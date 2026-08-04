@@ -5,6 +5,8 @@ deciders: owner (Nelson) + Claude
 refines:
   - "[ADR-0231](0231-strategikon-and-enchiridion-share-one-reference-workspace-language.md)"
   - "[ADR-0250](0250-strategikon-book-aligns-to-the-controls-content-boundary.md)"
+partially_superseded_by:
+  - "[ADR-0415](0415-every-run-page-is-assembled-by-one-closed-form.md)'s sole RunForm ownership of the Strategikon and complete Run page anatomy"
 ---
 
 # ADR-0335: The Strategikon is a Run-wide reference, not a Battle-only workspace

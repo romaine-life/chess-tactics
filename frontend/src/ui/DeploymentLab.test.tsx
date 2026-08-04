@@ -14,6 +14,7 @@ import {
 import {
   advanceDeployAll,
   chooseDeploymentMode,
+  confirmKlerosis,
   currentDeploymentUnit,
   deploymentInteractionStage,
   deploymentOptions,
@@ -172,7 +173,7 @@ describe('Deployment Lab', () => {
       expect.objectContaining({ type: 'pawn', side: 'enemy' }),
     ]));
 
-    let battle = chooseDeploymentMode(initial, level, 'deploy-all');
+    let battle = chooseDeploymentMode(confirmKlerosis(initial, level), level, 'deploy-all');
     while (battle.phase === 'deployment') {
       const active = currentDeploymentUnit(battle);
       expect(active).not.toBeNull();

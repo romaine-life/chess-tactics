@@ -428,16 +428,29 @@ export function disciplinePlacementCells(run: RunDocument, options: RunDeploymen
   return options.zoneCells.filter((cell) => !occupied.has(key(cell)));
 }
 
-export type RunDeploymentInteractionStage = 'klerosis' | 'primogeniture' | 'draw' | 'place' | 'adlected' | 'ready';
+export type RunDeploymentInteractionStage = 'klerosis' | 'pace' | 'primogeniture' | 'draw' | 'place' | 'adlected' | 'ready';
+
+/** The pre-information Deployment boundary owns a Run workspace, before the battlefield mounts. */
+export function deploymentAtKlerosisBoundary(run: RunDocument): boolean {
+  return run.phase === 'deployment' && deploymentInteractionStage(run) === 'klerosis';
+}
 
 export function deploymentInteractionStage(run: RunDocument, _options?: RunDeploymentOptions): RunDeploymentInteractionStage {
   const deployment = run.deployment;
-  if (!deployment || deployment.stage === 'klerosis' || !deployment.mode) return 'klerosis';
+  if (!deployment || deployment.stage === 'klerosis') return 'klerosis';
+  if (!deployment.mode) return 'pace';
   const unit = currentDeploymentUnit(run);
   if (!unit) return 'ready';
   if (unitIsAdlected(run, unit.id) && deployment.revealedUnitId === unit.id) return 'adlected';
   if (deployment.stage === 'primogeniture') return 'primogeniture';
   return deployment.revealedUnitId === unit.id ? 'place' : 'draw';
+}
+
+/** Acknowledges the exact visible deal without selecting how its units will be placed. */
+export function confirmKlerosis(run: RunDocument, level: Level): RunDocument {
+  const resolved = resolveDeploymentCapacity(run, level);
+  if (resolved.phase !== 'deployment' || resolved.deployment?.stage !== 'klerosis') return resolved;
+  return setDeploymentChoices(resolved, { stage: 'primogeniture' });
 }
 
 function commitPlacement(run: RunDocument, level: Level, unit: RunArmyUnit, cell: Vec | null, manual: boolean): RunDocument {
@@ -474,7 +487,7 @@ function commitPlacement(run: RunDocument, level: Level, unit: RunArmyUnit, cell
 
 export function chooseDeploymentMode(run: RunDocument, level: Level, mode: 'deploy-all' | 'step-through'): RunDocument {
   let next = resolveDeploymentCapacity(run, level);
-  if (next.phase !== 'deployment' || !next.deployment) return next;
+  if (next.phase !== 'deployment' || !next.deployment || next.deployment.stage === 'klerosis') return next;
   const first = next.deployment.queueUnitIds[0];
   next = setDeploymentChoices(next, {
     mode,

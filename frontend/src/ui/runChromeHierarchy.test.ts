@@ -19,9 +19,12 @@ const runCardFlight = readFileSync(new URL('./runCardFlightView.tsx', import.met
 const strategikonTitleNavigation = readFileSync(new URL('./StrategikonTitleNavigation.tsx', import.meta.url), 'utf8');
 const runCardFace = readFileSync(new URL('./RunCardFace.tsx', import.meta.url), 'utf8');
 const runBattlePreview = readFileSync(new URL('./RunBattlePreview.tsx', import.meta.url), 'utf8');
+const runKlerosisWorkspace = readFileSync(new URL('./RunKlerosisWorkspace.tsx', import.meta.url), 'utf8');
 const runLipsana = readFileSync(new URL('./Lipsana.tsx', import.meta.url), 'utf8');
 const runSelfInspection = readFileSync(new URL('./RunSelfInspection.tsx', import.meta.url), 'utf8');
 const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
+const skirmishShell = readFileSync(new URL('./SkirmishShell.tsx', import.meta.url), 'utf8');
+const runForm = readFileSync(new URL('./RunForm.tsx', import.meta.url), 'utf8');
 const skirmishBoard = readFileSync(new URL('../render/SkirmishBoard.tsx', import.meta.url), 'utf8');
 const skirmishHud = readFileSync(new URL('./SkirmishHud.tsx', import.meta.url), 'utf8');
 const chromeBox = readFileSync(new URL('./shared/ChromeBox.tsx', import.meta.url), 'utf8');
@@ -31,28 +34,27 @@ const gameStore = readFileSync(new URL('../game/store.ts', import.meta.url), 'ut
 const matchPersistence = readFileSync(new URL('../game/matchPersistence.ts', import.meta.url), 'utf8');
 
 describe('Run chrome hierarchy', () => {
-  it('uses the Battle-owned shell and HUD while replacing only Controls contents', () => {
+  it('admits every Run phase through the form-owned shell and HUD', () => {
     const metaControls = runScreen.match(
-      /function RunMetaControls\b[\s\S]*?\r?\n}\r?\n\r?\nfunction RunPhaseWorkspace/,
-    )?.[0] ?? '';
-    const sharedShell = skirmish.match(
-      /export function SkirmishShell\b[\s\S]*?\r?\n}\r?\n\r?\nfunction SkirmishSession/,
+      /function RunMetaControls\b[\s\S]*?\r?\n}\r?\n\r?\nfunction deploymentSquareLabel/,
     )?.[0] ?? '';
 
-    expect(skirmish).toContain('export function SkirmishShell');
-    expect(skirmish).toContain('<SkirmishHud {...hudProps} controlsContent={controlsContent} />');
+    expect(runForm).toContain('export function createRunForm');
+    expect(runForm).toContain('add(activity: RunActivity): ReactElement');
+    expect(runForm).toContain('<SkirmishShell');
+    expect(skirmishShell).toContain('<SkirmishHud {...hudProps} controlsContent={controlsContent} />');
     expect(skirmish).toContain('function SkirmishSession');
-    expect(skirmish).toContain('titleBarContent: ReactNode;');
-    expect(skirmish).toContain('?? runBattle?.titleBarContent');
-    expect(runScreen).toContain('titleBarContent,');
-    expect(runScreen).toContain('() => <RunTitleBarStatus run={run} path={routePath} />');
-    expect(skirmish).toMatch(/function SkirmishSession\b[\s\S]*?return \(\s*<SkirmishShell/);
+    expect(skirmish).toContain('runForm: RunForm;');
+    expect(skirmish).toContain('return runForm.add(runActivity({');
+    expect(skirmish).not.toContain('titleBarContent: ReactNode;');
+    expect(runScreen).toContain('const form = createRunForm({');
+    expect(runScreen).toContain('titleBarContent: shellRun ? <RunTitleBarStatus run={shellRun} path={routePath} /> : null,');
     expect(skirmish).toMatch(/export function Skirmish\b[\s\S]*?<SkirmishStoreProvider>/);
-    expect(sharedShell).toContain('<SceneSurfaceReadiness');
-    expect(sharedShell).toContain('surface="gameplay-hud"');
-    expect(sharedShell).toContain('readyToCompose={readyToCompose}');
-    expect(runScreen).toContain('<SkirmishShell');
-    expect(runScreen).toContain('readyToCompose={hydrated}');
+    expect(skirmishShell).toContain('<SceneSurfaceReadiness');
+    expect(skirmishShell).toContain('surface="gameplay-hud"');
+    expect(skirmishShell).toContain('readyToCompose={readyToCompose}');
+    expect(runScreen).not.toContain('<SkirmishShell');
+    expect(runScreen).toContain('readyToCompose: hydrated');
     expect(runScreen).not.toContain("classList.add('skirmish-active')");
     expect(runScreen).toMatch(/<RunMetaControls[\s\S]*?run=\{shellRun\}[\s\S]*?onNavigate=\{navigateRunView\}[\s\S]*?adlectioInFlight=\{adlectioBusy\}/);
     expect(metaControls).toContain('inert={adlectioInFlight ? true : undefined}');
@@ -99,12 +101,19 @@ describe('Run chrome hierarchy', () => {
   });
 
   it('makes Run phase and workspace replacement a closed director-owned scene slot', () => {
-    expect(runScreen.match(/<SkirmishShell/g)).toHaveLength(1);
+    expect(runScreen).not.toContain('<SkirmishShell');
+    expect(runScreen.match(/createRunForm\(/g)).toHaveLength(1);
+    expect(runForm).toContain("const RUN_ACTIVITY = Symbol('run-activity')");
+    expect(runForm).toContain('RunForm accepts only runActivity contributions.');
     expect(runScreen).toContain('sceneSnapshot: RunSceneSnapshot');
     expect(runScreen).toContain('<RunPresentationSceneSlot');
-    expect(runScreen).toContain("shellRun?.phase === 'deployment' || shellRun?.phase === 'battle'");
-    expect(runScreen).toContain('sceneInstance={`${shellRun.id}:battlefield:${shellRun.battleIndex}:${runSceneWorkspaceIdentity(sceneSnapshot.workspace)}`}');
+    expect(runScreen).toContain("&& (shellRun?.phase === 'deployment' || shellRun?.phase === 'battle')");
+    expect(runScreen).toContain('&& !klerosisRun');
+    expect(runScreen).toContain("const runSurfacePhase = klerosisRun ? 'klerosis' : sceneSnapshot.phase;");
+    expect(runScreen).toContain('? `${shellRun.id}:battlefield:${shellRun.battleIndex}:${runSceneWorkspaceIdentity(sceneSnapshot.workspace)}`');
     expect(runScreen).toContain('<RunBattlefieldPanel');
+    expect(runScreen).toContain('form={form}');
+    expect(runScreen).not.toMatch(/if \([^)]*phase === 'deployment'[\s\S]{0,200}return \(/);
     expect(skirmish).toContain('presentedDeploymentSurface');
     expect(skirmish).toContain('preserveBoardPresentation: true');
     expect(skirmish).toContain("unitArrivals={sceneActivated ? 'active' : 'pending'}");
@@ -153,20 +162,22 @@ describe('Run chrome hierarchy', () => {
     expect(styleCss).toMatch(/\.scene-director\.is-entering \.scene-boundary\[data-scene-overlap-scope="shell-viewport"\]\[data-scene-transition-active\] \[data-scene-overlap-region\]\s*\{[\s\S]*?opacity:\s*1;/);
     // The panel and any environment artwork retained across sibling destinations are
     // rendered beside the swap, never inside its fading overlap region.
-    expect(skirmish).toContain('className="shell-persistent-viewport-artwork"');
-    expect(skirmish).toMatch(/\{persistentViewportArtwork \? \([\s\S]*?\) : null\}\s*\{shellWorkspaceCoversLipsana \? null : <LipsanonStrip lipsanonIds=\{lipsanonIds\} \/>\}\s*\{children\}/);
+    expect(skirmishShell).toContain('className="shell-persistent-viewport-artwork"');
+    expect(skirmishShell).toMatch(/\{persistentViewportArtwork \? \([\s\S]*?\) : null\}\s*\{shellWorkspaceCoversLipsana \? null : <LipsanonStrip lipsanonIds=\{lipsanonIds\} \/>\}\s*\{children\}/);
     expect(skirmishHud).toContain('<ShellControlsPanel');
   });
 
   it('replaces the complete left shell workspace for Army and Lipsana while preserving the covered phase', () => {
-    expect(runScreen).toContain('function RunPhaseWorkspace');
-    expect(runScreen).toMatch(/<ShellViewportSwap[\s\S]*?className="run-phase-workspace"[\s\S]*?primaryClassName="run-phase-primary"[\s\S]*?primary=\{children\}/);
+    expect(runScreen).not.toContain('function RunPhaseWorkspace');
+    expect(runScreen).toContain("className: 'run-phase-workspace'");
+    expect(runScreen).toContain("primaryClassName: 'run-phase-primary'");
     expect(runScreen).toContain("view === 'lipsana'");
     expect(runScreen).toContain('<LipsanaWorkspace lipsanonIds={shellRun.lipsana} />');
-    expect(skirmish).toMatch(/<ShellViewportSwap[\s\S]*?className="skirmish-war-room"[\s\S]*?primaryClassName="skirmish-field"[\s\S]*?workspaceOpen=\{strategikonOpen \|\| Boolean\(runWorkspace\)\}/);
-    expect(skirmish).toContain('{shellWorkspaceCoversLipsana ? null : <LipsanonStrip lipsanonIds={lipsanonIds} />}');
-    expect(runScreen).toContain('shellWorkspaceCoversLipsana={strategikonOpen || Boolean(inspectionWorkspace)}');
-    expect(skirmish).toContain('{runWorkspace}');
+    expect(skirmish).toContain("className: 'skirmish-war-room'");
+    expect(skirmish).toContain("primaryClassName: 'skirmish-field'");
+    expect(runForm).toContain('const workspaceOpen = form.strategikonOpen || Boolean(form.inspectionWorkspace);');
+    expect(skirmishShell).toContain('{shellWorkspaceCoversLipsana ? null : <LipsanonStrip lipsanonIds={lipsanonIds} />}');
+    expect(runForm).toContain('{form.inspectionWorkspace}');
     expect(styleCss).toMatch(/\.shell-viewport-primary\[data-shell-workspace-covered\]\s*\{[\s\S]*?visibility:\s*hidden;/);
     expect(styleCss).toMatch(/\.run-phase-primary\s*>\s*\.run-workspace\s*\{[\s\S]*?grid-row:\s*1;/);
   });
@@ -175,11 +186,12 @@ describe('Run chrome hierarchy', () => {
     // Deployment, Sectio, and Victory are still the same Run: the reference workspace must
     // open from the same title mark Battle uses. Only an absent Run repairs the address.
     expect(runScreen).toContain("const strategikonOpen = sceneSnapshot.workspace.view === 'strategikon';");
-    expect(runScreen).toContain('strategikonPath: shellRun ? routePath : null,');
-    expect(runScreen).toContain('strategikonSearch: routeSearch,');
-    expect(runScreen).toContain('strategikonOpen={strategikonOpen}');
-    expect(runScreen).toContain('className="strategikon-slot"');
-    expect(runScreen).toContain('<Strategikon path={routePath} search={routeSearch} run={shellRun} />');
+    expect(runScreen).toContain('strategikonOpen,');
+    expect(runForm).toContain('const strategikonPath = form.run ? form.routePath : null;');
+    expect(runForm).toContain('strategikonPath,');
+    expect(runForm).toContain('strategikonSearch: form.routeSearch,');
+    expect(runForm).toContain('className="strategikon-slot"');
+    expect(runForm).toContain('<Strategikon path={form.routePath} search={form.routeSearch} run={form.run} />');
     expect(runScreen).toContain("routePath.startsWith('/run/strategikon/') && !run");
     expect(runScreen).not.toContain("sceneSnapshot.phase !== 'battle'");
     expect(skirmishHud).toContain('<StrategikonTitleNavigation path={strategikonPath} search={strategikonSearch} />');
@@ -214,7 +226,7 @@ describe('Run chrome hierarchy', () => {
   });
 
   it('fills shell-owned Run destinations while Deployment uses the battlefield', () => {
-    const playerRunSources = `${runScreen}\n${runArmyWorkspace}\n${runExpunctioWorkspace}\n${runBattlePreview}\n${runLipsana}`;
+    const playerRunSources = `${runScreen}\n${runArmyWorkspace}\n${runExpunctioWorkspace}\n${runBattlePreview}\n${runKlerosisWorkspace}\n${runLipsana}`;
     const runWorkspaceRule = styleCss.match(/\.run-workspace\s*\{([^}]*)\}/)?.[1] ?? '';
 
     expect(runWorkspace).toContain('export function RunSceneViewport');
@@ -228,6 +240,7 @@ describe('Run chrome hierarchy', () => {
     expect(chromeBox).not.toContain('export function ShellWorkspaceBody');
     for (const testId of [
       'run-sectio-workspace',
+      'run-klerosis-workspace',
       'run-battle-preview-workspace',
       'run-aftermath-workspace',
       'run-victory-workspace',
@@ -276,16 +289,23 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).not.toContain('DraftPanel');
     expect(runScreen).not.toContain("phase === 'draft'");
     expect(runCard).not.toContain("'draft'");
-    expect(skirmish).toContain("testId={runDeployment ? 'run-deployment' : 'skirmish'}");
-    expect(skirmish).toContain('className="skirmish-war-room"');
-    expect(skirmish).toContain('primaryClassName="skirmish-field"');
+    expect(skirmish).toContain("testId: runDeployment ? 'run-deployment' : 'skirmish'");
+    expect(skirmish).toContain("className: 'skirmish-war-room'");
+    expect(skirmish).toContain("primaryClassName: 'skirmish-field'");
     expect(runScreen).toContain('className="run-meta-controls run-deployment-controls"');
     expect(skirmish).toContain('<SkirmishBoard');
     expect(skirmish).toContain('surfaceState={presentedDeploymentSurface}');
     expect(skirmish).not.toContain('cameraActive=');
     expect(runScreen).toContain('viewKey: runBattleActivityId(prepared.id, prepared.battleIndex)');
     expect(runScreen).toContain('gameForRunDeployment(prepared, level, layout, true)');
-    expect(runScreen).toContain('<KlerosisOverlay');
+    expect(runScreen).toContain('<RunKlerosisWorkspace');
+    expect(runScreen).not.toContain('KlerosisOverlay');
+    expect(runKlerosisWorkspace).toContain('<RunSceneViewport');
+    expect(runKlerosisWorkspace).toContain("view: 'klerosis'");
+    expect(runKlerosisWorkspace).toContain('data-testid="klerosis-confirm"');
+    expect(runKlerosisWorkspace).not.toContain('Deploy all');
+    expect(runKlerosisWorkspace).not.toContain('Step through');
+    expect(runKlerosisWorkspace).not.toContain('SkirmishBoard');
     expect(runScreen).toContain('Deploy all');
     expect(runScreen).toContain('Step through');
     expect(runScreen).not.toContain('View Formation {index + 1}');
@@ -313,8 +333,7 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('<TitleBarSlot region="route">{runTitleBarRouteName(run, path)}</TitleBarSlot>');
     expect(runScreen).toContain('if (isStrategikonPath(path)) segments.push(...strategikonRouteLabels(path));');
     expect(runScreen).toContain('<RunTitleBarStatus run={shellRun} path={routePath} />');
-    expect(skirmish).toContain('...(strategikonOpen ? strategikonRouteLabels(routePath) : [])');
-    expect(skirmish).toContain('<TitleBarSlot region="route">{battleTitleRoute}</TitleBarSlot>');
+    expect(runScreen).toContain('titleBarContent: shellRun ? <RunTitleBarStatus run={shellRun} path={routePath} /> : null,');
     expect(runScreen).toContain('levelName={isGeneratedRunBattleName(levelName) ? null : levelName}');
     expect(runScreen).not.toContain('run-deployment-workspace');
     expect(runScreen).not.toContain('<LevelPreviewColumn');
@@ -341,10 +360,10 @@ describe('Run chrome hierarchy', () => {
 
   it('retains the installed Sectio scene outside the workspace transition region', () => {
     expect(runScreen).toContain("const persistentSectioScene = shellRun?.phase === 'sectio' ? sectioScene : null;");
-    expect(runScreen).toContain('persistentViewportArtwork={persistentSectioScene}');
+    expect(runScreen).toContain('persistentViewportArtwork: persistentSectioScene');
     expect(runScreen).not.toContain('backgroundArtwork={sectioScene}');
-    expect(skirmish).toContain("persistentViewportArtwork = null");
-    expect(skirmish).toContain("has-persistent-viewport-artwork");
+    expect(skirmishShell).toContain("persistentViewportArtwork = null");
+    expect(skirmishShell).toContain("has-persistent-viewport-artwork");
     expect(styleCss).toMatch(/\.shell-persistent-viewport-artwork\s*\{[\s\S]*?grid-column:\s*1;[\s\S]*?grid-row:\s*2;/);
     expect(styleCss).toMatch(/\.run-screen\.has-persistent-viewport-artwork \.run-phase-primary > \.run-workspace \.shell-workspace-fill\s*\{[\s\S]*?visibility:\s*hidden;/);
   });

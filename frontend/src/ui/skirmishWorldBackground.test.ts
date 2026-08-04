@@ -3,6 +3,7 @@ import { shouldLoadSkirmishWorldBackground } from './Skirmish';
 import { readFileSync } from 'node:fs';
 
 const skirmishSource = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
+const skirmishShellSource = readFileSync(new URL('./SkirmishShell.tsx', import.meta.url), 'utf8');
 const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 
 describe('Skirmish world background ownership', () => {
@@ -15,7 +16,7 @@ describe('Skirmish world background ownership', () => {
     expect(skirmishSource).toContain(
       "className={runDeployment?.screenClassName ?? (screenPredrawnBackgroundActive ? 'is-predrawn-board' : '')}",
     );
-    expect(skirmishSource).toContain(
+    expect(skirmishShellSource).toContain(
       "className={`skirmish-screen${persistentViewportArtwork ? ' has-persistent-viewport-artwork' : ''} ${className}`.trim()}",
     );
     expect(styleCss).toMatch(

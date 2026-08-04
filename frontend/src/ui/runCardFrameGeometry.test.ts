@@ -7,6 +7,7 @@ import {
   RUN_CARD_FRAME_SLOT_BY_VARIANT,
   RUN_CARD_FRAME_VARIANTS,
   RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY,
+  RUN_CARD_PRAECIPUUS_FRAME_GEOMETRY,
   RUN_CARD_STANDARD_FRAME_GEOMETRY,
   RUN_CARD_TEXT_PLACEMENT,
   runCardFrameGeometryForSlot,
@@ -60,7 +61,10 @@ describe('Run card frame geometry', () => {
     expect(typeMid('pestiferous')).toBeCloseTo(907, 1);
     expect(typeMid('concinnous')).toBeCloseTo(901.5, 1);
     expect(typeMid('hieratic')).toBeCloseTo(918.4, 1);
-    expect(new Set(RUN_CARD_FRAME_VARIANTS.map(typeMid)).size).toBe(RUN_CARD_FRAME_VARIANTS.length);
+    expect(typeMid('praecipuus')).toBeCloseTo(typeMid('hieratic'), 5);
+    // Praecipuus deliberately reuses Hieratic's measured alpha mask; the other
+    // five painted frames retain distinct plate heights.
+    expect(new Set(RUN_CARD_FRAME_VARIANTS.map(typeMid)).size).toBe(RUN_CARD_FRAME_VARIANTS.length - 1);
   });
 
   it('pads text against each frame’s own opening, not one shared column', () => {
@@ -103,6 +107,15 @@ describe('Run card frame geometry', () => {
     const steelCost = RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY.boxes.cost;
     expect(steelCost.x + steelCost.width / 2).toBeCloseTo(926.89, 2);
     expect(steelCost.y + steelCost.height / 2).toBeCloseTo(132.39, 2);
+  });
+
+  it('gives Praecipuus a dedicated royal frame identity on the measured Hieratic mask', () => {
+    expect(RUN_CARD_PRAECIPUUS_FRAME_GEOMETRY.slot)
+      .toBe('ui/run/card-prototypes/praecipuus-frame-v1.png');
+    expect(RUN_CARD_PRAECIPUUS_FRAME_GEOMETRY.boxes)
+      .toEqual(RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY.boxes);
+    expect(RUN_CARD_PRAECIPUUS_FRAME_GEOMETRY.frameSha256s)
+      .toEqual(['93ee3e1497ae1a930ca9d8d0242fd8b1fd93cd30da01511662ef2c48ed9a062e']);
   });
 
   it('names every frame byte-identity its boxes were measured against', () => {

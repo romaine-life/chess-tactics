@@ -343,7 +343,7 @@ export type RunPhase = 'aftermath' | 'bona-vacantia' | 'deployment' | 'battle' |
 export interface RunDeploymentState {
   battleIndex: number;
   seed: number;
-  /** Cards revealed together by Klerosis for this combat. */
+  /** Cards dealt in this exact order by Klerosis for this combat. */
   dealtCardIds: string[];
   /** One hidden seeded order owns capacity admission and later Farrago placement. */
   queueUnitIds: string[];
@@ -355,6 +355,8 @@ export interface RunDeploymentState {
   placementCursor: number;
   revealedUnitId?: string;
   mode?: 'deploy-all' | 'step-through';
+  /** Klerosis is the unconfirmed deal. Primogeniture begins once that deal is confirmed;
+   *  mode remains absent until the player chooses a pace. */
   stage: 'klerosis' | 'primogeniture' | 'farrago';
   /** Compatibility aliases used by the Battle runtime while reservists are retired. */
   blockedUnitIds: string[];
@@ -578,6 +580,13 @@ export const RUN_STARTER_CARD_BY_ID: Readonly<Record<RunStarterCardId, RunStarte
 );
 
 export type RunCardDefinition = RunCoreCard | RunStarterCard;
+
+/** Every authored card identity shown by card-reference surfaces. The offer deck remains
+ * RUN_CARD_DECK so starter-only cards cannot leak into ordinary Sectio draws. */
+export const RUN_CARD_CATALOG: readonly RunCardDefinition[] = Object.freeze([
+  ...RUN_STARTER_CARDS,
+  ...RUN_CARD_DECK,
+]);
 
 export function runCardDefinition(coreId: string): RunCardDefinition | undefined {
   return RUN_CARD_BY_ID[coreId] ?? RUN_STARTER_CARD_BY_ID[coreId as RunStarterCardId];

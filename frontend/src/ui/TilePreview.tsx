@@ -429,10 +429,16 @@ function preserveChromeLabRouteParams(params: URLSearchParams, route: TilesetStu
 function preserveCardLayoutRouteParams(params: URLSearchParams, route: TilesetStudioRouteState): void {
   if (route.viewerKind !== 'cardlayout') return;
   const current = new URLSearchParams(window.location.search);
-  (['frameCandidate', 'coinCandidate', 'artCandidate', 'cardVariant', 'contentsStudy', 'tacticalSpecimen', 'concinnousTarget'] as const).forEach((key) => {
+  (['frameCandidate', 'coinCandidate', 'artCandidate', 'propertyCandidate', 'unitStateCandidate', 'cardVariant', 'contentsStudy', 'tacticalSpecimen', 'concinnousTarget', 'starterCard'] as const).forEach((key) => {
     const value = current.get(key);
     if (value) params.set(key, value);
   });
+}
+
+function preserveCardIconFittingRouteParams(params: URLSearchParams, route: TilesetStudioRouteState): void {
+  if (route.viewerKind !== 'cardicons') return;
+  const value = new URLSearchParams(window.location.search).get('iconPair');
+  if (value) params.set('iconPair', value);
 }
 
 function preserveDeploymentLabRouteParams(params: URLSearchParams, route: TilesetStudioRouteState): void {
@@ -529,6 +535,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   if (route.selectedUnitId) params.set('unit', route.selectedUnitId);
   preserveChromeLabRouteParams(params, route);
   preserveCardLayoutRouteParams(params, route);
+  preserveCardIconFittingRouteParams(params, route);
   preserveDeploymentLabRouteParams(params, route);
   const nextHref = `${STUDIO_PATH}?${params.toString()}`;
   const currentHref = `${window.location.pathname}${window.location.search}`;

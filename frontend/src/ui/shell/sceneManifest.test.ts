@@ -8,7 +8,8 @@ import {
   sceneManifest,
   sceneOverlapScope,
 } from './sceneManifest';
-import { createRun } from '../../run/model';
+import { createRun, prepareDeployment } from '../../run/model';
+import { confirmKlerosis } from '../../run/deployment';
 import { createBlankLevel } from '../../core/level';
 
 describe('scene manifests', () => {
@@ -359,10 +360,12 @@ describe('scene manifests', () => {
       description: 'A test War',
       battles: [{ level, loot: false }],
     }, 17, '2026-08-01T00:00:00.000Z');
-    const deployment = { ...draft, phase: 'deployment' as const };
-    const battle = { ...draft, phase: 'battle' as const };
+    const klerosis = prepareDeployment({ ...draft, phase: 'deployment' as const });
+    const deployment = confirmKlerosis(klerosis, level);
+    const battle = { ...deployment, phase: 'battle' as const };
     const source = (document: typeof draft) => ({ run: { hydrated: true, document } });
 
+    const klerosisScene = sceneManifest('/run', '', source(klerosis));
     const deploymentScene = sceneManifest('/run', '', source(deployment));
     const battleScene = sceneManifest('/run', '', source(battle));
     const armyScene = sceneManifest('/run', '?view=army', source(battle));
@@ -370,19 +373,21 @@ describe('scene manifests', () => {
     const sectioBattlePreviewScene = sceneManifest('/run', '?view=battle-preview', source(draft));
     const sectioExpunctioScene = sceneManifest('/run', '?view=expunctio', source(draft));
 
-    expect(deploymentScene.snapshot).toMatchObject({
+    expect(klerosisScene.snapshot).toMatchObject({
       kind: 'run',
       phase: 'deployment',
       workspace: { view: 'primary' },
-      run: deployment,
+      run: klerosis,
     });
-    expect(deploymentScene.instances.map((entry) => entry.definition.slot)).toEqual([
+    expect(klerosisScene.instances.map((entry) => entry.definition.slot)).toEqual([
       'root',
       'run-phase',
       'run-workspace',
     ]);
-    // Deployment is a state of this Battle's already-mounted battlefield, not a scene
-    // before it. Phase promotion must therefore preserve both director and React keys.
+    // Klerosis owns the pre-Battle deal workspace. Confirming it crosses a real
+    // scene boundary; only the resulting Deployment and Battle share the board.
+    expect(deploymentScene.id).not.toBe(klerosisScene.id);
+    expect(sceneLayerKey(deploymentScene)).not.toBe(sceneLayerKey(klerosisScene));
     expect(battleScene.id).toBe(deploymentScene.id);
     expect(sceneLayerKey(battleScene)).toBe(sceneLayerKey(deploymentScene));
     expect(armyScene.id).not.toBe(battleScene.id);
@@ -401,6 +406,7 @@ describe('scene manifests', () => {
       phase: 'battle',
       workspace: { view: 'primary' },
     });
+    expect(deepestSharedSceneRegion(klerosisScene, deploymentScene)).toBe('gameplay-shell');
     expect(deepestSharedSceneRegion(deploymentScene, battleScene)).toBe('gameplay-shell');
     expect(deepestSharedSceneRegion(battleScene, armyScene)).toBe('gameplay-shell');
   });

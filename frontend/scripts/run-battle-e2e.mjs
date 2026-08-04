@@ -339,11 +339,34 @@ try {
   });
 
   // Board revealed and composed (no is-board-loading), tile hit buttons live.
-  await page.waitForFunction(() => {
-    const lab = document.querySelector('.skirmish-board-lab');
-    return lab && !lab.classList.contains('is-board-loading')
-      && document.querySelectorAll('button.skirmish-board-cell-hit').length > 0;
-  });
+  try {
+    await page.waitForFunction(() => {
+      const lab = document.querySelector('.skirmish-board-lab');
+      return lab && !lab.classList.contains('is-board-loading')
+        && (document.querySelector('[data-testid="run-klerosis"]')
+          || document.querySelectorAll('button.skirmish-board-cell-hit').length > 0);
+    });
+  } catch {
+    await fail('opening-board-ready', JSON.stringify(await page.evaluate(() => {
+      const lab = document.querySelector('.skirmish-board-lab');
+      const director = document.querySelector('.scene-director');
+      return {
+        path: location.pathname,
+        screen: document.querySelector('[data-testid="run-deployment"]')?.getAttribute('class') ?? null,
+        board: lab?.getAttribute('class') ?? null,
+        cells: document.querySelectorAll('button.skirmish-board-cell-hit').length,
+        klerosis: Boolean(document.querySelector('[data-testid="run-klerosis"]')),
+        directorPhase: director?.getAttribute('data-scene-phase') ?? null,
+        directorCommitted: director?.getAttribute('data-scene-committed') ?? null,
+        readiness: [...document.querySelectorAll('[data-painted-surface]')].map((surface) => ({
+          surface: surface.getAttribute('data-painted-surface'),
+          state: surface.getAttribute('data-painted-state'),
+          className: surface.getAttribute('class'),
+        })),
+        bodyText: document.body.innerText.slice(0, 600),
+      };
+    })));
+  }
   if (deploymentOnly) {
     await page.waitForFunction(() => document.querySelector('[data-testid="run-deployment"]')
       && !document.querySelector('[data-testid="run-deployment"]')?.closest('[inert]'));
@@ -457,74 +480,21 @@ try {
       window.__ctDeploymentProbe.frame = requestAnimationFrame(tick);
       return {
         phase: run?.phase,
-        disciplineIds: run?.army.filter((unit) => unit.abilities.includes('discipline')).map((unit) => unit.id) ?? [],
-        placements: run?.deployment?.manualPlacements ?? {},
+        klerosis: Boolean(document.querySelector('[data-testid="run-klerosis"]')),
       };
     });
-    if (deploymentState.phase !== 'deployment' || deploymentState.disciplineIds.length !== 2) {
+    if (deploymentState.phase !== 'deployment' || !deploymentState.klerosis) {
       await fail('deployment-fixture', JSON.stringify(deploymentState));
     }
 
-    const clickFirstDeploymentCell = async () => {
-      const cell = await page.$('[data-testid^="deployment-cell-"]');
-      if (!cell) await fail('deployment-placement', 'no legal cell');
-      await cell.click();
-    };
-
-    await clickFirstDeploymentCell();
-    await page.waitForFunction(() => {
-      const board = document.querySelector('[data-testid="skirmish-board"]');
-      return board?.getAttribute('data-arriving') === 'true'
-        && (board.getAttribute('data-arriving-unit-ids') ?? '').split(',').filter(Boolean).length === 1;
-    });
-    const firstArrival = await page.evaluate(async () => {
-      const { useActiveRun } = await import('/src/run/store.ts');
-      const run = useActiveRun.getState().run;
-      return {
-        phase: run?.phase,
-        ids: document.querySelector('[data-testid="skirmish-board"]')?.getAttribute('data-arriving-unit-ids') ?? '',
-        placedIds: Object.keys(run?.deployment?.manualPlacements ?? {}),
-      };
-    });
-    await page.waitForFunction(() => document.querySelector('[data-testid="skirmish-board"]')
-      ?.getAttribute('data-arriving') === 'false');
-    const secondDisciplineId = deploymentState.disciplineIds.find((unitId) => unitId !== firstArrival.placedIds[0]);
-    if (firstArrival.phase !== 'deployment'
-      || firstArrival.placedIds.length !== 1
-      || firstArrival.ids !== firstArrival.placedIds[0]
-      || !secondDisciplineId) {
-      await fail('first-discipline-arrival', JSON.stringify({ firstArrival, secondDisciplineId }));
+    if (!await clickButton('Deploy all')) {
+      await fail('klerosis-deploy-all', JSON.stringify(await buttonDiagnostics('Deploy all')));
     }
-
-    const finalPlacementStartedAt = Date.now();
-    await clickFirstDeploymentCell();
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    const finalManualArrival = await page.evaluate(async () => {
-      const { useActiveRun } = await import('/src/run/store.ts');
-      return {
-        phase: useActiveRun.getState().run?.phase,
-        ids: document.querySelector('[data-testid="skirmish-board"]')?.getAttribute('data-arriving-unit-ids') ?? '',
-      };
-    });
-    if (finalManualArrival.phase !== 'deployment' || finalManualArrival.ids !== secondDisciplineId) {
-      await fail('final-discipline-arrival', JSON.stringify({ finalManualArrival, secondDisciplineId }));
-    }
-    await page.waitForFunction((disciplineIds) => {
-      const ids = (document.querySelector('[data-testid="skirmish-board"]')
-        ?.getAttribute('data-arriving-unit-ids') ?? '').split(',').filter(Boolean);
-      return document.querySelector('[data-testid="skirmish"]')
-        && ids.length > 0
-        && ids.every((id) => !disciplineIds.includes(id));
-    }, {}, deploymentState.disciplineIds);
-    const automaticWaveStartedMs = Date.now() - finalPlacementStartedAt;
-    const automaticWave = await page.evaluate(() => ({
-      ids: (document.querySelector('[data-testid="skirmish-board"]')
-        ?.getAttribute('data-arriving-unit-ids') ?? '').split(',').filter(Boolean),
-    }));
+    await waitPhase('battle', 'klerosis-deploy-all');
     await page.waitForFunction(() => document.querySelector('[data-testid="skirmish-board"]')
       ?.getAttribute('data-arriving') === 'false');
 
-    const deploymentResult = await page.evaluate(async (disciplineIds) => {
+    const deploymentResult = await page.evaluate(async () => {
       const { useActiveRun } = await import('/src/run/store.ts');
       const { activeSkirmishStoreForDiagnostics } = await import('/src/game/SkirmishStoreContext.tsx');
       const { activeSkirmishViewStoreForDiagnostics } = await import('/src/game/SkirmishViewStoreContext.tsx');
@@ -534,11 +504,6 @@ try {
       const board = document.querySelector('[data-testid="skirmish-board"]');
       const gameStore = activeSkirmishStoreForDiagnostics();
       const viewStore = activeSkirmishViewStoreForDiagnostics();
-      const placements = run?.deployment?.manualPlacements ?? {};
-      const livePlacementByUnit = Object.fromEntries(disciplineIds.map((unitId) => {
-        const piece = gameStore?.getState().game.pieces.find((candidate) => candidate.id === unitId);
-        return [unitId, piece ? `${piece.x},${piece.y}` : null];
-      }));
       const currentCanvases = [...(board?.querySelectorAll('canvas') ?? [])];
       const finalLayer = board?.querySelector('.tileset-view-art-layer');
       const finalCamera = finalLayer ? [
@@ -548,8 +513,9 @@ try {
       ].join('|') : null;
       return {
         phase: run?.phase,
-        placements,
-        livePlacementByUnit,
+        klerosis: Boolean(document.querySelector('[data-testid="run-klerosis"]')),
+        battleControls: Boolean(document.querySelector('[data-testid="skirmish"]')),
+        strategikonToggle: Boolean(document.querySelector('[data-testid="strategikon-toggle"]')),
         sameBoard: board === probe.board,
         sameBoundary: board?.closest('.scene-boundary') === probe.boundary,
         sameViewPane: board?.querySelector('.tileset-view-stage') === probe.viewPane,
@@ -564,17 +530,14 @@ try {
         mountedGameStores: window.__ctMountedSkirmishStores?.length ?? 0,
         mountedViewStores: window.__ctMountedSkirmishViewStores?.length ?? 0,
       };
-    }, deploymentState.disciplineIds);
+    });
     const deploymentShot = 'tmp-shots/run-deployment-battle-continuity.png';
     await transitionBoard.screenshot({ path: deploymentShot });
-    const placementMismatch = deploymentState.disciplineIds.find(
-      (unitId) => deploymentResult.livePlacementByUnit[unitId] !== deploymentResult.placements[unitId],
-    );
     if (
       deploymentResult.phase !== 'battle'
-      || automaticWaveStartedMs < 560
-      || automaticWave.ids.length === 0
-      || automaticWave.ids.some((id) => deploymentState.disciplineIds.includes(id))
+      || deploymentResult.klerosis
+      || !deploymentResult.battleControls
+      || !deploymentResult.strategikonToggle
       || !deploymentResult.sameBoard
       || !deploymentResult.sameBoundary
       || !deploymentResult.sameViewPane
@@ -586,18 +549,10 @@ try {
       || deploymentResult.lifecycleViolations.length > 0
       || deploymentResult.mountedGameStores !== 1
       || deploymentResult.mountedViewStores !== 1
-      || placementMismatch
     ) {
-      await fail('deployment-battle-continuity', JSON.stringify({
-        firstArrival,
-        finalManualArrival,
-        automaticWave,
-        automaticWaveStartedMs,
-        placementMismatch,
-        deploymentResult,
-      }));
+      await fail('deployment-battle-continuity', JSON.stringify(deploymentResult));
     }
-    console.log('Deployment → Battle provider, DOM, canvas, camera, placement, and arrival continuity: OK');
+    console.log('Klerosis Deploy all → Battle provider, DOM, canvas, camera, and Strategikon continuity: OK');
     console.log('deployment screenshot:', deploymentShot);
     console.log('PASS — cold Deployment is camera-ready before reveal and promotes in place');
     await browser.close();

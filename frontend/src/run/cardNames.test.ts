@@ -9,7 +9,7 @@ import {
   runCardName,
   runCardSlug,
 } from './cardNames';
-import { RUN_CARD_DECK, cardContentsLabel, type RunCoreCard } from './model';
+import { RUN_CARD_CATALOG, RUN_CARD_DECK, cardContentsLabel, type RunCoreCard } from './model';
 
 describe('Run card names', () => {
   it('authors one name for every card in the generated deck', () => {
@@ -33,6 +33,13 @@ describe('Run card names', () => {
   it('names the lone queen Regal Serenity', () => {
     expect(runCardName({ pieces: ['queen'] })).toBe('Regal Serenity');
     expect(runCardArtSlot({ pieces: ['queen'] })).toBe('ui/run/card-art/q/illustration.png');
+  });
+
+  it('gives both starter cards dedicated illustration slots', () => {
+    expect(runCardArtSlot({ id: 'his-grace', pieces: ['king'] }))
+      .toBe('ui/run/card-art/his-grace/illustration.png');
+    expect(runCardArtSlot({ id: 'front-lines', pieces: ['pawn', 'pawn'] }))
+      .toBe('ui/run/card-art/front-lines/illustration.png');
   });
 
   it('authors one nonempty flavor fragment for every core card and no orphan flavor', () => {
@@ -61,11 +68,13 @@ describe('Run card names', () => {
     // Apostrophes are dropped rather than hyphenated, so a possessive reads as one word.
     expect(runCardSlug('pb')).toBe('pilgrims-escort');
     expect(runCardSlug('ppkb')).toBe('wayfarers-compact');
-    const slugs = RUN_CARD_DECK.map((card) => runCardSlug(card.id));
+    expect(runCardSlug('his-grace')).toBe('his-grace');
+    expect(runCardSlug('front-lines')).toBe('front-lines');
+    const slugs = RUN_CARD_CATALOG.map((card) => runCardSlug(card.id));
     expect(new Set(slugs).size).toBe(slugs.length);
     for (const slug of slugs) expect(slug).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
     // Every address resolves back to the card it names.
-    for (const card of RUN_CARD_DECK) expect(RUN_CARD_ID_BY_SLUG[runCardSlug(card.id)]).toBe(card.id);
+    for (const card of RUN_CARD_CATALOG) expect(RUN_CARD_ID_BY_SLUG[runCardSlug(card.id)]).toBe(card.id);
     // A card with no authored name addresses as its own id rather than an empty segment.
     expect(runCardSlug('qq')).toBe('qq');
   });

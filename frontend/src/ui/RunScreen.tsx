@@ -3,7 +3,7 @@ import type { RunBattleTransformSink, RunBattleUndoAdapter } from '../game/store
 import { defaultFacingForSide, paletteForSide, pieceSpritePath } from '../core/pieces';
 import type { GameState, Piece } from '../core/types';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
-import { InnerChromeBox, ShellViewportSwap } from './shared/ChromeBox';
+import { InnerChromeBox } from './shared/ChromeBox';
 import { HouseSelect } from './shared/HouseSelect';
 import { TitleBarStatus } from './shell/TitleBarControls';
 import { TitleBarSlot } from './shell/TitleBarSlot';
@@ -11,14 +11,13 @@ import { RunIdentityChip, RunTitleBarMeasures } from './RunTitleBarChips';
 import { PLAY_RUN_SELECTOR_HREF } from './playHubRoute';
 import {
   Skirmish,
-  SkirmishShell,
   type RunBattlePresentation,
   type RunDeploymentPresentation,
 } from './Skirmish';
 import { navigateApp } from './navigation';
 import { installedRunSectioWrap, runSectioWrapLiveMount } from './runSectioWrapCandidates';
 import { runSceneWorkspaceIdentity, type RunSceneSnapshot } from './shell/sceneManifest';
-import { GameplayWorkspaceSceneSlot, RunPresentationSceneSlot } from './shell/AuthoredSceneSlot';
+import { RunPresentationSceneSlot } from './shell/AuthoredSceneSlot';
 import { useConfirm } from './shared/ConfirmDialog';
 import { RunSceneViewport } from './RunWorkspace';
 import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
@@ -49,7 +48,6 @@ import {
   runBattleActivityId,
   runAbilityDescription,
   runAbilityDisplayName,
-  runCardDefinition,
   performAlienatio,
   performExpunctio,
   setDeploymentChoices,
@@ -63,7 +61,9 @@ import {
 import {
   advanceAutomaticDeployment,
   chooseDeploymentMode,
+  confirmKlerosis,
   currentDeploymentUnit,
+  deploymentAtKlerosisBoundary,
   deploymentInteractionStage,
   deploymentOptions,
   disciplinePlacementCells,
@@ -104,6 +104,7 @@ import {
 } from './RunArmyWorkspace';
 import { RunCard } from './RunCard';
 import { RunBattlePreview } from './RunBattlePreview';
+import { RunKlerosisWorkspace } from './RunKlerosisWorkspace';
 import { RunExpunctioWorkspace } from './RunExpunctioWorkspace';
 import { runCardName } from '../run/cardNames';
 import {
@@ -112,8 +113,8 @@ import {
   useRunCardFlight,
   type RunCardFlightRect,
 } from './runCardFlightView';
-import { Strategikon } from './Strategikon';
 import { isStrategikonPath, strategikonRouteLabels } from './strategikonRoute';
+import { createRunForm, runActivity, type RunForm } from './RunForm';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
 import type { SkirmishBoardSurfaceState } from '../render/SkirmishBoard';
@@ -369,103 +370,10 @@ function RunMetaControls({
   );
 }
 
-function RunPhaseWorkspace({
-  inspectionWorkspace,
-  strategikonWorkspace = null,
-  strategikonOpen = false,
-  children,
-}: {
-  inspectionWorkspace: ReactElement | null;
-  strategikonWorkspace?: ReactNode;
-  strategikonOpen?: boolean;
-  children: ReactElement;
-}): ReactElement {
-  return (
-    <ShellViewportSwap
-      className="run-phase-workspace"
-      primaryClassName="run-phase-primary"
-      primary={children}
-      workspaceOpen={strategikonOpen || Boolean(inspectionWorkspace)}
-      aria-label="Run workspace"
-    >
-      {inspectionWorkspace}
-      {strategikonWorkspace}
-    </ShellViewportSwap>
-  );
-}
-
 function deploymentSquareLabel(cellKey: string | undefined, rows: number): string | null {
   const match = cellKey ? /^(\d+),(\d+)$/.exec(cellKey) : null;
   if (!match) return null;
   return `${String.fromCharCode(65 + Number(match[1]))}${rows - Number(match[2])}`;
-}
-
-function KlerosisOverlay({
-  run,
-  onChooseMode,
-}: {
-  run: RunDocument;
-  onChooseMode: (mode: 'deploy-all' | 'step-through') => void;
-}): ReactElement {
-  const dealt = new Set(run.deployment?.dealtCardIds ?? []);
-  const cards = run.cards.filter((card) => dealt.has(card.id));
-  const deploying = new Set(run.deployment?.deployingUnitIds ?? []);
-  return (
-    <div className="run-klerosis-overlay" data-testid="run-klerosis">
-      <InnerChromeBox className="run-klerosis-panel">
-        <div className="run-klerosis-heading">
-          <span className="skirmish-eyebrow">Klerosis</span>
-          <h2>Your deployment deal</h2>
-          <p>These cards supply this combat. Their units enter the pool while space allows.</p>
-        </div>
-        <div className="run-klerosis-cards" role="list" aria-label="Cards dealt for this combat">
-          {cards.map((owned) => {
-            const card = runCardDefinition(owned.coreId);
-            return card ? (
-              <div role="listitem" className="run-klerosis-card" key={owned.id}>
-                <RunCard card={card} mode="reference" cardType={owned.cardType} adlected />
-              </div>
-            ) : null;
-          })}
-        </div>
-        <div className="run-klerosis-rosters">
-          <div>
-            <span className="skirmish-eyebrow">Deploying</span>
-            <ul>
-              {run.army.filter((unit) => deploying.has(unit.id)).map((unit) => (
-                <li key={unit.id}>{runUnitRosterLabel(unit)}</li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <span className="skirmish-eyebrow">Unavailable</span>
-            <ul>
-              {run.army.filter((unit) => !deploying.has(unit.id)).map((unit) => (
-                <li key={unit.id}>{runUnitRosterLabel(unit)}</li>
-              ))}
-              {run.army.every((unit) => deploying.has(unit.id)) ? <li>None</li> : null}
-            </ul>
-          </div>
-        </div>
-        <div className="run-klerosis-actions">
-          <ChromeButton
-            unit="inner-text-button"
-            className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-            onClick={() => onChooseMode('deploy-all')}
-          >
-            Deploy all
-          </ChromeButton>
-          <ChromeButton
-            unit="inner-text-button"
-            className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
-            onClick={() => onChooseMode('step-through')}
-          >
-            Step through
-          </ChromeButton>
-        </div>
-      </InnerChromeBox>
-    </div>
-  );
 }
 
 function DeploymentControls({
@@ -503,7 +411,7 @@ function DeploymentControls({
         <div className="skirmish-score-panel run-deployment-summary">
           <div>
             <span className="skirmish-eyebrow">Phase</span>
-            <strong>{stage === 'klerosis' ? 'Klerosis' : stage === 'primogeniture' ? 'Primogeniture' : 'Farrago'}</strong>
+            <strong>{stage === 'klerosis' ? 'Klerosis' : stage === 'pace' ? 'Pace' : stage === 'primogeniture' ? 'Primogeniture' : 'Farrago'}</strong>
           </div>
           <div>
             <span className="skirmish-eyebrow">Placed</span>
@@ -511,7 +419,7 @@ function DeploymentControls({
           </div>
         </div>
 
-        {mode ? (
+        {mode || stage === 'pace' ? (
           <div className="skirmish-view-group run-deployment-control">
             <span className="skirmish-eyebrow">Pace</span>
             <div className="run-inline-actions">
@@ -535,7 +443,7 @@ function DeploymentControls({
           </div>
         ) : null}
 
-        {activeUnit && stage !== 'draw' && stage !== 'klerosis' ? (
+        {activeUnit && stage !== 'draw' && stage !== 'klerosis' && stage !== 'pace' ? (
           <div className="skirmish-view-group run-deployment-control" data-testid="deployment-active-unit">
             <span className="skirmish-eyebrow">{stage === 'primogeniture' ? 'His Grace' : 'Drawn'}</span>
             <strong>{runUnitRosterLabel(activeUnit)}</strong>
@@ -605,12 +513,10 @@ function useRunDeploymentPresentation({
   run,
   view,
   onNavigate,
-  path,
 }: {
   run: RunDocument;
   view: RunScreenView;
   onNavigate: (view: RunScreenView) => void;
-  path: string;
 }): RunDeploymentPresentation | null {
   const replace = useActiveRun((state) => state.replace);
   const level = run.war.battles[run.battleIndex].level;
@@ -650,9 +556,7 @@ function useRunDeploymentPresentation({
   if (run.phase !== 'deployment') return null;
   return {
     surfaceState: deploymentSurfaceState,
-    titleBarContent: <RunTitleBarStatus run={prepared} path={path} />,
-    lipsanonIds: prepared.lipsana,
-    screenClassName: `run-screen run-deployment-screen${visibleLipsanonCount(prepared) ? ' has-lipsana' : ''}`,
+    screenClassName: 'run-deployment-screen',
     boardClassName: 'run-deployment-board',
     boardAriaLabel: `${level.name} deployment battlefield`,
     onArrivingUnitIdsChange: () => undefined,
@@ -694,12 +598,7 @@ function useRunDeploymentPresentation({
         </button>
       );
     },
-    boardOverlay: stage === 'klerosis' ? (
-      <KlerosisOverlay
-        run={prepared}
-        onChooseMode={(mode) => replace(chooseDeploymentMode(prepared, level, mode))}
-      />
-    ) : activeAdlected && hoveredPlacementCell && hoveredPlacementSeat ? (
+    boardOverlay: activeAdlected && hoveredPlacementCell && hoveredPlacementSeat ? (
       <span
         className={`board-unit-seat is-${activeAdlected.type} run-deployment-placement-ghost`}
         data-testid="deployment-placement-ghost"
@@ -1167,24 +1066,24 @@ function VictoryPanel({ run }: { run: RunDocument }): ReactElement {
 }
 
 function RunBattlefieldPanel({
+  form,
   run,
   routePath,
   routeSearch,
   view,
   onNavigate,
-  inspectionWorkspace,
 }: {
+  form: RunForm;
   run: RunDocument;
   view: RunScreenView;
   onNavigate: (view: RunScreenView) => void;
-  inspectionWorkspace: ReactElement | null;
   routePath: string;
   routeSearch: string;
 }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   const currentRun = useActiveRun((state) => state.run);
   const { abandonDialog, requestAbandon } = useRunAbandon(run);
-  const deploymentPresentation = useRunDeploymentPresentation({ run, view, onNavigate, path: routePath });
+  const deploymentPresentation = useRunDeploymentPresentation({ run, view, onNavigate });
   const baseLevel = run.war.battles[run.battleIndex].level;
   // Battle-runtime writes (including Restart) do not change deployment. Keep the
   // projected board document referentially stable across those persistence updates,
@@ -1203,12 +1102,7 @@ function RunBattlefieldPanel({
   );
   const runId = run.id;
   const battleSeed = run.deployment?.seed ?? run.seed;
-  const lipsanonIds = run.lipsana;
   const canCashOutPawn = hasLipsanon(run, 'mercenary-boat');
-  const titleBarContent = useMemo(
-    () => <RunTitleBarStatus run={run} path={routePath} />,
-    [routePath, run],
-  );
 
   const transformCommittedBoard = useCallback<RunBattleTransformSink>((game, _events) => {
       let active = useActiveRun.getState().run;
@@ -1259,8 +1153,6 @@ function RunBattlefieldPanel({
     level: battleLevel,
     seed: battleSeed,
     activityId: runBattleActivityId(runId, run.battleIndex),
-    titleBarContent,
-    lipsanonIds,
     transformCommittedBoard,
     undoAdapter: {
       capture: () => {
@@ -1295,7 +1187,7 @@ function RunBattlefieldPanel({
           if (latest?.id === runId) replace(cashOutPawn(latest, unitId));
         }
       : undefined,
-  }), [battleLevel, battleSeed, canCashOutPawn, lipsanonIds, replace, requestAbandon, run.battleIndex, runId, titleBarContent, transformCommittedBoard]);
+  }), [battleLevel, battleSeed, canCashOutPawn, replace, requestAbandon, run.battleIndex, runId, transformCommittedBoard]);
 
   // Subscribe to the current document so a Paid Crossing cash-out or Reservist event
   // refreshes the hook inputs without restarting the already-live matching board.
@@ -1304,11 +1196,11 @@ function RunBattlefieldPanel({
     <>
       {run.phase === 'battle' ? abandonDialog : null}
       <Skirmish
+        runForm={form}
         runBattle={presentation}
         runDeployment={deploymentPresentation}
         routePath={routePath}
         routeSearch={routeSearch}
-        runWorkspace={inspectionWorkspace}
       />
     </>
   );
@@ -1380,6 +1272,17 @@ export function RunScreen({
   // The pre-hydration document may exist from browser storage, but the screen treats
   // the Run as absent until hydrate() has arbitrated browser and account copies.
   const shellRun = hydrated ? run : null;
+  const klerosisRun = useMemo(() => {
+    if (!shellRun || shellRun.phase !== 'deployment') return null;
+    const level = shellRun.war.battles[shellRun.battleIndex]?.level;
+    if (!level) return null;
+    const initialized = shellRun.deployment ? shellRun : prepareDeployment(shellRun);
+    const prepared = resolveForcedDeploymentChoices(initialized, level);
+    return deploymentAtKlerosisBoundary(prepared) ? prepared : null;
+  }, [shellRun]);
+  useEffect(() => {
+    if (klerosisRun && klerosisRun !== shellRun) replace(klerosisRun);
+  }, [klerosisRun, replace, shellRun]);
   const rawView: RunScreenView = sceneSnapshot.workspace.view === 'strategikon'
     ? 'primary'
     : sceneSnapshot.workspace.view === 'bona-target'
@@ -1536,23 +1439,6 @@ export function RunScreen({
           </RunSceneViewport>
         )
         : null;
-  if (!craftWorkspace && (shellRun?.phase === 'deployment' || shellRun?.phase === 'battle')) {
-    return (
-      <RunPresentationSceneSlot
-        className="run-scene-slot"
-        sceneInstance={`${shellRun.id}:battlefield:${shellRun.battleIndex}:${runSceneWorkspaceIdentity(sceneSnapshot.workspace)}`}
-      >
-        <RunBattlefieldPanel
-          run={shellRun}
-          routePath={routePath}
-          routeSearch={routeSearch}
-          view={view}
-          onNavigate={navigateRunView}
-          inspectionWorkspace={inspectionWorkspace}
-        />
-      </RunPresentationSceneSlot>
-    );
-  }
   const workspace = craftWorkspace ?? (!hydrated
     ? (
       <RunSceneViewport
@@ -1588,6 +1474,16 @@ export function RunScreen({
           </ChromeNavButton>
         </RunSceneViewport>
       )
+      : klerosisRun
+        ? (
+          <RunKlerosisWorkspace
+            run={klerosisRun}
+            onConfirm={() => {
+              const level = klerosisRun.war.battles[klerosisRun.battleIndex].level;
+              replace(confirmKlerosis(klerosisRun, level));
+            }}
+          />
+        )
       : shellRun.phase === 'sectio' && shellRun.sectio
             ? (
               <SectioPanel
@@ -1627,64 +1523,70 @@ export function RunScreen({
               : shellRun.phase === 'aftermath' && shellRun.aftermath
                 ? <AftermathPanel run={shellRun} />
                 : <VictoryPanel run={shellRun} />);
-  return (
-    <RunPresentationSceneSlot
-      className="run-scene-slot"
-      sceneInstance={`${shellRun?.id ?? 'none'}:${sceneSnapshot.phase}:${runSceneWorkspaceIdentity(sceneSnapshot.workspace)}`}
-    >
-      {cardFlightElement}
-      {/* Sectio/victory use the shared HUD without mounting a battlefield. Their replaceable
-          presentation scene still owns its HUD view state explicitly; it must not borrow an
-          outgoing or incoming battlefield's camera/overlay store during director overlap. */}
+  const battlefieldActive = !craftWorkspace
+    && !klerosisRun
+    && (shellRun?.phase === 'deployment' || shellRun?.phase === 'battle');
+  const runSurfacePhase = klerosisRun ? 'klerosis' : sceneSnapshot.phase;
+  const sceneInstance = battlefieldActive && shellRun
+    ? `${shellRun.id}:battlefield:${shellRun.battleIndex}:${runSceneWorkspaceIdentity(sceneSnapshot.workspace)}`
+    : `${shellRun?.id ?? 'none'}:${runSurfacePhase}:${runSceneWorkspaceIdentity(sceneSnapshot.workspace)}`;
+  const visibleLipsanonIds = shellRun
+    ? bonaTarget
+      ? [...shellRun.lipsana, bonaTarget.lipsanonId]
+      : shellRun.lipsana
+    : [];
+  const form = createRunForm({
+    run: shellRun,
+    routePath,
+    routeSearch,
+    strategikonOpen,
+    titleBarContent: shellRun ? <RunTitleBarStatus run={shellRun} path={routePath} /> : null,
+    lipsanonIds: visibleLipsanonIds,
+    inspectionWorkspace,
+    className: `run-screen${shellRun && (visibleLipsanonCount(shellRun) || bonaTarget) ? ' has-lipsana' : ''}`,
+  });
+  const formSurface = battlefieldActive && shellRun
+    ? (
+      <RunBattlefieldPanel
+        form={form}
+        run={shellRun}
+        routePath={routePath}
+        routeSearch={routeSearch}
+        view={view}
+        onNavigate={navigateRunView}
+      />
+    )
+    : (
       <SkirmishViewStoreProvider>
-        <SkirmishShell
-          className={`run-screen${shellRun && (
-            visibleLipsanonCount(shellRun)
-            || bonaTarget
-          ) ? ' has-lipsana' : ''}`}
-          testId="run-screen"
-          titleBarContent={shellRun ? <RunTitleBarStatus run={shellRun} path={routePath} /> : null}
-          persistentViewportArtwork={persistentSectioScene}
-          lipsanonIds={shellRun
-            ? bonaTarget
-              ? [...shellRun.lipsana, bonaTarget.lipsanonId]
-              : shellRun.lipsana
-            : []}
-          shellWorkspaceCoversLipsana={strategikonOpen || Boolean(inspectionWorkspace)}
-          controlsContent={shellRun
-            ? (
-              <RunMetaControls
-                run={shellRun}
-                view={view}
-                onNavigate={navigateRunView}
-                showAbandon={shellRun.phase !== 'victory'}
-                adlectioInFlight={adlectioBusy}
-              />
-            )
-            : null}
-          readyToCompose={hydrated}
-          hudProps={{
-            enableGlobalShortcuts: false,
-            strategikonPath: shellRun ? routePath : null,
-            strategikonSearch: routeSearch,
-          }}
-        >
-          <RunPhaseWorkspace
-            inspectionWorkspace={inspectionWorkspace}
-            strategikonOpen={strategikonOpen}
-            strategikonWorkspace={(
-              <GameplayWorkspaceSceneSlot
-                className="strategikon-slot"
-                sceneInstance={strategikonOpen ? routePath : '/run/strategikon'}
-              >
-                {strategikonOpen ? <Strategikon path={routePath} search={routeSearch} run={shellRun} /> : null}
-              </GameplayWorkspaceSceneSlot>
-            )}
-          >
-            {workspace}
-          </RunPhaseWorkspace>
-        </SkirmishShell>
+        {form.add(runActivity({
+          id: sceneInstance,
+          testId: 'run-screen',
+          controlsContent: shellRun ? (
+            <RunMetaControls
+              run={shellRun}
+              view={view}
+              onNavigate={navigateRunView}
+              showAbandon={shellRun.phase !== 'victory'}
+              adlectioInFlight={adlectioBusy}
+            />
+          ) : null,
+          hudProps: { enableGlobalShortcuts: false },
+          persistentViewportArtwork: persistentSectioScene,
+          viewport: {
+            className: 'run-phase-workspace',
+            primaryClassName: 'run-phase-primary',
+            primary: workspace,
+            ariaLabel: 'Run workspace',
+            sceneInstance: '/run',
+          },
+          readyToCompose: hydrated,
+        }))}
       </SkirmishViewStoreProvider>
+    );
+  return (
+    <RunPresentationSceneSlot className="run-scene-slot" sceneInstance={sceneInstance}>
+      {cardFlightElement}
+      {formSurface}
     </RunPresentationSceneSlot>
   );
 }

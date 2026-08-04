@@ -340,8 +340,9 @@ an incomplete row is an availability failure.
   `card-property-icon` under `ui/kit/icons/card-properties/<property>.png`;
   state roles use component `unit-ability-icon` under
   `ui/kit/icons/game/<state>.png`. The closed pairs are
-  Pestiferous/Cacochymic, Concinnous/Eutactic, Legatine/Adlected, and
-  Hieratic/Agminate. All eight roles are accepted and installed, and the
+  Pestiferous/Cacochymic, Concinnous/Eutactic, Legatine/Adlected,
+  Hieratic/Agminate, and Praecipuus/Primogeniture. All ten roles are accepted
+  and installed, and the
   coordinated cutover has shipped: the card type strip carries its property
   symbol instead of an em-dash qualifier suffix, every public unit state draws
   its own icon, and the Cacochymic diamond placeholder that ADR-0312 named as
@@ -349,8 +350,8 @@ an incomplete row is an availability failure.
   `ui/run/card-status/plagued-v1.png`. Runtime code cannot infer a role from a
   slot path or substitute CSS, text, a generic glyph, or the other member of a
   pair. Every slot is named for the state or property it serves —
-  `ui/kit/icons/game/{cacochymic,eutactic,adlected,agminate}.png` and
-  `ui/kit/icons/card-properties/{pestiferous,concinnous,legatine,hieratic}.png` — as are
+  `ui/kit/icons/game/{cacochymic,eutactic,adlected,agminate,primogeniture}.png` and
+  `ui/kit/icons/card-properties/{pestiferous,concinnous,legatine,hieratic,praecipuus}.png` — as are
   `ui/surfaces/card-type-legatine.png` and
   `ui/run/card-prototypes/legatine-adlected-frame-v1.png`. ADR-0374 completed this
   cutover by re-pointing the seven coined-word slots onto byte-identical successors and
@@ -364,12 +365,24 @@ an incomplete row is an availability failure.
   Studio Viewer and still saves only a non-publishing design draft; promoting a
   new fit means committing those constants (ADR-0318, ADR-0339, ADR-0340,
   ADR-0341).
+  Praecipuus/Primogeniture is the fifth pair in that instrument. It
+  reads exact candidates from `review/run-card-icons/praecipuus/property.png`
+  and `review/run-card-icons/primogeniture/state.png`, projects them on canonical
+  His Grace with the owner-selected Codex illustration and Codex royal-purple
+  starter-frame review pixels over measured Hieratic geometry, and initializes older
+  four-pair drafts from the committed Praecipuus fit. Saving these review slots
+  remains non-publishing. The separately approved runtime cutover installs
+  `ui/kit/icons/card-properties/praecipuus.png` and
+  `ui/kit/icons/game/primogeniture.png` as dedicated closed roles, with committed
+  placements `{1.35, -1.05, 2.4}` and shared `{4.2, -0.45, 4.15}` respectively
+  (ADR-0412, ADR-0414).
   Run-card frame variants use typed standalone native 1060×1484 PNG slots:
   `ui/run/card-prototypes/frame-v1.png`,
   `ui/run/card-prototypes/pestiferous-frame-v1.png`,
-  `ui/run/card-prototypes/tactical-discipline-frame-v1.png`, and
+  `ui/run/card-prototypes/legatine-adlected-frame-v1.png`,
   `ui/run/card-prototypes/concinnous-frame-v1.png`, and
-  `ui/run/card-prototypes/hieratic-frame-v1.png`. The shared face selects the
+  `ui/run/card-prototypes/hieratic-frame-v1.png`, plus the dedicated
+  `ui/run/card-prototypes/praecipuus-frame-v1.png`. The shared face selects the
   semantic slot from the persisted qualifier; no frame owns live title, art,
   price, type, ledger, property, or flavor pixels. Every variant clips the same
   accepted gold-coin pixels from
@@ -381,6 +394,18 @@ an incomplete row is an availability failure.
   retain the same live integer. The dedicated alpha asset prevents surrounding
   frame pixels from entering non-card layouts; it does not introduce numbered
   coin artwork.
+  Starter status does not override that semantic frame selection. His Grace's
+  Praecipuus property owns the selected royal-purple frame treatment, while
+  property-free Front Lines uses the ordinary Standard Units frame and keeps
+  its starter identity in authored name and illustration (ADR-0413).
+  The two starter illustrations likewise own dedicated standalone slots at
+  `ui/run/card-art/his-grace/illustration.png` and
+  `ui/run/card-art/front-lines/illustration.png`; they do not alias compositionally
+  similar core cards or enter the atomic 49-card generated-art group (ADR-0414).
+  The exact two accepted illustration and two accepted icon derivatives use the
+  SHA-, slot-, archived-source-, geometry-, and transform-locked
+  `run-starter-selected-derivative-production-exception-v1`. No other resized
+  review medium inherits that exception. The Praecipuus frame remains native 1×.
   Concinnous resolves its accepted white frame. Hieratic resolves its distinct
   steel-armor frame and SHA-bound measured geometry while its gameplay mechanics
   remain deferred (ADR-0339); the two material identities never alias.

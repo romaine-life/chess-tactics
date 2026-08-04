@@ -23,6 +23,13 @@ for (const file of files) {
   const source = readFileSync(file, 'utf8');
   const normalized = relative(src, file).replaceAll('\\', '/');
   if (
+    source.includes("from './SkirmishShell'")
+    && normalized !== 'ui/RunForm.tsx'
+    && normalized !== 'ui/Skirmish.tsx'
+  ) {
+    fail(file, 'only RunForm and standalone Skirmish may import the structural gameplay shell');
+  }
+  if (
     normalized !== 'ui/navigation.ts'
     && (/addEventListener\(['"]popstate/.test(source)
       || source.includes('APP_NAVIGATION_EVENT')
@@ -101,9 +108,13 @@ for (const required of [
   'sceneSnapshot: RunSceneSnapshot',
   'const run = sceneSnapshot.run;',
   '<RunPresentationSceneSlot',
+  'const form = createRunForm({',
+  'form.add(runActivity({',
+  'form={form}',
   'navigateApp(nextHref, { replace: true, scroll: false })',
-  '<KlerosisOverlay',
-  'onChooseMode={(mode) => replace(chooseDeploymentMode(prepared, level, mode))}',
+  '<RunKlerosisWorkspace',
+  '&& !klerosisRun',
+  'replace(confirmKlerosis(klerosisRun, level))',
   'onArrivingUnitIdsChange: () => undefined',
 ]) {
   if (!runScreen.includes(required)) fail(runScreenPath, `missing closed Run scene-source invariant: ${required}`);
@@ -116,8 +127,43 @@ for (const forbidden of [
   'const [selectedState',
   'pendingPlacementArrivalUnitIdRef',
   'handleArrivingUnitIdsChange',
+  '<SkirmishShell',
+  '<Strategikon',
+  'KlerosisOverlay',
 ]) {
   if (runScreen.includes(forbidden)) fail(runScreenPath, `forbidden local Run presentation authority: ${forbidden}`);
+}
+
+const runKlerosisPath = resolve(src, 'ui/RunKlerosisWorkspace.tsx');
+const runKlerosis = readFileSync(runKlerosisPath, 'utf8');
+for (const required of [
+  '<RunSceneViewport',
+  "view: 'klerosis'",
+  'testId: \'run-klerosis-workspace\'',
+  'data-testid="klerosis-confirm"',
+]) {
+  if (!runKlerosis.includes(required)) fail(runKlerosisPath, `missing dedicated Klerosis workspace invariant: ${required}`);
+}
+for (const forbidden of ['SkirmishBoard', 'Deploy all', 'Step through']) {
+  if (runKlerosis.includes(forbidden)) fail(runKlerosisPath, `forbidden Klerosis battlefield coupling: ${forbidden}`);
+}
+
+const runFormPath = resolve(src, 'ui/RunForm.tsx');
+const runForm = readFileSync(runFormPath, 'utf8');
+for (const required of [
+  "const RUN_ACTIVITY = Symbol('run-activity')",
+  "const RUN_FORM = Symbol('run-form')",
+  'add(activity: RunActivity): ReactElement',
+  '<SkirmishShell',
+  'titleBarContent={form.titleBarContent}',
+  'lipsanonIds={form.lipsanonIds}',
+  'surfaceSignature={activity.surfaceSignature ?? activity.id}',
+  'strategikonPath,',
+  'className="strategikon-slot"',
+  '<Strategikon path={form.routePath} search={form.routeSearch} run={form.run} />',
+  'RunForm accepts only runActivity contributions.',
+]) {
+  if (!runForm.includes(required)) fail(runFormPath, `missing closed Run form invariant: ${required}`);
 }
 
 const bonaPath = resolve(src, 'ui/RunBonaVacantia.tsx');

@@ -10,6 +10,7 @@ partially_superseded_by:
   - "[ADR-0350](0350-run-deployment-promotes-the-mounted-battlefield-in-place.md)'s continuous mounted battlefield lifecycle"
   - "[ADR-0386](0386-shops-offer-read-only-intelligence-on-the-upcoming-battle.md)'s Shop-only pre-Battle opponent information"
   - "[ADR-0406](0406-klerosis-deals-cards-before-one-unit-at-a-time-deployment.md)'s universal Klerosis entry and one-unit queue"
+  - "[ADR-0416](0416-klerosis-is-a-dedicated-pre-battle-screen.md)'s dedicated Klerosis workspace before the battlefield"
 ---
 
 # ADR-0346: Run deployment is a battlefield state with conditional input

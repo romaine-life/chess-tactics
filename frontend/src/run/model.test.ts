@@ -9,6 +9,7 @@ import {
   ADLECTED_COST,
   GOLD_SCALE,
   HIERATIC_AGMINATE_OFFER_DENOMINATOR,
+  RUN_CARD_CATALOG,
   RUN_CARD_DECK,
   PIECE_VALUE,
   EUTACTIC_COST,
@@ -135,6 +136,12 @@ describe('Run piece economy', () => {
       expect(card.value).toBeLessThanOrEqual(9);
       expect(card.pieces.reduce((sum, piece) => sum + PIECE_VALUE[piece], 0)).toBe(card.value);
     }
+  });
+
+  it('keeps the two starter identities in the reference catalog without admitting them to offers', () => {
+    expect(RUN_CARD_CATALOG).toHaveLength(51);
+    expect(RUN_CARD_CATALOG.slice(0, 2).map((card) => card.id)).toEqual(['his-grace', 'front-lines']);
+    expect(RUN_CARD_DECK.some((card) => card.id === 'his-grace' || card.id === 'front-lines')).toBe(false);
   });
 
   it('starts with the permanent King, two Pawns, eight gold, and an optional three-card deal', () => {

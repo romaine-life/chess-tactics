@@ -67,7 +67,6 @@ import { runtimePortraitMasterSrc } from './portraitCandidates';
 import { preloadImages } from '../art/preload';
 import { nextLevelRef, orderedLevels, recordLevelWin } from '../campaign/progress';
 import { navigateApp, readValidatedReturnTo } from './navigation';
-import { useInstalledChromeCss } from './useInstalledChromeCss';
 import { PLAY_SKIRMISH_SELECTOR_HREF, playCampaignSelectorHref } from './playHubRoute';
 import { PredrawnCornerPicker } from './PredrawnCornerPicker';
 import {
@@ -81,22 +80,19 @@ import { useSkirmishViewStoreApi } from '../game/SkirmishViewStoreContext';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox, ShellViewportSwap } from './shared/ChromeBox';
 import { rememberAdminBattleHref } from '../admin/battleRoute';
-import type { LipsanonId, RunBattleReport } from '../run/model';
-import { useActiveRun } from '../run/store';
-import { LipsanonStrip } from './Lipsana';
+import type { RunBattleReport } from '../run/model';
 import { Strategikon } from './Strategikon';
 import { strategikonRouteLabels } from './strategikonRoute';
 import { GameplayWorkspaceSceneSlot } from './shell/AuthoredSceneSlot';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 import { RunBattleUndoButton } from './RunBattleUndoButton';
+import { SkirmishShell } from './SkirmishShell';
+import { runActivity, type RunForm } from './RunForm';
 
 export interface RunBattlePresentation {
   level: Level;
   seed: number;
   activityId: string;
-  /** Run identity and measures remain the title-bar authority during Battle (ADR-0366). */
-  titleBarContent: ReactNode;
-  lipsanonIds: readonly LipsanonId[];
   /** The Battle is won. What it cost is read off the live board here, because nothing
    *  outside it keeps the turn count once the board unmounts. */
   onVictory: (report: RunBattleReport) => void;
@@ -110,8 +106,6 @@ export interface RunBattlePresentation {
 /** Deployment chrome and interaction projected onto the Battle compositor already on screen. */
 export interface RunDeploymentPresentation {
   surfaceState: SkirmishBoardSurfaceState;
-  titleBarContent: ReactNode;
-  lipsanonIds: readonly LipsanonId[];
   controlsContent: ReactNode;
   renderCellOverlay: (context: SkirmishBoardCellOverlayContext) => ReactNode;
   boardOverlay: ReactNode;
@@ -121,13 +115,23 @@ export interface RunDeploymentPresentation {
   onArrivingUnitIdsChange: (unitIds: readonly string[]) => void;
 }
 
-export interface SkirmishProps {
-  runBattle?: RunBattlePresentation | null;
-  runDeployment?: RunDeploymentPresentation | null;
-  runWorkspace?: ReactNode;
+interface StandaloneSkirmishProps {
+  runForm?: never;
+  runBattle?: never;
+  runDeployment?: never;
   routePath?: string;
   routeSearch?: string;
 }
+
+interface RunSkirmishProps {
+  runForm: RunForm;
+  runBattle: RunBattlePresentation;
+  runDeployment?: RunDeploymentPresentation | null;
+  routePath?: string;
+  routeSearch?: string;
+}
+
+export type SkirmishProps = StandaloneSkirmishProps | RunSkirmishProps;
 
 export function shouldLoadSkirmishWorldBackground(
   boardSettled: boolean,
@@ -136,98 +140,12 @@ export function shouldLoadSkirmishWorldBackground(
   return boardSettled && !predrawnBackgroundActive;
 }
 
-export function SkirmishShell({
-  className = '',
-  testId = 'skirmish',
-  titleBarContent,
-  persistentViewportArtwork = null,
-  lipsanonIds = [],
-  shellWorkspaceCoversLipsana = false,
-  controlsContent,
-  hudProps,
-  hudContent,
-  screenStyle,
-  registerSceneSurface = true,
-  surfaceSignature,
-  readyToCompose = true,
-  children,
-}: {
-  className?: string;
-  testId?: string;
-  titleBarContent: ReactNode;
-  /** Artwork shared by sibling viewport destinations. It is deliberately outside
-   *  the director-faded overlap region so the environment remains continuous. */
-  persistentViewportArtwork?: ReactNode;
-  lipsanonIds?: readonly LipsanonId[];
-  shellWorkspaceCoversLipsana?: boolean;
-  controlsContent?: ReactNode;
-  hudProps?: SkirmishHudProps;
-  hudContent?: ReactNode;
-  screenStyle?: CSSProperties | null;
-  registerSceneSurface?: boolean;
-  /** Stable mounted-surface identity when chrome state changes within one battlefield. */
-  surfaceSignature?: string;
-  readyToCompose?: boolean;
-  children: ReactNode;
-}): ReactElement {
-  const installedChromeCss = useInstalledChromeCss();
-  const [paintAttempt, setPaintAttempt] = useState(0);
-  useEffect(() => {
-    const shell = document.querySelector('.shell');
-    shell?.classList.add('skirmish-active');
-    return () => shell?.classList.remove('skirmish-active');
-  }, []);
-  const resolvedScreenStyle = screenStyle === undefined
-    ? {
-        '--skirmish-world-bg': `url("${defaultBackgroundSet().world}")`,
-      } as CSSProperties
-    : screenStyle ?? undefined;
-  const surface = (
-    <>
-      {persistentViewportArtwork ? (
-        <div className="shell-persistent-viewport-artwork" aria-hidden="true">
-          {persistentViewportArtwork}
-        </div>
-      ) : null}
-      {shellWorkspaceCoversLipsana ? null : <LipsanonStrip lipsanonIds={lipsanonIds} />}
-      {children}
-      {hudContent === undefined
-        ? <SkirmishHud {...hudProps} controlsContent={controlsContent} />
-        : hudContent}
-    </>
-  );
-
-  return (
-    <div
-      data-testid={testId}
-      className={`skirmish-screen${persistentViewportArtwork ? ' has-persistent-viewport-artwork' : ''} ${className}`.trim()}
-      style={resolvedScreenStyle}
-    >
-      {installedChromeCss ? <style data-skirmish-chrome-family dangerouslySetInnerHTML={{ __html: installedChromeCss }} /> : null}
-      <TitleBarSlot region="center">{titleBarContent}</TitleBarSlot>
-      {registerSceneSurface ? (
-        <SceneSurfaceReadiness
-          surface="gameplay-hud"
-          signature={`${surfaceSignature ?? testId}:${paintAttempt}`}
-          readyToCompose={readyToCompose}
-          loadingLabel="Preparing Run…"
-          onRetry={() => setPaintAttempt((value) => value + 1)}
-          showStatus={false}
-        >
-          {surface}
-        </SceneSurfaceReadiness>
-      ) : surface}
-    </div>
-  );
-}
-
-function SkirmishSession({
-  runBattle = null,
-  runDeployment = null,
-  runWorkspace = null,
-  routePath = window.location.pathname,
-  routeSearch = window.location.search,
-}: SkirmishProps = {}) {
+function SkirmishSession(props: SkirmishProps = {}) {
+  const runForm = props.runForm ?? null;
+  const runBattle = props.runBattle ?? null;
+  const runDeployment = props.runDeployment ?? null;
+  const routePath = props.routePath ?? window.location.pathname;
+  const routeSearch = props.routeSearch ?? window.location.search;
   const sceneActivated = useSceneActivation();
   const sceneRevealed = useSceneReveal();
   const skirmishStore = useSkirmishStoreApi();
@@ -255,8 +173,8 @@ function SkirmishSession({
     };
   }, [runBattle?.transformCommittedBoard, runBattle?.undoAdapter, skirmishStore]);
   const routeParams = useMemo(() => new URLSearchParams(routeSearch), [routeSearch]);
-  const strategikonOpen = routePath.startsWith('/play/strategikon/') || routePath.startsWith('/run/strategikon/');
-  const strategikonBase = runBattle ? '/run' : '/play';
+  const strategikonOpen = routePath.startsWith('/play/strategikon/');
+  const strategikonBase = '/play';
   const predrawnPreview = useMemo(
     () => predrawnBoardPreviewSrc(routeSearch, window.location.origin),
     [routeSearch],
@@ -1214,22 +1132,25 @@ function SkirmishSession({
         '--skirmish-world-bg': `url("${defaultBackgroundSet().world}")`,
       } as CSSProperties
     : undefined;
+  const battleHudProps: SkirmishHudProps = {
+    canStartNewSkirmish: Boolean(activeLevel) && !isCampaignPlay && !isRunPlay,
+    onRestart: showRetryStud ? retrySkirmish : null,
+    restartLabel: activeLevel ? (isRunPlay ? 'Restart Battle' : isCampaignPlay ? 'Restart level' : 'Restart board') : 'Restart skirmish',
+    onNewSkirmish: startNewScenario,
+    newSkirmishLabel: newScenarioLabel,
+    showClockControl: !isCampaignPlay,
+    clockControlValue: activeLevel ? scenarioTimeControl : undefined,
+    onClockControlChange: activeLevel ? setScenarioTimeControl : undefined,
+    returnHref,
+    returnLabel,
+    netInteractive: netSeatInteractive,
+    onOpenPredrawnRegistration: predrawnPreview ? () => setPredrawnPickerOpen(true) : null,
+    onPawnCashOut: runBattle?.onPawnCashOut ?? null,
+    onAbandonRun: runBattle?.onAbandonRun ?? null,
+  };
   const battleHud = boardSettled && !boardSurfaceError ? (
     <SkirmishHud
-      canStartNewSkirmish={Boolean(activeLevel) && !isCampaignPlay && !isRunPlay}
-      onRestart={showRetryStud ? retrySkirmish : null}
-      restartLabel={activeLevel ? (isRunPlay ? 'Restart Battle' : isCampaignPlay ? 'Restart level' : 'Restart board') : 'Restart skirmish'}
-      onNewSkirmish={startNewScenario}
-      newSkirmishLabel={newScenarioLabel}
-      showClockControl={!isCampaignPlay}
-      clockControlValue={activeLevel ? scenarioTimeControl : undefined}
-      onClockControlChange={activeLevel ? setScenarioTimeControl : undefined}
-      returnHref={returnHref}
-      returnLabel={returnLabel}
-      netInteractive={netSeatInteractive}
-      onOpenPredrawnRegistration={predrawnPreview ? () => setPredrawnPickerOpen(true) : null}
-      onPawnCashOut={runBattle?.onPawnCashOut ?? null}
-      onAbandonRun={runBattle?.onAbandonRun ?? null}
+      {...battleHudProps}
       strategikonPath={routePath}
       strategikonSearch={routeSearch}
     />
@@ -1251,7 +1172,6 @@ function SkirmishSession({
   ) : null;
   const battleWorkspaceLayer = (
     <>
-      {runWorkspace}
       <GameplayWorkspaceSceneSlot
         className="strategikon-slot"
         sceneInstance={strategikonOpen ? routePath : `${strategikonBase}/strategikon`}
@@ -1260,7 +1180,7 @@ function SkirmishSession({
           <Strategikon
             path={routePath}
             search={routeSearch}
-            run={runBattle ? useActiveRun.getState().run : null}
+            run={null}
           />
         ) : null}
       </GameplayWorkspaceSceneSlot>
@@ -1275,7 +1195,6 @@ function SkirmishSession({
   const battleTitleRoute = runDeployment
     ? ''
     : [
-        ...(runBattle ? ['Battle'] : []),
         ...(strategikonOpen ? strategikonRouteLabels(routePath) : []),
       ].join(' › ');
   const skirmishTitleBarContent = playableSurfaceReady ? (
@@ -1314,26 +1233,9 @@ function SkirmishSession({
       </div>
     </>
   ) : null;
-  const titleBarContent = runDeployment?.titleBarContent
-    ?? runBattle?.titleBarContent
-    ?? skirmishTitleBarContent;
-
-  return (
-    <SkirmishShell
-      testId={runDeployment ? 'run-deployment' : 'skirmish'}
-      className={runDeployment?.screenClassName ?? (screenPredrawnBackgroundActive ? 'is-predrawn-board' : '')}
-      shellWorkspaceCoversLipsana={Boolean(runWorkspace) || strategikonOpen}
-      titleBarContent={titleBarContent}
-      lipsanonIds={runDeployment?.lipsanonIds ?? runBattle?.lipsanonIds ?? []}
-      controlsContent={runDeployment?.controlsContent}
-      hudProps={runDeployment ? { enableGlobalShortcuts: false } : undefined}
-      screenStyle={runDeployment ? undefined : screenStyle ?? null}
-      registerSceneSurface={Boolean(runBattle)}
-      surfaceSignature={runBattle?.activityId}
-      readyToCompose={playableSurfaceReady}
-      hudContent={runDeployment ? undefined : hudContent}
-    >
-
+  const titleBarContent = skirmishTitleBarContent;
+  const titleBarContributions = (
+    <>
       {/* Test play is an authoring loop, so its return is a persistent title-bar action rather
           than an easy-to-miss floating chip. The target still comes from the validated exact
           editor snapshot above; this only gives that existing route its canonical home. */}
@@ -1355,10 +1257,7 @@ function SkirmishSession({
           }]}
         />
       ) : null}
-
-      {/* The bottom-centre ornament diamond becomes a Retry button in single-player: one
-          click restarts the current battle. Portals into the shell bar's stud slot (ADR-0042)
-          so it sits exactly on the decorative nailhead without disturbing any other bar track. */}
+      {/* The bottom-centre ornament diamond becomes a Retry button in single-player. */}
       {!runDeployment && showRetryStud && playableSurfaceReady ? (
         <TitleBarSlot region="stud">
           <button
@@ -1373,69 +1272,154 @@ function SkirmishSession({
           </button>
         </TitleBarSlot>
       ) : null}
+    </>
+  );
+  const battlefieldPrimary = (
+    <div className="skirmish-board-frame">
+      {mapError ? (
+        <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate" role="alert" style={{ gap: 10 }}>
+          <strong>{mapError}</strong>
+          <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} to={returnHref ?? PLAY_SKIRMISH_SELECTOR_HREF}>
+            {returnIsEditor ? 'Back to editor' : returnIsDeploymentLab ? returnLabel : 'Back to Play'}
+          </ChromeNavButton>
+        </InnerChromeBox>
+      ) : boardSettled ? (
+        <>
+          {/* ADR-0235: Restart changes match state, not board identity. Keep this
+            compositor mounted so pieces return to their starting positions without
+            hiding, reacquiring, or replaying the board's first-frame lifecycle. */}
+          <SkirmishBoard
+            interactive={!runDeployment && sceneActivated && (!net || (netSeatInteractive && !netRelayFrozen))}
+            surfaceState={presentedDeploymentSurface}
+            renderCellOverlay={runDeployment?.renderCellOverlay}
+            boardOverlay={runDeployment?.boardOverlay}
+            className={runDeployment?.boardClassName}
+            ariaLabel={runDeployment?.boardAriaLabel}
+            onSurfaceReady={setBoardSurfaceReady}
+            onSurfaceError={setBoardSurfaceError}
+            onArrivingUnitIdsChange={runDeployment?.onArrivingUnitIdsChange}
+            reveal={playableSurfaceReady && sceneRevealed}
+            activate={!runDeployment && sceneActivated}
+            unitArrivals={sceneActivated ? 'active' : 'pending'}
+            predrawnReview={predrawnPreview ? {
+              src: predrawnPreview,
+              registration: predrawnRegistration,
+            } : undefined}
+          />
+          {!playableSurfaceReady && !boardSurfaceError ? (
+            <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate skirmish-surface-loading" role="status">
+              <strong>Preparing battlefield…</strong>
+              <small>Composing terrain, units, and controls</small>
+            </InnerChromeBox>
+          ) : null}
+        </>
+      ) : routeLobby ? (
+        <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate" role="status">
+          <strong>{netError ?? 'Connecting…'}</strong>
+          <small>Multiplayer</small>
+        </InnerChromeBox>
+      ) : routeMap ? (
+        <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate" role="status">
+          <strong>Loading map…</strong>
+          <small>Shared map</small>
+        </InnerChromeBox>
+      ) : null}
+    </div>
+  );
+  if (runForm && runBattle) {
+    return runForm.add(runActivity({
+      id: runBattle.activityId,
+      testId: runDeployment ? 'run-deployment' : 'skirmish',
+      className: runDeployment?.screenClassName ?? (screenPredrawnBackgroundActive ? 'is-predrawn-board' : ''),
+      controlsContent: runDeployment?.controlsContent,
+      hudProps: runDeployment ? { enableGlobalShortcuts: false } : battleHudProps,
+      beforeViewport: titleBarContributions,
+      viewport: {
+        className: 'skirmish-war-room',
+        primaryClassName: 'skirmish-field',
+        primary: battlefieldPrimary,
+        persistent: battlePersistentOverlay,
+        ariaLabel: runDeployment ? 'Run deployment battlefield' : 'Run Battle battlefield',
+        sceneInstance: '/run',
+      },
+      afterViewport: (
+        <>
+          {predrawnPickerOpen && predrawnPreview ? (
+            <PredrawnCornerPicker
+              src={predrawnPreview}
+              initialRegistration={predrawnRegistration}
+              columns={activeLevel?.board.cols ?? 1}
+              rows={activeLevel?.board.rows ?? 1}
+              onChange={savePredrawnRegistration}
+              onClose={() => setPredrawnPickerOpen(false)}
+            />
+          ) : null}
+          {!runDeployment && routeLevel && game.winner ? (
+            <div className="campaign-result" role="dialog" aria-modal="true" aria-label="Run Battle result" data-testid="run-battle-result">
+              <div className="settings-frame campaign-result-panel">
+                <h2>{game.winner === 'player' ? 'Victory' : game.winner === 'draw' ? 'Draw' : 'Defeat'}</h2>
+                <p>{routeLevel.name} — {resultDetail ?? objectiveGoal}</p>
+                <div className="campaign-result-actions">
+                  <RunBattleUndoButton testId="undo-run-move-result" />
+                  {game.winner === 'player' ? (
+                    <ChromeButton unit="inner-text-button"
+                      className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+                      onClick={() => runBattle.onVictory({
+                        survivingUnitIds: game.pieces
+                          .filter((piece) => piece.alive && piece.side === 'player' && piece.id.startsWith('run-'))
+                          .map((piece) => piece.id),
+                        turns: turnsElapsed,
+                      })}
+                    >
+                      Continue
+                    </ChromeButton>
+                  ) : (
+                    <ChromeButton unit="inner-text-button"
+                      className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+                      onClick={replayLevel}
+                    >
+                      Retry
+                    </ChromeButton>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </>
+      ),
+      screenStyle: runDeployment ? undefined : screenStyle ?? null,
+      registerSceneSurface: true,
+      surfaceSignature: runBattle.activityId,
+      readyToCompose: playableSurfaceReady,
+    }));
+  }
+
+  return (
+    <SkirmishShell
+      testId={runDeployment ? 'run-deployment' : 'skirmish'}
+      className={runDeployment?.screenClassName ?? (screenPredrawnBackgroundActive ? 'is-predrawn-board' : '')}
+      shellWorkspaceCoversLipsana={strategikonOpen}
+      titleBarContent={titleBarContent}
+      lipsanonIds={[]}
+      controlsContent={runDeployment?.controlsContent}
+      hudProps={runDeployment ? { enableGlobalShortcuts: false } : undefined}
+      screenStyle={runDeployment ? undefined : screenStyle ?? null}
+      registerSceneSurface={Boolean(runBattle)}
+      surfaceSignature={runBattle?.activityId}
+      readyToCompose={playableSurfaceReady}
+      hudContent={runDeployment ? undefined : hudContent}
+    >
+
+      {titleBarContributions}
 
       <ShellViewportSwap
         className="skirmish-war-room"
         primaryClassName="skirmish-field"
-        workspaceOpen={strategikonOpen || Boolean(runWorkspace)}
+        workspaceOpen={strategikonOpen}
         persistent={battlePersistentOverlay}
         aria-label={runDeployment ? 'Run deployment battlefield' : strategikonOpen ? 'Battle reference workspace' : 'Skirmish battlefield'}
         data-scene-instance={strategikonBase}
-        primary={(
-          <>
-          <div className="skirmish-board-frame">
-            {mapError ? (
-              <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate" role="alert" style={{ gap: 10 }}>
-                <strong>{mapError}</strong>
-                <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} to={returnHref ?? PLAY_SKIRMISH_SELECTOR_HREF}>
-                  {returnIsEditor ? 'Back to editor' : returnIsDeploymentLab ? returnLabel : 'Back to Play'}
-                </ChromeNavButton>
-              </InnerChromeBox>
-            ) : boardSettled ? (
-              <>
-                {/* ADR-0235: Restart changes match state, not board identity. Keep this
-                  compositor mounted so pieces return to their starting positions without
-                  hiding, reacquiring, or replaying the board's first-frame lifecycle. */}
-                <SkirmishBoard
-                  interactive={!runDeployment && sceneActivated && (!net || (netSeatInteractive && !netRelayFrozen))}
-                  surfaceState={presentedDeploymentSurface}
-                  renderCellOverlay={runDeployment?.renderCellOverlay}
-                  boardOverlay={runDeployment?.boardOverlay}
-                  className={runDeployment?.boardClassName}
-                  ariaLabel={runDeployment?.boardAriaLabel}
-                  onSurfaceReady={setBoardSurfaceReady}
-                  onSurfaceError={setBoardSurfaceError}
-                  onArrivingUnitIdsChange={runDeployment?.onArrivingUnitIdsChange}
-                  reveal={playableSurfaceReady && sceneRevealed}
-                  activate={!runDeployment && sceneActivated}
-                  unitArrivals={sceneActivated ? 'active' : 'pending'}
-                  predrawnReview={predrawnPreview ? {
-                    src: predrawnPreview,
-                    registration: predrawnRegistration,
-                  } : undefined}
-                />
-                {!playableSurfaceReady && !boardSurfaceError ? (
-                  <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate skirmish-surface-loading" role="status">
-                    <strong>Preparing battlefield…</strong>
-                    <small>Composing terrain, units, and controls</small>
-                  </InnerChromeBox>
-                ) : null}
-              </>
-            ) : routeLobby ? (
-              <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate" role="status">
-                <strong>{netError ?? 'Connecting…'}</strong>
-                <small>Multiplayer</small>
-              </InnerChromeBox>
-            ) : routeMap ? (
-              // A cold shared-map link fetches its snapshot before the board can mount.
-              <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate" role="status">
-                <strong>Loading map…</strong>
-                <small>Shared map</small>
-              </InnerChromeBox>
-            ) : null}
-          </div>
-          </>
-        )}
+        primary={battlefieldPrimary}
       >
         {battleWorkspaceLayer}
       </ShellViewportSwap>
@@ -1467,38 +1451,6 @@ function SkirmishSession({
                 <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} to={playCampaignSelectorHref(routeCampaignId)}>
                   Back to Campaign
                 </ChromeNavButton>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {!runDeployment && isRunPlay && runBattle && routeLevel && game.winner && (
-        <div className="campaign-result" role="dialog" aria-modal="true" aria-label="Run Battle result" data-testid="run-battle-result">
-          <div className="settings-frame campaign-result-panel">
-            <h2>{game.winner === 'player' ? 'Victory' : game.winner === 'draw' ? 'Draw' : 'Defeat'}</h2>
-            <p>{routeLevel.name} — {resultDetail ?? objectiveGoal}</p>
-            <div className="campaign-result-actions">
-              <RunBattleUndoButton testId="undo-run-move-result" />
-              {game.winner === 'player' ? (
-                <ChromeButton unit="inner-text-button"
-                  className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-                  onClick={() => runBattle.onVictory({
-                    survivingUnitIds: game.pieces
-                      .filter((piece) => piece.alive && piece.side === 'player' && piece.id.startsWith('run-'))
-                      .map((piece) => piece.id),
-                    turns: turnsElapsed,
-                  })}
-                >
-                  Continue
-                </ChromeButton>
-              ) : (
-                <ChromeButton unit="inner-text-button"
-                  className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-                  onClick={replayLevel}
-                >
-                  Retry
-                </ChromeButton>
               )}
             </div>
           </div>

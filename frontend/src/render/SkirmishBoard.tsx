@@ -2035,10 +2035,10 @@ export function SkirmishBoard({
           {!surfaceState ? <PremoveArrowLayer arrows={premoveChain} /> : null}
         </BoardLabBoard>
       </ViewPane>
-      {/* A battlefield modal belongs to the measured screen viewport, not to the board world.
+      {/* A battlefield overlay belongs to the measured screen viewport, not to the board world.
           TileGrid applies the camera transform to every child, so seating this inside
-          BoardLabBoard scales and pans the modal with the terrain. Keep it beside ViewPane:
-          cell overlays remain in board space, while Klerosis remains stable and hit-testable. */}
+          BoardLabBoard scales and pans it with the terrain. Keep it beside ViewPane while
+          cell overlays remain in board space. */}
       {boardOverlay}
       {/* The picked-up piece rides the cursor in screen space. Portaled to <body> so the board's
           own CSS transform can't become its containing block and misplace the fixed positioning;

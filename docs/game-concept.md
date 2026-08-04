@@ -208,16 +208,20 @@ these.
   must continue to show every unit property and retain the core card's flavor
   text in its bottom region. Repeated-unit grouping and a demonstrated maximum
   row count remain open presentation decisions (ADR-0270).
-- The starter army belongs to two starter-only royal-purple cards in the
-  Chartulary. **His Grace** contains the King; Praecipuus puts that card at the
+- The starter army belongs to two starter-only cards in the Chartulary.
+  **His Grace** contains the King and alone uses the royal-purple frame;
+  Praecipuus puts that card at the
   top of every Battle deal and grants the King Primogeniture, placing it before
-  every other unit. **Front Lines** contains the two ordinary starting Pawns.
+  every other unit. **Front Lines** contains the two ordinary starting Pawns
+  and uses the Standard Units frame because it has no card property.
   His Grace is not removable and neither card appears in ordinary Adlectio
-  offers (ADR-0406, ADR-0407).
-- Run Deployment is a battlefield state, not a level-summary destination. It
-  always opens with **Klerosis**, which reveals the dealt cards together and
-  shows the complete Deploying/Unavailable roster before asking for **Deploy
-  all** or **Step through**. The first Conflict deals at most three cards and
+  offers (ADR-0406, ADR-0407, ADR-0413).
+- Every Battle first opens a dedicated pre-Battle **Klerosis** screen. It deals
+  the cards visibly into a wrapping card field, shows the complete
+  Deploying/Unavailable roster, and asks only for **Confirm**. The battlefield
+  is not mounted behind that screen. Confirming Klerosis transitions into the
+  battlefield Deployment, where the player chooses **Deploy all** or **Step
+  through**. The first Conflict deals at most three cards and
   each later Conflict adds one; His Grace consumes the first slot and the rest
   come from a fresh seeded shuffle. Dealt cards contribute their remaining
   units individually, so one card may be split by limited board capacity.
@@ -284,16 +288,19 @@ these.
   removing their cards, so it discounts a later Expunctio without ever paying the complete
   fee (ADR-0230, ADR-0386, ADR-0407).
 - **Enchiridion** is the player-facing reference for unit movement, terrain
-  rules, the filterable core card deck, affected card types, all lipsana, and the
-  behavior of the current unit abilities: Adlected, Eutactic, Agminate,
-  and Cacochymic. Card filters combine exact gold value with
+  rules, the filterable card catalog (the two starter cards and 49-card core
+  deck), affected card types, all lipsana, and the
+  behavior of the current unit abilities: Primogeniture, Adlected, Eutactic,
+  Agminate, and Cacochymic. Card Types includes the starter-only Praecipuus
+  property on canonical His Grace. Card filters combine exact gold value with
   contained unit type. Cards uses no fourth column: its terminal third column
   fills the remaining Enchiridion canvas with real card faces in a vertically
   scrolling gallery, while individual card addresses focus those faces without
   introducing a separate detail (ADR-0364). The Card Types reference uses the
-  third column for its four affected-type names and the fourth for one selected
-  shared card face, temporarily using The Volunteer for each; Pestiferous,
-  Concinnous, Legatine and Hieratic all state their accepted effects, and none
+  third column for its five affected-type names and the fourth for one selected
+  card face: canonical His Grace for Praecipuus and The Volunteer for the four
+  ordinary properties. Praecipuus, Pestiferous, Concinnous, Legatine, and Hieratic
+  all state their accepted effects, and none
   remains provisional
   (ADR-0313, ADR-0315, ADR-0329, ADR-0339, ADR-0341, ADR-0345). During Battle,
   the Controls title bar opens **Strategikon** over the board without unmounting

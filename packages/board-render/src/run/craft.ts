@@ -54,6 +54,7 @@ import {
 import {
   advanceDeployAll,
   chooseDeploymentMode,
+  confirmKlerosis,
   currentDeploymentUnit,
   disciplinePlacementCells,
   deploymentOptions,
@@ -564,6 +565,7 @@ function autoDeploy(run: RunDocument): { run: RunDocument; layout: RunDeployment
   const level = prepared.war.battles[prepared.battleIndex]?.level;
   if (!level) throw new RunCraftError(`craft: Battle ${prepared.battleIndex + 1} has no Level.`);
   prepared = resolveDeploymentCapacity(prepared, level);
+  prepared = confirmKlerosis(prepared, level);
   prepared = chooseDeploymentMode(prepared, level, 'deploy-all');
   while (prepared.phase === 'deployment') {
     const unit = currentDeploymentUnit(prepared);

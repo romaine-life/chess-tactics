@@ -12,16 +12,19 @@ const mainMenu = readFileSync(new URL('./MainMenu.tsx', import.meta.url), 'utf8'
 const apparatusRailTab = readFileSync(new URL('./shared/ApparatusRailTab.tsx', import.meta.url), 'utf8');
 const style = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
+const skirmishShell = readFileSync(new URL('./SkirmishShell.tsx', import.meta.url), 'utf8');
+const runForm = readFileSync(new URL('./RunForm.tsx', import.meta.url), 'utf8');
 const hud = readFileSync(new URL('./SkirmishHud.tsx', import.meta.url), 'utf8');
 const runArmy = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url), 'utf8');
 const ataraxiaNumeral = readFileSync(new URL('./ataraxiaNumeral.ts', import.meta.url), 'utf8');
 
 describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
-  it('describes exactly the four unit abilities without card qualifiers', () => {
+  it('describes exactly the five unit abilities without card qualifiers', () => {
     const start = enchiridion.indexOf('const UNIT_STATE_REFERENCES');
     const end = enchiridion.indexOf('export function EnchiridionReference', start);
     const abilities = enchiridion.slice(start, end);
-    expect(abilities.match(/state: '(?:adlected|eutactic|agminate|cacochymic)'/g)).toHaveLength(4);
+    expect(abilities.match(/state: '(?:primogeniture|adlected|eutactic|agminate|cacochymic)'/g)).toHaveLength(5);
+    expect(abilities).toContain("name: 'Primogeniture'");
     expect(abilities).toContain('name: ADLECTED_DISPLAY_NAME');
     expect(abilities).toContain('name: EUTACTIC_DISPLAY_NAME');
     expect(abilities).toContain('name: AGMINATE_DISPLAY_NAME');
@@ -32,7 +35,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     // Each state inherits the accepted row material from its granting card property;
     // the pairing comes from the Run model rather than a second hand-written table.
     expect(abilities).toContain('const cardType = CARD_TYPE_BY_UNIT_STATE[state]');
-    expect(abilities).toContain('<CardTypeRowMaterial cardType={cardType} src={textureUrls[cardType]} />');
+    expect(abilities).toContain("src={textureUrls[cardType === 'praecipuus' ? 'hieratic' : cardType]}");
     expect(enchiridion).toContain('Object.entries(RUN_CARD_TYPE_REFERENCE)');
     expect(style).toMatch(/\.enchiridion-ability-card\s*\{[\s\S]*?isolation:\s*isolate;[\s\S]*?overflow:\s*hidden;[\s\S]*?position:\s*relative/);
     expect(style).toMatch(/\.enchiridion-ability-card > \.enchiridion-ability-icon\s*\{[\s\S]*?block-size:\s*34px;[\s\S]*?inline-size:\s*34px/);
@@ -253,7 +256,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     const cardCodex = enchiridion.slice(start, end);
     // Cards are the records themselves; there is deliberately no fourth-column
     // detail and no compact prose list duplicating those faces (ADR-0364).
-    expect(cardCodex).toContain('RUN_CARD_DECK');
+    expect(cardCodex).toContain('RUN_CARD_CATALOG');
     expect(cardCodex).toContain('className="enchiridion-card-gallery-layout"');
     expect(cardCodex).toContain('className="enchiridion-card-gallery-grid"');
     expect(cardCodex).toContain('<RunCard card={card} mode="reference" />');
@@ -301,12 +304,13 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(style).not.toMatch(/\.enchiridion-card-gallery-browser\s*\{[^}]*overflow-y:/s);
   });
 
-  it('selects four affected-card names in column three and previews one shared Volunteer face in column four', () => {
+  it('selects five card properties and previews each on a card the game can deal', () => {
     const start = enchiridion.indexOf('const CARD_TYPE_REFERENCES');
     const end = enchiridion.indexOf('const UNIT_STATE_REFERENCES', start);
     const cardTypes = enchiridion.slice(start, end);
-    expect(cardTypes.match(/id: '(?:pestiferous|concinnous|legatine|hieratic)'/g)).toHaveLength(4);
+    expect(cardTypes.match(/id: '(?:praecipuus|pestiferous|concinnous|legatine|hieratic)'/g)).toHaveLength(5);
     expect(cardTypes).toContain("const VOLUNTEER_CARD = RUN_CARD_BY_ID.p");
+    expect(cardTypes).toContain("RUN_STARTER_CARD_BY_ID['his-grace']");
     expect(cardTypes).toContain('<RunCardFace');
     // The glossary previews a real projected offer, so it neither picks its own frame
     // nor assembles its own face — both come from the single card projection.
@@ -327,7 +331,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(cardTypes).toContain('RUN_CARD_TYPE_REFERENCE[definition.id].name');
     // Every named card property now has installed Run mechanics, so none is provisional.
     expect(cardTypes).not.toContain('provisional: true');
-    expect(cardTypes).toContain("useState<RunCardType>('pestiferous')");
+    expect(cardTypes).toContain("useState<EnchiridionCardType>('praecipuus')");
     expect(cardTypes).toContain('className="enchiridion-card-type-layout"');
     expect(cardTypes).toContain('className="enchiridion-card-type-rows"');
     expect(cardTypes).toContain('data-testid={`enchiridion-card-type-${definition.id}`}');
@@ -387,12 +391,19 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(style).toMatch(/\.skirmish-hud-title-action:hover\s*\{[\s\S]*?filter:/);
     expect(style).not.toMatch(/\.skirmish-hud-title-action:is\(:hover,\s*\.active\)/);
     expect(style).toMatch(/\.skirmish-hud-title-action-glyph\s*\{[\s\S]*?block-size:\s*32px[\s\S]*?inline-size:\s*32px/);
-    expect(skirmish).toContain('className="skirmish-war-room"');
-    expect(skirmish).toMatch(/<ShellViewportSwap[\s\S]*?className="skirmish-war-room"[\s\S]*?primaryClassName="skirmish-field"[\s\S]*?workspaceOpen=\{strategikonOpen \|\| Boolean\(runWorkspace\)\}/);
-    expect(skirmish).toContain('lipsanonIds={runDeployment?.lipsanonIds ?? runBattle?.lipsanonIds ?? []}');
-    expect(skirmish).toContain('shellWorkspaceCoversLipsana={Boolean(runWorkspace) || strategikonOpen}');
-    expect(skirmish).toMatch(/<GameplayWorkspaceSceneSlot[\s\S]*?className="strategikon-slot"[\s\S]*?\{strategikonOpen \? \(/);
-    expect(skirmish).toMatch(/primary=\{\([\s\S]*?<div className="skirmish-board-frame">[\s\S]*?\)\}[\s\S]*?\{battleWorkspaceLayer\}/);
+    expect(runForm).toContain('className={activity.viewport.className}');
+    expect(runForm).toContain('primaryClassName={activity.viewport.primaryClassName}');
+    expect(runForm).toContain('primary={activity.viewport.primary}');
+    expect(runForm).toContain('workspaceOpen={workspaceOpen}');
+    expect(runForm).toContain('lipsanonIds={form.lipsanonIds}');
+    expect(runForm).toContain('shellWorkspaceCoversLipsana={workspaceOpen}');
+    expect(runForm).toContain('className="strategikon-slot"');
+    expect(runForm).toContain('{form.inspectionWorkspace}');
+    expect(runForm).toContain('<Strategikon path={form.routePath} search={form.routeSearch} run={form.run} />');
+    expect(skirmishShell).toContain('{shellWorkspaceCoversLipsana ? null : <LipsanonStrip lipsanonIds={lipsanonIds} />}');
+    expect(skirmish).toContain("className: 'skirmish-war-room'");
+    expect(skirmish).toContain("primaryClassName: 'skirmish-field'");
+    expect(skirmish).toContain('primary: battlefieldPrimary');
     // The always-mounted slot overlays every battlefield tile. Empty, it MUST be
     // pointer-transparent — with plain pointer-events it shields the whole board and
     // no unit can be selected or moved (the #552 regression). Mounted workspace

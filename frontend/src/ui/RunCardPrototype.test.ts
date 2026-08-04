@@ -28,6 +28,7 @@ import {
   runCardFrameBoxStyleFromSearch,
   runCardConcinnousTargetRevealedFromSearch,
   runCardPrototypeContent,
+  runCardPrototypeStarterCardFromSearch,
   runCardPrototypeVariantFromSearch,
   runCardTacticalSpecimenFromSearch,
   scaledRunCardContentsTuning,
@@ -43,6 +44,9 @@ describe('Run Card Layout review variant', () => {
     expect(runCardPrototypeVariantFromSearch('?mode=viewer&cardVariant=unknown')).toBe('standard');
     expect(runCardTacticalSpecimenFromSearch('?cardVariant=tactical&tacticalSpecimen=multi')).toBe('multi');
     expect(runCardTacticalSpecimenFromSearch('?cardVariant=tactical')).toBe('single');
+    expect(runCardPrototypeStarterCardFromSearch('?starterCard=front-lines')).toBe('front-lines');
+    expect(runCardPrototypeStarterCardFromSearch('?starterCard=his-grace')).toBe('his-grace');
+    expect(runCardPrototypeStarterCardFromSearch('?starterCard=unknown')).toBeNull();
   });
 
   it('addresses hidden and revealed Adlectio states without synthesized prose', () => {
@@ -124,7 +128,8 @@ describe('Run Card Layout review variant', () => {
 
   it('fits each property in its own committed seat and shares one unit-state seat', () => {
     expect(RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS.legatine).toEqual({ x: -4, y: -0.95, scale: 2.75 });
-    expect(RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT).toEqual({ x: 2.2, y: -0.95, scale: 5 });
+    expect(RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS.praecipuus).toEqual({ x: 1.35, y: -1.05, scale: 2.4 });
+    expect(RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT).toEqual({ x: 4.2, y: -0.45, scale: 4.15 });
     expect(runCardCommittedIconTuning('hieratic')).toEqual({
       property: RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS.hieratic,
       unitState: RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT,

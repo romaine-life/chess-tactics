@@ -106,11 +106,13 @@ describe('a projected face says only what its card actually shows', () => {
     expect(runCardFrameSlotForType(null)).not.toBe(runCardFrameSlotForType('hieratic'));
   });
 
-  it('prints both starter cards on one royal-purple frame without giving Front Lines a property', () => {
+  it('reserves the royal frame for Praecipuus and gives unqualified Front Lines the Standard frame', () => {
     const hisGrace = RUN_STARTER_CARD_BY_ID['his-grace'];
     const frontLines = RUN_STARTER_CARD_BY_ID['front-lines'];
-    expect(runCardFrameSlot(hisGrace)).toBe(runCardFrameSlot(frontLines));
-    expect(runCardFrameSlot(hisGrace)).toBe(runCardFrameSlotForType('hieratic'));
+    expect(runCardFrameSlot(hisGrace)).toBe(runCardFrameSlotForType('praecipuus'));
+    expect(runCardFrameSlot(hisGrace)).not.toBe(runCardFrameSlotForType('hieratic'));
+    expect(runCardFrameSlot(frontLines)).toBe(runCardFrameSlotForType(null));
+    expect(runCardFrameSlot(frontLines)).not.toBe(runCardFrameSlot(hisGrace));
     expect(runCardFaceContent(frontLines).cardProperty).toBeUndefined();
   });
 

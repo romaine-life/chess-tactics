@@ -23,6 +23,7 @@ const {
   LIPSANON_ICON_COMPONENT,
   LIPSANON_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
   RUN_CARD_COST_COIN_COMPONENT,
+  RUN_STARTER_SELECTED_DERIVATIVE_EXCEPTION_SCHEMA,
   RUN_RESOURCE_ICON_COMPONENT,
   RUN_SECTIO_WRAP_COMPONENT,
   SFX_SAMPLE_COMPONENT,
@@ -94,6 +95,54 @@ test('raster native evidence is required to identify the exact uploaded bytes', 
   delete missingSha.native_evidence.sourceSha256;
   assert.match(nativeMediaEvidenceIssue(missingSha), /sourceSha256 is required/);
   assert.equal(nativeMediaEvidenceIssue(raster()), null);
+});
+
+test('only the four exact ADR-0414 starter-card derivatives pass their production evidence gate', () => {
+  const outputSha256 = 'f3e6be8674f1c106ba328a015ca10c7ad0d98f4eb7ec4f4a0f6e0c6a8cbda8e6';
+  const evidence = {
+    schema: RUN_STARTER_SELECTED_DERIVATIVE_EXCEPTION_SCHEMA,
+    decision: 'ADR-0414',
+    status: 'owner-approved-production-exception',
+    native1x: false,
+    spatialResampling: true,
+    sourceWidth: 1774,
+    sourceHeight: 887,
+    outputWidth: 64,
+    outputHeight: 64,
+    sourceVersionId: '8a0ad309-f538-432a-96df-208fa1a12f7d',
+    sourceSha256: '9e24dd89a51a5927d44c7fa779b7e910fd67aa9431e981d96b70f46ada7378e1',
+    outputSha256,
+    transform: 'left-887x887-largest-component-nearest-neighbor-fit-40x54-center-64',
+  };
+  const approved = raster({
+    slot: 'ui/kit/icons/card-properties/praecipuus.png',
+    blob_sha256: outputSha256,
+    width: 64,
+    height: 64,
+    native_evidence: evidence,
+  });
+  assert.equal(nativeMediaEvidenceIssue(approved), null);
+  assert.match(nativeMediaEvidenceIssue({
+    ...approved,
+    slot: 'ui/kit/icons/card-properties/hieratic.png',
+  }), /restricted to its four starter-card runtime slots/);
+  assert.match(nativeMediaEvidenceIssue({
+    ...approved,
+    blob_sha256: replacementSha,
+  }), /does not authorize these uploaded bytes/);
+  assert.match(nativeMediaEvidenceIssue({
+    ...approved,
+    native_evidence: { ...evidence, transform: 'lanczos' },
+  }), /invalid geometry or transform/);
+});
+
+test('Praecipuus and Primogeniture own dedicated closed semantic icon slots', () => {
+  assert.deepEqual(gameConditionIconSlot('ui/kit/icons/card-properties/praecipuus.png'), {
+    component: 'card-property-icon', variant: 'praecipuus',
+  });
+  assert.deepEqual(gameConditionIconSlot('ui/kit/icons/game/primogeniture.png'), {
+    component: 'unit-ability-icon', variant: 'primogeniture',
+  });
 });
 
 test('card-type row textures have a closed semantic-slot and native-geometry runtime contract', () => {

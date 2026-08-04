@@ -10,7 +10,7 @@ import {
   saveRunCardIconFittingPortfolio,
 } from '../net/runCardIconFitting';
 import { runCardArtSlot } from '../run/cardNames';
-import { AGMINATE_DISPLAY_NAME, RUN_CARD_BY_ID } from '../run/model';
+import { AGMINATE_DISPLAY_NAME, RUN_CARD_BY_ID, RUN_STARTER_CARD_BY_ID } from '../run/model';
 import {
   RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS,
   RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT,
@@ -18,26 +18,33 @@ import {
   RunCardFace,
   type RunCardFaceContent,
   type RunCardIconPlacement,
+  type RunCardProperty,
   type RunUnitState,
 } from './RunCardFace';
-import type { RunCardType } from '../run/model';
 import { runCardFaceContent, runCardFrameSlotForType, runCardSpecimen } from './runCardFaceContent';
 import { runCardFrameGeometryForSlot } from './runCardFrameGeometry';
 import { SliderRow, ctlReset } from './dressing/SliderRow';
 import { AssetSwatchList } from './shared/AssetSwatchList';
 import { ChoiceGroup } from './shared/ChoiceGroup';
 import { StudioCatalogCard } from './studio/StudioCatalogCard';
+import { navigateApp } from './navigation';
 
 export const RUN_ICON_PAIR_BATCH_ID = 'run-icon-pairs-2026-08-01-v1';
+export const STARTER_RUN_ICON_PAIR_BATCH_ID = 'starter-card-icon-pair-codex-pixellab-review-2026-08-04-v1';
 export const RUN_CARD_ICON_FITTING_SCALE_MAX = 5;
+const HIS_GRACE_ART_REVIEW_SLOT = 'review/run-card-art/his-grace/illustration.png';
+const HIS_GRACE_CODEX_ART_SHA256 = '3911aa54c164a29837ac99d4d34bfc468c80af7ed8e4e41246c7431d9b394ec2';
+const STARTER_FRAME_REVIEW_SLOT = 'review/run-card-frame/starter/frame.png';
+const STARTER_FRAME_CODEX_SHA256 = '93ee3e1497ae1a930ca9d8d0242fd8b1fd93cd30da01511662ef2c48ed9a062e';
 
 type PairDefinition = Readonly<{
-  property: RunCardType;
+  property: RunCardProperty;
   propertySlot: string;
   state: RunUnitState;
   stateSlot: string;
   stateEffect: string;
   source: 'accepted' | 'owner-selected' | 'review';
+  candidateBatchId: string;
 }>;
 
 export const RUN_CARD_ICON_PAIRS: readonly PairDefinition[] = Object.freeze([
@@ -45,35 +52,55 @@ export const RUN_CARD_ICON_PAIRS: readonly PairDefinition[] = Object.freeze([
     property: 'pestiferous',
     propertySlot: 'ui/kit/icons/card-properties/pestiferous.png',
     state: 'cacochymic',
-    stateSlot: 'ui/kit/icons/game/plagued.png',
+    stateSlot: 'ui/kit/icons/game/cacochymic.png',
     stateEffect: 'The unit dies when combat ends.',
     source: 'accepted',
+    candidateBatchId: RUN_ICON_PAIR_BATCH_ID,
   },
   {
     property: 'concinnous',
     propertySlot: 'ui/kit/icons/card-properties/concinnous.png',
     state: 'eutactic',
-    stateSlot: 'ui/kit/icons/game/positioned.png',
+    stateSlot: 'ui/kit/icons/game/eutactic.png',
     stateEffect: "The unit favors its piece type's best-fit formation row during automatic deployment.",
     source: 'accepted',
+    candidateBatchId: RUN_ICON_PAIR_BATCH_ID,
   },
   {
     property: 'legatine',
-    propertySlot: 'ui/kit/icons/card-properties/tactical.png',
+    propertySlot: 'ui/kit/icons/card-properties/legatine.png',
     state: 'adlected',
-    stateSlot: 'ui/kit/icons/game/discipline.png',
+    stateSlot: 'ui/kit/icons/game/adlected.png',
     stateEffect: 'The player chooses its square when its deployment turn arrives.',
     source: 'accepted',
+    candidateBatchId: RUN_ICON_PAIR_BATCH_ID,
   },
   {
     property: 'hieratic',
     propertySlot: 'ui/kit/icons/card-properties/hieratic.png',
     state: 'agminate',
-    stateSlot: 'ui/kit/icons/game/marshalled.png',
+    stateSlot: 'ui/kit/icons/game/agminate.png',
     stateEffect: 'The unit prefers its piece-specific station during automatic deployment.',
     source: 'accepted',
+    candidateBatchId: RUN_ICON_PAIR_BATCH_ID,
+  },
+  {
+    property: 'praecipuus',
+    propertySlot: 'review/run-card-icons/praecipuus/property.png',
+    state: 'primogeniture',
+    stateSlot: 'review/run-card-icons/primogeniture/state.png',
+    stateEffect: 'Is placed before every other unit.',
+    source: 'review',
+    candidateBatchId: STARTER_RUN_ICON_PAIR_BATCH_ID,
   },
 ]);
+
+export function runCardIconFittingPropertyFromSearch(search: string): RunCardProperty | null {
+  const property = new URLSearchParams(search).get('iconPair');
+  return RUN_CARD_ICON_PAIRS.some((pair) => pair.property === property)
+    ? property as RunCardProperty
+    : null;
+}
 
 type PairSelection = Readonly<{
   propertyVersionId: string;
@@ -81,9 +108,9 @@ type PairSelection = Readonly<{
 }>;
 
 export type RunCardIconFittingDraft = Readonly<{
-  activeProperty: RunCardType;
-  selections: Readonly<Record<RunCardType, PairSelection>>;
-  propertyPlacements: Readonly<Record<RunCardType, RunCardIconPlacement>>;
+  activeProperty: RunCardProperty;
+  selections: Readonly<Record<RunCardProperty, PairSelection>>;
+  propertyPlacements: Readonly<Record<RunCardProperty, RunCardIconPlacement>>;
   unitStatePlacement: RunCardIconPlacement;
 }>;
 
@@ -109,11 +136,12 @@ function liveBatchId(version: AdminLiveMediaVersion): string | null {
 export function runIconPairReviewVersions(
   catalog: AdminLiveMediaCatalog,
   slot: string,
+  batchId = RUN_ICON_PAIR_BATCH_ID,
 ): AdminLiveMediaVersion[] {
   return catalog.versions
     .filter((version) => version.slot === slot
       && version.status === 'candidate'
-      && liveBatchId(version) === RUN_ICON_PAIR_BATCH_ID
+      && liveBatchId(version) === batchId
       && Boolean(version.media))
     .sort((left, right) => candidateIndex(left) - candidateIndex(right));
 }
@@ -138,9 +166,10 @@ export function runIconPairReviewFrameVersion(
 export function runCardIconFittingVersions(
   catalog: AdminLiveMediaCatalog,
   slot: string,
+  batchId = RUN_ICON_PAIR_BATCH_ID,
 ): AdminLiveMediaVersion[] {
   const accepted = acceptedVersion(catalog, slot);
-  const candidates = runIconPairReviewVersions(catalog, slot);
+  const candidates = runIconPairReviewVersions(catalog, slot, batchId);
   return accepted ? [accepted, ...candidates.filter((version) => version.id !== accepted.id)] : candidates;
 }
 
@@ -154,35 +183,39 @@ function clampNumber(value: unknown, fallback: number, min: number, max: number)
   return Math.min(max, Math.max(min, Math.round(number * 100) / 100));
 }
 
-function placementFrom(value: unknown, offsetLimit: number): RunCardIconPlacement {
+function placementFrom(
+  value: unknown,
+  offsetLimit: number,
+  fallback: RunCardIconPlacement = RUN_CARD_ICON_PLACEMENT_BASELINE,
+): RunCardIconPlacement {
   const raw = asRecord(value);
   return {
-    x: clampNumber(raw.x, RUN_CARD_ICON_PLACEMENT_BASELINE.x, -offsetLimit, offsetLimit),
-    y: clampNumber(raw.y, RUN_CARD_ICON_PLACEMENT_BASELINE.y, -offsetLimit, offsetLimit),
+    x: clampNumber(raw.x, fallback.x, -offsetLimit, offsetLimit),
+    y: clampNumber(raw.y, fallback.y, -offsetLimit, offsetLimit),
     scale: clampNumber(
       raw.scale,
-      RUN_CARD_ICON_PLACEMENT_BASELINE.scale,
+      fallback.scale,
       .4,
       RUN_CARD_ICON_FITTING_SCALE_MAX,
     ),
   };
 }
 
-function firstVersionId(catalog: AdminLiveMediaCatalog, slot: string): string {
-  return runCardIconFittingVersions(catalog, slot)[0]?.id ?? '';
+function firstVersionId(catalog: AdminLiveMediaCatalog, slot: string, batchId: string): string {
+  return runCardIconFittingVersions(catalog, slot, batchId)[0]?.id ?? '';
 }
 
 export function defaultRunCardIconFittingDraft(catalog: AdminLiveMediaCatalog): RunCardIconFittingDraft {
   const selections = Object.fromEntries(RUN_CARD_ICON_PAIRS.map((pair) => [pair.property, {
-    propertyVersionId: firstVersionId(catalog, pair.propertySlot),
-    stateVersionId: firstVersionId(catalog, pair.stateSlot),
-  }])) as Record<RunCardType, PairSelection>;
+    propertyVersionId: firstVersionId(catalog, pair.propertySlot, pair.candidateBatchId),
+    stateVersionId: firstVersionId(catalog, pair.stateSlot, pair.candidateBatchId),
+  }])) as Record<RunCardProperty, PairSelection>;
   // Reset returns to the committed fit the live cards ship, not to a zeroed-out
   // placement that no surface has ever used (ADR-0057).
   const propertyPlacements = Object.fromEntries(RUN_CARD_ICON_PAIRS.map((pair) => [
     pair.property,
     { ...RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS[pair.property] },
-  ])) as Record<RunCardType, RunCardIconPlacement>;
+  ])) as Record<RunCardProperty, RunCardIconPlacement>;
   return {
     activeProperty: 'pestiferous',
     selections,
@@ -200,12 +233,12 @@ export function normalizeRunCardIconFittingDraft(
   const rawSelections = asRecord(raw.selections);
   const rawPlacements = asRecord(raw.property_placements ?? raw.propertyPlacements);
   const activeProperty = RUN_CARD_ICON_PAIRS.some((pair) => pair.property === raw.active_property)
-    ? raw.active_property as RunCardType
+    ? raw.active_property as RunCardProperty
     : baseline.activeProperty;
   const selections = Object.fromEntries(RUN_CARD_ICON_PAIRS.map((pair) => {
     const selection = asRecord(rawSelections[pair.property]);
-    const propertyVersions = runCardIconFittingVersions(catalog, pair.propertySlot);
-    const stateVersions = runCardIconFittingVersions(catalog, pair.stateSlot);
+    const propertyVersions = runCardIconFittingVersions(catalog, pair.propertySlot, pair.candidateBatchId);
+    const stateVersions = runCardIconFittingVersions(catalog, pair.stateSlot, pair.candidateBatchId);
     const propertyVersionId = typeof selection.propertyVersionId === 'string'
       && propertyVersions.some((version) => version.id === selection.propertyVersionId)
       ? selection.propertyVersionId
@@ -215,16 +248,20 @@ export function normalizeRunCardIconFittingDraft(
       ? selection.stateVersionId
       : baseline.selections[pair.property].stateVersionId;
     return [pair.property, { propertyVersionId, stateVersionId }];
-  })) as Record<RunCardType, PairSelection>;
+  })) as Record<RunCardProperty, PairSelection>;
   const propertyPlacements = Object.fromEntries(RUN_CARD_ICON_PAIRS.map((pair) => [
     pair.property,
-    placementFrom(rawPlacements[pair.property], 4),
-  ])) as Record<RunCardType, RunCardIconPlacement>;
+    placementFrom(rawPlacements[pair.property], 4, baseline.propertyPlacements[pair.property]),
+  ])) as Record<RunCardProperty, RunCardIconPlacement>;
   return {
     activeProperty,
     selections,
     propertyPlacements,
-    unitStatePlacement: placementFrom(raw.unit_state_placement ?? raw.unitStatePlacement, 6),
+    unitStatePlacement: placementFrom(
+      raw.unit_state_placement ?? raw.unitStatePlacement,
+      6,
+      baseline.unitStatePlacement,
+    ),
   };
 }
 
@@ -232,7 +269,7 @@ function draftPayload(draft: RunCardIconFittingDraft, catalog: AdminLiveMediaCat
   const versionById = new Map(catalog.versions.map((version) => [version.id, version]));
   return {
     kind: 'run-card-icon-fitting-draft',
-    document_version: 1,
+    document_version: 2,
     active_property: draft.activeProperty,
     selections: Object.fromEntries(RUN_CARD_ICON_PAIRS.map((pair) => {
       const selection = draft.selections[pair.property];
@@ -251,6 +288,10 @@ function draftPayload(draft: RunCardIconFittingDraft, catalog: AdminLiveMediaCat
 
 function optionLabel(version: AdminLiveMediaVersion, pair: PairDefinition): string {
   if (version.status === 'accepted') return 'Accepted';
+  const provider = typeof version.metadata.provider === 'string' ? version.metadata.provider.trim() : '';
+  if (provider) return provider.toLowerCase() === 'pixellab'
+    ? 'PixelLab'
+    : `${provider.slice(0, 1).toUpperCase()}${provider.slice(1)}`;
   const sourceIndex = Number(version.metadata.sourceCandidateIndex);
   if (pair.source === 'owner-selected' && Number.isSafeInteger(sourceIndex)) return `Selected ${sourceIndex}`;
   const index = candidateIndex(version);
@@ -267,7 +308,10 @@ function candidateConcept(version: AdminLiveMediaVersion): string {
  * property symbol and unit-state marker are both public and both seat where they will
  * in a Sectio.
  */
-function specimenCard(pair: PairDefinition): RunCardFaceContent {
+export function runCardIconFittingSpecimenCard(pair: PairDefinition): RunCardFaceContent {
+  if (pair.property === 'praecipuus') {
+    return runCardFaceContent(RUN_STARTER_CARD_BY_ID['his-grace']);
+  }
   return runCardFaceContent(
     runCardSpecimen({
       pieces: RUN_CARD_BY_ID.p.pieces,
@@ -276,6 +320,19 @@ function specimenCard(pair: PairDefinition): RunCardFaceContent {
     }),
     { adlected: true },
   );
+}
+
+function versionBySha256(
+  catalog: AdminLiveMediaCatalog,
+  slot: string,
+  sha256: string,
+): AdminLiveMediaVersion | null {
+  return catalog.versions.find((version) => (
+    version.slot === slot
+    && version.media?.sha256 === sha256
+    && Boolean(version.media?.url)
+    && (version.status === 'candidate' || version.status === 'accepted')
+  )) ?? null;
 }
 
 function selectedVersion(
@@ -344,7 +401,11 @@ export function RunCardIconFittingViewer({
     void Promise.all([fetchAdminLiveMediaCatalog(), fetchRunCardIconFittingPortfolio()])
       .then(([nextCatalog, portfolio]) => {
         if (!active) return;
-        const nextDraft = normalizeRunCardIconFittingDraft(portfolio.data, nextCatalog);
+        const normalized = normalizeRunCardIconFittingDraft(portfolio.data, nextCatalog);
+        const requestedProperty = runCardIconFittingPropertyFromSearch(window.location.search);
+        const nextDraft = requestedProperty
+          ? { ...normalized, activeProperty: requestedProperty }
+          : normalized;
         setCatalog(nextCatalog);
         setDraft(nextDraft);
         setSavedSignature(JSON.stringify(nextDraft));
@@ -358,14 +419,27 @@ export function RunCardIconFittingViewer({
   const pair = RUN_CARD_ICON_PAIRS.find((candidate) => candidate.property === draft?.activeProperty)
     ?? RUN_CARD_ICON_PAIRS[0];
   const propertyVersions = useMemo(
-    () => catalog ? runCardIconFittingVersions(catalog, pair.propertySlot) : [],
-    [catalog, pair.propertySlot],
+    () => catalog ? runCardIconFittingVersions(catalog, pair.propertySlot, pair.candidateBatchId) : [],
+    [catalog, pair.candidateBatchId, pair.propertySlot],
   );
   const stateVersions = useMemo(
-    () => catalog ? runCardIconFittingVersions(catalog, pair.stateSlot) : [],
-    [catalog, pair.stateSlot],
+    () => catalog ? runCardIconFittingVersions(catalog, pair.stateSlot, pair.candidateBatchId) : [],
+    [catalog, pair.candidateBatchId, pair.stateSlot],
   );
-  const frame = catalog ? runIconPairReviewFrameVersion(catalog, runCardFrameSlotForType(pair.property)) : null;
+  const frameSlot = pair.property === 'praecipuus'
+    ? STARTER_FRAME_REVIEW_SLOT
+    : runCardFrameSlotForType(pair.property);
+  const frame = catalog
+    ? pair.property === 'praecipuus'
+      ? versionBySha256(catalog, frameSlot, STARTER_FRAME_CODEX_SHA256)
+      : runIconPairReviewFrameVersion(catalog, frameSlot)
+    : null;
+  const hisGraceArt = catalog && pair.property === 'praecipuus'
+    ? versionBySha256(catalog, HIS_GRACE_ART_REVIEW_SLOT, HIS_GRACE_CODEX_ART_SHA256)
+    : null;
+  const artUrl = pair.property === 'praecipuus'
+    ? hisGraceArt?.media?.url ?? null
+    : resolvedLiveMediaUrl(runCardArtSlot(RUN_CARD_BY_ID.p));
   const selection = draft?.selections[pair.property];
   const propertyVersion = selection ? selectedVersion(propertyVersions, selection.propertyVersionId) : null;
   const stateVersion = selection ? selectedVersion(stateVersions, selection.stateVersionId) : null;
@@ -383,6 +457,16 @@ export function RunCardIconFittingViewer({
         [pair.property]: { ...current.propertyPlacements[pair.property], [key]: value },
       },
     }));
+  };
+  const chooseProperty = (property: RunCardProperty): void => {
+    const params = new URLSearchParams(window.location.search);
+    params.set('iconPair', property);
+    const search = params.toString();
+    navigateApp(
+      `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`,
+      { replace: true, scroll: false },
+    );
+    changeDraft((current) => ({ ...current, activeProperty: property }));
   };
   const changeUnitStatePlacement = (key: keyof RunCardIconPlacement, value: number): void => {
     changeDraft((current) => ({
@@ -463,13 +547,13 @@ export function RunCardIconFittingViewer({
       <section className="al-lab-main run-card-icon-fitting-main" aria-label="Card icon fitting preview">
         {error ? <p role="alert">{error}</p> : null}
         {!error && (!catalog || !draft) ? <p role="status">Loading exact icon candidates and saved fitting draft…</p> : null}
-        {catalog && draft && frame && propertyVersion && stateVersion ? (
+        {catalog && draft && frame && propertyVersion && stateVersion && artUrl ? (
           <div className="run-card-icon-fitting-workbench">
             <div className="run-card-icon-fitting-stage">
               <RunCardFace
-                card={specimenCard(pair)}
+                card={runCardIconFittingSpecimenCard(pair)}
                 frameUrl={frame.media!.url}
-                artUrl={resolvedLiveMediaUrl(runCardArtSlot(RUN_CARD_BY_ID.p))}
+                artUrl={artUrl}
                 frameGeometry={runCardFrameGeometryForSlot(runCardFrameSlotForType(pair.property))}
                 iconMedia={{
                   propertyUrl: propertyVersion.media!.url,
@@ -481,7 +565,7 @@ export function RunCardIconFittingViewer({
               />
               <p>
                 <strong>{displayName(pair.property)}</strong> bestows <strong>{displayName(pair.state)}</strong>.
-                Property placement belongs to this card type; unit-state placement is shared by all four types.
+                Property placement belongs to this card type; unit-state placement is shared by all five pairs.
               </p>
             </div>
             <div className="run-card-icon-fitting-palettes">
@@ -519,7 +603,7 @@ export function RunCardIconFittingViewer({
                   buttonClassName="tileset-view-action"
                   ariaLabel="Card property"
                   value={pair.property}
-                  onChange={(property) => changeDraft((current) => ({ ...current, activeProperty: property }))}
+                  onChange={chooseProperty}
                   options={RUN_CARD_ICON_PAIRS.map((candidate) => ({
                     value: candidate.property,
                     label: displayName(candidate.property),
@@ -607,7 +691,7 @@ export function RunCardIconFittingCatalog({ onOpen }: { onOpen: () => void }): R
     <div className="tileset-studio-grid pages-grid" aria-label="Card icon fitting instruments">
       <StudioCatalogCard
         title="Property & Unit-State Icons"
-        badge="4 property/state pairs · exact live candidates"
+        badge="5 property/state pairs · exact live candidates"
         selected
         onSelect={onOpen}
         onOpen={onOpen}

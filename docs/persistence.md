@@ -44,7 +44,16 @@ Fitting draft. It records exact candidate ids/hashes, independent property
 placements, and the shared unit-state placement so an owner can resume visual
 fitting. Like every design portfolio, it is not an accepted media pointer or
 installed runtime-configuration authority; publishing remains a separate admin
-transaction (ADR-0340).
+transaction. Its version-2 document includes Praecipuus/Primogeniture as the
+fifth pair; version-1 four-pair drafts normalize in the client by preserving
+their geometry and current canonical selections, resolving predecessor-slot ids
+to accepted canonical replacements, and seeding the missing pair from current
+candidates and committed geometry, so this extension requires no database
+migration (ADR-0340, ADR-0412).
+ADR-0414 separately promotes the owner-selected pair, starter illustrations,
+and Praecipuus frame through the live-media and installed-drawable catalogs.
+That pointer/configuration transaction does not change the portfolio document,
+the relational schema, or `RunSaveVersion`.
 
 The active Run document names its schema marker **RunSaveVersion**. Its stored field is
 `runSaveVersion`, its type is `RunSaveVersion`, and the client and server share

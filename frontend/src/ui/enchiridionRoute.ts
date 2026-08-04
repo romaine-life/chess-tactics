@@ -10,12 +10,20 @@
 
 import { RUN_CARD_ID_BY_SLUG, runCardSlug } from '../run/cardNames';
 import {
-  RUN_CARD_BY_ID,
   RUN_CARD_TYPE_REFERENCE,
   RUN_LIPSANA,
+  runCardDefinition,
   type RunCardType,
   type LipsanonId,
 } from '../run/model';
+
+/** Every causal card property the reference can address, including the starter-only one. */
+export type EnchiridionCardType = RunCardType | 'praecipuus';
+
+const ENCHIRIDION_CARD_TYPES: ReadonlySet<string> = new Set([
+  'praecipuus',
+  ...Object.keys(RUN_CARD_TYPE_REFERENCE),
+]);
 
 export const ENCHIRIDION_SECTIONS = ['units', 'terrain', 'cards', 'card-types', 'lipsana', 'abilities', 'ataraxia'] as const;
 export type EnchiridionSection = typeof ENCHIRIDION_SECTIONS[number];
@@ -82,17 +90,17 @@ export function enchiridionCardFromPath(path: string): string | null {
   const slug = match?.[1];
   if (!slug || !Object.hasOwn(RUN_CARD_ID_BY_SLUG, slug)) return null;
   const id = RUN_CARD_ID_BY_SLUG[slug];
-  return Object.hasOwn(RUN_CARD_BY_ID, id) ? id : null;
+  return runCardDefinition(id) ? id : null;
 }
 
 /** The address of one card property's record in the main-menu Enchiridion. */
-export function enchiridionCardTypeHref(cardType: RunCardType): string {
+export function enchiridionCardTypeHref(cardType: EnchiridionCardType): string {
   return `/enchiridion/card-types/${cardType}`;
 }
 
 /** The property addressed by /enchiridion/card-types/<type>; null when absent or unknown. */
-export function enchiridionCardTypeFromPath(path: string): RunCardType | null {
+export function enchiridionCardTypeFromPath(path: string): EnchiridionCardType | null {
   const match = /^\/enchiridion\/card-types\/([^/]+)$/.exec(path);
   const id = match?.[1];
-  return id && Object.hasOwn(RUN_CARD_TYPE_REFERENCE, id) ? (id as RunCardType) : null;
+  return id && ENCHIRIDION_CARD_TYPES.has(id) ? (id as EnchiridionCardType) : null;
 }

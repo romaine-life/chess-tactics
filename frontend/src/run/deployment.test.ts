@@ -3,6 +3,7 @@ import { createBlankLevel, type Level } from '../core/level';
 import type { PlayablePieceType } from '../core/pieces';
 import {
   chooseDeploymentMode,
+  confirmKlerosis,
   currentDeploymentUnit,
   deploymentInteractionStage,
   deploymentOptions,
@@ -98,7 +99,7 @@ function queuedRun(level: Level, army: RunArmyUnit[], seed = 17): RunDocument {
 }
 
 function deployAll(run: RunDocument, level: Level): RunDocument {
-  let next = chooseDeploymentMode(run, level, 'deploy-all');
+  let next = chooseDeploymentMode(confirmKlerosis(run, level), level, 'deploy-all');
   while (next.phase === 'deployment') {
     const active = currentDeploymentUnit(next);
     if (!active) break;
@@ -155,6 +156,21 @@ describe('Klerosis', () => {
     expect(resolved.deployment?.deployingUnitIds).toEqual(['king', 'a']);
     expect(resolved.deployment?.unavailableUnitIds).toContain('b');
   });
+
+  it('requires the visible deal to be confirmed before pace can be selected', () => {
+    const level = deploymentLevel();
+    const run = queuedRun(level, [unit('king', 'king', ['primogeniture']), unit('pawn', 'pawn')]);
+    expect(chooseDeploymentMode(run, level, 'deploy-all')).toBe(run);
+
+    const confirmed = confirmKlerosis(run, level);
+    expect(confirmed.deployment?.stage).toBe('primogeniture');
+    expect(confirmed.deployment?.mode).toBeUndefined();
+    expect(deploymentInteractionStage(confirmed)).toBe('pace');
+
+    const paced = chooseDeploymentMode(confirmed, level, 'step-through');
+    expect(paced.deployment?.mode).toBe('step-through');
+    expect(deploymentInteractionStage(paced)).toBe('primogeniture');
+  });
 });
 
 describe('Primogeniture and Farrago interaction', () => {
@@ -164,7 +180,7 @@ describe('Primogeniture and Farrago interaction', () => {
       unit('king', 'king', ['primogeniture']),
       unit('pawn', 'pawn'),
     ]);
-    let stepped = chooseDeploymentMode(run, level, 'step-through');
+    let stepped = chooseDeploymentMode(confirmKlerosis(run, level), level, 'step-through');
     expect(deploymentInteractionStage(stepped)).toBe('primogeniture');
     expect(currentDeploymentUnit(stepped)?.id).toBe('king');
     stepped = placeRevealedDeploymentUnit(stepped, level);
@@ -184,7 +200,7 @@ describe('Primogeniture and Farrago interaction', () => {
       unit('pawn', 'pawn', ['adlected']),
       unit('rook', 'rook'),
     ]);
-    let fast = chooseDeploymentMode(run, level, 'deploy-all');
+    let fast = chooseDeploymentMode(confirmKlerosis(run, level), level, 'deploy-all');
     expect(fast.phase).toBe('deployment');
     expect(fast.deployment?.placementCursor).toBe(1);
     expect(deploymentInteractionStage(fast)).toBe('adlected');
@@ -197,7 +213,7 @@ describe('Primogeniture and Farrago interaction', () => {
   it('can switch pace without undoing revealed information or placements', () => {
     const level = deploymentLevel();
     let run = queuedRun(level, [unit('king', 'king', ['primogeniture']), unit('pawn', 'pawn')]);
-    run = chooseDeploymentMode(run, level, 'step-through');
+    run = chooseDeploymentMode(confirmKlerosis(run, level), level, 'step-through');
     run = placeRevealedDeploymentUnit(run, level);
     run = drawNextDeploymentUnit(run);
     const revealed = run.deployment?.revealedUnitId;

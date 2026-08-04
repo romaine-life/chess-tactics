@@ -21068,24 +21068,17 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
-.run-klerosis-overlay {
-  align-items: center;
-  display: grid;
-  inset: 0;
-  justify-items: center;
-  padding: clamp(var(--ds-space-3), 2.5vw, var(--ds-space-6));
-  pointer-events: auto;
-  position: absolute;
-  z-index: 20;
+.run-klerosis-workspace-content {
+  align-content: start;
+  overflow-y: auto;
 }
 
-.run-klerosis-panel {
+.run-klerosis-workspace {
   display: grid;
   gap: var(--ds-stack);
-  inline-size: min(980px, 100%);
-  max-block-size: 100%;
-  overflow: auto;
-  padding: var(--ds-space-3);
+  inline-size: 100%;
+  margin-inline: auto;
+  min-inline-size: 0;
 }
 
 .run-klerosis-heading {
@@ -21103,21 +21096,32 @@ button.tileset-relationship-cell {
   align-items: start;
   display: grid;
   gap: var(--ds-space-2);
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(196px, 236px));
   justify-content: center;
   margin-inline: auto;
-  max-inline-size: 720px;
   inline-size: 100%;
 }
 
 .run-klerosis-card {
   min-inline-size: 0;
+  transform-origin: center 16%;
+  will-change: opacity, transform;
+}
+
+.run-klerosis-workspace.is-dealing .run-klerosis-card {
+  opacity: 0;
+}
+
+.run-klerosis-workspace.is-deal-complete .run-klerosis-card {
+  opacity: 1;
+  will-change: auto;
 }
 
 .run-klerosis-rosters {
   display: grid;
   gap: var(--ds-space-2);
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: var(--ds-inset);
 }
 
 .run-klerosis-rosters > div {
@@ -21142,7 +21146,7 @@ button.tileset-relationship-cell {
 
 @media (max-width: 720px) {
   .run-klerosis-cards {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(160px, 220px));
   }
 
   .run-klerosis-rosters {

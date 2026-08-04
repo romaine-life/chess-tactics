@@ -15905,6 +15905,12 @@ const RUN_CARD_ART_REQUIRED_SLOTS = Object.freeze(
   RUN_CARD_ART_CARD_IDS.map((id) => `ui/run/card-art/${id}/illustration.png`).sort(),
 );
 const RUN_CARD_ART_GROUP_ID = 'run-card-art-core-v1';
+const RUN_STARTER_CARD_ART_SCHEMA = 'run-starter-card-art-v1';
+const RUN_STARTER_CARD_ART_PROVENANCE_SCHEMA = 'run-starter-card-art-provenance-v1';
+const RUN_STARTER_CARD_ART_BY_ID = Object.freeze({
+  'his-grace': Object.freeze({ title: 'His Grace', pieces: Object.freeze(['king']), value: 0 }),
+  'front-lines': Object.freeze({ title: 'Front Lines', pieces: Object.freeze(['pawn', 'pawn']), value: 2 }),
+});
 const RUN_CARD_ART_PIECE_VALUE = Object.freeze({ pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9 });
 const RUN_CARD_ART_PIECE_INITIAL = Object.freeze({ pawn: 'p', knight: 'k', bishop: 'b', rook: 'r', queen: 'q' });
 const RUN_CARD_ART_PIECE_ORDER = Object.freeze(['pawn', 'knight', 'bishop', 'rook', 'queen']);
@@ -15913,6 +15919,7 @@ const RUN_CARD_PESTIFEROUS_FRAME_SLOT = 'ui/run/card-prototypes/pestiferous-fram
 const RUN_CARD_CONCINNOUS_FRAME_SLOT = 'ui/run/card-prototypes/concinnous-frame-v1.png';
 const RUN_CARD_LEGATINE_FRAME_SLOT = 'ui/run/card-prototypes/legatine-adlected-frame-v1.png';
 const RUN_CARD_HIERATIC_FRAME_SLOT = 'ui/run/card-prototypes/hieratic-frame-v1.png';
+const RUN_CARD_PRAECIPUUS_FRAME_SLOT = 'ui/run/card-prototypes/praecipuus-frame-v1.png';
 const RUN_CARD_COST_COIN_SOURCE_SLOT = 'ui/run/card-prototypes/cost-coin-source-v1.png';
 const RUN_CARD_FRAME_VARIANT_BY_SLOT = Object.freeze({
   [RUN_CARD_FRAME_SLOT]: 'standard',
@@ -15920,6 +15927,7 @@ const RUN_CARD_FRAME_VARIANT_BY_SLOT = Object.freeze({
   [RUN_CARD_CONCINNOUS_FRAME_SLOT]: 'concinnous',
   [RUN_CARD_LEGATINE_FRAME_SLOT]: 'legatine',
   [RUN_CARD_HIERATIC_FRAME_SLOT]: 'hieratic',
+  [RUN_CARD_PRAECIPUUS_FRAME_SLOT]: 'praecipuus',
   [RUN_CARD_COST_COIN_SOURCE_SLOT]: 'cost-coin-source',
 });
 const RUN_CARD_FRAME_SCHEMA = 'run-card-frame-v1';
@@ -16076,6 +16084,50 @@ function runCardFrameProjection(row) {
   return { claimed: true, issue: null };
 }
 
+function runStarterCardArtProjection(row, cardId, metadata, slotMetadata, provenance) {
+  const definition = RUN_STARTER_CARD_ART_BY_ID[cardId];
+  if (!definition) return null;
+  if (metadata.schema !== RUN_STARTER_CARD_ART_SCHEMA || slotMetadata.schema !== RUN_STARTER_CARD_ART_SCHEMA) {
+    return { claimed: true, issue: 'Starter-card art requires its typed runtime metadata', value: null };
+  }
+  if (provenance.schema !== RUN_STARTER_CARD_ART_PROVENANCE_SCHEMA) {
+    return { claimed: true, issue: 'Starter-card art requires its typed Codex provenance', value: null };
+  }
+  if (
+    metadata.cardId !== cardId || slotMetadata.cardId !== cardId
+    || metadata.cardTitle !== definition.title || metadata.cardType !== 'Units'
+    || slotMetadata.cardType !== 'Units'
+    || metadata.nativeWidth !== 400 || metadata.nativeHeight !== 280
+    || metadata.value !== definition.value
+    || canonicalJson(metadata.pieces) !== canonicalJson(definition.pieces)
+    || metadata.generationModel !== 'codex-imagegen'
+  ) return { claimed: true, issue: 'Starter-card art identity or composition is inconsistent', value: null };
+  if (
+    provenance.generationModel !== 'codex-imagegen'
+    || !runtimeSemanticText(provenance.promptSummary, 8_000)
+    || !mediaVersionId(provenance.sourceVersionId)
+    || !mediaSha(provenance.sourceSha256)
+    || !runtimeSemanticText(provenance.transform, 240)
+  ) return { claimed: true, issue: 'Starter-card art generated-source provenance is incomplete', value: null };
+  if (row.slot !== `ui/run/card-art/${cardId}/illustration.png`) {
+    return { claimed: true, issue: 'Starter-card art slot does not match its card identity', value: null };
+  }
+  if (mediaAcceptanceContract(row).mode !== 'standalone') {
+    return { claimed: true, issue: 'Starter-card art requires standalone atomic acceptance', value: null };
+  }
+  return {
+    claimed: true,
+    issue: null,
+    value: {
+      kind: 'starter',
+      cardId,
+      versionId: String(row.id),
+      slot: row.slot,
+      sha256: row.blob_sha256,
+    },
+  };
+}
+
 function runCardArtProjection(row) {
   const claimed = row.domain === 'run-card-art'
     || (typeof row.slot === 'string' && row.slot.startsWith('ui/run/card-art/'));
@@ -16090,6 +16142,11 @@ function runCardArtProjection(row) {
     : isObjectRecord(row.metadata) ? row.metadata : {};
   const slotMetadata = isObjectRecord(row.slot_metadata) ? row.slot_metadata : {};
   const provenance = isObjectRecord(row.provenance) ? row.provenance : {};
+  const starterId = /^ui\/run\/card-art\/([^/]+)\/illustration\.png$/.exec(String(row.slot || ''))?.[1];
+  const starter = starterId
+    ? runStarterCardArtProjection(row, starterId, metadata, slotMetadata, provenance)
+    : null;
+  if (starter) return starter;
   if (metadata.schema !== 'run-card-art-plan-v2') {
     return { claimed: true, issue: 'Units-card art requires typed v2 plan metadata', value: null };
   }
@@ -16141,10 +16198,29 @@ function runCardArtProjection(row) {
     contract.mode !== 'group' || contract.groupId !== RUN_CARD_ART_GROUP_ID
     || canonicalJson(contract.requiredSlots) !== canonicalJson(RUN_CARD_ART_REQUIRED_SLOTS)
   ) return { claimed: true, issue: 'Units-card art requires the complete atomic 49-card acceptance group', value: null };
-  return { claimed: true, issue: null, value: { cardId } };
+  return { claimed: true, issue: null, value: { kind: 'core', cardId } };
 }
 
 function runCardArtOwnerProofIssue(runCardArt, proof, surfaceUrl) {
+  if (runCardArt.kind === 'starter') {
+    if (
+      proof.schema !== 'live-media-owner-proof-v1' || proof.canonicalScale !== 1
+      || proof.surfaceKind !== 'Studio Card Layout starter-card runtime cutover'
+      || proof.renderer !== 'RunCardPrototype/RunCardFace'
+      || proof.versionId !== runCardArt.versionId || proof.slot !== runCardArt.slot
+      || mediaSha(proof.contentSha256) !== runCardArt.sha256
+    ) return 'Starter-card art review requires the exact Card Layout owner proof';
+    try {
+      const url = new URL(surfaceUrl);
+      if (
+        url.pathname !== '/studio' || url.searchParams.get('vk') !== 'cardlayout'
+        || url.searchParams.get('starterCard') !== runCardArt.cardId
+      ) return 'Starter-card art review URL must identify its Card Layout starter card';
+    } catch {
+      return 'Starter-card art review URL is invalid';
+    }
+    return null;
+  }
   if (
     proof.schema !== 'live-media-owner-group-proof-v1' || proof.canonicalScale !== 1
     || proof.surfaceKind !== 'Studio Card Prompts complete Units set'

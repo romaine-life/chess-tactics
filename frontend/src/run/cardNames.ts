@@ -1,5 +1,6 @@
 import {
   RUN_STARTER_CARD_BY_ID,
+  RUN_STARTER_CARDS,
   cardContentsLabel,
   type RunArmyPieceType,
   type AdlectablePieceType,
@@ -169,10 +170,9 @@ export function runCardFlavor(card: NameableRunCard): string {
 
 /** Stable semantic live-media slot for one canonical core Units card. */
 export function runCardArtSlot(card: NameableRunCard): string {
-  // The starter pair uses installed royal and levy illustrations in the beta. Their shared
-  // purple frame carries starter identity while His Grace's royal subject does the rest.
-  const id = canonicalCardId(card);
-  return `ui/run/card-art/${id === 'his-grace' ? 'q' : id === 'front-lines' ? 'pp' : id}/illustration.png`;
+  // Starter cards own their art identity just as firmly as the core deck. A shared
+  // composition never aliases their accepted illustration bytes (ADR-0414).
+  return `ui/run/card-art/${canonicalCardId(card)}/illustration.png`;
 }
 
 // A card is addressed by the name printed on its banner, not by the piece-initial id the
@@ -186,11 +186,14 @@ const slugify = (name: string): string => name
 
 /** The address form of a card id: its banner name, hyphenated. Unnamed ids address as themselves. */
 export function runCardSlug(cardId: string): string {
-  const name = RUN_CARD_NAME_BY_ID[cardId];
+  const name = RUN_STARTER_CARD_BY_ID[cardId as RunStarterCardId]?.name ?? RUN_CARD_NAME_BY_ID[cardId];
   return name ? slugify(name) : cardId;
 }
 
-/** Every authored card address, resolved back to the deck id it names. */
+/** Every authored card address, resolved back to the catalog id it names. */
 export const RUN_CARD_ID_BY_SLUG: Readonly<Record<string, string>> = Object.freeze(
-  Object.fromEntries(Object.keys(RUN_CARD_NAME_BY_ID).map((id) => [runCardSlug(id), id])),
+  Object.fromEntries([
+    ...RUN_STARTER_CARDS.map((card) => card.id),
+    ...Object.keys(RUN_CARD_NAME_BY_ID),
+  ].map((id) => [runCardSlug(id), id])),
 );

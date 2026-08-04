@@ -15,6 +15,7 @@ import {
 import {
   advanceDeployAll,
   chooseDeploymentMode,
+  confirmKlerosis,
   currentDeploymentUnit,
   deploymentOptions,
   disciplinePlacementCells,
@@ -442,6 +443,7 @@ export function buildDeploymentLabSnapshot(config: DeploymentLabConfig): Deploym
       return unit && validCellKey(cell) ? [[unit.id, cell]] : [];
     }),
   );
+  run = confirmKlerosis(run, level);
   run = chooseDeploymentMode(run, level, 'deploy-all');
   while (run.phase === 'deployment') {
     const unit = currentDeploymentUnit(run);

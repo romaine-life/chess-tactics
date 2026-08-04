@@ -16,9 +16,14 @@ search for before constructing a control or repeated surface.
   decorative background artwork between its installed fill and live content;
   callers supply installed media content, not attachment or clipping geometry
   (ADR-0336).
-- `ui/Skirmish.tsx#SkirmishShell` — the persistent gameplay/Run shell. Its
-  `persistentViewportArtwork` seat owns environment art shared by sibling
-  viewport destinations and keeps that art outside their director-owned fade.
+- `ui/RunForm.tsx` — the sole Run-page constructor. `createRunForm(...).add(
+  runActivity(...))` permanently supplies the Run shell, title, Controls surface,
+  Strategikon, lipsana strip, and workspace swap while activities contribute only
+  bounded control, viewport, and overlay content (ADR-0415).
+- `ui/SkirmishShell.tsx` — the internal persistent gameplay frame used only by
+  `RunForm` and standalone `Skirmish`. Its `persistentViewportArtwork` seat owns
+  environment art shared by sibling viewport destinations and keeps that art
+  outside their director-owned fade.
 - `ui/shared/ActionList.tsx` — data-driven selectable/action rows. War battles,
   Campaign Editor levels, and Play level lists use this instead of constructing
   first/middle/last rows independently.
