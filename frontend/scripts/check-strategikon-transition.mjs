@@ -53,9 +53,10 @@ const STEPS = [
   { label: 'reference-rail-again', to: `/play/strategikon/enchiridion/lipsana${BATTLE}`, region: 'strategikon-reference-shell' },
   { label: 'reference-rail-ataraxia', to: `/play/strategikon/enchiridion/ataraxia${BATTLE}`, region: 'strategikon-reference-shell' },
   { label: 'section-rail', to: `/play/strategikon/prosopography${BATTLE}`, region: 'strategikon-shell' },
-  // Returning to the Enchiridion goes through the SECTION rail, whose tab offers the
-  // reference the section reopens with — the reference rail is gone while away.
-  { label: 'section-rail-back', to: `/play/strategikon/enchiridion/units${BATTLE}`, region: 'strategikon-shell' },
+  // Returning to the Enchiridion goes through the SECTION rail and lands on the
+  // routed empty ancestor. A reference opens only after its own rail is selected.
+  { label: 'section-rail-back', to: `/play/strategikon/enchiridion${BATTLE}`, region: 'strategikon-shell' },
+  { label: 'reference-rail-from-root', to: `/play/strategikon/enchiridion/units${BATTLE}`, region: 'strategikon-reference-shell' },
 ];
 
 const profile = mkdtempSync(join(tmpdir(), 'ct-strategikon-'));
@@ -106,9 +107,12 @@ try {
       });
       // Sample the bar on a timer, not on director mutations: the chips blanked
       // BETWEEN phase changes, so an attribute-driven sample would step right over it.
-      const titleBar = () => (document.querySelector('.app-shell-titlebar')?.innerText ?? '')
+      const titleBar = () => [...document.querySelectorAll('.app-shell-titlebar .titlebar-status')]
+        .map((node) => node.innerText)
+        .join(' ')
         .replace(/\s+/g, ' ')
-        // The battle clock ticks during the transition; compare structure, not time.
+        // The battle clock ticks during the transition; compare retained status
+        // structure, not time or the address breadcrumb that navigation changes.
         .replace(/\d+:\d\d/g, 'M:SS')
         .trim();
       window.__strategikon = { phases: [snap()], titleBar: [titleBar()] };

@@ -49,14 +49,14 @@ export function enchiridionLipsanonHref(lipsanonId: LipsanonId): string {
 }
 
 /**
- * Resolve a main-menu /enchiridion path to its section. Deeper address suffixes
- * (a lipsanon id today) stay within their section; unknown paths read as 'units',
- * matching the route family's long-standing fallback.
+ * Resolve a main-menu /enchiridion path to its explicitly addressed section.
+ * Deeper address suffixes stay within their section. The bare root and unknown
+ * paths select no section, leaving the retained Enchiridion shell open and empty.
  */
-export function enchiridionSectionFromPath(path: string): EnchiridionSection {
+export function enchiridionSectionFromPath(path: string): EnchiridionSection | null {
   return ENCHIRIDION_SECTIONS.find(
     (section) => path === `/enchiridion/${section}` || path.startsWith(`/enchiridion/${section}/`),
-  ) ?? 'units';
+  ) ?? null;
 }
 
 /**
@@ -65,7 +65,8 @@ export function enchiridionSectionFromPath(path: string): EnchiridionSection {
  * address as the one retained lipsanon-reference scene.
  */
 export function enchiridionSectionPath(path: string): string {
-  return enchiridionSectionHref(enchiridionSectionFromPath(path));
+  const section = enchiridionSectionFromPath(path);
+  return section ? enchiridionSectionHref(section) : '/enchiridion';
 }
 
 /** The lipsanon addressed by /enchiridion/lipsana/<lipsanon-id>; null when absent or unknown. */

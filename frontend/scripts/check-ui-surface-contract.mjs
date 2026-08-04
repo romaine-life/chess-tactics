@@ -40,6 +40,15 @@ const APPROVED_FRAMELESS_SURFACE_RESETS = new Map([
     'border-radius:0',
     'box-shadow:none',
   ])],
+  // ADR-0409 makes the title route itself navigation. The shared TitleRoute and
+  // BrandLockup owners remove native button chrome so those canonical NavButtons
+  // remain typography on the App-owned title surface rather than paint another one.
+  ['src/style.css|.title-route-button', new Set([
+    'background:none',
+    'border:0',
+    'border-radius:0',
+    'box-shadow:none',
+  ])],
 ]);
 
 function normalize(value) {

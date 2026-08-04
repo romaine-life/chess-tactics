@@ -7,6 +7,7 @@ import { InnerChromeBox } from './shared/ChromeBox';
 import { HouseSelect } from './shared/HouseSelect';
 import { TitleBarStatus } from './shell/TitleBarControls';
 import { TitleBarSlot } from './shell/TitleBarSlot';
+import { TitleRoute, type TitleRouteSegment } from './shell/TitleRoute';
 import { RunIdentityChip, RunTitleBarMeasures } from './RunTitleBarChips';
 import { PLAY_RUN_SELECTOR_HREF } from './playHubRoute';
 import {
@@ -113,7 +114,7 @@ import {
   useRunCardFlight,
   type RunCardFlightRect,
 } from './runCardFlightView';
-import { isStrategikonPath, strategikonRouteLabels } from './strategikonRoute';
+import { isStrategikonPath, strategikonRouteCrumbs } from './strategikonRoute';
 import { createRunForm, runActivity, type RunForm } from './RunForm';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
@@ -169,13 +170,26 @@ function runPhaseRouteName(run: RunDocument): string {
         : `${run.phase.charAt(0).toUpperCase()}${run.phase.slice(1)}`;
 }
 
-export function runTitleBarRouteName(run: RunDocument, path: string): string {
-  const segments = [runPhaseRouteName(run)];
-  if (isStrategikonPath(path)) segments.push(...strategikonRouteLabels(path));
-  return segments.join(' › ');
+export function runTitleBarRouteSegments(
+  run: RunDocument,
+  path: string,
+  search = '',
+): readonly TitleRouteSegment[] {
+  const segments: TitleRouteSegment[] = [{ label: runPhaseRouteName(run), to: `/run${search}` }];
+  if (isStrategikonPath(path)) {
+    segments.push(...strategikonRouteCrumbs(path).map((crumb) => ({
+      ...crumb,
+      to: `${crumb.to}${search}`,
+    })));
+  }
+  return segments;
 }
 
-function RunTitleBarStatus({ run, path }: { run: RunDocument; path: string }): ReactElement {
+function RunTitleBarStatus({ run, path, search }: {
+  run: RunDocument;
+  path: string;
+  search: string;
+}): ReactElement {
   const progress = runBattleProgress(run);
   const levelName = run.war.battles[run.battleIndex]?.level.name ?? 'Battle';
   return (
@@ -183,7 +197,9 @@ function RunTitleBarStatus({ run, path }: { run: RunDocument; path: string }): R
       {/* The phase is the durable Run position; an open Strategikon appends the exact
           visible workspace address — Sectio › Strategikon › Enchiridion › Cards —
           rather than leaving the covered phase as the last word in the route. */}
-      <TitleBarSlot region="route">{runTitleBarRouteName(run, path)}</TitleBarSlot>
+      <TitleBarSlot region="route">
+        <TitleRoute segments={runTitleBarRouteSegments(run, path, search)} />
+      </TitleBarSlot>
       <div className="skirmish-topbar-status run-topbar-status">
         <RunIdentityChip
           warName={run.war.name}
@@ -1264,7 +1280,7 @@ export function RunScreen({
   // Deployment, Sectio, and Victory all open it from the same Controls title mark. Only an
   // absent Run has nothing to reference, so that is the sole address the screen repairs.
   useEffect(() => {
-    if (hydrated && routePath.startsWith('/run/strategikon/') && !run) {
+    if (hydrated && isStrategikonPath(routePath) && !run) {
       navigateApp(`/run${routeSearch}`, { replace: true, scroll: false });
     }
   }, [hydrated, routePath, routeSearch, run]);
@@ -1540,7 +1556,9 @@ export function RunScreen({
     routePath,
     routeSearch,
     strategikonOpen,
-    titleBarContent: shellRun ? <RunTitleBarStatus run={shellRun} path={routePath} /> : null,
+    titleBarContent: shellRun ? (
+      <RunTitleBarStatus run={shellRun} path={routePath} search={routeSearch} />
+    ) : null,
     lipsanonIds: visibleLipsanonIds,
     inspectionWorkspace,
     className: `run-screen${shellRun && (visibleLipsanonCount(shellRun) || bonaTarget) ? ' has-lipsana' : ''}`,

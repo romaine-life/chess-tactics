@@ -53,12 +53,12 @@ function registeredParticipantIds(): Set<string> {
 const ROUTES = [
   '/', '/unknown', '/party', '/lobbies',
   '/settings', '/settings/general', '/settings/audio/tracks', '/settings/admin',
-  '/enchiridion/units', '/enchiridion/cards',
+  '/enchiridion', '/enchiridion/units', '/enchiridion/cards',
   '/editor', '/editor/wars', '/editor/level',
-  '/play/select/skirmish', '/play/select/levels', '/play/select/campaign', '/play',
+  '/play/select/skirmish', '/play/select/levels', '/play/select/campaign', '/play', '/play/strategikon',
   '/studio', '/unit-studio', '/prop-lab',
   '/portrait-editor', '/predrawn-reference',
-  '/run',
+  '/run', '/run/strategikon',
 ];
 
 describe('critical scene participants', () => {

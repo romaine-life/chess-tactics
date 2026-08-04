@@ -9,6 +9,7 @@ const strategikonRoute = readFileSync(new URL('./strategikonRoute.ts', import.me
 const enchiridionRoute = readFileSync(new URL('./enchiridionRoute.ts', import.meta.url), 'utf8');
 const strategikonTitleNavigation = readFileSync(new URL('./StrategikonTitleNavigation.tsx', import.meta.url), 'utf8');
 const mainMenu = readFileSync(new URL('./MainMenu.tsx', import.meta.url), 'utf8');
+const titleBarConfig = readFileSync(new URL('./shell/titleBarConfig.ts', import.meta.url), 'utf8');
 const apparatusRailTab = readFileSync(new URL('./shared/ApparatusRailTab.tsx', import.meta.url), 'utf8');
 const style = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
@@ -196,6 +197,37 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(style).toMatch(/\.strategikon-pane > \.run-panel-unframed,[\s\S]{0,120}?\{[\s\S]*?block-size:\s*100%/);
   });
 
+  it('uses the approved drawn scrollbar for every scrollable Enchiridion reference body', () => {
+    expect(enchiridion.match(/<KitScroll className="enchiridion-reference-scroll">/g)).toHaveLength(5);
+    for (const className of [
+      'enchiridion-unit-grid',
+      'enchiridion-terrain-list',
+      'enchiridion-card-type-rows',
+      'enchiridion-ability-list',
+      'enchiridion-ataraxia-list',
+    ]) {
+      expect(enchiridion).toMatch(new RegExp(
+        `<KitScroll className="enchiridion-reference-scroll">[\\s\\S]*?className="${className}"`,
+      ));
+      expect(style).not.toMatch(new RegExp(
+        `\\.${className}\\s*\\{[^}]*overflow(?:-y)?:\\s*(?:auto|scroll)`,
+        's',
+      ));
+    }
+    expect(style).toMatch(/\.enchiridion-reference-scroll\s*\{[\s\S]*?block-size:\s*100%;[\s\S]*?min-block-size:\s*0/);
+    expect(style).toMatch(/\.enchiridion-reference-scroll > \.kit-scroll-content\s*\{[\s\S]*?box-sizing:\s*border-box/);
+    expect(style).not.toMatch(/\.enchiridion-lipsanon-layout\s*\{[^}]*overflow-y:\s*(?:auto|scroll)/s);
+    expect(style).toMatch(/@media \(max-width: 1100px\)[\s\S]*?\.enchiridion-lipsanon-layout\s*\{[\s\S]*?grid-template-rows:\s*minmax\(0, 1fr\) auto;[\s\S]*?overflow:\s*hidden/);
+  });
+
+  it('keeps the responsive Strategikon profile on the approved drawn scrollbar', () => {
+    expect(runArmy).toContain("import { KitScroll } from './KitScroll';");
+    expect(runArmy).toContain('<KitScroll className="run-army-profile-scroll">');
+    expect(style).toMatch(/\.run-army-profile-scroll\s*\{[\s\S]*?block-size:\s*100%;[\s\S]*?min-block-size:\s*0/);
+    expect(style).not.toMatch(/\.run-army-profile-body\s*\{[^}]*overflow-y:\s*(?:auto|scroll)/s);
+    expect(style).toMatch(/\.strategikon-workspace \.shell-workspace-body-content\s*\{\s*overflow:\s*hidden;/);
+  });
+
   it('opts the main-menu workspace back into pointer input', () => {
     const workspaceRule = style.match(/\.menu-dest > \.enchiridion-workspace\s*\{[\s\S]*?\}/)?.[0] ?? '';
     expect(workspaceRule).toContain('pointer-events: auto');
@@ -208,6 +240,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(lipsanonCodex).toContain("useState<LipsanonBrowseMode>('rows')");
     expect(lipsanonCodex).toContain('data-testid="lipsanon-view-rows"');
     expect(lipsanonCodex).toContain('data-testid="lipsanon-view-grouped"');
+    expect(lipsanonCodex).toContain('<KitScroll className="enchiridion-lipsanon-scroll">');
     expect(lipsanonCodex).toMatch(/chromeUnitClassNames\(\s*'inner-list-row'/);
     expect(lipsanonCodex).toContain('<InnerChromeBox className="enchiridion-lipsanon-group">');
     expect(lipsanonCodex).toContain('className="enchiridion-lipsanon-group-grid"');
@@ -229,6 +262,25 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(mainMenuContentRule).toContain('min-inline-size: 0');
     expect(mainMenuContentRule).not.toContain('max-inline-size: var(--col-action-w)');
     expect(style).toMatch(/\.enchiridion-lipsanon-detail\s*\{[\s\S]*?align-self:\s*start[\s\S]*?block-size:\s*auto[\s\S]*?inline-size:\s*100%[\s\S]*?min-inline-size:\s*0/);
+    expect(style).toMatch(/\.enchiridion-lipsanon-scroll > \.kit-scroll-content\s*\{[\s\S]*?box-sizing:\s*border-box/);
+    expect(style).not.toMatch(/\.enchiridion-lipsanon-rows\s*\{[^}]*overflow-y:\s*auto/s);
+    expect(style).not.toMatch(/\.enchiridion-lipsanon-group\s*\{[^}]*overflow-y:\s*auto/s);
+  });
+
+  it('links the main-menu Enchiridion section from the persistent App-owned title route', () => {
+    expect(mainMenu).toContain('const enchiridionSection = enchiridionSectionFromPath(path);');
+    expect(mainMenu).toContain("enchiridion: '/enchiridion'");
+    expect(mainMenu).not.toContain('<TitleBarSlot region="route">');
+    expect(titleBarConfig).toContain('const section = enchiridionSectionFromPath(path);');
+    expect(titleBarConfig).toContain('label: ENCHIRIDION_SECTION_LABEL[section]');
+    expect(titleBarConfig).toContain('to: enchiridionSectionHref(section)');
+    expect(enchiridion).toContain('{section ? (');
+    expect(strategikon).toContain('{section ? <StrategikonContentSceneSlot');
+    expect(strategikon).toContain('{reference ? <StrategikonReferenceSceneSlot');
+    // The nested host retains the complete Run/Battle route from ADR-0389.
+    expect(strategikonRoute).toContain("{ label: 'Strategikon', to: root }");
+    expect(strategikonRoute).toContain("label: STRATEGIKON_SECTION_LABEL.enchiridion");
+    expect(strategikonRoute).toContain("to: strategikonHref(address.base, address.section, address.reference)");
   });
 
   it('routes individual lipsanon selection where the host addresses lipsana (ADR-0256)', () => {

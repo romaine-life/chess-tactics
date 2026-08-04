@@ -4,6 +4,7 @@ import { HeaderAccountCluster } from '../shared/HeaderAccountCluster';
 import { decodeShellChromeArt } from './shellChromeArt';
 import { useStartupScene } from './startupScene';
 import { titleBarConfig } from './titleBarConfig';
+import { TitleRoute } from './TitleRoute';
 
 // The ONE persistent title bar. Rendered once in App outside the replaceable
 // SceneBoundary, so the bar itself remains painted across every navigation while
@@ -64,6 +65,8 @@ export function AppTitleBar({ path, search, revealTitle, transitionStatus }: {
       <span className="app-shell-rail-junction app-shell-rail-junction--right-continuation" aria-hidden="true" />
       <BrandLockup
         screenName={config.screenName}
+        screenNameTo={config.screenNameTo}
+        routeContent={config.routeSegments?.length ? <TitleRoute segments={config.routeSegments} /> : null}
         routeSlot={config.routeSlot}
         transitionStatus={transitionStatus}
       />

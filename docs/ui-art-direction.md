@@ -246,7 +246,7 @@ homepage family uses one continuous generated scenic backdrop, one invariant tit
 bar, shared settings-twin rails, live rows, and data-backed board previews. The saved
 concept renders remain direction and comparison references rather than runtime screens.
 
-The default work surfaces are `/`, `/enchiridion/units`,
+The default work surfaces are `/`, `/enchiridion`, `/enchiridion/units`,
 `/enchiridion/terrain`, `/enchiridion/cards`, `/enchiridion/card-types`,
 `/enchiridion/lipsana`, `/enchiridion/abilities`, `/play/select`, `/play/select/continue/<mode>`, `/play/select/skirmish`,
 `/play/select/levels`, `/play/select/campaign/<id>`, `/editor`,
@@ -298,9 +298,19 @@ rail read one shared destination inventory, and the visible Chartulary mark is
 the measured endpoint for an adlected card's shrinking transfer. When that card leaves
 the Sectio layout, each surviving offer glides from its measured old seat to its new
 centred seat with no snap, bounce, or guessed slot (ADR-0387, ADR-0388). The persistent
-title route keeps the underlying Run phase, then appends Strategikon, its section,
-and any Enchiridion reference from those same label inventories—for example
-`Sectio › Strategikon › Enchiridion › Cards` (ADR-0389). Strategikon's
+title route always appends the visible Enchiridion section on the standalone host,
+and on a Run keeps the underlying phase before appending Strategikon, its section,
+and that same Enchiridion reference—for example
+`Enchiridion › Cards` or `Sectio › Strategikon › Enchiridion › Cards`
+(ADR-0389, ADR-0408). Every named segment is a frameless `NavButton` to its
+canonical address, so the route is a keyboard- and pointer-operable breadcrumb rather
+than orientation-only copy (ADR-0409). Address-only segments are owned directly by the
+persistent App title configuration, so Play-hosted Strategikon and standalone Enchiridion
+routes do not disappear while a scene is loading; only live document state such as the
+Run phase enters through the route portal (ADR-0410). Reference ancestors own empty
+routes: activating Strategikon or Enchiridion removes the exposed child and leaves the
+appropriate rail over its authored background; Units appears only at an explicit Units
+address, with no placeholder panel at any empty root (ADR-0411). Strategikon's
 rails are canonical main-menu rail columns: every destination added to either
 column inherits the exact menu-tab width, stack gap, inset, and stone-continuity
 language rather than defining host-local geometry. Strategikon replaces the board
