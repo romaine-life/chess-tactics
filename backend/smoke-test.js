@@ -937,17 +937,7 @@ function inlineMigrationSql(version) {
   return inlineMigrationDefinition(version).sql;
 }
 
-/**
- * The highest migration the inline registry defines. Derived rather than written down: this
- * check previously pinned the literal 51, so every added migration failed it until someone
- * bumped the number by hand.
- */
-function highestInlineMigrationVersion() {
-  inlineMigrationDefinition(1);
-  return cachedInlineMigrations.reduce((highest, m) => Math.max(highest, m.version), 0);
-}
-
-async function validatePrimarySparseNumericMigrationUpgrade() {
+async function validatePrimarySparseNumericMigrationUpgrade52() {
   const history = await queryDb(
     `SELECT version, name, checksum
        FROM schema_migrations
@@ -962,10 +952,7 @@ async function validatePrimarySparseNumericMigrationUpgrade() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from(
-    { length: highestInlineMigrationVersion() },
-    (_, index) => index + 1,
-  );
+  const expectedVersions = Array.from({ length: 52 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -980,7 +967,7 @@ async function validatePrimarySparseNumericMigrationUpgrade() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 15 }, (_, index) => index + 37),
+    ...Array.from({ length: 16 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1094,7 +1081,7 @@ async function validatePrimarySparseNumericMigrationUpgrade() {
     )
   ) {
     throw new Error(
-      `Primary server did not fill sparse numeric history 1-27 and 36 through the newest migration: `
+      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 52: `
       + `${JSON.stringify({
         history: history.rows,
         identity_columns: identityColumns.rows,
@@ -1348,7 +1335,7 @@ async function main() {
   await new Promise((resolve) => mockAuth.listen(authPort, '127.0.0.1', resolve));
   await new Promise((resolve) => mockBgm.listen(bgmPort, '127.0.0.1', resolve));
   await waitForServer();
-  await validatePrimarySparseNumericMigrationUpgrade();
+  await validatePrimarySparseNumericMigrationUpgrade52();
   const databaseRuntime = await queryDb('SELECT version() AS version');
   const isPgliteRuntime = /\bPGlite\b/i.test(String(databaseRuntime.rows[0]?.version || ''));
   if (!isPgliteRuntime) {

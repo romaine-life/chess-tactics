@@ -952,13 +952,13 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
 
   const primaryUpgradeProof = sourceSection(
     smokeSource,
-    'async function validatePrimarySparseNumericMigrationUpgrade51()',
+    'async function validatePrimarySparseNumericMigrationUpgrade52()',
     '\nasync function validateEditorMigration16Preservation()',
   );
   assert.match(
     primaryUpgradeProof,
-    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*51\s*\}/,
-    'the production upgrade proof must require a complete 1-51 history',
+    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*52\s*\}/,
+    'the production upgrade proof must require a complete 1-52 history',
   );
   assert.match(
     primaryUpgradeProof,
@@ -972,8 +972,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /length:\s*15[\s\S]*index\s*\+\s*37/,
-    'the production report must include every post-36 migration through 51',
+    /length:\s*16[\s\S]*index\s*\+\s*37/,
+    'the production report must include every post-36 migration through 52',
   );
   assert.match(
     primaryUpgradeProof,
