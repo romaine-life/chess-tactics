@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-08-04
 deciders: owner (Nelson) + Codex
+partially_superseded_by:
+  - "[ADR-0419](0419-deployment-draws-a-hidden-card-stack-in-play-order.md)'s face-down deal into the Controls stack"
 refines:
   - "[ADR-0387](0387-bought-cards-travel-into-a-title-reachable-chartulary.md)"
   - "[ADR-0406](0406-klerosis-deals-cards-before-one-unit-at-a-time-deployment.md)"
@@ -42,4 +44,3 @@ for cards entering the held-card register.
   the same registered title mark.
 - More-than-three-card future deals keep the same origin and ordered stagger while the destination
   grid remains free to wrap and scroll.
-

@@ -28,7 +28,7 @@ const skirmishHud = readFileSync(join(frontend, 'src/ui/SkirmishHud.tsx'), 'utf8
 const strategikon = readFileSync(join(frontend, 'src/ui/Strategikon.tsx'), 'utf8');
 const runScreen = readFileSync(join(frontend, 'src/ui/RunScreen.tsx'), 'utf8');
 const runForm = readFileSync(join(frontend, 'src/ui/RunForm.tsx'), 'utf8');
-const runKlerosisWorkspace = readFileSync(join(frontend, 'src/ui/RunKlerosisWorkspace.tsx'), 'utf8');
+const runDeploymentCardStack = readFileSync(join(frontend, 'src/ui/RunDeploymentCardStack.tsx'), 'utf8');
 const runArmyWorkspace = readFileSync(join(frontend, 'src/ui/RunArmyWorkspace.tsx'), 'utf8');
 const runExpunctioWorkspace = readFileSync(join(frontend, 'src/ui/RunExpunctioWorkspace.tsx'), 'utf8');
 const runLipsana = readFileSync(join(frontend, 'src/ui/Lipsana.tsx'), 'utf8');
@@ -1036,10 +1036,9 @@ if (!/export function RunSceneViewport/.test(runWorkspace)
 if (!/<RunSceneViewport[\s\S]*?scene=\{\{[\s\S]*?view: 'army'[\s\S]*?contentClassName,[\s\S]*?edgeAttached: true,[\s\S]*?testId: dataTestId/.test(runArmyWorkspace)) {
   failures.push('framed Run Army workspaces must use the shared edge-attached content variant');
 }
-const playerRunSources = `${runScreen}\n${runArmyWorkspace}\n${runExpunctioWorkspace}\n${runKlerosisWorkspace}\n${runLipsana}`;
+const playerRunSources = `${runScreen}\n${runArmyWorkspace}\n${runExpunctioWorkspace}\n${runDeploymentCardStack}\n${runLipsana}`;
 for (const testId of [
   'run-sectio-workspace',
-  'run-klerosis-workspace',
   'run-victory-workspace',
   'run-army-ledger-workspace',
   'run-army-profile-workspace',
@@ -1062,13 +1061,15 @@ if (!/testId=\{runDeployment \? 'run-deployment' : 'skirmish'\}/.test(skirmish)
   || !/renderCellOverlay:/.test(runScreen)
   || !/surfaceState=\{presentedDeploymentSurface\}/.test(skirmish)
   || /run-deployment-workspace|<LevelPreviewColumn|Choose square…/.test(runBattlefieldSources)) {
-  failures.push('confirmed Run Deployment must use the battlefield and phase-specific Controls instead of a RunWorkspace level manifest');
+  failures.push('Run Deployment must use the battlefield and phase-specific Controls instead of a RunWorkspace level manifest');
 }
-if (!/<RunSceneViewport[\s\S]*?view: 'klerosis'/.test(runKlerosisWorkspace)
-  || !/data-testid="klerosis-confirm"/.test(runKlerosisWorkspace)
-  || /SkirmishBoard|Deploy all|Step through/.test(runKlerosisWorkspace)
-  || /KlerosisOverlay/.test(runScreen)) {
-  failures.push('Klerosis must be a dedicated pre-Battle RunSceneViewport with Confirm as its only placement action');
+if (!/<RunDeploymentCardStack/.test(runScreen)
+  || !/data-deployment-card-stage=\{deployment\?\.stage/.test(runDeploymentCardStack)
+  || !/data-deployment-stack-card=\{cardId\}/.test(runDeploymentCardStack)
+  || !/<RunCardBack mediaUrl=\{resolvedLiveMediaUrl\(RUN_CARD_BACK_SLOT\)\}/.test(runDeploymentCardStack)
+  || /RunSceneViewport|data-klerosis|Confirm/.test(runDeploymentCardStack)
+  || /KlerosisOverlay|RunKlerosisWorkspace/.test(runScreen)) {
+  failures.push('Deployment must own one hidden Controls card stack on the canonical battlefield without a separate confirmation workspace');
 }
 if (/<OuterChromeBox\b|<OuterChromeHeader\b|chromeConsumer="run-(?:draft|deployment|sectio|victory|army-ledger|army-profile|alienatio|expunctio|empty)"/.test(playerRunSources)) {
   failures.push('player-facing Run destinations must not restore top-level outer panels');

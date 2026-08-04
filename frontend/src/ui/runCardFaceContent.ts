@@ -148,9 +148,7 @@ function publicAbilityTarget(
   card: RunCardDefinition | RunCardOffer,
   adlected: boolean,
 ): PublicAbilityTarget | null {
-  if (isRunStarterCard(card)) {
-    return card.id === 'his-grace' ? { state: 'primogeniture', pieceIndex: 0 } : null;
-  }
+  if (isRunStarterCard(card)) return null;
   if (!isRunCardOffer(card) || !card.cardType) return null;
   const granted = RUN_CARD_TYPE_REFERENCE[card.cardType].grants;
   // Cacochymic is a modifier the offer already names publicly through cacochymicPieceIndex.

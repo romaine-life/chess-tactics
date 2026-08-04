@@ -7,6 +7,8 @@ refines:
   - "[ADR-0406](0406-klerosis-deals-cards-before-one-unit-at-a-time-deployment.md)"
 refined_by:
   - "[ADR-0414](0414-selected-starter-card-media-becomes-dedicated-runtime-identity.md)'s owner-approved runtime cutover"
+partially_superseded_by:
+  - "[ADR-0419](0419-deployment-draws-a-hidden-card-stack-in-play-order.md)'s retirement of the Primogeniture fitting pair"
 ---
 
 # ADR-0412: Praecipuus and Primogeniture join Card Icon Fitting

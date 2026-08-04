@@ -19,6 +19,7 @@ partially_superseded_by:
   - "[ADR-0414](0414-selected-starter-card-media-becomes-dedicated-runtime-identity.md)'s dedicated starter-card runtime identities"
   - "[ADR-0416](0416-klerosis-is-a-dedicated-pre-battle-screen.md)'s separate confirmation workspace before pace selection"
   - "[ADR-0418](0418-klerosis-presents-the-deal-without-summary-copy-or-rosters.md)'s removal of the Deploying and Unavailable roster"
+  - "[ADR-0419](0419-deployment-draws-a-hidden-card-stack-in-play-order.md)'s card-owned order, hidden stack, and Primogeniture retirement"
 refines:
   - "[ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md)"
   - "[ADR-0274](0274-lipsana-grant-unit-owned-deployment-abilities.md)"

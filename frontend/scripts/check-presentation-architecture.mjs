@@ -112,10 +112,11 @@ for (const required of [
   'form.add(runActivity({',
   'form={form}',
   'navigateApp(nextHref, { replace: true, scroll: false })',
-  '<RunKlerosisWorkspace',
-  '&& !klerosisRun',
-  'replace(confirmKlerosis(klerosisRun, level))',
-  'onArrivingUnitIdsChange: () => undefined',
+  '<RunDeploymentCardStack',
+  'completeDeploymentDeal(latest, level)',
+  'finishDeploymentCardReveal(latest)',
+  'finishDeploymentCardDiscard(latest)',
+  'onArrivingUnitIdsChange: reportArrivals',
 ]) {
   if (!runScreen.includes(required)) fail(runScreenPath, `missing closed Run scene-source invariant: ${required}`);
 }
@@ -130,22 +131,28 @@ for (const forbidden of [
   '<SkirmishShell',
   '<Strategikon',
   'KlerosisOverlay',
+  'RunKlerosisWorkspace',
 ]) {
   if (runScreen.includes(forbidden)) fail(runScreenPath, `forbidden local Run presentation authority: ${forbidden}`);
 }
 
-const runKlerosisPath = resolve(src, 'ui/RunKlerosisWorkspace.tsx');
-const runKlerosis = readFileSync(runKlerosisPath, 'utf8');
+const deploymentCardStackPath = resolve(src, 'ui/RunDeploymentCardStack.tsx');
+const deploymentCardStack = readFileSync(deploymentCardStackPath, 'utf8');
 for (const required of [
-  '<RunSceneViewport',
-  "view: 'klerosis'",
-  'testId: \'run-klerosis-workspace\'',
-  'data-testid="klerosis-confirm"',
+  "document.querySelector<HTMLElement>('[data-run-card-flight-target]')",
+  'data-deployment-card-stage={deployment?.stage',
+  'data-deployment-stack-card={cardId}',
+  '<RunCardBack mediaUrl={resolvedLiveMediaUrl(RUN_CARD_BACK_SLOT)} />',
+  '<strong className="run-deployment-card-count"',
 ]) {
-  if (!runKlerosis.includes(required)) fail(runKlerosisPath, `missing dedicated Klerosis workspace invariant: ${required}`);
+  if (!deploymentCardStack.includes(required)) {
+    fail(deploymentCardStackPath, `missing closed Deployment card-stack invariant: ${required}`);
+  }
 }
-for (const forbidden of ['SkirmishBoard', 'Deploy all', 'Step through']) {
-  if (runKlerosis.includes(forbidden)) fail(runKlerosisPath, `forbidden Klerosis battlefield coupling: ${forbidden}`);
+for (const forbidden of ['RunSceneViewport', 'Confirm', 'data-klerosis']) {
+  if (deploymentCardStack.includes(forbidden)) {
+    fail(deploymentCardStackPath, `forbidden Deployment card-stack authority: ${forbidden}`);
+  }
 }
 
 const runFormPath = resolve(src, 'ui/RunForm.tsx');

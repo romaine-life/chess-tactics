@@ -4,6 +4,8 @@ date: 2026-08-04
 deciders: owner (Nelson) + Codex
 partially_supersedes:
   - "[ADR-0406](0406-klerosis-deals-cards-before-one-unit-at-a-time-deployment.md)'s borrowed starter-card visual identities"
+partially_superseded_by:
+  - "[ADR-0419](0419-deployment-draws-a-hidden-card-stack-in-play-order.md)'s retirement of the installed Primogeniture role"
 refines:
   - "[ADR-0085](0085-runtime-assets-are-live-storage-backed.md)"
   - "[ADR-0340](0340-run-card-icon-fitting-is-an-owner-operated-studio-instrument.md)"

@@ -1,7 +1,9 @@
 ---
-status: accepted
+status: superseded
 date: 2026-08-04
 deciders: owner (Nelson) + Codex
+superseded_by:
+  - "[ADR-0419](0419-deployment-draws-a-hidden-card-stack-in-play-order.md)"
 refined_by:
   - "[ADR-0417](0417-klerosis-deals-from-the-chartulary.md)"
 partially_supersedes:

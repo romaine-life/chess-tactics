@@ -28,6 +28,7 @@ import {
   type RunStarterCardId,
 } from '../run/model';
 import { runCardName } from '../run/cardNames';
+import { RunCardBack, RUN_CARD_BACK_REVIEW_SLOT, RUN_CARD_BACK_SLOT } from './RunCardBack';
 import {
   RUN_CARD_APPROVED_TUNING,
   RUN_CARD_CONTENTS_DENSITY_LADDER,
@@ -76,7 +77,6 @@ const FRONT_LINES_ART_REVIEW_SLOT = 'review/run-card-art/front-lines/illustratio
 const HIS_GRACE_ART_REVIEW_SLOT = 'review/run-card-art/his-grace/illustration.png';
 const STARTER_FRAME_REVIEW_SLOT = 'review/run-card-frame/starter/frame.png';
 const PRAECIPUUS_PROPERTY_ICON_REVIEW_SLOT = 'review/run-card-icons/praecipuus/property.png';
-const PRIMOGENITURE_STATE_ICON_REVIEW_SLOT = 'review/run-card-icons/primogeniture/state.png';
 const SHA256 = /^[0-9a-f]{64}$/;
 const REFERENCE_CARD_WIDTH = RUN_CARD_REFERENCE_WIDTH;
 const TITLE_SIZE_MIN = 3;
@@ -233,6 +233,10 @@ export function runCardContentsStudyFromSearch(search: string): boolean {
   return new URLSearchParams(search).get('contentsStudy') === '1';
 }
 
+export function runCardBackFromSearch(search: string): boolean {
+  return new URLSearchParams(search).get('cardSide') === 'back';
+}
+
 export type RunCardContentsStudyProfile = Readonly<{
   id: 'roomy' | 'filled' | 'packed' | 'scrunched';
   label: string;
@@ -351,6 +355,74 @@ function reviewCandidateProvider(version: AdminLiveMediaVersion): string {
   return version.label;
 }
 
+export const RUN_CARD_BACK_STUDY_ID = 'run-card-back-six-way-v2';
+export const RUN_CARD_BACK_KING_STUDY_ID = 'run-card-back-king-six-way-v3';
+
+const RUN_CARD_BACK_STUDY_CONCEPTS = Object.freeze([
+  {
+    id: 'arcane-relic',
+    studyId: RUN_CARD_BACK_STUDY_ID,
+    label: 'The Arcane Relic',
+    lineage: 'MTG lineage',
+    intent: 'An old, mysterious fantasy-game object with one iconic center: compelling to turn over, without borrowing recognizable trade dress.',
+  },
+  {
+    id: 'fivefold-gambit',
+    studyId: RUN_CARD_BACK_STUDY_ID,
+    label: 'The Fivefold Gambit',
+    lineage: 'MTG + chess',
+    intent: 'Five occult powers surround a chessboard contest, making the arcane structure answer to the game’s actual play language.',
+  },
+  {
+    id: 'closed-position',
+    studyId: RUN_CARD_BACK_STUDY_ID,
+    label: 'The Closed Position',
+    lineage: 'Pure chess card game',
+    intent: 'Chess alone supplies the identity: mirrored armies, board geometry, and a sealed central square holding the hidden move.',
+  },
+  {
+    id: 'sovereign-seal',
+    studyId: RUN_CARD_BACK_KING_STUDY_ID,
+    label: 'The Sovereign Seal',
+    lineage: 'MTG lineage + king',
+    intent: 'A fantasy-card relic organized around the king\u2019s seal; power exists, but visibly beneath his authority.',
+  },
+  {
+    id: 'crowned-gambit',
+    studyId: RUN_CARD_BACK_KING_STUDY_ID,
+    label: 'The Crowned Gambit',
+    lineage: 'MTG + chess + king',
+    intent: 'Arcane powers and board geometry become one royal mechanism, with the king as its undeniable center.',
+  },
+  {
+    id: 'kings-position',
+    studyId: RUN_CARD_BACK_KING_STUDY_ID,
+    label: 'The King\u2019s Position',
+    lineage: 'Chess + king',
+    intent: 'Chess alone supplies the language, but every line, piece, and square is ordered around the king\u2019s rank.',
+  },
+] as const);
+
+export type RunCardBackStudyConcept = (typeof RUN_CARD_BACK_STUDY_CONCEPTS)[number];
+
+export function runCardBackStudyConceptFromMetadata(
+  metadata: Readonly<Record<string, unknown>>,
+): RunCardBackStudyConcept | null {
+  const conceptId = metadata.conceptId;
+  return typeof conceptId === 'string'
+    ? RUN_CARD_BACK_STUDY_CONCEPTS.find((concept) => concept.id === conceptId) ?? null
+    : null;
+}
+
+function cardBackStudyConcept(version: AdminLiveMediaVersion): RunCardBackStudyConcept | null {
+  return runCardBackStudyConceptFromMetadata(version.metadata);
+}
+
+function isCurrentCardBackStudyCandidate(version: AdminLiveMediaVersion): boolean {
+  const concept = cardBackStudyConcept(version);
+  return concept !== null && version.metadata.studyId === concept.studyId;
+}
+
 export function RunCardPrototypeViewer({
   header,
   viewerZoom,
@@ -367,6 +439,7 @@ export function RunCardPrototypeViewer({
     runCardTacticalSpecimenFromSearch(window.location.search)
   ));
   const [contentsStudy, setContentsStudy] = useState(() => runCardContentsStudyFromSearch(window.location.search));
+  const [showCardBack, setShowCardBack] = useState(() => runCardBackFromSearch(window.location.search));
   const [concinnousTargetRevealed, setConcinnousTargetRevealed] = useState(() => (
     runCardConcinnousTargetRevealedFromSearch(window.location.search)
   ));
@@ -379,11 +452,11 @@ export function RunCardPrototypeViewer({
   const [artCandidateSha, setArtCandidateSha] = useState(() => (
     new URLSearchParams(window.location.search).get('artCandidate')
   ));
+  const [backCandidateSha, setBackCandidateSha] = useState(() => (
+    new URLSearchParams(window.location.search).get('backCandidate')
+  ));
   const [propertyCandidateSha, setPropertyCandidateSha] = useState(() => (
     new URLSearchParams(window.location.search).get('propertyCandidate')
-  ));
-  const [unitStateCandidateSha, setUnitStateCandidateSha] = useState(() => (
-    new URLSearchParams(window.location.search).get('unitStateCandidate')
   ));
   const [frameBoxStyle, setFrameBoxStyle] = useState<RunCardFrameBoxStyle>(() => (
     runCardFrameBoxStyleFromSearch(window.location.search)
@@ -408,6 +481,7 @@ export function RunCardPrototypeViewer({
   const [hieraticDenominator, setHieraticDenominator] = useState(HIERATIC_AGMINATE_OFFER_DENOMINATOR);
   const [handoffCopyState, setHandoffCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
   const [loaded, setLoaded] = useState<ReadonlySet<RunCardImageKind>>(() => new Set());
+  const [backLoaded, setBackLoaded] = useState(false);
   // The cost preview reprices the specimen and re-projects, rather than editing a face
   // after the fact: there is one way to obtain a card face, and this is not an exception.
   const starterCard = starterCardId ? RUN_STARTER_CARD_BY_ID[starterCardId] : null;
@@ -521,17 +595,37 @@ export function RunCardPrototypeViewer({
     () => reviewingHisGrace && catalog ? reviewCandidates(catalog, STARTER_FRAME_REVIEW_SLOT) : [],
     [catalog, reviewingHisGrace],
   );
+  const backReviewCandidates = useMemo(
+    () => catalog
+      ? reviewCandidates(catalog, RUN_CARD_BACK_REVIEW_SLOT)
+          .filter(isCurrentCardBackStudyCandidate)
+          .sort((left, right) => {
+            const leftConcept = cardBackStudyConcept(left)!;
+            const rightConcept = cardBackStudyConcept(right)!;
+            const conceptOrder = RUN_CARD_BACK_STUDY_CONCEPTS.indexOf(leftConcept)
+              - RUN_CARD_BACK_STUDY_CONCEPTS.indexOf(rightConcept);
+            if (conceptOrder !== 0) return conceptOrder;
+            return reviewCandidateProvider(left).localeCompare(reviewCandidateProvider(right));
+          })
+      : [],
+    [catalog],
+  );
+  const cardBack = useMemo(
+    () => catalog
+      ? selectedCandidate(catalog, RUN_CARD_BACK_REVIEW_SLOT, 'backCandidate', backCandidateSha)
+      : null,
+    [backCandidateSha, catalog],
+  );
+  const acceptedCardBack = useMemo(
+    () => catalog ? activeCandidate(catalog, RUN_CARD_BACK_SLOT) : null,
+    [catalog],
+  );
+  const cardBackConcept = cardBack ? cardBackStudyConcept(cardBack) : null;
   const propertyIcon = useMemo(
     () => reviewingHisGrace && catalog
       ? selectedCandidate(catalog, PRAECIPUUS_PROPERTY_ICON_REVIEW_SLOT, 'propertyCandidate', propertyCandidateSha)
       : null,
     [catalog, propertyCandidateSha, reviewingHisGrace],
-  );
-  const unitStateIcon = useMemo(
-    () => reviewingHisGrace && catalog
-      ? selectedCandidate(catalog, PRIMOGENITURE_STATE_ICON_REVIEW_SLOT, 'unitStateCandidate', unitStateCandidateSha)
-      : null,
-    [catalog, reviewingHisGrace, unitStateCandidateSha],
   );
   const propertyIconReviewCandidates = useMemo(
     () => reviewingHisGrace && catalog
@@ -539,45 +633,42 @@ export function RunCardPrototypeViewer({
       : [],
     [catalog, reviewingHisGrace],
   );
-  const unitStateIconReviewCandidates = useMemo(
-    () => reviewingHisGrace && catalog
-      ? reviewCandidates(catalog, PRIMOGENITURE_STATE_ICON_REVIEW_SLOT)
-      : [],
-    [catalog, reviewingHisGrace],
-  );
-  const iconMedia = useMemo<RunCardIconMedia>(() => reviewingHisGrace && propertyIcon && unitStateIcon
-    ? {
-        propertyUrl: propertyIcon.media!.url,
-        unitStateUrls: { primogeniture: unitStateIcon.media!.url },
-      }
-    : {}, [propertyIcon, reviewingHisGrace, unitStateIcon]);
+  const iconMedia = useMemo<RunCardIconMedia>(() => reviewingHisGrace && propertyIcon
+    ? { propertyUrl: propertyIcon.media!.url }
+    : {}, [propertyIcon, reviewingHisGrace]);
   const coinSource = useMemo(
     () => catalog ? selectedCandidate(catalog, RUN_CARD_COST_COIN_SOURCE_SLOT, 'coinCandidate') : null,
     [catalog],
   );
-  const missing = catalog && (
-    !frame
-    || !art
-    || !coinSource
-    || (reviewingHisGrace && (!propertyIcon || !unitStateIcon))
-  )
-    ? 'The requested frame, coin source, artwork, or icon candidate is unavailable.'
+  const missing = catalog
+    ? showCardBack
+      ? !cardBack ? 'The requested card-back candidate is unavailable.' : ''
+      : (
+          !frame
+          || !art
+          || !coinSource
+          || (reviewingHisGrace && !propertyIcon)
+        )
+        ? 'The requested frame, coin source, artwork, or icon candidate is unavailable.'
+        : ''
     : '';
   const hasRequestedMedia = Boolean(
     frame
     && art
     && coinSource
-    && (!reviewingHisGrace || (propertyIcon && unitStateIcon)),
+    && (!reviewingHisGrace || propertyIcon),
   );
   const sceneError = useMemo(() => error || missing ? new Error(error || missing) : null, [error, missing]);
-  const painted = Boolean(
-    frame
-    && art
-    && loaded.has('frame')
-    && loaded.has('coin')
-    && loaded.has('art')
-    && requiredRunCardImageKinds(displayedCard).every((kind) => loaded.has(kind)),
-  );
+  const painted = showCardBack
+    ? Boolean(cardBack && backLoaded)
+    : Boolean(
+        frame
+        && art
+        && loaded.has('frame')
+        && loaded.has('coin')
+        && loaded.has('art')
+        && requiredRunCardImageKinds(displayedCard).every((kind) => loaded.has(kind)),
+      );
   const onImageLoad = (kind: RunCardImageKind): void => {
     setLoaded((current) => current.has(kind) ? current : new Set([...current, kind]));
   };
@@ -654,7 +745,6 @@ export function RunCardPrototypeViewer({
     params.delete('artCandidate');
     params.delete('frameCandidate');
     params.delete('propertyCandidate');
-    params.delete('unitStateCandidate');
     const search = params.toString();
     navigateApp(
       `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`,
@@ -664,10 +754,9 @@ export function RunCardPrototypeViewer({
     setArtCandidateSha(null);
     setFrameCandidateSha(null);
     setPropertyCandidateSha(null);
-    setUnitStateCandidateSha(null);
   };
   const chooseReviewCandidate = (
-    queryName: 'artCandidate' | 'frameCandidate' | 'propertyCandidate' | 'unitStateCandidate',
+    queryName: 'artCandidate' | 'frameCandidate' | 'propertyCandidate',
     sha256: string,
   ): void => {
     const params = new URLSearchParams(window.location.search);
@@ -679,8 +768,7 @@ export function RunCardPrototypeViewer({
     );
     if (queryName === 'artCandidate') setArtCandidateSha(sha256);
     else if (queryName === 'frameCandidate') setFrameCandidateSha(sha256);
-    else if (queryName === 'propertyCandidate') setPropertyCandidateSha(sha256);
-    else setUnitStateCandidateSha(sha256);
+    else setPropertyCandidateSha(sha256);
   };
   const chooseTacticalSpecimen = (next: RunCardTacticalSpecimen): void => {
     const params = new URLSearchParams(window.location.search);
@@ -727,16 +815,30 @@ export function RunCardPrototypeViewer({
     );
     setFrameBoxStyle(next);
   };
-  const chooseContentsStudy = (next: boolean): void => {
+  const choosePreviewMode = (next: 'face' | 'back' | 'contents'): void => {
     const params = new URLSearchParams(window.location.search);
-    if (next) params.set('contentsStudy', '1');
+    if (next === 'contents') params.set('contentsStudy', '1');
     else params.delete('contentsStudy');
+    if (next === 'back') params.set('cardSide', 'back');
+    else params.delete('cardSide');
     const search = params.toString();
     navigateApp(
       `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`,
       { replace: true, scroll: false },
     );
-    setContentsStudy(next);
+    setContentsStudy(next === 'contents');
+    setShowCardBack(next === 'back');
+  };
+  const chooseBackCandidate = (sha256: string): void => {
+    const params = new URLSearchParams(window.location.search);
+    params.set('backCandidate', sha256);
+    const search = params.toString();
+    navigateApp(
+      `${window.location.pathname}${search ? `?${search}` : ''}${window.location.hash}`,
+      { replace: true, scroll: false },
+    );
+    setBackLoaded(false);
+    setBackCandidateSha(sha256);
   };
   const copyCodexHandoff = async (): Promise<void> => {
     const payload = JSON.stringify({
@@ -748,7 +850,6 @@ export function RunCardPrototypeViewer({
       units: 'percent of card width (cqw)',
       artworkSha256: art?.media?.sha256 ?? null,
       propertyIconSha256: propertyIcon?.media?.sha256 ?? null,
-      unitStateIconSha256: unitStateIcon?.media?.sha256 ?? null,
       coinSourceSha256: coinSource?.media?.sha256 ?? null,
       // Every frame's hand-tuned boxes, in native 1060x1484 frame pixels, each
       // paired with the exact frame pixels they were tuned against.
@@ -842,7 +943,32 @@ export function RunCardPrototypeViewer({
       <section className="al-lab-main run-card-prototype-main" aria-label="Card layout preview">
         {sceneError ? <p role="alert">{sceneError.message}</p> : null}
         {!sceneError && !painted ? <p role="status">Loading exact candidate pixels…</p> : null}
-        {hasRequestedMedia && frame && art && coinSource ? (
+        {showCardBack && cardBack ? (
+          <div className="run-card-prototype-stage is-card-back">
+            {cardBackConcept ? (
+              <header className="run-card-back-study-heading">
+                <span>{cardBackConcept.lineage} · {reviewCandidateProvider(cardBack)}</span>
+                <h2>{cardBackConcept.label}</h2>
+                <p>{cardBackConcept.intent}</p>
+              </header>
+            ) : null}
+            <div className="run-card-back-study" aria-label="Card-back size comparison">
+              <figure>
+                <RunCardBack
+                  mediaUrl={cardBack.media!.url}
+                  width={`${REFERENCE_CARD_WIDTH * viewerZoom}px`}
+                  onLoad={() => setBackLoaded(true)}
+                  onError={() => setError('card back image could not be decoded.')}
+                />
+                <figcaption>Full card</figcaption>
+              </figure>
+              <figure className="is-controls-scale">
+                <RunCardBack mediaUrl={cardBack.media!.url} width="84px" />
+                <figcaption>Controls stack scale</figcaption>
+              </figure>
+            </div>
+          </div>
+        ) : hasRequestedMedia && frame && art && coinSource ? (
           <div className={`run-card-prototype-stage${contentsStudy ? ' is-contents-study' : ''}`}>
             {contentsStudy ? (
               <div className="run-card-contents-study" aria-label="Contents Box density comparison">
@@ -895,7 +1021,11 @@ export function RunCardPrototypeViewer({
           <div className="tileset-control-stack">
             {header}
             <p className="run-card-prototype-note">
-              {contentsStudy
+              {showCardBack
+                ? acceptedCardBack
+                  ? `${acceptedCardBack.label} is the accepted default. Other exact face-down candidates remain available for comparison.`
+                  : 'Exact face-down candidates on the shared Run-card object. No runtime back is accepted yet.'
+                : contentsStudy
                 ? 'Uncommitted full-size comparisons. The same frame, art, title, and flavor isolate the Contents Box; raise Contents scale to probe the clipping boundary.'
                 : starterCard
                   ? `${displayedCard.name} review candidates are mounted on the actual starter card. Runtime pointers remain untouched.`
@@ -904,20 +1034,55 @@ export function RunCardPrototypeViewer({
             <div className="tileset-button-row" role="group" aria-label="Preview mode">
               <button
                 type="button"
-                className={`tileset-view-action${!contentsStudy ? ' active' : ''}`}
+                className={`tileset-view-action${!contentsStudy && !showCardBack ? ' active' : ''}`}
                 data-card-preview-mode="single"
-                aria-pressed={!contentsStudy}
-                onClick={() => chooseContentsStudy(false)}
-              >Single card</button>
+                aria-pressed={!contentsStudy && !showCardBack}
+                onClick={() => choosePreviewMode('face')}
+              >Card face</button>
+              <button
+                type="button"
+                className={`tileset-view-action${showCardBack ? ' active' : ''}`}
+                data-card-preview-mode="back"
+                aria-pressed={showCardBack}
+                onClick={() => choosePreviewMode('back')}
+              >Card back</button>
               <button
                 type="button"
                 className={`tileset-view-action${contentsStudy ? ' active' : ''}`}
                 data-card-preview-mode="contents-study"
                 aria-pressed={contentsStudy}
-                onClick={() => chooseContentsStudy(true)}
+                onClick={() => choosePreviewMode('contents')}
               >Contents study</button>
             </div>
-            {contentsStudy ? (
+            {showCardBack ? (
+              backReviewCandidates.length ? (
+                <div className="run-card-back-candidate-groups" aria-label="Card-back candidates">
+                  {RUN_CARD_BACK_STUDY_CONCEPTS.map((concept) => (
+                    <section key={concept.id}>
+                      <header>
+                        <strong>{concept.label}</strong>
+                        <span>{concept.lineage}</span>
+                      </header>
+                      <div className="tileset-button-row" role="group" aria-label={`${concept.label} candidates`}>
+                        {backReviewCandidates
+                          .filter((candidate) => cardBackStudyConcept(candidate)?.id === concept.id)
+                          .map((candidate) => (
+                            <button
+                              type="button"
+                              className={`tileset-view-action${cardBack?.id === candidate.id ? ' active' : ''}`}
+                              aria-pressed={cardBack?.id === candidate.id}
+                              onClick={() => chooseBackCandidate(candidate.media!.sha256)}
+                              key={candidate.id}
+                            >{reviewCandidateProvider(candidate)}{
+                              candidate.media?.sha256 === acceptedCardBack?.media?.sha256 ? ' · Accepted' : ''
+                            }</button>
+                          ))}
+                      </div>
+                    </section>
+                  ))}
+                </div>
+              ) : <p className="run-card-prototype-note">No card-back candidates are mounted.</p>
+            ) : contentsStudy ? (
               <SliderRow
                 label={<>Contents scale · {Math.round(contentsScale * 100)}%</>}
                 value={contentsScale}
@@ -979,6 +1144,7 @@ export function RunCardPrototypeViewer({
                 >Hieratic</button>
               </div>
             )}
+            {!showCardBack ? <>
             {!contentsStudy && starterCard && artReviewCandidates.length ? (
               <div className="tileset-button-row" role="group" aria-label={`${displayedCard.name} art candidate`}>
                 {artReviewCandidates.map((candidate) => (
@@ -1015,19 +1181,6 @@ export function RunCardPrototypeViewer({
                     onClick={() => chooseReviewCandidate('propertyCandidate', candidate.media!.sha256)}
                     key={candidate.id}
                   >{reviewCandidateProvider(candidate)} Praecipuus</button>
-                ))}
-              </div>
-            ) : null}
-            {reviewingHisGrace && unitStateIconReviewCandidates.length ? (
-              <div className="tileset-button-row" role="group" aria-label="Primogeniture icon candidate">
-                {unitStateIconReviewCandidates.map((candidate) => (
-                  <button
-                    type="button"
-                    className={`tileset-view-action${unitStateIcon?.id === candidate.id ? ' active' : ''}`}
-                    aria-pressed={unitStateIcon?.id === candidate.id}
-                    onClick={() => chooseReviewCandidate('unitStateCandidate', candidate.media!.sha256)}
-                    key={candidate.id}
-                  >{reviewCandidateProvider(candidate)} Primogeniture</button>
                 ))}
               </div>
             ) : null}
@@ -1293,6 +1446,7 @@ export function RunCardPrototypeViewer({
                 <div><dt>Hieratic sample</dt><dd>{realizedHieraticCount} / {RUN_CARD_SAMPLE_DRAWS} non-Concinnous draws · seed 4217 · {AGMINATE_DISPLAY_NAME} adds {AGMINATE_COST} gold</dd></div>
               </dl>
             ) : null}
+            </> : null}
           </div>
         </section>
       </aside>

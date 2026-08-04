@@ -19,7 +19,7 @@ const runCardFlight = readFileSync(new URL('./runCardFlightView.tsx', import.met
 const strategikonTitleNavigation = readFileSync(new URL('./StrategikonTitleNavigation.tsx', import.meta.url), 'utf8');
 const runCardFace = readFileSync(new URL('./RunCardFace.tsx', import.meta.url), 'utf8');
 const runBattlePreview = readFileSync(new URL('./RunBattlePreview.tsx', import.meta.url), 'utf8');
-const runKlerosisWorkspace = readFileSync(new URL('./RunKlerosisWorkspace.tsx', import.meta.url), 'utf8');
+const runDeploymentCardStack = readFileSync(new URL('./RunDeploymentCardStack.tsx', import.meta.url), 'utf8');
 const runLipsana = readFileSync(new URL('./Lipsana.tsx', import.meta.url), 'utf8');
 const runSelfInspection = readFileSync(new URL('./RunSelfInspection.tsx', import.meta.url), 'utf8');
 const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
@@ -108,8 +108,8 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('sceneSnapshot: RunSceneSnapshot');
     expect(runScreen).toContain('<RunPresentationSceneSlot');
     expect(runScreen).toContain("&& (shellRun?.phase === 'deployment' || shellRun?.phase === 'battle')");
-    expect(runScreen).toContain('&& !klerosisRun');
-    expect(runScreen).toContain("const runSurfacePhase = klerosisRun ? 'klerosis' : sceneSnapshot.phase;");
+    expect(runScreen).not.toContain('klerosisRun');
+    expect(runScreen).toContain('const runSurfacePhase = sceneSnapshot.phase;');
     expect(runScreen).toContain('? `${shellRun.id}:battlefield:${shellRun.battleIndex}:${runSceneWorkspaceIdentity(sceneSnapshot.workspace)}`');
     expect(runScreen).toContain('<RunBattlefieldPanel');
     expect(runScreen).toContain('form={form}');
@@ -119,7 +119,7 @@ describe('Run chrome hierarchy', () => {
     expect(skirmish).toContain("unitArrivals={sceneActivated ? 'active' : 'pending'}");
     expect(skirmish).toContain('onArrivingUnitIdsChange={runDeployment?.onArrivingUnitIdsChange}');
     expect(skirmishBoard).toContain('newlyVisibleArrivalPieces(visibleUnitIdsRef.current, livePieces)');
-    expect(runScreen).toContain('onArrivingUnitIdsChange: () => undefined');
+    expect(runScreen).toContain('onArrivingUnitIdsChange: reportArrivals');
     expect(runScreen).not.toContain('pendingPlacementArrivalUnitIdRef');
     expect(runScreen).not.toContain('RunWorkspaceStages');
     expect(runScreen).not.toContain('window.history');
@@ -226,7 +226,7 @@ describe('Run chrome hierarchy', () => {
   });
 
   it('fills shell-owned Run destinations while Deployment uses the battlefield', () => {
-    const playerRunSources = `${runScreen}\n${runArmyWorkspace}\n${runExpunctioWorkspace}\n${runBattlePreview}\n${runKlerosisWorkspace}\n${runLipsana}`;
+    const playerRunSources = `${runScreen}\n${runArmyWorkspace}\n${runExpunctioWorkspace}\n${runBattlePreview}\n${runDeploymentCardStack}\n${runLipsana}`;
     const runWorkspaceRule = styleCss.match(/\.run-workspace\s*\{([^}]*)\}/)?.[1] ?? '';
 
     expect(runWorkspace).toContain('export function RunSceneViewport');
@@ -240,7 +240,6 @@ describe('Run chrome hierarchy', () => {
     expect(chromeBox).not.toContain('export function ShellWorkspaceBody');
     for (const testId of [
       'run-sectio-workspace',
-      'run-klerosis-workspace',
       'run-battle-preview-workspace',
       'run-aftermath-workspace',
       'run-victory-workspace',
@@ -298,22 +297,16 @@ describe('Run chrome hierarchy', () => {
     expect(skirmish).not.toContain('cameraActive=');
     expect(runScreen).toContain('viewKey: runBattleActivityId(prepared.id, prepared.battleIndex)');
     expect(runScreen).toContain('gameForRunDeployment(prepared, level, layout, true)');
-    expect(runScreen).toContain('<RunKlerosisWorkspace');
+    expect(runScreen).toContain('<RunDeploymentCardStack');
     expect(runScreen).not.toContain('KlerosisOverlay');
-    expect(runKlerosisWorkspace).toContain('<RunSceneViewport');
-    expect(runKlerosisWorkspace).toContain("view: 'klerosis'");
-    expect(runKlerosisWorkspace).toContain('data-testid="klerosis-confirm"');
-    expect(runKlerosisWorkspace).toContain("document.querySelector('[data-run-card-flight-target]')");
-    expect(runKlerosisWorkspace).toContain('<SceneContinuityPortal');
-    expect(runKlerosisWorkspace).toContain('runCardFlightGeometry(element.getBoundingClientRect(), chartularyRect)');
-    expect(runKlerosisWorkspace).not.toContain('originX');
-    expect(runKlerosisWorkspace).not.toContain('originY');
-    expect(runKlerosisWorkspace).not.toContain('Your deployment deal');
-    expect(runKlerosisWorkspace).not.toContain('These cards supply this combat');
-    expect(runKlerosisWorkspace).not.toContain('run-klerosis-rosters');
-    expect(runKlerosisWorkspace).not.toContain('Deploy all');
-    expect(runKlerosisWorkspace).not.toContain('Step through');
-    expect(runKlerosisWorkspace).not.toContain('SkirmishBoard');
+    expect(runDeploymentCardStack).toContain("document.querySelector<HTMLElement>('[data-run-card-flight-target]')");
+    expect(runDeploymentCardStack).toContain('<RunCardBack');
+    expect(runDeploymentCardStack).toContain('data-deployment-card-stage');
+    expect(runDeploymentCardStack).not.toContain('Your deployment deal');
+    expect(runDeploymentCardStack).not.toContain('These cards supply this combat');
+    expect(runDeploymentCardStack).not.toContain('Deploy all');
+    expect(runDeploymentCardStack).not.toContain('Step through');
+    expect(runDeploymentCardStack).not.toContain('SkirmishBoard');
     expect(runScreen).toContain('Deploy all');
     expect(runScreen).toContain('Step through');
     expect(runScreen).toContain("prepared.deployment?.mode\n          ? switchDeploymentMode(prepared, level, mode)\n          : chooseDeploymentMode(prepared, level, mode)");

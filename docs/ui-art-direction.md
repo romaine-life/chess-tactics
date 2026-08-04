@@ -296,9 +296,9 @@ four Strategikon section marks sit immediately beside that rightmost book and
 directly open the same destinations as the complete workspace rail. Title and
 rail read one shared destination inventory, and the visible Chartulary mark is
 the measured endpoint for an adlected card's shrinking transfer and the measured origin for
-Klerosis dealing those held cards back into combat. When an adlected card leaves
+the face-down Deployment deal into the numbered Controls stack. When an adlected card leaves
 the Sectio layout, each surviving offer glides from its measured old seat to its new
-centred seat with no snap, bounce, or guessed slot (ADR-0387, ADR-0388, ADR-0417). The persistent
+centred seat with no snap, bounce, or guessed slot (ADR-0387, ADR-0388, ADR-0419). The persistent
 title route always appends the visible Enchiridion section on the standalone host,
 and on a Run keeps the underlying phase before appending Strategikon, its section,
 and that same Enchiridion reference—for example

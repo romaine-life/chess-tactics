@@ -20,12 +20,12 @@ const runArmy = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url),
 const ataraxiaNumeral = readFileSync(new URL('./ataraxiaNumeral.ts', import.meta.url), 'utf8');
 
 describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
-  it('describes exactly the five unit abilities without card qualifiers', () => {
+  it('describes exactly the four active unit abilities without card qualifiers', () => {
     const start = enchiridion.indexOf('const UNIT_STATE_REFERENCES');
     const end = enchiridion.indexOf('export function EnchiridionReference', start);
     const abilities = enchiridion.slice(start, end);
-    expect(abilities.match(/state: '(?:primogeniture|adlected|eutactic|agminate|cacochymic)'/g)).toHaveLength(5);
-    expect(abilities).toContain("name: 'Primogeniture'");
+    expect(abilities.match(/state: '(?:adlected|eutactic|agminate|cacochymic)'/g)).toHaveLength(4);
+    expect(abilities).not.toContain('Primogeniture');
     expect(abilities).toContain('name: ADLECTED_DISPLAY_NAME');
     expect(abilities).toContain('name: EUTACTIC_DISPLAY_NAME');
     expect(abilities).toContain('name: AGMINATE_DISPLAY_NAME');
@@ -36,7 +36,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     // Each state inherits the accepted row material from its granting card property;
     // the pairing comes from the Run model rather than a second hand-written table.
     expect(abilities).toContain('const cardType = CARD_TYPE_BY_UNIT_STATE[state]');
-    expect(abilities).toContain("src={textureUrls[cardType === 'praecipuus' ? 'hieratic' : cardType]}");
+    expect(abilities).toContain('src={textureUrls[cardType]}');
     expect(enchiridion).toContain('Object.entries(RUN_CARD_TYPE_REFERENCE)');
     expect(style).toMatch(/\.enchiridion-ability-card\s*\{[\s\S]*?isolation:\s*isolate;[\s\S]*?overflow:\s*hidden;[\s\S]*?position:\s*relative/);
     expect(style).toMatch(/\.enchiridion-ability-card > \.enchiridion-ability-icon\s*\{[\s\S]*?block-size:\s*34px;[\s\S]*?inline-size:\s*34px/);

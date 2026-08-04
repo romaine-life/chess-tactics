@@ -3,6 +3,7 @@ import {
   PIECE_LABEL,
   cardExpunctioPriceTenths,
   runCardDefinition,
+  runCardUnitIds,
   type RunArmyUnit,
   type RunDocument,
   type RunOwnedCard,
@@ -24,7 +25,7 @@ type ExpunctioRow = Readonly<{
 
 function attachedUnits(run: RunDocument, card: RunOwnedCard): RunArmyUnit[] {
   const byId = new Map(run.army.map((unit) => [unit.id, unit]));
-  return card.unitIds.flatMap((unitId) => {
+  return runCardUnitIds(card).flatMap((unitId) => {
     const unit = byId.get(unitId);
     return unit ? [unit] : [];
   });

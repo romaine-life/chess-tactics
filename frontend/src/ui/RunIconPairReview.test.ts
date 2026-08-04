@@ -4,7 +4,6 @@ import type { AdminLiveMediaCatalog, AdminLiveMediaVersion } from '../net/liveMe
 import {
   RUN_CARD_ICON_PAIRS,
   RUN_ICON_PAIR_BATCH_ID,
-  STARTER_RUN_ICON_PAIR_BATCH_ID,
   defaultRunCardIconFittingDraft,
   normalizeRunCardIconFittingDraft,
   runCardIconFittingPropertyFromSearch,
@@ -61,25 +60,14 @@ describe('Run icon pair review', () => {
     expect(app).not.toContain('return <RunIconPairReview />');
   });
 
-  it('includes the His Grace property/state pair as a directly addressable fitting specimen', () => {
-    const pair = RUN_CARD_ICON_PAIRS.find(({ property }) => property === 'praecipuus');
-    expect(RUN_CARD_ICON_PAIRS).toHaveLength(5);
-    expect(pair).toMatchObject({
-      propertySlot: 'review/run-card-icons/praecipuus/property.png',
-      state: 'primogeniture',
-      stateSlot: 'review/run-card-icons/primogeniture/state.png',
-      candidateBatchId: STARTER_RUN_ICON_PAIR_BATCH_ID,
-    });
+  it('keeps Praecipuus out of the unit-state fitting surface because it no longer grants one', () => {
+    expect(RUN_CARD_ICON_PAIRS).toHaveLength(4);
+    expect(RUN_CARD_ICON_PAIRS.map(({ property }) => property)).toEqual([
+      'pestiferous', 'concinnous', 'legatine', 'hieratic',
+    ]);
     expect(runCardIconFittingPropertyFromSearch('?mode=viewer&vk=cardicons&iconPair=praecipuus'))
-      .toBe('praecipuus');
+      .toBeNull();
     expect(runCardIconFittingPropertyFromSearch('?iconPair=unknown')).toBeNull();
-
-    const card = runCardIconFittingSpecimenCard(pair!);
-    expect(card).toMatchObject({
-      name: 'His Grace',
-      cardProperty: { id: 'praecipuus', name: 'Praecipuus' },
-      grants: [{ unit: 'king', count: 1, ability: { state: 'primogeniture', index: 0 } }],
-    });
   });
 
   it('uses the current canonical slots for every accepted legacy pair', () => {
@@ -136,27 +124,6 @@ describe('Run icon pair review', () => {
       .toEqual(['first', 'second']);
   });
 
-  it('reads the starter pair from its own generated review batch', () => {
-    const slot = 'review/run-card-icons/praecipuus/property.png';
-    const starter = version({
-      id: 'starter-codex',
-      slot,
-      metadata: { provider: 'codex' },
-      provenance: { liveMediaBatch: { batchId: STARTER_RUN_ICON_PAIR_BATCH_ID } },
-    });
-    const oldBatch = version({ id: 'old-batch', slot });
-    const catalog = {
-      schemaVersion: 1,
-      revision: 1,
-      updatedAt: '2026-08-04T00:00:00.000Z',
-      slots: [],
-      versions: [oldBatch, starter],
-    } satisfies AdminLiveMediaCatalog;
-
-    expect(runCardIconFittingVersions(catalog, slot, STARTER_RUN_ICON_PAIR_BATCH_ID))
-      .toEqual([starter]);
-  });
-
   it('uses a media-backed staging frame until that exact semantic slot is accepted', () => {
     const slot = 'ui/run/card-prototypes/hieratic-frame-v1.png';
     const candidate = version({ id: 'steel-frame', slot, status: 'candidate' });
@@ -206,11 +173,6 @@ describe('Run icon pair review', () => {
     // Reset restores the committed fit the live cards ship, not a zeroed placement.
     const baseline = defaultRunCardIconFittingDraft(catalog);
     expect(baseline.propertyPlacements.hieratic).toEqual(RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS.hieratic);
-    expect(baseline.propertyPlacements.praecipuus).toEqual(RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS.praecipuus);
-    expect(baseline.selections.praecipuus).toEqual({
-      propertyVersionId: 'praecipuus-property',
-      stateVersionId: 'praecipuus-state',
-    });
     expect(baseline.unitStatePlacement).toEqual(RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT);
     expect(baseline.unitStatePlacement).not.toEqual({ x: 0, y: 0, scale: 1 });
 
@@ -234,9 +196,6 @@ describe('Run icon pair review', () => {
       stateVersionId: 'hieratic-state',
     });
     expect(normalized.propertyPlacements.hieratic).toEqual({ x: 4, y: -4, scale: 5 });
-    // A saved four-pair draft acquires the fifth pair at the committed fit, never zeroed.
-    expect(normalized.propertyPlacements.praecipuus).toEqual(RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS.praecipuus);
-    expect(normalized.selections.praecipuus).toEqual(baseline.selections.praecipuus);
     expect(normalized.unitStatePlacement).toEqual({ x: 5.25, y: -5.5, scale: .65 });
   });
 });

@@ -485,7 +485,9 @@ describe('professional loading architecture guards', () => {
     expect(viewState).not.toContain('create<SkirmishViewState>');
     const runE2e = read('../scripts/run-battle-e2e.mjs');
     expect(runE2e).toContain('battlefieldTransition.cameraSamples.length !== 1');
-    expect(runE2e).toContain("!transition.finalCommitted?.includes(':klerosis:')");
+    expect(runE2e).toContain("!battlefieldTransition.finalCommitted?.includes(':battlefield:')");
+    expect(runE2e).toContain("dealingState.stage !== 'dealing'");
+    expect(runE2e).toContain('battlefieldTransition.dealAnimations !== paceState.stackCards');
     expect(runE2e).toContain('sameViewStore: viewStore === probe.viewStore');
     expect(runE2e).toContain("deploymentResult.initialCamera !== deploymentResult.finalCamera");
     expect(read('./game/store.ts')).toContain('if (!opts.deferClockStart) startClock()');

@@ -10,9 +10,11 @@ import {
   hasRunAbility,
   mixSeed,
   PIECE_VALUE,
+  runCardUnitIds,
   setDeploymentChoices,
   type RunArmyUnit,
   type RunDocument,
+  type RunOwnedCard,
 } from './model';
 
 export interface RunDeploymentLayout {
@@ -323,38 +325,60 @@ function temporaryTentRocks(run: RunDocument, level: Level, placements: Readonly
   return rocks;
 }
 
+function dealtCards(run: RunDocument): RunOwnedCard[] {
+  const byId = new Map(run.cards.map((card) => [card.id, card]));
+  return (run.deployment?.dealtCardIds ?? []).flatMap((cardId) => {
+    const card = byId.get(cardId);
+    return card ? [card] : [];
+  });
+}
+
+export function activeDeploymentCard(run: RunDocument): RunOwnedCard | null {
+  return dealtCards(run)[run.deployment?.activeCardIndex ?? -1] ?? null;
+}
+
+export function deploymentOrderedUnitIds(run: RunDocument): string[] {
+  return dealtCards(run).flatMap(runCardUnitIds);
+}
+
+function activeCardSeat(run: RunDocument): { index: number; unit: RunArmyUnit } | null {
+  const card = activeDeploymentCard(run);
+  const deployment = run.deployment;
+  if (!card || !deployment) return null;
+  for (let index = deployment.unitCursor; index < card.unitSeats.length; index += 1) {
+    const unitId = card.unitSeats[index];
+    if (!unitId || !deployment.deployingUnitIds.includes(unitId)) continue;
+    const unit = run.army.find((candidate) => candidate.id === unitId);
+    if (unit) return { index, unit };
+  }
+  return null;
+}
+
 function currentLayout(run: RunDocument, level: Level): RunDeploymentLayout {
   const persistedPlacements = decodedPlacements(run);
   const placements: Record<string, Vec> = {};
   const trace: RunDeploymentTraceEntry[] = [];
   const deployment = run.deployment;
   if (deployment) {
-    // Replay only the persisted, already-resolved prefix and never preview the hidden future.
-    for (let index = 0; index < Math.min(deployment.placementCursor, deployment.queueUnitIds.length); index += 1) {
-      const unitId = deployment.queueUnitIds[index];
+    // Replay only committed destinations in card/seat order and never preview a future card.
+    for (const [index, unitId] of deploymentOrderedUnitIds(run).entries()) {
       const unit = run.army.find((candidate) => candidate.id === unitId);
-      if (!unit || deployment.unavailableUnitIds.includes(unitId)) continue;
+      if (!unit || deployment.unavailableUnitIds.includes(unitId) || !persistedPlacements[unitId]) continue;
       const persisted = persistedPlacements[unitId];
-      if (persisted) {
-        if (deployment.manualPlacements[unitId]) {
-          trace.push({
-            unitId,
-            type: unit.type,
-            result: 'manual',
-            eligibleCellCount: playerDeploymentPools(level).all.length,
-            agminate: hasRunAbility(run, unit, 'agminate'),
-            automaticOrder: index + 1,
-            chosen: persisted,
-          });
-        } else {
-          trace.push(automaticPlacementChoice(run, level, unit, placements, index).trace);
-        }
-        placements[unitId] = persisted;
-        continue;
+      if (deployment.manualPlacements[unitId]) {
+        trace.push({
+          unitId,
+          type: unit.type,
+          result: 'manual',
+          eligibleCellCount: playerDeploymentPools(level).all.length,
+          agminate: hasRunAbility(run, unit, 'agminate'),
+          automaticOrder: index + 1,
+          chosen: persisted,
+        });
+      } else {
+        trace.push(automaticPlacementChoice(run, level, unit, placements, index).trace);
       }
-      const choice = automaticPlacementChoice(run, level, unit, placements, index);
-      trace.push(choice.trace);
-      if (choice.cell) placements[unitId] = choice.cell;
+      placements[unitId] = persisted;
     }
   }
   const blockedUnitIds = deployment?.unavailableUnitIds ?? [];
@@ -377,22 +401,22 @@ function currentLayout(run: RunDocument, level: Level): RunDeploymentLayout {
   };
 }
 
-/** Capacity admission happens once, immediately after the deal. His Grace is already first in
- * the queue; the same seeded order therefore decides both who fits and who later claims squares. */
+/** Capacity admission happens once against card order. Praecipuus puts His Grace first,
+ * and each card's persisted seats decide both who fits and who later claims squares. */
 export function resolveDeploymentCapacity(run: RunDocument, level: Level): RunDocument {
   if (run.phase !== 'deployment' || !run.deployment || run.deployment.capacityResolved) return run;
   const capacity = playerDeploymentCells(level).length;
-  const queueUnitIds = run.deployment.queueUnitIds.slice(0, capacity);
-  const unavailableUnitIds = run.army.map((unit) => unit.id).filter((id) => !queueUnitIds.includes(id));
+  const orderedUnitIds = deploymentOrderedUnitIds(run);
+  const deployingUnitIds = orderedUnitIds.slice(0, capacity);
+  const unavailableUnitIds = run.army.map((unit) => unit.id).filter((id) => !deployingUnitIds.includes(id));
   const permanentAdlected = new Set(run.army.filter((unit) => unit.abilities.includes('adlected')).map((unit) => unit.id));
-  const dawnCandidates = queueUnitIds.filter((id) => !permanentAdlected.has(id));
-  const fallbackCandidates = queueUnitIds;
+  const dawnCandidates = deployingUnitIds.filter((id) => !permanentAdlected.has(id));
+  const fallbackCandidates = deployingUnitIds;
   const temporaryAdlectedUnitId = hasLipsanon(run, 'inspirational-record') && fallbackCandidates.length
     ? createRng(mixSeed(run.deployment.seed, 'inspirational-record')).pick(dawnCandidates.length ? dawnCandidates : fallbackCandidates)
     : undefined;
   return setDeploymentChoices(run, {
-    queueUnitIds,
-    deployingUnitIds: [...queueUnitIds],
+    deployingUnitIds,
     unavailableUnitIds,
     blockedUnitIds: [...unavailableUnitIds],
     capacityResolved: true,
@@ -403,11 +427,11 @@ export function resolveDeploymentCapacity(run: RunDocument, level: Level): RunDo
 export function deploymentOptions(run: RunDocument, level: Level): RunDeploymentOptions {
   const layout = currentLayout(run, level);
   const capacity = playerDeploymentCells(level).length;
-  const queue = run.deployment?.queueUnitIds ?? [];
+  const queue = run.deployment?.deployingUnitIds ?? [];
   return {
     zoneCells: playerDeploymentCells(level),
     adlectedUnitIds: queue.filter((id) => unitIsAdlected(run, id)),
-    overflowCount: Math.max(0, run.army.length - capacity),
+    overflowCount: Math.max(0, deploymentOrderedUnitIds(run).length - capacity),
     hasBlockedChoice: false,
     needsBlockedChoice: false,
     blockedChoiceCount: 0,
@@ -416,8 +440,7 @@ export function deploymentOptions(run: RunDocument, level: Level): RunDeployment
 }
 
 export function currentDeploymentUnit(run: RunDocument): RunArmyUnit | null {
-  const id = run.deployment?.queueUnitIds[run.deployment.placementCursor];
-  return id ? run.army.find((unit) => unit.id === id) ?? null : null;
+  return activeCardSeat(run)?.unit ?? null;
 }
 
 export function disciplinePlacementCells(run: RunDocument, options: RunDeploymentOptions, unitId: string): Vec[] {
@@ -428,33 +451,57 @@ export function disciplinePlacementCells(run: RunDocument, options: RunDeploymen
   return options.zoneCells.filter((cell) => !occupied.has(key(cell)));
 }
 
-export type RunDeploymentInteractionStage = 'klerosis' | 'pace' | 'primogeniture' | 'draw' | 'place' | 'adlected' | 'ready';
-
-/** The pre-information Deployment boundary owns a Run workspace, before the battlefield mounts. */
-export function deploymentAtKlerosisBoundary(run: RunDocument): boolean {
-  return run.phase === 'deployment' && deploymentInteractionStage(run) === 'klerosis';
-}
+export type RunDeploymentInteractionStage =
+  | 'deal'
+  | 'pace'
+  | 'reveal-card'
+  | 'revealing-card'
+  | 'place'
+  | 'adlected'
+  | 'settling'
+  | 'discarding'
+  | 'ready';
 
 export function deploymentInteractionStage(run: RunDocument, _options?: RunDeploymentOptions): RunDeploymentInteractionStage {
   const deployment = run.deployment;
-  if (!deployment || deployment.stage === 'klerosis') return 'klerosis';
-  if (!deployment.mode) return 'pace';
+  if (!deployment || deployment.stage === 'dealing') return 'deal';
+  if (deployment.stage === 'pace') return 'pace';
+  if (deployment.stage === 'card') return 'reveal-card';
+  if (deployment.stage === 'revealing') return 'revealing-card';
+  if (deployment.stage === 'settling') return 'settling';
+  if (deployment.stage === 'discarding') return 'discarding';
+  if (deployment.stage === 'complete') return 'ready';
   const unit = currentDeploymentUnit(run);
   if (!unit) return 'ready';
-  if (unitIsAdlected(run, unit.id) && deployment.revealedUnitId === unit.id) return 'adlected';
-  if (deployment.stage === 'primogeniture') return 'primogeniture';
-  return deployment.revealedUnitId === unit.id ? 'place' : 'draw';
+  return unitIsAdlected(run, unit.id) ? 'adlected' : 'place';
 }
 
-/** Acknowledges the exact visible deal without selecting how its units will be placed. */
-export function confirmKlerosis(run: RunDocument, level: Level): RunDocument {
+/** Persists that the face-down transfer from the Chartulary has settled. */
+export function completeDeploymentDeal(run: RunDocument, level: Level): RunDocument {
   const resolved = resolveDeploymentCapacity(run, level);
-  if (resolved.phase !== 'deployment' || resolved.deployment?.stage !== 'klerosis') return resolved;
-  return setDeploymentChoices(resolved, { stage: 'primogeniture' });
+  if (resolved.phase !== 'deployment' || resolved.deployment?.stage !== 'dealing') return resolved;
+  return setDeploymentChoices(resolved, { stage: 'pace' });
 }
 
-function commitPlacement(run: RunDocument, level: Level, unit: RunArmyUnit, cell: Vec | null, manual: boolean): RunDocument {
+function stageAfterCommittedUnits(run: RunDocument): RunDocument {
   if (!run.deployment) return run;
+  return setDeploymentChoices(run, {
+    settlingUnitIds: [],
+    stage: currentDeploymentUnit(run) ? 'unit' : 'discarding',
+  });
+}
+
+function commitPlacement(
+  run: RunDocument,
+  _level: Level,
+  unit: RunArmyUnit,
+  cell: Vec | null,
+  manual: boolean,
+  deferSettlement = false,
+): RunDocument {
+  if (!run.deployment) return run;
+  const seat = activeCardSeat(run);
+  if (!seat || seat.unit.id !== unit.id) return run;
   const placements = { ...run.deployment.placements };
   const manualPlacements = { ...run.deployment.manualPlacements };
   let deployingUnitIds = [...run.deployment.deployingUnitIds];
@@ -466,86 +513,125 @@ function commitPlacement(run: RunDocument, level: Level, unit: RunArmyUnit, cell
     deployingUnitIds = deployingUnitIds.filter((id) => id !== unit.id);
     unavailableUnitIds = [...new Set([...unavailableUnitIds, unit.id])];
   }
-  const placementCursor = run.deployment.placementCursor + 1;
-  const atEnd = placementCursor >= run.deployment.queueUnitIds.length;
-  let next = setDeploymentChoices(run, {
+  const next = setDeploymentChoices(run, {
     placements,
     manualPlacements,
     deployingUnitIds,
     unavailableUnitIds,
     blockedUnitIds: [...unavailableUnitIds],
-    placementCursor,
-    revealedUnitId: undefined,
-    stage: atEnd ? 'farrago' : 'farrago',
+    unitCursor: seat.index + 1,
+    settlingUnitIds: cell
+      ? [...run.deployment.settlingUnitIds, unit.id]
+      : [...run.deployment.settlingUnitIds],
+    stage: deferSettlement ? 'unit' : cell ? 'settling' : 'unit',
   });
-  if (atEnd) {
-    return beginBattle(next, Object.keys(placements), [], unavailableUnitIds);
+  return cell || deferSettlement ? next : stageAfterCommittedUnits(next);
+}
+
+/** Commit every automatic seat that can advance without input as one compositor arrival wave. */
+function placeAutomaticDeploymentWave(run: RunDocument, level: Level): RunDocument {
+  let next = run;
+  while (next.phase === 'deployment' && next.deployment?.stage === 'unit') {
+    const unit = currentDeploymentUnit(next);
+    if (!unit || unitIsAdlected(next, unit.id)) break;
+    const placements = decodedPlacements(next);
+    const order = deploymentOrderedUnitIds(next).indexOf(unit.id);
+    const choice = automaticPlacementChoice(next, level, unit, placements, Math.max(0, order));
+    next = commitPlacement(next, level, unit, choice.cell, false, true);
   }
-  if (next.deployment?.mode === 'deploy-all') next = advanceDeployAll(next, level);
-  return next;
+  if (next.phase !== 'deployment' || !next.deployment) return next;
+  if (next.deployment.settlingUnitIds.length > 0) {
+    return setDeploymentChoices(next, { stage: 'settling' });
+  }
+  return stageAfterCommittedUnits(next);
 }
 
 export function chooseDeploymentMode(run: RunDocument, level: Level, mode: 'deploy-all' | 'step-through'): RunDocument {
   let next = resolveDeploymentCapacity(run, level);
-  if (next.phase !== 'deployment' || !next.deployment || next.deployment.stage === 'klerosis') return next;
-  const first = next.deployment.queueUnitIds[0];
+  if (next.phase !== 'deployment' || !next.deployment || next.deployment.stage !== 'pace') return next;
   next = setDeploymentChoices(next, {
     mode,
-    stage: 'primogeniture',
-    revealedUnitId: first,
+    stage: 'card',
   });
-  return mode === 'deploy-all' ? advanceDeployAll(next, level) : next;
+  return next;
 }
 
 export function switchDeploymentMode(run: RunDocument, level: Level, mode: 'deploy-all' | 'step-through'): RunDocument {
   if (run.phase !== 'deployment' || !run.deployment?.mode) return run;
-  let next = setDeploymentChoices(run, { mode });
-  return mode === 'deploy-all' ? advanceDeployAll(next, level) : next;
+  return setDeploymentChoices(run, { mode });
 }
 
-export function drawNextDeploymentUnit(run: RunDocument): RunDocument {
-  if (run.phase !== 'deployment' || !run.deployment || run.deployment.stage !== 'farrago') return run;
-  const unit = currentDeploymentUnit(run);
-  if (!unit || run.deployment.revealedUnitId) return run;
-  return setDeploymentChoices(run, { revealedUnitId: unit.id });
+export function revealActiveDeploymentCard(run: RunDocument): RunDocument {
+  const card = activeDeploymentCard(run);
+  if (run.phase !== 'deployment' || !run.deployment || run.deployment.stage !== 'card' || !card) return run;
+  return setDeploymentChoices(run, {
+    revealedCardIds: [...new Set([...run.deployment.revealedCardIds, card.id])],
+    stage: 'revealing',
+  });
+}
+
+export function finishDeploymentCardReveal(run: RunDocument): RunDocument {
+  if (run.phase !== 'deployment' || !run.deployment || run.deployment.stage !== 'revealing') return run;
+  return setDeploymentChoices(run, { stage: currentDeploymentUnit(run) ? 'unit' : 'discarding' });
 }
 
 export function placeRevealedDeploymentUnit(run: RunDocument, level: Level): RunDocument {
   const unit = currentDeploymentUnit(run);
-  if (!unit || run.deployment?.revealedUnitId !== unit.id || unitIsAdlected(run, unit.id)) return run;
+  if (!unit || run.deployment?.stage !== 'unit' || unitIsAdlected(run, unit.id)) return run;
   const placements = decodedPlacements(run);
-  const choice = automaticPlacementChoice(run, level, unit, placements, run.deployment.placementCursor);
+  const order = deploymentOrderedUnitIds(run).indexOf(unit.id);
+  const choice = automaticPlacementChoice(run, level, unit, placements, Math.max(0, order));
   return commitPlacement(run, level, unit, choice.cell, false);
 }
 
 export function placeAdlectedDeploymentUnit(run: RunDocument, level: Level, cell: Vec): RunDocument {
   const unit = currentDeploymentUnit(run);
-  if (!unit || run.deployment?.revealedUnitId !== unit.id || !unitIsAdlected(run, unit.id)) return run;
+  if (!unit || run.deployment?.stage !== 'unit' || !unitIsAdlected(run, unit.id)) return run;
   const options = deploymentOptions(run, level);
   if (!disciplinePlacementCells(run, options, unit.id).some((candidate) => key(candidate) === key(cell))) return run;
-  return commitPlacement(run, level, unit, cell, true);
+  const committed = commitPlacement(run, level, unit, cell, true, run.deployment.mode === 'deploy-all');
+  return run.deployment.mode === 'deploy-all'
+    ? placeAutomaticDeploymentWave(committed, level)
+    : committed;
+}
+
+export function finishDeploymentUnitSettlement(run: RunDocument, _level?: Level): RunDocument {
+  if (run.phase !== 'deployment' || !run.deployment) return run;
+  if (run.deployment.stage !== 'settling' || run.deployment.settlingUnitIds.length === 0) return run;
+  return stageAfterCommittedUnits(run);
+}
+
+export function finishDeploymentCardDiscard(run: RunDocument): RunDocument {
+  if (run.phase !== 'deployment' || !run.deployment || run.deployment.stage !== 'discarding') return run;
+  const nextCardIndex = run.deployment.activeCardIndex + 1;
+  if (nextCardIndex >= run.deployment.dealtCardIds.length) {
+    const completed = setDeploymentChoices(run, {
+      activeCardIndex: nextCardIndex,
+      unitCursor: 0,
+      discardCursor: nextCardIndex,
+      settlingUnitIds: [],
+      stage: 'complete',
+    });
+    return beginBattle(completed, Object.keys(run.deployment.placements), [], run.deployment.unavailableUnitIds);
+  }
+  return setDeploymentChoices(run, {
+    activeCardIndex: nextCardIndex,
+    unitCursor: 0,
+    discardCursor: run.deployment.discardCursor + 1,
+    settlingUnitIds: [],
+    stage: 'card',
+  });
 }
 
 export function advanceDeployAll(run: RunDocument, level: Level): RunDocument {
-  let next = run;
-  while (next.phase === 'deployment' && next.deployment?.mode === 'deploy-all') {
-    const unit = currentDeploymentUnit(next);
-    if (!unit) return beginBattle(next, Object.keys(next.deployment.placements), [], next.deployment.unavailableUnitIds);
-    if (unitIsAdlected(next, unit.id)) {
-      if (next.deployment.revealedUnitId === unit.id) return next;
-      return setDeploymentChoices(next, { revealedUnitId: unit.id });
-    }
-    if (next.deployment.revealedUnitId !== unit.id) {
-      next = setDeploymentChoices(next, { revealedUnitId: unit.id });
-    }
-    const before = next;
-    next = placeRevealedDeploymentUnit(next, level);
-    if (next === before) return next;
+  if (run.phase !== 'deployment' || run.deployment?.mode !== 'deploy-all') return run;
+  if (run.deployment.stage === 'card') return revealActiveDeploymentCard(run);
+  if (run.deployment.stage === 'unit' && !unitIsAdlected(run, currentDeploymentUnit(run)?.id ?? '')) {
+    return placeAutomaticDeploymentWave(run, level);
   }
-  return next;
+  return run;
 }
 
-/** Legacy entry points now stop on Klerosis. Choosing a mode is the information gate. */
 export function resolveForcedDeploymentChoices(run: RunDocument, level: Level): RunDocument {
   return resolveDeploymentCapacity(run, level);
 }
@@ -567,7 +653,7 @@ export function advanceReadyDeployment(run: RunDocument, level: Level): RunDocum
 }
 
 export function deploymentReady(run: RunDocument, _options?: RunDeploymentOptions): boolean {
-  return Boolean(run.deployment && run.deployment.placementCursor >= run.deployment.queueUnitIds.length);
+  return run.phase === 'battle';
 }
 
 export function selectedDeploymentLayout(run: RunDocument, options: RunDeploymentOptions): RunDeploymentLayout {

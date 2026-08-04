@@ -54,11 +54,15 @@ import {
 import {
   advanceDeployAll,
   chooseDeploymentMode,
-  confirmKlerosis,
+  completeDeploymentDeal,
   currentDeploymentUnit,
   disciplinePlacementCells,
   deploymentOptions,
+  finishDeploymentCardDiscard,
+  finishDeploymentCardReveal,
+  finishDeploymentUnitSettlement,
   placeAdlectedDeploymentUnit,
+  revealActiveDeploymentCard,
   resolveDeploymentCapacity,
   selectedDeploymentLayout,
   type RunDeploymentLayout,
@@ -565,11 +569,27 @@ function autoDeploy(run: RunDocument): { run: RunDocument; layout: RunDeployment
   const level = prepared.war.battles[prepared.battleIndex]?.level;
   if (!level) throw new RunCraftError(`craft: Battle ${prepared.battleIndex + 1} has no Level.`);
   prepared = resolveDeploymentCapacity(prepared, level);
-  prepared = confirmKlerosis(prepared, level);
+  prepared = completeDeploymentDeal(prepared, level);
   prepared = chooseDeploymentMode(prepared, level, 'deploy-all');
   while (prepared.phase === 'deployment') {
+    if (prepared.deployment?.stage === 'card') {
+      prepared = revealActiveDeploymentCard(prepared);
+      continue;
+    }
+    if (prepared.deployment?.stage === 'revealing') {
+      prepared = finishDeploymentCardReveal(prepared);
+      continue;
+    }
+    if (prepared.deployment?.stage === 'settling') {
+      prepared = finishDeploymentUnitSettlement(prepared, level);
+      continue;
+    }
+    if (prepared.deployment?.stage === 'discarding') {
+      prepared = finishDeploymentCardDiscard(prepared);
+      continue;
+    }
     const unit = currentDeploymentUnit(prepared);
-    if (!unit) break;
+    if (!unit) throw new RunCraftError('craft: Deployment stopped without an active card unit.');
     const options = deploymentOptions(prepared, level);
     const free = disciplinePlacementCells(prepared, options, unit.id)[0];
     const next = free
@@ -772,12 +792,14 @@ function addPieces(run: RunDocument, units: readonly RunCraftUnit[]): RunDocumen
 function pruneEmptyCards(run: RunDocument): RunDocument {
   const unitIds = new Set(run.army.map((unit) => unit.id));
   const cards = run.cards
-    .filter((card) => card.unitIds.length > 0 || card.lostUnitIds.length > 0)
-    .map((card) => (
-      card.effectTargetUnitId && !unitIds.has(card.effectTargetUnitId)
-        ? { ...card, effectTargetUnitId: null }
-        : card
-    ));
+    .map((card) => ({
+      ...card,
+      unitSeats: card.unitSeats.map((unitId) => unitId && unitIds.has(unitId) ? unitId : null),
+      effectTargetUnitId: card.effectTargetUnitId && unitIds.has(card.effectTargetUnitId)
+        ? card.effectTargetUnitId
+        : null,
+    }))
+    .filter((card) => card.unitSeats.some(Boolean) || card.lostUnitIds.length > 0);
   const cardIds = new Set(cards.map((card) => card.id));
   return {
     ...run,

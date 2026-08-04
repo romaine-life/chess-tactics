@@ -56,11 +56,15 @@ search for before constructing a control or repeated surface.
   `RunCardFace`; Sectio mode owns the gold transaction cue and supplies the exact
   source face used by the Adlectio transfer.
 - `ui/runCardFlightView.tsx` — the shared geometry for transferring that canonical
-  face into the Chartulary during Sectio and back out during Klerosis. It measures live endpoints, contributes through the director-owned
+  face into the Chartulary during Sectio. It measures live endpoints, contributes through the director-owned
   continuity layer above clipped shell layers, commits on landing, and exposes
   the transfer and survivor-reflow geometry plus the CSS-token duration parser
   for regression tests. `SectioCardRow` owns the live FLIP measurement for both
-  plain and installed-wrap layouts; Klerosis owns its ordered reverse-flight composition.
+  plain and installed-wrap layouts.
+- `ui/RunDeploymentCardStack.tsx` — the Controls-owned projection of the persisted
+  Deployment deal. It measures the real Chartulary shortcut, transfers the exact dealt count
+  face down into one numbered stack, reveals only the active card, and acknowledges deal,
+  reveal, and discard animation boundaries back into the Run document.
 - `ui/strategikonNavigation.ts` and `ui/StrategikonTitleNavigation.tsx` — one
   Strategikon destination inventory shared by the full workspace rail and the
   compact Controls-title shortcuts; the Chartulary shortcut also owns the card

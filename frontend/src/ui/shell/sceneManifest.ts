@@ -1,6 +1,5 @@
 import { normalizeRoutePath } from '../navigation';
 import { lipsanonNeedsUnitTarget, type LipsanonId } from '../../run/model';
-import { deploymentAtKlerosisBoundary } from '../../run/deployment';
 import { isRunRoutePath, isRunStrategikonPath } from '../runRoute';
 import { isStrategikonPath, strategikonBase, strategikonSectionPath } from '../strategikonRoute';
 import {
@@ -102,14 +101,7 @@ const isLevelEditorPath = (path: string): boolean => (
   path === '/editor/level' || path === '/edit' || path === '/level-editor'
 );
 
-/**
- * The Klerosis deal is a full pre-Battle workspace. Once it is confirmed, the
- * remaining Deployment and its Battle are one continuous mounted battlefield.
- */
 const runPhaseIdentity = (snapshot: RunSceneSnapshot): string => {
-  if (snapshot.phase === 'deployment' && snapshot.run && deploymentAtKlerosisBoundary(snapshot.run)) {
-    return 'klerosis';
-  }
   return snapshot.phase === 'deployment' || snapshot.phase === 'battle' ? 'battlefield' : snapshot.phase;
 };
 
@@ -327,9 +319,8 @@ export function sceneOverlapScope(
  * never unmounts and re-reveals its sibling action column, and opening or paging
  * through the Strategikon never tears down the Battle board behind it. The
  * state-driven Run phase and workspace slots stay leaf-keyed on purpose: their
- * scenes overlap as two complete layers, which requires distinct keys. Confirmed
- * Deployment and its Battle share a leaf key; the preceding Klerosis workspace has
- * its own key and transitions into that battlefield.
+ * scenes overlap as two complete layers, which requires distinct keys. Deployment
+ * and its Battle share one leaf key so the empty board becomes the played board.
  */
 const IDENTITY_ONLY_SLOTS: ReadonlySet<SceneSlotId> = new Set([
   'run-detail-content',

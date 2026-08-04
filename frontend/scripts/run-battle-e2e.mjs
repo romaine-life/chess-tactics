@@ -246,190 +246,22 @@ try {
       const army = run.army.map((unit, index) => ({
         ...unit,
         abilities: [
-          ...unit.abilities.filter((ability) => ability !== 'discipline'),
-          ...(index < 2 ? ['discipline'] : []),
+          ...unit.abilities.filter((ability) => ability !== 'adlected'),
+          ...(index < 2 ? ['adlected'] : []),
         ],
       }));
       useActiveRun.getState().replace({ ...run, army, updatedAt: new Date().toISOString() });
-      return army.filter((unit) => unit.abilities.includes('discipline')).map((unit) => unit.id);
+      return army.filter((unit) => unit.abilities.includes('adlected')).map((unit) => unit.id);
     });
     if (prepared?.length !== 2) await fail('prepare-deployment-fixture', JSON.stringify(prepared));
   }
 
   await page.evaluate(() => {
     const outgoing = document.querySelector('.run-scene-slot');
+    const nativeAnimate = Element.prototype.animate;
     const probe = {
       outgoing,
-      frame: 0,
-      sawPending: false,
-      sawOverlap: false,
-      sawEntering: false,
-      retainedOutgoing: false,
-      inertOutgoing: false,
-      blankFrame: false,
-      maxDealFlights: 0,
-      nearestDealOrigin: Number.POSITIVE_INFINITY,
-      dealUsesContinuityLayer: false,
-    };
-    window.__ctRunTransitionProbe = probe;
-    const tick = () => {
-      const director = document.querySelector('.scene-director');
-      const phase = director?.getAttribute('data-scene-phase') ?? 'missing';
-      const pending = director?.getAttribute('data-scene-pending') ?? '';
-      const boundaries = [...document.querySelectorAll('.scene-boundary')];
-      const transitioning = phase !== 'current' && phase !== 'startup';
-      probe.sawPending ||= pending.includes(':klerosis:');
-      probe.sawOverlap ||= boundaries.some((entry) => entry.getAttribute('data-scene-visual-role') === 'outgoing')
-        && boundaries.some((entry) => entry.getAttribute('data-scene-visual-role') === 'incoming');
-      probe.sawEntering ||= phase === 'entering';
-      probe.retainedOutgoing ||= transitioning && Boolean(probe.outgoing?.isConnected);
-      probe.inertOutgoing ||= transitioning && Boolean(probe.outgoing?.closest('[inert]'));
-      const chartulary = document.querySelector('[data-run-card-flight-target]');
-      const dealFlights = [...document.querySelectorAll('[data-klerosis-deal-flight]')];
-      probe.maxDealFlights = Math.max(probe.maxDealFlights, dealFlights.length);
-      probe.dealUsesContinuityLayer ||= dealFlights.some((flight) => Boolean(
-        flight.closest('[data-scene-continuity-kind="shared-element"]'),
-      ));
-      if (chartulary) {
-        const target = chartulary.getBoundingClientRect();
-        const targetX = target.left + target.width / 2;
-        const targetY = target.top + target.height / 2;
-        for (const flight of dealFlights) {
-          const rect = flight.getBoundingClientRect();
-          probe.nearestDealOrigin = Math.min(
-            probe.nearestDealOrigin,
-            Math.hypot(rect.left + rect.width / 2 - targetX, rect.top + rect.height / 2 - targetY),
-          );
-        }
-      }
-      if (transitioning) {
-        const visibleBoundary = boundaries.some((entry) => {
-          const rect = entry.getBoundingClientRect();
-          return rect.width > 0 && rect.height > 0 && Number.parseFloat(getComputedStyle(entry).opacity) > 0.01;
-        });
-        if (!visibleBoundary) probe.blankFrame = true;
-      }
-      probe.frame = requestAnimationFrame(tick);
-    };
-    probe.frame = requestAnimationFrame(tick);
-  });
-
-  if (!await clickButton('Continue to first Battle')) {
-    await fail('opening-continue-without-purchase', JSON.stringify(await buttonDiagnostics('Continue to first Battle')));
-  }
-  await waitPhase('klerosis', 'opening-continue-without-purchase');
-  await page.waitForFunction(() => {
-      const director = document.querySelector('.scene-director');
-      return director?.getAttribute('data-scene-phase') === 'current'
-      && (director.getAttribute('data-scene-committed') ?? '').includes(':klerosis:')
-      && !director.getAttribute('data-scene-pending');
-  });
-  await page.waitForSelector('[data-klerosis-deal-flight]', { timeout: 5_000 });
-  const klerosisMotionShot = 'tmp-shots/run-opening-klerosis-deal-motion.png';
-  await page.screenshot({ path: klerosisMotionShot });
-  console.log('Klerosis deal-motion screenshot:', klerosisMotionShot);
-
-  // Klerosis is its own full Run workspace. The battlefield and its pace controls
-  // must not exist until the player has seen the deal and confirmed it.
-  try {
-    await page.waitForFunction(() => {
-      const workspace = document.querySelector('[data-testid="run-klerosis-workspace"]');
-      const deal = document.querySelector('[data-testid="run-klerosis"]');
-      return workspace
-        && deal?.getAttribute('data-klerosis-deal-state') === 'complete'
-        && document.querySelectorAll('[data-klerosis-deal-card]').length > 0;
-    });
-  } catch {
-    await fail('opening-klerosis-ready', JSON.stringify(await page.evaluate(() => {
-      const director = document.querySelector('.scene-director');
-      return {
-        path: location.pathname,
-        workspace: Boolean(document.querySelector('[data-testid="run-klerosis-workspace"]')),
-        klerosis: Boolean(document.querySelector('[data-testid="run-klerosis"]')),
-        dealState: document.querySelector('[data-testid="run-klerosis"]')?.getAttribute('data-klerosis-deal-state') ?? null,
-        dealtCards: document.querySelectorAll('[data-klerosis-deal-card]').length,
-        board: Boolean(document.querySelector('[data-testid="skirmish-board"]')),
-        directorPhase: director?.getAttribute('data-scene-phase') ?? null,
-        directorCommitted: director?.getAttribute('data-scene-committed') ?? null,
-        bodyText: document.body.innerText.slice(0, 600),
-      };
-    })));
-  }
-
-  const klerosisState = await page.evaluate(() => ({
-    dealtCards: document.querySelectorAll('[data-klerosis-deal-card]').length,
-    board: Boolean(document.querySelector('[data-testid="skirmish-board"]')),
-    deployAll: [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Deploy all'),
-    stepThrough: [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Step through'),
-    confirm: Boolean(document.querySelector('[data-testid="klerosis-confirm"]')),
-    strategikonToggle: Boolean(document.querySelector('[data-testid="strategikon-toggle"]')),
-    roster: Boolean(document.querySelector('.run-klerosis-rosters')),
-    explanatoryCopy: document.body.textContent?.includes('These cards supply this combat') ?? false,
-  }));
-  if (
-    klerosisState.dealtCards === 0
-    || klerosisState.board
-    || klerosisState.deployAll
-    || klerosisState.stepThrough
-    || !klerosisState.confirm
-    || !klerosisState.strategikonToggle
-    || klerosisState.roster
-    || klerosisState.explanatoryCopy
-  ) {
-    await fail('klerosis-boundary', JSON.stringify(klerosisState));
-  }
-
-  const transition = await page.evaluate(() => {
-    const probe = window.__ctRunTransitionProbe;
-    cancelAnimationFrame(probe.frame);
-    const director = document.querySelector('.scene-director');
-    return {
-      sawPending: probe.sawPending,
-      sawOverlap: probe.sawOverlap,
-      sawEntering: probe.sawEntering,
-      retainedOutgoing: probe.retainedOutgoing,
-      inertOutgoing: probe.inertOutgoing,
-      blankFrame: probe.blankFrame,
-      maxDealFlights: probe.maxDealFlights,
-      nearestDealOrigin: probe.nearestDealOrigin,
-      dealUsesContinuityLayer: probe.dealUsesContinuityLayer,
-      finalPhase: director?.getAttribute('data-scene-phase') ?? null,
-      finalCommitted: director?.getAttribute('data-scene-committed') ?? null,
-      finalPending: director?.getAttribute('data-scene-pending') ?? null,
-      finalBoard: Boolean(document.querySelector('[data-testid="skirmish-board"]')),
-    };
-  });
-  if (
-    !transition.sawPending
-    || !transition.sawOverlap
-    || !transition.sawEntering
-    || !transition.retainedOutgoing
-    || !transition.inertOutgoing
-    || transition.blankFrame
-    || transition.maxDealFlights !== klerosisState.dealtCards
-    || transition.nearestDealOrigin > 1.5
-    || !transition.dealUsesContinuityLayer
-    || transition.finalPhase !== 'current'
-    || !transition.finalCommitted?.includes(':klerosis:')
-    || transition.finalPending
-    || transition.finalBoard
-  ) {
-    await fail('begin-klerosis-transition', JSON.stringify(transition));
-  }
-  console.log('director-owned opening Sectio → Klerosis transition: OK');
-
-  const klerosisShot = 'tmp-shots/run-opening-klerosis.png';
-  const klerosisWorkspace = await page.$('[data-testid="run-klerosis-workspace"]');
-  if (!klerosisWorkspace) await fail('klerosis-screenshot', 'Klerosis workspace unavailable after commit');
-  await page.screenshot({ path: klerosisShot });
-  console.log('Klerosis screenshot:', klerosisShot);
-
-  // Confirm is the Klerosis boundary. Only this transition may construct and
-  // reveal the battlefield, already camera-ready, in Deployment's Pace stage.
-  await page.evaluate(() => {
-    const outgoing = document.querySelector('.run-scene-slot');
-    const probe = {
-      outgoing,
+      nativeAnimate,
       frame: 0,
       sawPending: false,
       sawOverlap: false,
@@ -442,8 +274,32 @@ try {
       cameraSamples: [],
       visibleCameraFrames: 0,
       visibleEnteringCameraFrames: 0,
+      dealAnimations: 0,
+      farthestDealOrigin: 0,
     };
     window.__ctBattlefieldTransitionProbe = probe;
+    Element.prototype.animate = function deploymentDealProbe(frames, options) {
+      if (this.matches?.('[data-deployment-stack-card]')) {
+        const first = Array.isArray(frames) ? frames[0] : null;
+        const transform = first && typeof first === 'object' ? String(first.transform ?? '') : '';
+        const match = /translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(transform);
+        const chartulary = document.querySelector('[data-run-card-flight-target]');
+        if (match && chartulary) {
+          const card = this.getBoundingClientRect();
+          const source = chartulary.getBoundingClientRect();
+          const originX = card.left + card.width / 2 + Number(match[1]);
+          const originY = card.top + card.height / 2 + Number(match[2]);
+          const sourceX = source.left + source.width / 2;
+          const sourceY = source.top + source.height / 2;
+          probe.farthestDealOrigin = Math.max(
+            probe.farthestDealOrigin,
+            Math.hypot(originX - sourceX, originY - sourceY),
+          );
+        }
+        probe.dealAnimations += 1;
+      }
+      return nativeAnimate.call(this, frames, options);
+    };
     const tick = () => {
       const director = document.querySelector('.scene-director');
       const phase = director?.getAttribute('data-scene-phase') ?? 'missing';
@@ -493,20 +349,83 @@ try {
     probe.frame = requestAnimationFrame(tick);
   });
 
-  if (!await clickButton('Confirm')) {
-    await fail('klerosis-confirm', JSON.stringify(await buttonDiagnostics('Confirm')));
+  if (!await clickButton('Continue to first Battle')) {
+    await fail('opening-continue-without-purchase', JSON.stringify(await buttonDiagnostics('Continue to first Battle')));
   }
-  await waitPhase('deployment', 'klerosis-confirm');
-  await page.waitForFunction(() => document.querySelector('[data-testid="run-deployment"]')
-    && !document.querySelector('[data-testid="run-deployment"]')?.closest('[inert]')
-    && document.querySelector('[data-testid="skirmish-board"]')
-    && !document.querySelector('[data-testid="skirmish-board"]')?.classList.contains('is-board-loading')
+  await waitPhase('deployment', 'opening-continue-without-purchase');
+  await page.waitForFunction(() => {
+      const director = document.querySelector('.scene-director');
+      return director?.getAttribute('data-scene-phase') === 'current'
+      && (director.getAttribute('data-scene-committed') ?? '').includes(':battlefield:')
+      && !director.getAttribute('data-scene-pending');
+  });
+  await page.waitForSelector('[data-deployment-stack-card]', { timeout: 5_000 });
+  const dealMotionShot = 'tmp-shots/run-opening-deployment-deal-motion.png';
+  await page.screenshot({ path: dealMotionShot });
+  console.log('Deployment deal-motion screenshot:', dealMotionShot);
+
+  // Deployment begins on the already-mounted, empty battlefield. The face-down stack
+  // deals from the Chartulary, and pace is not a choice until every card has landed.
+  const dealingState = await page.evaluate(async () => {
+    const { useActiveRun } = await import('/src/run/store.ts');
+    const run = useActiveRun.getState().run;
+    return {
+      phase: run?.phase ?? null,
+      stage: run?.deployment?.stage ?? null,
+      placements: run?.deployment?.placements.length ?? null,
+      stackCards: document.querySelectorAll('[data-deployment-stack-card]').length,
+      backs: document.querySelectorAll('[data-deployment-stack-card] .run-card-back').length,
+      board: Boolean(document.querySelector('[data-testid="skirmish-board"]')),
+      deployAll: [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Deploy all'),
+      stepThrough: [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Step through'),
+      strategikonToggle: Boolean(document.querySelector('[data-testid="strategikon-toggle"]')),
+      explanatoryCopy: document.body.textContent?.includes('These cards supply this combat') ?? false,
+      confirmationCopy: document.body.textContent?.includes('Your deployment deal') ?? false,
+    };
+  });
+  if (
+    dealingState.phase !== 'deployment'
+    || dealingState.stage !== 'dealing'
+    || dealingState.placements !== 0
+    || dealingState.stackCards === 0
+    || dealingState.backs !== dealingState.stackCards
+    || !dealingState.board
+    || dealingState.deployAll
+    || dealingState.stepThrough
+    || !dealingState.strategikonToggle
+    || dealingState.explanatoryCopy
+    || dealingState.confirmationCopy
+  ) {
+    await fail('deployment-deal-boundary', JSON.stringify(dealingState));
+  }
+
+  await page.waitForFunction(() => document.querySelector('[data-deployment-card-stage="pace"]')
     && [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Deploy all')
     && [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Step through'));
+
+  const paceState = await page.evaluate(() => ({
+    stackCards: document.querySelectorAll('[data-deployment-stack-card]').length,
+    count: Number(document.querySelector('.run-deployment-card-count')?.textContent ?? 0),
+    board: Boolean(document.querySelector('[data-testid="skirmish-board"]')),
+    deployAll: [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Deploy all'),
+    stepThrough: [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Step through'),
+    strategikonToggle: Boolean(document.querySelector('[data-testid="strategikon-toggle"]')),
+  }));
+  if (
+    paceState.stackCards === 0
+    || paceState.count !== paceState.stackCards
+    || !paceState.board
+    || !paceState.deployAll
+    || !paceState.stepThrough
+    || !paceState.strategikonToggle
+  ) {
+    await fail('deployment-pace-boundary', JSON.stringify(paceState));
+  }
 
   const battlefieldTransition = await page.evaluate(() => {
     const probe = window.__ctBattlefieldTransitionProbe;
     cancelAnimationFrame(probe.frame);
+    Element.prototype.animate = probe.nativeAnimate;
     const director = document.querySelector('.scene-director');
     const finalArtLayer = document.querySelector('[data-testid="skirmish-board"] .tileset-view-art-layer');
     const finalCamera = finalArtLayer ? [
@@ -526,6 +445,8 @@ try {
       cameraSamples: probe.cameraSamples,
       visibleCameraFrames: probe.visibleCameraFrames,
       visibleEnteringCameraFrames: probe.visibleEnteringCameraFrames,
+      dealAnimations: probe.dealAnimations,
+      farthestDealOrigin: probe.farthestDealOrigin,
       finalCamera,
       finalPhase: director?.getAttribute('data-scene-phase') ?? null,
       finalCommitted: director?.getAttribute('data-scene-committed') ?? null,
@@ -545,19 +466,21 @@ try {
     || battlefieldTransition.visibleEnteringCameraFrames === 0
     || battlefieldTransition.cameraSamples.length !== 1
     || battlefieldTransition.cameraSamples[0]?.camera !== battlefieldTransition.finalCamera
+    || battlefieldTransition.dealAnimations !== paceState.stackCards
+    || battlefieldTransition.farthestDealOrigin > 1.5
     || battlefieldTransition.finalPhase !== 'current'
     || !battlefieldTransition.finalCommitted?.includes(':battlefield:')
     || battlefieldTransition.finalPending
   ) {
-    await fail('klerosis-battlefield-transition', JSON.stringify(battlefieldTransition));
+    await fail('begin-deployment-transition', JSON.stringify(battlefieldTransition));
   }
-  console.log('director-owned Klerosis → battlefield Deployment transition: OK');
+  console.log('director-owned opening Sectio → empty battlefield Deployment transition and Chartulary deal: OK');
 
   await page.waitForFunction(() => document.querySelector('[data-testid="skirmish-board"]')
     ?.getAttribute('data-arriving') === 'false');
   const transitionShot = 'tmp-shots/run-deployment-pace.png';
   const transitionBoard = await page.$('.skirmish-war-room');
-  if (!transitionBoard) await fail('transition-screenshot', 'Deployment battlefield unavailable after Klerosis');
+  if (!transitionBoard) await fail('transition-screenshot', 'Deployment battlefield unavailable after deal');
   await page.screenshot({ path: transitionShot });
   console.log('Deployment screenshot:', transitionShot);
 
@@ -611,14 +534,12 @@ try {
       window.__ctDeploymentProbe.frame = requestAnimationFrame(tick);
       return {
         deployment: Boolean(document.querySelector('[data-testid="run-deployment"]')),
-        klerosis: Boolean(document.querySelector('[data-testid="run-klerosis"]')),
         deployAll: [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Deploy all'),
         stepThrough: [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Step through'),
       };
     });
     if (
       !deploymentState.deployment
-      || deploymentState.klerosis
       || !deploymentState.deployAll
       || !deploymentState.stepThrough
     ) {
@@ -649,7 +570,6 @@ try {
         finalLayer.style.getPropertyValue('--view-pan-y'),
       ].join('|') : null;
       return {
-        klerosis: Boolean(document.querySelector('[data-testid="run-klerosis"]')),
         battleControls: Boolean(document.querySelector('[data-testid="skirmish"]')),
         strategikonToggle: Boolean(document.querySelector('[data-testid="strategikon-toggle"]')),
         sameBoard: board === probe.board,
@@ -670,8 +590,7 @@ try {
     const deploymentShot = 'tmp-shots/run-deployment-battle-continuity.png';
     await page.screenshot({ path: deploymentShot });
     if (
-      deploymentResult.klerosis
-      || !deploymentResult.battleControls
+      !deploymentResult.battleControls
       || !deploymentResult.strategikonToggle
       || !deploymentResult.sameBoard
       || !deploymentResult.sameBoundary
@@ -690,7 +609,7 @@ try {
     console.log('Deployment Deploy all → Battle provider, DOM, canvas, camera, and Strategikon continuity: OK');
     console.log('Battle continuity screenshot:', deploymentShot);
     if (deploymentOnly) {
-      console.log('PASS — Klerosis is separate, cold Deployment is camera-ready before reveal, and Deployment promotes in place');
+      console.log('PASS — Deployment opens empty, deals a hidden stack from the Chartulary, and promotes the same battlefield in place');
       await browser.close();
       rmSync(browserProfile, { recursive: true, force: true });
       process.exit(0);

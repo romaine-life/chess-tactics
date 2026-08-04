@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { sceneManifest } from './sceneManifest';
 import { initialSceneState, reduceScene } from './sceneDirector';
 import { createRun, prepareDeployment } from '../../run/model';
-import { confirmKlerosis } from '../../run/deployment';
+import { completeDeploymentDeal } from '../../run/deployment';
 import { createBlankLevel } from '../../core/level';
 
 describe('scene director', () => {
@@ -100,18 +100,18 @@ describe('scene director', () => {
     expect(state).toMatchObject({ phase: 'current', current: { id: 'gameplay' }, destination: null });
   });
 
-  it('transitions Klerosis into the battlefield, then refreshes Deployment into Battle in place', () => {
+  it('keeps the deal, Deployment, and Battle on the canonical battlefield scene', () => {
     const run = createRun({
       id: 'war',
       name: 'War',
       description: 'War',
       battles: [{ level: createBlankLevel('battle', 'Battle', 8, 8), loot: false }],
     }, 19, '2026-08-01T00:00:00.000Z');
-    const klerosis = prepareDeployment({ ...run, phase: 'deployment' as const });
-    const deployment = confirmKlerosis(klerosis, run.war.battles[0].level);
+    const deal = prepareDeployment({ ...run, phase: 'deployment' as const });
+    const deployment = completeDeploymentDeal(deal, run.war.battles[0].level);
     const battle = { ...deployment, phase: 'battle' as const };
-    const klerosisScene = sceneManifest('/run', '', {
-      run: { hydrated: true, document: klerosis },
+    const dealScene = sceneManifest('/run', '', {
+      run: { hydrated: true, document: deal },
     });
     const deploymentScene = sceneManifest('/run', '', {
       run: { hydrated: true, document: deployment },
@@ -119,15 +119,15 @@ describe('scene director', () => {
     const battleScene = sceneManifest('/run', '', {
       run: { hydrated: true, document: battle },
     });
-    let state = reduceScene(initialSceneState(klerosisScene), {
+    let state = reduceScene(initialSceneState(dealScene), {
       type: 'navigate',
       destination: deploymentScene,
       href: '/run',
     });
     expect(state).toMatchObject({
-      phase: 'exiting',
-      current: { snapshot: { kind: 'run', run: klerosis } },
-      destination: { snapshot: { kind: 'run', run: deployment } },
+      phase: 'current',
+      current: { snapshot: { kind: 'run', run: deployment } },
+      destination: null,
     });
 
     state = reduceScene(initialSceneState(deploymentScene), {

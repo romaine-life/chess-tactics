@@ -3,7 +3,6 @@ import { ShellWorkspace } from './shared/ChromeBox';
 
 export type RunViewportSceneView =
   | 'status'
-  | 'klerosis'
   | 'sectio'
   | 'aftermath'
   | 'victory'

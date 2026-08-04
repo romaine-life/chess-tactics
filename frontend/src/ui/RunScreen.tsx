@@ -51,7 +51,6 @@ import {
   runAbilityDisplayName,
   performAlienatio,
   performExpunctio,
-  setDeploymentChoices,
   sectioHasChanges,
   takeVacantiaLipsanon,
   undoRunBattleMove,
@@ -61,19 +60,22 @@ import {
 } from '../run/model';
 import {
   advanceAutomaticDeployment,
+  advanceDeployAll,
   chooseDeploymentMode,
-  confirmKlerosis,
+  completeDeploymentDeal,
   currentDeploymentUnit,
-  deploymentAtKlerosisBoundary,
   deploymentInteractionStage,
   deploymentOptions,
   disciplinePlacementCells,
-  drawNextDeploymentUnit,
+  finishDeploymentCardDiscard,
+  finishDeploymentCardReveal,
+  finishDeploymentUnitSettlement,
   gameForRunDeployment,
   levelWithRunDeployment,
   normalReservistCell,
   placeAdlectedDeploymentUnit,
   placeRevealedDeploymentUnit,
+  revealActiveDeploymentCard,
   resolveForcedDeploymentChoices,
   selectedDeploymentLayout,
   switchDeploymentMode,
@@ -105,7 +107,7 @@ import {
 } from './RunArmyWorkspace';
 import { RunCard } from './RunCard';
 import { RunBattlePreview } from './RunBattlePreview';
-import { RunKlerosisWorkspace } from './RunKlerosisWorkspace';
+import { RunDeploymentCardStack } from './RunDeploymentCardStack';
 import { RunExpunctioWorkspace } from './RunExpunctioWorkspace';
 import { runCardName } from '../run/cardNames';
 import {
@@ -399,8 +401,10 @@ function DeploymentControls({
   activeUnit,
   onNavigate,
   onSwitchMode,
-  onDraw,
   onPlace,
+  onDealComplete,
+  onRevealComplete,
+  onDiscardComplete,
 }: {
   run: RunDocument;
   view: RunScreenView;
@@ -408,13 +412,15 @@ function DeploymentControls({
   activeUnit: ReturnType<typeof currentDeploymentUnit>;
   onNavigate: (view: RunScreenView) => void;
   onSwitchMode: (mode: 'deploy-all' | 'step-through') => void;
-  onDraw: () => void;
   onPlace: () => void;
+  onDealComplete: () => void;
+  onRevealComplete: () => void;
+  onDiscardComplete: () => void;
 }): ReactElement {
   const { abandonDialog, abandoning, requestAbandon } = useRunAbandon(run);
   const mode = run.deployment?.mode;
   const abilities = activeUnit
-    ? (['primogeniture', 'adlected', 'eutactic', 'agminate'] as const).filter((ability) => (
+    ? (['adlected', 'eutactic', 'agminate'] as const).filter((ability) => (
         ability === 'adlected'
           ? activeUnit.abilities.includes('adlected') || run.deployment?.temporaryAdlectedUnitId === activeUnit.id
           : hasRunAbility(run, activeUnit, ability)
@@ -424,17 +430,6 @@ function DeploymentControls({
     <>
       {abandonDialog}
       <section className="run-meta-controls run-deployment-controls" aria-label="Deployment controls">
-        <div className="skirmish-score-panel run-deployment-summary">
-          <div>
-            <span className="skirmish-eyebrow">Phase</span>
-            <strong>{stage === 'klerosis' ? 'Klerosis' : stage === 'pace' ? 'Pace' : stage === 'primogeniture' ? 'Primogeniture' : 'Farrago'}</strong>
-          </div>
-          <div>
-            <span className="skirmish-eyebrow">Placed</span>
-            <strong>{run.deployment?.placementCursor ?? 0}/{run.deployment?.queueUnitIds.length ?? 0}</strong>
-          </div>
-        </div>
-
         {mode || stage === 'pace' ? (
           <div className="skirmish-view-group run-deployment-control">
             <span className="skirmish-eyebrow">Pace</span>
@@ -459,9 +454,9 @@ function DeploymentControls({
           </div>
         ) : null}
 
-        {activeUnit && stage !== 'draw' && stage !== 'klerosis' && stage !== 'pace' ? (
+        {activeUnit && (stage === 'place' || stage === 'adlected') ? (
           <div className="skirmish-view-group run-deployment-control" data-testid="deployment-active-unit">
-            <span className="skirmish-eyebrow">{stage === 'primogeniture' ? 'His Grace' : 'Drawn'}</span>
+            <span className="skirmish-eyebrow">Deploying</span>
             <strong>{runUnitRosterLabel(activeUnit)}</strong>
             {abilities.map((ability) => (
               <p key={ability}>
@@ -482,17 +477,10 @@ function DeploymentControls({
           </div>
         ) : null}
 
-        {stage === 'draw' ? (
+        {stage === 'settling' && activeUnit ? (
           <div className="skirmish-view-group run-deployment-control">
-            <span className="skirmish-eyebrow">Farrago</span>
-            <p>The next unit is still hidden in the seeded order.</p>
-            <ChromeButton
-              unit="inner-text-button"
-              className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-              onClick={onDraw}
-            >
-              Draw next
-            </ChromeButton>
+            <span className="skirmish-eyebrow">Settling</span>
+            <strong>{runUnitRosterLabel(activeUnit)}</strong>
           </div>
         ) : null}
 
@@ -520,6 +508,12 @@ function DeploymentControls({
             {abandoning ? 'Abandoning…' : 'Abandon Run'}
           </ChromeButton>
         </div>
+        <RunDeploymentCardStack
+          run={run}
+          onDealComplete={onDealComplete}
+          onRevealComplete={onRevealComplete}
+          onDiscardComplete={onDiscardComplete}
+        />
       </section>
     </>
   );
@@ -569,13 +563,52 @@ function useRunDeploymentPresentation({
     if (prepared !== run && prepared.phase === 'deployment') replace(prepared);
   }, [prepared, replace, run]);
 
+  useEffect(() => {
+    if (prepared.phase !== 'deployment') return;
+    if (prepared.deployment?.stage === 'card') {
+      replace(revealActiveDeploymentCard(prepared));
+      return;
+    }
+    if (prepared.deployment?.mode === 'deploy-all' && stage === 'place') {
+      replace(advanceDeployAll(prepared, level));
+    }
+  }, [level, prepared, replace, stage]);
+
+  const finishDeal = useCallback(() => {
+    const latest = useActiveRun.getState().run;
+    if (latest?.id === prepared.id && latest.phase === 'deployment') {
+      replace(completeDeploymentDeal(latest, level));
+    }
+  }, [level, prepared.id, replace]);
+  const finishReveal = useCallback(() => {
+    const latest = useActiveRun.getState().run;
+    if (latest?.id === prepared.id && latest.phase === 'deployment') {
+      replace(finishDeploymentCardReveal(latest));
+    }
+  }, [prepared.id, replace]);
+  const finishDiscard = useCallback(() => {
+    const latest = useActiveRun.getState().run;
+    if (latest?.id === prepared.id && latest.phase === 'deployment') {
+      replace(finishDeploymentCardDiscard(latest));
+    }
+  }, [prepared.id, replace]);
+  const reportArrivals = useCallback((unitIds: readonly string[]) => {
+    const latest = useActiveRun.getState().run;
+    const settlingUnitIds = latest?.id === prepared.id && latest.phase === 'deployment'
+      ? latest.deployment?.settlingUnitIds ?? []
+      : [];
+    if (settlingUnitIds.length > 0 && settlingUnitIds.every((unitId) => !unitIds.includes(unitId))) {
+      replace(finishDeploymentUnitSettlement(latest!, level));
+    }
+  }, [level, prepared.id, replace]);
+
   if (run.phase !== 'deployment') return null;
   return {
     surfaceState: deploymentSurfaceState,
     screenClassName: 'run-deployment-screen',
     boardClassName: 'run-deployment-board',
     boardAriaLabel: `${level.name} deployment battlefield`,
-    onArrivingUnitIdsChange: () => undefined,
+    onArrivingUnitIdsChange: reportArrivals,
     controlsContent: (
       <DeploymentControls
         run={prepared}
@@ -586,8 +619,10 @@ function useRunDeploymentPresentation({
         onSwitchMode={(mode) => replace(prepared.deployment?.mode
           ? switchDeploymentMode(prepared, level, mode)
           : chooseDeploymentMode(prepared, level, mode))}
-        onDraw={() => replace(drawNextDeploymentUnit(prepared))}
         onPlace={() => replace(placeRevealedDeploymentUnit(prepared, level))}
+        onDealComplete={finishDeal}
+        onRevealComplete={finishReveal}
+        onDiscardComplete={finishDiscard}
       />
     ),
     renderCellOverlay: ({ cell, visualFootprintStyle }) => {
@@ -1290,17 +1325,6 @@ export function RunScreen({
   // The pre-hydration document may exist from browser storage, but the screen treats
   // the Run as absent until hydrate() has arbitrated browser and account copies.
   const shellRun = hydrated ? run : null;
-  const klerosisRun = useMemo(() => {
-    if (!shellRun || shellRun.phase !== 'deployment') return null;
-    const level = shellRun.war.battles[shellRun.battleIndex]?.level;
-    if (!level) return null;
-    const initialized = shellRun.deployment ? shellRun : prepareDeployment(shellRun);
-    const prepared = resolveForcedDeploymentChoices(initialized, level);
-    return deploymentAtKlerosisBoundary(prepared) ? prepared : null;
-  }, [shellRun]);
-  useEffect(() => {
-    if (klerosisRun && klerosisRun !== shellRun) replace(klerosisRun);
-  }, [klerosisRun, replace, shellRun]);
   const rawView: RunScreenView = sceneSnapshot.workspace.view === 'strategikon'
     ? 'primary'
     : sceneSnapshot.workspace.view === 'bona-target'
@@ -1492,16 +1516,6 @@ export function RunScreen({
           </ChromeNavButton>
         </RunSceneViewport>
       )
-      : klerosisRun
-        ? (
-          <RunKlerosisWorkspace
-            run={klerosisRun}
-            onConfirm={() => {
-              const level = klerosisRun.war.battles[klerosisRun.battleIndex].level;
-              replace(confirmKlerosis(klerosisRun, level));
-            }}
-          />
-        )
       : shellRun.phase === 'sectio' && shellRun.sectio
             ? (
               <SectioPanel
@@ -1542,9 +1556,8 @@ export function RunScreen({
                 ? <AftermathPanel run={shellRun} />
                 : <VictoryPanel run={shellRun} />);
   const battlefieldActive = !craftWorkspace
-    && !klerosisRun
     && (shellRun?.phase === 'deployment' || shellRun?.phase === 'battle');
-  const runSurfacePhase = klerosisRun ? 'klerosis' : sceneSnapshot.phase;
+  const runSurfacePhase = sceneSnapshot.phase;
   const sceneInstance = battlefieldActive && shellRun
     ? `${shellRun.id}:battlefield:${shellRun.battleIndex}:${runSceneWorkspaceIdentity(sceneSnapshot.workspace)}`
     : `${shellRun?.id ?? 'none'}:${runSurfacePhase}:${runSceneWorkspaceIdentity(sceneSnapshot.workspace)}`;

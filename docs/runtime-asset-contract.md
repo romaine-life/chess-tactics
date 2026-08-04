@@ -341,7 +341,8 @@ an incomplete row is an availability failure.
   state roles use component `unit-ability-icon` under
   `ui/kit/icons/game/<state>.png`. The closed pairs are
   Pestiferous/Cacochymic, Concinnous/Eutactic, Legatine/Adlected,
-  Hieratic/Agminate, and Praecipuus/Primogeniture. All ten roles are accepted
+  and Hieratic/Agminate. Praecipuus remains a standalone card-property role; its retired
+  Primogeniture unit state is no longer an active role. The nine active roles are accepted
   and installed, and the
   coordinated cutover has shipped: the card type strip carries its property
   symbol instead of an em-dash qualifier suffix, every public unit state draws
@@ -350,7 +351,7 @@ an incomplete row is an availability failure.
   `ui/run/card-status/plagued-v1.png`. Runtime code cannot infer a role from a
   slot path or substitute CSS, text, a generic glyph, or the other member of a
   pair. Every slot is named for the state or property it serves —
-  `ui/kit/icons/game/{cacochymic,eutactic,adlected,agminate,primogeniture}.png` and
+  `ui/kit/icons/game/{cacochymic,eutactic,adlected,agminate}.png` and
   `ui/kit/icons/card-properties/{pestiferous,concinnous,legatine,hieratic,praecipuus}.png` — as are
   `ui/surfaces/card-type-legatine.png` and
   `ui/run/card-prototypes/legatine-adlected-frame-v1.png`. ADR-0374 completed this
@@ -365,17 +366,10 @@ an incomplete row is an availability failure.
   Studio Viewer and still saves only a non-publishing design draft; promoting a
   new fit means committing those constants (ADR-0318, ADR-0339, ADR-0340,
   ADR-0341).
-  Praecipuus/Primogeniture is the fifth pair in that instrument. It
-  reads exact candidates from `review/run-card-icons/praecipuus/property.png`
-  and `review/run-card-icons/primogeniture/state.png`, projects them on canonical
-  His Grace with the owner-selected Codex illustration and Codex royal-purple
-  starter-frame review pixels over measured Hieratic geometry, and initializes older
-  four-pair drafts from the committed Praecipuus fit. Saving these review slots
-  remains non-publishing. The separately approved runtime cutover installs
-  `ui/kit/icons/card-properties/praecipuus.png` and
-  `ui/kit/icons/game/primogeniture.png` as dedicated closed roles, with committed
-  placements `{1.35, -1.05, 2.4}` and shared `{4.2, -0.45, 4.15}` respectively
-  (ADR-0412, ADR-0414).
+  Praecipuus retains its dedicated accepted property icon and committed placement
+  `{1.35, -1.05, 2.4}` on canonical His Grace. Card Icon Fitting no longer projects a
+  Praecipuus/Primogeniture pair, and `ui/kit/icons/game/primogeniture.png` is retired from
+  active runtime policy (ADR-0419).
   Run-card frame variants use typed standalone native 1060×1484 PNG slots:
   `ui/run/card-prototypes/frame-v1.png`,
   `ui/run/card-prototypes/pestiferous-frame-v1.png`,
@@ -402,7 +396,7 @@ an incomplete row is an availability failure.
   `ui/run/card-art/his-grace/illustration.png` and
   `ui/run/card-art/front-lines/illustration.png`; they do not alias compositionally
   similar core cards or enter the atomic 49-card generated-art group (ADR-0414).
-  The exact two accepted illustration and two accepted icon derivatives use the
+  The exact two accepted illustration derivatives and the accepted Praecipuus icon derivative use the
   SHA-, slot-, archived-source-, geometry-, and transform-locked
   `run-starter-selected-derivative-production-exception-v1`. No other resized
   review medium inherits that exception. The Praecipuus frame remains native 1×.
@@ -470,6 +464,7 @@ exact-byte review instrument exist:
 | Terrain surface tops | Shared live-media catalog + private Blob | Shared single/batch APIs | Complete; database-declared groups are reviewed on the canonical board and accepted atomically |
 | Structure source-art turntables | Structure drawable catalog + shared live-media catalog/private Blob | Outside-repository batch manifest + canonical source archive client; one archived pack may supply multiple exact object-allowlisted Artwork groups | Complete; Studio validates all eight native 512×512 rasters, requires each exact direction to mount in the interactive board placement proof, records the typed owner group proof, accepts atomically, then installs the drawable record |
 | Strategikon command-archive background | `app-ui` drawable + shared live-media catalog/private Blob | Shared candidate API under the exact typed semantic slot | Complete; the live Strategikon surface records the closed ADR-0336 cover exception and exact candidate/slot proof, acceptance swaps the pointer atomically, and the drawable installs the required runtime role |
+| Universal Run card back | Shared live-media catalog + private Blob at `ui/run/card-back/standard.png` | Outside-repository batch manifest preserving the generated source and exact native candidate | Complete; Card Layout mounts the exact 1060×1484 candidate at full and Controls-stack scales, backend proof binds that SHA and semantic slot to the shared `RunCardBack` renderer, and standalone acceptance installs the current default without precluding later player selection among separately accepted backs |
 | Authored SFX one-shots | Shared live-media catalog/private Blob + revisioned `sfx_profiles/default` | Shared candidate API under typed `sfx/<sound-set>/v<n>.<format>` slots | Complete; the SFX Viewer mounts a complete private source waveform, lets the owner trim and audition an exact range, saves an immutable hash-verified derived candidate with frame/time provenance, then exact-byte auditions, atomically accepts, and declares that set in the live profile |
 | Other terrain and generic media domains | Shared live-media catalog + private Blob | Shared single/batch APIs | Deliberately blocked until that projection has a typed completeness validator, domain-owned exact-byte review instrument, backend proof validation, and atomic acceptance/rollback tests |
 | BGM | Backend-listed private Blob container; app-owned discovery/playback routes; per-Blob user-delegation SAS | Blob administration | Range-streamed by Azure after a bounded no-store redirect; intentionally not the generic candidate lifecycle (ADR-0200) |

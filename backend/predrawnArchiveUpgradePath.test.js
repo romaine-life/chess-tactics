@@ -61,7 +61,7 @@ test('already-applied migration 36 remains the immutable drawable-media migratio
   );
 });
 
-test('the exact sparse numeric legacy history upgrades through migration 57', () => {
+test('the exact sparse numeric legacy history upgrades through migration 58', () => {
   const versions = migrationVersions();
   const appliedBeforeUpgrade = new Set(
     versions.filter((version) => version <= 27 || version === 36),
@@ -418,7 +418,7 @@ test('the exact sparse numeric legacy history upgrades through migration 57', ()
   );
   assert.deepEqual(
     plan.pending.map((entry) => entry.version),
-    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57],
+    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58],
     'the bridge must fill the historical gap before applying every post-36 contract',
   );
   assert.throws(
@@ -450,7 +450,7 @@ test('the exact sparse numeric legacy history upgrades through migration 57', ()
   );
 });
 
-test('required-schema readiness and repair enforce the migrations 37 through 57 contracts', () => {
+test('required-schema readiness and repair enforce the migrations 37 through 58 contracts', () => {
   const relations = sourceSection(
     serverSource,
     'const REQUIRED_SCHEMA_RELATIONS = [',
@@ -978,13 +978,13 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
 
   const primaryUpgradeProof = sourceSection(
     smokeSource,
-    'async function validatePrimarySparseNumericMigrationUpgrade57()',
+    'async function validatePrimarySparseNumericMigrationUpgrade58()',
     '\nasync function validateEditorMigration16Preservation()',
   );
   assert.match(
     primaryUpgradeProof,
-    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*57\s*\}/,
-    'the production upgrade proof must require a complete 1-57 history',
+    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*58\s*\}/,
+    'the production upgrade proof must require a complete 1-58 history',
   );
   assert.match(
     primaryUpgradeProof,
@@ -998,8 +998,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /length:\s*21[\s\S]*index\s*\+\s*37/,
-    'the production report must include every post-36 migration through 57',
+    /length:\s*22[\s\S]*index\s*\+\s*37/,
+    'the production report must include every post-36 migration through 58',
   );
   assert.match(
     primaryUpgradeProof,
@@ -1073,7 +1073,7 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   const expunctioMigrationProof = sourceSection(
     smokeSource,
     'async function validateExpunctioMigration57()',
-    '\nasync function waitForServer()',
+    '\nasync function validateCardOrderedDeploymentMigration58()',
   );
   assert.match(
     expunctioMigrationProof,
@@ -1085,6 +1085,23 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
       expunctioMigrationProof,
       new RegExp(requiredProof),
       `migration 57 must prove ${requiredProof}`,
+    );
+  }
+  const cardOrderMigrationProof = sourceSection(
+    smokeSource,
+    'async function validateCardOrderedDeploymentMigration58()',
+    '\nasync function waitForServer()',
+  );
+  assert.match(
+    cardOrderMigrationProof,
+    /inlineMigrationSql\(58\)[\s\S]*inlineMigrationSql\(58\)/,
+    'the card-order migration proof must establish idempotency',
+  );
+  for (const requiredProof of ['unitSeats', 'primogeniture', 'runSaveVersion', 'deployment', 'battleRuntime', 'revision']) {
+    assert.match(
+      cardOrderMigrationProof,
+      new RegExp(requiredProof),
+      `migration 58 must prove ${requiredProof}`,
     );
   }
   assert.match(

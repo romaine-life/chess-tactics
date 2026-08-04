@@ -922,11 +922,6 @@ const UNIT_STATE_REFERENCES: readonly Readonly<{
   description: string;
 }>[] = Object.freeze([
   {
-    state: 'primogeniture',
-    name: 'Primogeniture',
-    description: 'Is placed before every other unit.',
-  },
-  {
     state: 'adlected',
     name: ADLECTED_DISPLAY_NAME,
     description: 'The player chooses its square when its deployment turn arrives.',
@@ -957,9 +952,7 @@ const CARD_TYPE_BY_UNIT_STATE = Object.freeze({
     (typeof RUN_CARD_TYPE_REFERENCE)[RunCardType],
   ][]).map(([cardType, definition]) => [definition.grants, cardType]),
   ),
-  // Row texture is decorative; the dedicated property and state icons own identity.
-  primogeniture: 'praecipuus',
-}) as Readonly<Record<RunUnitState, EnchiridionCardType>>;
+}) as Readonly<Record<RunUnitState, RunCardType>>;
 
 function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
   const textureUrls = acceptedCardTypeTextureUrls(currentLiveMediaCatalog());
@@ -982,7 +975,7 @@ function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
               >
                 <CardTypeRowMaterial
                   cardType={cardType}
-                  src={textureUrls[cardType === 'praecipuus' ? 'hieratic' : cardType]}
+                  src={textureUrls[cardType]}
                 />
                 <img
                   className="enchiridion-ability-icon"

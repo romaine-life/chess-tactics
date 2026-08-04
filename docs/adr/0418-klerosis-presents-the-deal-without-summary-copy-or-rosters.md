@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-08-04
 deciders: owner (Nelson) + Codex
+partially_superseded_by:
+  - "[ADR-0419](0419-deployment-draws-a-hidden-card-stack-in-play-order.md)'s removal of the separate confirmation workspace"
 partially_supersedes:
   - "[ADR-0406](0406-klerosis-deals-cards-before-one-unit-at-a-time-deployment.md)'s Deploying and Unavailable roster"
   - "[ADR-0416](0416-klerosis-is-a-dedicated-pre-battle-screen.md)'s resolved combat roster and explanatory heading"
@@ -35,4 +37,3 @@ authored records being dealt, and the motion from the Chartulary establishes wha
 - Units on undrawn or capacity-rejected cards are not enumerated on this confirmation screen.
 - The Deployment Lab and Enchiridion can carry detailed operational explanation without turning
   the ordinary Run flow into a diagnostic surface.
-

@@ -33,6 +33,7 @@ import {
   createRun,
   createRunCardOffer,
   resolveCacochymicCombatDeaths,
+  runCardUnitIds,
   formatGold,
   grantGold,
   hieraticAgminateAcquisitionTarget,
@@ -72,6 +73,13 @@ function war(battles = 4, lootAt: number[] = []): RunWarSnapshot {
 
 function cheapestOpeningOffer(run: RunDocument) {
   return [...run.sectio!.cardOffers].sort((left, right) => left.cost - right.cost)[0];
+}
+
+function legacyCards(cards: RunDocument['cards']) {
+  return cards.map((card) => {
+    const { unitSeats: _unitSeats, ...legacy } = card;
+    return { ...legacy, unitIds: runCardUnitIds(card) };
+  });
 }
 
 /** A Conflict that ends in loot now opens with Bona Vacantia, so a run may start there. */
@@ -169,7 +177,7 @@ describe('Run piece economy', () => {
     expect(continued.phase).toBe('deployment');
     expect(continued.battleIndex).toBe(0);
     expect(continued.cards.map((card) => card.coreId)).toEqual(['his-grace', 'front-lines']);
-    expect(continued.army.find((unit) => unit.type === 'king')?.abilities).toContain('primogeniture');
+    expect(continued.army.find((unit) => unit.type === 'king')?.abilities).toEqual([]);
     expect(continued.army.map((unit) => unit.type)).toEqual(['king', 'pawn', 'pawn']);
     expect(continued.goldTenths).toBe(RUN_STARTING_GOLD_TENTHS);
   });
@@ -185,8 +193,9 @@ describe('Run piece economy', () => {
     expect(adlected.sectio?.adlectedCardOfferIds).toEqual([offer.offerId]);
     expect(adlected.goldTenths).toBe(RUN_STARTING_GOLD_TENTHS - offer.cost * GOLD_SCALE);
     expect(card).toMatchObject({ coreId: offer.id, cardType: offer.cardType, acquiredAfterBattleIndex: 0 });
-    expect(card.unitIds).toHaveLength(offer.pieces.length);
-    expect(adlected.army.filter((unit) => card.unitIds.includes(unit.id)).map((unit) => unit.type)).toEqual(offer.pieces);
+    expect(runCardUnitIds(card)).toHaveLength(offer.pieces.length);
+    expect(adlected.army.filter((unit) => runCardUnitIds(card).includes(unit.id)).map((unit) => unit.type).sort())
+      .toEqual([...offer.pieces].sort());
     expect(adlected.nextCardSequence).toBe(2);
     expect(canLeaveSectio(adlected)).toBe(true);
     const reset = resetSectio(adlected);
@@ -368,12 +377,12 @@ describe('Run piece economy', () => {
   it('prices and performs one Expunctio per Sectio while preserving the printed-value floor', () => {
     const opening = createRun(war(), 47);
     const frontLines = opening.cards.find((card) => card.coreId === 'front-lines')!;
-    const attached = frontLines.unitIds.map((id) => opening.army.find((unit) => unit.id === id)!);
+    const attached = runCardUnitIds(frontLines).map((id) => opening.army.find((unit) => unit.id === id)!);
     expect(cardExpunctioPriceTenths(frontLines, attached)).toBe(4 * GOLD_SCALE);
 
     const afterOneSale = performAlienatio(opening, attached[0].id);
     const dilutedFrontLines = afterOneSale.cards.find((card) => card.id === frontLines.id)!;
-    const remaining = dilutedFrontLines.unitIds.map((id) => afterOneSale.army.find((unit) => unit.id === id)!);
+    const remaining = runCardUnitIds(dilutedFrontLines).map((id) => afterOneSale.army.find((unit) => unit.id === id)!);
     expect(cardExpunctioPriceTenths(dilutedFrontLines, remaining)).toBe(3 * GOLD_SCALE);
     const afterBothSales = performAlienatio(afterOneSale, remaining[0].id);
     const emptyFrontLines = afterBothSales.cards.find((card) => card.id === frontLines.id)!;
@@ -498,7 +507,7 @@ describe('Run progression and lipsanon offers', () => {
     expect(canTargetLipsanon(fresh, 'conscription-notice', king.id)).toBe(true);
     const granted = acquireLipsanon(fresh, 'conscription-notice', king.id);
     expect(granted.army.find((unit) => unit.id === king.id)?.abilities)
-      .toEqual(['primogeniture', 'adlected']);
+      .toEqual(['adlected']);
   });
 
   it('grants an exact administrator-entered gold amount through the Run model', () => {
@@ -626,6 +635,7 @@ describe('Run progression and lipsanon offers', () => {
       ...version18WithoutSectio,
       runSaveVersion: 17,
       phase: 'shop',
+      cards: legacyCards(current.cards),
       army: current.army.map(oldUnit),
       pestiferousLosses: current.pestiferousLosses.map((loss) => ({
         ...loss,
@@ -642,14 +652,29 @@ describe('Run progression and lipsanon offers', () => {
         entrySnapshot: {
           ...sectio!.entrySnapshot,
           army: sectio!.entrySnapshot.army.map(oldUnit),
+          cards: legacyCards(sectio!.entrySnapshot.cards),
         },
       },
     };
 
-    expect(migrateRunSaveDocument(version17)).toEqual(current);
+    const expectedMigrated = {
+      ...current,
+      cards: current.cards.map((card) => ({ ...card, unitSeats: [...card.unitSeats] })),
+      sectio: {
+        ...current.sectio!,
+        entrySnapshot: {
+          ...current.sectio!.entrySnapshot,
+          cards: current.sectio!.entrySnapshot.cards.map((card) => ({
+            ...card,
+            unitSeats: [...card.unitSeats],
+          })),
+        },
+      },
+    };
+    expect(migrateRunSaveDocument(version17)).toEqual(expectedMigrated);
     const { runSaveVersion: _runSaveVersion, ...version16 } = version17;
     const migratedFrom16 = migrateRunSaveDocument({ ...version16, formatVersion: 16 });
-    expect(migratedFrom16).toEqual(current);
+    expect(migratedFrom16).toEqual(expectedMigrated);
     expect(migratedFrom16).not.toHaveProperty('formatVersion');
     expect(migratedFrom16).not.toHaveProperty('shop');
     expect(() => normalizeRunDocument({
@@ -665,14 +690,12 @@ describe('Run progression and lipsanon offers', () => {
       .toThrow('unsupported version');
   });
 
-  it('migrates a version 18 Battle to the pre-information Klerosis boundary', () => {
+  it('migrates a version 18 Battle to the pre-information Deployment boundary', () => {
     const currentBattle = deployedRun(191, war(2));
     const version18 = {
       ...currentBattle,
       runSaveVersion: 18,
-      army: currentBattle.army.map((unit) => unit.type === 'king'
-        ? { ...unit, abilities: unit.abilities.filter((ability) => ability !== 'primogeniture') }
-        : unit),
+      army: currentBattle.army,
       cards: currentBattle.cards.filter((card) => card.coreId !== 'his-grace' && card.coreId !== 'front-lines'),
     };
 
@@ -683,16 +706,43 @@ describe('Run progression and lipsanon offers', () => {
     expect(migrated.deployment).toBeNull();
     expect(migrated.battleRuntime).toBeNull();
     expect(migrated.aftermath).toBeNull();
-    expect(migrated.army.find((unit) => unit.type === 'king')?.abilities).toContain('primogeniture');
+    expect(migrated.army.find((unit) => unit.type === 'king')?.abilities).toEqual([]);
     expect(migrated.cards.slice(0, 2).map((card) => card.coreId)).toEqual(['his-grace', 'front-lines']);
-    expect(migrated.cards[0].unitIds).toEqual([
+    expect(migrated.cards[0].unitSeats).toEqual([
       migrated.army.find((unit) => unit.type === 'king')!.id,
     ]);
-    expect(migrated.cards[1].unitIds).toEqual(
+    expect(migrated.cards[1].unitSeats).toEqual(
       migrated.army.filter((unit) => unit.type === 'pawn' && unit.source === 'starting').map((unit) => unit.id),
     );
     expect(migrated.goldTenths).toBe(currentBattle.goldTenths);
     expect(migrated.battleIndex).toBe(currentBattle.battleIndex);
+  });
+
+  it('restores empty card seats when migrating a sold-down version 20 card', () => {
+    const currentBattle = deployedRun(192, war(2));
+    const frontLines = currentBattle.cards.find((card) => card.coreId === 'front-lines')!;
+    const survivingPawnId = runCardUnitIds(frontLines)[0];
+    const soldPawnId = runCardUnitIds(frontLines)[1];
+    const version20 = {
+      ...currentBattle,
+      runSaveVersion: 20,
+      army: currentBattle.army.map((unit) => unit.type === 'king'
+        ? { ...unit, abilities: ['primogeniture', ...unit.abilities] }
+        : unit).filter((unit) => unit.id !== soldPawnId),
+      cards: legacyCards(currentBattle.cards).map((card) => card.coreId === 'front-lines'
+        ? { ...card, unitIds: [survivingPawnId] }
+        : card),
+    };
+
+    const migrated = migrateRunSaveDocument(version20);
+    const migratedFrontLines = migrated.cards.find((card) => card.coreId === 'front-lines')!;
+
+    expect(migrated.phase).toBe('deployment');
+    expect(migrated.deployment).toBeNull();
+    expect(migratedFrontLines.unitSeats).toHaveLength(2);
+    expect(migratedFrontLines.unitSeats.filter(Boolean)).toEqual([survivingPawnId]);
+    expect(migratedFrontLines.unitSeats).toContain(null);
+    expect(migrated.army.find((unit) => unit.type === 'king')?.abilities).not.toContain('primogeniture');
   });
 
   it('migrates version 19 into Expunctio transaction state without changing the Sectio', () => {
@@ -702,9 +752,13 @@ describe('Run progression and lipsanon offers', () => {
     const version19 = {
       ...current,
       runSaveVersion: 19,
+      cards: legacyCards(current.cards),
       sectio: {
         ...version19Sectio,
-        entrySnapshot: version19Snapshot,
+        entrySnapshot: {
+          ...version19Snapshot,
+          cards: legacyCards(version19Snapshot.cards),
+        },
       },
     };
 
@@ -883,12 +937,12 @@ describe('Ataraxia I — The Great Mortality', () => {
     const cacochymicPieceIndex = pestiferous.cacochymicPieceIndex!;
     const plaguedPiece = pestiferous.pieces[cacochymicPieceIndex];
     const discount = { pawn: 0, knight: 1, bishop: 1, rook: 2, queen: 3 }[plaguedPiece];
-    const acquiredUnits = adlected.army.filter((unit) => owned.unitIds.includes(unit.id));
+    const acquiredUnits = adlected.army.filter((unit) => runCardUnitIds(owned).includes(unit.id));
 
     expect(cacochymicPieceIndex).toBeGreaterThanOrEqual(0);
     expect(pestiferous.cost).toBe(pestiferous.value - discount);
     expect(owned).toMatchObject({ coreId: pestiferous.id, cardType: 'pestiferous', effectSeed: pestiferous.effectSeed });
-    expect(owned.unitIds).toHaveLength(pestiferous.pieces.length);
+    expect(runCardUnitIds(owned)).toHaveLength(pestiferous.pieces.length);
     expect(owned.cacochymicUnitId).toBe(acquiredUnits[cacochymicPieceIndex].id);
     expect(acquiredUnits.filter((unit) => unit.modifiers.includes('cacochymic')).map((unit) => unit.id))
       .toEqual([owned.cacochymicUnitId]);
@@ -940,7 +994,7 @@ describe('Ataraxia I — The Great Mortality', () => {
         cardType: 'pestiferous',
         effectSeed: 991,
         effectTargetUnitId: null,
-        unitIds: units.map((unit) => unit.id),
+        unitSeats: units.map((unit) => unit.id),
         lostUnitIds: [],
         cacochymicUnitId: units[0].id,
         acquiredAfterBattleIndex: 0,
@@ -959,7 +1013,8 @@ describe('Ataraxia I — The Great Mortality', () => {
     expect(first.army.find((unit) => unit.id === units[1].id)?.modifiers).toEqual(['cacochymic']);
     expect(retry.pestiferousLosses[0].unit.id).toBe(first.pestiferousLosses[0].unit.id);
     expect(resolveCacochymicCombatDeaths(first, 1)).toBe(first);
-    expect(second.cards[0].unitIds).toEqual([]);
+    expect(runCardUnitIds(second.cards[0])).toEqual([]);
+    expect(second.cards[0].unitSeats).toEqual([null, null]);
     expect(second.cards[0].lostUnitIds).toHaveLength(2);
     expect(second.cards[0].cacochymicUnitId).toBeNull();
     expect(empty).toBe(second);
@@ -983,7 +1038,7 @@ describe('Ataraxia I — The Great Mortality', () => {
         cardType: 'pestiferous',
         effectSeed: 992,
         effectTargetUnitId: null,
-        unitIds: units.map((unit) => unit.id),
+        unitSeats: units.map((unit) => unit.id),
         lostUnitIds: [],
         cacochymicUnitId: units[0].id,
         acquiredAfterBattleIndex: 0,
@@ -993,7 +1048,8 @@ describe('Ataraxia I — The Great Mortality', () => {
     };
     const alienated = performAlienatio(run, units[0].id);
 
-    expect(alienated.cards[0].unitIds).toEqual([units[1].id]);
+    expect(runCardUnitIds(alienated.cards[0])).toEqual([units[1].id]);
+    expect(alienated.cards[0].unitSeats).toEqual([null, units[1].id]);
     expect(alienated.cards[0].cacochymicUnitId).toBe(units[1].id);
     expect(alienated.army.find((unit) => unit.id === units[1].id)?.modifiers).toEqual(['cacochymic']);
   });
@@ -1012,7 +1068,7 @@ describe('Ataraxia I — The Great Mortality', () => {
         coreId: 'pp',
         cardType: 'pestiferous',
         effectSeed: 993,
-        unitIds: units.map((unit) => unit.id),
+        unitSeats: units.map((unit) => unit.id),
         lostUnitIds: [],
         acquiredAfterBattleIndex: 0,
       }],
@@ -1050,7 +1106,7 @@ describe('Concinnous cards', () => {
       card.coreId === concinnous.id && card.effectSeed === concinnous.effectSeed
     ))!;
     const positioned = adlected.army.filter((unit) => (
-      owned.unitIds.includes(unit.id) && unit.abilities.includes('eutactic')
+      runCardUnitIds(owned).includes(unit.id) && unit.abilities.includes('eutactic')
     ));
 
     expect(concinnous.cost).toBe(concinnous.value + EUTACTIC_COST);
@@ -1063,7 +1119,7 @@ describe('Concinnous cards', () => {
       effectTargetUnitId: positioned[0].id,
     });
     expect(positioned).toHaveLength(1);
-    expect(owned.unitIds[concinnous.effectTargetIndex!]).toBe(positioned[0].id);
+    expect(owned.effectTargetUnitId).toBe(positioned[0].id);
     expect(resetSectio(adlected).sectio?.cardOffers).toEqual(originalOffers);
   });
 
@@ -1148,15 +1204,13 @@ describe('Legatine Adlected cards', () => {
       card.coreId === tactical.id && card.effectSeed === tactical.effectSeed
     ))!;
     const disciplined = adlected.army.filter((unit) => (
-      owned.unitIds.includes(unit.id) && unit.abilities.includes('adlected')
+      runCardUnitIds(owned).includes(unit.id) && unit.abilities.includes('adlected')
     ));
 
     expect(owned.cardType).toBe('legatine');
     expect(disciplined).toHaveLength(1);
     expect(owned.effectTargetUnitId).toBe(disciplined[0].id);
-    expect(owned.unitIds.indexOf(disciplined[0].id)).toBe(
-      legatineAdlectedAcquisitionTarget(tactical.effectSeed, tactical.pieces.length),
-    );
+    expect(owned.effectTargetUnitId).toBe(disciplined[0].id);
   });
 });
 
@@ -1199,15 +1253,13 @@ describe('Hieratic Agminate cards', () => {
       card.coreId === hieratic.id && card.effectSeed === hieratic.effectSeed
     ))!;
     const agminate = adlected.army.filter((unit) => (
-      owned.unitIds.includes(unit.id) && unit.abilities.includes('agminate')
+      runCardUnitIds(owned).includes(unit.id) && unit.abilities.includes('agminate')
     ));
 
     expect(owned.cardType).toBe('hieratic');
     expect(agminate).toHaveLength(1);
     expect(owned.effectTargetUnitId).toBe(agminate[0].id);
-    expect(owned.unitIds.indexOf(agminate[0].id)).toBe(
-      hieraticAgminateAcquisitionTarget(hieratic.effectSeed, hieratic.pieces.length),
-    );
+    expect(owned.effectTargetUnitId).toBe(agminate[0].id);
     expect(adlected.goldTenths).toBe(sectio!.goldTenths - (hieratic.value + AGMINATE_COST) * GOLD_SCALE);
     // The Agminate draw is its own; it does not mirror the Tactical one.
     expect(hieraticAgminateAcquisitionTarget(hieratic.effectSeed, 8))

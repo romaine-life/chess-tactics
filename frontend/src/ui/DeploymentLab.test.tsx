@@ -14,15 +14,19 @@ import {
 import {
   advanceDeployAll,
   chooseDeploymentMode,
-  confirmKlerosis,
+  completeDeploymentDeal,
   currentDeploymentUnit,
   deploymentInteractionStage,
   deploymentOptions,
   disciplinePlacementCells,
+  finishDeploymentCardDiscard,
+  finishDeploymentCardReveal,
+  finishDeploymentUnitSettlement,
   placeAdlectedDeploymentUnit,
+  revealActiveDeploymentCard,
 } from '../run/deployment';
 import { PLAYABLE_PIECE_TYPES } from '../core/pieces';
-import { runCardDefinition } from '../run/model';
+import { runCardDefinition, runCardUnitIds } from '../run/model';
 
 function config(patch: Partial<DeploymentLabConfig> = {}): DeploymentLabConfig {
   return { ...readDeploymentLabRoute(''), ...patch };
@@ -87,7 +91,7 @@ describe('Deployment Lab', () => {
         units: generateDeploymentLabCrew(seed),
       }));
       expect(generated.cards.every((card) => runCardDefinition(card.coreId))).toBe(true);
-      expect(generated.cards.filter((card) => card.unitIds.some((unitId) => (
+      expect(generated.cards.filter((card) => runCardUnitIds(card).some((unitId) => (
         generated.army.find((unit) => unit.id === unitId)?.type === 'knight'
       ))).every((card) => card.coreId.includes('k'))).toBe(true);
     }
@@ -173,11 +177,28 @@ describe('Deployment Lab', () => {
       expect.objectContaining({ type: 'pawn', side: 'enemy' }),
     ]));
 
-    let battle = chooseDeploymentMode(confirmKlerosis(initial, level), level, 'deploy-all');
+    let battle = chooseDeploymentMode(completeDeploymentDeal(initial, level), level, 'deploy-all');
     while (battle.phase === 'deployment') {
+      const stage = deploymentInteractionStage(battle);
+      if (stage === 'reveal-card') {
+        battle = revealActiveDeploymentCard(battle);
+        continue;
+      }
+      if (stage === 'revealing-card') {
+        battle = finishDeploymentCardReveal(battle);
+        continue;
+      }
+      if (stage === 'settling') {
+        battle = finishDeploymentUnitSettlement(battle, level);
+        continue;
+      }
+      if (stage === 'discarding') {
+        battle = finishDeploymentCardDiscard(battle);
+        continue;
+      }
       const active = currentDeploymentUnit(battle);
       expect(active).not.toBeNull();
-      if (deploymentInteractionStage(battle) === 'adlected') {
+      if (stage === 'adlected') {
         const legal = disciplinePlacementCells(battle, deploymentOptions(battle, level), active!.id)[0];
         battle = placeAdlectedDeploymentUnit(battle, level, legal);
       } else {

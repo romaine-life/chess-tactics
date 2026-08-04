@@ -23,6 +23,10 @@ const {
   LIPSANON_ICON_COMPONENT,
   LIPSANON_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
   RUN_CARD_COST_COIN_COMPONENT,
+  RUN_CARD_BACK_COMPONENT,
+  RUN_CARD_BACK_PROOF_RENDERER,
+  RUN_CARD_BACK_PROOF_SCHEMA,
+  RUN_CARD_BACK_SLOT,
   RUN_STARTER_SELECTED_DERIVATIVE_EXCEPTION_SCHEMA,
   RUN_RESOURCE_ICON_COMPONENT,
   RUN_SECTIO_WRAP_COMPONENT,
@@ -53,6 +57,9 @@ const {
   runLipsanonIconSlotId,
   runCardCostCoinMediaIssue,
   runCardCostCoinSlot,
+  runCardBackMediaIssue,
+  runCardBackOwnerProofIssue,
+  runCardBackSlot,
   runResourceIconMediaIssue,
   runResourceIconSlotId,
   runSectioWrapMediaIssue,
@@ -97,7 +104,7 @@ test('raster native evidence is required to identify the exact uploaded bytes', 
   assert.equal(nativeMediaEvidenceIssue(raster()), null);
 });
 
-test('only the four exact ADR-0414 starter-card derivatives pass their production evidence gate', () => {
+test('only the active exact ADR-0414 starter-card derivatives pass their production evidence gate', () => {
   const outputSha256 = 'f3e6be8674f1c106ba328a015ca10c7ad0d98f4eb7ec4f4a0f6e0c6a8cbda8e6';
   const evidence = {
     schema: RUN_STARTER_SELECTED_DERIVATIVE_EXCEPTION_SCHEMA,
@@ -125,7 +132,7 @@ test('only the four exact ADR-0414 starter-card derivatives pass their productio
   assert.match(nativeMediaEvidenceIssue({
     ...approved,
     slot: 'ui/kit/icons/card-properties/hieratic.png',
-  }), /restricted to its four starter-card runtime slots/);
+  }), /restricted to its active starter-card runtime slots/);
   assert.match(nativeMediaEvidenceIssue({
     ...approved,
     blob_sha256: replacementSha,
@@ -136,13 +143,11 @@ test('only the four exact ADR-0414 starter-card derivatives pass their productio
   }), /invalid geometry or transform/);
 });
 
-test('Praecipuus and Primogeniture own dedicated closed semantic icon slots', () => {
+test('Praecipuus remains a card property while retired Primogeniture has no active semantic slot', () => {
   assert.deepEqual(gameConditionIconSlot('ui/kit/icons/card-properties/praecipuus.png'), {
     component: 'card-property-icon', variant: 'praecipuus',
   });
-  assert.deepEqual(gameConditionIconSlot('ui/kit/icons/game/primogeniture.png'), {
-    component: 'unit-ability-icon', variant: 'primogeniture',
-  });
+  assert.equal(gameConditionIconSlot('ui/kit/icons/game/primogeniture.png'), null);
 });
 
 test('card-type row textures have a closed semantic-slot and native-geometry runtime contract', () => {
@@ -1183,4 +1188,69 @@ test('one wall proof covers a whole batch, each candidate pinned to its own slot
   // A candidate absent from the batch cannot ride along on someone else's review.
   const basalt = wallFrame({ id: '33333333-3333-4333-8333-333333333333', slot: 'tiles/feature/wall-basalt-8.png' });
   assert.match(wallMaterialOwnerProofIssue(basalt, batch, batch.surfaceUrl), /candidate bytes/);
+});
+
+const cardBackVersionId = '44444444-4444-4444-8444-444444444444';
+const cardBackSha = 'f'.repeat(64);
+const cardBackRow = (overrides = {}) => ({
+  id: cardBackVersionId,
+  slot: RUN_CARD_BACK_SLOT,
+  domain: 'ui-kit',
+  role: 'card-back',
+  media_type: 'image/png',
+  blob_sha256: cardBackSha,
+  width: 1060,
+  height: 1484,
+  metadata: {
+    runtime: {
+      component: RUN_CARD_BACK_COMPONENT,
+      variant: 'standard',
+      frameWidth: 1060,
+      frameHeight: 1484,
+      frameCount: 1,
+      altText: '',
+      nativeRole: RUN_CARD_BACK_COMPONENT,
+    },
+  },
+  ...overrides,
+});
+const cardBackSurfaceUrl = `http://127.0.0.1:5173/studio?mode=viewer&vk=cardlayout&cardSide=back&backCandidate=${cardBackSha}`;
+const cardBackProof = (row, overrides = {}) => ({
+  schema: RUN_CARD_BACK_PROOF_SCHEMA,
+  renderer: RUN_CARD_BACK_PROOF_RENDERER,
+  surfaceUrl: cardBackSurfaceUrl,
+  canonicalScale: 1,
+  assetLocalScale: 1,
+  spatialResampling: false,
+  decodedNativeRaster: { width: 1060, height: 1484 },
+  selectedCandidates: [{ slot: row.slot, versionId: row.id, sha256: row.blob_sha256, rowRevision: 1 }],
+  slotSnapshots: [{ slot: row.slot, rowRevision: 0, activeVersionId: null }],
+  ...overrides,
+});
+
+test('Run card backs have one closed native 5:7 runtime projection', () => {
+  assert.equal(runCardBackSlot(RUN_CARD_BACK_SLOT), true);
+  assert.equal(runCardBackSlot('review/run-card-back/standard.png'), false);
+  assert.equal(runCardBackMediaIssue(cardBackRow()), null);
+  assert.match(runCardBackMediaIssue(cardBackRow({ slot: 'ui/run/card-back/other.png' })), /registered universal/);
+  assert.match(runCardBackMediaIssue(cardBackRow({ domain: 'review-media' })), /ui-kit domain/);
+  assert.match(runCardBackMediaIssue(cardBackRow({ width: 948, height: 1659 })), /1060x1484/);
+  assert.match(runCardBackMediaIssue(cardBackRow({
+    metadata: { runtime: { ...cardBackRow().metadata.runtime, component: 'card-face' } },
+  })), /component/);
+});
+
+test('Run card-back review pins exact native pixels on Card Layout', () => {
+  const row = cardBackRow();
+  const proof = cardBackProof(row);
+  assert.equal(runCardBackOwnerProofIssue(row, proof, cardBackSurfaceUrl), null);
+  assert.match(runCardBackOwnerProofIssue(row, { ...proof, canonicalScale: 0.5 }, cardBackSurfaceUrl), /exact scale/);
+  assert.match(runCardBackOwnerProofIssue(row, {
+    ...proof,
+    surfaceUrl: 'http://127.0.0.1:5173/studio?mode=viewer&vk=cardlayout&cardSide=back&backCandidate=' + 'a'.repeat(64),
+  }, 'http://127.0.0.1:5173/studio?mode=viewer&vk=cardlayout&cardSide=back&backCandidate=' + 'a'.repeat(64)), /exact Card Layout/);
+  assert.match(runCardBackOwnerProofIssue(row, {
+    ...proof,
+    selectedCandidates: [{ ...proof.selectedCandidates[0], sha256: 'a'.repeat(64) }],
+  }, cardBackSurfaceUrl), /candidate bytes/);
 });
