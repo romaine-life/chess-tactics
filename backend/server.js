@@ -3720,6 +3720,55 @@ const MIGRATIONS = [
           OR pg_temp.migrate_nested_levels(body) IS DISTINCT FROM body;
     `,
   },
+  {
+    version: 57,
+    name: 'Expunctio Sectio transaction',
+    // ADR-0407: RunSaveVersion 20 persists the once-per-Sectio card-removal
+    // transaction. The reset snapshot also gains the Run's exact Pestiferous losses so
+    // striking a Pestiferous card remains fully reversible until the player continues.
+    sql: `
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_active_run_to_expunctio(run_value jsonb)
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      IMMUTABLE
+      STRICT
+      AS $function$
+      DECLARE
+        migrated jsonb := run_value;
+        sectio_value jsonb;
+        entry_snapshot jsonb;
+      BEGIN
+        IF run_value->'runSaveVersion' <> '19'::jsonb THEN RETURN run_value; END IF;
+        migrated := jsonb_set(migrated, '{runSaveVersion}', '20'::jsonb, false);
+        IF jsonb_typeof(migrated->'sectio') = 'object' THEN
+          sectio_value := migrated->'sectio';
+          sectio_value := jsonb_set(sectio_value, '{expunctedCard}', 'null'::jsonb, true);
+          IF jsonb_typeof(sectio_value->'entrySnapshot') = 'object' THEN
+            entry_snapshot := sectio_value->'entrySnapshot';
+            entry_snapshot := jsonb_set(
+              entry_snapshot,
+              '{pestiferousLosses}',
+              CASE WHEN jsonb_typeof(migrated->'pestiferousLosses') = 'array'
+                THEN migrated->'pestiferousLosses'
+                ELSE '[]'::jsonb
+              END,
+              true
+            );
+            sectio_value := jsonb_set(sectio_value, '{entrySnapshot}', entry_snapshot, false);
+          END IF;
+          migrated := jsonb_set(migrated, '{sectio}', sectio_value, false);
+        END IF;
+        RETURN migrated;
+      END
+      $function$;
+
+      UPDATE active_runs
+         SET body = pg_temp.migrate_active_run_to_expunctio(body),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE body->'runSaveVersion' = '19'::jsonb;
+    `,
+  },
 ];
 
 let pool = null;
@@ -4311,13 +4360,17 @@ async function unmigratedActiveRunSaveCounts(client) {
        )::integer AS version_17_count,
        count(*) FILTER (
          WHERE body->'runSaveVersion' = '18'::jsonb
-       )::integer AS version_18_count
+       )::integer AS version_18_count,
+       count(*) FILTER (
+         WHERE body->'runSaveVersion' = '19'::jsonb
+       )::integer AS version_19_count
        FROM active_runs`,
   );
   return Object.freeze({
     version_16_count: Number(rows[0]?.version_16_count) || 0,
     version_17_count: Number(rows[0]?.version_17_count) || 0,
     version_18_count: Number(rows[0]?.version_18_count) || 0,
+    version_19_count: Number(rows[0]?.version_19_count) || 0,
   });
 }
 
@@ -4372,10 +4425,12 @@ async function requiredSchemaContractIssues(client) {
     unmigrated_active_run_save_count:
       unmigratedActiveRunSaves.version_16_count
       + unmigratedActiveRunSaves.version_17_count
-      + unmigratedActiveRunSaves.version_18_count,
+      + unmigratedActiveRunSaves.version_18_count
+      + unmigratedActiveRunSaves.version_19_count,
     unmigrated_active_run_version_16_count: unmigratedActiveRunSaves.version_16_count,
     unmigrated_active_run_version_17_count: unmigratedActiveRunSaves.version_17_count,
     unmigrated_active_run_version_18_count: unmigratedActiveRunSaves.version_18_count,
+    unmigrated_active_run_version_19_count: unmigratedActiveRunSaves.version_19_count,
     ...generationAttemptRetryContractIssues(
       retryContractRows.columns,
       retryContractRows.constraints,
@@ -4476,6 +4531,17 @@ async function repairRequiredSchemaContracts(
     await executeMigration(migration, 'repair active Run Klerosis contract');
     completedSteps.push(Object.freeze({
       contract: 'active Run Klerosis save version',
+      migration_version: migration.version,
+    }));
+    markInspection(`inspect required contract repairs after migration ${migration.version}`);
+    issues = await requiredSchemaContractIssues(client);
+  }
+  if (issues.unmigrated_active_run_version_19_count > 0) {
+    const migration = MIGRATIONS.find((candidate) => candidate.version === 57);
+    if (!migration) throw new Error('Expunctio active Run save repair migration is unavailable');
+    await executeMigration(migration, 'repair active Run Expunctio contract');
+    completedSteps.push(Object.freeze({
+      contract: 'active Run Expunctio save version',
       migration_version: migration.version,
     }));
     markInspection(`inspect required contract repairs after migration ${migration.version}`);
@@ -19381,6 +19447,7 @@ const ACTIVE_RUN_SECTIO_FIELDS = new Set([
   'paidLipsanonOffer',
   'paidLipsanonBought',
   'alienatedUnits',
+  'expunctedCard',
   'entrySnapshot',
 ]);
 const ACTIVE_RUN_VACANTIA_FIELDS = new Set([
@@ -19524,14 +19591,13 @@ function validateActiveRunBody(run) {
         : card.cardType === 'hieratic'
           ? 'agminate'
           : 'eutactic';
-      const effectTargetValid = (
-        affectedCard
-          ? typeof effectTarget === 'string'
+      const effectTargetValid = affectedCard
+        ? directEffectTarget === null
+          || (typeof effectTarget === 'string'
             && effectTarget.length > 0
             && effectTarget.length <= 160
-            && card.unitIds?.includes(effectTarget)
-          : directEffectTarget === null
-      );
+            && card.unitIds?.includes(effectTarget))
+        : directEffectTarget === null;
       if (
         typeof card.id !== 'string'
         || !card.id
@@ -19553,7 +19619,7 @@ function validateActiveRunBody(run) {
         || card.acquiredAfterBattleIndex < 0
         || card.acquiredAfterBattleIndex >= run.war.battles.length
       ) return 'run.cards contains an invalid card';
-      if (affectedCard) {
+      if (affectedCard && effectTarget !== null) {
         const targetUnit = run.army.find((unit) => unit.id === effectTarget);
         if (!targetUnit?.abilities.includes(expectedGrantedAbility)) return 'run.cards contains an invalid ability target';
       }
@@ -19607,18 +19673,30 @@ function validateActiveRunBody(run) {
       || hisGraceCards[0].unitIds[0] !== 'run-king'
       || hisGraceCards[0].lostUnitIds.length !== 0
     ) return 'run.cards must retain His Grace';
+    if (frontLinesCards.length > 1) return 'run.cards repeats Front Lines';
+    if (frontLinesCards.length === 1) {
+      const frontLines = frontLinesCards[0];
+      const startingPawnIds = run.army
+        .filter((unit) => unit.type === 'pawn' && unit.source === 'starting')
+        .map((unit) => unit.id);
+      if (
+        frontLines.id !== 'run-card-front-lines'
+        || frontLines.cardType !== null
+        || frontLines.effectTargetUnitId !== null
+        || frontLines.cacochymicUnitId !== null
+        || frontLines.lostUnitIds.length !== 0
+        || frontLines.unitIds.some((unitId) => {
+          const unit = run.army.find((candidate) => candidate.id === unitId);
+          return unit?.type !== 'pawn' || unit.source !== 'starting';
+        })
+        || startingPawnIds.length !== frontLines.unitIds.length
+        || startingPawnIds.some((unitId) => !frontLines.unitIds.includes(unitId))
+      ) return 'run.cards contains invalid Front Lines membership';
+    }
     if (
-      frontLinesCards.length !== 1
-      || frontLinesCards[0].id !== 'run-card-front-lines'
-      || frontLinesCards[0].cardType !== null
-      || frontLinesCards[0].effectTargetUnitId !== null
-      || frontLinesCards[0].cacochymicUnitId !== null
-      || frontLinesCards[0].lostUnitIds.length !== 0
-      || frontLinesCards[0].unitIds.some((unitId) => {
-        const unit = run.army.find((candidate) => candidate.id === unitId);
-        return unit?.type !== 'pawn' || unit.source !== 'starting';
-      })
-    ) return 'run.cards contains invalid Front Lines membership';
+      frontLinesCards.length === 0
+      && run.army.some((unit) => unit.type === 'pawn' && unit.source === 'starting')
+    ) return 'run.army retains units from removed Front Lines';
     if (!Array.isArray(run.pestiferousLosses) || run.pestiferousLosses.length > 20000) {
       return 'run.pestiferousLosses is invalid';
     }
@@ -19836,6 +19914,10 @@ function validateActiveRunBody(run) {
       return 'run.sectio.kind is invalid';
     }
     if (run.sectio.alienatedUnits !== undefined && !Array.isArray(run.sectio.alienatedUnits)) return 'run.sectio.alienatedUnits is invalid';
+    if (!Object.hasOwn(run.sectio, 'expunctedCard')) return 'run.sectio.expunctedCard is required';
+    if (run.sectio.expunctedCard !== null && !isObjectRecord(run.sectio.expunctedCard)) {
+      return 'run.sectio.expunctedCard is invalid';
+    }
     if (run.sectio.entrySnapshot !== undefined && !isObjectRecord(run.sectio.entrySnapshot)) {
       return 'run.sectio.entrySnapshot is invalid';
     }
@@ -19853,6 +19935,44 @@ function validateActiveRunBody(run) {
         !isObjectRecord(unit) || !ACTIVE_RUN_UNIT_SOURCES.has(unit.source)
       ))
     ) return 'run.sectio.entrySnapshot.army contains an invalid unit source';
+    const expunctedCard = run.sectio.expunctedCard;
+    if (expunctedCard) {
+      const card = expunctedCard.card;
+      const units = expunctedCard.units;
+      if (
+        !isObjectRecord(card)
+        || card.coreId === 'his-grace'
+        || typeof card.id !== 'string'
+        || !card.id
+        || run.cards.some((candidate) => candidate.id === card.id)
+        || !Array.isArray(card.unitIds)
+        || !Array.isArray(card.lostUnitIds)
+        || !Array.isArray(units)
+        || units.length !== card.unitIds.length
+        || units.some((unit, index) => (
+          !isObjectRecord(unit)
+          || unit.id !== card.unitIds[index]
+          || unitIds.has(unit.id)
+          || !ACTIVE_RUN_PIECES.has(unit.type)
+          || !ACTIVE_RUN_UNIT_SOURCES.has(unit.source)
+          || typeof unit.name !== 'string'
+          || !unit.name.trim()
+          || !Array.isArray(unit.abilities)
+          || !Array.isArray(unit.modifiers)
+        ))
+        || new Set(card.unitIds).size !== card.unitIds.length
+        || (card.effectTargetUnitId !== null && !card.unitIds.includes(card.effectTargetUnitId))
+        || (card.cardType === 'pestiferous'
+          ? card.unitIds.length > 0
+            ? !card.unitIds.includes(card.cacochymicUnitId)
+            : card.cacochymicUnitId !== null
+          : card.cacochymicUnitId !== null)
+        || !isFiniteInteger(expunctedCard.priceTenths)
+        || expunctedCard.priceTenths <= 0
+        || typeof serverRender?.cardExpunctioPriceTenths !== 'function'
+        || serverRender.cardExpunctioPriceTenths(card, units) !== expunctedCard.priceTenths
+      ) return 'run.sectio.expunctedCard is invalid';
+    }
     {
       if (!Array.isArray(run.sectio.cardOffers) || run.sectio.cardOffers.length < 1 || run.sectio.cardOffers.length > 10) {
         return 'run.sectio.cardOffers is invalid';
@@ -19926,6 +20046,7 @@ function validateActiveRunBody(run) {
         run.sectio.entrySnapshot !== undefined
         && (
           !Array.isArray(run.sectio.entrySnapshot.cards)
+          || !Array.isArray(run.sectio.entrySnapshot.pestiferousLosses)
           || !isFiniteInteger(run.sectio.entrySnapshot.nextCardSequence)
           || run.sectio.entrySnapshot.nextCardSequence < 1
         )
@@ -19945,17 +20066,22 @@ function validateActiveRunBody(run) {
         ))
       ) return 'run.sectio.entrySnapshot contains an invalid Cacochymic target';
       if (run.sectio.entrySnapshot !== undefined) {
-        const adlectedCards = run.cards.slice(run.sectio.entrySnapshot.cards.length);
+        const transactionCards = expunctedCard
+          ? [...run.cards, expunctedCard.card]
+          : run.cards;
+        const entryCardIds = new Set(run.sectio.entrySnapshot.cards.map((card) => card.id));
+        const adlectedCards = transactionCards.filter((card) => !entryCardIds.has(card.id));
         if (
-          run.cards.length !== run.sectio.entrySnapshot.cards.length + run.sectio.adlectedCardOfferIds.length
-          || adlectedCards.some((card, index) => {
-            const offer = run.sectio.cardOffers.find(
-              (candidate) => candidate.offerId === run.sectio.adlectedCardOfferIds[index],
-            );
-            return !offer
-              || card.coreId !== offer.id
-              || card.cardType !== offer.cardType
-              || card.effectSeed !== offer.effectSeed;
+          transactionCards.length !== run.sectio.entrySnapshot.cards.length + run.sectio.adlectedCardOfferIds.length
+          || run.sectio.entrySnapshot.cards.some((card) => !transactionCards.some((candidate) => candidate.id === card.id))
+          || adlectedCards.length !== run.sectio.adlectedCardOfferIds.length
+          || run.sectio.adlectedCardOfferIds.some((offerId) => {
+            const offer = run.sectio.cardOffers.find((candidate) => candidate.offerId === offerId);
+            return !offer || !adlectedCards.some((card) => (
+              card.coreId === offer.id
+              && card.cardType === offer.cardType
+              && card.effectSeed === offer.effectSeed
+            ));
           })
         ) return 'run.sectio Adlectio state is invalid';
       }

@@ -937,7 +937,7 @@ function inlineMigrationSql(version) {
   return inlineMigrationDefinition(version).sql;
 }
 
-async function validatePrimarySparseNumericMigrationUpgrade56() {
+async function validatePrimarySparseNumericMigrationUpgrade57() {
   const history = await queryDb(
     `SELECT version, name, checksum
        FROM schema_migrations
@@ -952,7 +952,7 @@ async function validatePrimarySparseNumericMigrationUpgrade56() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 56 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 57 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -967,7 +967,7 @@ async function validatePrimarySparseNumericMigrationUpgrade56() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 20 }, (_, index) => index + 37),
+    ...Array.from({ length: 21 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1081,7 +1081,7 @@ async function validatePrimarySparseNumericMigrationUpgrade56() {
     )
   ) {
     throw new Error(
-      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 56: `
+      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 57: `
       + `${JSON.stringify({
         history: history.rows,
         identity_columns: identityColumns.rows,
@@ -1830,6 +1830,95 @@ async function validateKlerosisAndDeploymentZoneMigration56() {
   }
 }
 
+async function validateExpunctioMigration57() {
+  const { Client } = require('pg');
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('CREATE SCHEMA smoke_expunctio_migration_57');
+    await client.query('SET LOCAL search_path TO smoke_expunctio_migration_57');
+    await client.query(`
+      CREATE TABLE active_runs (
+        owner_email text PRIMARY KEY, body jsonb NOT NULL, revision integer NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+    `);
+    const loss = {
+      battleIndex: 0,
+      cardId: 'run-card-1',
+      unit: { id: 'run-unit-lost', type: 'pawn', source: 'adlectio' },
+    };
+    const sectioRun = {
+      runSaveVersion: 19,
+      id: 'run-migration-57-sectio',
+      phase: 'sectio',
+      pestiferousLosses: [loss],
+      sectio: {
+        alienatedUnits: [],
+        entrySnapshot: { cards: [], army: [] },
+      },
+    };
+    const battleRun = {
+      runSaveVersion: 19,
+      id: 'run-migration-57-battle',
+      phase: 'battle',
+      pestiferousLosses: [],
+      sectio: null,
+    };
+    const currentRun = {
+      runSaveVersion: 20,
+      id: 'run-migration-57-current',
+      phase: 'sectio',
+      pestiferousLosses: [],
+      sectio: { expunctedCard: null, entrySnapshot: { pestiferousLosses: [] } },
+    };
+    await client.query(
+      `INSERT INTO active_runs (owner_email, body, revision) VALUES
+         ('sectio@example.com', $1::jsonb, 4),
+         ('battle@example.com', $2::jsonb, 7),
+         ('current@example.com', $3::jsonb, 9)`,
+      [JSON.stringify(sectioRun), JSON.stringify(battleRun), JSON.stringify(currentRun)],
+    );
+
+    await client.query(inlineMigrationSql(57));
+    await client.query(inlineMigrationSql(57));
+
+    const rows = (await client.query(
+      'SELECT owner_email, body, revision FROM active_runs ORDER BY owner_email',
+    )).rows;
+    const battle = rows.find((row) => row.owner_email === 'battle@example.com');
+    const current = rows.find((row) => row.owner_email === 'current@example.com');
+    const sectio = rows.find((row) => row.owner_email === 'sectio@example.com');
+    const migratedLosses = sectio?.body?.sectio?.entrySnapshot?.pestiferousLosses;
+    const migratedLoss = Array.isArray(migratedLosses) ? migratedLosses[0] : null;
+    if (
+      battle?.body?.runSaveVersion !== 20
+      || battle?.body?.sectio !== null
+      || Number(battle?.revision) !== 8
+      || current?.body?.runSaveVersion !== 20
+      || Number(current?.revision) !== 9
+      || sectio?.body?.runSaveVersion !== 20
+      || sectio?.body?.sectio?.expunctedCard !== null
+      || migratedLosses?.length !== 1
+      || migratedLoss?.battleIndex !== loss.battleIndex
+      || migratedLoss?.cardId !== loss.cardId
+      || migratedLoss?.unit?.id !== loss.unit.id
+      || migratedLoss?.unit?.type !== loss.unit.type
+      || migratedLoss?.unit?.source !== loss.unit.source
+      || Number(sectio?.revision) !== 5
+    ) {
+      throw new Error(`Migration 57 did not establish Expunctio transaction state: ${JSON.stringify(rows)}`);
+    }
+    await client.query('ROLLBACK');
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve validation error */ }
+    throw error;
+  } finally {
+    await client.end();
+  }
+}
+
 async function waitForServer() {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if (child.exitCode !== null) {
@@ -1862,7 +1951,7 @@ async function main() {
   await new Promise((resolve) => mockAuth.listen(authPort, '127.0.0.1', resolve));
   await new Promise((resolve) => mockBgm.listen(bgmPort, '127.0.0.1', resolve));
   await waitForServer();
-  await validatePrimarySparseNumericMigrationUpgrade56();
+  await validatePrimarySparseNumericMigrationUpgrade57();
   const databaseRuntime = await queryDb('SELECT version() AS version');
   const isPgliteRuntime = /\bPGlite\b/i.test(String(databaseRuntime.rows[0]?.version || ''));
   if (!isPgliteRuntime) {
@@ -1893,6 +1982,7 @@ async function main() {
   await validateRunSaveVersionMigration54();
   await validateSectioOperationsVocabularyMigration55();
   await validateKlerosisAndDeploymentZoneMigration56();
+  await validateExpunctioMigration57();
   await resetDb();
 
   const missingPropSeats = await get('/api/prop-seats/default');
@@ -4627,10 +4717,12 @@ async function main() {
       paidLipsanonOffer: null,
       paidLipsanonBought: false,
       alienatedUnits: [],
+      expunctedCard: null,
       entrySnapshot: {
         goldTenths: 80,
         army: activeRunStartingArmy,
         cards: activeRunStarterCards,
+        pestiferousLosses: [],
         lipsana: [],
         seenLipsana: [],
         conflictPaidLipsana: {},
@@ -4866,6 +4958,24 @@ async function main() {
   ) {
     throw new Error(`Active Run did not save: ${savedRun.statusCode} ${savedRun.body}`);
   }
+  const expunctioRun = boardRender.performExpunctio(savedRunBody.run, 'run-card-front-lines');
+  const savedExpunctioRun = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({ run: expunctioRun, revision: 1 }),
+  );
+  const savedExpunctioRunBody = JSON.parse(savedExpunctioRun.body);
+  if (
+    savedExpunctioRun.statusCode !== 200
+    || savedExpunctioRunBody.revision !== 2
+    || savedExpunctioRunBody.run.goldTenths !== 0
+    || savedExpunctioRunBody.run.cards.some((card) => card.coreId === 'front-lines')
+    || savedExpunctioRunBody.run.army.some((unit) => unit.source === 'starting')
+    || savedExpunctioRunBody.run.sectio.expunctedCard?.card?.id !== 'run-card-front-lines'
+    || savedExpunctioRunBody.run.sectio.expunctedCard?.priceTenths !== 40
+  ) {
+    throw new Error(`Expunctio did not persist through the authenticated Run endpoint: ${savedExpunctioRun.statusCode} ${savedExpunctioRun.body}`);
+  }
   const concinnousSectioRun = {
     ...activeRunDocument,
     phase: 'sectio',
@@ -4912,10 +5022,12 @@ async function main() {
       paidLipsanonOffer: null,
       paidLipsanonBought: false,
       alienatedUnits: [],
+      expunctedCard: null,
       entrySnapshot: {
         goldTenths: activeRunDocument.goldTenths,
         army: activeRunDocument.army,
         cards: activeRunDocument.cards,
+        pestiferousLosses: [],
         lipsana: [],
         seenLipsana: [],
         conflictPaidLipsana: {},
@@ -4929,12 +5041,12 @@ async function main() {
   const savedConcinnousSectioRun = await request(
     'PUT', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({ run: concinnousSectioRun, revision: 1 }),
+    JSON.stringify({ run: concinnousSectioRun, revision: 2 }),
   );
   const savedConcinnousSectioRunBody = JSON.parse(savedConcinnousSectioRun.body);
   if (
     savedConcinnousSectioRun.statusCode !== 200
-    || savedConcinnousSectioRunBody.revision !== 2
+    || savedConcinnousSectioRunBody.revision !== 3
     || savedConcinnousSectioRunBody.run.sectio.cardOffers[0].effectTargetIndex !== 0
     || savedConcinnousSectioRunBody.run.sectio.cardOffers[0].cost !== 11
     || savedConcinnousSectioRunBody.run.sectio.cardOffers[1].cost !== 12
@@ -4956,7 +5068,7 @@ async function main() {
           )),
         },
       },
-      revision: 2,
+      revision: 3,
     }),
   );
   if (mispricedHieraticRun.statusCode !== 400 || JSON.parse(mispricedHieraticRun.body).error !== 'invalid_active_run') {
@@ -4971,13 +5083,13 @@ async function main() {
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ run: { ...activeRunDocument, updatedAt: '2026-01-02T00:00:00.000Z' }, revision: 0 }),
   );
-  if (staleRun.statusCode !== 409 || JSON.parse(staleRun.body).revision !== 2) {
+  if (staleRun.statusCode !== 409 || JSON.parse(staleRun.body).revision !== 3) {
     throw new Error(`Stale active Run write should conflict: ${staleRun.statusCode} ${staleRun.body}`);
   }
   const deletedRun = await request(
     'DELETE', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({ revision: 2 }),
+    JSON.stringify({ revision: 3 }),
   );
   if (deletedRun.statusCode !== 200 || JSON.parse(deletedRun.body).ok !== true) {
     throw new Error(`Active Run did not delete: ${deletedRun.statusCode} ${deletedRun.body}`);

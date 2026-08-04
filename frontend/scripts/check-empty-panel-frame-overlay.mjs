@@ -27,6 +27,7 @@ const skirmishHud = readFileSync(join(frontend, 'src/ui/SkirmishHud.tsx'), 'utf8
 const strategikon = readFileSync(join(frontend, 'src/ui/Strategikon.tsx'), 'utf8');
 const runScreen = readFileSync(join(frontend, 'src/ui/RunScreen.tsx'), 'utf8');
 const runArmyWorkspace = readFileSync(join(frontend, 'src/ui/RunArmyWorkspace.tsx'), 'utf8');
+const runExpunctioWorkspace = readFileSync(join(frontend, 'src/ui/RunExpunctioWorkspace.tsx'), 'utf8');
 const runLipsana = readFileSync(join(frontend, 'src/ui/Lipsana.tsx'), 'utf8');
 const runWorkspace = readFileSync(join(frontend, 'src/ui/RunWorkspace.tsx'), 'utf8');
 const portraitEditor = readFileSync(join(frontend, 'src/ui/PortraitEditor.tsx'), 'utf8');
@@ -1029,13 +1030,14 @@ if (!/export function RunSceneViewport/.test(runWorkspace)
 if (!/<RunSceneViewport[\s\S]*?scene=\{\{[\s\S]*?view: 'army'[\s\S]*?contentClassName,[\s\S]*?edgeAttached: true,[\s\S]*?testId: dataTestId/.test(runArmyWorkspace)) {
   failures.push('framed Run Army workspaces must use the shared edge-attached content variant');
 }
-const playerRunSources = `${runScreen}\n${runArmyWorkspace}\n${runLipsana}`;
+const playerRunSources = `${runScreen}\n${runArmyWorkspace}\n${runExpunctioWorkspace}\n${runLipsana}`;
 for (const testId of [
   'run-sectio-workspace',
   'run-victory-workspace',
   'run-army-ledger-workspace',
   'run-army-profile-workspace',
   'run-alienatio-workspace',
+  'run-expunctio-workspace',
   'run-lipsana-workspace',
   'run-loading-workspace',
   'run-empty-workspace',
@@ -1055,7 +1057,7 @@ if (!/testId=\{runDeployment \? 'run-deployment' : 'skirmish'\}/.test(skirmish)
   || /run-deployment-workspace|<LevelPreviewColumn|Choose square…/.test(runBattlefieldSources)) {
   failures.push('Run Deployment must use the battlefield and phase-specific Controls instead of a RunWorkspace level manifest');
 }
-if (/<OuterChromeBox\b|<OuterChromeHeader\b|chromeConsumer="run-(?:draft|deployment|sectio|victory|army-ledger|army-profile|alienatio|empty)"/.test(playerRunSources)) {
+if (/<OuterChromeBox\b|<OuterChromeHeader\b|chromeConsumer="run-(?:draft|deployment|sectio|victory|army-ledger|army-profile|alienatio|expunctio|empty)"/.test(playerRunSources)) {
   failures.push('player-facing Run destinations must not restore top-level outer panels');
 }
 if (/<select\b|type="checkbox"/.test(playerRunSources)) {

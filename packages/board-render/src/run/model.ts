@@ -22,7 +22,7 @@ export {
 };
 
 /** The schema version of one persisted in-progress Run. Only this exact save shape is read. */
-export const CURRENT_RUN_SAVE_VERSION = 19;
+export const CURRENT_RUN_SAVE_VERSION = 20;
 export type RunSaveVersion = typeof CURRENT_RUN_SAVE_VERSION;
 
 export class UnsupportedRunSaveError extends Error {
@@ -35,6 +35,7 @@ export class UnsupportedRunSaveError extends Error {
 const RUN_SAVE_VERSION_FIELD_RENAME_SOURCE = 16;
 const RUN_SAVE_VERSION_EXCHANGE_VOCABULARY_SOURCE = 17;
 const RUN_SAVE_VERSION_KLEROSIS_SOURCE = 18;
+const RUN_SAVE_VERSION_EXPUNCTIO_SOURCE = 19;
 export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
@@ -295,6 +296,12 @@ export interface RunPestiferousLoss {
   unit: RunArmyUnit;
 }
 
+export interface RunExpunctioRecord {
+  card: RunOwnedCard;
+  units: RunArmyUnit[];
+  priceTenths: number;
+}
+
 export interface LipsanonAbilityGrant {
   ability: Extract<RunAbility, 'eutactic' | 'agminate'>;
   unitType: RunArmyPieceType;
@@ -434,6 +441,8 @@ export interface RunSectioState {
     unit: RunArmyUnit;
     proceedsTenths: number;
   }>;
+  /** The sole card struck from the Chartulary during this visit, or null while unused. */
+  expunctedCard: RunExpunctioRecord | null;
   entrySnapshot: RunSectioEntrySnapshot;
 }
 
@@ -455,6 +464,7 @@ export interface RunSectioEntrySnapshot {
   goldTenths: number;
   army: RunArmyUnit[];
   cards: RunOwnedCard[];
+  pestiferousLosses: RunPestiferousLoss[];
   lipsana: LipsanonId[];
   seenLipsana: LipsanonId[];
   conflictPaidLipsana: Record<string, { lipsanonId: LipsanonId; bought: boolean }>;
@@ -955,6 +965,7 @@ function openOpeningSectio(run: RunDocument, seed: number, ataraxiaTier: Ataraxi
       paidLipsanonOffer: null,
       paidLipsanonBought: false,
       alienatedUnits: [],
+      expunctedCard: null,
       entrySnapshot: createSectioEntrySnapshot(run, false),
     },
   };
@@ -987,6 +998,13 @@ function cloneCards(cards: readonly RunOwnedCard[]): RunOwnedCard[] {
     ...card,
     unitIds: [...card.unitIds],
     lostUnitIds: [...card.lostUnitIds],
+  }));
+}
+
+function clonePestiferousLosses(losses: readonly RunPestiferousLoss[]): RunPestiferousLoss[] {
+  return losses.map((loss) => ({
+    ...loss,
+    unit: cloneArmy([loss.unit])[0],
   }));
 }
 
@@ -1101,7 +1119,10 @@ function cardsNeedRepair(cards: readonly RunOwnedCard[]): boolean {
       : card.cacochymicUnitId !== null
   )) || cards.some((card) => (
     (card.cardType === 'concinnous' || card.cardType === 'legatine' || card.cardType === 'hieratic')
-      ? typeof card.effectTargetUnitId !== 'string' || card.effectTargetUnitId.length === 0
+      ? card.effectTargetUnitId !== null
+        && (typeof card.effectTargetUnitId !== 'string'
+          || card.effectTargetUnitId.length === 0
+          || !card.unitIds.includes(card.effectTargetUnitId))
       : card.effectTargetUnitId !== null
   ));
 }
@@ -1160,6 +1181,7 @@ function createSectioEntrySnapshot(run: RunDocument, paidLipsanonBought: boolean
     goldTenths: run.goldTenths,
     army: cloneArmy(run.army),
     cards: cloneCards(run.cards),
+    pestiferousLosses: clonePestiferousLosses(run.pestiferousLosses),
     lipsana: [...run.lipsana],
     seenLipsana: [...run.seenLipsana],
     conflictPaidLipsana: cloneConflictPaidLipsana(run.conflictPaidLipsana),
@@ -1177,8 +1199,10 @@ function normalizedArmyIdentity(run: RunDocument): {
   changed: boolean;
 } {
   const entryArmy = run.sectio?.entrySnapshot?.army ?? [];
+  const entryLossArmy = run.sectio?.entrySnapshot?.pestiferousLosses?.map((loss) => loss.unit) ?? [];
   const alienatedArmy = run.sectio?.alienatedUnits?.map((entry) => entry.unit) ?? [];
-  const units = [...entryArmy, ...run.army, ...alienatedArmy];
+  const expunctedArmy = run.sectio?.expunctedCard?.units ?? [];
+  const units = [...entryArmy, ...entryLossArmy, ...run.army, ...alienatedArmy, ...expunctedArmy];
   const byId = new Map<string, RunArmyUnit>();
   for (const unit of units) {
     if (!byId.has(unit.id)) byId.set(unit.id, unit);
@@ -1248,11 +1272,25 @@ function normalizedArmyIdentity(run: RunDocument): {
       const [unit] = rewriteArmy([entry.unit]);
       return unit === entry.unit ? entry : { ...entry, unit };
     });
+    const expunctedCard = sectio.expunctedCard
+      ? { ...sectio.expunctedCard, units: rewriteArmy(sectio.expunctedCard.units) }
+      : null;
     const entrySnapshot = sectio.entrySnapshot
-      ? { ...sectio.entrySnapshot, army: rewriteArmy(sectio.entrySnapshot.army) }
+      ? {
+          ...sectio.entrySnapshot,
+          army: rewriteArmy(sectio.entrySnapshot.army),
+          pestiferousLosses: (sectio.entrySnapshot.pestiferousLosses ?? []).map((loss) => ({
+            ...loss,
+            unit: rewriteArmy([loss.unit])[0],
+          })),
+        }
       : sectio.entrySnapshot;
-    if (alienatedUnits !== sectio.alienatedUnits || entrySnapshot !== sectio.entrySnapshot) {
-      sectio = { ...sectio, alienatedUnits, entrySnapshot };
+    if (
+      alienatedUnits !== sectio.alienatedUnits
+      || expunctedCard !== sectio.expunctedCard
+      || entrySnapshot !== sectio.entrySnapshot
+    ) {
+      sectio = { ...sectio, alienatedUnits, expunctedCard, entrySnapshot };
     }
   }
 
@@ -1304,7 +1342,11 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
     ...(Array.isArray(run.sectio?.alienatedUnits)
       ? run.sectio.alienatedUnits.map((alienated) => alienated?.unit)
       : []),
+    ...(Array.isArray(run.sectio?.expunctedCard?.units) ? run.sectio.expunctedCard.units : []),
     ...(Array.isArray(run.sectio?.entrySnapshot?.army) ? run.sectio.entrySnapshot.army : []),
+    ...(Array.isArray(run.sectio?.entrySnapshot?.pestiferousLosses)
+      ? run.sectio.entrySnapshot.pestiferousLosses.map((loss) => loss?.unit)
+      : []),
   ];
   if (persistedUnits.some((value) => (
     value
@@ -1429,7 +1471,9 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
     && (
       !next.sectio.entrySnapshot
       || !Array.isArray(next.sectio.alienatedUnits)
+      || next.sectio.expunctedCard === undefined
       || !Array.isArray(next.sectio.entrySnapshot.cards)
+      || !Array.isArray(next.sectio.entrySnapshot.pestiferousLosses)
       || !Number.isSafeInteger(next.sectio.entrySnapshot.nextCardSequence)
     )
   ) {
@@ -1439,12 +1483,16 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
       sectio: {
         ...next.sectio,
         alienatedUnits: Array.isArray(next.sectio.alienatedUnits) ? next.sectio.alienatedUnits : [],
+        expunctedCard: next.sectio.expunctedCard ?? null,
         entrySnapshot: next.sectio.entrySnapshot
           ? {
               ...next.sectio.entrySnapshot,
               cards: Array.isArray(next.sectio.entrySnapshot.cards)
                 ? cloneCards(next.sectio.entrySnapshot.cards)
                 : cloneCards(next.cards),
+              pestiferousLosses: Array.isArray(next.sectio.entrySnapshot.pestiferousLosses)
+                ? clonePestiferousLosses(next.sectio.entrySnapshot.pestiferousLosses)
+                : clonePestiferousLosses(next.pestiferousLosses),
               nextCardSequence: Number.isSafeInteger(next.sectio.entrySnapshot.nextCardSequence)
                 ? next.sectio.entrySnapshot.nextCardSequence
                 : next.nextCardSequence,
@@ -1587,7 +1635,7 @@ function migrateRunToKlerosis(stored: Record<string, unknown>): Record<string, u
     : sectio;
   return {
     ...stored,
-    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    runSaveVersion: RUN_SAVE_VERSION_EXPUNCTIO_SOURCE,
     phase: reenterDeployment ? 'deployment' : stored.phase,
     army,
     cards,
@@ -1597,12 +1645,45 @@ function migrateRunToKlerosis(stored: Record<string, unknown>): Record<string, u
   };
 }
 
+function migrateRunToExpunctio(stored: Record<string, unknown>): Record<string, unknown> {
+  const sectio = stored.sectio && typeof stored.sectio === 'object' && !Array.isArray(stored.sectio)
+    ? stored.sectio as Record<string, unknown>
+    : null;
+  const entrySnapshot = sectio?.entrySnapshot
+    && typeof sectio.entrySnapshot === 'object'
+    && !Array.isArray(sectio.entrySnapshot)
+    ? sectio.entrySnapshot as Record<string, unknown>
+    : null;
+  const migratedSectio = sectio
+    ? {
+        ...sectio,
+        expunctedCard: null,
+        ...(entrySnapshot
+          ? {
+              entrySnapshot: {
+                ...entrySnapshot,
+                pestiferousLosses: Array.isArray(stored.pestiferousLosses)
+                  ? stored.pestiferousLosses
+                  : [],
+              },
+            }
+          : {}),
+      }
+    : sectio;
+  return {
+    ...stored,
+    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    ...(sectio ? { sectio: migratedSectio } : {}),
+  };
+}
+
 /**
  * Advances every losslessly migratable predecessor through the declared save chain.
  * Version 16 first receives the version-marker rename from 17, version 17's Shop
  * vocabulary is rewritten into version 18's Sectio, Adlectio, and Alienatio vocabulary,
- * then version 18 receives starter cards and persisted Klerosis state. Older saves remain
- * unsupported rather than being interpreted through a compatibility reader.
+ * then version 18 receives starter cards and persisted Klerosis state. Version 19 finally
+ * receives Expunctio's once-per-Sectio record and reset-complete loss snapshot. Older saves
+ * remain unsupported rather than being interpreted through a compatibility reader.
  */
 export function migrateRunSaveDocument(value: unknown): RunDocument {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -1640,6 +1721,9 @@ export function migrateRunSaveDocument(value: unknown): RunDocument {
   }
   if (stored.runSaveVersion === RUN_SAVE_VERSION_KLEROSIS_SOURCE) {
     stored = migrateRunToKlerosis(stored);
+  }
+  if (stored.runSaveVersion === RUN_SAVE_VERSION_EXPUNCTIO_SOURCE) {
+    stored = migrateRunToExpunctio(stored);
   }
   return normalizeRunDocument(stored as unknown as RunDocument);
 }
@@ -2085,7 +2169,11 @@ function cardsWithoutUnit(cards: readonly RunOwnedCard[], unitId: string): RunOw
         ? seededPestiferousTarget(card.effectSeed, unitIds, card.lostUnitIds.length)
         : card.cacochymicUnitId
       : null;
-    return { ...card, unitIds, cacochymicUnitId };
+    const effectTargetUnitId = card.effectTargetUnitId === unitId
+      || !unitIds.includes(card.effectTargetUnitId ?? '')
+      ? null
+      : card.effectTargetUnitId;
+    return { ...card, unitIds, effectTargetUnitId, cacochymicUnitId };
   });
 }
 
@@ -2292,6 +2380,7 @@ function openPostBattleSectio(run: RunDocument, victoryGoldTenths: number): RunD
       paidLipsanonOffer,
       paidLipsanonBought,
       alienatedUnits: [],
+      expunctedCard: null,
       entrySnapshot,
     },
   };
@@ -2382,6 +2471,56 @@ export function performAlienatio(run: RunDocument, unitId: string): RunDocument 
   });
 }
 
+/** The exact fee for striking a held card: its printed value remains after every unit leaves. */
+export function cardExpunctioPriceTenths(
+  card: RunOwnedCard,
+  attachedUnits: readonly RunArmyUnit[],
+): number | null {
+  const definition = runCardDefinition(card.coreId);
+  if (!definition) return null;
+  return (
+    definition.value
+    + attachedUnits.reduce((total, unit) => total + PIECE_VALUE[unit.type], 0)
+  ) * GOLD_SCALE;
+}
+
+export function performExpunctio(run: RunDocument, cardId: string): RunDocument {
+  if (run.phase !== 'sectio' || !run.sectio || run.sectio.expunctedCard) return run;
+  const card = run.cards.find((candidate) => candidate.id === cardId);
+  if (!card) return run;
+  const definition = runCardDefinition(card.coreId);
+  if (!definition || ('removable' in definition && !definition.removable)) return run;
+  const armyById = new Map(run.army.map((unit) => [unit.id, unit]));
+  const attachedUnits = card.unitIds.flatMap((unitId) => {
+    const unit = armyById.get(unitId);
+    return unit ? [unit] : [];
+  });
+  if (attachedUnits.length !== card.unitIds.length) return run;
+  const priceTenths = cardExpunctioPriceTenths(card, attachedUnits);
+  if (priceTenths === null || run.goldTenths < priceTenths) return run;
+  const removedUnitIds = new Set(card.unitIds);
+  const cards = run.cards.filter((candidate) => candidate.id !== card.id);
+  const army = synchronizePlaguedModifiers(
+    run.army.filter((unit) => !removedUnitIds.has(unit.id)),
+    cards,
+  );
+  return touch({
+    ...run,
+    goldTenths: run.goldTenths - priceTenths,
+    army,
+    cards,
+    pestiferousLosses: run.pestiferousLosses.filter((loss) => loss.cardId !== card.id),
+    sectio: {
+      ...run.sectio,
+      expunctedCard: {
+        card: cloneCards([card])[0],
+        units: cloneArmy(attachedUnits),
+        priceTenths,
+      },
+    },
+  });
+}
+
 export function resetSectio(run: RunDocument): RunDocument {
   if (run.phase !== 'sectio' || !run.sectio?.entrySnapshot) return run;
   const snapshot = run.sectio.entrySnapshot;
@@ -2390,6 +2529,7 @@ export function resetSectio(run: RunDocument): RunDocument {
     goldTenths: snapshot.goldTenths,
     army: cloneArmy(snapshot.army),
     cards: cloneCards(snapshot.cards),
+    pestiferousLosses: clonePestiferousLosses(snapshot.pestiferousLosses),
     lipsana: [...snapshot.lipsana],
     seenLipsana: [...snapshot.seenLipsana],
     conflictPaidLipsana: cloneConflictPaidLipsana(snapshot.conflictPaidLipsana),
@@ -2401,6 +2541,7 @@ export function resetSectio(run: RunDocument): RunDocument {
       adlectedCardOfferIds: [],
       paidLipsanonBought: snapshot.paidLipsanonBought,
       alienatedUnits: [],
+      expunctedCard: null,
     },
   });
 }
@@ -2414,8 +2555,10 @@ export function sectioHasChanges(run: RunDocument): boolean {
     || run.sectio.adlectedCardOfferIds.length > 0
     || run.sectio.paidLipsanonBought !== snapshot.paidLipsanonBought
     || run.sectio.alienatedUnits.length > 0
+    || run.sectio.expunctedCard !== null
     || JSON.stringify(run.army) !== JSON.stringify(snapshot.army)
     || JSON.stringify(run.cards) !== JSON.stringify(snapshot.cards)
+    || JSON.stringify(run.pestiferousLosses) !== JSON.stringify(snapshot.pestiferousLosses)
     || JSON.stringify(run.lipsana) !== JSON.stringify(snapshot.lipsana)
     || JSON.stringify(run.conflictPaidLipsana) !== JSON.stringify(snapshot.conflictPaidLipsana)
   );

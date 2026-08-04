@@ -20577,7 +20577,7 @@ button.tileset-relationship-cell {
 
 /* Selling is a Sectio activity and stands in the same scene, so its heading reads
    over the scene art rather than above it. */
-.run-screen.has-persistent-viewport-artwork .run-alienatio-workspace-content > :is(h2, p) {
+.run-screen.has-persistent-viewport-artwork :is(.run-alienatio-workspace-content, .run-expunctio-workspace-content) > :is(h2, p) {
   text-shadow: 0 2px 6px rgba(2, 7, 12, .85);
 }
 .run-wrap-slot-card {
@@ -21204,6 +21204,11 @@ button.tileset-relationship-cell {
   z-index: 35;
 }
 
+.run-expunctio-workspace {
+  position: relative;
+  z-index: 35;
+}
+
 .run-self-inspection-workspace {
   z-index: 35;
 }
@@ -21556,6 +21561,75 @@ button.tileset-relationship-cell {
   grid-template-rows: auto auto auto minmax(0, 1fr);
   min-block-size: 0;
   overflow: hidden;
+}
+
+.run-expunctio-workspace-content {
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  min-block-size: 0;
+  overflow: hidden;
+}
+
+.run-expunctio-rule {
+  color: var(--skirmish-muted);
+  margin: 0;
+}
+
+.run-expunctio-list {
+  align-content: start;
+  display: grid;
+  gap: var(--ds-inline-tight);
+  min-block-size: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-inline-end: var(--ds-space-1);
+}
+
+.run-expunctio-row {
+  align-items: center;
+  display: grid;
+  gap: var(--ds-inline);
+  grid-template-columns: minmax(132px, 180px) minmax(0, 1fr) minmax(110px, auto) minmax(140px, auto);
+  min-block-size: 238px;
+  padding: var(--ds-space-3) var(--ds-inset);
+}
+
+.run-expunctio-row:is(.is-expuncted, .is-spent, .is-unavailable, .is-unaffordable) {
+  opacity: .72;
+}
+
+.run-expunctio-card,
+.run-expunctio-card > .run-card-action {
+  display: block;
+  inline-size: 100%;
+}
+
+.run-expunctio-copy {
+  align-content: center;
+  display: grid;
+  gap: var(--ds-space-2);
+  min-inline-size: 0;
+}
+
+.run-expunctio-copy > strong {
+  color: #eafaff;
+  font: var(--ds-weight-regular) var(--ds-text-lg)/1 var(--ds-font-display);
+}
+
+.run-expunctio-copy > :is(small, span),
+.run-expunctio-price > small {
+  color: var(--skirmish-muted);
+  font: var(--ds-weight-regular) var(--ds-text-md)/1.35 var(--ds-font-display);
+}
+
+.run-expunctio-price {
+  align-content: center;
+  display: grid;
+  gap: var(--ds-space-2);
+  justify-items: start;
+}
+
+.run-expunctio-row > button {
+  inline-size: 100%;
 }
 
 .run-alienatio-row {
@@ -22504,6 +22578,20 @@ button.tileset-relationship-cell {
 
   .run-alienatio-row {
     grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .run-expunctio-row {
+    grid-template-columns: minmax(112px, 160px) minmax(0, 1fr);
+  }
+
+  .run-expunctio-card {
+    grid-row: 1 / span 3;
+  }
+
+  .run-expunctio-price,
+  .run-expunctio-row > button {
+    grid-column: 2;
+    justify-self: stretch;
   }
 
   .run-alienatio-return,

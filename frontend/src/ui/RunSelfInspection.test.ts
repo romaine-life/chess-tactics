@@ -18,6 +18,7 @@ describe('Run self-inspection links', () => {
 
   it('recognizes the Sectio-only workspaces as addressable Run views', () => {
     expect(runWorkspaceViewFromSearch('?view=alienatio')).toBe('alienatio');
+    expect(runWorkspaceViewFromSearch('?view=expunctio')).toBe('expunctio');
     expect(runWorkspaceViewFromSearch('?view=sell')).toBe('primary');
     expect(runWorkspaceViewFromSearch('?view=battle-preview')).toBe('battle-preview');
     expect(runWorkspaceViewFromSearch('?view=unknown')).toBe('primary');

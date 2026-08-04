@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const runScreen = readFileSync(new URL('./RunScreen.tsx', import.meta.url), 'utf8');
 const runArmyWorkspace = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url), 'utf8');
+const runExpunctioWorkspace = readFileSync(new URL('./RunExpunctioWorkspace.tsx', import.meta.url), 'utf8');
 const app = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8');
 const enchiridionSource = readFileSync(new URL('./Enchiridion.tsx', import.meta.url), 'utf8');
 const sceneManifest = readFileSync(new URL('./shell/sceneManifest.ts', import.meta.url), 'utf8');
@@ -58,6 +59,8 @@ describe('Run chrome hierarchy', () => {
     expect(metaControls).not.toContain('disabled={adlectioInFlight}');
     expect(metaControls).not.toContain('disabled={abandoning || adlectioInFlight}');
     expect(metaControls).toContain('Alienatio');
+    expect(metaControls).toContain('Expunctio');
+    expect(metaControls).toContain('data-testid="run-view-expunctio"');
     expect(metaControls).toContain('View Battle');
     expect(metaControls).toContain('data-testid="run-view-battle-preview"');
     // The Run rail no longer carries Army/Lipsana: the Strategikon is Run-wide (ADR-0335)
@@ -211,7 +214,7 @@ describe('Run chrome hierarchy', () => {
   });
 
   it('fills shell-owned Run destinations while Deployment uses the battlefield', () => {
-    const playerRunSources = `${runScreen}\n${runArmyWorkspace}\n${runBattlePreview}\n${runLipsana}`;
+    const playerRunSources = `${runScreen}\n${runArmyWorkspace}\n${runExpunctioWorkspace}\n${runBattlePreview}\n${runLipsana}`;
     const runWorkspaceRule = styleCss.match(/\.run-workspace\s*\{([^}]*)\}/)?.[1] ?? '';
 
     expect(runWorkspace).toContain('export function RunSceneViewport');
@@ -231,6 +234,7 @@ describe('Run chrome hierarchy', () => {
       'run-army-ledger-workspace',
       'run-army-profile-workspace',
       'run-alienatio-workspace',
+      'run-expunctio-workspace',
       'run-lipsana-workspace',
       'run-loading-workspace',
       'run-empty-workspace',

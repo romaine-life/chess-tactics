@@ -22,8 +22,10 @@ import {
   beginBattle,
   canTargetLipsanon,
   canUndoRunBattleMove,
+  cardExpunctioPriceTenths,
   captureRunBattleUndo,
   performAdlectio,
+  performExpunctio,
   canLeaveSectio,
   cashOutPawn,
   closeBattle,
@@ -356,6 +358,40 @@ describe('Run piece economy', () => {
     expect(performAlienatio(alienated, 'run-king')).toBe(alienated);
   });
 
+  it('prices and performs one Expunctio per Sectio while preserving the printed-value floor', () => {
+    const opening = createRun(war(), 47);
+    const frontLines = opening.cards.find((card) => card.coreId === 'front-lines')!;
+    const attached = frontLines.unitIds.map((id) => opening.army.find((unit) => unit.id === id)!);
+    expect(cardExpunctioPriceTenths(frontLines, attached)).toBe(4 * GOLD_SCALE);
+
+    const afterOneSale = performAlienatio(opening, attached[0].id);
+    const dilutedFrontLines = afterOneSale.cards.find((card) => card.id === frontLines.id)!;
+    const remaining = dilutedFrontLines.unitIds.map((id) => afterOneSale.army.find((unit) => unit.id === id)!);
+    expect(cardExpunctioPriceTenths(dilutedFrontLines, remaining)).toBe(3 * GOLD_SCALE);
+    const afterBothSales = performAlienatio(afterOneSale, remaining[0].id);
+    const emptyFrontLines = afterBothSales.cards.find((card) => card.id === frontLines.id)!;
+    expect(cardExpunctioPriceTenths(emptyFrontLines, [])).toBe(2 * GOLD_SCALE);
+    expect(afterBothSales.goldTenths - opening.goldTenths).toBeLessThan(2 * GOLD_SCALE);
+
+    const expuncted = performExpunctio(afterOneSale, frontLines.id);
+    expect(expuncted.goldTenths).toBe(afterOneSale.goldTenths - 3 * GOLD_SCALE);
+    expect(expuncted.cards.some((card) => card.id === frontLines.id)).toBe(false);
+    expect(expuncted.army.some((unit) => remaining.some((candidate) => candidate.id === unit.id))).toBe(false);
+    expect(expuncted.sectio?.expunctedCard).toMatchObject({
+      card: { id: frontLines.id },
+      units: [{ id: remaining[0].id }],
+      priceTenths: 3 * GOLD_SCALE,
+    });
+    expect(performExpunctio(expuncted, 'run-card-his-grace')).toBe(expuncted);
+
+    const reset = resetSectio(expuncted);
+    expect(reset.army).toEqual(opening.army);
+    expect(reset.cards).toEqual(opening.cards);
+    expect(reset.goldTenths).toBe(opening.goldTenths);
+    expect(reset.sectio?.expunctedCard).toBeNull();
+    expect(reset.sectio?.alienatedUnits).toEqual([]);
+  });
+
   it('resets the complete sectio transaction without rerolling its offers', () => {
     let sectio = openSectio({ ...deployedRun(29), goldTenths: 100 * GOLD_SCALE }, []);
     const originalOffers = structuredClone(sectio.sectio!.cardOffers);
@@ -565,6 +601,13 @@ describe('Run progression and lipsanon offers', () => {
     current = {
       ...current,
       pestiferousLosses: [{ battleIndex: 0, cardId: current.cards[0].id, unit: acquired }],
+      sectio: {
+        ...current.sectio!,
+        entrySnapshot: {
+          ...current.sectio!.entrySnapshot,
+          pestiferousLosses: [{ battleIndex: 0, cardId: current.cards[0].id, unit: acquired }],
+        },
+      },
     };
     const oldUnit = (unit: RunDocument['army'][number]) => ({
       ...unit,
@@ -628,7 +671,7 @@ describe('Run progression and lipsanon offers', () => {
 
     const migrated = migrateRunSaveDocument(version18);
 
-    expect(migrated.runSaveVersion).toBe(19);
+    expect(migrated.runSaveVersion).toBe(CURRENT_RUN_SAVE_VERSION);
     expect(migrated.phase).toBe('deployment');
     expect(migrated.deployment).toBeNull();
     expect(migrated.battleRuntime).toBeNull();
@@ -643,6 +686,25 @@ describe('Run progression and lipsanon offers', () => {
     );
     expect(migrated.goldTenths).toBe(currentBattle.goldTenths);
     expect(migrated.battleIndex).toBe(currentBattle.battleIndex);
+  });
+
+  it('migrates version 19 into Expunctio transaction state without changing the Sectio', () => {
+    const current = createRun(war(), 193);
+    const { expunctedCard: _expunctedCard, entrySnapshot, ...version19Sectio } = current.sectio!;
+    const { pestiferousLosses: _snapshotLosses, ...version19Snapshot } = entrySnapshot;
+    const version19 = {
+      ...current,
+      runSaveVersion: 19,
+      sectio: {
+        ...version19Sectio,
+        entrySnapshot: version19Snapshot,
+      },
+    };
+
+    const migrated = migrateRunSaveDocument(version19);
+    expect(migrated).toEqual(current);
+    expect(migrated.sectio?.expunctedCard).toBeNull();
+    expect(migrated.sectio?.entrySnapshot.pestiferousLosses).toEqual(current.pestiferousLosses);
   });
 
   it('repairs incomplete current unit identities and Sectio reset state once', () => {
