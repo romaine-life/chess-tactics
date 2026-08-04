@@ -583,7 +583,9 @@ function useRunDeploymentPresentation({
         stage={stage}
         activeUnit={activeUnit}
         onNavigate={onNavigate}
-        onSwitchMode={(mode) => replace(switchDeploymentMode(prepared, level, mode))}
+        onSwitchMode={(mode) => replace(prepared.deployment?.mode
+          ? switchDeploymentMode(prepared, level, mode)
+          : chooseDeploymentMode(prepared, level, mode))}
         onDraw={() => replace(drawNextDeploymentUnit(prepared))}
         onPlace={() => replace(placeRevealedDeploymentUnit(prepared, level))}
       />

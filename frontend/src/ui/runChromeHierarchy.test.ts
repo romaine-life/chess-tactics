@@ -308,6 +308,7 @@ describe('Run chrome hierarchy', () => {
     expect(runKlerosisWorkspace).not.toContain('SkirmishBoard');
     expect(runScreen).toContain('Deploy all');
     expect(runScreen).toContain('Step through');
+    expect(runScreen).toContain("prepared.deployment?.mode\n          ? switchDeploymentMode(prepared, level, mode)\n          : chooseDeploymentMode(prepared, level, mode)");
     expect(runScreen).not.toContain('View Formation {index + 1}');
     expect(runScreen).not.toContain('Deploy this formation');
     expect(runScreen).toContain('renderCellOverlay: ({ cell, visualFootprintStyle }) => {');

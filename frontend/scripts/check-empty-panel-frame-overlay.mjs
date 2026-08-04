@@ -1021,7 +1021,7 @@ if (!/export function SkirmishShell[\s\S]*?<SkirmishHud \{\.\.\.hudProps\} contr
   || !/export function Skirmish\b[\s\S]*?<SkirmishStoreProvider>[\s\S]*?<SkirmishSession \{\.\.\.props\} \/>[\s\S]*?<\/SkirmishStoreProvider>/.test(skirmish)) {
   failures.push('Battle must render through one instance-owned Skirmish session and the one SkirmishShell that owns SkirmishHud');
 }
-if (!/const form = createRunForm\(\{[\s\S]*?titleBarContent: shellRun \? <RunTitleBarStatus[\s\S]*?lipsanonIds: visibleLipsanonIds/.test(runScreen)
+if (!/const form = createRunForm\(\{[\s\S]*?titleBarContent:\s*shellRun\s*\?\s*\(?\s*<RunTitleBarStatus[\s\S]*?lipsanonIds: visibleLipsanonIds/.test(runScreen)
   || !/form\.add\(runActivity\(\{[\s\S]*?controlsContent: shellRun \? \([\s\S]*?<RunMetaControls[\s\S]*?run=\{shellRun\}[\s\S]*?view=\{view\}[\s\S]*?onNavigate=\{navigateRunView\}[\s\S]*?showAbandon=\{shellRun\.phase !== 'victory'\}[\s\S]*?adlectioInFlight=\{adlectioBusy\}/.test(runScreen)
   || !/<SkirmishShell[\s\S]*?titleBarContent=\{form\.titleBarContent\}[\s\S]*?controlsContent=\{activity\.controlsContent\}/.test(runForm)
   || !/function RunMetaControls[\s\S]*?<section[\s\S]*?className="run-meta-controls"[\s\S]*?aria-label="Run controls"[\s\S]*?inert=\{adlectioInFlight \? true : undefined\}/.test(runScreen)
