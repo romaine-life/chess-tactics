@@ -1,4 +1,4 @@
-import { Children, useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { Children, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import type { RunBattleTransformSink } from '../game/store';
 import { defaultFacingForSide, paletteForSide, pieceSpritePath } from '../core/pieces';
 import type { GameState, Piece } from '../core/types';
@@ -47,6 +47,7 @@ import {
   setDeploymentChoices,
   shopHasChanges,
   takeVacantiaLipsanon,
+  type RunCardOffer,
   type RunDocument,
   type LipsanonId,
 } from '../run/model';
@@ -87,7 +88,15 @@ import {
 } from './RunArmyWorkspace';
 import { RunCard } from './RunCard';
 import { RunBattlePreview } from './RunBattlePreview';
+import { runCardName } from '../run/cardNames';
+import {
+  runCardMotionDurationMs,
+  runCardReflowOffset,
+  useRunCardFlight,
+  type RunCardFlightRect,
+} from './runCardFlightView';
 import { Strategikon } from './Strategikon';
+import { isStrategikonPath, strategikonRouteLabels } from './strategikonRoute';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
 import type { SkirmishBoardSurfaceState } from '../render/SkirmishBoard';
@@ -142,14 +151,21 @@ function runPhaseRouteName(run: RunDocument): string {
         : `${run.phase.charAt(0).toUpperCase()}${run.phase.slice(1)}`;
 }
 
-function RunTitleBarStatus({ run }: { run: RunDocument }): ReactElement {
+export function runTitleBarRouteName(run: RunDocument, path: string): string {
+  const segments = [runPhaseRouteName(run)];
+  if (isStrategikonPath(path)) segments.push(...strategikonRouteLabels(path));
+  return segments.join(' › ');
+}
+
+function RunTitleBarStatus({ run, path }: { run: RunDocument; path: string }): ReactElement {
   const progress = runBattleProgress(run);
   const levelName = run.war.battles[run.battleIndex]?.level.name ?? 'Battle';
   return (
     <>
-      {/* The phase is where you ARE in the Run, so it reads as route — Run › Shop —
-          beneath the wordmark, rather than as a second line on a status chip. */}
-      <TitleBarSlot region="route">{runPhaseRouteName(run)}</TitleBarSlot>
+      {/* The phase is the durable Run position; an open Strategikon appends the exact
+          visible workspace address — Shop › Strategikon › Enchiridion › Cards —
+          rather than leaving the covered phase as the last word in the route. */}
+      <TitleBarSlot region="route">{runTitleBarRouteName(run, path)}</TitleBarSlot>
       <div className="skirmish-topbar-status run-topbar-status">
         <RunIdentityChip
           warName={run.war.name}
@@ -207,11 +223,13 @@ function RunMetaControls({
   view,
   onNavigate,
   showAbandon = true,
+  purchaseInFlight = false,
 }: {
   run: RunDocument;
   view: RunScreenView;
   onNavigate: (view: RunScreenView) => void;
   showAbandon?: boolean;
+  purchaseInFlight?: boolean;
 }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   const { abandonDialog, abandoning, requestAbandon } = useRunAbandon(run);
@@ -234,7 +252,12 @@ function RunMetaControls({
   return (
     <>
       {abandonDialog}
-      <section className="run-meta-controls" aria-label="Run controls">
+      <section
+        className="run-meta-controls"
+        aria-label="Run controls"
+        aria-busy={purchaseInFlight ? true : undefined}
+        inert={purchaseInFlight ? true : undefined}
+      >
         <div className="skirmish-view-group">
           <span className="skirmish-eyebrow">{shop ? 'Shop views' : 'Run views'}</span>
           <div className="run-meta-navigation">
@@ -493,10 +516,12 @@ function useRunDeploymentPresentation({
   run,
   view,
   onNavigate,
+  path,
 }: {
   run: RunDocument;
   view: RunScreenView;
   onNavigate: (view: RunScreenView) => void;
+  path: string;
 }): RunDeploymentPresentation | null {
   const replace = useActiveRun((state) => state.replace);
   const level = run.war.battles[run.battleIndex].level;
@@ -603,7 +628,7 @@ function useRunDeploymentPresentation({
   if (run.phase !== 'deployment') return null;
   return {
     surfaceState: deploymentSurfaceState,
-    titleBarContent: <RunTitleBarStatus run={prepared} />,
+    titleBarContent: <RunTitleBarStatus run={prepared} path={path} />,
     lipsanonIds: prepared.lipsana,
     screenClassName: `run-screen run-deployment-screen${visibleLipsanonCount(prepared) ? ' has-lipsana' : ''}`,
     boardClassName: 'run-deployment-board',
@@ -721,11 +746,23 @@ function LipsanonOffer({
  * mounted inside its painted stall; otherwise it is the plain grid. The wrap is
  * decoration around the real cards — it never changes what is purchasable.
  */
-function ShopCardRow({ children }: { children: ReactNode }): ReactElement {
+function ShopCardRow({
+  children,
+  offerIds,
+  onReflowingChange,
+}: {
+  children: ReactNode;
+  offerIds: string[];
+  onReflowingChange: (reflowing: boolean) => void;
+}): ReactElement {
   const wrap = useMemo(() => installedRunShopWrap(), []);
   const [box, setBox] = useState({ width: 0, height: 0 });
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const rowRef = useRef<HTMLDivElement | null>(null);
+  const previousRectsRef = useRef(new Map<string, RunCardFlightRect>());
+  const previousLayoutKeyRef = useRef<string | null>(null);
   const cardCount = Children.count(children);
+  const layoutKey = offerIds.join('|');
   // Only a band wrap measures anything: it is a frame around the row, so the
   // row has to fit inside it. A screen scene is a background and never
   // participates — the cards lay out normally and the art sits behind them.
@@ -742,8 +779,77 @@ function ShopCardRow({ children }: { children: ReactNode }): ReactElement {
     return () => observer.disconnect();
   }, [wrap]);
 
+  useLayoutEffect(() => {
+    const row = rowRef.current;
+    if (!row) return undefined;
+    const currentRects = new Map<string, RunCardFlightRect>();
+    const elements = new Map<string, HTMLElement>();
+    row.querySelectorAll<HTMLElement>('[data-run-shop-offer-id]').forEach((element) => {
+      const id = element.dataset.runShopOfferId;
+      if (!id) return;
+      const rect = element.getBoundingClientRect();
+      currentRects.set(id, rect);
+      elements.set(id, element);
+    });
+
+    const previousKey = previousLayoutKeyRef.current;
+    const previousRects = previousRectsRef.current;
+    previousLayoutKeyRef.current = layoutKey;
+    previousRectsRef.current = currentRects;
+    if (previousKey === null || previousKey === layoutKey) {
+      return undefined;
+    }
+
+    const moving = [...currentRects].flatMap(([id, rect]) => {
+      const previous = previousRects.get(id);
+      const element = elements.get(id);
+      const offset = previous ? runCardReflowOffset(previous, rect) : null;
+      if (!element || !offset || (Math.abs(offset.x) < 0.5 && Math.abs(offset.y) < 0.5)) return [];
+      return [{ element, offset }];
+    });
+    if (!moving.length) return undefined;
+
+    const rowStyle = getComputedStyle(row);
+    const duration = runCardMotionDurationMs(rowStyle.getPropertyValue('--ds-duration-fade'));
+    const easing = rowStyle.getPropertyValue('--ds-ease-standard').trim();
+    if (!duration || !easing || typeof Element.prototype.animate !== 'function') return undefined;
+
+    let cancelled = false;
+    let animations: Animation[];
+    const clearPresentation = (): void => {
+      moving.forEach(({ element }) => {
+        element.classList.remove('is-reflowing');
+      });
+    };
+    const finish = (): void => {
+      if (cancelled) return;
+      clearPresentation();
+      onReflowingChange(false);
+    };
+
+    animations = moving.map(({ element, offset }) => {
+      element.classList.add('is-reflowing');
+      return element.animate(
+        [
+          { translate: `${offset.x}px ${offset.y}px` },
+          { translate: '0 0' },
+        ],
+        { duration, easing },
+      );
+    });
+    onReflowingChange(true);
+    void Promise.allSettled(animations.map((animation) => animation.finished)).then(finish);
+
+    return () => {
+      cancelled = true;
+      animations.forEach((animation) => animation.cancel());
+      clearPresentation();
+      onReflowingChange(false);
+    };
+  }, [box.height, box.width, layoutKey, onReflowingChange]);
+
   if (!wrap || wrap.kind !== 'band' || cardCount < 1) {
-    return <div className="run-card-grid">{children}</div>;
+    return <div className="run-card-grid" ref={rowRef}>{children}</div>;
   }
   const mount = box.width > 0 && box.height > 0
     ? runShopWrapLiveMount(wrap, cardCount, box.width, box.height)
@@ -763,6 +869,7 @@ function ShopCardRow({ children }: { children: ReactNode }): ReactElement {
           <img className="run-shop-wrap-art" src={wrap.src} alt="" draggable={false} />
           <div
             className="run-shop-wrap-cards"
+            ref={rowRef}
             style={{
               insetInlineStart: `${mount.cards.left}px`,
               insetBlockStart: `${mount.cards.top}px`,
@@ -783,13 +890,24 @@ function ShopPanel({
   run,
   view,
   sellWorkspace,
+  departingOfferId,
+  purchaseBusy,
+  purchaseAnnouncement,
+  onBuyCard,
+  onCardReflowingChange,
 }: {
   run: RunDocument;
   view: RunScreenView;
   sellWorkspace: ReactElement;
+  departingOfferId: string | null;
+  purchaseBusy: boolean;
+  purchaseAnnouncement: string;
+  onBuyCard: (offer: RunCardOffer, source: HTMLButtonElement) => void;
+  onCardReflowingChange: (reflowing: boolean) => void;
 }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   const shop = run.shop!;
+  const availableOffers = shop.cardOffers.filter((offer) => !shop.purchasedCardOfferIds.includes(offer.offerId));
   const pestiferousLosses = run.pestiferousLosses.filter((loss) => loss.battleIndex === shop.afterBattleIndex);
   return (
     <>
@@ -803,6 +921,7 @@ function ShopPanel({
             contentClassName: 'run-shop-workspace-content',
             testId: 'run-shop-workspace',
             ariaLabel: 'Shop',
+            inert: purchaseBusy,
           }}
         >
         {/* What the Battle paid is reported on the Battle's own aftermath screen, which the
@@ -825,22 +944,33 @@ function ShopPanel({
             </ul>
           </InnerChromeBox>
         ) : null}
-        <section className="run-shop-cards-section" aria-label="Cards">
-          <ShopCardRow>
-            {shop.cardOffers.map((offer) => {
-              const purchased = shop.purchasedCardOfferIds.includes(offer.offerId);
-              return (
-                <RunCard
-                  card={offer}
-                  mode="shop"
-                  purchased={purchased}
-                  key={offer.offerId}
-                  disabled={purchased || run.goldTenths < offer.cost * GOLD_SCALE}
-                  onSelect={() => replace(buyCard(run, offer.offerId))}
-                />
-              );
-            })}
+        <section
+          className="run-shop-cards-section"
+          aria-label="Cards"
+          aria-busy={purchaseBusy ? true : undefined}
+        >
+          <span className="sr-only" role="status" aria-live="polite">{purchaseAnnouncement}</span>
+          <ShopCardRow
+            offerIds={availableOffers.map((offer) => offer.offerId)}
+            onReflowingChange={onCardReflowingChange}
+          >
+            {availableOffers.map((offer) => (
+              <RunCard
+                card={offer}
+                mode="shop"
+                departing={departingOfferId === offer.offerId}
+                layoutId={offer.offerId}
+                key={offer.offerId}
+                disabled={purchaseBusy || run.goldTenths < offer.cost * GOLD_SCALE}
+                onSelect={(source) => onBuyCard(offer, source)}
+              />
+            ))}
           </ShopCardRow>
+          {availableOffers.length === 0 ? (
+            <InnerChromeBox className="run-shop-cards-empty" role="status">
+              All offered cards are in the Chartulary.
+            </InnerChromeBox>
+          ) : null}
         </section>
 
 
@@ -1022,7 +1152,7 @@ function RunBattlefieldPanel({
   const replace = useActiveRun((state) => state.replace);
   const currentRun = useActiveRun((state) => state.run);
   const { abandonDialog, requestAbandon } = useRunAbandon(run);
-  const deploymentPresentation = useRunDeploymentPresentation({ run, view, onNavigate });
+  const deploymentPresentation = useRunDeploymentPresentation({ run, view, onNavigate, path: routePath });
   const baseLevel = run.war.battles[run.battleIndex].level;
   // Battle-runtime writes (including Restart) do not change deployment. Keep the
   // projected board document referentially stable across those persistence updates,
@@ -1141,6 +1271,32 @@ export function RunScreen({
   const run = sceneSnapshot.run;
   const hydrated = sceneSnapshot.hydrated;
   const replace = useActiveRun((state) => state.replace);
+  const [purchaseAnnouncement, setPurchaseAnnouncement] = useState('');
+  const [cardReflowing, setCardReflowing] = useState(false);
+  const [landedPurchaseOfferId, setLandedPurchaseOfferId] = useState<string | null>(null);
+  const commitCardPurchase = useCallback((offer: RunCardOffer): void => {
+    const latest = useActiveRun.getState().run;
+    if (!latest || latest.phase !== 'shop' || !latest.shop) return;
+    const purchased = buyCard(latest, offer.offerId);
+    if (purchased === latest) return;
+    // Keep the source seat visually owned by the transfer until the scene snapshot
+    // acknowledges its removal. Local flight state can settle one render earlier.
+    setLandedPurchaseOfferId(offer.offerId);
+    replace(purchased);
+    setPurchaseAnnouncement(`${runCardName(offer)} purchased and added to the Chartulary.`);
+  }, [replace]);
+  const { flight: cardFlight, launch: launchCardFlight, element: cardFlightElement } = useRunCardFlight(commitCardPurchase);
+  const purchaseAcknowledged = Boolean(
+    landedPurchaseOfferId
+    && run?.phase === 'shop'
+    && run.shop?.purchasedCardOfferIds.includes(landedPurchaseOfferId),
+  );
+  useEffect(() => {
+    if (purchaseAcknowledged || (landedPurchaseOfferId && run?.phase !== 'shop')) {
+      setLandedPurchaseOfferId(null);
+    }
+  }, [landedPurchaseOfferId, purchaseAcknowledged, run?.phase]);
+  const purchaseBusy = Boolean(cardFlight) || Boolean(landedPurchaseOfferId) || cardReflowing;
   // A craft address sets the account's Run to the state it names before the screen reads one,
   // every time it is opened, then lands here without its craft parameters (ADR-0354).
   const craft = useRunCraft(routePath, routeSearch);
@@ -1179,9 +1335,11 @@ export function RunScreen({
   const bonaTarget = sceneSnapshot.workspace.view === 'bona-target'
     ? sceneSnapshot.workspace
     : null;
-  const strategikonHref = strategikonOpen
-    ? `/run${routeSearch}`
-    : `/run/strategikon/enchiridion/units${routeSearch}`;
+  const buyShopCard = (offer: RunCardOffer, source: HTMLButtonElement): void => {
+    if (purchaseBusy) return;
+    const target = document.querySelector('[data-run-card-flight-target]');
+    if (!launchCardFlight(offer, source, target)) commitCardPurchase(offer);
+  };
   const selectedUnitId = sceneSnapshot.workspace.view === 'army'
     || sceneSnapshot.workspace.view === 'bona-target'
       ? sceneSnapshot.workspace.unitId
@@ -1364,7 +1522,18 @@ export function RunScreen({
         </RunSceneViewport>
       )
       : shellRun.phase === 'shop' && shellRun.shop
-            ? <ShopPanel run={shellRun} view={view} sellWorkspace={sellWorkspace!} />
+            ? (
+              <ShopPanel
+                run={shellRun}
+                view={view}
+                sellWorkspace={sellWorkspace!}
+                departingOfferId={cardFlight?.offer.offerId ?? landedPurchaseOfferId}
+                purchaseBusy={purchaseBusy}
+                purchaseAnnouncement={purchaseAnnouncement}
+                onBuyCard={buyShopCard}
+                onCardReflowingChange={setCardReflowing}
+              />
+            )
             // Explicit, because the branch below is an else-fallthrough: any phase without
             // its own case silently renders Victory.
             : shellRun.phase === 'bona-vacantia' && shellRun.vacantia
@@ -1395,6 +1564,7 @@ export function RunScreen({
       className="run-scene-slot"
       sceneInstance={`${shellRun?.id ?? 'none'}:${sceneSnapshot.phase}:${runSceneWorkspaceIdentity(sceneSnapshot.workspace)}`}
     >
+      {cardFlightElement}
       {/* Shop/victory use the shared HUD without mounting a battlefield. Their replaceable
           presentation scene still owns its HUD view state explicitly; it must not borrow an
           outgoing or incoming battlefield's camera/overlay store during director overlap. */}
@@ -1405,7 +1575,7 @@ export function RunScreen({
             || bonaTarget
           ) ? ' has-lipsana' : ''}`}
           testId="run-screen"
-          titleBarContent={shellRun ? <RunTitleBarStatus run={shellRun} /> : null}
+          titleBarContent={shellRun ? <RunTitleBarStatus run={shellRun} path={routePath} /> : null}
           persistentViewportArtwork={persistentShopScene}
           lipsanonIds={shellRun
             ? bonaTarget
@@ -1414,13 +1584,21 @@ export function RunScreen({
             : []}
           shellWorkspaceCoversLipsana={strategikonOpen || Boolean(inspectionWorkspace)}
           controlsContent={shellRun
-            ? <RunMetaControls run={shellRun} view={view} onNavigate={navigateRunView} showAbandon={shellRun.phase !== 'victory'} />
+            ? (
+              <RunMetaControls
+                run={shellRun}
+                view={view}
+                onNavigate={navigateRunView}
+                showAbandon={shellRun.phase !== 'victory'}
+                purchaseInFlight={purchaseBusy}
+              />
+            )
             : null}
           readyToCompose={hydrated}
           hudProps={{
             enableGlobalShortcuts: false,
-            strategikonHref: shellRun ? strategikonHref : null,
-            strategikonOpen,
+            strategikonPath: shellRun ? routePath : null,
+            strategikonSearch: routeSearch,
           }}
         >
           <RunPhaseWorkspace

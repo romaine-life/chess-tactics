@@ -4,6 +4,10 @@ import { describe, expect, it } from 'vitest';
 
 const enchiridion = readFileSync(new URL('./Enchiridion.tsx', import.meta.url), 'utf8');
 const strategikon = readFileSync(new URL('./Strategikon.tsx', import.meta.url), 'utf8');
+const strategikonNavigation = readFileSync(new URL('./strategikonNavigation.ts', import.meta.url), 'utf8');
+const strategikonRoute = readFileSync(new URL('./strategikonRoute.ts', import.meta.url), 'utf8');
+const enchiridionRoute = readFileSync(new URL('./enchiridionRoute.ts', import.meta.url), 'utf8');
+const strategikonTitleNavigation = readFileSync(new URL('./StrategikonTitleNavigation.tsx', import.meta.url), 'utf8');
 const mainMenu = readFileSync(new URL('./MainMenu.tsx', import.meta.url), 'utf8');
 const apparatusRailTab = readFileSync(new URL('./shared/ApparatusRailTab.tsx', import.meta.url), 'utf8');
 const style = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
@@ -118,14 +122,17 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(enchiridion).toContain('<ApparatusRailColumn className="enchiridion-section-rail"');
     expect(strategikon).toContain('<ApparatusRailColumn className="strategikon-rail"');
     expect(strategikon).toContain('<EnchiridionSectionRail');
-    expect(strategikon.match(/<ApparatusRailTab/g)).toHaveLength(4);
-    expect(strategikon).toContain('title="The Martial Prosopography — Current Army"');
-    expect(strategikon).toContain('title="The Chartulary — Held Cards"');
-    expect(strategikon).toContain('title="The Lipsanotheca — Held Lipsana"');
+    expect(strategikon).toContain('strategikonNavigationItems().map((item, index) => (');
+    expect(strategikonNavigation).toContain('label: STRATEGIKON_SECTION_LABEL.prosopography');
+    expect(strategikonRoute).toContain("prosopography: 'Prosopography'");
+    expect(enchiridion).toContain('label={ENCHIRIDION_SECTION_LABEL[candidate]}');
+    expect(enchiridionRoute).toContain("'card-types': 'Card Types'");
+    expect(strategikonNavigation).toContain("title: 'The Chartulary — Held Cards'");
+    expect(strategikonNavigation).toContain("title: 'The Lipsanotheca — Held Lipsana'");
     // Adjacent Run registers never share one mark: the army takes the Units reference's
     // mark and the Chartulary takes the Cards reference's.
-    expect(strategikon).toContain("iconSrc={installedUiMedia('ui-kit-icons-unit-studio-png')}");
-    expect(strategikon).toContain("iconSrc={installedUiMedia('ui-kit-icons-players-png')}");
+    expect(strategikonNavigation).toContain("iconSrc: installedUiMedia('ui-kit-icons-unit-studio-png')");
+    expect(strategikonNavigation).toContain("iconSrc: installedUiMedia('ui-kit-icons-players-png')");
   });
 
   it('uses the canonical terrain-tile glyph instead of the creator-tools grid mark', () => {
@@ -149,7 +156,8 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
       expect(source).not.toContain('iconClassName');
     }
     // The Enchiridion destination resolves through ONE lookup for both rails.
-    expect(strategikon).toContain("iconSrc={menuModeIcon('enchiridion')}");
+    expect(strategikon).toContain('strategikonNavigationItems().map((item, index) => (');
+    expect(strategikonNavigation).toContain("iconSrc: menuModeIcon('enchiridion')");
     expect(mainMenu).toContain('icon: menuModeIcon(slug)');
     expect(mainMenu).not.toContain('asset.media.icon');
     // Every section of the shared section rail resolves to installed media.
@@ -360,16 +368,16 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
   });
 
   it('opens from Controls while retaining the mounted Battle field', () => {
-    expect(hud).toContain('data-testid="strategikon-toggle"');
-    expect(hud).toContain('const strategikonToggle = strategikonHref ? (');
-    expect(hud).toMatch(/<ShellControlsPanel[\s\S]*?titleActions=\{strategikonToggle\}/);
+    expect(hud).toContain('<StrategikonTitleNavigation path={strategikonPath} search={strategikonSearch} />');
+    expect(hud).toMatch(/<ShellControlsPanel[\s\S]*?titleActions=\{strategikonNavigation\}/);
     expect(hud).not.toContain('skirmish-hud-header-actions');
-    expect(hud).not.toContain('data-testid="strategikon-toggle"\n      data-chrome-unit=');
-    expect(hud).toContain("installedUiMedia('ui-kit-icons-studio-catalog-png')");
-    expect(hud).toContain("strategikonOpen ? 'Return to Battle' : 'Open Strategikon'");
-    expect(hud).toContain('Strategikon — inspect battle references, the current army, and held cards and lipsana.');
-    expect(hud).toContain('Return to Battle — close Strategikon without leaving this fight.');
-    expect(hud).toMatch(/data-testid="strategikon-toggle"[\s\S]*?<img[\s\S]*?<\/NavButton>/);
+    expect(strategikonTitleNavigation).toContain('data-testid="strategikon-toggle"');
+    expect(strategikonTitleNavigation).toContain("installedUiMedia('ui-kit-icons-studio-catalog-png')");
+    expect(strategikonTitleNavigation).toContain("open ? `Return to ${returnName}` : 'Open Strategikon'");
+    expect(strategikonTitleNavigation).toContain('Strategikon — inspect references, the current army, held cards, and held lipsana.');
+    expect(strategikonTitleNavigation).toContain('data-testid={`strategikon-title-${item.section}`}');
+    expect(strategikonTitleNavigation).toContain("data-run-card-flight-target={item.section === 'chartulary' ? '' : undefined}");
+    expect(strategikonTitleNavigation).toMatch(/data-testid="strategikon-toggle"[\s\S]*?<img[\s\S]*?<\/NavButton>/);
     expect(style).toMatch(/\.skirmish-screen \.skirmish-hud-titlebar > \.outer-chrome-header-title-actions\s*\{[\s\S]*?inset-inline-end:\s*calc\(var\(--le-control-content-inset\)\s*-\s*5px\)/);
     expect(style).toMatch(/\.skirmish-hud-title-action\s*\{[\s\S]*?background:\s*none[\s\S]*?border:\s*0[\s\S]*?box-shadow:\s*none/);
     expect(style).toMatch(/\.skirmish-hud-title-action\.active\s*\{[\s\S]*?background:\s*none[\s\S]*?border-color:\s*transparent[\s\S]*?box-shadow:\s*none/);

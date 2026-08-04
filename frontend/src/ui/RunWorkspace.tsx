@@ -25,6 +25,7 @@ export interface RunViewportSceneSpec {
   ariaLabel?: string;
   ariaLabelledBy?: string;
   role?: AriaRole;
+  inert?: boolean;
 }
 
 /**
@@ -46,6 +47,7 @@ export function RunSceneViewport({
     <main
       className={`run-workspace ${scene.className ?? ''}`.trim()}
       data-run-scene-view={scene.view}
+      inert={scene.inert ? true : undefined}
     >
       <ShellWorkspace
         data-testid={scene.testId}

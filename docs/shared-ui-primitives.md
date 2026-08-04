@@ -43,8 +43,21 @@ search for before constructing a control or repeated surface.
   Layout, Shops, review, and Enchiridion; it owns the paired property/state
   icon seats and includes their media in atomic face promotion.
 - `ui/RunCard.tsx` — the canonical interactive/reference host around
-  `RunCardFace`; Shop mode owns the gold transaction cue and registered
-  **Purchased** status chrome.
+  `RunCardFace`; Shop mode owns the gold transaction cue and supplies the exact
+  source face used by the purchase transfer.
+- `ui/runCardFlightView.tsx` — the Shop-to-Chartulary transfer of that canonical
+  face. It measures both live endpoints, contributes through the director-owned
+  continuity layer above clipped shell layers, commits on landing, and exposes
+  the transfer and survivor-reflow geometry plus the CSS-token duration parser
+  for regression tests. `ShopCardRow` owns the live FLIP measurement for both
+  plain and installed-wrap layouts.
+- `ui/strategikonNavigation.ts` and `ui/StrategikonTitleNavigation.tsx` — one
+  Strategikon destination inventory shared by the full workspace rail and the
+  compact Controls-title shortcuts; the Chartulary shortcut also owns the card
+  transfer target.
+- `ui/strategikonRoute.ts` and `ui/enchiridionRoute.ts` — the canonical address
+  parsers and exported section-label inventories shared by scene identity, rails,
+  title shortcuts, and the complete gameplay title route.
 - `ui/LevelInfoCompact.tsx` — the canonical derived Level ledger for board
   facts, authored and setup-event forces, zones, rules, and time control.
 - `ui/RunIconPairReview.tsx` — the embedded Studio Card Icon Fitting Viewer;

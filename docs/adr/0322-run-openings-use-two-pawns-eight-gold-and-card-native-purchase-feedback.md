@@ -5,6 +5,7 @@ deciders: owner (Nelson) + Codex
 partially_superseded_by:
   - "[ADR-0323](0323-run-shops-allow-every-affordable-card-purchase.md)'s independently purchasable cards and format-10 purchase collection"
   - "[ADR-0372](0372-a-card-sounds-like-a-card-when-it-is-handled.md)'s revival of the `card-purchase` sound set as the card-handling cue"
+  - "[ADR-0387](0387-bought-cards-travel-into-a-title-reachable-chartulary.md)'s purchase-to-Chartulary transfer in place of the persistent Purchased marker"
 partially_supersedes:
   - "[ADR-0224](0224-owner-supplied-sfx-open-as-full-source-trim-instruments.md)'s dedicated card-purchase runtime cue"
   - "[ADR-0319](0319-run-openings-spend-nine-gold-on-one-of-three-seeded-cards.md)'s nine-gold budget, 1–9 opening range, and all-core-cards-reachable outcome"

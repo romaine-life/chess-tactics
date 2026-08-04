@@ -1930,6 +1930,7 @@ h1 {
      decelerated entrance if ever needed; linear for the bgm button's opacity. */
   --ds-duration-fast: 100ms;
   --ds-duration-fade: 350ms;
+  --ds-duration-transfer: 560ms;
   --ds-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ds-ease-out: cubic-bezier(0.05, 0.7, 0.1, 1);
   --ds-ease-linear: linear;
@@ -19187,6 +19188,22 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
+/* The real seat stays in the row until the transfer lands, so the other offers
+   cannot jump underneath the flying card. The portalled canonical face is the
+   only visible copy during that beat. */
+.run-card-offer.is-departing {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Once the transferred card lands, surviving offers keep their old visual seats
+   and settle into the newly centred grid instead of snapping with the layout.
+   JS reads the shared motion tokens into the FLIP animation; this class owns only
+   the compositor hint while that bounded functional relocation is active. */
+.run-card-offer.is-reflowing {
+  will-change: translate;
+}
+
 .run-card-action {
   all: unset;
   aspect-ratio: 5 / 7;
@@ -19217,13 +19234,42 @@ button.tileset-relationship-cell {
   opacity: 1;
 }
 
-.run-card-purchased-indicator {
-  display: block;
-  font: var(--ds-weight-bold) var(--ds-text-sm)/1 var(--ds-font-display);
-  letter-spacing: .08em;
-  padding: var(--ds-space-2) var(--ds-space-3);
-  text-align: center;
-  text-transform: uppercase;
+.run-shop-cards-empty {
+  justify-self: center;
+  padding: var(--ds-space-3) var(--ds-space-4);
+}
+
+/* A bought card travels above every clipped Shop and shell layer into the real
+   Chartulary shortcut. Translation and scale share one functional-transfer beat:
+   the centre follows a straight segment while the card minimizes into the mark. */
+.run-card-flight-shield {
+  cursor: wait;
+  inset: 0;
+  pointer-events: auto;
+  position: fixed;
+  z-index: 10010;
+}
+
+.run-card-flight {
+  --run-card-flight-duration: var(--ds-duration-transfer);
+  pointer-events: none;
+  position: fixed;
+  scale: 1;
+  transform-origin: center;
+  transition:
+    translate var(--run-card-flight-duration) var(--ds-ease-out),
+    scale var(--run-card-flight-duration) var(--ds-ease-standard);
+  will-change: translate, scale;
+  z-index: 10011;
+}
+
+.run-card-flight > .run-card-action {
+  inline-size: 100%;
+}
+
+.run-card-flight.is-landed {
+  scale: var(--run-card-flight-scale);
+  translate: var(--run-card-flight-x) var(--run-card-flight-y);
 }
 
 .run-paid-lipsanon-price,
@@ -22184,7 +22230,8 @@ button.tileset-relationship-cell {
 }
 
 .skirmish-hud-titlebar > .kit-panel-title {
-  padding-inline-end: calc(32px + var(--ds-space-3) + var(--le-control-content-inset));
+  /* Four 24px section marks, four 4px gaps, and the 32px book. */
+  padding-inline-end: calc(144px + var(--ds-space-3) + var(--le-control-content-inset));
 }
 
 .skirmish-screen .skirmish-hud-titlebar > .outer-chrome-header-title-actions {
@@ -22207,6 +22254,39 @@ button.tileset-relationship-cell {
   line-height: 0;
   min-block-size: 0;
   padding: 0;
+}
+
+.strategikon-title-navigation {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-space-1);
+}
+
+.strategikon-title-section-action {
+  block-size: 24px;
+  inline-size: 24px;
+  opacity: .62;
+  transition:
+    filter var(--ds-duration-fast) var(--ds-ease-standard),
+    opacity var(--ds-duration-fast) var(--ds-ease-standard);
+}
+
+.strategikon-title-section-action:is(:hover, :focus-visible, .active) {
+  filter: brightness(1.22) saturate(1.08);
+  opacity: 1;
+}
+
+.strategikon-title-section-action:focus-visible {
+  outline: 2px solid rgba(255, 216, 122, .85);
+  outline-offset: 1px;
+}
+
+.strategikon-title-section-action img {
+  block-size: 22px;
+  image-rendering: pixelated;
+  inline-size: 22px;
+  object-fit: contain;
+  pointer-events: none;
 }
 
 .skirmish-hud-title-action.active {
