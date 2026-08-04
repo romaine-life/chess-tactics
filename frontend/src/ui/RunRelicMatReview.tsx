@@ -242,6 +242,9 @@ export function RelicMatStage({
 }): ReactElement {
   const landingSlot = useRef<HTMLSpanElement | null>(null);
   const gone = new Set([...(taken ?? []), ...(flying ? [flying] : [])]);
+  // Sticky, like the game's: the mat does not put the other relics back once one has been
+  // chosen. Reset is what lays them out again.
+  const taking = gone.size > 0;
   return (
     <div
       className="relic-mat-stage"
@@ -260,7 +263,7 @@ export function RelicMatStage({
             row's intrinsic sizing, and the layer grows to the raster instead of the cards. */}
         <img className="relic-mat-art" src={candidate.version.media!.url} alt="" draggable={false} />
         {cards ? (
-          <div className="relic-mat-cards" data-testid="relic-mat-offers" data-taking={flying ? '' : undefined}>
+          <div className="relic-mat-cards" data-testid="relic-mat-offers" data-taking={taking ? '' : undefined}>
             {REVIEW_RELICS.map((relicId, index) => {
               const relic = RUN_RELIC_BY_ID[relicId];
               const flown = gone.has(relicId);
@@ -271,6 +274,7 @@ export function RelicMatStage({
                   label={`${relic.name}. ${relic.description}`}
                   popupMaxInlineSize={288}
                   title={relic.name}
+                  suppressed={taking}
                   // The same per-offer clock the game lays down, so the tuner is judging
                   // the composition the player sees and not three synchronised copies.
                   style={relicFloatClock(index)}
@@ -544,7 +548,7 @@ export function RelicMatViewer({
             {/* Clicking a relic on the stage plays its travel to the corner. This lays them
                 back out so it can be replayed without leaving the screen. */}
             <label className="tileset-catalog-zoom">
-              <span>Take animation <strong data-testid="relic-mat-taken-count">{taken.length}/{REVIEW_RELICS.length} sent</strong></span>
+              <span>Take animation <strong data-testid="relic-mat-taken-count">{taken.length ? 'taken' : 'ready'}</strong> — click a relic on the mat</span>
               <div className="pages-ctl-row">
                 <ChromeButton
                   unit="inner-text-button"

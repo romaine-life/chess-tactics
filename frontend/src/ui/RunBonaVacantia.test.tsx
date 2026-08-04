@@ -150,6 +150,18 @@ describe('Bona Vacantia relics', () => {
     expect(RELIC_MOTION_COMMITTED.recede).toBe(0);
   });
 
+  it('never puts the untaken relics back once a relic has been chosen', () => {
+    // The flight ends when the relic lands, so anything derived from it un-takes the mat in
+    // the beat before the shop replaces it — the relics reappear at full size mid-exit. The
+    // choice is latched instead, and the tip goes with them: pointer-events cannot end a
+    // hover the pointer is already inside, so a name outlives the relic it describes.
+    const source = readFileSync(new URL('./RunBonaVacantia.tsx', import.meta.url), 'utf8');
+    expect(source).toContain("data-taking={departed ? '' : undefined}");
+    expect(source).toContain('const flying = departed === relicId;');
+    expect(source).toContain('suppressed={Boolean(departed)}');
+    expect(source).not.toMatch(/data-taking=\{flight/);
+  });
+
   it('holds the hovered relic at a whole-pixel size', () => {
     // The icons are 64px sprites drawn 1:1 and rendered nearest-neighbour. A fractional
     // hover size lands the sampling grid between source pixels and the edges shimmer, so the

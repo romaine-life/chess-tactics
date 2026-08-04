@@ -37,8 +37,11 @@ export function RunBonaVacantia({
 }): ReactElement | null {
   const vacantia = run.vacantia;
   const [target, setTarget] = useState('');
+  // Latched, not derived from the flight: the flight ends when the relic lands, and the mat
+  // must not un-take itself in the beat before the shop replaces it. Choosing is final.
+  const [departed, setDeparted] = useState<RunRelicId | null>(null);
   const mat = installedRelicMatUrl();
-  const { flight, launch, element } = useRelicFlight((relicId) => {
+  const { launch, element } = useRelicFlight((relicId) => {
     replace(takeVacantiaRelic(run, relicId, target || undefined));
   });
 
@@ -48,6 +51,8 @@ export function RunBonaVacantia({
   const heldRelicCount = run.relics.filter((relicId) => Boolean(RUN_RELIC_BY_ID[relicId])).length;
 
   function take(relicId: RunRelicId, icon: Element | null): void {
+    if (departed) return;
+    setDeparted(relicId);
     // Nothing measurable to fly between means nothing to show — take the relic outright
     // rather than stalling the screen on its own presentation.
     if (!launch(relicId, icon, relicStripLandingPoint(heldRelicCount))) {
@@ -84,12 +89,12 @@ export function RunBonaVacantia({
           <div
             className="relic-mat-cards"
             data-testid="run-vacantia-offers"
-            data-taking={flight ? '' : undefined}
+            data-taking={departed ? '' : undefined}
           >
             {vacantia.offers.map((relicId, index) => {
               const relic = RUN_RELIC_BY_ID[relicId];
               const blocked = relicTargetRequired(relicId) && !target;
-              const flying = flight?.relicId === relicId;
+              const flying = departed === relicId;
               return (
                 <Tooltip
                   className={`relic-mat-offer${flying ? ' is-flying' : ''}`}
@@ -97,6 +102,8 @@ export function RunBonaVacantia({
                   label={`${relic.name}. ${relic.description}`}
                   popupMaxInlineSize={288}
                   title={relic.name}
+                  // The mat is emptying; a name still floating over it belongs to nothing.
+                  suppressed={Boolean(departed)}
                   // Each relic breathes on its own clock. One shared clock makes three
                   // objects lying loose on a table read as a single animated strip.
                   style={relicFloatClock(index)}

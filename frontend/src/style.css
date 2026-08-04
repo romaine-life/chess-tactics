@@ -19807,7 +19807,11 @@ button.tileset-relationship-cell {
     scale var(--relic-take-duration) var(--relic-take-easing);
 }
 
-.relic-mat-cards[data-taking] .run-vacantia-take {
+/* The WHOLE offer stops taking the pointer, not just its button: dropping only the button
+   leaves the tooltip wrapper hovered, and the name of a relic that is no longer on the mat
+   goes on floating over an empty tray. Killing hit-testing on the wrapper makes the browser
+   re-evaluate what is under the cursor, the hover ends, and the tip goes with it. */
+.relic-mat-cards[data-taking] .relic-mat-offer {
   pointer-events: none;
 }
 
