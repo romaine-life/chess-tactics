@@ -4762,7 +4762,7 @@ async function main() {
   }
   const activeRunKing = {
     id: 'run-king', name: 'David of Israel', type: 'king', number: 1,
-    inspectionSeed: 1701, abilities: ['primogeniture'], modifiers: [], source: 'king',
+    inspectionSeed: 1701, abilities: [], modifiers: [], source: 'king',
   };
   const activeRunPawnA = {
     id: 'run-pawn-a', name: 'Stephen Botiller', type: 'pawn', number: 1,
@@ -4776,12 +4776,12 @@ async function main() {
   const activeRunStarterCards = [{
     id: 'run-card-his-grace', coreId: 'his-grace', cardType: null,
     effectSeed: 0, effectTargetUnitId: null,
-    unitIds: ['run-king'], lostUnitIds: [], cacochymicUnitId: null,
+    unitSeats: ['run-king'], lostUnitIds: [], cacochymicUnitId: null,
     acquiredAfterBattleIndex: 0,
   }, {
     id: 'run-card-front-lines', coreId: 'front-lines', cardType: null,
     effectSeed: 0, effectTargetUnitId: null,
-    unitIds: ['run-pawn-a', 'run-pawn-b'], lostUnitIds: [], cacochymicUnitId: null,
+    unitSeats: ['run-pawn-a', 'run-pawn-b'], lostUnitIds: [], cacochymicUnitId: null,
     acquiredAfterBattleIndex: 0,
   }];
   const activeRunNumberState = { pawn: 3, knight: 1, bishop: 1, rook: 1, queen: 1, king: 2 };
@@ -4860,7 +4860,7 @@ async function main() {
           cardType: 'pestiferous',
           effectSeed: 1703,
           effectTargetUnitId: null,
-          unitIds: ['run-pawn-a'],
+          unitSeats: ['run-pawn-a'],
           lostUnitIds: [],
           cacochymicUnitId: null,
           acquiredAfterBattleIndex: 0,
@@ -5041,13 +5041,13 @@ async function main() {
       {
         id: 'run-card-1', coreId: activeRunOffers[0].id, cardType: null,
         effectSeed: activeRunOffers[0].effectSeed, effectTargetUnitId: null,
-        unitIds: [adlectedPawn.id], lostUnitIds: [], cacochymicUnitId: null,
+        unitSeats: [adlectedPawn.id], lostUnitIds: [], cacochymicUnitId: null,
         acquiredAfterBattleIndex: 0,
       },
       {
         id: 'run-card-2', coreId: activeRunOffers[1].id, cardType: null,
         effectSeed: activeRunOffers[1].effectSeed, effectTargetUnitId: null,
-        unitIds: [adlectedKnight.id], lostUnitIds: [], cacochymicUnitId: null,
+        unitSeats: [adlectedKnight.id], lostUnitIds: [], cacochymicUnitId: null,
         acquiredAfterBattleIndex: 0,
       },
     ],
