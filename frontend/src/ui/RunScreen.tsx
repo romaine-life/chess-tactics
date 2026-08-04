@@ -28,16 +28,16 @@ import {
   CACOCHYMIC_DISPLAY_NAME,
   GOLD_SCALE,
   RUN_RELIC_BY_ID,
-  battleVictoryGoldTenths,
   buyCard,
   buyPaidRelic,
   canLeaveShop,
   cashOutPawn,
+  closeBattle,
   hasRelic,
+  leaveAftermath,
   leaveShop,
   markReservistDeployed,
   observeRunUnitDeath,
-  openShop,
   prepareDeployment,
   resetShop,
   restartBattle,
@@ -130,10 +130,12 @@ function runPhaseRouteName(run: RunDocument): string {
   // 'bona-vacantia' is the only phase id that is not one capitalised word, so capitalising
   // the id would route to "Bona-vacantia".
   return run.phase === 'victory'
-    ? 'Victory'
-    : run.phase === 'bona-vacantia'
-      ? 'Bona Vacantia'
-      : `${run.phase.charAt(0).toUpperCase()}${run.phase.slice(1)}`;
+    ? 'War Won'
+    : run.phase === 'aftermath'
+      ? 'Victory'
+      : run.phase === 'bona-vacantia'
+        ? 'Bona Vacantia'
+        : `${run.phase.charAt(0).toUpperCase()}${run.phase.slice(1)}`;
 }
 
 function RunTitleBarStatus({ run }: { run: RunDocument }): ReactElement {
@@ -220,9 +222,11 @@ function RunMetaControls({
       ? 'Deployment'
       : run.phase === 'battle'
         ? 'Battle'
-        : run.phase === 'victory'
+        : run.phase === 'aftermath'
           ? 'Victory'
-          : 'Shop';
+          : run.phase === 'victory'
+            ? 'War Won'
+            : 'Shop';
   return (
     <>
       {abandonDialog}
@@ -776,10 +780,6 @@ function ShopPanel({
 }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   const shop = run.shop!;
-  const opening = shop.kind === 'opening';
-  const victoryGoldTenths = Number.isSafeInteger(shop.victoryGoldTenths) && shop.victoryGoldTenths >= 0
-    ? shop.victoryGoldTenths
-    : battleVictoryGoldTenths(run.war.battles[shop.afterBattleIndex].level);
   const pestiferousLosses = run.pestiferousLosses.filter((loss) => loss.battleIndex === shop.afterBattleIndex);
   // Painted on the workspace element so it reaches the shell padding; an inner
   // layer stops at the scroller and leaves the old backdrop showing.
@@ -796,13 +796,8 @@ function ShopPanel({
           aria-label="Shop"
           backgroundArtwork={shopScene}
         >
-        {opening ? null : (
-          <div className="run-shop-rules">
-            <span>Victory</span>
-            <span aria-hidden="true">+</span>
-            <RunGoldAmount valueTenths={victoryGoldTenths} />
-          </div>
-        )}
+        {/* What the Battle paid is reported on the Battle's own aftermath screen, which the
+            player has already passed through to reach this one. */}
         {pestiferousLosses.length ? (
           <InnerChromeBox className="run-pestiferous-losses" role="status">
             <h3>Pestiferous attrition</h3>
@@ -861,6 +856,103 @@ function ShopPanel({
         </RunWorkspace>
       )}
     </>
+  );
+}
+
+/** Wall-clock time on a Battle, in the shape a clock reads: 4:37, or 1:04:37 past an hour. */
+function formatBattleElapsed(elapsedMs: number): string {
+  const total = Math.round(elapsedMs / 1000);
+  const seconds = total % 60;
+  const minutes = Math.floor(total / 60) % 60;
+  const hours = Math.floor(total / 3600);
+  const padded = (value: number): string => String(value).padStart(2, '0');
+  return hours ? `${hours}:${padded(minutes)}:${padded(seconds)}` : `${minutes}:${padded(seconds)}`;
+}
+
+function AftermathMeasure({
+  label,
+  children,
+  detail = null,
+}: {
+  label: string;
+  children: ReactNode;
+  detail?: ReactNode;
+}): ReactElement {
+  return (
+    <div className="run-aftermath-measure">
+      <dt>{label}</dt>
+      <dd>
+        <span className="run-aftermath-measure-value">{children}</span>
+        {detail ? <span className="run-aftermath-measure-detail">{detail}</span> : null}
+      </dd>
+    </div>
+  );
+}
+
+/**
+ * The screen that closes a won Battle. It is a phase of its own rather than a card over the
+ * board: the fight is finished, so the board behind it is no longer the thing being looked at,
+ * and the reward it reports used to be a line inside the Shop -- announcing the result of the
+ * fight in the room where the money is spent.
+ *
+ * The gold is not banked until Continue, so what the screen says it won and what the Run then
+ * receives are the same number read twice.
+ */
+function AftermathPanel({ run }: { run: RunDocument }): ReactElement {
+  const replace = useActiveRun((state) => state.replace);
+  const aftermath = run.aftermath!;
+  const progress = runBattleProgress(run);
+  const levelName = run.war.battles[aftermath.battleIndex]?.level.name ?? '';
+  const named = levelName && !isGeneratedRunBattleName(levelName) ? levelName : null;
+  return (
+    <RunWorkspace
+      className="run-aftermath-workspace"
+      contentClassName="run-aftermath-workspace-content"
+      data-testid="run-aftermath-workspace"
+      aria-labelledby="run-aftermath-workspace-title"
+      backgroundArtwork={workspaceBackgroundArtwork('run-victory')}
+    >
+      <header className="run-aftermath-head">
+        <p className="run-aftermath-eyebrow">
+          Conflict {progress.conflict} · Battle {progress.battle} of {progress.battlesInConflict}
+        </p>
+        <h2 id="run-aftermath-workspace-title" className="run-aftermath-title">Victory</h2>
+        {named ? <p className="run-aftermath-subtitle">{named}</p> : null}
+      </header>
+
+      <InnerChromeBox as="div" className="run-aftermath-report">
+        <dl className="run-aftermath-ledger">
+          <AftermathMeasure
+            label="Gold won"
+            detail={aftermath.bonusGoldTenths
+              ? `including ${RUN_RELIC_BY_ID['mercenarys-rifle'].name}`
+              : null}
+          >
+            <RunGoldAmount valueTenths={aftermath.goldTenths} />
+          </AftermathMeasure>
+          <AftermathMeasure label="Turns taken">{aftermath.turns}</AftermathMeasure>
+          <AftermathMeasure label="Time">
+            {aftermath.elapsedMs === null ? '—' : formatBattleElapsed(aftermath.elapsedMs)}
+          </AftermathMeasure>
+          <AftermathMeasure
+            label="Fallen"
+            detail={aftermath.fallenUnits.length
+              ? aftermath.fallenUnits.map((unit) => unit.name).join(' · ')
+              : 'The whole force came through.'}
+          >
+            {aftermath.fallenUnits.length}
+          </AftermathMeasure>
+        </dl>
+      </InnerChromeBox>
+
+      <ChromeButton unit="inner-text-button"
+        data-testid="run-aftermath-continue"
+        className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+        onClick={() => replace(leaveAftermath(run))}
+      >
+        Continue
+      </ChromeButton>
+    </RunWorkspace>
   );
 }
 
@@ -988,9 +1080,9 @@ function RunBattlefieldPanel({
     activityId: runBattleActivityId(runId, run.battleIndex),
     relicIds,
     transformCommittedBoard,
-    onVictory: (survivors) => {
+    onVictory: (report) => {
       const latest = useActiveRun.getState().run;
-      if (latest?.id === runId) replace(openShop(latest, survivors));
+      if (latest?.id === runId) replace(closeBattle(latest, report));
     },
     onRestart: () => {
       const latest = useActiveRun.getState().run;
@@ -1235,7 +1327,9 @@ export function RunScreen({
             // its own case silently renders Victory.
             : shellRun.phase === 'bona-vacantia' && shellRun.vacantia
               ? <RunBonaVacantia run={shellRun} replace={replace} />
-              : <VictoryPanel run={shellRun} />);
+              : shellRun.phase === 'aftermath' && shellRun.aftermath
+                ? <AftermathPanel run={shellRun} />
+                : <VictoryPanel run={shellRun} />);
   return (
     <RunPresentationSceneSlot
       className="run-scene-slot"

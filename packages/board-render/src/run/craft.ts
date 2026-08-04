@@ -30,9 +30,11 @@ import {
   beginBattle,
   buyCard,
   canLeaveShop,
+  closeBattle,
   createRun,
   leaveShop,
   mixSeed,
+  observeRunUnitDeath,
   openShop,
   prepareDeployment,
   removeUnitFromArmyAndCards,
@@ -72,11 +74,22 @@ export const RUN_CRAFT_PARAMS: readonly string[] = Object.freeze([
   'loot',
   'paid',
   'relics',
+  'turns',
+  'seconds',
+  'fallen',
 ]);
 
 export const DEFAULT_CRAFT_SEED = 1337;
 
-export type RunCraftPhase = 'bona-vacantia' | 'shop' | 'deployment' | 'battle' | 'victory';
+export type RunCraftPhase = 'aftermath' | 'bona-vacantia' | 'shop' | 'deployment' | 'battle' | 'victory';
+
+/**
+ * What a crafted aftermath reports when the spec does not say. A crafted Battle is placed,
+ * not played, so it has no turn count or clock of its own; these stand in for one that reads
+ * like a real Battle rather than an empty ledger.
+ */
+export const DEFAULT_CRAFT_AFTERMATH_TURNS = 14;
+export const DEFAULT_CRAFT_AFTERMATH_ELAPSED_MS = 277_000;
 
 export interface RunCraftCard {
   pieces: PurchasablePieceType[];
@@ -107,6 +120,11 @@ export interface RunCraftSpec {
   loot: RunRelicId[] | null;
   paidRelic: RunRelicId | null;
   relics: RunRelicId[] | null;
+  /** Aftermath only: what the Battle's report says it cost. A crafted Battle is not played,
+   * so these are the only way to put a specific result on that screen. */
+  turns: number | null;
+  elapsedMs: number | null;
+  fallen: number | null;
 }
 
 /** A spec the crafter refuses. The message is written for the person reading it on the screen. */
@@ -150,7 +168,7 @@ const CARD_TYPES: Readonly<Record<string, RunCardType | null>> = Object.freeze({
   agminate: 'hieratic',
 });
 
-const CRAFT_PHASES: readonly RunCraftPhase[] = ['bona-vacantia', 'shop', 'deployment', 'battle', 'victory'];
+const CRAFT_PHASES: readonly RunCraftPhase[] = ['aftermath', 'bona-vacantia', 'shop', 'deployment', 'battle', 'victory'];
 
 function pieceList(raw: string, label: string): PurchasablePieceType[] {
   const pieces: PurchasablePieceType[] = [];
@@ -252,6 +270,11 @@ export function parseRunCraftSpec(search: string): RunCraftSpec | null {
     loot: loot === null ? null : relicList(loot, 'loot'),
     paidRelic: paid === null ? null : relicList(paid, 'paid')[0] ?? null,
     relics: relics === null ? null : relicList(relics, 'relics'),
+    turns: params.get('turns') === null ? null : integer(params.get('turns')!, 'turns', 0, 999),
+    elapsedMs: params.get('seconds') === null
+      ? null
+      : integer(params.get('seconds')!, 'seconds', 0, 86_400) * 1000,
+    fallen: params.get('fallen') === null ? null : integer(params.get('fallen')!, 'fallen', 0, 100),
   };
 }
 
@@ -345,6 +368,11 @@ export function runCraftSpecFromJson(raw: unknown): RunCraftSpec {
     loot: spec.loot === undefined || spec.loot === null ? null : relicIdList(spec.loot, 'loot'),
     paidRelic: spec.paid === undefined || spec.paid === null ? null : relicIdList(spec.paid, 'paid')[0] ?? null,
     relics: spec.relics === undefined || spec.relics === null ? null : relicIdList(spec.relics, 'relics'),
+    turns: spec.turns === undefined || spec.turns === null ? null : jsonInteger(spec.turns, 'turns', 0, 999),
+    elapsedMs: spec.seconds === undefined || spec.seconds === null
+      ? null
+      : jsonInteger(spec.seconds, 'seconds', 0, 86_400) * 1000,
+    fallen: spec.fallen === undefined || spec.fallen === null ? null : jsonInteger(spec.fallen, 'fallen', 0, 100),
   };
 }
 
@@ -419,6 +447,9 @@ export function runCraftSpecToJson(spec: RunCraftSpec): Record<string, unknown> 
   if (spec.loot) json.loot = [...spec.loot];
   if (spec.paidRelic !== null) json.paid = spec.paidRelic;
   if (spec.relics) json.relics = [...spec.relics];
+  if (spec.turns !== null) json.turns = spec.turns;
+  if (spec.elapsedMs !== null) json.seconds = spec.elapsedMs / 1000;
+  if (spec.fallen !== null) json.fallen = spec.fallen;
   return json;
 }
 
@@ -462,6 +493,9 @@ export function runCraftAddressParams(spec: RunCraftSpec): URLSearchParams {
   if (spec.loot) params.set('loot', spec.loot.join(','));
   if (spec.paidRelic !== null) params.set('paid', spec.paidRelic);
   if (spec.relics) params.set('relics', spec.relics.join(','));
+  if (spec.turns !== null) params.set('turns', String(spec.turns));
+  if (spec.elapsedMs !== null) params.set('seconds', String(spec.elapsedMs / 1000));
+  if (spec.fallen !== null) params.set('fallen', String(spec.fallen));
   return params;
 }
 
@@ -563,6 +597,51 @@ function fightBattle(run: RunDocument): RunDocument {
   // Every deployed unit survives a crafted Battle: the crafter is placing the player at a state,
   // not simulating an outcome.
   return openShop(started, deployedUnitIds);
+}
+
+/**
+ * Stop at the aftermath report of the Battle the spec names, rather than fast-forwarding
+ * through it into the shop.
+ *
+ * A crafted Battle is placed and not played, so it has no casualties, no turn count and no
+ * clock. All three are put there through the transitions that would have written them: the
+ * fallen are observed one at a time, and the Battle's recorded start is backdated so
+ * closeBattle measures the elapsed time the spec asked for.
+ */
+function craftAftermath(run: RunDocument, spec: RunCraftSpec): RunDocument {
+  const { run: deployed, layout } = autoDeploy(run);
+  const deployedUnitIds = Object.keys(layout.placements);
+  let started = beginBattle(deployed, deployedUnitIds, layout.reserveUnitIds, layout.blockedUnitIds);
+  if (started.phase !== 'battle') throw new RunCraftError('craft: the crafted Battle could not be started.');
+
+  // A King that fell would have lost the Battle, so it is never on the casualty list.
+  const canFall = deployedUnitIds.filter((id) => started.army.find((unit) => unit.id === id)?.type !== 'king');
+  const fallenCount = spec.fallen ?? 0;
+  if (fallenCount > canFall.length) {
+    throw new RunCraftError(
+      `craft fallen: Battle ${started.battleIndex + 1} deploys ${canFall.length} unit${canFall.length === 1 ? '' : 's'} that could fall.`,
+    );
+  }
+  const fallen = new Set(canFall.slice(0, fallenCount));
+  for (const unitId of fallen) started = observeRunUnitDeath(started, unitId).run;
+
+  const elapsedMs = spec.elapsedMs ?? DEFAULT_CRAFT_AFTERMATH_ELAPSED_MS;
+  started = {
+    ...started,
+    battleRuntime: started.battleRuntime
+      ? { ...started.battleRuntime, startedAtMs: Date.now() - elapsedMs }
+      : null,
+  };
+  const closed = closeBattle(started, {
+    survivingUnitIds: deployedUnitIds.filter((id) => !fallen.has(id)),
+    turns: spec.turns ?? DEFAULT_CRAFT_AFTERMATH_TURNS,
+  });
+  if (closed.phase !== 'aftermath') {
+    throw new RunCraftError(
+      `craft: Battle ${started.battleIndex + 1} ends the War, so the War's victory screen follows it rather than a Battle report. Craft victory instead.`,
+    );
+  }
+  return closed;
 }
 
 /**
@@ -855,6 +934,9 @@ export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDo
   const deploymentIndex = spec.phase === 'shop'
     ? targetIndex - 1
     : spec.phase === 'victory' ? battles - 1 : targetIndex;
+  if (spec.phase !== 'aftermath' && (spec.turns !== null || spec.elapsedMs !== null || spec.fallen !== null)) {
+    throw new RunCraftError('craft: turns, seconds and fallen describe a Battle report, so they belong to craft=aftermath.');
+  }
   // A crafted army REPLACES the roster, which takes the units the held cards put there with it —
   // so the two ways of saying what the Run has cannot both be given.
   if (spec.cards && spec.army) {
@@ -884,6 +966,10 @@ export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDo
       spec.goldTenths,
     );
   }
+
+  // The Battle report stands between the Battle and the shop, so it is reached by fighting
+  // the Battle the spec names and stopping on the screen that closes it.
+  if (spec.phase === 'aftermath') return applyGold(craftAftermath(run, spec), spec.goldTenths);
 
   const shopped = takeVacantiaAuto(fightBattle(run));
   if (spec.phase === 'victory') {

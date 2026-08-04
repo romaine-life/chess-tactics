@@ -80,7 +80,7 @@ import { useSkirmishViewStoreApi } from '../game/SkirmishViewStoreContext';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox, ShellViewportSwap } from './shared/ChromeBox';
 import { rememberAdminBattleHref } from '../admin/battleRoute';
-import type { RunRelicId } from '../run/model';
+import type { RunBattleReport, RunRelicId } from '../run/model';
 import { useActiveRun } from '../run/store';
 import { RunRelicStrip } from './RunRelics';
 import { Strategikon } from './Strategikon';
@@ -92,7 +92,9 @@ export interface RunBattlePresentation {
   seed: number;
   activityId: string;
   relicIds: readonly RunRelicId[];
-  onVictory: (survivingPersistentUnitIds: string[]) => void;
+  /** The Battle is won. What it cost is read off the live board here, because nothing
+   *  outside it keeps the turn count once the board unmounts. */
+  onVictory: (report: RunBattleReport) => void;
   onRestart: () => void;
   onPawnCashOut?: (unitId: string) => void;
   onAbandonRun?: () => void;
@@ -360,6 +362,9 @@ function SkirmishSession({
   const activateClock = useSkirmish((s) => s.activateClock);
   const playableSurfaceReady = boardSurfaceReady && (runBattle ? true : hudSurfaceReady);
   const game = useSkirmish((s) => s.game);
+  // The Battle's own turn clock, for the aftermath report. It lives in this store and
+  // nowhere else, so it has to be read while the board is still mounted.
+  const turnsElapsed = useSkirmish((s) => s.turnsElapsed);
   const adminMode = useSkirmish((s) => s.adminMode);
   const adminWinBattle = useSkirmish((s) => s.adminWinBattle);
   // A Run Battle is promoted in place from its already-painted Deployment board. Keep the
@@ -1438,11 +1443,12 @@ function SkirmishSession({
               {game.winner === 'player' ? (
                 <ChromeButton unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-                  onClick={() => runBattle.onVictory(
-                    game.pieces
+                  onClick={() => runBattle.onVictory({
+                    survivingUnitIds: game.pieces
                       .filter((piece) => piece.alive && piece.side === 'player' && piece.id.startsWith('run-'))
                       .map((piece) => piece.id),
-                  )}
+                    turns: turnsElapsed,
+                  })}
                 >
                   Continue
                 </ChromeButton>

@@ -23,13 +23,16 @@ import {
   buyCard,
   canLeaveShop,
   cashOutPawn,
+  closeBattle,
   createRun,
   createRunCardOffer,
   deterioratePestiferousCards,
   formatGold,
   grantGold,
   hieraticAgminateAcquisitionTarget,
+  leaveAftermath,
   leaveShop,
+  observeRunUnitDeath,
   normalizeRunDocument,
   OPENING_SHOP_ROLL_BATTLE_INDEX,
   openingShopOffers,
@@ -358,6 +361,70 @@ describe('Run piece economy', () => {
     expect(reset.army).toEqual(originalArmy);
     expect(reset.goldTenths).toBe(originalGold);
     expect(shopHasChanges(reset)).toBe(false);
+  });
+});
+
+describe('the aftermath report that closes a Battle', () => {
+  it('stops on its own screen and banks nothing until the player leaves it', () => {
+    const battle = deployedRun(12, war(2));
+    const closed = closeBattle(battle, { survivingUnitIds: [], turns: 9 });
+
+    expect(closed.phase).toBe('aftermath');
+    expect(closed.shop).toBeNull();
+    // The gold is reported here and paid on Continue, so the screen cannot promise
+    // a number the Run then fails to hand over.
+    expect(closed.goldTenths).toBe(battle.goldTenths);
+    expect(closed.aftermath?.goldTenths).toBe(GOLD_SCALE);
+
+    const shop = leaveAftermath(closed);
+    expect(shop.phase).toBe('shop');
+    expect(shop.goldTenths).toBe(battle.goldTenths + GOLD_SCALE);
+    expect(shop.shop?.victoryGoldTenths).toBe(GOLD_SCALE);
+    expect(shop.aftermath).toBeNull();
+  });
+
+  it('reports the turns, the clock and the units that fell', () => {
+    const battle = deployedRun(12, war(2));
+    const fallen = battle.army.find((unit) => unit.type !== 'king')!;
+    const withLoss = observeRunUnitDeath(battle, fallen.id).run;
+    const closed = closeBattle(withLoss, { survivingUnitIds: [], turns: 23 });
+
+    expect(closed.aftermath?.turns).toBe(23);
+    expect(closed.aftermath?.elapsedMs).toBeGreaterThanOrEqual(0);
+    expect(closed.aftermath?.fallenUnits).toEqual([
+      { id: fallen.id, name: fallen.name, type: fallen.type },
+    ]);
+    // The runtime that knows who fell is torn down when the shop opens, so the list
+    // has to survive on the report rather than be recomputed from it.
+    expect(leaveAftermath(closed).battleRuntime).toBeNull();
+  });
+
+  it('carries the survivors it was given into the shop it opens', () => {
+    const battle = acquireRelic(deployedRun(12, war(2)), 'mercenarys-rifle');
+    const survivors = battle.army.map((unit) => unit.id);
+    const closed = closeBattle(battle, { survivingUnitIds: survivors, turns: 4 });
+    const bonus = battle.army.reduce((total, unit) => total + PIECE_VALUE[unit.type], 0);
+
+    expect(closed.aftermath?.bonusGoldTenths).toBe(bonus);
+    expect(closed.aftermath?.goldTenths).toBe(GOLD_SCALE + bonus);
+    expect(leaveAftermath(closed).goldTenths).toBe(battle.goldTenths + GOLD_SCALE + bonus);
+  });
+
+  it('gives the final Battle straight to the War victory screen, which is its own report', () => {
+    const first = leaveAftermath(closeBattle(deployedRun(12, war(2)), { survivingUnitIds: [], turns: 3 }));
+    const finalBattle = beginBattle(prepareDeployment(leaveShop(first)), [], [], []);
+
+    const won = closeBattle(finalBattle, { survivingUnitIds: [], turns: 3 });
+    expect(won.phase).toBe('victory');
+    expect(won.aftermath).toBeNull();
+  });
+
+  it('refuses to report a Battle that is not over, and a report that has already been left', () => {
+    const battle = deployedRun(12, war(2));
+    const closed = closeBattle(battle, { survivingUnitIds: [], turns: 3 });
+    expect(closeBattle(closed, { survivingUnitIds: [], turns: 99 })).toBe(closed);
+    expect(leaveAftermath(battle)).toBe(battle);
+    expect(leaveAftermath(leaveAftermath(closed)).phase).toBe('shop');
   });
 });
 

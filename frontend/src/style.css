@@ -19075,7 +19075,6 @@ button.tileset-relationship-cell {
   text-transform: uppercase;
 }
 
-.run-shop-rules,
 .run-paid-relic-price,
 .run-victory-summary {
   align-items: center;
@@ -19257,6 +19256,96 @@ button.tileset-relationship-cell {
 .run-victory-summary > span + span::before {
   content: "·";
   margin-inline-end: var(--ds-inline-tight);
+}
+
+/* The screen that closes a won Battle. Every other Run workspace stacks from the
+   top because it is a surface to work on; this one is read once and left, so it
+   centres on its own art instead. */
+.run-aftermath-workspace-content {
+  align-content: center;
+  gap: var(--ds-gutter);
+  justify-items: center;
+  text-align: center;
+}
+
+/* The heading stands directly on the artwork with nothing behind it, so it carries its
+   own shadow the way the Shop's scene copy does. */
+.run-aftermath-head {
+  display: grid;
+  gap: var(--ds-space-3);
+  justify-items: center;
+  text-shadow: 0 2px 6px rgba(2, 7, 12, .9);
+}
+
+.run-aftermath-eyebrow {
+  color: #94daf5;
+  font: var(--ds-weight-regular) var(--ds-text-xs)/1 var(--ds-font-display);
+  letter-spacing: var(--ds-tracking-wide);
+  text-transform: uppercase;
+}
+
+.run-aftermath-title {
+  font: var(--ds-weight-regular) var(--ds-text-display)/1 var(--ds-font-display);
+  letter-spacing: var(--ds-tracking-wide);
+  text-transform: uppercase;
+}
+
+.run-aftermath-subtitle {
+  color: var(--ds-ink-2);
+  font: var(--ds-weight-regular) var(--ds-text-md)/1.2 var(--ds-font-display);
+}
+
+/* The report is a fixed measure rather than the full content line: a ledger of four
+   short rows stretched edge to edge would put its labels and its numbers on opposite
+   sides of the screen. */
+.run-aftermath-report {
+  inline-size: min(100%, 420px);
+}
+
+/* The kit frame's own inner padding is sized for dense panel content; a ledger read at
+   arm's length needs its rows further off the border than that. */
+.run-aftermath-ledger {
+  display: grid;
+  gap: var(--ds-space-4);
+  margin: 0;
+  padding: var(--ds-space-2) var(--ds-space-3);
+}
+
+/* Label left, number right, on one row — the shape a ledger is read in. The pair is
+   flattened into this grid so a label always sits beside its own number, whether or
+   not that measure carries a second line beneath it. */
+.run-aftermath-measure {
+  align-items: center;
+  column-gap: var(--ds-inline);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  row-gap: var(--ds-space-1);
+  text-align: start;
+}
+
+.run-aftermath-measure > dt {
+  color: var(--ds-ink);
+  font: var(--ds-weight-regular) var(--ds-text-md)/1.2 var(--ds-font-display);
+}
+
+.run-aftermath-measure > dd {
+  display: contents;
+  margin: 0;
+}
+
+.run-aftermath-measure-value {
+  font: var(--ds-weight-regular) var(--ds-text-lg)/1 var(--ds-font-display);
+  justify-self: end;
+}
+
+/* What the number does not say on its own: which relic added to the purse, which
+   units are the casualties it counts. It runs the full width because a casualty
+   list is longer than the count it explains. */
+.run-aftermath-measure-detail {
+  color: var(--ds-ink-3);
+  font: var(--ds-weight-regular) var(--ds-text-xs)/1.4 var(--ds-font-display);
+  grid-column: 1 / -1;
+  text-align: end;
 }
 
 .run-relic-card {
@@ -19793,9 +19882,8 @@ button.tileset-relationship-cell {
   object-fit: cover;
 }
 
-/* The gold line reads over the scene rather than above it. Selling is a Shop
-   activity and stands in the same scene, so its heading gets the same treatment. */
-.run-shop-workspace.has-scene .run-shop-workspace-content > .run-shop-rules,
+/* Selling is a Shop activity and stands in the same scene, so its heading reads
+   over the scene art rather than above it. */
 .run-sell-workspace.has-scene .run-sell-workspace-content > :is(h2, p) {
   text-shadow: 0 2px 6px rgba(2, 7, 12, .85);
 }

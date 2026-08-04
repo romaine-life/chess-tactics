@@ -205,6 +205,7 @@ describe('Run chrome hierarchy', () => {
     expect(chromeBox).not.toContain('export function ShellWorkspaceBody');
     for (const testId of [
       'run-shop-workspace',
+      'run-aftermath-workspace',
       'run-victory-workspace',
       'run-army-ledger-workspace',
       'run-army-profile-workspace',
@@ -375,5 +376,32 @@ describe('Run chrome hierarchy', () => {
     expect(styleCss).toMatch(/\.run-army-profile-scene\s*\{[\s\S]*?position:\s*relative;/);
     expect(styleCss).toMatch(/\.run-army-profile-scene-viewport\s*\{[\s\S]*?overflow:\s*hidden;[\s\S]*?position:\s*absolute;/);
     expect(styleCss).not.toContain('.run-army-profile-portrait');
+  });
+
+  // The played handoff cannot be rendered in this suite (the Battle board needs a live
+  // compositor), so the wiring is pinned at its source instead: what the result card
+  // gives the Run, and what the Run does with it.
+  it('hands the won Battle to its own report instead of straight to the Shop', () => {
+    const resultCard = skirmish.match(
+      /data-testid="run-battle-result"[\s\S]*?onClick=\{\(\) => runBattle\.onVictory\(\{[\s\S]*?\}\)\}/,
+    )?.[0] ?? '';
+
+    // The turn count lives in the board store and unmounts with the board, so it is read
+    // while the board is still standing and travels with the survivors.
+    expect(skirmish).toContain('const turnsElapsed = useSkirmish((s) => s.turnsElapsed);');
+    expect(resultCard).toContain('survivingUnitIds: game.pieces');
+    expect(resultCard).toContain('turns: turnsElapsed,');
+    expect(skirmish).toContain('onVictory: (report: RunBattleReport) => void;');
+
+    expect(runScreen).toContain('if (latest?.id === runId) replace(closeBattle(latest, report));');
+    expect(runScreen).not.toContain('replace(openShop(latest');
+    expect(runScreen).toContain("shellRun.phase === 'aftermath' && shellRun.aftermath");
+    expect(runScreen).toContain('<AftermathPanel run={shellRun} />');
+    expect(runScreen).toContain('onClick={() => replace(leaveAftermath(run))}');
+
+    // The reward is reported on the Battle's own screen; restating it in the Shop is the
+    // placement ADR-0377 retired.
+    expect(runScreen).not.toContain('run-shop-rules');
+    expect(styleCss).not.toContain('.run-shop-rules');
   });
 });
