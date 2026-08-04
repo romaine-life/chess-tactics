@@ -363,7 +363,8 @@ try {
     stepThrough: [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Step through'),
     confirm: Boolean(document.querySelector('[data-testid="klerosis-confirm"]')),
     strategikonToggle: Boolean(document.querySelector('[data-testid="strategikon-toggle"]')),
-    rosterGroups: document.querySelectorAll('.run-klerosis-rosters > div').length,
+    roster: Boolean(document.querySelector('.run-klerosis-rosters')),
+    explanatoryCopy: document.body.textContent?.includes('These cards supply this combat') ?? false,
   }));
   if (
     klerosisState.dealtCards === 0
@@ -372,7 +373,8 @@ try {
     || klerosisState.stepThrough
     || !klerosisState.confirm
     || !klerosisState.strategikonToggle
-    || klerosisState.rosterGroups !== 2
+    || klerosisState.roster
+    || klerosisState.explanatoryCopy
   ) {
     await fail('klerosis-boundary', JSON.stringify(klerosisState));
   }

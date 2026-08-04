@@ -7,12 +7,10 @@ import {
   runCardMotionDurationMs,
   type RunCardFlightGeometry,
 } from './runCardFlightView';
-import { runUnitRosterLabel } from './RunArmyWorkspace';
 import { RunSceneViewport } from './RunWorkspace';
 import { useSceneReveal } from './shell/SceneBoundary';
 import { SceneContinuityPortal, useSceneContinuityAvailable } from './shell/SceneContinuity';
 import { ChromeButton } from './shared/ChromeButton';
-import { InnerChromeBox } from './shared/ChromeBox';
 
 /**
  * The pre-Battle deal is a full Run workspace, not a battlefield overlay. The
@@ -37,7 +35,6 @@ export function RunKlerosisWorkspace({
     const card = cardById.get(cardId);
     return card ? [card] : [];
   });
-  const deploying = new Set(run.deployment?.deployingUnitIds ?? []);
   const [dealComplete, setDealComplete] = useState(false);
   const [dealFlights, setDealFlights] = useState<Array<{
     cardId: string;
@@ -166,7 +163,7 @@ export function RunKlerosisWorkspace({
           className: 'run-klerosis-scene',
           contentClassName: 'run-klerosis-workspace-content',
           testId: 'run-klerosis-workspace',
-          ariaLabelledBy: 'run-klerosis-title',
+          ariaLabel: 'Klerosis',
         }}
       >
         <section
@@ -178,8 +175,6 @@ export function RunKlerosisWorkspace({
         >
           <header className="run-klerosis-heading">
             <span className="skirmish-eyebrow">Klerosis</span>
-            <h2 id="run-klerosis-title">Your deployment deal</h2>
-            <p>These cards supply this combat. Their units enter the pool while space allows.</p>
           </header>
 
           <div className="run-klerosis-cards" role="list" aria-label="Cards dealt for this combat">
@@ -199,26 +194,6 @@ export function RunKlerosisWorkspace({
               ) : null;
             })}
           </div>
-
-          <InnerChromeBox className="run-klerosis-rosters">
-            <div>
-              <span className="skirmish-eyebrow">Deploying</span>
-              <ul>
-                {run.army.filter((unit) => deploying.has(unit.id)).map((unit) => (
-                  <li key={unit.id}>{runUnitRosterLabel(unit)}</li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <span className="skirmish-eyebrow">Unavailable</span>
-              <ul>
-                {run.army.filter((unit) => !deploying.has(unit.id)).map((unit) => (
-                  <li key={unit.id}>{runUnitRosterLabel(unit)}</li>
-                ))}
-                {run.army.every((unit) => deploying.has(unit.id)) ? <li>None</li> : null}
-              </ul>
-            </div>
-          </InnerChromeBox>
 
           <div className="run-klerosis-actions">
             <ChromeButton

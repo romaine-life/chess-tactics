@@ -308,6 +308,9 @@ describe('Run chrome hierarchy', () => {
     expect(runKlerosisWorkspace).toContain('runCardFlightGeometry(element.getBoundingClientRect(), chartularyRect)');
     expect(runKlerosisWorkspace).not.toContain('originX');
     expect(runKlerosisWorkspace).not.toContain('originY');
+    expect(runKlerosisWorkspace).not.toContain('Your deployment deal');
+    expect(runKlerosisWorkspace).not.toContain('These cards supply this combat');
+    expect(runKlerosisWorkspace).not.toContain('run-klerosis-rosters');
     expect(runKlerosisWorkspace).not.toContain('Deploy all');
     expect(runKlerosisWorkspace).not.toContain('Step through');
     expect(runKlerosisWorkspace).not.toContain('SkirmishBoard');

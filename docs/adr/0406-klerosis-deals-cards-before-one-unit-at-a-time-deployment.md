@@ -18,6 +18,7 @@ partially_superseded_by:
   - "[ADR-0413](0413-royal-purple-belongs-to-praecipuus-not-starter-status.md)'s Praecipuus-only royal frame"
   - "[ADR-0414](0414-selected-starter-card-media-becomes-dedicated-runtime-identity.md)'s dedicated starter-card runtime identities"
   - "[ADR-0416](0416-klerosis-is-a-dedicated-pre-battle-screen.md)'s separate confirmation workspace before pace selection"
+  - "[ADR-0418](0418-klerosis-presents-the-deal-without-summary-copy-or-rosters.md)'s removal of the Deploying and Unavailable roster"
 refines:
   - "[ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md)"
   - "[ADR-0274](0274-lipsana-grant-unit-owned-deployment-abilities.md)"

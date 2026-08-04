@@ -21133,11 +21133,6 @@ button.tileset-relationship-cell {
   text-align: center;
 }
 
-.run-klerosis-heading > h2,
-.run-klerosis-heading > p {
-  margin: 0;
-}
-
 .run-klerosis-cards {
   align-items: start;
   display: grid;
@@ -21177,27 +21172,6 @@ button.tileset-relationship-cell {
   inline-size: 100%;
 }
 
-.run-klerosis-rosters {
-  display: grid;
-  gap: var(--ds-space-2);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  padding: var(--ds-inset);
-}
-
-.run-klerosis-rosters > div {
-  display: grid;
-  gap: var(--ds-inline-tight);
-}
-
-.run-klerosis-rosters ul {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--ds-inline-tight) var(--ds-space-2);
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
 .run-klerosis-actions {
   display: flex;
   gap: var(--ds-space-2);
@@ -21207,10 +21181,6 @@ button.tileset-relationship-cell {
 @media (max-width: 720px) {
   .run-klerosis-cards {
     grid-template-columns: repeat(auto-fit, minmax(160px, 220px));
-  }
-
-  .run-klerosis-rosters {
-    grid-template-columns: 1fr;
   }
 }
 

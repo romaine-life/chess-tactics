@@ -8,6 +8,8 @@ partially_supersedes:
   - "[ADR-0346](0346-run-deployment-is-a-battlefield-state-with-conditional-input.md)'s whole-Deployment battlefield scope"
   - "[ADR-0350](0350-run-deployment-promotes-the-mounted-battlefield-in-place.md)'s battlefield mount before the Klerosis information boundary"
   - "[ADR-0406](0406-klerosis-deals-cards-before-one-unit-at-a-time-deployment.md)'s immediate Deploy all/Step through choice on the dealt-card presentation"
+partially_superseded_by:
+  - "[ADR-0418](0418-klerosis-presents-the-deal-without-summary-copy-or-rosters.md)'s cards-only confirmation composition"
 refines:
   - "[ADR-0307](0307-every-replaceable-region-is-a-director-owned-scene-slot.md)"
   - "[ADR-0386](0386-shops-offer-read-only-intelligence-on-the-upcoming-battle.md)"
