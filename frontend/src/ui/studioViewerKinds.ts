@@ -25,6 +25,7 @@ export const STUDIO_VIEWER_KIND_LABELS = {
   wallcandidates: 'Wall Candidates',
   sfx: 'Sound Effects',
   gamelab: 'Game Lab',
+  deployment: 'Deployment Lab',
   gym: 'Training Gym',
   solver: 'Board Solver',
   screenart: 'Screen Art',

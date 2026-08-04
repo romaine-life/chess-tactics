@@ -102,8 +102,9 @@ for (const required of [
   'const run = sceneSnapshot.run;',
   '<RunPresentationSceneSlot',
   'navigateApp(nextHref, { replace: true, scroll: false })',
-  'pendingPlacementArrivalUnitIdRef.current = activeDisciplineUnitId',
-  'onArrivingUnitIdsChange: handleArrivingUnitIdsChange',
+  '<KlerosisOverlay',
+  'onChooseMode={(mode) => replace(chooseDeploymentMode(prepared, level, mode))}',
+  'onArrivingUnitIdsChange: () => undefined',
 ]) {
   if (!runScreen.includes(required)) fail(runScreenPath, `missing closed Run scene-source invariant: ${required}`);
 }
@@ -113,6 +114,8 @@ for (const forbidden of [
   'RunWorkspaceStages',
   'PaintedSurfaceBoundary',
   'const [selectedState',
+  'pendingPlacementArrivalUnitIdRef',
+  'handleArrivingUnitIdsChange',
 ]) {
   if (runScreen.includes(forbidden)) fail(runScreenPath, `forbidden local Run presentation authority: ${forbidden}`);
 }

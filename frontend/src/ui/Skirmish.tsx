@@ -53,6 +53,7 @@ import {
   readTimeControlParams,
   readVictoryRulesParam,
   resolvePlayReturnHref,
+  isDeploymentLabReturnHref,
 } from './playtestRoute';
 import { editorBoardToLevel } from '../core/levelBoard';
 import { fetchPublicMap } from '../net/maps';
@@ -311,7 +312,7 @@ function SkirmishSession({
   // Where a test-play should return to (the editor board that launched it, via ?returnTo). Drives
   // a "‹ Back to editor" in the title bar so a live board test is a LOOP — tweak, play, back —
   // not a one-way trip to the skirmish. Null for a normal match (no returnTo), so nothing shows.
-  const launchedReturnHref = readValidatedReturnTo();
+  const launchedReturnHref = readValidatedReturnTo(routeSearch);
   const boardReturnHref = useMemo(() => {
     if (!routeBoard) return null;
     const objective = (OBJECTIVE_TYPES as readonly string[]).includes(routeObjective ?? '')
@@ -342,6 +343,12 @@ function SkirmishSession({
     levelReturnHref,
   });
   const returnIsEditor = !!returnHref && /^\/(editor\/level|level-editor|edit)(\?|$)/.test(returnHref);
+  const returnIsDeploymentLab = isDeploymentLabReturnHref(returnHref);
+  const returnLabel = returnIsEditor
+    ? 'Back to editor'
+    : returnIsDeploymentLab
+      ? 'Back to Deployment Lab'
+      : 'Back';
   const [netError, setNetError] = useState<string | null>(null);
   const [mapError, setMapError] = useState<string | null>(null);
   // Netplay has no campaign result flow, so a decided match shows its own result card.
@@ -1218,7 +1225,7 @@ function SkirmishSession({
       clockControlValue={activeLevel ? scenarioTimeControl : undefined}
       onClockControlChange={activeLevel ? setScenarioTimeControl : undefined}
       returnHref={returnHref}
-      returnLabel={returnIsEditor ? 'Back to editor' : 'Back'}
+      returnLabel={returnLabel}
       netInteractive={netSeatInteractive}
       onOpenPredrawnRegistration={predrawnPreview ? () => setPredrawnPickerOpen(true) : null}
       onPawnCashOut={runBattle?.onPawnCashOut ?? null}
@@ -1337,9 +1344,13 @@ function SkirmishSession({
             id: 'skirmish-return',
             kind: 'navigation',
             presentation: 'return',
-            label: returnIsEditor ? '‹ Back to editor' : '‹ Back',
+            label: `‹ ${returnLabel}`,
             destination: returnHref,
-            title: returnIsEditor ? 'Return to the board editor with this position.' : 'Return to the previous screen.',
+            title: returnIsEditor
+              ? 'Return to the board editor with this position.'
+              : returnIsDeploymentLab
+                ? 'Return to this configured Deployment Lab case.'
+                : 'Return to the previous screen.',
             testId: 'skirmish-return',
           }]}
         />
@@ -1377,7 +1388,7 @@ function SkirmishSession({
               <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate" role="alert" style={{ gap: 10 }}>
                 <strong>{mapError}</strong>
                 <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} to={returnHref ?? PLAY_SKIRMISH_SELECTOR_HREF}>
-                  {returnIsEditor ? 'Back to editor' : 'Back to Play'}
+                  {returnIsEditor ? 'Back to editor' : returnIsDeploymentLab ? returnLabel : 'Back to Play'}
                 </ChromeNavButton>
               </InnerChromeBox>
             ) : boardSettled ? (

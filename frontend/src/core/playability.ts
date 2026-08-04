@@ -311,7 +311,7 @@ export function validateWarBattlePlayability(level: Level): PlayabilityResult {
   // is still a square the Run army starts on.
   const playerDeploymentPool = new Set(
     level.layers.zones
-      .filter((zone) => zone.type === 'player-spawn' || zone.type === 'player-pawn-spawn' || zone.type === 'player-king-spawn')
+      .filter((zone) => zone.type === 'player-spawn' || zone.type === 'player-king-spawn')
       .flatMap((zone) => zone.tiles.map(([x, y]) => key(x, y))),
   );
   const enemyDeploymentPool = new Set(

@@ -41,7 +41,10 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     // Every glossary entry draws its own accepted unit-state icon, never a stand-in glyph.
     expect(abilities).toContain('src={runUnitStateIconUrl(state)}');
     expect(abilities).not.toMatch(/skirmish-icon-(?:shield|move|flag)/);
-    expect(abilities).toContain('discounted by 0 gold for a Pawn, 1 for a Knight or Bishop, 2 for a Rook, and 3 for a Queen');
+    expect(abilities).toContain('description: CACOCHYMIC_DESCRIPTION');
+    expect(abilities).not.toContain('card-price contribution');
+    expect(abilities).not.toContain('Enrolled by direct appointment');
+    expect(abilities).not.toContain('Well-ordered; drawn up in good array');
     expect(abilities).not.toContain('Upon acquisition, one unit on this card becomes Positioned.');
     expect(abilities).not.toContain('Upon acquisition, one randomly chosen unit on this card gains Discipline.');
   });

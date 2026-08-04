@@ -46,12 +46,12 @@ test('the backend roster-piece mirror matches core PLAYABLE_PIECE_TYPES exactly'
   assert.deepStrictEqual([...backend].sort(), [...core].sort());
 });
 
-test('a zone carrying excludedPieceTypes is structurally validated, not ignored', () => {
+test('a zone carrying excludedPieceTypes may bar only the still-supported King', () => {
   const source = fs.readFileSync(SERVER, 'utf8');
   assert.match(
     source,
     /zone\.excludedPieceTypes !== undefined/,
     'validateWorkspaceLevel must check excludedPieceTypes so a malformed bar cannot reach the DB',
   );
-  assert.match(source, /excludedPieceTypes\.some\(\(type\) => !WORKSPACE_ROSTER_PIECES\.has\(type\)\)/);
+  assert.match(source, /excludedPieceTypes\.some\(\(type\) => type !== 'king'\)/);
 });

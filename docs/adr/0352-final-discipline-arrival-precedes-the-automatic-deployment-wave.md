@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-08-02
 deciders: owner (Nelson) + Codex
+partially_superseded_by:
+  - "[ADR-0406](0406-klerosis-deals-cards-before-one-unit-at-a-time-deployment.md)'s single mixed queue instead of separate waves"
 partially_supersedes:
   - "[ADR-0349](0349-the-final-deployment-choice-commits-and-camera-authority-follows-the-active-scene.md)'s immediate phase commit before the final placement presentation settles"
   - "[ADR-0351](0351-unit-arrival-choreography-follows-newly-visible-unit-identity.md)'s allowance for a final Discipline arrival and Battle additions to overlap"

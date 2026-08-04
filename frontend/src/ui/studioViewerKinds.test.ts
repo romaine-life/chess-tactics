@@ -10,6 +10,7 @@ describe('Studio viewer kind registry', () => {
     expect(isViewerKind('divider')).toBe(true);
     expect(isViewerKind('unitart')).toBe(true);
     expect(isViewerKind('cardicons')).toBe(true);
+    expect(isViewerKind('deployment')).toBe(true);
     expect(isViewerKind('not-a-viewer')).toBe(false);
     expect(isViewerKind(null)).toBe(false);
   });
@@ -18,6 +19,7 @@ describe('Studio viewer kind registry', () => {
     const studio = readFileSync(new URL('./TilePreview.tsx', import.meta.url), 'utf8');
 
     expect(Object.keys(STUDIO_VIEWER_KIND_LABELS)).toContain('cardicons');
+    expect(Object.keys(STUDIO_VIEWER_KIND_LABELS)).toContain('deployment');
     expect(studio).not.toContain('STUDIO_VIEWER_KIND_OPTIONS');
     expect(studio).not.toContain('aria-label="Viewer kind"');
     expect(studio).not.toContain('viewerKindSelect');

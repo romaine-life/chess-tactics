@@ -17,8 +17,8 @@ const RUN_LIPSANON_REGISTRY = [
   { id: 'mercenary-boat', name: 'The Paid Crossing', description: 'A promoting persistent Pawn may vanish permanently instead and grant 2 gold.', flavorText: 'The fare was counted once. The passenger was not.' },
   { id: 'quartermasters-ledger', name: "Quartermaster's Ledger", description: 'The Sectio reveals four Piece bundles instead of three.', flavorText: 'The ledger had a column for onward.' },
   { id: 'fair-scales', name: 'Fair Scales', description: 'Alienatio returns 75% of a unit’s value instead of 50%.', flavorText: 'That summer, seed was weighed more carefully than silver.' },
-  { id: 'muster-roll', name: 'Muster Roll', description: 'When capacity is short, choose which army units sit out.', flavorText: 'Those left in the margin did not board the train.' },
-  { id: 'surveyors-compass', name: "Surveyor's Compass", description: 'Choose between two deterministic random deployment layouts.', flavorText: 'The road west grew busy after the second frost.' },
+  { id: 'muster-roll', name: 'Muster Roll', description: 'Retired for this beta; has no effect.', flavorText: 'Those left in the margin did not board the train.' },
+  { id: 'surveyors-compass', name: "Surveyor's Compass", description: 'Retired for this beta; has no effect.', flavorText: 'The road west grew busy after the second frost.' },
 ] as const;
 
 export type LipsanonId = typeof RUN_LIPSANON_REGISTRY[number]['id'];
@@ -39,6 +39,19 @@ export interface LipsanonDefinition {
 }
 
 export const RUN_LIPSANA: readonly LipsanonDefinition[] = Object.freeze(RUN_LIPSANON_REGISTRY);
+
+/**
+ * Lipsana that seeded Run rewards and paid Shop offers may reveal.
+ *
+ * Muster Roll and Surveyor's Compass remain registered identities so existing Run saves keep
+ * their references, but ADR-0403/0404 defer further acquisition until Deployment's developing
+ * player-choice boundaries are settled.
+ */
+export const RUN_LIPSANON_OFFER_POOL: readonly LipsanonDefinition[] = Object.freeze(
+  RUN_LIPSANA.filter((lipsanon) => (
+    lipsanon.id !== 'muster-roll' && lipsanon.id !== 'surveyors-compass'
+  )),
+);
 
 export const LIPSANON_BY_ID: Readonly<Record<LipsanonId, LipsanonDefinition>> = Object.freeze(
   Object.fromEntries(RUN_LIPSANA.map((lipsanon) => [lipsanon.id, lipsanon])) as Record<LipsanonId, LipsanonDefinition>,

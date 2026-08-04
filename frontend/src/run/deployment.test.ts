@@ -1,514 +1,334 @@
 import { describe, expect, it } from 'vitest';
 import { createBlankLevel, type Level } from '../core/level';
-import { validateWarBattlePlayability } from '../core/playability';
+import type { PlayablePieceType } from '../core/pieces';
 import {
-  performAdlectio,
-  createRun,
-  hasRunAbility,
-  leaveSectio,
-  prepareDeployment,
-  setDeploymentChoices,
-  type RunArmyUnit,
-  type RunDocument,
-} from './model';
-import {
-  advanceAutomaticDeployment,
-  advanceReadyDeployment,
-  deploymentHasMeaningfulChoice,
+  chooseDeploymentMode,
+  currentDeploymentUnit,
+  deploymentInteractionStage,
   deploymentOptions,
   disciplinePlacementCells,
-  gameForRunDeployment,
-  levelForRunDeployment,
-  levelWithRunDeployment,
-  normalReservistCell,
-  playerDeploymentCells,
+  drawNextDeploymentUnit,
+  placeAdlectedDeploymentUnit,
+  placeRevealedDeploymentUnit,
   playerDeploymentPools,
-  resolveForcedDeploymentChoices,
+  resolveDeploymentCapacity,
 } from './deployment';
+import {
+  createRun,
+  prepareDeployment,
+  restartBattle,
+  type RunAbility,
+  type RunArmyUnit,
+  type RunDocument,
+  type RunOwnedCard,
+} from './model';
 
-function battle(): Level {
-  const level = createBlankLevel('run-deploy', 'Deployment', 4, 4);
+function deploymentLevel(files = 8, deploymentRows = 5): Level {
+  const rows = deploymentRows + 3;
+  const level = createBlankLevel('deployment-test', 'Deployment Test', files, rows);
   level.layers.zones = [{
-    id: 'player-zone',
+    id: 'player',
     type: 'player-spawn',
-    tiles: [[0, 2], [1, 2], [2, 2], [3, 2], [0, 3], [1, 3], [2, 3], [3, 3]],
+    tiles: Array.from({ length: deploymentRows }, (_, offset) => (
+      Array.from({ length: files }, (__, x) => [x, offset + 3] as [number, number])
+    )).flat(),
   }];
-  level.layers.units = [
-    { x: 0, y: 3, type: 'pawn', side: 'player' },
-    { x: 3, y: 0, type: 'king', side: 'enemy' },
-  ];
+  level.layers.units = [{ x: Math.floor(files / 2), y: 0, type: 'king', side: 'enemy' }];
   return level;
 }
 
-function run(seed = 13): RunDocument {
-  const level = battle();
-  let result = createRun({
-    id: 'war',
-    name: 'War',
-    description: '',
-    battles: [{ level, loot: false }],
-  }, seed);
-  result = performAdlectio(result, result.sectio!.cardOffers[0].offerId);
-  result = leaveSectio(result);
-  return prepareDeployment(result);
-}
-
-describe('Run deployment', () => {
-  it('treats authored units as obstacles and deals the same seed identically', () => {
-    const level = battle();
-    expect(playerDeploymentCells(level)).not.toContainEqual({ x: 0, y: 3 });
-    const first = deploymentOptions(run(22), level);
-    const second = deploymentOptions(run(22), level);
-    expect(first.layouts).toEqual(second.layouts);
-    expect(Object.values(first.layouts[0].placements)).not.toContainEqual({ x: 0, y: 3 });
-  });
-
-  it('never randomly blocks the permanently retained King', () => {
-    const level = battle();
-    level.layers.zones[0].tiles = [[1, 3]];
-    const options = deploymentOptions(run(), level);
-    expect(options.overflowCount).toBeGreaterThan(0);
-    expect(options.layouts[0].blockedUnitIds).not.toContain('run-king');
-  });
-
-  it('requires and honors deliberate placement for Discipline', () => {
-    const level = battle();
-    let disciplined = run();
-    disciplined = {
-      ...disciplined,
-      army: disciplined.army.map((unit) => unit.id === 'run-king'
-        ? { ...unit, abilities: ['adlected'] }
-        : unit),
-    };
-    let options = deploymentOptions(disciplined, level);
-    expect(options.adlectedUnitIds).toContain('run-king');
-    expect(options.layouts[0].placements['run-king']).toBeUndefined();
-    disciplined = setDeploymentChoices(disciplined, { manualPlacements: { 'run-king': '1,3' } });
-    options = deploymentOptions(disciplined, level);
-    expect(options.layouts[0].placements['run-king']).toEqual({ x: 1, y: 3 });
-  });
-
-  it('commits directly to Battle when Deployment has no player choice', () => {
-    const current = run();
-    const options = deploymentOptions(current, battle());
-    expect(deploymentHasMeaningfulChoice(current, options)).toBe(false);
-    expect(advanceAutomaticDeployment(current, battle()).phase).toBe('battle');
-  });
-
-  it('keeps an unresolved Discipline choice on the battlefield and commits its final placement', () => {
-    const level = battle();
-    const current = run();
-    const disciplined = {
-      ...current,
-      army: current.army.map((unit) => unit.id === 'run-king'
-        ? { ...unit, abilities: ['adlected'] as RunArmyUnit['abilities'] }
-        : unit),
-    };
-    expect(deploymentHasMeaningfulChoice(disciplined, deploymentOptions(disciplined, level))).toBe(true);
-    expect(advanceAutomaticDeployment(disciplined, level).phase).toBe('deployment');
-
-    const placed = setDeploymentChoices(disciplined, { manualPlacements: { 'run-king': '1,3' } });
-    expect(advanceAutomaticDeployment(placed, level).phase).toBe('deployment');
-    expect(advanceReadyDeployment(placed, level).phase).toBe('battle');
-  });
-
-  it('automatically resolves a Disciplined unit with only one legal square', () => {
-    const level = battle();
-    level.layers.zones[0].tiles = [[1, 3]];
-    const current = run();
-    const disciplined = {
-      ...current,
-      army: current.army.map((unit) => unit.id === 'run-king'
-        ? { ...unit, abilities: ['adlected'] as RunArmyUnit['abilities'] }
-        : unit),
-    };
-    const resolved = resolveForcedDeploymentChoices(disciplined, level);
-    expect(resolved.deployment?.manualPlacements['run-king']).toBe('1,3');
-    expect(advanceAutomaticDeployment(disciplined, level).phase).toBe('battle');
-  });
-
-  it('keeps Royal Sceptre Kings on a board-edge square and Royal Decree Kings on the back row', () => {
-    const level = battle();
-    // Placement is a free-for-all in random order (ADR-0367), so an ability steers a unit through
-    // what is still open when its turn comes. Judge the ability itself on an uncontested zone.
-    const base = run();
-    const royal = {
-      ...base,
-      army: base.army.filter((unit) => unit.type === 'king'),
-      lipsana: ['royal-sceptre', 'royal-decree'] as RunDocument['lipsana'],
-    };
-    const king = deploymentOptions(royal, level).layouts[0].placements['run-king'];
-    expect(king.y).toBe(3);
-    expect(king.x === 0 || king.x === 3 || king.y === 0 || king.y === 3).toBe(true);
-  });
-
-  it('derives lipsanon grants through the same abilities stored on individual units', () => {
-    const current = run();
-    const king = current.army.find((unit) => unit.type === 'king')!;
-    const inherited = {
-      ...current,
-      lipsana: ['royal-sceptre', 'royal-decree'] as RunDocument['lipsana'],
-    };
-    expect(hasRunAbility(inherited, king, 'eutactic')).toBe(true);
-    expect(hasRunAbility(inherited, king, 'agminate')).toBe(true);
-
-    const permanentKing = { ...king, abilities: ['eutactic', 'agminate'] as RunArmyUnit['abilities'] };
-    const permanent = { ...current, army: current.army.map((unit) => unit.id === king.id ? permanentKing : unit) };
-    expect(hasRunAbility(permanent, permanentKing, 'eutactic')).toBe(true);
-    expect(hasRunAbility(permanent, permanentKing, 'agminate')).toBe(true);
-    expect(deploymentOptions(permanent, battle()).layouts[0].placements['run-king']).toEqual(
-      deploymentOptions(inherited, battle()).layouts[0].placements['run-king'],
-    );
-  });
-
-  it('projects each persistent name with its unit identity into the Battle level', () => {
-    const current = run();
-    const layout = deploymentOptions(current, battle()).layouts[0];
-    const projected = levelWithRunDeployment(current, battle(), layout);
-    const persistentUnits = projected.layers.units.filter((unit) => unit.runUnitId && !unit.runUnitId.startsWith('run-tent-rock'));
-
-    expect(persistentUnits).not.toHaveLength(0);
-    for (const unit of persistentUnits) {
-      expect(unit.runUnitName).toBe(current.army.find((candidate) => candidate.id === unit.runUnitId)?.name);
-    }
-  });
-
-  it('keeps opponent pieces unresolved on the Deployment battlefield', () => {
-    const level = battle();
-    const current = run();
-    const layout = deploymentOptions(current, level).layouts[0];
-    const preview = levelForRunDeployment(current, level, layout);
-    expect(preview.layers.units.some((unit) => unit.side === 'enemy')).toBe(false);
-    expect(preview.layers.units.some((unit) => unit.side === 'player')).toBe(false);
-  });
-
-  it('feeds the live board compositor a passive position without resolving Battle spawns', () => {
-    const level = battle();
-    level.layers.zones.push({
-      id: 'enemy-zone',
-      type: 'enemy-spawn',
-      tiles: [[0, 0], [1, 0]],
-    });
-    level.events = [{
-      name: 'Enemy deployment',
-      trigger: { kind: 'setup' },
-      do: [{ kind: 'spawn', side: 'enemy', roster: { pawn: 1 }, zoneIds: ['enemy-zone'] }],
-    }];
-    const current = run();
-    const layout = deploymentOptions(current, level).layouts[0];
-    const game = gameForRunDeployment(current, level, layout);
-
-    expect(game.pieces.some((piece) => piece.side === 'enemy')).toBe(false);
-    expect(game.pieces.some((piece) => piece.id.startsWith('spawn-'))).toBe(false);
-    expect(game.pieces.some((piece) => piece.id.startsWith('run-'))).toBe(false);
-  });
-
-  it('places committed Disciplined units before revealing the automatic formation', () => {
-    const level = battle();
-    const current = run();
-    const king = current.army.find((unit) => unit.type === 'king')!;
-    const other = current.army.find((unit) => unit.id !== king.id)!;
-    const disciplined = {
-      ...current,
-      army: current.army.map((unit) => ({
-        ...unit,
-        abilities: [king.id, other.id].includes(unit.id)
-          ? ['adlected'] as RunArmyUnit['abilities']
-          : unit.abilities.filter((ability) => ability !== 'adlected'),
-      })),
-    };
-
-    let options = deploymentOptions(disciplined, level);
-    let preview = levelForRunDeployment(disciplined, level, options.layouts[0]);
-    expect(preview.layers.units.filter((unit) => unit.runUnitId)).toEqual([]);
-    expect(preview.layers.units.some((unit) => unit.side === 'enemy')).toBe(false);
-
-    const firstPlaced = setDeploymentChoices(disciplined, {
-      manualPlacements: { [king.id]: '1,3' },
-    });
-    options = deploymentOptions(firstPlaced, level);
-    preview = levelForRunDeployment(firstPlaced, level, options.layouts[0]);
-    expect(preview.layers.units.filter((unit) => unit.runUnitId).map((unit) => unit.runUnitId)).toEqual([king.id]);
-    expect(preview.layers.units.find((unit) => unit.runUnitId === king.id)).toMatchObject({ x: 1, y: 3 });
-
-    const allPlaced = setDeploymentChoices(firstPlaced, {
-      manualPlacements: { [king.id]: '1,3', [other.id]: '2,3' },
-    });
-    options = deploymentOptions(allPlaced, level);
-    preview = levelForRunDeployment(allPlaced, level, options.layouts[0]);
-    const visibleRunUnits = preview.layers.units.filter((unit) => unit.runUnitId && !unit.runUnitId.startsWith('run-tent-rock-'));
-    expect(visibleRunUnits.map((unit) => unit.runUnitId)).toEqual([king.id, other.id]);
-    expect(visibleRunUnits.find((unit) => unit.runUnitId === king.id)).toMatchObject({ x: 1, y: 3 });
-    expect(visibleRunUnits.find((unit) => unit.runUnitId === other.id)).toMatchObject({ x: 2, y: 3 });
-  });
-});
-
-// ---- Pawn deployment zones (ADR-0367) --------------------------------------------------------
-
-/** A Run whose army is exactly the requested non-King types, plus the permanent King. */
-function armyOf(types: RunArmyUnit['type'][], seed = 13): RunDocument {
-  const base = run(seed);
-  const king = base.army.find((unit) => unit.type === 'king')!;
+function unit(
+  id: string,
+  type: PlayablePieceType,
+  abilities: RunAbility[] = [],
+): RunArmyUnit {
   return {
-    ...base,
-    army: [king, ...types.map((type, index) => ({
-      ...base.army[base.army.length - 1],
-      id: `run-${type}-${index}`,
-      type,
-      abilities: [] as RunArmyUnit['abilities'],
-    }))],
+    id,
+    name: id,
+    type,
+    number: 1,
+    inspectionSeed: 1,
+    abilities,
+    modifiers: [],
+    source: type === 'king' ? 'king' : 'adlectio',
   };
 }
 
-describe('Dedicated deployment zones', () => {
-  it('bars pawns from a Player Deployment zone that excludes them, and keeps every other piece', () => {
-    const level = battle();
-    level.layers.zones = [{
-      id: 'player-zone',
-      type: 'player-spawn',
-      excludedPieceTypes: ['pawn'],
-      tiles: [[0, 2], [1, 2], [2, 2], [3, 2]],
-    }];
-    const pools = playerDeploymentPools(level);
-    expect(pools.all).toHaveLength(4);
-    expect(pools.byType.pawn).toEqual([]);
+function ownedCard(id: string, coreId: string, unitIds: string[]): RunOwnedCard {
+  return {
+    id,
+    coreId,
+    cardType: null,
+    effectSeed: 0,
+    effectTargetUnitId: null,
+    unitIds,
+    lostUnitIds: [],
+    cacochymicUnitId: null,
+    acquiredAfterBattleIndex: 0,
+  };
+}
 
-    const current = armyOf(['pawn', 'rook']);
-    const layout = deploymentOptions(current, level).layouts[0];
-    expect(layout.placements['run-rook-1']).toBeDefined();
-    expect(layout.placements['run-pawn-0']).toBeUndefined();
-    // A pawn with nowhere to stand sits the Battle out in reserve rather than vanishing.
-    expect(layout.blockedUnitIds).toContain('run-pawn-0');
-    expect(layout.reserveUnitIds).toContain('run-pawn-0');
-  });
+function baseRun(level: Level, seed = 17): RunDocument {
+  const created = createRun({ id: 'war', name: 'War', description: '', battles: [{ level, loot: false }] }, seed, '2026-01-01T00:00:00.000Z');
+  return { ...created, phase: 'deployment', sectio: null, vacantia: null, deployment: null };
+}
 
-  it('lets a Pawn Deployment zone take pawns and nothing else outside the shared squares', () => {
-    const level = battle();
-    level.layers.zones = [
-      { id: 'player-zone', type: 'player-spawn', excludedPieceTypes: ['pawn'], tiles: [[0, 2], [1, 2]] },
-      { id: 'pawn-zone', type: 'player-pawn-spawn', tiles: [[2, 2], [3, 2]] },
+function queuedRun(level: Level, army: RunArmyUnit[], seed = 17): RunDocument {
+  let run = prepareDeployment({ ...baseRun(level, seed), army });
+  const queueUnitIds = [
+    ...army.filter((candidate) => candidate.type === 'king').map((candidate) => candidate.id),
+    ...army.filter((candidate) => candidate.type !== 'king').map((candidate) => candidate.id),
+  ];
+  run = {
+    ...run,
+    deployment: {
+      ...run.deployment!,
+      queueUnitIds,
+      deployingUnitIds: [...queueUnitIds],
+      unavailableUnitIds: [],
+      capacityResolved: true,
+      placements: {},
+      placementCursor: 0,
+      stage: 'klerosis',
+      blockedUnitIds: [],
+      manualPlacements: {},
+    },
+  };
+  return run;
+}
+
+function deployAll(run: RunDocument, level: Level): RunDocument {
+  let next = chooseDeploymentMode(run, level, 'deploy-all');
+  while (next.phase === 'deployment') {
+    const active = currentDeploymentUnit(next);
+    if (!active) break;
+    const options = deploymentOptions(next, level);
+    const cell = disciplinePlacementCells(next, options, active.id)[0];
+    if (!cell) throw new Error(`Deployment paused without a legal Adlected cell for ${active.id}`);
+    next = placeAdlectedDeploymentUnit(next, level, cell);
+  }
+  return next;
+}
+
+function placement(run: RunDocument, level: Level, unitId: string): { x: number; y: number } {
+  const cell = deploymentOptions(run, level).layouts[0].placements[unitId];
+  if (!cell) throw new Error(`${unitId} was not placed`);
+  return cell;
+}
+
+describe('Klerosis', () => {
+  it('deals His Grace first, then two seeded ordinary cards in the first Conflict', () => {
+    const level = deploymentLevel();
+    const created = baseRun(level, 211);
+    const extras = Array.from({ length: 7 }, (_, index) => ownedCard(`extra-${index}`, 'p', [`extra-unit-${index}`]));
+    const army = [
+      ...created.army,
+      ...extras.map((card, index) => unit(card.unitIds[0], 'pawn', index % 2 ? ['eutactic'] : [])),
     ];
-    const pools = playerDeploymentPools(level);
-    expect(pools.all).toHaveLength(4);
-    expect(pools.byType.pawn).toEqual([{ x: 2, y: 2 }, { x: 3, y: 2 }]);
-
-    const layout = deploymentOptions(armyOf(['pawn', 'pawn']), level).layouts[0];
-    for (const id of ['run-pawn-0', 'run-pawn-1']) {
-      expect(pools.byType.pawn).toContainEqual(layout.placements[id]);
-    }
-    // The King is not a pawn, so it never lands on a pawn-only square while general ones remain.
-    expect(pools.byType.pawn).not.toContainEqual(layout.placements['run-king']);
+    const run = prepareDeployment({ ...created, army, cards: [...created.cards, ...extras] });
+    expect(run.deployment?.dealtCardIds).toHaveLength(3);
+    expect(run.deployment?.dealtCardIds[0]).toBe('run-card-his-grace');
+    expect(run.deployment?.stage).toBe('klerosis');
+    expect(run.deployment?.mode).toBeUndefined();
   });
 
-  it('makes an overlapping square a free-for-all rather than a pawn reservation', () => {
-    const level = battle();
-    // Every square is in both zones: pawns and other pieces compete for all of them.
-    const tiles: Array<[number, number]> = [[0, 2], [1, 2], [2, 2], [3, 2]];
-    level.layers.zones = [
-      { id: 'player-zone', type: 'player-spawn', tiles: [...tiles] },
-      { id: 'pawn-zone', type: 'player-pawn-spawn', tiles: [...tiles] },
-    ];
-    const pools = playerDeploymentPools(level);
-    expect(pools.all).toHaveLength(4);
-    expect(pools.byType.pawn).toHaveLength(4);
-
-    const layout = deploymentOptions(armyOf(['pawn', 'rook', 'knight']), level).layouts[0];
-    const placed = Object.values(layout.placements);
-    expect(placed).toHaveLength(4);
-    expect(new Set(placed.map((cell) => `${cell.x},${cell.y}`)).size).toBe(4);
-  });
-
-  it('places one unit at a time in a seeded random order, not by piece type', () => {
-    const level = battle();
-    level.layers.zones = [{
-      id: 'player-zone',
-      type: 'player-spawn',
-      tiles: [[0, 2], [1, 2], [2, 2], [3, 2], [1, 3], [2, 3], [3, 3]],
-    }];
-    // Same Run, same level: the seed alone decides the order, so the result is reproducible.
-    const current = armyOf(['pawn', 'pawn', 'rook', 'knight']);
-    expect(deploymentOptions(current, level).layouts[0].placements)
-      .toEqual(deploymentOptions(current, level).layouts[0].placements);
-    // Two layouts shuffle independently, so the Surveyor's Compass has real alternatives to offer.
-    const [first, second] = deploymentOptions(current, level).layouts;
-    expect(first.placements).not.toEqual(second.placements);
-  });
-
-  it('places an Agminate Pawn after ordinary Pawns and seats it alongside one', () => {
-    const level = battle();
-    level.layers.zones = [
-      {
-        id: 'player-zone',
-        type: 'player-spawn',
-        excludedPieceTypes: ['king'],
-        tiles: [[0, 2], [1, 2], [2, 2]],
-      },
-      { id: 'king-zone', type: 'player-king-spawn', tiles: [[3, 3]] },
-    ];
-    for (let seed = 1; seed <= 24; seed += 1) {
-      const base = armyOf(['pawn', 'pawn'], seed);
-      const current = {
-        ...base,
-        army: base.army.map((unit) => unit.id === 'run-pawn-1'
-          ? { ...unit, abilities: ['agminate'] as RunArmyUnit['abilities'] }
-          : unit),
-      };
-      const placements = deploymentOptions(current, level).layouts[0].placements;
-      const ordinary = placements['run-pawn-0'];
-      const agminate = placements['run-pawn-1'];
-      expect(agminate.y, `seed ${seed}`).toBe(ordinary.y);
-      expect(Math.abs(agminate.x - ordinary.x), `seed ${seed}`).toBe(1);
-    }
-  });
-
-  it('places an Agminate Bishop after ordinary Bishops before choosing opposite square color', () => {
-    const level = battle();
-    level.layers.zones = [
-      {
-        id: 'player-zone',
-        type: 'player-spawn',
-        excludedPieceTypes: ['king'],
-        tiles: [[0, 2], [1, 2], [2, 2]],
-      },
-      { id: 'king-zone', type: 'player-king-spawn', tiles: [[3, 3]] },
-    ];
-    for (let seed = 1; seed <= 24; seed += 1) {
-      const base = armyOf(['bishop', 'bishop'], seed);
-      const current = {
-        ...base,
-        army: base.army.map((unit) => unit.id === 'run-bishop-1'
-          ? { ...unit, abilities: ['agminate'] as RunArmyUnit['abilities'] }
-          : unit),
-      };
-      const placements = deploymentOptions(current, level).layouts[0].placements;
-      const ordinary = placements['run-bishop-0'];
-      const agminate = placements['run-bishop-1'];
-      expect((agminate.x + agminate.y) % 2, `seed ${seed}`)
-        .not.toBe((ordinary.x + ordinary.y) % 2);
-    }
-  });
-
-  it('never strands a piece that any deployment square would take', () => {
-    const level = battle();
-    level.layers.zones = [
-      { id: 'player-zone', type: 'player-spawn', excludedPieceTypes: ['pawn'], tiles: [[0, 2], [1, 2], [2, 2]] },
-      { id: 'pawn-zone', type: 'player-pawn-spawn', tiles: [[3, 2]] },
-    ];
-    const layout = deploymentOptions(armyOf(['rook', 'knight', 'pawn']), level).layouts[0];
-    // Capacity is 4 for 4 units: the King, Rook and Knight each take a general square and the
-    // pawn takes the only square open to it.
-    expect(Object.keys(layout.placements)).toHaveLength(4);
-    expect(layout.blockedUnitIds).toEqual([]);
-    expect(layout.placements['run-pawn-2']).toEqual({ x: 3, y: 2 });
-  });
-
-  it('lets a Disciplined pawn take a square the automatic placer refuses', () => {
-    const level = battle();
-    level.layers.zones = [{
-      id: 'player-zone',
-      type: 'player-spawn',
-      excludedPieceTypes: ['pawn'],
-      tiles: [[0, 2], [1, 2], [2, 2], [3, 2]],
-    }];
-    const base = armyOf(['pawn']);
-    const disciplined = {
-      ...base,
-      army: base.army.map((unit) => unit.id === 'run-pawn-0'
-        ? { ...unit, abilities: ['adlected'] as RunArmyUnit['abilities'] }
-        : unit),
+  it('freshly reseeds ordinary card order and adds one draw per Conflict', () => {
+    const level = deploymentLevel();
+    const make = (seed: number, conflictIndex: number): RunDocument => {
+      const created = baseRun(level, seed);
+      const extras = Array.from({ length: 10 }, (_, index) => ownedCard(`extra-${index}`, 'p', []));
+      return prepareDeployment({ ...created, conflictIndex, cards: [...created.cards, ...extras] });
     };
-    const options = deploymentOptions(disciplined, level);
-    // The player's own hand reaches every deployment square, pawn bar included.
-    expect(disciplinePlacementCells(disciplined, options, 'run-pawn-0')).toHaveLength(4);
-    const placed = setDeploymentChoices(disciplined, { manualPlacements: { 'run-pawn-0': '2,2' } });
-    const layout = deploymentOptions(placed, level).layouts[0];
-    expect(layout.placements['run-pawn-0']).toEqual({ x: 2, y: 2 });
-    expect(layout.blockedUnitIds).not.toContain('run-pawn-0');
+    expect(make(1, 0).deployment?.dealtCardIds).not.toEqual(make(2, 0).deployment?.dealtCardIds);
+    expect(make(1, 2).deployment?.dealtCardIds).toHaveLength(5);
   });
 
-  it('breaks the King off the general pool and into its own zone', () => {
-    const level = battle();
-    level.layers.zones = [
-      { id: 'player-zone', type: 'player-spawn', excludedPieceTypes: ['king'], tiles: [[0, 2], [1, 2], [2, 2]] },
-      { id: 'king-zone', type: 'player-king-spawn', tiles: [[3, 3]] },
-    ];
-    const pools = playerDeploymentPools(level);
-    expect(pools.byType.king).toEqual([{ x: 3, y: 3 }]);
-    expect(pools.byType.rook).toEqual([{ x: 0, y: 2 }, { x: 1, y: 2 }, { x: 2, y: 2 }]);
+  it('uses the same hidden queue for capacity admission and later placement', () => {
+    const level = deploymentLevel(2, 1);
+    const army = [unit('king', 'king', ['primogeniture']), unit('a', 'pawn'), unit('b', 'rook')];
+    const queued = queuedRun(level, army);
+    const resolved = resolveDeploymentCapacity({
+      ...queued,
+      deployment: { ...queued.deployment!, capacityResolved: false },
+    }, level);
+    expect(resolved.deployment?.queueUnitIds).toEqual(['king', 'a']);
+    expect(resolved.deployment?.deployingUnitIds).toEqual(['king', 'a']);
+    expect(resolved.deployment?.unavailableUnitIds).toContain('b');
+  });
+});
 
-    const layout = deploymentOptions(armyOf(['rook', 'knight']), level).layouts[0];
-    expect(layout.placements['run-king']).toEqual({ x: 3, y: 3 });
-    // The King's keep is not a square the rest of the army may take.
-    expect(layout.placements['run-rook-0']).not.toEqual({ x: 3, y: 3 });
-    expect(layout.placements['run-knight-1']).not.toEqual({ x: 3, y: 3 });
+describe('Primogeniture and Farrago interaction', () => {
+  it('places the King before revealing the first random unit', () => {
+    const level = deploymentLevel();
+    const run = queuedRun(level, [
+      unit('king', 'king', ['primogeniture']),
+      unit('pawn', 'pawn'),
+    ]);
+    let stepped = chooseDeploymentMode(run, level, 'step-through');
+    expect(deploymentInteractionStage(stepped)).toBe('primogeniture');
+    expect(currentDeploymentUnit(stepped)?.id).toBe('king');
+    stepped = placeRevealedDeploymentUnit(stepped, level);
+    expect(deploymentInteractionStage(stepped)).toBe('draw');
+    expect(stepped.deployment?.revealedUnitId).toBeUndefined();
+    stepped = drawNextDeploymentUnit(stepped);
+    expect(deploymentInteractionStage(stepped)).toBe('place');
+    expect(stepped.deployment?.revealedUnitId).toBe('pawn');
+    stepped = placeRevealedDeploymentUnit(stepped, level);
+    expect(stepped.phase).toBe('battle');
   });
 
-  it('places the King before every other unit, so a shared keep is never taken from it', () => {
-    const level = battle();
-    // The King zone overlaps the general zone entirely: without King-first, the rest of the army
-    // could take the one square the King was painted for.
-    level.layers.zones = [
-      { id: 'player-zone', type: 'player-spawn', excludedPieceTypes: ['king'], tiles: [[0, 2], [1, 2], [2, 2], [3, 2]] },
-      { id: 'king-zone', type: 'player-king-spawn', tiles: [[0, 2]] },
-    ];
-    for (const seed of [3, 8, 21, 44, 97]) {
-      const layout = deploymentOptions(armyOf(['rook', 'knight', 'pawn'], seed), level).layouts[0];
-      expect(layout.placements['run-king']).toEqual({ x: 0, y: 2 });
+  it('deploy-all pauses exactly when an Adlected unit reaches the front', () => {
+    const level = deploymentLevel();
+    const run = queuedRun(level, [
+      unit('king', 'king', ['primogeniture']),
+      unit('pawn', 'pawn', ['adlected']),
+      unit('rook', 'rook'),
+    ]);
+    let fast = chooseDeploymentMode(run, level, 'deploy-all');
+    expect(fast.phase).toBe('deployment');
+    expect(fast.deployment?.placementCursor).toBe(1);
+    expect(deploymentInteractionStage(fast)).toBe('adlected');
+    const cell = disciplinePlacementCells(fast, deploymentOptions(fast, level), 'pawn')[0];
+    fast = placeAdlectedDeploymentUnit(fast, level, cell);
+    expect(fast.phase).toBe('battle');
+    expect(fast.battleRuntime?.initiallyDeployedUnitIds).toEqual(expect.arrayContaining(['king', 'pawn', 'rook']));
+  });
+
+  it('can switch pace without undoing revealed information or placements', () => {
+    const level = deploymentLevel();
+    let run = queuedRun(level, [unit('king', 'king', ['primogeniture']), unit('pawn', 'pawn')]);
+    run = chooseDeploymentMode(run, level, 'step-through');
+    run = placeRevealedDeploymentUnit(run, level);
+    run = drawNextDeploymentUnit(run);
+    const revealed = run.deployment?.revealedUnitId;
+    const kingCell = run.deployment?.placements.king;
+    const switched = { ...run, deployment: { ...run.deployment!, mode: 'deploy-all' as const } };
+    expect(switched.deployment?.revealedUnitId).toBe(revealed);
+    expect(switched.deployment?.placements.king).toBe(kingCell);
+  });
+});
+
+describe('best-fit unit rules', () => {
+  it.each([
+    ['pawn', 3],
+    ['knight', 4],
+    ['bishop', 4],
+    ['rook', 7],
+    ['queen', 7],
+    ['king', 7],
+  ] as const)('puts an Eutactic %s on its formation row', (type, expectedY) => {
+    const level = deploymentLevel(8, 5);
+    const abilities: RunAbility[] = type === 'king' ? ['primogeniture', 'eutactic'] : ['eutactic'];
+    const finished = deployAll(queuedRun(level, [unit(type, type, abilities)], 50), level);
+    expect(placement(finished, level, type).y).toBe(expectedY);
+  });
+
+  it('falls back to the closest open Eutactic row', () => {
+    const level = deploymentLevel(4, 4);
+    level.layers.units.push(...Array.from({ length: 4 }, (_, x) => ({ x, y: 3, type: 'rock' as const, side: 'neutral' as const })));
+    const finished = deployAll(queuedRun(level, [unit('pawn', 'pawn', ['eutactic'])]), level);
+    expect(placement(finished, level, 'pawn').y).toBe(4);
+  });
+
+  it('puts an Agminate Queen in the middle of the board', () => {
+    const level = deploymentLevel(7, 4);
+    const finished = deployAll(queuedRun(level, [unit('queen', 'queen', ['agminate'])], 4), level);
+    expect(placement(finished, level, 'queen')).toEqual({ x: 3, y: 3 });
+  });
+
+  it('puts an Agminate Knight one square in from an edge', () => {
+    const level = deploymentLevel(7, 4);
+    const finished = deployAll(queuedRun(level, [unit('knight', 'knight', ['agminate'])], 5), level);
+    const cell = placement(finished, level, 'knight');
+    expect(Math.min(cell.x, cell.y, level.board.cols - 1 - cell.x, level.board.rows - 1 - cell.y)).toBe(1);
+  });
+
+  it('puts an Agminate King on the board edge', () => {
+    const level = deploymentLevel(7, 4);
+    const finished = deployAll(queuedRun(level, [unit('king', 'king', ['primogeniture', 'agminate'])], 6), level);
+    const cell = placement(finished, level, 'king');
+    expect(Math.min(cell.x, cell.y, level.board.cols - 1 - cell.x, level.board.rows - 1 - cell.y)).toBe(0);
+  });
+
+  it('puts an Agminate Rook on an outer back-row square', () => {
+    const level = deploymentLevel(7, 4);
+    const finished = deployAll(queuedRun(level, [
+      unit('king', 'king', ['primogeniture']),
+      unit('rook', 'rook', ['agminate']),
+    ], 7), level);
+    const cell = placement(finished, level, 'rook');
+    expect(cell.y).toBe(6);
+    expect([0, 6]).toContain(cell.x);
+  });
+
+  it('flanks an Agminate King with the first Agminate Rook when possible', () => {
+    const level = deploymentLevel(7, 4);
+    const finished = deployAll(queuedRun(level, [
+      unit('king', 'king', ['primogeniture', 'agminate']),
+      unit('rook', 'rook', ['agminate']),
+    ], 8), level);
+    const king = placement(finished, level, 'king');
+    const rook = placement(finished, level, 'rook');
+    expect(Math.abs(king.x - rook.x) + Math.abs(king.y - rook.y)).toBe(1);
+  });
+
+  it('finds an open file using permanent level obstructions, not combat units', () => {
+    const level = deploymentLevel(5, 2);
+    level.layers.terrain = Array.from({ length: 5 }, (_, x) => ({
+      x,
+      y: 1,
+      elevation: 0,
+      terrain: x === 2 || x === 3 ? 'grass' as const : 'rock' as const,
+    }));
+    level.layers.units.push(
+      { x: 2, y: 2, type: 'rock', side: 'neutral' },
+      { x: 3, y: 2, type: 'rook', side: 'enemy' },
+    );
+    const finished = deployAll(queuedRun(level, [unit('pawn', 'pawn', ['agminate'])], 9), level);
+    expect(placement(finished, level, 'pawn').x).toBe(3);
+  });
+
+  it('treats Pawn adjacency and an open file as equal conditions with a seeded tie', () => {
+    const level = deploymentLevel(5, 1);
+    level.layers.terrain = Array.from({ length: 5 }, (_, x) => ({ x, y: 1, elevation: 0, terrain: x === 0 ? 'grass' as const : 'rock' as const }));
+    const results = new Set<string>();
+    for (let seed = 1; seed <= 40; seed += 1) {
+      const finished = deployAll(queuedRun(level, [unit('plain', 'pawn'), unit('affinity', 'pawn', ['agminate'])], seed), level);
+      const plain = placement(finished, level, 'plain');
+      const affinity = placement(finished, level, 'affinity');
+      results.add(affinity.x === 0 ? 'open' : Math.abs(plain.x - affinity.x) === 1 ? 'adjacent' : 'fallback');
     }
+    expect(results).toContain('open');
+    expect(results).toContain('adjacent');
+    expect(results).not.toContain('fallback');
   });
 
-  it('lets Agminate read a King that is already placed', () => {
-    const level = battle();
-    const base = armyOf(['rook']);
-    const agminate = {
-      ...base,
-      army: base.army.map((unit) => ({ ...unit, abilities: ['agminate'] as RunArmyUnit['abilities'] })),
-    };
-    const placements = deploymentOptions(agminate, level).layouts[0].placements;
-    const king = placements['run-king'];
-    const rook = placements['run-rook-0'];
-    // The Agminate Rook seats itself beside its Agminate King; it could not do that against a
-    // King that had not taken its square yet.
-    expect(Math.abs(rook.x - king.x) + Math.abs(rook.y - king.y)).toBe(1);
+  it('chooses the nearest opposite-color square for an Agminate Bishop', () => {
+    const level = deploymentLevel(6, 3);
+    const finished = deployAll(queuedRun(level, [unit('plain', 'bishop'), unit('affinity', 'bishop', ['agminate'])], 23), level);
+    const plain = placement(finished, level, 'plain');
+    const affinity = placement(finished, level, 'affinity');
+    expect((plain.x + plain.y) % 2).not.toBe((affinity.x + affinity.y) % 2);
+    expect(Math.abs(plain.x - affinity.x) + Math.abs(plain.y - affinity.y)).toBe(1);
+  });
+});
+
+describe('retired pawn-only geometry and retries', () => {
+  it('ignores retired Pawn zones and pawn exclusions at runtime', () => {
+    const level = deploymentLevel(3, 1);
+    level.layers.zones[0].excludedPieceTypes = ['pawn'];
+    level.layers.zones.push({ id: 'retired', type: 'player-pawn-spawn', tiles: [[7, 7]] } as never);
+    const pools = playerDeploymentPools(level);
+    expect(pools.byType.pawn).toEqual(pools.all);
+    expect(pools.all).not.toContainEqual({ x: 7, y: 7 });
   });
 
-  it('refuses to save a War Battle whose geometry leaves the King nowhere to stand', () => {
-    const level = battle();
-    level.layers.zones = [{
-      id: 'player-zone',
-      type: 'player-spawn',
-      excludedPieceTypes: ['king'],
-      tiles: [[0, 2], [1, 2], [2, 2]],
-    }];
-    const codes = validateWarBattlePlayability(level).violations.map((violation) => violation.code);
-    expect(codes).toContain('W3_PLAYER_KING_SQUARE');
-
-    level.layers.zones.push({ id: 'king-zone', type: 'player-king-spawn', tiles: [[3, 3]] });
-    expect(validateWarBattlePlayability(level).violations.map((violation) => violation.code))
-      .not.toContain('W3_PLAYER_KING_SQUARE');
-  });
-
-  it('benching a pawn is legal, so no violation asks the author to fix it', () => {
-    const level = battle();
-    level.layers.zones = [{
-      id: 'player-zone',
-      type: 'player-spawn',
-      excludedPieceTypes: ['pawn'],
-      tiles: [[0, 2], [1, 2], [2, 2], [0, 3], [1, 3]],
-    }];
-    expect(validateWarBattlePlayability(level).violations.map((violation) => violation.code))
-      .not.toContain('W3_PLAYER_KING_SQUARE');
-  });
-
-  it('sends an automatic reservist pawn only to a pawn-eligible square', () => {
-    const level = battle();
-    level.layers.zones = [
-      { id: 'player-zone', type: 'player-spawn', excludedPieceTypes: ['pawn'], tiles: [[0, 2], [1, 2], [2, 2]] },
-      { id: 'pawn-zone', type: 'player-pawn-spawn', tiles: [[3, 2]] },
-    ];
-    const current = armyOf(['pawn']);
-    expect(normalReservistCell(current, level, new Set(), 0, 'pawn')).toEqual({ x: 3, y: 2 });
-    expect(normalReservistCell(current, level, new Set(['3,2']), 0, 'pawn')).toBeNull();
-    expect(normalReservistCell(current, level, new Set(['3,2']), 0, 'rook')).not.toBeNull();
+  it('restarts from the exact persisted deal, queue, choices, and formation', () => {
+    const level = deploymentLevel();
+    const battle = deployAll(queuedRun(level, [unit('king', 'king', ['primogeniture']), unit('pawn', 'pawn')], 99), level);
+    const before = JSON.stringify(battle.deployment);
+    const retried = restartBattle(battle);
+    expect(JSON.stringify(retried.deployment)).toBe(before);
+    expect(retried.battleRuntime?.initiallyDeployedUnitIds).toEqual(battle.deployment?.deployingUnitIds);
   });
 });

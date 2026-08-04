@@ -18,9 +18,9 @@ import {
   RunCardFace,
   type RunCardFaceContent,
   type RunCardIconPlacement,
-  type RunCardProperty,
   type RunUnitState,
 } from './RunCardFace';
+import type { RunCardType } from '../run/model';
 import { runCardFaceContent, runCardFrameSlotForType, runCardSpecimen } from './runCardFaceContent';
 import { runCardFrameGeometryForSlot } from './runCardFrameGeometry';
 import { SliderRow, ctlReset } from './dressing/SliderRow';
@@ -32,7 +32,7 @@ export const RUN_ICON_PAIR_BATCH_ID = 'run-icon-pairs-2026-08-01-v1';
 export const RUN_CARD_ICON_FITTING_SCALE_MAX = 5;
 
 type PairDefinition = Readonly<{
-  property: RunCardProperty;
+  property: RunCardType;
   propertySlot: string;
   state: RunUnitState;
   stateSlot: string;
@@ -46,7 +46,7 @@ export const RUN_CARD_ICON_PAIRS: readonly PairDefinition[] = Object.freeze([
     propertySlot: 'ui/kit/icons/card-properties/pestiferous.png',
     state: 'cacochymic',
     stateSlot: 'ui/kit/icons/game/plagued.png',
-    stateEffect: 'The marked unit receives its tier discount and is next to be lost.',
+    stateEffect: 'The unit dies when combat ends.',
     source: 'accepted',
   },
   {
@@ -54,7 +54,7 @@ export const RUN_CARD_ICON_PAIRS: readonly PairDefinition[] = Object.freeze([
     propertySlot: 'ui/kit/icons/card-properties/concinnous.png',
     state: 'eutactic',
     stateSlot: 'ui/kit/icons/game/positioned.png',
-    stateEffect: 'The unit favors its piece-specific region during automatic deployment.',
+    stateEffect: "The unit favors its piece type's best-fit formation row during automatic deployment.",
     source: 'accepted',
   },
   {
@@ -62,7 +62,7 @@ export const RUN_CARD_ICON_PAIRS: readonly PairDefinition[] = Object.freeze([
     propertySlot: 'ui/kit/icons/card-properties/tactical.png',
     state: 'adlected',
     stateSlot: 'ui/kit/icons/game/discipline.png',
-    stateEffect: 'The unit may be deliberately placed before automatic deployment.',
+    stateEffect: 'The player chooses its square when its deployment turn arrives.',
     source: 'accepted',
   },
   {
@@ -70,7 +70,7 @@ export const RUN_CARD_ICON_PAIRS: readonly PairDefinition[] = Object.freeze([
     propertySlot: 'ui/kit/icons/card-properties/hieratic.png',
     state: 'agminate',
     stateSlot: 'ui/kit/icons/game/marshalled.png',
-    stateEffect: 'The unit seeks its piece-specific station within the surrounding formation.',
+    stateEffect: 'The unit prefers its piece-specific station during automatic deployment.',
     source: 'accepted',
   },
 ]);
@@ -81,9 +81,9 @@ type PairSelection = Readonly<{
 }>;
 
 export type RunCardIconFittingDraft = Readonly<{
-  activeProperty: RunCardProperty;
-  selections: Readonly<Record<RunCardProperty, PairSelection>>;
-  propertyPlacements: Readonly<Record<RunCardProperty, RunCardIconPlacement>>;
+  activeProperty: RunCardType;
+  selections: Readonly<Record<RunCardType, PairSelection>>;
+  propertyPlacements: Readonly<Record<RunCardType, RunCardIconPlacement>>;
   unitStatePlacement: RunCardIconPlacement;
 }>;
 
@@ -176,13 +176,13 @@ export function defaultRunCardIconFittingDraft(catalog: AdminLiveMediaCatalog): 
   const selections = Object.fromEntries(RUN_CARD_ICON_PAIRS.map((pair) => [pair.property, {
     propertyVersionId: firstVersionId(catalog, pair.propertySlot),
     stateVersionId: firstVersionId(catalog, pair.stateSlot),
-  }])) as Record<RunCardProperty, PairSelection>;
+  }])) as Record<RunCardType, PairSelection>;
   // Reset returns to the committed fit the live cards ship, not to a zeroed-out
   // placement that no surface has ever used (ADR-0057).
   const propertyPlacements = Object.fromEntries(RUN_CARD_ICON_PAIRS.map((pair) => [
     pair.property,
     { ...RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS[pair.property] },
-  ])) as Record<RunCardProperty, RunCardIconPlacement>;
+  ])) as Record<RunCardType, RunCardIconPlacement>;
   return {
     activeProperty: 'pestiferous',
     selections,
@@ -200,7 +200,7 @@ export function normalizeRunCardIconFittingDraft(
   const rawSelections = asRecord(raw.selections);
   const rawPlacements = asRecord(raw.property_placements ?? raw.propertyPlacements);
   const activeProperty = RUN_CARD_ICON_PAIRS.some((pair) => pair.property === raw.active_property)
-    ? raw.active_property as RunCardProperty
+    ? raw.active_property as RunCardType
     : baseline.activeProperty;
   const selections = Object.fromEntries(RUN_CARD_ICON_PAIRS.map((pair) => {
     const selection = asRecord(rawSelections[pair.property]);
@@ -215,11 +215,11 @@ export function normalizeRunCardIconFittingDraft(
       ? selection.stateVersionId
       : baseline.selections[pair.property].stateVersionId;
     return [pair.property, { propertyVersionId, stateVersionId }];
-  })) as Record<RunCardProperty, PairSelection>;
+  })) as Record<RunCardType, PairSelection>;
   const propertyPlacements = Object.fromEntries(RUN_CARD_ICON_PAIRS.map((pair) => [
     pair.property,
     placementFrom(rawPlacements[pair.property], 4),
-  ])) as Record<RunCardProperty, RunCardIconPlacement>;
+  ])) as Record<RunCardType, RunCardIconPlacement>;
   return {
     activeProperty,
     selections,

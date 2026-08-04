@@ -40,7 +40,7 @@ const PLAYER_CARD_PALETTE = paletteForSide('player');
 const PLAYER_CARD_FACING = 'south';
 
 /** The card properties are the model's, not a lookalike list maintained beside it. */
-export type RunCardProperty = RunCardType;
+export type RunCardProperty = RunCardType | 'praecipuus';
 export type { RunUnitState };
 
 /**
@@ -53,6 +53,8 @@ const RUN_CARD_PROPERTY_MEDIA_ROLE: Readonly<Record<RunCardProperty, string>> = 
   concinnous: 'ui-kit-icons-card-properties-concinnous-png',
   legatine: 'ui-kit-icons-card-properties-legatine-png',
   hieratic: 'ui-kit-icons-card-properties-hieratic-png',
+  // The beta reuses the royal Hieratic emblem until Praecipuus receives its own live-media role.
+  praecipuus: 'ui-kit-icons-card-properties-hieratic-png',
 });
 
 export function runCardPropertyIconUrl(property: RunCardProperty): string {
@@ -94,6 +96,7 @@ export const RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS: Readonly<Record<RunCardProp
   concinnous: Object.freeze({ x: -0.6, y: 0.3, scale: 1 }),
   legatine: Object.freeze({ x: -4, y: -0.95, scale: 2.75 }),
   hieratic: Object.freeze({ x: -4, y: -3.45, scale: 1.8 }),
+  praecipuus: Object.freeze({ x: -4, y: -3.45, scale: 1.8 }),
 });
 
 export const RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT: RunCardIconPlacement = Object.freeze({

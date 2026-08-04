@@ -2,14 +2,19 @@ import { runCardArtSlot, runCardFlavor, runCardName } from '../run/cardNames';
 import {
   PIECE_VALUE,
   RUN_CARD_TYPE_REFERENCE,
+  RUN_STARTER_CARD_BY_ID,
   hieraticAgminateAcquisitionTarget,
   runCardOfferCost,
   legatineAdlectedAcquisitionTarget,
   type AdlectablePieceType,
+  type RunArmyPieceType,
   type RunAbility,
+  type RunCardDefinition,
   type RunCardOffer,
   type RunCardType,
   type RunCoreCard,
+  type RunStarterCard,
+  type RunStarterCardId,
 } from '../run/model';
 import {
   RUN_CARD_CONCINNOUS_FRAME_SLOT,
@@ -37,7 +42,7 @@ declare const RUN_CARD_FACE_PROJECTION: unique symbol;
  */
 export type RunCardGrant = Readonly<{
   count: number;
-  unit: AdlectablePieceType;
+  unit: RunArmyPieceType;
   /** Occurrence indices within this cell marked Cacochymic. */
   cacochymicIndices?: readonly number[];
   /** The single occurrence in this cell whose granted state is public, if any. */
@@ -55,7 +60,7 @@ export type RunCardFaceContent = Readonly<{
   cost: number;
   typeLine: string;
   cardProperty?: Readonly<{
-    id: RunCardType;
+    id: RunCardType | 'praecipuus';
     name: string;
     effect: string;
   }>;
@@ -66,7 +71,8 @@ export type RunCardFaceContent = Readonly<{
 /** Every current card is a unit card, so the type strip's left side never varies (ADR-0339). */
 export const RUN_CARD_TYPE_LINE = 'Units';
 
-const CARD_PIECE_ORDER: readonly AdlectablePieceType[] = Object.freeze([
+const CARD_PIECE_ORDER: readonly RunArmyPieceType[] = Object.freeze([
+  'king',
   'pawn',
   'knight',
   'bishop',
@@ -74,19 +80,24 @@ const CARD_PIECE_ORDER: readonly AdlectablePieceType[] = Object.freeze([
   'queen',
 ]);
 
-const FRAME_SLOT_BY_CARD_TYPE: Readonly<Record<RunCardType, string>> = Object.freeze({
+const FRAME_SLOT_BY_CARD_TYPE: Readonly<Record<RunCardType | 'praecipuus', string>> = Object.freeze({
   pestiferous: RUN_CARD_PESTIFEROUS_FRAME_SLOT,
   concinnous: RUN_CARD_CONCINNOUS_FRAME_SLOT,
   legatine: RUN_CARD_LEGATINE_FRAME_SLOT,
   hieratic: RUN_CARD_HIERATIC_FRAME_SLOT,
+  praecipuus: RUN_CARD_HIERATIC_FRAME_SLOT,
 });
 
-export function isRunCardOffer(card: RunCoreCard | RunCardOffer): card is RunCardOffer {
+export function isRunCardOffer(card: RunCardDefinition | RunCardOffer): card is RunCardOffer {
   return 'offerId' in card;
 }
 
+function isRunStarterCard(card: RunCardDefinition | RunCardOffer): card is RunStarterCard {
+  return card.id === 'his-grace' || card.id === 'front-lines';
+}
+
 /** The frame a card property is printed on, chosen once here rather than per host. */
-export function runCardFrameSlotForType(cardType: RunCardType | null): string {
+export function runCardFrameSlotForType(cardType: RunCardType | 'praecipuus' | null): string {
   return cardType ? FRAME_SLOT_BY_CARD_TYPE[cardType] : RUN_CARD_FRAME_SLOT;
 }
 
@@ -95,9 +106,13 @@ export function runCardFrameSlotForType(cardType: RunCardType | null): string {
  * the property under which it was adlected, so its carrier supplies that property (ADR-0371).
  */
 export function runCardFrameSlot(
-  card: RunCoreCard | RunCardOffer,
+  card: RunCardDefinition | RunCardOffer,
   heldCardType: RunCardType | null = null,
 ): string {
+  // Starter identity belongs to the pair, not only to His Grace's Praecipuus property.
+  // Front Lines therefore shares the same royal-purple frame without pretending to carry
+  // a card property of its own.
+  if (isRunStarterCard(card)) return RUN_CARD_HIERATIC_FRAME_SLOT;
   return runCardFrameSlotForType(runCardProperty(card, heldCardType));
 }
 
@@ -117,9 +132,10 @@ export type RunCardFaceOptions = Readonly<{
 
 /** The property a card wears: its offer's, or the one under which a held card was adlected. */
 function runCardProperty(
-  card: RunCoreCard | RunCardOffer,
+  card: RunCardDefinition | RunCardOffer,
   heldCardType: RunCardType | null,
-): RunCardType | null {
+): RunCardType | 'praecipuus' | null {
+  if (isRunStarterCard(card)) return card.property;
   return (isRunCardOffer(card) ? card.cardType : null) ?? heldCardType;
 }
 
@@ -130,9 +146,12 @@ type PublicAbilityTarget = Readonly<{ state: RunAbility; pieceIndex: number }>;
  * is read from RUN_CARD_TYPE_REFERENCE so cause and result cannot drift apart here.
  */
 function publicAbilityTarget(
-  card: RunCoreCard | RunCardOffer,
+  card: RunCardDefinition | RunCardOffer,
   adlected: boolean,
 ): PublicAbilityTarget | null {
+  if (isRunStarterCard(card)) {
+    return card.id === 'his-grace' ? { state: 'primogeniture', pieceIndex: 0 } : null;
+  }
   if (!isRunCardOffer(card) || !card.cardType) return null;
   const granted = RUN_CARD_TYPE_REFERENCE[card.cardType].grants;
   // Cacochymic is a modifier the offer already names publicly through cacochymicPieceIndex.
@@ -151,7 +170,7 @@ function publicAbilityTarget(
 }
 
 export function runCardGrants(
-  card: RunCoreCard | RunCardOffer,
+  card: RunCardDefinition | RunCardOffer,
   { adlected = false }: RunCardFaceOptions = {},
 ): readonly RunCardGrant[] {
   const cacochymicPieceIndex = isRunCardOffer(card) ? card.cacochymicPieceIndex : null;
@@ -174,7 +193,7 @@ export function runCardGrants(
 
 /** The one constructor of a card face. Every host draws what this returns, unedited. */
 export function runCardFaceContent(
-  card: RunCoreCard | RunCardOffer,
+  card: RunCardDefinition | RunCardOffer,
   options: RunCardFaceOptions = {},
 ): RunCardFaceContent {
   const offer = isRunCardOffer(card) ? card : null;
@@ -186,8 +205,10 @@ export function runCardFaceContent(
     ...(cardType ? {
       cardProperty: {
         id: cardType,
-        name: RUN_CARD_TYPE_REFERENCE[cardType].name,
-        effect: RUN_CARD_TYPE_REFERENCE[cardType].effect,
+        name: cardType === 'praecipuus' ? 'Praecipuus' : RUN_CARD_TYPE_REFERENCE[cardType].name,
+        effect: cardType === 'praecipuus'
+          ? 'Moves this card to the top of every deployment deal.'
+          : RUN_CARD_TYPE_REFERENCE[cardType].effect,
       },
     } : {}),
     grants: runCardGrants(card, options),

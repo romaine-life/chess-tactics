@@ -36,24 +36,27 @@ function boughtOne(): RunDocument {
 }
 
 describe('the Chartulary reads the Run rather than the deck', () => {
-  it('holds nothing before the first Adlectio', () => {
-    expect(heldCards(createRun(war(), 91))).toEqual([]);
+  it('begins with His Grace and Front Lines in the Chartulary', () => {
+    expect(heldCards(createRun(war(), 91)).map((held) => held.core.id))
+      .toEqual(['his-grace', 'front-lines']);
   });
 
   it('shows a adlected card as the deck card it is', () => {
     const run = boughtOne();
-    const [held] = heldCards(run);
-    expect(held.core.id).toBe(run.cards[0].coreId);
-    expect(held.core.pieces.length).toBe(run.cards[0].unitIds.length);
+    const owned = run.cards.find((card) => card.coreId !== 'his-grace' && card.coreId !== 'front-lines')!;
+    const held = heldCards(run).find((candidate) => candidate.owned.id === owned.id)!;
+    expect(held.core.id).toBe(owned.coreId);
+    expect(held.core.pieces.length).toBe(owned.unitIds.length);
   });
 
   it('keeps the card once its units leave the army', () => {
     const run = boughtOne();
-    const alienated = performAlienatio(run, run.cards[0].unitIds[0]);
+    const owned = run.cards.find((card) => card.coreId !== 'his-grace' && card.coreId !== 'front-lines')!;
+    const alienated = performAlienatio(run, owned.unitIds[0]);
     // A held-card page that dropped the card with its last unit would lose what the
     // gold was spent on. Alienatio of a unit does not relinquish the card.
-    expect(heldCards(alienated)).toHaveLength(1);
-    expect(heldCards(alienated)[0].core.id).toBe(heldCards(run)[0].core.id);
+    expect(heldCards(alienated)).toHaveLength(3);
+    expect(heldCards(alienated).some((held) => held.owned.id === owned.id)).toBe(true);
   });
 
   it('drops a card whose core id is no longer in the deck instead of drawing a blank face', () => {
@@ -62,7 +65,7 @@ describe('the Chartulary reads the Run rather than the deck', () => {
       ...run,
       cards: [...run.cards, { ...run.cards[0], id: 'stale', coreId: 'not-a-card' }],
     };
-    expect(heldCards(stale)).toHaveLength(1);
+    expect(heldCards(stale)).toHaveLength(3);
   });
 });
 

@@ -23,14 +23,12 @@ export interface DeploymentZoneOption {
  * dedicated zone type, and each can be barred from the general zone (ADR-0367).
  */
 const BREAKABLE = [
-  { pieceType: 'pawn', label: 'Pawn', zoneType: 'player-pawn-spawn' },
   { pieceType: 'king', label: 'King', zoneType: 'player-king-spawn' },
 ] as const satisfies ReadonlyArray<{ pieceType: PlayablePieceType; label: string; zoneType: ZoneType }>;
 export type BreakablePieceType = typeof BREAKABLE[number]['pieceType'];
 
 /** Why an author would break this type off the general pool, in the author's own terms. */
 const BREAKOUT_REASON: Record<BreakablePieceType, string> = {
-  pawn: 'A pawn cannot change column, so squares whose column is a dead end are wasted on one.',
   king: 'The King starts where you paint for it — a keep, a back rank, a corner — instead of wherever the roll lands it.',
 };
 
@@ -179,9 +177,7 @@ function DeploymentSideCard({
                   </div>
                 ) : null}
                 {on && squares === 0 ? (
-                  <p className="le-board-warning">{pieceType === 'king'
-                    ? 'No square accepts the King. Paint this zone — a War Battle cannot be saved while the Run has nowhere to put its King.'
-                    : 'No square accepts a pawn. Paint this zone, or every pawn in the Run army sits the Battle out in reserve.'}</p>
+                  <p className="le-board-warning">No square accepts the King. Paint this zone — a War Battle cannot be saved while the Run has nowhere to put its King.</p>
                 ) : on ? (
                   <p className="le-deployment-zone-help">{squares} square{squares === 1 ? '' : 's'} currently accept{squares === 1 ? 's' : ''} the {label}. {BREAKOUT_REASON[pieceType]}</p>
                 ) : null}
@@ -190,7 +186,7 @@ function DeploymentSideCard({
           }) : null}
 
           <p className="le-deployment-zone-help">
-            The King takes its square first. Every other unit then follows in random order, one at a time, each taking what is still open to it — a pawn that finds its squares gone does not deploy and stays in reserve.
+            The King takes its square first. Every other dealt unit then follows in random order, one at a time, each taking what is still open to it.
           </p>
         </>
       ) : deployment.enabled ? (

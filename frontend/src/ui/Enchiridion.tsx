@@ -16,6 +16,7 @@ import {
   AGMINATE_DISPLAY_NAME,
   ATARAXIA_BY_TIER,
   ATARAXIA_TIERS,
+  CACOCHYMIC_DESCRIPTION,
   CACOCHYMIC_DISPLAY_NAME,
   EUTACTIC_DISPLAY_NAME,
   RUN_CARD_BY_ID,
@@ -24,9 +25,9 @@ import {
   RUN_LIPSANA,
   cardContentsLabel,
   type AtaraxiaTier,
-  type AdlectablePieceType,
+  type RunArmyPieceType,
+  type RunCardDefinition,
   type RunCardType,
-  type RunCoreCard,
   type LipsanonId,
 } from '../run/model';
 import {
@@ -505,7 +506,7 @@ export function LipsanaCodex({
 }
 
 export type CardGoldFilter = 'all' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9';
-export type CardUnitFilter = 'all' | AdlectablePieceType;
+export type CardUnitFilter = 'all' | RunArmyPieceType;
 
 const CARD_GOLD_FILTER_OPTIONS: readonly HouseSelectOption<CardGoldFilter>[] = Object.freeze([
   { value: 'all', label: 'All' },
@@ -520,7 +521,7 @@ const CARD_GOLD_FILTER_OPTIONS: readonly HouseSelectOption<CardGoldFilter>[] = O
 
 const CARD_UNIT_FILTER_OPTIONS: readonly HouseSelectOption<CardUnitFilter>[] = Object.freeze([
   { value: 'all', label: 'Any unit' },
-  ...(['pawn', 'knight', 'bishop', 'rook', 'queen'] as const).map((value) => ({
+  ...(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'] as const).map((value) => ({
     value,
     label: (
       <span className="enchiridion-card-filter-unit-label">
@@ -532,12 +533,12 @@ const CARD_UNIT_FILTER_OPTIONS: readonly HouseSelectOption<CardUnitFilter>[] = O
 ]);
 
 export function cardMatchesFilters(
-  card: RunCoreCard,
+  card: RunCardDefinition,
   goldFilter: CardGoldFilter,
   unitFilter: CardUnitFilter,
 ): boolean {
   return (goldFilter === 'all' || card.value === Number(goldFilter))
-    && (unitFilter === 'all' || card.pieces.includes(unitFilter));
+    && (unitFilter === 'all' || card.pieces.some((piece) => piece === unitFilter));
 }
 
 // The card gallery's filter row, shared by the whole-deck reference and the Run's held
@@ -590,7 +591,7 @@ export function CardGalleryFilters({
 /** Cards grouped by gold value, ascending — the gallery's one authored ordering. */
 export function cardsByGoldValue<T>(
   entries: readonly T[],
-  coreOf: (entry: T) => RunCoreCard,
+  coreOf: (entry: T) => RunCardDefinition,
 ): Array<[number, T[]]> {
   const byValue = new Map<number, T[]>();
   for (const entry of entries) {
@@ -712,7 +713,7 @@ const CARD_TYPE_REFERENCES: readonly CardTypeReferenceDefinition[] = Object.free
   {
     id: 'pestiferous',
     cost: 1,
-    description: `One public unit is ${CACOCHYMIC_DISPLAY_NAME} and receives the tier discount. A victorious Battle loses that unit, then marks one remaining unit; the empty card remains in the deck.`,
+    description: `Marks one contained unit ${CACOCHYMIC_DISPLAY_NAME}. Whenever that unit dies, the card marks another remaining unit; the empty card remains in the deck.`,
   },
   {
     id: 'concinnous',
@@ -727,7 +728,7 @@ const CARD_TYPE_REFERENCES: readonly CardTypeReferenceDefinition[] = Object.free
   {
     id: 'hieratic',
     cost: 4,
-    description: `Priestly, highly formal, and rigidly stylized. One contained unit gains ${AGMINATE_DISPLAY_NAME} upon Adlectio and deploys into its role's formation seat rather than a rank. The target is hidden on multi-unit offers; this one-unit Volunteer shows the state because its target is forced.`,
+    description: `One contained unit gains ${AGMINATE_DISPLAY_NAME} upon Adlectio and prefers its piece-specific station during automatic deployment.`,
   },
 ]);
 
@@ -905,35 +906,44 @@ const UNIT_STATE_REFERENCES: readonly Readonly<{
   description: string;
 }>[] = Object.freeze([
   {
+    state: 'primogeniture',
+    name: 'Primogeniture',
+    description: 'Is placed before every other unit.',
+  },
+  {
     state: 'adlected',
     name: ADLECTED_DISPLAY_NAME,
-    description: 'Enrolled by direct appointment rather than by the usual process. The unit may be deliberately placed on a legal square in the player deployment zone before the remainder of the army is deployed.',
+    description: 'The player chooses its square when its deployment turn arrives.',
   },
   {
     state: 'eutactic',
     name: EUTACTIC_DISPLAY_NAME,
-    description: 'Well-ordered; drawn up in good array. The unit’s automatic deployment favors its piece-specific region: Pawns prefer the front row, the King and Bishops prefer the back row, and Rooks prefer outer back-row squares.',
+    description: 'During automatic deployment, Pawns prefer the front row; Knights and Bishops prefer the row immediately behind the front; and Rooks, Queens, and the King prefer the back row. If the preferred row is full, the unit uses the nearest available row.',
   },
   {
     state: 'agminate',
     name: AGMINATE_DISPLAY_NAME,
-    description: 'The unit seeks its piece-specific station: the King prefers a board edge, Rooks favor their King-flank and corner formation, and Bishops prefer the opposite square color from another Bishop.',
+    description: 'Pawns prefer another Pawn or an open file; Knights prefer squares one step in from the edge; Bishops prefer the nearest opposite-color square from another Bishop; Rooks prefer a back-row corner, except the first Rook flanks an Agminate King when possible; Queens prefer the middle; and the King prefers a board edge.',
   },
   {
     state: 'cacochymic',
     name: CACOCHYMIC_DISPLAY_NAME,
-    description: 'The unit may be permanently lost after a Battle when its Pestiferous card resolves attrition. Its card-price contribution is discounted by 0 gold for a Pawn, 1 for a Knight or Bishop, 2 for a Rook, and 3 for a Queen.',
+    description: CACOCHYMIC_DESCRIPTION,
   },
 ]);
 
 // A unit state inherits the surface of the one card property that grants it. Derive
 // that pairing from the Run model so the two Enchiridion sections cannot drift apart.
-const CARD_TYPE_BY_UNIT_STATE = Object.freeze(Object.fromEntries(
+const CARD_TYPE_BY_UNIT_STATE = Object.freeze({
+  ...Object.fromEntries(
   (Object.entries(RUN_CARD_TYPE_REFERENCE) as [
     RunCardType,
     (typeof RUN_CARD_TYPE_REFERENCE)[RunCardType],
   ][]).map(([cardType, definition]) => [definition.grants, cardType]),
-)) as Readonly<Record<RunUnitState, RunCardType>>;
+  ),
+  // Praecipuus and Hieratic share the owner-selected royal-purple material in this beta.
+  primogeniture: 'hieratic',
+}) as Readonly<Record<RunUnitState, RunCardType>>;
 
 function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
   const textureUrls = acceptedCardTypeTextureUrls(currentLiveMediaCatalog());

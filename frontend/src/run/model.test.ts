@@ -20,6 +20,7 @@ import {
   acquireLipsanon,
   battleVictoryGoldTenths,
   beginBattle,
+  canTargetLipsanon,
   canUndoRunBattleMove,
   captureRunBattleUndo,
   performAdlectio,
@@ -28,7 +29,7 @@ import {
   closeBattle,
   createRun,
   createRunCardOffer,
-  deterioratePestiferousCards,
+  resolveCacochymicCombatDeaths,
   formatGold,
   grantGold,
   hieraticAgminateAcquisitionTarget,
@@ -119,9 +120,9 @@ describe('Run piece economy', () => {
     }
   });
 
-  it('defines an Agminate Pawn by its same-type formation affinity', () => {
+  it('defines an Agminate Pawn by its two equal placement preferences', () => {
     expect(runAbilityDescription('agminate', 'pawn'))
-      .toBe('Prefers a square alongside another Pawn when possible.');
+      .toBe('Prefers a square alongside another Pawn or in an open file.');
   });
 
   it('enumerates every unique multiset worth 1–9 points exactly once', () => {
@@ -158,7 +159,8 @@ describe('Run piece economy', () => {
     const continued = leaveSectio(run);
     expect(continued.phase).toBe('deployment');
     expect(continued.battleIndex).toBe(0);
-    expect(continued.cards).toEqual([]);
+    expect(continued.cards.map((card) => card.coreId)).toEqual(['his-grace', 'front-lines']);
+    expect(continued.army.find((unit) => unit.type === 'king')?.abilities).toContain('primogeniture');
     expect(continued.army.map((unit) => unit.type)).toEqual(['king', 'pawn', 'pawn']);
     expect(continued.goldTenths).toBe(RUN_STARTING_GOLD_TENTHS);
   });
@@ -167,7 +169,7 @@ describe('Run piece economy', () => {
     const fresh = createRun(war(), 91);
     const offer = cheapestOpeningOffer(fresh);
     const adlected = performAdlectio(fresh, offer.offerId);
-    const card = adlected.cards[0];
+    const card = adlected.cards.find((candidate) => candidate.coreId === offer.id)!;
 
     expect(adlected.phase).toBe('sectio');
     expect(adlected.sectio?.kind).toBe('opening');
@@ -184,7 +186,7 @@ describe('Run piece economy', () => {
     expect(reset.sectio?.adlectedCardOfferIds).toEqual([]);
     expect(reset.sectio?.cardOffers).toEqual(fresh.sectio?.cardOffers);
     expect(reset.army.map((unit) => unit.type)).toEqual(['king', 'pawn', 'pawn']);
-    expect(reset.cards).toEqual([]);
+    expect(reset.cards.map((candidate) => candidate.coreId)).toEqual(['his-grace', 'front-lines']);
     expect(reset.goldTenths).toBe(RUN_STARTING_GOLD_TENTHS);
     expect(canLeaveSectio(reset)).toBe(true);
     const continued = leaveSectio(adlected);
@@ -439,6 +441,23 @@ describe('the aftermath report that closes a Battle', () => {
 });
 
 describe('Run progression and lipsanon offers', () => {
+  it('does not let Conscription Notice create a second ordinary-unit ability', () => {
+    const fresh = createRun(war(), 91);
+    const pawn = fresh.army.find((unit) => unit.type === 'pawn')!;
+    const withInherentPawn = {
+      ...fresh,
+      army: fresh.army.map((unit) => unit.id === pawn.id ? { ...unit, abilities: ['eutactic' as const] } : unit),
+    };
+    expect(canTargetLipsanon(withInherentPawn, 'conscription-notice', pawn.id)).toBe(false);
+    expect(acquireLipsanon(withInherentPawn, 'conscription-notice', pawn.id)).toBe(withInherentPawn);
+
+    const king = fresh.army.find((unit) => unit.type === 'king')!;
+    expect(canTargetLipsanon(fresh, 'conscription-notice', king.id)).toBe(true);
+    const granted = acquireLipsanon(fresh, 'conscription-notice', king.id);
+    expect(granted.army.find((unit) => unit.id === king.id)?.abilities)
+      .toEqual(['primogeniture', 'adlected']);
+  });
+
   it('grants an exact administrator-entered gold amount through the Run model', () => {
     const run = deployedRun();
     const granted = grantGold(run, 27);
@@ -594,6 +613,36 @@ describe('Run progression and lipsanon offers', () => {
     })).toThrow('retired Shop offer ids');
     expect(() => migrateRunSaveDocument({ ...version16, formatVersion: 15 }))
       .toThrow('unsupported version');
+  });
+
+  it('migrates a version 18 Battle to the pre-information Klerosis boundary', () => {
+    const currentBattle = deployedRun(191, war(2));
+    const version18 = {
+      ...currentBattle,
+      runSaveVersion: 18,
+      army: currentBattle.army.map((unit) => unit.type === 'king'
+        ? { ...unit, abilities: unit.abilities.filter((ability) => ability !== 'primogeniture') }
+        : unit),
+      cards: currentBattle.cards.filter((card) => card.coreId !== 'his-grace' && card.coreId !== 'front-lines'),
+    };
+
+    const migrated = migrateRunSaveDocument(version18);
+
+    expect(migrated.runSaveVersion).toBe(19);
+    expect(migrated.phase).toBe('deployment');
+    expect(migrated.deployment).toBeNull();
+    expect(migrated.battleRuntime).toBeNull();
+    expect(migrated.aftermath).toBeNull();
+    expect(migrated.army.find((unit) => unit.type === 'king')?.abilities).toContain('primogeniture');
+    expect(migrated.cards.slice(0, 2).map((card) => card.coreId)).toEqual(['his-grace', 'front-lines']);
+    expect(migrated.cards[0].unitIds).toEqual([
+      migrated.army.find((unit) => unit.type === 'king')!.id,
+    ]);
+    expect(migrated.cards[1].unitIds).toEqual(
+      migrated.army.filter((unit) => unit.type === 'pawn' && unit.source === 'starting').map((unit) => unit.id),
+    );
+    expect(migrated.goldTenths).toBe(currentBattle.goldTenths);
+    expect(migrated.battleIndex).toBe(currentBattle.battleIndex);
   });
 
   it('repairs incomplete current unit identities and Sectio reset state once', () => {
@@ -829,10 +878,10 @@ describe('Ataraxia I — The Great Mortality', () => {
       }],
       nextCardSequence: 2,
     };
-    const first = deterioratePestiferousCards(run, 1);
-    const retry = deterioratePestiferousCards(run, 1);
-    const second = deterioratePestiferousCards(first, 2);
-    const empty = deterioratePestiferousCards(second, 3);
+    const first = resolveCacochymicCombatDeaths(run, 1);
+    const retry = resolveCacochymicCombatDeaths(run, 1);
+    const second = resolveCacochymicCombatDeaths(first, 2);
+    const empty = resolveCacochymicCombatDeaths(second, 3);
 
     expect(first.army).toHaveLength(run.army.length - 1);
     expect(first.pestiferousLosses).toHaveLength(1);
@@ -840,7 +889,7 @@ describe('Ataraxia I — The Great Mortality', () => {
     expect(first.cards[0].cacochymicUnitId).toBe(units[1].id);
     expect(first.army.find((unit) => unit.id === units[1].id)?.modifiers).toEqual(['cacochymic']);
     expect(retry.pestiferousLosses[0].unit.id).toBe(first.pestiferousLosses[0].unit.id);
-    expect(deterioratePestiferousCards(first, 1)).toBe(first);
+    expect(resolveCacochymicCombatDeaths(first, 1)).toBe(first);
     expect(second.cards[0].unitIds).toEqual([]);
     expect(second.cards[0].lostUnitIds).toHaveLength(2);
     expect(second.cards[0].cacochymicUnitId).toBeNull();

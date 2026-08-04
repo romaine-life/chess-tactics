@@ -67,20 +67,20 @@ describe('levelBoard — zone projection into layers.zones', () => {
     expect(reopened.zones).toEqual({ '4,4': 'player-spawn' });
   });
 
-  it('projects the type bars and the dedicated zones into layers.zones and back', () => {
+  it('projects the King type bar and dedicated zone into layers.zones and back', () => {
     const level = editorBoardToLevel(board({
       zoneEntries: [
-        { id: 'z-player', name: 'Player Deployment', type: 'player-spawn', excludedPieceTypes: ['pawn'], tiles: ['0,0', '1,0'] },
-        { id: 'z-pawn', name: 'Pawn Deployment', type: 'player-pawn-spawn', tiles: ['1,0', '2,0'] },
+        { id: 'z-player', name: 'Player Deployment', type: 'player-spawn', excludedPieceTypes: ['king'], tiles: ['0,0', '1,0'] },
+        { id: 'z-king', name: 'King Deployment', type: 'player-king-spawn', tiles: ['1,0', '2,0'] },
       ],
     }), { id: 'l-pawn', name: 'Pawn zones' });
     expect(level.layers.zones).toEqual([
-      { id: 'z-player', name: 'Player Deployment', type: 'player-spawn', excludedPieceTypes: ['pawn'], tiles: [[0, 0], [1, 0]] },
-      { id: 'z-pawn', name: 'Pawn Deployment', type: 'player-pawn-spawn', tiles: [[1, 0], [2, 0]] },
+      { id: 'z-player', name: 'Player Deployment', type: 'player-spawn', excludedPieceTypes: ['king'], tiles: [[0, 0], [1, 0]] },
+      { id: 'z-king', name: 'King Deployment', type: 'player-king-spawn', tiles: [[1, 0], [2, 0]] },
     ]);
     expect(levelToEditorBoard(level).zoneEntries).toEqual([
-      { id: 'z-player', name: 'Player Deployment', type: 'player-spawn', excludedPieceTypes: ['pawn'], tiles: ['0,0', '1,0'] },
-      { id: 'z-pawn', name: 'Pawn Deployment', type: 'player-pawn-spawn', tiles: ['1,0', '2,0'] },
+      { id: 'z-player', name: 'Player Deployment', type: 'player-spawn', excludedPieceTypes: ['king'], tiles: ['0,0', '1,0'] },
+      { id: 'z-king', name: 'King Deployment', type: 'player-king-spawn', tiles: ['1,0', '2,0'] },
     ]);
   });
 
@@ -89,13 +89,12 @@ describe('levelBoard — zone projection into layers.zones', () => {
     // Level must not carry it, and the editor must not lose the squares already painted into it.
     const authored = board({
       zoneEntries: [
-        { id: 'z-player', name: 'Player Deployment', type: 'player-spawn', excludedPieceTypes: ['pawn'], tiles: ['0,0', '1,0'] },
-        { id: 'z-pawn', name: 'Pawn Deployment', type: 'player-pawn-spawn', tiles: ['2,0'] },
+        { id: 'z-player', name: 'Player Deployment', type: 'player-spawn', tiles: ['0,0', '1,0'] },
         { id: 'z-king', name: 'King Deployment', type: 'player-king-spawn', tiles: ['3,0', '4,0'] },
       ],
     });
     const level = editorBoardToLevel(authored, { id: 'l-off', name: 'Switched off' });
-    expect(level.layers.zones.map((zone) => zone.id)).toEqual(['z-player', 'z-pawn']);
+    expect(level.layers.zones.map((zone) => zone.id)).toEqual(['z-player']);
     // Reopening restores the retained King geometry, so switching it back on returns those squares.
     const king = levelToEditorBoard(level).zoneEntries?.find((entry) => entry.type === 'player-king-spawn');
     expect(king?.tiles).toEqual(['3,0', '4,0']);

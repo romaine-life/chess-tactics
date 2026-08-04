@@ -4,6 +4,8 @@ date: 2026-07-31
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
   - "[ADR-0343](0343-agminate-replaces-marshalled-as-the-formation-ability-name.md)'s Agminate ability name"
+  - "[ADR-0395](0395-eutactic-bestows-only-front-or-back-row-arrangement.md)'s removal of the Rook outer-square preference"
+  - "[ADR-0406](0406-klerosis-deals-cards-before-one-unit-at-a-time-deployment.md)'s one ordinary-unit ability limit"
 partially_supersedes:
   - "[ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md)'s direct ownership of seven piece-placement lipsanon effects"
   - "[ADR-0273](0273-relational-unit-placement-may-have-diminishing-value.md)'s deferral of the Marshalled name and lipsanon relationship"

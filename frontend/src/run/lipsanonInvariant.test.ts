@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { createBlankLevel } from '../core/level';
 import { gameEnv, legalMoves } from '../core/rules';
 import { createFromLevel } from '../game/setup';
-import { lipsanonNeedsUnitTarget, RUN_LIPSANA, RUN_LIPSANON_ABILITY_GRANTS } from './model';
+import {
+  lipsanonNeedsUnitTarget,
+  RUN_LIPSANA,
+  RUN_LIPSANON_ABILITY_GRANTS,
+  RUN_LIPSANON_OFFER_POOL,
+} from './model';
 
 describe('Run lipsanon chess invariant', () => {
   it('keeps every piece legal-move set identical when Run adjudication metadata is present', () => {
@@ -52,6 +57,17 @@ describe('Run lipsanon chess invariant', () => {
     expect(lipsanonNeedsUnitTarget('royal-decree')).toBe(false);
     expect(lipsanonNeedsUnitTarget('')).toBe(false);
     expect(lipsanonNeedsUnitTarget(null)).toBe(false);
+  });
+
+  it('keeps deferred Deployment lipsana registered for saves but out of seeded offers', () => {
+    expect(RUN_LIPSANA.find((lipsanon) => lipsanon.id === 'muster-roll')?.description)
+      .toBe('Retired for this beta; has no effect.');
+    expect(RUN_LIPSANA.find((lipsanon) => lipsanon.id === 'surveyors-compass')?.description)
+      .toBe('Retired for this beta; has no effect.');
+    expect(RUN_LIPSANON_OFFER_POOL).toHaveLength(18);
+    expect(RUN_LIPSANON_OFFER_POOL.map((lipsanon) => lipsanon.id)).not.toEqual(
+      expect.arrayContaining(['muster-roll', 'surveyors-compass']),
+    );
   });
 
   it('expresses placement lipsana only as shared unit-ability grants', () => {

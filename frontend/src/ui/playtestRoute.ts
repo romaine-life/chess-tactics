@@ -5,6 +5,7 @@ const TIME_INITIAL_PARAM = 'time';
 const TIME_INCREMENT_PARAM = 'inc';
 const EVENTS_PARAM = 'events';
 const VICTORY_PARAM = 'victory';
+const ROUTE_PARSE_BASE = 'https://chess-tactics.invalid';
 
 function bytesToBase64Url(bytes: Uint8Array): string {
   let binary = '';
@@ -146,4 +147,26 @@ export function resolvePlayReturnHref(input: {
   levelReturnHref: string | null;
 }): string | null {
   return input.explicitReturnHref ?? (input.hasBoard ? input.boardReturnHref : input.levelReturnHref);
+}
+
+/** Start the real Run flow while retaining the exact URL-addressed Deployment Lab case. */
+export function deploymentLabPlayerFlowHref(labHref: string): string {
+  const labUrl = new URL(labHref, ROUTE_PARSE_BASE);
+  const returnTo = `${labUrl.pathname}${labUrl.search}${labUrl.hash}`;
+  return `/run?${new URLSearchParams({ returnTo }).toString()}`;
+}
+
+/** Identify the validated return target that deserves Deployment Lab-specific navigation copy. */
+export function isDeploymentLabReturnHref(href: string | null): boolean {
+  if (!href) return false;
+  let url: URL;
+  try {
+    url = new URL(href, ROUTE_PARSE_BASE);
+  } catch {
+    return false;
+  }
+  return url.pathname.replace(/\/+$/, '') === '/studio'
+    && url.searchParams.get('mode') === 'viewer'
+    && url.searchParams.get('cat') === 'deployment'
+    && url.searchParams.get('vk') === 'deployment';
 }

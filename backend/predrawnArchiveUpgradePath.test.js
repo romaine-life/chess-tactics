@@ -418,7 +418,7 @@ test('the exact sparse numeric legacy history upgrades through migration 50', ()
   );
   assert.deepEqual(
     plan.pending.map((entry) => entry.version),
-    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55],
+    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56],
     'the bridge must fill the historical gap before applying every post-36 contract',
   );
   assert.throws(
@@ -450,7 +450,7 @@ test('the exact sparse numeric legacy history upgrades through migration 50', ()
   );
 });
 
-test('required-schema readiness and repair enforce the migrations 37 through 55 contracts', () => {
+test('required-schema readiness and repair enforce the migrations 37 through 56 contracts', () => {
   const relations = sourceSection(
     serverSource,
     'const REQUIRED_SCHEMA_RELATIONS = [',
@@ -606,6 +606,11 @@ test('required-schema readiness and repair enforce the migrations 37 through 55 
     contractReadiness,
     /unmigrated_active_run_version_17_count[\s\S]*version === 55[\s\S]*repair active Run Sectio operation vocabulary contract/,
     'readiness must detect and repair an unmigrated version-17 Shop-operation account Run',
+  );
+  assert.match(
+    contractReadiness,
+    /unmigrated_active_run_version_18_count[\s\S]*version === 56[\s\S]*repair active Run Klerosis contract/,
+    'readiness must detect and repair an unmigrated version-18 deployment account Run',
   );
   assert.match(
     contractReadiness,
@@ -968,13 +973,13 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
 
   const primaryUpgradeProof = sourceSection(
     smokeSource,
-    'async function validatePrimarySparseNumericMigrationUpgrade55()',
+    'async function validatePrimarySparseNumericMigrationUpgrade56()',
     '\nasync function validateEditorMigration16Preservation()',
   );
   assert.match(
     primaryUpgradeProof,
-    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*55\s*\}/,
-    'the production upgrade proof must require a complete 1-55 history',
+    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*56\s*\}/,
+    'the production upgrade proof must require a complete 1-56 history',
   );
   assert.match(
     primaryUpgradeProof,
@@ -988,8 +993,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /length:\s*19[\s\S]*index\s*\+\s*37/,
-    'the production report must include every post-36 migration through 55',
+    /length:\s*20[\s\S]*index\s*\+\s*37/,
+    'the production report must include every post-36 migration through 56',
   );
   assert.match(
     primaryUpgradeProof,
@@ -1031,7 +1036,7 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   const sectioMigrationProof = sourceSection(
     smokeSource,
     'async function validateSectioOperationsVocabularyMigration55()',
-    '\nasync function waitForServer()',
+    '\nasync function validateKlerosisAndDeploymentZoneMigration56()',
   );
   assert.match(
     sectioMigrationProof,
@@ -1043,6 +1048,23 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
     /shop-2-0-pp[\s\S]*adlectedCardOfferIds[\s\S]*alienatedUnits[\s\S]*adlectio[\s\S]*run-screen-art\/alienatio[\s\S]*run-sectio-wrap[\s\S]*mediaForeignKeys/,
     'the Sectio migration proof must cover Adlectio, Alienatio, offer ids, live media, and restored foreign keys',
   );
+  const klerosisMigrationProof = sourceSection(
+    smokeSource,
+    'async function validateKlerosisAndDeploymentZoneMigration56()',
+    '\nasync function waitForServer()',
+  );
+  assert.match(
+    klerosisMigrationProof,
+    /inlineMigrationSql\(56\)[\s\S]*inlineMigrationSql\(56\)/,
+    'the Klerosis and deployment-zone migration proof must establish idempotency',
+  );
+  for (const requiredProof of ['his-grace', 'front-lines', 'primogeniture', 'player-pawn-spawn', 'level_working_copy_revisions']) {
+    assert.match(
+      klerosisMigrationProof,
+      new RegExp(requiredProof),
+      `migration 56 must prove ${requiredProof}`,
+    );
+  }
   assert.match(
     migrationProof,
     /inlineMigrationSql\(37\)/,

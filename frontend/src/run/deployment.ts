@@ -18,9 +18,10 @@ export function gameForRunDeployment(
   run: RunDocument,
   level: Level,
   layout: RunDeploymentLayout,
+  includeAutomaticFormation = false,
 ): GameState {
   const seed = run.deployment?.seed ?? run.seed;
-  const game = createFromLevel(levelForRunDeployment(run, level, layout), seed);
+  const game = createFromLevel(levelForRunDeployment(run, level, layout, includeAutomaticFormation), seed);
   return {
     ...game,
     pieces: game.pieces.filter((piece) => piece.side !== 'enemy' && !piece.id.startsWith('spawn-')),

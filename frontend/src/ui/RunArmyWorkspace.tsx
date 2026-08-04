@@ -62,6 +62,7 @@ export const DEFAULT_RUN_ALIENATIO_FILTERS: RunAlienatioFilters = Object.freeze(
 export interface RunArmyProfileAction {
   label: string;
   onAction: (unitId: string) => void;
+  isDisabled?: (unit: RunArmyUnit) => boolean;
 }
 
 const PLAYER_PORTRAIT_PALETTE = paletteForSide('player') as PortraitPalette;
@@ -71,6 +72,7 @@ const PLAYER_PIECE_FACING = 'south';
 const TYPE_ORDER: readonly RunArmyPieceType[] = ['king', 'pawn', 'knight', 'bishop', 'rook', 'queen'];
 
 export type RunUnitTraitId =
+  | 'primogeniture'
   | 'adlected'
   | 'eutactic'
   | 'agminate'
@@ -140,6 +142,16 @@ export function runUnitTraits(run: RunDocument, unit: RunArmyUnit): RunUnitTrait
       icon: { state: 'cacochymic' },
     });
   }
+  if (unit.abilities.includes('primogeniture')) {
+    traits.push({
+      id: 'primogeniture',
+      label: runAbilityDisplayName('primogeniture'),
+      description: runAbilityDescription('primogeniture', unit.type),
+      source: 'His Grace',
+      inherited: false,
+      icon: { state: 'primogeniture' },
+    });
+  }
   if (unit.abilities.includes('adlected')) {
     traits.push({
       id: 'adlected',
@@ -153,16 +165,16 @@ export function runUnitTraits(run: RunDocument, unit: RunArmyUnit): RunUnitTrait
     traits.push(inheritedTrait(
       'adlected',
       ADLECTED_DISPLAY_NAME,
-      'May be deliberately placed in the player zone for this Battle.',
+      runAbilityDescription('adlected', unit.type),
       LIPSANON_BY_ID['inspirational-record'].name,
       { state: 'adlected' },
     ));
   }
 
-  const positioned = deploymentAbilityTrait(run, unit, 'eutactic');
-  if (positioned) traits.push(positioned);
-  const marshalled = deploymentAbilityTrait(run, unit, 'agminate');
-  if (marshalled) traits.push(marshalled);
+  const eutactic = deploymentAbilityTrait(run, unit, 'eutactic');
+  if (eutactic) traits.push(eutactic);
+  const agminate = deploymentAbilityTrait(run, unit, 'agminate');
+  if (agminate) traits.push(agminate);
   if (unit.type === 'king' && hasLipsanon(run, 'royal-tent')) {
     traits.push(inheritedTrait(
       'royal-tent',
@@ -232,8 +244,10 @@ function unitRunStatus(run: RunDocument, unit: RunArmyUnit): string {
     return 'Deployed';
   }
   if (run.phase === 'deployment') {
-    if (run.deployment?.chosenBlockedUnitIds?.includes(unit.id)) return 'Sitting out';
+    if (run.deployment?.unavailableUnitIds.includes(unit.id)) return 'Unavailable this combat';
     if (run.deployment?.manualPlacements[unit.id]) return `Placed with ${ADLECTED_DISPLAY_NAME}`;
+    if (run.deployment?.placements[unit.id]) return 'Placed';
+    if (!run.deployment?.deployingUnitIds.includes(unit.id)) return 'Not dealt';
     return 'Preparing to deploy';
   }
   if (run.phase === 'sectio') return unit.type === 'king' ? 'Permanently retained' : 'Available for Alienatio';
@@ -578,6 +592,7 @@ export function RunArmyWorkspace({
                   unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
                   tone="primary"
+                  disabled={profileAction.isDisabled?.(selected) ?? false}
                   onClick={() => profileAction.onAction(selected.id)}
                 >
                   {profileAction.label}

@@ -1,4 +1,10 @@
-import { cardContentsLabel, type RunCoreCard, type AdlectablePieceType } from './model';
+import {
+  RUN_STARTER_CARD_BY_ID,
+  cardContentsLabel,
+  type RunArmyPieceType,
+  type AdlectablePieceType,
+  type RunStarterCardId,
+} from './model';
 
 const CARD_INITIAL: Readonly<Record<AdlectablePieceType, string>> = Object.freeze({
   pawn: 'p',
@@ -15,8 +21,12 @@ const CARD_PIECE_ORDER: readonly AdlectablePieceType[] = Object.freeze(['pawn', 
  * resolves any card to the deck's canonical id (piece initials in
  * Adlectio order), regardless of the carrier's own id or piece ordering.
  */
-export function canonicalCardId(card: Pick<RunCoreCard, 'pieces'>): string {
+type NameableRunCard = Readonly<{ id?: string; pieces: readonly RunArmyPieceType[] }>;
+
+export function canonicalCardId(card: NameableRunCard): string {
+  if (card.id === 'his-grace' || card.id === 'front-lines') return card.id;
   return [...card.pieces]
+    .filter((piece): piece is AdlectablePieceType => piece !== 'king')
     .sort((left, right) => CARD_PIECE_ORDER.indexOf(left) - CARD_PIECE_ORDER.indexOf(right))
     .map((piece) => CARD_INITIAL[piece])
     .join('');
@@ -144,18 +154,25 @@ export const RUN_CARD_FLAVOR_BY_ID: Readonly<Record<string, string>> = Object.fr
 });
 
 /** The card's banner name; compositions outside the authored deck read as their contents. */
-export function runCardName(card: Pick<RunCoreCard, 'pieces'>): string {
+export function runCardName(card: NameableRunCard): string {
+  const starter = RUN_STARTER_CARD_BY_ID[card.id as RunStarterCardId];
+  if (starter) return starter.name;
   return RUN_CARD_NAME_BY_ID[canonicalCardId(card)] ?? cardContentsLabel(card);
 }
 
 /** The card's stable authored flavor; only out-of-deck diagnostic cards fall back. */
-export function runCardFlavor(card: Pick<RunCoreCard, 'pieces'>): string {
+export function runCardFlavor(card: NameableRunCard): string {
+  const starter = RUN_STARTER_CARD_BY_ID[card.id as RunStarterCardId];
+  if (starter) return starter.flavor;
   return RUN_CARD_FLAVOR_BY_ID[canonicalCardId(card)] ?? 'No account survives.';
 }
 
 /** Stable semantic live-media slot for one canonical core Units card. */
-export function runCardArtSlot(card: Pick<RunCoreCard, 'pieces'>): string {
-  return `ui/run/card-art/${canonicalCardId(card)}/illustration.png`;
+export function runCardArtSlot(card: NameableRunCard): string {
+  // The starter pair uses installed royal and levy illustrations in the beta. Their shared
+  // purple frame carries starter identity while His Grace's royal subject does the rest.
+  const id = canonicalCardId(card);
+  return `ui/run/card-art/${id === 'his-grace' ? 'q' : id === 'front-lines' ? 'pp' : id}/illustration.png`;
 }
 
 // A card is addressed by the name printed on its banner, not by the piece-initial id the

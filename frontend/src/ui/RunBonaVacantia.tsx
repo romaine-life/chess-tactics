@@ -1,6 +1,7 @@
 import { useState, type ReactElement } from 'react';
 import {
   ADLECTED_DISPLAY_NAME,
+  canTargetLipsanon,
   LIPSANON_BY_ID,
   lipsanonNeedsUnitTarget,
   runAbilityGeneralDescription,
@@ -204,6 +205,7 @@ export function RunBonaVacantiaTarget({
           profileAction={{
             label: `Give ${ADLECTED_DISPLAY_NAME} to this unit`,
             onAction: onConfirm,
+            isDisabled: (unit) => !canTargetLipsanon(run, lipsanonId, unit.id),
           }}
           framed={false}
         />

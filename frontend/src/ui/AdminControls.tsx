@@ -3,7 +3,7 @@ import { readAdminBattleHref } from '../admin/battleRoute';
 import { type AdminBattleMode } from '../game/store';
 import { useSkirmish } from '../game/SkirmishStoreContext';
 import { authorizeAdminPlaytest } from '../net/adminPlaytest';
-import { acquireLipsanon, GOLD_SCALE, grantGold, lipsanonNeedsUnitTarget, PIECE_LABEL, LIPSANON_BY_ID, RUN_LIPSANA, type LipsanonId } from '../run/model';
+import { acquireLipsanon, canTargetLipsanon, GOLD_SCALE, grantGold, lipsanonNeedsUnitTarget, PIECE_LABEL, LIPSANON_BY_ID, RUN_LIPSANA, type LipsanonId } from '../run/model';
 import { useActiveRun } from '../run/store';
 import { navigateApp, readValidatedReturnTo } from './navigation';
 import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
@@ -56,11 +56,12 @@ export function AdminControls({
   ], [run?.lipsana]);
   const targetOptions = useMemo<HouseSelectOption<string>[]>(() => [
     { value: '', label: 'Choose a unit' },
-    ...(run?.army.map((unit) => ({
+    ...(run?.army.filter((unit) => !lipsanonId || !lipsanonNeedsUnitTarget(lipsanonId)
+      || canTargetLipsanon(run, lipsanonId, unit.id)).map((unit) => ({
       value: unit.id,
       label: `${PIECE_LABEL[unit.type]} · ${unit.id}`,
     })) ?? []),
-  ], [run?.army]);
+  ], [lipsanonId, run]);
   const selectedLipsanon = lipsanonId ? LIPSANON_BY_ID[lipsanonId] : null;
   const needsLipsanonTarget = lipsanonNeedsUnitTarget(lipsanonId);
 

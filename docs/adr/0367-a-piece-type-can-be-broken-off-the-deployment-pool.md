@@ -10,6 +10,7 @@ partially_supersedes:
   - "[ADR-0288](0288-new-deployment-authoring-uses-one-flexible-zone-per-side.md)"
 partially_superseded_by:
   - "[ADR-0381](0381-affinity-dependent-agminate-units-deploy-after-the-random-formation.md)'s late affinity-dependent placement"
+  - "[ADR-0406](0406-klerosis-deals-cards-before-one-unit-at-a-time-deployment.md)'s retirement of Pawn-only geometry and one-unit queue"
 ---
 
 # ADR-0367: A piece type can be broken off the deployment pool, and placement is a free-for-all

@@ -6,6 +6,7 @@ import {
 } from './glossary';
 import {
   AGMINATE_DISPLAY_NAME,
+  CACOCHYMIC_DESCRIPTION,
   CACOCHYMIC_DISPLAY_NAME,
   RUN_CARD_TYPE_REFERENCE,
   runAbilityDescription,
@@ -33,14 +34,34 @@ describe('Run keyword glossary', () => {
   });
 
   it('keeps a unit state definition tied to the rule the per-unit tip states', () => {
-    // The general form IS the fallback branch of the per-unit description, so a glossary
-    // entry cannot come to describe a rule the Army ledger no longer applies.
+    // The glossary reads the shared general definitions while unit tips specialize the
+    // complete six-piece behavior from the same model module.
     expect(runGlossaryEntry('Adlected')?.definition)
       .toBe(runAbilityDescription('adlected', 'knight'));
     expect(runGlossaryEntry('Eutactic')?.definition)
       .toBe(runAbilityGeneralDescription('eutactic'));
     expect(runGlossaryEntry(AGMINATE_DISPLAY_NAME)?.definition)
-      .toBe(runAbilityDescription('agminate', 'knight'));
+      .toBe(runAbilityGeneralDescription('agminate'));
+    expect(runGlossaryEntry(CACOCHYMIC_DISPLAY_NAME)?.definition)
+      .toBe(CACOCHYMIC_DESCRIPTION);
+    expect(CACOCHYMIC_DESCRIPTION).toBe('Dies when combat ends.');
+  });
+
+  it('defines a complete Eutactic best-fit row and Agminate station for every piece', () => {
+    expect(runAbilityDescription('eutactic', 'pawn')).toContain('front row');
+    for (const piece of ['knight', 'bishop'] as const) {
+      expect(runAbilityDescription('eutactic', piece)).toContain('immediately behind the front');
+    }
+    for (const piece of ['rook', 'queen', 'king'] as const) {
+      expect(runAbilityDescription('eutactic', piece)).toContain('back row');
+    }
+    for (const piece of ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'] as const) {
+      expect(runAbilityDescription('agminate', piece).trim().length, piece).toBeGreaterThan(0);
+    }
+    expect(runAbilityGeneralDescription('eutactic'))
+      .toBe("Prefers its piece type's formation row during automatic deployment.");
+    expect(runAbilityGeneralDescription('agminate'))
+      .toBe('Prefers its piece-specific station during automatic deployment.');
   });
 
   it('finds the mechanic a card property effect names', () => {
