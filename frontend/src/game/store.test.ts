@@ -7,6 +7,7 @@ import { createBlankLevel } from '../core/level';
 import { settleCommittedPosition } from '../core/adjudication';
 import type { PlayingSide } from './clientPerspective';
 import { loadPersistedNetIntent, persistNetIntent } from './netIntentPersistence';
+import type { RunBattleUndoCheckpoint } from '../run/model';
 
 // A handful of tests here compute one or two full enemy replies, each of which runs
 // the rung-1 search AI (core/ai searchEnemyMove) synchronously and DELIBERATELY with
@@ -68,6 +69,7 @@ afterEach(() => {
   useSkirmish.getState().setNetMoveSink(null);
   useSkirmish.getState().setNetResignSink(null);
   useSkirmish.getState().setRunBattleTransformSink(null);
+  useSkirmish.getState().setRunBattleUndoAdapter(null);
   vi.unstubAllGlobals();
 });
 
@@ -80,6 +82,26 @@ function playFirstMove(seed: number) {
   if (moves.length) useSkirmish.getState().tryMoveTo(moves[0].x, moves[0].y);
   vi.runAllTimers(); // resolve the staged enemy reply
   return useSkirmish.getState().game;
+}
+
+function runUndoCheckpoint(goldTenths = 20): RunBattleUndoCheckpoint {
+  return {
+    runId: 'undo-run',
+    battleIndex: 0,
+    goldTenths,
+    army: [],
+    cards: [],
+    battleRuntime: {
+      battleIndex: 0,
+      initiallyDeployedUnitIds: [],
+      reserveUnitIds: [],
+      reservistPoolUnitIds: [],
+      deployedReservistUnitIds: [],
+      observedDeadUnitIds: [],
+      cashedOutUnitIds: [],
+      reinforcementSequence: 0,
+    },
+  };
 }
 
 describe('skirmish store', () => {
@@ -209,6 +231,74 @@ describe('skirmish store', () => {
 
   it('is fully deterministic for a seed + move sequence', () => {
     expect(playFirstMove(5)).toEqual(playFirstMove(5));
+  });
+
+  it('undoes a Run player move before the staged enemy reply can land', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null });
+    const runCheckpoint = runUndoCheckpoint();
+    const restore = vi.fn(() => true);
+    useSkirmish.getState().setRunBattleUndoAdapter({
+      capture: () => runCheckpoint,
+      canRestore: () => true,
+      restore,
+    });
+    const before = useSkirmish.getState();
+    const move = before.movesForSelected()[0];
+
+    before.tryMoveTo(move.x, move.y);
+    expect(useSkirmish.getState().game.turn).toBe('enemy');
+    expect(useSkirmish.getState().undoCheckpoint?.run).toEqual(runCheckpoint);
+    expect(useSkirmish.getState().canUndoLastPlayerMove()).toBe(true);
+
+    expect(useSkirmish.getState().undoLastPlayerMove()).toBe(true);
+    expect(restore).toHaveBeenCalledWith(runCheckpoint);
+    expect(useSkirmish.getState().game).toBe(before.game);
+    expect(useSkirmish.getState().selectedId).toBe(before.selectedId);
+    expect(useSkirmish.getState().undoCheckpoint).toBeNull();
+    expect(useSkirmish.getState().log[0]).toBe('Move undone — 1 gold paid.');
+
+    vi.runAllTimers();
+    expect(useSkirmish.getState().game).toBe(before.game);
+  });
+
+  it('rewinds the deterministic enemy reply with the player decision and allows no Redo', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null });
+    useSkirmish.getState().setRunBattleUndoAdapter({
+      capture: () => runUndoCheckpoint(),
+      canRestore: () => true,
+      restore: () => true,
+    });
+    const before = useSkirmish.getState();
+    const move = before.movesForSelected()[0];
+    before.tryMoveTo(move.x, move.y);
+    vi.runAllTimers();
+    expect(useSkirmish.getState().game).not.toBe(before.game);
+    expect(useSkirmish.getState().tick).toBeGreaterThan(before.tick);
+
+    expect(useSkirmish.getState().undoLastPlayerMove()).toBe(true);
+    expect(useSkirmish.getState().game).toBe(before.game);
+    expect(useSkirmish.getState().tick).toBe(before.tick);
+    expect(useSkirmish.getState().turnsElapsed).toBe(before.turnsElapsed);
+    expect(useSkirmish.getState().undoLastPlayerMove()).toBe(false);
+  });
+
+  it('keeps the board unchanged when the Run cannot pay for Undo', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null });
+    const restore = vi.fn(() => false);
+    useSkirmish.getState().setRunBattleUndoAdapter({
+      capture: () => runUndoCheckpoint(0),
+      canRestore: () => false,
+      restore,
+    });
+    const before = useSkirmish.getState();
+    const move = before.movesForSelected()[0];
+    before.tryMoveTo(move.x, move.y);
+    const moved = useSkirmish.getState().game;
+
+    expect(useSkirmish.getState().canUndoLastPlayerMove()).toBe(false);
+    expect(useSkirmish.getState().undoLastPlayerMove()).toBe(false);
+    expect(restore).not.toHaveBeenCalled();
+    expect(useSkirmish.getState().game).toBe(moved);
   });
 
   it('newSkirmish marks the game as started and records its level', () => {
@@ -646,6 +736,30 @@ describe('skirmish store: battle clock', () => {
     expect(s.log[0]).toMatch(/clock ran out/i);
     // Input is locked exactly like any other decided game.
     expect(useSkirmish.getState().movesForSelected()).toEqual([]);
+  });
+
+  it('keeps paid Run Undo available after the post-move player clock expires', () => {
+    const restore = vi.fn(() => true);
+    useSkirmish.getState().setRunBattleUndoAdapter({
+      capture: () => runUndoCheckpoint(),
+      canRestore: () => true,
+      restore,
+    });
+    useSkirmish.getState().newSkirmish({ seed: 5, level: timedLevel(2) });
+    const before = useSkirmish.getState();
+    const move = before.movesForSelected()[0];
+    before.tryMoveTo(move.x, move.y);
+
+    // Let the reply and landing beat finish, then let the restored player clock flag.
+    vi.advanceTimersByTime(3_500);
+    expect(useSkirmish.getState().game.winner).toBe('enemy');
+    expect(useSkirmish.getState().log[0]).toMatch(/clock ran out/i);
+    expect(useSkirmish.getState().canUndoLastPlayerMove()).toBe(true);
+
+    expect(useSkirmish.getState().undoLastPlayerMove()).toBe(true);
+    expect(restore).toHaveBeenCalledOnce();
+    expect(useSkirmish.getState().game).toBe(before.game);
+    expect(useSkirmish.getState().clock).toMatchObject({ remainingMs: 2_000, running: true });
   });
 });
 

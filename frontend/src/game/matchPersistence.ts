@@ -27,7 +27,7 @@ export type PersistedMatch = Pick<
 > &
   // Optional for snapshots written before these fields existed. resumeMatch defaults
   // a missing AI mode to search and a missing activity id to standalone play.
-  Partial<Pick<SkirmishState, 'aiMode' | 'activityId'>> & {
+  Partial<Pick<SkirmishState, 'aiMode' | 'activityId' | 'undoCheckpoint'>> & {
     /** Wall-clock recency used only to order Play's resumable activities. */
     savedAt?: string;
   };
@@ -71,6 +71,7 @@ function sliceOf(state: SkirmishState): PersistedMatch {
     activityId: state.activityId,
     clock: state.clock,
     aiMode: state.aiMode,
+    undoCheckpoint: state.undoCheckpoint ?? null,
     savedAt: new Date().toISOString(),
   };
 }
@@ -88,13 +89,13 @@ export function clearMatch(): void {
  *
  * Skips entirely when persistence is disabled (test play). A never-started
  * placeholder is left alone — it must NOT wipe a genuinely saved match that a fresh
- * page load is about to resume. A finished match IS cleared, so a later visit
- * starts fresh instead of resuming a decided board.
+ * page load is about to resume. A finished match is cleared unless its last player
+ * decision still has a payable Undo, in which case reload must preserve that choice.
  */
 export function persistMatch(state: SkirmishState): void {
   if (!enabled) return;
-  if (!state.started || state.game.winner !== null) {
-    if (state.started) clearMatch(); // a real match just finished → drop it
+  if (!state.started || (state.game.winner !== null && !state.undoCheckpoint)) {
+    if (state.started) clearMatch(); // an irrevocably finished match has nothing to resume
     return;
   }
   const store = storage();
@@ -144,7 +145,7 @@ export function persistedMatchMatchesActivity(
   levelId: string,
   activityId: string | null,
 ): boolean {
-  return match.game.winner === null
+  return (match.game.winner === null || Boolean(match.undoCheckpoint))
     && match.levelId === levelId
     && (match.activityId ?? null) === activityId;
 }

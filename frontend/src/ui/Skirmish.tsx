@@ -21,7 +21,7 @@ import { NavButton } from './shared/NavButton';
 import { RestartGlyph } from './shared/actionGlyphs';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarControlContribution, TitleBarStatus } from './shell/TitleBarControls';
-import { shouldStartFreshSkirmish, type RunBattleTransformSink } from '../game/store';
+import { shouldStartFreshSkirmish, type RunBattleTransformSink, type RunBattleUndoAdapter } from '../game/store';
 import { SkirmishStoreProvider, useSkirmish, useSkirmishStoreApi } from '../game/SkirmishStoreContext';
 import { loadMatch, persistedMatchMatchesActivity, setMatchPersistenceEnabled } from '../game/matchPersistence';
 import {
@@ -87,11 +87,14 @@ import { Strategikon } from './Strategikon';
 import { strategikonRouteLabels } from './strategikonRoute';
 import { GameplayWorkspaceSceneSlot } from './shell/AuthoredSceneSlot';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
+import { RunBattleUndoButton } from './RunBattleUndoButton';
 
 export interface RunBattlePresentation {
   level: Level;
   seed: number;
   activityId: string;
+  /** Run identity and measures remain the title-bar authority during Battle (ADR-0366). */
+  titleBarContent: ReactNode;
   lipsanonIds: readonly LipsanonId[];
   /** The Battle is won. What it cost is read off the live board here, because nothing
    *  outside it keeps the turn count once the board unmounts. */
@@ -100,6 +103,7 @@ export interface RunBattlePresentation {
   onPawnCashOut?: (unitId: string) => void;
   onAbandonRun?: () => void;
   transformCommittedBoard?: RunBattleTransformSink;
+  undoAdapter: RunBattleUndoAdapter;
 }
 
 /** Deployment chrome and interaction projected onto the Battle compositor already on screen. */
@@ -243,8 +247,12 @@ function SkirmishSession({
   const presentedDeploymentSurface = runDeployment?.surfaceState ?? retainedDeploymentSurface ?? undefined;
   useEffect(() => {
     skirmishStore.getState().setRunBattleTransformSink(runBattle?.transformCommittedBoard ?? null);
-    return () => skirmishStore.getState().setRunBattleTransformSink(null);
-  }, [runBattle?.transformCommittedBoard, skirmishStore]);
+    skirmishStore.getState().setRunBattleUndoAdapter(runBattle?.undoAdapter ?? null);
+    return () => {
+      skirmishStore.getState().setRunBattleTransformSink(null);
+      skirmishStore.getState().setRunBattleUndoAdapter(null);
+    };
+  }, [runBattle?.transformCommittedBoard, runBattle?.undoAdapter, skirmishStore]);
   const routeParams = useMemo(() => new URLSearchParams(routeSearch), [routeSearch]);
   const strategikonOpen = routePath.startsWith('/play/strategikon/') || routePath.startsWith('/run/strategikon/');
   const strategikonBase = runBattle ? '/run' : '/play';
@@ -1263,48 +1271,52 @@ function SkirmishSession({
         ...(runBattle ? ['Battle'] : []),
         ...(strategikonOpen ? strategikonRouteLabels(routePath) : []),
       ].join(' › ');
+  const skirmishTitleBarContent = playableSurfaceReady ? (
+    <>
+      {battleTitleRoute ? <TitleBarSlot region="route">{battleTitleRoute}</TitleBarSlot> : null}
+      <div className="skirmish-topbar-status">
+      {/* The battle clock is ALWAYS the middle chip on every play surface — a timed game
+        counts down and an authored untimed level reads "∞ / No limit". Keeping the
+        centre chip present means
+        the turn plate and objective always flank a real element, so the clock stays
+        page-centred over the title bar's diamond (equal-width flanks, see style.css). */}
+      <TitleBarStatus className="skirmish-status-chip skirmish-turn-plate">
+        <strong>{turnLabel}</strong>
+        <small>{game.winner ? 'Skirmish Complete' : 'Live Board'}</small>
+      </TitleBarStatus>
+      <TitleBarStatus className={`skirmish-status-chip skirmish-clock${clock && clock.remainingMs <= 20_000 ? ' danger is-low' : ''}`}>
+        {clock ? (
+          <>
+            <strong>{formatClockMs(clock.remainingMs)}</strong>
+            <small>{clock.incrementMs > 0 ? `+${clock.incrementMs / 1000}s / move` : 'Battle Clock'}</small>
+          </>
+        ) : (
+          <>
+            <strong className="skirmish-clock-unlimited" aria-label="No time limit">∞</strong>
+            <small>No limit</small>
+          </>
+        )}
+      </TitleBarStatus>
+      <TitleBarStatus className="skirmish-status-chip skirmish-objective">
+        <span className="skirmish-icon skirmish-icon-flag" aria-hidden="true" />
+        <span>
+          <strong>Objective</strong>
+          <small>{objectiveGoal}</small>
+        </span>
+      </TitleBarStatus>
+      </div>
+    </>
+  ) : null;
+  const titleBarContent = runDeployment?.titleBarContent
+    ?? runBattle?.titleBarContent
+    ?? skirmishTitleBarContent;
 
   return (
     <SkirmishShell
       testId={runDeployment ? 'run-deployment' : 'skirmish'}
       className={runDeployment?.screenClassName ?? (screenPredrawnBackgroundActive ? 'is-predrawn-board' : '')}
       shellWorkspaceCoversLipsana={Boolean(runWorkspace) || strategikonOpen}
-      titleBarContent={runDeployment ? runDeployment.titleBarContent : playableSurfaceReady ? (
-        <>
-          {battleTitleRoute ? <TitleBarSlot region="route">{battleTitleRoute}</TitleBarSlot> : null}
-          <div className="skirmish-topbar-status">
-          {/* The battle clock is ALWAYS the middle chip on every play surface — a timed game
-            counts down and an authored untimed level reads "∞ / No limit". Keeping the
-            centre chip present means
-            the turn plate and objective always flank a real element, so the clock stays
-            page-centred over the title bar's diamond (equal-width flanks, see style.css). */}
-          <TitleBarStatus className="skirmish-status-chip skirmish-turn-plate">
-            <strong>{turnLabel}</strong>
-            <small>{game.winner ? 'Skirmish Complete' : 'Live Board'}</small>
-          </TitleBarStatus>
-          <TitleBarStatus className={`skirmish-status-chip skirmish-clock${clock && clock.remainingMs <= 20_000 ? ' danger is-low' : ''}`}>
-            {clock ? (
-              <>
-                <strong>{formatClockMs(clock.remainingMs)}</strong>
-                <small>{clock.incrementMs > 0 ? `+${clock.incrementMs / 1000}s / move` : 'Battle Clock'}</small>
-              </>
-            ) : (
-              <>
-                <strong className="skirmish-clock-unlimited" aria-label="No time limit">∞</strong>
-                <small>No limit</small>
-              </>
-            )}
-          </TitleBarStatus>
-          <TitleBarStatus className="skirmish-status-chip skirmish-objective">
-            <span className="skirmish-icon skirmish-icon-flag" aria-hidden="true" />
-            <span>
-              <strong>Objective</strong>
-              <small>{objectiveGoal}</small>
-            </span>
-          </TitleBarStatus>
-          </div>
-        </>
-      ) : null}
+      titleBarContent={titleBarContent}
       lipsanonIds={runDeployment?.lipsanonIds ?? runBattle?.lipsanonIds ?? []}
       controlsContent={runDeployment?.controlsContent}
       hudProps={runDeployment ? { enableGlobalShortcuts: false } : undefined}
@@ -1456,6 +1468,7 @@ function SkirmishSession({
             <h2>{game.winner === 'player' ? 'Victory' : game.winner === 'draw' ? 'Draw' : 'Defeat'}</h2>
             <p>{routeLevel.name} — {resultDetail ?? objectiveGoal}</p>
             <div className="campaign-result-actions">
+              <RunBattleUndoButton testId="undo-run-move-result" />
               {game.winner === 'player' ? (
                 <ChromeButton unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}

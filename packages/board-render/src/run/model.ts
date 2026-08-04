@@ -337,6 +337,22 @@ export interface RunBattleRuntime {
   reinforcementSequence: number;
 }
 
+/**
+ * The Run-owned half of one Battle move checkpoint.
+ *
+ * The board store owns the matching chess position. This bounded slice is enough to
+ * reverse every Run mutation a committed move can cause without turning the complete
+ * Run document into a second browser-owned authority (ADR-0394).
+ */
+export interface RunBattleUndoCheckpoint {
+  runId: string;
+  battleIndex: number;
+  goldTenths: number;
+  army: RunArmyUnit[];
+  cards: RunOwnedCard[];
+  battleRuntime: RunBattleRuntime;
+}
+
 /** One unit that fell during the Battle. Persistent units are not lost for falling -- they
  * return for the next Battle -- so this is the Battle's casualty list, not the roster's. */
 export interface RunAftermathFallenUnit {
@@ -1592,6 +1608,114 @@ export function restartBattle(run: RunDocument): RunDocument {
       cashedOutUnitIds: [],
       reinforcementSequence: 0,
     },
+  });
+}
+
+export const RUN_BATTLE_UNDO_COST_TENTHS = GOLD_SCALE;
+
+function cloneRunBattleRuntime(runtime: RunBattleRuntime): RunBattleRuntime {
+  return {
+    ...runtime,
+    initiallyDeployedUnitIds: [...runtime.initiallyDeployedUnitIds],
+    reserveUnitIds: [...runtime.reserveUnitIds],
+    reservistPoolUnitIds: [...runtime.reservistPoolUnitIds],
+    deployedReservistUnitIds: [...runtime.deployedReservistUnitIds],
+    observedDeadUnitIds: [...runtime.observedDeadUnitIds],
+    cashedOutUnitIds: [...runtime.cashedOutUnitIds],
+  };
+}
+
+function cloneRunBattleUndoArmy(army: readonly RunArmyUnit[]): RunArmyUnit[] {
+  return army.map((unit) => ({
+    ...unit,
+    abilities: [...unit.abilities],
+    modifiers: [...unit.modifiers],
+  }));
+}
+
+function cloneRunBattleUndoCards(cards: readonly RunOwnedCard[]): RunOwnedCard[] {
+  return cards.map((card) => ({
+    ...card,
+    unitIds: [...card.unitIds],
+    lostUnitIds: [...card.lostUnitIds],
+  }));
+}
+
+export function captureRunBattleUndo(run: RunDocument): RunBattleUndoCheckpoint | null {
+  if (run.phase !== 'battle' || !run.battleRuntime) return null;
+  return {
+    runId: run.id,
+    battleIndex: run.battleIndex,
+    goldTenths: run.goldTenths,
+    army: cloneRunBattleUndoArmy(run.army),
+    cards: cloneRunBattleUndoCards(run.cards),
+    battleRuntime: cloneRunBattleRuntime(run.battleRuntime),
+  };
+}
+
+function isRunBattleUndoCheckpoint(value: unknown): value is RunBattleUndoCheckpoint {
+  if (!value || typeof value !== 'object') return false;
+  const checkpoint = value as Partial<RunBattleUndoCheckpoint>;
+  const runtime = checkpoint.battleRuntime as Partial<RunBattleRuntime> | null | undefined;
+  const armyIsValid = Array.isArray(checkpoint.army)
+    && checkpoint.army.every((unit) => Boolean(
+      unit
+      && typeof unit === 'object'
+      && Array.isArray(unit.abilities)
+      && Array.isArray(unit.modifiers),
+    ));
+  const cardsAreValid = Array.isArray(checkpoint.cards)
+    && checkpoint.cards.every((card) => Boolean(
+      card
+      && typeof card === 'object'
+      && Array.isArray(card.unitIds)
+      && Array.isArray(card.lostUnitIds),
+    ));
+  const runtimeIsValid = Boolean(
+    runtime
+    && typeof runtime === 'object'
+    && Number.isSafeInteger(runtime.battleIndex)
+    && Array.isArray(runtime.initiallyDeployedUnitIds)
+    && Array.isArray(runtime.reserveUnitIds)
+    && Array.isArray(runtime.reservistPoolUnitIds)
+    && Array.isArray(runtime.deployedReservistUnitIds)
+    && Array.isArray(runtime.observedDeadUnitIds)
+    && Array.isArray(runtime.cashedOutUnitIds)
+    && Number.isSafeInteger(runtime.reinforcementSequence),
+  );
+  return typeof checkpoint.runId === 'string'
+    && Number.isSafeInteger(checkpoint.battleIndex)
+    && Number.isSafeInteger(checkpoint.goldTenths)
+    && (checkpoint.goldTenths ?? -1) >= 0
+    && armyIsValid
+    && cardsAreValid
+    && runtimeIsValid;
+}
+
+export function canUndoRunBattleMove(
+  run: RunDocument,
+  checkpoint: RunBattleUndoCheckpoint | null,
+): boolean {
+  return isRunBattleUndoCheckpoint(checkpoint)
+    && run.phase === 'battle'
+    && run.id === checkpoint.runId
+    && run.battleIndex === checkpoint.battleIndex
+    && checkpoint.battleRuntime.battleIndex === checkpoint.battleIndex
+    && checkpoint.goldTenths >= RUN_BATTLE_UNDO_COST_TENTHS;
+}
+
+/** Restore move-owned Run state and pay for the Undo from the pre-move economy. */
+export function undoRunBattleMove(
+  run: RunDocument,
+  checkpoint: RunBattleUndoCheckpoint | null,
+): RunDocument {
+  if (!checkpoint || !canUndoRunBattleMove(run, checkpoint)) return run;
+  return touch({
+    ...run,
+    goldTenths: checkpoint.goldTenths - RUN_BATTLE_UNDO_COST_TENTHS,
+    army: cloneRunBattleUndoArmy(checkpoint.army),
+    cards: cloneRunBattleUndoCards(checkpoint.cards),
+    battleRuntime: cloneRunBattleRuntime(checkpoint.battleRuntime),
   });
 }
 

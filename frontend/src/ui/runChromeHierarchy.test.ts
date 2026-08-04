@@ -26,6 +26,8 @@ const skirmishHud = readFileSync(new URL('./SkirmishHud.tsx', import.meta.url), 
 const chromeBox = readFileSync(new URL('./shared/ChromeBox.tsx', import.meta.url), 'utf8');
 const paintedSurfaceBoundary = readFileSync(new URL('./shell/PaintedSurfaceBoundary.tsx', import.meta.url), 'utf8');
 const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+const gameStore = readFileSync(new URL('../game/store.ts', import.meta.url), 'utf8');
+const matchPersistence = readFileSync(new URL('../game/matchPersistence.ts', import.meta.url), 'utf8');
 
 describe('Run chrome hierarchy', () => {
   it('uses the Battle-owned shell and HUD while replacing only Controls contents', () => {
@@ -39,6 +41,10 @@ describe('Run chrome hierarchy', () => {
     expect(skirmish).toContain('export function SkirmishShell');
     expect(skirmish).toContain('<SkirmishHud {...hudProps} controlsContent={controlsContent} />');
     expect(skirmish).toContain('function SkirmishSession');
+    expect(skirmish).toContain('titleBarContent: ReactNode;');
+    expect(skirmish).toContain('?? runBattle?.titleBarContent');
+    expect(runScreen).toContain('titleBarContent,');
+    expect(runScreen).toContain('() => <RunTitleBarStatus run={run} path={routePath} />');
     expect(skirmish).toMatch(/function SkirmishSession\b[\s\S]*?return \(\s*<SkirmishShell/);
     expect(skirmish).toMatch(/export function Skirmish\b[\s\S]*?<SkirmishStoreProvider>/);
     expect(sharedShell).toContain('<SceneSurfaceReadiness');
@@ -448,5 +454,18 @@ describe('Run chrome hierarchy', () => {
     // placement ADR-0377 retired.
     expect(runScreen).not.toContain('run-sectio-rules');
     expect(styleCss).not.toContain('.run-sectio-rules');
+  });
+
+  it('pairs a paid Run checkpoint with the board before every player move', () => {
+    expect(runScreen).toContain('capture: () => {');
+    expect(runScreen).toContain('captureRunBattleUndo(latest)');
+    expect(runScreen).toContain('canUndoRunBattleMove(latest, checkpoint)');
+    expect(runScreen).toContain('const restored = undoRunBattleMove(latest, checkpoint);');
+    expect(skirmish).toContain('setRunBattleUndoAdapter(runBattle?.undoAdapter ?? null)');
+    expect(gameStore).toContain('const undoCheckpoint = capturePlayerMoveUndo();');
+    expect(gameStore).toContain("log: ['Move undone — 1 gold paid.', ...checkpoint.log]");
+    expect(gameStore).toContain('beforeApply?.(piece.id);');
+    expect(gameStore).toContain('commitPlayerMove(p, mv, undefined, true, commitRunCashOut);');
+    expect(matchPersistence).toContain('undoCheckpoint: state.undoCheckpoint ?? null');
   });
 });

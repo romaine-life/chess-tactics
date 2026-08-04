@@ -21,6 +21,7 @@ const base = process.argv.slice(2).find((argument) => !argument.startsWith('--')
 if (!base) { console.error('usage: npm run e2e:run-battle -- <base-url>'); process.exit(2); }
 const transitionOnly = process.argv.includes('--transition-only');
 const deploymentOnly = process.argv.includes('--deployment-only');
+const undoOnly = process.argv.includes('--undo-only');
 
 const CHROMES = [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
@@ -215,6 +216,26 @@ try {
 
   await page.waitForFunction(() => [...document.querySelectorAll('button')].some((b) => (b.textContent || '').trim() === 'Start Run'));
   if (!await clickButton('Start Run')) await fail('start-run', JSON.stringify(await buttonDiagnostics('Start Run')));
+
+  // A fresh Conflict can now begin with mandatory Bona Vacantia before its opening
+  // Sectio. Wait for the director-owned destination, then take one of the ordinary
+  // offers with a real hit-tested click (only Conscription Notice needs a second step).
+  try {
+    await page.waitForFunction(() => {
+      const director = document.querySelector('.scene-director');
+      const committed = director?.getAttribute('data-scene-committed') ?? '';
+      return director?.getAttribute('data-scene-phase') === 'current'
+        && (committed.includes(':bona-vacantia:') || committed.includes(':sectio:'));
+    }, { timeout: 45_000 });
+  } catch {
+    await fail('start-run-phase', JSON.stringify(await sceneDiagnostics()));
+  }
+  const bonaOffer = await page.$('button.run-vacantia-take:not([data-lipsanon-id="conscription-notice"])');
+  if (bonaOffer) {
+    const offerBox = await bonaOffer.boundingBox();
+    if (!offerBox) await fail('opening-bona-vacantia', 'ordinary lipsanon offer has no geometry');
+    await page.mouse.click(offerBox.x + offerBox.width / 2, offerBox.y + offerBox.height / 2);
+  }
   await waitPhase('sectio', 'start-run');
 
   if (deploymentOnly) {
@@ -594,11 +615,19 @@ try {
   const plan = await page.evaluate(async () => {
     const g = await import('/src/game/SkirmishStoreContext.tsx');
     const r = await import('/src/core/rules.ts');
+    const activeRun = await import('/src/run/store.ts');
     const s = g.activeSkirmishStoreForDiagnostics()?.getState();
-    if (!s) return null;
+    const run = activeRun.useActiveRun.getState().run;
+    if (!s || !run) return null;
     for (const p of s.game.pieces.filter((q) => q.side === 'player' && q.alive)) {
       const moves = r.legalMoves(p, s.game.pieces, s.game.size, s.env);
-      if (moves.length) return { pieceId: p.id, type: p.type, from: { x: p.x, y: p.y }, to: { x: moves[0].x, y: moves[0].y } };
+      if (moves.length) return {
+        pieceId: p.id,
+        type: p.type,
+        from: { x: p.x, y: p.y },
+        to: { x: moves[0].x, y: moves[0].y },
+        goldTenths: run.goldTenths,
+      };
     }
     return null;
   });
@@ -668,35 +697,101 @@ try {
   }
   console.log('move committed by real click: OK');
 
-  // The enemy answers and the turn returns — the full loop is alive.
+  if (!undoOnly) {
+    // The default full-loop proof waits for the enemy answer. The focused Undo proof
+    // deliberately clicks during that thinking window to verify cancellation too; unit
+    // coverage separately proves that the same checkpoint rewinds an already-landed reply.
+    try {
+      await page.waitForFunction(
+        () => import('/src/game/SkirmishStoreContext.tsx').then((m) => {
+          const s = m.activeSkirmishStoreForDiagnostics()?.getState();
+          if (!s) return false;
+          return s.game.turn === 'player' && !s.game.winner;
+        }),
+        { timeout: 15_000 },
+      );
+    } catch {
+      const replyState = await page.evaluate(async () => {
+        const context = await import('/src/game/SkirmishStoreContext.tsx');
+        const state = context.activeSkirmishStoreForDiagnostics()?.getState();
+        return state ? {
+          turn: state.game.turn,
+          winner: state.game.winner,
+          reason: state.game.reason,
+          log: state.log.slice(0, 5),
+        } : null;
+      });
+      await fail('enemy-reply', JSON.stringify(replyState));
+    }
+    console.log('enemy replied, turn returned: OK');
+  }
+
+  // Run Undo is a real Controls action: expose it through the HUD tab, prove its canonical
+  // one-gold presentation is enabled, click it through hit-testing, and verify that the player
+  // decision + enemy reply rewind while the Run pays exactly one gold.
+  const controlsTab = await page.$('#skirmish-tab-controls');
+  if (!controlsTab) await fail('undo-controls', 'Controls tab is missing');
+  const controlsBox = await controlsTab.boundingBox();
+  if (!controlsBox) await fail('undo-controls', 'Controls tab has no geometry');
+  await page.mouse.click(controlsBox.x + controlsBox.width / 2, controlsBox.y + controlsBox.height / 2);
+  await page.waitForSelector('[data-testid="undo-run-move"]:not([disabled])', { visible: true, timeout: 5_000 });
+  const undoShot = 'tmp-shots/run-battle-undo-control.png';
+  const controlsPanel = await page.$('.skirmish-controls-card');
+  if (!controlsPanel) await fail('undo-controls', 'Controls panel did not open');
+  await controlsPanel.screenshot({ path: undoShot });
+  console.log('undo control screenshot:', undoShot);
+
+  const undoButton = await page.$('[data-testid="undo-run-move"]');
+  const undoBox = await undoButton?.boundingBox();
+  if (!undoBox) await fail('undo', 'paid Undo button has no hit target');
+  await page.mouse.click(undoBox.x + undoBox.width / 2, undoBox.y + undoBox.height / 2);
   try {
     await page.waitForFunction(
-      () => import('/src/game/SkirmishStoreContext.tsx').then((m) => {
-        const s = m.activeSkirmishStoreForDiagnostics()?.getState();
-        if (!s) return false;
-        return s.game.turn === 'player' && !s.game.winner;
+      ({ pieceId, from, goldTenths }) => Promise.all([
+        import('/src/game/SkirmishStoreContext.tsx'),
+        import('/src/run/store.ts'),
+      ]).then(([gameContext, activeRun]) => {
+        const state = gameContext.activeSkirmishStoreForDiagnostics()?.getState();
+        const run = activeRun.useActiveRun.getState().run;
+        const piece = state?.game.pieces.find((candidate) => candidate.id === pieceId);
+        return state?.game.turn === 'player'
+          && !state.game.winner
+          && state.undoCheckpoint === null
+          && piece?.x === from.x
+          && piece?.y === from.y
+          && run?.goldTenths === goldTenths - 10;
       }),
-      { timeout: 15_000 },
+      { timeout: 5_000 },
+      plan,
     );
   } catch {
-    const replyState = await page.evaluate(async () => {
-      const context = await import('/src/game/SkirmishStoreContext.tsx');
-      const state = context.activeSkirmishStoreForDiagnostics()?.getState();
-      return state ? {
+    const undoState = await page.evaluate(async (planned) => {
+      const gameContext = await import('/src/game/SkirmishStoreContext.tsx');
+      const activeRun = await import('/src/run/store.ts');
+      const state = gameContext.activeSkirmishStoreForDiagnostics()?.getState();
+      const run = activeRun.useActiveRun.getState().run;
+      return state && run ? {
         turn: state.game.turn,
         winner: state.game.winner,
-        reason: state.game.reason,
-        log: state.log.slice(0, 5),
+        undo: Boolean(state.undoCheckpoint),
+        goldTenths: run.goldTenths,
+        piece: state.game.pieces.find((candidate) => candidate.id === planned.pieceId),
       } : null;
-    });
-    await fail('enemy-reply', JSON.stringify(replyState));
+    }, plan);
+    await fail('undo', JSON.stringify(undoState));
   }
-  console.log('enemy replied, turn returned: OK');
+  console.log(`${undoOnly ? 'thinking reply cancelled and player decision' : 'player decision and enemy reply'} undone for exactly one gold: OK`);
 
   const shot = 'tmp-shots/run-battle-e2e.png';
   const board = await page.$('.skirmish-war-room');
   if (board) await board.screenshot({ path: shot });
   console.log('screenshot:', shot);
+  if (undoOnly) {
+    console.log('PASS — paid Undo cancels a pending reply, restores the player decision, and costs exactly one gold');
+    await browser.close();
+    rmSync(browserProfile, { recursive: true, force: true });
+    process.exit(0);
+  }
 
   // The open Strategikon must still take the pointer (its slot re-enables it).
   const toggle = await page.$('[data-testid="strategikon-toggle"]');
@@ -718,7 +813,7 @@ try {
   if (!railHit?.reachable) await fail('strategikon-open', 'open workspace does not receive the pointer');
   console.log('open Strategikon takes the pointer: OK');
 
-  console.log('PASS — anonymous Run battle is fully playable with real clicks');
+  console.log('PASS — anonymous Run battle is fully playable and paid Undo is exact');
   await browser.close();
   rmSync(browserProfile, { recursive: true, force: true });
 } catch (error) {

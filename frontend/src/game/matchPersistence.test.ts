@@ -83,6 +83,7 @@ describe('match persistence', () => {
       levelId: state.levelId,
       activityId: state.activityId,
       clock: state.clock,
+      undoCheckpoint: null,
       savedAt: expect.any(String),
     });
     expect(Number.isNaN(Date.parse(loaded?.savedAt ?? ''))).toBe(false);
@@ -105,6 +106,43 @@ describe('match persistence', () => {
     expect(loadMatch()).not.toBeNull();
     persistMatch(fakeState({ winner: 'player' }));
     expect(loadMatch()).toBeNull();
+  });
+
+  it('keeps a terminal Run Battle resumable while its paid Undo checkpoint exists', () => {
+    const state = fakeState({ winner: 'enemy', activityId: 'run:first:battle:0', turn: 'done' });
+    state.undoCheckpoint = {
+      game: { ...state.game, winner: null, turn: 'player' },
+      tick: state.tick,
+      log: [...state.log],
+      resultDetail: null,
+      turnsElapsed: state.turnsElapsed,
+      selectedId: 'p1',
+      focusedId: 'p1',
+      clock: null,
+      run: {
+        runId: 'first',
+        battleIndex: 0,
+        goldTenths: 20,
+        army: [],
+        cards: [],
+        battleRuntime: {
+          battleIndex: 0,
+          initiallyDeployedUnitIds: [],
+          reserveUnitIds: [],
+          reservistPoolUnitIds: [],
+          deployedReservistUnitIds: [],
+          observedDeadUnitIds: [],
+          cashedOutUnitIds: [],
+          reinforcementSequence: 0,
+        },
+      },
+    };
+
+    persistMatch(state);
+    const loaded = loadMatch();
+    expect(loaded?.game.winner).toBe('enemy');
+    expect(loaded?.undoCheckpoint?.run.goldTenths).toBe(20);
+    expect(persistedMatchMatchesActivity(loaded!, 'lvl-1', 'run:first:battle:0')).toBe(true);
   });
 
   it('leaves an existing save intact for the module-load placeholder (not started)', () => {

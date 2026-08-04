@@ -27,6 +27,7 @@ import { AdminControls } from './AdminControls';
 import { LIPSANON_BY_ID } from '../run/model';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 import { StrategikonTitleNavigation } from './StrategikonTitleNavigation';
+import { RunBattleUndoButton } from './RunBattleUndoButton';
 
 const TYPE_LABEL = PIECE_LABEL;
 
@@ -394,8 +395,7 @@ export function SkirmishHud({
               <ChromeButton unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'skirmish-promotion-option')}
                 onClick={() => {
-                  onPawnCashOut(promotingPiece.id);
-                  cashOutPromotion();
+                  cashOutPromotion(onPawnCashOut);
                 }}
                 aria-label="Take 2 gold and permanently remove this Pawn"
                 title={`${LIPSANON_BY_ID['mercenary-boat'].name}: take 2 gold; this Pawn leaves the army permanently.`}
@@ -625,6 +625,7 @@ export function SkirmishHud({
                   attempt (＋), or concede the current board. */}
               <span className="skirmish-eyebrow">Scenario</span>
               <div className="skirmish-view-row">
+                <RunBattleUndoButton testId="undo-run-move" />
                 {returnHref && !net ? (
                   <ChromeNavButton unit="inner-text-button"
                     className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'skirmish-return-button')}
