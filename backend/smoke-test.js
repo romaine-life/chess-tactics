@@ -1502,12 +1502,18 @@ async function validateSectioOperationsVocabularyMigration55() {
     const events = await client.query('SELECT slot FROM media_asset_events ORDER BY slot');
     const drawables = await client.query('SELECT slot FROM drawable_asset_media ORDER BY slot');
     const mediaForeignKeys = await client.query(`
-      SELECT local_table.relname AS local_table
+      SELECT constraint_entry.conname,
+             local_table.relname AS local_table,
+             referenced_table.relname AS referenced_table
         FROM pg_constraint constraint_entry
         JOIN pg_class local_table ON local_table.oid = constraint_entry.conrelid
-       WHERE constraint_entry.contype = 'f'
-         AND local_table.relname IN ('media_slots', 'media_versions', 'drawable_asset_media')
-       ORDER BY local_table.relname
+        JOIN pg_class referenced_table ON referenced_table.oid = constraint_entry.confrelid
+       WHERE constraint_entry.conname IN (
+         'drawable_asset_media_slot_fkey',
+         'media_slots_active_version_fk',
+         'media_versions_slot_fkey'
+       )
+       ORDER BY constraint_entry.conname
     `);
     const allMediaRows = [...slots.rows, ...versions.rows];
     if (
@@ -1542,8 +1548,13 @@ async function validateSectioOperationsVocabularyMigration55() {
       || allMediaRows.some((row) => row.metadata?.schema?.startsWith('run-shop-wrap-'))
       || allMediaRows.some((row) => row.metadata?.runtime?.component === 'run-shop-wrap')
       || allMediaRows.some((row) => row.metadata?.runtime?.nativeRole === 'run-shop-wrap')
-      || mediaForeignKeys.rows.map((row) => row.local_table).join(',')
-        !== 'drawable_asset_media,media_slots,media_versions'
+      || mediaForeignKeys.rows.map((row) => (
+        `${row.conname}:${row.local_table}->${row.referenced_table}`
+      )).join(',') !== [
+        'drawable_asset_media_slot_fkey:drawable_asset_media->media_slots',
+        'media_slots_active_version_fk:media_slots->media_versions',
+        'media_versions_slot_fkey:media_versions->media_slots',
+      ].join(',')
     ) {
       throw new Error(`Migration 55 did not move the complete Sectio, Adlectio, and Alienatio vocabulary graph: ${JSON.stringify({
         active_runs: activeRuns.rows,
