@@ -5,8 +5,21 @@ import { LipsanonIcon } from './Lipsana';
 import { Tooltip } from './shared/InfoTip';
 import { StudioCatalogCard } from './studio/StudioCatalogCard';
 import { StudioStepper } from './studio/StudioStepper';
-import { SliderRow } from './dressing/SliderRow';
+import { SliderRow, ctlReset } from './dressing/SliderRow';
+import { ChoiceGroup } from './shared/ChoiceGroup';
+import { Toggle } from './shared/Toggle';
+import { slotPoint, useLipsanonFlight } from './runLipsanonFlightView';
 import { ChromeButton } from './shared/ChromeButton';
+import {
+  LIPSANON_FLOAT_COMMITTED_PERIOD,
+  LIPSANON_FLOAT_COMMITTED_RISE,
+  LIPSANON_FLOAT_COMMITTED_TIMING,
+  LIPSANON_FLOAT_STEPPED_TIMING,
+  LIPSANON_GLOW_COMMITTED,
+  LIPSANON_RECEDE_COMMITTED,
+  LIPSANON_TRAY_STROKE_COMMITTED,
+  lipsanonFloatClock,
+} from './runLipsanonMat';
 
 /**
  * Candidate MATS -- the surface the Run's lipsanon offers are laid out on at the head of a
@@ -133,24 +146,116 @@ export function findLipsanonMat(items: readonly LipsanonMatCandidate[], id: stri
  * `cards` is off for the catalog thumbnails, where 64px icons would be illegible anyway
  * and the only question is which mat to open.
  */
+export interface LipsanonMotionTuning {
+  /** How far the bob rises, in whole pixels. */
+  rise: number;
+  /** The base cycle every offer's own clock scales from, in seconds. */
+  period: number;
+  /** Interpolate the bob's stops (a smooth float) or hold each one (a pixel-art bob). */
+  stepped: boolean;
+  /** Multiplier on the emanation's radius and opacity. 0 puts the light out. */
+  glow: number;
+  /** The one-pixel stroke that seats the tray on the table, in whole pixels. */
+  trayStroke: number;
+  /** How much of the untaken lipsana' exit is a shrink. 0 collapses them to a point. */
+  recede: number;
+  /** Which emphases a hovered lipsanon gets. They compose; any combination is legal. */
+  hover: LipsanonHoverEmphasis;
+}
+
+/**
+ * Emphasis can come from adding light to the lipsanon being considered or from taking it away
+ * from everything else, and those read very differently — so none of these is a mode. They
+ * are independent, and the combination the owner settles on becomes the committed one.
+ */
+export interface LipsanonHoverEmphasis {
+  /** The emanation opens past the steady level a settled lipsanon already holds. */
+  flare: boolean;
+  /** A contact shadow beneath, so the scale reads as picked up rather than drawn bigger. */
+  lift: boolean;
+  /** The silhouette stroke turns from near-black to warm gold. */
+  rim: boolean;
+  /** The tray and the other offers recede instead. */
+  focus: boolean;
+}
+
+export const LIPSANON_HOVER_EMPHASES: readonly { key: keyof LipsanonHoverEmphasis; label: string; note: string }[] = [
+  { key: 'flare', label: 'Flare', note: 'the light opens up past its settled level' },
+  { key: 'lift', label: 'Lift shadow', note: 'a contact shadow beneath — picked up, not just bigger' },
+  { key: 'rim', label: 'Gold rim', note: 'the silhouette stroke catches the light' },
+  { key: 'focus', label: 'Focus', note: 'the tray and the other two recede instead' },
+];
+
+export const LIPSANON_MOTION_COMMITTED: LipsanonMotionTuning = {
+  rise: LIPSANON_FLOAT_COMMITTED_RISE,
+  period: LIPSANON_FLOAT_COMMITTED_PERIOD,
+  stepped: false,
+  glow: LIPSANON_GLOW_COMMITTED,
+  trayStroke: LIPSANON_TRAY_STROKE_COMMITTED,
+  recede: LIPSANON_RECEDE_COMMITTED,
+  // Nothing extra ships yet: hovering settles, brightens and enlarges, and that is all until
+  // an emphasis is chosen here.
+  hover: { flare: false, lift: false, rim: false, focus: false },
+};
+
+/** The tuned motion as the custom properties style.css reads. */
+export function lipsanonMotionStyle(motion: LipsanonMotionTuning): CSSProperties {
+  return {
+    '--lipsanon-float-rise': `${motion.rise}px`,
+    '--lipsanon-float-period': `${motion.period}s`,
+    '--lipsanon-float-timing': motion.stepped ? LIPSANON_FLOAT_STEPPED_TIMING : LIPSANON_FLOAT_COMMITTED_TIMING,
+    '--lipsanon-glow': `${motion.glow}`,
+    '--lipsanon-tray-stroke-width': `${motion.trayStroke}px`,
+    '--lipsanon-recede-scale': `${motion.recede}`,
+  } as CSSProperties;
+}
+
+/** The enabled emphases as the flags style.css keys its hover rules off. */
+export function lipsanonHoverAttributes(hover: LipsanonHoverEmphasis): Record<string, string> {
+  const flags: Record<string, string> = {};
+  for (const { key } of LIPSANON_HOVER_EMPHASES) {
+    if (hover[key]) flags[`data-hover-${key}`] = '';
+  }
+  return flags;
+}
+
 export function LipsanonMatStage({
   candidate,
   backdrop,
   cards = true,
   scale,
+  motion,
+  taken,
+  flying,
+  onTake,
 }: {
   candidate: LipsanonMatCandidate;
   backdrop: string;
   cards?: boolean;
   scale?: number;
+  motion?: LipsanonMotionTuning;
+  /** Lipsana already sent to the corner. Absent means the stage is not interactive. */
+  taken?: readonly LipsanonId[];
+  /** The lipsanon currently travelling, so the mat lets go of it as it leaves. */
+  flying?: LipsanonId | null;
+  onTake?: (lipsanonId: LipsanonId, icon: Element | null, landing: Element | null) => void;
 }): ReactElement {
+  const landingSlot = useRef<HTMLSpanElement | null>(null);
+  const gone = new Set([...(taken ?? []), ...(flying ? [flying] : [])]);
+  // Sticky, like the game's: the mat does not put the other lipsana back once one has been
+  // chosen. Reset is what lays them out again.
+  const taking = gone.size > 0;
   return (
     <div
       className="lipsanon-mat-stage"
       data-mat={candidate.mat}
       data-generator={candidate.generator}
       data-cards={cards ? 'on' : 'off'}
-      style={scale === undefined ? undefined : { '--lipsanon-mat-scale-tuned': scale } as CSSProperties}
+      style={{
+        ...(scale === undefined ? null : { '--lipsanon-mat-scale-tuned': scale } as CSSProperties),
+        ...(motion ? lipsanonMotionStyle(motion) : null),
+      }}
+      {...(motion ? lipsanonHoverAttributes(motion.hover) : null)}
     >
       {backdrop ? <img className="lipsanon-mat-backdrop" src={backdrop} alt="" draggable={false} /> : null}
       <div className="lipsanon-mat-layer">
@@ -158,17 +263,36 @@ export function LipsanonMatStage({
             row's intrinsic sizing, and the layer grows to the raster instead of the cards. */}
         <img className="lipsanon-mat-art" src={candidate.version.media!.url} alt="" draggable={false} />
         {cards ? (
-          <div className="lipsanon-mat-cards" data-testid="lipsanon-mat-offers">
-            {REVIEW_LIPSANA.map((lipsanonId) => {
+          <div className="lipsanon-mat-cards" data-testid="lipsanon-mat-offers" data-taking={taking ? '' : undefined}>
+            {REVIEW_LIPSANA.map((lipsanonId, index) => {
               const lipsanon = LIPSANON_BY_ID[lipsanonId];
+              const flown = gone.has(lipsanonId);
               return (
                 <Tooltip
-                  className="lipsanon-mat-offer"
+                  className={`lipsanon-mat-offer${flown ? ' is-flying' : ''}`}
                   key={lipsanonId}
                   label={`${lipsanon.name}. ${lipsanon.description}`}
                   popupMaxInlineSize={288}
                   title={lipsanon.name}
-                  trigger={<LipsanonIcon lipsanonId={lipsanonId} />}
+                  suppressed={taking}
+                  // The same per-offer clock the game lays down, so the tuner is judging
+                  // the composition the player sees and not three synchronised copies.
+                  style={lipsanonFloatClock(index)}
+                  trigger={onTake ? (
+                    <button
+                      type="button"
+                      className="run-vacantia-take"
+                      data-lipsanon-id={lipsanonId}
+                      aria-label={`Send ${lipsanon.name} to the corner`}
+                      onClick={(event) => onTake(
+                        lipsanonId,
+                        event.currentTarget.querySelector('.run-lipsanon-icon'),
+                        landingSlot.current,
+                      )}
+                    >
+                      <LipsanonIcon lipsanonId={lipsanonId} />
+                    </button>
+                  ) : <LipsanonIcon lipsanonId={lipsanonId} />}
                 >
                   <span>{lipsanon.description}</span>
                 </Tooltip>
@@ -177,6 +301,33 @@ export function LipsanonMatStage({
           </div>
         ) : null}
       </div>
+      {/* Where a clicked lipsanon goes. The game's destination is the held-lipsanon strip in the
+          screen's top-left, so this stands in the same corner and keeps the travel honest.
+          The trailing empty slot is what the flight is aimed at — measuring the real box
+          beats recomputing the geometry, and it is correct the moment the row reflows. */}
+      {taken ? (
+        <div className="lipsanon-mat-landing" data-testid="lipsanon-mat-landing" aria-label="Lipsana sent to the corner">
+          {taken.map((lipsanonId) => {
+            const lipsanon = LIPSANON_BY_ID[lipsanonId];
+            // The strip's own classes, not a lookalike: a landed lipsanon has to behave the way
+            // a held one does, or the corner stops being a preview of where it went.
+            return (
+              <Tooltip
+                className="lipsanon-mat-landing-slot run-lipsanon-inventory-item"
+                key={lipsanonId}
+                triggerClassName="run-lipsanon-inventory-trigger"
+                popupMaxInlineSize={288}
+                label={`${lipsanon.name}. ${lipsanon.description}`}
+                title={lipsanon.name}
+                trigger={<LipsanonIcon lipsanonId={lipsanonId} />}
+              >
+                <span>{lipsanon.description}</span>
+              </Tooltip>
+            );
+          })}
+          <span className="lipsanon-mat-landing-slot" ref={landingSlot} aria-hidden="true" />
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -304,10 +455,12 @@ function useTunedMatMeasurement(
 function TunedScaleExport({
   candidate,
   measured,
+  motion,
   scale,
 }: {
   candidate: LipsanonMatCandidate | null;
   measured: TunedMatMeasurement | null;
+  motion: LipsanonMotionTuning;
   scale: number;
 }): ReactElement | null {
   const [copied, setCopied] = useState(false);
@@ -357,6 +510,15 @@ export function LipsanonMatViewer({
   const found = id ? findLipsanonMat(items, id) : null;
   const empty = 'No candidate selected — pick a card in the Lipsanon Mat catalog.';
   const [scale, setScale] = useState(LIPSANON_MAT_COMMITTED_SCALE);
+  const [motion, setMotion] = useState<LipsanonMotionTuning>(LIPSANON_MOTION_COMMITTED);
+  // Clicking a lipsanon plays the real take: the same travel, to the same corner of the screen
+  // the game sends it to. Reset lays them back out so it can be watched again.
+  const [taken, setTaken] = useState<LipsanonId[]>([]);
+  const { flight, launch, element: flightElement } = useLipsanonFlight(
+    (lipsanonId) => setTaken((current) => (current.includes(lipsanonId) ? current : [...current, lipsanonId])),
+  );
+  const tune = <Key extends keyof LipsanonMotionTuning>(key: Key, value: LipsanonMotionTuning[Key]): void =>
+    setMotion((current) => ({ ...current, [key]: value }));
   const stage = useRef<HTMLElement | null>(null);
   const measured = useTunedMatMeasurement(stage, scale, id);
   return (
@@ -365,9 +527,22 @@ export function LipsanonMatViewer({
         {!found ? <p className="al-lab-empty">{empty}</p> : (
           <div className="al-lab-stages">
             <figure ref={stage} className="al-stage lipsanon-mat-figure" data-testid="lipsanon-mat-stage" data-mat={found.mat} data-generator={found.generator}>
-              <LipsanonMatStage candidate={found} backdrop={backdrop} scale={scale} />
+              <LipsanonMatStage
+                candidate={found}
+                backdrop={backdrop}
+                scale={scale}
+                motion={motion}
+                taken={taken}
+                flying={flight?.lipsanonId ?? null}
+                onTake={(lipsanonId, icon, landing) => {
+                  if (!launch(lipsanonId, icon, slotPoint(landing))) {
+                    setTaken((current) => (current.includes(lipsanonId) ? current : [...current, lipsanonId]));
+                  }
+                }}
+              />
               <figcaption>{found.matLabel} — {found.generatorLabel}</figcaption>
             </figure>
+            {flightElement}
           </div>
         )}
       </section>
@@ -382,6 +557,31 @@ export function LipsanonMatViewer({
               onChange={onSelect}
               options={items.map((item) => ({ id: item.id, label: `${item.matLabel} — ${item.generatorLabel}` }))}
               value={found?.id ?? ''}
+            />
+            {/* Clicking a lipsanon on the stage plays its travel to the corner. This lays them
+                back out so it can be replayed without leaving the screen. */}
+            <label className="tileset-catalog-zoom">
+              <span>Take animation <strong data-testid="lipsanon-mat-taken-count">{taken.length ? 'taken' : 'ready'}</strong> — click a lipsanon on the mat</span>
+              <div className="pages-ctl-row">
+                <ChromeButton
+                  unit="inner-text-button"
+                  data-testid="lipsanon-mat-reset-take"
+                  disabled={taken.length === 0}
+                  onClick={() => setTaken([])}
+                >
+                  Reset lipsana
+                </ChromeButton>
+              </div>
+            </label>
+            <SliderRow
+              label={<>Others vanish <strong data-testid="lipsanon-recede-value">{motion.recede.toFixed(2)}×</strong> — 0 shrinks them to a point, 1 only fades them</>}
+              value={motion.recede}
+              set={(value) => tune('recede', value)}
+              min={0}
+              max={1}
+              step={0.01}
+              nudge={0.01}
+              dflt={LIPSANON_MOTION_COMMITTED.recede}
             />
             <SliderRow
               label={<>Mat scale <strong data-testid="lipsanon-mat-scale-value">{scale.toFixed(2)}×</strong> the lipsanon row</>}
@@ -398,7 +598,94 @@ export function LipsanonMatViewer({
                 ? `Mat ${measured.matWidth}×${measured.matHeight} over a ${measured.rowWidth}px lipsanon row. Committed value is ${LIPSANON_MAT_COMMITTED_SCALE.toFixed(2)}× — the reset returns here.`
                 : `Committed value is ${LIPSANON_MAT_COMMITTED_SCALE.toFixed(2)}×.`}
             </p>
-            <TunedScaleExport candidate={found} measured={measured} scale={scale} />
+
+            {/* The lipsana' idle life. The stage above runs the SAME rules the game runs, so
+                what is tuned here is what ships once the value is committed to style.css. */}
+            <label className="tileset-catalog-zoom">
+              <span>Float</span>
+              <div className="pages-ctl-row">
+                <ChoiceGroup
+                  ariaLabel="Float character"
+                  value={motion.stepped ? 'stepped' : 'smooth'}
+                  options={[
+                    { value: 'smooth', label: 'Smooth', title: 'Interpolate between the bob’s stops' },
+                    { value: 'stepped', label: 'Pixel-stepped', title: 'Hold each whole-pixel stop' },
+                  ]}
+                  onChange={(value) => tune('stepped', value === 'stepped')}
+                />
+                {ctlReset(() => tune('stepped', LIPSANON_MOTION_COMMITTED.stepped))}
+              </div>
+            </label>
+            <SliderRow
+              label={<>Float rise <strong data-testid="lipsanon-float-rise-value">{motion.rise}px</strong></>}
+              value={motion.rise}
+              set={(value) => tune('rise', Math.round(value))}
+              min={0}
+              max={14}
+              step={1}
+              nudge={1}
+              dflt={LIPSANON_MOTION_COMMITTED.rise}
+            />
+            <SliderRow
+              label={<>Float period <strong data-testid="lipsanon-float-period-value">{motion.period.toFixed(1)}s</strong></>}
+              value={motion.period}
+              set={(value) => tune('period', value)}
+              min={0.8}
+              max={9}
+              step={0.1}
+              nudge={0.1}
+              dflt={LIPSANON_MOTION_COMMITTED.period}
+            />
+            <SliderRow
+              label={<>Glow <strong data-testid="lipsanon-glow-value">{motion.glow.toFixed(2)}×</strong></>}
+              value={motion.glow}
+              set={(value) => tune('glow', value)}
+              min={0}
+              max={2.5}
+              step={0.05}
+              nudge={0.05}
+              dflt={LIPSANON_MOTION_COMMITTED.glow}
+            />
+            <SliderRow
+              label={<>Tray stroke <strong data-testid="lipsanon-tray-stroke-value">{motion.trayStroke}px</strong></>}
+              value={motion.trayStroke}
+              set={(value) => tune('trayStroke', Math.round(value))}
+              min={0}
+              max={4}
+              step={1}
+              nudge={1}
+              dflt={LIPSANON_MOTION_COMMITTED.trayStroke}
+            />
+
+            {/* Emphasis on hover. Independent on purpose: adding light to the lipsanon and
+                taking it away from everything else are different readings, and they can be
+                combined. Hover a lipsanon on the stage to judge each one. */}
+            <label className="tileset-catalog-zoom">
+              <span>Hover emphasis</span>
+              <div className="pages-ctl-row">
+                {ctlReset(() => tune('hover', LIPSANON_MOTION_COMMITTED.hover))}
+              </div>
+            </label>
+            {LIPSANON_HOVER_EMPHASES.map(({ key, label, note }) => (
+              <label className="tileset-catalog-zoom" key={key}>
+                <span>{label} <em>— {note}</em></span>
+                <div className="pages-ctl-row">
+                  <Toggle
+                    label={`${label} on hover`}
+                    checked={motion.hover[key]}
+                    onChange={(checked) => tune('hover', { ...motion.hover, [key]: checked })}
+                  />
+                </div>
+              </label>
+            ))}
+
+            <p className="tileset-catalog-note" data-testid="lipsanon-motion-readout">
+              {motion.stepped
+                ? `Pixel-stepped: 12 held stops per cycle, so the bob advances about every ${Math.round(motion.period * 1000 / 12)}ms and never lands off-pixel.`
+                : 'Smooth: the bob’s whole-pixel stops are interpolated, so it moves every frame and can sit between pixels.'}
+              {` Committed is ${LIPSANON_MOTION_COMMITTED.stepped ? 'pixel-stepped' : 'smooth'}, ${LIPSANON_MOTION_COMMITTED.rise}px over ${LIPSANON_MOTION_COMMITTED.period.toFixed(1)}s, glow ${LIPSANON_MOTION_COMMITTED.glow.toFixed(2)}× — every reset returns there.`}
+            </p>
+            <TunedScaleExport candidate={found} measured={measured} motion={motion} scale={scale} />
             {found ? (
               <dl className="al-meta">
                 <div><dt>Mat</dt><dd>{found.matLabel}</dd></div>

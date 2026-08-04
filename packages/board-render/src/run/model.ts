@@ -17,7 +17,7 @@ export {
   type LipsanonId,
 };
 
-// Format 15 renamed the held-relic field to `lipsana` (ADR-0376). The old `relics` key is
+// Format 15 renamed the held-lipsanon field to `lipsana` (ADR-0376). The old `lipsana` key is
 // not read: docs/migration-policy.md prohibits a compatibility read, so a document written
 // before the rename is unsupported rather than half-migrated.
 export const RUN_FORMAT_VERSION = 15;
@@ -1117,7 +1117,7 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
     chosenDraftId?: unknown;
   };
   if (raw.phase === 'draft') throw new Error('The retired Run draft phase is unsupported.');
-  // Format 15 renamed `relics` to `lipsana`. Every phase of an older document carries the
+  // Format 15 renamed `lipsana` to `lipsana`. Every phase of an older document carries the
   // retired key, and reading it to fill the new one would be exactly the compatibility path
   // docs/migration-policy.md forbids — so the document is refused, not carried forward.
   if (Number(raw.formatVersion) < 15) {

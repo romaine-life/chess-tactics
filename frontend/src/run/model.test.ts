@@ -429,7 +429,7 @@ describe('Run progression and lipsanon offers', () => {
     expect(normalizeRunDocument(upgraded)).toBe(upgraded);
   });
 
-  // Format 15 renamed the held-relic field to `lipsana`. Every document below it carries the
+  // Format 15 renamed the held-lipsanon field to `lipsana`. Every document below it carries the
   // retired key and no new one, and reading the old key to fill the new one is the
   // compatibility path docs/migration-policy.md prohibits — so the floor refuses them all
   // rather than upgrading some. The per-format upgrade tests this replaces (format 1 names,

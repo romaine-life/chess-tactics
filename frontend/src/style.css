@@ -18987,6 +18987,13 @@ button.tileset-relationship-cell {
   gap: var(--ds-stack);
   overflow-x: hidden;
   overflow-y: auto;
+  /* This rail scrolls whenever a workspace outgrows a short window, and it sits directly
+     beside the Controls rail, which has always carried the app's own scrollbar. Left
+     unskinned it renders the raw OS scrollbar -- arrow buttons and all -- inside a painted
+     medieval room, one shared surface away from a themed one. Same treatment as
+     .run-meta-controls, so no Run surface can ever show an OS bar. */
+  scrollbar-color: #315160 #071017;
+  scrollbar-width: thin;
 }
 
 .run-shell-workspace-content :is(h2, h3, h4, p),
@@ -19335,6 +19342,22 @@ button.tileset-relationship-cell {
   filter: drop-shadow(0 0 4px #9fe7ff);
 }
 
+/* A held lipsanon answers the pointer. It carries a tip that only appears on hover, so without
+   a highlight there is nothing to say it is worth hovering -- the strip read as decoration.
+   Same language as the mat, at HUD scale: 64px x 1.125 is 72px exactly, so the sprite still
+   lands on whole pixels. The cyan ring above stays the keyboard affordance. */
+.run-lipsanon-inventory-item .run-lipsanon-icon {
+  overflow: visible;
+  transition:
+    filter 180ms ease,
+    scale 180ms cubic-bezier(0.2, 0.75, 0.3, 1);
+}
+
+.run-lipsanon-inventory-trigger:is(:hover, :focus-visible) .run-lipsanon-icon {
+  filter: brightness(1.18) drop-shadow(0 0 6px rgb(255 226 168 / 0.6));
+  scale: 1.125;
+}
+
 .run-lipsanon-inventory-item .run-lipsanon-icon,
 .run-lipsanon-inventory-item .run-lipsanon-icon img {
   block-size: 64px;
@@ -19458,7 +19481,19 @@ button.tileset-relationship-cell {
    here (it resolved to top-aligned), so the block centre is pinned outright. */
 .lipsanon-mat-art {
   block-size: auto;
+  /* The tray is a painted object dropped onto a painted room, and its wood sits at nearly the
+     same value as the table under it -- with nothing between the two silhouettes it reads as
+     pasted over the scene rather than resting in it. The same one-pixel stroke the lipsana
+     already carry gives the edge somewhere to end. Tuned in the Studio's Lipsanon Mat viewer. */
+  --lipsanon-tray-stroke: rgb(12 9 7 / 0.9);
+  filter:
+    drop-shadow(var(--lipsanon-tray-stroke-width, 1px) 0 0 var(--lipsanon-tray-stroke))
+    drop-shadow(calc(-1 * var(--lipsanon-tray-stroke-width, 1px)) 0 0 var(--lipsanon-tray-stroke))
+    drop-shadow(0 var(--lipsanon-tray-stroke-width, 1px) 0 var(--lipsanon-tray-stroke))
+    drop-shadow(0 calc(-1 * var(--lipsanon-tray-stroke-width, 1px)) 0 var(--lipsanon-tray-stroke))
+    brightness(var(--lipsanon-tray-dim, 1));
   image-rendering: pixelated;
+  transition: --lipsanon-tray-dim 220ms ease;
   inline-size: calc(100% * var(--lipsanon-mat-scale));
   inset-block-start: 50%;
   inset-inline-start: calc((100% - 100% * var(--lipsanon-mat-scale)) / 2);
@@ -19511,13 +19546,374 @@ button.tileset-relationship-cell {
   margin: 0;
 }
 
-.lipsanon-mat-offer .run-lipsanon-icon img {
+.lipsanon-mat-offer .run-lipsanon-icon img,
+.run-lipsanon-flight .run-lipsanon-icon img {
   --lipsanon-mat-stroke: rgb(16 12 9 / 0.92);
   filter:
     drop-shadow(1px 0 0 var(--lipsanon-mat-stroke))
     drop-shadow(-1px 0 0 var(--lipsanon-mat-stroke))
     drop-shadow(0 1px 0 var(--lipsanon-mat-stroke))
     drop-shadow(0 -1px 0 var(--lipsanon-mat-stroke));
+}
+
+/* ===== The lipsana are alive on the mat =====
+   Three unclaimed objects lying in a dim room. They breathe, they give off a little light,
+   and they answer the pointer -- so the screen reads as goods worth taking rather than three
+   inert thumbnails. Motion and light only: nothing here paints a surface, and the light is
+   cast by each lipsanon's OWN silhouette, which is why it follows the art instead of sitting
+   behind it as a disc. */
+
+/* Registered so the amplitude itself can be TRANSITIONED. That is what lets a hovered lipsanon
+   settle: the bob keeps running on its own clock while its rise eases to zero, so the lipsanon
+   comes to rest at exactly translate 0 -- its seat on the mat -- from wherever in the cycle
+   the pointer caught it, and picks the bob back up from the same clock on the way out.
+   Freezing the animation instead would stop it wherever it happened to be, which is a
+   different resting height every time. The initial value is the committed rise. */
+@property --lipsanon-float-rise {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 5px;
+}
+
+/* The hover EMPHASES, each a 0..1 strength so they compose instead of competing. Registered
+   so they transition, and 0 by default so every one of them is a no-op until it is switched
+   on -- the drop-shadows they drive collapse to zero radius at zero alpha. Toggled live in
+   the Studio's Lipsanon Mat viewer; whichever combination is chosen becomes the committed one. */
+@property --lipsanon-flare {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --lipsanon-lift {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+/* How far the tray is pushed back while one lipsanon is being considered. 1 is untouched. */
+@property --lipsanon-tray-dim {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
+}
+
+/* The emanation's PULSE DEPTH, on the same principle. A hovered lipsanon has to stop moving,
+   and a halo whose blur radius breathes in and out is moving -- the lit edge visibly grows
+   and shrinks even though the sprite is perfectly still. Easing the depth to zero collapses
+   the pulse onto its bright end, so the hovered lipsanon holds one steady light instead of
+   going dark or continuing to breathe. */
+@property --lipsanon-glow-pulse {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
+}
+
+/* The bob is one ramp of stops expressed as fractions of --lipsanon-float-rise, and the TIMING
+   FUNCTION decides its character: interpolate between the stops and it is a smooth float;
+   hold each stop with steps(1, end) and it is a pixel-art bob that never lands off-pixel.
+   Every stop is round()ed to a whole pixel so the stepped reading stays integer-exact at any
+   amplitude -- the smooth reading interpolates between those integer endpoints and is
+   unaffected. Both are tuned live in the Studio's Lipsanon Mat viewer. */
+@keyframes lipsanon-vacantia-float {
+  0%    { translate: 0 0; }
+  8.4%  { translate: 0 round(calc(var(--lipsanon-float-rise, 5px) * -0.2), 1px); }
+  16.7% { translate: 0 round(calc(var(--lipsanon-float-rise, 5px) * -0.4), 1px); }
+  25%   { translate: 0 round(calc(var(--lipsanon-float-rise, 5px) * -0.6), 1px); }
+  33.4% { translate: 0 round(calc(var(--lipsanon-float-rise, 5px) * -0.8), 1px); }
+  41.7% { translate: 0 round(calc(var(--lipsanon-float-rise, 5px) * -1), 1px); }
+  58.4% { translate: 0 round(calc(var(--lipsanon-float-rise, 5px) * -1), 1px); }
+  66.7% { translate: 0 round(calc(var(--lipsanon-float-rise, 5px) * -0.8), 1px); }
+  75%   { translate: 0 round(calc(var(--lipsanon-float-rise, 5px) * -0.6), 1px); }
+  83.4% { translate: 0 round(calc(var(--lipsanon-float-rise, 5px) * -0.4), 1px); }
+  91.7% { translate: 0 round(calc(var(--lipsanon-float-rise, 5px) * -0.2), 1px); }
+  100%  { translate: 0 0; }
+}
+
+/* The emanation, on the other hand, is light rather than pixels, so it moves continuously.
+   The stroke is repeated in every frame because an animated `filter` replaces the whole
+   declaration -- drop it and the silhouette loses its footing against the mat.
+   The BRIGHT end is the fixed one and the trough is written as the bright end minus a depth
+   scaled by --lipsanon-glow-pulse, so collapsing the pulse to 0 leaves both keyframes equal at
+   full brightness. That is what a settled lipsanon holds. */
+@keyframes lipsanon-vacantia-emanate {
+  0%, 100% {
+    filter:
+      drop-shadow(1px 0 0 var(--lipsanon-mat-stroke))
+      drop-shadow(-1px 0 0 var(--lipsanon-mat-stroke))
+      drop-shadow(0 1px 0 var(--lipsanon-mat-stroke))
+      drop-shadow(0 -1px 0 var(--lipsanon-mat-stroke))
+      /* Same RGB at both ends, deliberately: radius and opacity carry the whole pulse. Let
+         the colour differ too and the two frames never become equal at pulse 0 -- the hue
+         goes on drifting under a settled lipsanon, which is exactly the movement being removed
+         here. At half opacity the warmer trough tint was doing nothing visible anyway. */
+      drop-shadow(
+        0 0 calc((6px - 3px * var(--lipsanon-glow-pulse, 1)) * var(--lipsanon-glow, 1))
+        rgb(255 232 186 / calc((0.86 - 0.36 * var(--lipsanon-glow-pulse, 1)) * var(--lipsanon-glow, 1))))
+      drop-shadow(
+        0 0 calc((20px - 10px * var(--lipsanon-glow-pulse, 1)) * var(--lipsanon-glow, 1))
+        rgb(255 190 96 / calc((0.52 - 0.24 * var(--lipsanon-glow-pulse, 1)) * var(--lipsanon-glow, 1))));
+  }
+  50% {
+    filter:
+      drop-shadow(1px 0 0 var(--lipsanon-mat-stroke))
+      drop-shadow(-1px 0 0 var(--lipsanon-mat-stroke))
+      drop-shadow(0 1px 0 var(--lipsanon-mat-stroke))
+      drop-shadow(0 -1px 0 var(--lipsanon-mat-stroke))
+      drop-shadow(0 0 calc(6px * var(--lipsanon-glow, 1)) rgb(255 232 186 / calc(0.86 * var(--lipsanon-glow, 1))))
+      drop-shadow(0 0 calc(20px * var(--lipsanon-glow, 1)) rgb(255 190 96 / calc(0.52 * var(--lipsanon-glow, 1))));
+  }
+}
+
+/* Owned by the OFFER, not by the take button: the Studio's Lipsanon Mat viewer mounts the same
+   composite without the button, and a treatment the tuner cannot see is a treatment that
+   cannot be tuned. Each offer carries its own --lipsanon-float-spread and delay so the three
+   never move as one strip; the viewer drives the period they all scale from.
+
+   !important clears the global `* { animation: none }` OS-reduce reset: Windows "animation
+   effects off" reports prefers-reduced-motion falsely (deploy-drop/ADR-0048 precedent), and
+   this is the whole life of the screen. The EXPLICIT in-game choice still stills it, below. */
+.lipsanon-mat-offer .run-lipsanon-icon {
+  animation:
+    lipsanon-vacantia-float
+    calc(var(--lipsanon-float-period, 3.4s) * var(--lipsanon-float-spread, 1))
+    var(--lipsanon-float-timing, linear)
+    var(--lipsanon-float-delay, 0s)
+    infinite !important;
+}
+
+.lipsanon-mat-offer .run-lipsanon-icon img {
+  animation:
+    lipsanon-vacantia-emanate
+    calc(var(--lipsanon-float-period, 3.4s) * var(--lipsanon-float-spread, 1) * 1.35)
+    ease-in-out
+    var(--lipsanon-float-delay, 0s)
+    infinite !important;
+  /* Declared HERE, on the element the filter belongs to. The hover sets the depth on the
+     icon above, which jumps; the img sees that inherited change and eases it, so the light
+     comes up to its steady level over the same beat the lipsanon takes to settle. */
+  transition: --lipsanon-glow-pulse 240ms cubic-bezier(0.3, 0.7, 0.3, 1);
+}
+
+/* Hovering picks the lipsanon up and SETTLES it: the rise eases to zero, so the lipsanon stops
+   drifting and comes to rest on its seat -- the same height every time, whatever part of the
+   bob the pointer caught. A held object the reader is deciding about should hold still and be
+   easy to aim at; it is still lit, and the emanation keeps breathing, because light is not
+   movement. Keyed off the offer rather than the button so focusing the tooltip trigger reads
+   the same, and so the viewer's unbuttoned copy answers the pointer exactly as the game does. */
+.lipsanon-mat-offer:hover .run-lipsanon-icon,
+.lipsanon-mat-offer:focus-within .run-lipsanon-icon {
+  --lipsanon-float-rise: 0px;
+  --lipsanon-glow-pulse: 0;
+  /* One chain, every emphasis always present at its own strength. At 0 a drop-shadow has no
+     radius and no alpha, so an effect that is switched off costs nothing and cannot fight
+     the ones that are on. */
+  filter:
+    brightness(1.2)
+    drop-shadow(
+      0 calc(7px * var(--lipsanon-lift, 0)) calc(6px * var(--lipsanon-lift, 0))
+      rgb(6 4 3 / calc(0.62 * var(--lipsanon-lift, 0))))
+    drop-shadow(
+      0 0 calc(9px * var(--lipsanon-flare, 0))
+      rgb(255 240 206 / calc(0.9 * var(--lipsanon-flare, 0))))
+    drop-shadow(
+      0 0 calc(30px * var(--lipsanon-flare, 0))
+      rgb(255 196 104 / calc(0.72 * var(--lipsanon-flare, 0))));
+  /* 64px x 1.25 is 80px EXACTLY. A fractional hover size (1.22 gave 78.08px) leaves the
+     nearest-neighbour sampling grid landing between source pixels, and the sprite's edges
+     crawl as it is re-rasterized -- movement the computed style cannot show you. */
+  scale: 1.25;
+}
+
+/* Settled means STOPPED, not zero-amplitude. An animation with its amplitude collapsed is
+   still a running animation: the element stays live on the compositor and is re-rasterized
+   every frame, which a pixelated sprite shows as a crawl along its edges. Pausing ends that.
+   The settle survives the pause because a paused animation still re-resolves the var() in
+   its keyframes -- verified in Chrome -- so the rise and the pulse go on easing to zero
+   underneath it and the lipsanon still comes to rest on its seat rather than freezing wherever
+   the pointer caught it. */
+.lipsanon-mat-offer:hover .run-lipsanon-icon,
+.lipsanon-mat-offer:focus-within .run-lipsanon-icon,
+.lipsanon-mat-offer:hover .run-lipsanon-icon img,
+.lipsanon-mat-offer:focus-within .run-lipsanon-icon img {
+  /* !important because the `animation` SHORTHAND above carries it, and a shorthand resets
+     animation-play-state to `running` -- an unflagged pause here is simply outranked. */
+  animation-play-state: paused !important;
+}
+
+/* ===== The four hover emphases =====
+   Each is switched on by a flag on the stage, so the game and the Studio viewer read the same
+   rules and the viewer can combine them. They are deliberately independent: emphasis can come
+   from adding light to the thing being considered, or from taking it away from everything
+   else, and those read very differently.
+
+   FLARE  -- the emanation opens up past the steady level a settled lipsanon already holds.
+   LIFT   -- a contact shadow appears beneath, so the scale reads as picked up off the tray
+             rather than simply drawn bigger.
+   RIM    -- the one-pixel silhouette stroke turns from near-black to warm gold, so the edge
+             itself catches the light. It reaches a PAUSED animation because a paused
+             animation still re-resolves the var() in its keyframes.
+   FOCUS  -- the tray and the other two offers recede instead, emphasising by contrast. */
+.lipsanon-mat-stage[data-hover-flare] .lipsanon-mat-offer:hover .run-lipsanon-icon,
+.lipsanon-mat-stage[data-hover-flare] .lipsanon-mat-offer:focus-within .run-lipsanon-icon {
+  --lipsanon-flare: 1;
+}
+
+.lipsanon-mat-stage[data-hover-lift] .lipsanon-mat-offer:hover .run-lipsanon-icon,
+.lipsanon-mat-stage[data-hover-lift] .lipsanon-mat-offer:focus-within .run-lipsanon-icon {
+  --lipsanon-lift: 1;
+}
+
+.lipsanon-mat-stage[data-hover-rim] .lipsanon-mat-offer:hover .run-lipsanon-icon img,
+.lipsanon-mat-stage[data-hover-rim] .lipsanon-mat-offer:focus-within .run-lipsanon-icon img {
+  --lipsanon-mat-stroke: rgb(255 214 142 / 0.95);
+}
+
+.lipsanon-mat-stage[data-hover-focus] .lipsanon-mat-layer:has(.lipsanon-mat-offer:hover) .lipsanon-mat-art,
+.lipsanon-mat-stage[data-hover-focus] .lipsanon-mat-layer:has(.lipsanon-mat-offer:focus-within) .lipsanon-mat-art {
+  --lipsanon-tray-dim: 0.66;
+}
+
+.lipsanon-mat-stage[data-hover-focus] .lipsanon-mat-cards:has(.lipsanon-mat-offer:hover) .lipsanon-mat-offer:not(:hover),
+.lipsanon-mat-stage[data-hover-focus] .lipsanon-mat-cards:has(.lipsanon-mat-offer:focus-within) .lipsanon-mat-offer:not(:focus-within) {
+  opacity: 0.42;
+}
+
+/* The strengths ease rather than snap, on the same beat as the settle. Declared where each
+   one is READ: the icon owns flare and lift, the img owns the rim colour. */
+.lipsanon-mat-offer .run-lipsanon-icon {
+  transition:
+    --lipsanon-flare 220ms ease,
+    --lipsanon-float-rise 240ms cubic-bezier(0.3, 0.7, 0.3, 1),
+    --lipsanon-lift 220ms ease,
+    filter 200ms ease,
+    scale 200ms cubic-bezier(0.2, 0.75, 0.3, 1);
+}
+
+/* An offer that cannot be taken yet does not answer the pointer at all -- it keeps the
+   amplitude it inherits from the stage and goes on drifting. Ordered after the hover rule
+   deliberately: the two carry equal specificity and the later one is meant to win. */
+.run-vacantia-take:disabled .run-lipsanon-icon {
+  --lipsanon-float-rise: inherit;
+  --lipsanon-glow-pulse: inherit;
+  animation-play-state: running !important;
+  filter: none;
+  scale: 1;
+}
+
+.run-vacantia-take:disabled .run-lipsanon-icon img {
+  animation-play-state: running !important;
+}
+
+/* Taking is committed when the lipsanon lands, so the mat has to hold still while it travels:
+   the ones left behind recede, the taken one leaves with the flying copy, and nothing is
+   clickable.
+
+   The recede runs on the FLIGHT's clock and the flight's easing -- same duration, same curve
+   -- so the two are one gesture rather than two effects that happen to overlap. The duration
+   is LIPSANON_FLIGHT_MS; a test pins the two together. */
+.lipsanon-mat-cards {
+  --lipsanon-take-duration: 560ms;
+  --lipsanon-take-easing: cubic-bezier(0.45, 0.05, 0.25, 1);
+}
+
+.lipsanon-mat-offer {
+  transition:
+    opacity var(--lipsanon-take-duration) var(--lipsanon-take-easing),
+    scale var(--lipsanon-take-duration) var(--lipsanon-take-easing);
+}
+
+/* The WHOLE offer stops taking the pointer, not just its button: dropping only the button
+   leaves the tooltip wrapper hovered, and the name of a lipsanon that is no longer on the mat
+   goes on floating over an empty tray. Killing hit-testing on the wrapper makes the browser
+   re-evaluate what is under the cursor, the hover ends, and the tip goes with it. */
+.lipsanon-mat-cards[data-taking] .lipsanon-mat-offer {
+  pointer-events: none;
+}
+
+/* They GO as the chosen one leaves -- shrinking away to nothing rather than settling at some
+   dimmer size. Only one lipsanon was ever going to be taken, so the other two have no business
+   still being on the mat when it lands. The knob is how much of that exit is a shrink: 0
+   collapses them to a point, 1 fades them out where they lie. */
+.lipsanon-mat-cards[data-taking] .lipsanon-mat-offer {
+  opacity: 0;
+  scale: var(--lipsanon-recede-scale, 0);
+}
+
+/* The lipsanon that LEFT is gone from the mat, whether or not the rest are receding: the
+   travelling copy is the only one of it that should be on screen. Both selectors are needed
+   because the dimming rule above is more specific than a bare `.lipsanon-mat-offer.is-flying`. */
+.lipsanon-mat-cards .lipsanon-mat-offer.is-flying,
+.lipsanon-mat-cards[data-taking] .lipsanon-mat-offer.is-flying {
+  opacity: 0;
+  transition: none;
+}
+
+/* The Studio viewer's landing corner. The game sends a taken lipsanon to the held-lipsanon strip
+   in the screen's top-left, so the stand-in sits in the same corner of the stage and uses the
+   same 64px slots -- the travel being judged has to be the travel that ships, not a shorter
+   one to a nearer target. */
+.lipsanon-mat-landing {
+  display: flex;
+  gap: var(--ds-space-1);
+  inset-block-start: var(--ds-space-2);
+  inset-inline-start: var(--ds-space-2);
+  position: absolute;
+  z-index: 2;
+}
+
+.lipsanon-mat-landing-slot {
+  block-size: 64px;
+  display: inline-flex;
+  flex: 0 0 64px;
+  inline-size: 64px;
+}
+
+.lipsanon-mat-landing-slot img {
+  filter: drop-shadow(0 2px 1px rgb(0 0 0 / 0.85));
+}
+
+/* The lipsanon in transit. Fixed to the viewport and portalled out of the workspace, because
+   it starts inside an overflow-hidden scene slot and ends in the strip outside it.
+   Transitions rather than keyframes deliberately: the global reduced-motion reset kills
+   animations, and a take that silently teleports is a take the player cannot follow. */
+.run-lipsanon-flight {
+  --lipsanon-flight-duration: 560ms;
+  pointer-events: none;
+  position: fixed;
+  /* ONE translate on ONE element, so the lipsanon travels the straight segment between where it
+     was laid out and where it is kept. Splitting the axes across two elements is what curves
+     a path: give x and y different easings and they reach their halfway points at different
+     moments, and the lipsanon bows away from the line between its endpoints. */
+  transition: translate var(--lipsanon-flight-duration) cubic-bezier(0.45, 0.05, 0.25, 1);
+  z-index: 200;
+}
+
+.run-lipsanon-flight .run-lipsanon-icon {
+  overflow: visible;
+}
+
+/* The size only. It arrives at the size it will keep, shrinking out of its hover lift over
+   the same beat -- a scale change does not move the centre, so it cannot bend the path. */
+.run-lipsanon-flight-lift {
+  scale: 1.25;
+  transition: scale var(--lipsanon-flight-duration) cubic-bezier(0.4, 0, 0.4, 1);
+}
+
+.run-lipsanon-flight.is-landed {
+  translate: var(--lipsanon-flight-x) var(--lipsanon-flight-y);
+}
+
+.run-lipsanon-flight.is-landed .run-lipsanon-flight-lift {
+  scale: 1;
+}
+
+/* The explicit in-game reduced-motion choice: the lipsana hold still and keep the static
+   stroke rule above. The take still slides -- it is what tells the player where the lipsanon
+   went, and it is a single short slide with nothing else moving. */
+:root.reduce-motion .lipsanon-mat-offer .run-lipsanon-icon,
+:root.reduce-motion .lipsanon-mat-offer .run-lipsanon-icon img {
+  animation: none !important;
 }
 
 /* Catalog thumbnails carry no cards, so nothing is there to size the layer. Hold the

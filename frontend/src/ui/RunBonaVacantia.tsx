@@ -4,7 +4,9 @@ import { LipsanonIcon } from './Lipsana';
 import { RunWorkspace } from './RunWorkspace';
 import { HouseSelect } from './shared/HouseSelect';
 import { Tooltip } from './shared/InfoTip';
-import { installedLipsanonMatUrl } from './runLipsanonMat';
+import { installedLipsanonMatUrl, lipsanonFloatClock } from './runLipsanonMat';
+import { lipsanonStripLandingPoint } from './runLipsanonFlight';
+import { useLipsanonFlight } from './runLipsanonFlightView';
 import { runUnitRosterLabel } from './RunArmyWorkspace';
 import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
 
@@ -17,7 +19,8 @@ import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
  * the held-lipsanon strip uses. The reading is the art.
  *
  * Taking is mandatory and there is no confirm step: choosing is the whole screen, and the
- * choice is what advances the Run.
+ * choice is what advances the Run. The take is committed when the lipsanon LANDS in the
+ * held-lipsanon strip — commit first and the workspace it is flying out of is already gone.
  */
 
 /** Lipsana that cannot be granted blind — they need a unit named before they mean anything. */
@@ -34,10 +37,28 @@ export function RunBonaVacantia({
 }): ReactElement | null {
   const vacantia = run.vacantia;
   const [target, setTarget] = useState('');
+  // Latched, not derived from the flight: the flight ends when the lipsanon lands, and the mat
+  // must not un-take itself in the beat before the shop replaces it. Choosing is final.
+  const [departed, setDeparted] = useState<LipsanonId | null>(null);
   const mat = installedLipsanonMatUrl();
+  const { launch, element } = useLipsanonFlight((lipsanonId) => {
+    replace(takeVacantiaLipsanon(run, lipsanonId, target || undefined));
+  });
+
   if (!vacantia) return null;
 
   const needsTarget = vacantia.offers.some(lipsanonTargetRequired);
+  const heldLipsanonCount = run.lipsana.filter((lipsanonId) => Boolean(LIPSANON_BY_ID[lipsanonId])).length;
+
+  function take(lipsanonId: LipsanonId, icon: Element | null): void {
+    if (departed) return;
+    setDeparted(lipsanonId);
+    // Nothing measurable to fly between means nothing to show — take the lipsanon outright
+    // rather than stalling the screen on its own presentation.
+    if (!launch(lipsanonId, icon, lipsanonStripLandingPoint(heldLipsanonCount))) {
+      replace(takeVacantiaLipsanon(run, lipsanonId, target || undefined));
+    }
+  }
 
   return (
     <RunWorkspace
@@ -65,17 +86,27 @@ export function RunBonaVacantia({
       <div className="lipsanon-mat-stage" data-cards="on" data-testid="run-vacantia-mat">
         <div className="lipsanon-mat-layer">
           {mat ? <img className="lipsanon-mat-art" src={mat} alt="" draggable={false} /> : null}
-          <div className="lipsanon-mat-cards" data-testid="run-vacantia-offers">
-            {vacantia.offers.map((lipsanonId) => {
+          <div
+            className="lipsanon-mat-cards"
+            data-testid="run-vacantia-offers"
+            data-taking={departed ? '' : undefined}
+          >
+            {vacantia.offers.map((lipsanonId, index) => {
               const lipsanon = LIPSANON_BY_ID[lipsanonId];
               const blocked = lipsanonTargetRequired(lipsanonId) && !target;
+              const flying = departed === lipsanonId;
               return (
                 <Tooltip
-                  className="lipsanon-mat-offer"
+                  className={`lipsanon-mat-offer${flying ? ' is-flying' : ''}`}
                   key={lipsanonId}
                   label={`${lipsanon.name}. ${lipsanon.description}`}
                   popupMaxInlineSize={288}
                   title={lipsanon.name}
+                  // The mat is emptying; a name still floating over it belongs to nothing.
+                  suppressed={Boolean(departed)}
+                  // Each lipsanon breathes on its own clock. One shared clock makes three
+                  // objects lying loose on a table read as a single animated strip.
+                  style={lipsanonFloatClock(index)}
                   trigger={
                     <button
                       type="button"
@@ -83,7 +114,7 @@ export function RunBonaVacantia({
                       data-lipsanon-id={lipsanonId}
                       disabled={blocked}
                       aria-label={`Take ${lipsanon.name}`}
-                      onClick={() => replace(takeVacantiaLipsanon(run, lipsanonId, target || undefined))}
+                      onClick={(event) => take(lipsanonId, event.currentTarget.querySelector('.run-lipsanon-icon'))}
                     >
                       <LipsanonIcon lipsanonId={lipsanonId} />
                     </button>
@@ -96,6 +127,8 @@ export function RunBonaVacantia({
           </div>
         </div>
       </div>
+
+      {element}
     </RunWorkspace>
   );
 }

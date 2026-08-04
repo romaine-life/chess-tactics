@@ -1,5 +1,5 @@
 import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { ReactElement, ReactNode } from 'react';
+import type { CSSProperties, ReactElement, ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { chromeFamilyPortalHost } from '../chromeFamilyRuntime';
 import { ChromeSurfaceFill, InnerChromeBox } from './ChromeBox';
@@ -207,6 +207,8 @@ export function Tooltip({
   popupClassName = '',
   triggerClassName = '',
   focusable = true,
+  style,
+  suppressed = false,
 }: {
   trigger: ReactNode;
   children: ReactNode;
@@ -217,6 +219,14 @@ export function Tooltip({
   popupClassName?: string;
   triggerClassName?: string;
   focusable?: boolean;
+  /** Custom properties the trigger's own treatment reads. Not for surface paint. */
+  style?: CSSProperties;
+  /**
+   * Hold the pop closed regardless of hover or focus. For a trigger that is leaving the
+   * screen: `pointer-events: none` does not end a hover the pointer is already inside — the
+   * browser only re-tests on the next move — so a tip can outlive the thing it describes.
+   */
+  suppressed?: boolean;
 }): ReactElement {
   const id = useId();
   const {
@@ -237,6 +247,7 @@ export function Tooltip({
   return (
     <span
       className={`tooltip ${className}`.trim()}
+      style={style}
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
     >
@@ -246,7 +257,7 @@ export function Tooltip({
         tabIndex={focusable ? 0 : undefined}
         aria-label={focusable ? label : undefined}
         aria-hidden={focusable ? undefined : 'true'}
-        aria-describedby={focusable && pos ? describedBy : undefined}
+        aria-describedby={focusable && pos && !suppressed ? describedBy : undefined}
         onFocus={onFocus}
         onBlur={onBlur}
         onKeyDown={(event) => {
@@ -257,7 +268,7 @@ export function Tooltip({
       </span>
       <TooltipPopup
         id={id}
-        pos={pos}
+        pos={suppressed ? null : pos}
         portalHost={portalHost}
         className={popupClassName}
         glossary={entries}
