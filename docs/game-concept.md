@@ -192,11 +192,13 @@ these.
   row count remain open presentation decisions (ADR-0270).
 - Deployment modifiers may be contextual rather than linearly valuable. A
   role-aware **Agminate** ability belongs to a particular unit but may inspect
-  the surrounding formation. Its Bishop behavior is only to prefer a square
-  color opposite another Bishop: an ordinary Bishop can be its reference, one
-  Agminate Bishop may have little effect alone, and a second is not owed an
-  invented additional benefit. The player weighs that roster-dependent value
-  (ADR-0273, ADR-0274).
+  the surrounding formation. An Agminate Pawn prefers to stand immediately
+  alongside another Pawn, while an Agminate Bishop prefers a square color
+  opposite another Bishop. Those affinity-dependent Pawns and Bishops deploy
+  after the ordinary seeded formation so a same-type reference is already down;
+  an ordinary unit can be that reference, one Agminate unit may have little
+  effect alone, and a second is not owed an invented additional benefit. The
+  player weighs that roster-dependent value (ADR-0273, ADR-0274, ADR-0381).
 - Run Deployment is a battlefield state, not a level-summary destination. The
   full board remains primary while Controls owns any Muster Roll, Adlected,
   or Surveyor's Compass decision. Adlected places its named unit directly on

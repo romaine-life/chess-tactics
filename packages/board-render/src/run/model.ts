@@ -40,9 +40,9 @@ export const LEGATINE_ADLECTED_OFFER_DENOMINATOR = 8;
 export const HIERATIC_AGMINATE_OFFER_DENOMINATOR = 8;
 export const EUTACTIC_COST = 2;
 export const ADLECTED_COST = 3;
-/** Agminate seats a unit in its role's formation instead of a rank, and its King,
- * Rook and Bishop rules interlock, so it carries Discipline's price rather than
- * Positioned's. */
+/** Agminate seats a unit in its role's formation instead of a rank. Its Pawn,
+ * King, Rook and Bishop behaviors form a role-aware formation, so it carries
+ * Adlected's price rather than Eutactic's. */
 export const AGMINATE_COST = 3;
 
 export type AtaraxiaTier = 0 | 1;
@@ -128,6 +128,7 @@ export function runAbilityDescription(ability: RunAbility, unit: RunArmyPieceTyp
     if (unit === 'bishop' || unit === 'king') return 'Prefers the back row during automatic deployment.';
     return runAbilityGeneralDescription('eutactic');
   }
+  if (unit === 'pawn') return 'Prefers a square alongside another Pawn when possible.';
   if (unit === 'king') return 'Prefers a board-edge square in the player placement zone.';
   if (unit === 'rook') return 'Prefers the established King-flank and corner formation.';
   if (unit === 'bishop') return 'Prefers a square color opposite another Bishop when possible.';
