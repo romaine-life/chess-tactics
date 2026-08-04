@@ -937,7 +937,17 @@ function inlineMigrationSql(version) {
   return inlineMigrationDefinition(version).sql;
 }
 
-async function validatePrimarySparseNumericMigrationUpgrade51() {
+/**
+ * The highest migration the inline registry defines. Derived rather than written down: this
+ * check previously pinned the literal 51, so every added migration failed it until someone
+ * bumped the number by hand.
+ */
+function highestInlineMigrationVersion() {
+  inlineMigrationDefinition(1);
+  return cachedInlineMigrations.reduce((highest, m) => Math.max(highest, m.version), 0);
+}
+
+async function validatePrimarySparseNumericMigrationUpgrade() {
   const history = await queryDb(
     `SELECT version, name, checksum
        FROM schema_migrations
@@ -952,7 +962,10 @@ async function validatePrimarySparseNumericMigrationUpgrade51() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 51 }, (_, index) => index + 1);
+  const expectedVersions = Array.from(
+    { length: highestInlineMigrationVersion() },
+    (_, index) => index + 1,
+  );
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -1081,7 +1094,7 @@ async function validatePrimarySparseNumericMigrationUpgrade51() {
     )
   ) {
     throw new Error(
-      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 51: `
+      `Primary server did not fill sparse numeric history 1-27 and 36 through the newest migration: `
       + `${JSON.stringify({
         history: history.rows,
         identity_columns: identityColumns.rows,
@@ -1335,7 +1348,7 @@ async function main() {
   await new Promise((resolve) => mockAuth.listen(authPort, '127.0.0.1', resolve));
   await new Promise((resolve) => mockBgm.listen(bgmPort, '127.0.0.1', resolve));
   await waitForServer();
-  await validatePrimarySparseNumericMigrationUpgrade51();
+  await validatePrimarySparseNumericMigrationUpgrade();
   const databaseRuntime = await queryDb('SELECT version() AS version');
   const isPgliteRuntime = /\bPGlite\b/i.test(String(databaseRuntime.rows[0]?.version || ''));
   if (!isPgliteRuntime) {
