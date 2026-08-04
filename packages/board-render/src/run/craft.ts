@@ -8,7 +8,7 @@
 //
 // So this module never authors state directly. It composes the SAME transitions the game plays —
 // createRun → buyCard → leaveShop → prepareDeployment → beginBattle → openShop — and only then
-// applies the requested overrides in the phase where each one is legal (army and relics before a
+// applies the requested overrides in the phase where each one is legal (army and lipsana before a
 // Battle, offers and gold in the Shop that a real openShop() produced). What comes out is a
 // document the game and the server both accept, because the game built it.
 //
@@ -24,8 +24,8 @@ import {
   CACOCHYMIC_DISCOUNT,
   EUTACTIC_COST,
   RUN_CARD_BY_ID,
-  RUN_RELIC_BY_ID,
-  acquireRelic,
+  LIPSANON_BY_ID,
+  acquireLipsanon,
   addArmyPieces,
   beginBattle,
   buyCard,
@@ -41,14 +41,14 @@ import {
   seededPestiferousTarget,
   setDeploymentChoices,
   snapshotWar,
-  takeVacantiaRelic,
+  takeVacantiaLipsanon,
   type AtaraxiaTier,
   type PurchasablePieceType,
   type RunAbility,
   type RunCardOffer,
   type RunCardType,
   type RunDocument,
-  type RunRelicId,
+  type LipsanonId,
   type RunWarSnapshot,
 } from './model';
 import {
@@ -73,7 +73,7 @@ export const RUN_CRAFT_PARAMS: readonly string[] = Object.freeze([
   'cards',
   'loot',
   'paid',
-  'relics',
+  'lipsana',
   'turns',
   'seconds',
   'fallen',
@@ -97,7 +97,7 @@ export interface RunCraftCard {
 }
 
 /** One crafted army unit. The URL grammar can only name a piece; a JSON spec can also grant the
- * abilities a unit would otherwise have earned from a card or a relic. */
+ * abilities a unit would otherwise have earned from a card or a lipsanon. */
 export interface RunCraftUnit {
   type: PurchasablePieceType;
   abilities: RunAbility[];
@@ -117,9 +117,9 @@ export interface RunCraftSpec {
   /** Cards the Run already HOLDS. Bought for real in the opening Shop and carried forward, so the
    * army, abilities, Plagued marks and card records are the ones the game itself writes. */
   cards: RunCraftCard[] | null;
-  loot: RunRelicId[] | null;
-  paidRelic: RunRelicId | null;
-  relics: RunRelicId[] | null;
+  loot: LipsanonId[] | null;
+  paidLipsanon: LipsanonId | null;
+  lipsana: LipsanonId[] | null;
   /** Aftermath only: what the Battle's report says it cost. A crafted Battle is not played,
    * so these are the only way to put a specific result on that screen. */
   turns: number | null;
@@ -221,10 +221,10 @@ function cardSpec(raw: string): RunCraftCard {
   return { pieces, cardType: CARD_TYPES[key] };
 }
 
-function relicList(raw: string, label: string): RunRelicId[] {
+function lipsanonList(raw: string, label: string): LipsanonId[] {
   return raw.split(',').map((token) => token.trim()).filter(Boolean).map((id) => {
-    if (!RUN_RELIC_BY_ID[id as RunRelicId]) throw new RunCraftError(`craft ${label}: "${id}" is not a relic id.`);
-    return id as RunRelicId;
+    if (!LIPSANON_BY_ID[id as LipsanonId]) throw new RunCraftError(`craft ${label}: "${id}" is not a lipsanon id.`);
+    return id as LipsanonId;
   });
 }
 
@@ -255,7 +255,7 @@ export function parseRunCraftSpec(search: string): RunCraftSpec | null {
   const add = params.get('add');
   const loot = params.get('loot');
   const paid = params.get('paid');
-  const relics = params.get('relics');
+  const lipsana = params.get('lipsana');
   return {
     phase: phase as RunCraftPhase,
     battle: params.get('battle') === null ? 1 : integer(params.get('battle')!, 'battle', 1, 100),
@@ -267,9 +267,9 @@ export function parseRunCraftSpec(search: string): RunCraftSpec | null {
     add: add === null ? null : craftUnits(pieceList(add, 'add')),
     offers: offers === null ? null : offers.split(',').map((token) => token.trim()).filter(Boolean).map(cardSpec),
     cards: cards === null ? null : cards.split(',').map((token) => token.trim()).filter(Boolean).map(cardSpec),
-    loot: loot === null ? null : relicList(loot, 'loot'),
-    paidRelic: paid === null ? null : relicList(paid, 'paid')[0] ?? null,
-    relics: relics === null ? null : relicList(relics, 'relics'),
+    loot: loot === null ? null : lipsanonList(loot, 'loot'),
+    paidLipsanon: paid === null ? null : lipsanonList(paid, 'paid')[0] ?? null,
+    lipsana: lipsana === null ? null : lipsanonList(lipsana, 'lipsana'),
     turns: params.get('turns') === null ? null : integer(params.get('turns')!, 'turns', 0, 999),
     elapsedMs: params.get('seconds') === null
       ? null
@@ -319,10 +319,10 @@ function craftUnitList(raw: unknown, label: string): RunCraftUnit[] {
   });
 }
 
-function relicIdList(raw: unknown, label: string): RunRelicId[] {
-  if (typeof raw === 'string') return relicList(raw, label);
-  if (!Array.isArray(raw)) throw new RunCraftError(`craft ${label}: expected a list of relic ids.`);
-  return relicList(raw.map((id) => String(id)).join(','), label);
+function lipsanonIdList(raw: unknown, label: string): LipsanonId[] {
+  if (typeof raw === 'string') return lipsanonList(raw, label);
+  if (!Array.isArray(raw)) throw new RunCraftError(`craft ${label}: expected a list of lipsanon ids.`);
+  return lipsanonList(raw.map((id) => String(id)).join(','), label);
 }
 
 function jsonInteger(raw: unknown, label: string, min: number, max: number): number {
@@ -365,9 +365,9 @@ export function runCraftSpecFromJson(raw: unknown): RunCraftSpec {
     add: spec.add === undefined || spec.add === null ? null : craftUnitList(spec.add, 'add'),
     offers: offers === undefined || offers === null ? null : craftCardList(offers, 'offers'),
     cards: spec.cards === undefined || spec.cards === null ? null : craftCardList(spec.cards, 'cards'),
-    loot: spec.loot === undefined || spec.loot === null ? null : relicIdList(spec.loot, 'loot'),
-    paidRelic: spec.paid === undefined || spec.paid === null ? null : relicIdList(spec.paid, 'paid')[0] ?? null,
-    relics: spec.relics === undefined || spec.relics === null ? null : relicIdList(spec.relics, 'relics'),
+    loot: spec.loot === undefined || spec.loot === null ? null : lipsanonIdList(spec.loot, 'loot'),
+    paidLipsanon: spec.paid === undefined || spec.paid === null ? null : lipsanonIdList(spec.paid, 'paid')[0] ?? null,
+    lipsana: spec.lipsana === undefined || spec.lipsana === null ? null : lipsanonIdList(spec.lipsana, 'lipsana'),
     turns: spec.turns === undefined || spec.turns === null ? null : jsonInteger(spec.turns, 'turns', 0, 999),
     elapsedMs: spec.seconds === undefined || spec.seconds === null
       ? null
@@ -445,8 +445,8 @@ export function runCraftSpecToJson(spec: RunCraftSpec): Record<string, unknown> 
   if (spec.offers) json.offers = spec.offers.map((card) => ({ pieces: [...card.pieces], type: card.cardType }));
   if (spec.cards) json.cards = spec.cards.map((card) => ({ pieces: [...card.pieces], type: card.cardType }));
   if (spec.loot) json.loot = [...spec.loot];
-  if (spec.paidRelic !== null) json.paid = spec.paidRelic;
-  if (spec.relics) json.relics = [...spec.relics];
+  if (spec.paidLipsanon !== null) json.paid = spec.paidLipsanon;
+  if (spec.lipsana) json.lipsana = [...spec.lipsana];
   if (spec.turns !== null) json.turns = spec.turns;
   if (spec.elapsedMs !== null) json.seconds = spec.elapsedMs / 1000;
   if (spec.fallen !== null) json.fallen = spec.fallen;
@@ -491,8 +491,8 @@ export function runCraftAddressParams(spec: RunCraftSpec): URLSearchParams {
       .join(','));
   }
   if (spec.loot) params.set('loot', spec.loot.join(','));
-  if (spec.paidRelic !== null) params.set('paid', spec.paidRelic);
-  if (spec.relics) params.set('relics', spec.relics.join(','));
+  if (spec.paidLipsanon !== null) params.set('paid', spec.paidLipsanon);
+  if (spec.lipsana) params.set('lipsana', spec.lipsana.join(','));
   if (spec.turns !== null) params.set('turns', String(spec.turns));
   if (spec.elapsedMs !== null) params.set('seconds', String(spec.elapsedMs / 1000));
   if (spec.fallen !== null) params.set('fallen', String(spec.fallen));
@@ -645,18 +645,18 @@ function craftAftermath(run: RunDocument, spec: RunCraftSpec): RunDocument {
 }
 
 /**
- * Get past a Conflict's relic screen by taking the first offer that will be accepted.
- * Fast-forwarding has to make the same mandatory choice a player would; taking a relic is
+ * Get past a Conflict's lipsanon screen by taking the first offer that will be accepted.
+ * Fast-forwarding has to make the same mandatory choice a player would; taking a lipsanon is
  * also what opens the shop behind it, so this is how the crafter reaches any later state.
  */
 function takeVacantiaAuto(run: RunDocument): RunDocument {
   if (run.phase !== 'bona-vacantia' || !run.vacantia) return run;
   const target = firstNonKingUnitId(run);
-  for (const relic of run.vacantia.offers) {
-    const taken = takeVacantiaRelic(run, relic, target);
+  for (const lipsanon of run.vacantia.offers) {
+    const taken = takeVacantiaLipsanon(run, lipsanon, target);
     if (taken !== run) return taken;
   }
-  throw new RunCraftError('craft: the Conflict opened with no relic that could be taken.');
+  throw new RunCraftError('craft: the Conflict opened with no lipsanon that could be taken.');
 }
 
 function leaveShopAuto(run: RunDocument): RunDocument {
@@ -754,7 +754,7 @@ function craftUnits(pieces: readonly PurchasablePieceType[]): RunCraftUnit[] {
 }
 
 /** Add crafted units, then grant each one the abilities the spec asked for. Abilities are stored on
- * the unit exactly as a card or relic would leave them, so the game reads them normally. */
+ * the unit exactly as a card or lipsanon would leave them, so the game reads them normally. */
 function addPieces(run: RunDocument, units: readonly RunCraftUnit[]): RunDocument {
   const { addedUnits, ...update } = addArmyPieces(run, units.map((unit) => unit.type), 'shop');
   const granted = new Map(addedUnits.map((added, index) => [added.id, units[index].abilities]));
@@ -799,12 +799,12 @@ function applyArmy(run: RunDocument, spec: RunCraftSpec): RunDocument {
   return next;
 }
 
-function applyRelics(run: RunDocument, spec: RunCraftSpec): RunDocument {
+function applyLipsana(run: RunDocument, spec: RunCraftSpec): RunDocument {
   let next = run;
-  for (const relic of spec.relics ?? []) {
+  for (const lipsanon of spec.lipsana ?? []) {
     const target = firstNonKingUnitId(next);
-    const acquired = acquireRelic(next, relic, target);
-    if (acquired === next) throw new RunCraftError(`craft relics: "${relic}" could not be acquired.`);
+    const acquired = acquireLipsanon(next, lipsanon, target);
+    if (acquired === next) throw new RunCraftError(`craft lipsana: "${lipsanon}" could not be acquired.`);
     next = acquired;
   }
   return next;
@@ -845,45 +845,45 @@ function craftOffer(
 function applyShopOffers(run: RunDocument, spec: RunCraftSpec): RunDocument {
   const shop = run.shop;
   if (!shop) return run;
-  const held = new Set(run.relics);
-  for (const relic of [...(spec.loot ?? []), ...(spec.paidRelic ? [spec.paidRelic] : [])]) {
-    if (held.has(relic)) throw new RunCraftError(`craft: "${relic}" is already held, so it cannot also be offered.`);
+  const held = new Set(run.lipsana);
+  for (const lipsanon of [...(spec.loot ?? []), ...(spec.paidLipsanon ? [spec.paidLipsanon] : [])]) {
+    if (held.has(lipsanon)) throw new RunCraftError(`craft: "${lipsanon}" is already held, so it cannot also be offered.`);
   }
   const cardOffers = spec.offers ? spec.offers.map((card, index) => craftOffer(run, card, index)) : shop.cardOffers;
   const offerIds = new Set(cardOffers.map((offer) => offer.offerId));
   if (offerIds.size !== cardOffers.length) {
     throw new RunCraftError('craft offers: the same card was offered twice; each Shop card must be distinct.');
   }
-  const paidRelicOffer = spec.paidRelic ?? shop.paidRelicOffer;
+  const paidLipsanonOffer = spec.paidLipsanon ?? shop.paidLipsanonOffer;
   return {
     ...run,
-    seenRelics: [...new Set([...run.seenRelics, ...(paidRelicOffer ? [paidRelicOffer] : [])])],
+    seenLipsana: [...new Set([...run.seenLipsana, ...(paidLipsanonOffer ? [paidLipsanonOffer] : [])])],
     shop: {
       ...shop,
       cardOffers,
       purchasedCardOfferIds: [],
-      paidRelicOffer,
-      paidRelicBought: false,
+      paidLipsanonOffer,
+      paidLipsanonBought: false,
     },
   };
 }
 
-/** `loot=` now writes the Conflict's opening offers, which is where the relic moved to. */
+/** `loot=` now writes the Conflict's opening offers, which is where the lipsanon moved to. */
 function applyVacantiaOffers(run: RunDocument, spec: RunCraftSpec): RunDocument {
   const vacantia = run.vacantia;
   if (!vacantia || !spec.loot) return run;
-  const held = new Set(run.relics);
-  for (const relic of spec.loot) {
-    if (held.has(relic)) throw new RunCraftError(`craft: "${relic}" is already held, so it cannot also be offered.`);
+  const held = new Set(run.lipsana);
+  for (const lipsanon of spec.loot) {
+    if (held.has(lipsanon)) throw new RunCraftError(`craft: "${lipsanon}" is already held, so it cannot also be offered.`);
   }
   return {
     ...run,
-    seenRelics: [...new Set([...run.seenRelics, ...spec.loot])],
+    seenLipsana: [...new Set([...run.seenLipsana, ...spec.loot])],
     vacantia: { ...vacantia, offers: [...spec.loot] },
   };
 }
 
-/** Gold is set last so relic payouts and Battle rewards cannot move the number off the request.
+/** Gold is set last so lipsanon payouts and Battle rewards cannot move the number off the request.
  * Inside a Shop the entry snapshot moves with it, so Discard changes restores the crafted gold. */
 function applyGold(run: RunDocument, goldTenths: number | null): RunDocument {
   if (goldTenths === null) return run;
@@ -896,7 +896,7 @@ function applyGold(run: RunDocument, goldTenths: number | null): RunDocument {
   };
 }
 
-const OPENING_SHOP_OVERRIDES: readonly (keyof RunCraftSpec)[] = ['goldTenths', 'army', 'add', 'offers', 'cards', 'loot', 'paidRelic', 'relics'];
+const OPENING_SHOP_OVERRIDES: readonly (keyof RunCraftSpec)[] = ['goldTenths', 'army', 'add', 'offers', 'cards', 'loot', 'paidLipsanon', 'lipsana'];
 
 /** Build the crafted Run. Every state is reached by the transitions the game itself plays. */
 export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDocument {
@@ -911,16 +911,16 @@ export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDo
   // battle=1 reaches it without playing anything.
   if (spec.phase === 'bona-vacantia' && targetIndex === 0) {
     if (opening.phase !== 'bona-vacantia') {
-      throw new RunCraftError(`craft: ${war.name} has no loot Battle, so no Conflict opens with a relic.`);
+      throw new RunCraftError(`craft: ${war.name} has no loot Battle, so no Conflict opens with a lipsanon.`);
     }
-    // Offers last, matching the Shop path: the held-relic guard can only see a relic the
-    // spec granted once applyRelics has actually granted it.
-    return applyGold(applyVacantiaOffers(applyRelics(applyArmy(opening, spec), spec), spec), spec.goldTenths);
+    // Offers last, matching the Shop path: the held-lipsanon guard can only see a lipsanon the
+    // spec granted once applyLipsana has actually granted it.
+    return applyGold(applyVacantiaOffers(applyLipsana(applyArmy(opening, spec), spec), spec), spec.goldTenths);
   }
 
   // The opening Shop is pinned by the server contract — its offers, army and starting gold are
   // checked value by value — so it is craftable only as itself. It now sits behind the opening
-  // relic screen, so reaching it means taking that relic first.
+  // lipsanon screen, so reaching it means taking that lipsanon first.
   if (spec.phase === 'shop' && targetIndex === 0) {
     const overridden = OPENING_SHOP_OVERRIDES.filter((key) => spec[key] !== null);
     if (overridden.length) {
@@ -943,19 +943,19 @@ export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDo
     throw new RunCraftError('craft: cards and army cannot both be given. A crafted army replaces the roster the held cards put there; use add for extra units beside them.');
   }
 
-  // A Conflict's relic screen sits between the Battle that closed the previous Conflict and
+  // A Conflict's lipsanon screen sits between the Battle that closed the previous Conflict and
   // the Shop that follows it, so it is reached by fighting up to that Battle and stopping.
   if (spec.phase === 'bona-vacantia') {
     const closing = advanceToDeployment(opening, targetIndex - 1, spec.cards);
-    const opened = fightBattle(applyRelics(applyArmy(closing, spec), spec));
+    const opened = fightBattle(applyLipsana(applyArmy(closing, spec), spec));
     if (opened.phase !== 'bona-vacantia') {
-      throw new RunCraftError(`craft: Battle ${targetIndex} does not close a Conflict, so no relic screen follows it.`);
+      throw new RunCraftError(`craft: Battle ${targetIndex} does not close a Conflict, so no lipsanon screen follows it.`);
     }
     return applyGold(applyVacantiaOffers(opened, spec), spec.goldTenths);
   }
 
   let run = advanceToDeployment(opening, deploymentIndex, spec.cards);
-  run = applyRelics(applyArmy(run, spec), spec);
+  run = applyLipsana(applyArmy(run, spec), spec);
 
   if (spec.phase === 'deployment') return applyGold(prepareDeployment(run), spec.goldTenths);
 

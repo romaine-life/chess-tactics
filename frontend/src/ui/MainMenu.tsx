@@ -10,8 +10,8 @@ import {
   enchiridionCardHref,
   enchiridionCardTypeFromPath,
   enchiridionCardTypeHref,
-  enchiridionRelicFromPath,
-  enchiridionRelicHref,
+  enchiridionLipsanonFromPath,
+  enchiridionLipsanonHref,
   enchiridionSectionFromPath,
 } from './enchiridionRoute';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
@@ -165,8 +165,8 @@ export function MainMenu({
                       <Enchiridion
                         section={enchiridionSectionFromPath(path)}
                         cardTypeTextureBatch={new URLSearchParams(search).get('cardTypeTextureBatch')}
-                        selectedRelicId={enchiridionRelicFromPath(path)}
-                        relicHref={enchiridionRelicHref}
+                        selectedLipsanonId={enchiridionLipsanonFromPath(path)}
+                        lipsanonHref={enchiridionLipsanonHref}
                         selectedCardId={enchiridionCardFromPath(path)}
                         cardHref={enchiridionCardHref}
                         selectedCardTypeId={enchiridionCardTypeFromPath(path)}

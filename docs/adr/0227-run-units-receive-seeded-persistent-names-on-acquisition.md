@@ -31,7 +31,7 @@ must not change when a seeded Run reloads or moves between devices.
 - The generated name is stored on `RunArmyUnit`, not regenerated for display.
   Deployment projects it onto the live Battle piece so the existing selected-unit
   viewer and roster accessibility labels can use the persistent identity.
-- The Run army, deployment choices, and relic target selectors show the name
+- The Run army, deployment choices, and lipsanon target selectors show the name
   alongside the chess-piece type. The type remains explicit because a name never
   replaces chess identity.
 - Run document format 2 requires names. Format-1 documents remain readable and are

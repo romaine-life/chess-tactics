@@ -7,7 +7,7 @@ refines:
   - "[ADR-0057](0057-studio-tuning-surfaces-reset-to-authoritative-baseline.md)"
 partially_supersedes:
   - "[ADR-0089](0089-sfx-runtime-profile-is-db-authoritative.md)'s enumeration of the profile as terrain assignments and arrival only"
-  - "[ADR-0372](0372-a-card-sounds-like-a-card-when-it-is-handled.md)'s committed cue assignment and its asserted Cards/Relics asymmetry"
+  - "[ADR-0372](0372-a-card-sounds-like-a-card-when-it-is-handled.md)'s committed cue assignment and its asserted Cards/Lipsana asymmetry"
 ---
 
 # ADR-0375: The profile owns what an interface cue sounds like
@@ -34,7 +34,7 @@ owner is listening to it — and every committed assignment converts that into a
 through an agent. ADR-0372 was written after reading only the clause about the specific artifact;
 the governing rule was never opened.
 
-ADR-0372 additionally asserted that Cards being audibly distinct from Relics and Units "is the
+ADR-0372 additionally asserted that Cards being audibly distinct from Lipsana and Units "is the
 intended asymmetry, not an inconsistency to be evened out later." The owner never said that. It
 was inferred and written into the accepted record, which is the more damaging half of the mistake:
 a fabricated preference in the ADRs teaches every later agent a decision that was never made.
@@ -56,7 +56,7 @@ a fabricated preference in the ADRs teaches every later agent a decision that wa
   `card-purchase`, `gold`→`gold-sell`), so the migration itself changes nothing a player hears.
   What changes is who can change it next. A cue whose set is absent migrates to `null` rather than
   to an assignment the validator would refuse.
-- **ADR-0372's asserted Cards/Relics asymmetry is withdrawn**, not restated here. Whether Relics
+- **ADR-0372's asserted Cards/Lipsana asymmetry is withdrawn**, not restated here. Whether Lipsana
   and Units should also make a distinct sound is now a question the owner answers in the Studio by
   ear, and no ADR holds a position on it.
 - No compatibility path: per `docs/migration-policy.md` a v1 document is unsupported, not adapted.

@@ -1,19 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import type { AdminLiveMediaCatalog } from '../net/liveMediaAdmin';
 import {
-  partitionRunRelicReviewCandidates,
-  runRelicReviewCandidates,
-  type RunRelicReviewCandidate,
-} from './RunRelicReview';
+  partitionLipsanonReviewCandidates,
+  runLipsanonReviewCandidates,
+  type LipsanonReviewCandidate,
+} from './LipsanonReview';
 
-describe('Run relic art review', () => {
-  it('ignores unrelated accepted media versions that have no matching Run relic slot', () => {
+describe('Run lipsanon art review', () => {
+  it('ignores unrelated accepted media versions that have no matching Run lipsanon slot', () => {
     const catalog = {
       schemaVersion: 1,
       revision: 1,
       updatedAt: '2026-07-29T00:00:00.000Z',
       slots: [{
-        slot: 'ui/run/relics/royal-decree.png',
+        slot: 'ui/run/lipsana/royal-decree.png',
         domain: 'ui-kit',
         role: 'icon',
         availabilityPolicy: 'decorative',
@@ -47,7 +47,7 @@ describe('Run relic art review', () => {
         },
         {
           id: 'royal-decree-version',
-          slot: 'ui/run/relics/royal-decree.png',
+          slot: 'ui/run/lipsana/royal-decree.png',
           sourcePath: null,
           domain: 'ui-kit',
           role: 'icon',
@@ -74,22 +74,22 @@ describe('Run relic art review', () => {
       ],
     } satisfies AdminLiveMediaCatalog;
 
-    expect(runRelicReviewCandidates(catalog)).toEqual([
-      expect.objectContaining({ relicId: 'royal-decree' }),
+    expect(runLipsanonReviewCandidates(catalog)).toEqual([
+      expect.objectContaining({ lipsanonId: 'royal-decree' }),
     ]);
   });
 
   it('separates new candidates from already installed reference art', () => {
     const installed = {
-      relicId: 'royal-decree',
+      lipsanonId: 'royal-decree',
       version: { status: 'accepted' },
-    } as RunRelicReviewCandidate;
+    } as LipsanonReviewCandidate;
     const candidate = {
-      relicId: 'fair-scales',
+      lipsanonId: 'fair-scales',
       version: { status: 'candidate' },
-    } as RunRelicReviewCandidate;
+    } as LipsanonReviewCandidate;
 
-    expect(partitionRunRelicReviewCandidates([installed, candidate])).toEqual({
+    expect(partitionLipsanonReviewCandidates([installed, candidate])).toEqual({
       newCandidates: [candidate],
       installedReferences: [installed],
     });

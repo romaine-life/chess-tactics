@@ -23,7 +23,7 @@ export function canonicalCardId(card: Pick<RunCoreCard, 'pieces'>): string {
 }
 
 // Every card in the generated deck carries an authored banner name, in the same
-// historical-medieval register as the relic names. The id scheme is the card's
+// historical-medieval register as the lipsanon names. The id scheme is the card's
 // piece initials in purchase order (p/k/b/r/q — k is the Knight), so 'ppb' is two Pawns
 // and a Bishop. A card outside the deck (e.g. an art-review fixture) falls back to its
 // prose label.

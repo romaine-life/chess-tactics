@@ -49,7 +49,7 @@ content container**.
   and drawn scroll owners that already own their internal content spacing. That
   variant removes the inner-container end inset while leaving the same attached
   body in place. It is a content-kind declaration, not a geometry value.
-- Level Editor Events, Level Artwork, ordinary Run destinations, and Run Relics
+- Level Editor Events, Level Artwork, ordinary Run destinations, and Run Lipsana
   use the default inset content lane. Strategikon and framed Run Army
   ledger/profile surfaces use the edge-attached variant.
 - Events header actions, selected-rule controls, and other right-aligned inner

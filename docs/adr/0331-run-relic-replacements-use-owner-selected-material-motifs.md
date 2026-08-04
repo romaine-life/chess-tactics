@@ -2,20 +2,20 @@
 status: superseded by ADR-0332
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
-superseded_by: "[ADR-0332](0332-eight-run-relic-icons-ship-the-approved-resized-pixels.md)"
+superseded_by: "[ADR-0332](0332-eight-run-lipsanon-icons-ship-the-approved-resized-pixels.md)"
 refines:
   - "[ADR-0076](0076-scaling-is-calibration-production-art-is-native-1x.md)"
-  - "[ADR-0198](0198-run-relic-icons-are-installed-live-art-and-persistently-visible.md)"
-  - "[ADR-0264](0264-run-relic-identities-carry-anti-story-residue.md)"
+  - "[ADR-0198](0198-run-lipsanon-icons-are-installed-live-art-and-persistently-visible.md)"
+  - "[ADR-0264](0264-run-lipsanon-identities-carry-anti-story-residue.md)"
 ---
 
-# ADR-0331: Run relic replacements use owner-selected material motifs
+# ADR-0331: Run lipsanon replacements use owner-selected material motifs
 
 ## Context and Problem Statement
 
 ADR-0264 deliberately hid eight icons whose installed pixels illustrated
-superseded relic names. A new eight-icon calibration family was generated and
-shown together in the Studio Run Relic Art Review at each icon's exact 64x64
+superseded lipsanon names. A new eight-icon calibration family was generated and
+shown together in the Studio Run Lipsanon Art Review at each icon's exact 64x64
 seat. The owner approved all eight visual directions, but the reviewed files
 were reduced from larger generation outputs and therefore cannot be accepted as
 native production art under ADR-0076.
@@ -27,7 +27,7 @@ regenerate them natively for production.**
 
 The approved visual directions are:
 
-| Stable relic id | Accepted name | Approved material motif | Calibration version |
+| Stable lipsanon id | Accepted name | Approved material motif | Calibration version |
 | --- | --- | --- | --- |
 | `congressional-approval` | Sealed Valuation | A sealed appraisal parchment, nested brass vessel weights, and red wax | `8208e17f-cf61-473a-bfc3-76fa82f3656b` |
 | `inspirational-record` | Dawn Register | An open departure ledger with a blue ribbon | `02c883e2-89da-4d2f-818d-203706e23d6e` |
@@ -51,7 +51,7 @@ provenance.
 
 Production replacements must be newly generated native 64x64 transparent
 PixelLab PNGs that preserve these directions without spatial resampling. The
-existing `run-relic-icons:v1` sixteen-slot review and acceptance group remains
+existing `run-lipsanon-icons:v1` sixteen-slot review and acceptance group remains
 in force: the eight replacements and byte-identical candidate copies of the
 eight unchanged family members must be mounted and reviewed together before an
 atomic pointer swap. Only after that accepted installation may code remove the

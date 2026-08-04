@@ -56,9 +56,9 @@ these.
 - A board sits somewhere on a spectrum (§5): from a **directed puzzle** to a
   **full game against an AI**, with **PvP** against a human also supported.
 - Ordinary boards remain **self-contained**. **Run** adds the deliberate continuity
-  layer: a persistent chess army, shops, and relics move through an authored War while
+  layer: a persistent chess army, shops, and lipsana move through an authored War while
   every Battle still obeys recognizable chess-piece behavior (ADR-0193).
-- Acquired relics read as persistent Run state: one frameless native-size icon
+- Acquired lipsana read as persistent Run state: one frameless native-size icon
   strip stays at the upper-left beneath the title bar in Battles and between-Battle
   screens, independent of the Battle Controls panel; pointing at or focusing an
   icon immediately explains its name and complete effect (ADR-0216, ADR-0217).
@@ -145,7 +145,7 @@ these.
   behavior as Contents Box prose. Before purchase, direct unit-property
   presentation marks the target as hidden. The target is seeded and persisted
   with the offer, priced normally, and merely revealed—not rerolled—after
-  purchase. A card does not become Concinnous just because an external relic
+  purchase. A card does not become Concinnous just because an external lipsanon
   later modifies one of its units. Concinnous owns its dedicated white frame
   treatment while retaining the shared anatomy. After Legatine and Pestiferous precedence, every remaining shop
   offer—regardless of core value—has a seeded one-in-eight Concinnous roll. It
@@ -216,12 +216,12 @@ these.
   only after the persisted phase becomes Battle. When no meaningful player
   choice exists, Shop Continue commits the deterministic formation directly
   into Battle (ADR-0346, ADR-0348, ADR-0349, ADR-0350, ADR-0351, ADR-0352).
-- Placement relics grant shared unit abilities rather than owning bespoke
+- Placement lipsana grant shared unit abilities rather than owning bespoke
   placement rules. Field Linens grants Eutactic to Pawns; Royal Decree to the
   King; Crenellated Rampart to Rooks; and Pope's Staff to Bishops. Ghibelline
   Rampart grants Agminate to Rooks; Pope's Robes to Bishops; and Royal Sceptre
   to the King. Their rules text names only the grant, while the unit-ability
-  reference owns the piece-specific behavior. Permanent and relic-granted
+  reference owns the piece-specific behavior. Permanent and lipsanon-granted
   copies do not stack (ADR-0274).
 - Every persistent Run unit receives a seeded, stored historical identity when
   it joins the army. Piece type chooses the register: recorded archers for
@@ -238,7 +238,7 @@ these.
   same-offer shop visit, and continues the Run; Army inspection remains
   available in every Run phase without pausing an active Battle (ADR-0230).
 - **Enchiridion** is the player-facing reference for unit movement, terrain
-  rules, the filterable core card deck, affected card types, all relics, and the
+  rules, the filterable core card deck, affected card types, all lipsana, and the
   behavior of the current unit abilities: Adlected, Eutactic, Agminate,
   and Cacochymic. Card filters combine exact gold value with
   contained unit type. Cards uses no fourth column: its terminal third column
@@ -252,7 +252,7 @@ these.
   (ADR-0313, ADR-0315, ADR-0329, ADR-0339, ADR-0341, ADR-0345). During Battle,
   the Controls title bar opens **Strategikon** over the board without unmounting
   the fight; its Martial Prosopography, Chartulary and Lipsanotheca expose the
-  persistent army, the cards bought so far, and held relics beside the same
+  persistent army, the cards bought so far, and held lipsana beside the same
   Enchiridion (ADR-0231). The Chartulary is the Cards gallery itself — same
   filters, same gold groups, same faces, no annotation beside them — and the
   only difference is which cards are in it (ADR-0371).
@@ -265,12 +265,12 @@ these.
   separate preparation destination between Current Run and **Start New Run**,
   with Ataraxia setup and confirmed replacement (ADR-0232, ADR-0289, ADR-0290,
   ADR-0294, ADR-0356).
-- Army and Relics are grouped as player **Self inspection** in Run Controls.
+- Army and Lipsana are grouped as player **Self inspection** in Run Controls.
   Either replaces the complete left Play workspace through the shared
   fill-only shell surface while the current phase stays mounted underneath;
-  the normal relic strip yields to the readable Relics workspace during
+  the normal lipsanon strip yields to the readable Lipsana workspace during
   inspection. The exact workspaces are directly reviewable at
-  `/run?view=army` and `/run?view=relics` (ADR-0240, ADR-0244).
+  `/run?view=army` and `/run?view=lipsana` (ADR-0240, ADR-0244).
 - Selecting one Army unit opens a tile-backed inspection scene, not an enlarged
   portrait. The canonical board renderer draws that unit's real board sprite
   on a stable terrain surface with seeded optional grass. A persistent scene
@@ -415,7 +415,7 @@ discussion. This section records *direction*, not a spec.
   ([ADR-0025](adr/0025-world-scene-art-anti-story-lore.md)).
 - **No** daily challenge.
 - **No permanent account power progression.** Run continuity lasts for one active War;
-  relics may reshape its surrounding ecosystem but never a chess piece's behavior.
+  lipsana may reshape its surrounding ecosystem but never a chess piece's behavior.
 - The asset / design portfolio is **not** a game feature.
 
 ## 12. Relationship to the current codebase
@@ -479,7 +479,7 @@ optional in every Shop.
 
 Allowlisted administrators can open an in-place **Admin Controls** subview from the
 active Battle HUD's Controls panel. Its tools can arm one unrestricted move, kill one
-selected unit, award the current Battle, or grant Gold and an unheld Relic to the active
+selected unit, award the current Battle, or grant Gold and an unheld Lipsanon to the active
 Run without navigating away from the board. These are explicit playtest interventions
 around the canonical Battle and Run lifecycles, not new piece rules: the legal-move
 generator remains unchanged. The exact access, lifecycle, and excluded-control boundaries

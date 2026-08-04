@@ -337,7 +337,7 @@ export interface LevelEconomy {
 
 /** War-specific metadata authored on the Level's Battle tab (ADR-0193). */
 export interface BattleSettings {
-  /** This non-final Battle's ordinary shop also deals three free relic choices. */
+  /** This non-final Battle's ordinary shop also deals three free lipsanon choices. */
   loot?: boolean;
 }
 

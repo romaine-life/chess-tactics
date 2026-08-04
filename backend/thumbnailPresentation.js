@@ -67,12 +67,12 @@ function resolveDefaultOgImage(catalog) {
   return requiredMedia(requiredRole(catalog, 'app-ui', 'application-ui'), 'og-default');
 }
 
-function resolveRunRelicIcon(catalog, relicId) {
+function resolveLipsanonIcon(catalog, lipsanonId) {
   const asset = requiredDrawable(
     catalog,
-    'run-relic',
-    `for relic ${relicId}`,
-    (candidate) => candidate.behavior?.relicId === relicId,
+    'run-lipsanon',
+    `for lipsanon ${lipsanonId}`,
+    (candidate) => candidate.behavior?.lipsanonId === lipsanonId,
   );
   const media = asset?.media?.icon?.media;
   if (
@@ -83,7 +83,7 @@ function resolveRunRelicIcon(catalog, relicId) {
     || media.width !== 64
     || media.height !== 64
   ) {
-    throw new Error(`thumbnail presentation run-relic ${asset.id} has no native 64x64 PNG icon`);
+    throw new Error(`thumbnail presentation run-lipsanon ${asset.id} has no native 64x64 PNG icon`);
   }
   return {
     src: media.immutableUrl,
@@ -96,5 +96,5 @@ function resolveRunRelicIcon(catalog, relicId) {
 module.exports = {
   resolveDefaultOgImage,
   resolveLevelCardPresentation,
-  resolveRunRelicIcon,
+  resolveLipsanonIcon,
 };

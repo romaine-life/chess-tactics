@@ -285,8 +285,8 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
                         title="Loot"
                         description={isFinalBattle
                           ? 'The final Battle ends the War, so there is no following shop or Loot offer.'
-                          : 'After this Battle, the shop reveals three unseen relics and the player chooses one for free.'}
-                        value={<span>{!isFinalBattle && selectedLevel.battle?.loot ? 'Relic choice' : 'Normal shop'}</span>}
+                          : 'After this Battle, the shop reveals three unseen lipsana and the player chooses one for free.'}
+                        value={<span>{!isFinalBattle && selectedLevel.battle?.loot ? 'Lipsanon choice' : 'Normal shop'}</span>}
                       >
                         <input
                           type="checkbox"

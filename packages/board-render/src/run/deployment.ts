@@ -6,7 +6,7 @@ import { propCells, propDef } from '../core/props';
 import { defaultFacingForSide, PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import {
   beginBattle,
-  hasRelic,
+  hasLipsanon,
   hasRunAbility,
   mixSeed,
   PIECE_VALUE,
@@ -118,7 +118,7 @@ function chosenBlocked(run: RunDocument, capacity: number): string[] {
   const overflow = Math.max(0, run.army.length - capacity);
   if (!overflow) return [];
   const nonKing = run.army.filter((unit) => unit.type !== 'king');
-  if (hasRelic(run, 'muster-roll') && run.deployment?.chosenBlockedUnitIds) {
+  if (hasLipsanon(run, 'muster-roll') && run.deployment?.chosenBlockedUnitIds) {
     const valid = [...new Set(run.deployment.chosenBlockedUnitIds)]
       .filter((id) => nonKing.some((unit) => unit.id === id))
       .slice(0, overflow);
@@ -260,7 +260,7 @@ function buildLayout(run: RunDocument, level: Level, index: 0 | 1, blockedUnitId
   const heldBack = [...blockedUnitIds, ...stranded];
 
   const temporaryRocks: Vec[] = [];
-  if (hasRelic(run, 'royal-tent') && hasRelic(run, 'royal-decree')) {
+  if (hasLipsanon(run, 'royal-tent') && hasLipsanon(run, 'royal-decree')) {
     const king = run.army.find((unit) => unit.type === 'king');
     const kingCell = king ? placements[king.id] : undefined;
     if (kingCell) {
@@ -298,7 +298,7 @@ export function deploymentOptions(run: RunDocument, level: Level): RunDeployment
   const overflowCount = Math.max(0, run.army.length - capacity);
   const blockedUnitIds = chosenBlocked(run, capacity);
   const chosenCount = run.deployment?.chosenBlockedUnitIds?.filter((id) => run.army.some((unit) => unit.id === id && unit.type !== 'king')).length ?? 0;
-  const hasBlockedChoice = hasRelic(run, 'muster-roll')
+  const hasBlockedChoice = hasLipsanon(run, 'muster-roll')
     && overflowCount > 0
     && overflowCount < run.army.filter((unit) => unit.type !== 'king').length;
   return {
@@ -350,7 +350,7 @@ export function resolveForcedDeploymentChoices(run: RunDocument, level: Level): 
   const eligibleBlocked = next.army.filter((unit) => unit.type !== 'king').map((unit) => unit.id);
 
   if (
-    hasRelic(next, 'muster-roll')
+    hasLipsanon(next, 'muster-roll')
     && options.overflowCount > 0
     && options.overflowCount === eligibleBlocked.length
     && next.deployment!.chosenBlockedUnitIds?.join('|') !== eligibleBlocked.join('|')
@@ -380,7 +380,7 @@ export function resolveForcedDeploymentChoices(run: RunDocument, level: Level): 
   }
 
   if (
-    hasRelic(next, 'surveyors-compass')
+    hasLipsanon(next, 'surveyors-compass')
     && !layoutsDiffer(options.layouts)
     && next.deployment!.layoutChoice !== 0
   ) {
@@ -392,7 +392,7 @@ export function resolveForcedDeploymentChoices(run: RunDocument, level: Level): 
 export function deploymentHasMeaningfulChoice(run: RunDocument, options: RunDeploymentOptions): boolean {
   if (options.hasBlockedChoice) return true;
   if (options.adlectedUnitIds.some((unitId) => disciplinePlacementCells(run, options, unitId).length > 1)) return true;
-  return hasRelic(run, 'surveyors-compass') && layoutsDiffer(options.layouts);
+  return hasLipsanon(run, 'surveyors-compass') && layoutsDiffer(options.layouts);
 }
 
 /** Commit a deterministic Deployment only when the player has nothing meaningful to decide. */
@@ -423,14 +423,14 @@ function commitReadyDeployment(run: RunDocument, options: RunDeploymentOptions):
 
 export function deploymentReady(run: RunDocument, options: RunDeploymentOptions): boolean {
   if (!run.deployment || options.zoneCells.length === 0 || options.needsBlockedChoice) return false;
-  const layoutIndex = hasRelic(run, 'surveyors-compass') ? run.deployment.layoutChoice : 0;
+  const layoutIndex = hasLipsanon(run, 'surveyors-compass') ? run.deployment.layoutChoice : 0;
   if (layoutIndex !== 0 && layoutIndex !== 1) return false;
   const layout = options.layouts[layoutIndex];
   return options.adlectedUnitIds.every((id) => Boolean(layout.placements[id]));
 }
 
 export function selectedDeploymentLayout(run: RunDocument, options: RunDeploymentOptions): RunDeploymentLayout {
-  return options.layouts[hasRelic(run, 'surveyors-compass') ? run.deployment?.layoutChoice ?? 0 : 0];
+  return options.layouts[hasLipsanon(run, 'surveyors-compass') ? run.deployment?.layoutChoice ?? 0 : 0];
 }
 
 export function levelWithRunDeployment(run: RunDocument, level: Level, layout: RunDeploymentLayout): Level {
@@ -455,7 +455,7 @@ export function levelWithRunDeployment(run: RunDocument, level: Level, layout: R
   }));
   return {
     ...level,
-    runRules: { occultDagger: hasRelic(run, 'occult-dagger') },
+    runRules: { occultDagger: hasLipsanon(run, 'occult-dagger') },
     layers: {
       ...level.layers,
       units: [...level.layers.units, ...runUnits, ...rocks],

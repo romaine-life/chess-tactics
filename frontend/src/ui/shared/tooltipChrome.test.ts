@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 const infoTip = readFileSync(new URL('./InfoTip.tsx', import.meta.url), 'utf8');
 const runtime = readFileSync(new URL('../chromeFamilyRuntime.ts', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../../style.css', import.meta.url), 'utf8');
-const CONSUMERS = ['RunRelics.tsx', 'RunArmyWorkspace.tsx', 'RunCardFace.tsx'];
+const CONSUMERS = ['Lipsana.tsx', 'RunArmyWorkspace.tsx', 'RunCardFace.tsx'];
 
 function rule(selector: string): string {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -34,7 +34,7 @@ describe('tooltip chrome', () => {
   });
 
   it('owns the tooltip treatment so no call site restates it', () => {
-    // The Run relic and ability tips set this treatment; it is the shared
+    // The Run lipsanon and ability tips set this treatment; it is the shared
     // default now, not a class each caller has to remember to opt into.
     const pop = rule('.infotip-pop');
     // The gap between parts must clear the body's own inter-line space, or a
@@ -47,10 +47,10 @@ describe('tooltip chrome', () => {
 
     // The primitive renders the title itself from the `title` prop.
     expect(infoTip).toContain('<strong className="tooltip-title">{title}</strong>');
-    expect(css).not.toContain('.run-relic-tooltip-');
+    expect(css).not.toContain('.run-lipsanon-tooltip-');
     for (const consumer of CONSUMERS) {
       const source = readFileSync(new URL(`../${consumer}`, import.meta.url), 'utf8');
-      expect(source, consumer).not.toContain('run-relic-tooltip-');
+      expect(source, consumer).not.toContain('run-lipsanon-tooltip-');
     }
   });
 
@@ -62,7 +62,9 @@ describe('tooltip chrome', () => {
     // The definitions describe the trigger too — a keyboard reader hears what a
     // sighted reader was just handed.
     expect(infoTip).toContain('const describedBy = [id, ...entries.map((entry) => `${id}-${entry.id}`)].join(\' \');');
-    expect(infoTip).toContain('aria-describedby={focusable && pos ? describedBy : undefined}');
+    // `!suppressed` belongs in the same condition: a held-closed tip renders no panes, so
+    // describing the trigger by their ids would point a screen reader at nothing.
+    expect(infoTip).toContain('aria-describedby={focusable && pos && !suppressed ? describedBy : undefined}');
   });
 
   it('stacks the tip and its definitions as one column, not as scattered popups', () => {

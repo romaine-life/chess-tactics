@@ -89,8 +89,8 @@ describe('run craft spec parsing', () => {
     ]);
   });
 
-  it('rejects a relic id that does not exist', () => {
-    expect(() => parseRunCraftSpec('?craft=shop&relics=lucky-rabbit')).toThrow(/not a relic id/);
+  it('rejects a lipsanon id that does not exist', () => {
+    expect(() => parseRunCraftSpec('?craft=shop&lipsana=lucky-rabbit')).toThrow(/not a lipsanon id/);
   });
 
   it('keeps the Run screen own parameters when the craft request is spent', () => {
@@ -111,14 +111,14 @@ describe('run craft specs from a request body', () => {
       battle: 2,
       army: [{ type: 'rook', abilities: ['agminate'] }, 'pawn'],
       offers: [{ pieces: ['pawn', 'pawn'], type: 'concinnous' }],
-      relics: ['fair-scales'],
+      lipsana: ['fair-scales'],
     });
     expect(parsed.army).toEqual([
       { type: 'rook', abilities: ['agminate'] },
       { type: 'pawn', abilities: [] },
     ]);
     expect(parsed.offers).toEqual([{ pieces: ['pawn', 'pawn'], cardType: 'concinnous' }]);
-    expect(parsed.relics).toEqual(['fair-scales']);
+    expect(parsed.lipsana).toEqual(['fair-scales']);
   });
 
   it('refuses a field it does not understand rather than crafting the wrong Run', () => {
@@ -251,21 +251,21 @@ describe('crafted Run documents', () => {
     expect(runCraftSpecFromJson(runCraftSpecToJson(parsed)).cards).toEqual(parsed.cards);
   });
 
-  it('offers Conflict relics that are still choosable', () => {
+  it('offers Conflict lipsana that are still choosable', () => {
     const run = craft('?craft=bona-vacantia&battle=1&loot=fair-scales,mercenarys-rifle', war(4, [2]));
     expect(run.phase).toBe('bona-vacantia');
     expect(run.vacantia?.offers).toEqual(['fair-scales', 'mercenarys-rifle']);
-    expect(run.seenRelics).toEqual(expect.arrayContaining(['fair-scales', 'mercenarys-rifle']));
+    expect(run.seenLipsana).toEqual(expect.arrayContaining(['fair-scales', 'mercenarys-rifle']));
   });
 
-  it('will not offer a relic the crafted Run already holds', () => {
-    expect(() => craft('?craft=bona-vacantia&battle=1&relics=fair-scales&loot=fair-scales', war(4, [2])))
+  it('will not offer a lipsanon the crafted Run already holds', () => {
+    expect(() => craft('?craft=bona-vacantia&battle=1&lipsana=fair-scales&loot=fair-scales', war(4, [2])))
       .toThrow(/already held/);
   });
 
-  it('holds the relics the link names', () => {
-    const run = craft('?craft=shop&battle=2&relics=quartermasters-ledger');
-    expect(run.relics).toContain('quartermasters-ledger');
+  it('holds the lipsana the link names', () => {
+    const run = craft('?craft=shop&battle=2&lipsana=quartermasters-ledger');
+    expect(run.lipsana).toContain('quartermasters-ledger');
   });
 
   it('crafts a deployment screen at the named Battle', () => {
@@ -285,7 +285,7 @@ describe('crafted Run documents', () => {
   });
 
   it('makes the Surveyor\'s Compass layout choice a crafted Battle would otherwise wait on', () => {
-    const run = craft('?craft=battle&battle=3&relics=surveyors-compass');
+    const run = craft('?craft=battle&battle=3&lipsana=surveyors-compass');
     expect(run.phase).toBe('battle');
     expect(run.deployment?.layoutChoice).toBe(0);
     expect(run.battleRuntime?.initiallyDeployedUnitIds.length).toBeGreaterThan(0);
@@ -301,7 +301,7 @@ describe('crafted Run documents', () => {
   it('plays through loot Battles while fast-forwarding', () => {
     const run = craft('?craft=shop&battle=3', war(4, [0]));
     expect(run.phase).toBe('shop');
-    expect(run.relics.length).toBeGreaterThan(0);
+    expect(run.lipsana.length).toBeGreaterThan(0);
     expect(run.conflictIndex).toBe(1);
   });
 
@@ -411,7 +411,7 @@ describe('links that craft the Run they open', () => {
   it('carries every field of the address grammar back unchanged', () => {
     const search = '?craft=shop&battle=3&war=off-w-craft&seed=99&tier=1&gold=12.5'
       + '&army=rook,pawn&add=knight&offers=queen,pawn+pawn:concinnous&loot=fair-scales'
-      + '&paid=quartermasters-ledger&relics=surveyors-compass';
+      + '&paid=quartermasters-ledger&lipsana=surveyors-compass';
     expect(roundTrip(search)).toEqual(spec(search));
   });
 
@@ -430,7 +430,7 @@ describe('links that craft the Run they open', () => {
   });
 
   it('writes the same JSON the request body grammar reads, so an id always means one spec', () => {
-    const source = spec('?craft=shop&battle=3&gold=12.5&offers=pawn+pawn:pestiferous&relics=fair-scales');
+    const source = spec('?craft=shop&battle=3&gold=12.5&offers=pawn+pawn:pestiferous&lipsana=fair-scales');
     expect(runCraftSpecFromJson(runCraftSpecToJson(source))).toEqual(source);
   });
 });

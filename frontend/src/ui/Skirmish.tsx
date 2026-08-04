@@ -80,9 +80,9 @@ import { useSkirmishViewStoreApi } from '../game/SkirmishViewStoreContext';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox, ShellViewportSwap } from './shared/ChromeBox';
 import { rememberAdminBattleHref } from '../admin/battleRoute';
-import type { RunBattleReport, RunRelicId } from '../run/model';
+import type { LipsanonId, RunBattleReport } from '../run/model';
 import { useActiveRun } from '../run/store';
-import { RunRelicStrip } from './RunRelics';
+import { LipsanonStrip } from './Lipsana';
 import { Strategikon } from './Strategikon';
 import { GameplayWorkspaceSceneSlot } from './shell/AuthoredSceneSlot';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
@@ -91,7 +91,7 @@ export interface RunBattlePresentation {
   level: Level;
   seed: number;
   activityId: string;
-  relicIds: readonly RunRelicId[];
+  lipsanonIds: readonly LipsanonId[];
   /** The Battle is won. What it cost is read off the live board here, because nothing
    *  outside it keeps the turn count once the board unmounts. */
   onVictory: (report: RunBattleReport) => void;
@@ -105,7 +105,7 @@ export interface RunBattlePresentation {
 export interface RunDeploymentPresentation {
   surfaceState: SkirmishBoardSurfaceState;
   titleBarContent: ReactNode;
-  relicIds: readonly RunRelicId[];
+  lipsanonIds: readonly LipsanonId[];
   controlsContent: ReactNode;
   renderCellOverlay: (context: SkirmishBoardCellOverlayContext) => ReactNode;
   boardOverlay: ReactNode;
@@ -134,8 +134,8 @@ export function SkirmishShell({
   className = '',
   testId = 'skirmish',
   titleBarContent,
-  relicIds = [],
-  shellWorkspaceCoversRelics = false,
+  lipsanonIds = [],
+  shellWorkspaceCoversLipsana = false,
   controlsContent,
   hudProps,
   hudContent,
@@ -148,8 +148,8 @@ export function SkirmishShell({
   className?: string;
   testId?: string;
   titleBarContent: ReactNode;
-  relicIds?: readonly RunRelicId[];
-  shellWorkspaceCoversRelics?: boolean;
+  lipsanonIds?: readonly LipsanonId[];
+  shellWorkspaceCoversLipsana?: boolean;
   controlsContent?: ReactNode;
   hudProps?: SkirmishHudProps;
   hudContent?: ReactNode;
@@ -174,7 +174,7 @@ export function SkirmishShell({
     : screenStyle ?? undefined;
   const surface = (
     <>
-      {shellWorkspaceCoversRelics ? null : <RunRelicStrip relicIds={relicIds} />}
+      {shellWorkspaceCoversLipsana ? null : <LipsanonStrip lipsanonIds={lipsanonIds} />}
       {children}
       {hudContent === undefined
         ? <SkirmishHud {...hudProps} controlsContent={controlsContent} />
@@ -1255,7 +1255,7 @@ function SkirmishSession({
     <SkirmishShell
       testId={runDeployment ? 'run-deployment' : 'skirmish'}
       className={runDeployment?.screenClassName ?? (screenPredrawnBackgroundActive ? 'is-predrawn-board' : '')}
-      shellWorkspaceCoversRelics={Boolean(runWorkspace) || strategikonOpen}
+      shellWorkspaceCoversLipsana={Boolean(runWorkspace) || strategikonOpen}
       titleBarContent={runDeployment ? runDeployment.titleBarContent : playableSurfaceReady ? (
         <div className="skirmish-topbar-status">
           {/* The battle clock is ALWAYS the middle chip on every play surface — a timed game
@@ -1289,7 +1289,7 @@ function SkirmishSession({
           </TitleBarStatus>
         </div>
       ) : null}
-      relicIds={runDeployment?.relicIds ?? runBattle?.relicIds ?? []}
+      lipsanonIds={runDeployment?.lipsanonIds ?? runBattle?.lipsanonIds ?? []}
       controlsContent={runDeployment?.controlsContent}
       hudProps={runDeployment ? { enableGlobalShortcuts: false } : undefined}
       screenStyle={runDeployment ? undefined : screenStyle ?? null}

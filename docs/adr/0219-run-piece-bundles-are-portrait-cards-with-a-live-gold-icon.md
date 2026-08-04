@@ -26,7 +26,7 @@ dedicated resource icon and live number can communicate the same state.
   resource icon followed by the live numeric price. Purchased and disabled
   states remain native control state on the same card.
 - Compact Run currency readouts use the icon plus a live number. Explanatory
-  sentences and relic rules may still name gold where prose is necessary.
+  sentences and lipsanon rules may still name gold where prose is necessary.
 - The selected gold art is PixelLab option 2, a native transparent 64×64 coin
   stack. It is accepted through the typed `run-resource-icon` live-media
   projection at `ui/run/resources/gold.png`.

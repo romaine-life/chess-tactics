@@ -196,7 +196,7 @@ shell-owned playfield through the shared `RunWorkspace`/`ShellWorkspace`
 composition. `RunWorkspace` supplies the
 workflow content; `ShellWorkspace` itself supplies the same Controls-attached
 body and default inset content container for every destination. Content gutters
-and relic reservation live inside that continuous body without creating an
+and lipsanon reservation live inside that continuous body without creating an
 inline-end shell gap. A primary frame or drawn scroll owner uses the shared
 edge-attached content variant rather than authoring an end-padding exception.
 Destinations do not add an
@@ -208,7 +208,7 @@ removes Deployment from that destination inventory. Deployment is a persisted
 gameplay phase presented on the full canonical battlefield; its phase-specific
 workflow replaces the contents of the shared `ShellControlsPanel`. It does not
 instantiate `RunWorkspace`, `LevelPreviewColumn`, a second board frame, or a
-level-manifest heading. Army/Relics workspaces may still cover the retained
+level-manifest heading. Army/Lipsana workspaces may still cover the retained
 Deployment battlefield through `ShellViewportSwap` exactly as they cover an
 active Battle.
 
@@ -230,9 +230,9 @@ Under [ADR-0240](adr/0240-run-self-inspection-owns-the-left-shell-workspace.md)
 and [ADR-0244](adr/0244-run-self-inspection-views-are-deep-linkable.md),
 that same fill-only composition remains the workflow-neutral
 `RunWorkspace`/`ShellWorkspace` primitive.
-Run Army and Relics self-inspection reuse it to replace the complete left Play
+Run Army and Lipsana self-inspection reuse it to replace the complete left Play
 workspace while title and Controls remain fixed; `/run?view=army` and
-`/run?view=relics` open those exact workspaces. A shell workspace consumes the
+`/run?view=lipsana` open those exact workspaces. A shell workspace consumes the
 installed outer-role fill but is never an `outer-panel` consumer: it owns no
 exterior rails, corner atoms, viewport offsets, or second frame. Covered content
 is passed through `ShellViewportSwap`, which owns the retained primary wrapper

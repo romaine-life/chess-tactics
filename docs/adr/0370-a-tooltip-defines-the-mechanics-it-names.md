@@ -5,7 +5,7 @@ deciders: owner (Nelson) + Claude
 supersedes:
   - "[ADR-0305](0305-card-ability-properties-do-not-synthesize-description-text.md)'s deferral of the ability-definition inspection system"
 extends:
-  - 0217-run-relic-icons-use-immediate-styled-tooltips.md
+  - 0217-run-lipsanon-icons-use-immediate-styled-tooltips.md
   - 0339-run-card-properties-and-unit-states-use-paired-icons.md
 ---
 
@@ -76,7 +76,7 @@ call site; no caller opts in, and no caller writes a glossary sentence by hand.
 ## Consequences
 
 - Every existing tip gains this without being touched: card properties, the card
-  face's unit-state markers, relic descriptions, Army ledger trait chips, the
+  face's unit-state markers, lipsanon descriptions, Army ledger trait chips, the
   Ataraxia tier measure. Any future tip that names a mechanic is covered the day
   it is written.
 - Authored prose may now invoke a mechanic by name and stop, instead of inlining a
@@ -89,7 +89,7 @@ call site; no caller opts in, and no caller writes a glossary sentence by hand.
 
 ## More Information
 
-- [ADR-0217](0217-run-relic-icons-use-immediate-styled-tooltips.md)
+- [ADR-0217](0217-run-lipsanon-icons-use-immediate-styled-tooltips.md)
 - [ADR-0305](0305-card-ability-properties-do-not-synthesize-description-text.md)
 - [ADR-0339](0339-run-card-properties-and-unit-states-use-paired-icons.md)
 - `frontend/src/ui/shared/tooltipGlossary.tsx`, `frontend/src/ui/shared/InfoTip.tsx`

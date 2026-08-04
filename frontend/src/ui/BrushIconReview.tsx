@@ -92,10 +92,10 @@ export function BrushIconReview(): ReactElement {
 
   return (
     <main
-      className="run-relic-review-screen brush-icon-review-screen skirmish-screen"
+      className="run-lipsanon-review-screen brush-icon-review-screen skirmish-screen"
       style={{ ['--skirmish-world-bg' as string]: `url("${defaultBackgroundSet().world}")` }}
     >
-      <OuterChromeBox chromeConsumer="brush-icon-review" titled className="run-relic-review-panel brush-icon-review-panel">
+      <OuterChromeBox chromeConsumer="brush-icon-review" titled className="run-lipsanon-review-panel brush-icon-review-panel">
         <OuterChromeHeader title="Level Editor Brush Icon Review" />
         <p>
           Exact private PixelLab candidates in the registered Level Editor tool button and at native 64×64.
@@ -183,7 +183,7 @@ export function BrushIconReview(): ReactElement {
                 </section>
                 <section className="brush-icon-review-section" aria-labelledby="brush-native-title">
                   <h2 id="brush-native-title">Native pixel work</h2>
-                  <div className="run-relic-review-grid brush-icon-review-native-grid" data-testid="brush-icon-native-grid">
+                  <div className="run-lipsanon-review-grid brush-icon-review-native-grid" data-testid="brush-icon-native-grid">
                     {candidates.map((version) => (
                       <figure data-version-id={version.id} key={`native-${version.id}`}>
                         <img src={version.media!.url} width="64" height="64" alt="" draggable={false} />

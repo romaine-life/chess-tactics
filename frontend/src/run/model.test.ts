@@ -17,7 +17,7 @@ import {
   RUN_STARTING_GOLD,
   RUN_STARTING_GOLD_TENTHS,
   LEGATINE_ADLECTED_OFFER_DENOMINATOR,
-  acquireRelic,
+  acquireLipsanon,
   battleVictoryGoldTenths,
   beginBattle,
   buyCard,
@@ -42,7 +42,7 @@ import {
   runAbilityDisplayName,
   sellArmyUnit,
   shopHasChanges,
-  takeVacantiaRelic,
+  takeVacantiaLipsanon,
   legatineAdlectedAcquisitionTarget,
   type RunDocument,
   type RunWarSnapshot,
@@ -66,13 +66,13 @@ function cheapestOpeningOffer(run: RunDocument) {
 }
 
 /** A Conflict that ends in loot now opens with Bona Vacantia, so a run may start there. */
-function pastOpeningRelic(run: RunDocument): RunDocument {
+function pastOpeningLipsanon(run: RunDocument): RunDocument {
   if (run.phase !== 'bona-vacantia' || !run.vacantia) return run;
-  return takeVacantiaRelic(run, run.vacantia.offers[0], run.army[0].id);
+  return takeVacantiaLipsanon(run, run.vacantia.offers[0], run.army[0].id);
 }
 
 function deployedRun(seed = 17, snapshot = war()): RunDocument {
-  let run = pastOpeningRelic(createRun(snapshot, seed, '2026-01-01T00:00:00.000Z'));
+  let run = pastOpeningLipsanon(createRun(snapshot, seed, '2026-01-01T00:00:00.000Z'));
   // A qualifier can price an opening offer past the starting gold, so open with the
   // cheapest card rather than whichever one landed in slot 0.
   run = buyCard(run, cheapestOpeningOffer(run).offerId);
@@ -81,7 +81,7 @@ function deployedRun(seed = 17, snapshot = war()): RunDocument {
 }
 
 function deployedAtaraxiaRun(seed = 17, snapshot = war()): RunDocument {
-  let run = pastOpeningRelic(createRun(snapshot, seed, 1, '2026-01-01T00:00:00.000Z'));
+  let run = pastOpeningLipsanon(createRun(snapshot, seed, 1, '2026-01-01T00:00:00.000Z'));
   run = buyCard(run, cheapestOpeningOffer(run).offerId);
   run = prepareDeployment(leaveShop(run));
   return beginBattle(run, run.army.map((unit) => unit.id), [], []);
@@ -335,7 +335,7 @@ describe('Run piece economy', () => {
 
   it('sells every non-King and formats Fair Scales quarter-gold exactly', () => {
     let shop = openShop(deployedRunWithPawn(), []);
-    shop = acquireRelic(shop, 'fair-scales');
+    shop = acquireLipsanon(shop, 'fair-scales');
     const pawn = shop.army.find((unit) => unit.type === 'pawn')!;
     const sold = sellArmyUnit(shop, pawn.id);
     expect(sold.goldTenths - shop.goldTenths).toBe(7.5);
@@ -400,7 +400,7 @@ describe('the aftermath report that closes a Battle', () => {
   });
 
   it('carries the survivors it was given into the shop it opens', () => {
-    const battle = acquireRelic(deployedRun(12, war(2)), 'mercenarys-rifle');
+    const battle = acquireLipsanon(deployedRun(12, war(2)), 'mercenarys-rifle');
     const survivors = battle.army.map((unit) => unit.id);
     const closed = closeBattle(battle, { survivingUnitIds: survivors, turns: 4 });
     const bonus = battle.army.reduce((total, unit) => total + PIECE_VALUE[unit.type], 0);
@@ -428,7 +428,7 @@ describe('the aftermath report that closes a Battle', () => {
   });
 });
 
-describe('Run progression and relic offers', () => {
+describe('Run progression and lipsanon offers', () => {
   it('grants an exact administrator-entered gold amount through the Run model', () => {
     const run = deployedRun();
     const granted = grantGold(run, 27);
@@ -496,50 +496,21 @@ describe('Run progression and relic offers', () => {
     expect(normalizeRunDocument(upgraded)).toBe(upgraded);
   });
 
-  it('deterministically upgrades unnamed format-1 army units without resetting the Run', () => {
+  // Format 15 renamed the held-lipsanon field to `lipsana`. Every document below it carries the
+  // retired key and no new one, and reading the old key to fill the new one is the
+  // compatibility path docs/migration-policy.md prohibits — so the floor refuses them all
+  // rather than upgrading some. The per-format upgrade tests this replaces (format 1 names,
+  // 2 identities, 3 inspection seeds, 5 Cacochymic state) asserted behaviour no stored
+  // document can reach any more.
+  it('refuses every document written before the Lipsana rename rather than half-migrating it', () => {
     const opening = createRun(war(), 73);
     const current = leaveShop(buyCard(opening, cheapestOpeningOffer(opening).offerId));
-    const legacy = {
-      ...current,
-      formatVersion: 1,
-      army: current.army.map(({ name: _name, ...unit }) => unit),
-    } as unknown as RunDocument;
-    const upgraded = normalizeRunDocument(legacy);
-
-    expect(upgraded.formatVersion).toBe(RUN_FORMAT_VERSION);
-    expect(upgraded.id).toBe(current.id);
-    expect(upgraded.army.map((unit) => unit.name)).toEqual(current.army.map((unit) => unit.name));
-    expect(normalizeRunDocument(upgraded)).toBe(upgraded);
-  });
-
-  it('replaces the provisional format-2 fantasy names with role-appropriate historical identities', () => {
-    const opening = createRun(war(), 73);
-    const current = leaveShop(buyCard(opening, cheapestOpeningOffer(opening).offerId));
-    const provisional = {
-      ...current,
-      formatVersion: 2,
-      army: current.army.map((unit, index) => ({ ...unit, name: `Provisional Name ${index}` })),
-    } as unknown as RunDocument;
-    const upgraded = normalizeRunDocument(provisional);
-
-    expect(upgraded.formatVersion).toBe(RUN_FORMAT_VERSION);
-    expect(upgraded.army.map((unit) => unit.name)).toEqual(current.army.map((unit) => unit.name));
-    expect(normalizeRunDocument(upgraded)).toBe(upgraded);
-  });
-
-  it('assigns persistent inspection-scene seeds when upgrading format-3 units', () => {
-    const opening = createRun(war(), 73);
-    const current = leaveShop(buyCard(opening, cheapestOpeningOffer(opening).offerId));
-    const legacy = {
-      ...current,
-      formatVersion: 3,
-      army: current.army.map(({ inspectionSeed: _inspectionSeed, ...unit }) => unit),
-    } as unknown as RunDocument;
-    const upgraded = normalizeRunDocument(legacy);
-
-    expect(upgraded.formatVersion).toBe(RUN_FORMAT_VERSION);
-    expect(upgraded.army.every((unit) => Number.isSafeInteger(unit.inspectionSeed))).toBe(true);
-    expect(normalizeRunDocument(upgraded)).toBe(upgraded);
+    for (const formatVersion of [1, 2, 3, 5, 7, 9, 13, 14]) {
+      expect(() => normalizeRunDocument({
+        ...current,
+        formatVersion,
+      } as unknown as RunDocument)).toThrow('written before the Lipsana rename');
+    }
   });
 
   it('normalizes legacy unit identities and shop reset state once', () => {
@@ -574,11 +545,11 @@ describe('Run progression and relic offers', () => {
       chosenDraftId: null,
     } as unknown as RunDocument)).toThrow('retired Run draft phase');
 
+    // A current-format document still sheds the retired draft fields; only the draft phase
+    // itself throws. The old format-7 variant of this case is covered by the version floor.
     const committed = leaveShop(buyCard(current, cheapestOpeningOffer(current).offerId));
     const polluted = {
       ...committed,
-      formatVersion: 7,
-      army: committed.army.map((unit) => unit.type === 'king' ? unit : { ...unit, source: 'draft' }),
       draftOffers: [{ id: 'retired', draftId: 'retired', pieces: ['pawn'], value: 1 }],
       chosenDraftId: 'retired',
     } as unknown as RunDocument;
@@ -586,15 +557,6 @@ describe('Run progression and relic offers', () => {
     expect(normalized.formatVersion).toBe(RUN_FORMAT_VERSION);
     expect('draftOffers' in normalized).toBe(false);
     expect('chosenDraftId' in normalized).toBe(false);
-    expect(normalized.army.every((unit) => String(unit.source) !== 'draft')).toBe(true);
-  });
-
-  it('rejects older Shop documents instead of adapting a retired transaction shape', () => {
-    const current = createRun(war(), 73);
-    expect(() => normalizeRunDocument({
-      ...current,
-      formatVersion: 9,
-    } as unknown as RunDocument)).toThrow('Older Run Shop documents are unsupported.');
   });
 
   it('burns all three seen Conflict offers, including the two not chosen', () => {
@@ -603,28 +565,28 @@ describe('Run progression and relic offers', () => {
     expect(first.phase).toBe('bona-vacantia');
     const firstOffers = first.vacantia!.offers;
     expect(firstOffers).toHaveLength(3);
-    const chosen = takeVacantiaRelic(first, firstOffers[0], first.army[0].id);
+    const chosen = takeVacantiaLipsanon(first, firstOffers[0], first.army[0].id);
     expect(chosen.phase).toBe('shop');
     const secondBattle = beginBattle(prepareDeployment(leaveShop(chosen)), [], [], []);
     const second = openShop(secondBattle, []);
     expect(second.phase).toBe('bona-vacantia');
     expect(second.vacantia!.offers).toHaveLength(3);
-    expect(second.vacantia!.offers.some((relic) => firstOffers.includes(relic))).toBe(false);
+    expect(second.vacantia!.offers.some((lipsanon) => firstOffers.includes(lipsanon))).toBe(false);
   });
 
   it('keeps one Shopkey offer for the whole Conflict', () => {
-    const withKey = acquireRelic(deployedRun(57, war(4)), 'merchants-shopkey');
+    const withKey = acquireLipsanon(deployedRun(57, war(4)), 'merchants-shopkey');
     const firstShop = openShop(withKey, []);
-    expect(firstShop.shop!.paidRelicOffer).not.toBeNull();
-    const offer = firstShop.shop!.paidRelicOffer;
+    expect(firstShop.shop!.paidLipsanonOffer).not.toBeNull();
+    const offer = firstShop.shop!.paidLipsanonOffer;
     const secondBattle = beginBattle(prepareDeployment(leaveShop(firstShop)), [], [], []);
     const secondShop = openShop(secondBattle, []);
     expect(secondShop.conflictIndex).toBe(0);
-    expect(secondShop.shop!.paidRelicOffer).toBe(offer);
+    expect(secondShop.shop!.paidLipsanonOffer).toBe(offer);
   });
 
   it('permanently removes a cashed-out Pawn and grants two gold', () => {
-    let run = acquireRelic(deployedRunWithPawn(), 'mercenary-boat');
+    let run = acquireLipsanon(deployedRunWithPawn(), 'mercenary-boat');
     const pawn = run.army.find((unit) => unit.type === 'pawn')!;
     const cashed = cashOutPawn(run, pawn.id);
     expect(cashed.army.some((unit) => unit.id === pawn.id)).toBe(false);
@@ -806,15 +768,17 @@ describe('Ataraxia I — The Great Mortality', () => {
     expect(sold.army.find((unit) => unit.id === units[1].id)?.modifiers).toEqual(['cacochymic']);
   });
 
-  it('upgrades format-5 all-unit Cacochymic state to one deterministic current target', () => {
+  // The format-5 half of this case (all-unit Cacochymic state upgrading to one target) is
+  // unreachable under the format-15 floor. What survives is the live repair: a current
+  // document whose Pestiferous card has lost its target gets a deterministic one back.
+  it('repairs a Pestiferous card that has lost its deterministic Cacochymic target', () => {
     const base = deployedAtaraxiaRun(81, war(3));
     const units = base.army.filter((unit) => unit.type !== 'king').slice(0, 2).map((unit) => ({
       ...unit,
       modifiers: ['cacochymic'] as RunDocument['army'][number]['modifiers'],
     }));
-    const legacy = {
+    const upgraded = normalizeRunDocument({
       ...base,
-      formatVersion: 5,
       army: [base.army.find((unit) => unit.type === 'king')!, ...units],
       cards: [{
         id: 'run-card-1',
@@ -826,14 +790,12 @@ describe('Ataraxia I — The Great Mortality', () => {
         acquiredAfterBattleIndex: 0,
       }],
       nextCardSequence: 2,
-    } as unknown as RunDocument;
-    const upgraded = normalizeRunDocument(legacy);
+    } as unknown as RunDocument);
 
     expect(upgraded.formatVersion).toBe(RUN_FORMAT_VERSION);
     expect(upgraded.cards[0].cacochymicUnitId).not.toBeNull();
     expect(upgraded.army.filter((unit) => unit.modifiers.includes('cacochymic')).map((unit) => unit.id))
       .toEqual([upgraded.cards[0].cacochymicUnitId]);
-    expect(normalizeRunDocument(upgraded)).toBe(upgraded);
 
     const missingCurrentTarget = {
       ...upgraded,

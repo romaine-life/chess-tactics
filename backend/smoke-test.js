@@ -779,7 +779,7 @@ function openSse(path, headers = {}) {
 // process liveness; `/ready` is asserted after this reset establishes a known
 // complete catalog state.
 async function resetDb() {
-  await queryDb('TRUNCATE levels, campaign_workspaces, public_maps, editor_document_edit_events, editor_document_recoveries, editor_document_edit_sessions, predrawn_background_geometry_bindings, predrawn_background_version_events, predrawn_background_versions, level_working_copies, level_thumbnail_derivatives, design_portfolios, campaigns, official_campaigns, active_runs, run_relic_stat_events, lab_runs, prop_seats, sfx_profiles, drawable_asset_events, drawable_asset_media, drawable_assets, drawable_catalog_state, media_asset_events, media_versions, media_blobs, media_slots, media_catalog_state, unit_asset_events, unit_sprites, unit_families, unit_assets, unit_catalog_state CASCADE');
+  await queryDb('TRUNCATE levels, campaign_workspaces, public_maps, editor_document_edit_events, editor_document_recoveries, editor_document_edit_sessions, predrawn_background_geometry_bindings, predrawn_background_version_events, predrawn_background_versions, level_working_copies, level_thumbnail_derivatives, design_portfolios, campaigns, official_campaigns, active_runs, lipsanon_stat_events, lab_runs, prop_seats, sfx_profiles, drawable_asset_events, drawable_asset_media, drawable_assets, drawable_catalog_state, media_asset_events, media_versions, media_blobs, media_slots, media_catalog_state, unit_asset_events, unit_sprites, unit_families, unit_assets, unit_catalog_state CASCADE');
   await queryDb("INSERT INTO media_catalog_state (singleton) VALUES (true); INSERT INTO drawable_catalog_state (singleton) VALUES (true); INSERT INTO unit_catalog_state (singleton) VALUES (true); INSERT INTO unit_families (family) VALUES ('pawn'), ('rook'), ('knight'), ('bishop'), ('queen'), ('king');");
 }
 
@@ -937,7 +937,7 @@ function inlineMigrationSql(version) {
   return inlineMigrationDefinition(version).sql;
 }
 
-async function validatePrimarySparseNumericMigrationUpgrade51() {
+async function validatePrimarySparseNumericMigrationUpgrade52() {
   const history = await queryDb(
     `SELECT version, name, checksum
        FROM schema_migrations
@@ -952,7 +952,7 @@ async function validatePrimarySparseNumericMigrationUpgrade51() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 51 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 52 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -967,7 +967,7 @@ async function validatePrimarySparseNumericMigrationUpgrade51() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 15 }, (_, index) => index + 37),
+    ...Array.from({ length: 16 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1042,16 +1042,16 @@ async function validatePrimarySparseNumericMigrationUpgrade51() {
     (row) => row.constraint_type === 'c',
   );
   await queryDb(
-    `INSERT INTO run_relic_stat_events (owner_email, event_id, relic_id, event_kind)
+    `INSERT INTO lipsanon_stat_events (owner_email, event_id, lipsanon_id, event_kind)
      VALUES ('migration-45-smoke@example.com', 'migration-45-idempotency', 'conscription-notice', 'picked')
-     ON CONFLICT (owner_email, event_id, relic_id) DO NOTHING;
-     INSERT INTO run_relic_stat_events (owner_email, event_id, relic_id, event_kind)
+     ON CONFLICT (owner_email, event_id, lipsanon_id) DO NOTHING;
+     INSERT INTO lipsanon_stat_events (owner_email, event_id, lipsanon_id, event_kind)
      VALUES ('migration-45-smoke@example.com', 'migration-45-idempotency', 'conscription-notice', 'picked')
-     ON CONFLICT (owner_email, event_id, relic_id) DO NOTHING;`,
+     ON CONFLICT (owner_email, event_id, lipsanon_id) DO NOTHING;`,
   );
-  const relicEventRows = await queryDb(
-    `SELECT owner_email, event_id, relic_id, event_kind
-       FROM run_relic_stat_events
+  const lipsanonEventRows = await queryDb(
+    `SELECT owner_email, event_id, lipsanon_id, event_kind
+       FROM lipsanon_stat_events
       WHERE owner_email = 'migration-45-smoke@example.com'
         AND event_id = 'migration-45-idempotency'`,
   );
@@ -1073,21 +1073,21 @@ async function validatePrimarySparseNumericMigrationUpgrade51() {
     || canonicalReasonForeignKey.delete_action !== 'r'
     || canonicalReasonForeignKey.referenced_schema !== 'public'
     || canonicalReasonForeignKey.referenced_table !== 'level_working_copy_revision_reasons'
-    || relicEventRows.rows.length !== 1
-    || relicEventRows.rows[0].relic_id !== 'conscription-notice'
-    || relicEventRows.rows[0].event_kind !== 'picked'
+    || lipsanonEventRows.rows.length !== 1
+    || lipsanonEventRows.rows[0].lipsanon_id !== 'conscription-notice'
+    || lipsanonEventRows.rows[0].event_kind !== 'picked'
     || !/^FOREIGN KEY \(reason\) REFERENCES level_working_copy_revision_reasons\(reason\)/.test(
       canonicalReasonForeignKey.definition,
     )
   ) {
     throw new Error(
-      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 51: `
+      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 52: `
       + `${JSON.stringify({
         history: history.rows,
         identity_columns: identityColumns.rows,
         reasons: revisionReasonRows.rows,
         constraints: revisionReasonConstraints.rows,
-        relic_events: relicEventRows.rows,
+        lipsanon_events: lipsanonEventRows.rows,
       })}\noutput:\n${output}`,
     );
   }
@@ -1335,7 +1335,7 @@ async function main() {
   await new Promise((resolve) => mockAuth.listen(authPort, '127.0.0.1', resolve));
   await new Promise((resolve) => mockBgm.listen(bgmPort, '127.0.0.1', resolve));
   await waitForServer();
-  await validatePrimarySparseNumericMigrationUpgrade51();
+  await validatePrimarySparseNumericMigrationUpgrade52();
   const databaseRuntime = await queryDb('SELECT version() AS version');
   const isPgliteRuntime = /\bPGlite\b/i.test(String(databaseRuntime.rows[0]?.version || ''));
   if (!isPgliteRuntime) {
@@ -2963,21 +2963,21 @@ async function main() {
     media: {},
   });
   const sharedPresentationSlot = 'wall-decor/test-banner-base.png';
-  const royalDecreeRelicSlot = 'ui/run/relics/royal-decree.png';
+  const royalDecreeLipsanonSlot = 'ui/run/lipsana/royal-decree.png';
   await seedSyntheticReadinessMedia({
-    slot: royalDecreeRelicSlot,
+    slot: royalDecreeLipsanonSlot,
     domain: 'ui-kit',
     role: 'icon',
     width: 64,
     height: 64,
   });
   await seedSyntheticDrawable({
-    id: 'run-relic-royal-decree',
-    kind: 'run-relic',
+    id: 'run-lipsanon-royal-decree',
+    kind: 'run-lipsanon',
     label: 'Royal Decree',
-    behavior: { relicId: 'royal-decree' },
-    metadata: { artFamily: 'synthetic-run-relic-icons' },
-    media: { icon: royalDecreeRelicSlot },
+    behavior: { lipsanonId: 'royal-decree' },
+    metadata: { artFamily: 'synthetic-run-lipsanon-icons' },
+    media: { icon: royalDecreeLipsanonSlot },
   });
   await seedSyntheticDrawable({
     id: 'test-subterrain-opaque', kind: 'subterrain', label: 'Synthetic Subterrain',
@@ -3544,33 +3544,33 @@ async function main() {
   ) {
     throw new Error(`Official play page should advertise the level thumbnail: ${officialPlay.statusCode}`);
   }
-  const relicReference = await get('/enchiridion/relics/royal-decree');
-  const relicImageMatch = relicReference.body.match(
+  const lipsanonReference = await get('/enchiridion/lipsana/royal-decree');
+  const lipsanonImageMatch = lipsanonReference.body.match(
     /<meta property="og:image" content="[^"]+(\/api\/media\/[0-9a-f]{64})">/,
   );
   if (
-    relicReference.statusCode !== 200
-    || !relicReference.body.includes('<title>Royal Decree</title>')
-    || !relicReference.body.includes('<meta property="og:title" content="Royal Decree">')
-    || !relicReference.body.includes('<meta property="og:description" content="Your King gains Eutactic.">')
-    || !relicReference.body.includes('<meta property="og:image:width" content="64">')
-    || !relicReference.body.includes('<meta property="og:image:height" content="64">')
-    || !relicReference.body.includes('<meta name="twitter:card" content="summary">')
-    || !relicImageMatch
+    lipsanonReference.statusCode !== 200
+    || !lipsanonReference.body.includes('<title>Royal Decree</title>')
+    || !lipsanonReference.body.includes('<meta property="og:title" content="Royal Decree">')
+    || !lipsanonReference.body.includes('<meta property="og:description" content="Your King gains Eutactic.">')
+    || !lipsanonReference.body.includes('<meta property="og:image:width" content="64">')
+    || !lipsanonReference.body.includes('<meta property="og:image:height" content="64">')
+    || !lipsanonReference.body.includes('<meta name="twitter:card" content="summary">')
+    || !lipsanonImageMatch
   ) {
-    throw new Error(`Relic reference should advertise its icon and complete effect: ${relicReference.statusCode}`);
+    throw new Error(`Lipsanon reference should advertise its icon and complete effect: ${lipsanonReference.statusCode}`);
   }
-  const relicImage = await get(relicImageMatch[1], undefined, 5000);
-  if (relicImage.statusCode !== 200 || relicImage.headers['content-type'] !== 'image/png') {
-    throw new Error(`Relic unfurl icon should be anonymously readable live media: ${relicImage.statusCode}`);
+  const lipsanonImage = await get(lipsanonImageMatch[1], undefined, 5000);
+  if (lipsanonImage.statusCode !== 200 || lipsanonImage.headers['content-type'] !== 'image/png') {
+    throw new Error(`Lipsanon unfurl icon should be anonymously readable live media: ${lipsanonImage.statusCode}`);
   }
-  const unknownRelicReference = await get('/enchiridion/relics/constructor');
+  const unknownLipsanonReference = await get('/enchiridion/lipsana/constructor');
   if (
-    unknownRelicReference.statusCode !== 200
-    || !unknownRelicReference.body.includes('<meta property="og:title" content="Chess Tactics">')
-    || unknownRelicReference.body.includes('Your King gains Eutactic')
+    unknownLipsanonReference.statusCode !== 200
+    || !unknownLipsanonReference.body.includes('<meta property="og:title" content="Chess Tactics">')
+    || unknownLipsanonReference.body.includes('Your King gains Eutactic')
   ) {
-    throw new Error(`Unknown relic ids should retain the generic unfurl: ${unknownRelicReference.statusCode}`);
+    throw new Error(`Unknown lipsanon ids should retain the generic unfurl: ${unknownLipsanonReference.statusCode}`);
   }
   const officialThumb = await get('/assets/level-thumb/off-l-test.png', undefined, 5000);
   if (
@@ -4048,7 +4048,7 @@ async function main() {
     { id: 'rpp', offerId: 'opening-2-rpp', pieces: ['rook', 'pawn', 'pawn'], value: 7, cost: 9, cardType: 'concinnous', effectSeed: 1706, cacochymicPieceIndex: null, effectTargetIndex: 0 },
   ];
   const activeRunDocument = {
-    formatVersion: 15,
+    formatVersion: 16,
     id: 'run-smoke',
     seed: 17,
     ataraxiaTier: 1,
@@ -4066,9 +4066,9 @@ async function main() {
     army: activeRunStartingArmy,
     cards: [],
     pestiferousLosses: [],
-    relics: [],
-    seenRelics: [],
-    conflictPaidRelics: {},
+    lipsana: [],
+    seenLipsana: [],
+    conflictPaidLipsana: {},
     nextArmyUnitSequence: 1,
     nextArmyUnitNumberByType: activeRunNumberState,
     nextCardSequence: 1,
@@ -4081,20 +4081,20 @@ async function main() {
       victoryGoldTenths: 0,
       cardOffers: activeRunOffers,
       purchasedCardOfferIds: [],
-      paidRelicOffer: null,
-      paidRelicBought: false,
+      paidLipsanonOffer: null,
+      paidLipsanonBought: false,
       soldUnits: [],
       entrySnapshot: {
         goldTenths: 80,
         army: activeRunStartingArmy,
         cards: [],
-        relics: [],
-        seenRelics: [],
-        conflictPaidRelics: {},
+        lipsana: [],
+        seenLipsana: [],
+        conflictPaidLipsana: {},
         nextArmyUnitSequence: 1,
         nextArmyUnitNumberByType: activeRunNumberState,
         nextCardSequence: 1,
-        paidRelicBought: false,
+        paidLipsanonBought: false,
       },
     },
   };
@@ -4349,20 +4349,20 @@ async function main() {
         cacochymicPieceIndex: null,
       }],
       purchasedCardOfferIds: [],
-      paidRelicOffer: null,
-      paidRelicBought: false,
+      paidLipsanonOffer: null,
+      paidLipsanonBought: false,
       soldUnits: [],
       entrySnapshot: {
         goldTenths: activeRunDocument.goldTenths,
         army: activeRunDocument.army,
         cards: activeRunDocument.cards,
-        relics: [],
-        seenRelics: [],
-        conflictPaidRelics: {},
+        lipsana: [],
+        seenLipsana: [],
+        conflictPaidLipsana: {},
         nextArmyUnitSequence: activeRunDocument.nextArmyUnitSequence,
         nextArmyUnitNumberByType: activeRunNumberState,
         nextCardSequence: activeRunDocument.nextCardSequence,
-        paidRelicBought: false,
+        paidLipsanonBought: false,
       },
     },
   };
@@ -4530,87 +4530,87 @@ async function main() {
     throw new Error(`A refused craft must write nothing: ${craftedRunAfterRefusals.statusCode} ${craftedRunAfterRefusals.body}`);
   }
 
-  // --- Run relic statistics: owner-scoped, append-only, retry-idempotent ----
-  const anonymousRelicStatistics = await get('/api/run-relic-statistics');
-  if (anonymousRelicStatistics.statusCode !== 401) {
-    throw new Error(`Anonymous relic statistics should require sign-in: ${anonymousRelicStatistics.statusCode}`);
+  // --- Run lipsanon statistics: owner-scoped, append-only, retry-idempotent ----
+  const anonymousLipsanonStatistics = await get('/api/run-lipsanon-statistics');
+  if (anonymousLipsanonStatistics.statusCode !== 401) {
+    throw new Error(`Anonymous lipsanon statistics should require sign-in: ${anonymousLipsanonStatistics.statusCode}`);
   }
-  const emptyRelicStatistics = await get(
-    '/api/run-relic-statistics',
+  const emptyLipsanonStatistics = await get(
+    '/api/run-lipsanon-statistics',
     { cookie: '__Host-chess-tactics-access=abc' },
   );
   if (
-    emptyRelicStatistics.statusCode !== 200
-    || Object.keys(JSON.parse(emptyRelicStatistics.body).statistics || {}).length !== 0
+    emptyLipsanonStatistics.statusCode !== 200
+    || Object.keys(JSON.parse(emptyLipsanonStatistics.body).statistics || {}).length !== 0
   ) {
-    throw new Error(`Relic statistics should begin empty: ${emptyRelicStatistics.statusCode} ${emptyRelicStatistics.body}`);
+    throw new Error(`Lipsanon statistics should begin empty: ${emptyLipsanonStatistics.statusCode} ${emptyLipsanonStatistics.body}`);
   }
-  const relicEventsBody = JSON.stringify({
+  const lipsanonEventsBody = JSON.stringify({
     events: [
-      { eventId: 'pick:run-smoke:conscription-notice', relicId: 'conscription-notice', kind: 'picked' },
-      { eventId: 'battle-win:run-smoke:0', relicId: 'conscription-notice', kind: 'battle-win' },
-      { eventId: 'battle-win:run-smoke:0', relicId: 'training-linens', kind: 'battle-win' },
+      { eventId: 'pick:run-smoke:conscription-notice', lipsanonId: 'conscription-notice', kind: 'picked' },
+      { eventId: 'battle-win:run-smoke:0', lipsanonId: 'conscription-notice', kind: 'battle-win' },
+      { eventId: 'battle-win:run-smoke:0', lipsanonId: 'training-linens', kind: 'battle-win' },
     ],
   });
-  const savedRelicEvents = await request(
+  const savedLipsanonEvents = await request(
     'POST',
-    '/api/run-relic-stat-events',
+    '/api/run-lipsanon-stat-events',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    relicEventsBody,
+    lipsanonEventsBody,
   );
-  const retriedRelicEvents = await request(
+  const retriedLipsanonEvents = await request(
     'POST',
-    '/api/run-relic-stat-events',
+    '/api/run-lipsanon-stat-events',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    relicEventsBody,
+    lipsanonEventsBody,
   );
-  const savedRelicEventsBody = JSON.parse(savedRelicEvents.body);
-  const retriedRelicEventsBody = JSON.parse(retriedRelicEvents.body);
+  const savedLipsanonEventsBody = JSON.parse(savedLipsanonEvents.body);
+  const retriedLipsanonEventsBody = JSON.parse(retriedLipsanonEvents.body);
   if (
-    savedRelicEvents.statusCode !== 200
-    || savedRelicEventsBody.inserted !== 3
-    || retriedRelicEvents.statusCode !== 200
-    || retriedRelicEventsBody.inserted !== 0
+    savedLipsanonEvents.statusCode !== 200
+    || savedLipsanonEventsBody.inserted !== 3
+    || retriedLipsanonEvents.statusCode !== 200
+    || retriedLipsanonEventsBody.inserted !== 0
   ) {
-    throw new Error(`Relic event retries were not idempotent: ${savedRelicEvents.statusCode} ${savedRelicEvents.body} / ${retriedRelicEvents.statusCode} ${retriedRelicEvents.body}`);
+    throw new Error(`Lipsanon event retries were not idempotent: ${savedLipsanonEvents.statusCode} ${savedLipsanonEvents.body} / ${retriedLipsanonEvents.statusCode} ${retriedLipsanonEvents.body}`);
   }
-  const loadedRelicStatistics = await get(
-    '/api/run-relic-statistics',
+  const loadedLipsanonStatistics = await get(
+    '/api/run-lipsanon-statistics',
     { cookie: '__Host-chess-tactics-access=abc' },
   );
-  const loadedRelicStatisticsBody = JSON.parse(loadedRelicStatistics.body);
+  const loadedLipsanonStatisticsBody = JSON.parse(loadedLipsanonStatistics.body);
   if (
-    loadedRelicStatistics.statusCode !== 200
-    || loadedRelicStatisticsBody.statistics['conscription-notice']?.timesPicked !== 1
-    || loadedRelicStatisticsBody.statistics['conscription-notice']?.battlesWonWhileHeld !== 1
-    || loadedRelicStatisticsBody.statistics['training-linens']?.timesPicked !== 0
-    || loadedRelicStatisticsBody.statistics['training-linens']?.battlesWonWhileHeld !== 1
+    loadedLipsanonStatistics.statusCode !== 200
+    || loadedLipsanonStatisticsBody.statistics['conscription-notice']?.timesPicked !== 1
+    || loadedLipsanonStatisticsBody.statistics['conscription-notice']?.battlesWonWhileHeld !== 1
+    || loadedLipsanonStatisticsBody.statistics['training-linens']?.timesPicked !== 0
+    || loadedLipsanonStatisticsBody.statistics['training-linens']?.battlesWonWhileHeld !== 1
   ) {
-    throw new Error(`Relic statistics did not aggregate exact facts: ${loadedRelicStatistics.statusCode} ${loadedRelicStatistics.body}`);
+    throw new Error(`Lipsanon statistics did not aggregate exact facts: ${loadedLipsanonStatistics.statusCode} ${loadedLipsanonStatistics.body}`);
   }
-  const rivalRelicStatistics = await get(
-    '/api/run-relic-statistics',
+  const rivalLipsanonStatistics = await get(
+    '/api/run-lipsanon-statistics',
     { cookie: '__Host-chess-tactics-access=rival' },
   );
   if (
-    rivalRelicStatistics.statusCode !== 200
-    || Object.keys(JSON.parse(rivalRelicStatistics.body).statistics || {}).length !== 0
+    rivalLipsanonStatistics.statusCode !== 200
+    || Object.keys(JSON.parse(rivalLipsanonStatistics.body).statistics || {}).length !== 0
   ) {
-    throw new Error(`Relic statistics should be owner-scoped: ${rivalRelicStatistics.statusCode} ${rivalRelicStatistics.body}`);
+    throw new Error(`Lipsanon statistics should be owner-scoped: ${rivalLipsanonStatistics.statusCode} ${rivalLipsanonStatistics.body}`);
   }
-  const invalidRelicEvents = await request(
+  const invalidLipsanonEvents = await request(
     'POST',
-    '/api/run-relic-stat-events',
+    '/api/run-lipsanon-stat-events',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
-      events: [{ eventId: 'pick:run-smoke:not-a-relic', relicId: 'not-a-relic', kind: 'picked' }],
+      events: [{ eventId: 'pick:run-smoke:not-a-lipsanon', lipsanonId: 'not-a-lipsanon', kind: 'picked' }],
     }),
   );
   if (
-    invalidRelicEvents.statusCode !== 400
-    || JSON.parse(invalidRelicEvents.body).error !== 'invalid_run_relic_stat_events'
+    invalidLipsanonEvents.statusCode !== 400
+    || JSON.parse(invalidLipsanonEvents.body).error !== 'invalid_lipsanon_stat_events'
   ) {
-    throw new Error(`Unknown relic statistics must fail closed: ${invalidRelicEvents.statusCode} ${invalidRelicEvents.body}`);
+    throw new Error(`Unknown lipsanon statistics must fail closed: ${invalidLipsanonEvents.statusCode} ${invalidLipsanonEvents.body}`);
   }
 
   // A migrated v13 URL is translated client-side from ?map=<id> to the normal

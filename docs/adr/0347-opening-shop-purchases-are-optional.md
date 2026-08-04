@@ -43,7 +43,7 @@ post-Battle Shops.**
   identifies the starting inventory/economy presentation. It does not authorize
   a different shopping rule.
 - Opening inventory policy remains unchanged: three distinct-value standard
-  offers from 1–8, no preceding Victory reward, and no Loot, paid-relic, or
+  offers from 1–8, no preceding Victory reward, and no Loot, paid-lipsanon, or
   Ataraxia offer effects. Those are deal construction and Run-start context,
   not purchase requirements.
 - No Run format change is required because zero purchases is already represented

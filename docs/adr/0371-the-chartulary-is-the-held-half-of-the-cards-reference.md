@@ -13,7 +13,7 @@ refines:
 ## Context
 
 The Strategikon carries two registers that read the live Run — the Martial Prosopography
-(the current army) and the Lipsanotheca (held relics) — beside the Enchiridion, which reads
+(the current army) and the Lipsanotheca (held lipsana) — beside the Enchiridion, which reads
 the game's fixed content. Cards had only the fixed half. `RunDocument.cards` has recorded
 every purchase since the Run format gained it, and nothing in the game displayed it: a player
 could see every card the deck *can* deal and no surface at all for the cards they *bought*.
@@ -69,7 +69,7 @@ general rather than particular to it:
 ## Consequences
 
 - Every phase of a Run can answer "what did I buy, and what is left of it" from the same
-  Controls mark that already opens the army and the relics.
+  Controls mark that already opens the army and the lipsana.
 - The card gallery has one implementation of its filter row and its grouping, so a change to
   either lands on both the reference and the register.
 - Cards are permanent once bought: the Chartulary keeps a card whose every unit has been sold

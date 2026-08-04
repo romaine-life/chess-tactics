@@ -425,10 +425,10 @@ reference frame uses the semantic edge-attached content variant, so that frame
 and its drawn scroll owner meet Controls while their own subordinate content
 retains internal spacing. Its entry is the divider-safe, frameless open-codex
 art control aligned to the Controls content boundary by ADR-0250, with
-state-specific hover/focus information. Relic references use the shared
+state-specific hover/focus information. Lipsanon references use the shared
 dual-view browser from ADR-0254: a top-of-column Rows/Grouped tab switches
 between corrected named rows and one containing inner frame around an unframed
-icon grid. Relic entries do not open tooltips; both views select the same
+icon grid. Lipsanon entries do not open tooltips; both views select the same
 content-sized record as the sole visible description authority. In the
 main-menu host, the two canonical rail anchors remain fixed while Enchiridion
 content consumes the remaining visible canvas; the ordinary action-column width

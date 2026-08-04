@@ -5,7 +5,7 @@ import {
   RunArmyWorkspace,
   type RunArmyFilters,
 } from './RunArmyWorkspace';
-import { EnchiridionReference, EnchiridionSectionRail, RelicCodex } from './Enchiridion';
+import { EnchiridionReference, EnchiridionSectionRail, LipsanaCodex } from './Enchiridion';
 import { HeldCardCodex } from './HeldCardCodex';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
 import { InnerChromeBox, ShellWorkspace } from './shared/ChromeBox';
@@ -112,7 +112,7 @@ export function Strategikon({
           />
           <ApparatusRailTab
             label="Lipsanotheca"
-            title="The Lipsanotheca — Held Relics"
+            title="The Lipsanotheca — Held Lipsana"
             to={href('lipsanotheca')}
             index={3}
             active={section === 'lipsanotheca'}
@@ -155,7 +155,7 @@ export function Strategikon({
               <EnchiridionReference
                 section={reference}
                 framed={false}
-                selectedRelicId={null}
+                selectedLipsanonId={null}
                 selectedCardId={null}
                 selectedCardTypeId={null}
               />
@@ -185,9 +185,9 @@ export function Strategikon({
             <UnavailableRunReference title="The Chartulary" copy="Cards bought during a Run appear here." />
           )
         ) : run ? (
-          <RelicCodex relicIds={run.relics} title="The Lipsanotheca" showStatistics={false} framed={false} />
+          <LipsanaCodex lipsanonIds={run.lipsana} title="The Lipsanotheca" showStatistics={false} framed={false} />
         ) : (
-          <UnavailableRunReference title="The Lipsanotheca" copy="Held relics appear here during a Run." />
+          <UnavailableRunReference title="The Lipsanotheca" copy="Held lipsana appear here during a Run." />
         )}
       </StrategikonContentSceneSlot>
     </ShellWorkspace>

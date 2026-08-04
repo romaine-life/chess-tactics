@@ -26,7 +26,7 @@ import { installedUiMedia } from './installedUiMedia';
 import { InnerChromeBox, ShellControlsPanel } from './shared/ChromeBox';
 import { useAuthSession } from '../net/authSession';
 import { AdminControls } from './AdminControls';
-import { RUN_RELIC_BY_ID } from '../run/model';
+import { LIPSANON_BY_ID } from '../run/model';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 
 const TYPE_LABEL = PIECE_LABEL;
@@ -319,7 +319,7 @@ export function SkirmishHud({
   const strategikonLabel = strategikonOpen ? 'Return to Battle' : 'Open Strategikon';
   const strategikonTitle = strategikonOpen
     ? 'Return to Battle — close Strategikon without leaving this fight.'
-    : 'Strategikon — inspect battle references, the current army, and held cards and relics.';
+    : 'Strategikon — inspect battle references, the current army, and held cards and lipsana.';
   const strategikonToggle = strategikonHref ? (
     <NavButton
       data-testid="strategikon-toggle"
@@ -417,7 +417,7 @@ export function SkirmishHud({
                   cashOutPromotion();
                 }}
                 aria-label="Take 2 gold and permanently remove this Pawn"
-                title={`${RUN_RELIC_BY_ID['mercenary-boat'].name}: take 2 gold; this Pawn leaves the army permanently.`}
+                title={`${LIPSANON_BY_ID['mercenary-boat'].name}: take 2 gold; this Pawn leaves the army permanently.`}
               >
                 <span aria-hidden="true">¤</span>
                 <span>Take 2 gold</span>

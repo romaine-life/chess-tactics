@@ -36,7 +36,7 @@ Games end a fight on a victory screen. The Run already has one, for the whole Wa
   phase of its own with its own workspace and its own artwork, not an overlay: the fight is
   finished, so the board behind it is no longer the thing being looked at.
 - `closeBattle(run, report)` performs that transition and captures, on `run.aftermath`, what
-  nothing else keeps: the gold the Battle awarded (and the part of it a relic added), the turn
+  nothing else keeps: the gold the Battle awarded (and the part of it a lipsanon added), the turn
   count, the wall-clock elapsed, the surviving unit ids, and the units that fell.
 - Wall-clock elapsed is measured from `RunBattleRuntime.startedAtMs`, recorded by `beginBattle`
   and re-recorded by `restartBattle` — a retry is a fresh Battle, not a continuation. Storing
@@ -65,13 +65,15 @@ to move.
 
 ## Consequences
 
-- Run format 15. In-progress Runs are unsupported; per the repo's standing policy the owner's
-  active Run is disposable test state.
+- Run format 16, landing on top of ADR-0376's 15. In-progress Runs are unsupported; per the
+  repo's standing policy the owner's active Run is disposable test state. ADR-0376 moved the
+  model to 15 but left `validateActiveRunBody` pinned at 14, so every format-15 active-Run
+  write was refused; the version is corrected here rather than left broken behind the bump.
 - Anything wanting to report more about a Battle later — material traded, a grade, a longest
   streak — now has a screen to put it on and a document field to carry it, instead of needing
   the board still mounted.
 - Two screens now sit between a won Battle and the next one when a Conflict closes: the
   aftermath, then Bona Vacantia, then the Shop. That order is deliberate — the Battle is
-  reported, then its relic is chosen, then the money is spent.
+  reported, then its lipsanon is chosen, then the money is spent.
 - `openShop` accepts both `battle` and `aftermath` as its entry phase. The Battle entry is what
   the final Battle and the crafter's fast-forward use; the aftermath entry is the played path.

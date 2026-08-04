@@ -27,13 +27,13 @@ import {
   ATARAXIA_BY_TIER,
   CACOCHYMIC_DISPLAY_NAME,
   GOLD_SCALE,
-  RUN_RELIC_BY_ID,
+  LIPSANON_BY_ID,
   buyCard,
-  buyPaidRelic,
+  buyPaidLipsanon,
   canLeaveShop,
   cashOutPawn,
   closeBattle,
-  hasRelic,
+  hasLipsanon,
   leaveAftermath,
   leaveShop,
   markReservistDeployed,
@@ -45,9 +45,9 @@ import {
   sellArmyUnit,
   setDeploymentChoices,
   shopHasChanges,
-  takeVacantiaRelic,
+  takeVacantiaLipsanon,
   type RunDocument,
-  type RunRelicId,
+  type LipsanonId,
 } from '../run/model';
 import {
   advanceAutomaticDeployment,
@@ -64,7 +64,7 @@ import { useActiveRun } from '../run/store';
 import { SkirmishViewStoreProvider } from '../game/SkirmishViewStoreContext';
 import { runLinkTargetMismatch } from '../run/craft';
 import { useRunCraft } from './useRunCraft';
-import { RunRelicIcon, RunRelicsWorkspace } from './RunRelics';
+import { LipsanonIcon, LipsanaWorkspace } from './Lipsana';
 import { RunBonaVacantia } from './RunBonaVacantia';
 import { RunGoldAmount } from './RunResources';
 import {
@@ -92,8 +92,8 @@ import { objectBaseZIndex } from '../render/sceneDepth';
 
 type RunScreenView = RunWorkspaceView;
 
-function visibleRunRelicCount(run: RunDocument): number {
-  return run.relics.filter((relicId) => Boolean(RUN_RELIC_BY_ID[relicId])).length;
+function visibleLipsanonCount(run: RunDocument): number {
+  return run.lipsana.filter((lipsanonId) => Boolean(LIPSANON_BY_ID[lipsanonId])).length;
 }
 
 function runBattleProgress(run: RunDocument): {
@@ -175,7 +175,7 @@ function useRunAbandon(run: RunDocument): {
     if (abandoning) return;
     const confirmed = await ask({
       title: 'Abandon this Run?',
-      message: `${run.war.name} and all of its army, gold, relics, and Battle progress will be permanently removed.`,
+      message: `${run.war.name} and all of its army, gold, lipsana, and Battle progress will be permanently removed.`,
       confirmLabel: 'Abandon Run',
       cancelLabel: 'Keep Run',
       tone: 'danger',
@@ -213,7 +213,7 @@ function RunMetaControls({
   const { abandonDialog, abandoning, requestAbandon } = useRunAbandon(run);
   const shop = run.phase === 'shop' ? run.shop : null;
   const canLeave = canLeaveShop(run);
-  // Nothing inside the shop blocks Continue any more: the Conflict's relic is taken on
+  // Nothing inside the shop blocks Continue any more: the Conflict's lipsanon is taken on
   // Bona Vacantia, before the shop is even built.
   const continueHint: string | null = null;
   const primaryLabel = run.phase === 'bona-vacantia'
@@ -429,7 +429,7 @@ function DeploymentControls({
           </div>
         ) : null}
 
-        {hasRelic(run, 'surveyors-compass') ? (
+        {hasLipsanon(run, 'surveyors-compass') ? (
           <div className="skirmish-view-group run-deployment-control">
             <span className="skirmish-eyebrow">Surveyor&apos;s Compass</span>
             <p>Preview and choose the remaining formation.</p>
@@ -590,8 +590,8 @@ function useRunDeploymentPresentation({
   return {
     surfaceState: deploymentSurfaceState,
     titleBarContent: <RunTitleBarStatus run={prepared} />,
-    relicIds: prepared.relics,
-    screenClassName: `run-screen run-deployment-screen${visibleRunRelicCount(prepared) ? ' has-relics' : ''}`,
+    lipsanonIds: prepared.lipsana,
+    screenClassName: `run-screen run-deployment-screen${visibleLipsanonCount(prepared) ? ' has-lipsana' : ''}`,
     boardClassName: 'run-deployment-board',
     boardAriaLabel: `${level.name} deployment battlefield`,
     onArrivingUnitIdsChange: handleArrivingUnitIdsChange,
@@ -657,33 +657,33 @@ function useRunDeploymentPresentation({
   };
 }
 
-function relicTargetRequired(relic: RunRelicId | null): boolean {
-  return relic === 'conscription-notice';
+function lipsanonTargetRequired(lipsanon: LipsanonId | null): boolean {
+  return lipsanon === 'conscription-notice';
 }
 
-function RelicOffer({
+function LipsanonOffer({
   run,
-  relicId,
+  lipsanonId,
   action,
   actionLabel,
   disabled = false,
 }: {
   run: RunDocument;
-  relicId: RunRelicId;
+  lipsanonId: LipsanonId;
   action: (targetUnitId?: string) => void;
   actionLabel: ReactNode;
   disabled?: boolean;
 }): ReactElement {
-  const relic = RUN_RELIC_BY_ID[relicId];
+  const lipsanon = LIPSANON_BY_ID[lipsanonId];
   const [target, setTarget] = useState('');
-  const needsTarget = relicTargetRequired(relicId);
+  const needsTarget = lipsanonTargetRequired(lipsanonId);
   return (
-    <InnerChromeBox className="run-card run-relic-card">
-      <header className="run-relic-card-heading">
-        <RunRelicIcon relicId={relicId} />
-        <h3>{relic.name}</h3>
+    <InnerChromeBox className="run-card run-lipsanon-card">
+      <header className="run-lipsanon-card-heading">
+        <LipsanonIcon lipsanonId={lipsanonId} />
+        <h3>{lipsanon.name}</h3>
       </header>
-      <p>{relic.description}</p>
+      <p>{lipsanon.description}</p>
       {needsTarget ? (
         <HouseSelect
           value={target}
@@ -835,20 +835,20 @@ function ShopPanel({
         </section>
 
 
-        {shop.paidRelicOffer ? (
+        {shop.paidLipsanonOffer ? (
           <section>
             <h3>Merchant&apos;s Shopkey</h3>
-            <RelicOffer
+            <LipsanonOffer
               run={run}
-              relicId={shop.paidRelicOffer}
-              actionLabel={shop.paidRelicBought ? 'Sold out this Conflict' : (
-                <span className="run-paid-relic-price">
+              lipsanonId={shop.paidLipsanonOffer}
+              actionLabel={shop.paidLipsanonBought ? 'Sold out this Conflict' : (
+                <span className="run-paid-lipsanon-price">
                   <span>Buy</span>
                   <RunGoldAmount valueTenths={10 * GOLD_SCALE} className="run-gold-amount--button" />
                 </span>
               )}
-              disabled={shop.paidRelicBought || run.goldTenths < 10 * GOLD_SCALE}
-              action={(target) => replace(buyPaidRelic(run, target))}
+              disabled={shop.paidLipsanonBought || run.goldTenths < 10 * GOLD_SCALE}
+              action={(target) => replace(buyPaidLipsanon(run, target))}
             />
           </section>
         ) : null}
@@ -925,7 +925,7 @@ function AftermathPanel({ run }: { run: RunDocument }): ReactElement {
           <AftermathMeasure
             label="Gold won"
             detail={aftermath.bonusGoldTenths
-              ? `including ${RUN_RELIC_BY_ID['mercenarys-rifle'].name}`
+              ? `including ${LIPSANON_BY_ID['mercenarys-rifle'].name}`
               : null}
           >
             <RunGoldAmount valueTenths={aftermath.goldTenths} />
@@ -972,7 +972,7 @@ function VictoryPanel({ run }: { run: RunDocument }): ReactElement {
       <p>{run.war.description}</p>
       <p className="run-victory-summary">
         <span>{run.army.length} persistent units</span>
-        <span>{visibleRunRelicCount(run)} relics</span>
+        <span>{visibleLipsanonCount(run)} lipsana</span>
         <RunGoldAmount valueTenths={run.goldTenths} />
       </p>
       <ChromeButton unit="inner-text-button"
@@ -1014,20 +1014,20 @@ function RunBattlefieldPanel({
   // so Skirmish does not re-run its board-entry effect for an unchanged battle.
   const options = useMemo(
     () => deploymentOptions(run, baseLevel),
-    [baseLevel, run.army, run.deployment, run.relics, run.seed],
+    [baseLevel, run.army, run.deployment, run.lipsana, run.seed],
   );
   const layout = useMemo(
     () => selectedDeploymentLayout(run, options),
-    [options, run.deployment, run.relics],
+    [options, run.deployment, run.lipsana],
   );
   const battleLevel = useMemo(
     () => levelWithRunDeployment(run, baseLevel, layout),
-    [baseLevel, layout, run.army, run.relics],
+    [baseLevel, layout, run.army, run.lipsana],
   );
   const runId = run.id;
   const battleSeed = run.deployment?.seed ?? run.seed;
-  const relicIds = run.relics;
-  const canCashOutPawn = hasRelic(run, 'mercenary-boat');
+  const lipsanonIds = run.lipsana;
+  const canCashOutPawn = hasLipsanon(run, 'mercenary-boat');
 
   const transformCommittedBoard = useCallback<RunBattleTransformSink>((game, _events) => {
       let active = useActiveRun.getState().run;
@@ -1078,7 +1078,7 @@ function RunBattlefieldPanel({
     level: battleLevel,
     seed: battleSeed,
     activityId: runBattleActivityId(runId, run.battleIndex),
-    relicIds,
+    lipsanonIds,
     transformCommittedBoard,
     onVictory: (report) => {
       const latest = useActiveRun.getState().run;
@@ -1095,7 +1095,7 @@ function RunBattlefieldPanel({
           if (latest?.id === runId) replace(cashOutPawn(latest, unitId));
         }
       : undefined,
-  }), [battleLevel, battleSeed, canCashOutPawn, relicIds, replace, requestAbandon, run.battleIndex, runId, transformCommittedBoard]);
+  }), [battleLevel, battleSeed, canCashOutPawn, lipsanonIds, replace, requestAbandon, run.battleIndex, runId, transformCommittedBoard]);
 
   // Subscribe to the current document so a Paid Crossing cash-out or Reservist event
   // refreshes the hook inputs without restarting the already-live matching board.
@@ -1176,7 +1176,7 @@ export function RunScreen({
   const sellFilters = sellFilterState.scope === filterScope
     ? sellFilterState.filters
     : { ...DEFAULT_RUN_SELL_FILTERS };
-  // Army, Relics, and Sell are workspaces of the Run screen itself, so they always
+  // Army, Lipsana, and Sell are workspaces of the Run screen itself, so they always
   // address the Run root. Dropping any open Strategikon address keeps these Controls
   // live instead of navigating to a path the reference workspace still covers.
   const navigateRunView = (nextView: RunScreenView): void => {
@@ -1205,11 +1205,11 @@ export function RunScreen({
       onSell={sellUnit}
     />
   ) : null;
-  const relicsWorkspace = shellRun ? <RunRelicsWorkspace relicIds={shellRun.relics} /> : null;
+  const lipsanaWorkspace = shellRun ? <LipsanaWorkspace lipsanonIds={shellRun.lipsana} /> : null;
   const inspectionWorkspace = view === 'army'
     ? armyWorkspace
-    : view === 'relics'
-      ? relicsWorkspace
+    : view === 'lipsana'
+      ? lipsanaWorkspace
       : null;
   const shopScene = useInstalledShopScene();
   const sellWorkspace = shellRun ? (
@@ -1340,11 +1340,11 @@ export function RunScreen({
           outgoing or incoming battlefield's camera/overlay store during director overlap. */}
       <SkirmishViewStoreProvider>
         <SkirmishShell
-          className={`run-screen${shellRun && visibleRunRelicCount(shellRun) ? ' has-relics' : ''}`}
+          className={`run-screen${shellRun && visibleLipsanonCount(shellRun) ? ' has-lipsana' : ''}`}
           testId="run-screen"
           titleBarContent={shellRun ? <RunTitleBarStatus run={shellRun} /> : null}
-          relicIds={shellRun ? shellRun.relics : []}
-          shellWorkspaceCoversRelics={strategikonOpen || Boolean(inspectionWorkspace)}
+          lipsanonIds={shellRun ? shellRun.lipsana : []}
+          shellWorkspaceCoversLipsana={strategikonOpen || Boolean(inspectionWorkspace)}
           controlsContent={shellRun
             ? <RunMetaControls run={shellRun} view={view} onNavigate={navigateRunView} showAbandon={shellRun.phase !== 'victory'} />
             : null}

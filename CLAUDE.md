@@ -285,7 +285,7 @@ curl -X POST <url>/api/active-run/craft -H 'content-type: application/json' -d '
   "phase": "shop", "battle": 4, "gold": 33.5,
   "army": [{ "type": "rook", "abilities": ["agminate"] }, "knight", "pawn"],
   "offers": [{ "pieces": ["queen"] }, { "pieces": ["pawn","pawn"], "type": "concinnous" }],
-  "loot": ["fair-scales"], "relics": ["quartermasters-ledger"] }'
+  "loot": ["fair-scales"], "lipsana": ["quartermasters-ledger"] }'
 ```
 
 Same fields as the address grammar below, plus what an address cannot carry: units as objects
@@ -311,7 +311,7 @@ hand-authored one-off leaves a durable link behind:
 ```
 /run?craft=shop&battle=3&gold=25&army=knight,rook&offers=queen,pawn+pawn:concinnous,rook:legatine
 /run?craft=deployment&battle=2&army=rook,rook,bishop,pawn&gold=12
-/run?craft=battle&battle=4&relics=fair-scales
+/run?craft=battle&battle=4&lipsana=fair-scales
 /run?craft=aftermath&battle=3&turns=21&seconds=402&fallen=2
 /run?craft=victory&gold=40
 ```
@@ -321,7 +321,7 @@ hand-authored one-off leaves a durable link behind:
   Battle N, so `battle=1` is the opening Shop (which takes no overrides — the Run contract
   pins its offers, army and 8 gold).
 - `gold=25` (decimals fine), `army=knight,rook` (the exact non-King army; `add=queen`
-  appends instead), `relics=<id,id>`.
+  appends instead), `lipsana=<id,id>`.
 - Shop only: `offers=<card>[,<card>]` where a card is its pieces joined by `+` with an
   optional `:legatine|:concinnous|:pestiferous|:hieratic`; `loot=<id,id>`; `paid=<id>`. Pieces accept
   names, chess letters, or a bare deck id (`pawn,pawn,knight` = `p,p,n` = `ppk`).
@@ -330,7 +330,7 @@ hand-authored one-off leaves a durable link behind:
   Battle just won; the FINAL Battle has no aftermath (its report is the War victory
   screen), so craft `victory` for that one.
 - `war=<id>` picks the War (default: the first Run-eligible official one), `seed=<n>` and
-  `tier=0|1` fix the roll. `view=army|relics|sell` still applies and survives the craft.
+  `tier=0|1` fix the roll. `view=army|lipsana|sell` still applies and survives the craft.
 - `cards=<card>[,<card>]` — the cards the Run already HOLDS, written exactly like `offers`.
 - Units carrying abilities cannot be written as an address — use the JSON spec above, which has
   no such limit because the link is an id either way.
@@ -432,6 +432,15 @@ everyone's, ahead of the review that was supposed to gate it.
   is ahead of the database answers `503 schema_migration_required` with the exact
   `missing_versions`. **That is the expected state of your worktree while the PR is open** —
   it is the system working, not a blocker to route around.
+- **The other direction has exactly one fix: `git merge origin/main`.** When someone else's
+  migration lands on `main`, the shared database carries a version your branch has never heard
+  of, and every `/api/*` call answers `503 schema_migration_history_invalid` with
+  `unexpected_versions: [N]`. In the browser that surfaces as **"Live assets unavailable"** or
+  **"Required scene data or artwork could not be reached"** — which look like a dead server and
+  are not. Confirm with `curl <url>/api/asset-catalog`, then merge `origin/main`; the
+  Vite-spawned backend restarts itself and serves again. **Never** reach for the database:
+  do not delete the row, do not add a matching stub migration, do not renumber yours to sit
+  above it. The branch is behind, and the branch is what moves.
 - Verify the migration through the tests that need no database:
   `cd backend && npm run test:live-media` covers migration integrity, append-only history, and
   execution planning.

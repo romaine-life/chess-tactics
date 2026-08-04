@@ -4,7 +4,7 @@ import { deleteActiveRun, loadActiveRun, saveActiveRun } from '../net/activeRun'
 import { HttpError } from '../net/http';
 import { RUN_FORMAT_VERSION, normalizeRunDocument, type RunDocument } from './model';
 import { recordAtaraxiaCompletion } from './progression';
-import { recordRunRelicStatEvents, relicStatEventsForRunTransition } from './relicStatistics';
+import { recordLipsanonStatEvents, lipsanonStatEventsForRunTransition } from './lipsanonStatistics';
 
 const LOCAL_RUN_KEY = 'chess-tactics:active-run:v1';
 
@@ -194,7 +194,7 @@ export const useActiveRun = create<ActiveRunState>((set, get) => ({
   },
 
   replace: (run) => {
-    recordRunRelicStatEvents(relicStatEventsForRunTransition(get().run, run));
+    recordLipsanonStatEvents(lipsanonStatEventsForRunTransition(get().run, run));
     recordCompletedRun(run);
     writeLocalRun(run);
     set({ run, persistenceError: null });
@@ -206,7 +206,7 @@ export const useActiveRun = create<ActiveRunState>((set, get) => ({
   // saving it back — a PUT here would race the craft's own write and could only lose to it. Any
   // browser/account adoption conflict is settled by the craft too: this IS the answer.
   adoptCraftedRun: (run, revision) => {
-    recordRunRelicStatEvents(relicStatEventsForRunTransition(get().run, run));
+    recordLipsanonStatEvents(lipsanonStatEventsForRunTransition(get().run, run));
     recordCompletedRun(run);
     writeLocalRun(run);
     set({

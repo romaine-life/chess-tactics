@@ -18,11 +18,11 @@ window.AmbienceSim = window.AmbienceSim || { effects: {}, presets: {} };
 			config: { hue: 8, sat: 0.82, lmin: 0.10, lmax: 0.86, pulse_period: 185, pulse_amp: 0.86, glow: 0.88, ember_rate: 5 },
 		},
 		{
-			key: 'ancient-amber', label: 'ancient amber', note: 'slow relic pulse',
+			key: 'ancient-amber', label: 'ancient amber', note: 'slow lipsanon pulse',
 			config: { hue: 40, sat: 0.58, lmin: 0.12, lmax: 0.82, pulse_period: 245, pulse_amp: 0.64, glow: 0.64, ember_rate: 3 },
 		},
 		{
-			key: 'dormant', label: 'dormant', note: 'dim gray relic',
+			key: 'dormant', label: 'dormant', note: 'dim gray lipsanon',
 			config: { hue: 218, sat: 0.10, lmin: 0.08, lmax: 0.55, pulse_period: 330, pulse_amp: 0.34, glow: 0.34, ember_rate: 1 },
 		},
 	];

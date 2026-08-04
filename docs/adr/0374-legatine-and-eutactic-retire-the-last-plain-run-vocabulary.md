@@ -5,7 +5,7 @@ deciders: owner (Nelson) + Claude
 partially_supersedes:
   - "[ADR-0309](0309-concinnous-names-the-white-positioned-card-qualifier.md)'s Positioned state name"
   - "[ADR-0329](0329-concinnous-and-tactical-use-distinct-frames-and-one-shared-coin.md)'s restored Tactical qualifier name"
-  - "[ADR-0274](0274-relics-grant-unit-owned-deployment-abilities.md)'s deferral of renaming Discipline and Positioned"
+  - "[ADR-0274](0274-lipsana-grant-unit-owned-deployment-abilities.md)'s deferral of renaming Discipline and Positioned"
   - "[ADR-0339](0339-run-card-properties-and-unit-states-use-paired-icons.md)'s Tactical/Discipline pair name"
 extends:
   - "[ADR-0341](0341-cacochymic-replaces-plagued-as-the-pestiferous-unit-state-name.md)"
@@ -107,7 +107,7 @@ exception.
 - [Game concept](../game-concept.md)
 - [Persistence](../persistence.md)
 - [Runtime asset contract](../runtime-asset-contract.md)
-- [ADR-0274](0274-relics-grant-unit-owned-deployment-abilities.md)
+- [ADR-0274](0274-lipsana-grant-unit-owned-deployment-abilities.md)
 - [ADR-0309](0309-concinnous-names-the-white-positioned-card-qualifier.md)
 - [ADR-0329](0329-concinnous-and-tactical-use-distinct-frames-and-one-shared-coin.md)
 - [ADR-0339](0339-run-card-properties-and-unit-states-use-paired-icons.md)

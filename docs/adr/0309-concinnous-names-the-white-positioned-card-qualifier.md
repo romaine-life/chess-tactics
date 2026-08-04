@@ -48,7 +48,7 @@ exactly one contained unit to become Positioned upon acquisition.
   two-gold value.
 - Concinnous records the rule that authored the enhancement. A card does not
   become Concinnous merely because a contained unit gains Positioned from a
-  relic or another external source.
+  lipsanon or another external source.
 - Concinnous is this specific one-unit Positioned qualifier, not an umbrella
   name for arbitrary positive modifiers. Future card-authored enhancements may
   receive their own causal qualifiers.
@@ -82,7 +82,7 @@ exactly one contained unit to become Positioned upon acquisition.
 
 - [Game concept](../game-concept.md)
 - [ADR-0272](0272-card-types-author-effects-and-may-conceal-unit-targets.md)
-- [ADR-0274](0274-relics-grant-unit-owned-deployment-abilities.md)
+- [ADR-0274](0274-lipsana-grant-unit-owned-deployment-abilities.md)
 - [ADR-0276](0276-run-type-lines-declare-primary-families-and-affected-qualifiers.md)
 - [ADR-0283](0283-run-card-face-is-one-shared-live-runtime-component.md)
 - [ADR-0285](0285-run-card-type-lines-use-one-optically-centered-baseline.md)

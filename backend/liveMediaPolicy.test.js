@@ -20,8 +20,8 @@ const {
   LEVEL_EDITOR_BRUSH_ICON_PROOF_RENDERER,
   LEVEL_EDITOR_BRUSH_ICON_PROOF_SCHEMA,
   LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SCHEMA,
-  RUN_RELIC_ICON_COMPONENT,
-  RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
+  LIPSANON_ICON_COMPONENT,
+  LIPSANON_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
   RUN_CARD_COST_COIN_COMPONENT,
   RUN_RESOURCE_ICON_COMPONENT,
   RUN_SHOP_WRAP_COMPONENT,
@@ -48,8 +48,8 @@ const {
   predrawnBoardOwnerProofIssue,
   predrawnBoardSlotSlug,
   preservesNativeEvidenceForUpload,
-  runRelicIconMediaIssue,
-  runRelicIconSlotId,
+  runLipsanonIconMediaIssue,
+  runLipsanonIconSlotId,
   runCardCostCoinMediaIssue,
   runCardCostCoinSlot,
   runResourceIconMediaIssue,
@@ -157,10 +157,10 @@ test('same-dimension replacement bytes clear stale native evidence', () => {
   }), true);
 });
 
-test('only the eight exact ADR-0332 resized Run relic outputs pass the production evidence gate', () => {
+test('only the eight exact ADR-0332 resized Run lipsanon outputs pass the production evidence gate', () => {
   const outputSha256 = '928f9ceb7a5612ff0d2216b70422b972b04492a4c9ed277e5122721b390c52d0';
   const evidence = {
-    schema: RUN_RELIC_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
+    schema: LIPSANON_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
     decision: 'ADR-0332',
     status: 'owner-approved-production-exception',
     native1x: false,
@@ -175,7 +175,7 @@ test('only the eight exact ADR-0332 resized Run relic outputs pass the productio
     transform: 'chroma-key-crop-nearest-neighbor-fit-52-alpha-threshold-96',
   };
   const approved = raster({
-    slot: 'ui/run/relics/congressional-approval.png',
+    slot: 'ui/run/lipsana/congressional-approval.png',
     blob_sha256: outputSha256,
     width: 64,
     height: 64,
@@ -190,8 +190,8 @@ test('only the eight exact ADR-0332 resized Run relic outputs pass the productio
   }), true);
   assert.match(nativeMediaEvidenceIssue({
     ...approved,
-    slot: 'ui/run/relics/conscription-notice.png',
-  }), /restricted to its eight Run relic slots/);
+    slot: 'ui/run/lipsana/conscription-notice.png',
+  }), /restricted to its eight Run lipsanon slots/);
   assert.match(nativeMediaEvidenceIssue({
     ...approved,
     blob_sha256: replacementSha,
@@ -201,16 +201,16 @@ test('only the eight exact ADR-0332 resized Run relic outputs pass the productio
     native_evidence: { ...evidence, transform: 'lanczos' },
   }), /exact transform/);
   assert.match(nativeMediaEvidenceIssue(raster({
-    slot: 'ui/run/relics/congressional-approval.png',
+    slot: 'ui/run/lipsana/congressional-approval.png',
     width: 64,
     height: 64,
     native_evidence: { native1x: false, spatialResampling: true },
   })), /native1x must be true/);
 });
 
-function runRelicIcon(overrides = {}) {
+function runLipsanonIcon(overrides = {}) {
   return {
-    slot: 'ui/run/relics/conscription-notice.png',
+    slot: 'ui/run/lipsana/conscription-notice.png',
     domain: 'ui-kit',
     role: 'icon',
     media_type: 'image/png',
@@ -218,12 +218,12 @@ function runRelicIcon(overrides = {}) {
     height: 64,
     metadata: {
       runtime: {
-        component: RUN_RELIC_ICON_COMPONENT,
+        component: LIPSANON_ICON_COMPONENT,
         variant: 'conscription-notice',
         frameWidth: 64,
         frameHeight: 64,
         frameCount: 1,
-        nativeRole: RUN_RELIC_ICON_COMPONENT,
+        nativeRole: LIPSANON_ICON_COMPONENT,
         altText: '',
       },
     },
@@ -304,17 +304,17 @@ test('Run shop wrap windows and slot openings must stay inside the painted canva
   );
 });
 
-test('Run relic icon projection binds one native reviewed icon to its exact relic id', () => {
-  const row = runRelicIcon();
-  assert.equal(runRelicIconSlotId(row.slot), 'conscription-notice');
-  assert.equal(runRelicIconMediaIssue(row), null);
-  assert.match(runRelicIconMediaIssue(runRelicIcon({ domain: 'review-media' })), /ui-kit domain/);
-  assert.match(runRelicIconMediaIssue(runRelicIcon({ role: 'media' })), /icon role/);
-  assert.match(runRelicIconMediaIssue(runRelicIcon({ width: 63 })), /64x64/);
-  assert.match(runRelicIconMediaIssue(runRelicIcon({
+test('Run lipsanon icon projection binds one native reviewed icon to its exact lipsanon id', () => {
+  const row = runLipsanonIcon();
+  assert.equal(runLipsanonIconSlotId(row.slot), 'conscription-notice');
+  assert.equal(runLipsanonIconMediaIssue(row), null);
+  assert.match(runLipsanonIconMediaIssue(runLipsanonIcon({ domain: 'review-media' })), /ui-kit domain/);
+  assert.match(runLipsanonIconMediaIssue(runLipsanonIcon({ role: 'media' })), /icon role/);
+  assert.match(runLipsanonIconMediaIssue(runLipsanonIcon({ width: 63 })), /64x64/);
+  assert.match(runLipsanonIconMediaIssue(runLipsanonIcon({
     metadata: { runtime: { ...row.metadata.runtime, variant: 'royal-decree' } },
   })), /variant/);
-  assert.match(runRelicIconMediaIssue(runRelicIcon({
+  assert.match(runLipsanonIconMediaIssue(runLipsanonIcon({
     metadata: { runtime: { ...row.metadata.runtime, altText: 'duplicated accessible text' } },
   })), /altText/);
 });
@@ -994,7 +994,7 @@ test('Ataraxia rung review proof pins the reviewed surface, bytes, and whole set
     null,
   );
   // A surface that does not wear the mark cannot stand in for one that does.
-  const elsewhere = 'http://localhost:5191/enchiridion/relics';
+  const elsewhere = 'http://localhost:5191/enchiridion/lipsana';
   assert.match(
     ataraxiaNumeralOwnerProofIssue(row, numeralProof(row, { surfaceUrl: elsewhere }), elsewhere),
     /live Ataraxia reference rows/,

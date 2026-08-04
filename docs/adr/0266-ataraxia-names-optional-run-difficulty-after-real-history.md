@@ -13,13 +13,13 @@ partially_superseded_by:
 
 Run needs difficulty beyond its baseline, but a generic rank such as Hard or
 Ascension would miss the game's antiquarian, over-intellectual register. The
-anti-story already draws scene and relic pressure from real history without
+anti-story already draws scene and lipsanon pressure from real history without
 turning those references into an explained fictional plot.
 
 ## Decision Drivers
 
 - Difficulty naming should belong beside Strategikon, Enchiridion, and the
-  historical residue carried by scenes and relics.
+  historical residue carried by scenes and lipsana.
 - Added difficulty should feel like another condition to observe, not a heroic
   ladder that promises mastery over suffering.
 - Real history may deepen the anti-story without identifying a protagonist,

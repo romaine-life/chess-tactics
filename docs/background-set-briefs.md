@@ -330,7 +330,7 @@ problem as well as they could.
 ### Set 06 Candidate: Spolia
 
 **Status:** Candidate for generated set. Backdrop candidates generated for the
-Run's conflict-opening relic page (the screen that hands the player a relic at
+Run's conflict-opening lipsanon page (the screen that hands the player a lipsanon at
 the head of each Conflict).
 
 **Hidden scenario:** goods have changed hands without anyone handing them over.
@@ -352,11 +352,11 @@ scene that says who died or why the place stopped. Nobody gives the player
 anything, and no giver appears.
 
 **Style notes:** the accepted refined pixel-art video-game background lane. This
-set must not repeat the Relics workspace's warm candlelit treasury interior —
+set must not repeat the Lipsana workspace's warm candlelit treasury interior —
 that backdrop already exists and this is a different moment. Vary
 interior/exterior, season, hour, and camera height across the panels.
 
-This set answers the acquisition question the run relics already imply in their
+This set answers the acquisition question the run lipsana already imply in their
 flavor fragments ("It was counted with the valuables. No hand claimed it." /
 "The vessels were weighed after the prayers had stopped."). It is provenance,
 not benediction.

@@ -24,7 +24,7 @@ natural place to discover playtest controls while keeping the board mounted and 
 - **Admin Controls** opens a dedicated in-HUD subview. It is not added to the normal
   five-icon HUD tab strip, so player navigation remains uncluttered.
 - The in-HUD subview exposes the complete approved control set: Free Move, Kill Unit,
-  Win Battle, Gain Gold, and Gain Relic.
+  Win Battle, Gain Gold, and Gain Lipsanon.
 - Free Move and Kill Unit authorize and arm in place, return the HUD to its ordinary Unit
   view, and leave the Battle visible for the administrator's next board click. Win Battle
   resolves against the already-mounted Battle. No route transition is involved.

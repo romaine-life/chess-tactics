@@ -15,7 +15,7 @@ refines:
 ## Context and Problem Statement
 
 Ataraxia is the only Run-wide rule system with no reference record. Units, Terrain,
-Cards, Card Types, Relics and Abilities each have an Enchiridion section; the difficulty
+Cards, Card Types, Lipsana and Abilities each have an Enchiridion section; the difficulty
 ladder existed solely inside the Run-preparation selector, which shows one tier at a
 time and only to a player already committed to starting a Run.
 
@@ -132,7 +132,7 @@ neighbouring section has a crafted mark. The owner selected a **carved-stone** n
   note now derives the tier below from `ATARAXIA_BY_TIER` instead of hard-coding the
   baseline's label, so it cannot go stale.
 - Cost: the reference reads account progression, so it is the first Enchiridion section
-  besides Relics whose content varies per account.
+  besides Lipsana whose content varies per account.
 - Cost: the baseline's `0` is an Arabic digit at the head of a Roman sequence. Every
   antiquarian alternative needs explaining, which a row of a reference cannot carry.
 - Good: the ladder can reach Ataraxia X without another art pass, so installing a tier
