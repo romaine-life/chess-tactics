@@ -66,9 +66,7 @@ to move.
 ## Consequences
 
 - Run format 16, landing on top of ADR-0376's 15. In-progress Runs are unsupported; per the
-  repo's standing policy the owner's active Run is disposable test state. ADR-0376 moved the
-  model to 15 but left `validateActiveRunBody` pinned at 14, so every format-15 active-Run
-  write was refused; the version is corrected here rather than left broken behind the bump.
+  repo's standing policy the owner's active Run is disposable test state.
 - Anything wanting to report more about a Battle later — material traded, a grade, a longest
   streak — now has a screen to put it on and a document field to carry it, instead of needing
   the board still mounted.
