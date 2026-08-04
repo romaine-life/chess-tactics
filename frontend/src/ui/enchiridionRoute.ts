@@ -1,7 +1,7 @@
 // The main-menu Enchiridion's route language (ADR-0256), split from the component so
 // MainMenu and the scene manifest resolve one address contract instead of lookalike
-// parsers. `/enchiridion/<section>` selects a reference section; the relics section
-// additionally addresses one relic as `/enchiridion/relics/<relic-id>`, the cards section
+// parsers. `/enchiridion/<section>` selects a reference section; the lipsana section
+// additionally addresses one lipsanon as `/enchiridion/lipsana/<lipsanon-id>`, the cards section
 // addresses one gallery face by the name on its banner, hyphenated —
 // `/enchiridion/cards/country-parish`, never the model's piece-initial id — and the
 // card-types section addresses one property as `/enchiridion/card-types/<type>`. The
@@ -12,26 +12,26 @@ import { RUN_CARD_ID_BY_SLUG, runCardSlug } from '../run/cardNames';
 import {
   RUN_CARD_BY_ID,
   RUN_CARD_TYPE_REFERENCE,
-  RUN_RELICS,
+  RUN_LIPSANA,
   type RunCardType,
-  type RunRelicId,
+  type LipsanonId,
 } from '../run/model';
 
-export const ENCHIRIDION_SECTIONS = ['units', 'terrain', 'cards', 'card-types', 'relics', 'abilities', 'ataraxia'] as const;
+export const ENCHIRIDION_SECTIONS = ['units', 'terrain', 'cards', 'card-types', 'lipsana', 'abilities', 'ataraxia'] as const;
 export type EnchiridionSection = typeof ENCHIRIDION_SECTIONS[number];
 
 export function enchiridionSectionHref(section: EnchiridionSection): string {
   return `/enchiridion/${section}`;
 }
 
-/** The address of one relic's record in the main-menu Enchiridion. */
-export function enchiridionRelicHref(relicId: RunRelicId): string {
-  return `/enchiridion/relics/${relicId}`;
+/** The address of one lipsanon's record in the main-menu Enchiridion. */
+export function enchiridionLipsanonHref(lipsanonId: LipsanonId): string {
+  return `/enchiridion/lipsana/${lipsanonId}`;
 }
 
 /**
  * Resolve a main-menu /enchiridion path to its section. Deeper address suffixes
- * (a relic id today) stay within their section; unknown paths read as 'units',
+ * (a lipsanon id today) stay within their section; unknown paths read as 'units',
  * matching the route family's long-standing fallback.
  */
 export function enchiridionSectionFromPath(path: string): EnchiridionSection {
@@ -42,18 +42,18 @@ export function enchiridionSectionFromPath(path: string): EnchiridionSection {
 
 /**
  * The canonical section route a main-menu /enchiridion path belongs to. Address
- * suffixes collapse onto their section so the scene system can treat every relic
- * address as the one retained relic-reference scene.
+ * suffixes collapse onto their section so the scene system can treat every lipsanon
+ * address as the one retained lipsanon-reference scene.
  */
 export function enchiridionSectionPath(path: string): string {
   return enchiridionSectionHref(enchiridionSectionFromPath(path));
 }
 
-/** The relic addressed by /enchiridion/relics/<relic-id>; null when absent or unknown. */
-export function enchiridionRelicFromPath(path: string): RunRelicId | null {
-  const match = /^\/enchiridion\/relics\/([^/]+)$/.exec(path);
+/** The lipsanon addressed by /enchiridion/lipsana/<lipsanon-id>; null when absent or unknown. */
+export function enchiridionLipsanonFromPath(path: string): LipsanonId | null {
+  const match = /^\/enchiridion\/lipsana\/([^/]+)$/.exec(path);
   const id = match?.[1];
-  return id && RUN_RELICS.some((relic) => relic.id === id) ? (id as RunRelicId) : null;
+  return id && RUN_LIPSANA.some((lipsanon) => lipsanon.id === id) ? (id as LipsanonId) : null;
 }
 
 /** The address of one card face in the main-menu Enchiridion gallery. */

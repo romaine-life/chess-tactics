@@ -62,7 +62,7 @@ Controls.**
   square resolves automatically; a unit excluded into reserve requires no
   placement.
 - Muster Roll and Surveyor's Compass remain Controls-owned choices and update the
-  same battlefield immediately. Controls keeps Army, Relics, and Run abandonment
+  same battlefield immediately. Controls keeps Army, Lipsana, and Run abandonment
   available without rebuilding Battle Controls.
 - **Begin Battle** appears only when Deployment contains a meaningful player
   choice and enables only when all required choices are complete. If no

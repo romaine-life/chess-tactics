@@ -21,7 +21,7 @@ Controls panel, but without any of that wiring — and additionally repaired any
 The result the owner saw: the Controls title band on the Shop, Deployment, and Victory
 screens is the same brown band with the same **CONTROLS** copy, but the book mark at its
 right edge is simply absent. Nothing about those phases makes the reference less useful —
-the Shop is precisely where the army, the held relics, and the unit/card rules are consulted
+the Shop is precisely where the army, the held lipsana, and the unit/card rules are consulted
 before spending gold — so the absence read as a missing control rather than a scoped one.
 
 ## Decision
@@ -34,7 +34,7 @@ before spending gold — so the absence read as a missing control rather than a 
   workspace mounts in a director-owned `strategikon-slot` covering the phase workspace.
 - Only an **absent** Run repairs a `/run/strategikon/*` address back to `/run`. Phase is
   never the reason an address is rewritten.
-- The Controls column's own workspace verbs — Army, Relics, Sell Units — always address the
+- The Controls column's own workspace verbs — Army, Lipsana, Sell Units — always address the
   Run root, so they stay live while the Strategikon covers the screen instead of navigating
   to a path the reference workspace still occupies.
 
@@ -43,7 +43,7 @@ before spending gold — so the absence read as a missing control rather than a 
 - One control appears in one place across the whole Run, so the Controls title band no longer
   changes its contents from phase to phase.
 - The Strategikon's own Prosopography and Lipsanotheca sections read the live Run document in
-  every phase; between Battles they are the same content as the Controls Army/Relics
+  every phase; between Battles they are the same content as the Controls Army/Lipsana
   workspaces, reached from the reference rail instead of the Controls column.
 - ADR-0231's Battle framing is superseded only in scope. The workspace language, the rail,
   the frameless book control, and its Controls-boundary alignment (ADR-0250) are unchanged.

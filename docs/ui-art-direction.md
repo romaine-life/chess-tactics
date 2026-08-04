@@ -248,7 +248,7 @@ concept renders remain direction and comparison references rather than runtime s
 
 The default work surfaces are `/`, `/enchiridion/units`,
 `/enchiridion/terrain`, `/enchiridion/cards`, `/enchiridion/card-types`,
-`/enchiridion/relics`, `/enchiridion/abilities`, `/play/select`, `/play/select/continue/<mode>`, `/play/select/skirmish`,
+`/enchiridion/lipsana`, `/enchiridion/abilities`, `/play/select`, `/play/select/continue/<mode>`, `/play/select/skirmish`,
 `/play/select/levels`, `/play/select/campaign/<id>`, `/editor`,
 `/editor/level`, and exact `/play?...` for a selected live board. The main menu has
 five top-level controls — Play, Editor, Lobbies, Enchiridion, Settings — and Play owns the shared
@@ -270,7 +270,7 @@ Enchiridion is immediately above Settings. In Battle, frameless open-codex art
 at the same visual scale as the Controls title and aligned to the Controls
 content boundary opens
 Strategikon; its hover/focus information names the unfamiliar destination and
-summarizes its references, army, and relic contents under ADR-0250. Strategikon's
+summarizes its references, army, and lipsanon contents under ADR-0250. Strategikon's
 rails are canonical main-menu rail columns: every destination added to either
 column inherits the exact menu-tab width, stack gap, inset, and stone-continuity
 language rather than defining host-local geometry. Strategikon replaces the board
@@ -287,11 +287,11 @@ between that fill and the real content. The shared shell clips the decorative
 layer and applies the closed owner-approved cover, pixelated, 0.68-opacity
 treatment; no candidate/admin lookup or repository fallback participates.
 In both
-hosts, relic references use the
+hosts, lipsanon references use the
 ADR-0254 dual-view browser: a compact Rows/Grouped tab sits above the selection
 column; Rows uses corrected named list frames, while Grouped uses one containing
 inner frame around an otherwise unframed native-icon grid. Neither view opens
-relic tooltips: the selected content-sized record is the sole visible
+lipsanon tooltips: the selected content-sized record is the sole visible
 name/effect/history authority. Card Types follows that master-detail reading:
 the third column contains the four affected-type names and the fourth contains
 only the selected Volunteer-based card face; it does not compare four card

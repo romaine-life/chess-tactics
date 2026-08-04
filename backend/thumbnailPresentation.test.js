@@ -5,7 +5,7 @@ const test = require('node:test');
 const {
   resolveDefaultOgImage,
   resolveLevelCardPresentation,
-  resolveRunRelicIcon,
+  resolveLipsanonIcon,
 } = require('./thumbnailPresentation');
 
 let sequence = 0;
@@ -76,13 +76,13 @@ test('level-card presentation fails closed when a component is absent or ambiguo
   assert.throws(() => resolveLevelCardPresentation(duplicateSurface), /found 2/);
 });
 
-test('relic unfurl presentation resolves the installed native icon by canonical relic id', () => {
+test('lipsanon unfurl presentation resolves the installed native icon by canonical lipsanon id', () => {
   const catalog = productionShapedCatalog();
   catalog.assets.push({
-    id: 'run-relic-royal-decree',
-    kind: 'run-relic',
+    id: 'run-lipsanon-royal-decree',
+    kind: 'run-lipsanon',
     label: 'Royal Decree',
-    behavior: { relicId: 'royal-decree' },
+    behavior: { lipsanonId: 'royal-decree' },
     media: {
       icon: {
         media: {
@@ -95,7 +95,7 @@ test('relic unfurl presentation resolves the installed native icon by canonical 
     },
   });
 
-  assert.deepEqual(resolveRunRelicIcon(catalog, 'royal-decree'), {
+  assert.deepEqual(resolveLipsanonIcon(catalog, 'royal-decree'), {
     src: '/api/media/royal-decree',
     width: 64,
     height: 64,
@@ -103,13 +103,13 @@ test('relic unfurl presentation resolves the installed native icon by canonical 
   });
 });
 
-test('relic unfurl presentation fails closed for missing, ambiguous, or non-native artwork', () => {
+test('lipsanon unfurl presentation fails closed for missing, ambiguous, or non-native artwork', () => {
   const catalog = productionShapedCatalog();
-  const relic = {
-    id: 'run-relic-royal-decree',
-    kind: 'run-relic',
+  const lipsanon = {
+    id: 'run-lipsanon-royal-decree',
+    kind: 'run-lipsanon',
     label: 'Royal Decree',
-    behavior: { relicId: 'royal-decree' },
+    behavior: { lipsanonId: 'royal-decree' },
     media: {
       icon: {
         media: {
@@ -122,10 +122,10 @@ test('relic unfurl presentation fails closed for missing, ambiguous, or non-nati
     },
   };
 
-  assert.throws(() => resolveRunRelicIcon(catalog, 'royal-decree'), /found 0/);
-  catalog.assets.push(relic, { ...relic, id: 'duplicate-royal-decree' });
-  assert.throws(() => resolveRunRelicIcon(catalog, 'royal-decree'), /found 2/);
+  assert.throws(() => resolveLipsanonIcon(catalog, 'royal-decree'), /found 0/);
+  catalog.assets.push(lipsanon, { ...lipsanon, id: 'duplicate-royal-decree' });
+  assert.throws(() => resolveLipsanonIcon(catalog, 'royal-decree'), /found 2/);
   catalog.assets.pop();
-  relic.media.icon.media.width = 63;
-  assert.throws(() => resolveRunRelicIcon(catalog, 'royal-decree'), /native 64x64 PNG/);
+  lipsanon.media.icon.media.width = 63;
+  assert.throws(() => resolveLipsanonIcon(catalog, 'royal-decree'), /native 64x64 PNG/);
 });

@@ -193,7 +193,7 @@ function TooltipPopup({
 // hover or keyboard focus and uses fixed positioning so scrolling containers do
 // not clip it. Keep native title="" off consumers of this primitive.
 //
-// `title` is the named thing the tip is about — a relic, an ability, a card
+// `title` is the named thing the tip is about — a lipsanon, an ability, a card
 // property — and children are its explanation. The pop owns the whole treatment
 // (grid, gaps, display face for the title, body face for the rest), so a caller
 // never restates it: a popupClassName is for sizing, not for typography.

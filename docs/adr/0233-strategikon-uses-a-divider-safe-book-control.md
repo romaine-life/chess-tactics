@@ -34,7 +34,7 @@ Catalog glyph is already the canonical open illuminated codex.
   the riveted bottom divider.
 - In Battle, its accessible name is **Open Strategikon** and its hover title is
   **Strategikon — inspect battle references, the current army, and held
-  relics.**
+  lipsana.**
 - While Strategikon is open, the same active control is named **Return to
   Battle** and its hover title explains that closing Strategikon does not leave
   the current fight.

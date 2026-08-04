@@ -59,7 +59,7 @@ const {
 const {
   resolveDefaultOgImage,
   resolveLevelCardPresentation,
-  resolveRunRelicIcon,
+  resolveLipsanonIcon,
 } = require(path.join(bakedBackendDir, 'thumbnailPresentation'));
 const {
   ataraxiaNumeralMediaIssue,
@@ -79,8 +79,8 @@ const {
   predrawnBoardOwnerProofIssue,
   predrawnBoardSlotSlug,
   preservesNativeEvidenceForUpload,
-  runRelicIconMediaIssue,
-  runRelicIconSlotId,
+  runLipsanonIconMediaIssue,
+  runLipsanonIconSlotId,
   runCardCostCoinMediaIssue,
   runCardCostCoinSlot,
   runResourceIconMediaIssue,
@@ -88,8 +88,8 @@ const {
   runShopWrapMediaIssue,
   workspaceBackgroundSlotId,
   workspaceBackgroundMediaIssue,
-  runRelicMatSlot,
-  runRelicMatMediaIssue,
+  runLipsanonMatSlot,
+  runLipsanonMatMediaIssue,
   runShopWrapSlotId,
   sfxSampleMediaIssue,
   sfxSampleOwnerProofIssue,
@@ -2792,6 +2792,107 @@ const MIGRATIONS = [
         CHECK (client_schema_version = 2);
     `,
   },
+  {
+    version: 52,
+    name: 'relics are Lipsana end to end',
+    // ADR-0376: the held-relic register was already The Lipsanotheca — Greek leipsanon
+    // (relic) + theke (case) — while its contents kept the plain English word. The vocabulary
+    // is now one root everywhere, which means the storage layer moves too: the old spelling
+    // survives nowhere, per docs/migration-policy.md.
+    //
+    // media_slots.slot is a primary key that media_versions.slot and the composite
+    // media_slots_active_version_fk both reference with no ON UPDATE clause, so the parent
+    // key cannot be rewritten while those constraints stand. They are dropped, all three
+    // slot-bearing tables move together inside this transaction, and the constraints are
+    // restored identically — the graph is never observable in a torn state.
+    //
+    // Run documents are NOT rewritten. RUN_FORMAT_VERSION 15 refuses anything older, so an
+    // in-progress Run is discarded rather than migrated; converting them here would be the
+    // compatibility path the policy forbids, and the owner's active Run is disposable.
+    // Minted craft links are rewritten instead, because a link is a durable address the
+    // owner holds and its spec is data this migration can canonicalize exactly.
+    sql: `
+      -- media_versions' slot FK was created inline, so its name is whatever Postgres
+      -- generated. Guessing it and passing IF EXISTS would drop nothing on a mismatch and
+      -- then fail the UPDATE against a constraint still standing, so it is looked up.
+      DO $$
+      DECLARE constraint_name text;
+      BEGIN
+        SELECT conname INTO constraint_name
+          FROM pg_constraint
+         WHERE conrelid = 'media_versions'::regclass
+           AND confrelid = 'media_slots'::regclass
+           AND contype = 'f'
+           AND conkey = ARRAY[(
+                 SELECT attnum FROM pg_attribute
+                  WHERE attrelid = 'media_versions'::regclass AND attname = 'slot'
+               )]::smallint[];
+        IF constraint_name IS NULL THEN
+          RAISE EXCEPTION 'media_versions has no single-column slot foreign key to drop';
+        END IF;
+        EXECUTE format('ALTER TABLE media_versions DROP CONSTRAINT %I', constraint_name);
+      END $$;
+      ALTER TABLE media_slots DROP CONSTRAINT IF EXISTS media_slots_active_version_fk;
+
+      UPDATE media_slots
+         SET slot = 'ui/run/lipsana/' || substring(slot from '^ui/run/relics/(.*)$')
+       WHERE slot LIKE 'ui/run/relics/%';
+      UPDATE media_versions
+         SET slot = 'ui/run/lipsana/' || substring(slot from '^ui/run/relics/(.*)$')
+       WHERE slot LIKE 'ui/run/relics/%';
+      UPDATE media_asset_events
+         SET slot = 'ui/run/lipsana/' || substring(slot from '^ui/run/relics/(.*)$')
+       WHERE slot LIKE 'ui/run/relics/%';
+
+      ALTER TABLE media_versions
+        ADD CONSTRAINT media_versions_slot_fkey
+        FOREIGN KEY (slot) REFERENCES media_slots(slot) ON DELETE RESTRICT;
+      ALTER TABLE media_slots
+        ADD CONSTRAINT media_slots_active_version_fk
+        FOREIGN KEY (active_version_id, slot) REFERENCES media_versions (id, slot);
+
+      UPDATE media_slots SET role = 'run-lipsanon-icon' WHERE role = 'run-relic-icon';
+      UPDATE media_slots SET role = 'run-lipsanon-mat'  WHERE role = 'run-relic-mat';
+      UPDATE media_versions SET role = 'run-lipsanon-icon' WHERE role = 'run-relic-icon';
+      UPDATE media_versions SET role = 'run-lipsanon-mat'  WHERE role = 'run-relic-mat';
+
+      UPDATE media_slots
+         SET metadata = jsonb_set(
+               jsonb_set(metadata, '{runtime,component}', to_jsonb(
+                 replace(metadata->'runtime'->>'component', 'run-relic-', 'run-lipsanon-'))),
+               '{runtime,nativeRole}', to_jsonb(
+                 replace(metadata->'runtime'->>'nativeRole', 'run-relic-', 'run-lipsanon-')))
+       WHERE metadata->'runtime'->>'component' LIKE 'run-relic-%'
+          OR metadata->'runtime'->>'nativeRole' LIKE 'run-relic-%';
+      UPDATE media_versions
+         SET metadata = jsonb_set(
+               jsonb_set(metadata, '{runtime,component}', to_jsonb(
+                 replace(metadata->'runtime'->>'component', 'run-relic-', 'run-lipsanon-'))),
+               '{runtime,nativeRole}', to_jsonb(
+                 replace(metadata->'runtime'->>'nativeRole', 'run-relic-', 'run-lipsanon-')))
+       WHERE metadata->'runtime'->>'component' LIKE 'run-relic-%'
+          OR metadata->'runtime'->>'nativeRole' LIKE 'run-relic-%';
+
+      -- Migration 45 is byte-for-byte canonical (ADR-0174), so the old names are still
+      -- what exists on disk. Postgres does not carry index or constraint names along with
+      -- a table rename, so each is renamed explicitly rather than left as the one place
+      -- the retired word survives.
+      ALTER TABLE IF EXISTS run_relic_stat_events RENAME TO lipsanon_stat_events;
+      ALTER TABLE IF EXISTS lipsanon_stat_events RENAME COLUMN relic_id TO lipsanon_id;
+      ALTER INDEX IF EXISTS run_relic_stat_events_owner_relic_idx
+        RENAME TO lipsanon_stat_events_owner_lipsanon_idx;
+      ALTER TABLE IF EXISTS lipsanon_stat_events
+        RENAME CONSTRAINT run_relic_stat_events_kind_check TO lipsanon_stat_events_kind_check;
+
+      UPDATE run_craft_links
+         SET spec = (spec - 'relics') || jsonb_build_object('lipsana', spec->'relics')
+       WHERE jsonb_exists(spec, 'relics');
+
+      UPDATE media_catalog_state
+         SET revision = revision + 1, updated_at = now()
+       WHERE singleton;
+    `,
+  },
 ];
 
 let pool = null;
@@ -2826,7 +2927,7 @@ const REQUIRED_SCHEMA_RELATIONS = [
   'predrawn_background_raw_contract_bindings',
   'predrawn_generation_attempts',
   'predrawn_generation_attempt_events',
-  'run_relic_stat_events',
+  'lipsanon_stat_events',
   'run_progression',
   // run_craft_links (migration 50) is deliberately absent. This list drives auto-repair of
   // relations the app cannot serve a single route without; craft links are a debugging
@@ -2846,7 +2947,9 @@ const REQUIRED_SCHEMA_REPAIR_MIGRATIONS = new Map([
   ['predrawn_background_raw_contract_bindings', 35],
   ['predrawn_generation_attempts', 43],
   ['predrawn_generation_attempt_events', 43],
-  ['run_relic_stat_events', 45],
+  // Migration 45 creates this relation under its original name and 52 renames it, so a
+  // repair must replay both — replaying 45 alone would rebuild the retired spelling.
+  ['lipsanon_stat_events', [45, 52]],
   ['run_progression', 49],
 ]);
 
@@ -15305,8 +15408,8 @@ function mediaDomainProjectionIssue(row) {
     }
     return predrawnBoardMediaIssue(row, runtime.value);
   }
-  if (runRelicIconSlotId(row.slot)) {
-    return runRelicIconMediaIssue(row, runtime.value);
+  if (runLipsanonIconSlotId(row.slot)) {
+    return runLipsanonIconMediaIssue(row, runtime.value);
   }
   if (runCardCostCoinSlot(row.slot)) {
     return runCardCostCoinMediaIssue(row, runtime.value);
@@ -15340,8 +15443,8 @@ function mediaDomainProjectionIssue(row) {
   if (workspaceBackgroundSlotId(row.slot)) {
     return workspaceBackgroundMediaIssue(row, runtime.value);
   }
-  if (runRelicMatSlot(row.slot)) {
-    return runRelicMatMediaIssue(row, runtime.value);
+  if (runLipsanonMatSlot(row.slot)) {
+    return runLipsanonMatMediaIssue(row, runtime.value);
   }
   if (ataraxiaNumeralSlot(row.slot)) {
     return ataraxiaNumeralMediaIssue(row, runtime.value);
@@ -18381,8 +18484,8 @@ const ACTIVE_RUN_SHOP_FIELDS = new Set([
   'victoryGoldTenths',
   'cardOffers',
   'purchasedCardOfferIds',
-  'paidRelicOffer',
-  'paidRelicBought',
+  'paidLipsanonOffer',
+  'paidLipsanonBought',
   'soldUnits',
   'entrySnapshot',
 ]);
@@ -18393,21 +18496,21 @@ const ACTIVE_RUN_VACANTIA_FIELDS = new Set([
   'victoryGoldTenths',
   'offers',
 ]);
-const RUN_RELICS = Array.isArray(serverRender?.RUN_RELICS) ? serverRender.RUN_RELICS : [];
-const RUN_RELIC_BY_ID = serverRender?.RUN_RELIC_BY_ID ?? {};
-const RUN_RELIC_IDS = new Set(RUN_RELICS.map((relic) => relic.id));
+const RUN_LIPSANA = Array.isArray(serverRender?.RUN_LIPSANA) ? serverRender.RUN_LIPSANA : [];
+const LIPSANON_BY_ID = serverRender?.LIPSANON_BY_ID ?? {};
+const RUN_LIPSANON_IDS = new Set(RUN_LIPSANA.map((lipsanon) => lipsanon.id));
 /**
- * Gold the Run's held relics paid the moment they were taken. Read from the model's own
- * table (RUN_RELIC_IMMEDIATE_GOLD) rather than restated here, so the opening Shop's pinned
- * gold check stays exact when a relic's payout changes.
+ * Gold the Run's held lipsana paid the moment they were taken. Read from the model's own
+ * table (RUN_LIPSANON_IMMEDIATE_GOLD) rather than restated here, so the opening Shop's pinned
+ * gold check stays exact when a lipsanon's payout changes.
  */
-function openingRelicGoldTenths(run) {
-  if (!Array.isArray(run.relics)) return 0;
-  if (typeof serverRender?.relicImmediateGoldTenths === 'function') {
-    return serverRender.relicImmediateGoldTenths(run.relics);
+function openingLipsanonGoldTenths(run) {
+  if (!Array.isArray(run.lipsana)) return 0;
+  if (typeof serverRender?.lipsanonImmediateGoldTenths === 'function') {
+    return serverRender.lipsanonImmediateGoldTenths(run.lipsana);
   }
-  const table = serverRender?.RUN_RELIC_IMMEDIATE_GOLD ?? {};
-  return run.relics.reduce((total, relic) => total + (table[relic] ?? 0) * 10, 0);
+  const table = serverRender?.RUN_LIPSANON_IMMEDIATE_GOLD ?? {};
+  return run.lipsana.reduce((total, lipsanon) => total + (table[lipsanon] ?? 0) * 10, 0);
 }
 
 function validateActiveRunBody(run) {
@@ -18616,7 +18719,7 @@ function validateActiveRunBody(run) {
     if (lossUnitIds.size !== lostCardUnitIds.size) return 'run.cards loss history is incomplete';
     if (!isFiniteInteger(run.nextCardSequence) || run.nextCardSequence < 1) return 'run.nextCardSequence is invalid';
   }
-  for (const field of ['relics', 'seenRelics']) {
+  for (const field of ['lipsana', 'seenLipsana']) {
     if (!Array.isArray(run[field]) || run[field].length > 100 || run[field].some((id) => typeof id !== 'string' || !id)) {
       return `run.${field} is invalid`;
     }
@@ -18647,11 +18750,11 @@ function validateActiveRunBody(run) {
       if (!Array.isArray(vacantia.offers) || vacantia.offers.length < 1 || vacantia.offers.length > 3) {
         return 'run.vacantia.offers is invalid';
       }
-      if (new Set(vacantia.offers).size !== vacantia.offers.length) return 'run.vacantia.offers repeats a relic';
-      for (const relic of vacantia.offers) {
-        if (!RUN_RELIC_IDS.has(relic)) return 'run.vacantia.offers is invalid';
+      if (new Set(vacantia.offers).size !== vacantia.offers.length) return 'run.vacantia.offers repeats a lipsanon';
+      for (const lipsanon of vacantia.offers) {
+        if (!RUN_LIPSANON_IDS.has(lipsanon)) return 'run.vacantia.offers is invalid';
         // An offer the player already holds could never have been revealed.
-        if (Array.isArray(run.relics) && run.relics.includes(relic)) return 'run.vacantia offers a held relic';
+        if (Array.isArray(run.lipsana) && run.lipsana.includes(lipsanon)) return 'run.vacantia offers a held lipsanon';
       }
     } else if (run.vacantia !== null && run.vacantia !== undefined) {
       return 'run.vacantia is invalid outside the bona-vacantia phase';
@@ -18790,14 +18893,14 @@ function validateActiveRunBody(run) {
           // opening cannot be left without a purchase.
           || run.shop.cardOffers.some((offer) => offer.value > 8)
           || !run.shop.cardOffers.some((offer) => offer.cost <= 8)
-          || run.shop.paidRelicOffer !== null
-          || run.shop.paidRelicBought !== false
+          || run.shop.paidLipsanonOffer !== null
+          || run.shop.paidLipsanonBought !== false
           || !isObjectRecord(run.shop.entrySnapshot)
-          // Bona Vacantia runs BEFORE the opening Shop, so a relic taken there may already
+          // Bona Vacantia runs BEFORE the opening Shop, so a lipsanon taken there may already
           // have paid out. The gold is still pinned value-by-value -- to the starting gold
-          // plus exactly what the relics held are worth on acquisition, computed from the
+          // plus exactly what the lipsana held are worth on acquisition, computed from the
           // model's own payout table so the two cannot drift.
-          || run.shop.entrySnapshot.goldTenths !== 80 + openingRelicGoldTenths(run)
+          || run.shop.entrySnapshot.goldTenths !== 80 + openingLipsanonGoldTenths(run)
           || !Array.isArray(run.shop.entrySnapshot.army)
           || run.shop.entrySnapshot.army.length !== 3
           || run.shop.entrySnapshot.army[0]?.id !== 'run-king'
@@ -19024,7 +19127,7 @@ function craftedRunSummary(run) {
     gold: run.goldTenths / 10,
     army: run.army.map((unit) => unit.type),
     offers: run.shop ? run.shop.cardOffers.map((offer) => `${offer.pieces.join('+')}@${offer.cost}`) : null,
-    relics: run.relics,
+    lipsana: run.lipsana,
   };
 }
 
@@ -19159,51 +19262,51 @@ app.post('/api/active-run/craft', async (req, res) => {
   }
 });
 
-// --- Account-scoped Run relic history (ADR-0231) --------------------------
+// --- Account-scoped Run lipsanon history (ADR-0231) --------------------------
 // The mutable active Run cannot answer lifetime questions after completion or
 // abandonment. Clients submit deterministic facts; the composite key makes
 // retries and cross-tab delivery idempotent.
-const RUN_RELIC_STAT_KINDS = new Set(['picked', 'battle-win']);
-const RUN_RELIC_STAT_EVENT_ID = /^[a-z0-9][a-z0-9:._-]{0,239}$/;
+const RUN_LIPSANON_STAT_KINDS = new Set(['picked', 'battle-win']);
+const RUN_LIPSANON_STAT_EVENT_ID = /^[a-z0-9][a-z0-9:._-]{0,239}$/;
 
-function validateRunRelicStatEvents(raw) {
+function validateLipsanonStatEvents(raw) {
   if (!Array.isArray(raw) || raw.length < 1 || raw.length > 500) {
     return { error: 'events must contain 1-500 entries' };
   }
   const events = [];
   for (const event of raw) {
     if (!isObjectRecord(event)
-      || !RUN_RELIC_STAT_EVENT_ID.test(String(event.eventId || ''))
-      || !RUN_RELIC_IDS.has(event.relicId)
-      || !RUN_RELIC_STAT_KINDS.has(event.kind)) {
-      return { error: 'events contain an invalid eventId, relicId, or kind' };
+      || !RUN_LIPSANON_STAT_EVENT_ID.test(String(event.eventId || ''))
+      || !RUN_LIPSANON_IDS.has(event.lipsanonId)
+      || !RUN_LIPSANON_STAT_KINDS.has(event.kind)) {
+      return { error: 'events contain an invalid eventId, lipsanonId, or kind' };
     }
     events.push({
       eventId: String(event.eventId),
-      relicId: String(event.relicId),
+      lipsanonId: String(event.lipsanonId),
       kind: String(event.kind),
     });
   }
   return { events };
 }
 
-app.get('/api/run-relic-statistics', async (req, res) => {
+app.get('/api/run-lipsanon-statistics', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
   try {
     await ensureDbReady();
     const { rows } = await pool.query(
-      `SELECT relic_id,
+      `SELECT lipsanon_id,
               count(*) FILTER (WHERE event_kind = 'picked')::integer AS times_picked,
               count(*) FILTER (WHERE event_kind = 'battle-win')::integer AS battles_won_while_held
-         FROM run_relic_stat_events
+         FROM lipsanon_stat_events
         WHERE owner_email = $1
-        GROUP BY relic_id`,
+        GROUP BY lipsanon_id`,
       [user.email],
     );
     res.status(200).json({
       statistics: Object.fromEntries(rows.map((row) => [
-        row.relic_id,
+        row.lipsanon_id,
         {
           timesPicked: Number(row.times_picked) || 0,
           battlesWonWhileHeld: Number(row.battles_won_while_held) || 0,
@@ -19211,16 +19314,16 @@ app.get('/api/run-relic-statistics', async (req, res) => {
       ])),
     });
   } catch (error) {
-    dbUnavailable(res, 'Run relic statistics read failed', error, 'run_relic_statistics_unavailable');
+    dbUnavailable(res, 'Run lipsanon statistics read failed', error, 'run_lipsanon_statistics_unavailable');
   }
 });
 
-app.post('/api/run-relic-stat-events', async (req, res) => {
+app.post('/api/run-lipsanon-stat-events', async (req, res) => {
   const user = await requireUser(req, res);
   if (!user) return;
-  const validation = validateRunRelicStatEvents(req.body && req.body.events);
+  const validation = validateLipsanonStatEvents(req.body && req.body.events);
   if (validation.error) {
-    res.status(400).json({ error: 'invalid_run_relic_stat_events', details: validation.error });
+    res.status(400).json({ error: 'invalid_lipsanon_stat_events', details: validation.error });
     return;
   }
   try {
@@ -19229,10 +19332,10 @@ app.post('/api/run-relic-stat-events', async (req, res) => {
       let accepted = 0;
       for (const event of validation.events) {
         const inserted = await client.query(
-          `INSERT INTO run_relic_stat_events (owner_email, event_id, relic_id, event_kind)
+          `INSERT INTO lipsanon_stat_events (owner_email, event_id, lipsanon_id, event_kind)
            VALUES ($1, $2, $3, $4)
-           ON CONFLICT (owner_email, event_id, relic_id) DO NOTHING`,
-          [user.email, event.eventId, event.relicId, event.kind],
+           ON CONFLICT (owner_email, event_id, lipsanon_id) DO NOTHING`,
+          [user.email, event.eventId, event.lipsanonId, event.kind],
         );
         accepted += inserted.rowCount || 0;
       }
@@ -19240,7 +19343,7 @@ app.post('/api/run-relic-stat-events', async (req, res) => {
     });
     res.status(200).json({ ok: true, received: validation.events.length, inserted: result });
   } catch (error) {
-    dbUnavailable(res, 'Run relic statistics write failed', error, 'run_relic_statistics_unavailable');
+    dbUnavailable(res, 'Run lipsanon statistics write failed', error, 'run_lipsanon_statistics_unavailable');
   }
 });
 
@@ -19254,9 +19357,9 @@ const ADMIN_PLAYTEST_ACTIONS = new Set([
   'kill-unit',
   'win-battle',
   'gain-gold',
-  'gain-relic',
+  'gain-lipsanon',
 ]);
-const ADMIN_PLAYTEST_RELICS = RUN_RELIC_IDS;
+const ADMIN_PLAYTEST_LIPSANA = RUN_LIPSANON_IDS;
 
 app.post('/api/admin/playtest/authorize', async (req, res) => {
   const user = await requireAdmin(req, res);
@@ -19274,16 +19377,16 @@ app.post('/api/admin/playtest/authorize', async (req, res) => {
     return;
   }
   if (
-    body.action === 'gain-relic'
+    body.action === 'gain-lipsanon'
     && (
-      !ADMIN_PLAYTEST_RELICS.has(body.relicId)
+      !ADMIN_PLAYTEST_LIPSANA.has(body.lipsanonId)
       || (
         body.targetUnitId !== undefined
         && (typeof body.targetUnitId !== 'string' || !body.targetUnitId || body.targetUnitId.length > 160)
       )
     )
   ) {
-    res.status(400).json({ error: 'invalid_admin_relic_grant' });
+    res.status(400).json({ error: 'invalid_admin_lipsanon_grant' });
     return;
   }
   res.status(200).json({ ok: true, action: body.action });
@@ -19328,7 +19431,7 @@ function makeStaticCacheHeaders(rootDir) {
 // --- Open Graph unfurls + on-demand board thumbnails ------------------------
 // Shared content links must unfurl on Discord/Slack/Twitter (crawlers fetch the
 // URL server-side — no JS, no auth). The SPA fallback injects route-specific
-// og:/twitter: tags. Levels point at an on-demand board render; canonical relic
+// og:/twitter: tags. Levels point at an on-demand board render; canonical lipsanon
 // addresses point at the exact installed live icon. Generic pages use the
 // branded default-image semantic slot. Targeted media never masks missing
 // content/media with it.
@@ -19891,11 +19994,11 @@ async function ogTagsFor(req) {
   const levelId = typeof req.query.levelId === 'string' ? req.query.levelId : null;
   const campaignId = typeof req.query.campaignId === 'string' ? req.query.campaignId : null;
   const mapId = typeof req.query.map === 'string' && PUBLIC_ID_RE.test(req.query.map) ? req.query.map : null;
-  const relicMatch = /^\/enchiridion\/relics\/([a-z][a-z0-9-]*)\/?$/.exec(req.path);
-  const relic = relicMatch && Object.hasOwn(RUN_RELIC_BY_ID, relicMatch[1])
-    ? RUN_RELIC_BY_ID[relicMatch[1]]
+  const lipsanonMatch = /^\/enchiridion\/lipsana\/([a-z][a-z0-9-]*)\/?$/.exec(req.path);
+  const lipsanon = lipsanonMatch && Object.hasOwn(LIPSANON_BY_ID, lipsanonMatch[1])
+    ? LIPSANON_BY_ID[lipsanonMatch[1]]
     : null;
-  const target = relic ? null : await resolveShareTarget({ levelId, campaignId, mapId }).catch(() => null);
+  const target = lipsanon ? null : await resolveShareTarget({ levelId, campaignId, mapId }).catch(() => null);
 
   let title = OG_SITE_NAME;
   let description = OG_DEFAULT_DESC;
@@ -19906,15 +20009,15 @@ async function ogTagsFor(req) {
   let imageType = 'image/png';
   let imageAlt = `${OG_SITE_NAME} preview`;
   let twitterCard = 'summary_large_image';
-  if (relic) {
-    const icon = resolveRunRelicIcon(drawableCatalog, relic.id);
-    title = relic.name;
-    description = relic.description;
+  if (lipsanon) {
+    const icon = resolveLipsanonIcon(drawableCatalog, lipsanon.id);
+    title = lipsanon.name;
+    description = lipsanon.description;
     image = `${origin}${icon.src}`;
     imageWidth = icon.width;
     imageHeight = icon.height;
     imageType = icon.mediaType;
-    imageAlt = `${relic.name} relic`;
+    imageAlt = `${lipsanon.name} lipsanon`;
     twitterCard = 'summary';
   } else {
     const defaultOgPath = resolveDefaultOgImage(drawableCatalog);

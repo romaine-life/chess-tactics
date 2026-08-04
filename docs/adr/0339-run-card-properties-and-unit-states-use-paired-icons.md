@@ -14,7 +14,7 @@ partially_supersedes:
   - "[ADR-0329](0329-concinnous-and-tactical-use-distinct-frames-and-one-shared-coin.md)'s visible Concinnous and Tactical type-line suffixes and forged-steel assignment to Concinnous"
   - "[ADR-0324](0324-run-card-frames-declare-native-content-boxes.md)'s assignment of the measured steel geometry to Concinnous"
 extends:
-  - "[ADR-0198](0198-run-relic-icons-are-installed-live-art-and-persistently-visible.md)"
+  - "[ADR-0198](0198-run-lipsanon-icons-are-installed-live-art-and-persistently-visible.md)"
   - "[ADR-0305](0305-card-ability-properties-do-not-synthesize-description-text.md)"
   - "[ADR-0318](0318-plagued-and-pestiferous-use-separate-owner-selected-icons.md)"
   - "[ADR-0330](0330-run-card-type-lines-use-the-lower-optical-baseline.md)"

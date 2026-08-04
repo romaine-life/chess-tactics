@@ -8,7 +8,7 @@ import {
 describe('Run self-inspection links', () => {
   it('reads only supported self-inspection views', () => {
     expect(runSelfInspectionViewFromSearch('?view=army')).toBe('army');
-    expect(runSelfInspectionViewFromSearch('?view=relics')).toBe('relics');
+    expect(runSelfInspectionViewFromSearch('?view=lipsana')).toBe('lipsana');
     expect(runSelfInspectionViewFromSearch('?view=sell')).toBeNull();
     expect(runSelfInspectionViewFromSearch('')).toBeNull();
   });

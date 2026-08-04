@@ -38,11 +38,11 @@ describe('tooltip keyword glossary', () => {
 
   it('reaches a term nested inside the caller’s own markup', () => {
     const { entries, markup } = read(
-      <span><span>Grants Adlected on purchase.</span><small>Relic source</small></span>,
+      <span><span>Grants Adlected on purchase.</span><small>Lipsanon source</small></span>,
     );
     expect(entries.map((entry) => entry.id)).toEqual(['adlected']);
     expect(markup).toContain('tooltip-keyword');
-    expect(markup).toContain('Relic source');
+    expect(markup).toContain('Lipsanon source');
   });
 
   it('defines each named mechanic once, in reading order', () => {

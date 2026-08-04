@@ -70,7 +70,7 @@ workflow styling.
 
 ### Consequences
 
-- Good: Run Shop, Run Army/Relics, Strategikon, and Level Editor replacement
+- Good: Run Shop, Run Army/Lipsana, Strategikon, and Level Editor replacement
   workspaces inherit one repeatable Controls-edge rule.
 - Good: content-start tuning remains available without recreating a right-side
   shell gap.

@@ -40,7 +40,7 @@ test('surface guard permits only the approved frameless Strategikon button reset
 test('surface guard permits grouped reliquary triggers to remain unframed', () => {
   assert.deepEqual(
     collectCssSurfaceRules(`
-      .enchiridion-relic-grouped-trigger {
+      .enchiridion-lipsanon-grouped-trigger {
         background: none;
         border: 0;
         border-radius: 0;

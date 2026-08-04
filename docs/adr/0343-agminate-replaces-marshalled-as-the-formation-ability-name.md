@@ -4,7 +4,7 @@ date: 2026-08-02
 deciders: owner (Nelson) + Codex
 partially_supersedes:
   - "[ADR-0273](0273-relational-unit-placement-may-have-diminishing-value.md)'s Marshalled working name"
-  - "[ADR-0274](0274-relics-grant-unit-owned-deployment-abilities.md)'s Marshalled ability name"
+  - "[ADR-0274](0274-lipsana-grant-unit-owned-deployment-abilities.md)'s Marshalled ability name"
   - "[ADR-0339](0339-run-card-properties-and-unit-states-use-paired-icons.md)'s Hieratic/Marshalled pair name"
   - "[ADR-0340](0340-run-card-icon-fitting-is-an-owner-operated-studio-instrument.md)'s Marshalled fitting label"
 ---
@@ -31,7 +31,7 @@ production cutover.
 - **Agminate** is the canonical player-facing name for the role-aware unit
   ability formerly called Marshalled. Its King, Rook, and Bishop deployment
   behavior is unchanged.
-- Relic text, ability references, filters, tooltips, accessible names,
+- Lipsanon text, ability references, filters, tooltips, accessible names,
   Enchiridion content, and Card Icon Fitting use Agminate immediately.
 - The existing icon candidates and owner-saved fitting remain selected. This
   vocabulary decision does not request regenerated pixels or a new fitting.

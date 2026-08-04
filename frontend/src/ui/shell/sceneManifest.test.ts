@@ -90,13 +90,13 @@ describe('scene manifests', () => {
       // is why the family could resolve every section to one identity unnoticed.
       ['/play/strategikon/enchiridion/units'], ['/play/strategikon/enchiridion/terrain'],
       ['/play/strategikon/enchiridion/cards'], ['/play/strategikon/enchiridion/card-types'],
-      ['/play/strategikon/enchiridion/relics'], ['/play/strategikon/enchiridion/abilities'],
+      ['/play/strategikon/enchiridion/lipsana'], ['/play/strategikon/enchiridion/abilities'],
       ['/play/strategikon/enchiridion/ataraxia'],
       ['/play/strategikon/prosopography'], ['/play/strategikon/chartulary'],
       ['/play/strategikon/lipsanotheca'],
       ['/play/strategikon/unknown'], ['/play/strategikon/enchiridion/unknown'],
       ['/run/strategikon/enchiridion/units', '', { run: { hydrated: true, document: run } }],
-      ['/run/strategikon/enchiridion/relics', '', { run: { hydrated: true, document: run } }],
+      ['/run/strategikon/enchiridion/lipsana', '', { run: { hydrated: true, document: run } }],
       ['/run/strategikon/prosopography', '', { run: { hydrated: true, document: run } }],
       ['/run/strategikon/chartulary', '', { run: { hydrated: true, document: run } }],
       ['/run/strategikon/lipsanotheca', '', { run: { hydrated: true, document: run } }],
@@ -114,14 +114,14 @@ describe('scene manifests', () => {
       ['/settings/audio/tracks'], ['/settings/gameplay'], ['/settings/creator-tools'],
       ['/settings/admin'], ['/party'],
       ['/enchiridion'], ['/enchiridion/units'], ['/enchiridion/terrain'], ['/enchiridion/cards'],
-      ['/enchiridion/card-types'], ['/enchiridion/relics'], ['/enchiridion/relics/some-relic'],
+      ['/enchiridion/card-types'], ['/enchiridion/lipsana'], ['/enchiridion/lipsana/some-lipsanon'],
       ['/enchiridion/abilities'], ['/enchiridion/ataraxia'], ['/enchiridion/unknown'],
       ['/lobbies'], ['/lobbies/room-1'],
       ['/editor'], ['/campaigns'], ['/campaigns-next'], ['/editor/wars'],
       ['/editor', '?campaign=camp-a'], ['/editor', '?campaign=camp-b'],
       ['/editor', '?collection=skirmish-profiles'], ['/editor', '?collection=unassigned'],
       ['/editor/level'], ['/editor/level', '?document=doc-1'], ['/edit'], ['/level-editor'],
-      ['/studio'], ['/studio', '?relicReview=1'], ['/studio/drawables'], ['/unit-studio'],
+      ['/studio'], ['/studio', '?lipsanonReview=1'], ['/studio/drawables'], ['/unit-studio'],
       ['/prop-lab'], ['/surface-lab'],
       ['/predrawn-reference'], ['/portrait-editor'],
     ];
@@ -325,7 +325,7 @@ describe('scene manifests', () => {
     // untouched, so it takes the ordinary region-preserving path and fades only the
     // pane its rail replaces.
     const runReference = sceneManifest('/run/strategikon/enchiridion/units');
-    const runReferenceOther = sceneManifest('/run/strategikon/enchiridion/relics');
+    const runReferenceOther = sceneManifest('/run/strategikon/enchiridion/lipsana');
     expect(overlapsStateDrivenRunScene(runStrategikon, runReference)).toBe(false);
     expect(deepestSharedSceneRegion(runStrategikon, runReference)).toBe('strategikon-shell');
     expect(deepestSharedSceneRegion(runReference, runReferenceOther)).toBe('strategikon-reference-shell');
@@ -346,7 +346,7 @@ describe('scene manifests', () => {
     ]);
     expect(deepestSharedSceneRegion(
       sceneManifest('/enchiridion/units'),
-      sceneManifest('/enchiridion/relics'),
+      sceneManifest('/enchiridion/lipsana'),
     )).toBe('enchiridion-shell');
   });
 
@@ -386,14 +386,14 @@ describe('scene manifests', () => {
     expect(deepestSharedSceneRegion(battleScene, armyScene)).toBe('gameplay-shell');
   });
 
-  it('addresses individual relics inside the one retained relic-reference scene (ADR-0256)', () => {
-    const base = sceneManifest('/enchiridion/relics');
-    const addressed = sceneManifest('/enchiridion/relics/royal-decree');
-    // Same manifest id + instance keys ⇒ relic selection is an address-only update:
-    // App's same-scene path applies and no exit/enter choreography runs per relic.
+  it('addresses individual lipsana inside the one retained lipsanon-reference scene (ADR-0256)', () => {
+    const base = sceneManifest('/enchiridion/lipsana');
+    const addressed = sceneManifest('/enchiridion/lipsana/royal-decree');
+    // Same manifest id + instance keys ⇒ lipsanon selection is an address-only update:
+    // App's same-scene path applies and no exit/enter choreography runs per lipsanon.
     expect(addressed.id).toBe(base.id);
     expect(addressed.instances.map((entry) => entry.key)).toEqual(base.instances.map((entry) => entry.key));
-    expect(addressed.leaf.definition.id).toBe('enchiridion/relics');
+    expect(addressed.leaf.definition.id).toBe('enchiridion/lipsana');
     expect(addressed).toMatchObject({
       host: 'enchiridion-shell',
       background: 'homepage',
@@ -463,7 +463,7 @@ describe('scene manifests', () => {
 
   it('narrows an overlapping fade to the shell viewport when only the Run workspace changes', () => {
     // Overlapping layers both paint the retained Run shell — the Controls panel and its
-    // title plank, the relic rail, the shell fill. Fading the whole boundary blends that
+    // title plank, the lipsanon rail, the shell fill. Fading the whole boundary blends that
     // retained chrome toward the backdrop at the crossfade midpoint, which is what made
     // the Controls title bar visibly dim on every Shop/Sell Units switch.
     const war = {

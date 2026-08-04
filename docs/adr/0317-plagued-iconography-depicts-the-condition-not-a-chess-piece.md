@@ -8,7 +8,7 @@ supersedes:
   - "[ADR-0316](0316-plagued-icon-candidates-are-reviewed-in-context.md)"
 refines:
   - "[ADR-0085](0085-runtime-assets-are-live-storage-backed.md)"
-  - "[ADR-0198](0198-run-relics-use-live-native-ui-icons.md)"
+  - "[ADR-0198](0198-run-lipsana-use-live-native-ui-icons.md)"
   - "[ADR-0313](0313-enchiridion-filters-cards-and-previews-affected-types.md)"
 ---
 

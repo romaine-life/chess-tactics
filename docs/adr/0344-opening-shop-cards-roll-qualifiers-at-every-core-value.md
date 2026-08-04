@@ -56,7 +56,7 @@ choice. An opening in which *nothing* is affordable is not a choice at all.
   deal that already has something to buy.
 - **The server validates the opening as a Shop, not as a fixed list.** The
   opening contract keeps its pins on phase, indices, offer count, distinct
-  values, empty Loot/paid-relic state and starting army, but its offers are now
+  values, empty Loot/paid-lipsanon state and starting army, but its offers are now
   checked by the same shared qualifier and affected-pricing rules as every other
   Shop, plus the requirement that at least one opening offer cost at most eight
   gold.

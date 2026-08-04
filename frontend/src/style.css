@@ -9116,7 +9116,7 @@ body.loading-bootstrap .app-startup-status {
     overflow-y: auto;
   }
 
-  .run-relic-strip {
+  .run-lipsanon-strip {
     max-inline-size: calc(100% - (2 * var(--ds-space-3)));
   }
 
@@ -10104,7 +10104,7 @@ body { font-size: 17px; }
   transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
 }
 /* Same-shell overlap (a Run workspace swap): both layers paint an identical Controls
-   panel, relic rail, and shell fill, so fading the boundary would blend that retained
+   panel, lipsanon rail, and shell fill, so fading the boundary would blend that retained
    chrome 25% toward the backdrop at the crossfade midpoint — the visible dimming of the
    Controls title plank on every Shop/Sell Units switch. The layers still overlap so the
    outgoing snapshot stays frozen; only the shell's replaceable viewport carries the
@@ -18919,7 +18919,7 @@ button.tileset-relationship-cell {
 /* ===== Run =====
    The between-Battle loop shares the installed Skirmish world and control chrome. */
 .run-screen {
-  --run-relic-strip-block-size: 64px;
+  --run-lipsanon-strip-block-size: 64px;
 }
 
 .run-scene-slot {
@@ -19083,7 +19083,7 @@ button.tileset-relationship-cell {
 }
 
 .run-shop-rules,
-.run-paid-relic-price,
+.run-paid-lipsanon-price,
 .run-victory-summary {
   align-items: center;
   display: flex;
@@ -19266,18 +19266,18 @@ button.tileset-relationship-cell {
   margin-inline-end: var(--ds-inline-tight);
 }
 
-.run-relic-card {
+.run-lipsanon-card {
   min-block-size: 174px;
 }
 
-.run-relic-card-heading {
+.run-lipsanon-card-heading {
   align-items: center;
   display: grid;
   gap: var(--ds-inline-tight);
   grid-template-columns: 64px minmax(0, 1fr);
 }
 
-.run-relic-icon {
+.run-lipsanon-icon {
   align-items: center;
   block-size: 64px;
   display: inline-flex;
@@ -19286,21 +19286,21 @@ button.tileset-relationship-cell {
   overflow: hidden;
 }
 
-.run-relic-icon img {
+.run-lipsanon-icon img {
   block-size: 64px;
   image-rendering: pixelated;
   inline-size: 64px;
   object-fit: contain;
 }
 
-.run-relic-icon.is-unavailable {
+.run-lipsanon-icon.is-unavailable {
   color: var(--skirmish-muted);
   font-size: var(--ds-text-xs);
   line-height: 1.05;
   text-align: center;
 }
 
-.run-relic-strip {
+.run-lipsanon-strip {
   inset-block-start: calc(var(--app-header-h) + var(--ds-space-2));
   inset-inline-start: var(--ds-space-3);
   max-inline-size: calc(100% - var(--skirmish-rail-w) - var(--ds-space-6) - var(--ds-space-1));
@@ -19309,7 +19309,7 @@ button.tileset-relationship-cell {
   z-index: 40;
 }
 
-.run-relic-inventory-list {
+.run-lipsanon-inventory-list {
   align-items: center;
   display: flex;
   flex-wrap: nowrap;
@@ -19319,11 +19319,11 @@ button.tileset-relationship-cell {
   scrollbar-width: none;
 }
 
-.run-relic-inventory-list::-webkit-scrollbar {
+.run-lipsanon-inventory-list::-webkit-scrollbar {
   display: none;
 }
 
-.run-relic-inventory-item {
+.run-lipsanon-inventory-item {
   block-size: 64px;
   cursor: help;
   display: inline-flex;
@@ -19331,56 +19331,56 @@ button.tileset-relationship-cell {
   inline-size: 64px;
 }
 
-.run-relic-inventory-trigger {
+.run-lipsanon-inventory-trigger {
   block-size: 64px;
   display: inline-flex;
   inline-size: 64px;
   outline: none;
 }
 
-.run-relic-inventory-trigger:focus-visible {
+.run-lipsanon-inventory-trigger:focus-visible {
   filter: drop-shadow(0 0 4px #9fe7ff);
 }
 
-/* A held relic answers the pointer. It carries a tip that only appears on hover, so without
+/* A held lipsanon answers the pointer. It carries a tip that only appears on hover, so without
    a highlight there is nothing to say it is worth hovering -- the strip read as decoration.
    Same language as the mat, at HUD scale: 64px x 1.125 is 72px exactly, so the sprite still
    lands on whole pixels. The cyan ring above stays the keyboard affordance. */
-.run-relic-inventory-item .run-relic-icon {
+.run-lipsanon-inventory-item .run-lipsanon-icon {
   overflow: visible;
   transition:
     filter 180ms ease,
     scale 180ms cubic-bezier(0.2, 0.75, 0.3, 1);
 }
 
-.run-relic-inventory-trigger:is(:hover, :focus-visible) .run-relic-icon {
+.run-lipsanon-inventory-trigger:is(:hover, :focus-visible) .run-lipsanon-icon {
   filter: brightness(1.18) drop-shadow(0 0 6px rgb(255 226 168 / 0.6));
   scale: 1.125;
 }
 
-.run-relic-inventory-item .run-relic-icon,
-.run-relic-inventory-item .run-relic-icon img {
+.run-lipsanon-inventory-item .run-lipsanon-icon,
+.run-lipsanon-inventory-item .run-lipsanon-icon img {
   block-size: 64px;
   inline-size: 64px;
 }
 
-.run-relic-inventory-item .run-relic-icon.is-unavailable {
+.run-lipsanon-inventory-item .run-lipsanon-icon.is-unavailable {
   font-size: var(--ds-text-xs);
 }
 
-.run-relic-inventory-item img {
+.run-lipsanon-inventory-item img {
   filter: drop-shadow(0 2px 1px rgba(0, 0, 0, .85));
 }
 
-.run-screen .run-relic-strip {
+.run-screen .run-lipsanon-strip {
   max-inline-size: calc(100% - (2 * var(--ds-space-3)));
 }
 
-.run-screen.has-relics .run-shell-workspace-content {
-  padding-block-start: calc(var(--ds-gutter) + var(--run-relic-strip-block-size) + var(--ds-space-2));
+.run-screen.has-lipsana .run-shell-workspace-content {
+  padding-block-start: calc(var(--ds-gutter) + var(--run-lipsanon-strip-block-size) + var(--ds-space-2));
 }
 
-.run-relic-review-screen {
+.run-lipsanon-review-screen {
   block-size: 100%;
   box-sizing: border-box;
   grid-template-columns: minmax(0, 1fr);
@@ -19388,7 +19388,7 @@ button.tileset-relationship-cell {
   padding: var(--ds-inset);
 }
 
-.run-relic-review-panel {
+.run-lipsanon-review-panel {
   grid-column: 1;
   grid-row: 2;
   margin-inline: auto;
@@ -19397,13 +19397,13 @@ button.tileset-relationship-cell {
   inline-size: 100%;
 }
 
-.run-relic-review-panel > .le-outer-panel-content {
+.run-lipsanon-review-panel > .le-outer-panel-content {
   display: grid;
   gap: var(--ds-inline);
 }
 
 /* Screen-art candidates are wide 640x360 plates meant to be read at 4x, so they get a
-   flowing row per screen rather than the relic grid's fixed icon columns. */
+   flowing row per screen rather than the lipsanon grid's fixed icon columns. */
 /* A backdrop plate is opaque and object-fit:cover fills the whole box, so the base
    card-image checkerboard never shows through and this rule paints nothing of its own —
    it only sets the 16:9 shape the plates are authored in. */
@@ -19434,11 +19434,11 @@ button.tileset-relationship-cell {
   block-size: auto;
 }
 
-/* Relic-mat review composite: chosen backdrop, mat over it, live relic cards on top.
+/* Lipsanon-mat review composite: chosen backdrop, mat over it, live lipsanon cards on top.
    Layout only — every visible surface in the stack is generated art or an existing
    chrome unit, so nothing here paints. The mat and the card row share one grid cell
    deliberately: a mat that fails to contain the row must show that it fails. */
-.relic-mat-stage {
+.lipsanon-mat-stage {
   aspect-ratio: 16 / 9;
   display: grid;
   inline-size: 100%;
@@ -19447,7 +19447,7 @@ button.tileset-relationship-cell {
   position: relative;
 }
 
-.relic-mat-backdrop {
+.lipsanon-mat-backdrop {
   block-size: 100%;
   image-rendering: pixelated;
   inline-size: 100%;
@@ -19456,19 +19456,19 @@ button.tileset-relationship-cell {
   position: absolute;
 }
 
-/* The CARD ROW sizes this, not the stage: the layer shrinks to the relics' own
+/* The CARD ROW sizes this, not the stage: the layer shrinks to the lipsana' own
    max-content width and the mat is drawn to that plus one bleed on each side. Sizing the
    mat as a share of the stage instead makes it grow with the viewport and swallow the
    backdrop it is supposed to be lying on. */
-/* --relic-mat-scale is the mat's width as a multiple of the relic row's. It is the one
+/* --lipsanon-mat-scale is the mat's width as a multiple of the lipsanon row's. It is the one
    number this composite is tuned by, so the Viewer drives it directly and the committed
    value below is what the Viewer's reset returns to. */
-.relic-mat-layer {
-  --relic-mat-scale: 1.74;
+.lipsanon-mat-layer {
+  --lipsanon-mat-scale: 1.74;
   display: grid;
   /* Leave the overhang room, or a narrow stage lets the row fill it and the mat's torn
      edges are the first thing clipped away -- the one part of it that has to be seen. */
-  max-inline-size: calc(100% / var(--relic-mat-scale));
+  max-inline-size: calc(100% / var(--lipsanon-mat-scale));
   place-items: center;
   position: relative;
 }
@@ -19479,33 +19479,33 @@ button.tileset-relationship-cell {
    would distort the torn silhouette and cropping to fit would cut it off. That makes the
    mat taller than the row, and grid/flex centring of an overflowing item is not reliable
    here (it resolved to top-aligned), so the block centre is pinned outright. */
-.relic-mat-art {
+.lipsanon-mat-art {
   block-size: auto;
   /* The tray is a painted object dropped onto a painted room, and its wood sits at nearly the
      same value as the table under it -- with nothing between the two silhouettes it reads as
-     pasted over the scene rather than resting in it. The same one-pixel stroke the relics
-     already carry gives the edge somewhere to end. Tuned in the Studio's Relic Mat viewer. */
-  --relic-tray-stroke: rgb(12 9 7 / 0.9);
+     pasted over the scene rather than resting in it. The same one-pixel stroke the lipsana
+     already carry gives the edge somewhere to end. Tuned in the Studio's Lipsanon Mat viewer. */
+  --lipsanon-tray-stroke: rgb(12 9 7 / 0.9);
   filter:
-    drop-shadow(var(--relic-tray-stroke-width, 1px) 0 0 var(--relic-tray-stroke))
-    drop-shadow(calc(-1 * var(--relic-tray-stroke-width, 1px)) 0 0 var(--relic-tray-stroke))
-    drop-shadow(0 var(--relic-tray-stroke-width, 1px) 0 var(--relic-tray-stroke))
-    drop-shadow(0 calc(-1 * var(--relic-tray-stroke-width, 1px)) 0 var(--relic-tray-stroke))
-    brightness(var(--relic-tray-dim, 1));
+    drop-shadow(var(--lipsanon-tray-stroke-width, 1px) 0 0 var(--lipsanon-tray-stroke))
+    drop-shadow(calc(-1 * var(--lipsanon-tray-stroke-width, 1px)) 0 0 var(--lipsanon-tray-stroke))
+    drop-shadow(0 var(--lipsanon-tray-stroke-width, 1px) 0 var(--lipsanon-tray-stroke))
+    drop-shadow(0 calc(-1 * var(--lipsanon-tray-stroke-width, 1px)) 0 var(--lipsanon-tray-stroke))
+    brightness(var(--lipsanon-tray-dim, 1));
   image-rendering: pixelated;
-  transition: --relic-tray-dim 220ms ease;
-  inline-size: calc(100% * var(--relic-mat-scale));
+  transition: --lipsanon-tray-dim 220ms ease;
+  inline-size: calc(100% * var(--lipsanon-mat-scale));
   inset-block-start: 50%;
-  inset-inline-start: calc((100% - 100% * var(--relic-mat-scale)) / 2);
+  inset-inline-start: calc((100% - 100% * var(--lipsanon-mat-scale)) / 2);
   position: absolute;
   translate: 0 -50%;
 }
 
-/* The offers themselves: the relic icon and nothing else. No card, no name, no effect
+/* The offers themselves: the lipsanon icon and nothing else. No card, no name, no effect
    text -- the reading is the art, and the words arrive on hover through the shared
    Tooltip. This row is what gives the layer its width, so the mat ends up sized to the
-   relics rather than to a panel wrapped around them. */
-.relic-mat-cards {
+   lipsana rather than to a panel wrapped around them. */
+.lipsanon-mat-cards {
   display: flex;
   gap: var(--ds-space-7);
   position: relative;
@@ -19514,12 +19514,12 @@ button.tileset-relationship-cell {
 /* The icons are dropped straight onto painted cloth, stone or wood, so nothing separates
    their silhouette from what is behind them. A hard one-pixel stroke does that without
    touching the art or putting a frame back around it. */
-.relic-mat-offer .run-relic-icon {
+.lipsanon-mat-offer .run-lipsanon-icon {
   overflow: visible;
 }
 
 .run-vacantia-take {
-  /* The relic IS the control here -- the take target is the art, not a panel around it.
+  /* The lipsanon IS the control here -- the take target is the art, not a panel around it.
      These declarations only remove the shell's default button chrome; they paint no
      parallel surface of their own. */
   background: none;
@@ -19546,30 +19546,30 @@ button.tileset-relationship-cell {
   margin: 0;
 }
 
-.relic-mat-offer .run-relic-icon img,
-.run-relic-flight .run-relic-icon img {
-  --relic-mat-stroke: rgb(16 12 9 / 0.92);
+.lipsanon-mat-offer .run-lipsanon-icon img,
+.run-lipsanon-flight .run-lipsanon-icon img {
+  --lipsanon-mat-stroke: rgb(16 12 9 / 0.92);
   filter:
-    drop-shadow(1px 0 0 var(--relic-mat-stroke))
-    drop-shadow(-1px 0 0 var(--relic-mat-stroke))
-    drop-shadow(0 1px 0 var(--relic-mat-stroke))
-    drop-shadow(0 -1px 0 var(--relic-mat-stroke));
+    drop-shadow(1px 0 0 var(--lipsanon-mat-stroke))
+    drop-shadow(-1px 0 0 var(--lipsanon-mat-stroke))
+    drop-shadow(0 1px 0 var(--lipsanon-mat-stroke))
+    drop-shadow(0 -1px 0 var(--lipsanon-mat-stroke));
 }
 
-/* ===== The relics are alive on the mat =====
+/* ===== The lipsana are alive on the mat =====
    Three unclaimed objects lying in a dim room. They breathe, they give off a little light,
    and they answer the pointer -- so the screen reads as goods worth taking rather than three
    inert thumbnails. Motion and light only: nothing here paints a surface, and the light is
-   cast by each relic's OWN silhouette, which is why it follows the art instead of sitting
+   cast by each lipsanon's OWN silhouette, which is why it follows the art instead of sitting
    behind it as a disc. */
 
-/* Registered so the amplitude itself can be TRANSITIONED. That is what lets a hovered relic
-   settle: the bob keeps running on its own clock while its rise eases to zero, so the relic
+/* Registered so the amplitude itself can be TRANSITIONED. That is what lets a hovered lipsanon
+   settle: the bob keeps running on its own clock while its rise eases to zero, so the lipsanon
    comes to rest at exactly translate 0 -- its seat on the mat -- from wherever in the cycle
    the pointer caught it, and picks the bob back up from the same clock on the way out.
    Freezing the animation instead would stop it wherever it happened to be, which is a
    different resting height every time. The initial value is the committed rise. */
-@property --relic-float-rise {
+@property --lipsanon-float-rise {
   syntax: '<length>';
   inherits: true;
   initial-value: 5px;
@@ -19578,55 +19578,55 @@ button.tileset-relationship-cell {
 /* The hover EMPHASES, each a 0..1 strength so they compose instead of competing. Registered
    so they transition, and 0 by default so every one of them is a no-op until it is switched
    on -- the drop-shadows they drive collapse to zero radius at zero alpha. Toggled live in
-   the Studio's Relic Mat viewer; whichever combination is chosen becomes the committed one. */
-@property --relic-flare {
+   the Studio's Lipsanon Mat viewer; whichever combination is chosen becomes the committed one. */
+@property --lipsanon-flare {
   syntax: '<number>';
   inherits: true;
   initial-value: 0;
 }
 
-@property --relic-lift {
+@property --lipsanon-lift {
   syntax: '<number>';
   inherits: true;
   initial-value: 0;
 }
 
-/* How far the tray is pushed back while one relic is being considered. 1 is untouched. */
-@property --relic-tray-dim {
+/* How far the tray is pushed back while one lipsanon is being considered. 1 is untouched. */
+@property --lipsanon-tray-dim {
   syntax: '<number>';
   inherits: true;
   initial-value: 1;
 }
 
-/* The emanation's PULSE DEPTH, on the same principle. A hovered relic has to stop moving,
+/* The emanation's PULSE DEPTH, on the same principle. A hovered lipsanon has to stop moving,
    and a halo whose blur radius breathes in and out is moving -- the lit edge visibly grows
    and shrinks even though the sprite is perfectly still. Easing the depth to zero collapses
-   the pulse onto its bright end, so the hovered relic holds one steady light instead of
+   the pulse onto its bright end, so the hovered lipsanon holds one steady light instead of
    going dark or continuing to breathe. */
-@property --relic-glow-pulse {
+@property --lipsanon-glow-pulse {
   syntax: '<number>';
   inherits: true;
   initial-value: 1;
 }
 
-/* The bob is one ramp of stops expressed as fractions of --relic-float-rise, and the TIMING
+/* The bob is one ramp of stops expressed as fractions of --lipsanon-float-rise, and the TIMING
    FUNCTION decides its character: interpolate between the stops and it is a smooth float;
    hold each stop with steps(1, end) and it is a pixel-art bob that never lands off-pixel.
    Every stop is round()ed to a whole pixel so the stepped reading stays integer-exact at any
    amplitude -- the smooth reading interpolates between those integer endpoints and is
-   unaffected. Both are tuned live in the Studio's Relic Mat viewer. */
-@keyframes relic-vacantia-float {
+   unaffected. Both are tuned live in the Studio's Lipsanon Mat viewer. */
+@keyframes lipsanon-vacantia-float {
   0%    { translate: 0 0; }
-  8.4%  { translate: 0 round(calc(var(--relic-float-rise, 5px) * -0.2), 1px); }
-  16.7% { translate: 0 round(calc(var(--relic-float-rise, 5px) * -0.4), 1px); }
-  25%   { translate: 0 round(calc(var(--relic-float-rise, 5px) * -0.6), 1px); }
-  33.4% { translate: 0 round(calc(var(--relic-float-rise, 5px) * -0.8), 1px); }
-  41.7% { translate: 0 round(calc(var(--relic-float-rise, 5px) * -1), 1px); }
-  58.4% { translate: 0 round(calc(var(--relic-float-rise, 5px) * -1), 1px); }
-  66.7% { translate: 0 round(calc(var(--relic-float-rise, 5px) * -0.8), 1px); }
-  75%   { translate: 0 round(calc(var(--relic-float-rise, 5px) * -0.6), 1px); }
-  83.4% { translate: 0 round(calc(var(--relic-float-rise, 5px) * -0.4), 1px); }
-  91.7% { translate: 0 round(calc(var(--relic-float-rise, 5px) * -0.2), 1px); }
+  8.4%  { translate: 0 round(calc(var(--lipsanon-float-rise, 5px) * -0.2), 1px); }
+  16.7% { translate: 0 round(calc(var(--lipsanon-float-rise, 5px) * -0.4), 1px); }
+  25%   { translate: 0 round(calc(var(--lipsanon-float-rise, 5px) * -0.6), 1px); }
+  33.4% { translate: 0 round(calc(var(--lipsanon-float-rise, 5px) * -0.8), 1px); }
+  41.7% { translate: 0 round(calc(var(--lipsanon-float-rise, 5px) * -1), 1px); }
+  58.4% { translate: 0 round(calc(var(--lipsanon-float-rise, 5px) * -1), 1px); }
+  66.7% { translate: 0 round(calc(var(--lipsanon-float-rise, 5px) * -0.8), 1px); }
+  75%   { translate: 0 round(calc(var(--lipsanon-float-rise, 5px) * -0.6), 1px); }
+  83.4% { translate: 0 round(calc(var(--lipsanon-float-rise, 5px) * -0.4), 1px); }
+  91.7% { translate: 0 round(calc(var(--lipsanon-float-rise, 5px) * -0.2), 1px); }
   100%  { translate: 0 0; }
 }
 
@@ -19634,91 +19634,91 @@ button.tileset-relationship-cell {
    The stroke is repeated in every frame because an animated `filter` replaces the whole
    declaration -- drop it and the silhouette loses its footing against the mat.
    The BRIGHT end is the fixed one and the trough is written as the bright end minus a depth
-   scaled by --relic-glow-pulse, so collapsing the pulse to 0 leaves both keyframes equal at
-   full brightness. That is what a settled relic holds. */
-@keyframes relic-vacantia-emanate {
+   scaled by --lipsanon-glow-pulse, so collapsing the pulse to 0 leaves both keyframes equal at
+   full brightness. That is what a settled lipsanon holds. */
+@keyframes lipsanon-vacantia-emanate {
   0%, 100% {
     filter:
-      drop-shadow(1px 0 0 var(--relic-mat-stroke))
-      drop-shadow(-1px 0 0 var(--relic-mat-stroke))
-      drop-shadow(0 1px 0 var(--relic-mat-stroke))
-      drop-shadow(0 -1px 0 var(--relic-mat-stroke))
+      drop-shadow(1px 0 0 var(--lipsanon-mat-stroke))
+      drop-shadow(-1px 0 0 var(--lipsanon-mat-stroke))
+      drop-shadow(0 1px 0 var(--lipsanon-mat-stroke))
+      drop-shadow(0 -1px 0 var(--lipsanon-mat-stroke))
       /* Same RGB at both ends, deliberately: radius and opacity carry the whole pulse. Let
          the colour differ too and the two frames never become equal at pulse 0 -- the hue
-         goes on drifting under a settled relic, which is exactly the movement being removed
+         goes on drifting under a settled lipsanon, which is exactly the movement being removed
          here. At half opacity the warmer trough tint was doing nothing visible anyway. */
       drop-shadow(
-        0 0 calc((6px - 3px * var(--relic-glow-pulse, 1)) * var(--relic-glow, 1))
-        rgb(255 232 186 / calc((0.86 - 0.36 * var(--relic-glow-pulse, 1)) * var(--relic-glow, 1))))
+        0 0 calc((6px - 3px * var(--lipsanon-glow-pulse, 1)) * var(--lipsanon-glow, 1))
+        rgb(255 232 186 / calc((0.86 - 0.36 * var(--lipsanon-glow-pulse, 1)) * var(--lipsanon-glow, 1))))
       drop-shadow(
-        0 0 calc((20px - 10px * var(--relic-glow-pulse, 1)) * var(--relic-glow, 1))
-        rgb(255 190 96 / calc((0.52 - 0.24 * var(--relic-glow-pulse, 1)) * var(--relic-glow, 1))));
+        0 0 calc((20px - 10px * var(--lipsanon-glow-pulse, 1)) * var(--lipsanon-glow, 1))
+        rgb(255 190 96 / calc((0.52 - 0.24 * var(--lipsanon-glow-pulse, 1)) * var(--lipsanon-glow, 1))));
   }
   50% {
     filter:
-      drop-shadow(1px 0 0 var(--relic-mat-stroke))
-      drop-shadow(-1px 0 0 var(--relic-mat-stroke))
-      drop-shadow(0 1px 0 var(--relic-mat-stroke))
-      drop-shadow(0 -1px 0 var(--relic-mat-stroke))
-      drop-shadow(0 0 calc(6px * var(--relic-glow, 1)) rgb(255 232 186 / calc(0.86 * var(--relic-glow, 1))))
-      drop-shadow(0 0 calc(20px * var(--relic-glow, 1)) rgb(255 190 96 / calc(0.52 * var(--relic-glow, 1))));
+      drop-shadow(1px 0 0 var(--lipsanon-mat-stroke))
+      drop-shadow(-1px 0 0 var(--lipsanon-mat-stroke))
+      drop-shadow(0 1px 0 var(--lipsanon-mat-stroke))
+      drop-shadow(0 -1px 0 var(--lipsanon-mat-stroke))
+      drop-shadow(0 0 calc(6px * var(--lipsanon-glow, 1)) rgb(255 232 186 / calc(0.86 * var(--lipsanon-glow, 1))))
+      drop-shadow(0 0 calc(20px * var(--lipsanon-glow, 1)) rgb(255 190 96 / calc(0.52 * var(--lipsanon-glow, 1))));
   }
 }
 
-/* Owned by the OFFER, not by the take button: the Studio's Relic Mat viewer mounts the same
+/* Owned by the OFFER, not by the take button: the Studio's Lipsanon Mat viewer mounts the same
    composite without the button, and a treatment the tuner cannot see is a treatment that
-   cannot be tuned. Each offer carries its own --relic-float-spread and delay so the three
+   cannot be tuned. Each offer carries its own --lipsanon-float-spread and delay so the three
    never move as one strip; the viewer drives the period they all scale from.
 
    !important clears the global `* { animation: none }` OS-reduce reset: Windows "animation
    effects off" reports prefers-reduced-motion falsely (deploy-drop/ADR-0048 precedent), and
    this is the whole life of the screen. The EXPLICIT in-game choice still stills it, below. */
-.relic-mat-offer .run-relic-icon {
+.lipsanon-mat-offer .run-lipsanon-icon {
   animation:
-    relic-vacantia-float
-    calc(var(--relic-float-period, 3.4s) * var(--relic-float-spread, 1))
-    var(--relic-float-timing, linear)
-    var(--relic-float-delay, 0s)
+    lipsanon-vacantia-float
+    calc(var(--lipsanon-float-period, 3.4s) * var(--lipsanon-float-spread, 1))
+    var(--lipsanon-float-timing, linear)
+    var(--lipsanon-float-delay, 0s)
     infinite !important;
 }
 
-.relic-mat-offer .run-relic-icon img {
+.lipsanon-mat-offer .run-lipsanon-icon img {
   animation:
-    relic-vacantia-emanate
-    calc(var(--relic-float-period, 3.4s) * var(--relic-float-spread, 1) * 1.35)
+    lipsanon-vacantia-emanate
+    calc(var(--lipsanon-float-period, 3.4s) * var(--lipsanon-float-spread, 1) * 1.35)
     ease-in-out
-    var(--relic-float-delay, 0s)
+    var(--lipsanon-float-delay, 0s)
     infinite !important;
   /* Declared HERE, on the element the filter belongs to. The hover sets the depth on the
      icon above, which jumps; the img sees that inherited change and eases it, so the light
-     comes up to its steady level over the same beat the relic takes to settle. */
-  transition: --relic-glow-pulse 240ms cubic-bezier(0.3, 0.7, 0.3, 1);
+     comes up to its steady level over the same beat the lipsanon takes to settle. */
+  transition: --lipsanon-glow-pulse 240ms cubic-bezier(0.3, 0.7, 0.3, 1);
 }
 
-/* Hovering picks the relic up and SETTLES it: the rise eases to zero, so the relic stops
+/* Hovering picks the lipsanon up and SETTLES it: the rise eases to zero, so the lipsanon stops
    drifting and comes to rest on its seat -- the same height every time, whatever part of the
    bob the pointer caught. A held object the reader is deciding about should hold still and be
    easy to aim at; it is still lit, and the emanation keeps breathing, because light is not
    movement. Keyed off the offer rather than the button so focusing the tooltip trigger reads
    the same, and so the viewer's unbuttoned copy answers the pointer exactly as the game does. */
-.relic-mat-offer:hover .run-relic-icon,
-.relic-mat-offer:focus-within .run-relic-icon {
-  --relic-float-rise: 0px;
-  --relic-glow-pulse: 0;
+.lipsanon-mat-offer:hover .run-lipsanon-icon,
+.lipsanon-mat-offer:focus-within .run-lipsanon-icon {
+  --lipsanon-float-rise: 0px;
+  --lipsanon-glow-pulse: 0;
   /* One chain, every emphasis always present at its own strength. At 0 a drop-shadow has no
      radius and no alpha, so an effect that is switched off costs nothing and cannot fight
      the ones that are on. */
   filter:
     brightness(1.2)
     drop-shadow(
-      0 calc(7px * var(--relic-lift, 0)) calc(6px * var(--relic-lift, 0))
-      rgb(6 4 3 / calc(0.62 * var(--relic-lift, 0))))
+      0 calc(7px * var(--lipsanon-lift, 0)) calc(6px * var(--lipsanon-lift, 0))
+      rgb(6 4 3 / calc(0.62 * var(--lipsanon-lift, 0))))
     drop-shadow(
-      0 0 calc(9px * var(--relic-flare, 0))
-      rgb(255 240 206 / calc(0.9 * var(--relic-flare, 0))))
+      0 0 calc(9px * var(--lipsanon-flare, 0))
+      rgb(255 240 206 / calc(0.9 * var(--lipsanon-flare, 0))))
     drop-shadow(
-      0 0 calc(30px * var(--relic-flare, 0))
-      rgb(255 196 104 / calc(0.72 * var(--relic-flare, 0))));
+      0 0 calc(30px * var(--lipsanon-flare, 0))
+      rgb(255 196 104 / calc(0.72 * var(--lipsanon-flare, 0))));
   /* 64px x 1.25 is 80px EXACTLY. A fractional hover size (1.22 gave 78.08px) leaves the
      nearest-neighbour sampling grid landing between source pixels, and the sprite's edges
      crawl as it is re-rasterized -- movement the computed style cannot show you. */
@@ -19730,12 +19730,12 @@ button.tileset-relationship-cell {
    every frame, which a pixelated sprite shows as a crawl along its edges. Pausing ends that.
    The settle survives the pause because a paused animation still re-resolves the var() in
    its keyframes -- verified in Chrome -- so the rise and the pulse go on easing to zero
-   underneath it and the relic still comes to rest on its seat rather than freezing wherever
+   underneath it and the lipsanon still comes to rest on its seat rather than freezing wherever
    the pointer caught it. */
-.relic-mat-offer:hover .run-relic-icon,
-.relic-mat-offer:focus-within .run-relic-icon,
-.relic-mat-offer:hover .run-relic-icon img,
-.relic-mat-offer:focus-within .run-relic-icon img {
+.lipsanon-mat-offer:hover .run-lipsanon-icon,
+.lipsanon-mat-offer:focus-within .run-lipsanon-icon,
+.lipsanon-mat-offer:hover .run-lipsanon-icon img,
+.lipsanon-mat-offer:focus-within .run-lipsanon-icon img {
   /* !important because the `animation` SHORTHAND above carries it, and a shorthand resets
      animation-play-state to `running` -- an unflagged pause here is simply outranked. */
   animation-play-state: paused !important;
@@ -19747,45 +19747,45 @@ button.tileset-relationship-cell {
    from adding light to the thing being considered, or from taking it away from everything
    else, and those read very differently.
 
-   FLARE  -- the emanation opens up past the steady level a settled relic already holds.
+   FLARE  -- the emanation opens up past the steady level a settled lipsanon already holds.
    LIFT   -- a contact shadow appears beneath, so the scale reads as picked up off the tray
              rather than simply drawn bigger.
    RIM    -- the one-pixel silhouette stroke turns from near-black to warm gold, so the edge
              itself catches the light. It reaches a PAUSED animation because a paused
              animation still re-resolves the var() in its keyframes.
    FOCUS  -- the tray and the other two offers recede instead, emphasising by contrast. */
-.relic-mat-stage[data-hover-flare] .relic-mat-offer:hover .run-relic-icon,
-.relic-mat-stage[data-hover-flare] .relic-mat-offer:focus-within .run-relic-icon {
-  --relic-flare: 1;
+.lipsanon-mat-stage[data-hover-flare] .lipsanon-mat-offer:hover .run-lipsanon-icon,
+.lipsanon-mat-stage[data-hover-flare] .lipsanon-mat-offer:focus-within .run-lipsanon-icon {
+  --lipsanon-flare: 1;
 }
 
-.relic-mat-stage[data-hover-lift] .relic-mat-offer:hover .run-relic-icon,
-.relic-mat-stage[data-hover-lift] .relic-mat-offer:focus-within .run-relic-icon {
-  --relic-lift: 1;
+.lipsanon-mat-stage[data-hover-lift] .lipsanon-mat-offer:hover .run-lipsanon-icon,
+.lipsanon-mat-stage[data-hover-lift] .lipsanon-mat-offer:focus-within .run-lipsanon-icon {
+  --lipsanon-lift: 1;
 }
 
-.relic-mat-stage[data-hover-rim] .relic-mat-offer:hover .run-relic-icon img,
-.relic-mat-stage[data-hover-rim] .relic-mat-offer:focus-within .run-relic-icon img {
-  --relic-mat-stroke: rgb(255 214 142 / 0.95);
+.lipsanon-mat-stage[data-hover-rim] .lipsanon-mat-offer:hover .run-lipsanon-icon img,
+.lipsanon-mat-stage[data-hover-rim] .lipsanon-mat-offer:focus-within .run-lipsanon-icon img {
+  --lipsanon-mat-stroke: rgb(255 214 142 / 0.95);
 }
 
-.relic-mat-stage[data-hover-focus] .relic-mat-layer:has(.relic-mat-offer:hover) .relic-mat-art,
-.relic-mat-stage[data-hover-focus] .relic-mat-layer:has(.relic-mat-offer:focus-within) .relic-mat-art {
-  --relic-tray-dim: 0.66;
+.lipsanon-mat-stage[data-hover-focus] .lipsanon-mat-layer:has(.lipsanon-mat-offer:hover) .lipsanon-mat-art,
+.lipsanon-mat-stage[data-hover-focus] .lipsanon-mat-layer:has(.lipsanon-mat-offer:focus-within) .lipsanon-mat-art {
+  --lipsanon-tray-dim: 0.66;
 }
 
-.relic-mat-stage[data-hover-focus] .relic-mat-cards:has(.relic-mat-offer:hover) .relic-mat-offer:not(:hover),
-.relic-mat-stage[data-hover-focus] .relic-mat-cards:has(.relic-mat-offer:focus-within) .relic-mat-offer:not(:focus-within) {
+.lipsanon-mat-stage[data-hover-focus] .lipsanon-mat-cards:has(.lipsanon-mat-offer:hover) .lipsanon-mat-offer:not(:hover),
+.lipsanon-mat-stage[data-hover-focus] .lipsanon-mat-cards:has(.lipsanon-mat-offer:focus-within) .lipsanon-mat-offer:not(:focus-within) {
   opacity: 0.42;
 }
 
 /* The strengths ease rather than snap, on the same beat as the settle. Declared where each
    one is READ: the icon owns flare and lift, the img owns the rim colour. */
-.relic-mat-offer .run-relic-icon {
+.lipsanon-mat-offer .run-lipsanon-icon {
   transition:
-    --relic-flare 220ms ease,
-    --relic-float-rise 240ms cubic-bezier(0.3, 0.7, 0.3, 1),
-    --relic-lift 220ms ease,
+    --lipsanon-flare 220ms ease,
+    --lipsanon-float-rise 240ms cubic-bezier(0.3, 0.7, 0.3, 1),
+    --lipsanon-lift 220ms ease,
     filter 200ms ease,
     scale 200ms cubic-bezier(0.2, 0.75, 0.3, 1);
 }
@@ -19793,67 +19793,67 @@ button.tileset-relationship-cell {
 /* An offer that cannot be taken yet does not answer the pointer at all -- it keeps the
    amplitude it inherits from the stage and goes on drifting. Ordered after the hover rule
    deliberately: the two carry equal specificity and the later one is meant to win. */
-.run-vacantia-take:disabled .run-relic-icon {
-  --relic-float-rise: inherit;
-  --relic-glow-pulse: inherit;
+.run-vacantia-take:disabled .run-lipsanon-icon {
+  --lipsanon-float-rise: inherit;
+  --lipsanon-glow-pulse: inherit;
   animation-play-state: running !important;
   filter: none;
   scale: 1;
 }
 
-.run-vacantia-take:disabled .run-relic-icon img {
+.run-vacantia-take:disabled .run-lipsanon-icon img {
   animation-play-state: running !important;
 }
 
-/* Taking is committed when the relic lands, so the mat has to hold still while it travels:
+/* Taking is committed when the lipsanon lands, so the mat has to hold still while it travels:
    the ones left behind recede, the taken one leaves with the flying copy, and nothing is
    clickable.
 
    The recede runs on the FLIGHT's clock and the flight's easing -- same duration, same curve
    -- so the two are one gesture rather than two effects that happen to overlap. The duration
-   is RELIC_FLIGHT_MS; a test pins the two together. */
-.relic-mat-cards {
-  --relic-take-duration: 560ms;
-  --relic-take-easing: cubic-bezier(0.45, 0.05, 0.25, 1);
+   is LIPSANON_FLIGHT_MS; a test pins the two together. */
+.lipsanon-mat-cards {
+  --lipsanon-take-duration: 560ms;
+  --lipsanon-take-easing: cubic-bezier(0.45, 0.05, 0.25, 1);
 }
 
-.relic-mat-offer {
+.lipsanon-mat-offer {
   transition:
-    opacity var(--relic-take-duration) var(--relic-take-easing),
-    scale var(--relic-take-duration) var(--relic-take-easing);
+    opacity var(--lipsanon-take-duration) var(--lipsanon-take-easing),
+    scale var(--lipsanon-take-duration) var(--lipsanon-take-easing);
 }
 
 /* The WHOLE offer stops taking the pointer, not just its button: dropping only the button
-   leaves the tooltip wrapper hovered, and the name of a relic that is no longer on the mat
+   leaves the tooltip wrapper hovered, and the name of a lipsanon that is no longer on the mat
    goes on floating over an empty tray. Killing hit-testing on the wrapper makes the browser
    re-evaluate what is under the cursor, the hover ends, and the tip goes with it. */
-.relic-mat-cards[data-taking] .relic-mat-offer {
+.lipsanon-mat-cards[data-taking] .lipsanon-mat-offer {
   pointer-events: none;
 }
 
 /* They GO as the chosen one leaves -- shrinking away to nothing rather than settling at some
-   dimmer size. Only one relic was ever going to be taken, so the other two have no business
+   dimmer size. Only one lipsanon was ever going to be taken, so the other two have no business
    still being on the mat when it lands. The knob is how much of that exit is a shrink: 0
    collapses them to a point, 1 fades them out where they lie. */
-.relic-mat-cards[data-taking] .relic-mat-offer {
+.lipsanon-mat-cards[data-taking] .lipsanon-mat-offer {
   opacity: 0;
-  scale: var(--relic-recede-scale, 0);
+  scale: var(--lipsanon-recede-scale, 0);
 }
 
-/* The relic that LEFT is gone from the mat, whether or not the rest are receding: the
+/* The lipsanon that LEFT is gone from the mat, whether or not the rest are receding: the
    travelling copy is the only one of it that should be on screen. Both selectors are needed
-   because the dimming rule above is more specific than a bare `.relic-mat-offer.is-flying`. */
-.relic-mat-cards .relic-mat-offer.is-flying,
-.relic-mat-cards[data-taking] .relic-mat-offer.is-flying {
+   because the dimming rule above is more specific than a bare `.lipsanon-mat-offer.is-flying`. */
+.lipsanon-mat-cards .lipsanon-mat-offer.is-flying,
+.lipsanon-mat-cards[data-taking] .lipsanon-mat-offer.is-flying {
   opacity: 0;
   transition: none;
 }
 
-/* The Studio viewer's landing corner. The game sends a taken relic to the held-relic strip
+/* The Studio viewer's landing corner. The game sends a taken lipsanon to the held-lipsanon strip
    in the screen's top-left, so the stand-in sits in the same corner of the stage and uses the
    same 64px slots -- the travel being judged has to be the travel that ships, not a shorter
    one to a nearer target. */
-.relic-mat-landing {
+.lipsanon-mat-landing {
   display: flex;
   gap: var(--ds-space-1);
   inset-block-start: var(--ds-space-2);
@@ -19862,107 +19862,107 @@ button.tileset-relationship-cell {
   z-index: 2;
 }
 
-.relic-mat-landing-slot {
+.lipsanon-mat-landing-slot {
   block-size: 64px;
   display: inline-flex;
   flex: 0 0 64px;
   inline-size: 64px;
 }
 
-.relic-mat-landing-slot img {
+.lipsanon-mat-landing-slot img {
   filter: drop-shadow(0 2px 1px rgb(0 0 0 / 0.85));
 }
 
-/* The relic in transit. Fixed to the viewport and portalled out of the workspace, because
+/* The lipsanon in transit. Fixed to the viewport and portalled out of the workspace, because
    it starts inside an overflow-hidden scene slot and ends in the strip outside it.
    Transitions rather than keyframes deliberately: the global reduced-motion reset kills
    animations, and a take that silently teleports is a take the player cannot follow. */
-.run-relic-flight {
-  --relic-flight-duration: 560ms;
+.run-lipsanon-flight {
+  --lipsanon-flight-duration: 560ms;
   pointer-events: none;
   position: fixed;
-  /* ONE translate on ONE element, so the relic travels the straight segment between where it
+  /* ONE translate on ONE element, so the lipsanon travels the straight segment between where it
      was laid out and where it is kept. Splitting the axes across two elements is what curves
      a path: give x and y different easings and they reach their halfway points at different
-     moments, and the relic bows away from the line between its endpoints. */
-  transition: translate var(--relic-flight-duration) cubic-bezier(0.45, 0.05, 0.25, 1);
+     moments, and the lipsanon bows away from the line between its endpoints. */
+  transition: translate var(--lipsanon-flight-duration) cubic-bezier(0.45, 0.05, 0.25, 1);
   z-index: 200;
 }
 
-.run-relic-flight .run-relic-icon {
+.run-lipsanon-flight .run-lipsanon-icon {
   overflow: visible;
 }
 
 /* The size only. It arrives at the size it will keep, shrinking out of its hover lift over
    the same beat -- a scale change does not move the centre, so it cannot bend the path. */
-.run-relic-flight-lift {
+.run-lipsanon-flight-lift {
   scale: 1.25;
-  transition: scale var(--relic-flight-duration) cubic-bezier(0.4, 0, 0.4, 1);
+  transition: scale var(--lipsanon-flight-duration) cubic-bezier(0.4, 0, 0.4, 1);
 }
 
-.run-relic-flight.is-landed {
-  translate: var(--relic-flight-x) var(--relic-flight-y);
+.run-lipsanon-flight.is-landed {
+  translate: var(--lipsanon-flight-x) var(--lipsanon-flight-y);
 }
 
-.run-relic-flight.is-landed .run-relic-flight-lift {
+.run-lipsanon-flight.is-landed .run-lipsanon-flight-lift {
   scale: 1;
 }
 
-/* The explicit in-game reduced-motion choice: the relics hold still and keep the static
-   stroke rule above. The take still slides -- it is what tells the player where the relic
+/* The explicit in-game reduced-motion choice: the lipsana hold still and keep the static
+   stroke rule above. The take still slides -- it is what tells the player where the lipsanon
    went, and it is a single short slide with nothing else moving. */
-:root.reduce-motion .relic-mat-offer .run-relic-icon,
-:root.reduce-motion .relic-mat-offer .run-relic-icon img {
+:root.reduce-motion .lipsanon-mat-offer .run-lipsanon-icon,
+:root.reduce-motion .lipsanon-mat-offer .run-lipsanon-icon img {
   animation: none !important;
 }
 
 /* Catalog thumbnails carry no cards, so nothing is there to size the layer. Hold the
    same proportion the real composite lands on. */
-.relic-mat-stage[data-cards='off'] .relic-mat-layer {
+.lipsanon-mat-stage[data-cards='off'] .lipsanon-mat-layer {
   inline-size: 68%;
 }
 
-.relic-mat-stage[data-cards='off'] .relic-mat-art {
+.lipsanon-mat-stage[data-cards='off'] .lipsanon-mat-art {
   inline-size: 100%;
   inset-inline-start: 0;
 }
 
-/* The Viewer overrides --relic-mat-scale live while it is being tuned. */
-.relic-mat-stage[data-cards='on'] .relic-mat-layer {
-  --relic-mat-scale: var(--relic-mat-scale-tuned, 1.74);
+/* The Viewer overrides --lipsanon-mat-scale live while it is being tuned. */
+.lipsanon-mat-stage[data-cards='on'] .lipsanon-mat-layer {
+  --lipsanon-mat-scale: var(--lipsanon-mat-scale-tuned, 1.74);
 }
 
-.tileset-studio-card-image.relic-mat-card-image {
+.tileset-studio-card-image.lipsanon-mat-card-image {
   min-height: 0;
 }
 
 /* Beats the base .tileset-studio-card-image img rule, which sizes every catalog image to
    iso-tile dimensions -- correct for a tile thumbnail, but it shrinks a backdrop to a
    corner and detaches the mat from it, which is the one thing this card exists to show. */
-.tileset-studio-card-image.relic-mat-card-image .relic-mat-backdrop {
+.tileset-studio-card-image.lipsanon-mat-card-image .lipsanon-mat-backdrop {
   height: 100%;
   object-fit: cover;
   width: 100%;
 }
 
-.tileset-studio-card-image.relic-mat-card-image .relic-mat-art {
+.tileset-studio-card-image.lipsanon-mat-card-image .lipsanon-mat-art {
   height: auto;
   object-fit: contain;
   width: 100%;
 }
 
-.relic-mat-figure {
+.lipsanon-mat-figure {
   flex: 1 1 100%;
   min-inline-size: 0;
 }
 
-.run-relic-review-grid {
+.run-lipsanon-review-grid {
   display: grid;
   gap: var(--ds-inline-tight);
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.run-relic-review-grid figure {
+.run-lipsanon-review-grid figure {
   align-items: center;
   display: grid;
   gap: var(--ds-inline-tight);
@@ -19972,18 +19972,18 @@ button.tileset-relationship-cell {
   padding: var(--ds-inset);
 }
 
-.run-relic-review-grid img {
+.run-lipsanon-review-grid img {
   block-size: 64px;
   image-rendering: pixelated;
   inline-size: 64px;
 }
 
-.run-relic-review-grid figcaption {
+.run-lipsanon-review-grid figcaption {
   display: grid;
   gap: var(--ds-space-1);
 }
 
-.run-relic-review-grid small {
+.run-lipsanon-review-grid small {
   color: var(--skirmish-muted);
 }
 
@@ -20200,12 +20200,12 @@ button.tileset-relationship-cell {
   z-index: 1;
 }
 
-.run-relic-reference-art {
+.run-lipsanon-reference-art {
   display: grid;
   gap: var(--ds-inline);
 }
 
-.run-relic-reference-art summary {
+.run-lipsanon-reference-art summary {
   cursor: pointer;
   font-weight: 700;
 }
@@ -20565,7 +20565,7 @@ button.tileset-relationship-cell {
 }
 
 @media (max-width: 900px) {
-  .run-relic-review-grid,
+  .run-lipsanon-review-grid,
   .plagued-icon-review-ability-grid,
   .brush-icon-review-choice-grid,
   .run-icon-pair-options {
@@ -21007,7 +21007,7 @@ button.tileset-relationship-cell {
   text-align: end;
 }
 
-.run-relics-ledger {
+.run-lipsana-ledger {
   align-content: start;
   display: grid;
   flex: 1 1 auto;
@@ -21019,7 +21019,7 @@ button.tileset-relationship-cell {
   padding-inline-end: var(--ds-space-1);
 }
 
-.run-relics-ledger-row {
+.run-lipsana-ledger-row {
   align-items: center;
   display: grid;
   gap: var(--ds-space-4);
@@ -21028,18 +21028,18 @@ button.tileset-relationship-cell {
   padding: var(--ds-space-3);
 }
 
-.run-relics-ledger-copy {
+.run-lipsana-ledger-copy {
   display: grid;
   gap: var(--ds-space-2);
   min-inline-size: 0;
 }
 
-.run-relics-ledger-copy > strong {
+.run-lipsana-ledger-copy > strong {
   color: #eafaff;
   font: var(--ds-weight-regular) var(--ds-text-lg)/1 var(--ds-font-display);
 }
 
-.run-relics-ledger-copy > span,
+.run-lipsana-ledger-copy > span,
 .run-self-inspection-empty {
   color: var(--skirmish-muted);
   font: var(--ds-weight-regular) var(--ds-text-md)/1.35 var(--ds-font-display);
@@ -21325,11 +21325,11 @@ button.tileset-relationship-cell {
   padding: var(--ds-inset);
 }
 
-.enchiridion-relic-panel > .le-outer-panel-content {
+.enchiridion-lipsanon-panel > .le-outer-panel-content {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
-.enchiridion-relic-layout {
+.enchiridion-lipsanon-layout {
   align-content: start;
   align-items: start;
   block-size: 100%;
@@ -21341,7 +21341,7 @@ button.tileset-relationship-cell {
   overflow: hidden;
 }
 
-.enchiridion-relic-browser {
+.enchiridion-lipsanon-browser {
   align-self: stretch;
   display: grid;
   gap: var(--ds-space-2);
@@ -21349,17 +21349,17 @@ button.tileset-relationship-cell {
   min-block-size: 0;
 }
 
-.enchiridion-relic-view-tabs {
+.enchiridion-lipsanon-view-tabs {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-.enchiridion-relic-browse-panel {
+.enchiridion-lipsanon-browse-panel {
   min-block-size: 0;
   overflow: hidden;
 }
 
-.enchiridion-relic-rows,
-.enchiridion-relic-group-grid {
+.enchiridion-lipsanon-rows,
+.enchiridion-lipsanon-group-grid {
   align-content: start;
   display: grid;
   gap: var(--ds-space-2);
@@ -21369,18 +21369,18 @@ button.tileset-relationship-cell {
   padding: 0;
 }
 
-.enchiridion-relic-rows {
+.enchiridion-lipsanon-rows {
   block-size: 100%;
   overflow-x: hidden;
   overflow-y: auto;
   padding-inline-end: 4px;
 }
 
-.enchiridion-relic-row {
+.enchiridion-lipsanon-row {
   inline-size: 100%;
 }
 
-.enchiridion-relic-row {
+.enchiridion-lipsanon-row {
   align-items: center;
   cursor: pointer;
   display: grid;
@@ -21391,18 +21391,18 @@ button.tileset-relationship-cell {
   text-align: start;
 }
 
-.enchiridion-relic-row-icon,
-.enchiridion-relic-row-icon img {
+.enchiridion-lipsanon-row-icon,
+.enchiridion-lipsanon-row-icon img {
   block-size: 48px;
   inline-size: 48px;
 }
 
-.enchiridion-relic-row-name {
+.enchiridion-lipsanon-row-name {
   font-size: var(--ds-text-md);
   line-height: 1.2;
 }
 
-.enchiridion-relic-group {
+.enchiridion-lipsanon-group {
   block-size: auto;
   max-block-size: 100%;
   overflow-x: hidden;
@@ -21410,18 +21410,18 @@ button.tileset-relationship-cell {
   padding: var(--ds-inset);
 }
 
-.enchiridion-relic-group-grid {
+.enchiridion-lipsanon-group-grid {
   grid-template-columns: repeat(auto-fill, 64px);
   justify-content: start;
 }
 
-.enchiridion-relic-group-grid > li,
-.enchiridion-relic-grouped-trigger {
+.enchiridion-lipsanon-group-grid > li,
+.enchiridion-lipsanon-grouped-trigger {
   block-size: 64px;
   inline-size: 64px;
 }
 
-.enchiridion-relic-grouped-trigger {
+.enchiridion-lipsanon-grouped-trigger {
   appearance: none;
   background: none;
   border: 0;
@@ -21430,11 +21430,11 @@ button.tileset-relationship-cell {
   padding: 0;
 }
 
-.enchiridion-relic-grouped-trigger:is(:hover, :focus-visible, .is-active) .run-relic-icon {
+.enchiridion-lipsanon-grouped-trigger:is(:hover, :focus-visible, .is-active) .run-lipsanon-icon {
   filter: brightness(1.18) drop-shadow(0 0 3px rgba(101, 184, 255, .82));
 }
 
-.enchiridion-relic-detail {
+.enchiridion-lipsanon-detail {
   align-self: start;
   align-content: start;
   block-size: auto;
@@ -21448,31 +21448,31 @@ button.tileset-relationship-cell {
   padding: var(--ds-inset);
 }
 
-.enchiridion-relic-detail > dl,
-.enchiridion-relic-detail > small {
+.enchiridion-lipsanon-detail > dl,
+.enchiridion-lipsanon-detail > small {
   grid-column: 1 / -1;
 }
 
-.enchiridion-relic-detail > div {
+.enchiridion-lipsanon-detail > div {
   align-content: start;
   display: grid;
   gap: var(--ds-space-2);
 }
 
-.enchiridion-relic-detail dl {
+.enchiridion-lipsanon-detail dl {
   display: grid;
   gap: var(--ds-space-2);
   margin: 0;
 }
 
-.enchiridion-relic-detail dl > div {
+.enchiridion-lipsanon-detail dl > div {
   align-items: baseline;
   display: flex;
   gap: var(--ds-stack);
   justify-content: space-between;
 }
 
-.enchiridion-relic-detail dd {
+.enchiridion-lipsanon-detail dd {
   margin: 0;
 }
 
@@ -21901,27 +21901,27 @@ button.tileset-relationship-cell {
     min-block-size: 180px;
   }
 
-  .enchiridion-relic-layout {
+  .enchiridion-lipsanon-layout {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .enchiridion-relic-layout {
+  .enchiridion-lipsanon-layout {
     grid-template-rows: auto auto;
     overflow-x: hidden;
     overflow-y: auto;
     padding-inline-end: 4px;
   }
 
-  .enchiridion-relic-browser {
+  .enchiridion-lipsanon-browser {
     align-self: start;
   }
 
-  .enchiridion-relic-browse-panel {
+  .enchiridion-lipsanon-browse-panel {
     overflow: visible;
   }
 
-  .enchiridion-relic-rows,
-  .enchiridion-relic-group {
+  .enchiridion-lipsanon-rows,
+  .enchiridion-lipsanon-group {
     block-size: auto;
     overflow: visible;
   }
@@ -22948,7 +22948,7 @@ button.tileset-relationship-cell {
   gap: var(--ds-space-2);
   min-width: 0;
 }
-/* The named thing the tip is about, in the display face — the Run relic and
+/* The named thing the tip is about, in the display face — the Run lipsanon and
    ability tips set the precedent and every tip now follows it. */
 .tooltip-title {
   color: #9fe7ff;

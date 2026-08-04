@@ -10,7 +10,7 @@ deciders: owner (Nelson) + Codex
 
 ADR-0032 forbids visible boxes fabricated from arbitrary HTML and CSS, and
 ADR-0059 requires registered shared chrome primitives. Those rules were
-documented but not general build gates. A Run relic tooltip therefore reused
+documented but not general build gates. A Run lipsanon tooltip therefore reused
 shared interaction behavior while still inheriting an unregistered CSS-painted
 background, border, radius, and shadow.
 
@@ -32,7 +32,7 @@ current-state baseline.
   registered `InnerChromeBox`; feature code supplies only trigger and content.
 - The gate has executable regression tests proving it rejects stylesheet paint,
   inline React paint, new baseline debt, and a second tooltip owner.
-- The Run relic tooltip removes its CSS-fabricated surface declarations and
+- The Run lipsanon tooltip removes its CSS-fabricated surface declarations and
   uses the installed inner nine-slice role. Position, spacing, and typography
   remain ordinary layout concerns.
 

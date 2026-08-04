@@ -56,7 +56,7 @@ and survives its contents.**
   an empty nuisance and possible dead draw. It never cleans itself up merely
   because it is empty.
 - Removing that empty card requires an explicit card-removal effect, such as a
-  future relic or paid shop service. The exact removal mechanisms remain
+  future lipsanon or paid shop service. The exact removal mechanisms remain
   undecided.
 - It remains undecided whether plague attrition applies to every owned
   Pestiferous card on advancement or only to a card drawn or deployed for that

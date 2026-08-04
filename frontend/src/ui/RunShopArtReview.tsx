@@ -235,10 +235,10 @@ export function RunShopArtReview(): ReactElement {
 
   return (
     <main
-      className="run-relic-review-screen skirmish-screen"
+      className="run-lipsanon-review-screen skirmish-screen"
       style={{ ['--skirmish-world-bg' as string]: `url("${defaultBackgroundSet().world}")` }}
     >
-      <OuterChromeBox chromeConsumer="run-shop-art-review" titled className="run-relic-review-panel">
+      <OuterChromeBox chromeConsumer="run-shop-art-review" titled className="run-lipsanon-review-panel">
         <OuterChromeHeader title="Run Card Review" />
         <p>Accepted frame and illustration pixels mounted in the shared live card face.</p>
         <div className="run-card-grid" aria-label="Trading-card examples">

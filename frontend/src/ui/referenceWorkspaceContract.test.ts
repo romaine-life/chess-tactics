@@ -121,7 +121,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(strategikon.match(/<ApparatusRailTab/g)).toHaveLength(4);
     expect(strategikon).toContain('title="The Martial Prosopography — Current Army"');
     expect(strategikon).toContain('title="The Chartulary — Held Cards"');
-    expect(strategikon).toContain('title="The Lipsanotheca — Held Relics"');
+    expect(strategikon).toContain('title="The Lipsanotheca — Held Lipsana"');
     // Adjacent Run registers never share one mark: the army takes the Units reference's
     // mark and the Chartulary takes the Cards reference's.
     expect(strategikon).toContain("iconSrc={installedUiMedia('ui-kit-icons-unit-studio-png')}");
@@ -173,7 +173,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(strategikon).toMatch(/<EnchiridionReference[\s\S]*?framed=\{false\}/);
     expect(strategikon).not.toContain('<Enchiridion\n');
     expect(strategikon).toMatch(/<RunArmyWorkspace[\s\S]*?framed=\{false\}/);
-    expect(strategikon).toMatch(/<RelicCodex[^>]*framed=\{false\}/);
+    expect(strategikon).toMatch(/<LipsanaCodex[^>]*framed=\{false\}/);
     expect(runArmy).toContain('framed = true');
     expect(runArmy).toContain('className={`${className} ${contentClassName} run-panel-unframed`}');
     // The unframed run panels must fill the Strategikon content region: without a
@@ -187,23 +187,23 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(workspaceRule).toContain('pointer-events: auto');
   });
 
-  it('supports tooltip-free relic views that consume the remaining main-menu canvas (ADR-0254)', () => {
-    const start = enchiridion.indexOf('export function RelicCodex');
+  it('supports tooltip-free lipsanon views that consume the remaining main-menu canvas (ADR-0254)', () => {
+    const start = enchiridion.indexOf('export function LipsanaCodex');
     const end = enchiridion.indexOf('function AbilitiesSection', start);
-    const relicCodex = enchiridion.slice(start, end);
-    expect(relicCodex).toContain("useState<RelicBrowseMode>('rows')");
-    expect(relicCodex).toContain('data-testid="relic-view-rows"');
-    expect(relicCodex).toContain('data-testid="relic-view-grouped"');
-    expect(relicCodex).toMatch(/chromeUnitClassNames\(\s*'inner-list-row'/);
-    expect(relicCodex).toContain('<InnerChromeBox className="enchiridion-relic-group">');
-    expect(relicCodex).toContain('className="enchiridion-relic-group-grid"');
-    expect(relicCodex).toContain('className={`enchiridion-relic-grouped-trigger');
-    expect(relicCodex).toContain('className="enchiridion-relic-row-name"');
-    expect(relicCodex).not.toContain('<Tooltip');
-    expect(relicCodex).not.toContain('interactiveTrigger');
-    expect(style).toMatch(/\.enchiridion-relic-row-name\s*\{[\s\S]*?font-size:\s*var\(--ds-text-md\)/);
-    expect(style).toMatch(/\.enchiridion-relic-group-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(auto-fill,\s*64px\)/);
-    expect(style).toMatch(/\.enchiridion-relic-grouped-trigger\s*\{[\s\S]*?background:\s*none[\s\S]*?border:\s*0/);
+    const lipsanonCodex = enchiridion.slice(start, end);
+    expect(lipsanonCodex).toContain("useState<LipsanonBrowseMode>('rows')");
+    expect(lipsanonCodex).toContain('data-testid="lipsanon-view-rows"');
+    expect(lipsanonCodex).toContain('data-testid="lipsanon-view-grouped"');
+    expect(lipsanonCodex).toMatch(/chromeUnitClassNames\(\s*'inner-list-row'/);
+    expect(lipsanonCodex).toContain('<InnerChromeBox className="enchiridion-lipsanon-group">');
+    expect(lipsanonCodex).toContain('className="enchiridion-lipsanon-group-grid"');
+    expect(lipsanonCodex).toContain('className={`enchiridion-lipsanon-grouped-trigger');
+    expect(lipsanonCodex).toContain('className="enchiridion-lipsanon-row-name"');
+    expect(lipsanonCodex).not.toContain('<Tooltip');
+    expect(lipsanonCodex).not.toContain('interactiveTrigger');
+    expect(style).toMatch(/\.enchiridion-lipsanon-row-name\s*\{[\s\S]*?font-size:\s*var\(--ds-text-md\)/);
+    expect(style).toMatch(/\.enchiridion-lipsanon-group-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(auto-fill,\s*64px\)/);
+    expect(style).toMatch(/\.enchiridion-lipsanon-grouped-trigger\s*\{[\s\S]*?background:\s*none[\s\S]*?border:\s*0/);
     const mainMenuWorkspaceRule = style.match(/\.menu-dest > \.enchiridion-workspace\s*\{[\s\S]*?\}/)?.[0] ?? '';
     const mainMenuContentRule = style.match(/\.menu-dest > \.enchiridion-workspace > \.enchiridion-content\s*\{[\s\S]*?\}/)?.[0] ?? '';
     expect(mainMenuWorkspaceRule).toContain('flex: none');
@@ -214,26 +214,26 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(mainMenuContentRule).toContain('flex: 1 1 auto');
     expect(mainMenuContentRule).toContain('min-inline-size: 0');
     expect(mainMenuContentRule).not.toContain('max-inline-size: var(--col-action-w)');
-    expect(style).toMatch(/\.enchiridion-relic-detail\s*\{[\s\S]*?align-self:\s*start[\s\S]*?block-size:\s*auto[\s\S]*?inline-size:\s*100%[\s\S]*?min-inline-size:\s*0/);
+    expect(style).toMatch(/\.enchiridion-lipsanon-detail\s*\{[\s\S]*?align-self:\s*start[\s\S]*?block-size:\s*auto[\s\S]*?inline-size:\s*100%[\s\S]*?min-inline-size:\s*0/);
   });
 
-  it('routes individual relic selection where the host addresses relics (ADR-0256)', () => {
+  it('routes individual lipsanon selection where the host addresses lipsana (ADR-0256)', () => {
     const start = enchiridion.indexOf('function ReferenceTrigger');
     const end = enchiridion.indexOf('export function CardCodex', start);
-    const relicCodex = enchiridion.slice(start, end);
+    const lipsanonCodex = enchiridion.slice(start, end);
     // One trigger control, two transports: NavButton when the record has an address
     // (ADR-0052 — a button that navigates, never an anchor), plain selection otherwise.
-    expect(relicCodex).toContain('if (to) return <NavButton to={to}');
-    expect(relicCodex).not.toContain('<a ');
-    expect(relicCodex.match(/<ReferenceTrigger/g)).toHaveLength(2);
-    expect(relicCodex).toMatch(/to=\{relicHref\?\.\(relic\.id\)\}/);
+    expect(lipsanonCodex).toContain('if (to) return <NavButton to={to}');
+    expect(lipsanonCodex).not.toContain('<a ');
+    expect(lipsanonCodex.match(/<ReferenceTrigger/g)).toHaveLength(2);
+    expect(lipsanonCodex).toMatch(/to=\{lipsanonHref\?\.\(lipsanon\.id\)\}/);
     // Routed hosts derive selection from the address; local state is the ephemeral fallback.
-    expect(relicCodex).toContain('const selectedId = relicHref ? (selectedRelicId ?? relicIds[0] ?? RUN_RELICS[0].id) : localSelectedId;');
+    expect(lipsanonCodex).toContain('const selectedId = lipsanonHref ? (selectedLipsanonId ?? lipsanonIds[0] ?? RUN_LIPSANA[0].id) : localSelectedId;');
     // The main menu is the addressing host…
-    expect(mainMenu).toContain('selectedRelicId={enchiridionRelicFromPath(path)}');
-    expect(mainMenu).toContain('relicHref={enchiridionRelicHref}');
+    expect(mainMenu).toContain('selectedLipsanonId={enchiridionLipsanonFromPath(path)}');
+    expect(mainMenu).toContain('lipsanonHref={enchiridionLipsanonHref}');
     // …and the Battle-hosted Strategikon keeps ephemeral reference selection.
-    expect(strategikon).not.toContain('relicHref');
+    expect(strategikon).not.toContain('lipsanonHref');
   });
 
   it('uses the full terminal content column as a routed gallery of real card faces', () => {
@@ -257,7 +257,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     // Handling a card sounds like a card, not like a control. The control names the CUE;
     // the DB-owned profile decides what it plays (ADR-0375).
     expect(cardCodex).toContain('data-ui-sfx="card"');
-    // The main menu addresses individual cards like relic records…
+    // The main menu addresses individual cards like lipsanon records…
     expect(mainMenu).toContain('selectedCardId={enchiridionCardFromPath(path)}');
     expect(mainMenu).toContain('cardHref={enchiridionCardHref}');
     // …and the Battle-hosted Strategikon keeps ephemeral reference selection.
@@ -367,7 +367,7 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(hud).not.toContain('data-testid="strategikon-toggle"\n      data-chrome-unit=');
     expect(hud).toContain("installedUiMedia('ui-kit-icons-studio-catalog-png')");
     expect(hud).toContain("strategikonOpen ? 'Return to Battle' : 'Open Strategikon'");
-    expect(hud).toContain('Strategikon — inspect battle references, the current army, and held cards and relics.');
+    expect(hud).toContain('Strategikon — inspect battle references, the current army, and held cards and lipsana.');
     expect(hud).toContain('Return to Battle — close Strategikon without leaving this fight.');
     expect(hud).toMatch(/data-testid="strategikon-toggle"[\s\S]*?<img[\s\S]*?<\/NavButton>/);
     expect(style).toMatch(/\.skirmish-screen \.skirmish-hud-titlebar > \.outer-chrome-header-title-actions\s*\{[\s\S]*?inset-inline-end:\s*calc\(var\(--le-control-content-inset\)\s*-\s*5px\)/);
@@ -378,8 +378,8 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(style).toMatch(/\.skirmish-hud-title-action-glyph\s*\{[\s\S]*?block-size:\s*32px[\s\S]*?inline-size:\s*32px/);
     expect(skirmish).toContain('className="skirmish-war-room"');
     expect(skirmish).toMatch(/<ShellViewportSwap[\s\S]*?className="skirmish-war-room"[\s\S]*?primaryClassName="skirmish-field"[\s\S]*?workspaceOpen=\{strategikonOpen \|\| Boolean\(runWorkspace\)\}/);
-    expect(skirmish).toContain('relicIds={runDeployment?.relicIds ?? runBattle?.relicIds ?? []}');
-    expect(skirmish).toContain('shellWorkspaceCoversRelics={Boolean(runWorkspace) || strategikonOpen}');
+    expect(skirmish).toContain('lipsanonIds={runDeployment?.lipsanonIds ?? runBattle?.lipsanonIds ?? []}');
+    expect(skirmish).toContain('shellWorkspaceCoversLipsana={Boolean(runWorkspace) || strategikonOpen}');
     expect(skirmish).toMatch(/<GameplayWorkspaceSceneSlot[\s\S]*?className="strategikon-slot"[\s\S]*?\{strategikonOpen \? \(/);
     expect(skirmish).toMatch(/primary=\{\([\s\S]*?<div className="skirmish-board-frame">[\s\S]*?\)\}[\s\S]*?\{battleWorkspaceLayer\}/);
     // The always-mounted slot overlays every battlefield tile. Empty, it MUST be

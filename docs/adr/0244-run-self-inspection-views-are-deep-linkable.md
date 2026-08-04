@@ -11,10 +11,10 @@ extends:
 
 ## Context
 
-Run Army and Relics are reviewable workspace destinations, but ADR-0240's first
+Run Army and Lipsana are reviewable workspace destinations, but ADR-0240's first
 implementation stored the selected destination only in component state. A link
 to `/run` opened whichever operational Run phase was active and required the
-recipient to find Controls, then Self inspection, then Army or Relics. That made
+recipient to find Controls, then Self inspection, then Army or Lipsana. That made
 the exact screen impossible to hand off or capture through the canonical
 screenshot route.
 
@@ -24,9 +24,9 @@ The canonical Run route represents an open self-inspection destination with the
 `view` query parameter:
 
 - `/run?view=army` opens Army.
-- `/run?view=relics` opens Relics.
+- `/run?view=lipsana` opens Lipsana.
 - Missing or unsupported values open the current Run phase's primary workspace.
-- Selecting Army or Relics in Controls replaces the current URL's `view` value.
+- Selecting Army or Lipsana in Controls replaces the current URL's `view` value.
   Returning to a phase-owned primary or selling destination removes it.
 - Unrelated query parameters and the hash are preserved.
 - The parameter selects presentation only. It never creates, advances, pauses,

@@ -3,30 +3,30 @@ status: accepted
 date: 2026-07-30
 deciders: owner (Nelson) + Codex
 supersedes:
-  - "[ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md) relic display identities"
-  - "[ADR-0198](0198-run-relic-icons-are-installed-live-art-and-persistently-visible.md) installed-art authority for renamed identities"
+  - "[ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md) lipsanon display identities"
+  - "[ADR-0198](0198-run-lipsanon-icons-are-installed-live-art-and-persistently-visible.md) installed-art authority for renamed identities"
 partially_superseded_by:
-  - "[ADR-0332](0332-eight-run-relic-icons-ship-the-approved-resized-pixels.md)"
+  - "[ADR-0332](0332-eight-run-lipsanon-icons-ship-the-approved-resized-pixels.md)"
 ---
 
-# ADR-0264: Run relic identities carry anti-story residue
+# ADR-0264: Run lipsanon identities carry anti-story residue
 
 ## Context and Problem Statement
 
-ADR-0193 approved twenty Run relic mechanics and provisional names before the
-project connected card and relic writing to the anti-story. Several names
+ADR-0193 approved twenty Run lipsanon mechanics and provisional names before the
+project connected card and lipsanon writing to the anti-story. Several names
 already imply a larger material world, including the two Ramparts, royal and
 liturgical objects, ledgers, scales, rolls, and surveying tools. Eight others
 sound modern, generic, overtly supernatural, or like implementation labels.
 
-Relic mechanics, persisted Run documents, account history, URLs, and installed
-media all use stable relic ids. The user-facing identity may change without
+Lipsanon mechanics, persisted Run documents, account history, URLs, and installed
+media all use stable lipsanon ids. The user-facing identity may change without
 breaking those authorities, but superseded artwork must not silently illustrate
 the renamed object.
 
 ## Decision Outcome
 
-Chosen: **keep every relic id and mechanic stable while relic names and flavor
+Chosen: **keep every lipsanon id and mechanic stable while lipsanon names and flavor
 fragments carry the anti-story's material residue.**
 
 The eight user-facing renames are:
@@ -47,10 +47,10 @@ architecture, religious matter, administration, care, trade, or travel, but
 they do not explain a plot. Mechanical descriptions remain literal and
 separate from the flavor fragment.
 
-Every relic definition owns one original flavor fragment drawn from the four
+Every lipsanon definition owns one original flavor fragment drawn from the four
 accepted historical pressure sources:
 
-| Relic | Flavor fragment |
+| Lipsanon | Flavor fragment |
 | --- | --- |
 | Conscription Notice | One name was underlined. No reason was entered. |
 | Sealed Valuation | The vessels were weighed after the prayers had stopped. |
@@ -82,12 +82,12 @@ normal live-media review and installation workflow.
 
 ### Consequences
 
-- Good: relics read as one anti-story family rather than a mixture of modern,
+- Good: lipsana read as one anti-story family rather than a mixture of modern,
   generic-fantasy, and material-historical naming.
 - Good: old Runs, account statistics, deep links, server allowlists, and media
   slots remain valid because stable ids do not change.
-- Good: superseded art cannot misrepresent a renamed relic.
-- Cost: eight relics intentionally show a text placeholder until replacement
+- Good: superseded art cannot misrepresent a renamed lipsanon.
+- Cost: eight lipsana intentionally show a text placeholder until replacement
   PixelLab icons are generated, reviewed, and installed.
 
 ## More Information
@@ -97,4 +97,4 @@ normal live-media review and installation workflow.
 - Historical pressure sources:
   [`docs/lore/historical-anchors/`](../lore/historical-anchors/)
 - Runtime art authority:
-  [ADR-0198](0198-run-relic-icons-are-installed-live-art-and-persistently-visible.md)
+  [ADR-0198](0198-run-lipsanon-icons-are-installed-live-art-and-persistently-visible.md)

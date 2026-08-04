@@ -3,7 +3,7 @@ status: accepted
 date: 2026-08-03
 deciders: owner (Nelson) + Claude
 partially_superseded_by:
-  - "[ADR-0375](0375-the-profile-owns-what-an-interface-cue-sounds-like.md)'s owner-assigned cue mapping, which also withdraws this record's asserted Cards/Relics asymmetry as never having been an owner decision"
+  - "[ADR-0375](0375-the-profile-owns-what-an-interface-cue-sounds-like.md)'s owner-assigned cue mapping, which also withdraws this record's asserted Cards/Lipsana asymmetry as never having been an owner decision"
 partially_supersedes:
   - "[ADR-0322](0322-run-openings-use-two-pawns-eight-gold-and-card-native-purchase-feedback.md)'s retirement of the `card-purchase` runtime assignment"
 refines:
@@ -49,11 +49,11 @@ this game's fiction, and handling one is not the same gesture as pressing a cont
 
 - The one installed card recording has a caller again, and the surfaces that display cards no
   longer sound identical to the chrome around them.
-- ~~Cards is now audibly distinct from Relics and Units, which keep the generic click — that is the
+- ~~Cards is now audibly distinct from Lipsana and Units, which keep the generic click — that is the
   intended asymmetry, not an inconsistency to be evened out later.~~
   **Withdrawn by [ADR-0375](0375-the-profile-owns-what-an-interface-cue-sounds-like.md): the owner
   never expressed this preference. It was inferred by the agent and recorded here as though it had
-  been decided. Whether Relics and Units should also sound distinct is an open question the owner
+  been decided. Whether Lipsana and Units should also sound distinct is an open question the owner
   answers by ear in the SFX Studio; no ADR holds a position on it.**
 - A future card-handling gesture (a draw animation, a discard) has an obvious cue to reach for and
   no ADR standing in its way.

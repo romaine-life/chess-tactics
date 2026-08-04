@@ -4,7 +4,7 @@ date: 2026-08-02
 deciders: owner (Nelson) + Claude
 extends:
   - "[ADR-0076](0076-live-media-is-native-1x.md)"
-  - "[ADR-0332](0332-eight-run-relic-icons-ship-the-approved-resized-pixels.md)"
+  - "[ADR-0332](0332-eight-run-lipsanon-icons-ship-the-approved-resized-pixels.md)"
   - "[ADR-0359](0359-run-card-text-is-centered-in-per-frame-boxes.md)"
 ---
 

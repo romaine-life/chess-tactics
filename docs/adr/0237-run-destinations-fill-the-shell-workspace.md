@@ -33,7 +33,7 @@ playfield through one shared `RunWorkspace`, which composes the workflow-neutral
   ledger, full-pane unit profile, Sell Units, loading, and no-active-Run states
   all use the same edge-to-edge workspace.
 - The outer-role material reaches every playfield edge. Content gutters,
-  two-column layouts, scrolling, and the relic inventory reservation live
+  two-column layouts, scrolling, and the lipsanon inventory reservation live
   inside that continuous surface and never expose the parent behind it.
 - A destination does not instantiate `OuterChromeBox`, register an
   `outer-panel` consumer, or draw another title frame merely to acquire a
@@ -44,7 +44,7 @@ playfield through one shared `RunWorkspace`, which composes the workflow-neutral
 - Subordinate cards, rows, buttons, dropdowns, tooltips, and statistics may use
   registered inner chrome. Run controls use the canonical shared control
   primitives rather than raw browser checkboxes or selects.
-- Run layout spacing, including internal padding and relic offsets, resolves
+- Run layout spacing, including internal padding and lipsanon offsets, resolves
   through the design-system spacing roles and scale governed by ADR-0031.
 - Source-structure guards enumerate the Run destinations and reject both
   top-level outer-panel consumers and a return of parent workspace padding.

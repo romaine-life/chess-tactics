@@ -15,7 +15,7 @@ const runWorkspace = readFileSync(new URL('./RunWorkspace.tsx', import.meta.url)
 const runUnitInspectionScene = readFileSync(new URL('./RunUnitInspectionScene.tsx', import.meta.url), 'utf8');
 const runCard = readFileSync(new URL('./RunCard.tsx', import.meta.url), 'utf8');
 const runCardFace = readFileSync(new URL('./RunCardFace.tsx', import.meta.url), 'utf8');
-const runRelics = readFileSync(new URL('./RunRelics.tsx', import.meta.url), 'utf8');
+const runLipsana = readFileSync(new URL('./Lipsana.tsx', import.meta.url), 'utf8');
 const runSelfInspection = readFileSync(new URL('./RunSelfInspection.tsx', import.meta.url), 'utf8');
 const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
 const skirmishBoard = readFileSync(new URL('../render/SkirmishBoard.tsx', import.meta.url), 'utf8');
@@ -47,13 +47,13 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain("<RunMetaControls run={shellRun} view={view} onNavigate={navigateRunView} showAbandon={shellRun.phase !== 'victory'} />");
     expect(metaControls).toContain('<section className="run-meta-controls" aria-label="Run controls">');
     expect(metaControls).toContain('Sell Units');
-    // The Run rail no longer carries Army/Relics: the Strategikon is Run-wide (ADR-0335)
-    // and its Prosopography/Lipsanotheca render the same RunArmyWorkspace and held-relic
+    // The Run rail no longer carries Army/Lipsana: the Strategikon is Run-wide (ADR-0335)
+    // and its Prosopography/Lipsanotheca render the same RunArmyWorkspace and held-lipsanon
     // codex, so a second entry point to them was a duplicate. The battle HUD keeps its own.
     expect(metaControls).not.toContain('Self inspection');
     expect(metaControls).not.toContain('<RunSelfInspectionControls');
     // The module keeps the view/address helpers; its button pair is gone with the rail
-    // group and the battle-HUD group, so nothing renders Army/Relics entries any more.
+    // group and the battle-HUD group, so nothing renders Army/Lipsana entries any more.
     expect(runSelfInspection).not.toContain('ChromeButton');
     expect(runSelfInspection).toContain("url.searchParams.set('view', view)");
     expect(runScreen).toContain("current.pathname = '/run';");
@@ -72,7 +72,7 @@ describe('Run chrome hierarchy', () => {
     expect(runArmyWorkspace).not.toContain('chromeConsumer="run-army-profile"');
     expect(runArmyWorkspace).toContain('<RunWorkspace');
     expect(runArmyWorkspace).toContain('className="run-self-inspection-workspace run-army-workspace run-army-ledger"');
-    expect(runRelics).toContain('className="run-self-inspection-workspace run-relics-workspace"');
+    expect(runLipsana).toContain('className="run-self-inspection-workspace run-lipsana-workspace"');
     expect(skirmishHud).toContain('<ShellControlsPanel');
     expect(skirmishHud).toContain('{controlsContent === undefined ? (');
     expect(runScreen).not.toContain('function RunShell');
@@ -136,18 +136,18 @@ describe('Run chrome hierarchy', () => {
     expect(styleCss).toMatch(/\.scene-director\.is-entering \.scene-boundary\[data-scene-overlap-scope="shell-viewport"\]\[data-scene-visual-role="outgoing"\] \[data-scene-overlap-region\]\s*\{[\s\S]*?opacity:\s*0;/);
     expect(styleCss).toMatch(/\.scene-director\.is-entering \.scene-boundary\[data-scene-overlap-scope="shell-viewport"\]\[data-scene-transition-active\] \[data-scene-overlap-region\]\s*\{[\s\S]*?opacity:\s*1;/);
     // The panel is rendered beside the swap, never inside it.
-    expect(skirmish).toMatch(/\{shellWorkspaceCoversRelics \? null : <RunRelicStrip relicIds=\{relicIds\} \/>\}\s*\{children\}/);
+    expect(skirmish).toMatch(/\{shellWorkspaceCoversLipsana \? null : <LipsanonStrip lipsanonIds=\{lipsanonIds\} \/>\}\s*\{children\}/);
     expect(skirmishHud).toContain('<ShellControlsPanel');
   });
 
-  it('replaces the complete left shell workspace for Army and Relics while preserving the covered phase', () => {
+  it('replaces the complete left shell workspace for Army and Lipsana while preserving the covered phase', () => {
     expect(runScreen).toContain('function RunPhaseWorkspace');
     expect(runScreen).toMatch(/<ShellViewportSwap[\s\S]*?className="run-phase-workspace"[\s\S]*?primaryClassName="run-phase-primary"[\s\S]*?primary=\{children\}/);
-    expect(runScreen).toContain("view === 'relics'");
-    expect(runScreen).toContain('<RunRelicsWorkspace relicIds={shellRun.relics} />');
+    expect(runScreen).toContain("view === 'lipsana'");
+    expect(runScreen).toContain('<LipsanaWorkspace lipsanonIds={shellRun.lipsana} />');
     expect(skirmish).toMatch(/<ShellViewportSwap[\s\S]*?className="skirmish-war-room"[\s\S]*?primaryClassName="skirmish-field"[\s\S]*?workspaceOpen=\{strategikonOpen \|\| Boolean\(runWorkspace\)\}/);
-    expect(skirmish).toContain('{shellWorkspaceCoversRelics ? null : <RunRelicStrip relicIds={relicIds} />}');
-    expect(runScreen).toContain('shellWorkspaceCoversRelics={strategikonOpen || Boolean(inspectionWorkspace)}');
+    expect(skirmish).toContain('{shellWorkspaceCoversLipsana ? null : <LipsanonStrip lipsanonIds={lipsanonIds} />}');
+    expect(runScreen).toContain('shellWorkspaceCoversLipsana={strategikonOpen || Boolean(inspectionWorkspace)}');
     expect(skirmish).toContain('{runWorkspace}');
     expect(styleCss).toMatch(/\.shell-viewport-primary\[data-shell-workspace-covered\]\s*\{[\s\S]*?visibility:\s*hidden;/);
     expect(styleCss).toMatch(/\.run-phase-primary\s*>\s*\.run-workspace\s*\{[\s\S]*?grid-row:\s*1;/);
@@ -193,7 +193,7 @@ describe('Run chrome hierarchy', () => {
   });
 
   it('fills shell-owned Run destinations while Deployment uses the battlefield', () => {
-    const playerRunSources = `${runScreen}\n${runArmyWorkspace}\n${runRelics}`;
+    const playerRunSources = `${runScreen}\n${runArmyWorkspace}\n${runLipsana}`;
     const runWorkspaceRule = styleCss.match(/\.run-workspace\s*\{([^}]*)\}/)?.[1] ?? '';
 
     expect(runWorkspace).toContain('export function RunWorkspace');
@@ -209,7 +209,7 @@ describe('Run chrome hierarchy', () => {
       'run-army-ledger-workspace',
       'run-army-profile-workspace',
       'run-sell-workspace',
-      'run-relics-workspace',
+      'run-lipsana-workspace',
       'run-loading-workspace',
       'run-empty-workspace',
     ]) {
@@ -235,7 +235,7 @@ describe('Run chrome hierarchy', () => {
     expect(runArmyWorkspace).toContain('<HouseSelect');
     expect(runWorkspaceRule).toContain('position: relative');
     expect(runWorkspaceRule).not.toMatch(/\b(?:padding|gap)\s*:/);
-    expect(runScreen).toContain('className={`run-screen${shellRun && visibleRunRelicCount(shellRun)');
+    expect(runScreen).toContain('className={`run-screen${shellRun && visibleLipsanonCount(shellRun)');
     expect(styleCss).toMatch(/\.skirmish-screen\s*\{[\s\S]*?column-gap:\s*0/);
     expect(styleCss).toMatch(/\.skirmish-screen:not\(\.level-editor-screen\) \.skirmish-war-room > \.skirmish-field\s*\{[\s\S]*?margin-inline-end:\s*var\(--skirmish-board-controls-gutter\)/);
     expect(styleCss).not.toContain('.skirmish-screen.is-run-self-inspection-open');
@@ -243,9 +243,9 @@ describe('Run chrome hierarchy', () => {
     expect(styleCss).toMatch(/\.run-shell-workspace\s*\{[\s\S]*?--shell-workspace-body-inset-block:\s*var\(--ds-gutter\);[\s\S]*?--shell-workspace-body-inset-start:\s*var\(--ds-gutter\)/);
     expect(styleCss).toMatch(/\.shell-workspace-body\s*\{[\s\S]*?padding-inline-end:\s*0/);
     expect(styleCss).toContain('.run-shell-workspace-content');
-    expect(styleCss).toContain('.run-screen.has-relics .run-shell-workspace-content');
+    expect(styleCss).toContain('.run-screen.has-lipsana .run-shell-workspace-content');
     expect(styleCss).not.toContain('.run-workspace--full');
-    expect(styleCss).not.toContain('.run-screen.has-relics .run-workspace');
+    expect(styleCss).not.toContain('.run-screen.has-lipsana .run-workspace');
     expect(runScreen).not.toContain('DraftPanel');
     expect(runScreen).not.toContain("phase === 'draft'");
     expect(runCard).not.toContain("'draft'");

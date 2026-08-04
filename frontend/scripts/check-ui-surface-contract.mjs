@@ -27,12 +27,12 @@ const APPROVED_FRAMELESS_SURFACE_RESETS = new Map([
   ])],
   // ADR-0254 retains one shared inner frame around the grouped reliquary. These
   // resets keep its icon triggers visually unframed inside that owned surface.
-  ['src/style.css|.enchiridion-relic-grouped-trigger', new Set([
+  ['src/style.css|.enchiridion-lipsanon-grouped-trigger', new Set([
     'background:none',
     'border:0',
     'border-radius:0',
   ])],
-  // Bona Vacantia makes the relic art itself the take target (no card, no panel). These
+  // Bona Vacantia makes the lipsanon art itself the take target (no card, no panel). These
   // remove the shell's default button chrome from that trigger; they paint nothing.
   ['src/style.css|.run-vacantia-take', new Set([
     'background:none',

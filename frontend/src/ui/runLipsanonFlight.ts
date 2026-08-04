@@ -1,35 +1,35 @@
 /**
- * Where a relic the player has just taken comes to rest.
+ * Where a lipsanon the player has just taken comes to rest.
  *
- * The held-relic strip is the destination, but the slot the relic lands in does not exist
+ * The held-lipsanon strip is the destination, but the slot the lipsanon lands in does not exist
  * until the take is committed — and the take is what ends this screen, so it cannot be
  * committed before the flight without swapping the workspace out from under it. The
  * landing place is therefore MEASURED rather than committed to: a hidden probe built from
  * the strip's own classes is laid out where the real strip lives, and the slot after the
- * last held relic is read off it.
+ * last held lipsanon is read off it.
  *
  * Reading the position out of a probe rather than recomputing it in JS keeps one owner for
  * the strip's geometry: style.css positions the strip, and this only asks the browser where
- * that ended up. A Run holding no relics yet has no strip in the DOM at all, and the probe
+ * that ended up. A Run holding no lipsana yet has no strip in the DOM at all, and the probe
  * answers for that case with exactly the same code.
  */
 
-const STRIP_CLASS = 'run-relic-strip';
-const LIST_CLASS = 'run-relic-inventory-list';
-const ITEM_CLASS = 'run-relic-inventory-item';
+const STRIP_CLASS = 'run-lipsanon-strip';
+const LIST_CLASS = 'run-lipsanon-inventory-list';
+const ITEM_CLASS = 'run-lipsanon-inventory-item';
 
-export interface RelicLandingPoint {
+export interface LipsanonLandingPoint {
   left: number;
   top: number;
 }
 
 /**
- * The viewport position of the strip slot the next relic will occupy.
+ * The viewport position of the strip slot the next lipsanon will occupy.
  *
- * `heldCount` is the number of relics already VISIBLE in the strip — retired ids the strip
- * drops must not be counted, or the relic flies one slot too far right.
+ * `heldCount` is the number of lipsana already VISIBLE in the strip — retired ids the strip
+ * drops must not be counted, or the lipsanon flies one slot too far right.
  */
-export function relicStripLandingPoint(heldCount: number): RelicLandingPoint | null {
+export function lipsanonStripLandingPoint(heldCount: number): LipsanonLandingPoint | null {
   if (typeof document === 'undefined') return null;
   const screen = document.querySelector('.run-screen');
   if (!screen) return null;

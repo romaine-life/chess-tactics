@@ -65,7 +65,7 @@ export type SceneViewId =
   | 'enchiridion-terrain'
   | 'enchiridion-cards'
   | 'enchiridion-card-types'
-  | 'enchiridion-relics'
+  | 'enchiridion-lipsana'
   | 'enchiridion-abilities'
   | 'enchiridion-ataraxia'
   | 'strategikon'
@@ -124,7 +124,7 @@ export interface ScenePath extends SceneManifest {
 }
 
 export type RunScenePhase = 'hydrating' | 'no-active' | RunPhase;
-export type RunSceneWorkspace = 'primary' | 'army' | 'relics' | 'sell' | 'strategikon';
+export type RunSceneWorkspace = 'primary' | 'army' | 'lipsana' | 'sell' | 'strategikon';
 
 export interface RunSceneSnapshot {
   kind: 'run';
@@ -178,7 +178,7 @@ export const SCENE_DEFINITIONS = Object.freeze({
   enchiridionTerrain: defineScene({ id: 'enchiridion/terrain', parent: 'enchiridion', slot: 'enchiridion-content', view: 'enchiridion-terrain' }),
   enchiridionCards: defineScene({ id: 'enchiridion/cards', parent: 'enchiridion', slot: 'enchiridion-content', view: 'enchiridion-cards' }),
   enchiridionCardTypes: defineScene({ id: 'enchiridion/card-types', parent: 'enchiridion', slot: 'enchiridion-content', view: 'enchiridion-card-types' }),
-  enchiridionRelics: defineScene({ id: 'enchiridion/relics', parent: 'enchiridion', slot: 'enchiridion-content', view: 'enchiridion-relics' }),
+  enchiridionLipsana: defineScene({ id: 'enchiridion/lipsana', parent: 'enchiridion', slot: 'enchiridion-content', view: 'enchiridion-lipsana' }),
   enchiridionAbilities: defineScene({ id: 'enchiridion/abilities', parent: 'enchiridion', slot: 'enchiridion-content', view: 'enchiridion-abilities' }),
   enchiridionAtaraxia: defineScene({ id: 'enchiridion/ataraxia', parent: 'enchiridion', slot: 'enchiridion-content', view: 'enchiridion-ataraxia' }),
   // The Strategikon is one authored shell mounted under two ancestries (Battle's
@@ -194,7 +194,7 @@ export const SCENE_DEFINITIONS = Object.freeze({
   strategikonReferenceTerrain: defineScene({ id: 'strategikon/enchiridion/terrain', parent: 'strategikon/enchiridion', slot: 'strategikon-reference-content', view: 'strategikon-reference' }),
   strategikonReferenceCards: defineScene({ id: 'strategikon/enchiridion/cards', parent: 'strategikon/enchiridion', slot: 'strategikon-reference-content', view: 'strategikon-reference' }),
   strategikonReferenceCardTypes: defineScene({ id: 'strategikon/enchiridion/card-types', parent: 'strategikon/enchiridion', slot: 'strategikon-reference-content', view: 'strategikon-reference' }),
-  strategikonReferenceRelics: defineScene({ id: 'strategikon/enchiridion/relics', parent: 'strategikon/enchiridion', slot: 'strategikon-reference-content', view: 'strategikon-reference' }),
+  strategikonReferenceLipsana: defineScene({ id: 'strategikon/enchiridion/lipsana', parent: 'strategikon/enchiridion', slot: 'strategikon-reference-content', view: 'strategikon-reference' }),
   strategikonReferenceAbilities: defineScene({ id: 'strategikon/enchiridion/abilities', parent: 'strategikon/enchiridion', slot: 'strategikon-reference-content', view: 'strategikon-reference' }),
   strategikonReferenceAtaraxia: defineScene({ id: 'strategikon/enchiridion/ataraxia', parent: 'strategikon/enchiridion', slot: 'strategikon-reference-content', view: 'strategikon-reference' }),
   lobbies: defineScene({ id: 'lobbies', parent: 'main-menu', slot: 'menu-destination', view: 'lobbies' }),
