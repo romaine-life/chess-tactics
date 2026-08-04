@@ -16,6 +16,7 @@ import {
   RELIC_FLOAT_COMMITTED_TIMING,
   RELIC_FLOAT_STEPPED_TIMING,
   RELIC_GLOW_COMMITTED,
+  RELIC_RECEDE_COMMITTED,
   RELIC_TRAY_STROKE_COMMITTED,
   relicFloatClock,
 } from './runRelicMat';
@@ -156,6 +157,8 @@ export interface RelicMotionTuning {
   glow: number;
   /** The one-pixel stroke that seats the tray on the table, in whole pixels. */
   trayStroke: number;
+  /** How far the relics left behind pull back while the chosen one travels. */
+  recede: number;
   /** Which emphases a hovered relic gets. They compose; any combination is legal. */
   hover: RelicHoverEmphasis;
 }
@@ -189,6 +192,7 @@ export const RELIC_MOTION_COMMITTED: RelicMotionTuning = {
   stepped: false,
   glow: RELIC_GLOW_COMMITTED,
   trayStroke: RELIC_TRAY_STROKE_COMMITTED,
+  recede: RELIC_RECEDE_COMMITTED,
   // Nothing extra ships yet: hovering settles, brightens and enlarges, and that is all until
   // an emphasis is chosen here.
   hover: { flare: false, lift: false, rim: false, focus: false },
@@ -202,6 +206,7 @@ export function relicMotionStyle(motion: RelicMotionTuning): CSSProperties {
     '--relic-float-timing': motion.stepped ? RELIC_FLOAT_STEPPED_TIMING : RELIC_FLOAT_COMMITTED_TIMING,
     '--relic-glow': `${motion.glow}`,
     '--relic-tray-stroke-width': `${motion.trayStroke}px`,
+    '--relic-recede-scale': `${motion.recede}`,
   } as CSSProperties;
 }
 
@@ -551,6 +556,16 @@ export function RelicMatViewer({
                 </ChromeButton>
               </div>
             </label>
+            <SliderRow
+              label={<>Take recede <strong data-testid="relic-recede-value">{motion.recede.toFixed(2)}×</strong> — how far the others pull back</>}
+              value={motion.recede}
+              set={(value) => tune('recede', value)}
+              min={0.3}
+              max={1}
+              step={0.01}
+              nudge={0.01}
+              dflt={RELIC_MOTION_COMMITTED.recede}
+            />
             <SliderRow
               label={<>Mat scale <strong data-testid="relic-mat-scale-value">{scale.toFixed(2)}×</strong> the relic row</>}
               value={scale}

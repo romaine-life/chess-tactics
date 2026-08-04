@@ -7,6 +7,7 @@ import type { RunWarSnapshot } from '../run/model';
 import { RunBonaVacantia } from './RunBonaVacantia';
 import { RELIC_HOVER_EMPHASES, RELIC_MOTION_COMMITTED, relicHoverAttributes } from './RunRelicMatReview';
 import { relicStripLandingPoint } from './runRelicFlight';
+import { RELIC_FLIGHT_MS } from './runRelicFlightView';
 import { RELIC_FLOAT_COMMITTED_TIMING } from './runRelicMat';
 
 function war(battles = 4, lootAt: number[] = []): RunWarSnapshot {
@@ -130,6 +131,22 @@ describe('Bona Vacantia relics', () => {
     const body = lift.slice(0, lift.indexOf('}'));
     expect(body).toContain('scale');
     expect(body).not.toContain('translate');
+  });
+
+  it('recedes the relics left behind on the flight’s own clock', () => {
+    // "In tandem with the move" is the requirement, so the recede borrows the flight's
+    // duration and easing rather than picking its own. Nothing in CSS can see
+    // RELIC_FLIGHT_MS, so the two are pinned here — drift would leave the mat still settling
+    // after the relic had arrived, or snapping still before it got there.
+    const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+    expect(css).toContain(`--relic-take-duration: ${RELIC_FLIGHT_MS}ms;`);
+    expect(css).toMatch(/\.relic-mat-offer \{\s*transition:\s*opacity var\(--relic-take-duration\) var\(--relic-take-easing\),\s*scale var\(--relic-take-duration\) var\(--relic-take-easing\);/);
+    // Smaller AND dimmer together — fading alone reads as vanishing where they lie rather
+    // than withdrawing.
+    expect(css).toMatch(
+      /\.relic-mat-cards\[data-taking\] \.relic-mat-offer \{\s*opacity: 0\.5;\s*scale: var\(--relic-recede-scale, [\d.]+\);/,
+    );
+    expect(css).toContain(`--relic-recede-scale, ${RELIC_MOTION_COMMITTED.recede}`);
   });
 
   it('holds the hovered relic at a whole-pixel size', () => {

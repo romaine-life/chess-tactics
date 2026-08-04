@@ -19790,17 +19790,32 @@ button.tileset-relationship-cell {
 }
 
 /* Taking is committed when the relic lands, so the mat has to hold still while it travels:
-   the other two recede, the taken one leaves with the flying copy, and nothing is clickable. */
+   the ones left behind recede, the taken one leaves with the flying copy, and nothing is
+   clickable.
+
+   The recede runs on the FLIGHT's clock and the flight's easing -- same duration, same curve
+   -- so the two are one gesture rather than two effects that happen to overlap. The duration
+   is RELIC_FLIGHT_MS; a test pins the two together. */
+.relic-mat-cards {
+  --relic-take-duration: 560ms;
+  --relic-take-easing: cubic-bezier(0.45, 0.05, 0.25, 1);
+}
+
 .relic-mat-offer {
-  transition: opacity 320ms ease;
+  transition:
+    opacity var(--relic-take-duration) var(--relic-take-easing),
+    scale var(--relic-take-duration) var(--relic-take-easing);
 }
 
 .relic-mat-cards[data-taking] .run-vacantia-take {
   pointer-events: none;
 }
 
+/* They pull back as the chosen one leaves: smaller and dimmer together, which reads as the
+   others withdrawing rather than merely fading out where they lie. */
 .relic-mat-cards[data-taking] .relic-mat-offer {
   opacity: 0.5;
+  scale: var(--relic-recede-scale, 0.72);
 }
 
 /* The relic that LEFT is gone from the mat, whether or not the rest are receding: the
