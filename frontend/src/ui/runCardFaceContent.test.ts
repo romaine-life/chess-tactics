@@ -125,4 +125,15 @@ describe('a projected face says only what its card actually shows', () => {
       expect(face.grants.reduce((total, grant) => total + grant.count, 0)).toBe(card.pieces.length);
     }
   });
+
+  it('keeps a dealt card identity while its transient contents empty for discard', () => {
+    const identity = RUN_CARD_BY_ID.k;
+    const emptied = { ...identity, pieces: [] };
+    const face = runCardFaceContent(emptied, { identity });
+
+    expect(face.name).toBe(runCardFaceContent(identity).name);
+    expect(face.flavor).toBe(runCardFaceContent(identity).flavor);
+    expect(face.cost).toBe(identity.value);
+    expect(face.grants).toEqual([]);
+  });
 });

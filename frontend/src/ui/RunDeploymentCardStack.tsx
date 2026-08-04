@@ -49,6 +49,7 @@ export function RunDeploymentCardStack({
   const remainingIds = (deployment?.dealtCardIds ?? []).slice(deployment?.discardCursor ?? 0);
   const activeCardId = deployment?.dealtCardIds[deployment.activeCardIndex] ?? null;
   const activeCard = activeCardId ? cardById.get(activeCardId) ?? null : null;
+  const activeIdentity = activeCard ? runCardDefinition(activeCard.coreId) ?? null : null;
   const activeDefinition = activeCard
     ? visibleCardDefinition(run, activeCard, deployment?.unitCursor ?? 0)
     : null;
@@ -147,10 +148,11 @@ export function RunDeploymentCardStack({
               <span className="run-deployment-stack-side is-back">
                 <RunCardBack mediaUrl={resolvedLiveMediaUrl(RUN_CARD_BACK_SLOT)} />
               </span>
-              {isActive && owned && activeDefinition ? (
+              {isActive && owned && activeDefinition && activeIdentity ? (
                 <span className="run-deployment-stack-side is-front">
                   <RunCard
                     card={activeDefinition}
+                    identityCard={activeIdentity}
                     mode="reference"
                     cardType={owned.cardType}
                     adlected

@@ -127,6 +127,13 @@ export type RunCardFaceOptions = Readonly<{
    * An offer always carries its own property and ignores this.
    */
   cardType?: RunCardType | null;
+  /**
+   * Stable authored identity for a transient projection of this card. Deployment removes
+   * units from the visible contents before the empty card finishes discarding; its banner,
+   * flavor and illustration still belong to the card that was dealt, not to an invented
+   * zero-unit composition.
+   */
+  identity?: RunCardDefinition | RunCardOffer;
 }>;
 
 /** The property a card wears: its offer's, or the one under which a held card was adlected. */
@@ -193,10 +200,11 @@ export function runCardFaceContent(
   card: RunCardDefinition | RunCardOffer,
   options: RunCardFaceOptions = {},
 ): RunCardFaceContent {
+  const identity = options.identity ?? card;
   const offer = isRunCardOffer(card) ? card : null;
   const cardType = runCardProperty(card, options.cardType ?? null);
   return {
-    name: runCardName(card),
+    name: runCardName(identity),
     cost: offer?.cost ?? card.value,
     typeLine: RUN_CARD_TYPE_LINE,
     ...(cardType ? {
@@ -209,7 +217,7 @@ export function runCardFaceContent(
       },
     } : {}),
     grants: runCardGrants(card, options),
-    flavor: runCardFlavor(card),
+    flavor: runCardFlavor(identity),
   } as RunCardFaceContent;
 }
 
