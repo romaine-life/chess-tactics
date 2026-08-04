@@ -614,7 +614,7 @@ describe('Ataraxia ladder identities', () => {
       numeral: '0',
       label: 'Ataraxia 0',
       title: 'The Untroubled Mind',
-      effect: 'Standard Run rules. Shop cards may be Legatine, Concinnous or Hieratic but are never Pestiferous.',
+      effect: 'Standard rules.',
     });
   });
 

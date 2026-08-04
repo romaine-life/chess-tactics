@@ -7,6 +7,8 @@ supersedes:
 extends:
   - 0217-run-lipsanon-icons-use-immediate-styled-tooltips.md
   - 0339-run-card-properties-and-unit-states-use-paired-icons.md
+partially_superseded_by:
+  - "[ADR-0388](0388-ataraxia-tooltip-is-a-compact-cumulative-rule-list.md)'s closed Ataraxia exception"
 ---
 
 # ADR-0370: A tooltip defines the mechanics it names

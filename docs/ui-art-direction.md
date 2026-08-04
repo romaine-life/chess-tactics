@@ -265,7 +265,10 @@ facts plus Play or Ataraxia plus Start Run in the right detail column. It omits 
 authored-War copy, and the Ataraxia choice is the shared scrollable dropdown
 with unavailable installed tiers visible but disabled. Every tier, including **Ataraxia 0 — The
 Untroubled Mind**, presents its subtitle in the selector and its literal impact
-beneath it (ADR-0289, ADR-0290, ADR-0291).
+beneath it. In the Run title bar, Ataraxia's tooltip is instead a compact cumulative
+list headed only **Ataraxia**: every active tier is one small canonical carved-numeral
+row beside its model-owned effect, with no appended mechanic-definition panes; tier
+zero reads **Standard rules.** (ADR-0289, ADR-0290, ADR-0291, ADR-0388, ADR-0389).
 On Bona Vacantia, the room-caption corner stays empty: no workspace heading,
 instructional prose, or placeholder label repeats the room identity. The persistent
 title bar is the sole textual location label unless a future accepted art decision

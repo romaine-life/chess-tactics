@@ -1,5 +1,5 @@
 import type { ReactElement, ReactNode } from 'react';
-import { ATARAXIA_BY_TIER, formatGold, type AtaraxiaTier } from '../run/model';
+import { ATARAXIA_BY_TIER, ATARAXIA_TIERS, formatGold, type AtaraxiaTier } from '../run/model';
 import { RunGoldIcon } from './RunResources';
 import { ataraxiaNumeralArtUrl } from './ataraxiaNumeral';
 import { RunProgressIcon } from './shared/RunProgressIcon';
@@ -41,11 +41,15 @@ function RunMeasure({
   label,
   name,
   detail,
+  explainMechanics,
+  popupClassName,
   children,
 }: {
   label: string;
   name: string;
-  detail: string;
+  detail: ReactNode;
+  explainMechanics?: boolean;
+  popupClassName?: string;
   children: ReactNode;
 }): ReactElement {
   return (
@@ -55,9 +59,39 @@ function RunMeasure({
       label={label}
       title={name}
       trigger={children}
+      explainMechanics={explainMechanics}
+      popupClassName={popupClassName}
     >
       {detail}
     </Tooltip>
+  );
+}
+
+function AtaraxiaTooltipRules({ tier }: { tier: AtaraxiaTier }): ReactElement {
+  const activeTiers = ATARAXIA_TIERS.filter((activeTier) => activeTier <= tier);
+  return (
+    <span className="run-ataraxia-tooltip-list">
+      {activeTiers.map((activeTier) => {
+        const definition = ATARAXIA_BY_TIER[activeTier];
+        const art = ataraxiaNumeralArtUrl(definition.numeral);
+        return (
+          <span className="run-ataraxia-tooltip-rule" key={activeTier}>
+            {art
+              ? (
+                  <span className="run-ataraxia-tooltip-rung is-art" aria-hidden="true">
+                    <img src={art} alt="" draggable={false} />
+                  </span>
+                )
+              : (
+                  <span className="run-ataraxia-tooltip-rung is-unavailable" aria-hidden="true">
+                    {definition.numeral}
+                  </span>
+                )}
+            <span>{definition.effect}</span>
+          </span>
+        );
+      })}
+    </span>
   );
 }
 
@@ -83,6 +117,7 @@ export function RunTitleBarMeasures({
   battleIconSrc?: string;
 }): ReactElement {
   const ataraxia = ATARAXIA_BY_TIER[tier];
+  const activeAtaraxia = ATARAXIA_TIERS.filter((activeTier) => activeTier <= tier);
   const rungArt = ataraxiaNumeralArtUrl(ataraxia.numeral);
   const gold = formatGold(goldTenths);
   return (
@@ -92,9 +127,13 @@ export function RunTitleBarMeasures({
           names Ataraxia; a bar with no heading cannot, or the rung reads as a loose
           counter. The tier's name and rule stay in the tooltip. */}
       <RunMeasure
-        label={`${ataraxia.label}. ${ataraxia.title}. ${ataraxia.effect}`}
-        name={`${ataraxia.label} — ${ataraxia.title}`}
-        detail={ataraxia.effect}
+        label={`Ataraxia. ${activeAtaraxia.map((activeTier) => (
+          `${ATARAXIA_BY_TIER[activeTier].numeral}: ${ATARAXIA_BY_TIER[activeTier].effect}`
+        )).join(' ')}`}
+        name="Ataraxia"
+        detail={<AtaraxiaTooltipRules tier={tier} />}
+        explainMechanics={false}
+        popupClassName="run-ataraxia-tooltip"
       >
         <RunProgressIcon variant="ataraxia" src={ataraxiaIconSrc} />
         {rungArt
