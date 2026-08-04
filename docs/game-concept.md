@@ -213,7 +213,7 @@ these.
   top of every Battle deal and grants the King Primogeniture, placing it before
   every other unit. **Front Lines** contains the two ordinary starting Pawns.
   His Grace is not removable and neither card appears in ordinary Adlectio
-  offers (ADR-0406).
+  offers (ADR-0406, ADR-0407).
 - Run Deployment is a battlefield state, not a level-summary destination. It
   always opens with **Klerosis**, which reveals the dealt cards together and
   shows the complete Deploying/Unavailable roster before asking for **Deploy
@@ -270,7 +270,7 @@ these.
   King is worth 1 gold and every other enemy chess piece pays 50% of its
   standard value (ADR-0220).
 - Sectio visits separate Adlectio, upcoming-Battle reconnaissance, detailed army
-  inspection, and a compact decision-complete Alienatio list into explicit
+  inspection, a compact decision-complete Alienatio list, and **Expunctio** into explicit
   main-pane destinations. **View Battle** shows the next canonical Level in a
   pannable read-only board beside its rules, zones, time control, and forces.
   Fixed opponents appear on the map; known setup-event rosters appear in the
@@ -278,7 +278,11 @@ these.
   still waits for Deployment. The persistent Controls panel navigates these
   destinations, resets the complete same-offer Sectio visit, and continues the
   Run; Army inspection remains available in every Run phase without pausing an
-  active Battle (ADR-0230, ADR-0386).
+  active Battle. Expunctio may remove one held card per visit and takes every unit still
+  attached to it. Its fee is the card's full printed value plus the standard value of those
+  remaining units; His Grace is unavailable. Alienatio still sells individual units without
+  removing their cards, so it discounts a later Expunctio without ever paying the complete
+  fee (ADR-0230, ADR-0386, ADR-0407).
 - **Enchiridion** is the player-facing reference for unit movement, terrain
   rules, the filterable core card deck, affected card types, all lipsana, and the
   behavior of the current unit abilities: Adlected, Eutactic, Agminate,

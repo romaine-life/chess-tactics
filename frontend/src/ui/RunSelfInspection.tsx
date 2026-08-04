@@ -1,10 +1,10 @@
 
 export type RunSelfInspectionView = 'army' | 'lipsana';
-export type RunWorkspaceView = 'primary' | 'alienatio' | 'battle-preview' | RunSelfInspectionView;
+export type RunWorkspaceView = 'primary' | 'alienatio' | 'expunctio' | 'battle-preview' | RunSelfInspectionView;
 
 export function runWorkspaceViewFromSearch(search: string): RunWorkspaceView {
   const view = new URLSearchParams(search).get('view');
-  return view === 'army' || view === 'lipsana' || view === 'alienatio' || view === 'battle-preview'
+  return view === 'army' || view === 'lipsana' || view === 'alienatio' || view === 'expunctio' || view === 'battle-preview'
     ? view
     : 'primary';
 }

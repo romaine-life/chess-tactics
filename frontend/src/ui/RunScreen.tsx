@@ -51,6 +51,7 @@ import {
   runAbilityDisplayName,
   runCardDefinition,
   performAlienatio,
+  performExpunctio,
   setDeploymentChoices,
   sectioHasChanges,
   takeVacantiaLipsanon,
@@ -103,6 +104,7 @@ import {
 } from './RunArmyWorkspace';
 import { RunCard } from './RunCard';
 import { RunBattlePreview } from './RunBattlePreview';
+import { RunExpunctioWorkspace } from './RunExpunctioWorkspace';
 import { runCardName } from '../run/cardNames';
 import {
   runCardMotionDurationMs,
@@ -301,6 +303,14 @@ function RunMetaControls({
                   onClick={() => onNavigate('alienatio')}
                 >
                   Alienatio
+                </ChromeButton>
+                <ChromeButton unit="inner-text-button"
+                  data-testid="run-view-expunctio"
+                  className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'expunctio' && 'active')}
+                  aria-pressed={view === 'expunctio'}
+                  onClick={() => onNavigate('expunctio')}
+                >
+                  Expunctio
                 </ChromeButton>
               </>
             ) : null}
@@ -906,6 +916,7 @@ function SectioPanel({
   run,
   view,
   alienatioWorkspace,
+  expunctioWorkspace,
   departingOfferId,
   adlectioBusy,
   adlectioAnnouncement,
@@ -915,6 +926,7 @@ function SectioPanel({
   run: RunDocument;
   view: RunScreenView;
   alienatioWorkspace: ReactElement;
+  expunctioWorkspace: ReactElement;
   departingOfferId: string | null;
   adlectioBusy: boolean;
   adlectioAnnouncement: string;
@@ -927,7 +939,11 @@ function SectioPanel({
   const pestiferousLosses = run.pestiferousLosses.filter((loss) => loss.battleIndex === sectio.afterBattleIndex);
   return (
     <>
-      {view === 'alienatio' ? alienatioWorkspace : view === 'battle-preview' ? <RunBattlePreview run={run} /> : (
+      {view === 'alienatio'
+        ? alienatioWorkspace
+        : view === 'expunctio'
+          ? expunctioWorkspace
+          : view === 'battle-preview' ? <RunBattlePreview run={run} /> : (
         // The title bar already says Run › Sectio, so a heading painted into the
         // scene's corner only repeats it. The name stays for assistive tech.
         <RunSceneViewport
@@ -1369,7 +1385,9 @@ export function RunScreen({
     : sceneSnapshot.workspace.view === 'bona-target'
       ? 'primary'
       : sceneSnapshot.workspace.view;
-  const view = shellRun?.phase !== 'sectio' && rawView === 'alienatio' ? 'primary' : rawView;
+  const view = shellRun?.phase !== 'sectio' && (rawView === 'alienatio' || rawView === 'expunctio')
+    ? 'primary'
+    : rawView;
   const strategikonOpen = sceneSnapshot.workspace.view === 'strategikon';
   const bonaTarget = sceneSnapshot.workspace.view === 'bona-target'
     ? sceneSnapshot.workspace
@@ -1415,6 +1433,13 @@ export function RunScreen({
     const alienated = performAlienatio(latest, unitId);
     if (alienated !== latest) replace(alienated);
   };
+  const expunctCard = (cardId: string): void => {
+    if (!shellRun) return;
+    const latest = useActiveRun.getState().run;
+    if (!latest || latest.id !== shellRun.id) return;
+    const expuncted = performExpunctio(latest, cardId);
+    if (expuncted !== latest) replace(expuncted);
+  };
   const armyWorkspace = shellRun ? (
     <RunArmyWorkspace
       run={shellRun}
@@ -1441,9 +1466,12 @@ export function RunScreen({
       onAlienate={alienateUnit}
     />
   ) : null;
+  const expunctioWorkspace = shellRun ? (
+    <RunExpunctioWorkspace run={shellRun} onExpunct={expunctCard} />
+  ) : null;
   // The Sectio scene belongs to the retained shell viewport, not to whichever Sectio
   // workspace happens to be in front of it. Keeping it outside the transition region
-  // prevents Sectio/View Battle/Alienatio swaps from fading or remounting the room.
+  // prevents Sectio/View Battle/Alienatio/Expunctio swaps from fading or remounting the room.
   const persistentSectioScene = shellRun?.phase === 'sectio' ? sectioScene : null;
   // A craft request speaks for the whole screen while it runs: the Run it is about to replace must
   // not flash its own phase first, and a refused spec has to say why instead of silently doing
@@ -1566,6 +1594,7 @@ export function RunScreen({
                 run={shellRun}
                 view={view}
                 alienatioWorkspace={alienatioWorkspace!}
+                expunctioWorkspace={expunctioWorkspace!}
                 departingOfferId={cardFlight?.offer.offerId ?? landedAdlectioOfferId}
                 adlectioBusy={adlectioBusy}
                 adlectioAnnouncement={adlectioAnnouncement}

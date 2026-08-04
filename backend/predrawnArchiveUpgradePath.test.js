@@ -61,7 +61,7 @@ test('already-applied migration 36 remains the immutable drawable-media migratio
   );
 });
 
-test('the exact sparse numeric legacy history upgrades through migration 50', () => {
+test('the exact sparse numeric legacy history upgrades through migration 57', () => {
   const versions = migrationVersions();
   const appliedBeforeUpgrade = new Set(
     versions.filter((version) => version <= 27 || version === 36),
@@ -418,7 +418,7 @@ test('the exact sparse numeric legacy history upgrades through migration 50', ()
   );
   assert.deepEqual(
     plan.pending.map((entry) => entry.version),
-    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56],
+    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57],
     'the bridge must fill the historical gap before applying every post-36 contract',
   );
   assert.throws(
@@ -450,7 +450,7 @@ test('the exact sparse numeric legacy history upgrades through migration 50', ()
   );
 });
 
-test('required-schema readiness and repair enforce the migrations 37 through 56 contracts', () => {
+test('required-schema readiness and repair enforce the migrations 37 through 57 contracts', () => {
   const relations = sourceSection(
     serverSource,
     'const REQUIRED_SCHEMA_RELATIONS = [',
@@ -611,6 +611,11 @@ test('required-schema readiness and repair enforce the migrations 37 through 56 
     contractReadiness,
     /unmigrated_active_run_version_18_count[\s\S]*version === 56[\s\S]*repair active Run Klerosis contract/,
     'readiness must detect and repair an unmigrated version-18 deployment account Run',
+  );
+  assert.match(
+    contractReadiness,
+    /unmigrated_active_run_version_19_count[\s\S]*version === 57[\s\S]*repair active Run Expunctio contract/,
+    'readiness must detect and repair an unmigrated version-19 account Run',
   );
   assert.match(
     contractReadiness,
@@ -973,13 +978,13 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
 
   const primaryUpgradeProof = sourceSection(
     smokeSource,
-    'async function validatePrimarySparseNumericMigrationUpgrade56()',
+    'async function validatePrimarySparseNumericMigrationUpgrade57()',
     '\nasync function validateEditorMigration16Preservation()',
   );
   assert.match(
     primaryUpgradeProof,
-    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*56\s*\}/,
-    'the production upgrade proof must require a complete 1-56 history',
+    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*57\s*\}/,
+    'the production upgrade proof must require a complete 1-57 history',
   );
   assert.match(
     primaryUpgradeProof,
@@ -993,8 +998,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /length:\s*20[\s\S]*index\s*\+\s*37/,
-    'the production report must include every post-36 migration through 56',
+    /length:\s*21[\s\S]*index\s*\+\s*37/,
+    'the production report must include every post-36 migration through 57',
   );
   assert.match(
     primaryUpgradeProof,
@@ -1051,7 +1056,7 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   const klerosisMigrationProof = sourceSection(
     smokeSource,
     'async function validateKlerosisAndDeploymentZoneMigration56()',
-    '\nasync function waitForServer()',
+    '\nasync function validateExpunctioMigration57()',
   );
   assert.match(
     klerosisMigrationProof,
@@ -1063,6 +1068,23 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
       klerosisMigrationProof,
       new RegExp(requiredProof),
       `migration 56 must prove ${requiredProof}`,
+    );
+  }
+  const expunctioMigrationProof = sourceSection(
+    smokeSource,
+    'async function validateExpunctioMigration57()',
+    '\nasync function waitForServer()',
+  );
+  assert.match(
+    expunctioMigrationProof,
+    /inlineMigrationSql\(57\)[\s\S]*inlineMigrationSql\(57\)/,
+    'the Expunctio migration proof must establish idempotency',
+  );
+  for (const requiredProof of ['expunctedCard', 'pestiferousLosses', 'runSaveVersion', 'revision']) {
+    assert.match(
+      expunctioMigrationProof,
+      new RegExp(requiredProof),
+      `migration 57 must prove ${requiredProof}`,
     );
   }
   assert.match(

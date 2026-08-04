@@ -189,7 +189,9 @@ export * from './run/craft';
 export {
   CURRENT_RUN_SAVE_VERSION,
   RUN_LIPSANON_IMMEDIATE_GOLD,
+  cardExpunctioPriceTenths,
   lipsanonImmediateGoldTenths,
+  performExpunctio,
   snapshotWar,
   type RunDocument,
   type RunSaveVersion,

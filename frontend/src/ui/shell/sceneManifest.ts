@@ -66,9 +66,11 @@ function runSceneSnapshot(
           ? Object.freeze({ view: 'lipsana' as const })
           : requestedView === 'alienatio' && phase === 'sectio'
             ? Object.freeze({ view: 'alienatio' as const })
-            : requestedView === 'battle-preview' && phase === 'sectio'
-              ? Object.freeze({ view: 'battle-preview' as const })
-              : Object.freeze({ view: 'primary' as const });
+            : requestedView === 'expunctio' && phase === 'sectio'
+              ? Object.freeze({ view: 'expunctio' as const })
+              : requestedView === 'battle-preview' && phase === 'sectio'
+                ? Object.freeze({ view: 'battle-preview' as const })
+                : Object.freeze({ view: 'primary' as const });
   return Object.freeze({
     kind: 'run',
     hydrated: source?.hydrated ?? false,

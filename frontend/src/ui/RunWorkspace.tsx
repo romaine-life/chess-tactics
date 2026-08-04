@@ -11,6 +11,7 @@ export type RunViewportSceneView =
   | 'army'
   | 'lipsana'
   | 'alienatio'
+  | 'expunctio'
   | 'battle-preview';
 
 export interface RunViewportSceneSpec {

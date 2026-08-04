@@ -368,6 +368,7 @@ describe('scene manifests', () => {
     const armyScene = sceneManifest('/run', '?view=army', source(battle));
     const hiddenBattlePreviewScene = sceneManifest('/run', '?view=battle-preview', source(battle));
     const sectioBattlePreviewScene = sceneManifest('/run', '?view=battle-preview', source(draft));
+    const sectioExpunctioScene = sceneManifest('/run', '?view=expunctio', source(draft));
 
     expect(deploymentScene.snapshot).toMatchObject({
       kind: 'run',
@@ -389,6 +390,11 @@ describe('scene manifests', () => {
       kind: 'run',
       phase: 'sectio',
       workspace: { view: 'battle-preview' },
+    });
+    expect(sectioExpunctioScene.snapshot).toMatchObject({
+      kind: 'run',
+      phase: 'sectio',
+      workspace: { view: 'expunctio' },
     });
     expect(hiddenBattlePreviewScene.snapshot).toMatchObject({
       kind: 'run',
@@ -547,12 +553,15 @@ describe('scene manifests', () => {
     const source = { run: { hydrated: true, document } };
     const sectio = sceneManifest('/run', '', source);
     const alienatio = sceneManifest('/run', '?view=alienatio', source);
+    const expunctio = sceneManifest('/run', '?view=expunctio', source);
     const army = sceneManifest('/run', '?view=army', source);
     const battlePreview = sceneManifest('/run', '?view=battle-preview', source);
     const strategikon = sceneManifest('/run/strategikon/prosopography', '', source);
 
     expect(sceneOverlapScope(sectio, alienatio)).toBe('shell-viewport');
     expect(sceneOverlapScope(alienatio, sectio)).toBe('shell-viewport');
+    expect(sceneOverlapScope(sectio, expunctio)).toBe('shell-viewport');
+    expect(sceneOverlapScope(expunctio, sectio)).toBe('shell-viewport');
     expect(sceneOverlapScope(sectio, army)).toBe('shell-viewport');
     expect(sceneOverlapScope(sectio, battlePreview)).toBe('shell-viewport');
     expect(sceneOverlapScope(battlePreview, sectio)).toBe('shell-viewport');

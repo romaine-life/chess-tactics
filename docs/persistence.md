@@ -50,30 +50,35 @@ The active Run document names its schema marker **RunSaveVersion**. Its stored f
 `runSaveVersion`, its type is `RunSaveVersion`, and the client and server share
 `CURRENT_RUN_SAVE_VERSION`. Normalization and writes accept only that exact version. The lossless
 chain first renames version 16's marker to RunSaveVersion 17, rewrites version 17's Shop
-vocabulary into RunSaveVersion 18's Sectio, Adlectio, and Alienatio vocabulary, then advances
-version 18 to RunSaveVersion 19's starter Chartulary and persisted Klerosis queue. Migration 54
-owns the marker rename; migration 55 advances the Sectio vocabulary; migration 56 adds His Grace
-and Front Lines, grants the King Primogeniture, and returns a version-18 Deployment or Battle to
-the pre-information Klerosis boundary because that version did not persist exact automatic
-destinations.
+vocabulary into RunSaveVersion 18's Sectio, Adlectio, and Alienatio vocabulary, advances version
+18 to RunSaveVersion 19's starter Chartulary and persisted Klerosis queue, then advances version
+19 to RunSaveVersion 20's Expunctio transaction and reset-complete Pestiferous loss snapshot.
+Migration 54 owns the marker rename; migration 55 advances the Sectio vocabulary; migration 56
+adds His Grace and Front Lines, grants the King Primogeniture, and returns a version-18 Deployment
+or Battle to the pre-information Klerosis boundary because that version did not persist exact
+automatic destinations. Migration 57 adds Expunctio without changing the player's current phase
+or resources.
 Each account migration advances the Run's CAS revision, while the browser applies the same chain
 to its local document on first load. Saves older than version 16 remain unavailable because their
 retired gameplay state has no declared lossless transform. See
 [ADR-0380](adr/0380-run-save-versions-always-migrate.md) and
 [ADR-0392](adr/0392-sectio-is-the-run-disposal-and-acquisition-phase.md) through
 [ADR-0393](adr/0393-adlectio-and-alienatio-are-the-movements-within-sectio.md), and
-[ADR-0406](adr/0406-klerosis-deals-cards-before-one-unit-at-a-time-deployment.md).
+[ADR-0406](adr/0406-klerosis-deals-cards-before-one-unit-at-a-time-deployment.md), and
+[ADR-0407](adr/0407-expunctio-removes-one-card-per-sectio.md).
 
 Beginning with RunSaveVersion 16, every version that reaches players has an explicit forward
 migration for account and browser storage. Retired content maps to a typed tombstone or neutral
 replacement—for example, a removed card remains in the deck as **Removed card**—rather than
 invalidating the Run.
 
-RunSaveVersion 19 begins in Bona Vacantia when the opening Conflict offers a lipsanon, otherwise
+RunSaveVersion 20 begins in Bona Vacantia when the opening Conflict offers a lipsanon, otherwise
 in the normal Sectio with kind `opening`. The Run carries the permanent King and two starting Pawns
 through the starter-only His Grace and Front Lines cards, eight gold, and three seeded card offers.
-Adlectio remains in the same Sectio transaction; Army,
-Alienatio, Reset Sectio, and Continue reuse the post-Battle model. Continue may perform no
+Adlectio remains in the same Sectio transaction; Army, Alienatio, Expunctio, Reset Sectio, and
+Continue reuse the post-Battle model. Expunctio may remove one held card and its remaining units
+per visit for its printed value plus those units' standard value; His Grace is never eligible.
+Continue may perform no
 Adlectio and enters Deployment at Battle index 0. Deployment always persists the Klerosis deal,
 capacity decision, one-unit queue, information cursor, mode, and exact committed formation. A won
 non-final Battle enters `aftermath`, which persists
@@ -97,7 +102,8 @@ shape. Likewise, version 17's `shop` phase/property and `shop` unit source exist
 explicit migration boundary. Its `purchasedCardOfferIds` and `soldUnits` fields migrate directly
 to `adlectedCardOfferIds` and `alienatedUnits`; current admitted units use source `adlectio`.
 `normalizeRunDocument` repairs incomplete data only inside the
-current RunSaveVersion; it contains no historical version upgrade path.
+current RunSaveVersion; it contains no historical version upgrade path. The browser storage
+boundary owns the explicit historical chain through version 20.
 
 Run Battle Undo does not add another authority to `RunDocument`. The browser-owned resumable
 match snapshot keeps one checkpoint from immediately before the latest player move, including the
