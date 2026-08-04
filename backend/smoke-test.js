@@ -1890,6 +1890,8 @@ async function validateExpunctioMigration57() {
     const battle = rows.find((row) => row.owner_email === 'battle@example.com');
     const current = rows.find((row) => row.owner_email === 'current@example.com');
     const sectio = rows.find((row) => row.owner_email === 'sectio@example.com');
+    const migratedLosses = sectio?.body?.sectio?.entrySnapshot?.pestiferousLosses;
+    const migratedLoss = Array.isArray(migratedLosses) ? migratedLosses[0] : null;
     if (
       battle?.body?.runSaveVersion !== 20
       || battle?.body?.sectio !== null
@@ -1898,7 +1900,12 @@ async function validateExpunctioMigration57() {
       || Number(current?.revision) !== 9
       || sectio?.body?.runSaveVersion !== 20
       || sectio?.body?.sectio?.expunctedCard !== null
-      || JSON.stringify(sectio?.body?.sectio?.entrySnapshot?.pestiferousLosses) !== JSON.stringify([loss])
+      || migratedLosses?.length !== 1
+      || migratedLoss?.battleIndex !== loss.battleIndex
+      || migratedLoss?.cardId !== loss.cardId
+      || migratedLoss?.unit?.id !== loss.unit.id
+      || migratedLoss?.unit?.type !== loss.unit.type
+      || migratedLoss?.unit?.source !== loss.unit.source
       || Number(sectio?.revision) !== 5
     ) {
       throw new Error(`Migration 57 did not establish Expunctio transaction state: ${JSON.stringify(rows)}`);
