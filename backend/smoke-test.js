@@ -937,7 +937,7 @@ function inlineMigrationSql(version) {
   return inlineMigrationDefinition(version).sql;
 }
 
-async function validatePrimarySparseNumericMigrationUpgrade53() {
+async function validatePrimarySparseNumericMigrationUpgrade54() {
   const history = await queryDb(
     `SELECT version, name, checksum
        FROM schema_migrations
@@ -952,7 +952,7 @@ async function validatePrimarySparseNumericMigrationUpgrade53() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 53 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 54 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -967,7 +967,7 @@ async function validatePrimarySparseNumericMigrationUpgrade53() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 17 }, (_, index) => index + 37),
+    ...Array.from({ length: 18 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1303,6 +1303,59 @@ async function validateEditorRevisionReasonMigration37() {
   }
 }
 
+async function validateRunSaveVersionMigration54() {
+  const { Client } = require('pg');
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('CREATE SCHEMA smoke_run_save_version_migration_54');
+    await client.query('SET LOCAL search_path TO smoke_run_save_version_migration_54');
+    await client.query(`
+      CREATE TABLE active_runs (
+        owner_email text PRIMARY KEY,
+        body jsonb NOT NULL,
+        revision integer NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      INSERT INTO active_runs (owner_email, body, revision) VALUES
+        ('version16@example.com', '{"formatVersion":16,"id":"preserved"}'::jsonb, 7),
+        ('version17@example.com', '{"runSaveVersion":17,"id":"current"}'::jsonb, 3),
+        ('version15@example.com', '{"formatVersion":15,"id":"unsupported"}'::jsonb, 5);
+    `);
+    await client.query(inlineMigrationSql(54));
+    await client.query(inlineMigrationSql(54));
+
+    const { rows } = await client.query(
+      `SELECT owner_email, body, revision
+         FROM active_runs
+        ORDER BY owner_email`,
+    );
+    const byOwner = new Map(rows.map((row) => [row.owner_email, row]));
+    const migrated = byOwner.get('version16@example.com');
+    const current = byOwner.get('version17@example.com');
+    const unsupported = byOwner.get('version15@example.com');
+    if (
+      migrated?.body?.runSaveVersion !== 17
+      || Object.hasOwn(migrated?.body ?? {}, 'formatVersion')
+      || migrated?.body?.id !== 'preserved'
+      || Number(migrated?.revision) !== 8
+      || current?.body?.runSaveVersion !== 17
+      || Number(current?.revision) !== 3
+      || unsupported?.body?.formatVersion !== 15
+      || Number(unsupported?.revision) !== 5
+    ) {
+      throw new Error(`Migration 54 did not preserve exactly the version-16 Run: ${JSON.stringify(rows)}`);
+    }
+    await client.query('ROLLBACK');
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve validation error */ }
+    throw error;
+  } finally {
+    await client.end();
+  }
+}
+
 async function waitForServer() {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if (child.exitCode !== null) {
@@ -1335,7 +1388,7 @@ async function main() {
   await new Promise((resolve) => mockAuth.listen(authPort, '127.0.0.1', resolve));
   await new Promise((resolve) => mockBgm.listen(bgmPort, '127.0.0.1', resolve));
   await waitForServer();
-  await validatePrimarySparseNumericMigrationUpgrade53();
+  await validatePrimarySparseNumericMigrationUpgrade54();
   const databaseRuntime = await queryDb('SELECT version() AS version');
   const isPgliteRuntime = /\bPGlite\b/i.test(String(databaseRuntime.rows[0]?.version || ''));
   if (!isPgliteRuntime) {
@@ -1363,6 +1416,7 @@ async function main() {
   await validateEditorMigration16Preservation();
   await validateThumbnailRepairMigration22();
   await validateEditorRevisionReasonMigration37();
+  await validateRunSaveVersionMigration54();
   await resetDb();
 
   const missingPropSeats = await get('/api/prop-seats/default');
@@ -4048,7 +4102,7 @@ async function main() {
     { id: 'rpp', offerId: 'opening-2-rpp', pieces: ['rook', 'pawn', 'pawn'], value: 7, cost: 9, cardType: 'concinnous', effectSeed: 1706, cacochymicPieceIndex: null, effectTargetIndex: 0 },
   ];
   const activeRunDocument = {
-    formatVersion: 16,
+    runSaveVersion: boardRender.CURRENT_RUN_SAVE_VERSION,
     id: 'run-smoke',
     seed: 17,
     ataraxiaTier: 1,
@@ -4074,6 +4128,8 @@ async function main() {
     nextCardSequence: 1,
     deployment: null,
     battleRuntime: null,
+    aftermath: null,
+    vacantia: null,
     shop: {
       kind: 'opening',
       afterBattleIndex: 0,
@@ -4133,6 +4189,14 @@ async function main() {
   if (missingRunRevision.statusCode !== 400 || JSON.parse(missingRunRevision.body).error !== 'active_run_revision_required') {
     throw new Error(`Active Run writes must carry a revision: ${missingRunRevision.statusCode} ${missingRunRevision.body}`);
   }
+  const retiredRunVersionField = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({ run: { ...activeRunDocument, formatVersion: 16 }, revision: 0 }),
+  );
+  if (retiredRunVersionField.statusCode !== 400 || JSON.parse(retiredRunVersionField.body).error !== 'invalid_active_run') {
+    throw new Error(`Active Runs must reject the retired formatVersion field: ${retiredRunVersionField.statusCode} ${retiredRunVersionField.body}`);
+  }
   const invalidOpeningRun = await request(
     'PUT', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
@@ -4145,7 +4209,7 @@ async function main() {
     }),
   );
   if (invalidOpeningRun.statusCode !== 400 || JSON.parse(invalidOpeningRun.body).error !== 'invalid_active_run') {
-    throw new Error(`Format-12 opening Shops must persist three card offers: ${invalidOpeningRun.statusCode} ${invalidOpeningRun.body}`);
+    throw new Error(`Current Run saves must persist three opening Shop offers: ${invalidOpeningRun.statusCode} ${invalidOpeningRun.body}`);
   }
   const unaffordableOpeningRun = await request(
     'PUT', '/api/active-run',
@@ -4203,7 +4267,7 @@ async function main() {
     }),
   );
   if (retiredShopFieldRun.statusCode !== 400 || JSON.parse(retiredShopFieldRun.body).error !== 'invalid_active_run') {
-    throw new Error(`Format-12 Shops must reject unsupported fields: ${retiredShopFieldRun.statusCode} ${retiredShopFieldRun.body}`);
+    throw new Error(`Current Run saves must reject unsupported Shop fields: ${retiredShopFieldRun.statusCode} ${retiredShopFieldRun.body}`);
   }
   const duplicatePurchasedCardRun = await request(
     'PUT', '/api/active-run',
@@ -4220,7 +4284,7 @@ async function main() {
     }),
   );
   if (duplicatePurchasedCardRun.statusCode !== 400 || JSON.parse(duplicatePurchasedCardRun.body).error !== 'invalid_active_run') {
-    throw new Error(`Format-12 Shops must reject a duplicate card purchase: ${duplicatePurchasedCardRun.statusCode} ${duplicatePurchasedCardRun.body}`);
+    throw new Error(`Current Run saves must reject a duplicate card purchase: ${duplicatePurchasedCardRun.statusCode} ${duplicatePurchasedCardRun.body}`);
   }
   const invalidOpeningArmy = await request(
     'PUT', '/api/active-run',
@@ -4237,7 +4301,7 @@ async function main() {
     }),
   );
   if (invalidOpeningArmy.statusCode !== 400 || JSON.parse(invalidOpeningArmy.body).error !== 'invalid_active_run') {
-    throw new Error(`Unpurchased format-12 opening Shops must contain only the starting army: ${invalidOpeningArmy.statusCode} ${invalidOpeningArmy.body}`);
+    throw new Error(`An unpurchased opening Shop must contain only the starting army: ${invalidOpeningArmy.statusCode} ${invalidOpeningArmy.body}`);
   }
   const retiredDraftRun = await request(
     'PUT', '/api/active-run',
@@ -4245,7 +4309,7 @@ async function main() {
     JSON.stringify({ run: { ...activeRunDocument, draftOffers: [] }, revision: 0 }),
   );
   if (retiredDraftRun.statusCode !== 400 || JSON.parse(retiredDraftRun.body).error !== 'invalid_active_run') {
-    throw new Error(`Format-12 Runs must reject retired draft state: ${retiredDraftRun.statusCode} ${retiredDraftRun.body}`);
+    throw new Error(`Current Run saves must reject retired draft state: ${retiredDraftRun.statusCode} ${retiredDraftRun.body}`);
   }
   const retiredDraftSourceRun = await request(
     'PUT', '/api/active-run',
@@ -4256,7 +4320,7 @@ async function main() {
     }),
   );
   if (retiredDraftSourceRun.statusCode !== 400 || JSON.parse(retiredDraftSourceRun.body).error !== 'invalid_active_run') {
-    throw new Error(`Format-12 Runs must reject retired draft unit sources: ${retiredDraftSourceRun.statusCode} ${retiredDraftSourceRun.body}`);
+    throw new Error(`Current Run saves must reject retired draft unit sources: ${retiredDraftSourceRun.statusCode} ${retiredDraftSourceRun.body}`);
   }
   const purchasedPawn = {
     id: 'run-unit-1', name: 'Eadric Miller', type: 'pawn', number: 3,

@@ -17,10 +17,18 @@ export {
   type LipsanonId,
 };
 
-// Format 15 renamed the held-lipsanon field to `lipsana` (ADR-0376). The old `lipsana` key is
-// not read: docs/migration-policy.md prohibits a compatibility read, so a document written
-// before the rename is unsupported rather than half-migrated.
-export const RUN_FORMAT_VERSION = 16;
+/** The schema version of one persisted in-progress Run. Only this exact save shape is read. */
+export const CURRENT_RUN_SAVE_VERSION = 17;
+export type RunSaveVersion = typeof CURRENT_RUN_SAVE_VERSION;
+
+export class UnsupportedRunSaveError extends Error {
+  constructor(message = 'This Run was saved by an unsupported version. Start a new Run.') {
+    super(message);
+    this.name = 'UnsupportedRunSaveError';
+  }
+}
+
+const RUN_SAVE_VERSION_FIELD_RENAME_SOURCE = 16;
 export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
@@ -404,7 +412,7 @@ export interface RunShopEntrySnapshot {
 }
 
 export interface RunDocument {
-  formatVersion: typeof RUN_FORMAT_VERSION;
+  runSaveVersion: RunSaveVersion;
   id: string;
   seed: number;
   ataraxiaTier: AtaraxiaTier;
@@ -767,7 +775,7 @@ export function createRun(
   const ataraxiaTier = typeof ataraxiaTierOrNow === 'number' ? ataraxiaTierOrNow : 0;
   const createdAt = typeof ataraxiaTierOrNow === 'string' ? ataraxiaTierOrNow : now;
   const run: RunDocument = {
-    formatVersion: RUN_FORMAT_VERSION,
+    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
     id: freshRunId(),
     seed: seed >>> 0,
     ataraxiaTier,
@@ -871,7 +879,7 @@ function cloneCards(cards: readonly RunOwnedCard[]): RunOwnedCard[] {
   }));
 }
 
-function normalizeLegacyCards(value: unknown, seed: number): RunOwnedCard[] {
+function repairRunCards(value: unknown, seed: number): RunOwnedCard[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((candidate): RunOwnedCard[] => {
     if (!candidate || typeof candidate !== 'object') return [];
@@ -926,7 +934,7 @@ function normalizeLegacyCards(value: unknown, seed: number): RunOwnedCard[] {
   });
 }
 
-function normalizeCardOffers(value: unknown): RunCardOffer[] {
+function repairRunCardOffers(value: unknown): RunCardOffer[] {
   if (!Array.isArray(value)) return [];
   return value.map((candidate) => {
     const offer = candidate as RunCardOffer & {
@@ -973,7 +981,7 @@ function normalizeCardOffers(value: unknown): RunCardOffer[] {
   });
 }
 
-function cardsNeedTargetNormalization(cards: readonly RunOwnedCard[]): boolean {
+function cardsNeedRepair(cards: readonly RunOwnedCard[]): boolean {
   return cards.some((card) => (
     card.cardType === 'pestiferous'
       ? card.unitIds.length > 0
@@ -987,7 +995,7 @@ function cardsNeedTargetNormalization(cards: readonly RunOwnedCard[]): boolean {
   ));
 }
 
-function offersNeedTargetNormalization(offers: readonly RunCardOffer[]): boolean {
+function offersNeedRepair(offers: readonly RunCardOffer[]): boolean {
   return offers.some((offer) => (
     offer.cardType === 'pestiferous'
       ? !Number.isSafeInteger(offer.cacochymicPieceIndex)
@@ -1074,7 +1082,6 @@ function normalizedArmyIdentity(run: RunDocument): {
   const assignedInspectionSeeds = new Map<string, number>();
   const roleOrdinals = initialArmyNumberState();
   for (const type of ARMY_PIECE_ORDER) roleOrdinals[type] = 0;
-  const replacesLegacyNames = Number(run.formatVersion) < 3;
   for (const unit of byId.values()) {
     let number = Number.isSafeInteger(unit.number) && unit.number > 0 ? unit.number : 1;
     while (used[unit.type].has(number)) number += 1;
@@ -1088,7 +1095,7 @@ function normalizedArmyIdentity(run: RunDocument): {
       && unit.name.length <= 80;
     assignedNames.set(
       unit.id,
-      !replacesLegacyNames && validName
+      validName
         ? unit.name
         : runUnitName(run.seed, unit.type, roleOrdinal),
     );
@@ -1158,24 +1165,15 @@ function normalizedArmyIdentity(run: RunDocument): {
 export function normalizeRunDocument(run: RunDocument): RunDocument {
   const raw = run as Omit<RunDocument, 'phase'> & {
     phase: RunPhase | 'draft';
+    formatVersion?: unknown;
     draftOffers?: unknown;
     chosenDraftId?: unknown;
   };
-  if (raw.phase === 'draft') throw new Error('The retired Run draft phase is unsupported.');
-  // Format 15 renamed `lipsana` to `lipsana`. Every phase of an older document carries the
-  // retired key, and reading it to fill the new one would be exactly the compatibility path
-  // docs/migration-policy.md forbids — so the document is refused, not carried forward.
-  if (Number(raw.formatVersion) < 15) {
-    throw new Error('Run documents written before the Lipsana rename are unsupported.');
+  if (raw.runSaveVersion !== CURRENT_RUN_SAVE_VERSION || 'formatVersion' in raw) {
+    throw new UnsupportedRunSaveError();
   }
-  if (raw.phase === 'shop' && Number(raw.formatVersion) !== RUN_FORMAT_VERSION) {
-    throw new Error('Older Run Shop documents are unsupported.');
-  }
-  // Format 13 moved the Conflict lipsanon out of the shop and into its own phase. A document
-  // written before that has no offer to show and a shop that still expects a loot pick, so
-  // it cannot be carried forward -- it is discarded rather than half-migrated.
-  if (raw.phase === 'bona-vacantia' && Number(raw.formatVersion) !== RUN_FORMAT_VERSION) {
-    throw new Error('Older Run Shop documents are unsupported.');
+  if (raw.phase === 'draft' || 'draftOffers' in raw || 'chosenDraftId' in raw) {
+    throw new UnsupportedRunSaveError('This Run contains retired draft data. Start a new Run.');
   }
   // The aftermath phase IS its report; a document standing in it without one has nothing to
   // show and no survivors to open the shop with.
@@ -1185,15 +1183,9 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
   let next = run;
   if (next.vacantia === undefined) next = { ...next, vacantia: null };
   // The aftermath report belongs to the Battle it closed, so it is not carried into any
-  // later phase -- a document written before format 15 simply has none.
+  // later phase. Repair an incomplete current save rather than leaking the report forward.
   if (next.aftermath === undefined || (next.phase !== 'aftermath' && next.aftermath !== null)) {
     next = { ...next, aftermath: next.phase === 'aftermath' ? next.aftermath ?? null : null };
-  }
-  if ('draftOffers' in raw || 'chosenDraftId' in raw) {
-    const withoutDraft = { ...raw } as Record<string, unknown>;
-    delete withoutDraft.draftOffers;
-    delete withoutDraft.chosenDraftId;
-    next = withoutDraft as unknown as RunDocument;
   }
   if (
     next.phase !== 'shop'
@@ -1213,40 +1205,39 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
     }
   }
 
-  const legacy = next as RunDocument & {
+  const stored = next as RunDocument & {
     ataraxiaTier?: unknown;
     cards?: unknown;
     pestiferousLosses?: unknown;
     nextCardSequence?: unknown;
   };
-  const ataraxiaTier: AtaraxiaTier = legacy.ataraxiaTier === 1 ? 1 : 0;
-  const storedCards = Array.isArray(legacy.cards) ? legacy.cards as RunOwnedCard[] : [];
-  const cards = Number(next.formatVersion) === RUN_FORMAT_VERSION
-    && !cardsNeedTargetNormalization(storedCards)
+  const ataraxiaTier: AtaraxiaTier = stored.ataraxiaTier === 1 ? 1 : 0;
+  const storedCards = Array.isArray(stored.cards) ? stored.cards as RunOwnedCard[] : [];
+  const cards = !cardsNeedRepair(storedCards)
     ? storedCards
-    : normalizeLegacyCards(legacy.cards, next.seed);
-  const pestiferousLosses = Array.isArray(legacy.pestiferousLosses)
-    ? legacy.pestiferousLosses as RunPestiferousLoss[]
+    : repairRunCards(stored.cards, next.seed);
+  const pestiferousLosses = Array.isArray(stored.pestiferousLosses)
+    ? stored.pestiferousLosses as RunPestiferousLoss[]
     : [];
-  const nextCardSequence = Number.isSafeInteger(legacy.nextCardSequence) && Number(legacy.nextCardSequence) > 0
-    ? Number(legacy.nextCardSequence)
+  const nextCardSequence = Number.isSafeInteger(stored.nextCardSequence) && Number(stored.nextCardSequence) > 0
+    ? Number(stored.nextCardSequence)
     : cards.length + 1;
-  let shop = legacy.shop;
+  let shop = stored.shop;
   if (shop && shop.kind !== 'opening' && shop.kind !== 'post-battle') {
     shop = { ...shop, kind: 'post-battle' };
   }
   if (shop && (
-    offersNeedTargetNormalization(shop.cardOffers)
-    || (shop.entrySnapshot && cardsNeedTargetNormalization(shop.entrySnapshot.cards))
+    offersNeedRepair(shop.cardOffers)
+    || (shop.entrySnapshot && cardsNeedRepair(shop.entrySnapshot.cards))
   )) {
     shop = {
       ...shop,
-      cardOffers: normalizeCardOffers(shop.cardOffers),
+      cardOffers: repairRunCardOffers(shop.cardOffers),
       ...(shop.entrySnapshot
         ? {
             entrySnapshot: {
               ...shop.entrySnapshot,
-              cards: normalizeLegacyCards(shop.entrySnapshot.cards, next.seed),
+              cards: repairRunCards(shop.entrySnapshot.cards, next.seed),
             },
           }
         : {}),
@@ -1277,11 +1268,9 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
       };
     }
   }
-  const versionChanged = Number(next.formatVersion) !== RUN_FORMAT_VERSION;
-  if (identity.changed || versionChanged || army !== identity.army || identityShop !== identity.shop) {
+  if (identity.changed || army !== identity.army || identityShop !== identity.shop) {
     next = {
       ...next,
-      formatVersion: RUN_FORMAT_VERSION,
       army,
       shop: identityShop,
       nextArmyUnitNumberByType: identity.nextArmyUnitNumberByType,
@@ -1318,6 +1307,29 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
     };
   }
   return next;
+}
+
+/**
+ * Moves the one losslessly migratable predecessor into the current stored shape.
+ * Older Run saves remain unsupported; this is the exact formatVersion -> runSaveVersion
+ * field rename, not a general compatibility reader.
+ */
+export function migrateRunSaveDocument(value: unknown): RunDocument {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new UnsupportedRunSaveError();
+  }
+  const stored = value as Record<string, unknown>;
+  if (
+    stored.formatVersion === RUN_SAVE_VERSION_FIELD_RENAME_SOURCE
+    && !Object.hasOwn(stored, 'runSaveVersion')
+  ) {
+    const { formatVersion: _retiredFormatVersion, ...run } = stored;
+    return normalizeRunDocument({
+      ...run,
+      runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    } as unknown as RunDocument);
+  }
+  return normalizeRunDocument(value as RunDocument);
 }
 
 export function addArmyPieces(

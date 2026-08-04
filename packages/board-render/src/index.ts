@@ -187,11 +187,12 @@ export * from './ui/unitCatalog';
 // belong to core/pieces (PIECE_LABEL), and consumers of those reach them by subpath.
 export * from './run/craft';
 export {
-  RUN_FORMAT_VERSION,
+  CURRENT_RUN_SAVE_VERSION,
   RUN_LIPSANON_IMMEDIATE_GOLD,
   lipsanonImmediateGoldTenths,
   snapshotWar,
   type RunDocument,
+  type RunSaveVersion,
   type RunVacantiaState,
   type RunWarSnapshot,
 } from './run/model';
