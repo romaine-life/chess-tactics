@@ -1581,7 +1581,8 @@ async function validateSectioOperationsVocabularyMigration55() {
 }
 
 async function validateKlerosisAndDeploymentZoneMigration56() {
-  const client = new pg.Client({ connectionString: databaseUrl });
+  const { Client } = require('pg');
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
   try {
     await client.query('BEGIN');
