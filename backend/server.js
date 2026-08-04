@@ -2893,6 +2893,54 @@ const MIGRATIONS = [
        WHERE singleton;
     `,
   },
+  {
+    version: 53,
+    name: 'the drawable catalog follows the Lipsana slot rename',
+    // Migration 52 renames media_slots.slot, a primary key. Three tables reference it, and 52
+    // carried two: it drops media_versions' slot FK and media_slots_active_version_fk, moves
+    // media_slots / media_versions / media_asset_events, and restores both constraints.
+    //
+    // drawable_asset_media.slot references it too (drawable_asset_media_slot_fkey, ON DELETE
+    // RESTRICT, no ON UPDATE), and was not carried. On a database with no accepted relic media
+    // the rename matches no child row and 52 applies cleanly, which is every fresh and CI
+    // database — so this only bites where the catalog is real, and production is the only one
+    // of those. There, 52 fails its own parent UPDATE and rolls back on every deploy.
+    //
+    // 52 is immutable (ADR-0174), so this is the follow-up that repairs it: it moves the table
+    // 52 left behind and restores the constraint. Both halves are idempotent, because on a
+    // fresh database 52 already succeeded and there is nothing here left to do.
+    sql: `
+      UPDATE drawable_asset_media
+         SET slot = 'ui/run/lipsana/' || substring(slot from '^ui/run/relics/(.*)$')
+       WHERE slot LIKE 'ui/run/relics/%';
+
+      -- Re-adding a constraint that is already there would abort the transaction, and the
+      -- name is Postgres-generated from an inline REFERENCES, so presence is decided by
+      -- shape from the catalog rather than by guessing the name.
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+            FROM pg_constraint
+           WHERE conrelid = 'drawable_asset_media'::regclass
+             AND confrelid = 'media_slots'::regclass
+             AND contype = 'f'
+             AND conkey = ARRAY[(
+                   SELECT attnum FROM pg_attribute
+                    WHERE attrelid = 'drawable_asset_media'::regclass AND attname = 'slot'
+                 )]::smallint[]
+        ) THEN
+          ALTER TABLE drawable_asset_media
+            ADD CONSTRAINT drawable_asset_media_slot_fkey
+            FOREIGN KEY (slot) REFERENCES media_slots(slot) ON DELETE RESTRICT;
+        END IF;
+      END $$;
+
+      UPDATE media_catalog_state
+         SET revision = revision + 1, updated_at = now()
+       WHERE singleton;
+    `,
+  },
 ];
 
 let pool = null;
