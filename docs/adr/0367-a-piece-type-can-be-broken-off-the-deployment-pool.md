@@ -8,6 +8,8 @@ refines:
   - "[ADR-0348](0348-discipline-resolves-before-automatic-deployment.md)"
 partially_supersedes:
   - "[ADR-0288](0288-new-deployment-authoring-uses-one-flexible-zone-per-side.md)"
+partially_superseded_by:
+  - "[ADR-0381](0381-affinity-dependent-agminate-units-deploy-after-the-random-formation.md)'s late affinity-dependent placement"
 ---
 
 # ADR-0367: A piece type can be broken off the deployment pool, and placement is a free-for-all
