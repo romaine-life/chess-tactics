@@ -86,6 +86,13 @@ to `adlectedCardOfferIds` and `alienatedUnits`; current admitted units use sourc
 `normalizeRunDocument` repairs incomplete data only inside the
 current RunSaveVersion; it contains no historical version upgrade path.
 
+Run Battle Undo does not add another authority to `RunDocument`. The browser-owned resumable
+match snapshot keeps one checkpoint from immediately before the latest player move, including the
+bounded Run economy/runtime slice needed to reverse move-owned casualty, Reservist, and Pawn
+cash-out effects. Undo restores that slice through the normal active-Run write and deducts one gold;
+the checkpoint exists only alongside the device-local live board and is replaced by the next move
+or cleared by Battle replacement (ADR-0394).
+
 Per-user scoping means each user has their own `id` namespace — two users can
 both have a level `my-level` without colliding, and neither can read or
 overwrite the other's. Writes upsert and bump a `revision`.

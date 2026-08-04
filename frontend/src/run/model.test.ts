@@ -20,6 +20,8 @@ import {
   acquireLipsanon,
   battleVictoryGoldTenths,
   beginBattle,
+  canUndoRunBattleMove,
+  captureRunBattleUndo,
   performAdlectio,
   canLeaveSectio,
   cashOutPawn,
@@ -46,6 +48,7 @@ import {
   sectioHasChanges,
   takeVacantiaLipsanon,
   legatineAdlectedAcquisitionTarget,
+  undoRunBattleMove,
   type RunDocument,
   type RunWarSnapshot,
 } from './model';
@@ -666,6 +669,40 @@ describe('Run progression and lipsanon offers', () => {
     const cashed = cashOutPawn(run, pawn.id);
     expect(cashed.army.some((unit) => unit.id === pawn.id)).toBe(false);
     expect(cashed.goldTenths - run.goldTenths).toBe(2 * GOLD_SCALE);
+  });
+
+  it('undoes move-owned Battle effects and charges one gold from the pre-move state', () => {
+    const run = {
+      ...acquireLipsanon(deployedRunWithPawn(), 'mercenary-boat'),
+      goldTenths: 5 * GOLD_SCALE,
+    };
+    const pawn = run.army.find((unit) => unit.type === 'pawn')!;
+    const checkpoint = captureRunBattleUndo(run);
+    expect(checkpoint).not.toBeNull();
+    expect(canUndoRunBattleMove(run, checkpoint)).toBe(true);
+
+    const cashed = cashOutPawn(run, pawn.id);
+    const withObservedDeath = observeRunUnitDeath(cashed, pawn.id).run;
+    expect(withObservedDeath.army.some((unit) => unit.id === pawn.id)).toBe(false);
+    expect(withObservedDeath.battleRuntime?.cashedOutUnitIds).toContain(pawn.id);
+    expect(withObservedDeath.battleRuntime?.observedDeadUnitIds).toContain(pawn.id);
+
+    const undone = undoRunBattleMove(withObservedDeath, checkpoint);
+    expect(undone.army).toEqual(run.army);
+    expect(undone.cards).toEqual(run.cards);
+    expect(undone.battleRuntime).toEqual(run.battleRuntime);
+    expect(undone.goldTenths).toBe(run.goldTenths - GOLD_SCALE);
+  });
+
+  it('cannot finance an Undo with gold produced by the move being undone', () => {
+    const run = { ...deployedRunWithPawn(), goldTenths: 0 };
+    const checkpoint = captureRunBattleUndo(run);
+    const pawn = run.army.find((unit) => unit.type === 'pawn')!;
+    const cashed = cashOutPawn(run, pawn.id);
+
+    expect(cashed.goldTenths).toBe(2 * GOLD_SCALE);
+    expect(canUndoRunBattleMove(cashed, checkpoint)).toBe(false);
+    expect(undoRunBattleMove(cashed, checkpoint)).toBe(cashed);
   });
 });
 

@@ -11,6 +11,7 @@ const chromeRuntime = readFileSync(new URL('./chromeFamilyRuntime.ts', import.me
 const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
 const portraitPreload = readFileSync(new URL('../art/preload.ts', import.meta.url), 'utf8');
+const runBattleUndoButton = readFileSync(new URL('./RunBattleUndoButton.tsx', import.meta.url), 'utf8');
 
 const buttonBlocks = (source: string): string[] => source.match(/<(?:button|ChromeButton)\b[\s\S]*?<\/(?:button|ChromeButton)>/g) ?? [];
 const navButtonBlocks = (source: string): string[] => source.match(/<(?:NavButton|ChromeNavButton)\b[\s\S]*?<\/(?:NavButton|ChromeNavButton)>/g) ?? [];
@@ -76,8 +77,8 @@ describe('Skirmish chrome hierarchy', () => {
   });
 
   it('registers every level-specific title-bar status box as inner chrome', () => {
-    const titleStart = skirmish.indexOf('titleBarContent={runDeployment ? runDeployment.titleBarContent : playableSurfaceReady ? (');
-    const titleEnd = skirmish.indexOf('lipsanonIds={', titleStart);
+    const titleStart = skirmish.indexOf('const skirmishTitleBarContent = playableSurfaceReady ? (');
+    const titleEnd = skirmish.indexOf('const titleBarContent =', titleStart);
     const titleContent = titleStart >= 0 && titleEnd > titleStart ? skirmish.slice(titleStart, titleEnd) : '';
     expect(titleContent.match(/<TitleBarStatus\b/g)).toHaveLength(3);
     expect(titleContent).not.toMatch(/<div\b[^>]*skirmish-status-chip/);
@@ -159,6 +160,17 @@ describe('Skirmish chrome hierarchy', () => {
     expectChromeUnit(resign, 'inner-text-button');
     expect(resign).toContain("'danger'");
     expect(styleCss).not.toMatch(/\.skirmish-resign-button[^\{]*\{[^}]*border-image(?:-source)?\s*:/);
+  });
+
+  it('renders paid Run Undo through one shared text-button and the canonical gold amount', () => {
+    expect(skirmishHud).toContain('<RunBattleUndoButton testId="undo-run-move" />');
+    expect(skirmish).toContain('<RunBattleUndoButton testId="undo-run-move-result" />');
+    expect(runBattleUndoButton).toContain('unit="inner-text-button"');
+    expect(runBattleUndoButton).toContain("chromeUnitClassNames('inner-text-button', 'app-header-button'");
+    expect(runBattleUndoButton).toContain('valueTenths={RUN_BATTLE_UNDO_COST_TENTHS}');
+    expect(runBattleUndoButton).toContain('data-ui-sfx="gold"');
+    expect(runBattleUndoButton).toContain('disabled={!canUndo}');
+    expect(runBattleUndoButton).toContain('undoLastPlayerMove();');
   });
 
   it('opens administrator controls inside the HUD without adding a sixth player tab', () => {

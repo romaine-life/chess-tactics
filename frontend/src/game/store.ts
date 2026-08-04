@@ -23,6 +23,7 @@ import { loadShippedAiWeights } from '../net/aiWeights';
 import { PIECE_LABEL } from '../core/pieces';
 import { clearPersistedNetIntent, loadPersistedNetIntent, persistNetIntent } from './netIntentPersistence';
 import { adminMoveTargets, killUnitForAdmin } from './adminBattle';
+import type { RunBattleUndoCheckpoint } from '../run/model';
 
 // Seed the shipped-AI-weights cache once so the live enemy AI picks up any weights an
 // admin shipped for a level (ship-to-everyone). Best-effort; a failure leaves the
@@ -115,6 +116,26 @@ export type NetResignSink = () => void;
  * never consulted by legal move generation, so lipsana cannot change piece behavior.
  */
 export type RunBattleTransformSink = (game: GameState, events: readonly GameEvent[]) => GameState;
+
+/** Run economy/runtime ownership paired with the board store's move checkpoint. */
+export interface RunBattleUndoAdapter {
+  capture: () => RunBattleUndoCheckpoint | null;
+  canRestore: (checkpoint: RunBattleUndoCheckpoint) => boolean;
+  restore: (checkpoint: RunBattleUndoCheckpoint) => boolean;
+}
+
+/** One browser-resumable checkpoint immediately before a committed player move. */
+export interface PlayerMoveUndoCheckpoint {
+  game: GameState;
+  tick: number;
+  log: string[];
+  resultDetail: string | null;
+  turnsElapsed: number;
+  selectedId: string | null;
+  focusedId: string | null;
+  clock: ClockState | null;
+  run: RunBattleUndoCheckpoint;
+}
 
 // Turn tempo (ms). A move isn't one simultaneous swap — it's a rhythm: your move
 // lands, the board settles for a beat, the enemy "thinks", then answers. This
@@ -390,7 +411,13 @@ export interface SkirmishState {
   tryMoveTo: (x: number, y: number) => void;
   choosePromotion: (type: PromotionPieceType) => void;
   /** Run-only Paid Crossing choice: complete the pending move, then remove the Pawn. */
-  cashOutPromotion: () => void;
+  cashOutPromotion: (commitRunCashOut?: (pieceId: string) => void) => void;
+  /** One Run-only checkpoint before the latest committed player move (ADR-0394). */
+  undoCheckpoint: PlayerMoveUndoCheckpoint | null;
+  /** True while this mounted Battle supplies the Run economy half of Undo. */
+  runUndoEnabled: boolean;
+  canUndoLastPlayerMove: () => boolean;
+  undoLastPlayerMove: () => boolean;
   armAdminMode: (mode: AdminBattleMode) => boolean;
   clearAdminMode: () => void;
   adminKillUnit: (pieceId: string) => boolean;
@@ -423,6 +450,8 @@ export interface SkirmishState {
   setTestMinCpuDelay: (ms: number) => void;
   /** Install this battle instance's Run-only committed-board transform. */
   setRunBattleTransformSink: (sink: RunBattleTransformSink | null) => void;
+  /** Install the matching Run economy/runtime checkpoint owner. */
+  setRunBattleUndoAdapter: (adapter: RunBattleUndoAdapter | null) => void;
   setNetMoveSink: (sink: NetMoveSink | null) => void;
   setNetResignSink: (sink: NetResignSink | null) => void;
 }
@@ -434,13 +463,15 @@ export interface SkirmishState {
  * been started, the last one already finished, or a different level is opened.
  */
 export function shouldStartFreshSkirmish(
-  state: Pick<SkirmishState, 'started' | 'game' | 'levelId' | 'activityId'> & { net?: NetState | null },
+  state: Pick<SkirmishState, 'started' | 'game' | 'levelId' | 'activityId'>
+    & Partial<Pick<SkirmishState, 'undoCheckpoint'>>
+    & { net?: NetState | null },
   requestedLevelId: string | null,
   requestedActivityId: string | null,
 ): boolean {
   return !!state.net
     || !state.started
-    || state.game.winner !== null
+    || (state.game.winner !== null && !state.undoCheckpoint)
     || state.levelId !== requestedLevelId
     || state.activityId !== requestedActivityId;
 }
@@ -450,6 +481,7 @@ const INITIAL_GAME = createSkirmish({ seed: 1 });
 const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
   let matchEpoch = 0;
   let runBattleTransformSink: RunBattleTransformSink | null = null;
+  let runBattleUndoAdapter: RunBattleUndoAdapter | null = null;
   let netMoveSink: NetMoveSink | null = null;
   let netResignSink: NetResignSink | null = null;
   let enemyReplyTimer: ReturnType<typeof setTimeout> | null = null;
@@ -762,6 +794,34 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     }
   };
 
+  const capturePlayerMoveUndo = (): PlayerMoveUndoCheckpoint | null => {
+    const s = get();
+    const run = runBattleUndoAdapter?.capture() ?? null;
+    if (!run || s.net || !s.started || s.game.winner) return null;
+    const clock = s.clock
+      ? {
+          ...s.clock,
+          // Keep the exact thinking time left at commit, but do not bank this move's
+          // Fischer increment. Undo returns to the decision, not to free clock time.
+          remainingMs: s.clock.running
+            ? Math.max(0, clockDeadline - Date.now())
+            : s.clock.remainingMs,
+          running: false,
+        }
+      : null;
+    return {
+      game: s.game,
+      tick: s.tick,
+      log: [...s.log],
+      resultDetail: s.resultDetail,
+      turnsElapsed: s.turnsElapsed,
+      selectedId: s.selectedId,
+      focusedId: s.focusedId,
+      clock,
+      run,
+    };
+  };
+
   // Apply a legal player move and run the full post-move pipeline: bank the clock
   // increment, apply, sound the footstep, evaluate the objective, detect checkmate/
   // stalemate/check on the enemy now to move, commit, stage the enemy reply, persist.
@@ -772,9 +832,12 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     mv: Move,
     promotion?: PromotionPieceType,
     removeAfterMove = false,
+    beforeApply?: (pieceId: string) => void,
   ) => {
     const s = get();
+    const undoCheckpoint = capturePlayerMoveUndo();
     pauseClockWithIncrement();
+    beforeApply?.(piece.id);
     const playerRes = applyMove(s.game, piece.id, mv, { promotion });
     const afterSpecial = removeAfterMove
       ? {
@@ -825,6 +888,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       resultDetail,
       pendingPromotion: null,
       premoveInputOpen: false,
+      undoCheckpoint,
       ...interaction,
       log: [...msgs.reverse(), ...s.log].slice(0, 12),
     });
@@ -1010,6 +1074,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       focusedId: null,
       pendingPromotion: null,
       adminMode: null,
+      undoCheckpoint: null,
       premoves: [],
       premoveInputOpen: false,
       sessionEpoch: epoch,
@@ -1042,6 +1107,8 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
   clock: null,
   pendingPromotion: null,
   adminMode: null,
+  undoCheckpoint: null,
+  runUndoEnabled: false,
   sessionEpoch: 0,
   boardViewEpoch: 0,
   net: null,
@@ -1116,6 +1183,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       clock,
       pendingPromotion: null,
       adminMode: null,
+      undoCheckpoint: null,
       sessionEpoch: epoch,
       boardViewEpoch: opts.preserveBoardPresentation ? get().boardViewEpoch : epoch,
       net: null,
@@ -1207,6 +1275,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       clock: null, // netplay is untimed in v1 (a shared wall-clock is future work)
       pendingPromotion: null,
       adminMode: null,
+      undoCheckpoint: null,
       sessionEpoch: epoch,
       boardViewEpoch: epoch,
       premoves: [],
@@ -1271,6 +1340,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       selectedId: null,
       pendingPromotion: null,
       adminMode: null,
+      undoCheckpoint: null,
       premoves: [],
       premoveInputOpen: false,
     });
@@ -1324,6 +1394,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       pendingPromotion: null,
       adminMode: null,
       resultDetail: null,
+      undoCheckpoint: null,
       clock: s.clock ? { ...s.clock, running: false } : null,
       testMode: false,
       testMinCpuDelayMs: 0,
@@ -1353,6 +1424,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       pendingPromotion: null,
       adminMode: null,
       resultDetail: reason === 'resign' ? null : s.resultDetail,
+      undoCheckpoint: null,
       premoves: [],
       premoveInputOpen: false,
       testMode: false,
@@ -1368,6 +1440,50 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
   },
 
   activateClock: () => startClock(),
+
+  canUndoLastPlayerMove: () => {
+    const s = get();
+    return Boolean(
+      !s.net
+      && s.runUndoEnabled
+      && s.undoCheckpoint
+      && runBattleUndoAdapter?.canRestore(s.undoCheckpoint.run),
+    );
+  },
+
+  undoLastPlayerMove: () => {
+    const s = get();
+    const checkpoint = s.undoCheckpoint;
+    if (
+      s.net
+      || !s.runUndoEnabled
+      || !checkpoint
+      || !runBattleUndoAdapter?.canRestore(checkpoint.run)
+      || !runBattleUndoAdapter.restore(checkpoint.run)
+    ) return false;
+
+    const epoch = beginSession();
+    set({
+      game: checkpoint.game,
+      env: envFor(checkpoint.game),
+      tick: checkpoint.tick,
+      log: ['Move undone — 1 gold paid.', ...checkpoint.log].slice(0, 12),
+      resultDetail: checkpoint.resultDetail,
+      turnsElapsed: checkpoint.turnsElapsed,
+      selectedId: checkpoint.selectedId,
+      focusedId: checkpoint.focusedId,
+      clock: checkpoint.clock ? { ...checkpoint.clock, running: false } : null,
+      pendingPromotion: null,
+      adminMode: null,
+      premoves: [],
+      premoveInputOpen: false,
+      undoCheckpoint: null,
+      sessionEpoch: epoch,
+    });
+    startClock();
+    persistMatch(get());
+    return true;
+  },
 
   resumeMatch: (match, options) => {
     const epoch = beginSession();
@@ -1410,6 +1526,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       premoveInputOpen: false,
       pendingPromotion: null,
       adminMode: null,
+      undoCheckpoint: match.undoCheckpoint ?? null,
       sessionEpoch: epoch,
       boardViewEpoch: epoch,
       // Resume with the clock paused; startClock re-arms the deadline from the
@@ -1527,6 +1644,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       adminMode: null,
       premoves: [],
       premoveInputOpen: false,
+      undoCheckpoint: null,
       sessionEpoch: epoch,
       clock: s.clock ? { ...s.clock, running: false } : null,
       log: ['Admin awarded victory to the player.', ...s.log].slice(0, 12),
@@ -1575,7 +1693,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     commitPlayerMove(p, mv, type);
   },
 
-  cashOutPromotion: () => {
+  cashOutPromotion: (commitRunCashOut) => {
     const s = get();
     const pending = s.pendingPromotion;
     if (!pending || pending.mode !== 'move' || s.net) return;
@@ -1588,7 +1706,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       return;
     }
     if (s.premoves.length || s.premoveInputOpen) set({ premoves: [], premoveInputOpen: false });
-    commitPlayerMove(p, mv, undefined, true);
+    commitPlayerMove(p, mv, undefined, true, commitRunCashOut);
   },
 
   queueMove: (pieceId, x, y) => {
@@ -1634,6 +1752,10 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
   },
   setRunBattleTransformSink: (sink) => {
     runBattleTransformSink = sink;
+  },
+  setRunBattleUndoAdapter: (adapter) => {
+    runBattleUndoAdapter = adapter;
+    set({ runUndoEnabled: Boolean(adapter) });
   },
   setNetMoveSink: (sink) => {
     netMoveSink = sink;

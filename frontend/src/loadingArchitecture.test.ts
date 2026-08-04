@@ -461,7 +461,10 @@ describe('professional loading architecture guards', () => {
     const viewState = read('./game/skirmishView.ts');
     expect(board).toContain('const completePreparedFrame = boardReady && cameraReady');
     expect(board).toContain('onSurfaceReady?.(surfaceReady)');
-    expect(skirmish).toContain('titleBarContent={runDeployment ? runDeployment.titleBarContent : playableSurfaceReady ? (');
+    expect(skirmish).toContain('const skirmishTitleBarContent = playableSurfaceReady ? (');
+    expect(skirmish).toContain('const titleBarContent = runDeployment?.titleBarContent');
+    expect(skirmish).toContain('?? runBattle?.titleBarContent');
+    expect(skirmish).toContain('?? skirmishTitleBarContent');
     expect(skirmish).toContain('surface="gameplay-hud"');
     expect(skirmish).toContain('Preparing battlefield…');
     expect(read('../scripts/shot.mjs')).toContain('An explicit readiness contract is an assertion');

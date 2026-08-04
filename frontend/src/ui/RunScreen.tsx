@@ -1,5 +1,5 @@
 import { Children, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
-import type { RunBattleTransformSink } from '../game/store';
+import type { RunBattleTransformSink, RunBattleUndoAdapter } from '../game/store';
 import { defaultFacingForSide, paletteForSide, pieceSpritePath } from '../core/pieces';
 import type { GameState, Piece } from '../core/types';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
@@ -31,7 +31,9 @@ import {
   performAdlectio,
   buyPaidLipsanon,
   canLeaveSectio,
+  canUndoRunBattleMove,
   cashOutPawn,
+  captureRunBattleUndo,
   closeBattle,
   hasLipsanon,
   leaveAftermath,
@@ -47,6 +49,7 @@ import {
   setDeploymentChoices,
   sectioHasChanges,
   takeVacantiaLipsanon,
+  undoRunBattleMove,
   type RunCardOffer,
   type RunDocument,
   type LipsanonId,
@@ -1173,6 +1176,10 @@ function RunBattlefieldPanel({
   const battleSeed = run.deployment?.seed ?? run.seed;
   const lipsanonIds = run.lipsana;
   const canCashOutPawn = hasLipsanon(run, 'mercenary-boat');
+  const titleBarContent = useMemo(
+    () => <RunTitleBarStatus run={run} path={routePath} />,
+    [routePath, run],
+  );
 
   const transformCommittedBoard = useCallback<RunBattleTransformSink>((game, _events) => {
       let active = useActiveRun.getState().run;
@@ -1223,8 +1230,27 @@ function RunBattlefieldPanel({
     level: battleLevel,
     seed: battleSeed,
     activityId: runBattleActivityId(runId, run.battleIndex),
+    titleBarContent,
     lipsanonIds,
     transformCommittedBoard,
+    undoAdapter: {
+      capture: () => {
+        const latest = useActiveRun.getState().run;
+        return latest?.id === runId ? captureRunBattleUndo(latest) : null;
+      },
+      canRestore: (checkpoint) => {
+        const latest = useActiveRun.getState().run;
+        return Boolean(latest?.id === runId && canUndoRunBattleMove(latest, checkpoint));
+      },
+      restore: (checkpoint) => {
+        const latest = useActiveRun.getState().run;
+        if (!latest || latest.id !== runId) return false;
+        const restored = undoRunBattleMove(latest, checkpoint);
+        if (restored === latest) return false;
+        replace(restored);
+        return true;
+      },
+    } satisfies RunBattleUndoAdapter,
     onVictory: (report) => {
       const latest = useActiveRun.getState().run;
       if (latest?.id === runId) replace(closeBattle(latest, report));
@@ -1240,7 +1266,7 @@ function RunBattlefieldPanel({
           if (latest?.id === runId) replace(cashOutPawn(latest, unitId));
         }
       : undefined,
-  }), [battleLevel, battleSeed, canCashOutPawn, lipsanonIds, replace, requestAbandon, run.battleIndex, runId, transformCommittedBoard]);
+  }), [battleLevel, battleSeed, canCashOutPawn, lipsanonIds, replace, requestAbandon, run.battleIndex, runId, titleBarContent, transformCommittedBoard]);
 
   // Subscribe to the current document so a Paid Crossing cash-out or Reservist event
   // refreshes the hook inputs without restarting the already-live matching board.

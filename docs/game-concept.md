@@ -58,6 +58,10 @@ these.
 - Ordinary boards remain **self-contained**. **Run** adds the deliberate continuity
   layer: a persistent chess army, Sectio visits, and lipsana move through an authored War while
   every Battle still obeys recognizable chess-piece behavior (ADR-0193).
+- In an active Run Battle, **Undo** spends one gold to return to the checkpoint before
+  the latest player move. Its deterministic enemy reply and move-owned casualty,
+  Reservist, or Pawn cash-out effects rewind with it; the one-level checkpoint survives
+  an ordinary reload and never changes chess-piece behavior (ADR-0394).
 - Acquired lipsana read as persistent Run state: one frameless native-size icon
   strip stays at the upper-left beneath the title bar in Battles and between-Battle
   screens, independent of the Battle Controls panel; pointing at or focusing an
