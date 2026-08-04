@@ -83,6 +83,9 @@ const {
   runLipsanonIconSlotId,
   runCardCostCoinMediaIssue,
   runCardCostCoinSlot,
+  runCardBackMediaIssue,
+  runCardBackOwnerProofIssue,
+  runCardBackSlot,
   runResourceIconMediaIssue,
   runResourceIconSlotId,
   runSectioWrapMediaIssue,
@@ -3769,6 +3772,291 @@ const MIGRATIONS = [
        WHERE body->'runSaveVersion' = '19'::jsonb;
     `,
   },
+  {
+    version: 58,
+    name: 'card-ordered deployment state',
+    // ADR-0419: RunSaveVersion 21 retires Primogeniture and the independent
+    // Klerosis/Farrago queue. Cards gain stable nullable unit seats; an in-flight
+    // Deployment or Battle returns to the new pre-information empty battlefield.
+    sql: `
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_run_unit_from_primogeniture(unit_value jsonb)
+      RETURNS jsonb
+      LANGUAGE sql
+      IMMUTABLE
+      STRICT
+      AS $function$
+        SELECT CASE WHEN jsonb_typeof(unit_value) <> 'object' THEN unit_value ELSE
+          jsonb_set(
+            unit_value,
+            '{abilities}',
+            COALESCE((
+              SELECT jsonb_agg(ability ORDER BY ordinal)
+                FROM jsonb_array_elements(
+                  CASE WHEN jsonb_typeof(unit_value->'abilities') = 'array'
+                    THEN unit_value->'abilities' ELSE '[]'::jsonb END
+                ) WITH ORDINALITY AS abilities(ability, ordinal)
+               WHERE ability <> '"primogeniture"'::jsonb
+            ), '[]'::jsonb),
+            true
+          )
+        END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_run_army_from_primogeniture(army_value jsonb)
+      RETURNS jsonb
+      LANGUAGE sql
+      IMMUTABLE
+      STRICT
+      AS $function$
+        SELECT CASE WHEN jsonb_typeof(army_value) <> 'array' THEN army_value ELSE
+          COALESCE((
+            SELECT jsonb_agg(pg_temp.migrate_run_unit_from_primogeniture(unit_value) ORDER BY ordinal)
+              FROM jsonb_array_elements(army_value) WITH ORDINALITY AS units(unit_value, ordinal)
+          ), '[]'::jsonb)
+        END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_run_card_to_unit_seats(card_value jsonb, army_value jsonb)
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      IMMUTABLE
+      STRICT
+      AS $function$
+      DECLARE
+        unit_ids jsonb := CASE WHEN jsonb_typeof(card_value->'unitIds') = 'array'
+          THEN card_value->'unitIds' ELSE '[]'::jsonb END;
+        core_id text := card_value->>'coreId';
+        piece_types text[] := ARRAY[]::text[];
+        used_unit_ids text[] := ARRAY[]::text[];
+        unit_seats jsonb := '[]'::jsonb;
+        piece_code text;
+        piece_type text;
+        candidate_unit_id text;
+        candidate_type text;
+        selected_unit_id text;
+        piece_index integer;
+      BEGIN
+        IF jsonb_typeof(card_value) <> 'object' THEN RETURN card_value; END IF;
+        IF core_id = 'his-grace' THEN
+          piece_types := ARRAY['king'];
+        ELSIF core_id = 'front-lines' THEN
+          piece_types := ARRAY['pawn', 'pawn'];
+        ELSIF core_id ~ '^[pkbrq]+$' THEN
+          FOR piece_index IN 1..length(core_id) LOOP
+            piece_code := substr(core_id, piece_index, 1);
+            piece_types := array_append(piece_types, CASE piece_code
+              WHEN 'p' THEN 'pawn'
+              WHEN 'k' THEN 'knight'
+              WHEN 'b' THEN 'bishop'
+              WHEN 'r' THEN 'rook'
+              WHEN 'q' THEN 'queen'
+            END);
+          END LOOP;
+        ELSE
+          RETURN (card_value - 'unitIds') || jsonb_build_object('unitSeats', unit_ids);
+        END IF;
+        -- A complete predecessor already owns an order. Only a sold-down card needs
+        -- its typed definition expanded back to stable nullable seats.
+        IF jsonb_array_length(unit_ids) >= cardinality(piece_types) THEN
+          RETURN (card_value - 'unitIds') || jsonb_build_object('unitSeats', unit_ids);
+        END IF;
+        FOREACH piece_type IN ARRAY piece_types LOOP
+          selected_unit_id := NULL;
+          FOR candidate_unit_id IN
+            SELECT unit_id #>> '{}'
+              FROM jsonb_array_elements(unit_ids) WITH ORDINALITY AS ids(unit_id, ordinal)
+             WHERE jsonb_typeof(unit_id) = 'string'
+               AND NOT ((unit_id #>> '{}') = ANY(used_unit_ids))
+             ORDER BY ordinal
+          LOOP
+            SELECT unit_value->>'type'
+              INTO candidate_type
+              FROM jsonb_array_elements(CASE WHEN jsonb_typeof(army_value) = 'array'
+                THEN army_value ELSE '[]'::jsonb END) AS units(unit_value)
+             WHERE unit_value->>'id' = candidate_unit_id
+             LIMIT 1;
+            IF candidate_type = piece_type THEN
+              selected_unit_id := candidate_unit_id;
+              used_unit_ids := array_append(used_unit_ids, selected_unit_id);
+              EXIT;
+            END IF;
+          END LOOP;
+          unit_seats := unit_seats || jsonb_build_array(
+            CASE WHEN selected_unit_id IS NULL THEN 'null'::jsonb ELSE to_jsonb(selected_unit_id) END
+          );
+        END LOOP;
+        -- Preserve malformed but still-referenced predecessor data for validation rather
+        -- than silently dropping a unit that could not be associated with a typed seat.
+        IF cardinality(used_unit_ids) <> jsonb_array_length(unit_ids) THEN
+          unit_seats := unit_ids;
+        END IF;
+        RETURN (card_value - 'unitIds') || jsonb_build_object('unitSeats', unit_seats);
+      END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_run_cards_to_unit_seats(cards_value jsonb, army_value jsonb)
+      RETURNS jsonb
+      LANGUAGE sql
+      IMMUTABLE
+      STRICT
+      AS $function$
+        SELECT CASE WHEN jsonb_typeof(cards_value) <> 'array' THEN cards_value ELSE
+          COALESCE((
+            SELECT jsonb_agg(pg_temp.migrate_run_card_to_unit_seats(card_value, army_value) ORDER BY ordinal)
+              FROM jsonb_array_elements(cards_value) WITH ORDINALITY AS cards(card_value, ordinal)
+          ), '[]'::jsonb)
+        END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_run_losses_from_primogeniture(losses_value jsonb)
+      RETURNS jsonb
+      LANGUAGE sql
+      IMMUTABLE
+      STRICT
+      AS $function$
+        SELECT CASE WHEN jsonb_typeof(losses_value) <> 'array' THEN losses_value ELSE
+          COALESCE((
+            SELECT jsonb_agg(
+              CASE WHEN jsonb_typeof(loss_value) = 'object'
+                THEN jsonb_set(
+                  loss_value,
+                  '{unit}',
+                  pg_temp.migrate_run_unit_from_primogeniture(loss_value->'unit'),
+                  false
+                )
+                ELSE loss_value
+              END
+              ORDER BY ordinal
+            )
+              FROM jsonb_array_elements(losses_value) WITH ORDINALITY AS losses(loss_value, ordinal)
+          ), '[]'::jsonb)
+        END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_run_sectio_to_card_order(sectio_value jsonb)
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      IMMUTABLE
+      STRICT
+      AS $function$
+      DECLARE
+        migrated jsonb := sectio_value;
+        entry_snapshot jsonb;
+        expuncted jsonb;
+      BEGIN
+        IF jsonb_typeof(sectio_value) <> 'object' THEN RETURN sectio_value; END IF;
+        IF jsonb_typeof(migrated->'alienatedUnits') = 'array' THEN
+          migrated := jsonb_set(migrated, '{alienatedUnits}', COALESCE((
+            SELECT jsonb_agg(
+              CASE WHEN jsonb_typeof(alienated) = 'object' THEN jsonb_set(
+                alienated,
+                '{unit}',
+                pg_temp.migrate_run_unit_from_primogeniture(alienated->'unit'),
+                false
+              ) ELSE alienated END
+              ORDER BY ordinal
+            ) FROM jsonb_array_elements(migrated->'alienatedUnits')
+              WITH ORDINALITY AS values(alienated, ordinal)
+          ), '[]'::jsonb), false);
+        END IF;
+        IF jsonb_typeof(migrated->'expunctedCard') = 'object' THEN
+          expuncted := migrated->'expunctedCard';
+          expuncted := jsonb_set(
+            expuncted,
+            '{card}',
+            pg_temp.migrate_run_card_to_unit_seats(expuncted->'card', expuncted->'units'),
+            false
+          );
+          expuncted := jsonb_set(
+            expuncted,
+            '{units}',
+            pg_temp.migrate_run_army_from_primogeniture(expuncted->'units'),
+            false
+          );
+          migrated := jsonb_set(migrated, '{expunctedCard}', expuncted, false);
+        END IF;
+        IF jsonb_typeof(migrated->'entrySnapshot') = 'object' THEN
+          entry_snapshot := migrated->'entrySnapshot';
+          entry_snapshot := jsonb_set(
+            entry_snapshot,
+            '{army}',
+            pg_temp.migrate_run_army_from_primogeniture(entry_snapshot->'army'),
+            false
+          );
+          entry_snapshot := jsonb_set(
+            entry_snapshot,
+            '{cards}',
+            pg_temp.migrate_run_cards_to_unit_seats(entry_snapshot->'cards', entry_snapshot->'army'),
+            false
+          );
+          entry_snapshot := jsonb_set(
+            entry_snapshot,
+            '{pestiferousLosses}',
+            pg_temp.migrate_run_losses_from_primogeniture(entry_snapshot->'pestiferousLosses'),
+            false
+          );
+          migrated := jsonb_set(migrated, '{entrySnapshot}', entry_snapshot, false);
+        END IF;
+        RETURN migrated;
+      END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_active_run_to_card_order(run_value jsonb)
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      IMMUTABLE
+      STRICT
+      AS $function$
+      DECLARE
+        migrated jsonb := run_value;
+        reenter_deployment boolean;
+      BEGIN
+        IF run_value->'runSaveVersion' <> '20'::jsonb THEN RETURN run_value; END IF;
+        reenter_deployment := run_value->>'phase' IN ('deployment', 'battle');
+        migrated := jsonb_set(migrated, '{runSaveVersion}', '21'::jsonb, false);
+        migrated := jsonb_set(
+          migrated,
+          '{army}',
+          pg_temp.migrate_run_army_from_primogeniture(migrated->'army'),
+          false
+        );
+        migrated := jsonb_set(
+          migrated,
+          '{cards}',
+          pg_temp.migrate_run_cards_to_unit_seats(migrated->'cards', migrated->'army'),
+          false
+        );
+        migrated := jsonb_set(
+          migrated,
+          '{pestiferousLosses}',
+          pg_temp.migrate_run_losses_from_primogeniture(migrated->'pestiferousLosses'),
+          false
+        );
+        IF jsonb_typeof(migrated->'sectio') = 'object' THEN
+          migrated := jsonb_set(
+            migrated,
+            '{sectio}',
+            pg_temp.migrate_run_sectio_to_card_order(migrated->'sectio'),
+            false
+          );
+        END IF;
+        IF reenter_deployment THEN
+          migrated := jsonb_set(migrated, '{phase}', '"deployment"'::jsonb, false);
+          migrated := jsonb_set(migrated, '{deployment}', 'null'::jsonb, false);
+          migrated := jsonb_set(migrated, '{battleRuntime}', 'null'::jsonb, false);
+          migrated := jsonb_set(migrated, '{aftermath}', 'null'::jsonb, true);
+        END IF;
+        RETURN migrated;
+      END
+      $function$;
+
+      UPDATE active_runs
+         SET body = pg_temp.migrate_active_run_to_card_order(body),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE body->'runSaveVersion' = '20'::jsonb;
+    `,
+  },
 ];
 
 let pool = null;
@@ -4363,7 +4651,10 @@ async function unmigratedActiveRunSaveCounts(client) {
        )::integer AS version_18_count,
        count(*) FILTER (
          WHERE body->'runSaveVersion' = '19'::jsonb
-       )::integer AS version_19_count
+       )::integer AS version_19_count,
+       count(*) FILTER (
+         WHERE body->'runSaveVersion' = '20'::jsonb
+       )::integer AS version_20_count
        FROM active_runs`,
   );
   return Object.freeze({
@@ -4371,6 +4662,7 @@ async function unmigratedActiveRunSaveCounts(client) {
     version_17_count: Number(rows[0]?.version_17_count) || 0,
     version_18_count: Number(rows[0]?.version_18_count) || 0,
     version_19_count: Number(rows[0]?.version_19_count) || 0,
+    version_20_count: Number(rows[0]?.version_20_count) || 0,
   });
 }
 
@@ -4426,11 +4718,13 @@ async function requiredSchemaContractIssues(client) {
       unmigratedActiveRunSaves.version_16_count
       + unmigratedActiveRunSaves.version_17_count
       + unmigratedActiveRunSaves.version_18_count
-      + unmigratedActiveRunSaves.version_19_count,
+      + unmigratedActiveRunSaves.version_19_count
+      + unmigratedActiveRunSaves.version_20_count,
     unmigrated_active_run_version_16_count: unmigratedActiveRunSaves.version_16_count,
     unmigrated_active_run_version_17_count: unmigratedActiveRunSaves.version_17_count,
     unmigrated_active_run_version_18_count: unmigratedActiveRunSaves.version_18_count,
     unmigrated_active_run_version_19_count: unmigratedActiveRunSaves.version_19_count,
+    unmigrated_active_run_version_20_count: unmigratedActiveRunSaves.version_20_count,
     ...generationAttemptRetryContractIssues(
       retryContractRows.columns,
       retryContractRows.constraints,
@@ -4527,10 +4821,10 @@ async function repairRequiredSchemaContracts(
   }
   if (issues.unmigrated_active_run_version_18_count > 0) {
     const migration = MIGRATIONS.find((candidate) => candidate.version === 56);
-    if (!migration) throw new Error('Klerosis active Run save repair migration is unavailable');
-    await executeMigration(migration, 'repair active Run Klerosis contract');
+    if (!migration) throw new Error('starter Chartulary active Run save repair migration is unavailable');
+    await executeMigration(migration, 'repair active Run starter Chartulary contract');
     completedSteps.push(Object.freeze({
-      contract: 'active Run Klerosis save version',
+      contract: 'active Run starter Chartulary save version',
       migration_version: migration.version,
     }));
     markInspection(`inspect required contract repairs after migration ${migration.version}`);
@@ -4542,6 +4836,17 @@ async function repairRequiredSchemaContracts(
     await executeMigration(migration, 'repair active Run Expunctio contract');
     completedSteps.push(Object.freeze({
       contract: 'active Run Expunctio save version',
+      migration_version: migration.version,
+    }));
+    markInspection(`inspect required contract repairs after migration ${migration.version}`);
+    issues = await requiredSchemaContractIssues(client);
+  }
+  if (issues.unmigrated_active_run_version_20_count > 0) {
+    const migration = MIGRATIONS.find((candidate) => candidate.version === 58);
+    if (!migration) throw new Error('card-ordered Deployment active Run repair migration is unavailable');
+    await executeMigration(migration, 'repair active Run card-ordered Deployment contract');
+    completedSteps.push(Object.freeze({
+      contract: 'active Run card-ordered Deployment save version',
       migration_version: migration.version,
     }));
     markInspection(`inspect required contract repairs after migration ${migration.version}`);
@@ -15845,6 +16150,11 @@ function reviewedMediaEvidenceIssue(row) {
   } else if (strategikonBackgroundSlot(row.slot)) {
     const issue = strategikonBackgroundOwnerProofIssue(row, proof, evidence.surfaceUrl);
     if (issue) return issue;
+  } else if (runCardBackSlot(row.slot) || row.role === 'card-back') {
+    const projectionIssue = runCardBackMediaIssue(row);
+    if (projectionIssue) return projectionIssue;
+    const issue = runCardBackOwnerProofIssue(row, proof, evidence.surfaceUrl);
+    if (issue) return issue;
   } else if (wallMaterialSlot(row.slot)) {
     const issue = wallMaterialOwnerProofIssue(row, proof, evidence.surfaceUrl);
     if (issue) return issue;
@@ -15905,6 +16215,12 @@ const RUN_CARD_ART_REQUIRED_SLOTS = Object.freeze(
   RUN_CARD_ART_CARD_IDS.map((id) => `ui/run/card-art/${id}/illustration.png`).sort(),
 );
 const RUN_CARD_ART_GROUP_ID = 'run-card-art-core-v1';
+const RUN_STARTER_CARD_ART_SCHEMA = 'run-starter-card-art-v1';
+const RUN_STARTER_CARD_ART_PROVENANCE_SCHEMA = 'run-starter-card-art-provenance-v1';
+const RUN_STARTER_CARD_ART_BY_ID = Object.freeze({
+  'his-grace': Object.freeze({ title: 'His Grace', pieces: Object.freeze(['king']), value: 0 }),
+  'front-lines': Object.freeze({ title: 'Front Lines', pieces: Object.freeze(['pawn', 'pawn']), value: 2 }),
+});
 const RUN_CARD_ART_PIECE_VALUE = Object.freeze({ pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9 });
 const RUN_CARD_ART_PIECE_INITIAL = Object.freeze({ pawn: 'p', knight: 'k', bishop: 'b', rook: 'r', queen: 'q' });
 const RUN_CARD_ART_PIECE_ORDER = Object.freeze(['pawn', 'knight', 'bishop', 'rook', 'queen']);
@@ -15913,6 +16229,7 @@ const RUN_CARD_PESTIFEROUS_FRAME_SLOT = 'ui/run/card-prototypes/pestiferous-fram
 const RUN_CARD_CONCINNOUS_FRAME_SLOT = 'ui/run/card-prototypes/concinnous-frame-v1.png';
 const RUN_CARD_LEGATINE_FRAME_SLOT = 'ui/run/card-prototypes/legatine-adlected-frame-v1.png';
 const RUN_CARD_HIERATIC_FRAME_SLOT = 'ui/run/card-prototypes/hieratic-frame-v1.png';
+const RUN_CARD_PRAECIPUUS_FRAME_SLOT = 'ui/run/card-prototypes/praecipuus-frame-v1.png';
 const RUN_CARD_COST_COIN_SOURCE_SLOT = 'ui/run/card-prototypes/cost-coin-source-v1.png';
 const RUN_CARD_FRAME_VARIANT_BY_SLOT = Object.freeze({
   [RUN_CARD_FRAME_SLOT]: 'standard',
@@ -15920,6 +16237,7 @@ const RUN_CARD_FRAME_VARIANT_BY_SLOT = Object.freeze({
   [RUN_CARD_CONCINNOUS_FRAME_SLOT]: 'concinnous',
   [RUN_CARD_LEGATINE_FRAME_SLOT]: 'legatine',
   [RUN_CARD_HIERATIC_FRAME_SLOT]: 'hieratic',
+  [RUN_CARD_PRAECIPUUS_FRAME_SLOT]: 'praecipuus',
   [RUN_CARD_COST_COIN_SOURCE_SLOT]: 'cost-coin-source',
 });
 const RUN_CARD_FRAME_SCHEMA = 'run-card-frame-v1';
@@ -16076,6 +16394,50 @@ function runCardFrameProjection(row) {
   return { claimed: true, issue: null };
 }
 
+function runStarterCardArtProjection(row, cardId, metadata, slotMetadata, provenance) {
+  const definition = RUN_STARTER_CARD_ART_BY_ID[cardId];
+  if (!definition) return null;
+  if (metadata.schema !== RUN_STARTER_CARD_ART_SCHEMA || slotMetadata.schema !== RUN_STARTER_CARD_ART_SCHEMA) {
+    return { claimed: true, issue: 'Starter-card art requires its typed runtime metadata', value: null };
+  }
+  if (provenance.schema !== RUN_STARTER_CARD_ART_PROVENANCE_SCHEMA) {
+    return { claimed: true, issue: 'Starter-card art requires its typed Codex provenance', value: null };
+  }
+  if (
+    metadata.cardId !== cardId || slotMetadata.cardId !== cardId
+    || metadata.cardTitle !== definition.title || metadata.cardType !== 'Units'
+    || slotMetadata.cardType !== 'Units'
+    || metadata.nativeWidth !== 400 || metadata.nativeHeight !== 280
+    || metadata.value !== definition.value
+    || canonicalJson(metadata.pieces) !== canonicalJson(definition.pieces)
+    || metadata.generationModel !== 'codex-imagegen'
+  ) return { claimed: true, issue: 'Starter-card art identity or composition is inconsistent', value: null };
+  if (
+    provenance.generationModel !== 'codex-imagegen'
+    || !runtimeSemanticText(provenance.promptSummary, 8_000)
+    || !mediaVersionId(provenance.sourceVersionId)
+    || !mediaSha(provenance.sourceSha256)
+    || !runtimeSemanticText(provenance.transform, 240)
+  ) return { claimed: true, issue: 'Starter-card art generated-source provenance is incomplete', value: null };
+  if (row.slot !== `ui/run/card-art/${cardId}/illustration.png`) {
+    return { claimed: true, issue: 'Starter-card art slot does not match its card identity', value: null };
+  }
+  if (mediaAcceptanceContract(row).mode !== 'standalone') {
+    return { claimed: true, issue: 'Starter-card art requires standalone atomic acceptance', value: null };
+  }
+  return {
+    claimed: true,
+    issue: null,
+    value: {
+      kind: 'starter',
+      cardId,
+      versionId: String(row.id),
+      slot: row.slot,
+      sha256: row.blob_sha256,
+    },
+  };
+}
+
 function runCardArtProjection(row) {
   const claimed = row.domain === 'run-card-art'
     || (typeof row.slot === 'string' && row.slot.startsWith('ui/run/card-art/'));
@@ -16090,6 +16452,11 @@ function runCardArtProjection(row) {
     : isObjectRecord(row.metadata) ? row.metadata : {};
   const slotMetadata = isObjectRecord(row.slot_metadata) ? row.slot_metadata : {};
   const provenance = isObjectRecord(row.provenance) ? row.provenance : {};
+  const starterId = /^ui\/run\/card-art\/([^/]+)\/illustration\.png$/.exec(String(row.slot || ''))?.[1];
+  const starter = starterId
+    ? runStarterCardArtProjection(row, starterId, metadata, slotMetadata, provenance)
+    : null;
+  if (starter) return starter;
   if (metadata.schema !== 'run-card-art-plan-v2') {
     return { claimed: true, issue: 'Units-card art requires typed v2 plan metadata', value: null };
   }
@@ -16141,10 +16508,29 @@ function runCardArtProjection(row) {
     contract.mode !== 'group' || contract.groupId !== RUN_CARD_ART_GROUP_ID
     || canonicalJson(contract.requiredSlots) !== canonicalJson(RUN_CARD_ART_REQUIRED_SLOTS)
   ) return { claimed: true, issue: 'Units-card art requires the complete atomic 49-card acceptance group', value: null };
-  return { claimed: true, issue: null, value: { cardId } };
+  return { claimed: true, issue: null, value: { kind: 'core', cardId } };
 }
 
 function runCardArtOwnerProofIssue(runCardArt, proof, surfaceUrl) {
+  if (runCardArt.kind === 'starter') {
+    if (
+      proof.schema !== 'live-media-owner-proof-v1' || proof.canonicalScale !== 1
+      || proof.surfaceKind !== 'Studio Card Layout starter-card runtime cutover'
+      || proof.renderer !== 'RunCardPrototype/RunCardFace'
+      || proof.versionId !== runCardArt.versionId || proof.slot !== runCardArt.slot
+      || mediaSha(proof.contentSha256) !== runCardArt.sha256
+    ) return 'Starter-card art review requires the exact Card Layout owner proof';
+    try {
+      const url = new URL(surfaceUrl);
+      if (
+        url.pathname !== '/studio' || url.searchParams.get('vk') !== 'cardlayout'
+        || url.searchParams.get('starterCard') !== runCardArt.cardId
+      ) return 'Starter-card art review URL must identify its Card Layout starter card';
+    } catch {
+      return 'Starter-card art review URL is invalid';
+    }
+    return null;
+  }
   if (
     proof.schema !== 'live-media-owner-group-proof-v1' || proof.canonicalScale !== 1
     || proof.surfaceKind !== 'Studio Card Prompts complete Units set'
@@ -16372,6 +16758,9 @@ function mediaDomainProjectionIssue(row) {
   }
   if (runCardCostCoinSlot(row.slot)) {
     return runCardCostCoinMediaIssue(row, runtime.value);
+  }
+  if (runCardBackSlot(row.slot) || row.role === 'card-back') {
+    return runCardBackMediaIssue(row, runtime.value);
   }
   if (runResourceIconSlotId(row.slot)) {
     return runResourceIconMediaIssue(row, runtime.value);
@@ -17299,6 +17688,32 @@ async function validateMediaReviewProofSnapshot(client, current, evidence, surfa
     const proofIssue = levelEditorBrushIconSlot(current.slot)
       ? levelEditorBrushIconOwnerProofIssue(current, evidence, surfaceUrl)
       : strategikonBackgroundOwnerProofIssue(current, evidence, surfaceUrl);
+    if (proofIssue) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: proofIssue });
+    }
+    const selected = evidence.selectedCandidates[0];
+    const snapshot = evidence.slotSnapshots[0];
+    const slotResult = await client.query(
+      'SELECT slot, active_version_id, row_revision FROM media_slots WHERE slot = $1',
+      [current.slot],
+    );
+    const slotRow = slotResult.rows[0];
+    if (!slotRow) throw mediaMutationError('media_slot_not_found', 404);
+    if (
+      Number(snapshot.rowRevision) !== Number(slotRow.row_revision)
+      || (snapshot.activeVersionId ?? null) !== (slotRow.active_version_id ? String(slotRow.active_version_id) : null)
+    ) throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: 'slot snapshot mismatch' });
+    if (current.status !== 'candidate' || Number(selected.rowRevision) !== Number(current.row_revision)) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: 'candidate snapshot mismatch' });
+    }
+    return;
+  }
+  if (runCardBackSlot(current.slot) || current.role === 'card-back') {
+    const projectionIssue = runCardBackMediaIssue(current);
+    if (projectionIssue) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: projectionIssue });
+    }
+    const proofIssue = runCardBackOwnerProofIssue(current, evidence, surfaceUrl);
     if (proofIssue) {
       throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: proofIssue });
     }
@@ -19434,7 +19849,7 @@ const ACTIVE_RUN_PHASES = new Set(['aftermath', 'bona-vacantia', 'deployment', '
 const ACTIVE_RUN_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
 const ACTIVE_RUN_UNIT_SOURCES = new Set(['king', 'starting', 'adlectio']);
 const ACTIVE_RUN_PIECE_VALUES = Object.freeze({ pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9, king: 0 });
-const ACTIVE_RUN_ABILITIES = new Set(['adlected', 'eutactic', 'agminate', 'primogeniture']);
+const ACTIVE_RUN_ABILITIES = new Set(['adlected', 'eutactic', 'agminate']);
 const ACTIVE_RUN_MODIFIERS = new Set(['cacochymic']);
 const ACTIVE_RUN_CACOCHYMIC_DISCOUNTS = Object.freeze({ pawn: 0, knight: 1, bishop: 1, rook: 2, queen: 3 });
 const ACTIVE_RUN_SECTIO_FIELDS = new Set([
@@ -19470,13 +19885,15 @@ const ACTIVE_RUN_DEPLOYMENT_FIELDS = new Set([
   'battleIndex',
   'seed',
   'dealtCardIds',
-  'queueUnitIds',
   'deployingUnitIds',
   'unavailableUnitIds',
   'capacityResolved',
   'placements',
-  'placementCursor',
-  'revealedUnitId',
+  'activeCardIndex',
+  'unitCursor',
+  'discardCursor',
+  'revealedCardIds',
+  'settlingUnitIds',
   'mode',
   'stage',
   'blockedUnitIds',
@@ -19547,9 +19964,7 @@ function validateActiveRunBody(run) {
       !Array.isArray(unit.abilities)
       || new Set(unit.abilities).size !== unit.abilities.length
       || unit.abilities.some((ability) => !ACTIVE_RUN_ABILITIES.has(ability))
-      || (unit.type === 'king'
-        ? !unit.abilities.includes('primogeniture') || unit.abilities.length > 2
-        : unit.abilities.includes('primogeniture') || unit.abilities.length > 1)
+      || unit.abilities.length > 1
     ) {
       return 'run.army contains invalid abilities';
     }
@@ -19573,6 +19988,7 @@ function validateActiveRunBody(run) {
     const cardUnitIds = new Set();
     const lostCardUnitIds = new Set();
     const cacochymicTargetUnitIds = new Set();
+    const unitIdsForCard = (card) => card.unitSeats.filter((unitId) => typeof unitId === 'string');
     for (const card of run.cards) {
       if (!isObjectRecord(card)) return 'run.cards contains an invalid card';
       const cardTypeValid = card.cardType === null
@@ -19582,6 +19998,7 @@ function validateActiveRunBody(run) {
         || card.cardType === 'hieratic';
       const directEffectTarget = card.effectTargetUnitId;
       const effectTarget = directEffectTarget;
+      const attachedUnitIds = Array.isArray(card.unitSeats) ? unitIdsForCard(card) : [];
       const affectedCard = card.cardType === 'concinnous'
         || card.cardType === 'legatine'
         || card.cardType === 'hieratic';
@@ -19596,7 +20013,7 @@ function validateActiveRunBody(run) {
           || (typeof effectTarget === 'string'
             && effectTarget.length > 0
             && effectTarget.length <= 160
-            && card.unitIds?.includes(effectTarget))
+            && attachedUnitIds.includes(effectTarget))
         : directEffectTarget === null;
       if (
         typeof card.id !== 'string'
@@ -19611,8 +20028,9 @@ function validateActiveRunBody(run) {
         || !isFiniteInteger(card.effectSeed)
         || card.effectSeed < 0
         || card.effectSeed > 0xffffffff
-        || !Array.isArray(card.unitIds)
-        || card.unitIds.length > 200
+        || !Array.isArray(card.unitSeats)
+        || card.unitSeats.length > 200
+        || card.unitSeats.some((unitId) => unitId !== null && typeof unitId !== 'string')
         || !Array.isArray(card.lostUnitIds)
         || card.lostUnitIds.length > 200
         || !isFiniteInteger(card.acquiredAfterBattleIndex)
@@ -19625,15 +20043,16 @@ function validateActiveRunBody(run) {
       }
       {
         const validPlaguedTarget = card.cardType === 'pestiferous'
-          ? card.unitIds.length > 0
-            ? typeof card.cacochymicUnitId === 'string' && card.unitIds.includes(card.cacochymicUnitId)
+          ? attachedUnitIds.length > 0
+            ? typeof card.cacochymicUnitId === 'string' && attachedUnitIds.includes(card.cacochymicUnitId)
             : card.cacochymicUnitId === null
           : card.cacochymicUnitId === null;
         if (!validPlaguedTarget) return 'run.cards contains an invalid Cacochymic target';
         if (card.cacochymicUnitId !== null) cacochymicTargetUnitIds.add(card.cacochymicUnitId);
       }
       cardIds.add(card.id);
-      for (const unitId of card.unitIds) {
+      if (new Set(attachedUnitIds).size !== attachedUnitIds.length) return 'run.cards repeats unit membership';
+      for (const unitId of attachedUnitIds) {
         if (
           typeof unitId !== 'string'
           || !unitId
@@ -19669,8 +20088,8 @@ function validateActiveRunBody(run) {
       || hisGraceCards[0].cardType !== null
       || hisGraceCards[0].effectTargetUnitId !== null
       || hisGraceCards[0].cacochymicUnitId !== null
-      || hisGraceCards[0].unitIds.length !== 1
-      || hisGraceCards[0].unitIds[0] !== 'run-king'
+      || hisGraceCards[0].unitSeats.length !== 1
+      || hisGraceCards[0].unitSeats[0] !== 'run-king'
       || hisGraceCards[0].lostUnitIds.length !== 0
     ) return 'run.cards must retain His Grace';
     if (frontLinesCards.length > 1) return 'run.cards repeats Front Lines';
@@ -19685,12 +20104,12 @@ function validateActiveRunBody(run) {
         || frontLines.effectTargetUnitId !== null
         || frontLines.cacochymicUnitId !== null
         || frontLines.lostUnitIds.length !== 0
-        || frontLines.unitIds.some((unitId) => {
+        || unitIdsForCard(frontLines).some((unitId) => {
           const unit = run.army.find((candidate) => candidate.id === unitId);
           return unit?.type !== 'pawn' || unit.source !== 'starting';
         })
-        || startingPawnIds.length !== frontLines.unitIds.length
-        || startingPawnIds.some((unitId) => !frontLines.unitIds.includes(unitId))
+        || startingPawnIds.length !== unitIdsForCard(frontLines).length
+        || startingPawnIds.some((unitId) => !unitIdsForCard(frontLines).includes(unitId))
       ) return 'run.cards contains invalid Front Lines membership';
     }
     if (
@@ -19754,6 +20173,7 @@ function validateActiveRunBody(run) {
         && new Set(value).size === value.length
         && value.every((id) => typeof id === 'string' && allowedIds.has(id));
       const cardIds = new Set(run.cards.map((card) => card.id));
+      const deploymentStages = new Set(['dealing', 'pace', 'card', 'revealing', 'unit', 'settling', 'discarding', 'complete']);
       if (
         deployment.battleIndex !== run.battleIndex
         || !isFiniteInteger(deployment.seed)
@@ -19761,15 +20181,20 @@ function validateActiveRunBody(run) {
         || deployment.seed > 0xffffffff
         || !validUniqueIds(deployment.dealtCardIds, cardIds)
         || deployment.dealtCardIds[0] !== 'run-card-his-grace'
-        || !validUniqueIds(deployment.queueUnitIds, unitIds)
-        || deployment.queueUnitIds[0] !== 'run-king'
         || !validUniqueIds(deployment.deployingUnitIds, unitIds)
         || !validUniqueIds(deployment.unavailableUnitIds, unitIds)
         || typeof deployment.capacityResolved !== 'boolean'
-        || !isFiniteInteger(deployment.placementCursor)
-        || deployment.placementCursor < 0
-        || deployment.placementCursor > deployment.queueUnitIds.length
-        || !['klerosis', 'primogeniture', 'farrago'].includes(deployment.stage)
+        || !isFiniteInteger(deployment.activeCardIndex)
+        || deployment.activeCardIndex < 0
+        || deployment.activeCardIndex > deployment.dealtCardIds.length
+        || !isFiniteInteger(deployment.unitCursor)
+        || deployment.unitCursor < 0
+        || !isFiniteInteger(deployment.discardCursor)
+        || deployment.discardCursor < 0
+        || deployment.discardCursor > deployment.dealtCardIds.length
+        || !validUniqueIds(deployment.revealedCardIds, cardIds)
+        || !validUniqueIds(deployment.settlingUnitIds, unitIds)
+        || !deploymentStages.has(deployment.stage)
         || (deployment.mode !== undefined && !['deploy-all', 'step-through'].includes(deployment.mode))
         || !isObjectRecord(deployment.placements)
         || !isObjectRecord(deployment.manualPlacements)
@@ -19778,21 +20203,23 @@ function validateActiveRunBody(run) {
       const deployingIds = new Set(deployment.deployingUnitIds);
       const unavailableIds = new Set(deployment.unavailableUnitIds);
       if (
-        [...deployingIds].some((id) => unavailableIds.has(id) || !deployment.queueUnitIds.includes(id))
+        [...deployingIds].some((id) => unavailableIds.has(id))
         || new Set([...deployingIds, ...unavailableIds]).size !== unitIds.size
         || deployment.blockedUnitIds.length !== deployment.unavailableUnitIds.length
         || deployment.blockedUnitIds.some((id, index) => id !== deployment.unavailableUnitIds[index])
       ) return 'run.deployment unit pools are inconsistent';
-      const dealtUnitIds = new Set(deployment.dealtCardIds.flatMap((cardId) => (
-        run.cards.find((card) => card.id === cardId)?.unitIds ?? []
-      )));
+      const dealtUnitOrder = deployment.dealtCardIds.flatMap((cardId) => {
+        const card = run.cards.find((candidate) => candidate.id === cardId);
+        return Array.isArray(card?.unitSeats)
+          ? card.unitSeats.filter((unitId) => typeof unitId === 'string')
+          : [];
+      });
+      const dealtUnitIds = new Set(dealtUnitOrder);
       if (
-        deployment.queueUnitIds.some((id) => !dealtUnitIds.has(id))
-        || (!deployment.capacityResolved && (
-          deployment.queueUnitIds.length !== dealtUnitIds.size
-          || [...dealtUnitIds].some((id) => !deployment.queueUnitIds.includes(id))
-        ))
-      ) return 'run.deployment queue does not match its dealt cards';
+        deployment.deployingUnitIds.some((id) => !dealtUnitIds.has(id))
+        || deployment.deployingUnitIds.some((id, index) => id !== dealtUnitOrder[index])
+        || (!deployment.capacityResolved && deployment.deployingUnitIds.length !== dealtUnitOrder.length)
+      ) return 'run.deployment pool does not match its dealt cards';
       const placementEntries = Object.entries(deployment.placements);
       const placementSquares = new Set();
       for (const [unitId, square] of placementEntries) {
@@ -19807,24 +20234,47 @@ function validateActiveRunBody(run) {
       for (const [unitId, square] of Object.entries(deployment.manualPlacements)) {
         if (deployment.placements[unitId] !== square) return 'run.deployment manual placements are invalid';
       }
-      const currentUnitId = deployment.queueUnitIds[deployment.placementCursor];
+      const activeCardId = deployment.dealtCardIds[deployment.activeCardIndex];
+      const activeCard = run.cards.find((card) => card.id === activeCardId);
+      const activeSeats = Array.isArray(activeCard?.unitSeats) ? activeCard.unitSeats : [];
       if (
-        deployment.revealedUnitId !== undefined
-        && (deployment.revealedUnitId !== currentUnitId || !deployingIds.has(deployment.revealedUnitId))
-      ) return 'run.deployment revealed unit is invalid';
+        deployment.unitCursor > activeSeats.length
+        || deployment.discardCursor !== deployment.activeCardIndex
+      ) return 'run.deployment cursors are inconsistent';
+      const expectedRevealedCount = ['revealing', 'unit', 'settling', 'discarding'].includes(deployment.stage)
+        ? deployment.activeCardIndex + 1
+        : deployment.activeCardIndex;
+      if (
+        deployment.revealedCardIds.length !== expectedRevealedCount
+        || deployment.revealedCardIds.some((cardId, index) => cardId !== deployment.dealtCardIds[index])
+      ) return 'run.deployment revealed cards are inconsistent';
+      if (
+        deployment.settlingUnitIds.some((unitId) => (
+          !deployingIds.has(unitId) || !Object.hasOwn(deployment.placements, unitId)
+        ))
+        || (deployment.stage === 'settling') !== (deployment.settlingUnitIds.length > 0)
+      ) return 'run.deployment settling units are invalid';
       if (
         deployment.temporaryAdlectedUnitId !== undefined
         && !deployingIds.has(deployment.temporaryAdlectedUnitId)
       ) return 'run.deployment temporary Adlected unit is invalid';
-      if (deployment.stage === 'klerosis' && (deployment.mode !== undefined || deployment.placementCursor !== 0)) {
-        return 'run.deployment Klerosis state is invalid';
+      if (
+        (deployment.stage === 'dealing' || deployment.stage === 'pace')
+        && (deployment.mode !== undefined || deployment.activeCardIndex !== 0 || deployment.unitCursor !== 0)
+      ) {
+        return 'run.deployment pre-placement state is invalid';
+      }
+      if (!['dealing', 'pace'].includes(deployment.stage) && deployment.stage !== 'complete' && !deployment.mode) {
+        return 'run.deployment pace is required';
       }
       if (
         run.phase === 'battle'
         && (!deployment.capacityResolved
           || !deployment.mode
-          || deployment.placementCursor !== deployment.queueUnitIds.length
-          || deployment.revealedUnitId !== undefined)
+          || deployment.stage !== 'complete'
+          || deployment.activeCardIndex !== deployment.dealtCardIds.length
+          || deployment.discardCursor !== deployment.dealtCardIds.length
+          || deployment.settlingUnitIds.length !== 0)
       ) return 'run Battle has incomplete deployment state';
     }
   }
@@ -19939,19 +20389,22 @@ function validateActiveRunBody(run) {
     if (expunctedCard) {
       const card = expunctedCard.card;
       const units = expunctedCard.units;
+      const attachedUnitIds = Array.isArray(card?.unitSeats)
+        ? card.unitSeats.filter((unitId) => typeof unitId === 'string')
+        : [];
       if (
         !isObjectRecord(card)
         || card.coreId === 'his-grace'
         || typeof card.id !== 'string'
         || !card.id
         || run.cards.some((candidate) => candidate.id === card.id)
-        || !Array.isArray(card.unitIds)
+        || !Array.isArray(card.unitSeats)
         || !Array.isArray(card.lostUnitIds)
         || !Array.isArray(units)
-        || units.length !== card.unitIds.length
+        || units.length !== attachedUnitIds.length
         || units.some((unit, index) => (
           !isObjectRecord(unit)
-          || unit.id !== card.unitIds[index]
+          || unit.id !== attachedUnitIds[index]
           || unitIds.has(unit.id)
           || !ACTIVE_RUN_PIECES.has(unit.type)
           || !ACTIVE_RUN_UNIT_SOURCES.has(unit.source)
@@ -19960,11 +20413,11 @@ function validateActiveRunBody(run) {
           || !Array.isArray(unit.abilities)
           || !Array.isArray(unit.modifiers)
         ))
-        || new Set(card.unitIds).size !== card.unitIds.length
-        || (card.effectTargetUnitId !== null && !card.unitIds.includes(card.effectTargetUnitId))
+        || new Set(attachedUnitIds).size !== attachedUnitIds.length
+        || (card.effectTargetUnitId !== null && !attachedUnitIds.includes(card.effectTargetUnitId))
         || (card.cardType === 'pestiferous'
-          ? card.unitIds.length > 0
-            ? !card.unitIds.includes(card.cacochymicUnitId)
+          ? attachedUnitIds.length > 0
+            ? !attachedUnitIds.includes(card.cacochymicUnitId)
             : card.cacochymicUnitId !== null
           : card.cacochymicUnitId !== null)
         || !isFiniteInteger(expunctedCard.priceTenths)
@@ -20055,11 +20508,11 @@ function validateActiveRunBody(run) {
         run.sectio.entrySnapshot !== undefined
         && run.sectio.entrySnapshot.cards.some((card) => (
           !isObjectRecord(card)
-          || !Array.isArray(card.unitIds)
+          || !Array.isArray(card.unitSeats)
           || (
             card.cardType === 'pestiferous'
-              ? card.unitIds.length > 0
-                ? typeof card.cacochymicUnitId !== 'string' || !card.unitIds.includes(card.cacochymicUnitId)
+              ? card.unitSeats.some((unitId) => typeof unitId === 'string')
+                ? typeof card.cacochymicUnitId !== 'string' || !card.unitSeats.includes(card.cacochymicUnitId)
                 : card.cacochymicUnitId !== null
               : card.cacochymicUnitId !== null
           )
@@ -20098,7 +20551,7 @@ function validateActiveRunBody(run) {
           // Opening offers carry the same qualifiers as any other draw and are priced by the
           // shared affected-pricing rule checked above, so a qualifier may price one past the
           // starting gold. At least one remains buyable even though leaving without Adlectio is
-          // allowed; the first Klerosis can consequently reveal only the two starter cards.
+          // allowed; the first Deployment deal can consequently contain only the two starter cards.
           || run.sectio.cardOffers.some((offer) => offer.value > 8)
           || !run.sectio.cardOffers.some((offer) => offer.cost <= 8)
           || run.sectio.paidLipsanonOffer !== null
@@ -20113,7 +20566,7 @@ function validateActiveRunBody(run) {
           || run.sectio.entrySnapshot.army.length !== 3
           || run.sectio.entrySnapshot.army[0]?.id !== 'run-king'
           || run.sectio.entrySnapshot.army[0]?.type !== 'king'
-          || !run.sectio.entrySnapshot.army[0]?.abilities?.includes('primogeniture')
+          || run.sectio.entrySnapshot.army[0]?.abilities?.length !== 0
           || run.sectio.entrySnapshot.army[1]?.id !== 'run-pawn-a'
           || run.sectio.entrySnapshot.army[1]?.type !== 'pawn'
           || run.sectio.entrySnapshot.army[1]?.source !== 'starting'
@@ -20124,19 +20577,19 @@ function validateActiveRunBody(run) {
           || run.sectio.entrySnapshot.cards.length !== 2
           || run.sectio.entrySnapshot.cards[0]?.id !== 'run-card-his-grace'
           || run.sectio.entrySnapshot.cards[0]?.coreId !== 'his-grace'
-          || run.sectio.entrySnapshot.cards[0]?.unitIds?.length !== 1
-          || run.sectio.entrySnapshot.cards[0]?.unitIds?.[0] !== 'run-king'
+          || run.sectio.entrySnapshot.cards[0]?.unitSeats?.length !== 1
+          || run.sectio.entrySnapshot.cards[0]?.unitSeats?.[0] !== 'run-king'
           || run.sectio.entrySnapshot.cards[1]?.id !== 'run-card-front-lines'
           || run.sectio.entrySnapshot.cards[1]?.coreId !== 'front-lines'
-          || run.sectio.entrySnapshot.cards[1]?.unitIds?.length !== 2
-          || run.sectio.entrySnapshot.cards[1]?.unitIds?.[0] !== 'run-pawn-a'
-          || run.sectio.entrySnapshot.cards[1]?.unitIds?.[1] !== 'run-pawn-b'
+          || run.sectio.entrySnapshot.cards[1]?.unitSeats?.length !== 2
+          || !run.sectio.entrySnapshot.cards[1]?.unitSeats?.includes('run-pawn-a')
+          || !run.sectio.entrySnapshot.cards[1]?.unitSeats?.includes('run-pawn-b')
         ) return 'run opening Sectio is invalid';
         const openingUnitIds = new Set([
           'run-king',
           'run-pawn-a',
           'run-pawn-b',
-          ...run.cards.flatMap((card) => card.unitIds),
+          ...run.cards.flatMap((card) => card.unitSeats.filter((unitId) => typeof unitId === 'string')),
         ]);
         if (run.army.some((unit) => !openingUnitIds.has(unit.id))) {
           return 'run opening Sectio purchase state is invalid';

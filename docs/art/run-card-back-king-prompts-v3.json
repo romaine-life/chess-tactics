@@ -1,0 +1,114 @@
+{
+  "schema": "run-card-back-prompt-set-v3",
+  "studyId": "run-card-back-king-six-way-v3",
+  "slot": "review/run-card-back/standard.png",
+  "intent": "Add the king as a second factor to the existing MTG lineage, MTG plus chess, and chess-only card-back comparison.",
+  "concepts": [
+    {
+      "id": "sovereign-seal",
+      "label": "The Sovereign Seal",
+      "lineage": "MTG lineage + king",
+      "intent": "A fantasy-card relic organized around the king's seal; power exists, but visibly beneath his authority."
+    },
+    {
+      "id": "crowned-gambit",
+      "label": "The Crowned Gambit",
+      "lineage": "MTG + chess + king",
+      "intent": "Arcane powers and board geometry become one royal mechanism, with the king as its undeniable center."
+    },
+    {
+      "id": "kings-position",
+      "label": "The King's Position",
+      "lineage": "Chess + king",
+      "intent": "Chess alone supplies the language, but every line, piece, and square is ordered around the king's rank."
+    }
+  ],
+  "candidates": [
+    {
+      "id": "sovereign-seal-codex",
+      "conceptId": "sovereign-seal",
+      "provider": "codex",
+      "generator": "Codex built-in image generation",
+      "sourceGeometry": { "width": 1060, "height": 1484 },
+      "parameters": { "referencedImages": 0 },
+      "prompt": "Use case: stylized-concept\nAsset type: universal game card back for a dark medieval chess tactics card game\nPrimary request: Factor combination “MTG lineage + king,” working title “The Sovereign Seal.” Create an original classic-fantasy trading-card back whose entire mysterious object is organized around mortal royal authority. The king should be present through one unmistakable crowned royal signet or sealed throne-emblem at the exact center; five small colored mineral inlays are visibly subordinate to that central seal. Capture the ancient handled-object appeal of great fantasy card games without reproducing any existing card back, logo, lettering, oval-and-five-dot layout, or recognizable trade dress.\nScene/backdrop: the artwork itself fills the entire exact 5:7 portrait canvas edge to edge; no tabletop, mockup, exterior background, or transparent margin.\nSubject: a large central wax-and-gold royal signet containing an abstract crown over an empty throne, nested in engraved brass rings and dark aged leather; five muted mineral inlays embedded irregularly in the surrounding mechanism, smaller than the sovereign seal. No chessboard or chess piece.\nStyle/medium: richly painted dark-fantasy physical-card art, tactile, venerable, subtly worn from play.\nComposition/framing: exact 1060×1484 or exact 5:7 portrait; complete outer border visible on all four sides; centered and strongly symmetrical; bold thumbnail silhouette; narrow safe margin.\nLighting/mood: restrained amber light from the seal, absolute human authority, ceremonial rather than divine.\nColor palette: blackened walnut, oxblood leather, tarnished gold, muted jewel accents, royal purple used sparingly.\nMaterials/textures: worn leather, engraved brass, dark wax, rubbed gilding, tiny scratches.\nConstraints: original design; no text, letters, numbers, readable runes, logos, watermarks, people, faces, divine halo, chess pieces, checkerboard, perspective tilt, cast shadow, exterior scene, or card-face elements. The final output itself must be exactly 5:7, not a narrow card floating inside another canvas."
+    },
+    {
+      "id": "sovereign-seal-pixellab",
+      "conceptId": "sovereign-seal",
+      "provider": "pixellab",
+      "generator": "PixelLab Create UI Asset",
+      "jobId": "4a6c8e42-a2b6-467a-b348-e62f4a3bdf2b",
+      "sourceGeometry": { "width": 360, "height": 504 },
+      "parameters": {
+        "width": 360,
+        "height": 504,
+        "noBackground": true,
+        "colorPalette": "blackened walnut, oxblood, tarnished gold, sparse royal purple, five muted jewel accents",
+        "pieces": [{ "id": "card_back", "kind": "rounded_rect", "x": 0, "y": 0, "w": 366, "h": 512, "radius": 18 }]
+      },
+      "prompt": "A single isolated universal card-back panel for a dark medieval chess-tactics card game, portrait 5:7. Classic fantasy trading-card object appeal, but wholly original: one enormous mortal royal wax-and-gold signet at the exact center, marked by an abstract crown above an empty throne. Five small differently colored mineral inlays are embedded irregularly around the seal and are visibly subordinate to it. Dark aged leather, blackened walnut, engraved tarnished brass, oxblood wax, sparse royal purple, rubbed gilding, tiny scratches. Strong bilateral symmetry and complete ornamental border visible on all four sides. The king is expressed only through the royal seal; no person and no chess pieces. No text, letters, numbers, logos, existing trade dress, oval-and-five-dot arrangement, tabletop, mockup, exterior background, cast shadow, buttons, windows, labels, inventory UI, or card-face elements. The artwork itself fills the panel edge to edge."
+    },
+    {
+      "id": "crowned-gambit-codex",
+      "conceptId": "crowned-gambit",
+      "provider": "codex",
+      "generator": "Codex built-in image edit",
+      "inputId": "crowned-gambit-codex-original",
+      "sourceGeometry": { "width": 1060, "height": 1484 },
+      "parameters": { "referencedImages": 1 },
+      "prompt": "Edit the provided card-back artwork only to reflow it into an exact 5:7 portrait canvas at 1060×1484. Preserve the Crowned Gambit design, central crowned black chess king, diamond checkerboard, brass mechanism, colored mineral inlays, corner tower architecture, palette, material, lighting, and detail. Keep the entire complete ornamental outer border visible on all four sides with a narrow safe margin. Do not crop any border, corner, tower, or central king. Do not add text, logos, people, card mockups, cast shadows, or exterior background. The artwork itself must fill the exact 5:7 canvas edge to edge."
+    },
+    {
+      "id": "crowned-gambit-pixellab",
+      "conceptId": "crowned-gambit",
+      "provider": "pixellab",
+      "generator": "PixelLab Create UI Asset",
+      "jobId": "66a623ce-4fc4-4304-825b-8485ad5af0e6",
+      "sourceGeometry": { "width": 360, "height": 504 },
+      "parameters": {
+        "width": 360,
+        "height": 504,
+        "noBackground": true,
+        "colorPalette": "blackened steel, old brass, bone ivory, ink blue, royal purple, muted mineral accents",
+        "pieces": [{ "id": "card_back", "kind": "rounded_rect", "x": 0, "y": 0, "w": 366, "h": 512, "radius": 18 }]
+      },
+      "prompt": "A single isolated universal card-back panel for a dark medieval chess-tactics card game, portrait 5:7. Wholly original fusion of ancient fantasy-card artifact language, chess geometry, and absolute royal authority: one monumental crowned black chess king at the exact center, inside a diamond-turned black-and-ivory checkerboard aperture and engraved brass armillary mechanism. Several small differently colored mineral inlays surround it and remain subordinate to the king. Rook-like architectural buttresses stabilize the corners. Dark worn leather, old brass, obsidian, chipped ivory, ink blue, royal purple. Strong symmetry, bold thumbnail silhouette, complete outer border visible on all sides. No human figure, face, divine halo, text, letters, notation, logos, existing trade dress, tabletop, mockup, exterior background, cast shadow, buttons, windows, labels, inventory UI, or card-face elements. The artwork itself fills the panel edge to edge."
+    },
+    {
+      "id": "kings-position-codex",
+      "conceptId": "kings-position",
+      "provider": "codex",
+      "generator": "Codex built-in image generation",
+      "sourceGeometry": { "width": 1060, "height": 1484 },
+      "parameters": { "referencedImages": 0 },
+      "prompt": "Use case: stylized-concept\nAsset type: universal game card back for a dark medieval chess tactics card game\nPrimary request: Factor combination “chess + king,” working title “The King’s Position.” Build the entire identity from chess and absolute royal hierarchy, with no fantasy trading-card power language. One monumental king must dominate every other form: the board, rooks, and minor-piece silhouettes exist only as its ordered field.\nScene/backdrop: the artwork itself fills the entire exact 5:7 portrait canvas edge to edge; no tabletop, mockup, exterior background, or transparent margin.\nSubject: a colossal ebony-and-ivory heraldic king-piece silhouette on the central axis, constructed as a reversible double-headed emblem so the card back remains rotationally plausible; a disciplined 8-by-8 board lattice recedes behind it; four rook crenellations anchor the corners; very small abstract pawn and knight motifs line the border as clearly subordinate troops. No gems, celestial machinery, or magic.\nStyle/medium: richly painted medieval chess-set craftsmanship, formal premium card ornament, graphic at thumbnail scale.\nComposition/framing: exact 1060×1484 or exact 5:7 portrait; complete outer border visible on all four sides; strict two-way symmetry, narrow safe margin, central king is the immediate first read.\nLighting/mood: sober torchlit tournament hall, martial, controlled, unquestioned mortal authority.\nColor palette: ebony black, aged boxwood ivory, cold steel, restrained royal purple only as a narrow heraldic thread.\nMaterials/textures: carved wood, hammered steel, worn wool baize, shallow engraved ornament.\nConstraints: original design; no arcane rings, colored power stones, celestial symbols, spell imagery, human figure, face, text, letters, numbers, notation, logos, watermarks, divine halo, perspective tilt, cast shadow, exterior scene, or card-face elements. The final output itself must be exactly 5:7, not a narrow card floating inside another canvas."
+    },
+    {
+      "id": "kings-position-pixellab",
+      "conceptId": "kings-position",
+      "provider": "pixellab",
+      "generator": "PixelLab Create UI Asset",
+      "jobId": "4f68ac14-1f0b-40f4-a4e2-d2757be64845",
+      "sourceGeometry": { "width": 360, "height": 504 },
+      "parameters": {
+        "width": 360,
+        "height": 504,
+        "noBackground": true,
+        "colorPalette": "ebony black, aged ivory, cold steel, extremely restrained royal purple",
+        "pieces": [{ "id": "card_back", "kind": "rounded_rect", "x": 0, "y": 0, "w": 366, "h": 512, "radius": 18 }]
+      },
+      "prompt": "A single isolated universal card-back panel for a dark medieval chess-tactics card game, portrait 5:7. Pure chess and absolute royal hierarchy with no fantasy trading-card power language: one colossal ebony-and-ivory heraldic king-piece silhouette dominates the central axis, constructed as a reversible double-headed emblem so the design remains rotationally plausible. A disciplined 8-by-8 board lattice lies behind it, four rook crenellations anchor the corners, and tiny abstract pawn and knight motifs line the border as clearly subordinate troops. Carved ebony, aged boxwood ivory, hammered steel, worn dark wool, a hairline of royal purple. Strict two-way symmetry and complete ornamental border visible on all four sides. No gems, magic, celestial machinery, arcane rings, human figure, face, divine halo, text, letters, notation, logos, tabletop, mockup, exterior background, cast shadow, buttons, windows, labels, inventory UI, or card-face elements. The artwork itself fills the panel edge to edge."
+    }
+  ],
+  "sourceAttempts": [
+    {
+      "id": "crowned-gambit-codex-original",
+      "provider": "codex",
+      "sourceGeometry": { "width": 1061, "height": 1483 },
+      "status": "reflowed-before-review",
+      "reason": "The original was close to 5:7 but not exact, so it was reflowed before mounting to prevent canonical card cropping.",
+      "prompt": "Use case: stylized-concept\nAsset type: universal game card back for a dark medieval chess tactics card game\nPrimary request: Factor combination “MTG lineage + chess + king,” working title “The Crowned Gambit.” Fuse the ancient fantasy-card-object appeal of a hidden world with unmistakable chess geometry and a dominant king. Do not reproduce any existing card back, logo, lettering, oval-and-five-dot layout, or recognizable trade dress.\nScene/backdrop: the artwork itself fills the entire exact 5:7 portrait canvas edge to edge; no tabletop, mockup, exterior background, or transparent margin.\nSubject: one monumental crowned chess king at the exact center, seated within a diamond-turned black-and-ivory chessboard aperture and surrounded by an engraved brass armillary mechanism; five small differently colored mineral powers are mounted around it, clearly subordinate to the king; rook-like architectural buttresses stabilize the corners. The central king must remain the obvious first read at thumbnail scale.\nStyle/medium: richly painted dark-fantasy physical-card art, medieval occult engineering, tactile and worn.\nComposition/framing: exact 1060×1484 or exact 5:7 portrait; complete outer border visible on all four sides; centered, symmetrical, bold at small size, narrow safe margin.\nLighting/mood: cold board light and warm royal gold; strategic, secretive, unquestioned authority rather than divinity.\nColor palette: blackened steel, old brass, bone ivory, ink blue, royal purple, five restrained mineral accents.\nMaterials/textures: engraved metal, polished obsidian, chipped ivory, worn leather, rubbed gilding.\nConstraints: original design; no human figure, face, text, letters, numbers, readable notation, logos, watermarks, divine halo, perspective tilt, cast shadow, exterior scene, or card-face elements. The final output itself must be exactly 5:7, not a narrow card floating inside another canvas."
+    }
+  ]
+}

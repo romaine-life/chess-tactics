@@ -8,6 +8,7 @@ partially_supersedes:
   - "[ADR-0349](0349-the-final-deployment-choice-commits-and-camera-authority-follows-the-active-scene.md)'s overlapping Deployment/Battle scenes and activation-owned arrival motion"
 partially_superseded_by:
   - "[ADR-0351](0351-unit-arrival-choreography-follows-newly-visible-unit-identity.md)'s per-new-unit arrival rule"
+  - "[ADR-0416](0416-klerosis-is-a-dedicated-pre-battle-screen.md)'s pre-Battle deal before the continuous battlefield mounts"
 ---
 
 # ADR-0350: Run Deployment promotes the mounted battlefield in place

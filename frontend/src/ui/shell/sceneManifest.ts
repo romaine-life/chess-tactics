@@ -101,14 +101,9 @@ const isLevelEditorPath = (path: string): boolean => (
   path === '/editor/level' || path === '/edit' || path === '/level-editor'
 );
 
-/**
- * Deployment and its Battle are one continuous battlefield phase (ADR-0354), so they
- * deliberately resolve to the same phase identity; every other phase change keeps its
- * own and takes a complete-scene transition.
- */
-const runPhaseIdentity = (snapshot: RunSceneSnapshot): string => (
-  snapshot.phase === 'deployment' || snapshot.phase === 'battle' ? 'battlefield' : snapshot.phase
-);
+const runPhaseIdentity = (snapshot: RunSceneSnapshot): string => {
+  return snapshot.phase === 'deployment' || snapshot.phase === 'battle' ? 'battlefield' : snapshot.phase;
+};
 
 /** The Run instances the director keys from persisted state rather than the address. */
 function runStateInstances(snapshot: RunSceneSnapshot): readonly SceneInstance[] {
@@ -324,9 +319,8 @@ export function sceneOverlapScope(
  * never unmounts and re-reveals its sibling action column, and opening or paging
  * through the Strategikon never tears down the Battle board behind it. The
  * state-driven Run phase and workspace slots stay leaf-keyed on purpose: their
- * scenes overlap as two complete layers, which requires distinct keys. Deployment and
- * its Battle are one continuous battlefield phase and so deliberately share a leaf key
- * (ADR-0354); other Run phase changes still receive distinct keys.
+ * scenes overlap as two complete layers, which requires distinct keys. Deployment
+ * and its Battle share one leaf key so the empty board becomes the played board.
  */
 const IDENTITY_ONLY_SLOTS: ReadonlySet<SceneSlotId> = new Set([
   'run-detail-content',

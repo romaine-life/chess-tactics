@@ -6,6 +6,7 @@ import {
   performAdlectio,
   createRun,
   performAlienatio,
+  runCardUnitIds,
   type RunDocument,
   type RunWarSnapshot,
 } from '../run/model';
@@ -46,13 +47,13 @@ describe('the Chartulary reads the Run rather than the deck', () => {
     const owned = run.cards.find((card) => card.coreId !== 'his-grace' && card.coreId !== 'front-lines')!;
     const held = heldCards(run).find((candidate) => candidate.owned.id === owned.id)!;
     expect(held.core.id).toBe(owned.coreId);
-    expect(held.core.pieces.length).toBe(owned.unitIds.length);
+    expect(held.core.pieces.length).toBe(runCardUnitIds(owned).length);
   });
 
   it('keeps the card once its units leave the army', () => {
     const run = boughtOne();
     const owned = run.cards.find((card) => card.coreId !== 'his-grace' && card.coreId !== 'front-lines')!;
-    const alienated = performAlienatio(run, owned.unitIds[0]);
+    const alienated = performAlienatio(run, runCardUnitIds(owned)[0]);
     // A held-card page that dropped the card with its last unit would lose what the
     // gold was spent on. Alienatio of a unit does not relinquish the card.
     expect(heldCards(alienated)).toHaveLength(3);

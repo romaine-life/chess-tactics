@@ -39,6 +39,48 @@ const RUN_CARD_FRAME_NORMALISED_EXCEPTION_BY_SLOT = Object.freeze({
     sourcePaintedHeight: 1427,
   }),
 });
+// ADR-0414. The owner selected exact Codex derivatives after side-by-side
+// review. Their generated sources are archived in live storage, and these exact
+// output bytes are admitted only in their dedicated starter-card roles. This is
+// deliberately narrower than treating resampled review media as generally native.
+const RUN_STARTER_SELECTED_DERIVATIVE_EXCEPTION_SCHEMA =
+  'run-starter-selected-derivative-production-exception-v1';
+const RUN_CARD_BACK_SLOT = 'ui/run/card-back/standard.png';
+const RUN_CARD_BACK_COMPONENT = 'run-card-back';
+const RUN_CARD_BACK_PROOF_SCHEMA = 'run-card-back-card-layout-proof-v1';
+const RUN_CARD_BACK_PROOF_RENDERER = 'RunCardBack/CardLayout';
+const RUN_STARTER_SELECTED_DERIVATIVE_BY_SLOT = Object.freeze({
+  'ui/run/card-art/his-grace/illustration.png': Object.freeze({
+    outputSha256: '3911aa54c164a29837ac99d4d34bfc468c80af7ed8e4e41246c7431d9b394ec2',
+    sourceSha256: 'bc0ce7ad6e940d475b1beb069fb5269feafdc9124b70f105eedd2d918a669859',
+    sourceVersionId: '8759216d-74b8-4467-aad8-5840a7c13644',
+    sourceWidth: 1499,
+    sourceHeight: 1049,
+    outputWidth: 400,
+    outputHeight: 280,
+    transform: 'nearest-neighbor-resize-1499x1049-to-400x280-no-crop',
+  }),
+  'ui/run/card-art/front-lines/illustration.png': Object.freeze({
+    outputSha256: '56752ab5f9ff817113ae43c7278624aad5ab8f8fe42f8f5b174eedf84ce86bda',
+    sourceSha256: '09fabd713f9aa75bcd3ff5d34eb7dd68c602bf9a389d13c9e6269e6015def81f',
+    sourceVersionId: '9be2d1c0-912d-4770-94f6-36d0f76bd8ce',
+    sourceWidth: 1499,
+    sourceHeight: 1049,
+    outputWidth: 400,
+    outputHeight: 280,
+    transform: 'nearest-neighbor-resize-1499x1049-to-400x280-no-crop',
+  }),
+  'ui/kit/icons/card-properties/praecipuus.png': Object.freeze({
+    outputSha256: 'f3e6be8674f1c106ba328a015ca10c7ad0d98f4eb7ec4f4a0f6e0c6a8cbda8e6',
+    sourceSha256: '9e24dd89a51a5927d44c7fa779b7e910fd67aa9431e981d96b70f46ada7378e1',
+    sourceVersionId: '8a0ad309-f538-432a-96df-208fa1a12f7d',
+    sourceWidth: 1774,
+    sourceHeight: 887,
+    outputWidth: 64,
+    outputHeight: 64,
+    transform: 'left-887x887-largest-component-nearest-neighbor-fit-40x54-center-64',
+  }),
+});
 const RUN_RESOURCE_ICON_COMPONENT = 'run-resource-icon';
 const RUN_RESOURCE_ICON_SLOT = /^ui\/run\/resources\/([a-z][a-z0-9-]{0,79})\.png$/;
 const RUN_CARD_COST_COIN_COMPONENT = 'run-card-cost-coin';
@@ -60,6 +102,7 @@ const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
   'ui/kit/icons/card-properties/concinnous.png': Object.freeze({ component: 'card-property-icon', variant: 'concinnous' }),
   'ui/kit/icons/card-properties/legatine.png': Object.freeze({ component: 'card-property-icon', variant: 'legatine' }),
   'ui/kit/icons/card-properties/hieratic.png': Object.freeze({ component: 'card-property-icon', variant: 'hieratic' }),
+  'ui/kit/icons/card-properties/praecipuus.png': Object.freeze({ component: 'card-property-icon', variant: 'praecipuus' }),
   // The Run's position in its War, as the persistent title bar names it, plus the
   // emblem that says WHICH ladder the carved rung beside it belongs to.
   'ui/kit/icons/run/ataraxia-mark.png': Object.freeze({ component: RUN_PROGRESS_ICON_COMPONENT, variant: 'ataraxia' }),
@@ -157,6 +200,10 @@ function runResourceIconSlotId(slot) {
 
 function runCardCostCoinSlot(slot) {
   return String(slot || '') === RUN_CARD_COST_COIN_SLOT;
+}
+
+function runCardBackSlot(slot) {
+  return String(slot || '') === RUN_CARD_BACK_SLOT;
 }
 
 function runSectioWrapSlotId(slot) {
@@ -598,6 +645,90 @@ function runCardCostCoinMediaIssue(row, projectedRuntime = null) {
   }
   if (runtime.altText !== '') {
     return 'Run card cost coin metadata.runtime.altText must be empty because the live value owns its accessible name';
+  }
+  return null;
+}
+
+/**
+ * The universal Run-card back is one native complete card, not a frame fragment
+ * or a face-specific skin. Its closed slot keeps every Run consumer on the same
+ * semantic object while a later player preference can choose among separately
+ * accepted backs without allowing arbitrary ui-kit media into this role.
+ */
+function runCardBackMediaIssue(row, projectedRuntime = null) {
+  if (!runCardBackSlot(row.slot)) return 'Run card backs require the registered universal semantic slot';
+  if (row.domain !== 'ui-kit') return 'Run card backs require the ui-kit domain';
+  if (row.role !== 'card-back') return 'Run card backs require the card-back role';
+  if (row.media_type !== 'image/png') return 'Run card backs require image/png';
+  if (Number(row.width) !== 1060 || Number(row.height) !== 1484) {
+    return 'Run card backs must preserve the native 1060x1484 5:7 raster';
+  }
+
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime)) return 'Run card backs require metadata.runtime';
+  const allowed = new Set([
+    'component', 'variant', 'frameWidth', 'frameHeight', 'frameCount', 'altText', 'nativeRole',
+  ]);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `Run card-back runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== RUN_CARD_BACK_COMPONENT) {
+    return `Run card-back metadata.runtime.component must be ${RUN_CARD_BACK_COMPONENT}`;
+  }
+  if (runtime.variant !== 'standard') return 'Run card-back variant must be standard';
+  if (runtime.frameWidth !== 1060 || runtime.frameHeight !== 1484 || runtime.frameCount !== 1) {
+    return 'Run card-back runtime geometry must describe one native 1060x1484 frame';
+  }
+  if (runtime.nativeRole !== RUN_CARD_BACK_COMPONENT) {
+    return `Run card-back metadata.runtime.nativeRole must be ${RUN_CARD_BACK_COMPONENT}`;
+  }
+  if (runtime.altText !== '') {
+    return 'Run card-back metadata.runtime.altText must be empty because the face-down card owns its accessible name';
+  }
+  return null;
+}
+
+function runCardBackOwnerProofIssue(row, proof, surfaceUrl = null) {
+  if (!runCardBackSlot(row.slot)) return 'Run card-back proof requires the universal semantic slot';
+  if (!isObjectRecord(proof) || proof.schema !== RUN_CARD_BACK_PROOF_SCHEMA) {
+    return `Run card-back review requires ${RUN_CARD_BACK_PROOF_SCHEMA}`;
+  }
+  if (proof.renderer !== RUN_CARD_BACK_PROOF_RENDERER) {
+    return 'Run card-back proof does not name Card Layout and the shared RunCardBack renderer';
+  }
+  if (surfaceUrl !== null && proof.surfaceUrl !== surfaceUrl) {
+    return 'Run card-back proof surfaceUrl does not match the reviewed surface';
+  }
+  let parsedSurface;
+  try { parsedSurface = new URL(proof.surfaceUrl); } catch { return 'Run card-back proof surfaceUrl is invalid'; }
+  const candidateSha256 = normalizedSha(row.blob_sha256);
+  if (
+    parsedSurface.pathname !== '/studio'
+    || parsedSurface.searchParams.get('mode') !== 'viewer'
+    || parsedSurface.searchParams.get('vk') !== 'cardlayout'
+    || parsedSurface.searchParams.get('cardSide') !== 'back'
+    || normalizedSha(parsedSurface.searchParams.get('backCandidate')) !== candidateSha256
+  ) return 'Run card-back proof must identify the exact Card Layout back candidate';
+  if (
+    proof.canonicalScale !== 1 || proof.assetLocalScale !== 1 || proof.spatialResampling !== false
+    || !isObjectRecord(proof.decodedNativeRaster)
+    || proof.decodedNativeRaster.width !== 1060 || proof.decodedNativeRaster.height !== 1484
+  ) return 'Run card-back proof must cover the decoded native 1060x1484 pixels at exact scale';
+  if (!candidateSha256 || !Array.isArray(proof.selectedCandidates) || proof.selectedCandidates.length !== 1) {
+    return 'Run card-back proof must identify exactly one candidate';
+  }
+  const selected = proof.selectedCandidates[0];
+  if (
+    !isObjectRecord(selected) || selected.slot !== row.slot || selected.versionId !== String(row.id)
+    || normalizedSha(selected.sha256) !== candidateSha256
+  ) return 'Run card-back proof does not identify the reviewed candidate bytes';
+  if (!Array.isArray(proof.slotSnapshots) || proof.slotSnapshots.length !== 1) {
+    return 'Run card-back proof must snapshot the universal semantic slot';
+  }
+  if (!isObjectRecord(proof.slotSnapshots[0]) || proof.slotSnapshots[0].slot !== row.slot) {
+    return 'Run card-back proof slot snapshot is invalid';
   }
   return null;
 }
@@ -1258,6 +1389,33 @@ function nativeMediaEvidenceIssue(row) {
   const isRaster = String(row.media_type || '').startsWith('image/') && row.media_type !== 'image/svg+xml';
   if (!isRaster) return null;
   const evidence = isObjectRecord(row.native_evidence) ? row.native_evidence : {};
+  if (evidence.schema === RUN_STARTER_SELECTED_DERIVATIVE_EXCEPTION_SCHEMA) {
+    const expected = RUN_STARTER_SELECTED_DERIVATIVE_BY_SLOT[String(row.slot || '')];
+    if (!expected) return 'ADR-0414 selected-derivative evidence is restricted to its active starter-card runtime slots';
+    if (
+      normalizedSha(row.blob_sha256) !== expected.outputSha256
+      || normalizedSha(evidence.outputSha256) !== expected.outputSha256
+    ) return 'ADR-0414 selected-derivative evidence does not authorize these uploaded bytes';
+    if (
+      normalizedSha(evidence.sourceSha256) !== expected.sourceSha256
+      || evidence.sourceVersionId !== expected.sourceVersionId
+    ) return 'ADR-0414 selected-derivative evidence does not name its archived generated source';
+    if (
+      evidence.decision !== 'ADR-0414'
+      || evidence.status !== 'owner-approved-production-exception'
+      || evidence.native1x !== false
+      || evidence.spatialResampling !== true
+    ) return 'ADR-0414 selected-derivative evidence is incomplete';
+    if (
+      Number(row.width) !== expected.outputWidth || Number(row.height) !== expected.outputHeight
+      || Number(evidence.outputWidth) !== expected.outputWidth
+      || Number(evidence.outputHeight) !== expected.outputHeight
+      || Number(evidence.sourceWidth) !== expected.sourceWidth
+      || Number(evidence.sourceHeight) !== expected.sourceHeight
+      || evidence.transform !== expected.transform
+    ) return 'ADR-0414 selected-derivative evidence has invalid geometry or transform';
+    return null;
+  }
   if (evidence.schema === LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SCHEMA) {
     if (
       String(row.slot || '') !== LEVEL_EDITOR_BRUSH_ICON_SLOT
@@ -1381,6 +1539,11 @@ module.exports = {
   LIPSANON_ICON_COMPONENT,
   LIPSANON_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
   RUN_CARD_COST_COIN_COMPONENT,
+  RUN_CARD_BACK_COMPONENT,
+  RUN_CARD_BACK_PROOF_RENDERER,
+  RUN_CARD_BACK_PROOF_SCHEMA,
+  RUN_CARD_BACK_SLOT,
+  RUN_STARTER_SELECTED_DERIVATIVE_EXCEPTION_SCHEMA,
   RUN_RESOURCE_ICON_COMPONENT,
   RUN_SECTIO_WRAP_COMPONENT,
   SFX_SAMPLE_COMPONENT,
@@ -1415,6 +1578,9 @@ module.exports = {
   runLipsanonIconSlotId,
   runCardCostCoinMediaIssue,
   runCardCostCoinSlot,
+  runCardBackMediaIssue,
+  runCardBackOwnerProofIssue,
+  runCardBackSlot,
   runResourceIconMediaIssue,
   runResourceIconSlotId,
   runSectioWrapMediaIssue,

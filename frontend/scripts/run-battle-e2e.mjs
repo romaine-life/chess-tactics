@@ -246,20 +246,22 @@ try {
       const army = run.army.map((unit, index) => ({
         ...unit,
         abilities: [
-          ...unit.abilities.filter((ability) => ability !== 'discipline'),
-          ...(index < 2 ? ['discipline'] : []),
+          ...unit.abilities.filter((ability) => ability !== 'adlected'),
+          ...(index < 2 ? ['adlected'] : []),
         ],
       }));
       useActiveRun.getState().replace({ ...run, army, updatedAt: new Date().toISOString() });
-      return army.filter((unit) => unit.abilities.includes('discipline')).map((unit) => unit.id);
+      return army.filter((unit) => unit.abilities.includes('adlected')).map((unit) => unit.id);
     });
     if (prepared?.length !== 2) await fail('prepare-deployment-fixture', JSON.stringify(prepared));
   }
 
   await page.evaluate(() => {
     const outgoing = document.querySelector('.run-scene-slot');
+    const nativeAnimate = Element.prototype.animate;
     const probe = {
       outgoing,
+      nativeAnimate,
       frame: 0,
       sawPending: false,
       sawOverlap: false,
@@ -272,8 +274,32 @@ try {
       cameraSamples: [],
       visibleCameraFrames: 0,
       visibleEnteringCameraFrames: 0,
+      dealAnimations: 0,
+      farthestDealOrigin: 0,
     };
-    window.__ctRunTransitionProbe = probe;
+    window.__ctBattlefieldTransitionProbe = probe;
+    Element.prototype.animate = function deploymentDealProbe(frames, options) {
+      if (this.matches?.('[data-deployment-stack-card]')) {
+        const first = Array.isArray(frames) ? frames[0] : null;
+        const transform = first && typeof first === 'object' ? String(first.transform ?? '') : '';
+        const match = /translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(transform);
+        const chartulary = document.querySelector('[data-run-card-flight-target]');
+        if (match && chartulary) {
+          const card = this.getBoundingClientRect();
+          const source = chartulary.getBoundingClientRect();
+          const originX = card.left + card.width / 2 + Number(match[1]);
+          const originY = card.top + card.height / 2 + Number(match[2]);
+          const sourceX = source.left + source.width / 2;
+          const sourceY = source.top + source.height / 2;
+          probe.farthestDealOrigin = Math.max(
+            probe.farthestDealOrigin,
+            Math.hypot(originX - sourceX, originY - sourceY),
+          );
+        }
+        probe.dealAnimations += 1;
+      }
+      return nativeAnimate.call(this, frames, options);
+    };
     const tick = () => {
       const director = document.querySelector('.scene-director');
       const phase = director?.getAttribute('data-scene-phase') ?? 'missing';
@@ -315,12 +341,8 @@ try {
           return rect.width > 0 && rect.height > 0 && Number.parseFloat(getComputedStyle(entry).opacity) > 0.01;
         });
         if (!visibleBoundary) probe.blankFrame = true;
-        const pendingBoard = incomingBoard;
-        if (pendingBoard?.getAttribute('data-interactive') === 'true') probe.interactiveBeforeCommit = true;
-        // Staged arrivals BEFORE commit are required, not forbidden: the destination is revealed
-        // during this transition, and units that have not arrived must already be off the board
-        // by then. What must not happen before commit is the entrance actually playing.
-        if (pendingBoard?.getAttribute('data-arrival-state') === 'entering') probe.arrivalBeforeCommit = true;
+        if (incomingBoard?.getAttribute('data-interactive') === 'true') probe.interactiveBeforeCommit = true;
+        if (incomingBoard?.getAttribute('data-arrival-state') === 'entering') probe.arrivalBeforeCommit = true;
       }
       probe.frame = requestAnimationFrame(tick);
     };
@@ -330,28 +352,80 @@ try {
   if (!await clickButton('Continue to first Battle')) {
     await fail('opening-continue-without-purchase', JSON.stringify(await buttonDiagnostics('Continue to first Battle')));
   }
-  await waitPhase(deploymentOnly ? 'deployment' : 'battle', 'opening-continue-without-purchase');
+  await waitPhase('deployment', 'opening-continue-without-purchase');
   await page.waitForFunction(() => {
       const director = document.querySelector('.scene-director');
       return director?.getAttribute('data-scene-phase') === 'current'
       && (director.getAttribute('data-scene-committed') ?? '').includes(':battlefield:')
       && !director.getAttribute('data-scene-pending');
   });
+  await page.waitForSelector('[data-deployment-stack-card]', { timeout: 5_000 });
+  const dealMotionShot = 'tmp-shots/run-opening-deployment-deal-motion.png';
+  await page.screenshot({ path: dealMotionShot });
+  console.log('Deployment deal-motion screenshot:', dealMotionShot);
 
-  // Board revealed and composed (no is-board-loading), tile hit buttons live.
-  await page.waitForFunction(() => {
-    const lab = document.querySelector('.skirmish-board-lab');
-    return lab && !lab.classList.contains('is-board-loading')
-      && document.querySelectorAll('button.skirmish-board-cell-hit').length > 0;
+  // Deployment begins on the already-mounted, empty battlefield. The face-down stack
+  // deals from the Chartulary, and pace is not a choice until every card has landed.
+  const dealingState = await page.evaluate(async () => {
+    const { useActiveRun } = await import('/src/run/store.ts');
+    const run = useActiveRun.getState().run;
+    return {
+      phase: run?.phase ?? null,
+      stage: run?.deployment?.stage ?? null,
+      placements: run?.deployment?.placements.length ?? null,
+      stackCards: document.querySelectorAll('[data-deployment-stack-card]').length,
+      backs: document.querySelectorAll('[data-deployment-stack-card] .run-card-back').length,
+      board: Boolean(document.querySelector('[data-testid="skirmish-board"]')),
+      deployAll: [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Deploy all'),
+      stepThrough: [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Step through'),
+      strategikonToggle: Boolean(document.querySelector('[data-testid="strategikon-toggle"]')),
+      explanatoryCopy: document.body.textContent?.includes('These cards supply this combat') ?? false,
+      confirmationCopy: document.body.textContent?.includes('Your deployment deal') ?? false,
+    };
   });
-  if (deploymentOnly) {
-    await page.waitForFunction(() => document.querySelector('[data-testid="run-deployment"]')
-      && !document.querySelector('[data-testid="run-deployment"]')?.closest('[inert]'));
+  if (
+    dealingState.phase !== 'deployment'
+    || dealingState.stage !== 'dealing'
+    || dealingState.placements !== 0
+    || dealingState.stackCards === 0
+    || dealingState.backs !== dealingState.stackCards
+    || !dealingState.board
+    || dealingState.deployAll
+    || dealingState.stepThrough
+    || !dealingState.strategikonToggle
+    || dealingState.explanatoryCopy
+    || dealingState.confirmationCopy
+  ) {
+    await fail('deployment-deal-boundary', JSON.stringify(dealingState));
   }
 
-  const transition = await page.evaluate(() => {
-    const probe = window.__ctRunTransitionProbe;
+  await page.waitForFunction(() => document.querySelector('[data-deployment-card-stage="pace"]')
+    && [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Deploy all')
+    && [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Step through'));
+
+  const paceState = await page.evaluate(() => ({
+    stackCards: document.querySelectorAll('[data-deployment-stack-card]').length,
+    count: Number(document.querySelector('.run-deployment-card-count')?.textContent ?? 0),
+    board: Boolean(document.querySelector('[data-testid="skirmish-board"]')),
+    deployAll: [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Deploy all'),
+    stepThrough: [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Step through'),
+    strategikonToggle: Boolean(document.querySelector('[data-testid="strategikon-toggle"]')),
+  }));
+  if (
+    paceState.stackCards === 0
+    || paceState.count !== paceState.stackCards
+    || !paceState.board
+    || !paceState.deployAll
+    || !paceState.stepThrough
+    || !paceState.strategikonToggle
+  ) {
+    await fail('deployment-pace-boundary', JSON.stringify(paceState));
+  }
+
+  const battlefieldTransition = await page.evaluate(() => {
+    const probe = window.__ctBattlefieldTransitionProbe;
     cancelAnimationFrame(probe.frame);
+    Element.prototype.animate = probe.nativeAnimate;
     const director = document.querySelector('.scene-director');
     const finalArtLayer = document.querySelector('[data-testid="skirmish-board"] .tileset-view-art-layer');
     const finalCamera = finalArtLayer ? [
@@ -371,6 +445,8 @@ try {
       cameraSamples: probe.cameraSamples,
       visibleCameraFrames: probe.visibleCameraFrames,
       visibleEnteringCameraFrames: probe.visibleEnteringCameraFrames,
+      dealAnimations: probe.dealAnimations,
+      farthestDealOrigin: probe.farthestDealOrigin,
       finalCamera,
       finalPhase: director?.getAttribute('data-scene-phase') ?? null,
       finalCommitted: director?.getAttribute('data-scene-committed') ?? null,
@@ -378,39 +454,40 @@ try {
     };
   });
   if (
-    !transition.sawPending
-    || !transition.sawOverlap
-    || !transition.sawEntering
-    || !transition.retainedOutgoing
-    || !transition.inertOutgoing
-    || transition.blankFrame
-    || transition.interactiveBeforeCommit
-    || transition.arrivalBeforeCommit
-    || transition.visibleCameraFrames === 0
-    || transition.visibleEnteringCameraFrames === 0
-    || transition.cameraSamples.length !== 1
-    || transition.cameraSamples[0]?.camera !== transition.finalCamera
-    || transition.finalPhase !== 'current'
-    || !transition.finalCommitted?.includes(':battlefield:')
-    || transition.finalPending
+    !battlefieldTransition.sawPending
+    || !battlefieldTransition.sawOverlap
+    || !battlefieldTransition.sawEntering
+    || !battlefieldTransition.retainedOutgoing
+    || !battlefieldTransition.inertOutgoing
+    || battlefieldTransition.blankFrame
+    || battlefieldTransition.interactiveBeforeCommit
+    || battlefieldTransition.arrivalBeforeCommit
+    || battlefieldTransition.visibleCameraFrames === 0
+    || battlefieldTransition.visibleEnteringCameraFrames === 0
+    || battlefieldTransition.cameraSamples.length !== 1
+    || battlefieldTransition.cameraSamples[0]?.camera !== battlefieldTransition.finalCamera
+    || battlefieldTransition.dealAnimations !== paceState.stackCards
+    || battlefieldTransition.farthestDealOrigin > 1.5
+    || battlefieldTransition.finalPhase !== 'current'
+    || !battlefieldTransition.finalCommitted?.includes(':battlefield:')
+    || battlefieldTransition.finalPending
   ) {
-    await fail('begin-battle-transition', JSON.stringify(transition));
+    await fail('begin-deployment-transition', JSON.stringify(battlefieldTransition));
   }
-  console.log(`director-owned opening Sectio → ${deploymentOnly ? 'Deployment' : 'Battle'} transition: OK`);
+  console.log('director-owned opening Sectio → empty battlefield Deployment transition and Chartulary deal: OK');
 
   await page.waitForFunction(() => document.querySelector('[data-testid="skirmish-board"]')
     ?.getAttribute('data-arriving') === 'false');
-  const transitionShot = 'tmp-shots/run-opening-sectio-battle-transition.png';
+  const transitionShot = 'tmp-shots/run-deployment-pace.png';
   const transitionBoard = await page.$('.skirmish-war-room');
-  if (!transitionBoard) await fail('transition-screenshot', 'Battle workspace unavailable after commit');
-  await transitionBoard.screenshot({ path: transitionShot });
-  console.log('transition screenshot:', transitionShot);
-  if (deploymentOnly) {
+  if (!transitionBoard) await fail('transition-screenshot', 'Deployment battlefield unavailable after deal');
+  await page.screenshot({ path: transitionShot });
+  console.log('Deployment screenshot:', transitionShot);
+
+  {
     const deploymentState = await page.evaluate(async () => {
-      const { useActiveRun } = await import('/src/run/store.ts');
       const { activeSkirmishStoreForDiagnostics } = await import('/src/game/SkirmishStoreContext.tsx');
       const { activeSkirmishViewStoreForDiagnostics } = await import('/src/game/SkirmishViewStoreContext.tsx');
-      const run = useActiveRun.getState().run;
       const board = document.querySelector('[data-testid="skirmish-board"]');
       const cameraLayer = board?.querySelector('.tileset-view-art-layer');
       const camera = () => cameraLayer ? [
@@ -456,89 +533,35 @@ try {
       };
       window.__ctDeploymentProbe.frame = requestAnimationFrame(tick);
       return {
-        phase: run?.phase,
-        disciplineIds: run?.army.filter((unit) => unit.abilities.includes('discipline')).map((unit) => unit.id) ?? [],
-        placements: run?.deployment?.manualPlacements ?? {},
+        deployment: Boolean(document.querySelector('[data-testid="run-deployment"]')),
+        deployAll: [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Deploy all'),
+        stepThrough: [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Step through'),
       };
     });
-    if (deploymentState.phase !== 'deployment' || deploymentState.disciplineIds.length !== 2) {
+    if (
+      !deploymentState.deployment
+      || !deploymentState.deployAll
+      || !deploymentState.stepThrough
+    ) {
       await fail('deployment-fixture', JSON.stringify(deploymentState));
     }
 
-    const clickFirstDeploymentCell = async () => {
-      const cell = await page.$('[data-testid^="deployment-cell-"]');
-      if (!cell) await fail('deployment-placement', 'no legal cell');
-      await cell.click();
-    };
-
-    await clickFirstDeploymentCell();
-    await page.waitForFunction(() => {
-      const board = document.querySelector('[data-testid="skirmish-board"]');
-      return board?.getAttribute('data-arriving') === 'true'
-        && (board.getAttribute('data-arriving-unit-ids') ?? '').split(',').filter(Boolean).length === 1;
-    });
-    const firstArrival = await page.evaluate(async () => {
-      const { useActiveRun } = await import('/src/run/store.ts');
-      const run = useActiveRun.getState().run;
-      return {
-        phase: run?.phase,
-        ids: document.querySelector('[data-testid="skirmish-board"]')?.getAttribute('data-arriving-unit-ids') ?? '',
-        placedIds: Object.keys(run?.deployment?.manualPlacements ?? {}),
-      };
-    });
-    await page.waitForFunction(() => document.querySelector('[data-testid="skirmish-board"]')
-      ?.getAttribute('data-arriving') === 'false');
-    const secondDisciplineId = deploymentState.disciplineIds.find((unitId) => unitId !== firstArrival.placedIds[0]);
-    if (firstArrival.phase !== 'deployment'
-      || firstArrival.placedIds.length !== 1
-      || firstArrival.ids !== firstArrival.placedIds[0]
-      || !secondDisciplineId) {
-      await fail('first-discipline-arrival', JSON.stringify({ firstArrival, secondDisciplineId }));
+    if (!await clickButton('Deploy all')) {
+      await fail('deployment-deploy-all', JSON.stringify(await buttonDiagnostics('Deploy all')));
     }
-
-    const finalPlacementStartedAt = Date.now();
-    await clickFirstDeploymentCell();
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    const finalManualArrival = await page.evaluate(async () => {
-      const { useActiveRun } = await import('/src/run/store.ts');
-      return {
-        phase: useActiveRun.getState().run?.phase,
-        ids: document.querySelector('[data-testid="skirmish-board"]')?.getAttribute('data-arriving-unit-ids') ?? '',
-      };
-    });
-    if (finalManualArrival.phase !== 'deployment' || finalManualArrival.ids !== secondDisciplineId) {
-      await fail('final-discipline-arrival', JSON.stringify({ finalManualArrival, secondDisciplineId }));
-    }
-    await page.waitForFunction((disciplineIds) => {
-      const ids = (document.querySelector('[data-testid="skirmish-board"]')
-        ?.getAttribute('data-arriving-unit-ids') ?? '').split(',').filter(Boolean);
-      return document.querySelector('[data-testid="skirmish"]')
-        && ids.length > 0
-        && ids.every((id) => !disciplineIds.includes(id));
-    }, {}, deploymentState.disciplineIds);
-    const automaticWaveStartedMs = Date.now() - finalPlacementStartedAt;
-    const automaticWave = await page.evaluate(() => ({
-      ids: (document.querySelector('[data-testid="skirmish-board"]')
-        ?.getAttribute('data-arriving-unit-ids') ?? '').split(',').filter(Boolean),
-    }));
+    await page.waitForFunction(() => document.querySelector('[data-testid="skirmish"]')
+      && !document.querySelector('[data-testid="run-deployment"]'));
     await page.waitForFunction(() => document.querySelector('[data-testid="skirmish-board"]')
       ?.getAttribute('data-arriving') === 'false');
 
-    const deploymentResult = await page.evaluate(async (disciplineIds) => {
-      const { useActiveRun } = await import('/src/run/store.ts');
+    const deploymentResult = await page.evaluate(async () => {
       const { activeSkirmishStoreForDiagnostics } = await import('/src/game/SkirmishStoreContext.tsx');
       const { activeSkirmishViewStoreForDiagnostics } = await import('/src/game/SkirmishViewStoreContext.tsx');
       const probe = window.__ctDeploymentProbe;
       cancelAnimationFrame(probe.frame);
-      const run = useActiveRun.getState().run;
       const board = document.querySelector('[data-testid="skirmish-board"]');
       const gameStore = activeSkirmishStoreForDiagnostics();
       const viewStore = activeSkirmishViewStoreForDiagnostics();
-      const placements = run?.deployment?.manualPlacements ?? {};
-      const livePlacementByUnit = Object.fromEntries(disciplineIds.map((unitId) => {
-        const piece = gameStore?.getState().game.pieces.find((candidate) => candidate.id === unitId);
-        return [unitId, piece ? `${piece.x},${piece.y}` : null];
-      }));
       const currentCanvases = [...(board?.querySelectorAll('canvas') ?? [])];
       const finalLayer = board?.querySelector('.tileset-view-art-layer');
       const finalCamera = finalLayer ? [
@@ -547,9 +570,8 @@ try {
         finalLayer.style.getPropertyValue('--view-pan-y'),
       ].join('|') : null;
       return {
-        phase: run?.phase,
-        placements,
-        livePlacementByUnit,
+        battleControls: Boolean(document.querySelector('[data-testid="skirmish"]')),
+        strategikonToggle: Boolean(document.querySelector('[data-testid="strategikon-toggle"]')),
         sameBoard: board === probe.board,
         sameBoundary: board?.closest('.scene-boundary') === probe.boundary,
         sameViewPane: board?.querySelector('.tileset-view-stage') === probe.viewPane,
@@ -564,17 +586,12 @@ try {
         mountedGameStores: window.__ctMountedSkirmishStores?.length ?? 0,
         mountedViewStores: window.__ctMountedSkirmishViewStores?.length ?? 0,
       };
-    }, deploymentState.disciplineIds);
+    });
     const deploymentShot = 'tmp-shots/run-deployment-battle-continuity.png';
-    await transitionBoard.screenshot({ path: deploymentShot });
-    const placementMismatch = deploymentState.disciplineIds.find(
-      (unitId) => deploymentResult.livePlacementByUnit[unitId] !== deploymentResult.placements[unitId],
-    );
+    await page.screenshot({ path: deploymentShot });
     if (
-      deploymentResult.phase !== 'battle'
-      || automaticWaveStartedMs < 560
-      || automaticWave.ids.length === 0
-      || automaticWave.ids.some((id) => deploymentState.disciplineIds.includes(id))
+      !deploymentResult.battleControls
+      || !deploymentResult.strategikonToggle
       || !deploymentResult.sameBoard
       || !deploymentResult.sameBoundary
       || !deploymentResult.sameViewPane
@@ -586,23 +603,17 @@ try {
       || deploymentResult.lifecycleViolations.length > 0
       || deploymentResult.mountedGameStores !== 1
       || deploymentResult.mountedViewStores !== 1
-      || placementMismatch
     ) {
-      await fail('deployment-battle-continuity', JSON.stringify({
-        firstArrival,
-        finalManualArrival,
-        automaticWave,
-        automaticWaveStartedMs,
-        placementMismatch,
-        deploymentResult,
-      }));
+      await fail('deployment-battle-continuity', JSON.stringify(deploymentResult));
     }
-    console.log('Deployment → Battle provider, DOM, canvas, camera, placement, and arrival continuity: OK');
-    console.log('deployment screenshot:', deploymentShot);
-    console.log('PASS — cold Deployment is camera-ready before reveal and promotes in place');
-    await browser.close();
-    rmSync(browserProfile, { recursive: true, force: true });
-    process.exit(0);
+    console.log('Deployment Deploy all → Battle provider, DOM, canvas, camera, and Strategikon continuity: OK');
+    console.log('Battle continuity screenshot:', deploymentShot);
+    if (deploymentOnly) {
+      console.log('PASS — Deployment opens empty, deals a hidden stack from the Chartulary, and promotes the same battlefield in place');
+      await browser.close();
+      rmSync(browserProfile, { recursive: true, force: true });
+      process.exit(0);
+    }
   }
   if (transitionOnly) {
     console.log('PASS — opening Sectio Continue is optional-commerce and director-owned through Battle');

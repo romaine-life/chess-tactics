@@ -7,6 +7,7 @@ partially_superseded_by:
   - "[ADR-0343](0343-agminate-replaces-marshalled-as-the-formation-ability-name.md)'s Agminate fitting label"
 refined_by:
   - "[ADR-0342](0342-studio-viewers-are-entered-through-catalog-and-own-only-local-controls.md)'s focused Viewer control rail"
+  - "[ADR-0412](0412-praecipuus-and-primogeniture-join-card-icon-fitting.md)'s fifth property/state pair"
 extends:
   - "[ADR-0057](0057-studio-tuning-surfaces-reset-to-authoritative-baseline.md)"
   - "[ADR-0071](0071-the-deliverable-is-the-instrument.md)"

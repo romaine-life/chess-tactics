@@ -20,6 +20,7 @@ import {
   RUN_CARD_CONCINNOUS_FRAME_SLOT,
   RUN_CARD_FRAME_SLOT,
   RUN_CARD_HIERATIC_FRAME_SLOT,
+  RUN_CARD_PRAECIPUUS_FRAME_SLOT,
   RUN_CARD_PESTIFEROUS_FRAME_SLOT,
   RUN_CARD_LEGATINE_FRAME_SLOT,
 } from './runCardFrameGeometry';
@@ -85,7 +86,7 @@ const FRAME_SLOT_BY_CARD_TYPE: Readonly<Record<RunCardType | 'praecipuus', strin
   concinnous: RUN_CARD_CONCINNOUS_FRAME_SLOT,
   legatine: RUN_CARD_LEGATINE_FRAME_SLOT,
   hieratic: RUN_CARD_HIERATIC_FRAME_SLOT,
-  praecipuus: RUN_CARD_HIERATIC_FRAME_SLOT,
+  praecipuus: RUN_CARD_PRAECIPUUS_FRAME_SLOT,
 });
 
 export function isRunCardOffer(card: RunCardDefinition | RunCardOffer): card is RunCardOffer {
@@ -109,10 +110,8 @@ export function runCardFrameSlot(
   card: RunCardDefinition | RunCardOffer,
   heldCardType: RunCardType | null = null,
 ): string {
-  // Starter identity belongs to the pair, not only to His Grace's Praecipuus property.
-  // Front Lines therefore shares the same royal-purple frame without pretending to carry
-  // a card property of its own.
-  if (isRunStarterCard(card)) return RUN_CARD_HIERATIC_FRAME_SLOT;
+  // His Grace's royal frame follows Praecipuus. Front Lines has no property, so it uses
+  // the same Standard frame as every other unqualified Units card (ADR-0413).
   return runCardFrameSlotForType(runCardProperty(card, heldCardType));
 }
 
@@ -149,9 +148,7 @@ function publicAbilityTarget(
   card: RunCardDefinition | RunCardOffer,
   adlected: boolean,
 ): PublicAbilityTarget | null {
-  if (isRunStarterCard(card)) {
-    return card.id === 'his-grace' ? { state: 'primogeniture', pieceIndex: 0 } : null;
-  }
+  if (isRunStarterCard(card)) return null;
   if (!isRunCardOffer(card) || !card.cardType) return null;
   const granted = RUN_CARD_TYPE_REFERENCE[card.cardType].grants;
   // Cacochymic is a modifier the offer already names publicly through cacochymicPieceIndex.

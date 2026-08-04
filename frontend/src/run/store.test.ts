@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createBlankLevel } from '../core/level';
-import { CURRENT_RUN_SAVE_VERSION, createRun, type RunWarSnapshot } from './model';
+import { CURRENT_RUN_SAVE_VERSION, createRun, runCardUnitIds, type RunDocument, type RunWarSnapshot } from './model';
+
+function legacyCards(cards: RunDocument['cards']) {
+  return cards.map((card) => {
+    const { unitSeats: _unitSeats, ...legacy } = card;
+    return { ...legacy, unitIds: runCardUnitIds(card) };
+  });
+}
 
 function memoryStorage(): Storage {
   const values = new Map<string, string>();
@@ -40,10 +47,15 @@ describe('Run browser persistence', () => {
     } = sectio!;
     storage.setItem('chess-tactics:active-run:v1', JSON.stringify({
       ...version16,
+      cards: legacyCards(current.cards),
       formatVersion: 16,
       phase: 'shop',
       shop: {
         ...version16Shop,
+        entrySnapshot: {
+          ...version16Shop.entrySnapshot,
+          cards: legacyCards(version16Shop.entrySnapshot.cards),
+        },
         purchasedCardOfferIds: adlectedCardOfferIds,
         soldUnits: alienatedUnits,
       },

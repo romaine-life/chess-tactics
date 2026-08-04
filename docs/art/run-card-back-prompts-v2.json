@@ -1,0 +1,140 @@
+{
+  "schema": "run-card-back-prompt-set-v2",
+  "studyId": "run-card-back-six-way-v2",
+  "slot": "review/run-card-back/standard.png",
+  "intent": "Compare three card-back ideas through one Codex and one PixelLab interpretation of each idea.",
+  "selection": {
+    "decision": "ADR-0420",
+    "conceptId": "fivefold-gambit",
+    "candidateId": "fivefold-gambit-codex",
+    "provider": "codex",
+    "sha256": "fa0cc826b10e5b7ea87eddc63494f7bea2a6bcc424d4500e76f603d1edfd3938",
+    "runtimeSlot": "ui/run/card-back/standard.png",
+    "promotion": "byte-identical native 1060x1484 pixels"
+  },
+  "concepts": [
+    {
+      "id": "arcane-relic",
+      "label": "The Arcane Relic",
+      "lineage": "MTG lineage",
+      "intent": "An old, mysterious fantasy-game object with one iconic center: compelling to turn over, without borrowing recognizable trade dress."
+    },
+    {
+      "id": "fivefold-gambit",
+      "label": "The Fivefold Gambit",
+      "lineage": "MTG + chess",
+      "intent": "Five occult powers surround a chessboard contest, making the arcane structure answer to the game’s actual play language."
+    },
+    {
+      "id": "closed-position",
+      "label": "The Closed Position",
+      "lineage": "Pure chess card game",
+      "intent": "Chess alone supplies the identity: mirrored armies, board geometry, and a sealed central square holding the hidden move."
+    }
+  ],
+  "candidates": [
+    {
+      "id": "arcane-relic-codex",
+      "conceptId": "arcane-relic",
+      "provider": "codex",
+      "generator": "Codex built-in image generation",
+      "sourceGeometry": { "width": 1060, "height": 1484 },
+      "parameters": { "referencedImages": 0 },
+      "prompt": "Use case: stylized-concept\nAsset type: universal game card back for a dark medieval chess tactics card game\nPrimary request: Concept 1, “The Arcane Relic” — an original card back based on what makes classic fantasy trading-card backs compelling: an ancient, handled game object with a mysterious central emblem and a sense of a vast hidden world. Do not reproduce any existing card back, logo, lettering, oval-and-five-dot layout, or recognizable trade dress.\nScene/backdrop: the artwork itself fills the entire straight-on vertical 5:7 card canvas edge to edge; no tabletop, no mockup, no surrounding environment.\nSubject: a single ornate circular astrolabe-like reliquary at the exact center, nested rings of old brass and dark walnut, with five tiny mismatched mineral inlays integrated irregularly into the rings rather than evenly orbiting them; an abstract eclipsed star at the center.\nStyle/medium: richly painted dark-fantasy game art, tactile and aged, subtle hand-crafted asymmetry, premium physical-card finish.\nComposition/framing: perfectly centered, vertically symmetrical overall, strong thumbnail silhouette, layered ornamental border, safe margin around all important detail, 5:7 portrait.\nLighting/mood: low amber glow from within the relic, mysterious, venerable, inviting.\nColor palette: warm umber, blackened walnut, tarnished brass, muted mineral accents, restrained amber.\nMaterials/textures: worn leather, old wood grain, engraved brass, rubbed gilt, tiny scratches from play.\nConstraints: original design; no text, letters, numbers, runes that resemble writing, logos, watermarks, chess pieces, hands, people, perspective tilt, cast shadow, exterior background, or card-face elements. The card back must be rotationally plausible and read cleanly at small size."
+    },
+    {
+      "id": "arcane-relic-pixellab",
+      "conceptId": "arcane-relic",
+      "provider": "pixellab",
+      "generator": "PixelLab Create UI Asset",
+      "jobId": "0365e5bb-2aef-4581-b5ea-5a2e64641d44",
+      "sourceGeometry": { "width": 360, "height": 504 },
+      "parameters": {
+        "width": 360,
+        "height": 504,
+        "noBackground": true,
+        "colorPalette": "black walnut, warm umber, tarnished brass, muted amber, tiny subdued mineral accents",
+        "pieces": [{ "id": "card_back", "kind": "rounded_rect", "x": 0, "y": 0, "w": 366, "h": 512, "radius": 18 }]
+      },
+      "prompt": "A complete vertical 5:7 collectible game card back, straight-on and filling the whole rounded panel. Original dark medieval fantasy object: worn black walnut and leather, tarnished brass ornamental border, one centered circular astrolabe reliquary with an eclipsed star at its heart, five tiny mismatched muted mineral inlays integrated irregularly into its nested rings. Warm amber inner glow, ancient handled physical card, strong symmetry and thumbnail readability. No text, letters, logos, watermarks, chess pieces, people, exterior scene, mockup, cast shadow, or recognizable existing card-back trade dress. Detailed polished pixel art suitable for a dark fantasy tactics game."
+    },
+    {
+      "id": "fivefold-gambit-codex",
+      "conceptId": "fivefold-gambit",
+      "provider": "codex",
+      "generator": "Codex built-in image generation",
+      "sourceGeometry": { "width": 1060, "height": 1484 },
+      "parameters": { "referencedImages": 0 },
+      "prompt": "Use case: stylized-concept\nAsset type: universal game card back for a dark medieval chess tactics card game\nPrimary request: Concept 2, “The Fivefold Gambit” — an original fusion of classic arcane fantasy trading-card energy and chess. Capture the sense of five competing occult powers surrounding one hidden contest, but express the contest through unmistakable chessboard geometry. Do not reproduce any existing card back, logo, lettering, oval-and-five-dot layout, or recognizable trade dress.\nScene/backdrop: the artwork itself fills the entire straight-on vertical 5:7 card canvas edge to edge; no tabletop, no mockup, no surrounding environment.\nSubject: at the exact center, a small diamond-turned chessboard aperture of alternating dark ivory and obsidian squares, partly obscured by a circular brass armillary mechanism; five differently colored mineral seals are embedded at unequal points in the surrounding machinery; four abstract rook-like corner buttresses frame the contest without becoming literal separate chess pieces.\nStyle/medium: richly painted dark-fantasy game art, tactile physical-card ornament, original medieval occult engineering.\nComposition/framing: strong bilateral symmetry with subtle asymmetry in the five seals, central chess geometry readable at thumbnail scale, layered border, safe margin, 5:7 portrait.\nLighting/mood: cool moonlit board against warm internal brass glow, strategic, secretive, portentous.\nColor palette: blackened steel, old brass, bone ivory, ink blue, with five restrained mineral colors.\nMaterials/textures: engraved metal, aged vellum seams, polished obsidian, chipped ivory, rubbed gilding.\nConstraints: original design; no text, letters, numbers, readable notation, logos, watermarks, people, hands, perspective tilt, cast shadow, exterior background, or card-face elements. Avoid directly depicting a king as the central icon. The card back must be rotationally plausible and read cleanly at small size."
+    },
+    {
+      "id": "fivefold-gambit-pixellab",
+      "conceptId": "fivefold-gambit",
+      "provider": "pixellab",
+      "generator": "PixelLab Create UI Asset",
+      "jobId": "d3edcf6d-ddba-433b-bbed-3f02a9783dd6",
+      "sourceGeometry": { "width": 360, "height": 504 },
+      "parameters": {
+        "width": 360,
+        "height": 504,
+        "noBackground": true,
+        "colorPalette": "blackened steel, aged brass, bone ivory, ink blue, five restrained polished-stone colors",
+        "pieces": [{ "id": "card_back", "kind": "rounded_rect", "x": 0, "y": 0, "w": 366, "h": 512, "radius": 18 }]
+      },
+      "prompt": "A complete vertical 5:7 collectible game card back, straight-on and filling the whole rounded panel. Original medieval fantasy and chess fusion: a centered diamond-turned black-and-ivory chessboard window inside an ornate brass astronomical instrument, five differently colored polished stone inlays set at unequal points around it, and abstract rook-buttress shapes worked into all four corners. Strategic, mysterious, finely crafted, readable at thumbnail size. No text, letters, logos, watermarks, people, exterior scene, mockup, cast shadow, direct copying, or recognizable existing card-back design. Detailed polished pixel art suitable for a dark fantasy tactics game."
+    },
+    {
+      "id": "closed-position-codex-original",
+      "conceptId": "closed-position",
+      "provider": "codex",
+      "generator": "Codex built-in image generation",
+      "sourceGeometry": { "width": 948, "height": 1659 },
+      "status": "rejected-after-review",
+      "reason": "The generator ignored the requested 5:7 geometry; the canonical card object correctly cropped the 0.57-aspect source.",
+      "parameters": { "referencedImages": 0 },
+      "prompt": "Use case: stylized-concept\nAsset type: universal game card back for a dark medieval chess tactics card game\nPrimary request: Concept 3, “The Closed Position” — a pure chess-card-game identity with no fantasy trading-card vocabulary. Make the deck feel like a portable, secret chess position: formal, martial, and immediately legible as chess even at control-panel scale.\nScene/backdrop: the artwork itself fills the entire straight-on vertical 5:7 card canvas edge to edge; no tabletop, no mockup, no surrounding environment.\nSubject: a perfectly mirrored heraldic composition built from an 8-by-8 board lattice, paired black and ivory knight profiles facing inward, compact rook crenellations anchoring all four corners, and one sealed empty central square as the hidden move. The chess forms should interlock into one ornamental back rather than look like loose pieces placed on a board.\nStyle/medium: richly painted medieval chess-set craftsmanship, restrained premium game-card ornament, graphic enough to read as a thumbnail.\nComposition/framing: strict two-way symmetry, strong central axis, layered border based on board coordinates without letters or numbers, safe margin, 5:7 portrait.\nLighting/mood: sober torchlit tournament hall, controlled, intelligent, martial.\nColor palette: ebony black, aged boxwood ivory, cold steel, a very restrained royal-purple thread, no rainbow gems.\nMaterials/textures: carved wood, hammered steel, worn wool baize, shallow engraved linework.\nConstraints: original design; no arcane circles, colored power stones, celestial symbols, fantasy spell imagery, text, letters, numbers, notation, logos, watermarks, people, hands, perspective tilt, cast shadow, exterior background, or card-face elements. The card back must be rotationally plausible and read cleanly at small size."
+    },
+    {
+      "id": "closed-position-codex-v2",
+      "conceptId": "closed-position",
+      "provider": "codex",
+      "generator": "Codex built-in image edit",
+      "inputId": "closed-position-codex-original",
+      "sourceGeometry": { "width": 1060, "height": 1484 },
+      "parameters": { "referencedImages": 1 },
+      "prompt": "Use case: precise-object-edit\nAsset type: universal 5:7 game card back\nInput images: Image 1 is the edit target and must remain recognizably the same “Closed Position” chess card-back candidate.\nPrimary request: Correct only the canvas geometry. Recompose Image 1 into an exact 5:7 portrait card back by expanding and rebuilding the artwork toward the left and right, so the entire existing top-to-bottom design remains visible. Do not crop away the top border, bottom border, corner rooks, any knight, or the central sealed square.\nComposition/framing: exact 5:7 portrait rectangle, preferably 1060×1484; the complete outer card border must be visible on all four sides with a narrow, even safe margin; straight-on with no perspective. Preserve the same two-way mirrored heraldic arrangement, alternating ebony-and-ivory chess fields, paired knight profiles, four corner rooks, central sealed square, and ornamental steel/ivory border. Extend or proportionally reflow the side fields and ornament as needed to reach 5:7 without cutting anything off.\nStyle/medium: preserve Image 1’s richly painted medieval chess-set craftsmanship, materials, lighting, colors, texture, and level of detail.\nConstraints: change only aspect ratio and the minimum geometry needed to fit it. Keep every major motif and the same visual identity. No new subjects, text, letters, numbers, notation, logos, watermarks, exterior background, tabletop, cast shadow, perspective tilt, or card-face content. The final image itself must be exactly 5:7, not a tall card floating inside a 5:7 background."
+    },
+    {
+      "id": "closed-position-pixellab",
+      "conceptId": "closed-position",
+      "provider": "pixellab",
+      "generator": "PixelLab Create UI Asset",
+      "jobId": "303476ad-cc24-4e21-b203-d765368f89dd",
+      "sourceGeometry": { "width": 360, "height": 504 },
+      "parameters": {
+        "width": 360,
+        "height": 504,
+        "noBackground": true,
+        "colorPalette": "ebony black, aged boxwood ivory, cold steel, restrained royal purple",
+        "pieces": [{ "id": "card_back", "kind": "rounded_rect", "x": 0, "y": 0, "w": 366, "h": 512, "radius": 18 }]
+      },
+      "prompt": "ONE SINGLE COMPLETE CHESS CARD BACK PANEL ONLY. The entire output is one vertical rounded 5:7 panel filling the canvas from edge to edge. Inside that one panel: strict two-way symmetry, paired black and ivory carved knight profiles facing inward, a small integrated checkerboard lattice, rook crenellations in the four corners, and one sealed empty square at the center. Formal medieval chess-set craftsmanship in polished pixel art. Ebony, aged ivory, cold steel, tiny restrained purple accents. No title, no words, no letters, no numbers, no logo, no game screen, no UI kit, no menus, no small cards, no characters, no castle scene, no dragon, no surrounding objects, no exterior background. Do not place the card inside another composition; the card back itself fills the whole panel."
+    }
+  ],
+  "failedAttempts": [
+    {
+      "provider": "pixellab",
+      "conceptId": "fivefold-gambit",
+      "jobId": "a6da1fe8-fa09-4bc2-89f9-61c6a833fdff",
+      "status": "provider-policy-rejection",
+      "note": "The provider rejected the original wording before producing media; the successful retry preserves the same visual structure in neutral language."
+    },
+    {
+      "provider": "pixellab",
+      "conceptId": "closed-position",
+      "jobId": "2f7eeb53-1e62-4fe5-89d8-59b6383b4166",
+      "status": "rejected-before-review",
+      "note": "The result expanded into a titled role-playing-game UI kit instead of one card back, so it was never mounted as a review candidate."
+    }
+  ]
+}

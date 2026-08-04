@@ -23,9 +23,12 @@ const chromeButton = readFileSync(join(frontend, 'src/ui/shared/ChromeButton.tsx
 const cyclePicker = readFileSync(join(frontend, 'src/ui/shared/CyclePicker.tsx'), 'utf8');
 const chromeDividedGrid = readFileSync(join(frontend, 'src/ui/shared/ChromeDividedGrid.tsx'), 'utf8');
 const skirmish = readFileSync(join(frontend, 'src/ui/Skirmish.tsx'), 'utf8');
+const skirmishShell = readFileSync(join(frontend, 'src/ui/SkirmishShell.tsx'), 'utf8');
 const skirmishHud = readFileSync(join(frontend, 'src/ui/SkirmishHud.tsx'), 'utf8');
 const strategikon = readFileSync(join(frontend, 'src/ui/Strategikon.tsx'), 'utf8');
 const runScreen = readFileSync(join(frontend, 'src/ui/RunScreen.tsx'), 'utf8');
+const runForm = readFileSync(join(frontend, 'src/ui/RunForm.tsx'), 'utf8');
+const runDeploymentCardStack = readFileSync(join(frontend, 'src/ui/RunDeploymentCardStack.tsx'), 'utf8');
 const runArmyWorkspace = readFileSync(join(frontend, 'src/ui/RunArmyWorkspace.tsx'), 'utf8');
 const runExpunctioWorkspace = readFileSync(join(frontend, 'src/ui/RunExpunctioWorkspace.tsx'), 'utf8');
 const runLipsana = readFileSync(join(frontend, 'src/ui/Lipsana.tsx'), 'utf8');
@@ -321,7 +324,7 @@ if (!/chromeUnitsInHierarchyOrder\(\)\.map/.test(chromeLab) || !/ChromeUnitAudit
 }
 if (/from\s+'\.\/ChromeLab'/.test(levelEditor)
   || !/from\s+'\.\/useInstalledChromeCss'/.test(levelEditor)
-  || !/from\s+'\.\/useInstalledChromeCss'/.test(skirmish)) {
+  || !/from\s+'\.\/useInstalledChromeCss'/.test(skirmishShell)) {
   failures.push('live Level Editor and Skirmish surfaces must share the chrome-family installer, never import Chrome Lab UI');
 }
 for (const symbol of ['composeDividerRender', 'composeFrameDataUrl', 'dividerDefault', 'frameCss', 'roleDefault']) {
@@ -337,9 +340,9 @@ if (!/data-level-editor-chrome-family/.test(levelEditor)
   || !/dangerouslySetInnerHTML=\{\{\s*__html:\s*installedChromeCss\s*\}\}/.test(levelEditor)) {
   failures.push('live level editor must inject the installed shared chrome family CSS');
 }
-if (!/useInstalledChromeCss\(\)/.test(skirmish)
-  || !/data-skirmish-chrome-family/.test(skirmish)
-  || !/dangerouslySetInnerHTML=\{\{\s*__html:\s*installedChromeCss\s*\}\}/.test(skirmish)) {
+if (!/useInstalledChromeCss\(\)/.test(skirmishShell)
+  || !/data-skirmish-chrome-family/.test(skirmishShell)
+  || !/dangerouslySetInnerHTML=\{\{\s*__html:\s*installedChromeCss\s*\}\}/.test(skirmishShell)) {
   failures.push('live Skirmish must inject the same installed shared chrome family CSS');
 }
 if (/divider-atoms-v1/.test(chromeRuntime + chromeLab)) {
@@ -977,8 +980,9 @@ for (const { path, source } of shellCallerSources) {
     failures.push(`${relativePath} must not reconstruct the ShellWorkspace body or content lane`);
   }
 }
-if (!/<ShellViewportSwap[\s\S]*?className="run-phase-workspace"[\s\S]*?primaryClassName="run-phase-primary"[\s\S]*?primary=\{children\}/.test(runScreen)
-  || !/<ShellViewportSwap[\s\S]*?className="skirmish-war-room"[\s\S]*?primaryClassName="skirmish-field"[\s\S]*?workspaceOpen=\{strategikonOpen \|\| Boolean\(runWorkspace\)\}/.test(skirmish)) {
+if (!/<ShellViewportSwap[\s\S]*?className=\{activity\.viewport\.className\}[\s\S]*?primaryClassName=\{activity\.viewport\.primaryClassName\}[\s\S]*?primary=\{activity\.viewport\.primary\}[\s\S]*?workspaceOpen=\{workspaceOpen\}/.test(runForm)
+  || !/className: 'run-phase-workspace'[\s\S]*?primaryClassName: 'run-phase-primary'/.test(runScreen)
+  || !/className: 'skirmish-war-room'[\s\S]*?primaryClassName: 'skirmish-field'/.test(skirmish)) {
   failures.push('Run and Battle replacement modes must use the shared viewport-swap owner');
 }
 // The layout class may be a plain string or a template literal: the Enchiridion
@@ -1012,15 +1016,17 @@ if (!/<ShellControlsPanel[\s\S]*?className=\{className\}[\s\S]*?titleActions=\{s
   || /<h2>Controls<\/h2>/.test(skirmishHud)) {
   failures.push('live Skirmish HUD must supply content and actions to the one ShellControlsPanel owner');
 }
-if (!/export function SkirmishShell[\s\S]*?<SkirmishHud \{\.\.\.hudProps\} controlsContent=\{controlsContent\} \/>/.test(skirmish)
+if (!/export function SkirmishShell[\s\S]*?<SkirmishHud \{\.\.\.hudProps\} controlsContent=\{controlsContent\} \/>/.test(skirmishShell)
   || !/function SkirmishSession\b[\s\S]*?return \([\s\S]*?<SkirmishShell/.test(skirmish)
   || !/export function Skirmish\b[\s\S]*?<SkirmishStoreProvider>[\s\S]*?<SkirmishSession \{\.\.\.props\} \/>[\s\S]*?<\/SkirmishStoreProvider>/.test(skirmish)) {
   failures.push('Battle must render through one instance-owned Skirmish session and the one SkirmishShell that owns SkirmishHud');
 }
-if (!/<SkirmishShell[\s\S]*?controlsContent=\{shellRun[\s\S]*?<RunMetaControls[\s\S]*?run=\{shellRun\}[\s\S]*?view=\{view\}[\s\S]*?onNavigate=\{navigateRunView\}[\s\S]*?showAbandon=\{shellRun\.phase !== 'victory'\}[\s\S]*?adlectioInFlight=\{adlectioBusy\}[\s\S]*?\/>[\s\S]*?: null\}/.test(runScreen)
+if (!/const form = createRunForm\(\{[\s\S]*?titleBarContent:\s*shellRun\s*\?\s*\(?\s*<RunTitleBarStatus[\s\S]*?lipsanonIds: visibleLipsanonIds/.test(runScreen)
+  || !/form\.add\(runActivity\(\{[\s\S]*?controlsContent: shellRun \? \([\s\S]*?<RunMetaControls[\s\S]*?run=\{shellRun\}[\s\S]*?view=\{view\}[\s\S]*?onNavigate=\{navigateRunView\}[\s\S]*?showAbandon=\{shellRun\.phase !== 'victory'\}[\s\S]*?adlectioInFlight=\{adlectioBusy\}/.test(runScreen)
+  || !/<SkirmishShell[\s\S]*?titleBarContent=\{form\.titleBarContent\}[\s\S]*?controlsContent=\{activity\.controlsContent\}/.test(runForm)
   || !/function RunMetaControls[\s\S]*?<section[\s\S]*?className="run-meta-controls"[\s\S]*?aria-label="Run controls"[\s\S]*?inert=\{adlectioInFlight \? true : undefined\}/.test(runScreen)
-  || /function RunShell|function RunControlsRail|chromeConsumer="run-controls"/.test(runScreen)) {
-  failures.push('Run Sectio must use the Battle-owned SkirmishShell and replace only SkirmishHud contents');
+  || /function RunShell|function RunControlsRail|chromeConsumer="run-controls"|<SkirmishShell/.test(runScreen)) {
+  failures.push('every Run phase must contribute controls to the one closed RunForm shell');
 }
 if (!/export function RunSceneViewport/.test(runWorkspace)
   || !/<main[\s\S]*?className=\{`run-workspace \$\{scene\.className \?\? ''\}`\.trim\(\)\}[\s\S]*?data-run-scene-view=\{scene\.view\}/.test(runWorkspace)
@@ -1030,7 +1036,7 @@ if (!/export function RunSceneViewport/.test(runWorkspace)
 if (!/<RunSceneViewport[\s\S]*?scene=\{\{[\s\S]*?view: 'army'[\s\S]*?contentClassName,[\s\S]*?edgeAttached: true,[\s\S]*?testId: dataTestId/.test(runArmyWorkspace)) {
   failures.push('framed Run Army workspaces must use the shared edge-attached content variant');
 }
-const playerRunSources = `${runScreen}\n${runArmyWorkspace}\n${runExpunctioWorkspace}\n${runLipsana}`;
+const playerRunSources = `${runScreen}\n${runArmyWorkspace}\n${runExpunctioWorkspace}\n${runDeploymentCardStack}\n${runLipsana}`;
 for (const testId of [
   'run-sectio-workspace',
   'run-victory-workspace',
@@ -1056,6 +1062,14 @@ if (!/testId=\{runDeployment \? 'run-deployment' : 'skirmish'\}/.test(skirmish)
   || !/surfaceState=\{presentedDeploymentSurface\}/.test(skirmish)
   || /run-deployment-workspace|<LevelPreviewColumn|Choose square…/.test(runBattlefieldSources)) {
   failures.push('Run Deployment must use the battlefield and phase-specific Controls instead of a RunWorkspace level manifest');
+}
+if (!/<RunDeploymentCardStack/.test(runScreen)
+  || !/data-deployment-card-stage=\{deployment\?\.stage/.test(runDeploymentCardStack)
+  || !/data-deployment-stack-card=\{cardId\}/.test(runDeploymentCardStack)
+  || !/<RunCardBack mediaUrl=\{resolvedLiveMediaUrl\(RUN_CARD_BACK_SLOT\)\}/.test(runDeploymentCardStack)
+  || /RunSceneViewport|data-klerosis|Confirm/.test(runDeploymentCardStack)
+  || /KlerosisOverlay|RunKlerosisWorkspace/.test(runScreen)) {
+  failures.push('Deployment must own one hidden Controls card stack on the canonical battlefield without a separate confirmation workspace');
 }
 if (/<OuterChromeBox\b|<OuterChromeHeader\b|chromeConsumer="run-(?:draft|deployment|sectio|victory|army-ledger|army-profile|alienatio|expunctio|empty)"/.test(playerRunSources)) {
   failures.push('player-facing Run destinations must not restore top-level outer panels');
@@ -1090,9 +1104,9 @@ const rawLipsanonSpacing = runLipsanonRules.filter((block) => /(?:margin|padding
 if (rawLipsanonSpacing.length > 0) {
   failures.push('Run lipsanon overlay spacing must use ADR-0031 tokens at every responsive width');
 }
-if (!/\{shellWorkspaceCoversLipsana \? null : <LipsanonStrip lipsanonIds=\{lipsanonIds\} \/>\}/.test(skirmish)
-  || !/shellWorkspaceCoversLipsana=\{strategikonOpen \|\| Boolean\(inspectionWorkspace\)\}/.test(runScreen)
-  || !/shellWorkspaceCoversLipsana=\{Boolean\(runWorkspace\) \|\| strategikonOpen\}/.test(skirmish)) {
+if (!/\{shellWorkspaceCoversLipsana \? null : <LipsanonStrip lipsanonIds=\{lipsanonIds\} \/>\}/.test(skirmishShell)
+  || !/const workspaceOpen = form\.strategikonOpen \|\| Boolean\(form\.inspectionWorkspace\)/.test(runForm)
+  || !/shellWorkspaceCoversLipsana=\{workspaceOpen\}/.test(runForm)) {
   failures.push('Shell-covering workspaces must suppress the covered lipsanon strip without changing shell geometry');
 }
 if (!/import\s+\{\s*SkirmishHud\s*\}/.test(chromeUnitAudit)

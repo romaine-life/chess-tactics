@@ -15,11 +15,16 @@ import {
 import {
   advanceDeployAll,
   chooseDeploymentMode,
+  completeDeploymentDeal,
   currentDeploymentUnit,
   deploymentOptions,
   disciplinePlacementCells,
+  finishDeploymentCardDiscard,
+  finishDeploymentCardReveal,
+  finishDeploymentUnitSettlement,
   levelWithRunDeployment,
   placeAdlectedDeploymentUnit,
+  revealActiveDeploymentCard,
   type RunDeploymentTraceEntry,
 } from '../run/deployment';
 import {
@@ -98,7 +103,7 @@ const CARD_PIECE_CODE: Record<Exclude<PlayablePieceType, 'king'>, string> = {
 const PIECE_BY_CODE = Object.fromEntries(
   Object.entries(PIECE_CODE).map(([type, code]) => [code, type]),
 ) as Record<string, PlayablePieceType>;
-const ABILITY_CODE: Record<RunAbility, string> = { adlected: 'd', eutactic: 'e', agminate: 'a', primogeniture: 'p' };
+const ABILITY_CODE: Record<RunAbility, string> = { adlected: 'd', eutactic: 'e', agminate: 'a' };
 const ABILITY_ORDER: RunAbility[] = ['adlected', 'eutactic', 'agminate'];
 const GENERATED_CREW_MIN = 6;
 const GENERATED_CREW_VARIANTS = 5;
@@ -321,10 +326,7 @@ function buildArmy(config: DeploymentLabConfig): RunArmyUnit[] {
       type: unit.type,
       number,
       inspectionSeed: config.seed + index,
-      abilities: [
-        ...(isRetainedKing ? ['primogeniture' as const] : []),
-        ...unit.abilities.filter((ability) => ability !== 'primogeniture').slice(0, 1),
-      ],
+      abilities: unit.abilities.slice(0, 1),
       modifiers: [],
       source: isRetainedKing ? 'king' : isStartingPawn ? 'starting' : 'adlectio',
     };
@@ -338,9 +340,9 @@ function buildCards(
 ): RunDocument['cards'] {
   const startingPawnIds = army.filter((unit) => unit.source === 'starting' && unit.type === 'pawn').map((unit) => unit.id);
   const starterCards = starters.map((card) => card.coreId === 'his-grace'
-    ? { ...card, unitIds: ['run-king'] }
+    ? { ...card, unitSeats: ['run-king'] }
     : card.coreId === 'front-lines'
-      ? { ...card, unitIds: startingPawnIds }
+      ? { ...card, unitSeats: startingPawnIds }
       : card);
   const ordinary = config.units.flatMap((unit, index) => {
     const member = army[index];
@@ -393,7 +395,7 @@ function buildCards(
         cardType,
         effectSeed: mixSeed(config.seed, 'deployment-lab-card', index),
         effectTargetUnitId: enhanced?.unit.id ?? null,
-        unitIds: entries.map((entry) => entry.unit.id),
+        unitSeats: entries.map((entry) => entry.unit.id),
         lostUnitIds: [],
         cacochymicUnitId: null,
         acquiredAfterBattleIndex: 0,
@@ -427,7 +429,7 @@ export function buildDeploymentLabSnapshot(config: DeploymentLabConfig): Deploym
     phase: 'deployment',
     battleIndex: 0,
     // The algorithm view traces the whole configured crew. The real player-flow launch below
-    // resets this to Conflict 0, where Klerosis deals exactly three cards.
+    // resets this to Conflict 0, where Deployment draws exactly three cards.
     conflictIndex: 99,
     army,
     cards,
@@ -442,8 +444,25 @@ export function buildDeploymentLabSnapshot(config: DeploymentLabConfig): Deploym
       return unit && validCellKey(cell) ? [[unit.id, cell]] : [];
     }),
   );
+  run = completeDeploymentDeal(run, level);
   run = chooseDeploymentMode(run, level, 'deploy-all');
   while (run.phase === 'deployment') {
+    if (run.deployment?.stage === 'card') {
+      run = revealActiveDeploymentCard(run);
+      continue;
+    }
+    if (run.deployment?.stage === 'revealing') {
+      run = finishDeploymentCardReveal(run);
+      continue;
+    }
+    if (run.deployment?.stage === 'settling') {
+      run = finishDeploymentUnitSettlement(run, level);
+      continue;
+    }
+    if (run.deployment?.stage === 'discarding') {
+      run = finishDeploymentCardDiscard(run);
+      continue;
+    }
     const unit = currentDeploymentUnit(run);
     if (!unit) break;
     const options = deploymentOptions(run, level);
@@ -485,7 +504,7 @@ export function deploymentLabFlowIssue(config: DeploymentLabConfig): string | nu
   const kingCount = config.units.filter((unit) => unit.type === 'king').length;
   if (kingCount === 0) return 'Add a King before starting the player flow.';
   if (kingCount > 1) return 'Keep exactly one King before starting the player flow.';
-  if (config.units.some((unit) => unit.abilities.filter((ability) => ability !== 'primogeniture').length > 1)) {
+  if (config.units.some((unit) => unit.abilities.length > 1)) {
     return 'Each unit may carry only one deployment ability.';
   }
   return null;
@@ -501,7 +520,7 @@ const REGION_OPTIONS: readonly HouseSelectOption<DedicatedRegion>[] = [
   { value: 'back', label: 'Back row only' },
 ];
 const ABILITY_LABEL: Record<RunAbility, string> = {
-  adlected: 'Adlected', eutactic: 'Eutactic', agminate: 'Agminate', primogeniture: 'Primogeniture',
+  adlected: 'Adlected', eutactic: 'Eutactic', agminate: 'Agminate',
 };
 
 function stationSummary(trace: RunDeploymentTraceEntry): string {
@@ -748,7 +767,7 @@ export function DeploymentLabViewer(): ReactElement {
               <h3>Player flow</h3>
               <p>
                 Replace the active Run with this case and enter the real Deployment battlefield.
-                Klerosis deals the first three cards, then the real controls carry the case into Battle.
+                Three cards draw face down into Controls, then the real controls carry the case into Battle.
               </p>
               <InnerTextButton
                 tone="primary"

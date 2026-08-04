@@ -937,7 +937,7 @@ function inlineMigrationSql(version) {
   return inlineMigrationDefinition(version).sql;
 }
 
-async function validatePrimarySparseNumericMigrationUpgrade57() {
+async function validatePrimarySparseNumericMigrationUpgrade58() {
   const history = await queryDb(
     `SELECT version, name, checksum
        FROM schema_migrations
@@ -952,7 +952,7 @@ async function validatePrimarySparseNumericMigrationUpgrade57() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 57 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 58 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -967,7 +967,7 @@ async function validatePrimarySparseNumericMigrationUpgrade57() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 21 }, (_, index) => index + 37),
+    ...Array.from({ length: 22 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1081,7 +1081,7 @@ async function validatePrimarySparseNumericMigrationUpgrade57() {
     )
   ) {
     throw new Error(
-      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 57: `
+      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 58: `
       + `${JSON.stringify({
         history: history.rows,
         identity_columns: identityColumns.rows,
@@ -1919,6 +1919,120 @@ async function validateExpunctioMigration57() {
   }
 }
 
+async function validateCardOrderedDeploymentMigration58() {
+  const { Client } = require('pg');
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('CREATE SCHEMA smoke_card_order_migration_58');
+    await client.query('SET LOCAL search_path TO smoke_card_order_migration_58');
+    await client.query(`
+      CREATE TABLE active_runs (
+        owner_email text PRIMARY KEY, body jsonb NOT NULL, revision integer NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+    `);
+    const king = { id: 'king', type: 'king', abilities: ['primogeniture', 'agminate'] };
+    const pawn = { id: 'pawn', type: 'pawn', abilities: ['eutactic'] };
+    const rook = { id: 'rook', type: 'rook', abilities: [] };
+    const cards = [
+      { id: 'grace', coreId: 'his-grace', unitIds: ['king'] },
+      { id: 'line', coreId: 'pr', unitIds: ['rook'] },
+    ];
+    const nestedLoss = { battleIndex: 0, cardId: 'line', unit: { ...pawn, abilities: ['primogeniture'] } };
+    const sectio = {
+      alienatedUnits: [{ unit: { ...rook, abilities: ['primogeniture'] }, valueTenths: 20 }],
+      expunctedCard: { card: cards[1], units: [{ ...rook, abilities: ['primogeniture'] }], priceTenths: 40 },
+      entrySnapshot: { army: [king, pawn, rook], cards, pestiferousLosses: [nestedLoss] },
+    };
+    const deploymentRun = {
+      runSaveVersion: 20,
+      id: 'run-migration-58-deployment',
+      phase: 'deployment',
+      army: [king, pawn, rook],
+      cards,
+      pestiferousLosses: [nestedLoss],
+      sectio,
+      deployment: { stage: 'farrago', queueUnitIds: ['king', 'rook', 'pawn'] },
+      battleRuntime: null,
+      aftermath: null,
+    };
+    const battleRun = {
+      ...deploymentRun,
+      id: 'run-migration-58-battle',
+      phase: 'battle',
+      battleRuntime: { battleIndex: 0, initiallyDeployedUnitIds: ['king', 'rook', 'pawn'] },
+    };
+    const sectioRun = {
+      ...deploymentRun,
+      id: 'run-migration-58-sectio',
+      phase: 'sectio',
+      deployment: null,
+    };
+    const currentRun = {
+      runSaveVersion: 21,
+      id: 'run-migration-58-current',
+      phase: 'sectio',
+      army: [{ id: 'king', type: 'king', abilities: [] }],
+      cards: [{ id: 'grace', coreId: 'his-grace', unitSeats: ['king'] }],
+      pestiferousLosses: [],
+      sectio: null,
+      deployment: null,
+    };
+    await client.query(
+      `INSERT INTO active_runs (owner_email, body, revision) VALUES
+         ('deployment@example.com', $1::jsonb, 3),
+         ('battle@example.com', $2::jsonb, 5),
+         ('sectio@example.com', $3::jsonb, 7),
+         ('current@example.com', $4::jsonb, 11)`,
+      [deploymentRun, battleRun, sectioRun, currentRun].map(JSON.stringify),
+    );
+
+    await client.query(inlineMigrationSql(58));
+    await client.query(inlineMigrationSql(58));
+
+    const rows = (await client.query(
+      'SELECT owner_email, body, revision FROM active_runs ORDER BY owner_email',
+    )).rows;
+    const deployment = rows.find((row) => row.owner_email === 'deployment@example.com');
+    const battle = rows.find((row) => row.owner_email === 'battle@example.com');
+    const sectioRow = rows.find((row) => row.owner_email === 'sectio@example.com');
+    const current = rows.find((row) => row.owner_email === 'current@example.com');
+    const migrated = [deployment, battle, sectioRow];
+    const containsPrimogeniture = migrated.some((row) => JSON.stringify(row.body).includes('primogeniture'));
+    const hasRetiredUnitIds = migrated.some((row) => /"unitIds"/.test(JSON.stringify(row.body)));
+    if (
+      migrated.some((row) => row?.body?.runSaveVersion !== 21)
+      || containsPrimogeniture
+      || hasRetiredUnitIds
+      || JSON.stringify(deployment?.body?.cards?.map((card) => card.unitSeats)) !== JSON.stringify([['king'], [null, 'rook']])
+      || deployment?.body?.phase !== 'deployment'
+      || deployment?.body?.deployment !== null
+      || deployment?.body?.battleRuntime !== null
+      || battle?.body?.phase !== 'deployment'
+      || battle?.body?.deployment !== null
+      || battle?.body?.battleRuntime !== null
+      || sectioRow?.body?.phase !== 'sectio'
+      || JSON.stringify(sectioRow?.body?.sectio?.expunctedCard?.card?.unitSeats) !== JSON.stringify([null, 'rook'])
+      || sectioRow?.body?.sectio?.entrySnapshot?.cards?.[0]?.unitSeats?.[0] !== 'king'
+      || Number(deployment?.revision) !== 4
+      || Number(battle?.revision) !== 6
+      || Number(sectioRow?.revision) !== 8
+      || current?.body?.runSaveVersion !== 21
+      || Number(current?.revision) !== 11
+    ) {
+      throw new Error(`Migration 58 did not establish card-ordered deployment state: ${JSON.stringify(rows)}`);
+    }
+    await client.query('ROLLBACK');
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve validation error */ }
+    throw error;
+  } finally {
+    await client.end();
+  }
+}
+
 async function waitForServer() {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if (child.exitCode !== null) {
@@ -1951,7 +2065,7 @@ async function main() {
   await new Promise((resolve) => mockAuth.listen(authPort, '127.0.0.1', resolve));
   await new Promise((resolve) => mockBgm.listen(bgmPort, '127.0.0.1', resolve));
   await waitForServer();
-  await validatePrimarySparseNumericMigrationUpgrade57();
+  await validatePrimarySparseNumericMigrationUpgrade58();
   const databaseRuntime = await queryDb('SELECT version() AS version');
   const isPgliteRuntime = /\bPGlite\b/i.test(String(databaseRuntime.rows[0]?.version || ''));
   if (!isPgliteRuntime) {
@@ -1983,6 +2097,7 @@ async function main() {
   await validateSectioOperationsVocabularyMigration55();
   await validateKlerosisAndDeploymentZoneMigration56();
   await validateExpunctioMigration57();
+  await validateCardOrderedDeploymentMigration58();
   await resetDb();
 
   const missingPropSeats = await get('/api/prop-seats/default');
@@ -4647,7 +4762,7 @@ async function main() {
   }
   const activeRunKing = {
     id: 'run-king', name: 'David of Israel', type: 'king', number: 1,
-    inspectionSeed: 1701, abilities: ['primogeniture'], modifiers: [], source: 'king',
+    inspectionSeed: 1701, abilities: [], modifiers: [], source: 'king',
   };
   const activeRunPawnA = {
     id: 'run-pawn-a', name: 'Stephen Botiller', type: 'pawn', number: 1,
@@ -4661,12 +4776,12 @@ async function main() {
   const activeRunStarterCards = [{
     id: 'run-card-his-grace', coreId: 'his-grace', cardType: null,
     effectSeed: 0, effectTargetUnitId: null,
-    unitIds: ['run-king'], lostUnitIds: [], cacochymicUnitId: null,
+    unitSeats: ['run-king'], lostUnitIds: [], cacochymicUnitId: null,
     acquiredAfterBattleIndex: 0,
   }, {
     id: 'run-card-front-lines', coreId: 'front-lines', cardType: null,
     effectSeed: 0, effectTargetUnitId: null,
-    unitIds: ['run-pawn-a', 'run-pawn-b'], lostUnitIds: [], cacochymicUnitId: null,
+    unitSeats: ['run-pawn-a', 'run-pawn-b'], lostUnitIds: [], cacochymicUnitId: null,
     acquiredAfterBattleIndex: 0,
   }];
   const activeRunNumberState = { pawn: 3, knight: 1, bishop: 1, rook: 1, queen: 1, king: 2 };
@@ -4745,7 +4860,7 @@ async function main() {
           cardType: 'pestiferous',
           effectSeed: 1703,
           effectTargetUnitId: null,
-          unitIds: ['run-pawn-a'],
+          unitSeats: ['run-pawn-a'],
           lostUnitIds: [],
           cacochymicUnitId: null,
           acquiredAfterBattleIndex: 0,
@@ -4926,13 +5041,13 @@ async function main() {
       {
         id: 'run-card-1', coreId: activeRunOffers[0].id, cardType: null,
         effectSeed: activeRunOffers[0].effectSeed, effectTargetUnitId: null,
-        unitIds: [adlectedPawn.id], lostUnitIds: [], cacochymicUnitId: null,
+        unitSeats: [adlectedPawn.id], lostUnitIds: [], cacochymicUnitId: null,
         acquiredAfterBattleIndex: 0,
       },
       {
         id: 'run-card-2', coreId: activeRunOffers[1].id, cardType: null,
         effectSeed: activeRunOffers[1].effectSeed, effectTargetUnitId: null,
-        unitIds: [adlectedKnight.id], lostUnitIds: [], cacochymicUnitId: null,
+        unitSeats: [adlectedKnight.id], lostUnitIds: [], cacochymicUnitId: null,
         acquiredAfterBattleIndex: 0,
       },
     ],

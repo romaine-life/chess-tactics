@@ -10,9 +10,10 @@ import {
   enchiridionSectionFromPath,
   enchiridionSectionPath,
 } from './enchiridionRoute';
-import { RUN_CARD_TYPE_REFERENCE, type RunCardType } from '../run/model';
+import { RUN_CARD_TYPE_REFERENCE } from '../run/model';
+import type { EnchiridionCardType } from './enchiridionRoute';
 
-const CARD_TYPES = Object.keys(RUN_CARD_TYPE_REFERENCE) as RunCardType[];
+const CARD_TYPES = ['praecipuus', ...Object.keys(RUN_CARD_TYPE_REFERENCE)] as EnchiridionCardType[];
 
 describe('main-menu Enchiridion addresses', () => {
   it('keeps the bare and unknown roots empty until a section is addressed', () => {
@@ -49,6 +50,9 @@ describe('main-menu Enchiridion addresses', () => {
   it('keeps every per-item address inside the section that owns it', () => {
     expect(enchiridionLipsanonFromPath(enchiridionLipsanonHref('royal-decree'))).toBe('royal-decree');
     expect(enchiridionCardFromPath(enchiridionCardHref('ppb'))).toBe('ppb');
+    expect(enchiridionCardHref('his-grace')).toBe('/enchiridion/cards/his-grace');
+    expect(enchiridionCardFromPath('/enchiridion/cards/his-grace')).toBe('his-grace');
+    expect(enchiridionCardFromPath('/enchiridion/cards/front-lines')).toBe('front-lines');
     // One address never resolves as another section's item.
     expect(enchiridionCardFromPath(enchiridionCardTypeHref('hieratic'))).toBeNull();
     expect(enchiridionLipsanonFromPath(enchiridionCardTypeHref('hieratic'))).toBeNull();

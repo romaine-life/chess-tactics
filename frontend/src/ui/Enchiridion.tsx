@@ -20,7 +20,8 @@ import {
   CACOCHYMIC_DISPLAY_NAME,
   EUTACTIC_DISPLAY_NAME,
   RUN_CARD_BY_ID,
-  RUN_CARD_DECK,
+  RUN_CARD_CATALOG,
+  RUN_STARTER_CARD_BY_ID,
   RUN_CARD_TYPE_REFERENCE,
   RUN_LIPSANA,
   cardContentsLabel,
@@ -55,6 +56,7 @@ import {
   ENCHIRIDION_SECTIONS,
   ENCHIRIDION_SECTION_LABEL,
   enchiridionSectionHref,
+  type EnchiridionCardType,
   type EnchiridionSection,
 } from './enchiridionRoute';
 import { installedUiMedia } from './installedUiMedia';
@@ -511,13 +513,13 @@ export function LipsanaCodex({
   );
 }
 
-export type CardGoldFilter = 'all' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9';
+export type CardGoldFilter = 'all' | '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9';
 export type CardUnitFilter = 'all' | RunArmyPieceType;
 
 const CARD_GOLD_FILTER_OPTIONS: readonly HouseSelectOption<CardGoldFilter>[] = Object.freeze([
   { value: 'all', label: 'All' },
-  ...Array.from({ length: 9 }, (_, index) => {
-    const value = String(index + 1) as Exclude<CardGoldFilter, 'all'>;
+  ...Array.from({ length: 10 }, (_, index) => {
+    const value = String(index) as Exclude<CardGoldFilter, 'all'>;
     return {
       value,
       label: <RunCardCostCoin value={Number(value)} className="enchiridion-card-filter-gold-amount" />,
@@ -547,7 +549,7 @@ export function cardMatchesFilters(
     && (unitFilter === 'all' || card.pieces.some((piece) => piece === unitFilter));
 }
 
-// The card gallery's filter row, shared by the whole-deck reference and the Run's held
+// The card gallery's filter row, shared by the whole-catalog reference and the Run's held
 // Chartulary. One control row governs both, so the two galleries cannot drift into
 // lookalike filters with different options or different compact amounts (ADR-0059).
 export function CardGalleryFilters({
@@ -628,7 +630,7 @@ export function CardCodex({
   const focusedCardId = cardHref ? selectedCardId : localSelectedId;
   const galleryRef = useRef<HTMLDivElement | null>(null);
   const visibleCards = useMemo(
-    () => RUN_CARD_DECK.filter((card) => cardMatchesFilters(card, goldFilter, unitFilter)),
+    () => RUN_CARD_CATALOG.filter((card) => cardMatchesFilters(card, goldFilter, unitFilter)),
     [goldFilter, unitFilter],
   );
   const groups = useMemo(() => cardsByGoldValue(visibleCards, (card) => card), [visibleCards]);
@@ -646,7 +648,7 @@ export function CardCodex({
       framed={framed}
       title="Cards"
     >
-      <p>Every card the Run can deal. The opening Sectio and later visits use this one deck; a card costs its gold value.</p>
+      <p>Every card the Run can deal. Starter cards begin in the Chartulary; the rest may be offered by Sectio.</p>
       <div className="enchiridion-card-gallery-layout">
         <CardGalleryFilters
           goldFilter={goldFilter}
@@ -661,7 +663,7 @@ export function CardCodex({
             ref={galleryRef}
             className="enchiridion-card-gallery-browser"
             role="list"
-            aria-label="Filtered card deck by gold value"
+            aria-label="Filtered card catalog by gold value"
           >
             {groups.map(([value, cards]) => (
               <section className="enchiridion-card-gallery-group" key={value} aria-label={`${value} gold cards`}>
@@ -693,7 +695,7 @@ export function CardCodex({
             {!groups.length ? (
               <InnerChromeBox className="enchiridion-empty">
                 <h3>No matching cards</h3>
-                <p>No core card has both of the selected properties.</p>
+                <p>No card has both of the selected properties.</p>
               </InnerChromeBox>
             ) : null}
           </div>
@@ -709,13 +711,18 @@ export function CardCodex({
  * itself, never restated here.
  */
 type CardTypeReferenceDefinition = Readonly<{
-  id: RunCardType;
+  id: EnchiridionCardType;
   cost: number;
   description: string;
   provisional?: boolean;
 }>;
 
 const CARD_TYPE_REFERENCES: readonly CardTypeReferenceDefinition[] = Object.freeze([
+  {
+    id: 'praecipuus',
+    cost: 0,
+    description: 'Moves this card to the top of every deployment deal.',
+  },
   {
     id: 'pestiferous',
     cost: 1,
@@ -739,7 +746,7 @@ const CARD_TYPE_REFERENCES: readonly CardTypeReferenceDefinition[] = Object.free
 ]);
 
 const cardTypeName = (definition: CardTypeReferenceDefinition): string => (
-  RUN_CARD_TYPE_REFERENCE[definition.id].name
+  definition.id === 'praecipuus' ? 'Praecipuus' : RUN_CARD_TYPE_REFERENCE[definition.id].name
 );
 
 const VOLUNTEER_CARD = RUN_CARD_BY_ID.p;
@@ -749,7 +756,7 @@ function CardTypeRowMaterial({
   cardType,
   src,
 }: {
-  cardType: RunCardType;
+  cardType: EnchiridionCardType;
   src?: string;
 }): ReactElement | null {
   if (!src) return null;
@@ -772,18 +779,19 @@ function CardTypeRowMaterial({
 }
 
 /**
- * The reference draws a real one-unit Volunteer offer of each type and projects it like
- * every other host, so the glossary cannot show a card the Sectio could never deal. Its
- * target is forced by the single unit, which is why each state is public here.
+ * Ordinary properties draw a real one-unit Volunteer offer, while Praecipuus draws
+ * canonical His Grace. The glossary therefore cannot show a card the game never deals.
  */
 function CardTypeReference({ definition }: { definition: CardTypeReferenceDefinition }): ReactElement {
-  const specimen = runCardSpecimen({
-    pieces: VOLUNTEER_CARD.pieces,
-    cardType: definition.id,
-    cost: definition.cost,
-    cacochymicPieceIndex: definition.id === 'pestiferous' ? 0 : null,
-    effectTargetIndex: definition.id === 'concinnous' ? 0 : null,
-  });
+  const specimen = definition.id === 'praecipuus'
+    ? RUN_STARTER_CARD_BY_ID['his-grace']
+    : runCardSpecimen({
+      pieces: VOLUNTEER_CARD.pieces,
+      cardType: definition.id,
+      cost: definition.cost,
+      cacochymicPieceIndex: definition.id === 'pestiferous' ? 0 : null,
+      effectTargetIndex: definition.id === 'concinnous' ? 0 : null,
+    });
   const frameSlot = runCardFrameSlot(specimen);
   return (
     <div className="enchiridion-card-type-preview">
@@ -806,11 +814,11 @@ function CardTypesSection({
   framed: boolean;
   textureBatch: string | null;
   /** The route-addressed property; read only when cardTypeHref makes selection navigational. */
-  selectedCardTypeId?: RunCardType | null;
+  selectedCardTypeId?: EnchiridionCardType | null;
   /** When present, selecting a property navigates to this address instead of setting local state. */
-  cardTypeHref?: (cardType: RunCardType) => string;
+  cardTypeHref?: (cardType: EnchiridionCardType) => string;
 }): ReactElement {
-  const [localSelectedTypeId, setLocalSelectedTypeId] = useState<RunCardType>('pestiferous');
+  const [localSelectedTypeId, setLocalSelectedTypeId] = useState<EnchiridionCardType>('praecipuus');
   // Routed hosts derive the selection from the address every render; an unknown or absent
   // card-type address falls back to the first property without rewriting the URL.
   const selectedTypeId = cardTypeHref
@@ -880,7 +888,7 @@ function CardTypesSection({
                 >
                   <CardTypeRowMaterial
                     cardType={definition.id}
-                    src={displayedTextureUrls[definition.id]}
+                    src={displayedTextureUrls[definition.id === 'praecipuus' ? 'hieratic' : definition.id]}
                   />
                   <span className="enchiridion-card-type-row-identity">
                     <AlphaBoundIcon
@@ -914,11 +922,6 @@ const UNIT_STATE_REFERENCES: readonly Readonly<{
   description: string;
 }>[] = Object.freeze([
   {
-    state: 'primogeniture',
-    name: 'Primogeniture',
-    description: 'Is placed before every other unit.',
-  },
-  {
     state: 'adlected',
     name: ADLECTED_DISPLAY_NAME,
     description: 'The player chooses its square when its deployment turn arrives.',
@@ -949,8 +952,6 @@ const CARD_TYPE_BY_UNIT_STATE = Object.freeze({
     (typeof RUN_CARD_TYPE_REFERENCE)[RunCardType],
   ][]).map(([cardType, definition]) => [definition.grants, cardType]),
   ),
-  // Praecipuus and Hieratic share the owner-selected royal-purple material in this beta.
-  primogeniture: 'hieratic',
 }) as Readonly<Record<RunUnitState, RunCardType>>;
 
 function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
@@ -972,7 +973,10 @@ function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
                 data-card-type={cardType}
                 key={state}
               >
-                <CardTypeRowMaterial cardType={cardType} src={textureUrls[cardType]} />
+                <CardTypeRowMaterial
+                  cardType={cardType}
+                  src={textureUrls[cardType]}
+                />
                 <img
                   className="enchiridion-ability-icon"
                   src={runUnitStateIconUrl(state)}
@@ -1094,8 +1098,8 @@ export function EnchiridionReference({
   lipsanonHref?: (lipsanonId: LipsanonId) => string;
   selectedCardId: string | null;
   cardHref?: (cardId: string) => string;
-  selectedCardTypeId: RunCardType | null;
-  cardTypeHref?: (cardType: RunCardType) => string;
+  selectedCardTypeId: EnchiridionCardType | null;
+  cardTypeHref?: (cardType: EnchiridionCardType) => string;
   cardTypeTextureBatch?: string | null;
 }): ReactElement {
   if (section === 'terrain') return <TerrainSection framed={framed} />;
@@ -1141,9 +1145,9 @@ export function Enchiridion({
   /** When present, card focus in the cards section navigates to this address. */
   cardHref?: (cardId: string) => string;
   /** The route-addressed property for the card-types section; see CardTypesSection. */
-  selectedCardTypeId?: RunCardType | null;
+  selectedCardTypeId?: EnchiridionCardType | null;
   /** When present, property selection in the card-types section navigates to this address. */
-  cardTypeHref?: (cardType: RunCardType) => string;
+  cardTypeHref?: (cardType: EnchiridionCardType) => string;
   showSectionRail?: boolean;
   sceneInstanceKey?: string;
   framed?: boolean;

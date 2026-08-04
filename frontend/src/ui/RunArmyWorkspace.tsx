@@ -73,7 +73,6 @@ const PLAYER_PIECE_FACING = 'south';
 const TYPE_ORDER: readonly RunArmyPieceType[] = ['king', 'pawn', 'knight', 'bishop', 'rook', 'queen'];
 
 export type RunUnitTraitId =
-  | 'primogeniture'
   | 'adlected'
   | 'eutactic'
   | 'agminate'
@@ -83,7 +82,7 @@ export type RunUnitTraitId =
 
 /**
  * A paired unit state draws its own accepted icon; a lipsanon-derived trait is not one of
- * the four states and keeps a kit glyph (ADR-0339).
+ * the paired states and keeps a kit glyph (ADR-0339).
  */
 export type RunUnitTraitIcon =
   | Readonly<{ state: RunUnitState }>
@@ -141,16 +140,6 @@ export function runUnitTraits(run: RunDocument, unit: RunArmyUnit): RunUnitTrait
       source: 'The Great Mortality',
       inherited: false,
       icon: { state: 'cacochymic' },
-    });
-  }
-  if (unit.abilities.includes('primogeniture')) {
-    traits.push({
-      id: 'primogeniture',
-      label: runAbilityDisplayName('primogeniture'),
-      description: runAbilityDescription('primogeniture', unit.type),
-      source: 'His Grace',
-      inherited: false,
-      icon: { state: 'primogeniture' },
     });
   }
   if (unit.abilities.includes('adlected')) {

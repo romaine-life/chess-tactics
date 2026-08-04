@@ -6,11 +6,18 @@ export const RUN_CARD_PESTIFEROUS_FRAME_SLOT = 'ui/run/card-prototypes/pestifero
 export const RUN_CARD_CONCINNOUS_FRAME_SLOT = 'ui/run/card-prototypes/concinnous-frame-v1.png';
 export const RUN_CARD_LEGATINE_FRAME_SLOT = 'ui/run/card-prototypes/legatine-adlected-frame-v1.png';
 export const RUN_CARD_HIERATIC_FRAME_SLOT = 'ui/run/card-prototypes/hieratic-frame-v1.png';
+export const RUN_CARD_PRAECIPUUS_FRAME_SLOT = 'ui/run/card-prototypes/praecipuus-frame-v1.png';
 
-export type RunCardFrameVariant = 'standard' | 'pestiferous' | 'concinnous' | 'legatine' | 'hieratic';
+export type RunCardFrameVariant =
+  | 'standard'
+  | 'pestiferous'
+  | 'concinnous'
+  | 'legatine'
+  | 'hieratic'
+  | 'praecipuus';
 
 export const RUN_CARD_FRAME_VARIANTS: readonly RunCardFrameVariant[] = Object.freeze([
-  'standard', 'pestiferous', 'concinnous', 'legatine', 'hieratic',
+  'standard', 'pestiferous', 'concinnous', 'legatine', 'hieratic', 'praecipuus',
 ]);
 
 export const RUN_CARD_FRAME_SLOT_BY_VARIANT: Readonly<Record<RunCardFrameVariant, string>> = Object.freeze({
@@ -19,6 +26,7 @@ export const RUN_CARD_FRAME_SLOT_BY_VARIANT: Readonly<Record<RunCardFrameVariant
   concinnous: RUN_CARD_CONCINNOUS_FRAME_SLOT,
   legatine: RUN_CARD_LEGATINE_FRAME_SLOT,
   hieratic: RUN_CARD_HIERATIC_FRAME_SLOT,
+  praecipuus: RUN_CARD_PRAECIPUUS_FRAME_SLOT,
 });
 
 export type RunCardFrameBoxName = 'title' | 'cost' | 'art' | 'type' | 'contents';
@@ -245,6 +253,18 @@ export const RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY = defineGeometry({
   },
 });
 
+/**
+ * Praecipuus owns the royal-purple frame selected for His Grace. Its generated
+ * material was transferred onto the accepted Hieratic alpha mask at native 1x,
+ * so the two frames deliberately share measured openings without sharing a
+ * semantic slot or pixel identity (ADR-0413).
+ */
+export const RUN_CARD_PRAECIPUUS_FRAME_GEOMETRY = defineGeometry({
+  variant: 'praecipuus',
+  frameSha256s: ['93ee3e1497ae1a930ca9d8d0242fd8b1fd93cd30da01511662ef2c48ed9a062e'],
+  boxes: { ...RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY.boxes },
+});
+
 export const RUN_CARD_FRAME_GEOMETRY_BY_VARIANT: Readonly<Record<RunCardFrameVariant, RunCardFrameGeometry>> =
   Object.freeze({
     standard: RUN_CARD_STANDARD_FRAME_GEOMETRY,
@@ -252,6 +272,7 @@ export const RUN_CARD_FRAME_GEOMETRY_BY_VARIANT: Readonly<Record<RunCardFrameVar
     concinnous: RUN_CARD_CONCINNOUS_FRAME_GEOMETRY,
     legatine: RUN_CARD_LEGATINE_FRAME_GEOMETRY,
     hieratic: RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY,
+    praecipuus: RUN_CARD_PRAECIPUUS_FRAME_GEOMETRY,
   });
 
 const GEOMETRY_BY_SLOT: ReadonlyMap<string, RunCardFrameGeometry> = new Map(

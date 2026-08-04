@@ -14,6 +14,12 @@ partially_supersedes:
   - "[ADR-0396](0396-eutactic-and-agminate-compose-as-best-fit-row-and-station.md)'s Eutactic-plus-Agminate ordinary-unit composition and Pawn-middle station"
   - "[ADR-0398](0398-run-deployment-has-an-owner-operated-studio-lab.md)'s Pawn-region and multi-ability lab matrix"
   - "[ADR-0401](0401-deployment-lab-generates-an-editable-seeded-crew.md)'s independent three-bit ability mask"
+partially_superseded_by:
+  - "[ADR-0413](0413-royal-purple-belongs-to-praecipuus-not-starter-status.md)'s Praecipuus-only royal frame"
+  - "[ADR-0414](0414-selected-starter-card-media-becomes-dedicated-runtime-identity.md)'s dedicated starter-card runtime identities"
+  - "[ADR-0416](0416-klerosis-is-a-dedicated-pre-battle-screen.md)'s separate confirmation workspace before pace selection"
+  - "[ADR-0418](0418-klerosis-presents-the-deal-without-summary-copy-or-rosters.md)'s removal of the Deploying and Unavailable roster"
+  - "[ADR-0419](0419-deployment-draws-a-hidden-card-stack-in-play-order.md)'s card-owned order, hidden stack, and Primogeniture retirement"
 refines:
   - "[ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md)"
   - "[ADR-0274](0274-lipsana-grant-unit-owned-deployment-abilities.md)"
@@ -24,6 +30,9 @@ refines:
   - "[ADR-0400](0400-deployment-playtests-carry-a-visible-return-to-the-lab.md)"
   - "[ADR-0404](0404-muster-roll-leaves-the-lipsanon-offer-pool.md)"
   - "[ADR-0405](0405-surveyors-compass-leaves-the-lipsanon-offer-pool.md)"
+refined_by:
+  - "[ADR-0412](0412-praecipuus-and-primogeniture-join-card-icon-fitting.md)'s review-only fifth fitting pair"
+  - "[ADR-0417](0417-klerosis-deals-from-the-chartulary.md)'s measured Chartulary deal origin"
 ---
 
 # ADR-0406: Klerosis deals cards before one-unit-at-a-time Deployment

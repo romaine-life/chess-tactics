@@ -1,0 +1,78 @@
+{
+  "schema": "run-card-back-prompt-set-v1",
+  "slot": "review/run-card-back/standard.png",
+  "intent": "One universal face-down Run card that conceals every card identity.",
+  "candidates": [
+    {
+      "id": "codex-01",
+      "provider": "codex",
+      "generator": "Codex built-in image generation",
+      "sourceGeometry": { "width": 1060, "height": 1484 },
+      "parameters": { "referencedImages": 0 },
+      "prompt": "Use case: stylized-concept\nAsset type: universal face-down card back for a medieval pixel-art tactical game UI\nPrimary request: Create one complete 5:7 portrait card back, seen perfectly flat and straight-on, with bilateral and rotational symmetry. It should feel like a durable military register or chartulary cover: dark desaturated midnight-blue leather or painted steel, a restrained cold-steel riveted border, small aged-brass corner and clasp details, and a strong central embossed heraldic device built from abstract interlocking lines and one small closed-book clasp motif. The same back conceals every card type, so it must not depict any unit, character, piece type, price, color-coded ability, or card face content.\nStyle/medium: polished indie-game pixel art with deliberately clustered pixels, crisp hard-edged forms, compact readable silhouette, subtle irregular print-like texture; materially compatible with the existing dark medieval Run card frames shown in this project\nComposition/framing: exact 5:7 portrait card rectangle; card fills the canvas edge-to-edge; centered nested border and central medallion; generous simple dark fields so it remains readable when reduced to a tiny deck stack\nLighting/mood: dim cool directional metal highlights, sober, weighty, handled object rather than magical artifact\nColor palette: midnight navy, blue-black, gunmetal, restrained tarnished brass; no royal-purple identity and no bright faction color\nMaterials/textures: worn leather grain or hammered painted steel, darkened rivets, scuffed brass, slight age at the edges\nText (verbatim): \"\"\nConstraints: no text, no letters, no numbers, no watermark; no people; no faces; no chess pieces; no crowns; no weapons; no glowing runes; no scene or background outside the card; no perspective tilt; no drop shadow; no transparent margin; no card-face windows; no UI labels. Preserve a clean outer silhouette and exact vertical 5:7 proportion."
+    },
+    {
+      "id": "pixellab-ui-01",
+      "provider": "pixellab",
+      "generator": "PixelLab Create UI Asset",
+      "jobId": "76acc889-f37a-45db-a46d-676f3587f245",
+      "sourceGeometry": { "width": 360, "height": 504 },
+      "parameters": {
+        "width": 360,
+        "height": 504,
+        "noBackground": false,
+        "colorPalette": "midnight navy, blue-black, gunmetal, restrained tarnished brass",
+        "elements": ["panel"],
+        "pieces": [
+          { "id": "card", "kind": "rounded_rect", "x": 0, "y": 0, "w": 366, "h": 512, "radius": 18, "label": "complete edge-to-edge card back" }
+        ]
+      },
+      "prompt": "One complete face-down medieval military register card back, perfectly flat and straight-on. The entire 5:7 panel is one universal card object with bilateral and 180-degree rotational symmetry. Dark midnight-navy leather inset inside a cold gunmetal riveted frame, restrained tarnished-brass corner guards, and a bold centered embossed medallion of abstract interlocking geometric lines around a tiny closed-book clasp. Crisp polished indie-game pixel art, clustered pixels, sober and weighty, large simple dark fields that remain legible at deck-stack size. No text, letters, numbers, people, faces, chess pieces, crowns, weapons, glowing runes, units, prices, ability colors, card-face windows, perspective, drop shadow, outside scene, or watermark. The panel and border must reach the canvas edges as a complete card back rather than floating in empty background."
+    },
+    {
+      "id": "pixellab-ui-transparent-edit-01",
+      "provider": "pixellab",
+      "generator": "PixelLab Edit Image",
+      "jobId": "9d531dab-cd4c-4573-a3a5-ecd880f2abef",
+      "inputJobId": "76acc889-f37a-45db-a46d-676f3587f245",
+      "sourceGeometry": { "width": 360, "height": 504 },
+      "status": "rejected-before-review",
+      "reason": "The edit removed the navy inner field along with the gray exterior matte instead of preserving the card.",
+      "parameters": { "width": 360, "height": 504, "noBackground": true },
+      "prompt": "Preserve the card back itself, its exact composition, colors, pixel style, border, rivets, brass corners, and central medallion. Change only the flat gray matte outside the outer card silhouette: remove that exterior matte to transparent pixels. Do not crop, resize, redraw, recolor, add, or move any part of the card."
+    },
+    {
+      "id": "pixellab-ui-local-key-rejected-01",
+      "provider": "local-deterministic-postprocess",
+      "generator": "imagegen remove_chroma_key.py",
+      "inputJobId": "76acc889-f37a-45db-a46d-676f3587f245",
+      "sourceGeometry": { "width": 360, "height": 504 },
+      "status": "rejected-before-review",
+      "reason": "The exterior gray was too close to card colors for global chroma distance; the result made most of the card partially transparent.",
+      "parameters": {
+        "autoKey": "border",
+        "softMatte": true,
+        "transparentThreshold": 12,
+        "opaqueThreshold": 220,
+        "despill": true
+      }
+    },
+    {
+      "id": "pixellab-pixen-rejected-01",
+      "provider": "pixellab",
+      "generator": "PixelLab Pixen",
+      "jobId": "5a0b3d68-7590-431f-9471-3f5852cc7a3a",
+      "sourceGeometry": { "width": 400, "height": 560 },
+      "parameters": {
+        "width": 400,
+        "height": 560,
+        "noBackground": false,
+        "detail": "highly detailed",
+        "outline": "selective outline"
+      },
+      "status": "rejected-before-review",
+      "reason": "The generated card floated too narrowly inside the canvas and did not provide the requested complete edge-to-edge back.",
+      "prompt": "A complete universal face-down playing card back for a dark medieval tactical game, perfectly flat straight-on exact 5:7 portrait rectangle filling the canvas. Bilateral and 180-degree rotational symmetry. It resembles a durable military register or chartulary cover: dark desaturated midnight-navy leather or painted steel, restrained cold gunmetal riveted border, small tarnished brass corner guards and clasp details, and a bold centered embossed medallion made from abstract interlocking geometric lines around one tiny closed-book clasp motif. Polished indie-game pixel art with deliberate clustered pixels, crisp hard-edged forms, compact readable silhouette, subtle irregular worn texture. Large simple dark fields so it reads when reduced to a tiny deck stack. Sober, weighty handled object, not magical. No text, letters, numbers, people, faces, chess pieces, crowns, weapons, glowing runes, unit symbols, prices, ability colors, card-face windows, outside background, perspective tilt, drop shadow, transparent margin, or watermark. Midnight navy, blue-black, gunmetal, and restrained aged brass only; no royal purple and no bright faction color."
+    }
+  ]
+}

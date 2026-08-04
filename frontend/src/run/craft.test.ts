@@ -7,6 +7,7 @@ import {
   PIECE_VALUE,
   EUTACTIC_COST,
   normalizeRunDocument,
+  runCardUnitIds,
   type RunWarSnapshot,
 } from './model';
 import {
@@ -143,7 +144,7 @@ describe('run craft specs from a request body', () => {
       war(),
     );
     expect(run.army.map((unit) => `${unit.type}:${unit.abilities.join('+') || 'none'}`))
-      .toEqual(['king:primogeniture', 'rook:agminate', 'pawn:none']);
+      .toEqual(['king:none', 'rook:agminate', 'pawn:none']);
   });
 });
 
@@ -227,7 +228,7 @@ describe('crafted Run documents', () => {
     // Real adlectiones: every held unit id is an army unit, and the Concinnous target got its
     // ability from performAdlectio rather than from the spec.
     const armyIds = new Set(run.army.map((unit) => unit.id));
-    expect(held.every((card) => card.unitIds.every((id) => armyIds.has(id)))).toBe(true);
+    expect(held.every((card) => runCardUnitIds(card).every((id) => armyIds.has(id)))).toBe(true);
     expect(run.army.find((unit) => unit.id === held[1].effectTargetUnitId)?.abilities)
       .toContain('eutactic');
     // The staged offers are withdrawn: the Sectio reads as the one the game dealt.
@@ -294,8 +295,8 @@ describe('crafted Run documents', () => {
   it('keeps the retired Surveyor\'s Compass inert in an explicit crafted Battle', () => {
     const run = craft('?craft=battle&battle=3&lipsana=surveyors-compass');
     expect(run.phase).toBe('battle');
-    expect(run.deployment?.stage).toBe('farrago');
-    expect(run.deployment?.placementCursor).toBe(run.deployment?.queueUnitIds.length);
+    expect(run.deployment?.stage).toBe('complete');
+    expect(run.deployment?.activeCardIndex).toBe(run.deployment?.dealtCardIds.length);
     expect(run.battleRuntime?.initiallyDeployedUnitIds.length).toBeGreaterThan(0);
   });
 

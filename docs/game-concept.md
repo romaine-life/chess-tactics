@@ -208,41 +208,45 @@ these.
   must continue to show every unit property and retain the core card's flavor
   text in its bottom region. Repeated-unit grouping and a demonstrated maximum
   row count remain open presentation decisions (ADR-0270).
-- The starter army belongs to two starter-only royal-purple cards in the
-  Chartulary. **His Grace** contains the King; Praecipuus puts that card at the
-  top of every Battle deal and grants the King Primogeniture, placing it before
-  every other unit. **Front Lines** contains the two ordinary starting Pawns.
+- The starter army belongs to two starter-only cards in the Chartulary.
+  **His Grace** contains the King and alone uses the royal-purple frame;
+  Praecipuus puts that card at the top of every Battle deal. Because cards now
+  own deployment order, His Grace's first seat places the King before every
+  other unit without a second unit ability. **Front Lines** contains the two ordinary starting Pawns
+  and uses the Standard Units frame because it has no card property.
   His Grace is not removable and neither card appears in ordinary Adlectio
-  offers (ADR-0406, ADR-0407).
-- Run Deployment is a battlefield state, not a level-summary destination. It
-  always opens with **Klerosis**, which reveals the dealt cards together and
-  shows the complete Deploying/Unavailable roster before asking for **Deploy
-  all** or **Step through**. The first Conflict deals at most three cards and
+  offers (ADR-0406, ADR-0407, ADR-0413).
+- Every Battle enters Deployment on the canonical empty battlefield. The first Conflict deals
+  at most three face-down cards from the persistent Chartulary mark into a numbered stack in
+  Controls, and
   each later Conflict adds one; His Grace consumes the first slot and the rest
   come from a fresh seeded shuffle. Dealt cards contribute their remaining
-  units individually, so one card may be split by limited board capacity.
-- After the King, one hidden seeded **Farrago** queue owns both capacity and
-  placement order. Units resolve one at a time from their own rules; Adlected
+  units individually, so one card may be split by limited board capacity. Only after the deal
+  settles does the player choose **Deploy all** or **Step through**. The top card flips when it
+  becomes active; later cards remain hidden (ADR-0419).
+- Card order, followed by each card's persisted left-to-right unit seats, owns both capacity and
+  placement order. A sold or lost unit leaves an empty seat rather than changing the durable
+  order; the visible card may compact its surviving ledger. Units resolve one at a time from
+  their own rules; Adlected
   pauses for a highlighted-square choice when that unit reaches the front.
-  Deploy all commits the same sequence as one transition but still pauses for
-  required input. Step through reveals each unit before its destination. Once a
-  random placement reveals information, the player cannot undo across it. The
-  exact deal, capacity result, queue, revealed unit, choices, and formation
-  persist across reload and Battle retry; final placement promotes the already
-  mounted battlefield directly into Battle (ADR-0346, ADR-0350, ADR-0351,
-  ADR-0406).
+  Deploy all advances the same sequence automatically but still pauses for required input;
+  Step through advances one unit at a time. Each unit finishes its board arrival before the next
+  seat advances. After a card's final unit settles, that card discards; after the final discard,
+  the already-mounted battlefield promotes directly into Battle. The exact deal, seat order,
+  active card, reveal state, unit cursor, pace, capacity result, choices, discards, and formation
+  persist across reload and Battle retry (ADR-0346, ADR-0350, ADR-0351, ADR-0419).
 - Deployment modifiers may be contextual rather than linearly valuable. An
   Agminate Pawn inspects prior Pawns for adjacency or an open file, and an
   Agminate Bishop prefers the nearest opposite-color square relative to a prior
   Bishop. They receive no late phase: whether a reference already exists is a
-  consequence of the seeded unit queue (ADR-0273, ADR-0274, ADR-0406).
+  consequence of the card and seat order (ADR-0273, ADR-0274, ADR-0419).
 - Muster Roll and Surveyor's Compass are registered only for existing Runs that
   already reference them and explicit playtests. New reveals omit both from the
   seeded lipsanon offer surfaces until the developing Deployment choices and
   information locks are settled; no RunSaveVersion or database migration is
   introduced by that availability change. Surveyor's Compass's former
-  two-formation behavior is superseded by the one-unit queue (ADR-0404,
-  ADR-0405, ADR-0406).
+  two-formation behavior is superseded by one-unit-at-a-time card order (ADR-0404,
+  ADR-0405, ADR-0419).
 - Placement lipsana grant shared unit abilities rather than owning bespoke
   placement rules. Field Linens grants Eutactic to Pawns; Royal Decree to the
   King; Crenellated Rampart to Rooks; and Pope's Staff to Bishops. Ghibelline
@@ -250,8 +254,8 @@ these.
   to the King. Their rules text names only the grant, while the unit-ability
   reference owns the piece-specific behavior. Permanent and lipsanon-granted
   copies do not stack. Ordinary units carry at most one deployment ability;
-  unit-type lipsana skip ordinary units that already have an inherent ability.
-  The King uniquely carries Primogeniture plus at most one additional ability.
+  unit-type lipsana skip units that already have an inherent ability. Every unit carries at most
+  one deployment ability; the King begins without one and may receive one from a lipsanon.
   Eutactic is a closest-available best-fit row preference:
   Pawns prefer the front row; Knights and Bishops the row immediately behind
   it; and Rooks, Queens, and the King the back row. Agminate separately gives
@@ -259,7 +263,7 @@ these.
   pull toward the middle, Knights a preference one square in from an edge,
   the King to an edge, Rooks into their King-flank/corner formation, and
   Bishops onto the nearest opposite square color from a prior Bishop
-  (ADR-0274, ADR-0395, ADR-0396, ADR-0406).
+  (ADR-0274, ADR-0395, ADR-0396, ADR-0419).
 - Every persistent Run unit receives a seeded, stored historical identity when
   it joins the army. Piece type chooses the register: recorded archers for
   Pawns, documented knights, religious leaders, real castles for Rooks, queens
@@ -284,16 +288,19 @@ these.
   removing their cards, so it discounts a later Expunctio without ever paying the complete
   fee (ADR-0230, ADR-0386, ADR-0407).
 - **Enchiridion** is the player-facing reference for unit movement, terrain
-  rules, the filterable core card deck, affected card types, all lipsana, and the
-  behavior of the current unit abilities: Adlected, Eutactic, Agminate,
-  and Cacochymic. Card filters combine exact gold value with
+  rules, the filterable card catalog (the two starter cards and 49-card core
+  deck), affected card types, all lipsana, and the
+  behavior of the current unit abilities: Adlected, Eutactic, Agminate, and
+  Cacochymic. Card Types includes the starter-only Praecipuus
+  property on canonical His Grace. Card filters combine exact gold value with
   contained unit type. Cards uses no fourth column: its terminal third column
   fills the remaining Enchiridion canvas with real card faces in a vertically
   scrolling gallery, while individual card addresses focus those faces without
   introducing a separate detail (ADR-0364). The Card Types reference uses the
-  third column for its four affected-type names and the fourth for one selected
-  shared card face, temporarily using The Volunteer for each; Pestiferous,
-  Concinnous, Legatine and Hieratic all state their accepted effects, and none
+  third column for its five affected-type names and the fourth for one selected
+  card face: canonical His Grace for Praecipuus and The Volunteer for the four
+  ordinary properties. Praecipuus, Pestiferous, Concinnous, Legatine, and Hieratic
+  all state their accepted effects, and none
   remains provisional
   (ADR-0313, ADR-0315, ADR-0329, ADR-0339, ADR-0341, ADR-0345). During Battle,
   the Controls title bar opens **Strategikon** over the board without unmounting

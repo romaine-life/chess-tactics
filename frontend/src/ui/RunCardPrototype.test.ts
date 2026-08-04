@@ -24,10 +24,13 @@ import {
   runCardFrameBoxDraftsWithEdge,
   RUN_CARD_CONTENTS_STUDY_PROFILES,
   runCardContentsStudyFromSearch,
+  runCardBackFromSearch,
   runCardPrototypeCostFromSearch,
   runCardFrameBoxStyleFromSearch,
   runCardConcinnousTargetRevealedFromSearch,
   runCardPrototypeContent,
+  runCardPrototypeStarterCardFromSearch,
+  runCardBackStudyConceptFromMetadata,
   runCardPrototypeVariantFromSearch,
   runCardTacticalSpecimenFromSearch,
   scaledRunCardContentsTuning,
@@ -43,6 +46,9 @@ describe('Run Card Layout review variant', () => {
     expect(runCardPrototypeVariantFromSearch('?mode=viewer&cardVariant=unknown')).toBe('standard');
     expect(runCardTacticalSpecimenFromSearch('?cardVariant=tactical&tacticalSpecimen=multi')).toBe('multi');
     expect(runCardTacticalSpecimenFromSearch('?cardVariant=tactical')).toBe('single');
+    expect(runCardPrototypeStarterCardFromSearch('?starterCard=front-lines')).toBe('front-lines');
+    expect(runCardPrototypeStarterCardFromSearch('?starterCard=his-grace')).toBe('his-grace');
+    expect(runCardPrototypeStarterCardFromSearch('?starterCard=unknown')).toBeNull();
   });
 
   it('addresses hidden and revealed Adlectio states without synthesized prose', () => {
@@ -124,7 +130,8 @@ describe('Run Card Layout review variant', () => {
 
   it('fits each property in its own committed seat and shares one unit-state seat', () => {
     expect(RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS.legatine).toEqual({ x: -4, y: -0.95, scale: 2.75 });
-    expect(RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT).toEqual({ x: 2.2, y: -0.95, scale: 5 });
+    expect(RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS.praecipuus).toEqual({ x: 1.35, y: -1.05, scale: 2.4 });
+    expect(RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT).toEqual({ x: 4.2, y: -0.45, scale: 4.15 });
     expect(runCardCommittedIconTuning('hieratic')).toEqual({
       property: RUN_CARD_COMMITTED_PROPERTY_PLACEMENTS.hieratic,
       unitState: RUN_CARD_COMMITTED_UNIT_STATE_PLACEMENT,
@@ -163,6 +170,39 @@ describe('Run Card Layout review variant', () => {
   it('addresses the Contents Box comparison without changing the ordinary default', () => {
     expect(runCardContentsStudyFromSearch('?mode=viewer&vk=cardlayout&contentsStudy=1')).toBe(true);
     expect(runCardContentsStudyFromSearch('?mode=viewer&vk=cardlayout')).toBe(false);
+  });
+
+  it('addresses the universal card back without changing the ordinary face default', () => {
+    expect(runCardBackFromSearch('?mode=viewer&vk=cardlayout&cardSide=back')).toBe(true);
+    expect(runCardBackFromSearch('?mode=viewer&vk=cardlayout')).toBe(false);
+  });
+
+  it('derives both six-way card-back discussions from typed candidate metadata', () => {
+    expect(runCardBackStudyConceptFromMetadata({ conceptId: 'arcane-relic' })).toMatchObject({
+      label: 'The Arcane Relic',
+      lineage: 'MTG lineage',
+    });
+    expect(runCardBackStudyConceptFromMetadata({ conceptId: 'fivefold-gambit' })).toMatchObject({
+      label: 'The Fivefold Gambit',
+      lineage: 'MTG + chess',
+    });
+    expect(runCardBackStudyConceptFromMetadata({ conceptId: 'closed-position' })).toMatchObject({
+      label: 'The Closed Position',
+      lineage: 'Pure chess card game',
+    });
+    expect(runCardBackStudyConceptFromMetadata({ conceptId: 'sovereign-seal' })).toMatchObject({
+      label: 'The Sovereign Seal',
+      lineage: 'MTG lineage + king',
+    });
+    expect(runCardBackStudyConceptFromMetadata({ conceptId: 'crowned-gambit' })).toMatchObject({
+      label: 'The Crowned Gambit',
+      lineage: 'MTG + chess + king',
+    });
+    expect(runCardBackStudyConceptFromMetadata({ conceptId: 'kings-position' })).toMatchObject({
+      label: 'The King\u2019s Position',
+      lineage: 'Chess + king',
+    });
+    expect(runCardBackStudyConceptFromMetadata({ conceptId: 'unknown' })).toBeNull();
   });
 
   it('addresses each frame-box line style, so an alignment pass can see the plate', () => {

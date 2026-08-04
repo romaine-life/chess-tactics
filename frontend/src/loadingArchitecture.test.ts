@@ -455,6 +455,8 @@ describe('professional loading architecture guards', () => {
 
   it('does not expose gameplay HUD chrome before the board surface is ready', () => {
     const skirmish = read('./ui/Skirmish.tsx');
+    const skirmishShell = read('./ui/SkirmishShell.tsx');
+    const runForm = read('./ui/RunForm.tsx');
     const board = read('./render/SkirmishBoard.tsx');
     const storeContext = read('./game/SkirmishStoreContext.tsx');
     const viewContext = read('./game/SkirmishViewStoreContext.tsx');
@@ -462,10 +464,9 @@ describe('professional loading architecture guards', () => {
     expect(board).toContain('const completePreparedFrame = boardReady && cameraReady');
     expect(board).toContain('onSurfaceReady?.(surfaceReady)');
     expect(skirmish).toContain('const skirmishTitleBarContent = playableSurfaceReady ? (');
-    expect(skirmish).toContain('const titleBarContent = runDeployment?.titleBarContent');
-    expect(skirmish).toContain('?? runBattle?.titleBarContent');
-    expect(skirmish).toContain('?? skirmishTitleBarContent');
-    expect(skirmish).toContain('surface="gameplay-hud"');
+    expect(skirmish).toContain('readyToCompose: playableSurfaceReady');
+    expect(runForm).toContain('titleBarContent={form.titleBarContent}');
+    expect(skirmishShell).toContain('surface="gameplay-hud"');
     expect(skirmish).toContain('Preparing battlefield…');
     expect(read('../scripts/shot.mjs')).toContain('An explicit readiness contract is an assertion');
     expect(skirmish).toContain('if (!runDeployment && playableSurfaceReady && sceneActivated) activateClock()');
@@ -483,7 +484,10 @@ describe('professional loading architecture guards', () => {
     expect(viewState).toContain('createStore<SkirmishViewState>');
     expect(viewState).not.toContain('create<SkirmishViewState>');
     const runE2e = read('../scripts/run-battle-e2e.mjs');
-    expect(runE2e).toContain('transition.cameraSamples.length !== 1');
+    expect(runE2e).toContain('battlefieldTransition.cameraSamples.length !== 1');
+    expect(runE2e).toContain("!battlefieldTransition.finalCommitted?.includes(':battlefield:')");
+    expect(runE2e).toContain("dealingState.stage !== 'dealing'");
+    expect(runE2e).toContain('battlefieldTransition.dealAnimations !== paceState.stackCards');
     expect(runE2e).toContain('sameViewStore: viewStore === probe.viewStore');
     expect(runE2e).toContain("deploymentResult.initialCamera !== deploymentResult.finalCamera");
     expect(read('./game/store.ts')).toContain('if (!opts.deferClockStart) startClock()');

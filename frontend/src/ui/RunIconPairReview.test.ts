@@ -6,6 +6,9 @@ import {
   RUN_ICON_PAIR_BATCH_ID,
   defaultRunCardIconFittingDraft,
   normalizeRunCardIconFittingDraft,
+  runCardIconFittingPropertyFromSearch,
+  runCardIconFittingSpecimenCard,
+  runCardIconFittingVersions,
   runIconPairReviewFrameVersion,
   runIconPairReviewVersions,
 } from './RunIconPairReview';
@@ -17,7 +20,7 @@ import {
 function version(overrides: Partial<AdminLiveMediaVersion>): AdminLiveMediaVersion {
   return {
     id: 'candidate',
-    slot: 'ui/kit/icons/game/positioned.png',
+    slot: 'ui/kit/icons/game/eutactic.png',
     sourcePath: null,
     domain: 'ui-kit',
     role: 'icon',
@@ -52,7 +55,53 @@ describe('Run icon pair review', () => {
     expect(studio).toContain("openViewer('cardicons')");
     expect(studio).toContain("viewerKind === 'cardicons'");
     expect(studio).toContain("params.get('runIconPairReview') === '1'");
+    expect(studio).toContain("if (route.viewerKind !== 'cardicons') return;");
+    expect(studio).toContain("params.set('iconPair', value)");
     expect(app).not.toContain('return <RunIconPairReview />');
+  });
+
+  it('keeps Praecipuus out of the unit-state fitting surface because it no longer grants one', () => {
+    expect(RUN_CARD_ICON_PAIRS).toHaveLength(4);
+    expect(RUN_CARD_ICON_PAIRS.map(({ property }) => property)).toEqual([
+      'pestiferous', 'concinnous', 'legatine', 'hieratic',
+    ]);
+    expect(runCardIconFittingPropertyFromSearch('?mode=viewer&vk=cardicons&iconPair=praecipuus'))
+      .toBeNull();
+    expect(runCardIconFittingPropertyFromSearch('?iconPair=unknown')).toBeNull();
+  });
+
+  it('uses the current canonical slots for every accepted legacy pair', () => {
+    expect(RUN_CARD_ICON_PAIRS.slice(0, 4).map(({ property, propertySlot, state, stateSlot }) => ({
+      property,
+      propertySlot,
+      state,
+      stateSlot,
+    }))).toEqual([
+      {
+        property: 'pestiferous',
+        propertySlot: 'ui/kit/icons/card-properties/pestiferous.png',
+        state: 'cacochymic',
+        stateSlot: 'ui/kit/icons/game/cacochymic.png',
+      },
+      {
+        property: 'concinnous',
+        propertySlot: 'ui/kit/icons/card-properties/concinnous.png',
+        state: 'eutactic',
+        stateSlot: 'ui/kit/icons/game/eutactic.png',
+      },
+      {
+        property: 'legatine',
+        propertySlot: 'ui/kit/icons/card-properties/legatine.png',
+        state: 'adlected',
+        stateSlot: 'ui/kit/icons/game/adlected.png',
+      },
+      {
+        property: 'hieratic',
+        propertySlot: 'ui/kit/icons/card-properties/hieratic.png',
+        state: 'agminate',
+        stateSlot: 'ui/kit/icons/game/agminate.png',
+      },
+    ]);
   });
 
   it('shows only current-batch private candidates for the exact typed slot, ordered by option', () => {
@@ -64,14 +113,14 @@ describe('Run icon pair review', () => {
       versions: [
         version({ id: 'second', metadata: { candidateIndex: 2 } }),
         version({ id: 'accepted', status: 'accepted' }),
-        version({ id: 'other-slot', slot: 'ui/kit/icons/game/marshalled.png' }),
+        version({ id: 'other-slot', slot: 'ui/kit/icons/game/agminate.png' }),
         version({ id: 'other-batch', provenance: { liveMediaBatch: { batchId: 'other' } } }),
         version({ id: 'missing-media', media: null }),
         version({ id: 'first', metadata: { candidateIndex: 1 } }),
       ],
     } satisfies AdminLiveMediaCatalog;
 
-    expect(runIconPairReviewVersions(catalog, 'ui/kit/icons/game/positioned.png').map(({ id }) => id))
+    expect(runIconPairReviewVersions(catalog, 'ui/kit/icons/game/eutactic.png').map(({ id }) => id))
       .toEqual(['first', 'second']);
   });
 
@@ -103,8 +152,16 @@ describe('Run icon pair review', () => {
 
   it('restores exact saved choices while clamping per-property and shared fitting geometry', () => {
     const versions = RUN_CARD_ICON_PAIRS.flatMap((pair) => [
-      version({ id: `${pair.property}-property`, slot: pair.propertySlot }),
-      version({ id: `${pair.property}-state`, slot: pair.stateSlot }),
+      version({
+        id: `${pair.property}-property`,
+        slot: pair.propertySlot,
+        provenance: { liveMediaBatch: { batchId: pair.candidateBatchId } },
+      }),
+      version({
+        id: `${pair.property}-state`,
+        slot: pair.stateSlot,
+        provenance: { liveMediaBatch: { batchId: pair.candidateBatchId } },
+      }),
     ]);
     const catalog = {
       schemaVersion: 1,

@@ -22,7 +22,7 @@ export {
 };
 
 /** The schema version of one persisted in-progress Run. Only this exact save shape is read. */
-export const CURRENT_RUN_SAVE_VERSION = 20;
+export const CURRENT_RUN_SAVE_VERSION = 21;
 export type RunSaveVersion = typeof CURRENT_RUN_SAVE_VERSION;
 
 export class UnsupportedRunSaveError extends Error {
@@ -34,8 +34,9 @@ export class UnsupportedRunSaveError extends Error {
 
 const RUN_SAVE_VERSION_FIELD_RENAME_SOURCE = 16;
 const RUN_SAVE_VERSION_EXCHANGE_VOCABULARY_SOURCE = 17;
-const RUN_SAVE_VERSION_KLEROSIS_SOURCE = 18;
+const RUN_SAVE_VERSION_STARTER_CHARTULARY_SOURCE = 18;
 const RUN_SAVE_VERSION_EXPUNCTIO_SOURCE = 19;
+const RUN_SAVE_VERSION_CARD_ORDER_SOURCE = 20;
 export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
@@ -96,12 +97,11 @@ export const ATARAXIA_TIERS: readonly AtaraxiaTier[] = Object.freeze(
 
 export type AdlectablePieceType = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen';
 export type RunArmyPieceType = AdlectablePieceType | 'king';
-export type RunAbility = 'adlected' | 'eutactic' | 'agminate' | 'primogeniture';
+export type RunAbility = 'adlected' | 'eutactic' | 'agminate';
 
 export const AGMINATE_DISPLAY_NAME = 'Agminate';
 export const EUTACTIC_DISPLAY_NAME = 'Eutactic';
 export const ADLECTED_DISPLAY_NAME = 'Adlected';
-export const PRIMOGENITURE_DISPLAY_NAME = 'Primogeniture';
 
 /**
  * Every unit state's player-facing name (ADR-0374). Since the vocabulary cutover a stored
@@ -113,7 +113,6 @@ const RUN_ABILITY_DISPLAY_NAME: Readonly<Record<RunAbility, string>> = Object.fr
   adlected: ADLECTED_DISPLAY_NAME,
   eutactic: EUTACTIC_DISPLAY_NAME,
   agminate: AGMINATE_DISPLAY_NAME,
-  primogeniture: PRIMOGENITURE_DISPLAY_NAME,
 });
 
 export function runAbilityDisplayName(ability: RunAbility): string {
@@ -127,7 +126,6 @@ export function runAbilityDisplayName(ability: RunAbility): string {
  * per piece because their deployment rule genuinely differs by piece.
  */
 export function runAbilityDescription(ability: RunAbility, unit: RunArmyPieceType): string {
-  if (ability === 'primogeniture') return 'Is placed before every other unit.';
   if (ability === 'adlected') {
     return runAbilityGeneralDescription('adlected');
   }
@@ -151,7 +149,6 @@ export function runAbilityDescription(ability: RunAbility, unit: RunArmyPieceTyp
  * to this one, so the glossary and the per-unit tip cannot drift apart.
  */
 export function runAbilityGeneralDescription(ability: RunAbility): string {
-  if (ability === 'primogeniture') return 'Is placed before every other unit.';
   if (ability === 'adlected') {
     return 'The player chooses its square when its deployment turn arrives.';
   }
@@ -256,7 +253,7 @@ export interface RunCoreCard {
 export type RunStarterCardId = 'his-grace' | 'front-lines';
 
 /** Starter-only Chartulary cards. They are never offered by Adlectio, but otherwise
- * participate in Klerosis exactly like every card the player holds. */
+ * participate in the Deployment deal exactly like every card the player holds. */
 export interface RunStarterCard {
   id: RunStarterCardId;
   pieces: RunArmyPieceType[];
@@ -284,10 +281,17 @@ export interface RunOwnedCard {
   effectSeed: number;
   /** Exact acquired unit enhanced by this card, or null for other card types. */
   effectTargetUnitId: string | null;
-  unitIds: string[];
+  /** Stable left-to-right seats. A sold or lost unit leaves null rather than reordering
+   * the card; presentation may compact the surviving seats without changing this identity. */
+  unitSeats: Array<string | null>;
   lostUnitIds: string[];
   cacochymicUnitId: string | null;
   acquiredAfterBattleIndex: number;
+}
+
+/** The units still attached to a card, in its persisted left-to-right order. */
+export function runCardUnitIds(card: Pick<RunOwnedCard, 'unitSeats'>): string[] {
+  return card.unitSeats.filter((unitId): unitId is string => typeof unitId === 'string');
 }
 
 export interface RunPestiferousLoss {
@@ -343,19 +347,24 @@ export type RunPhase = 'aftermath' | 'bona-vacantia' | 'deployment' | 'battle' |
 export interface RunDeploymentState {
   battleIndex: number;
   seed: number;
-  /** Cards revealed together by Klerosis for this combat. */
+  /** Cards dealt in this exact order for this combat. */
   dealtCardIds: string[];
-  /** One hidden seeded order owns capacity admission and later Farrago placement. */
-  queueUnitIds: string[];
   deployingUnitIds: string[];
   unavailableUnitIds: string[];
   capacityResolved: boolean;
   /** Exact committed formation, preserved across reload and Battle retry. */
   placements: Record<string, string>;
-  placementCursor: number;
-  revealedUnitId?: string;
+  /** Zero-based cursor into the dealt cards and that card's stable seat order. */
+  activeCardIndex: number;
+  unitCursor: number;
+  /** Count of cards whose discard animation has completed. */
+  discardCursor: number;
+  revealedCardIds: string[];
+  /** Units committed together and still completing their compositor-owned arrivals. */
+  settlingUnitIds: string[];
   mode?: 'deploy-all' | 'step-through';
-  stage: 'klerosis' | 'primogeniture' | 'farrago';
+  /** Each value is a persisted information or animation boundary. */
+  stage: 'dealing' | 'pace' | 'card' | 'revealing' | 'unit' | 'settling' | 'discarding' | 'complete';
   /** Compatibility aliases used by the Battle runtime while reservists are retired. */
   blockedUnitIds: string[];
   manualPlacements: Record<string, string>;
@@ -578,6 +587,13 @@ export const RUN_STARTER_CARD_BY_ID: Readonly<Record<RunStarterCardId, RunStarte
 );
 
 export type RunCardDefinition = RunCoreCard | RunStarterCard;
+
+/** Every authored card identity shown by card-reference surfaces. The offer deck remains
+ * RUN_CARD_DECK so starter-only cards cannot leak into ordinary Sectio draws. */
+export const RUN_CARD_CATALOG: readonly RunCardDefinition[] = Object.freeze([
+  ...RUN_STARTER_CARDS,
+  ...RUN_CARD_DECK,
+]);
 
 export function runCardDefinition(coreId: string): RunCardDefinition | undefined {
   return RUN_CARD_BY_ID[coreId] ?? RUN_STARTER_CARD_BY_ID[coreId as RunStarterCardId];
@@ -833,7 +849,7 @@ function initialArmy(seed: number): RunArmyUnit[] {
       type: 'king',
       number: 1,
       inspectionSeed: mixSeed(seed, 'run-unit-inspection:run-king'),
-      abilities: ['primogeniture'],
+      abilities: [],
       modifiers: [],
       source: 'king',
     },
@@ -860,7 +876,7 @@ function initialArmy(seed: number): RunArmyUnit[] {
   ];
 }
 
-function initialCards(): RunOwnedCard[] {
+function initialCards(seed: number): RunOwnedCard[] {
   return [
     {
       id: 'run-card-his-grace',
@@ -868,7 +884,7 @@ function initialCards(): RunOwnedCard[] {
       cardType: null,
       effectSeed: 0,
       effectTargetUnitId: null,
-      unitIds: ['run-king'],
+      unitSeats: ['run-king'],
       lostUnitIds: [],
       cacochymicUnitId: null,
       acquiredAfterBattleIndex: 0,
@@ -879,7 +895,7 @@ function initialCards(): RunOwnedCard[] {
       cardType: null,
       effectSeed: 0,
       effectTargetUnitId: null,
-      unitIds: ['run-pawn-a', 'run-pawn-b'],
+      unitSeats: shuffled(['run-pawn-a', 'run-pawn-b'], mixSeed(seed, 'card-unit-seats:run-card-front-lines')),
       lostUnitIds: [],
       cacochymicUnitId: null,
       acquiredAfterBattleIndex: 0,
@@ -907,7 +923,7 @@ export function createRun(
     conflictIndex: 0,
     goldTenths: RUN_STARTING_GOLD_TENTHS,
     army: initialArmy(seed),
-    cards: initialCards(),
+    cards: initialCards(seed),
     pestiferousLosses: [],
     lipsana: [],
     seenLipsana: [],
@@ -996,7 +1012,7 @@ function cloneArmy(army: readonly RunArmyUnit[]): RunArmyUnit[] {
 function cloneCards(cards: readonly RunOwnedCard[]): RunOwnedCard[] {
   return cards.map((card) => ({
     ...card,
-    unitIds: [...card.unitIds],
+    unitSeats: [...card.unitSeats],
     lostUnitIds: [...card.lostUnitIds],
   }));
 }
@@ -1028,9 +1044,10 @@ function repairRunCards(value: unknown, seed: number): RunOwnedCard[] {
     const effectSeed = Number.isSafeInteger(card.effectSeed)
       ? Number(card.effectSeed) >>> 0
       : mixSeed(seed, card.id);
-    const unitIds = Array.isArray(card.unitIds)
-      ? card.unitIds.filter((id): id is string => typeof id === 'string')
+    const unitSeats = Array.isArray(card.unitSeats)
+      ? card.unitSeats.filter((id): id is string | null => id === null || typeof id === 'string')
       : [];
+    const unitIds = unitSeats.filter((id): id is string => typeof id === 'string');
     const lostUnitIds = Array.isArray(card.lostUnitIds)
       ? card.lostUnitIds.filter((id): id is string => typeof id === 'string')
       : [];
@@ -1049,7 +1066,7 @@ function repairRunCards(value: unknown, seed: number): RunOwnedCard[] {
         && unitIds.includes(storedEffectTargetUnitId)
         ? storedEffectTargetUnitId
         : null,
-      unitIds,
+      unitSeats,
       lostUnitIds,
       cacochymicUnitId: cardType === 'pestiferous'
         ? typeof card.cacochymicUnitId === 'string' && unitIds.includes(card.cacochymicUnitId)
@@ -1113,8 +1130,8 @@ function repairRunCardOffers(value: unknown): RunCardOffer[] {
 function cardsNeedRepair(cards: readonly RunOwnedCard[]): boolean {
   return cards.some((card) => (
     card.cardType === 'pestiferous'
-      ? card.unitIds.length > 0
-        ? typeof card.cacochymicUnitId !== 'string' || !card.unitIds.includes(card.cacochymicUnitId)
+      ? runCardUnitIds(card).length > 0
+        ? typeof card.cacochymicUnitId !== 'string' || !runCardUnitIds(card).includes(card.cacochymicUnitId)
         : card.cacochymicUnitId !== null
       : card.cacochymicUnitId !== null
   )) || cards.some((card) => (
@@ -1122,7 +1139,7 @@ function cardsNeedRepair(cards: readonly RunOwnedCard[]): boolean {
       ? card.effectTargetUnitId !== null
         && (typeof card.effectTargetUnitId !== 'string'
           || card.effectTargetUnitId.length === 0
-          || !card.unitIds.includes(card.effectTargetUnitId))
+          || !runCardUnitIds(card).includes(card.effectTargetUnitId))
       : card.effectTargetUnitId !== null
   ));
 }
@@ -1579,8 +1596,8 @@ function migrateRunArmyToPrimogeniture(value: unknown): unknown {
 function migrateCardsToStarterChartulary(
   value: unknown,
   armyValue: unknown,
-): RunOwnedCard[] {
-  const cards = Array.isArray(value) ? value.filter((card): card is RunOwnedCard => (
+): Array<Record<string, unknown>> {
+  const cards = Array.isArray(value) ? value.filter((card): card is Record<string, unknown> => (
     Boolean(card && typeof card === 'object' && !Array.isArray(card))
   )) : [];
   const army = Array.isArray(armyValue)
@@ -1591,9 +1608,15 @@ function migrateCardsToStarterChartulary(
     const kingId = army.find((unit) => unit.type === 'king' && typeof unit.id === 'string')?.id;
     if (typeof kingId === 'string') {
       next.unshift({
-        ...initialCards()[0],
+        id: 'run-card-his-grace',
+        coreId: 'his-grace',
+        cardType: null,
         effectSeed: 0,
+        effectTargetUnitId: null,
         unitIds: [kingId],
+        lostUnitIds: [],
+        cacochymicUnitId: null,
+        acquiredAfterBattleIndex: 0,
       });
     }
   }
@@ -1602,19 +1625,25 @@ function migrateCardsToStarterChartulary(
       .filter((unit) => unit.source === 'starting' && unit.type === 'pawn' && typeof unit.id === 'string')
       .map((unit) => unit.id as string);
     next.splice(Math.min(1, next.length), 0, {
-      ...initialCards()[1],
+      id: 'run-card-front-lines',
+      coreId: 'front-lines',
+      cardType: null,
       effectSeed: 0,
+      effectTargetUnitId: null,
       unitIds: pawnIds,
+      lostUnitIds: [],
+      cacochymicUnitId: null,
+      acquiredAfterBattleIndex: 0,
     });
   }
   return next;
 }
 
-function migrateRunToKlerosis(stored: Record<string, unknown>): Record<string, unknown> {
+function migrateRunToStarterChartulary(stored: Record<string, unknown>): Record<string, unknown> {
   const army = migrateRunArmyToPrimogeniture(stored.army);
   const cards = migrateCardsToStarterChartulary(stored.cards, army);
   // Version 18 never persisted automatic destinations, so an in-flight Battle cannot be
-  // represented truthfully in the exact version-19 formation. Return it to Klerosis before
+  // represented truthfully in the exact version-19 formation. Return it to the deal boundary before
   // any new information is exposed; prepareDeployment will persist the new deal immediately.
   const reenterDeployment = stored.phase === 'deployment' || stored.phase === 'battle';
   const sectio = stored.sectio && typeof stored.sectio === 'object' && !Array.isArray(stored.sectio)
@@ -1672,7 +1701,123 @@ function migrateRunToExpunctio(stored: Record<string, unknown>): Record<string, 
     : sectio;
   return {
     ...stored,
+    runSaveVersion: RUN_SAVE_VERSION_CARD_ORDER_SOURCE,
+    ...(sectio ? { sectio: migratedSectio } : {}),
+  };
+}
+
+function migrateRunArmyUnitFromPrimogeniture(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const unit = value as Record<string, unknown>;
+  if (!Array.isArray(unit.abilities)) return unit;
+  return {
+    ...unit,
+    abilities: unit.abilities.filter((ability) => ability !== 'primogeniture'),
+  };
+}
+
+function migrateRunArmyFromPrimogeniture(value: unknown): unknown {
+  return Array.isArray(value) ? value.map(migrateRunArmyUnitFromPrimogeniture) : value;
+}
+
+function migrateRunCardToSeats(value: unknown, armyValue: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const card = value as Record<string, unknown>;
+  const { unitIds: retiredUnitIds, ...current } = card;
+  const unitIds = Array.isArray(retiredUnitIds)
+    ? retiredUnitIds.filter((unitId): unitId is string => typeof unitId === 'string')
+    : [];
+  const definition = typeof card.coreId === 'string' ? runCardDefinition(card.coreId) : undefined;
+  let unitSeats: Array<string | null> = [...unitIds];
+  if (definition && unitIds.length < definition.pieces.length) {
+    const unitTypeById = new Map(
+      (Array.isArray(armyValue) ? armyValue : []).flatMap((candidate) => {
+        if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return [];
+        const unit = candidate as Record<string, unknown>;
+        return typeof unit.id === 'string' && typeof unit.type === 'string'
+          ? [[unit.id, unit.type] as const]
+          : [];
+      }),
+    );
+    const remaining = [...unitIds];
+    unitSeats = definition.pieces.map((piece) => {
+      const index = remaining.findIndex((unitId) => unitTypeById.get(unitId) === piece);
+      return index < 0 ? null : remaining.splice(index, 1)[0];
+    });
+    // A malformed predecessor must not silently lose a still-attached unit. Normalization
+    // will reject the fallback shape, but the migration itself remains lossless.
+    if (remaining.length > 0) unitSeats = [...unitIds];
+  }
+  return {
+    ...current,
+    unitSeats,
+  };
+}
+
+function migrateRunCardsToSeats(value: unknown, armyValue: unknown): unknown {
+  return Array.isArray(value) ? value.map((card) => migrateRunCardToSeats(card, armyValue)) : value;
+}
+
+function migrateRunLossesFromPrimogeniture(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  return value.map((candidate) => {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return candidate;
+    const loss = candidate as Record<string, unknown>;
+    return { ...loss, unit: migrateRunArmyUnitFromPrimogeniture(loss.unit) };
+  });
+}
+
+function migrateRunToCardOrder(stored: Record<string, unknown>): Record<string, unknown> {
+  const sectio = stored.sectio && typeof stored.sectio === 'object' && !Array.isArray(stored.sectio)
+    ? stored.sectio as Record<string, unknown>
+    : null;
+  const entrySnapshot = sectio?.entrySnapshot
+    && typeof sectio.entrySnapshot === 'object'
+    && !Array.isArray(sectio.entrySnapshot)
+    ? sectio.entrySnapshot as Record<string, unknown>
+    : null;
+  const expunctedCard = sectio?.expunctedCard
+    && typeof sectio.expunctedCard === 'object'
+    && !Array.isArray(sectio.expunctedCard)
+    ? sectio.expunctedCard as Record<string, unknown>
+    : null;
+  const migratedSectio = sectio
+    ? {
+        ...sectio,
+        alienatedUnits: Array.isArray(sectio.alienatedUnits)
+          ? sectio.alienatedUnits.map((candidate) => {
+              if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return candidate;
+              const alienated = candidate as Record<string, unknown>;
+              return { ...alienated, unit: migrateRunArmyUnitFromPrimogeniture(alienated.unit) };
+            })
+          : sectio.alienatedUnits,
+        expunctedCard: expunctedCard
+          ? {
+              ...expunctedCard,
+              card: migrateRunCardToSeats(expunctedCard.card, expunctedCard.units),
+              units: migrateRunArmyFromPrimogeniture(expunctedCard.units),
+            }
+          : sectio.expunctedCard,
+        entrySnapshot: entrySnapshot
+          ? {
+              ...entrySnapshot,
+              army: migrateRunArmyFromPrimogeniture(entrySnapshot.army),
+              cards: migrateRunCardsToSeats(entrySnapshot.cards, entrySnapshot.army),
+              pestiferousLosses: migrateRunLossesFromPrimogeniture(entrySnapshot.pestiferousLosses),
+            }
+          : sectio.entrySnapshot,
+      }
+    : sectio;
+  const reenterDeployment = stored.phase === 'deployment' || stored.phase === 'battle';
+  return {
+    ...stored,
     runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    phase: reenterDeployment ? 'deployment' : stored.phase,
+    army: migrateRunArmyFromPrimogeniture(stored.army),
+    cards: migrateRunCardsToSeats(stored.cards, stored.army),
+    pestiferousLosses: migrateRunLossesFromPrimogeniture(stored.pestiferousLosses),
+    deployment: reenterDeployment ? null : stored.deployment,
+    ...(reenterDeployment ? { battleRuntime: null, aftermath: null } : {}),
     ...(sectio ? { sectio: migratedSectio } : {}),
   };
 }
@@ -1681,9 +1826,10 @@ function migrateRunToExpunctio(stored: Record<string, unknown>): Record<string, 
  * Advances every losslessly migratable predecessor through the declared save chain.
  * Version 16 first receives the version-marker rename from 17, version 17's Shop
  * vocabulary is rewritten into version 18's Sectio, Adlectio, and Alienatio vocabulary,
- * then version 18 receives starter cards and persisted Klerosis state. Version 19 finally
- * receives Expunctio's once-per-Sectio record and reset-complete loss snapshot. Older saves
- * remain unsupported rather than being interpreted through a compatibility reader.
+ * then version 18 receives starter cards and persisted deal state. Version 19 receives
+ * Expunctio's once-per-Sectio record and reset-complete loss snapshot. Version 20 retires
+ * Primogeniture and replaces shrinking card membership plus the independent unit shuffle
+ * with stable card seats and card-ordered Deployment. Older saves remain unsupported.
  */
 export function migrateRunSaveDocument(value: unknown): RunDocument {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -1712,18 +1858,21 @@ export function migrateRunSaveDocument(value: unknown): RunDocument {
       : stored.pestiferousLosses;
     stored = {
       ...run,
-      runSaveVersion: RUN_SAVE_VERSION_KLEROSIS_SOURCE,
+      runSaveVersion: RUN_SAVE_VERSION_STARTER_CHARTULARY_SOURCE,
       phase: stored.phase === 'shop' ? 'sectio' : stored.phase,
       army: migrateRunArmyAdlectioVocabulary(stored.army),
       pestiferousLosses,
       sectio: migrateRunSectioOperationsVocabulary(shop),
     };
   }
-  if (stored.runSaveVersion === RUN_SAVE_VERSION_KLEROSIS_SOURCE) {
-    stored = migrateRunToKlerosis(stored);
+  if (stored.runSaveVersion === RUN_SAVE_VERSION_STARTER_CHARTULARY_SOURCE) {
+    stored = migrateRunToStarterChartulary(stored);
   }
   if (stored.runSaveVersion === RUN_SAVE_VERSION_EXPUNCTIO_SOURCE) {
     stored = migrateRunToExpunctio(stored);
+  }
+  if (stored.runSaveVersion === RUN_SAVE_VERSION_CARD_ORDER_SOURCE) {
+    stored = migrateRunToCardOrder(stored);
   }
   return normalizeRunDocument(stored as unknown as RunDocument);
 }
@@ -1771,12 +1920,10 @@ export function lipsanonGrantingRunAbility(
   unit: RunArmyUnit,
   ability: RunAbility,
 ): LipsanonId | null {
-  // Unit-type lipsana never pile a second deployment rule onto an ordinary unit that
-  // already owns one. The King is the sole exception: Primogeniture is inherent, so one
-  // held unit-type grant may sit beside it. If several matching lipsana are held, their
-  // stable acquisition order decides which one is effective.
-  const inherentDeploymentAbilities = unit.abilities.filter((candidate) => candidate !== 'primogeniture');
-  if (unit.type === 'king' ? inherentDeploymentAbilities.length > 0 : unit.abilities.length > 0) return null;
+  // Unit-type lipsana never pile a second deployment rule onto a unit that already owns one.
+  // If several matching lipsana are held, their stable acquisition order decides which one
+  // is effective.
+  if (unit.abilities.length > 0) return null;
   for (const lipsanonId of run.lipsana) {
     const grant = RUN_LIPSANON_ABILITY_GRANTS[lipsanonId];
     if (grant?.unitType !== unit.type) continue;
@@ -1790,13 +1937,13 @@ export function hasRunAbility(run: RunDocument, unit: RunArmyUnit, ability: RunA
 }
 
 /** Whether a target-required lipsanon can add its permanent state without violating
- * ordinary-unit cardinality. The King may receive one state beside Primogeniture. */
+ * one-inherent-ability cardinality. */
 export function canTargetLipsanon(run: RunDocument, lipsanon: LipsanonId, unitId: string): boolean {
   if (!lipsanonNeedsUnitTarget(lipsanon)) return false;
   const unit = run.army.find((candidate) => candidate.id === unitId);
   if (!unit) return false;
   if (lipsanon === 'conscription-notice') {
-    return unit.abilities.filter((ability) => ability !== 'primogeniture').length === 0;
+    return unit.abilities.length === 0;
   }
   return true;
 }
@@ -1831,36 +1978,31 @@ export function prepareDeployment(run: RunDocument): RunDocument {
   const hisGrace = run.cards.find((card) => card.coreId === 'his-grace');
   const ordinary = shuffled(
     run.cards.filter((card) => card.id !== hisGrace?.id),
-    mixSeed(seed, 'klerosis-cards'),
+    mixSeed(seed, 'deployment-cards'),
   );
   const dealCount = Math.max(1, 3 + run.conflictIndex);
   const dealtCards = [...(hisGrace ? [hisGrace] : []), ...ordinary].slice(0, dealCount);
-  const dealtUnitIds = [...new Set(dealtCards.flatMap((card) => card.unitIds))]
+  const dealtUnitIds = [...new Set(dealtCards.flatMap(runCardUnitIds))]
     .filter((unitId) => run.army.some((unit) => unit.id === unitId));
-  const kingIds = dealtUnitIds.filter((unitId) => run.army.find((unit) => unit.id === unitId)?.type === 'king');
-  const queueUnitIds = [
-    ...kingIds,
-    ...shuffled(
-      dealtUnitIds.filter((unitId) => !kingIds.includes(unitId)),
-      mixSeed(seed, 'deployment-unit-order'),
-    ),
-  ];
   const unavailableUnitIds = run.army
     .map((unit) => unit.id)
-    .filter((unitId) => !queueUnitIds.includes(unitId));
+    .filter((unitId) => !dealtUnitIds.includes(unitId));
   return touch({
     ...run,
     deployment: {
       battleIndex: run.battleIndex,
       seed,
       dealtCardIds: dealtCards.map((card) => card.id),
-      queueUnitIds,
-      deployingUnitIds: [...queueUnitIds],
+      deployingUnitIds: [...dealtUnitIds],
       unavailableUnitIds,
       capacityResolved: false,
       placements: {},
-      placementCursor: 0,
-      stage: 'klerosis',
+      activeCardIndex: 0,
+      unitCursor: 0,
+      discardCursor: 0,
+      revealedCardIds: [],
+      settlingUnitIds: [],
+      stage: 'dealing',
       blockedUnitIds: [...unavailableUnitIds],
       manualPlacements: {},
     },
@@ -1873,14 +2015,16 @@ export function setDeploymentChoices(
   choices: Partial<Pick<RunDeploymentState,
     | 'manualPlacements'
     | 'placements'
-    | 'placementCursor'
-    | 'revealedUnitId'
+    | 'activeCardIndex'
+    | 'unitCursor'
+    | 'discardCursor'
+    | 'revealedCardIds'
+    | 'settlingUnitIds'
     | 'mode'
     | 'stage'
     | 'deployingUnitIds'
     | 'unavailableUnitIds'
     | 'capacityResolved'
-    | 'queueUnitIds'
     | 'blockedUnitIds'
     | 'temporaryAdlectedUnitId'
   >>,
@@ -1965,7 +2109,7 @@ function cloneRunBattleUndoArmy(army: readonly RunArmyUnit[]): RunArmyUnit[] {
 function cloneRunBattleUndoCards(cards: readonly RunOwnedCard[]): RunOwnedCard[] {
   return cards.map((card) => ({
     ...card,
-    unitIds: [...card.unitIds],
+    unitSeats: [...card.unitSeats],
     lostUnitIds: [...card.lostUnitIds],
   }));
 }
@@ -1997,7 +2141,7 @@ function isRunBattleUndoCheckpoint(value: unknown): value is RunBattleUndoCheckp
     && checkpoint.cards.every((card) => Boolean(
       card
       && typeof card === 'object'
-      && Array.isArray(card.unitIds)
+      && Array.isArray(card.unitSeats)
       && Array.isArray(card.lostUnitIds),
     ));
   const runtimeIsValid = Boolean(
@@ -2162,8 +2306,9 @@ export function grantGold(run: RunDocument, amountTenths: number): RunDocument {
 
 function cardsWithoutUnit(cards: readonly RunOwnedCard[], unitId: string): RunOwnedCard[] {
   return cards.map((card) => {
-    if (!card.unitIds.includes(unitId)) return card;
-    const unitIds = card.unitIds.filter((id) => id !== unitId);
+    if (!card.unitSeats.includes(unitId)) return card;
+    const unitSeats = card.unitSeats.map((id) => id === unitId ? null : id);
+    const unitIds = unitSeats.filter((id): id is string => typeof id === 'string');
     const cacochymicUnitId = card.cardType === 'pestiferous'
       ? card.cacochymicUnitId === unitId || !unitIds.includes(card.cacochymicUnitId ?? '')
         ? seededPestiferousTarget(card.effectSeed, unitIds, card.lostUnitIds.length)
@@ -2173,7 +2318,7 @@ function cardsWithoutUnit(cards: readonly RunOwnedCard[], unitId: string): RunOw
       || !unitIds.includes(card.effectTargetUnitId ?? '')
       ? null
       : card.effectTargetUnitId;
-    return { ...card, unitIds, effectTargetUnitId, cacochymicUnitId };
+    return { ...card, unitSeats, effectTargetUnitId, cacochymicUnitId };
   });
 }
 
@@ -2200,7 +2345,7 @@ export function resolveCacochymicCombatDeaths(run: RunDocument, battleIndex: num
     if (run.pestiferousLosses.some((loss) => loss.cardId === card.id && loss.battleIndex === battleIndex)) {
       return card;
     }
-    const remaining = card.unitIds.filter((id) => armyById.has(id) && !removedIds.has(id));
+    const remaining = runCardUnitIds(card).filter((id) => armyById.has(id) && !removedIds.has(id));
     if (!remaining.length) return card;
     const unitId = card.cacochymicUnitId && remaining.includes(card.cacochymicUnitId)
       ? card.cacochymicUnitId
@@ -2213,11 +2358,12 @@ export function resolveCacochymicCombatDeaths(run: RunDocument, battleIndex: num
       ? unit
       : { ...unit, modifiers: [...unit.modifiers, 'cacochymic' as const] };
     losses.push({ battleIndex, cardId: card.id, unit: cloneArmy([plaguedUnit])[0] });
-    const unitIds = card.unitIds.filter((id) => id !== unitId);
+    const unitSeats = card.unitSeats.map((id) => id === unitId ? null : id);
+    const unitIds = unitSeats.filter((id): id is string => typeof id === 'string');
     const lostUnitIds = [...card.lostUnitIds, unitId];
     return {
       ...card,
-      unitIds,
+      unitSeats,
       lostUnitIds,
       cacochymicUnitId: seededPestiferousTarget(card.effectSeed, unitIds, lostUnitIds.length),
     };
@@ -2431,7 +2577,10 @@ export function performAdlectio(run: RunDocument, offerId: string): RunDocument 
     cardType: offer.cardType,
     effectSeed: offer.effectSeed,
     effectTargetUnitId: effectTargetUnit?.id ?? null,
-    unitIds: addedUnits.map((unit) => unit.id),
+    unitSeats: shuffled(
+      addedUnits.map((unit) => unit.id),
+      mixSeed(offer.effectSeed, 'card-unit-seat-order'),
+    ),
     lostUnitIds: [],
     cacochymicUnitId,
     acquiredAfterBattleIndex: run.sectio.afterBattleIndex,
@@ -2491,14 +2640,15 @@ export function performExpunctio(run: RunDocument, cardId: string): RunDocument 
   const definition = runCardDefinition(card.coreId);
   if (!definition || ('removable' in definition && !definition.removable)) return run;
   const armyById = new Map(run.army.map((unit) => [unit.id, unit]));
-  const attachedUnits = card.unitIds.flatMap((unitId) => {
+  const attachedUnitIds = runCardUnitIds(card);
+  const attachedUnits = attachedUnitIds.flatMap((unitId) => {
     const unit = armyById.get(unitId);
     return unit ? [unit] : [];
   });
-  if (attachedUnits.length !== card.unitIds.length) return run;
+  if (attachedUnits.length !== attachedUnitIds.length) return run;
   const priceTenths = cardExpunctioPriceTenths(card, attachedUnits);
   if (priceTenths === null || run.goldTenths < priceTenths) return run;
-  const removedUnitIds = new Set(card.unitIds);
+  const removedUnitIds = new Set(attachedUnitIds);
   const cards = run.cards.filter((candidate) => candidate.id !== card.id);
   const army = synchronizePlaguedModifiers(
     run.army.filter((unit) => !removedUnitIds.has(unit.id)),
