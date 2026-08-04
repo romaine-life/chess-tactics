@@ -3,7 +3,13 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { RUN_CARD_BY_ID, RUN_CARD_DECK, RUN_CARD_TYPE_REFERENCE, createRunCardOffer } from '../run/model';
+import {
+  RUN_CARD_BY_ID,
+  RUN_CARD_DECK,
+  RUN_CARD_TYPE_REFERENCE,
+  RUN_STARTER_CARD_BY_ID,
+  createRunCardOffer,
+} from '../run/model';
 import {
   runCardFaceContent,
   runCardFrameSlot,
@@ -98,6 +104,14 @@ describe('a projected face says only what its card actually shows', () => {
     expect(specimen.cost).toBe(offer.cost);
     expect(runCardFrameSlot(specimen)).toBe(runCardFrameSlot(offer));
     expect(runCardFrameSlotForType(null)).not.toBe(runCardFrameSlotForType('hieratic'));
+  });
+
+  it('prints both starter cards on one royal-purple frame without giving Front Lines a property', () => {
+    const hisGrace = RUN_STARTER_CARD_BY_ID['his-grace'];
+    const frontLines = RUN_STARTER_CARD_BY_ID['front-lines'];
+    expect(runCardFrameSlot(hisGrace)).toBe(runCardFrameSlot(frontLines));
+    expect(runCardFrameSlot(hisGrace)).toBe(runCardFrameSlotForType('hieratic'));
+    expect(runCardFaceContent(frontLines).cardProperty).toBeUndefined();
   });
 
   it('names and illustrates every deck card from its composition alone', () => {

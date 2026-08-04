@@ -8,8 +8,8 @@
 
 import { useMemo, useState, type ReactElement } from 'react';
 import {
-  RUN_CARD_BY_ID,
-  type RunCoreCard,
+  runCardDefinition,
+  type RunCardDefinition,
   type RunDocument,
   type RunOwnedCard,
 } from '../run/model';
@@ -25,10 +25,12 @@ import { KitScroll } from './KitScroll';
 import { RunCard } from './RunCard';
 import { InnerChromeBox } from './shared/ChromeBox';
 import { RunCardCostCoin } from './shared/RunCardCostCoin';
+import { ChromeButton } from './shared/ChromeButton';
+import { chromeUnitClassNames } from './chromeUnitRegistry';
 
 interface HeldCard {
   owned: RunOwnedCard;
-  core: RunCoreCard;
+  core: RunCardDefinition;
 }
 
 /**
@@ -37,7 +39,7 @@ interface HeldCard {
  */
 export function heldCards(run: RunDocument): HeldCard[] {
   return run.cards.flatMap((owned) => {
-    const core = RUN_CARD_BY_ID[owned.coreId];
+    const core = runCardDefinition(owned.coreId);
     return core ? [{ owned, core }] : [];
   });
 }
@@ -53,10 +55,18 @@ export function HeldCardCodex({
 }): ReactElement {
   const [goldFilter, setGoldFilter] = useState<CardGoldFilter>('all');
   const [unitFilter, setUnitFilter] = useState<CardUnitFilter>('all');
+  const [thisCombatOnly, setThisCombatOnly] = useState(false);
   const all = useMemo(() => heldCards(run), [run]);
+  const thisCombatAvailable = Boolean(
+    run.deployment && (run.phase === 'deployment' || run.phase === 'battle'),
+  );
+  const dealt = useMemo(() => new Set(run.deployment?.dealtCardIds ?? []), [run.deployment?.dealtCardIds]);
   const visible = useMemo(
-    () => all.filter((held) => cardMatchesFilters(held.core, goldFilter, unitFilter)),
-    [all, goldFilter, unitFilter],
+    () => all.filter((held) => (
+      cardMatchesFilters(held.core, goldFilter, unitFilter)
+      && (!thisCombatOnly || !thisCombatAvailable || dealt.has(held.owned.id))
+    )),
+    [all, dealt, goldFilter, thisCombatAvailable, thisCombatOnly, unitFilter],
   );
   const groups = useMemo(() => cardsByGoldValue(visible, (held) => held.core), [visible]);
   return (
@@ -66,7 +76,7 @@ export function HeldCardCodex({
       framed={framed}
       title={title}
     >
-      <p>Every card admitted by Adlectio in this Run. An adlected card is retained; its units appear in the Martial Prosopography.</p>
+      <p>Every card held in this Run. Starter cards and cards admitted by Adlectio retain the units still attached to them.</p>
       <div className="enchiridion-card-gallery-layout">
         <CardGalleryFilters
           goldFilter={goldFilter}
@@ -76,6 +86,16 @@ export function HeldCardCodex({
           count={visible.length}
           testIdPrefix="strategikon-chartulary"
         />
+        {thisCombatAvailable ? (
+          <ChromeButton
+            unit="inner-text-button"
+            className={chromeUnitClassNames('inner-text-button', 'app-header-button', thisCombatOnly && 'active')}
+            aria-pressed={thisCombatOnly}
+            onClick={() => setThisCombatOnly((value) => !value)}
+          >
+            This Combat
+          </ChromeButton>
+        ) : null}
         <KitScroll className="enchiridion-card-gallery-scroll">
           <div
             className="enchiridion-card-gallery-browser"
@@ -107,7 +127,7 @@ export function HeldCardCodex({
                 <p>
                   {all.length
                     ? 'No held card has both of the selected properties.'
-                    : 'No Adlectio has occurred yet. Cards adlected in the Sectio remain here for the rest of the Run.'}
+                    : 'No cards are held.'}
                 </p>
               </InnerChromeBox>
             ) : null}

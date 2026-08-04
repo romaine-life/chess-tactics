@@ -30,12 +30,14 @@ import {
   LIPSANON_BY_ID,
   performAdlectio,
   buyPaidLipsanon,
+  canTargetLipsanon,
   canLeaveSectio,
   canUndoRunBattleMove,
   cashOutPawn,
   captureRunBattleUndo,
   closeBattle,
   hasLipsanon,
+  hasRunAbility,
   leaveAftermath,
   leaveSectio,
   lipsanonNeedsUnitTarget,
@@ -45,6 +47,9 @@ import {
   resetSectio,
   restartBattle,
   runBattleActivityId,
+  runAbilityDescription,
+  runAbilityDisplayName,
+  runCardDefinition,
   performAlienatio,
   setDeploymentChoices,
   sectioHasChanges,
@@ -56,14 +61,21 @@ import {
 } from '../run/model';
 import {
   advanceAutomaticDeployment,
-  advanceReadyDeployment,
+  chooseDeploymentMode,
+  currentDeploymentUnit,
+  deploymentInteractionStage,
   deploymentOptions,
   disciplinePlacementCells,
+  drawNextDeploymentUnit,
   gameForRunDeployment,
   levelWithRunDeployment,
   normalReservistCell,
+  placeAdlectedDeploymentUnit,
+  placeRevealedDeploymentUnit,
   resolveForcedDeploymentChoices,
   selectedDeploymentLayout,
+  switchDeploymentMode,
+  type RunDeploymentInteractionStage,
 } from '../run/deployment';
 import { useActiveRun } from '../run/store';
 import { SkirmishViewStoreProvider } from '../game/SkirmishViewStoreContext';
@@ -378,119 +390,182 @@ function deploymentSquareLabel(cellKey: string | undefined, rows: number): strin
   return `${String.fromCharCode(65 + Number(match[1]))}${rows - Number(match[2])}`;
 }
 
+function KlerosisOverlay({
+  run,
+  onChooseMode,
+}: {
+  run: RunDocument;
+  onChooseMode: (mode: 'deploy-all' | 'step-through') => void;
+}): ReactElement {
+  const dealt = new Set(run.deployment?.dealtCardIds ?? []);
+  const cards = run.cards.filter((card) => dealt.has(card.id));
+  const deploying = new Set(run.deployment?.deployingUnitIds ?? []);
+  return (
+    <div className="run-klerosis-overlay" data-testid="run-klerosis">
+      <InnerChromeBox className="run-klerosis-panel">
+        <div className="run-klerosis-heading">
+          <span className="skirmish-eyebrow">Klerosis</span>
+          <h2>Your deployment deal</h2>
+          <p>These cards supply this combat. Their units enter the pool while space allows.</p>
+        </div>
+        <div className="run-klerosis-cards" role="list" aria-label="Cards dealt for this combat">
+          {cards.map((owned) => {
+            const card = runCardDefinition(owned.coreId);
+            return card ? (
+              <div role="listitem" className="run-klerosis-card" key={owned.id}>
+                <RunCard card={card} mode="reference" cardType={owned.cardType} adlected />
+              </div>
+            ) : null;
+          })}
+        </div>
+        <div className="run-klerosis-rosters">
+          <div>
+            <span className="skirmish-eyebrow">Deploying</span>
+            <ul>
+              {run.army.filter((unit) => deploying.has(unit.id)).map((unit) => (
+                <li key={unit.id}>{runUnitRosterLabel(unit)}</li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <span className="skirmish-eyebrow">Unavailable</span>
+            <ul>
+              {run.army.filter((unit) => !deploying.has(unit.id)).map((unit) => (
+                <li key={unit.id}>{runUnitRosterLabel(unit)}</li>
+              ))}
+              {run.army.every((unit) => deploying.has(unit.id)) ? <li>None</li> : null}
+            </ul>
+          </div>
+        </div>
+        <div className="run-klerosis-actions">
+          <ChromeButton
+            unit="inner-text-button"
+            className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+            onClick={() => onChooseMode('deploy-all')}
+          >
+            Deploy all
+          </ChromeButton>
+          <ChromeButton
+            unit="inner-text-button"
+            className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+            onClick={() => onChooseMode('step-through')}
+          >
+            Step through
+          </ChromeButton>
+        </div>
+      </InnerChromeBox>
+    </div>
+  );
+}
+
 function DeploymentControls({
   run,
   view,
-  options,
-  activeDisciplineUnitId,
+  stage,
+  activeUnit,
   onNavigate,
-  onSelectDisciplineUnit,
-  onToggleBlocked,
-  onSelectLayout,
+  onSwitchMode,
+  onDraw,
+  onPlace,
 }: {
   run: RunDocument;
   view: RunScreenView;
-  options: ReturnType<typeof deploymentOptions>;
-  activeDisciplineUnitId: string | null;
+  stage: RunDeploymentInteractionStage;
+  activeUnit: ReturnType<typeof currentDeploymentUnit>;
   onNavigate: (view: RunScreenView) => void;
-  onSelectDisciplineUnit: (unitId: string) => void;
-  onToggleBlocked: (unitId: string) => void;
-  onSelectLayout: (layout: 0 | 1) => void;
+  onSwitchMode: (mode: 'deploy-all' | 'step-through') => void;
+  onDraw: () => void;
+  onPlace: () => void;
 }): ReactElement {
   const { abandonDialog, abandoning, requestAbandon } = useRunAbandon(run);
-  const chosenBlocked = run.deployment?.chosenBlockedUnitIds ?? [];
-  const placedDisciplineCount = options.adlectedUnitIds.filter(
-    (unitId) => Boolean(run.deployment?.manualPlacements[unitId]),
-  ).length;
-  const disciplinePending = placedDisciplineCount < options.adlectedUnitIds.length;
-  const layout = selectedDeploymentLayout(run, options);
+  const mode = run.deployment?.mode;
+  const abilities = activeUnit
+    ? (['primogeniture', 'adlected', 'eutactic', 'agminate'] as const).filter((ability) => (
+        ability === 'adlected'
+          ? activeUnit.abilities.includes('adlected') || run.deployment?.temporaryAdlectedUnitId === activeUnit.id
+          : hasRunAbility(run, activeUnit, ability)
+      ))
+    : [];
   return (
     <>
       {abandonDialog}
       <section className="run-meta-controls run-deployment-controls" aria-label="Deployment controls">
-        <div className="skirmish-score-panel run-deployment-summary" aria-label="Deployment summary">
+        <div className="skirmish-score-panel run-deployment-summary">
           <div>
-            <span className="skirmish-eyebrow">Deployment</span>
-            <strong>{disciplinePending ? `${placedDisciplineCount} fixed` : `${Object.keys(layout.placements).length} ready`}</strong>
+            <span className="skirmish-eyebrow">Phase</span>
+            <strong>{stage === 'klerosis' ? 'Klerosis' : stage === 'primogeniture' ? 'Primogeniture' : 'Farrago'}</strong>
           </div>
           <div>
-            <span className="skirmish-eyebrow">Reserve</span>
-            <strong>{layout.blockedUnitIds.length}</strong>
+            <span className="skirmish-eyebrow">Placed</span>
+            <strong>{run.deployment?.placementCursor ?? 0}/{run.deployment?.queueUnitIds.length ?? 0}</strong>
           </div>
         </div>
 
-        {options.hasBlockedChoice ? (
+        {mode ? (
           <div className="skirmish-view-group run-deployment-control">
-            <span className="skirmish-eyebrow">Muster Roll</span>
-            <p>Choose {options.blockedChoiceCount} unit{options.blockedChoiceCount === 1 ? '' : 's'} to hold in reserve.</p>
-            <div className="run-choice-list">
-              {run.army.filter((unit) => unit.type !== 'king').map((unit) => {
-                const selected = chosenBlocked.includes(unit.id);
-                return (
-                  <ChromeButton unit="inner-list-row"
-                    className={chromeUnitClassNames('inner-list-row', 'run-choice-option', selected && 'active')}
-                    aria-pressed={selected}
-                    disabled={!selected && chosenBlocked.length >= options.blockedChoiceCount}
-                    onClick={() => onToggleBlocked(unit.id)}
-                    key={unit.id}
-                  >
-                    <span>{runUnitRosterLabel(unit)}</span>
-                    <small>{selected ? 'In reserve' : 'Deploying'}</small>
-                  </ChromeButton>
-                );
-              })}
-            </div>
-          </div>
-        ) : options.overflowCount > 0 ? (
-          <p className="skirmish-grid-hint">{options.overflowCount} excess unit{options.overflowCount === 1 ? '' : 's'} will remain in reserve.</p>
-        ) : null}
-
-        {options.adlectedUnitIds.length > 0 ? (
-          <div className="skirmish-view-group run-deployment-control">
-            <span className="skirmish-eyebrow">{ADLECTED_DISPLAY_NAME} · {placedDisciplineCount}/{options.adlectedUnitIds.length}</span>
-            <p>Select an {ADLECTED_DISPLAY_NAME} unit, then choose one of its highlighted battlefield squares.</p>
-            <div className="run-choice-list">
-              {options.adlectedUnitIds.map((unitId) => {
-                const unit = run.army.find((candidate) => candidate.id === unitId);
-                const square = deploymentSquareLabel(run.deployment?.manualPlacements[unitId], run.war.battles[run.battleIndex].level.board.rows);
-                return (
-                  <ChromeButton unit="inner-list-row"
-                    className={chromeUnitClassNames('inner-list-row', 'run-choice-option', activeDisciplineUnitId === unitId && 'active')}
-                    aria-pressed={activeDisciplineUnitId === unitId}
-                    onClick={() => onSelectDisciplineUnit(unitId)}
-                    key={unitId}
-                  >
-                    <span>{unit ? runUnitRosterLabel(unit) : unitId}</span>
-                    <small>{square ? `Placed · ${square}` : 'Choose on battlefield'}</small>
-                  </ChromeButton>
-                );
-              })}
-            </div>
-          </div>
-        ) : null}
-
-        {hasLipsanon(run, 'surveyors-compass') ? (
-          <div className="skirmish-view-group run-deployment-control">
-            <span className="skirmish-eyebrow">Surveyor&apos;s Compass</span>
-            <p>Preview and choose the remaining formation.</p>
+            <span className="skirmish-eyebrow">Pace</span>
             <div className="run-inline-actions">
-              {[0, 1].map((index) => (
-                <ChromeButton unit="inner-text-button"
-                  key={index}
-                  className={chromeUnitClassNames('inner-text-button', 'app-header-button', run.deployment?.layoutChoice === index && 'active')}
-                  aria-pressed={run.deployment?.layoutChoice === index}
-                  onClick={() => onSelectLayout(index as 0 | 1)}
-                >
-                  Formation {index + 1}
-                </ChromeButton>
-              ))}
+              <ChromeButton
+                unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'app-header-button', mode === 'deploy-all' && 'active')}
+                aria-pressed={mode === 'deploy-all'}
+                onClick={() => onSwitchMode('deploy-all')}
+              >
+                Deploy all
+              </ChromeButton>
+              <ChromeButton
+                unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'app-header-button', mode === 'step-through' && 'active')}
+                aria-pressed={mode === 'step-through'}
+                onClick={() => onSwitchMode('step-through')}
+              >
+                Step through
+              </ChromeButton>
             </div>
+          </div>
+        ) : null}
+
+        {activeUnit && stage !== 'draw' && stage !== 'klerosis' ? (
+          <div className="skirmish-view-group run-deployment-control" data-testid="deployment-active-unit">
+            <span className="skirmish-eyebrow">{stage === 'primogeniture' ? 'His Grace' : 'Drawn'}</span>
+            <strong>{runUnitRosterLabel(activeUnit)}</strong>
+            {abilities.map((ability) => (
+              <p key={ability}>
+                <b>{runAbilityDisplayName(ability)}</b> · {runAbilityDescription(ability, activeUnit.type)}
+              </p>
+            ))}
+            {stage === 'adlected' ? (
+              <p>Select one of the highlighted squares.</p>
+            ) : (
+              <ChromeButton
+                unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+                onClick={onPlace}
+              >
+                Place {activeUnit.type === 'king' ? 'His Grace' : runUnitRosterLabel(activeUnit)}
+              </ChromeButton>
+            )}
+          </div>
+        ) : null}
+
+        {stage === 'draw' ? (
+          <div className="skirmish-view-group run-deployment-control">
+            <span className="skirmish-eyebrow">Farrago</span>
+            <p>The next unit is still hidden in the seeded order.</p>
+            <ChromeButton
+              unit="inner-text-button"
+              className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+              onClick={onDraw}
+            >
+              Draw next
+            </ChromeButton>
           </div>
         ) : null}
 
         <div className="skirmish-view-group">
           <span className="skirmish-eyebrow">Run view</span>
-          <ChromeButton unit="inner-text-button"
+          <ChromeButton
+            unit="inner-text-button"
             data-testid="run-view-primary"
             className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'primary' && 'active')}
             aria-pressed={view === 'primary'}
@@ -501,7 +576,8 @@ function DeploymentControls({
         </div>
         <div className="skirmish-view-group run-meta-abandon">
           <span className="skirmish-eyebrow">Run</span>
-          <ChromeButton unit="inner-text-button"
+          <ChromeButton
+            unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'danger')}
             data-testid="abandon-run"
             disabled={abandoning}
@@ -533,100 +609,33 @@ function useRunDeploymentPresentation({
     [level, run],
   );
   const options = useMemo(() => deploymentOptions(prepared, level), [level, prepared]);
-  const layout = selectedDeploymentLayout(prepared, options);
-  const [selectedDisciplineUnitId, setSelectedDisciplineUnitId] = useState<string | null>(null);
-  const [hoveredCellKey, setHoveredCellKey] = useState<string | null>(null);
-  const firstUnplacedDisciplineUnitId = options.adlectedUnitIds.find(
-    (unitId) => !prepared.deployment?.manualPlacements[unitId],
-  ) ?? null;
-  const activeDisciplineUnitId = selectedDisciplineUnitId && options.adlectedUnitIds.includes(selectedDisciplineUnitId)
-    ? selectedDisciplineUnitId
-    : firstUnplacedDisciplineUnitId ?? options.adlectedUnitIds[0] ?? null;
-  const activeDisciplineUnit = prepared.army.find((unit) => unit.id === activeDisciplineUnitId) ?? null;
+  const stage = deploymentInteractionStage(prepared, options);
+  const activeUnit = currentDeploymentUnit(prepared);
+  const activeAdlected = stage === 'adlected' ? activeUnit : null;
   const legalCells = useMemo(
-    () => activeDisciplineUnitId ? disciplinePlacementCells(prepared, options, activeDisciplineUnitId) : [],
-    [activeDisciplineUnitId, options, prepared],
+    () => activeAdlected ? disciplinePlacementCells(prepared, options, activeAdlected.id) : [],
+    [activeAdlected, options, prepared],
   );
   const legalCellKeys = useMemo(() => new Set(legalCells.map((cell) => `${cell.x},${cell.y}`)), [legalCells]);
-  const activeCellKey = activeDisciplineUnitId
-    ? prepared.deployment?.manualPlacements[activeDisciplineUnitId] ?? null
-    : null;
-  const hoveredPlacementCell = hoveredCellKey && hoveredCellKey !== activeCellKey
+  const [hoveredCellKey, setHoveredCellKey] = useState<string | null>(null);
+  const hoveredPlacementCell = hoveredCellKey
     ? legalCells.find((cell) => `${cell.x},${cell.y}` === hoveredCellKey) ?? null
     : null;
-  const hoveredPlacementSeat = hoveredPlacementCell
-    ? boardLabCellPosition(hoveredPlacementCell)
-    : null;
+  const hoveredPlacementSeat = hoveredPlacementCell ? boardLabCellPosition(hoveredPlacementCell) : null;
+  const layout = selectedDeploymentLayout(prepared, options);
   const deploymentGame = useMemo(
-    () => gameForRunDeployment(prepared, level, layout),
+    () => gameForRunDeployment(prepared, level, layout, true),
     [layout, level, prepared],
   );
-  const deploymentSeed = prepared.deployment?.seed ?? prepared.seed;
   const deploymentSurfaceState = useMemo<SkirmishBoardSurfaceState>(() => ({
     game: deploymentGame,
-    seed: deploymentSeed,
+    seed: prepared.deployment?.seed ?? prepared.seed,
     viewKey: runBattleActivityId(prepared.id, prepared.battleIndex),
-  }), [deploymentGame, deploymentSeed, prepared.battleIndex, prepared.id]);
-  const pendingPlacementArrivalUnitIdRef = useRef<string | null>(null);
-  const pendingPlacementArrivalObservedRef = useRef(false);
-
-  const advanceIfReady = useCallback(() => {
-    const latest = useActiveRun.getState().run;
-    if (!latest || latest.id !== run.id || latest.phase !== 'deployment') return;
-    const latestLevel = latest.war.battles[latest.battleIndex]?.level;
-    if (!latestLevel) return;
-    const staged = latest.deployment ? latest : prepareDeployment(latest);
-    const advanced = advanceReadyDeployment(staged, latestLevel);
-    if (advanced !== latest) replace(advanced);
-  }, [replace, run.id]);
+  }), [deploymentGame, prepared.battleIndex, prepared.deployment?.seed, prepared.id, prepared.seed]);
 
   useEffect(() => {
-    // Non-placement choices still commit as soon as they are ready. A placement click owns a
-    // compositor-reported arrival cycle, so its pending id keeps this generic path from folding
-    // the final manual drop into the automatic Battle wave.
-    if (!pendingPlacementArrivalUnitIdRef.current) advanceIfReady();
-  }, [advanceIfReady, run]);
-
-  const handleArrivingUnitIdsChange = useCallback((unitIds: readonly string[]) => {
-    const pendingUnitId = pendingPlacementArrivalUnitIdRef.current;
-    if (!pendingUnitId) return;
-    if (unitIds.includes(pendingUnitId)) {
-      pendingPlacementArrivalObservedRef.current = true;
-      return;
-    }
-    if (!pendingPlacementArrivalObservedRef.current || unitIds.length > 0) return;
-    pendingPlacementArrivalUnitIdRef.current = null;
-    pendingPlacementArrivalObservedRef.current = false;
-    advanceIfReady();
-  }, [advanceIfReady]);
-
-  useEffect(() => {
-    setHoveredCellKey(null);
-  }, [activeDisciplineUnitId]);
-
-  const toggleBlocked = (unitId: string): void => {
-    const chosenBlocked = prepared.deployment?.chosenBlockedUnitIds ?? [];
-    const next = chosenBlocked.includes(unitId)
-      ? chosenBlocked.filter((id) => id !== unitId)
-      : chosenBlocked.length < options.blockedChoiceCount ? [...chosenBlocked, unitId] : chosenBlocked;
-    replace(setDeploymentChoices(prepared, { chosenBlockedUnitIds: next }));
-  };
-
-  const placeDisciplineUnit = (cellKey: string): void => {
-    if (!activeDisciplineUnitId || !legalCellKeys.has(cellKey)) return;
-    const manualPlacements = { ...(prepared.deployment?.manualPlacements ?? {}) };
-    manualPlacements[activeDisciplineUnitId] = cellKey;
-    // Persist and paint the exact placement while Deployment still owns the board. Promotion
-    // waits for this unit's compositor-owned arrival to settle, then introduces the automatic
-    // formation as its own subsequent wave on the same mounted battlefield.
-    pendingPlacementArrivalUnitIdRef.current = activeDisciplineUnitId;
-    pendingPlacementArrivalObservedRef.current = false;
-    replace(setDeploymentChoices(prepared, { manualPlacements }));
-    const nextUnplaced = options.adlectedUnitIds.find(
-      (unitId) => unitId !== activeDisciplineUnitId && !manualPlacements[unitId],
-    );
-    if (nextUnplaced) setSelectedDisciplineUnitId(nextUnplaced);
-  };
+    if (prepared !== run && prepared.phase === 'deployment') replace(prepared);
+  }, [prepared, replace, run]);
 
   if (run.phase !== 'deployment') return null;
   return {
@@ -636,61 +645,57 @@ function useRunDeploymentPresentation({
     screenClassName: `run-screen run-deployment-screen${visibleLipsanonCount(prepared) ? ' has-lipsana' : ''}`,
     boardClassName: 'run-deployment-board',
     boardAriaLabel: `${level.name} deployment battlefield`,
-    onArrivingUnitIdsChange: handleArrivingUnitIdsChange,
+    onArrivingUnitIdsChange: () => undefined,
     controlsContent: (
       <DeploymentControls
         run={prepared}
         view={view}
-        options={options}
-        activeDisciplineUnitId={activeDisciplineUnitId}
+        stage={stage}
+        activeUnit={activeUnit}
         onNavigate={onNavigate}
-        onSelectDisciplineUnit={setSelectedDisciplineUnitId}
-        onToggleBlocked={toggleBlocked}
-        onSelectLayout={(layoutChoice) => replace(setDeploymentChoices(prepared, { layoutChoice }))}
+        onSwitchMode={(mode) => replace(switchDeploymentMode(prepared, level, mode))}
+        onDraw={() => replace(drawNextDeploymentUnit(prepared))}
+        onPlace={() => replace(placeRevealedDeploymentUnit(prepared, level))}
       />
     ),
     renderCellOverlay: ({ cell, visualFootprintStyle }) => {
       const cellKey = `${cell.x},${cell.y}`;
-      if (!activeDisciplineUnit) return null;
-      const isLegalPlacement = legalCellKeys.has(cellKey);
-      const squareLabel = deploymentSquareLabel(cellKey, level.board.rows);
+      const legal = legalCellKeys.has(cellKey);
+      if (!activeAdlected) return null;
+      const label = deploymentSquareLabel(cellKey, level.board.rows);
       return (
         <button
           type="button"
-          className={`skirmish-board-cell-hit run-deployment-cell ${isLegalPlacement ? 'is-move' : 'is-deployment-blocked'}${!isLegalPlacement && hoveredCellKey === cellKey ? ' is-threat' : ''}${activeCellKey === cellKey ? ' is-selected' : ''}`}
-          aria-label={isLegalPlacement
-            ? `Place ${runUnitRosterLabel(activeDisciplineUnit)} on ${squareLabel}`
-            : `${squareLabel} is unavailable for ${runUnitRosterLabel(activeDisciplineUnit)}`}
-          aria-pressed={isLegalPlacement ? activeCellKey === cellKey : undefined}
-          aria-disabled={!isLegalPlacement}
-          data-cx={cell.x}
-          data-cy={cell.y}
-          data-testid={`${isLegalPlacement ? 'deployment-cell' : 'deployment-blocked-cell'}-${cell.x}-${cell.y}`}
+          className={`skirmish-board-cell-hit run-deployment-cell ${legal ? 'is-move' : 'is-deployment-blocked'}`}
+          aria-label={legal ? `Place ${runUnitRosterLabel(activeAdlected)} on ${label}` : `${label} is unavailable`}
+          aria-disabled={!legal}
           style={visualFootprintStyle}
-          onPointerDown={(event) => { if (event.button === 0) event.stopPropagation(); }}
           onPointerEnter={() => setHoveredCellKey(cellKey)}
           onPointerLeave={() => setHoveredCellKey((current) => current === cellKey ? null : current)}
-          onFocus={() => setHoveredCellKey(cellKey)}
-          onBlur={() => setHoveredCellKey((current) => current === cellKey ? null : current)}
-          onClick={isLegalPlacement ? () => placeDisciplineUnit(cellKey) : undefined}
+          onClick={legal ? () => replace(placeAdlectedDeploymentUnit(prepared, level, cell)) : undefined}
         >
           <PredrawnMoveHighlightPaint />
         </button>
       );
     },
-    boardOverlay: activeDisciplineUnit && hoveredPlacementCell && hoveredPlacementSeat ? (
+    boardOverlay: stage === 'klerosis' ? (
+      <KlerosisOverlay
+        run={prepared}
+        onChooseMode={(mode) => replace(chooseDeploymentMode(prepared, level, mode))}
+      />
+    ) : activeAdlected && hoveredPlacementCell && hoveredPlacementSeat ? (
       <span
-        className={`board-unit-seat is-${activeDisciplineUnit.type} run-deployment-placement-ghost`}
+        className={`board-unit-seat is-${activeAdlected.type} run-deployment-placement-ghost`}
+        data-testid="deployment-placement-ghost"
         style={{
           left: hoveredPlacementSeat.left,
           top: hoveredPlacementSeat.top,
           zIndex: objectBaseZIndex(hoveredPlacementCell),
         }}
-        data-testid="deployment-placement-ghost"
         aria-hidden="true"
       >
         <img
-          src={pieceSpritePath(activeDisciplineUnit.type, paletteForSide('player'), defaultFacingForSide('player'))}
+          src={pieceSpritePath(activeAdlected.type, paletteForSide('player'), defaultFacingForSide('player'))}
           alt=""
           draggable={false}
         />
@@ -727,7 +732,9 @@ function LipsanonOffer({
           value={target}
           options={[
             { value: '', label: 'Choose a unit…' },
-            ...run.army.map((unit) => ({ value: unit.id, label: runUnitRosterLabel(unit) })),
+            ...run.army
+              .filter((unit) => canTargetLipsanon(run, lipsanonId, unit.id))
+              .map((unit) => ({ value: unit.id, label: runUnitRosterLabel(unit) })),
           ]}
           onChange={setTarget}
           ariaLabel="Adlected target unit"

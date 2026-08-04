@@ -12,6 +12,7 @@ partially_superseded_by:
   - "[ADR-0265](0265-run-cards-keep-core-identities-while-units-carry-modifiers.md)"
   - "[ADR-0267](0267-pestiferous-cards-lose-units-and-persist-when-empty.md)"
   - "[ADR-0274](0274-lipsana-grant-unit-owned-deployment-abilities.md)"
+  - "[ADR-0395](0395-eutactic-bestows-only-front-or-back-row-arrangement.md)'s removal of the Rook outer-square preference"
 ---
 
 # ADR-0193: Runs are persistent Wars around unchanged chess Battles

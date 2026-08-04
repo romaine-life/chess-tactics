@@ -4,8 +4,10 @@ import { runCardArtSlot, runCardName } from '../run/cardNames';
 import {
   CACOCHYMIC_DISPLAY_NAME,
   cardContentsLabel,
+  EUTACTIC_DISPLAY_NAME,
   PIECE_LABEL,
   type RunCardOffer,
+  type RunCardDefinition,
   type RunCardType,
   type RunCoreCard,
 } from '../run/model';
@@ -32,14 +34,14 @@ export function concinnousTargetLabel(card: RunCardOffer): string {
  * public on the face too: a hidden acquisition target is silent in both channels rather
  * than being announced by a sentence the printed card no longer carries (ADR-0339).
  */
-function publicTargetLabel(card: RunCoreCard | RunCardOffer, adlected: boolean): string {
+function publicTargetLabel(card: RunCardDefinition | RunCardOffer, adlected: boolean): string {
   if (!isRunCardOffer(card)) return '';
   if (card.cardType === 'pestiferous') {
     const target = card.cacochymicPieceIndex === null ? null : card.pieces[card.cacochymicPieceIndex];
     return target ? ` ${CACOCHYMIC_DISPLAY_NAME} ${target}.` : '';
   }
   if (card.cardType === 'concinnous' && adlected) {
-    return ` Positioned: ${concinnousTargetLabel(card)}.`;
+    return ` ${EUTACTIC_DISPLAY_NAME}: ${concinnousTargetLabel(card)}.`;
   }
   return '';
 }
@@ -58,7 +60,7 @@ export function RunCard({
   disabled = false,
   onSelect,
 }: {
-  card: RunCoreCard | RunCardOffer;
+  card: RunCardDefinition | RunCardOffer;
   mode: 'sectio' | 'reference';
   /**
    * The property of a card that is no longer an offer — a card the Run HOLDS. An owned

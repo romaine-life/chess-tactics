@@ -4,6 +4,7 @@ import {
   LIPSANON_BY_ID,
   RUN_LIPSANA,
   lipsanonNeedsUnitTarget,
+  RUN_LIPSANON_OFFER_POOL,
   type LipsanonDefinition,
   type LipsanonId,
 } from '../core/runLipsana';
@@ -15,12 +16,13 @@ export {
   LIPSANON_BY_ID,
   RUN_LIPSANA,
   lipsanonNeedsUnitTarget,
+  RUN_LIPSANON_OFFER_POOL,
   type LipsanonDefinition,
   type LipsanonId,
 };
 
 /** The schema version of one persisted in-progress Run. Only this exact save shape is read. */
-export const CURRENT_RUN_SAVE_VERSION = 18;
+export const CURRENT_RUN_SAVE_VERSION = 19;
 export type RunSaveVersion = typeof CURRENT_RUN_SAVE_VERSION;
 
 export class UnsupportedRunSaveError extends Error {
@@ -32,6 +34,7 @@ export class UnsupportedRunSaveError extends Error {
 
 const RUN_SAVE_VERSION_FIELD_RENAME_SOURCE = 16;
 const RUN_SAVE_VERSION_EXCHANGE_VOCABULARY_SOURCE = 17;
+const RUN_SAVE_VERSION_KLEROSIS_SOURCE = 18;
 export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
@@ -43,9 +46,8 @@ export const LEGATINE_ADLECTED_OFFER_DENOMINATOR = 8;
 export const HIERATIC_AGMINATE_OFFER_DENOMINATOR = 8;
 export const EUTACTIC_COST = 2;
 export const ADLECTED_COST = 3;
-/** Agminate seats a unit in its role's formation instead of a rank. Its Pawn,
- * King, Rook and Bishop behaviors form a role-aware formation, so it carries
- * Adlected's price rather than Eutactic's. */
+/** Agminate applies one piece-specific station rule during automatic deployment.
+ * Its six roles and relational formation rules justify the same premium as Adlected. */
 export const AGMINATE_COST = 3;
 
 export type AtaraxiaTier = 0 | 1;
@@ -78,7 +80,7 @@ export const ATARAXIA_BY_TIER: Readonly<Record<AtaraxiaTier, Readonly<{
     numeral: 'I',
     label: 'Ataraxia I',
     title: 'The Great Mortality',
-    effect: `About one in eight Sectio cards is Pestiferous. Its marked ${CACOCHYMIC_DISPLAY_NAME} unit is lost after each victorious Battle, then another is marked.`,
+    effect: `About one in eight Sectio cards is Pestiferous. Its marked ${CACOCHYMIC_DISPLAY_NAME} unit dies when combat ends; when it does, the card marks another remaining unit.`,
   }),
 });
 
@@ -93,11 +95,12 @@ export const ATARAXIA_TIERS: readonly AtaraxiaTier[] = Object.freeze(
 
 export type AdlectablePieceType = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen';
 export type RunArmyPieceType = AdlectablePieceType | 'king';
-export type RunAbility = 'adlected' | 'eutactic' | 'agminate';
+export type RunAbility = 'adlected' | 'eutactic' | 'agminate' | 'primogeniture';
 
 export const AGMINATE_DISPLAY_NAME = 'Agminate';
 export const EUTACTIC_DISPLAY_NAME = 'Eutactic';
 export const ADLECTED_DISPLAY_NAME = 'Adlected';
+export const PRIMOGENITURE_DISPLAY_NAME = 'Primogeniture';
 
 /**
  * Every unit state's player-facing name (ADR-0374). Since the vocabulary cutover a stored
@@ -109,6 +112,7 @@ const RUN_ABILITY_DISPLAY_NAME: Readonly<Record<RunAbility, string>> = Object.fr
   adlected: ADLECTED_DISPLAY_NAME,
   eutactic: EUTACTIC_DISPLAY_NAME,
   agminate: AGMINATE_DISPLAY_NAME,
+  primogeniture: PRIMOGENITURE_DISPLAY_NAME,
 });
 
 export function runAbilityDisplayName(ability: RunAbility): string {
@@ -122,19 +126,21 @@ export function runAbilityDisplayName(ability: RunAbility): string {
  * per piece because their deployment rule genuinely differs by piece.
  */
 export function runAbilityDescription(ability: RunAbility, unit: RunArmyPieceType): string {
+  if (ability === 'primogeniture') return 'Is placed before every other unit.';
   if (ability === 'adlected') {
     return runAbilityGeneralDescription('adlected');
   }
   if (ability === 'eutactic') {
     if (unit === 'pawn') return 'Prefers the front row during automatic deployment.';
-    if (unit === 'rook') return 'Prefers an outer back-row square during automatic deployment.';
-    if (unit === 'bishop' || unit === 'king') return 'Prefers the back row during automatic deployment.';
-    return runAbilityGeneralDescription('eutactic');
+    if (unit === 'knight' || unit === 'bishop') return 'Prefers the row immediately behind the front during automatic deployment.';
+    return 'Prefers the back row during automatic deployment.';
   }
-  if (unit === 'pawn') return 'Prefers a square alongside another Pawn when possible.';
+  if (unit === 'pawn') return 'Prefers a square alongside another Pawn or in an open file.';
+  if (unit === 'queen') return 'Gravitates toward the middle of the board.';
+  if (unit === 'knight') return 'Prefers squares one step in from the board edge.';
   if (unit === 'king') return 'Prefers a board-edge square in the player placement zone.';
-  if (unit === 'rook') return 'Prefers the established King-flank and corner formation.';
-  if (unit === 'bishop') return 'Prefers a square color opposite another Bishop when possible.';
+  if (unit === 'rook') return 'Prefers a back-row corner, except the first Rook flanks an Agminate King when possible.';
+  if (unit === 'bishop') return 'Prefers the nearest square of opposite color from another Bishop.';
   return runAbilityGeneralDescription('agminate');
 }
 
@@ -144,14 +150,15 @@ export function runAbilityDescription(ability: RunAbility, unit: RunArmyPieceTyp
  * to this one, so the glossary and the per-unit tip cannot drift apart.
  */
 export function runAbilityGeneralDescription(ability: RunAbility): string {
+  if (ability === 'primogeniture') return 'Is placed before every other unit.';
   if (ability === 'adlected') {
-    return 'May be deliberately placed in the player zone before random deployment.';
+    return 'The player chooses its square when its deployment turn arrives.';
   }
-  if (ability === 'eutactic') return 'Prefers its piece-specific region during automatic deployment.';
+  if (ability === 'eutactic') return "Prefers its piece type's formation row during automatic deployment.";
   return 'Prefers its piece-specific station during automatic deployment.';
 }
 
-export const CACOCHYMIC_DESCRIPTION = 'Will be permanently lost after the next victorious Battle.';
+export const CACOCHYMIC_DESCRIPTION = 'Dies when combat ends.';
 
 /**
  * The four causal card properties and the unit state each one bestows (ADR-0339). Card
@@ -166,7 +173,7 @@ export const RUN_CARD_TYPE_REFERENCE: Readonly<Record<RunCardType, Readonly<{
   pestiferous: Object.freeze({
     name: 'Pestiferous',
     grants: 'cacochymic',
-    effect: `Marks one contained unit ${CACOCHYMIC_DISPLAY_NAME}; each victorious Battle loses it and marks another.`,
+    effect: `Marks one contained unit ${CACOCHYMIC_DISPLAY_NAME}; whenever that unit dies, the card marks another remaining unit.`,
   }),
   concinnous: Object.freeze({
     name: 'Concinnous',
@@ -245,6 +252,20 @@ export interface RunCoreCard {
   value: number;
 }
 
+export type RunStarterCardId = 'his-grace' | 'front-lines';
+
+/** Starter-only Chartulary cards. They are never offered by Adlectio, but otherwise
+ * participate in Klerosis exactly like every card the player holds. */
+export interface RunStarterCard {
+  id: RunStarterCardId;
+  pieces: RunArmyPieceType[];
+  value: number;
+  name: string;
+  flavor: string;
+  property: 'praecipuus' | null;
+  removable: boolean;
+}
+
 export interface RunCardOffer extends RunCoreCard {
   offerId: string;
   cost: number;
@@ -315,10 +336,22 @@ export type RunPhase = 'aftermath' | 'bona-vacantia' | 'deployment' | 'battle' |
 export interface RunDeploymentState {
   battleIndex: number;
   seed: number;
+  /** Cards revealed together by Klerosis for this combat. */
+  dealtCardIds: string[];
+  /** One hidden seeded order owns capacity admission and later Farrago placement. */
+  queueUnitIds: string[];
+  deployingUnitIds: string[];
+  unavailableUnitIds: string[];
+  capacityResolved: boolean;
+  /** Exact committed formation, preserved across reload and Battle retry. */
+  placements: Record<string, string>;
+  placementCursor: number;
+  revealedUnitId?: string;
+  mode?: 'deploy-all' | 'step-through';
+  stage: 'klerosis' | 'primogeniture' | 'farrago';
+  /** Compatibility aliases used by the Battle runtime while reservists are retired. */
   blockedUnitIds: string[];
-  chosenBlockedUnitIds?: string[];
   manualPlacements: Record<string, string>;
-  layoutChoice?: 0 | 1;
   temporaryAdlectedUnitId?: string;
 }
 
@@ -508,6 +541,37 @@ export const RUN_CARD_DECK: readonly RunCoreCard[] = Object.freeze(allRunCards()
 export const RUN_CARD_BY_ID: Readonly<Record<string, RunCoreCard>> = Object.freeze(
   Object.fromEntries(RUN_CARD_DECK.map((card) => [card.id, card])),
 );
+
+export const RUN_STARTER_CARDS: readonly RunStarterCard[] = Object.freeze([
+  Object.freeze<RunStarterCard>({
+    id: 'his-grace',
+    pieces: ['king'],
+    value: 0,
+    name: 'His Grace',
+    flavor: 'None before the King.',
+    property: 'praecipuus',
+    removable: false,
+  }),
+  Object.freeze<RunStarterCard>({
+    id: 'front-lines',
+    pieces: ['pawn', 'pawn'],
+    value: 2,
+    name: 'Front Lines',
+    flavor: 'The first order was enough.',
+    property: null,
+    removable: true,
+  }),
+]);
+
+export const RUN_STARTER_CARD_BY_ID: Readonly<Record<RunStarterCardId, RunStarterCard>> = Object.freeze(
+  Object.fromEntries(RUN_STARTER_CARDS.map((card) => [card.id, card])) as Record<RunStarterCardId, RunStarterCard>,
+);
+
+export type RunCardDefinition = RunCoreCard | RunStarterCard;
+
+export function runCardDefinition(coreId: string): RunCardDefinition | undefined {
+  return RUN_CARD_BY_ID[coreId] ?? RUN_STARTER_CARD_BY_ID[coreId as RunStarterCardId];
+}
 
 export function mixSeed(seed: number, label: string, index = 0): number {
   let value = (seed ^ Math.imul(index + 1, 0x9e3779b1)) >>> 0;
@@ -759,7 +823,7 @@ function initialArmy(seed: number): RunArmyUnit[] {
       type: 'king',
       number: 1,
       inspectionSeed: mixSeed(seed, 'run-unit-inspection:run-king'),
-      abilities: [],
+      abilities: ['primogeniture'],
       modifiers: [],
       source: 'king',
     },
@@ -786,6 +850,33 @@ function initialArmy(seed: number): RunArmyUnit[] {
   ];
 }
 
+function initialCards(): RunOwnedCard[] {
+  return [
+    {
+      id: 'run-card-his-grace',
+      coreId: 'his-grace',
+      cardType: null,
+      effectSeed: 0,
+      effectTargetUnitId: null,
+      unitIds: ['run-king'],
+      lostUnitIds: [],
+      cacochymicUnitId: null,
+      acquiredAfterBattleIndex: 0,
+    },
+    {
+      id: 'run-card-front-lines',
+      coreId: 'front-lines',
+      cardType: null,
+      effectSeed: 0,
+      effectTargetUnitId: null,
+      unitIds: ['run-pawn-a', 'run-pawn-b'],
+      lostUnitIds: [],
+      cacochymicUnitId: null,
+      acquiredAfterBattleIndex: 0,
+    },
+  ];
+}
+
 export function createRun(
   war: RunWarSnapshot,
   seed: number,
@@ -806,7 +897,7 @@ export function createRun(
     conflictIndex: 0,
     goldTenths: RUN_STARTING_GOLD_TENTHS,
     army: initialArmy(seed),
-    cards: [],
+    cards: initialCards(),
     pestiferousLosses: [],
     lipsana: [],
     seenLipsana: [],
@@ -1422,10 +1513,95 @@ function migrateRunSectioOperationsVocabulary(value: unknown): unknown {
   return { ...currentSectio, cardOffers, adlectedCardOfferIds, alienatedUnits, entrySnapshot };
 }
 
+function migrateRunArmyToPrimogeniture(value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  return value.map((candidate) => {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return candidate;
+    const unit = candidate as Record<string, unknown>;
+    if (unit.type !== 'king') return unit;
+    const abilities = Array.isArray(unit.abilities)
+      ? unit.abilities.filter((ability): ability is string => typeof ability === 'string')
+      : [];
+    return abilities.includes('primogeniture')
+      ? unit
+      : { ...unit, abilities: [...abilities, 'primogeniture'] };
+  });
+}
+
+function migrateCardsToStarterChartulary(
+  value: unknown,
+  armyValue: unknown,
+): RunOwnedCard[] {
+  const cards = Array.isArray(value) ? value.filter((card): card is RunOwnedCard => (
+    Boolean(card && typeof card === 'object' && !Array.isArray(card))
+  )) : [];
+  const army = Array.isArray(armyValue)
+    ? armyValue.filter((unit): unit is Record<string, unknown> => Boolean(unit && typeof unit === 'object' && !Array.isArray(unit)))
+    : [];
+  const next = [...cards];
+  if (!next.some((card) => card.coreId === 'his-grace')) {
+    const kingId = army.find((unit) => unit.type === 'king' && typeof unit.id === 'string')?.id;
+    if (typeof kingId === 'string') {
+      next.unshift({
+        ...initialCards()[0],
+        effectSeed: 0,
+        unitIds: [kingId],
+      });
+    }
+  }
+  if (!next.some((card) => card.coreId === 'front-lines')) {
+    const pawnIds = army
+      .filter((unit) => unit.source === 'starting' && unit.type === 'pawn' && typeof unit.id === 'string')
+      .map((unit) => unit.id as string);
+    next.splice(Math.min(1, next.length), 0, {
+      ...initialCards()[1],
+      effectSeed: 0,
+      unitIds: pawnIds,
+    });
+  }
+  return next;
+}
+
+function migrateRunToKlerosis(stored: Record<string, unknown>): Record<string, unknown> {
+  const army = migrateRunArmyToPrimogeniture(stored.army);
+  const cards = migrateCardsToStarterChartulary(stored.cards, army);
+  // Version 18 never persisted automatic destinations, so an in-flight Battle cannot be
+  // represented truthfully in the exact version-19 formation. Return it to Klerosis before
+  // any new information is exposed; prepareDeployment will persist the new deal immediately.
+  const reenterDeployment = stored.phase === 'deployment' || stored.phase === 'battle';
+  const sectio = stored.sectio && typeof stored.sectio === 'object' && !Array.isArray(stored.sectio)
+    ? stored.sectio as Record<string, unknown>
+    : null;
+  const entrySnapshot = sectio?.entrySnapshot && typeof sectio.entrySnapshot === 'object' && !Array.isArray(sectio.entrySnapshot)
+    ? sectio.entrySnapshot as Record<string, unknown>
+    : null;
+  const migratedSectio = sectio && entrySnapshot
+    ? {
+        ...sectio,
+        entrySnapshot: {
+          ...entrySnapshot,
+          army: migrateRunArmyToPrimogeniture(entrySnapshot.army),
+          cards: migrateCardsToStarterChartulary(entrySnapshot.cards, entrySnapshot.army),
+        },
+      }
+    : sectio;
+  return {
+    ...stored,
+    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    phase: reenterDeployment ? 'deployment' : stored.phase,
+    army,
+    cards,
+    deployment: null,
+    ...(reenterDeployment ? { battleRuntime: null, aftermath: null } : {}),
+    ...(sectio ? { sectio: migratedSectio } : {}),
+  };
+}
+
 /**
  * Advances every losslessly migratable predecessor through the declared save chain.
- * Version 16 first receives the version-marker rename from 17, then version 17's Shop
- * vocabulary is rewritten into version 18's Sectio, Adlectio, and Alienatio vocabulary. Older saves remain
+ * Version 16 first receives the version-marker rename from 17, version 17's Shop
+ * vocabulary is rewritten into version 18's Sectio, Adlectio, and Alienatio vocabulary,
+ * then version 18 receives starter cards and persisted Klerosis state. Older saves remain
  * unsupported rather than being interpreted through a compatibility reader.
  */
 export function migrateRunSaveDocument(value: unknown): RunDocument {
@@ -1455,12 +1631,15 @@ export function migrateRunSaveDocument(value: unknown): RunDocument {
       : stored.pestiferousLosses;
     stored = {
       ...run,
-      runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+      runSaveVersion: RUN_SAVE_VERSION_KLEROSIS_SOURCE,
       phase: stored.phase === 'shop' ? 'sectio' : stored.phase,
       army: migrateRunArmyAdlectioVocabulary(stored.army),
       pestiferousLosses,
       sectio: migrateRunSectioOperationsVocabulary(shop),
     };
+  }
+  if (stored.runSaveVersion === RUN_SAVE_VERSION_KLEROSIS_SOURCE) {
+    stored = migrateRunToKlerosis(stored);
   }
   return normalizeRunDocument(stored as unknown as RunDocument);
 }
@@ -1508,9 +1687,16 @@ export function lipsanonGrantingRunAbility(
   unit: RunArmyUnit,
   ability: RunAbility,
 ): LipsanonId | null {
+  // Unit-type lipsana never pile a second deployment rule onto an ordinary unit that
+  // already owns one. The King is the sole exception: Primogeniture is inherent, so one
+  // held unit-type grant may sit beside it. If several matching lipsana are held, their
+  // stable acquisition order decides which one is effective.
+  const inherentDeploymentAbilities = unit.abilities.filter((candidate) => candidate !== 'primogeniture');
+  if (unit.type === 'king' ? inherentDeploymentAbilities.length > 0 : unit.abilities.length > 0) return null;
   for (const lipsanonId of run.lipsana) {
     const grant = RUN_LIPSANON_ABILITY_GRANTS[lipsanonId];
-    if (grant?.ability === ability && grant.unitType === unit.type) return lipsanonId;
+    if (grant?.unitType !== unit.type) continue;
+    return grant.ability === ability ? lipsanonId : null;
   }
   return null;
 }
@@ -1519,11 +1705,28 @@ export function hasRunAbility(run: RunDocument, unit: RunArmyUnit, ability: RunA
   return unit.abilities.includes(ability) || lipsanonGrantingRunAbility(run, unit, ability) !== null;
 }
 
+/** Whether a target-required lipsanon can add its permanent state without violating
+ * ordinary-unit cardinality. The King may receive one state beside Primogeniture. */
+export function canTargetLipsanon(run: RunDocument, lipsanon: LipsanonId, unitId: string): boolean {
+  if (!lipsanonNeedsUnitTarget(lipsanon)) return false;
+  const unit = run.army.find((candidate) => candidate.id === unitId);
+  if (!unit) return false;
+  if (lipsanon === 'conscription-notice') {
+    return unit.abilities.filter((ability) => ability !== 'primogeniture').length === 0;
+  }
+  return true;
+}
+
 function availableLipsana(run: RunDocument): LipsanonId[] {
   const held = new Set(run.lipsana);
   const seen = new Set(run.seenLipsana);
-  return RUN_LIPSANA
-    .filter((lipsanon) => !held.has(lipsanon.id) && !seen.has(lipsanon.id) && (!lipsanon.requires || held.has(lipsanon.requires)))
+  return RUN_LIPSANON_OFFER_POOL
+    .filter((lipsanon) => (
+      !held.has(lipsanon.id)
+      && !seen.has(lipsanon.id)
+      && (!lipsanon.requires || held.has(lipsanon.requires))
+      && (!lipsanon.unitTarget || run.army.some((unit) => canTargetLipsanon(run, lipsanon.id, unit.id)))
+    ))
     .map((lipsanon) => lipsanon.id);
 }
 
@@ -1537,31 +1740,75 @@ function revealLipsana(run: RunDocument, count: number, label: string, index: nu
 
 export function prepareDeployment(run: RunDocument): RunDocument {
   if (run.phase !== 'deployment') return run;
+  if (run.deployment?.battleIndex === run.battleIndex) {
+    return touch({ ...run, battleRuntime: null });
+  }
   const seed = mixSeed(run.seed, 'deployment', run.battleIndex);
-  const temporaryAdlectedUnitId = hasLipsanon(run, 'inspirational-record')
-    ? createRng(mixSeed(seed, 'inspirational-record')).pick(run.army).id
-    : undefined;
+  const hisGrace = run.cards.find((card) => card.coreId === 'his-grace');
+  const ordinary = shuffled(
+    run.cards.filter((card) => card.id !== hisGrace?.id),
+    mixSeed(seed, 'klerosis-cards'),
+  );
+  const dealCount = Math.max(1, 3 + run.conflictIndex);
+  const dealtCards = [...(hisGrace ? [hisGrace] : []), ...ordinary].slice(0, dealCount);
+  const dealtUnitIds = [...new Set(dealtCards.flatMap((card) => card.unitIds))]
+    .filter((unitId) => run.army.some((unit) => unit.id === unitId));
+  const kingIds = dealtUnitIds.filter((unitId) => run.army.find((unit) => unit.id === unitId)?.type === 'king');
+  const queueUnitIds = [
+    ...kingIds,
+    ...shuffled(
+      dealtUnitIds.filter((unitId) => !kingIds.includes(unitId)),
+      mixSeed(seed, 'deployment-unit-order'),
+    ),
+  ];
+  const unavailableUnitIds = run.army
+    .map((unit) => unit.id)
+    .filter((unitId) => !queueUnitIds.includes(unitId));
   return touch({
     ...run,
-    deployment: run.deployment?.battleIndex === run.battleIndex
-      ? run.deployment
-      : {
-          battleIndex: run.battleIndex,
-          seed,
-          blockedUnitIds: [],
-          manualPlacements: {},
-          temporaryAdlectedUnitId,
-        },
+    deployment: {
+      battleIndex: run.battleIndex,
+      seed,
+      dealtCardIds: dealtCards.map((card) => card.id),
+      queueUnitIds,
+      deployingUnitIds: [...queueUnitIds],
+      unavailableUnitIds,
+      capacityResolved: false,
+      placements: {},
+      placementCursor: 0,
+      stage: 'klerosis',
+      blockedUnitIds: [...unavailableUnitIds],
+      manualPlacements: {},
+    },
     battleRuntime: null,
   });
 }
 
 export function setDeploymentChoices(
   run: RunDocument,
-  choices: Partial<Pick<RunDeploymentState, 'chosenBlockedUnitIds' | 'manualPlacements' | 'layoutChoice'>>,
+  choices: Partial<Pick<RunDeploymentState,
+    | 'manualPlacements'
+    | 'placements'
+    | 'placementCursor'
+    | 'revealedUnitId'
+    | 'mode'
+    | 'stage'
+    | 'deployingUnitIds'
+    | 'unavailableUnitIds'
+    | 'capacityResolved'
+    | 'queueUnitIds'
+    | 'blockedUnitIds'
+    | 'temporaryAdlectedUnitId'
+  >>,
 ): RunDocument {
   if (run.phase !== 'deployment' || !run.deployment) return run;
-  return touch({ ...run, deployment: { ...run.deployment, ...choices } });
+  return touch({
+    ...run,
+    deployment: {
+      ...run.deployment,
+      ...choices,
+    },
+  });
 }
 
 export function beginBattle(
@@ -1598,10 +1845,8 @@ export function restartBattle(run: RunDocument): RunDocument {
       // A retry is a fresh Battle, so its clock starts again rather than counting the
       // attempt that was thrown away.
       startedAtMs: Date.now(),
-      initiallyDeployedUnitIds: run.army
-        .filter((unit) => !run.deployment?.blockedUnitIds.includes(unit.id))
-        .map((unit) => unit.id),
-      reserveUnitIds: [...run.deployment.blockedUnitIds],
+      initiallyDeployedUnitIds: [...run.deployment.deployingUnitIds],
+      reserveUnitIds: [],
       reservistPoolUnitIds: [],
       deployedReservistUnitIds: [],
       observedDeadUnitIds: [],
@@ -1820,7 +2065,7 @@ function immediateLipsanon(run: RunDocument, lipsanon: LipsanonId, targetUnitId?
 
 export function acquireLipsanon(run: RunDocument, lipsanon: LipsanonId, targetUnitId?: string): RunDocument {
   if (run.lipsana.includes(lipsanon)) return run;
-  if (lipsanonNeedsUnitTarget(lipsanon) && !run.army.some((unit) => unit.id === targetUnitId)) return run;
+  if (lipsanonNeedsUnitTarget(lipsanon) && !canTargetLipsanon(run, lipsanon, targetUnitId ?? '')) return run;
   return touch(immediateLipsanon({ ...run, lipsana: [...run.lipsana, lipsanon] }, lipsanon, targetUnitId));
 }
 
@@ -1856,7 +2101,9 @@ export function removeUnitFromArmyAndCards(
   return { army, cards };
 }
 
-export function deterioratePestiferousCards(run: RunDocument, battleIndex: number): RunDocument {
+/** Resolve Cacochymic units' committed combat-end deaths. Each owning Pestiferous card
+ * then selects its next surviving member, while the battle-index ledger keeps retries idempotent. */
+export function resolveCacochymicCombatDeaths(run: RunDocument, battleIndex: number): RunDocument {
   const armyById = new Map(run.army.map((unit) => [unit.id, unit]));
   const removedIds = new Set<string>();
   const losses: RunPestiferousLoss[] = [];
@@ -1965,12 +2212,12 @@ export function openSectio(run: RunDocument, survivingUnitIds: readonly string[]
   const finalBattle = run.battleIndex >= run.war.battles.length - 1;
 
   const { victoryGoldTenths, bonusGoldTenths: rifleTenths } = battleRewardTenths(run, survivingUnitIds);
-  const deteriorated = deterioratePestiferousCards(run, run.battleIndex);
+  const resolvedDeaths = resolveCacochymicCombatDeaths(run, run.battleIndex);
   if (finalBattle) {
-    return touch({ ...deteriorated, phase: 'victory', sectio: null, deployment: null, battleRuntime: null, aftermath: null });
+    return touch({ ...resolvedDeaths, phase: 'victory', sectio: null, deployment: null, battleRuntime: null, aftermath: null });
   }
   const banked: RunDocument = {
-    ...deteriorated,
+    ...resolvedDeaths,
     goldTenths: run.goldTenths + victoryGoldTenths + rifleTenths,
     deployment: null,
     battleRuntime: null,
@@ -2228,10 +2475,10 @@ export function formatGold(goldTenths: number): string {
   return gold.toFixed(Number.isInteger(gold) ? 0 : Number.isInteger(gold * 10) ? 1 : 2);
 }
 
-export function cardContentsLabel(card: Pick<RunCoreCard, 'pieces'>): string {
-  const counts = new Map<AdlectablePieceType, number>();
+export function cardContentsLabel(card: Readonly<{ pieces: readonly RunArmyPieceType[] }>): string {
+  const counts = new Map<RunArmyPieceType, number>();
   for (const piece of card.pieces) counts.set(piece, (counts.get(piece) ?? 0) + 1);
-  return ADLECTIO_PIECE_ORDER
+  return (['king', ...ADLECTIO_PIECE_ORDER] as const)
     .filter((piece) => counts.has(piece))
     .map((piece) => `${counts.get(piece)! > 1 ? `${counts.get(piece)} ` : ''}${PIECE_LABEL[piece]}${counts.get(piece)! > 1 ? 's' : ''}`)
     .join(' + ');

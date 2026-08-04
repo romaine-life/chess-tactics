@@ -91,6 +91,8 @@ describe('Skirmish chrome hierarchy', () => {
     expect(skirmish).toContain("id: 'skirmish-return'");
     expect(skirmish).toContain('destination: returnHref');
     expect(skirmish).toContain("testId: 'skirmish-return'");
+    expect(skirmish).toContain("? 'Back to Deployment Lab'");
+    expect(skirmish).toContain("? 'Return to this configured Deployment Lab case.'");
     expect(skirmish).not.toContain('skirmish-return-editor');
     expect(styleCss).not.toContain('.skirmish-return-editor');
   });

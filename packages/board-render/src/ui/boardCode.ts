@@ -534,8 +534,7 @@ function visualTerrainSurfaceKeys(
 /** Deduplicate and order a zone's barred types so the same authored intent always encodes alike. */
 function cleanExcludedPieceTypes(value: unknown): PlayablePieceType[] | undefined {
   if (!Array.isArray(value)) return undefined;
-  const seen = new Set(value.filter((type): type is PlayablePieceType => validPieceTypes.has(type)));
-  const types = PLAYABLE_PIECE_TYPES.filter((type) => seen.has(type));
+  const types: PlayablePieceType[] = value.includes('king') ? ['king'] : [];
   return types.length ? types : undefined;
 }
 
@@ -566,7 +565,7 @@ function normalizeZoneEntries(entries: readonly EditorZoneEntry[] | undefined, c
       tiles: sortCellKeys(tiles),
     });
   }
-  // At most one Player Deployment, Pawn Deployment and Enemy Deployment zone can survive a
+  // At most one Player Deployment, King Deployment and Enemy Deployment zone can survive a
   // normalize, so no decode, paste or legacy import can reintroduce a duplicate (ADR-0367).
   return canonicalizeSingletonZones(out).map((entry) => ({ ...entry, tiles: sortCellKeys(entry.tiles) }));
 }
@@ -1192,8 +1191,7 @@ export function decodeBoard(code: string): EditorBoard | null {
           name: typeof name === 'string' ? name : undefined,
           color: typeof color === 'string' ? color as ZoneColor : undefined,
           type: type as ZoneType,
-          // `1` is the short-lived pawn-only spelling of this element, before it carried a list.
-          excludedPieceTypes: excluded === 1 || excluded === true ? ['pawn'] : cleanExcludedPieceTypes(excluded),
+          excludedPieceTypes: cleanExcludedPieceTypes(excluded),
           tiles: Array.isArray(tiles) ? tiles.map(String) : [],
         })),
         cols,

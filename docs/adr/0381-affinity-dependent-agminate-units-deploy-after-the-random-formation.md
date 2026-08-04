@@ -2,11 +2,13 @@
 status: accepted
 date: 2026-08-03
 deciders: owner (Nelson) + Codex
+partially_superseded_by:
+  - "[ADR-0406](0406-klerosis-deals-cards-before-one-unit-at-a-time-deployment.md)'s one-unit queue"
 partially_supersedes:
   - "[ADR-0367](0367-a-piece-type-can-be-broken-off-the-deployment-pool.md)'s random automatic-placement order"
 refines:
   - "[ADR-0273](0273-relational-unit-placement-may-have-diminishing-value.md)"
-  - "[ADR-0274](0274-relics-grant-unit-owned-deployment-abilities.md)"
+  - "[ADR-0274](0274-lipsana-grant-unit-owned-deployment-abilities.md)"
 ---
 
 # ADR-0381: Affinity-dependent Agminate units deploy after the random formation
@@ -54,5 +56,5 @@ than sometimes precede it.
 
 - [Game concept](../game-concept.md)
 - [ADR-0273](0273-relational-unit-placement-may-have-diminishing-value.md)
-- [ADR-0274](0274-relics-grant-unit-owned-deployment-abilities.md)
+- [ADR-0274](0274-lipsana-grant-unit-owned-deployment-abilities.md)
 - [ADR-0367](0367-a-piece-type-can-be-broken-off-the-deployment-pool.md)

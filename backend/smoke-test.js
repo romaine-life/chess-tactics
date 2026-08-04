@@ -937,7 +937,7 @@ function inlineMigrationSql(version) {
   return inlineMigrationDefinition(version).sql;
 }
 
-async function validatePrimarySparseNumericMigrationUpgrade55() {
+async function validatePrimarySparseNumericMigrationUpgrade56() {
   const history = await queryDb(
     `SELECT version, name, checksum
        FROM schema_migrations
@@ -952,7 +952,7 @@ async function validatePrimarySparseNumericMigrationUpgrade55() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 55 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 56 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -967,7 +967,7 @@ async function validatePrimarySparseNumericMigrationUpgrade55() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 19 }, (_, index) => index + 37),
+    ...Array.from({ length: 20 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1081,7 +1081,7 @@ async function validatePrimarySparseNumericMigrationUpgrade55() {
     )
   ) {
     throw new Error(
-      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 55: `
+      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 56: `
       + `${JSON.stringify({
         history: history.rows,
         identity_columns: identityColumns.rows,
@@ -1580,6 +1580,200 @@ async function validateSectioOperationsVocabularyMigration55() {
   }
 }
 
+async function validateKlerosisAndDeploymentZoneMigration56() {
+  const client = new pg.Client({ connectionString: databaseUrl });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('CREATE SCHEMA smoke_klerosis_migration_56');
+    await client.query('SET LOCAL search_path TO smoke_klerosis_migration_56');
+    await client.query(`
+      CREATE TABLE active_runs (
+        owner_email text PRIMARY KEY, body jsonb NOT NULL, revision integer NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE levels (
+        owner_email text, id text, body jsonb NOT NULL, revision integer NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (owner_email, id)
+      );
+      CREATE TABLE campaign_workspaces (
+        owner_email text PRIMARY KEY, body jsonb NOT NULL, revision bigint NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE official_campaigns (
+        id text PRIMARY KEY, data jsonb NOT NULL, revision integer NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now(), updated_by text
+      );
+      CREATE TABLE public_maps (
+        public_id text PRIMARY KEY, body jsonb NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE level_working_copies (
+        document_id text PRIMARY KEY, body jsonb NOT NULL, revision bigint NOT NULL,
+        saved_revision bigint NOT NULL, baseline_hash text,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE level_working_copy_revisions (
+        document_id text NOT NULL, revision bigint NOT NULL, body jsonb NOT NULL,
+        saved_revision bigint NOT NULL, baseline_hash text, reason text NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (document_id, revision)
+      );
+      CREATE TABLE editor_document_edit_sessions (session_id uuid PRIMARY KEY, draft_body jsonb NOT NULL);
+      CREATE TABLE editor_document_recoveries (recovery_id uuid PRIMARY KEY, body jsonb NOT NULL);
+      CREATE TABLE lab_runs (id text PRIMARY KEY, body jsonb NOT NULL);
+      CREATE TABLE train_runs (
+        id text PRIMARY KEY, spec jsonb NOT NULL, body jsonb NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE solve_runs (
+        id text PRIMARY KEY, spec jsonb NOT NULL, body jsonb NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+    `);
+    const boardWire = {
+      c: 3,
+      r: 2,
+      zn: [
+        ['general', 'player-spawn', ['0,0'], 'Player Deployment', 'blue', ['pawn', 'king']],
+        ['pawns', 'player-pawn-spawn', ['1,0'], 'Pawn Deployment', 'green'],
+      ],
+      z: { '0,0': 'player-spawn', '1,0': 'player-pawn-spawn' },
+    };
+    const level = {
+      formatVersion: 1,
+      id: 'migration-level',
+      boardCode: Buffer.from(JSON.stringify(boardWire), 'utf8').toString('base64url'),
+      layers: {
+        zones: [
+          { id: 'general', type: 'player-spawn', tiles: [[0, 0]], excludedPieceTypes: ['pawn', 'king'] },
+          { id: 'pawns', type: 'player-pawn-spawn', tiles: [[1, 0]] },
+        ],
+      },
+    };
+    const run = {
+      runSaveVersion: 18,
+      id: 'run-migration-56',
+      phase: 'battle',
+      army: [
+        { id: 'run-king', type: 'king', source: 'king', abilities: [] },
+        { id: 'run-pawn-a', type: 'pawn', source: 'starting', abilities: [] },
+        { id: 'run-pawn-b', type: 'pawn', source: 'starting', abilities: [] },
+      ],
+      cards: [{ id: 'run-card-1', coreId: 'p', unitIds: [] }],
+      deployment: { seed: 11, manualPlacements: { 'run-king': '0,0' } },
+      battleRuntime: { marker: true },
+      aftermath: null,
+      war: { battles: [{ level }] },
+      sectio: {
+        entrySnapshot: {
+          army: [
+            { id: 'run-king', type: 'king', source: 'king', abilities: [] },
+            { id: 'run-pawn-a', type: 'pawn', source: 'starting', abilities: [] },
+            { id: 'run-pawn-b', type: 'pawn', source: 'starting', abilities: [] },
+          ],
+          cards: [],
+        },
+      },
+    };
+    const nestedLevel = JSON.stringify({ levels: { [level.id]: level } });
+    await client.query(
+      `INSERT INTO active_runs (owner_email, body, revision) VALUES ('run@example.com', $1::jsonb, 7);
+       INSERT INTO levels (owner_email, id, body, revision) VALUES ('owner@example.com', 'migration-level', $2::jsonb, 4);
+       INSERT INTO campaign_workspaces (owner_email, body, revision) VALUES ('owner@example.com', $3::jsonb, 8);
+       INSERT INTO official_campaigns (id, data, revision) VALUES ('default', $3::jsonb, 9);
+       INSERT INTO public_maps (public_id, body) VALUES ('public', $2::jsonb);
+       INSERT INTO level_working_copies (document_id, body, revision, saved_revision, baseline_hash)
+         VALUES ('document', $2::jsonb, 2, 2, 'old');
+       INSERT INTO level_working_copy_revisions
+         (document_id, revision, body, saved_revision, baseline_hash, reason)
+         VALUES ('document', 2, $2::jsonb, 2, 'old', 'autosave');
+       INSERT INTO editor_document_edit_sessions (session_id, draft_body)
+         VALUES ('00000000-0000-4000-8000-000000000056', $2::jsonb);
+       INSERT INTO editor_document_recoveries (recovery_id, body)
+         VALUES ('00000000-0000-4000-8000-000000000156', $2::jsonb);
+       INSERT INTO lab_runs (id, body) VALUES ('lab', $3::jsonb);
+       INSERT INTO train_runs (id, spec, body) VALUES ('train', $3::jsonb, $3::jsonb);
+       INSERT INTO solve_runs (id, spec, body) VALUES ('solve', $3::jsonb, $3::jsonb);`,
+      [JSON.stringify(run), JSON.stringify(level), nestedLevel],
+    );
+
+    await client.query(inlineMigrationSql(56));
+    await client.query(inlineMigrationSql(56));
+
+    const migratedRun = (await client.query('SELECT body, revision FROM active_runs')).rows[0];
+    const migratedLevel = (await client.query('SELECT body, revision FROM levels')).rows[0];
+    const workingCopy = (await client.query(
+      'SELECT revision, saved_revision, baseline_hash FROM level_working_copies',
+    )).rows[0];
+    const workingHistory = await client.query(
+      'SELECT revision, reason, body FROM level_working_copy_revisions ORDER BY revision',
+    );
+    const residuals = await client.query(`
+      SELECT count(*)::integer AS count
+        FROM (
+          SELECT body::text AS value FROM levels
+          UNION ALL SELECT body::text FROM campaign_workspaces
+          UNION ALL SELECT data::text FROM official_campaigns
+          UNION ALL SELECT body::text FROM public_maps
+          UNION ALL SELECT body::text FROM level_working_copies
+          UNION ALL SELECT body::text FROM level_working_copy_revisions
+          UNION ALL SELECT draft_body::text FROM editor_document_edit_sessions
+          UNION ALL SELECT body::text FROM editor_document_recoveries
+          UNION ALL SELECT body::text FROM lab_runs
+          UNION ALL SELECT spec::text FROM train_runs
+          UNION ALL SELECT body::text FROM train_runs
+          UNION ALL SELECT spec::text FROM solve_runs
+          UNION ALL SELECT body::text FROM solve_runs
+          UNION ALL SELECT body::text FROM active_runs
+        ) AS documents
+       WHERE position('player-pawn-spawn' in value) > 0
+          OR (position('excludedPieceTypes' in value) > 0 AND position('"pawn"' in value) > 0)
+    `);
+    const migratedWire = JSON.parse(Buffer.from(migratedLevel.body.boardCode, 'base64url').toString('utf8'));
+    const layerGeneral = migratedLevel.body.layers.zones.find((zone) => zone.type === 'player-spawn');
+    const wireGeneral = migratedWire.zn.find((zone) => zone[1] === 'player-spawn');
+    if (
+      migratedRun.body.runSaveVersion !== 19
+      || migratedRun.body.phase !== 'deployment'
+      || migratedRun.body.deployment !== null
+      || migratedRun.body.battleRuntime !== null
+      || Number(migratedRun.revision) !== 8
+      || !migratedRun.body.army[0].abilities.includes('primogeniture')
+      || migratedRun.body.cards.slice(0, 2).map((card) => card.coreId).join(',') !== 'his-grace,front-lines'
+      || migratedRun.body.cards[0].unitIds[0] !== 'run-king'
+      || migratedRun.body.cards[1].unitIds.join(',') !== 'run-pawn-a,run-pawn-b'
+      || migratedRun.body.sectio.entrySnapshot.cards.length !== 2
+      || Number(migratedLevel.revision) !== 5
+      || JSON.stringify(layerGeneral.tiles) !== JSON.stringify([[0, 0], [1, 0]])
+      || JSON.stringify(layerGeneral.excludedPieceTypes) !== JSON.stringify(['king'])
+      || JSON.stringify(wireGeneral[2]) !== JSON.stringify(['0,0', '1,0'])
+      || JSON.stringify(wireGeneral[5]) !== JSON.stringify(['king'])
+      || migratedWire.z['1,0'] !== 'player-spawn'
+      || Number(workingCopy.revision) !== 3
+      || Number(workingCopy.saved_revision) !== 3
+      || workingCopy.baseline_hash !== null
+      || workingHistory.rows.length !== 2
+      || workingHistory.rows[1].reason !== 'migration'
+      || residuals.rows[0].count !== 0
+    ) {
+      throw new Error(`Migration 56 did not establish Klerosis and remove Pawn-only deployment geometry: ${JSON.stringify({
+        run: migratedRun,
+        level: migratedLevel,
+        working_copy: workingCopy,
+        working_history: workingHistory.rows,
+        residuals: residuals.rows,
+        wire: migratedWire,
+      })}`);
+    }
+    await client.query('ROLLBACK');
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve validation error */ }
+    throw error;
+  } finally {
+    await client.end();
+  }
+}
+
 async function waitForServer() {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if (child.exitCode !== null) {
@@ -1612,7 +1806,7 @@ async function main() {
   await new Promise((resolve) => mockAuth.listen(authPort, '127.0.0.1', resolve));
   await new Promise((resolve) => mockBgm.listen(bgmPort, '127.0.0.1', resolve));
   await waitForServer();
-  await validatePrimarySparseNumericMigrationUpgrade55();
+  await validatePrimarySparseNumericMigrationUpgrade56();
   const databaseRuntime = await queryDb('SELECT version() AS version');
   const isPgliteRuntime = /\bPGlite\b/i.test(String(databaseRuntime.rows[0]?.version || ''));
   if (!isPgliteRuntime) {
@@ -1642,6 +1836,7 @@ async function main() {
   await validateEditorRevisionReasonMigration37();
   await validateRunSaveVersionMigration54();
   await validateSectioOperationsVocabularyMigration55();
+  await validateKlerosisAndDeploymentZoneMigration56();
   await resetDb();
 
   const missingPropSeats = await get('/api/prop-seats/default');
@@ -4306,7 +4501,7 @@ async function main() {
   }
   const activeRunKing = {
     id: 'run-king', name: 'David of Israel', type: 'king', number: 1,
-    inspectionSeed: 1701, abilities: [], modifiers: [], source: 'king',
+    inspectionSeed: 1701, abilities: ['primogeniture'], modifiers: [], source: 'king',
   };
   const activeRunPawnA = {
     id: 'run-pawn-a', name: 'Stephen Botiller', type: 'pawn', number: 1,
@@ -4317,6 +4512,17 @@ async function main() {
     inspectionSeed: 1703, abilities: [], modifiers: [], source: 'starting',
   };
   const activeRunStartingArmy = [activeRunKing, activeRunPawnA, activeRunPawnB];
+  const activeRunStarterCards = [{
+    id: 'run-card-his-grace', coreId: 'his-grace', cardType: null,
+    effectSeed: 0, effectTargetUnitId: null,
+    unitIds: ['run-king'], lostUnitIds: [], cacochymicUnitId: null,
+    acquiredAfterBattleIndex: 0,
+  }, {
+    id: 'run-card-front-lines', coreId: 'front-lines', cardType: null,
+    effectSeed: 0, effectTargetUnitId: null,
+    unitIds: ['run-pawn-a', 'run-pawn-b'], lostUnitIds: [], cacochymicUnitId: null,
+    acquiredAfterBattleIndex: 0,
+  }];
   const activeRunNumberState = { pawn: 3, knight: 1, bishop: 1, rook: 1, queen: 1, king: 2 };
   const activeRunOffers = [
     { id: 'p', offerId: 'opening-0-p', pieces: ['pawn'], value: 1, cost: 1, cardType: null, effectSeed: 1704, cacochymicPieceIndex: null, effectTargetIndex: null },
@@ -4343,7 +4549,7 @@ async function main() {
     conflictIndex: 0,
     goldTenths: 80,
     army: activeRunStartingArmy,
-    cards: [],
+    cards: activeRunStarterCards,
     pestiferousLosses: [],
     lipsana: [],
     seenLipsana: [],
@@ -4368,7 +4574,7 @@ async function main() {
       entrySnapshot: {
         goldTenths: 80,
         army: activeRunStartingArmy,
-        cards: [],
+        cards: activeRunStarterCards,
         lipsana: [],
         seenLipsana: [],
         conflictPaidLipsana: {},
@@ -4568,6 +4774,7 @@ async function main() {
     goldTenths: 40,
     army: [...activeRunDocument.army, adlectedPawn, adlectedKnight],
     cards: [
+      ...activeRunStarterCards,
       {
         id: 'run-card-1', coreId: activeRunOffers[0].id, cardType: null,
         effectSeed: activeRunOffers[0].effectSeed, effectTargetUnitId: null,

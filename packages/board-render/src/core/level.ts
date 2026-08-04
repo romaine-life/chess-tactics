@@ -23,8 +23,8 @@ export const CAMPAIGN_FORMAT_VERSION = 1;
 export const BOARD_COLS = { min: 1, max: 48 } as const;
 export const BOARD_ROWS = { min: 1, max: 48 } as const;
 
-export type ZoneType = 'region' | 'player-spawn' | 'player-pawn-spawn' | 'player-king-spawn' | 'enemy-spawn' | 'enemy-threat' | 'objective' | 'falling-rock' | 'pawn-promotion';
-export const ZONE_TYPES = ['region', 'player-spawn', 'player-pawn-spawn', 'player-king-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock', 'pawn-promotion'] as const satisfies readonly ZoneType[];
+export type ZoneType = 'region' | 'player-spawn' | 'player-king-spawn' | 'enemy-spawn' | 'enemy-threat' | 'objective' | 'falling-rock' | 'pawn-promotion';
+export const ZONE_TYPES = ['region', 'player-spawn', 'player-king-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock', 'pawn-promotion'] as const satisfies readonly ZoneType[];
 
 /**
  * A Run-player deployment zone that holds ONE piece type and nothing else (ADR-0367). Painting one
@@ -32,7 +32,6 @@ export const ZONE_TYPES = ['region', 'player-spawn', 'player-pawn-spawn', 'playe
  * zone breaks it off that pool entirely.
  */
 export const DEDICATED_DEPLOYMENT_ZONE_TYPES = {
-  'player-pawn-spawn': 'pawn',
   'player-king-spawn': 'king',
 } as const satisfies Partial<Record<ZoneType, PlayablePieceType>>;
 export const dedicatedDeploymentPieceType = (type: ZoneType): PlayablePieceType | undefined =>
@@ -72,7 +71,7 @@ export function zoneEntriesOnLevel<Entry extends { type: ZoneType; excludedPiece
  * board codes, which left the author looking at duplicate objects that no UI could explain.
  * Every reader canonicalizes duplicates into one zone per type instead of warning about them.
  */
-export const SINGLETON_ZONE_TYPES = ['player-spawn', 'player-pawn-spawn', 'player-king-spawn', 'enemy-spawn'] as const satisfies readonly ZoneType[];
+export const SINGLETON_ZONE_TYPES = ['player-spawn', 'player-king-spawn', 'enemy-spawn'] as const satisfies readonly ZoneType[];
 export const isSingletonZoneType = (type: ZoneType): boolean => (SINGLETON_ZONE_TYPES as readonly ZoneType[]).includes(type);
 
 /**
@@ -822,8 +821,8 @@ export function validateLevel(value: unknown): ValidateResult {
           break;
         }
         const excluded = (z as { excludedPieceTypes?: unknown }).excludedPieceTypes;
-        if (excluded !== undefined && (!Array.isArray(excluded) || excluded.some((type) => !(PLAYABLE_PIECE_TYPES as readonly unknown[]).includes(type)))) {
-          errors.push(`zone "${z.id}" excludedPieceTypes must be an array of: ${PLAYABLE_PIECE_TYPES.join(', ')}`);
+        if (excluded !== undefined && (!Array.isArray(excluded) || excluded.some((type) => type !== 'king'))) {
+          errors.push(`zone "${z.id}" excludedPieceTypes may contain only king`);
           break;
         }
         const badTile = z.tiles.find((t) => !Array.isArray(t) || t.length !== 2 || !Number.isInteger(t[0]) || !Number.isInteger(t[1]));

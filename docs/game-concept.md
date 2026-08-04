@@ -116,8 +116,8 @@ these.
   a Sectio reveals the card, promoted unchanged if adlected, and discarded if
   passed so a later shuffle may affect that core differently. Adlected adds
   3 gold, Eutactic adds 2 (and can raise Concinnous cards to 10 or 11), and
-  Cacochymic discounts by piece tier—Pawn 0, minor
-  1, Rook 2, Queen 3—so Sectio-card prices remain whole gold and a Cacochymic Pawn
+  Pestiferous reduces its offer price according to the marked unit's piece tier—Pawn 0, minor
+  1, Rook 2, Queen 3—so Sectio-card prices remain whole gold and a marked Pawn
   still costs 1. Exact public contents and modifier markers belong in the Contents Box
   unit ledger, not generated card-name permutations; an explicitly concealed
   Concinnous target appears there as hidden until Adlectio (ADR-0265, ADR-0271,
@@ -177,8 +177,8 @@ these.
   that remain. Exactly one contained unit gains Agminate at acquisition, chosen
   the way a Legatine target is: drawn on Adlectio, concealed by a multi-unit
   offer, and shown as the forced result on a one-unit offer. Agminate seats a
-  unit in its role's formation rather than a rank and its King, Rook and Bishop
-  rules interlock, so it carries Adlected's three-gold price. Hieratic owns the
+  unit in its piece-specific station during automatic deployment, so it carries
+  Adlected's three-gold price. Hieratic owns the
   dedicated steel-armor frame (ADR-0339, ADR-0345).
 - Run difficulty is **Ataraxia**. The first Run uses **Ataraxia 0 — The
   Untroubled Mind**, whose displayed impact is **Standard rules.**; later Runs may opt into historically named
@@ -190,60 +190,76 @@ these.
 - **Ataraxia I — The Great Mortality** initially targets Pestiferous status for
   roughly one in eight otherwise eligible Sectio draws. Pestiferous status is
   rolled with the rest of that affected offer, not added as another deck copy.
-  A nonempty Pestiferous card publicly marks exactly one unit Cacochymic. Only that
-  unit receives the piece-tier Cacochymic discount. The unit ledger identifies it
-  with the dedicated Cacochymic icon rather than a written label. Every owned nonempty
-  Pestiferous card loses its marked unit on each victorious-Battle advancement,
-  whether or not the card was drawn or deployed, then immediately marks one
-  remaining unit for the next advancement. Alienatio, cashing out, or otherwise
-  permanently removing the marked unit retargets the card while it remains
-  nonempty. The empty card remains as a possible dead draw until an explicit
+  A nonempty Pestiferous card publicly marks exactly one unit Cacochymic. The offer's
+  price reduction is based on that unit's piece tier. The unit ledger identifies it
+  with the dedicated Cacochymic icon rather than a written label. The marked Cacochymic
+  unit on every owned nonempty Pestiferous card dies when combat ends, whether or not its card was drawn or deployed.
+  Whenever that unit dies, its Pestiferous card immediately marks one remaining unit.
+  Alienatio, cashing out, or otherwise permanently removing the marked unit also
+  retargets the card while it remains nonempty. The empty card remains as a possible dead draw until an explicit
   effect removes it. Affected Sectio offers, their exact public target, Adlectio state,
   card membership, and losses are persisted; the seeded draw-time roll is one in
   eight and is inspectable in Card Layout. Pestiferous cards retain the shared
   face geometry but resolve their dedicated black bubbling-crude frame slot;
   ordinary cards keep the standard frame (ADR-0267, ADR-0269, ADR-0271, ADR-0286,
-  ADR-0311, ADR-0312).
+  ADR-0311, ADR-0312, ADR-0397).
 - Card ledgers have no assumed row cap before live experimentation. Dense cards
   may step down row spacing, icons, and type within readable bounds, but they
   must continue to show every unit property and retain the core card's flavor
   text in its bottom region. Repeated-unit grouping and a demonstrated maximum
   row count remain open presentation decisions (ADR-0270).
-- Deployment modifiers may be contextual rather than linearly valuable. A
-  role-aware **Agminate** ability belongs to a particular unit but may inspect
-  the surrounding formation. An Agminate Pawn prefers to stand immediately
-  alongside another Pawn, while an Agminate Bishop prefers a square color
-  opposite another Bishop. Those affinity-dependent Pawns and Bishops deploy
-  after the ordinary seeded formation so a same-type reference is already down;
-  an ordinary unit can be that reference, one Agminate unit may have little
-  effect alone, and a second is not owed an invented additional benefit. The
-  player weighs that roster-dependent value (ADR-0273, ADR-0274, ADR-0381).
-- Run Deployment is a battlefield state, not a level-summary destination. The
-  full board remains primary while Controls owns any Muster Roll, Adlected,
-  or Surveyor's Compass decision. Adlected places its named unit directly on
-  highlighted legal player-zone squares before ordinary deployment. While any
-  Adlected placement remains, the battlefield shows only committed
-  Adlected units. The final required Adlected, Muster Roll, or Surveyor's
-  Compass choice is first persisted and shown on that mounted board, then commits
-  directly to Battle without a separate confirmation. The same scene, session
-  store, board compositor, unit identities, and camera remain mounted: the
-  deterministic friendly formation and unresolved opponents join the position.
-  Each Adlected placement and each remaining unit first introduced at Battle
-  start uses the canonical entry animation. The final Adlected unit completes
-  its own arrival before automatic deployment begins as a separate wave;
-  already-visible units neither move nor replay arrival, and the terrain is not
-  reacquired or redrawn. Combat input,
-  clocks, and opponent behavior open
-  only after the persisted phase becomes Battle. When no meaningful player
-  choice exists, Sectio Continue commits the deterministic formation directly
-  into Battle (ADR-0346, ADR-0348, ADR-0349, ADR-0350, ADR-0351, ADR-0352).
+- The starter army belongs to two starter-only royal-purple cards in the
+  Chartulary. **His Grace** contains the King; Praecipuus puts that card at the
+  top of every Battle deal and grants the King Primogeniture, placing it before
+  every other unit. **Front Lines** contains the two ordinary starting Pawns.
+  His Grace is not removable and neither card appears in ordinary Adlectio
+  offers (ADR-0406).
+- Run Deployment is a battlefield state, not a level-summary destination. It
+  always opens with **Klerosis**, which reveals the dealt cards together and
+  shows the complete Deploying/Unavailable roster before asking for **Deploy
+  all** or **Step through**. The first Conflict deals at most three cards and
+  each later Conflict adds one; His Grace consumes the first slot and the rest
+  come from a fresh seeded shuffle. Dealt cards contribute their remaining
+  units individually, so one card may be split by limited board capacity.
+- After the King, one hidden seeded **Farrago** queue owns both capacity and
+  placement order. Units resolve one at a time from their own rules; Adlected
+  pauses for a highlighted-square choice when that unit reaches the front.
+  Deploy all commits the same sequence as one transition but still pauses for
+  required input. Step through reveals each unit before its destination. Once a
+  random placement reveals information, the player cannot undo across it. The
+  exact deal, capacity result, queue, revealed unit, choices, and formation
+  persist across reload and Battle retry; final placement promotes the already
+  mounted battlefield directly into Battle (ADR-0346, ADR-0350, ADR-0351,
+  ADR-0406).
+- Deployment modifiers may be contextual rather than linearly valuable. An
+  Agminate Pawn inspects prior Pawns for adjacency or an open file, and an
+  Agminate Bishop prefers the nearest opposite-color square relative to a prior
+  Bishop. They receive no late phase: whether a reference already exists is a
+  consequence of the seeded unit queue (ADR-0273, ADR-0274, ADR-0406).
+- Muster Roll and Surveyor's Compass are registered only for existing Runs that
+  already reference them and explicit playtests. New reveals omit both from the
+  seeded lipsanon offer surfaces until the developing Deployment choices and
+  information locks are settled; no RunSaveVersion or database migration is
+  introduced by that availability change. Surveyor's Compass's former
+  two-formation behavior is superseded by the one-unit queue (ADR-0404,
+  ADR-0405, ADR-0406).
 - Placement lipsana grant shared unit abilities rather than owning bespoke
   placement rules. Field Linens grants Eutactic to Pawns; Royal Decree to the
   King; Crenellated Rampart to Rooks; and Pope's Staff to Bishops. Ghibelline
   Rampart grants Agminate to Rooks; Pope's Robes to Bishops; and Royal Sceptre
   to the King. Their rules text names only the grant, while the unit-ability
   reference owns the piece-specific behavior. Permanent and lipsanon-granted
-  copies do not stack (ADR-0274).
+  copies do not stack. Ordinary units carry at most one deployment ability;
+  unit-type lipsana skip ordinary units that already have an inherent ability.
+  The King uniquely carries Primogeniture plus at most one additional ability.
+  Eutactic is a closest-available best-fit row preference:
+  Pawns prefer the front row; Knights and Bishops the row immediately behind
+  it; and Rooks, Queens, and the King the back row. Agminate separately gives
+  Pawns a preference for adjacency to another Pawn or an open file, Queens a
+  pull toward the middle, Knights a preference one square in from an edge,
+  the King to an edge, Rooks into their King-flank/corner formation, and
+  Bishops onto the nearest opposite square color from a prior Bishop
+  (ADR-0274, ADR-0395, ADR-0396, ADR-0406).
 - Every persistent Run unit receives a seeded, stored historical identity when
   it joins the army. Piece type chooses the register: recorded archers for
   Pawns, documented knights, religious leaders, real castles for Rooks, queens

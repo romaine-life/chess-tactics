@@ -16,6 +16,7 @@ const RUN_UNIT_STATE_MEDIA_ROLE: Readonly<Record<RunUnitState, string>> = Object
   adlected: 'ui-kit-icons-game-adlected-png',
   eutactic: 'ui-kit-icons-game-eutactic-png',
   agminate: 'ui-kit-icons-game-agminate-png',
+  primogeniture: 'ui-kit-icons-game-eutactic-png',
   cacochymic: 'ui-kit-icons-game-cacochymic-png',
 });
 

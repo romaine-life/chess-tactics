@@ -21068,6 +21068,88 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
+.run-klerosis-overlay {
+  align-items: center;
+  display: grid;
+  inset: 0;
+  justify-items: center;
+  padding: clamp(var(--ds-space-3), 2.5vw, var(--ds-space-6));
+  pointer-events: auto;
+  position: absolute;
+  z-index: 20;
+}
+
+.run-klerosis-panel {
+  display: grid;
+  gap: var(--ds-stack);
+  inline-size: min(980px, 100%);
+  max-block-size: 100%;
+  overflow: auto;
+  padding: var(--ds-space-3);
+}
+
+.run-klerosis-heading {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  text-align: center;
+}
+
+.run-klerosis-heading > h2,
+.run-klerosis-heading > p {
+  margin: 0;
+}
+
+.run-klerosis-cards {
+  align-items: start;
+  display: grid;
+  gap: var(--ds-space-2);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  justify-content: center;
+  margin-inline: auto;
+  max-inline-size: 720px;
+  inline-size: 100%;
+}
+
+.run-klerosis-card {
+  min-inline-size: 0;
+}
+
+.run-klerosis-rosters {
+  display: grid;
+  gap: var(--ds-space-2);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.run-klerosis-rosters > div {
+  display: grid;
+  gap: var(--ds-inline-tight);
+}
+
+.run-klerosis-rosters ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-inline-tight) var(--ds-space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.run-klerosis-actions {
+  display: flex;
+  gap: var(--ds-space-2);
+  justify-content: center;
+}
+
+@media (max-width: 720px) {
+  .run-klerosis-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .run-klerosis-rosters {
+    grid-template-columns: 1fr;
+  }
+}
+
 .run-inline-actions {
   display: flex;
   flex-wrap: wrap;
@@ -24540,4 +24622,199 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
 
 .screen-art-install code {
   word-break: break-all;
+}
+
+/* Deployment Lab: one canonical placement result above its algorithm-emitted trace. The
+   surrounding Studio shell and the two InnerChromeBox instances own all surface paint. */
+.deployment-lab-main {
+  align-content: stretch;
+  gap: var(--ds-stack, 12px);
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.deployment-lab-heading {
+  align-items: end;
+  display: flex;
+  gap: var(--ds-gutter, 16px);
+  justify-content: space-between;
+}
+
+.deployment-lab-heading h2,
+.deployment-lab-heading p,
+.deployment-lab-trace-heading h3,
+.deployment-lab-trace-heading p {
+  margin: 0;
+}
+
+.deployment-lab-heading p,
+.deployment-lab-trace-heading p,
+.deployment-lab-trace-heading > span {
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
+  font-size: var(--ds-text-xs, 12px);
+}
+
+.deployment-lab-heading dl {
+  display: flex;
+  gap: var(--ds-gutter, 16px);
+  margin: 0;
+}
+
+.deployment-lab-heading dl > div {
+  display: grid;
+  gap: 2px;
+  text-align: end;
+}
+
+.deployment-lab-heading dt {
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
+  font-size: var(--ds-text-2xs, 10px);
+  text-transform: uppercase;
+}
+
+.deployment-lab-heading dd {
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  margin: 0;
+}
+
+.deployment-lab-output {
+  display: grid;
+  gap: var(--ds-stack, 12px);
+  grid-template-rows: minmax(280px, 3fr) minmax(160px, 2fr);
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.deployment-lab-board-frame {
+  min-height: 280px;
+  overflow: hidden;
+  padding: var(--ds-inline, 8px);
+}
+
+.deployment-lab-trace-frame {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 160px;
+  overflow: hidden;
+  padding: var(--ds-inline, 8px);
+}
+
+.deployment-lab-trace-heading {
+  align-items: end;
+  display: flex;
+  gap: var(--ds-stack, 12px);
+  justify-content: space-between;
+  padding: var(--ds-inline, 8px);
+}
+
+.deployment-lab-trace-heading > span {
+  text-align: end;
+}
+
+.deployment-lab-trace-scroll {
+  min-height: 0;
+  overflow: auto;
+}
+
+.deployment-lab-trace-scroll table {
+  font-size: var(--ds-text-xs, 12px);
+  width: 100%;
+}
+
+.deployment-lab-trace-scroll :is(th, td) {
+  padding: 6px 8px;
+  text-align: start;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.deployment-lab-trace-scroll th {
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
+  font-size: var(--ds-text-2xs, 10px);
+  position: sticky;
+  text-transform: uppercase;
+  top: 0;
+}
+
+.deployment-lab-trace-scroll tr.is-warning td {
+  color: var(--ds-color-warning, #efca78);
+}
+
+.deployment-lab-cell {
+  cursor: crosshair;
+}
+
+.deployment-lab-control-group {
+  display: grid;
+  gap: var(--ds-inline, 8px);
+}
+
+.deployment-lab-control-group h3 {
+  margin: var(--ds-inline, 8px) 0 0;
+}
+
+.deployment-lab-flow-controls p {
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
+  font-size: var(--ds-text-xs, 12px);
+  margin: 0;
+}
+
+.deployment-lab-flow-controls .deployment-lab-flow-issue {
+  color: var(--ds-color-warning, #efca78);
+}
+
+.deployment-lab-add-unit,
+.deployment-lab-unit-control-head {
+  display: grid;
+  gap: var(--ds-inline, 8px);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.deployment-lab-roster-controls {
+  min-width: 0;
+}
+
+.deployment-lab-unit-control {
+  display: grid;
+  gap: var(--ds-inline, 8px);
+  padding: var(--ds-inline, 8px);
+}
+
+.deployment-lab-unit-control-head {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.deployment-lab-ability-toggles {
+  display: grid;
+  gap: 4px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.deployment-lab-ability-toggles label {
+  align-items: center;
+  display: flex;
+  font-size: var(--ds-text-2xs, 10px);
+  gap: 3px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.deployment-lab-ability-toggles input {
+  flex: none;
+}
+
+.deployment-lab-catalog .tileset-studio-card-text > span {
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
+  font-size: var(--ds-text-xs, 12px);
+}
+
+.deployment-lab-card-media {
+  align-items: center;
+  display: flex;
+  font-size: clamp(24px, 4vw, 52px);
+  gap: clamp(3px, .8vw, 12px);
+  height: 100%;
+  justify-content: center;
+  letter-spacing: .04em;
+  width: 100%;
 }

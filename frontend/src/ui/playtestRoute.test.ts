@@ -5,6 +5,8 @@ import {
   appendTimeControlParams,
   appendVictoryRulesParam,
   currentBoardTestHref,
+  deploymentLabPlayerFlowHref,
+  isDeploymentLabReturnHref,
   readLevelEventsParam,
   readTimeControlParams,
   readVictoryRulesParam,
@@ -144,5 +146,17 @@ describe('playtest route helpers', () => {
       boardReturnHref: '/editor/level?board=current',
       levelReturnHref: '/editor/level?levelId=l1',
     })).toBe('/editor/level?board=current');
+  });
+
+  it('round-trips the exact configured Deployment Lab through the Run return target', () => {
+    const labHref = '/studio?mode=viewer&cat=deployment&vk=deployment&df=10&dr=6&du=p.de%2Cq.a#trace';
+    const runHref = deploymentLabPlayerFlowHref(labHref);
+    const runUrl = new URL(runHref, 'https://chess.test');
+
+    expect(runUrl.pathname).toBe('/run');
+    expect(runUrl.searchParams.get('returnTo')).toBe(labHref);
+    expect(isDeploymentLabReturnHref(runUrl.searchParams.get('returnTo'))).toBe(true);
+    expect(isDeploymentLabReturnHref('/studio?mode=viewer&cat=deployment&vk=cards')).toBe(false);
+    expect(isDeploymentLabReturnHref('/editor/level?mode=viewer&cat=deployment&vk=deployment')).toBe(false);
   });
 });

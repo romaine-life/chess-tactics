@@ -52,8 +52,13 @@ import {
   type RunWarSnapshot,
 } from './model';
 import {
+  advanceDeployAll,
+  chooseDeploymentMode,
+  currentDeploymentUnit,
+  disciplinePlacementCells,
   deploymentOptions,
-  deploymentReady,
+  placeAdlectedDeploymentUnit,
+  resolveDeploymentCapacity,
   selectedDeploymentLayout,
   type RunDeploymentLayout,
 } from './deployment';
@@ -315,7 +320,11 @@ function craftUnitList(raw: unknown, label: string): RunCraftUnit[] {
       }
       resolved.push(named);
     }
-    return { type: pieces[0], abilities: resolved };
+    const unique = [...new Set(resolved)];
+    if (unique.length > 1) {
+      throw new RunCraftError(`craft ${label}: a unit may carry only one deployment ability.`);
+    }
+    return { type: pieces[0], abilities: unique };
   });
 }
 
@@ -554,45 +563,31 @@ function autoDeploy(run: RunDocument): { run: RunDocument; layout: RunDeployment
   let prepared = prepareDeployment(run);
   const level = prepared.war.battles[prepared.battleIndex]?.level;
   if (!level) throw new RunCraftError(`craft: Battle ${prepared.battleIndex + 1} has no Level.`);
-  let options = deploymentOptions(prepared, level);
-  if (options.needsBlockedChoice) {
-    const chosen = prepared.army
-      .filter((unit) => unit.type !== 'king')
-      .slice(0, options.blockedChoiceCount)
-      .map((unit) => unit.id);
-    prepared = setDeploymentChoices(prepared, { chosenBlockedUnitIds: chosen });
-    options = deploymentOptions(prepared, level);
-  }
-  if (prepared.deployment?.layoutChoice !== 0 && prepared.deployment?.layoutChoice !== 1) {
-    // A Surveyor's Compass makes the layout an unmade player choice; the crafter takes the first.
-    prepared = setDeploymentChoices(prepared, { layoutChoice: 0 });
-  }
-  if (options.adlectedUnitIds.length) {
-    // Adlected units are placed by hand in play, so the crafter places them the same way:
-    // the first free deployment cells, deterministically.
-    const layout = selectedDeploymentLayout(prepared, options);
-    const used = new Set(Object.values(layout.placements).map((cell) => `${cell.x},${cell.y}`));
-    const manualPlacements = { ...(prepared.deployment?.manualPlacements ?? {}) };
-    for (const unitId of options.adlectedUnitIds) {
-      if (manualPlacements[unitId]) continue;
-      const free = options.zoneCells.find((cell) => !used.has(`${cell.x},${cell.y}`));
-      if (!free) break;
-      manualPlacements[unitId] = `${free.x},${free.y}`;
-      used.add(`${free.x},${free.y}`);
+  prepared = resolveDeploymentCapacity(prepared, level);
+  prepared = chooseDeploymentMode(prepared, level, 'deploy-all');
+  while (prepared.phase === 'deployment') {
+    const unit = currentDeploymentUnit(prepared);
+    if (!unit) break;
+    const options = deploymentOptions(prepared, level);
+    const free = disciplinePlacementCells(prepared, options, unit.id)[0];
+    const next = free
+      ? placeAdlectedDeploymentUnit(prepared, level, free)
+      : advanceDeployAll(prepared, level);
+    if (next === prepared) {
+      throw new RunCraftError(`craft: Battle ${prepared.battleIndex + 1} could not be deployed automatically.`);
     }
-    prepared = setDeploymentChoices(prepared, { manualPlacements });
-    options = deploymentOptions(prepared, level);
+    prepared = next;
   }
-  if (!deploymentReady(prepared, options)) {
-    throw new RunCraftError(`craft: Battle ${prepared.battleIndex + 1} could not be deployed automatically.`);
-  }
+  const options = deploymentOptions(prepared, level);
   return { run: prepared, layout: selectedDeploymentLayout(prepared, options) };
 }
 
 function fightBattle(run: RunDocument): RunDocument {
   const { run: deployed, layout } = autoDeploy(run);
   const deployedUnitIds = Object.keys(layout.placements);
-  const started = beginBattle(deployed, deployedUnitIds, layout.reserveUnitIds, layout.blockedUnitIds);
+  const started = deployed.phase === 'battle'
+    ? deployed
+    : beginBattle(deployed, deployedUnitIds, layout.reserveUnitIds, layout.blockedUnitIds);
   if (started.phase !== 'battle') throw new RunCraftError('craft: the crafted Battle could not be started.');
   // Every deployed unit survives a crafted Battle: the crafter is placing the player at a state,
   // not simulating an outcome.
@@ -611,7 +606,9 @@ function fightBattle(run: RunDocument): RunDocument {
 function craftAftermath(run: RunDocument, spec: RunCraftSpec): RunDocument {
   const { run: deployed, layout } = autoDeploy(run);
   const deployedUnitIds = Object.keys(layout.placements);
-  let started = beginBattle(deployed, deployedUnitIds, layout.reserveUnitIds, layout.blockedUnitIds);
+  let started = deployed.phase === 'battle'
+    ? deployed
+    : beginBattle(deployed, deployedUnitIds, layout.reserveUnitIds, layout.blockedUnitIds);
   if (started.phase !== 'battle') throw new RunCraftError('craft: the crafted Battle could not be started.');
 
   // A King that fell would have lost the Battle, so it is never on the casualty list.
@@ -960,11 +957,8 @@ export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDo
   if (spec.phase === 'deployment') return applyGold(prepareDeployment(run), spec.goldTenths);
 
   if (spec.phase === 'battle') {
-    const { run: deployed, layout } = autoDeploy(run);
-    return applyGold(
-      beginBattle(deployed, Object.keys(layout.placements), layout.reserveUnitIds, layout.blockedUnitIds),
-      spec.goldTenths,
-    );
+    const { run: deployed } = autoDeploy(run);
+    return applyGold(deployed, spec.goldTenths);
   }
 
   // The Battle report stands between the Battle and the Sectio, so it is reached by fighting

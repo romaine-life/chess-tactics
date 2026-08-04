@@ -49,31 +49,44 @@ transaction (ADR-0340).
 The active Run document names its schema marker **RunSaveVersion**. Its stored field is
 `runSaveVersion`, its type is `RunSaveVersion`, and the client and server share
 `CURRENT_RUN_SAVE_VERSION`. Normalization and writes accept only that exact version. The lossless
-chain first renames version 16's marker to RunSaveVersion 17, then rewrites version 17's Shop
-vocabulary into RunSaveVersion 18's Sectio, Adlectio, and Alienatio vocabulary. Migration 54 owns
-the marker rename; migration 55 advances the phase, state property, operation collections,
-admitted-unit provenance, and offer-id prefixes together.
+chain first renames version 16's marker to RunSaveVersion 17, rewrites version 17's Shop
+vocabulary into RunSaveVersion 18's Sectio, Adlectio, and Alienatio vocabulary, then advances
+version 18 to RunSaveVersion 19's starter Chartulary and persisted Klerosis queue. Migration 54
+owns the marker rename; migration 55 advances the Sectio vocabulary; migration 56 adds His Grace
+and Front Lines, grants the King Primogeniture, and returns a version-18 Deployment or Battle to
+the pre-information Klerosis boundary because that version did not persist exact automatic
+destinations.
 Each account migration advances the Run's CAS revision, while the browser applies the same chain
 to its local document on first load. Saves older than version 16 remain unavailable because their
 retired gameplay state has no declared lossless transform. See
 [ADR-0380](adr/0380-run-save-versions-always-migrate.md) and
 [ADR-0392](adr/0392-sectio-is-the-run-disposal-and-acquisition-phase.md) through
-[ADR-0393](adr/0393-adlectio-and-alienatio-are-the-movements-within-sectio.md).
+[ADR-0393](adr/0393-adlectio-and-alienatio-are-the-movements-within-sectio.md), and
+[ADR-0406](adr/0406-klerosis-deals-cards-before-one-unit-at-a-time-deployment.md).
 
 Beginning with RunSaveVersion 16, every version that reaches players has an explicit forward
 migration for account and browser storage. Retired content maps to a typed tombstone or neutral
 replacement—for example, a removed card remains in the deck as **Removed card**—rather than
 invalidating the Run.
 
-RunSaveVersion 18 begins in Bona Vacantia when the opening Conflict offers a lipsanon, otherwise
-in the normal Sectio with kind `opening`. The Run carries the permanent King, two starting Pawns,
-eight gold, and three seeded card offers. Adlectio remains in the same Sectio transaction; Army,
+RunSaveVersion 19 begins in Bona Vacantia when the opening Conflict offers a lipsanon, otherwise
+in the normal Sectio with kind `opening`. The Run carries the permanent King and two starting Pawns
+through the starter-only His Grace and Front Lines cards, eight gold, and three seeded card offers.
+Adlectio remains in the same Sectio transaction; Army,
 Alienatio, Reset Sectio, and Continue reuse the post-Battle model. Continue may perform no
-Adlectio and enters
-Deployment at Battle index 0. Deployment persists only when it owns a player choice; otherwise
-Continue commits directly to Battle. A won non-final Battle enters `aftermath`, which persists
+Adlectio and enters Deployment at Battle index 0. Deployment always persists the Klerosis deal,
+capacity decision, one-unit queue, information cursor, mode, and exact committed formation. A won
+non-final Battle enters `aftermath`, which persists
 the reward, turns, elapsed time, survivors, and fallen units until Continue opens Bona Vacantia
-or the next Sectio. See ADR-0321 through ADR-0348 and ADR-0377 for those gameplay decisions.
+or the next Sectio. See ADR-0321 through ADR-0348, ADR-0377, and ADR-0406 for those gameplay
+decisions.
+
+Migration 56 also retires Pawn-only deployment geometry from durable content. It folds every
+`player-pawn-spawn` square into the general `player-spawn` zone, removes Pawn from that zone's
+`excludedPieceTypes`, and rewrites both structured Levels and encoded `boardCode` wherever playable
+Levels may persist: canonical and public Levels, campaigns, working copies and their retained
+history/session/recovery state, active Runs, and lab/train/solve records. The transform is
+idempotent and preserves every unrelated zone field and square (ADR-0406).
 
 The save stores the selected Ataraxia tier, named and numbered army units, held cards, exact card
 and offer targets, Cacochymic loss history, lipsana and their Conflict state, current deployment
@@ -850,7 +863,7 @@ change. Hosts without Postgres binaries (e.g. the musl session pod) must supply
 The smoke database begins with the exact former ledger: immutable migrations
 1–27 and 36 have executed and only those versions are recorded in the old
 numeric-only format. The production auto-mode runner must skip 1–27 and 36,
-apply 28–35 and 37–45, seal the completed historical rows 1–36, enforce
+apply 28–35 and 37–56, seal the completed historical rows 1–36, enforce
 non-null identity, report that exact plan, and pass its live relation and
 constraint-topology postconditions. The same upgraded database then receives
 the real authenticated generation-attempt archive request; the test verifies

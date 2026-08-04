@@ -6,6 +6,8 @@ partially_superseded_by:
   - "[ADR-0350](0350-run-deployment-promotes-the-mounted-battlefield-in-place.md)'s one mounted scene/store/compositor and phase-gated Battle activation"
   - "[ADR-0352](0352-final-discipline-arrival-precedes-the-automatic-deployment-wave.md)'s final-arrival settlement boundary before automatic phase promotion"
   - "[ADR-0353](0353-battlefield-view-state-is-instance-owned-and-camera-ready-before-reveal.md)'s instance-local camera and pre-reveal preparation rule"
+  - "[ADR-0403](0403-surveyors-compass-chooses-between-ability-resolved-formations.md)'s separate Compass preview and consequential deploy action"
+  - "[ADR-0406](0406-klerosis-deals-cards-before-one-unit-at-a-time-deployment.md)'s persisted queue and final-placement boundary"
 partially_supersedes:
   - "[ADR-0346](0346-run-deployment-is-a-battlefield-state-with-conditional-input.md)'s explicit Begin Battle confirmation after meaningful choices"
   - "[ADR-0348](0348-discipline-resolves-before-automatic-deployment.md)'s implication that the completed automatic formation pauses in Deployment"

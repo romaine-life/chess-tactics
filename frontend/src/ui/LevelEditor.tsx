@@ -1754,14 +1754,12 @@ const DEFAULT_ZONE_TYPE: ZoneType = 'region';
 // The piece types that own a dedicated deployment zone, and can therefore be broken off the
 // general Player Deployment pool (ADR-0367).
 const LE_BREAKABLE_DEPLOYMENT_TYPES = [
-  { pieceType: 'pawn', label: 'Pawn' },
   { pieceType: 'king', label: 'King' },
 ] as const satisfies ReadonlyArray<{ pieceType: PlayablePieceType; label: string }>;
 const DEFAULT_ZONE_COLOR: ZoneColor = 'teal';
 const LEGACY_ZONE_COLOR: Record<ZoneType, ZoneColor> = {
   region: 'teal',
   'player-spawn': 'blue',
-  'player-pawn-spawn': 'violet',
   'player-king-spawn': 'gold',
   'enemy-spawn': 'red',
   'enemy-threat': 'violet',
@@ -7779,13 +7777,13 @@ export function LevelEditor(): ReactElement {
     const nextExcluded = PLAYABLE_PIECE_TYPES.filter((type) => excluded.has(type));
     entries[generalIndex] = { ...general, excludedPieceTypes: nextExcluded.length ? nextExcluded : undefined };
 
-    const zoneType = pieceType === 'pawn' ? 'player-pawn-spawn' : 'player-king-spawn';
+    const zoneType = 'player-king-spawn';
     let zoneIndex = entries.findIndex((entry) => entry.type === zoneType);
     if (on && zoneIndex < 0) {
       entries.push({
         id: nextZoneEntryId(entries),
-        name: uniqueZoneEntryName(pieceType === 'pawn' ? 'Pawn Deployment' : 'King Deployment', entries),
-        color: pieceType === 'pawn' ? 'violet' : 'gold',
+        name: uniqueZoneEntryName('King Deployment', entries),
+        color: 'gold',
         type: zoneType,
         tiles: [],
       });
@@ -10006,8 +10004,6 @@ export function LevelEditor(): ReactElement {
                 ? activeZone.excludedPieceTypes?.length
                   ? `Player Deployment. Automatic placement puts every piece except ${LE_BREAKABLE_DEPLOYMENT_TYPES.filter(({ pieceType }) => activeZone.excludedPieceTypes?.includes(pieceType)).map(({ label }) => `${label}s`).join(' and ')} here; an Adlected unit may still be placed here by hand.`
                   : 'Player Deployment. The Run army starts on these squares.'
-                : activeZone?.type === 'player-pawn-spawn'
-                ? 'Pawn Deployment. Pawns may start here. Squares shared with Player Deployment stay open to every piece.'
                 : activeZone?.type === 'player-king-spawn'
                 ? 'King Deployment. The King may start here, and takes its square before any other unit.'
                 : activeZone?.type === 'enemy-spawn'

@@ -5,6 +5,7 @@ deciders: owner (Nelson) + Codex
 partially_superseded_by:
   - "[ADR-0350](0350-run-deployment-promotes-the-mounted-battlefield-in-place.md)'s in-place completed-formation presentation"
   - "[ADR-0349](0349-the-final-deployment-choice-commits-and-camera-authority-follows-the-active-scene.md)'s immediate Battle commit after the final required placement"
+  - "[ADR-0406](0406-klerosis-deals-cards-before-one-unit-at-a-time-deployment.md)'s queue-local Adlected placement"
 partially_supersedes:
   - "[ADR-0346](0346-run-deployment-is-a-battlefield-state-with-conditional-input.md)'s provisional formation recomputation during incomplete Discipline"
 ---

@@ -29,7 +29,7 @@ describe('tooltip keyword glossary', () => {
     const { entries } = read(<span>{CACOCHYMIC_DESCRIPTION}</span>, CACOCHYMIC_DISPLAY_NAME);
     expect(entries).toEqual([]);
     const selfNamed = read(
-      <span>{`A ${CACOCHYMIC_DISPLAY_NAME} unit is lost after the next victorious Battle.`}</span>,
+      <span>{`A ${CACOCHYMIC_DISPLAY_NAME} unit dies when combat ends.`}</span>,
       CACOCHYMIC_DISPLAY_NAME,
     );
     expect(selfNamed.entries).toEqual([]);

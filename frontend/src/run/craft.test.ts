@@ -130,13 +130,20 @@ describe('run craft specs from a request body', () => {
       .toThrow(/"flying" is not an ability/);
   });
 
+  it('refuses multiple deployment abilities on one ordinary unit', () => {
+    expect(() => runCraftSpecFromJson({
+      phase: 'sectio',
+      army: [{ type: 'rook', abilities: ['eutactic', 'agminate'] }],
+    })).toThrow(/only one deployment ability/);
+  });
+
   it('grants crafted abilities to the units it adds', () => {
     const run = craftRunDocument(
       runCraftSpecFromJson({ phase: 'sectio', battle: 2, army: [{ type: 'rook', abilities: ['agminate'] }, 'pawn'] }),
       war(),
     );
     expect(run.army.map((unit) => `${unit.type}:${unit.abilities.join('+') || 'none'}`))
-      .toEqual(['king:none', 'rook:agminate', 'pawn:none']);
+      .toEqual(['king:primogeniture', 'rook:agminate', 'pawn:none']);
   });
 });
 
@@ -214,8 +221,8 @@ describe('crafted Run documents', () => {
 
   it('crafts the cards the Run already holds by adlecting them for real', () => {
     const run = craft('?craft=sectio&battle=3&cards=rook,pawn+pawn:concinnous&gold=20');
-    expect(run.cards).toHaveLength(3); // the opening Adlectio plus the two named cards
-    const held = run.cards.slice(1);
+    expect(run.cards).toHaveLength(5); // two starters, the opening Adlectio, and the two named cards
+    const held = run.cards.filter((card) => card.coreId === 'r' || card.coreId === 'pp');
     expect(held.map((card) => card.coreId)).toEqual(['r', 'pp']);
     // Real adlectiones: every held unit id is an army unit, and the Concinnous target got its
     // ability from performAdlectio rather than from the spec.
@@ -284,10 +291,11 @@ describe('crafted Run documents', () => {
     expect(run.battleRuntime?.initiallyDeployedUnitIds.length).toBeGreaterThan(0);
   });
 
-  it('makes the Surveyor\'s Compass layout choice a crafted Battle would otherwise wait on', () => {
+  it('keeps the retired Surveyor\'s Compass inert in an explicit crafted Battle', () => {
     const run = craft('?craft=battle&battle=3&lipsana=surveyors-compass');
     expect(run.phase).toBe('battle');
-    expect(run.deployment?.layoutChoice).toBe(0);
+    expect(run.deployment?.stage).toBe('farrago');
+    expect(run.deployment?.placementCursor).toBe(run.deployment?.queueUnitIds.length);
     expect(run.battleRuntime?.initiallyDeployedUnitIds.length).toBeGreaterThan(0);
   });
 

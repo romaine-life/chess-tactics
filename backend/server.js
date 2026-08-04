@@ -3284,6 +3284,455 @@ const MIGRATIONS = [
        WHERE singleton;
     `,
   },
+  {
+    version: 56,
+    name: 'Klerosis starter cards and one general deployment zone',
+    // ADR-0395/0396/0406: RunSaveVersion 19 makes the
+    // starter Chartulary and the persisted deal/queue explicit. A pre-19 Battle cannot
+    // supply exact automatic destinations because those lived only in browser match state,
+    // so it returns to the pre-information Klerosis boundary with its roster, deck, seed,
+    // economy, and War progress intact. The same migration retires Pawn-only deployment
+    // geometry from every durable playable Level representation, including boardCode.
+    sql: `
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_run_army_to_primogeniture(army_value jsonb)
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      IMMUTABLE
+      STRICT
+      AS $function$
+      DECLARE
+        unit_value jsonb;
+        abilities jsonb;
+        migrated jsonb := '[]'::jsonb;
+      BEGIN
+        IF jsonb_typeof(army_value) <> 'array' THEN RETURN army_value; END IF;
+        FOR unit_value IN SELECT value FROM jsonb_array_elements(army_value) LOOP
+          IF jsonb_typeof(unit_value) = 'object' AND unit_value->>'type' = 'king' THEN
+            abilities := CASE
+              WHEN jsonb_typeof(unit_value->'abilities') = 'array' THEN unit_value->'abilities'
+              ELSE '[]'::jsonb
+            END;
+            IF NOT abilities @> '["primogeniture"]'::jsonb THEN
+              unit_value := jsonb_set(unit_value, '{abilities}', abilities || '["primogeniture"]'::jsonb, true);
+            END IF;
+          END IF;
+          migrated := migrated || jsonb_build_array(unit_value);
+        END LOOP;
+        RETURN migrated;
+      END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_run_cards_to_starters(
+        cards_value jsonb,
+        army_value jsonb
+      )
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      IMMUTABLE
+      STRICT
+      AS $function$
+      DECLARE
+        cards jsonb := CASE WHEN jsonb_typeof(cards_value) = 'array' THEN cards_value ELSE '[]'::jsonb END;
+        king_id text;
+        starting_pawn_ids jsonb := '[]'::jsonb;
+        his_grace jsonb;
+        front_lines jsonb;
+      BEGIN
+        SELECT unit_value->>'id'
+          INTO king_id
+          FROM jsonb_array_elements(army_value) AS unit_value
+         WHERE jsonb_typeof(unit_value) = 'object'
+           AND unit_value->>'type' = 'king'
+           AND unit_value ? 'id'
+         LIMIT 1;
+        SELECT COALESCE(jsonb_agg(to_jsonb(unit_value->>'id') ORDER BY ordinality), '[]'::jsonb)
+          INTO starting_pawn_ids
+          FROM jsonb_array_elements(army_value) WITH ORDINALITY AS entry(unit_value, ordinality)
+         WHERE jsonb_typeof(unit_value) = 'object'
+           AND unit_value->>'type' = 'pawn'
+           AND unit_value->>'source' = 'starting'
+           AND unit_value ? 'id';
+        IF king_id IS NULL THEN RETURN cards; END IF;
+
+        his_grace := jsonb_build_object(
+          'id', 'run-card-his-grace',
+          'coreId', 'his-grace',
+          'cardType', NULL,
+          'effectSeed', 0,
+          'effectTargetUnitId', NULL,
+          'unitIds', jsonb_build_array(king_id),
+          'lostUnitIds', '[]'::jsonb,
+          'cacochymicUnitId', NULL,
+          'acquiredAfterBattleIndex', 0
+        );
+        front_lines := jsonb_build_object(
+          'id', 'run-card-front-lines',
+          'coreId', 'front-lines',
+          'cardType', NULL,
+          'effectSeed', 0,
+          'effectTargetUnitId', NULL,
+          'unitIds', starting_pawn_ids,
+          'lostUnitIds', '[]'::jsonb,
+          'cacochymicUnitId', NULL,
+          'acquiredAfterBattleIndex', 0
+        );
+        RETURN jsonb_build_array(his_grace, front_lines) || cards;
+      END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_active_run_to_klerosis(run_value jsonb)
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      AS $function$
+      DECLARE
+        migrated jsonb;
+        army_value jsonb;
+        sectio_value jsonb;
+        entry_snapshot jsonb;
+        entry_army jsonb;
+      BEGIN
+        IF run_value->'runSaveVersion' <> '18'::jsonb THEN RETURN run_value; END IF;
+        army_value := pg_temp.migrate_run_army_to_primogeniture(run_value->'army');
+        migrated := jsonb_set(run_value, '{army}', army_value, false);
+        migrated := jsonb_set(
+          migrated,
+          '{cards}',
+          pg_temp.migrate_run_cards_to_starters(run_value->'cards', army_value),
+          false
+        );
+        migrated := jsonb_set(migrated, '{runSaveVersion}', '19'::jsonb, false);
+
+        IF jsonb_typeof(migrated->'sectio') = 'object'
+           AND jsonb_typeof(migrated->'sectio'->'entrySnapshot') = 'object' THEN
+          sectio_value := migrated->'sectio';
+          entry_snapshot := sectio_value->'entrySnapshot';
+          entry_army := pg_temp.migrate_run_army_to_primogeniture(entry_snapshot->'army');
+          entry_snapshot := jsonb_set(entry_snapshot, '{army}', entry_army, false);
+          entry_snapshot := jsonb_set(
+            entry_snapshot,
+            '{cards}',
+            pg_temp.migrate_run_cards_to_starters(entry_snapshot->'cards', entry_army),
+            false
+          );
+          sectio_value := jsonb_set(sectio_value, '{entrySnapshot}', entry_snapshot, false);
+          migrated := jsonb_set(migrated, '{sectio}', sectio_value, false);
+        END IF;
+
+        IF migrated->>'phase' IN ('deployment', 'battle') THEN
+          migrated := jsonb_set(migrated, '{phase}', '"deployment"'::jsonb, false);
+          migrated := jsonb_set(migrated, '{deployment}', 'null'::jsonb, false);
+          migrated := jsonb_set(migrated, '{battleRuntime}', 'null'::jsonb, false);
+          migrated := jsonb_set(migrated, '{aftermath}', 'null'::jsonb, false);
+        END IF;
+        RETURN migrated;
+      END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.jsonb_distinct_array_concat(left_value jsonb, right_value jsonb)
+      RETURNS jsonb
+      LANGUAGE sql
+      IMMUTABLE
+      AS $function$
+        SELECT COALESCE(jsonb_agg(value ORDER BY first_ordinality), '[]'::jsonb)
+          FROM (
+            SELECT value, min(ordinality) AS first_ordinality
+              FROM jsonb_array_elements(
+                CASE WHEN jsonb_typeof(left_value) = 'array' THEN left_value ELSE '[]'::jsonb END
+                || CASE WHEN jsonb_typeof(right_value) = 'array' THEN right_value ELSE '[]'::jsonb END
+              ) WITH ORDINALITY AS item(value, ordinality)
+             GROUP BY value
+          ) AS distinct_items
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.without_pawn_exclusion(excluded_value jsonb)
+      RETURNS jsonb
+      LANGUAGE sql
+      IMMUTABLE
+      AS $function$
+        SELECT COALESCE(jsonb_agg(value ORDER BY ordinality), '[]'::jsonb)
+          FROM jsonb_array_elements(
+            CASE WHEN jsonb_typeof(excluded_value) = 'array' THEN excluded_value ELSE '[]'::jsonb END
+          ) WITH ORDINALITY AS item(value, ordinality)
+         WHERE value <> '"pawn"'::jsonb
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_level_layer_zones(zones_value jsonb)
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      IMMUTABLE
+      STRICT
+      AS $function$
+      DECLARE
+        zone_value jsonb;
+        pawn_tiles jsonb := '[]'::jsonb;
+        first_pawn jsonb := NULL;
+        migrated jsonb := '[]'::jsonb;
+        merged boolean := false;
+        excluded jsonb;
+      BEGIN
+        IF jsonb_typeof(zones_value) <> 'array' THEN RETURN zones_value; END IF;
+        FOR zone_value IN SELECT value FROM jsonb_array_elements(zones_value) LOOP
+          IF jsonb_typeof(zone_value) = 'object' AND zone_value->>'type' = 'player-pawn-spawn' THEN
+            IF first_pawn IS NULL THEN first_pawn := zone_value; END IF;
+            pawn_tiles := pg_temp.jsonb_distinct_array_concat(pawn_tiles, zone_value->'tiles');
+          END IF;
+        END LOOP;
+        FOR zone_value IN SELECT value FROM jsonb_array_elements(zones_value) LOOP
+          IF jsonb_typeof(zone_value) = 'object' AND zone_value->>'type' = 'player-pawn-spawn' THEN CONTINUE; END IF;
+          IF jsonb_typeof(zone_value) = 'object' AND zone_value->>'type' = 'player-spawn' THEN
+            excluded := pg_temp.without_pawn_exclusion(zone_value->'excludedPieceTypes');
+            zone_value := CASE WHEN jsonb_array_length(excluded) = 0
+              THEN zone_value - 'excludedPieceTypes'
+              ELSE jsonb_set(zone_value, '{excludedPieceTypes}', excluded, true)
+            END;
+            IF NOT merged AND jsonb_array_length(pawn_tiles) > 0 THEN
+              zone_value := jsonb_set(
+                zone_value,
+                '{tiles}',
+                pg_temp.jsonb_distinct_array_concat(zone_value->'tiles', pawn_tiles),
+                true
+              );
+              merged := true;
+            END IF;
+          END IF;
+          migrated := migrated || jsonb_build_array(zone_value);
+        END LOOP;
+        IF NOT merged AND first_pawn IS NOT NULL THEN
+          first_pawn := jsonb_set(first_pawn, '{type}', '"player-spawn"'::jsonb, false)
+            - 'excludedPieceTypes';
+          first_pawn := jsonb_set(first_pawn, '{tiles}', pawn_tiles, true);
+          migrated := migrated || jsonb_build_array(first_pawn);
+        END IF;
+        RETURN migrated;
+      END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_board_wire_zones(wire_value jsonb)
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      IMMUTABLE
+      STRICT
+      AS $function$
+      DECLARE
+        migrated jsonb := wire_value;
+        entry_value jsonb;
+        pawn_tiles jsonb := '[]'::jsonb;
+        first_pawn jsonb := NULL;
+        entries jsonb := '[]'::jsonb;
+        merged boolean := false;
+        excluded jsonb;
+        legacy_zones jsonb;
+      BEGIN
+        IF jsonb_typeof(wire_value) <> 'object' THEN RETURN wire_value; END IF;
+        IF jsonb_typeof(wire_value->'zn') = 'array' THEN
+          FOR entry_value IN SELECT value FROM jsonb_array_elements(wire_value->'zn') LOOP
+            IF jsonb_typeof(entry_value) = 'array' AND entry_value->>1 = 'player-pawn-spawn' THEN
+              IF first_pawn IS NULL THEN first_pawn := entry_value; END IF;
+              pawn_tiles := pg_temp.jsonb_distinct_array_concat(pawn_tiles, entry_value->2);
+            END IF;
+          END LOOP;
+          FOR entry_value IN SELECT value FROM jsonb_array_elements(wire_value->'zn') LOOP
+            IF jsonb_typeof(entry_value) = 'array' AND entry_value->>1 = 'player-pawn-spawn' THEN CONTINUE; END IF;
+            IF jsonb_typeof(entry_value) = 'array' AND entry_value->>1 = 'player-spawn' THEN
+              IF jsonb_typeof(entry_value->5) = 'array' THEN
+                excluded := pg_temp.without_pawn_exclusion(entry_value->5);
+                entry_value := jsonb_set(entry_value, '{5}', excluded, false);
+              END IF;
+              IF NOT merged AND jsonb_array_length(pawn_tiles) > 0 THEN
+                entry_value := jsonb_set(
+                  entry_value,
+                  '{2}',
+                  pg_temp.jsonb_distinct_array_concat(entry_value->2, pawn_tiles),
+                  false
+                );
+                merged := true;
+              END IF;
+            END IF;
+            entries := entries || jsonb_build_array(entry_value);
+          END LOOP;
+          IF NOT merged AND first_pawn IS NOT NULL THEN
+            first_pawn := jsonb_set(first_pawn, '{1}', '"player-spawn"'::jsonb, false);
+            first_pawn := jsonb_set(first_pawn, '{2}', pawn_tiles, false);
+            IF jsonb_typeof(first_pawn->5) = 'array' THEN
+              first_pawn := jsonb_set(first_pawn, '{5}', '[]'::jsonb, false);
+            END IF;
+            entries := entries || jsonb_build_array(first_pawn);
+          END IF;
+          migrated := jsonb_set(migrated, '{zn}', entries, false);
+        END IF;
+        IF jsonb_typeof(wire_value->'z') = 'object' THEN
+          SELECT COALESCE(jsonb_object_agg(
+            key,
+            CASE WHEN value = '"player-pawn-spawn"'::jsonb THEN '"player-spawn"'::jsonb ELSE value END
+          ), '{}'::jsonb)
+            INTO legacy_zones
+            FROM jsonb_each(wire_value->'z');
+          migrated := jsonb_set(migrated, '{z}', legacy_zones, false);
+        END IF;
+        RETURN migrated;
+      END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_level_board_code(code_value text)
+      RETURNS text
+      LANGUAGE plpgsql
+      IMMUTABLE
+      STRICT
+      AS $function$
+      DECLARE
+        padded text;
+        wire_value jsonb;
+        encoded text;
+      BEGIN
+        padded := translate(code_value, '-_', '+/')
+          || repeat('=', (4 - length(code_value) % 4) % 4);
+        wire_value := convert_from(decode(padded, 'base64'), 'UTF8')::jsonb;
+        wire_value := pg_temp.migrate_board_wire_zones(wire_value);
+        encoded := encode(convert_to(wire_value::text, 'UTF8'), 'base64');
+        RETURN replace(replace(replace(replace(replace(encoded, '+', '-'), '/', '_'), E'\n', ''), E'\r', ''), '=', '');
+      EXCEPTION WHEN others THEN
+        RETURN code_value;
+      END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_level_object(level_value jsonb)
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      IMMUTABLE
+      STRICT
+      AS $function$
+      DECLARE
+        migrated jsonb := level_value;
+        layers_value jsonb;
+      BEGIN
+        IF jsonb_typeof(level_value) <> 'object' THEN RETURN level_value; END IF;
+        IF jsonb_typeof(migrated->'layers') = 'object'
+           AND jsonb_typeof(migrated->'layers'->'zones') = 'array' THEN
+          layers_value := jsonb_set(
+            migrated->'layers',
+            '{zones}',
+            pg_temp.migrate_level_layer_zones(migrated->'layers'->'zones'),
+            false
+          );
+          migrated := jsonb_set(migrated, '{layers}', layers_value, false);
+        END IF;
+        IF jsonb_typeof(migrated->'boardCode') = 'string' THEN
+          migrated := jsonb_set(
+            migrated,
+            '{boardCode}',
+            to_jsonb(pg_temp.migrate_level_board_code(migrated->>'boardCode')),
+            false
+          );
+        END IF;
+        RETURN migrated;
+      END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_nested_levels(document_value jsonb)
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      IMMUTABLE
+      STRICT
+      AS $function$
+      DECLARE
+        migrated jsonb;
+      BEGIN
+        IF jsonb_typeof(document_value) = 'array' THEN
+          SELECT COALESCE(jsonb_agg(pg_temp.migrate_nested_levels(value) ORDER BY ordinality), '[]'::jsonb)
+            INTO migrated
+            FROM jsonb_array_elements(document_value) WITH ORDINALITY AS entry(value, ordinality);
+          RETURN migrated;
+        END IF;
+        IF jsonb_typeof(document_value) = 'object' THEN
+          SELECT COALESCE(jsonb_object_agg(key, pg_temp.migrate_nested_levels(value)), '{}'::jsonb)
+            INTO migrated
+            FROM jsonb_each(document_value);
+          IF migrated->'formatVersion' = '1'::jsonb
+             AND (migrated ? 'layers' OR migrated ? 'boardCode') THEN
+            migrated := pg_temp.migrate_level_object(migrated);
+          END IF;
+          RETURN migrated;
+        END IF;
+        RETURN document_value;
+      END
+      $function$;
+
+      UPDATE active_runs
+         SET body = pg_temp.migrate_nested_levels(pg_temp.migrate_active_run_to_klerosis(body)),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE body->'runSaveVersion' = '18'::jsonb;
+
+      UPDATE levels
+         SET body = pg_temp.migrate_nested_levels(body),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE position('player-pawn-spawn' in body::text) > 0
+          OR (position('excludedPieceTypes' in body::text) > 0 AND position('"pawn"' in body::text) > 0);
+      UPDATE campaign_workspaces
+         SET body = pg_temp.migrate_nested_levels(body),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE position('player-pawn-spawn' in body::text) > 0
+          OR (position('excludedPieceTypes' in body::text) > 0 AND position('"pawn"' in body::text) > 0);
+      UPDATE official_campaigns
+         SET data = pg_temp.migrate_nested_levels(data),
+             revision = revision + 1,
+             updated_at = now(),
+             updated_by = 'migration-56'
+       WHERE position('player-pawn-spawn' in data::text) > 0
+          OR (position('excludedPieceTypes' in data::text) > 0 AND position('"pawn"' in data::text) > 0);
+      UPDATE public_maps
+         SET body = pg_temp.migrate_nested_levels(body), updated_at = now()
+       WHERE position('player-pawn-spawn' in body::text) > 0
+          OR (position('excludedPieceTypes' in body::text) > 0 AND position('"pawn"' in body::text) > 0);
+
+      UPDATE level_working_copy_revisions
+         SET body = pg_temp.migrate_nested_levels(body)
+       WHERE position('player-pawn-spawn' in body::text) > 0
+          OR (position('excludedPieceTypes' in body::text) > 0 AND position('"pawn"' in body::text) > 0);
+      WITH changed AS (
+        UPDATE level_working_copies
+           SET body = pg_temp.migrate_nested_levels(body),
+               saved_revision = CASE WHEN saved_revision = revision THEN revision + 1 ELSE saved_revision END,
+               revision = revision + 1,
+               baseline_hash = NULL,
+               updated_at = now()
+         WHERE position('player-pawn-spawn' in body::text) > 0
+            OR (position('excludedPieceTypes' in body::text) > 0 AND position('"pawn"' in body::text) > 0)
+        RETURNING document_id, revision, body, saved_revision, baseline_hash, updated_at
+      )
+      INSERT INTO level_working_copy_revisions
+        (document_id, revision, body, saved_revision, baseline_hash, reason, created_at)
+      SELECT document_id, revision, body, saved_revision, baseline_hash, 'migration', updated_at
+        FROM changed
+      ON CONFLICT (document_id, revision) DO NOTHING;
+      UPDATE editor_document_edit_sessions
+         SET draft_body = pg_temp.migrate_nested_levels(draft_body)
+       WHERE position('player-pawn-spawn' in draft_body::text) > 0
+          OR (position('excludedPieceTypes' in draft_body::text) > 0 AND position('"pawn"' in draft_body::text) > 0);
+      UPDATE editor_document_recoveries
+         SET body = pg_temp.migrate_nested_levels(body)
+       WHERE position('player-pawn-spawn' in body::text) > 0
+          OR (position('excludedPieceTypes' in body::text) > 0 AND position('"pawn"' in body::text) > 0);
+
+      UPDATE lab_runs SET body = pg_temp.migrate_nested_levels(body)
+       WHERE position('player-pawn-spawn' in body::text) > 0
+          OR (position('excludedPieceTypes' in body::text) > 0 AND position('"pawn"' in body::text) > 0);
+      UPDATE train_runs
+         SET spec = pg_temp.migrate_nested_levels(spec), body = pg_temp.migrate_nested_levels(body), updated_at = now()
+       WHERE position('player-pawn-spawn' in spec::text) > 0
+          OR position('player-pawn-spawn' in body::text) > 0
+          OR (position('excludedPieceTypes' in spec::text) > 0 AND position('"pawn"' in spec::text) > 0)
+          OR (position('excludedPieceTypes' in body::text) > 0 AND position('"pawn"' in body::text) > 0);
+      UPDATE solve_runs
+         SET spec = pg_temp.migrate_nested_levels(spec), body = pg_temp.migrate_nested_levels(body), updated_at = now()
+       WHERE position('player-pawn-spawn' in spec::text) > 0
+          OR position('player-pawn-spawn' in body::text) > 0
+          OR (position('excludedPieceTypes' in spec::text) > 0 AND position('"pawn"' in spec::text) > 0)
+          OR (position('excludedPieceTypes' in body::text) > 0 AND position('"pawn"' in body::text) > 0);
+    `,
+  },
 ];
 
 let pool = null;
@@ -3872,12 +4321,16 @@ async function unmigratedActiveRunSaveCounts(client) {
        )::integer AS version_16_count,
        count(*) FILTER (
          WHERE body->'runSaveVersion' = '17'::jsonb
-       )::integer AS version_17_count
+       )::integer AS version_17_count,
+       count(*) FILTER (
+         WHERE body->'runSaveVersion' = '18'::jsonb
+       )::integer AS version_18_count
        FROM active_runs`,
   );
   return Object.freeze({
     version_16_count: Number(rows[0]?.version_16_count) || 0,
     version_17_count: Number(rows[0]?.version_17_count) || 0,
+    version_18_count: Number(rows[0]?.version_18_count) || 0,
   });
 }
 
@@ -3930,9 +4383,12 @@ async function requiredSchemaContractIssues(client) {
       unexpectedReasonForeignKeys.map((constraint) => constraint.constraint_name),
     ),
     unmigrated_active_run_save_count:
-      unmigratedActiveRunSaves.version_16_count + unmigratedActiveRunSaves.version_17_count,
+      unmigratedActiveRunSaves.version_16_count
+      + unmigratedActiveRunSaves.version_17_count
+      + unmigratedActiveRunSaves.version_18_count,
     unmigrated_active_run_version_16_count: unmigratedActiveRunSaves.version_16_count,
     unmigrated_active_run_version_17_count: unmigratedActiveRunSaves.version_17_count,
+    unmigrated_active_run_version_18_count: unmigratedActiveRunSaves.version_18_count,
     ...generationAttemptRetryContractIssues(
       retryContractRows.columns,
       retryContractRows.constraints,
@@ -4022,6 +4478,17 @@ async function repairRequiredSchemaContracts(
     await executeMigration(migration, 'repair active Run Sectio operation vocabulary contract');
     completedSteps.push(Object.freeze({
       contract: 'active Run Sectio operation vocabulary',
+      migration_version: migration.version,
+    }));
+    markInspection(`inspect required contract repairs after migration ${migration.version}`);
+    issues = await requiredSchemaContractIssues(client);
+  }
+  if (issues.unmigrated_active_run_version_18_count > 0) {
+    const migration = MIGRATIONS.find((candidate) => candidate.version === 56);
+    if (!migration) throw new Error('Klerosis active Run save repair migration is unavailable');
+    await executeMigration(migration, 'repair active Run Klerosis contract');
+    completedSteps.push(Object.freeze({
+      contract: 'active Run Klerosis save version',
       migration_version: migration.version,
     }));
     markInspection(`inspect required contract repairs after migration ${migration.version}`);
@@ -6162,7 +6629,7 @@ const WORKSPACE_TERRAIN = new Set(['grass', 'water', 'stone', 'road', 'bridge', 
 // Mirror of core/level.ts ZONE_TYPES. `workspaceZoneTypes.test.js` fails when this drifts from
 // the shared source: a zone type the editor can author but this set does not know is rejected
 // as an invalid level body, which surfaces to the author only as "Cloud autosave is unavailable".
-const WORKSPACE_ZONE_TYPES = new Set(['region', 'player-spawn', 'player-pawn-spawn', 'player-king-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock', 'pawn-promotion']);
+const WORKSPACE_ZONE_TYPES = new Set(['region', 'player-spawn', 'player-king-spawn', 'enemy-spawn', 'enemy-threat', 'objective', 'falling-rock', 'pawn-promotion']);
 const WORKSPACE_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king', 'rock', 'random-rock']);
 const WORKSPACE_SIDES = new Set(['player', 'enemy', 'neutral']);
 // Playable-only piece types for a random-placement roster (no rocks) — mirrors the
@@ -6436,7 +6903,7 @@ function validateWorkspaceLevel(level, key) {
     if (!zone || typeof zone.id !== 'string' || !WORKSPACE_ZONE_TYPES.has(zone.type) || !Array.isArray(zone.tiles)) return `levels.${key}.layers.zones contains an invalid zone`;
     // ADR-0367: the piece types a Player Deployment zone bars from automatic placement.
     if (zone.excludedPieceTypes !== undefined) {
-      if (!Array.isArray(zone.excludedPieceTypes) || zone.excludedPieceTypes.some((type) => !WORKSPACE_ROSTER_PIECES.has(type))) {
+      if (!Array.isArray(zone.excludedPieceTypes) || zone.excludedPieceTypes.some((type) => type !== 'king')) {
         return `levels.${key}.layers.zones contains an invalid excludedPieceTypes`;
       }
     }
@@ -18914,7 +19381,7 @@ const ACTIVE_RUN_PHASES = new Set(['aftermath', 'bona-vacantia', 'deployment', '
 const ACTIVE_RUN_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
 const ACTIVE_RUN_UNIT_SOURCES = new Set(['king', 'starting', 'adlectio']);
 const ACTIVE_RUN_PIECE_VALUES = Object.freeze({ pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9, king: 0 });
-const ACTIVE_RUN_ABILITIES = new Set(['adlected', 'eutactic', 'agminate']);
+const ACTIVE_RUN_ABILITIES = new Set(['adlected', 'eutactic', 'agminate', 'primogeniture']);
 const ACTIVE_RUN_MODIFIERS = new Set(['cacochymic']);
 const ACTIVE_RUN_CACOCHYMIC_DISCOUNTS = Object.freeze({ pawn: 0, knight: 1, bishop: 1, rook: 2, queen: 3 });
 const ACTIVE_RUN_SECTIO_FIELDS = new Set([
@@ -18944,6 +19411,23 @@ const ACTIVE_RUN_AFTERMATH_FIELDS = new Set([
   'bonusGoldTenths',
   'survivingUnitIds',
   'fallenUnits',
+]);
+const ACTIVE_RUN_DEPLOYMENT_FIELDS = new Set([
+  'battleIndex',
+  'seed',
+  'dealtCardIds',
+  'queueUnitIds',
+  'deployingUnitIds',
+  'unavailableUnitIds',
+  'capacityResolved',
+  'placements',
+  'placementCursor',
+  'revealedUnitId',
+  'mode',
+  'stage',
+  'blockedUnitIds',
+  'manualPlacements',
+  'temporaryAdlectedUnitId',
 ]);
 const ACTIVE_RUN_SAVE_VERSION = serverRender?.CURRENT_RUN_SAVE_VERSION;
 const RUN_LIPSANA = Array.isArray(serverRender?.RUN_LIPSANA) ? serverRender.RUN_LIPSANA : [];
@@ -19005,7 +19489,14 @@ function validateActiveRunBody(run) {
     if (!validName) {
       return 'run.army contains an invalid unit name';
     }
-    if (!Array.isArray(unit.abilities) || unit.abilities.some((ability) => !ACTIVE_RUN_ABILITIES.has(ability))) {
+    if (
+      !Array.isArray(unit.abilities)
+      || new Set(unit.abilities).size !== unit.abilities.length
+      || unit.abilities.some((ability) => !ACTIVE_RUN_ABILITIES.has(ability))
+      || (unit.type === 'king'
+        ? !unit.abilities.includes('primogeniture') || unit.abilities.length > 2
+        : unit.abilities.includes('primogeniture') || unit.abilities.length > 1)
+    ) {
       return 'run.army contains invalid abilities';
     }
     if (!Array.isArray(unit.modifiers) || unit.modifiers.some((modifier) => !ACTIVE_RUN_MODIFIERS.has(modifier))) {
@@ -19018,7 +19509,10 @@ function validateActiveRunBody(run) {
       return 'run.army contains an invalid inspection seed';
     }
   }
-  if (!run.army.some((unit) => unit.id === 'run-king' && unit.type === 'king')) return 'run.army must retain its King';
+  if (
+    run.army.filter((unit) => unit.id === 'run-king' && unit.type === 'king').length !== 1
+    || run.army.filter((unit) => unit.type === 'king').length !== 1
+  ) return 'run.army must retain its one King';
   {
     if (!Array.isArray(run.cards) || run.cards.length > 200) return 'run.cards is invalid';
     const cardIds = new Set();
@@ -19114,6 +19608,30 @@ function validateActiveRunBody(run) {
         return 'run.army Cacochymic modifiers do not match card targets';
       }
     }
+    const hisGraceCards = run.cards.filter((card) => card.coreId === 'his-grace');
+    const frontLinesCards = run.cards.filter((card) => card.coreId === 'front-lines');
+    if (
+      hisGraceCards.length !== 1
+      || hisGraceCards[0].id !== 'run-card-his-grace'
+      || hisGraceCards[0].cardType !== null
+      || hisGraceCards[0].effectTargetUnitId !== null
+      || hisGraceCards[0].cacochymicUnitId !== null
+      || hisGraceCards[0].unitIds.length !== 1
+      || hisGraceCards[0].unitIds[0] !== 'run-king'
+      || hisGraceCards[0].lostUnitIds.length !== 0
+    ) return 'run.cards must retain His Grace';
+    if (
+      frontLinesCards.length !== 1
+      || frontLinesCards[0].id !== 'run-card-front-lines'
+      || frontLinesCards[0].cardType !== null
+      || frontLinesCards[0].effectTargetUnitId !== null
+      || frontLinesCards[0].cacochymicUnitId !== null
+      || frontLinesCards[0].lostUnitIds.length !== 0
+      || frontLinesCards[0].unitIds.some((unitId) => {
+        const unit = run.army.find((candidate) => candidate.id === unitId);
+        return unit?.type !== 'pawn' || unit.source !== 'starting';
+      })
+    ) return 'run.cards contains invalid Front Lines membership';
     if (!Array.isArray(run.pestiferousLosses) || run.pestiferousLosses.length > 20000) {
       return 'run.pestiferousLosses is invalid';
     }
@@ -19155,6 +19673,95 @@ function validateActiveRunBody(run) {
     }
     if (lossUnitIds.size !== lostCardUnitIds.size) return 'run.cards loss history is incomplete';
     if (!isFiniteInteger(run.nextCardSequence) || run.nextCardSequence < 1) return 'run.nextCardSequence is invalid';
+  }
+  {
+    const deployment = run.deployment;
+    if (run.phase === 'battle' && deployment === null) return 'run.deployment is required during Battle';
+    if (run.phase !== 'deployment' && run.phase !== 'battle') {
+      if (deployment !== null) return 'run.deployment is invalid outside deployment and Battle';
+    } else if (deployment !== null) {
+      if (!isObjectRecord(deployment)) return 'run.deployment is invalid';
+      if (Object.keys(deployment).some((field) => !ACTIVE_RUN_DEPLOYMENT_FIELDS.has(field))) {
+        return 'run.deployment contains an unsupported field';
+      }
+      const validUniqueIds = (value, allowedIds, maximum = 200) => Array.isArray(value)
+        && value.length <= maximum
+        && new Set(value).size === value.length
+        && value.every((id) => typeof id === 'string' && allowedIds.has(id));
+      const cardIds = new Set(run.cards.map((card) => card.id));
+      if (
+        deployment.battleIndex !== run.battleIndex
+        || !isFiniteInteger(deployment.seed)
+        || deployment.seed < 0
+        || deployment.seed > 0xffffffff
+        || !validUniqueIds(deployment.dealtCardIds, cardIds)
+        || deployment.dealtCardIds[0] !== 'run-card-his-grace'
+        || !validUniqueIds(deployment.queueUnitIds, unitIds)
+        || deployment.queueUnitIds[0] !== 'run-king'
+        || !validUniqueIds(deployment.deployingUnitIds, unitIds)
+        || !validUniqueIds(deployment.unavailableUnitIds, unitIds)
+        || typeof deployment.capacityResolved !== 'boolean'
+        || !isFiniteInteger(deployment.placementCursor)
+        || deployment.placementCursor < 0
+        || deployment.placementCursor > deployment.queueUnitIds.length
+        || !['klerosis', 'primogeniture', 'farrago'].includes(deployment.stage)
+        || (deployment.mode !== undefined && !['deploy-all', 'step-through'].includes(deployment.mode))
+        || !isObjectRecord(deployment.placements)
+        || !isObjectRecord(deployment.manualPlacements)
+        || !validUniqueIds(deployment.blockedUnitIds, unitIds)
+      ) return 'run.deployment contains invalid state';
+      const deployingIds = new Set(deployment.deployingUnitIds);
+      const unavailableIds = new Set(deployment.unavailableUnitIds);
+      if (
+        [...deployingIds].some((id) => unavailableIds.has(id) || !deployment.queueUnitIds.includes(id))
+        || new Set([...deployingIds, ...unavailableIds]).size !== unitIds.size
+        || deployment.blockedUnitIds.length !== deployment.unavailableUnitIds.length
+        || deployment.blockedUnitIds.some((id, index) => id !== deployment.unavailableUnitIds[index])
+      ) return 'run.deployment unit pools are inconsistent';
+      const dealtUnitIds = new Set(deployment.dealtCardIds.flatMap((cardId) => (
+        run.cards.find((card) => card.id === cardId)?.unitIds ?? []
+      )));
+      if (
+        deployment.queueUnitIds.some((id) => !dealtUnitIds.has(id))
+        || (!deployment.capacityResolved && (
+          deployment.queueUnitIds.length !== dealtUnitIds.size
+          || [...dealtUnitIds].some((id) => !deployment.queueUnitIds.includes(id))
+        ))
+      ) return 'run.deployment queue does not match its dealt cards';
+      const placementEntries = Object.entries(deployment.placements);
+      const placementSquares = new Set();
+      for (const [unitId, square] of placementEntries) {
+        if (
+          !deployingIds.has(unitId)
+          || typeof square !== 'string'
+          || !/^-?\d+,-?\d+$/.test(square)
+          || placementSquares.has(square)
+        ) return 'run.deployment placements are invalid';
+        placementSquares.add(square);
+      }
+      for (const [unitId, square] of Object.entries(deployment.manualPlacements)) {
+        if (deployment.placements[unitId] !== square) return 'run.deployment manual placements are invalid';
+      }
+      const currentUnitId = deployment.queueUnitIds[deployment.placementCursor];
+      if (
+        deployment.revealedUnitId !== undefined
+        && (deployment.revealedUnitId !== currentUnitId || !deployingIds.has(deployment.revealedUnitId))
+      ) return 'run.deployment revealed unit is invalid';
+      if (
+        deployment.temporaryAdlectedUnitId !== undefined
+        && !deployingIds.has(deployment.temporaryAdlectedUnitId)
+      ) return 'run.deployment temporary Adlected unit is invalid';
+      if (deployment.stage === 'klerosis' && (deployment.mode !== undefined || deployment.placementCursor !== 0)) {
+        return 'run.deployment Klerosis state is invalid';
+      }
+      if (
+        run.phase === 'battle'
+        && (!deployment.capacityResolved
+          || !deployment.mode
+          || deployment.placementCursor !== deployment.queueUnitIds.length
+          || deployment.revealedUnitId !== undefined)
+      ) return 'run Battle has incomplete deployment state';
+    }
   }
   for (const field of ['lipsana', 'seenLipsana']) {
     if (!Array.isArray(run[field]) || run[field].length > 100 || run[field].some((id) => typeof id !== 'string' || !id)) {
@@ -19377,8 +19984,8 @@ function validateActiveRunBody(run) {
           || offerValues.size !== 3
           // Opening offers carry the same qualifiers as any other draw and are priced by the
           // shared affected-pricing rule checked above, so a qualifier may price one past the
-          // starting gold. At least one of them must stay buyable with that gold, because the
-          // opening cannot be left without a purchase.
+          // starting gold. At least one remains buyable even though leaving without Adlectio is
+          // allowed; the first Klerosis can consequently reveal only the two starter cards.
           || run.sectio.cardOffers.some((offer) => offer.value > 8)
           || !run.sectio.cardOffers.some((offer) => offer.cost <= 8)
           || run.sectio.paidLipsanonOffer !== null
@@ -19392,6 +19999,8 @@ function validateActiveRunBody(run) {
           || !Array.isArray(run.sectio.entrySnapshot.army)
           || run.sectio.entrySnapshot.army.length !== 3
           || run.sectio.entrySnapshot.army[0]?.id !== 'run-king'
+          || run.sectio.entrySnapshot.army[0]?.type !== 'king'
+          || !run.sectio.entrySnapshot.army[0]?.abilities?.includes('primogeniture')
           || run.sectio.entrySnapshot.army[1]?.id !== 'run-pawn-a'
           || run.sectio.entrySnapshot.army[1]?.type !== 'pawn'
           || run.sectio.entrySnapshot.army[1]?.source !== 'starting'
@@ -19399,7 +20008,16 @@ function validateActiveRunBody(run) {
           || run.sectio.entrySnapshot.army[2]?.type !== 'pawn'
           || run.sectio.entrySnapshot.army[2]?.source !== 'starting'
           || !Array.isArray(run.sectio.entrySnapshot.cards)
-          || run.sectio.entrySnapshot.cards.length !== 0
+          || run.sectio.entrySnapshot.cards.length !== 2
+          || run.sectio.entrySnapshot.cards[0]?.id !== 'run-card-his-grace'
+          || run.sectio.entrySnapshot.cards[0]?.coreId !== 'his-grace'
+          || run.sectio.entrySnapshot.cards[0]?.unitIds?.length !== 1
+          || run.sectio.entrySnapshot.cards[0]?.unitIds?.[0] !== 'run-king'
+          || run.sectio.entrySnapshot.cards[1]?.id !== 'run-card-front-lines'
+          || run.sectio.entrySnapshot.cards[1]?.coreId !== 'front-lines'
+          || run.sectio.entrySnapshot.cards[1]?.unitIds?.length !== 2
+          || run.sectio.entrySnapshot.cards[1]?.unitIds?.[0] !== 'run-pawn-a'
+          || run.sectio.entrySnapshot.cards[1]?.unitIds?.[1] !== 'run-pawn-b'
         ) return 'run opening Sectio is invalid';
         const openingUnitIds = new Set([
           'run-king',
