@@ -1513,6 +1513,11 @@ async function validateSectioOperationsVocabularyMigration55() {
          'media_slots_active_version_fk',
          'media_versions_slot_fkey'
        )
+         AND constraint_entry.conrelid IN (
+           'drawable_asset_media'::regclass,
+           'media_slots'::regclass,
+           'media_versions'::regclass
+         )
        ORDER BY constraint_entry.conname
     `);
     const allMediaRows = [...slots.rows, ...versions.rows];
