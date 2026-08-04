@@ -609,7 +609,7 @@ test('required-schema readiness and repair enforce the migrations 37 through 58 
   );
   assert.match(
     contractReadiness,
-    /unmigrated_active_run_version_18_count[\s\S]*version === 56[\s\S]*repair active Run Klerosis contract/,
+    /unmigrated_active_run_version_18_count[\s\S]*version === 56[\s\S]*repair active Run starter Chartulary contract/,
     'readiness must detect and repair an unmigrated version-18 deployment account Run',
   );
   assert.match(
