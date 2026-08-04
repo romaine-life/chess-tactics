@@ -7,6 +7,8 @@ partially_supersedes:
   - "[ADR-0268](0268-ataraxia-unlocks-linearly-and-stacks-cumulatively.md)'s No Ataraxia baseline label"
   - "[ADR-0289](0289-run-preparation-is-control-first-and-ataraxia-uses-one-selector.md)'s rule that the baseline has no explanatory sentence"
   - "[ADR-0290](0290-run-preparation-follows-play-master-detail-navigation.md)'s nonbaseline-only mechanic statement"
+partially_superseded_by:
+  - "[ADR-0390](0390-ataraxia-tooltip-is-a-compact-cumulative-rule-list.md)'s shortened baseline impact copy"
 ---
 
 # ADR-0291: Ataraxia zero is a named tier with visible impact
