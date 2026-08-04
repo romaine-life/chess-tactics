@@ -20777,6 +20777,24 @@ button.tileset-relationship-cell {
   gap: var(--ds-inline-tight);
 }
 
+/* Account/browser Run adoption is a decision made with two buttons, not a
+   framed record of its own. The Run section already supplies the surrounding
+   structure, so the conflict copy and actions sit directly in that flow. */
+.run-adoption-conflict {
+  display: grid;
+  gap: var(--ds-stack);
+  padding: var(--ds-space-2) var(--ds-space-2) 0;
+}
+
+.run-adoption-conflict-copy {
+  display: grid;
+  gap: var(--ds-inline-tight);
+}
+
+.run-adoption-conflict :is(h3, p) {
+  margin: 0;
+}
+
 .run-meta-controls {
   align-content: start;
   display: flex;

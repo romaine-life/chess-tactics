@@ -99,6 +99,13 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain("'No active Run'");
   });
 
+  it('presents Run adoption as an unboxed decision group', () => {
+    expect(playMenu).toContain('className="run-adoption-conflict"');
+    expect(playMenu).toContain('data-testid="run-adoption-conflict"');
+    expect(playMenu).not.toContain('<InnerChromeBox className="play-level-card" role="alert">');
+    expect(style).toContain('.run-adoption-conflict {');
+  });
+
   it('keeps new-Run setup in the right detail column with one scrollable Ataraxia dropdown', () => {
     expect(playMenu).not.toContain('Roguelike chess');
     expect(playMenu).not.toContain('Carry one persistent army');
