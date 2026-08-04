@@ -4,6 +4,7 @@ date: 2026-08-01
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
   - "[ADR-0347](0347-opening-shop-purchases-are-optional.md)'s removal of the retained mandatory opening purchase"
+  - "[ADR-0387](0387-bought-cards-travel-into-a-title-reachable-chartulary.md)'s removal of a bought offer from the Shop after its transfer lands"
 partially_supersedes:
   - "[ADR-0319](0319-run-openings-spend-nine-gold-on-one-of-three-seeded-cards.md)'s exactly-one opening purchase"
   - "[ADR-0321](0321-run-opening-is-the-normal-shop-and-draft-is-retired.md)'s inherited one-card-per-visit Shop behavior"

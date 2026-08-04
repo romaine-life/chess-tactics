@@ -20,6 +20,17 @@ import {
 export const ENCHIRIDION_SECTIONS = ['units', 'terrain', 'cards', 'card-types', 'lipsana', 'abilities', 'ataraxia'] as const;
 export type EnchiridionSection = typeof ENCHIRIDION_SECTIONS[number];
 
+/** One label inventory for rails, title routes, and every other address presenter. */
+export const ENCHIRIDION_SECTION_LABEL: Readonly<Record<EnchiridionSection, string>> = {
+  units: 'Units',
+  terrain: 'Terrain',
+  cards: 'Cards',
+  'card-types': 'Card Types',
+  lipsana: 'Lipsana',
+  abilities: 'Abilities',
+  ataraxia: 'Ataraxia',
+};
+
 export function enchiridionSectionHref(section: EnchiridionSection): string {
   return `/enchiridion/${section}`;
 }

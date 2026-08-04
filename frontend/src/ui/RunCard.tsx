@@ -16,7 +16,6 @@ import {
   runCardFrameSlot,
 } from './runCardFaceContent';
 import { runCardFrameGeometryForSlot } from './runCardFrameGeometry';
-import { InnerChromeBox } from './shared/ChromeBox';
 
 export function concinnousTargetLabel(card: RunCardOffer): string {
   const targetIndex = card.effectTargetIndex;
@@ -54,6 +53,8 @@ export function RunCard({
   mode,
   cardType: ownedCardType = null,
   purchased = false,
+  departing = false,
+  layoutId,
   disabled = false,
   onSelect,
 }: {
@@ -66,8 +67,11 @@ export function RunCard({
    */
   cardType?: RunCardType | null;
   purchased?: boolean;
+  departing?: boolean;
+  /** Stable Shop identity used to preserve the card's visual seat across reflow. */
+  layoutId?: string;
   disabled?: boolean;
-  onSelect?: () => void;
+  onSelect?: (element: HTMLButtonElement) => void;
 }): ReactElement {
   const label = cardContentsLabel(card);
   const name = runCardName(card);
@@ -95,22 +99,21 @@ export function RunCard({
   }
   const actionLabel = `${purchased ? 'Purchased' : 'Buy'} ${name} — ${label} — for ${faceContent.cost} gold.${targetLabel}`;
   return (
-    <span className="run-card-offer">
+    <span
+      className={`run-card-offer${departing ? ' is-departing' : ''}`}
+      data-run-shop-offer-id={layoutId}
+      aria-busy={departing || undefined}
+    >
       <button
         type="button"
         data-ui-sfx="gold"
         className={`run-card-action${purchased ? ' is-purchased' : ''}`}
         aria-label={actionLabel}
         disabled={disabled}
-        onClick={onSelect}
+        onClick={(event) => onSelect?.(event.currentTarget)}
       >
         {face}
       </button>
-      {purchased ? (
-        <InnerChromeBox as="span" className="run-card-purchased-indicator" role="status">
-          Purchased
-        </InnerChromeBox>
-      ) : null}
     </span>
   );
 }

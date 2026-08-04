@@ -97,7 +97,7 @@ describe('Skirmish chrome hierarchy', () => {
   it('uses the registered outer panel and explicit inner boxes', () => {
     expect(skirmishHud).toContain('<ShellControlsPanel');
     expect(skirmishHud).toContain('className={className}');
-    expect(skirmishHud).toContain('titleActions={strategikonToggle}');
+    expect(skirmishHud).toContain('titleActions={strategikonNavigation}');
     expect(skirmishHud).not.toContain('<OuterChromeBox');
     expect(chromeBox).toContain('chromeConsumer="shell-controls"');
     expect(chromeBox).toContain('data-shell-controls-panel=""');

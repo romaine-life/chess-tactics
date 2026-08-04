@@ -57,9 +57,9 @@ export function titleBarConfig(path: string, search = ''): TitleBarConfig | null
       screenName: run ? 'Run' : playRouteScreenName({ path: '/play', search }),
       barClass: 'skirmish-topbar',
       centerSlot: true,
-      // A Run's phase is document state, not address, so the Run screen names it
-      // in the route line rather than the shell reading it out of the URL.
-      routeSlot: run,
+      // A Run names its document-state phase here. A play Strategikon also needs
+      // the slot so its visible section/reference address can follow the Battle name.
+      routeSlot: run || path.startsWith('/play/strategikon/'),
       studSlot: true,
     };
   }

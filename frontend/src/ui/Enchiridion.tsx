@@ -50,7 +50,12 @@ import {
   type LipsanaStatistics,
 } from '../run/lipsanonStatistics';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
-import { ENCHIRIDION_SECTIONS, enchiridionSectionHref, type EnchiridionSection } from './enchiridionRoute';
+import {
+  ENCHIRIDION_SECTIONS,
+  ENCHIRIDION_SECTION_LABEL,
+  enchiridionSectionHref,
+  type EnchiridionSection,
+} from './enchiridionRoute';
 import { installedUiMedia } from './installedUiMedia';
 import { LipsanonIcon } from './Lipsana';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
@@ -71,16 +76,6 @@ import {
   hasCompleteCardTypeTextureSet,
   type CardTypeTextureUrls,
 } from './cardTypeTextureReview';
-
-const SECTION_LABEL: Record<EnchiridionSection, string> = {
-  units: 'Units',
-  terrain: 'Terrain',
-  cards: 'Cards',
-  'card-types': 'Card Types',
-  lipsana: 'Lipsana',
-  abilities: 'Abilities',
-  ataraxia: 'Ataraxia',
-};
 
 /**
  * Every section's mark, resolved to installed media. These are the same kit icons the
@@ -1168,7 +1163,7 @@ export function EnchiridionSectionRail({
       {ENCHIRIDION_SECTIONS.map((candidate, index) => (
         <ApparatusRailTab
           key={candidate}
-          label={SECTION_LABEL[candidate]}
+          label={ENCHIRIDION_SECTION_LABEL[candidate]}
           to={sectionHref(candidate)}
           index={index}
           active={section === candidate}

@@ -16,8 +16,8 @@ import {
 import { TitleBarControlContribution } from './shell/TitleBarControls';
 import type { EnchiridionSection } from './enchiridionRoute';
 import { strategikonAddress, strategikonHref, type StrategikonSection } from './strategikonRoute';
+import { strategikonNavigationItems } from './strategikonNavigation';
 import { installedUiMedia } from './installedUiMedia';
-import { menuModeIcon } from './menuModeIcon';
 
 function UnavailableRunReference({ title, copy }: { title: string; copy: string }): ReactElement {
   return (
@@ -82,42 +82,17 @@ export function Strategikon({
       edgeAttached
       rail={(
         <ApparatusRailColumn className="strategikon-rail" aria-label="Strategikon sections">
-          <ApparatusRailTab
-            label="Enchiridion"
-            to={href('enchiridion', reference)}
-            index={0}
-            active={section === 'enchiridion'}
-            // The main menu's Enchiridion destination and this one are the same
-            // destination, so they read the same installed mark (menuModeIcon).
-            iconSrc={menuModeIcon('enchiridion')}
-          />
-          <ApparatusRailTab
-            label="Prosopography"
-            title="The Martial Prosopography — Current Army"
-            to={href('prosopography')}
-            index={1}
-            active={section === 'prosopography'}
-            // The Enchiridion's Units and Cards references mark units and cards; this rail's
-            // two Run registers are those same two kinds of record, so they take the same
-            // two marks rather than sharing one between adjacent tabs.
-            iconSrc={installedUiMedia('ui-kit-icons-unit-studio-png')}
-          />
-          <ApparatusRailTab
-            label="Chartulary"
-            title="The Chartulary — Held Cards"
-            to={href('chartulary')}
-            index={2}
-            active={section === 'chartulary'}
-            iconSrc={installedUiMedia('ui-kit-icons-players-png')}
-          />
-          <ApparatusRailTab
-            label="Lipsanotheca"
-            title="The Lipsanotheca — Held Lipsana"
-            to={href('lipsanotheca')}
-            index={3}
-            active={section === 'lipsanotheca'}
-            iconSrc={installedUiMedia('ui-kit-icons-info-png')}
-          />
+          {strategikonNavigationItems().map((item, index) => (
+            <ApparatusRailTab
+              key={item.section}
+              label={item.label}
+              title={item.title}
+              to={href(item.section, item.section === 'enchiridion' ? reference : item.reference)}
+              index={index}
+              active={section === item.section}
+              iconSrc={item.iconSrc}
+            />
+          ))}
         </ApparatusRailColumn>
       )}
       aria-label="Strategikon"
@@ -180,7 +155,7 @@ export function Strategikon({
           )
         ) : section === 'chartulary' ? (
           run ? (
-            <HeldCardCodex run={run} title="The Chartulary" framed={false} />
+            <HeldCardCodex run={run} title="The Chartulary — Held Cards" framed={false} />
           ) : (
             <UnavailableRunReference title="The Chartulary" copy="Cards bought during a Run appear here." />
           )

@@ -258,10 +258,12 @@ describe('professional loading architecture guards', () => {
 
   it('keeps gameplay control-panel tabs immediate while navigation remains explicit', () => {
     const hud = read('./ui/SkirmishHud.tsx');
+    const titleNavigation = read('./ui/StrategikonTitleNavigation.tsx');
     expect(hud).toContain('data-transition-policy="immediate-local"');
     expect(hud).toContain('onClick={() => setTab(t.id)}');
     expect(hud).not.toContain('onClick={() => navigateApp(t.id)}');
-    expect(hud).toContain('<NavButton');
+    expect(hud).toContain('<StrategikonTitleNavigation');
+    expect(titleNavigation).toContain('<NavButton');
     expect(read('../scripts/shot.mjs')).toContain("const assertImmediateLocalControl = has('assert-immediate-local-control')");
     expect(read('../scripts/shot.mjs')).toContain('immediate local control entered the scene lifecycle');
   });

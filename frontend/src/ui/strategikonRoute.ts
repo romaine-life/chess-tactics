@@ -5,7 +5,11 @@
 // disagreed with `enchiridionRoute`, and neither was visible to the scene graph —
 // which is how its rail navigated without a director transition.
 
-import { ENCHIRIDION_SECTIONS, type EnchiridionSection } from './enchiridionRoute';
+import {
+  ENCHIRIDION_SECTIONS,
+  ENCHIRIDION_SECTION_LABEL,
+  type EnchiridionSection,
+} from './enchiridionRoute';
 import { normalizeRoutePath } from './navigation';
 
 /** The two ancestries the one Strategikon shell mounts under. */
@@ -19,6 +23,13 @@ export const STRATEGIKON_SECTIONS: readonly StrategikonSection[] = [
   'chartulary',
   'lipsanotheca',
 ];
+
+export const STRATEGIKON_SECTION_LABEL: Readonly<Record<StrategikonSection, string>> = {
+  enchiridion: 'Enchiridion',
+  prosopography: 'Prosopography',
+  chartulary: 'Chartulary',
+  lipsanotheca: 'Lipsanotheca',
+};
 
 export interface StrategikonAddress {
   base: StrategikonBase;
@@ -67,4 +78,12 @@ export function strategikonAddress(pathname: string): StrategikonAddress {
 export function strategikonSectionPath(pathname: string): string {
   const address = strategikonAddress(pathname);
   return strategikonHref(address.base, address.section, address.reference);
+}
+
+/** Human route segments for the exact visible Strategikon workspace address. */
+export function strategikonRouteLabels(pathname: string): readonly string[] {
+  const address = strategikonAddress(pathname);
+  return address.section === 'enchiridion'
+    ? ['Strategikon', STRATEGIKON_SECTION_LABEL.enchiridion, ENCHIRIDION_SECTION_LABEL[address.reference]]
+    : ['Strategikon', STRATEGIKON_SECTION_LABEL[address.section]];
 }
