@@ -7,6 +7,8 @@ refines:
   - "[ADR-0104](0104-title-bar-controls-are-typed-contributions-to-one-lane.md)"
   - "[ADR-0316](0316-plagued-icon-candidates-are-reviewed-in-context.md)"
   - "[ADR-0318](0318-plagued-and-pestiferous-use-separate-owner-selected-icons.md)"
+refined_by:
+  - "[ADR-0389](0389-the-title-route-names-the-visible-strategikon-address.md)"
 ---
 
 # ADR-0366: A Run names its phase as route and its repeatable ideas as icons

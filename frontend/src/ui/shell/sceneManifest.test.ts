@@ -105,6 +105,7 @@ describe('scene manifests', () => {
       ['/run', '', { run: { hydrated: true, document: run } }],
       ['/run', '?view=army', { run: { hydrated: true, document: run } }],
       ['/run', '?view=sell', { run: { hydrated: true, document: run } }],
+      ['/run', '?view=battle-preview', { run: { hydrated: true, document: run } }],
       ['/play/select'], ['/play/select/continue'], ['/play/select/continue/campaign'],
       ['/play/select/continue/skirmish'], ['/play/select/continue/run'], ['/play/select/continue/levels'],
       ['/play/select/unknown'], ['/play/select/skirmish'], ['/play/select/levels'],
@@ -365,6 +366,8 @@ describe('scene manifests', () => {
     const deploymentScene = sceneManifest('/run', '', source(deployment));
     const battleScene = sceneManifest('/run', '', source(battle));
     const armyScene = sceneManifest('/run', '?view=army', source(battle));
+    const hiddenBattlePreviewScene = sceneManifest('/run', '?view=battle-preview', source(battle));
+    const shopBattlePreviewScene = sceneManifest('/run', '?view=battle-preview', source(draft));
 
     expect(deploymentScene.snapshot).toMatchObject({
       kind: 'run',
@@ -382,6 +385,16 @@ describe('scene manifests', () => {
     expect(battleScene.id).toBe(deploymentScene.id);
     expect(sceneLayerKey(battleScene)).toBe(sceneLayerKey(deploymentScene));
     expect(armyScene.id).not.toBe(battleScene.id);
+    expect(shopBattlePreviewScene.snapshot).toMatchObject({
+      kind: 'run',
+      phase: 'shop',
+      workspace: { view: 'battle-preview' },
+    });
+    expect(hiddenBattlePreviewScene.snapshot).toMatchObject({
+      kind: 'run',
+      phase: 'battle',
+      workspace: { view: 'primary' },
+    });
     expect(deepestSharedSceneRegion(deploymentScene, battleScene)).toBe('gameplay-shell');
     expect(deepestSharedSceneRegion(battleScene, armyScene)).toBe('gameplay-shell');
   });
@@ -535,11 +548,14 @@ describe('scene manifests', () => {
     const shop = sceneManifest('/run', '', source);
     const sell = sceneManifest('/run', '?view=sell', source);
     const army = sceneManifest('/run', '?view=army', source);
+    const battlePreview = sceneManifest('/run', '?view=battle-preview', source);
     const strategikon = sceneManifest('/run/strategikon/prosopography', '', source);
 
     expect(sceneOverlapScope(shop, sell)).toBe('shell-viewport');
     expect(sceneOverlapScope(sell, shop)).toBe('shell-viewport');
     expect(sceneOverlapScope(shop, army)).toBe('shell-viewport');
+    expect(sceneOverlapScope(shop, battlePreview)).toBe('shell-viewport');
+    expect(sceneOverlapScope(battlePreview, shop)).toBe('shell-viewport');
     expect(sceneOverlapScope(shop, strategikon)).toBe('shell-viewport');
     expect(sceneOverlapScope(strategikon, shop)).toBe('shell-viewport');
 

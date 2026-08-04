@@ -84,6 +84,7 @@ import type { LipsanonId, RunBattleReport } from '../run/model';
 import { useActiveRun } from '../run/store';
 import { LipsanonStrip } from './Lipsana';
 import { Strategikon } from './Strategikon';
+import { strategikonRouteLabels } from './strategikonRoute';
 import { GameplayWorkspaceSceneSlot } from './shell/AuthoredSceneSlot';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 
@@ -134,6 +135,7 @@ export function SkirmishShell({
   className = '',
   testId = 'skirmish',
   titleBarContent,
+  persistentViewportArtwork = null,
   lipsanonIds = [],
   shellWorkspaceCoversLipsana = false,
   controlsContent,
@@ -148,6 +150,9 @@ export function SkirmishShell({
   className?: string;
   testId?: string;
   titleBarContent: ReactNode;
+  /** Artwork shared by sibling viewport destinations. It is deliberately outside
+   *  the director-faded overlap region so the environment remains continuous. */
+  persistentViewportArtwork?: ReactNode;
   lipsanonIds?: readonly LipsanonId[];
   shellWorkspaceCoversLipsana?: boolean;
   controlsContent?: ReactNode;
@@ -174,6 +179,11 @@ export function SkirmishShell({
     : screenStyle ?? undefined;
   const surface = (
     <>
+      {persistentViewportArtwork ? (
+        <div className="shell-persistent-viewport-artwork" aria-hidden="true">
+          {persistentViewportArtwork}
+        </div>
+      ) : null}
       {shellWorkspaceCoversLipsana ? null : <LipsanonStrip lipsanonIds={lipsanonIds} />}
       {children}
       {hudContent === undefined
@@ -185,7 +195,7 @@ export function SkirmishShell({
   return (
     <div
       data-testid={testId}
-      className={`skirmish-screen ${className}`.trim()}
+      className={`skirmish-screen${persistentViewportArtwork ? ' has-persistent-viewport-artwork' : ''} ${className}`.trim()}
       style={resolvedScreenStyle}
     >
       {installedChromeCss ? <style data-skirmish-chrome-family dangerouslySetInnerHTML={{ __html: installedChromeCss }} /> : null}
@@ -238,9 +248,6 @@ function SkirmishSession({
   const routeParams = useMemo(() => new URLSearchParams(routeSearch), [routeSearch]);
   const strategikonOpen = routePath.startsWith('/play/strategikon/') || routePath.startsWith('/run/strategikon/');
   const strategikonBase = runBattle ? '/run' : '/play';
-  const strategikonHref = strategikonOpen
-    ? `${strategikonBase}${routeSearch}`
-    : `${strategikonBase}/strategikon/enchiridion/units${routeSearch}`;
   const predrawnPreview = useMemo(
     () => predrawnBoardPreviewSrc(routeSearch, window.location.origin),
     [routeSearch],
@@ -1208,8 +1215,8 @@ function SkirmishSession({
       onOpenPredrawnRegistration={predrawnPreview ? () => setPredrawnPickerOpen(true) : null}
       onPawnCashOut={runBattle?.onPawnCashOut ?? null}
       onAbandonRun={runBattle?.onAbandonRun ?? null}
-      strategikonHref={strategikonHref}
-      strategikonOpen={strategikonOpen}
+      strategikonPath={routePath}
+      strategikonSearch={routeSearch}
     />
   ) : null;
   // The continuous Run scene registers one stable outer gameplay surface across Deployment and
@@ -1250,6 +1257,12 @@ function SkirmishSession({
       <small>Multiplayer</small>
     </InnerChromeBox>
   ) : null;
+  const battleTitleRoute = runDeployment
+    ? ''
+    : [
+        ...(runBattle ? ['Battle'] : []),
+        ...(strategikonOpen ? strategikonRouteLabels(routePath) : []),
+      ].join(' › ');
 
   return (
     <SkirmishShell
@@ -1257,7 +1270,9 @@ function SkirmishSession({
       className={runDeployment?.screenClassName ?? (screenPredrawnBackgroundActive ? 'is-predrawn-board' : '')}
       shellWorkspaceCoversLipsana={Boolean(runWorkspace) || strategikonOpen}
       titleBarContent={runDeployment ? runDeployment.titleBarContent : playableSurfaceReady ? (
-        <div className="skirmish-topbar-status">
+        <>
+          {battleTitleRoute ? <TitleBarSlot region="route">{battleTitleRoute}</TitleBarSlot> : null}
+          <div className="skirmish-topbar-status">
           {/* The battle clock is ALWAYS the middle chip on every play surface — a timed game
             counts down and an authored untimed level reads "∞ / No limit". Keeping the
             centre chip present means
@@ -1287,7 +1302,8 @@ function SkirmishSession({
               <small>{objectiveGoal}</small>
             </span>
           </TitleBarStatus>
-        </div>
+          </div>
+        </>
       ) : null}
       lipsanonIds={runDeployment?.lipsanonIds ?? runBattle?.lipsanonIds ?? []}
       controlsContent={runDeployment?.controlsContent}

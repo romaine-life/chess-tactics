@@ -70,7 +70,7 @@ describe('tooltip chrome', () => {
   });
 
   it('gives the cumulative Ataraxia list the popup budget instead of glossary panes', () => {
-    // ADR-0388. Ataraxia is the one closed exception to the automatic glossary:
+    // ADR-0390. Ataraxia is the one closed exception to the automatic glossary:
     // its tooltip grows by one model-owned, canonically marked row per active rung.
     expect(runTitleBar).toContain('ATARAXIA_TIERS.filter((activeTier) => activeTier <= tier)');
     expect(runTitleBar).toContain('className="run-ataraxia-tooltip-rung is-art"');

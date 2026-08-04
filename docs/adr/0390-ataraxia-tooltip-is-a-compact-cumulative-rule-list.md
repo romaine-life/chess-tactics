@@ -10,10 +10,10 @@ refines:
   - 0363-the-ataraxia-ladder-is-an-enchiridion-reference-section.md
   - 0366-a-run-names-its-phase-as-route-and-its-repeatable-ideas-as-icons.md
 partially_superseded_by:
-  - "[ADR-0389](0389-ataraxia-tooltip-names-the-ladder-once.md)'s heading and numeral size"
+  - "[ADR-0391](0391-ataraxia-tooltip-names-the-ladder-once.md)'s heading and numeral size"
 ---
 
-# ADR-0388: Ataraxia tooltip is a compact cumulative rule list
+# ADR-0390: Ataraxia tooltip is a compact cumulative rule list
 
 ## Context
 

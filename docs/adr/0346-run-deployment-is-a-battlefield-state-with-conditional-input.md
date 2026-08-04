@@ -8,6 +8,7 @@ partially_superseded_by:
   - "[ADR-0348](0348-discipline-resolves-before-automatic-deployment.md)'s Discipline-before-formation projection order"
   - "[ADR-0349](0349-the-final-deployment-choice-commits-and-camera-authority-follows-the-active-scene.md)'s final-choice commit and active-scene camera ownership"
   - "[ADR-0350](0350-run-deployment-promotes-the-mounted-battlefield-in-place.md)'s continuous mounted battlefield lifecycle"
+  - "[ADR-0386](0386-shops-offer-read-only-intelligence-on-the-upcoming-battle.md)'s Shop-only pre-Battle opponent information"
 ---
 
 # ADR-0346: Run deployment is a battlefield state with conditional input

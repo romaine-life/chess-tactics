@@ -268,7 +268,7 @@ Untroubled Mind**, presents its subtitle in the selector and its literal impact
 beneath it. In the Run title bar, Ataraxia's tooltip is instead a compact cumulative
 list headed only **Ataraxia**: every active tier is one small canonical carved-numeral
 row beside its model-owned effect, with no appended mechanic-definition panes; tier
-zero reads **Standard rules.** (ADR-0289, ADR-0290, ADR-0291, ADR-0388, ADR-0389).
+zero reads **Standard rules.** (ADR-0289, ADR-0290, ADR-0291, ADR-0390, ADR-0391).
 On Bona Vacantia, the room-caption corner stays empty: no workspace heading,
 instructional prose, or placeholder label repeats the room identity. The persistent
 title bar is the sole textual location label unless a future accepted art decision
@@ -291,7 +291,16 @@ Enchiridion is immediately above Settings. In Battle, frameless open-codex art
 at the same visual scale as the Controls title and aligned to the Controls
 content boundary opens
 Strategikon; its hover/focus information names the unfamiliar destination and
-summarizes its references, army, and lipsanon contents under ADR-0250. Strategikon's
+summarizes its references, army, card, and lipsanon contents under ADR-0250. The
+four Strategikon section marks sit immediately beside that rightmost book and
+directly open the same destinations as the complete workspace rail. Title and
+rail read one shared destination inventory, and the visible Chartulary mark is
+the measured endpoint for a bought card's shrinking transfer. When that card leaves
+the Shop layout, each surviving offer glides from its measured old seat to its new
+centred seat with no snap, bounce, or guessed slot (ADR-0387, ADR-0388). The persistent
+title route keeps the underlying Run phase, then appends Strategikon, its section,
+and any Enchiridion reference from those same label inventories—for example
+`Shop › Strategikon › Enchiridion › Cards` (ADR-0389). Strategikon's
 rails are canonical main-menu rail columns: every destination added to either
 column inherits the exact menu-tab width, stack gap, inset, and stone-continuity
 language rather than defining host-local geometry. Strategikon replaces the board

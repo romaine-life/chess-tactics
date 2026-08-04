@@ -14,7 +14,10 @@ const titleBarPortal = readFileSync(new URL('./shell/TitleBarPortalContext.tsx',
 const runWorkspace = readFileSync(new URL('./RunWorkspace.tsx', import.meta.url), 'utf8');
 const runUnitInspectionScene = readFileSync(new URL('./RunUnitInspectionScene.tsx', import.meta.url), 'utf8');
 const runCard = readFileSync(new URL('./RunCard.tsx', import.meta.url), 'utf8');
+const runCardFlight = readFileSync(new URL('./runCardFlightView.tsx', import.meta.url), 'utf8');
+const strategikonTitleNavigation = readFileSync(new URL('./StrategikonTitleNavigation.tsx', import.meta.url), 'utf8');
 const runCardFace = readFileSync(new URL('./RunCardFace.tsx', import.meta.url), 'utf8');
+const runBattlePreview = readFileSync(new URL('./RunBattlePreview.tsx', import.meta.url), 'utf8');
 const runLipsana = readFileSync(new URL('./Lipsana.tsx', import.meta.url), 'utf8');
 const runSelfInspection = readFileSync(new URL('./RunSelfInspection.tsx', import.meta.url), 'utf8');
 const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
@@ -44,9 +47,13 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('<SkirmishShell');
     expect(runScreen).toContain('readyToCompose={hydrated}');
     expect(runScreen).not.toContain("classList.add('skirmish-active')");
-    expect(runScreen).toContain("<RunMetaControls run={shellRun} view={view} onNavigate={navigateRunView} showAbandon={shellRun.phase !== 'victory'} />");
-    expect(metaControls).toContain('<section className="run-meta-controls" aria-label="Run controls">');
+    expect(runScreen).toMatch(/<RunMetaControls[\s\S]*?run=\{shellRun\}[\s\S]*?onNavigate=\{navigateRunView\}[\s\S]*?purchaseInFlight=\{purchaseBusy\}/);
+    expect(metaControls).toContain('inert={purchaseInFlight ? true : undefined}');
+    expect(metaControls).not.toContain('disabled={purchaseInFlight}');
+    expect(metaControls).not.toContain('disabled={abandoning || purchaseInFlight}');
     expect(metaControls).toContain('Sell Units');
+    expect(metaControls).toContain('View Battle');
+    expect(metaControls).toContain('data-testid="run-view-battle-preview"');
     // The Run rail no longer carries Army/Lipsana: the Strategikon is Run-wide (ADR-0335)
     // and its Prosopography/Lipsanotheca render the same RunArmyWorkspace and held-lipsanon
     // codex, so a second entry point to them was a duplicate. The battle HUD keeps its own.
@@ -135,8 +142,10 @@ describe('Run chrome hierarchy', () => {
     expect(styleCss).toMatch(/\.scene-director\.is-entering \.scene-boundary\[data-scene-overlap-scope="shell-viewport"\]\[data-scene-transition-active\]\s*\{[\s\S]*?opacity:\s*1;[\s\S]*?transition:\s*none;/);
     expect(styleCss).toMatch(/\.scene-director\.is-entering \.scene-boundary\[data-scene-overlap-scope="shell-viewport"\]\[data-scene-visual-role="outgoing"\] \[data-scene-overlap-region\]\s*\{[\s\S]*?opacity:\s*0;/);
     expect(styleCss).toMatch(/\.scene-director\.is-entering \.scene-boundary\[data-scene-overlap-scope="shell-viewport"\]\[data-scene-transition-active\] \[data-scene-overlap-region\]\s*\{[\s\S]*?opacity:\s*1;/);
-    // The panel is rendered beside the swap, never inside it.
-    expect(skirmish).toMatch(/\{shellWorkspaceCoversLipsana \? null : <LipsanonStrip lipsanonIds=\{lipsanonIds\} \/>\}\s*\{children\}/);
+    // The panel and any environment artwork retained across sibling destinations are
+    // rendered beside the swap, never inside its fading overlap region.
+    expect(skirmish).toContain('className="shell-persistent-viewport-artwork"');
+    expect(skirmish).toMatch(/\{persistentViewportArtwork \? \([\s\S]*?\) : null\}\s*\{shellWorkspaceCoversLipsana \? null : <LipsanonStrip lipsanonIds=\{lipsanonIds\} \/>\}\s*\{children\}/);
     expect(skirmishHud).toContain('<ShellControlsPanel');
   });
 
@@ -157,16 +166,17 @@ describe('Run chrome hierarchy', () => {
     // Deployment, Shop, and Victory are still the same Run: the reference workspace must
     // open from the same title mark Battle uses. Only an absent Run repairs the address.
     expect(runScreen).toContain("const strategikonOpen = sceneSnapshot.workspace.view === 'strategikon';");
-    expect(runScreen).toContain("? `/run${routeSearch}`");
-    expect(runScreen).toContain(': `/run/strategikon/enchiridion/units${routeSearch}`');
-    expect(runScreen).toContain('strategikonHref: shellRun ? strategikonHref : null,');
-    expect(runScreen).toContain('strategikonOpen,');
+    expect(runScreen).toContain('strategikonPath: shellRun ? routePath : null,');
+    expect(runScreen).toContain('strategikonSearch: routeSearch,');
+    expect(runScreen).toContain('strategikonOpen={strategikonOpen}');
     expect(runScreen).toContain('className="strategikon-slot"');
     expect(runScreen).toContain('<Strategikon path={routePath} search={routeSearch} run={shellRun} />');
     expect(runScreen).toContain("routePath.startsWith('/run/strategikon/') && !run");
     expect(runScreen).not.toContain("sceneSnapshot.phase !== 'battle'");
-    expect(skirmishHud).toContain('data-testid="strategikon-toggle"');
-    expect(skirmishHud).toContain('titleActions={strategikonToggle}');
+    expect(skirmishHud).toContain('<StrategikonTitleNavigation path={strategikonPath} search={strategikonSearch} />');
+    expect(skirmishHud).toContain('titleActions={strategikonNavigation}');
+    expect(strategikonTitleNavigation).toContain('data-testid="strategikon-toggle"');
+    expect(strategikonTitleNavigation).toContain('data-run-card-flight-target');
     expect(styleCss).toMatch(/\.strategikon-slot\s*\{[\s\S]*?position:\s*absolute;/);
     expect(styleCss).toMatch(/\.run-phase-workspace\s*\{[\s\S]*?position:\s*relative;/);
   });
@@ -183,17 +193,19 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).not.toContain('TitleBarControlContribution');
   });
 
-  it('uses the gold transaction cue for card purchases and shows a textual completion state', () => {
+  it('uses the gold transaction cue and transfers bought cards into the Chartulary', () => {
     expect(runCard).toContain('data-ui-sfx="gold"');
-    expect(runCard).toContain('className="run-card-purchased-indicator" role="status"');
-    expect(runCard).toContain('Purchased');
-    expect(runCard).not.toContain("' active is-purchased'");
-    expect(runScreen).toContain('const purchased = shop.purchasedCardOfferIds.includes(offer.offerId);');
-    expect(runScreen).toContain('disabled={purchased || run.goldTenths < offer.cost * GOLD_SCALE}');
+    expect(runScreen).toContain('useRunCardFlight(commitCardPurchase)');
+    expect(runScreen).toContain("document.querySelector('[data-run-card-flight-target]')");
+    expect(runScreen).toContain('shop.cardOffers.filter((offer) => !shop.purchasedCardOfferIds.includes(offer.offerId))');
+    expect(runScreen).toContain('purchased and added to the Chartulary.');
+    expect(runScreen).toContain('All offered cards are in the Chartulary.');
+    expect(runCardFlight).toContain('<RunCard card={flight.offer} mode="reference" />');
+    expect(runCard).not.toContain('run-card-purchased-indicator');
   });
 
   it('fills shell-owned Run destinations while Deployment uses the battlefield', () => {
-    const playerRunSources = `${runScreen}\n${runArmyWorkspace}\n${runLipsana}`;
+    const playerRunSources = `${runScreen}\n${runArmyWorkspace}\n${runBattlePreview}\n${runLipsana}`;
     const runWorkspaceRule = styleCss.match(/\.run-workspace\s*\{([^}]*)\}/)?.[1] ?? '';
 
     expect(runWorkspace).toContain('export function RunSceneViewport');
@@ -207,6 +219,7 @@ describe('Run chrome hierarchy', () => {
     expect(chromeBox).not.toContain('export function ShellWorkspaceBody');
     for (const testId of [
       'run-shop-workspace',
+      'run-battle-preview-workspace',
       'run-aftermath-workspace',
       'run-victory-workspace',
       'run-army-ledger-workspace',
@@ -281,9 +294,13 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('advanceReadyDeployment(');
     expect(runScreen).not.toContain('data-testid="begin-run-battle"');
     expect(runScreen).not.toContain('onBeginBattle');
-    // The phase is the title bar's ROUTE segment (Run › Shop), never a second line
-    // on the progress chip; the chip's small line is the authored Battle name only.
-    expect(runScreen).toContain('<TitleBarSlot region="route">{runPhaseRouteName(run)}</TitleBarSlot>');
+    // The phase is the title bar's first ROUTE segment (Run › Shop), and an open
+    // Strategikon appends its exact section/reference address rather than hiding it.
+    expect(runScreen).toContain('<TitleBarSlot region="route">{runTitleBarRouteName(run, path)}</TitleBarSlot>');
+    expect(runScreen).toContain('if (isStrategikonPath(path)) segments.push(...strategikonRouteLabels(path));');
+    expect(runScreen).toContain('<RunTitleBarStatus run={shellRun} path={routePath} />');
+    expect(skirmish).toContain('...(strategikonOpen ? strategikonRouteLabels(routePath) : [])');
+    expect(skirmish).toContain('<TitleBarSlot region="route">{battleTitleRoute}</TitleBarSlot>');
     expect(runScreen).toContain('levelName={isGeneratedRunBattleName(levelName) ? null : levelName}');
     expect(runScreen).not.toContain('run-deployment-workspace');
     expect(runScreen).not.toContain('<LevelPreviewColumn');
@@ -291,6 +308,31 @@ describe('Run chrome hierarchy', () => {
     expect(styleCss).toContain('.run-deployment-board');
     expect(styleCss).toContain('.skirmish-board-cell-hit.is-threat::before');
     expect(styleCss).not.toContain('.run-deployment-cell.is-deployment-blocked:hover::before');
+  });
+
+  it('previews the upcoming Shop Battle through the canonical read-only board and Level ledger', () => {
+    expect(runBattlePreview).toContain('<RunSceneViewport');
+    expect(runBattlePreview).toContain("view: 'battle-preview'");
+    expect(runBattlePreview).toContain('<FramedReadOnlyBoardView');
+    expect(runScreen).toContain('<RunBattlePreview run={run} />');
+    expect(runBattlePreview).toContain('<LevelInfoCompact level={level} />');
+    expect(runBattlePreview).toContain('levelToEditorBoard(level)');
+    expect(runBattlePreview).toContain('Drag to pan · scroll to zoom');
+    expect(runBattlePreview).toContain('setup forces whose');
+    expect(runBattlePreview).not.toContain('<OuterChromeBox');
+    expect(runBattlePreview).not.toContain('<LevelPreviewColumn');
+    expect(runBattlePreview).not.toContain('backgroundArtwork');
+    expect(styleCss).toMatch(/\.run-battle-preview-layout\s*\{[\s\S]*?grid-template-areas:[\s\S]*?"head intelligence"[\s\S]*?"board intelligence"/);
+  });
+
+  it('retains the installed Shop scene outside the workspace transition region', () => {
+    expect(runScreen).toContain("const persistentShopScene = shellRun?.phase === 'shop' ? shopScene : null;");
+    expect(runScreen).toContain('persistentViewportArtwork={persistentShopScene}');
+    expect(runScreen).not.toContain('backgroundArtwork={shopScene}');
+    expect(skirmish).toContain("persistentViewportArtwork = null");
+    expect(skirmish).toContain("has-persistent-viewport-artwork");
+    expect(styleCss).toMatch(/\.shell-persistent-viewport-artwork\s*\{[\s\S]*?grid-column:\s*1;[\s\S]*?grid-row:\s*2;/);
+    expect(styleCss).toMatch(/\.run-screen\.has-persistent-viewport-artwork \.run-phase-primary > \.run-workspace \.shell-workspace-fill\s*\{[\s\S]*?visibility:\s*hidden;/);
   });
 
   it('draws every card through the approved shared trading-card face', () => {

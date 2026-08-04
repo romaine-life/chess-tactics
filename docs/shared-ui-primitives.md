@@ -16,6 +16,9 @@ search for before constructing a control or repeated surface.
   decorative background artwork between its installed fill and live content;
   callers supply installed media content, not attachment or clipping geometry
   (ADR-0336).
+- `ui/Skirmish.tsx#SkirmishShell` — the persistent gameplay/Run shell. Its
+  `persistentViewportArtwork` seat owns environment art shared by sibling
+  viewport destinations and keeps that art outside their director-owned fade.
 - `ui/shared/ActionList.tsx` — data-driven selectable/action rows. War battles,
   Campaign Editor levels, and Play level lists use this instead of constructing
   first/middle/last rows independently.
@@ -30,6 +33,9 @@ search for before constructing a control or repeated surface.
 - `ui/shared/ApparatusRailTab.tsx` — menu-language navigation rail columns and
   tabs. `ApparatusRailColumn` owns the main-menu column width, stack gap, and
   framed/open perimeter; `ApparatusRailTab` owns each button.
+- `ui/shared/BoardViewFraming.tsx` — canonical contained read-only board framing.
+  `FramedReadOnlyBoardView` owns pannable/zoomable `ViewPane` interaction and
+  opening camera policy; `StaticReadOnlyBoardView` owns non-interactive stacks.
 
 ## Studio and workflow compositions
 
@@ -37,8 +43,23 @@ search for before constructing a control or repeated surface.
   Layout, Shops, review, and Enchiridion; it owns the paired property/state
   icon seats and includes their media in atomic face promotion.
 - `ui/RunCard.tsx` — the canonical interactive/reference host around
-  `RunCardFace`; Shop mode owns the gold transaction cue and registered
-  **Purchased** status chrome.
+  `RunCardFace`; Shop mode owns the gold transaction cue and supplies the exact
+  source face used by the purchase transfer.
+- `ui/runCardFlightView.tsx` — the Shop-to-Chartulary transfer of that canonical
+  face. It measures both live endpoints, contributes through the director-owned
+  continuity layer above clipped shell layers, commits on landing, and exposes
+  the transfer and survivor-reflow geometry plus the CSS-token duration parser
+  for regression tests. `ShopCardRow` owns the live FLIP measurement for both
+  plain and installed-wrap layouts.
+- `ui/strategikonNavigation.ts` and `ui/StrategikonTitleNavigation.tsx` — one
+  Strategikon destination inventory shared by the full workspace rail and the
+  compact Controls-title shortcuts; the Chartulary shortcut also owns the card
+  transfer target.
+- `ui/strategikonRoute.ts` and `ui/enchiridionRoute.ts` — the canonical address
+  parsers and exported section-label inventories shared by scene identity, rails,
+  title shortcuts, and the complete gameplay title route.
+- `ui/LevelInfoCompact.tsx` — the canonical derived Level ledger for board
+  facts, authored and setup-event forces, zones, rules, and time control.
 - `ui/RunIconPairReview.tsx` — the embedded Studio Card Icon Fitting Viewer;
   exact property/state candidate selection, per-property fitting, and the one
   shared unit-state fitting draft all render through `RunCardFace`.

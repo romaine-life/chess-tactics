@@ -1930,6 +1930,7 @@ h1 {
      decelerated entrance if ever needed; linear for the bgm button's opacity. */
   --ds-duration-fast: 100ms;
   --ds-duration-fade: 350ms;
+  --ds-duration-transfer: 560ms;
   --ds-ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ds-ease-out: cubic-bezier(0.05, 0.7, 0.1, 1);
   --ds-ease-linear: linear;
@@ -9108,7 +9109,9 @@ body.loading-bootstrap .app-startup-status {
 @media (max-width: 860px) {
   .skirmish-screen {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(520px, 62vh) auto;
+    /* The title bar is fixed outside this screen, so its empty shell row must stay
+       explicit after the one-column switch instead of collapsing over the workspace. */
+    grid-template-rows: var(--app-header-h) minmax(520px, 62vh) auto;
     /* The board art layer intentionally overdraws its fitted viewport. Keep the
        stacked page vertically scrollable, but never expose that paint-only width
        as an empty horizontal scroll range. */
@@ -18961,6 +18964,27 @@ button.tileset-relationship-cell {
   position: relative;
 }
 
+/* Scene artwork shared by sibling shell-viewport destinations is a retained layer,
+   not part of the fading workspace pair. Both overlapping Run scene layers paint the
+   same pixels here while only their foreground viewport region crossfades. */
+.shell-persistent-viewport-artwork {
+  grid-column: 1;
+  grid-row: 2;
+  min-block-size: 0;
+  min-inline-size: 0;
+  overflow: hidden;
+  pointer-events: none;
+  position: relative;
+  z-index: 0;
+}
+
+/* The primary Shop workspaces normally paint the shell's standard fill. When the
+   retained viewport artwork is installed, that fill must yield so the shared scene
+   remains visible beneath Shop, View Battle, and Sell Units alike. */
+.run-screen.has-persistent-viewport-artwork .run-phase-primary > .run-workspace .shell-workspace-fill {
+  visibility: hidden;
+}
+
 .run-phase-primary {
   block-size: 100%;
   display: grid;
@@ -19015,6 +19039,118 @@ button.tileset-relationship-cell {
   gap: var(--ds-inline-tight);
 }
 
+.run-battle-preview-content {
+  align-content: stretch;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.run-battle-preview-surface,
+.run-battle-preview-surface > .painted-surface-content,
+.run-battle-preview-layout {
+  block-size: 100%;
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.run-battle-preview-layout {
+  display: grid;
+  gap: var(--ds-stack);
+  grid-template-areas:
+    "head intelligence"
+    "board intelligence";
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 34%);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.run-battle-preview-head {
+  align-content: start;
+  display: grid;
+  gap: var(--ds-space-1);
+  grid-area: head;
+}
+
+.run-battle-preview-head p {
+  color: var(--skirmish-muted);
+  font-size: var(--ds-text-sm);
+}
+
+.run-battle-preview-board-frame {
+  display: grid;
+  grid-area: board;
+  min-block-size: 0;
+  min-inline-size: 0;
+  overflow: hidden;
+  padding: var(--ds-space-2);
+}
+
+.run-battle-preview-board-view,
+.run-battle-preview-board-view > .board-view-pane-seat {
+  block-size: 100%;
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.run-battle-preview-board-view .tileset-placement-board.is-readonly .tileset-generated-board-tile {
+  cursor: default;
+}
+
+.run-battle-preview-intelligence {
+  display: grid;
+  gap: var(--ds-inline);
+  grid-area: intelligence;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.run-battle-preview-intelligence .ce-level-info {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.run-battle-preview-note {
+  display: grid;
+  gap: var(--ds-space-2);
+  padding: var(--ds-inset);
+}
+
+.run-battle-preview-note p {
+  color: var(--skirmish-muted);
+  font-size: var(--ds-text-sm);
+}
+
+@media (max-width: 900px) {
+  .run-battle-preview-content {
+    align-content: start;
+    grid-template-rows: auto;
+    overflow-y: auto;
+  }
+
+  .run-battle-preview-surface,
+  .run-battle-preview-surface > .painted-surface-content,
+  .run-battle-preview-layout {
+    block-size: auto;
+  }
+
+  .run-battle-preview-layout {
+    align-self: start;
+    grid-template-areas:
+      "head"
+      "board"
+      "intelligence";
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+  }
+
+  .run-battle-preview-board-frame {
+    aspect-ratio: var(--board-view-aspect);
+  }
+
+  .run-battle-preview-intelligence {
+    grid-template-rows: auto auto;
+  }
+}
+
 .run-status-workspace-content {
   place-content: center;
   place-items: center;
@@ -19052,6 +19188,22 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
+/* The real seat stays in the row until the transfer lands, so the other offers
+   cannot jump underneath the flying card. The portalled canonical face is the
+   only visible copy during that beat. */
+.run-card-offer.is-departing {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Once the transferred card lands, surviving offers keep their old visual seats
+   and settle into the newly centred grid instead of snapping with the layout.
+   JS reads the shared motion tokens into the FLIP animation; this class owns only
+   the compositor hint while that bounded functional relocation is active. */
+.run-card-offer.is-reflowing {
+  will-change: translate;
+}
+
 .run-card-action {
   all: unset;
   aspect-ratio: 5 / 7;
@@ -19082,13 +19234,42 @@ button.tileset-relationship-cell {
   opacity: 1;
 }
 
-.run-card-purchased-indicator {
-  display: block;
-  font: var(--ds-weight-bold) var(--ds-text-sm)/1 var(--ds-font-display);
-  letter-spacing: .08em;
-  padding: var(--ds-space-2) var(--ds-space-3);
-  text-align: center;
-  text-transform: uppercase;
+.run-shop-cards-empty {
+  justify-self: center;
+  padding: var(--ds-space-3) var(--ds-space-4);
+}
+
+/* A bought card travels above every clipped Shop and shell layer into the real
+   Chartulary shortcut. Translation and scale share one functional-transfer beat:
+   the centre follows a straight segment while the card minimizes into the mark. */
+.run-card-flight-shield {
+  cursor: wait;
+  inset: 0;
+  pointer-events: auto;
+  position: fixed;
+  z-index: 10010;
+}
+
+.run-card-flight {
+  --run-card-flight-duration: var(--ds-duration-transfer);
+  pointer-events: none;
+  position: fixed;
+  scale: 1;
+  transform-origin: center;
+  transition:
+    translate var(--run-card-flight-duration) var(--ds-ease-out),
+    scale var(--run-card-flight-duration) var(--ds-ease-standard);
+  will-change: translate, scale;
+  z-index: 10011;
+}
+
+.run-card-flight > .run-card-action {
+  inline-size: 100%;
+}
+
+.run-card-flight.is-landed {
+  scale: var(--run-card-flight-scale);
+  translate: var(--run-card-flight-x) var(--run-card-flight-y);
 }
 
 .run-paid-lipsanon-price,
@@ -19271,7 +19452,7 @@ button.tileset-relationship-cell {
 /* Ataraxia accumulates one rule per rung, so its title-bar tip spends the body on
    that ladder rather than on ADR-0370's separate mechanic-definition panes. The
    canonical carved marks shrink into a text-row seat; typed numerals keep the
-   same geometry while the live set is unavailable (ADR-0388/0389). */
+   same geometry while the live set is unavailable (ADR-0390/0391). */
 .run-ataraxia-tooltip-list {
   display: grid;
   gap: var(--ds-space-2);
@@ -20396,7 +20577,7 @@ button.tileset-relationship-cell {
 
 /* Selling is a Shop activity and stands in the same scene, so its heading reads
    over the scene art rather than above it. */
-.run-sell-workspace.has-scene .run-sell-workspace-content > :is(h2, p) {
+.run-screen.has-persistent-viewport-artwork .run-sell-workspace-content > :is(h2, p) {
   text-shadow: 0 2px 6px rgba(2, 7, 12, .85);
 }
 .run-wrap-slot-card {
@@ -22082,7 +22263,8 @@ button.tileset-relationship-cell {
 }
 
 .skirmish-hud-titlebar > .kit-panel-title {
-  padding-inline-end: calc(32px + var(--ds-space-3) + var(--le-control-content-inset));
+  /* Four 24px section marks, four 4px gaps, and the 32px book. */
+  padding-inline-end: calc(144px + var(--ds-space-3) + var(--le-control-content-inset));
 }
 
 .skirmish-screen .skirmish-hud-titlebar > .outer-chrome-header-title-actions {
@@ -22105,6 +22287,39 @@ button.tileset-relationship-cell {
   line-height: 0;
   min-block-size: 0;
   padding: 0;
+}
+
+.strategikon-title-navigation {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-space-1);
+}
+
+.strategikon-title-section-action {
+  block-size: 24px;
+  inline-size: 24px;
+  opacity: .62;
+  transition:
+    filter var(--ds-duration-fast) var(--ds-ease-standard),
+    opacity var(--ds-duration-fast) var(--ds-ease-standard);
+}
+
+.strategikon-title-section-action:is(:hover, :focus-visible, .active) {
+  filter: brightness(1.22) saturate(1.08);
+  opacity: 1;
+}
+
+.strategikon-title-section-action:focus-visible {
+  outline: 2px solid rgba(255, 216, 122, .85);
+  outline-offset: 1px;
+}
+
+.strategikon-title-section-action img {
+  block-size: 22px;
+  image-rendering: pixelated;
+  inline-size: 22px;
+  object-fit: contain;
+  pointer-events: none;
 }
 
 .skirmish-hud-title-action.active {

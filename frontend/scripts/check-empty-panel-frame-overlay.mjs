@@ -1006,7 +1006,7 @@ if (!levelEditorEventsWorkspace
 if (!/<ShellWorkspace[\s\S]*?className="le-artwork-workspace"[\s\S]*?bodyClassName="le-artwork-workspace-content"/.test(levelEditor)) {
   failures.push('Level Artwork must provide content to the body-owning ShellWorkspace');
 }
-if (!/<ShellControlsPanel[\s\S]*?className=\{className\}[\s\S]*?titleActions=\{strategikonToggle\}[\s\S]*?titleClassName="skirmish-hud-titlebar"/.test(skirmishHud)
+if (!/<ShellControlsPanel[\s\S]*?className=\{className\}[\s\S]*?titleActions=\{strategikonNavigation\}[\s\S]*?titleClassName="skirmish-hud-titlebar"/.test(skirmishHud)
   || /<OuterChromeBox\b|<OuterChromeHeader\b|chromeConsumer=/.test(skirmishHud)
   || /<h2>Controls<\/h2>/.test(skirmishHud)) {
   failures.push('live Skirmish HUD must supply content and actions to the one ShellControlsPanel owner');
@@ -1016,8 +1016,8 @@ if (!/export function SkirmishShell[\s\S]*?<SkirmishHud \{\.\.\.hudProps\} contr
   || !/export function Skirmish\b[\s\S]*?<SkirmishStoreProvider>[\s\S]*?<SkirmishSession \{\.\.\.props\} \/>[\s\S]*?<\/SkirmishStoreProvider>/.test(skirmish)) {
   failures.push('Battle must render through one instance-owned Skirmish session and the one SkirmishShell that owns SkirmishHud');
 }
-if (!/<SkirmishShell[\s\S]*?controlsContent=\{shellRun\s*\?\s*<RunMetaControls run=\{shellRun\} view=\{view\} onNavigate=\{navigateRunView\} showAbandon=\{shellRun\.phase !== 'victory'\} \/>\s*:\s*null\}/.test(runScreen)
-  || !/function RunMetaControls[\s\S]*?<section className="run-meta-controls" aria-label="Run controls">/.test(runScreen)
+if (!/<SkirmishShell[\s\S]*?controlsContent=\{shellRun[\s\S]*?<RunMetaControls[\s\S]*?run=\{shellRun\}[\s\S]*?view=\{view\}[\s\S]*?onNavigate=\{navigateRunView\}[\s\S]*?showAbandon=\{shellRun\.phase !== 'victory'\}[\s\S]*?purchaseInFlight=\{purchaseBusy\}[\s\S]*?\/>[\s\S]*?: null\}/.test(runScreen)
+  || !/function RunMetaControls[\s\S]*?<section[\s\S]*?className="run-meta-controls"[\s\S]*?aria-label="Run controls"[\s\S]*?inert=\{purchaseInFlight \? true : undefined\}/.test(runScreen)
   || /function RunShell|function RunControlsRail|chromeConsumer="run-controls"/.test(runScreen)) {
   failures.push('Run shop must use the Battle-owned SkirmishShell and replace only SkirmishHud contents');
 }

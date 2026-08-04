@@ -122,11 +122,13 @@ these.
   the permanent King, two free Pawns, 8 gold plus any immediate lipsanon payout,
   and three seeded card offers at distinct core values from 1 through 8.
   Each card may be bought once while the player can afford it. Every bought card
-  keeps the Shop open, shows a framed **Purchased** state beneath that card, and
-  uses the same gold transaction cue as selling. Only the explicit
+  keeps the Shop open, flies from its Shop seat into the title-reachable
+  Chartulary, leaves the deal once it lands, and uses the same gold transaction
+  cue as selling. The surviving offers then glide from their measured old seats into the newly centred
+  deal instead of snapping when the bought card leaves. Only the explicit
   Continue action enters the first Battle, and it is available without requiring
   a purchase. **Card** is the sole current gameplay noun for these deck entries
-  and offers (ADR-0321, ADR-0322, ADR-0323, ADR-0344, ADR-0347).
+  and offers (ADR-0321, ADR-0322, ADR-0323, ADR-0344, ADR-0347, ADR-0387, ADR-0388).
 - Each of those 49 Units cards owns one native 400×280 PixelLab illustration
   keyed by its canonical composition id. Human unit roles and readable
   equipment control the composition; historical pressure supplies secondary
@@ -180,7 +182,7 @@ these.
   one, and the ladder stacks: selecting tier N applies every condition from 1
   through N. The title-bar tooltip names **Ataraxia** once, then lists every active
   tier as a small carved numeral beside that tier's effect and adds no glossary
-  panes of its own (ADR-0266, ADR-0268, ADR-0291, ADR-0388, ADR-0389).
+  panes of its own (ADR-0266, ADR-0268, ADR-0291, ADR-0390, ADR-0391).
 - **Ataraxia I — The Great Mortality** initially targets Pestiferous status for
   roughly one in eight otherwise eligible shop draws. Pestiferous status is
   rolled with the rest of that affected offer, not added as another deck copy.
@@ -247,11 +249,16 @@ these.
 - A non-final Run victory funds its shop from the authored enemy force: each
   King is worth 1 gold and every other enemy chess piece pays 50% of its
   standard value (ADR-0220).
-- Run shops separate buying, detailed army inspection, and a compact
-  decision-complete selling list into explicit main-pane destinations. The
-  persistent Controls panel navigates those destinations, resets the complete
-  same-offer shop visit, and continues the Run; Army inspection remains
-  available in every Run phase without pausing an active Battle (ADR-0230).
+- Run shops separate buying, upcoming-Battle reconnaissance, detailed army
+  inspection, and a compact decision-complete selling list into explicit
+  main-pane destinations. **View Battle** shows the next canonical Level in a
+  pannable read-only board beside its rules, zones, time control, and forces.
+  Fixed opponents appear on the map; known setup-event rosters appear in the
+  ledger without resolving their exact squares, and the persistent Run army
+  still waits for Deployment. The persistent Controls panel navigates these
+  destinations, resets the complete same-offer shop visit, and continues the
+  Run; Army inspection remains available in every Run phase without pausing an
+  active Battle (ADR-0230, ADR-0386).
 - **Enchiridion** is the player-facing reference for unit movement, terrain
   rules, the filterable core card deck, affected card types, all lipsana, and the
   behavior of the current unit abilities: Adlected, Eutactic, Agminate,
@@ -266,9 +273,13 @@ these.
   remains provisional
   (ADR-0313, ADR-0315, ADR-0329, ADR-0339, ADR-0341, ADR-0345). During Battle,
   the Controls title bar opens **Strategikon** over the board without unmounting
-  the fight; its Martial Prosopography, Chartulary and Lipsanotheca expose the
+  the fight. Its four section marks sit beside the book and directly open the
+  Enchiridion, Martial Prosopography, Chartulary, and Lipsanotheca; the same
+  destinations remain in the complete workspace rail. Those Run registers expose the
   persistent army, the cards bought so far, and held lipsana beside the same
-  Enchiridion (ADR-0231). The Chartulary is the Cards gallery itself — same
+  Enchiridion. The title route retains the covered Run phase and appends the exact
+  visible address—`Shop › Strategikon › Chartulary`, or one further segment for an
+  Enchiridion subcategory (ADR-0231, ADR-0387, ADR-0389). The Chartulary is the Cards gallery itself — same
   filters, same gold groups, same faces, no annotation beside them — and the
   only difference is which cards are in it (ADR-0371).
 - Play defaults to one activity-agnostic, descriptor-free **Continue** rail

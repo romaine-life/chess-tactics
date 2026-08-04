@@ -148,6 +148,25 @@ actions. Generated chrome targets that component-owned marker rather than a
 list of consumer ids. Production code does not rebuild a panel titled Controls
 from `OuterChromeBox` and `OuterChromeHeader`.
 
+Under [ADR-0387](adr/0387-bought-cards-travel-into-a-title-reachable-chartulary.md),
+the gameplay Controls title's action region contains the compact Strategikon
+index followed by its rightmost open-codex mark. The index and the complete
+Strategikon rail read one destination inventory; the book keeps ADR-0250's
+visible-edge alignment, and the Chartulary shortcut is the measured endpoint
+for Shop card transfers rather than a second deck icon or a hard-coded screen
+coordinate.
+
+Under [ADR-0388](adr/0388-remaining-shop-cards-settle-into-their-new-seats.md),
+removing a purchased card never permits the remaining card grid to snap. The shared
+row measures each survivor before and after the logical layout change, then settles
+it between those real rectangles on the live motion tokens while the Shop stays inert.
+
+Under [ADR-0389](adr/0389-the-title-route-names-the-visible-strategikon-address.md),
+the gameplay screen-name route retains the underlying Run phase and appends every
+visible Strategikon address segment. Its section and nested Enchiridion labels come
+from the same canonical inventories as the rails; route copy never reparses or renames
+the destination independently.
+
 Under [ADR-0101](adr/0101-title-bar-buttons-use-the-inner-box-role.md), every
 button inside that persistent title bar consumes the registered `inner-box`
 role. The inner role owns its frame and state art; the title-control primitive
@@ -191,8 +210,8 @@ omit either layer or provide an inline-end value.
 
 Under [ADR-0237](adr/0237-run-destinations-fill-the-shell-workspace.md), the same
 ownership test applies to player-facing non-Battle Run destinations. Shop/Loot,
-Victory, Army ledger and profile, Sell Units, loading, and empty states fill the
-shell-owned playfield through the shared `RunWorkspace`/`ShellWorkspace`
+the Shop's upcoming-Battle preview, Victory, Army ledger and profile, Sell Units,
+loading, and empty states fill the shell-owned playfield through the shared `RunWorkspace`/`ShellWorkspace`
 composition. `RunWorkspace` supplies the
 workflow content; `ShellWorkspace` itself supplies the same Controls-attached
 body and default inset content container for every destination. Content gutters
@@ -202,6 +221,14 @@ edge-attached content variant rather than authoring an end-padding exception.
 Destinations do not add an
 `OuterChromeBox`, outer-panel consumer, or duplicate title frame merely to
 acquire a background; subordinate controls remain registered inner chrome.
+
+Per [ADR-0386](adr/0386-shops-offer-read-only-intelligence-on-the-upcoming-battle.md),
+the Shop's `/run?view=battle-preview` destination composes the canonical
+`FramedReadOnlyBoardView` and `LevelInfoCompact` inside that fill-only workspace.
+It may lay those subordinate inner frames beside one another, but it cannot
+instantiate a gameplay session, project the Run army, resolve setup positions,
+or build a second board renderer. The address is valid only while the persisted
+Run phase is Shop.
 
 [ADR-0346](adr/0346-run-deployment-is-a-battlefield-state-with-conditional-input.md)
 removes Deployment from that destination inventory. Deployment is a persisted

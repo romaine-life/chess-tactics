@@ -3,17 +3,17 @@ status: accepted
 date: 2026-08-04
 deciders: owner (Nelson) + Codex
 partially_supersedes:
-  - "[ADR-0388](0388-ataraxia-tooltip-is-a-compact-cumulative-rule-list.md)'s selected-tier heading and 24px numeral seat"
+  - "[ADR-0390](0390-ataraxia-tooltip-is-a-compact-cumulative-rule-list.md)'s selected-tier heading and 24px numeral seat"
 refines:
   - 0363-the-ataraxia-ladder-is-an-enchiridion-reference-section.md
   - 0366-a-run-names-its-phase-as-route-and-its-repeatable-ideas-as-icons.md
 ---
 
-# ADR-0389: Ataraxia tooltip names the ladder once
+# ADR-0391: Ataraxia tooltip names the ladder once
 
 ## Context
 
-ADR-0388 initially headed the tooltip with the selected tier's full identity and then
+ADR-0390 initially headed the tooltip with the selected tier's full identity and then
 opened the cumulative list with that tier's numbered row. At tier zero this read as
 **Ataraxia 0** over **0 Standard rules.** The first modifier mark was also large enough
 to compete with the text instead of indexing it.
@@ -38,4 +38,4 @@ to compete with the text instead of indexing it.
 
 - [ADR-0363](0363-the-ataraxia-ladder-is-an-enchiridion-reference-section.md)
 - [ADR-0366](0366-a-run-names-its-phase-as-route-and-its-repeatable-ideas-as-icons.md)
-- [ADR-0388](0388-ataraxia-tooltip-is-a-compact-cumulative-rule-list.md)
+- [ADR-0390](0390-ataraxia-tooltip-is-a-compact-cumulative-rule-list.md)

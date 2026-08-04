@@ -47,10 +47,10 @@ export function craftDestination(routeSearch: string): string {
   const params = new URLSearchParams(routeSearch);
   const to = params.get('to');
   params.delete('to');
-  const rest = params.toString();
-  const search = rest ? `?${rest}` : '';
-  const inRun = to !== null && /^\/run(\/|$)/.test(to) && !isRunCraftLinkPath(to);
-  return `${inRun ? to : '/run'}${search}`;
+  const inRun = to !== null && /^\/run(?:[/?#]|$)/.test(to) && !isRunCraftLinkPath(to);
+  const destination = new URL(inRun ? to : '/run', 'http://localhost');
+  for (const [name, value] of params) destination.searchParams.append(name, value);
+  return `${destination.pathname}${destination.search}${destination.hash}`;
 }
 
 /** Resolves to the refusal message, or null once the crafted Run has been adopted. Never rejects:
