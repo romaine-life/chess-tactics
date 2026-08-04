@@ -1677,25 +1677,61 @@ async function validateKlerosisAndDeploymentZoneMigration56() {
       },
     };
     const nestedLevel = JSON.stringify({ levels: { [level.id]: level } });
+    const runJson = JSON.stringify(run);
+    const levelJson = JSON.stringify(level);
     await client.query(
-      `INSERT INTO active_runs (owner_email, body, revision) VALUES ('run@example.com', $1::jsonb, 7);
-       INSERT INTO levels (owner_email, id, body, revision) VALUES ('owner@example.com', 'migration-level', $2::jsonb, 4);
-       INSERT INTO campaign_workspaces (owner_email, body, revision) VALUES ('owner@example.com', $3::jsonb, 8);
-       INSERT INTO official_campaigns (id, data, revision) VALUES ('default', $3::jsonb, 9);
-       INSERT INTO public_maps (public_id, body) VALUES ('public', $2::jsonb);
-       INSERT INTO level_working_copies (document_id, body, revision, saved_revision, baseline_hash)
-         VALUES ('document', $2::jsonb, 2, 2, 'old');
-       INSERT INTO level_working_copy_revisions
+      `INSERT INTO active_runs (owner_email, body, revision)
+       VALUES ('run@example.com', $1::jsonb, 7)`,
+      [runJson],
+    );
+    await client.query(
+      `INSERT INTO levels (owner_email, id, body, revision)
+       VALUES ('owner@example.com', 'migration-level', $1::jsonb, 4)`,
+      [levelJson],
+    );
+    await client.query(
+      `INSERT INTO campaign_workspaces (owner_email, body, revision)
+       VALUES ('owner@example.com', $1::jsonb, 8)`,
+      [nestedLevel],
+    );
+    await client.query(
+      `INSERT INTO official_campaigns (id, data, revision)
+       VALUES ('default', $1::jsonb, 9)`,
+      [nestedLevel],
+    );
+    await client.query(
+      `INSERT INTO public_maps (public_id, body) VALUES ('public', $1::jsonb)`,
+      [levelJson],
+    );
+    await client.query(
+      `INSERT INTO level_working_copies (document_id, body, revision, saved_revision, baseline_hash)
+       VALUES ('document', $1::jsonb, 2, 2, 'old')`,
+      [levelJson],
+    );
+    await client.query(
+      `INSERT INTO level_working_copy_revisions
          (document_id, revision, body, saved_revision, baseline_hash, reason)
-         VALUES ('document', 2, $2::jsonb, 2, 'old', 'autosave');
-       INSERT INTO editor_document_edit_sessions (session_id, draft_body)
-         VALUES ('00000000-0000-4000-8000-000000000056', $2::jsonb);
-       INSERT INTO editor_document_recoveries (recovery_id, body)
-         VALUES ('00000000-0000-4000-8000-000000000156', $2::jsonb);
-       INSERT INTO lab_runs (id, body) VALUES ('lab', $3::jsonb);
-       INSERT INTO train_runs (id, spec, body) VALUES ('train', $3::jsonb, $3::jsonb);
-       INSERT INTO solve_runs (id, spec, body) VALUES ('solve', $3::jsonb, $3::jsonb);`,
-      [JSON.stringify(run), JSON.stringify(level), nestedLevel],
+       VALUES ('document', 2, $1::jsonb, 2, 'old', 'autosave')`,
+      [levelJson],
+    );
+    await client.query(
+      `INSERT INTO editor_document_edit_sessions (session_id, draft_body)
+       VALUES ('00000000-0000-4000-8000-000000000056', $1::jsonb)`,
+      [levelJson],
+    );
+    await client.query(
+      `INSERT INTO editor_document_recoveries (recovery_id, body)
+       VALUES ('00000000-0000-4000-8000-000000000156', $1::jsonb)`,
+      [levelJson],
+    );
+    await client.query(`INSERT INTO lab_runs (id, body) VALUES ('lab', $1::jsonb)`, [nestedLevel]);
+    await client.query(
+      `INSERT INTO train_runs (id, spec, body) VALUES ('train', $1::jsonb, $1::jsonb)`,
+      [nestedLevel],
+    );
+    await client.query(
+      `INSERT INTO solve_runs (id, spec, body) VALUES ('solve', $1::jsonb, $1::jsonb)`,
+      [nestedLevel],
     );
 
     await client.query(inlineMigrationSql(56));
