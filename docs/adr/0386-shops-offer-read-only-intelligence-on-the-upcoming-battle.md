@@ -8,9 +8,10 @@ partially_supersedes:
 refines:
   - "[ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md)"
   - "[ADR-0237](0237-run-destinations-fill-the-shell-workspace.md)"
+  - "[ADR-0383](0383-run-viewport-dom-is-a-scene-contribution.md)"
 ---
 
-# ADR-0381: Shops offer read-only intelligence on the upcoming Battle
+# ADR-0386: Shops offer read-only intelligence on the upcoming Battle
 
 ## Context
 

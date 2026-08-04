@@ -161,33 +161,6 @@ describe('Run deployment', () => {
     );
   });
 
-  it('lets one Marshalled Bishop prefer the opposite color from an ordinary Bishop', () => {
-    const current = run();
-    const king = current.army.find((unit) => unit.type === 'king')!;
-    const bishop = (id: string, number: number, abilities: RunArmyUnit['abilities']): RunArmyUnit => ({
-      id,
-      name: id,
-      type: 'bishop',
-      number,
-      inspectionSeed: number,
-      abilities,
-      modifiers: [],
-      source: 'shop',
-    });
-    const bishops = {
-      ...current,
-      army: [
-        king,
-        bishop('ordinary-bishop', 1, []),
-        bishop('marshalled-bishop', 2, ['agminate']),
-      ],
-    };
-    const placements = deploymentOptions(bishops, battle()).layouts[0].placements;
-    const ordinary = placements['ordinary-bishop'];
-    const marshalled = placements['marshalled-bishop'];
-    expect((ordinary.x + ordinary.y) % 2).not.toBe((marshalled.x + marshalled.y) % 2);
-  });
-
   it('projects each persistent name with its unit identity into the Battle level', () => {
     const current = run();
     const layout = deploymentOptions(current, battle()).layouts[0];
@@ -359,6 +332,60 @@ describe('Dedicated deployment zones', () => {
     // Two layouts shuffle independently, so the Surveyor's Compass has real alternatives to offer.
     const [first, second] = deploymentOptions(current, level).layouts;
     expect(first.placements).not.toEqual(second.placements);
+  });
+
+  it('places an Agminate Pawn after ordinary Pawns and seats it alongside one', () => {
+    const level = battle();
+    level.layers.zones = [
+      {
+        id: 'player-zone',
+        type: 'player-spawn',
+        excludedPieceTypes: ['king'],
+        tiles: [[0, 2], [1, 2], [2, 2]],
+      },
+      { id: 'king-zone', type: 'player-king-spawn', tiles: [[3, 3]] },
+    ];
+    for (let seed = 1; seed <= 24; seed += 1) {
+      const base = armyOf(['pawn', 'pawn'], seed);
+      const current = {
+        ...base,
+        army: base.army.map((unit) => unit.id === 'run-pawn-1'
+          ? { ...unit, abilities: ['agminate'] as RunArmyUnit['abilities'] }
+          : unit),
+      };
+      const placements = deploymentOptions(current, level).layouts[0].placements;
+      const ordinary = placements['run-pawn-0'];
+      const agminate = placements['run-pawn-1'];
+      expect(agminate.y, `seed ${seed}`).toBe(ordinary.y);
+      expect(Math.abs(agminate.x - ordinary.x), `seed ${seed}`).toBe(1);
+    }
+  });
+
+  it('places an Agminate Bishop after ordinary Bishops before choosing opposite square color', () => {
+    const level = battle();
+    level.layers.zones = [
+      {
+        id: 'player-zone',
+        type: 'player-spawn',
+        excludedPieceTypes: ['king'],
+        tiles: [[0, 2], [1, 2], [2, 2]],
+      },
+      { id: 'king-zone', type: 'player-king-spawn', tiles: [[3, 3]] },
+    ];
+    for (let seed = 1; seed <= 24; seed += 1) {
+      const base = armyOf(['bishop', 'bishop'], seed);
+      const current = {
+        ...base,
+        army: base.army.map((unit) => unit.id === 'run-bishop-1'
+          ? { ...unit, abilities: ['agminate'] as RunArmyUnit['abilities'] }
+          : unit),
+      };
+      const placements = deploymentOptions(current, level).layouts[0].placements;
+      const ordinary = placements['run-bishop-0'];
+      const agminate = placements['run-bishop-1'];
+      expect((agminate.x + agminate.y) % 2, `seed ${seed}`)
+        .not.toBe((ordinary.x + ordinary.y) % 2);
+    }
   });
 
   it('never strands a piece that any deployment square would take', () => {

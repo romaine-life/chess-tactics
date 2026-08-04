@@ -62,6 +62,17 @@ these.
   strip stays at the upper-left beneath the title bar in Battles and between-Battle
   screens, independent of the Battle Controls panel; pointing at or focusing an
   icon immediately explains its name and complete effect (ADR-0216, ADR-0217).
+- A Conflict whose authored span still contains a loot Battle opens with **Bona
+  Vacantia** before its Shop. The mat presents three lipsana and no unrelated
+  unit selector. An ordinary choice commits when it lands in the held strip; a
+  choice that needs a named unit lands provisionally and opens the exact Martial
+  Prosopography ledger/profile, with the lipsanon and ability explanation in the
+  absent tab rail's column. Confirming a unit commits both facts and reveals the
+  Shop. Until then, **Return to the three offers** restores the untouched mat,
+  with no pending acquisition in the Run document. The target ledger and each
+  unit profile are addressable authored Run scenes rather than local screen state
+  (ADR-0368, ADR-0383). The landed lipsanon remains continuously visible while
+  scene ownership passes from the flight to the held strip (ADR-0385).
 - Run cards use a familiar trading-card anatomy: a
   title at upper left, one compact gold coin with a live positive whole-number cost
   at upper right, a large pane for the card's accepted PixelLab illustration, a narrow card-
@@ -107,8 +118,9 @@ these.
   unit ledger, not generated card-name permutations; an explicitly concealed
   Concinnous target appears there as hidden until purchase (ADR-0265, ADR-0271,
   ADR-0272, ADR-0305, ADR-0309).
-- A fresh Run opens in the normal Shop with the permanent King, two free Pawns,
-  8 gold, and three seeded card offers at distinct core values from 1 through 8.
+- After the opening Bona Vacantia choice, a fresh Run enters the normal Shop with
+  the permanent King, two free Pawns, 8 gold plus any immediate lipsanon payout,
+  and three seeded card offers at distinct core values from 1 through 8.
   Each card may be bought once while the player can afford it. Every bought card
   keeps the Shop open, shows a framed **Purchased** state beneath that card, and
   uses the same gold transaction cue as selling. Only the explicit
@@ -192,11 +204,13 @@ these.
   row count remain open presentation decisions (ADR-0270).
 - Deployment modifiers may be contextual rather than linearly valuable. A
   role-aware **Agminate** ability belongs to a particular unit but may inspect
-  the surrounding formation. Its Bishop behavior is only to prefer a square
-  color opposite another Bishop: an ordinary Bishop can be its reference, one
-  Agminate Bishop may have little effect alone, and a second is not owed an
-  invented additional benefit. The player weighs that roster-dependent value
-  (ADR-0273, ADR-0274).
+  the surrounding formation. An Agminate Pawn prefers to stand immediately
+  alongside another Pawn, while an Agminate Bishop prefers a square color
+  opposite another Bishop. Those affinity-dependent Pawns and Bishops deploy
+  after the ordinary seeded formation so a same-type reference is already down;
+  an ordinary unit can be that reference, one Agminate unit may have little
+  effect alone, and a second is not owed an invented additional benefit. The
+  player weighs that roster-dependent value (ADR-0273, ADR-0274, ADR-0381).
 - Run Deployment is a battlefield state, not a level-summary destination. The
   full board remains primary while Controls owns any Muster Roll, Adlected,
   or Surveyor's Compass decision. Adlected places its named unit directly on
@@ -241,7 +255,7 @@ these.
   still waits for Deployment. The persistent Controls panel navigates these
   destinations, resets the complete same-offer shop visit, and continues the
   Run; Army inspection remains available in every Run phase without pausing an
-  active Battle (ADR-0230, ADR-0381).
+  active Battle (ADR-0230, ADR-0386).
 - **Enchiridion** is the player-facing reference for unit movement, terrain
   rules, the filterable core card deck, affected card types, all lipsana, and the
   behavior of the current unit abilities: Adlected, Eutactic, Agminate,

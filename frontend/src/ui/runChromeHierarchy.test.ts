@@ -73,9 +73,9 @@ describe('Run chrome hierarchy', () => {
     expect(runArmyWorkspace).toContain('data-ui-sfx={status === \'available\' ? \'gold\' : undefined}');
     expect(runArmyWorkspace).not.toContain('chromeConsumer="run-army-ledger"');
     expect(runArmyWorkspace).not.toContain('chromeConsumer="run-army-profile"');
-    expect(runArmyWorkspace).toContain('<RunWorkspace');
+    expect(runArmyWorkspace).toContain('<RunSceneViewport');
     expect(runArmyWorkspace).toContain('className="run-self-inspection-workspace run-army-workspace run-army-ledger"');
-    expect(runLipsana).toContain('className="run-self-inspection-workspace run-lipsana-workspace"');
+    expect(runLipsana).toContain("className: 'run-self-inspection-workspace run-lipsana-workspace'");
     expect(skirmishHud).toContain('<ShellControlsPanel');
     expect(skirmishHud).toContain('{controlsContent === undefined ? (');
     expect(runScreen).not.toContain('function RunShell');
@@ -90,7 +90,7 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('sceneSnapshot: RunSceneSnapshot');
     expect(runScreen).toContain('<RunPresentationSceneSlot');
     expect(runScreen).toContain("shellRun?.phase === 'deployment' || shellRun?.phase === 'battle'");
-    expect(runScreen).toContain('sceneInstance={`${shellRun.id}:battlefield:${shellRun.battleIndex}:${sceneSnapshot.workspace}`}');
+    expect(runScreen).toContain('sceneInstance={`${shellRun.id}:battlefield:${shellRun.battleIndex}:${runSceneWorkspaceIdentity(sceneSnapshot.workspace)}`}');
     expect(runScreen).toContain('<RunBattlefieldPanel');
     expect(skirmish).toContain('presentedDeploymentSurface');
     expect(skirmish).toContain('preserveBoardPresentation: true');
@@ -105,7 +105,7 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).not.toContain('const run = useActiveRun((state) => state.run);');
     expect(styleCss).not.toContain('.run-stage');
     expect(sceneManifest).toContain("instance(SCENE_DEFINITIONS.runPhase, { phase: phaseIdentity })");
-    expect(sceneManifest).toContain("instance(SCENE_DEFINITIONS.runWorkspace, { phase: phaseIdentity, workspace: snapshot.workspace })");
+    expect(sceneManifest).toContain('workspace: runSceneWorkspaceIdentity(snapshot.workspace),');
     expect(sceneDirector).toContain("type: 'refresh-source'");
     expect(app).toContain("source: 'active-run'");
     expect(app).toContain('sceneSnapshot={scene.snapshot as RunSceneSnapshot}');
@@ -161,7 +161,7 @@ describe('Run chrome hierarchy', () => {
   it('offers the Strategikon from the Controls title mark in every Run phase, not only Battle', () => {
     // Deployment, Shop, and Victory are still the same Run: the reference workspace must
     // open from the same title mark Battle uses. Only an absent Run repairs the address.
-    expect(runScreen).toContain("const strategikonOpen = sceneSnapshot.workspace === 'strategikon';");
+    expect(runScreen).toContain("const strategikonOpen = sceneSnapshot.workspace.view === 'strategikon';");
     expect(runScreen).toContain("? `/run${routeSearch}`");
     expect(runScreen).toContain(': `/run/strategikon/enchiridion/units${routeSearch}`');
     expect(runScreen).toContain('strategikonHref: shellRun ? strategikonHref : null,');
@@ -201,11 +201,13 @@ describe('Run chrome hierarchy', () => {
     const playerRunSources = `${runScreen}\n${runArmyWorkspace}\n${runBattlePreview}\n${runLipsana}`;
     const runWorkspaceRule = styleCss.match(/\.run-workspace\s*\{([^}]*)\}/)?.[1] ?? '';
 
-    expect(runWorkspace).toContain('export function RunWorkspace');
-    expect(runWorkspace).toContain('<main className={`run-workspace ${className}`.trim()}>');
+    expect(runWorkspace).toContain('export function RunSceneViewport');
+    expect(runWorkspace).toContain('scene: RunViewportSceneSpec;');
+    expect(runWorkspace).toContain('data-run-scene-view={scene.view}');
+    expect(runWorkspace).toContain('className={`run-workspace ${scene.className ?? \'\'}`.trim()}');
     expect(runWorkspace).toContain('<ShellWorkspace');
     expect(runWorkspace).toContain('className="run-shell-workspace"');
-    expect(runWorkspace).toContain('bodyClassName={`run-shell-workspace-content ${contentClassName}`.trim()}');
+    expect(runWorkspace).toContain('bodyClassName={`run-shell-workspace-content ${scene.contentClassName ?? \'\'}`.trim()}');
     expect(chromeBox).toContain('export function ShellWorkspace');
     expect(chromeBox).not.toContain('export function ShellWorkspaceBody');
     for (const testId of [
@@ -220,7 +222,7 @@ describe('Run chrome hierarchy', () => {
       'run-loading-workspace',
       'run-empty-workspace',
     ]) {
-      expect(playerRunSources).toContain(`data-testid="${testId}"`);
+      expect(playerRunSources).toMatch(new RegExp(`(?:data-testid="${testId}"|testId: '${testId}')`));
     }
     for (const retiredConsumer of [
       'run-draft',
@@ -242,7 +244,8 @@ describe('Run chrome hierarchy', () => {
     expect(runArmyWorkspace).toContain('<HouseSelect');
     expect(runWorkspaceRule).toContain('position: relative');
     expect(runWorkspaceRule).not.toMatch(/\b(?:padding|gap)\s*:/);
-    expect(runScreen).toContain('className={`run-screen${shellRun && visibleLipsanonCount(shellRun)');
+    expect(runScreen).toContain('visibleLipsanonCount(shellRun)');
+    expect(runScreen).toContain('|| bonaTarget');
     expect(styleCss).toMatch(/\.skirmish-screen\s*\{[\s\S]*?column-gap:\s*0/);
     expect(styleCss).toMatch(/\.skirmish-screen:not\(\.level-editor-screen\) \.skirmish-war-room > \.skirmish-field\s*\{[\s\S]*?margin-inline-end:\s*var\(--skirmish-board-controls-gutter\)/);
     expect(styleCss).not.toContain('.skirmish-screen.is-run-self-inspection-open');
@@ -297,7 +300,8 @@ describe('Run chrome hierarchy', () => {
   });
 
   it('previews the upcoming Shop Battle through the canonical read-only board and Level ledger', () => {
-    expect(runBattlePreview).toContain('<RunWorkspace');
+    expect(runBattlePreview).toContain('<RunSceneViewport');
+    expect(runBattlePreview).toContain("view: 'battle-preview'");
     expect(runBattlePreview).toContain('<FramedReadOnlyBoardView');
     expect(runScreen).toContain('<RunBattlePreview run={run} />');
     expect(runBattlePreview).toContain('<LevelInfoCompact level={level} />');

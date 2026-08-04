@@ -3,6 +3,7 @@ import type { PieceType } from '../core/types';
 import {
   LIPSANON_BY_ID,
   RUN_LIPSANA,
+  lipsanonNeedsUnitTarget,
   type LipsanonDefinition,
   type LipsanonId,
 } from '../core/runLipsana';
@@ -13,6 +14,7 @@ import { runUnitName } from './unitNames';
 export {
   LIPSANON_BY_ID,
   RUN_LIPSANA,
+  lipsanonNeedsUnitTarget,
   type LipsanonDefinition,
   type LipsanonId,
 };
@@ -40,9 +42,9 @@ export const LEGATINE_ADLECTED_OFFER_DENOMINATOR = 8;
 export const HIERATIC_AGMINATE_OFFER_DENOMINATOR = 8;
 export const EUTACTIC_COST = 2;
 export const ADLECTED_COST = 3;
-/** Agminate seats a unit in its role's formation instead of a rank, and its King,
- * Rook and Bishop rules interlock, so it carries Discipline's price rather than
- * Positioned's. */
+/** Agminate seats a unit in its role's formation instead of a rank. Its Pawn,
+ * King, Rook and Bishop behaviors form a role-aware formation, so it carries
+ * Adlected's price rather than Eutactic's. */
 export const AGMINATE_COST = 3;
 
 export type AtaraxiaTier = 0 | 1;
@@ -128,6 +130,7 @@ export function runAbilityDescription(ability: RunAbility, unit: RunArmyPieceTyp
     if (unit === 'bishop' || unit === 'king') return 'Prefers the back row during automatic deployment.';
     return runAbilityGeneralDescription('eutactic');
   }
+  if (unit === 'pawn') return 'Prefers a square alongside another Pawn when possible.';
   if (unit === 'king') return 'Prefers a board-edge square in the player placement zone.';
   if (unit === 'rook') return 'Prefers the established King-flank and corner formation.';
   if (unit === 'bishop') return 'Prefers a square color opposite another Bishop when possible.';
@@ -1564,7 +1567,7 @@ function immediateLipsanon(run: RunDocument, lipsanon: LipsanonId, targetUnitId?
   let next = run;
   const payout = RUN_LIPSANON_IMMEDIATE_GOLD[lipsanon];
   if (payout) next = { ...next, goldTenths: next.goldTenths + payout * GOLD_SCALE };
-  if (lipsanon === 'conscription-notice' && targetUnitId) {
+  if (lipsanonNeedsUnitTarget(lipsanon) && targetUnitId) {
     next = {
       ...next,
       army: next.army.map((unit) => (
@@ -1579,7 +1582,7 @@ function immediateLipsanon(run: RunDocument, lipsanon: LipsanonId, targetUnitId?
 
 export function acquireLipsanon(run: RunDocument, lipsanon: LipsanonId, targetUnitId?: string): RunDocument {
   if (run.lipsana.includes(lipsanon)) return run;
-  if (lipsanon === 'conscription-notice' && !run.army.some((unit) => unit.id === targetUnitId)) return run;
+  if (lipsanonNeedsUnitTarget(lipsanon) && !run.army.some((unit) => unit.id === targetUnitId)) return run;
   return touch(immediateLipsanon({ ...run, lipsana: [...run.lipsana, lipsanon] }, lipsanon, targetUnitId));
 }
 

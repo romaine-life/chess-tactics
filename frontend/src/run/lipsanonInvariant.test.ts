@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createBlankLevel } from '../core/level';
 import { gameEnv, legalMoves } from '../core/rules';
 import { createFromLevel } from '../game/setup';
-import { RUN_LIPSANA, RUN_LIPSANON_ABILITY_GRANTS } from './model';
+import { lipsanonNeedsUnitTarget, RUN_LIPSANA, RUN_LIPSANON_ABILITY_GRANTS } from './model';
 
 describe('Run lipsanon chess invariant', () => {
   it('keeps every piece legal-move set identical when Run adjudication metadata is present', () => {
@@ -39,9 +39,19 @@ describe('Run lipsanon chess invariant', () => {
         'flavorText',
         'requires',
         'immediate',
+        'unitTarget',
       ].includes(key))).toBe(true);
       expect(lipsanon.flavorText.length).toBeGreaterThan(0);
     }
+  });
+
+  it('declares which lipsana cannot be granted without a named unit', () => {
+    expect(RUN_LIPSANA.filter((lipsanon) => lipsanon.unitTarget).map((lipsanon) => lipsanon.id))
+      .toEqual(['conscription-notice']);
+    expect(lipsanonNeedsUnitTarget('conscription-notice')).toBe(true);
+    expect(lipsanonNeedsUnitTarget('royal-decree')).toBe(false);
+    expect(lipsanonNeedsUnitTarget('')).toBe(false);
+    expect(lipsanonNeedsUnitTarget(null)).toBe(false);
   });
 
   it('expresses placement lipsana only as shared unit-ability grants', () => {

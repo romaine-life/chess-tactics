@@ -17,10 +17,10 @@ import {
 } from './Skirmish';
 import { navigateApp } from './navigation';
 import { installedRunShopWrap, runShopWrapLiveMount } from './runShopWrapCandidates';
-import type { RunSceneSnapshot } from './shell/sceneManifest';
+import { runSceneWorkspaceIdentity, type RunSceneSnapshot } from './shell/sceneManifest';
 import { GameplayWorkspaceSceneSlot, RunPresentationSceneSlot } from './shell/AuthoredSceneSlot';
 import { useConfirm } from './shared/ConfirmDialog';
-import { RunWorkspace } from './RunWorkspace';
+import { RunSceneViewport } from './RunWorkspace';
 import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
 import {
   ADLECTED_DISPLAY_NAME,
@@ -36,6 +36,7 @@ import {
   hasLipsanon,
   leaveAftermath,
   leaveShop,
+  lipsanonNeedsUnitTarget,
   markReservistDeployed,
   observeRunUnitDeath,
   prepareDeployment,
@@ -65,9 +66,11 @@ import { SkirmishViewStoreProvider } from '../game/SkirmishViewStoreContext';
 import { runLinkTargetMismatch } from '../run/craft';
 import { useRunCraft } from './useRunCraft';
 import { LipsanonIcon, LipsanaWorkspace } from './Lipsana';
-import { RunBonaVacantia } from './RunBonaVacantia';
+import { RunBonaVacantia, RunBonaVacantiaTarget } from './RunBonaVacantia';
 import { RunGoldAmount } from './RunResources';
 import {
+  runArmyUnitHref,
+  runBonaTargetHref,
   runWorkspaceHref,
   type RunSelfInspectionView,
   type RunWorkspaceView,
@@ -668,10 +671,6 @@ function useRunDeploymentPresentation({
   };
 }
 
-function lipsanonTargetRequired(lipsanon: LipsanonId | null): boolean {
-  return lipsanon === 'conscription-notice';
-}
-
 function LipsanonOffer({
   run,
   lipsanonId,
@@ -687,7 +686,7 @@ function LipsanonOffer({
 }): ReactElement {
   const lipsanon = LIPSANON_BY_ID[lipsanonId];
   const [target, setTarget] = useState('');
-  const needsTarget = lipsanonTargetRequired(lipsanonId);
+  const needsTarget = lipsanonNeedsUnitTarget(lipsanonId);
   return (
     <InnerChromeBox className="run-card run-lipsanon-card">
       <header className="run-lipsanon-card-heading">
@@ -703,7 +702,7 @@ function LipsanonOffer({
             ...run.army.map((unit) => ({ value: unit.id, label: runUnitRosterLabel(unit) })),
           ]}
           onChange={setTarget}
-          ariaLabel="Discipline target"
+          ariaLabel="Adlected target unit"
         />
       ) : null}
       <ChromeButton unit="inner-text-button"
@@ -797,11 +796,14 @@ function ShopPanel({
       {view === 'sell' ? sellWorkspace : view === 'battle-preview' ? <RunBattlePreview run={run} /> : (
         // The title bar already says Run › Shop, so a heading painted into the
         // scene's corner only repeats it. The name stays for assistive tech.
-        <RunWorkspace
-          className="run-shop-workspace"
-          contentClassName="run-shop-workspace-content"
-          data-testid="run-shop-workspace"
-          aria-label="Shop"
+        <RunSceneViewport
+          scene={{
+            view: 'shop',
+            className: 'run-shop-workspace',
+            contentClassName: 'run-shop-workspace-content',
+            testId: 'run-shop-workspace',
+            ariaLabel: 'Shop',
+          }}
         >
         {/* What the Battle paid is reported on the Battle's own aftermath screen, which the
             player has already passed through to reach this one. */}
@@ -860,7 +862,7 @@ function ShopPanel({
           </section>
         ) : null}
 
-        </RunWorkspace>
+        </RunSceneViewport>
       )}
     </>
   );
@@ -912,12 +914,15 @@ function AftermathPanel({ run }: { run: RunDocument }): ReactElement {
   const levelName = run.war.battles[aftermath.battleIndex]?.level.name ?? '';
   const named = levelName && !isGeneratedRunBattleName(levelName) ? levelName : null;
   return (
-    <RunWorkspace
-      className="run-aftermath-workspace"
-      contentClassName="run-aftermath-workspace-content"
-      data-testid="run-aftermath-workspace"
-      aria-labelledby="run-aftermath-workspace-title"
-      backgroundArtwork={workspaceBackgroundArtwork('run-victory')}
+    <RunSceneViewport
+      scene={{
+        view: 'aftermath',
+        className: 'run-aftermath-workspace',
+        contentClassName: 'run-aftermath-workspace-content',
+        testId: 'run-aftermath-workspace',
+        ariaLabelledBy: 'run-aftermath-workspace-title',
+        backgroundArtwork: workspaceBackgroundArtwork('run-victory'),
+      }}
     >
       <header className="run-aftermath-head">
         <p className="run-aftermath-eyebrow">
@@ -959,19 +964,22 @@ function AftermathPanel({ run }: { run: RunDocument }): ReactElement {
       >
         Continue
       </ChromeButton>
-    </RunWorkspace>
+    </RunSceneViewport>
   );
 }
 
 function VictoryPanel({ run }: { run: RunDocument }): ReactElement {
   const abandon = useActiveRun((state) => state.abandon);
   return (
-    <RunWorkspace
-      className="run-victory-workspace"
-      contentClassName="run-victory-workspace-content"
-      data-testid="run-victory-workspace"
-      aria-labelledby="run-victory-workspace-title"
-      backgroundArtwork={workspaceBackgroundArtwork('run-victory')}
+    <RunSceneViewport
+      scene={{
+        view: 'victory',
+        className: 'run-victory-workspace',
+        contentClassName: 'run-victory-workspace-content',
+        testId: 'run-victory-workspace',
+        ariaLabelledBy: 'run-victory-workspace-title',
+        backgroundArtwork: workspaceBackgroundArtwork('run-victory'),
+      }}
     >
       <h2 id="run-victory-workspace-title">War won</h2>
       <h2>{run.war.name}</h2>
@@ -992,7 +1000,7 @@ function VictoryPanel({ run }: { run: RunDocument }): ReactElement {
       >
         Finish Run
       </ChromeButton>
-    </RunWorkspace>
+    </RunSceneViewport>
   );
 }
 
@@ -1136,18 +1144,11 @@ export function RunScreen({
   // A craft address sets the account's Run to the state it names before the screen reads one,
   // every time it is opened, then lands here without its craft parameters (ADR-0354).
   const craft = useRunCraft(routePath, routeSearch);
-  const viewScope = run
-    ? `${run.id}:${run.phase}:${run.phase === 'shop' ? run.shop?.afterBattleIndex ?? run.battleIndex : run.battleIndex}`
-    : 'no-run';
   const filterScope = run?.phase === 'shop'
     ? `${run.id}:shop:${run.shop?.afterBattleIndex ?? run.battleIndex}`
     : run
       ? `${run.id}:outside-shop`
       : 'no-run';
-  const [selectedState, setSelectedState] = useState<{ scope: string; unitId: string | null }>({
-    scope: 'no-run',
-    unitId: null,
-  });
   const [armyFilterState, setArmyFilterState] = useState<{ scope: string; filters: RunArmyFilters }>({
     scope: 'no-run',
     filters: { ...DEFAULT_RUN_ARMY_FILTERS },
@@ -1168,15 +1169,23 @@ export function RunScreen({
   // The pre-hydration document may exist from browser storage, but the screen treats
   // the Run as absent until hydrate() has arbitrated browser and account copies.
   const shellRun = hydrated ? run : null;
-  const rawView: RunScreenView = sceneSnapshot.workspace === 'strategikon'
+  const rawView: RunScreenView = sceneSnapshot.workspace.view === 'strategikon'
     ? 'primary'
-    : sceneSnapshot.workspace;
+    : sceneSnapshot.workspace.view === 'bona-target'
+      ? 'primary'
+      : sceneSnapshot.workspace.view;
   const view = shellRun?.phase !== 'shop' && rawView === 'sell' ? 'primary' : rawView;
-  const strategikonOpen = sceneSnapshot.workspace === 'strategikon';
+  const strategikonOpen = sceneSnapshot.workspace.view === 'strategikon';
+  const bonaTarget = sceneSnapshot.workspace.view === 'bona-target'
+    ? sceneSnapshot.workspace
+    : null;
   const strategikonHref = strategikonOpen
     ? `/run${routeSearch}`
     : `/run/strategikon/enchiridion/units${routeSearch}`;
-  const selectedUnitId = selectedState.scope === viewScope ? selectedState.unitId : null;
+  const selectedUnitId = sceneSnapshot.workspace.view === 'army'
+    || sceneSnapshot.workspace.view === 'bona-target'
+      ? sceneSnapshot.workspace.unitId
+      : null;
   const armyFilters = armyFilterState.scope === filterScope
     ? armyFilterState.filters
     : { ...DEFAULT_RUN_ARMY_FILTERS };
@@ -1191,7 +1200,16 @@ export function RunScreen({
     current.pathname = '/run';
     const nextHref = runWorkspaceHref(current.toString(), nextView);
     navigateApp(nextHref, { replace: true, scroll: false });
-    if (nextView !== 'army') setSelectedState({ scope: viewScope, unitId: null });
+  };
+  const navigateArmyUnit = (unitId: string | null): void => {
+    const current = new URL(window.location.href);
+    current.pathname = '/run';
+    navigateApp(runArmyUnitHref(current.toString(), unitId), { replace: true, scroll: false });
+  };
+  const navigateBonaTarget = (lipsanonId: LipsanonId, unitId: string | null = null): void => {
+    const current = new URL(window.location.href);
+    current.pathname = '/run';
+    navigateApp(runBonaTargetHref(current.toString(), lipsanonId, unitId), { replace: true, scroll: false });
   };
   const sellUnit = (unitId: string): void => {
     if (!shellRun) return;
@@ -1199,7 +1217,6 @@ export function RunScreen({
     if (!latest || latest.id !== shellRun.id) return;
     const sold = sellArmyUnit(latest, unitId);
     if (sold !== latest) replace(sold);
-    setSelectedState({ scope: viewScope, unitId: null });
   };
   const armyWorkspace = shellRun ? (
     <RunArmyWorkspace
@@ -1207,8 +1224,8 @@ export function RunScreen({
       filters={armyFilters}
       selectedUnitId={selectedUnitId}
       onFiltersChange={(filters) => setArmyFilterState({ scope: filterScope, filters })}
-      onSelectUnit={(unitId) => setSelectedState({ scope: viewScope, unitId })}
-      onBack={() => setSelectedState({ scope: viewScope, unitId: null })}
+      onSelectUnit={(unitId) => navigateArmyUnit(unitId)}
+      onBack={() => navigateArmyUnit(null)}
       onSell={sellUnit}
     />
   ) : null;
@@ -1239,36 +1256,45 @@ export function RunScreen({
   const linkMismatch = hydrated && runLinkTargetMismatch(routeSearch, run?.id ?? null);
   const craftWorkspace = craft.crafting
     ? (
-      <RunWorkspace
-        className="run-loading-workspace"
-        contentClassName="run-status-workspace-content"
-        data-testid="run-craft-workspace"
-        role="status"
+      <RunSceneViewport
+        scene={{
+          view: 'status',
+          className: 'run-loading-workspace',
+          contentClassName: 'run-status-workspace-content',
+          testId: 'run-craft-workspace',
+          role: 'status',
+        }}
       >
         <p>Crafting Run…</p>
-      </RunWorkspace>
+      </RunSceneViewport>
     )
     : craft.error
       ? (
-        <RunWorkspace
-          className="run-empty-workspace"
-          contentClassName="run-status-workspace-content"
-          data-testid="run-craft-error-workspace"
-          role="alert"
-          aria-labelledby="run-craft-error-title"
+        <RunSceneViewport
+          scene={{
+            view: 'status',
+            className: 'run-empty-workspace',
+            contentClassName: 'run-status-workspace-content',
+            testId: 'run-craft-error-workspace',
+            role: 'alert',
+            ariaLabelledBy: 'run-craft-error-title',
+          }}
         >
           <h2 id="run-craft-error-title">This Run could not be crafted</h2>
           <p>{craft.error}</p>
-        </RunWorkspace>
+        </RunSceneViewport>
       )
       : linkMismatch
         ? (
-          <RunWorkspace
-            className="run-empty-workspace"
-            contentClassName="run-status-workspace-content"
-            data-testid="run-link-mismatch-workspace"
-            role="status"
-            aria-labelledby="run-link-mismatch-title"
+          <RunSceneViewport
+            scene={{
+              view: 'status',
+              className: 'run-empty-workspace',
+              contentClassName: 'run-status-workspace-content',
+              testId: 'run-link-mismatch-workspace',
+              role: 'status',
+              ariaLabelledBy: 'run-link-mismatch-title',
+            }}
           >
             <h2 id="run-link-mismatch-title">This link is for a different Run</h2>
             <p>
@@ -1282,14 +1308,14 @@ export function RunScreen({
             >
               Open my Run
             </ChromeNavButton>
-          </RunWorkspace>
+          </RunSceneViewport>
         )
         : null;
   if (!craftWorkspace && (shellRun?.phase === 'deployment' || shellRun?.phase === 'battle')) {
     return (
       <RunPresentationSceneSlot
         className="run-scene-slot"
-        sceneInstance={`${shellRun.id}:battlefield:${shellRun.battleIndex}:${sceneSnapshot.workspace}`}
+        sceneInstance={`${shellRun.id}:battlefield:${shellRun.battleIndex}:${runSceneWorkspaceIdentity(sceneSnapshot.workspace)}`}
       >
         <RunBattlefieldPanel
           run={shellRun}
@@ -1304,22 +1330,28 @@ export function RunScreen({
   }
   const workspace = craftWorkspace ?? (!hydrated
     ? (
-      <RunWorkspace
-        className="run-loading-workspace"
-        contentClassName="run-status-workspace-content"
-        data-testid="run-loading-workspace"
-        role="status"
+      <RunSceneViewport
+        scene={{
+          view: 'status',
+          className: 'run-loading-workspace',
+          contentClassName: 'run-status-workspace-content',
+          testId: 'run-loading-workspace',
+          role: 'status',
+        }}
       >
         <p>Loading Run…</p>
-      </RunWorkspace>
+      </RunSceneViewport>
     )
     : !shellRun
       ? (
-        <RunWorkspace
-          className="run-empty-workspace"
-          contentClassName="run-status-workspace-content"
-          data-testid="run-empty-workspace"
-          aria-labelledby="run-empty-workspace-title"
+        <RunSceneViewport
+          scene={{
+            view: 'status',
+            className: 'run-empty-workspace',
+            contentClassName: 'run-status-workspace-content',
+            testId: 'run-empty-workspace',
+            ariaLabelledBy: 'run-empty-workspace-title',
+          }}
         >
           <h2 id="run-empty-workspace-title">No active Run</h2>
           <p>Start a Run from Play, or direct-play one of your Wars from the War Editor.</p>
@@ -1329,32 +1361,57 @@ export function RunScreen({
           >
             Back to Run
           </ChromeNavButton>
-        </RunWorkspace>
+        </RunSceneViewport>
       )
       : shellRun.phase === 'shop' && shellRun.shop
             ? <ShopPanel run={shellRun} view={view} sellWorkspace={sellWorkspace!} />
             // Explicit, because the branch below is an else-fallthrough: any phase without
             // its own case silently renders Victory.
             : shellRun.phase === 'bona-vacantia' && shellRun.vacantia
-              ? <RunBonaVacantia run={shellRun} replace={replace} />
+              ? bonaTarget
+                ? (
+                  <RunBonaVacantiaTarget
+                    run={shellRun}
+                    lipsanonId={bonaTarget.lipsanonId}
+                    selectedUnitId={bonaTarget.unitId}
+                    filters={armyFilters}
+                    onFiltersChange={(filters) => setArmyFilterState({ scope: filterScope, filters })}
+                    onSelectUnit={(unitId) => navigateBonaTarget(bonaTarget.lipsanonId, unitId)}
+                    onBackToUnits={() => navigateBonaTarget(bonaTarget.lipsanonId)}
+                    onBackToOffers={() => navigateRunView('primary')}
+                    onConfirm={(unitId) => replace(takeVacantiaLipsanon(
+                      shellRun,
+                      bonaTarget.lipsanonId,
+                      unitId,
+                    ))}
+                  />
+                )
+                : <RunBonaVacantia run={shellRun} replace={replace} onTargetLipsanon={navigateBonaTarget} />
               : shellRun.phase === 'aftermath' && shellRun.aftermath
                 ? <AftermathPanel run={shellRun} />
                 : <VictoryPanel run={shellRun} />);
   return (
     <RunPresentationSceneSlot
       className="run-scene-slot"
-      sceneInstance={`${shellRun?.id ?? 'none'}:${sceneSnapshot.phase}:${sceneSnapshot.workspace}`}
+      sceneInstance={`${shellRun?.id ?? 'none'}:${sceneSnapshot.phase}:${runSceneWorkspaceIdentity(sceneSnapshot.workspace)}`}
     >
       {/* Shop/victory use the shared HUD without mounting a battlefield. Their replaceable
           presentation scene still owns its HUD view state explicitly; it must not borrow an
           outgoing or incoming battlefield's camera/overlay store during director overlap. */}
       <SkirmishViewStoreProvider>
         <SkirmishShell
-          className={`run-screen${shellRun && visibleLipsanonCount(shellRun) ? ' has-lipsana' : ''}`}
+          className={`run-screen${shellRun && (
+            visibleLipsanonCount(shellRun)
+            || bonaTarget
+          ) ? ' has-lipsana' : ''}`}
           testId="run-screen"
           titleBarContent={shellRun ? <RunTitleBarStatus run={shellRun} /> : null}
           persistentViewportArtwork={persistentShopScene}
-          lipsanonIds={shellRun ? shellRun.lipsana : []}
+          lipsanonIds={shellRun
+            ? bonaTarget
+              ? [...shellRun.lipsana, bonaTarget.lipsanonId]
+              : shellRun.lipsana
+            : []}
           shellWorkspaceCoversLipsana={strategikonOpen || Boolean(inspectionWorkspace)}
           controlsContent={shellRun
             ? <RunMetaControls run={shellRun} view={view} onNavigate={navigateRunView} showAbandon={shellRun.phase !== 'victory'} />

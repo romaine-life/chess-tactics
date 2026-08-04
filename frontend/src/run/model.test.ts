@@ -40,6 +40,7 @@ import {
   openShop,
   prepareDeployment,
   resetShop,
+  runAbilityDescription,
   runAbilityDisplayName,
   sellArmyUnit,
   shopHasChanges,
@@ -113,6 +114,11 @@ describe('Run piece economy', () => {
     for (const ability of ['adlected', 'eutactic', 'agminate'] as const) {
       expect(runAbilityDisplayName(ability).toLowerCase()).toBe(ability);
     }
+  });
+
+  it('defines an Agminate Pawn by its same-type formation affinity', () => {
+    expect(runAbilityDescription('agminate', 'pawn'))
+      .toBe('Prefers a square alongside another Pawn when possible.');
   });
 
   it('enumerates every unique multiset worth 1–9 points exactly once', () => {

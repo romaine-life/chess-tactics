@@ -24,7 +24,7 @@ import { runtimePortraitMasterSrc } from './portraitCandidates';
 import { UnitPortrait, type Palette as PortraitPalette, type Piece as PortraitPiece } from './PortraitEditor';
 import { RunGoldAmount } from './RunResources';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
-import { RunWorkspace } from './RunWorkspace';
+import { RunSceneViewport } from './RunWorkspace';
 import { InnerChromeBox } from './shared/ChromeBox';
 import { HouseSelect } from './shared/HouseSelect';
 import { ChromeDividedGridRow, DividedInnerChromeBox } from './shared/ChromeDividedGrid';
@@ -58,6 +58,11 @@ export const DEFAULT_RUN_SELL_FILTERS: RunSellFilters = Object.freeze({
   ...DEFAULT_RUN_ARMY_FILTERS,
   saleState: 'all',
 });
+
+export interface RunArmyProfileAction {
+  label: string;
+  onAction: (unitId: string) => void;
+}
 
 const PLAYER_PORTRAIT_PALETTE = paletteForSide('player') as PortraitPalette;
 // A unit identifying itself in a chrome list faces the reader, the same choice the run
@@ -473,15 +478,18 @@ function RunArmyWorkspaceHost({
 }): ReactElement {
   if (framed) {
     return (
-      <RunWorkspace
-        className={className}
-        contentClassName={contentClassName}
-        edgeAttached
-        data-testid={dataTestId}
-        aria-labelledby="run-army-workspace-title"
+      <RunSceneViewport
+        scene={{
+          view: 'army',
+          className,
+          contentClassName,
+          edgeAttached: true,
+          testId: dataTestId,
+          ariaLabelledBy: 'run-army-workspace-title',
+        }}
       >
         {children}
-      </RunWorkspace>
+      </RunSceneViewport>
     );
   }
   return (
@@ -506,6 +514,7 @@ export function RunArmyWorkspace({
   onSelectUnit,
   onBack,
   onSell,
+  profileAction,
 }: {
   run: RunDocument;
   title?: string;
@@ -517,6 +526,8 @@ export function RunArmyWorkspace({
   onSelectUnit: (unitId: string) => void;
   onBack: () => void;
   onSell: (unitId: string) => void;
+  /** Replaces the ordinary sell control when the profile is choosing a unit for another workflow. */
+  profileAction?: RunArmyProfileAction;
 }): ReactElement {
   const selected = selectedUnitId ? run.army.find((unit) => unit.id === selectedUnitId) ?? null : null;
   const units = useMemo(() => filteredAndSortedUnits(run, run.army, filters), [filters, run]);
@@ -562,7 +573,16 @@ export function RunArmyWorkspace({
                   <div><dt>Kills</dt><dd>{kills ?? '—'}</dd></div>
                 </dl>
               </InnerChromeBox>
-              <ProfileSellAction run={run} unit={selected} onSell={onSell} />
+              {profileAction ? (
+                <ChromeButton
+                  unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+                  tone="primary"
+                  onClick={() => profileAction.onAction(selected.id)}
+                >
+                  {profileAction.label}
+                </ChromeButton>
+              ) : <ProfileSellAction run={run} unit={selected} onSell={onSell} />}
             </section>
           </div>
       </RunArmyWorkspaceHost>
@@ -592,6 +612,7 @@ export function RunArmyWorkspace({
             <ChromeDividedGridRow
               as="button"
               className="run-army-ledger-row"
+              aria-label={`${profileAction ? 'Select' : 'Inspect'} ${runUnitDisplayName(unit)}`}
               onClick={() => {
                 ledgerScrollTop.current = ledgerRef.current?.scrollTop ?? 0;
                 onSelectUnit(unit.id);
@@ -611,9 +632,18 @@ export function RunArmyWorkspace({
                 </small>
                 <RunUnitTraitList run={run} unit={unit} compact />
               </span>
-              <span className="run-army-ledger-value">
-                <small>Value</small>
-                <strong>{PIECE_VALUE[unit.type]}</strong>
+              <span className={profileAction ? 'run-army-ledger-select' : 'run-army-ledger-value'}>
+                {profileAction ? (
+                  <>
+                    <strong>Select</strong>
+                    <span aria-hidden="true">›</span>
+                  </>
+                ) : (
+                  <>
+                    <small>Value</small>
+                    <strong>{PIECE_VALUE[unit.type]}</strong>
+                  </>
+                )}
               </span>
             </ChromeDividedGridRow>
           ))}
@@ -666,11 +696,14 @@ export function RunSellWorkspace({
   }, [filters, run]);
 
   return (
-    <RunWorkspace
-      className="run-sell-workspace"
-      contentClassName="run-sell-workspace-content"
-      data-testid="run-sell-workspace"
-      aria-labelledby="run-sell-workspace-title"
+    <RunSceneViewport
+      scene={{
+        view: 'sell',
+        className: 'run-sell-workspace',
+        contentClassName: 'run-sell-workspace-content',
+        testId: 'run-sell-workspace',
+        ariaLabelledBy: 'run-sell-workspace-title',
+      }}
     >
       <h2 id="run-sell-workspace-title">Sell Units</h2>
       <p>Sales apply immediately. Reset Shop restores every transaction from this visit.</p>
@@ -732,6 +765,6 @@ export function RunSellWorkspace({
         })}
         {!rows.length ? <p>No units match these filters.</p> : null}
       </div>
-    </RunWorkspace>
+    </RunSceneViewport>
   );
 }

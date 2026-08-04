@@ -4,7 +4,7 @@ import { levelToEditorBoard } from '../core/levelBoard';
 import { InnerChromeBox } from './shared/ChromeBox';
 import { FramedReadOnlyBoardView } from './shared/BoardViewFraming';
 import { LevelInfoCompact } from './LevelInfoCompact';
-import { RunWorkspace } from './RunWorkspace';
+import { RunSceneViewport } from './RunWorkspace';
 import { PaintedSurfaceBoundary } from './shell/PaintedSurfaceBoundary';
 
 /**
@@ -33,11 +33,14 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
   };
 
   return (
-    <RunWorkspace
-      className="run-battle-preview-workspace"
-      contentClassName="run-battle-preview-content"
-      data-testid="run-battle-preview-workspace"
-      aria-labelledby="run-battle-preview-title"
+    <RunSceneViewport
+      scene={{
+        view: 'battle-preview',
+        className: 'run-battle-preview-workspace',
+        contentClassName: 'run-battle-preview-content',
+        testId: 'run-battle-preview-workspace',
+        ariaLabelledBy: 'run-battle-preview-title',
+      }}
     >
       <PaintedSurfaceBoundary
         surface={`run-battle-preview:${run.id}:${run.battleIndex}`}
@@ -85,6 +88,6 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
           </aside>
         </div>
       </PaintedSurfaceBoundary>
-    </RunWorkspace>
+    </RunSceneViewport>
   );
 }

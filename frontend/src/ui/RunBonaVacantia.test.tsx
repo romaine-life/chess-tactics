@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { createBlankLevel } from '../core/level';
 import { craftRunDocument, parseRunCraftSpec } from '../run/craft';
 import type { RunWarSnapshot } from '../run/model';
-import { RunBonaVacantia } from './RunBonaVacantia';
+import { RunBonaVacantia, RunBonaVacantiaTarget } from './RunBonaVacantia';
+import { DEFAULT_RUN_ARMY_FILTERS } from './RunArmyWorkspace';
 import { LIPSANON_HOVER_EMPHASES, LIPSANON_MOTION_COMMITTED, lipsanonHoverAttributes } from './LipsanonMatReview';
 import { lipsanonStripLandingPoint } from './runLipsanonFlight';
 import { LIPSANON_FLIGHT_MS } from './runLipsanonFlightView';
@@ -34,10 +35,37 @@ function vacantiaRun() {
   return craftRunDocument(spec, war(4, [2]));
 }
 
+function targetedVacantiaRun() {
+  const spec = parseRunCraftSpec('?craft=bona-vacantia&battle=1&loot=conscription-notice,royal-decree,training-linens');
+  if (!spec) throw new Error('targeted craft spec did not parse');
+  return craftRunDocument(spec, war(4, [2]));
+}
+
 describe('Bona Vacantia lipsana', () => {
+  it('leaves the room-caption corner empty and relies on the title bar for the phase name', () => {
+    const markup = renderToStaticMarkup(
+      <RunBonaVacantia run={vacantiaRun()} replace={() => {}} onTargetLipsanon={() => {}} />,
+    );
+    expect(markup).toContain('aria-label="Lipsanon offers"');
+    expect(markup).not.toContain('<h2');
+    expect(markup).not.toContain('run-vacantia-lede');
+    expect(markup).not.toContain('Nobody is here to hand these over');
+    expect(markup).not.toContain('Bona Vacantia');
+  });
+
+  it('fits the runtime mat stage to its scene slot instead of creating an ultrawide scrollbar', () => {
+    const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+    expect(css).toMatch(
+      /\.run-vacantia-content\s*\{[^}]*grid-template-rows:\s*minmax\(0, 1fr\);[^}]*overflow:\s*hidden;/s,
+    );
+    expect(css).toMatch(
+      /\.run-vacantia-content\s*>\s*\.lipsanon-mat-stage\s*\{[^}]*aspect-ratio:\s*auto;[^}]*block-size:\s*100%;/s,
+    );
+  });
+
   it('gives every offer its own float clock so the three do not move as one strip', () => {
     const markup = renderToStaticMarkup(
-      <RunBonaVacantia run={vacantiaRun()} replace={() => {}} />,
+      <RunBonaVacantia run={vacantiaRun()} replace={() => {}} onTargetLipsanon={() => {}} />,
     );
     const delays = [...markup.matchAll(/--lipsanon-float-delay:([^;"]+)/g)].map(([, value]) => value.trim());
     const spreads = [...markup.matchAll(/--lipsanon-float-spread:([^;"]+)/g)].map(([, value]) => value.trim());
@@ -48,12 +76,68 @@ describe('Bona Vacantia lipsana', () => {
 
   it('rests with no lipsanon in flight and nothing dimmed', () => {
     const markup = renderToStaticMarkup(
-      <RunBonaVacantia run={vacantiaRun()} replace={() => {}} />,
+      <RunBonaVacantia run={vacantiaRun()} replace={() => {}} onTargetLipsanon={() => {}} />,
     );
     expect(markup).toContain('data-testid="run-vacantia-offers"');
     expect(markup).not.toContain('data-taking');
     expect(markup).not.toContain('run-lipsanon-flight');
     expect(markup).not.toContain('is-flying');
+  });
+
+  it('offers a targeted lipsanon directly instead of asking for a unit before it is taken', () => {
+    const markup = renderToStaticMarkup(
+      <RunBonaVacantia run={targetedVacantiaRun()} replace={() => {}} onTargetLipsanon={() => {}} />,
+    );
+    expect(markup).toContain('aria-label="Take Conscription Notice"');
+    expect(markup).not.toContain('Discipline target');
+    expect(markup).not.toContain('Adlected target unit');
+
+    const source = readFileSync(new URL('./RunBonaVacantia.tsx', import.meta.url), 'utf8');
+    expect(source).toContain('if (lipsanonNeedsUnitTarget(lipsanonId))');
+    expect(source).toContain('onTargetLipsanon(lipsanonId);');
+    expect(source).toContain('<RunArmyWorkspace');
+    expect(source).toContain('label: `Give ${ADLECTED_DISPLAY_NAME} to this unit`');
+    expect(source).not.toContain('const [targeting');
+    expect(source).not.toContain('const [selectedUnitId');
+  });
+
+  it('carries a landed lipsanon outside both scene fades until the incoming strip owns it', () => {
+    const bona = readFileSync(new URL('./RunBonaVacantia.tsx', import.meta.url), 'utf8');
+    const flight = readFileSync(new URL('./runLipsanonFlightView.tsx', import.meta.url), 'utf8');
+    const continuity = readFileSync(new URL('./shell/SceneContinuity.tsx', import.meta.url), 'utf8');
+    const app = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8');
+
+    expect(bona).toContain("{ handoff: 'scene-retirement' }");
+    expect(flight).toContain("<SceneContinuityPortal contribution={{ kind: 'shared-element', id: `lipsanon:${flight.lipsanonId}` }}>");
+    expect(flight).toContain("options.handoff === 'scene-retirement'");
+    expect(flight).toContain('if (!retainThroughSceneTransition) setFlight(null);');
+    expect(flight).not.toContain('createPortal');
+    expect(continuity).toContain('data-scene-continuity-contribution={contribution.id}');
+    expect(continuity).toContain('data-scene-continuity-host=""');
+    expect(app).toContain('<SceneContinuityHost>');
+  });
+
+  it('uses the held strip as the sole relic instance and makes unit selection explicit', () => {
+    const markup = renderToStaticMarkup(
+      <RunBonaVacantiaTarget
+        run={targetedVacantiaRun()}
+        lipsanonId="conscription-notice"
+        selectedUnitId={null}
+        filters={{ ...DEFAULT_RUN_ARMY_FILTERS }}
+        onFiltersChange={() => {}}
+        onSelectUnit={() => {}}
+        onBackToUnits={() => {}}
+        onBackToOffers={() => {}}
+        onConfirm={() => {}}
+      />,
+    );
+    expect(markup).toContain('data-run-scene-view="bona-target"');
+    expect(markup).not.toContain('run-lipsanon-icon');
+    expect(markup).not.toContain('Bona Vacantia');
+    expect(markup).toContain('Return to the three offers');
+    expect(markup).toContain('Select a unit');
+    expect(markup).toContain('>Select<');
+    expect(markup).toContain('aria-label="Select ');
   });
 
   it('keeps the tuner resetting to the numbers style.css actually ships', () => {
@@ -150,15 +234,17 @@ describe('Bona Vacantia lipsana', () => {
     expect(LIPSANON_MOTION_COMMITTED.recede).toBe(0);
   });
 
-  it('never puts the untaken lipsana back once a lipsanon has been chosen', () => {
+  it('keeps the untaken lipsana gone through landing while the authored target scene enters', () => {
     // The flight ends when the lipsanon lands, so anything derived from it un-takes the mat in
-    // the beat before the shop replaces it — the lipsana reappear at full size mid-exit. The
-    // choice is latched instead, and the tip goes with them: pointer-events cannot end a
-    // hover the pointer is already inside, so a name outlives the lipsanon it describes.
+    // the beat before the authored target scene replaces it — the lipsana reappear at full
+    // size mid-exit. The outgoing mat keeps its local animation latch; returning to the
+    // offers is a new primary scene instance, not a local screen swap.
     const source = readFileSync(new URL('./RunBonaVacantia.tsx', import.meta.url), 'utf8');
     expect(source).toContain("data-taking={departed ? '' : undefined}");
     expect(source).toContain('const flying = departed === lipsanonId;');
     expect(source).toContain('suppressed={Boolean(departed)}');
+    expect(source).toContain('Return to the three offers');
+    expect(source).not.toContain('function returnToMat(): void');
     expect(source).not.toMatch(/data-taking=\{flight/);
   });
 
@@ -198,9 +284,11 @@ describe('Bona Vacantia lipsana', () => {
     expect(body).toMatch(/scrollbar-width: thin;/);
   });
 
-  it('answers with no landing point where there is no document, so the take is committed outright', () => {
-    // Server rendering has no strip to measure. The take must still be reachable there
-    // rather than throwing or stalling the screen on its own presentation.
+  it('answers with no landing point where there is no document and keeps both fallback paths reachable', () => {
+    // Server rendering has no strip to measure. An ordinary take commits immediately; a
+    // targeted take navigates to its authored chooser immediately rather than throwing or stalling.
     expect(lipsanonStripLandingPoint(0)).toBeNull();
+    const source = readFileSync(new URL('./RunBonaVacantia.tsx', import.meta.url), 'utf8');
+    expect(source).toMatch(/if \(!launch\([\s\S]*?if \(lipsanonNeedsUnitTarget\(lipsanonId\)\) onTargetLipsanon\(lipsanonId\);[\s\S]*?else replace\(takeVacantiaLipsanon/);
   });
 });

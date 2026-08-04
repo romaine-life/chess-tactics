@@ -138,7 +138,7 @@ function cellScore(
   unit: RunArmyUnit,
   cell: Vec,
   placed: Record<string, Vec>,
-  marshalledRookIndex: number,
+  agminateRookIndex: number,
   rngNoise: number,
 ): number {
   const minY = Math.min(...cells.map((candidate) => candidate.y));
@@ -146,6 +146,19 @@ function cellScore(
   let score = rngNoise;
   if (unit.type === 'pawn' && hasRunAbility(run, unit, 'eutactic')) {
     score += cell.y === minY ? 1000 : -Math.abs(cell.y - minY) * 50;
+  }
+  if (unit.type === 'pawn' && hasRunAbility(run, unit, 'agminate')) {
+    const placedPawns = Object.entries(placed).flatMap(([unitId, placedCell]) => (
+      run.army.find((candidate) => candidate.id === unitId)?.type === 'pawn'
+        ? [placedCell]
+        : []
+    ));
+    if (placedPawns.length) {
+      const alongside = placedPawns.some((placedPawn) => (
+        placedPawn.y === cell.y && Math.abs(placedPawn.x - cell.x) === 1
+      ));
+      score += alongside ? 1200 : -1200;
+    }
   }
   if (unit.type === 'king') {
     if (hasRunAbility(run, unit, 'agminate')) score += edgeDistance(cell, level) === 0 ? 5000 : -5000;
@@ -164,7 +177,7 @@ function cellScore(
       const maxBackX = Math.max(...backRow.map((candidate) => candidate.x));
       const corners = backRow.filter((candidate) => candidate.x === minBackX || candidate.x === maxBackX);
       if (king && kingCell) {
-        if (hasRunAbility(run, king, 'agminate') && marshalledRookIndex === 0) {
+        if (hasRunAbility(run, king, 'agminate') && agminateRookIndex === 0) {
           const adjacent = Math.abs(cell.x - kingCell.x) + Math.abs(cell.y - kingCell.y) === 1;
           score += adjacent ? 4000 : -Math.abs(cell.x - kingCell.x) * 80;
         } else {
@@ -193,21 +206,31 @@ function cellScore(
 }
 
 /**
- * The order units take their turn to claim a square. Deployment is a free-for-all (ADR-0367):
- * one unit at a time, in a seeded random order, each taking the best square still available to
- * it. Nothing is reserved ahead of a unit and nothing backtracks, so a unit whose eligible squares
- * were taken by units that went earlier simply does not deploy.
+ * The order units take their turn to claim a square. Deployment is a seeded free-for-all
+ * (ADR-0367/0381): one unit at a time takes the best square still available to it. Nothing is
+ * reserved ahead of a unit and nothing backtracks, so a unit whose eligible squares were taken by
+ * units that went earlier simply does not deploy.
  *
  * The King is the one exception and goes first. The Run always fields its King — it is never among
  * the blocked units — so it cannot be the unit that misses out, and a King Deployment zone would
  * otherwise be honored or not on a coin flip. Placing it first also lets the formation abilities
- * that read the King's square (Agminate) work from a King that is already down.
+ * that read the King's square (Agminate) work from a King that is already down. Agminate Pawns and
+ * Bishops go after the ordinary shuffled group because their preferences need to inspect Pawns and
+ * Bishops already in the formation. Their relative order still comes from the same seeded shuffle.
  */
 function unitPlacementOrder(run: RunDocument, units: RunArmyUnit[], index: 0 | 1): RunArmyUnit[] {
   const stable = [...units].sort((a, b) => a.id.localeCompare(b.id));
   const kings = stable.filter((unit) => unit.type === 'king');
-  const rest = shuffled(stable.filter((unit) => unit.type !== 'king'), mixSeed(run.deployment?.seed ?? run.seed, 'placement-order', index));
-  return [...kings, ...rest];
+  const shuffledRest = shuffled(
+    stable.filter((unit) => unit.type !== 'king'),
+    mixSeed(run.deployment?.seed ?? run.seed, 'placement-order', index),
+  );
+  const readsOwnTypeFormation = (unit: RunArmyUnit): boolean => (
+    (unit.type === 'pawn' || unit.type === 'bishop') && hasRunAbility(run, unit, 'agminate')
+  );
+  const ordinary = shuffledRest.filter((unit) => !readsOwnTypeFormation(unit));
+  const affinityDependent = shuffledRest.filter(readsOwnTypeFormation);
+  return [...kings, ...ordinary, ...affinityDependent];
 }
 
 function buildLayout(run: RunDocument, level: Level, index: 0 | 1, blockedUnitIds: string[]): RunDeploymentLayout {
@@ -232,7 +255,7 @@ function buildLayout(run: RunDocument, level: Level, index: 0 | 1, blockedUnitId
     available.delete(key(manual));
   }
 
-  let marshalledRookIndex = 0;
+  let agminateRookIndex = 0;
   const stranded: string[] = [];
   for (const unit of unitPlacementOrder(run, deployed, index)) {
     if (placements[unit.id] || disciplined.has(unit.id)) continue;
@@ -245,7 +268,7 @@ function buildLayout(run: RunDocument, level: Level, index: 0 | 1, blockedUnitId
     let best = candidates[0];
     let bestScore = Number.NEGATIVE_INFINITY;
     for (const cell of candidates) {
-      const score = cellScore(run, level, pools.all, unit, cell, placements, marshalledRookIndex, rng.next());
+      const score = cellScore(run, level, pools.all, unit, cell, placements, agminateRookIndex, rng.next());
       if (score > bestScore) {
         best = cell;
         bestScore = score;
@@ -253,7 +276,7 @@ function buildLayout(run: RunDocument, level: Level, index: 0 | 1, blockedUnitId
     }
     placements[unit.id] = best;
     available.delete(key(best));
-    if (unit.type === 'rook' && hasRunAbility(run, unit, 'agminate')) marshalledRookIndex += 1;
+    if (unit.type === 'rook' && hasRunAbility(run, unit, 'agminate')) agminateRookIndex += 1;
   }
   // A unit that found no square it could use sits this Battle out exactly like an overflow unit:
   // it is blocked, and remains callable as a reservist.

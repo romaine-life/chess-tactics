@@ -19,6 +19,7 @@ const bodySelector = String(flag('body', '[data-shell-workspace-body]'));
 const contentSelector = String(flag('content', '[data-shell-workspace-content]'));
 const dockSelector = String(flag('dock', bodySelector));
 const readySelector = String(flag('ready', dockSelector));
+const clickSelector = flag('click', null);
 const alignSelector = flag('align', null);
 const tolerance = Number(flag('tolerance', '0.51'));
 const chromes = [
@@ -30,7 +31,7 @@ const chromes = [
 const executablePath = chromes.find(existsSync);
 
 if (!url || url.startsWith('--')) {
-  console.error('usage: npm run verify:workspace -- <live-url> [--size 1440x900] [--body <selector>] [--content <selector>] [--dock <selector>] [--align <selector>] [--ready <selector>]');
+  console.error('usage: npm run verify:workspace -- <live-url> [--size 1440x900] [--body <selector>] [--content <selector>] [--dock <selector>] [--align <selector>] [--ready <selector>] [--click <selector>]');
   process.exit(2);
 }
 if (!executablePath) {
@@ -73,6 +74,14 @@ try {
   await page.goto(url, { waitUntil: 'networkidle0', timeout: 8000 })
     .catch(() => page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 }));
   await page.waitForSelector('.skirmish-hud', { timeout: 15000 });
+  if (clickSelector) {
+    await page.waitForFunction(
+      "document.querySelector('[data-scene-phase=current]') !== null",
+      { timeout: 15000 },
+    );
+    await page.waitForSelector(String(clickSelector), { visible: true, timeout: 15000 });
+    await page.click(String(clickSelector));
+  }
   await page.waitForSelector(readySelector, { timeout: 15000 });
   await page.evaluate(() => document.fonts?.ready).catch(() => {});
   await page.waitForFunction(({ bodyQuery, dockQuery }) => {

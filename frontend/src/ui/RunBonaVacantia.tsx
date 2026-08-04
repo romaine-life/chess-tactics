@@ -1,13 +1,26 @@
 import { useState, type ReactElement } from 'react';
-import { LIPSANON_BY_ID, takeVacantiaLipsanon, type RunDocument, type LipsanonId } from '../run/model';
+import {
+  ADLECTED_DISPLAY_NAME,
+  LIPSANON_BY_ID,
+  lipsanonNeedsUnitTarget,
+  runAbilityGeneralDescription,
+  takeVacantiaLipsanon,
+  type LipsanonId,
+  type RunDocument,
+} from '../run/model';
 import { LipsanonIcon } from './Lipsana';
-import { RunWorkspace } from './RunWorkspace';
-import { HouseSelect } from './shared/HouseSelect';
+import { RunSceneViewport } from './RunWorkspace';
 import { Tooltip } from './shared/InfoTip';
 import { installedLipsanonMatUrl, lipsanonFloatClock } from './runLipsanonMat';
 import { lipsanonStripLandingPoint } from './runLipsanonFlight';
 import { useLipsanonFlight } from './runLipsanonFlightView';
-import { runUnitRosterLabel } from './RunArmyWorkspace';
+import {
+  RunArmyWorkspace,
+  type RunArmyFilters,
+} from './RunArmyWorkspace';
+import { chromeUnitClassNames } from './chromeUnitRegistry';
+import { ChromeButton } from './shared/ChromeButton';
+import { InnerChromeBox } from './shared/ChromeBox';
 import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
 
 /**
@@ -18,71 +31,63 @@ import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
  * text; the name and effect arrive on hover through the shared Tooltip, the same trigger
  * the held-lipsanon strip uses. The reading is the art.
  *
- * Taking is mandatory and there is no confirm step: choosing is the whole screen, and the
- * choice is what advances the Run. The take is committed when the lipsanon LANDS in the
- * held-lipsanon strip — commit first and the workspace it is flying out of is already gone.
+ * Taking is mandatory. An ordinary lipsanon commits when it lands and opens the Shop. A
+ * lipsanon that needs a unit named first lands provisionally, then uses the Martial
+ * Prosopography to make that choice; confirming the unit commits both facts atomically.
  */
-
-/** Lipsana that cannot be granted blind — they need a unit named before they mean anything. */
-function lipsanonTargetRequired(lipsanon: LipsanonId): boolean {
-  return lipsanon === 'conscription-notice';
-}
 
 export function RunBonaVacantia({
   run,
   replace,
+  onTargetLipsanon,
 }: {
   run: RunDocument;
   replace: (next: RunDocument) => void;
+  onTargetLipsanon: (lipsanonId: LipsanonId) => void;
 }): ReactElement | null {
   const vacantia = run.vacantia;
-  const [target, setTarget] = useState('');
-  // Latched, not derived from the flight: the flight ends when the lipsanon lands, and the mat
-  // must not un-take itself in the beat before the shop replaces it. Choosing is final.
+  // Latched, not derived from the flight: the flight ends when the lipsanon lands, and the
+  // mat must not repopulate in the beat before the Shop or target chooser replaces it.
   const [departed, setDeparted] = useState<LipsanonId | null>(null);
   const mat = installedLipsanonMatUrl();
-  const { launch, element } = useLipsanonFlight((lipsanonId) => {
-    replace(takeVacantiaLipsanon(run, lipsanonId, target || undefined));
-  });
+  const { launch, element } = useLipsanonFlight(
+    (lipsanonId) => {
+      if (lipsanonNeedsUnitTarget(lipsanonId)) {
+        onTargetLipsanon(lipsanonId);
+        return;
+      }
+      replace(takeVacantiaLipsanon(run, lipsanonId));
+    },
+    { handoff: 'scene-retirement' },
+  );
 
   if (!vacantia) return null;
 
-  const needsTarget = vacantia.offers.some(lipsanonTargetRequired);
   const heldLipsanonCount = run.lipsana.filter((lipsanonId) => Boolean(LIPSANON_BY_ID[lipsanonId])).length;
 
   function take(lipsanonId: LipsanonId, icon: Element | null): void {
     if (departed) return;
+    const destination = lipsanonStripLandingPoint(heldLipsanonCount);
     setDeparted(lipsanonId);
     // Nothing measurable to fly between means nothing to show — take the lipsanon outright
-    // rather than stalling the screen on its own presentation.
-    if (!launch(lipsanonId, icon, lipsanonStripLandingPoint(heldLipsanonCount))) {
-      replace(takeVacantiaLipsanon(run, lipsanonId, target || undefined));
+    // when it needs no target, or open the target chooser immediately when it does.
+    if (!launch(lipsanonId, icon, destination)) {
+      if (lipsanonNeedsUnitTarget(lipsanonId)) onTargetLipsanon(lipsanonId);
+      else replace(takeVacantiaLipsanon(run, lipsanonId));
     }
   }
 
   return (
-    <RunWorkspace
-      className="run-vacantia-workspace"
-      contentClassName="run-vacantia-content"
-      data-testid="run-bona-vacantia"
-      aria-labelledby="run-vacantia-title"
-      backgroundArtwork={workspaceBackgroundArtwork('run-bona-vacantia')}
+    <RunSceneViewport
+      scene={{
+        view: 'bona-mat',
+        className: 'run-vacantia-workspace',
+        contentClassName: 'run-vacantia-content',
+        testId: 'run-bona-vacantia',
+        ariaLabel: 'Lipsanon offers',
+        backgroundArtwork: workspaceBackgroundArtwork('run-bona-vacantia'),
+      }}
     >
-      <h2 id="run-vacantia-title">Bona Vacantia</h2>
-      <p className="run-vacantia-lede">Nobody is here to hand these over. Take one.</p>
-
-      {needsTarget ? (
-        <HouseSelect
-          value={target}
-          options={[
-            { value: '', label: 'Choose a unit…' },
-            ...run.army.map((unit) => ({ value: unit.id, label: runUnitRosterLabel(unit) })),
-          ]}
-          onChange={setTarget}
-          ariaLabel="Discipline target"
-        />
-      ) : null}
-
       <div className="lipsanon-mat-stage" data-cards="on" data-testid="run-vacantia-mat">
         <div className="lipsanon-mat-layer">
           {mat ? <img className="lipsanon-mat-art" src={mat} alt="" draggable={false} /> : null}
@@ -93,7 +98,6 @@ export function RunBonaVacantia({
           >
             {vacantia.offers.map((lipsanonId, index) => {
               const lipsanon = LIPSANON_BY_ID[lipsanonId];
-              const blocked = lipsanonTargetRequired(lipsanonId) && !target;
               const flying = departed === lipsanonId;
               return (
                 <Tooltip
@@ -112,7 +116,7 @@ export function RunBonaVacantia({
                       type="button"
                       className="run-vacantia-take"
                       data-lipsanon-id={lipsanonId}
-                      disabled={blocked}
+                      disabled={Boolean(departed)}
                       aria-label={`Take ${lipsanon.name}`}
                       onClick={(event) => take(lipsanonId, event.currentTarget.querySelector('.run-lipsanon-icon'))}
                     >
@@ -129,6 +133,81 @@ export function RunBonaVacantia({
       </div>
 
       {element}
-    </RunWorkspace>
+    </RunSceneViewport>
+  );
+}
+
+export function RunBonaVacantiaTarget({
+  run,
+  lipsanonId,
+  selectedUnitId,
+  filters,
+  onFiltersChange,
+  onSelectUnit,
+  onBackToUnits,
+  onBackToOffers,
+  onConfirm,
+}: {
+  run: RunDocument;
+  lipsanonId: LipsanonId;
+  selectedUnitId: string | null;
+  filters: RunArmyFilters;
+  onFiltersChange: (filters: RunArmyFilters) => void;
+  onSelectUnit: (unitId: string) => void;
+  onBackToUnits: () => void;
+  onBackToOffers: () => void;
+  onConfirm: (unitId: string) => void;
+}): ReactElement {
+  const lipsanon = LIPSANON_BY_ID[lipsanonId];
+  return (
+    <RunSceneViewport
+      scene={{
+        view: 'bona-target',
+        className: 'run-vacantia-workspace is-targeting',
+        contentClassName: 'run-vacantia-target-content',
+        testId: 'run-bona-vacantia-target',
+        ariaLabelledBy: 'run-vacantia-target-title',
+        backgroundArtwork: workspaceBackgroundArtwork('run-bona-vacantia'),
+        edgeAttached: true,
+      }}
+    >
+      <div className="run-vacantia-target-layout">
+        <aside className="run-vacantia-target-brief">
+          <h2 id="run-vacantia-target-title">{lipsanon.name}</h2>
+          <p>{lipsanon.description}</p>
+          <InnerChromeBox className="run-vacantia-target-ability">
+            <strong>{ADLECTED_DISPLAY_NAME}</strong>
+            <span>{runAbilityGeneralDescription('adlected')}</span>
+          </InnerChromeBox>
+          <p className="run-vacantia-target-instruction">
+            Select a unit to inspect it, then confirm who permanently gains {ADLECTED_DISPLAY_NAME}.
+            Nothing is recorded until that confirmation reveals the Shop.
+          </p>
+          <ChromeButton
+            unit="inner-text-button"
+            className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+            onClick={onBackToOffers}
+          >
+            Return to the three offers
+          </ChromeButton>
+        </aside>
+        <RunArmyWorkspace
+          run={run}
+          title="Select a unit"
+          backLabel="Back to unit list"
+          filters={filters}
+          selectedUnitId={selectedUnitId}
+          onFiltersChange={onFiltersChange}
+          onSelectUnit={onSelectUnit}
+          onBack={onBackToUnits}
+          onSell={() => undefined}
+          profileAction={{
+            label: `Give ${ADLECTED_DISPLAY_NAME} to this unit`,
+            onAction: onConfirm,
+          }}
+          framed={false}
+        />
+      </div>
+    </RunSceneViewport>
   );
 }

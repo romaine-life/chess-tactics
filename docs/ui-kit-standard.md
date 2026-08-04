@@ -203,7 +203,7 @@ Destinations do not add an
 `OuterChromeBox`, outer-panel consumer, or duplicate title frame merely to
 acquire a background; subordinate controls remain registered inner chrome.
 
-Per [ADR-0381](adr/0381-shops-offer-read-only-intelligence-on-the-upcoming-battle.md),
+Per [ADR-0386](adr/0386-shops-offer-read-only-intelligence-on-the-upcoming-battle.md),
 the Shop's `/run?view=battle-preview` destination composes the canonical
 `FramedReadOnlyBoardView` and `LevelInfoCompact` inside that fill-only workspace.
 It may lay those subordinate inner frames beside one another, but it cannot
