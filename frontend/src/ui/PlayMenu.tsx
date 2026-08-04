@@ -257,14 +257,16 @@ function RunPanel({
                 </section>
               ) : null}
               {adoptionConflict ? (
-                <InnerChromeBox className="play-level-card" role="alert">
-                  <h3>Two active Runs</h3>
-                  <p>This browser has {adoptionConflict.browserRun.war.name}; your account has {adoptionConflict.accountRun.war.name}. Choose which one the account keeps.</p>
+                <div className="run-adoption-conflict" role="alert" data-testid="run-adoption-conflict">
+                  <div className="run-adoption-conflict-copy">
+                    <h3>Two active Runs</h3>
+                    <p>This browser has {adoptionConflict.browserRun.war.name}; your account has {adoptionConflict.accountRun.war.name}. Choose which one the account keeps.</p>
+                  </div>
                   <div className="run-inline-actions">
                     <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} onClick={keepAccountRun}>Keep account Run</ChromeButton>
                     <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} disabled={syncing} onClick={() => { void adoptBrowserRun(); }}>Adopt browser Run</ChromeButton>
                   </div>
-                </InnerChromeBox>
+                </div>
               ) : null}
               {/* The row keeps its place when no Run exists — disabled like the Continue
                   rows ("Nothing to continue") and the locked Ataraxia tiers, so the
