@@ -15,6 +15,13 @@ import { RUN_CARD_TYPE_REFERENCE, type RunCardType } from '../run/model';
 const CARD_TYPES = Object.keys(RUN_CARD_TYPE_REFERENCE) as RunCardType[];
 
 describe('main-menu Enchiridion addresses', () => {
+  it('keeps the bare and unknown roots empty until a section is addressed', () => {
+    expect(enchiridionSectionFromPath('/enchiridion')).toBeNull();
+    expect(enchiridionSectionPath('/enchiridion')).toBe('/enchiridion');
+    expect(enchiridionSectionFromPath('/enchiridion/unknown')).toBeNull();
+    expect(enchiridionSectionPath('/enchiridion/unknown')).toBe('/enchiridion');
+  });
+
   it('addresses every card property, and round-trips each one', () => {
     for (const cardType of CARD_TYPES) {
       const href = enchiridionCardTypeHref(cardType);

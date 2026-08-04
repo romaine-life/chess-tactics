@@ -245,7 +245,10 @@ const enchiridionShell: SectionedShell = {
   // retained reference scene (ADR-0256), so selection never re-keys the slot.
   sections: Object.entries(ENCHIRIDION_SECTION_DEFINITIONS).map(([id, definition]) => section(id, definition)),
   sectionPath: (path) => enchiridionSectionPath(path),
-  resolve: (path) => ({ sectionId: enchiridionSectionFromPath(path) }),
+  resolve: (path) => {
+    const selected = enchiridionSectionFromPath(path);
+    return selected ? { sectionId: selected } : null;
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -381,7 +384,10 @@ const strategikonReferenceShell: SectionedShell = {
   contentSlot: 'strategikon-reference-content',
   sections: Object.entries(STRATEGIKON_REFERENCE_DEFINITIONS)
     .map(([id, definition]) => section(id, definition)),
-  resolve: (path) => ({ sectionId: strategikonAddress(path).reference }),
+  resolve: (path) => {
+    const selected = strategikonAddress(path).reference;
+    return selected ? { sectionId: selected } : null;
+  },
 };
 
 const strategikonShell: SectionedShell = {
@@ -401,7 +407,10 @@ const strategikonShell: SectionedShell = {
   ],
   // The canonical address carries the base, so the two ancestries never share an id.
   sectionPath: (path) => strategikonSectionPath(path),
-  resolve: (path) => ({ sectionId: strategikonAddress(path).section }),
+  resolve: (path) => {
+    const selected = strategikonAddress(path).section;
+    return selected ? { sectionId: selected } : null;
+  },
 };
 
 // ---------------------------------------------------------------------------
@@ -474,14 +483,16 @@ export function resolveSectionedShellScene(
   while (entry) {
     instances.push(sceneInstance(entry.shell));
     if (entry.manifest) manifest = { ...manifest, ...entry.manifest };
+    // An addressable shell root owns an identity even when its content slot is
+    // intentionally empty. Resolve the identity before asking for a selected child.
+    if (entry.identityPrefix && entry.sectionPath) {
+      id = `${entry.identityPrefix}:${entry.sectionPath(path, search)}`;
+    }
     const resolution = entry.resolve(path, search);
     if (!resolution) break;
     const selected: SectionedShellSection | undefined = entry.sections
       .find((candidate) => candidate.id === resolution.sectionId);
     if (!selected) break;
-    if (entry.identityPrefix && entry.sectionPath) {
-      id = `${entry.identityPrefix}:${entry.sectionPath(path, search)}`;
-    }
     // A section that is itself a registered shell continues the walk — its own
     // shell instance is pushed by the next iteration, never here.
     const child: SectionedShell | undefined = SECTIONED_SHELL_BY_SHELL_DEFINITION[selected.definition.id];

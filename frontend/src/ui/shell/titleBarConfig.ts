@@ -7,11 +7,22 @@
 // shipping surface (Studio + dev/inspector tools included) is on
 // the shared bar; there is no opt-out set, and the function never returns null.
 import { playRouteScreenName } from '@chess-tactics/board-render';
+import {
+  ENCHIRIDION_SECTION_LABEL,
+  enchiridionSectionFromPath,
+  enchiridionSectionHref,
+} from '../enchiridionRoute';
 import { isPlaySelectorPath } from '../playHubRoute';
 import { isRunRoutePath } from '../runRoute';
+import { isStrategikonPath, strategikonBase, strategikonRouteCrumbs } from '../strategikonRoute';
+import type { TitleRouteSegment } from './TitleRoute';
 
 export interface TitleBarConfig {
   screenName: string;
+  /** Canonical address for a screen name that begins a clickable title route. */
+  screenNameTo?: string;
+  /** Address-derived segments owned by the persistent App shell. */
+  routeSegments?: readonly TitleRouteSegment[];
   /** Hide the Settings gear in the cluster (default: shown). Available modulation, but
    *  no screen currently sets it — even Settings keeps its gear as a "back to settings
    *  root" link (#241). The account control always renders regardless (ADR-0036/0042). */
@@ -25,7 +36,8 @@ export interface TitleBarConfig {
   centerSlot?: boolean;
   /** Render the trailing route segment of the screen-name line, filled via
    *  <TitleBarSlot region="route">. For a screen whose position within itself is
-   *  live state rather than address — the Run's phase reads as `Run › Sectio`. */
+   *  live state rather than address — the Run's phase reads as `Run › Sectio`.
+   *  Each rendered segment is a canonical breadcrumb NavButton (ADR-0409). */
   routeSlot?: boolean;
   /** Render the bottom-centre "stud" portal slot — the decorative nailhead diamond
    *  becomes an interactive control the screen fills via <TitleBarSlot region="stud">.
@@ -49,17 +61,22 @@ export function titleBarConfig(path: string, search = ''): TitleBarConfig | null
     };
   }
 
-  if (path === '/play' || path.startsWith('/play/strategikon/') || isRunRoutePath(path)) {
+  if (path === '/play' || isStrategikonPath(path) || isRunRoutePath(path)) {
     // studSlot lets a single-player battle turn the ornament diamond into a Retry button
     // (the Skirmish screen portals it in, netplay omitted).
     const run = path.startsWith('/run');
+    const playStrategikon = isStrategikonPath(path) && strategikonBase(path) === '/play';
     return {
       screenName: run ? 'Run' : playRouteScreenName({ path: '/play', search }),
+      screenNameTo: run ? `/run${search}` : playStrategikon ? `/play${search}` : undefined,
+      routeSegments: playStrategikon
+        ? strategikonRouteCrumbs(path).map((crumb) => ({ ...crumb, to: `${crumb.to}${search}` }))
+        : undefined,
       barClass: 'skirmish-topbar',
       centerSlot: true,
-      // A Run names its document-state phase here. A play Strategikon also needs
-      // the slot so its visible section/reference address can follow the Battle name.
-      routeSlot: run || path.startsWith('/play/strategikon/'),
+      // A Run names its document-state phase through the route portal. A Play
+      // Strategikon's address-only ancestry is rendered directly by the App config.
+      routeSlot: run,
       studSlot: true,
     };
   }
@@ -90,7 +107,17 @@ export function titleBarConfig(path: string, search = ''): TitleBarConfig | null
     return { screenName: 'Settings', signInReturnTo: '/settings', barClass: 'app-titlebar--ui-scaled settings-topbar' };
   }
   if (path === '/enchiridion' || path.startsWith('/enchiridion/')) {
-    return { screenName: 'Enchiridion', signInReturnTo: path, barClass: 'main-menu-twin-header' };
+    const section = enchiridionSectionFromPath(path);
+    return {
+      screenName: 'Enchiridion',
+      screenNameTo: '/enchiridion',
+      routeSegments: section ? [{
+        label: ENCHIRIDION_SECTION_LABEL[section],
+        to: enchiridionSectionHref(section),
+      }] : undefined,
+      signInReturnTo: path,
+      barClass: 'main-menu-twin-header',
+    };
   }
   // Fallback: the Main Menu — renderRoute's default for any unmatched path.
   return { screenName: 'Main Menu', signInReturnTo: '/', barClass: 'main-menu-twin-header' };

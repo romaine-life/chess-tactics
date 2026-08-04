@@ -11,6 +11,7 @@ describe('titleBarConfig play route screen names', () => {
   it('gives the Run loop the live-board title bar and retry socket', () => {
     expect(titleBarConfig('/run')).toMatchObject({
       screenName: 'Run',
+      screenNameTo: '/run',
       barClass: 'skirmish-topbar',
       centerSlot: true,
       studSlot: true,
@@ -53,5 +54,48 @@ describe('titleBarConfig play route screen names', () => {
       screenName: 'Pre-drawn Reference',
       barClass: 'predrawn-reference-topbar',
     });
+  });
+
+  it('links the title route for every Enchiridion address', () => {
+    expect(titleBarConfig('/enchiridion/units')).toMatchObject({
+      screenName: 'Enchiridion',
+      screenNameTo: '/enchiridion',
+      routeSegments: [{ label: 'Units', to: '/enchiridion/units' }],
+    });
+    expect(titleBarConfig('/enchiridion')).toMatchObject({
+      screenName: 'Enchiridion',
+      screenNameTo: '/enchiridion',
+    });
+    expect(titleBarConfig('/enchiridion')?.routeSegments).toBeUndefined();
+    expect(titleBarConfig('/enchiridion/lipsana/quartermasters-ledger')?.routeSegments).toEqual([
+      { label: 'Lipsana', to: '/enchiridion/lipsana' },
+    ]);
+  });
+
+  it('links every nested Play Strategikon segment from the persistent App shell', () => {
+    expect(titleBarConfig('/play/strategikon/enchiridion/lipsana', '?levelId=l1')).toMatchObject({
+      screenNameTo: '/play?levelId=l1',
+      routeSegments: [
+        { label: 'Strategikon', to: '/play/strategikon?levelId=l1' },
+        { label: 'Enchiridion', to: '/play/strategikon/enchiridion?levelId=l1' },
+        { label: 'Lipsana', to: '/play/strategikon/enchiridion/lipsana?levelId=l1' },
+      ],
+    });
+    expect(titleBarConfig('/play/strategikon', '?levelId=l1')?.routeSegments).toEqual([
+      { label: 'Strategikon', to: '/play/strategikon?levelId=l1' },
+    ]);
+    expect(titleBarConfig('/play/strategikon/enchiridion', '?levelId=l1')?.routeSegments).toEqual([
+      { label: 'Strategikon', to: '/play/strategikon?levelId=l1' },
+      { label: 'Enchiridion', to: '/play/strategikon/enchiridion?levelId=l1' },
+    ]);
+  });
+
+  it('reserves the dynamic route portal only for Run document state', () => {
+    expect(titleBarConfig('/run/strategikon/enchiridion/lipsana', '?run=1')).toMatchObject({
+      screenNameTo: '/run?run=1',
+      routeSlot: true,
+    });
+    expect(titleBarConfig('/run/strategikon/enchiridion/lipsana', '?run=1')?.routeSegments)
+      .toBeUndefined();
   });
 });

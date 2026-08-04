@@ -4,6 +4,7 @@ date: 2026-08-03
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
   - "[ADR-0392](0392-sectio-is-the-run-disposal-and-acquisition-phase.md)'s `Run › Sectio` route vocabulary"
+  - "[ADR-0409](0409-the-title-route-is-a-clickable-breadcrumb.md)'s clickable breadcrumb interaction"
 refines:
   - "[ADR-0366](0366-a-run-names-its-phase-as-route-and-its-repeatable-ideas-as-icons.md)"
   - "[ADR-0335](0335-the-strategikon-is-a-run-wide-reference-not-a-battle-only-workspace.md)"

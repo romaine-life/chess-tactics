@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-07-30
 deciders: owner (Nelson) + Codex
+partially_superseded_by:
+  - "[ADR-0411](0411-reference-ancestors-own-empty-routed-roots.md)'s empty bare and unknown roots"
 refines:
   - "[ADR-0231](0231-strategikon-and-enchiridion-share-one-reference-workspace-language.md)"
   - "[ADR-0254](0254-enchiridion-content-owns-the-remaining-menu-canvas.md)"

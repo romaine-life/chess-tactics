@@ -88,6 +88,7 @@ describe('scene manifests', () => {
       // Every Strategikon address, on BOTH hosts. The old list carried one — and a
       // malformed one at that — so no pair of its sections was ever compared, which
       // is why the family could resolve every section to one identity unnoticed.
+      ['/play/strategikon'], ['/play/strategikon/enchiridion'],
       ['/play/strategikon/enchiridion/units'], ['/play/strategikon/enchiridion/terrain'],
       ['/play/strategikon/enchiridion/cards'], ['/play/strategikon/enchiridion/card-types'],
       ['/play/strategikon/enchiridion/lipsana'], ['/play/strategikon/enchiridion/abilities'],
@@ -95,6 +96,8 @@ describe('scene manifests', () => {
       ['/play/strategikon/prosopography'], ['/play/strategikon/chartulary'],
       ['/play/strategikon/lipsanotheca'],
       ['/play/strategikon/unknown'], ['/play/strategikon/enchiridion/unknown'],
+      ['/run/strategikon', '', { run: { hydrated: true, document: run } }],
+      ['/run/strategikon/enchiridion', '', { run: { hydrated: true, document: run } }],
       ['/run/strategikon/enchiridion/units', '', { run: { hydrated: true, document: run } }],
       ['/run/strategikon/enchiridion/lipsana', '', { run: { hydrated: true, document: run } }],
       ['/run/strategikon/prosopography', '', { run: { hydrated: true, document: run } }],
@@ -330,6 +333,12 @@ describe('scene manifests', () => {
     expect(overlapsStateDrivenRunScene(runStrategikon, runReference)).toBe(false);
     expect(deepestSharedSceneRegion(runStrategikon, runReference)).toBe('strategikon-shell');
     expect(deepestSharedSceneRegion(runReference, runReferenceOther)).toBe('strategikon-reference-shell');
+    expect(sceneManifest('/run/strategikon').instances.map((entry) => entry.definition.id)).toEqual([
+      'run', 'run/phase', 'run/workspace', 'strategikon',
+    ]);
+    expect(sceneManifest('/run/strategikon/enchiridion').instances.map((entry) => entry.definition.id)).toEqual([
+      'run', 'run/phase', 'run/workspace', 'strategikon', 'strategikon/enchiridion',
+    ]);
     expect(sceneManifest('/enchiridion/abilities').instances.map((entry) => entry.definition.id)).toEqual([
       'main-menu',
       'enchiridion',
@@ -478,8 +487,13 @@ describe('scene manifests', () => {
     });
     // Section changes remain real scene transitions.
     expect(sceneManifest('/enchiridion/units').id).not.toBe(base.id);
-    // The bare and unknown fallbacks share the units scene they already render.
-    expect(sceneManifest('/enchiridion').id).toBe(sceneManifest('/enchiridion/units').id);
+    // The bare root retains the shell while leaving its content slot empty.
+    expect(sceneManifest('/enchiridion').id).not.toBe(sceneManifest('/enchiridion/units').id);
+    expect(sceneManifest('/enchiridion').instances.map((entry) => entry.definition.id)).toEqual([
+      'main-menu', 'enchiridion',
+    ]);
+    expect(isEmptySlotOrigin(sceneManifest('/enchiridion'), sceneManifest('/enchiridion/units'))).toBe(true);
+    expect(isEmptySlotDestination(sceneManifest('/enchiridion/units'), sceneManifest('/enchiridion'))).toBe(true);
   });
 
   it('addresses individual cards inside the one retained card-reference scene', () => {
@@ -527,9 +541,9 @@ describe('scene manifests', () => {
     // they could never register there. They are the director's first two ladder rungs now;
     // naming them here is how six declared ids decayed into comments (ADR-0369).
     const routes = [
-      '/', '/unknown', '/settings/general', '/settings/audio/tracks', '/enchiridion/units',
-      '/play/select/skirmish', '/play', '/editor', '/editor/level', '/studio', '/lobbies',
-      '/party', '/portrait-editor', '/predrawn-reference', '/run',
+      '/', '/unknown', '/settings/general', '/settings/audio/tracks', '/enchiridion', '/enchiridion/units',
+      '/play/select/skirmish', '/play', '/play/strategikon', '/editor', '/editor/level', '/studio', '/lobbies',
+      '/party', '/portrait-editor', '/predrawn-reference', '/run', '/run/strategikon',
     ];
     for (const route of routes) {
       const { critical } = sceneManifest(route);

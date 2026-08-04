@@ -33,14 +33,21 @@ export const STRATEGIKON_SECTION_LABEL: Readonly<Record<StrategikonSection, stri
 
 export interface StrategikonAddress {
   base: StrategikonBase;
-  section: StrategikonSection;
+  section: StrategikonSection | null;
   /** The reference sub-section; meaningful only for the Enchiridion section. */
-  reference: EnchiridionSection;
+  reference: EnchiridionSection | null;
+}
+
+export interface StrategikonRouteCrumb {
+  label: string;
+  to: string;
 }
 
 export function isStrategikonPath(pathname: string): boolean {
   const path = normalizeRoutePath(pathname);
-  return STRATEGIKON_BASES.some((base) => path.startsWith(`${base}/strategikon/`));
+  return STRATEGIKON_BASES.some(
+    (base) => path === `${base}/strategikon` || path.startsWith(`${base}/strategikon/`),
+  );
 }
 
 export function strategikonBase(pathname: string): StrategikonBase {
@@ -49,29 +56,34 @@ export function strategikonBase(pathname: string): StrategikonBase {
 
 export function strategikonHref(
   base: StrategikonBase,
-  section: StrategikonSection,
-  reference: EnchiridionSection = 'units',
+  section: StrategikonSection | null = null,
+  reference: EnchiridionSection | null = null,
 ): string {
+  if (!section) return `${base}/strategikon`;
   return section === 'enchiridion'
-    ? `${base}/strategikon/enchiridion/${reference}`
+    ? `${base}/strategikon/enchiridion${reference ? `/${reference}` : ''}`
     : `${base}/strategikon/${section}`;
 }
 
 /**
- * Resolve any Strategikon address to its canonical section address. Unknown
- * suffixes read as the Enchiridion's units reference, matching what the screen
- * already renders for them, so an address-only difference never re-runs the
- * scene lifecycle for the same committed section.
+ * Resolve only explicitly addressed Strategikon descendants. The Strategikon
+ * root selects no primary section; its Enchiridion root selects no reference.
+ * Unknown descendants collapse to the nearest real ancestor rather than exposing
+ * Units as an implicit fallback.
  */
 export function strategikonAddress(pathname: string): StrategikonAddress {
   const path = normalizeRoutePath(pathname);
   const base = strategikonBase(path);
   const rest = path.slice(`${base}/strategikon`.length);
-  if (rest === '/prosopography') return { base, section: 'prosopography', reference: 'units' };
-  if (rest === '/chartulary') return { base, section: 'chartulary', reference: 'units' };
-  if (rest === '/lipsanotheca') return { base, section: 'lipsanotheca', reference: 'units' };
-  const reference = ENCHIRIDION_SECTIONS.find((section) => rest === `/enchiridion/${section}`) ?? 'units';
-  return { base, section: 'enchiridion', reference };
+  if (!rest) return { base, section: null, reference: null };
+  if (rest === '/prosopography') return { base, section: 'prosopography', reference: null };
+  if (rest === '/chartulary') return { base, section: 'chartulary', reference: null };
+  if (rest === '/lipsanotheca') return { base, section: 'lipsanotheca', reference: null };
+  if (rest === '/enchiridion' || rest.startsWith('/enchiridion/')) {
+    const reference = ENCHIRIDION_SECTIONS.find((candidate) => rest === `/enchiridion/${candidate}`) ?? null;
+    return { base, section: 'enchiridion', reference };
+  }
+  return { base, section: null, reference: null };
 }
 
 /** The canonical section address — the manifest identity suffix for this family. */
@@ -80,10 +92,30 @@ export function strategikonSectionPath(pathname: string): string {
   return strategikonHref(address.base, address.section, address.reference);
 }
 
-/** Human route segments for the exact visible Strategikon workspace address. */
-export function strategikonRouteLabels(pathname: string): readonly string[] {
+/** Clickable route segments for the exact visible Strategikon workspace address. */
+export function strategikonRouteCrumbs(pathname: string): readonly StrategikonRouteCrumb[] {
   const address = strategikonAddress(pathname);
+  const root = strategikonHref(address.base);
+  if (!address.section) return [{ label: 'Strategikon', to: root }];
   return address.section === 'enchiridion'
-    ? ['Strategikon', STRATEGIKON_SECTION_LABEL.enchiridion, ENCHIRIDION_SECTION_LABEL[address.reference]]
-    : ['Strategikon', STRATEGIKON_SECTION_LABEL[address.section]];
+    ? [
+        { label: 'Strategikon', to: root },
+        {
+          label: STRATEGIKON_SECTION_LABEL.enchiridion,
+          to: strategikonHref(address.base, 'enchiridion'),
+        },
+        ...(address.reference ? [{
+          label: ENCHIRIDION_SECTION_LABEL[address.reference],
+          to: strategikonHref(address.base, address.section, address.reference),
+        }] : []),
+      ]
+    : [
+        { label: 'Strategikon', to: root },
+        { label: STRATEGIKON_SECTION_LABEL[address.section], to: strategikonHref(address.base, address.section) },
+      ];
+}
+
+/** Human labels retained for non-interactive consumers and compact tests. */
+export function strategikonRouteLabels(pathname: string): readonly string[] {
+  return strategikonRouteCrumbs(pathname).map((crumb) => crumb.label);
 }

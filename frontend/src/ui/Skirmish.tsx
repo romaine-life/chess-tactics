@@ -85,7 +85,7 @@ import type { LipsanonId, RunBattleReport } from '../run/model';
 import { useActiveRun } from '../run/store';
 import { LipsanonStrip } from './Lipsana';
 import { Strategikon } from './Strategikon';
-import { strategikonRouteLabels } from './strategikonRoute';
+import { isStrategikonPath } from './strategikonRoute';
 import { GameplayWorkspaceSceneSlot } from './shell/AuthoredSceneSlot';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 import { RunBattleUndoButton } from './RunBattleUndoButton';
@@ -255,7 +255,7 @@ function SkirmishSession({
     };
   }, [runBattle?.transformCommittedBoard, runBattle?.undoAdapter, skirmishStore]);
   const routeParams = useMemo(() => new URLSearchParams(routeSearch), [routeSearch]);
-  const strategikonOpen = routePath.startsWith('/play/strategikon/') || routePath.startsWith('/run/strategikon/');
+  const strategikonOpen = isStrategikonPath(routePath);
   const strategikonBase = runBattle ? '/run' : '/play';
   const predrawnPreview = useMemo(
     () => predrawnBoardPreviewSrc(routeSearch, window.location.origin),
@@ -1272,16 +1272,8 @@ function SkirmishSession({
       <small>Multiplayer</small>
     </InnerChromeBox>
   ) : null;
-  const battleTitleRoute = runDeployment
-    ? ''
-    : [
-        ...(runBattle ? ['Battle'] : []),
-        ...(strategikonOpen ? strategikonRouteLabels(routePath) : []),
-      ].join(' › ');
   const skirmishTitleBarContent = playableSurfaceReady ? (
-    <>
-      {battleTitleRoute ? <TitleBarSlot region="route">{battleTitleRoute}</TitleBarSlot> : null}
-      <div className="skirmish-topbar-status">
+    <div className="skirmish-topbar-status">
       {/* The battle clock is ALWAYS the middle chip on every play surface — a timed game
         counts down and an authored untimed level reads "∞ / No limit". Keeping the
         centre chip present means
@@ -1311,8 +1303,7 @@ function SkirmishSession({
           <small>{objectiveGoal}</small>
         </span>
       </TitleBarStatus>
-      </div>
-    </>
+    </div>
   ) : null;
   const titleBarContent = runDeployment?.titleBarContent
     ?? runBattle?.titleBarContent

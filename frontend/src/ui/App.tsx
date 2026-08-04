@@ -31,6 +31,7 @@ import {
 } from './navigation';
 import { RouteLoadBoundary } from './shell/RouteLoadBoundary';
 import { isRunRoutePath } from './runRoute';
+import { isStrategikonPath, strategikonBase } from './strategikonRoute';
 import { levelEditorRouteIdentity } from './levelEditorRouteIdentity';
 import {
   importLevelEditor,
@@ -681,7 +682,9 @@ export function App(): ReactElement {
 function renderScene(scene: ScenePath, search: string): ReactElement {
   const path = scene.pathname;
   if (path === '/play') return <Skirmish routePath={path} routeSearch={search} />;
-  if (path.startsWith('/play/strategikon/')) return <Skirmish routePath={path} routeSearch={search} />;
+  if (isStrategikonPath(path) && strategikonBase(path) === '/play') {
+    return <Skirmish routePath={path} routeSearch={search} />;
+  }
   if (isRunRoutePath(path)) {
     return <RunScreen routePath={path} routeSearch={search} sceneSnapshot={scene.snapshot as RunSceneSnapshot} />;
   }

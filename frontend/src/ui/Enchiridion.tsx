@@ -254,17 +254,19 @@ function UnitsSection({ framed }: { framed: boolean }): ReactElement {
       title="Units"
     >
       <p>Each board is drawn by the Battle renderer and its moves come from the same movement engine. Cyan squares are legal destinations; red squares are captures.</p>
-      <div className="enchiridion-unit-grid">
-        {PLAYABLE_PIECE_TYPES.map((type) => (
-          <InnerChromeBox className="enchiridion-unit-card" key={type}>
-            <div className="enchiridion-unit-copy">
-              <h3>{PIECE_LABEL[type]}</h3>
-              <p>{UNIT_COPY[type]}</p>
-            </div>
-            <MovementDiagram type={type} />
-          </InnerChromeBox>
-        ))}
-      </div>
+      <KitScroll className="enchiridion-reference-scroll">
+        <div className="enchiridion-unit-grid">
+          {PLAYABLE_PIECE_TYPES.map((type) => (
+            <InnerChromeBox className="enchiridion-unit-card" key={type}>
+              <div className="enchiridion-unit-copy">
+                <h3>{PIECE_LABEL[type]}</h3>
+                <p>{UNIT_COPY[type]}</p>
+              </div>
+              <MovementDiagram type={type} />
+            </InnerChromeBox>
+          ))}
+        </div>
+      </KitScroll>
     </ReferenceSectionFrame>
   );
 }
@@ -305,17 +307,19 @@ function TerrainSection({ framed }: { framed: boolean }): ReactElement {
       framed={framed}
       title="Terrain"
     >
-      <div className="enchiridion-terrain-list">
-        {TERRAIN_FEATURES.map((feature) => (
-          <InnerChromeBox className="enchiridion-terrain-row" key={feature.label}>
-            <span className={feature.icon} aria-hidden="true" />
-            <span>
-              <h3>{feature.label}</h3>
-              <p>{feature.copy}</p>
-            </span>
-          </InnerChromeBox>
-        ))}
-      </div>
+      <KitScroll className="enchiridion-reference-scroll">
+        <div className="enchiridion-terrain-list">
+          {TERRAIN_FEATURES.map((feature) => (
+            <InnerChromeBox className="enchiridion-terrain-row" key={feature.label}>
+              <span className={feature.icon} aria-hidden="true" />
+              <span>
+                <h3>{feature.label}</h3>
+                <p>{feature.copy}</p>
+              </span>
+            </InnerChromeBox>
+          ))}
+        </div>
+      </KitScroll>
       <InnerChromeBox className="enchiridion-rule-exceptions">
         <h3>Path exceptions</h3>
         <p><strong>Knights</strong> jump over gaps, fences, and intervening obstacles. Only the landing square must be legal.</p>
@@ -435,47 +439,49 @@ export function LipsanaCodex({
               role="tabpanel"
               aria-label={`${browseMode === 'rows' ? 'Rows' : 'Grouped'} lipsanon view`}
             >
-              {browseMode === 'rows' ? (
-                <ul className="enchiridion-lipsanon-rows" aria-label={title}>
-                  {visibleLipsana.map((lipsanon) => (
-                    <li key={lipsanon.id}>
-                      <ReferenceTrigger
-                        to={lipsanonHref?.(lipsanon.id)}
-                        onSelect={() => setLocalSelectedId(lipsanon.id)}
-                        data-chrome-unit="inner-list-row"
-                        className={chromeUnitClassNames(
-                          'inner-list-row',
-                          'enchiridion-lipsanon-row',
-                          selected.id === lipsanon.id && 'is-active',
-                        )}
-                        aria-label={`${lipsanon.name}. ${lipsanon.description}`}
-                        aria-pressed={selected.id === lipsanon.id}
-                      >
-                        <LipsanonIcon lipsanonId={lipsanon.id} className="enchiridion-lipsanon-row-icon" />
-                        <span className="enchiridion-lipsanon-row-name">{lipsanon.name}</span>
-                      </ReferenceTrigger>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <InnerChromeBox className="enchiridion-lipsanon-group">
-                  <ul className="enchiridion-lipsanon-group-grid" aria-label={title}>
+              <KitScroll className="enchiridion-lipsanon-scroll">
+                {browseMode === 'rows' ? (
+                  <ul className="enchiridion-lipsanon-rows" aria-label={title}>
                     {visibleLipsana.map((lipsanon) => (
                       <li key={lipsanon.id}>
                         <ReferenceTrigger
                           to={lipsanonHref?.(lipsanon.id)}
                           onSelect={() => setLocalSelectedId(lipsanon.id)}
-                          className={`enchiridion-lipsanon-grouped-trigger${selected.id === lipsanon.id ? ' is-active' : ''}`}
+                          data-chrome-unit="inner-list-row"
+                          className={chromeUnitClassNames(
+                            'inner-list-row',
+                            'enchiridion-lipsanon-row',
+                            selected.id === lipsanon.id && 'is-active',
+                          )}
                           aria-label={`${lipsanon.name}. ${lipsanon.description}`}
                           aria-pressed={selected.id === lipsanon.id}
                         >
-                          <LipsanonIcon lipsanonId={lipsanon.id} />
+                          <LipsanonIcon lipsanonId={lipsanon.id} className="enchiridion-lipsanon-row-icon" />
+                          <span className="enchiridion-lipsanon-row-name">{lipsanon.name}</span>
                         </ReferenceTrigger>
                       </li>
                     ))}
                   </ul>
-                </InnerChromeBox>
-              )}
+                ) : (
+                  <InnerChromeBox className="enchiridion-lipsanon-group">
+                    <ul className="enchiridion-lipsanon-group-grid" aria-label={title}>
+                      {visibleLipsana.map((lipsanon) => (
+                        <li key={lipsanon.id}>
+                          <ReferenceTrigger
+                            to={lipsanonHref?.(lipsanon.id)}
+                            onSelect={() => setLocalSelectedId(lipsanon.id)}
+                            className={`enchiridion-lipsanon-grouped-trigger${selected.id === lipsanon.id ? ' is-active' : ''}`}
+                            aria-label={`${lipsanon.name}. ${lipsanon.description}`}
+                            aria-pressed={selected.id === lipsanon.id}
+                          >
+                            <LipsanonIcon lipsanonId={lipsanon.id} />
+                          </ReferenceTrigger>
+                        </li>
+                      ))}
+                    </ul>
+                  </InnerChromeBox>
+                )}
+              </KitScroll>
             </div>
           </div>
           <InnerChromeBox className="enchiridion-lipsanon-detail">
@@ -854,40 +860,42 @@ function CardTypesSection({
         className="enchiridion-card-type-layout"
         data-card-type-texture-review={textureReviewStatus}
       >
-        <ul className="enchiridion-card-type-rows" aria-label="Card types">
-          {CARD_TYPE_REFERENCES.map((definition) => (
-            <li key={definition.id}>
-              <ReferenceTrigger
-                to={cardTypeHref?.(definition.id)}
-                onSelect={() => setLocalSelectedTypeId(definition.id)}
-                data-ui-sfx="card"
-                data-chrome-unit="inner-list-row"
-                data-testid={`enchiridion-card-type-${definition.id}`}
-                className={chromeUnitClassNames(
-                  'inner-list-row',
-                  'enchiridion-card-type-row',
-                  selected.id === definition.id && 'is-active',
-                )}
-                aria-label={`${cardTypeName(definition)}. ${definition.description}`}
-                aria-pressed={selected.id === definition.id}
-              >
-                <CardTypeRowMaterial
-                  cardType={definition.id}
-                  src={displayedTextureUrls[definition.id]}
-                />
-                <span className="enchiridion-card-type-row-identity">
-                  <AlphaBoundIcon
-                    className="enchiridion-card-type-row-icon"
-                    src={runCardPropertyIconUrl(definition.id)}
-                    draggable={false}
+        <KitScroll className="enchiridion-reference-scroll">
+          <ul className="enchiridion-card-type-rows" aria-label="Card types">
+            {CARD_TYPE_REFERENCES.map((definition) => (
+              <li key={definition.id}>
+                <ReferenceTrigger
+                  to={cardTypeHref?.(definition.id)}
+                  onSelect={() => setLocalSelectedTypeId(definition.id)}
+                  data-ui-sfx="card"
+                  data-chrome-unit="inner-list-row"
+                  data-testid={`enchiridion-card-type-${definition.id}`}
+                  className={chromeUnitClassNames(
+                    'inner-list-row',
+                    'enchiridion-card-type-row',
+                    selected.id === definition.id && 'is-active',
+                  )}
+                  aria-label={`${cardTypeName(definition)}. ${definition.description}`}
+                  aria-pressed={selected.id === definition.id}
+                >
+                  <CardTypeRowMaterial
+                    cardType={definition.id}
+                    src={displayedTextureUrls[definition.id]}
                   />
-                  <span className="enchiridion-card-type-row-name">{cardTypeName(definition)}</span>
-                </span>
-                {definition.provisional ? <small>Provisional</small> : null}
-              </ReferenceTrigger>
-            </li>
-          ))}
-        </ul>
+                  <span className="enchiridion-card-type-row-identity">
+                    <AlphaBoundIcon
+                      className="enchiridion-card-type-row-icon"
+                      src={runCardPropertyIconUrl(definition.id)}
+                      draggable={false}
+                    />
+                    <span className="enchiridion-card-type-row-name">{cardTypeName(definition)}</span>
+                  </span>
+                  {definition.provisional ? <small>Provisional</small> : null}
+                </ReferenceTrigger>
+              </li>
+            ))}
+          </ul>
+        </KitScroll>
         <div className="enchiridion-card-type-detail">
           <CardTypeReference definition={selected} />
         </div>
@@ -954,31 +962,33 @@ function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
       framed={framed}
       title="Abilities"
     >
-      <div className="enchiridion-ability-list">
-        {UNIT_STATE_REFERENCES.map(({ state, name, description }) => {
-          const cardType = CARD_TYPE_BY_UNIT_STATE[state];
-          return (
-            <InnerChromeBox
-              className="enchiridion-ability-card"
-              data-card-type={cardType}
-              key={state}
-            >
-              <CardTypeRowMaterial cardType={cardType} src={textureUrls[cardType]} />
-              <img
-                className="enchiridion-ability-icon"
-                src={runUnitStateIconUrl(state)}
-                alt=""
-                aria-hidden="true"
-                draggable={false}
-              />
-              <span>
-                <h3>{name}</h3>
-                <p>{description}</p>
-              </span>
-            </InnerChromeBox>
-          );
-        })}
-      </div>
+      <KitScroll className="enchiridion-reference-scroll">
+        <div className="enchiridion-ability-list">
+          {UNIT_STATE_REFERENCES.map(({ state, name, description }) => {
+            const cardType = CARD_TYPE_BY_UNIT_STATE[state];
+            return (
+              <InnerChromeBox
+                className="enchiridion-ability-card"
+                data-card-type={cardType}
+                key={state}
+              >
+                <CardTypeRowMaterial cardType={cardType} src={textureUrls[cardType]} />
+                <img
+                  className="enchiridion-ability-icon"
+                  src={runUnitStateIconUrl(state)}
+                  alt=""
+                  aria-hidden="true"
+                  draggable={false}
+                />
+                <span>
+                  <h3>{name}</h3>
+                  <p>{description}</p>
+                </span>
+              </InnerChromeBox>
+            );
+          })}
+        </div>
+      </KitScroll>
     </ReferenceSectionFrame>
   );
 }
@@ -1024,37 +1034,39 @@ function AtaraxiaSection({ framed }: { framed: boolean }): ReactElement {
       title="Ataraxia"
     >
       <p>Optional Run difficulty, named after real history. The ladder is linear and cumulative: completing the highest tier available to you unlocks exactly the next one, and selecting a tier applies the conditions of every tier up to and including it.</p>
-      <div className="enchiridion-ataraxia-list">
-        {ATARAXIA_TIERS.map((tier) => {
-          const definition = ATARAXIA_BY_TIER[tier];
-          const locked = tier > unlockedThrough;
-          const standing = locked
-            ? `Locked — complete ${ATARAXIA_BY_TIER[(tier - 1) as AtaraxiaTier].label} to unlock`
-            : tier <= completedThrough ? 'Completed' : 'Unlocked';
-          return (
-            <InnerChromeBox
-              className={`enchiridion-ataraxia-card${locked ? ' is-locked' : ''}`}
-              key={tier}
-            >
-              {artUrl(definition.numeral) ? (
-                <img
-                  className="enchiridion-ataraxia-numeral is-art"
-                  src={artUrl(definition.numeral) ?? undefined}
-                  alt={definition.numeral}
-                  draggable={false}
-                />
-              ) : (
-                <span className="enchiridion-ataraxia-numeral">{definition.numeral}</span>
-              )}
-              <span>
-                <h3>{definition.title}</h3>
-                <p>{definition.effect}</p>
-                <small className="enchiridion-ataraxia-standing">{standing}</small>
-              </span>
-            </InnerChromeBox>
-          );
-        })}
-      </div>
+      <KitScroll className="enchiridion-reference-scroll">
+        <div className="enchiridion-ataraxia-list">
+          {ATARAXIA_TIERS.map((tier) => {
+            const definition = ATARAXIA_BY_TIER[tier];
+            const locked = tier > unlockedThrough;
+            const standing = locked
+              ? `Locked — complete ${ATARAXIA_BY_TIER[(tier - 1) as AtaraxiaTier].label} to unlock`
+              : tier <= completedThrough ? 'Completed' : 'Unlocked';
+            return (
+              <InnerChromeBox
+                className={`enchiridion-ataraxia-card${locked ? ' is-locked' : ''}`}
+                key={tier}
+              >
+                {artUrl(definition.numeral) ? (
+                  <img
+                    className="enchiridion-ataraxia-numeral is-art"
+                    src={artUrl(definition.numeral) ?? undefined}
+                    alt={definition.numeral}
+                    draggable={false}
+                  />
+                ) : (
+                  <span className="enchiridion-ataraxia-numeral">{definition.numeral}</span>
+                )}
+                <span>
+                  <h3>{definition.title}</h3>
+                  <p>{definition.effect}</p>
+                  <small className="enchiridion-ataraxia-standing">{standing}</small>
+                </span>
+              </InnerChromeBox>
+            );
+          })}
+        </div>
+      </KitScroll>
     </ReferenceSectionFrame>
   );
 }
@@ -1105,7 +1117,7 @@ export function EnchiridionReference({
 }
 
 export function Enchiridion({
-  section = 'units',
+  section = null,
   sectionHref = enchiridionSectionHref,
   selectedLipsanonId = null,
   lipsanonHref,
@@ -1114,11 +1126,11 @@ export function Enchiridion({
   selectedCardTypeId = null,
   cardTypeHref,
   showSectionRail = true,
-  sceneInstanceKey = `enchiridion/${section}`,
+  sceneInstanceKey = `enchiridion/${section ?? 'root'}`,
   framed = true,
   cardTypeTextureBatch = null,
 }: {
-  section?: EnchiridionSection;
+  section?: EnchiridionSection | null;
   sectionHref?: (section: EnchiridionSection) => string;
   /** The route-addressed lipsanon for the lipsana section; see LipsanaCodex. */
   selectedLipsanonId?: LipsanonId | null;
@@ -1141,22 +1153,24 @@ export function Enchiridion({
   return (
     <div className={`enchiridion-workspace${showSectionRail ? ' has-section-rail' : ''}`}>
       {showSectionRail ? <EnchiridionSectionRail section={section} sectionHref={sectionHref} /> : null}
-      <EnchiridionContentSceneSlot
-        className="enchiridion-content"
-        sceneInstance={sceneInstanceKey}
-      >
-        <EnchiridionReference
-          section={section}
-          framed={framed}
-          selectedLipsanonId={selectedLipsanonId}
-          lipsanonHref={lipsanonHref}
-          selectedCardId={selectedCardId}
-          cardHref={cardHref}
-          selectedCardTypeId={selectedCardTypeId}
-          cardTypeHref={cardTypeHref}
-          cardTypeTextureBatch={cardTypeTextureBatch}
-        />
-      </EnchiridionContentSceneSlot>
+      {section ? (
+        <EnchiridionContentSceneSlot
+          className="enchiridion-content"
+          sceneInstance={sceneInstanceKey}
+        >
+          <EnchiridionReference
+            section={section}
+            framed={framed}
+            selectedLipsanonId={selectedLipsanonId}
+            lipsanonHref={lipsanonHref}
+            selectedCardId={selectedCardId}
+            cardHref={cardHref}
+            selectedCardTypeId={selectedCardTypeId}
+            cardTypeHref={cardTypeHref}
+            cardTypeTextureBatch={cardTypeTextureBatch}
+          />
+        </EnchiridionContentSceneSlot>
+      ) : null}
     </div>
   );
 }
@@ -1165,7 +1179,7 @@ export function EnchiridionSectionRail({
   section,
   sectionHref,
 }: {
-  section: EnchiridionSection;
+  section: EnchiridionSection | null;
   sectionHref: (section: EnchiridionSection) => string;
 }): ReactElement {
   return (

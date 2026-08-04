@@ -38,7 +38,7 @@ export function StrategikonTitleNavigation({
           <NavButton
             key={item.section}
             className={`skirmish-hud-title-action strategikon-title-section-action${active ? ' active' : ''}`}
-            to={`${strategikonHref(base, item.section, item.reference)}${search}`}
+            to={`${strategikonHref(base, item.section)}${search}`}
             aria-label={`Open ${item.label}`}
             aria-current={active ? 'page' : undefined}
             title={item.title}
@@ -53,7 +53,7 @@ export function StrategikonTitleNavigation({
       <NavButton
         data-testid="strategikon-toggle"
         className={`skirmish-hud-title-action${open ? ' active' : ''}`}
-        to={open ? `${base}${search}` : `${strategikonHref(base, 'enchiridion', 'units')}${search}`}
+        to={open ? `${base}${search}` : `${strategikonHref(base)}${search}`}
         aria-label={toggleLabel}
         aria-current={open ? 'page' : undefined}
         title={toggleTitle}

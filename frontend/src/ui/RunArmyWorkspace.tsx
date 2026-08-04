@@ -32,6 +32,7 @@ import { Tooltip } from './shared/InfoTip';
 import { RunUnitInspectionScene } from './RunUnitInspectionScene';
 import { ChromeButton } from './shared/ChromeButton';
 import { RunAbilityIcon, type RunUnitState } from './shared/RunAbilityIcon';
+import { KitScroll } from './KitScroll';
 
 export type RunRosterOrder = 'type' | 'value' | 'ability' | 'acquired';
 export type RunRosterTypeFilter = 'all' | RunArmyPieceType;
@@ -570,36 +571,38 @@ export function RunArmyWorkspace({
               {backLabel}
             </ChromeButton>
           </header>
-          <div className="run-army-profile-body">
-            <RunUnitInspectionScene unit={selected} />
-            <section className="run-army-profile-copy">
-              <p className="run-army-profile-identity">
-                <strong>{runUnitIdentifier(selected)}</strong>
-                {optionalUnitName(selected) ? <span>{PIECE_LABEL[selected.type]}</span> : null}
-                {rank ? <span>{rank}</span> : null}
-              </p>
-              <RunUnitTraitList run={run} unit={selected} />
-              <InnerChromeBox className="run-army-profile-stats">
-                <dl>
-                  <div><dt>Value</dt><dd>{PIECE_VALUE[selected.type]}</dd></div>
-                  <div><dt>Status</dt><dd>{unitRunStatus(run, selected)}</dd></div>
-                  <div><dt>Source</dt><dd>{unitSourceLabel(selected)}</dd></div>
-                  <div><dt>Kills</dt><dd>{kills ?? '—'}</dd></div>
-                </dl>
-              </InnerChromeBox>
-              {profileAction ? (
-                <ChromeButton
-                  unit="inner-text-button"
-                  className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
-                  tone="primary"
-                  disabled={profileAction.isDisabled?.(selected) ?? false}
-                  onClick={() => profileAction.onAction(selected.id)}
-                >
-                  {profileAction.label}
-                </ChromeButton>
-              ) : <ProfileAlienatioAction run={run} unit={selected} onAlienate={onAlienate} />}
-            </section>
-          </div>
+          <KitScroll className="run-army-profile-scroll">
+            <div className="run-army-profile-body">
+              <RunUnitInspectionScene unit={selected} />
+              <section className="run-army-profile-copy">
+                <p className="run-army-profile-identity">
+                  <strong>{runUnitIdentifier(selected)}</strong>
+                  {optionalUnitName(selected) ? <span>{PIECE_LABEL[selected.type]}</span> : null}
+                  {rank ? <span>{rank}</span> : null}
+                </p>
+                <RunUnitTraitList run={run} unit={selected} />
+                <InnerChromeBox className="run-army-profile-stats">
+                  <dl>
+                    <div><dt>Value</dt><dd>{PIECE_VALUE[selected.type]}</dd></div>
+                    <div><dt>Status</dt><dd>{unitRunStatus(run, selected)}</dd></div>
+                    <div><dt>Source</dt><dd>{unitSourceLabel(selected)}</dd></div>
+                    <div><dt>Kills</dt><dd>{kills ?? '—'}</dd></div>
+                  </dl>
+                </InnerChromeBox>
+                {profileAction ? (
+                  <ChromeButton
+                    unit="inner-text-button"
+                    className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+                    tone="primary"
+                    disabled={profileAction.isDisabled?.(selected) ?? false}
+                    onClick={() => profileAction.onAction(selected.id)}
+                  >
+                    {profileAction.label}
+                  </ChromeButton>
+                ) : <ProfileAlienatioAction run={run} unit={selected} onAlienate={onAlienate} />}
+              </section>
+            </div>
+          </KitScroll>
       </RunArmyWorkspaceHost>
     );
   }
