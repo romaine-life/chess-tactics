@@ -3,6 +3,7 @@ import type { PieceType } from '../core/types';
 import {
   LIPSANON_BY_ID,
   RUN_LIPSANA,
+  lipsanonNeedsUnitTarget,
   type LipsanonDefinition,
   type LipsanonId,
 } from '../core/runLipsana';
@@ -13,6 +14,7 @@ import { runUnitName } from './unitNames';
 export {
   LIPSANON_BY_ID,
   RUN_LIPSANA,
+  lipsanonNeedsUnitTarget,
   type LipsanonDefinition,
   type LipsanonId,
 };
@@ -1565,7 +1567,7 @@ function immediateLipsanon(run: RunDocument, lipsanon: LipsanonId, targetUnitId?
   let next = run;
   const payout = RUN_LIPSANON_IMMEDIATE_GOLD[lipsanon];
   if (payout) next = { ...next, goldTenths: next.goldTenths + payout * GOLD_SCALE };
-  if (lipsanon === 'conscription-notice' && targetUnitId) {
+  if (lipsanonNeedsUnitTarget(lipsanon) && targetUnitId) {
     next = {
       ...next,
       army: next.army.map((unit) => (
@@ -1580,7 +1582,7 @@ function immediateLipsanon(run: RunDocument, lipsanon: LipsanonId, targetUnitId?
 
 export function acquireLipsanon(run: RunDocument, lipsanon: LipsanonId, targetUnitId?: string): RunDocument {
   if (run.lipsana.includes(lipsanon)) return run;
-  if (lipsanon === 'conscription-notice' && !run.army.some((unit) => unit.id === targetUnitId)) return run;
+  if (lipsanonNeedsUnitTarget(lipsanon) && !run.army.some((unit) => unit.id === targetUnitId)) return run;
   return touch(immediateLipsanon({ ...run, lipsana: [...run.lipsana, lipsanon] }, lipsanon, targetUnitId));
 }
 

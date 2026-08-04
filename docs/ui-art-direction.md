@@ -266,6 +266,24 @@ authored-War copy, and the Ataraxia choice is the shared scrollable dropdown
 with unavailable installed tiers visible but disabled. Every tier, including **Ataraxia 0 — The
 Untroubled Mind**, presents its subtitle in the selector and its literal impact
 beneath it (ADR-0289, ADR-0290, ADR-0291).
+On Bona Vacantia, the room-caption corner stays empty: no workspace heading,
+instructional prose, or placeholder label repeats the room identity. The persistent
+title bar is the sole textual location label unless a future accepted art decision
+depicts the room within the authored scene artwork. The runtime mat stage fits the
+actual scene slot at every viewport aspect ratio; the review instrument's 16:9 canvas
+does not impose a scroll region on the Run workspace. The mat presents only the three
+lipsana. A unit-targeted take
+flies to the held strip provisionally, then the exact Martial Prosopography
+ledger/profile replaces the mat. Its normal section-tab column is absent here;
+that established-width column instead explains the chosen lipsanon, the granted
+ability, the confirmation boundary, and the action that restores the untouched
+mat. The provisional lipsanon appears only once, in the canonical held strip;
+the decision column does not repeat its icon or the phase name. Each ledger row
+explicitly says **Select**, the unit profile supplies the grant action, and only
+that action reveals the Shop. On landing, the moving lipsanon remains carried at
+the strip coordinate outside both scene fades until the incoming canonical strip
+is visible beneath it; it never blinks out during the ownership handoff
+(ADR-0030, ADR-0297, ADR-0383, ADR-0384, ADR-0385).
 Enchiridion is immediately above Settings. In Battle, frameless open-codex art
 at the same visual scale as the Controls title and aligned to the Controls
 content boundary opens

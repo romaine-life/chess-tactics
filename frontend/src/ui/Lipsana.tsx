@@ -1,7 +1,7 @@
 import { drawableAssets } from '@chess-tactics/board-render';
 import type { ReactElement } from 'react';
 import { LIPSANON_BY_ID, type LipsanonId } from '../run/model';
-import { RunWorkspace } from './RunWorkspace';
+import { RunSceneViewport } from './RunWorkspace';
 import { InnerChromeBox } from './shared/ChromeBox';
 import { Tooltip } from './shared/InfoTip';
 
@@ -52,6 +52,27 @@ export function LipsanonIcon({
   );
 }
 
+/** One canonical held-lipsanon record in the persistent inventory strip. */
+export function LipsanonInventoryItem({
+  lipsanonId,
+}: {
+  lipsanonId: LipsanonId;
+}): ReactElement {
+  const lipsanon = LIPSANON_BY_ID[lipsanonId];
+  return (
+    <Tooltip
+      className="run-lipsanon-inventory-item"
+      triggerClassName="run-lipsanon-inventory-trigger"
+      popupMaxInlineSize={288}
+      label={`${lipsanon.name}. ${lipsanon.description}`}
+      title={lipsanon.name}
+      trigger={<LipsanonIcon lipsanonId={lipsanonId} />}
+    >
+      <span>{lipsanon.description}</span>
+    </Tooltip>
+  );
+}
+
 export function LipsanonStrip({
   lipsanonIds,
 }: {
@@ -66,22 +87,9 @@ export function LipsanonStrip({
       data-testid="run-lipsanon-strip"
     >
       <div className="run-lipsanon-inventory-list">
-        {knownLipsanonIds.map((lipsanonId) => {
-          const lipsanon = LIPSANON_BY_ID[lipsanonId];
-          return (
-            <Tooltip
-              className="run-lipsanon-inventory-item"
-              key={lipsanonId}
-              triggerClassName="run-lipsanon-inventory-trigger"
-              popupMaxInlineSize={288}
-              label={`${lipsanon.name}. ${lipsanon.description}`}
-              title={lipsanon.name}
-              trigger={<LipsanonIcon lipsanonId={lipsanonId} />}
-            >
-              <span>{lipsanon.description}</span>
-            </Tooltip>
-          );
-        })}
+        {knownLipsanonIds.map((lipsanonId) => (
+          <LipsanonInventoryItem lipsanonId={lipsanonId} key={lipsanonId} />
+        ))}
       </div>
     </section>
   );
@@ -94,11 +102,14 @@ export function LipsanaWorkspace({
 }): ReactElement {
   const knownLipsanonIds = lipsanonIds.filter((lipsanonId) => Boolean(LIPSANON_BY_ID[lipsanonId]));
   return (
-    <RunWorkspace
-      className="run-self-inspection-workspace run-lipsana-workspace"
-      contentClassName="run-self-inspection-content"
-      data-testid="run-lipsana-workspace"
-      aria-labelledby="run-lipsana-workspace-title"
+    <RunSceneViewport
+      scene={{
+        view: 'lipsana',
+        className: 'run-self-inspection-workspace run-lipsana-workspace',
+        contentClassName: 'run-self-inspection-content',
+        testId: 'run-lipsana-workspace',
+        ariaLabelledBy: 'run-lipsana-workspace-title',
+      }}
     >
       <header className="run-self-inspection-head">
         <h2 id="run-lipsana-workspace-title">Lipsana</h2>
@@ -128,6 +139,6 @@ export function LipsanaWorkspace({
           No lipsana held. Lipsana acquired during this Run will appear here.
         </p>
       )}
-    </RunWorkspace>
+    </RunSceneViewport>
   );
 }

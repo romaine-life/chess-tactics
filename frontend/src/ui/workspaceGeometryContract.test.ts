@@ -20,7 +20,7 @@ describe('shell surface ownership contract (ADR-0297)', () => {
     expect(chromeBox).toContain('data-shell-workspace-content=""');
     expect(chromeBox).toContain("data-shell-workspace-content-edge={edgeAttached ? '' : undefined}");
     expect(chromeBox).toContain('className={`shell-workspace-body-content ${bodyClassName}`.trim()}');
-    expect(runWorkspace).toContain('bodyClassName={`run-shell-workspace-content ${contentClassName}`.trim()}');
+    expect(runWorkspace).toContain('bodyClassName={`run-shell-workspace-content ${scene.contentClassName ?? \'\'}`.trim()}');
     expect(strategikon).toContain('bodyClassName="strategikon-content"');
     expect(levelEditorConsumers).toContain('bodyClassName="le-events-workspace-content"');
     expect(levelEditor).toContain('bodyClassName="le-artwork-workspace-content"');
@@ -49,9 +49,9 @@ describe('shell surface ownership contract (ADR-0297)', () => {
   });
 
   it('defaults ordinary workspaces to the inset lane and names only primary frame owners as edge attached', () => {
-    expect(runWorkspace).toContain('edgeAttached={edgeAttached}');
+    expect(runWorkspace).toContain('edgeAttached={scene.edgeAttached ?? false}');
     expect(strategikon).toMatch(/<ShellWorkspace[\s\S]*?bodyClassName="strategikon-content"[\s\S]*?edgeAttached/);
-    expect(runArmyWorkspace).toMatch(/<RunWorkspace[\s\S]*?contentClassName=\{contentClassName\}[\s\S]*?edgeAttached/);
+    expect(runArmyWorkspace).toMatch(/<RunSceneViewport[\s\S]*?scene=\{\{[\s\S]*?contentClassName,[\s\S]*?edgeAttached: true/);
     expect(levelEditorConsumers).not.toContain('edgeAttached');
     expect(levelEditor).not.toMatch(/<ShellWorkspace[\s\S]*?className="le-artwork-workspace"[\s\S]*?edgeAttached/);
   });

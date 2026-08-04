@@ -1021,12 +1021,12 @@ if (!/<SkirmishShell[\s\S]*?controlsContent=\{shellRun\s*\?\s*<RunMetaControls r
   || /function RunShell|function RunControlsRail|chromeConsumer="run-controls"/.test(runScreen)) {
   failures.push('Run shop must use the Battle-owned SkirmishShell and replace only SkirmishHud contents');
 }
-if (!/export function RunWorkspace/.test(runWorkspace)
-  || !/<main className=\{`run-workspace \$\{className\}`\.trim\(\)\}>/.test(runWorkspace)
-  || !/<ShellWorkspace[\s\S]*?className="run-shell-workspace"[\s\S]*?bodyClassName=\{`run-shell-workspace-content \$\{contentClassName\}`\.trim\(\)\}[\s\S]*?edgeAttached=\{edgeAttached\}/.test(runWorkspace)) {
-  failures.push('RunWorkspace must supply content to the body-owning ShellWorkspace');
+if (!/export function RunSceneViewport/.test(runWorkspace)
+  || !/<main[\s\S]*?className=\{`run-workspace \$\{scene\.className \?\? ''\}`\.trim\(\)\}[\s\S]*?data-run-scene-view=\{scene\.view\}/.test(runWorkspace)
+  || !/<ShellWorkspace[\s\S]*?className="run-shell-workspace"[\s\S]*?bodyClassName=\{`run-shell-workspace-content \$\{scene\.contentClassName \?\? ''\}`\.trim\(\)\}[\s\S]*?edgeAttached=\{scene\.edgeAttached \?\? false\}/.test(runWorkspace)) {
+  failures.push('RunSceneViewport must supply typed scene content to the body-owning ShellWorkspace');
 }
-if (!/<RunWorkspace[\s\S]*?contentClassName=\{contentClassName\}[\s\S]*?edgeAttached[\s\S]*?data-testid=\{dataTestId\}/.test(runArmyWorkspace)) {
+if (!/<RunSceneViewport[\s\S]*?scene=\{\{[\s\S]*?view: 'army'[\s\S]*?contentClassName,[\s\S]*?edgeAttached: true,[\s\S]*?testId: dataTestId/.test(runArmyWorkspace)) {
   failures.push('framed Run Army workspaces must use the shared edge-attached content variant');
 }
 const playerRunSources = `${runScreen}\n${runArmyWorkspace}\n${runLipsana}`;
@@ -1040,8 +1040,9 @@ for (const testId of [
   'run-loading-workspace',
   'run-empty-workspace',
 ]) {
-  if (!playerRunSources.includes(`data-testid="${testId}"`)) {
-    failures.push(`player-facing Run destination ${testId} must use RunWorkspace`);
+  if (!playerRunSources.includes(`data-testid="${testId}"`)
+    && !playerRunSources.includes(`testId: '${testId}'`)) {
+    failures.push(`player-facing Run destination ${testId} must use RunSceneViewport`);
   }
 }
 const runBattlefieldSources = `${runScreen}\n${skirmish}`;

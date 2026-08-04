@@ -11,6 +11,30 @@ export function runWorkspaceHref(currentHref: string, view: RunWorkspaceView): s
   const url = new URL(currentHref, 'http://localhost');
   if (view !== 'primary') url.searchParams.set('view', view);
   else url.searchParams.delete('view');
+  url.searchParams.delete('lipsanon');
+  url.searchParams.delete('unit');
+  const query = url.searchParams.toString();
+  return `${url.pathname}${query ? `?${query}` : ''}${url.hash}`;
+}
+
+export function runArmyUnitHref(currentHref: string, unitId: string | null): string {
+  const url = new URL(runWorkspaceHref(currentHref, 'army'), 'http://localhost');
+  if (unitId) url.searchParams.set('unit', unitId);
+  else url.searchParams.delete('unit');
+  const query = url.searchParams.toString();
+  return `${url.pathname}${query ? `?${query}` : ''}${url.hash}`;
+}
+
+export function runBonaTargetHref(
+  currentHref: string,
+  lipsanonId: string,
+  unitId: string | null = null,
+): string {
+  const url = new URL(currentHref, 'http://localhost');
+  url.searchParams.set('view', 'bona-target');
+  url.searchParams.set('lipsanon', lipsanonId);
+  if (unitId) url.searchParams.set('unit', unitId);
+  else url.searchParams.delete('unit');
   const query = url.searchParams.toString();
   return `${url.pathname}${query ? `?${query}` : ''}${url.hash}`;
 }

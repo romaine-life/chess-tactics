@@ -1,4 +1,4 @@
-import type { RunDocument, RunPhase } from '../../run/model';
+import type { LipsanonId, RunDocument, RunPhase } from '../../run/model';
 
 /**
  * The authored scene vocabulary.
@@ -124,7 +124,13 @@ export interface ScenePath extends SceneManifest {
 }
 
 export type RunScenePhase = 'hydrating' | 'no-active' | RunPhase;
-export type RunSceneWorkspace = 'primary' | 'army' | 'lipsana' | 'sell' | 'strategikon';
+export type RunSceneWorkspace =
+  | Readonly<{ view: 'primary' }>
+  | Readonly<{ view: 'army'; unitId: string | null }>
+  | Readonly<{ view: 'lipsana' }>
+  | Readonly<{ view: 'sell' }>
+  | Readonly<{ view: 'strategikon' }>
+  | Readonly<{ view: 'bona-target'; lipsanonId: LipsanonId; unitId: string | null }>;
 
 export interface RunSceneSnapshot {
   kind: 'run';

@@ -2,7 +2,8 @@
 
 ## Status
 
-Accepted.
+Accepted; the immediate-commit and choice-presentation clause is partially superseded by
+[ADR-0382](0382-bona-vacantia-keeps-a-targeted-take-provisional-until-the-shop.md).
 
 ## Context
 

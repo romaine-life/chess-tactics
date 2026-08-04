@@ -46,6 +46,53 @@ for (const file of files) {
   if (source.includes('useSkirmish.getState')) {
     fail(file, 'runtime Battle code must use the nearest instance-owned Skirmish store');
   }
+  // The Run viewport is a capability, not a class-name convention. Feature code
+  // contributes a typed scene object to RunSceneViewport; only that renderer may
+  // emit the landmark/frame/layer which can replace the shell viewport.
+  if (
+    /\.(?:ts|tsx)$/.test(normalized)
+    &&
+    normalized !== 'ui/RunWorkspace.tsx'
+    && (source.includes('run-shell-workspace')
+      || /className=\{?[^\n]*\brun-workspace\b/.test(source))
+  ) {
+    fail(file, 'Run viewport DOM must be emitted by the closed RunSceneViewport API');
+  }
+  if (
+    normalized !== 'ui/RunWorkspace.tsx'
+    && source.includes("from './RunWorkspace'")
+    && !source.includes('RunSceneViewport')
+  ) {
+    fail(file, 'Run workspace consumers may import only the closed RunSceneViewport capability');
+  }
+  if (source.includes('<RunSceneViewport') && !/<RunSceneViewport\s+scene=\{\{/.test(source)) {
+    fail(file, 'every Run viewport contribution must declare a typed scene object');
+  }
+  if (
+    /^ui\/(?:Run|run|Lipsana)/.test(normalized)
+    && source.includes('createPortal')
+  ) {
+    fail(file, 'Run feature code may not portal around the scene viewport authority');
+  }
+  if (
+    normalized !== 'ui/shell/SceneContinuity.tsx'
+    && source.includes('data-scene-continuity-host')
+  ) {
+    fail(file, 'only the director-owned SceneContinuityHost may emit the continuity layer');
+  }
+}
+
+const continuityPath = resolve(src, 'ui/shell/SceneContinuity.tsx');
+const continuity = readFileSync(continuityPath, 'utf8');
+for (const required of [
+  'SceneContinuityHostContext',
+  'data-scene-continuity-host=""',
+  "kind: 'shared-element'",
+  'contribution: SceneContinuityContribution',
+  'export function SceneContinuityPortal',
+  'data-scene-continuity-contribution={contribution.id}',
+]) {
+  if (!continuity.includes(required)) fail(continuityPath, `missing closed scene-continuity invariant: ${required}`);
 }
 
 const runScreenPath = resolve(src, 'ui/RunScreen.tsx');
@@ -60,8 +107,34 @@ for (const required of [
 ]) {
   if (!runScreen.includes(required)) fail(runScreenPath, `missing closed Run scene-source invariant: ${required}`);
 }
-for (const forbidden of ['window.history', 'setTimeout(', 'RunWorkspaceStages', 'PaintedSurfaceBoundary']) {
+for (const forbidden of [
+  'window.history',
+  'setTimeout(',
+  'RunWorkspaceStages',
+  'PaintedSurfaceBoundary',
+  'const [selectedState',
+]) {
   if (runScreen.includes(forbidden)) fail(runScreenPath, `forbidden local Run presentation authority: ${forbidden}`);
+}
+
+const bonaPath = resolve(src, 'ui/RunBonaVacantia.tsx');
+const bona = readFileSync(bonaPath, 'utf8');
+for (const forbidden of [
+  'const [targeting',
+  'const [selectedUnitId',
+  'run-vacantia-pending-lipsanon',
+  'createPortal',
+]) {
+  if (bona.includes(forbidden)) fail(bonaPath, `forbidden local Bona scene authority: ${forbidden}`);
+}
+for (const required of [
+  '<RunSceneViewport',
+  "view: 'bona-mat'",
+  "view: 'bona-target'",
+  'onTargetLipsanon(lipsanonId)',
+  "{ handoff: 'scene-retirement' }",
+]) {
+  if (!bona.includes(required)) fail(bonaPath, `missing authored Bona scene contribution: ${required}`);
 }
 
 const retiredRunStages = resolve(src, 'ui/RunWorkspaceStages.tsx');
@@ -73,6 +146,9 @@ const stylesPath = resolve(src, 'style.css');
 const styles = readFileSync(stylesPath, 'utf8');
 if (/\.run-stage(?:\.|\s|\{)/.test(styles)) {
   fail(stylesPath, 'retired local Run entering/departing choreography still exists');
+}
+if (styles.includes('.run-vacantia-pending-lipsanon')) {
+  fail(stylesPath, 'Bona may not mount a fixed viewport layer outside the Run scene contribution');
 }
 
 const skirmishPath = resolve(src, 'ui/Skirmish.tsx');

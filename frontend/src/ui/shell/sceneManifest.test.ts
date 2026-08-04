@@ -369,7 +369,7 @@ describe('scene manifests', () => {
     expect(deploymentScene.snapshot).toMatchObject({
       kind: 'run',
       phase: 'deployment',
-      workspace: 'primary',
+      workspace: { view: 'primary' },
       run: deployment,
     });
     expect(deploymentScene.instances.map((entry) => entry.definition.slot)).toEqual([
@@ -384,6 +384,64 @@ describe('scene manifests', () => {
     expect(armyScene.id).not.toBe(battleScene.id);
     expect(deepestSharedSceneRegion(deploymentScene, battleScene)).toBe('gameplay-shell');
     expect(deepestSharedSceneRegion(battleScene, armyScene)).toBe('gameplay-shell');
+  });
+
+  it('authors Bona targeting and unit inspection as distinct Run workspace scenes', () => {
+    const level = createBlankLevel('run-battle', 'Run Battle', 8, 8);
+    const base = createRun({
+      id: 'run-war',
+      name: 'Run War',
+      description: 'A test War',
+      battles: [{ level, loot: false }],
+    }, 17, '2026-08-01T00:00:00.000Z');
+    const document = {
+      ...base,
+      phase: 'bona-vacantia' as const,
+      vacantia: {
+        kind: 'opening' as const,
+        conflictIndex: 0,
+        afterBattleIndex: 0,
+        victoryGoldTenths: 0,
+        offers: ['conscription-notice' as const, 'royal-decree' as const, 'training-linens' as const],
+      },
+    };
+    const source = { run: { hydrated: true, document } };
+    const unitId = document.army[0].id;
+    const mat = sceneManifest('/run', '', source);
+    const ledger = sceneManifest('/run', '?view=bona-target&lipsanon=conscription-notice', source);
+    const profile = sceneManifest(
+      '/run',
+      `?view=bona-target&lipsanon=conscription-notice&unit=${encodeURIComponent(unitId)}`,
+      source,
+    );
+
+    expect(ledger.snapshot).toMatchObject({
+      workspace: { view: 'bona-target', lipsanonId: 'conscription-notice', unitId: null },
+    });
+    expect(profile.snapshot).toMatchObject({
+      workspace: { view: 'bona-target', lipsanonId: 'conscription-notice', unitId },
+    });
+    expect(new Set([mat.id, ledger.id, profile.id]).size).toBe(3);
+    expect(sceneLayerKey(mat)).not.toBe(sceneLayerKey(ledger));
+    expect(sceneLayerKey(ledger)).not.toBe(sceneLayerKey(profile));
+    expect(sceneOverlapScope(mat, ledger)).toBe('shell-viewport');
+    expect(sceneOverlapScope(ledger, profile)).toBe('shell-viewport');
+
+    const armyLedger = sceneManifest('/run', '?view=army', source);
+    const armyProfile = sceneManifest('/run', `?view=army&unit=${encodeURIComponent(unitId)}`, source);
+    expect(armyLedger.snapshot).toMatchObject({ workspace: { view: 'army', unitId: null } });
+    expect(armyProfile.snapshot).toMatchObject({ workspace: { view: 'army', unitId } });
+    expect(armyProfile.id).not.toBe(armyLedger.id);
+    expect(sceneLayerKey(armyProfile)).not.toBe(sceneLayerKey(armyLedger));
+    expect(sceneOverlapScope(armyLedger, armyProfile)).toBe('shell-viewport');
+
+    // Unknown, untargeted, or out-of-phase requests do not gain viewport authority.
+    expect(sceneManifest('/run', '?view=bona-target&lipsanon=royal-decree', source).id).toBe(mat.id);
+    expect(sceneManifest('/run', '?view=bona-target&lipsanon=conscription-notice&unit=missing', source).id)
+      .toBe(ledger.id);
+    expect(sceneManifest('/run', '?view=bona-target&lipsanon=conscription-notice', {
+      run: { hydrated: true, document: base },
+    }).snapshot).toMatchObject({ workspace: { view: 'primary' } });
   });
 
   it('addresses individual lipsana inside the one retained lipsanon-reference scene (ADR-0256)', () => {
