@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-08-04
 deciders: owner (Nelson) + Codex
+refined_by:
+  - "[ADR-0417](0417-klerosis-deals-from-the-chartulary.md)"
 partially_supersedes:
   - "[ADR-0346](0346-run-deployment-is-a-battlefield-state-with-conditional-input.md)'s whole-Deployment battlefield scope"
   - "[ADR-0350](0350-run-deployment-promotes-the-mounted-battlefield-in-place.md)'s battlefield mount before the Klerosis information boundary"

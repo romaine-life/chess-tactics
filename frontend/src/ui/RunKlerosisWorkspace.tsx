@@ -1,11 +1,16 @@
-import { useLayoutEffect, useRef, useState, type ReactElement } from 'react';
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactElement } from 'react';
 import { runCardDefinition, type RunDocument } from '../run/model';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { RunCard } from './RunCard';
-import { runCardMotionDurationMs } from './runCardFlightView';
+import {
+  runCardFlightGeometry,
+  runCardMotionDurationMs,
+  type RunCardFlightGeometry,
+} from './runCardFlightView';
 import { runUnitRosterLabel } from './RunArmyWorkspace';
 import { RunSceneViewport } from './RunWorkspace';
 import { useSceneReveal } from './shell/SceneBoundary';
+import { SceneContinuityPortal, useSceneContinuityAvailable } from './shell/SceneContinuity';
 import { ChromeButton } from './shared/ChromeButton';
 import { InnerChromeBox } from './shared/ChromeBox';
 
@@ -22,7 +27,9 @@ export function RunKlerosisWorkspace({
   onConfirm: () => void;
 }): ReactElement {
   const sceneRevealed = useSceneReveal();
+  const continuityAvailable = useSceneContinuityAvailable();
   const rootRef = useRef<HTMLElement | null>(null);
+  const flightElementsRef = useRef(new Map<string, HTMLDivElement>());
   const dealtCardIds = run.deployment?.dealtCardIds ?? [];
   const dealKey = dealtCardIds.join(':');
   const cardById = new Map(run.cards.map((card) => [card.id, card]));
@@ -32,9 +39,14 @@ export function RunKlerosisWorkspace({
   });
   const deploying = new Set(run.deployment?.deployingUnitIds ?? []);
   const [dealComplete, setDealComplete] = useState(false);
+  const [dealFlights, setDealFlights] = useState<Array<{
+    cardId: string;
+    geometry: RunCardFlightGeometry;
+  }> | null>(null);
 
   useLayoutEffect(() => {
     setDealComplete(false);
+    setDealFlights(null);
     const root = rootRef.current;
     if (!sceneRevealed || !root) return undefined;
     const cardElements = [...root.querySelectorAll<HTMLElement>('[data-klerosis-deal-card]')];
@@ -42,29 +54,56 @@ export function RunKlerosisWorkspace({
       setDealComplete(true);
       return undefined;
     }
+    const chartulary = document.querySelector('[data-run-card-flight-target]');
+    const chartularyRect = chartulary?.getBoundingClientRect();
+    if (!continuityAvailable || !chartularyRect) {
+      setDealComplete(true);
+      return undefined;
+    }
+    const flights = cardElements.flatMap((element) => {
+      const cardId = element.getAttribute('data-klerosis-deal-card');
+      const geometry = runCardFlightGeometry(element.getBoundingClientRect(), chartularyRect);
+      return cardId && geometry ? [{ cardId, geometry }] : [];
+    });
+    if (flights.length !== cardElements.length) {
+      setDealComplete(true);
+      return undefined;
+    }
+    setDealFlights(flights);
+    return undefined;
+  }, [continuityAvailable, dealKey, sceneRevealed]);
+
+  useLayoutEffect(() => {
+    if (!dealFlights?.length) return undefined;
+    const root = rootRef.current;
+    if (!root) return undefined;
     const style = getComputedStyle(root);
     const duration = runCardMotionDurationMs(style.getPropertyValue('--ds-duration-transfer'));
     const stagger = runCardMotionDurationMs(style.getPropertyValue('--ds-stagger'));
     const easing = style.getPropertyValue('--ds-ease-out').trim();
     if (!duration || !stagger || !easing || typeof Element.prototype.animate !== 'function') {
       setDealComplete(true);
+      setDealFlights(null);
       return undefined;
     }
-    const rootRect = root.getBoundingClientRect();
-    const originX = rootRect.left + rootRect.width / 2;
-    const originY = rootRect.top + Math.min(82, rootRect.height * 0.12);
     let cancelled = false;
-    const animations = cardElements.map((element, index) => {
-      const rect = element.getBoundingClientRect();
-      const x = originX - (rect.left + rect.width / 2);
-      const y = originY - (rect.top + rect.height * 0.16);
+    const animations = dealFlights.flatMap(({ cardId, geometry }, index) => {
+      const element = flightElementsRef.current.get(cardId);
+      if (!element) return [];
       return element.animate(
         [
           {
             opacity: 0,
-            transform: `translate3d(${x}px, ${y}px, 0) scale(.86) rotate(${index % 2 === 0 ? '-2deg' : '2deg'})`,
+            translate: `${geometry.x}px ${geometry.y}px`,
+            scale: geometry.scale,
           },
-          { opacity: 1, transform: 'translate3d(0, 0, 0) scale(1) rotate(0)' },
+          {
+            opacity: 1,
+            offset: 0.06,
+            translate: `${geometry.x}px ${geometry.y}px`,
+            scale: geometry.scale,
+          },
+          { opacity: 1, translate: '0px 0px', scale: 1 },
         ],
         {
           duration,
@@ -74,88 +113,126 @@ export function RunKlerosisWorkspace({
         },
       );
     });
+    if (animations.length !== dealFlights.length) {
+      animations.forEach((animation) => animation.cancel());
+      setDealComplete(true);
+      setDealFlights(null);
+      return undefined;
+    }
     void Promise.allSettled(animations.map((animation) => animation.finished)).then(() => {
-      if (!cancelled) setDealComplete(true);
+      if (!cancelled) {
+        setDealComplete(true);
+        setDealFlights(null);
+      }
     });
     return () => {
       cancelled = true;
       animations.forEach((animation) => animation.cancel());
     };
-  }, [dealKey, sceneRevealed]);
+  }, [dealFlights]);
 
   return (
-    <RunSceneViewport
-      scene={{
-        view: 'klerosis',
-        className: 'run-klerosis-scene',
-        contentClassName: 'run-klerosis-workspace-content',
-        testId: 'run-klerosis-workspace',
-        ariaLabelledBy: 'run-klerosis-title',
-      }}
-    >
-      <section
-        ref={rootRef}
-        className={`run-klerosis-workspace${dealComplete ? ' is-deal-complete' : ' is-dealing'}`}
-        data-testid="run-klerosis"
-        data-klerosis-deal-state={dealComplete ? 'complete' : 'dealing'}
-        aria-busy={!dealComplete}
-      >
-        <header className="run-klerosis-heading">
-          <span className="skirmish-eyebrow">Klerosis</span>
-          <h2 id="run-klerosis-title">Your deployment deal</h2>
-          <p>These cards supply this combat. Their units enter the pool while space allows.</p>
-        </header>
-
-        <div className="run-klerosis-cards" role="list" aria-label="Cards dealt for this combat">
-          {cards.map((owned, index) => {
-            const card = runCardDefinition(owned.coreId);
-            return card ? (
-              <div
-                role="listitem"
-                className="run-klerosis-card"
-                data-klerosis-deal-card={owned.id}
-                data-klerosis-deal-index={index}
-                key={owned.id}
-                style={{ zIndex: cards.length - index }}
-              >
-                <RunCard card={card} mode="reference" cardType={owned.cardType} adlected />
-              </div>
-            ) : null;
-          })}
-        </div>
-
-        <InnerChromeBox className="run-klerosis-rosters">
-          <div>
-            <span className="skirmish-eyebrow">Deploying</span>
-            <ul>
-              {run.army.filter((unit) => deploying.has(unit.id)).map((unit) => (
-                <li key={unit.id}>{runUnitRosterLabel(unit)}</li>
-              ))}
-            </ul>
-          </div>
-          <div>
-            <span className="skirmish-eyebrow">Unavailable</span>
-            <ul>
-              {run.army.filter((unit) => !deploying.has(unit.id)).map((unit) => (
-                <li key={unit.id}>{runUnitRosterLabel(unit)}</li>
-              ))}
-              {run.army.every((unit) => deploying.has(unit.id)) ? <li>None</li> : null}
-            </ul>
-          </div>
-        </InnerChromeBox>
-
-        <div className="run-klerosis-actions">
-          <ChromeButton
-            unit="inner-text-button"
-            className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-            data-testid="klerosis-confirm"
-            disabled={!dealComplete}
-            onClick={onConfirm}
+    <>
+      {dealFlights?.map(({ cardId, geometry }) => {
+        const owned = cardById.get(cardId);
+        const card = owned ? runCardDefinition(owned.coreId) : null;
+        return owned && card ? (
+          <SceneContinuityPortal
+            key={cardId}
+            contribution={{ kind: 'shared-element', id: `klerosis-deal:${cardId}` }}
           >
-            {dealComplete ? 'Confirm' : 'Dealing…'}
-          </ChromeButton>
-        </div>
-      </section>
-    </RunSceneViewport>
+            <div
+              ref={(element) => {
+                if (element) flightElementsRef.current.set(cardId, element);
+                else flightElementsRef.current.delete(cardId);
+              }}
+              className="run-klerosis-deal-flight"
+              data-klerosis-deal-flight={cardId}
+              style={{
+                insetInlineStart: `${geometry.from.left}px`,
+                insetBlockStart: `${geometry.from.top}px`,
+                inlineSize: `${geometry.from.width}px`,
+                blockSize: `${geometry.from.height}px`,
+              } as CSSProperties}
+            >
+              <RunCard card={card} mode="reference" cardType={owned.cardType} adlected />
+            </div>
+          </SceneContinuityPortal>
+        ) : null;
+      })}
+      <RunSceneViewport
+        scene={{
+          view: 'klerosis',
+          className: 'run-klerosis-scene',
+          contentClassName: 'run-klerosis-workspace-content',
+          testId: 'run-klerosis-workspace',
+          ariaLabelledBy: 'run-klerosis-title',
+        }}
+      >
+        <section
+          ref={rootRef}
+          className={`run-klerosis-workspace${dealComplete ? ' is-deal-complete' : ' is-dealing'}`}
+          data-testid="run-klerosis"
+          data-klerosis-deal-state={dealComplete ? 'complete' : 'dealing'}
+          aria-busy={!dealComplete}
+        >
+          <header className="run-klerosis-heading">
+            <span className="skirmish-eyebrow">Klerosis</span>
+            <h2 id="run-klerosis-title">Your deployment deal</h2>
+            <p>These cards supply this combat. Their units enter the pool while space allows.</p>
+          </header>
+
+          <div className="run-klerosis-cards" role="list" aria-label="Cards dealt for this combat">
+            {cards.map((owned, index) => {
+              const card = runCardDefinition(owned.coreId);
+              return card ? (
+                <div
+                  role="listitem"
+                  className="run-klerosis-card"
+                  data-klerosis-deal-card={owned.id}
+                  data-klerosis-deal-index={index}
+                  key={owned.id}
+                  style={{ zIndex: cards.length - index }}
+                >
+                  <RunCard card={card} mode="reference" cardType={owned.cardType} adlected />
+                </div>
+              ) : null;
+            })}
+          </div>
+
+          <InnerChromeBox className="run-klerosis-rosters">
+            <div>
+              <span className="skirmish-eyebrow">Deploying</span>
+              <ul>
+                {run.army.filter((unit) => deploying.has(unit.id)).map((unit) => (
+                  <li key={unit.id}>{runUnitRosterLabel(unit)}</li>
+                ))}
+              </ul>
+            </div>
+            <div>
+              <span className="skirmish-eyebrow">Unavailable</span>
+              <ul>
+                {run.army.filter((unit) => !deploying.has(unit.id)).map((unit) => (
+                  <li key={unit.id}>{runUnitRosterLabel(unit)}</li>
+                ))}
+                {run.army.every((unit) => deploying.has(unit.id)) ? <li>None</li> : null}
+              </ul>
+            </div>
+          </InnerChromeBox>
+
+          <div className="run-klerosis-actions">
+            <ChromeButton
+              unit="inner-text-button"
+              className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+              data-testid="klerosis-confirm"
+              disabled={!dealComplete}
+              onClick={onConfirm}
+            >
+              {dealComplete ? 'Confirm' : 'Dealing…'}
+            </ChromeButton>
+          </div>
+        </section>
+      </RunSceneViewport>
+    </>
   );
 }

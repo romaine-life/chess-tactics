@@ -217,11 +217,11 @@ these.
   His Grace is not removable and neither card appears in ordinary Adlectio
   offers (ADR-0406, ADR-0407, ADR-0413).
 - Every Battle first opens a dedicated pre-Battle **Klerosis** screen. It deals
-  the cards visibly into a wrapping card field, shows the complete
+  the cards visibly from the persistent Chartulary mark into a wrapping card field, shows the complete
   Deploying/Unavailable roster, and asks only for **Confirm**. The battlefield
   is not mounted behind that screen. Confirming Klerosis transitions into the
   battlefield Deployment, where the player chooses **Deploy all** or **Step
-  through**. The first Conflict deals at most three cards and
+  through** (ADR-0416, ADR-0417). The first Conflict deals at most three cards and
   each later Conflict adds one; His Grace consumes the first slot and the rest
   come from a fresh seeded shuffle. Dealt cards contribute their remaining
   units individually, so one card may be split by limited board capacity.

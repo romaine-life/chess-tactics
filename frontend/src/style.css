@@ -21150,8 +21150,7 @@ button.tileset-relationship-cell {
 
 .run-klerosis-card {
   min-inline-size: 0;
-  transform-origin: center 16%;
-  will-change: opacity, transform;
+  will-change: opacity;
 }
 
 .run-klerosis-workspace.is-dealing .run-klerosis-card {
@@ -21161,6 +21160,21 @@ button.tileset-relationship-cell {
 .run-klerosis-workspace.is-deal-complete .run-klerosis-card {
   opacity: 1;
   will-change: auto;
+}
+
+/* Klerosis reverses the existing card-to-Chartulary transfer: each canonical
+   face begins inside the real title shortcut, then crosses shell clipping in
+   the director-owned continuity layer to settle into its dealt seat. */
+.run-klerosis-deal-flight {
+  pointer-events: none;
+  position: fixed;
+  transform-origin: center;
+  will-change: opacity, translate, scale;
+  z-index: 10011;
+}
+
+.run-klerosis-deal-flight > .run-card-action {
+  inline-size: 100%;
 }
 
 .run-klerosis-rosters {

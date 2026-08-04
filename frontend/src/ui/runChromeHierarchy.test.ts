@@ -303,6 +303,11 @@ describe('Run chrome hierarchy', () => {
     expect(runKlerosisWorkspace).toContain('<RunSceneViewport');
     expect(runKlerosisWorkspace).toContain("view: 'klerosis'");
     expect(runKlerosisWorkspace).toContain('data-testid="klerosis-confirm"');
+    expect(runKlerosisWorkspace).toContain("document.querySelector('[data-run-card-flight-target]')");
+    expect(runKlerosisWorkspace).toContain('<SceneContinuityPortal');
+    expect(runKlerosisWorkspace).toContain('runCardFlightGeometry(element.getBoundingClientRect(), chartularyRect)');
+    expect(runKlerosisWorkspace).not.toContain('originX');
+    expect(runKlerosisWorkspace).not.toContain('originY');
     expect(runKlerosisWorkspace).not.toContain('Deploy all');
     expect(runKlerosisWorkspace).not.toContain('Step through');
     expect(runKlerosisWorkspace).not.toContain('SkirmishBoard');

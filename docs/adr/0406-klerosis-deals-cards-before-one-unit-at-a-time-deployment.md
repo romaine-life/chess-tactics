@@ -30,6 +30,7 @@ refines:
   - "[ADR-0405](0405-surveyors-compass-leaves-the-lipsanon-offer-pool.md)"
 refined_by:
   - "[ADR-0412](0412-praecipuus-and-primogeniture-join-card-icon-fitting.md)'s review-only fifth fitting pair"
+  - "[ADR-0417](0417-klerosis-deals-from-the-chartulary.md)'s measured Chartulary deal origin"
 ---
 
 # ADR-0406: Klerosis deals cards before one-unit-at-a-time Deployment

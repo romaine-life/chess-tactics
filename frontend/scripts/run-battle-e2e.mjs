@@ -267,6 +267,9 @@ try {
       retainedOutgoing: false,
       inertOutgoing: false,
       blankFrame: false,
+      maxDealFlights: 0,
+      nearestDealOrigin: Number.POSITIVE_INFINITY,
+      dealUsesContinuityLayer: false,
     };
     window.__ctRunTransitionProbe = probe;
     const tick = () => {
@@ -281,6 +284,24 @@ try {
       probe.sawEntering ||= phase === 'entering';
       probe.retainedOutgoing ||= transitioning && Boolean(probe.outgoing?.isConnected);
       probe.inertOutgoing ||= transitioning && Boolean(probe.outgoing?.closest('[inert]'));
+      const chartulary = document.querySelector('[data-run-card-flight-target]');
+      const dealFlights = [...document.querySelectorAll('[data-klerosis-deal-flight]')];
+      probe.maxDealFlights = Math.max(probe.maxDealFlights, dealFlights.length);
+      probe.dealUsesContinuityLayer ||= dealFlights.some((flight) => Boolean(
+        flight.closest('[data-scene-continuity-kind="shared-element"]'),
+      ));
+      if (chartulary) {
+        const target = chartulary.getBoundingClientRect();
+        const targetX = target.left + target.width / 2;
+        const targetY = target.top + target.height / 2;
+        for (const flight of dealFlights) {
+          const rect = flight.getBoundingClientRect();
+          probe.nearestDealOrigin = Math.min(
+            probe.nearestDealOrigin,
+            Math.hypot(rect.left + rect.width / 2 - targetX, rect.top + rect.height / 2 - targetY),
+          );
+        }
+      }
       if (transitioning) {
         const visibleBoundary = boundaries.some((entry) => {
           const rect = entry.getBoundingClientRect();
@@ -303,6 +324,10 @@ try {
       && (director.getAttribute('data-scene-committed') ?? '').includes(':klerosis:')
       && !director.getAttribute('data-scene-pending');
   });
+  await page.waitForSelector('[data-klerosis-deal-flight]', { timeout: 5_000 });
+  const klerosisMotionShot = 'tmp-shots/run-opening-klerosis-deal-motion.png';
+  await page.screenshot({ path: klerosisMotionShot });
+  console.log('Klerosis deal-motion screenshot:', klerosisMotionShot);
 
   // Klerosis is its own full Run workspace. The battlefield and its pace controls
   // must not exist until the player has seen the deal and confirmed it.
@@ -363,6 +388,9 @@ try {
       retainedOutgoing: probe.retainedOutgoing,
       inertOutgoing: probe.inertOutgoing,
       blankFrame: probe.blankFrame,
+      maxDealFlights: probe.maxDealFlights,
+      nearestDealOrigin: probe.nearestDealOrigin,
+      dealUsesContinuityLayer: probe.dealUsesContinuityLayer,
       finalPhase: director?.getAttribute('data-scene-phase') ?? null,
       finalCommitted: director?.getAttribute('data-scene-committed') ?? null,
       finalPending: director?.getAttribute('data-scene-pending') ?? null,
@@ -376,6 +404,9 @@ try {
     || !transition.retainedOutgoing
     || !transition.inertOutgoing
     || transition.blankFrame
+    || transition.maxDealFlights !== klerosisState.dealtCards
+    || transition.nearestDealOrigin > 1.5
+    || !transition.dealUsesContinuityLayer
     || transition.finalPhase !== 'current'
     || !transition.finalCommitted?.includes(':klerosis:')
     || transition.finalPending

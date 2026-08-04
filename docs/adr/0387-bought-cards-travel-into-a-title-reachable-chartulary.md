@@ -14,6 +14,7 @@ refines:
 refined_by:
   - "[ADR-0388](0388-remaining-shop-cards-settle-into-their-new-seats.md)"
   - "[ADR-0389](0389-the-title-route-names-the-visible-strategikon-address.md)"
+  - "[ADR-0417](0417-klerosis-deals-from-the-chartulary.md)"
 partially_superseded_by:
   - "[ADR-0392](0392-sectio-is-the-run-disposal-and-acquisition-phase.md)'s replacement of the Shop terminology with Sectio"
   - "[ADR-0393](0393-adlectio-and-alienatio-are-the-movements-within-sectio.md)'s replacement of purchase terminology with Adlectio"
