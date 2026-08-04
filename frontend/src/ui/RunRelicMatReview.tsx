@@ -157,7 +157,7 @@ export interface RelicMotionTuning {
   glow: number;
   /** The one-pixel stroke that seats the tray on the table, in whole pixels. */
   trayStroke: number;
-  /** How far the relics left behind pull back while the chosen one travels. */
+  /** How much of the untaken relics' exit is a shrink. 0 collapses them to a point. */
   recede: number;
   /** Which emphases a hovered relic gets. They compose; any combination is legal. */
   hover: RelicHoverEmphasis;
@@ -557,10 +557,10 @@ export function RelicMatViewer({
               </div>
             </label>
             <SliderRow
-              label={<>Take recede <strong data-testid="relic-recede-value">{motion.recede.toFixed(2)}×</strong> — how far the others pull back</>}
+              label={<>Others vanish <strong data-testid="relic-recede-value">{motion.recede.toFixed(2)}×</strong> — 0 shrinks them to a point, 1 only fades them</>}
               value={motion.recede}
               set={(value) => tune('recede', value)}
-              min={0.3}
+              min={0}
               max={1}
               step={0.01}
               nudge={0.01}

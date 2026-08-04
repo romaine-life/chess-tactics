@@ -19811,11 +19811,13 @@ button.tileset-relationship-cell {
   pointer-events: none;
 }
 
-/* They pull back as the chosen one leaves: smaller and dimmer together, which reads as the
-   others withdrawing rather than merely fading out where they lie. */
+/* They GO as the chosen one leaves -- shrinking away to nothing rather than settling at some
+   dimmer size. Only one relic was ever going to be taken, so the other two have no business
+   still being on the mat when it lands. The knob is how much of that exit is a shrink: 0
+   collapses them to a point, 1 fades them out where they lie. */
 .relic-mat-cards[data-taking] .relic-mat-offer {
-  opacity: 0.5;
-  scale: var(--relic-recede-scale, 0.72);
+  opacity: 0;
+  scale: var(--relic-recede-scale, 0);
 }
 
 /* The relic that LEFT is gone from the mat, whether or not the rest are receding: the

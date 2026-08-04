@@ -141,12 +141,13 @@ describe('Bona Vacantia relics', () => {
     const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
     expect(css).toContain(`--relic-take-duration: ${RELIC_FLIGHT_MS}ms;`);
     expect(css).toMatch(/\.relic-mat-offer \{\s*transition:\s*opacity var\(--relic-take-duration\) var\(--relic-take-easing\),\s*scale var\(--relic-take-duration\) var\(--relic-take-easing\);/);
-    // Smaller AND dimmer together — fading alone reads as vanishing where they lie rather
-    // than withdrawing.
+    // They GO, they do not settle at some dimmer size: only one relic was ever going to be
+    // taken, so the others must not still be on the mat when it lands.
     expect(css).toMatch(
-      /\.relic-mat-cards\[data-taking\] \.relic-mat-offer \{\s*opacity: 0\.5;\s*scale: var\(--relic-recede-scale, [\d.]+\);/,
+      /\.relic-mat-cards\[data-taking\] \.relic-mat-offer \{\s*opacity: 0;\s*scale: var\(--relic-recede-scale, [\d.]+\);/,
     );
     expect(css).toContain(`--relic-recede-scale, ${RELIC_MOTION_COMMITTED.recede}`);
+    expect(RELIC_MOTION_COMMITTED.recede).toBe(0);
   });
 
   it('holds the hovered relic at a whole-pixel size', () => {
