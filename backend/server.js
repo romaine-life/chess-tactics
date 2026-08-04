@@ -3667,30 +3667,25 @@ const MIGRATIONS = [
          SET body = pg_temp.migrate_nested_levels(body),
              revision = revision + 1,
              updated_at = now()
-       WHERE position('player-pawn-spawn' in body::text) > 0
-          OR (position('excludedPieceTypes' in body::text) > 0 AND position('"pawn"' in body::text) > 0);
+       WHERE pg_temp.migrate_nested_levels(body) IS DISTINCT FROM body;
       UPDATE campaign_workspaces
          SET body = pg_temp.migrate_nested_levels(body),
              revision = revision + 1,
              updated_at = now()
-       WHERE position('player-pawn-spawn' in body::text) > 0
-          OR (position('excludedPieceTypes' in body::text) > 0 AND position('"pawn"' in body::text) > 0);
+       WHERE pg_temp.migrate_nested_levels(body) IS DISTINCT FROM body;
       UPDATE official_campaigns
          SET data = pg_temp.migrate_nested_levels(data),
              revision = revision + 1,
              updated_at = now(),
              updated_by = 'migration-56'
-       WHERE position('player-pawn-spawn' in data::text) > 0
-          OR (position('excludedPieceTypes' in data::text) > 0 AND position('"pawn"' in data::text) > 0);
+       WHERE pg_temp.migrate_nested_levels(data) IS DISTINCT FROM data;
       UPDATE public_maps
          SET body = pg_temp.migrate_nested_levels(body), updated_at = now()
-       WHERE position('player-pawn-spawn' in body::text) > 0
-          OR (position('excludedPieceTypes' in body::text) > 0 AND position('"pawn"' in body::text) > 0);
+       WHERE pg_temp.migrate_nested_levels(body) IS DISTINCT FROM body;
 
       UPDATE level_working_copy_revisions
          SET body = pg_temp.migrate_nested_levels(body)
-       WHERE position('player-pawn-spawn' in body::text) > 0
-          OR (position('excludedPieceTypes' in body::text) > 0 AND position('"pawn"' in body::text) > 0);
+       WHERE pg_temp.migrate_nested_levels(body) IS DISTINCT FROM body;
       WITH changed AS (
         UPDATE level_working_copies
            SET body = pg_temp.migrate_nested_levels(body),
@@ -3698,8 +3693,7 @@ const MIGRATIONS = [
                revision = revision + 1,
                baseline_hash = NULL,
                updated_at = now()
-         WHERE position('player-pawn-spawn' in body::text) > 0
-            OR (position('excludedPieceTypes' in body::text) > 0 AND position('"pawn"' in body::text) > 0)
+         WHERE pg_temp.migrate_nested_levels(body) IS DISTINCT FROM body
         RETURNING document_id, revision, body, saved_revision, baseline_hash, updated_at
       )
       INSERT INTO level_working_copy_revisions
@@ -3709,28 +3703,21 @@ const MIGRATIONS = [
       ON CONFLICT (document_id, revision) DO NOTHING;
       UPDATE editor_document_edit_sessions
          SET draft_body = pg_temp.migrate_nested_levels(draft_body)
-       WHERE position('player-pawn-spawn' in draft_body::text) > 0
-          OR (position('excludedPieceTypes' in draft_body::text) > 0 AND position('"pawn"' in draft_body::text) > 0);
+       WHERE pg_temp.migrate_nested_levels(draft_body) IS DISTINCT FROM draft_body;
       UPDATE editor_document_recoveries
          SET body = pg_temp.migrate_nested_levels(body)
-       WHERE position('player-pawn-spawn' in body::text) > 0
-          OR (position('excludedPieceTypes' in body::text) > 0 AND position('"pawn"' in body::text) > 0);
+       WHERE pg_temp.migrate_nested_levels(body) IS DISTINCT FROM body;
 
       UPDATE lab_runs SET body = pg_temp.migrate_nested_levels(body)
-       WHERE position('player-pawn-spawn' in body::text) > 0
-          OR (position('excludedPieceTypes' in body::text) > 0 AND position('"pawn"' in body::text) > 0);
+       WHERE pg_temp.migrate_nested_levels(body) IS DISTINCT FROM body;
       UPDATE train_runs
          SET spec = pg_temp.migrate_nested_levels(spec), body = pg_temp.migrate_nested_levels(body), updated_at = now()
-       WHERE position('player-pawn-spawn' in spec::text) > 0
-          OR position('player-pawn-spawn' in body::text) > 0
-          OR (position('excludedPieceTypes' in spec::text) > 0 AND position('"pawn"' in spec::text) > 0)
-          OR (position('excludedPieceTypes' in body::text) > 0 AND position('"pawn"' in body::text) > 0);
+       WHERE pg_temp.migrate_nested_levels(spec) IS DISTINCT FROM spec
+          OR pg_temp.migrate_nested_levels(body) IS DISTINCT FROM body;
       UPDATE solve_runs
          SET spec = pg_temp.migrate_nested_levels(spec), body = pg_temp.migrate_nested_levels(body), updated_at = now()
-       WHERE position('player-pawn-spawn' in spec::text) > 0
-          OR position('player-pawn-spawn' in body::text) > 0
-          OR (position('excludedPieceTypes' in spec::text) > 0 AND position('"pawn"' in spec::text) > 0)
-          OR (position('excludedPieceTypes' in body::text) > 0 AND position('"pawn"' in body::text) > 0);
+       WHERE pg_temp.migrate_nested_levels(spec) IS DISTINCT FROM spec
+          OR pg_temp.migrate_nested_levels(body) IS DISTINCT FROM body;
     `,
   },
 ];

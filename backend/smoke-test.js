@@ -1651,6 +1651,14 @@ async function validateKlerosisAndDeploymentZoneMigration56() {
         ],
       },
     };
+    const unaffectedLevel = {
+      formatVersion: 1,
+      id: 'unaffected-level',
+      layers: {
+        zones: [{ id: 'general', type: 'player-spawn', tiles: [[0, 0]], excludedPieceTypes: ['king'] }],
+        units: [{ x: 0, y: 1, type: 'pawn', side: 'player' }],
+      },
+    };
     const run = {
       runSaveVersion: 18,
       id: 'run-migration-56',
@@ -1688,6 +1696,11 @@ async function validateKlerosisAndDeploymentZoneMigration56() {
       `INSERT INTO levels (owner_email, id, body, revision)
        VALUES ('owner@example.com', 'migration-level', $1::jsonb, 4)`,
       [levelJson],
+    );
+    await client.query(
+      `INSERT INTO levels (owner_email, id, body, revision)
+       VALUES ('owner@example.com', 'unaffected-level', $1::jsonb, 4)`,
+      [JSON.stringify(unaffectedLevel)],
     );
     await client.query(
       `INSERT INTO campaign_workspaces (owner_email, body, revision)
@@ -1738,7 +1751,12 @@ async function validateKlerosisAndDeploymentZoneMigration56() {
     await client.query(inlineMigrationSql(56));
 
     const migratedRun = (await client.query('SELECT body, revision FROM active_runs')).rows[0];
-    const migratedLevel = (await client.query('SELECT body, revision FROM levels')).rows[0];
+    const migratedLevel = (await client.query(
+      `SELECT body, revision FROM levels WHERE id = 'migration-level'`,
+    )).rows[0];
+    const unaffectedRevision = (await client.query(
+      `SELECT revision FROM levels WHERE id = 'unaffected-level'`,
+    )).rows[0]?.revision;
     const workingCopy = (await client.query(
       'SELECT revision, saved_revision, baseline_hash FROM level_working_copies',
     )).rows[0];
@@ -1748,23 +1766,22 @@ async function validateKlerosisAndDeploymentZoneMigration56() {
     const residuals = await client.query(`
       SELECT count(*)::integer AS count
         FROM (
-          SELECT body::text AS value FROM levels
-          UNION ALL SELECT body::text FROM campaign_workspaces
-          UNION ALL SELECT data::text FROM official_campaigns
-          UNION ALL SELECT body::text FROM public_maps
-          UNION ALL SELECT body::text FROM level_working_copies
-          UNION ALL SELECT body::text FROM level_working_copy_revisions
-          UNION ALL SELECT draft_body::text FROM editor_document_edit_sessions
-          UNION ALL SELECT body::text FROM editor_document_recoveries
-          UNION ALL SELECT body::text FROM lab_runs
-          UNION ALL SELECT spec::text FROM train_runs
-          UNION ALL SELECT body::text FROM train_runs
-          UNION ALL SELECT spec::text FROM solve_runs
-          UNION ALL SELECT body::text FROM solve_runs
-          UNION ALL SELECT body::text FROM active_runs
+          SELECT body AS value FROM levels
+          UNION ALL SELECT body FROM campaign_workspaces
+          UNION ALL SELECT data FROM official_campaigns
+          UNION ALL SELECT body FROM public_maps
+          UNION ALL SELECT body FROM level_working_copies
+          UNION ALL SELECT body FROM level_working_copy_revisions
+          UNION ALL SELECT draft_body FROM editor_document_edit_sessions
+          UNION ALL SELECT body FROM editor_document_recoveries
+          UNION ALL SELECT body FROM lab_runs
+          UNION ALL SELECT spec FROM train_runs
+          UNION ALL SELECT body FROM train_runs
+          UNION ALL SELECT spec FROM solve_runs
+          UNION ALL SELECT body FROM solve_runs
+          UNION ALL SELECT body FROM active_runs
         ) AS documents
-       WHERE position('player-pawn-spawn' in value) > 0
-          OR (position('excludedPieceTypes' in value) > 0 AND position('"pawn"' in value) > 0)
+       WHERE pg_temp.migrate_nested_levels(value) IS DISTINCT FROM value
     `);
     const migratedWire = JSON.parse(Buffer.from(migratedLevel.body.boardCode, 'base64url').toString('utf8'));
     const layerGeneral = migratedLevel.body.layers.zones.find((zone) => zone.type === 'player-spawn');
@@ -1781,6 +1798,7 @@ async function validateKlerosisAndDeploymentZoneMigration56() {
       || migratedRun.body.cards[1].unitIds.join(',') !== 'run-pawn-a,run-pawn-b'
       || migratedRun.body.sectio.entrySnapshot.cards.length !== 2
       || Number(migratedLevel.revision) !== 5
+      || Number(unaffectedRevision) !== 4
       || JSON.stringify(layerGeneral.tiles) !== JSON.stringify([[0, 0], [1, 0]])
       || JSON.stringify(layerGeneral.excludedPieceTypes) !== JSON.stringify(['king'])
       || JSON.stringify(wireGeneral[2]) !== JSON.stringify(['0,0', '1,0'])
@@ -1796,6 +1814,7 @@ async function validateKlerosisAndDeploymentZoneMigration56() {
       throw new Error(`Migration 56 did not establish Klerosis and remove Pawn-only deployment geometry: ${JSON.stringify({
         run: migratedRun,
         level: migratedLevel,
+        unaffected_revision: unaffectedRevision,
         working_copy: workingCopy,
         working_history: workingHistory.rows,
         residuals: residuals.rows,
