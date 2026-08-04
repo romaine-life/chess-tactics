@@ -41,6 +41,10 @@ describe('Skirmish chrome hierarchy', () => {
     expect(styleCss).toMatch(/@media \(max-width: 860px\)[\s\S]*?\.skirmish-screen\s*\{[\s\S]*?overflow-x:\s*hidden;[\s\S]*?overflow-y:\s*auto;/);
   });
 
+  it('reserves the fixed title bar before stacked mobile workspaces', () => {
+    expect(styleCss).toMatch(/@media \(max-width: 860px\)[\s\S]*?\.skirmish-screen\s*\{[\s\S]*?grid-template-rows:\s*var\(--app-header-h\) minmax\(520px, 62vh\) auto;/);
+  });
+
   it('uses one typed control lane and one branched shell divider (ADR-0100/0104)', () => {
     expect(appTitleBar).toContain('chrome-family-surface chrome-rails-offscreen');
     expect(appTitleBar).not.toContain('chromeCorners');

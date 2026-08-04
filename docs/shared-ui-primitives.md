@@ -16,6 +16,9 @@ search for before constructing a control or repeated surface.
   decorative background artwork between its installed fill and live content;
   callers supply installed media content, not attachment or clipping geometry
   (ADR-0336).
+- `ui/Skirmish.tsx#SkirmishShell` — the persistent gameplay/Run shell. Its
+  `persistentViewportArtwork` seat owns environment art shared by sibling
+  viewport destinations and keeps that art outside their director-owned fade.
 - `ui/shared/ActionList.tsx` — data-driven selectable/action rows. War battles,
   Campaign Editor levels, and Play level lists use this instead of constructing
   first/middle/last rows independently.
@@ -30,6 +33,9 @@ search for before constructing a control or repeated surface.
 - `ui/shared/ApparatusRailTab.tsx` — menu-language navigation rail columns and
   tabs. `ApparatusRailColumn` owns the main-menu column width, stack gap, and
   framed/open perimeter; `ApparatusRailTab` owns each button.
+- `ui/shared/BoardViewFraming.tsx` — canonical contained read-only board framing.
+  `FramedReadOnlyBoardView` owns pannable/zoomable `ViewPane` interaction and
+  opening camera policy; `StaticReadOnlyBoardView` owns non-interactive stacks.
 
 ## Studio and workflow compositions
 
@@ -39,6 +45,8 @@ search for before constructing a control or repeated surface.
 - `ui/RunCard.tsx` — the canonical interactive/reference host around
   `RunCardFace`; Shop mode owns the gold transaction cue and registered
   **Purchased** status chrome.
+- `ui/LevelInfoCompact.tsx` — the canonical derived Level ledger for board
+  facts, authored and setup-event forces, zones, rules, and time control.
 - `ui/RunIconPairReview.tsx` — the embedded Studio Card Icon Fitting Viewer;
   exact property/state candidate selection, per-property fitting, and the one
   shared unit-state fitting draft all render through `RunCardFace`.

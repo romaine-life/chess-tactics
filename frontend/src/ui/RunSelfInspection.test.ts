@@ -5,6 +5,7 @@ import {
   runBonaTargetHref,
   runSelfInspectionHref,
   runSelfInspectionViewFromSearch,
+  runWorkspaceViewFromSearch,
 } from './RunSelfInspection';
 
 describe('Run self-inspection links', () => {
@@ -13,6 +14,11 @@ describe('Run self-inspection links', () => {
     expect(runSelfInspectionViewFromSearch('?view=lipsana')).toBe('lipsana');
     expect(runSelfInspectionViewFromSearch('?view=sell')).toBeNull();
     expect(runSelfInspectionViewFromSearch('')).toBeNull();
+  });
+
+  it('recognizes the shop-only upcoming Battle workspace as an addressable Run view', () => {
+    expect(runWorkspaceViewFromSearch('?view=battle-preview')).toBe('battle-preview');
+    expect(runWorkspaceViewFromSearch('?view=unknown')).toBe('primary');
   });
 
   it('preserves unrelated route state while adding or clearing the view', () => {

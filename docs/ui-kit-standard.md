@@ -191,8 +191,8 @@ omit either layer or provide an inline-end value.
 
 Under [ADR-0237](adr/0237-run-destinations-fill-the-shell-workspace.md), the same
 ownership test applies to player-facing non-Battle Run destinations. Shop/Loot,
-Victory, Army ledger and profile, Sell Units, loading, and empty states fill the
-shell-owned playfield through the shared `RunWorkspace`/`ShellWorkspace`
+the Shop's upcoming-Battle preview, Victory, Army ledger and profile, Sell Units,
+loading, and empty states fill the shell-owned playfield through the shared `RunWorkspace`/`ShellWorkspace`
 composition. `RunWorkspace` supplies the
 workflow content; `ShellWorkspace` itself supplies the same Controls-attached
 body and default inset content container for every destination. Content gutters
@@ -202,6 +202,14 @@ edge-attached content variant rather than authoring an end-padding exception.
 Destinations do not add an
 `OuterChromeBox`, outer-panel consumer, or duplicate title frame merely to
 acquire a background; subordinate controls remain registered inner chrome.
+
+Per [ADR-0386](adr/0386-shops-offer-read-only-intelligence-on-the-upcoming-battle.md),
+the Shop's `/run?view=battle-preview` destination composes the canonical
+`FramedReadOnlyBoardView` and `LevelInfoCompact` inside that fill-only workspace.
+It may lay those subordinate inner frames beside one another, but it cannot
+instantiate a gameplay session, project the Run army, resolve setup positions,
+or build a second board renderer. The address is valid only while the persisted
+Run phase is Shop.
 
 [ADR-0346](adr/0346-run-deployment-is-a-battlefield-state-with-conditional-input.md)
 removes Deployment from that destination inventory. Deployment is a persisted

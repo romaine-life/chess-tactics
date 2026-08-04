@@ -10,7 +10,8 @@ export type RunViewportSceneView =
   | 'bona-target'
   | 'army'
   | 'lipsana'
-  | 'sell';
+  | 'sell'
+  | 'battle-preview';
 
 export interface RunViewportSceneSpec {
   view: RunViewportSceneView;

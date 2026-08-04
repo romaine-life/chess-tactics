@@ -134,6 +134,7 @@ export function SkirmishShell({
   className = '',
   testId = 'skirmish',
   titleBarContent,
+  persistentViewportArtwork = null,
   lipsanonIds = [],
   shellWorkspaceCoversLipsana = false,
   controlsContent,
@@ -148,6 +149,9 @@ export function SkirmishShell({
   className?: string;
   testId?: string;
   titleBarContent: ReactNode;
+  /** Artwork shared by sibling viewport destinations. It is deliberately outside
+   *  the director-faded overlap region so the environment remains continuous. */
+  persistentViewportArtwork?: ReactNode;
   lipsanonIds?: readonly LipsanonId[];
   shellWorkspaceCoversLipsana?: boolean;
   controlsContent?: ReactNode;
@@ -174,6 +178,11 @@ export function SkirmishShell({
     : screenStyle ?? undefined;
   const surface = (
     <>
+      {persistentViewportArtwork ? (
+        <div className="shell-persistent-viewport-artwork" aria-hidden="true">
+          {persistentViewportArtwork}
+        </div>
+      ) : null}
       {shellWorkspaceCoversLipsana ? null : <LipsanonStrip lipsanonIds={lipsanonIds} />}
       {children}
       {hudContent === undefined
@@ -185,7 +194,7 @@ export function SkirmishShell({
   return (
     <div
       data-testid={testId}
-      className={`skirmish-screen ${className}`.trim()}
+      className={`skirmish-screen${persistentViewportArtwork ? ' has-persistent-viewport-artwork' : ''} ${className}`.trim()}
       style={resolvedScreenStyle}
     >
       {installedChromeCss ? <style data-skirmish-chrome-family dangerouslySetInnerHTML={{ __html: installedChromeCss }} /> : null}

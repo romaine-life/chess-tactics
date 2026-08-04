@@ -66,7 +66,9 @@ function runSceneSnapshot(
           ? Object.freeze({ view: 'lipsana' as const })
           : requestedView === 'sell' && phase === 'shop'
             ? Object.freeze({ view: 'sell' as const })
-            : Object.freeze({ view: 'primary' as const });
+            : requestedView === 'battle-preview' && phase === 'shop'
+              ? Object.freeze({ view: 'battle-preview' as const })
+              : Object.freeze({ view: 'primary' as const });
   return Object.freeze({
     kind: 'run',
     hydrated: source?.hydrated ?? false,
