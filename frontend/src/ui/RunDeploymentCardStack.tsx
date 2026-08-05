@@ -254,7 +254,9 @@ export function RunDeploymentCardStack({
     return scene.after(duration, onDiscardComplete);
   });
 
-  const visibleCount = deployment?.stage === 'dealing' ? dealProgress : remainingIds.length;
+  const visibleCount = deployment?.stage === 'awaiting-deal' || deployment?.stage === 'dealing'
+    ? dealProgress
+    : remainingIds.length;
   return (
     <>
       {deployment?.stage === 'dealing' ? (
