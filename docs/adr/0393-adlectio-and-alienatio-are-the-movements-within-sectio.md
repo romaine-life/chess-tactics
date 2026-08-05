@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-08-04
 deciders: owner (Nelson) + Codex
+partially_superseded_by:
+  - "[ADR-0432](0432-aliene-is-the-alienatio-action-verb.md)'s grammatical distinction between the operation noun and its player-facing action verb"
 partially_supersedes:
   - "[ADR-0230](0230-run-shops-separate-buying-army-inspection-and-selling.md)'s buying and selling terminology"
   - "[ADR-0387](0387-bought-cards-travel-into-a-title-reachable-chartulary.md)'s purchase terminology"

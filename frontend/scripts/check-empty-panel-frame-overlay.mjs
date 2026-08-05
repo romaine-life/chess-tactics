@@ -597,7 +597,10 @@ if (!/<KitScroll\s+className="house-select-menu-scroll"/.test(houseSelect)
   || !houseSelectScrollBlock.includes('--le-inner-divider-atom-left-overhang')
   || !houseSelectScrollBlock.includes('--le-inner-divider-atom-right-overhang')
   || !/padding-inline\s*:\s*var\(--house-select-clip-apron-left\) var\(--house-select-clip-apron-right\)/.test(houseSelectScrollContentBlock)
-  || !/right\s*:\s*calc\(3px \+ var\(--house-select-clip-apron-right\)\)/.test(houseSelectScrollRailBlock)
+  || !/bottom\s*:\s*0/.test(houseSelectScrollRailBlock)
+  || !/right\s*:\s*calc\(var\(--house-select-clip-apron-right\) - var\(--le-chrome-inner-rail-w, 7px\)\)/.test(houseSelectScrollRailBlock)
+  || !/top\s*:\s*0/.test(houseSelectScrollRailBlock)
+  || !/z-index\s*:\s*5/.test(houseSelectScrollRailBlock)
   || !/overflow-x\s*:\s*hidden/.test(houseSelectScrollContentBlock)
   || /overflow-x\s*:\s*(?:auto|scroll)/.test(houseSelectScrollContentBlock)
   || /--le-inner-atom-(?:left|right)-(?:overhang|footprint)/.test(houseSelectOptionBlock)) {
@@ -1021,10 +1024,16 @@ if (!/export function SkirmishShell[\s\S]*?<SkirmishHud \{\.\.\.hudProps\} contr
   || !/export function Skirmish\b[\s\S]*?<SkirmishStoreProvider>[\s\S]*?<SkirmishSession \{\.\.\.props\} \/>[\s\S]*?<\/SkirmishStoreProvider>/.test(skirmish)) {
   failures.push('Battle must render through one instance-owned Skirmish session and the one SkirmishShell that owns SkirmishHud');
 }
+const runMetaControlsStart = runScreen.indexOf('function RunMetaControls');
+const runMetaControlsEnd = runScreen.indexOf('\nfunction deploymentSquareLabel', runMetaControlsStart);
+const runMetaControls = runMetaControlsStart >= 0
+  ? runScreen.slice(runMetaControlsStart, runMetaControlsEnd >= 0 ? runMetaControlsEnd : undefined)
+  : '';
 if (!/const form = createRunForm\(\{[\s\S]*?titleBarContent:\s*shellRun\s*\?\s*\(?\s*<RunTitleBarStatus[\s\S]*?lipsanonIds: visibleLipsanonIds/.test(runScreen)
-  || !/form\.add\(runActivity\(\{[\s\S]*?controlsContent: shellRun \? \([\s\S]*?<RunMetaControls[\s\S]*?run=\{shellRun\}[\s\S]*?view=\{view\}[\s\S]*?onNavigate=\{navigateRunView\}[\s\S]*?showAbandon=\{shellRun\.phase !== 'victory'\}[\s\S]*?adlectioInFlight=\{adlectioBusy\}/.test(runScreen)
+  || !/form\.add\(runActivity\(\{[\s\S]*?controlsContent: shellRun \? \([\s\S]*?<RunMetaControls[\s\S]*?run=\{shellRun\}[\s\S]*?view=\{view\}[\s\S]*?onNavigate=\{navigateRunView\}[\s\S]*?showAbandon=\{shellRun\.phase !== 'victory'\}/.test(runScreen)
   || !/<SkirmishShell[\s\S]*?titleBarContent=\{form\.titleBarContent\}[\s\S]*?controlsContent=\{activity\.controlsContent\}/.test(runForm)
-  || !/function RunMetaControls[\s\S]*?<section[\s\S]*?className="run-meta-controls"[\s\S]*?aria-label="Run controls"[\s\S]*?inert=\{adlectioInFlight \? true : undefined\}/.test(runScreen)
+  || !/<section[\s\S]*?className="run-meta-controls"[\s\S]*?aria-label="Run controls"/.test(runMetaControls)
+  || /\binert=/.test(runMetaControls)
   || /function RunShell|function RunControlsRail|chromeConsumer="run-controls"|<SkirmishShell/.test(runScreen)) {
   failures.push('every Run phase must contribute controls to the one closed RunForm shell');
 }

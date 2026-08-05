@@ -72,6 +72,8 @@ describe('Level Editor chrome hierarchy', () => {
     expect(chromeBox).toContain('export function ChromeSurfaceFill');
     expect(chromeBox).toContain('data-chrome-fill-role={role}');
     expect(chromeBox).toContain('<ChromeSurfaceFill role="outer" className="le-outer-panel-fill" />');
+    expect(chromeBox).toContain('fillRole?: ChromeRole;');
+    expect(chromeBox).toContain('className="inner-chrome-box-fill"');
     expect(levelEditor).toContain('<ShellWorkspace');
     expect(levelEditor).toContain('bodyClassName="le-artwork-workspace-content"');
     expect(levelEditor).toMatch(/<ShellViewportSwap[\s\S]*?className="level-editor-viewport-swap"[\s\S]*?primaryClassName="skirmish-board-frame"[\s\S]*?workspaceOpen=\{eventsOpen \|\| Boolean\(levelArtworkWorkspace\)\}/);
@@ -273,6 +275,7 @@ describe('Level Editor chrome hierarchy', () => {
     expect(houseSelect).toContain("paintOverhang('--le-inner-atom-top-overhang')");
     expect(houseSelect).toContain("paintOverhang('--le-inner-atom-bottom-overhang')");
     expect(houseSelect).not.toContain('data-disabled=');
+    expect(styleCss).toMatch(/\.house-select-menu-scroll > \.kit-scroll-rail\s*\{[\s\S]*?bottom:\s*0;[\s\S]*?right:\s*calc\(var\(--house-select-clip-apron-right\) - var\(--le-chrome-inner-rail-w, 7px\)\);[\s\S]*?top:\s*0;[\s\S]*?z-index:\s*5;/);
     expect(styleCss).not.toMatch(/\.house-select[^\n{]*(?:disabled|data-disabled)[^\n{]*::after/);
   });
 

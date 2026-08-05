@@ -4,18 +4,30 @@ import {
   runCardDefinition,
   type RunArmyPieceType,
   type RunCardDefinition,
+  type RunDeploymentState,
   type RunDocument,
   type RunOwnedCard,
 } from '../run/model';
 import { updateAppSettings, useAppSettings } from '../settings/appSettings';
 import { RunCard } from './RunCard';
 import { RunCardBack, RUN_CARD_BACK_SLOT } from './RunCardBack';
-import { runCardMotionDurationMs } from './runCardFlightView';
+import { runCardFlightGeometry, runCardMotionDurationMs } from './runCardFlightView';
 import { useSceneEnteredAction } from './shell/SceneActivity';
 import { SceneContinuityPortal } from './shell/SceneContinuity';
 import { ChromeButton } from './shared/ChromeButton';
 import { Toggle } from './shared/Toggle';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
+
+export function deploymentCardIsDiscarding(
+  deployment: Pick<RunDeploymentState, 'stage' | 'activeCardIndex' | 'discardCursor'> | null | undefined,
+  absoluteIndex: number,
+  isActive: boolean,
+): boolean {
+  return deployment?.stage === 'discarding'
+    && (deployment.activeCardIndex > deployment.discardCursor
+      ? absoluteIndex < deployment.activeCardIndex
+      : isActive);
+}
 
 export function deploymentCardEmptyPieceIndices(
   pieces: readonly RunArmyPieceType[],
@@ -116,6 +128,7 @@ export function RunDeploymentDeckDeal({
       <div className="run-deployment-deal-actions">
         <ChromeButton
           unit="inner-text-button"
+          data-testid="deployment-deal"
           className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
           disabled={!awaiting || disabled}
           onClick={onBeginDeal}
@@ -170,6 +183,12 @@ export function RunDeploymentCardStack({
   const activeDefinition = activePresentation?.definition ?? null;
   const activeRevealed = Boolean(activeCardId && deployment?.revealedCardIds.includes(activeCardId));
   const undealtCardCount = Math.max(0, run.cards.length - (deployment?.dealtCardIds.length ?? 0));
+  const discardingIds = remainingIds.filter((_, index) => deploymentCardIsDiscarding(
+    deployment,
+    (deployment?.discardCursor ?? 0) + index,
+    remainingIds[index] === activeCardId,
+  ));
+  const discardKey = discardingIds.join(':');
 
   useSceneEnteredAction(`deployment-deal:${run.id}:${dealtKey}`, deployment?.stage === 'dealing', (scene) => {
     const root = rootRef.current;
@@ -289,11 +308,69 @@ export function RunDeploymentCardStack({
     return scene.after(duration, onRevealComplete);
   });
 
-  useSceneEnteredAction(`deployment-discard:${run.id}:${activeCardId ?? 'none'}`, deployment?.stage === 'discarding', (scene) => {
+  useSceneEnteredAction(`deployment-discard:${run.id}:${discardKey || 'none'}`, deployment?.stage === 'discarding', (scene) => {
     const root = rootRef.current;
-    if (!root) return undefined;
-    const duration = runCardMotionDurationMs(getComputedStyle(root).getPropertyValue('--ds-duration-transfer')) || 420;
-    return scene.after(duration, onDiscardComplete);
+    const target = document.querySelector<HTMLElement>('[data-run-card-flight-target]');
+    if (!root || !target || !discardingIds.length) return scene.nextFrame(onDiscardComplete);
+    const sources = discardingIds.map((cardId) => (
+      root.querySelector<HTMLElement>(`[data-deployment-stack-card="${CSS.escape(cardId)}"]`)
+    ));
+    const flights = discardingIds.map((cardId) => (
+      document.querySelector<HTMLElement>(`[data-deployment-discard-flight-card="${CSS.escape(cardId)}"]`)
+    ));
+    if (sources.some((source) => !source) || flights.some((flight) => !flight)) {
+      return scene.nextFrame(onDiscardComplete);
+    }
+    const style = getComputedStyle(root);
+    const duration = runCardMotionDurationMs(style.getPropertyValue('--deployment-discard-duration'))
+      ?? runCardMotionDurationMs(style.getPropertyValue('--ds-duration-transfer'))
+      ?? 560;
+    const stagger = runCardMotionDurationMs(style.getPropertyValue('--deployment-discard-stagger')) ?? 72;
+    const easing = style.getPropertyValue('--ds-ease-in-out').trim()
+      || style.getPropertyValue('--ds-ease-out').trim()
+      || 'ease-in-out';
+    const targetRect = target.getBoundingClientRect();
+    const animations: Animation[] = [];
+    let cancelled = false;
+    flights.forEach((flight, index) => {
+      const sourceRect = sources[index]!.getBoundingClientRect();
+      const geometry = runCardFlightGeometry(sourceRect, targetRect);
+      if (!flight || !geometry) return;
+      Object.assign(flight.style, {
+        left: `${geometry.from.left}px`,
+        top: `${geometry.from.top}px`,
+        width: `${geometry.from.width}px`,
+        height: `${geometry.from.height}px`,
+      });
+      const fan = (index - (flights.length - 1) / 2) * 4;
+      const animation = scene.animate(flight, [
+        { opacity: 1, transform: 'translate(0, 0) scale(1) rotate(0deg)' },
+        { opacity: 1, transform: `translate(${fan}px, -10px) scale(.98) rotate(${fan}deg)`, offset: 0.2 },
+        {
+          opacity: 1,
+          transform: `translate(${geometry.x}px, ${geometry.y}px) scale(${geometry.scale}) rotate(0deg)`,
+          offset: 0.9,
+        },
+        {
+          opacity: 0,
+          transform: `translate(${geometry.x}px, ${geometry.y}px) scale(${geometry.scale}) rotate(0deg)`,
+        },
+      ], {
+        duration,
+        delay: index * stagger,
+        easing,
+        fill: 'both',
+      });
+      if (animation) animations.push(animation);
+    });
+    if (animations.length !== discardingIds.length) {
+      animations.forEach((animation) => animation.cancel());
+      return scene.nextFrame(onDiscardComplete);
+    }
+    void Promise.allSettled(animations.map((animation) => animation.finished)).then(() => {
+      if (!cancelled) onDiscardComplete();
+    });
+    return () => { cancelled = true; };
   });
 
   const visibleCount = deployment?.stage === 'awaiting-deal' || deployment?.stage === 'dealing'
@@ -316,6 +393,38 @@ export function RunDeploymentCardStack({
           </div>
         </SceneContinuityPortal>
       ) : null}
+      {deployment?.stage === 'discarding' && discardingIds.length ? (
+        <SceneContinuityPortal contribution={{ kind: 'shared-element', id: `deployment-discard:${run.id}:${discardKey}` }}>
+          <div className="run-deployment-discard-flights">
+            {discardingIds.map((cardId) => {
+              const owned = cardById.get(cardId);
+              const identity = owned ? runCardDefinition(owned.coreId) ?? null : null;
+              const presentation = owned ? deploymentCardPresentation(run, owned, deployment.unitCursor) : null;
+              const faceUp = cardId === activeCardId && activeRevealed;
+              return (
+                <div
+                  className="run-deployment-discard-flight"
+                  data-deployment-discard-flight-card={cardId}
+                  key={cardId}
+                >
+                  {faceUp && owned && identity && presentation ? (
+                    <RunCard
+                      card={presentation.definition}
+                      identityCard={identity}
+                      mode="reference"
+                      cardType={owned.cardType}
+                      adlected
+                      emptyPieceIndices={presentation.emptyPieceIndices}
+                    />
+                  ) : (
+                    <RunCardBack mediaUrl={resolvedLiveMediaUrl(RUN_CARD_BACK_SLOT)} />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </SceneContinuityPortal>
+      ) : null}
       <section
         ref={rootRef}
         className="run-deployment-card-stack"
@@ -327,17 +436,19 @@ export function RunDeploymentCardStack({
         {remainingIds.map((cardId, index) => {
           const owned = cardById.get(cardId);
           const isActive = cardId === activeCardId;
+          const absoluteIndex = (deployment?.discardCursor ?? 0) + index;
+          const discarding = deploymentCardIsDiscarding(deployment, absoluteIndex, isActive);
           return (
             <div
               className={`run-deployment-stack-card${index < dealProgress ? ' is-dealt' : ''}${isActive ? ' is-active' : ''}${
                 isActive && activeRevealed ? ' is-revealed' : ''
               }${isActive && deployment?.stage === 'revealing' ? ' is-revealing' : ''}${
-                isActive && deployment?.stage === 'discarding' ? ' is-discarding' : ''
+                discarding ? ' is-discarding' : ''
               }`}
               data-deployment-stack-card={cardId}
               style={{
                 '--deployment-card-depth': index,
-                zIndex: remainingIds.length - index,
+                zIndex: isActive ? remainingIds.length + 1 : remainingIds.length - index,
               } as CSSProperties}
               key={cardId}
             >

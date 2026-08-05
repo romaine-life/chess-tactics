@@ -8,7 +8,7 @@ import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, 
 import { boardLabCellPosition, boardLabMetrics, immutableBoardLabTerrainSrc } from '../render/BoardLabBoard';
 import { projectBoardPoint, unprojectBoardPoint, type BoardTown, type BoardTownSection } from '@chess-tactics/board-render';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
-import { FloatingArtworkSprite, PropSprite, propHalfSrc } from '../render/BoardStructure';
+import { PropSprite, propHalfSrc } from '../render/BoardStructure';
 import { PROP_DEFS, defaultPropDef, propCells, propDef, type PropDef, type PropKind } from '../core/props';
 import {
   STRUCTURE_ART_ASSETS,
@@ -1295,17 +1295,6 @@ function StudioEditableBoard({
         />
       );
     }
-    if (artworkDrag) {
-      const source = placedFloatingArtwork.find((placement) => placement.id === artworkDrag.id);
-      if (source) {
-        const ghost = { ...source, ...artworkDrag.point };
-        overlaySprites.push(
-          <span key="artwork-drag-ghost" className="le-floating-artwork-ghost" aria-hidden="true">
-            <FloatingArtworkSprite placement={ghost} ghost />
-          </span>,
-        );
-      }
-    }
   }
 
   // Footprint hover preview for the prop brush: outline every cell the prop would occupy under the
@@ -1441,7 +1430,9 @@ function StudioEditableBoard({
     units: placedUnits,
     doodads: placedDoodads,
     props: placedProps,
-    floatingArtwork: placedFloatingArtwork.slice(),
+    floatingArtwork: placedFloatingArtwork.map((placement) => (
+      artworkDrag?.id === placement.id ? { ...placement, ...artworkDrag.point } : placement
+    )),
     cover: placedCover,
     coverTypes: placedCoverTypes,
     features: placedFeatures as EditorBoard['features'],
@@ -4407,8 +4398,8 @@ export function LevelEditor(): ReactElement {
     });
     if (!grown.length) return;
     const next = cloneEditorBoard(current);
-    // Scene art paints in array order with no board-derived depth, so the merged scene has to be
-    // re-sorted by ground contact or a new near tree would draw behind an older far one.
+    // Canonical rendering derives visible depth from ground contact. Keep the stored batch sorted
+    // as deterministic content and as a stable tie-breaker for identical contacts.
     next.floatingArtwork = sortFloatingArtworkByDepth([...existing, ...grown], forestGeometry);
     commitEditorBoard(next, null);
   };
@@ -4574,16 +4565,6 @@ export function LevelEditor(): ReactElement {
       spacing: TOWN_PLAN_DEFAULTS.spacing,
       fit: TOWN_PLAN_DEFAULTS.fit,
     });
-  };
-
-  /** Re-sort every piece of scene art into back-to-front paint order. */
-  const sortSceneArtByDepth = (): void => {
-    const current = currentEditorBoardRef.current;
-    const existing = current.floatingArtwork ?? [];
-    if (existing.length < 2) return;
-    const next = cloneEditorBoard(current);
-    next.floatingArtwork = sortFloatingArtworkByDepth(existing, forestGeometry);
-    commitEditorBoard(next, null);
   };
 
   const paintCell = (x: number, y: number): void => {
@@ -10504,11 +10485,6 @@ export function LevelEditor(): ReactElement {
             <div className="le-ctrlrow">
               <ChromeButton unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                onClick={sortSceneArtByDepth}
-                title="Re-order every piece of scene art back to front so nearer art overlaps farther art"
-              >Fix scene art overlap order</ChromeButton>
-              <ChromeButton unit="inner-text-button"
-                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                 onClick={resetForestParams}
               >Reset forest settings</ChromeButton>
             </div>
@@ -10597,7 +10573,7 @@ export function LevelEditor(): ReactElement {
                 </div>
               );
             })}
-            <p className="le-board-note">Click a source once to arm its free-placement brush; click it again to disarm. Facing controls the next placement and rotates the currently selected artwork. Place it anywhere in the scene with no tile, contact point, footprint, terrain rule, or collision. Select toggles image-bounds highlights for every selectable artwork and changes the current artwork; click Select again to clear selection mode and its outlines. Move drags only the current artwork, and Details keeps its exact pixel X/Y and scale controls.</p>
+            <p className="le-board-note">Click a source once to arm its free-placement brush; click it again to disarm. Facing controls the next placement and rotates the currently selected artwork. Place it anywhere in the scene with no tile, footprint, terrain rule, or collision; its installed ground anchor automatically resolves overlap with walls and other scene objects. Select toggles image-bounds highlights for every selectable artwork and changes the current artwork; click Select again to clear selection mode and its outlines. Move drags only the current artwork, and Details keeps its exact pixel X/Y and scale controls.</p>
           </section>
         ) : subterrainTool ? (
           <section className="skirmish-card le-brush-panel">

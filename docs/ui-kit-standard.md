@@ -156,10 +156,13 @@ visible-edge alignment, and the Chartulary shortcut is the measured endpoint
 for Sectio card transfers rather than a second deck icon or a hard-coded screen
 coordinate.
 
-Under [ADR-0388](adr/0388-remaining-shop-cards-settle-into-their-new-seats.md),
-removing an adlected card never permits the remaining card grid to snap. The shared
-row measures each survivor before and after the logical layout change, then settles
-it between those real rectangles on the live motion tokens while the Sectio stays inert.
+Under [ADR-0388](adr/0388-remaining-shop-cards-settle-into-their-new-seats.md) and
+[ADR-0431](adr/0431-sectio-transactions-never-wait-for-presentation.md), removing an
+adlected card never permits the remaining card grid to snap. The shared row measures each
+survivor before and after the logical layout change, then settles it between those real
+rectangles on the live motion tokens. The Sectio remains interactive throughout; a later
+Adlectio continues from the survivors' current visual rectangles while independent card
+flights play out in the continuity layer.
 
 Under [ADR-0389](adr/0389-the-title-route-names-the-visible-strategikon-address.md),
 the gameplay screen-name route retains the underlying Run phase and appends every
@@ -221,6 +224,15 @@ edge-attached content variant rather than authoring an end-padding exception.
 Destinations do not add an
 `OuterChromeBox`, outer-panel consumer, or duplicate title frame merely to
 acquire a background; subordinate controls remain registered inner chrome.
+
+Under [ADR-0433](adr/0433-leaf-chrome-uses-oak-over-structural-teal-fields.md),
+material also communicates the last level of that hierarchy. Cool teal/blue
+stone remains on structural fields that establish a region for subordinate
+units. Terminal controls and identity/status plates use the installed oak leaf
+surface. Dropdown triggers are leaves while their open popup bodies remain
+structural fields. Repeated leaf renderers carry a data-owned texture phase;
+they do not restart the surface per item, infer phase from `nth-child`, or move
+the fill to a parent whose gaps must remain transparent.
 
 Per [ADR-0386](adr/0386-shops-offer-read-only-intelligence-on-the-upcoming-battle.md),
 the Sectio's `/run?view=battle-preview` destination composes the canonical

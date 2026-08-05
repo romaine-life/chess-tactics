@@ -12,6 +12,7 @@ import {
   RUN_CARD_TEXT_PLACEMENT,
   runCardFrameGeometryForSlot,
   runCardFrameGeometryKnowsPixels,
+  runCardFramePaintInsetRatios,
   runCardCostSizeCqw,
   runCardFrameGeometryVariables,
   runCardFrameGeometryWithBoxes,
@@ -151,6 +152,22 @@ describe('Run card frame geometry', () => {
     expect(runCardFrameGeometryForSlot(null)).toBe(RUN_CARD_STANDARD_FRAME_GEOMETRY);
     expect(runCardFrameGeometryForSlot('ui/run/card-prototypes/not-a-frame.png'))
       .toBe(RUN_CARD_STANDARD_FRAME_GEOMETRY);
+  });
+
+  it('exposes the painted card keylines independently of transparent canvas', () => {
+    for (const variant of RUN_CARD_FRAME_VARIANTS) {
+      const geometry = RUN_CARD_FRAME_GEOMETRY_BY_VARIANT[variant];
+      const { paintBounds } = geometry;
+      expect(paintBounds.x).toBe(26);
+      expect(paintBounds.x + paintBounds.width).toBe(1035);
+      expect(paintBounds.y).toBe(variant === 'pestiferous' ? 43 : 42);
+      expect(paintBounds.y + paintBounds.height).toBe(variant === 'pestiferous' ? 1445 : 1444);
+      expect(runCardFramePaintInsetRatios(geometry)).toEqual({
+        blockStart: paintBounds.y / RUN_CARD_FRAME_NATIVE_WIDTH,
+        blockEnd: (RUN_CARD_FRAME_NATIVE_HEIGHT - paintBounds.y - paintBounds.height)
+          / RUN_CARD_FRAME_NATIVE_WIDTH,
+      });
+    }
   });
 
   it('carries owner-tuned boxes on the same frame identity', () => {

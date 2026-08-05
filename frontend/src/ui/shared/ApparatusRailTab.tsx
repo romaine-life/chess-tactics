@@ -2,6 +2,7 @@ import type { CSSProperties, HTMLAttributes, ReactElement, ReactNode } from 'rea
 import { chromeUnitClassNames } from '../chromeUnitRegistry';
 import { FittedTabLabel } from './FittedTabLabel';
 import { ChromeNavButton } from './ChromeButton';
+import { CHROME_LEAF_FILL_SURFACE } from './chromeSurfacePolicy';
 
 export interface ApparatusRailTabProps {
   label: string;
@@ -46,7 +47,7 @@ export interface ApparatusRailColumnProps extends HTMLAttributes<HTMLElement> {
  * The id is a CHROME_FILL_SURFACES entry; chromeFamilyRuntime emits the matching
  * `[data-chrome-tab-fill-surface="<id>"] .settings-tab` fill rule.
  */
-export const APPARATUS_RAIL_FILL_SURFACE = 'hybrid-wood-oak';
+export const APPARATUS_RAIL_FILL_SURFACE = CHROME_LEAF_FILL_SURFACE;
 
 /**
  * Canonical menu-language rail column. The component owns the fixed column

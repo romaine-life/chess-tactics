@@ -14,6 +14,7 @@ import {
 } from '../enchiridionRoute';
 import { isPlaySelectorPath } from '../playHubRoute';
 import { isRunRoutePath } from '../runRoute';
+import { runWorkspaceHref } from '../RunSelfInspection';
 import { isStrategikonPath, strategikonBase, strategikonRouteCrumbs } from '../strategikonRoute';
 import type { TitleRouteSegment } from './TitleRoute';
 
@@ -68,7 +69,7 @@ export function titleBarConfig(path: string, search = ''): TitleBarConfig | null
     const playStrategikon = isStrategikonPath(path) && strategikonBase(path) === '/play';
     return {
       screenName: run ? 'Run' : playRouteScreenName({ path: '/play', search }),
-      screenNameTo: run ? `/run${search}` : playStrategikon ? `/play${search}` : undefined,
+      screenNameTo: run ? runWorkspaceHref(`/run${search}`, 'primary') : playStrategikon ? `/play${search}` : undefined,
       routeSegments: playStrategikon
         ? strategikonRouteCrumbs(path).map((crumb) => ({ ...crumb, to: `${crumb.to}${search}` }))
         : undefined,

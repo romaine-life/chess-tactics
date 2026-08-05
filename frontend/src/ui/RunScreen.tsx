@@ -1,10 +1,11 @@
-import { Children, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { Children, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import type { RunBattleTransformSink, RunBattleUndoAdapter } from '../game/store';
 import { defaultFacingForSide, paletteForSide, pieceSpritePath } from '../core/pieces';
 import type { GameState, Piece } from '../core/types';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox } from './shared/ChromeBox';
 import { HouseSelect } from './shared/HouseSelect';
+import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
 import { TitleBarStatus } from './shell/TitleBarControls';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleRoute, type TitleRouteSegment } from './shell/TitleRoute';
@@ -95,9 +96,13 @@ import { LipsanonIcon, LipsanaWorkspace } from './Lipsana';
 import { RunBonaVacantia, RunBonaVacantiaTarget } from './RunBonaVacantia';
 import { RunGoldAmount } from './RunResources';
 import {
+  isSectioWorkspaceView,
+  RUN_WORKSPACE_VIEW_LABEL,
+  SECTIO_WORKSPACE_VIEWS,
   runArmyUnitHref,
   runBonaTargetHref,
   runWorkspaceHref,
+  runWorkspaceTitleSegment,
   type RunSelfInspectionView,
   type RunWorkspaceView,
 } from './RunSelfInspection';
@@ -121,7 +126,7 @@ import { runCardName } from '../run/cardNames';
 import {
   runCardMotionDurationMs,
   runCardReflowOffset,
-  useRunCardFlight,
+  useRunCardFlights,
   type RunCardFlightRect,
 } from './runCardFlightView';
 import { isStrategikonPath, strategikonRouteCrumbs } from './strategikonRoute';
@@ -183,22 +188,31 @@ function runPhaseRouteName(run: RunDocument): string {
 export function runTitleBarRouteSegments(
   run: RunDocument,
   path: string,
-  search = '',
+  search: string,
+  requestedView: RunScreenView,
 ): readonly TitleRouteSegment[] {
-  const segments: TitleRouteSegment[] = [{ label: runPhaseRouteName(run), to: `/run${search}` }];
+  const runRootHref = runWorkspaceHref(`/run${search}`, 'primary');
+  const segments: TitleRouteSegment[] = [{ label: runPhaseRouteName(run), to: runRootHref }];
   if (isStrategikonPath(path)) {
     segments.push(...strategikonRouteCrumbs(path).map((crumb) => ({
       ...crumb,
       to: `${crumb.to}${search}`,
     })));
+  } else {
+    const view = isSectioWorkspaceView(requestedView) && run.phase !== 'sectio'
+      ? 'primary'
+      : requestedView;
+    const workspaceSegment = runWorkspaceTitleSegment(`/run${search}`, view);
+    if (workspaceSegment) segments.push(workspaceSegment);
   }
   return segments;
 }
 
-function RunTitleBarStatus({ run, path, search }: {
+function RunTitleBarStatus({ run, path, search, view }: {
   run: RunDocument;
   path: string;
   search: string;
+  view: RunScreenView;
 }): ReactElement {
   const progress = runBattleProgress(run);
   const levelName = run.war.battles[run.battleIndex]?.level.name ?? 'Battle';
@@ -208,7 +222,7 @@ function RunTitleBarStatus({ run, path, search }: {
           visible workspace address — Sectio › Strategikon › Enchiridion › Cards —
           rather than leaving the covered phase as the last word in the route. */}
       <TitleBarSlot region="route">
-        <TitleRoute segments={runTitleBarRouteSegments(run, path, search)} />
+        <TitleRoute segments={runTitleBarRouteSegments(run, path, search, view)} />
       </TitleBarSlot>
       <div className="skirmish-topbar-status run-topbar-status">
         <RunIdentityChip
@@ -267,13 +281,11 @@ function RunMetaControls({
   view,
   onNavigate,
   showAbandon = true,
-  adlectioInFlight = false,
 }: {
   run: RunDocument;
   view: RunScreenView;
   onNavigate: (view: RunScreenView) => void;
   showAbandon?: boolean;
-  adlectioInFlight?: boolean;
 }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   const { abandonDialog, abandoning, requestAbandon } = useRunAbandon(run);
@@ -299,47 +311,34 @@ function RunMetaControls({
       <section
         className="run-meta-controls"
         aria-label="Run controls"
-        aria-busy={adlectioInFlight ? true : undefined}
-        inert={adlectioInFlight ? true : undefined}
       >
         <div className="skirmish-view-group">
           <span className="skirmish-eyebrow">{sectio ? 'Sectio views' : 'Run views'}</span>
           <div className="run-meta-navigation">
             <ChromeButton unit="inner-text-button"
+              data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
               data-testid="run-view-primary"
               className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'primary' && 'active')}
+              style={{ ['--run-leaf-control-index' as string]: 0 } as CSSProperties}
               aria-pressed={view === 'primary'}
               onClick={() => onNavigate('primary')}
             >
               {primaryLabel}
             </ChromeButton>
             {sectio ? (
-              <>
+              SECTIO_WORKSPACE_VIEWS.map((candidate, index) => (
                 <ChromeButton unit="inner-text-button"
-                  data-testid="run-view-battle-preview"
-                  className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'battle-preview' && 'active')}
-                  aria-pressed={view === 'battle-preview'}
-                  onClick={() => onNavigate('battle-preview')}
+                  key={candidate}
+                  data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                  data-testid={`run-view-${candidate}`}
+                  className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === candidate && 'active')}
+                  style={{ ['--run-leaf-control-index' as string]: index + 1 } as CSSProperties}
+                  aria-pressed={view === candidate}
+                  onClick={() => onNavigate(candidate)}
                 >
-                  View Battle
+                  {RUN_WORKSPACE_VIEW_LABEL[candidate]}
                 </ChromeButton>
-                <ChromeButton unit="inner-text-button"
-                  data-testid="run-view-alienatio"
-                  className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'alienatio' && 'active')}
-                  aria-pressed={view === 'alienatio'}
-                  onClick={() => onNavigate('alienatio')}
-                >
-                  Alienatio
-                </ChromeButton>
-                <ChromeButton unit="inner-text-button"
-                  data-testid="run-view-expunctio"
-                  className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'expunctio' && 'active')}
-                  aria-pressed={view === 'expunctio'}
-                  onClick={() => onNavigate('expunctio')}
-                >
-                  Expunctio
-                </ChromeButton>
-              </>
+              ))
             ) : null}
           </div>
         </div>
@@ -348,7 +347,9 @@ function RunMetaControls({
             <span className="skirmish-eyebrow">Sectio</span>
             <div className="run-meta-navigation">
               <ChromeButton unit="inner-text-button"
+                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+                style={{ ['--run-leaf-control-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 1 } as CSSProperties}
                 disabled={!sectioHasChanges(run)}
                 data-testid="reset-run-sectio"
                 onClick={() => {
@@ -359,7 +360,9 @@ function RunMetaControls({
                 Reset Sectio
               </ChromeButton>
               <ChromeButton unit="inner-text-button"
+                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+                style={{ ['--run-leaf-control-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 2 } as CSSProperties}
                 disabled={!canLeave}
                 data-testid="continue-run-sectio"
                 title={!canLeave && continueHint ? continueHint : undefined}
@@ -381,7 +384,9 @@ function RunMetaControls({
             <span className="skirmish-eyebrow">Run</span>
             <div className="skirmish-view-row">
               <ChromeButton unit="inner-text-button"
+                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'danger')}
+                style={{ ['--run-leaf-control-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 3 } as CSSProperties}
                 data-testid="abandon-run"
                 disabled={abandoning}
                 onClick={() => { void requestAbandon(); }}
@@ -431,9 +436,9 @@ function DeploymentControls({
 }): ReactElement {
   const { abandonDialog, abandoning, requestAbandon } = useRunAbandon(run);
   const transport = run.deployment?.transport ?? 'paused';
-  const transportReady = stage !== 'await-deal' && stage !== 'dealing' && stage !== 'ready';
+  const transportReady = stage !== 'dealing' && stage !== 'ready';
   const inputRequired = stage === 'adlected';
-  const nextReady = stage === 'place';
+  const nextReady = stage === 'await-deal' || stage === 'reveal-card' || stage === 'place';
   const abilities = activeUnit
     ? (['adlected', 'eutactic', 'agminate'] as const).filter((ability) => (
         ability === 'adlected'
@@ -583,6 +588,7 @@ function useRunDeploymentPresentation({
   const legalCellKeys = useMemo(() => new Set(legalCells.map((cell) => `${cell.x},${cell.y}`)), [legalCells]);
   const [hoveredCellKey, setHoveredCellKey] = useState<string | null>(null);
   const [dealProgress, setDealProgress] = useState(0);
+  const advanceOneAfterRevealRef = useRef(false);
   const hoveredPlacementCell = hoveredCellKey
     ? legalCells.find((cell) => `${cell.x},${cell.y}` === hoveredCellKey) ?? null
     : null;
@@ -610,7 +616,11 @@ function useRunDeploymentPresentation({
     if (departureActive) return;
     if (prepared.phase !== 'deployment') return;
     if (prepared.deployment?.stage === 'card') {
-      replace(revealActiveDeploymentCard(prepared));
+      if (prepared.deployment.transport === 'full-deploy') {
+        replace(advanceDeploymentTransport(prepared, level));
+      } else if (prepared.deployment.transport === 'playing') {
+        replace(revealActiveDeploymentCard(prepared));
+      }
       return;
     }
     if (stage === 'adlected' && prepared.deployment?.transport !== 'paused') {
@@ -629,6 +639,7 @@ function useRunDeploymentPresentation({
     if (departureActive) return;
     const latest = useActiveRun.getState().run;
     if (latest?.id === prepared.id && latest.phase === 'deployment') {
+      advanceOneAfterRevealRef.current = false;
       replace(beginDeploymentDeal(latest));
     }
   }, [departureActive, prepared.id, replace]);
@@ -636,20 +647,46 @@ function useRunDeploymentPresentation({
     if (departureActive) return;
     const latest = useActiveRun.getState().run;
     if (latest?.id === prepared.id && latest.phase === 'deployment') {
-      replace(completeDeploymentDeal(latest, level));
+      const completed = completeDeploymentDeal(latest, level);
+      if (advanceOneAfterRevealRef.current) {
+        replace(revealActiveDeploymentCard(completed));
+      } else if (completed.deployment?.transport === 'full-deploy') {
+        replace(advanceDeploymentTransport(completed, level));
+      } else {
+        replace(completed);
+      }
     }
   }, [departureActive, level, prepared.id, replace]);
   const setTransport = useCallback((transport: 'paused' | 'playing' | 'full-deploy') => {
     if (departureActive) return;
     const latest = useActiveRun.getState().run;
     if (latest?.id === prepared.id && latest.phase === 'deployment') {
-      replace(setDeploymentTransport(latest, transport));
+      advanceOneAfterRevealRef.current = false;
+      if (latest.deployment?.stage === 'awaiting-deal') {
+        replace(beginDeploymentDeal(latest, transport));
+        return;
+      }
+      const requested = setDeploymentTransport(latest, transport);
+      replace(transport === 'full-deploy'
+        ? advanceDeploymentTransport(requested, level)
+        : requested);
     }
-  }, [departureActive, prepared.id, replace]);
+  }, [departureActive, level, prepared.id, replace]);
   const advanceOne = useCallback(() => {
     if (departureActive) return;
     const latest = useActiveRun.getState().run;
     if (latest?.id !== prepared.id || latest.phase !== 'deployment') return;
+    const latestStage = deploymentInteractionStage(latest);
+    if (latestStage === 'await-deal') {
+      advanceOneAfterRevealRef.current = true;
+      replace(beginDeploymentDeal(latest));
+      return;
+    }
+    if (latestStage === 'reveal-card') {
+      advanceOneAfterRevealRef.current = true;
+      replace(revealActiveDeploymentCard(latest));
+      return;
+    }
     const paused = setDeploymentTransport(latest, 'paused');
     if (deploymentInteractionStage(paused) === 'place') {
       replace(placeRevealedDeploymentUnit(paused, level));
@@ -661,9 +698,16 @@ function useRunDeploymentPresentation({
     if (departureActive) return;
     const latest = useActiveRun.getState().run;
     if (latest?.id === prepared.id && latest.phase === 'deployment') {
-      replace(finishDeploymentCardReveal(latest));
+      let revealed = finishDeploymentCardReveal(latest);
+      if (advanceOneAfterRevealRef.current) {
+        advanceOneAfterRevealRef.current = false;
+        if (deploymentInteractionStage(revealed) === 'place') {
+          revealed = placeRevealedDeploymentUnit(revealed, level);
+        }
+      }
+      replace(revealed);
     }
-  }, [departureActive, prepared.id, replace]);
+  }, [departureActive, level, prepared.id, replace]);
   const finishDiscard = useCallback(() => {
     if (departureActive) return;
     const latest = useActiveRun.getState().run;
@@ -820,11 +864,9 @@ function LipsanonOffer({
 function SectioCardRow({
   children,
   offerIds,
-  onReflowingChange,
 }: {
   children: ReactNode;
   offerIds: string[];
-  onReflowingChange: (reflowing: boolean) => void;
 }): ReactElement {
   const sceneMotion = useSceneMotion();
   const wrap = useMemo(() => installedRunSectioWrap(), []);
@@ -896,7 +938,6 @@ function SectioCardRow({
     const finish = (): void => {
       if (cancelled) return;
       clearPresentation();
-      onReflowingChange(false);
     };
 
     animations = moving.map(({ element, offset }) => {
@@ -914,16 +955,24 @@ function SectioCardRow({
       clearPresentation();
       return undefined;
     }
-    onReflowingChange(true);
     void Promise.allSettled(animations.map((animation) => animation.finished)).then(finish);
 
     return () => {
       cancelled = true;
+      // A second Adlectio can change the row while this FLIP is mid-flight. Preserve
+      // each survivor's current visual rectangle so the replacement FLIP continues
+      // from the pixels the player just clicked beside instead of snapping to a stale
+      // logical seat before beginning again.
+      const interruptedRects = new Map<string, RunCardFlightRect>();
+      row.querySelectorAll<HTMLElement>('[data-run-sectio-offer-id]').forEach((element) => {
+        const id = element.dataset.runSectioOfferId;
+        if (id) interruptedRects.set(id, element.getBoundingClientRect());
+      });
+      if (interruptedRects.size) previousRectsRef.current = interruptedRects;
       animations.forEach((animation) => animation.cancel());
       clearPresentation();
-      onReflowingChange(false);
     };
-  }, [box.height, box.width, layoutKey, onReflowingChange, sceneMotion]);
+  }, [box.height, box.width, layoutKey, sceneMotion]);
 
   if (!wrap || wrap.kind !== 'band' || cardCount < 1) {
     return <div className="run-card-grid" ref={rowRef}>{children}</div>;
@@ -968,21 +1017,15 @@ function SectioPanel({
   view,
   alienatioWorkspace,
   expunctioWorkspace,
-  departingOfferId,
-  adlectioBusy,
   adlectioAnnouncement,
   onAdlect,
-  onCardReflowingChange,
 }: {
   run: RunDocument;
   view: RunScreenView;
   alienatioWorkspace: ReactElement;
   expunctioWorkspace: ReactElement;
-  departingOfferId: string | null;
-  adlectioBusy: boolean;
   adlectioAnnouncement: string;
   onAdlect: (offer: RunCardOffer, source: HTMLButtonElement) => void;
-  onCardReflowingChange: (reflowing: boolean) => void;
 }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   const sectio = run.sectio!;
@@ -1004,7 +1047,6 @@ function SectioPanel({
             contentClassName: 'run-sectio-workspace-content',
             testId: 'run-sectio-workspace',
             ariaLabel: 'Sectio',
-            inert: adlectioBusy,
           }}
         >
         {/* What the Battle paid is reported on the Battle's own aftermath screen, which the
@@ -1030,21 +1072,18 @@ function SectioPanel({
         <section
           className="run-sectio-cards-section"
           aria-label="Cards"
-          aria-busy={adlectioBusy ? true : undefined}
         >
           <span className="sr-only" role="status" aria-live="polite">{adlectioAnnouncement}</span>
           <SectioCardRow
             offerIds={availableOffers.map((offer) => offer.offerId)}
-            onReflowingChange={onCardReflowingChange}
           >
             {availableOffers.map((offer) => (
               <RunCard
                 card={offer}
                 mode="sectio"
-                departing={departingOfferId === offer.offerId}
                 layoutId={offer.offerId}
                 key={offer.offerId}
-                disabled={adlectioBusy || run.goldTenths < offer.cost * GOLD_SCALE}
+                disabled={run.goldTenths < offer.cost * GOLD_SCALE}
                 onSelect={(source) => onAdlect(offer, source)}
               />
             ))}
@@ -1414,31 +1453,7 @@ export function RunScreen({
   const hydrated = sceneSnapshot.hydrated;
   const replace = useActiveRun((state) => state.replace);
   const [adlectioAnnouncement, setAdlectioAnnouncement] = useState('');
-  const [cardReflowing, setCardReflowing] = useState(false);
-  const [landedAdlectioOfferId, setLandedAdlectioOfferId] = useState<string | null>(null);
-  const commitAdlectio = useCallback((offer: RunCardOffer): void => {
-    const latest = useActiveRun.getState().run;
-    if (!latest || latest.phase !== 'sectio' || !latest.sectio) return;
-    const adlected = performAdlectio(latest, offer.offerId);
-    if (adlected === latest) return;
-    // Keep the source seat visually owned by the transfer until the scene snapshot
-    // acknowledges its removal. Local flight state can settle one render earlier.
-    setLandedAdlectioOfferId(offer.offerId);
-    replace(adlected);
-    setAdlectioAnnouncement(`${runCardName(offer)} admitted by Adlectio and added to the Chartulary.`);
-  }, [replace]);
-  const { flight: cardFlight, launch: launchCardFlight, element: cardFlightElement } = useRunCardFlight(commitAdlectio);
-  const adlectioAcknowledged = Boolean(
-    landedAdlectioOfferId
-    && run?.phase === 'sectio'
-    && run.sectio?.adlectedCardOfferIds.includes(landedAdlectioOfferId),
-  );
-  useEffect(() => {
-    if (adlectioAcknowledged || (landedAdlectioOfferId && run?.phase !== 'sectio')) {
-      setLandedAdlectioOfferId(null);
-    }
-  }, [landedAdlectioOfferId, adlectioAcknowledged, run?.phase]);
-  const adlectioBusy = Boolean(cardFlight) || Boolean(landedAdlectioOfferId) || cardReflowing;
+  const { launch: launchCardFlight, element: cardFlightElement } = useRunCardFlights();
   // A craft address sets the account's Run to the state it names before the screen reads one,
   // every time it is opened, then lands here without its craft parameters (ADR-0354).
   const craft = useRunCraft(routePath, routeSearch);
@@ -1480,9 +1495,17 @@ export function RunScreen({
     ? sceneSnapshot.workspace
     : null;
   const beginAdlectio = (offer: RunCardOffer, source: HTMLButtonElement): void => {
-    if (adlectioBusy) return;
+    const latest = useActiveRun.getState().run;
+    if (!latest || latest.phase !== 'sectio' || !latest.sectio) return;
+    const adlected = performAdlectio(latest, offer.offerId);
+    if (adlected === latest) return;
     const target = document.querySelector('[data-run-card-flight-target]');
-    if (!launchCardFlight(offer, source, target)) commitAdlectio(offer);
+    launchCardFlight(offer, source, target);
+    // The animation explains a transaction; it never owns one. Commit immediately so
+    // every remaining affordable card and every Sectio control stays responsive while
+    // any number of independent visual flights finish in the continuity layer.
+    replace(adlected);
+    setAdlectioAnnouncement(`${runCardName(offer)} admitted by Adlectio and added to the Chartulary.`);
   };
   const selectedUnitId = sceneSnapshot.workspace.view === 'army'
     || sceneSnapshot.workspace.view === 'bona-target'
@@ -1513,12 +1536,12 @@ export function RunScreen({
     current.pathname = '/run';
     navigateApp(runBonaTargetHref(current.toString(), lipsanonId, unitId), { replace: true, scroll: false });
   };
-  const alienateUnit = (unitId: string): void => {
+  const alieneUnit = (unitId: string): void => {
     if (!shellRun) return;
     const latest = useActiveRun.getState().run;
     if (!latest || latest.id !== shellRun.id) return;
-    const alienated = performAlienatio(latest, unitId);
-    if (alienated !== latest) replace(alienated);
+    const aliened = performAlienatio(latest, unitId);
+    if (aliened !== latest) replace(aliened);
   };
   const expunctCard = (cardId: string): void => {
     if (!shellRun) return;
@@ -1535,7 +1558,7 @@ export function RunScreen({
       onFiltersChange={(filters) => setArmyFilterState({ scope: filterScope, filters })}
       onSelectUnit={(unitId) => navigateArmyUnit(unitId)}
       onBack={() => navigateArmyUnit(null)}
-      onAlienate={alienateUnit}
+      onAliene={alieneUnit}
     />
   ) : null;
   const lipsanaWorkspace = shellRun ? <LipsanaWorkspace lipsanonIds={shellRun.lipsana} /> : null;
@@ -1550,7 +1573,7 @@ export function RunScreen({
       run={shellRun}
       filters={alienatioFilters}
       onFiltersChange={(filters) => setAlienatioFilterState({ scope: filterScope, filters })}
-      onAlienate={alienateUnit}
+      onAliene={alieneUnit}
     />
   ) : null;
   const expunctioWorkspace = shellRun ? (
@@ -1665,11 +1688,8 @@ export function RunScreen({
                 view={view}
                 alienatioWorkspace={alienatioWorkspace!}
                 expunctioWorkspace={expunctioWorkspace!}
-                departingOfferId={cardFlight?.offer.offerId ?? landedAdlectioOfferId}
-                adlectioBusy={adlectioBusy}
                 adlectioAnnouncement={adlectioAnnouncement}
                 onAdlect={beginAdlectio}
-                onCardReflowingChange={setCardReflowing}
               />
             )
             // Explicit, because the branch below is an else-fallthrough: any phase without
@@ -1714,7 +1734,7 @@ export function RunScreen({
     routeSearch,
     strategikonOpen,
     titleBarContent: shellRun ? (
-      <RunTitleBarStatus run={shellRun} path={routePath} search={routeSearch} />
+      <RunTitleBarStatus run={shellRun} path={routePath} search={routeSearch} view={view} />
     ) : null,
     lipsanonIds: visibleLipsanonIds,
     inspectionWorkspace,
@@ -1742,7 +1762,6 @@ export function RunScreen({
               view={view}
               onNavigate={navigateRunView}
               showAbandon={shellRun.phase !== 'victory'}
-              adlectioInFlight={adlectioBusy}
             />
           ) : null,
           hudProps: { enableGlobalShortcuts: false },

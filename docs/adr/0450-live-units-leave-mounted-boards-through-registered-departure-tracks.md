@@ -5,14 +5,14 @@ deciders: owner (Nelson) + Codex
 refines:
   - "[ADR-0350](0350-run-deployment-promotes-the-mounted-battlefield-in-place.md)"
   - "[ADR-0351](0351-unit-arrival-choreography-follows-newly-visible-unit-identity.md)"
-  - "[ADR-0431](0431-deployment-position-rerolls-cost-one-before-battle-and-five-after.md)"
+  - "[ADR-0449](0449-deployment-position-rerolls-cost-one-before-battle-and-five-after.md)"
 ---
 
-# ADR-0432: Live units leave mounted boards through registered departure tracks
+# ADR-0450: Live units leave mounted boards through registered departure tracks
 
 ## Context
 
-ADR-0431 initially replaced the persisted formation as soon as the player bought a reroll. The
+ADR-0449 initially replaced the persisted formation as soon as the player bought a reroll. The
 mounted compositor correctly projected that new empty Deployment state, but the visible units
 therefore vanished in one frame. The model transition had a cost and a destination but no physical
 exit.
@@ -60,4 +60,4 @@ and make physical continuity depend on whichever screen initiated the transition
 
 - [Board render contract](../board-render-contract.md)
 - [Game concept](../game-concept.md)
-- [ADR-0431](0431-deployment-position-rerolls-cost-one-before-battle-and-five-after.md)
+- [ADR-0449](0449-deployment-position-rerolls-cost-one-before-battle-and-five-after.md)

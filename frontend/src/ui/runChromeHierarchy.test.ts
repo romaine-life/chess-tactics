@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 const runScreen = readFileSync(new URL('./RunScreen.tsx', import.meta.url), 'utf8');
 const runArmyWorkspace = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url), 'utf8');
 const runExpunctioWorkspace = readFileSync(new URL('./RunExpunctioWorkspace.tsx', import.meta.url), 'utf8');
+const runTitleBarChips = readFileSync(new URL('./RunTitleBarChips.tsx', import.meta.url), 'utf8');
 const app = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8');
 const enchiridionSource = readFileSync(new URL('./Enchiridion.tsx', import.meta.url), 'utf8');
 const sceneManifest = readFileSync(new URL('./shell/sceneManifest.ts', import.meta.url), 'utf8');
@@ -28,6 +29,8 @@ const runForm = readFileSync(new URL('./RunForm.tsx', import.meta.url), 'utf8');
 const skirmishBoard = readFileSync(new URL('../render/SkirmishBoard.tsx', import.meta.url), 'utf8');
 const skirmishHud = readFileSync(new URL('./SkirmishHud.tsx', import.meta.url), 'utf8');
 const chromeBox = readFileSync(new URL('./shared/ChromeBox.tsx', import.meta.url), 'utf8');
+const houseSelect = readFileSync(new URL('./shared/HouseSelect.tsx', import.meta.url), 'utf8');
+const chromeSurfacePolicy = readFileSync(new URL('./shared/chromeSurfacePolicy.ts', import.meta.url), 'utf8');
 const paintedSurfaceBoundary = readFileSync(new URL('./shell/PaintedSurfaceBoundary.tsx', import.meta.url), 'utf8');
 const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const gameStore = readFileSync(new URL('../game/store.ts', import.meta.url), 'utf8');
@@ -48,7 +51,7 @@ describe('Run chrome hierarchy', () => {
     expect(skirmish).toContain('return runForm.add(runActivity({');
     expect(skirmish).not.toContain('titleBarContent: ReactNode;');
     expect(runScreen).toContain('const form = createRunForm({');
-    expect(runScreen).toContain('<RunTitleBarStatus run={shellRun} path={routePath} search={routeSearch} />');
+    expect(runScreen).toContain('<RunTitleBarStatus run={shellRun} path={routePath} search={routeSearch} view={view} />');
     expect(skirmish).toMatch(/export function Skirmish\b[\s\S]*?<SkirmishStoreProvider>/);
     expect(skirmishShell).toContain('<SceneSurfaceReadiness');
     expect(skirmishShell).toContain('surface="gameplay-hud"');
@@ -56,15 +59,12 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).not.toContain('<SkirmishShell');
     expect(runScreen).toContain('readyToCompose: hydrated');
     expect(runScreen).not.toContain("classList.add('skirmish-active')");
-    expect(runScreen).toMatch(/<RunMetaControls[\s\S]*?run=\{shellRun\}[\s\S]*?onNavigate=\{navigateRunView\}[\s\S]*?adlectioInFlight=\{adlectioBusy\}/);
-    expect(metaControls).toContain('inert={adlectioInFlight ? true : undefined}');
-    expect(metaControls).not.toContain('disabled={adlectioInFlight}');
-    expect(metaControls).not.toContain('disabled={abandoning || adlectioInFlight}');
-    expect(metaControls).toContain('Alienatio');
-    expect(metaControls).toContain('Expunctio');
-    expect(metaControls).toContain('data-testid="run-view-expunctio"');
-    expect(metaControls).toContain('View Battle');
-    expect(metaControls).toContain('data-testid="run-view-battle-preview"');
+    expect(runScreen).toMatch(/<RunMetaControls[\s\S]*?run=\{shellRun\}[\s\S]*?onNavigate=\{navigateRunView\}/);
+    expect(metaControls).not.toContain('inert=');
+    expect(metaControls).not.toContain('adlectioInFlight');
+    expect(metaControls).toContain('SECTIO_WORKSPACE_VIEWS.map');
+    expect(metaControls).toContain('RUN_WORKSPACE_VIEW_LABEL[candidate]');
+    expect(metaControls).toContain('data-testid={`run-view-${candidate}`}');
     // The Run rail no longer carries Army/Lipsana: the Strategikon is Run-wide (ADR-0335)
     // and its Prosopography/Lipsanotheca render the same RunArmyWorkspace and held-lipsanon
     // codex, so a second entry point to them was a duplicate. The battle HUD keeps its own.
@@ -217,7 +217,7 @@ describe('Run chrome hierarchy', () => {
 
   it('uses the gold transaction cue and transfers adlected cards into the Chartulary', () => {
     expect(runCard).toContain('data-ui-sfx="gold"');
-    expect(runScreen).toContain('useRunCardFlight(commitAdlectio)');
+    expect(runScreen).toContain('useRunCardFlights()');
     expect(runScreen).toContain("document.querySelector('[data-run-card-flight-target]')");
     expect(runScreen).toContain('sectio.cardOffers.filter((offer) => !sectio.adlectedCardOfferIds.includes(offer.offerId))');
     expect(runScreen).toContain('admitted by Adlectio and added to the Chartulary.');
@@ -289,6 +289,22 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).not.toContain('DraftPanel');
     expect(runScreen).not.toContain("phase === 'draft'");
     expect(runCard).not.toContain("'draft'");
+    expect(runExpunctioWorkspace).toContain('edgeAttached: true');
+    expect(runExpunctioWorkspace).toContain('<KitScroll className="run-sectio-operation-list-scroll">');
+    expect(runExpunctioWorkspace).toContain("if (status === 'available') return 'Athetize';");
+    expect(runExpunctioWorkspace).toContain("if (status === 'expuncted') return 'Athetized this visit';");
+    expect(runExpunctioWorkspace).not.toContain("return 'Expunctio';");
+    expect(runExpunctioWorkspace).toContain('className="run-expunctio-companion"');
+    expect(runExpunctioWorkspace).toContain('runCardFramePaintInsetRatios');
+    expect(runExpunctioWorkspace).toContain('fillRole="outer"');
+    expect(runExpunctioWorkspace).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
+    expect(runExpunctioWorkspace).not.toContain('runCardName');
+    expect(styleCss).not.toContain('.run-expunctio-row:is(.is-expuncted, .is-spent, .is-unavailable, .is-unaffordable)');
+    expect(styleCss).toMatch(/\.run-expunctio-workspace \.run-sectio-operation-list-scroll > \.kit-scroll-content\s*\{[\s\S]*?padding-inline-start:\s*var\(--ds-space-1\)/);
+    expect(styleCss).toMatch(/\.run-expunctio-list\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
+    expect(styleCss).toMatch(/\.run-expunctio-companion\s*\{[\s\S]*?block-size:\s*calc\(var\(--run-expunctio-card-inline-size\) \* 7 \/ 5\);[\s\S]*?padding-block:\s*var\(--run-expunctio-card-paint-start-inset\) var\(--run-expunctio-card-paint-end-inset\);/);
+    expect(styleCss).toMatch(/\.inner-chrome-box > \.inner-chrome-box-fill\s*\{[\s\S]*?inset:\s*0;/);
+    expect(styleCss).toMatch(/\.run-expunctio-copy > :first-child\s*\{[\s\S]*?translate:\s*0 -\.34em;/);
     expect(skirmish).toContain("testId: runDeployment ? 'run-deployment' : 'skirmish'");
     expect(skirmish).toContain("className: 'skirmish-war-room'");
     expect(skirmish).toContain("primaryClassName: 'skirmish-field'");
@@ -311,16 +327,24 @@ describe('Run chrome hierarchy', () => {
     expect(runDeploymentCardStack).not.toContain('SkirmishBoard');
     expect(runDeploymentCardStack).toContain('Deal automatically');
     expect(runDeploymentCardStack).toContain('data-deployment-center-deck');
+    expect(runDeploymentCardStack).toContain('data-testid="deployment-deal"');
     expect(runDeploymentCardStack).toContain("deployment?.stage === 'awaiting-deal' || deployment?.stage === 'dealing'");
+    expect(runDeploymentCardStack).toContain('data-deployment-discard-flight-card');
+    expect(runDeploymentCardStack).toContain('runCardFlightGeometry(sourceRect, targetRect)');
+    expect(runDeploymentCardStack).toContain('Promise.allSettled(animations.map((animation) => animation.finished))');
     expect(runDeploymentCardStack).toContain('emptyPieceIndices={activePresentation?.emptyPieceIndices ?? []}');
     expect(runDeploymentCardStack).not.toContain('owned.unitSeats.slice(');
     expect(styleCss).toMatch(/\.run-deployment-stack-card\.is-active\.is-revealed > \.run-deployment-stack-side\.is-back\s*\{[\s\S]*?transform:\s*rotateY\(-180deg\)/);
     expect(styleCss).toMatch(/\.run-deployment-stack-card\.is-active\.is-revealed > \.run-deployment-stack-side\.is-front\s*\{[\s\S]*?transform:\s*rotateY\(0deg\)/);
     expect(styleCss).not.toMatch(/\.run-deployment-stack-card\.is-active\.is-revealed\s*\{[\s\S]*?transform:\s*rotateY/);
+    expect(styleCss).not.toContain('@keyframes run-deployment-card-discard');
     expect(runScreen).toContain('Full deploy');
     expect(runScreen).toContain('data-testid="deployment-next"');
     expect(runScreen).toContain("onSetTransport('playing')");
     expect(runScreen).toContain("onSetTransport('paused')");
+    expect(runScreen).toContain("latest.deployment?.stage === 'awaiting-deal'");
+    expect(runScreen).toContain('beginDeploymentDeal(latest, transport)');
+    expect(runScreen).toContain("stage === 'await-deal' || stage === 'reveal-card' || stage === 'place'");
     expect(runScreen).not.toContain('Place {activeUnit.type');
     expect(runScreen).toContain("setDeploymentTransport(latest, transport)");
     expect(runScreen).toContain("placeRevealedDeploymentUnit(paused, level)");
@@ -346,9 +370,10 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).not.toContain('onBeginBattle');
     // The phase is the title bar's first clickable ROUTE segment (Run › Sectio),
     // and an open Strategikon appends its exact canonical section/reference links.
-    expect(runScreen).toContain('<TitleRoute segments={runTitleBarRouteSegments(run, path, search)} />');
+    expect(runScreen).toContain('<TitleRoute segments={runTitleBarRouteSegments(run, path, search, view)} />');
+    expect(runScreen).toContain('runWorkspaceTitleSegment(`/run${search}`, view)');
     expect(runScreen).toContain('strategikonRouteCrumbs(path).map');
-    expect(runScreen).toContain('<RunTitleBarStatus run={shellRun} path={routePath} search={routeSearch} />');
+    expect(runScreen).toContain('<RunTitleBarStatus run={shellRun} path={routePath} search={routeSearch} view={view} />');
     // Address-only Play breadcrumbs are App-owned, so they remain present even
     // while the replaceable battlefield scene is not yet active.
     expect(skirmish).not.toContain('<TitleBarSlot region="route">');
@@ -359,6 +384,74 @@ describe('Run chrome hierarchy', () => {
     expect(styleCss).toContain('.run-deployment-board');
     expect(styleCss).toContain('.skirmish-board-cell-hit.is-threat::before');
     expect(styleCss).not.toContain('.run-deployment-cell.is-deployment-blocked:hover::before');
+  });
+
+  it('keeps Sectio operation lists on the canonical drawn scrollbar', () => {
+    const operationListRule = styleCss.match(/\.run-sectio-operation-list\s*\{([^}]*)\}/)?.[1] ?? '';
+
+    expect(runArmyWorkspace).toContain('<KitScroll className="run-sectio-operation-list-scroll">');
+    expect(runExpunctioWorkspace).toContain('<KitScroll className="run-sectio-operation-list-scroll">');
+    expect(runArmyWorkspace).toContain('className="run-sectio-operation-list run-alienatio-list"');
+    expect(runExpunctioWorkspace).toContain('className="run-sectio-operation-list run-expunctio-list"');
+    expect(runArmyWorkspace).toContain('data-chrome-fill-surface="baseline-stone-blue"');
+    expect(runExpunctioWorkspace).toContain('fillRole="outer"');
+    expect(runArmyWorkspace).toContain("['--run-operation-row-index' as string]: index");
+    expect(runExpunctioWorkspace).toContain("['--run-operation-row-index' as string]: index");
+    expect(styleCss).toMatch(/\.run-alienatio-row\s*\{[\s\S]*?--chrome-surface-position-y:\s*calc\(var\(--run-operation-row-index, 0\)/);
+    expect(styleCss).toMatch(/\.run-expunctio-row\s*\{[\s\S]*?--chrome-surface-position-y:\s*calc\(var\(--run-operation-row-index, 0\)/);
+    expect(styleCss).toMatch(/\.run-alienatio-row\s*\{[^}]*--run-operation-surface-pitch:\s*calc\(112px \+ var\(--ds-inline-tight\)\);[^}]*block-size:\s*112px;/s);
+    expect(styleCss).toMatch(/\.run-expunctio-row\s*\{[\s\S]*?--run-operation-surface-pitch:\s*calc\([\s\S]*?var\(--run-expunctio-card-inline-size\) \* 7 \/ 5[\s\S]*?var\(--ds-stack\)[\s\S]*?\);/);
+    expect(styleCss).toMatch(/@media \(max-width: 960px\)[\s\S]*?\.run-alienatio-row\s*\{[^}]*--run-operation-surface-pitch:\s*calc\(224px \+ var\(--ds-inline-tight\)\);[^}]*block-size:\s*224px;/s);
+    expect(styleCss).toMatch(/\.run-sectio-operation-list-scroll\s*\{[^}]*--run-operation-clip-apron-block-start:\s*var\(--le-inner-atom-top-overhang, 0px\);[^}]*--run-operation-clip-apron-block-end:\s*var\(--le-inner-atom-bottom-overhang, 0px\);/s);
+    expect(styleCss).toMatch(/\.run-sectio-operation-list-scroll > \.kit-scroll-rail\s*\{[^}]*bottom:\s*var\(--run-operation-clip-apron-block-end\);[^}]*top:\s*var\(--run-operation-clip-apron-block-start\);/s);
+    expect(operationListRule).toMatch(/overflow-block:\s*clip/);
+    expect(operationListRule).toMatch(/overflow-inline:\s*visible/);
+    expect(operationListRule).toMatch(/padding-block:\s*var\(--run-operation-clip-apron-block-start\)\s*var\(--run-operation-clip-apron-block-end\)/);
+    expect(operationListRule).not.toMatch(/overflow(?:-[xy])?:\s*(?:auto|scroll)/);
+    expect(styleCss).not.toMatch(/\.run-(?:alienatio|expunctio)-row:nth-child/);
+    expect(styleCss).not.toMatch(/\.run-alienatio-row(?:\.is-aliened|:is\([^}]+\))\s*\{[^}]*opacity:/);
+    expect(styleCss).not.toMatch(/\.run-expunctio-row:is\([^}]+\)\s*\{[^}]*opacity:/);
+  });
+
+  it('reserves structural teal for containers and paints Run leaf chrome with data-phased oak', () => {
+    const metaControls = runScreen.match(
+      /function RunMetaControls\b[\s\S]*?\r?\n}\r?\n\r?\nfunction deploymentSquareLabel/,
+    )?.[0] ?? '';
+
+    expect(chromeSurfacePolicy).toContain("export const CHROME_LEAF_FILL_SURFACE = 'hybrid-wood-oak'");
+    expect(houseSelect).toContain('fillSurface?: string;');
+    expect(houseSelect).toContain('data-chrome-fill-surface={fillSurface}');
+    expect((runArmyWorkspace.match(/fillSurface=\{CHROME_LEAF_FILL_SURFACE\}/g) ?? [])).toHaveLength(4);
+    expect(runArmyWorkspace).toContain("['--run-roster-filter-index' as string]: 3");
+    expect(styleCss).toMatch(/\.run-roster-filters \.house-select\s*\{[\s\S]*?--chrome-surface-position-y:\s*calc\(var\(--run-roster-filter-index, 0\)/);
+
+    expect(metaControls).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
+    expect(metaControls).toContain('SECTIO_WORKSPACE_VIEWS.map((candidate, index) =>');
+    expect(metaControls).toContain("['--run-leaf-control-index' as string]: index + 1");
+    expect(metaControls).toContain("['--run-leaf-control-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 3");
+    expect(styleCss).toMatch(/\.run-meta-controls \[data-chrome-fill-surface\]\s*\{[\s\S]*?--chrome-surface-position-y:\s*calc\(var\(--run-leaf-control-index, 0\)/);
+
+    expect(runArmyWorkspace).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
+    expect(runExpunctioWorkspace).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
+    expect(runTitleBarChips).toMatch(/<TitleBarStatus[\s\S]*?data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}/);
+    expect(runArmyWorkspace).toContain('data-chrome-fill-surface="baseline-stone-blue"');
+    expect(runExpunctioWorkspace).toContain('fillRole="outer"');
+    expect(styleCss).not.toMatch(/\.run-(?:roster-filters|meta-controls)[^}]*:nth-child/);
+  });
+
+  it('uses Alienatio as the operation noun and Aliene as its action verb', () => {
+    expect(runArmyWorkspace).toContain('<h2 id="run-alienatio-workspace-title">Alienatio</h2>');
+    expect(runArmyWorkspace).toContain("status === 'alienable' ? 'Aliene'");
+    expect(runArmyWorkspace).toContain("status === 'aliened' ? 'Aliened this visit'");
+    expect(runArmyWorkspace).toContain("{ value: 'aliened', label: 'Aliened this visit' }");
+    expect(runArmyWorkspace).toContain("? 'Aliened during this Sectio visit. Reset Sectio to restore this unit.'");
+    expect(runArmyWorkspace).toContain("<span>{unit.type === 'king' ? 'Retained' : 'Aliene'}</span>");
+    expect(runArmyWorkspace).not.toContain("status === 'alienable' ? 'Alienatio'");
+    expect(runArmyWorkspace).not.toContain('Alienated this visit');
+    expect(runArmyWorkspace).not.toContain('onAlienate');
+    expect(runScreen).toContain('const alieneUnit = (unitId: string): void => {');
+    expect(runScreen).toContain('onAliene={alieneUnit}');
+    expect(styleCss).toContain('.run-alienatio-row:is(.is-aliened, .is-retained) > *');
   });
 
   it('previews the upcoming Sectio Battle through the canonical read-only board and Level ledger', () => {

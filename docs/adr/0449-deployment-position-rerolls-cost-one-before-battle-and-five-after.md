@@ -9,10 +9,10 @@ refines:
   - "[ADR-0422](0422-deployment-deals-a-visible-deck-before-transport-begins.md)"
   - "[ADR-0424](0424-run-battle-retry-costs-three-gold.md)"
 refined_by:
-  - "[ADR-0432](0432-live-units-leave-mounted-boards-through-registered-departure-tracks.md)"
+  - "[ADR-0450](0450-live-units-leave-mounted-boards-through-registered-departure-tracks.md)"
 ---
 
-# ADR-0431: Deployment position rerolls cost one before Battle and five after
+# ADR-0449: Deployment position rerolls cost one before Battle and five after
 
 ## Context
 

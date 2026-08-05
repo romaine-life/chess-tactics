@@ -13,7 +13,7 @@ import {
 import { roadEdgeKey } from '../core/featureAutotile';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { fenceOverlayZIndex, wallArtOverlayZIndex, wallOverlayZIndex } from './fenceOverlayDepth';
-import { CELL_DEPTH_STRIDE, fencePostZIndex, objectBaseZIndex, structureBackZIndex } from './sceneDepth';
+import { CELL_DEPTH_STRIDE, fencePostZIndex, objectBaseZIndex, projectedSceneObjectZBracket, structureBackZIndex } from './sceneDepth';
 import type { EditorBoard } from '../ui/boardCode';
 import { applyLiveUnitCatalog, resetLiveUnitCatalog } from '../ui/unitCatalog';
 import { testLiveUnitCatalog } from '../test/liveUnitCatalog';
@@ -627,9 +627,17 @@ describe('uniqueDrawSrcs — dedup so each image decodes once', () => {
         dy: -75.5,
         dw: 336,
         dh: 525,
-        z: 1_000_000,
       });
-      expect(ops[1]).toMatchObject({ ...ops[0], src: expectedFront, z: 1_000_001 });
+      const depth = projectedSceneObjectZBracket(-75.5 + 255 * 1.75);
+      expect(ops[0].z).toBeCloseTo(depth.back);
+      expect(ops[1]).toMatchObject({
+        src: expectedFront,
+        dx: 153,
+        dy: -75.5,
+        dw: 336,
+        dh: 525,
+      });
+      expect(ops[1].z).toBeCloseTo(depth.front);
       expect(board.floatingArtwork?.[0]).toEqual(placement);
     } finally {
       applyTestDrawableCatalog();
@@ -755,8 +763,10 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     const ops = boardDrawOps(board);
     const back = ops.find((op) => op.src === structureArtHalfSrc('oak', 'back'));
     const front = ops.find((op) => op.src === structureArtHalfSrc('oak', 'front'));
-    expect(back).toMatchObject({ dx: -24, dy: -145, dw: 288, dh: 450, z: 1_000_000 });
-    expect(front?.z).toBe(1_000_001);
+    expect(back).toMatchObject({ dx: -24, dy: -145, dw: 288, dh: 450 });
+    const depth = projectedSceneObjectZBracket(-145 + 255 * 1.5);
+    expect(back?.z).toBeCloseTo(depth.back);
+    expect(front?.z).toBeCloseTo(depth.front);
 
     const baked: EditorBoard = {
       ...board,
@@ -765,6 +775,43 @@ describe('boardDrawOps — z-order matches the live DOM bands', () => {
     const bakedOps = boardDrawOps(baked);
     expect(bakedOps).toHaveLength(1);
     expect(bakedOps[0].src).toBe('/assets/predrawn/test-board');
+  });
+
+  it('interleaves free-pixel Scene Art with a nearer wall from its installed ground contact', () => {
+    const wallEdge = roadEdgeKey(0, 0, -1, 0);
+    const behindWall: EditorBoard = {
+      ...blank(4, 4),
+      walls: { [wallEdge]: 'stone' },
+      floatingArtwork: [{
+        id: 'art-behind-wall',
+        sourceArtId: 'oak',
+        pixelX: 0,
+        // Oak is 192×300 with anchorY 255. This centers its ground contact at scene Y -24,
+        // one projected cell-depth band behind the wall owner at 0,0.
+        pixelY: -129,
+        direction: 'south',
+        scale: 1,
+      }],
+    };
+    const behindOps = boardDrawOps(behindWall);
+    const wall = behindOps.find((op) => op.src === wallFrameSrc('stone', 8));
+    const art = behindOps.filter((op) => (
+      op.src === structureArtHalfSrc('oak', 'back') || op.src === structureArtHalfSrc('oak', 'front')
+    ));
+
+    expect(wall).toBeDefined();
+    expect(art).toHaveLength(2);
+    expect(Math.max(...art.map((op) => op.z))).toBeLessThan(wall!.z);
+
+    const inFrontOps = boardDrawOps({
+      ...behindWall,
+      floatingArtwork: [{ ...behindWall.floatingArtwork![0], pixelY: -81 }],
+    });
+    const frontWall = inFrontOps.find((op) => op.src === wallFrameSrc('stone', 8));
+    const frontArt = inFrontOps.filter((op) => (
+      op.src === structureArtHalfSrc('oak', 'back') || op.src === structureArtHalfSrc('oak', 'front')
+    ));
+    expect(Math.min(...frontArt.map((op) => op.z))).toBeGreaterThan(frontWall!.z);
   });
 
   it('replaces every covered 1x1 top with one macrotile below feature overlays', () => {

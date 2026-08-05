@@ -173,7 +173,7 @@ describe('deployment card deal', () => {
     expect(Object.keys(finished.deployment?.placements ?? {})).toEqual(['king', 'a', 'b']);
   });
 
-  it('requires Deal before the face-down partition and transport', () => {
+  it('keeps the face-down partition paused after an ordinary Deal', () => {
     const level = deploymentLevel();
     const run = orderedRun(level, [unit('king', 'king'), unit('pawn', 'pawn')]);
     expect(deploymentInteractionStage(run)).toBe('await-deal');
@@ -182,6 +182,18 @@ describe('deployment card deal', () => {
     expect(deploymentInteractionStage(dealing)).toBe('dealing');
     const dealt = completeDeploymentDeal(dealing, level);
     expect(dealt.deployment?.transport).toBe('paused');
+    expect(deploymentInteractionStage(dealt)).toBe('reveal-card');
+    expect(advanceDeploymentTransport(dealt, level)).toBe(dealt);
+    expect(dealt.deployment?.revealedCardIds).toEqual([]);
+  });
+
+  it.each(['playing', 'full-deploy'] as const)('carries a pre-deal %s intent through Deal', (transport) => {
+    const level = deploymentLevel();
+    const run = orderedRun(level, [unit('king', 'king'), unit('pawn', 'pawn')]);
+    const dealing = beginDeploymentDeal(run, transport);
+    expect(dealing.deployment?.transport).toBe(transport);
+    const dealt = completeDeploymentDeal(dealing, level);
+    expect(dealt.deployment?.transport).toBe(transport);
     expect(deploymentInteractionStage(dealt)).toBe('reveal-card');
   });
 });
@@ -209,7 +221,37 @@ describe('card reveal, placement, and discard boundaries', () => {
     expect(deploymentInteractionStage(run)).toBe('reveal-card');
   });
 
-  it('deploy-all still pauses for an Adlected choice', () => {
+  it('full deploy commits every remaining automatic card as one arrival wave, then discards the stack', () => {
+    const level = deploymentLevel();
+    const run = orderedRun(
+      level,
+      [unit('king', 'king'), unit('pawn', 'pawn'), unit('rook', 'rook')],
+      17,
+      [['king'], ['pawn'], ['rook']],
+    );
+    const dealt = completeDeploymentDeal(beginDeploymentDeal(run, 'full-deploy'), level);
+    const fast = advanceDeploymentTransport(dealt, level);
+
+    expect(deploymentInteractionStage(fast)).toBe('settling');
+    expect(fast.deployment?.settlingUnitIds).toHaveLength(3);
+    expect(fast.deployment?.settlingUnitIds).toEqual(expect.arrayContaining(['king', 'pawn', 'rook']));
+    expect(fast.deployment?.placements).toEqual(expect.objectContaining({
+      king: expect.any(String),
+      pawn: expect.any(String),
+      rook: expect.any(String),
+    }));
+    expect(fast.deployment?.activeCardIndex).toBe(fast.deployment?.dealtCardIds.length);
+    expect(fast.deployment?.discardCursor).toBe(0);
+    expect(fast.deployment?.revealedCardIds).toEqual([]);
+
+    const landed = finishDeploymentUnitSettlement(fast, level);
+    expect(deploymentInteractionStage(landed)).toBe('discarding');
+    const battle = finishDeploymentCardDiscard(landed);
+    expect(battle.phase).toBe('battle');
+    expect(battle.deployment?.discardCursor).toBe(battle.deployment?.dealtCardIds.length);
+  });
+
+  it('full deploy pauses at Adlected only after the preceding automatic wave settles and discards', () => {
     const level = deploymentLevel();
     const run = orderedRun(
       level,
@@ -217,14 +259,17 @@ describe('card reveal, placement, and discard boundaries', () => {
       17,
       [['king'], ['pawn', 'rook']],
     );
-    let fast = setDeploymentTransport(completeDeploymentDeal(beginDeploymentDeal(run), level), 'full-deploy');
-    fast = revealActiveDeploymentCard(fast);
-    fast = finishDeploymentCardReveal(fast);
-    fast = placeRevealedDeploymentUnit(fast, level);
+    const dealt = completeDeploymentDeal(beginDeploymentDeal(run), level);
+    let fast = advanceDeploymentTransport(setDeploymentTransport(dealt, 'full-deploy'), level);
+    expect(deploymentInteractionStage(fast)).toBe('settling');
+    expect(fast.deployment?.settlingUnitIds).toEqual(['king']);
+    expect(fast.deployment?.activeCardIndex).toBe(1);
+    expect(fast.deployment?.revealedCardIds).toEqual(['card-1']);
+    expect(fast.deployment?.transport).toBe('paused');
+
     fast = finishDeploymentUnitSettlement(fast, level);
+    expect(deploymentInteractionStage(fast)).toBe('discarding');
     fast = finishDeploymentCardDiscard(fast);
-    fast = revealActiveDeploymentCard(fast);
-    fast = finishDeploymentCardReveal(fast);
     expect(deploymentInteractionStage(fast)).toBe('adlected');
     const cell = disciplinePlacementCells(fast, deploymentOptions(fast, level), 'pawn')[0];
     fast = placeAdlectedDeploymentUnit(fast, level, cell);

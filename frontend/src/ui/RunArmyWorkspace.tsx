@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, type ReactElement, type ReactNode } from 'react';
+import { useLayoutEffect, useMemo, useRef, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { defaultBackgroundSet } from '../art/backgroundSets';
 import { paletteForSide, pieceSpritePath } from '../core/pieces';
 import {
@@ -31,13 +31,14 @@ import { ChromeDividedGridRow, DividedInnerChromeBox } from './shared/ChromeDivi
 import { Tooltip } from './shared/InfoTip';
 import { RunUnitInspectionScene } from './RunUnitInspectionScene';
 import { ChromeButton } from './shared/ChromeButton';
+import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
 import { RunAbilityIcon, type RunUnitState } from './shared/RunAbilityIcon';
 import { KitScroll } from './KitScroll';
 
 export type RunRosterOrder = 'type' | 'value' | 'ability' | 'acquired';
 export type RunRosterTypeFilter = 'all' | RunArmyPieceType;
 export type RunRosterAbilityFilter = 'all' | RunUnitTraitId;
-export type RunAlienatioStateFilter = 'all' | 'alienable' | 'alienated' | 'retained';
+export type RunAlienatioStateFilter = 'all' | 'alienable' | 'aliened' | 'retained';
 
 export interface RunArmyFilters {
   order: RunRosterOrder;
@@ -323,7 +324,7 @@ function RunRosterFilters({
 }): ReactElement {
   return (
     <section className="run-roster-filters" aria-label="Army filters">
-      <label>
+      <label style={{ ['--run-roster-filter-index' as string]: 0 } as CSSProperties}>
         <span>Order</span>
         <HouseSelect
           value={filters.order}
@@ -335,9 +336,10 @@ function RunRosterFilters({
           ]}
           onChange={(order) => onChange({ ...filters, order })}
           ariaLabel="Army order"
+          fillSurface={CHROME_LEAF_FILL_SURFACE}
         />
       </label>
-      <label>
+      <label style={{ ['--run-roster-filter-index' as string]: 1 } as CSSProperties}>
         <span>Piece</span>
         <HouseSelect
           value={filters.type}
@@ -347,9 +349,10 @@ function RunRosterFilters({
           ]}
           onChange={(type) => onChange({ ...filters, type })}
           ariaLabel="Army piece type"
+          fillSurface={CHROME_LEAF_FILL_SURFACE}
         />
       </label>
-      <label>
+      <label style={{ ['--run-roster-filter-index' as string]: 2 } as CSSProperties}>
         <span>Ability</span>
         <HouseSelect
           value={filters.ability}
@@ -364,21 +367,23 @@ function RunRosterFilters({
           ]}
           onChange={(ability) => onChange({ ...filters, ability })}
           ariaLabel="Army ability"
+          fillSurface={CHROME_LEAF_FILL_SURFACE}
         />
       </label>
       {alienatioState !== null && onAlienatioStateChange ? (
-        <label>
+        <label style={{ ['--run-roster-filter-index' as string]: 3 } as CSSProperties}>
           <span>Alienatio state</span>
           <HouseSelect
             value={alienatioState}
             options={[
               { value: 'all', label: 'All units' },
               { value: 'alienable', label: 'Alienable' },
-              { value: 'alienated', label: 'Alienated this visit' },
+              { value: 'aliened', label: 'Aliened this visit' },
               { value: 'retained', label: 'Retained' },
             ]}
             onChange={onAlienatioStateChange}
             ariaLabel="Unit Alienatio state"
+            fillSurface={CHROME_LEAF_FILL_SURFACE}
           />
         </label>
       ) : null}
@@ -431,11 +436,11 @@ function filteredAndSortedUnits(
 function ProfileAlienatioAction({
   run,
   unit,
-  onAlienate,
+  onAliene,
 }: {
   run: RunDocument;
   unit: RunArmyUnit;
-  onAlienate: (unitId: string) => void;
+  onAliene: (unitId: string) => void;
 }): ReactElement {
   const unavailableReason = unit.type === 'king'
     ? 'The King is permanently retained and cannot undergo Alienatio.'
@@ -444,12 +449,14 @@ function ProfileAlienatioAction({
       : null;
   const button = (
     <ChromeButton unit="inner-text-button"
+      data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
       data-ui-sfx={unavailableReason ? undefined : 'gold'}
       className={chromeUnitClassNames('inner-text-button', 'app-header-button', unavailableReason ? '' : 'danger')}
+      style={{ ['--run-leaf-control-index' as string]: 1 } as CSSProperties}
       disabled={Boolean(unavailableReason)}
-      onClick={() => onAlienate(unit.id)}
+      onClick={() => onAliene(unit.id)}
     >
-      <span>{unit.type === 'king' ? 'Retained' : 'Alienatio'}</span>
+      <span>{unit.type === 'king' ? 'Retained' : 'Aliene'}</span>
       {unit.type !== 'king' ? (
         <RunGoldAmount valueTenths={unitAlienatioTenths(run, unit)} className="run-gold-amount--button" />
       ) : null}
@@ -517,7 +524,7 @@ export function RunArmyWorkspace({
   onFiltersChange,
   onSelectUnit,
   onBack,
-  onAlienate,
+  onAliene,
   profileAction,
 }: {
   run: RunDocument;
@@ -529,7 +536,7 @@ export function RunArmyWorkspace({
   onFiltersChange: (filters: RunArmyFilters) => void;
   onSelectUnit: (unitId: string) => void;
   onBack: () => void;
-  onAlienate: (unitId: string) => void;
+  onAliene: (unitId: string) => void;
   /** Replaces the ordinary Alienatio control when the profile is choosing a unit for another workflow. */
   profileAction?: RunArmyProfileAction;
 }): ReactElement {
@@ -554,7 +561,9 @@ export function RunArmyWorkspace({
           <header className="run-self-inspection-head">
             <h2 id="run-army-workspace-title">{runUnitDisplayName(selected)}</h2>
             <ChromeButton unit="inner-text-button"
+              data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
               className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+              style={{ ['--run-leaf-control-index' as string]: 0 } as CSSProperties}
               onClick={onBack}
             >
               {backLabel}
@@ -581,14 +590,16 @@ export function RunArmyWorkspace({
                 {profileAction ? (
                   <ChromeButton
                     unit="inner-text-button"
+                    data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                     className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+                    style={{ ['--run-leaf-control-index' as string]: 1 } as CSSProperties}
                     tone="primary"
                     disabled={profileAction.isDisabled?.(selected) ?? false}
                     onClick={() => profileAction.onAction(selected.id)}
                   >
                     {profileAction.label}
                   </ChromeButton>
-                ) : <ProfileAlienatioAction run={run} unit={selected} onAlienate={onAlienate} />}
+                ) : <ProfileAlienatioAction run={run} unit={selected} onAliene={onAliene} />}
               </section>
             </div>
           </KitScroll>
@@ -666,7 +677,7 @@ export function RunArmyWorkspace({
 
 interface AlienatioRow {
   unit: RunArmyUnit;
-  status: 'alienable' | 'alienated' | 'retained';
+  status: 'alienable' | 'aliened' | 'retained';
   proceedsTenths: number;
 }
 
@@ -676,24 +687,24 @@ function alienatioRows(run: RunDocument): AlienatioRow[] {
     status: unit.type === 'king' ? 'retained' : 'alienable',
     proceedsTenths: unitAlienatioTenths(run, unit),
   }));
-  const alienated = (run.sectio?.alienatedUnits ?? []).map(({ unit, proceedsTenths }): AlienatioRow => ({
+  const aliened = (run.sectio?.alienatedUnits ?? []).map(({ unit, proceedsTenths }): AlienatioRow => ({
     unit,
-    status: 'alienated',
+    status: 'aliened',
     proceedsTenths,
   }));
-  return [...current, ...alienated];
+  return [...current, ...aliened];
 }
 
 export function RunAlienatioWorkspace({
   run,
   filters,
   onFiltersChange,
-  onAlienate,
+  onAliene,
 }: {
   run: RunDocument;
   filters: RunAlienatioFilters;
   onFiltersChange: (filters: RunAlienatioFilters) => void;
-  onAlienate: (unitId: string) => void;
+  onAliene: (unitId: string) => void;
 }): ReactElement {
   const rows = useMemo(() => {
     const byId = new Map(alienatioRows(run).map((row) => [row.unit.id, row]));
@@ -720,58 +731,66 @@ export function RunAlienatioWorkspace({
         alienatioState={filters.alienatioState}
         onAlienatioStateChange={(alienatioState) => onFiltersChange({ ...filters, alienatioState })}
       />
-      <div className="run-alienatio-list" aria-label="Units available for Alienatio">
-        {rows.map(({ unit, status, proceedsTenths }) => {
-          const alienatioButton = (
-            <ChromeButton unit="inner-text-button"
-              data-ui-sfx={status === 'alienable' ? 'gold' : undefined}
-              className={chromeUnitClassNames('inner-text-button', 'app-header-button', status === 'alienable' && 'danger')}
-              disabled={status !== 'alienable'}
-              onClick={() => onAlienate(unit.id)}
-            >
-              {status === 'alienable' ? 'Alienatio' : status === 'alienated' ? 'Alienated this visit' : 'Retained'}
-            </ChromeButton>
-          );
-          const alienatioAction = status === 'alienable' ? alienatioButton : (
-            <Tooltip
-              trigger={alienatioButton}
-              label={status === 'alienated'
-                ? `${runUnitDisplayName(unit)} underwent Alienatio during this Sectio visit. Reset Sectio to restore it.`
-                : 'The King is permanently retained and cannot undergo Alienatio.'}
-              popupMaxInlineSize={300}
-            >
-              <span>
-                {status === 'alienated'
-                  ? 'Alienated during this Sectio visit. Reset Sectio to restore this unit.'
+      <KitScroll className="run-sectio-operation-list-scroll">
+        <div className="run-sectio-operation-list run-alienatio-list" aria-label="Units available for Alienatio">
+          {rows.map(({ unit, status, proceedsTenths }, index) => {
+            const alienatioButton = (
+              <ChromeButton unit="inner-text-button"
+                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                data-ui-sfx={status === 'alienable' ? 'gold' : undefined}
+                className={chromeUnitClassNames('inner-text-button', 'app-header-button', status === 'alienable' && 'danger')}
+                disabled={status !== 'alienable'}
+                onClick={() => onAliene(unit.id)}
+              >
+                {status === 'alienable' ? 'Aliene' : status === 'aliened' ? 'Aliened this visit' : 'Retained'}
+              </ChromeButton>
+            );
+            const alienatioAction = status === 'alienable' ? alienatioButton : (
+              <Tooltip
+                trigger={alienatioButton}
+                label={status === 'aliened'
+                  ? `${runUnitDisplayName(unit)} underwent Alienatio during this Sectio visit. Reset Sectio to restore it.`
                   : 'The King is permanently retained and cannot undergo Alienatio.'}
-              </span>
-            </Tooltip>
-          );
-          return (
-            <InnerChromeBox className={`run-alienatio-row is-${status}`} key={unit.id}>
-              <img
-                className="run-alienatio-board-piece"
-                src={pieceSpritePath(unit.type, PLAYER_PORTRAIT_PALETTE, PLAYER_PIECE_FACING)}
-                alt=""
-                draggable={false}
-              />
-              <span className="run-alienatio-copy">
-                <strong>{runUnitDisplayName(unit)}</strong>
-                <small>{runUnitIdentifier(unit)} · {unitSourceLabel(unit)} · Base value {PIECE_VALUE[unit.type]}</small>
-                <RunUnitTraitList run={run} unit={unit} compact />
-              </span>
-              <span className="run-alienatio-return">
-                <small>{status === 'alienated' ? 'Received' : 'Alienatio return'}</small>
-                {unit.type === 'king'
-                  ? <strong>Retained</strong>
-                  : <RunGoldAmount valueTenths={proceedsTenths} />}
-              </span>
-              {alienatioAction}
-            </InnerChromeBox>
-          );
-        })}
-        {!rows.length ? <p>No units match these filters.</p> : null}
-      </div>
+                popupMaxInlineSize={300}
+              >
+                <span>
+                  {status === 'aliened'
+                    ? 'Aliened during this Sectio visit. Reset Sectio to restore this unit.'
+                    : 'The King is permanently retained and cannot undergo Alienatio.'}
+                </span>
+              </Tooltip>
+            );
+            return (
+              <InnerChromeBox
+                className={`run-alienatio-row is-${status}`}
+                data-chrome-fill-surface="baseline-stone-blue"
+                key={unit.id}
+                style={{ ['--run-operation-row-index' as string]: index } as CSSProperties}
+              >
+                <img
+                  className="run-alienatio-board-piece"
+                  src={pieceSpritePath(unit.type, PLAYER_PORTRAIT_PALETTE, PLAYER_PIECE_FACING)}
+                  alt=""
+                  draggable={false}
+                />
+                <span className="run-alienatio-copy">
+                  <strong>{runUnitDisplayName(unit)}</strong>
+                  <small>{runUnitIdentifier(unit)} · {unitSourceLabel(unit)} · Base value {PIECE_VALUE[unit.type]}</small>
+                  <RunUnitTraitList run={run} unit={unit} compact />
+                </span>
+                <span className="run-alienatio-return">
+                  <small>{status === 'aliened' ? 'Received' : 'Alienatio return'}</small>
+                  {unit.type === 'king'
+                    ? <strong>Retained</strong>
+                    : <RunGoldAmount valueTenths={proceedsTenths} />}
+                </span>
+                {alienatioAction}
+              </InnerChromeBox>
+            );
+          })}
+          {!rows.length ? <p>No units match these filters.</p> : null}
+        </div>
+      </KitScroll>
     </RunSceneViewport>
   );
 }

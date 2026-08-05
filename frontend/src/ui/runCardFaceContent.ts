@@ -62,6 +62,7 @@ export type RunCardGrant = Readonly<{
 export type RunCardFaceContent = Readonly<{
   name: string;
   cost: number;
+  showsCost: boolean;
   typeLine: string;
   cardProperty?: Readonly<{
     id: RunCardType | 'praecipuus';
@@ -217,6 +218,7 @@ export function runCardFaceContent(
   return {
     name: runCardName(identity),
     cost: offer?.cost ?? card.value,
+    showsCost: identity.id !== 'his-grace',
     typeLine: RUN_CARD_TYPE_LINE,
     ...(cardType ? {
       cardProperty: {

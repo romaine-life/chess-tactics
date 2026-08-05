@@ -22,9 +22,9 @@ not replay their entrance. The final Adlected arrival completes before phase
 promotion introduces the remaining formation as a separate wave; the compositor's
 own active-id ledger supplies that boundary rather than a screen-owned timer
 ([ADR-0352](adr/0352-final-discipline-arrival-precedes-the-automatic-deployment-wave.md)).
-Per [ADR-0431](adr/0431-deployment-position-rerolls-cost-one-before-battle-and-five-after.md),
+Per [ADR-0449](adr/0449-deployment-position-rerolls-cost-one-before-battle-and-five-after.md),
 a post-placement reroll returns that same mounted activity to Deployment. Per
-[ADR-0432](adr/0432-live-units-leave-mounted-boards-through-registered-departure-tracks.md),
+[ADR-0450](adr/0450-live-units-leave-mounted-boards-through-registered-departure-tracks.md),
 the existing formation first follows the compositor-owned `withdraw-home` track: player and enemy
 units turn toward their respective home edges, retain their identities and mirrors while moving,
 and report completion only after every visible unit clears the board. The atomic gold/reset
@@ -354,12 +354,18 @@ source art. The persisted `floatingArtwork` channel is not the prop or doodad
 channel: a placement has a stable instance id, source-art id, and integer
 center in canonical unzoomed projected-scene pixels, plus a canonical eight-way
 direction and per-instance source scale. It has no board coordinate, tile,
-footprint, contact point, terrain eligibility, blocking, depth seat, or
-gameplay projection.
+footprint, terrain eligibility, blocking, persisted depth, or gameplay
+projection.
 
 The shared renderer centers the selected source frame on `pixelX`/`pixelY` and
-draws floating artwork above the authored board scene in collection order.
-Authors never store or edit `z`. A change of direction selects a complete
+per [ADR-0434](adr/0434-scene-art-uses-its-ground-contact-for-shared-depth.md),
+derives its exact ground contact from the selected directional sprite's installed
+anchor and effective scale. The contact's continuous projected-scene Y enters
+the same canonical structure back/base/front depth bands as tile-addressed
+objects. Scene Art therefore interleaves with walls, wall art, fences, props,
+doodads, units, and cover instead of occupying an unconditional overlay lane.
+Authors never store, edit, or manually repair `z`; collection order is only the
+stable tie-breaker for exact equal-depth operations. A change of direction selects a complete
 installed `<direction>-back`/`<direction>-front` media pair. South may use the
 legacy `back`/`front` pair. Missing pairs are unavailable rather than flattened,
 planar-rotated, or silently substituted. Per-direction source calibration may

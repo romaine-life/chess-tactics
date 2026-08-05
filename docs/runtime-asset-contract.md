@@ -37,7 +37,10 @@ drawable (`back`/`front` for south/default and paired
 `<direction>-back`/`<direction>-front` roles for additional views). The
 placement's canonical projected-scene pixel center, rendered direction, and
 source-composition scale are level data; the selected media still resolves
-through the catalog.
+through the catalog. Scene depth is not another persisted placement field: per
+[ADR-0434](adr/0434-scene-art-uses-its-ground-contact-for-shared-depth.md), the
+shared renderer derives it from that resolved directional sprite's installed
+ground anchor.
 
 Per
 [ADR-0158](adr/0158-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md),

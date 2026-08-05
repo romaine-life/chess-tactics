@@ -58,6 +58,7 @@ export function HouseSelect<TValue extends string>({
   disabled = false,
   title,
   testId,
+  fillSurface,
 }: {
   value: TValue;
   options: readonly HouseSelectOption<TValue>[];
@@ -67,6 +68,8 @@ export function HouseSelect<TValue extends string>({
   disabled?: boolean;
   title?: string;
   testId?: string;
+  /** Optional named fill for the closed leaf control; the menu remains a structural field. */
+  fillSurface?: string;
 }): ReactElement {
   const id = useId();
   const buttonRef = useRef<HTMLButtonElement | null>(null);
@@ -285,6 +288,7 @@ export function HouseSelect<TValue extends string>({
       <ChromeButton unit="inner-dropdown"
         ref={buttonRef}
         className={triggerClass}
+        data-chrome-fill-surface={fillSurface}
         data-testid={testId}
         aria-label={ariaLabel}
         aria-haspopup="listbox"
