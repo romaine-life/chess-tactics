@@ -299,6 +299,8 @@ the measured endpoint for an adlected card's shrinking transfer and the measured
 the face-down Deployment deal into the numbered Controls stack. When an adlected card leaves
 the Sectio layout, each surviving offer glides from its measured old seat to its new
 centred seat with no snap, bounce, or guessed slot (ADR-0387, ADR-0388, ADR-0419). The persistent
+active Deployment card never compacts around a played unit: its authored density, sprite scale,
+and stack seats remain fixed while the departed occurrence becomes a visible vacancy (ADR-0427).
 title route always appends the visible Enchiridion section on the standalone host,
 and on a Run keeps the underlying phase before appending Strategikon, its section,
 and that same Enchiridion reference—for example
