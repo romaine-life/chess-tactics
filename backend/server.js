@@ -4057,6 +4057,113 @@ const MIGRATIONS = [
        WHERE body->'runSaveVersion' = '20'::jsonb;
     `,
   },
+  {
+    version: 59,
+    name: 'complete Primogeniture retirement',
+    // ADR-0419 retires the ability as one installed-content graph change. Remove
+    // the app-ui consumer before retiring the semantic slot so no catalog snapshot
+    // can retain a dangling role. Every write is conditional, making the migration
+    // safe after an owner has already completed the same canonical transactions.
+    sql: `
+      WITH removed_media AS (
+        DELETE FROM drawable_asset_media
+         WHERE asset_id = 'app-ui'
+           AND role = 'ui-kit-icons-game-primogeniture-png'
+        RETURNING asset_id
+      ), updated_asset AS (
+        UPDATE drawable_assets
+           SET behavior = jsonb_set(
+                 COALESCE(behavior, '{}'::jsonb),
+                 '{requiredRoles}',
+                 COALESCE((
+                   SELECT jsonb_agg(required_role ORDER BY ordinal)
+                     FROM jsonb_array_elements(
+                       CASE WHEN jsonb_typeof(behavior->'requiredRoles') = 'array'
+                         THEN behavior->'requiredRoles' ELSE '[]'::jsonb END
+                     ) WITH ORDINALITY AS required(required_role, ordinal)
+                    WHERE required_role <> to_jsonb('ui-kit-icons-game-primogeniture-png'::text)
+                 ), '[]'::jsonb),
+                 true
+               ),
+               row_revision = row_revision + 1,
+               updated_at = now(),
+               updated_by = 'migration-59'
+         WHERE id = 'app-ui'
+           AND (
+             EXISTS (SELECT 1 FROM removed_media)
+             OR (
+               jsonb_typeof(behavior->'requiredRoles') = 'array'
+               AND (behavior->'requiredRoles') ? 'ui-kit-icons-game-primogeniture-png'
+             )
+           )
+        RETURNING id
+      )
+      UPDATE drawable_catalog_state
+         SET revision = revision + 1,
+             updated_at = now()
+       WHERE singleton = true
+         AND (
+           EXISTS (SELECT 1 FROM removed_media)
+           OR EXISTS (SELECT 1 FROM updated_asset)
+         );
+
+      WITH target_slot AS (
+        SELECT slot, active_version_id
+          FROM media_slots
+         WHERE slot = 'ui/kit/icons/game/primogeniture.png'
+           AND lifecycle_state <> 'retired'
+      ), archived_version AS (
+        UPDATE media_versions AS version
+           SET status = 'archived',
+               row_revision = row_revision + 1,
+               updated_at = now(),
+               updated_by = 'migration-59'
+          FROM target_slot
+         WHERE version.id = target_slot.active_version_id
+           AND version.status <> 'archived'
+        RETURNING version.id
+      ), retired_slot AS (
+        UPDATE media_slots AS slot
+           SET active_version_id = NULL,
+               lifecycle_state = 'retired',
+               retired_at = now(),
+               retirement_evidence = jsonb_build_object(
+                 'reason', 'Primogeniture retired by ADR-0419',
+                 'evidence', jsonb_build_object(
+                   'decision', 'ADR-0419',
+                   'replacement', 'Praecipuus and persisted dealt-card order'
+                 ),
+                 'retiredBy', 'migration-59',
+                 'retiredAt', now(),
+                 'previousVersionId', target_slot.active_version_id
+               ),
+               row_revision = row_revision + 1,
+               updated_at = now(),
+               updated_by = 'migration-59'
+          FROM target_slot
+         WHERE slot.slot = target_slot.slot
+        RETURNING slot.slot, target_slot.active_version_id
+      ), retirement_event AS (
+        INSERT INTO media_asset_events (
+          slot, source_path, version_id, action, actor_email, details
+        )
+        SELECT retired_slot.slot, NULL, retired_slot.active_version_id,
+               'slot-retired', 'migration-59',
+               jsonb_build_object(
+                 'reason', 'Primogeniture retired by ADR-0419',
+                 'decision', 'ADR-0419',
+                 'previousVersionId', retired_slot.active_version_id
+               )
+          FROM retired_slot
+        RETURNING id
+      )
+      UPDATE media_catalog_state
+         SET revision = revision + 1,
+             updated_at = now()
+       WHERE singleton = true
+         AND EXISTS (SELECT 1 FROM retired_slot);
+    `,
+  },
 ];
 
 let pool = null;
@@ -4666,6 +4773,31 @@ async function unmigratedActiveRunSaveCounts(client) {
   });
 }
 
+async function primogenitureRetirementContractRows(client) {
+  const { rows } = await client.query(
+    `SELECT
+       (SELECT count(*)::integer
+          FROM media_slots
+         WHERE slot = 'ui/kit/icons/game/primogeniture.png'
+           AND lifecycle_state <> 'retired') AS non_retired_slot_count,
+       (SELECT count(*)::integer
+          FROM drawable_asset_media
+         WHERE asset_id = 'app-ui'
+           AND role = 'ui-kit-icons-game-primogeniture-png') AS drawable_binding_count,
+       (SELECT count(*)::integer
+          FROM drawable_assets
+         WHERE id = 'app-ui'
+           AND jsonb_typeof(behavior->'requiredRoles') = 'array'
+           AND (behavior->'requiredRoles') ? 'ui-kit-icons-game-primogeniture-png')
+         AS required_role_count`,
+  );
+  return Object.freeze({
+    non_retired_slot_count: Number(rows[0]?.non_retired_slot_count) || 0,
+    drawable_binding_count: Number(rows[0]?.drawable_binding_count) || 0,
+    required_role_count: Number(rows[0]?.required_role_count) || 0,
+  });
+}
+
 async function requiredSchemaContractIssues(client) {
   const missingReasons = await missingRequiredSchemaRevisionReasons(client);
   const constraints = await workingCopyRevisionReasonConstraintRows(client);
@@ -4673,6 +4805,7 @@ async function requiredSchemaContractIssues(client) {
   const moveHighlightContractRows = await generationAttemptMoveHighlightContractRows(client);
   const migrationIdentityRows = await schemaMigrationIdentityBoundaryRows(client);
   const unmigratedActiveRunSaves = await unmigratedActiveRunSaveCounts(client);
+  const primogenitureRetirement = await primogenitureRetirementContractRows(client);
   const migrationIdentityIssues = schemaMigrationIdentityBoundaryIssues(
     migrationIdentityRows.columns,
     migrationIdentityRows.constraints,
@@ -4725,6 +4858,9 @@ async function requiredSchemaContractIssues(client) {
     unmigrated_active_run_version_18_count: unmigratedActiveRunSaves.version_18_count,
     unmigrated_active_run_version_19_count: unmigratedActiveRunSaves.version_19_count,
     unmigrated_active_run_version_20_count: unmigratedActiveRunSaves.version_20_count,
+    primogeniture_non_retired_slot_count: primogenitureRetirement.non_retired_slot_count,
+    primogeniture_drawable_binding_count: primogenitureRetirement.drawable_binding_count,
+    primogeniture_required_role_count: primogenitureRetirement.required_role_count,
     ...generationAttemptRetryContractIssues(
       retryContractRows.columns,
       retryContractRows.constraints,
@@ -4735,6 +4871,14 @@ async function requiredSchemaContractIssues(client) {
     ),
     ...migrationIdentityIssues,
   });
+}
+
+function primogenitureRetirementContractIssuesPresent(issues) {
+  return (
+    issues.primogeniture_non_retired_slot_count > 0
+    || issues.primogeniture_drawable_binding_count > 0
+    || issues.primogeniture_required_role_count > 0
+  );
 }
 
 function workingCopyReasonContractIssuesPresent(issues) {
@@ -4753,6 +4897,7 @@ function schemaContractIssuesPresent(issues) {
     || generationAttemptMoveHighlightContractIssuesPresent(issues)
     || schemaMigrationIdentityBoundaryIssuesPresent(issues)
     || issues.unmigrated_active_run_save_count > 0
+    || primogenitureRetirementContractIssuesPresent(issues)
   );
 }
 
@@ -4847,6 +4992,17 @@ async function repairRequiredSchemaContracts(
     await executeMigration(migration, 'repair active Run card-ordered Deployment contract');
     completedSteps.push(Object.freeze({
       contract: 'active Run card-ordered Deployment save version',
+      migration_version: migration.version,
+    }));
+    markInspection(`inspect required contract repairs after migration ${migration.version}`);
+    issues = await requiredSchemaContractIssues(client);
+  }
+  if (primogenitureRetirementContractIssuesPresent(issues)) {
+    const migration = MIGRATIONS.find((candidate) => candidate.version === 59);
+    if (!migration) throw new Error('Primogeniture retirement repair migration is unavailable');
+    await executeMigration(migration, 'repair complete Primogeniture retirement contract');
+    completedSteps.push(Object.freeze({
+      contract: 'complete Primogeniture installed-content retirement',
       migration_version: migration.version,
     }));
     markInspection(`inspect required contract repairs after migration ${migration.version}`);
@@ -17250,6 +17406,24 @@ async function retireMediaSlotBatch(items, proof, actorEmail) {
           throw mediaMutationError('media_group_contract_mismatch', 409, { groupId, slot });
         }
       }
+    }
+    const drawableDependencies = await client.query(
+      `SELECT media.slot, media.asset_id, media.role
+         FROM drawable_asset_media media
+         JOIN drawable_assets asset ON asset.id = media.asset_id
+        WHERE media.slot = ANY($1::text[])
+          AND asset.lifecycle_state = 'active'
+        ORDER BY media.slot, media.asset_id, media.role`,
+      [slots],
+    );
+    if (drawableDependencies.rows.length) {
+      throw mediaMutationError('media_slot_in_use', 409, {
+        dependencies: drawableDependencies.rows.map((row) => ({
+          slot: row.slot,
+          assetId: row.asset_id,
+          role: row.role,
+        })),
+      });
     }
     let changedPublicCatalog = false;
     for (const row of rows) {

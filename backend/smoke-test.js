@@ -937,7 +937,7 @@ function inlineMigrationSql(version) {
   return inlineMigrationDefinition(version).sql;
 }
 
-async function validatePrimarySparseNumericMigrationUpgrade58() {
+async function validatePrimarySparseNumericMigrationUpgrade59() {
   const history = await queryDb(
     `SELECT version, name, checksum
        FROM schema_migrations
@@ -952,7 +952,7 @@ async function validatePrimarySparseNumericMigrationUpgrade58() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 58 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 59 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -967,7 +967,7 @@ async function validatePrimarySparseNumericMigrationUpgrade58() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 22 }, (_, index) => index + 37),
+    ...Array.from({ length: 23 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1081,7 +1081,7 @@ async function validatePrimarySparseNumericMigrationUpgrade58() {
     )
   ) {
     throw new Error(
-      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 58: `
+      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 59: `
       + `${JSON.stringify({
         history: history.rows,
         identity_columns: identityColumns.rows,
@@ -2033,6 +2033,127 @@ async function validateCardOrderedDeploymentMigration58() {
   }
 }
 
+async function validateCompletePrimogenitureRetirementMigration59() {
+  const { Client } = require('pg');
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('CREATE SCHEMA smoke_primogeniture_retirement_migration_59');
+    await client.query('SET LOCAL search_path TO smoke_primogeniture_retirement_migration_59');
+    await client.query(`
+      CREATE TABLE drawable_catalog_state (
+        singleton boolean PRIMARY KEY, revision bigint NOT NULL, updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE media_catalog_state (
+        singleton boolean PRIMARY KEY, revision bigint NOT NULL, updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE drawable_assets (
+        id text PRIMARY KEY, behavior jsonb NOT NULL, lifecycle_state text NOT NULL,
+        row_revision bigint NOT NULL, updated_at timestamptz NOT NULL DEFAULT now(), updated_by text
+      );
+      CREATE TABLE media_slots (
+        slot text PRIMARY KEY, lifecycle_state text NOT NULL, active_version_id uuid,
+        retired_at timestamptz, retirement_evidence jsonb NOT NULL DEFAULT '{}'::jsonb,
+        row_revision bigint NOT NULL, updated_at timestamptz NOT NULL DEFAULT now(), updated_by text
+      );
+      CREATE TABLE media_versions (
+        id uuid PRIMARY KEY, status text NOT NULL, row_revision bigint NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now(), updated_by text
+      );
+      CREATE TABLE drawable_asset_media (
+        asset_id text NOT NULL, role text NOT NULL, slot text NOT NULL,
+        PRIMARY KEY (asset_id, role)
+      );
+      CREATE TABLE media_asset_events (
+        id bigserial PRIMARY KEY, slot text, source_path text, version_id uuid,
+        action text NOT NULL, actor_email text, details jsonb NOT NULL DEFAULT '{}'::jsonb,
+        created_at timestamptz NOT NULL DEFAULT now()
+      );
+      INSERT INTO drawable_catalog_state (singleton, revision) VALUES (true, 10);
+      INSERT INTO media_catalog_state (singleton, revision) VALUES (true, 20);
+      INSERT INTO drawable_assets (id, behavior, lifecycle_state, row_revision)
+      VALUES (
+        'app-ui',
+        '{"requiredRoles":["ui-kit-icons-game-primogeniture-png","ui-kit-icons-game-praecipuus-png"]}'::jsonb,
+        'active',
+        7
+      );
+      INSERT INTO media_slots (
+        slot, lifecycle_state, active_version_id, row_revision
+      ) VALUES (
+        'ui/kit/icons/game/primogeniture.png',
+        'active',
+        'e8631a8c-7afa-425b-b487-898153278335'::uuid,
+        4
+      );
+      INSERT INTO media_versions (id, status, row_revision)
+      VALUES ('e8631a8c-7afa-425b-b487-898153278335'::uuid, 'accepted', 3);
+      INSERT INTO drawable_asset_media (asset_id, role, slot) VALUES
+        ('app-ui', 'ui-kit-icons-game-primogeniture-png', 'ui/kit/icons/game/primogeniture.png'),
+        ('app-ui', 'ui-kit-icons-game-praecipuus-png', 'ui/kit/icons/game/praecipuus.png');
+    `);
+
+    await client.query(inlineMigrationSql(59));
+    await client.query(inlineMigrationSql(59));
+
+    const asset = (await client.query(
+      `SELECT behavior, row_revision, updated_by FROM drawable_assets WHERE id = 'app-ui'`,
+    )).rows[0];
+    const bindings = (await client.query(
+      `SELECT role, slot FROM drawable_asset_media WHERE asset_id = 'app-ui' ORDER BY role`,
+    )).rows;
+    const slot = (await client.query(
+      `SELECT lifecycle_state, active_version_id, retirement_evidence, row_revision, updated_by
+         FROM media_slots WHERE slot = 'ui/kit/icons/game/primogeniture.png'`,
+    )).rows[0];
+    const version = (await client.query(
+      `SELECT status, row_revision, updated_by FROM media_versions
+        WHERE id = 'e8631a8c-7afa-425b-b487-898153278335'::uuid`,
+    )).rows[0];
+    const drawableRevision = Number((await client.query(
+      'SELECT revision FROM drawable_catalog_state WHERE singleton = true',
+    )).rows[0].revision);
+    const mediaRevision = Number((await client.query(
+      'SELECT revision FROM media_catalog_state WHERE singleton = true',
+    )).rows[0].revision);
+    const events = (await client.query(
+      `SELECT action, actor_email, details FROM media_asset_events
+        WHERE slot = 'ui/kit/icons/game/primogeniture.png'`,
+    )).rows;
+    if (
+      JSON.stringify(asset.behavior.requiredRoles) !== JSON.stringify(['ui-kit-icons-game-praecipuus-png'])
+      || Number(asset.row_revision) !== 8
+      || asset.updated_by !== 'migration-59'
+      || bindings.length !== 1
+      || bindings[0].role !== 'ui-kit-icons-game-praecipuus-png'
+      || slot.lifecycle_state !== 'retired'
+      || slot.active_version_id !== null
+      || slot.retirement_evidence?.evidence?.decision !== 'ADR-0419'
+      || Number(slot.row_revision) !== 5
+      || slot.updated_by !== 'migration-59'
+      || version.status !== 'archived'
+      || Number(version.row_revision) !== 4
+      || version.updated_by !== 'migration-59'
+      || drawableRevision !== 11
+      || mediaRevision !== 21
+      || events.length !== 1
+      || events[0].action !== 'slot-retired'
+      || events[0].actor_email !== 'migration-59'
+    ) {
+      throw new Error(`Migration 59 did not complete Primogeniture retirement atomically: ${JSON.stringify({
+        asset, bindings, slot, version, drawableRevision, mediaRevision, events,
+      })}`);
+    }
+    await client.query('ROLLBACK');
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve validation error */ }
+    throw error;
+  } finally {
+    await client.end();
+  }
+}
+
 async function waitForServer() {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if (child.exitCode !== null) {
@@ -2065,7 +2186,7 @@ async function main() {
   await new Promise((resolve) => mockAuth.listen(authPort, '127.0.0.1', resolve));
   await new Promise((resolve) => mockBgm.listen(bgmPort, '127.0.0.1', resolve));
   await waitForServer();
-  await validatePrimarySparseNumericMigrationUpgrade58();
+  await validatePrimarySparseNumericMigrationUpgrade59();
   const databaseRuntime = await queryDb('SELECT version() AS version');
   const isPgliteRuntime = /\bPGlite\b/i.test(String(databaseRuntime.rows[0]?.version || ''));
   if (!isPgliteRuntime) {
@@ -2098,6 +2219,7 @@ async function main() {
   await validateKlerosisAndDeploymentZoneMigration56();
   await validateExpunctioMigration57();
   await validateCardOrderedDeploymentMigration58();
+  await validateCompletePrimogenitureRetirementMigration59();
   await resetDb();
 
   const missingPropSeats = await get('/api/prop-seats/default');
@@ -3190,6 +3312,50 @@ async function main() {
     partialGroupRetirement.statusCode !== 409
     || JSON.parse(partialGroupRetirement.body).error !== 'media_group_retirement_incomplete'
   ) throw new Error(`Partial grouped retirement should fail: ${partialGroupRetirement.statusCode} ${partialGroupRetirement.body}`);
+  const retirementConsumerInput = {
+    kind: 'smoke-fixture',
+    label: 'Media retirement consumer',
+    sortOrder: 0,
+    lifecycleState: 'active',
+    behavior: {},
+    metadata: {},
+    media: { preview: groupSlots[0] },
+  };
+  const retirementConsumer = await request(
+    'PUT', '/api/admin/drawable-assets/smoke-retirement-consumer',
+    { ...adminJson, 'if-match': '"0"' }, JSON.stringify(retirementConsumerInput), 5000,
+  );
+  if (
+    retirementConsumer.statusCode !== 200
+    || JSON.parse(retirementConsumer.body).asset.rowRevision !== 1
+  ) throw new Error(`Disposable retirement consumer creation failed: ${retirementConsumer.statusCode} ${retirementConsumer.body}`);
+  const blockedGroupRetirement = await request(
+    'POST', '/api/admin/media-slots/retire-batch', adminJson,
+    JSON.stringify({
+      items: groupedSlotRows.map((slot) => ({ slot: slot.slot, expectedRevision: slot.rowRevision })),
+      reason: 'Prove active drawable consumers block slot retirement',
+      evidence: { ownerConfirmed: true, fixture: 'live-media-smoke', groupId: 'smoke/terrain/surface-v1' },
+      confirmCriticalRetirement: true,
+    }), 5000,
+  );
+  const blockedGroupRetirementBody = JSON.parse(blockedGroupRetirement.body);
+  if (
+    blockedGroupRetirement.statusCode !== 409
+    || blockedGroupRetirementBody.error !== 'media_slot_in_use'
+    || blockedGroupRetirementBody.details?.dependencies?.length !== 1
+    || blockedGroupRetirementBody.details.dependencies[0].assetId !== 'smoke-retirement-consumer'
+    || blockedGroupRetirementBody.details.dependencies[0].role !== 'preview'
+    || blockedGroupRetirementBody.details.dependencies[0].slot !== groupSlots[0]
+  ) throw new Error(`Active drawable dependency should block media retirement: ${blockedGroupRetirement.statusCode} ${blockedGroupRetirement.body}`);
+  const retiredConsumer = await request(
+    'PUT', '/api/admin/drawable-assets/smoke-retirement-consumer',
+    { ...adminJson, 'if-match': '"1"' },
+    JSON.stringify({ ...retirementConsumerInput, lifecycleState: 'retired' }), 5000,
+  );
+  if (
+    retiredConsumer.statusCode !== 200
+    || JSON.parse(retiredConsumer.body).asset.lifecycleState !== 'retired'
+  ) throw new Error(`Disposable retirement consumer retirement failed: ${retiredConsumer.statusCode} ${retiredConsumer.body}`);
   const groupRetirement = await request(
     'POST', '/api/admin/media-slots/retire-batch', adminJson,
     JSON.stringify({
