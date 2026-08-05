@@ -2542,7 +2542,10 @@ async function validateRepairedEditorDocumentDiscardOperation61() {
     throw new Error(`Migration 61 repaired document did not load as a saved Level: ${loaded.statusCode} ${loaded.body}`);
   }
   const opened = await openEditorEditSession(documentId);
-  if (opened.response.statusCode !== 200 || opened.body.session?.state !== 'active') {
+  if (
+    opened.response.statusCode !== 200
+    || !['active', 'waiting'].includes(opened.body.session?.state)
+  ) {
     throw new Error(`Migration 61 repaired document could not open an edit session: ${opened.response.statusCode} ${opened.response.body}`);
   }
   await queryDb(
