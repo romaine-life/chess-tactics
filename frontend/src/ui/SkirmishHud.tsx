@@ -29,6 +29,7 @@ import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 import { StrategikonTitleNavigation } from './StrategikonTitleNavigation';
 import { RunBattleUndoButton } from './RunBattleUndoButton';
 import { RunBattleRetryButton } from './RunBattleRetryButton';
+import { RunDeploymentRerollButton } from './RunDeploymentRerollButton';
 
 const TYPE_LABEL = PIECE_LABEL;
 
@@ -191,6 +192,11 @@ export type SkirmishHudProps = {
   restartCostTenths?: number;
   restartDisabled?: boolean;
   restartUnavailableReason?: string;
+  /** Run-only transition back through the complete placement phase. */
+  onRerollDeployment?: (() => void) | null;
+  canRerollDeployment?: boolean;
+  deploymentRerollCostTenths?: number;
+  deploymentRerollDeparting?: boolean;
   /** Start a new attempt for the CURRENT authored scenario. */
   onNewSkirmish?: (() => void) | null;
   /** Accessible name for the New button (e.g. "New attempt" / "New skirmish"). */
@@ -229,6 +235,10 @@ export function SkirmishHud({
   restartCostTenths,
   restartDisabled = false,
   restartUnavailableReason,
+  onRerollDeployment = null,
+  canRerollDeployment = false,
+  deploymentRerollCostTenths,
+  deploymentRerollDeparting = false,
   onNewSkirmish = null,
   newSkirmishLabel = 'New skirmish',
   showClockControl = true,
@@ -629,6 +639,21 @@ export function SkirmishHud({
                   />
                 </div>
                 <p className="skirmish-grid-hint">Type any floor for the CPU's think time — it widens the window to premove. Your clock is paused during it anyway.</p>
+              </div>
+            ) : null}
+            {onRerollDeployment && deploymentRerollCostTenths !== undefined ? (
+              <div className="skirmish-view-group">
+                <span className="skirmish-eyebrow">Deployment</span>
+                <div className="skirmish-view-row">
+                  <RunDeploymentRerollButton
+                    testId="reroll-deployment-battle"
+                    costTenths={deploymentRerollCostTenths}
+                    canReroll={canRerollDeployment}
+                    onReroll={onRerollDeployment}
+                    departing={deploymentRerollDeparting}
+                  />
+                </div>
+                <p className="skirmish-grid-hint">Return to Deployment and redo every unit placement.</p>
               </div>
             ) : null}
             <div className="skirmish-view-group">

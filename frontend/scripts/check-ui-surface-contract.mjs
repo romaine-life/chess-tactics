@@ -49,6 +49,12 @@ const APPROVED_FRAMELESS_SURFACE_RESETS = new Map([
     'border-radius:0',
     'box-shadow:none',
   ])],
+  // The accepted InnerChromeBox wrapper owns the Gold field's complete surface. These
+  // declarations remove the native input paint inside that frame; they add no surface.
+  ['src/style.css|.admin-gold-input', new Set([
+    'background:transparent',
+    'border:0',
+  ])],
 ]);
 
 function normalize(value) {

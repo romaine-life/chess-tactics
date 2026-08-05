@@ -69,6 +69,12 @@ these.
   untouched opening position; a terminal defeat or draw retains Retry. Run Battles do not
   expose Resign: Retry already discards the attempt, while Abandon Run owns ending the
   persistent Run (ADR-0424, ADR-0425, ADR-0426).
+- **Reroll deployment** spends one gold at any point during Deployment or five gold after
+  the formation has promoted into Battle. The existing live formation first turns and withdraws
+  through each side's home edge; only after every visible unit clears the mounted battlefield does
+  the price commit and the complete placement sequence restart with a new position seed. The
+  current combat deal remains fixed, and three-gold Retry remains the cheaper way to replay the
+  exact formation (ADR-0449, ADR-0450).
 - A defeated Run Battle no longer offers Undo. Its viewport-scoped, non-modal result keeps
   the right Controls panel available for inspection and offers the canonical paid **Retry**
   beside explicit **New Run** and **Main Menu** exits. New Run enters the existing preparation

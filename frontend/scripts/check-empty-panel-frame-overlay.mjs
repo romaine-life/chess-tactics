@@ -1024,11 +1024,16 @@ if (!/export function SkirmishShell[\s\S]*?<SkirmishHud \{\.\.\.hudProps\} contr
   || !/export function Skirmish\b[\s\S]*?<SkirmishStoreProvider>[\s\S]*?<SkirmishSession \{\.\.\.props\} \/>[\s\S]*?<\/SkirmishStoreProvider>/.test(skirmish)) {
   failures.push('Battle must render through one instance-owned Skirmish session and the one SkirmishShell that owns SkirmishHud');
 }
+const runMetaControlsStart = runScreen.indexOf('function RunMetaControls');
+const runMetaControlsEnd = runScreen.indexOf('\nfunction deploymentSquareLabel', runMetaControlsStart);
+const runMetaControls = runMetaControlsStart >= 0
+  ? runScreen.slice(runMetaControlsStart, runMetaControlsEnd >= 0 ? runMetaControlsEnd : undefined)
+  : '';
 if (!/const form = createRunForm\(\{[\s\S]*?titleBarContent:\s*shellRun\s*\?\s*\(?\s*<RunTitleBarStatus[\s\S]*?lipsanonIds: visibleLipsanonIds/.test(runScreen)
   || !/form\.add\(runActivity\(\{[\s\S]*?controlsContent: shellRun \? \([\s\S]*?<RunMetaControls[\s\S]*?run=\{shellRun\}[\s\S]*?view=\{view\}[\s\S]*?onNavigate=\{navigateRunView\}[\s\S]*?showAbandon=\{shellRun\.phase !== 'victory'\}/.test(runScreen)
   || !/<SkirmishShell[\s\S]*?titleBarContent=\{form\.titleBarContent\}[\s\S]*?controlsContent=\{activity\.controlsContent\}/.test(runForm)
-  || !/function RunMetaControls[\s\S]*?<section[\s\S]*?className="run-meta-controls"[\s\S]*?aria-label="Run controls"/.test(runScreen)
-  || /function RunMetaControls[\s\S]*?<section[\s\S]*?className="run-meta-controls"[\s\S]*?inert=/.test(runScreen)
+  || !/<section[\s\S]*?className="run-meta-controls"[\s\S]*?aria-label="Run controls"/.test(runMetaControls)
+  || /\binert=/.test(runMetaControls)
   || /function RunShell|function RunControlsRail|chromeConsumer="run-controls"|<SkirmishShell/.test(runScreen)) {
   failures.push('every Run phase must contribute controls to the one closed RunForm shell');
 }

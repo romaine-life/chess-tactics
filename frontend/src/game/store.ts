@@ -373,6 +373,8 @@ export interface SkirmishState {
   restartSkirmish: (opts: SkirmishOptions & { activityId?: string | null }) => void;
   /** Begin a deferred player's clock once the playable surface has painted. */
   activateClock: () => void;
+  /** Freeze one live Run Battle while its units physically leave the mounted battlefield. */
+  suspendForBoardDeparture: () => void;
   /** Start a multiplayer match: build the shared (level, seed) board, record which
    *  side this client controls, disable the local AI + clock, and route local moves
    *  to the relay sink. Both clients call this with the SAME level + seed. */
@@ -1440,6 +1442,29 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
   },
 
   activateClock: () => startClock(),
+
+  suspendForBoardDeparture: () => {
+    const s = get();
+    if (!s.started || s.net) return;
+    // The departure owns the board until its compositor reports completion. Cancel every
+    // opponent/premove callback and stop the exact clock before invalidating their epoch; the
+    // replacement Deployment will build a fresh match after its new formation promotes.
+    pauseClockForAdmin();
+    const current = get();
+    const epoch = beginSession();
+    set({
+      sessionEpoch: epoch,
+      clock: current.clock ? { ...current.clock, running: false } : null,
+      selectedId: null,
+      focusedId: null,
+      pendingPromotion: null,
+      adminMode: null,
+      undoCheckpoint: null,
+      runUndoEnabled: false,
+      premoves: [],
+      premoveInputOpen: false,
+    });
+  },
 
   canUndoLastPlayerMove: () => {
     const s = get();

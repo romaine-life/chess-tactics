@@ -37,6 +37,21 @@ describe('skirmish presentation instances', () => {
     expect(first.getState().setRunBattleTransformSink)
       .not.toBe(second.getState().setRunBattleTransformSink);
   });
+
+  it('suspends every live Battle authority while units depart the board', () => {
+    const store = createSkirmishStore();
+    store.getState().newSkirmish({ seed: 17 });
+    const beforeEpoch = store.getState().sessionEpoch;
+
+    store.getState().suspendForBoardDeparture();
+
+    expect(store.getState().sessionEpoch).toBeGreaterThan(beforeEpoch);
+    expect(store.getState().clock?.running).toBe(false);
+    expect(store.getState().selectedId).toBeNull();
+    expect(store.getState().focusedId).toBeNull();
+    expect(store.getState().premoves).toEqual([]);
+    expect(store.getState().runUndoEnabled).toBe(false);
+  });
 });
 
 // The enemy reply is staged on a timer (see ENEMY_REPLY_DELAY) so play reads as

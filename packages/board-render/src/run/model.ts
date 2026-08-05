@@ -44,6 +44,8 @@ export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
 export const RUN_BATTLE_RETRY_COST_TENTHS = 3 * GOLD_SCALE;
+export const RUN_DEPLOYMENT_REROLL_COST_TENTHS = GOLD_SCALE;
+export const RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS = 5 * GOLD_SCALE;
 export const RUN_OPENING_OFFER_COUNT = 3;
 export const INSTALLED_ATARAXIA_MAX_TIER = 1;
 export const PESTIFEROUS_OFFER_DENOMINATOR = 8;
@@ -2040,6 +2042,41 @@ function revealLipsana(run: RunDocument, count: number, label: string, index: nu
   return { offers, seenLipsana: [...run.seenLipsana, ...offers] };
 }
 
+function freshDeploymentState(
+  run: RunDocument,
+  seed: number,
+  dealtCardIds: readonly string[],
+): RunDeploymentState {
+  const cardsById = new Map(run.cards.map((card) => [card.id, card]));
+  const dealtCards = dealtCardIds.flatMap((cardId) => {
+    const card = cardsById.get(cardId);
+    return card ? [card] : [];
+  });
+  const dealtUnitIds = [...new Set(dealtCards.flatMap(runCardUnitIds))]
+    .filter((unitId) => run.army.some((unit) => unit.id === unitId));
+  const unavailableUnitIds = run.army
+    .map((unit) => unit.id)
+    .filter((unitId) => !dealtUnitIds.includes(unitId));
+  return {
+    battleIndex: run.battleIndex,
+    seed,
+    dealtCardIds: dealtCards.map((card) => card.id),
+    deployingUnitIds: [...dealtUnitIds],
+    unavailableUnitIds,
+    capacityResolved: false,
+    placements: {},
+    activeCardIndex: 0,
+    unitCursor: 0,
+    discardCursor: 0,
+    revealedCardIds: [],
+    settlingUnitIds: [],
+    transport: 'paused',
+    stage: 'awaiting-deal',
+    blockedUnitIds: [...unavailableUnitIds],
+    manualPlacements: {},
+  };
+}
+
 export function prepareDeployment(run: RunDocument): RunDocument {
   if (run.phase !== 'deployment') return run;
   if (run.deployment?.battleIndex === run.battleIndex) {
@@ -2052,33 +2089,46 @@ export function prepareDeployment(run: RunDocument): RunDocument {
     mixSeed(seed, 'deployment-cards'),
   );
   const dealCount = Math.max(1, 3 + run.conflictIndex);
-  const dealtCards = [...(hisGrace ? [hisGrace] : []), ...ordinary].slice(0, dealCount);
-  const dealtUnitIds = [...new Set(dealtCards.flatMap(runCardUnitIds))]
-    .filter((unitId) => run.army.some((unit) => unit.id === unitId));
-  const unavailableUnitIds = run.army
-    .map((unit) => unit.id)
-    .filter((unitId) => !dealtUnitIds.includes(unitId));
+  const dealtCardIds = [...(hisGrace ? [hisGrace] : []), ...ordinary]
+    .slice(0, dealCount)
+    .map((card) => card.id);
   return touch({
     ...run,
-    deployment: {
-      battleIndex: run.battleIndex,
-      seed,
-      dealtCardIds: dealtCards.map((card) => card.id),
-      deployingUnitIds: [...dealtUnitIds],
-      unavailableUnitIds,
-      capacityResolved: false,
-      placements: {},
-      activeCardIndex: 0,
-      unitCursor: 0,
-      discardCursor: 0,
-      revealedCardIds: [],
-      settlingUnitIds: [],
-      transport: 'paused',
-      stage: 'awaiting-deal',
-      blockedUnitIds: [...unavailableUnitIds],
-      manualPlacements: {},
-    },
+    deployment: freshDeploymentState(run, seed, dealtCardIds),
     battleRuntime: null,
+  });
+}
+
+export function deploymentRerollCostTenths(run: RunDocument): number | null {
+  if (run.phase === 'deployment') return RUN_DEPLOYMENT_REROLL_COST_TENTHS;
+  if (run.phase === 'battle') return RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS;
+  return null;
+}
+
+export function canRerollDeployment(run: RunDocument): boolean {
+  const cost = deploymentRerollCostTenths(run);
+  return cost !== null
+    && run.deployment?.battleIndex === run.battleIndex
+    && run.goldTenths >= cost;
+}
+
+/**
+ * Pay to throw away every committed placement and replay the current combat's Deployment.
+ * The combat deal and authored card-seat order stay fixed: this is a position reroll, not a
+ * second chance to draw a different combat pool.
+ */
+export function rerollDeployment(run: RunDocument): RunDocument {
+  const cost = deploymentRerollCostTenths(run);
+  if (cost === null || !canRerollDeployment(run) || !run.deployment) return run;
+  const mixedSeed = mixSeed(run.deployment.seed, 'deployment-reroll');
+  const nextSeed = mixedSeed === run.deployment.seed ? (mixedSeed + 1) >>> 0 : mixedSeed;
+  return touch({
+    ...run,
+    phase: 'deployment',
+    goldTenths: run.goldTenths - cost,
+    deployment: freshDeploymentState(run, nextSeed, run.deployment.dealtCardIds),
+    battleRuntime: null,
+    aftermath: null,
   });
 }
 

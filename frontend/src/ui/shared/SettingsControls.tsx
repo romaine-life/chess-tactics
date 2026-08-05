@@ -1,4 +1,5 @@
 import { type AriaRole, type ReactElement, type ReactNode } from 'react';
+import type { InterfaceSfxCue } from '../../core/sfxProfile';
 import { chromeUnitClassNames } from '../chromeUnitRegistry';
 import { InnerTextButton, InnerTextNavButton, type ChromeButtonTone } from './ChromeButton';
 
@@ -22,6 +23,7 @@ export function SettingsButton({
   disabled = false,
   title,
   'data-testid': dataTestid,
+  'data-ui-sfx': dataUiSfx,
 }: {
   children: ReactNode;
   tone?: ButtonTone;
@@ -33,13 +35,14 @@ export function SettingsButton({
   disabled?: boolean;
   title?: string;
   'data-testid'?: string;
+  'data-ui-sfx'?: InterfaceSfxCue;
 }): ReactElement {
   const classes = `settings-chrome-button settings-chrome-button-${tone} ${className}`.trim();
   if (href && external) {
     // External destinations still open a new tab — via a button, not an anchor
     // (ADR-0052): no hover URL leaks into the game shell; noopener guards the opener.
     return (
-      <InnerTextButton className={classes} tone={tone} aria-label={ariaLabel} title={title} disabled={disabled} data-testid={dataTestid} onClick={() => window.open(href, '_blank', 'noopener,noreferrer')}>
+      <InnerTextButton className={classes} tone={tone} aria-label={ariaLabel} title={title} disabled={disabled} data-testid={dataTestid} data-ui-sfx={dataUiSfx} onClick={() => window.open(href, '_blank', 'noopener,noreferrer')}>
         <span>{children}</span>
       </InnerTextButton>
     );
@@ -47,13 +50,13 @@ export function SettingsButton({
   if (href && !disabled) {
     // Internal routes are game controls — a NavButton, not a hyperlink (ADR-0052).
     return (
-      <InnerTextNavButton className={classes} tone={tone} to={href} aria-label={ariaLabel} title={title} data-testid={dataTestid}>
+      <InnerTextNavButton className={classes} tone={tone} to={href} aria-label={ariaLabel} title={title} data-testid={dataTestid} data-ui-sfx={dataUiSfx}>
         <span>{children}</span>
       </InnerTextNavButton>
     );
   }
   return (
-    <InnerTextButton className={classes} tone={tone} aria-label={ariaLabel} title={title} disabled={disabled} data-testid={dataTestid} onClick={onClick}>
+    <InnerTextButton className={classes} tone={tone} aria-label={ariaLabel} title={title} disabled={disabled} data-testid={dataTestid} data-ui-sfx={dataUiSfx} onClick={onClick}>
       <span>{children}</span>
     </InnerTextButton>
   );

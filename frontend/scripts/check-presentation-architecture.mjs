@@ -147,7 +147,7 @@ for (const required of [
   'data-testid="deployment-play"',
   'data-testid="deployment-next"',
   'data-testid="deployment-full-deploy"',
-  'disabled={!nextReady}',
+  'disabled={departing || !nextReady}',
   'onClick={onNext}',
   'setDeploymentTransport(latest, transport)',
   'beginDeploymentDeal(latest)',
@@ -155,6 +155,8 @@ for (const required of [
   'finishDeploymentCardReveal(latest)',
   'finishDeploymentCardDiscard(latest)',
   'onArrivingUnitIdsChange: reportArrivals',
+  "reason: 'deployment-reroll'",
+  'onUnitDepartureComplete={completeDeploymentRerollDeparture}',
 ]) {
   if (!runScreen.includes(required)) fail(runScreenPath, `missing closed Run scene-source invariant: ${required}`);
 }
@@ -261,10 +263,10 @@ const skirmish = readFileSync(skirmishPath, 'utf8');
 for (const required of [
   '<SkirmishStoreProvider>',
   '<SceneSurfaceReadiness',
-  'if (!runDeployment && playableSurfaceReady && sceneActivated) activateClock()',
+  'if (!runDeployment && !unitDeparture && playableSurfaceReady && sceneActivated) activateClock()',
   'reveal={playableSurfaceReady && sceneRevealed}',
   'activate={!runDeployment && sceneActivated}',
-  'interactive={!runDeployment && sceneActivated &&',
+  'interactive={!runDeployment && !unitDeparture && sceneActivated &&',
   'surfaceSignature={runBattle?.activityId}',
   'surfaceState={presentedDeploymentSurface}',
   'preserveBoardPresentation: true',
@@ -273,6 +275,8 @@ for (const required of [
   // reveal — which happens during the scene entrance — never shows them seated early.
   "unitArrivals={sceneActivated ? 'active' : 'pending'}",
   'onArrivingUnitIdsChange={runDeployment?.onArrivingUnitIdsChange}',
+  'unitDeparture={unitDeparture}',
+  'suspendForBoardDeparture()',
 ]) {
   if (!skirmish.includes(required)) fail(skirmishPath, `missing commit-gated Battle invariant: ${required}`);
 }
@@ -282,6 +286,10 @@ const skirmishBoard = readFileSync(skirmishBoardPath, 'utf8');
 for (const required of [
   'newlyVisibleArrivalPieces(visibleUnitIdsRef.current, livePieces)',
   'data-arriving-unit-ids={arrivingUnitIds.join(\',\')}',
+  "export const UNIT_DEPARTURE_TRACKS = ['withdraw-home', 'withdraw-nearest-edge'] as const",
+  "case 'deployment-reroll': return 'withdraw-home'",
+  'data-departure-track={unitDeparture ? unitDepartureTrack(unitDeparture) : undefined}',
+  'state.onUnitDepartureComplete(departureRequest.id)',
 ]) {
   if (!skirmishBoard.includes(required)) fail(skirmishBoardPath, `missing retained-board per-unit arrival invariant: ${required}`);
 }

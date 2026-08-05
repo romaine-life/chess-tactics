@@ -21,9 +21,11 @@ import {
 } from './deployment';
 import {
   GOLD_SCALE,
+  RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS,
   RUN_BATTLE_RETRY_COST_TENTHS,
   createRun,
   prepareDeployment,
+  rerollDeployment,
   restartBattle,
   runCardUnitIds,
   type RunAbility,
@@ -412,5 +414,26 @@ describe('retired pawn-only geometry and retries', () => {
     expect(JSON.stringify(retried.deployment)).toBe(before);
     expect(retried.battleRuntime?.initiallyDeployedUnitIds).toEqual(battle.deployment?.deployingUnitIds);
     expect(retried.goldTenths).toBe(battle.goldTenths - RUN_BATTLE_RETRY_COST_TENTHS);
+  });
+
+  it('replays the complete Deployment lifecycle after a post-placement reroll', () => {
+    const level = deploymentLevel();
+    const battle = {
+      ...advanceLifecycle(orderedRun(level, [unit('king', 'king'), unit('pawn', 'pawn')], 99), level),
+      goldTenths: 10 * GOLD_SCALE,
+    };
+    const originalDeal = battle.deployment!.dealtCardIds;
+    const originalSeed = battle.deployment!.seed;
+
+    const rerolled = rerollDeployment(battle);
+    expect(rerolled.phase).toBe('deployment');
+    expect(rerolled.deployment?.stage).toBe('awaiting-deal');
+    expect(rerolled.deployment?.dealtCardIds).toEqual(originalDeal);
+    expect(rerolled.deployment?.seed).not.toBe(originalSeed);
+    expect(rerolled.goldTenths).toBe(battle.goldTenths - RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS);
+
+    const redeployed = advanceLifecycle(rerolled, level);
+    expect(redeployed.phase).toBe('battle');
+    expect(Object.keys(redeployed.deployment?.placements ?? {})).toEqual(['king', 'pawn']);
   });
 });
