@@ -48,7 +48,7 @@ describe('Run chrome hierarchy', () => {
     expect(skirmish).toContain('return runForm.add(runActivity({');
     expect(skirmish).not.toContain('titleBarContent: ReactNode;');
     expect(runScreen).toContain('const form = createRunForm({');
-    expect(runScreen).toContain('<RunTitleBarStatus run={shellRun} path={routePath} search={routeSearch} />');
+    expect(runScreen).toContain('<RunTitleBarStatus run={shellRun} path={routePath} search={routeSearch} view={view} />');
     expect(skirmish).toMatch(/export function Skirmish\b[\s\S]*?<SkirmishStoreProvider>/);
     expect(skirmishShell).toContain('<SceneSurfaceReadiness');
     expect(skirmishShell).toContain('surface="gameplay-hud"');
@@ -60,11 +60,9 @@ describe('Run chrome hierarchy', () => {
     expect(metaControls).toContain('inert={adlectioInFlight ? true : undefined}');
     expect(metaControls).not.toContain('disabled={adlectioInFlight}');
     expect(metaControls).not.toContain('disabled={abandoning || adlectioInFlight}');
-    expect(metaControls).toContain('Alienatio');
-    expect(metaControls).toContain('Expunctio');
-    expect(metaControls).toContain('data-testid="run-view-expunctio"');
-    expect(metaControls).toContain('View Battle');
-    expect(metaControls).toContain('data-testid="run-view-battle-preview"');
+    expect(metaControls).toContain('SECTIO_WORKSPACE_VIEWS.map');
+    expect(metaControls).toContain('RUN_WORKSPACE_VIEW_LABEL[candidate]');
+    expect(metaControls).toContain('data-testid={`run-view-${candidate}`}');
     // The Run rail no longer carries Army/Lipsana: the Strategikon is Run-wide (ADR-0335)
     // and its Prosopography/Lipsanotheca render the same RunArmyWorkspace and held-lipsanon
     // codex, so a second entry point to them was a duplicate. The battle HUD keeps its own.
@@ -346,9 +344,10 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).not.toContain('onBeginBattle');
     // The phase is the title bar's first clickable ROUTE segment (Run › Sectio),
     // and an open Strategikon appends its exact canonical section/reference links.
-    expect(runScreen).toContain('<TitleRoute segments={runTitleBarRouteSegments(run, path, search)} />');
+    expect(runScreen).toContain('<TitleRoute segments={runTitleBarRouteSegments(run, path, search, view)} />');
+    expect(runScreen).toContain('runWorkspaceTitleSegment(`/run${search}`, view)');
     expect(runScreen).toContain('strategikonRouteCrumbs(path).map');
-    expect(runScreen).toContain('<RunTitleBarStatus run={shellRun} path={routePath} search={routeSearch} />');
+    expect(runScreen).toContain('<RunTitleBarStatus run={shellRun} path={routePath} search={routeSearch} view={view} />');
     // Address-only Play breadcrumbs are App-owned, so they remain present even
     // while the replaceable battlefield scene is not yet active.
     expect(skirmish).not.toContain('<TitleBarSlot region="route">');
