@@ -4,11 +4,11 @@ date: 2026-08-05
 deciders: owner (Nelson) + Codex
 refines:
   - "[ADR-0030](0030-scrollbars-never-vanish.md)"
-  - "[ADR-0435](0435-a-won-run-battle-pauses-on-its-visible-board-before-rewards.md)"
-  - "[ADR-0437](0437-run-phases-retire-before-their-successors-reveal.md)"
+  - "[ADR-0452](0452-a-won-run-battle-pauses-on-its-visible-board-before-rewards.md)"
+  - "[ADR-0454](0454-run-phases-retire-before-their-successors-reveal.md)"
 ---
 
-# ADR-0438: Aftermath retains a reversible terminal-board review
+# ADR-0455: Aftermath retains a reversible terminal-board review
 
 ## Context
 
@@ -37,7 +37,7 @@ overflow and paints a native scrollbar for content which cannot actually move.
   Run. Abandoning the Run and reaching final War victory retire it as well. Other terminal matches
   keep their existing persistence behavior.
 - Moving between aftermath and terminal-board review replaces the complete scene under
-  ADR-0437; their different Controls states never overlap.
+  ADR-0454; their different Controls states never overlap.
 - Non-Sectio Run Controls with only sparse, fixed actions are static layouts, not scroll panes.
   They suppress overflow instead of painting a false scrollbar. ADR-0030 continues to govern
   surfaces which actually own scrolling.

@@ -15,15 +15,16 @@
 // Serialization is plain JSON — core/types is serializable by construction.
 
 import type { SkirmishState } from './store';
+import { readElapsedClockMs } from '../core/clock';
 
 const KEY = 'chess-tactics-active-match-v1';
-const VERSION = 1;
+const VERSION = 2;
 
 // The fields that fully describe a resumable match. `env` (derived) and
 // `selectedId`/`focusedId` (transient) are deliberately omitted — see module note.
 export type PersistedMatch = Pick<
   SkirmishState,
-  'game' | 'seed' | 'tick' | 'log' | 'objective' | 'objectiveCtx' | 'victoryOverride' | 'turnsElapsed' | 'levelId' | 'clock'
+  'game' | 'seed' | 'tick' | 'log' | 'objective' | 'objectiveCtx' | 'victoryOverride' | 'turnsElapsed' | 'levelId' | 'clock' | 'battleElapsed'
 > &
   // Optional for snapshots written before these fields existed. resumeMatch defaults
   // a missing AI mode to search and a missing activity id to standalone play.
@@ -55,7 +56,7 @@ function storage(): Storage | null {
 let enabled = true;
 // The Battle and aftermath are sibling scenes, so their stores do not share component
 // lifetime. Keep the just-won board in this module as the mandatory same-session handoff;
-// localStorage remains the reload bridge, not the condition for rendering Back (ADR-0440).
+// localStorage remains the reload bridge, not the condition for rendering Back (ADR-0457).
 let currentSessionRunVictory: PersistedMatch | null = null;
 
 export function setMatchPersistenceEnabled(value: boolean): void {
@@ -75,6 +76,12 @@ function sliceOf(state: SkirmishState): PersistedMatch {
     levelId: state.levelId,
     activityId: state.activityId,
     clock: state.clock,
+    // Persist only the exact bank. A reload or loading gap is not live Battle time,
+    // so the device-local wall-clock anchor never crosses the storage boundary.
+    battleElapsed: {
+      elapsedMs: readElapsedClockMs(state.battleElapsed),
+      startedAtMs: null,
+    },
     aiMode: state.aiMode,
     undoCheckpoint: state.undoCheckpoint ?? null,
     savedAt: new Date().toISOString(),
@@ -90,8 +97,8 @@ export function clearMatch(): void {
 /**
  * Save the live match, or clear the saved copy when there's nothing worth
  * resuming. Called after every state transition that changes the board (see store:
- * newSkirmish / tryMoveTo / enemy reply / clock expiry), so the disk copy is never
- * more than one move stale.
+ * newSkirmish / tryMoveTo / enemy reply / clock expiry), plus pagehide so a reload
+ * banks live elapsed time even before the next move.
  *
  * Skips entirely when persistence is disabled (test play). A never-started
  * placeholder is left alone — it must NOT wipe a genuinely saved match that a fresh
@@ -123,15 +130,35 @@ export function persistMatch(state: SkirmishState): void {
 // Minimal shape guard: enough to trust the blob can drive a board without throwing.
 // A malformed or older-version copy resolves to null (and is cleared) so the caller
 // falls back to a fresh game rather than crashing on a half-parsed state.
-function isResumable(value: unknown): value is StoredEnvelope {
+function hasResumableShape(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== 'object') return false;
   const v = value as Record<string, unknown>;
-  if (v.version !== VERSION) return false;
   const game = v.game as Record<string, unknown> | undefined;
   if (!game || typeof game !== 'object') return false;
   return Array.isArray(game.pieces)
     && typeof game.size === 'object' && game.size !== null
     && Array.isArray(v.log);
+}
+
+function migrateEnvelope(value: unknown): StoredEnvelope | null {
+  if (!hasResumableShape(value)) return null;
+  const envelope = value as Record<string, unknown>;
+  if (envelope.version === 1) {
+    return {
+      ...envelope,
+      version: VERSION,
+      battleElapsed: { elapsedMs: 0, startedAtMs: null },
+    } as unknown as StoredEnvelope;
+  }
+  if (envelope.version !== VERSION) return null;
+  const elapsed = envelope.battleElapsed as Record<string, unknown> | undefined;
+  if (
+    !elapsed
+    || !Number.isFinite(elapsed.elapsedMs)
+    || Number(elapsed.elapsedMs) < 0
+    || elapsed.startedAtMs !== null
+  ) return null;
+  return envelope as unknown as StoredEnvelope;
 }
 
 /** Read a resumable match, or null when there's none, it's stale, or it's unreadable. */
@@ -143,8 +170,12 @@ export function loadMatch(): PersistedMatch | null {
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as unknown;
-    if (!isResumable(parsed)) { clearMatch(); return null; }
-    const { version: _version, ...match } = parsed;
+    const envelope = migrateEnvelope(parsed);
+    if (!envelope) { clearMatch(); return null; }
+    if ((parsed as { version?: unknown }).version !== VERSION) {
+      try { store.setItem(KEY, JSON.stringify(envelope)); } catch { /* best-effort migration write */ }
+    }
+    const { version: _version, ...match } = envelope;
     return match;
   } catch {
     clearMatch();

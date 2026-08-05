@@ -105,13 +105,17 @@ Continue may perform no
 Adlectio and enters Deployment at Battle index 0. Deployment always persists the exact dealt-card
 order, stable nullable seats, capacity decision, active card, revealed-card prefix, seat cursor,
 deal boundary, paused/play/full-deploy transport, committed placements, settlement boundary, and
-discard cursor. A won
+discard cursor. A one-gold in-Deployment or five-gold in-Battle position reroll replaces those
+existing fields at the initial deal boundary with a new placement seed while retaining the dealt
+card ids and nullable seat order. Its registered unit-departure track is presentation-only: the
+atomic persisted replacement and gold debit occur after compositor completion, so animation
+progress adds no RunSaveVersion field. A won
 non-final Battle enters `aftermath`, which persists
 the reward, turns, elapsed time, survivors, and fallen units until Continue opens Bona Vacantia
 or the next Sectio. The exact terminal board crosses from the live Battle scene to aftermath in a
 mandatory current-session handoff so Back is not conditional on a best-effort storage write;
 browser match persistence remains the exact-identity reload fallback. See ADR-0321 through
-ADR-0348, ADR-0377, ADR-0419, ADR-0422, and ADR-0440 for those gameplay decisions.
+ADR-0348, ADR-0377, ADR-0419, ADR-0422, ADR-0449, and ADR-0457 for those gameplay decisions.
 
 Level documents have their own `formatVersion`, separate from the PostgreSQL schema-migration
 ledger. Current code accepts exactly Level format version 2. The declared version 1 to 2 transform
@@ -147,6 +151,11 @@ bounded Run economy/runtime slice needed to reverse move-owned casualty, Reservi
 cash-out effects. Undo restores that slice through the normal active-Run write and deducts one gold;
 the checkpoint exists only alongside the device-local live board and is replaced by the next move
 or cleared by Battle replacement (ADR-0394).
+
+The same resumable match snapshot banks an untimed Battle's elapsed duration without persisting its
+live wall-clock anchor. Version 1 snapshots migrate once to version 2 with a zero bank; current
+snapshots resume the bank only after the painted Battle activates, so loading and reload gaps never
+become displayed play time (ADR-0451).
 
 Per-user scoping means each user has their own `id` namespace — two users can
 both have a level `my-level` without colliding, and neither can read or

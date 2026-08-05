@@ -3,12 +3,12 @@ status: accepted
 date: 2026-08-05
 deciders: owner (Nelson) + Codex
 partially_supersedes:
-  - "[ADR-0436](0436-a-terminal-run-battle-is-a-craftable-review-landing.md)'s immediate-clear timing"
+  - "[ADR-0453](0453-a-terminal-run-battle-is-a-craftable-review-landing.md)'s immediate-clear timing"
 refines:
-  - "[ADR-0442](0442-battle-scenes-reveal-once-and-terminal-review-units-stay-settled.md)"
+  - "[ADR-0459](0459-battle-scenes-reveal-once-and-terminal-review-units-stay-settled.md)"
 ---
 
-# ADR-0443: A crafted terminal marker lasts through its Victory surface
+# ADR-0460: A crafted terminal marker lasts through its Victory surface
 
 ## Context
 
@@ -40,7 +40,7 @@ problem is only when its exact terminal classification ends.
 - A crafted Victory link has one visible reveal: environment, board, settled units, Victory, and
   Rewards rise together under the scene director.
 - A Victory earned during an already-visible ordinary Battle may still use the lightweight
-  acknowledgement fade required by ADR-0435.
+  acknowledgement fade required by ADR-0452.
 - No crafted-result field enters Run persistence, match persistence, or `RunSaveVersion`.
 - The live terminal gate can require Victory to exist before scene current, remain at child
   opacity one throughout the reveal, and observe no unit entrance.

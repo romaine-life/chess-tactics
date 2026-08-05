@@ -55,7 +55,7 @@ describe('Run acquisition-target disclosure', () => {
 
     // The whole face, in text: the card's own name, its primary type, and its flavor.
     // There is no slot an ability sentence could occupy (ADR-0305, ADR-0339).
-    expect(Object.keys(hidden).sort()).toEqual(['cardProperty', 'cost', 'flavor', 'grants', 'name', 'typeLine']);
+    expect(Object.keys(hidden).sort()).toEqual(['cardProperty', 'cost', 'flavor', 'grants', 'name', 'showsCost', 'typeLine']);
     expect(hidden.typeLine).toBe('Units');
     expect(hidden.grants.every((grant) => !grant.ability)).toBe(true);
   });

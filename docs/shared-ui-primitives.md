@@ -62,7 +62,9 @@ search for before constructing a control or repeated surface.
   native scrollbar and owns the always-present drawn rail plus overflow-only
   thumb required by ADR-0030. Every Enchiridion reference body and every
   Strategikon destination that scrolls consumes this primitive; section lists
-  must not become native `overflow: auto` owners.
+  must not become native `overflow: auto` owners. Per ADR-0448, thumb size,
+  position, and drag travel derive from the drawn rail's rendered height so a
+  contract-owned clip apron may inset that rail without corrupting behavior.
 
 ## Studio and workflow compositions
 
@@ -70,7 +72,7 @@ search for before constructing a control or repeated surface.
   portal capability. It carries transient paint outside scene and selection fades,
   exposes no input or navigation authority, and releases retained handoffs only when
   the director settles the destination ([ADR-0385](adr/0385-scene-crossing-visuals-use-the-directors-continuity-layer.md),
-  [ADR-0446](adr/0446-continuity-handoffs-settle-with-the-director.md)).
+  [ADR-0463](adr/0463-continuity-handoffs-settle-with-the-director.md)).
 - `ui/RunCardFace.tsx` — the canonical visible Run-card anatomy shared by Card
   Layout, Sectio visits, review, Enchiridion, and Deployment; it owns the paired property/state
   icon seats, retains authored geometry for optional empty occurrences, and includes only visible

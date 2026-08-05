@@ -15,7 +15,9 @@ import {
   EUTACTIC_COST,
   CURRENT_RUN_SAVE_VERSION,
   RUN_OPENING_OFFER_COUNT,
+  RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS,
   RUN_BATTLE_RETRY_COST_TENTHS,
+  RUN_DEPLOYMENT_REROLL_COST_TENTHS,
   RUN_STARTING_GOLD,
   RUN_STARTING_GOLD_TENTHS,
   LEGATINE_ADLECTED_OFFER_DENOMINATOR,
@@ -23,6 +25,7 @@ import {
   battleVictoryGoldTenths,
   beginBattle,
   canTargetLipsanon,
+  canRerollDeployment,
   canRestartBattle,
   canUndoRunBattleMove,
   cardExpunctioPriceTenths,
@@ -34,6 +37,7 @@ import {
   closeBattle,
   createRun,
   createRunCardOffer,
+  deploymentRerollCostTenths,
   resolveCacochymicCombatDeaths,
   runCardUnitIds,
   formatGold,
@@ -48,6 +52,7 @@ import {
   openingSectioOffers,
   openSectio,
   prepareDeployment,
+  rerollDeployment,
   resetSectio,
   restartBattle,
   runAbilityDescription,
@@ -115,6 +120,94 @@ describe('Battle retry', () => {
     const unaffordable = { ...battle, goldTenths: RUN_BATTLE_RETRY_COST_TENTHS - 1 };
     expect(canRestartBattle(unaffordable)).toBe(false);
     expect(restartBattle(unaffordable)).toBe(unaffordable);
+  });
+});
+
+describe('Deployment reroll', () => {
+  function progressedDeployment(goldTenths: number): RunDocument {
+    let run = pastOpeningLipsanon(createRun(war(), 73, '2026-01-01T00:00:00.000Z'));
+    run = prepareDeployment(leaveSectio(run));
+    const firstUnitId = run.deployment!.deployingUnitIds[0];
+    return {
+      ...run,
+      goldTenths,
+      deployment: {
+        ...run.deployment!,
+        capacityResolved: true,
+        placements: { [firstUnitId]: '3,7' },
+        manualPlacements: { [firstUnitId]: '3,7' },
+        activeCardIndex: 1,
+        unitCursor: 1,
+        discardCursor: 1,
+        revealedCardIds: [run.deployment!.dealtCardIds[0]],
+        settlingUnitIds: [firstUnitId],
+        transport: 'full-deploy',
+        stage: 'settling',
+        temporaryAdlectedUnitId: firstUnitId,
+      },
+    };
+  }
+
+  it('spends one gold at any Deployment boundary and restarts every placement', () => {
+    const run = progressedDeployment(4 * GOLD_SCALE);
+    const originalDeal = run.deployment!.dealtCardIds;
+    const originalSeed = run.deployment!.seed;
+
+    expect(deploymentRerollCostTenths(run)).toBe(RUN_DEPLOYMENT_REROLL_COST_TENTHS);
+    expect(canRerollDeployment(run)).toBe(true);
+    const rerolled = rerollDeployment(run);
+
+    expect(rerolled.phase).toBe('deployment');
+    expect(rerolled.goldTenths).toBe(run.goldTenths - RUN_DEPLOYMENT_REROLL_COST_TENTHS);
+    expect(rerolled.deployment?.seed).not.toBe(originalSeed);
+    expect(rerolled.deployment?.dealtCardIds).toEqual(originalDeal);
+    expect(rerolled.deployment).toMatchObject({
+      stage: 'awaiting-deal',
+      transport: 'paused',
+      capacityResolved: false,
+      placements: {},
+      manualPlacements: {},
+      activeCardIndex: 0,
+      unitCursor: 0,
+      discardCursor: 0,
+      revealedCardIds: [],
+      settlingUnitIds: [],
+    });
+    expect(rerolled.deployment).not.toHaveProperty('temporaryAdlectedUnitId');
+  });
+
+  it('spends five gold after positioning and returns Battle to fresh Deployment', () => {
+    const deployment = progressedDeployment(9 * GOLD_SCALE);
+    const battle = beginBattle(
+      deployment,
+      deployment.deployment!.deployingUnitIds,
+      [],
+      deployment.deployment!.unavailableUnitIds,
+    );
+
+    expect(deploymentRerollCostTenths(battle)).toBe(RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS);
+    const rerolled = rerollDeployment(battle);
+
+    expect(rerolled.phase).toBe('deployment');
+    expect(rerolled.goldTenths).toBe(battle.goldTenths - RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS);
+    expect(rerolled.battleRuntime).toBeNull();
+    expect(rerolled.deployment?.stage).toBe('awaiting-deal');
+    expect(rerolled.deployment?.dealtCardIds).toEqual(battle.deployment?.dealtCardIds);
+  });
+
+  it('refuses either reroll below its phase-specific price', () => {
+    const deployment = progressedDeployment(RUN_DEPLOYMENT_REROLL_COST_TENTHS - 1);
+    expect(canRerollDeployment(deployment)).toBe(false);
+    expect(rerollDeployment(deployment)).toBe(deployment);
+
+    const payableBattle = beginBattle(
+      { ...deployment, goldTenths: RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS - 1 },
+      deployment.deployment!.deployingUnitIds,
+      [],
+      deployment.deployment!.unavailableUnitIds,
+    );
+    expect(canRerollDeployment(payableBattle)).toBe(false);
+    expect(rerollDeployment(payableBattle)).toBe(payableBattle);
   });
 });
 

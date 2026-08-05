@@ -14,6 +14,7 @@ import {
   SkirmishBoard,
   type SkirmishBoardCellOverlayContext,
   type SkirmishBoardSurfaceState,
+  type UnitDepartureRequest,
 } from '../render/SkirmishBoard';
 import { SkirmishHud, type SkirmishHudProps } from './SkirmishHud';
 import { SceneSurfaceReadiness } from './shell/PaintedSurfaceBoundary';
@@ -28,6 +29,7 @@ import { SkirmishStoreProvider, useSkirmish, useSkirmishStoreApi } from '../game
 import {
   loadMatch,
   loadReviewableRunBattleMatch,
+  persistMatch,
   persistedMatchMatchesActivity,
   setMatchPersistenceEnabled,
 } from '../game/matchPersistence';
@@ -48,7 +50,12 @@ import { clearPersistedNetIntent } from '../game/netIntentPersistence';
 import { acquireNetSeatLease } from '../game/netSeatLease';
 import { objectiveSummary, victoryRulesForObjective } from '../core/objectives';
 import { objectiveBriefingForSide } from '../game/objectiveBriefing';
-import { formatClockMs } from '../core/clock';
+import {
+  formatClockMs,
+  formatElapsedClockMs,
+  readElapsedClockMs,
+  type ElapsedClockState,
+} from '../core/clock';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { decodeBoard } from './boardCode';
@@ -94,6 +101,7 @@ import { GameplayWorkspaceSceneSlot } from './shell/AuthoredSceneSlot';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 import { RunBattleUndoButton } from './RunBattleUndoButton';
 import { RunBattleRetryButton } from './RunBattleRetryButton';
+import { RunDeploymentRerollButton } from './RunDeploymentRerollButton';
 import { SkirmishShell } from './SkirmishShell';
 import { runActivity, type RunForm } from './RunForm';
 
@@ -113,6 +121,10 @@ export interface RunBattlePresentation {
   onRestart: () => boolean;
   canRestart: boolean;
   retryCostTenths: number;
+  /** Spend the post-placement price and replay the complete Deployment phase. */
+  onRerollDeployment: () => boolean;
+  canRerollDeployment: boolean;
+  deploymentRerollCostTenths: number;
   onPawnCashOut?: (unitId: string) => void;
   onAbandonRun?: () => void;
   transformCommittedBoard?: RunBattleTransformSink;
@@ -143,6 +155,8 @@ interface RunSkirmishProps {
   runForm: RunForm;
   runBattle: RunBattlePresentation;
   runDeployment?: RunDeploymentPresentation | null;
+  unitDeparture?: UnitDepartureRequest | null;
+  onUnitDepartureComplete?: (requestId: string) => void;
   routePath?: string;
   routeSearch?: string;
 }
@@ -165,6 +179,22 @@ export function canRetryRunBattle(
   return canAffordRetry && (turnsElapsed > 0 || battleEnded);
 }
 
+/** A Deployment reroll retains the mounted Battle activity but must promote its new seed once. */
+export function runBattlePresentationKey(activityId: string, seed: number): string {
+  return `${activityId}:${seed}`;
+}
+
+function useElapsedClockReadout(clock: ElapsedClockState, enabled: boolean): number {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    setNowMs(Date.now());
+    if (!enabled || clock.startedAtMs === null) return undefined;
+    const ticker = window.setInterval(() => setNowMs(Date.now()), 250);
+    return () => window.clearInterval(ticker);
+  }, [clock.startedAtMs, enabled]);
+  return readElapsedClockMs(clock, nowMs);
+}
+
 function SkirmishSession(props: SkirmishProps = {}) {
   const runForm = props.runForm ?? null;
   const runBattle = props.runBattle ?? null;
@@ -177,6 +207,8 @@ function SkirmishSession(props: SkirmishProps = {}) {
   const runBattleSeed = runBattle?.seed ?? null;
   const runBattleReviewTerminal = runBattle?.reviewTerminalResult ?? false;
   const runDeploymentActive = Boolean(runDeployment);
+  const unitDeparture = 'unitDeparture' in props ? props.unitDeparture ?? null : null;
+  const onUnitDepartureComplete = 'onUnitDepartureComplete' in props ? props.onUnitDepartureComplete : undefined;
   const routePath = props.routePath ?? window.location.pathname;
   const routeSearch = props.routeSearch ?? window.location.search;
   const sceneActivated = useSceneActivation();
@@ -185,15 +217,20 @@ function SkirmishSession(props: SkirmishProps = {}) {
   const skirmishViewStore = useSkirmishViewStoreApi();
   const lastDeploymentSurfaceRef = useRef<SkirmishBoardSurfaceState | null>(null);
   const continuedFromDeploymentRef = useRef(false);
-  const [stagedBattleActivityId, setStagedBattleActivityId] = useState<string | null>(null);
+  const battlePresentationKey = runBattle ? runBattlePresentationKey(runBattle.activityId, runBattle.seed) : null;
+  const [stagedBattlePresentationKey, setStagedBattlePresentationKey] = useState<string | null>(null);
   if (runDeployment) {
     lastDeploymentSurfaceRef.current = runDeployment.surfaceState;
     continuedFromDeploymentRef.current = true;
   }
+  useLayoutEffect(() => {
+    if (!unitDeparture || runDeployment) return;
+    skirmishStore.getState().suspendForBoardDeparture();
+  }, [runDeployment, skirmishStore, unitDeparture]);
   const retainedDeploymentSurface = !runDeployment
     && runBattle
     && continuedFromDeploymentRef.current
-    && stagedBattleActivityId !== runBattle.activityId
+    && stagedBattlePresentationKey !== battlePresentationKey
       ? lastDeploymentSurfaceRef.current
       : null;
   const presentedDeploymentSurface = runDeployment?.surfaceState ?? retainedDeploymentSurface ?? undefined;
@@ -361,7 +398,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
   // only the newly introduced formation members the canonical arrival treatment.
   useLayoutEffect(() => {
     if (runDeployment || !runBattle || !continuedFromDeploymentRef.current) return;
-    if (stagedBattleActivityId === runBattle.activityId) return;
+    if (stagedBattlePresentationKey === battlePresentationKey) return;
     const ai = new URLSearchParams(window.location.search).get('ai') === 'greedy' ? 'greedy' as const : 'search' as const;
     newSkirmish({
       seed: runBattle.seed,
@@ -373,8 +410,8 @@ function SkirmishSession(props: SkirmishProps = {}) {
     });
     setRouteLevel(runBattle.level);
     setBoardSettled(true);
-    setStagedBattleActivityId(runBattle.activityId);
-  }, [newSkirmish, runBattle, runDeployment, stagedBattleActivityId]);
+    setStagedBattlePresentationKey(battlePresentationKey);
+  }, [battlePresentationKey, newSkirmish, runBattle, runDeployment, stagedBattlePresentationKey]);
   const screenBoard = useMemo(
     () => game.boardCode ? decodeBoard(game.boardCode) : null,
     [game.boardCode],
@@ -399,6 +436,8 @@ function SkirmishSession(props: SkirmishProps = {}) {
   // remainingMs to the displayed readout, so this subscription re-renders about
   // once a second, not per tick.
   const clock = useSkirmish((s) => s.clock);
+  const battleElapsed = useSkirmish((s) => s.battleElapsed);
+  const elapsedReadoutMs = useElapsedClockReadout(battleElapsed, clock === null);
   const net = useSkirmish((s) => s.net);
   const localSide: PlayingSide = net ? net.localSide : 'player';
   const activeLevel = useMemo(() => {
@@ -568,7 +607,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
         : isCampaignPlay ? 'Retry level' : 'Retry board')
     : 'Back to Play';
   const runBattleRetryAvailable = runBattle
-    ? canRetryRunBattle(runBattle.canRestart, turnsElapsed, Boolean(game.winner))
+    ? !unitDeparture && canRetryRunBattle(runBattle.canRestart, turnsElapsed, Boolean(game.winner))
     : true;
   const runBattleRetryUnavailableReason = runBattle
     && runBattle.canRestart
@@ -780,8 +819,17 @@ function SkirmishSession(props: SkirmishProps = {}) {
   }, [newSkirmish, resumeMatch, isTestPlay, routeBoard, routeBoardLevel, routeMap, routeCampaignId, routeLevel, routeLevelId, routeLobby, runBattleActivityId, runBattleLevel, runBattleReviewTerminal, runBattleSeed, runDeploymentActive]);
 
   useEffect(() => {
-    if (!runDeployment && playableSurfaceReady && sceneActivated) activateClock();
-  }, [activateClock, playableSurfaceReady, runDeployment, sceneActivated]);
+    // Board transitions already persist their exact elapsed bank. Pagehide covers the
+    // remaining case: a reload while the player has not moved since the last snapshot.
+    // The storage boundary strips the live anchor, so reload latency is never counted.
+    const bankBeforeUnload = () => persistMatch(skirmishStore.getState());
+    window.addEventListener('pagehide', bankBeforeUnload);
+    return () => window.removeEventListener('pagehide', bankBeforeUnload);
+  }, [skirmishStore]);
+
+  useEffect(() => {
+    if (!runDeployment && !unitDeparture && playableSurfaceReady && sceneActivated) activateClock();
+  }, [activateClock, playableSurfaceReady, runDeployment, sceneActivated, unitDeparture]);
 
   // Multiplayer entry: `/play?lobby=<id>` enters a lobby's shared board. Both clients
   // build the SAME (level, seed) game; each side's moves relay through the lobby channel
@@ -1241,6 +1289,10 @@ function SkirmishSession(props: SkirmishProps = {}) {
     onOpenPredrawnRegistration: predrawnPreview ? () => setPredrawnPickerOpen(true) : null,
     onPawnCashOut: runBattle?.onPawnCashOut ?? null,
     onAbandonRun: runBattle?.onAbandonRun ?? null,
+    onRerollDeployment: runBattle ? () => { runBattle.onRerollDeployment(); } : null,
+    canRerollDeployment: !unitDeparture && (runBattle?.canRerollDeployment ?? false),
+    deploymentRerollCostTenths: runBattle?.deploymentRerollCostTenths,
+    deploymentRerollDeparting: Boolean(unitDeparture),
   };
   const battleHud = boardSettled && !boardSurfaceError ? (
     <SkirmishHud
@@ -1325,6 +1377,13 @@ function SkirmishSession(props: SkirmishProps = {}) {
               unavailableReason={runBattleRetryUnavailableReason}
               className="active"
             />
+            <RunDeploymentRerollButton
+              testId="reroll-deployment-result"
+              costTenths={runBattle.deploymentRerollCostTenths}
+              canReroll={!unitDeparture && runBattle.canRerollDeployment}
+              onReroll={() => { runBattle.onRerollDeployment(); }}
+              departing={Boolean(unitDeparture)}
+            />
             {game.winner === 'enemy' ? (
               <>
                 <ChromeNavButton unit="inner-text-button"
@@ -1351,7 +1410,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
   const skirmishTitleBarContent = playableSurfaceReady ? (
     <div className="skirmish-topbar-status">
       {/* The battle clock is ALWAYS the middle chip on every play surface — a timed game
-        counts down and an authored untimed level reads "∞ / No limit". Keeping the
+        counts down and an authored untimed level counts elapsed Battle time upward. Keeping the
         centre chip present means
         the turn plate and objective always flank a real element, so the clock stays
         page-centred over the title bar's diamond (equal-width flanks, see style.css). */}
@@ -1367,7 +1426,9 @@ function SkirmishSession(props: SkirmishProps = {}) {
           </>
         ) : (
           <>
-            <strong className="skirmish-clock-unlimited" aria-label="No time limit">∞</strong>
+            <strong data-testid="untimed-battle-clock" aria-label={`Elapsed time ${formatElapsedClockMs(elapsedReadoutMs)}`}>
+              {formatElapsedClockMs(elapsedReadoutMs)}
+            </strong>
             <small>No limit</small>
           </>
         )}
@@ -1439,7 +1500,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
             compositor mounted so pieces return to their starting positions without
             hiding, reacquiring, or replaying the board's first-frame lifecycle. */}
           <SkirmishBoard
-            interactive={!runDeployment && sceneActivated && (!net || (netSeatInteractive && !netRelayFrozen))}
+            interactive={!runDeployment && !unitDeparture && sceneActivated && (!net || (netSeatInteractive && !netRelayFrozen))}
             surfaceState={presentedDeploymentSurface}
             renderCellOverlay={runDeployment?.renderCellOverlay}
             boardOverlay={runDeployment?.boardOverlay}
@@ -1448,6 +1509,8 @@ function SkirmishSession(props: SkirmishProps = {}) {
             onSurfaceReady={setBoardSurfaceReady}
             onSurfaceError={setBoardSurfaceError}
             onArrivingUnitIdsChange={reportArrivingUnitIds}
+            unitDeparture={unitDeparture}
+            onUnitDepartureComplete={onUnitDepartureComplete}
             reveal={playableSurfaceReady && sceneRevealed}
             revealTransition="scene"
             activate={!runDeployment && sceneActivated}

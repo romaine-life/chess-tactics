@@ -3,16 +3,16 @@ status: accepted
 date: 2026-08-05
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0441](0441-aftermath-uses-an-out-in-dissolve.md)"
-  - "[ADR-0444](0444-aftermath-crossfades-directly-without-a-homepage-floor.md)"
-  - "[ADR-0445](0445-transition-choreography-is-derived-from-scene-ownership.md)"
+  - "[ADR-0458](0458-aftermath-uses-an-out-in-dissolve.md)"
+  - "[ADR-0461](0461-aftermath-crossfades-directly-without-a-homepage-floor.md)"
+  - "[ADR-0462](0462-transition-choreography-is-derived-from-scene-ownership.md)"
 refines:
   - "[ADR-0205](0205-navigation-loads-atomic-scenes-through-one-director.md)"
   - "[ADR-0307](0307-every-replaceable-region-is-a-director-owned-scene-slot.md)"
-  - "[ADR-0435](0435-a-won-run-battle-pauses-on-its-visible-board-before-rewards.md)"
+  - "[ADR-0452](0452-a-won-run-battle-pauses-on-its-visible-board-before-rewards.md)"
 ---
 
-# ADR-0437: Run phases retire before their successors reveal
+# ADR-0454: Run phases retire before their successors reveal
 
 ## Context
 

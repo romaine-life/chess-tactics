@@ -8,6 +8,7 @@ import { settleCommittedPosition } from '../core/adjudication';
 import type { PlayingSide } from './clientPerspective';
 import { loadPersistedNetIntent, persistNetIntent } from './netIntentPersistence';
 import type { RunBattleUndoCheckpoint } from '../run/model';
+import { readElapsedClockMs } from '../core/clock';
 
 // A handful of tests here compute one or two full enemy replies, each of which runs
 // the rung-1 search AI (core/ai searchEnemyMove) synchronously and DELIBERATELY with
@@ -36,6 +37,22 @@ describe('skirmish presentation instances', () => {
     expect(second.getState().seed).toBe(1);
     expect(first.getState().setRunBattleTransformSink)
       .not.toBe(second.getState().setRunBattleTransformSink);
+  });
+
+  it('suspends every live Battle authority while units depart the board', () => {
+    const store = createSkirmishStore();
+    store.getState().newSkirmish({ seed: 17 });
+    const beforeEpoch = store.getState().sessionEpoch;
+
+    store.getState().suspendForBoardDeparture();
+
+    expect(store.getState().sessionEpoch).toBeGreaterThan(beforeEpoch);
+    expect(store.getState().clock?.running).toBe(false);
+    expect(store.getState().battleElapsed.startedAtMs).toBeNull();
+    expect(store.getState().selectedId).toBeNull();
+    expect(store.getState().focusedId).toBeNull();
+    expect(store.getState().premoves).toEqual([]);
+    expect(store.getState().runUndoEnabled).toBe(false);
   });
 });
 
@@ -331,6 +348,7 @@ describe('skirmish store', () => {
     const saved = {
       game: s.game, seed: s.seed, tick: s.tick, log: s.log, objective: s.objective,
       objectiveCtx: s.objectiveCtx, victoryOverride: s.victoryOverride, turnsElapsed: s.turnsElapsed, levelId: 'lvl-9', clock: s.clock,
+      battleElapsed: { elapsedMs: readElapsedClockMs(s.battleElapsed), startedAtMs: null },
     };
     // Simulate a reload wiping the singleton to a different, unrelated game.
     vi.clearAllTimers();
@@ -357,6 +375,7 @@ describe('skirmish store', () => {
     const saved = {
       game: s.game, seed: s.seed, tick: s.tick, log: s.log, objective: s.objective,
       objectiveCtx: s.objectiveCtx, victoryOverride: s.victoryOverride, turnsElapsed: s.turnsElapsed, levelId: s.levelId, clock: s.clock,
+      battleElapsed: { elapsedMs: readElapsedClockMs(s.battleElapsed), startedAtMs: null },
     };
     vi.clearAllTimers(); // a page reload kills the pending reply — the soft-lock this guards
     useSkirmish.getState().resumeMatch(saved);
@@ -681,13 +700,41 @@ describe('skirmish store: battle clock', () => {
   it('does not charge loading time when the playable surface owns clock activation', () => {
     useSkirmish.getState().newSkirmish({ seed: 5, level: timedLevel(60, 5), deferClockStart: true });
     expect(clock()).toEqual({ remainingMs: 60_000, running: false, incrementMs: 5_000 });
+    expect(useSkirmish.getState().battleElapsed).toEqual({ elapsedMs: 0, startedAtMs: null });
     vi.advanceTimersByTime(120_000);
     expect(clock()).toEqual({ remainingMs: 60_000, running: false, incrementMs: 5_000 });
+    expect(readElapsedClockMs(useSkirmish.getState().battleElapsed)).toBe(0);
 
     useSkirmish.getState().activateClock();
     expect(clock()!.running).toBe(true);
     vi.advanceTimersByTime(3_000);
     expect(clock()!.remainingMs).toBe(57_000);
+    expect(readElapsedClockMs(useSkirmish.getState().battleElapsed)).toBe(3_000);
+  });
+
+  it('counts an untimed Battle upward without creating a flag-fall condition', () => {
+    useSkirmish.getState().newSkirmish({ seed: 6, timeControl: null });
+    expect(clock()).toBeNull();
+    expect(readElapsedClockMs(useSkirmish.getState().battleElapsed)).toBe(0);
+
+    vi.advanceTimersByTime(3_250);
+    expect(readElapsedClockMs(useSkirmish.getState().battleElapsed)).toBe(3_250);
+    expect(useSkirmish.getState().game.winner).toBeNull();
+
+    useSkirmish.getState().resignLocal();
+    const frozen = readElapsedClockMs(useSkirmish.getState().battleElapsed);
+    vi.advanceTimersByTime(30_000);
+    expect(readElapsedClockMs(useSkirmish.getState().battleElapsed)).toBe(frozen);
+  });
+
+  it('resets elapsed time on a fresh attempt', () => {
+    useSkirmish.getState().newSkirmish({ seed: 6, timeControl: null });
+    vi.advanceTimersByTime(5_000);
+    expect(readElapsedClockMs(useSkirmish.getState().battleElapsed)).toBe(5_000);
+
+    useSkirmish.getState().restartSkirmish({ seed: 6, timeControl: null });
+    expect(readElapsedClockMs(useSkirmish.getState().battleElapsed)).toBe(0);
+    expect(useSkirmish.getState().battleElapsed.startedAtMs).not.toBeNull();
   });
 
   it('counts down on the player turn and freezes for the whole enemy reply', () => {

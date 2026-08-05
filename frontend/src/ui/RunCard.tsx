@@ -94,6 +94,7 @@ export function RunCard({
     identity,
     emptyPieceIndices,
   });
+  const valueLabel = faceContent.showsCost ? ` Worth ${faceContent.cost} gold.` : '';
   const targetLabel = publicTargetLabel(card, adlected);
   const face = (
     <RunCardFace
@@ -108,7 +109,7 @@ export function RunCard({
     return (
       <span
         className="run-card-action is-reference"
-        aria-label={`${name}. ${label}.${emptySeatLabel} Worth ${faceContent.cost} gold.${targetLabel}`}
+        aria-label={`${name}. ${label}.${emptySeatLabel}${valueLabel}${targetLabel}`}
       >
         {face}
       </span>

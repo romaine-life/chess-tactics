@@ -72,6 +72,8 @@ describe('Level Editor chrome hierarchy', () => {
     expect(chromeBox).toContain('export function ChromeSurfaceFill');
     expect(chromeBox).toContain('data-chrome-fill-role={role}');
     expect(chromeBox).toContain('<ChromeSurfaceFill role="outer" className="le-outer-panel-fill" />');
+    expect(chromeBox).toContain('fillRole?: ChromeRole;');
+    expect(chromeBox).toContain('className="inner-chrome-box-fill"');
     expect(levelEditor).toContain('<ShellWorkspace');
     expect(levelEditor).toContain('bodyClassName="le-artwork-workspace-content"');
     expect(levelEditor).toMatch(/<ShellViewportSwap[\s\S]*?className="level-editor-viewport-swap"[\s\S]*?primaryClassName="skirmish-board-frame"[\s\S]*?workspaceOpen=\{eventsOpen \|\| Boolean\(levelArtworkWorkspace\)\}/);

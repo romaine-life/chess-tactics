@@ -5,10 +5,10 @@ deciders: owner (Nelson) + Codex
 refines:
   - "[ADR-0205](0205-navigation-loads-atomic-scenes-through-one-director.md)"
   - "[ADR-0357](0357-a-unit-awaiting-its-entrance-is-staged-off-the-board.md)"
-  - "[ADR-0438](0438-aftermath-retains-a-reversible-terminal-board-review.md)"
+  - "[ADR-0455](0455-aftermath-retains-a-reversible-terminal-board-review.md)"
 ---
 
-# ADR-0442: Battle scenes reveal once and terminal-review units stay settled
+# ADR-0459: Battle scenes reveal once and terminal-review units stay settled
 
 ## Context
 

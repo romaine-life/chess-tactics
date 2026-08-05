@@ -20,6 +20,9 @@ import {
   skirmishTileClickIntent,
   skirmishVisualTerrainCells,
   unitArrivalPlan,
+  unitDepartureDestination,
+  unitDeparturePose,
+  unitDepartureTrack,
 } from './SkirmishBoard';
 
 afterEach(() => resetLiveUnitCatalog());
@@ -77,6 +80,40 @@ describe('retained-board unit arrivals', () => {
     expect(arrivalOffset(1_400, plan).opacity).toBe(0);
     expect(arrivalOffset(1_650, plan)).toEqual({ dy: -60, opacity: 1 });
     expect(arrivalOffset(2_400, plan)).toEqual({ dy: 0, opacity: 1 });
+  });
+});
+
+describe('closed unit-departure tracks', () => {
+  const player: Piece = { id: 'player-rook', side: 'player', type: 'rook', x: 2, y: 4, startY: 6, alive: true };
+  const enemy: Piece = { id: 'enemy-bishop', side: 'enemy', type: 'bishop', x: 5, y: 3, startY: 1, alive: true };
+  const board = { cols: 8, rows: 8 };
+
+  it('defaults a deployment reroll to each side withdrawing through its home edge', () => {
+    const track = unitDepartureTrack({ id: 'reroll-1', reason: 'deployment-reroll' });
+
+    expect(track).toBe('withdraw-home');
+    expect(unitDepartureDestination(player, board, track)).toMatchObject({ facing: 'south' });
+    expect(unitDepartureDestination(enemy, board, track)).toMatchObject({ facing: 'north' });
+  });
+
+  it('keeps the unit visible while it travels and fades only after clearing the edge', () => {
+    const plan = {
+      requestId: 'reroll-1',
+      track: 'withdraw-home' as const,
+      startMs: 1_000,
+      delayMs: 100,
+      durationMs: 800,
+      startLeft: 10,
+      startTop: 20,
+      endLeft: 110,
+      endTop: 220,
+      startOpacity: 1,
+      facing: 'south' as const,
+    };
+
+    expect(unitDeparturePose(1_050, plan)).toEqual({ left: 10, top: 20, opacity: 1, active: true });
+    expect(unitDeparturePose(1_500, plan).opacity).toBe(1);
+    expect(unitDeparturePose(1_900, plan)).toEqual({ left: 110, top: 220, opacity: 0, active: false });
   });
 });
 

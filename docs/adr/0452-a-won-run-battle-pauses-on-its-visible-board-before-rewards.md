@@ -10,7 +10,7 @@ refines:
   - "[ADR-0415](0415-every-run-page-is-assembled-by-one-closed-form.md)"
 ---
 
-# ADR-0435: A won Run Battle pauses on its visible board before rewards
+# ADR-0452: A won Run Battle pauses on its visible board before rewards
 
 ## Context
 

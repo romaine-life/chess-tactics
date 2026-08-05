@@ -3,21 +3,21 @@ status: accepted
 date: 2026-08-05
 deciders: owner (Nelson) + Codex
 supersedes:
-  - "[ADR-0441](0441-aftermath-uses-an-out-in-dissolve.md)"
+  - "[ADR-0458](0458-aftermath-uses-an-out-in-dissolve.md)"
 partially_supersedes:
-  - "[ADR-0437](0437-run-phases-retire-before-their-successors-reveal.md)'s retire-before-reveal presentation"
+  - "[ADR-0454](0454-run-phases-retire-before-their-successors-reveal.md)'s retire-before-reveal presentation"
 refines:
   - "[ADR-0043](0043-ui-motion-system.md)"
   - "[ADR-0205](0205-navigation-loads-atomic-scenes-through-one-director.md)"
-  - "[ADR-0435](0435-a-won-run-battle-pauses-on-its-visible-board-before-rewards.md)"
-  - "[ADR-0438](0438-aftermath-retains-a-reversible-terminal-board-review.md)"
+  - "[ADR-0452](0452-a-won-run-battle-pauses-on-its-visible-board-before-rewards.md)"
+  - "[ADR-0455](0455-aftermath-retains-a-reversible-terminal-board-review.md)"
 ---
 
-# ADR-0444: Aftermath crossfades directly without a homepage floor
+# ADR-0461: Aftermath crossfades directly without a homepage floor
 
 ## Context
 
-The won-board/aftermath boundary used the sequential out-in dissolve adopted by ADR-0441.
+The won-board/aftermath boundary used the sequential out-in dissolve adopted by ADR-0458.
 The outgoing scene faded completely before the prepared incoming scene began fading in. At that
 fully transparent midpoint, the application-wide homepage backdrop became visible even though
 neither the source nor destination was a Main Menu scene. The result was two disconnected fades
@@ -45,7 +45,7 @@ It obscured transition defects and spent rendering work on artwork that a Run di
   before entrance, while a Run-to-Run transition does not create or reveal it.
 - Unmatched routes may still resolve to the explicit Main Menu route. That route resolution does
   not authorize rendering Main Menu artwork underneath known non-homepage scenes.
-- The direct crossfade supersedes ADR-0441 and partially supersedes ADR-0437's sequential
+- The direct crossfade supersedes ADR-0458 and partially supersedes ADR-0454's sequential
   retire-before-reveal presentation. Their stable outgoing snapshot, hidden destination
   preparation, director ownership, and immediate domain-commit requirements remain in force.
 

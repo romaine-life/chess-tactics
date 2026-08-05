@@ -29,6 +29,8 @@ describe('Run card atomic presentation', () => {
       .toBe(signature);
     expect(runCardPresentationSignature({ ...card, name: 'Another Card' }, '/frame-a.png', '/art-a.png'))
       .not.toBe(signature);
+    expect(runCardPresentationSignature({ ...card, showsCost: false }, '/frame-a.png', '/art-a.png'))
+      .not.toBe(signature);
     expect(runCardPresentationSignature(card, '/frame-b.png', '/art-a.png')).not.toBe(signature);
     expect(runCardPresentationSignature(card, '/frame-a.png', '/art-b.png')).not.toBe(signature);
     expect(runCardPresentationSignature(
@@ -155,6 +157,12 @@ describe('Run card atomic presentation', () => {
     expect(source).toContain('if (!ready || ready.signature !== signature) return;');
     expect(source).toContain('aria-busy={pending ? true : undefined}');
     expect(style).toMatch(/\.run-card-face-layer\.is-pending\s*\{[\s\S]*?opacity:\s*0/);
+  });
+
+  it('prints cost only when the canonical face projection says the numeral belongs', () => {
+    const source = readFileSync(new URL('./RunCardFace.tsx', import.meta.url), 'utf8');
+    expect(source).toContain('card.showsCost ? (');
+    expect(source).toContain("displayed.card.showsCost ? ` Costs ${displayed.card.cost} gold.` : ''");
   });
 
   it('projects per-property fitting and one shared unit-state fitting into both state seats', () => {

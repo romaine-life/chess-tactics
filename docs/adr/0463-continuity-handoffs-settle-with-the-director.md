@@ -5,10 +5,10 @@ deciders: owner (Nelson) + Codex
 partially_supersedes:
   - "[ADR-0385](0385-scene-crossing-visuals-use-the-directors-continuity-layer.md)'s outgoing-component lifetime rule"
 refines:
-  - "[ADR-0445](0445-transition-choreography-is-derived-from-scene-ownership.md)"
+  - "[ADR-0462](0462-transition-choreography-is-derived-from-scene-ownership.md)"
 ---
 
-# ADR-0446: Continuity handoffs settle with the director
+# ADR-0463: Continuity handoffs settle with the director
 
 ## Context
 
@@ -17,7 +17,7 @@ through the director's continuity layer. That worked while every Run workspace n
 overlapped two complete scene trees: retiring the outgoing tree released the carried paint
 after the incoming canonical owner appeared.
 
-ADR-0445 distinguishes a complete scene replacement from a selection change. A selection
+ADR-0462 distinguishes a complete scene replacement from a selection change. A selection
 retains one scene owner, fades only its selected region to the owner's neutral state, and
 replaces that region during preparation. The outgoing selected component therefore unmounts
 before the destination enters. Using its lifetime as the release signal makes the carried

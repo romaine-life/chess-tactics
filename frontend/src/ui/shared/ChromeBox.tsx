@@ -217,16 +217,38 @@ export function ShellControlsPanel({
 export function InnerChromeBox({
   as: Element = 'div',
   className = '',
+  fillRole,
+  fillSurface,
+  children,
   ...props
 }: HTMLAttributes<HTMLElement> & {
   as?: 'div' | 'span';
+  /** Optional installed fill beneath the inner frame. The frame role stays
+   * inner; only the surface material is borrowed from the named role/surface. */
+  fillRole?: ChromeRole;
+  fillSurface?: string;
 }): ReactElement {
+  const hasFill = Boolean(fillRole || fillSurface);
   return (
     <Element
       {...props}
       data-chrome-unit="inner-box"
-      className={chromeUnitClassNames('inner-box', 'inner-chrome-box', className)}
-    />
+      className={chromeUnitClassNames(
+        'inner-box',
+        'inner-chrome-box',
+        hasFill && 'has-chrome-surface-fill',
+        className,
+      )}
+    >
+      {hasFill ? (
+        <ChromeSurfaceFill
+          role={fillRole}
+          surface={fillSurface}
+          className="inner-chrome-box-fill"
+        />
+      ) : null}
+      {children}
+    </Element>
   );
 }
 

@@ -478,10 +478,10 @@ describe('professional loading architecture guards', () => {
     expect(skirmishShell).toContain('surface="gameplay-hud"');
     expect(skirmish).toContain('Preparing battlefield…');
     expect(read('../scripts/shot.mjs')).toContain('An explicit readiness contract is an assertion');
-    expect(skirmish).toContain('if (!runDeployment && playableSurfaceReady && sceneActivated) activateClock()');
+    expect(skirmish).toContain('if (!runDeployment && !unitDeparture && playableSurfaceReady && sceneActivated) activateClock()');
     expect(skirmish).toContain('reveal={playableSurfaceReady && sceneRevealed}');
     expect(skirmish).toContain('activate={!runDeployment && sceneActivated}');
-    expect(skirmish).toContain('interactive={!runDeployment && sceneActivated &&');
+    expect(skirmish).toContain('interactive={!runDeployment && !unitDeparture && sceneActivated &&');
     expect(skirmish).not.toContain('cameraActive=');
     expect(board).toContain('onZoomChange={setZoom}');
     expect(board).toContain('onPanChange={setBoardPan}');
@@ -505,7 +505,9 @@ describe('professional loading architecture guards', () => {
     expect(runE2e).toContain('Array.from({ length: transportState.stackCards + 1 }, (_, index) => index)');
     expect(runE2e).toContain('sameViewStore: viewStore === probe.viewStore');
     expect(runE2e).toContain("deploymentResult.initialCamera !== deploymentResult.finalCamera");
-    expect(read('./game/store.ts')).toContain('if (!opts.deferClockStart) startClock()');
+    expect(read('./game/store.ts')).toMatch(
+      /if \(!opts\.deferClockStart\) \{\s*startClock\(\);\s*startBattleElapsed\(\);\s*\}/,
+    );
   });
 
   it('keeps Battle Restart separate from board-surface destruction', () => {

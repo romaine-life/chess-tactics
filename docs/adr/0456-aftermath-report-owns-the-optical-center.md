@@ -3,11 +3,11 @@ status: accepted
 date: 2026-08-05
 deciders: owner (Nelson) + Codex
 refines:
-  - "[ADR-0435](0435-a-won-run-battle-pauses-on-its-visible-board-before-rewards.md)"
-  - "[ADR-0438](0438-aftermath-retains-a-reversible-terminal-board-review.md)"
+  - "[ADR-0452](0452-a-won-run-battle-pauses-on-its-visible-board-before-rewards.md)"
+  - "[ADR-0455](0455-aftermath-retains-a-reversible-terminal-board-review.md)"
 ---
 
-# ADR-0439: Aftermath report owns the optical center
+# ADR-0456: Aftermath report owns the optical center
 
 ## Context
 

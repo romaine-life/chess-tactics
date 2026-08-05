@@ -6,14 +6,14 @@ partially_supersedes:
   - "[ADR-0205](0205-navigation-loads-atomic-scenes-through-one-director.md)'s universal fade-to-background sequence"
   - "[ADR-0307](0307-every-replaceable-region-is-a-director-owned-scene-slot.md)'s treatment of every slot change as one visual class"
   - "[ADR-0355](0355-a-rail-of-sections-is-a-registry-entry.md)'s state-driven Run overlap clause"
-  - "[ADR-0437](0437-run-phases-retire-before-their-successors-reveal.md)'s same-phase workspace crossfade clause"
+  - "[ADR-0454](0454-run-phases-retire-before-their-successors-reveal.md)'s same-phase workspace crossfade clause"
 refines:
   - "[ADR-0206](0206-scenes-declare-persistent-visual-hosts.md)"
   - "[ADR-0207](0207-persistent-scene-hosts-form-a-nested-path.md)"
-  - "[ADR-0444](0444-aftermath-crossfades-directly-without-a-homepage-floor.md)"
+  - "[ADR-0461](0461-aftermath-crossfades-directly-without-a-homepage-floor.md)"
 ---
 
-# ADR-0445: Transition choreography is derived from scene ownership
+# ADR-0462: Transition choreography is derived from scene ownership
 
 ## Context
 

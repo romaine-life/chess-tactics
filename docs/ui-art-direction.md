@@ -290,7 +290,7 @@ the live Battle hands that review snapshot directly to aftermath before any best
 so the report reached from Rewards always presents Back. Rewards returns to the same report, while
 Continue is the irreversible accounting handoff.
 Non-Sectio Controls likewise omit the one-item, no-op **Run views** group and are static layouts,
-not empty scroll panes (ADR-0435, ADR-0437, ADR-0438, ADR-0439, ADR-0440).
+not empty scroll panes (ADR-0452, ADR-0454, ADR-0455, ADR-0456, ADR-0457).
 On Bona Vacantia, the room-caption corner stays empty: no workspace heading,
 instructional prose, or placeholder label repeats the room identity. The persistent
 title bar is the sole textual location label unless a future accepted art decision
@@ -382,6 +382,34 @@ are settled. Daily/news is removed.
 The real board/battlefield layer is out of scope for this pass, and desktop is
 the validation target. Profile/account and the overall desktop composition still
 need review.
+
+Per [ADR-0442](adr/0442-expunctio-is-a-card-first-gallery.md), Expunctio is a
+card-first two-column gallery. Each tile grows from its complete canonical card
+face and arranges its fee and action beside that primary record; the shared drawn
+scrollbar owns overflow. His Grace keeps the accepted gold socket but omits its
+misleading zero numeral and zero-price accessible wording on every canonical face.
+Per [ADR-0443](adr/0443-athetize-is-the-card-action-within-expunctio.md), the
+workspace and fee remain Expunctio, while each available card's action reads
+**Athetize** and its completed state reads **Athetized this visit**.
+Per [ADR-0444](adr/0444-expunctio-card-tiles-remain-opaque-in-every-state.md),
+unavailable, unaffordable, spent, and completed tiles retain the same opaque
+canonical card and inner-chrome rendering as available tiles. Status copy and
+the disabled action control communicate state; whole-tile opacity never does.
+Per [ADR-0445](adr/0445-card-companions-align-to-painted-frame-keylines.md),
+card-adjacent copy and controls align to the frame pixels rather than the card's
+transparent 5:7 canvas. The first companion line's visible ink meets the painted top
+rail and the action's painted lower rail meets the card's painted lower rail;
+responsive sizing derives both insets from the active frame geometry.
+Per [ADR-0446](adr/0446-expunctio-tiles-use-shell-surface-and-oak-actions.md),
+Expunctio does not repeat the card's printed title beside its canonical face.
+Each tile keeps its inner frame but borrows the installed outer-role surface used
+by the title bar and Controls panel; its action keeps the canonical control frame
+over the registered `hybrid-wood-oak` surface.
+Per [ADR-0448](adr/0448-expunctio-scrollbar-keys-to-the-terminal-frame-rail.md),
+the final tile's straight frame rail and the shared drawn scrollbar meet one
+bottom keyline at the end of the gallery. The corner atom may continue below
+that rail through its measured clip apron, and the scrollbar reserves the same
+live overhang at its block end rather than extending to the ornament's tip.
 
 ## Parallel Work Boundaries
 

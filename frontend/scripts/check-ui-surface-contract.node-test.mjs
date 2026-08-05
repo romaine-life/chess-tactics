@@ -64,6 +64,18 @@ test('surface guard permits the shared title breadcrumb to remain unframed', () 
   );
 });
 
+test('surface guard permits a native input reset inside the accepted Gold field frame', () => {
+  assert.deepEqual(
+    collectCssSurfaceRules(`
+      .admin-gold-input {
+        background: transparent;
+        border: 0;
+      }
+    `),
+    [],
+  );
+});
+
 test('surface guard detects inline React surface fabrication', () => {
   assert.deepEqual(collectInlineSurfaceStyles('<div style={{ display: "grid" }} />'), []);
   const entries = collectInlineSurfaceStyles('<div style={{ backgroundColor: "#123", border: "1px solid red" }} />');

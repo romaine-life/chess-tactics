@@ -80,7 +80,7 @@ not select an animation mode. A `scene-replacement` keeps the complete outgoing 
 painted while its successor prepares, then crossfades those two scenes directly. A
 `selection-change` may fade the selected region to the retained owner's real neutral
 state, prepare its successor, and fade that successor in while the owner stays painted
-(ADR-0445).
+(ADR-0462).
 
 Manifests also declare a persistent visual host. During a selection change, the
 director retains and locks its background, title, controls, and every region outside
@@ -170,7 +170,7 @@ visual there while the incoming region paints its real owner beneath it. A retai
 selection releases that carry when the director returns to `current`; a full replacement
 releases it when the outgoing owner retires at the same completed boundary. The handoff
 therefore occurs at one coordinate with no faded, duplicated, or blank frame. Feature
-portals outside this capability remain forbidden (ADR-0385, ADR-0446).
+portals outside this capability remain forbidden (ADR-0385, ADR-0463).
 
 Authored transition does not imply Loading presentation. A `transition-only`
 destination still exits, mounts hidden, acknowledges paint, enters, and remains
@@ -194,7 +194,7 @@ outgoing fade followed by a separate incoming fade. During `entering`, the outgo
 scene fades from opaque to transparent while the incoming scene fades from transparent
 to opaque over the same interval. There is no fully transparent crossover at which an
 unrelated fallback scene may appear. This applies to the reversible won-board/aftermath
-review boundary as well as other complete Run scene replacements (ADR-0444, ADR-0445).
+review boundary as well as other complete Run scene replacements (ADR-0461, ADR-0462).
 The lifecycle's `exiting` phase deactivates and freezes a complete outgoing owner but
 does not lower its opacity; opacity exit during that phase belongs only to an authored
 selection region or an intentionally emptied slot.
@@ -203,7 +203,7 @@ The homepage backdrop is mounted only while the current or pending scene declare
 `homepage` background. It may prepare behind an outgoing scene during a real transition
 to the Main Menu, but it is neither mounted nor drawn beneath Run-to-Run transitions.
 An unmatched address can still resolve explicitly to the Main Menu; that route fallback
-does not make Main Menu artwork a universal visual floor for known routes (ADR-0444).
+does not make Main Menu artwork a universal visual floor for known routes (ADR-0461).
 
 Title-bar contributions discover targets inside their own committed scene. DOM-node
 refs are never lifted into the director, because portal attachment must not mutate the
@@ -286,10 +286,12 @@ route lifecycle during the same React commit.
   already settled because their entrance happened in the Battle being revisited. A crafted
   terminal landing is prepared the same way: its board, seated units, Victory acknowledgement,
   and Rewards action are present inside the director's one reveal, with no child opacity fade
-  beginning after the scene becomes current (ADR-0442, ADR-0443).
-- A playable board includes its first-frame HUD and title controls. The battle clock remains
-  paused until board compositors and HUD resources have painted and the complete surface is
-  revealed; network or asset latency is never charged as player thinking time.
+  beginning after the scene becomes current (ADR-0459, ADR-0460).
+ - A playable board includes its first-frame HUD and title controls. Both the authored countdown
+  and an untimed Level's elapsed Battle clock remain paused until board compositors and HUD
+  resources have painted and the complete surface is revealed; network, asset, and reload latency
+  is never charged. The untimed readout then counts all live Battle wall-clock time upward without
+  gaining a flag-fall rule (ADR-0451).
 - Readiness timeouts were removed from menu, route, screen, and board boundaries. A failed
   critical resource is an error, never synthetic readiness.
 - Every route family resolves through `sceneManifest`; unmatched routes explicitly

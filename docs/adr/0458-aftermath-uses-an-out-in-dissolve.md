@@ -3,21 +3,21 @@ status: superseded
 date: 2026-08-05
 deciders: owner (Nelson) + Codex
 superseded_by:
-  - "[ADR-0444](0444-aftermath-crossfades-directly-without-a-homepage-floor.md)"
+  - "[ADR-0461](0461-aftermath-crossfades-directly-without-a-homepage-floor.md)"
 partially_supersedes:
-  - "[ADR-0437](0437-run-phases-retire-before-their-successors-reveal.md)'s all-Run-phase scope"
+  - "[ADR-0454](0454-run-phases-retire-before-their-successors-reveal.md)'s all-Run-phase scope"
 refines:
   - "[ADR-0043](0043-ui-motion-system.md)"
   - "[ADR-0205](0205-navigation-loads-atomic-scenes-through-one-director.md)"
-  - "[ADR-0435](0435-a-won-run-battle-pauses-on-its-visible-board-before-rewards.md)"
-  - "[ADR-0438](0438-aftermath-retains-a-reversible-terminal-board-review.md)"
+  - "[ADR-0452](0452-a-won-run-battle-pauses-on-its-visible-board-before-rewards.md)"
+  - "[ADR-0455](0455-aftermath-retains-a-reversible-terminal-board-review.md)"
 ---
 
-# ADR-0441: Aftermath uses an out-in dissolve
+# ADR-0458: Aftermath uses an out-in dissolve
 
 ## Context
 
-The first implementation of ADR-0437 applied one retire-then-reveal mode to every Run phase
+The first implementation of ADR-0454 applied one retire-then-reveal mode to every Run phase
 replacement. Its outgoing phase faded normally, but its incoming phase used `step-end`: the
 successor remained invisible and then appeared as a cut. Applying a sequential fade to that same
 global mode corrected the cut, but introduced a fully transparent midpoint into ordinary
@@ -42,7 +42,7 @@ parallel. That boundary includes Back to the exact won board and Rewards back to
 - The fully transparent crossover is an intentional fade-through point for this review boundary,
   not a loading or incomplete scene. It does not generalize to ordinary navigation.
 - Other Run phase changes retain the scene director's atomic crossfade and its no-blank-frame
-  contract. The broad all-Run-phase scope of ADR-0437 is therefore partially superseded.
+  contract. The broad all-Run-phase scope of ADR-0454 is therefore partially superseded.
 - The lightweight Victory acknowledgement itself uses the shared 350ms opacity-only entrance.
   It has no translate component or raw timing, and it remains active when the operating system's
   movement-reduction preference disables CSS keyframe animations.

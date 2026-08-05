@@ -70,14 +70,6 @@
       "kind": "css",
       "file": "src/style.css",
       "context": "",
-      "selector": ".admin-gold-input",
-      "surfaceHash": "3b4518da3b91d3245d86840af67c15560ac25c7ace60033ff2f2985e7d193722",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
       "selector": ".al-checker, .al-in-button, .al-on-panel",
       "surfaceHash": "9b3fce1a1db25ba70375dfbaa8465c623351ff97438a7aabb8db3666e31ced1a",
       "occurrence": 1

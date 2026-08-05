@@ -49,6 +49,7 @@ function fakeState(overrides: {
     objectiveCtx: { kingSide: 'enemy' },
     log: ['Skirmish begins.'],
     clock: null,
+    battleElapsed: { elapsedMs: 4_000, startedAtMs: null },
     game: {
       size: { cols: 8, rows: 8 },
       pieces: [{ id: 'p1', side: 'player', type: 'pawn', x: 0, y: 6, alive: true, startY: 6 }],
@@ -86,6 +87,7 @@ describe('match persistence', () => {
       levelId: state.levelId,
       activityId: state.activityId,
       clock: state.clock,
+      battleElapsed: state.battleElapsed,
       undoCheckpoint: null,
       savedAt: expect.any(String),
     });
@@ -184,6 +186,27 @@ describe('match persistence', () => {
     store.setItem(KEY, JSON.stringify({ version: 99, game: { pieces: [], size: {} }, log: [] }));
     expect(loadMatch()).toBeNull();
     expect(store.getItem(KEY)).toBeNull(); // stale copy removed
+  });
+
+  it('migrates a version-1 match to a banked elapsed clock and writes only version 2', () => {
+    persistMatch(fakeState());
+    const old = JSON.parse(store.getItem(KEY)!) as Record<string, unknown>;
+    old.version = 1;
+    delete old.battleElapsed;
+    store.setItem(KEY, JSON.stringify(old));
+
+    expect(loadMatch()?.battleElapsed).toEqual({ elapsedMs: 0, startedAtMs: null });
+    expect(JSON.parse(store.getItem(KEY)!).version).toBe(2);
+    expect(JSON.parse(store.getItem(KEY)!).battleElapsed).toEqual({ elapsedMs: 0, startedAtMs: null });
+  });
+
+  it('banks a running elapsed anchor when it persists', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(10_000);
+    const state = fakeState();
+    state.battleElapsed = { elapsedMs: 2_000, startedAtMs: 7_000 };
+    persistMatch(state);
+    expect(loadMatch()?.battleElapsed).toEqual({ elapsedMs: 5_000, startedAtMs: null });
+    vi.restoreAllMocks();
   });
 
   it('discards and clears an unparseable copy', () => {

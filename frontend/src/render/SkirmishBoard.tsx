@@ -521,6 +521,8 @@ function collectBoardArt(
 const ARRIVAL_BASE_MS = 400; // first unit lands AFTER the board reveal (veil/board fade) has finished
 const ARRIVAL_WAVE_GAP_MS = 240; // the enemy wave answers this long after the player wave starts
 const ARRIVAL_STEP_MS = 50; // per-unit stagger within a wave
+const DEPARTURE_STEP_MS = 45;
+const DEPARTURE_ANIM_MS = 760;
 // Drag-to-move tuning. The threshold keeps a small wobble on a tap from becoming a drag, so
 // click-select → click-move is untouched; the ghost defaults are only a fallback size for when
 // the on-screen sprite can't be measured at pick-up.
@@ -538,6 +540,83 @@ const isRoyal = (type: Piece['type']): boolean => type === 'king' || type === 'q
 export interface UnitArrivalPlan {
   startMs: number | null;
   delayMs: number;
+}
+
+/**
+ * Unit exits are selected from this closed physical track registry. Callers name a reason and
+ * normally accept its default; an authored context may explicitly choose another registered
+ * track, but may not supply an arbitrary motion curve.
+ */
+export const UNIT_DEPARTURE_TRACKS = ['withdraw-home', 'withdraw-nearest-edge'] as const;
+export type UnitDepartureTrack = typeof UNIT_DEPARTURE_TRACKS[number];
+export type UnitDepartureReason = 'deployment-reroll';
+
+export interface UnitDepartureRequest {
+  id: string;
+  reason: UnitDepartureReason;
+  track?: UnitDepartureTrack;
+}
+
+export function unitDepartureTrack(request: UnitDepartureRequest): UnitDepartureTrack {
+  if (request.track) return request.track;
+  switch (request.reason) {
+    case 'deployment-reroll': return 'withdraw-home';
+  }
+}
+
+export interface UnitDeparturePlan {
+  requestId: string;
+  track: UnitDepartureTrack;
+  startMs: number;
+  delayMs: number;
+  durationMs: number;
+  startLeft: number;
+  startTop: number;
+  endLeft: number;
+  endTop: number;
+  startOpacity: number;
+  facing: UnitFacing;
+}
+
+function nearestEdgeDestination(
+  piece: Piece,
+  board: Pick<EditorBoard, 'cols' | 'rows'>,
+): { x: number; y: number; facing: UnitFacing } {
+  const candidates = [
+    { distance: piece.x + 1, x: -2.5, y: piece.y, facing: 'west' as const },
+    { distance: board.cols - piece.x, x: board.cols + 1.5, y: piece.y, facing: 'east' as const },
+    { distance: piece.y + 1, x: piece.x, y: -2.5, facing: 'north' as const },
+    { distance: board.rows - piece.y, x: piece.x, y: board.rows + 1.5, facing: 'south' as const },
+  ];
+  candidates.sort((left, right) => left.distance - right.distance);
+  return candidates[0];
+}
+
+export function unitDepartureDestination(
+  piece: Piece,
+  board: Pick<EditorBoard, 'cols' | 'rows'>,
+  track: UnitDepartureTrack,
+): { left: number; top: number; facing: UnitFacing } {
+  const destination = track === 'withdraw-home'
+    ? piece.side === 'enemy'
+      ? { x: piece.x, y: -2.5, facing: 'north' as const }
+      : { x: piece.x, y: board.rows + 1.5, facing: 'south' as const }
+    : nearestEdgeDestination(piece, board);
+  return { ...boardLabCellPosition(destination), facing: destination.facing };
+}
+
+export function unitDeparturePose(
+  timeMs: number,
+  plan: UnitDeparturePlan,
+): { left: number; top: number; opacity: number; active: boolean } {
+  const progress = clamp01((timeMs - plan.startMs - plan.delayMs) / plan.durationMs);
+  const travel = easeInQuad(progress);
+  return {
+    left: lerp(plan.startLeft, plan.endLeft, travel),
+    top: lerp(plan.startTop, plan.endTop, travel),
+    opacity: plan.startOpacity * clamp01(progress < 0.84 ? 1 : 1 - (progress - 0.84) / 0.16),
+    active: progress < 1,
+  };
 }
 
 /**
@@ -816,6 +895,9 @@ function SkirmishSceneLayer({
   livePieces,
   unitArrivals,
   onArrivingUnitIdsChange,
+  unitDeparture,
+  onDepartingUnitIdsChange,
+  onUnitDepartureComplete,
   draggingId,
   noHopId,
   premovedIds,
@@ -832,6 +914,9 @@ function SkirmishSceneLayer({
   livePieces: readonly Piece[];
   unitArrivals: UnitArrivalLifecycle;
   onArrivingUnitIdsChange: (unitIds: readonly string[]) => void;
+  unitDeparture: UnitDepartureRequest | null;
+  onDepartingUnitIdsChange: (unitIds: readonly string[]) => void;
+  onUnitDepartureComplete: (requestId: string) => void;
   draggingId: string | null;
   noHopId: string | null;
   premovedIds: ReadonlySet<string>;
@@ -846,8 +931,12 @@ function SkirmishSceneLayer({
   const motionRef = useRef<Map<string, PieceMotion>>(new Map());
   const visibleUnitIdsRef = useRef<Set<string>>(new Set());
   const arrivalPlansRef = useRef<Map<string, UnitArrivalPlan>>(new Map());
+  const departurePlansRef = useRef<Map<string, UnitDeparturePlan>>(new Map());
   const arrivalLifecycleStartedRef = useRef(false);
   const reportedArrivalIdsRef = useRef('');
+  const reportedDepartureIdsRef = useRef('');
+  const handledDepartureRequestRef = useRef<string | null>(null);
+  const completedDepartureRequestRef = useRef<string | null>(null);
   const imagesRef = useRef<Map<string, HTMLImageElement>>(new Map());
   const animationFrameRef = useRef<number | null>(null);
   const acknowledgementFrameRef = useRef<number | null>(null);
@@ -917,6 +1006,8 @@ function SkirmishSceneLayer({
     frameKey,
     onFirstFrame,
     onFrameError,
+    unitDeparture,
+    onUnitDepartureComplete,
   });
 
   const requestSceneFrame = useCallback(() => {
@@ -935,6 +1026,14 @@ function SkirmishSceneLayer({
     onArrivingUnitIdsChange(ids);
   }, [onArrivingUnitIdsChange]);
 
+  const reportDepartingUnits = useCallback(() => {
+    const ids = [...departurePlansRef.current.keys()].sort();
+    const key = ids.join(',');
+    if (key === reportedDepartureIdsRef.current) return;
+    reportedDepartureIdsRef.current = key;
+    onDepartingUnitIdsChange(ids);
+  }, [onDepartingUnitIdsChange]);
+
   useLayoutEffect(() => {
     frameStateRef.current = {
       staticOps,
@@ -951,12 +1050,56 @@ function SkirmishSceneLayer({
       frameKey,
       onFirstFrame,
       onFrameError,
+      unitDeparture,
+      onUnitDepartureComplete,
     };
     if (acknowledgedFrameKeyRef.current !== frameKey && acknowledgementFrameRef.current !== null) {
       window.cancelAnimationFrame(acknowledgementFrameRef.current);
       acknowledgementFrameRef.current = null;
     }
     const now = performance.now();
+    if (!unitDeparture && handledDepartureRequestRef.current !== null) {
+      departurePlansRef.current.clear();
+      handledDepartureRequestRef.current = null;
+      completedDepartureRequestRef.current = null;
+      reportDepartingUnits();
+    }
+    if (unitDeparture && handledDepartureRequestRef.current !== unitDeparture.id) {
+      departurePlansRef.current.clear();
+      handledDepartureRequestRef.current = unitDeparture.id;
+      completedDepartureRequestRef.current = null;
+      const track = unitDepartureTrack(unitDeparture);
+      const departingPieces = livePieces.filter((piece) => (
+        piece.side !== 'neutral'
+        && piece.type !== 'rock'
+        && piece.type !== 'random-rock'
+      ));
+      departingPieces.forEach((piece, index) => {
+        const target = boardLabCellPosition(piece);
+        const motion = motionRef.current.get(piece.id);
+        const seated = motion ? motionSeat(motion, now) : { ...target, progress: 1, active: false };
+        const arrival = arrivalOffset(now, arrivalPlansRef.current.get(piece.id));
+        const destination = unitDepartureDestination(piece, sceneBoard, track);
+        departurePlansRef.current.set(piece.id, {
+          requestId: unitDeparture.id,
+          track,
+          startMs: now,
+          delayMs: index * DEPARTURE_STEP_MS,
+          durationMs: DEPARTURE_ANIM_MS,
+          startLeft: seated.left,
+          startTop: seated.top + arrival.dy,
+          endLeft: destination.left,
+          endTop: destination.top,
+          startOpacity: arrival.opacity,
+          facing: destination.facing,
+        });
+        // Reroll is now the unit's active lifecycle. An arrival cannot keep settling while the
+        // same identity is physically withdrawing from the battlefield.
+        arrivalPlansRef.current.delete(piece.id);
+      });
+      reportArrivingUnits();
+      reportDepartingUnits();
+    }
     const nextIds = new Set(livePieces.map((piece) => piece.id));
     for (const id of visibleUnitIdsRef.current) {
       if (!nextIds.has(id)) visibleUnitIdsRef.current.delete(id);
@@ -1039,7 +1182,9 @@ function SkirmishSceneLayer({
     premovedIds,
     requestSceneFrame,
     requiredSourceKey,
+    reportDepartingUnits,
     staticOps,
+    unitDeparture,
     unitArrivals,
   ]);
 
@@ -1066,16 +1211,23 @@ function SkirmishSceneLayer({
             startTime: timeMs,
             duration: 0,
           };
-          const seat = motionSeat(motion, timeMs);
-          const arrival = arrivalOffset(timeMs, arrivalPlansRef.current.get(piece.id));
+          const seated = motionSeat(motion, timeMs);
+          const departurePlan = departurePlansRef.current.get(piece.id);
+          const departure = departurePlan ? unitDeparturePose(timeMs, departurePlan) : null;
+          const seat = departure ?? seated;
+          const arrival = departure ? { dy: 0, opacity: departure.opacity } : arrivalOffset(timeMs, arrivalPlansRef.current.get(piece.id));
           const baseOpacity = state.draggingId === piece.id ? 0.3 : state.premovedIds.has(piece.id) ? 0.4 : 1;
-          const op = pieceOp(piece, seat, {
-            dy: moveHopOffset(seat.progress, piece.side) + arrival.dy,
+          const presentedPiece = departurePlan ? { ...piece, facing: departurePlan.facing } : piece;
+          const depthPiece = departure
+            ? { ...presentedPiece, ...unprojectBoardPoint(seat) }
+            : presentedPiece;
+          const op = pieceOp(depthPiece, seat, {
+            dy: (departure ? 0 : moveHopOffset(seated.progress, piece.side)) + arrival.dy,
             opacity: baseOpacity * arrival.opacity,
           });
           if (op) {
             physicalPieceOps.push(op);
-            const reflectionSubject = mirrorSubjectForSeat(op, seat, piece);
+            const reflectionSubject = mirrorSubjectForSeat(op, seat, presentedPiece);
             if (reflectionSubject) reflectionSubjects.push(reflectionSubject);
           }
         }
@@ -1144,8 +1296,24 @@ function SkirmishSceneLayer({
           arrivalPlansRef.current.delete(pieceId);
         }
       }
+      let hasActiveDepartures = false;
+      for (const plan of departurePlansRef.current.values()) {
+        if (unitDeparturePose(timeMs, plan).active) {
+          hasActiveDepartures = true;
+          break;
+        }
+      }
+      const departureRequest = state.unitDeparture;
+      if (
+        departureRequest
+        && !hasActiveDepartures
+        && completedDepartureRequestRef.current !== departureRequest.id
+      ) {
+        completedDepartureRequestRef.current = departureRequest.id;
+        state.onUnitDepartureComplete(departureRequest.id);
+      }
       reportArrivingUnits();
-      if (state.hasAnimatedGroundCover || hasActiveArrivals || hasActiveMotion) requestSceneFrame();
+      if (state.hasAnimatedGroundCover || hasActiveArrivals || hasActiveMotion || hasActiveDepartures) requestSceneFrame();
     };
   }, [reportArrivingUnits, requestSceneFrame]);
 
@@ -1227,6 +1395,8 @@ export function SkirmishBoard({
   onSurfaceReady,
   onSurfaceError,
   onArrivingUnitIdsChange,
+  unitDeparture = null,
+  onUnitDepartureComplete,
   reveal = true,
   activate = reveal,
   unitArrivals = activate ? 'active' : 'pending',
@@ -1252,6 +1422,10 @@ export function SkirmishBoard({
   onSurfaceError?: (error: Error | null) => void;
   /** Reports the compositor-owned arrival cycle without transferring animation timing upward. */
   onArrivingUnitIdsChange?: (unitIds: readonly string[]) => void;
+  /** One registered physical exit selected by the owning gameplay transition. */
+  unitDeparture?: UnitDepartureRequest | null;
+  /** Reports only after every selected unit has followed that exit clear of the board. */
+  onUnitDepartureComplete?: (requestId: string) => void;
   reveal?: boolean;
   activate?: boolean;
   /**
@@ -1561,6 +1735,8 @@ export function SkirmishBoard({
   // it can introduce units into an already-mounted compositor without reanimating incumbents.
   const [arrivingUnitIds, setArrivingUnitIds] = useState<readonly string[]>([]);
   const arriving = arrivingUnitIds.length > 0;
+  const [departingUnitIds, setDepartingUnitIds] = useState<readonly string[]>([]);
+  const departing = departingUnitIds.length > 0;
   // The entrance is released only once this battlefield is both activated and on screen; until
   // then it stays staged, which is the state a preparing or entering board is revealed in.
   // Review positions bypass the entrance completely and paint their already-arrived units.
@@ -1577,6 +1753,12 @@ export function SkirmishBoard({
     setArrivingUnitIds(unitIds);
     onArrivingUnitIdsChange?.(unitIds);
   }, [onArrivingUnitIdsChange]);
+  const handleUnitDepartureComplete = useCallback((requestId: string) => {
+    onUnitDepartureComplete?.(requestId);
+  }, [onUnitDepartureComplete]);
+  useEffect(() => {
+    if (!unitDeparture) setDepartingUnitIds([]);
+  }, [unitDeparture]);
   const focusPiece = useMemo(
     () => livePieces.find((piece) => piece.id === focusedId) ?? livePieces.find((piece) => piece.id === selectedId) ?? null,
     [focusedId, livePieces, selectedId],
@@ -1944,6 +2126,9 @@ export function SkirmishBoard({
       data-arriving-unit-ids={presentingArrivals ? arrivingUnitIds.join(',') : ''}
       data-unit-arrivals={unitArrivals}
       data-reveal-transition={revealTransition}
+      data-departure-state={departing ? 'withdrawing' : 'none'}
+      data-departure-track={unitDeparture ? unitDepartureTrack(unitDeparture) : undefined}
+      data-departing-unit-ids={departingUnitIds.join(',')}
       data-painted-layers={boardFrame.paintedLayers.join(',')}
       aria-busy={!boardVisible && !boardFrame.error ? true : undefined}
       inert={!boardVisible && !boardFrame.error ? true : undefined}
@@ -1994,6 +2179,9 @@ export function SkirmishBoard({
               livePieces={livePieces}
               unitArrivals={arrivalLifecycle}
               onArrivingUnitIdsChange={handleArrivingUnitIdsChange}
+              unitDeparture={unitDeparture}
+              onDepartingUnitIdsChange={setDepartingUnitIds}
+              onUnitDepartureComplete={handleUnitDepartureComplete}
               draggingId={drag?.pieceId ?? null}
               noHopId={noHopId}
               premovedIds={premovedIds}

@@ -14,7 +14,7 @@ import { objectiveBriefingForSide, victoryRuleDetailForSide } from './objectiveB
 import type { PlayingSide } from './clientPerspective';
 import { kingSideOf, objectiveContextForLevel, objectiveSummary, victoryRulesForObjective, type ObjectiveContext } from '../core/objectives';
 import type { Level, ObjectiveType, TimeControl, VictoryRules } from '../core/level';
-import { DEFAULT_TIME_CONTROL } from '../core/clock';
+import { DEFAULT_TIME_CONTROL, readElapsedClockMs, type ElapsedClockState } from '../core/clock';
 import { terrainAt } from '../core/terrain';
 import { playArrival, playTerrain } from '../sfx';
 import { createSkirmish, type SkirmishOptions } from './setup';
@@ -353,6 +353,9 @@ export interface SkirmishState {
   aiMode: AiMode;
   /** The battle clock, when the level authored one (null = untimed). */
   clock: ClockState | null;
+  /** Wall-clock duration of the current Battle. Untimed levels display this as a
+   * count-up clock; it remains separate from the optional flag-fall clock. */
+  battleElapsed: ElapsedClockState;
   /** A local pawn has chosen a promotion-zone move and is waiting for the piece choice. */
   pendingPromotion: PendingPromotion | null;
   /** One explicitly authorized administrator intervention. Ephemeral and consumed once. */
@@ -371,8 +374,10 @@ export interface SkirmishState {
   /** Reset match state on the board already being presented. This invalidates async
    *  match work without replacing, reframing, or replaying the board presentation. */
   restartSkirmish: (opts: SkirmishOptions & { activityId?: string | null }) => void;
-  /** Begin a deferred player's clock once the playable surface has painted. */
+  /** Begin the deferred countdown and elapsed clock once the playable surface has painted. */
   activateClock: () => void;
+  /** Freeze one live Run Battle while its units physically leave the mounted battlefield. */
+  suspendForBoardDeparture: () => void;
   /** Start a multiplayer match: build the shared (level, seed) board, record which
    *  side this client controls, disable the local AI + clock, and route local moves
    *  to the relay sink. Both clients call this with the SAME level + seed. */
@@ -499,6 +504,23 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
   let clockDeadline = 0;
   let clockTicker: ReturnType<typeof setInterval> | null = null;
 
+  const pauseBattleElapsed = () => {
+    const cur = get();
+    if (cur.battleElapsed.startedAtMs === null) return;
+    set({
+      battleElapsed: {
+        elapsedMs: readElapsedClockMs(cur.battleElapsed),
+        startedAtMs: null,
+      },
+    });
+  };
+
+  const startBattleElapsed = () => {
+    const cur = get();
+    if (!cur.started || cur.game.winner || cur.battleElapsed.startedAtMs !== null) return;
+    set({ battleElapsed: { ...cur.battleElapsed, startedAtMs: Date.now() } });
+  };
+
   const stopClockTicker = () => {
     if (clockTicker !== null) { clearInterval(clockTicker); clockTicker = null; }
   };
@@ -513,6 +535,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
 
   /** Invalidate every callback owned by the previous match and return the new epoch. */
   const beginSession = (): number => {
+    pauseBattleElapsed();
     cancelSessionAsync();
     matchEpoch += 1;
     return matchEpoch;
@@ -1081,6 +1104,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       clock: s.clock ? { ...s.clock, running: false } : null,
       log: [...messages.reverse(), ...s.log].slice(0, 12),
     });
+    if (!game.winner) startBattleElapsed();
     if (!game.winner && game.turn === 'enemy') scheduleEnemyReply();
     else if (!game.winner && game.turn === 'player') startClock();
     persistMatch(get());
@@ -1105,6 +1129,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
   activityId: null,
   aiMode: 'search',
   clock: null,
+  battleElapsed: { elapsedMs: 0, startedAtMs: null },
   pendingPromotion: null,
   adminMode: null,
   undoCheckpoint: null,
@@ -1181,6 +1206,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       activityId: opts.activityId ?? null,
       aiMode: opts.ai ?? get().aiMode,
       clock,
+      battleElapsed: { elapsedMs: 0, startedAtMs: null },
       pendingPromotion: null,
       adminMode: null,
       undoCheckpoint: null,
@@ -1192,7 +1218,10 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     });
     // The clock starts with the game — it is the player's move from the first beat
     // (a degenerate instant-draw start is guarded inside startClock).
-    if (!opts.deferClockStart) startClock();
+    if (!opts.deferClockStart) {
+      startClock();
+      startBattleElapsed();
+    }
     // "Units come onto the board": a soft staggered roll-call as the player's force
     // deploys. Each unit sounds the terrain it lands on (softer, gain 0.7) layered
     // with the authored "arrival" thump (playArrival) — the landing.mp3 that plays
@@ -1273,6 +1302,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       levelId: level.id,
       activityId: null,
       clock: null, // netplay is untimed in v1 (a shared wall-clock is future work)
+      battleElapsed: { elapsedMs: 0, startedAtMs: null },
       pendingPromotion: null,
       adminMode: null,
       undoCheckpoint: null,
@@ -1367,6 +1397,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       testMode: false,
       testMinCpuDelayMs: 0,
       clock: null,
+      battleElapsed: { elapsedMs: 0, startedAtMs: null },
       net: null,
     });
   },
@@ -1439,7 +1470,33 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     });
   },
 
-  activateClock: () => startClock(),
+  activateClock: () => {
+    startClock();
+    startBattleElapsed();
+  },
+
+  suspendForBoardDeparture: () => {
+    const s = get();
+    if (!s.started || s.net) return;
+    // The departure owns the board until its compositor reports completion. Cancel every
+    // opponent/premove callback and stop the exact clock before invalidating their epoch; the
+    // replacement Deployment will build a fresh match after its new formation promotes.
+    pauseClockForAdmin();
+    const current = get();
+    const epoch = beginSession();
+    set({
+      sessionEpoch: epoch,
+      clock: current.clock ? { ...current.clock, running: false } : null,
+      selectedId: null,
+      focusedId: null,
+      pendingPromotion: null,
+      adminMode: null,
+      undoCheckpoint: null,
+      runUndoEnabled: false,
+      premoves: [],
+      premoveInputOpen: false,
+    });
+  },
 
   canUndoLastPlayerMove: () => {
     const s = get();
@@ -1481,6 +1538,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       sessionEpoch: epoch,
     });
     startClock();
+    startBattleElapsed();
     persistMatch(get());
     return true;
   },
@@ -1533,11 +1591,15 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       // banked remainder when it's the player's live turn. A reload isn't thinking
       // time, so the player keeps the time they had at their last move.
       clock: match.clock ? { ...match.clock, running: false } : null,
+      battleElapsed: { ...match.battleElapsed, startedAtMs: null },
       net: null, // netplay disables persistence, so a disk-resumed match is single-player
       testMode: false,
       testMinCpuDelayMs: 0,
     });
-    if (!options?.deferClockStart) startClock();
+    if (!options?.deferClockStart) {
+      startClock();
+      startBattleElapsed();
+    }
     // If the reload caught the game mid enemy-reply (the player had just moved, the
     // turn was handed to 'enemy', but the staged setTimeout died with the old page),
     // re-stage it — otherwise the board soft-locks: player input is locked on the

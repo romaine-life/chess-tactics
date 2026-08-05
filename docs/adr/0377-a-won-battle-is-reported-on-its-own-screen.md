@@ -1,9 +1,9 @@
 ---
-status: superseded by ADR-0435
+status: superseded by ADR-0452
 date: 2026-08-03
 deciders: owner (Nelson) + Claude
 superseded_by:
-  - "[ADR-0435](0435-a-won-run-battle-pauses-on-its-visible-board-before-rewards.md)"
+  - "[ADR-0452](0452-a-won-run-battle-pauses-on-its-visible-board-before-rewards.md)"
 refines:
   - "[ADR-0220](0220-run-victory-gold-scales-with-enemy-force-value.md)"
   - "[ADR-0338](0338-a-run-state-is-handed-over-as-a-link-that-crafts-it.md)"

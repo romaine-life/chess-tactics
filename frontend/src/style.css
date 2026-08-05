@@ -4551,7 +4551,7 @@ h1 {
    nailhead diamond, with the turn plate and objective hugging it as a mirrored pair.
    min- (not fixed) width so an unusually long objective line grows rather than clips;
    the widest real content is ~139px ("Defeat every enemy piece"), so 150 sits both
-   comfortably on one line. The clock is always the centre chip (untimed reads "∞"),
+   comfortably on one line. The clock is always the centre chip (untimed counts up),
    so this equal pair centres it on every play surface, timed or not.
    Scoped to the cluster so the standalone board status chips that reuse
    .skirmish-turn-plate (loading / map-error) keep sizing to their own content. */
@@ -4581,16 +4581,6 @@ h1 {
 
 .skirmish-clock strong {
   font-variant-numeric: tabular-nums;
-}
-
-/* Untimed games show "∞" here instead of a countdown. The infinity glyph is absent from
-   the pixel display font (it falls back to a text font and renders small/thin), so bump
-   its size and drop the tabular-figure treatment it doesn't need — it then reads with the
-   same weight as the "5:00" it stands in for. */
-.skirmish-clock strong.skirmish-clock-unlimited {
-  font-size: 1.5em;
-  font-variant-numeric: normal;
-  line-height: 0.9;
 }
 
 /* The final seconds read as danger — the telegraph palette's threat tone, the same
@@ -5585,7 +5575,7 @@ body.loading-bootstrap .app-startup-status {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
-.skirmish-admin-panel .admin-gold-input {
+.skirmish-admin-panel .admin-gold-field {
   inline-size: 100%;
 }
 
@@ -18512,20 +18502,39 @@ button.tileset-relationship-cell {
   gap: var(--ds-inline-tight);
 }
 
+/* Both children paint tuned corner atoms outside their rails. Keep the normal
+   inline gap between those paint footprints instead of letting the field's
+   right atoms and the action's left atoms overlap (ADR-0093). */
+.admin-control-inline {
+  gap: calc(
+    var(--ds-inline-tight)
+    + var(--le-inner-atom-right-overhang, 0px)
+    + var(--le-inner-atom-left-overhang, 0px)
+  );
+}
+
 .admin-control-stack {
   flex-direction: column;
   min-inline-size: min(300px, 34vw);
 }
 
+.admin-gold-field {
+  align-items: stretch;
+  block-size: 40px;
+  display: inline-flex;
+  inline-size: 112px;
+  min-inline-size: 0;
+}
+
 .admin-gold-input {
-  background: rgba(3, 12, 19, .9);
-  border: 10px solid transparent;
-  border-image: var(--media-ui-kit-button-neutral-png) 24 fill / 10px round;
+  appearance: auto;
+  background: transparent;
+  border: 0;
   box-sizing: border-box;
   color: #eff9ff;
   font: inherit;
-  block-size: 40px;
-  inline-size: 112px;
+  block-size: 100%;
+  inline-size: 100%;
   min-width: 0;
   padding: 0 var(--ds-inset);
 }
@@ -18572,9 +18581,11 @@ button.tileset-relationship-cell {
   border-image-source: var(--media-ui-kit-button-danger-png);
 }
 
-.settings-chrome-button span {
-  display: block;
+.settings-chrome-button > span {
+  align-items: center;
+  display: inline-flex;
   font-size: var(--ds-text-xs);
+  gap: var(--ds-space-1);
   line-height: 1;
   pointer-events: none;
   text-transform: uppercase;
@@ -19311,6 +19322,12 @@ button.tileset-relationship-cell {
   font-size: var(--ds-text-sm);
 }
 
+.run-gold-icon--button {
+  block-size: 18px;
+  flex: none;
+  inline-size: 18px;
+}
+
 /* Compact costs outside a card draw the transparent 112px extraction of the
    accepted card coin. The live number is laid over those same pixels instead
    of spelling out gold. */
@@ -19495,7 +19512,7 @@ button.tileset-relationship-cell {
 /* The report box is the aftermath screen's visual anchor. Equal flexible tracks
    first establish its geometric centre; the complete heading/report/action composition
    then moves by one twentieth of the actual workspace height so the report lands on the
-   45% optical centre without measuring or centring the combined stack (ADR-0439). */
+   45% optical centre without measuring or centring the combined stack (ADR-0456). */
 .run-aftermath-workspace {
   container-type: size;
 }
@@ -21157,6 +21174,8 @@ button.tileset-relationship-cell {
 .run-deployment-card-stack {
   --deployment-deal-duration: 560ms;
   --deployment-deal-stagger: 340ms;
+  --deployment-discard-duration: 560ms;
+  --deployment-discard-stagger: 72ms;
   align-items: start;
   display: grid;
   gap: var(--ds-inline-tight);
@@ -21207,8 +21226,30 @@ button.tileset-relationship-cell {
   will-change: opacity, transform;
 }
 
-.run-deployment-stack-card.is-active.is-discarding {
-  animation: run-deployment-card-discard var(--ds-duration-transfer) var(--ds-ease-out) both;
+.run-deployment-stack-card.is-discarding {
+  opacity: 0;
+}
+
+.run-deployment-card-stack[data-deployment-card-stage='discarding'] .run-deployment-card-count {
+  opacity: 0;
+}
+
+.run-deployment-discard-flight {
+  opacity: 0;
+  pointer-events: none;
+  position: fixed;
+  transform-origin: center;
+  will-change: opacity, transform;
+}
+
+.run-deployment-discard-flight > :is(.run-card-back, .run-card-action) {
+  block-size: 100%;
+  inline-size: 100%;
+}
+
+.run-deployment-discard-flight > .run-card-back {
+  display: block;
+  object-fit: contain;
 }
 
 .run-deployment-stack-side {
@@ -21255,11 +21296,6 @@ button.tileset-relationship-cell {
   position: absolute;
   text-shadow: 0 1px 0 #000;
   z-index: 20;
-}
-
-@keyframes run-deployment-card-discard {
-  0% { opacity: 1; }
-  100% { opacity: 0; transform: translate(64px, 28px) rotate(9deg) scale(.82); }
 }
 
 .run-inline-actions {
@@ -21745,26 +21781,73 @@ button.tileset-relationship-cell {
   overflow: hidden;
 }
 
+.run-expunctio-workspace-content > :is(h2, p) {
+  margin-inline-end: var(--ds-gutter);
+}
+
 .run-expunctio-rule {
   color: var(--skirmish-muted);
   margin: 0;
 }
 
+.run-expunctio-workspace .run-sectio-operation-list-scroll {
+  block-size: 100%;
+  min-inline-size: 0;
+}
+
+.run-expunctio-workspace .run-sectio-operation-list-scroll > .kit-scroll-content {
+  box-sizing: border-box;
+  padding-inline-start: var(--ds-space-1);
+  padding-inline-end: calc(
+    var(--kit-scroll-rail-inline-offset)
+    + var(--kit-scroll-rail-width)
+    + var(--ds-space-1)
+  );
+}
+
+.run-expunctio-list {
+  align-content: start;
+  display: grid;
+  gap: var(--ds-stack);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
 .run-expunctio-row {
-  --run-operation-surface-pitch: calc(252px + (2 * var(--ds-space-3)) + var(--ds-inline-tight));
+  --run-expunctio-card-inline-size: 320px;
+  --run-operation-surface-pitch: calc(
+    (var(--run-expunctio-card-inline-size) * 7 / 5)
+    + (2 * var(--ds-space-3))
+    + var(--ds-stack)
+  );
   --chrome-surface-position-y: calc(var(--run-operation-row-index, 0) * -1 * var(--run-operation-surface-pitch));
-  align-items: center;
-  block-size: calc(252px + (2 * var(--ds-space-3)));
+  --run-expunctio-card-paint-start-inset: calc(
+    var(--run-expunctio-card-inline-size) * var(--run-expunctio-card-paint-start-ratio)
+  );
+  --run-expunctio-card-paint-end-inset: calc(
+    var(--run-expunctio-card-inline-size) * var(--run-expunctio-card-paint-end-ratio)
+  );
+  align-items: start;
   box-sizing: border-box;
   display: grid;
-  gap: var(--ds-inline);
-  grid-template-columns: minmax(132px, 180px) minmax(0, 1fr) minmax(110px, auto) minmax(140px, auto);
-  min-block-size: 238px;
+  gap: var(--ds-stack);
+  grid-template-columns: var(--run-expunctio-card-inline-size) minmax(0, 1fr);
+  min-inline-size: 0;
   padding: var(--ds-space-3) var(--ds-inset);
 }
 
-.run-expunctio-row:is(.is-expuncted, .is-spent, .is-unavailable, .is-unaffordable) > * {
-  opacity: .72;
+.inner-chrome-box.has-chrome-surface-fill {
+  position: relative;
+}
+
+.inner-chrome-box > .inner-chrome-box-fill {
+  inset: 0;
+}
+
+.inner-chrome-box.has-chrome-surface-fill > :not(.inner-chrome-box-fill) {
+  position: relative;
+  z-index: 1;
 }
 
 .run-expunctio-card,
@@ -21773,16 +21856,26 @@ button.tileset-relationship-cell {
   inline-size: 100%;
 }
 
+.run-expunctio-card {
+  justify-self: center;
+  max-inline-size: var(--run-expunctio-card-inline-size);
+}
+
+.run-expunctio-companion {
+  block-size: calc(var(--run-expunctio-card-inline-size) * 7 / 5);
+  box-sizing: border-box;
+  display: grid;
+  gap: var(--ds-stack);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-inline-size: 0;
+  padding-block: var(--run-expunctio-card-paint-start-inset) var(--run-expunctio-card-paint-end-inset);
+}
+
 .run-expunctio-copy {
   align-content: center;
   display: grid;
   gap: var(--ds-space-2);
   min-inline-size: 0;
-}
-
-.run-expunctio-copy > strong {
-  color: #eafaff;
-  font: var(--ds-weight-regular) var(--ds-text-lg)/1 var(--ds-font-display);
 }
 
 .run-expunctio-copy > :is(small, span),
@@ -21798,8 +21891,13 @@ button.tileset-relationship-cell {
   justify-items: start;
 }
 
-.run-expunctio-row > button {
+.run-expunctio-companion > button {
+  align-self: end;
   inline-size: 100%;
+}
+
+.run-expunctio-copy > :first-child {
+  translate: 0 -.34em;
 }
 
 .run-alienatio-row {
@@ -22725,6 +22823,12 @@ button.tileset-relationship-cell {
   }
 }
 
+@media (max-width: 1400px) {
+  .run-expunctio-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 960px) {
   .run-vacantia-target-content {
     overflow-y: auto;
@@ -22761,19 +22865,7 @@ button.tileset-relationship-cell {
   }
 
   .run-expunctio-row {
-    --run-operation-surface-pitch: calc(224px + (2 * var(--ds-space-3)) + var(--ds-inline-tight));
-    block-size: calc(224px + (2 * var(--ds-space-3)));
-    grid-template-columns: minmax(112px, 160px) minmax(0, 1fr);
-  }
-
-  .run-expunctio-card {
-    grid-row: 1 / span 3;
-  }
-
-  .run-expunctio-price,
-  .run-expunctio-row > button {
-    grid-column: 2;
-    justify-self: stretch;
+    --run-expunctio-card-inline-size: 240px;
   }
 
   .run-alienatio-return,
@@ -22781,6 +22873,27 @@ button.tileset-relationship-cell {
     grid-column: 2;
     justify-self: stretch;
   }
+}
+
+@media (max-width: 620px) {
+  .run-expunctio-row {
+    --run-expunctio-card-inline-size: min(100%, 280px);
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .run-expunctio-card {
+    inline-size: var(--run-expunctio-card-inline-size);
+  }
+
+  .run-expunctio-companion {
+    block-size: auto;
+    padding-block: 0;
+  }
+
+  .run-expunctio-copy > :first-child {
+    translate: none;
+  }
+
 }
 
 /* Play-screen level rows are selectable too (click the body to preview; Play stays one-click). */

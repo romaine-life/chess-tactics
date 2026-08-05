@@ -85,6 +85,17 @@ describe('Skirmish chrome hierarchy', () => {
     expect(skirmish).toMatch(/import \{[^}]*TitleBarStatus[^}]*\} from '\.\/shell\/TitleBarControls';/);
   });
 
+  it('shows elapsed time instead of a static infinity for an untimed Battle', () => {
+    expect(skirmish).toContain('data-testid="untimed-battle-clock"');
+    expect(skirmish).toContain('formatElapsedClockMs(elapsedReadoutMs)');
+    expect(skirmish).toContain('<small>No limit</small>');
+    expect(skirmish).not.toContain('skirmish-clock-unlimited');
+    expect(skirmish).not.toContain('>∞<');
+    expect(styleCss).not.toContain('.skirmish-clock-unlimited');
+    expect(skirmish).toContain("window.addEventListener('pagehide', bankBeforeUnload)");
+    expect(skirmish).toContain('persistMatch(skirmishStore.getState())');
+  });
+
   it('keeps the playtest return in the canonical typed title-bar control lane', () => {
     expect(skirmish).toContain('<TitleBarControlContribution');
     expect(skirmish).toContain('ariaLabel="Playtest navigation"');

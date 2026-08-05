@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Live capability/lifecycle gate for Run scene ownership and selection (ADR-0383, ADR-0445).
+// Live capability/lifecycle gate for Run scene ownership and selection (ADR-0383, ADR-0462).
 //
 // Usage: npm run verify:run-scenes -- '<bona-vacantia-craft-url>'
 
