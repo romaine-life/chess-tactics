@@ -18,6 +18,7 @@ refined_by:
 partially_superseded_by:
   - "[ADR-0392](0392-sectio-is-the-run-disposal-and-acquisition-phase.md)'s replacement of the Shop terminology with Sectio"
   - "[ADR-0393](0393-adlectio-and-alienatio-are-the-movements-within-sectio.md)'s replacement of purchase terminology with Adlectio"
+  - "[ADR-0431](0431-sectio-transactions-never-wait-for-presentation.md)'s immediate transaction and non-blocking presentation"
 ---
 
 # ADR-0387: Bought cards travel into a title-reachable Chartulary

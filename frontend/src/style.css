@@ -6476,9 +6476,10 @@ body.loading-bootstrap .app-startup-status {
   padding-inline: var(--house-select-clip-apron-left) var(--house-select-clip-apron-right);
 }
 .house-select-menu-scroll > .kit-scroll-rail {
-  bottom: 2px;
-  right: calc(3px + var(--house-select-clip-apron-right));
-  top: 2px;
+  bottom: 0;
+  right: calc(var(--house-select-clip-apron-right) - var(--le-chrome-inner-rail-w, 7px));
+  top: 0;
+  z-index: 5;
 }
 .house-select-menu-options {
   display: flex;
@@ -15616,13 +15617,6 @@ button.tileset-relationship-cell {
   z-index: 4;
 }
 
-.le-floating-artwork-ghost {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  z-index: 40000;
-}
-
 .le-artwork-free-placement-surface {
   position: absolute;
   inset: 0;
@@ -19234,15 +19228,7 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
-/* The real seat stays in the row until the transfer lands, so the other offers
-   cannot jump underneath the flying card. The portalled canonical face is the
-   only visible copy during that beat. */
-.run-card-offer.is-departing {
-  opacity: 0;
-  pointer-events: none;
-}
-
-/* Once the transferred card lands, surviving offers keep their old visual seats
+/* Once an adlected card leaves, surviving offers keep their old visual seats
    and settle into the newly centred grid instead of snapping with the layout.
    JS reads the shared motion tokens into the FLIP animation; this class owns only
    the compositor hint while that bounded functional relocation is active. */
@@ -19285,17 +19271,10 @@ button.tileset-relationship-cell {
   padding: var(--ds-space-3) var(--ds-space-4);
 }
 
-/* An adlected card travels above every clipped Sectio and shell layer into the real
+/* Adlected cards travel above every clipped Sectio and shell layer into the real
    Chartulary shortcut. Translation and scale share one functional-transfer beat:
-   the centre follows a straight segment while the card minimizes into the mark. */
-.run-card-flight-shield {
-  cursor: wait;
-  inset: 0;
-  pointer-events: auto;
-  position: fixed;
-  z-index: 10010;
-}
-
+   each centre follows a straight segment while the card minimizes into the mark.
+   The continuity layer is intentionally pointer-inert, so flights never gate input. */
 .run-card-flight {
   --run-card-flight-duration: var(--ds-duration-transfer);
   pointer-events: none;
@@ -21318,6 +21297,7 @@ button.tileset-relationship-cell {
 }
 
 .run-meta-controls {
+  --run-leaf-control-surface-pitch: calc(46px + var(--ds-inline-tight));
   align-content: start;
   display: flex;
   flex: 1 1 auto;
@@ -21336,6 +21316,10 @@ button.tileset-relationship-cell {
 
 .run-meta-navigation > button {
   inline-size: 100%;
+}
+
+.run-meta-controls [data-chrome-fill-surface] {
+  --chrome-surface-position-y: calc(var(--run-leaf-control-index, 0) * -1 * var(--run-leaf-control-surface-pitch));
 }
 
 .run-meta-abandon {
@@ -21388,6 +21372,7 @@ button.tileset-relationship-cell {
 }
 
 .run-roster-filters {
+  --run-roster-filter-surface-pitch: calc(var(--le-inner-field-h, 38px) + var(--ds-inline-tight));
   align-items: end;
   display: grid;
   gap: var(--ds-inline-tight);
@@ -21401,6 +21386,7 @@ button.tileset-relationship-cell {
 }
 
 .run-roster-filters .house-select {
+  --chrome-surface-position-y: calc(var(--run-roster-filter-index, 0) * -1 * var(--run-roster-filter-surface-pitch));
   inline-size: 100%;
   min-inline-size: 0;
 }
@@ -21418,14 +21404,36 @@ button.tileset-relationship-cell {
   min-block-size: 0;
 }
 
-.run-alienatio-list {
+.run-sectio-operation-list-scroll {
+  --run-operation-clip-apron-block-start: var(--le-inner-atom-top-overhang, 0px);
+  --run-operation-clip-apron-block-end: var(--le-inner-atom-bottom-overhang, 0px);
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.run-sectio-operation-list-scroll > .kit-scroll-content {
+  box-sizing: border-box;
+}
+
+.run-sectio-operation-list-scroll > .kit-scroll-rail {
+  bottom: var(--run-operation-clip-apron-block-end);
+  top: var(--run-operation-clip-apron-block-start);
+}
+
+/* ADR-0093: corner atoms are paint-only overhang, so the list owns a measured
+   transparent block apron before clipping that paint out of the scroll extent.
+   The drawn rail terminates on the row rails, while each atom remains visible
+   in the apron instead of manufacturing a false final scroll step. */
+.run-sectio-operation-list {
   align-content: start;
   display: grid;
   gap: var(--ds-inline-tight);
   min-block-size: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding-inline-end: var(--ds-space-1);
+  overflow-block: clip;
+  overflow-inline: visible;
+  padding-block:
+    var(--run-operation-clip-apron-block-start)
+    var(--run-operation-clip-apron-block-end);
 }
 
 .run-army-ledger-row {
@@ -21576,12 +21584,20 @@ button.tileset-relationship-cell {
   display: block;
 }
 
+.run-army-profile {
+  --run-leaf-control-surface-pitch: calc(46px + var(--ds-inline-tight));
+}
+
 .run-army-profile-content {
   block-size: 100%;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-block-size: 0;
   overflow: hidden;
+}
+
+.run-army-profile [data-chrome-fill-surface] {
+  --chrome-surface-position-y: calc(var(--run-leaf-control-index, 0) * -1 * var(--run-leaf-control-surface-pitch));
 }
 
 .run-army-profile-scroll {
@@ -21731,17 +21747,13 @@ button.tileset-relationship-cell {
   margin: 0;
 }
 
-.run-expunctio-list {
+.run-expunctio-workspace .run-sectio-operation-list-scroll {
   block-size: 100%;
   min-inline-size: 0;
 }
 
-.run-expunctio-list > .kit-scroll-content {
+.run-expunctio-workspace .run-sectio-operation-list-scroll > .kit-scroll-content {
   box-sizing: border-box;
-  /* The terminal tile rail and the drawn scroll track share one bottom
-     keyline. Any trailing inset becomes visible only at scroll-end and makes
-     the track appear to overshoot the gallery. */
-  padding-block: var(--ds-space-1) 0;
   padding-inline-start: var(--ds-space-1);
   padding-inline-end: calc(
     var(--kit-scroll-rail-inline-offset)
@@ -21750,15 +21762,7 @@ button.tileset-relationship-cell {
   );
 }
 
-.run-expunctio-list > .kit-scroll-rail {
-  /* The terminal frame's horizontal rail is the shared keyline. Its corner
-     atom continues below that rail, so reserve the same painted overhang at
-     the bottom of the drawn scrollbar instead of keying the scrollbar to the
-     ornament's tip. */
-  bottom: var(--le-inner-atom-bottom-overhang, 0);
-}
-
-.run-expunctio-gallery {
+.run-expunctio-list {
   align-content: start;
   display: grid;
   gap: var(--ds-stack);
@@ -21769,6 +21773,12 @@ button.tileset-relationship-cell {
 
 .run-expunctio-row {
   --run-expunctio-card-inline-size: 320px;
+  --run-operation-surface-pitch: calc(
+    (var(--run-expunctio-card-inline-size) * 7 / 5)
+    + (2 * var(--ds-space-3))
+    + var(--ds-stack)
+  );
+  --chrome-surface-position-y: calc(var(--run-operation-row-index, 0) * -1 * var(--run-operation-surface-pitch));
   --run-expunctio-card-paint-start-inset: calc(
     var(--run-expunctio-card-inline-size) * var(--run-expunctio-card-paint-start-ratio)
   );
@@ -21776,24 +21786,12 @@ button.tileset-relationship-cell {
     var(--run-expunctio-card-inline-size) * var(--run-expunctio-card-paint-end-ratio)
   );
   align-items: start;
+  box-sizing: border-box;
   display: grid;
   gap: var(--ds-stack);
   grid-template-columns: var(--run-expunctio-card-inline-size) minmax(0, 1fr);
   min-inline-size: 0;
   padding: var(--ds-space-3) var(--ds-inset);
-}
-
-/* The installed frame's corner-atom ::after extends beyond the border box.
-   Preserve that complete painted apron without letting its transparent overlay
-   box manufacture extra scroll range after the terminal tile. This selector is
-   deliberately more specific than the live family rule that ordinarily forces
-   framed controls to overflow visibly. */
-.run-expunctio-workspace .run-expunctio-gallery .run-expunctio-row.inner-box {
-  overflow: clip !important;
-  overflow-clip-margin: var(
-    --le-inner-atom-bottom-clip-apron,
-    var(--le-inner-atom-bottom-overhang, 0px)
-  );
 }
 
 .inner-chrome-box.has-chrome-surface-fill {
@@ -21860,7 +21858,11 @@ button.tileset-relationship-cell {
 }
 
 .run-alienatio-row {
+  --run-operation-surface-pitch: calc(112px + var(--ds-inline-tight));
+  --chrome-surface-position-y: calc(var(--run-operation-row-index, 0) * -1 * var(--run-operation-surface-pitch));
   align-items: center;
+  block-size: 112px;
+  box-sizing: border-box;
   display: grid;
   gap: var(--ds-inline);
   grid-template-columns: 86px minmax(0, 1fr) minmax(110px, auto) minmax(140px, auto);
@@ -21868,8 +21870,7 @@ button.tileset-relationship-cell {
   padding: var(--ds-space-2) var(--ds-inset);
 }
 
-.run-alienatio-row.is-alienated,
-.run-alienatio-row.is-retained {
+.run-alienatio-row:is(.is-aliened, .is-retained) > * {
   opacity: .7;
 }
 
@@ -22780,7 +22781,7 @@ button.tileset-relationship-cell {
 }
 
 @media (max-width: 1400px) {
-  .run-expunctio-gallery {
+  .run-expunctio-list {
     grid-template-columns: minmax(0, 1fr);
   }
 }
@@ -22814,7 +22815,10 @@ button.tileset-relationship-cell {
   }
 
   .run-alienatio-row {
+    --run-operation-surface-pitch: calc(224px + var(--ds-inline-tight));
+    block-size: 224px;
     grid-template-columns: 72px minmax(0, 1fr);
+    min-block-size: 224px;
   }
 
   .run-expunctio-row {

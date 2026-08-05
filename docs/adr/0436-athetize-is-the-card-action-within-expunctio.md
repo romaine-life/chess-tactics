@@ -6,7 +6,10 @@ refines:
   - "[ADR-0309](0309-concinnous-names-the-white-positioned-card-qualifier.md)"
   - "[ADR-0341](0341-cacochymic-replaces-plagued-as-the-pestiferous-unit-state-name.md)"
   - "[ADR-0407](0407-expunctio-removes-one-card-per-sectio.md)"
+  - "[ADR-0432](0432-aliene-is-the-alienatio-action-verb.md)"
   - "[ADR-0435](0435-expunctio-is-a-card-first-gallery.md)"
+partially_supersedes:
+  - "[ADR-0432](0432-aliene-is-the-alienatio-action-verb.md)'s Expunct card-action command"
 ---
 
 # ADR-0436: Athetize is the card action within Expunctio

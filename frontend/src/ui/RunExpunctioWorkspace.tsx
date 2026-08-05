@@ -17,6 +17,7 @@ import { RunSceneViewport } from './RunWorkspace';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { ChromeButton } from './shared/ChromeButton';
 import { InnerChromeBox } from './shared/ChromeBox';
+import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
 
 type ExpunctioRow = Readonly<{
   card: RunOwnedCard;
@@ -98,9 +99,9 @@ export function RunExpunctioWorkspace({
       <p className="run-expunctio-rule">
         Fee = printed card value + remaining unit value. Reset Sectio restores the complete visit.
       </p>
-      <KitScroll className="run-expunctio-list">
-        <div className="run-expunctio-gallery" aria-label="Cards available for Expunctio">
-          {rows.map(({ card, units, priceTenths, status }) => {
+      <KitScroll className="run-sectio-operation-list-scroll">
+        <div className="run-sectio-operation-list run-expunctio-list" aria-label="Cards available for Expunctio">
+          {rows.map(({ card, units, priceTenths, status }, index) => {
             const definition = runCardDefinition(card.coreId)!;
             const paintInsets = runCardFramePaintInsetRatios(
               runCardFrameGeometryForSlot(runCardFrameSlot(definition, card.cardType)),
@@ -111,6 +112,7 @@ export function RunExpunctioWorkspace({
                 fillRole="outer"
                 key={`${status}:${card.id}`}
                 style={{
+                  ['--run-operation-row-index' as string]: index,
                   '--run-expunctio-card-paint-start-ratio': paintInsets.blockStart,
                   '--run-expunctio-card-paint-end-ratio': paintInsets.blockEnd,
                 } as CSSProperties}
@@ -136,7 +138,7 @@ export function RunExpunctioWorkspace({
                   </span>
                   <ChromeButton
                     unit="inner-text-button"
-                    data-chrome-fill-surface="hybrid-wood-oak"
+                    data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                     data-ui-sfx={status === 'available' ? 'gold' : undefined}
                     className={chromeUnitClassNames(
                       'inner-text-button',

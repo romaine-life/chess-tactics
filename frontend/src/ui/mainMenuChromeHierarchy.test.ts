@@ -10,6 +10,7 @@ const editor = readFileSync(new URL('./CampaignEditor.tsx', import.meta.url), 'u
 const lobbies = readFileSync(new URL('./Lobbies.tsx', import.meta.url), 'utf8');
 const settingsControls = readFileSync(new URL('./shared/SettingsControls.tsx', import.meta.url), 'utf8');
 const apparatusRailTab = readFileSync(new URL('./shared/ApparatusRailTab.tsx', import.meta.url), 'utf8');
+const chromeSurfacePolicy = readFileSync(new URL('./shared/chromeSurfacePolicy.ts', import.meta.url), 'utf8');
 const actionList = readFileSync(new URL('./shared/ActionList.tsx', import.meta.url), 'utf8');
 
 function expectTaggedLegacyControls(source: string, legacyClass: string, helper = 'chromeUnitClassNames('): void {
@@ -41,7 +42,8 @@ describe('Main Menu chrome hierarchy', () => {
     // The surface is declared ONCE on the shared rail primitive, so every menu-language
     // rail (Main Menu, Settings, Editor, Play, Enchiridion, Strategikon) is painted from
     // the same source and a re-skin is a single edit. A per-screen literal is the drift.
-    expect(apparatusRailTab).toContain("export const APPARATUS_RAIL_FILL_SURFACE = 'hybrid-wood-oak'");
+    expect(chromeSurfacePolicy).toContain("export const CHROME_LEAF_FILL_SURFACE = 'hybrid-wood-oak'");
+    expect(apparatusRailTab).toContain('export const APPARATUS_RAIL_FILL_SURFACE = CHROME_LEAF_FILL_SURFACE');
     expect(apparatusRailTab).toContain('data-chrome-tab-fill-surface={APPARATUS_RAIL_FILL_SURFACE}');
     expect(mainMenu).not.toContain('data-chrome-tab-fill-surface=');
     expect(mainMenu).not.toContain('STONE_SURFACE');

@@ -275,6 +275,7 @@ describe('Level Editor chrome hierarchy', () => {
     expect(houseSelect).toContain("paintOverhang('--le-inner-atom-top-overhang')");
     expect(houseSelect).toContain("paintOverhang('--le-inner-atom-bottom-overhang')");
     expect(houseSelect).not.toContain('data-disabled=');
+    expect(styleCss).toMatch(/\.house-select-menu-scroll > \.kit-scroll-rail\s*\{[\s\S]*?bottom:\s*0;[\s\S]*?right:\s*calc\(var\(--house-select-clip-apron-right\) - var\(--le-chrome-inner-rail-w, 7px\)\);[\s\S]*?top:\s*0;[\s\S]*?z-index:\s*5;/);
     expect(styleCss).not.toMatch(/\.house-select[^\n{]*(?:disabled|data-disabled)[^\n{]*::after/);
   });
 

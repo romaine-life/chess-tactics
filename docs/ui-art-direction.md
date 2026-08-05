@@ -156,6 +156,8 @@ the chrome should be low-glare.
 Do:
 
 - Use dark navy, charcoal, muted blue-gray, and subdued steel panels.
+- Use cool teal/blue stone for structural fields that hold subordinate units,
+  and installed oak for terminal leaf controls or status plates (ADR-0433).
 - Use off-white text, not pure white walls of UI.
 - Use cobalt for primary/player actions, red/orange for power/threat, and gray
   for wait/disabled states.

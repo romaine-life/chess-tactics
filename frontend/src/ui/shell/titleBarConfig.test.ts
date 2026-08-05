@@ -16,6 +16,7 @@ describe('titleBarConfig play route screen names', () => {
       centerSlot: true,
       studSlot: true,
     });
+    expect(titleBarConfig('/run', '?run=1&view=alienatio')?.screenNameTo).toBe('/run?run=1');
   });
 
   it('returns from sign-in to the current Play selector section', () => {

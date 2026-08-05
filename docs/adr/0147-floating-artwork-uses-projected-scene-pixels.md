@@ -1,9 +1,11 @@
 ---
-status: "accepted; Level Editor placement and interaction clauses superseded by ADR-0148"
+status: "accepted; Level Editor placement and interaction clauses superseded by ADR-0148; board-depth clauses superseded by ADR-0434"
 date: 2026-07-23
 deciders: Nelson, Codex
 supersedes: ADR-0145 board-coordinate/contact-depth clauses and ADR-0146 seated-target/bounded-axis clauses
-partially_superseded_by: "[ADR-0148](0148-floating-artwork-uses-dedicated-placement-and-explicit-selection.md)"
+partially_superseded_by:
+  - "[ADR-0148](0148-floating-artwork-uses-dedicated-placement-and-explicit-selection.md)"
+  - "[ADR-0434](0434-scene-art-uses-its-ground-contact-for-shared-depth.md)"
 ---
 
 # ADR-0147: Floating artwork uses projected scene pixels

@@ -4,6 +4,7 @@ import { RunGoldIcon } from './RunResources';
 import { ataraxiaNumeralArtUrl } from './ataraxiaNumeral';
 import { RunProgressIcon } from './shared/RunProgressIcon';
 import { Tooltip } from './shared/InfoTip';
+import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
 import { TitleBarStatus } from './shell/TitleBarControls';
 
 // What the persistent title bar says about a Run, in two parts.
@@ -30,7 +31,10 @@ export function RunIdentityChip({
   levelName: string | null;
 }): ReactElement {
   return (
-    <TitleBarStatus className="skirmish-status-chip skirmish-turn-plate run-topbar-identity">
+    <TitleBarStatus
+      className="skirmish-status-chip skirmish-turn-plate run-topbar-identity"
+      data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+    >
       <strong>{warName}</strong>
       {levelName ? <small>{levelName}</small> : null}
     </TitleBarStatus>

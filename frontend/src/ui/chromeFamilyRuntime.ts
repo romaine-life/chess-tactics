@@ -1073,9 +1073,7 @@ export function frameCss(
   const innerAtomLeftOverhang = cssPx(Math.max(0, -(innerFrame.atomOverlay?.leftX ?? 0)));
   const innerAtomRightOverhang = cssPx(Math.max(0, -(innerFrame.atomOverlay?.rightX ?? 0)));
   const innerAtomTopOverhang = cssPx(Math.max(0, -(innerFrame.atomOverlay?.topY ?? 0)));
-  const innerAtomBottomOverhangValue = Math.max(0, -(innerFrame.atomOverlay?.bottomY ?? 0));
-  const innerAtomBottomOverhang = cssPx(innerAtomBottomOverhangValue);
-  const innerAtomBottomClipApron = cssPx(innerRailWidth + innerAtomBottomOverhangValue);
+  const innerAtomBottomOverhang = cssPx(Math.max(0, -(innerFrame.atomOverlay?.bottomY ?? 0)));
   const innerDividerAtomLeftOverhang = cssPx(Math.max(0, -(dividers.inner.atomOverlay?.leftX ?? 0)));
   const innerDividerAtomRightOverhang = cssPx(Math.max(0, -(dividers.inner.atomOverlay?.rightX ?? 0)));
   const innerRoleSelectors = chromeUnitRoleSelectors('inner');
@@ -1207,7 +1205,6 @@ ${familySurface} {
   --le-inner-atom-right-overhang: ${innerAtomRightOverhang} !important;
   --le-inner-atom-top-overhang: ${innerAtomTopOverhang} !important;
   --le-inner-atom-bottom-overhang: ${innerAtomBottomOverhang} !important;
-  --le-inner-atom-bottom-clip-apron: ${innerAtomBottomClipApron} !important;
   --le-inner-divider-atom-left-overhang: ${innerDividerAtomLeftOverhang} !important;
   --le-inner-divider-atom-right-overhang: ${innerDividerAtomRightOverhang} !important;
   --le-outer-fill-box-left: ${cssPx(outer.fillBoxLeft)} !important;

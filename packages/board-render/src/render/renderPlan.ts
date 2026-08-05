@@ -28,7 +28,7 @@ import {
 } from '../core/featureAutotile';
 import { resolveWallArtFaces, slotSource, wallArtSlotsForFace } from '../core/wallArt';
 import { flatContactClipRects, propZBracket, structureSeatPoint, structureSourceHalfSrc, structureSourceSprite, structureSourceSplitMode } from './structureGeometry';
-import { fenceOverlayZIndex, fencePostZIndex, groundCoverZIndex, objectBaseZIndex, wallArtOverlayZIndex, wallOverlayZIndex } from './sceneDepth';
+import { fenceOverlayZIndex, fencePostZIndex, groundCoverZIndex, objectBaseZIndex, projectedSceneObjectZBracket, wallArtOverlayZIndex, wallOverlayZIndex } from './sceneDepth';
 import { propDef, type StructureSourceRef } from '../core/props';
 import {
   structureArtAsset,
@@ -714,15 +714,18 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
     }
   }
 
-  for (const [index, placement] of (predrawnBackgroundActive ? [] : (board.floatingArtwork ?? [])).entries()) {
+  for (const placement of predrawnBackgroundActive ? [] : (board.floatingArtwork ?? [])) {
     const sprite = structureArtDirectionSprite(placement.sourceArtId, placement.direction);
     if (!sprite) continue;
     const scale = sprite.scale * placement.scale;
     const width = sprite.w * scale;
     const height = sprite.h * scale;
-    // Floating source art is an ordered visual overlay. It never derives depth from a tile,
-    // contact point, or projected board coordinate.
-    const back = 1_000_000 + index * 2;
+    const dx = placement.pixelX - width / 2;
+    const dy = placement.pixelY - height / 2;
+    // The placement remains free projected-pixel art. Its installed directional anchor supplies
+    // only a render-time ground contact, which seats it in the same continuous depth bands as
+    // walls and board-addressed objects. No board coordinate or z enters persisted content.
+    const { back, front } = projectedSceneObjectZBracket(dy + sprite.anchorY * scale);
     pushFloatingArtworkDrawOps(
       ops,
       placement.sourceArtId,
@@ -730,10 +733,10 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
       sprite,
       sprite.anchorY,
       scale,
-      placement.pixelX - width / 2,
-      placement.pixelY - height / 2,
+      dx,
+      dy,
       back,
-      back + 1,
+      front,
     );
   }
 

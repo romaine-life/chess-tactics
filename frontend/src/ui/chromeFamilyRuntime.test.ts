@@ -176,7 +176,6 @@ describe('chrome family geometry ownership (ADR-0083)', () => {
     expect(css).toContain('--le-inner-atom-right-overhang: 7px !important;');
     expect(css).toContain('--le-inner-atom-top-overhang: 8px !important;');
     expect(css).toContain('--le-inner-atom-bottom-overhang: 8px !important;');
-    expect(css).toContain('--le-inner-atom-bottom-clip-apron: 15px !important;');
     expect(css).toContain('--le-inner-divider-atom-left-overhang: 2.5px !important;');
     expect(css).toContain('--le-inner-divider-atom-right-overhang: 2px !important;');
     expect(css).not.toContain('atom-left-footprint');

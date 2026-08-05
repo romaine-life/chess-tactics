@@ -9,57 +9,49 @@ import {
   type RefObject,
 } from 'react';
 
+const KIT_SCROLL_MIN_THUMB = 24;
+
+export interface KitScrollMetrics {
+  scrollable: boolean;
+  h: number;
+  top: number;
+}
+
+/**
+ * The thumb belongs to the drawn rail, not to the content viewport. Consumers
+ * may inset that rail to preserve chrome paint aprons, so its actual rendered
+ * height is the only valid track for thumb size and position.
+ */
+export function computeKitScrollMetrics({
+  clientHeight,
+  scrollHeight,
+  scrollTop,
+  trackHeight,
+}: {
+  clientHeight: number;
+  scrollHeight: number;
+  scrollTop: number;
+  trackHeight: number;
+}): KitScrollMetrics {
+  const scrollable = scrollHeight > clientHeight + 1;
+  const track = Math.max(0, trackHeight);
+  if (!scrollable || track === 0) return { scrollable, h: 0, top: 0 };
+
+  const h = Math.min(
+    track,
+    Math.max(KIT_SCROLL_MIN_THUMB, Math.round(track * (clientHeight / scrollHeight))),
+  );
+  const maxScroll = Math.max(0, scrollHeight - clientHeight);
+  const maxThumb = Math.max(0, track - h);
+  const progress = maxScroll > 0 ? Math.min(1, Math.max(0, scrollTop / maxScroll)) : 0;
+  return { scrollable, h, top: Math.round(progress * maxThumb) };
+}
+
 // A DRAWN scrollbar (ADR-0030). The native scrollbar is hidden; we render an always-present rail
 // (a real DOM element — the browser can't hide it) plus a grip thumb that appears only when there's
 // scrollable content and tracks the scroll position. Because it's DOM, the rail never vanishes on an
 // empty pane AND it screenshots like any other element (native ::-webkit skins don't render in
 // headless captures). Content still scrolls natively (wheel/keys); we only draw + drive the bar.
-export function kitScrollMetrics({
-  viewportHeight,
-  scrollHeight,
-  scrollTop,
-  trackHeight,
-}: {
-  viewportHeight: number;
-  scrollHeight: number;
-  scrollTop: number;
-  trackHeight: number;
-}): { scrollable: boolean; h: number; top: number } {
-  const scrollable = scrollHeight > viewportHeight + 1;
-  if (!scrollable || trackHeight <= 0) return { scrollable: false, h: 0, top: 0 };
-
-  const h = Math.min(
-    trackHeight,
-    Math.max(24, Math.round(trackHeight * (viewportHeight / scrollHeight))),
-  );
-  const maxScroll = scrollHeight - viewportHeight;
-  const top = maxScroll > 0
-    ? Math.round((scrollTop / maxScroll) * (trackHeight - h))
-    : 0;
-  return { scrollable, h, top };
-}
-
-export function kitScrollDragTarget({
-  startScrollTop,
-  deltaY,
-  viewportHeight,
-  scrollHeight,
-  trackHeight,
-  thumbHeight,
-}: {
-  startScrollTop: number;
-  deltaY: number;
-  viewportHeight: number;
-  scrollHeight: number;
-  trackHeight: number;
-  thumbHeight: number;
-}): number {
-  const maxThumb = trackHeight - thumbHeight;
-  const maxScroll = scrollHeight - viewportHeight;
-  if (maxThumb <= 0 || maxScroll <= 0) return startScrollTop;
-  return startScrollTop + deltaY * (maxScroll / maxThumb);
-}
-
 export function KitScroll({ children, className, style, contentRef }: {
   children: ReactNode;
   className?: string;
@@ -76,8 +68,8 @@ export function KitScroll({ children, className, style, contentRef }: {
     const el = content.current;
     const track = rail.current;
     if (!el || !track) return;
-    setM(kitScrollMetrics({
-      viewportHeight: el.clientHeight,
+    setM(computeKitScrollMetrics({
+      clientHeight: el.clientHeight,
       scrollHeight: el.scrollHeight,
       scrollTop: el.scrollTop,
       trackHeight: track.clientHeight,
@@ -105,15 +97,12 @@ export function KitScroll({ children, className, style, contentRef }: {
     const move = (ev: MouseEvent): void => {
       const d = drag.current;
       const c = content.current;
-      if (!d || !c) return;
-      c.scrollTop = kitScrollDragTarget({
-        startScrollTop: d.top,
-        deltaY: ev.clientY - d.y,
-        viewportHeight: c.clientHeight,
-        scrollHeight: c.scrollHeight,
-        trackHeight: rail.current?.clientHeight ?? c.clientHeight,
-        thumbHeight: d.h,
-      });
+      const track = rail.current;
+      if (!d || !c || !track) return;
+      const maxThumb = track.clientHeight - d.h;
+      const maxScroll = c.scrollHeight - c.clientHeight;
+      if (maxThumb <= 0) return;
+      c.scrollTop = d.top + (ev.clientY - d.y) * (maxScroll / maxThumb);
     };
     const up = (): void => {
       drag.current = null;
@@ -129,8 +118,8 @@ export function KitScroll({ children, className, style, contentRef }: {
       <div className="kit-scroll-content" ref={content} onScroll={recompute}>
         {children}
       </div>
-      <div className="kit-scroll-rail" aria-hidden="true" ref={rail}>
-        {m.scrollable ? (
+      <div className="kit-scroll-rail" ref={rail} aria-hidden="true">
+        {m.scrollable && m.h > 0 ? (
           <div
             className="kit-scroll-thumb"
             style={{ height: `${m.h}px`, transform: `translateY(${m.top}px)` }}
