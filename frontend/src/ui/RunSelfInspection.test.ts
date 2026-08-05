@@ -6,6 +6,7 @@ import {
   runSelfInspectionHref,
   runSelfInspectionViewFromSearch,
   runWorkspaceViewFromSearch,
+  runWorkspaceTitleSegment,
 } from './RunSelfInspection';
 
 describe('Run self-inspection links', () => {
@@ -29,6 +30,18 @@ describe('Run self-inspection links', () => {
       .toBe('/run?seed=7&view=army#unit');
     expect(runSelfInspectionHref('http://example.test/run?seed=7&view=army#unit', null))
       .toBe('/run?seed=7#unit');
+  });
+
+  it('derives title segments from the same Run workspace labels and addresses', () => {
+    expect(runWorkspaceTitleSegment('/run?run=1&view=alienatio', 'alienatio')).toEqual({
+      label: 'Alienatio',
+      to: '/run?run=1&view=alienatio',
+    });
+    expect(runWorkspaceTitleSegment('/run?run=1&view=army&unit=run-king', 'army')).toEqual({
+      label: 'Army',
+      to: '/run?run=1&view=army',
+    });
+    expect(runWorkspaceTitleSegment('/run?run=1&view=expunctio', 'primary')).toBeNull();
   });
 
   it('addresses Run unit profiles and Bona targets without local presentation identity', () => {
