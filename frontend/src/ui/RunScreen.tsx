@@ -91,9 +91,13 @@ import { LipsanonIcon, LipsanaWorkspace } from './Lipsana';
 import { RunBonaVacantia, RunBonaVacantiaTarget } from './RunBonaVacantia';
 import { RunGoldAmount } from './RunResources';
 import {
+  isSectioWorkspaceView,
+  RUN_WORKSPACE_VIEW_LABEL,
+  SECTIO_WORKSPACE_VIEWS,
   runArmyUnitHref,
   runBonaTargetHref,
   runWorkspaceHref,
+  runWorkspaceTitleSegment,
   type RunSelfInspectionView,
   type RunWorkspaceView,
 } from './RunSelfInspection';
@@ -178,22 +182,31 @@ function runPhaseRouteName(run: RunDocument): string {
 export function runTitleBarRouteSegments(
   run: RunDocument,
   path: string,
-  search = '',
+  search: string,
+  requestedView: RunScreenView,
 ): readonly TitleRouteSegment[] {
-  const segments: TitleRouteSegment[] = [{ label: runPhaseRouteName(run), to: `/run${search}` }];
+  const runRootHref = runWorkspaceHref(`/run${search}`, 'primary');
+  const segments: TitleRouteSegment[] = [{ label: runPhaseRouteName(run), to: runRootHref }];
   if (isStrategikonPath(path)) {
     segments.push(...strategikonRouteCrumbs(path).map((crumb) => ({
       ...crumb,
       to: `${crumb.to}${search}`,
     })));
+  } else {
+    const view = isSectioWorkspaceView(requestedView) && run.phase !== 'sectio'
+      ? 'primary'
+      : requestedView;
+    const workspaceSegment = runWorkspaceTitleSegment(`/run${search}`, view);
+    if (workspaceSegment) segments.push(workspaceSegment);
   }
   return segments;
 }
 
-function RunTitleBarStatus({ run, path, search }: {
+function RunTitleBarStatus({ run, path, search, view }: {
   run: RunDocument;
   path: string;
   search: string;
+  view: RunScreenView;
 }): ReactElement {
   const progress = runBattleProgress(run);
   const levelName = run.war.battles[run.battleIndex]?.level.name ?? 'Battle';
@@ -203,7 +216,7 @@ function RunTitleBarStatus({ run, path, search }: {
           visible workspace address — Sectio › Strategikon › Enchiridion › Cards —
           rather than leaving the covered phase as the last word in the route. */}
       <TitleBarSlot region="route">
-        <TitleRoute segments={runTitleBarRouteSegments(run, path, search)} />
+        <TitleRoute segments={runTitleBarRouteSegments(run, path, search, view)} />
       </TitleBarSlot>
       <div className="skirmish-topbar-status run-topbar-status">
         <RunIdentityChip
@@ -305,32 +318,17 @@ function RunMetaControls({
               {primaryLabel}
             </ChromeButton>
             {sectio ? (
-              <>
+              SECTIO_WORKSPACE_VIEWS.map((candidate) => (
                 <ChromeButton unit="inner-text-button"
-                  data-testid="run-view-battle-preview"
-                  className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'battle-preview' && 'active')}
-                  aria-pressed={view === 'battle-preview'}
-                  onClick={() => onNavigate('battle-preview')}
+                  key={candidate}
+                  data-testid={`run-view-${candidate}`}
+                  className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === candidate && 'active')}
+                  aria-pressed={view === candidate}
+                  onClick={() => onNavigate(candidate)}
                 >
-                  View Battle
+                  {RUN_WORKSPACE_VIEW_LABEL[candidate]}
                 </ChromeButton>
-                <ChromeButton unit="inner-text-button"
-                  data-testid="run-view-alienatio"
-                  className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'alienatio' && 'active')}
-                  aria-pressed={view === 'alienatio'}
-                  onClick={() => onNavigate('alienatio')}
-                >
-                  Alienatio
-                </ChromeButton>
-                <ChromeButton unit="inner-text-button"
-                  data-testid="run-view-expunctio"
-                  className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'expunctio' && 'active')}
-                  aria-pressed={view === 'expunctio'}
-                  onClick={() => onNavigate('expunctio')}
-                >
-                  Expunctio
-                </ChromeButton>
-              </>
+              ))
             ) : null}
           </div>
         </div>
@@ -1605,7 +1603,7 @@ export function RunScreen({
     routeSearch,
     strategikonOpen,
     titleBarContent: shellRun ? (
-      <RunTitleBarStatus run={shellRun} path={routePath} search={routeSearch} />
+      <RunTitleBarStatus run={shellRun} path={routePath} search={routeSearch} view={view} />
     ) : null,
     lipsanonIds: visibleLipsanonIds,
     inspectionWorkspace,
