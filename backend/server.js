@@ -4566,6 +4566,48 @@ const MIGRATIONS = [
           OR pg_temp.migrate_nested_levels_v2(body) IS DISTINCT FROM body;
     `,
   },
+  {
+    version: 62,
+    name: 'Retained saved editor baseline evidence',
+    // ADR-0430: migration 61 can reconstruct a baseline from the exact saved
+    // revision, but production history retention predates that invariant. When
+    // the saved revision itself is gone, a later retained revision carrying the
+    // same saved_revision and a non-null baseline_hash is still direct evidence
+    // of that save boundary. Restore the newest such hash and preserve the
+    // resulting conflict until the owner explicitly Discards or resolves it.
+    sql: `
+      WITH candidates AS (
+        SELECT working.document_id,
+               evidence.baseline_hash AS recovered_baseline_hash
+          FROM level_working_copies working
+          JOIN LATERAL (
+            SELECT revision.baseline_hash
+              FROM level_working_copy_revisions revision
+             WHERE revision.document_id = working.document_id
+               AND revision.saved_revision = working.saved_revision
+               AND revision.baseline_hash IS NOT NULL
+             ORDER BY revision.revision DESC
+             LIMIT 1
+          ) evidence ON true
+         WHERE working.saved_revision > 0
+           AND working.baseline_hash IS NULL
+      ), changed AS (
+        UPDATE level_working_copies working
+           SET revision = working.revision + 1,
+               baseline_hash = candidate.recovered_baseline_hash,
+               updated_at = now()
+          FROM candidates candidate
+         WHERE candidate.document_id = working.document_id
+        RETURNING working.document_id, working.revision, working.body,
+                  working.saved_revision, working.baseline_hash, working.updated_at
+      )
+      INSERT INTO level_working_copy_revisions
+        (document_id, revision, body, saved_revision, baseline_hash, reason, created_at)
+      SELECT document_id, revision, body, saved_revision, baseline_hash, 'migration', updated_at
+        FROM changed
+      ON CONFLICT (document_id, revision) DO NOTHING;
+    `,
+  },
 ];
 
 let pool = null;
@@ -5472,10 +5514,21 @@ async function repairRequiredSchemaContracts(
     || issues.unrepaired_saved_editor_baseline_count > 0
   ) {
     const migration = MIGRATIONS.find((candidate) => candidate.version === 61);
-    if (!migration) throw new Error('Level format 2 and saved editor baseline repair migration is unavailable');
-    await executeMigration(migration, 'repair Level format 2 and saved editor baseline contract');
+    if (!migration) throw new Error('Level format 2 and exact saved editor baseline repair migration is unavailable');
+    await executeMigration(migration, 'repair Level format 2 and exact saved editor baseline contract');
     completedSteps.push(Object.freeze({
-      contract: 'Level format 2 and saved editor baselines',
+      contract: 'Level format 2, embedded Run save version, and exact saved editor baselines',
+      migration_version: migration.version,
+    }));
+    markInspection(`inspect required contract repairs after migration ${migration.version}`);
+    issues = await requiredSchemaContractIssues(client);
+  }
+  if (issues.unrepaired_saved_editor_baseline_count > 0) {
+    const migration = MIGRATIONS.find((candidate) => candidate.version === 62);
+    if (!migration) throw new Error('retained saved editor baseline evidence repair migration is unavailable');
+    await executeMigration(migration, 'repair retained saved editor baseline evidence contract');
+    completedSteps.push(Object.freeze({
+      contract: 'retained saved editor baseline evidence',
       migration_version: migration.version,
     }));
     markInspection(`inspect required contract repairs after migration ${migration.version}`);

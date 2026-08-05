@@ -937,7 +937,7 @@ function inlineMigrationSql(version) {
   return inlineMigrationDefinition(version).sql;
 }
 
-async function validatePrimarySparseNumericMigrationUpgrade61() {
+async function validatePrimarySparseNumericMigrationUpgrade62() {
   const history = await queryDb(
     `SELECT version, name, checksum
        FROM schema_migrations
@@ -952,7 +952,7 @@ async function validatePrimarySparseNumericMigrationUpgrade61() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 61 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 62 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -967,7 +967,7 @@ async function validatePrimarySparseNumericMigrationUpgrade61() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 25 }, (_, index) => index + 37),
+    ...Array.from({ length: 26 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1081,7 +1081,7 @@ async function validatePrimarySparseNumericMigrationUpgrade61() {
     )
   ) {
     throw new Error(
-      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 61: `
+      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 62: `
       + `${JSON.stringify({
         history: history.rows,
         identity_columns: identityColumns.rows,
@@ -2480,8 +2480,95 @@ async function validateLevelFormatAndEditorBaselineMigration61() {
   }
 }
 
-async function validateRepairedEditorDocumentDiscardOperation61() {
-  const documentId = '00000000-0000-4000-8000-000000000261';
+async function validateRetainedEditorBaselineEvidenceMigration62() {
+  const { Client } = require('pg');
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('CREATE SCHEMA smoke_editor_baseline_migration_62');
+    await client.query('SET LOCAL search_path TO smoke_editor_baseline_migration_62');
+    await client.query(`
+      CREATE TABLE level_working_copies (
+        document_id text PRIMARY KEY, body jsonb NOT NULL, revision bigint NOT NULL,
+        saved_revision bigint NOT NULL, baseline_hash text,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE level_working_copy_revisions (
+        document_id text NOT NULL, revision bigint NOT NULL, body jsonb NOT NULL,
+        saved_revision bigint NOT NULL, baseline_hash text, reason text NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (document_id, revision)
+      );
+    `);
+    await client.query(`
+      INSERT INTO level_working_copies
+        (document_id, body, revision, saved_revision, baseline_hash)
+      VALUES
+        ('same-boundary-evidence', '{"formatVersion":2,"name":"Private draft"}'::jsonb, 30, 27, NULL),
+        ('missing-evidence', '{"formatVersion":2,"name":"Unproved draft"}'::jsonb, 5, 2, NULL),
+        ('healthy', '{"formatVersion":2,"name":"Healthy"}'::jsonb, 7, 7, 'healthy-baseline');
+
+      INSERT INTO level_working_copy_revisions
+        (document_id, revision, body, saved_revision, baseline_hash, reason)
+      VALUES
+        ('same-boundary-evidence', 28, '{"formatVersion":2,"name":"Private draft"}'::jsonb, 27, 'old-format-baseline', 'autosave'),
+        ('same-boundary-evidence', 29, '{"formatVersion":2,"name":"Private draft"}'::jsonb, 26, 'wrong-save-boundary', 'autosave'),
+        ('same-boundary-evidence', 30, '{"formatVersion":2,"name":"Private draft"}'::jsonb, 27, NULL, 'migration'),
+        ('missing-evidence', 4, '{"formatVersion":2,"name":"Unproved draft"}'::jsonb, 1, 'unrelated-baseline', 'autosave'),
+        ('missing-evidence', 5, '{"formatVersion":2,"name":"Unproved draft"}'::jsonb, 2, NULL, 'migration'),
+        ('healthy', 7, '{"formatVersion":2,"name":"Healthy"}'::jsonb, 7, 'healthy-baseline', 'save');
+    `);
+
+    await client.query(inlineMigrationSql(62));
+    await client.query(inlineMigrationSql(62));
+
+    const documents = await client.query(`
+      SELECT document_id, revision, saved_revision, baseline_hash
+        FROM level_working_copies
+       ORDER BY document_id
+    `);
+    const history = await client.query(`
+      SELECT document_id, revision, saved_revision, baseline_hash, reason
+        FROM level_working_copy_revisions
+       WHERE reason = 'migration'
+       ORDER BY document_id, revision
+    `);
+    const byId = new Map(documents.rows.map((row) => [row.document_id, row]));
+    const repaired = byId.get('same-boundary-evidence');
+    const missing = byId.get('missing-evidence');
+    const healthy = byId.get('healthy');
+    if (
+      Number(repaired?.revision) !== 31
+      || Number(repaired?.saved_revision) !== 27
+      || repaired?.baseline_hash !== 'old-format-baseline'
+      || Number(missing?.revision) !== 5
+      || Number(missing?.saved_revision) !== 2
+      || missing?.baseline_hash !== null
+      || Number(healthy?.revision) !== 7
+      || healthy?.baseline_hash !== 'healthy-baseline'
+      || history.rows.filter((row) => (
+        row.document_id === 'same-boundary-evidence'
+        && Number(row.revision) === 31
+        && Number(row.saved_revision) === 27
+        && row.baseline_hash === 'old-format-baseline'
+      )).length !== 1
+    ) {
+      throw new Error(`Migration 62 did not conservatively restore retained baseline evidence: ${JSON.stringify({
+        documents: documents.rows,
+        history: history.rows,
+      })}`);
+    }
+    await client.query('ROLLBACK');
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve validation error */ }
+    throw error;
+  } finally {
+    await client.end();
+  }
+}
+
+async function validateRepairedEditorDocumentDiscardOperation62() {
+  const documentId = '00000000-0000-4000-8000-000000000262';
   const levelId = 'migration-operation-level';
   const version1Level = {
     formatVersion: 1,
@@ -2495,6 +2582,7 @@ async function validateRepairedEditorDocumentDiscardOperation61() {
     theme: 'grassland',
     layers: { terrain: [], decals: [], zones: [], units: [] },
   };
+  const privateDraft = { ...version1Level, name: 'Private draft with pruned saved revision' };
   await queryDb(
     `INSERT INTO campaign_workspaces (owner_email, body, revision)
      VALUES ('player@example.com', $1::jsonb, 1)`,
@@ -2504,14 +2592,14 @@ async function validateRepairedEditorDocumentDiscardOperation61() {
     `INSERT INTO level_working_copies
        (document_id, owner_email, workspace_kind, workspace_id, level_id,
         body, revision, saved_revision, baseline_hash)
-     VALUES ($1, 'player@example.com', 'user', 'campaign', $2, $3::jsonb, 5, 5, NULL)`,
-    [documentId, levelId, JSON.stringify(version1Level)],
+     VALUES ($1, 'player@example.com', 'user', 'campaign', $2, $3::jsonb, 6, 5, NULL)`,
+    [documentId, levelId, JSON.stringify(privateDraft)],
   );
   await queryDb(
     `INSERT INTO level_working_copy_revisions
        (document_id, revision, body, saved_revision, baseline_hash, reason)
-     VALUES ($1, 5, $2::jsonb, 5, NULL, 'save')`,
-    [documentId, JSON.stringify(version1Level)],
+     VALUES ($1, 6, $2::jsonb, 5, md5(($3::jsonb)::text), 'autosave')`,
+    [documentId, JSON.stringify(privateDraft), JSON.stringify(version1Level)],
   );
   const beforeRepair = await get(`/api/editor-documents/${documentId}`, {
     cookie: '__Host-chess-tactics-access=abc',
@@ -2527,6 +2615,7 @@ async function validateRepairedEditorDocumentDiscardOperation61() {
     throw new Error(`A missing baseline hash reclassified a saved document: ${beforeRepair.statusCode} ${beforeRepair.body}`);
   }
   await queryDb(inlineMigrationSql(61));
+  await queryDb(inlineMigrationSql(62));
 
   const loaded = await get(`/api/editor-documents/${documentId}`, {
     cookie: '__Host-chess-tactics-access=abc',
@@ -2537,35 +2626,24 @@ async function validateRepairedEditorDocumentDiscardOperation61() {
     || loadedBody.document?.level?.formatVersion !== 2
     || loadedBody.document?.has_saved_baseline !== true
     || loadedBody.document?.never_saved !== false
-    || loadedBody.document?.baseline_conflict !== false
+    || loadedBody.document?.dirty !== true
+    || loadedBody.document?.baseline_conflict !== true
   ) {
-    throw new Error(`Migration 61 repaired document did not load as a saved Level: ${loaded.statusCode} ${loaded.body}`);
+    throw new Error(`Migration 62 repaired document did not preserve its conflict: ${loaded.statusCode} ${loaded.body}`);
   }
   const opened = await openEditorEditSession(documentId);
   if (
     opened.response.statusCode !== 200
     || !['active', 'waiting'].includes(opened.body.session?.state)
   ) {
-    throw new Error(`Migration 61 repaired document could not open an edit session: ${opened.response.statusCode} ${opened.response.body}`);
+    throw new Error(`Migration 62 repaired document could not open an edit session: ${opened.response.statusCode} ${opened.response.body}`);
   }
-  await queryDb(
-    `UPDATE level_working_copies
-        SET body = jsonb_set(body, '{name}', '"Unsaved after repair"'::jsonb, false),
-            revision = revision + 1,
-            updated_at = now()
-      WHERE document_id = $1`,
-    [documentId],
-  );
-  const dirty = await get(`/api/editor-documents/${documentId}`, {
-    cookie: '__Host-chess-tactics-access=abc',
-  });
-  const dirtyDocument = JSON.parse(dirty.body).document;
   const discarded = await request(
     'POST',
     `/api/editor-documents/${documentId}/discard`,
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify(editorMutationBody(documentId, '__Host-chess-tactics-access=abc', {
-      revision: dirtyDocument.revision,
+      revision: loadedBody.document.revision,
     })),
   );
   const discardedBody = JSON.parse(discarded.body);
@@ -2613,7 +2691,7 @@ async function main() {
   await new Promise((resolve) => mockAuth.listen(authPort, '127.0.0.1', resolve));
   await new Promise((resolve) => mockBgm.listen(bgmPort, '127.0.0.1', resolve));
   await waitForServer();
-  await validatePrimarySparseNumericMigrationUpgrade61();
+  await validatePrimarySparseNumericMigrationUpgrade62();
   const databaseRuntime = await queryDb('SELECT version() AS version');
   const isPgliteRuntime = /\bPGlite\b/i.test(String(databaseRuntime.rows[0]?.version || ''));
   if (!isPgliteRuntime) {
@@ -2649,7 +2727,8 @@ async function main() {
   await validateCompletePrimogenitureRetirementMigration59();
   await validateDeploymentTransportMigration60();
   await validateLevelFormatAndEditorBaselineMigration61();
-  await validateRepairedEditorDocumentDiscardOperation61();
+  await validateRetainedEditorBaselineEvidenceMigration62();
+  await validateRepairedEditorDocumentDiscardOperation62();
   await resetDb();
 
   const missingPropSeats = await get('/api/prop-seats/default');
