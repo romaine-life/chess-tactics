@@ -19,10 +19,9 @@
 //     converts through the source's own anchor at the end, which is what makes a mixed-size
 //     species list share one ground plane.
 //
-//  3. PAINT-ORDER DEPTH. Floating artwork derives no depth from the board: its array index
-//     IS its paint order (renderPlan.ts, `back = 1_000_000 + index * 2`). Output is therefore
-//     sorted by ground Y so nearer trees overlap farther ones. Callers appending a batch to a
-//     hand-placed scene should re-sort the merged array; `sortFloatingArtworkByDepth` does it.
+//  3. STABLE SERIAL ORDER. The renderer derives continuous scene depth from the ground contact,
+//     so correctness does not depend on array order. Generated batches are still sorted by ground
+//     Y for deterministic board codes and stable tie-breaking when contacts are exactly equal.
 
 import { TILE_STEP_X, TILE_STEP_Y } from '../art/projectionContract';
 import { unprojectBoardPoint } from '../render/boardProjection';
@@ -185,8 +184,9 @@ export function forestPlacementId(seed: number, cellX: number, cellY: number): s
 
 
 /**
- * Sort scene art into back-to-front paint order by ground contact. Placements whose source
- * geometry cannot be resolved keep their relative order at the front of the list.
+ * Sort scene art into a deterministic back-to-front storage order by ground contact. Rendering
+ * derives depth independently; placements whose geometry cannot be resolved keep their relative
+ * order at the front of the list.
  */
 export function sortFloatingArtworkByDepth(
   placements: readonly FloatingArtworkPlacement[],
@@ -306,7 +306,7 @@ export function scatterForest(input: ForestScatterInput): FloatingArtworkPlaceme
     }
   }
 
-  // Paint order is array order, so hand back a depth-sorted batch.
+  // Keep generated board content deterministic even though the renderer owns visible depth.
   return produced
     .sort((a, b) => (a.ground.y === b.ground.y ? a.ground.x - b.ground.x : a.ground.y - b.ground.y))
     .map((entry) => entry.placement);

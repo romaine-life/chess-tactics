@@ -1,3 +1,5 @@
+import { TILE_STEP_Y } from '../art/projectionContract';
+
 // Shared board depth policy. Keep the offsets named so terrain dressing, barriers,
 // objects, and exported thumbnails cannot drift into slightly different stacks.
 
@@ -48,6 +50,20 @@ export function structureBackZIndex(cell: { x: number; y: number }): number {
 
 export function structureFrontZIndex(cell: { x: number; y: number }): number {
   return objectBaseZIndex(cell) + STRUCTURE_FRONT_DEPTH_DELTA;
+}
+
+/**
+ * Free-pixel Scene Art still has one canonical ground contact: the installed directional
+ * sprite's anchor. Projected scene Y is the isometric sum axis, so it maps continuously onto
+ * the same cell-depth bands as tile-addressed objects without persisting a board coordinate or z.
+ */
+export function projectedSceneObjectZBracket(scenePixelY: number): { base: number; back: number; front: number } {
+  const base = OBJECT_DEPTH_OFFSET + (scenePixelY / TILE_STEP_Y) * CELL_DEPTH_STRIDE;
+  return {
+    base,
+    back: base + STRUCTURE_BACK_DEPTH_DELTA,
+    front: base + STRUCTURE_FRONT_DEPTH_DELTA,
+  };
 }
 
 export function groundCoverZIndex(cell: { x: number; y: number }, tuftDy: number): number {
