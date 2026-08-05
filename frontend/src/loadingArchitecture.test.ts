@@ -505,7 +505,9 @@ describe('professional loading architecture guards', () => {
     expect(runE2e).toContain('Array.from({ length: transportState.stackCards + 1 }, (_, index) => index)');
     expect(runE2e).toContain('sameViewStore: viewStore === probe.viewStore');
     expect(runE2e).toContain("deploymentResult.initialCamera !== deploymentResult.finalCamera");
-    expect(read('./game/store.ts')).toContain('if (!opts.deferClockStart) startClock()');
+    expect(read('./game/store.ts')).toMatch(
+      /if \(!opts\.deferClockStart\) \{\s*startClock\(\);\s*startBattleElapsed\(\);\s*\}/,
+    );
   });
 
   it('keeps Battle Restart separate from board-surface destruction', () => {

@@ -253,9 +253,11 @@ route lifecycle during the same React commit.
 - Terrain and scene canvases share decoded image records and acknowledge their actual first
   composition to the board boundary. The board reveals only after terrain, barrier, and
   scene acknowledgements and a browser paint opportunity.
-- A playable board includes its first-frame HUD and title controls. The battle clock remains
-  paused until board compositors and HUD resources have painted and the complete surface is
-  revealed; network or asset latency is never charged as player thinking time.
+- A playable board includes its first-frame HUD and title controls. Both the authored countdown
+  and an untimed Level's elapsed Battle clock remain paused until board compositors and HUD
+  resources have painted and the complete surface is revealed; network, asset, and reload latency
+  is never charged. The untimed readout then counts all live Battle wall-clock time upward without
+  gaining a flag-fall rule (ADR-0451).
 - Readiness timeouts were removed from menu, route, screen, and board boundaries. A failed
   critical resource is an error, never synthetic readiness.
 - Every route family resolves through `sceneManifest`; unmatched routes explicitly
