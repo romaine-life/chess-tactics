@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:ee3bcf944758a2db6e2d312a880aa87be62519507e88148dff3a970102eae3a6"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:22243536b75460b8f0cad42661fe2f05702046d61df972fc76f48e5fa7b40c9b"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Make Full Deploy resolve as one serial action"
-  prNumber: "715"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/715"
-  commit: "288b4890"
+  prTitle: "Refine the Expunctio card gallery"
+  prNumber: "716"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/716"
+  commit: "71abc1bc"
 
 name: chess-tactics
 namespace: chess-tactics
