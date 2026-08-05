@@ -42,8 +42,11 @@ declare const RUN_CARD_FACE_PROJECTION: unique symbol;
  * occurrences carry a state the player is allowed to see.
  */
 export type RunCardGrant = Readonly<{
+  /** Authored occurrence count. Empty Deployment seats remain part of this geometry. */
   count: number;
   unit: RunArmyPieceType;
+  /** Occurrence indices within this cell whose unit has already left the card. */
+  emptyIndices?: readonly number[];
   /** Occurrence indices within this cell marked Cacochymic. */
   cacochymicIndices?: readonly number[];
   /** The single occurrence in this cell whose granted state is public, if any. */
@@ -128,12 +131,17 @@ export type RunCardFaceOptions = Readonly<{
    */
   cardType?: RunCardType | null;
   /**
-   * Stable authored identity for a transient projection of this card. Deployment removes
-   * units from the visible contents before the empty card finishes discarding; its banner,
-   * flavor and illustration still belong to the card that was dealt, not to an invented
-   * zero-unit composition.
+   * Stable authored identity for a transient projection of this card. Its banner, flavor and
+   * illustration still belong to the card that was dealt while transient state marks authored
+   * occurrences empty.
    */
   identity?: RunCardDefinition | RunCardOffer;
+  /**
+   * Authored piece indices that currently contain no unit. The canonical face keeps those
+   * seats in its density and stack geometry so transient Deployment state cannot recompose
+   * the printed card around its survivors.
+   */
+  emptyPieceIndices?: readonly number[];
 }>;
 
 /** The property a card wears: its offer's, or the one under which a held card was adlected. */
@@ -175,18 +183,21 @@ function publicAbilityTarget(
 
 export function runCardGrants(
   card: RunCardDefinition | RunCardOffer,
-  { adlected = false }: RunCardFaceOptions = {},
+  { adlected = false, emptyPieceIndices = [] }: RunCardFaceOptions = {},
 ): readonly RunCardGrant[] {
   const cacochymicPieceIndex = isRunCardOffer(card) ? card.cacochymicPieceIndex : null;
   const target = publicAbilityTarget(card, adlected);
+  const emptyPieces = new Set(emptyPieceIndices);
   return CARD_PIECE_ORDER.flatMap((unit) => {
     const pieceIndices = card.pieces.flatMap((piece, index) => piece === unit ? [index] : []);
     if (pieceIndices.length === 0) return [];
+    const emptyIndices = pieceIndices.flatMap((pieceIndex, index) => emptyPieces.has(pieceIndex) ? [index] : []);
     const plaguedIndex = cacochymicPieceIndex === null ? -1 : pieceIndices.indexOf(cacochymicPieceIndex);
     const abilityIndex = target === null ? -1 : pieceIndices.indexOf(target.pieceIndex);
     return [{
       unit,
       count: pieceIndices.length,
+      ...(emptyIndices.length ? { emptyIndices } : {}),
       cacochymicIndices: plaguedIndex >= 0 ? [plaguedIndex] : [],
       ...(target !== null && abilityIndex >= 0
         ? { ability: { state: target.state, index: abilityIndex } }

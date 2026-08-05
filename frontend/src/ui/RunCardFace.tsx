@@ -359,8 +359,13 @@ const runCardUnitStateImageKind = (
 export function requiredRunCardImageKinds(card: RunCardFaceContent): readonly RunCardImageKind[] {
   const stateKinds = new Set<RunCardImageKind>();
   for (const grant of card.grants) {
-    if (grant.ability) stateKinds.add(`unit-state:${grant.ability.state}`);
-    if (grant.cacochymicIndices?.length) stateKinds.add('unit-state:cacochymic');
+    const emptyIndices = new Set(grant.emptyIndices ?? []);
+    if (grant.ability && !emptyIndices.has(grant.ability.index)) {
+      stateKinds.add(`unit-state:${grant.ability.state}`);
+    }
+    if (grant.cacochymicIndices?.some((index) => !emptyIndices.has(index))) {
+      stateKinds.add('unit-state:cacochymic');
+    }
   }
   return [
     'frame',
@@ -369,7 +374,9 @@ export function requiredRunCardImageKinds(card: RunCardFaceContent): readonly Ru
     ...(card.cardProperty ? ['property-icon' as const] : []),
     ...stateKinds,
     ...card.grants.flatMap((grant, cell) => (
-      Array.from({ length: grant.count }, (_, index) => runCardUnitImageKind(cell, grant.unit, index))
+      Array.from({ length: grant.count }, (_, index) => (
+        grant.emptyIndices?.includes(index) ? [] : [runCardUnitImageKind(cell, grant.unit, index)]
+      )).flat()
     )),
   ];
 }
@@ -394,8 +401,8 @@ export function runCardPresentationSignature(
     card.cardProperty ? [card.cardProperty.id, card.cardProperty.name, card.cardProperty.effect] : null,
     iconMedia.propertyUrl ?? null,
     iconMedia.unitStateUrls ?? null,
-    card.grants.map(({ count, unit, cacochymicIndices, ability }) => (
-      [count, unit, cacochymicIndices ?? [], ability ? [ability.state, ability.index] : null]
+    card.grants.map(({ count, unit, emptyIndices, cacochymicIndices, ability }) => (
+      [count, unit, emptyIndices ?? [], cacochymicIndices ?? [], ability ? [ability.state, ability.index] : null]
     )),
     card.flavor,
   ]);
@@ -631,12 +638,20 @@ function UnitStackSprite({
   );
 }
 
-function grantLabel({ count, unit, cacochymicIndices = [], ability }: RunCardGrant): string {
-  const units = `${count} ${unit}${count === 1 ? '' : 's'}`;
-  const plagued = cacochymicIndices.length
-    ? count === 1 ? `1 ${CACOCHYMIC_DISPLAY_NAME} ${unit}` : `${units}, one ${CACOCHYMIC_DISPLAY_NAME}`
+function grantLabel({ count, unit, emptyIndices = [], cacochymicIndices = [], ability }: RunCardGrant): string {
+  const presentCount = Math.max(0, count - emptyIndices.length);
+  const units = `${presentCount} ${unit}${presentCount === 1 ? '' : 's'}`;
+  const plaguedCount = cacochymicIndices.filter((index) => !emptyIndices.includes(index)).length;
+  const plagued = plaguedCount
+    ? presentCount === 1 ? `1 ${CACOCHYMIC_DISPLAY_NAME} ${unit}` : `${units}, one ${CACOCHYMIC_DISPLAY_NAME}`
     : units;
-  return ability ? `${plagued} with ${runAbilityDisplayName(ability.state)}` : plagued;
+  const withAbility = ability && !emptyIndices.includes(ability.index)
+    ? `${plagued} with ${runAbilityDisplayName(ability.state)}`
+    : plagued;
+  const emptySeats = emptyIndices.length
+    ? `; ${emptyIndices.length} empty seat${emptyIndices.length === 1 ? '' : 's'}`
+    : '';
+  return `${withAbility}${emptySeats}`;
 }
 
 function grantsLabel(grants: readonly RunCardGrant[]): string {
@@ -796,6 +811,7 @@ function RunCardFaceLayer({
           aria-label="Card contents"
         >
           {card.grants.map((grant, cell) => {
+            const emptyIndices = grant.emptyIndices ?? [];
             const cacochymicIndices = grant.cacochymicIndices ?? [];
             const stackCount = grant.count + cacochymicIndices.length + (grant.ability ? 1 : 0);
             // The marker seats immediately after the unit that actually carries the state,
@@ -812,9 +828,11 @@ function RunCardFaceLayer({
                 aria-label={grantLabel(grant)}
                 key={grant.unit}
               >
-                <strong className="run-card-prototype-ledger-count" aria-hidden="true">{grant.count}</strong>
+                <strong className="run-card-prototype-ledger-count" aria-hidden="true">
+                  {Math.max(0, grant.count - emptyIndices.length)}
+                </strong>
                 <span className="run-card-prototype-unit-stack" aria-hidden="true">
-                  {Array.from({ length: grant.count }, (_, index) => (
+                  {Array.from({ length: grant.count }, (_, index) => emptyIndices.includes(index) ? null : (
                     <UnitStackSprite
                       ability={index === abilityUnitIndex ? grant.ability?.state : undefined}
                       abilityIconUrl={index === abilityUnitIndex && grant.ability

@@ -235,7 +235,8 @@ these.
   remain hidden (ADR-0419, ADR-0422).
 - Card order, followed by each card's persisted left-to-right unit seats, owns both capacity and
   placement order. A sold or lost unit leaves an empty seat rather than changing the durable
-  order; the visible card may compact its surviving ledger. Units resolve one at a time from
+  order. The revealed card retains its authored ledger, density, unit scale, and stack positions;
+  a unit that leaves becomes a visibly vacant seat and only the occupied count changes. Units resolve one at a time from
   their own rules; Adlected
   pauses for a highlighted-square choice when that unit reaches the front.
   Deployment transport begins paused. **Next** advances exactly one ordinary unit and remains
@@ -246,7 +247,7 @@ these.
   a card's final unit settles, that card discards; after the final discard, the already-mounted
   battlefield promotes directly into Battle. The exact deal, seat order, active card, reveal
   state, unit cursor, transport, capacity result, choices, discards, and formation persist across
-  reload and Battle retry (ADR-0346, ADR-0350, ADR-0351, ADR-0419, ADR-0422).
+  reload and Battle retry (ADR-0346, ADR-0350, ADR-0351, ADR-0419, ADR-0422, ADR-0427).
 - Deployment modifiers may be contextual rather than linearly valuable. An
   Agminate Pawn inspects prior Pawns for adjacency or an open file, and an
   Agminate Bishop prefers the nearest opposite-color square relative to a prior

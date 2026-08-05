@@ -126,14 +126,18 @@ describe('a projected face says only what its card actually shows', () => {
     }
   });
 
-  it('keeps a dealt card identity while its transient contents empty for discard', () => {
-    const identity = RUN_CARD_BY_ID.k;
-    const emptied = { ...identity, pieces: [] };
-    const face = runCardFaceContent(emptied, { identity });
+  it('keeps authored seats while a dealt card empties', () => {
+    const identity = RUN_STARTER_CARD_BY_ID['front-lines'];
+    const face = runCardFaceContent(identity, { identity, emptyPieceIndices: [0] });
 
     expect(face.name).toBe(runCardFaceContent(identity).name);
     expect(face.flavor).toBe(runCardFaceContent(identity).flavor);
     expect(face.cost).toBe(identity.value);
-    expect(face.grants).toEqual([]);
+    expect(face.grants).toEqual([{
+      unit: 'pawn',
+      count: 2,
+      emptyIndices: [0],
+      cacochymicIndices: [],
+    }]);
   });
 });

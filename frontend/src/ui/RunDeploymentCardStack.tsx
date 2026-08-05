@@ -2,7 +2,7 @@ import { useRef, type CSSProperties, type ReactElement } from 'react';
 import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import {
   runCardDefinition,
-  runCardUnitIds,
+  type RunArmyPieceType,
   type RunCardDefinition,
   type RunDocument,
   type RunOwnedCard,
@@ -17,15 +17,54 @@ import { ChromeButton } from './shared/ChromeButton';
 import { Toggle } from './shared/Toggle';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 
-function visibleCardDefinition(run: RunDocument, owned: RunOwnedCard, fromSeat: number): RunCardDefinition | null {
+export function deploymentCardEmptyPieceIndices(
+  pieces: readonly RunArmyPieceType[],
+  unitSeats: readonly (string | null)[],
+  unitTypeById: ReadonlyMap<string, RunArmyPieceType>,
+  fromSeat: number,
+): readonly number[] {
+  const openPieceIndicesByType = new Map<RunArmyPieceType, number[]>();
+  pieces.forEach((piece, pieceIndex) => {
+    const openIndices = openPieceIndicesByType.get(piece) ?? [];
+    openIndices.push(pieceIndex);
+    openPieceIndicesByType.set(piece, openIndices);
+  });
+
+  const pieceIndexBySeat = new Map<number, number>();
+  unitSeats.forEach((unitId, seatIndex) => {
+    if (!unitId) return;
+    const unitType = unitTypeById.get(unitId);
+    if (!unitType) return;
+    const openIndices = openPieceIndicesByType.get(unitType);
+    const pieceIndex = openIndices?.shift();
+    if (pieceIndex !== undefined) pieceIndexBySeat.set(seatIndex, pieceIndex);
+  });
+
+  const occupiedPieceIndices = new Set(pieceIndexBySeat.values());
+  const emptyPieceIndices = new Set<number>();
+  pieces.forEach((_, pieceIndex) => {
+    if (!occupiedPieceIndices.has(pieceIndex)) emptyPieceIndices.add(pieceIndex);
+  });
+  pieceIndexBySeat.forEach((pieceIndex, seatIndex) => {
+    if (seatIndex < fromSeat) emptyPieceIndices.add(pieceIndex);
+  });
+  return [...emptyPieceIndices].sort((left, right) => left - right);
+}
+
+function deploymentCardPresentation(run: RunDocument, owned: RunOwnedCard, fromSeat: number): Readonly<{
+  definition: RunCardDefinition;
+  emptyPieceIndices: readonly number[];
+}> | null {
   const definition = runCardDefinition(owned.coreId);
   if (!definition) return null;
-  const unitById = new Map(run.army.map((unit) => [unit.id, unit]));
-  const pieces = runCardUnitIds({ unitSeats: owned.unitSeats.slice(fromSeat) }).flatMap((unitId) => {
-    const unit = unitById.get(unitId);
-    return unit ? [unit.type] : [];
-  });
-  return { ...definition, pieces } as RunCardDefinition;
+  const unitTypeById = new Map(run.army.map((unit) => [unit.id, unit.type]));
+  const emptyPieceIndices = deploymentCardEmptyPieceIndices(
+    definition.pieces,
+    owned.unitSeats,
+    unitTypeById,
+    fromSeat,
+  );
+  return { definition, emptyPieceIndices };
 }
 
 /** The complete face-down Chartulary deck before its combat partition is committed. */
@@ -123,9 +162,10 @@ export function RunDeploymentCardStack({
   const activeCardId = deployment?.dealtCardIds[deployment.activeCardIndex] ?? null;
   const activeCard = activeCardId ? cardById.get(activeCardId) ?? null : null;
   const activeIdentity = activeCard ? runCardDefinition(activeCard.coreId) ?? null : null;
-  const activeDefinition = activeCard
-    ? visibleCardDefinition(run, activeCard, deployment?.unitCursor ?? 0)
+  const activePresentation = activeCard
+    ? deploymentCardPresentation(run, activeCard, deployment?.unitCursor ?? 0)
     : null;
+  const activeDefinition = activePresentation?.definition ?? null;
   const activeRevealed = Boolean(activeCardId && deployment?.revealedCardIds.includes(activeCardId));
   const undealtCardCount = Math.max(0, run.cards.length - (deployment?.dealtCardIds.length ?? 0));
 
@@ -310,6 +350,7 @@ export function RunDeploymentCardStack({
                     mode="reference"
                     cardType={owned.cardType}
                     adlected
+                    emptyPieceIndices={activePresentation?.emptyPieceIndices ?? []}
                   />
                 </span>
               ) : null}
