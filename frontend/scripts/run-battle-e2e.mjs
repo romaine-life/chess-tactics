@@ -501,6 +501,18 @@ try {
   }
 
   try {
+    await page.waitForFunction(() => document.querySelector('[data-deployment-stack-card].is-active.is-revealing'));
+    await page.evaluate(() => new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    }));
+  } catch {
+    await fail('deployment-card-flip-motion', JSON.stringify(await sceneDiagnostics()));
+  }
+  const revealMotionShot = 'tmp-shots/run-opening-deployment-card-reveal.png';
+  await page.screenshot({ path: revealMotionShot });
+  console.log('Deployment card-reveal screenshot:', revealMotionShot);
+
+  try {
     await page.waitForFunction(() => document.querySelector('[data-deployment-card-stage="unit"]')
       && !document.querySelector('[data-testid="deployment-next"]')?.disabled);
   } catch {
@@ -531,6 +543,42 @@ try {
       };
     });
     await fail('deployment-deal-settle', JSON.stringify(stalledDeal));
+  }
+
+  try {
+    await page.waitForFunction(() => {
+      const card = document.querySelector('[data-deployment-stack-card].is-active.is-revealed');
+      const front = card?.querySelector('.run-deployment-stack-side.is-front');
+      const rect = card?.getBoundingClientRect();
+      if (!card || !front || !rect) return false;
+      const paintedSide = document.elementsFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+        .map((element) => element.closest('.run-deployment-stack-side'))
+        .find(Boolean);
+      return paintedSide === front;
+    }, { timeout: 5_000 });
+  } catch {
+    const revealPresentation = await page.evaluate(() => {
+      const card = document.querySelector('[data-deployment-stack-card].is-active');
+      const front = card?.querySelector('.run-deployment-stack-side.is-front');
+      const back = card?.querySelector('.run-deployment-stack-side.is-back');
+      const rect = card?.getBoundingClientRect();
+      const hitStack = rect
+        ? document.elementsFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+          .slice(0, 8)
+          .map((element) => ({ tag: element.tagName, className: element.className }))
+        : [];
+      return {
+        className: card?.className ?? null,
+        front: Boolean(front),
+        frontLabel: front?.querySelector('.run-card-action')?.getAttribute('aria-label') ?? null,
+        frontTransform: front ? getComputedStyle(front).transform : null,
+        frontBackface: front ? getComputedStyle(front).backfaceVisibility : null,
+        backTransform: back ? getComputedStyle(back).transform : null,
+        backBackface: back ? getComputedStyle(back).backfaceVisibility : null,
+        hitStack,
+      };
+    });
+    await fail('deployment-card-reveal', JSON.stringify(revealPresentation));
   }
 
   const transportState = await page.evaluate(() => {
