@@ -15,6 +15,7 @@ import {
   EUTACTIC_COST,
   CURRENT_RUN_SAVE_VERSION,
   RUN_OPENING_OFFER_COUNT,
+  RUN_BATTLE_RETRY_COST_TENTHS,
   RUN_STARTING_GOLD,
   RUN_STARTING_GOLD_TENTHS,
   LEGATINE_ADLECTED_OFFER_DENOMINATOR,
@@ -22,6 +23,7 @@ import {
   battleVictoryGoldTenths,
   beginBattle,
   canTargetLipsanon,
+  canRestartBattle,
   canUndoRunBattleMove,
   cardExpunctioPriceTenths,
   captureRunBattleUndo,
@@ -47,6 +49,7 @@ import {
   openSectio,
   prepareDeployment,
   resetSectio,
+  restartBattle,
   runAbilityDescription,
   runAbilityDisplayName,
   performAlienatio,
@@ -96,6 +99,24 @@ function deployedRun(seed = 17, snapshot = war()): RunDocument {
   run = prepareDeployment(leaveSectio(run));
   return beginBattle(run, run.army.map((unit) => unit.id), [], []);
 }
+
+describe('Battle retry', () => {
+  it('spends three gold and refuses to restart when the Run cannot pay', () => {
+    const battle = { ...deployedRun(), goldTenths: 7 * GOLD_SCALE };
+    const originalStartedAtMs = battle.battleRuntime?.startedAtMs;
+
+    expect(canRestartBattle(battle)).toBe(true);
+    const retried = restartBattle(battle);
+    expect(retried).not.toBe(battle);
+    expect(retried.goldTenths).toBe(battle.goldTenths - RUN_BATTLE_RETRY_COST_TENTHS);
+    expect(retried.battleRuntime?.battleIndex).toBe(battle.battleIndex);
+    expect(retried.battleRuntime?.startedAtMs).toBeGreaterThanOrEqual(originalStartedAtMs ?? 0);
+
+    const unaffordable = { ...battle, goldTenths: RUN_BATTLE_RETRY_COST_TENTHS - 1 };
+    expect(canRestartBattle(unaffordable)).toBe(false);
+    expect(restartBattle(unaffordable)).toBe(unaffordable);
+  });
+});
 
 function deployedAtaraxiaRun(seed = 17, snapshot = war()): RunDocument {
   let run = pastOpeningLipsanon(createRun(snapshot, seed, 1, '2026-01-01T00:00:00.000Z'));

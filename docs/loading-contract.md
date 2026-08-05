@@ -110,7 +110,9 @@ mutable match state with its starting state while preserving the mounted board, 
 camera, compositors, decoded resources, and existing painted acknowledgement. They do
 not clear surface readiness, key or remount the board from a match/session epoch, hide
 the Play surface, display Loading/Preparing copy, or reacquire unchanged visual
-dependencies. A genuinely different board, level, installed-art identity, or visual
+dependencies. In a Run, the shared reset transition first spends the canonical three-gold
+retry cost and refuses an unaffordable attempt; this economy transaction does not change
+the visual lifecycle. A genuinely different board, level, installed-art identity, or visual
 contract is a board replacement or new-Battle operation and follows the painted-frame
 acquisition lifecycle; it is not a restart.
 
@@ -298,4 +300,3 @@ rules above.
 
 Surface manifests are delivery projections only. Postgres remains the installed-content
 authority and Blob storage remains the media-byte authority under ADR-0106 and ADR-0085.
-

@@ -30,6 +30,7 @@ import {
   LIPSANON_BY_ID,
   performAdlectio,
   buyPaidLipsanon,
+  canRestartBattle,
   canTargetLipsanon,
   canLeaveSectio,
   canUndoRunBattleMove,
@@ -45,6 +46,7 @@ import {
   observeRunUnitDeath,
   prepareDeployment,
   resetSectio,
+  RUN_BATTLE_RETRY_COST_TENTHS,
   restartBattle,
   runBattleActivityId,
   runAbilityDescription,
@@ -1209,6 +1211,7 @@ function RunBattlefieldPanel({
   const runId = run.id;
   const battleSeed = run.deployment?.seed ?? run.seed;
   const canCashOutPawn = hasLipsanon(run, 'mercenary-boat');
+  const retryRun = currentRun?.id === runId ? currentRun : run;
 
   const transformCommittedBoard = useCallback<RunBattleTransformSink>((game, _events) => {
       let active = useActiveRun.getState().run;
@@ -1284,8 +1287,14 @@ function RunBattlefieldPanel({
     },
     onRestart: () => {
       const latest = useActiveRun.getState().run;
-      if (latest?.id === runId) replace(restartBattle(latest));
+      if (!latest || latest.id !== runId) return false;
+      const restarted = restartBattle(latest);
+      if (restarted === latest) return false;
+      replace(restarted);
+      return true;
     },
+    canRestart: canRestartBattle(retryRun),
+    retryCostTenths: RUN_BATTLE_RETRY_COST_TENTHS,
     onAbandonRun: () => { void requestAbandon(); },
     onPawnCashOut: canCashOutPawn
       ? (unitId) => {
@@ -1293,11 +1302,10 @@ function RunBattlefieldPanel({
           if (latest?.id === runId) replace(cashOutPawn(latest, unitId));
         }
       : undefined,
-  }), [battleLevel, battleSeed, canCashOutPawn, replace, requestAbandon, run.battleIndex, runId, transformCommittedBoard]);
+  }), [battleLevel, battleSeed, canCashOutPawn, replace, requestAbandon, retryRun, run.battleIndex, runId, transformCommittedBoard]);
 
   // Subscribe to the current document so a Paid Crossing cash-out or Reservist event
   // refreshes the hook inputs without restarting the already-live matching board.
-  void currentRun;
   return (
     <>
       {run.phase === 'battle' ? abandonDialog : null}

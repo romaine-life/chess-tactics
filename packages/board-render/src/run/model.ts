@@ -41,6 +41,7 @@ const RUN_SAVE_VERSION_DEPLOYMENT_TRANSPORT_SOURCE = 21;
 export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
+export const RUN_BATTLE_RETRY_COST_TENTHS = 3 * GOLD_SCALE;
 export const RUN_OPENING_OFFER_COUNT = 3;
 export const INSTALLED_ATARAXIA_MAX_TIER = 1;
 export const PESTIFEROUS_OFFER_DENOMINATOR = 8;
@@ -2101,10 +2102,17 @@ export function beginBattle(
   });
 }
 
+export function canRestartBattle(run: RunDocument): boolean {
+  return run.phase === 'battle'
+    && Boolean(run.deployment)
+    && run.goldTenths >= RUN_BATTLE_RETRY_COST_TENTHS;
+}
+
 export function restartBattle(run: RunDocument): RunDocument {
-  if (run.phase !== 'battle' || !run.deployment) return run;
+  if (!canRestartBattle(run) || !run.deployment) return run;
   return touch({
     ...run,
+    goldTenths: run.goldTenths - RUN_BATTLE_RETRY_COST_TENTHS,
     battleRuntime: {
       battleIndex: run.battleIndex,
       // A retry is a fresh Battle, so its clock starts again rather than counting the
