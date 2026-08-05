@@ -478,25 +478,31 @@ export function deploymentInteractionStage(run: RunDocument, _options?: RunDeplo
 }
 
 /** Crosses the persisted player/auto-deal boundary without revealing a card. */
-export function beginDeploymentDeal(run: RunDocument): RunDocument {
+export function beginDeploymentDeal(
+  run: RunDocument,
+  transport: RunDeploymentTransport = 'paused',
+): RunDocument {
   if (run.phase !== 'deployment' || run.deployment?.stage !== 'awaiting-deal') return run;
-  return setDeploymentChoices(run, { stage: 'dealing' });
+  return setDeploymentChoices(run, { stage: 'dealing', transport });
 }
 
 /** Persists that both face-down branches of the deck partition have settled. */
 export function completeDeploymentDeal(run: RunDocument, level: Level): RunDocument {
   const resolved = resolveDeploymentCapacity(run, level);
   if (resolved.phase !== 'deployment' || resolved.deployment?.stage !== 'dealing') return resolved;
-  return setDeploymentChoices(resolved, { stage: 'card', transport: 'paused' });
+  return setDeploymentChoices(resolved, { stage: 'card' });
 }
 
 function stageAfterCommittedUnits(run: RunDocument): RunDocument {
   if (!run.deployment) return run;
+  const nextUnit = currentDeploymentUnit(run);
+  const completedCardPrefixPendingDiscard = run.deployment.activeCardIndex > run.deployment.discardCursor;
   const next = setDeploymentChoices(run, {
     settlingUnitIds: [],
-    stage: currentDeploymentUnit(run) ? 'unit' : 'discarding',
+    stage: nextUnit
+      ? completedCardPrefixPendingDiscard ? 'discarding' : 'unit'
+      : 'discarding',
   });
-  const nextUnit = currentDeploymentUnit(next);
   return nextUnit && unitIsAdlected(next, nextUnit.id)
     ? setDeploymentChoices(next, { transport: 'paused' })
     : next;
@@ -539,22 +545,58 @@ function commitPlacement(
   return cell || deferSettlement ? next : stageAfterCommittedUnits(next);
 }
 
-/** Commit every automatic seat that can advance without input as one compositor arrival wave. */
+/** Commit every remaining automatic seat, across card boundaries, as one compositor arrival wave.
+ * Cards stay in Controls until that wave settles, then the completed prefix discards together. */
 function placeAutomaticDeploymentWave(run: RunDocument, level: Level): RunDocument {
   let next = run;
-  while (next.phase === 'deployment' && next.deployment?.stage === 'unit') {
+  while (
+    next.phase === 'deployment'
+    && (next.deployment?.stage === 'card' || next.deployment?.stage === 'unit')
+  ) {
     const unit = currentDeploymentUnit(next);
-    if (!unit || unitIsAdlected(next, unit.id)) break;
+    if (!unit) {
+      const deployment = next.deployment;
+      const nextCardIndex = deployment.activeCardIndex + 1;
+      if (nextCardIndex >= deployment.dealtCardIds.length) {
+        next = setDeploymentChoices(next, {
+          activeCardIndex: deployment.dealtCardIds.length,
+          unitCursor: 0,
+          stage: deployment.settlingUnitIds.length > 0 ? 'settling' : 'discarding',
+        });
+        break;
+      }
+      next = setDeploymentChoices(next, {
+        activeCardIndex: nextCardIndex,
+        unitCursor: 0,
+        stage: 'unit',
+      });
+      continue;
+    }
+    if (unitIsAdlected(next, unit.id)) {
+      const card = activeDeploymentCard(next);
+      const deployment = next.deployment;
+      next = setDeploymentChoices(next, {
+        revealedCardIds: card
+          ? [...new Set([...deployment.revealedCardIds, card.id])]
+          : [...deployment.revealedCardIds],
+        stage: deployment.settlingUnitIds.length > 0
+          ? 'settling'
+          : deployment.activeCardIndex > deployment.discardCursor ? 'discarding' : 'unit',
+        transport: 'paused',
+      });
+      break;
+    }
     const placements = decodedPlacements(next);
     const order = deploymentOrderedUnitIds(next).indexOf(unit.id);
     const choice = automaticPlacementChoice(next, level, unit, placements, Math.max(0, order));
     next = commitPlacement(next, level, unit, choice.cell, false, true);
   }
   if (next.phase !== 'deployment' || !next.deployment) return next;
+  if (next.deployment.stage === 'settling' || next.deployment.stage === 'discarding') return next;
   if (next.deployment.settlingUnitIds.length > 0) {
     return setDeploymentChoices(next, { stage: 'settling' });
   }
-  return stageAfterCommittedUnits(next);
+  return next;
 }
 
 export function setDeploymentTransport(
@@ -615,6 +657,24 @@ export function finishDeploymentUnitSettlement(run: RunDocument, _level?: Level)
 
 export function finishDeploymentCardDiscard(run: RunDocument): RunDocument {
   if (run.phase !== 'deployment' || !run.deployment || run.deployment.stage !== 'discarding') return run;
+  if (run.deployment.activeCardIndex > run.deployment.discardCursor) {
+    if (run.deployment.activeCardIndex >= run.deployment.dealtCardIds.length) {
+      const completed = setDeploymentChoices(run, {
+        activeCardIndex: run.deployment.dealtCardIds.length,
+        unitCursor: 0,
+        discardCursor: run.deployment.dealtCardIds.length,
+        settlingUnitIds: [],
+        stage: 'complete',
+      });
+      return beginBattle(completed, Object.keys(run.deployment.placements), [], run.deployment.unavailableUnitIds);
+    }
+    return setDeploymentChoices(run, {
+      discardCursor: run.deployment.activeCardIndex,
+      settlingUnitIds: [],
+      stage: 'unit',
+      transport: 'paused',
+    });
+  }
   const nextCardIndex = run.deployment.activeCardIndex + 1;
   if (nextCardIndex >= run.deployment.dealtCardIds.length) {
     const completed = setDeploymentChoices(run, {
@@ -637,14 +697,21 @@ export function finishDeploymentCardDiscard(run: RunDocument): RunDocument {
 
 export function advanceDeploymentTransport(run: RunDocument, level: Level): RunDocument {
   if (run.phase !== 'deployment' || !run.deployment) return run;
-  if (run.deployment.stage === 'card') return revealActiveDeploymentCard(run);
+  if (
+    run.deployment.transport === 'full-deploy'
+    && (run.deployment.stage === 'card' || run.deployment.stage === 'unit')
+  ) {
+    return placeAutomaticDeploymentWave(run, level);
+  }
+  if (run.deployment.stage === 'card') {
+    return run.deployment.transport === 'playing' ? revealActiveDeploymentCard(run) : run;
+  }
   if (run.deployment.stage !== 'unit') return run;
   const unit = currentDeploymentUnit(run);
   if (!unit || unitIsAdlected(run, unit.id)) {
     return setDeploymentChoices(run, { transport: 'paused' });
   }
   if (run.deployment.transport === 'playing') return placeRevealedDeploymentUnit(run, level);
-  if (run.deployment.transport === 'full-deploy') return placeAutomaticDeploymentWave(run, level);
   return run;
 }
 

@@ -21157,6 +21157,8 @@ button.tileset-relationship-cell {
 .run-deployment-card-stack {
   --deployment-deal-duration: 560ms;
   --deployment-deal-stagger: 340ms;
+  --deployment-discard-duration: 560ms;
+  --deployment-discard-stagger: 72ms;
   align-items: start;
   display: grid;
   gap: var(--ds-inline-tight);
@@ -21207,8 +21209,30 @@ button.tileset-relationship-cell {
   will-change: opacity, transform;
 }
 
-.run-deployment-stack-card.is-active.is-discarding {
-  animation: run-deployment-card-discard var(--ds-duration-transfer) var(--ds-ease-out) both;
+.run-deployment-stack-card.is-discarding {
+  opacity: 0;
+}
+
+.run-deployment-card-stack[data-deployment-card-stage='discarding'] .run-deployment-card-count {
+  opacity: 0;
+}
+
+.run-deployment-discard-flight {
+  opacity: 0;
+  pointer-events: none;
+  position: fixed;
+  transform-origin: center;
+  will-change: opacity, transform;
+}
+
+.run-deployment-discard-flight > :is(.run-card-back, .run-card-action) {
+  block-size: 100%;
+  inline-size: 100%;
+}
+
+.run-deployment-discard-flight > .run-card-back {
+  display: block;
+  object-fit: contain;
 }
 
 .run-deployment-stack-side {
@@ -21255,11 +21279,6 @@ button.tileset-relationship-cell {
   position: absolute;
   text-shadow: 0 1px 0 #000;
   z-index: 20;
-}
-
-@keyframes run-deployment-card-discard {
-  0% { opacity: 1; }
-  100% { opacity: 0; transform: translate(64px, 28px) rotate(9deg) scale(.82); }
 }
 
 .run-inline-actions {

@@ -427,9 +427,9 @@ function DeploymentControls({
 }): ReactElement {
   const { abandonDialog, abandoning, requestAbandon } = useRunAbandon(run);
   const transport = run.deployment?.transport ?? 'paused';
-  const transportReady = stage !== 'await-deal' && stage !== 'dealing' && stage !== 'ready';
+  const transportReady = stage !== 'dealing' && stage !== 'ready';
   const inputRequired = stage === 'adlected';
-  const nextReady = stage === 'place';
+  const nextReady = stage === 'await-deal' || stage === 'reveal-card' || stage === 'place';
   const abilities = activeUnit
     ? (['adlected', 'eutactic', 'agminate'] as const).filter((ability) => (
         ability === 'adlected'
@@ -558,6 +558,7 @@ function useRunDeploymentPresentation({
   const legalCellKeys = useMemo(() => new Set(legalCells.map((cell) => `${cell.x},${cell.y}`)), [legalCells]);
   const [hoveredCellKey, setHoveredCellKey] = useState<string | null>(null);
   const [dealProgress, setDealProgress] = useState(0);
+  const advanceOneAfterRevealRef = useRef(false);
   const hoveredPlacementCell = hoveredCellKey
     ? legalCells.find((cell) => `${cell.x},${cell.y}` === hoveredCellKey) ?? null
     : null;
@@ -584,7 +585,11 @@ function useRunDeploymentPresentation({
   useEffect(() => {
     if (prepared.phase !== 'deployment') return;
     if (prepared.deployment?.stage === 'card') {
-      replace(revealActiveDeploymentCard(prepared));
+      if (prepared.deployment.transport === 'full-deploy') {
+        replace(advanceDeploymentTransport(prepared, level));
+      } else if (prepared.deployment.transport === 'playing') {
+        replace(revealActiveDeploymentCard(prepared));
+      }
       return;
     }
     if (stage === 'adlected' && prepared.deployment?.transport !== 'paused') {
@@ -602,24 +607,51 @@ function useRunDeploymentPresentation({
   const beginDeal = useCallback(() => {
     const latest = useActiveRun.getState().run;
     if (latest?.id === prepared.id && latest.phase === 'deployment') {
+      advanceOneAfterRevealRef.current = false;
       replace(beginDeploymentDeal(latest));
     }
   }, [prepared.id, replace]);
   const finishDeal = useCallback(() => {
     const latest = useActiveRun.getState().run;
     if (latest?.id === prepared.id && latest.phase === 'deployment') {
-      replace(completeDeploymentDeal(latest, level));
+      const completed = completeDeploymentDeal(latest, level);
+      if (advanceOneAfterRevealRef.current) {
+        replace(revealActiveDeploymentCard(completed));
+      } else if (completed.deployment?.transport === 'full-deploy') {
+        replace(advanceDeploymentTransport(completed, level));
+      } else {
+        replace(completed);
+      }
     }
   }, [level, prepared.id, replace]);
   const setTransport = useCallback((transport: 'paused' | 'playing' | 'full-deploy') => {
     const latest = useActiveRun.getState().run;
     if (latest?.id === prepared.id && latest.phase === 'deployment') {
-      replace(setDeploymentTransport(latest, transport));
+      advanceOneAfterRevealRef.current = false;
+      if (latest.deployment?.stage === 'awaiting-deal') {
+        replace(beginDeploymentDeal(latest, transport));
+        return;
+      }
+      const requested = setDeploymentTransport(latest, transport);
+      replace(transport === 'full-deploy'
+        ? advanceDeploymentTransport(requested, level)
+        : requested);
     }
-  }, [prepared.id, replace]);
+  }, [level, prepared.id, replace]);
   const advanceOne = useCallback(() => {
     const latest = useActiveRun.getState().run;
     if (latest?.id !== prepared.id || latest.phase !== 'deployment') return;
+    const latestStage = deploymentInteractionStage(latest);
+    if (latestStage === 'await-deal') {
+      advanceOneAfterRevealRef.current = true;
+      replace(beginDeploymentDeal(latest));
+      return;
+    }
+    if (latestStage === 'reveal-card') {
+      advanceOneAfterRevealRef.current = true;
+      replace(revealActiveDeploymentCard(latest));
+      return;
+    }
     const paused = setDeploymentTransport(latest, 'paused');
     if (deploymentInteractionStage(paused) === 'place') {
       replace(placeRevealedDeploymentUnit(paused, level));
@@ -630,9 +662,16 @@ function useRunDeploymentPresentation({
   const finishReveal = useCallback(() => {
     const latest = useActiveRun.getState().run;
     if (latest?.id === prepared.id && latest.phase === 'deployment') {
-      replace(finishDeploymentCardReveal(latest));
+      let revealed = finishDeploymentCardReveal(latest);
+      if (advanceOneAfterRevealRef.current) {
+        advanceOneAfterRevealRef.current = false;
+        if (deploymentInteractionStage(revealed) === 'place') {
+          revealed = placeRevealedDeploymentUnit(revealed, level);
+        }
+      }
+      replace(revealed);
     }
-  }, [prepared.id, replace]);
+  }, [level, prepared.id, replace]);
   const finishDiscard = useCallback(() => {
     const latest = useActiveRun.getState().run;
     if (latest?.id === prepared.id && latest.phase === 'deployment') {
