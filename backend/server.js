@@ -4210,7 +4210,7 @@ const MIGRATIONS = [
   {
     version: 61,
     name: 'Level format 2 and saved editor baselines',
-    // ADR-0427: Level format 2 gives migration 56's Pawn-zone retirement an
+    // ADR-0428: Level format 2 gives migration 56's Pawn-zone retirement an
     // explicit document-version edge. RunSaveVersion 23 advances every embedded
     // Battle Level with it. Saved working copies reconstruct their migrated
     // baseline from the retained saved revision; true never-saved drafts remain null.

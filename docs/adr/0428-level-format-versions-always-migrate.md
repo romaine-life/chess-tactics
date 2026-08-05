@@ -10,7 +10,7 @@ refines:
   - "[Migration policy](../migration-policy.md)"
 ---
 
-# ADR-0427: Level format versions always migrate
+# ADR-0428: Level format versions always migrate
 
 ## Context
 

@@ -255,10 +255,20 @@ try {
           ...(manuallyPlaced.has(unit.id) ? ['adlected'] : []),
         ],
       }));
-      useActiveRun.getState().replace({ ...run, army, updatedAt: new Date().toISOString() });
-      return army.filter((unit) => unit.abilities.includes('adlected')).map((unit) => unit.id);
+      const lipsana = run.lipsana.filter((id) => id !== 'inspirational-record');
+      useActiveRun.getState().replace({ ...run, army, lipsana, updatedAt: new Date().toISOString() });
+      return {
+        cardOrder,
+        adlected: army.filter((unit) => unit.abilities.includes('adlected')).map((unit) => unit.id),
+      };
     });
-    if (prepared?.length !== 2) await fail('prepare-deployment-fixture', JSON.stringify(prepared));
+    if (
+      prepared?.adlected.length !== 2
+      || prepared.cardOrder[0] === prepared.adlected[0]
+      || prepared.cardOrder[0] === prepared.adlected[1]
+    ) {
+      await fail('prepare-deployment-fixture', JSON.stringify(prepared));
+    }
   }
 
   await page.evaluate(() => {
@@ -501,11 +511,24 @@ try {
   }
 
   try {
+    await page.waitForFunction(() => document.querySelector('[data-deployment-stack-card].is-active.is-revealing'));
+    await page.evaluate(() => new Promise((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(resolve));
+    }));
+  } catch {
+    await fail('deployment-card-flip-motion', JSON.stringify(await sceneDiagnostics()));
+  }
+  const revealMotionShot = 'tmp-shots/run-opening-deployment-card-reveal.png';
+  await page.screenshot({ path: revealMotionShot });
+  console.log('Deployment card-reveal screenshot:', revealMotionShot);
+
+  try {
     await page.waitForFunction(() => document.querySelector('[data-deployment-card-stage="unit"]')
       && !document.querySelector('[data-testid="deployment-next"]')?.disabled);
   } catch {
     const stalledDeal = await page.evaluate(async () => {
       const { useActiveRun } = await import('/src/run/store.ts');
+      const { currentDeploymentUnit, deploymentInteractionStage } = await import('/src/run/deployment.ts');
       const run = useActiveRun.getState().run;
       const probe = window.__ctBattlefieldTransitionProbe;
       const director = document.querySelector('.scene-director');
@@ -513,7 +536,10 @@ try {
         phase: run?.phase ?? null,
         stage: run?.deployment?.stage ?? null,
         transport: run?.deployment?.transport ?? null,
+        interactionStage: run ? deploymentInteractionStage(run) : null,
+        activeUnit: run ? currentDeploymentUnit(run) : null,
         placements: Object.keys(run?.deployment?.placements ?? {}).length,
+        nextDisabled: document.querySelector('[data-testid="deployment-next"]')?.disabled ?? null,
         dealCount: document.querySelector('.run-deployment-card-count')?.textContent ?? null,
         centerCount: document.querySelector('.run-deployment-center-count')?.textContent ?? null,
         flightCount: document.querySelectorAll('[data-deployment-flight-card]').length,
@@ -531,6 +557,42 @@ try {
       };
     });
     await fail('deployment-deal-settle', JSON.stringify(stalledDeal));
+  }
+
+  try {
+    await page.waitForFunction(() => {
+      const card = document.querySelector('[data-deployment-stack-card].is-active.is-revealed');
+      const front = card?.querySelector('.run-deployment-stack-side.is-front');
+      const rect = card?.getBoundingClientRect();
+      if (!card || !front || !rect) return false;
+      const paintedSide = document.elementsFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+        .map((element) => element.closest('.run-deployment-stack-side'))
+        .find(Boolean);
+      return paintedSide === front;
+    }, { timeout: 5_000 });
+  } catch {
+    const revealPresentation = await page.evaluate(() => {
+      const card = document.querySelector('[data-deployment-stack-card].is-active');
+      const front = card?.querySelector('.run-deployment-stack-side.is-front');
+      const back = card?.querySelector('.run-deployment-stack-side.is-back');
+      const rect = card?.getBoundingClientRect();
+      const hitStack = rect
+        ? document.elementsFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
+          .slice(0, 8)
+          .map((element) => ({ tag: element.tagName, className: element.className }))
+        : [];
+      return {
+        className: card?.className ?? null,
+        front: Boolean(front),
+        frontLabel: front?.querySelector('.run-card-action')?.getAttribute('aria-label') ?? null,
+        frontTransform: front ? getComputedStyle(front).transform : null,
+        frontBackface: front ? getComputedStyle(front).backfaceVisibility : null,
+        backTransform: back ? getComputedStyle(back).transform : null,
+        backBackface: back ? getComputedStyle(back).backfaceVisibility : null,
+        hitStack,
+      };
+    });
+    await fail('deployment-card-reveal', JSON.stringify(revealPresentation));
   }
 
   const transportState = await page.evaluate(() => {
@@ -727,6 +789,35 @@ try {
     // Full deploy is the fastest transport, not permission to answer required choices.
     // The fixture deliberately gives two units Adlected. Each highlighted-square choice
     // leaves transport paused, so the player must explicitly resume Full deploy afterward.
+    const presentedCardGeometry = () => page.evaluate(() => {
+      const layer = document.querySelector(
+        '[data-deployment-stack-card].is-active .run-card-face-layer.is-presented',
+      );
+      const rect = layer?.getBoundingClientRect();
+      const ledger = layer?.querySelector('.run-card-prototype-ledger');
+      if (!layer || !rect || !ledger) return null;
+      return {
+        signature: layer.getAttribute('data-card-presentation'),
+        density: layer.getAttribute('data-contents-density'),
+        unitHeight: getComputedStyle(layer).getPropertyValue('--run-card-unit-height'),
+        cellCount: Number(ledger.getAttribute('data-cell-count')),
+        count: Number(layer.querySelector('.run-card-prototype-ledger-count')?.textContent ?? NaN),
+        unitSeats: [...layer.querySelectorAll(
+          '.run-card-prototype-unit-icon-seat:not(.run-card-prototype-unit-marker-seat)',
+        )].map((seat) => {
+          const seatRect = seat.getBoundingClientRect();
+          return {
+            stackIndex: Number(seat.getAttribute('data-stack-index')),
+            x: seatRect.left - rect.left,
+            y: seatRect.top - rect.top,
+            width: seatRect.width,
+            height: seatRect.height,
+          };
+        }),
+      };
+    });
+    let fullFrontLinesGeometry = null;
+    let emptySeatVerified = false;
     for (let choice = 0; choice < 10; choice += 1) {
       await page.waitForFunction(() => (
         !document.querySelector('[data-testid="run-deployment"]')
@@ -746,6 +837,17 @@ try {
         '[data-testid="deployment-active-unit"]',
         (element) => element.textContent?.replace(/\s+/g, ' ').trim() ?? '',
       );
+      const beforeChoiceGeometry = await presentedCardGeometry();
+      if (
+        !fullFrontLinesGeometry
+        && beforeChoiceGeometry?.count === 2
+        && beforeChoiceGeometry.unitSeats.length === 2
+      ) {
+        fullFrontLinesGeometry = beforeChoiceGeometry;
+        const fullSeatShot = 'tmp-shots/run-deployment-card-full-seats.png';
+        await page.screenshot({ path: fullSeatShot });
+        console.log('Deployment full-seat screenshot:', fullSeatShot);
+      }
       const box = await legal.boundingBox();
       if (!box) await fail('deployment-required-choice', 'highlighted square has no pointer geometry');
       await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
@@ -755,7 +857,43 @@ try {
           || !active
           || active.textContent?.replace(/\s+/g, ' ').trim() !== previous;
       }, {}, activeLabel);
+      if (fullFrontLinesGeometry && !emptySeatVerified) {
+        await page.waitForFunction((fullSignature) => {
+          const layer = document.querySelector(
+            '[data-deployment-stack-card].is-active .run-card-face-layer.is-presented',
+          );
+          return layer?.getAttribute('data-card-presentation') !== fullSignature
+            && Number(layer?.querySelector('.run-card-prototype-ledger-count')?.textContent ?? NaN) === 1;
+        }, {}, fullFrontLinesGeometry.signature);
+        const emptySeatGeometry = await presentedCardGeometry();
+        const remaining = emptySeatGeometry?.unitSeats[0];
+        const original = remaining
+          ? fullFrontLinesGeometry.unitSeats.find((seat) => seat.stackIndex === remaining.stackIndex)
+          : null;
+        const moved = !remaining || !original || ['x', 'y', 'width', 'height'].some((key) => (
+          Math.abs(remaining[key] - original[key]) > 0.75
+        ));
+        if (
+          !emptySeatGeometry
+          || emptySeatGeometry.count !== 1
+          || emptySeatGeometry.unitSeats.length !== 1
+          || emptySeatGeometry.density !== fullFrontLinesGeometry.density
+          || emptySeatGeometry.unitHeight !== fullFrontLinesGeometry.unitHeight
+          || emptySeatGeometry.cellCount !== fullFrontLinesGeometry.cellCount
+          || moved
+        ) {
+          await fail('deployment-card-empty-seat', JSON.stringify({
+            full: fullFrontLinesGeometry,
+            emptied: emptySeatGeometry,
+          }));
+        }
+        const emptySeatShot = 'tmp-shots/run-deployment-card-empty-seat.png';
+        await page.screenshot({ path: emptySeatShot });
+        console.log('Deployment empty-seat screenshot:', emptySeatShot);
+        emptySeatVerified = true;
+      }
     }
+    if (!emptySeatVerified) await fail('deployment-card-empty-seat', 'Front Lines never exposed one occupied seat');
     try {
       await page.waitForFunction(() => document.querySelector('[data-testid="skirmish"]')
         && !document.querySelector('[data-testid="run-deployment"]'));

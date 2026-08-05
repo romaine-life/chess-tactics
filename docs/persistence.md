@@ -122,7 +122,7 @@ idempotent and preserves every unrelated zone field and square. Migration 56 per
 in-place retirement; migration 61 establishes the explicit Level version edge across every durable
 location and repairs working-copy baselines from `saved_revision` history. Browser imports use the
 same shared transform, and embedded browser Runs advance through RunSaveVersion 23. See
-[ADR-0427](adr/0427-level-format-versions-always-migrate.md).
+[ADR-0428](adr/0428-level-format-versions-always-migrate.md).
 
 The save stores the selected Ataraxia tier, named and numbered army units, held cards, exact card
 and offer targets, Cacochymic loss history, lipsana and their Conflict state, current deployment

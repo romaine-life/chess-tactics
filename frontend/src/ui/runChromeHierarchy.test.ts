@@ -312,6 +312,11 @@ describe('Run chrome hierarchy', () => {
     expect(runDeploymentCardStack).toContain('Deal automatically');
     expect(runDeploymentCardStack).toContain('data-deployment-center-deck');
     expect(runDeploymentCardStack).toContain("deployment?.stage === 'awaiting-deal' || deployment?.stage === 'dealing'");
+    expect(runDeploymentCardStack).toContain('emptyPieceIndices={activePresentation?.emptyPieceIndices ?? []}');
+    expect(runDeploymentCardStack).not.toContain('owned.unitSeats.slice(');
+    expect(styleCss).toMatch(/\.run-deployment-stack-card\.is-active\.is-revealed > \.run-deployment-stack-side\.is-back\s*\{[\s\S]*?transform:\s*rotateY\(-180deg\)/);
+    expect(styleCss).toMatch(/\.run-deployment-stack-card\.is-active\.is-revealed > \.run-deployment-stack-side\.is-front\s*\{[\s\S]*?transform:\s*rotateY\(0deg\)/);
+    expect(styleCss).not.toMatch(/\.run-deployment-stack-card\.is-active\.is-revealed\s*\{[\s\S]*?transform:\s*rotateY/);
     expect(runScreen).toContain('Full deploy');
     expect(runScreen).toContain('data-testid="deployment-next"');
     expect(runScreen).toContain("onSetTransport('playing')");
@@ -395,7 +400,8 @@ describe('Run chrome hierarchy', () => {
     expect(runCard).toContain("from './runCardFaceContent'");
     // A held card's property (ADR-0371) reaches the face through the projection too,
     // rather than RunCard re-deriving a frame or a face from it.
-    expect(runCard).toContain('runCardFaceContent(card, { adlected, cardType: ownedCardType, identity })');
+    expect(runCard).toContain('emptyPieceIndices,');
+    expect(runCard).toContain('runCardFaceContent(card, {');
     expect(runCard).toContain('runCardFrameSlot(card, ownedCardType)');
     expect(runCard).not.toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
     expect(runCard).not.toContain('RUN_CARD_LEGATINE_FRAME_SLOT');
