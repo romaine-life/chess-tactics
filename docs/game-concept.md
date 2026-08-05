@@ -69,6 +69,10 @@ these.
   untouched opening position; a terminal defeat or draw retains Retry. Run Battles do not
   expose Resign: Retry already discards the attempt, while Abandon Run owns ending the
   persistent Run (ADR-0424, ADR-0425, ADR-0426).
+- A defeated Run Battle no longer offers Undo. Its viewport-scoped, non-modal result keeps
+  the right Controls panel available for inspection and offers the canonical paid **Retry**
+  beside explicit **New Run** and **Main Menu** exits. New Run enters the existing preparation
+  and replacement-confirmation flow rather than replacing the Run immediately (ADR-0428).
 - Acquired lipsana read as persistent Run state: one frameless native-size icon
   strip stays at the upper-left beneath the title bar in Battles and between-Battle
   screens, independent of the Battle Controls panel; pointing at or focusing an

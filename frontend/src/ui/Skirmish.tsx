@@ -67,7 +67,7 @@ import { runtimePortraitMasterSrc } from './portraitCandidates';
 import { preloadImages } from '../art/preload';
 import { nextLevelRef, orderedLevels, recordLevelWin } from '../campaign/progress';
 import { navigateApp, readValidatedReturnTo } from './navigation';
-import { PLAY_SKIRMISH_SELECTOR_HREF, playCampaignSelectorHref } from './playHubRoute';
+import { PLAY_RUN_NEW_SELECTOR_HREF, PLAY_SKIRMISH_SELECTOR_HREF, playCampaignSelectorHref } from './playHubRoute';
 import { PredrawnCornerPicker } from './PredrawnCornerPicker';
 import {
   predrawnBoardPreviewRegistration,
@@ -1226,6 +1226,57 @@ function SkirmishSession(props: SkirmishProps = {}) {
       <small>Multiplayer</small>
     </InnerChromeBox>
   ) : null;
+  const runBattleResult = runBattle && !runDeployment && routeLevel && game.winner ? (
+    <div className="campaign-result campaign-result--viewport" role="dialog" aria-label="Run Battle result" data-testid="run-battle-result">
+      <div className="settings-frame campaign-result-panel">
+        <h2>{game.winner === 'player' ? 'Victory' : game.winner === 'draw' ? 'Draw' : 'Defeat'}</h2>
+        <p>{routeLevel.name} — {resultDetail ?? objectiveGoal}</p>
+        <div className="campaign-result-actions">
+          {game.winner !== 'enemy' ? <RunBattleUndoButton testId="undo-run-move-result" /> : null}
+          {game.winner === 'player' ? (
+            <ChromeButton unit="inner-text-button"
+              className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+              onClick={() => runBattle.onVictory({
+                survivingUnitIds: game.pieces
+                  .filter((piece) => piece.alive && piece.side === 'player' && piece.id.startsWith('run-'))
+                  .map((piece) => piece.id),
+                turns: turnsElapsed,
+              })}
+            >
+              Continue
+            </ChromeButton>
+          ) : (
+            <RunBattleRetryButton
+              testId="retry-run-battle-result"
+              costTenths={runBattle.retryCostTenths}
+              canRetry={runBattleRetryAvailable}
+              onRetry={replayLevel}
+              unavailableReason={runBattleRetryUnavailableReason}
+              className="active"
+            />
+          )}
+          {game.winner === 'enemy' ? (
+            <>
+              <ChromeNavButton unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+                data-testid="new-run-after-defeat"
+                to={PLAY_RUN_NEW_SELECTOR_HREF}
+              >
+                New Run
+              </ChromeNavButton>
+              <ChromeNavButton unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+                data-testid="main-menu-after-defeat"
+                to="/"
+              >
+                Main Menu
+              </ChromeNavButton>
+            </>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  ) : null;
   const skirmishTitleBarContent = playableSurfaceReady ? (
     <div className="skirmish-topbar-status">
       {/* The battle clock is ALWAYS the middle chip on every play surface — a timed game
@@ -1366,7 +1417,12 @@ function SkirmishSession(props: SkirmishProps = {}) {
         className: 'skirmish-war-room',
         primaryClassName: 'skirmish-field',
         primary: battlefieldPrimary,
-        persistent: battlePersistentOverlay,
+        persistent: (
+          <>
+            {battlePersistentOverlay}
+            {runBattleResult}
+          </>
+        ),
         ariaLabel: runDeployment ? 'Run deployment battlefield' : 'Run Battle battlefield',
         sceneInstance: '/run',
       },
@@ -1381,39 +1437,6 @@ function SkirmishSession(props: SkirmishProps = {}) {
               onChange={savePredrawnRegistration}
               onClose={() => setPredrawnPickerOpen(false)}
             />
-          ) : null}
-          {!runDeployment && routeLevel && game.winner ? (
-            <div className="campaign-result" role="dialog" aria-modal="true" aria-label="Run Battle result" data-testid="run-battle-result">
-              <div className="settings-frame campaign-result-panel">
-                <h2>{game.winner === 'player' ? 'Victory' : game.winner === 'draw' ? 'Draw' : 'Defeat'}</h2>
-                <p>{routeLevel.name} — {resultDetail ?? objectiveGoal}</p>
-                <div className="campaign-result-actions">
-                  <RunBattleUndoButton testId="undo-run-move-result" />
-                  {game.winner === 'player' ? (
-                    <ChromeButton unit="inner-text-button"
-                      className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-                      onClick={() => runBattle.onVictory({
-                        survivingUnitIds: game.pieces
-                          .filter((piece) => piece.alive && piece.side === 'player' && piece.id.startsWith('run-'))
-                          .map((piece) => piece.id),
-                        turns: turnsElapsed,
-                      })}
-                    >
-                      Continue
-                    </ChromeButton>
-                  ) : (
-                    <RunBattleRetryButton
-                      testId="retry-run-battle-result"
-                      costTenths={runBattle.retryCostTenths}
-                      canRetry={runBattleRetryAvailable}
-                      onRetry={replayLevel}
-                      unavailableReason={runBattleRetryUnavailableReason}
-                      className="active"
-                    />
-                  )}
-                </div>
-              </div>
-            </div>
           ) : null}
         </>
       ),
