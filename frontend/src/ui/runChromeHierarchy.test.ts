@@ -133,8 +133,8 @@ describe('Run chrome hierarchy', () => {
     expect(app).toContain('sceneSnapshot={scene.snapshot as RunSceneSnapshot}');
     expect(app).toContain('overlapsStateDrivenRunScene');
     expect(app).toContain('(!preservesSceneHost || overlapsRunScene)');
-    expect(app).toContain("layer.visualRole === 'outgoing'");
-    expect(sceneBoundary).toContain('deactivating?: boolean');
+    expect(sceneBoundary).toContain("visualRole === 'outgoing'");
+    expect(sceneBoundary).toContain('directorPhase: ScenePhase');
     expect(sceneBoundary).toContain('target.inert = true');
     expect(titleBarSlot).toContain('const active = useSceneActivation()');
 
@@ -309,9 +309,15 @@ describe('Run chrome hierarchy', () => {
     expect(runDeploymentCardStack).not.toContain('Deploy all');
     expect(runDeploymentCardStack).not.toContain('Step through');
     expect(runDeploymentCardStack).not.toContain('SkirmishBoard');
-    expect(runScreen).toContain('Deploy all');
-    expect(runScreen).toContain('Step through');
-    expect(runScreen).toContain("prepared.deployment?.mode\n          ? switchDeploymentMode(prepared, level, mode)\n          : chooseDeploymentMode(prepared, level, mode)");
+    expect(runDeploymentCardStack).toContain('Deal automatically');
+    expect(runDeploymentCardStack).toContain('data-deployment-center-deck');
+    expect(runScreen).toContain('Full deploy');
+    expect(runScreen).toContain('data-testid="deployment-next"');
+    expect(runScreen).toContain("onSetTransport('playing')");
+    expect(runScreen).toContain("onSetTransport('paused')");
+    expect(runScreen).not.toContain('Place {activeUnit.type');
+    expect(runScreen).toContain("setDeploymentTransport(latest, transport)");
+    expect(runScreen).toContain("placeRevealedDeploymentUnit(paused, level)");
     expect(runScreen).not.toContain('View Formation {index + 1}');
     expect(runScreen).not.toContain('Deploy this formation');
     expect(runScreen).toContain('renderCellOverlay: ({ cell, visualFootprintStyle }) => {');
@@ -329,7 +335,7 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('gameForRunDeployment(prepared, level, layout, true)');
     expect(runScreen).toContain("stage === 'adlected'");
     expect(runScreen).toContain('advanceAutomaticDeployment(deployment, level)');
-    expect(runScreen).toContain('placeRevealedDeploymentUnit(prepared, level)');
+    expect(runScreen).toContain('placeRevealedDeploymentUnit(paused, level)');
     expect(runScreen).not.toContain('data-testid="begin-run-battle"');
     expect(runScreen).not.toContain('onBeginBattle');
     // The phase is the title bar's first clickable ROUTE segment (Run › Sectio),

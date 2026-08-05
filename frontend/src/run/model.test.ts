@@ -766,6 +766,39 @@ describe('Run progression and lipsanon offers', () => {
     expect(migrated.army.find((unit) => unit.type === 'king')?.abilities).not.toContain('primogeniture');
   });
 
+  it('migrates version 21 Deployment to the nearest honest paused transport boundary', () => {
+    const currentBattle = deployedRun(194, war(2));
+    const { transport: _transport, ...legacyDeployment } = currentBattle.deployment!;
+    const version21 = {
+      ...currentBattle,
+      runSaveVersion: 21,
+      phase: 'deployment',
+      battleRuntime: null,
+      deployment: {
+        ...legacyDeployment,
+        stage: 'unit',
+        mode: 'deploy-all',
+        revealedCardIds: [legacyDeployment.dealtCardIds[0]],
+        placements: { ...legacyDeployment.placements, preserved: '3,7' },
+      },
+    };
+
+    const migrated = migrateRunSaveDocument(version21);
+    expect(migrated.runSaveVersion).toBe(CURRENT_RUN_SAVE_VERSION);
+    expect(migrated.deployment?.stage).toBe('unit');
+    expect(migrated.deployment?.transport).toBe('paused');
+    expect(migrated.deployment).not.toHaveProperty('mode');
+    expect(migrated.deployment?.revealedCardIds).toEqual(version21.deployment.revealedCardIds);
+    expect(migrated.deployment?.placements.preserved).toBe('3,7');
+
+    const waiting = migrateRunSaveDocument({
+      ...version21,
+      deployment: { ...version21.deployment, stage: 'dealing' },
+    });
+    expect(waiting.deployment?.stage).toBe('awaiting-deal');
+    expect(waiting.deployment?.transport).toBe('paused');
+  });
+
   it('migrates version 19 into Expunctio transaction state without changing the Sectio', () => {
     const current = createRun(war(), 193);
     const { expunctedCard: _expunctedCard, entrySnapshot, ...version19Sectio } = current.sectio!;

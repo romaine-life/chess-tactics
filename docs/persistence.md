@@ -65,7 +65,8 @@ chain first renames version 16's marker to RunSaveVersion 17, rewrites version 1
 vocabulary into RunSaveVersion 18's Sectio, Adlectio, and Alienatio vocabulary, advances version
 18 to RunSaveVersion 19's starter Chartulary and historical deployment queue, advances version
 19 to RunSaveVersion 20's Expunctio transaction and reset-complete Pestiferous loss snapshot,
-then advances version 20 to RunSaveVersion 21's stable nullable card seats and card-ordered Deployment.
+advances version 20 to RunSaveVersion 21's stable nullable card seats and card-ordered Deployment,
+then advances version 21 to RunSaveVersion 22's explicit deal boundary and persisted transport.
 Migration 54 owns the marker rename; migration 55 advances the Sectio vocabulary; migration 56
 adds His Grace and Front Lines and returns a version-18 Deployment or Battle to its then-current
 pre-information boundary because that version did not persist exact automatic destinations.
@@ -73,6 +74,9 @@ Migration 57 adds Expunctio without changing the player's current phase or resou
 expands `unitIds` into the authored card shape as stable nullable `unitSeats`—restoring holes for
 already-sold units—removes Primogeniture from every stored unit copy,
 and returns an in-flight version-20 Deployment or Battle to the new empty-battlefield deal boundary.
+Migration 60 removes the retired Deployment mode, maps a not-yet-settled old deal back to
+`awaiting-deal`, maps an already-settled old pace boundary to the active card, and preserves every
+later reveal, placement, settlement, and discard boundary while resuming it paused.
 Each account migration advances the Run's CAS revision, while the browser applies the same chain
 to its local document on first load. Saves older than version 16 remain unavailable because their
 retired gameplay state has no declared lossless transform. See
@@ -80,6 +84,7 @@ retired gameplay state has no declared lossless transform. See
 [ADR-0392](adr/0392-sectio-is-the-run-disposal-and-acquisition-phase.md) through
 [ADR-0393](adr/0393-adlectio-and-alienatio-are-the-movements-within-sectio.md), and
 [ADR-0419](adr/0419-deployment-draws-a-hidden-card-stack-in-play-order.md), and
+[ADR-0422](adr/0422-deployment-deals-a-visible-deck-before-transport-begins.md), and
 [ADR-0407](adr/0407-expunctio-removes-one-card-per-sectio.md).
 
 Beginning with RunSaveVersion 16, every version that reaches players has an explicit forward
@@ -87,7 +92,7 @@ migration for account and browser storage. Retired content maps to a typed tombs
 replacement—for example, a removed card remains in the deck as **Removed card**—rather than
 invalidating the Run.
 
-RunSaveVersion 21 begins in Bona Vacantia when the opening Conflict offers a lipsanon, otherwise
+RunSaveVersion 22 begins in Bona Vacantia when the opening Conflict offers a lipsanon, otherwise
 in the normal Sectio with kind `opening`. The Run carries the permanent King and two starting Pawns
 through the starter-only His Grace and Front Lines cards, eight gold, and three seeded card offers.
 Adlectio remains in the same Sectio transaction; Army, Alienatio, Expunctio, Reset Sectio, and
@@ -96,10 +101,11 @@ per visit for its printed value plus those units' standard value; His Grace is n
 Continue may perform no
 Adlectio and enters Deployment at Battle index 0. Deployment always persists the exact dealt-card
 order, stable nullable seats, capacity decision, active card, revealed-card prefix, seat cursor,
-pace, committed placements, settlement boundary, and discard cursor. A won
+deal boundary, paused/play/full-deploy transport, committed placements, settlement boundary, and
+discard cursor. A won
 non-final Battle enters `aftermath`, which persists
 the reward, turns, elapsed time, survivors, and fallen units until Continue opens Bona Vacantia
-or the next Sectio. See ADR-0321 through ADR-0348, ADR-0377, and ADR-0419 for those gameplay
+or the next Sectio. See ADR-0321 through ADR-0348, ADR-0377, ADR-0419, and ADR-0422 for those gameplay
 decisions.
 
 Migration 56 also retires Pawn-only deployment geometry from durable content. It folds every

@@ -62,8 +62,8 @@ import {
 } from '../run/model';
 import {
   advanceAutomaticDeployment,
-  advanceDeployAll,
-  chooseDeploymentMode,
+  advanceDeploymentTransport,
+  beginDeploymentDeal,
   completeDeploymentDeal,
   currentDeploymentUnit,
   deploymentInteractionStage,
@@ -80,7 +80,7 @@ import {
   revealActiveDeploymentCard,
   resolveForcedDeploymentChoices,
   selectedDeploymentLayout,
-  switchDeploymentMode,
+  setDeploymentTransport,
   type RunDeploymentInteractionStage,
 } from '../run/deployment';
 import { useActiveRun } from '../run/store';
@@ -109,7 +109,8 @@ import {
 } from './RunArmyWorkspace';
 import { RunCard } from './RunCard';
 import { RunBattlePreview } from './RunBattlePreview';
-import { RunDeploymentCardStack } from './RunDeploymentCardStack';
+import { RunDeploymentCardStack, RunDeploymentDeckDeal } from './RunDeploymentCardStack';
+import { useSceneMotion } from './shell/SceneActivity';
 import { RunExpunctioWorkspace } from './RunExpunctioWorkspace';
 import { runCardName } from '../run/cardNames';
 import {
@@ -398,29 +399,32 @@ function deploymentSquareLabel(cellKey: string | undefined, rows: number): strin
 
 function DeploymentControls({
   run,
-  view,
   stage,
   activeUnit,
-  onNavigate,
-  onSwitchMode,
-  onPlace,
+  dealProgress,
+  onDealProgress,
+  onSetTransport,
+  onNext,
   onDealComplete,
   onRevealComplete,
   onDiscardComplete,
 }: {
   run: RunDocument;
-  view: RunScreenView;
   stage: RunDeploymentInteractionStage;
   activeUnit: ReturnType<typeof currentDeploymentUnit>;
-  onNavigate: (view: RunScreenView) => void;
-  onSwitchMode: (mode: 'deploy-all' | 'step-through') => void;
-  onPlace: () => void;
+  dealProgress: number;
+  onDealProgress: (count: number) => void;
+  onSetTransport: (transport: 'paused' | 'playing' | 'full-deploy') => void;
+  onNext: () => void;
   onDealComplete: () => void;
   onRevealComplete: () => void;
   onDiscardComplete: () => void;
 }): ReactElement {
   const { abandonDialog, abandoning, requestAbandon } = useRunAbandon(run);
-  const mode = run.deployment?.mode;
+  const transport = run.deployment?.transport ?? 'paused';
+  const transportReady = stage !== 'await-deal' && stage !== 'dealing' && stage !== 'ready';
+  const inputRequired = stage === 'adlected';
+  const nextReady = stage === 'place';
   const abilities = activeUnit
     ? (['adlected', 'eutactic', 'agminate'] as const).filter((ability) => (
         ability === 'adlected'
@@ -432,29 +436,63 @@ function DeploymentControls({
     <>
       {abandonDialog}
       <section className="run-meta-controls run-deployment-controls" aria-label="Deployment controls">
-        {mode || stage === 'pace' ? (
-          <div className="skirmish-view-group run-deployment-control">
-            <span className="skirmish-eyebrow">Pace</span>
-            <div className="run-inline-actions">
-              <ChromeButton
-                unit="inner-text-button"
-                className={chromeUnitClassNames('inner-text-button', 'app-header-button', mode === 'deploy-all' && 'active')}
-                aria-pressed={mode === 'deploy-all'}
-                onClick={() => onSwitchMode('deploy-all')}
-              >
-                Deploy all
-              </ChromeButton>
-              <ChromeButton
-                unit="inner-text-button"
-                className={chromeUnitClassNames('inner-text-button', 'app-header-button', mode === 'step-through' && 'active')}
-                aria-pressed={mode === 'step-through'}
-                onClick={() => onSwitchMode('step-through')}
-              >
-                Step through
-              </ChromeButton>
-            </div>
+        <RunDeploymentCardStack
+          run={run}
+          dealProgress={dealProgress}
+          onDealProgress={onDealProgress}
+          onDealComplete={onDealComplete}
+          onRevealComplete={onRevealComplete}
+          onDiscardComplete={onDiscardComplete}
+        />
+
+        <div className="skirmish-view-group run-deployment-control" data-testid="deployment-transport-control">
+          <div className="run-deployment-transport" role="group" aria-label="Deployment transport">
+            <ChromeButton
+              unit="inner-text-button"
+              className={chromeUnitClassNames('inner-text-button', 'app-header-button', transport === 'paused' && 'active')}
+              aria-label="Pause deployment"
+              title="Pause"
+              aria-pressed={transport === 'paused'}
+              disabled={!transportReady || transport === 'paused'}
+              onClick={() => onSetTransport('paused')}
+            >
+              ⏸
+            </ChromeButton>
+            <ChromeButton
+              unit="inner-text-button"
+              data-testid="deployment-play"
+              className={chromeUnitClassNames('inner-text-button', 'app-header-button', transport === 'playing' && 'active')}
+              aria-label="Play deployment"
+              title="Play"
+              aria-pressed={transport === 'playing'}
+              disabled={!transportReady || inputRequired}
+              onClick={() => onSetTransport('playing')}
+            >
+              ▶
+            </ChromeButton>
+            <ChromeButton
+              unit="inner-text-button"
+              data-testid="deployment-next"
+              className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+              aria-label="Next deployment step"
+              title="Next step"
+              disabled={!nextReady}
+              onClick={onNext}
+            >
+              ⏭
+            </ChromeButton>
+            <ChromeButton
+              unit="inner-text-button"
+              data-testid="deployment-full-deploy"
+              className={chromeUnitClassNames('inner-text-button', 'app-header-button', transport === 'full-deploy' && 'active')}
+              aria-pressed={transport === 'full-deploy'}
+              disabled={!transportReady || inputRequired}
+              onClick={() => onSetTransport('full-deploy')}
+            >
+              Full deploy
+            </ChromeButton>
           </div>
-        ) : null}
+        </div>
 
         {activeUnit && (stage === 'place' || stage === 'adlected') ? (
           <div className="skirmish-view-group run-deployment-control" data-testid="deployment-active-unit">
@@ -465,17 +503,7 @@ function DeploymentControls({
                 <b>{runAbilityDisplayName(ability)}</b> · {runAbilityDescription(ability, activeUnit.type)}
               </p>
             ))}
-            {stage === 'adlected' ? (
-              <p>Select one of the highlighted squares.</p>
-            ) : (
-              <ChromeButton
-                unit="inner-text-button"
-                className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-                onClick={onPlace}
-              >
-                Place {activeUnit.type === 'king' ? 'His Grace' : runUnitRosterLabel(activeUnit)}
-              </ChromeButton>
-            )}
+            {stage === 'adlected' ? <p>Select one of the highlighted squares.</p> : null}
           </div>
         ) : null}
 
@@ -486,18 +514,6 @@ function DeploymentControls({
           </div>
         ) : null}
 
-        <div className="skirmish-view-group">
-          <span className="skirmish-eyebrow">Run view</span>
-          <ChromeButton
-            unit="inner-text-button"
-            data-testid="run-view-primary"
-            className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'primary' && 'active')}
-            aria-pressed={view === 'primary'}
-            onClick={() => onNavigate('primary')}
-          >
-            Deployment
-          </ChromeButton>
-        </div>
         <div className="skirmish-view-group run-meta-abandon">
           <span className="skirmish-eyebrow">Run</span>
           <ChromeButton
@@ -510,12 +526,6 @@ function DeploymentControls({
             {abandoning ? 'Abandoning…' : 'Abandon Run'}
           </ChromeButton>
         </div>
-        <RunDeploymentCardStack
-          run={run}
-          onDealComplete={onDealComplete}
-          onRevealComplete={onRevealComplete}
-          onDiscardComplete={onDiscardComplete}
-        />
       </section>
     </>
   );
@@ -523,12 +533,8 @@ function DeploymentControls({
 
 function useRunDeploymentPresentation({
   run,
-  view,
-  onNavigate,
 }: {
   run: RunDocument;
-  view: RunScreenView;
-  onNavigate: (view: RunScreenView) => void;
 }): RunDeploymentPresentation | null {
   const replace = useActiveRun((state) => state.replace);
   const level = run.war.battles[run.battleIndex].level;
@@ -546,6 +552,7 @@ function useRunDeploymentPresentation({
   );
   const legalCellKeys = useMemo(() => new Set(legalCells.map((cell) => `${cell.x},${cell.y}`)), [legalCells]);
   const [hoveredCellKey, setHoveredCellKey] = useState<string | null>(null);
+  const [dealProgress, setDealProgress] = useState(0);
   const hoveredPlacementCell = hoveredCellKey
     ? legalCells.find((cell) => `${cell.x},${cell.y}` === hoveredCellKey) ?? null
     : null;
@@ -566,20 +573,53 @@ function useRunDeploymentPresentation({
   }, [prepared, replace, run]);
 
   useEffect(() => {
+    if (prepared.deployment?.stage === 'awaiting-deal') setDealProgress(0);
+  }, [prepared.deployment?.battleIndex, prepared.deployment?.stage]);
+
+  useEffect(() => {
     if (prepared.phase !== 'deployment') return;
     if (prepared.deployment?.stage === 'card') {
       replace(revealActiveDeploymentCard(prepared));
       return;
     }
-    if (prepared.deployment?.mode === 'deploy-all' && stage === 'place') {
-      replace(advanceDeployAll(prepared, level));
+    if (stage === 'adlected' && prepared.deployment?.transport !== 'paused') {
+      replace(setDeploymentTransport(prepared, 'paused'));
+      return;
+    }
+    if (
+      stage === 'place'
+      && (prepared.deployment?.transport === 'playing' || prepared.deployment?.transport === 'full-deploy')
+    ) {
+      replace(advanceDeploymentTransport(prepared, level));
     }
   }, [level, prepared, replace, stage]);
 
+  const beginDeal = useCallback(() => {
+    const latest = useActiveRun.getState().run;
+    if (latest?.id === prepared.id && latest.phase === 'deployment') {
+      replace(beginDeploymentDeal(latest));
+    }
+  }, [prepared.id, replace]);
   const finishDeal = useCallback(() => {
     const latest = useActiveRun.getState().run;
     if (latest?.id === prepared.id && latest.phase === 'deployment') {
       replace(completeDeploymentDeal(latest, level));
+    }
+  }, [level, prepared.id, replace]);
+  const setTransport = useCallback((transport: 'paused' | 'playing' | 'full-deploy') => {
+    const latest = useActiveRun.getState().run;
+    if (latest?.id === prepared.id && latest.phase === 'deployment') {
+      replace(setDeploymentTransport(latest, transport));
+    }
+  }, [prepared.id, replace]);
+  const advanceOne = useCallback(() => {
+    const latest = useActiveRun.getState().run;
+    if (latest?.id !== prepared.id || latest.phase !== 'deployment') return;
+    const paused = setDeploymentTransport(latest, 'paused');
+    if (deploymentInteractionStage(paused) === 'place') {
+      replace(placeRevealedDeploymentUnit(paused, level));
+    } else if (paused !== latest) {
+      replace(paused);
     }
   }, [level, prepared.id, replace]);
   const finishReveal = useCallback(() => {
@@ -614,14 +654,12 @@ function useRunDeploymentPresentation({
     controlsContent: (
       <DeploymentControls
         run={prepared}
-        view={view}
         stage={stage}
         activeUnit={activeUnit}
-        onNavigate={onNavigate}
-        onSwitchMode={(mode) => replace(prepared.deployment?.mode
-          ? switchDeploymentMode(prepared, level, mode)
-          : chooseDeploymentMode(prepared, level, mode))}
-        onPlace={() => replace(placeRevealedDeploymentUnit(prepared, level))}
+        dealProgress={dealProgress}
+        onDealProgress={setDealProgress}
+        onSetTransport={setTransport}
+        onNext={advanceOne}
         onDealComplete={finishDeal}
         onRevealComplete={finishReveal}
         onDiscardComplete={finishDiscard}
@@ -653,24 +691,33 @@ function useRunDeploymentPresentation({
         </button>
       );
     },
-    boardOverlay: activeAdlected && hoveredPlacementCell && hoveredPlacementSeat ? (
-      <span
-        className={`board-unit-seat is-${activeAdlected.type} run-deployment-placement-ghost`}
-        data-testid="deployment-placement-ghost"
-        style={{
-          left: hoveredPlacementSeat.left,
-          top: hoveredPlacementSeat.top,
-          zIndex: objectBaseZIndex(hoveredPlacementCell),
-        }}
-        aria-hidden="true"
-      >
-        <img
-          src={pieceSpritePath(activeAdlected.type, paletteForSide('player'), defaultFacingForSide('player'))}
-          alt=""
-          draggable={false}
+    boardOverlay: (
+      <>
+        <RunDeploymentDeckDeal
+          run={prepared}
+          dealtCount={dealProgress}
+          onBeginDeal={beginDeal}
         />
-      </span>
-    ) : null,
+        {activeAdlected && hoveredPlacementCell && hoveredPlacementSeat ? (
+          <span
+            className={`board-unit-seat is-${activeAdlected.type} run-deployment-placement-ghost`}
+            data-testid="deployment-placement-ghost"
+            style={{
+              left: hoveredPlacementSeat.left,
+              top: hoveredPlacementSeat.top,
+              zIndex: objectBaseZIndex(hoveredPlacementCell),
+            }}
+            aria-hidden="true"
+          >
+            <img
+              src={pieceSpritePath(activeAdlected.type, paletteForSide('player'), defaultFacingForSide('player'))}
+              alt=""
+              draggable={false}
+            />
+          </span>
+        ) : null}
+      </>
+    ),
   };
 }
 
@@ -735,6 +782,7 @@ function SectioCardRow({
   offerIds: string[];
   onReflowingChange: (reflowing: boolean) => void;
 }): ReactElement {
+  const sceneMotion = useSceneMotion();
   const wrap = useMemo(() => installedRunSectioWrap(), []);
   const [box, setBox] = useState({ width: 0, height: 0 });
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -809,14 +857,19 @@ function SectioCardRow({
 
     animations = moving.map(({ element, offset }) => {
       element.classList.add('is-reflowing');
-      return element.animate(
+      return sceneMotion.animate(
+        element,
         [
           { translate: `${offset.x}px ${offset.y}px` },
           { translate: '0 0' },
         ],
         { duration, easing },
       );
-    });
+    }).flatMap((animation) => animation ? [animation] : []);
+    if (animations.length !== moving.length) {
+      clearPresentation();
+      return undefined;
+    }
     onReflowingChange(true);
     void Promise.allSettled(animations.map((animation) => animation.finished)).then(finish);
 
@@ -826,7 +879,7 @@ function SectioCardRow({
       clearPresentation();
       onReflowingChange(false);
     };
-  }, [box.height, box.width, layoutKey, onReflowingChange]);
+  }, [box.height, box.width, layoutKey, onReflowingChange, sceneMotion]);
 
   if (!wrap || wrap.kind !== 'band' || cardCount < 1) {
     return <div className="run-card-grid" ref={rowRef}>{children}</div>;
@@ -1138,7 +1191,7 @@ function RunBattlefieldPanel({
   const replace = useActiveRun((state) => state.replace);
   const currentRun = useActiveRun((state) => state.run);
   const { abandonDialog, requestAbandon } = useRunAbandon(run);
-  const deploymentPresentation = useRunDeploymentPresentation({ run, view, onNavigate });
+  const deploymentPresentation = useRunDeploymentPresentation({ run });
   const baseLevel = run.war.battles[run.battleIndex].level;
   // Battle-runtime writes (including Restart) do not change deployment. Keep the
   // projected board document referentially stable across those persistence updates,

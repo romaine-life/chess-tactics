@@ -17,20 +17,17 @@ import { AdminControls } from './AdminControls';
 import { ChromeNavButton } from './shared/ChromeButton';
 import { ApparatusRailColumn } from './shared/ApparatusRailTab';
 import { SettingsContentSceneSlot } from './shell/AuthoredSceneSlot';
+import {
+  DEFAULT_APP_SETTINGS,
+  updateAppSettings,
+  useAppSettings,
+  type AppSettings,
+} from '../settings/appSettings';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
 const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
-const SETTINGS_KEY = 'chess-tactics-settings-v1';
 type SettingsTab = 'general' | 'audio' | 'gameplay' | 'creator-tools' | 'admin';
 type VisibleSettingsTab = Exclude<SettingsTab, 'admin'>;
-
-interface LocalSettings {
-  uiScale: number;
-  masterAudio: boolean;
-  musicVolume: number;
-  effectsVolume: number;
-  interfaceSounds: boolean;
-}
 
 interface BgmTrack {
   title: string;
@@ -62,14 +59,6 @@ interface CreatorTool {
   // broadcast monitor), not an in-app SPA route.
   external?: boolean;
 }
-
-const DEFAULT_SETTINGS: LocalSettings = {
-  uiScale: 100,
-  masterAudio: true,
-  musicVolume: 70,
-  effectsVolume: 80,
-  interfaceSounds: true,
-};
 
 const tabs: TabDefinition[] = [
   { id: 'general', label: 'General', icon: 'ui-kit-icons-gear-png' },
@@ -153,27 +142,6 @@ function clamp(value: unknown, min: number, max: number, fallback: number): numb
   return Math.min(max, Math.max(min, Math.round(numeric)));
 }
 
-function readLocalSettings(): LocalSettings {
-  try {
-    const raw = localStorage.getItem(SETTINGS_KEY);
-    if (!raw) return DEFAULT_SETTINGS;
-    const parsed = JSON.parse(raw) as Partial<LocalSettings>;
-    return {
-      uiScale: clamp(parsed.uiScale, 90, 120, DEFAULT_SETTINGS.uiScale),
-      masterAudio: typeof parsed.masterAudio === 'boolean' ? parsed.masterAudio : DEFAULT_SETTINGS.masterAudio,
-      musicVolume: clamp(parsed.musicVolume, 0, 100, DEFAULT_SETTINGS.musicVolume),
-      effectsVolume: clamp(parsed.effectsVolume, 0, 100, DEFAULT_SETTINGS.effectsVolume),
-      interfaceSounds: typeof parsed.interfaceSounds === 'boolean' ? parsed.interfaceSounds : DEFAULT_SETTINGS.interfaceSounds,
-    };
-  } catch {
-    return DEFAULT_SETTINGS;
-  }
-}
-
-function saveLocalSettings(settings: LocalSettings): void {
-  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch { /* ignore */ }
-}
-
 function applyUiScale(scale: number): void {
   document.documentElement.style.setProperty('--settings-ui-scale', `${scale / 100}`);
 }
@@ -233,7 +201,7 @@ export function Settings({
   // thus that Back — survives each tab/tracks hop.
   const returnTo = readValidatedReturnTo(search);
   const [muted, setMuted] = useState(readMuted());
-  const [settings, setSettings] = useState<LocalSettings>(readLocalSettings);
+  const settings = useAppSettings();
   const [tracks, setTracks] = useState<BgmTrack[] | null>(null);
   const [tracksStatus, setTracksStatus] = useState('');
   const [disabledUrls, setDisabledUrls] = useState<string[]>(() => readDisabledUrls());
@@ -275,7 +243,6 @@ export function Settings({
   }, []);
 
   useEffect(() => {
-    saveLocalSettings(settings);
     applyUiScale(settings.uiScale);
     // Let the running SFX service pick up master-audio / effects-volume changes live
     // (it re-reads localStorage on this event), so the Effects slider takes effect
@@ -358,9 +325,9 @@ export function Settings({
     [display.tab],
   );
 
-  const updateSetting = <Key extends keyof LocalSettings>(key: Key, value: LocalSettings[Key]) => {
+  const updateSetting = <Key extends keyof AppSettings>(key: Key, value: AppSettings[Key]) => {
     setConfirmingReset(false);
-    setSettings((current) => ({ ...current, [key]: value }));
+    updateAppSettings((current) => ({ ...current, [key]: value }));
   };
 
   const setMasterAudio = (enabled: boolean) => {
@@ -374,7 +341,7 @@ export function Settings({
       setConfirmingReset(true);
       return;
     }
-    setSettings(DEFAULT_SETTINGS);
+    updateAppSettings({ ...DEFAULT_APP_SETTINGS });
     setMuted(false);
     writeMuted(false);
     setConfirmingReset(false);
@@ -409,7 +376,7 @@ export function Settings({
   };
 
   const adjustScale = (delta: number) => {
-    updateSetting('uiScale', clamp(settings.uiScale + delta, 90, 120, DEFAULT_SETTINGS.uiScale));
+    updateSetting('uiScale', clamp(settings.uiScale + delta, 90, 120, DEFAULT_APP_SETTINGS.uiScale));
   };
 
   // The About → Build row. Dev keeps its worktree · commit line; prod shows the
@@ -525,7 +492,7 @@ export function Settings({
             value={settings.musicVolume}
             suffix="%"
             label="Music Volume"
-            onChange={(next) => updateSetting('musicVolume', clamp(next, 0, 100, DEFAULT_SETTINGS.musicVolume))}
+            onChange={(next) => updateSetting('musicVolume', clamp(next, 0, 100, DEFAULT_APP_SETTINGS.musicVolume))}
           />
           <SettingsButton href={withReturnTo(TRACKS_PATH)} ariaLabel="View the soundtrack track list">View Tracks</SettingsButton>
         </SettingsRow>
@@ -536,7 +503,7 @@ export function Settings({
             value={settings.effectsVolume}
             suffix="%"
             label="Effects Volume"
-            onChange={(next) => updateSetting('effectsVolume', clamp(next, 0, 100, DEFAULT_SETTINGS.effectsVolume))}
+            onChange={(next) => updateSetting('effectsVolume', clamp(next, 0, 100, DEFAULT_APP_SETTINGS.effectsVolume))}
           />
           <SettingsButton onClick={() => previewTerrain('water')} ariaLabel="Play a sample effect sound">Test</SettingsButton>
         </SettingsRow>
@@ -598,11 +565,15 @@ export function Settings({
   const renderGameplay = () => (
     <SettingsSection title="Gameplay">
       <SettingsRow
-        title="Coming Soon"
-        description="Gameplay settings are not available yet."
-        value={<span>Locked</span>}
-        tall
-      />
+        title="Deal automatically"
+        description="Begin the Deployment deal as soon as the battlefield is ready."
+      >
+        <Toggle
+          checked={settings.autoDealDeployment}
+          label="Deal Deployment cards automatically"
+          onChange={(value) => updateSetting('autoDealDeployment', value)}
+        />
+      </SettingsRow>
     </SettingsSection>
   );
 

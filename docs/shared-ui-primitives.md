@@ -24,6 +24,13 @@ search for before constructing a control or repeated surface.
   `RunForm` and standalone `Skirmish`. Its `persistentViewportArtwork` seat owns
   environment art shared by sibling viewport destinations and keeps that art
   outside their director-owned fade.
+- `ui/shell/SceneActivity.tsx` — the director-owned authority for functional
+  scene time. Preparing scenes may render, decode, and measure, but their entered
+  actions remain dormant. Entry motion is constructed during preparation and held
+  at its first frame, so destination layout never flashes before the motion begins;
+  descendant motion is held with it until the director commits the scene as current.
+  Imperative Web Animations go through its `SceneMotion` capability rather than
+  calling the browser API from feature code.
 - `ui/shared/ActionList.tsx` — data-driven selectable/action rows. War battles,
   Campaign Editor levels, and Play level lists use this instead of constructing
   first/middle/last rows independently.
@@ -35,6 +42,9 @@ search for before constructing a control or repeated surface.
   owns the registered swatch button and selected state for every item.
 - `ui/shared/SettingsControls.tsx` — settings sections, settings rows, and the
   standard text action button.
+- `settings/appSettings.ts` — the one device-local application-settings owner.
+  Settings screens and workflow entry points subscribe to the same normalized
+  snapshot and update it through one storage/event boundary.
 - `ui/shared/ApparatusRailTab.tsx` — menu-language navigation rail columns and
   tabs. `ApparatusRailColumn` owns the main-menu column width, stack gap, and
   framed/open perimeter; `ApparatusRailTab` owns each button.
@@ -62,9 +72,10 @@ search for before constructing a control or repeated surface.
   for regression tests. `SectioCardRow` owns the live FLIP measurement for both
   plain and installed-wrap layouts.
 - `ui/RunDeploymentCardStack.tsx` — the Controls-owned projection of the persisted
-  Deployment deal. It measures the real Chartulary shortcut, transfers the exact dealt count
-  face down into one numbered stack, reveals only the active card, and acknowledges deal,
-  reveal, and discard animation boundaries back into the Run document.
+  Deployment deck and deal. It presents the complete face-down center deck, partitions the
+  exact combat count deliberately into the prominent Controls stack, transfers the counted
+  remainder into the real Chartulary shortcut, reveals only the active card, and acknowledges
+  deal, reveal, and discard animation boundaries back into the Run document.
 - `ui/strategikonNavigation.ts` and `ui/StrategikonTitleNavigation.tsx` — one
   Strategikon destination inventory shared by the full workspace rail and the
   compact Controls-title shortcuts; the Chartulary shortcut also owns the card

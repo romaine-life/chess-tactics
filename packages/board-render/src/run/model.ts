@@ -22,7 +22,7 @@ export {
 };
 
 /** The schema version of one persisted in-progress Run. Only this exact save shape is read. */
-export const CURRENT_RUN_SAVE_VERSION = 21;
+export const CURRENT_RUN_SAVE_VERSION = 22;
 export type RunSaveVersion = typeof CURRENT_RUN_SAVE_VERSION;
 
 export class UnsupportedRunSaveError extends Error {
@@ -37,6 +37,7 @@ const RUN_SAVE_VERSION_EXCHANGE_VOCABULARY_SOURCE = 17;
 const RUN_SAVE_VERSION_STARTER_CHARTULARY_SOURCE = 18;
 const RUN_SAVE_VERSION_EXPUNCTIO_SOURCE = 19;
 const RUN_SAVE_VERSION_CARD_ORDER_SOURCE = 20;
+const RUN_SAVE_VERSION_DEPLOYMENT_TRANSPORT_SOURCE = 21;
 export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
@@ -345,6 +346,8 @@ export interface RunWarSnapshot {
  */
 export type RunPhase = 'aftermath' | 'bona-vacantia' | 'deployment' | 'battle' | 'sectio' | 'victory';
 
+export type RunDeploymentTransport = 'paused' | 'playing' | 'full-deploy';
+
 export interface RunDeploymentState {
   battleIndex: number;
   seed: number;
@@ -363,9 +366,10 @@ export interface RunDeploymentState {
   revealedCardIds: string[];
   /** Units committed together and still completing their compositor-owned arrivals. */
   settlingUnitIds: string[];
-  mode?: 'deploy-all' | 'step-through';
+  /** One persisted transport controls the same ordered deployment sequence. */
+  transport: RunDeploymentTransport;
   /** Each value is a persisted information or animation boundary. */
-  stage: 'dealing' | 'pace' | 'card' | 'revealing' | 'unit' | 'settling' | 'discarding' | 'complete';
+  stage: 'awaiting-deal' | 'dealing' | 'card' | 'revealing' | 'unit' | 'settling' | 'discarding' | 'complete';
   /** Compatibility aliases used by the Battle runtime while reservists are retired. */
   blockedUnitIds: string[];
   manualPlacements: Record<string, string>;
@@ -1812,7 +1816,7 @@ function migrateRunToCardOrder(stored: Record<string, unknown>): Record<string, 
   const reenterDeployment = stored.phase === 'deployment' || stored.phase === 'battle';
   return {
     ...stored,
-    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    runSaveVersion: RUN_SAVE_VERSION_DEPLOYMENT_TRANSPORT_SOURCE,
     phase: reenterDeployment ? 'deployment' : stored.phase,
     army: migrateRunArmyFromPrimogeniture(stored.army),
     cards: migrateRunCardsToSeats(stored.cards, stored.army),
@@ -1823,6 +1827,33 @@ function migrateRunToCardOrder(stored: Record<string, unknown>): Record<string, 
   };
 }
 
+function migrateRunToDeploymentTransport(stored: Record<string, unknown>): Record<string, unknown> {
+  const deployment = stored.deployment
+    && typeof stored.deployment === 'object'
+    && !Array.isArray(stored.deployment)
+    ? stored.deployment as Record<string, unknown>
+    : null;
+  let migratedDeployment: Record<string, unknown> | null = deployment;
+  if (deployment) {
+    const { mode: _retiredMode, ...current } = deployment;
+    const stage = deployment.stage === 'dealing'
+      ? 'awaiting-deal'
+      : deployment.stage === 'pace'
+        ? 'card'
+        : deployment.stage;
+    migratedDeployment = {
+      ...current,
+      transport: 'paused',
+      stage,
+    };
+  }
+  return {
+    ...stored,
+    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    ...(deployment ? { deployment: migratedDeployment } : {}),
+  };
+}
+
 /**
  * Advances every losslessly migratable predecessor through the declared save chain.
  * Version 16 first receives the version-marker rename from 17, version 17's Shop
@@ -1830,7 +1861,9 @@ function migrateRunToCardOrder(stored: Record<string, unknown>): Record<string, 
  * then version 18 receives starter cards and persisted deal state. Version 19 receives
  * Expunctio's once-per-Sectio record and reset-complete loss snapshot. Version 20 retires
  * Primogeniture and replaces shrinking card membership plus the independent unit shuffle
- * with stable card seats and card-ordered Deployment. Older saves remain unsupported.
+ * with stable card seats and card-ordered Deployment. Version 21 replaces the one-time
+ * Deployment mode choice with an explicit deal boundary and persisted transport. Older saves
+ * remain unsupported.
  */
 export function migrateRunSaveDocument(value: unknown): RunDocument {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -1874,6 +1907,9 @@ export function migrateRunSaveDocument(value: unknown): RunDocument {
   }
   if (stored.runSaveVersion === RUN_SAVE_VERSION_CARD_ORDER_SOURCE) {
     stored = migrateRunToCardOrder(stored);
+  }
+  if (stored.runSaveVersion === RUN_SAVE_VERSION_DEPLOYMENT_TRANSPORT_SOURCE) {
+    stored = migrateRunToDeploymentTransport(stored);
   }
   return normalizeRunDocument(stored as unknown as RunDocument);
 }
@@ -2003,7 +2039,8 @@ export function prepareDeployment(run: RunDocument): RunDocument {
       discardCursor: 0,
       revealedCardIds: [],
       settlingUnitIds: [],
-      stage: 'dealing',
+      transport: 'paused',
+      stage: 'awaiting-deal',
       blockedUnitIds: [...unavailableUnitIds],
       manualPlacements: {},
     },
@@ -2021,7 +2058,7 @@ export function setDeploymentChoices(
     | 'discardCursor'
     | 'revealedCardIds'
     | 'settlingUnitIds'
-    | 'mode'
+    | 'transport'
     | 'stage'
     | 'deployingUnitIds'
     | 'unavailableUnitIds'
