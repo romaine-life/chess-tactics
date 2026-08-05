@@ -49,7 +49,7 @@ export function continueInventory(
 ): ContinueInventory {
   const matchBelongsToRun = Boolean(
     run
-    && run.phase === 'battle'
+    && (run.phase === 'battle' || run.phase === 'aftermath')
     && match?.activityId === runBattleActivityId(run.id, run.battleIndex),
   );
   const runTime = parsedTime(run?.updatedAt);

@@ -47,6 +47,21 @@ for (const file of files) {
   if (source.includes('SCENE_FADE_MS') || source.includes('STAGE_FADE_MS')) {
     fail(file, 'presentation timing belongs to sceneTransitionLifecycle');
   }
+  if (
+    normalized !== 'ui/App.tsx'
+    && normalized !== 'ui/shell/sceneManifest.ts'
+    && (source.includes("'scene-replacement'") || source.includes("'selection-change'"))
+  ) {
+    fail(file, 'scene ownership derives transition relationship; features may not choose it');
+  }
+  if (
+    source.includes('overlapsStateDrivenRunScene')
+    || source.includes('sceneOverlapScope')
+    || source.includes('data-scene-overlap-scope')
+    || source.includes('data-scene-overlap-region')
+  ) {
+    fail(file, 'retired Run-specific overlap choreography must not return');
+  }
   const webAnimationReceivers = [...source.matchAll(/\b([A-Za-z_$][\w$]*)\.animate\s*\(/g)]
     .map((match) => match[1]);
   if (
@@ -104,8 +119,25 @@ const sceneBoundary = readFileSync(sceneBoundaryPath, 'utf8');
 for (const required of [
   'directorPhase={scene.phase}',
   'visualRole={layer.visualRole}',
+  'sceneTransitionRelationship(scene.current, scene.destination)',
+  'data-scene-transition-relationship={transitionRelationship?.kind}',
+  '<SceneContinuityHost phase={scene.phase} generation={scene.generation}>',
 ]) {
   if (!app.includes(required)) fail(appPath, `missing director-owned scene lifecycle input: ${required}`);
+}
+
+const sceneManifestPath = resolve(src, 'ui/shell/sceneManifest.ts');
+const sceneManifestSource = readFileSync(sceneManifestPath, 'utf8');
+for (const required of [
+  'export function sceneTransitionRelationship(',
+  "kind: 'scene-replacement'",
+  "kind: 'selection-change'",
+  "path.snapshot.workspace.view === 'battle-review'",
+  "'run/phase': 'gameplay-workspace'",
+]) {
+  if (!sceneManifestSource.includes(required)) {
+    fail(sceneManifestPath, `missing derived scene-ownership invariant: ${required}`);
+  }
 }
 for (const forbidden of ['preparing={layer.preparing}', 'deactivating={', 'revealing={']) {
   if (app.includes(forbidden)) fail(appPath, `scene lifecycle permission must not be caller supplied: ${forbidden}`);
@@ -127,6 +159,9 @@ for (const required of [
   'contribution: SceneContinuityContribution',
   'export function SceneContinuityPortal',
   'data-scene-continuity-contribution={contribution.id}',
+  "if (phase !== 'current')",
+  'awaitingSettlement.current = generation',
+  'onSceneSettled();',
 ]) {
   if (!continuity.includes(required)) fail(continuityPath, `missing closed scene-continuity invariant: ${required}`);
 }
@@ -239,9 +274,20 @@ for (const required of [
   "view: 'bona-mat'",
   "view: 'bona-target'",
   'onTargetLipsanon(lipsanonId)',
-  "{ handoff: 'scene-retirement' }",
+  'launchLipsanon(lipsanonId, icon, destination)',
 ]) {
   if (!bona.includes(required)) fail(bonaPath, `missing authored Bona scene contribution: ${required}`);
+}
+if (bona.includes('useLipsanonFlight(')) {
+  fail(bonaPath, 'Bona selection may receive the phase-owned launch capability but may not own the carried flight');
+}
+for (const required of [
+  'useLipsanonFlight((lipsanonId)',
+  "{ handoff: 'scene-settled' }",
+  'launchLipsanon={launchBonaLipsanon}',
+  '{bonaLipsanonFlightElement}',
+]) {
+  if (!runScreen.includes(required)) fail(runScreenPath, `missing Run phase-owned Bona continuity invariant: ${required}`);
 }
 
 const retiredRunStages = resolve(src, 'ui/RunWorkspaceStages.tsx');
@@ -270,11 +316,16 @@ for (const required of [
   'surfaceSignature={runBattle?.activityId}',
   'surfaceState={presentedDeploymentSurface}',
   'preserveBoardPresentation: true',
-  // Activation releases the entrance; it does not decide whether there is one. A battlefield
-  // that has not been activated is still staging the units it is about to introduce, so its
-  // reveal — which happens during the scene entrance — never shows them seated early.
-  "unitArrivals={sceneActivated ? 'active' : 'pending'}",
-  'onArrivingUnitIdsChange={runDeployment?.onArrivingUnitIdsChange}',
+  // Activation releases an ordinary entrance; it does not decide whether there is one. A
+  // terminal review deliberately keeps the already-arrived position settled instead.
+  "unitArrivals={runBattleReviewTerminal ? 'settled' : sceneActivated ? 'active' : 'pending'}",
+  // A navigated Battle delegates opacity to the authored scene so board readiness cannot start
+  // a second serialized fade after the scene itself has entered.
+  'revealTransition="scene"',
+  // The shared arrival report still advances Deployment, and now also gates an exact crafted
+  // terminal landing until the Battle's complete final position is seated.
+  'runDeployment.onArrivingUnitIdsChange(unitIds)',
+  'onArrivingUnitIdsChange={reportArrivingUnitIds}',
   'unitDeparture={unitDeparture}',
   'suspendForBoardDeparture()',
 ]) {
@@ -285,7 +336,10 @@ const skirmishBoardPath = resolve(src, 'render/SkirmishBoard.tsx');
 const skirmishBoard = readFileSync(skirmishBoardPath, 'utf8');
 for (const required of [
   'newlyVisibleArrivalPieces(visibleUnitIdsRef.current, livePieces)',
-  'data-arriving-unit-ids={arrivingUnitIds.join(\',\')}',
+  "if (unitArrivals === 'settled') arrivalPlansRef.current.clear()",
+  "data-arriving-unit-ids={presentingArrivals ? arrivingUnitIds.join(',') : ''}",
+  'data-unit-arrivals={unitArrivals}',
+  'data-reveal-transition={revealTransition}',
   "export const UNIT_DEPARTURE_TRACKS = ['withdraw-home', 'withdraw-nearest-edge'] as const",
   "case 'deployment-reroll': return 'withdraw-home'",
   'data-departure-track={unitDeparture ? unitDepartureTrack(unitDeparture) : undefined}',

@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
+partially_superseded_by:
+  - "[ADR-0462](0462-transition-choreography-is-derived-from-scene-ownership.md)"
 ---
 
 # ADR-0307: Every replaceable region is a director-owned scene slot

@@ -20,6 +20,7 @@ import { hasRunCraftRequest, isRunCraftLinkPath, runCraftLinkId, searchWithoutCr
 import { craftActiveRunFromLink, mintRunCraftLink } from '../net/activeRun';
 import { useActiveRun } from '../run/store';
 import { navigateApp } from './navigation';
+import { registerCraftedBattleResult } from './craftedRunLanding';
 
 export interface RunCraftStatus {
   crafting: boolean;
@@ -71,6 +72,7 @@ async function applyCraft(routePath: string, routeSearch: string): Promise<strin
     await useActiveRun.getState().hydrate();
     const crafted = await craftActiveRunFromLink(id);
     if (!crafted.run) return 'The Run was crafted, but the server did not return it.';
+    registerCraftedBattleResult(crafted.run, crafted.battleResult);
     useActiveRun.getState().adoptCraftedRun(crafted.run, crafted.revision);
     navigateApp(craftDestination(routeSearch), { replace: true, scroll: false });
     return null;

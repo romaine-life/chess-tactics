@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-08-04
 deciders: owner (Nelson) + Codex
+partially_superseded_by:
+  - "[ADR-0463](0463-continuity-handoffs-settle-with-the-director.md)'s outgoing-component lifetime rule"
 refines:
   - ADR-0205
   - ADR-0206

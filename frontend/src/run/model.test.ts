@@ -549,6 +549,7 @@ describe('the aftermath report that closes a Battle', () => {
 
     expect(closed.phase).toBe('aftermath');
     expect(closed.sectio).toBeNull();
+    expect(closed.deployment).toBeNull();
     // The gold is reported here and paid on Continue, so the screen cannot promise
     // a number the Run then fails to hand over.
     expect(closed.goldTenths).toBe(battle.goldTenths);

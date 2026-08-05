@@ -1,7 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   clearMatch,
+  isReviewableRunBattleMatch,
   loadMatch,
+  loadReviewableRunBattleMatch,
   persistedMatchMatchesActivity,
   persistMatch,
   setMatchPersistenceEnabled,
@@ -62,6 +64,7 @@ beforeEach(() => {
   store = memoryStorage();
   vi.stubGlobal('window', { localStorage: store });
   setMatchPersistenceEnabled(true);
+  clearMatch();
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -103,11 +106,35 @@ describe('match persistence', () => {
     expect(loadMatch()).toBeNull();
   });
 
-  it('drops the saved copy once the game is decided', () => {
+  it('drops a standalone saved copy once the game is decided', () => {
     persistMatch(fakeState());
     expect(loadMatch()).not.toBeNull();
     persistMatch(fakeState({ winner: 'player' }));
     expect(loadMatch()).toBeNull();
+  });
+
+  it('keeps an exact won Run Battle for aftermath board review without reviving other results', () => {
+    const won = fakeState({ winner: 'player', activityId: 'run:first:battle:0', turn: 'done' });
+    persistMatch(won);
+    const loaded = loadMatch();
+
+    expect(loaded?.game.winner).toBe('player');
+    expect(isReviewableRunBattleMatch(loaded, 'lvl-1', 'run:first:battle:0')).toBe(true);
+    expect(isReviewableRunBattleMatch(loaded, 'lvl-1', 'run:second:battle:0')).toBe(false);
+
+    persistMatch(fakeState({ winner: 'enemy', activityId: 'run:first:battle:0', turn: 'done' }));
+    expect(loadMatch()).toBeNull();
+  });
+
+  it('hands the won board to aftermath in-session even when durable match storage is unavailable', () => {
+    const won = fakeState({ winner: 'player', activityId: 'run:first:battle:0', turn: 'done' });
+    setMatchPersistenceEnabled(false);
+
+    persistMatch(won);
+
+    expect(loadMatch()).toBeNull();
+    expect(loadReviewableRunBattleMatch('lvl-1', 'run:first:battle:0')?.game.winner).toBe('player');
+    expect(loadReviewableRunBattleMatch('lvl-1', 'run:other:battle:0')).toBeNull();
   });
 
   it('keeps a terminal Run Battle resumable while its paid Undo checkpoint exists', () => {

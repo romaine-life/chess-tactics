@@ -45,14 +45,12 @@ import { SceneBoundary } from './shell/SceneBoundary';
 import { SceneContinuityHost } from './shell/SceneContinuity';
 import { initialSceneState, reduceScene } from './shell/sceneDirector';
 import {
-  deepestSharedSceneRegion,
   isEmptySlotDestination,
   isEmptySlotOrigin,
-  overlapsStateDrivenRunScene,
   runSceneWorkspaceIdentity,
   sceneLayerKey,
   sceneManifest,
-  sceneOverlapScope,
+  sceneTransitionRelationship,
 } from './shell/sceneManifest';
 import type { ScenePath } from './shell/sceneManifest';
 import type { RunSceneSnapshot } from './shell/sceneManifest';
@@ -89,10 +87,11 @@ const sceneFailureCopy = (error: Error | null): string => (
 );
 
 /**
- * ADR-0205 application spine. History accepts navigation immediately while the
- * rendered route remains the outgoing scene until its controls have faded. The
- * destination may mount inert while the outgoing scene exits, reports a painted
- * frame through SceneBoundary, and enters as one background-and-controls composition.
+ * Application presentation spine. History accepts navigation immediately while the
+ * graph determines whether the request replaces a complete scene owner or changes a
+ * selection inside one retained owner. A replacement prepares beside its exact outgoing
+ * scene and crossfades directly; a selection may deselect its named region before the
+ * prepared successor enters that same stable scene.
  */
 export function App(): ReactElement {
   const installedChromeCss = useInstalledChromeCss();
@@ -399,8 +398,11 @@ export function App(): ReactElement {
     if (scene.phase !== 'exiting') return undefined;
     const generation = scene.generation;
     const destination = scene.destination;
-    const sharedRegion = destination && !overlapsStateDrivenRunScene(scene.current, destination)
-      ? deepestSharedSceneRegion(scene.current, destination)
+    const relationship = destination
+      ? sceneTransitionRelationship(scene.current, destination)
+      : null;
+    const sharedRegion = relationship?.kind === 'selection-change'
+      ? relationship.region
       : null;
     if (!sharedRegion) {
       loadingStartedAt.current = performance.now();
@@ -482,10 +484,7 @@ export function App(): ReactElement {
           latest.generation === generation
           && latest.destinationHref
           && latest.destination
-          && (
-            !deepestSharedSceneRegion(latest.current, latest.destination)
-            || overlapsStateDrivenRunScene(latest.current, latest.destination)
-          )
+          && sceneTransitionRelationship(latest.current, latest.destination).kind === 'scene-replacement'
         ) {
           const url = new URL(latest.destinationHref, window.location.origin);
           setPath(normalizeRoutePath(url.pathname));
@@ -515,16 +514,16 @@ export function App(): ReactElement {
   );
   const showLoadingPresentation = scene.phase === 'error'
     || (scene.phase === 'startup' && scene.startupStage < 0);
-  const overlapsRunScene = Boolean(
-    scene.destination && overlapsStateDrivenRunScene(scene.current, scene.destination),
-  );
+  const transitionRelationship = scene.destination
+    ? sceneTransitionRelationship(scene.current, scene.destination)
+    : null;
   // A cold load has no outgoing scene: its destination IS its current, so there is no
   // painted host to retain and nothing to overlap. Preserving a host here would leave the
   // shell's own chrome on screen while only the inner region waited — which is exactly the
   // half-built frame the ladder exists to prevent, now that the curtain lifts at rung 1.
   const initialPreparation = scene.startupActive;
-  const preservedSceneHost = scene.destination && !overlapsRunScene && !initialPreparation
-    ? deepestSharedSceneRegion(scene.current, scene.destination)
+  const preservedSceneHost = transitionRelationship?.kind === 'selection-change' && !initialPreparation
+    ? transitionRelationship.region
     : null;
   const preservesSceneHost = preservedSceneHost !== null;
   // The persistent bar wears the COMMITTED scene's identity, never the browser's intent
@@ -534,19 +533,13 @@ export function App(): ReactElement {
   const committedPath = scene.current.pathname;
   const overlapsCompleteScenes = Boolean(
     scene.destination
-    && (!preservesSceneHost || overlapsRunScene)
+    && transitionRelationship?.kind === 'scene-replacement'
     && !initialPreparation,
   );
   const destinationLocation = scene.destinationHref
     ? new URL(scene.destinationHref, window.location.origin)
     : null;
   const destinationSearch = destinationLocation?.search ?? search;
-  // Overlapping layers still retain everything outside the replaced slot. Naming the
-  // scope keeps that retained chrome out of the crossfade instead of blending it
-  // toward the backdrop at the midpoint.
-  const overlapScope = overlapsCompleteScenes
-    ? sceneOverlapScope(scene.current, scene.destination!)
-    : 'scene';
   const sceneLayers = overlapsCompleteScenes
     ? [
         {
@@ -557,7 +550,6 @@ export function App(): ReactElement {
           href: `${path}${search}`,
           preserveHost: false,
           transitionRegion: null,
-          overlapScope,
           visualRole: 'outgoing' as const,
         },
         {
@@ -568,7 +560,6 @@ export function App(): ReactElement {
           href: scene.destinationHref!,
           preserveHost: false,
           transitionRegion: null,
-          overlapScope,
           visualRole: 'incoming' as const,
         },
       ]
@@ -586,11 +577,16 @@ export function App(): ReactElement {
           href: `${path}${search}`,
           preserveHost: preservesSceneHost,
           transitionRegion: preservedSceneHost,
-          overlapScope: 'scene' as const,
           visualRole: 'single' as const,
         },
       ];
   const slots = sceneSlots(scene.current, scene.destination);
+  // The animated menu artwork is a real scene resource, not a universal floor. Keep its
+  // singleton mounted while either side of a transition belongs to the homepage family so
+  // those routes retain continuity; park it everywhere else. A Run-to-Run crossfade must have
+  // only its actual outgoing and incoming scenes behind one another.
+  const homepageBackdropActive = scene.current.background === 'homepage'
+    || scene.destination?.background === 'homepage';
 
   return (
     <>
@@ -601,6 +597,7 @@ export function App(): ReactElement {
         data-scene-error={scene.error?.message}
         data-scene-committed={scene.current.leaf.key}
         data-scene-pending={scene.destination?.leaf.key}
+        data-scene-transition-relationship={transitionRelationship?.kind}
         data-scene-wait-presentation={manifest.waitPresentation}
         data-scene-slots={JSON.stringify(slots.map((slot) => ({
           id: slot.id,
@@ -609,12 +606,14 @@ export function App(): ReactElement {
         })))}
       >
         <UpdateBanner />
-        <div
-          className={`scene-homepage-background${startupController.revealed('background') ? '' : ' is-startup-pending'}`}
-          aria-hidden="true"
-        >
-          <HomepageBackdrop directorHostOnly />
-        </div>
+        {homepageBackdropActive ? (
+          <div
+            className={`scene-homepage-background${startupController.revealed('background') ? '' : ' is-startup-pending'}`}
+            aria-hidden="true"
+          >
+            <HomepageBackdrop directorHostOnly />
+          </div>
+        ) : null}
         <StartupSceneContext.Provider value={startupController}>
           <AppTitleBar
             path={committedPath}
@@ -622,7 +621,7 @@ export function App(): ReactElement {
             revealTitle={startupController.revealed('chrome')}
             transitionStatus={titleBarLoading ? 'Loading…' : null}
           />
-          <SceneContinuityHost>
+          <SceneContinuityHost phase={scene.phase} generation={scene.generation}>
             {sceneLayers.map((layer) => (
               <SceneBoundary
                 key={layer.key}
@@ -633,7 +632,6 @@ export function App(): ReactElement {
                 transitionRegion={layer.transitionRegion}
                 mountedKey={layer.scene.leaf.key}
                 visualRole={layer.visualRole}
-                overlapScope={layer.overlapScope}
                 onPainted={destinationPainted}
                 onFailed={destinationFailed}
               >

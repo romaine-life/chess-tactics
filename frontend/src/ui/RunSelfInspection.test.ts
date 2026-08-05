@@ -22,6 +22,7 @@ describe('Run self-inspection links', () => {
     expect(runWorkspaceViewFromSearch('?view=expunctio')).toBe('expunctio');
     expect(runWorkspaceViewFromSearch('?view=sell')).toBe('primary');
     expect(runWorkspaceViewFromSearch('?view=battle-preview')).toBe('battle-preview');
+    expect(runWorkspaceViewFromSearch('?view=battle-review')).toBe('battle-review');
     expect(runWorkspaceViewFromSearch('?view=unknown')).toBe('primary');
   });
 

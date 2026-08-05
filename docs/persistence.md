@@ -112,8 +112,10 @@ atomic persisted replacement and gold debit occur after compositor completion, s
 progress adds no RunSaveVersion field. A won
 non-final Battle enters `aftermath`, which persists
 the reward, turns, elapsed time, survivors, and fallen units until Continue opens Bona Vacantia
-or the next Sectio. See ADR-0321 through ADR-0348, ADR-0377, ADR-0419, ADR-0422, and ADR-0449 for those gameplay
-decisions.
+or the next Sectio. The exact terminal board crosses from the live Battle scene to aftermath in a
+mandatory current-session handoff so Back is not conditional on a best-effort storage write;
+browser match persistence remains the exact-identity reload fallback. See ADR-0321 through
+ADR-0348, ADR-0377, ADR-0419, ADR-0422, ADR-0449, and ADR-0457 for those gameplay decisions.
 
 Level documents have their own `formatVersion`, separate from the PostgreSQL schema-migration
 ledger. Current code accepts exactly Level format version 2. The declared version 1 to 2 transform

@@ -28,9 +28,9 @@ export interface LipsanonFlight {
 }
 
 export interface LipsanonFlightOptions {
-  /** Keep the landed visual in the director-owned continuity layer until this
-   * outgoing scene is retired and the incoming scene's real owner is visible. */
-  handoff?: 'landing' | 'scene-retirement';
+  /** Keep the landed visual in the director-owned continuity layer until the
+   * director settles the requested replacement or selection transition. */
+  handoff?: 'landing' | 'scene-settled';
 }
 
 /**
@@ -59,13 +59,13 @@ export function useLipsanonFlight(
   element: ReactElement | null;
 } {
   const continuityAvailable = useSceneContinuityAvailable();
-  const retainThroughSceneTransition = options.handoff === 'scene-retirement';
+  const retainThroughSceneTransition = options.handoff === 'scene-settled';
   const [flight, setFlight] = useState<LipsanonFlight | null>(null);
   // A transition needs a frame with the start state applied before the end state arrives;
   // rendering the flight already landed would snap the lipsanon across with no travel.
   const [landed, setLanded] = useState(false);
   // Ordinary local handoffs drop the travelling copy the moment the caller owns the
-  // landing. A scene-retirement handoff deliberately keeps the landed copy: the incoming
+  // landing. A scene-settled handoff deliberately keeps the landed copy: the incoming
   // scene's real owner is mounted but hidden during preparation, so releasing here creates
   // a visible hole until entrance begins.
   const [settled, setSettled] = useState(false);
@@ -83,6 +83,10 @@ export function useLipsanonFlight(
     if (!retainThroughSceneTransition) setFlight(null);
   };
   const settle = useCallback(() => commitRef.current(), []);
+  const releaseSettledHandoff = useCallback(() => {
+    setSettled(true);
+    setFlight(null);
+  }, []);
 
   useEffect(() => {
     if (!flight) return undefined;
@@ -111,7 +115,10 @@ export function useLipsanonFlight(
 
   const element = flight && !settled
     ? (
-      <SceneContinuityPortal contribution={{ kind: 'shared-element', id: `lipsanon:${flight.lipsanonId}` }}>
+      <SceneContinuityPortal
+        contribution={{ kind: 'shared-element', id: `lipsanon:${flight.lipsanonId}` }}
+        onSceneSettled={retainThroughSceneTransition ? releaseSettledHandoff : undefined}
+      >
         {/* Carried by the director so the travel is not clipped by what it leaves and
             its landed frame is not faded with either scene owner. */}
         <div

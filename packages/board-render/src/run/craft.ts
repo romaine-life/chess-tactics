@@ -92,7 +92,7 @@ export const RUN_CRAFT_PARAMS: readonly string[] = Object.freeze([
 
 export const DEFAULT_CRAFT_SEED = 1337;
 
-export type RunCraftPhase = 'aftermath' | 'bona-vacantia' | 'sectio' | 'deployment' | 'battle' | 'victory';
+export type RunCraftPhase = 'aftermath' | 'bona-vacantia' | 'sectio' | 'deployment' | 'battle' | 'battle-victory' | 'victory';
 
 /**
  * What a crafted aftermath reports when the spec does not say. A crafted Battle is placed,
@@ -179,7 +179,7 @@ const CARD_TYPES: Readonly<Record<string, RunCardType | null>> = Object.freeze({
   agminate: 'hieratic',
 });
 
-const CRAFT_PHASES: readonly RunCraftPhase[] = ['aftermath', 'bona-vacantia', 'sectio', 'deployment', 'battle', 'victory'];
+const CRAFT_PHASES: readonly RunCraftPhase[] = ['aftermath', 'bona-vacantia', 'sectio', 'deployment', 'battle', 'battle-victory', 'victory'];
 
 function pieceList(raw: string, label: string): AdlectablePieceType[] {
   const pieces: AdlectablePieceType[] = [];
@@ -982,7 +982,10 @@ export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDo
 
   if (spec.phase === 'deployment') return applyGold(prepareDeployment(run), spec.goldTenths);
 
-  if (spec.phase === 'battle') {
+  // battle-victory is the same valid persisted Battle document. Its terminal board result is
+  // an admin-only presentation instruction returned with the crafted response, never a second
+  // Run phase or a field smuggled into the save document.
+  if (spec.phase === 'battle' || spec.phase === 'battle-victory') {
     const { run: deployed } = autoDeploy(run);
     return applyGold(deployed, spec.goldTenths);
   }

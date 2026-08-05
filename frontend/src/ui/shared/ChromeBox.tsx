@@ -1,7 +1,10 @@
 import type { ComponentPropsWithoutRef, HTMLAttributes, ReactElement, ReactNode } from 'react';
 import type { ChromeRole } from '../chromeCandidateSources';
 import { chromeUnitClassNames } from '../chromeUnitRegistry';
-import { shellViewportOverlapRegion } from '../shell/AuthoredSceneSlot';
+import {
+  GameplayWorkspaceActivation,
+  gameplayWorkspaceTransitionTarget,
+} from '../shell/AuthoredSceneSlot';
 
 export function ChromeSurfaceFill({
   role,
@@ -91,22 +94,24 @@ export function ShellViewportSwap({
   return (
     <section
       {...props}
-      {...shellViewportOverlapRegion()}
+      {...gameplayWorkspaceTransitionTarget()}
       data-shell-viewport-swap=""
       data-shell-workspace-open={covered ? '' : undefined}
       className={`shell-viewport-swap ${className}`.trim()}
     >
-      <div
-        data-shell-viewport-primary=""
-        data-shell-workspace-covered={covered ? '' : undefined}
-        className={`shell-viewport-primary ${primaryClassName}`.trim()}
-        inert={covered ? true : undefined}
-        aria-hidden={covered ? true : undefined}
-      >
-        {primary}
-      </div>
-      {persistent}
-      {children}
+      <GameplayWorkspaceActivation>
+        <div
+          data-shell-viewport-primary=""
+          data-shell-workspace-covered={covered ? '' : undefined}
+          className={`shell-viewport-primary ${primaryClassName}`.trim()}
+          inert={covered ? true : undefined}
+          aria-hidden={covered ? true : undefined}
+        >
+          {primary}
+        </div>
+        {persistent}
+        {children}
+      </GameplayWorkspaceActivation>
     </section>
   );
 }

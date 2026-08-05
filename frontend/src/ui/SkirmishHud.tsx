@@ -661,7 +661,9 @@ export function SkirmishHud({
                   attempt (＋), or concede the current board. */}
               <span className="skirmish-eyebrow">Scenario</span>
               <div className="skirmish-view-row">
-                {game.winner !== 'enemy' ? <RunBattleUndoButton testId="undo-run-move" /> : null}
+                {game.winner !== 'player' && game.winner !== 'enemy'
+                  ? <RunBattleUndoButton testId="undo-run-move" />
+                  : null}
                 {returnHref && !net ? (
                   <ChromeNavButton unit="inner-text-button"
                     className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'skirmish-return-button')}

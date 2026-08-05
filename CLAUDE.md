@@ -242,10 +242,13 @@ and don't tell the user screenshots are impossible. Use the helper below.
    ```
    npm run verify:unit-arrival -- '<vite-url>/play/select/campaign/off-c-crown-valoria' --click '.campaign-level-row [aria-label^="Play "]'
    npm run verify:unit-arrival -- '<vite-url>/play/select/continue/run' --click 'a[href^="/run"], [data-nav^="/run"]'
+   npm run verify:unit-arrival -- '<battle-victory-craft-url>' --settled
    ```
    It fails when a battlefield is revealed with units still to arrive standing at
    their seats, and when a board that has already resolved disagrees with its own
    settled composition — the seen-then-vanished-then-placed bug class (ADR-0357).
+   Terminal mode instead requires settled units and Victory to be fully composed
+   before the scene becomes current, with no independent child opacity entrance.
 
 This works on ANY live route by selector — no per-target fixture, so there's no "new
 screen ⇒ flail" cliff. `frontend/scripts/shot.mjs` is the implementation.
@@ -326,11 +329,13 @@ hand-authored one-off leaves a durable link behind:
 /run?craft=sectio&battle=3&gold=25&army=knight,rook&offers=queen,pawn+pawn:concinnous,rook:legatine
 /run?craft=deployment&battle=2&army=rook,rook,bishop,pawn&gold=12
 /run?craft=battle&battle=4&lipsana=fair-scales
+/run?craft=battle-victory&battle=4&lipsana=fair-scales
 /run?craft=aftermath&battle=3&turns=21&seconds=402&fallen=2
 /run?craft=victory&gold=40
 ```
 
-- `craft=sectio|deployment|battle|aftermath|victory` — the phase to land on.
+- `craft=sectio|deployment|battle|battle-victory|aftermath|victory` — the phase to land on;
+  `battle-victory` opens the settled Battle directly on its board-visible Victory/Rewards state.
 - `battle=N` — the Battle you are at, 1-based. For a Sectio that is the Sectio you leave into
   Battle N, so `battle=1` is the opening Sectio (which takes no overrides — the Run contract
   pins its offers, army and 8 gold).

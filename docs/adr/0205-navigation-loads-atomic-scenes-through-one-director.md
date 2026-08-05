@@ -2,6 +2,8 @@
 status: "accepted"
 date: 2026-07-27
 deciders: Nelson, Codex
+partially_superseded_by:
+  - "[ADR-0462](0462-transition-choreography-is-derived-from-scene-ownership.md)"
 supersedes:
   - ADR-0046
   - ADR-0049

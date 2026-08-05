@@ -19,6 +19,7 @@ import {
   skirmishArmyOverlaySet,
   skirmishTileClickIntent,
   skirmishVisualTerrainCells,
+  unitArrivalPlan,
   unitDepartureDestination,
   unitDeparturePose,
   unitDepartureTrack,
@@ -60,6 +61,16 @@ describe('retained-board unit arrivals', () => {
 
   it('seats a unit that has no entrance to play', () => {
     expect(arrivalOffset(1_000, undefined)).toEqual({ dy: 0, opacity: 1 });
+  });
+
+  it('gives a terminal review no arrival plan, so its existing position stays seated', () => {
+    expect(unitArrivalPlan('settled', 1_000, 400)).toBeUndefined();
+    expect(arrivalOffset(1_000, unitArrivalPlan('settled', 1_000, 400))).toEqual({ dy: 0, opacity: 1 });
+  });
+
+  it('keeps ordinary entrances staged until activation and releases them afterward', () => {
+    expect(unitArrivalPlan('pending', 1_000, 400)).toEqual({ startMs: null, delayMs: 400 });
+    expect(unitArrivalPlan('active', 1_000, 400)).toEqual({ startMs: 1_000, delayMs: 400 });
   });
 
   it('runs a released entrance from off the board down to its seat', () => {

@@ -175,9 +175,10 @@ describe('Skirmish chrome hierarchy', () => {
     expect(styleCss).not.toMatch(/\.skirmish-resign-button[^\{]*\{[^}]*border-image(?:-source)?\s*:/);
   });
 
-  it('renders paid Run Undo through one shared text-button and the canonical gold amount', () => {
-    expect(skirmishHud).toContain("game.winner !== 'enemy' ? <RunBattleUndoButton testId=\"undo-run-move\" /> : null");
-    expect(skirmish).toContain("game.winner !== 'enemy' ? <RunBattleUndoButton testId=\"undo-run-move-result\" /> : null");
+  it('renders paid Run Undo through one shared text-button without offering it on victory', () => {
+    expect(skirmishHud).toContain("game.winner !== 'player' && game.winner !== 'enemy'");
+    expect(skirmishHud).toContain('<RunBattleUndoButton testId="undo-run-move" />');
+    expect(skirmish).toContain("game.winner === 'draw' ? <RunBattleUndoButton testId=\"undo-run-move-result\" /> : null");
     expect(runBattleUndoButton).toContain('unit="inner-text-button"');
     expect(runBattleUndoButton).toContain("chromeUnitClassNames('inner-text-button', 'app-header-button'");
     expect(runBattleUndoButton).toContain('valueTenths={RUN_BATTLE_UNDO_COST_TENTHS}');

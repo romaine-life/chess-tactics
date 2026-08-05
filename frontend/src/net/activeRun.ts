@@ -7,6 +7,11 @@ export interface RevisionedActiveRun {
   updated_at: string | null;
 }
 
+export interface CraftedActiveRun extends RevisionedActiveRun {
+  /** Admin-only presentation carried by a craft response, never persisted in RunDocument. */
+  battleResult: 'player' | null;
+}
+
 function safeRevision(value: unknown): number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : 0;
 }
@@ -18,6 +23,14 @@ function parsedActiveRun(value: unknown): RevisionedActiveRun {
     run,
     revision: safeRevision(body.revision),
     updated_at: typeof body.updated_at === 'string' ? body.updated_at : null,
+  };
+}
+
+function parsedCraftedActiveRun(value: unknown): CraftedActiveRun {
+  const body = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  return {
+    ...parsedActiveRun(value),
+    battleResult: body.battleResult === 'player' ? 'player' : null,
   };
 }
 
@@ -43,14 +56,14 @@ export async function saveActiveRun(run: RunDocument, revision: number): Promise
  * carries; the server holds the spec it stands for and composes the state out of the game's real
  * transitions. Opening the same link again crafts it again — that is the restart button.
  */
-export async function craftActiveRunFromLink(id: string): Promise<RevisionedActiveRun> {
+export async function craftActiveRunFromLink(id: string): Promise<CraftedActiveRun> {
   const response = await fetch(`/api/active-run/craft/${encodeURIComponent(id)}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     credentials: 'include',
     body: '{}',
   });
-  if (response.ok) return parsedActiveRun(await response.json());
+  if (response.ok) return parsedCraftedActiveRun(await response.json());
   throw new Error(await craftRefusal(response));
 }
 

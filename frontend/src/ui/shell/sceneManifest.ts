@@ -70,6 +70,8 @@ function runSceneSnapshot(
               ? Object.freeze({ view: 'expunctio' as const })
               : requestedView === 'battle-preview' && phase === 'sectio'
                 ? Object.freeze({ view: 'battle-preview' as const })
+                : requestedView === 'battle-review' && phase === 'aftermath'
+                  ? Object.freeze({ view: 'battle-review' as const })
                 : Object.freeze({ view: 'primary' as const });
   return Object.freeze({
     kind: 'run',
@@ -225,13 +227,15 @@ export function sceneManifest(
  */
 const HOST_REGION_BY_DEFINITION: Readonly<Partial<Record<string, SceneHost>>> = Object.freeze({
   ...SECTIONED_SHELL_REGION_BY_DEFINITION,
-  gameplay: 'gameplay-shell',
+  gameplay: 'gameplay-workspace',
   run: 'gameplay-shell',
+  'run/phase': 'gameplay-workspace',
 });
 
 const DESTINATION_SLOT_BY_REGION: Readonly<Partial<Record<SceneHost, SceneSlotId>>> = Object.freeze({
   ...SECTIONED_SHELL_SLOT_BY_REGION,
   'gameplay-shell': 'gameplay-content',
+  'gameplay-workspace': 'gameplay-content',
 });
 
 /** Every slot the scene graph can mount, for the inspectable projection. */
@@ -259,55 +263,56 @@ export function deepestSharedSceneRegion(
   return shared;
 }
 
-/** The Run instances the director keys from persisted state rather than the address. */
-const RUN_STATE_SLOTS: ReadonlySet<SceneSlotId> = new Set(['root', 'run-phase', 'run-workspace']);
+export type SceneTransitionRelationship =
+  | Readonly<{ kind: 'scene-replacement'; region: null }>
+  | Readonly<{ kind: 'selection-change'; region: SceneHost }>;
+
+const SCENE_REPLACEMENT: SceneTransitionRelationship = Object.freeze({
+  kind: 'scene-replacement',
+  region: null,
+});
 
 /**
- * True when two Run scenes differ in state the Run document owns — its phase, its
- * battle, or which workspace fills the shell.
+ * Stable owner of a Run's complete scene composition.
  *
- * Those overlap as two complete layers so the outgoing snapshot stays frozen while
- * the destination prepares. A change BENEATH the workspace — moving between the
- * Strategikon's sections — is address-driven inside one committed workspace and
- * takes the ordinary region-preserving path instead, so its retained rails are not
- * dragged through a whole-screen crossfade.
+ * Ordinary workspaces are selections inside one Run phase, so they intentionally
+ * share the phase owner. The aftermath's terminal board review is a complete Battle
+ * scene reached from the report and therefore owns a separate composition even though
+ * its durable Run phase remains `aftermath`.
  */
-export function overlapsStateDrivenRunScene(current: ScenePath, destination: ScenePath): boolean {
-  if (current.snapshot.kind !== 'run' || destination.snapshot.kind !== 'run') return false;
-  const stateIdentity = (path: ScenePath): string => path.instances
-    .filter((entry) => RUN_STATE_SLOTS.has(entry.definition.slot))
-    .map((entry) => entry.key)
-    .join(' > ');
-  return stateIdentity(current) !== stateIdentity(destination);
+function runSceneOwnerKey(path: ScenePath): string | null {
+  if (path.snapshot.kind !== 'run') return null;
+  const phase = path.instances.find((entry) => entry.definition.slot === 'run-phase');
+  if (!phase) return null;
+  return path.snapshot.workspace.view === 'battle-review'
+    ? `${phase.key}:battle-review`
+    : phase.key;
 }
 
-export type SceneOverlapScope = 'scene' | 'shell-viewport';
-
 /**
- * How much of an overlapping scene pair the director is allowed to fade.
+ * The semantic relationship between two authored destinations.
  *
- * Overlapping layers still retain every instance before the first divergence, and
- * both paint it identically. When that divergence is the `run-workspace` slot — Sectio
- * to Alienatio, Army, Lipsana, or opening the Strategikon — the Run shell around it
- * is retained, including the Controls panel and lipsanon rail. Crossfading the whole
- * boundary blends that retained chrome toward the backdrop at the midpoint, which is
- * the Controls title plank dimming on every workspace switch. Report the narrower
- * scope so only the shell's replaceable viewport carries the transition. A phase
- * change (Sectio to Battle) replaces the Controls contents too and keeps the
- * whole-scene crossfade.
+ * This is not an animation option. The graph derives it from presentation ownership:
+ * a new owner must crossfade directly from the prepared outgoing scene, while a new
+ * selection under one retained owner may use the existing deselect/prepare/select
+ * language in that owner's named region.
  */
-export function sceneOverlapScope(
+export function sceneTransitionRelationship(
   current: ScenePath,
   destination: ScenePath,
-): SceneOverlapScope {
-  const length = Math.min(current.instances.length, destination.instances.length);
-  let index = 0;
-  while (index < length && current.instances[index].key === destination.instances[index].key) index += 1;
-  if (index === 0 || index >= length) return 'scene';
-  const currentInstance = current.instances[index];
-  const destinationInstance = destination.instances[index];
-  if (currentInstance.definition.id !== destinationInstance.definition.id) return 'scene';
-  return currentInstance.definition.slot === 'run-workspace' ? 'shell-viewport' : 'scene';
+): SceneTransitionRelationship {
+  const currentRunOwner = runSceneOwnerKey(current);
+  const destinationRunOwner = runSceneOwnerKey(destination);
+  if (
+    currentRunOwner !== null
+    && destinationRunOwner !== null
+    && currentRunOwner !== destinationRunOwner
+  ) return SCENE_REPLACEMENT;
+
+  const region = deepestSharedSceneRegion(current, destination);
+  return region
+    ? Object.freeze({ kind: 'selection-change', region })
+    : SCENE_REPLACEMENT;
 }
 
 /**
@@ -330,6 +335,8 @@ const IDENTITY_ONLY_SLOTS: ReadonlySet<SceneSlotId> = new Set([
 ]);
 
 export function sceneLayerKey(scene: ScenePath): string {
+  const runOwner = runSceneOwnerKey(scene);
+  if (runOwner) return runOwner;
   for (let index = scene.instances.length - 1; index >= 0; index -= 1) {
     const entry = scene.instances[index];
     if (!IDENTITY_ONLY_SLOTS.has(entry.definition.slot)) return entry.key;

@@ -17,6 +17,7 @@ export type SceneHost =
   | 'editor-shell'
   | 'enchiridion-shell'
   | 'gameplay-shell'
+  | 'gameplay-workspace'
   | 'strategikon-shell'
   | 'strategikon-reference-shell'
   | 'standalone';
@@ -131,6 +132,7 @@ export type RunSceneWorkspace =
   | Readonly<{ view: 'alienatio' }>
   | Readonly<{ view: 'expunctio' }>
   | Readonly<{ view: 'battle-preview' }>
+  | Readonly<{ view: 'battle-review' }>
   | Readonly<{ view: 'strategikon' }>
   | Readonly<{ view: 'bona-target'; lipsanonId: LipsanonId; unitId: string | null }>;
 

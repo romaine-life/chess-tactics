@@ -4686,6 +4686,11 @@ h1 {
 .skirmish-board-lab {
   transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
 }
+.skirmish-board-lab[data-reveal-transition='scene'] {
+  /* The surrounding authored scene reveals this complete prepared surface. Keeping the board's
+     local readiness fade here would serialize a second opacity entrance after scene commit. */
+  transition: none;
+}
 .skirmish-board-lab.is-board-loading {
   opacity: 0;
 }
@@ -10105,32 +10110,6 @@ body { font-size: 17px; }
 }
 .scene-director.is-entering .scene-boundary[data-scene-visual-role="outgoing"] {
   opacity: 0;
-  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
-}
-/* Same-shell overlap (a Run workspace swap): both layers paint an identical Controls
-   panel, lipsanon rail, and shell fill, so fading the boundary would blend that retained
-   chrome 25% toward the backdrop at the crossfade midpoint — the visible dimming of the
-   Controls title plank on every Sectio/Alienatio switch. The layers still overlap so the
-   outgoing snapshot stays frozen; only the shell's replaceable viewport carries the
-   fade. See sceneOverlapScope (a phase change keeps the whole-scene crossfade). */
-.scene-boundary[data-scene-overlap-scope="shell-viewport"].is-preparing [data-scene-overlap-region] {
-  opacity: 0;
-}
-.scene-director.is-entering .scene-boundary[data-scene-overlap-scope="shell-viewport"][data-scene-visual-role="outgoing"] {
-  opacity: 1;
-  transition: none;
-}
-.scene-director.is-entering .scene-boundary[data-scene-overlap-scope="shell-viewport"][data-scene-visual-role="outgoing"] [data-scene-overlap-region] {
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
-}
-.scene-director.is-entering .scene-boundary[data-scene-overlap-scope="shell-viewport"][data-scene-transition-active] {
-  opacity: 1;
-  transition: none;
-}
-.scene-director.is-entering .scene-boundary[data-scene-overlap-scope="shell-viewport"][data-scene-transition-active] [data-scene-overlap-region] {
-  opacity: 1;
   transition: opacity var(--ds-duration-fade) var(--ds-ease-linear);
 }
 .scene-boundary.is-region-preparing {
@@ -19530,30 +19509,36 @@ button.tileset-relationship-cell {
   margin-inline-end: var(--ds-inline-tight);
 }
 
-/* The screen that closes a won Battle. Every other Run workspace stacks from the
-   top because it is a surface to work on; this one is read once and left, so it
-   centres on its own art instead. */
+/* The report box is the aftermath screen's visual anchor. Equal flexible tracks
+   first establish its geometric centre; the complete heading/report/action composition
+   then moves by one twentieth of the actual workspace height so the report lands on the
+   45% optical centre without measuring or centring the combined stack (ADR-0456). */
+.run-aftermath-workspace {
+  container-type: size;
+}
+
 .run-aftermath-workspace-content {
-  align-content: center;
+  align-items: center;
+  grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr);
   gap: var(--ds-gutter);
   justify-items: center;
   text-align: center;
 }
 
+.run-aftermath-head,
+.run-aftermath-report,
+.run-aftermath-actions {
+  translate: 0 -5cqh;
+}
+
 /* The heading stands directly on the artwork with nothing behind it, so it carries its
    own shadow the way the Sectio's scene copy does. */
 .run-aftermath-head {
+  align-self: end;
   display: grid;
   gap: var(--ds-space-3);
   justify-items: center;
   text-shadow: 0 2px 6px rgba(2, 7, 12, .9);
-}
-
-.run-aftermath-eyebrow {
-  color: #94daf5;
-  font: var(--ds-weight-regular) var(--ds-text-xs)/1 var(--ds-font-display);
-  letter-spacing: var(--ds-tracking-wide);
-  text-transform: uppercase;
 }
 
 .run-aftermath-title {
@@ -19571,7 +19556,16 @@ button.tileset-relationship-cell {
    short rows stretched edge to edge would put its labels and its numbers on opposite
    sides of the screen. */
 .run-aftermath-report {
+  grid-row: 2;
   inline-size: min(100%, 420px);
+}
+
+.run-aftermath-actions {
+  align-self: start;
+  display: flex;
+  gap: var(--ds-inline-tight);
+  grid-row: 3;
+  justify-content: center;
 }
 
 /* The kit frame's own inner padding is sized for dense panel content; a ledger read at
@@ -19732,6 +19726,12 @@ button.tileset-relationship-cell {
 
 .run-screen.has-lipsana .run-shell-workspace-content {
   padding-block-start: calc(var(--ds-gutter) + var(--run-lipsanon-strip-block-size) + var(--ds-space-2));
+}
+
+/* Aftermath uses the whole Battle viewport as its optical-placement basis. The inventory
+   strip remains an overlay there; reserving its height would distort that focal line. */
+.run-screen.has-lipsana .run-aftermath-workspace-content {
+  padding-block-start: 0;
 }
 
 .run-lipsanon-review-screen {
@@ -21342,6 +21342,13 @@ button.tileset-relationship-cell {
   min-block-size: 0;
   overflow-x: hidden;
   overflow-y: auto;
+}
+
+/* Sparse phase Controls are not scroll panes. Their bottom-pinned Run action makes
+   Chromium report a false 17px flex overflow; hiding that nonexistent lane prevents
+   the native rail from advertising content which cannot actually move. */
+.run-meta-controls[data-run-controls-scroll="static"] {
+  overflow-y: hidden;
 }
 
 .run-meta-navigation {
@@ -23590,6 +23597,46 @@ button.tileset-relationship-cell {
   position: absolute;
   z-index: 1;
 }
+
+/* A won Run Battle pauses on the final board instead of replacing it with another
+   result card. The overlay owns no shade and intercepts no board input; only the
+   explicit Rewards action is interactive. */
+.run-battle-victory-overlay {
+  display: grid;
+  inset: 0;
+  padding-block: 24px clamp(30px, 8vh, 84px);
+  place-items: end center;
+  pointer-events: none;
+}
+
+.run-battle-victory-banner {
+  align-items: center;
+  display: grid;
+  gap: clamp(14px, 2vw, 28px);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  inline-size: 100%;
+  pointer-events: none;
+  text-align: center;
+}
+
+.run-battle-victory-banner h2 {
+  color: var(--ds-ink-1, #eaf2f6);
+  font: var(--ds-weight-regular) clamp(36px, 6vw, 72px)/.92 var(--ds-font-display);
+  grid-column: 2;
+  letter-spacing: var(--ds-tracking-wide);
+  margin: 0;
+  text-shadow: 0 3px 5px rgba(2, 7, 12, .98), 0 0 18px rgba(2, 7, 12, .88);
+  text-transform: uppercase;
+}
+
+.run-battle-rewards-button {
+  grid-column: 3;
+  justify-self: start;
+  min-inline-size: 0;
+  padding-inline: 14px;
+  pointer-events: auto;
+}
+
 .campaign-result-panel {
   display: grid;
   gap: 14px;
