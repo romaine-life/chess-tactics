@@ -241,13 +241,18 @@ try {
   if (deploymentOnly) {
     const prepared = await page.evaluate(async () => {
       const { useActiveRun } = await import('/src/run/store.ts');
+      const { leaveSectio, prepareDeployment } = await import('/src/run/model.ts');
+      const { deploymentOrderedUnitIds } = await import('/src/run/deployment.ts');
       const run = useActiveRun.getState().run;
       if (!run || run.phase !== 'sectio' || run.army.length < 3) return null;
-      const army = run.army.map((unit, index) => ({
+      const cardOrder = deploymentOrderedUnitIds(prepareDeployment(leaveSectio(run)));
+      const manuallyPlaced = new Set(cardOrder.slice(1, 3));
+      if (cardOrder.length < 3 || manuallyPlaced.size !== 2) return null;
+      const army = run.army.map((unit) => ({
         ...unit,
         abilities: [
           ...unit.abilities.filter((ability) => ability !== 'adlected'),
-          ...(index > 0 && index < 3 ? ['adlected'] : []),
+          ...(manuallyPlaced.has(unit.id) ? ['adlected'] : []),
         ],
       }));
       useActiveRun.getState().replace({ ...run, army, updatedAt: new Date().toISOString() });
