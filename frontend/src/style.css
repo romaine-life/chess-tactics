@@ -19234,15 +19234,7 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
-/* The real seat stays in the row until the transfer lands, so the other offers
-   cannot jump underneath the flying card. The portalled canonical face is the
-   only visible copy during that beat. */
-.run-card-offer.is-departing {
-  opacity: 0;
-  pointer-events: none;
-}
-
-/* Once the transferred card lands, surviving offers keep their old visual seats
+/* Once an adlected card leaves, surviving offers keep their old visual seats
    and settle into the newly centred grid instead of snapping with the layout.
    JS reads the shared motion tokens into the FLIP animation; this class owns only
    the compositor hint while that bounded functional relocation is active. */
@@ -19285,17 +19277,10 @@ button.tileset-relationship-cell {
   padding: var(--ds-space-3) var(--ds-space-4);
 }
 
-/* An adlected card travels above every clipped Sectio and shell layer into the real
+/* Adlected cards travel above every clipped Sectio and shell layer into the real
    Chartulary shortcut. Translation and scale share one functional-transfer beat:
-   the centre follows a straight segment while the card minimizes into the mark. */
-.run-card-flight-shield {
-  cursor: wait;
-  inset: 0;
-  pointer-events: auto;
-  position: fixed;
-  z-index: 10010;
-}
-
+   each centre follows a straight segment while the card minimizes into the mark.
+   The continuity layer is intentionally pointer-inert, so flights never gate input. */
 .run-card-flight {
   --run-card-flight-duration: var(--ds-duration-transfer);
   pointer-events: none;

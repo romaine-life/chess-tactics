@@ -116,7 +116,7 @@ import { runCardName } from '../run/cardNames';
 import {
   runCardMotionDurationMs,
   runCardReflowOffset,
-  useRunCardFlight,
+  useRunCardFlights,
   type RunCardFlightRect,
 } from './runCardFlightView';
 import { isStrategikonPath, strategikonRouteCrumbs } from './strategikonRoute';
@@ -262,13 +262,11 @@ function RunMetaControls({
   view,
   onNavigate,
   showAbandon = true,
-  adlectioInFlight = false,
 }: {
   run: RunDocument;
   view: RunScreenView;
   onNavigate: (view: RunScreenView) => void;
   showAbandon?: boolean;
-  adlectioInFlight?: boolean;
 }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   const { abandonDialog, abandoning, requestAbandon } = useRunAbandon(run);
@@ -294,8 +292,6 @@ function RunMetaControls({
       <section
         className="run-meta-controls"
         aria-label="Run controls"
-        aria-busy={adlectioInFlight ? true : undefined}
-        inert={adlectioInFlight ? true : undefined}
       >
         <div className="skirmish-view-group">
           <span className="skirmish-eyebrow">{sectio ? 'Sectio views' : 'Run views'}</span>
@@ -776,11 +772,9 @@ function LipsanonOffer({
 function SectioCardRow({
   children,
   offerIds,
-  onReflowingChange,
 }: {
   children: ReactNode;
   offerIds: string[];
-  onReflowingChange: (reflowing: boolean) => void;
 }): ReactElement {
   const sceneMotion = useSceneMotion();
   const wrap = useMemo(() => installedRunSectioWrap(), []);
@@ -852,7 +846,6 @@ function SectioCardRow({
     const finish = (): void => {
       if (cancelled) return;
       clearPresentation();
-      onReflowingChange(false);
     };
 
     animations = moving.map(({ element, offset }) => {
@@ -870,16 +863,24 @@ function SectioCardRow({
       clearPresentation();
       return undefined;
     }
-    onReflowingChange(true);
     void Promise.allSettled(animations.map((animation) => animation.finished)).then(finish);
 
     return () => {
       cancelled = true;
+      // A second Adlectio can change the row while this FLIP is mid-flight. Preserve
+      // each survivor's current visual rectangle so the replacement FLIP continues
+      // from the pixels the player just clicked beside instead of snapping to a stale
+      // logical seat before beginning again.
+      const interruptedRects = new Map<string, RunCardFlightRect>();
+      row.querySelectorAll<HTMLElement>('[data-run-sectio-offer-id]').forEach((element) => {
+        const id = element.dataset.runSectioOfferId;
+        if (id) interruptedRects.set(id, element.getBoundingClientRect());
+      });
+      if (interruptedRects.size) previousRectsRef.current = interruptedRects;
       animations.forEach((animation) => animation.cancel());
       clearPresentation();
-      onReflowingChange(false);
     };
-  }, [box.height, box.width, layoutKey, onReflowingChange, sceneMotion]);
+  }, [box.height, box.width, layoutKey, sceneMotion]);
 
   if (!wrap || wrap.kind !== 'band' || cardCount < 1) {
     return <div className="run-card-grid" ref={rowRef}>{children}</div>;
@@ -924,21 +925,15 @@ function SectioPanel({
   view,
   alienatioWorkspace,
   expunctioWorkspace,
-  departingOfferId,
-  adlectioBusy,
   adlectioAnnouncement,
   onAdlect,
-  onCardReflowingChange,
 }: {
   run: RunDocument;
   view: RunScreenView;
   alienatioWorkspace: ReactElement;
   expunctioWorkspace: ReactElement;
-  departingOfferId: string | null;
-  adlectioBusy: boolean;
   adlectioAnnouncement: string;
   onAdlect: (offer: RunCardOffer, source: HTMLButtonElement) => void;
-  onCardReflowingChange: (reflowing: boolean) => void;
 }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   const sectio = run.sectio!;
@@ -960,7 +955,6 @@ function SectioPanel({
             contentClassName: 'run-sectio-workspace-content',
             testId: 'run-sectio-workspace',
             ariaLabel: 'Sectio',
-            inert: adlectioBusy,
           }}
         >
         {/* What the Battle paid is reported on the Battle's own aftermath screen, which the
@@ -986,21 +980,18 @@ function SectioPanel({
         <section
           className="run-sectio-cards-section"
           aria-label="Cards"
-          aria-busy={adlectioBusy ? true : undefined}
         >
           <span className="sr-only" role="status" aria-live="polite">{adlectioAnnouncement}</span>
           <SectioCardRow
             offerIds={availableOffers.map((offer) => offer.offerId)}
-            onReflowingChange={onCardReflowingChange}
           >
             {availableOffers.map((offer) => (
               <RunCard
                 card={offer}
                 mode="sectio"
-                departing={departingOfferId === offer.offerId}
                 layoutId={offer.offerId}
                 key={offer.offerId}
-                disabled={adlectioBusy || run.goldTenths < offer.cost * GOLD_SCALE}
+                disabled={run.goldTenths < offer.cost * GOLD_SCALE}
                 onSelect={(source) => onAdlect(offer, source)}
               />
             ))}
@@ -1333,31 +1324,7 @@ export function RunScreen({
   const hydrated = sceneSnapshot.hydrated;
   const replace = useActiveRun((state) => state.replace);
   const [adlectioAnnouncement, setAdlectioAnnouncement] = useState('');
-  const [cardReflowing, setCardReflowing] = useState(false);
-  const [landedAdlectioOfferId, setLandedAdlectioOfferId] = useState<string | null>(null);
-  const commitAdlectio = useCallback((offer: RunCardOffer): void => {
-    const latest = useActiveRun.getState().run;
-    if (!latest || latest.phase !== 'sectio' || !latest.sectio) return;
-    const adlected = performAdlectio(latest, offer.offerId);
-    if (adlected === latest) return;
-    // Keep the source seat visually owned by the transfer until the scene snapshot
-    // acknowledges its removal. Local flight state can settle one render earlier.
-    setLandedAdlectioOfferId(offer.offerId);
-    replace(adlected);
-    setAdlectioAnnouncement(`${runCardName(offer)} admitted by Adlectio and added to the Chartulary.`);
-  }, [replace]);
-  const { flight: cardFlight, launch: launchCardFlight, element: cardFlightElement } = useRunCardFlight(commitAdlectio);
-  const adlectioAcknowledged = Boolean(
-    landedAdlectioOfferId
-    && run?.phase === 'sectio'
-    && run.sectio?.adlectedCardOfferIds.includes(landedAdlectioOfferId),
-  );
-  useEffect(() => {
-    if (adlectioAcknowledged || (landedAdlectioOfferId && run?.phase !== 'sectio')) {
-      setLandedAdlectioOfferId(null);
-    }
-  }, [landedAdlectioOfferId, adlectioAcknowledged, run?.phase]);
-  const adlectioBusy = Boolean(cardFlight) || Boolean(landedAdlectioOfferId) || cardReflowing;
+  const { launch: launchCardFlight, element: cardFlightElement } = useRunCardFlights();
   // A craft address sets the account's Run to the state it names before the screen reads one,
   // every time it is opened, then lands here without its craft parameters (ADR-0354).
   const craft = useRunCraft(routePath, routeSearch);
@@ -1399,9 +1366,17 @@ export function RunScreen({
     ? sceneSnapshot.workspace
     : null;
   const beginAdlectio = (offer: RunCardOffer, source: HTMLButtonElement): void => {
-    if (adlectioBusy) return;
+    const latest = useActiveRun.getState().run;
+    if (!latest || latest.phase !== 'sectio' || !latest.sectio) return;
+    const adlected = performAdlectio(latest, offer.offerId);
+    if (adlected === latest) return;
     const target = document.querySelector('[data-run-card-flight-target]');
-    if (!launchCardFlight(offer, source, target)) commitAdlectio(offer);
+    launchCardFlight(offer, source, target);
+    // The animation explains a transaction; it never owns one. Commit immediately so
+    // every remaining affordable card and every Sectio control stays responsive while
+    // any number of independent visual flights finish in the continuity layer.
+    replace(adlected);
+    setAdlectioAnnouncement(`${runCardName(offer)} admitted by Adlectio and added to the Chartulary.`);
   };
   const selectedUnitId = sceneSnapshot.workspace.view === 'army'
     || sceneSnapshot.workspace.view === 'bona-target'
@@ -1584,11 +1559,8 @@ export function RunScreen({
                 view={view}
                 alienatioWorkspace={alienatioWorkspace!}
                 expunctioWorkspace={expunctioWorkspace!}
-                departingOfferId={cardFlight?.offer.offerId ?? landedAdlectioOfferId}
-                adlectioBusy={adlectioBusy}
                 adlectioAnnouncement={adlectioAnnouncement}
                 onAdlect={beginAdlectio}
-                onCardReflowingChange={setCardReflowing}
               />
             )
             // Explicit, because the branch below is an else-fallthrough: any phase without
@@ -1661,7 +1633,6 @@ export function RunScreen({
               view={view}
               onNavigate={navigateRunView}
               showAbandon={shellRun.phase !== 'victory'}
-              adlectioInFlight={adlectioBusy}
             />
           ) : null,
           hudProps: { enableGlobalShortcuts: false },

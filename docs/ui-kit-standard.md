@@ -156,10 +156,13 @@ visible-edge alignment, and the Chartulary shortcut is the measured endpoint
 for Sectio card transfers rather than a second deck icon or a hard-coded screen
 coordinate.
 
-Under [ADR-0388](adr/0388-remaining-shop-cards-settle-into-their-new-seats.md),
-removing an adlected card never permits the remaining card grid to snap. The shared
-row measures each survivor before and after the logical layout change, then settles
-it between those real rectangles on the live motion tokens while the Sectio stays inert.
+Under [ADR-0388](adr/0388-remaining-shop-cards-settle-into-their-new-seats.md) and
+[ADR-0431](adr/0431-sectio-transactions-never-wait-for-presentation.md), removing an
+adlected card never permits the remaining card grid to snap. The shared row measures each
+survivor before and after the logical layout change, then settles it between those real
+rectangles on the live motion tokens. The Sectio remains interactive throughout; a later
+Adlectio continues from the survivors' current visual rectangles while independent card
+flights play out in the continuity layer.
 
 Under [ADR-0389](adr/0389-the-title-route-names-the-visible-strategikon-address.md),
 the gameplay screen-name route retains the underlying Run phase and appends every

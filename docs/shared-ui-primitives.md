@@ -68,10 +68,12 @@ search for before constructing a control or repeated surface.
   source face used by the Adlectio transfer.
 - `ui/runCardFlightView.tsx` — the shared geometry for transferring that canonical
   face into the Chartulary during Sectio. It measures live endpoints, contributes through the director-owned
-  continuity layer above clipped shell layers, commits on landing, and exposes
-  the transfer and survivor-reflow geometry plus the CSS-token duration parser
-  for regression tests. `SectioCardRow` owns the live FLIP measurement for both
-  plain and installed-wrap layouts.
+  continuity layer above clipped shell layers, and owns any number of independent
+  presentation-only flights after their transactions commit immediately. It exposes the transfer
+  and survivor-reflow geometry plus the CSS-token duration parser for regression tests.
+  `SectioCardRow` owns the live, still-interactive FLIP measurement for both plain and
+  installed-wrap layouts, including interruption from the survivor's current visual rectangle
+  ([ADR-0431](adr/0431-sectio-transactions-never-wait-for-presentation.md)).
 - `ui/RunDeploymentCardStack.tsx` — the Controls-owned projection of the persisted
   Deployment deck and deal. It presents the complete face-down center deck, partitions the
   exact combat count deliberately into the prominent Controls stack, transfers the counted
