@@ -269,6 +269,11 @@ beneath it. In the Run title bar, Ataraxia's tooltip is instead a compact cumula
 list headed only **Ataraxia**: every active tier is one small canonical carved-numeral
 row beside its model-owned effect, with no appended mechanic-definition panes; tier
 zero reads **Standard rules.** (ADR-0289, ADR-0290, ADR-0291, ADR-0390, ADR-0391).
+On Run defeat, the result shade belongs only to the battlefield viewport. The persistent
+title bar and right Controls panel remain fully visible and operable for post-Battle
+inspection. The result is therefore non-modal and offers paid **Retry**, **New Run**, and
+**Main Menu**, with no terminal-defeat Undo; New Run routes through the existing preparation
+and replacement confirmation (ADR-0427).
 On Bona Vacantia, the room-caption corner stays empty: no workspace heading,
 instructional prose, or placeholder label repeats the room identity. The persistent
 title bar is the sole textual location label unless a future accepted art decision
