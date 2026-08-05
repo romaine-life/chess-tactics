@@ -52,6 +52,11 @@ ADR-0414 separately promoted the starter illustrations and Praecipuus media thro
 live-media and installed-drawable catalogs.
 That pointer/configuration transaction does not change the portfolio document,
 the relational schema, or `RunSaveVersion`.
+Migration 59 completes ADR-0419's Primogeniture retirement as one installed-content graph
+change: it removes the `app-ui` required role and drawable-media binding before retiring the
+semantic slot and archiving its accepted version. Schema readiness verifies all three
+postconditions, and live-media retirement refuses any slot still referenced by an active
+drawable, so a partial retirement cannot make the public drawable catalog unavailable.
 
 The active Run document names its schema marker **RunSaveVersion**. Its stored field is
 `runSaveVersion`, its type is `RunSaveVersion`, and the client and server share
