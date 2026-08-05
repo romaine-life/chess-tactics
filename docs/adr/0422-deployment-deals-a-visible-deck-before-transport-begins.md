@@ -10,8 +10,8 @@ refines:
   - "[ADR-0415](0415-every-run-page-is-assembled-by-one-closed-form.md)"
   - "[ADR-0421](0421-a-preparing-scene-has-no-permission-to-perform.md)"
 partially_superseded_by:
-  - "[ADR-0434](0434-full-deploy-is-one-placement-wave-and-one-discard.md)'s one-wave Full deploy boundary"
-  - "[ADR-0435](0435-deployment-transport-may-own-deal-and-attention-is-serial.md)'s pre-Deal transport availability"
+  - "[ADR-0435](0435-full-deploy-is-one-placement-wave-and-one-discard.md)'s one-wave Full deploy boundary"
+  - "[ADR-0436](0436-deployment-transport-may-own-deal-and-attention-is-serial.md)'s pre-Deal transport availability"
 ---
 
 # ADR-0422: Deployment deals a visible deck before transport begins

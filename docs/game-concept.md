@@ -257,8 +257,8 @@ these.
   After the final discard, the already-mounted battlefield promotes directly into Battle. The exact deal,
   seat order, active card, reveal
   state, unit cursor, transport, capacity result, choices, discards, and formation persist across
-  reload and Battle retry (ADR-0346, ADR-0350, ADR-0351, ADR-0419, ADR-0422, ADR-0427, ADR-0434,
-  ADR-0435).
+  reload and Battle retry (ADR-0346, ADR-0350, ADR-0351, ADR-0419, ADR-0422, ADR-0427, ADR-0435,
+  ADR-0436).
 - Deployment modifiers may be contextual rather than linearly valuable. An
   Agminate Pawn inspects prior Pawns for adjacency or an open file, and an
   Agminate Bishop prefers the nearest opposite-color square relative to a prior

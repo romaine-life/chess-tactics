@@ -6,10 +6,10 @@ partially_supersedes:
   - "[ADR-0422](0422-deployment-deals-a-visible-deck-before-transport-begins.md)'s unavailable transport before Deal"
 refines:
   - "[ADR-0421](0421-a-preparing-scene-has-no-permission-to-perform.md)"
-  - "[ADR-0434](0434-full-deploy-is-one-placement-wave-and-one-discard.md)"
+  - "[ADR-0435](0435-full-deploy-is-one-placement-wave-and-one-discard.md)"
 ---
 
-# ADR-0435: Deployment transport may own Deal and attention is serial
+# ADR-0436: Deployment transport may own Deal and attention is serial
 
 ## Context
 
@@ -50,4 +50,4 @@ local fade that did not visibly return the cards to their deck.
 
 - [Game concept](../game-concept.md)
 - [ADR-0422](0422-deployment-deals-a-visible-deck-before-transport-begins.md)
-- [ADR-0434](0434-full-deploy-is-one-placement-wave-and-one-discard.md)
+- [ADR-0435](0435-full-deploy-is-one-placement-wave-and-one-discard.md)

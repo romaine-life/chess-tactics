@@ -10,10 +10,10 @@ refines:
   - "[ADR-0406](0406-klerosis-deals-cards-before-one-unit-at-a-time-deployment.md)'s one-transition Deploy all boundary"
   - "[ADR-0350](0350-run-deployment-promotes-the-mounted-battlefield-in-place.md)"
 refined_by:
-  - "[ADR-0435](0435-deployment-transport-may-own-deal-and-attention-is-serial.md)'s serial attention and measured discard flight"
+  - "[ADR-0436](0436-deployment-transport-may-own-deal-and-attention-is-serial.md)'s serial attention and measured discard flight"
 ---
 
-# ADR-0434: Full deploy is one placement wave and one discard
+# ADR-0435: Full deploy is one placement wave and one discard
 
 ## Context
 
