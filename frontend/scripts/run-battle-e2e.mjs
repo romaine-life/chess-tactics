@@ -495,8 +495,38 @@ try {
     await fail('deployment-dealing-boundary', JSON.stringify(dealingState));
   }
 
-  await page.waitForFunction(() => document.querySelector('[data-deployment-card-stage="unit"]')
-    && !document.querySelector('[data-testid="deployment-next"]')?.disabled);
+  try {
+    await page.waitForFunction(() => document.querySelector('[data-deployment-card-stage="unit"]')
+      && !document.querySelector('[data-testid="deployment-next"]')?.disabled);
+  } catch {
+    const stalledDeal = await page.evaluate(async () => {
+      const { useActiveRun } = await import('/src/run/store.ts');
+      const run = useActiveRun.getState().run;
+      const probe = window.__ctBattlefieldTransitionProbe;
+      const director = document.querySelector('.scene-director');
+      return {
+        phase: run?.phase ?? null,
+        stage: run?.deployment?.stage ?? null,
+        transport: run?.deployment?.transport ?? null,
+        placements: Object.keys(run?.deployment?.placements ?? {}).length,
+        dealCount: document.querySelector('.run-deployment-card-count')?.textContent ?? null,
+        centerCount: document.querySelector('.run-deployment-center-count')?.textContent ?? null,
+        flightCount: document.querySelectorAll('[data-deployment-flight-card]').length,
+        cards: [...document.querySelectorAll('[data-deployment-stack-card]')]
+          .map((card) => ({ id: card.getAttribute('data-deployment-stack-card'), className: card.className })),
+        animations: probe?.dealAnimationRefs.map((animation) => ({
+          playState: animation.playState,
+          currentTime: Number(animation.currentTime ?? 0),
+          pending: animation.pending,
+        })) ?? null,
+        dealCalls: probe?.dealCalls ?? null,
+        directorPhase: director?.getAttribute('data-scene-phase') ?? null,
+        committed: director?.getAttribute('data-scene-committed') ?? null,
+        pending: director?.getAttribute('data-scene-pending') ?? null,
+      };
+    });
+    await fail('deployment-deal-settle', JSON.stringify(stalledDeal));
+  }
 
   const transportState = await page.evaluate(() => {
     const transportRect = document.querySelector('[data-testid="deployment-transport-control"]')?.getBoundingClientRect();
