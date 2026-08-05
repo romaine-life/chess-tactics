@@ -120,9 +120,12 @@ Levels may persist: canonical and public Levels, campaigns, working copies and t
 history/session/recovery state, active Runs, and lab/train/solve records. The transform is
 idempotent and preserves every unrelated zone field and square. Migration 56 performed the first
 in-place retirement; migration 61 establishes the explicit Level version edge across every durable
-location and repairs working-copy baselines from `saved_revision` history. Browser imports use the
-same shared transform, and embedded browser Runs advance through RunSaveVersion 23. See
-[ADR-0429](adr/0429-level-format-versions-always-migrate.md).
+location and repairs working-copy baselines from exact `saved_revision` bodies. When retention has
+already pruned that body, migration 62 restores only a later retained non-null baseline hash carrying
+the same saved-revision identity; an old-format hash remains a deliberate conflict until explicit
+Discard. Browser imports use the same shared transform, and embedded browser Runs advance through
+RunSaveVersion 23. See [ADR-0429](adr/0429-level-format-versions-always-migrate.md) and
+[ADR-0430](adr/0430-pruned-saved-revisions-retain-baseline-evidence.md).
 
 The save stores the selected Ataraxia tier, named and numbered army units, held cards, exact card
 and offer targets, Cacochymic loss history, lipsana and their Conflict state, current deployment
@@ -480,7 +483,10 @@ working copy; it never Save/publishes itself.
 canonical Level. Loading or resolving an existing working copy never changes its body or revision.
 When canonical content changed elsewhere, the working copy remains intact and reports
 `baseline_conflict: true`; Save rejects rather than overwriting the external canonical change.
-Discard deliberately adopts the current canonical Level and resets that baseline.
+Discard deliberately adopts the current canonical Level and resets that baseline. A retained
+historical baseline restored after its exact saved body was pruned is intentionally conservative:
+if its old-format hash differs from the current canonical hash, the same conflict and Discard rules
+apply rather than silently blessing the current canonical Level.
 
 Each acknowledged working-copy mutation records the complete resulting Level in
 `level_working_copy_revisions` inside the same transaction. Retention keeps the newest 200
@@ -771,6 +777,11 @@ working-copy revisions, the required state is the complete
 exactly one validated `level_working_copy_revisions.reason` foreign key to that
 catalog with restricted update/delete behavior. `auto` may replay the
 append-only idempotent repair under the lock; `check` only reports the mismatch.
+Readiness also requires every saved working copy to have a baseline. Auto repair
+uses migration 61 for old Level/embedded Run bodies and exact saved-body
+reconstruction, then migration 62 for a pruned saved body whose later retained
+revision still records the same saved-revision baseline; absent evidence remains
+an unrepaired hard failure.
 
 For attempt-owned cyan profiles, migrations 40 and 41 together own the required
 state. Migration 40 adds the exact three nullable typed profile columns, the

@@ -61,7 +61,7 @@ test('already-applied migration 36 remains the immutable drawable-media migratio
   );
 });
 
-test('the exact sparse numeric legacy history upgrades through migration 61', () => {
+test('the exact sparse numeric legacy history upgrades through migration 62', () => {
   const versions = migrationVersions();
   const appliedBeforeUpgrade = new Set(
     versions.filter((version) => version <= 27 || version === 36),
@@ -111,6 +111,10 @@ test('the exact sparse numeric legacy history upgrades through migration 61', ()
   assert.ok(
     pending.includes(48),
     'the card-scenes retirement must be its own append-only pending migration 48',
+  );
+  assert.ok(
+    pending.includes(62),
+    'pruned saved-revision baseline evidence must have its own pending migration 62',
   );
 
   const migration37 = inlineMigration(37);
@@ -440,6 +444,17 @@ test('the exact sparse numeric legacy history upgrades through migration 61', ()
     /saved_revision > 0[\s\S]*old_saved_hash[\s\S]*new_saved_hash[\s\S]*baseline_hash/i,
     'migration 61 must reconstruct saved baselines from retained saved-revision evidence',
   );
+  const migration62 = inlineMigration(62);
+  assert.equal(
+    migration62.name,
+    'Retained saved editor baseline evidence',
+    'migration 62 must own the pruned saved-revision fallback',
+  );
+  assert.match(
+    migration62.sql,
+    /revision\.saved_revision = working\.saved_revision[\s\S]*revision\.baseline_hash IS NOT NULL[\s\S]*ORDER BY revision\.revision DESC[\s\S]*baseline_hash = candidate\.recovered_baseline_hash/i,
+    'migration 62 must restore only the newest baseline evidence for the same saved boundary',
+  );
   assert.equal(
     (serverSource.match(/never_saved: savedRevision === 0/g) || []).length,
     2,
@@ -476,7 +491,7 @@ test('the exact sparse numeric legacy history upgrades through migration 61', ()
   );
   assert.deepEqual(
     plan.pending.map((entry) => entry.version),
-    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61],
+    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62],
     'the bridge must fill the historical gap before applying every post-36 contract',
   );
   assert.throws(
@@ -508,7 +523,7 @@ test('the exact sparse numeric legacy history upgrades through migration 61', ()
   );
 });
 
-test('required-schema readiness and repair enforce the migrations 37 through 61 contracts', () => {
+test('required-schema readiness and repair enforce the migrations 37 through 62 contracts', () => {
   const relations = sourceSection(
     serverSource,
     'const REQUIRED_SCHEMA_RELATIONS = [',
@@ -687,8 +702,13 @@ test('required-schema readiness and repair enforce the migrations 37 through 61 
   );
   assert.match(
     contractReadiness,
-    /unmigrated_active_run_version_22_count[\s\S]*unmigrated_level_format_1_count[\s\S]*unrepaired_saved_editor_baseline_count[\s\S]*version === 61[\s\S]*repair Level format 2 and saved editor baseline contract/,
-    'readiness must detect and repair old Levels, version-22 Runs, and erased saved baselines',
+    /unmigrated_active_run_version_22_count[\s\S]*unmigrated_level_format_1_count[\s\S]*unrepaired_saved_editor_baseline_count[\s\S]*version === 61[\s\S]*repair Level format 2 and exact saved editor baseline contract/,
+    'readiness must route old Levels, version-22 Runs, and exact saved-body repair through migration 61 first',
+  );
+  assert.match(
+    contractReadiness,
+    /unrepaired_saved_editor_baseline_count[\s\S]*version === 62[\s\S]*repair retained saved editor baseline evidence contract/,
+    'readiness must route remaining saved-baseline gaps through migration 62',
   );
   assert.match(
     contractReadiness,
@@ -1056,13 +1076,13 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
 
   const primaryUpgradeProof = sourceSection(
     smokeSource,
-    'async function validatePrimarySparseNumericMigrationUpgrade61()',
+    'async function validatePrimarySparseNumericMigrationUpgrade62()',
     '\nasync function validateEditorMigration16Preservation()',
   );
   assert.match(
     primaryUpgradeProof,
-    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*61\s*\}/,
-    'the production upgrade proof must require a complete 1-61 history',
+    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*62\s*\}/,
+    'the production upgrade proof must require a complete 1-62 history',
   );
   assert.match(
     primaryUpgradeProof,
@@ -1076,8 +1096,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /length:\s*25[\s\S]*index\s*\+\s*37/,
-    'the production report must include every post-36 migration through 61',
+    /length:\s*26[\s\S]*index\s*\+\s*37/,
+    'the production report must include every post-36 migration through 62',
   );
   assert.match(
     primaryUpgradeProof,
@@ -1219,7 +1239,7 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   const levelFormatMigrationProof = sourceSection(
     smokeSource,
     'async function validateLevelFormatAndEditorBaselineMigration61()',
-    '\nasync function validateRepairedEditorDocumentDiscardOperation61()',
+    '\nasync function validateRetainedEditorBaselineEvidenceMigration62()',
   );
   assert.match(
     levelFormatMigrationProof,
@@ -1233,15 +1253,32 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
       `migration 61 must prove ${requiredProof}`,
     );
   }
+  const retainedBaselineMigrationProof = sourceSection(
+    smokeSource,
+    'async function validateRetainedEditorBaselineEvidenceMigration62()',
+    '\nasync function validateRepairedEditorDocumentDiscardOperation62()',
+  );
+  assert.match(
+    retainedBaselineMigrationProof,
+    /inlineMigrationSql\(62\)[\s\S]*inlineMigrationSql\(62\)/,
+    'the retained baseline evidence migration proof must establish idempotency',
+  );
+  for (const requiredProof of ['saved_revision', 'baseline_hash', 'same-boundary-evidence', 'missing-evidence', 'migration']) {
+    assert.match(
+      retainedBaselineMigrationProof,
+      new RegExp(requiredProof),
+      `migration 62 must prove ${requiredProof}`,
+    );
+  }
   const repairedEditorOperationProof = sourceSection(
     smokeSource,
-    'async function validateRepairedEditorDocumentDiscardOperation61()',
+    'async function validateRepairedEditorDocumentDiscardOperation62()',
     '\nasync function waitForServer()',
   );
   assert.match(
     repairedEditorOperationProof,
-    /openEditorEditSession[\s\S]*\/discard[\s\S]*has_saved_baseline[\s\S]*baseline_conflict/,
-    'a migrated document must open a real fenced editor session and Discard to canonical Level 2',
+    /inlineMigrationSql\(61\)[\s\S]*inlineMigrationSql\(62\)[\s\S]*openEditorEditSession[\s\S]*\/discard[\s\S]*has_saved_baseline[\s\S]*baseline_conflict/,
+    'a pruned-history document must open a real fenced editor session and Discard to canonical Level 2',
   );
   assert.match(
     migrationProof,

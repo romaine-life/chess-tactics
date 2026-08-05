@@ -2,6 +2,7 @@
 status: accepted
 date: 2026-08-04
 deciders: owner (Nelson) + Codex
+partially_superseded_by: "[ADR-0430](0430-pruned-saved-revisions-retain-baseline-evidence.md)"
 refines:
   - "[ADR-0174](0174-database-migrations-are-append-only-checksummed-and-explicit.md)"
   - "[ADR-0304](0304-level-editor-documents-are-live-shared-working-copies.md)"
