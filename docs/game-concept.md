@@ -306,13 +306,15 @@ these.
   still waits for Deployment. The persistent Controls panel navigates these
   destinations, resets the complete same-offer Sectio visit, and continues the
   Run; Army inspection remains available in every Run phase without pausing an
-  active Battle. Expunctio may remove one held card per visit and takes every unit still
-  attached to it. Its fee is the card's full printed value plus the standard value of those
+  active Battle. Within the Expunctio workspace, the player **athetizes** one held card at most
+  once per visit; the card and every unit still attached to it leave the Chartulary. Its fee is
+  the card's full printed value plus the standard value of those
   remaining units; His Grace is unavailable. Alienatio still sells individual units without
   removing their cards, so it discounts a later Expunctio without ever paying the complete
   fee. The operation names remain nouns while their unit/card commands are the obscure English
-  verbs **Adlect**, **Aliene**, and **Expunct**; a completed Alienatio unit is **Aliened**
-  (ADR-0230, ADR-0386, ADR-0393, ADR-0407, ADR-0432).
+  verbs **Adlect**, **Aliene**, and **Athetize**; completed Alienatio and Expunctio records are
+  **Aliened** and **Athetized this visit**, respectively
+  (ADR-0230, ADR-0386, ADR-0393, ADR-0407, ADR-0432, ADR-0443).
 - **Enchiridion** is the player-facing reference for unit movement, terrain
   rules, the filterable card catalog (the two starter cards and 49-card core
   deck), affected card types, all lipsana, and the

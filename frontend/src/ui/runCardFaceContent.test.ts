@@ -57,7 +57,7 @@ describe('the Run card face has exactly one constructor', () => {
     expect(styleCss).not.toContain('run-card-prototype-property ');
 
     const face = runCardFaceContent(runCardSpecimen({ pieces: ['pawn', 'knight'], cardType: 'hieratic' }));
-    expect(Object.keys(face).sort()).toEqual(['cardProperty', 'cost', 'flavor', 'grants', 'name', 'typeLine']);
+    expect(Object.keys(face).sort()).toEqual(['cardProperty', 'cost', 'flavor', 'grants', 'name', 'showsCost', 'typeLine']);
   });
 });
 
@@ -113,6 +113,8 @@ describe('a projected face says only what its card actually shows', () => {
     expect(runCardFrameSlot(hisGrace)).not.toBe(runCardFrameSlotForType('hieratic'));
     expect(runCardFrameSlot(frontLines)).toBe(runCardFrameSlotForType(null));
     expect(runCardFrameSlot(frontLines)).not.toBe(runCardFrameSlot(hisGrace));
+    expect(runCardFaceContent(hisGrace).showsCost).toBe(false);
+    expect(runCardFaceContent(frontLines).showsCost).toBe(true);
     expect(runCardFaceContent(frontLines).cardProperty).toBeUndefined();
   });
 

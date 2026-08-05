@@ -59,7 +59,9 @@ search for before constructing a control or repeated surface.
   native scrollbar and owns the always-present drawn rail plus overflow-only
   thumb required by ADR-0030. Every Enchiridion reference body and every
   Strategikon destination that scrolls consumes this primitive; section lists
-  must not become native `overflow: auto` owners.
+  must not become native `overflow: auto` owners. Per ADR-0448, thumb size,
+  position, and drag travel derive from the drawn rail's rendered height so a
+  contract-owned clip apron may inset that rail without corrupting behavior.
 
 ## Studio and workflow compositions
 

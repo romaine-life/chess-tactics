@@ -21757,26 +21757,73 @@ button.tileset-relationship-cell {
   overflow: hidden;
 }
 
+.run-expunctio-workspace-content > :is(h2, p) {
+  margin-inline-end: var(--ds-gutter);
+}
+
 .run-expunctio-rule {
   color: var(--skirmish-muted);
   margin: 0;
 }
 
+.run-expunctio-workspace .run-sectio-operation-list-scroll {
+  block-size: 100%;
+  min-inline-size: 0;
+}
+
+.run-expunctio-workspace .run-sectio-operation-list-scroll > .kit-scroll-content {
+  box-sizing: border-box;
+  padding-inline-start: var(--ds-space-1);
+  padding-inline-end: calc(
+    var(--kit-scroll-rail-inline-offset)
+    + var(--kit-scroll-rail-width)
+    + var(--ds-space-1)
+  );
+}
+
+.run-expunctio-list {
+  align-content: start;
+  display: grid;
+  gap: var(--ds-stack);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
 .run-expunctio-row {
-  --run-operation-surface-pitch: calc(252px + (2 * var(--ds-space-3)) + var(--ds-inline-tight));
+  --run-expunctio-card-inline-size: 320px;
+  --run-operation-surface-pitch: calc(
+    (var(--run-expunctio-card-inline-size) * 7 / 5)
+    + (2 * var(--ds-space-3))
+    + var(--ds-stack)
+  );
   --chrome-surface-position-y: calc(var(--run-operation-row-index, 0) * -1 * var(--run-operation-surface-pitch));
-  align-items: center;
-  block-size: calc(252px + (2 * var(--ds-space-3)));
+  --run-expunctio-card-paint-start-inset: calc(
+    var(--run-expunctio-card-inline-size) * var(--run-expunctio-card-paint-start-ratio)
+  );
+  --run-expunctio-card-paint-end-inset: calc(
+    var(--run-expunctio-card-inline-size) * var(--run-expunctio-card-paint-end-ratio)
+  );
+  align-items: start;
   box-sizing: border-box;
   display: grid;
-  gap: var(--ds-inline);
-  grid-template-columns: minmax(132px, 180px) minmax(0, 1fr) minmax(110px, auto) minmax(140px, auto);
-  min-block-size: 238px;
+  gap: var(--ds-stack);
+  grid-template-columns: var(--run-expunctio-card-inline-size) minmax(0, 1fr);
+  min-inline-size: 0;
   padding: var(--ds-space-3) var(--ds-inset);
 }
 
-.run-expunctio-row:is(.is-expuncted, .is-spent, .is-unavailable, .is-unaffordable) > * {
-  opacity: .72;
+.inner-chrome-box.has-chrome-surface-fill {
+  position: relative;
+}
+
+.inner-chrome-box > .inner-chrome-box-fill {
+  inset: 0;
+}
+
+.inner-chrome-box.has-chrome-surface-fill > :not(.inner-chrome-box-fill) {
+  position: relative;
+  z-index: 1;
 }
 
 .run-expunctio-card,
@@ -21785,16 +21832,26 @@ button.tileset-relationship-cell {
   inline-size: 100%;
 }
 
+.run-expunctio-card {
+  justify-self: center;
+  max-inline-size: var(--run-expunctio-card-inline-size);
+}
+
+.run-expunctio-companion {
+  block-size: calc(var(--run-expunctio-card-inline-size) * 7 / 5);
+  box-sizing: border-box;
+  display: grid;
+  gap: var(--ds-stack);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-inline-size: 0;
+  padding-block: var(--run-expunctio-card-paint-start-inset) var(--run-expunctio-card-paint-end-inset);
+}
+
 .run-expunctio-copy {
   align-content: center;
   display: grid;
   gap: var(--ds-space-2);
   min-inline-size: 0;
-}
-
-.run-expunctio-copy > strong {
-  color: #eafaff;
-  font: var(--ds-weight-regular) var(--ds-text-lg)/1 var(--ds-font-display);
 }
 
 .run-expunctio-copy > :is(small, span),
@@ -21810,8 +21867,13 @@ button.tileset-relationship-cell {
   justify-items: start;
 }
 
-.run-expunctio-row > button {
+.run-expunctio-companion > button {
+  align-self: end;
   inline-size: 100%;
+}
+
+.run-expunctio-copy > :first-child {
+  translate: 0 -.34em;
 }
 
 .run-alienatio-row {
@@ -22737,6 +22799,12 @@ button.tileset-relationship-cell {
   }
 }
 
+@media (max-width: 1400px) {
+  .run-expunctio-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 @media (max-width: 960px) {
   .run-vacantia-target-content {
     overflow-y: auto;
@@ -22773,19 +22841,7 @@ button.tileset-relationship-cell {
   }
 
   .run-expunctio-row {
-    --run-operation-surface-pitch: calc(224px + (2 * var(--ds-space-3)) + var(--ds-inline-tight));
-    block-size: calc(224px + (2 * var(--ds-space-3)));
-    grid-template-columns: minmax(112px, 160px) minmax(0, 1fr);
-  }
-
-  .run-expunctio-card {
-    grid-row: 1 / span 3;
-  }
-
-  .run-expunctio-price,
-  .run-expunctio-row > button {
-    grid-column: 2;
-    justify-self: stretch;
+    --run-expunctio-card-inline-size: 240px;
   }
 
   .run-alienatio-return,
@@ -22793,6 +22849,27 @@ button.tileset-relationship-cell {
     grid-column: 2;
     justify-self: stretch;
   }
+}
+
+@media (max-width: 620px) {
+  .run-expunctio-row {
+    --run-expunctio-card-inline-size: min(100%, 280px);
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .run-expunctio-card {
+    inline-size: var(--run-expunctio-card-inline-size);
+  }
+
+  .run-expunctio-companion {
+    block-size: auto;
+    padding-block: 0;
+  }
+
+  .run-expunctio-copy > :first-child {
+    translate: none;
+  }
+
 }
 
 /* Play-screen level rows are selectable too (click the body to preview; Play stays one-click). */

@@ -289,6 +289,22 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).not.toContain('DraftPanel');
     expect(runScreen).not.toContain("phase === 'draft'");
     expect(runCard).not.toContain("'draft'");
+    expect(runExpunctioWorkspace).toContain('edgeAttached: true');
+    expect(runExpunctioWorkspace).toContain('<KitScroll className="run-sectio-operation-list-scroll">');
+    expect(runExpunctioWorkspace).toContain("if (status === 'available') return 'Athetize';");
+    expect(runExpunctioWorkspace).toContain("if (status === 'expuncted') return 'Athetized this visit';");
+    expect(runExpunctioWorkspace).not.toContain("return 'Expunctio';");
+    expect(runExpunctioWorkspace).toContain('className="run-expunctio-companion"');
+    expect(runExpunctioWorkspace).toContain('runCardFramePaintInsetRatios');
+    expect(runExpunctioWorkspace).toContain('fillRole="outer"');
+    expect(runExpunctioWorkspace).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
+    expect(runExpunctioWorkspace).not.toContain('runCardName');
+    expect(styleCss).not.toContain('.run-expunctio-row:is(.is-expuncted, .is-spent, .is-unavailable, .is-unaffordable)');
+    expect(styleCss).toMatch(/\.run-expunctio-workspace \.run-sectio-operation-list-scroll > \.kit-scroll-content\s*\{[\s\S]*?padding-inline-start:\s*var\(--ds-space-1\)/);
+    expect(styleCss).toMatch(/\.run-expunctio-list\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
+    expect(styleCss).toMatch(/\.run-expunctio-companion\s*\{[\s\S]*?block-size:\s*calc\(var\(--run-expunctio-card-inline-size\) \* 7 \/ 5\);[\s\S]*?padding-block:\s*var\(--run-expunctio-card-paint-start-inset\) var\(--run-expunctio-card-paint-end-inset\);/);
+    expect(styleCss).toMatch(/\.inner-chrome-box > \.inner-chrome-box-fill\s*\{[\s\S]*?inset:\s*0;/);
+    expect(styleCss).toMatch(/\.run-expunctio-copy > :first-child\s*\{[\s\S]*?translate:\s*0 -\.34em;/);
     expect(skirmish).toContain("testId: runDeployment ? 'run-deployment' : 'skirmish'");
     expect(skirmish).toContain("className: 'skirmish-war-room'");
     expect(skirmish).toContain("primaryClassName: 'skirmish-field'");
@@ -378,13 +394,13 @@ describe('Run chrome hierarchy', () => {
     expect(runArmyWorkspace).toContain('className="run-sectio-operation-list run-alienatio-list"');
     expect(runExpunctioWorkspace).toContain('className="run-sectio-operation-list run-expunctio-list"');
     expect(runArmyWorkspace).toContain('data-chrome-fill-surface="baseline-stone-blue"');
-    expect(runExpunctioWorkspace).toContain('data-chrome-fill-surface="baseline-stone-blue"');
+    expect(runExpunctioWorkspace).toContain('fillRole="outer"');
     expect(runArmyWorkspace).toContain("['--run-operation-row-index' as string]: index");
     expect(runExpunctioWorkspace).toContain("['--run-operation-row-index' as string]: index");
     expect(styleCss).toMatch(/\.run-alienatio-row\s*\{[\s\S]*?--chrome-surface-position-y:\s*calc\(var\(--run-operation-row-index, 0\)/);
     expect(styleCss).toMatch(/\.run-expunctio-row\s*\{[\s\S]*?--chrome-surface-position-y:\s*calc\(var\(--run-operation-row-index, 0\)/);
     expect(styleCss).toMatch(/\.run-alienatio-row\s*\{[^}]*--run-operation-surface-pitch:\s*calc\(112px \+ var\(--ds-inline-tight\)\);[^}]*block-size:\s*112px;/s);
-    expect(styleCss).toMatch(/\.run-expunctio-row\s*\{[^}]*--run-operation-surface-pitch:\s*calc\(252px \+ \(2 \* var\(--ds-space-3\)\) \+ var\(--ds-inline-tight\)\);[^}]*block-size:\s*calc\(252px \+ \(2 \* var\(--ds-space-3\)\)\);/s);
+    expect(styleCss).toMatch(/\.run-expunctio-row\s*\{[\s\S]*?--run-operation-surface-pitch:\s*calc\([\s\S]*?var\(--run-expunctio-card-inline-size\) \* 7 \/ 5[\s\S]*?var\(--ds-stack\)[\s\S]*?\);/);
     expect(styleCss).toMatch(/@media \(max-width: 960px\)[\s\S]*?\.run-alienatio-row\s*\{[^}]*--run-operation-surface-pitch:\s*calc\(224px \+ var\(--ds-inline-tight\)\);[^}]*block-size:\s*224px;/s);
     expect(styleCss).toMatch(/\.run-sectio-operation-list-scroll\s*\{[^}]*--run-operation-clip-apron-block-start:\s*var\(--le-inner-atom-top-overhang, 0px\);[^}]*--run-operation-clip-apron-block-end:\s*var\(--le-inner-atom-bottom-overhang, 0px\);/s);
     expect(styleCss).toMatch(/\.run-sectio-operation-list-scroll > \.kit-scroll-rail\s*\{[^}]*bottom:\s*var\(--run-operation-clip-apron-block-end\);[^}]*top:\s*var\(--run-operation-clip-apron-block-start\);/s);
@@ -419,7 +435,7 @@ describe('Run chrome hierarchy', () => {
     expect(runExpunctioWorkspace).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
     expect(runTitleBarChips).toMatch(/<TitleBarStatus[\s\S]*?data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}/);
     expect(runArmyWorkspace).toContain('data-chrome-fill-surface="baseline-stone-blue"');
-    expect(runExpunctioWorkspace).toContain('data-chrome-fill-surface="baseline-stone-blue"');
+    expect(runExpunctioWorkspace).toContain('fillRole="outer"');
     expect(styleCss).not.toMatch(/\.run-(?:roster-filters|meta-controls)[^}]*:nth-child/);
   });
 
