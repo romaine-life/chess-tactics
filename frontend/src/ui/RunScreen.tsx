@@ -1,10 +1,11 @@
-import { Children, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { Children, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import type { RunBattleTransformSink, RunBattleUndoAdapter } from '../game/store';
 import { defaultFacingForSide, paletteForSide, pieceSpritePath } from '../core/pieces';
 import type { GameState, Piece } from '../core/types';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox } from './shared/ChromeBox';
 import { HouseSelect } from './shared/HouseSelect';
+import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
 import { TitleBarStatus } from './shell/TitleBarControls';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleRoute, type TitleRouteSegment } from './shell/TitleRoute';
@@ -310,19 +311,23 @@ function RunMetaControls({
           <span className="skirmish-eyebrow">{sectio ? 'Sectio views' : 'Run views'}</span>
           <div className="run-meta-navigation">
             <ChromeButton unit="inner-text-button"
+              data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
               data-testid="run-view-primary"
               className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'primary' && 'active')}
+              style={{ ['--run-leaf-control-index' as string]: 0 } as CSSProperties}
               aria-pressed={view === 'primary'}
               onClick={() => onNavigate('primary')}
             >
               {primaryLabel}
             </ChromeButton>
             {sectio ? (
-              SECTIO_WORKSPACE_VIEWS.map((candidate) => (
+              SECTIO_WORKSPACE_VIEWS.map((candidate, index) => (
                 <ChromeButton unit="inner-text-button"
                   key={candidate}
+                  data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                   data-testid={`run-view-${candidate}`}
                   className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === candidate && 'active')}
+                  style={{ ['--run-leaf-control-index' as string]: index + 1 } as CSSProperties}
                   aria-pressed={view === candidate}
                   onClick={() => onNavigate(candidate)}
                 >
@@ -337,7 +342,9 @@ function RunMetaControls({
             <span className="skirmish-eyebrow">Sectio</span>
             <div className="run-meta-navigation">
               <ChromeButton unit="inner-text-button"
+                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+                style={{ ['--run-leaf-control-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 1 } as CSSProperties}
                 disabled={!sectioHasChanges(run)}
                 data-testid="reset-run-sectio"
                 onClick={() => {
@@ -348,7 +355,9 @@ function RunMetaControls({
                 Reset Sectio
               </ChromeButton>
               <ChromeButton unit="inner-text-button"
+                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+                style={{ ['--run-leaf-control-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 2 } as CSSProperties}
                 disabled={!canLeave}
                 data-testid="continue-run-sectio"
                 title={!canLeave && continueHint ? continueHint : undefined}
@@ -370,7 +379,9 @@ function RunMetaControls({
             <span className="skirmish-eyebrow">Run</span>
             <div className="skirmish-view-row">
               <ChromeButton unit="inner-text-button"
+                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'danger')}
+                style={{ ['--run-leaf-control-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 3 } as CSSProperties}
                 data-testid="abandon-run"
                 disabled={abandoning}
                 onClick={() => { void requestAbandon(); }}
@@ -1405,12 +1416,12 @@ export function RunScreen({
     current.pathname = '/run';
     navigateApp(runBonaTargetHref(current.toString(), lipsanonId, unitId), { replace: true, scroll: false });
   };
-  const alienateUnit = (unitId: string): void => {
+  const alieneUnit = (unitId: string): void => {
     if (!shellRun) return;
     const latest = useActiveRun.getState().run;
     if (!latest || latest.id !== shellRun.id) return;
-    const alienated = performAlienatio(latest, unitId);
-    if (alienated !== latest) replace(alienated);
+    const aliened = performAlienatio(latest, unitId);
+    if (aliened !== latest) replace(aliened);
   };
   const expunctCard = (cardId: string): void => {
     if (!shellRun) return;
@@ -1427,7 +1438,7 @@ export function RunScreen({
       onFiltersChange={(filters) => setArmyFilterState({ scope: filterScope, filters })}
       onSelectUnit={(unitId) => navigateArmyUnit(unitId)}
       onBack={() => navigateArmyUnit(null)}
-      onAlienate={alienateUnit}
+      onAliene={alieneUnit}
     />
   ) : null;
   const lipsanaWorkspace = shellRun ? <LipsanaWorkspace lipsanonIds={shellRun.lipsana} /> : null;
@@ -1442,7 +1453,7 @@ export function RunScreen({
       run={shellRun}
       filters={alienatioFilters}
       onFiltersChange={(filters) => setAlienatioFilterState({ scope: filterScope, filters })}
-      onAlienate={alienateUnit}
+      onAliene={alieneUnit}
     />
   ) : null;
   const expunctioWorkspace = shellRun ? (
