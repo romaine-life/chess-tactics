@@ -8,7 +8,7 @@ refines:
   - "[ADR-0407](0407-expunctio-removes-one-card-per-sectio.md)"
 ---
 
-# ADR-0435: Expunctio is a card-first gallery
+# ADR-0442: Expunctio is a card-first gallery
 
 ## Context
 

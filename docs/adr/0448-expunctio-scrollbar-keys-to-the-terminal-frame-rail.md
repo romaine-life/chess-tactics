@@ -3,18 +3,18 @@ status: accepted
 date: 2026-08-05
 deciders: owner (Nelson) + Codex
 supersedes:
-  - "[ADR-0440](0440-expunctio-scroll-end-shares-the-terminal-tile-keyline.md)"
+  - "[ADR-0447](0447-expunctio-scroll-end-shares-the-terminal-tile-keyline.md)"
 refines:
   - "[ADR-0030](0030-scrollbars-never-vanish.md)"
   - "[ADR-0093](0093-chrome-rails-own-alignment-atoms-use-clip-aprons.md)"
-  - "[ADR-0435](0435-expunctio-is-a-card-first-gallery.md)"
+  - "[ADR-0442](0442-expunctio-is-a-card-first-gallery.md)"
 ---
 
-# ADR-0441: Expunctio scrollbar keys to the terminal frame rail
+# ADR-0448: Expunctio scrollbar keys to the terminal frame rail
 
 ## Context
 
-ADR-0440 correctly required one readable bottom keyline, but incorrectly treated
+ADR-0447 correctly required one readable bottom keyline, but incorrectly treated
 the terminal frame's corner atom as that keyline and constrained the correction
 to scroll-content geometry. The inner frame is composite paint: its straight
 bottom rail ends at the border box while its absolute corner atom continues

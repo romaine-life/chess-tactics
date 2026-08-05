@@ -5,12 +5,12 @@ deciders: owner (Nelson) + Codex
 refines:
   - "[ADR-0027](0027-icon-optical-keylines.md)"
   - "[ADR-0283](0283-run-card-face-is-one-shared-live-runtime-component.md)"
-  - "[ADR-0435](0435-expunctio-is-a-card-first-gallery.md)"
+  - "[ADR-0442](0442-expunctio-is-a-card-first-gallery.md)"
 partially_superseded_by:
-  - "[ADR-0439](0439-expunctio-tiles-use-shell-surface-and-oak-actions.md)'s removal of the repeated heading; its first-line ink inherits the same top keyline"
+  - "[ADR-0446](0446-expunctio-tiles-use-shell-surface-and-oak-actions.md)'s removal of the repeated heading; its first-line ink inherits the same top keyline"
 ---
 
-# ADR-0438: Card companions align to painted frame keylines
+# ADR-0445: Card companions align to painted frame keylines
 
 ## Context
 

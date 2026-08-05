@@ -6,13 +6,13 @@ refines:
   - "[ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md)"
   - "[ADR-0218](0218-new-ui-surface-paint-is-build-blocked.md)"
   - "[ADR-0433](0433-leaf-chrome-uses-oak-over-structural-teal-fields.md)"
-  - "[ADR-0435](0435-expunctio-is-a-card-first-gallery.md)"
-  - "[ADR-0438](0438-card-companions-align-to-painted-frame-keylines.md)"
+  - "[ADR-0442](0442-expunctio-is-a-card-first-gallery.md)"
+  - "[ADR-0445](0445-card-companions-align-to-painted-frame-keylines.md)"
 partially_supersedes:
-  - "[ADR-0438](0438-card-companions-align-to-painted-frame-keylines.md)'s repeated-heading anchor"
+  - "[ADR-0445](0445-card-companions-align-to-painted-frame-keylines.md)'s repeated-heading anchor"
 ---
 
-# ADR-0439: Expunctio tiles use shell surface and oak actions
+# ADR-0446: Expunctio tiles use shell surface and oak actions
 
 ## Context
 

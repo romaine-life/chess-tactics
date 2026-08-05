@@ -5,10 +5,10 @@ deciders: owner (Nelson) + Codex
 refines:
   - "[ADR-0218](0218-new-ui-surface-paint-is-build-blocked.md)"
   - "[ADR-0283](0283-run-card-face-is-one-shared-live-runtime-component.md)"
-  - "[ADR-0435](0435-expunctio-is-a-card-first-gallery.md)"
+  - "[ADR-0442](0442-expunctio-is-a-card-first-gallery.md)"
 ---
 
-# ADR-0437: Expunctio card tiles remain opaque in every state
+# ADR-0444: Expunctio card tiles remain opaque in every state
 
 ## Context
 

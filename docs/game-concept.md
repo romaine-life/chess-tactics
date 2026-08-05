@@ -243,15 +243,22 @@ these.
   a unit that leaves becomes a visibly vacant seat and only the occupied count changes. Units resolve one at a time from
   their own rules; Adlected
   pauses for a highlighted-square choice when that unit reaches the front.
-  Deployment transport begins paused. **Next** advances exactly one ordinary unit and remains
-  paused; **Play** advances ordinary units one at a time; **Full deploy** commits the fastest
-  remaining automatic wave. **Pause** finishes the current atomic arrival before stopping.
+  Deployment transport begins paused, but **Play**, **Next**, and **Full deploy** are available
+  before Deal and perform that Deal before continuing their requested pace. The dedicated Deal
+  action leaves the pile paused and face down. **Next** reveals and advances exactly one ordinary
+  unit before pausing; **Play** advances ordinary units one at a time; **Full deploy** reveals no
+  cards and commits every remaining automatic unit across all remaining cards at once as one
+  arrival wave. **Pause** finishes the current atomic arrival before stopping.
   Adlected and any later required input always pause transport, and a resolved choice never
-  silently resumes it. Each unit finishes its board arrival before the next seat advances. After
-  a card's final unit settles, that card discards; after the final discard, the already-mounted
-  battlefield promotes directly into Battle. The exact deal, seat order, active card, reveal
+  silently resumes it. Under Play or Next, each unit finishes its board arrival before the next
+  seat advances and a card discards after its final unit settles. Under Full deploy, remaining
+  cards stay motionless and face down while the one unit wave lands. Only after every unit settles
+  do those cards fly from their measured Controls pile into the measured Chartulary mark together.
+  After the final discard, the already-mounted battlefield promotes directly into Battle. The exact deal,
+  seat order, active card, reveal
   state, unit cursor, transport, capacity result, choices, discards, and formation persist across
-  reload and Battle retry (ADR-0346, ADR-0350, ADR-0351, ADR-0419, ADR-0422, ADR-0427).
+  reload and Battle retry (ADR-0346, ADR-0350, ADR-0351, ADR-0419, ADR-0422, ADR-0427, ADR-0435,
+  ADR-0436).
 - Deployment modifiers may be contextual rather than linearly valuable. An
   Agminate Pawn inspects prior Pawns for adjacency or an open file, and an
   Agminate Bishop prefers the nearest opposite-color square relative to a prior
@@ -307,7 +314,7 @@ these.
   fee. The operation names remain nouns while their unit/card commands are the obscure English
   verbs **Adlect**, **Aliene**, and **Athetize**; completed Alienatio and Expunctio records are
   **Aliened** and **Athetized this visit**, respectively
-  (ADR-0230, ADR-0386, ADR-0393, ADR-0407, ADR-0432, ADR-0436).
+  (ADR-0230, ADR-0386, ADR-0393, ADR-0407, ADR-0432, ADR-0443).
 - **Enchiridion** is the player-facing reference for unit movement, terrain
   rules, the filterable card catalog (the two starter cards and 49-card core
   deck), affected card types, all lipsana, and the

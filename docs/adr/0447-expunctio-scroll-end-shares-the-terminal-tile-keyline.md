@@ -1,14 +1,14 @@
 ---
-status: superseded by ADR-0441
+status: superseded by ADR-0448
 date: 2026-08-05
 deciders: owner (Nelson) + Codex
-superseded_by: 0441-expunctio-scrollbar-keys-to-the-terminal-frame-rail.md
+superseded_by: 0448-expunctio-scrollbar-keys-to-the-terminal-frame-rail.md
 refines:
   - "[ADR-0030](0030-scrollbars-never-vanish.md)"
-  - "[ADR-0435](0435-expunctio-is-a-card-first-gallery.md)"
+  - "[ADR-0442](0442-expunctio-is-a-card-first-gallery.md)"
 ---
 
-# ADR-0440: Expunctio scroll end shares the terminal tile keyline
+# ADR-0447: Expunctio scroll end shares the terminal tile keyline
 
 ## Context
 
