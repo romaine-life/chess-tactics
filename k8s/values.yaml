@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:d8ee13f8a1f0c03b8f49047236d25f33dc76c3162344d5f6a9ed1869d71b3648"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:17b9d7ade80b5bf2905c70b316479989d591b34305d79666d630f22321e580fc"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Show Sectio room routes in title bar"
-  prNumber: "711"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/711"
-  commit: "f0b1e5af"
+  prTitle: "Make Sectio card purchases non-blocking"
+  prNumber: "712"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/712"
+  commit: "566c76f3"
 
 name: chess-tactics
 namespace: chess-tactics
