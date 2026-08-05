@@ -21225,13 +21225,7 @@ button.tileset-relationship-cell {
     calc(var(--deployment-card-depth, 0) * -2px),
     calc(var(--deployment-card-depth, 0) * -2px)
   );
-  transform-style: preserve-3d;
-  transition: transform var(--ds-duration-transfer) var(--ds-ease-out);
   will-change: opacity, transform;
-}
-
-.run-deployment-stack-card.is-active.is-revealed {
-  transform: rotateY(180deg);
 }
 
 .run-deployment-stack-card.is-active.is-discarding {
@@ -21243,10 +21237,20 @@ button.tileset-relationship-cell {
   display: block;
   inset: 0;
   position: absolute;
+  transition: transform var(--ds-duration-transfer) var(--ds-ease-out);
+  will-change: transform;
 }
 
 .run-deployment-stack-side.is-front {
   transform: rotateY(180deg);
+}
+
+.run-deployment-stack-card.is-active.is-revealed > .run-deployment-stack-side.is-back {
+  transform: rotateY(-180deg);
+}
+
+.run-deployment-stack-card.is-active.is-revealed > .run-deployment-stack-side.is-front {
+  transform: rotateY(0deg);
 }
 
 .run-deployment-stack-side > :is(.run-card-back, .run-card-action) {

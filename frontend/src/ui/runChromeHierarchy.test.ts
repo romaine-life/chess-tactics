@@ -312,6 +312,9 @@ describe('Run chrome hierarchy', () => {
     expect(runDeploymentCardStack).toContain('Deal automatically');
     expect(runDeploymentCardStack).toContain('data-deployment-center-deck');
     expect(runDeploymentCardStack).toContain("deployment?.stage === 'awaiting-deal' || deployment?.stage === 'dealing'");
+    expect(styleCss).toMatch(/\.run-deployment-stack-card\.is-active\.is-revealed > \.run-deployment-stack-side\.is-back\s*\{[\s\S]*?transform:\s*rotateY\(-180deg\)/);
+    expect(styleCss).toMatch(/\.run-deployment-stack-card\.is-active\.is-revealed > \.run-deployment-stack-side\.is-front\s*\{[\s\S]*?transform:\s*rotateY\(0deg\)/);
+    expect(styleCss).not.toMatch(/\.run-deployment-stack-card\.is-active\.is-revealed\s*\{[\s\S]*?transform:\s*rotateY/);
     expect(runScreen).toContain('Full deploy');
     expect(runScreen).toContain('data-testid="deployment-next"');
     expect(runScreen).toContain("onSetTransport('playing')");
