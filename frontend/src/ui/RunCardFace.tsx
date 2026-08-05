@@ -397,6 +397,7 @@ export function runCardPresentationSignature(
     frameGeometry.frameSha256s,
     card.name,
     card.cost,
+    card.showsCost,
     card.typeLine,
     card.cardProperty ? [card.cardProperty.id, card.cardProperty.name, card.cardProperty.effect] : null,
     iconMedia.propertyUrl ?? null,
@@ -776,7 +777,9 @@ function RunCardFaceLayer({
         onError={() => acknowledgeError('art')}
       />
       <span className="run-card-prototype-name">{card.name}</span>
-      <strong className="run-card-prototype-cost" aria-label={`${card.cost} gold`}>{card.cost}</strong>
+      {card.showsCost ? (
+        <strong className="run-card-prototype-cost" aria-label={`${card.cost} gold`}>{card.cost}</strong>
+      ) : null}
       <span className="run-card-prototype-type">
         <span className="run-card-prototype-type-label">{card.typeLine}</span>
         {card.cardProperty ? (
@@ -1043,7 +1046,7 @@ export function RunCardFace({
       aria-hidden={ariaHidden || undefined}
       aria-busy={pending ? true : undefined}
       data-frame-geometry={displayed.frameGeometry.id}
-      aria-label={ariaHidden ? undefined : `${displayed.card.name}. ${displayed.card.typeLine}${displayed.card.cardProperty ? `, ${displayed.card.cardProperty.name}: ${displayed.card.cardProperty.effect}` : ''}. Costs ${displayed.card.cost} gold. Grants ${grantsLabel(displayed.card.grants)}.`}
+      aria-label={ariaHidden ? undefined : `${displayed.card.name}. ${displayed.card.typeLine}${displayed.card.cardProperty ? `, ${displayed.card.cardProperty.name}: ${displayed.card.cardProperty.effect}` : ''}.${displayed.card.showsCost ? ` Costs ${displayed.card.cost} gold.` : ''} Grants ${grantsLabel(displayed.card.grants)}.`}
     >
       {layers.map((layer) => (
         <RunCardFaceLayer

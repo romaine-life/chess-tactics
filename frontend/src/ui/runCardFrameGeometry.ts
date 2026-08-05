@@ -63,6 +63,8 @@ export type RunCardFrameRect = Readonly<{
 
 export type RunCardFrameBoxes = Readonly<Record<RunCardFrameBoxName, RunCardFrameRect>>;
 
+export type RunCardFramePaintBounds = RunCardFrameRect;
+
 export type RunCardFrameGeometry = Readonly<{
   id: `${RunCardFrameVariant}-v1`;
   variant: RunCardFrameVariant;
@@ -76,6 +78,11 @@ export type RunCardFrameGeometry = Readonly<{
    * boxes and a live media promotion never has to land with a code deploy.
    */
   frameSha256s: readonly string[];
+  /**
+   * Tight native-pixel bounds of the frame's painted canvas. Layout hosts use
+   * these optical keylines instead of aligning the transparent 5:7 canvas.
+   */
+  paintBounds: RunCardFramePaintBounds;
   boxes: RunCardFrameBoxes;
 }>;
 
@@ -155,6 +162,14 @@ function defineGeometry(
       || box.y + box.height > RUN_CARD_FRAME_NATIVE_HEIGHT
     ) throw new Error(`${geometry.variant} ${name} box is outside the native frame`);
   }
+  const paint = geometry.paintBounds;
+  if (
+    !Number.isFinite(paint.x) || !Number.isFinite(paint.y)
+    || !Number.isFinite(paint.width) || !Number.isFinite(paint.height)
+    || paint.x < 0 || paint.y < 0 || paint.width <= 0 || paint.height <= 0
+    || paint.x + paint.width > RUN_CARD_FRAME_NATIVE_WIDTH
+    || paint.y + paint.height > RUN_CARD_FRAME_NATIVE_HEIGHT
+  ) throw new Error(`${geometry.variant} paint bounds are outside the native frame`);
   return Object.freeze({
     ...geometry,
     id: `${geometry.variant}-v1`,
@@ -162,6 +177,7 @@ function defineGeometry(
     sourceWidth: RUN_CARD_FRAME_NATIVE_WIDTH,
     sourceHeight: RUN_CARD_FRAME_NATIVE_HEIGHT,
     frameSha256s: Object.freeze([...geometry.frameSha256s]),
+    paintBounds: Object.freeze({ ...geometry.paintBounds }),
     // Declared in one order regardless of how a frame's literal groups its boxes,
     // so every geometry enumerates identically.
     boxes: Object.freeze(Object.fromEntries(
@@ -184,6 +200,7 @@ function defineGeometry(
 export const RUN_CARD_STANDARD_FRAME_GEOMETRY = defineGeometry({
   variant: 'standard',
   frameSha256s: ['73710874141ec1c904416860d55a0be69d4dc7f5104db7eeecbfc756ca02dfe1'],
+  paintBounds: { x: 26, y: 42, width: 1009, height: 1402 },
   boxes: {
     art: { x: 94, y: 207, width: 870, height: 611 },
     contents: { x: 88, y: 959, width: 884, height: 433 },
@@ -196,6 +213,7 @@ export const RUN_CARD_STANDARD_FRAME_GEOMETRY = defineGeometry({
 export const RUN_CARD_PESTIFEROUS_FRAME_GEOMETRY = defineGeometry({
   variant: 'pestiferous',
   frameSha256s: ['1a403e5e9adad96c0bed9673acae3e26abc750d978130e9bc8e92bbca8947e9d'],
+  paintBounds: { x: 26, y: 43, width: 1009, height: 1402 },
   boxes: {
     art: { x: 108, y: 221, width: 844, height: 590 },
     contents: { x: 107, y: 976, width: 855, height: 411 },
@@ -210,6 +228,7 @@ export const RUN_CARD_CONCINNOUS_FRAME_GEOMETRY = defineGeometry({
   // Normalised to the shared painted card box; boxes remapped through the same
   // transform, so they describe these pixels (ADR-0360).
   frameSha256s: ['310629d033eebd8f2b1227de1b8a42e1a6b86087327111c145b8f715d4481bcb'],
+  paintBounds: { x: 26, y: 42, width: 1009, height: 1402 },
   boxes: {
     art: { x: 103, y: 217.74, width: 853, height: 603.25 },
     contents: { x: 91, y: 962.19, width: 879, height: 431.46 },
@@ -224,6 +243,7 @@ export const RUN_CARD_CONCINNOUS_FRAME_GEOMETRY = defineGeometry({
 export const RUN_CARD_LEGATINE_FRAME_GEOMETRY = defineGeometry({
   variant: 'legatine',
   frameSha256s: ['6c54a0a6dc48f56a3cf21c83d57d08cfbf11a501ae90f820b527c07cf40d3140'],
+  paintBounds: { x: 26, y: 42, width: 1009, height: 1402 },
   boxes: {
     art: { x: 97, y: 209, width: 865, height: 608 },
     contents: { x: 90, y: 965, width: 881, height: 429 },
@@ -244,6 +264,7 @@ export const RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY = defineGeometry({
   // Normalised to the shared painted card box; boxes remapped through the same
   // transform, so they describe these pixels (ADR-0360).
   frameSha256s: ['6552cae59d0d1b404a466b2d37fb6d0a0e6dcdcd60b171ec4979f8a50c610348'],
+  paintBounds: { x: 26, y: 42, width: 1009, height: 1402 },
   boxes: {
     title: { x: 98.07, y: 95.05, width: 751.75, height: 86.46 },
     cost: { x: 868, y: 79.9, width: 117.78, height: 104.98 },
@@ -262,6 +283,7 @@ export const RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY = defineGeometry({
 export const RUN_CARD_PRAECIPUUS_FRAME_GEOMETRY = defineGeometry({
   variant: 'praecipuus',
   frameSha256s: ['93ee3e1497ae1a930ca9d8d0242fd8b1fd93cd30da01511662ef2c48ed9a062e'],
+  paintBounds: { x: 26, y: 42, width: 1009, height: 1402 },
   boxes: { ...RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY.boxes },
 });
 
@@ -301,6 +323,25 @@ export function runCardFrameGeometryKnowsPixels(
 
 function percentage(value: number, total: number): string {
   return `${((value / total) * 100).toFixed(4)}%`;
+}
+
+export type RunCardFramePaintInsetRatios = Readonly<{
+  blockStart: number;
+  blockEnd: number;
+}>;
+
+/**
+ * Optical block insets expressed against card width. The face scales from its
+ * native width, so these unitless ratios remain exact at every rendered size.
+ */
+export function runCardFramePaintInsetRatios(
+  geometry: RunCardFrameGeometry,
+): RunCardFramePaintInsetRatios {
+  return Object.freeze({
+    blockStart: geometry.paintBounds.y / geometry.sourceWidth,
+    blockEnd: (geometry.sourceHeight - geometry.paintBounds.y - geometry.paintBounds.height)
+      / geometry.sourceWidth,
+  });
 }
 
 /** Converts native frame-pixel boxes into the shared face's responsive CSS variables. */

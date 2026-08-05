@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import type { CSSProperties, ReactElement } from 'react';
 import {
   PIECE_LABEL,
   cardExpunctioPriceTenths,
@@ -8,8 +8,10 @@ import {
   type RunDocument,
   type RunOwnedCard,
 } from '../run/model';
-import { runCardName } from '../run/cardNames';
+import { KitScroll } from './KitScroll';
 import { RunCard } from './RunCard';
+import { runCardFrameSlot } from './runCardFaceContent';
+import { runCardFrameGeometryForSlot, runCardFramePaintInsetRatios } from './runCardFrameGeometry';
 import { RunGoldAmount } from './RunResources';
 import { RunSceneViewport } from './RunWorkspace';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
@@ -65,8 +67,8 @@ function unitList(units: readonly RunArmyUnit[]): string {
 }
 
 function actionLabel(status: ExpunctioRow['status']): string {
-  if (status === 'available') return 'Expunctio';
-  if (status === 'expuncted') return 'Expuncted this visit';
+  if (status === 'available') return 'Athetize';
+  if (status === 'expuncted') return 'Athetized this visit';
   if (status === 'spent') return 'Already used';
   if (status === 'unaffordable') return 'Insufficient gold';
   return 'Unavailable';
@@ -86,6 +88,7 @@ export function RunExpunctioWorkspace({
         view: 'expunctio',
         className: 'run-expunctio-workspace',
         contentClassName: 'run-expunctio-workspace-content',
+        edgeAttached: true,
         testId: 'run-expunctio-workspace',
         ariaLabelledBy: 'run-expunctio-workspace-title',
       }}
@@ -95,47 +98,62 @@ export function RunExpunctioWorkspace({
       <p className="run-expunctio-rule">
         Fee = printed card value + remaining unit value. Reset Sectio restores the complete visit.
       </p>
-      <div className="run-expunctio-list" aria-label="Cards available for Expunctio">
-        {rows.map(({ card, units, priceTenths, status }) => {
-          const definition = runCardDefinition(card.coreId)!;
-          return (
-            <InnerChromeBox className={`run-expunctio-row is-${status}`} key={`${status}:${card.id}`}>
-              <span className="run-expunctio-card">
-                <RunCard
-                  card={definition}
-                  cardType={card.cardType}
-                  adlected
-                  mode="reference"
-                />
-              </span>
-              <span className="run-expunctio-copy">
-                <strong>{runCardName(definition)}</strong>
-                <small>{status === 'expuncted'
-                  ? 'Removed with card'
-                  : status === 'unavailable' ? 'Not subject to Expunctio' : 'Attached units'}</small>
-                <span>{unitList(units)}</span>
-              </span>
-              <span className="run-expunctio-price">
-                <small>{status === 'expuncted' ? 'Paid' : 'Expunctio fee'}</small>
-                {priceTenths === null ? <strong>Unavailable</strong> : <RunGoldAmount valueTenths={priceTenths} />}
-              </span>
-              <ChromeButton
-                unit="inner-text-button"
-                data-ui-sfx={status === 'available' ? 'gold' : undefined}
-                className={chromeUnitClassNames(
-                  'inner-text-button',
-                  'app-header-button',
-                  status === 'available' && 'danger',
-                )}
-                disabled={status !== 'available'}
-                onClick={() => onExpunct(card.id)}
+      <KitScroll className="run-expunctio-list">
+        <div className="run-expunctio-gallery" aria-label="Cards available for Expunctio">
+          {rows.map(({ card, units, priceTenths, status }) => {
+            const definition = runCardDefinition(card.coreId)!;
+            const paintInsets = runCardFramePaintInsetRatios(
+              runCardFrameGeometryForSlot(runCardFrameSlot(definition, card.cardType)),
+            );
+            return (
+              <InnerChromeBox
+                className={`run-expunctio-row is-${status}`}
+                fillRole="outer"
+                key={`${status}:${card.id}`}
+                style={{
+                  '--run-expunctio-card-paint-start-ratio': paintInsets.blockStart,
+                  '--run-expunctio-card-paint-end-ratio': paintInsets.blockEnd,
+                } as CSSProperties}
               >
-                {actionLabel(status)}
-              </ChromeButton>
-            </InnerChromeBox>
-          );
-        })}
-      </div>
+                <span className="run-expunctio-card">
+                  <RunCard
+                    card={definition}
+                    cardType={card.cardType}
+                    adlected
+                    mode="reference"
+                  />
+                </span>
+                <span className="run-expunctio-companion">
+                  <span className="run-expunctio-copy">
+                    <small>{status === 'expuncted'
+                      ? 'Removed with card'
+                      : status === 'unavailable' ? 'Not subject to Expunctio' : 'Attached units'}</small>
+                    <span>{unitList(units)}</span>
+                  </span>
+                  <span className="run-expunctio-price">
+                    <small>{status === 'expuncted' ? 'Paid' : 'Expunctio fee'}</small>
+                    {priceTenths === null ? <strong>Unavailable</strong> : <RunGoldAmount valueTenths={priceTenths} />}
+                  </span>
+                  <ChromeButton
+                    unit="inner-text-button"
+                    data-chrome-fill-surface="hybrid-wood-oak"
+                    data-ui-sfx={status === 'available' ? 'gold' : undefined}
+                    className={chromeUnitClassNames(
+                      'inner-text-button',
+                      'app-header-button',
+                      status === 'available' && 'danger',
+                    )}
+                    disabled={status !== 'available'}
+                    onClick={() => onExpunct(card.id)}
+                  >
+                    {actionLabel(status)}
+                  </ChromeButton>
+                </span>
+              </InnerChromeBox>
+            );
+          })}
+        </div>
+      </KitScroll>
     </RunSceneViewport>
   );
 }
