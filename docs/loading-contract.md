@@ -66,7 +66,7 @@ is not accepted as evidence of a warm journey.
 one authored `ScenePath` whose instances own named slots and one `SceneManifest`;
 `SceneBoundary` keeps the complete destination hidden and inert
 until its required paint owner and every registered participant report a drawable
-frame. Navigation retains the outgoing background and follows:
+frame. Navigation retains the outgoing owner and follows:
 
 `current → exiting → loading → destination-painted → entering → current`
 
@@ -74,11 +74,20 @@ Repeated navigation to the active destination is idempotent. A later destination
 cancels the old generation. Failure terminates at one director-owned retry surface;
 a React-tree failure terminates at one root retry surface rather than a blank page.
 
-Manifests also declare a persistent visual host. When current and destination share
-that host, the director retains and locks its background, title, and controls without
-fading or remounting them. Only the declared destination region prepares unrevealed
-and enters after its own complete painted acknowledgement. Different-host navigation
-continues to replace the complete scene.
+The graph derives whether a navigation changes the complete scene owner or changes a
+selection inside one retained owner. This relationship is structural; a feature does
+not select an animation mode. A `scene-replacement` keeps the complete outgoing scene
+painted while its successor prepares, then crossfades those two scenes directly. A
+`selection-change` may fade the selected region to the retained owner's real neutral
+state, prepare its successor, and fade that successor in while the owner stays painted
+(ADR-0445).
+
+Manifests also declare a persistent visual host. During a selection change, the
+director retains and locks its background, title, controls, and every region outside
+the selected content without fading or remounting them. Only the declared destination
+region deselects, prepares unrevealed, and enters after its own complete painted
+acknowledgement. Sharing an ancestor does not turn a complete owner replacement into
+a selection change.
 
 Hosts form a registered path rather than a flat exception. The director preserves
 the deepest shared host and scopes acquisition, inertness, paint acknowledgement,
@@ -86,18 +95,18 @@ failure, and entrance to its named destination region. The Play host is nested u
 the main-menu host: Play navigation remains mounted while Skirmish, Levels, and
 campaign content replace one another.
 
-During a same-host transition, inertness belongs only to the replaceable destination
+During a selection transition, inertness belongs only to the replaceable destination
 region. Preserved ancestor controls remain interactive and may retarget the active
 load; the latest accepted destination generation cancels stale acquisition and paint
-acknowledgements. A full-scene transition with no shared host still locks the complete
-outgoing hierarchy.
+acknowledgements. A complete scene replacement locks the complete outgoing hierarchy
+even when its paths share a structural ancestor.
 
-Every replaceable hierarchy declares the same canonical transition target. The director
-retains that exact DOM target through exit, marks it hidden before committing the pending
-instance, and permits React replacement only after that commit. Complete-scene and
-persistent-host transitions differ only in which target is selected; they do not own
-separate fade implementations. Layout-preserving targets apply the same lifecycle to
-their direct visual children.
+Every selection hierarchy declares one canonical transition target. The director retains
+that exact DOM target through deselection, marks it hidden before committing the pending
+selection, and permits React replacement only after that commit. Complete scene owners
+instead render as two director-owned boundaries during their handoff. Layout-preserving
+selection targets apply the same lifecycle to their direct visual children. Application
+features cannot request either relationship or provide alternate transition CSS.
 
 Ordinary state changes inside a committed scene remain immediate. Tabs, toggles,
 selections, sliders, board overlays, inspectors, dialogs, and gameplay commands do not
@@ -156,10 +165,12 @@ transition tests enforce its identity and lifecycle (ADR-0383).
 A visual that physically crosses from an outgoing scene owner to an incoming one
 uses the director's inert continuity layer. `SceneContinuityPortal` is the sole
 capability for that layer; it carries no interaction, state authority, viewport,
-or navigation. The outgoing owner keeps the landed visual there until its scene is
-retired, while the incoming scene paints its real owner beneath it. The handoff then
-occurs at one coordinate with no faded, duplicated, or blank frame. Feature portals
-outside this capability remain forbidden (ADR-0385).
+or navigation. The nearest semantic owner that spans the handoff keeps the landed
+visual there while the incoming region paints its real owner beneath it. A retained
+selection releases that carry when the director returns to `current`; a full replacement
+releases it when the outgoing owner retires at the same completed boundary. The handoff
+therefore occurs at one coordinate with no faded, duplicated, or blank frame. Feature
+portals outside this capability remain forbidden (ADR-0385, ADR-0446).
 
 Authored transition does not imply Loading presentation. A `transition-only`
 destination still exits, mounts hidden, acknowledges paint, enters, and remains
@@ -175,8 +186,24 @@ destination acknowledges a complete painted frame, the two authored scenes cross
 only then may the outgoing DOM be destroyed. No blank intermediary or reconstructed
 background is permitted. This treats composited boards and complete pre-drawn board
 scenes identically. Center-screen `Loading...` exists only in the pre-React cold-start
-document, before the title bar is available. Retryable terminal failure remains a
-scene-canvas surface because it owns an action, not passive wait copy.
+  document, before the title bar is available. Retryable terminal failure remains a
+  scene-canvas surface because it owns an action, not passive wait copy.
+
+A direct full-scene crossfade is one transition to the prepared destination, not an
+outgoing fade followed by a separate incoming fade. During `entering`, the outgoing
+scene fades from opaque to transparent while the incoming scene fades from transparent
+to opaque over the same interval. There is no fully transparent crossover at which an
+unrelated fallback scene may appear. This applies to the reversible won-board/aftermath
+review boundary as well as other complete Run scene replacements (ADR-0444, ADR-0445).
+The lifecycle's `exiting` phase deactivates and freezes a complete outgoing owner but
+does not lower its opacity; opacity exit during that phase belongs only to an authored
+selection region or an intentionally emptied slot.
+
+The homepage backdrop is mounted only while the current or pending scene declares the
+`homepage` background. It may prepare behind an outgoing scene during a real transition
+to the Main Menu, but it is neither mounted nor drawn beneath Run-to-Run transitions.
+An unmatched address can still resolve explicitly to the Main Menu; that route fallback
+does not make Main Menu artwork a universal visual floor for known routes (ADR-0444).
 
 Title-bar contributions discover targets inside their own committed scene. DOM-node
 refs are never lifted into the director, because portal attachment must not mutate the
@@ -252,7 +279,14 @@ route lifecycle during the same React commit.
   is **Nothing to continue**. This selection never launches gameplay.
 - Terrain and scene canvases share decoded image records and acknowledge their actual first
   composition to the board boundary. The board reveals only after terrain, barrier, and
-  scene acknowledgements and a browser paint opportunity.
+  scene acknowledgements and a browser paint opportunity. In a navigated Battle that readiness
+  gate delegates its visible opacity entrance to the scene director, so the environment and board
+  reveal as one prepared scene rather than as serialized fades. Ordinary units remain staged until
+  activation and then arrive; an aftermath Back review instead paints its exact terminal units
+  already settled because their entrance happened in the Battle being revisited. A crafted
+  terminal landing is prepared the same way: its board, seated units, Victory acknowledgement,
+  and Rewards action are present inside the director's one reveal, with no child opacity fade
+  beginning after the scene becomes current (ADR-0442, ADR-0443).
 - A playable board includes its first-frame HUD and title controls. The battle clock remains
   paused until board compositors and HUD resources have painted and the complete surface is
   revealed; network or asset latency is never charged as player thinking time.

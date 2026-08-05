@@ -3,10 +3,9 @@ import {
   deepestSharedSceneRegion,
   isEmptySlotDestination,
   isEmptySlotOrigin,
-  overlapsStateDrivenRunScene,
   sceneLayerKey,
   sceneManifest,
-  sceneOverlapScope,
+  sceneTransitionRelationship,
 } from './sceneManifest';
 import { createRun, prepareDeployment } from '../../run/model';
 import { completeDeploymentDeal } from '../../run/deployment';
@@ -309,7 +308,7 @@ describe('scene manifests', () => {
     expect(deepestSharedSceneRegion(
       run,
       runStrategikon,
-    )).toBe('gameplay-shell');
+    )).toBe('gameplay-workspace');
     expect(isEmptySlotOrigin(
       play,
       playStrategikon,
@@ -318,21 +317,25 @@ describe('scene manifests', () => {
       playStrategikon,
       play,
     )).toBe(true);
-    // Opening the Strategikon fills the same empty gameplay slot on the Run host,
-    // but App never consults that: the Run workspace value itself changes, so the
-    // pair takes the state-driven overlap path and its narrowed viewport scope
-    // instead — the Controls plank must not ride a whole-screen crossfade.
+    // Opening the Strategikon changes a selection inside the same Run phase. The
+    // gameplay viewport may pass through its deselected state while the Controls
+    // panel and the rest of the owning scene stay painted.
     expect(isEmptySlotOrigin(run, runStrategikon)).toBe(true);
     expect(isEmptySlotDestination(runStrategikon, run)).toBe(true);
-    expect(overlapsStateDrivenRunScene(run, runStrategikon)).toBe(true);
-    expect(sceneOverlapScope(run, runStrategikon)).toBe('shell-viewport');
+    expect(sceneTransitionRelationship(run, runStrategikon)).toEqual({
+      kind: 'selection-change',
+      region: 'gameplay-workspace',
+    });
     // Travel BETWEEN Strategikon sections leaves the Run's own state identity
     // untouched, so it takes the ordinary region-preserving path and fades only the
     // pane its rail replaces.
     const runReference = sceneManifest('/run/strategikon/enchiridion/units');
     const runReferenceOther = sceneManifest('/run/strategikon/enchiridion/lipsana');
-    expect(overlapsStateDrivenRunScene(runStrategikon, runReference)).toBe(false);
     expect(deepestSharedSceneRegion(runStrategikon, runReference)).toBe('strategikon-shell');
+    expect(sceneTransitionRelationship(runStrategikon, runReference)).toEqual({
+      kind: 'selection-change',
+      region: 'strategikon-shell',
+    });
     expect(deepestSharedSceneRegion(runReference, runReferenceOther)).toBe('strategikon-reference-shell');
     expect(sceneManifest('/run/strategikon').instances.map((entry) => entry.definition.id)).toEqual([
       'run', 'run/phase', 'run/workspace', 'strategikon',
@@ -414,9 +417,13 @@ describe('scene manifests', () => {
       phase: 'battle',
       workspace: { view: 'primary' },
     });
-    expect(deepestSharedSceneRegion(dealScene, deploymentScene)).toBe('gameplay-shell');
-    expect(deepestSharedSceneRegion(deploymentScene, battleScene)).toBe('gameplay-shell');
-    expect(deepestSharedSceneRegion(battleScene, armyScene)).toBe('gameplay-shell');
+    expect(deepestSharedSceneRegion(dealScene, deploymentScene)).toBe('gameplay-workspace');
+    expect(deepestSharedSceneRegion(deploymentScene, battleScene)).toBe('gameplay-workspace');
+    expect(deepestSharedSceneRegion(battleScene, armyScene)).toBe('gameplay-workspace');
+    expect(sceneTransitionRelationship(battleScene, armyScene)).toEqual({
+      kind: 'selection-change',
+      region: 'gameplay-workspace',
+    });
   });
 
   it('authors Bona targeting and unit inspection as distinct Run workspace scenes', () => {
@@ -455,18 +462,27 @@ describe('scene manifests', () => {
       workspace: { view: 'bona-target', lipsanonId: 'conscription-notice', unitId },
     });
     expect(new Set([mat.id, ledger.id, profile.id]).size).toBe(3);
-    expect(sceneLayerKey(mat)).not.toBe(sceneLayerKey(ledger));
-    expect(sceneLayerKey(ledger)).not.toBe(sceneLayerKey(profile));
-    expect(sceneOverlapScope(mat, ledger)).toBe('shell-viewport');
-    expect(sceneOverlapScope(ledger, profile)).toBe('shell-viewport');
+    expect(sceneLayerKey(mat)).toBe(sceneLayerKey(ledger));
+    expect(sceneLayerKey(ledger)).toBe(sceneLayerKey(profile));
+    expect(sceneTransitionRelationship(mat, ledger)).toEqual({
+      kind: 'selection-change',
+      region: 'gameplay-workspace',
+    });
+    expect(sceneTransitionRelationship(ledger, profile)).toEqual({
+      kind: 'selection-change',
+      region: 'gameplay-workspace',
+    });
 
     const armyLedger = sceneManifest('/run', '?view=army', source);
     const armyProfile = sceneManifest('/run', `?view=army&unit=${encodeURIComponent(unitId)}`, source);
     expect(armyLedger.snapshot).toMatchObject({ workspace: { view: 'army', unitId: null } });
     expect(armyProfile.snapshot).toMatchObject({ workspace: { view: 'army', unitId } });
     expect(armyProfile.id).not.toBe(armyLedger.id);
-    expect(sceneLayerKey(armyProfile)).not.toBe(sceneLayerKey(armyLedger));
-    expect(sceneOverlapScope(armyLedger, armyProfile)).toBe('shell-viewport');
+    expect(sceneLayerKey(armyProfile)).toBe(sceneLayerKey(armyLedger));
+    expect(sceneTransitionRelationship(armyLedger, armyProfile)).toEqual({
+      kind: 'selection-change',
+      region: 'gameplay-workspace',
+    });
 
     // Unknown, untargeted, or out-of-phase requests do not gain viewport authority.
     expect(sceneManifest('/run', '?view=bona-target&lipsanon=royal-decree', source).id).toBe(mat.id);
@@ -557,11 +573,7 @@ describe('scene manifests', () => {
     }
   });
 
-  it('narrows an overlapping fade to the shell viewport when only the Run workspace changes', () => {
-    // Overlapping layers both paint the retained Run shell — the Controls panel and its
-    // title plank, the lipsanon rail, the shell fill. Fading the whole boundary blends that
-    // retained chrome toward the backdrop at the crossfade midpoint, which is what made
-    // the Controls title bar visibly dim on every Sectio/Alienatio switch.
+  it('derives scene replacement versus within-scene selection from Run ownership', () => {
     const war = {
       id: 'war',
       name: 'War',
@@ -577,25 +589,59 @@ describe('scene manifests', () => {
     const battlePreview = sceneManifest('/run', '?view=battle-preview', source);
     const strategikon = sceneManifest('/run/strategikon/prosopography', '', source);
 
-    expect(sceneOverlapScope(sectio, alienatio)).toBe('shell-viewport');
-    expect(sceneOverlapScope(alienatio, sectio)).toBe('shell-viewport');
-    expect(sceneOverlapScope(sectio, expunctio)).toBe('shell-viewport');
-    expect(sceneOverlapScope(expunctio, sectio)).toBe('shell-viewport');
-    expect(sceneOverlapScope(sectio, army)).toBe('shell-viewport');
-    expect(sceneOverlapScope(sectio, battlePreview)).toBe('shell-viewport');
-    expect(sceneOverlapScope(battlePreview, sectio)).toBe('shell-viewport');
-    expect(sceneOverlapScope(sectio, strategikon)).toBe('shell-viewport');
-    expect(sceneOverlapScope(strategikon, sectio)).toBe('shell-viewport');
+    for (const [current, destination] of [
+      [sectio, alienatio],
+      [alienatio, sectio],
+      [sectio, expunctio],
+      [expunctio, sectio],
+      [sectio, army],
+      [sectio, battlePreview],
+      [battlePreview, sectio],
+      [sectio, strategikon],
+      [strategikon, sectio],
+    ] as const) {
+      expect(sceneTransitionRelationship(current, destination)).toEqual({
+        kind: 'selection-change',
+        region: 'gameplay-workspace',
+      });
+      expect(sceneLayerKey(current)).toBe(sceneLayerKey(destination));
+    }
 
-    // A phase change replaces the Controls contents too, so it keeps the whole-scene
-    // crossfade, and so does any pair that is not one authored slot apart.
+    // A phase change replaces the owning scene and therefore must prepare and
+    // crossfade two complete compositions without a deselected midpoint.
     const battle = sceneManifest('/run', '', {
       run: { hydrated: true, document: { ...document, phase: 'battle' } },
     });
-    expect(sceneOverlapScope(sectio, battle)).toBe('scene');
-    expect(sceneOverlapScope(sectio, sceneManifest('/run', '', { run: { hydrated: false, document: null } })))
-      .toBe('scene');
-    expect(sceneOverlapScope(sectio, sceneManifest('/play/select/run'))).toBe('scene');
-    expect(sceneOverlapScope(sectio, sectio)).toBe('scene');
+    expect(sceneTransitionRelationship(sectio, battle)).toEqual({ kind: 'scene-replacement', region: null });
+    expect(sceneTransitionRelationship(
+      sectio,
+      sceneManifest('/run', '', { run: { hydrated: false, document: null } }),
+    )).toEqual({ kind: 'scene-replacement', region: null });
+    expect(sceneTransitionRelationship(sectio, sceneManifest('/play/select/run')))
+      .toEqual({ kind: 'scene-replacement', region: null });
+    expect(sceneLayerKey(sectio)).not.toBe(sceneLayerKey(battle));
+
+    const aftermathDocument = {
+      ...document,
+      phase: 'aftermath' as const,
+      aftermath: {
+        battleIndex: 0,
+        turns: 4,
+        elapsedMs: 1000,
+        goldTenths: 10,
+        bonusGoldTenths: 0,
+        survivingUnitIds: [],
+        fallenUnits: [],
+      },
+    };
+    const aftermath = sceneManifest('/run', '', { run: { hydrated: true, document: aftermathDocument } });
+    const battleReview = sceneManifest('/run', '?view=battle-review', {
+      run: { hydrated: true, document: aftermathDocument },
+    });
+    expect(battleReview.snapshot).toMatchObject({ workspace: { view: 'battle-review' } });
+    expect(sceneTransitionRelationship(battle, aftermath)).toEqual({ kind: 'scene-replacement', region: null });
+    expect(sceneTransitionRelationship(aftermath, battleReview)).toEqual({ kind: 'scene-replacement', region: null });
+    expect(sceneTransitionRelationship(battleReview, aftermath)).toEqual({ kind: 'scene-replacement', region: null });
+    expect(sceneLayerKey(aftermath)).not.toBe(sceneLayerKey(battleReview));
   });
 });

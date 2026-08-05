@@ -535,7 +535,7 @@ const isRoyal = (type: Piece['type']): boolean => type === 'king' || type === 'q
  * null while the entrance is staged but not yet released, which is how a battlefield can be
  * prepared and revealed without ever painting a unit at a seat it has not arrived in yet.
  */
-interface UnitArrivalPlan {
+export interface UnitArrivalPlan {
   startMs: number | null;
   delayMs: number;
 }
@@ -544,10 +544,23 @@ interface UnitArrivalPlan {
  * Where a battlefield is in its unit-entrance lifecycle. `pending` is a battlefield that will
  * play an entrance but has not been activated for it: preparation and reveal both happen here,
  * so the units it is about to introduce are already staged off the board. `active` releases
- * them. Scene activation gates the MOTION (ADR-0353); it must not gate the staging, because the
- * scene entrance reveals the board before it activates it.
+ * them. `settled` is a review of a position whose units have already arrived, so it admits them
+ * directly at their seats. Scene activation gates the MOTION (ADR-0353); it must not gate the
+ * staging, because the scene entrance reveals the board before it activates it.
  */
-export type UnitArrivalLifecycle = 'pending' | 'active';
+export type UnitArrivalLifecycle = 'pending' | 'active' | 'settled';
+
+export function unitArrivalPlan(
+  lifecycle: UnitArrivalLifecycle,
+  now: number,
+  delayMs: number,
+): UnitArrivalPlan | undefined {
+  if (lifecycle === 'settled') return undefined;
+  return {
+    startMs: lifecycle === 'active' ? now : null,
+    delayMs,
+  };
+}
 
 export function computeArrivalDelays(
   pieces: readonly Piece[],
@@ -963,12 +976,12 @@ function SkirmishSceneLayer({
     arrivalLifecycleStartedRef.current = true;
     // Admission happens whether or not the entrance may play yet, so a battlefield preparing
     // behind a scene transition already knows these units are off the board. Activation then
-    // releases everything staged so far as one wave.
+    // releases everything staged so far as one wave. A terminal review is different: those
+    // units have already arrived, so it deliberately owns no arrival plans at all.
+    if (unitArrivals === 'settled') arrivalPlansRef.current.clear();
     for (const piece of additions) {
-      arrivalPlansRef.current.set(piece.id, {
-        startMs: unitArrivals === 'active' ? now : null,
-        delayMs: delays.get(piece.id) ?? 0,
-      });
+      const plan = unitArrivalPlan(unitArrivals, now, delays.get(piece.id) ?? 0);
+      if (plan) arrivalPlansRef.current.set(piece.id, plan);
     }
     if (unitArrivals === 'active') {
       for (const [pieceId, plan] of arrivalPlansRef.current) {
@@ -1217,6 +1230,7 @@ export function SkirmishBoard({
   reveal = true,
   activate = reveal,
   unitArrivals = activate ? 'active' : 'pending',
+  revealTransition = 'local',
 }: {
   interactive?: boolean;
   /**
@@ -1244,8 +1258,14 @@ export function SkirmishBoard({
    * Unit-entry presentation is independent from combat input/clock activation. A battlefield
    * that has not been activated yet is `pending`, not "no arrivals": it still stages the units
    * it is about to introduce, so its first revealed frame never shows them seated early.
+   * `settled` is reserved for a position being revisited after its arrival already happened.
    */
   unitArrivals?: UnitArrivalLifecycle;
+  /**
+   * `scene` delegates the visible opacity entrance to the surrounding SceneBoundary. The local
+   * readiness gate still keeps incomplete pixels hidden, but does not start a second fade.
+   */
+  revealTransition?: 'local' | 'scene';
 } = {}) {
   const interactionEnabled = interactive && !surfaceState;
   // Board-view state lives in the shared view store so the HUD's "View" tab owns
@@ -1543,10 +1563,16 @@ export function SkirmishBoard({
   const arriving = arrivingUnitIds.length > 0;
   // The entrance is released only once this battlefield is both activated and on screen; until
   // then it stays staged, which is the state a preparing or entering board is revealed in.
-  const arrivalLifecycle: UnitArrivalLifecycle = boardVisible && unitArrivals === 'active' ? 'active' : 'pending';
+  // Review positions bypass the entrance completely and paint their already-arrived units.
+  const arrivalLifecycle: UnitArrivalLifecycle = unitArrivals === 'settled'
+    ? 'settled'
+    : boardVisible && unitArrivals === 'active'
+      ? 'active'
+      : 'pending';
+  const presentingArrivals = arrivalLifecycle !== 'settled' && arriving;
   // Staged and entering are different claims: staged units are held off the board and nothing is
   // moving, entering units are playing their drop. Activation gates the second, not the first.
-  const arrivalState = !arriving ? 'none' : arrivalLifecycle === 'active' ? 'entering' : 'staged';
+  const arrivalState = !presentingArrivals ? 'none' : arrivalLifecycle === 'active' ? 'entering' : 'staged';
   const handleArrivingUnitIdsChange = useCallback((unitIds: readonly string[]) => {
     setArrivingUnitIds(unitIds);
     onArrivingUnitIdsChange?.(unitIds);
@@ -1913,9 +1939,11 @@ export function SkirmishBoard({
     <div
       data-testid="skirmish-board"
       data-interactive={interactionEnabled ? 'true' : 'false'}
-      data-arriving={arriving ? 'true' : 'false'}
+      data-arriving={presentingArrivals ? 'true' : 'false'}
       data-arrival-state={arrivalState}
-      data-arriving-unit-ids={arrivingUnitIds.join(',')}
+      data-arriving-unit-ids={presentingArrivals ? arrivingUnitIds.join(',') : ''}
+      data-unit-arrivals={unitArrivals}
+      data-reveal-transition={revealTransition}
       data-painted-layers={boardFrame.paintedLayers.join(',')}
       aria-busy={!boardVisible && !boardFrame.error ? true : undefined}
       inert={!boardVisible && !boardFrame.error ? true : undefined}

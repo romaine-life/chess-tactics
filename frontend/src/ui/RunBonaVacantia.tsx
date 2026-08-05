@@ -14,7 +14,7 @@ import { RunSceneViewport } from './RunWorkspace';
 import { Tooltip } from './shared/InfoTip';
 import { installedLipsanonMatUrl, lipsanonFloatClock } from './runLipsanonMat';
 import { lipsanonStripLandingPoint } from './runLipsanonFlight';
-import { useLipsanonFlight } from './runLipsanonFlightView';
+import type { LipsanonFlightPoint } from './runLipsanonFlightView';
 import {
   RunArmyWorkspace,
   type RunArmyFilters,
@@ -41,27 +41,22 @@ export function RunBonaVacantia({
   run,
   replace,
   onTargetLipsanon,
+  launchLipsanon,
 }: {
   run: RunDocument;
   replace: (next: RunDocument) => void;
   onTargetLipsanon: (lipsanonId: LipsanonId) => void;
+  launchLipsanon: (
+    lipsanonId: LipsanonId,
+    icon: Element | null,
+    to: LipsanonFlightPoint | null,
+  ) => boolean;
 }): ReactElement | null {
   const vacantia = run.vacantia;
   // Latched, not derived from the flight: the flight ends when the lipsanon lands, and the
   // mat must not repopulate in the beat before the Sectio or target chooser replaces it.
   const [departed, setDeparted] = useState<LipsanonId | null>(null);
   const mat = installedLipsanonMatUrl();
-  const { launch, element } = useLipsanonFlight(
-    (lipsanonId) => {
-      if (lipsanonNeedsUnitTarget(lipsanonId)) {
-        onTargetLipsanon(lipsanonId);
-        return;
-      }
-      replace(takeVacantiaLipsanon(run, lipsanonId));
-    },
-    { handoff: 'scene-retirement' },
-  );
-
   if (!vacantia) return null;
 
   const heldLipsanonCount = run.lipsana.filter((lipsanonId) => Boolean(LIPSANON_BY_ID[lipsanonId])).length;
@@ -72,7 +67,7 @@ export function RunBonaVacantia({
     setDeparted(lipsanonId);
     // Nothing measurable to fly between means nothing to show — take the lipsanon outright
     // when it needs no target, or open the target chooser immediately when it does.
-    if (!launch(lipsanonId, icon, destination)) {
+    if (!launchLipsanon(lipsanonId, icon, destination)) {
       if (lipsanonNeedsUnitTarget(lipsanonId)) onTargetLipsanon(lipsanonId);
       else replace(takeVacantiaLipsanon(run, lipsanonId));
     }
@@ -132,8 +127,6 @@ export function RunBonaVacantia({
           </div>
         </div>
       </div>
-
-      {element}
     </RunSceneViewport>
   );
 }

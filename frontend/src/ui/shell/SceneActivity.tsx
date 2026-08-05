@@ -5,7 +5,9 @@ import {
   useRef,
   type ReactElement,
   type ReactNode,
+  type RefObject,
 } from 'react';
+import { uiFadeTiming } from './motionTokens';
 
 export interface SceneMotion {
   animate(
@@ -303,6 +305,24 @@ export function useSceneEntryMotion(
     if (!enabled) return undefined;
     return authority.registerEntryMotion(id, (motion) => prepareRef.current(motion));
   }, [authority, enabled, id]);
+}
+
+/** A tokenized, opacity-only entrance that survives the OS movement-reduction reset. */
+export function useSceneOpacityEntrance(
+  id: string,
+  enabled: boolean,
+  elementRef: RefObject<Element | null>,
+): void {
+  useSceneEntryMotion(id, enabled, (motion) => {
+    const element = elementRef.current;
+    if (!element) return undefined;
+    const animation = motion.animate(
+      element,
+      [{ opacity: 0 }, { opacity: 1 }],
+      uiFadeTiming(document.documentElement),
+    );
+    return () => animation?.cancel();
+  });
 }
 
 /** The only application-facing owner of imperative Web Animations. */

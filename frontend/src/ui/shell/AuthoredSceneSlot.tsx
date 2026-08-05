@@ -1,21 +1,22 @@
-import type { ComponentPropsWithoutRef, ReactElement } from 'react';
+import type { ComponentPropsWithoutRef, ReactElement, ReactNode } from 'react';
 import {
-  sceneOverlapRegionAttributes,
   sceneTransitionTargetAttributes,
   type SceneTransitionTargetMode,
 } from './sceneTransitionTarget';
 import { SceneSlotActivation } from './SceneBoundary';
 import type { SceneHost } from './sceneManifest';
 
-/**
- * Declares the shell's replaceable viewport, the only region an overlapping
- * same-shell scene pair may fade. Everything outside it is retained chrome that
- * both layers paint identically, so it must never ride the transition.
- */
-export const shellViewportOverlapRegion = sceneOverlapRegionAttributes;
-
 type DivSlotProps = ComponentPropsWithoutRef<'div'> & { sceneInstance: string };
 type MainSlotProps = ComponentPropsWithoutRef<'main'> & { sceneInstance: string };
+
+/** Closed capability for the stable gameplay scene's selectable viewport. */
+export const gameplayWorkspaceTransitionTarget = (): ReturnType<typeof sceneTransitionTargetAttributes> => (
+  sceneTransitionTargetAttributes('gameplay-workspace')
+);
+
+export const GameplayWorkspaceActivation = ({ children }: { children: ReactNode }): ReactElement => (
+  <SceneSlotActivation region="gameplay-workspace">{children}</SceneSlotActivation>
+);
 
 function DivSceneSlot({
   sceneInstance,
@@ -77,7 +78,7 @@ export const EnchiridionContentSceneSlot = (props: MainSlotProps): ReactElement 
 );
 
 export const GameplayWorkspaceSceneSlot = (props: DivSlotProps): ReactElement => (
-  <DivSceneSlot {...props} region="gameplay-shell" />
+  <DivSceneSlot {...props} region="gameplay-workspace" />
 );
 
 export const RunPresentationSceneSlot = (props: DivSlotProps): ReactElement => (

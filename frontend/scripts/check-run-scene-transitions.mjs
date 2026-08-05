@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Live capability/lifecycle gate for Run viewport replacement (ADR-0383).
+// Live capability/lifecycle gate for Run scene ownership and selection (ADR-0383, ADR-0445).
 //
 // Usage: npm run verify:run-scenes -- '<bona-vacantia-craft-url>'
 
@@ -74,6 +74,7 @@ async function transition(page, {
   click,
   final,
   expectedView,
+  relationship,
   continuityLipsanonId = null,
 }) {
   await page.waitForFunction(settled, { timeout: TIMEOUT });
@@ -84,15 +85,22 @@ async function transition(page, {
       phase: director?.getAttribute('data-scene-phase') ?? 'missing',
       committed: director?.getAttribute('data-scene-committed') ?? '',
       pending: director?.getAttribute('data-scene-pending') ?? '',
+      relationship: director?.getAttribute('data-scene-transition-relationship') ?? '',
     });
     window.__runSceneTrace = [snap()];
     new MutationObserver(() => window.__runSceneTrace.push(snap())).observe(director, {
       attributes: true,
-      attributeFilter: ['data-scene-phase', 'data-scene-committed', 'data-scene-pending'],
+      attributeFilter: [
+        'data-scene-phase',
+        'data-scene-committed',
+        'data-scene-pending',
+        'data-scene-transition-relationship',
+      ],
     });
     window.__runSceneContinuityRecording = Boolean(continuityId);
     window.__runSceneContinuity = [];
-    if (!continuityId) return;
+    window.__runSceneFrameRecording = true;
+    window.__runSceneFrames = [];
     const effectiveOpacity = (node) => {
       let opacity = 1;
       for (let current = node; current; current = current.parentElement) {
@@ -103,29 +111,42 @@ async function transition(page, {
       return opacity;
     };
     const sample = () => {
-      if (!window.__runSceneContinuityRecording) return;
-      const icons = [...document.querySelectorAll(`.run-lipsanon-icon[data-lipsanon-id="${continuityId}"]`)]
-        .map((node) => {
-          const box = node.getBoundingClientRect();
-          const opacity = effectiveOpacity(node);
-          return {
-            kind: node.closest('[data-scene-continuity-host]')
-              ? 'carry'
-              : node.closest('[data-testid="run-lipsanon-strip"]')
-                ? 'strip'
-                : node.closest('.lipsanon-mat-offer')
-                  ? 'mat'
-                  : 'other',
-            opacity,
-            visible: opacity > 0.01 && box.width > 0 && box.height > 0,
-            x: Math.round(box.x),
-            y: Math.round(box.y),
-          };
-        });
-      window.__runSceneContinuity.push({
-        phase: director?.getAttribute('data-scene-phase') ?? 'missing',
-        icons,
+      if (!window.__runSceneFrameRecording) return;
+      const phase = director?.getAttribute('data-scene-phase') ?? 'missing';
+      const relation = director?.getAttribute('data-scene-transition-relationship') ?? '';
+      const viewport = document.querySelector('.shell-viewport-swap[data-scene-transition-target="gameplay-workspace"]');
+      window.__runSceneFrames.push({
+        phase,
+        relationship: relation,
+        viewportOpacity: viewport ? effectiveOpacity(viewport) : null,
+        controlsOpacity: [...document.querySelectorAll('.shell-controls-panel')].map(effectiveOpacity),
+        homepage: Boolean(document.querySelector('.scene-homepage-background')),
+        layers: [...document.querySelectorAll('.scene-boundary')].map((node) => ({
+          role: node.getAttribute('data-scene-visual-role'),
+          opacity: Number(getComputedStyle(node).opacity),
+        })),
       });
+      if (window.__runSceneContinuityRecording && continuityId) {
+        const icons = [...document.querySelectorAll(`.run-lipsanon-icon[data-lipsanon-id="${continuityId}"]`)]
+          .map((node) => {
+            const box = node.getBoundingClientRect();
+            const opacity = effectiveOpacity(node);
+            return {
+              kind: node.closest('[data-scene-continuity-host]')
+                ? 'carry'
+                : node.closest('[data-testid="run-lipsanon-strip"]')
+                  ? 'strip'
+                  : node.closest('.lipsanon-mat-offer')
+                    ? 'mat'
+                    : 'other',
+              opacity,
+              visible: opacity > 0.01 && box.width > 0 && box.height > 0,
+              x: Math.round(box.x),
+              y: Math.round(box.y),
+            };
+          });
+        window.__runSceneContinuity.push({ phase, icons });
+      }
       requestAnimationFrame(sample);
     };
     requestAnimationFrame(sample);
@@ -135,28 +156,38 @@ async function transition(page, {
   await new Promise((resolve) => { setTimeout(resolve, 250); });
   const audit = await page.evaluate(() => {
     window.__runSceneContinuityRecording = false;
+    window.__runSceneFrameRecording = false;
     return {
       trace: window.__runSceneTrace,
       continuity: window.__runSceneContinuity,
+      frames: window.__runSceneFrames,
     };
   });
-  if (!Array.isArray(audit?.trace) || !Array.isArray(audit?.continuity)) {
+  if (!Array.isArray(audit?.trace) || !Array.isArray(audit?.continuity) || !Array.isArray(audit?.frames)) {
     throw new Error(`Run scene audit state was lost: ${JSON.stringify(audit)}`);
   }
   const trace = audit.trace;
   const sequence = [];
   for (const entry of trace) {
     const previous = sequence[sequence.length - 1];
-    if (!previous || previous.phase !== entry.phase || previous.committed !== entry.committed || previous.pending !== entry.pending) {
+    if (
+      !previous
+      || previous.phase !== entry.phase
+      || previous.committed !== entry.committed
+      || previous.pending !== entry.pending
+      || previous.relationship !== entry.relationship
+    ) {
       sequence.push(entry);
     }
   }
   const phases = sequence.map((entry) => entry.phase);
   const violations = [];
-  // State-driven Run scenes overlap complete layers. Their exit acknowledgement is
-  // synchronous (nothing is torn down before the incoming layer paints), so MutationObserver
-  // legitimately sees current -> loading rather than the reducer's transient exiting value.
-  // Loading + entering + changed committed identity are the observable lifecycle proof.
+  if (!sequence.some((entry) => entry.relationship === relationship)) {
+    violations.push(`director never declared ${relationship}: ${JSON.stringify(sequence)}`);
+  }
+  if (relationship === 'selection-change' && phases.filter((phase) => phase === 'exiting').length !== 1) {
+    violations.push(`selection expected one deselection phase; saw ${phases.join(' -> ')}`);
+  }
   if (phases.filter((phase) => phase === 'loading').length !== 1) {
     violations.push(`expected exactly one preparation phase; saw ${phases.join(' -> ')}`);
   }
@@ -164,6 +195,32 @@ async function transition(page, {
   if (phases[phases.length - 1] !== 'current') violations.push(`did not settle; saw ${phases.join(' -> ')}`);
   if (sequence[0]?.committed === sequence[sequence.length - 1]?.committed) {
     violations.push(`committed scene identity did not change (${sequence[0]?.committed})`);
+  }
+  const relationshipFrames = audit.frames.filter((frame) => frame.relationship === relationship);
+  if (relationship === 'selection-change') {
+    if (!relationshipFrames.some((frame) => frame.viewportOpacity !== null && frame.viewportOpacity < 0.05)) {
+      violations.push('selection never reached its authored deselected viewport state');
+    }
+    if (relationshipFrames.some((frame) => frame.layers.length !== 1 || frame.layers[0].opacity < 0.99)) {
+      violations.push('selection faded or duplicated its owning scene boundary');
+    }
+    if (
+      !relationshipFrames.some((frame) => frame.controlsOpacity.length > 0)
+      || relationshipFrames.some((frame) => frame.controlsOpacity.some((opacity) => opacity < 0.99))
+    ) {
+      violations.push('selection faded the retained Controls panel');
+    }
+  } else {
+    const overlap = relationshipFrames.filter((frame) => frame.layers.length === 2);
+    if (!overlap.some((frame) => frame.layers.every((layer) => layer.opacity > 0.01 && layer.opacity < 0.99))) {
+      violations.push('scene replacement never produced an overlapping crossfade frame');
+    }
+    if (overlap.some((frame) => frame.layers.every((layer) => layer.opacity < 0.05))) {
+      violations.push('scene replacement exposed a transparent midpoint');
+    }
+    if (relationshipFrames.some((frame) => frame.homepage)) {
+      violations.push('Run scene replacement mounted the homepage fallback');
+    }
   }
   const topology = await auditViewport(page, expectedView);
   if (topology.visibleViews.length !== 1 || topology.visibleViews[0] !== expectedView) {
@@ -207,7 +264,7 @@ async function transition(page, {
       if (!overlappingHandoff) violations.push('incoming strip never became visible beneath the continuity carry');
     }
   }
-  return { label, phases, topology, violations };
+  return { label, phases, relationship, topology, violations };
 }
 
 try {
@@ -256,6 +313,7 @@ try {
     click: '.run-vacantia-take[aria-label="Take Conscription Notice"]',
     final: `${settled} && new URLSearchParams(location.search).get('view') === 'bona-target' && Boolean(document.querySelector('[data-testid="run-bona-vacantia-target"]'))`,
     expectedView: 'bona-target',
+    relationship: 'selection-change',
     continuityLipsanonId: 'conscription-notice',
   }));
 
@@ -279,6 +337,7 @@ try {
     click: '.run-army-ledger-row',
     final: `${settled} && Boolean(new URLSearchParams(location.search).get('unit')) && Boolean(document.querySelector('[data-testid="run-army-profile-workspace"]'))`,
     expectedView: 'bona-target',
+    relationship: 'selection-change',
   }));
 
   await page.goto(new URL('/run?view=army', origin).href, { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
@@ -291,6 +350,7 @@ try {
     click: '.run-army-ledger-row',
     final: `${settled} && Boolean(new URLSearchParams(location.search).get('unit')) && Boolean(document.querySelector('[data-testid="run-army-profile-workspace"]'))`,
     expectedView: 'army',
+    relationship: 'selection-change',
   }));
 
   await page.goto(startUrl.href, { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
@@ -303,6 +363,7 @@ try {
     click: '.run-vacantia-take[aria-label="Take Royal Decree"]',
     final: `${settled} && Boolean(document.querySelector('[data-testid="run-sectio-workspace"]'))`,
     expectedView: 'sectio',
+    relationship: 'scene-replacement',
     continuityLipsanonId: 'royal-decree',
   }));
 

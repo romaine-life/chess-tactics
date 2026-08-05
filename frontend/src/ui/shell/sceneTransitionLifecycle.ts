@@ -1,9 +1,4 @@
-function cssTimeMs(value: string): number {
-  const trimmed = value.trim();
-  if (trimmed.endsWith('ms')) return Number.parseFloat(trimmed) || 0;
-  if (trimmed.endsWith('s')) return (Number.parseFloat(trimmed) || 0) * 1000;
-  return 0;
-}
+import { cssTimeMs } from './motionTokens';
 
 function maximumTransitionMs(element: Element): number {
   const style = getComputedStyle(element);

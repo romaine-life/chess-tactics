@@ -2495,6 +2495,7 @@ export function closeBattle(run: RunDocument, report: RunBattleReport): RunDocum
   return touch({
     ...run,
     phase: 'aftermath',
+    deployment: null,
     aftermath: {
       battleIndex: run.battleIndex,
       turns: Number.isSafeInteger(report.turns) && report.turns > 0 ? report.turns : 0,

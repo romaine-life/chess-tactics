@@ -2,6 +2,7 @@ import {
   type CSSProperties,
   type ReactElement,
   type ReactNode,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -17,13 +18,19 @@ import {
 import { SkirmishHud, type SkirmishHudProps } from './SkirmishHud';
 import { SceneSurfaceReadiness } from './shell/PaintedSurfaceBoundary';
 import { useSceneActivation, useSceneReveal } from './shell/SceneBoundary';
+import { useSceneOpacityEntrance } from './shell/SceneActivity';
 import { NavButton } from './shared/NavButton';
 import { RestartGlyph } from './shared/actionGlyphs';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarControlContribution, TitleBarStatus } from './shell/TitleBarControls';
 import { shouldStartFreshSkirmish, type RunBattleTransformSink, type RunBattleUndoAdapter } from '../game/store';
 import { SkirmishStoreProvider, useSkirmish, useSkirmishStoreApi } from '../game/SkirmishStoreContext';
-import { loadMatch, persistedMatchMatchesActivity, setMatchPersistenceEnabled } from '../game/matchPersistence';
+import {
+  loadMatch,
+  loadReviewableRunBattleMatch,
+  persistedMatchMatchesActivity,
+  setMatchPersistenceEnabled,
+} from '../game/matchPersistence';
 import {
   fetchLobby,
   postMove,
@@ -94,6 +101,11 @@ export interface RunBattlePresentation {
   level: Level;
   seed: number;
   activityId: string;
+  /** Admin crafter-only terminal landing. The persisted Run remains an ordinary Battle. */
+  craftedResult?: 'player' | null;
+  /** This mount presents an already-resolved terminal board, either from a crafted Victory
+   *  landing or the read-only position restored from persisted aftermath. */
+  reviewTerminalResult?: boolean;
   /** The Battle is won. What it cost is read off the live board here, because nothing
    *  outside it keeps the turn count once the board unmounts. */
   onVictory: (report: RunBattleReport) => void;
@@ -157,6 +169,14 @@ function SkirmishSession(props: SkirmishProps = {}) {
   const runForm = props.runForm ?? null;
   const runBattle = props.runBattle ?? null;
   const runDeployment = props.runDeployment ?? null;
+  // A Run presentation also carries callbacks whose identities may change while the scene
+  // director is retiring this Battle. Setup answers only to the committed Battle identity:
+  // presentation churn must never restart a terminal game and erase its review surface.
+  const runBattleLevel = runBattle?.level ?? null;
+  const runBattleActivityId = runBattle?.activityId ?? null;
+  const runBattleSeed = runBattle?.seed ?? null;
+  const runBattleReviewTerminal = runBattle?.reviewTerminalResult ?? false;
+  const runDeploymentActive = Boolean(runDeployment);
   const routePath = props.routePath ?? window.location.pathname;
   const routeSearch = props.routeSearch ?? window.location.search;
   const sceneActivated = useSceneActivation();
@@ -203,7 +223,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
     () => routeParams.get('predrawnPicker') === '1',
   );
   const routeCampaignId = routeParams.get('campaignId');
-  const routeLevelId = runBattle?.level.id ?? routeParams.get('levelId');
+  const routeLevelId = runBattleLevel?.id ?? routeParams.get('levelId');
   const routeMode = routeParams.get('mode');
   // Play-test a shared board-code link directly (no save/sign-in): `?board=<code>` decodes an
   // authored board into a one-off fixed-placement level. `?obj=<mode>` picks the win rule
@@ -297,7 +317,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
   // resumed (a stale snapshot after an edit would mislead), unlike real play below.
   const isTestPlay = routeMode === 'test';
   const [routeLevel, setRouteLevel] = useState<Level | null>(() => (
-    runBattle?.level ?? (routeLevelId ? useCampaigns.getState().levels[routeLevelId] ?? null : null)
+    runBattleLevel ?? (routeLevelId ? useCampaigns.getState().levels[routeLevelId] ?? null : null)
   ));
   // The board mounts only once this screen has DECIDED which game to play (fresh vs resume).
   // The store ships a populated placeholder game (store.ts INITIAL_GAME), so mounting the
@@ -315,11 +335,25 @@ function SkirmishSession(props: SkirmishProps = {}) {
   const activateClock = useSkirmish((s) => s.activateClock);
   const playableSurfaceReady = boardSurfaceReady && (runBattle ? true : hudSurfaceReady);
   const game = useSkirmish((s) => s.game);
+  const runBattleVictoryBannerRef = useRef<HTMLDivElement | null>(null);
+  useSceneOpacityEntrance(
+    'run-battle-victory',
+    // A result earned on an already-visible board receives the lightweight acknowledgement.
+    // A prepared terminal landing is already inside the director's scene fade and must not
+    // register a second opacity owner for Victory and Rewards.
+    Boolean(runBattle && !runDeployment && !runBattleReviewTerminal && game.winner === 'player'),
+    runBattleVictoryBannerRef,
+  );
   // The Battle's own turn clock, for the aftermath report. It lives in this store and
   // nowhere else, so it has to be read while the board is still mounted.
   const turnsElapsed = useSkirmish((s) => s.turnsElapsed);
+  const activityId = useSkirmish((s) => s.activityId);
   const adminMode = useSkirmish((s) => s.adminMode);
+  const armAdminMode = useSkirmish((s) => s.armAdminMode);
   const adminWinBattle = useSkirmish((s) => s.adminWinBattle);
+  const reportArrivingUnitIds = useCallback((unitIds: readonly string[]) => {
+    if (runDeployment) runDeployment.onArrivingUnitIdsChange(unitIds);
+  }, [runDeployment]);
   // A Run Battle is promoted in place from its already-painted Deployment board. Keep the
   // final Deployment position as the board source for the transition render, build the live
   // match into this same session store before paint, then release that temporary source. The
@@ -462,6 +496,21 @@ function SkirmishSession(props: SkirmishProps = {}) {
     if (adminMode === 'win-battle') adminWinBattle();
   }, [adminMode, adminWinBattle]);
 
+  // A battle-victory craft link owns both halves of the review state: the server builds a
+  // valid persisted Battle, then this mounted board applies its terminal presentation through
+  // the same one-shot store action as Admin Controls. The layout effect runs after the exact
+  // board has painted but before the scene boundary's reveal frames, so board, settled units,
+  // Victory, and Rewards are one prepared scene instead of serialized entrances.
+  useLayoutEffect(() => {
+    if (
+      runBattle?.craftedResult !== 'player'
+      || activityId !== runBattle.activityId
+      || !playableSurfaceReady
+      || game.winner
+    ) return;
+    if (armAdminMode('win-battle')) adminWinBattle();
+  }, [activityId, adminWinBattle, armAdminMode, game.winner, playableSurfaceReady, runBattle]);
+
   // Bank the win the moment a campaign battle is won (idempotent).
   useEffect(() => {
     if (isCampaignPlay && routeLevel && game.winner === 'player') recordLevelWin(routeLevel.id);
@@ -581,7 +630,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
     // A live board must name canonical content (or carry an authored board/map link).
     // Bare /play and the retired ?random=1 path return to the selector instead of
     // synthesizing an item-less procedural match (ADR-0070/0074).
-    if (!routeLevelId && !routeBoard && !routeMap && !runBattle) {
+    if (!routeLevelId && !routeBoard && !routeMap && !runBattleLevel) {
       navigateApp(PLAY_SKIRMISH_SELECTOR_HREF, { replace: true, scroll: false });
       return undefined;
     }
@@ -596,8 +645,8 @@ function SkirmishSession(props: SkirmishProps = {}) {
     // Deployment owns the visible position until its final choice has painted. It deliberately
     // does not initialize or persist a live match yet; the layout effect above promotes that
     // exact mounted presentation when the Run document advances to Battle.
-    if (runDeployment && runBattle) {
-      setRouteLevel(runBattle.level);
+    if (runDeploymentActive && runBattleLevel) {
+      setRouteLevel(runBattleLevel);
       setBoardSettled(true);
       return;
     }
@@ -606,9 +655,18 @@ function SkirmishSession(props: SkirmishProps = {}) {
     // restart: its instance-owned store already holds the live board. Only build a
     // fresh game when there isn't a matching in-progress one — i.e. the
     // first launch, after a finished game, or when a different level is opened.
-    const shouldStartFresh = (levelId: string | null, activityId: string | null = null): boolean =>
-      shouldStartFreshSkirmish(skirmishStore.getState(), levelId, activityId);
-    const freshSeed = () => runBattle?.seed ?? Math.floor(Math.random() * 999999) + 1;
+    const shouldStartFresh = (levelId: string | null, activityId: string | null = null): boolean => {
+      const current = skirmishStore.getState();
+      if (
+        runBattleReviewTerminal
+        && current.started
+        && current.game.winner === 'player'
+        && current.levelId === levelId
+        && current.activityId === activityId
+      ) return false;
+      return shouldStartFreshSkirmish(current, levelId, activityId);
+    };
+    const freshSeed = () => runBattleSeed ?? Math.floor(Math.random() * 999999) + 1;
     // Dev A/B lever: `?ai=greedy` pits you against the legacy random-capture
     // enemy; anything else gets the objective-aware search AI.
     const ai = new URLSearchParams(window.location.search).get('ai') === 'greedy' ? 'greedy' as const : 'search' as const;
@@ -621,7 +679,9 @@ function SkirmishSession(props: SkirmishProps = {}) {
     const startOrResume = (levelId: string, levelDoc: Level, activityId: string | null = null): void => {
       if (!shouldStartFresh(levelId, activityId)) return; // this scene store already holds this battle
       if (!isTestPlay) {
-        const saved = loadMatch();
+        const saved = runBattleReviewTerminal && activityId
+          ? loadReviewableRunBattleMatch(levelId, activityId)
+          : loadMatch();
         if (saved && persistedMatchMatchesActivity(saved, levelId, activityId)) {
           resumeMatch(saved, { deferClockStart: true });
           return;
@@ -677,9 +737,9 @@ function SkirmishSession(props: SkirmishProps = {}) {
       return () => { active = false; };
     }
 
-    if (runBattle) {
-      setRouteLevel(runBattle.level);
-      startOrResume(runBattle.level.id, runBattle.level, runBattle.activityId);
+    if (runBattleLevel) {
+      setRouteLevel(runBattleLevel);
+      startOrResume(runBattleLevel.id, runBattleLevel, runBattleActivityId);
       setBoardSettled(true);
       return;
     }
@@ -717,7 +777,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
         setBoardSettled(true);
       });
     return () => { active = false; };
-  }, [newSkirmish, resumeMatch, isTestPlay, routeBoard, routeBoardLevel, routeMap, routeCampaignId, routeLevel, routeLevelId, routeLobby, runBattle, runDeployment]);
+  }, [newSkirmish, resumeMatch, isTestPlay, routeBoard, routeBoardLevel, routeMap, routeCampaignId, routeLevel, routeLevelId, routeLobby, runBattleActivityId, runBattleLevel, runBattleReviewTerminal, runBattleSeed, runDeploymentActive]);
 
   useEffect(() => {
     if (!runDeployment && playableSurfaceReady && sceneActivated) activateClock();
@@ -1227,25 +1287,36 @@ function SkirmishSession(props: SkirmishProps = {}) {
     </InnerChromeBox>
   ) : null;
   const runBattleResult = runBattle && !runDeployment && routeLevel && game.winner ? (
-    <div className="campaign-result campaign-result--viewport" role="dialog" aria-label="Run Battle result" data-testid="run-battle-result">
-      <div className="settings-frame campaign-result-panel">
-        <h2>{game.winner === 'player' ? 'Victory' : game.winner === 'draw' ? 'Draw' : 'Defeat'}</h2>
-        <p>{routeLevel.name} — {resultDetail ?? objectiveGoal}</p>
-        <div className="campaign-result-actions">
-          {game.winner !== 'enemy' ? <RunBattleUndoButton testId="undo-run-move-result" /> : null}
-          {game.winner === 'player' ? (
-            <ChromeButton unit="inner-text-button"
-              className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-              onClick={() => runBattle.onVictory({
-                survivingUnitIds: game.pieces
-                  .filter((piece) => piece.alive && piece.side === 'player' && piece.id.startsWith('run-'))
-                  .map((piece) => piece.id),
-                turns: turnsElapsed,
-              })}
-            >
-              Continue
-            </ChromeButton>
-          ) : (
+    game.winner === 'player' ? (
+      <div
+        className="campaign-result--viewport run-battle-victory-overlay"
+        role="status"
+        aria-label="Battle won"
+        data-testid="run-battle-result"
+      >
+        <div ref={runBattleVictoryBannerRef} className="run-battle-victory-banner">
+          <h2>Victory</h2>
+          <ChromeButton unit="inner-text-button"
+            className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active', 'run-battle-rewards-button')}
+            data-testid="run-battle-rewards"
+            onClick={() => runBattle.onVictory({
+              survivingUnitIds: game.pieces
+                .filter((piece) => piece.alive && piece.side === 'player' && piece.id.startsWith('run-'))
+                .map((piece) => piece.id),
+              turns: turnsElapsed,
+            })}
+          >
+            Rewards &gt;
+          </ChromeButton>
+        </div>
+      </div>
+    ) : (
+      <div className="campaign-result campaign-result--viewport" role="dialog" aria-label="Run Battle result" data-testid="run-battle-result">
+        <div className="settings-frame campaign-result-panel">
+          <h2>{game.winner === 'draw' ? 'Draw' : 'Defeat'}</h2>
+          <p>{routeLevel.name} — {resultDetail ?? objectiveGoal}</p>
+          <div className="campaign-result-actions">
+            {game.winner === 'draw' ? <RunBattleUndoButton testId="undo-run-move-result" /> : null}
             <RunBattleRetryButton
               testId="retry-run-battle-result"
               costTenths={runBattle.retryCostTenths}
@@ -1254,28 +1325,28 @@ function SkirmishSession(props: SkirmishProps = {}) {
               unavailableReason={runBattleRetryUnavailableReason}
               className="active"
             />
-          )}
-          {game.winner === 'enemy' ? (
-            <>
-              <ChromeNavButton unit="inner-text-button"
-                className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
-                data-testid="new-run-after-defeat"
-                to={PLAY_RUN_NEW_SELECTOR_HREF}
-              >
-                New Run
-              </ChromeNavButton>
-              <ChromeNavButton unit="inner-text-button"
-                className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
-                data-testid="main-menu-after-defeat"
-                to="/"
-              >
-                Main Menu
-              </ChromeNavButton>
-            </>
-          ) : null}
+            {game.winner === 'enemy' ? (
+              <>
+                <ChromeNavButton unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+                  data-testid="new-run-after-defeat"
+                  to={PLAY_RUN_NEW_SELECTOR_HREF}
+                >
+                  New Run
+                </ChromeNavButton>
+                <ChromeNavButton unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+                  data-testid="main-menu-after-defeat"
+                  to="/"
+                >
+                  Main Menu
+                </ChromeNavButton>
+              </>
+            ) : null}
+          </div>
         </div>
       </div>
-    </div>
+    )
   ) : null;
   const skirmishTitleBarContent = playableSurfaceReady ? (
     <div className="skirmish-topbar-status">
@@ -1376,10 +1447,11 @@ function SkirmishSession(props: SkirmishProps = {}) {
             ariaLabel={runDeployment?.boardAriaLabel}
             onSurfaceReady={setBoardSurfaceReady}
             onSurfaceError={setBoardSurfaceError}
-            onArrivingUnitIdsChange={runDeployment?.onArrivingUnitIdsChange}
+            onArrivingUnitIdsChange={reportArrivingUnitIds}
             reveal={playableSurfaceReady && sceneRevealed}
+            revealTransition="scene"
             activate={!runDeployment && sceneActivated}
-            unitArrivals={sceneActivated ? 'active' : 'pending'}
+            unitArrivals={runBattleReviewTerminal ? 'settled' : sceneActivated ? 'active' : 'pending'}
             predrawnReview={predrawnPreview ? {
               src: predrawnPreview,
               registration: predrawnRegistration,

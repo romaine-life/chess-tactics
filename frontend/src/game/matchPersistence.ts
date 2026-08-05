@@ -53,6 +53,11 @@ function storage(): Storage | null {
 // would be a footgun. Real campaign play and free skirmishes persist. The screen
 // sets this on mount, before it starts or resumes a game (see ui/Skirmish).
 let enabled = true;
+// The Battle and aftermath are sibling scenes, so their stores do not share component
+// lifetime. Keep the just-won board in this module as the mandatory same-session handoff;
+// localStorage remains the reload bridge, not the condition for rendering Back (ADR-0440).
+let currentSessionRunVictory: PersistedMatch | null = null;
+
 export function setMatchPersistenceEnabled(value: boolean): void {
   enabled = value;
 }
@@ -77,6 +82,7 @@ function sliceOf(state: SkirmishState): PersistedMatch {
 }
 
 export function clearMatch(): void {
+  currentSessionRunVictory = null;
   const store = storage();
   try { store?.removeItem(KEY); } catch { /* storage blocked — nothing to remove */ }
 }
@@ -93,8 +99,18 @@ export function clearMatch(): void {
  * decision still has a payable Undo, in which case reload must preserve that choice.
  */
 export function persistMatch(state: SkirmishState): void {
+  // A won Run Battle remains reviewable from its persisted aftermath report. Keep that
+  // exact terminal position even though victory no longer offers Undo; standalone and
+  // non-victory terminal matches still have no resumable work and are discarded.
+  const reviewableRunVictory = state.game.winner === 'player'
+    && typeof state.activityId === 'string'
+    && state.activityId.startsWith('run:');
+  // Capture the scene-to-scene handoff before the best-effort disk gate. A storage policy,
+  // quota failure, or private-mode denial must not remove Back from the report reached from
+  // this mounted board. Any later started non-victory match retires the stale handoff.
+  if (state.started) currentSessionRunVictory = reviewableRunVictory ? sliceOf(state) : null;
   if (!enabled) return;
-  if (!state.started || (state.game.winner !== null && !state.undoCheckpoint)) {
+  if (!state.started || (state.game.winner !== null && !state.undoCheckpoint && !reviewableRunVictory)) {
     if (state.started) clearMatch(); // an irrevocably finished match has nothing to resume
     return;
   }
@@ -145,7 +161,33 @@ export function persistedMatchMatchesActivity(
   levelId: string,
   activityId: string | null,
 ): boolean {
-  return (match.game.winner === null || Boolean(match.undoCheckpoint))
+  const reviewableRunVictory = match.game.winner === 'player'
+    && typeof match.activityId === 'string'
+    && match.activityId.startsWith('run:');
+  return (match.game.winner === null || Boolean(match.undoCheckpoint) || reviewableRunVictory)
     && match.levelId === levelId
     && (match.activityId ?? null) === activityId;
+}
+
+/** The exact terminal player-win snapshot the matching aftermath may return to for review. */
+export function isReviewableRunBattleMatch(
+  match: PersistedMatch | null,
+  levelId: string,
+  activityId: string,
+): boolean {
+  return match?.game.winner === 'player'
+    && persistedMatchMatchesActivity(match, levelId, activityId);
+}
+
+/** Resolve Back's exact won board. The current scene handoff wins; disk is only the
+ * reload fallback. Neither path may substitute a different Run, Battle, or Level. */
+export function loadReviewableRunBattleMatch(
+  levelId: string,
+  activityId: string,
+): PersistedMatch | null {
+  if (isReviewableRunBattleMatch(currentSessionRunVictory, levelId, activityId)) {
+    return currentSessionRunVictory;
+  }
+  const stored = loadMatch();
+  return isReviewableRunBattleMatch(stored, levelId, activityId) ? stored : null;
 }

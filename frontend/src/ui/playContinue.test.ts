@@ -69,6 +69,22 @@ describe('Play Continue inventory', () => {
     expect(inventory.activities.some((activity) => activity.mode === 'levels')).toBe(false);
   });
 
+  it('keeps an aftermath board-review snapshot inside the one Run activity', () => {
+    const aftermath = { ...run('2026-01-01T00:00:00.000Z'), phase: 'aftermath' as const };
+    const inventory = continueInventory(
+      aftermath,
+      match('run-battle', '2026-01-02T00:00:00.000Z', runBattleActivityId('run-1', 0)),
+      [],
+      { 'run-battle': level('run-battle', 'Standalone Battle') },
+    );
+
+    expect(inventory.activities).toHaveLength(1);
+    expect(inventory.activities[0]).toMatchObject({
+      mode: 'run',
+      summary: 'The Long War · Battle 1 won',
+    });
+  });
+
   it('does not mistake another same-Level battle for the active Run', () => {
     const inventory = continueInventory(
       run('2026-01-01T00:00:00.000Z'),

@@ -21575,11 +21575,13 @@ app.post('/api/active-run/craft/:id', async (req, res) => {
   if (craftRouteUnavailable(res)) return;
   const id = String(req.params.id || '').toLowerCase();
   let run = null;
+  let spec = null;
   try {
     if (!serverRender.runCraftLinkId(serverRender.runCraftLinkForId(id))) {
       throw runCraftError('This is not a craft link id. Check the whole link was copied.');
     }
-    run = await craftedRunForSpec(await runCraftLinkSpec(id));
+    spec = await runCraftLinkSpec(id);
+    run = await craftedRunForSpec(spec);
   } catch (error) {
     reportCraftFailure(res, error, 'Run craft from link failed');
     return;
@@ -21597,6 +21599,9 @@ app.post('/api/active-run/craft/:id', async (req, res) => {
       runUrl: serverRender.runLinkForRun(run.id),
       runId: run.id,
       summary: craftedRunSummary(run),
+      // The persisted Run remains an ordinary Battle. This admin-only response tells the
+      // client when the craft link names its terminal board presentation as well.
+      battleResult: spec.phase === 'battle-victory' ? 'player' : null,
     });
   } catch (error) {
     dbUnavailable(res, 'Run craft write failed', error, 'active_run_store_unavailable');
@@ -21618,9 +21623,10 @@ app.post('/api/active-run/craft', async (req, res) => {
   if (craftRouteUnavailable(res)) return;
   let run = null;
   let link = null;
+  let spec = null;
   try {
     const body = req.body && typeof req.body === 'object' ? req.body : {};
-    const spec = runCraftSpecFromRequest(body);
+    spec = runCraftSpecFromRequest(body);
     link = await mintRunCraftLink(spec, user.email);
     run = await craftedRunForSpec(spec);
   } catch (error) {
@@ -21647,6 +21653,7 @@ app.post('/api/active-run/craft', async (req, res) => {
       runUrl: serverRender.runLinkForRun(run.id),
       runId: run.id,
       summary: craftedRunSummary(run),
+      battleResult: spec.phase === 'battle-victory' ? 'player' : null,
     });
   } catch (error) {
     dbUnavailable(res, 'Run craft write failed', error, 'active_run_store_unavailable');

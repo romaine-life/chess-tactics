@@ -21,6 +21,15 @@ describe('Run title route', () => {
     ]);
   });
 
+  it('names an aftermath board review as the Battle without adding a second crumb', () => {
+    expect(runTitleBarRouteSegments(
+      runInPhase('aftermath'),
+      '/run',
+      '?run=1&view=battle-review',
+      'battle-review',
+    )).toEqual([{ label: 'Battle', to: '/run?run=1' }]);
+  });
+
   it('does not present a Sectio-only room outside Sectio', () => {
     expect(runTitleBarRouteSegments(
       runInPhase('battle'),

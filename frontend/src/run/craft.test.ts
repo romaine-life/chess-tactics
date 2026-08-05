@@ -292,6 +292,14 @@ describe('crafted Run documents', () => {
     expect(run.battleRuntime?.initiallyDeployedUnitIds.length).toBeGreaterThan(0);
   });
 
+  it('crafts a terminal-victory landing as the same valid Battle document', () => {
+    const run = craft('?craft=battle-victory&battle=3&army=rook,rook');
+    expect(run.phase).toBe('battle');
+    expect(run.battleIndex).toBe(2);
+    expect(run.battleRuntime?.battleIndex).toBe(2);
+    expect(run.battleRuntime?.initiallyDeployedUnitIds.length).toBeGreaterThan(0);
+  });
+
   it('keeps the retired Surveyor\'s Compass inert in an explicit crafted Battle', () => {
     const run = craft('?craft=battle&battle=3&lipsana=surveyors-compass');
     expect(run.phase).toBe('battle');
@@ -323,6 +331,7 @@ describe('crafted Run documents', () => {
     expect(run.phase).toBe('aftermath');
     expect(run.battleIndex).toBe(1);
     expect(run.sectio).toBeNull();
+    expect(run.deployment).toBeNull();
     // The reward is reported and not yet banked, exactly as a played Battle leaves it.
     expect(run.aftermath?.goldTenths).toBe(GOLD_SCALE);
     expect(run.aftermath?.turns).toBe(14);
@@ -353,6 +362,7 @@ describe('crafted Run documents', () => {
       '?craft=sectio&battle=3&gold=25&army=knight,rook&offers=queen,pawn+pawn:pestiferous',
       '?craft=deployment&battle=2',
       '?craft=battle&battle=2',
+      '?craft=battle-victory&battle=2',
       '?craft=aftermath&battle=2&turns=21&seconds=402&fallen=2',
       '?craft=victory',
     ]) {

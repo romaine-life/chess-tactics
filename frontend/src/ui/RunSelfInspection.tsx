@@ -1,6 +1,6 @@
 
 export type RunSelfInspectionView = 'army' | 'lipsana';
-export type RunWorkspaceView = 'primary' | 'alienatio' | 'expunctio' | 'battle-preview' | RunSelfInspectionView;
+export type RunWorkspaceView = 'primary' | 'alienatio' | 'expunctio' | 'battle-preview' | 'battle-review' | RunSelfInspectionView;
 
 export const SECTIO_WORKSPACE_VIEWS = ['battle-preview', 'alienatio', 'expunctio'] as const;
 export type SectioWorkspaceView = typeof SECTIO_WORKSPACE_VIEWS[number];
@@ -12,6 +12,7 @@ export const RUN_WORKSPACE_VIEW_LABEL: Readonly<Record<Exclude<RunWorkspaceView,
   alienatio: 'Alienatio',
   expunctio: 'Expunctio',
   'battle-preview': 'View Battle',
+  'battle-review': 'Battle',
 });
 
 export function isSectioWorkspaceView(view: RunWorkspaceView): view is SectioWorkspaceView {
@@ -20,7 +21,7 @@ export function isSectioWorkspaceView(view: RunWorkspaceView): view is SectioWor
 
 export function runWorkspaceViewFromSearch(search: string): RunWorkspaceView {
   const view = new URLSearchParams(search).get('view');
-  return view === 'army' || view === 'lipsana' || view === 'alienatio' || view === 'expunctio' || view === 'battle-preview'
+  return view === 'army' || view === 'lipsana' || view === 'alienatio' || view === 'expunctio' || view === 'battle-preview' || view === 'battle-review'
     ? view
     : 'primary';
 }
@@ -39,7 +40,7 @@ export function runWorkspaceTitleSegment(
   currentHref: string,
   view: RunWorkspaceView,
 ): Readonly<{ label: string; to: string }> | null {
-  return view === 'primary'
+  return view === 'primary' || view === 'battle-review'
     ? null
     : Object.freeze({
       label: RUN_WORKSPACE_VIEW_LABEL[view],

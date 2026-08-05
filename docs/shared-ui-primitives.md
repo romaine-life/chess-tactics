@@ -34,7 +34,10 @@ search for before constructing a control or repeated surface.
   at its first frame, so destination layout never flashes before the motion begins;
   descendant motion is held with it until the director commits the scene as current.
   Imperative Web Animations go through its `SceneMotion` capability rather than
-  calling the browser API from feature code.
+  calling the browser API from feature code. Its `useSceneOpacityEntrance` hook
+  is the canonical tokenized fade-in for content that appears inside an already
+  active scene; because it is pure opacity, the OS movement-reduction reset does
+  not suppress it.
 - `ui/shared/ActionList.tsx` — data-driven selectable/action rows. War battles,
   Campaign Editor levels, and Play level lists use this instead of constructing
   first/middle/last rows independently.
@@ -63,6 +66,11 @@ search for before constructing a control or repeated surface.
 
 ## Studio and workflow compositions
 
+- `ui/shell/SceneContinuity.tsx` — the director's sole inert shared-element layer and
+  portal capability. It carries transient paint outside scene and selection fades,
+  exposes no input or navigation authority, and releases retained handoffs only when
+  the director settles the destination ([ADR-0385](adr/0385-scene-crossing-visuals-use-the-directors-continuity-layer.md),
+  [ADR-0446](adr/0446-continuity-handoffs-settle-with-the-director.md)).
 - `ui/RunCardFace.tsx` — the canonical visible Run-card anatomy shared by Card
   Layout, Sectio visits, review, Enchiridion, and Deployment; it owns the paired property/state
   icon seats, retains authored geometry for optional empty occurrences, and includes only visible

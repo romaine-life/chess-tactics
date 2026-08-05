@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-08-02
 deciders: owner (Nelson) + Claude
+partially_superseded_by:
+  - "[ADR-0445](0445-transition-choreography-is-derived-from-scene-ownership.md)"
 refines:
   - ADR-0207
   - ADR-0307

@@ -35,6 +35,11 @@ const paintedSurfaceBoundary = readFileSync(new URL('./shell/PaintedSurfaceBound
 const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const gameStore = readFileSync(new URL('../game/store.ts', import.meta.url), 'utf8');
 const matchPersistence = readFileSync(new URL('../game/matchPersistence.ts', import.meta.url), 'utf8');
+const useRunCraft = readFileSync(new URL('./useRunCraft.ts', import.meta.url), 'utf8');
+const craftedRunLanding = readFileSync(new URL('./craftedRunLanding.ts', import.meta.url), 'utf8');
+const bonaVacantia = readFileSync(new URL('./RunBonaVacantia.tsx', import.meta.url), 'utf8');
+const lipsanonFlight = readFileSync(new URL('./runLipsanonFlightView.tsx', import.meta.url), 'utf8');
+const sceneContinuity = readFileSync(new URL('./shell/SceneContinuity.tsx', import.meta.url), 'utf8');
 
 describe('Run chrome hierarchy', () => {
   it('admits every Run phase through the form-owned shell and HUD', () => {
@@ -62,6 +67,10 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toMatch(/<RunMetaControls[\s\S]*?run=\{shellRun\}[\s\S]*?onNavigate=\{navigateRunView\}/);
     expect(metaControls).not.toContain('inert=');
     expect(metaControls).not.toContain('adlectioInFlight');
+    // A phase with no sibling destination must not render a selected button which only
+    // navigates back to itself. The navigation group exists only for real Sectio views.
+    expect(metaControls).not.toContain('Run views');
+    expect(metaControls).toContain("const sectio = run.phase === 'sectio' ? run.sectio : null;");
     expect(metaControls).toContain('SECTIO_WORKSPACE_VIEWS.map');
     expect(metaControls).toContain('RUN_WORKSPACE_VIEW_LABEL[candidate]');
     expect(metaControls).toContain('data-testid={`run-view-${candidate}`}');
@@ -107,7 +116,7 @@ describe('Run chrome hierarchy', () => {
     expect(runForm).toContain('RunForm accepts only runActivity contributions.');
     expect(runScreen).toContain('sceneSnapshot: RunSceneSnapshot');
     expect(runScreen).toContain('<RunPresentationSceneSlot');
-    expect(runScreen).toContain("&& (shellRun?.phase === 'deployment' || shellRun?.phase === 'battle')");
+    expect(runScreen).toContain("&& (shellRun?.phase === 'deployment' || shellRun?.phase === 'battle' || reviewingWonBattle)");
     expect(runScreen).not.toContain('klerosisRun');
     expect(runScreen).toContain('const runSurfacePhase = sceneSnapshot.phase;');
     expect(runScreen).toContain('? `${shellRun.id}:battlefield:${shellRun.battleIndex}:${runSceneWorkspaceIdentity(sceneSnapshot.workspace)}`');
@@ -116,23 +125,35 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).not.toMatch(/if \([^)]*phase === 'deployment'[\s\S]{0,200}return \(/);
     expect(skirmish).toContain('presentedDeploymentSurface');
     expect(skirmish).toContain('preserveBoardPresentation: true');
-    expect(skirmish).toContain("unitArrivals={sceneActivated ? 'active' : 'pending'}");
-    expect(skirmish).toContain('onArrivingUnitIdsChange={runDeployment?.onArrivingUnitIdsChange}');
+    expect(skirmish).toContain("unitArrivals={runBattleReviewTerminal ? 'settled' : sceneActivated ? 'active' : 'pending'}");
+    expect(skirmish).toContain('revealTransition="scene"');
+    expect(skirmishBoard).toContain("data-reveal-transition={revealTransition}");
+    expect(skirmishBoard).toContain('data-unit-arrivals={unitArrivals}');
+    expect(skirmishBoard).toContain("if (unitArrivals === 'settled') arrivalPlansRef.current.clear()");
+    expect(skirmish).toContain('onArrivingUnitIdsChange={reportArrivingUnitIds}');
     expect(skirmishBoard).toContain('newlyVisibleArrivalPieces(visibleUnitIdsRef.current, livePieces)');
     expect(runScreen).toContain('onArrivingUnitIdsChange: reportArrivals');
     expect(runScreen).not.toContain('pendingPlacementArrivalUnitIdRef');
     expect(runScreen).not.toContain('RunWorkspaceStages');
     expect(runScreen).not.toContain('window.history');
     expect(runScreen).toContain('const run = sceneSnapshot.run;');
-    expect(runScreen).not.toContain('const run = useActiveRun((state) => state.run);');
+    expect(runScreen).not.toMatch(/useActiveRun\(\(state\) => state\.run\)/);
+    expect(skirmish).toContain('const runBattleLevel = runBattle?.level ?? null;');
+    expect(skirmish).toContain('const runBattleActivityId = runBattle?.activityId ?? null;');
+    expect(skirmish).toContain('const runBattleSeed = runBattle?.seed ?? null;');
+    expect(skirmish).toContain('const runBattleReviewTerminal = runBattle?.reviewTerminalResult ?? false;');
+    expect(skirmish).toContain('const runDeploymentActive = Boolean(runDeployment);');
+    expect(skirmish).toContain('runBattleActivityId, runBattleLevel, runBattleReviewTerminal, runBattleSeed, runDeploymentActive]);');
     expect(styleCss).not.toContain('.run-stage');
     expect(sceneManifest).toContain("instance(SCENE_DEFINITIONS.runPhase, { phase: phaseIdentity })");
     expect(sceneManifest).toContain('workspace: runSceneWorkspaceIdentity(snapshot.workspace),');
     expect(sceneDirector).toContain("type: 'refresh-source'");
     expect(app).toContain("source: 'active-run'");
     expect(app).toContain('sceneSnapshot={scene.snapshot as RunSceneSnapshot}');
-    expect(app).toContain('overlapsStateDrivenRunScene');
-    expect(app).toContain('(!preservesSceneHost || overlapsRunScene)');
+    expect(app).toContain('sceneTransitionRelationship');
+    expect(app).toContain("transitionRelationship?.kind === 'scene-replacement'");
+    expect(app).toContain("transitionRelationship?.kind === 'selection-change'");
+    expect(app).toContain('data-scene-transition-relationship={transitionRelationship?.kind}');
     expect(sceneBoundary).toContain("visualRole === 'outgoing'");
     expect(sceneBoundary).toContain('directorPhase: ScenePhase');
     expect(sceneBoundary).toContain('target.inert = true');
@@ -146,20 +167,40 @@ describe('Run chrome hierarchy', () => {
     expect(titleBarPortal).toContain('observer.observe(document.body, { childList: true, subtree: true })');
   });
 
-  it('keeps the retained Controls panel out of an overlapping Run workspace fade', () => {
-    // Sectio <-> Alienatio overlaps two complete Run layers so the outgoing snapshot stays
-    // frozen. Both layers paint the same Controls panel, so fading the boundary blended
-    // its title plank toward the backdrop mid-transition. Only the shell's replaceable
-    // viewport may carry that fade; the panel is a sibling of it and must not.
-    expect(chromeBox).toContain('{...shellViewportOverlapRegion()}');
-    expect(chromeBox).toMatch(/<section[\s\S]*?\{\.\.\.shellViewportOverlapRegion\(\)\}[\s\S]*?data-shell-viewport-swap=""/);
-    expect(app).toContain('sceneOverlapScope(scene.current, scene.destination!)');
-    expect(app).toContain('overlapScope={layer.overlapScope}');
-    expect(sceneBoundary).toContain("data-scene-overlap-scope={overlapScope === 'scene' ? undefined : overlapScope}");
-    expect(styleCss).toMatch(/\.scene-director\.is-entering \.scene-boundary\[data-scene-overlap-scope="shell-viewport"\]\[data-scene-visual-role="outgoing"\]\s*\{[\s\S]*?opacity:\s*1;[\s\S]*?transition:\s*none;/);
-    expect(styleCss).toMatch(/\.scene-director\.is-entering \.scene-boundary\[data-scene-overlap-scope="shell-viewport"\]\[data-scene-transition-active\]\s*\{[\s\S]*?opacity:\s*1;[\s\S]*?transition:\s*none;/);
-    expect(styleCss).toMatch(/\.scene-director\.is-entering \.scene-boundary\[data-scene-overlap-scope="shell-viewport"\]\[data-scene-visual-role="outgoing"\] \[data-scene-overlap-region\]\s*\{[\s\S]*?opacity:\s*0;/);
-    expect(styleCss).toMatch(/\.scene-director\.is-entering \.scene-boundary\[data-scene-overlap-scope="shell-viewport"\]\[data-scene-transition-active\] \[data-scene-overlap-region\]\s*\{[\s\S]*?opacity:\s*1;/);
+  it('derives full-scene crossfades and within-scene deselection from ownership', () => {
+    // A Run workspace is a selection inside its phase. Its viewport is the named
+    // transition target; Controls and the surrounding Run scene are not.
+    expect(chromeBox).toContain('{...gameplayWorkspaceTransitionTarget()}');
+    expect(chromeBox).toContain('<GameplayWorkspaceActivation>');
+    expect(sceneManifest).toContain("'run/phase': 'gameplay-workspace'");
+    expect(sceneManifest).toContain("kind: 'selection-change'");
+    expect(sceneManifest).toContain("kind: 'scene-replacement'");
+    expect(sceneManifest).toContain("path.snapshot.workspace.view === 'battle-review'");
+    expect(sceneManifest).not.toContain('overlapsStateDrivenRunScene');
+    expect(sceneManifest).not.toContain('sceneOverlapScope');
+    expect(sceneBoundary).not.toContain('data-scene-overlap-scope');
+    expect(styleCss).not.toContain('data-scene-overlap-scope');
+    expect(styleCss).not.toContain('data-scene-overlap-region');
+    expect(styleCss).toMatch(/\.scene-director\.is-exiting \[data-scene-transition-target\]\[data-scene-transition-active\]\s*\{[\s\S]*?opacity:\s*0;/);
+    expect(styleCss).toMatch(/\.scene-director\.is-entering \[data-scene-transition-target\]\[data-scene-transition-active\]\s*\{[\s\S]*?opacity:\s*1;/);
+    expect(sceneManifest).not.toContain("'out-in'");
+    expect(sceneBoundary).not.toContain('data-scene-overlap-mode');
+    expect(styleCss).not.toContain('data-scene-overlap-mode');
+    expect(styleCss).toMatch(/\.scene-director\.is-entering \.scene-boundary\[data-scene-visual-role="outgoing"\]\s*\{[\s\S]*?opacity:\s*0;[\s\S]*?transition:\s*opacity var\(--ds-duration-fade\) var\(--ds-ease-linear\);/);
+    expect(styleCss).toMatch(/\.scene-director\.is-entering \[data-scene-transition-target\]\[data-scene-transition-active\]\s*\{[\s\S]*?opacity:\s*1;[\s\S]*?transition:\s*opacity var\(--ds-duration-fade\) var\(--ds-ease-linear\);/);
+    expect(styleCss).not.toContain('retire-then-reveal');
+    expect(app).toContain("const homepageBackdropActive = scene.current.background === 'homepage'");
+    expect(app).toContain("|| scene.destination?.background === 'homepage'");
+    expect(app).toContain('{homepageBackdropActive ? (');
+    // A shared element crossing either relationship follows the director's settlement,
+    // not the lifetime of a selected workspace that deliberately unmounts in loading.
+    expect(app).toContain('<SceneContinuityHost phase={scene.phase} generation={scene.generation}>');
+    expect(sceneContinuity).toContain("if (phase !== 'current')");
+    expect(sceneContinuity).toContain('awaitingSettlement.current = generation');
+    expect(lipsanonFlight).toContain("options.handoff === 'scene-settled'");
+    expect(runScreen).toContain('launchLipsanon={launchBonaLipsanon}');
+    expect(runScreen).toMatch(/\{bonaLipsanonFlightElement\}[\s\S]*?\{formSurface\}/);
+    expect(bonaVacantia).not.toContain('useLipsanonFlight(');
     // The panel and any environment artwork retained across sibling destinations are
     // rendered beside the swap, never inside its fading overlap region.
     expect(skirmishShell).toContain('className="shell-persistent-viewport-artwork"');
@@ -552,12 +593,59 @@ describe('Run chrome hierarchy', () => {
   });
 
   // The played handoff cannot be rendered in this suite (the Battle board needs a live
-  // compositor), so the wiring is pinned at its source instead: what the result card
+  // compositor), so the wiring is pinned at its source instead: what the board overlay
   // gives the Run, and what the Run does with it.
-  it('hands the won Battle to its own report instead of straight to the Sectio', () => {
+  it('keeps the won board visible until Rewards opens its report', () => {
+    const victoryBranch = skirmish.match(
+      /game\.winner === 'player' \? \([\s\S]*?\n    \) : \(/,
+    )?.[0] ?? '';
     const resultCard = skirmish.match(
       /data-testid="run-battle-result"[\s\S]*?onClick=\{\(\) => runBattle\.onVictory\(\{[\s\S]*?\}\)\}/,
     )?.[0] ?? '';
+
+    expect(victoryBranch).toContain('run-battle-victory-overlay');
+    expect(victoryBranch).not.toContain('className="campaign-result ');
+    expect(victoryBranch).toContain('role="status"');
+    expect(victoryBranch).toContain('<h2>Victory</h2>');
+    expect(victoryBranch).toContain('data-testid="run-battle-rewards"');
+    expect(victoryBranch).toContain('Rewards &gt;');
+    expect(victoryBranch).not.toContain('settings-frame');
+    expect(victoryBranch).not.toContain('RunBattleUndoButton');
+    expect(skirmish).toContain("game.winner === 'draw' ? <RunBattleUndoButton");
+    expect(styleCss).toMatch(/\.run-battle-victory-overlay\s*\{[\s\S]*?display:\s*grid;[\s\S]*?pointer-events:\s*none;/);
+    expect(styleCss).toMatch(/\.run-battle-rewards-button\s*\{[\s\S]*?pointer-events:\s*auto;/);
+    expect(skirmish).toContain('useSceneOpacityEntrance(');
+    expect(skirmish).toContain("!runBattleReviewTerminal && game.winner === 'player'");
+    expect(skirmish).toContain('ref={runBattleVictoryBannerRef}');
+    expect(styleCss).not.toContain('run-battle-victory-enter');
+    expect(styleCss).toMatch(/\.run-battle-victory-banner\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) auto minmax\(0, 1fr\);/);
+    expect(styleCss).toMatch(/\.run-battle-victory-banner h2\s*\{[\s\S]*?grid-column:\s*2;/);
+    expect(styleCss).toMatch(/\.run-battle-rewards-button\s*\{[\s\S]*?grid-column:\s*3;[\s\S]*?min-inline-size:\s*0;/);
+
+    // The exact review surface is itself craftable. The server response carries a transient
+    // landing instruction beside the valid Battle document; the painted matching board consumes
+    // it through the canonical one-shot victory action before the director reveals the scene.
+    expect(useRunCraft).toContain('registerCraftedBattleResult(crafted.run, crafted.battleResult)');
+    expect(craftedRunLanding).toContain("run.phase === 'battle'");
+    expect(runScreen).toContain('const craftedBattleResult = onReviewRewards ? null : craftedBattleResultFor(run);');
+    expect(runScreen).toContain('craftedResult: craftedBattleResult');
+    expect(runScreen).toContain('reviewTerminalResult: Boolean(onReviewRewards || craftedBattleResult)');
+    expect(skirmish).toContain("runBattle?.craftedResult !== 'player'");
+    expect(skirmish).toContain('activityId !== runBattle.activityId');
+    expect(skirmish).toContain('!playableSurfaceReady');
+    expect(skirmish).not.toContain('|| !sceneActivated\n      || game.winner');
+    expect(skirmish).toContain('useLayoutEffect(() => {');
+    expect(skirmish).toContain("if (armAdminMode('win-battle')) adminWinBattle()");
+    expect(runScreen).toContain('clearCraftedBattleResult({');
+    expect(runScreen).toContain('data-testid="run-aftermath-back"');
+    expect(runScreen).toContain("onReviewBattle={() => navigateRunView('battle-review')}");
+    expect(runScreen).toContain("onReviewRewards={reviewingWonBattle ? () => navigateRunView('primary') : undefined}");
+    expect(runScreen).toContain('loadReviewableRunBattleMatch(');
+    expect(skirmish).toContain('? loadReviewableRunBattleMatch(levelId, activityId)');
+    expect(runScreen).toContain("? { ...shellRun, phase: 'battle', aftermath: null }");
+    expect(runScreen).toContain('clearMatch();');
+    expect(runScreen).toContain("data-run-controls-scroll={sectio ? 'scroll' : 'static'}");
+    expect(styleCss).toMatch(/\.run-meta-controls\[data-run-controls-scroll="static"\]\s*\{[\s\S]*?overflow-y:\s*hidden;/);
 
     // The turn count lives in the board store and unmounts with the board, so it is read
     // while the board is still standing and travels with the survivors.
@@ -566,14 +654,21 @@ describe('Run chrome hierarchy', () => {
     expect(resultCard).toContain('turns: turnsElapsed,');
     expect(skirmish).toContain('onVictory: (report: RunBattleReport) => void;');
 
-    expect(runScreen).toContain('if (latest?.id === runId) replace(closeBattle(latest, report));');
+    expect(runScreen).toContain('const closed = closeBattle(latest, report);');
+    expect(runScreen).toContain('replace(closed);');
     expect(runScreen).not.toContain('replace(openSectio(latest');
     expect(runScreen).toContain("shellRun.phase === 'aftermath' && shellRun.aftermath");
-    expect(runScreen).toContain('<AftermathPanel run={shellRun} />');
-    expect(runScreen).toContain('onClick={() => replace(leaveAftermath(run))}');
+    expect(runScreen).toContain('<AftermathPanel');
+    expect(runScreen).toContain('replace(leaveAftermath(run));');
+    expect(runScreen).not.toContain('run-aftermath-eyebrow');
+    expect(runScreen).not.toContain('Conflict {progress.conflict} · Battle');
+    expect(styleCss).toMatch(/\.run-aftermath-workspace\s*\{[\s\S]*?container-type:\s*size;/);
+    expect(styleCss).toMatch(/\.run-aftermath-workspace-content\s*\{[\s\S]*?grid-template-rows:\s*minmax\(0, 1fr\) auto minmax\(0, 1fr\);/);
+    expect(styleCss).toMatch(/\.run-aftermath-head,[\s\S]*?\.run-aftermath-report,[\s\S]*?\.run-aftermath-actions\s*\{[\s\S]*?translate:\s*0 -5cqh;/);
+    expect(styleCss).toMatch(/\.run-aftermath-report\s*\{[\s\S]*?grid-row:\s*2;/);
+    expect(styleCss).toMatch(/\.run-screen\.has-lipsana \.run-aftermath-workspace-content\s*\{[\s\S]*?padding-block-start:\s*0;/);
 
-    // The reward is reported on the Battle's own screen; restating it in the Sectio is the
-    // placement ADR-0377 retired.
+    // The reward is reported in aftermath; restating it in Sectio remains retired.
     expect(runScreen).not.toContain('run-sectio-rules');
     expect(styleCss).not.toContain('.run-sectio-rules');
   });

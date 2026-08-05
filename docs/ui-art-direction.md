@@ -276,6 +276,21 @@ title bar and right Controls panel remain fully visible and operable for post-Ba
 inspection. The result is therefore non-modal and offers paid **Retry**, **New Run**, and
 **Main Menu**, with no terminal-defeat Undo; New Run routes through the existing preparation
 and replacement confirmation (ADR-0428).
+On Run victory, the settled board stays fully visible and inspectable. An unframed,
+bottom-justified **Victory** acknowledgement fades over it with one prominent **Rewards >**
+action and no shade, recap card, or terminal-victory Undo. Rewards opens the persisted aftermath
+report. The complete won-Battle scene, including its Victory action and current Controls state,
+fades completely away before the complete report scene fades in; the two phases never appear or
+mutate in parallel, and both legs use the shared UI fade duration. That
+workspace seats its information box on the 45%-from-top optical centre, places Victory above it
+and the Back/Continue actions below it without centring the combined stack,
+and does not repeat the Conflict/Battle measures already present in the title bar. **Back** beside
+Continue returns to the exact won board without leaving or recomputing the persisted aftermath;
+the live Battle hands that review snapshot directly to aftermath before any best-effort disk write,
+so the report reached from Rewards always presents Back. Rewards returns to the same report, while
+Continue is the irreversible accounting handoff.
+Non-Sectio Controls likewise omit the one-item, no-op **Run views** group and are static layouts,
+not empty scroll panes (ADR-0435, ADR-0437, ADR-0438, ADR-0439, ADR-0440).
 On Bona Vacantia, the room-caption corner stays empty: no workspace heading,
 instructional prose, or placeholder label repeats the room identity. The persistent
 title bar is the sole textual location label unless a future accepted art decision

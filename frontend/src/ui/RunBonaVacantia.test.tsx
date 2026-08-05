@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
+import { applyDrawableCatalog, resetDrawableCatalog } from '@chess-tactics/board-render';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createBlankLevel } from '../core/level';
 import { craftRunDocument, parseRunCraftSpec } from '../run/craft';
 import type { RunWarSnapshot } from '../run/model';
@@ -10,6 +11,10 @@ import { LIPSANON_HOVER_EMPHASES, LIPSANON_MOTION_COMMITTED, lipsanonHoverAttrib
 import { lipsanonStripLandingPoint } from './runLipsanonFlight';
 import { LIPSANON_FLIGHT_MS } from './runLipsanonFlightView';
 import { LIPSANON_FLOAT_COMMITTED_TIMING } from './runLipsanonMat';
+import { testDrawableCatalog } from '../test/drawableCatalog';
+
+beforeAll(() => applyDrawableCatalog(testDrawableCatalog()));
+afterAll(() => resetDrawableCatalog());
 
 function war(battles = 4, lootAt: number[] = []): RunWarSnapshot {
   return {
@@ -44,7 +49,12 @@ function targetedVacantiaRun() {
 describe('Bona Vacantia lipsana', () => {
   it('leaves the room-caption corner empty and relies on the title bar for the phase name', () => {
     const markup = renderToStaticMarkup(
-      <RunBonaVacantia run={vacantiaRun()} replace={() => {}} onTargetLipsanon={() => {}} />,
+      <RunBonaVacantia
+        run={vacantiaRun()}
+        replace={() => {}}
+        onTargetLipsanon={() => {}}
+        launchLipsanon={() => false}
+      />,
     );
     expect(markup).toContain('aria-label="Lipsanon offers"');
     expect(markup).not.toContain('<h2');
@@ -65,7 +75,12 @@ describe('Bona Vacantia lipsana', () => {
 
   it('gives every offer its own float clock so the three do not move as one strip', () => {
     const markup = renderToStaticMarkup(
-      <RunBonaVacantia run={vacantiaRun()} replace={() => {}} onTargetLipsanon={() => {}} />,
+      <RunBonaVacantia
+        run={vacantiaRun()}
+        replace={() => {}}
+        onTargetLipsanon={() => {}}
+        launchLipsanon={() => false}
+      />,
     );
     const delays = [...markup.matchAll(/--lipsanon-float-delay:([^;"]+)/g)].map(([, value]) => value.trim());
     const spreads = [...markup.matchAll(/--lipsanon-float-spread:([^;"]+)/g)].map(([, value]) => value.trim());
@@ -76,7 +91,12 @@ describe('Bona Vacantia lipsana', () => {
 
   it('rests with no lipsanon in flight and nothing dimmed', () => {
     const markup = renderToStaticMarkup(
-      <RunBonaVacantia run={vacantiaRun()} replace={() => {}} onTargetLipsanon={() => {}} />,
+      <RunBonaVacantia
+        run={vacantiaRun()}
+        replace={() => {}}
+        onTargetLipsanon={() => {}}
+        launchLipsanon={() => false}
+      />,
     );
     expect(markup).toContain('data-testid="run-vacantia-offers"');
     expect(markup).not.toContain('data-taking');
@@ -86,7 +106,12 @@ describe('Bona Vacantia lipsana', () => {
 
   it('offers a targeted lipsanon directly instead of asking for a unit before it is taken', () => {
     const markup = renderToStaticMarkup(
-      <RunBonaVacantia run={targetedVacantiaRun()} replace={() => {}} onTargetLipsanon={() => {}} />,
+      <RunBonaVacantia
+        run={targetedVacantiaRun()}
+        replace={() => {}}
+        onTargetLipsanon={() => {}}
+        launchLipsanon={() => false}
+      />,
     );
     expect(markup).toContain('aria-label="Take Conscription Notice"');
     expect(markup).not.toContain('Discipline target');
@@ -103,18 +128,26 @@ describe('Bona Vacantia lipsana', () => {
 
   it('carries a landed lipsanon outside both scene fades until the incoming strip owns it', () => {
     const bona = readFileSync(new URL('./RunBonaVacantia.tsx', import.meta.url), 'utf8');
+    const runScreen = readFileSync(new URL('./RunScreen.tsx', import.meta.url), 'utf8');
     const flight = readFileSync(new URL('./runLipsanonFlightView.tsx', import.meta.url), 'utf8');
     const continuity = readFileSync(new URL('./shell/SceneContinuity.tsx', import.meta.url), 'utf8');
     const app = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8');
 
-    expect(bona).toContain("{ handoff: 'scene-retirement' }");
-    expect(flight).toContain("<SceneContinuityPortal contribution={{ kind: 'shared-element', id: `lipsanon:${flight.lipsanonId}` }}>");
-    expect(flight).toContain("options.handoff === 'scene-retirement'");
+    expect(bona).not.toContain('useLipsanonFlight(');
+    expect(bona).toContain('launchLipsanon(lipsanonId, icon, destination)');
+    expect(runScreen).toContain("{ handoff: 'scene-settled' }");
+    expect(runScreen).toMatch(/\{bonaLipsanonFlightElement\}[\s\S]*?\{formSurface\}/);
+    expect(runScreen).toContain('launchLipsanon={launchBonaLipsanon}');
+    expect(flight).toContain("contribution={{ kind: 'shared-element', id: `lipsanon:${flight.lipsanonId}` }}");
+    expect(flight).toContain("options.handoff === 'scene-settled'");
     expect(flight).toContain('if (!retainThroughSceneTransition) setFlight(null);');
+    expect(flight).toContain('onSceneSettled={retainThroughSceneTransition ? releaseSettledHandoff : undefined}');
     expect(flight).not.toContain('createPortal');
+    expect(continuity).toContain("if (phase !== 'current')");
+    expect(continuity).toContain('onSceneSettled();');
     expect(continuity).toContain('data-scene-continuity-contribution={contribution.id}');
     expect(continuity).toContain('data-scene-continuity-host=""');
-    expect(app).toContain('<SceneContinuityHost>');
+    expect(app).toContain('<SceneContinuityHost phase={scene.phase} generation={scene.generation}>');
   });
 
   it('uses the held strip as the sole relic instance and makes unit selection explicit', () => {
@@ -289,6 +322,6 @@ describe('Bona Vacantia lipsana', () => {
     // targeted take navigates to its authored chooser immediately rather than throwing or stalling.
     expect(lipsanonStripLandingPoint(0)).toBeNull();
     const source = readFileSync(new URL('./RunBonaVacantia.tsx', import.meta.url), 'utf8');
-    expect(source).toMatch(/if \(!launch\([\s\S]*?if \(lipsanonNeedsUnitTarget\(lipsanonId\)\) onTargetLipsanon\(lipsanonId\);[\s\S]*?else replace\(takeVacantiaLipsanon/);
+    expect(source).toMatch(/if \(!launchLipsanon\([\s\S]*?if \(lipsanonNeedsUnitTarget\(lipsanonId\)\) onTargetLipsanon\(lipsanonId\);[\s\S]*?else replace\(takeVacantiaLipsanon/);
   });
 });

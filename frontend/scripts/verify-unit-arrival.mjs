@@ -21,6 +21,7 @@
 // Usage:
 //   node scripts/verify-unit-arrival.mjs <battle-url> [--size WxH] [--timeout ms] [--out dir]
 //     [--click <selector>]   let the first scene settle, then navigate by clicking (menu → battle)
+//     [--settled]            require a terminal Victory to reveal with seated units and no child fade
 //     [--keep-frames]        write every recorded frame, not just the filmstrip
 
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
@@ -38,6 +39,7 @@ const [w, h] = String(flag('size', '1280x800')).split('x').map(Number);
 const timeout = Math.max(1_000, Number(flag('timeout', 60_000)) || 60_000);
 const outDir = resolve(process.cwd(), String(flag('out', 'tmp-shots/arrival')));
 const click = flag('click');
+const settledReview = has('settled');
 const keepFrames = has('keep-frames');
 // Board pixels disagreeing with the settled frame by more than this in any channel are counted.
 const PIXEL_TOLERANCE = 60;
@@ -62,7 +64,7 @@ const CHROMES = [
 ];
 const executablePath = CHROMES.find(existsSync);
 if (!url || url.startsWith('--')) {
-  console.error('usage: verify-unit-arrival <battle-url> [--size WxH] [--timeout ms] [--out dir] [--click selector] [--keep-frames]');
+  console.error('usage: verify-unit-arrival <battle-url> [--size WxH] [--timeout ms] [--out dir] [--click selector] [--settled] [--keep-frames]');
   process.exit(2);
 }
 if (!executablePath) { console.error(`No Chrome/Edge found. Checked:\n${CHROMES.join('\n')}`); process.exit(1); }
@@ -119,7 +121,14 @@ try {
   // player saw; this proves it deterministically, because the visible window can be shorter than
   // the board's own fade on a fast machine and still be the same defect.
   await page.evaluateOnNewDocument(() => {
-    window.__ctLifecycle = { states: [], earlyRevealMs: 0, entrances: 0 };
+    window.__ctLifecycle = {
+      states: [],
+      earlyRevealMs: 0,
+      entrances: 0,
+      victorySamples: 0,
+      victoryBeforeCurrent: false,
+      minVictoryOpacity: 1,
+    };
     let last = '';
     let lastAt = null;
     let stagedThisMount = false;
@@ -129,6 +138,14 @@ try {
       const board = document.querySelector('.skirmish-board-lab');
       const revealed = Boolean(board) && !board.classList.contains('is-board-loading');
       const staged = board?.getAttribute('data-arriving') === 'true';
+      const phase = document.querySelector('[data-scene-phase]')?.getAttribute('data-scene-phase') ?? '-';
+      const victory = document.querySelector('.run-battle-victory-banner');
+      if (victory) {
+        const opacity = Number.parseFloat(getComputedStyle(victory).opacity);
+        trace.victorySamples += 1;
+        if (Number.isFinite(opacity)) trace.minVictoryOpacity = Math.min(trace.minVictoryOpacity, opacity);
+        if (phase !== 'current') trace.victoryBeforeCurrent = true;
+      }
       const now = performance.now();
       if (!board) {
         // No battlefield mounted: whatever this mount accumulated proved nothing.
@@ -145,9 +162,11 @@ try {
       if (revealed && !staged && !stagedThisMount && lastAt !== null) pendingEarlyMs += now - lastAt;
       lastAt = now;
       const state = [
-        document.querySelector('[data-scene-phase]')?.getAttribute('data-scene-phase') ?? '-',
+        phase,
         board ? (revealed ? 'board:revealed' : 'board:hidden') : 'board:absent',
         staged ? 'arrivals:staged' : 'arrivals:none',
+        board ? `lifecycle:${board.getAttribute('data-unit-arrivals') ?? '-'}` : 'lifecycle:-',
+        victory ? 'victory:present' : 'victory:absent',
       ].join(' ');
       if (state !== last && trace.states.length < 400) {
         last = state;
@@ -234,6 +253,14 @@ try {
   if (!resolvedFrame) throw new Error('the battlefield never resolved to its settled composition');
 
   const lifecycle = await page.evaluate(() => window.__ctLifecycle ?? null);
+  const finalPresentation = await page.evaluate(() => {
+    const board = document.querySelector('.skirmish-board-lab');
+    return {
+      unitArrivals: board?.getAttribute('data-unit-arrivals') ?? null,
+      arrivalState: board?.getAttribute('data-arrival-state') ?? null,
+      victory: Boolean(document.querySelector('.run-battle-victory-banner')),
+    };
+  });
   // The filmstrip is named from the pixels, not the DOM: the frame that matters is the first one
   // in which the battlefield is actually on the player's screen.
   const onScreen = track.find((frame) => frame.changed <= ON_SCREEN) ?? null;
@@ -259,7 +286,25 @@ try {
     `${JSON.stringify(track.map(({ ms, changed }) => ({ ms, changed: Number(changed.toFixed(5)) })), null, 1)}\n`,
   );
 
-  if (!lifecycle?.entrances) {
+  if (settledReview && !lifecycle?.victorySamples) {
+    failure = 'the terminal battlefield never composed its Victory acknowledgement';
+  } else if (settledReview && !lifecycle.victoryBeforeCurrent) {
+    failure = 'Victory appeared only after the terminal battlefield became current — it straggled behind the scene reveal';
+  } else if (settledReview && lifecycle.minVictoryOpacity < 0.99) {
+    failure = `Victory owned a second opacity entrance (minimum child opacity ${lifecycle.minVictoryOpacity.toFixed(3)}) `
+      + 'instead of remaining fully composed inside the scene fade';
+  } else if (settledReview && lifecycle.entrances) {
+    failure = `the terminal battlefield replayed ${lifecycle.entrances} unit entrance(s)`;
+  } else if (settledReview && (
+    finalPresentation.unitArrivals !== 'settled'
+    || finalPresentation.arrivalState !== 'none'
+    || !finalPresentation.victory
+  )) {
+    failure = `the terminal battlefield did not stay settled: ${JSON.stringify(finalPresentation)}`;
+  } else if (settledReview) {
+    console.log(`terminal Victory reveal OK: Victory stayed fully composed across ${lifecycle.victorySamples} scene samples, `
+      + 'units remained settled, and no independent entrance played');
+  } else if (!lifecycle?.entrances) {
     failure = 'no unit entrance was observed on this battlefield — the gate had no target';
   } else if (lifecycle.earlyRevealMs > EARLY_REVEAL_MS) {
     failure = `the battlefield was revealed with its army seated for ${Math.round(lifecycle.earlyRevealMs)}ms `

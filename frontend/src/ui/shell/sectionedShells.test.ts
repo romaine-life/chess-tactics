@@ -4,6 +4,7 @@ import {
   deepestSharedSceneRegion,
   sceneLayerKey,
   sceneManifest,
+  sceneTransitionRelationship,
   type ScenePath,
 } from './sceneManifest';
 import { createRun } from '../../run/model';
@@ -205,6 +206,10 @@ describe('sectioned shells', () => {
 
           // The rail's own shell, and everything above it, is retained.
           expect(deepestSharedSceneRegion(from, to), context).toBe(family.region);
+          expect(sceneTransitionRelationship(from, to), context).toEqual({
+            kind: 'selection-change',
+            region: family.region,
+          });
 
           // Everything above the content slot is retained, and the FIRST thing that
           // differs is the instance that slot holds. Deeper instances may differ too

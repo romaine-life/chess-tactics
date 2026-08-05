@@ -85,11 +85,17 @@ import {
   type RunDeploymentInteractionStage,
 } from '../run/deployment';
 import { useActiveRun } from '../run/store';
+import {
+  clearMatch,
+  loadReviewableRunBattleMatch,
+} from '../game/matchPersistence';
 import { SkirmishViewStoreProvider } from '../game/SkirmishViewStoreContext';
 import { runLinkTargetMismatch } from '../run/craft';
 import { useRunCraft } from './useRunCraft';
+import { clearCraftedBattleResult, craftedBattleResultFor } from './craftedRunLanding';
 import { LipsanonIcon, LipsanaWorkspace } from './Lipsana';
 import { RunBonaVacantia, RunBonaVacantiaTarget } from './RunBonaVacantia';
+import { useLipsanonFlight } from './runLipsanonFlightView';
 import { RunGoldAmount } from './RunResources';
 import {
   isSectioWorkspaceView,
@@ -187,7 +193,10 @@ export function runTitleBarRouteSegments(
   requestedView: RunScreenView,
 ): readonly TitleRouteSegment[] {
   const runRootHref = runWorkspaceHref(`/run${search}`, 'primary');
-  const segments: TitleRouteSegment[] = [{ label: runPhaseRouteName(run), to: runRootHref }];
+  const phaseName = run.phase === 'aftermath' && requestedView === 'battle-review'
+    ? 'Battle'
+    : runPhaseRouteName(run);
+  const segments: TitleRouteSegment[] = [{ label: phaseName, to: runRootHref }];
   if (isStrategikonPath(path)) {
     segments.push(...strategikonRouteCrumbs(path).map((crumb) => ({
       ...crumb,
@@ -256,6 +265,7 @@ function useRunAbandon(run: RunDocument): {
     if (!confirmed) return;
     setAbandoning(true);
     await abandon();
+    clearMatch();
     navigateApp(PLAY_RUN_SELECTOR_HREF, { replace: true, scroll: false });
   }, [abandon, abandoning, ask, run.war.name]);
   return { abandonDialog: dialog, abandoning, requestAbandon };
@@ -289,39 +299,29 @@ function RunMetaControls({
   // Nothing inside the Sectio blocks Continue any more: the Conflict's lipsanon is taken on
   // Bona Vacantia, before the Sectio is even built.
   const continueHint: string | null = null;
-  const primaryLabel = run.phase === 'bona-vacantia'
-    ? 'Bona Vacantia'
-    : run.phase === 'deployment'
-      ? 'Deployment'
-      : run.phase === 'battle'
-        ? 'Battle'
-        : run.phase === 'aftermath'
-          ? 'Victory'
-          : run.phase === 'victory'
-            ? 'War Won'
-            : 'Sectio';
   return (
     <>
       {abandonDialog}
       <section
         className="run-meta-controls"
+        data-run-controls-scroll={sectio ? 'scroll' : 'static'}
         aria-label="Run controls"
       >
-        <div className="skirmish-view-group">
-          <span className="skirmish-eyebrow">{sectio ? 'Sectio views' : 'Run views'}</span>
-          <div className="run-meta-navigation">
-            <ChromeButton unit="inner-text-button"
-              data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-              data-testid="run-view-primary"
-              className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'primary' && 'active')}
-              style={{ ['--run-leaf-control-index' as string]: 0 } as CSSProperties}
-              aria-pressed={view === 'primary'}
-              onClick={() => onNavigate('primary')}
-            >
-              {primaryLabel}
-            </ChromeButton>
-            {sectio ? (
-              SECTIO_WORKSPACE_VIEWS.map((candidate, index) => (
+        {sectio ? (
+          <div className="skirmish-view-group">
+            <span className="skirmish-eyebrow">Sectio views</span>
+            <div className="run-meta-navigation">
+              <ChromeButton unit="inner-text-button"
+                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                data-testid="run-view-primary"
+                className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'primary' && 'active')}
+                style={{ ['--run-leaf-control-index' as string]: 0 } as CSSProperties}
+                aria-pressed={view === 'primary'}
+                onClick={() => onNavigate('primary')}
+              >
+                Sectio
+              </ChromeButton>
+              {SECTIO_WORKSPACE_VIEWS.map((candidate, index) => (
                 <ChromeButton unit="inner-text-button"
                   key={candidate}
                   data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
@@ -333,10 +333,10 @@ function RunMetaControls({
                 >
                   {RUN_WORKSPACE_VIEW_LABEL[candidate]}
                 </ChromeButton>
-              ))
-            ) : null}
+              ))}
+            </div>
           </div>
-        </div>
+        ) : null}
         {sectio ? (
           <div className="skirmish-view-group">
             <span className="skirmish-eyebrow">Sectio</span>
@@ -1068,18 +1068,24 @@ function AftermathMeasure({
 }
 
 /**
- * The screen that closes a won Battle. It is a phase of its own rather than a card over the
- * board: the fight is finished, so the board behind it is no longer the thing being looked at,
- * and the reward it reports used to be a line inside the Sectio -- announcing the result of the
- * fight in the room where the money is spent.
+ * The rewards report entered from the won board's lightweight Victory overlay. It remains a
+ * phase of its own because the reward it reports used to be a line inside the Sectio --
+ * announcing the result of the fight in the room where the money is spent.
  *
  * The gold is not banked until Continue, so what the screen says it won and what the Run then
  * receives are the same number read twice.
  */
-function AftermathPanel({ run }: { run: RunDocument }): ReactElement {
+function AftermathPanel({
+  run,
+  canReviewBattle,
+  onReviewBattle,
+}: {
+  run: RunDocument;
+  canReviewBattle: boolean;
+  onReviewBattle: () => void;
+}): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   const aftermath = run.aftermath!;
-  const progress = runBattleProgress(run);
   const levelName = run.war.battles[aftermath.battleIndex]?.level.name ?? '';
   const named = levelName && !isGeneratedRunBattleName(levelName) ? levelName : null;
   return (
@@ -1094,9 +1100,6 @@ function AftermathPanel({ run }: { run: RunDocument }): ReactElement {
       }}
     >
       <header className="run-aftermath-head">
-        <p className="run-aftermath-eyebrow">
-          Conflict {progress.conflict} · Battle {progress.battle} of {progress.battlesInConflict}
-        </p>
         <h2 id="run-aftermath-workspace-title" className="run-aftermath-title">Victory</h2>
         {named ? <p className="run-aftermath-subtitle">{named}</p> : null}
       </header>
@@ -1126,13 +1129,27 @@ function AftermathPanel({ run }: { run: RunDocument }): ReactElement {
         </dl>
       </InnerChromeBox>
 
-      <ChromeButton unit="inner-text-button"
-        data-testid="run-aftermath-continue"
-        className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-        onClick={() => replace(leaveAftermath(run))}
-      >
-        Continue
-      </ChromeButton>
+      <div className="run-aftermath-actions">
+        {canReviewBattle ? (
+          <ChromeButton unit="inner-text-button"
+            data-testid="run-aftermath-back"
+            className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+            onClick={onReviewBattle}
+          >
+            Back
+          </ChromeButton>
+        ) : null}
+        <ChromeButton unit="inner-text-button"
+          data-testid="run-aftermath-continue"
+          className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+          onClick={() => {
+            replace(leaveAftermath(run));
+            clearMatch();
+          }}
+        >
+          Continue
+        </ChromeButton>
+      </div>
     </RunSceneViewport>
   );
 }
@@ -1180,16 +1197,17 @@ function RunBattlefieldPanel({
   routeSearch,
   view,
   onNavigate,
+  onReviewRewards,
 }: {
   form: RunForm;
   run: RunDocument;
   view: RunScreenView;
   onNavigate: (view: RunScreenView) => void;
+  onReviewRewards?: () => void;
   routePath: string;
   routeSearch: string;
 }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
-  const currentRun = useActiveRun((state) => state.run);
   const { abandonDialog, requestAbandon } = useRunAbandon(run);
   const deploymentPresentation = useRunDeploymentPresentation({ run });
   const baseLevel = run.war.battles[run.battleIndex].level;
@@ -1210,8 +1228,9 @@ function RunBattlefieldPanel({
   );
   const runId = run.id;
   const battleSeed = run.deployment?.seed ?? run.seed;
+  const craftedBattleResult = onReviewRewards ? null : craftedBattleResultFor(run);
   const canCashOutPawn = hasLipsanon(run, 'mercenary-boat');
-  const retryRun = currentRun?.id === runId ? currentRun : run;
+  const battleCanRestart = onReviewRewards ? false : canRestartBattle(run);
 
   const transformCommittedBoard = useCallback<RunBattleTransformSink>((game, _events) => {
       let active = useActiveRun.getState().run;
@@ -1262,6 +1281,11 @@ function RunBattlefieldPanel({
     level: battleLevel,
     seed: battleSeed,
     activityId: runBattleActivityId(runId, run.battleIndex),
+    craftedResult: craftedBattleResult,
+    // Both terminal-review entrances are already-resolved boards. Aftermath Back restores
+    // the saved terminal match; a crafted Victory applies its one-shot result while this
+    // incoming scene is still preparing. Neither should stage or replay unit arrivals.
+    reviewTerminalResult: Boolean(onReviewRewards || craftedBattleResult),
     transformCommittedBoard,
     undoAdapter: {
       capture: () => {
@@ -1282,10 +1306,27 @@ function RunBattlefieldPanel({
       },
     } satisfies RunBattleUndoAdapter,
     onVictory: (report) => {
+      if (onReviewRewards) {
+        onReviewRewards();
+        return;
+      }
       const latest = useActiveRun.getState().run;
-      if (latest?.id === runId) replace(closeBattle(latest, report));
+      if (latest?.id === runId) {
+        const closed = closeBattle(latest, report);
+        // The transient craft marker stays for the whole visible-board Victory surface so
+        // every render continues to classify it as terminal. Rewards retires both the
+        // surface and its marker together.
+        clearCraftedBattleResult({
+          id: runId,
+          phase: 'battle',
+          battleIndex: run.battleIndex,
+        });
+        replace(closed);
+        if (closed.phase === 'victory') clearMatch();
+      }
     },
     onRestart: () => {
+      if (onReviewRewards) return false;
       const latest = useActiveRun.getState().run;
       if (!latest || latest.id !== runId) return false;
       const restarted = restartBattle(latest);
@@ -1293,16 +1334,16 @@ function RunBattlefieldPanel({
       replace(restarted);
       return true;
     },
-    canRestart: canRestartBattle(retryRun),
+    canRestart: battleCanRestart,
     retryCostTenths: RUN_BATTLE_RETRY_COST_TENTHS,
     onAbandonRun: () => { void requestAbandon(); },
-    onPawnCashOut: canCashOutPawn
+    onPawnCashOut: canCashOutPawn && !onReviewRewards
       ? (unitId) => {
           const latest = useActiveRun.getState().run;
           if (latest?.id === runId) replace(cashOutPawn(latest, unitId));
         }
       : undefined,
-  }), [battleLevel, battleSeed, canCashOutPawn, replace, requestAbandon, retryRun, run.battleIndex, runId, transformCommittedBoard]);
+  }), [battleCanRestart, battleLevel, battleSeed, canCashOutPawn, craftedBattleResult, onReviewRewards, replace, requestAbandon, run.battleIndex, runId, transformCommittedBoard]);
 
   // Subscribe to the current document so a Paid Crossing cash-out or Reservist event
   // refreshes the hook inputs without restarting the already-live matching board.
@@ -1367,9 +1408,32 @@ export function RunScreen({
     : sceneSnapshot.workspace.view === 'bona-target'
       ? 'primary'
       : sceneSnapshot.workspace.view;
-  const view = shellRun?.phase !== 'sectio' && (rawView === 'alienatio' || rawView === 'expunctio')
+  const battleReviewActivity = shellRun
+    ? runBattleActivityId(shellRun.id, shellRun.battleIndex)
+    : null;
+  const battleReviewAvailable = Boolean(
+    shellRun?.phase === 'aftermath'
+    && battleReviewActivity
+    && loadReviewableRunBattleMatch(
+      shellRun.war.battles[shellRun.battleIndex].level.id,
+      battleReviewActivity,
+    ),
+  );
+  const view = rawView === 'battle-review' && !battleReviewAvailable
     ? 'primary'
-    : rawView;
+    : shellRun?.phase !== 'sectio' && (rawView === 'alienatio' || rawView === 'expunctio')
+      ? 'primary'
+      : rawView;
+  const reviewingWonBattle = rawView === 'battle-review' && battleReviewAvailable;
+  const battleSurfaceRun = useMemo<RunDocument | null>(() => (
+    reviewingWonBattle && shellRun
+      ? { ...shellRun, phase: 'battle', aftermath: null }
+      : shellRun
+  ), [reviewingWonBattle, shellRun]);
+  useEffect(() => {
+    if (!hydrated || rawView !== 'battle-review' || battleReviewAvailable) return;
+    navigateApp(runWorkspaceHref(`/run${routeSearch}`, 'primary'), { replace: true, scroll: false });
+  }, [battleReviewAvailable, hydrated, rawView, routeSearch]);
   const strategikonOpen = sceneSnapshot.workspace.view === 'strategikon';
   const bonaTarget = sceneSnapshot.workspace.view === 'bona-target'
     ? sceneSnapshot.workspace
@@ -1416,6 +1480,21 @@ export function RunScreen({
     current.pathname = '/run';
     navigateApp(runBonaTargetHref(current.toString(), lipsanonId, unitId), { replace: true, scroll: false });
   };
+  // The Run phase owns this carry, not the selected Bona workspace. A targeted take keeps
+  // the same phase scene mounted while the gameplay workspace deselects, so local mat state
+  // would unmount during preparation and leave the continuity layer blank.
+  const {
+    launch: launchBonaLipsanon,
+    element: bonaLipsanonFlightElement,
+  } = useLipsanonFlight((lipsanonId) => {
+    const latest = useActiveRun.getState().run;
+    if (!latest || latest.phase !== 'bona-vacantia') return;
+    if (lipsanonNeedsUnitTarget(lipsanonId)) {
+      navigateBonaTarget(lipsanonId);
+      return;
+    }
+    replace(takeVacantiaLipsanon(latest, lipsanonId));
+  }, { handoff: 'scene-settled' });
   const alieneUnit = (unitId: string): void => {
     if (!shellRun) return;
     const latest = useActiveRun.getState().run;
@@ -1593,12 +1672,25 @@ export function RunScreen({
                     ))}
                   />
                 )
-                : <RunBonaVacantia run={shellRun} replace={replace} onTargetLipsanon={navigateBonaTarget} />
+                : (
+                  <RunBonaVacantia
+                    run={shellRun}
+                    replace={replace}
+                    onTargetLipsanon={navigateBonaTarget}
+                    launchLipsanon={launchBonaLipsanon}
+                  />
+                )
               : shellRun.phase === 'aftermath' && shellRun.aftermath
-                ? <AftermathPanel run={shellRun} />
+                ? (
+                  <AftermathPanel
+                    run={shellRun}
+                    canReviewBattle={battleReviewAvailable}
+                    onReviewBattle={() => navigateRunView('battle-review')}
+                  />
+                )
                 : <VictoryPanel run={shellRun} />);
   const battlefieldActive = !craftWorkspace
-    && (shellRun?.phase === 'deployment' || shellRun?.phase === 'battle');
+    && (shellRun?.phase === 'deployment' || shellRun?.phase === 'battle' || reviewingWonBattle);
   const runSurfacePhase = sceneSnapshot.phase;
   const sceneInstance = battlefieldActive && shellRun
     ? `${shellRun.id}:battlefield:${shellRun.battleIndex}:${runSceneWorkspaceIdentity(sceneSnapshot.workspace)}`
@@ -1620,15 +1712,16 @@ export function RunScreen({
     inspectionWorkspace,
     className: `run-screen${shellRun && (visibleLipsanonCount(shellRun) || bonaTarget) ? ' has-lipsana' : ''}`,
   });
-  const formSurface = battlefieldActive && shellRun
+  const formSurface = battlefieldActive && battleSurfaceRun
     ? (
       <RunBattlefieldPanel
         form={form}
-        run={shellRun}
+        run={battleSurfaceRun}
         routePath={routePath}
         routeSearch={routeSearch}
         view={view}
         onNavigate={navigateRunView}
+        onReviewRewards={reviewingWonBattle ? () => navigateRunView('primary') : undefined}
       />
     )
     : (
@@ -1660,6 +1753,7 @@ export function RunScreen({
   return (
     <RunPresentationSceneSlot className="run-scene-slot" sceneInstance={sceneInstance}>
       {cardFlightElement}
+      {bonaLipsanonFlightElement}
       {formSurface}
     </RunPresentationSceneSlot>
   );
