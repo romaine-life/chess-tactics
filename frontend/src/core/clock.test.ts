@@ -1,5 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, formatClockMs, formatClockSeconds, parseClockSeconds, stepLadder } from './clock';
+import {
+  CLOCK_INCREMENT_SECONDS,
+  CLOCK_INITIAL_SECONDS,
+  formatClockMs,
+  formatClockSeconds,
+  formatElapsedClockMs,
+  parseClockSeconds,
+  readElapsedClockMs,
+  stepLadder,
+} from './clock';
 
 describe('formatClockMs (live readout)', () => {
   it('renders m:ss above ten seconds, rounding a started second up', () => {
@@ -27,6 +36,22 @@ describe('formatClockSeconds (authored values)', () => {
     expect(formatClockSeconds(300)).toBe('5:00');
     expect(formatClockSeconds(30)).toBe('0:30');
     expect(formatClockSeconds(3_600)).toBe('60:00');
+  });
+});
+
+describe('untimed Battle elapsed clock', () => {
+  it('reads a live monotonic anchor on top of banked time', () => {
+    expect(readElapsedClockMs({ elapsedMs: 2_500, startedAtMs: 10_000 }, 13_250)).toBe(5_750);
+    expect(readElapsedClockMs({ elapsedMs: 2_500, startedAtMs: null }, 99_000)).toBe(2_500);
+    expect(readElapsedClockMs({ elapsedMs: 2_500, startedAtMs: 10_000 }, 9_000)).toBe(2_500);
+  });
+
+  it('counts upward in floor-quantized whole seconds', () => {
+    expect(formatElapsedClockMs(0)).toBe('0:00');
+    expect(formatElapsedClockMs(999)).toBe('0:00');
+    expect(formatElapsedClockMs(1_000)).toBe('0:01');
+    expect(formatElapsedClockMs(61_999)).toBe('1:01');
+    expect(formatElapsedClockMs(3_600_000)).toBe('60:00');
   });
 });
 

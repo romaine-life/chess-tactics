@@ -150,6 +150,11 @@ cash-out effects. Undo restores that slice through the normal active-Run write a
 the checkpoint exists only alongside the device-local live board and is replaced by the next move
 or cleared by Battle replacement (ADR-0394).
 
+The same resumable match snapshot banks an untimed Battle's elapsed duration without persisting its
+live wall-clock anchor. Version 1 snapshots migrate once to version 2 with a zero bank; current
+snapshots resume the bank only after the painted Battle activates, so loading and reload gaps never
+become displayed play time (ADR-0451).
+
 Per-user scoping means each user has their own `id` namespace — two users can
 both have a level `my-level` without colliding, and neither can read or
 overwrite the other's. Writes upsert and bump a `revision`.

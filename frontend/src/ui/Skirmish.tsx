@@ -24,7 +24,7 @@ import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarControlContribution, TitleBarStatus } from './shell/TitleBarControls';
 import { shouldStartFreshSkirmish, type RunBattleTransformSink, type RunBattleUndoAdapter } from '../game/store';
 import { SkirmishStoreProvider, useSkirmish, useSkirmishStoreApi } from '../game/SkirmishStoreContext';
-import { loadMatch, persistedMatchMatchesActivity, setMatchPersistenceEnabled } from '../game/matchPersistence';
+import { loadMatch, persistMatch, persistedMatchMatchesActivity, setMatchPersistenceEnabled } from '../game/matchPersistence';
 import {
   fetchLobby,
   postMove,
@@ -42,7 +42,12 @@ import { clearPersistedNetIntent } from '../game/netIntentPersistence';
 import { acquireNetSeatLease } from '../game/netSeatLease';
 import { objectiveSummary, victoryRulesForObjective } from '../core/objectives';
 import { objectiveBriefingForSide } from '../game/objectiveBriefing';
-import { formatClockMs } from '../core/clock';
+import {
+  formatClockMs,
+  formatElapsedClockMs,
+  readElapsedClockMs,
+  type ElapsedClockState,
+} from '../core/clock';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { decodeBoard } from './boardCode';
@@ -164,6 +169,17 @@ export function canRetryRunBattle(
 /** A Deployment reroll retains the mounted Battle activity but must promote its new seed once. */
 export function runBattlePresentationKey(activityId: string, seed: number): string {
   return `${activityId}:${seed}`;
+}
+
+function useElapsedClockReadout(clock: ElapsedClockState, enabled: boolean): number {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    setNowMs(Date.now());
+    if (!enabled || clock.startedAtMs === null) return undefined;
+    const ticker = window.setInterval(() => setNowMs(Date.now()), 250);
+    return () => window.clearInterval(ticker);
+  }, [clock.startedAtMs, enabled]);
+  return readElapsedClockMs(clock, nowMs);
 }
 
 function SkirmishSession(props: SkirmishProps = {}) {
@@ -385,6 +401,8 @@ function SkirmishSession(props: SkirmishProps = {}) {
   // remainingMs to the displayed readout, so this subscription re-renders about
   // once a second, not per tick.
   const clock = useSkirmish((s) => s.clock);
+  const battleElapsed = useSkirmish((s) => s.battleElapsed);
+  const elapsedReadoutMs = useElapsedClockReadout(battleElapsed, clock === null);
   const net = useSkirmish((s) => s.net);
   const localSide: PlayingSide = net ? net.localSide : 'player';
   const activeLevel = useMemo(() => {
@@ -738,6 +756,15 @@ function SkirmishSession(props: SkirmishProps = {}) {
       });
     return () => { active = false; };
   }, [newSkirmish, resumeMatch, isTestPlay, routeBoard, routeBoardLevel, routeMap, routeCampaignId, routeLevel, routeLevelId, routeLobby, runBattle, runDeployment]);
+
+  useEffect(() => {
+    // Board transitions already persist their exact elapsed bank. Pagehide covers the
+    // remaining case: a reload while the player has not moved since the last snapshot.
+    // The storage boundary strips the live anchor, so reload latency is never counted.
+    const bankBeforeUnload = () => persistMatch(skirmishStore.getState());
+    window.addEventListener('pagehide', bankBeforeUnload);
+    return () => window.removeEventListener('pagehide', bankBeforeUnload);
+  }, [skirmishStore]);
 
   useEffect(() => {
     if (!runDeployment && !unitDeparture && playableSurfaceReady && sceneActivated) activateClock();
@@ -1313,7 +1340,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
   const skirmishTitleBarContent = playableSurfaceReady ? (
     <div className="skirmish-topbar-status">
       {/* The battle clock is ALWAYS the middle chip on every play surface — a timed game
-        counts down and an authored untimed level reads "∞ / No limit". Keeping the
+        counts down and an authored untimed level counts elapsed Battle time upward. Keeping the
         centre chip present means
         the turn plate and objective always flank a real element, so the clock stays
         page-centred over the title bar's diamond (equal-width flanks, see style.css). */}
@@ -1329,7 +1356,9 @@ function SkirmishSession(props: SkirmishProps = {}) {
           </>
         ) : (
           <>
-            <strong className="skirmish-clock-unlimited" aria-label="No time limit">∞</strong>
+            <strong data-testid="untimed-battle-clock" aria-label={`Elapsed time ${formatElapsedClockMs(elapsedReadoutMs)}`}>
+              {formatElapsedClockMs(elapsedReadoutMs)}
+            </strong>
             <small>No limit</small>
           </>
         )}

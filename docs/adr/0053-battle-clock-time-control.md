@@ -2,6 +2,7 @@
 status: "accepted"
 date: 2026-07-03
 deciders: Nelson, Claude
+partially_superseded_by: "[ADR-0451](0451-untimed-levels-display-elapsed-battle-time.md)"
 ---
 
 # ADR-0053: The battle clock — a per-level chess time control for the player only

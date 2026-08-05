@@ -4,6 +4,14 @@
 
 import type { TimeControl } from './level';
 
+/** A wall-clock stopwatch stored as banked elapsed time plus an optional live anchor.
+ * The anchor is device-local and is cleared whenever the Battle is not actively
+ * presented; loading and reload gaps therefore never become play time. */
+export interface ElapsedClockState {
+  elapsedMs: number;
+  startedAtMs: number | null;
+}
+
 /** The editor's default when the clock is toggled ON — 5:00, no increment. */
 export const DEFAULT_TIME_CONTROL: TimeControl = { initialSeconds: 300, incrementSeconds: 0 };
 
@@ -36,6 +44,18 @@ export function formatClockMs(ms: number): string {
     return `0:${String(Math.floor(tenths / 10)).padStart(2, '0')}.${tenths % 10}`;
   }
   const totalSeconds = Math.ceil(clamped / 1000);
+  return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`;
+}
+
+/** Resolve the exact elapsed duration from its bank and live wall-clock anchor. */
+export function readElapsedClockMs(clock: ElapsedClockState, nowMs = Date.now()): number {
+  const liveMs = clock.startedAtMs === null ? 0 : Math.max(0, nowMs - clock.startedAtMs);
+  return Math.max(0, clock.elapsedMs + liveMs);
+}
+
+/** Untimed Battle readout: count upward in whole seconds, beginning at 0:00. */
+export function formatElapsedClockMs(ms: number): string {
+  const totalSeconds = Math.floor(Math.max(0, ms) / 1000);
   return `${Math.floor(totalSeconds / 60)}:${String(totalSeconds % 60).padStart(2, '0')}`;
 }
 

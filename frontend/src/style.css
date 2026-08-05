@@ -4551,7 +4551,7 @@ h1 {
    nailhead diamond, with the turn plate and objective hugging it as a mirrored pair.
    min- (not fixed) width so an unusually long objective line grows rather than clips;
    the widest real content is ~139px ("Defeat every enemy piece"), so 150 sits both
-   comfortably on one line. The clock is always the centre chip (untimed reads "∞"),
+   comfortably on one line. The clock is always the centre chip (untimed counts up),
    so this equal pair centres it on every play surface, timed or not.
    Scoped to the cluster so the standalone board status chips that reuse
    .skirmish-turn-plate (loading / map-error) keep sizing to their own content. */
@@ -4581,16 +4581,6 @@ h1 {
 
 .skirmish-clock strong {
   font-variant-numeric: tabular-nums;
-}
-
-/* Untimed games show "∞" here instead of a countdown. The infinity glyph is absent from
-   the pixel display font (it falls back to a text font and renders small/thin), so bump
-   its size and drop the tabular-figure treatment it doesn't need — it then reads with the
-   same weight as the "5:00" it stands in for. */
-.skirmish-clock strong.skirmish-clock-unlimited {
-  font-size: 1.5em;
-  font-variant-numeric: normal;
-  line-height: 0.9;
 }
 
 /* The final seconds read as danger — the telegraph palette's threat tone, the same
