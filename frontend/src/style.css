@@ -6476,9 +6476,10 @@ body.loading-bootstrap .app-startup-status {
   padding-inline: var(--house-select-clip-apron-left) var(--house-select-clip-apron-right);
 }
 .house-select-menu-scroll > .kit-scroll-rail {
-  bottom: 2px;
-  right: calc(3px + var(--house-select-clip-apron-right));
-  top: 2px;
+  bottom: 0;
+  right: calc(var(--house-select-clip-apron-right) - var(--le-chrome-inner-rail-w, 7px));
+  top: 0;
+  z-index: 5;
 }
 .house-select-menu-options {
   display: flex;
