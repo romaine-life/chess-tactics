@@ -6,6 +6,7 @@ import { authorizeAdminPlaytest } from '../net/adminPlaytest';
 import { acquireLipsanon, canTargetLipsanon, GOLD_SCALE, grantGold, lipsanonNeedsUnitTarget, PIECE_LABEL, LIPSANON_BY_ID, RUN_LIPSANA, type LipsanonId } from '../run/model';
 import { useActiveRun } from '../run/store';
 import { navigateApp, readValidatedReturnTo } from './navigation';
+import { RunGoldIcon } from './RunResources';
 import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
 import { InnerChromeBox } from './shared/ChromeBox';
@@ -220,23 +221,27 @@ export function AdminControls({
                 <small>{run ? `Add gold to ${run.war.name}.` : 'Start a Run before granting gold.'}</small>
               </div>
               <div className="admin-control-inline">
-                <input
-                  className="admin-gold-input"
-                  type="number"
-                  min="0.1"
-                  max="1000000"
-                  step="0.1"
-                  value={goldAmount}
-                  disabled={!run || busy !== null}
-                  onChange={(event) => setGoldAmount(event.target.value)}
-                  aria-label="Gold amount"
-                />
+                <InnerChromeBox as="span" className="admin-gold-field">
+                  <input
+                    className="admin-gold-input"
+                    type="number"
+                    min="0.1"
+                    max="1000000"
+                    step="0.1"
+                    value={goldAmount}
+                    disabled={!run || busy !== null}
+                    onChange={(event) => setGoldAmount(event.target.value)}
+                    aria-label="Gold amount"
+                  />
+                </InnerChromeBox>
                 <SettingsButton
                   tone="primary"
                   disabled={!run || busy !== null}
                   onClick={() => void gainGold()}
                   data-testid="battle-admin-gain-gold"
+                  data-ui-sfx="gold"
                 >
+                  <RunGoldIcon className="run-gold-icon--button" />
                   Grant
                 </SettingsButton>
               </div>
@@ -322,18 +327,27 @@ export function AdminControls({
           description={run ? `Add gold to ${run.war.name}. Enter an amount in tenths.` : 'Start a Run before granting gold.'}
         >
           <div className="admin-control-inline">
-            <input
-              className="admin-gold-input"
-              type="number"
-              min="0.1"
-              max="1000000"
-              step="0.1"
-              value={goldAmount}
+            <InnerChromeBox as="span" className="admin-gold-field">
+              <input
+                className="admin-gold-input"
+                type="number"
+                min="0.1"
+                max="1000000"
+                step="0.1"
+                value={goldAmount}
+                disabled={!run || busy !== null}
+                onChange={(event) => setGoldAmount(event.target.value)}
+                aria-label="Gold amount"
+              />
+            </InnerChromeBox>
+            <SettingsButton
+              tone="primary"
               disabled={!run || busy !== null}
-              onChange={(event) => setGoldAmount(event.target.value)}
-              aria-label="Gold amount"
-            />
-            <SettingsButton tone="primary" disabled={!run || busy !== null} onClick={() => void gainGold()} data-testid="admin-gain-gold">
+              onClick={() => void gainGold()}
+              data-testid="admin-gain-gold"
+              data-ui-sfx="gold"
+            >
+              <RunGoldIcon className="run-gold-icon--button" />
               Grant
             </SettingsButton>
           </div>

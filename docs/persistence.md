@@ -105,10 +105,14 @@ Continue may perform no
 Adlectio and enters Deployment at Battle index 0. Deployment always persists the exact dealt-card
 order, stable nullable seats, capacity decision, active card, revealed-card prefix, seat cursor,
 deal boundary, paused/play/full-deploy transport, committed placements, settlement boundary, and
-discard cursor. A won
+discard cursor. A one-gold in-Deployment or five-gold in-Battle position reroll replaces those
+existing fields at the initial deal boundary with a new placement seed while retaining the dealt
+card ids and nullable seat order. Its registered unit-departure track is presentation-only: the
+atomic persisted replacement and gold debit occur after compositor completion, so animation
+progress adds no RunSaveVersion field. A won
 non-final Battle enters `aftermath`, which persists
 the reward, turns, elapsed time, survivors, and fallen units until Continue opens Bona Vacantia
-or the next Sectio. See ADR-0321 through ADR-0348, ADR-0377, ADR-0419, and ADR-0422 for those gameplay
+or the next Sectio. See ADR-0321 through ADR-0348, ADR-0377, ADR-0419, ADR-0422, and ADR-0431 for those gameplay
 decisions.
 
 Level documents have their own `formatVersion`, separate from the PostgreSQL schema-migration

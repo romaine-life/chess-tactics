@@ -5580,7 +5580,7 @@ body.loading-bootstrap .app-startup-status {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
-.skirmish-admin-panel .admin-gold-input {
+.skirmish-admin-panel .admin-gold-field {
   inline-size: 100%;
 }
 
@@ -18539,20 +18539,39 @@ button.tileset-relationship-cell {
   gap: var(--ds-inline-tight);
 }
 
+/* Both children paint tuned corner atoms outside their rails. Keep the normal
+   inline gap between those paint footprints instead of letting the field's
+   right atoms and the action's left atoms overlap (ADR-0093). */
+.admin-control-inline {
+  gap: calc(
+    var(--ds-inline-tight)
+    + var(--le-inner-atom-right-overhang, 0px)
+    + var(--le-inner-atom-left-overhang, 0px)
+  );
+}
+
 .admin-control-stack {
   flex-direction: column;
   min-inline-size: min(300px, 34vw);
 }
 
+.admin-gold-field {
+  align-items: stretch;
+  block-size: 40px;
+  display: inline-flex;
+  inline-size: 112px;
+  min-inline-size: 0;
+}
+
 .admin-gold-input {
-  background: rgba(3, 12, 19, .9);
-  border: 10px solid transparent;
-  border-image: var(--media-ui-kit-button-neutral-png) 24 fill / 10px round;
+  appearance: auto;
+  background: transparent;
+  border: 0;
   box-sizing: border-box;
   color: #eff9ff;
   font: inherit;
-  block-size: 40px;
-  inline-size: 112px;
+  block-size: 100%;
+  inline-size: 100%;
   min-width: 0;
   padding: 0 var(--ds-inset);
 }
@@ -18599,9 +18618,11 @@ button.tileset-relationship-cell {
   border-image-source: var(--media-ui-kit-button-danger-png);
 }
 
-.settings-chrome-button span {
-  display: block;
+.settings-chrome-button > span {
+  align-items: center;
+  display: inline-flex;
   font-size: var(--ds-text-xs);
+  gap: var(--ds-space-1);
   line-height: 1;
   pointer-events: none;
   text-transform: uppercase;
@@ -19351,6 +19372,12 @@ button.tileset-relationship-cell {
 
 .run-gold-icon.is-unavailable {
   font-size: var(--ds-text-sm);
+}
+
+.run-gold-icon--button {
+  block-size: 18px;
+  flex: none;
+  inline-size: 18px;
 }
 
 /* Compact costs outside a card draw the transparent 112px extraction of the

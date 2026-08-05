@@ -72,10 +72,12 @@ export function RunDeploymentDeckDeal({
   run,
   dealtCount,
   onBeginDeal,
+  disabled = false,
 }: {
   run: RunDocument;
   dealtCount: number;
   onBeginDeal: () => void;
+  disabled?: boolean;
 }): ReactElement | null {
   const deployment = run.deployment;
   const settings = useAppSettings();
@@ -86,7 +88,7 @@ export function RunDeploymentDeckDeal({
 
   useSceneEnteredAction(
     `deployment-auto-deal:${run.id}:${deployment?.battleIndex ?? 'none'}`,
-    Boolean(awaiting && settings.autoDealDeployment),
+    Boolean(awaiting && !disabled && settings.autoDealDeployment),
     (scene) => scene.nextFrame(onBeginDeal),
   );
 
@@ -115,10 +117,10 @@ export function RunDeploymentDeckDeal({
         <ChromeButton
           unit="inner-text-button"
           className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-          disabled={!awaiting}
+          disabled={!awaiting || disabled}
           onClick={onBeginDeal}
         >
-          {awaiting ? 'Deal' : 'Dealing…'}
+          {disabled ? 'Withdrawing…' : awaiting ? 'Deal' : 'Dealing…'}
         </ChromeButton>
         {!settings.autoDealDeployment ? (
           <div className="run-deployment-auto-deal">

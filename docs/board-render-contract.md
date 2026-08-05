@@ -22,6 +22,16 @@ not replay their entrance. The final Adlected arrival completes before phase
 promotion introduces the remaining formation as a separate wave; the compositor's
 own active-id ledger supplies that boundary rather than a screen-owned timer
 ([ADR-0352](adr/0352-final-discipline-arrival-precedes-the-automatic-deployment-wave.md)).
+Per [ADR-0431](adr/0431-deployment-position-rerolls-cost-one-before-battle-and-five-after.md),
+a post-placement reroll returns that same mounted activity to Deployment. Per
+[ADR-0432](adr/0432-live-units-leave-mounted-boards-through-registered-departure-tracks.md),
+the existing formation first follows the compositor-owned `withdraw-home` track: player and enemy
+units turn toward their respective home edges, retain their identities and mirrors while moving,
+and report completion only after every visible unit clears the board. The atomic gold/reset
+transition then replaces the formation with its new placement seed and creates one new promotion
+identity when placement completes, while the compositor, `ViewPane`, camera, and scene activity
+remain mounted. Still-live departure reasons default to or explicitly choose from the closed
+`withdraw-home | withdraw-nearest-edge` registry; callers cannot provide ad hoc curves or timers.
 
 Per
 [ADR-0353](adr/0353-battlefield-view-state-is-instance-owned-and-camera-ready-before-reveal.md),
