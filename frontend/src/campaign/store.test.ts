@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useCampaigns } from './store';
-import { validateLevel } from '../core/level';
+import { LEVEL_FORMAT_VERSION, validateLevel } from '../core/level';
 
 function reset() {
   useCampaigns.setState({
@@ -18,7 +18,7 @@ const OFFICIAL_ID = /^off-[a-z]+(-[a-z]+)*$/; // backend validateOfficialWorkspa
 
 function makeLevel(id: string, name = 'L') {
   return {
-    formatVersion: 1, id, name, notes: '',
+    formatVersion: LEVEL_FORMAT_VERSION, id, name, notes: '',
     board: { cols: 8, rows: 8, heightLevels: 1 }, objective: 'capture-all' as const, difficulty: 'normal',
     economy: { startingFunds: 1000, incomePerTurn: 100 }, theme: 'grassland',
     layers: { terrain: [], decals: [], zones: [], units: [] },

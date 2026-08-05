@@ -937,7 +937,7 @@ function inlineMigrationSql(version) {
   return inlineMigrationDefinition(version).sql;
 }
 
-async function validatePrimarySparseNumericMigrationUpgrade60() {
+async function validatePrimarySparseNumericMigrationUpgrade61() {
   const history = await queryDb(
     `SELECT version, name, checksum
        FROM schema_migrations
@@ -952,7 +952,7 @@ async function validatePrimarySparseNumericMigrationUpgrade60() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 60 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 61 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -967,7 +967,7 @@ async function validatePrimarySparseNumericMigrationUpgrade60() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 24 }, (_, index) => index + 37),
+    ...Array.from({ length: 25 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1081,7 +1081,7 @@ async function validatePrimarySparseNumericMigrationUpgrade60() {
     )
   ) {
     throw new Error(
-      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 60: `
+      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 61: `
       + `${JSON.stringify({
         history: history.rows,
         identity_columns: identityColumns.rows,
@@ -2245,6 +2245,339 @@ async function validateDeploymentTransportMigration60() {
   }
 }
 
+async function validateLevelFormatAndEditorBaselineMigration61() {
+  const { Client } = require('pg');
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('CREATE SCHEMA smoke_level_format_migration_61');
+    await client.query('SET LOCAL search_path TO smoke_level_format_migration_61');
+    await client.query(`
+      CREATE TABLE active_runs (
+        owner_email text PRIMARY KEY, body jsonb NOT NULL, revision integer NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE levels (
+        owner_email text, id text, body jsonb NOT NULL, revision integer NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (owner_email, id)
+      );
+      CREATE TABLE campaign_workspaces (
+        owner_email text PRIMARY KEY, body jsonb NOT NULL, revision bigint NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE official_campaigns (
+        id text PRIMARY KEY, data jsonb NOT NULL, revision integer NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now(), updated_by text
+      );
+      CREATE TABLE public_maps (
+        public_id text PRIMARY KEY, body jsonb NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE level_working_copies (
+        document_id text PRIMARY KEY, body jsonb NOT NULL, revision bigint NOT NULL,
+        saved_revision bigint NOT NULL, baseline_hash text,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE level_working_copy_revisions (
+        document_id text NOT NULL, revision bigint NOT NULL, body jsonb NOT NULL,
+        saved_revision bigint NOT NULL, baseline_hash text, reason text NOT NULL,
+        created_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (document_id, revision)
+      );
+      CREATE TABLE editor_document_edit_sessions (session_id uuid PRIMARY KEY, draft_body jsonb NOT NULL);
+      CREATE TABLE editor_document_recoveries (recovery_id uuid PRIMARY KEY, body jsonb NOT NULL);
+      CREATE TABLE lab_runs (id text PRIMARY KEY, body jsonb NOT NULL);
+      CREATE TABLE train_runs (
+        id text PRIMARY KEY, spec jsonb NOT NULL, body jsonb NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE solve_runs (
+        id text PRIMARY KEY, spec jsonb NOT NULL, body jsonb NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+    `);
+    const boardWire = {
+      c: 3,
+      r: 2,
+      zn: [
+        ['general', 'player-spawn', ['0,0'], 'Player Deployment', 'blue', ['pawn', 'king']],
+        ['pawns', 'player-pawn-spawn', ['1,0'], 'Piétons', 'green'],
+      ],
+      z: { '0,0': 'player-spawn', '1,0': 'player-pawn-spawn' },
+    };
+    const level = {
+      formatVersion: 1,
+      id: 'migration-level-v2',
+      name: 'Saved position',
+      boardCode: Buffer.from(JSON.stringify(boardWire), 'utf8').toString('base64url'),
+      layers: {
+        zones: [
+          { id: 'general', type: 'player-spawn', tiles: [[0, 0]], excludedPieceTypes: ['pawn', 'king'] },
+          { id: 'pawns', type: 'player-pawn-spawn', tiles: [[1, 0]] },
+        ],
+      },
+    };
+    const dirtyLevel = { ...level, name: 'Unsaved progress' };
+    const nestedLevel = { levels: { [level.id]: level } };
+    const run = {
+      runSaveVersion: 22,
+      id: 'run-migration-61',
+      war: { battles: [{ level, loot: false }] },
+    };
+    const levelJson = JSON.stringify(level);
+    const nestedJson = JSON.stringify(nestedLevel);
+    await client.query(
+      `INSERT INTO active_runs (owner_email, body, revision) VALUES ('run@example.com', $1::jsonb, 7)`,
+      [JSON.stringify(run)],
+    );
+    await client.query(
+      `INSERT INTO levels (owner_email, id, body, revision)
+       VALUES ('owner@example.com', 'migration-level-v2', $1::jsonb, 4)`,
+      [levelJson],
+    );
+    await client.query(
+      `INSERT INTO campaign_workspaces (owner_email, body, revision)
+       VALUES ('owner@example.com', $1::jsonb, 8)`,
+      [nestedJson],
+    );
+    await client.query(
+      `INSERT INTO official_campaigns (id, data, revision) VALUES ('default', $1::jsonb, 9)`,
+      [nestedJson],
+    );
+    await client.query(`INSERT INTO public_maps (public_id, body) VALUES ('public', $1::jsonb)`, [levelJson]);
+    await client.query(
+      `INSERT INTO level_working_copies (document_id, body, revision, saved_revision, baseline_hash)
+       VALUES
+         ('clean', $1::jsonb, 11, 11, NULL),
+         ('dirty', $2::jsonb, 12, 11, NULL),
+         ('never-saved', $2::jsonb, 3, 0, NULL),
+         ('healthy', $1::jsonb, 5, 5, md5(($1::jsonb)::text))`,
+      [levelJson, JSON.stringify(dirtyLevel)],
+    );
+    await client.query(
+      `INSERT INTO level_working_copy_revisions
+         (document_id, revision, body, saved_revision, baseline_hash, reason)
+       VALUES
+         ('clean', 11, $1::jsonb, 11, NULL, 'save'),
+         ('dirty', 11, $1::jsonb, 11, NULL, 'save'),
+         ('never-saved', 3, $2::jsonb, 0, NULL, 'create'),
+         ('healthy', 5, $1::jsonb, 5, md5(($1::jsonb)::text), 'save')`,
+      [levelJson, JSON.stringify(dirtyLevel)],
+    );
+    await client.query(
+      `INSERT INTO editor_document_edit_sessions (session_id, draft_body)
+       VALUES ('00000000-0000-4000-8000-000000000061', $1::jsonb)`,
+      [levelJson],
+    );
+    await client.query(
+      `INSERT INTO editor_document_recoveries (recovery_id, body)
+       VALUES ('00000000-0000-4000-8000-000000000161', $1::jsonb)`,
+      [levelJson],
+    );
+    await client.query(`INSERT INTO lab_runs (id, body) VALUES ('lab', $1::jsonb)`, [nestedJson]);
+    await client.query(
+      `INSERT INTO train_runs (id, spec, body) VALUES ('train', $1::jsonb, $1::jsonb)`,
+      [nestedJson],
+    );
+    await client.query(
+      `INSERT INTO solve_runs (id, spec, body) VALUES ('solve', $1::jsonb, $1::jsonb)`,
+      [nestedJson],
+    );
+
+    await client.query(inlineMigrationSql(61));
+    await client.query(inlineMigrationSql(61));
+
+    const migratedRun = (await client.query('SELECT body, revision FROM active_runs')).rows[0];
+    const migratedLevel = (await client.query('SELECT body, revision FROM levels')).rows[0];
+    const workingCopies = (await client.query(`
+      SELECT document_id, body, revision, saved_revision, baseline_hash,
+             md5(body::text) AS body_hash
+        FROM level_working_copies
+       ORDER BY document_id
+    `)).rows;
+    const workingById = new Map(workingCopies.map((row) => [row.document_id, row]));
+    const clean = workingById.get('clean');
+    const dirty = workingById.get('dirty');
+    const neverSaved = workingById.get('never-saved');
+    const healthy = workingById.get('healthy');
+    const savedDirtyHash = (await client.query(
+      `SELECT md5(body::text) AS hash
+         FROM level_working_copy_revisions
+        WHERE document_id = 'dirty' AND revision = 11`,
+    )).rows[0]?.hash;
+    const history = await client.query(
+      'SELECT document_id, revision, reason, body FROM level_working_copy_revisions ORDER BY document_id, revision',
+    );
+    const residuals = await client.query(`
+      SELECT count(*)::integer AS count
+        FROM (
+          SELECT body AS value FROM levels
+          UNION ALL SELECT body FROM campaign_workspaces
+          UNION ALL SELECT data FROM official_campaigns
+          UNION ALL SELECT body FROM public_maps
+          UNION ALL SELECT body FROM level_working_copies
+          UNION ALL SELECT body FROM level_working_copy_revisions
+          UNION ALL SELECT draft_body FROM editor_document_edit_sessions
+          UNION ALL SELECT body FROM editor_document_recoveries
+          UNION ALL SELECT body FROM lab_runs
+          UNION ALL SELECT spec FROM train_runs
+          UNION ALL SELECT body FROM train_runs
+          UNION ALL SELECT spec FROM solve_runs
+          UNION ALL SELECT body FROM solve_runs
+          UNION ALL SELECT body FROM active_runs
+        ) AS documents
+       WHERE pg_temp.migrate_nested_levels_v2(value) IS DISTINCT FROM value
+    `);
+    const migratedWire = JSON.parse(Buffer.from(migratedLevel.body.boardCode, 'base64url').toString('utf8'));
+    const layerGeneral = migratedLevel.body.layers.zones.find((zone) => zone.type === 'player-spawn');
+    const wireGeneral = migratedWire.zn.find((zone) => zone[1] === 'player-spawn');
+    if (
+      migratedRun?.body?.runSaveVersion !== 23
+      || migratedRun?.body?.war?.battles?.[0]?.level?.formatVersion !== 2
+      || Number(migratedRun?.revision) !== 8
+      || migratedLevel?.body?.formatVersion !== 2
+      || Number(migratedLevel?.revision) !== 5
+      || JSON.stringify(layerGeneral?.tiles) !== JSON.stringify([[0, 0], [1, 0]])
+      || JSON.stringify(layerGeneral?.excludedPieceTypes) !== JSON.stringify(['king'])
+      || JSON.stringify(wireGeneral?.[2]) !== JSON.stringify(['0,0', '1,0'])
+      || JSON.stringify(wireGeneral?.[5]) !== JSON.stringify(['king'])
+      || migratedWire.z?.['1,0'] !== 'player-spawn'
+      || clean?.body?.formatVersion !== 2
+      || Number(clean?.revision) !== 12
+      || Number(clean?.saved_revision) !== 12
+      || clean?.baseline_hash !== clean?.body_hash
+      || dirty?.body?.formatVersion !== 2
+      || Number(dirty?.revision) !== 13
+      || Number(dirty?.saved_revision) !== 11
+      || dirty?.baseline_hash !== savedDirtyHash
+      || dirty?.baseline_hash === dirty?.body_hash
+      || neverSaved?.body?.formatVersion !== 2
+      || Number(neverSaved?.revision) !== 4
+      || Number(neverSaved?.saved_revision) !== 0
+      || neverSaved?.baseline_hash !== null
+      || healthy?.body?.formatVersion !== 2
+      || Number(healthy?.revision) !== 6
+      || Number(healthy?.saved_revision) !== 6
+      || healthy?.baseline_hash !== healthy?.body_hash
+      || history.rows.filter((row) => row.reason === 'migration').length !== 4
+      || residuals.rows[0]?.count !== 0
+    ) {
+      throw new Error(`Migration 61 did not establish Level format 2 and reconstruct saved baselines: ${JSON.stringify({
+        run: migratedRun,
+        level: migratedLevel,
+        working_copies: workingCopies,
+        history: history.rows,
+        residuals: residuals.rows,
+        wire: migratedWire,
+      })}`);
+    }
+    await client.query('ROLLBACK');
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve validation error */ }
+    throw error;
+  } finally {
+    await client.end();
+  }
+}
+
+async function validateRepairedEditorDocumentDiscardOperation61() {
+  const documentId = '00000000-0000-4000-8000-000000000261';
+  const levelId = 'migration-operation-level';
+  const version1Level = {
+    formatVersion: 1,
+    id: levelId,
+    name: 'Canonical saved position',
+    notes: '',
+    board: { cols: 2, rows: 2, heightLevels: 1 },
+    objective: 'capture-all',
+    difficulty: 'normal',
+    economy: { startingFunds: 0, incomePerTurn: 0 },
+    theme: 'grassland',
+    layers: { terrain: [], decals: [], zones: [], units: [] },
+  };
+  await queryDb(
+    `INSERT INTO campaign_workspaces (owner_email, body, revision)
+     VALUES ('player@example.com', $1::jsonb, 1)`,
+    [JSON.stringify({ campaigns: [], wars: [], levels: { [levelId]: version1Level } })],
+  );
+  await queryDb(
+    `INSERT INTO level_working_copies
+       (document_id, owner_email, workspace_kind, workspace_id, level_id,
+        body, revision, saved_revision, baseline_hash)
+     VALUES ($1, 'player@example.com', 'user', 'campaign', $2, $3::jsonb, 5, 5, NULL)`,
+    [documentId, levelId, JSON.stringify(version1Level)],
+  );
+  await queryDb(
+    `INSERT INTO level_working_copy_revisions
+       (document_id, revision, body, saved_revision, baseline_hash, reason)
+     VALUES ($1, 5, $2::jsonb, 5, NULL, 'save')`,
+    [documentId, JSON.stringify(version1Level)],
+  );
+  const beforeRepair = await get(`/api/editor-documents/${documentId}`, {
+    cookie: '__Host-chess-tactics-access=abc',
+  });
+  const beforeRepairBody = JSON.parse(beforeRepair.body);
+  if (
+    beforeRepair.statusCode !== 200
+    || beforeRepairBody.document?.saved_revision !== 5
+    || beforeRepairBody.document?.has_saved_baseline !== false
+    || beforeRepairBody.document?.never_saved !== false
+    || beforeRepairBody.document?.baseline_conflict !== true
+  ) {
+    throw new Error(`A missing baseline hash reclassified a saved document: ${beforeRepair.statusCode} ${beforeRepair.body}`);
+  }
+  await queryDb(inlineMigrationSql(61));
+
+  const loaded = await get(`/api/editor-documents/${documentId}`, {
+    cookie: '__Host-chess-tactics-access=abc',
+  });
+  const loadedBody = JSON.parse(loaded.body);
+  if (
+    loaded.statusCode !== 200
+    || loadedBody.document?.level?.formatVersion !== 2
+    || loadedBody.document?.has_saved_baseline !== true
+    || loadedBody.document?.never_saved !== false
+    || loadedBody.document?.baseline_conflict !== false
+  ) {
+    throw new Error(`Migration 61 repaired document did not load as a saved Level: ${loaded.statusCode} ${loaded.body}`);
+  }
+  const opened = await openEditorEditSession(documentId);
+  if (opened.response.statusCode !== 200 || opened.body.session?.state !== 'active') {
+    throw new Error(`Migration 61 repaired document could not open an edit session: ${opened.response.statusCode} ${opened.response.body}`);
+  }
+  await queryDb(
+    `UPDATE level_working_copies
+        SET body = jsonb_set(body, '{name}', '"Unsaved after repair"'::jsonb, false),
+            revision = revision + 1,
+            updated_at = now()
+      WHERE document_id = $1`,
+    [documentId],
+  );
+  const dirty = await get(`/api/editor-documents/${documentId}`, {
+    cookie: '__Host-chess-tactics-access=abc',
+  });
+  const dirtyDocument = JSON.parse(dirty.body).document;
+  const discarded = await request(
+    'POST',
+    `/api/editor-documents/${documentId}/discard`,
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(documentId, '__Host-chess-tactics-access=abc', {
+      revision: dirtyDocument.revision,
+    })),
+  );
+  const discardedBody = JSON.parse(discarded.body);
+  if (
+    discarded.statusCode !== 200
+    || discardedBody.document?.level?.formatVersion !== 2
+    || discardedBody.document?.level?.name !== version1Level.name
+    || discardedBody.document?.dirty !== false
+    || discardedBody.document?.has_saved_baseline !== true
+    || discardedBody.document?.baseline_conflict !== false
+  ) {
+    throw new Error(`Repaired Level could not perform its fenced Discard operation: ${discarded.statusCode} ${discarded.body}`);
+  }
+}
+
 async function waitForServer() {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if (child.exitCode !== null) {
@@ -2277,7 +2610,7 @@ async function main() {
   await new Promise((resolve) => mockAuth.listen(authPort, '127.0.0.1', resolve));
   await new Promise((resolve) => mockBgm.listen(bgmPort, '127.0.0.1', resolve));
   await waitForServer();
-  await validatePrimarySparseNumericMigrationUpgrade60();
+  await validatePrimarySparseNumericMigrationUpgrade61();
   const databaseRuntime = await queryDb('SELECT version() AS version');
   const isPgliteRuntime = /\bPGlite\b/i.test(String(databaseRuntime.rows[0]?.version || ''));
   if (!isPgliteRuntime) {
@@ -2312,6 +2645,8 @@ async function main() {
   await validateCardOrderedDeploymentMigration58();
   await validateCompletePrimogenitureRetirementMigration59();
   await validateDeploymentTransportMigration60();
+  await validateLevelFormatAndEditorBaselineMigration61();
+  await validateRepairedEditorDocumentDiscardOperation61();
   await resetDb();
 
   const missingPropSeats = await get('/api/prop-seats/default');
@@ -4412,7 +4747,7 @@ async function main() {
     }],
     levels: {
       'off-l-test': {
-        formatVersion: 1, id: 'off-l-test', name: 'Test Level', notes: '',
+        formatVersion: boardRender.LEVEL_FORMAT_VERSION, id: 'off-l-test', name: 'Test Level', notes: '',
         board: { cols: 8, rows: 8, heightLevels: 1 }, objective: 'capture-all', difficulty: 'normal',
         economy: { startingFunds: 1000, incomePerTurn: 100 }, theme: 'grassland',
         events: [{
@@ -4844,7 +5179,7 @@ async function main() {
   }
 
   const workspaceLevel = {
-    formatVersion: 1,
+    formatVersion: boardRender.LEVEL_FORMAT_VERSION,
     id: 'smoke-1',
     name: 'Smoke Level',
     notes: '',

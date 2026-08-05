@@ -61,7 +61,7 @@ test('already-applied migration 36 remains the immutable drawable-media migratio
   );
 });
 
-test('the exact sparse numeric legacy history upgrades through migration 60', () => {
+test('the exact sparse numeric legacy history upgrades through migration 61', () => {
   const versions = migrationVersions();
   const appliedBeforeUpgrade = new Set(
     versions.filter((version) => version <= 27 || version === 36),
@@ -424,6 +424,32 @@ test('the exact sparse numeric legacy history upgrades through migration 60', ()
     /runSaveVersion[\s\S]*'21'[\s\S]*'22'[\s\S]*awaiting-deal[\s\S]*transport[\s\S]*paused/i,
     'migration 60 must losslessly advance version 21 to an explicit paused deal boundary',
   );
+  const migration61 = inlineMigration(61);
+  assert.equal(
+    migration61.name,
+    'Level format 2 and saved editor baselines',
+    'migration 61 must own the Level document version edge and working-copy repair',
+  );
+  assert.match(
+    migration61.sql,
+    /formatVersion[\s\S]*'1'[\s\S]*'2'[\s\S]*runSaveVersion[\s\S]*'22'[\s\S]*'23'/i,
+    'migration 61 must advance Level 1 and every containing version-22 Run together',
+  );
+  assert.match(
+    migration61.sql,
+    /saved_revision > 0[\s\S]*old_saved_hash[\s\S]*new_saved_hash[\s\S]*baseline_hash/i,
+    'migration 61 must reconstruct saved baselines from retained saved-revision evidence',
+  );
+  assert.equal(
+    (serverSource.match(/never_saved: savedRevision === 0/g) || []).length,
+    2,
+    'editor document payloads must derive never-saved state from saved history, not hash presence',
+  );
+  assert.doesNotMatch(
+    serverSource,
+    /never_saved: !hasSavedBaseline/,
+    'a missing baseline hash must not reclassify a saved document as disposable',
+  );
 
   const migration36 = inlineMigration(36);
   const allMigrations = versions.map(inlineMigration);
@@ -450,7 +476,7 @@ test('the exact sparse numeric legacy history upgrades through migration 60', ()
   );
   assert.deepEqual(
     plan.pending.map((entry) => entry.version),
-    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60],
+    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61],
     'the bridge must fill the historical gap before applying every post-36 contract',
   );
   assert.throws(
@@ -482,7 +508,7 @@ test('the exact sparse numeric legacy history upgrades through migration 60', ()
   );
 });
 
-test('required-schema readiness and repair enforce the migrations 37 through 60 contracts', () => {
+test('required-schema readiness and repair enforce the migrations 37 through 61 contracts', () => {
   const relations = sourceSection(
     serverSource,
     'const REQUIRED_SCHEMA_RELATIONS = [',
@@ -658,6 +684,11 @@ test('required-schema readiness and repair enforce the migrations 37 through 60 
     contractReadiness,
     /unmigrated_active_run_version_21_count[\s\S]*version === 60[\s\S]*repair active Run Deployment transport contract/,
     'readiness must detect and repair an unmigrated version-21 account Run',
+  );
+  assert.match(
+    contractReadiness,
+    /unmigrated_active_run_version_22_count[\s\S]*unmigrated_level_format_1_count[\s\S]*unrepaired_saved_editor_baseline_count[\s\S]*version === 61[\s\S]*repair Level format 2 and saved editor baseline contract/,
+    'readiness must detect and repair old Levels, version-22 Runs, and erased saved baselines',
   );
   assert.match(
     contractReadiness,
@@ -1025,13 +1056,13 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
 
   const primaryUpgradeProof = sourceSection(
     smokeSource,
-    'async function validatePrimarySparseNumericMigrationUpgrade60()',
+    'async function validatePrimarySparseNumericMigrationUpgrade61()',
     '\nasync function validateEditorMigration16Preservation()',
   );
   assert.match(
     primaryUpgradeProof,
-    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*60\s*\}/,
-    'the production upgrade proof must require a complete 1-60 history',
+    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*61\s*\}/,
+    'the production upgrade proof must require a complete 1-61 history',
   );
   assert.match(
     primaryUpgradeProof,
@@ -1045,8 +1076,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /length:\s*24[\s\S]*index\s*\+\s*37/,
-    'the production report must include every post-36 migration through 60',
+    /length:\s*25[\s\S]*index\s*\+\s*37/,
+    'the production report must include every post-36 migration through 61',
   );
   assert.match(
     primaryUpgradeProof,
@@ -1171,7 +1202,7 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   const deploymentTransportMigrationProof = sourceSection(
     smokeSource,
     'async function validateDeploymentTransportMigration60()',
-    '\nasync function waitForServer()',
+    '\nasync function validateLevelFormatAndEditorBaselineMigration61()',
   );
   assert.match(
     deploymentTransportMigrationProof,
@@ -1185,6 +1216,33 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
       `migration 60 must prove ${requiredProof}`,
     );
   }
+  const levelFormatMigrationProof = sourceSection(
+    smokeSource,
+    'async function validateLevelFormatAndEditorBaselineMigration61()',
+    '\nasync function validateRepairedEditorDocumentDiscardOperation61()',
+  );
+  assert.match(
+    levelFormatMigrationProof,
+    /inlineMigrationSql\(61\)[\s\S]*inlineMigrationSql\(61\)/,
+    'the Level format migration proof must establish idempotency',
+  );
+  for (const requiredProof of ['formatVersion', 'runSaveVersion', 'baseline_hash', 'saved_revision', 'never-saved', 'level_working_copy_revisions']) {
+    assert.match(
+      levelFormatMigrationProof,
+      new RegExp(requiredProof),
+      `migration 61 must prove ${requiredProof}`,
+    );
+  }
+  const repairedEditorOperationProof = sourceSection(
+    smokeSource,
+    'async function validateRepairedEditorDocumentDiscardOperation61()',
+    '\nasync function waitForServer()',
+  );
+  assert.match(
+    repairedEditorOperationProof,
+    /openEditorEditSession[\s\S]*\/discard[\s\S]*has_saved_baseline[\s\S]*baseline_conflict/,
+    'a migrated document must open a real fenced editor session and Discard to canonical Level 2',
+  );
   assert.match(
     migrationProof,
     /inlineMigrationSql\(37\)/,

@@ -12,7 +12,7 @@ import { useCampaigns } from '../campaign/store';
 import { useWars } from '../war/store';
 import { saveUserWorkspace, publishOfficialWorkspace, userWorkspaceForSave, officialWorkspaceForSave, mapSaveError, tierOf } from '../campaign/save';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
-import { validateLevel, type Campaign, type CampaignLevelRef, type Level } from '../core/level';
+import { migrateLevelDocument, validateLevel, type Campaign, type CampaignLevelRef, type Level } from '../core/level';
 import { MODE_NAME } from '../core/objectives';
 import { isWorkspaceConflict } from '../net/campaignWorkspace';
 import { goSignIn } from '../net/auth';
@@ -918,14 +918,22 @@ export function CampaignEditor({
       return;
     }
     try {
-      const parsed = JSON.parse(await file.text()) as Partial<{ campaigns: Campaign[]; levels: Record<string, Level> }>;
-      const validationError = validateWorkspaceImport(parsed);
+      const parsed = JSON.parse(await file.text()) as Partial<{ campaigns: Campaign[]; levels: Record<string, unknown> }>;
+      if (parsed.levels && typeof parsed.levels === 'object') {
+        parsed.levels = Object.fromEntries(Object.entries(parsed.levels).map(([id, level]) => [
+          id,
+          migrateLevelDocument(level),
+        ]));
+      }
+      const validationError = validateWorkspaceImport(
+        parsed as Partial<{ campaigns: Campaign[]; levels: Record<string, Level> }>,
+      );
       if (validationError) {
         setStatus(`Import failed: ${validationError}.`);
         return;
       }
       const importedCampaigns = parsed.campaigns!;
-      const importedLevels = parsed.levels!;
+      const importedLevels = parsed.levels as Record<string, Level>;
       const previousCampaignId = useCampaigns.getState().selectedCampaignId;
       useCampaigns.getState().importWorkspace({ campaigns: importedCampaigns, levels: importedLevels });
       const importedCampaignId = useCampaigns.getState().selectedCampaignId;

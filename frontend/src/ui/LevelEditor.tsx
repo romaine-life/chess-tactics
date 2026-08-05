@@ -287,6 +287,7 @@ import {
   closeEditorDocumentEditSession,
   createEditorDocument,
   discardEditorDocumentChanges,
+  editorDocumentHasDiscardTarget,
   heartbeatEditorDocumentEditSession,
   isEditorDocumentBaselineConflict,
   isEditorDocumentConflict,
@@ -7496,7 +7497,7 @@ export function LevelEditor(): ReactElement {
   };
 
   const discardChanges = async (): Promise<void> => {
-    if (!editorDocument || !targetLevelId || !editorDocument.has_saved_baseline) return;
+    if (!editorDocument || !targetLevelId || !editorDocumentHasDiscardTarget(editorDocument)) return;
     if (!me?.signed_in || documentRevisionRef.current === null) {
       reportStatus('Cloud working copy is unavailable.', 'warning', 'Reconnect before discarding changes.');
       return;
@@ -8360,8 +8361,7 @@ export function LevelEditor(): ReactElement {
   const persistenceEmergencyVisible = cloudSaveState === 'conflict' || cloudSaveState === 'error';
   const hasDiscardableChanges = Boolean(
     editorSessionCanWrite
-    &&
-    editorDocument?.has_saved_baseline
+    && editorDocumentHasDiscardTarget(editorDocument)
     && (dirty || documentConflictRef.current),
   );
   // Button text should name the available action or the current blocker. In particular, a clean
@@ -9322,7 +9322,7 @@ export function LevelEditor(): ReactElement {
                   onClick={retryCloudDocument}
                 >Retry cloud sync</ChromeButton>
               ) : null}
-              {editorDocument?.has_saved_baseline ? (
+              {editorDocumentHasDiscardTarget(editorDocument) ? (
                 <ChromeButton unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                   data-testid="le-discard-changes"

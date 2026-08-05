@@ -799,6 +799,38 @@ describe('Run progression and lipsanon offers', () => {
     expect(waiting.deployment?.transport).toBe('paused');
   });
 
+  it('migrates every embedded version 1 Battle Level from RunSaveVersion 22', () => {
+    const current = createRun(war(2), 195);
+    const version22 = {
+      ...current,
+      runSaveVersion: 22,
+      war: {
+        ...current.war,
+        battles: current.war.battles.map((battle) => ({
+          ...battle,
+          level: { ...battle.level, formatVersion: 1 },
+        })),
+      },
+    };
+
+    const migrated = migrateRunSaveDocument(version22);
+
+    expect(migrated.runSaveVersion).toBe(CURRENT_RUN_SAVE_VERSION);
+    expect(migrated.war.battles.every((battle) => battle.level.formatVersion === 2)).toBe(true);
+    expect(migrated.war.battles.map((battle) => battle.level.id))
+      .toEqual(current.war.battles.map((battle) => battle.level.id));
+    expect(() => normalizeRunDocument({
+      ...migrated,
+      war: {
+        ...migrated.war,
+        battles: migrated.war.battles.map((battle) => ({
+          ...battle,
+          level: { ...battle.level, formatVersion: 1 },
+        })),
+      },
+    })).toThrow('unsupported Battle Level');
+  });
+
   it('migrates version 19 into Expunctio transaction state without changing the Sectio', () => {
     const current = createRun(war(), 193);
     const { expunctedCard: _expunctedCard, entrySnapshot, ...version19Sectio } = current.sectio!;

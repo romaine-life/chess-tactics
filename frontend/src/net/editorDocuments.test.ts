@@ -10,6 +10,7 @@ import {
   deleteNeverSavedEditorDocument,
   discardEditorDocumentChanges,
   editorDocumentEditFence,
+  editorDocumentHasDiscardTarget,
   heartbeatEditorDocumentEditSession,
   isEditorDocumentConflict,
   isEditorDocumentEditSessionError,
@@ -71,6 +72,22 @@ const editSession: EditorDocumentEditSession = {
   last_edit_at: null,
   lease_expires_at: '2026-07-20T01:02:00.000Z',
 };
+
+describe('editor document saved-position state', () => {
+  it('keeps Discard reachable when a canonical conflict outlives a missing historical hash', () => {
+    expect(editorDocumentHasDiscardTarget(document)).toBe(true);
+    expect(editorDocumentHasDiscardTarget({
+      ...document,
+      has_saved_baseline: false,
+      baseline_conflict: true,
+    })).toBe(true);
+    expect(editorDocumentHasDiscardTarget({
+      ...document,
+      has_saved_baseline: false,
+      baseline_conflict: false,
+    })).toBe(false);
+  });
+});
 
 const editPresence: EditorDocumentEditPresence = {
   document_id: 'doc-7f3c',

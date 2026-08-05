@@ -300,5 +300,5 @@ export const breakLineLevel = ({
     "initialSeconds": 45,
     "incrementSeconds": 0
   },
-  "formatVersion": 1
+  "formatVersion": 2
 } as unknown) as Level;

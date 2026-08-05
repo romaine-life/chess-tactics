@@ -4207,6 +4207,365 @@ const MIGRATIONS = [
        WHERE body->'runSaveVersion' = '21'::jsonb;
     `,
   },
+  {
+    version: 61,
+    name: 'Level format 2 and saved editor baselines',
+    // ADR-0427: Level format 2 gives migration 56's Pawn-zone retirement an
+    // explicit document-version edge. RunSaveVersion 23 advances every embedded
+    // Battle Level with it. Saved working copies reconstruct their migrated
+    // baseline from the retained saved revision; true never-saved drafts remain null.
+    sql: `
+      CREATE OR REPLACE FUNCTION pg_temp.level_v2_distinct_array_concat(left_value jsonb, right_value jsonb)
+      RETURNS jsonb
+      LANGUAGE sql
+      IMMUTABLE
+      AS $function$
+        SELECT COALESCE(jsonb_agg(value ORDER BY first_ordinality), '[]'::jsonb)
+          FROM (
+            SELECT value, min(ordinality) AS first_ordinality
+              FROM jsonb_array_elements(
+                CASE WHEN jsonb_typeof(left_value) = 'array' THEN left_value ELSE '[]'::jsonb END
+                || CASE WHEN jsonb_typeof(right_value) = 'array' THEN right_value ELSE '[]'::jsonb END
+              ) WITH ORDINALITY AS item(value, ordinality)
+             GROUP BY value
+          ) AS distinct_items
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.level_v2_without_pawn_exclusion(excluded_value jsonb)
+      RETURNS jsonb
+      LANGUAGE sql
+      IMMUTABLE
+      AS $function$
+        SELECT COALESCE(jsonb_agg(value ORDER BY ordinality), '[]'::jsonb)
+          FROM jsonb_array_elements(
+            CASE WHEN jsonb_typeof(excluded_value) = 'array' THEN excluded_value ELSE '[]'::jsonb END
+          ) WITH ORDINALITY AS item(value, ordinality)
+         WHERE value <> '"pawn"'::jsonb
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_level_v2_layer_zones(zones_value jsonb)
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      IMMUTABLE
+      STRICT
+      AS $function$
+      DECLARE
+        zone_value jsonb;
+        pawn_tiles jsonb := '[]'::jsonb;
+        first_pawn jsonb := NULL;
+        migrated jsonb := '[]'::jsonb;
+        merged boolean := false;
+        excluded jsonb;
+      BEGIN
+        IF jsonb_typeof(zones_value) <> 'array' THEN RETURN zones_value; END IF;
+        FOR zone_value IN SELECT value FROM jsonb_array_elements(zones_value) LOOP
+          IF jsonb_typeof(zone_value) = 'object' AND zone_value->>'type' = 'player-pawn-spawn' THEN
+            IF first_pawn IS NULL THEN first_pawn := zone_value; END IF;
+            pawn_tiles := pg_temp.level_v2_distinct_array_concat(pawn_tiles, zone_value->'tiles');
+          END IF;
+        END LOOP;
+        FOR zone_value IN SELECT value FROM jsonb_array_elements(zones_value) LOOP
+          IF jsonb_typeof(zone_value) = 'object' AND zone_value->>'type' = 'player-pawn-spawn' THEN CONTINUE; END IF;
+          IF jsonb_typeof(zone_value) = 'object' AND zone_value->>'type' = 'player-spawn' THEN
+            IF jsonb_typeof(zone_value->'excludedPieceTypes') = 'array'
+               AND (
+                 first_pawn IS NOT NULL
+                 OR zone_value->'excludedPieceTypes' @> '["pawn"]'::jsonb
+               ) THEN
+              excluded := pg_temp.level_v2_without_pawn_exclusion(zone_value->'excludedPieceTypes');
+              zone_value := CASE WHEN jsonb_array_length(excluded) = 0
+                THEN zone_value - 'excludedPieceTypes'
+                ELSE jsonb_set(zone_value, '{excludedPieceTypes}', excluded, true)
+              END;
+            END IF;
+            IF NOT merged AND first_pawn IS NOT NULL THEN
+              zone_value := jsonb_set(
+                zone_value,
+                '{tiles}',
+                pg_temp.level_v2_distinct_array_concat(zone_value->'tiles', pawn_tiles),
+                true
+              );
+              merged := true;
+            END IF;
+          END IF;
+          migrated := migrated || jsonb_build_array(zone_value);
+        END LOOP;
+        IF NOT merged AND first_pawn IS NOT NULL THEN
+          first_pawn := jsonb_set(first_pawn, '{type}', '"player-spawn"'::jsonb, false)
+            - 'excludedPieceTypes';
+          first_pawn := jsonb_set(first_pawn, '{tiles}', pawn_tiles, true);
+          migrated := migrated || jsonb_build_array(first_pawn);
+        END IF;
+        RETURN migrated;
+      END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_level_v2_board_wire(wire_value jsonb)
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      IMMUTABLE
+      STRICT
+      AS $function$
+      DECLARE
+        migrated jsonb := wire_value;
+        entry_value jsonb;
+        pawn_tiles jsonb := '[]'::jsonb;
+        first_pawn jsonb := NULL;
+        entries jsonb := '[]'::jsonb;
+        merged boolean := false;
+        excluded jsonb;
+        legacy_zones jsonb;
+      BEGIN
+        IF jsonb_typeof(wire_value) <> 'object' THEN RETURN wire_value; END IF;
+        IF jsonb_typeof(wire_value->'zn') = 'array' THEN
+          FOR entry_value IN SELECT value FROM jsonb_array_elements(wire_value->'zn') LOOP
+            IF jsonb_typeof(entry_value) = 'array' AND entry_value->>1 = 'player-pawn-spawn' THEN
+              IF first_pawn IS NULL THEN first_pawn := entry_value; END IF;
+              pawn_tiles := pg_temp.level_v2_distinct_array_concat(pawn_tiles, entry_value->2);
+            END IF;
+          END LOOP;
+          FOR entry_value IN SELECT value FROM jsonb_array_elements(wire_value->'zn') LOOP
+            IF jsonb_typeof(entry_value) = 'array' AND entry_value->>1 = 'player-pawn-spawn' THEN CONTINUE; END IF;
+            IF jsonb_typeof(entry_value) = 'array' AND entry_value->>1 = 'player-spawn' THEN
+              IF jsonb_typeof(entry_value->5) = 'array' THEN
+                excluded := pg_temp.level_v2_without_pawn_exclusion(entry_value->5);
+                entry_value := jsonb_set(entry_value, '{5}', excluded, false);
+              END IF;
+              IF NOT merged AND first_pawn IS NOT NULL THEN
+                entry_value := jsonb_set(
+                  entry_value,
+                  '{2}',
+                  pg_temp.level_v2_distinct_array_concat(entry_value->2, pawn_tiles),
+                  false
+                );
+                merged := true;
+              END IF;
+            END IF;
+            entries := entries || jsonb_build_array(entry_value);
+          END LOOP;
+          IF NOT merged AND first_pawn IS NOT NULL THEN
+            first_pawn := jsonb_set(first_pawn, '{1}', '"player-spawn"'::jsonb, false);
+            first_pawn := jsonb_set(first_pawn, '{2}', pawn_tiles, false);
+            IF jsonb_typeof(first_pawn->5) = 'array' THEN
+              first_pawn := jsonb_set(first_pawn, '{5}', '[]'::jsonb, false);
+            END IF;
+            entries := entries || jsonb_build_array(first_pawn);
+          END IF;
+          migrated := jsonb_set(migrated, '{zn}', entries, false);
+        END IF;
+        IF jsonb_typeof(wire_value->'z') = 'object' THEN
+          SELECT COALESCE(jsonb_object_agg(
+            key,
+            CASE WHEN value = '"player-pawn-spawn"'::jsonb THEN '"player-spawn"'::jsonb ELSE value END
+          ), '{}'::jsonb)
+            INTO legacy_zones
+            FROM jsonb_each(wire_value->'z');
+          migrated := jsonb_set(migrated, '{z}', legacy_zones, false);
+        END IF;
+        RETURN migrated;
+      END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_level_v2_board_code(code_value text)
+      RETURNS text
+      LANGUAGE plpgsql
+      IMMUTABLE
+      STRICT
+      AS $function$
+      DECLARE
+        padded text;
+        wire_value jsonb;
+        encoded text;
+      BEGIN
+        padded := translate(code_value, '-_', '+/')
+          || repeat('=', (4 - length(code_value) % 4) % 4);
+        wire_value := convert_from(decode(padded, 'base64'), 'UTF8')::jsonb;
+        wire_value := pg_temp.migrate_level_v2_board_wire(wire_value);
+        encoded := encode(convert_to(wire_value::text, 'UTF8'), 'base64');
+        RETURN replace(replace(replace(replace(replace(encoded, '+', '-'), '/', '_'), E'\n', ''), E'\r', ''), '=', '');
+      EXCEPTION WHEN others THEN
+        RETURN code_value;
+      END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_level_object_v2(level_value jsonb)
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      IMMUTABLE
+      STRICT
+      AS $function$
+      DECLARE
+        migrated jsonb := level_value;
+        layers_value jsonb;
+      BEGIN
+        IF jsonb_typeof(level_value) <> 'object' OR level_value->'formatVersion' <> '1'::jsonb THEN
+          RETURN level_value;
+        END IF;
+        IF jsonb_typeof(migrated->'layers') = 'object'
+           AND jsonb_typeof(migrated->'layers'->'zones') = 'array' THEN
+          layers_value := jsonb_set(
+            migrated->'layers',
+            '{zones}',
+            pg_temp.migrate_level_v2_layer_zones(migrated->'layers'->'zones'),
+            false
+          );
+          migrated := jsonb_set(migrated, '{layers}', layers_value, false);
+        END IF;
+        IF jsonb_typeof(migrated->'boardCode') = 'string' THEN
+          migrated := jsonb_set(
+            migrated,
+            '{boardCode}',
+            to_jsonb(pg_temp.migrate_level_v2_board_code(migrated->>'boardCode')),
+            false
+          );
+        END IF;
+        RETURN jsonb_set(migrated, '{formatVersion}', '2'::jsonb, false);
+      END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_nested_levels_v2(document_value jsonb)
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      IMMUTABLE
+      STRICT
+      AS $function$
+      DECLARE
+        migrated jsonb;
+      BEGIN
+        IF jsonb_typeof(document_value) = 'array' THEN
+          SELECT COALESCE(jsonb_agg(pg_temp.migrate_nested_levels_v2(value) ORDER BY ordinality), '[]'::jsonb)
+            INTO migrated
+            FROM jsonb_array_elements(document_value) WITH ORDINALITY AS entry(value, ordinality);
+          RETURN migrated;
+        END IF;
+        IF jsonb_typeof(document_value) = 'object' THEN
+          SELECT COALESCE(jsonb_object_agg(key, pg_temp.migrate_nested_levels_v2(value)), '{}'::jsonb)
+            INTO migrated
+            FROM jsonb_each(document_value);
+          IF migrated->'formatVersion' = '1'::jsonb
+             AND (migrated ? 'layers' OR migrated ? 'boardCode') THEN
+            migrated := pg_temp.migrate_level_object_v2(migrated);
+          END IF;
+          IF migrated->'runSaveVersion' = '22'::jsonb AND migrated ? 'war' THEN
+            migrated := jsonb_set(migrated, '{runSaveVersion}', '23'::jsonb, false);
+          END IF;
+          RETURN migrated;
+        END IF;
+        RETURN document_value;
+      END
+      $function$;
+
+      DROP TABLE IF EXISTS pg_temp.level_migration_61_baselines;
+      CREATE TEMP TABLE level_migration_61_baselines ON COMMIT DROP AS
+      SELECT working.document_id,
+             working.baseline_hash AS old_baseline_hash,
+             working.saved_revision,
+             md5(saved.body::text) AS old_saved_hash,
+             md5(pg_temp.migrate_nested_levels_v2(saved.body)::text) AS new_saved_hash,
+             pg_temp.migrate_nested_levels_v2(working.body) AS migrated_body
+        FROM level_working_copies working
+        LEFT JOIN LATERAL (
+          SELECT revision.body
+            FROM level_working_copy_revisions revision
+           WHERE revision.document_id = working.document_id
+             AND revision.revision = working.saved_revision
+          UNION ALL
+          SELECT working.body
+           WHERE working.revision = working.saved_revision
+          LIMIT 1
+        ) saved ON true;
+
+      UPDATE active_runs
+         SET body = pg_temp.migrate_nested_levels_v2(body),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE pg_temp.migrate_nested_levels_v2(body) IS DISTINCT FROM body;
+      UPDATE levels
+         SET body = pg_temp.migrate_nested_levels_v2(body),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE pg_temp.migrate_nested_levels_v2(body) IS DISTINCT FROM body;
+      UPDATE campaign_workspaces
+         SET body = pg_temp.migrate_nested_levels_v2(body),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE pg_temp.migrate_nested_levels_v2(body) IS DISTINCT FROM body;
+      UPDATE official_campaigns
+         SET data = pg_temp.migrate_nested_levels_v2(data),
+             revision = revision + 1,
+             updated_at = now(),
+             updated_by = 'migration-61'
+       WHERE pg_temp.migrate_nested_levels_v2(data) IS DISTINCT FROM data;
+      UPDATE public_maps
+         SET body = pg_temp.migrate_nested_levels_v2(body), updated_at = now()
+       WHERE pg_temp.migrate_nested_levels_v2(body) IS DISTINCT FROM body;
+
+      UPDATE level_working_copy_revisions
+         SET body = pg_temp.migrate_nested_levels_v2(body)
+       WHERE pg_temp.migrate_nested_levels_v2(body) IS DISTINCT FROM body;
+      WITH candidates AS (
+        SELECT working.document_id,
+               evidence.migrated_body,
+               CASE
+                 WHEN evidence.saved_revision > 0
+                  AND evidence.new_saved_hash IS NOT NULL
+                  AND (
+                    evidence.old_baseline_hash IS NULL
+                    OR evidence.old_baseline_hash = evidence.old_saved_hash
+                  )
+                 THEN evidence.new_saved_hash
+                 ELSE evidence.old_baseline_hash
+               END AS migrated_baseline_hash
+          FROM level_working_copies working
+          JOIN level_migration_61_baselines evidence USING (document_id)
+      ), changed AS (
+        UPDATE level_working_copies working
+           SET body = candidate.migrated_body,
+               saved_revision = CASE
+                 WHEN working.saved_revision = working.revision THEN working.revision + 1
+                 ELSE working.saved_revision
+               END,
+               revision = working.revision + 1,
+               baseline_hash = candidate.migrated_baseline_hash,
+               updated_at = now()
+          FROM candidates candidate
+         WHERE candidate.document_id = working.document_id
+           AND (
+             candidate.migrated_body IS DISTINCT FROM working.body
+             OR candidate.migrated_baseline_hash IS DISTINCT FROM working.baseline_hash
+           )
+        RETURNING working.document_id, working.revision, working.body,
+                  working.saved_revision, working.baseline_hash, working.updated_at
+      )
+      INSERT INTO level_working_copy_revisions
+        (document_id, revision, body, saved_revision, baseline_hash, reason, created_at)
+      SELECT document_id, revision, body, saved_revision, baseline_hash, 'migration', updated_at
+        FROM changed
+      ON CONFLICT (document_id, revision) DO NOTHING;
+
+      UPDATE editor_document_edit_sessions
+         SET draft_body = pg_temp.migrate_nested_levels_v2(draft_body)
+       WHERE pg_temp.migrate_nested_levels_v2(draft_body) IS DISTINCT FROM draft_body;
+      UPDATE editor_document_recoveries
+         SET body = pg_temp.migrate_nested_levels_v2(body)
+       WHERE pg_temp.migrate_nested_levels_v2(body) IS DISTINCT FROM body;
+      UPDATE lab_runs
+         SET body = pg_temp.migrate_nested_levels_v2(body)
+       WHERE pg_temp.migrate_nested_levels_v2(body) IS DISTINCT FROM body;
+      UPDATE train_runs
+         SET spec = pg_temp.migrate_nested_levels_v2(spec),
+             body = pg_temp.migrate_nested_levels_v2(body),
+             updated_at = now()
+       WHERE pg_temp.migrate_nested_levels_v2(spec) IS DISTINCT FROM spec
+          OR pg_temp.migrate_nested_levels_v2(body) IS DISTINCT FROM body;
+      UPDATE solve_runs
+         SET spec = pg_temp.migrate_nested_levels_v2(spec),
+             body = pg_temp.migrate_nested_levels_v2(body),
+             updated_at = now()
+       WHERE pg_temp.migrate_nested_levels_v2(spec) IS DISTINCT FROM spec
+          OR pg_temp.migrate_nested_levels_v2(body) IS DISTINCT FROM body;
+    `,
+  },
 ];
 
 let pool = null;
@@ -4807,7 +5166,10 @@ async function unmigratedActiveRunSaveCounts(client) {
        )::integer AS version_20_count,
        count(*) FILTER (
          WHERE body->'runSaveVersion' = '21'::jsonb
-       )::integer AS version_21_count
+       )::integer AS version_21_count,
+       count(*) FILTER (
+         WHERE body->'runSaveVersion' = '22'::jsonb
+       )::integer AS version_22_count
        FROM active_runs`,
   );
   return Object.freeze({
@@ -4817,7 +5179,46 @@ async function unmigratedActiveRunSaveCounts(client) {
     version_19_count: Number(rows[0]?.version_19_count) || 0,
     version_20_count: Number(rows[0]?.version_20_count) || 0,
     version_21_count: Number(rows[0]?.version_21_count) || 0,
+    version_22_count: Number(rows[0]?.version_22_count) || 0,
   });
+}
+
+async function unmigratedLevelDocumentCount(client) {
+  const { rows } = await client.query(
+    `WITH documents(value) AS (
+       SELECT body FROM levels
+       UNION ALL SELECT body FROM campaign_workspaces
+       UNION ALL SELECT data FROM official_campaigns
+       UNION ALL SELECT body FROM public_maps
+       UNION ALL SELECT body FROM level_working_copies
+       UNION ALL SELECT body FROM level_working_copy_revisions
+       UNION ALL SELECT draft_body FROM editor_document_edit_sessions
+       UNION ALL SELECT body FROM editor_document_recoveries
+       UNION ALL SELECT body FROM active_runs
+       UNION ALL SELECT body FROM lab_runs
+       UNION ALL SELECT spec FROM train_runs
+       UNION ALL SELECT body FROM train_runs
+       UNION ALL SELECT spec FROM solve_runs
+       UNION ALL SELECT body FROM solve_runs
+     )
+     SELECT count(*)::integer AS count
+       FROM documents document
+       CROSS JOIN LATERAL jsonb_path_query(document.value, '$.**') nested(value)
+      WHERE jsonb_typeof(nested.value) = 'object'
+        AND nested.value->'formatVersion' = '1'::jsonb
+        AND (nested.value ? 'layers' OR nested.value ? 'boardCode')`,
+  );
+  return Number(rows[0]?.count) || 0;
+}
+
+async function unrepairedSavedEditorBaselineCount(client) {
+  const { rows } = await client.query(
+    `SELECT count(*)::integer AS count
+       FROM level_working_copies
+      WHERE saved_revision > 0
+        AND baseline_hash IS NULL`,
+  );
+  return Number(rows[0]?.count) || 0;
 }
 
 async function primogenitureRetirementContractRows(client) {
@@ -4852,6 +5253,8 @@ async function requiredSchemaContractIssues(client) {
   const moveHighlightContractRows = await generationAttemptMoveHighlightContractRows(client);
   const migrationIdentityRows = await schemaMigrationIdentityBoundaryRows(client);
   const unmigratedActiveRunSaves = await unmigratedActiveRunSaveCounts(client);
+  const unmigratedLevelDocuments = await unmigratedLevelDocumentCount(client);
+  const unrepairedSavedEditorBaselines = await unrepairedSavedEditorBaselineCount(client);
   const primogenitureRetirement = await primogenitureRetirementContractRows(client);
   const migrationIdentityIssues = schemaMigrationIdentityBoundaryIssues(
     migrationIdentityRows.columns,
@@ -4900,13 +5303,17 @@ async function requiredSchemaContractIssues(client) {
       + unmigratedActiveRunSaves.version_18_count
       + unmigratedActiveRunSaves.version_19_count
       + unmigratedActiveRunSaves.version_20_count
-      + unmigratedActiveRunSaves.version_21_count,
+      + unmigratedActiveRunSaves.version_21_count
+      + unmigratedActiveRunSaves.version_22_count,
     unmigrated_active_run_version_16_count: unmigratedActiveRunSaves.version_16_count,
     unmigrated_active_run_version_17_count: unmigratedActiveRunSaves.version_17_count,
     unmigrated_active_run_version_18_count: unmigratedActiveRunSaves.version_18_count,
     unmigrated_active_run_version_19_count: unmigratedActiveRunSaves.version_19_count,
     unmigrated_active_run_version_20_count: unmigratedActiveRunSaves.version_20_count,
     unmigrated_active_run_version_21_count: unmigratedActiveRunSaves.version_21_count,
+    unmigrated_active_run_version_22_count: unmigratedActiveRunSaves.version_22_count,
+    unmigrated_level_format_1_count: unmigratedLevelDocuments,
+    unrepaired_saved_editor_baseline_count: unrepairedSavedEditorBaselines,
     primogeniture_non_retired_slot_count: primogenitureRetirement.non_retired_slot_count,
     primogeniture_drawable_binding_count: primogenitureRetirement.drawable_binding_count,
     primogeniture_required_role_count: primogenitureRetirement.required_role_count,
@@ -4946,6 +5353,8 @@ function schemaContractIssuesPresent(issues) {
     || generationAttemptMoveHighlightContractIssuesPresent(issues)
     || schemaMigrationIdentityBoundaryIssuesPresent(issues)
     || issues.unmigrated_active_run_save_count > 0
+    || issues.unmigrated_level_format_1_count > 0
+    || issues.unrepaired_saved_editor_baseline_count > 0
     || primogenitureRetirementContractIssuesPresent(issues)
   );
 }
@@ -5052,6 +5461,21 @@ async function repairRequiredSchemaContracts(
     await executeMigration(migration, 'repair active Run Deployment transport contract');
     completedSteps.push(Object.freeze({
       contract: 'active Run Deployment transport save version',
+      migration_version: migration.version,
+    }));
+    markInspection(`inspect required contract repairs after migration ${migration.version}`);
+    issues = await requiredSchemaContractIssues(client);
+  }
+  if (
+    issues.unmigrated_active_run_version_22_count > 0
+    || issues.unmigrated_level_format_1_count > 0
+    || issues.unrepaired_saved_editor_baseline_count > 0
+  ) {
+    const migration = MIGRATIONS.find((candidate) => candidate.version === 61);
+    if (!migration) throw new Error('Level format 2 and saved editor baseline repair migration is unavailable');
+    await executeMigration(migration, 'repair Level format 2 and saved editor baseline contract');
+    completedSteps.push(Object.freeze({
+      contract: 'Level format 2 and saved editor baselines',
       migration_version: migration.version,
     }));
     markInspection(`inspect required contract repairs after migration ${migration.version}`);
@@ -7379,6 +7803,7 @@ function validateWorkspaceEvents(events, key) {
 // BOARD_COLS / BOARD_ROWS consts in core/level.ts.
 const WORKSPACE_BOARD_COLS = { min: 1, max: 48 };
 const WORKSPACE_BOARD_ROWS = { min: 1, max: 48 };
+const WORKSPACE_LEVEL_FORMAT_VERSION = serverRender?.LEVEL_FORMAT_VERSION ?? 2;
 
 function isFiniteInteger(value) {
   return Number.isInteger(value) && Number.isFinite(value);
@@ -7391,7 +7816,9 @@ function validateWorkspaceCoord(cell, cols, rows) {
 
 function validateWorkspaceLevel(level, key) {
   if (!level || typeof level !== 'object') return `levels.${key} must be an object`;
-  if (level.formatVersion !== 1) return `levels.${key}.formatVersion must be 1`;
+  if (level.formatVersion !== WORKSPACE_LEVEL_FORMAT_VERSION) {
+    return `levels.${key}.formatVersion must be ${WORKSPACE_LEVEL_FORMAT_VERSION}`;
+  }
   if (typeof level.id !== 'string' || !level.id) return `levels.${key}.id is required`;
   if (level.id !== key) return `levels.${key}.id must match its workspace key`;
   if (typeof level.name !== 'string') return `levels.${key}.name is required`;
@@ -7816,7 +8243,7 @@ function publicEditorDocument(row) {
     saved_revision: savedRevision,
     dirty: revision !== savedRevision,
     has_saved_baseline: hasSavedBaseline,
-    never_saved: !hasSavedBaseline,
+    never_saved: savedRevision === 0,
     baseline_conflict: Boolean(row && row.baseline_conflict),
     edit_generation: Number(row && row.edit_generation) || 0,
     created_at: row.created_at ?? null,
@@ -7838,7 +8265,7 @@ function publicEditorDocumentSummary(row) {
     saved_revision: savedRevision,
     dirty: revision !== savedRevision,
     has_saved_baseline: hasSavedBaseline,
-    never_saved: !hasSavedBaseline,
+    never_saved: savedRevision === 0,
     edit_generation: Number(row && row.edit_generation) || 0,
     created_at: row.created_at ?? null,
     updated_at: row.updated_at ?? null,

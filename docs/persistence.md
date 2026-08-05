@@ -66,7 +66,9 @@ vocabulary into RunSaveVersion 18's Sectio, Adlectio, and Alienatio vocabulary, 
 18 to RunSaveVersion 19's starter Chartulary and historical deployment queue, advances version
 19 to RunSaveVersion 20's Expunctio transaction and reset-complete Pestiferous loss snapshot,
 advances version 20 to RunSaveVersion 21's stable nullable card seats and card-ordered Deployment,
-then advances version 21 to RunSaveVersion 22's explicit deal boundary and persisted transport.
+advances version 21 to RunSaveVersion 22's explicit deal boundary and persisted transport, then
+advances version 22 to RunSaveVersion 23 by migrating every embedded Battle Level to Level format
+version 2.
 Migration 54 owns the marker rename; migration 55 advances the Sectio vocabulary; migration 56
 adds His Grace and Front Lines and returns a version-18 Deployment or Battle to its then-current
 pre-information boundary because that version did not persist exact automatic destinations.
@@ -77,6 +79,7 @@ and returns an in-flight version-20 Deployment or Battle to the new empty-battle
 Migration 60 removes the retired Deployment mode, maps a not-yet-settled old deal back to
 `awaiting-deal`, maps an already-settled old pace boundary to the active card, and preserves every
 later reveal, placement, settlement, and discard boundary while resuming it paused.
+Migration 61 advances every embedded Battle Level and the containing Run marker together.
 Each account migration advances the Run's CAS revision, while the browser applies the same chain
 to its local document on first load. Saves older than version 16 remain unavailable because their
 retired gameplay state has no declared lossless transform. See
@@ -92,7 +95,7 @@ migration for account and browser storage. Retired content maps to a typed tombs
 replacement—for example, a removed card remains in the deck as **Removed card**—rather than
 invalidating the Run.
 
-RunSaveVersion 22 begins in Bona Vacantia when the opening Conflict offers a lipsanon, otherwise
+RunSaveVersion 23 begins in Bona Vacantia when the opening Conflict offers a lipsanon, otherwise
 in the normal Sectio with kind `opening`. The Run carries the permanent King and two starting Pawns
 through the starter-only His Grace and Front Lines cards, eight gold, and three seeded card offers.
 Adlectio remains in the same Sectio transaction; Army, Alienatio, Expunctio, Reset Sectio, and
@@ -108,12 +111,18 @@ the reward, turns, elapsed time, survivors, and fallen units until Continue open
 or the next Sectio. See ADR-0321 through ADR-0348, ADR-0377, ADR-0419, and ADR-0422 for those gameplay
 decisions.
 
-Migration 56 also retires Pawn-only deployment geometry from durable content. It folds every
+Level documents have their own `formatVersion`, separate from the PostgreSQL schema-migration
+ledger. Current code accepts exactly Level format version 2. The declared version 1 to 2 transform
+retires Pawn-only deployment geometry: it folds every
 `player-pawn-spawn` square into the general `player-spawn` zone, removes Pawn from that zone's
 `excludedPieceTypes`, and rewrites both structured Levels and encoded `boardCode` wherever playable
 Levels may persist: canonical and public Levels, campaigns, working copies and their retained
 history/session/recovery state, active Runs, and lab/train/solve records. The transform is
-idempotent and preserves every unrelated zone field and square (ADR-0406).
+idempotent and preserves every unrelated zone field and square. Migration 56 performed the first
+in-place retirement; migration 61 establishes the explicit Level version edge across every durable
+location and repairs working-copy baselines from `saved_revision` history. Browser imports use the
+same shared transform, and embedded browser Runs advance through RunSaveVersion 23. See
+[ADR-0427](adr/0427-level-format-versions-always-migrate.md).
 
 The save stores the selected Ataraxia tier, named and numbered army units, held cards, exact card
 and offer targets, Cacochymic loss history, lipsana and their Conflict state, current deployment
@@ -125,7 +134,7 @@ explicit migration boundary. Its `purchasedCardOfferIds` and `soldUnits` fields 
 to `adlectedCardOfferIds` and `alienatedUnits`; current admitted units use source `adlectio`.
 `normalizeRunDocument` repairs incomplete data only inside the
 current RunSaveVersion; it contains no historical version upgrade path. The browser storage
-boundary owns the explicit historical chain through version 20.
+boundary owns the explicit historical chain through version 23.
 
 Run Battle Undo does not add another authority to `RunDocument`. The browser-owned resumable
 match snapshot keeps one checkpoint from immediately before the latest player move, including the
