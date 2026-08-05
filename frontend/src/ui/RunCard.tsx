@@ -56,6 +56,7 @@ export function RunCard({
   mode,
   cardType: ownedCardType = null,
   adlected = false,
+  emptyPieceIndices = [],
   departing = false,
   layoutId,
   disabled = false,
@@ -72,6 +73,8 @@ export function RunCard({
    */
   cardType?: RunCardType | null;
   adlected?: boolean;
+  /** Authored card seats whose units have left; retained so the face does not reflow. */
+  emptyPieceIndices?: readonly number[];
   departing?: boolean;
   /** Stable Sectio identity used to preserve the card's visual seat across reflow. */
   layoutId?: string;
@@ -79,10 +82,20 @@ export function RunCard({
   onSelect?: (element: HTMLButtonElement) => void;
 }): ReactElement {
   const identity = identityCard ?? card;
-  const label = cardContentsLabel(card);
+  const emptyPieces = new Set(emptyPieceIndices);
+  const label = cardContentsLabel({ pieces: card.pieces.filter((_, index) => !emptyPieces.has(index)) })
+    || 'No units remain';
+  const emptySeatLabel = emptyPieces.size
+    ? ` ${emptyPieces.size} empty seat${emptyPieces.size === 1 ? '' : 's'}.`
+    : '';
   const name = runCardName(identity);
   const frameSlot = runCardFrameSlot(card, ownedCardType);
-  const faceContent = runCardFaceContent(card, { adlected, cardType: ownedCardType, identity });
+  const faceContent = runCardFaceContent(card, {
+    adlected,
+    cardType: ownedCardType,
+    identity,
+    emptyPieceIndices,
+  });
   const targetLabel = publicTargetLabel(card, adlected);
   const face = (
     <RunCardFace
@@ -97,7 +110,7 @@ export function RunCard({
     return (
       <span
         className="run-card-action is-reference"
-        aria-label={`${name}. ${label}. Worth ${faceContent.cost} gold.${targetLabel}`}
+        aria-label={`${name}. ${label}.${emptySeatLabel} Worth ${faceContent.cost} gold.${targetLabel}`}
       >
         {face}
       </span>

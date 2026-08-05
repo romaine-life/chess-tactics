@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   requiredRunCardImageKinds,
+  runCardContentsDensityStepForCard,
   runCardPresentationCanPromote,
   runCardPresentationSignature,
   type RunCardFaceContent,
@@ -68,6 +69,28 @@ describe('Run card atomic presentation', () => {
     const complete = new Set<RunCardImageKind>(requiredRunCardImageKinds(card));
     expect(runCardPresentationCanPromote(signature, signature, card, incomplete)).toBe(false);
     expect(runCardPresentationCanPromote(signature, signature, card, complete)).toBe(true);
+  });
+
+  it('retains authored density and requires only occupied seat media after a unit leaves', () => {
+    const specimen = runCardSpecimen({ pieces: ['pawn', 'pawn'] });
+    const full = runCardFaceContent(specimen);
+    const oneSeatEmpty = runCardFaceContent(specimen, { emptyPieceIndices: [0] });
+
+    expect(oneSeatEmpty.grants).toEqual([{
+      unit: 'pawn',
+      count: 2,
+      emptyIndices: [0],
+      cacochymicIndices: [],
+    }]);
+    expect(runCardContentsDensityStepForCard(oneSeatEmpty)).toEqual(runCardContentsDensityStepForCard(full));
+    expect(requiredRunCardImageKinds(oneSeatEmpty)).toEqual([
+      'frame',
+      'coin',
+      'art',
+      'unit:0:pawn:1',
+    ]);
+    expect(runCardPresentationSignature(oneSeatEmpty, '/frame.png', '/art.png'))
+      .not.toBe(runCardPresentationSignature(full, '/frame.png', '/art.png'));
   });
 
   it('holds a paired property/state face until both exact icon consumers settle', () => {

@@ -7,7 +7,7 @@ refines:
   - "[ADR-0235](0235-battle-restart-is-not-a-board-destructive-operation.md)"
   - "[ADR-0358](0358-a-premove-is-judged-against-permanent-board-law.md)"
 partially_superseded_by:
-  - "[ADR-0427](0427-run-defeat-offers-retry-and-exits-without-blocking-controls.md)"
+  - "[ADR-0428](0428-run-defeat-offers-retry-and-exits-without-blocking-controls.md)"
 ---
 
 # ADR-0394: Run Battle Undo rewinds one player decision for one gold

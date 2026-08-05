@@ -13,7 +13,7 @@ refines:
   - "[ADR-0425](0425-run-battle-restart-unlocks-after-the-first-turn.md)"
 ---
 
-# ADR-0427: Run defeat offers Retry and exits without blocking Controls
+# ADR-0428: Run defeat offers Retry and exits without blocking Controls
 
 ## Context
 

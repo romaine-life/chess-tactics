@@ -60,8 +60,9 @@ search for before constructing a control or repeated surface.
 ## Studio and workflow compositions
 
 - `ui/RunCardFace.tsx` — the canonical visible Run-card anatomy shared by Card
-  Layout, Sectio visits, review, and Enchiridion; it owns the paired property/state
-  icon seats and includes their media in atomic face promotion.
+  Layout, Sectio visits, review, Enchiridion, and Deployment; it owns the paired property/state
+  icon seats, retains authored geometry for optional empty occurrences, and includes only visible
+  media in atomic face promotion.
 - `ui/RunCard.tsx` — the canonical interactive/reference host around
   `RunCardFace`; Sectio mode owns the gold transaction cue and supplies the exact
   source face used by the Adlectio transfer.
