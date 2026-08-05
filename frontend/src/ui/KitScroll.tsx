@@ -9,6 +9,44 @@ import {
   type RefObject,
 } from 'react';
 
+const KIT_SCROLL_MIN_THUMB = 24;
+
+export interface KitScrollMetrics {
+  scrollable: boolean;
+  h: number;
+  top: number;
+}
+
+/**
+ * The thumb belongs to the drawn rail, not to the content viewport. Consumers
+ * may inset that rail to preserve chrome paint aprons, so its actual rendered
+ * height is the only valid track for thumb size and position.
+ */
+export function computeKitScrollMetrics({
+  clientHeight,
+  scrollHeight,
+  scrollTop,
+  trackHeight,
+}: {
+  clientHeight: number;
+  scrollHeight: number;
+  scrollTop: number;
+  trackHeight: number;
+}): KitScrollMetrics {
+  const scrollable = scrollHeight > clientHeight + 1;
+  const track = Math.max(0, trackHeight);
+  if (!scrollable || track === 0) return { scrollable, h: 0, top: 0 };
+
+  const h = Math.min(
+    track,
+    Math.max(KIT_SCROLL_MIN_THUMB, Math.round(track * (clientHeight / scrollHeight))),
+  );
+  const maxScroll = Math.max(0, scrollHeight - clientHeight);
+  const maxThumb = Math.max(0, track - h);
+  const progress = maxScroll > 0 ? Math.min(1, Math.max(0, scrollTop / maxScroll)) : 0;
+  return { scrollable, h, top: Math.round(progress * maxThumb) };
+}
+
 // A DRAWN scrollbar (ADR-0030). The native scrollbar is hidden; we render an always-present rail
 // (a real DOM element — the browser can't hide it) plus a grip thumb that appears only when there's
 // scrollable content and tracks the scroll position. Because it's DOM, the rail never vanishes on an
@@ -22,18 +60,20 @@ export function KitScroll({ children, className, style, contentRef }: {
 }): ReactElement {
   const localContent = useRef<HTMLDivElement>(null);
   const content = contentRef ?? localContent;
+  const rail = useRef<HTMLDivElement>(null);
   const drag = useRef<{ y: number; top: number; h: number } | null>(null);
   const [m, setM] = useState<{ scrollable: boolean; h: number; top: number }>({ scrollable: false, h: 0, top: 0 });
 
   const recompute = (): void => {
     const el = content.current;
-    if (!el) return;
-    const track = el.clientHeight;
-    const scrollable = el.scrollHeight > el.clientHeight + 1;
-    const h = scrollable ? Math.max(24, Math.round(track * (el.clientHeight / el.scrollHeight))) : 0;
-    const maxScroll = el.scrollHeight - el.clientHeight;
-    const top = scrollable && maxScroll > 0 ? Math.round((el.scrollTop / maxScroll) * (track - h)) : 0;
-    setM({ scrollable, h, top });
+    const track = rail.current;
+    if (!el || !track) return;
+    setM(computeKitScrollMetrics({
+      clientHeight: el.clientHeight,
+      scrollHeight: el.scrollHeight,
+      scrollTop: el.scrollTop,
+      trackHeight: track.clientHeight,
+    }));
   };
 
   useLayoutEffect(() => {
@@ -42,6 +82,7 @@ export function KitScroll({ children, className, style, contentRef }: {
     recompute();
     const ro = new ResizeObserver(recompute);
     ro.observe(el);
+    if (rail.current) ro.observe(rail.current);
     const mo = new MutationObserver(recompute);
     mo.observe(el, { childList: true, subtree: true, attributes: true });
     return () => { ro.disconnect(); mo.disconnect(); };
@@ -56,8 +97,9 @@ export function KitScroll({ children, className, style, contentRef }: {
     const move = (ev: MouseEvent): void => {
       const d = drag.current;
       const c = content.current;
-      if (!d || !c) return;
-      const maxThumb = c.clientHeight - d.h;
+      const track = rail.current;
+      if (!d || !c || !track) return;
+      const maxThumb = track.clientHeight - d.h;
       const maxScroll = c.scrollHeight - c.clientHeight;
       if (maxThumb <= 0) return;
       c.scrollTop = d.top + (ev.clientY - d.y) * (maxScroll / maxThumb);
@@ -76,8 +118,8 @@ export function KitScroll({ children, className, style, contentRef }: {
       <div className="kit-scroll-content" ref={content} onScroll={recompute}>
         {children}
       </div>
-      <div className="kit-scroll-rail" aria-hidden="true">
-        {m.scrollable ? (
+      <div className="kit-scroll-rail" ref={rail} aria-hidden="true">
+        {m.scrollable && m.h > 0 ? (
           <div
             className="kit-scroll-thumb"
             style={{ height: `${m.h}px`, transform: `translateY(${m.top}px)` }}

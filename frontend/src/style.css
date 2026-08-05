@@ -21304,6 +21304,7 @@ button.tileset-relationship-cell {
 }
 
 .run-meta-controls {
+  --run-leaf-control-surface-pitch: calc(46px + var(--ds-inline-tight));
   align-content: start;
   display: flex;
   flex: 1 1 auto;
@@ -21322,6 +21323,10 @@ button.tileset-relationship-cell {
 
 .run-meta-navigation > button {
   inline-size: 100%;
+}
+
+.run-meta-controls [data-chrome-fill-surface] {
+  --chrome-surface-position-y: calc(var(--run-leaf-control-index, 0) * -1 * var(--run-leaf-control-surface-pitch));
 }
 
 .run-meta-abandon {
@@ -21374,6 +21379,7 @@ button.tileset-relationship-cell {
 }
 
 .run-roster-filters {
+  --run-roster-filter-surface-pitch: calc(var(--le-inner-field-h, 38px) + var(--ds-inline-tight));
   align-items: end;
   display: grid;
   gap: var(--ds-inline-tight);
@@ -21387,6 +21393,7 @@ button.tileset-relationship-cell {
 }
 
 .run-roster-filters .house-select {
+  --chrome-surface-position-y: calc(var(--run-roster-filter-index, 0) * -1 * var(--run-roster-filter-surface-pitch));
   inline-size: 100%;
   min-inline-size: 0;
 }
@@ -21404,14 +21411,36 @@ button.tileset-relationship-cell {
   min-block-size: 0;
 }
 
-.run-alienatio-list {
+.run-sectio-operation-list-scroll {
+  --run-operation-clip-apron-block-start: var(--le-inner-atom-top-overhang, 0px);
+  --run-operation-clip-apron-block-end: var(--le-inner-atom-bottom-overhang, 0px);
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.run-sectio-operation-list-scroll > .kit-scroll-content {
+  box-sizing: border-box;
+}
+
+.run-sectio-operation-list-scroll > .kit-scroll-rail {
+  bottom: var(--run-operation-clip-apron-block-end);
+  top: var(--run-operation-clip-apron-block-start);
+}
+
+/* ADR-0093: corner atoms are paint-only overhang, so the list owns a measured
+   transparent block apron before clipping that paint out of the scroll extent.
+   The drawn rail terminates on the row rails, while each atom remains visible
+   in the apron instead of manufacturing a false final scroll step. */
+.run-sectio-operation-list {
   align-content: start;
   display: grid;
   gap: var(--ds-inline-tight);
   min-block-size: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding-inline-end: var(--ds-space-1);
+  overflow-block: clip;
+  overflow-inline: visible;
+  padding-block:
+    var(--run-operation-clip-apron-block-start)
+    var(--run-operation-clip-apron-block-end);
 }
 
 .run-army-ledger-row {
@@ -21562,12 +21591,20 @@ button.tileset-relationship-cell {
   display: block;
 }
 
+.run-army-profile {
+  --run-leaf-control-surface-pitch: calc(46px + var(--ds-inline-tight));
+}
+
 .run-army-profile-content {
   block-size: 100%;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-block-size: 0;
   overflow: hidden;
+}
+
+.run-army-profile [data-chrome-fill-surface] {
+  --chrome-surface-position-y: calc(var(--run-leaf-control-index, 0) * -1 * var(--run-leaf-control-surface-pitch));
 }
 
 .run-army-profile-scroll {
@@ -21713,18 +21750,12 @@ button.tileset-relationship-cell {
   margin: 0;
 }
 
-.run-expunctio-list {
-  align-content: start;
-  display: grid;
-  gap: var(--ds-inline-tight);
-  min-block-size: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding-inline-end: var(--ds-space-1);
-}
-
 .run-expunctio-row {
+  --run-operation-surface-pitch: calc(252px + (2 * var(--ds-space-3)) + var(--ds-inline-tight));
+  --chrome-surface-position-y: calc(var(--run-operation-row-index, 0) * -1 * var(--run-operation-surface-pitch));
   align-items: center;
+  block-size: calc(252px + (2 * var(--ds-space-3)));
+  box-sizing: border-box;
   display: grid;
   gap: var(--ds-inline);
   grid-template-columns: minmax(132px, 180px) minmax(0, 1fr) minmax(110px, auto) minmax(140px, auto);
@@ -21732,7 +21763,7 @@ button.tileset-relationship-cell {
   padding: var(--ds-space-3) var(--ds-inset);
 }
 
-.run-expunctio-row:is(.is-expuncted, .is-spent, .is-unavailable, .is-unaffordable) {
+.run-expunctio-row:is(.is-expuncted, .is-spent, .is-unavailable, .is-unaffordable) > * {
   opacity: .72;
 }
 
@@ -21772,7 +21803,11 @@ button.tileset-relationship-cell {
 }
 
 .run-alienatio-row {
+  --run-operation-surface-pitch: calc(112px + var(--ds-inline-tight));
+  --chrome-surface-position-y: calc(var(--run-operation-row-index, 0) * -1 * var(--run-operation-surface-pitch));
   align-items: center;
+  block-size: 112px;
+  box-sizing: border-box;
   display: grid;
   gap: var(--ds-inline);
   grid-template-columns: 86px minmax(0, 1fr) minmax(110px, auto) minmax(140px, auto);
@@ -21780,8 +21815,7 @@ button.tileset-relationship-cell {
   padding: var(--ds-space-2) var(--ds-inset);
 }
 
-.run-alienatio-row.is-alienated,
-.run-alienatio-row.is-retained {
+.run-alienatio-row:is(.is-aliened, .is-retained) > * {
   opacity: .7;
 }
 
@@ -22720,10 +22754,15 @@ button.tileset-relationship-cell {
   }
 
   .run-alienatio-row {
+    --run-operation-surface-pitch: calc(224px + var(--ds-inline-tight));
+    block-size: 224px;
     grid-template-columns: 72px minmax(0, 1fr);
+    min-block-size: 224px;
   }
 
   .run-expunctio-row {
+    --run-operation-surface-pitch: calc(224px + (2 * var(--ds-space-3)) + var(--ds-inline-tight));
+    block-size: calc(224px + (2 * var(--ds-space-3)));
     grid-template-columns: minmax(112px, 160px) minmax(0, 1fr);
   }
 

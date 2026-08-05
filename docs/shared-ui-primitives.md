@@ -16,6 +16,10 @@ search for before constructing a control or repeated surface.
   decorative background artwork between its installed fill and live content;
   callers supply installed media content, not attachment or clipping geometry
   (ADR-0336).
+- `ui/shared/chromeSurfacePolicy.ts` — semantic named-surface policy shared by
+  chrome consumers. `CHROME_LEAF_FILL_SURFACE` identifies the installed oak
+  fill for terminal controls and status plates; structural containers retain
+  their role-owned teal/blue fill (ADR-0433).
 - `ui/RunForm.tsx` — the sole Run-page constructor. `createRunForm(...).add(
   runActivity(...))` permanently supplies the Run shell, title, Controls surface,
   Strategikon, lipsana strip, and workspace swap while activities contribute only

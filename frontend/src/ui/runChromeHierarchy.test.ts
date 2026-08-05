@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 const runScreen = readFileSync(new URL('./RunScreen.tsx', import.meta.url), 'utf8');
 const runArmyWorkspace = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url), 'utf8');
 const runExpunctioWorkspace = readFileSync(new URL('./RunExpunctioWorkspace.tsx', import.meta.url), 'utf8');
+const runTitleBarChips = readFileSync(new URL('./RunTitleBarChips.tsx', import.meta.url), 'utf8');
 const app = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8');
 const enchiridionSource = readFileSync(new URL('./Enchiridion.tsx', import.meta.url), 'utf8');
 const sceneManifest = readFileSync(new URL('./shell/sceneManifest.ts', import.meta.url), 'utf8');
@@ -28,6 +29,8 @@ const runForm = readFileSync(new URL('./RunForm.tsx', import.meta.url), 'utf8');
 const skirmishBoard = readFileSync(new URL('../render/SkirmishBoard.tsx', import.meta.url), 'utf8');
 const skirmishHud = readFileSync(new URL('./SkirmishHud.tsx', import.meta.url), 'utf8');
 const chromeBox = readFileSync(new URL('./shared/ChromeBox.tsx', import.meta.url), 'utf8');
+const houseSelect = readFileSync(new URL('./shared/HouseSelect.tsx', import.meta.url), 'utf8');
+const chromeSurfacePolicy = readFileSync(new URL('./shared/chromeSurfacePolicy.ts', import.meta.url), 'utf8');
 const paintedSurfaceBoundary = readFileSync(new URL('./shell/PaintedSurfaceBoundary.tsx', import.meta.url), 'utf8');
 const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const gameStore = readFileSync(new URL('../game/store.ts', import.meta.url), 'utf8');
@@ -357,6 +360,74 @@ describe('Run chrome hierarchy', () => {
     expect(styleCss).toContain('.run-deployment-board');
     expect(styleCss).toContain('.skirmish-board-cell-hit.is-threat::before');
     expect(styleCss).not.toContain('.run-deployment-cell.is-deployment-blocked:hover::before');
+  });
+
+  it('keeps Sectio operation lists on the canonical drawn scrollbar', () => {
+    const operationListRule = styleCss.match(/\.run-sectio-operation-list\s*\{([^}]*)\}/)?.[1] ?? '';
+
+    expect(runArmyWorkspace).toContain('<KitScroll className="run-sectio-operation-list-scroll">');
+    expect(runExpunctioWorkspace).toContain('<KitScroll className="run-sectio-operation-list-scroll">');
+    expect(runArmyWorkspace).toContain('className="run-sectio-operation-list run-alienatio-list"');
+    expect(runExpunctioWorkspace).toContain('className="run-sectio-operation-list run-expunctio-list"');
+    expect(runArmyWorkspace).toContain('data-chrome-fill-surface="baseline-stone-blue"');
+    expect(runExpunctioWorkspace).toContain('data-chrome-fill-surface="baseline-stone-blue"');
+    expect(runArmyWorkspace).toContain("['--run-operation-row-index' as string]: index");
+    expect(runExpunctioWorkspace).toContain("['--run-operation-row-index' as string]: index");
+    expect(styleCss).toMatch(/\.run-alienatio-row\s*\{[\s\S]*?--chrome-surface-position-y:\s*calc\(var\(--run-operation-row-index, 0\)/);
+    expect(styleCss).toMatch(/\.run-expunctio-row\s*\{[\s\S]*?--chrome-surface-position-y:\s*calc\(var\(--run-operation-row-index, 0\)/);
+    expect(styleCss).toMatch(/\.run-alienatio-row\s*\{[^}]*--run-operation-surface-pitch:\s*calc\(112px \+ var\(--ds-inline-tight\)\);[^}]*block-size:\s*112px;/s);
+    expect(styleCss).toMatch(/\.run-expunctio-row\s*\{[^}]*--run-operation-surface-pitch:\s*calc\(252px \+ \(2 \* var\(--ds-space-3\)\) \+ var\(--ds-inline-tight\)\);[^}]*block-size:\s*calc\(252px \+ \(2 \* var\(--ds-space-3\)\)\);/s);
+    expect(styleCss).toMatch(/@media \(max-width: 960px\)[\s\S]*?\.run-alienatio-row\s*\{[^}]*--run-operation-surface-pitch:\s*calc\(224px \+ var\(--ds-inline-tight\)\);[^}]*block-size:\s*224px;/s);
+    expect(styleCss).toMatch(/\.run-sectio-operation-list-scroll\s*\{[^}]*--run-operation-clip-apron-block-start:\s*var\(--le-inner-atom-top-overhang, 0px\);[^}]*--run-operation-clip-apron-block-end:\s*var\(--le-inner-atom-bottom-overhang, 0px\);/s);
+    expect(styleCss).toMatch(/\.run-sectio-operation-list-scroll > \.kit-scroll-rail\s*\{[^}]*bottom:\s*var\(--run-operation-clip-apron-block-end\);[^}]*top:\s*var\(--run-operation-clip-apron-block-start\);/s);
+    expect(operationListRule).toMatch(/overflow-block:\s*clip/);
+    expect(operationListRule).toMatch(/overflow-inline:\s*visible/);
+    expect(operationListRule).toMatch(/padding-block:\s*var\(--run-operation-clip-apron-block-start\)\s*var\(--run-operation-clip-apron-block-end\)/);
+    expect(operationListRule).not.toMatch(/overflow(?:-[xy])?:\s*(?:auto|scroll)/);
+    expect(styleCss).not.toMatch(/\.run-(?:alienatio|expunctio)-row:nth-child/);
+    expect(styleCss).not.toMatch(/\.run-alienatio-row(?:\.is-aliened|:is\([^}]+\))\s*\{[^}]*opacity:/);
+    expect(styleCss).not.toMatch(/\.run-expunctio-row:is\([^}]+\)\s*\{[^}]*opacity:/);
+  });
+
+  it('reserves structural teal for containers and paints Run leaf chrome with data-phased oak', () => {
+    const metaControls = runScreen.match(
+      /function RunMetaControls\b[\s\S]*?\r?\n}\r?\n\r?\nfunction deploymentSquareLabel/,
+    )?.[0] ?? '';
+
+    expect(chromeSurfacePolicy).toContain("export const CHROME_LEAF_FILL_SURFACE = 'hybrid-wood-oak'");
+    expect(houseSelect).toContain('fillSurface?: string;');
+    expect(houseSelect).toContain('data-chrome-fill-surface={fillSurface}');
+    expect((runArmyWorkspace.match(/fillSurface=\{CHROME_LEAF_FILL_SURFACE\}/g) ?? [])).toHaveLength(4);
+    expect(runArmyWorkspace).toContain("['--run-roster-filter-index' as string]: 3");
+    expect(styleCss).toMatch(/\.run-roster-filters \.house-select\s*\{[\s\S]*?--chrome-surface-position-y:\s*calc\(var\(--run-roster-filter-index, 0\)/);
+
+    expect(metaControls).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
+    expect(metaControls).toContain('SECTIO_WORKSPACE_VIEWS.map((candidate, index) =>');
+    expect(metaControls).toContain("['--run-leaf-control-index' as string]: index + 1");
+    expect(metaControls).toContain("['--run-leaf-control-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 3");
+    expect(styleCss).toMatch(/\.run-meta-controls \[data-chrome-fill-surface\]\s*\{[\s\S]*?--chrome-surface-position-y:\s*calc\(var\(--run-leaf-control-index, 0\)/);
+
+    expect(runArmyWorkspace).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
+    expect(runExpunctioWorkspace).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
+    expect(runTitleBarChips).toMatch(/<TitleBarStatus[\s\S]*?data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}/);
+    expect(runArmyWorkspace).toContain('data-chrome-fill-surface="baseline-stone-blue"');
+    expect(runExpunctioWorkspace).toContain('data-chrome-fill-surface="baseline-stone-blue"');
+    expect(styleCss).not.toMatch(/\.run-(?:roster-filters|meta-controls)[^}]*:nth-child/);
+  });
+
+  it('uses Alienatio as the operation noun and Aliene as its action verb', () => {
+    expect(runArmyWorkspace).toContain('<h2 id="run-alienatio-workspace-title">Alienatio</h2>');
+    expect(runArmyWorkspace).toContain("status === 'alienable' ? 'Aliene'");
+    expect(runArmyWorkspace).toContain("status === 'aliened' ? 'Aliened this visit'");
+    expect(runArmyWorkspace).toContain("{ value: 'aliened', label: 'Aliened this visit' }");
+    expect(runArmyWorkspace).toContain("? 'Aliened during this Sectio visit. Reset Sectio to restore this unit.'");
+    expect(runArmyWorkspace).toContain("<span>{unit.type === 'king' ? 'Retained' : 'Aliene'}</span>");
+    expect(runArmyWorkspace).not.toContain("status === 'alienable' ? 'Alienatio'");
+    expect(runArmyWorkspace).not.toContain('Alienated this visit');
+    expect(runArmyWorkspace).not.toContain('onAlienate');
+    expect(runScreen).toContain('const alieneUnit = (unitId: string): void => {');
+    expect(runScreen).toContain('onAliene={alieneUnit}');
+    expect(styleCss).toContain('.run-alienatio-row:is(.is-aliened, .is-retained) > *');
   });
 
   it('previews the upcoming Sectio Battle through the canonical read-only board and Level ledger', () => {

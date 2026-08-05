@@ -225,6 +225,15 @@ Destinations do not add an
 `OuterChromeBox`, outer-panel consumer, or duplicate title frame merely to
 acquire a background; subordinate controls remain registered inner chrome.
 
+Under [ADR-0433](adr/0433-leaf-chrome-uses-oak-over-structural-teal-fields.md),
+material also communicates the last level of that hierarchy. Cool teal/blue
+stone remains on structural fields that establish a region for subordinate
+units. Terminal controls and identity/status plates use the installed oak leaf
+surface. Dropdown triggers are leaves while their open popup bodies remain
+structural fields. Repeated leaf renderers carry a data-owned texture phase;
+they do not restart the surface per item, infer phase from `nth-child`, or move
+the fill to a parent whose gaps must remain transparent.
+
 Per [ADR-0386](adr/0386-shops-offer-read-only-intelligence-on-the-upcoming-battle.md),
 the Sectio's `/run?view=battle-preview` destination composes the canonical
 `FramedReadOnlyBoardView` and `LevelInfoCompact` inside that fill-only workspace.

@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import type { CSSProperties, ReactElement } from 'react';
 import {
   PIECE_LABEL,
   cardExpunctioPriceTenths,
@@ -9,12 +9,14 @@ import {
   type RunOwnedCard,
 } from '../run/model';
 import { runCardName } from '../run/cardNames';
+import { KitScroll } from './KitScroll';
 import { RunCard } from './RunCard';
 import { RunGoldAmount } from './RunResources';
 import { RunSceneViewport } from './RunWorkspace';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { ChromeButton } from './shared/ChromeButton';
 import { InnerChromeBox } from './shared/ChromeBox';
+import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
 
 type ExpunctioRow = Readonly<{
   card: RunOwnedCard;
@@ -95,47 +97,55 @@ export function RunExpunctioWorkspace({
       <p className="run-expunctio-rule">
         Fee = printed card value + remaining unit value. Reset Sectio restores the complete visit.
       </p>
-      <div className="run-expunctio-list" aria-label="Cards available for Expunctio">
-        {rows.map(({ card, units, priceTenths, status }) => {
-          const definition = runCardDefinition(card.coreId)!;
-          return (
-            <InnerChromeBox className={`run-expunctio-row is-${status}`} key={`${status}:${card.id}`}>
-              <span className="run-expunctio-card">
-                <RunCard
-                  card={definition}
-                  cardType={card.cardType}
-                  adlected
-                  mode="reference"
-                />
-              </span>
-              <span className="run-expunctio-copy">
-                <strong>{runCardName(definition)}</strong>
-                <small>{status === 'expuncted'
-                  ? 'Removed with card'
-                  : status === 'unavailable' ? 'Not subject to Expunctio' : 'Attached units'}</small>
-                <span>{unitList(units)}</span>
-              </span>
-              <span className="run-expunctio-price">
-                <small>{status === 'expuncted' ? 'Paid' : 'Expunctio fee'}</small>
-                {priceTenths === null ? <strong>Unavailable</strong> : <RunGoldAmount valueTenths={priceTenths} />}
-              </span>
-              <ChromeButton
-                unit="inner-text-button"
-                data-ui-sfx={status === 'available' ? 'gold' : undefined}
-                className={chromeUnitClassNames(
-                  'inner-text-button',
-                  'app-header-button',
-                  status === 'available' && 'danger',
-                )}
-                disabled={status !== 'available'}
-                onClick={() => onExpunct(card.id)}
+      <KitScroll className="run-sectio-operation-list-scroll">
+        <div className="run-sectio-operation-list run-expunctio-list" aria-label="Cards available for Expunctio">
+          {rows.map(({ card, units, priceTenths, status }, index) => {
+            const definition = runCardDefinition(card.coreId)!;
+            return (
+              <InnerChromeBox
+                className={`run-expunctio-row is-${status}`}
+                data-chrome-fill-surface="baseline-stone-blue"
+                key={`${status}:${card.id}`}
+                style={{ ['--run-operation-row-index' as string]: index } as CSSProperties}
               >
-                {actionLabel(status)}
-              </ChromeButton>
-            </InnerChromeBox>
-          );
-        })}
-      </div>
+                <span className="run-expunctio-card">
+                  <RunCard
+                    card={definition}
+                    cardType={card.cardType}
+                    adlected
+                    mode="reference"
+                  />
+                </span>
+                <span className="run-expunctio-copy">
+                  <strong>{runCardName(definition)}</strong>
+                  <small>{status === 'expuncted'
+                    ? 'Removed with card'
+                    : status === 'unavailable' ? 'Not subject to Expunctio' : 'Attached units'}</small>
+                  <span>{unitList(units)}</span>
+                </span>
+                <span className="run-expunctio-price">
+                  <small>{status === 'expuncted' ? 'Paid' : 'Expunctio fee'}</small>
+                  {priceTenths === null ? <strong>Unavailable</strong> : <RunGoldAmount valueTenths={priceTenths} />}
+                </span>
+                <ChromeButton
+                  unit="inner-text-button"
+                  data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                  data-ui-sfx={status === 'available' ? 'gold' : undefined}
+                  className={chromeUnitClassNames(
+                    'inner-text-button',
+                    'app-header-button',
+                    status === 'available' && 'danger',
+                  )}
+                  disabled={status !== 'available'}
+                  onClick={() => onExpunct(card.id)}
+                >
+                  {actionLabel(status)}
+                </ChromeButton>
+              </InnerChromeBox>
+            );
+          })}
+        </div>
+      </KitScroll>
     </RunSceneViewport>
   );
 }

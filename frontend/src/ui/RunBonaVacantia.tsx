@@ -201,7 +201,7 @@ export function RunBonaVacantiaTarget({
           onFiltersChange={onFiltersChange}
           onSelectUnit={onSelectUnit}
           onBack={onBackToUnits}
-          onAlienate={() => undefined}
+          onAliene={() => undefined}
           profileAction={{
             label: `Give ${ADLECTED_DISPLAY_NAME} to this unit`,
             onAction: onConfirm,
