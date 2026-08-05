@@ -156,7 +156,9 @@ selector:
 
 - **Scene Art** owns the free projected-pixel `floatingArtwork` channel. It is
   gameplay-inert and is the only Placed Art type that accepts positions outside
-  the playable board.
+  the playable board. Its installed directional ground anchor automatically
+  interleaves it with the shared board depth stack; authors never manage a z
+  value or repair overlap by reordering instances (ADR-0434).
 - **Doodads** are tile-addressed, nonblocking, and board-only.
 - **Props** are tile-addressed and blocking; their complete footprint must
   remain inside the playable board.
