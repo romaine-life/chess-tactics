@@ -442,6 +442,10 @@ describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
     expect(style).toMatch(/\.skirmish-hud-title-action\.active\s*\{[\s\S]*?background:\s*none[\s\S]*?border-color:\s*transparent[\s\S]*?box-shadow:\s*none/);
     expect(style).toMatch(/\.skirmish-hud-title-action:hover\s*\{[\s\S]*?filter:/);
     expect(style).not.toMatch(/\.skirmish-hud-title-action:is\(:hover,\s*\.active\)/);
+    const sectionShortcutRule = style.match(/\.strategikon-title-section-action\s*\{[^}]*\}/)?.[0] ?? '';
+    const sectionShortcutStateRule = style.match(/\.strategikon-title-section-action:is\(:hover,\s*:focus-visible,\s*\.active\)\s*\{[^}]*\}/)?.[0] ?? '';
+    expect(sectionShortcutRule).not.toContain('opacity:');
+    expect(sectionShortcutStateRule).not.toContain('opacity:');
     expect(style).toMatch(/\.skirmish-hud-title-action-glyph\s*\{[\s\S]*?block-size:\s*32px[\s\S]*?inline-size:\s*32px/);
     expect(runForm).toContain('className={activity.viewport.className}');
     expect(runForm).toContain('primaryClassName={activity.viewport.primaryClassName}');

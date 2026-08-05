@@ -22511,15 +22511,11 @@ button.tileset-relationship-cell {
 .strategikon-title-section-action {
   block-size: 24px;
   inline-size: 24px;
-  opacity: .62;
-  transition:
-    filter var(--ds-duration-fast) var(--ds-ease-standard),
-    opacity var(--ds-duration-fast) var(--ds-ease-standard);
+  transition: filter var(--ds-duration-fast) var(--ds-ease-standard);
 }
 
 .strategikon-title-section-action:is(:hover, :focus-visible, .active) {
   filter: brightness(1.22) saturate(1.08);
-  opacity: 1;
 }
 
 .strategikon-title-section-action:focus-visible {
