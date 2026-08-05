@@ -13,8 +13,8 @@ import {
   type PlayablePieceType,
 } from '../core/pieces';
 import {
-  advanceDeployAll,
-  chooseDeploymentMode,
+  advanceDeploymentTransport,
+  beginDeploymentDeal,
   completeDeploymentDeal,
   currentDeploymentUnit,
   deploymentOptions,
@@ -25,6 +25,7 @@ import {
   levelWithRunDeployment,
   placeAdlectedDeploymentUnit,
   revealActiveDeploymentCard,
+  setDeploymentTransport,
   type RunDeploymentTraceEntry,
 } from '../run/deployment';
 import {
@@ -444,8 +445,9 @@ export function buildDeploymentLabSnapshot(config: DeploymentLabConfig): Deploym
       return unit && validCellKey(cell) ? [[unit.id, cell]] : [];
     }),
   );
+  run = beginDeploymentDeal(run);
   run = completeDeploymentDeal(run, level);
-  run = chooseDeploymentMode(run, level, 'deploy-all');
+  run = setDeploymentTransport(run, 'full-deploy');
   while (run.phase === 'deployment') {
     if (run.deployment?.stage === 'card') {
       run = revealActiveDeploymentCard(run);
@@ -472,7 +474,7 @@ export function buildDeploymentLabSnapshot(config: DeploymentLabConfig): Deploym
     ))
       ? configured
       : disciplinePlacementCells(run, options, unit.id)[0];
-    const next = cell ? placeAdlectedDeploymentUnit(run, level, cell) : advanceDeployAll(run, level);
+    const next = cell ? placeAdlectedDeploymentUnit(run, level, cell) : advanceDeploymentTransport(run, level);
     if (next === run) break;
     run = next;
   }

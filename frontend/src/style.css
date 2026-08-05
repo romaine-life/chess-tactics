@@ -21106,21 +21106,115 @@ button.tileset-relationship-cell {
   z-index: 8;
 }
 
+.run-deployment-deal-overlay {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+  inset: 0;
+  justify-content: center;
+  pointer-events: none;
+  position: absolute;
+  z-index: 24;
+}
+
+.run-deployment-center-deck {
+  aspect-ratio: 5 / 7;
+  filter: drop-shadow(0 12px 24px rgba(0, 0, 0, .58));
+  inline-size: clamp(124px, 11vw, 168px);
+  position: relative;
+  transform-origin: center;
+  will-change: opacity, transform;
+}
+
+.run-deployment-center-card {
+  display: block;
+  inset: 0;
+  position: absolute;
+}
+
+.run-deployment-center-card.is-depth-two { transform: translate(-6px, -6px); }
+.run-deployment-center-card.is-depth-one { transform: translate(-3px, -3px); }
+.run-deployment-center-card.is-top { position: relative; }
+
+.run-deployment-center-card > .run-card-back {
+  block-size: 100%;
+  display: block;
+  inline-size: 100%;
+  object-fit: contain;
+}
+
+.run-deployment-center-count {
+  align-items: center;
+  color: #effcff;
+  display: flex;
+  font-size: 14px;
+  inline-size: 30px;
+  inset-block-end: calc(-1 * var(--ds-space-2));
+  inset-inline-end: calc(-1 * var(--ds-space-2));
+  justify-content: center;
+  min-block-size: 30px;
+  position: absolute;
+  text-shadow: 0 1px 0 #000;
+}
+
+.run-deployment-deal-actions {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+  pointer-events: auto;
+}
+
+.run-deployment-auto-deal {
+  align-items: center;
+  color: #d8edf3;
+  cursor: pointer;
+  display: flex;
+  font-size: var(--ds-text-sm);
+  gap: var(--ds-space-2);
+}
+
 .run-deployment-card-stack {
-  align-items: end;
+  --deployment-deal-duration: 560ms;
+  --deployment-deal-stagger: 340ms;
+  align-items: start;
   display: grid;
   gap: var(--ds-inline-tight);
-  justify-items: end;
-  min-block-size: 154px;
+  justify-items: start;
+  min-block-size: 178px;
   overflow: visible;
-  padding: var(--ds-space-1) var(--ds-space-2) var(--ds-space-2);
+  padding: var(--ds-space-1) var(--ds-space-2) var(--ds-space-3);
 }
 
 .run-deployment-card-pile {
   aspect-ratio: 5 / 7;
-  inline-size: clamp(82px, 7vw, 108px);
+  inline-size: clamp(104px, 8.5vw, 132px);
   perspective: 700px;
   position: relative;
+}
+
+.run-deployment-card-stack[data-deployment-card-stage='awaiting-deal'] .run-deployment-stack-card,
+.run-deployment-card-stack[data-deployment-card-stage='awaiting-deal'] .run-deployment-card-count {
+  opacity: 0;
+}
+
+.run-deployment-card-stack[data-deployment-card-stage='dealing'] .run-deployment-stack-card:not(.is-dealt) {
+  opacity: 0;
+}
+
+.run-deployment-deal-flight {
+  opacity: 0;
+  position: fixed;
+  transform-origin: center;
+  will-change: opacity, transform;
+}
+
+.run-deployment-deal-flight > .run-card-back {
+  block-size: 100%;
+  display: block;
+  inline-size: 100%;
+  object-fit: contain;
 }
 
 .run-deployment-stack-card {
@@ -21189,6 +21283,16 @@ button.tileset-relationship-cell {
   display: flex;
   flex-wrap: wrap;
   gap: var(--ds-inline-tight);
+}
+
+.run-deployment-transport {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: repeat(3, minmax(34px, auto));
+}
+
+.run-deployment-transport > :last-child {
+  grid-column: 1 / -1;
 }
 
 /* Account/browser Run adoption is a decision made with two buttons, not a

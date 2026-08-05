@@ -13,6 +13,7 @@ import {
   runCardUnitIds,
   setDeploymentChoices,
   type RunArmyUnit,
+  type RunDeploymentTransport,
   type RunDocument,
   type RunOwnedCard,
 } from './model';
@@ -452,8 +453,8 @@ export function disciplinePlacementCells(run: RunDocument, options: RunDeploymen
 }
 
 export type RunDeploymentInteractionStage =
-  | 'deal'
-  | 'pace'
+  | 'await-deal'
+  | 'dealing'
   | 'reveal-card'
   | 'revealing-card'
   | 'place'
@@ -464,8 +465,8 @@ export type RunDeploymentInteractionStage =
 
 export function deploymentInteractionStage(run: RunDocument, _options?: RunDeploymentOptions): RunDeploymentInteractionStage {
   const deployment = run.deployment;
-  if (!deployment || deployment.stage === 'dealing') return 'deal';
-  if (deployment.stage === 'pace') return 'pace';
+  if (!deployment || deployment.stage === 'awaiting-deal') return 'await-deal';
+  if (deployment.stage === 'dealing') return 'dealing';
   if (deployment.stage === 'card') return 'reveal-card';
   if (deployment.stage === 'revealing') return 'revealing-card';
   if (deployment.stage === 'settling') return 'settling';
@@ -476,19 +477,29 @@ export function deploymentInteractionStage(run: RunDocument, _options?: RunDeplo
   return unitIsAdlected(run, unit.id) ? 'adlected' : 'place';
 }
 
-/** Persists that the face-down transfer from the Chartulary has settled. */
+/** Crosses the persisted player/auto-deal boundary without revealing a card. */
+export function beginDeploymentDeal(run: RunDocument): RunDocument {
+  if (run.phase !== 'deployment' || run.deployment?.stage !== 'awaiting-deal') return run;
+  return setDeploymentChoices(run, { stage: 'dealing' });
+}
+
+/** Persists that both face-down branches of the deck partition have settled. */
 export function completeDeploymentDeal(run: RunDocument, level: Level): RunDocument {
   const resolved = resolveDeploymentCapacity(run, level);
   if (resolved.phase !== 'deployment' || resolved.deployment?.stage !== 'dealing') return resolved;
-  return setDeploymentChoices(resolved, { stage: 'pace' });
+  return setDeploymentChoices(resolved, { stage: 'card', transport: 'paused' });
 }
 
 function stageAfterCommittedUnits(run: RunDocument): RunDocument {
   if (!run.deployment) return run;
-  return setDeploymentChoices(run, {
+  const next = setDeploymentChoices(run, {
     settlingUnitIds: [],
     stage: currentDeploymentUnit(run) ? 'unit' : 'discarding',
   });
+  const nextUnit = currentDeploymentUnit(next);
+  return nextUnit && unitIsAdlected(next, nextUnit.id)
+    ? setDeploymentChoices(next, { transport: 'paused' })
+    : next;
 }
 
 function commitPlacement(
@@ -546,19 +557,19 @@ function placeAutomaticDeploymentWave(run: RunDocument, level: Level): RunDocume
   return stageAfterCommittedUnits(next);
 }
 
-export function chooseDeploymentMode(run: RunDocument, level: Level, mode: 'deploy-all' | 'step-through'): RunDocument {
-  let next = resolveDeploymentCapacity(run, level);
-  if (next.phase !== 'deployment' || !next.deployment || next.deployment.stage !== 'pace') return next;
-  next = setDeploymentChoices(next, {
-    mode,
-    stage: 'card',
-  });
-  return next;
-}
-
-export function switchDeploymentMode(run: RunDocument, level: Level, mode: 'deploy-all' | 'step-through'): RunDocument {
-  if (run.phase !== 'deployment' || !run.deployment?.mode) return run;
-  return setDeploymentChoices(run, { mode });
+export function setDeploymentTransport(
+  run: RunDocument,
+  transport: RunDeploymentTransport,
+): RunDocument {
+  if (run.phase !== 'deployment' || !run.deployment) return run;
+  if (run.deployment.stage === 'awaiting-deal' || run.deployment.stage === 'dealing' || run.deployment.stage === 'complete') {
+    return run;
+  }
+  const unit = currentDeploymentUnit(run);
+  if (transport !== 'paused' && unit && unitIsAdlected(run, unit.id)) {
+    return setDeploymentChoices(run, { transport: 'paused' });
+  }
+  return setDeploymentChoices(run, { transport });
 }
 
 export function revealActiveDeploymentCard(run: RunDocument): RunDocument {
@@ -572,7 +583,11 @@ export function revealActiveDeploymentCard(run: RunDocument): RunDocument {
 
 export function finishDeploymentCardReveal(run: RunDocument): RunDocument {
   if (run.phase !== 'deployment' || !run.deployment || run.deployment.stage !== 'revealing') return run;
-  return setDeploymentChoices(run, { stage: currentDeploymentUnit(run) ? 'unit' : 'discarding' });
+  const next = setDeploymentChoices(run, { stage: currentDeploymentUnit(run) ? 'unit' : 'discarding' });
+  const unit = currentDeploymentUnit(next);
+  return unit && unitIsAdlected(next, unit.id)
+    ? setDeploymentChoices(next, { transport: 'paused' })
+    : next;
 }
 
 export function placeRevealedDeploymentUnit(run: RunDocument, level: Level): RunDocument {
@@ -589,10 +604,7 @@ export function placeAdlectedDeploymentUnit(run: RunDocument, level: Level, cell
   if (!unit || run.deployment?.stage !== 'unit' || !unitIsAdlected(run, unit.id)) return run;
   const options = deploymentOptions(run, level);
   if (!disciplinePlacementCells(run, options, unit.id).some((candidate) => key(candidate) === key(cell))) return run;
-  const committed = commitPlacement(run, level, unit, cell, true, run.deployment.mode === 'deploy-all');
-  return run.deployment.mode === 'deploy-all'
-    ? placeAutomaticDeploymentWave(committed, level)
-    : committed;
+  return commitPlacement(setDeploymentChoices(run, { transport: 'paused' }), level, unit, cell, true);
 }
 
 export function finishDeploymentUnitSettlement(run: RunDocument, _level?: Level): RunDocument {
@@ -623,12 +635,16 @@ export function finishDeploymentCardDiscard(run: RunDocument): RunDocument {
   });
 }
 
-export function advanceDeployAll(run: RunDocument, level: Level): RunDocument {
-  if (run.phase !== 'deployment' || run.deployment?.mode !== 'deploy-all') return run;
+export function advanceDeploymentTransport(run: RunDocument, level: Level): RunDocument {
+  if (run.phase !== 'deployment' || !run.deployment) return run;
   if (run.deployment.stage === 'card') return revealActiveDeploymentCard(run);
-  if (run.deployment.stage === 'unit' && !unitIsAdlected(run, currentDeploymentUnit(run)?.id ?? '')) {
-    return placeAutomaticDeploymentWave(run, level);
+  if (run.deployment.stage !== 'unit') return run;
+  const unit = currentDeploymentUnit(run);
+  if (!unit || unitIsAdlected(run, unit.id)) {
+    return setDeploymentChoices(run, { transport: 'paused' });
   }
+  if (run.deployment.transport === 'playing') return placeRevealedDeploymentUnit(run, level);
+  if (run.deployment.transport === 'full-deploy') return placeAutomaticDeploymentWave(run, level);
   return run;
 }
 
@@ -645,11 +661,11 @@ export function deploymentHasCompassChoice(_run?: RunDocument, _options?: RunDep
 }
 
 export function advanceAutomaticDeployment(run: RunDocument, level: Level): RunDocument {
-  return resolveDeploymentCapacity(run, level);
+  return advanceDeploymentTransport(resolveDeploymentCapacity(run, level), level);
 }
 
 export function advanceReadyDeployment(run: RunDocument, level: Level): RunDocument {
-  return run.deployment?.mode === 'deploy-all' ? advanceDeployAll(run, level) : run;
+  return advanceDeploymentTransport(run, level);
 }
 
 export function deploymentReady(run: RunDocument, _options?: RunDeploymentOptions): boolean {

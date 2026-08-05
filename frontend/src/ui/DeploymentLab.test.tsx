@@ -12,8 +12,8 @@ import {
   type DeploymentLabConfig,
 } from './DeploymentLab';
 import {
-  advanceDeployAll,
-  chooseDeploymentMode,
+  advanceDeploymentTransport,
+  beginDeploymentDeal,
   completeDeploymentDeal,
   currentDeploymentUnit,
   deploymentInteractionStage,
@@ -24,6 +24,7 @@ import {
   finishDeploymentUnitSettlement,
   placeAdlectedDeploymentUnit,
   revealActiveDeploymentCard,
+  setDeploymentTransport,
 } from '../run/deployment';
 import { PLAYABLE_PIECE_TYPES } from '../core/pieces';
 import { runCardDefinition, runCardUnitIds } from '../run/model';
@@ -177,7 +178,10 @@ describe('Deployment Lab', () => {
       expect.objectContaining({ type: 'pawn', side: 'enemy' }),
     ]));
 
-    let battle = chooseDeploymentMode(completeDeploymentDeal(initial, level), level, 'deploy-all');
+    let battle = setDeploymentTransport(
+      completeDeploymentDeal(beginDeploymentDeal(initial), level),
+      'full-deploy',
+    );
     while (battle.phase === 'deployment') {
       const stage = deploymentInteractionStage(battle);
       if (stage === 'reveal-card') {
@@ -202,7 +206,7 @@ describe('Deployment Lab', () => {
         const legal = disciplinePlacementCells(battle, deploymentOptions(battle, level), active!.id)[0];
         battle = placeAdlectedDeploymentUnit(battle, level, legal);
       } else {
-        battle = advanceDeployAll(battle, level);
+        battle = advanceDeploymentTransport(battle, level);
       }
     }
     expect(battle.phase).toBe('battle');

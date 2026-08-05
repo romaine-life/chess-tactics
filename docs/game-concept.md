@@ -216,25 +216,30 @@ these.
   and uses the Standard Units frame because it has no card property.
   His Grace is not removable and neither card appears in ordinary Adlectio
   offers (ADR-0406, ADR-0407, ADR-0413).
-- Every Battle enters Deployment on the canonical empty battlefield. The first Conflict deals
-  at most three face-down cards from the persistent Chartulary mark into a numbered stack in
-  Controls, and
-  each later Conflict adds one; His Grace consumes the first slot and the rest
-  come from a fresh seeded shuffle. Dealt cards contribute their remaining
-  units individually, so one card may be split by limited board capacity. Only after the deal
-  settles does the player choose **Deploy all** or **Step through**. The top card flips when it
-  becomes active; later cards remain hidden (ADR-0419).
+- Every Battle enters Deployment on the canonical empty battlefield with the complete face-down
+  Chartulary deck visible in the center. **Deal** partitions that deck only after the battlefield
+  scene is committed; a device-local **Deal automatically** preference may perform the same
+  action on later Deployments. The first Conflict deals at most three cards, one at a time, into
+  the numbered stack at the top-left of Controls so each landing remains legible. Each later
+  Conflict adds one card. His Grace consumes the first slot and the rest come from a fresh seeded
+  shuffle. The undrawn remainder moves as one counted face-down stack into the persistent
+  Chartulary mark. Dealt cards contribute their remaining units individually, so one card may be
+  split by limited board capacity. The top card flips only when it becomes active; later cards
+  remain hidden (ADR-0419, ADR-0422).
 - Card order, followed by each card's persisted left-to-right unit seats, owns both capacity and
   placement order. A sold or lost unit leaves an empty seat rather than changing the durable
   order; the visible card may compact its surviving ledger. Units resolve one at a time from
   their own rules; Adlected
   pauses for a highlighted-square choice when that unit reaches the front.
-  Deploy all advances the same sequence automatically but still pauses for required input;
-  Step through advances one unit at a time. Each unit finishes its board arrival before the next
-  seat advances. After a card's final unit settles, that card discards; after the final discard,
-  the already-mounted battlefield promotes directly into Battle. The exact deal, seat order,
-  active card, reveal state, unit cursor, pace, capacity result, choices, discards, and formation
-  persist across reload and Battle retry (ADR-0346, ADR-0350, ADR-0351, ADR-0419).
+  Deployment transport begins paused. **Next** advances exactly one ordinary unit and remains
+  paused; **Play** advances ordinary units one at a time; **Full deploy** commits the fastest
+  remaining automatic wave. **Pause** finishes the current atomic arrival before stopping.
+  Adlected and any later required input always pause transport, and a resolved choice never
+  silently resumes it. Each unit finishes its board arrival before the next seat advances. After
+  a card's final unit settles, that card discards; after the final discard, the already-mounted
+  battlefield promotes directly into Battle. The exact deal, seat order, active card, reveal
+  state, unit cursor, transport, capacity result, choices, discards, and formation persist across
+  reload and Battle retry (ADR-0346, ADR-0350, ADR-0351, ADR-0419, ADR-0422).
 - Deployment modifiers may be contextual rather than linearly valuable. An
   Agminate Pawn inspects prior Pawns for adjacency or an open file, and an
   Agminate Bishop prefers the nearest opposite-color square relative to a prior

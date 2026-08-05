@@ -1,7 +1,9 @@
 ---
-status: accepted
+status: superseded
 date: 2026-08-04
 deciders: owner (Nelson) + Codex
+superseded_by:
+  - "[ADR-0422](0422-deployment-deals-a-visible-deck-before-transport-begins.md)"
 supersedes:
   - "[ADR-0416](0416-klerosis-is-a-dedicated-pre-battle-screen.md)"
   - "[ADR-0417](0417-klerosis-deals-from-the-chartulary.md)'s face-up deal into a separate workspace"

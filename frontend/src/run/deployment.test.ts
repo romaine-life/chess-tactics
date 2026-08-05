@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createBlankLevel, type Level } from '../core/level';
 import type { PlayablePieceType } from '../core/pieces';
 import {
-  chooseDeploymentMode,
+  advanceDeploymentTransport,
+  beginDeploymentDeal,
   completeDeploymentDeal,
   currentDeploymentUnit,
   deploymentInteractionStage,
@@ -16,7 +17,7 @@ import {
   playerDeploymentPools,
   resolveDeploymentCapacity,
   revealActiveDeploymentCard,
-  switchDeploymentMode,
+  setDeploymentTransport,
 } from './deployment';
 import {
   createRun,
@@ -93,8 +94,12 @@ function orderedRun(
   return prepareDeployment({ ...baseRun(level, seed), army, cards });
 }
 
-function advanceLifecycle(run: RunDocument, level: Level, mode: 'deploy-all' | 'step-through' = 'deploy-all'): RunDocument {
-  let next = chooseDeploymentMode(completeDeploymentDeal(run, level), level, mode);
+function advanceLifecycle(
+  run: RunDocument,
+  level: Level,
+  transport: 'paused' | 'playing' | 'full-deploy' = 'full-deploy',
+): RunDocument {
+  let next = setDeploymentTransport(completeDeploymentDeal(beginDeploymentDeal(run), level), transport);
   for (let guard = 0; next.phase === 'deployment' && guard < 100; guard += 1) {
     const stage = deploymentInteractionStage(next);
     if (stage === 'reveal-card') next = revealActiveDeploymentCard(next);
@@ -131,8 +136,8 @@ describe('deployment card deal', () => {
     const run = prepareDeployment({ ...created, army, cards: [...created.cards, ...extras] });
     expect(run.deployment?.dealtCardIds).toHaveLength(3);
     expect(run.deployment?.dealtCardIds[0]).toBe('run-card-his-grace');
-    expect(run.deployment?.stage).toBe('dealing');
-    expect(run.deployment?.mode).toBeUndefined();
+    expect(run.deployment?.stage).toBe('awaiting-deal');
+    expect(run.deployment?.transport).toBe('paused');
   });
 
   it('freshly reseeds ordinary card order and adds one draw per Conflict', () => {
@@ -164,28 +169,25 @@ describe('deployment card deal', () => {
     expect(Object.keys(finished.deployment?.placements ?? {})).toEqual(['king', 'a', 'b']);
   });
 
-  it('offers pace only after the face-down deal has settled', () => {
+  it('requires Deal before the face-down partition and transport', () => {
     const level = deploymentLevel();
     const run = orderedRun(level, [unit('king', 'king'), unit('pawn', 'pawn')]);
-    expect(deploymentInteractionStage(run)).toBe('deal');
-    const premature = chooseDeploymentMode(run, level, 'deploy-all');
-    expect(premature.deployment).toMatchObject({ stage: 'dealing', capacityResolved: true });
-    expect(premature.deployment?.mode).toBeUndefined();
-    const dealt = completeDeploymentDeal(run, level);
-    expect(deploymentInteractionStage(dealt)).toBe('pace');
-    const paced = chooseDeploymentMode(dealt, level, 'step-through');
-    expect(paced.deployment?.mode).toBe('step-through');
-    expect(deploymentInteractionStage(paced)).toBe('reveal-card');
+    expect(deploymentInteractionStage(run)).toBe('await-deal');
+    expect(setDeploymentTransport(run, 'full-deploy')).toBe(run);
+    const dealing = beginDeploymentDeal(run);
+    expect(deploymentInteractionStage(dealing)).toBe('dealing');
+    const dealt = completeDeploymentDeal(dealing, level);
+    expect(dealt.deployment?.transport).toBe('paused');
+    expect(deploymentInteractionStage(dealt)).toBe('reveal-card');
   });
 });
 
 describe('card reveal, placement, and discard boundaries', () => {
   it('reveals, settles, and discards His Grace before advancing to the next card', () => {
     const level = deploymentLevel();
-    let run = chooseDeploymentMode(
-      completeDeploymentDeal(orderedRun(level, [unit('king', 'king'), unit('pawn', 'pawn')]), level),
+    let run = completeDeploymentDeal(
+      beginDeploymentDeal(orderedRun(level, [unit('king', 'king'), unit('pawn', 'pawn')])),
       level,
-      'step-through',
     );
     expect(deploymentInteractionStage(run)).toBe('reveal-card');
     run = revealActiveDeploymentCard(run);
@@ -211,7 +213,7 @@ describe('card reveal, placement, and discard boundaries', () => {
       17,
       [['king'], ['pawn', 'rook']],
     );
-    let fast = chooseDeploymentMode(completeDeploymentDeal(run, level), level, 'deploy-all');
+    let fast = setDeploymentTransport(completeDeploymentDeal(beginDeploymentDeal(run), level), 'full-deploy');
     fast = revealActiveDeploymentCard(fast);
     fast = finishDeploymentCardReveal(fast);
     fast = placeRevealedDeploymentUnit(fast, level);
@@ -223,22 +225,22 @@ describe('card reveal, placement, and discard boundaries', () => {
     const cell = disciplinePlacementCells(fast, deploymentOptions(fast, level), 'pawn')[0];
     fast = placeAdlectedDeploymentUnit(fast, level, cell);
     expect(deploymentInteractionStage(fast)).toBe('settling');
-    expect(fast.deployment?.settlingUnitIds).toEqual(['pawn', 'rook']);
+    expect(fast.deployment?.settlingUnitIds).toEqual(['pawn']);
+    expect(fast.deployment?.transport).toBe('paused');
   });
 
-  it('switches pace without undoing revealed information or placements', () => {
+  it('switches transport without undoing revealed information or placements', () => {
     const level = deploymentLevel();
-    let run = chooseDeploymentMode(
-      completeDeploymentDeal(orderedRun(level, [unit('king', 'king'), unit('pawn', 'pawn')]), level),
+    let run = completeDeploymentDeal(
+      beginDeploymentDeal(orderedRun(level, [unit('king', 'king'), unit('pawn', 'pawn')])),
       level,
-      'step-through',
     );
     run = revealActiveDeploymentCard(run);
     run = finishDeploymentCardReveal(run);
     run = placeRevealedDeploymentUnit(run, level);
     const revealed = run.deployment?.revealedCardIds;
     const kingCell = run.deployment?.placements.king;
-    const switched = switchDeploymentMode(run, level, 'deploy-all');
+    const switched = setDeploymentTransport(run, 'full-deploy');
     expect(switched.deployment?.revealedCardIds).toEqual(revealed);
     expect(switched.deployment?.placements.king).toBe(kingCell);
   });
