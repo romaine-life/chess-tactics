@@ -76,15 +76,17 @@ describe('Run card Adlectio transfer', () => {
     }
   });
 
-  it('keeps the source seat stable and flies the canonical face on one transfer clock', () => {
+  it('commits immediately and lets independent canonical faces fly without blocking input', () => {
     const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
     const source = readFileSync(new URL('./runCardFlightView.tsx', import.meta.url), 'utf8');
     const screen = readFileSync(new URL('./RunScreen.tsx', import.meta.url), 'utf8');
     expect(css).toContain(`--ds-duration-transfer: ${RUN_CARD_FLIGHT_MS}ms;`);
-    expect(css).toMatch(/\.run-card-offer\.is-departing\s*\{[\s\S]*?opacity:\s*0;[\s\S]*?pointer-events:\s*none;/);
     expect(css).toMatch(/\.run-card-flight\.is-landed\s*\{[\s\S]*?scale:\s*var\(--run-card-flight-scale\);[\s\S]*?translate:\s*var\(--run-card-flight-x\) var\(--run-card-flight-y\);/);
     expect(source).toContain('<RunCard card={flight.offer} mode="reference" />');
-    expect(source).toContain("<SceneContinuityPortal contribution={{ kind: 'shared-element', id: `card:${flight.offer.offerId}` }}>");
+    expect(source).toContain("<SceneContinuityPortal contribution={{ kind: 'shared-element', id: `card:${flight.id}` }}>");
+    expect(source).toContain('setFlights((current) => [...current, { id, offer, geometry }]);');
+    expect(source).toContain('flights.map((flight) => (');
+    expect(source).not.toContain('run-card-flight-shield');
     expect(source).not.toContain('createPortal');
     expect(source).toContain("event.propertyName === 'translate'");
     expect(css).toMatch(/\.run-card-offer\.is-reflowing\s*\{[\s\S]*?will-change:\s*translate;/);
@@ -93,11 +95,15 @@ describe('Run card Adlectio transfer', () => {
     expect(screen).toContain("rowStyle.getPropertyValue('--ds-ease-standard')");
     expect(screen).toContain('return sceneMotion.animate(');
     expect(screen).toContain("import { useSceneMotion } from './shell/SceneActivity'");
-    expect(screen).toContain('onReflowingChange(true);');
-    expect(screen).toContain('setLandedAdlectioOfferId(offer.offerId);');
-    expect(screen).toContain('departingOfferId={cardFlight?.offer.offerId ?? landedAdlectioOfferId}');
-    expect(screen).toContain('const adlectioBusy = Boolean(cardFlight) || Boolean(landedAdlectioOfferId) || cardReflowing;');
-    expect(screen).toContain('inert={adlectioInFlight ? true : undefined}');
-    expect(screen).not.toContain('disabled={adlectioInFlight}');
+    expect(screen).toContain('interruptedRects.set(id, element.getBoundingClientRect())');
+    expect(screen).toContain('const adlected = performAdlectio(latest, offer.offerId);');
+    expect(screen).toMatch(/launchCardFlight\(offer, source, target\);[\s\S]*?replace\(adlected\);/);
+    expect(screen).toContain('useRunCardFlights()');
+    expect(screen).not.toContain('adlectioBusy');
+    expect(screen).not.toContain('adlectioInFlight');
+    expect(screen).not.toContain('landedAdlectioOfferId');
+    expect(screen).not.toContain('cardReflowing');
+    expect(screen).not.toContain('departingOfferId');
+    expect(screen).not.toContain('inert:');
   });
 });

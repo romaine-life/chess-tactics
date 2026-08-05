@@ -57,7 +57,6 @@ export function RunCard({
   cardType: ownedCardType = null,
   adlected = false,
   emptyPieceIndices = [],
-  departing = false,
   layoutId,
   disabled = false,
   onSelect,
@@ -75,7 +74,6 @@ export function RunCard({
   adlected?: boolean;
   /** Authored card seats whose units have left; retained so the face does not reflow. */
   emptyPieceIndices?: readonly number[];
-  departing?: boolean;
   /** Stable Sectio identity used to preserve the card's visual seat across reflow. */
   layoutId?: string;
   disabled?: boolean;
@@ -119,9 +117,8 @@ export function RunCard({
   const actionLabel = `${adlected ? 'Adlected' : 'Adlectio'} ${name} — ${label} — for ${faceContent.cost} gold.${targetLabel}`;
   return (
     <span
-      className={`run-card-offer${departing ? ' is-departing' : ''}`}
+      className="run-card-offer"
       data-run-sectio-offer-id={layoutId}
-      aria-busy={departing || undefined}
     >
       <button
         type="button"

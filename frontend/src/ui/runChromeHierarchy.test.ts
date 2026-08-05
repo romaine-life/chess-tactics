@@ -56,10 +56,9 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).not.toContain('<SkirmishShell');
     expect(runScreen).toContain('readyToCompose: hydrated');
     expect(runScreen).not.toContain("classList.add('skirmish-active')");
-    expect(runScreen).toMatch(/<RunMetaControls[\s\S]*?run=\{shellRun\}[\s\S]*?onNavigate=\{navigateRunView\}[\s\S]*?adlectioInFlight=\{adlectioBusy\}/);
-    expect(metaControls).toContain('inert={adlectioInFlight ? true : undefined}');
-    expect(metaControls).not.toContain('disabled={adlectioInFlight}');
-    expect(metaControls).not.toContain('disabled={abandoning || adlectioInFlight}');
+    expect(runScreen).toMatch(/<RunMetaControls[\s\S]*?run=\{shellRun\}[\s\S]*?onNavigate=\{navigateRunView\}/);
+    expect(metaControls).not.toContain('inert=');
+    expect(metaControls).not.toContain('adlectioInFlight');
     expect(metaControls).toContain('SECTIO_WORKSPACE_VIEWS.map');
     expect(metaControls).toContain('RUN_WORKSPACE_VIEW_LABEL[candidate]');
     expect(metaControls).toContain('data-testid={`run-view-${candidate}`}');
@@ -215,7 +214,7 @@ describe('Run chrome hierarchy', () => {
 
   it('uses the gold transaction cue and transfers adlected cards into the Chartulary', () => {
     expect(runCard).toContain('data-ui-sfx="gold"');
-    expect(runScreen).toContain('useRunCardFlight(commitAdlectio)');
+    expect(runScreen).toContain('useRunCardFlights()');
     expect(runScreen).toContain("document.querySelector('[data-run-card-flight-target]')");
     expect(runScreen).toContain('sectio.cardOffers.filter((offer) => !sectio.adlectedCardOfferIds.includes(offer.offerId))');
     expect(runScreen).toContain('admitted by Adlectio and added to the Chartulary.');

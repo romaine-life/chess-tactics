@@ -67,89 +67,106 @@ export function runCardFlightGeometry(
 }
 
 interface RunCardFlight {
+  id: string;
   offer: RunCardOffer;
   geometry: RunCardFlightGeometry;
 }
 
 /**
- * Sends the canonical live card face from its measured Sectio seat to the measured
- * Chartulary shortcut. The portal escapes the Sectio scroller and the flight commits
- * only on landing, so the source cannot disappear before the player sees where it went.
+ * One presentation-only card flight. Its transaction is already complete, so settling
+ * only removes these pixels and never gates or mutates the Run.
  */
-export function useRunCardFlight(onLanded: (offer: RunCardOffer) => void): {
-  flight: RunCardFlight | null;
+function RunCardFlightVisual({
+  flight,
+  onSettled,
+}: {
+  flight: RunCardFlight;
+  onSettled: (id: string) => void;
+}): ReactElement {
+  const [landed, setLanded] = useState(false);
+  const settledRef = useRef(false);
+  const settle = useCallback(() => {
+    if (settledRef.current) return;
+    settledRef.current = true;
+    onSettled(flight.id);
+  }, [flight.id, onSettled]);
+
+  useEffect(() => {
+    let innerRaf: number | null = null;
+    const outerRaf = requestAnimationFrame(() => {
+      innerRaf = requestAnimationFrame(() => setLanded(true));
+    });
+    const watchdog = setTimeout(settle, RUN_CARD_FLIGHT_MS + 240);
+    return () => {
+      cancelAnimationFrame(outerRaf);
+      if (innerRaf !== null) cancelAnimationFrame(innerRaf);
+      clearTimeout(watchdog);
+    };
+  }, [settle]);
+
+  return (
+    <SceneContinuityPortal contribution={{ kind: 'shared-element', id: `card:${flight.id}` }}>
+      <div
+        className={`run-card-flight${landed ? ' is-landed' : ''}`}
+        data-testid="run-card-flight"
+        aria-hidden="true"
+        style={{
+          insetInlineStart: `${flight.geometry.from.left}px`,
+          insetBlockStart: `${flight.geometry.from.top}px`,
+          inlineSize: `${flight.geometry.from.width}px`,
+          blockSize: `${flight.geometry.from.height}px`,
+          '--run-card-flight-x': `${flight.geometry.x}px`,
+          '--run-card-flight-y': `${flight.geometry.y}px`,
+          '--run-card-flight-scale': flight.geometry.scale,
+        } as CSSProperties}
+        onTransitionEnd={(event) => {
+          if (event.target === event.currentTarget && event.propertyName === 'translate') settle();
+        }}
+      >
+        <RunCard card={flight.offer} mode="reference" />
+      </div>
+    </SceneContinuityPortal>
+  );
+}
+
+/**
+ * Sends canonical live card faces from their measured Sectio seats to the measured
+ * Chartulary shortcut. Each launch is independent: presentation from an earlier
+ * Adlectio keeps running while later interactions and flights proceed.
+ */
+export function useRunCardFlights(): {
   launch: (offer: RunCardOffer, source: Element | null, target: Element | null) => boolean;
   element: ReactElement | null;
 } {
   const continuityAvailable = useSceneContinuityAvailable();
-  const [flight, setFlight] = useState<RunCardFlight | null>(null);
-  const [landed, setLanded] = useState(false);
-  const settledRef = useRef(false);
-  const flightRef = useRef<RunCardFlight | null>(null);
-  flightRef.current = flight;
-  const onLandedRef = useRef(onLanded);
-  onLandedRef.current = onLanded;
-
-  const settle = useCallback(() => {
-    const current = flightRef.current;
-    if (!current || settledRef.current) return;
-    settledRef.current = true;
-    onLandedRef.current(current.offer);
-    setFlight(null);
+  const [flights, setFlights] = useState<RunCardFlight[]>([]);
+  const nextFlightSequenceRef = useRef(0);
+  const settle = useCallback((id: string): void => {
+    setFlights((current) => current.filter((flight) => flight.id !== id));
   }, []);
 
-  useEffect(() => {
-    if (!flight) return undefined;
-    const raf = requestAnimationFrame(() => requestAnimationFrame(() => setLanded(true)));
-    const watchdog = setTimeout(settle, RUN_CARD_FLIGHT_MS + 240);
-    return () => {
-      cancelAnimationFrame(raf);
-      clearTimeout(watchdog);
-    };
-  }, [flight, settle]);
-
   const launch = useCallback((offer: RunCardOffer, source: Element | null, target: Element | null): boolean => {
-    if (flightRef.current) return true;
     if (!continuityAvailable) return false;
     const sourceRect = source?.getBoundingClientRect();
     const targetRect = target?.getBoundingClientRect();
     if (!sourceRect || !targetRect) return false;
     const geometry = runCardFlightGeometry(sourceRect, targetRect);
     if (!geometry) return false;
-    settledRef.current = false;
-    setLanded(false);
-    setFlight({ offer, geometry });
+    nextFlightSequenceRef.current += 1;
+    const id = `${offer.offerId}:${nextFlightSequenceRef.current}`;
+    setFlights((current) => [...current, { id, offer, geometry }]);
     return true;
   }, [continuityAvailable]);
 
-  const element = flight
+  const element = flights.length
     ? (
-      <SceneContinuityPortal contribution={{ kind: 'shared-element', id: `card:${flight.offer.offerId}` }}>
       <>
-        <div className="run-card-flight-shield" aria-hidden="true" />
-        <div
-          className={`run-card-flight${landed ? ' is-landed' : ''}`}
-          data-testid="run-card-flight"
-          aria-hidden="true"
-          style={{
-            insetInlineStart: `${flight.geometry.from.left}px`,
-            insetBlockStart: `${flight.geometry.from.top}px`,
-            inlineSize: `${flight.geometry.from.width}px`,
-            blockSize: `${flight.geometry.from.height}px`,
-            '--run-card-flight-x': `${flight.geometry.x}px`,
-            '--run-card-flight-y': `${flight.geometry.y}px`,
-            '--run-card-flight-scale': flight.geometry.scale,
-          } as CSSProperties}
-          onTransitionEnd={(event) => {
-            if (event.propertyName === 'translate') settle();
-          }}
-        >
-          <RunCard card={flight.offer} mode="reference" />
-        </div>
+        {flights.map((flight) => (
+          <RunCardFlightVisual key={flight.id} flight={flight} onSettled={settle} />
+        ))}
       </>
-      </SceneContinuityPortal>
     )
     : null;
 
-  return { flight, launch, element };
+  return { launch, element };
 }
