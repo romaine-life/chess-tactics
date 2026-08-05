@@ -91,8 +91,8 @@ const sceneFailureCopy = (error: Error | null): string => (
 /**
  * ADR-0205 application spine. History accepts navigation immediately while the
  * rendered route remains the outgoing scene until its controls have faded. The
- * destination then mounts inert and unrevealed, reports a painted frame through
- * SceneBoundary, and enters as one background-and-controls composition.
+ * destination may mount inert while the outgoing scene exits, reports a painted
+ * frame through SceneBoundary, and enters as one background-and-controls composition.
  */
 export function App(): ReactElement {
   const installedChromeCss = useInstalledChromeCss();
@@ -502,10 +502,6 @@ export function App(): ReactElement {
 
   // `startup` prepares its destination through the same boundary contract as any other
   // navigation — the ladder puts the shell rungs in front of it, it does not replace it.
-  const preparing = scene.phase === 'loading'
-    || scene.phase === 'entering'
-    || scene.phase === 'error'
-    || scene.phase === 'startup';
   const manifest = scene.destination ?? scene.current;
   // `path` advances only when the director accepts exit-finished. Keep the
   // renderer bound to that mounted path; `manifest` may describe a pending
@@ -513,7 +509,6 @@ export function App(): ReactElement {
   const mountedScene = scene.phase === 'exiting'
     ? scene.current
     : scene.destination ?? scene.current;
-  const transitioning = scene.phase !== 'current' && scene.phase !== 'startup';
   const showSceneFailure = scene.phase === 'error';
   const titleBarLoading = manifest.waitPresentation === 'loading' && (
     scene.phase === 'loading' || scene.phase === 'entering'
@@ -560,7 +555,6 @@ export function App(): ReactElement {
           manifest: scene.current,
           search,
           href: `${path}${search}`,
-          preparing: false,
           preserveHost: false,
           transitionRegion: null,
           overlapScope,
@@ -572,7 +566,6 @@ export function App(): ReactElement {
           manifest: scene.destination!,
           search: destinationSearch,
           href: scene.destinationHref!,
-          preparing,
           preserveHost: false,
           transitionRegion: null,
           overlapScope,
@@ -591,7 +584,6 @@ export function App(): ReactElement {
           manifest,
           search,
           href: `${path}${search}`,
-          preparing,
           preserveHost: preservesSceneHost,
           transitionRegion: preservedSceneHost,
           overlapScope: 'scene' as const,
@@ -636,15 +628,10 @@ export function App(): ReactElement {
                 key={layer.key}
                 manifest={layer.manifest}
                 generation={scene.generation}
-                preparing={layer.preparing}
+                directorPhase={scene.phase}
                 preserveHost={layer.preserveHost}
                 transitionRegion={layer.transitionRegion}
                 mountedKey={layer.scene.leaf.key}
-                revealing={scene.phase === 'entering' && layer.visualRole !== 'outgoing'}
-                deactivating={transitioning && (
-                  layer.visualRole === 'outgoing'
-                  || (layer.visualRole === 'single' && scene.phase === 'exiting')
-                )}
                 visualRole={layer.visualRole}
                 overlapScope={layer.overlapScope}
                 onPainted={destinationPainted}

@@ -4164,6 +4164,49 @@ const MIGRATIONS = [
          AND EXISTS (SELECT 1 FROM retired_slot);
     `,
   },
+  {
+    version: 60,
+    name: 'deployment deal and transport state',
+    // ADR-0422: RunSaveVersion 22 makes the pre-deal boundary explicit and
+    // replaces the old one-time mode choice with paused/play/full transport.
+    // Every predecessor already past the deal keeps its exact revealed and
+    // committed information, but resumes paused rather than moving on its own.
+    sql: `
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_active_run_to_deployment_transport(run_value jsonb)
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      IMMUTABLE
+      STRICT
+      AS $function$
+      DECLARE
+        migrated jsonb := run_value;
+        deployment_value jsonb;
+        deployment_stage text;
+      BEGIN
+        IF run_value->'runSaveVersion' <> '21'::jsonb THEN RETURN run_value; END IF;
+        migrated := jsonb_set(migrated, '{runSaveVersion}', '22'::jsonb, false);
+        IF jsonb_typeof(migrated->'deployment') = 'object' THEN
+          deployment_value := (migrated->'deployment') - 'mode'::text;
+          deployment_stage := deployment_value->>'stage';
+          IF deployment_stage = 'dealing' THEN
+            deployment_value := jsonb_set(deployment_value, '{stage}', '"awaiting-deal"'::jsonb, false);
+          ELSIF deployment_stage = 'pace' THEN
+            deployment_value := jsonb_set(deployment_value, '{stage}', '"card"'::jsonb, false);
+          END IF;
+          deployment_value := jsonb_set(deployment_value, '{transport}', '"paused"'::jsonb, true);
+          migrated := jsonb_set(migrated, '{deployment}', deployment_value, false);
+        END IF;
+        RETURN migrated;
+      END
+      $function$;
+
+      UPDATE active_runs
+         SET body = pg_temp.migrate_active_run_to_deployment_transport(body),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE body->'runSaveVersion' = '21'::jsonb;
+    `,
+  },
 ];
 
 let pool = null;
@@ -4761,7 +4804,10 @@ async function unmigratedActiveRunSaveCounts(client) {
        )::integer AS version_19_count,
        count(*) FILTER (
          WHERE body->'runSaveVersion' = '20'::jsonb
-       )::integer AS version_20_count
+       )::integer AS version_20_count,
+       count(*) FILTER (
+         WHERE body->'runSaveVersion' = '21'::jsonb
+       )::integer AS version_21_count
        FROM active_runs`,
   );
   return Object.freeze({
@@ -4770,6 +4816,7 @@ async function unmigratedActiveRunSaveCounts(client) {
     version_18_count: Number(rows[0]?.version_18_count) || 0,
     version_19_count: Number(rows[0]?.version_19_count) || 0,
     version_20_count: Number(rows[0]?.version_20_count) || 0,
+    version_21_count: Number(rows[0]?.version_21_count) || 0,
   });
 }
 
@@ -4852,12 +4899,14 @@ async function requiredSchemaContractIssues(client) {
       + unmigratedActiveRunSaves.version_17_count
       + unmigratedActiveRunSaves.version_18_count
       + unmigratedActiveRunSaves.version_19_count
-      + unmigratedActiveRunSaves.version_20_count,
+      + unmigratedActiveRunSaves.version_20_count
+      + unmigratedActiveRunSaves.version_21_count,
     unmigrated_active_run_version_16_count: unmigratedActiveRunSaves.version_16_count,
     unmigrated_active_run_version_17_count: unmigratedActiveRunSaves.version_17_count,
     unmigrated_active_run_version_18_count: unmigratedActiveRunSaves.version_18_count,
     unmigrated_active_run_version_19_count: unmigratedActiveRunSaves.version_19_count,
     unmigrated_active_run_version_20_count: unmigratedActiveRunSaves.version_20_count,
+    unmigrated_active_run_version_21_count: unmigratedActiveRunSaves.version_21_count,
     primogeniture_non_retired_slot_count: primogenitureRetirement.non_retired_slot_count,
     primogeniture_drawable_binding_count: primogenitureRetirement.drawable_binding_count,
     primogeniture_required_role_count: primogenitureRetirement.required_role_count,
@@ -4992,6 +5041,17 @@ async function repairRequiredSchemaContracts(
     await executeMigration(migration, 'repair active Run card-ordered Deployment contract');
     completedSteps.push(Object.freeze({
       contract: 'active Run card-ordered Deployment save version',
+      migration_version: migration.version,
+    }));
+    markInspection(`inspect required contract repairs after migration ${migration.version}`);
+    issues = await requiredSchemaContractIssues(client);
+  }
+  if (issues.unmigrated_active_run_version_21_count > 0) {
+    const migration = MIGRATIONS.find((candidate) => candidate.version === 60);
+    if (!migration) throw new Error('Deployment transport active Run repair migration is unavailable');
+    await executeMigration(migration, 'repair active Run Deployment transport contract');
+    completedSteps.push(Object.freeze({
+      contract: 'active Run Deployment transport save version',
       migration_version: migration.version,
     }));
     markInspection(`inspect required contract repairs after migration ${migration.version}`);
@@ -20068,7 +20128,7 @@ const ACTIVE_RUN_DEPLOYMENT_FIELDS = new Set([
   'discardCursor',
   'revealedCardIds',
   'settlingUnitIds',
-  'mode',
+  'transport',
   'stage',
   'blockedUnitIds',
   'manualPlacements',
@@ -20347,7 +20407,16 @@ function validateActiveRunBody(run) {
         && new Set(value).size === value.length
         && value.every((id) => typeof id === 'string' && allowedIds.has(id));
       const cardIds = new Set(run.cards.map((card) => card.id));
-      const deploymentStages = new Set(['dealing', 'pace', 'card', 'revealing', 'unit', 'settling', 'discarding', 'complete']);
+      const deploymentStages = new Set([
+        'awaiting-deal',
+        'dealing',
+        'card',
+        'revealing',
+        'unit',
+        'settling',
+        'discarding',
+        'complete',
+      ]);
       if (
         deployment.battleIndex !== run.battleIndex
         || !isFiniteInteger(deployment.seed)
@@ -20369,7 +20438,7 @@ function validateActiveRunBody(run) {
         || !validUniqueIds(deployment.revealedCardIds, cardIds)
         || !validUniqueIds(deployment.settlingUnitIds, unitIds)
         || !deploymentStages.has(deployment.stage)
-        || (deployment.mode !== undefined && !['deploy-all', 'step-through'].includes(deployment.mode))
+        || !['paused', 'playing', 'full-deploy'].includes(deployment.transport)
         || !isObjectRecord(deployment.placements)
         || !isObjectRecord(deployment.manualPlacements)
         || !validUniqueIds(deployment.blockedUnitIds, unitIds)
@@ -20433,18 +20502,14 @@ function validateActiveRunBody(run) {
         && !deployingIds.has(deployment.temporaryAdlectedUnitId)
       ) return 'run.deployment temporary Adlected unit is invalid';
       if (
-        (deployment.stage === 'dealing' || deployment.stage === 'pace')
-        && (deployment.mode !== undefined || deployment.activeCardIndex !== 0 || deployment.unitCursor !== 0)
+        (deployment.stage === 'awaiting-deal' || deployment.stage === 'dealing')
+        && (deployment.transport !== 'paused' || deployment.activeCardIndex !== 0 || deployment.unitCursor !== 0)
       ) {
         return 'run.deployment pre-placement state is invalid';
-      }
-      if (!['dealing', 'pace'].includes(deployment.stage) && deployment.stage !== 'complete' && !deployment.mode) {
-        return 'run.deployment pace is required';
       }
       if (
         run.phase === 'battle'
         && (!deployment.capacityResolved
-          || !deployment.mode
           || deployment.stage !== 'complete'
           || deployment.activeCardIndex !== deployment.dealtCardIds.length
           || deployment.discardCursor !== deployment.dealtCardIds.length

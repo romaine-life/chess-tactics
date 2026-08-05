@@ -91,7 +91,8 @@ describe('Run card Adlectio transfer', () => {
     expect(screen).toContain('const offset = previous ? runCardReflowOffset(previous, rect) : null;');
     expect(screen).toContain("rowStyle.getPropertyValue('--ds-duration-fade')");
     expect(screen).toContain("rowStyle.getPropertyValue('--ds-ease-standard')");
-    expect(screen).toContain('return element.animate(');
+    expect(screen).toContain('return sceneMotion.animate(');
+    expect(screen).toContain("import { useSceneMotion } from './shell/SceneActivity'");
     expect(screen).toContain('onReflowingChange(true);');
     expect(screen).toContain('setLandedAdlectioOfferId(offer.offerId);');
     expect(screen).toContain('departingOfferId={cardFlight?.offer.offerId ?? landedAdlectioOfferId}');

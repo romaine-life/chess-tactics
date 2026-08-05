@@ -52,8 +52,8 @@ import {
   type RunWarSnapshot,
 } from './model';
 import {
-  advanceDeployAll,
-  chooseDeploymentMode,
+  advanceDeploymentTransport,
+  beginDeploymentDeal,
   completeDeploymentDeal,
   currentDeploymentUnit,
   disciplinePlacementCells,
@@ -65,6 +65,7 @@ import {
   revealActiveDeploymentCard,
   resolveDeploymentCapacity,
   selectedDeploymentLayout,
+  setDeploymentTransport,
   type RunDeploymentLayout,
 } from './deployment';
 
@@ -569,8 +570,9 @@ function autoDeploy(run: RunDocument): { run: RunDocument; layout: RunDeployment
   const level = prepared.war.battles[prepared.battleIndex]?.level;
   if (!level) throw new RunCraftError(`craft: Battle ${prepared.battleIndex + 1} has no Level.`);
   prepared = resolveDeploymentCapacity(prepared, level);
+  prepared = beginDeploymentDeal(prepared);
   prepared = completeDeploymentDeal(prepared, level);
-  prepared = chooseDeploymentMode(prepared, level, 'deploy-all');
+  prepared = setDeploymentTransport(prepared, 'full-deploy');
   while (prepared.phase === 'deployment') {
     if (prepared.deployment?.stage === 'card') {
       prepared = revealActiveDeploymentCard(prepared);
@@ -594,7 +596,7 @@ function autoDeploy(run: RunDocument): { run: RunDocument; layout: RunDeployment
     const free = disciplinePlacementCells(prepared, options, unit.id)[0];
     const next = free
       ? placeAdlectedDeploymentUnit(prepared, level, free)
-      : advanceDeployAll(prepared, level);
+      : advanceDeploymentTransport(prepared, level);
     if (next === prepared) {
       throw new RunCraftError(`craft: Battle ${prepared.battleIndex + 1} could not be deployed automatically.`);
     }

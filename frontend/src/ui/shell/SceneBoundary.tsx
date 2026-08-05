@@ -15,6 +15,11 @@ import { loadDecodedImage } from '../../render/imageResources';
 import type { SceneManifest } from './sceneManifest';
 import type { SceneHost, SceneOverlapScope } from './sceneManifest';
 import { sceneTransitionTargetSelector } from './sceneTransitionTarget';
+import {
+  createSceneActivityAuthority,
+  SceneActivityProvider,
+} from './SceneActivity';
+import type { ScenePhase } from './sceneDirector';
 
 type ParticipantPhase = 'loading' | 'painted' | 'error';
 interface Participant { phase: ParticipantPhase; error: Error | null }
@@ -127,12 +132,10 @@ const paintFrames = (): Promise<void> => new Promise((resolve) => {
 interface SceneBoundaryProps {
   manifest: SceneManifest;
   generation: number;
-  preparing: boolean;
+  directorPhase: ScenePhase;
   preserveHost: boolean;
   transitionRegion: SceneHost | null;
   mountedKey: string;
-  revealing?: boolean;
-  deactivating?: boolean;
   visualRole?: 'single' | 'outgoing' | 'incoming';
   /** How much of this layer the director's overlap transition may fade. */
   overlapScope?: SceneOverlapScope;
@@ -141,22 +144,49 @@ interface SceneBoundaryProps {
   onFailed: (generation: number, error: Error) => void;
 }
 
+export function sceneBoundaryLifecycle(
+  directorPhase: ScenePhase,
+  visualRole: 'single' | 'outgoing' | 'incoming',
+): { preparing: boolean; revealing: boolean; deactivating: boolean } {
+  const destinationPreparing = directorPhase === 'startup'
+    || directorPhase === 'loading'
+    || directorPhase === 'entering'
+    || directorPhase === 'error';
+  return {
+    // An incoming overlap exists during the outgoing exit so it can paint and measure.
+    // Its presence is not permission: it stays preparing through the entire entrance.
+    preparing: visualRole === 'incoming'
+      || (visualRole === 'single' && destinationPreparing),
+    revealing: directorPhase === 'entering' && visualRole !== 'outgoing',
+    deactivating: directorPhase !== 'current'
+      && directorPhase !== 'startup'
+      && (visualRole === 'outgoing' || (visualRole === 'single' && directorPhase === 'exiting')),
+  };
+}
+
 export function SceneBoundary({
   manifest,
   generation,
-  preparing,
+  directorPhase,
   preserveHost,
   transitionRegion,
   mountedKey,
-  revealing = false,
-  deactivating = false,
   visualRole = 'single',
   overlapScope = 'scene',
   children,
   onPainted,
   onFailed,
 }: SceneBoundaryProps): ReactElement {
+  const { preparing, revealing, deactivating } = sceneBoundaryLifecycle(directorPhase, visualRole);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const sceneActivity = useMemo(
+    () => createSceneActivityAuthority(),
+    // One destination authority survives preparation -> entrance -> commit so it can release
+    // the exact motion it held. A new generation prevents a retained React boundary from
+    // carrying yesterday's active permission into a new preparation. `deactivating` splits a
+    // host-preserved outgoing scene from the destination that later reuses its boundary.
+    [deactivating, generation, manifest.id, mountedKey],
+  );
   const participantsRef = useRef(new Map<string, Participant>());
   const [revision, setRevision] = useState(0);
   const report = useCallback((id: string, participant: Participant | null) => {
@@ -179,6 +209,23 @@ export function SceneBoundary({
   const unresolvedParticipants = participantSnapshot
     .filter((entry) => !entry.endsWith(':painted'))
     .map((entry) => entry.slice(0, entry.lastIndexOf(':')));
+
+  useLayoutEffect(() => {
+    if (deactivating) {
+      sceneActivity.deactivate();
+      return undefined;
+    }
+    if (!preparing) {
+      sceneActivity.activate();
+      return undefined;
+    }
+    const root = preserveHost && transitionRegion
+      ? rootRef.current?.querySelector<HTMLElement>(sceneTransitionTargetSelector(transitionRegion)) ?? null
+      : rootRef.current;
+    return root ? sceneActivity.holdPreparingMotion(root) : undefined;
+  }, [deactivating, preparing, preserveHost, sceneActivity, transitionRegion]);
+
+  useEffect(() => () => sceneActivity.dispose(), [sceneActivity]);
 
   useLayoutEffect(() => {
     if (!preserveHost || !transitionRegion || !rootRef.current) return undefined;
@@ -285,6 +332,7 @@ export function SceneBoundary({
       <SceneRevealContext.Provider value={!preparing || preserveHost || revealing}>
         <ScenePreparingRegionContext.Provider value={preparing && preserveHost ? transitionRegion : null}>
         <SceneRegistrationContext.Provider value={registration}>
+        <SceneActivityProvider authority={sceneActivity}>
           <div
           ref={rootRef}
           className={`scene-boundary scene-transition-target${preparing ? preserveHost ? ' is-region-preparing' : ' is-preparing' : ' is-current'}`}
@@ -303,6 +351,7 @@ export function SceneBoundary({
           >
             {children}
           </div>
+        </SceneActivityProvider>
         </SceneRegistrationContext.Provider>
         </ScenePreparingRegionContext.Provider>
       </SceneRevealContext.Provider>

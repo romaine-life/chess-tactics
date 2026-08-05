@@ -937,7 +937,7 @@ function inlineMigrationSql(version) {
   return inlineMigrationDefinition(version).sql;
 }
 
-async function validatePrimarySparseNumericMigrationUpgrade59() {
+async function validatePrimarySparseNumericMigrationUpgrade60() {
   const history = await queryDb(
     `SELECT version, name, checksum
        FROM schema_migrations
@@ -952,7 +952,7 @@ async function validatePrimarySparseNumericMigrationUpgrade59() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 59 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 60 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -967,7 +967,7 @@ async function validatePrimarySparseNumericMigrationUpgrade59() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 23 }, (_, index) => index + 37),
+    ...Array.from({ length: 24 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1081,7 +1081,7 @@ async function validatePrimarySparseNumericMigrationUpgrade59() {
     )
   ) {
     throw new Error(
-      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 59: `
+      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 60: `
       + `${JSON.stringify({
         history: history.rows,
         identity_columns: identityColumns.rows,
@@ -2154,6 +2154,97 @@ async function validateCompletePrimogenitureRetirementMigration59() {
   }
 }
 
+async function validateDeploymentTransportMigration60() {
+  const { Client } = require('pg');
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('CREATE SCHEMA smoke_deployment_transport_migration_60');
+    await client.query('SET LOCAL search_path TO smoke_deployment_transport_migration_60');
+    await client.query(`
+      CREATE TABLE active_runs (
+        owner_email text PRIMARY KEY, body jsonb NOT NULL, revision integer NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+    `);
+    const baseDeployment = {
+      battleIndex: 0,
+      dealtCardIds: ['grace', 'line', 'rook'],
+      revealedCardIds: [],
+      placements: {},
+      discardCursor: 0,
+    };
+    const waiting = {
+      runSaveVersion: 21,
+      phase: 'deployment',
+      deployment: { ...baseDeployment, stage: 'dealing' },
+    };
+    const dealt = {
+      runSaveVersion: 21,
+      phase: 'deployment',
+      deployment: { ...baseDeployment, stage: 'pace' },
+    };
+    const revealed = {
+      runSaveVersion: 21,
+      phase: 'deployment',
+      deployment: {
+        ...baseDeployment,
+        stage: 'unit',
+        mode: 'deploy-all',
+        revealedCardIds: ['grace'],
+        placements: { king: '3,7' },
+      },
+    };
+    const current = { runSaveVersion: 22, phase: 'sectio', deployment: null };
+    await client.query(
+      `INSERT INTO active_runs (owner_email, body, revision) VALUES
+         ('waiting@example.com', $1::jsonb, 2),
+         ('dealt@example.com', $2::jsonb, 4),
+         ('revealed@example.com', $3::jsonb, 6),
+         ('current@example.com', $4::jsonb, 8)`,
+      [waiting, dealt, revealed, current].map(JSON.stringify),
+    );
+
+    await client.query(inlineMigrationSql(60));
+    await client.query(inlineMigrationSql(60));
+
+    const rows = (await client.query(
+      'SELECT owner_email, body, revision FROM active_runs ORDER BY owner_email',
+    )).rows;
+    const byOwner = new Map(rows.map((row) => [row.owner_email, row]));
+    const waitingRow = byOwner.get('waiting@example.com');
+    const dealtRow = byOwner.get('dealt@example.com');
+    const revealedRow = byOwner.get('revealed@example.com');
+    const currentRow = byOwner.get('current@example.com');
+    if (
+      waitingRow?.body?.runSaveVersion !== 22
+      || waitingRow?.body?.deployment?.stage !== 'awaiting-deal'
+      || waitingRow?.body?.deployment?.transport !== 'paused'
+      || Number(waitingRow?.revision) !== 3
+      || dealtRow?.body?.deployment?.stage !== 'card'
+      || dealtRow?.body?.deployment?.transport !== 'paused'
+      || Number(dealtRow?.revision) !== 5
+      || revealedRow?.body?.deployment?.stage !== 'unit'
+      || revealedRow?.body?.deployment?.transport !== 'paused'
+      || Object.hasOwn(revealedRow?.body?.deployment ?? {}, 'mode')
+      || revealedRow?.body?.deployment?.revealedCardIds?.[0] !== 'grace'
+      || revealedRow?.body?.deployment?.placements?.king !== '3,7'
+      || Number(revealedRow?.revision) !== 7
+      || currentRow?.body?.runSaveVersion !== 22
+      || Number(currentRow?.revision) !== 8
+    ) {
+      throw new Error(`Migration 60 did not establish Deployment deal and transport state: ${JSON.stringify(rows)}`);
+    }
+    await client.query('ROLLBACK');
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve validation error */ }
+    throw error;
+  } finally {
+    await client.end();
+  }
+}
+
 async function waitForServer() {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if (child.exitCode !== null) {
@@ -2186,7 +2277,7 @@ async function main() {
   await new Promise((resolve) => mockAuth.listen(authPort, '127.0.0.1', resolve));
   await new Promise((resolve) => mockBgm.listen(bgmPort, '127.0.0.1', resolve));
   await waitForServer();
-  await validatePrimarySparseNumericMigrationUpgrade59();
+  await validatePrimarySparseNumericMigrationUpgrade60();
   const databaseRuntime = await queryDb('SELECT version() AS version');
   const isPgliteRuntime = /\bPGlite\b/i.test(String(databaseRuntime.rows[0]?.version || ''));
   if (!isPgliteRuntime) {
@@ -2220,6 +2311,7 @@ async function main() {
   await validateExpunctioMigration57();
   await validateCardOrderedDeploymentMigration58();
   await validateCompletePrimogenitureRetirementMigration59();
+  await validateDeploymentTransportMigration60();
   await resetDb();
 
   const missingPropSeats = await get('/api/prop-seats/default');
@@ -5355,6 +5447,60 @@ async function main() {
   if (mispricedHieraticRun.statusCode !== 400 || JSON.parse(mispricedHieraticRun.body).error !== 'invalid_active_run') {
     throw new Error(`Hieratic offers must carry the Agminate price: ${mispricedHieraticRun.statusCode} ${mispricedHieraticRun.body}`);
   }
+  const deploymentRun = {
+    ...activeRunDocument,
+    phase: 'deployment',
+    sectio: null,
+    deployment: {
+      battleIndex: 0,
+      seed: 1709,
+      dealtCardIds: ['run-card-his-grace', 'run-card-front-lines'],
+      deployingUnitIds: ['run-king', 'run-pawn-a', 'run-pawn-b'],
+      unavailableUnitIds: [],
+      capacityResolved: false,
+      placements: {},
+      activeCardIndex: 0,
+      unitCursor: 0,
+      discardCursor: 0,
+      revealedCardIds: [],
+      settlingUnitIds: [],
+      transport: 'paused',
+      stage: 'awaiting-deal',
+      blockedUnitIds: [],
+      manualPlacements: {},
+    },
+  };
+  const savedDeploymentRun = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({ run: deploymentRun, revision: 3 }),
+  );
+  const savedDeploymentRunBody = JSON.parse(savedDeploymentRun.body);
+  if (
+    savedDeploymentRun.statusCode !== 200
+    || savedDeploymentRunBody.revision !== 4
+    || savedDeploymentRunBody.run.deployment?.stage !== 'awaiting-deal'
+    || savedDeploymentRunBody.run.deployment?.transport !== 'paused'
+  ) {
+    throw new Error(`Deployment transport state did not save: ${savedDeploymentRun.statusCode} ${savedDeploymentRun.body}`);
+  }
+  const retiredDeploymentMode = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      run: {
+        ...savedDeploymentRunBody.run,
+        deployment: { ...savedDeploymentRunBody.run.deployment, mode: 'deploy-all' },
+      },
+      revision: 4,
+    }),
+  );
+  if (
+    retiredDeploymentMode.statusCode !== 400
+    || JSON.parse(retiredDeploymentMode.body).error !== 'invalid_active_run'
+  ) {
+    throw new Error(`Active Runs must reject retired Deployment pace state: ${retiredDeploymentMode.statusCode} ${retiredDeploymentMode.body}`);
+  }
   const rivalRun = await get('/api/active-run', { cookie: '__Host-chess-tactics-access=rival' });
   if (rivalRun.statusCode !== 200 || JSON.parse(rivalRun.body).run !== null) {
     throw new Error(`Active Run should be owner-scoped: ${rivalRun.statusCode} ${rivalRun.body}`);
@@ -5364,13 +5510,13 @@ async function main() {
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ run: { ...activeRunDocument, updatedAt: '2026-01-02T00:00:00.000Z' }, revision: 0 }),
   );
-  if (staleRun.statusCode !== 409 || JSON.parse(staleRun.body).revision !== 3) {
+  if (staleRun.statusCode !== 409 || JSON.parse(staleRun.body).revision !== 4) {
     throw new Error(`Stale active Run write should conflict: ${staleRun.statusCode} ${staleRun.body}`);
   }
   const deletedRun = await request(
     'DELETE', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({ revision: 3 }),
+    JSON.stringify({ revision: 4 }),
   );
   if (deletedRun.statusCode !== 200 || JSON.parse(deletedRun.body).ok !== true) {
     throw new Error(`Active Run did not delete: ${deletedRun.statusCode} ${deletedRun.body}`);

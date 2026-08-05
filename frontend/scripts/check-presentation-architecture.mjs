@@ -47,6 +47,14 @@ for (const file of files) {
   if (source.includes('SCENE_FADE_MS') || source.includes('STAGE_FADE_MS')) {
     fail(file, 'presentation timing belongs to sceneTransitionLifecycle');
   }
+  const webAnimationReceivers = [...source.matchAll(/\b([A-Za-z_$][\w$]*)\.animate\s*\(/g)]
+    .map((match) => match[1]);
+  if (
+    normalized !== 'ui/shell/SceneActivity.tsx'
+    && webAnimationReceivers.some((receiver) => receiver !== 'scene' && receiver !== 'sceneMotion')
+  ) {
+    fail(file, 'imperative Web Animations must go through the scene-owned motion authority');
+  }
   if (source.includes('RunWorkspaceStages')) {
     fail(file, 'Run phase/workspace replacement belongs to the PresentationDirector');
   }
@@ -89,6 +97,27 @@ for (const file of files) {
   }
 }
 
+const appPath = resolve(src, 'ui/App.tsx');
+const app = readFileSync(appPath, 'utf8');
+const sceneBoundaryPath = resolve(src, 'ui/shell/SceneBoundary.tsx');
+const sceneBoundary = readFileSync(sceneBoundaryPath, 'utf8');
+for (const required of [
+  'directorPhase={scene.phase}',
+  'visualRole={layer.visualRole}',
+]) {
+  if (!app.includes(required)) fail(appPath, `missing director-owned scene lifecycle input: ${required}`);
+}
+for (const forbidden of ['preparing={layer.preparing}', 'deactivating={', 'revealing={']) {
+  if (app.includes(forbidden)) fail(appPath, `scene lifecycle permission must not be caller supplied: ${forbidden}`);
+}
+for (const required of [
+  'sceneBoundaryLifecycle(directorPhase, visualRole)',
+  "preparing: visualRole === 'incoming'",
+  '[deactivating, generation, manifest.id, mountedKey]',
+]) {
+  if (!sceneBoundary.includes(required)) fail(sceneBoundaryPath, `missing closed scene activity invariant: ${required}`);
+}
+
 const continuityPath = resolve(src, 'ui/shell/SceneContinuity.tsx');
 const continuity = readFileSync(continuityPath, 'utf8');
 for (const required of [
@@ -113,6 +142,15 @@ for (const required of [
   'form={form}',
   'navigateApp(nextHref, { replace: true, scroll: false })',
   '<RunDeploymentCardStack',
+  '<RunDeploymentDeckDeal',
+  'data-testid="deployment-transport-control"',
+  'data-testid="deployment-play"',
+  'data-testid="deployment-next"',
+  'data-testid="deployment-full-deploy"',
+  'disabled={!nextReady}',
+  'onClick={onNext}',
+  'setDeploymentTransport(latest, transport)',
+  'beginDeploymentDeal(latest)',
   'completeDeploymentDeal(latest, level)',
   'finishDeploymentCardReveal(latest)',
   'finishDeploymentCardDiscard(latest)',
@@ -132,6 +170,11 @@ for (const forbidden of [
   '<Strategikon',
   'KlerosisOverlay',
   'RunKlerosisWorkspace',
+  "{mode || stage === 'pace' ? (",
+  'chooseDeploymentMode',
+  'switchDeploymentMode',
+  'deployment-step-through',
+  'Place {activeUnit.type',
 ]) {
   if (runScreen.includes(forbidden)) fail(runScreenPath, `forbidden local Run presentation authority: ${forbidden}`);
 }
@@ -144,6 +187,12 @@ for (const required of [
   'data-deployment-stack-card={cardId}',
   '<RunCardBack mediaUrl={resolvedLiveMediaUrl(RUN_CARD_BACK_SLOT)} />',
   '<strong className="run-deployment-card-count"',
+  'useSceneEnteredAction(`deployment-deal:',
+  '<SceneContinuityPortal contribution={{ kind: \'shared-element\'',
+  'data-deployment-center-deck=""',
+  'useAppSettings()',
+  'useSceneEnteredAction(`deployment-reveal:',
+  'useSceneEnteredAction(`deployment-discard:',
 ]) {
   if (!deploymentCardStack.includes(required)) {
     fail(deploymentCardStackPath, `missing closed Deployment card-stack invariant: ${required}`);

@@ -242,12 +242,12 @@ try {
     const prepared = await page.evaluate(async () => {
       const { useActiveRun } = await import('/src/run/store.ts');
       const run = useActiveRun.getState().run;
-      if (!run || run.phase !== 'sectio' || run.army.length < 2) return null;
+      if (!run || run.phase !== 'sectio' || run.army.length < 3) return null;
       const army = run.army.map((unit, index) => ({
         ...unit,
         abilities: [
           ...unit.abilities.filter((ability) => ability !== 'adlected'),
-          ...(index < 2 ? ['adlected'] : []),
+          ...(index > 0 && index < 3 ? ['adlected'] : []),
         ],
       }));
       useActiveRun.getState().replace({ ...run, army, updatedAt: new Date().toISOString() });
@@ -275,20 +275,41 @@ try {
       visibleCameraFrames: 0,
       visibleEnteringCameraFrames: 0,
       dealAnimations: 0,
+      dealAnimationRefs: [],
+      dealConstructedBeforeCommit: false,
+      dealPlayedBeforeCommit: false,
+      dealAdvancedAfterCommit: false,
+      dealCalls: [],
+      dealCountSamples: [],
       farthestDealOrigin: 0,
     };
     window.__ctBattlefieldTransitionProbe = probe;
     Element.prototype.animate = function deploymentDealProbe(frames, options) {
-      if (this.matches?.('[data-deployment-stack-card]')) {
+      const animation = nativeAnimate.call(this, frames, options);
+      if (this.matches?.('[data-deployment-flight-card], [data-deployment-remainder-flight]')) {
+        const director = document.querySelector('.scene-director');
+        probe.dealConstructedBeforeCommit ||= director?.getAttribute('data-scene-phase') !== 'current'
+          || Boolean(director?.getAttribute('data-scene-pending'))
+          || !(director?.getAttribute('data-scene-committed') ?? '').includes(':battlefield:');
+        probe.dealAnimationRefs.push(animation);
+        probe.dealCalls.push({
+          phase: director?.getAttribute('data-scene-phase') ?? null,
+          committed: director?.getAttribute('data-scene-committed') ?? null,
+          pending: director?.getAttribute('data-scene-pending') ?? null,
+          boundary: this.closest?.('.scene-boundary')?.className ?? null,
+        });
         const first = Array.isArray(frames) ? frames[0] : null;
         const transform = first && typeof first === 'object' ? String(first.transform ?? '') : '';
         const match = /translate\((-?[\d.]+)px,\s*(-?[\d.]+)px\)/.exec(transform);
-        const chartulary = document.querySelector('[data-run-card-flight-target]');
-        if (match && chartulary) {
+        const centerDeck = document.querySelector('[data-deployment-center-deck]');
+        if (match && centerDeck) {
+          // The native animation has already installed its time-zero keyframe. Read the
+          // transformed card directly: adding the authored translation again would count
+          // the origin offset twice.
           const card = this.getBoundingClientRect();
-          const source = chartulary.getBoundingClientRect();
-          const originX = card.left + card.width / 2 + Number(match[1]);
-          const originY = card.top + card.height / 2 + Number(match[2]);
+          const source = centerDeck.getBoundingClientRect();
+          const originX = card.left + card.width / 2;
+          const originY = card.top + card.height / 2;
           const sourceX = source.left + source.width / 2;
           const sourceY = source.top + source.height / 2;
           probe.farthestDealOrigin = Math.max(
@@ -298,12 +319,27 @@ try {
         }
         probe.dealAnimations += 1;
       }
-      return nativeAnimate.call(this, frames, options);
+      return animation;
     };
     const tick = () => {
       const director = document.querySelector('.scene-director');
       const phase = director?.getAttribute('data-scene-phase') ?? 'missing';
       const pending = director?.getAttribute('data-scene-pending') ?? '';
+      const deploymentCommitted = phase === 'current'
+        && !pending
+        && (director?.getAttribute('data-scene-committed') ?? '').includes(':battlefield:');
+      if (probe.dealAnimationRefs.length > 0) {
+        const times = probe.dealAnimationRefs.map((animation) => Number(animation.currentTime ?? 0));
+        if (!deploymentCommitted) {
+          probe.dealPlayedBeforeCommit ||= times.some((time) => time > 0.5);
+        } else {
+          probe.dealAdvancedAfterCommit ||= times.some((time) => time > 0.5);
+        }
+      }
+      const dealCount = Number(document.querySelector('.run-deployment-card-count')?.textContent ?? NaN);
+      if (Number.isFinite(dealCount) && probe.dealCountSamples.at(-1) !== dealCount) {
+        probe.dealCountSamples.push(dealCount);
+      }
       const boundaries = [...document.querySelectorAll('.scene-boundary')];
       const transitioning = phase !== 'current' && phase !== 'startup';
       probe.sawPending ||= pending.includes(':battlefield:');
@@ -360,66 +396,138 @@ try {
       && !director.getAttribute('data-scene-pending');
   });
   await page.waitForSelector('[data-deployment-stack-card]', { timeout: 5_000 });
+  // Deployment begins as a committed, empty battlefield with the complete deck in the
+  // middle. Nothing has moved or been revealed, and transport already owns its stable
+  // Controls seat while the player decides whether to deal.
+  const awaitingDealState = await page.evaluate(async () => {
+    const { useActiveRun } = await import('/src/run/store.ts');
+    const run = useActiveRun.getState().run;
+    const deal = [...document.querySelectorAll('button')]
+      .find((button) => button.textContent?.trim() === 'Deal');
+    const transportRect = document.querySelector('[data-testid="deployment-transport-control"]')?.getBoundingClientRect();
+    const probe = window.__ctBattlefieldTransitionProbe;
+    return {
+      phase: run?.phase ?? null,
+      stage: run?.deployment?.stage ?? null,
+      placements: run?.deployment ? Object.keys(run.deployment.placements).length : null,
+      totalCards: run?.cards.length ?? null,
+      dealtCards: run?.deployment?.dealtCardIds.length ?? null,
+      stackCards: document.querySelectorAll('[data-deployment-stack-card]').length,
+      backs: document.querySelectorAll('[data-deployment-stack-card] .run-card-back').length,
+      centerDeck: Boolean(document.querySelector('[data-deployment-center-deck]')),
+      centerBacks: document.querySelectorAll('[data-deployment-center-deck] .run-card-back').length,
+      centerCount: Number(document.querySelector('.run-deployment-center-count')?.textContent ?? NaN),
+      board: Boolean(document.querySelector('[data-testid="skirmish-board"]')),
+      deal: Boolean(deal),
+      dealDisabled: deal?.disabled ?? null,
+      playDisabled: document.querySelector('[data-testid="deployment-play"]')?.disabled ?? null,
+      nextDisabled: document.querySelector('[data-testid="deployment-next"]')?.disabled ?? null,
+      fullDeployDisabled: document.querySelector('[data-testid="deployment-full-deploy"]')?.disabled ?? null,
+      transportRect: transportRect
+        ? { x: transportRect.x, y: transportRect.y, width: transportRect.width, height: transportRect.height }
+        : null,
+      strategikonToggle: Boolean(document.querySelector('[data-testid="strategikon-toggle"]')),
+      obsoleteDeploymentButton: [...document.querySelectorAll('.run-deployment-controls button')]
+        .some((button) => button.textContent?.trim() === 'Deployment'),
+      explanatoryCopy: document.body.textContent?.includes('These cards supply this combat') ?? false,
+      confirmationCopy: document.body.textContent?.includes('Your deployment deal') ?? false,
+      dealAnimations: probe?.dealAnimations ?? null,
+    };
+  });
+  if (
+    awaitingDealState.phase !== 'deployment'
+    || awaitingDealState.stage !== 'awaiting-deal'
+    || awaitingDealState.placements !== 0
+    || awaitingDealState.totalCards < awaitingDealState.dealtCards
+    || awaitingDealState.stackCards !== awaitingDealState.dealtCards
+    || awaitingDealState.backs !== awaitingDealState.stackCards
+    || !awaitingDealState.centerDeck
+    || awaitingDealState.centerBacks !== Math.min(3, awaitingDealState.totalCards)
+    || awaitingDealState.centerCount !== awaitingDealState.totalCards
+    || !awaitingDealState.board
+    || !awaitingDealState.deal
+    || awaitingDealState.dealDisabled
+    || !awaitingDealState.playDisabled
+    || !awaitingDealState.nextDisabled
+    || !awaitingDealState.fullDeployDisabled
+    || !awaitingDealState.transportRect
+    || !awaitingDealState.strategikonToggle
+    || awaitingDealState.obsoleteDeploymentButton
+    || awaitingDealState.explanatoryCopy
+    || awaitingDealState.confirmationCopy
+    || awaitingDealState.dealAnimations !== 0
+  ) {
+    await fail('deployment-awaiting-deal-boundary', JSON.stringify(awaitingDealState));
+  }
+
+  const awaitingDealShot = 'tmp-shots/run-opening-deployment-awaiting-deal.png';
+  await page.screenshot({ path: awaitingDealShot });
+  console.log('Deployment awaiting-deal screenshot:', awaitingDealShot);
+  if (!await clickButton('Deal')) {
+    await fail('deployment-deal', JSON.stringify(await buttonDiagnostics('Deal')));
+  }
+  await page.waitForFunction(() => document.querySelector('[data-deployment-card-stage="dealing"]'));
   const dealMotionShot = 'tmp-shots/run-opening-deployment-deal-motion.png';
   await page.screenshot({ path: dealMotionShot });
   console.log('Deployment deal-motion screenshot:', dealMotionShot);
 
-  // Deployment begins on the already-mounted, empty battlefield. The face-down stack
-  // deals from the Chartulary, and pace is not a choice until every card has landed.
   const dealingState = await page.evaluate(async () => {
     const { useActiveRun } = await import('/src/run/store.ts');
     const run = useActiveRun.getState().run;
     return {
-      phase: run?.phase ?? null,
       stage: run?.deployment?.stage ?? null,
-      placements: run?.deployment?.placements.length ?? null,
-      stackCards: document.querySelectorAll('[data-deployment-stack-card]').length,
-      backs: document.querySelectorAll('[data-deployment-stack-card] .run-card-back').length,
-      board: Boolean(document.querySelector('[data-testid="skirmish-board"]')),
-      deployAll: [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Deploy all'),
-      stepThrough: [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Step through'),
-      strategikonToggle: Boolean(document.querySelector('[data-testid="strategikon-toggle"]')),
-      explanatoryCopy: document.body.textContent?.includes('These cards supply this combat') ?? false,
-      confirmationCopy: document.body.textContent?.includes('Your deployment deal') ?? false,
+      placements: run?.deployment ? Object.keys(run.deployment.placements).length : null,
+      dealDisabled: [...document.querySelectorAll('button')]
+        .find((button) => button.textContent?.trim() === 'Dealing…')?.disabled ?? null,
+      playDisabled: document.querySelector('[data-testid="deployment-play"]')?.disabled ?? null,
+      nextDisabled: document.querySelector('[data-testid="deployment-next"]')?.disabled ?? null,
+      fullDeployDisabled: document.querySelector('[data-testid="deployment-full-deploy"]')?.disabled ?? null,
     };
   });
   if (
-    dealingState.phase !== 'deployment'
-    || dealingState.stage !== 'dealing'
+    dealingState.stage !== 'dealing'
     || dealingState.placements !== 0
-    || dealingState.stackCards === 0
-    || dealingState.backs !== dealingState.stackCards
-    || !dealingState.board
-    || dealingState.deployAll
-    || dealingState.stepThrough
-    || !dealingState.strategikonToggle
-    || dealingState.explanatoryCopy
-    || dealingState.confirmationCopy
+    || !dealingState.dealDisabled
+    || !dealingState.playDisabled
+    || !dealingState.nextDisabled
+    || !dealingState.fullDeployDisabled
   ) {
-    await fail('deployment-deal-boundary', JSON.stringify(dealingState));
+    await fail('deployment-dealing-boundary', JSON.stringify(dealingState));
   }
 
-  await page.waitForFunction(() => document.querySelector('[data-deployment-card-stage="pace"]')
-    && [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Deploy all')
-    && [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Step through'));
+  await page.waitForFunction(() => document.querySelector('[data-deployment-card-stage="unit"]')
+    && !document.querySelector('[data-testid="deployment-next"]')?.disabled);
 
-  const paceState = await page.evaluate(() => ({
-    stackCards: document.querySelectorAll('[data-deployment-stack-card]').length,
-    count: Number(document.querySelector('.run-deployment-card-count')?.textContent ?? 0),
-    board: Boolean(document.querySelector('[data-testid="skirmish-board"]')),
-    deployAll: [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Deploy all'),
-    stepThrough: [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Step through'),
-    strategikonToggle: Boolean(document.querySelector('[data-testid="strategikon-toggle"]')),
-  }));
+  const transportState = await page.evaluate(() => {
+    const transportRect = document.querySelector('[data-testid="deployment-transport-control"]')?.getBoundingClientRect();
+    return {
+      stackCards: document.querySelectorAll('[data-deployment-stack-card]').length,
+      count: Number(document.querySelector('.run-deployment-card-count')?.textContent ?? 0),
+      board: Boolean(document.querySelector('[data-testid="skirmish-board"]')),
+      playDisabled: document.querySelector('[data-testid="deployment-play"]')?.disabled ?? null,
+      nextDisabled: document.querySelector('[data-testid="deployment-next"]')?.disabled ?? null,
+      fullDeployDisabled: document.querySelector('[data-testid="deployment-full-deploy"]')?.disabled ?? null,
+      transportRect: transportRect
+        ? { x: transportRect.x, y: transportRect.y, width: transportRect.width, height: transportRect.height }
+        : null,
+      strategikonToggle: Boolean(document.querySelector('[data-testid="strategikon-toggle"]')),
+    };
+  });
+  const transportGeometryChanged = !awaitingDealState.transportRect || !transportState.transportRect
+    || ['x', 'y', 'width', 'height'].some((key) => (
+      Math.abs(awaitingDealState.transportRect[key] - transportState.transportRect[key]) > 0.5
+    ));
   if (
-    paceState.stackCards === 0
-    || paceState.count !== paceState.stackCards
-    || !paceState.board
-    || !paceState.deployAll
-    || !paceState.stepThrough
-    || !paceState.strategikonToggle
+    transportState.stackCards === 0
+    || transportState.count !== transportState.stackCards
+    || !transportState.board
+    || transportState.playDisabled
+    || transportState.nextDisabled
+    || transportState.fullDeployDisabled
+    || transportGeometryChanged
+    || !transportState.strategikonToggle
   ) {
-    await fail('deployment-pace-boundary', JSON.stringify(paceState));
+    await fail('deployment-transport-boundary', JSON.stringify(transportState));
   }
 
   const battlefieldTransition = await page.evaluate(() => {
@@ -446,6 +554,11 @@ try {
       visibleCameraFrames: probe.visibleCameraFrames,
       visibleEnteringCameraFrames: probe.visibleEnteringCameraFrames,
       dealAnimations: probe.dealAnimations,
+      dealConstructedBeforeCommit: probe.dealConstructedBeforeCommit,
+      dealPlayedBeforeCommit: probe.dealPlayedBeforeCommit,
+      dealAdvancedAfterCommit: probe.dealAdvancedAfterCommit,
+      dealCalls: probe.dealCalls,
+      dealCountSamples: probe.dealCountSamples,
       farthestDealOrigin: probe.farthestDealOrigin,
       finalCamera,
       finalPhase: director?.getAttribute('data-scene-phase') ?? null,
@@ -466,7 +579,19 @@ try {
     || battlefieldTransition.visibleEnteringCameraFrames === 0
     || battlefieldTransition.cameraSamples.length !== 1
     || battlefieldTransition.cameraSamples[0]?.camera !== battlefieldTransition.finalCamera
-    || battlefieldTransition.dealAnimations !== paceState.stackCards
+    || battlefieldTransition.dealAnimations !== transportState.stackCards
+      + (awaitingDealState.totalCards > awaitingDealState.dealtCards ? 1 : 0)
+    || battlefieldTransition.dealConstructedBeforeCommit
+    || battlefieldTransition.dealPlayedBeforeCommit
+    || !battlefieldTransition.dealAdvancedAfterCommit
+    || JSON.stringify(battlefieldTransition.dealCountSamples) !== JSON.stringify(
+      Array.from({ length: transportState.stackCards + 1 }, (_, index) => index),
+    )
+    || battlefieldTransition.dealCalls.some((call) => (
+      call.phase !== 'current'
+      || call.pending
+      || !call.committed?.includes(':battlefield:')
+    ))
     || battlefieldTransition.farthestDealOrigin > 1.5
     || battlefieldTransition.finalPhase !== 'current'
     || !battlefieldTransition.finalCommitted?.includes(':battlefield:')
@@ -474,11 +599,11 @@ try {
   ) {
     await fail('begin-deployment-transition', JSON.stringify(battlefieldTransition));
   }
-  console.log('director-owned opening Sectio → empty battlefield Deployment transition and Chartulary deal: OK');
+  console.log('director-owned Sectio → empty Deployment, explicit center-deck partition, and counted deal: OK');
 
   await page.waitForFunction(() => document.querySelector('[data-testid="skirmish-board"]')
     ?.getAttribute('data-arriving') === 'false');
-  const transitionShot = 'tmp-shots/run-deployment-pace.png';
+  const transitionShot = 'tmp-shots/run-deployment-transport.png';
   const transitionBoard = await page.$('.skirmish-war-room');
   if (!transitionBoard) await fail('transition-screenshot', 'Deployment battlefield unavailable after deal');
   await page.screenshot({ path: transitionShot });
@@ -534,25 +659,95 @@ try {
       window.__ctDeploymentProbe.frame = requestAnimationFrame(tick);
       return {
         deployment: Boolean(document.querySelector('[data-testid="run-deployment"]')),
-        deployAll: [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Deploy all'),
-        stepThrough: [...document.querySelectorAll('button')].some((button) => button.textContent?.trim() === 'Step through'),
+        pause: Boolean(document.querySelector('button[aria-label="Pause deployment"]')),
+        play: Boolean(document.querySelector('[data-testid="deployment-play"]')),
+        next: Boolean(document.querySelector('[data-testid="deployment-next"]')),
+        fullDeploy: Boolean(document.querySelector('[data-testid="deployment-full-deploy"]')),
       };
     });
     if (
       !deploymentState.deployment
-      || !deploymentState.deployAll
-      || !deploymentState.stepThrough
+      || !deploymentState.pause
+      || !deploymentState.play
+      || !deploymentState.next
+      || !deploymentState.fullDeploy
     ) {
       await fail('deployment-fixture', JSON.stringify(deploymentState));
     }
 
-    if (!await clickButton('Deploy all')) {
-      await fail('deployment-deploy-all', JSON.stringify(await buttonDiagnostics('Deploy all')));
+    const placementsBeforeStep = await page.evaluate(async () => {
+      const { useActiveRun } = await import('/src/run/store.ts');
+      return Object.keys(useActiveRun.getState().run?.deployment?.placements ?? {}).length;
+    });
+    const separatePlaceButton = await page.evaluate(() => [...document.querySelectorAll('button')]
+      .some((button) => button.textContent?.trim().startsWith('Place ')));
+    if (separatePlaceButton) await fail('deployment-next-control', 'a separate Place button was mounted');
+    await page.click('[data-testid="deployment-next"]');
+    await page.waitForFunction(async (before) => {
+      const { useActiveRun } = await import('/src/run/store.ts');
+      return Object.keys(useActiveRun.getState().run?.deployment?.placements ?? {}).length > before;
+    }, {}, placementsBeforeStep);
+
+    await page.click('[data-testid="deployment-full-deploy"]');
+    // Full deploy is the fastest transport, not permission to answer required choices.
+    // The fixture deliberately gives two units Adlected. Each highlighted-square choice
+    // leaves transport paused, so the player must explicitly resume Full deploy afterward.
+    for (let choice = 0; choice < 10; choice += 1) {
+      await page.waitForFunction(() => (
+        !document.querySelector('[data-testid="run-deployment"]')
+        || Boolean(document.querySelector('button.run-deployment-cell.is-move:not([aria-disabled="true"])'))
+        || (
+          !document.querySelector('[data-testid="deployment-next"]')?.disabled
+          && document.querySelector('[data-testid="deployment-full-deploy"]')?.getAttribute('aria-pressed') !== 'true'
+        )
+      ));
+      if (!await page.$('[data-testid="run-deployment"]')) break;
+      const legal = await page.$('button.run-deployment-cell.is-move:not([aria-disabled="true"])');
+      if (!legal) {
+        await page.click('[data-testid="deployment-full-deploy"]');
+        continue;
+      }
+      const activeLabel = await page.$eval(
+        '[data-testid="deployment-active-unit"]',
+        (element) => element.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+      );
+      const box = await legal.boundingBox();
+      if (!box) await fail('deployment-required-choice', 'highlighted square has no pointer geometry');
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+      await page.waitForFunction((previous) => {
+        const active = document.querySelector('[data-testid="deployment-active-unit"]');
+        return !document.querySelector('[data-testid="run-deployment"]')
+          || !active
+          || active.textContent?.replace(/\s+/g, ' ').trim() !== previous;
+      }, {}, activeLabel);
     }
-    await page.waitForFunction(() => document.querySelector('[data-testid="skirmish"]')
-      && !document.querySelector('[data-testid="run-deployment"]'));
-    await page.waitForFunction(() => document.querySelector('[data-testid="skirmish-board"]')
-      ?.getAttribute('data-arriving') === 'false');
+    try {
+      await page.waitForFunction(() => document.querySelector('[data-testid="skirmish"]')
+        && !document.querySelector('[data-testid="run-deployment"]'));
+      await page.waitForFunction(() => document.querySelector('[data-testid="skirmish-board"]')
+        ?.getAttribute('data-arriving') === 'false');
+    } catch {
+      const stalled = await page.evaluate(async () => {
+        const { useActiveRun } = await import('/src/run/store.ts');
+        const run = useActiveRun.getState().run;
+        const director = document.querySelector('.scene-director');
+        const board = document.querySelector('[data-testid="skirmish-board"]');
+        return {
+          phase: run?.phase ?? null,
+          deploymentStage: run?.deployment?.stage ?? null,
+          deploymentTransport: run?.deployment?.transport ?? null,
+          activeCardIndex: run?.deployment?.activeCardIndex ?? null,
+          unitCursor: run?.deployment?.unitCursor ?? null,
+          settlingUnitIds: run?.deployment?.settlingUnitIds ?? null,
+          directorPhase: director?.getAttribute('data-scene-phase') ?? null,
+          committed: director?.getAttribute('data-scene-committed') ?? null,
+          pending: director?.getAttribute('data-scene-pending') ?? null,
+          arriving: board?.getAttribute('data-arriving') ?? null,
+          controls: document.querySelector('.run-deployment-controls')?.textContent?.trim() ?? null,
+        };
+      });
+      await fail('deployment-deploy-all-settle', JSON.stringify(stalled));
+    }
 
     const deploymentResult = await page.evaluate(async () => {
       const { activeSkirmishStoreForDiagnostics } = await import('/src/game/SkirmishStoreContext.tsx');
@@ -606,10 +801,10 @@ try {
     ) {
       await fail('deployment-battle-continuity', JSON.stringify(deploymentResult));
     }
-    console.log('Deployment Deploy all → Battle provider, DOM, canvas, camera, and Strategikon continuity: OK');
+    console.log('Deployment Next placement → Full deploy with required pauses → Battle provider, DOM, canvas, camera, and Strategikon continuity: OK');
     console.log('Battle continuity screenshot:', deploymentShot);
     if (deploymentOnly) {
-      console.log('PASS — Deployment opens empty, deals a hidden stack from the Chartulary, and promotes the same battlefield in place');
+      console.log('PASS — Deployment partitions the centered deck, advances one unit with Next, resumes required pauses, and promotes the same battlefield in place');
       await browser.close();
       rmSync(browserProfile, { recursive: true, force: true });
       process.exit(0);
