@@ -118,6 +118,50 @@ function pngDimensions(filename) {
   return { width: png.width, height: png.height, byteLength: bytes.length, visiblePixels };
 }
 
+/**
+ * Locate the base from pixels, not the 512px source frame. A qualifying bottom row ignores tiny
+ * antialias specks; the final eight percent of visible alpha isolates the trunk/root contact band
+ * while excluding the elevated crown. The contact ellipse is seated at that band's centre.
+ */
+function measureGroundContact(filename) {
+  const png = PNG.sync.read(fs.readFileSync(filename));
+  const alphaThreshold = 32;
+  const minimumOpaqueRowPixels = Math.max(2, Math.ceil(png.width * 0.004));
+  let bottom = -1;
+  for (let y = png.height - 1; y >= 0; y -= 1) {
+    let opaque = 0;
+    for (let x = 0; x < png.width; x += 1) {
+      if (png.data[(y * png.width + x) * 4 + 3] >= alphaThreshold) opaque += 1;
+    }
+    if (opaque >= minimumOpaqueRowPixels) {
+      bottom = y;
+      break;
+    }
+  }
+  if (bottom < 0) throw new Error(`Cannot locate an opaque ground contact in ${filename}`);
+
+  const bandHeight = Math.ceil(png.height * 0.08);
+  let minX = png.width;
+  let maxX = -1;
+  let minY = png.height;
+  let maxY = -1;
+  for (let y = Math.max(0, bottom - bandHeight + 1); y <= bottom; y += 1) {
+    for (let x = 0; x < png.width; x += 1) {
+      if (png.data[(y * png.width + x) * 4 + 3] < alphaThreshold) continue;
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+    }
+  }
+  if (maxX < 0 || maxY < 0) throw new Error(`Cannot measure a ground-contact band in ${filename}`);
+  return {
+    anchorX: Math.round((minX + maxX) / 2),
+    anchorY: Math.round((minY + maxY) / 2),
+    groundFootprint: { w: maxX - minX + 1, h: maxY - minY + 1 },
+  };
+}
+
 function parseArgs(argv) {
   const options = {
     sourceRoot: '',
@@ -319,7 +363,7 @@ function renderAsset(asset, prepared, spec, options) {
   return output;
 }
 
-function sourceArtMetadata(asset, direction) {
+function sourceArtMetadata(asset, direction, groundContact) {
   return {
     schema: SOURCE_ART_SCHEMA,
     assetId: asset.id,
@@ -330,6 +374,7 @@ function sourceArtMetadata(asset, direction) {
     sourceOnly: !asset.existing,
     structureKind: asset.existing ? null : 'landmark',
     direction,
+    groundContact,
     placementScale: asset.placementScale,
     license: asset.source.license,
     referenceOnly: true,
@@ -390,6 +435,7 @@ async function main() {
     for (const direction of DIRECTIONS) {
       const filename = path.join(output, `${direction}.png`);
       const hash = sha256File(filename);
+      const groundContact = measureGroundContact(filename);
       candidates.push({
         id: `${asset.id}-${direction}`,
         file: path.relative(options.workDir, filename).replaceAll('\\', '/'),
@@ -400,7 +446,7 @@ async function main() {
         availabilityPolicy: 'decorative',
         sourceIds: prepared.sourceId ? [prepared.sourceId] : [],
         metadata: {
-          sourceArt: sourceArtMetadata(asset, direction),
+          sourceArt: sourceArtMetadata(asset, direction, groundContact),
         },
         provenance: {
           schema: 'structure-source-art-render-provenance-v1',

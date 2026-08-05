@@ -369,7 +369,11 @@ stable tie-breaker for exact equal-depth operations. A change of direction selec
 installed `<direction>-back`/`<direction>-front` media pair. South may use the
 legacy `back`/`front` pair. Missing pairs are unavailable rather than flattened,
 planar-rotated, or silently substituted. Per-direction source calibration may
-override the drawable's default scale and split geometry.
+override the drawable's default scale and split geometry. Per ADR-0473, every
+new source-art candidate also carries its measured bottom-alpha contact anchor
+and root/base footprint; installation preserves that per-facing geometry. The
+Forest boundary test consumes only that scaled contact footprint, never the
+complete source frame or elevated alpha.
 
 Per [ADR-0150](adr/0150-structure-source-art-turntables-are-complete-source-only-live-groups.md),
 [ADR-0151](adr/0151-source-art-review-requires-interactive-board-placement.md),
