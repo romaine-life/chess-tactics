@@ -4186,7 +4186,7 @@ const MIGRATIONS = [
         IF run_value->'runSaveVersion' <> '21'::jsonb THEN RETURN run_value; END IF;
         migrated := jsonb_set(migrated, '{runSaveVersion}', '22'::jsonb, false);
         IF jsonb_typeof(migrated->'deployment') = 'object' THEN
-          deployment_value := migrated->'deployment' - 'mode';
+          deployment_value := (migrated->'deployment') - 'mode'::text;
           deployment_stage := deployment_value->>'stage';
           IF deployment_stage = 'dealing' THEN
             deployment_value := jsonb_set(deployment_value, '{stage}', '"awaiting-deal"'::jsonb, false);
