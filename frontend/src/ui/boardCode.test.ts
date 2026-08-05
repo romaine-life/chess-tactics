@@ -267,6 +267,115 @@ describe('boardCode round-trip', () => {
     expect(decodeBoard(encodeBoard(emptyBoard({ generatedRegions })))!.generatedRegions).toEqual(generatedRegions);
   });
 
+  it('round-trips saved Forest instances with their area, weighted recipe, and rerun settings', () => {
+    const forests: EditorBoard['forests'] = [{
+      id: 'forest-1',
+      name: 'North woods',
+      bounds: { minX: -2, minY: -1, maxX: 5, maxY: 6 },
+      sections: [{
+        id: 'section-1',
+        relationship: 'distinct',
+        trees: [
+          { id: 'tree-1', sourceArtId: 'oak-tree', weight: 3.5 },
+          { id: 'tree-2', sourceArtId: 'fern', weight: 1 },
+        ],
+        density: 2.4,
+        jitter: 0.7,
+        scaleMin: 0.65,
+        scaleMax: 1.45,
+        randomFacing: false,
+        facing: 'north-east',
+        spacing: 34,
+        clumping: 0.6,
+        falloff: 0.25,
+      }],
+      fixedSeed: true,
+      seed: 7331,
+    }];
+    expect(decodeBoard(encodeBoard(emptyBoard({ forests })))!.forests).toEqual(forests);
+  });
+
+  it('round-trips the explicit fixed-seed opt-in for saved Towns', () => {
+    const towns: EditorBoard['towns'] = [{
+      id: 'town-1',
+      name: 'Crossroads',
+      bounds: { minX: 1, minY: 1, maxX: 8, maxY: 8 },
+      sections: [{
+        id: 'section-1',
+        relationship: 'distinct',
+        plan: 'linear',
+        size: 12,
+        buildings: [{ id: 'building-1', sourceArtId: 'cottage', weight: 1 }],
+        scaleMean: 1,
+        scaleMin: 0.75,
+        scaleMax: 1.35,
+        plotWidth: 110,
+        landmarkIds: [],
+        setback: 78,
+        looseness: 0.45,
+        facingWobble: 0.2,
+        spacing: 10,
+        fit: 'shrink',
+      }],
+      fixedSeed: true,
+      seed: 4217,
+    }];
+    expect(decodeBoard(encodeBoard(emptyBoard({ towns })))!.towns).toEqual(towns);
+  });
+
+  it('round-trips zero-Section Town and Forest recipes as valid unfinished authoring state', () => {
+    const towns: EditorBoard['towns'] = [{
+      id: 'town-empty',
+      name: 'Empty town',
+      bounds: { minX: 1, minY: 1, maxX: 5, maxY: 5 },
+      sections: [],
+      seed: 10,
+    }];
+    const forests: EditorBoard['forests'] = [{
+      id: 'forest-empty',
+      name: 'Empty forest',
+      bounds: { minX: 0, minY: 0, maxX: 4, maxY: 4 },
+      sections: [],
+      seed: 11,
+    }];
+    const decoded = decodeBoard(encodeBoard(emptyBoard({ towns, forests })))!;
+    expect(decoded.towns).toEqual(towns);
+    expect(decoded.forests).toEqual(forests);
+  });
+
+  it('normalizes previously saved global Forest settings into one explicit Section', () => {
+    const legacyForest = {
+      id: 'forest-old', name: 'Old woods', bounds: { minX: 0, minY: 0, maxX: 5, maxY: 5 },
+      trees: [{ id: 'tree-1', sourceArtId: 'oak-tree', weight: 2 }],
+      density: 2.1, jitter: 0.7, scaleMin: 0.8, scaleMax: 1.4, randomFacing: true,
+      facing: 'south', spacing: 30, clumping: 0.6, falloff: 0.2, seed: 8,
+    };
+    const decoded = decodeBoard(encodeBoard(emptyBoard({ forests: [legacyForest] as never })))!;
+    expect(decoded.forests).toEqual([expect.objectContaining({
+      id: 'forest-old',
+      sections: [expect.objectContaining({
+        relationship: 'distinct', density: 2.1, trees: legacyForest.trees,
+      })],
+    })]);
+  });
+
+  it('normalizes a global Town Plan into complete Section-local approaches', () => {
+    const legacyTown = {
+      id: 'town-old', name: 'Old town', bounds: { minX: 0, minY: 0, maxX: 10, maxY: 8 },
+      plan: 'green', size: 12, blend: 0.8, landmarkIds: ['windmill'], setback: 70,
+      looseness: 0.3, facingWobble: 0.1, spacing: 12, fit: 'shrink', seed: 9,
+      sections: [
+        { id: 'homes', buildings: [{ id: 'home', sourceArtId: 'cottage', weight: 1 }], share: 3, scaleMean: 1, scaleMin: 0.8, scaleMax: 1.2, plotWidth: 100 },
+        { id: 'mills', buildings: [{ id: 'mill', sourceArtId: 'windmill', weight: 1 }], share: 1, scaleMean: 1.2, scaleMin: 1, scaleMax: 1.5, plotWidth: 130 },
+      ],
+    };
+    const decoded = decodeBoard(encodeBoard(emptyBoard({ towns: [legacyTown] as never })))!;
+    expect(decoded.towns?.[0].sections).toEqual([
+      expect.objectContaining({ id: 'homes', relationship: 'distinct', plan: 'green', size: 9, landmarkIds: ['windmill'] }),
+      expect.objectContaining({ id: 'mills', relationship: 'mixed', plan: 'green', size: 3, landmarkIds: [] }),
+    ]);
+  });
+
   it('round-trips macrotile placements', () => {
     const macroTiles = [
       { assetId: 'grass-soft-bands-3x3', x: 1, y: 1, breaks: [1, 4, 7] },
@@ -294,6 +403,11 @@ describe('boardCode round-trip', () => {
   it('encodes a generated-region-free board byte-identically to a code that predates region units', () => {
     expect(encodeBoard(emptyBoard({ generatedRegions: [] }))).toBe(encodeBoard(emptyBoard()));
     expect(decodeBoard(encodeBoard(emptyBoard()))!.generatedRegions).toEqual([]);
+  });
+
+  it('omits an empty saved-Forest channel and decodes it as an empty list', () => {
+    expect(encodeBoard(emptyBoard({ forests: [] }))).toBe(encodeBoard(emptyBoard()));
+    expect(decodeBoard(encodeBoard(emptyBoard()))!.forests).toEqual([]);
   });
 
   it('round-trips a pre-drawn board as a semantic media slot plus canonical review frame', () => {

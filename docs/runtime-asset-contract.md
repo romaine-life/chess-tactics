@@ -417,8 +417,10 @@ an incomplete row is an availability failure.
   component and availability contracts.
 - Structure source artwork: one drawable record owns installed membership and
   exactly eight paired directional roles. Each direction may reuse one full
-  `flat-contact` raster for both named roles. `sourceOnly` records deliberately
-  omit prop/doodad gameplay policy and remain excluded from those projections.
+  `flat-contact` raster for both named roles and carries the contact anchor and
+  root/base footprint measured from that raster's bottom opaque band.
+  `sourceOnly` records deliberately omit prop/doodad gameplay policy and remain
+  excluded from those projections.
 - SFX: recording bytes resolve from live media slots. The complete revisioned
   `sfx_profiles/default` document owns sound-set metadata/gains, all landable-
   terrain assignments, and arrival sample/gain/firing. Missing profile state is

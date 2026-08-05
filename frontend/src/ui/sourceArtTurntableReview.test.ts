@@ -58,6 +58,11 @@ function mediaCatalog(): AdminLiveMediaCatalog {
           sourceOnly: true,
           structureKind: 'landmark',
           direction,
+          groundContact: {
+            anchorX: 240 + index,
+            anchorY: 390 + index,
+            groundFootprint: { w: 40 + index, h: 20 + index },
+          },
           placementScale: 0.45,
           license: 'unspecified',
         },
@@ -113,6 +118,11 @@ describe('source art turntable review', () => {
     const catalog = mediaCatalog();
     const group = sourceArtTurntableGroups(catalog)[0];
     expect(group).toMatchObject({ assetId: 'castle', structureId: 'structure-castle', sourceOnly: true });
+    expect(group.groundContactByDirection.south).toEqual({
+      anchorX: 240,
+      anchorY: 390,
+      groundFootprint: { w: 40, h: 20 },
+    });
     const batch = sourceArtSelectedVersions(catalog, group, {});
     expect(batch.missingSlots).toEqual([]);
     expect(batch.versions).toHaveLength(8);
@@ -203,7 +213,22 @@ describe('source art turntable review', () => {
       value: 'castle',
       structureKind: 'landmark',
       sourceOnly: true,
+      anchorX: 240,
+      anchorY: 390,
+      groundFootprint: { w: 40, h: 20 },
       splitMode: 'flat-contact',
+      directions: {
+        south: {
+          anchorX: 240,
+          anchorY: 390,
+          groundFootprint: { w: 40, h: 20 },
+        },
+        east: {
+          anchorX: 246,
+          anchorY: 396,
+          groundFootprint: { w: 46, h: 26 },
+        },
+      },
     });
     expect(input.behavior).not.toHaveProperty('terrains');
     expect(input.behavior).not.toHaveProperty('blocking');

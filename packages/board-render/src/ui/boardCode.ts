@@ -11,7 +11,7 @@
 //   wl?:{edgeKey:wallMaterial}, wa?:{anchorEdgeKey:wallArtId},
 //   st?:{"x,y:south|east":subterrainMaterial},
 //   rc?:[edgeKey], rx?:[edgeKey], zn?:[[zoneId,zoneType,[cell],name?,color?]], z?:{cell:zoneType},
-//   gr?:generatedRegionUnits,
+//   gr?:generatedRegionUnits, tw?:savedTownUnits, fr?:savedForestUnits,
 //   pd?:[semanticMediaSlot,referenceFrameWidth,referenceFrameHeight,registration?],
 //   pgf?:[version,x,y,width,height], cam?:[minX,minY,width,height],
 //   fa?:[[instanceId,sourceArtId,pixelX,pixelY,direction,scale]],
@@ -29,7 +29,8 @@
 // independent wall-art layer mounted on walls.
 // `zn` is the authored gameplay-zone list; `z` is the legacy collapsed view (cell -> type) kept
 // for old links/clients. `gr` stores editor-only generated-region units: saved cell selections
-// plus the Generate panel settings needed to rerun them. base64url of the JSON (no padding, +/ -> -_).
+// plus the Generate panel settings needed to rerun them. `tw` and `fr` do the same for saved Town
+// and Forest instances. base64url of the JSON (no padding, +/ -> -_).
 //
 // FORWARD/BACK-COMPAT: `z`/`p`/`fa`/`fe`/`fp`/`wl`/`wa`/`df`/`pgf` are emitted only when non-empty, so a board without them
 // encodes byte-identically to a code that predates them, and an OLD code decodes them to empty.
@@ -207,6 +208,47 @@ export interface FloatingArtworkPlacement {
   scale: number;
 }
 
+/** One weighted source-art entry in a saved Forest recipe. */
+export interface BoardForestTree {
+  id: string;
+  sourceArtId: string;
+  weight: number;
+}
+
+export type BoardGeneratorSectionRelationship = 'distinct' | 'mixed';
+
+/** One complete Forest approach inside the generator-owned composition. */
+export interface BoardForestSection {
+  id: string;
+  /** Distinct starts a new generated territory; mixed shares the preceding territory. */
+  relationship: BoardGeneratorSectionRelationship;
+  trees: BoardForestTree[];
+  density: number;
+  jitter: number;
+  scaleMin: number;
+  scaleMax: number;
+  randomFacing: boolean;
+  facing: Direction;
+  spacing: number;
+  clumping: number;
+  falloff: number;
+}
+
+/**
+ * One saved Forest INSTANCE. Like a saved generated terrain region or Town, it owns its grid
+ * area and complete rerunnable recipe; generated Scene Art remains ordinary editable board data.
+ */
+export interface BoardForest {
+  id: string;
+  name: string;
+  bounds: { minX: number; minY: number; maxX: number; maxY: number };
+  /** Complete approaches; the generator derives every internal territory from these. */
+  sections: BoardForestSection[];
+  /** Absent/false means Generate chooses a fresh seed; true opts into exact replay. */
+  fixedSeed?: boolean;
+  seed: number;
+}
+
 /**
  * One saved town INSTANCE, mirroring how BoardGeneratedRegion saves a generated terrain unit:
  * a named thing that owns an area, remembers the settings it was built from, and can be reselected
@@ -220,12 +262,21 @@ export interface BoardTownBuilding {
 
 export interface BoardTownSection {
   id: string;
+  /** Distinct starts a new generated territory; mixed shares the preceding territory. */
+  relationship: BoardGeneratorSectionRelationship;
+  plan: string;
+  size: number;
   buildings: BoardTownBuilding[];
-  share: number;
   scaleMean: number;
   scaleMin: number;
   scaleMax: number;
   plotWidth: number;
+  landmarkIds: string[];
+  setback: number;
+  looseness: number;
+  facingWobble: number;
+  spacing: number;
+  fit: string;
 }
 
 export interface BoardTown {
@@ -233,18 +284,10 @@ export interface BoardTown {
   name: string;
   /** Grid-cell rect the town fills. */
   bounds: { minX: number; minY: number; maxX: number; maxY: number };
-  plan: string;
-  size: number;
+  /** Complete approaches; the generator derives every internal territory from these. */
   sections: BoardTownSection[];
-  /** 0 keeps sections apart, 1 interleaves them, between widens the band where they meet. */
-  blend: number;
-  landmarkIds: string[];
-  setback: number;
-  looseness: number;
-  facingWobble: number;
-  spacing: number;
-  /** 'drop' sites fewer buildings where it is tight; 'shrink' builds smaller instead. */
-  fit: string;
+  /** Absent/false means Generate chooses a fresh seed; true opts into exact replay. */
+  fixedSeed?: boolean;
   seed: number;
 }
 
@@ -329,6 +372,8 @@ export interface EditorBoard {
   generatedRegions?: BoardGeneratedRegion[];
   /** Saved town instances: the selection each owns plus the settings it was generated from. */
   towns?: BoardTown[];
+  /** Saved Forest instances: grid selection plus the complete weighted rerun recipe. */
+  forests?: BoardForest[];
 }
 
 const enc = (s: string): string => btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -695,7 +740,8 @@ function cleanTowns(value: unknown): BoardTown[] {
     if (!townIdPattern.test(id) || seen.has(id) || !bounds || typeof bounds !== 'object') continue;
     const rect = ['minX', 'minY', 'maxX', 'maxY'].map((k) => Number((bounds as Record<string, unknown>)[k]));
     if (rect.some((n) => !Number.isSafeInteger(n) || Math.abs(n) > 4096)) continue;
-    const sections: BoardTownSection[] = Array.isArray(t.sections)
+    const globalSize = Math.round(clampNumber(t.size, 14, 1, 400));
+    const parsedSections: Array<BoardTownSection & { authoredSize: boolean; legacyShare: number }> = Array.isArray(t.sections)
       ? (t.sections as unknown[]).flatMap((rawSection) => {
         if (!rawSection || typeof rawSection !== 'object') return [];
         const sec = rawSection as Record<string, unknown>;
@@ -719,35 +765,124 @@ function cleanTowns(value: unknown): BoardTown[] {
           : [];
         return [{
           id: sectionId,
+          relationship: sec.relationship === 'mixed' ? 'mixed' as const : 'distinct' as const,
+          plan: typeof sec.plan === 'string' ? sec.plan : (typeof t.plan === 'string' ? t.plan : 'linear'),
+          size: Math.round(clampNumber(sec.size, globalSize, 1, 400)),
+          authoredSize: Number.isFinite(Number(sec.size)),
           buildings: buildings.length ? buildings : legacy,
-          share: clampNumber(sec.share, 1, 0, 100),
+          legacyShare: clampNumber(sec.share, 1, 0, 100),
           scaleMean: clampNumber(sec.scaleMean, 1, 0.1, 8),
           scaleMin: clampNumber(sec.scaleMin, 0.75, 0.1, 8),
           scaleMax: clampNumber(sec.scaleMax, 1.35, 0.1, 8),
           // Frontage moved from the town onto the section; fall back to the town's old value.
           plotWidth: clampNumber(sec.plotWidth, clampNumber(t.plotWidth, 110, 10, 1000), 10, 1000),
+          landmarkIds: Array.isArray(sec.landmarkIds)
+            ? (sec.landmarkIds as unknown[]).filter((x): x is string => typeof x === 'string' && !!x)
+            : [],
+          setback: clampNumber(sec.setback, clampNumber(t.setback, 78, 1, 1000), 1, 1000),
+          looseness: clampNumber(sec.looseness, clampNumber(t.looseness, 0.45, 0, 1), 0, 1),
+          facingWobble: clampNumber(sec.facingWobble, clampNumber(t.facingWobble, 0.2, 0, 1), 0, 1),
+          spacing: clampNumber(sec.spacing, clampNumber(t.spacing, 10, 0, 1000), 0, 1000),
+          fit: sec.fit === 'drop' || (sec.fit === undefined && t.fit === 'drop') ? 'drop' : 'shrink',
         }];
       })
       : [];
-    if (!sections.length) continue;
+    const shareTotal = parsedSections.reduce((sum, section) => sum + section.legacyShare, 0) || parsedSections.length;
+    const legacyLandmarks = Array.isArray(t.landmarkIds)
+      ? (t.landmarkIds as unknown[]).filter((x): x is string => typeof x === 'string' && !!x)
+      : [];
+    const legacyMixed = clampNumber(t.blend, 0.35, 0, 1) >= 0.5;
+    const sections: BoardTownSection[] = parsedSections.map(({ authoredSize, legacyShare, ...section }, index) => ({
+      ...section,
+      relationship: index === 0 ? 'distinct' : (
+        (t.sections as unknown[])[index] && typeof (t.sections as unknown[])[index] === 'object'
+          && ((t.sections as unknown[])[index] as Record<string, unknown>).relationship === 'mixed'
+          ? 'mixed'
+          : legacyMixed ? 'mixed' : 'distinct'
+      ),
+      size: authoredSize
+        ? section.size
+        : Math.max(1, Math.round(globalSize * (legacyShare || 1) / shareTotal)),
+      landmarkIds: section.landmarkIds.length || index > 0 ? section.landmarkIds : legacyLandmarks,
+    }));
     seen.add(id);
     out.push({
       id,
       name: typeof t.name === 'string' && t.name.trim() ? t.name.trim().slice(0, 64) : id,
       bounds: { minX: rect[0], minY: rect[1], maxX: rect[2], maxY: rect[3] },
-      plan: typeof t.plan === 'string' ? t.plan : 'linear',
-      size: Math.round(clampNumber(t.size, 14, 1, 400)),
       sections,
-      blend: clampNumber(t.blend, 0.35, 0, 1),
-      landmarkIds: Array.isArray(t.landmarkIds)
-        ? (t.landmarkIds as unknown[]).filter((x): x is string => typeof x === 'string' && !!x)
-        : [],
-      setback: clampNumber(t.setback, 78, 1, 1000),
-      looseness: clampNumber(t.looseness, 0.45, 0, 1),
-      facingWobble: clampNumber(t.facingWobble, 0.2, 0, 1),
-      spacing: clampNumber(t.spacing, 10, 0, 1000),
-      fit: t.fit === 'drop' ? 'drop' : 'shrink',
+      ...(t.fixedSeed === true ? { fixedSeed: true } : {}),
       seed: Math.round(clampNumber(t.seed, 1, 1, 0xffffffff)),
+    });
+  }
+  return out;
+}
+
+/** Saved Forest instances, rejecting any entry that cannot be regenerated deterministically. */
+function cleanForests(value: unknown): BoardForest[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const out: BoardForest[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const forest = raw as Record<string, unknown>;
+    const id = typeof forest.id === 'string' ? forest.id.trim() : '';
+    const bounds = forest.bounds as Record<string, unknown> | undefined;
+    if (!townIdPattern.test(id) || seen.has(id) || !bounds || typeof bounds !== 'object') continue;
+    const rect = ['minX', 'minY', 'maxX', 'maxY'].map((key) => Number(bounds[key]));
+    if (rect.some((n) => !Number.isSafeInteger(n) || Math.abs(n) > 4096)) continue;
+    const cleanTrees = (rawTrees: unknown): BoardForestTree[] => {
+      const treeIds = new Set<string>();
+      return Array.isArray(rawTrees)
+      ? (rawTrees as unknown[]).flatMap((rawTree) => {
+        if (!rawTree || typeof rawTree !== 'object' || Array.isArray(rawTree)) return [];
+        const tree = rawTree as Record<string, unknown>;
+        const treeId = typeof tree.id === 'string' ? tree.id.trim() : '';
+        const sourceArtId = typeof tree.sourceArtId === 'string' ? tree.sourceArtId.trim() : '';
+        if (!townIdPattern.test(treeId) || treeIds.has(treeId) || !floatingArtworkIdPattern.test(sourceArtId)) return [];
+        treeIds.add(treeId);
+        return [{ id: treeId, sourceArtId, weight: clampNumber(tree.weight, 1, 0, 100) }];
+      })
+      : [];
+    };
+    const rawSections = Array.isArray(forest.sections)
+      ? forest.sections as unknown[]
+      : [{ id: 's0', ...forest }];
+    const sectionIds = new Set<string>();
+    const sections: BoardForestSection[] = rawSections.flatMap((rawSection, index) => {
+      if (!rawSection || typeof rawSection !== 'object' || Array.isArray(rawSection)) return [];
+      const section = rawSection as Record<string, unknown>;
+      const sectionId = typeof section.id === 'string' ? section.id.trim() : '';
+      if (!townIdPattern.test(sectionId) || sectionIds.has(sectionId)) return [];
+      sectionIds.add(sectionId);
+      const facing = validArtworkDirections.has(String(section.facing))
+        ? String(section.facing) as Direction
+        : 'south';
+      return [{
+        id: sectionId,
+        relationship: index > 0 && section.relationship === 'mixed' ? 'mixed' : 'distinct',
+        trees: cleanTrees(section.trees),
+        density: clampNumber(section.density, 1.6, 0.2, 6),
+        jitter: clampNumber(section.jitter, 0.85, 0, 1),
+        scaleMin: clampNumber(section.scaleMin, 0.8, 0.1, 8),
+        scaleMax: clampNumber(section.scaleMax, 1.3, 0.1, 8),
+        randomFacing: section.randomFacing !== false,
+        facing,
+        spacing: clampNumber(section.spacing, 26, 0, 1000),
+        clumping: clampNumber(section.clumping, 0.45, 0, 1),
+        falloff: clampNumber(section.falloff, 0.35, 0, 1),
+      }];
+    });
+    seen.add(id);
+    out.push({
+      id,
+      name: typeof forest.name === 'string' && forest.name.trim()
+        ? forest.name.trim().slice(0, 64)
+        : id,
+      bounds: { minX: rect[0], minY: rect[1], maxX: rect[2], maxY: rect[3] },
+      sections,
+      ...(forest.fixedSeed === true ? { fixedSeed: true } : {}),
+      seed: Math.round(clampNumber(forest.seed, 1, 1, 0xffffffff)),
     });
   }
   return out;
@@ -1052,6 +1187,8 @@ export function encodeBoard(b: EditorBoard): string {
   if (nonEmpty(zones)) wire.z = zones;
   const towns = cleanTowns(b.towns);
   if (towns.length) wire.tw = towns;
+  const forests = cleanForests(b.forests);
+  if (forests.length) wire.fr = forests;
   const gr = encodeGeneratedRegions(b.generatedRegions, b.cols, b.rows, b.decorativeApron);
   if (gr.length) wire.gr = gr;
   return enc(JSON.stringify(wire));
@@ -1216,6 +1353,7 @@ export function decodeBoard(code: string): EditorBoard | null {
     const floatingArtwork = cleanFloatingArtwork(w.fa);
     const generatedRegions = decodeGeneratedRegions(w.gr, cols, rows, decorativeApron);
     const towns = cleanTowns(w.tw);
+    const forests = cleanForests(w.fr);
     const surface = Array.isArray(w.pd)
       ? w.pd[0] === 2 || w.pd[0] === 3
         ? normalizePredrawnBoardSurface({
@@ -1300,6 +1438,7 @@ export function decodeBoard(code: string): EditorBoard | null {
       zones,
       generatedRegions,
       towns,
+      forests,
     };
   } catch {
     return null;
