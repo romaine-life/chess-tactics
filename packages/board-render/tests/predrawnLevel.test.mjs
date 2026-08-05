@@ -9,6 +9,7 @@ import {
 const {
   decodeBoard,
   encodeBoard,
+  LEVEL_FORMAT_VERSION,
   withPredrawnBoardSurface,
   withoutPredrawnBoardOcclusionMask,
   withoutPredrawnBoardSurface,
@@ -73,7 +74,7 @@ function board() {
 
 function level() {
   return {
-    formatVersion: 1,
+    formatVersion: LEVEL_FORMAT_VERSION,
     id: 'off-l-fortress-gate',
     name: 'Fortress Gate',
     notes: 'Enemy pieces begin from elevated stone ground.',

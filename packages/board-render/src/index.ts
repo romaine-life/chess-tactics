@@ -141,6 +141,7 @@ export * from './art/tileTemplate';
 export * from './core/featureAutotile';
 export * from './core/groundCover';
 export * from './core/level';
+export * from './core/levelMigration';
 export * from './core/levelBoard';
 export * from './core/sharedLevelMerge';
 export * from './core/predrawnLevel';

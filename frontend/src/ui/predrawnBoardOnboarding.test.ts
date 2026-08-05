@@ -77,7 +77,7 @@ describe('pre-drawn board onboarding', () => {
       featureExits: {},
     };
     const level: Level = {
-      formatVersion: 1,
+      formatVersion: 2,
       id: 'off-l-fortress-gate',
       name: 'Fortress Gate',
       notes: 'keep me',

@@ -1,4 +1,5 @@
-import type { Level, War } from '../core/level';
+import { validateLevel, type Level, type War } from '../core/level';
+import { migrateLevelDocument } from '../core/levelMigration';
 import type { PieceType } from '../core/types';
 import {
   LIPSANON_BY_ID,
@@ -22,7 +23,7 @@ export {
 };
 
 /** The schema version of one persisted in-progress Run. Only this exact save shape is read. */
-export const CURRENT_RUN_SAVE_VERSION = 22;
+export const CURRENT_RUN_SAVE_VERSION = 23;
 export type RunSaveVersion = typeof CURRENT_RUN_SAVE_VERSION;
 
 export class UnsupportedRunSaveError extends Error {
@@ -38,6 +39,7 @@ const RUN_SAVE_VERSION_STARTER_CHARTULARY_SOURCE = 18;
 const RUN_SAVE_VERSION_EXPUNCTIO_SOURCE = 19;
 const RUN_SAVE_VERSION_CARD_ORDER_SOURCE = 20;
 const RUN_SAVE_VERSION_DEPLOYMENT_TRANSPORT_SOURCE = 21;
+const RUN_SAVE_VERSION_LEVEL_FORMAT_SOURCE = 22;
 export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
@@ -1344,6 +1346,13 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
   if (raw.runSaveVersion !== CURRENT_RUN_SAVE_VERSION || 'formatVersion' in raw) {
     throw new UnsupportedRunSaveError();
   }
+  if (
+    !raw.war
+    || !Array.isArray(raw.war.battles)
+    || raw.war.battles.some((battle) => !battle || !validateLevel(battle.level).ok)
+  ) {
+    throw new UnsupportedRunSaveError('This Run contains an unsupported Battle Level.');
+  }
   if (raw.phase === 'draft' || 'draftOffers' in raw || 'chosenDraftId' in raw) {
     throw new UnsupportedRunSaveError('This Run contains retired draft data. Start a new Run.');
   }
@@ -1849,8 +1858,29 @@ function migrateRunToDeploymentTransport(stored: Record<string, unknown>): Recor
   }
   return {
     ...stored,
-    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    runSaveVersion: RUN_SAVE_VERSION_LEVEL_FORMAT_SOURCE,
     ...(deployment ? { deployment: migratedDeployment } : {}),
+  };
+}
+
+function migrateRunToCurrentLevelFormat(stored: Record<string, unknown>): Record<string, unknown> {
+  const war = stored.war && typeof stored.war === 'object' && !Array.isArray(stored.war)
+    ? stored.war as Record<string, unknown>
+    : null;
+  if (!war || !Array.isArray(war.battles)) throw new UnsupportedRunSaveError();
+  return {
+    ...stored,
+    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    war: {
+      ...war,
+      battles: war.battles.map((battle) => {
+        if (!battle || typeof battle !== 'object' || Array.isArray(battle)) {
+          throw new UnsupportedRunSaveError();
+        }
+        const record = battle as Record<string, unknown>;
+        return { ...record, level: migrateLevelDocument(record.level) };
+      }),
+    },
   };
 }
 
@@ -1862,8 +1892,9 @@ function migrateRunToDeploymentTransport(stored: Record<string, unknown>): Recor
  * Expunctio's once-per-Sectio record and reset-complete loss snapshot. Version 20 retires
  * Primogeniture and replaces shrinking card membership plus the independent unit shuffle
  * with stable card seats and card-ordered Deployment. Version 21 replaces the one-time
- * Deployment mode choice with an explicit deal boundary and persisted transport. Older saves
- * remain unsupported.
+ * Deployment mode choice with an explicit deal boundary and persisted transport. Version 22
+ * then advances every embedded War Battle through the Level document chain. Older saves remain
+ * unsupported.
  */
 export function migrateRunSaveDocument(value: unknown): RunDocument {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -1910,6 +1941,9 @@ export function migrateRunSaveDocument(value: unknown): RunDocument {
   }
   if (stored.runSaveVersion === RUN_SAVE_VERSION_DEPLOYMENT_TRANSPORT_SOURCE) {
     stored = migrateRunToDeploymentTransport(stored);
+  }
+  if (stored.runSaveVersion === RUN_SAVE_VERSION_LEVEL_FORMAT_SOURCE) {
+    stored = migrateRunToCurrentLevelFormat(stored);
   }
   return normalizeRunDocument(stored as unknown as RunDocument);
 }

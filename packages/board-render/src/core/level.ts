@@ -14,7 +14,9 @@ import { parseEdgeKey, isOrthogonalPair } from './featureAutotile';
 // existing `from './level'` importers are unaffected.
 export type { TerrainType, TerrainCell };
 
-export const LEVEL_FORMAT_VERSION = 1;
+/** The only Level document shape accepted by current runtime/editor code. */
+export const LEVEL_FORMAT_VERSION = 2;
+export type LevelFormatVersion = typeof LEVEL_FORMAT_VERSION;
 export const CAMPAIGN_FORMAT_VERSION = 1;
 
 // Structural bounds only. The old 4×4 floor was an arbitrary guardrail with no technical

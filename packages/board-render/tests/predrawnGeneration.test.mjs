@@ -8,6 +8,7 @@ const {
   buildPredrawnGenerationDefinition,
   decodeBoard,
   encodeBoard,
+  LEVEL_FORMAT_VERSION,
 } = require('../dist/index.cjs');
 
 before(installTestDrawableCatalog);
@@ -103,7 +104,7 @@ function holdBridgeLevel() {
     zones: {},
   };
   return {
-    formatVersion: 1,
+    formatVersion: LEVEL_FORMAT_VERSION,
     id: 'off-l-hold-bridge',
     name: 'Hold the Bridge',
     notes: 'story copy must not enter generation semantics',

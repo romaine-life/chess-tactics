@@ -33,6 +33,13 @@ export interface EditorDocument {
   updated_at: string | null;
 }
 
+/** A canonical conflict proves a saved Discard target even if old metadata lost its hash. */
+export function editorDocumentHasDiscardTarget(
+  document: Pick<EditorDocument, 'has_saved_baseline' | 'baseline_conflict'> | null | undefined,
+): boolean {
+  return Boolean(document && (document.has_saved_baseline || document.baseline_conflict));
+}
+
 export interface EditorDocumentEditFence {
   edit_session_id: string;
   edit_session_key: string;
