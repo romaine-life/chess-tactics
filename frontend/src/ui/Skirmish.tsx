@@ -80,12 +80,13 @@ import { useSkirmishViewStoreApi } from '../game/SkirmishViewStoreContext';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox, ShellViewportSwap } from './shared/ChromeBox';
 import { rememberAdminBattleHref } from '../admin/battleRoute';
-import type { RunBattleReport } from '../run/model';
+import { formatGold, type RunBattleReport } from '../run/model';
 import { Strategikon } from './Strategikon';
 import { isStrategikonPath } from './strategikonRoute';
 import { GameplayWorkspaceSceneSlot } from './shell/AuthoredSceneSlot';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 import { RunBattleUndoButton } from './RunBattleUndoButton';
+import { RunBattleRetryButton } from './RunBattleRetryButton';
 import { SkirmishShell } from './SkirmishShell';
 import { runActivity, type RunForm } from './RunForm';
 
@@ -96,7 +97,10 @@ export interface RunBattlePresentation {
   /** The Battle is won. What it cost is read off the live board here, because nothing
    *  outside it keeps the turn count once the board unmounts. */
   onVictory: (report: RunBattleReport) => void;
-  onRestart: () => void;
+  /** Atomically spends the retry price and returns whether the Battle may reset. */
+  onRestart: () => boolean;
+  canRestart: boolean;
+  retryCostTenths: number;
   onPawnCashOut?: (unitId: string) => void;
   onAbandonRun?: () => void;
   transformCommittedBoard?: RunBattleTransformSink;
@@ -138,6 +142,15 @@ export function shouldLoadSkirmishWorldBackground(
   predrawnBackgroundActive: boolean,
 ): boolean {
   return boardSettled && !predrawnBackgroundActive;
+}
+
+/** Active Restart waits until turn one is complete; a terminal result must retain its way out. */
+export function canRetryRunBattle(
+  canAffordRetry: boolean,
+  turnsElapsed: number,
+  battleEnded: boolean,
+): boolean {
+  return canAffordRetry && (turnsElapsed > 0 || battleEnded);
 }
 
 function SkirmishSession(props: SkirmishProps = {}) {
@@ -479,7 +492,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
     const seed = runBattle
       ? runBattle.seed
       : spawnEventsForLevel(level).length ? Math.floor(Math.random() * 999999) + 1 : skirmishStore.getState().seed;
-    if (runBattle) runBattle.onRestart();
+    if (runBattle && (!canRetryRunBattle(runBattle.canRestart, turnsElapsed, Boolean(game.winner)) || !runBattle.onRestart())) return;
     // ADR-0235: restarting healthy gameplay replaces match state in place. The
     // already-painted board and HUD remain ready, so the new clock may start
     // immediately without routing through surface acquisition.
@@ -500,7 +513,20 @@ function SkirmishSession(props: SkirmishProps = {}) {
   };
   // Show the Retry stud only once a single-player board is up (no netplay, no dead map link).
   const showRetryStud = boardSettled && !mapError && !routeLobby && !net;
-  const retryStudLabel = activeLevel ? (isRunPlay ? 'Retry Battle' : isCampaignPlay ? 'Retry level' : 'Retry board') : 'Back to Play';
+  const retryStudLabel = activeLevel
+    ? (isRunPlay && runBattle
+        ? `Retry Battle for ${formatGold(runBattle.retryCostTenths)} gold`
+        : isCampaignPlay ? 'Retry level' : 'Retry board')
+    : 'Back to Play';
+  const runBattleRetryAvailable = runBattle
+    ? canRetryRunBattle(runBattle.canRestart, turnsElapsed, Boolean(game.winner))
+    : true;
+  const runBattleRetryUnavailableReason = runBattle
+    && runBattle.canRestart
+    && turnsElapsed === 0
+    && !game.winner
+    ? 'Retry becomes available after the first turn.'
+    : undefined;
   const newScenarioLabel = activeLevel ? 'New attempt' : 'Choose board';
 
   // The next level in this campaign after the one just cleared (null on the last level or
@@ -1134,8 +1160,16 @@ function SkirmishSession(props: SkirmishProps = {}) {
     : undefined;
   const battleHudProps: SkirmishHudProps = {
     canStartNewSkirmish: Boolean(activeLevel) && !isCampaignPlay && !isRunPlay,
+    canResign: !isRunPlay,
     onRestart: showRetryStud ? retrySkirmish : null,
-    restartLabel: activeLevel ? (isRunPlay ? 'Restart Battle' : isCampaignPlay ? 'Restart level' : 'Restart board') : 'Restart skirmish',
+    restartLabel: activeLevel
+      ? (isRunPlay && runBattle
+          ? `Retry Battle for ${formatGold(runBattle.retryCostTenths)} gold`
+          : isCampaignPlay ? 'Restart level' : 'Restart board')
+      : 'Restart skirmish',
+    restartCostTenths: runBattle?.retryCostTenths,
+    restartDisabled: Boolean(runBattle && !runBattleRetryAvailable),
+    restartUnavailableReason: runBattleRetryUnavailableReason,
     onNewSkirmish: startNewScenario,
     newSkirmishLabel: newScenarioLabel,
     showClockControl: !isCampaignPlay,
@@ -1257,7 +1291,9 @@ function SkirmishSession(props: SkirmishProps = {}) {
             className="skirmish-retry-stud"
             data-testid="retry-stud"
             aria-label={retryStudLabel}
-            title={retryStudLabel}
+            title={runBattleRetryUnavailableReason ?? retryStudLabel}
+            data-ui-sfx={runBattle ? 'gold' : undefined}
+            disabled={Boolean(runBattle && !runBattleRetryAvailable)}
             onClick={retrySkirmish}
           >
             <RestartGlyph className="skirmish-retry-stud-glyph" />
@@ -1366,12 +1402,14 @@ function SkirmishSession(props: SkirmishProps = {}) {
                       Continue
                     </ChromeButton>
                   ) : (
-                    <ChromeButton unit="inner-text-button"
-                      className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-                      onClick={replayLevel}
-                    >
-                      Retry
-                    </ChromeButton>
+                    <RunBattleRetryButton
+                      testId="retry-run-battle-result"
+                      costTenths={runBattle.retryCostTenths}
+                      canRetry={runBattleRetryAvailable}
+                      onRetry={replayLevel}
+                      unavailableReason={runBattleRetryUnavailableReason}
+                      className="active"
+                    />
                   )}
                 </div>
               </div>

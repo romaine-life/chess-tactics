@@ -28,6 +28,7 @@ import { LIPSANON_BY_ID } from '../run/model';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 import { StrategikonTitleNavigation } from './StrategikonTitleNavigation';
 import { RunBattleUndoButton } from './RunBattleUndoButton';
+import { RunBattleRetryButton } from './RunBattleRetryButton';
 
 const TYPE_LABEL = PIECE_LABEL;
 
@@ -179,11 +180,17 @@ export type SkirmishHudProps = {
   enableGlobalShortcuts?: boolean;
   /** Show the (+) button for authored non-campaign or single-player test/attempt loops. */
   canStartNewSkirmish?: boolean;
+  /** Run Battles use Retry and Abandon Run instead of manufacturing a resigned defeat. */
+  canResign?: boolean;
   /** In-place restart of the CURRENT authored battle. Non-null only
    *  in single-player; shown as the ↻ Restart button. Same action as the title-bar diamond. */
   onRestart?: (() => void) | null;
   /** Accessible name for the Restart button (e.g. "Restart level" / "Restart skirmish"). */
   restartLabel?: string;
+  /** Run-only paid retry. Omitted for free Campaign, playtest, and skirmish restarts. */
+  restartCostTenths?: number;
+  restartDisabled?: boolean;
+  restartUnavailableReason?: string;
   /** Start a new attempt for the CURRENT authored scenario. */
   onNewSkirmish?: (() => void) | null;
   /** Accessible name for the New button (e.g. "New attempt" / "New skirmish"). */
@@ -216,8 +223,12 @@ export function SkirmishHud({
   style,
   enableGlobalShortcuts = true,
   canStartNewSkirmish = true,
+  canResign = true,
   onRestart = null,
   restartLabel = 'Restart',
+  restartCostTenths,
+  restartDisabled = false,
+  restartUnavailableReason,
   onNewSkirmish = null,
   newSkirmishLabel = 'New skirmish',
   showClockControl = true,
@@ -638,7 +649,15 @@ export function SkirmishHud({
                     <span>{returnLabel}</span>
                   </ChromeNavButton>
                 ) : null}
-                {onRestart && !net ? (
+                {onRestart && !net && restartCostTenths !== undefined ? (
+                  <RunBattleRetryButton
+                    testId="restart-level"
+                    costTenths={restartCostTenths}
+                    canRetry={!restartDisabled}
+                    onRetry={onRestart}
+                    unavailableReason={restartUnavailableReason}
+                  />
+                ) : onRestart && !net ? (
                   <ChromeButton unit="inner-tool-square"
                     className={chromeUnitClassNames('inner-tool-square', 'app-header-button', 'skirmish-lifecycle-button')}
                     data-testid="restart-level"
@@ -664,7 +683,7 @@ export function SkirmishHud({
                 ) : null}
                 {/* Concede the current battle. In netplay this relays through the lobby; in
                     solo/test play it immediately ends the board as a defeat. */}
-                {!game.winner && (!net || netInteractive) ? (
+                {canResign && !game.winner && (!net || netInteractive) ? (
                   <ChromeButton unit="inner-text-button"
                     className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'skirmish-resign-button', 'danger')}
                     data-testid="resign"

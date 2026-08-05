@@ -19,6 +19,8 @@ import {
   switchDeploymentMode,
 } from './deployment';
 import {
+  GOLD_SCALE,
+  RUN_BATTLE_RETRY_COST_TENTHS,
   createRun,
   prepareDeployment,
   restartBattle,
@@ -354,10 +356,14 @@ describe('retired pawn-only geometry and retries', () => {
 
   it('restarts from the exact persisted deal, seat order, choices, and formation', () => {
     const level = deploymentLevel();
-    const battle = advanceLifecycle(orderedRun(level, [unit('king', 'king'), unit('pawn', 'pawn')], 99), level);
+    const battle = {
+      ...advanceLifecycle(orderedRun(level, [unit('king', 'king'), unit('pawn', 'pawn')], 99), level),
+      goldTenths: 10 * GOLD_SCALE,
+    };
     const before = JSON.stringify(battle.deployment);
     const retried = restartBattle(battle);
     expect(JSON.stringify(retried.deployment)).toBe(before);
     expect(retried.battleRuntime?.initiallyDeployedUnitIds).toEqual(battle.deployment?.deployingUnitIds);
+    expect(retried.goldTenths).toBe(battle.goldTenths - RUN_BATTLE_RETRY_COST_TENTHS);
   });
 });

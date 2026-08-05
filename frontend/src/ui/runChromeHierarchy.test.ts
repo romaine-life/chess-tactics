@@ -202,7 +202,7 @@ describe('Run chrome hierarchy', () => {
     expect(styleCss).toMatch(/\.run-phase-workspace\s*\{[\s\S]*?position:\s*relative;/);
   });
 
-  it('keeps Run abandonment at the bottom of Controls and distinct from Battle resignation', () => {
+  it('keeps Run abandonment at the bottom of Controls and removes redundant Battle resignation', () => {
     expect(runScreen).toContain('function useRunAbandon');
     expect(runScreen).toContain("title: 'Abandon this Run?'");
     expect(runScreen).toContain("tone: 'danger'");
@@ -210,7 +210,8 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('data-testid="abandon-run"');
     expect(skirmishHud).toContain('onAbandonRun?: (() => void) | null');
     expect(skirmishHud).toContain('<span className="skirmish-eyebrow">Run</span>');
-    expect(skirmishHud).toContain('data-testid="resign"');
+    expect(skirmish).toContain('canResign: !isRunPlay');
+    expect(skirmishHud).toContain('canResign && !game.winner');
     expect(runScreen).not.toContain('TitleBarControlContribution');
   });
 

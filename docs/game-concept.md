@@ -62,6 +62,13 @@ these.
   the latest player move. Its deterministic enemy reply and move-owned casualty,
   Reservist, or Pawn cash-out effects rewind with it; the one-level checkpoint survives
   an ordinary reload and never changes chess-piece behavior (ADR-0394).
+- Restarting or retrying an active Run Battle spends three gold. The paid reset is
+  unavailable below that balance, keeps the deterministic deployment, and replaces the
+  mutable Battle attempt without remounting its battlefield; retries outside Run remain
+  free. Restart stays disabled during the live first turn, when it would only replace the
+  untouched opening position; a terminal defeat or draw retains Retry. Run Battles do not
+  expose Resign: Retry already discards the attempt, while Abandon Run owns ending the
+  persistent Run (ADR-0424, ADR-0425, ADR-0426).
 - Acquired lipsana read as persistent Run state: one frameless native-size icon
   strip stays at the upper-left beneath the title bar in Battles and between-Battle
   screens, independent of the Battle Controls panel; pointing at or focusing an
