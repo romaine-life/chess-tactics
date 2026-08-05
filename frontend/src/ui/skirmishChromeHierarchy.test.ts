@@ -165,14 +165,29 @@ describe('Skirmish chrome hierarchy', () => {
   });
 
   it('renders paid Run Undo through one shared text-button and the canonical gold amount', () => {
-    expect(skirmishHud).toContain('<RunBattleUndoButton testId="undo-run-move" />');
-    expect(skirmish).toContain('<RunBattleUndoButton testId="undo-run-move-result" />');
+    expect(skirmishHud).toContain("game.winner !== 'enemy' ? <RunBattleUndoButton testId=\"undo-run-move\" /> : null");
+    expect(skirmish).toContain("game.winner !== 'enemy' ? <RunBattleUndoButton testId=\"undo-run-move-result\" /> : null");
     expect(runBattleUndoButton).toContain('unit="inner-text-button"');
     expect(runBattleUndoButton).toContain("chromeUnitClassNames('inner-text-button', 'app-header-button'");
     expect(runBattleUndoButton).toContain('valueTenths={RUN_BATTLE_UNDO_COST_TENTHS}');
     expect(runBattleUndoButton).toContain('data-ui-sfx="gold"');
     expect(runBattleUndoButton).toContain('disabled={!canUndo}');
     expect(runBattleUndoButton).toContain('undoLastPlayerMove();');
+  });
+
+  it('keeps a defeated Run result inside the viewport with retry and explicit exits', () => {
+    const result = skirmish.match(
+      /const runBattleResult = [\s\S]*?\n  \) : null;/,
+    )?.[0] ?? '';
+
+    expect(result).toContain('className="campaign-result campaign-result--viewport"');
+    expect(result).not.toContain('aria-modal="true"');
+    expect(result).toContain('testId="retry-run-battle-result"');
+    expect(result).toContain('data-testid="new-run-after-defeat"');
+    expect(result).toContain('to={PLAY_RUN_NEW_SELECTOR_HREF}');
+    expect(result).toContain('data-testid="main-menu-after-defeat"');
+    expect(result).toContain('to="/"');
+    expect(styleCss).toMatch(/\.campaign-result--viewport\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?z-index:\s*1;/);
   });
 
   it('opens administrator controls inside the HUD without adding a sixth player tab', () => {
