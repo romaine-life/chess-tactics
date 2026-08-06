@@ -48,6 +48,10 @@ describe('formation-only Run card face', () => {
     const styles = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
     expect(styles).toMatch(/\.run-card-formation-cell,[\s\S]*?inset-block-start:\s*var\(--run-card-formation-top\)/);
     expect(styles).toMatch(/\.run-card-formation-cell,[\s\S]*?inset-inline-start:\s*var\(--run-card-formation-left\)/);
+    expect(styles).toMatch(/\.run-card-formation-cell,[\s\S]*?transform:\s*translate\(var\(--run-card-unit-anchor-x\),\s*var\(--run-card-unit-anchor-y\)\)/);
+    const source = readFileSync(new URL('./RunCardFace.tsx', import.meta.url), 'utf8');
+    expect(source).toContain("`var(--unit-anchor-x-${piece.unit}, -50%)`");
+    expect(source).toContain("`var(--unit-anchor-y-${piece.unit}, -78%)`");
   });
 
   it('prints a complete isometric board footprint with fading neighboring tiles', () => {

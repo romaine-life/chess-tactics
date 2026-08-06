@@ -350,7 +350,12 @@ function FormationDiagram({
             data-piece-index={piece.pieceIndex}
             data-formation-row={piece.y === 0 ? 'front' : 'back'}
             key={piece.pieceIndex}
-            style={position(piece.x, piece.y)}
+            style={{
+              ...position(piece.x, piece.y),
+              '--run-card-unit-scale': `var(--unit-scale-${piece.unit}, 1)`,
+              '--run-card-unit-anchor-x': `var(--unit-anchor-x-${piece.unit}, -50%)`,
+              '--run-card-unit-anchor-y': `var(--unit-anchor-y-${piece.unit}, -78%)`,
+            } as CSSProperties}
           >
             {content}
           </span>

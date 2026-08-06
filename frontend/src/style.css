@@ -25245,27 +25245,29 @@ button.run-card-formation-cell {
   align-items: center;
   background: transparent;
   border: 0;
-  block-size: var(--run-card-formation-tile-height);
+  block-size: calc(16.08cqw * var(--run-card-unit-scale));
   box-sizing: border-box;
-  display: flex;
-  inline-size: var(--run-card-formation-tile-width);
+  display: grid;
+  inline-size: calc(13.46cqw * var(--run-card-unit-scale));
   inset-block-start: var(--run-card-formation-top);
   inset-inline-start: var(--run-card-formation-left);
-  justify-content: center;
+  justify-items: center;
   min-block-size: 0;
   min-inline-size: 0;
   padding: 0;
   position: absolute;
-  transform: translate(-50%, -50%);
+  transform: translate(var(--run-card-unit-anchor-x), var(--run-card-unit-anchor-y));
   z-index: calc(var(--run-card-formation-depth) + 20);
 }
 
 .run-card-formation-cell-button {
   all: unset;
+  align-items: center;
   block-size: 100%;
   cursor: pointer;
-  display: block;
+  display: grid;
   inline-size: 100%;
+  justify-items: center;
   position: relative;
 }
 
@@ -25288,17 +25290,18 @@ button.run-card-formation-cell.is-selectable {
   outline: .3cqw dashed currentColor;
 }
 
+.run-card-formation-cell.is-empty {
+  block-size: var(--run-card-formation-tile-height);
+  inline-size: var(--run-card-formation-tile-width);
+  transform: translate(-50%, -50%);
+}
+
 .run-card-formation-unit {
-  block-size: 17.2cqw;
+  block-size: calc(17.2cqw * var(--run-card-unit-scale));
   filter: drop-shadow(0 .45cqw .35cqw rgba(19, 29, 32, .45));
-  inset-block-end: 38%;
-  inset-inline-start: 50%;
   image-rendering: pixelated;
-  inline-size: auto;
-  max-inline-size: 19cqw;
+  inline-size: calc(14.58cqw * var(--run-card-unit-scale));
   object-fit: contain;
-  position: absolute;
-  transform: translateX(-50%);
 }
 
 .run-card-prototype-ledger:is(.is-1-cells, .is-2-cells) > .run-card-prototype-ledger-row,
