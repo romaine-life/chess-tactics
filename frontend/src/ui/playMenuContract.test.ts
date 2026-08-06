@@ -96,7 +96,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // The Current Run row is an availability surface, not an existence surface: with
     // no active Run it stays in place disabled (like Continue's "Nothing to continue"
     // rows), keeping the resume point spatially learnable.
-    expect(playMenu).toContain('disabled={!run}');
+    expect(playMenu).toContain('disabled={!presentedRun}');
     expect(playMenu).toContain("'No active Run'");
   });
 
@@ -205,6 +205,15 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toMatch(/<ChromeButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-start"/);
   });
 
+  it('freezes the confirmed Play presentation until the outgoing scene retires', () => {
+    expect(playMenu).toContain('const startingPresentationRef = useRef<');
+    expect(playMenu).toContain('const presentedRun = presentation.run;');
+    expect(playMenu).toContain('startingPresentationRef.current = { run, persistenceError, adoptionConflict, syncing };');
+    expect(playMenu).toContain("navigationAccepted = navigateApp('/run');");
+    expect(playMenu).toMatch(/if \(!navigationAccepted\) \{[\s\S]*?setStarting\(false\);/);
+    expect(playMenu).not.toContain('finally {\n      setStarting(false);');
+  });
+
   it('confirms Run replacement inline in the detail column instead of a popup', () => {
     // The disclosure card states the stakes before any click; the first Start Run click
     // arms an explicit Keep Run / Abandon and Start pair in the same actions row.
@@ -212,7 +221,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('data-testid="run-replace-warning"');
     expect(playMenu).toMatch(/<InnerChromeBox[^>]*fillSurface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-replace-warning"/);
     expect(playMenu).toContain('This cannot be undone.');
-    expect(playMenu).toContain('if (run) { setArmed(true); return; }');
+    expect(playMenu).toContain('if (presentedRun) { setArmed(true); return; }');
     expect(playMenu).toContain('data-testid="run-keep"');
     expect(playMenu).toContain('data-testid="run-abandon-and-start"');
     expect(playMenu).toMatch(/<ChromeButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-keep"/);

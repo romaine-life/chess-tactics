@@ -192,6 +192,19 @@ function RunPanel({
   const keepAccountRun = useActiveRun((state) => state.keepAccountRun);
   const adoptBrowserRun = useActiveRun((state) => state.adoptBrowserRun);
   const [starting, setStarting] = useState(false);
+  // Starting a Run replaces the shared store before the scene director can resolve and
+  // prepare `/run`. Keep the already-painted Play scene on the exact state the player
+  // confirmed so that store replacement cannot redraw its outgoing frame mid-fade.
+  const startingPresentationRef = useRef<{
+    run: typeof run;
+    persistenceError: typeof persistenceError;
+    adoptionConflict: typeof adoptionConflict;
+    syncing: boolean;
+  } | null>(null);
+  const presentation = starting && startingPresentationRef.current
+    ? startingPresentationRef.current
+    : { run, persistenceError, adoptionConflict, syncing };
+  const presentedRun = presentation.run;
   // Replacing an active Run is confirmed inline: the first Start Run click arms the
   // decision and the actions row swaps to an explicit Keep Run / Abandon and Start pair.
   const [armed, setArmed] = useState(false);
@@ -205,7 +218,7 @@ function RunPanel({
   // question. `start` abandons the current Run first, which settles the conflict before the save.
   const newRunUnavailable = loading
     || !hydrated
-    || syncing
+    || presentation.syncing
     || eligible.length === 0;
 
   useEffect(() => { void hydrate(); }, [hydrate]);
@@ -217,7 +230,9 @@ function RunPanel({
   useEffect(() => {
     if (ataraxiaTier > highestUnlockedTier) setAtaraxiaTier(highestUnlockedTier);
   }, [ataraxiaTier, highestUnlockedTier]);
-  useEffect(() => { setArmed(false); }, [choice, run]);
+  useEffect(() => {
+    if (!starting) setArmed(false);
+  }, [choice, run, starting]);
   useEffect(() => {
     if (!armed) return;
     // Mirror the danger-dialog convention: focus lands on the safe choice, Escape keeps the Run.
@@ -231,7 +246,9 @@ function RunPanel({
 
   const start = async (): Promise<void> => {
     if (starting || syncing || !eligible.length) return;
+    startingPresentationRef.current = { run, persistenceError, adoptionConflict, syncing };
     setStarting(true);
+    let navigationAccepted = false;
     try {
       if (run) await abandon();
       const seedArray = new Uint32Array(1);
@@ -239,9 +256,15 @@ function RunPanel({
       const seed = seedArray[0] || (Date.now() >>> 0);
       const war = [...eligible].sort((a, b) => a.id.localeCompare(b.id))[seed % eligible.length];
       replace(createRun(snapshotWar(war, levels), seed, ataraxiaTier));
-      navigateApp('/run');
+      navigationAccepted = navigateApp('/run');
     } finally {
-      setStarting(false);
+      // A successful scene replacement retains this component as the outgoing layer
+      // until the director retires it. Clearing `starting` here would expose the newly
+      // replaced store through that fading layer for its last visible frames.
+      if (!navigationAccepted) {
+        startingPresentationRef.current = null;
+        setStarting(false);
+      }
     }
   };
 
@@ -257,15 +280,15 @@ function RunPanel({
                   <div className="settings-row-copy"><h4>Loading Runs…</h4></div>
                 </section>
               ) : null}
-              {adoptionConflict ? (
+              {presentation.adoptionConflict ? (
                 <div className="run-adoption-conflict" role="alert" data-testid="run-adoption-conflict">
                   <div className="run-adoption-conflict-copy">
                     <h3>Two active Runs</h3>
-                    <p>This browser has {adoptionConflict.browserRun.war.name}; your account has {adoptionConflict.accountRun.war.name}. Choose which one the account keeps.</p>
+                    <p>This browser has {presentation.adoptionConflict.browserRun.war.name}; your account has {presentation.adoptionConflict.accountRun.war.name}. Choose which one the account keeps.</p>
                   </div>
                   <div className="run-inline-actions">
                     <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} onClick={keepAccountRun}>Keep account Run</ChromeButton>
-                    <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} disabled={syncing} onClick={() => { void adoptBrowserRun(); }}>Adopt browser Run</ChromeButton>
+                    <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} disabled={presentation.syncing} onClick={() => { void adoptBrowserRun(); }}>Adopt browser Run</ChromeButton>
                   </div>
                 </div>
               ) : null}
@@ -274,19 +297,19 @@ function RunPanel({
                   resume point stays learnable where it will appear (ADR-0289's
                   visible-but-disabled language). It only leaves the list while the
                   adoption conflict card speaks for the current Run instead. */}
-              {!adoptionConflict && (run || (hydrated && !loading)) ? (
+              {!presentation.adoptionConflict && (presentedRun || (hydrated && !loading)) ? (
                 <ChromeNavButton unit="inner-list-row"
                   to={PLAY_RUN_CURRENT_SELECTOR_HREF}
-                  className={chromeUnitClassNames('inner-list-row', 'settings-row play-choice-row', !run && 'is-disabled', choice === 'current' && 'active is-selected')}
+                  className={chromeUnitClassNames('inner-list-row', 'settings-row play-choice-row', !presentedRun && 'is-disabled', choice === 'current' && 'active is-selected')}
                   data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                  disabled={!run}
+                  disabled={!presentedRun}
                   aria-current={choice === 'current' ? 'page' : undefined}
                   data-testid="run-choice-current"
                 >
                   <div className="settings-row-copy">
                     <h4>Current Run</h4>
-                    <p>{run
-                      ? `Battle ${run.battleIndex + 1} of ${run.war.battles.length} · ${ATARAXIA_BY_TIER[run.ataraxiaTier].label}`
+                    <p>{presentedRun
+                      ? `Battle ${presentedRun.battleIndex + 1} of ${presentedRun.war.battles.length} · ${ATARAXIA_BY_TIER[presentedRun.ataraxiaTier].label}`
                       : 'No active Run'}</p>
                   </div>
                 </ChromeNavButton>
@@ -322,7 +345,7 @@ function RunPanel({
               </ChromeNavButton>
             </div>
           </section>
-          {persistenceError ? <p className="play-content-warning" role="status">{persistenceError}</p> : null}
+          {presentation.persistenceError ? <p className="play-content-warning" role="status">{presentation.persistenceError}</p> : null}
         </div>
       </ActionColumn>
 
@@ -330,16 +353,16 @@ function RunPanel({
         className="play-run-detail-slot"
         sceneInstance={choice ? `play/run/${choice}` : 'play/run'}
       >
-        {choice === 'current' && run ? (
+        {choice === 'current' && presentedRun ? (
           <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Current Run" data-testid="run-detail-current">
             <div className="ce-selected-head"><h2>Current Run</h2></div>
             <div className="play-detail-body">
               <InnerChromeBox className="play-detail-facts">
                 <dl>
-                  <div><dt>Battle</dt><dd>{run.battleIndex + 1} of {run.war.battles.length}</dd></div>
-                  <div><dt>Army</dt><dd>{run.army.length} units</dd></div>
-                  <div><dt>Gold</dt><dd>{formatGold(run.goldTenths)}</dd></div>
-                  <div><dt>Ataraxia</dt><dd>{ATARAXIA_BY_TIER[run.ataraxiaTier].label}</dd></div>
+                  <div><dt>Battle</dt><dd>{presentedRun.battleIndex + 1} of {presentedRun.war.battles.length}</dd></div>
+                  <div><dt>Army</dt><dd>{presentedRun.army.length} units</dd></div>
+                  <div><dt>Gold</dt><dd>{formatGold(presentedRun.goldTenths)}</dd></div>
+                  <div><dt>Ataraxia</dt><dd>{ATARAXIA_BY_TIER[presentedRun.ataraxiaTier].label}</dd></div>
                 </dl>
               </InnerChromeBox>
             </div>
@@ -360,7 +383,7 @@ function RunPanel({
                 fillSurface={CHROME_LEAF_FILL_SURFACE}
               />
             </div>
-            {run ? (
+            {presentedRun ? (
               <InnerChromeBox
                 className="run-replace-note"
                 fillSurface={CHROME_LEAF_FILL_SURFACE}
@@ -368,10 +391,10 @@ function RunPanel({
                 data-testid="run-replace-warning"
               >
                 <h3>Replaces your current Run</h3>
-                <p>Starting a new Run abandons {run.war.name} — Battle {run.battleIndex + 1} of {run.war.battles.length} · {formatGold(run.goldTenths)} gold. This cannot be undone.</p>
+                <p>Starting a new Run abandons {presentedRun.war.name} — Battle {presentedRun.battleIndex + 1} of {presentedRun.war.battles.length} · {formatGold(presentedRun.goldTenths)} gold. This cannot be undone.</p>
               </InnerChromeBox>
             ) : null}
-            {run && armed ? (
+            {presentedRun && armed ? (
               <div className="ce-preview-actions run-replace-decision">
                 <ChromeButton unit="inner-text-button"
                   ref={keepRunButtonRef}
@@ -400,7 +423,7 @@ function RunPanel({
                   data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                   data-testid="run-start"
                   disabled={newRunUnavailable || starting}
-                  onClick={() => { if (run) { setArmed(true); return; } void start(); }}
+                  onClick={() => { if (presentedRun) { setArmed(true); return; } void start(); }}
                 >
                   <span>{starting ? 'Starting…' : 'Start Run'}</span>
                 </ChromeButton>
