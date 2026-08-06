@@ -101,6 +101,13 @@ import {
 } from './townPresets';
 import { generatorSeedForRun, MAX_GENERATOR_SEED, randomGeneratorSeed } from './generatorSeed';
 import { BoardSizePanel, type BoardResizeSide } from './shared/BoardSizePanel';
+import {
+  MAX_SCENIC_TERRAIN_EXTENT,
+  PLAYABLE_GRID_MOVE_DIRECTIONS,
+  movePlayableGrid,
+  playableGridMoveAvailability,
+  type PlayableGridMoveDirection,
+} from './levelEditorPlayableGridMove';
 import { DEFAULT_LEVEL_NAME, LEVEL_NAME_MAX, normalizeLevelName } from './shared/levelNamePolicy';
 import {
   levelEditorHrefWithRouteState,
@@ -364,7 +371,6 @@ const SCENIC_TERRAIN_EXTENT_BY_BOARD_EDGE = {
 const SCENIC_TERRAIN_SIDES: readonly DecorativeTerrainSide[] = socketEdges.map(
   (edge) => SCENIC_TERRAIN_EXTENT_BY_BOARD_EDGE[edge],
 );
-const MAX_SCENIC_TERRAIN_EXTENT = 16;
 const MAX_SCENIC_TERRAIN_GENERATION_AREA = 250_000;
 type ScenicTerrainGenerationMode = 'match-reference' | 'grass';
 const SCENIC_TERRAIN_GENERATION_OPTIONS: ReadonlyArray<{ value: ScenicTerrainGenerationMode; label: string }> = [
@@ -8260,6 +8266,67 @@ export function LevelEditor(): ReactElement {
     }
   };
 
+  const moveGrid = (direction: PlayableGridMoveDirection): void => {
+    const result = movePlayableGrid(currentEditorBoardRef.current, direction);
+    if (!result) {
+      const availability = playableGridMoveAvailability(currentEditorBoardRef.current, direction);
+      reportStatus(
+        `Could not move the playable grid ${direction}.`,
+        'warning',
+        availability.reason ?? 'The authored scene has no room in that direction.',
+      );
+      return;
+    }
+
+    const { x: dx, y: dy } = result.contentDelta;
+    const shiftedKey = (key: string): string | undefined => {
+      const match = /^(-?\d+),(-?\d+)$/.exec(key);
+      if (!match) return undefined;
+      return `${Number(match[1]) + dx},${Number(match[2]) + dy}`;
+    };
+    const authoredScenicKeys = new Set(
+      decorativeTerrainApronCoordinates(
+        result.board.cols,
+        result.board.rows,
+        result.board.decorativeApron ?? { top: 0, right: 0, bottom: 0, left: 0 },
+        result.board.decorativeFootprint ?? [],
+      ).map(({ x, y }) => `${x},${y}`),
+    );
+    const onAuthoredSurface = (key: string): boolean => {
+      const [x, y] = key.split(',').map(Number);
+      return (x >= 0 && x < result.board.cols && y >= 0 && y < result.board.rows)
+        || authoredScenicKeys.has(key);
+    };
+    const shiftedSelection = selectedCell
+      ? { x: selectedCell.x + dx, y: selectedCell.y + dy }
+      : null;
+    const selectedKey = shiftedSelection ? `${shiftedSelection.x},${shiftedSelection.y}` : '';
+    if (!commitEditorBoard(
+      result.board,
+      shiftedSelection && onAuthoredSurface(selectedKey) ? shiftedSelection : null,
+    )) return;
+
+    if (activeGeneratedRegionId) {
+      const activeRegion = result.board.generatedRegions?.find((region) => region.id === activeGeneratedRegionId);
+      setRegionSelection(new Set(activeRegion?.cells ?? []));
+    } else {
+      setRegionSelection((current) => new Set(
+        [...current]
+          .map(shiftedKey)
+          .filter((key): key is string => key !== undefined && onAuthoredSurface(key)),
+      ));
+    }
+
+    const label = direction[0].toUpperCase() + direction.slice(1);
+    reportStatus(
+      `Moved the playable grid ${label}.`,
+      result.dropped.total ? 'warning' : 'success',
+      result.dropped.total
+        ? `${result.dropped.total} gameplay placement${result.dropped.total === 1 ? '' : 's'} left the playable rectangle and ${result.dropped.total === 1 ? 'was' : 'were'} removed.`
+        : 'The authored scene stayed aligned. Undo restores the previous grid position.',
+    );
+  };
+
   const paintedCount = Object.keys(boardCells).length;
   const unitCount = Object.keys(boardUnits).length;
   const doodadCount = Object.keys(boardDoodads).length;
@@ -9569,6 +9636,27 @@ export function LevelEditor(): ReactElement {
               <>
                 <BoardSizePanel cols={boardCols} rows={boardRows} onResize={resizeBoard} />
                 <p className="le-board-note">Choose the side, then add or remove columns and rows there. Shrinking drops content outside the new bounds.</p>
+                <h3>Move playable grid</h3>
+                <div className="le-grid-nudge" aria-label="Move playable grid one tile">
+                  {PLAYABLE_GRID_MOVE_DIRECTIONS.map((direction) => {
+                    const availability = playableGridMoveAvailability(currentEditorBoard, direction);
+                    const label = direction[0].toUpperCase();
+                    const fullLabel = direction[0].toUpperCase() + direction.slice(1);
+                    return (
+                      <ChromeButton unit="inner-text-button"
+                        key={direction}
+                        className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', `is-${direction}`)}
+                        data-testid={`le-move-grid-${direction}`}
+                        aria-label={`Move playable grid ${fullLabel}`}
+                        title={availability.reason ?? `Move the playable grid one tile ${direction}.`}
+                        disabled={!availability.allowed}
+                        onClick={() => moveGrid(direction)}
+                      >{label}</ChromeButton>
+                    );
+                  })}
+                  <span className="le-grid-nudge-centre" aria-hidden="true">Grid</span>
+                </div>
+                <p className="le-board-note">Move one tile into existing scenic terrain while keeping the authored scene aligned. Gameplay-only placements pushed outside the grid are removed.</p>
                 <h3>Scenic terrain rectangle</h3>
                 <div className="le-ctrlrow">
                   <span className="le-ctrllabel">Generation</span>
