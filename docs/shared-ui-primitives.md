@@ -91,7 +91,7 @@ search for before constructing a control or repeated surface.
   retains every original pile in both plain and installed-wrap layouts, so no survivor
   measurement or FLIP path remains
   ([ADR-0431](adr/0431-sectio-transactions-never-wait-for-presentation.md),
-  [ADR-0476](adr/0476-sectio-offers-reveal-the-face-down-pile-beneath-them.md)).
+  [ADR-0481](adr/0481-sectio-offers-reveal-the-face-down-pile-beneath-them.md)).
 - `ui/RunDeploymentCardStack.tsx` — the Controls-owned projection of the persisted
   Deployment deck and deal. It presents the complete face-down center deck, partitions the
   exact combat count deliberately into the prominent Controls stack, transfers the counted

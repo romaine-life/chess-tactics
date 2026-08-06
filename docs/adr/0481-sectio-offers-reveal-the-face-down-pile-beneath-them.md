@@ -12,7 +12,7 @@ refines:
   - "[ADR-0420](0420-the-fivefold-gambit-codex-is-the-default-run-card-back.md)"
 ---
 
-# ADR-0476: Sectio offers reveal the face-down pile beneath them
+# ADR-0481: Sectio offers reveal the face-down pile beneath them
 
 ## Context
 

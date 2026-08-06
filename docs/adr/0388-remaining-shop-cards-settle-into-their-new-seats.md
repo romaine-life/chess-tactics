@@ -3,7 +3,7 @@ status: superseded
 date: 2026-08-03
 deciders: owner (Nelson) + Codex
 superseded_by:
-  - "[ADR-0476](0476-sectio-offers-reveal-the-face-down-pile-beneath-them.md)"
+  - "[ADR-0481](0481-sectio-offers-reveal-the-face-down-pile-beneath-them.md)"
 partially_superseded_by:
   - "[ADR-0392](0392-sectio-is-the-run-disposal-and-acquisition-phase.md)'s replacement of the Shop terminology with Sectio"
   - "[ADR-0393](0393-adlectio-and-alienatio-are-the-movements-within-sectio.md)'s replacement of purchase terminology with Adlectio"

@@ -157,7 +157,7 @@ for Sectio card transfers rather than a second deck icon or a hard-coded screen
 coordinate.
 
 Under [ADR-0431](adr/0431-sectio-transactions-never-wait-for-presentation.md) and
-[ADR-0476](adr/0476-sectio-offers-reveal-the-face-down-pile-beneath-them.md), removing an
+[ADR-0481](adr/0481-sectio-offers-reveal-the-face-down-pile-beneath-them.md), removing an
 adlected face reveals the accepted universal back in the pile's unchanged original seat. The
 remaining piles never reflow, the revealed back is not interactive, and a later Adlectio can
 launch immediately while independent card flights play out in the continuity layer.

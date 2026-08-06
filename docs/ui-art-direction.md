@@ -323,7 +323,7 @@ the measured endpoint for an adlected card's shrinking transfer and the measured
 the face-down Deployment deal into the numbered Controls stack. When an adlected card leaves
 the Sectio layout, it reveals the accepted face-down card registered beneath it in the same pile
 seat. Every original pile remains fixed; the back is non-interactive presentation rather than a
-replacement offer or stock count (ADR-0387, ADR-0419, ADR-0420, ADR-0476). The persistent
+replacement offer or stock count (ADR-0387, ADR-0419, ADR-0420, ADR-0481). The persistent
 active Deployment card never compacts around a played unit: its authored density, sprite scale,
 and stack seats remain fixed while the departed occurrence becomes a visible vacancy (ADR-0427).
 title route always appends the visible Enchiridion section on the standalone host,

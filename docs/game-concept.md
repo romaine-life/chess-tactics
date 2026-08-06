@@ -151,7 +151,7 @@ these.
   piles do not move. Only the explicit
   Continue action enters the first Battle, and it is available without requiring
   an Adlectio. **Card** is the sole current gameplay noun for these deck entries
-  and offers (ADR-0321, ADR-0322, ADR-0323, ADR-0344, ADR-0347, ADR-0387, ADR-0476).
+  and offers (ADR-0321, ADR-0322, ADR-0323, ADR-0344, ADR-0347, ADR-0387, ADR-0481).
 - Each of those 49 Units cards owns one native 400×280 PixelLab illustration
   keyed by its canonical composition id. Human unit roles and readable
   equipment control the composition; historical pressure supplies secondary
