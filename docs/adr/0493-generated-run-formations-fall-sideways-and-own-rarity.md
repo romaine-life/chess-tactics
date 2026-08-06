@@ -79,9 +79,12 @@ authored row from left to right, then any remaining legal deployment cell. Units
 cell remains are blocked. This fallback is deterministic and intentionally secondary to getting
 the first complete Run playable.
 
-RunSaveVersion advances to 25. A version-24 Run in Deployment or Battle returns to the empty
-Deployment deal boundary so no persisted random formation plan survives into sideways settling.
-All held cards and their stable seats remain intact.
+RunSaveVersion advances to 25. Append-only database migration 63 advances durable version-23 and
+version-24 account documents to that same shape; the browser owns the equivalent local-storage
+chain. A predecessor Run in Deployment or Battle returns to the empty Deployment deal boundary so
+no persisted random formation plan survives into sideways settling. Existing economy, persistent
+units, and valid held-card seats remain intact; retired bundles fall back to neutral singleton
+cards rather than invalidating the Run.
 
 ## Consequences
 

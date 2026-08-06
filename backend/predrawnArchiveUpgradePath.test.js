@@ -61,7 +61,7 @@ test('already-applied migration 36 remains the immutable drawable-media migratio
   );
 });
 
-test('the exact sparse numeric legacy history upgrades through migration 62', () => {
+test('the exact sparse numeric legacy history upgrades through migration 63', () => {
   const versions = migrationVersions();
   const appliedBeforeUpgrade = new Set(
     versions.filter((version) => version <= 27 || version === 36),
@@ -115,6 +115,10 @@ test('the exact sparse numeric legacy history upgrades through migration 62', ()
   assert.ok(
     pending.includes(62),
     'pruned saved-revision baseline evidence must have its own pending migration 62',
+  );
+  assert.ok(
+    pending.includes(63),
+    'the omitted durable Run save edges must have their own pending migration 63',
   );
 
   const migration37 = inlineMigration(37);
@@ -455,6 +459,27 @@ test('the exact sparse numeric legacy history upgrades through migration 62', ()
     /revision\.saved_revision = working\.saved_revision[\s\S]*revision\.baseline_hash IS NOT NULL[\s\S]*ORDER BY revision\.revision DESC[\s\S]*baseline_hash = candidate\.recovered_baseline_hash/i,
     'migration 62 must restore only the newest baseline evidence for the same saved boundary',
   );
+  const migration63 = inlineMigration(63);
+  assert.equal(
+    migration63.name,
+    'ability-free generated formation Runs',
+    'migration 63 must own both omitted account-Run save edges',
+  );
+  assert.match(
+    migration63.sql,
+    /run25_plain_army[\s\S]*run25_migrate_cards[\s\S]*migrate_active_run_v23_to_v25[\s\S]*runSaveVersion'[\s\S]*'23'[\s\S]*'25'/i,
+    'migration 63 must retire version-23 ability state without discarding the army or Chartulary',
+  );
+  assert.match(
+    migration63.sql,
+    /run25_add_sectio_rarity[\s\S]*migrate_active_run_v24_to_v25[\s\S]*runSaveVersion'[\s\S]*'24'[\s\S]*'25'/i,
+    'migration 63 must canonicalize version-24 offers while advancing them to version 25',
+  );
+  assert.match(
+    migration63.sql,
+    /phase'[\s\S]*deployment[\s\S]*battle[\s\S]*deployment'[\s\S]*battleRuntime[\s\S]*aftermath/i,
+    'migration 63 must return every in-flight predecessor to the clean Deployment boundary',
+  );
   assert.equal(
     (serverSource.match(/never_saved: savedRevision === 0/g) || []).length,
     2,
@@ -491,7 +516,7 @@ test('the exact sparse numeric legacy history upgrades through migration 62', ()
   );
   assert.deepEqual(
     plan.pending.map((entry) => entry.version),
-    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62],
+    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63],
     'the bridge must fill the historical gap before applying every post-36 contract',
   );
   assert.throws(
@@ -523,7 +548,7 @@ test('the exact sparse numeric legacy history upgrades through migration 62', ()
   );
 });
 
-test('required-schema readiness and repair enforce the migrations 37 through 62 contracts', () => {
+test('required-schema readiness and repair enforce the migrations 37 through 63 contracts', () => {
   const relations = sourceSection(
     serverSource,
     'const REQUIRED_SCHEMA_RELATIONS = [',
@@ -704,6 +729,11 @@ test('required-schema readiness and repair enforce the migrations 37 through 62 
     contractReadiness,
     /unmigrated_active_run_version_22_count[\s\S]*unmigrated_level_format_1_count[\s\S]*unrepaired_saved_editor_baseline_count[\s\S]*version === 61[\s\S]*repair Level format 2 and exact saved editor baseline contract/,
     'readiness must route old Levels, version-22 Runs, and exact saved-body repair through migration 61 first',
+  );
+  assert.match(
+    contractReadiness,
+    /unmigrated_active_run_version_23_count[\s\S]*unmigrated_active_run_version_24_count[\s\S]*version === 63[\s\S]*repair ability-free generated formation Run contract/,
+    'readiness must route both omitted account-Run save edges through migration 63',
   );
   assert.match(
     contractReadiness,
@@ -1076,13 +1106,13 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
 
   const primaryUpgradeProof = sourceSection(
     smokeSource,
-    'async function validatePrimarySparseNumericMigrationUpgrade62()',
+    'async function validatePrimarySparseNumericMigrationUpgrade63()',
     '\nasync function validateEditorMigration16Preservation()',
   );
   assert.match(
     primaryUpgradeProof,
-    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*62\s*\}/,
-    'the production upgrade proof must require a complete 1-62 history',
+    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*63\s*\}/,
+    'the production upgrade proof must require a complete 1-63 history',
   );
   assert.match(
     primaryUpgradeProof,
@@ -1096,8 +1126,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /length:\s*26[\s\S]*index\s*\+\s*37/,
-    'the production report must include every post-36 migration through 62',
+    /length:\s*27[\s\S]*index\s*\+\s*37/,
+    'the production report must include every post-36 migration through 63',
   );
   assert.match(
     primaryUpgradeProof,

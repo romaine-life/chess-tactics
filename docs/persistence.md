@@ -81,11 +81,13 @@ Migration 60 removes the retired Deployment mode, maps a not-yet-settled old dea
 `awaiting-deal`, maps an already-settled old pace boundary to the active card, and preserves every
 later reveal, placement, settlement, and discard boundary while resuming it paused.
 Migration 61 advances every embedded Battle Level and the containing Run marker together.
-The version-23 to 24 client migration strips retired card and unit ability state, preserves held
-formation identities where possible, rebuilds the starter, and returns in-flight Deployment or
-Battle state to the formation-card deal boundary. The version-24 to 25 client migration preserves
-the Chartulary and economy but again returns an in-flight Deployment or Battle to that boundary so
-no persisted random translation survives into deterministic right-to-left settling.
+Migration 63 owns the two subsequent account-document edges that do not change PostgreSQL's
+relational shape. It advances any durable version-23 or version-24 `active_runs.body` directly to
+version 25: retired ability state is removed, valid held formation identities and every persistent
+unit are preserved, offers receive canonical rarity, and in-flight Deployment or Battle state
+returns to the formation-card deal boundary. The browser applies the equivalent version-23 to 24
+and version-24 to 25 transforms to its local copy, so no persisted random translation survives
+into deterministic right-to-left settling.
 Each account migration advances the Run's CAS revision, while the browser applies the same chain
 to its local document on first load. Saves older than version 16 remain unavailable because their
 retired gameplay state has no declared lossless transform. See

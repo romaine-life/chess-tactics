@@ -937,7 +937,7 @@ function inlineMigrationSql(version) {
   return inlineMigrationDefinition(version).sql;
 }
 
-async function validatePrimarySparseNumericMigrationUpgrade62() {
+async function validatePrimarySparseNumericMigrationUpgrade63() {
   const history = await queryDb(
     `SELECT version, name, checksum
        FROM schema_migrations
@@ -952,7 +952,7 @@ async function validatePrimarySparseNumericMigrationUpgrade62() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 62 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 63 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -967,7 +967,7 @@ async function validatePrimarySparseNumericMigrationUpgrade62() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 26 }, (_, index) => index + 37),
+    ...Array.from({ length: 27 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1081,7 +1081,7 @@ async function validatePrimarySparseNumericMigrationUpgrade62() {
     )
   ) {
     throw new Error(
-      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 62: `
+      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 63: `
       + `${JSON.stringify({
         history: history.rows,
         identity_columns: identityColumns.rows,
@@ -2567,6 +2567,144 @@ async function validateRetainedEditorBaselineEvidenceMigration62() {
   }
 }
 
+async function validateGeneratedFormationRunMigration63() {
+  const { Client } = require('pg');
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('CREATE SCHEMA smoke_generated_formation_run_migration_63');
+    await client.query('SET LOCAL search_path TO smoke_generated_formation_run_migration_63');
+    await client.query(`
+      CREATE TABLE active_runs (
+        owner_email text PRIMARY KEY, body jsonb NOT NULL, revision integer NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+    `);
+    const unit = (id, type, source, extra = {}) => ({
+      id, type, source, name: id, number: 1, inspectionSeed: 17, ...extra,
+    });
+    const v23Army = [
+      unit('run-king', 'king', 'king', { abilities: ['eutactic'] }),
+      unit('run-pawn-a', 'pawn', 'starting', { modifiers: ['cacochymic'] }),
+      unit('run-pawn-b', 'pawn', 'starting'),
+      unit('run-knight-1', 'knight', 'adlectio', { abilities: ['adlected'] }),
+      unit('run-bishop-1', 'bishop', 'adlectio'),
+      unit('run-pawn-3', 'pawn', 'adlectio'),
+    ];
+    const oldCard = (id, coreId, unitSeats, extra = {}) => ({
+      id, coreId, unitSeats, acquiredAfterBattleIndex: 0,
+      cardType: null, effectSeed: 9, effectTargetUnitId: null,
+      lostUnitIds: [], cacochymicUnitId: null, ...extra,
+    });
+    const v23Cards = [
+      oldCard('run-card-his-grace', 'his-grace', ['run-king']),
+      oldCard('run-card-front-lines', 'front-lines', ['run-pawn-a', 'run-pawn-b']),
+      oldCard('run-card-knight', 'k', ['run-knight-1']),
+      oldCard('run-card-old-pb', 'pb', ['run-bishop-1', 'run-pawn-3']),
+    ];
+    const v23 = {
+      runSaveVersion: 23,
+      id: 'run-v23', seed: 23, ataraxiaTier: 1, updatedAt: new Date().toISOString(),
+      phase: 'sectio', battleIndex: 0, conflictIndex: 0, goldTenths: 80,
+      war: { id: 'war', name: 'War', description: '', battles: [{ level: { formatVersion: 2 }, loot: false }] },
+      army: v23Army, cards: v23Cards,
+      lipsana: ['quartermasters-ledger', 'training-linens'],
+      seenLipsana: ['quartermasters-ledger', 'training-linens'],
+      conflictPaidLipsana: {
+        0: { lipsanonId: 'fair-scales', bought: false },
+        1: { lipsanonId: 'royal-decree', bought: false },
+      },
+      nextArmyUnitSequence: 7,
+      nextArmyUnitNumberByType: { pawn: 4, knight: 2, bishop: 2, rook: 1, queen: 1, king: 2 },
+      nextCardSequence: 5,
+      deployment: null, battleRuntime: null, aftermath: null,
+      vacantia: null, pestiferousLosses: [],
+      sectio: {
+        kind: 'opening', afterBattleIndex: 0, conflictIndex: 0, victoryGoldTenths: 0,
+        cardOffers: [], adlectedCardOfferIds: ['old-offer'], paidLipsanonOffer: 'royal-decree',
+        paidLipsanonBought: true, alienatedUnits: [], expunctedCard: null,
+        entrySnapshot: {},
+      },
+    };
+    const offer = (id, artId, pieces, formation, value) => ({
+      id, artId, pieces, formation, value, offerId: `offer-${id}`, cost: value,
+    });
+    const v24Sectio = {
+      runSaveVersion: 24, phase: 'sectio', deployment: null, battleRuntime: null, aftermath: null,
+      sectio: {
+        cardOffers: [
+          offer('p', 'p', ['pawn'], [{ x: 0, y: 0 }], 1),
+          offer('r', 'r', ['rook'], [{ x: 0, y: 0 }], 5),
+          offer('bb-vertical', 'bb', ['bishop', 'bishop'], [{ x: 0, y: 0 }, { x: 0, y: 1 }], 6),
+        ],
+      },
+    };
+    const v24Battle = {
+      runSaveVersion: 24, phase: 'battle', deployment: { placements: { king: '2,6' } },
+      battleRuntime: { battleIndex: 0 }, aftermath: { stale: true }, sectio: null,
+    };
+    const v25 = { runSaveVersion: 25, phase: 'sectio', deployment: null, sectio: { cardOffers: [] } };
+    await client.query(
+      `INSERT INTO active_runs (owner_email, body, revision) VALUES
+        ('v23@example.com', $1::jsonb, 1),
+        ('v24-sectio@example.com', $2::jsonb, 3),
+        ('v24-battle@example.com', $3::jsonb, 5),
+        ('v25@example.com', $4::jsonb, 7)`,
+      [v23, v24Sectio, v24Battle, v25].map(JSON.stringify),
+    );
+
+    await client.query(inlineMigrationSql(63));
+    await client.query(inlineMigrationSql(63));
+
+    const rows = (await client.query(
+      'SELECT owner_email, body, revision FROM active_runs ORDER BY owner_email',
+    )).rows;
+    const byOwner = new Map(rows.map((row) => [row.owner_email, row]));
+    const migrated23 = byOwner.get('v23@example.com');
+    const migrated24Sectio = byOwner.get('v24-sectio@example.com');
+    const migrated24Battle = byOwner.get('v24-battle@example.com');
+    const current25 = byOwner.get('v25@example.com');
+    const v23UnitSeats = migrated23?.body?.cards?.flatMap((card) => card.unitSeats.filter(Boolean)) ?? [];
+    if (
+      migrated23?.body?.runSaveVersion !== 25
+      || migrated23?.body?.ataraxiaTier !== 0
+      || Number(migrated23?.revision) !== 2
+      || JSON.stringify(migrated23.body).match(/abilities|modifiers|cardType|pestiferousLosses/)
+      || migrated23.body.cards?.[0]?.id !== 'run-card-his-grace'
+      || JSON.stringify(migrated23.body.cards?.[0]?.unitSeats) !== JSON.stringify(['run-king', 'run-pawn-a', 'run-pawn-b'])
+      || migrated23.body.cards?.find((card) => card.id === 'run-card-knight')?.coreId !== 'k'
+      || new Set(v23UnitSeats).size !== v23Army.length
+      || v23UnitSeats.length !== v23Army.length
+      || JSON.stringify(migrated23.body.lipsana) !== JSON.stringify(['quartermasters-ledger'])
+      || Object.keys(migrated23.body.conflictPaidLipsana).length !== 1
+      || migrated23.body.sectio?.cardOffers?.length !== 4
+      || migrated23.body.sectio?.cardOffers?.some((candidate) => !candidate.rarity)
+      || migrated23.body.sectio?.paidLipsanonOffer !== null
+      || migrated24Sectio?.body?.runSaveVersion !== 25
+      || Number(migrated24Sectio?.revision) !== 4
+      || JSON.stringify(migrated24Sectio.body.sectio.cardOffers.map((candidate) => candidate.rarity))
+        !== JSON.stringify(['common', 'uncommon', 'rare'])
+      || migrated24Battle?.body?.runSaveVersion !== 25
+      || migrated24Battle?.body?.phase !== 'deployment'
+      || migrated24Battle?.body?.deployment !== null
+      || migrated24Battle?.body?.battleRuntime !== null
+      || migrated24Battle?.body?.aftermath !== null
+      || Number(migrated24Battle?.revision) !== 6
+      || current25?.body?.runSaveVersion !== 25
+      || Number(current25?.revision) !== 7
+    ) {
+      throw new Error(`Migration 63 did not produce canonical generated formation Runs: ${JSON.stringify(rows)}`);
+    }
+    await client.query('ROLLBACK');
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve validation error */ }
+    throw error;
+  } finally {
+    await client.end();
+  }
+}
+
 async function validateRepairedEditorDocumentDiscardOperation62() {
   const documentId = '00000000-0000-4000-8000-000000000262';
   const levelId = 'migration-operation-level';
@@ -2691,7 +2829,7 @@ async function main() {
   await new Promise((resolve) => mockAuth.listen(authPort, '127.0.0.1', resolve));
   await new Promise((resolve) => mockBgm.listen(bgmPort, '127.0.0.1', resolve));
   await waitForServer();
-  await validatePrimarySparseNumericMigrationUpgrade62();
+  await validatePrimarySparseNumericMigrationUpgrade63();
   const databaseRuntime = await queryDb('SELECT version() AS version');
   const isPgliteRuntime = /\bPGlite\b/i.test(String(databaseRuntime.rows[0]?.version || ''));
   if (!isPgliteRuntime) {
@@ -2728,6 +2866,7 @@ async function main() {
   await validateDeploymentTransportMigration60();
   await validateLevelFormatAndEditorBaselineMigration61();
   await validateRetainedEditorBaselineEvidenceMigration62();
+  await validateGeneratedFormationRunMigration63();
   await validateRepairedEditorDocumentDiscardOperation62();
   await resetDb();
 
