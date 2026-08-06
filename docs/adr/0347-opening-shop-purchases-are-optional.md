@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
+superseded_by:
+  - "[ADR-0494](0494-runs-begin-in-battle-and-sectio-deals-a-derived-rarity-pile.md)'s removal of the opening Sectio"
 partially_supersedes:
   - "[ADR-0321](0321-run-opening-is-the-normal-shop-and-draft-is-retired.md)'s mandatory opening purchase before Continue"
   - "[ADR-0323](0323-run-shops-allow-every-affordable-card-purchase.md)'s retained mandatory opening purchase"

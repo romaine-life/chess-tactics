@@ -7,7 +7,7 @@
 // is accepted.
 //
 // So this module never authors state directly. It composes the SAME transitions the game plays —
-// createRun → performAdlectio → leaveSectio → prepareDeployment → beginBattle → openSectio — and only then
+// createRun → prepareDeployment → beginBattle → openSectio → performAdlectio → leaveSectio — and only then
 // applies the requested overrides in the phase where each one is legal (army and lipsana before a
 // Battle, offers and gold in the Sectio that a real openSectio() produced). What comes out is a
 // document the game and the server both accept, because the game built it.
@@ -112,7 +112,7 @@ export interface RunCraftSpec {
   army: RunCraftUnit[] | null;
   add: RunCraftUnit[] | null;
   offers: RunCraftCard[] | null;
-  /** Cards the Run already holds. Acquired in the opening Sectio and carried forward. */
+  /** Cards the Run already holds. Acquired in the first reachable post-Battle Sectio. */
   cards: RunCraftCard[] | null;
   loot: LipsanonId[] | null;
   paidLipsanon: LipsanonId | null;
@@ -601,7 +601,7 @@ function craftAftermath(run: RunDocument, spec: RunCraftSpec): RunDocument {
 /**
  * Get past a Conflict's lipsanon screen by taking the first offer that will be accepted.
  * Fast-forwarding has to make the same mandatory choice a player would; taking a lipsanon is
- * also what opens the Sectio behind it, so this is how the crafter reaches any later state.
+ * also advances the Run, so this is how the crafter reaches any later state.
  */
 function takeVacantiaAuto(run: RunDocument): RunDocument {
   if (run.phase !== 'bona-vacantia' || !run.vacantia) return run;
@@ -620,19 +620,8 @@ function leaveSectioAuto(run: RunDocument): RunDocument {
   return leaveSectio(next);
 }
 
-function adlectOpeningCard(run: RunDocument): RunDocument {
-  const affordable = [...(run.sectio?.cardOffers ?? [])]
-    .filter((offer) => offer.cost * GOLD_SCALE <= run.goldTenths)
-    .sort((a, b) => a.cost - b.cost || a.offerId.localeCompare(b.offerId));
-  const chosen = affordable[0];
-  if (!chosen) throw new RunCraftError('craft: the opening Sectio offered nothing affordable.');
-  const adlected = performAdlectio(run, chosen.offerId);
-  if (adlected === run) throw new RunCraftError('craft: the opening Sectio Adlectio was refused.');
-  return adlected;
-}
-
 /**
- * Adlect the cards the Run should already HOLD, in the opening Sectio it is standing in.
+ * Adlect the cards the Run should already HOLD in its first post-Battle Sectio.
  *
  * The point of the field is the Chartulary and everything downstream of Adlectio: real units
  * with real ids and card records the server validator accepts. Each card is staged as an ordinary
@@ -641,9 +630,8 @@ function adlectOpeningCard(run: RunDocument): RunDocument {
  * themselves out of what the Run has to spend, and the staged offers are withdrawn so the Sectio
  * that is about to be left still reads as the one the game dealt.
  *
- * They are adlected at the START of the fast-forward, which means they then live through every
- * Battle before the target: units die, Pestiferous cards deteriorate, and what arrives is a card
- * with a history rather than a fresh Adlectio.
+ * They are adlected at the earliest legal point, after Battle 1, and then live through every
+ * later Battle before the target.
  */
 function adlectHeldCards(run: RunDocument, cards: readonly RunCraftCard[] | null): RunDocument {
   if (!cards?.length) return run;
@@ -686,16 +674,25 @@ function adlectHeldCards(run: RunDocument, cards: readonly RunCraftCard[] | null
 /** Far above any real Sectio slot, so a staged held-card offer can never collide with a dealt one. */
 const HELD_CARD_SLOT_BASE = 1000;
 
-/** Fast-forward from the opening Sectio to the deployment of a target Battle by playing every
- * Battle before it. */
+/** Fast-forward from the opening to the deployment of a target Battle by playing every Battle
+ * before it. Held cards enter through the first post-Battle Sectio because no card acquisition
+ * exists before Battle 1. */
 function advanceToDeployment(run: RunDocument, battleIndex: number, held: readonly RunCraftCard[] | null): RunDocument {
-  let next = leaveSectioAuto(adlectHeldCards(adlectOpeningCard(takeVacantiaAuto(run)), held));
+  if (battleIndex === 0 && held?.length) {
+    throw new RunCraftError('craft cards: cards cannot be held before the Sectio after Battle 1.');
+  }
+  let next = takeVacantiaAuto(run);
+  let heldAdlected = false;
   let guard = 0;
   while (next.battleIndex < battleIndex) {
     if ((guard += 1) > 200) throw new RunCraftError('craft: fast-forward made no progress.');
-    const inSectio = takeVacantiaAuto(fightBattle(next));
+    let inSectio = takeVacantiaAuto(fightBattle(next));
     if (inSectio.phase !== 'sectio') {
       throw new RunCraftError(`craft: the War ended before Battle ${battleIndex + 1}.`);
+    }
+    if (!heldAdlected && held?.length) {
+      inSectio = adlectHeldCards(inSectio, held);
+      heldAdlected = true;
     }
     next = leaveSectioAuto(inSectio);
   }
@@ -821,8 +818,6 @@ function applyGold(run: RunDocument, goldTenths: number | null): RunDocument {
   };
 }
 
-const OPENING_SECTIO_OVERRIDES: readonly (keyof RunCraftSpec)[] = ['goldTenths', 'army', 'add', 'offers', 'cards', 'loot', 'paidLipsanon', 'lipsana'];
-
 /** Build the crafted Run. Every state is reached by the transitions the game itself plays. */
 export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDocument {
   const battles = war.battles.length;
@@ -832,28 +827,22 @@ export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDo
   }
   const opening = createRun(war, spec.seed, spec.ataraxiaTier);
 
-  // The run's own first state. Bona Vacantia now sits in front of the opening Sectio, so
-  // battle=1 reaches it without playing anything.
+  // The Run's own first state. Bona Vacantia sits directly in front of Battle 1.
   if (spec.phase === 'bona-vacantia' && targetIndex === 0) {
     if (opening.phase !== 'bona-vacantia') {
       throw new RunCraftError(`craft: ${war.name} has no loot Battle, so no Conflict opens with a lipsanon.`);
     }
-    // Offers last, matching the Sectio path: the held-lipsanon guard can only see a lipsanon the
+    if (spec.cards?.length) {
+      throw new RunCraftError('craft cards: cards cannot be held before the Sectio after Battle 1.');
+    }
+    // Offers last: the held-lipsanon guard can only see a lipsanon the
     // spec granted once applyLipsana has actually granted it.
     return applyGold(applyVacantiaOffers(applyLipsana(applyArmy(opening, spec), spec), spec), spec.goldTenths);
   }
 
-  // The opening Sectio is pinned by the server contract — its offers, army and starting gold are
-  // checked value by value — so it is craftable only as itself. It now sits behind the opening
-  // lipsanon screen, so reaching it means taking that lipsanon first.
+  // There is intentionally no Sectio before Battle 1.
   if (spec.phase === 'sectio' && targetIndex === 0) {
-    const overridden = OPENING_SECTIO_OVERRIDES.filter((key) => spec[key] !== null);
-    if (overridden.length) {
-      throw new RunCraftError(
-        'craft: the opening Sectio is fixed by the Run contract and takes no overrides. Craft battle=2 or later for a Sectio with crafted contents.',
-      );
-    }
-    return takeVacantiaAuto(opening);
+    throw new RunCraftError('craft: the first Sectio follows Battle 1. Use craft=sectio&battle=2.');
   }
 
   const deploymentIndex = spec.phase === 'sectio'

@@ -22,9 +22,16 @@ import { OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { useSceneParticipant } from './shell/SceneBoundary';
 
 const REVIEW_CARDS: readonly RunCoreCard[] = [
-  { id: 'review-two-pawns-bishop', pieces: ['pawn', 'pawn', 'bishop'], value: 5 },
-  { id: 'review-pawn-rook', pieces: ['pawn', 'rook'], value: 6 },
-  { id: 'review-four-pawns-bishop', pieces: ['pawn', 'pawn', 'pawn', 'pawn', 'bishop'], value: 7 },
+  { id: 'review-three-pawns', artId: 'ppp', pieces: ['pawn', 'pawn', 'pawn'], value: 3, rarity: 'common' },
+  { id: 'review-pawn-rook', artId: 'pr', pieces: ['pawn', 'rook'], value: 6, rarity: 'uncommon' },
+  {
+    id: 'review-opposite-bishops',
+    artId: 'bb',
+    pieces: ['bishop', 'bishop'],
+    formation: [{ x: 0, y: 0 }, { x: 1, y: 0 }],
+    value: 6,
+    rarity: 'rare',
+  },
 ];
 
 function WrapCandidateRow({ candidate }: { candidate: RunSectioWrapCandidate }): ReactElement {

@@ -2,6 +2,8 @@ export const RUN_CARD_FRAME_NATIVE_WIDTH = 1060;
 export const RUN_CARD_FRAME_NATIVE_HEIGHT = 1484;
 
 export const RUN_CARD_FRAME_SLOT = 'ui/run/card-prototypes/frame-v1.png';
+export const RUN_CARD_UNCOMMON_FRAME_SLOT = 'ui/run/card-prototypes/standard-uncommon-frame-v1.png';
+export const RUN_CARD_RARE_FRAME_SLOT = 'ui/run/card-prototypes/standard-rare-frame-v1.png';
 export const RUN_CARD_PESTIFEROUS_FRAME_SLOT = 'ui/run/card-prototypes/pestiferous-frame-v1.png';
 export const RUN_CARD_CONCINNOUS_FRAME_SLOT = 'ui/run/card-prototypes/concinnous-frame-v1.png';
 export const RUN_CARD_LEGATINE_FRAME_SLOT = 'ui/run/card-prototypes/legatine-adlected-frame-v1.png';
@@ -28,6 +30,13 @@ export const RUN_CARD_FRAME_SLOT_BY_VARIANT: Readonly<Record<RunCardFrameVariant
   hieratic: RUN_CARD_HIERATIC_FRAME_SLOT,
   praecipuus: RUN_CARD_PRAECIPUUS_FRAME_SLOT,
 });
+
+export const RUN_CARD_STANDARD_FRAME_SLOT_BY_RARITY: Readonly<Record<'common' | 'uncommon' | 'rare', string>> =
+  Object.freeze({
+    common: RUN_CARD_FRAME_SLOT,
+    uncommon: RUN_CARD_UNCOMMON_FRAME_SLOT,
+    rare: RUN_CARD_RARE_FRAME_SLOT,
+  });
 
 export type RunCardFrameBoxName = 'title' | 'cost' | 'art' | 'type' | 'contents';
 
@@ -199,7 +208,11 @@ function defineGeometry(
  */
 export const RUN_CARD_STANDARD_FRAME_GEOMETRY = defineGeometry({
   variant: 'standard',
-  frameSha256s: ['73710874141ec1c904416860d55a0be69d4dc7f5104db7eeecbfc756ca02dfe1'],
+  frameSha256s: [
+    'a5ff21ff0c821f93bb78338401c663169ed7a08e295754ee00fefc8d359a4eca',
+    '037ac0896d4a9307b27ff909197b1d769c04311a2deb59e5ae7d2041bce3e2b1',
+    '73710874141ec1c904416860d55a0be69d4dc7f5104db7eeecbfc756ca02dfe1',
+  ],
   paintBounds: { x: 26, y: 42, width: 1009, height: 1402 },
   boxes: {
     art: { x: 94, y: 207, width: 870, height: 611 },
@@ -297,12 +310,14 @@ export const RUN_CARD_FRAME_GEOMETRY_BY_VARIANT: Readonly<Record<RunCardFrameVar
     praecipuus: RUN_CARD_PRAECIPUUS_FRAME_GEOMETRY,
   });
 
-const GEOMETRY_BY_SLOT: ReadonlyMap<string, RunCardFrameGeometry> = new Map(
-  RUN_CARD_FRAME_VARIANTS.map((variant) => [
+const GEOMETRY_BY_SLOT: ReadonlyMap<string, RunCardFrameGeometry> = new Map([
+  ...RUN_CARD_FRAME_VARIANTS.map((variant) => [
     RUN_CARD_FRAME_SLOT_BY_VARIANT[variant],
     RUN_CARD_FRAME_GEOMETRY_BY_VARIANT[variant],
-  ]),
-);
+  ] as const),
+  [RUN_CARD_UNCOMMON_FRAME_SLOT, RUN_CARD_STANDARD_FRAME_GEOMETRY],
+  [RUN_CARD_RARE_FRAME_SLOT, RUN_CARD_STANDARD_FRAME_GEOMETRY],
+]);
 
 /**
  * Every frame owns its boxes. A frame is identified by the slot it is served

@@ -14,6 +14,7 @@ import {
   SkirmishBoard,
   type SkirmishBoardCellOverlayContext,
   type SkirmishBoardSurfaceState,
+  type UnitArrivalTrack,
   type UnitDepartureRequest,
 } from '../render/SkirmishBoard';
 import { SkirmishHud, type SkirmishHudProps } from './SkirmishHud';
@@ -141,6 +142,7 @@ export interface RunDeploymentPresentation {
   boardClassName?: string;
   boardAriaLabel: string;
   onArrivingUnitIdsChange: (unitIds: readonly string[]) => void;
+  unitArrivalTrack: UnitArrivalTrack;
 }
 
 interface StandaloneSkirmishProps {
@@ -1515,6 +1517,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
             revealTransition="scene"
             activate={!runDeployment && sceneActivated}
             unitArrivals={runBattleReviewTerminal ? 'settled' : sceneActivated ? 'active' : 'pending'}
+            unitArrivalTrack={runDeployment?.unitArrivalTrack}
             predrawnReview={predrawnPreview ? {
               src: predrawnPreview,
               registration: predrawnRegistration,

@@ -2,8 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { createBlankLevel } from '../core/level';
 import {
   createRun,
+  createRunCardOffer,
   leaveSectio,
+  openSectio,
+  performAdlectio,
   prepareDeployment,
+  RUN_CARD_BY_ID,
   runCardUnitIds,
   type RunDocument,
   type RunWarSnapshot,
@@ -12,13 +16,20 @@ import {
   beginDeploymentDeal,
   completeDeploymentDeal,
   deploymentInteractionStage,
+  finishDeploymentCardDiscard,
   finishDeploymentCardReveal,
+  finishDeploymentUnitSettlement,
   placeRevealedDeploymentUnit,
   revealActiveDeploymentCard,
   resolveForcedDeploymentChoices,
 } from './deployment';
 
-function fixture(rows = 8, columns = 8, seed = 17): { run: RunDocument; level: ReturnType<typeof createBlankLevel> } {
+function fixture(
+  rows = 8,
+  columns = 8,
+  seed = 17,
+  cardIds: readonly string[] = [],
+): { run: RunDocument; level: ReturnType<typeof createBlankLevel> } {
   const level = createBlankLevel('formation-level', 'Formation Level', columns, rows + 3);
   level.layers.zones = [{
     id: 'player',
@@ -32,9 +43,30 @@ function fixture(rows = 8, columns = 8, seed = 17): { run: RunDocument; level: R
     id: 'formation-war',
     name: 'Formation War',
     description: 'Deployment fixture.',
-    battles: [{ level, loot: false }],
+    battles: [{ level, loot: false }, { level: structuredClone(level), loot: false }],
   };
-  const run = resolveForcedDeploymentChoices(prepareDeployment(leaveSectio(createRun(war, seed))), level);
+  let assembled = createRun(war, seed);
+  if (cardIds.length) {
+    assembled = openSectio(
+      { ...assembled, phase: 'battle' },
+      assembled.army.map((unit) => unit.id),
+    );
+  }
+  cardIds.forEach((cardId, index) => {
+    const definition = RUN_CARD_BY_ID[cardId];
+    const offer = createRunCardOffer(assembled, definition, 0, 100 + index);
+    assembled = {
+      ...assembled,
+      goldTenths: 10_000,
+      sectio: {
+        ...assembled.sectio!,
+        cardOffers: [...assembled.sectio!.cardOffers, offer],
+      },
+    };
+    assembled = performAdlectio(assembled, offer.offerId);
+  });
+  const ready = assembled.phase === 'sectio' ? leaveSectio(assembled) : assembled;
+  const run = resolveForcedDeploymentChoices(prepareDeployment(ready), level);
   return { run, level };
 }
 
@@ -73,6 +105,38 @@ describe('formation deployment', () => {
     expect(king.x - leftPawn.x).toBe(1);
     expect(rightPawn.x - king.x).toBe(1);
     expect(rightPawn.y).toBe(leftPawn.y);
+  });
+
+  it('keeps the authored rows and settles the first formation against the left edge', () => {
+    const { run, level } = fixture();
+    const placed = placeRevealedDeploymentUnit(revealFirstCard(run, level), level);
+    const [king, leftPawn, rightPawn] = runCardUnitIds(placed.cards[0])
+      .map((id) => cell(placed.deployment!.placements[id]));
+
+    expect({ king, leftPawn, rightPawn }).toEqual({
+      king: { x: 1, y: 4 },
+      leftPawn: { x: 0, y: 3 },
+      rightPawn: { x: 2, y: 3 },
+    });
+  });
+
+  it('slides the next rigid formation left until the settled card blocks its next shift', () => {
+    const { run, level } = fixture(8, 8, 17, ['ppp']);
+    let deployed = placeRevealedDeploymentUnit(revealFirstCard(run, level), level);
+    deployed = finishDeploymentUnitSettlement(deployed, level);
+    deployed = finishDeploymentCardDiscard(deployed);
+    deployed = finishDeploymentCardReveal(revealActiveDeploymentCard(deployed));
+    deployed = placeRevealedDeploymentUnit(deployed, level);
+
+    const secondCard = deployed.cards.find((card) => card.coreId === 'ppp')!;
+    const cells = runCardUnitIds(secondCard)
+      .map((id) => cell(deployed.deployment!.placements[id]))
+      .sort((left, right) => left.x - right.x);
+    expect(cells).toEqual([
+      { x: 3, y: 3 },
+      { x: 4, y: 3 },
+      { x: 5, y: 3 },
+    ]);
   });
 
   it('persists one reusable plan for every unit on the active card', () => {

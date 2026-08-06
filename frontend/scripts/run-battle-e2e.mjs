@@ -4,7 +4,7 @@
 // not the pointer path — an invisible overlay shielding the board passes every unit
 // test while making the game unplayable; see the strategikon-slot regression, #552).
 //
-// Drives a FRESH anonymous profile end-to-end: start run → leave the opening Sectio without buying → begin battle
+// Drives a FRESH anonymous profile end-to-end: start run → take opening Bona Vacantia → begin battle
 // → click a unit's tile → click a legal destination → assert the move commits, the
 // enemy replies, and the open Strategikon still takes the pointer. Fails loudly at
 // the exact step where a click is swallowed.
@@ -217,60 +217,19 @@ try {
   await page.waitForFunction(() => [...document.querySelectorAll('button')].some((b) => (b.textContent || '').trim() === 'Start Run'));
   if (!await clickButton('Start Run')) await fail('start-run', JSON.stringify(await buttonDiagnostics('Start Run')));
 
-  // A fresh Conflict can now begin with mandatory Bona Vacantia before its opening
-  // Sectio. Wait for the director-owned destination, then take one of the ordinary
-  // offers with a real hit-tested click (only Conscription Notice needs a second step).
+  // A fresh Conflict can begin with mandatory Bona Vacantia directly before Battle 1.
+  // Wait for that director-owned destination (or immediate Deployment in a War with no
+  // opening lipsanon) before installing the transition probe.
   try {
     await page.waitForFunction(() => {
       const director = document.querySelector('.scene-director');
       const committed = director?.getAttribute('data-scene-committed') ?? '';
       return director?.getAttribute('data-scene-phase') === 'current'
-        && (committed.includes(':bona-vacantia:') || committed.includes(':sectio:'));
+        && (committed.includes(':bona-vacantia:') || committed.includes(':battlefield:'));
     }, { timeout: 45_000 });
   } catch {
     await fail('start-run-phase', JSON.stringify(await sceneDiagnostics()));
   }
-  const bonaOffer = await page.$('button.run-vacantia-take:not([data-lipsanon-id="conscription-notice"])');
-  if (bonaOffer) {
-    const offerBox = await bonaOffer.boundingBox();
-    if (!offerBox) await fail('opening-bona-vacantia', 'ordinary lipsanon offer has no geometry');
-    await page.mouse.click(offerBox.x + offerBox.width / 2, offerBox.y + offerBox.height / 2);
-  }
-  await waitPhase('sectio', 'start-run');
-
-  if (deploymentOnly) {
-    const prepared = await page.evaluate(async () => {
-      const { useActiveRun } = await import('/src/run/store.ts');
-      const { leaveSectio, prepareDeployment } = await import('/src/run/model.ts');
-      const { deploymentOrderedUnitIds } = await import('/src/run/deployment.ts');
-      const run = useActiveRun.getState().run;
-      if (!run || run.phase !== 'sectio' || run.army.length < 3) return null;
-      const cardOrder = deploymentOrderedUnitIds(prepareDeployment(leaveSectio(run)));
-      const manuallyPlaced = new Set(cardOrder.slice(1, 3));
-      if (cardOrder.length < 3 || manuallyPlaced.size !== 2) return null;
-      const army = run.army.map((unit) => ({
-        ...unit,
-        abilities: [
-          ...unit.abilities.filter((ability) => ability !== 'adlected'),
-          ...(manuallyPlaced.has(unit.id) ? ['adlected'] : []),
-        ],
-      }));
-      const lipsana = run.lipsana.filter((id) => id !== 'inspirational-record');
-      useActiveRun.getState().replace({ ...run, army, lipsana, updatedAt: new Date().toISOString() });
-      return {
-        cardOrder,
-        adlected: army.filter((unit) => unit.abilities.includes('adlected')).map((unit) => unit.id),
-      };
-    });
-    if (
-      prepared?.adlected.length !== 2
-      || prepared.cardOrder[0] === prepared.adlected[0]
-      || prepared.cardOrder[0] === prepared.adlected[1]
-    ) {
-      await fail('prepare-deployment-fixture', JSON.stringify(prepared));
-    }
-  }
-
   await page.evaluate(() => {
     const outgoing = document.querySelector('.run-scene-slot');
     const nativeAnimate = Element.prototype.animate;
@@ -400,10 +359,13 @@ try {
     probe.frame = requestAnimationFrame(tick);
   });
 
-  if (!await clickButton('Continue to first Battle')) {
-    await fail('opening-continue-without-purchase', JSON.stringify(await buttonDiagnostics('Continue to first Battle')));
+  const bonaOffer = await page.$('button.run-vacantia-take:not([data-lipsanon-id="conscription-notice"])');
+  if (bonaOffer) {
+    const offerBox = await bonaOffer.boundingBox();
+    if (!offerBox) await fail('opening-bona-vacantia', 'ordinary lipsanon offer has no geometry');
+    await page.mouse.click(offerBox.x + offerBox.width / 2, offerBox.y + offerBox.height / 2);
   }
-  await waitPhase('deployment', 'opening-continue-without-purchase');
+  await waitPhase('deployment', 'opening-bona-vacantia-to-deployment');
   await page.waitForFunction(() => {
       const director = document.querySelector('.scene-director');
       return director?.getAttribute('data-scene-phase') === 'current'
@@ -462,9 +424,9 @@ try {
     || !awaitingDealState.board
     || !awaitingDealState.deal
     || awaitingDealState.dealDisabled
-    || !awaitingDealState.playDisabled
-    || !awaitingDealState.nextDisabled
-    || !awaitingDealState.fullDeployDisabled
+    || awaitingDealState.playDisabled
+    || awaitingDealState.nextDisabled
+    || awaitingDealState.fullDeployDisabled
     || !awaitingDealState.transportRect
     || !awaitingDealState.strategikonToggle
     || awaitingDealState.obsoleteDeploymentButton
@@ -511,6 +473,9 @@ try {
   }
 
   try {
+    await page.waitForFunction(() => document.querySelector('[data-deployment-card-stage="card"]')
+      && !document.querySelector('[data-testid="deployment-next"]')?.disabled);
+    await page.click('[data-testid="deployment-next"]');
     await page.waitForFunction(() => document.querySelector('[data-deployment-stack-card].is-active.is-revealing'));
     await page.evaluate(() => new Promise((resolve) => {
       requestAnimationFrame(() => requestAnimationFrame(resolve));
@@ -521,6 +486,72 @@ try {
   const revealMotionShot = 'tmp-shots/run-opening-deployment-card-reveal.png';
   await page.screenshot({ path: revealMotionShot });
   console.log('Deployment card-reveal screenshot:', revealMotionShot);
+
+  if (deploymentOnly) {
+    let arrival = null;
+    try {
+      await page.waitForFunction(() => {
+        const board = document.querySelector('[data-testid="skirmish-board"]');
+        return board?.getAttribute('data-unit-arrival-track') === 'slide-from-right'
+          && board.getAttribute('data-arriving') === 'true';
+      }, { timeout: 5_000 });
+      arrival = await page.evaluate(() => {
+        const board = document.querySelector('[data-testid="skirmish-board"]');
+        return {
+          track: board?.getAttribute('data-unit-arrival-track') ?? null,
+          arriving: board?.getAttribute('data-arriving') ?? null,
+          unitIds: (board?.getAttribute('data-arriving-unit-ids') ?? '').split(',').filter(Boolean),
+        };
+      });
+    } catch {
+      await fail('deployment-sideways-arrival', JSON.stringify(await sceneDiagnostics()));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 220));
+    const arrivalShot = 'tmp-shots/run-deployment-sideways-arrival.png';
+    await page.screenshot({ path: arrivalShot });
+
+    try {
+      await page.waitForFunction(async () => {
+        const { useActiveRun } = await import('/src/run/store.ts');
+        const run = useActiveRun.getState().run;
+        return run?.phase === 'battle'
+          && document.querySelector('[data-testid="skirmish-board"]')?.getAttribute('data-arriving') === 'false';
+      }, { timeout: 15_000 });
+    } catch {
+      await fail('deployment-sideways-settle', JSON.stringify(await sceneDiagnostics()));
+    }
+
+    const settled = await page.evaluate(async () => {
+      const { useActiveRun } = await import('/src/run/store.ts');
+      const { runCardUnitIds } = await import('/src/run/model.ts');
+      const run = useActiveRun.getState().run;
+      const card = run?.cards[0];
+      const seats = card && run?.deployment
+        ? runCardUnitIds(card).map((id) => ({ id, cell: run.deployment.placements[id] ?? null }))
+        : [];
+      return { phase: run?.phase ?? null, seats };
+    });
+    const occupied = settled.seats.map(({ cell }) => cell).filter(Boolean);
+    const parsed = occupied.map((cell) => cell.split(',').map(Number));
+    const xs = parsed.map(([x]) => x).sort((a, b) => a - b);
+    const ys = new Set(parsed.map(([, y]) => y));
+    if (
+      arrival?.track !== 'slide-from-right'
+      || arrival.arriving !== 'true'
+      || arrival.unitIds.length !== 3
+      || settled.phase !== 'battle'
+      || occupied.length !== 3
+      || JSON.stringify(xs) !== JSON.stringify([0, 1, 2])
+      || ys.size !== 2
+    ) {
+      await fail('deployment-sideways-formation', JSON.stringify({ arrival, settled }));
+    }
+    console.log('Sideways arrival screenshot:', arrivalShot);
+    console.log('PASS — one card reveals, slides its complete two-row formation from the right, settles left, and promotes the same Battle');
+    await browser.close();
+    rmSync(browserProfile, { recursive: true, force: true });
+    process.exit(0);
+  }
 
   try {
     await page.waitForFunction(() => document.querySelector('[data-deployment-card-stage="unit"]')
@@ -984,7 +1015,7 @@ try {
     }
   }
   if (transitionOnly) {
-    console.log('PASS — opening Sectio Continue is optional-commerce and director-owned through Battle');
+    console.log('PASS — opening Bona Vacantia hands directly to director-owned Battle 1');
     await browser.close();
     rmSync(browserProfile, { recursive: true, force: true });
     process.exit(0);
