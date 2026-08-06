@@ -80,8 +80,11 @@ search for before constructing a control or repeated surface.
   media. It also owns the unit sprite's cached alpha mask: Expunctio
   pointer hover and click reuse those installed source pixels as a silhouette hit test with a
   small scale-relative halo matching the visible outline; overlapping halos resolve to the nearest
-  visible sprite pixel, while its semantic buttons retain ordinary keyboard activation
-  ([ADR-0485](adr/0485-expunctio-unit-pointer-targets-include-the-visible-outline.md)).
+  visible sprite pixel, while its semantic buttons retain ordinary keyboard activation. Every
+  occupied same-role unit stack also has one stable shared larger prose-named hover reading from
+  `Tooltip`, so crossing repeated figures does not replace or move the popup
+  ([ADR-0485](adr/0485-expunctio-unit-pointer-targets-include-the-visible-outline.md),
+  [ADR-0490](adr/0490-run-card-units-reveal-a-larger-named-reading.md)).
 - `ui/RunCard.tsx` — the canonical interactive/reference host around
   `RunCardFace`; Sectio mode owns the gold transaction cue and supplies the exact
   source face used by the Adlectio transfer.

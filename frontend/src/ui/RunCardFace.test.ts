@@ -237,6 +237,18 @@ describe('Run card atomic presentation', () => {
     expect(style).toMatch(/\.run-card-prototype-property-icon\s*\{[\s\S]*?--run-card-property-icon-x/);
   });
 
+  it('gives each same-role unit stack one stable larger prose-named hover reading', () => {
+    const source = readFileSync(new URL('./RunCardFace.tsx', import.meta.url), 'utf8');
+    const style = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+    expect(source).toContain('function UnitGrantStack');
+    expect(source).toContain('className="run-card-prototype-unit-tooltip"');
+    expect(source).toContain('title={unitName}');
+    expect(source).toContain('className="run-card-prototype-unit-tooltip-sprite"');
+    expect(source).toMatch(/className="run-card-prototype-unit-tooltip"[\s\S]*?focusable=\{false\}[\s\S]*?trigger=\{placements\.map/);
+    expect(source.match(/className="run-card-prototype-unit-tooltip"/g)).toHaveLength(1);
+    expect(style).toMatch(/\.run-card-prototype-unit-tooltip-sprite\s*\{[\s\S]*?block-size:\s*112px/);
+  });
+
   it('makes card figures selectable only when a transactional host opts in', () => {
     const source = readFileSync(new URL('./RunCardFace.tsx', import.meta.url), 'utf8');
     const style = readFileSync(new URL('../style.css', import.meta.url), 'utf8');

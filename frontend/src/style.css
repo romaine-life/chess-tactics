@@ -25124,6 +25124,38 @@ button.run-card-prototype-unit-icon-seat.is-selectable {
   position: absolute;
 }
 
+/* Occupied units of one role share one trigger. The trigger is fitted from the
+   first occupied sprite to the last, so crossing between repeated units keeps
+   one popup and one stable anchor instead of replacing overlapping tooltips. */
+.run-card-prototype-unit-tooltip {
+  block-size: 100%;
+  display: block;
+  position: absolute;
+  z-index: 0;
+}
+
+.run-card-prototype-unit-tooltip > .run-card-prototype-unit-tooltip-trigger {
+  block-size: 100%;
+  cursor: help;
+  display: block;
+  inline-size: 100%;
+  position: relative;
+}
+
+.run-card-prototype-unit-tooltip-popup {
+  justify-items: center;
+  min-inline-size: 136px;
+}
+
+.run-card-prototype-unit-tooltip-sprite {
+  block-size: 112px;
+  display: block;
+  inline-size: auto;
+  image-rendering: pixelated;
+  max-inline-size: 136px;
+  object-fit: contain;
+}
+
 .run-card-prototype-unit-stack.has-pixel-hover {
   cursor: pointer;
 }
