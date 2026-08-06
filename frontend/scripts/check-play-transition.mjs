@@ -10,11 +10,12 @@
 // but a committed canonical Continue address, or loses the canonicalization event
 // (the App location subscription must deliver it: an in-flight retarget shows a
 // second scene-navigation-accepted mark; a post-commit refresh shows
-// scene-address-refreshed).
+// scene-address-refreshed). It also starts a replacement Run and verifies that the
+// outgoing confirmation remains structurally frozen while the Run store is replaced.
 //
 // Usage: npm run verify:play-transition -- '<base-url>'
 
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import puppeteer from 'puppeteer-core';
@@ -36,6 +37,7 @@ if (!executablePath) { console.error('No Chrome/Edge found. Checked:\n' + CHROME
 
 const TIMEOUT = 30_000;
 const CANONICAL_PREFIX = '/play/select/continue';
+const captureStartRun = process.argv.includes('--capture-start-run');
 const profile = mkdtempSync(join(tmpdir(), 'ct-playnav-'));
 const browser = await puppeteer.launch({
   executablePath,
@@ -173,20 +175,127 @@ async function runScenario({ label, delayCampaignsMs }) {
   }
 }
 
+async function runStartRunScenario() {
+  const label = 'start-run-outgoing-snapshot';
+  const page = await browser.newPage();
+  try {
+    await page.setViewport({ width: 1280, height: 800 });
+    const signIn = new URL('/api/auth/sign-in', base);
+    signIn.searchParams.set('returnTo', '/api/auth/me');
+    const auth = await page.goto(signIn.href, { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
+    if (!auth || (!auth.ok() && auth.status() !== 304)) {
+      throw new Error(`local sign-in failed (${auth?.status() ?? 'no response'})`);
+    }
+
+    await page.goto(new URL('/play/select/run/new', base).href, { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
+    await page.waitForFunction(
+      `document.querySelector('[data-scene-phase]')?.getAttribute('data-scene-phase') === 'current'
+        && Boolean(document.querySelector('[data-testid="run-replace-warning"]'))
+        && Boolean(document.querySelector('[data-testid="run-start"]'))`,
+      { timeout: TIMEOUT },
+    );
+    await page.click('[data-testid="run-start"]');
+    await page.waitForSelector('[data-testid="run-abandon-and-start"]', { visible: true, timeout: TIMEOUT });
+
+    await page.evaluate(() => {
+      const director = document.querySelector('[data-scene-phase]');
+      const rect = (element) => {
+        if (!element) return null;
+        const bounds = element.getBoundingClientRect();
+        return [bounds.x, bounds.y, bounds.width, bounds.height].map((value) => Math.round(value * 100) / 100);
+      };
+      const read = () => {
+        const detail = document.querySelector('[data-testid="run-detail-new"]');
+        const warning = detail?.querySelector('[data-testid="run-replace-warning"]') ?? null;
+        const actions = detail?.querySelector('.run-replace-decision') ?? null;
+        const buttons = detail
+          ? [...detail.querySelectorAll('button[data-testid]')]
+            .map((element) => element.getAttribute('data-testid'))
+            .filter((value) => value === 'run-keep' || value === 'run-abandon-and-start' || value === 'run-start')
+            .sort()
+          : [];
+        window.__startRunFrames.push({
+          at: Math.round(performance.now()),
+          phase: director?.getAttribute('data-scene-phase') ?? null,
+          detailVisible: Boolean(detail),
+          warningVisible: Boolean(warning),
+          buttons,
+          geometry: [rect(detail), rect(warning), rect(actions)],
+        });
+      };
+      window.__startRunFrames = [];
+      read();
+      window.__startRunObserver = new MutationObserver(read);
+      window.__startRunObserver.observe(document.body, {
+        attributes: true,
+        childList: true,
+        characterData: true,
+        subtree: true,
+      });
+    });
+
+    if (captureStartRun) {
+      const captureDir = join(process.cwd(), 'tmp-shots');
+      mkdirSync(captureDir, { recursive: true });
+      await page.screenshot({ path: join(captureDir, 'start-run-armed.png'), fullPage: false });
+    }
+    await page.click('[data-testid="run-abandon-and-start"]');
+    if (captureStartRun) {
+      await page.waitForFunction(
+        `document.querySelector('[data-scene-phase]')?.getAttribute('data-scene-phase') === 'entering'`,
+        { timeout: TIMEOUT },
+      );
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      await page.screenshot({ path: join(process.cwd(), 'tmp-shots', 'start-run-transition.png'), fullPage: false });
+    }
+    await page.waitForFunction(
+      `window.location.pathname === '/run'
+        && document.querySelector('[data-scene-phase]')?.getAttribute('data-scene-phase') === 'current'`,
+      { timeout: TIMEOUT },
+    );
+    const frames = await page.evaluate(() => {
+      window.__startRunObserver?.disconnect();
+      return window.__startRunFrames;
+    });
+    const visibleFrames = frames.filter((frame) => frame.detailVisible);
+    const baselineGeometry = visibleFrames[0]?.geometry ?? null;
+    const unstableFrames = visibleFrames.filter((frame) => (
+      !frame.warningVisible
+      || frame.buttons.join(',') !== 'run-abandon-and-start,run-keep'
+      || JSON.stringify(frame.geometry) !== JSON.stringify(baselineGeometry)
+    ));
+    const violations = [];
+    if (visibleFrames.length === 0) violations.push('the armed outgoing detail was never observed');
+    if (unstableFrames.length > 0) {
+      const signatures = [...new Set(unstableFrames.map((frame) => (
+        `${frame.phase}:warning=${frame.warningVisible}:buttons=${frame.buttons.join(',')}`
+      )))];
+      violations.push(`outgoing confirmation changed before retirement (${signatures.join(' | ')})`);
+    }
+    return { label, violations, finalPath: page.url(), visibleFrames: visibleFrames.length };
+  } finally {
+    await page.close();
+  }
+}
+
 try {
   const scenarios = [
     await runScenario({ label: 'natural-timing', delayCampaignsMs: 0 }),
     await runScenario({ label: 'forced-mid-transition-canonicalization', delayCampaignsMs: 600 }),
+    await runStartRunScenario(),
   ];
   let failed = false;
   for (const scenario of scenarios) {
     const ok = scenario.violations.length === 0;
     failed ||= !ok;
-    console.log(`${ok ? 'OK' : 'FAIL'} ${scenario.label}: exits=${scenario.exitingCount} accepted=${scenario.acceptedCount} refreshed=${scenario.refreshedCount} final=${scenario.finalPath}`);
+    const details = 'exitingCount' in scenario
+      ? `exits=${scenario.exitingCount} accepted=${scenario.acceptedCount} refreshed=${scenario.refreshedCount}`
+      : `visibleFrames=${scenario.visibleFrames}`;
+    console.log(`${ok ? 'OK' : 'FAIL'} ${scenario.label}: ${details} final=${scenario.finalPath}`);
     if (!ok) {
       console.error(`  violations: ${scenario.violations.join('; ')}`);
-      console.error(`  phases: ${JSON.stringify(scenario.phaseSequence)}`);
-      console.error(`  marks: ${JSON.stringify(scenario.marks)}`);
+      if ('phaseSequence' in scenario) console.error(`  phases: ${JSON.stringify(scenario.phaseSequence)}`);
+      if ('marks' in scenario) console.error(`  marks: ${JSON.stringify(scenario.marks)}`);
     }
   }
   process.exitCode = failed ? 10 : 0;
