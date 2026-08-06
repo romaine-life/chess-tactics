@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-08-03
 deciders: owner (Nelson) + Claude
+partially_superseded_by:
+  - "[ADR-0494](0494-runs-begin-in-battle-and-sectio-deals-a-derived-rarity-pile.md)'s earliest legal crafted-card acquisition after Battle 1"
 refines:
   - "[ADR-0231](0231-strategikon-and-enchiridion-share-one-reference-workspace-language.md)"
   - "[ADR-0335](0335-the-strategikon-is-a-run-wide-reference-not-a-battle-only-workspace.md)"

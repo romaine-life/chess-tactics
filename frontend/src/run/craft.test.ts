@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { createBlankLevel } from '../core/level';
 import {
+  craftRunDocument,
   craftCoreCardId,
   hasRunCraftRequest,
   parseRunCraftSpec,
@@ -8,6 +10,20 @@ import {
   runCraftSpecFromJson,
   searchWithoutCraftParams,
 } from './craft';
+import type { RunWarSnapshot } from './model';
+
+function craftWar(): RunWarSnapshot {
+  return {
+    id: 'craft-war',
+    name: 'Craft War',
+    description: 'A Battle-first craft fixture.',
+    battles: Array.from({ length: 3 }, (_, index) => {
+      const level = createBlankLevel(`craft-battle-${index}`, `Battle ${index + 1}`, 8, 8);
+      level.layers.units.push({ x: 4, y: 0, type: 'king', side: 'enemy' });
+      return { level, loot: false };
+    }),
+  };
+}
 
 describe('formation Run craft parsing', () => {
   it('reads plain piece names and compact chess aliases', () => {
@@ -66,5 +82,28 @@ describe('formation Run craft parsing', () => {
     expect(hasRunCraftRequest(new URL(address, 'http://test').search)).toBe(true);
     expect(runCraftSpecFingerprint(spec)).toBe(runCraftSpecFingerprint(parseRunCraftSpec(new URL(address, 'http://test').search)!));
     expect(searchWithoutCraftParams('?craft=battle&seed=3&view=army')).toBe('?view=army');
+  });
+
+  it('has no craftable Sectio or held acquisition before Battle 1', () => {
+    const war = craftWar();
+    expect(() => craftRunDocument(
+      runCraftSpecFromJson({ phase: 'sectio', battle: 1 }),
+      war,
+    )).toThrow(/first Sectio follows Battle 1/i);
+    expect(() => craftRunDocument(
+      runCraftSpecFromJson({ phase: 'deployment', battle: 1, cards: ['p'] }),
+      war,
+    )).toThrow(/cannot be held before the Sectio after Battle 1/i);
+  });
+
+  it('stages held cards through the first legal post-Battle Sectio', () => {
+    const run = craftRunDocument(
+      runCraftSpecFromJson({ phase: 'deployment', battle: 2, cards: ['p'] }),
+      craftWar(),
+    );
+    expect(run.phase).toBe('deployment');
+    expect(run.battleIndex).toBe(1);
+    expect(run.cards.map((card) => card.coreId)).toContain('p');
+    expect(run.sectioCardCursor).toBe(3);
   });
 });

@@ -4,6 +4,7 @@ import {
   createRun,
   createRunCardOffer,
   leaveSectio,
+  openSectio,
   performAdlectio,
   prepareDeployment,
   RUN_CARD_BY_ID,
@@ -42,9 +43,15 @@ function fixture(
     id: 'formation-war',
     name: 'Formation War',
     description: 'Deployment fixture.',
-    battles: [{ level, loot: false }],
+    battles: [{ level, loot: false }, { level: structuredClone(level), loot: false }],
   };
   let assembled = createRun(war, seed);
+  if (cardIds.length) {
+    assembled = openSectio(
+      { ...assembled, phase: 'battle' },
+      assembled.army.map((unit) => unit.id),
+    );
+  }
   cardIds.forEach((cardId, index) => {
     const definition = RUN_CARD_BY_ID[cardId];
     const offer = createRunCardOffer(assembled, definition, 0, 100 + index);
@@ -58,7 +65,8 @@ function fixture(
     };
     assembled = performAdlectio(assembled, offer.offerId);
   });
-  const run = resolveForcedDeploymentChoices(prepareDeployment(leaveSectio(assembled)), level);
+  const ready = assembled.phase === 'sectio' ? leaveSectio(assembled) : assembled;
+  const run = resolveForcedDeploymentChoices(prepareDeployment(ready), level);
   return { run, level };
 }
 

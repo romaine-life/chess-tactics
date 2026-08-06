@@ -7,6 +7,7 @@ partially_superseded_by:
   - "[ADR-0323](0323-run-shops-allow-every-affordable-card-purchase.md)'s multi-card shared Shop transaction and format-10 purchase state"
   - "[ADR-0322](0322-run-openings-use-two-pawns-eight-gold-and-card-native-purchase-feedback.md)'s format-9 card vocabulary, two-Pawn army, eight-gold budget, and purchase feedback"
   - "[ADR-0392](0392-sectio-is-the-run-disposal-and-acquisition-phase.md)'s replacement of the Shop terminology and stored phase with Sectio"
+  - "[ADR-0494](0494-runs-begin-in-battle-and-sectio-deals-a-derived-rarity-pile.md)'s removal of the opening Sectio"
 partially_supersedes:
   - "[ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md)'s separate opening-draft phase"
   - "[ADR-0237](0237-run-destinations-fill-the-shell-workspace.md)'s Opening draft destination"

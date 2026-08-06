@@ -356,7 +356,7 @@ function RunMetaControls({
                   onNavigate('primary');
                 }}
               >
-                {sectio.kind === 'opening' ? 'Continue to first Battle' : 'Continue to next Battle'}
+                Continue to next Battle
               </ChromeButton>
             </div>
             {!canLeave && continueHint ? <p className="skirmish-grid-hint">{continueHint}</p> : null}

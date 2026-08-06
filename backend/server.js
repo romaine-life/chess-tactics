@@ -5168,7 +5168,48 @@ const MIGRATIONS = [
          END,
              revision = revision + 1,
              updated_at = now()
-       WHERE body->'runSaveVersion' IN ('23'::jsonb, '24'::jsonb);
+      WHERE body->'runSaveVersion' IN ('23'::jsonb, '24'::jsonb);
+    `,
+  },
+  {
+    version: 64,
+    name: 'Battle-first opening and derived Sectio card pile',
+    // ADR-0494: version 26 removes the opening Sectio and stores only the cursor into
+    // the seed-derived 180-card pile. Existing post-Battle offers remain visible and
+    // begin the new sequence at zero; an in-progress opening Sectio keeps completed
+    // transactions and proceeds directly to Battle 1's Deployment.
+    sql: `
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_active_run_v25_to_v26(run_value jsonb)
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      AS $function$
+      DECLARE
+        migrated jsonb := run_value;
+        opening_sectio boolean := run_value->>'phase' = 'sectio'
+          AND run_value->'sectio'->>'kind' = 'opening';
+      BEGIN
+        IF run_value->'runSaveVersion' <> '25'::jsonb THEN RETURN run_value; END IF;
+        migrated := jsonb_set(migrated, '{runSaveVersion}', '26'::jsonb, false);
+        migrated := jsonb_set(migrated, '{sectioCardCursor}', '0'::jsonb, true);
+        IF opening_sectio THEN
+          migrated := jsonb_set(migrated, '{phase}', '"deployment"'::jsonb, false);
+          migrated := jsonb_set(migrated, '{sectio}', 'null'::jsonb, false);
+          migrated := jsonb_set(migrated, '{vacantia}', 'null'::jsonb, false);
+          migrated := jsonb_set(migrated, '{deployment}', 'null'::jsonb, false);
+          migrated := jsonb_set(migrated, '{battleRuntime}', 'null'::jsonb, false);
+          migrated := jsonb_set(migrated, '{aftermath}', 'null'::jsonb, false);
+        ELSIF jsonb_typeof(migrated->'sectio') = 'object' THEN
+          migrated := jsonb_set(migrated, '{sectio}', (migrated->'sectio') - 'kind', false);
+        END IF;
+        RETURN migrated;
+      END
+      $function$;
+
+      UPDATE active_runs
+         SET body = pg_temp.migrate_active_run_v25_to_v26(body),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE body->'runSaveVersion' = '25'::jsonb;
     `,
   },
 ];
@@ -5780,7 +5821,10 @@ async function unmigratedActiveRunSaveCounts(client) {
        )::integer AS version_23_count,
        count(*) FILTER (
          WHERE body->'runSaveVersion' = '24'::jsonb
-       )::integer AS version_24_count
+       )::integer AS version_24_count,
+       count(*) FILTER (
+         WHERE body->'runSaveVersion' = '25'::jsonb
+       )::integer AS version_25_count
        FROM active_runs`,
   );
   return Object.freeze({
@@ -5793,6 +5837,7 @@ async function unmigratedActiveRunSaveCounts(client) {
     version_22_count: Number(rows[0]?.version_22_count) || 0,
     version_23_count: Number(rows[0]?.version_23_count) || 0,
     version_24_count: Number(rows[0]?.version_24_count) || 0,
+    version_25_count: Number(rows[0]?.version_25_count) || 0,
   });
 }
 
@@ -5919,7 +5964,8 @@ async function requiredSchemaContractIssues(client) {
       + unmigratedActiveRunSaves.version_21_count
       + unmigratedActiveRunSaves.version_22_count
       + unmigratedActiveRunSaves.version_23_count
-      + unmigratedActiveRunSaves.version_24_count,
+      + unmigratedActiveRunSaves.version_24_count
+      + unmigratedActiveRunSaves.version_25_count,
     unmigrated_active_run_version_16_count: unmigratedActiveRunSaves.version_16_count,
     unmigrated_active_run_version_17_count: unmigratedActiveRunSaves.version_17_count,
     unmigrated_active_run_version_18_count: unmigratedActiveRunSaves.version_18_count,
@@ -5929,6 +5975,7 @@ async function requiredSchemaContractIssues(client) {
     unmigrated_active_run_version_22_count: unmigratedActiveRunSaves.version_22_count,
     unmigrated_active_run_version_23_count: unmigratedActiveRunSaves.version_23_count,
     unmigrated_active_run_version_24_count: unmigratedActiveRunSaves.version_24_count,
+    unmigrated_active_run_version_25_count: unmigratedActiveRunSaves.version_25_count,
     unmigrated_level_format_1_count: unmigratedLevelDocuments,
     unrepaired_saved_editor_baseline_count: unrepairedSavedEditorBaselines,
     primogeniture_non_retired_slot_count: primogenitureRetirement.non_retired_slot_count,
@@ -6107,6 +6154,17 @@ async function repairRequiredSchemaContracts(
     await executeMigration(migration, 'repair ability-free generated formation Run contract');
     completedSteps.push(Object.freeze({
       contract: 'ability-free generated formation Run save version',
+      migration_version: migration.version,
+    }));
+    markInspection(`inspect required contract repairs after migration ${migration.version}`);
+    issues = await requiredSchemaContractIssues(client);
+  }
+  if (issues.unmigrated_active_run_version_25_count > 0) {
+    const migration = MIGRATIONS.find((candidate) => candidate.version === 64);
+    if (!migration) throw new Error('derived Sectio card pile active Run repair migration is unavailable');
+    await executeMigration(migration, 'repair Battle-first opening and derived Sectio card pile contract');
+    completedSteps.push(Object.freeze({
+      contract: 'Battle-first opening and derived Sectio card pile Run save version',
       migration_version: migration.version,
     }));
     markInspection(`inspect required contract repairs after migration ${migration.version}`);
@@ -21225,7 +21283,6 @@ const ACTIVE_RUN_ABILITIES = new Set(['adlected', 'eutactic', 'agminate']);
 const ACTIVE_RUN_MODIFIERS = new Set(['cacochymic']);
 const ACTIVE_RUN_CACOCHYMIC_DISCOUNTS = Object.freeze({ pawn: 0, knight: 1, bishop: 1, rook: 2, queen: 3 });
 const ACTIVE_RUN_SECTIO_FIELDS = new Set([
-  'kind',
   'afterBattleIndex',
   'conflictIndex',
   'victoryGoldTenths',
@@ -22077,7 +22134,7 @@ function formationRunSnapshotIssue(snapshot, warBattleCount) {
 }
 
 /**
- * Current Run persistence boundary. Version 25 deliberately knows nothing about card
+ * Current Run persistence boundary. Version 26 deliberately knows nothing about card
  * qualifiers or unit abilities: a card resolves through the generated one-to-four-unit
  * formation catalog and every unit on it is committed together during Deployment.
  */
@@ -22096,6 +22153,9 @@ function validateFormationRunBody(run) {
   if (!isFiniteInteger(run.battleIndex) || run.battleIndex < 0) return 'run.battleIndex is invalid';
   if (!isFiniteInteger(run.conflictIndex) || run.conflictIndex < 0) return 'run.conflictIndex is invalid';
   if (!isFiniteInteger(run.goldTenths) || run.goldTenths < 0) return 'run.goldTenths is invalid';
+  if (!isFiniteInteger(run.sectioCardCursor) || run.sectioCardCursor < 0) {
+    return 'run.sectioCardCursor is invalid';
+  }
 
   if (!isObjectRecord(run.war) || typeof run.war.id !== 'string' || !run.war.id) return 'run.war is invalid';
   if (typeof run.war.name !== 'string' || typeof run.war.description !== 'string') return 'run.war is invalid';

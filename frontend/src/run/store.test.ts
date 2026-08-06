@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createBlankLevel } from '../core/level';
-import { CURRENT_RUN_SAVE_VERSION, createRun, runCardUnitIds, type RunDocument, type RunWarSnapshot } from './model';
+import { CURRENT_RUN_SAVE_VERSION, createRun, openSectio, runCardUnitIds, type RunDocument, type RunWarSnapshot } from './model';
 
 function legacyCards(cards: RunDocument['cards']) {
   return cards.map((card) => {
@@ -26,7 +26,10 @@ function war(): RunWarSnapshot {
     id: 'war-store-test',
     name: 'Store Test War',
     description: 'A Run persistence fixture.',
-    battles: [{ level: createBlankLevel('battle-store-test'), loot: false }],
+    battles: [
+      { level: createBlankLevel('battle-store-test'), loot: false },
+      { level: createBlankLevel('battle-store-test-2'), loot: false },
+    ],
   };
 }
 
@@ -38,8 +41,17 @@ afterEach(() => {
 describe('Run browser persistence', () => {
   it('chains a version-16 Shop save into the sole current Sectio shape on first read', async () => {
     const storage = memoryStorage();
-    const current = createRun(war(), 73);
-    const { runSaveVersion: _runSaveVersion, sectio, ...version16 } = current;
+    const fresh = createRun(war(), 73);
+    const current = openSectio(
+      { ...fresh, phase: 'battle' },
+      fresh.army.map((unit) => unit.id),
+    );
+    const {
+      runSaveVersion: _runSaveVersion,
+      sectioCardCursor: _sectioCardCursor,
+      sectio,
+      ...version16
+    } = current;
     const {
       adlectedCardOfferIds,
       alienatedUnits,
@@ -52,6 +64,7 @@ describe('Run browser persistence', () => {
       phase: 'shop',
       shop: {
         ...version16Shop,
+        kind: 'opening',
         entrySnapshot: {
           ...version16Shop.entrySnapshot,
           cards: legacyCards(version16Shop.entrySnapshot.cards),
@@ -65,10 +78,12 @@ describe('Run browser persistence', () => {
     const { useActiveRun } = await import('./store');
     const persisted = JSON.parse(storage.getItem('chess-tactics:active-run:v1') ?? 'null');
 
-    expect(useActiveRun.getState().run).toEqual(current);
+    expect(useActiveRun.getState().run).toEqual(persisted);
     expect(persisted.runSaveVersion).toBe(CURRENT_RUN_SAVE_VERSION);
     expect(persisted).not.toHaveProperty('formatVersion');
     expect(persisted).not.toHaveProperty('shop');
-    expect(persisted.phase).toBe('sectio');
+    expect(persisted.phase).toBe('deployment');
+    expect(persisted.sectio).toBeNull();
+    expect(persisted.sectioCardCursor).toBe(0);
   });
 });

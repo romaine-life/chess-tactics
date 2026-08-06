@@ -7,7 +7,7 @@ import {
   sceneManifest,
   sceneTransitionRelationship,
 } from './sceneManifest';
-import { createRun, prepareDeployment } from '../../run/model';
+import { createRun, openSectio, prepareDeployment } from '../../run/model';
 import { completeDeploymentDeal } from '../../run/deployment';
 import { createBlankLevel } from '../../core/level';
 
@@ -355,8 +355,12 @@ describe('scene manifests', () => {
       id: 'run-war',
       name: 'Run War',
       description: 'A test War',
-      battles: [{ level, loot: false }],
+      battles: [{ level, loot: false }, { level: structuredClone(level), loot: false }],
     }, 17, '2026-08-01T00:00:00.000Z');
+    const sectioDocument = openSectio(
+      { ...draft, phase: 'battle' },
+      draft.army.map((unit) => unit.id),
+    );
     const deal = prepareDeployment({ ...draft, phase: 'deployment' as const });
     const deployment = completeDeploymentDeal(deal, level);
     const battle = { ...deployment, phase: 'battle' as const };
@@ -367,8 +371,8 @@ describe('scene manifests', () => {
     const battleScene = sceneManifest('/run', '', source(battle));
     const armyScene = sceneManifest('/run', '?view=army', source(battle));
     const hiddenBattlePreviewScene = sceneManifest('/run', '?view=battle-preview', source(battle));
-    const sectioBattlePreviewScene = sceneManifest('/run', '?view=battle-preview', source(draft));
-    const sectioExpunctioScene = sceneManifest('/run', '?view=expunctio', source(draft));
+    const sectioBattlePreviewScene = sceneManifest('/run', '?view=battle-preview', source(sectioDocument));
+    const sectioExpunctioScene = sceneManifest('/run', '?view=expunctio', source(sectioDocument));
 
     expect(dealScene.snapshot).toMatchObject({
       kind: 'run',
@@ -513,9 +517,16 @@ describe('scene manifests', () => {
       id: 'war',
       name: 'War',
       description: 'War',
-      battles: [{ level: createBlankLevel('battle', 'Battle', 8, 8), loot: false }],
+      battles: [
+        { level: createBlankLevel('battle', 'Battle', 8, 8), loot: false },
+        { level: createBlankLevel('battle-2', 'Battle 2', 8, 8), loot: false },
+      ],
     };
-    const document = createRun(war, 19, '2026-08-01T00:00:00.000Z');
+    const opening = createRun(war, 19, '2026-08-01T00:00:00.000Z');
+    const document = openSectio(
+      { ...opening, phase: 'battle' },
+      opening.army.map((unit) => unit.id),
+    );
     const source = { run: { hydrated: true, document } };
     const sectio = sceneManifest('/run', '', source);
     const expunctio = sceneManifest('/run', '?view=expunctio', source);

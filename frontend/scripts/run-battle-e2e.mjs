@@ -4,7 +4,7 @@
 // not the pointer path — an invisible overlay shielding the board passes every unit
 // test while making the game unplayable; see the strategikon-slot regression, #552).
 //
-// Drives a FRESH anonymous profile end-to-end: start run → leave the opening Sectio without buying → begin battle
+// Drives a FRESH anonymous profile end-to-end: start run → take opening Bona Vacantia → begin battle
 // → click a unit's tile → click a legal destination → assert the move commits, the
 // enemy replies, and the open Strategikon still takes the pointer. Fails loudly at
 // the exact step where a click is swallowed.
@@ -217,27 +217,19 @@ try {
   await page.waitForFunction(() => [...document.querySelectorAll('button')].some((b) => (b.textContent || '').trim() === 'Start Run'));
   if (!await clickButton('Start Run')) await fail('start-run', JSON.stringify(await buttonDiagnostics('Start Run')));
 
-  // A fresh Conflict can now begin with mandatory Bona Vacantia before its opening
-  // Sectio. Wait for the director-owned destination, then take one of the ordinary
-  // offers with a real hit-tested click (only Conscription Notice needs a second step).
+  // A fresh Conflict can begin with mandatory Bona Vacantia directly before Battle 1.
+  // Wait for that director-owned destination (or immediate Deployment in a War with no
+  // opening lipsanon) before installing the transition probe.
   try {
     await page.waitForFunction(() => {
       const director = document.querySelector('.scene-director');
       const committed = director?.getAttribute('data-scene-committed') ?? '';
       return director?.getAttribute('data-scene-phase') === 'current'
-        && (committed.includes(':bona-vacantia:') || committed.includes(':sectio:'));
+        && (committed.includes(':bona-vacantia:') || committed.includes(':battlefield:'));
     }, { timeout: 45_000 });
   } catch {
     await fail('start-run-phase', JSON.stringify(await sceneDiagnostics()));
   }
-  const bonaOffer = await page.$('button.run-vacantia-take:not([data-lipsanon-id="conscription-notice"])');
-  if (bonaOffer) {
-    const offerBox = await bonaOffer.boundingBox();
-    if (!offerBox) await fail('opening-bona-vacantia', 'ordinary lipsanon offer has no geometry');
-    await page.mouse.click(offerBox.x + offerBox.width / 2, offerBox.y + offerBox.height / 2);
-  }
-  await waitPhase('sectio', 'start-run');
-
   await page.evaluate(() => {
     const outgoing = document.querySelector('.run-scene-slot');
     const nativeAnimate = Element.prototype.animate;
@@ -367,10 +359,13 @@ try {
     probe.frame = requestAnimationFrame(tick);
   });
 
-  if (!await clickButton('Continue to first Battle')) {
-    await fail('opening-continue-without-purchase', JSON.stringify(await buttonDiagnostics('Continue to first Battle')));
+  const bonaOffer = await page.$('button.run-vacantia-take:not([data-lipsanon-id="conscription-notice"])');
+  if (bonaOffer) {
+    const offerBox = await bonaOffer.boundingBox();
+    if (!offerBox) await fail('opening-bona-vacantia', 'ordinary lipsanon offer has no geometry');
+    await page.mouse.click(offerBox.x + offerBox.width / 2, offerBox.y + offerBox.height / 2);
   }
-  await waitPhase('deployment', 'opening-continue-without-purchase');
+  await waitPhase('deployment', 'opening-bona-vacantia-to-deployment');
   await page.waitForFunction(() => {
       const director = document.querySelector('.scene-director');
       return director?.getAttribute('data-scene-phase') === 'current'
@@ -1020,7 +1015,7 @@ try {
     }
   }
   if (transitionOnly) {
-    console.log('PASS — opening Sectio Continue is optional-commerce and director-owned through Battle');
+    console.log('PASS — opening Bona Vacantia hands directly to director-owned Battle 1');
     await browser.close();
     rmSync(browserProfile, { recursive: true, force: true });
     process.exit(0);

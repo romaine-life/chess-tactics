@@ -102,21 +102,24 @@ these.
 - Rarity describes desirability rather than material price. Queens, two Rooks, three
   non-Pawns, and every formation containing Bishops on opposite-colored squares are
   Rare. A Rook or two non-Pawns is ordinarily Uncommon; same-color Bishop pairs remain
-  Common. Each offer seat rolls its tier first at 75% Common, 20% Uncommon, and 5% Rare,
-  then selects a distinct seeded formation from that tier.
+  Common. Each Run derives a hidden 180-card pile containing exactly 135 Common, 36
+  Uncommon, and 9 Rare cards. Per-rarity queues consume every unseen identity before
+  recycling, then the selected cards are shuffled together without smoothing streaks.
 - A Sectio reveals three seeded formation-card offers, or four while
   Quartermaster's Ledger is held. Each offer costs exactly its printed material
   value. Adlectio adds the card and its units without rolling, assigning, or
-  revealing another property. The accepted face-down pile behavior and direct
-  Chartulary flight remain presentation-only; they do not imply a hidden market
-  or a replacement draw.
+  revealing another property. The Run persists only its cursor through the hidden
+  pile; its seed reproduces membership and order across reload. The revealed backs
+  in consumed offer seats still provide no replacement draw during that Sectio.
 - Run difficulty currently exposes only **Ataraxia 0 — The Untroubled Mind**,
   displayed as **Standard rules.** Higher difficulty tiers remain tabled until the
   baseline economy has supported a completed Run.
 - A fresh Run starts with one non-removable card, **His Grace**: the King behind
   two protecting Pawns in a three-cell triangle. The earlier separate Front Lines
   card is retired. The starter's units, order, and formation are the same facts
-  shown on its face and used in Deployment.
+  shown on its face and used in Deployment. There is no opening Sectio: opening
+  Bona Vacantia, when present, leads directly to Battle 1; otherwise Deployment
+  begins immediately. The first card offers arrive after Battle 1.
 - Every Battle enters Deployment on the canonical empty battlefield with the
   face-down Chartulary in the center. Deal order is seeded per combat, with His
   Grace first and up to three cards in the first Conflict; later Conflicts add one
@@ -405,13 +408,12 @@ The first prototype stays deliberately minimal (pillars §3). Resolved scope:
 
 **Deferred (post-v1, not precluded):** fluid royal / win conditions; mutating or
 cursed terrain and pieces; named-tactic surfacing; a competent search-based AI.
-Player armies and Run progression are governed by ADR-0193. ADR-0321 makes the
-opening the normal Sectio transaction and retires the separate draft phase and
-screen. ADR-0322 supplies the current two-Pawn, 8-gold opening and card-native
-transaction feedback and sound. ADR-0323 removes the inherited one-card-per-Sectio
-cap so every affordable dealt card can undergo Adlectio once. ADR-0347 removes the
-remaining mandatory opening transaction, and ADR-0393 names the optional card
-admission **Adlectio** in every Sectio.
+Player armies and Run progression are governed by ADR-0193. ADR-0321 retired the
+separate draft phase in favor of Sectio, while ADR-0494 now removes that opening
+Sectio so Battle 1 introduces the Run before its card economy. ADR-0322's two-Pawn,
+8-gold starter remains. ADR-0323 removes the inherited one-card-per-Sectio cap so
+every affordable dealt card can undergo Adlectio once, and ADR-0393 names that
+optional card admission **Adlectio** in every post-Battle Sectio.
 
 ## 14. Administrator playtesting
 

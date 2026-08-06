@@ -21,7 +21,7 @@ export {
 };
 
 /** The schema version of one persisted in-progress Run. Only this exact save shape is read. */
-export const CURRENT_RUN_SAVE_VERSION = 25;
+export const CURRENT_RUN_SAVE_VERSION = 26;
 export type RunSaveVersion = typeof CURRENT_RUN_SAVE_VERSION;
 
 export class UnsupportedRunSaveError extends Error {
@@ -40,13 +40,20 @@ const RUN_SAVE_VERSION_DEPLOYMENT_TRANSPORT_SOURCE = 21;
 const RUN_SAVE_VERSION_LEVEL_FORMAT_SOURCE = 22;
 const RUN_SAVE_VERSION_FORMATION_CARDS_SOURCE = 23;
 const RUN_SAVE_VERSION_SIDEWAYS_FORMATIONS_SOURCE = 24;
+const RUN_SAVE_VERSION_SECTIO_PILE_SOURCE = 25;
 export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
 export const RUN_BATTLE_RETRY_COST_TENTHS = 3 * GOLD_SCALE;
 export const RUN_DEPLOYMENT_REROLL_COST_TENTHS = GOLD_SCALE;
 export const RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS = 5 * GOLD_SCALE;
-export const RUN_OPENING_OFFER_COUNT = 3;
+export const RUN_SECTIO_CARD_OFFER_COUNT = 3;
+export const RUN_SECTIO_CARD_PILE_SIZE = 180;
+export const RUN_SECTIO_CARD_PILE_RARITY_COUNT: Readonly<Record<RunCardRarity, number>> = Object.freeze({
+  common: 135,
+  uncommon: 36,
+  rare: 9,
+});
 export const INSTALLED_ATARAXIA_MAX_TIER = 0;
 export type AtaraxiaTier = 0;
 
@@ -208,10 +215,9 @@ export interface RunWarSnapshot {
 }
 
 /**
- * 'bona-vacantia' opens a Conflict: the player takes one lipsanon before the Sectio that leads
- * into the Conflict's first Battle. It replaced the loot lipsanon that used to be won at a
- * Conflict's END, inside the Sectio -- same three-per-run cadence, opposite end, so the
- * choice is made looking forward rather than handed out as a reward.
+ * 'bona-vacantia' opens a Conflict: the player takes one lipsanon before its first Battle.
+ * It replaced the loot lipsanon that used to be won at a Conflict's END -- same three-per-run
+ * cadence, opposite end, so the choice is made looking forward rather than handed out as a reward.
  *
  * 'aftermath' closes a Battle: what the Battle paid and cost gets its own screen before
  * the Run moves on. The reward used to be reported by a line inside the Sectio, which put
@@ -316,7 +322,6 @@ export interface RunBattleReport {
 }
 
 export interface RunSectioState {
-  kind: 'opening' | 'post-battle';
   afterBattleIndex: number;
   conflictIndex: number;
   victoryGoldTenths: number;
@@ -334,10 +339,10 @@ export interface RunSectioState {
 }
 
 /**
- * The lipsanon offer that opens a Conflict. `kind` says which Sectio this hands off to once a
- * lipsanon is taken: the run's pinned opening Sectio, or the post-Battle Sectio that follows the
- * Battle just fought. `victoryGoldTenths` is carried through because that Sectio reports it
- * and the Battle's gold is banked before this screen, not after it.
+ * The lipsanon offer that opens a Conflict. `kind` says whether taking it hands off directly to
+ * Battle 1's Deployment or to the post-Battle Sectio following the Battle just fought.
+ * `victoryGoldTenths` is carried through because that later Sectio reports it and the Battle's
+ * gold is banked before this screen, not after it.
  */
 export interface RunVacantiaState {
   kind: 'opening' | 'post-battle';
@@ -379,6 +384,8 @@ export interface RunDocument {
   nextArmyUnitSequence: number;
   nextArmyUnitNumberByType: RunArmyNumberState;
   nextCardSequence: number;
+  /** Cards already consumed from the seed-derived hidden Sectio pile. */
+  sectioCardCursor: number;
   deployment: RunDeploymentState | null;
   battleRuntime: RunBattleRuntime | null;
   aftermath: RunAftermathState | null;
@@ -688,7 +695,8 @@ export function runCardRarityForRoll(roll: number): RunCardRarity {
   return 'rare';
 }
 
-function sectioCardOffers(
+/** Historical version-23-to-24 migration deal. This is not a live Sectio source. */
+function legacySectioCardOffers(
   seed: number,
   battleIndex: number,
   offerCount: number,
@@ -703,35 +711,96 @@ function sectioCardOffers(
     const tier = eligible.filter((card) => card.rarity === rarity);
     const candidates = tier.length ? tier : eligible;
     const card = shuffled(candidates, mixSeed(seed, `${label}:card`, slotIndex))[0];
-    if (!card) throw new Error(`Sectio has no eligible card for offer ${slotIndex + 1}.`);
+    if (!card) throw new Error(`Historical Sectio has no eligible card for offer ${slotIndex + 1}.`);
     chosen.add(card.id);
     return createRunCardOffer({ seed }, card, battleIndex, slotIndex);
   });
 }
 
-/** Opening draws roll in their own index space so a core identity offered in the
- * opening and again in the Sectio after Battle 1 — which is also `battleIndex` 0 —
- * rolls its qualifier independently. */
-export const OPENING_SECTIO_ROLL_BATTLE_INDEX = -1;
-
-/** The opening uses the ordinary tier-first deal while limiting every candidate to
- * the eight gold actually in hand. */
-function openingSectioOffersWithCount(
-  seed: number,
-  _ataraxiaTier: AtaraxiaTier = 0,
-  offerCount = RUN_OPENING_OFFER_COUNT,
-): RunCardOffer[] {
-  return sectioCardOffers(
-    seed,
-    OPENING_SECTIO_ROLL_BATTLE_INDEX,
-    offerCount,
-    'opening-sectio',
-    RUN_STARTING_GOLD,
-  ).map((offer, slotIndex) => ({ ...offer, offerId: `opening-${slotIndex}-${offer.id}` }));
+function legacyOpeningSectioOffers(seed: number, offerCount: number): RunCardOffer[] {
+  return legacySectioCardOffers(seed, -1, offerCount, 'opening-sectio', RUN_STARTING_GOLD)
+    .map((offer, slotIndex) => ({ ...offer, offerId: `opening-${slotIndex}-${offer.id}` }));
 }
 
-export function openingSectioOffers(seed: number, ataraxiaTier: AtaraxiaTier = 0): RunCardOffer[] {
-  return openingSectioOffersWithCount(seed, ataraxiaTier, RUN_OPENING_OFFER_COUNT);
+const RUN_CARD_RARITIES: readonly RunCardRarity[] = ['common', 'uncommon', 'rare'];
+
+function rarityCardsForPile(
+  seed: number,
+  rarity: RunCardRarity,
+  pileIndex: number,
+): RunCoreCard[] {
+  const tier = RUN_CARD_DECK.filter((card) => card.rarity === rarity);
+  const quota = RUN_SECTIO_CARD_PILE_RARITY_COUNT[rarity];
+  const result: RunCoreCard[] = [];
+  let streamCursor = pileIndex * quota;
+  while (result.length < quota) {
+    const epochIndex = Math.floor(streamCursor / tier.length);
+    const epochCursor = streamCursor % tier.length;
+    const epoch = shuffled(tier, mixSeed(seed, `sectio-pile:${rarity}:epoch`, epochIndex));
+    const take = Math.min(quota - result.length, tier.length - epochCursor);
+    result.push(...epoch.slice(epochCursor, epochCursor + take));
+    streamCursor += take;
+  }
+  return result;
+}
+
+/** Keep every possible three- or four-card Sectio row identity-distinct, including the seam
+ * between piles. Epoch rollover can otherwise repeat one card after a rarity's unseen queue
+ * has been exhausted. */
+function separateNearbyCardDuplicates(
+  cards: readonly RunCoreCard[],
+  previousTail: readonly RunCoreCard[],
+): RunCoreCard[] {
+  for (let offset = 0; offset < cards.length; offset += 1) {
+    const remaining = [...cards.slice(offset), ...cards.slice(0, offset)];
+    const result: RunCoreCard[] = [];
+    while (remaining.length) {
+      const recentIds = new Set([...previousTail, ...result].slice(-3).map((card) => card.id));
+      const candidateIndex = remaining.findIndex((card) => !recentIds.has(card.id));
+      if (candidateIndex < 0) break;
+      result.push(remaining.splice(candidateIndex, 1)[0]);
+    }
+    if (!remaining.length) return result;
+  }
+  throw new Error('Sectio pile cannot separate duplicate card identities.');
+}
+
+/** One exact 75/20/5 hidden pile. Each rarity consumes a continuous seed-derived queue, so
+ * the next pile takes every still-unseen card in that rarity before its queue is reshuffled. */
+export function sectioCardPile(seed: number, pileIndex: number): RunCoreCard[] {
+  const target = Math.max(0, Math.floor(pileIndex));
+  let previousTail: RunCoreCard[] = [];
+  let result: RunCoreCard[] = [];
+  for (let index = 0; index <= target; index += 1) {
+    const selected = RUN_CARD_RARITIES.flatMap((rarity) => rarityCardsForPile(seed, rarity, index));
+    const mixed = shuffled(selected, mixSeed(seed, 'sectio-pile:mix', index));
+    result = separateNearbyCardDuplicates(mixed, previousTail);
+    previousTail = result.slice(-3);
+  }
+  return result;
+}
+
+export function sectioCardOffersAtCursor(
+  seed: number,
+  battleIndex: number,
+  cursor: number,
+  offerCount: number,
+): RunCardOffer[] {
+  const start = Math.max(0, Math.floor(cursor));
+  const piles = new Map<number, RunCoreCard[]>();
+  return Array.from({ length: offerCount }, (_, slotIndex) => {
+    const absoluteIndex = start + slotIndex;
+    const pileIndex = Math.floor(absoluteIndex / RUN_SECTIO_CARD_PILE_SIZE);
+    const pileCursor = absoluteIndex % RUN_SECTIO_CARD_PILE_SIZE;
+    let pile = piles.get(pileIndex);
+    if (!pile) {
+      pile = sectioCardPile(seed, pileIndex);
+      piles.set(pileIndex, pile);
+    }
+    const card = pile[pileCursor];
+    if (!card) throw new Error(`Sectio pile has no card at cursor ${absoluteIndex}.`);
+    return createRunCardOffer({ seed }, card, battleIndex, absoluteIndex);
+  });
 }
 
 function freshRunId(): string {
@@ -807,7 +876,7 @@ export function createRun(
     ataraxiaTier,
     updatedAt: createdAt,
     war,
-    phase: 'sectio',
+    phase: 'deployment',
     battleIndex: 0,
     conflictIndex: 0,
     goldTenths: RUN_STARTING_GOLD_TENTHS,
@@ -823,14 +892,15 @@ export function createRun(
       king: 2,
     },
     nextCardSequence: 1,
+    sectioCardCursor: 0,
     deployment: null,
     battleRuntime: null,
     aftermath: null,
     sectio: null,
     vacantia: null,
   };
-  // A Conflict that ends in loot opens with Bona Vacantia; a war with no loot battles at
-  // all still starts straight in the Sectio, exactly as it used to.
+  // A Conflict that ends in loot opens with Bona Vacantia. Taking its lipsanon now leads
+  // straight into Battle 1; a war with no loot Battles begins in Deployment immediately.
   if (conflictOpensWithVacantia(war, 0)) {
     const reveal = revealLipsana(run, 3, 'vacantia-lipsana', 0);
     return {
@@ -846,33 +916,7 @@ export function createRun(
       },
     };
   }
-  return openOpeningSectio(run, seed, ataraxiaTier);
-}
-
-/**
- * The Run's pinned opening Sectio. Held apart from createRun because Bona Vacantia now sits
- * in front of it: the lipsanon is taken first, and only then is this Sectio built -- so its
- * entry snapshot records the army and lipsana the player actually walks in with.
- */
-function openOpeningSectio(run: RunDocument, seed: number, ataraxiaTier: AtaraxiaTier): RunDocument {
-  return {
-    ...run,
-    phase: 'sectio',
-    vacantia: null,
-    sectio: {
-      kind: 'opening',
-      afterBattleIndex: 0,
-      conflictIndex: 0,
-      victoryGoldTenths: 0,
-      cardOffers: openingSectioOffersWithCount(seed, ataraxiaTier, runSectioCardOfferCount(run)),
-      adlectedCardOfferIds: [],
-      paidLipsanonOffer: null,
-      paidLipsanonBought: false,
-      alienatedUnits: [],
-      expunctedCard: null,
-      entrySnapshot: createSectioEntrySnapshot(run, false),
-    },
-  };
+  return run;
 }
 
 /**
@@ -1107,6 +1151,12 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
   if (rawSectio && ('purchasedCardOfferIds' in rawSectio || 'soldUnits' in rawSectio)) {
     throw new UnsupportedRunSaveError('This Run contains retired Sectio operation data. Start a new Run.');
   }
+  if (rawSectio && 'kind' in rawSectio) {
+    throw new UnsupportedRunSaveError('This Run contains a retired opening-Sectio marker.');
+  }
+  if (!Number.isSafeInteger(raw.sectioCardCursor) || raw.sectioCardCursor < 0) {
+    throw new UnsupportedRunSaveError('This Run contains an invalid Sectio card cursor.');
+  }
   const persistedUnits: unknown[] = [
     ...(Array.isArray(run.army) ? run.army : []),
     ...(Array.isArray(run.sectio?.alienatedUnits)
@@ -1172,20 +1222,6 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
     ? Number(stored.nextCardSequence)
     : cards.length + 1;
   let sectio = stored.sectio;
-  if (sectio && sectio.kind !== 'opening' && sectio.kind !== 'post-battle') {
-    sectio = { ...sectio, kind: 'post-battle' };
-  }
-  if (
-    sectio?.kind === 'opening'
-    && runSectioCardOfferCount(next) === 4
-    && sectio.cardOffers.length === RUN_OPENING_OFFER_COUNT
-  ) {
-    const completeOpening = openingSectioOffersWithCount(next.seed, ataraxiaTier, 4);
-    const persistedOfferIds = sectio.cardOffers.map((offer) => offer.offerId);
-    if (persistedOfferIds.every((offerId, index) => completeOpening[index]?.offerId === offerId)) {
-      sectio = { ...sectio, cardOffers: completeOpening };
-    }
-  }
   if (sectio) {
     sectio = {
       ...sectio,
@@ -1731,10 +1767,10 @@ function migrateFormationSectio(
   const sectio = value as Record<string, unknown>;
   const seed = Number(stored.seed) >>> 0;
   const battleIndex = Number.isSafeInteger(stored.battleIndex) ? Number(stored.battleIndex) : 0;
-  const offerCount = Array.isArray(lipsana) && lipsana.includes('quartermasters-ledger') ? 4 : RUN_OPENING_OFFER_COUNT;
+  const offerCount = Array.isArray(lipsana) && lipsana.includes('quartermasters-ledger') ? 4 : RUN_SECTIO_CARD_OFFER_COUNT;
   const cardOffers = sectio.kind === 'opening'
-    ? openingSectioOffersWithCount(seed, 0, offerCount)
-    : sectioCardOffers(seed, battleIndex, offerCount, `post-battle-sectio:${battleIndex}`);
+    ? legacyOpeningSectioOffers(seed, offerCount)
+    : legacySectioCardOffers(seed, battleIndex, offerCount, `post-battle-sectio:${battleIndex}`);
   const paidLipsanonOffer = typeof sectio.paidLipsanonOffer === 'string'
     && CURRENT_LIPSANON_IDS.has(sectio.paidLipsanonOffer as LipsanonId)
     ? sectio.paidLipsanonOffer
@@ -1816,10 +1852,39 @@ function migrateRunToSidewaysFormations(stored: Record<string, unknown>): Record
   const reenterDeployment = stored.phase === 'battle' || stored.phase === 'deployment';
   return {
     ...stored,
-    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    runSaveVersion: RUN_SAVE_VERSION_SECTIO_PILE_SOURCE,
     phase: reenterDeployment ? 'deployment' : stored.phase,
     deployment: reenterDeployment ? null : stored.deployment,
     ...(reenterDeployment ? { battleRuntime: null, aftermath: null } : {}),
+  };
+}
+
+/** Version 26 removes the opening Sectio and installs the seed-derived hidden card pile.
+ * Existing post-Battle offers remain exactly as saved; their first future deal begins at
+ * cursor zero. An in-progress opening Sectio keeps every completed transaction and proceeds
+ * directly to Battle 1's Deployment. */
+function migrateRunToSectioPile(stored: Record<string, unknown>): Record<string, unknown> {
+  const rawSectio = stored.sectio && typeof stored.sectio === 'object' && !Array.isArray(stored.sectio)
+    ? stored.sectio as Record<string, unknown>
+    : null;
+  const openingSectio = stored.phase === 'sectio' && rawSectio?.kind === 'opening';
+  let sectio = stored.sectio;
+  if (rawSectio && !openingSectio) {
+    const { kind: _retiredKind, ...currentSectio } = rawSectio;
+    sectio = currentSectio;
+  }
+  return {
+    ...stored,
+    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    phase: openingSectio ? 'deployment' : stored.phase,
+    sectioCardCursor: 0,
+    sectio: openingSectio ? null : sectio,
+    ...(openingSectio ? {
+      vacantia: null,
+      deployment: null,
+      battleRuntime: null,
+      aftermath: null,
+    } : {}),
   };
 }
 
@@ -1834,7 +1899,8 @@ function migrateRunToSidewaysFormations(stored: Record<string, unknown>): Record
  * Deployment mode choice with an explicit deal boundary and persisted transport. Version 22
  * advances every embedded War Battle through the Level document chain. Version 23 then retires
  * unit abilities and installs authored formation cards. Version 24 expands that catalog and
- * resets in-flight placement plans for sideways settling. Older saves remain unsupported.
+ * resets in-flight placement plans for sideways settling. Version 25 removes the opening
+ * Sectio and begins a seed-derived card pile. Older saves remain unsupported.
  */
 export function migrateRunSaveDocument(value: unknown): RunDocument {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -1891,6 +1957,9 @@ export function migrateRunSaveDocument(value: unknown): RunDocument {
   if (stored.runSaveVersion === RUN_SAVE_VERSION_SIDEWAYS_FORMATIONS_SOURCE) {
     stored = migrateRunToSidewaysFormations(stored);
   }
+  if (stored.runSaveVersion === RUN_SAVE_VERSION_SECTIO_PILE_SOURCE) {
+    stored = migrateRunToSectioPile(stored);
+  }
   return normalizeRunDocument(stored as unknown as RunDocument);
 }
 
@@ -1931,7 +2000,7 @@ export function hasLipsanon(run: RunDocument, lipsanon: LipsanonId): boolean {
 
 /** One shared answer for every Sectio deal and the server-side persistence contract. */
 export function runSectioCardOfferCount(run: Pick<RunDocument, 'lipsana'>): number {
-  return run.lipsana.includes('quartermasters-ledger') ? 4 : RUN_OPENING_OFFER_COUNT;
+  return run.lipsana.includes('quartermasters-ledger') ? 4 : RUN_SECTIO_CARD_OFFER_COUNT;
 }
 
 function availableLipsana(run: RunDocument): LipsanonId[] {
@@ -2292,10 +2361,8 @@ export function markReservistDeployed(run: RunDocument, unitId: string): RunDocu
 }
 
 /**
- * Gold a lipsanon pays the moment it is taken. Data rather than branches because the server
- * has to verify it independently: the opening Sectio's gold is pinned value-by-value, and
- * Bona Vacantia now runs BEFORE that Sectio, so an opening lipsanon can legitimately move the
- * number the contract checks. Both sides read this map, so neither can drift.
+ * Gold a lipsanon pays the moment it is taken. Data rather than branches keeps immediate
+ * acquisition effects in one exact table shared by every transition and persistence surface.
  */
 export const RUN_LIPSANON_IMMEDIATE_GOLD: Readonly<Partial<Record<LipsanonId, number>>> = Object.freeze({
   'congressional-approval': 5,
@@ -2451,12 +2518,13 @@ export function openSectio(run: RunDocument, survivingUnitIds: readonly string[]
 function openPostBattleSectio(run: RunDocument, victoryGoldTenths: number): RunDocument {
   let next: RunDocument = { ...run, phase: 'sectio', vacantia: null };
   const cardCount = runSectioCardOfferCount(next);
-  const cardOffers = sectioCardOffers(
+  const cardOffers = sectioCardOffersAtCursor(
     next.seed,
     next.battleIndex,
+    next.sectioCardCursor,
     cardCount,
-    `post-battle-sectio:${next.battleIndex}`,
   );
+  next = { ...next, sectioCardCursor: next.sectioCardCursor + cardCount };
   let paidLipsanonOffer: LipsanonId | null = null;
   let paidLipsanonBought = false;
   if (hasLipsanon(next, 'merchants-shopkey')) {
@@ -2483,7 +2551,6 @@ function openPostBattleSectio(run: RunDocument, victoryGoldTenths: number): RunD
   return {
     ...next,
     sectio: {
-      kind: 'post-battle',
       afterBattleIndex: next.battleIndex,
       conflictIndex: next.conflictIndex,
       victoryGoldTenths,
@@ -2644,7 +2711,8 @@ export function canLeaveSectio(run: RunDocument): boolean {
 
 /**
  * Take the Conflict's lipsanon. Mandatory, as the loot lipsanon was: there is no way past this
- * screen without one, so taking it is also what opens the Sectio behind it.
+ * screen without one. The opening choice leads directly to Battle 1; later choices still
+ * lead to the Sectio following the Battle that closed the prior Conflict.
  */
 export function takeVacantiaLipsanon(run: RunDocument, lipsanon: LipsanonId): RunDocument {
   if (run.phase !== 'bona-vacantia' || !run.vacantia || !run.vacantia.offers.includes(lipsanon)) return run;
@@ -2652,7 +2720,7 @@ export function takeVacantiaLipsanon(run: RunDocument, lipsanon: LipsanonId): Ru
   if (acquired === run) return run;
   const vacantia = run.vacantia;
   const opened = vacantia.kind === 'opening'
-    ? openOpeningSectio(acquired, acquired.seed, acquired.ataraxiaTier)
+    ? { ...acquired, phase: 'deployment' as const, vacantia: null, sectio: null }
     : openPostBattleSectio(acquired, vacantia.victoryGoldTenths);
   return touch(opened);
 }
@@ -2674,13 +2742,12 @@ export function buyPaidLipsanon(run: RunDocument): RunDocument {
 
 export function leaveSectio(run: RunDocument): RunDocument {
   if (!canLeaveSectio(run) || !run.sectio) return run;
-  const opening = run.sectio.kind === 'opening';
   const endedConflict = run.war.battles[run.sectio.afterBattleIndex]?.loot === true;
   return touch({
     ...run,
     phase: 'deployment',
-    battleIndex: opening ? run.battleIndex : run.battleIndex + 1,
-    conflictIndex: run.conflictIndex + (!opening && endedConflict ? 1 : 0),
+    battleIndex: run.battleIndex + 1,
+    conflictIndex: run.conflictIndex + (endedConflict ? 1 : 0),
     deployment: null,
     battleRuntime: null,
     sectio: null,

@@ -4,6 +4,8 @@ import {
   CURRENT_RUN_SAVE_VERSION,
   RUN_GENERATED_CARD_COUNT,
   RUN_OFFER_CARD_COUNT,
+  RUN_SECTIO_CARD_PILE_RARITY_COUNT,
+  RUN_SECTIO_CARD_PILE_SIZE,
   RUN_CARD_BY_ID,
   RUN_CARD_CATALOG,
   RUN_CARD_DECK,
@@ -13,11 +15,17 @@ import {
   acquireLipsanon,
   createRun,
   createRunCardOffer,
+  leaveSectio,
   migrateRunSaveDocument,
   normalizeRunDocument,
+  openSectio,
   performAdlectio,
+  resetSectio,
   runCardUnitIds,
   runCardRarityForRoll,
+  sectioCardOffersAtCursor,
+  sectioCardPile,
+  takeVacantiaLipsanon,
   type RunDocument,
   type RunWarSnapshot,
 } from './model';
@@ -29,8 +37,20 @@ function war(): RunWarSnapshot {
     id: 'formation-war',
     name: 'Formation War',
     description: 'A test war.',
-    battles: [{ level, loot: false }],
+    battles: [
+      { level, loot: false },
+      { level: structuredClone(level), loot: false },
+      { level: structuredClone(level), loot: false },
+    ],
   };
+}
+
+function firstSectio(seed: number): RunDocument {
+  const run = createRun(war(), seed);
+  return openSectio(
+    { ...run, phase: 'battle' },
+    run.army.map((unit) => unit.id),
+  );
 }
 
 describe('formation card catalog', () => {
@@ -83,7 +103,7 @@ describe('formation card catalog', () => {
     expect(opposite.every((card) => card.rarity === 'rare')).toBe(true);
   });
 
-  it('keeps pool size separate from the tier-first appearance rate', () => {
+  it('keeps master-catalog rarity counts separate from the pile appearance quota', () => {
     expect(Object.fromEntries(['common', 'uncommon', 'rare'].map((rarity) => [
       rarity,
       RUN_CARD_DECK.filter((card) => card.rarity === rarity).length,
@@ -117,25 +137,116 @@ describe('plain Run creation and acquisition', () => {
     expect(run.cards).toHaveLength(1);
     expect(run.cards[0]).toMatchObject({ coreId: 'his-grace' });
     expect(runCardUnitIds(run.cards[0])).toEqual(run.army.map((unit) => unit.id));
+    expect(run.phase).toBe('deployment');
+    expect(run.sectio).toBeNull();
+    expect(run.sectioCardCursor).toBe(0);
   });
 
-  it('deals three distinct affordable opening cards after rolling rarity first', () => {
-    const run = createRun(war(), 23);
+  it('deals the first three hidden-pile cards only after Battle 1', () => {
+    const run = firstSectio(23);
     const offers = run.sectio!.cardOffers;
     expect(offers).toHaveLength(3);
     expect(new Set(offers.map((offer) => offer.id)).size).toBe(3);
-    expect(offers.every((offer) => offer.cost <= 8)).toBe(true);
     expect(offers.every((offer) => ['common', 'uncommon', 'rare'].includes(offer.rarity))).toBe(true);
+    expect(run.sectioCardCursor).toBe(3);
+    expect(offers.map((offer) => offer.id)).toEqual(
+      sectioCardOffersAtCursor(run.seed, 0, 0, 3).map((offer) => offer.id),
+    );
+  });
+
+  it('moves the opening lipsanon choice directly into Battle 1 Deployment', () => {
+    const openingWar = war();
+    openingWar.battles[0].loot = true;
+    const run = createRun(openingWar, 29);
+    expect(run.phase).toBe('bona-vacantia');
+    const chosen = run.vacantia!.offers[0];
+    const taken = takeVacantiaLipsanon(run, chosen);
+    expect(taken.phase).toBe('deployment');
+    expect(taken.battleIndex).toBe(0);
+    expect(taken.sectio).toBeNull();
+    expect(taken.lipsana).toContain(chosen);
+  });
+
+  it('lets Quartermaster’s Ledger consume four hidden-pile positions', () => {
+    const base = acquireLipsanon(createRun(war(), 37), 'quartermasters-ledger');
+    const run = openSectio(
+      { ...base, phase: 'battle' },
+      base.army.map((unit) => unit.id),
+    );
+    expect(run.sectio?.cardOffers).toHaveLength(4);
+    expect(run.sectioCardCursor).toBe(4);
+  });
+
+  it('retains the same row on Reset and consumes the next row at the next Sectio', () => {
+    const first = firstSectio(43);
+    const firstOfferIds = first.sectio!.cardOffers.map((offer) => offer.id);
+    const reset = resetSectio(first);
+    expect(reset.sectioCardCursor).toBe(3);
+    expect(reset.sectio!.cardOffers.map((offer) => offer.id)).toEqual(firstOfferIds);
+
+    const betweenBattles = leaveSectio(first);
+    const second = openSectio(
+      { ...betweenBattles, phase: 'battle' },
+      betweenBattles.army.map((unit) => unit.id),
+    );
+    expect(second.sectioCardCursor).toBe(6);
+    expect(second.sectio!.cardOffers.map((offer) => offer.id)).toEqual(
+      sectioCardOffersAtCursor(second.seed, 1, 3, 3).map((offer) => offer.id),
+    );
   });
 
   it('preserves the authored unit order when a formation is acquired', () => {
-    const base = createRun(war(), 31);
+    const base = firstSectio(31);
     const offer = createRunCardOffer(base, RUN_CARD_BY_ID['ppk-protected'], -1, 0);
     const run = { ...base, sectio: { ...base.sectio!, cardOffers: [offer] } };
     const acquired = performAdlectio(run, offer.offerId);
     const card = acquired.cards.at(-1)!;
     expect(runCardUnitIds(card).map((id) => acquired.army.find((unit) => unit.id === id)!.type))
       .toEqual(['knight', 'pawn', 'pawn']);
+  });
+});
+
+describe('derived Sectio card pile', () => {
+  it('contains exactly 135 common, 36 uncommon, and 9 rare cards', () => {
+    const pile = sectioCardPile(101, 0);
+    expect(pile).toHaveLength(RUN_SECTIO_CARD_PILE_SIZE);
+    expect(Object.fromEntries(['common', 'uncommon', 'rare'].map((rarity) => [
+      rarity,
+      pile.filter((card) => card.rarity === rarity).length,
+    ]))).toEqual(RUN_SECTIO_CARD_PILE_RARITY_COUNT);
+  });
+
+  it('is deterministic and keeps every possible four-card row identity-distinct across a seam', () => {
+    const first = sectioCardPile(211, 0);
+    const second = sectioCardPile(211, 1);
+    expect(sectioCardPile(211, 0).map((card) => card.id)).toEqual(first.map((card) => card.id));
+    const sequence = [...first, ...second];
+    for (let index = 0; index <= sequence.length - 4; index += 1) {
+      expect(new Set(sequence.slice(index, index + 4).map((card) => card.id)).size).toBe(4);
+    }
+  });
+
+  it('reorders a late recycled pile when a greedy shuffle would strand a duplicate', () => {
+    const previous = sectioCardPile(2, 9);
+    const recycled = sectioCardPile(2, 10);
+    const sequence = [...previous.slice(-3), ...recycled];
+    for (let index = 0; index <= sequence.length - 4; index += 1) {
+      expect(new Set(sequence.slice(index, index + 4).map((card) => card.id)).size).toBe(4);
+    }
+  });
+
+  it('exhausts each rarity queue before recycling that rarity', () => {
+    for (const rarity of ['common', 'uncommon', 'rare'] as const) {
+      const quota = RUN_SECTIO_CARD_PILE_RARITY_COUNT[rarity];
+      const tierCount = RUN_CARD_DECK.filter((card) => card.rarity === rarity).length;
+      const pilesNeeded = Math.ceil(tierCount / quota);
+      const seen = new Set<string>();
+      for (let pileIndex = 0; pileIndex < pilesNeeded; pileIndex += 1) {
+        const cards = sectioCardPile(307, pileIndex).filter((card) => card.rarity === rarity);
+        for (const card of cards) seen.add(card.id);
+      }
+      expect(seen.size).toBe(tierCount);
+    }
   });
 });
 
@@ -183,5 +294,43 @@ describe('ability retirement migration', () => {
   it('normalizes current saves idempotently', () => {
     const run = createRun(war(), 67);
     expect(normalizeRunDocument(normalizeRunDocument(run))).toEqual(normalizeRunDocument(run));
+  });
+
+  it('moves a version-25 opening Sectio directly to Deployment without losing transactions', () => {
+    const current = firstSectio(71);
+    const opening = {
+      ...current,
+      runSaveVersion: 25,
+      battleIndex: 0,
+      conflictIndex: 0,
+      sectioCardCursor: undefined,
+      sectio: { ...current.sectio!, kind: 'opening' },
+    };
+    const migrated = migrateRunSaveDocument(opening);
+    expect(migrated).toMatchObject({
+      runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+      phase: 'deployment',
+      battleIndex: 0,
+      sectioCardCursor: 0,
+      sectio: null,
+    });
+    expect(migrated.army).toEqual(current.army);
+    expect(migrated.cards).toEqual(current.cards);
+    expect(migrated.goldTenths).toBe(current.goldTenths);
+  });
+
+  it('keeps a version-25 post-Battle offer row and begins the derived cursor at zero', () => {
+    const current = firstSectio(73);
+    const legacy = {
+      ...current,
+      runSaveVersion: 25,
+      sectioCardCursor: undefined,
+      sectio: { ...current.sectio!, kind: 'post-battle' },
+    };
+    const migrated = migrateRunSaveDocument(legacy);
+    expect(migrated.phase).toBe('sectio');
+    expect(migrated.sectioCardCursor).toBe(0);
+    expect(migrated.sectio?.cardOffers).toEqual(current.sectio?.cardOffers);
+    expect(migrated.sectio).not.toHaveProperty('kind');
   });
 });

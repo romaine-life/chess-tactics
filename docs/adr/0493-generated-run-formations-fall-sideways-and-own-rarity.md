@@ -4,6 +4,8 @@ date: 2026-08-06
 deciders: owner (Nelson) + Codex
 supersedes:
   - "[ADR-0492](0492-run-cards-are-small-authored-formations-without-abilities.md)'s bounded nineteen-card deck, random legal translation, Standard-only frame, and tabled rarity"
+partially_superseded_by:
+  - "[ADR-0494](0494-runs-begin-in-battle-and-sectio-deals-a-derived-rarity-pile.md)'s exact hidden rarity pile and removal of the affordable opening deal"
 ---
 
 # ADR-0493: Generated Run formations fall sideways and own rarity

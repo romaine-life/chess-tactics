@@ -6,6 +6,8 @@ supersedes:
   - "[ADR-0388](0388-remaining-shop-cards-settle-into-their-new-seats.md)"
 partially_supersedes:
   - "[ADR-0431](0431-sectio-transactions-never-wait-for-presentation.md)'s survivor-FLIP clauses"
+partially_superseded_by:
+  - "[ADR-0494](0494-runs-begin-in-battle-and-sectio-deals-a-derived-rarity-pile.md)'s hidden gameplay pile"
 refines:
   - "[ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md)"
   - "[ADR-0387](0387-bought-cards-travel-into-a-title-reachable-chartulary.md)"
