@@ -400,6 +400,11 @@ describe('live media admin tooling client', () => {
     expect(parseCli([
       'upload-candidate-batch', '--api-base', 'http://localhost:9999', '--manifest', 'batch.json',
     ]).command).toBe('upload-candidate-batch');
+    expect(parseCli([
+      'upload-candidate', '--api-base', 'http://localhost:9999', '--file', 'candidate.png',
+      '--slot', 'ui/example.png', '--domain', 'ui', '--role', 'card-frame', '--label', 'Example',
+      '--slot-metadata-json', 'slot.json',
+    ]).slotMetadata).toBe('slot.json');
     expect(() => parseCli(['review-candidate'])).toThrow(/Usage/);
     expect(() => readCandidateBatchManifest(fileURLToPath(import.meta.url)))
       .toThrow(/outside the Git repository/);

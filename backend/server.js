@@ -86,6 +86,8 @@ const {
   runCardBackMediaIssue,
   runCardBackOwnerProofIssue,
   runCardBackSlot,
+  runCardRarityFrameOwnerProofIssue,
+  runCardRarityFrameSlot,
   runResourceIconMediaIssue,
   runResourceIconSlotId,
   runExpunctioReviewSurface,
@@ -17502,6 +17504,11 @@ function reviewedMediaEvidenceIssue(row) {
     if (projectionIssue) return projectionIssue;
     const issue = runCardBackOwnerProofIssue(row, proof, evidence.surfaceUrl);
     if (issue) return issue;
+  } else if (runCardRarityFrameSlot(row.slot)) {
+    const projectionIssue = runCardFrameProjection(row);
+    if (projectionIssue.issue) return projectionIssue.issue;
+    const issue = runCardRarityFrameOwnerProofIssue(row, proof, evidence.surfaceUrl);
+    if (issue) return issue;
   } else if (wallMaterialSlot(row.slot)) {
     const issue = wallMaterialOwnerProofIssue(row, proof, evidence.surfaceUrl);
     if (issue) return issue;
@@ -17572,6 +17579,8 @@ const RUN_CARD_ART_PIECE_VALUE = Object.freeze({ pawn: 1, knight: 3, bishop: 3, 
 const RUN_CARD_ART_PIECE_INITIAL = Object.freeze({ pawn: 'p', knight: 'k', bishop: 'b', rook: 'r', queen: 'q' });
 const RUN_CARD_ART_PIECE_ORDER = Object.freeze(['pawn', 'knight', 'bishop', 'rook', 'queen']);
 const RUN_CARD_FRAME_SLOT = 'ui/run/card-prototypes/frame-v1.png';
+const RUN_CARD_UNCOMMON_FRAME_SLOT = 'ui/run/card-prototypes/standard-uncommon-frame-v1.png';
+const RUN_CARD_RARE_FRAME_SLOT = 'ui/run/card-prototypes/standard-rare-frame-v1.png';
 const RUN_CARD_PESTIFEROUS_FRAME_SLOT = 'ui/run/card-prototypes/pestiferous-frame-v1.png';
 const RUN_CARD_CONCINNOUS_FRAME_SLOT = 'ui/run/card-prototypes/concinnous-frame-v1.png';
 const RUN_CARD_LEGATINE_FRAME_SLOT = 'ui/run/card-prototypes/legatine-adlected-frame-v1.png';
@@ -17580,6 +17589,8 @@ const RUN_CARD_PRAECIPUUS_FRAME_SLOT = 'ui/run/card-prototypes/praecipuus-frame-
 const RUN_CARD_COST_COIN_SOURCE_SLOT = 'ui/run/card-prototypes/cost-coin-source-v1.png';
 const RUN_CARD_FRAME_VARIANT_BY_SLOT = Object.freeze({
   [RUN_CARD_FRAME_SLOT]: 'standard',
+  [RUN_CARD_UNCOMMON_FRAME_SLOT]: 'standard',
+  [RUN_CARD_RARE_FRAME_SLOT]: 'standard',
   [RUN_CARD_PESTIFEROUS_FRAME_SLOT]: 'pestiferous',
   [RUN_CARD_CONCINNOUS_FRAME_SLOT]: 'concinnous',
   [RUN_CARD_LEGATINE_FRAME_SLOT]: 'legatine',
@@ -17588,6 +17599,7 @@ const RUN_CARD_FRAME_VARIANT_BY_SLOT = Object.freeze({
   [RUN_CARD_COST_COIN_SOURCE_SLOT]: 'cost-coin-source',
 });
 const RUN_CARD_FRAME_SCHEMA = 'run-card-frame-v1';
+const RUN_CARD_RARITY_FRAME_SCHEMA = 'run-card-frame-v2';
 const SOURCE_ART_TURNTABLE_SCHEMA = 'structure-source-art-turntable-v1';
 const SOURCE_ART_TURNTABLE_DIRECTIONS = Object.freeze([
   'south', 'south-west', 'west', 'north-west', 'north', 'north-east', 'east', 'south-east',
@@ -17714,6 +17726,7 @@ function sourceArtTurntableOwnerProofIssue(sourceArt, proof, surfaceUrl) {
 
 function runCardFrameProjection(row) {
   const variant = RUN_CARD_FRAME_VARIANT_BY_SLOT[row.slot];
+  const rarity = runCardRarityFrameSlot(row.slot);
   const claimed = Boolean(variant) || row.role === 'card-frame';
   if (!claimed) return { claimed: false, issue: null };
   if (!variant) return { claimed: true, issue: 'Run card frame role is restricted to the canonical semantic frame slots' };
@@ -17726,13 +17739,21 @@ function runCardFrameProjection(row) {
   const metadata = isObjectRecord(row.version_metadata) ? row.version_metadata
     : isObjectRecord(row.metadata) ? row.metadata : {};
   const slotMetadata = isObjectRecord(row.slot_metadata) ? row.slot_metadata : {};
-  if (
+  if (rarity) {
+    if (
+      metadata.schema !== RUN_CARD_RARITY_FRAME_SCHEMA || slotMetadata.schema !== RUN_CARD_RARITY_FRAME_SCHEMA
+      || metadata.frameType !== 'standard' || slotMetadata.frameType !== 'standard'
+      || metadata.rarity !== rarity || slotMetadata.rarity !== rarity
+      || metadata.referenceWidthPx !== 360 || slotMetadata.referenceWidthPx !== 360
+      || metadata.aspectRatio !== '5:7' || slotMetadata.aspectRatio !== '5:7'
+    ) return { claimed: true, issue: 'Run card rarity frame requires its typed Standard-family rarity metadata' };
+  } else if (
     metadata.schema !== RUN_CARD_FRAME_SCHEMA || slotMetadata.schema !== RUN_CARD_FRAME_SCHEMA
     || metadata.referenceWidthPx !== 360 || slotMetadata.referenceWidthPx !== 360
     || metadata.aspectRatio !== '5:7' || slotMetadata.aspectRatio !== '5:7'
   ) return { claimed: true, issue: 'Run card frame requires its typed Card Layout projection metadata' };
   if (
-    variant !== 'standard'
+    !rarity && variant !== 'standard'
     && (metadata.variant !== variant || slotMetadata.variant !== variant)
   ) return { claimed: true, issue: `${variant} Run card frame requires its typed variant metadata` };
   if (mediaAcceptanceContract(row).mode !== 'standalone') {
@@ -19100,6 +19121,32 @@ async function validateMediaReviewProofSnapshot(client, current, evidence, surfa
     }
     return;
   }
+  if (runCardRarityFrameSlot(current.slot)) {
+    const projectionIssue = runCardFrameProjection(current).issue;
+    if (projectionIssue) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: projectionIssue });
+    }
+    const proofIssue = runCardRarityFrameOwnerProofIssue(current, evidence, surfaceUrl);
+    if (proofIssue) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: proofIssue });
+    }
+    const selected = evidence.selectedCandidates[0];
+    const snapshot = evidence.slotSnapshots[0];
+    const slotResult = await client.query(
+      'SELECT slot, active_version_id, row_revision FROM media_slots WHERE slot = $1',
+      [current.slot],
+    );
+    const slotRow = slotResult.rows[0];
+    if (!slotRow) throw mediaMutationError('media_slot_not_found', 404);
+    if (
+      Number(snapshot.rowRevision) !== Number(slotRow.row_revision)
+      || (snapshot.activeVersionId ?? null) !== (slotRow.active_version_id ? String(slotRow.active_version_id) : null)
+    ) throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: 'slot snapshot mismatch' });
+    if (current.status !== 'candidate' || Number(selected.rowRevision) !== Number(current.row_revision)) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: 'candidate snapshot mismatch' });
+    }
+    return;
+  }
   if (ataraxiaNumeralSlot(current.slot)) {
     const projectionIssue = mediaDomainProjectionIssue(current);
     if (projectionIssue) {
@@ -19502,6 +19549,24 @@ function assertStrategikonBackgroundAcceptanceProof(row, slot) {
   ) throw mediaMutationError('media_review_slot_snapshot_stale', 409, { slot: row.slot });
 }
 
+function assertRunCardRarityFrameAcceptanceProof(row, slot) {
+  if (!runCardRarityFrameSlot(row.slot)) return;
+  if (mediaAcceptanceContract(row).mode !== 'standalone') {
+    throw mediaMutationError('media_group_contract_mismatch', 409, { slot: row.slot });
+  }
+  const review = isObjectRecord(row.review_evidence) ? row.review_evidence : {};
+  const proof = isObjectRecord(review.evidence) ? review.evidence : {};
+  const issue = runCardRarityFrameOwnerProofIssue(row, proof, review.surfaceUrl);
+  if (issue) throw mediaMutationError('media_owner_review_required', 409, { slot: row.slot, reason: issue });
+  const selected = proof.selectedCandidates[0];
+  const snapshot = proof.slotSnapshots[0];
+  if (
+    Number(selected.rowRevision) + 1 !== Number(row.row_revision)
+    || !slot || Number(snapshot.rowRevision) !== Number(slot.row_revision)
+    || (snapshot.activeVersionId ?? null) !== (slot.active_version_id ? String(slot.active_version_id) : null)
+  ) throw mediaMutationError('media_review_slot_snapshot_stale', 409, { slot: row.slot });
+}
+
 function assertTerrainAcceptanceProof(rows, slotById, contract = null) {
   if (!rows.length || rows.some((row) => row.domain !== 'terrain')) return;
   const expectedSlots = contract?.mode === 'group' ? contract.requiredSlots : rows.map((row) => row.slot).sort();
@@ -19722,6 +19787,7 @@ async function acceptMediaVersionBatch(items, actorEmail) {
       assertSfxSampleAcceptanceProof(row, slotById.get(row.slot));
       assertLevelEditorBrushIconAcceptanceProof(row, slotById.get(row.slot));
       assertStrategikonBackgroundAcceptanceProof(row, slotById.get(row.slot));
+      assertRunCardRarityFrameAcceptanceProof(row, slotById.get(row.slot));
     }
 
     const bySlot = new Map(rows.map((row) => [row.slot, row]));

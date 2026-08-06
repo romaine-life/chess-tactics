@@ -9,9 +9,7 @@ import {
   type RunCardRarity,
 } from '../run/model';
 import {
-  RUN_CARD_CONCINNOUS_FRAME_SLOT,
-  RUN_CARD_FRAME_SLOT,
-  RUN_CARD_HIERATIC_FRAME_SLOT,
+  RUN_CARD_STANDARD_FRAME_SLOT_BY_RARITY,
 } from './runCardFrameGeometry';
 
 declare const RUN_CARD_FACE_PROJECTION: unique symbol;
@@ -57,11 +55,9 @@ export function isRunCardOffer(card: RunCardDefinition | RunCardOffer): card is 
   return 'offerId' in card;
 }
 
-/** Frame color speaks only for rarity: ordinary, white, then forged steel. */
+/** Rarity selects material inside the Standard family; frame type remains independent. */
 export function runCardFrameSlot(card: RunCardDefinition | RunCardOffer): string {
-  if (card.rarity === 'rare') return RUN_CARD_HIERATIC_FRAME_SLOT;
-  if (card.rarity === 'uncommon') return RUN_CARD_CONCINNOUS_FRAME_SLOT;
-  return RUN_CARD_FRAME_SLOT;
+  return RUN_CARD_STANDARD_FRAME_SLOT_BY_RARITY[card.rarity];
 }
 
 export type RunCardFaceOptions = Readonly<{
