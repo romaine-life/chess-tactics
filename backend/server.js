@@ -10132,6 +10132,14 @@ async function dbWorkingCopyPredrawnAttemptFields(client, documentRow) {
 
 async function dbBindPredrawnSourceToWorkingCopy(client, documentRow, value) {
   const fields = await dbWorkingCopyPredrawnAttemptFields(client, documentRow);
+  const gridOverlay = value.operation?.gridOverlay ?? 'none';
+  const semanticRequest = {
+    ...fields.semanticRequest,
+    gridOverlay,
+  };
+  const semanticRequestSha256 = crypto.createHash('sha256')
+    .update(canonicalJson(semanticRequest))
+    .digest('hex');
   const operation = {
     ...value.operation,
     kind: 'generation-source-v2',
@@ -10141,13 +10149,14 @@ async function dbBindPredrawnSourceToWorkingCopy(client, documentRow, value) {
     backgroundMode: fields.backgroundMode,
     sourceBackgroundVersionId: fields.sourceBackgroundVersionId,
     sourceOcclusionVersionId: fields.sourceOcclusionVersionId,
+    gridOverlay,
     workingCopyDocumentRevision: fields.workingCopyDocumentRevision,
     workingCopyLevelSha256: fields.workingCopyLevelSha256,
     environmentGeometrySchema: ENVIRONMENT_GEOMETRY_SCHEMA,
     environmentGeometrySha256: fields.environmentGeometrySha256,
     semanticBoardSha256: fields.semanticBoardSha256,
-    semanticRequest: fields.semanticRequest,
-    semanticRequestSha256: fields.semanticRequestSha256,
+    semanticRequest,
+    semanticRequestSha256,
   };
   const provenance = {
     ...value.provenance,
@@ -10156,10 +10165,11 @@ async function dbBindPredrawnSourceToWorkingCopy(client, documentRow, value) {
     backgroundMode: fields.backgroundMode,
     sourceBackgroundVersionId: fields.sourceBackgroundVersionId,
     sourceOcclusionVersionId: fields.sourceOcclusionVersionId,
+    gridOverlay,
     generationFrame: fields.frame,
     environmentGeometrySha256: fields.environmentGeometrySha256,
     semanticBoardSha256: fields.semanticBoardSha256,
-    semanticRequestSha256: fields.semanticRequestSha256,
+    semanticRequestSha256,
   };
   const workingCopyValue = {
     ...value,

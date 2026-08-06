@@ -75,4 +75,11 @@ describe('Level Editor pre-drawn generation frame handoff', () => {
     expect(studioBoard).toContain('onFirstFrame={onSceneFirstFrame}');
     expect(sceneLayer).toContain('onFirstFrame={onFirstFrame}');
   });
+
+  it('shows the playable grid over the generation-frame preview', () => {
+    const boardPreview = picker.match(/<StudioReadOnlyBoard[\s\S]*?\/>/)?.[0] ?? '';
+
+    expect(boardPreview).toContain('showGrid');
+    expect(studioBoard).toContain('{showGrid ? <BoardGridLayer cells={reviewGridCells} /> : null}');
+  });
 });

@@ -7,6 +7,7 @@ const panel = readFileSync(new URL('./PredrawnBackgroundVersionsPanel.tsx', impo
 const inspector = readFileSync(new URL('./PredrawnWarpInspector.tsx', import.meta.url), 'utf8');
 const moveHighlightEditor = readFileSync(new URL('./PredrawnMoveHighlightEditor.tsx', import.meta.url), 'utf8');
 const sourcePanel = readFileSync(new URL('./PredrawnSourceArtworkPanel.tsx', import.meta.url), 'utf8');
+const reference = readFileSync(new URL('./PredrawnReference.tsx', import.meta.url), 'utf8');
 const attempts = readFileSync(new URL('./predrawnCreationAttempts.ts', import.meta.url), 'utf8');
 const style = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 
@@ -78,6 +79,18 @@ describe('AI generation references', () => {
     expect(sourcePanel).toContain('Copy generation reference');
     expect(sourcePanel).not.toContain('Start manual AI handoff');
     expect(sourcePanel).not.toContain('onStartAttempt');
+  });
+
+  it('offers an exact per-reference choice to bake only the playable grid', () => {
+    expect(sourcePanel).toContain('Bake playable grid');
+    expect(sourcePanel).toContain('checked={bakePlayableGrid}');
+    expect(sourcePanel).toContain('showGrid={bakePlayableGrid}');
+    expect(sourcePanel).toContain("const gridOverlay = bakePlayableGrid ? 'playable' : 'none'");
+    expect(sourcePanel.match(/gridOverlay,/g)?.length).toBeGreaterThanOrEqual(3);
+    expect(sourcePanel).toContain("source.operation.gridOverlay === 'playable' ? 'Playable grid baked' : 'Grid-free'");
+    expect(reference).toContain("querySelectorAll<HTMLCanvasElement | HTMLImageElement | SVGSVGElement>('canvas, img, svg')");
+    expect(reference).toContain('layer instanceof SVGSVGElement');
+    expect(reference).toContain('await drawReferenceSvg(context, layer, destination)');
   });
 
   it('leaves returned-image and attempt creation entirely to Board Art Pipeline', () => {
