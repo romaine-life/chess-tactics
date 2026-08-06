@@ -15440,7 +15440,7 @@ button.tileset-relationship-cell {
 }
 
 .le-camera-boundary-handle {
-  appearance: none;
+  all: unset;
   color: #bcecff;
   filter: drop-shadow(0 0 1px #07111a);
   height: 12px;
