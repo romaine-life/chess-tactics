@@ -4,7 +4,7 @@
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
-import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, cameraToContainBounds, defaultBoardCameraBounds, defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, MAX_FLOATING_ARTWORK_PIXEL, mergeSharedLevel, normalizeBoardCameraBounds, predrawnEnvironmentGeometryFingerprintInputV2, predrawnVisualFootprintClipStyleForCell, resolvedBoardCameraBounds, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, type BoardBackgroundMode, type BoardCameraBounds, type BoardCameraSnapMode, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
+import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, cameraToContainBounds, defaultBoardCameraBounds, defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, MAX_FLOATING_ARTWORK_PIXEL, mergeSharedLevel, normalizeBoardCameraBounds, predrawnEnvironmentGeometryFingerprintInputV2, predrawnVisualFootprintClipStyleForCell, resolvedBoardCameraBounds, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, worldViewportForCamera, type BoardBackgroundMode, type BoardCameraBounds, type BoardCameraSnapMode, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
 import { boardLabCellPosition, boardLabMetrics, immutableBoardLabTerrainSrc } from '../render/BoardLabBoard';
 import { projectBoardPoint, unprojectBoardPoint, type BoardForest, type BoardForestSection, type BoardForestTree, type BoardTown, type BoardTownSection } from '@chess-tactics/board-render';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
@@ -3891,6 +3891,36 @@ export function LevelEditor(): ReactElement {
     commitCameraBoundary(bounds);
     setCameraBoundaryInteractionMode('edit');
     frameCameraBoundary(bounds);
+  };
+  const setCameraBoundaryFromView = (): void => {
+    if (!viewViewportSize) {
+      reportStatus(
+        'The current view is not ready yet.',
+        'warning',
+        'Wait for the canvas to finish measuring, then try again.',
+      );
+      return;
+    }
+    const current = currentEditorBoardRef.current;
+    const visibleBounds = worldViewportForCamera({
+      viewport: viewViewportSize,
+      camera: { zoom: viewZoom, pan: viewPan },
+    });
+    const normalized = normalizeBoardCameraBounds(visibleBounds, current);
+    if (!normalized) return;
+    commitCameraBoundary(visibleBounds);
+    setCameraBoundaryInteractionMode('edit');
+    const expandedForOpeningFrame = normalized.minX !== visibleBounds.minX
+      || normalized.minY !== visibleBounds.minY
+      || normalized.width !== visibleBounds.width
+      || normalized.height !== visibleBounds.height;
+    reportStatus(
+      'Camera boundary set from the current view.',
+      'success',
+      expandedForOpeningFrame
+        ? 'The boundary was expanded just enough to retain the required opening board frame.'
+        : 'Play now uses this visible rectangle as its zoom-out and pan limit.',
+    );
   };
   const setPredrawnVersionSurface = (surface: VersionedPredrawnBoardSurface): void => {
     if (!editorSessionCanWrite) {
@@ -9670,6 +9700,17 @@ export function LevelEditor(): ReactElement {
             ) : (
               <p className="le-board-note">Drag anywhere inside the box to move it, or drag an edge or corner handle to resize it. Arrow keys move the focused control by 4 world pixels; hold Shift for 24.</p>
             )}
+          </section>
+          <section className="skirmish-card skirmish-view-card" aria-label="Set camera boundary from current view">
+            <h2>Current view</h2>
+            <ChromeButton
+              unit="inner-text-button"
+              className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+              onClick={setCameraBoundaryFromView}
+              disabled={!editorSessionCanWrite || !viewViewportSize}
+              title="Replace the camera boundary with the world-space rectangle visible in the editor canvas."
+            >Set from view</ChromeButton>
+            <p className="le-board-note">Zoom and pan the canvas first, then capture exactly that visible area. The required opening board frame is always retained.</p>
           </section>
           <section className="skirmish-card skirmish-view-card" aria-label="Camera boundary snap">
             <h2>Snap boundary</h2>
