@@ -196,6 +196,7 @@ export {
   cardExpunctioPriceTenths,
   lipsanonImmediateGoldTenths,
   performExpunctio,
+  runSectioCardOfferCount,
   snapshotWar,
   type RunDocument,
   type RunSaveVersion,

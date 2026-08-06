@@ -141,7 +141,8 @@ these.
   ADR-0272, ADR-0305, ADR-0309).
 - After the opening Bona Vacantia choice, a fresh Run enters the normal Sectio with
   the permanent King, two free Pawns, 8 gold plus any immediate lipsanon payout,
-  and three seeded card offers at distinct core values from 1 through 8.
+  and three seeded card offers at distinct core values from 1 through 8, or four while
+  Quartermaster's Ledger is held.
   Each card may undergo Adlectio once while the player can afford it. Every adlected card
   keeps the Sectio open, flies from its Sectio seat into the title-reachable
   Chartulary, leaves the deal once it lands, and uses the same gold transaction

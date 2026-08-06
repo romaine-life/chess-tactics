@@ -9,6 +9,7 @@ import {
   ADLECTED_COST,
   GOLD_SCALE,
   HIERATIC_AGMINATE_OFFER_DENOMINATOR,
+  LIPSANON_BY_ID,
   RUN_CARD_CATALOG,
   RUN_CARD_DECK,
   PIECE_VALUE,
@@ -62,6 +63,7 @@ import {
   takeVacantiaLipsanon,
   legatineAdlectedAcquisitionTarget,
   undoRunBattleMove,
+  type LipsanonId,
   type RunDocument,
   type RunWarSnapshot,
 } from './model';
@@ -294,6 +296,40 @@ describe('Run piece economy', () => {
     expect(continued.army.find((unit) => unit.type === 'king')?.abilities).toEqual([]);
     expect(continued.army.map((unit) => unit.type)).toEqual(['king', 'pawn', 'pawn']);
     expect(continued.goldTenths).toBe(RUN_STARTING_GOLD_TENTHS);
+  });
+
+  it("lets Quartermaster's Ledger add a fourth unit card to the opening Sectio", () => {
+    const offered = createRun(war(4, [2]), 91);
+    expect(offered.phase).toBe('bona-vacantia');
+    const vacantiaOffers: LipsanonId[] = offered.vacantia!.offers
+      .filter((id) => id !== 'quartermasters-ledger');
+    vacantiaOffers.unshift('quartermasters-ledger');
+    vacantiaOffers.splice(3);
+    const offeredWithLedger: RunDocument = {
+      ...offered,
+      seenLipsana: [...new Set([...offered.seenLipsana, 'quartermasters-ledger' as const])],
+      vacantia: {
+        ...offered.vacantia!,
+        offers: vacantiaOffers,
+      },
+    };
+
+    const opened = takeVacantiaLipsanon(offeredWithLedger, 'quartermasters-ledger');
+    expect(opened.phase).toBe('sectio');
+    expect(opened.sectio?.kind).toBe('opening');
+    expect(opened.sectio?.cardOffers).toHaveLength(4);
+    expect(new Set(opened.sectio?.cardOffers.map((offer) => offer.value)).size).toBe(4);
+    expect(LIPSANON_BY_ID['quartermasters-ledger'].description)
+      .toBe('The Sectio reveals four unit cards instead of three.');
+
+    const persistedBeforeFix: RunDocument = {
+      ...opened,
+      sectio: {
+        ...opened.sectio!,
+        cardOffers: opened.sectio!.cardOffers.slice(0, RUN_OPENING_OFFER_COUNT),
+      },
+    };
+    expect(normalizeRunDocument(persistedBeforeFix).sectio?.cardOffers).toEqual(opened.sectio?.cardOffers);
   });
 
   it('buys the opening card in place and waits for explicit Continue before deployment', () => {
