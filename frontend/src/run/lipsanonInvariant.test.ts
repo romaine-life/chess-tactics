@@ -2,15 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { createBlankLevel } from '../core/level';
 import { gameEnv, legalMoves } from '../core/rules';
 import { createFromLevel } from '../game/setup';
-import {
-  lipsanonNeedsUnitTarget,
-  RUN_LIPSANA,
-  RUN_LIPSANON_ABILITY_GRANTS,
-  RUN_LIPSANON_OFFER_POOL,
-} from './model';
+import { RUN_LIPSANA, RUN_LIPSANON_OFFER_POOL } from './model';
 
-describe('Run lipsanon chess invariant', () => {
-  it('keeps every piece legal-move set identical when Run adjudication metadata is present', () => {
+describe('Run lipsanon invariant', () => {
+  it('keeps Run adjudication metadata out of chess movement', () => {
     const level = createBlankLevel('invariant', 'Invariant', 8, 8);
     level.layers.units = [
       { x: 4, y: 7, type: 'king', side: 'player' },
@@ -19,77 +14,21 @@ describe('Run lipsanon chess invariant', () => {
       { x: 1, y: 6, type: 'knight', side: 'player' },
       { x: 3, y: 5, type: 'pawn', side: 'player' },
       { x: 4, y: 0, type: 'king', side: 'enemy' },
-      { x: 3, y: 1, type: 'pawn', side: 'enemy' },
     ];
     const ordinary = createFromLevel(level, 7);
     const runGame = { ...ordinary, checkmateRequiresEnemyNonKingEliminated: true };
-    const ordinaryEnv = gameEnv(ordinary);
-    const runEnv = gameEnv(runGame);
-
     for (const piece of ordinary.pieces.filter((candidate) => candidate.alive)) {
-      const ordinaryMoves = legalMoves(piece, ordinary.pieces, ordinary.size, ordinaryEnv);
-      const runPiece = runGame.pieces.find((candidate) => candidate.id === piece.id)!;
-      const runMoves = legalMoves(runPiece, runGame.pieces, runGame.size, runEnv);
-      expect(runMoves).toEqual(ordinaryMoves);
+      expect(legalMoves(runGame.pieces.find((candidate) => candidate.id === piece.id)!, runGame.pieces, runGame.size, gameEnv(runGame)))
+        .toEqual(legalMoves(piece, ordinary.pieces, ordinary.size, gameEnv(ordinary)));
     }
   });
 
-  it('keeps the approved lipsanon registry outside piece movement definitions', () => {
-    expect(RUN_LIPSANA).toHaveLength(20);
+  it('has nine player-facing, target-free relic definitions', () => {
+    expect(RUN_LIPSANA).toHaveLength(9);
+    expect(RUN_LIPSANON_OFFER_POOL).toEqual(RUN_LIPSANA);
     for (const lipsanon of RUN_LIPSANA) {
-      expect(Object.keys(lipsanon).every((key) => [
-        'id',
-        'name',
-        'description',
-        'flavorText',
-        'requires',
-        'immediate',
-        'unitTarget',
-      ].includes(key))).toBe(true);
-      expect(lipsanon.flavorText.length).toBeGreaterThan(0);
+      expect(Object.keys(lipsanon).every((key) => ['id', 'name', 'description', 'flavorText', 'immediate'].includes(key))).toBe(true);
+      expect(JSON.stringify(lipsanon)).not.toMatch(/adlected|eutactic|agminate|cacochymic/i);
     }
-  });
-
-  it('declares which lipsana cannot be granted without a named unit', () => {
-    expect(RUN_LIPSANA.filter((lipsanon) => lipsanon.unitTarget).map((lipsanon) => lipsanon.id))
-      .toEqual(['conscription-notice']);
-    expect(lipsanonNeedsUnitTarget('conscription-notice')).toBe(true);
-    expect(lipsanonNeedsUnitTarget('royal-decree')).toBe(false);
-    expect(lipsanonNeedsUnitTarget('')).toBe(false);
-    expect(lipsanonNeedsUnitTarget(null)).toBe(false);
-  });
-
-  it('keeps deferred Deployment lipsana registered for saves but out of seeded offers', () => {
-    expect(RUN_LIPSANA.find((lipsanon) => lipsanon.id === 'muster-roll')?.description)
-      .toBe('Retired for this beta; has no effect.');
-    expect(RUN_LIPSANA.find((lipsanon) => lipsanon.id === 'surveyors-compass')?.description)
-      .toBe('Retired for this beta; has no effect.');
-    expect(RUN_LIPSANON_OFFER_POOL).toHaveLength(18);
-    expect(RUN_LIPSANON_OFFER_POOL.map((lipsanon) => lipsanon.id)).not.toEqual(
-      expect.arrayContaining(['muster-roll', 'surveyors-compass']),
-    );
-  });
-
-  it('expresses placement lipsana only as shared unit-ability grants', () => {
-    expect(RUN_LIPSANON_ABILITY_GRANTS).toEqual({
-      'training-linens': { ability: 'eutactic', unitType: 'pawn' },
-      'royal-decree': { ability: 'eutactic', unitType: 'king' },
-      'crenellated-rampart': { ability: 'eutactic', unitType: 'rook' },
-      'popes-staff': { ability: 'eutactic', unitType: 'bishop' },
-      'ghibelline-rampart': { ability: 'agminate', unitType: 'rook' },
-      'popes-robes': { ability: 'agminate', unitType: 'bishop' },
-      'royal-sceptre': { ability: 'agminate', unitType: 'king' },
-    });
-    expect(Object.fromEntries(
-      Object.keys(RUN_LIPSANON_ABILITY_GRANTS).map((id) => [id, RUN_LIPSANA.find((lipsanon) => lipsanon.id === id)?.description]),
-    )).toEqual({
-      'training-linens': 'Your Pawns gain Eutactic.',
-      'royal-decree': 'Your King gains Eutactic.',
-      'crenellated-rampart': 'Your Rooks gain Eutactic.',
-      'popes-staff': 'Your Bishops gain Eutactic.',
-      'ghibelline-rampart': 'Your Rooks gain Agminate.',
-      'popes-robes': 'Your Bishops gain Agminate.',
-      'royal-sceptre': 'Your King gains Agminate.',
-    });
   });
 });

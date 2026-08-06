@@ -7,7 +7,6 @@ export type RunViewportSceneView =
   | 'aftermath'
   | 'victory'
   | 'bona-mat'
-  | 'bona-target'
   | 'army'
   | 'lipsana'
   | 'expunctio'

@@ -27,9 +27,9 @@ describe('Run Ataraxia progression', () => {
     expect(highestUnlockedAtaraxiaTier(readRunProgression())).toBe(0);
   });
 
-  it('unlocks Ataraxia I after completing the baseline and never regresses', () => {
+  it('records baseline completion while the installed ladder remains tier zero', () => {
     expect(recordAtaraxiaCompletion(0).highestCompletedAtaraxiaTier).toBe(0);
-    expect(highestUnlockedAtaraxiaTier(readRunProgression())).toBe(1);
+    expect(highestUnlockedAtaraxiaTier(readRunProgression())).toBe(0);
     expect(mergeRunProgression(
       readRunProgression(),
       { formatVersion: 1, highestCompletedAtaraxiaTier: -1 },

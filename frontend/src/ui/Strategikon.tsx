@@ -132,7 +132,6 @@ export function Strategikon({
                 framed={false}
                 selectedLipsanonId={null}
                 selectedCardId={null}
-                selectedCardTypeId={null}
               />
             </StrategikonReferenceSceneSlot> : null}
           </>

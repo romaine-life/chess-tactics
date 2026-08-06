@@ -115,7 +115,7 @@ export function HeldCardCodex({
                       data-card-id={held.owned.id}
                       key={held.owned.id}
                     >
-                      <RunCard card={held.core} mode="reference" cardType={held.owned.cardType} />
+                      <RunCard card={held.core} mode="reference" />
                     </div>
                   ))}
                 </div>

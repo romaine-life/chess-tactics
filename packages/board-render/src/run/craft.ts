@@ -2,8 +2,8 @@
 //
 // Debugging and feature work constantly need "the Sectio after Battle 3 with 25 gold and a Rook on
 // offer". Playing there by hand is slow, and hand-authoring the document is worse: the server
-// validator (validateActiveRunBody) cross-checks army/card membership, Plagued targets, offer
-// pricing and the Sectio entry snapshot, so a typed-out document is rejected far more often than it
+// validator (validateActiveRunBody) cross-checks army/card membership, offer pricing and the
+// Sectio entry snapshot, so a typed-out document is rejected far more often than it
 // is accepted.
 //
 // So this module never authors state directly. It composes the SAME transitions the game plays —
@@ -15,16 +15,10 @@
 // The URL grammar lives here too, so links stay the shared contract between the owner and an agent.
 
 import type { Level, War } from '../core/level';
-import { createRng } from '../core/rng';
 import {
-  AGMINATE_COST,
-  ADLECTED_COST,
   GOLD_SCALE,
-  PIECE_VALUE,
-  CACOCHYMIC_DISCOUNT,
-  EUTACTIC_COST,
   RUN_CARD_BY_ID,
-  LIPSANON_BY_ID,
+  RUN_LIPSANA,
   acquireLipsanon,
   addArmyPieces,
   beginBattle,
@@ -38,15 +32,12 @@ import {
   openSectio,
   prepareDeployment,
   removeUnitFromArmyAndCards,
-  seededPestiferousTarget,
   setDeploymentChoices,
   snapshotWar,
   takeVacantiaLipsanon,
   type AtaraxiaTier,
   type AdlectablePieceType,
-  type RunAbility,
   type RunCardOffer,
-  type RunCardType,
   type RunDocument,
   type LipsanonId,
   type RunWarSnapshot,
@@ -55,13 +46,11 @@ import {
   advanceDeploymentTransport,
   beginDeploymentDeal,
   completeDeploymentDeal,
-  currentDeploymentUnit,
-  disciplinePlacementCells,
   deploymentOptions,
   finishDeploymentCardDiscard,
   finishDeploymentCardReveal,
   finishDeploymentUnitSettlement,
-  placeAdlectedDeploymentUnit,
+  placeRevealedDeploymentUnit,
   revealActiveDeploymentCard,
   resolveDeploymentCapacity,
   selectedDeploymentLayout,
@@ -103,15 +92,13 @@ export const DEFAULT_CRAFT_AFTERMATH_TURNS = 14;
 export const DEFAULT_CRAFT_AFTERMATH_ELAPSED_MS = 277_000;
 
 export interface RunCraftCard {
+  coreId: string;
   pieces: AdlectablePieceType[];
-  cardType: RunCardType | null;
 }
 
-/** One crafted army unit. The URL grammar can only name a piece; a JSON spec can also grant the
- * abilities a unit would otherwise have earned from a card or a lipsanon. */
+/** One crafted army unit. */
 export interface RunCraftUnit {
   type: AdlectablePieceType;
-  abilities: RunAbility[];
 }
 
 export interface RunCraftSpec {
@@ -125,8 +112,7 @@ export interface RunCraftSpec {
   army: RunCraftUnit[] | null;
   add: RunCraftUnit[] | null;
   offers: RunCraftCard[] | null;
-  /** Cards the Run already HOLDS. Adlected in the opening Sectio and carried forward, so the
-   * army, abilities, Plagued marks and card records are the ones the game itself writes. */
+  /** Cards the Run already holds. Acquired in the opening Sectio and carried forward. */
   cards: RunCraftCard[] | null;
   loot: LipsanonId[] | null;
   paidLipsanon: LipsanonId | null;
@@ -160,25 +146,6 @@ const PIECE_ALIASES: Readonly<Record<string, AdlectablePieceType>> = Object.free
   queen: 'queen',
 });
 
-/** Each card type answers to its qualifier, its granted state, and the retired words both
- * were called before ADR-0374, so craft links written under the old vocabulary keep
- * resolving. Every spelling lands on the same stored type. */
-const CARD_TYPES: Readonly<Record<string, RunCardType | null>> = Object.freeze({
-  plain: null,
-  none: null,
-  legatine: 'legatine',
-  adlected: 'legatine',
-  tactical: 'legatine',
-  discipline: 'legatine',
-  concinnous: 'concinnous',
-  eutactic: 'concinnous',
-  positioned: 'concinnous',
-  pestiferous: 'pestiferous',
-  plagued: 'pestiferous',
-  hieratic: 'hieratic',
-  agminate: 'hieratic',
-});
-
 const CRAFT_PHASES: readonly RunCraftPhase[] = ['aftermath', 'bona-vacantia', 'sectio', 'deployment', 'battle', 'battle-victory', 'victory'];
 
 function pieceList(raw: string, label: string): AdlectablePieceType[] {
@@ -202,8 +169,7 @@ function pieceList(raw: string, label: string): AdlectablePieceType[] {
   return pieces;
 }
 
-/** The deck already holds every legal multiset worth 1-9 gold, so a crafted card is always a real
- * core card — looked up, never synthesized, so card art and names resolve like any other card. */
+/** Legacy composition shorthand used only when exactly one active formation has that roster. */
 export function craftCoreCardId(pieces: readonly AdlectablePieceType[]): string {
   const order: readonly AdlectablePieceType[] = ['pawn', 'knight', 'bishop', 'rook', 'queen'];
   return [...pieces]
@@ -215,26 +181,29 @@ export function craftCoreCardId(pieces: readonly AdlectablePieceType[]): string 
 function cardSpec(raw: string): RunCraftCard {
   const [piecesPart, typePart, ...extra] = raw.split(':');
   if (extra.length) throw new RunCraftError(`craft offers: "${raw}" has more than one ":" card type.`);
+  if (typePart !== undefined) throw new RunCraftError(`craft offers: card qualifiers are unsupported; omit ":${typePart}".`);
+  const exact = RUN_CARD_BY_ID[piecesPart.toLowerCase()];
+  if (exact) return { coreId: exact.id, pieces: [...exact.pieces] };
+
   const pieces = pieceList(piecesPart, 'offers');
-  const value = pieces.reduce((total, piece) => total + PIECE_VALUE[piece], 0);
-  if (!RUN_CARD_BY_ID[craftCoreCardId(pieces)]) {
+  const composition = craftCoreCardId(pieces);
+  const matches = Object.values(RUN_CARD_BY_ID).filter((card) => craftCoreCardId(card.pieces) === composition);
+  if (matches.length !== 1) {
+    const choices = matches.map((card) => card.id).join(', ');
     throw new RunCraftError(
-      `craft offers: "${raw}" is worth ${value} gold; a Sectio card must be worth 1-9 gold.`,
+      matches.length
+        ? `craft offers: "${piecesPart}" has multiple formations. Use one card id: ${choices}.`
+        : `craft offers: "${raw}" is not an active formation card.`,
     );
   }
-  if (typePart === undefined) return { pieces, cardType: null };
-  const key = typePart.toLowerCase();
-  if (!(key in CARD_TYPES)) {
-    throw new RunCraftError(
-      `craft offers: "${typePart}" is not a card type. Use legatine, concinnous, pestiferous, hieratic or plain.`,
-    );
-  }
-  return { pieces, cardType: CARD_TYPES[key] };
+  return { coreId: matches[0].id, pieces: [...matches[0].pieces] };
 }
 
 function lipsanonList(raw: string, label: string): LipsanonId[] {
   return raw.split(',').map((token) => token.trim()).filter(Boolean).map((id) => {
-    if (!LIPSANON_BY_ID[id as LipsanonId]) throw new RunCraftError(`craft ${label}: "${id}" is not a lipsanon id.`);
+    if (!RUN_LIPSANA.some((lipsanon) => lipsanon.id === id)) {
+      throw new RunCraftError(`craft ${label}: "${id}" is not an active lipsanon id.`);
+    }
     return id as LipsanonId;
   });
 }
@@ -272,7 +241,7 @@ export function parseRunCraftSpec(search: string): RunCraftSpec | null {
     battle: params.get('battle') === null ? 1 : integer(params.get('battle')!, 'battle', 1, 100),
     warId: params.get('war'),
     seed: params.get('seed') === null ? DEFAULT_CRAFT_SEED : integer(params.get('seed')!, 'seed', 0, 0xffffffff),
-    ataraxiaTier: (params.get('tier') === null ? 0 : integer(params.get('tier')!, 'tier', 0, 1)) as AtaraxiaTier,
+    ataraxiaTier: (params.get('tier') === null ? 0 : integer(params.get('tier')!, 'tier', 0, 0)) as AtaraxiaTier,
     goldTenths,
     army: army === null ? null : craftUnits(pieceList(army, 'army')),
     add: add === null ? null : craftUnits(pieceList(add, 'add')),
@@ -290,19 +259,6 @@ export function parseRunCraftSpec(search: string): RunCraftSpec | null {
 }
 
 
-/** A crafted ability may be written by its name or by its stored value (ADR-0374). The
- * refusal message quotes the names, since those are what the game says out loud. */
-const RUN_ABILITY_ALIASES: Readonly<Record<string, RunAbility>> = Object.freeze({
-  adlected: 'adlected',
-  discipline: 'adlected',
-  eutactic: 'eutactic',
-  positioned: 'eutactic',
-  agminate: 'agminate',
-  marshalled: 'agminate',
-});
-
-const RUN_ABILITY_NAMES = ['adlected', 'eutactic', 'agminate'] as const;
-
 function craftUnitList(raw: unknown, label: string): RunCraftUnit[] {
   if (typeof raw === 'string') return craftUnits(pieceList(raw, label));
   if (!Array.isArray(raw)) throw new RunCraftError(`craft ${label}: expected a list of units.`);
@@ -310,27 +266,15 @@ function craftUnitList(raw: unknown, label: string): RunCraftUnit[] {
     if (typeof entry === 'string') {
       const pieces = pieceList(entry, label);
       if (pieces.length !== 1) throw new RunCraftError(`craft ${label}: "${entry}" names more than one unit.`);
-      return { type: pieces[0], abilities: [] };
+      return { type: pieces[0] };
     }
     if (!entry || typeof entry !== 'object') throw new RunCraftError(`craft ${label}: expected a piece name or a unit object.`);
-    const unit = entry as { type?: unknown; abilities?: unknown };
+    const unit = entry as Record<string, unknown>;
+    const unknown = Object.keys(unit).filter((key) => key !== 'type');
+    if (unknown.length) throw new RunCraftError(`craft ${label}: unknown unit field "${unknown[0]}".`);
     const pieces = pieceList(String(unit.type ?? ''), label);
     if (pieces.length !== 1) throw new RunCraftError(`craft ${label}: "${String(unit.type)}" names more than one unit.`);
-    const abilities = unit.abilities === undefined ? [] : unit.abilities;
-    if (!Array.isArray(abilities)) throw new RunCraftError(`craft ${label}: abilities must be a list.`);
-    const resolved: RunAbility[] = [];
-    for (const ability of abilities) {
-      const named = typeof ability === 'string' ? RUN_ABILITY_ALIASES[ability.toLowerCase()] : undefined;
-      if (!named) {
-        throw new RunCraftError(`craft ${label}: "${String(ability)}" is not an ability. Use ${RUN_ABILITY_NAMES.join(', ')}.`);
-      }
-      resolved.push(named);
-    }
-    const unique = [...new Set(resolved)];
-    if (unique.length > 1) {
-      throw new RunCraftError(`craft ${label}: a unit may carry only one deployment ability.`);
-    }
-    return { type: pieces[0], abilities: unique };
+    return { type: pieces[0] };
   });
 }
 
@@ -346,7 +290,7 @@ function jsonInteger(raw: unknown, label: string, min: number, max: number): num
 
 /**
  * Read a craft spec out of a request body. Same crafter, richer surface than the address grammar:
- * a JSON spec can carry structured units with abilities and card offers as objects, with no URL
+ * a JSON spec can carry structured units and card offers as objects, with no URL
  * length to work around. Every unknown field is refused rather than silently ignored, so a typo in
  * an agent's spec is reported instead of quietly producing the wrong Run.
  */
@@ -374,7 +318,7 @@ export function runCraftSpecFromJson(raw: unknown): RunCraftSpec {
     battle: spec.battle === undefined || spec.battle === null ? 1 : jsonInteger(spec.battle, 'battle', 1, 100),
     warId: spec.war === undefined || spec.war === null ? null : String(spec.war),
     seed: spec.seed === undefined || spec.seed === null ? DEFAULT_CRAFT_SEED : jsonInteger(spec.seed, 'seed', 0, 0xffffffff),
-    ataraxiaTier: (tier === undefined || tier === null ? 0 : jsonInteger(tier, 'tier', 0, 1)) as AtaraxiaTier,
+    ataraxiaTier: (tier === undefined || tier === null ? 0 : jsonInteger(tier, 'tier', 0, 0)) as AtaraxiaTier,
     goldTenths,
     army: spec.army === undefined || spec.army === null ? null : craftUnitList(spec.army, 'army'),
     add: spec.add === undefined || spec.add === null ? null : craftUnitList(spec.add, 'add'),
@@ -397,10 +341,13 @@ function craftCardList(raw: unknown, label: string): RunCraftCard[] {
   return raw.map((entry) => {
     if (typeof entry === 'string') return cardSpec(entry);
     if (!entry || typeof entry !== 'object') throw new RunCraftError(`craft ${label}: expected a card string or object.`);
-    const card = entry as { pieces?: unknown; type?: unknown; cardType?: unknown };
+    const card = entry as Record<string, unknown>;
+    const unknown = Object.keys(card).filter((key) => key !== 'id' && key !== 'coreId' && key !== 'pieces');
+    if (unknown.length) throw new RunCraftError(`craft ${label}: unknown card field "${unknown[0]}".`);
+    const id = card.id ?? card.coreId;
+    if (id !== undefined && id !== null) return cardSpec(String(id));
     const pieces = Array.isArray(card.pieces) ? card.pieces.map((piece) => String(piece)).join('+') : String(card.pieces ?? '');
-    const type = card.type ?? card.cardType;
-    return cardSpec(type === undefined || type === null ? pieces : `${pieces}:${String(type)}`);
+    return cardSpec(pieces);
   });
 }
 
@@ -451,14 +398,13 @@ export function isRunCraftLinkPath(pathname: string): boolean {
  * link was minted for.
  */
 export function runCraftSpecToJson(spec: RunCraftSpec): Record<string, unknown> {
-  const unit = (entry: RunCraftUnit) => (entry.abilities.length ? { type: entry.type, abilities: [...entry.abilities] } : entry.type);
   const json: Record<string, unknown> = { phase: spec.phase, battle: spec.battle, seed: spec.seed, tier: spec.ataraxiaTier };
   if (spec.warId !== null) json.war = spec.warId;
   if (spec.goldTenths !== null) json.gold = spec.goldTenths / GOLD_SCALE;
-  if (spec.army) json.army = spec.army.map(unit);
-  if (spec.add) json.add = spec.add.map(unit);
-  if (spec.offers) json.offers = spec.offers.map((card) => ({ pieces: [...card.pieces], type: card.cardType }));
-  if (spec.cards) json.cards = spec.cards.map((card) => ({ pieces: [...card.pieces], type: card.cardType }));
+  if (spec.army) json.army = spec.army.map((entry) => entry.type);
+  if (spec.add) json.add = spec.add.map((entry) => entry.type);
+  if (spec.offers) json.offers = spec.offers.map((card) => card.coreId);
+  if (spec.cards) json.cards = spec.cards.map((card) => card.coreId);
   if (spec.loot) json.loot = [...spec.loot];
   if (spec.paidLipsanon !== null) json.paid = spec.paidLipsanon;
   if (spec.lipsana) json.lipsana = [...spec.lipsana];
@@ -481,11 +427,6 @@ export function runCraftSpecFingerprint(spec: RunCraftSpec): string {
 /** The readable address grammar, for writing a spec by hand. It is a way to SAY a spec, not the
  * link a crafted state is handed over as — that is always the id (runCraftLinkForId). */
 export function runCraftAddressParams(spec: RunCraftSpec): URLSearchParams {
-  // An address cannot say "this Rook carries Agminate". Refusing beats writing a shorter spec
-  // than the one asked for: the craft id has no such limit, so nothing needs this to lie.
-  if ([...(spec.army ?? []), ...(spec.add ?? [])].some((entry) => entry.abilities.length)) {
-    throw new RunCraftError('craft: units carrying abilities cannot be written as an address. Mint a craft link for them.');
-  }
   const params = new URLSearchParams();
   params.set('craft', spec.phase);
   params.set('battle', String(spec.battle));
@@ -497,12 +438,12 @@ export function runCraftAddressParams(spec: RunCraftSpec): URLSearchParams {
   if (spec.add) params.set('add', spec.add.map((entry) => entry.type).join(','));
   if (spec.offers) {
     params.set('offers', spec.offers
-      .map((card) => card.pieces.join('+') + (card.cardType ? `:${card.cardType}` : ''))
+      .map((card) => card.coreId)
       .join(','));
   }
   if (spec.cards) {
     params.set('cards', spec.cards
-      .map((card) => card.pieces.join('+') + (card.cardType ? `:${card.cardType}` : ''))
+      .map((card) => card.coreId)
       .join(','));
   }
   if (spec.loot) params.set('loot', spec.loot.join(','));
@@ -561,10 +502,6 @@ export function selectCraftWar(
   }
 }
 
-function firstNonKingUnitId(run: RunDocument): string | undefined {
-  return run.army.find((unit) => unit.type !== 'king')?.id;
-}
-
 function autoDeploy(run: RunDocument): { run: RunDocument; layout: RunDeploymentLayout } {
   let prepared = prepareDeployment(run);
   const level = prepared.war.battles[prepared.battleIndex]?.level;
@@ -590,12 +527,8 @@ function autoDeploy(run: RunDocument): { run: RunDocument; layout: RunDeployment
       prepared = finishDeploymentCardDiscard(prepared);
       continue;
     }
-    const unit = currentDeploymentUnit(prepared);
-    if (!unit) throw new RunCraftError('craft: Deployment stopped without an active card unit.');
-    const options = deploymentOptions(prepared, level);
-    const free = disciplinePlacementCells(prepared, options, unit.id)[0];
-    const next = free
-      ? placeAdlectedDeploymentUnit(prepared, level, free)
+    const next = prepared.deployment?.stage === 'unit'
+      ? placeRevealedDeploymentUnit(prepared, level)
       : advanceDeploymentTransport(prepared, level);
     if (next === prepared) {
       throw new RunCraftError(`craft: Battle ${prepared.battleIndex + 1} could not be deployed automatically.`);
@@ -672,9 +605,8 @@ function craftAftermath(run: RunDocument, spec: RunCraftSpec): RunDocument {
  */
 function takeVacantiaAuto(run: RunDocument): RunDocument {
   if (run.phase !== 'bona-vacantia' || !run.vacantia) return run;
-  const target = firstNonKingUnitId(run);
   for (const lipsanon of run.vacantia.offers) {
-    const taken = takeVacantiaLipsanon(run, lipsanon, target);
+    const taken = takeVacantiaLipsanon(run, lipsanon);
     if (taken !== run) return taken;
   }
   throw new RunCraftError('craft: the Conflict opened with no lipsanon that could be taken.');
@@ -703,8 +635,8 @@ function adlectOpeningCard(run: RunDocument): RunDocument {
  * Adlect the cards the Run should already HOLD, in the opening Sectio it is standing in.
  *
  * The point of the field is the Chartulary and everything downstream of Adlectio: real units
- * with real ids, the abilities and Plagued marks `performAdlectio` grants, and card records the server
- * validator accepts. So each card is staged as an ordinary offer and adlected — never written into
+ * with real ids and card records the server validator accepts. Each card is staged as an ordinary
+ * offer and acquired — never written into
  * `run.cards` directly. Gold is restored afterwards, so held cards do not silently pay for
  * themselves out of what the Run has to spend, and the staged offers are withdrawn so the Sectio
  * that is about to be left still reads as the one the game dealt.
@@ -771,22 +703,16 @@ function advanceToDeployment(run: RunDocument, battleIndex: number, held: readon
 }
 
 function craftUnits(pieces: readonly AdlectablePieceType[]): RunCraftUnit[] {
-  return pieces.map((type) => ({ type, abilities: [] }));
+  return pieces.map((type) => ({ type }));
 }
 
-/** Add crafted units, then grant each one the abilities the spec asked for. Abilities are stored on
- * the unit exactly as a card or lipsanon would leave them, so the game reads them normally. */
 function addPieces(run: RunDocument, units: readonly RunCraftUnit[]): RunDocument {
-  const { addedUnits, ...update } = addArmyPieces(run, units.map((unit) => unit.type), 'adlectio');
-  const granted = new Map(addedUnits.map((added, index) => [added.id, units[index].abilities]));
-  return {
-    ...run,
-    ...update,
-    army: update.army.map((unit) => {
-      const abilities = granted.get(unit.id);
-      return abilities?.length ? { ...unit, abilities: [...new Set([...unit.abilities, ...abilities])] } : unit;
-    }),
-  };
+  const { addedUnits: _addedUnits, ...update } = addArmyPieces(
+    run,
+    units.map((unit) => unit.type),
+    'adlectio',
+  );
+  return { ...run, ...update };
 }
 
 /** Cards are the Run's Adlectio history; a crafted army rewrites the roster, so cards keep only the
@@ -797,17 +723,9 @@ function pruneEmptyCards(run: RunDocument): RunDocument {
     .map((card) => ({
       ...card,
       unitSeats: card.unitSeats.map((unitId) => unitId && unitIds.has(unitId) ? unitId : null),
-      effectTargetUnitId: card.effectTargetUnitId && unitIds.has(card.effectTargetUnitId)
-        ? card.effectTargetUnitId
-        : null,
     }))
-    .filter((card) => card.unitSeats.some(Boolean) || card.lostUnitIds.length > 0);
-  const cardIds = new Set(cards.map((card) => card.id));
-  return {
-    ...run,
-    cards,
-    pestiferousLosses: run.pestiferousLosses.filter((loss) => cardIds.has(loss.cardId)),
-  };
+    .filter((card) => card.unitSeats.some(Boolean));
+  return { ...run, cards };
 }
 
 function applyArmy(run: RunDocument, spec: RunCraftSpec): RunDocument {
@@ -825,8 +743,7 @@ function applyArmy(run: RunDocument, spec: RunCraftSpec): RunDocument {
 function applyLipsana(run: RunDocument, spec: RunCraftSpec): RunDocument {
   let next = run;
   for (const lipsanon of spec.lipsana ?? []) {
-    const target = firstNonKingUnitId(next);
-    const acquired = acquireLipsanon(next, lipsanon, target);
+    const acquired = acquireLipsanon(next, lipsanon);
     if (acquired === next) throw new RunCraftError(`craft lipsana: "${lipsanon}" could not be acquired.`);
     next = acquired;
   }
@@ -838,30 +755,15 @@ function craftOffer(
   card: RunCraftCard,
   slotIndex: number,
 ): RunCardOffer {
-  const core = RUN_CARD_BY_ID[craftCoreCardId(card.pieces)];
-  const effectSeed = mixSeed(run.seed, `craft-offer:${core.id}`, slotIndex);
-  const cacochymicPieceIndex = card.cardType === 'pestiferous'
-    ? seededPestiferousTarget(effectSeed, core.pieces.map((_piece, index) => index), 0)
-    : null;
-  const plaguedPiece = cacochymicPieceIndex === null ? null : core.pieces[cacochymicPieceIndex];
+  const core = RUN_CARD_BY_ID[card.coreId];
+  if (!core) throw new RunCraftError(`craft offers: "${card.coreId}" is not an active formation card.`);
+  void run.seed;
   return {
     ...core,
     pieces: [...core.pieces],
+    formation: core.formation?.map((cell) => ({ ...cell })),
     offerId: `craft-${slotIndex}-${core.id}`,
-    // The exact pricing the game and the server both derive; a hand-set cost is rejected.
-    cost: plaguedPiece
-      ? core.value - CACOCHYMIC_DISCOUNT[plaguedPiece]
-      : core.value + (card.cardType === 'legatine'
-        ? ADLECTED_COST
-        : card.cardType === 'hieratic'
-          ? AGMINATE_COST
-          : card.cardType === 'concinnous' ? EUTACTIC_COST : 0),
-    cardType: card.cardType,
-    effectSeed,
-    cacochymicPieceIndex,
-    effectTargetIndex: card.cardType === 'concinnous'
-      ? createRng(mixSeed(effectSeed, 'concinnous-target')).int(core.pieces.length)
-      : null,
+    cost: core.value,
   };
 }
 

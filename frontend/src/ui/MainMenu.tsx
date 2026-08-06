@@ -8,8 +8,6 @@ import { Enchiridion } from './Enchiridion';
 import {
   enchiridionCardFromPath,
   enchiridionCardHref,
-  enchiridionCardTypeFromPath,
-  enchiridionCardTypeHref,
   enchiridionLipsanonFromPath,
   enchiridionLipsanonHref,
   enchiridionSectionFromPath,
@@ -165,13 +163,10 @@ export function MainMenu({
                   : dest === 'enchiridion' ? (
                       <Enchiridion
                         section={enchiridionSection}
-                        cardTypeTextureBatch={new URLSearchParams(search).get('cardTypeTextureBatch')}
                         selectedLipsanonId={enchiridionLipsanonFromPath(path)}
                         lipsanonHref={enchiridionLipsanonHref}
                         selectedCardId={enchiridionCardFromPath(path)}
                         cardHref={enchiridionCardHref}
-                        selectedCardTypeId={enchiridionCardTypeFromPath(path)}
-                        cardTypeHref={enchiridionCardTypeHref}
                         sceneInstanceKey={sceneInstanceKey}
                         framed={false}
                       />

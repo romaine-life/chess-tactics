@@ -343,21 +343,6 @@ describe('scene manifests', () => {
     expect(sceneManifest('/run/strategikon/enchiridion').instances.map((entry) => entry.definition.id)).toEqual([
       'run', 'run/phase', 'run/workspace', 'strategikon', 'strategikon/enchiridion',
     ]);
-    expect(sceneManifest('/enchiridion/abilities').instances.map((entry) => entry.definition.id)).toEqual([
-      'main-menu',
-      'enchiridion',
-      'enchiridion/abilities',
-    ]);
-    expect(sceneManifest('/enchiridion/abilities')).toMatchObject({
-      host: 'enchiridion-shell',
-      background: 'homepage',
-      paintOwner: 'dom',
-    });
-    expect(sceneManifest('/enchiridion/card-types').instances.map((entry) => entry.definition.id)).toEqual([
-      'main-menu',
-      'enchiridion',
-      'enchiridion/card-types',
-    ]);
     expect(deepestSharedSceneRegion(
       sceneManifest('/enchiridion/units'),
       sceneManifest('/enchiridion/lipsana'),
@@ -426,7 +411,7 @@ describe('scene manifests', () => {
     });
   });
 
-  it('authors Bona targeting and unit inspection as distinct Run workspace scenes', () => {
+  it('authors unit inspection as a distinct Run workspace scene', () => {
     const level = createBlankLevel('run-battle', 'Run Battle', 8, 8);
     const base = createRun({
       id: 'run-war',
@@ -436,43 +421,10 @@ describe('scene manifests', () => {
     }, 17, '2026-08-01T00:00:00.000Z');
     const document = {
       ...base,
-      phase: 'bona-vacantia' as const,
-      vacantia: {
-        kind: 'opening' as const,
-        conflictIndex: 0,
-        afterBattleIndex: 0,
-        victoryGoldTenths: 0,
-        offers: ['conscription-notice' as const, 'royal-decree' as const, 'training-linens' as const],
-      },
+      phase: 'deployment' as const,
     };
     const source = { run: { hydrated: true, document } };
     const unitId = document.army[0].id;
-    const mat = sceneManifest('/run', '', source);
-    const ledger = sceneManifest('/run', '?view=bona-target&lipsanon=conscription-notice', source);
-    const profile = sceneManifest(
-      '/run',
-      `?view=bona-target&lipsanon=conscription-notice&unit=${encodeURIComponent(unitId)}`,
-      source,
-    );
-
-    expect(ledger.snapshot).toMatchObject({
-      workspace: { view: 'bona-target', lipsanonId: 'conscription-notice', unitId: null },
-    });
-    expect(profile.snapshot).toMatchObject({
-      workspace: { view: 'bona-target', lipsanonId: 'conscription-notice', unitId },
-    });
-    expect(new Set([mat.id, ledger.id, profile.id]).size).toBe(3);
-    expect(sceneLayerKey(mat)).toBe(sceneLayerKey(ledger));
-    expect(sceneLayerKey(ledger)).toBe(sceneLayerKey(profile));
-    expect(sceneTransitionRelationship(mat, ledger)).toEqual({
-      kind: 'selection-change',
-      region: 'gameplay-workspace',
-    });
-    expect(sceneTransitionRelationship(ledger, profile)).toEqual({
-      kind: 'selection-change',
-      region: 'gameplay-workspace',
-    });
-
     const armyLedger = sceneManifest('/run', '?view=army', source);
     const armyProfile = sceneManifest('/run', `?view=army&unit=${encodeURIComponent(unitId)}`, source);
     expect(armyLedger.snapshot).toMatchObject({ workspace: { view: 'army', unitId: null } });
@@ -483,14 +435,6 @@ describe('scene manifests', () => {
       kind: 'selection-change',
       region: 'gameplay-workspace',
     });
-
-    // Unknown, untargeted, or out-of-phase requests do not gain viewport authority.
-    expect(sceneManifest('/run', '?view=bona-target&lipsanon=royal-decree', source).id).toBe(mat.id);
-    expect(sceneManifest('/run', '?view=bona-target&lipsanon=conscription-notice&unit=missing', source).id)
-      .toBe(ledger.id);
-    expect(sceneManifest('/run', '?view=bona-target&lipsanon=conscription-notice', {
-      run: { hydrated: true, document: base },
-    }).snapshot).toMatchObject({ workspace: { view: 'primary' } });
   });
 
   it('addresses individual lipsana inside the one retained lipsanon-reference scene (ADR-0256)', () => {
@@ -523,15 +467,6 @@ describe('scene manifests', () => {
     expect(addressed.id).toBe(base.id);
     expect(addressed.instances.map((entry) => entry.key)).toEqual(base.instances.map((entry) => entry.key));
     expect(addressed.leaf.definition.id).toBe('enchiridion/cards');
-    expect(sceneManifest('/enchiridion/units').id).not.toBe(base.id);
-  });
-
-  it('addresses individual card properties inside the one retained card-types scene', () => {
-    const base = sceneManifest('/enchiridion/card-types');
-    const addressed = sceneManifest('/enchiridion/card-types/hieratic');
-    expect(addressed.id).toBe(base.id);
-    expect(addressed.instances.map((entry) => entry.key)).toEqual(base.instances.map((entry) => entry.key));
-    expect(addressed.leaf.definition.id).toBe('enchiridion/card-types');
     expect(sceneManifest('/enchiridion/units').id).not.toBe(base.id);
   });
 

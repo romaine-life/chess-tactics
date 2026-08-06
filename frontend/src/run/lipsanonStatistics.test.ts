@@ -30,27 +30,27 @@ describe('Run lipsanon statistics', () => {
   it('records a lipsanon pick with a stable run-and-lipsanon identity', () => {
     expect(lipsanonStatEventsForRunTransition(
       run(),
-      run({ lipsana: ['conscription-notice'] }),
+      run({ lipsana: ['fair-scales'] }),
     )).toEqual([{
-      eventId: 'pick:run-1:conscription-notice',
-      lipsanonId: 'conscription-notice',
+      eventId: 'pick:run-1:fair-scales',
+      lipsanonId: 'fair-scales',
       kind: 'picked',
     }]);
   });
 
   it('records one Battle win for every lipsanon held through that Battle', () => {
     expect(lipsanonStatEventsForRunTransition(
-      run({ lipsana: ['conscription-notice', 'training-linens'] }),
-      run({ phase: 'sectio', lipsana: ['conscription-notice', 'training-linens'] }),
+      run({ lipsana: ['fair-scales', 'quartermasters-ledger'] }),
+      run({ phase: 'sectio', lipsana: ['fair-scales', 'quartermasters-ledger'] }),
     )).toEqual([
       {
         eventId: 'battle-win:run-1:0',
-        lipsanonId: 'conscription-notice',
+        lipsanonId: 'fair-scales',
         kind: 'battle-win',
       },
       {
         eventId: 'battle-win:run-1:0',
-        lipsanonId: 'training-linens',
+        lipsanonId: 'quartermasters-ledger',
         kind: 'battle-win',
       },
     ]);
@@ -59,11 +59,11 @@ describe('Run lipsanon statistics', () => {
   it('does not infer history across different Runs or ordinary same-phase updates', () => {
     expect(lipsanonStatEventsForRunTransition(
       run(),
-      run({ id: 'run-2', lipsana: ['conscription-notice'] }),
+      run({ id: 'run-2', lipsana: ['fair-scales'] }),
     )).toEqual([]);
     expect(lipsanonStatEventsForRunTransition(
-      run({ lipsana: ['conscription-notice'] }),
-      run({ goldTenths: 20, lipsana: ['conscription-notice'] }),
+      run({ lipsana: ['fair-scales'] }),
+      run({ goldTenths: 20, lipsana: ['fair-scales'] }),
     )).toEqual([]);
   });
 });

@@ -192,6 +192,8 @@ export * from './ui/unitCatalog';
 export * from './run/craft';
 export {
   CURRENT_RUN_SAVE_VERSION,
+  RUN_CARD_BY_ID,
+  RUN_STARTER_CARD_BY_ID,
   RUN_LIPSANON_IMMEDIATE_GOLD,
   cardExpunctioPriceTenths,
   lipsanonImmediateGoldTenths,

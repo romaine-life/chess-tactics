@@ -20683,10 +20683,11 @@ const ACTIVE_RUN_DEPLOYMENT_FIELDS = new Set([
   'transport',
   'stage',
   'blockedUnitIds',
-  'manualPlacements',
-  'temporaryAdlectedUnitId',
+  'formationPlans',
 ]);
 const ACTIVE_RUN_SAVE_VERSION = serverRender?.CURRENT_RUN_SAVE_VERSION;
+const ACTIVE_RUN_CARD_BY_ID = serverRender?.RUN_CARD_BY_ID ?? {};
+const ACTIVE_RUN_STARTER_CARD_BY_ID = serverRender?.RUN_STARTER_CARD_BY_ID ?? {};
 const RUN_LIPSANA = Array.isArray(serverRender?.RUN_LIPSANA) ? serverRender.RUN_LIPSANA : [];
 const LIPSANON_BY_ID = serverRender?.LIPSANON_BY_ID ?? {};
 const RUN_LIPSANON_IDS = new Set(RUN_LIPSANA.map((lipsanon) => lipsanon.id));
@@ -21392,6 +21393,299 @@ function validateActiveRunBody(run) {
   return null;
 }
 
+const RETIRED_FORMATION_RUN_FIELDS = new Set([
+  'abilities',
+  'modifiers',
+  'cardType',
+  'effectSeed',
+  'effectTargetIndex',
+  'effectTargetUnitId',
+  'cacochymicPieceIndex',
+  'cacochymicUnitId',
+  'lostUnitIds',
+  'pestiferousLosses',
+  'manualPlacements',
+  'temporaryAdlectedUnitId',
+]);
+
+function containsRetiredFormationRunField(value) {
+  if (!value || typeof value !== 'object') return false;
+  if (Array.isArray(value)) return value.some(containsRetiredFormationRunField);
+  return Object.entries(value).some(([field, child]) => (
+    RETIRED_FORMATION_RUN_FIELDS.has(field) || containsRetiredFormationRunField(child)
+  ));
+}
+
+function formationRunUnitIssue(unit, { kingAllowed = true } = {}) {
+  if (!isObjectRecord(unit)) return 'unit must be an object';
+  if (containsRetiredFormationRunField(unit)) return 'unit contains retired ability state';
+  if (typeof unit.id !== 'string' || !unit.id || unit.id.length > 160) return 'unit.id is invalid';
+  if (!ACTIVE_RUN_PIECES.has(unit.type) || (!kingAllowed && unit.type === 'king')) return 'unit.type is invalid';
+  if (!ACTIVE_RUN_UNIT_SOURCES.has(unit.source)) return 'unit.source is invalid';
+  if (typeof unit.name !== 'string' || !unit.name.trim() || unit.name.length > 80) return 'unit.name is invalid';
+  if (!isFiniteInteger(unit.number) || unit.number < 1) return 'unit.number is invalid';
+  if (!isFiniteInteger(unit.inspectionSeed) || unit.inspectionSeed < 0 || unit.inspectionSeed > 0xffffffff) {
+    return 'unit.inspectionSeed is invalid';
+  }
+  return null;
+}
+
+function activeRunCardDefinition(coreId) {
+  return ACTIVE_RUN_CARD_BY_ID[coreId] ?? ACTIVE_RUN_STARTER_CARD_BY_ID[coreId] ?? null;
+}
+
+function formationRunOwnedCardIssue(card, warBattleCount) {
+  if (!isObjectRecord(card)) return 'card must be an object';
+  if (containsRetiredFormationRunField(card)) return 'card contains retired ability state';
+  if (typeof card.id !== 'string' || !card.id || card.id.length > 160) return 'card.id is invalid';
+  if (typeof card.coreId !== 'string' || !activeRunCardDefinition(card.coreId)) return 'card.coreId is invalid';
+  if (!Array.isArray(card.unitSeats)) return 'card.unitSeats is invalid';
+  const definition = activeRunCardDefinition(card.coreId);
+  if (
+    card.unitSeats.length !== definition.pieces.length
+    || card.unitSeats.some((unitId) => unitId !== null && (typeof unitId !== 'string' || !unitId))
+  ) return 'card.unitSeats is invalid';
+  if (
+    !isFiniteInteger(card.acquiredAfterBattleIndex)
+    || card.acquiredAfterBattleIndex < 0
+    || card.acquiredAfterBattleIndex >= warBattleCount
+  ) return 'card.acquiredAfterBattleIndex is invalid';
+  return null;
+}
+
+function formationRunOfferIssue(offer) {
+  if (!isObjectRecord(offer)) return 'offer must be an object';
+  if (containsRetiredFormationRunField(offer)) return 'offer contains retired ability state';
+  const definition = typeof offer.id === 'string' ? ACTIVE_RUN_CARD_BY_ID[offer.id] : null;
+  if (!definition) return 'offer.id is invalid';
+  if (typeof offer.offerId !== 'string' || !offer.offerId || offer.offerId.length > 200) return 'offer.offerId is invalid';
+  if (!Array.isArray(offer.pieces) || offer.pieces.join(',') !== definition.pieces.join(',')) return 'offer.pieces is invalid';
+  if (!isFiniteInteger(offer.value) || offer.value !== definition.value) return 'offer.value is invalid';
+  if (!isFiniteInteger(offer.cost) || offer.cost !== definition.value) return 'offer.cost is invalid';
+  if (!Array.isArray(offer.formation) || offer.formation.length !== definition.formation.length) {
+    return 'offer.formation is invalid';
+  }
+  if (offer.formation.some((cell, index) => (
+    !isObjectRecord(cell)
+    || cell.x !== definition.formation[index].x
+    || cell.y !== definition.formation[index].y
+  ))) return 'offer.formation is invalid';
+  return null;
+}
+
+function formationRunSnapshotIssue(snapshot, warBattleCount) {
+  if (!isObjectRecord(snapshot)) return 'snapshot must be an object';
+  if (!Array.isArray(snapshot.army) || snapshot.army.some((unit) => formationRunUnitIssue(unit))) {
+    return 'snapshot.army is invalid';
+  }
+  if (!Array.isArray(snapshot.cards) || snapshot.cards.some((card) => formationRunOwnedCardIssue(card, warBattleCount))) {
+    return 'snapshot.cards is invalid';
+  }
+  if (!isFiniteInteger(snapshot.goldTenths) || snapshot.goldTenths < 0) return 'snapshot.goldTenths is invalid';
+  if (!isFiniteInteger(snapshot.nextArmyUnitSequence) || snapshot.nextArmyUnitSequence < 1) {
+    return 'snapshot.nextArmyUnitSequence is invalid';
+  }
+  if (!isFiniteInteger(snapshot.nextCardSequence) || snapshot.nextCardSequence < 1) return 'snapshot.nextCardSequence is invalid';
+  return null;
+}
+
+/**
+ * Current Run persistence boundary. Version 24 deliberately knows nothing about card
+ * qualifiers or unit abilities: a card is an authored one-to-three-unit formation and
+ * every unit on it is committed together during Deployment.
+ */
+function validateFormationRunBody(run) {
+  if (!isObjectRecord(run)) return 'run must be an object';
+  if (run.runSaveVersion !== ACTIVE_RUN_SAVE_VERSION) return 'run.runSaveVersion is unsupported';
+  if (containsRetiredFormationRunField(run)) return 'run contains retired ability state';
+  if ('formatVersion' in run || 'shop' in run || 'draftOffers' in run || 'chosenDraftId' in run) {
+    return 'run contains retired state';
+  }
+  if (typeof run.id !== 'string' || !run.id || run.id.length > 160) return 'run.id is invalid';
+  if (!isFiniteInteger(run.seed) || run.seed < 0 || run.seed > 0xffffffff) return 'run.seed is invalid';
+  if (run.ataraxiaTier !== 0) return 'run.ataraxiaTier is invalid';
+  if (typeof run.updatedAt !== 'string' || !run.updatedAt) return 'run.updatedAt is required';
+  if (!ACTIVE_RUN_PHASES.has(run.phase)) return 'run.phase is invalid';
+  if (!isFiniteInteger(run.battleIndex) || run.battleIndex < 0) return 'run.battleIndex is invalid';
+  if (!isFiniteInteger(run.conflictIndex) || run.conflictIndex < 0) return 'run.conflictIndex is invalid';
+  if (!isFiniteInteger(run.goldTenths) || run.goldTenths < 0) return 'run.goldTenths is invalid';
+
+  if (!isObjectRecord(run.war) || typeof run.war.id !== 'string' || !run.war.id) return 'run.war is invalid';
+  if (typeof run.war.name !== 'string' || typeof run.war.description !== 'string') return 'run.war is invalid';
+  if (!Array.isArray(run.war.battles) || run.war.battles.length < 1 || run.war.battles.length > 100) {
+    return 'run.war.battles is invalid';
+  }
+  for (const [index, battle] of run.war.battles.entries()) {
+    if (!isObjectRecord(battle) || typeof battle.loot !== 'boolean') return `run.war.battles.${index} is invalid`;
+    const levelError = validateWorkspaceLevel(battle.level, battle.level?.id);
+    if (levelError) return `run.war.battles.${index}: ${levelError}`;
+  }
+  if (run.battleIndex >= run.war.battles.length) return 'run.battleIndex is outside the War';
+
+  if (!Array.isArray(run.army) || run.army.length < 1 || run.army.length > 200) return 'run.army is invalid';
+  const unitIds = new Set();
+  for (const unit of run.army) {
+    const issue = formationRunUnitIssue(unit);
+    if (issue || unitIds.has(unit.id)) return `run.army contains an invalid unit${issue ? `: ${issue}` : ''}`;
+    unitIds.add(unit.id);
+  }
+  if (run.army.filter((unit) => unit.type === 'king' && unit.id === 'run-king').length !== 1
+    || run.army.filter((unit) => unit.type === 'king').length !== 1) {
+    return 'run.army must retain its one King';
+  }
+
+  if (!Array.isArray(run.cards) || run.cards.length < 1 || run.cards.length > 200) return 'run.cards is invalid';
+  const cardIds = new Set();
+  const seatedUnitIds = new Set();
+  for (const card of run.cards) {
+    const issue = formationRunOwnedCardIssue(card, run.war.battles.length);
+    if (issue || cardIds.has(card.id)) return `run.cards contains an invalid card${issue ? `: ${issue}` : ''}`;
+    cardIds.add(card.id);
+    const definition = activeRunCardDefinition(card.coreId);
+    for (const [seatIndex, unitId] of card.unitSeats.entries()) {
+      if (unitId === null) continue;
+      const unit = run.army.find((candidate) => candidate.id === unitId);
+      if (!unit || seatedUnitIds.has(unitId) || unit.type !== definition.pieces[seatIndex]) {
+        return 'run.cards contains invalid unit membership';
+      }
+      seatedUnitIds.add(unitId);
+    }
+  }
+  const starter = run.cards.filter((card) => card.coreId === 'his-grace');
+  if (
+    starter.length !== 1
+    || starter[0].id !== 'run-card-his-grace'
+    || starter[0].unitSeats[0] !== 'run-king'
+    || !['run-pawn-a', null].includes(starter[0].unitSeats[1])
+    || !['run-pawn-b', null].includes(starter[0].unitSeats[2])
+  ) return 'run.cards must retain the complete His Grace formation';
+  if (run.army.some((unit) => !seatedUnitIds.has(unit.id))) return 'run.army contains a unit outside the Chartulary';
+
+  if (!isFiniteInteger(run.nextCardSequence) || run.nextCardSequence < 1) return 'run.nextCardSequence is invalid';
+  if (!isFiniteInteger(run.nextArmyUnitSequence) || run.nextArmyUnitSequence < 1) return 'run.nextArmyUnitSequence is invalid';
+  if (!isObjectRecord(run.nextArmyUnitNumberByType)) return 'run.nextArmyUnitNumberByType is invalid';
+  for (const type of ACTIVE_RUN_PIECES) {
+    if (!isFiniteInteger(run.nextArmyUnitNumberByType[type]) || run.nextArmyUnitNumberByType[type] < 1) {
+      return 'run.nextArmyUnitNumberByType is invalid';
+    }
+  }
+
+  for (const field of ['lipsana', 'seenLipsana']) {
+    if (!Array.isArray(run[field]) || new Set(run[field]).size !== run[field].length
+      || run[field].some((id) => !RUN_LIPSANON_IDS.has(id))) return `run.${field} is invalid`;
+  }
+  if (run.lipsana.some((id) => !run.seenLipsana.includes(id))) return 'run.lipsana is inconsistent with seenLipsana';
+  if (!isObjectRecord(run.conflictPaidLipsana)) return 'run.conflictPaidLipsana is invalid';
+  for (const [conflict, record] of Object.entries(run.conflictPaidLipsana)) {
+    if (!/^\d+$/.test(conflict) || !isObjectRecord(record) || !RUN_LIPSANON_IDS.has(record.lipsanonId)
+      || typeof record.bought !== 'boolean') return 'run.conflictPaidLipsana is invalid';
+  }
+
+  const deployment = run.deployment;
+  if (run.phase === 'battle' && !isObjectRecord(deployment)) return 'run.deployment is required during Battle';
+  if (!['deployment', 'battle'].includes(run.phase) && deployment !== null) return 'run.deployment is invalid outside Deployment and Battle';
+  if (deployment !== null) {
+    if (!isObjectRecord(deployment) || Object.keys(deployment).some((field) => !ACTIVE_RUN_DEPLOYMENT_FIELDS.has(field))) {
+      return 'run.deployment contains an unsupported field';
+    }
+    const uniqueIds = (value, allowed, maximum = 200) => Array.isArray(value) && value.length <= maximum
+      && new Set(value).size === value.length && value.every((id) => allowed.has(id));
+    if (
+      deployment.battleIndex !== run.battleIndex
+      || !isFiniteInteger(deployment.seed) || deployment.seed < 0 || deployment.seed > 0xffffffff
+      || !uniqueIds(deployment.dealtCardIds, cardIds)
+      || deployment.dealtCardIds[0] !== 'run-card-his-grace'
+      || !uniqueIds(deployment.deployingUnitIds, unitIds)
+      || !uniqueIds(deployment.unavailableUnitIds, unitIds)
+      || !uniqueIds(deployment.blockedUnitIds, unitIds)
+      || !uniqueIds(deployment.revealedCardIds, cardIds)
+      || !uniqueIds(deployment.settlingUnitIds, unitIds)
+      || typeof deployment.capacityResolved !== 'boolean'
+      || !isObjectRecord(deployment.placements)
+      || !isObjectRecord(deployment.formationPlans)
+      || !isFiniteInteger(deployment.activeCardIndex) || deployment.activeCardIndex < 0
+      || deployment.activeCardIndex > deployment.dealtCardIds.length
+      || !isFiniteInteger(deployment.unitCursor) || deployment.unitCursor < 0
+      || !isFiniteInteger(deployment.discardCursor) || deployment.discardCursor < 0
+      || deployment.discardCursor > deployment.dealtCardIds.length
+      || !['paused', 'playing', 'full-deploy'].includes(deployment.transport)
+      || !['awaiting-deal', 'dealing', 'card', 'revealing', 'unit', 'settling', 'discarding', 'complete'].includes(deployment.stage)
+    ) return 'run.deployment contains invalid state';
+    const placementSquares = new Set();
+    for (const [unitId, square] of Object.entries(deployment.placements)) {
+      if (!unitIds.has(unitId) || typeof square !== 'string' || !/^-?\d+,-?\d+$/.test(square)
+        || placementSquares.has(square)) return 'run.deployment placements are invalid';
+      placementSquares.add(square);
+    }
+    for (const [plannedCardId, plan] of Object.entries(deployment.formationPlans)) {
+      const plannedCard = run.cards.find((card) => card.id === plannedCardId);
+      if (!plannedCard || !deployment.dealtCardIds.includes(plannedCardId) || !isObjectRecord(plan)) {
+        return 'run.deployment formation plans are invalid';
+      }
+      const plannedSeats = new Set(plannedCard.unitSeats.filter((id) => typeof id === 'string'));
+      const planSquares = new Set();
+      if (Object.keys(plan).length > plannedSeats.size) return 'run.deployment formation plans are invalid';
+      for (const [unitId, square] of Object.entries(plan)) {
+        if (!plannedSeats.has(unitId) || typeof square !== 'string' || !/^-?\d+,-?\d+$/.test(square)
+          || planSquares.has(square)) return 'run.deployment formation plans are invalid';
+        planSquares.add(square);
+      }
+    }
+  }
+
+  if (run.phase === 'aftermath') {
+    if (!isObjectRecord(run.aftermath) || !Array.isArray(run.aftermath.survivingUnitIds)
+      || !Array.isArray(run.aftermath.fallenUnits)) return 'run.aftermath is invalid';
+  } else if (run.aftermath !== null) return 'run.aftermath is invalid outside Aftermath';
+
+  if (run.phase === 'bona-vacantia') {
+    if (!isObjectRecord(run.vacantia) || !Array.isArray(run.vacantia.offers)
+      || run.vacantia.offers.length < 1 || run.vacantia.offers.length > 3
+      || new Set(run.vacantia.offers).size !== run.vacantia.offers.length
+      || run.vacantia.offers.some((id) => !RUN_LIPSANON_IDS.has(id))) return 'run.vacantia is invalid';
+  } else if (run.vacantia !== null) return 'run.vacantia is invalid outside Bona Vacantia';
+
+  if (run.phase === 'sectio') {
+    const sectio = run.sectio;
+    if (!isObjectRecord(sectio) || Object.keys(sectio).some((field) => !ACTIVE_RUN_SECTIO_FIELDS.has(field))) {
+      return 'run.sectio is invalid';
+    }
+    if (!Array.isArray(sectio.cardOffers) || sectio.cardOffers.length < 1
+      || sectio.cardOffers.some((offer) => formationRunOfferIssue(offer))) return 'run.sectio.cardOffers is invalid';
+    if (typeof serverRender?.runSectioCardOfferCount !== 'function'
+      || sectio.cardOffers.length !== serverRender.runSectioCardOfferCount(run)) {
+      return 'run.sectio.cardOffers has an invalid count';
+    }
+    const offerIds = new Set(sectio.cardOffers.map((offer) => offer.offerId));
+    if (!Array.isArray(sectio.adlectedCardOfferIds)
+      || new Set(sectio.adlectedCardOfferIds).size !== sectio.adlectedCardOfferIds.length
+      || sectio.adlectedCardOfferIds.some((id) => !offerIds.has(id))) return 'run.sectio.adlectedCardOfferIds is invalid';
+    if (formationRunSnapshotIssue(sectio.entrySnapshot, run.war.battles.length)) return 'run.sectio.entrySnapshot is invalid';
+    if (!Array.isArray(sectio.alienatedUnits) || sectio.alienatedUnits.some((record) => (
+      !isObjectRecord(record) || formationRunUnitIssue(record.unit)
+      || !isFiniteInteger(record.proceedsTenths) || record.proceedsTenths < 0
+    ))) return 'run.sectio.alienatedUnits is invalid';
+    if (sectio.expunctedCard !== null) {
+      const record = sectio.expunctedCard;
+      if (!isObjectRecord(record) || formationRunOwnedCardIssue(record.card, run.war.battles.length)
+        || record.card.coreId === 'his-grace' || !Array.isArray(record.units)
+        || record.units.some((unit) => formationRunUnitIssue(unit))
+        || !isFiniteInteger(record.priceTenths) || record.priceTenths <= 0) return 'run.sectio.expunctedCard is invalid';
+    }
+    if (sectio.paidLipsanonOffer !== null && !RUN_LIPSANON_IDS.has(sectio.paidLipsanonOffer)) {
+      return 'run.sectio.paidLipsanonOffer is invalid';
+    }
+    if (typeof sectio.paidLipsanonBought !== 'boolean') return 'run.sectio.paidLipsanonBought is invalid';
+  } else if (run.sectio !== null) return 'run.sectio is invalid outside Sectio';
+
+  if (run.phase === 'battle') {
+    if (!isObjectRecord(run.battleRuntime) || run.battleRuntime.battleIndex !== run.battleIndex) {
+      return 'run.battleRuntime is invalid during Battle';
+    }
+  } else if (run.battleRuntime !== null) return 'run.battleRuntime is invalid outside Battle';
+  return null;
+}
+
 function publicActiveRun(row) {
   return {
     run: row && isObjectRecord(row.body) ? row.body : null,
@@ -21424,7 +21718,7 @@ app.put('/api/active-run', async (req, res) => {
     res.status(400).json({ error: 'active_run_revision_required' });
     return;
   }
-  const validation = validateActiveRunBody(raw.run);
+  const validation = validateFormationRunBody(raw.run);
   if (validation) {
     res.status(400).json({ error: 'invalid_active_run', details: validation });
     return;
@@ -21659,7 +21953,7 @@ app.post('/api/active-run/craft/:id', async (req, res) => {
     reportCraftFailure(res, error, 'Run craft from link failed');
     return;
   }
-  const validation = validateActiveRunBody(run);
+  const validation = validateFormationRunBody(run);
   if (validation) {
     res.status(500).json({ error: 'crafted_run_invalid', details: validation });
     return;
@@ -21708,7 +22002,7 @@ app.post('/api/active-run/craft', async (req, res) => {
   }
   // The crafter composes with the game's transitions, so a rejection here is a defect in this
   // server's own contract rather than bad input — report it as one instead of a 400.
-  const validation = validateActiveRunBody(run);
+  const validation = validateFormationRunBody(run);
   if (validation) {
     res.status(500).json({ error: 'crafted_run_invalid', details: validation });
     return;

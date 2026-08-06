@@ -1025,7 +1025,7 @@ if (!/export function SkirmishShell[\s\S]*?<SkirmishHud \{\.\.\.hudProps\} contr
   failures.push('Battle must render through one instance-owned Skirmish session and the one SkirmishShell that owns SkirmishHud');
 }
 const runMetaControlsStart = runScreen.indexOf('function RunMetaControls');
-const runMetaControlsEnd = runScreen.indexOf('\nfunction deploymentSquareLabel', runMetaControlsStart);
+const runMetaControlsEnd = runScreen.indexOf('\nfunction DeploymentControls', runMetaControlsStart);
 const runMetaControls = runMetaControlsStart >= 0
   ? runScreen.slice(runMetaControlsStart, runMetaControlsEnd >= 0 ? runMetaControlsEnd : undefined)
   : '';

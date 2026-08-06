@@ -143,8 +143,8 @@ function ExpunctioCardTile({
     setSelectedUnitId(null);
   }, [selectedUnitId, units]);
   const paintInsets = useMemo(() => runCardFramePaintInsetRatios(
-    runCardFrameGeometryForSlot(runCardFrameSlot(definition, card.cardType)),
-  ), [card.cardType, definition]);
+    runCardFrameGeometryForSlot(runCardFrameSlot(definition)),
+  ), [definition]);
   const cycle = (offset: number): void => {
     if (!units.length) return;
     const nextIndex = selectedIndex < 0
@@ -228,8 +228,6 @@ function ExpunctioCardTile({
       <span className="run-expunctio-card" ref={cardRef}>
         <RunCard
           card={definition}
-          cardType={card.cardType}
-          adlected
           mode="reference"
           emptyPieceIndices={status === 'expuncted' ? [] : emptyPieceIndices}
           compactEmptyPieceSeats

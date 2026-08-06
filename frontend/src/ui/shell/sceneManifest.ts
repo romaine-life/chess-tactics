@@ -1,5 +1,4 @@
 import { normalizeRoutePath } from '../navigation';
-import { lipsanonNeedsUnitTarget, type LipsanonId } from '../../run/model';
 import { isRunRoutePath, isRunStrategikonPath } from '../runRoute';
 import { isStrategikonPath, strategikonBase, strategikonSectionPath } from '../strategikonRoute';
 import {
@@ -49,18 +48,9 @@ function runSceneSnapshot(
   const unitId = source?.document?.army.some((unit) => unit.id === requestedUnitId)
     ? requestedUnitId
     : null;
-  const requestedLipsanonId = params.get('lipsanon') as LipsanonId | null;
-  const offeredTargetedLipsanon = phase === 'bona-vacantia'
-    && requestedLipsanonId !== null
-    && source?.document?.vacantia?.offers.includes(requestedLipsanonId)
-    && lipsanonNeedsUnitTarget(requestedLipsanonId)
-      ? requestedLipsanonId
-      : null;
   const workspace: RunSceneWorkspace = isRunStrategikonPath(path)
     ? Object.freeze({ view: 'strategikon' as const })
-    : requestedView === 'bona-target' && offeredTargetedLipsanon
-      ? Object.freeze({ view: 'bona-target' as const, lipsanonId: offeredTargetedLipsanon, unitId })
-      : requestedView === 'army'
+    : requestedView === 'army'
         ? Object.freeze({ view: 'army' as const, unitId })
         : requestedView === 'lipsana'
           ? Object.freeze({ view: 'lipsana' as const })
@@ -82,11 +72,6 @@ function runSceneSnapshot(
 
 export function runSceneWorkspaceIdentity(workspace: RunSceneWorkspace): string {
   if (workspace.view === 'army') return workspace.unitId ? `army:${workspace.unitId}` : 'army';
-  if (workspace.view === 'bona-target') {
-    return workspace.unitId
-      ? `bona-target:${workspace.lipsanonId}:${workspace.unitId}`
-      : `bona-target:${workspace.lipsanonId}`;
-  }
   return workspace.view;
 }
 

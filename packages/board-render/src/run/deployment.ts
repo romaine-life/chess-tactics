@@ -7,9 +7,9 @@ import { defaultFacingForSide, PLAYABLE_PIECE_TYPES, type PlayablePieceType } fr
 import {
   beginBattle,
   hasLipsanon,
-  hasRunAbility,
   mixSeed,
   PIECE_VALUE,
+  runCardDefinition,
   runCardUnitIds,
   setDeploymentChoices,
   type RunArmyUnit,
@@ -27,7 +27,7 @@ export interface RunDeploymentLayout {
   trace: RunDeploymentTraceEntry[];
 }
 
-export type RunDeploymentTraceResult = 'blocked' | 'manual' | 'manual-pending' | 'automatic' | 'stranded';
+export type RunDeploymentTraceResult = 'blocked' | 'automatic' | 'stranded';
 
 export interface RunDeploymentTraceEntry {
   unitId: string;
@@ -35,20 +35,16 @@ export interface RunDeploymentTraceEntry {
   result: RunDeploymentTraceResult;
   eligibleCellCount: number;
   availableCellCount?: number;
-  agminate: boolean;
   automaticOrder?: number;
-  eutacticTargetRowIndex?: number;
-  eutacticTargetRow?: number;
-  eutacticBestRows?: number[];
-  selectedRow?: number;
   candidateCount?: number;
   chosen?: Vec;
   score?: number;
+  formationCardId?: string;
+  formationPreserved?: boolean;
 }
 
 export interface RunDeploymentOptions {
   zoneCells: Vec[];
-  adlectedUnitIds: string[];
   overflowCount: number;
   hasBlockedChoice: false;
   needsBlockedChoice: false;
@@ -119,132 +115,6 @@ export function playerDeploymentCells(level: Level): Vec[] {
   return playerDeploymentPools(level).all;
 }
 
-function unitIsAdlected(run: RunDocument, unitId: string): boolean {
-  const unit = run.army.find((candidate) => candidate.id === unitId);
-  return Boolean(unit?.abilities.includes('adlected') || run.deployment?.temporaryAdlectedUnitId === unitId);
-}
-
-function eutacticTargetRowIndex(unit: RunArmyUnit, eligibleCells: readonly Vec[]): number {
-  const rows = [...new Set(eligibleCells.map((cell) => cell.y))].sort((a, b) => a - b);
-  if (unit.type === 'pawn') return 0;
-  if (unit.type === 'knight' || unit.type === 'bishop') return Math.min(1, rows.length - 1);
-  return Math.max(0, rows.length - 1);
-}
-
-function eutacticBestFitRows(
-  unit: RunArmyUnit,
-  eligibleCells: readonly Vec[],
-  availableCells: readonly Vec[],
-): number[] {
-  const rows = [...new Set(eligibleCells.map((cell) => cell.y))].sort((a, b) => a - b);
-  if (!rows.length || !availableCells.length) return [];
-  const targetIndex = eutacticTargetRowIndex(unit, eligibleCells);
-  const rowIndex = new Map(rows.map((row, index) => [row, index]));
-  const availableRows = [...new Set(availableCells.map((cell) => cell.y))];
-  const bestDistance = Math.min(...availableRows.map((row) => Math.abs((rowIndex.get(row) ?? targetIndex) - targetIndex)));
-  return availableRows.filter((row) => Math.abs((rowIndex.get(row) ?? targetIndex) - targetIndex) === bestDistance);
-}
-
-function edgeDistance(cell: Vec, level: Level): number {
-  return Math.min(cell.x, cell.y, level.board.cols - 1 - cell.x, level.board.rows - 1 - cell.y);
-}
-
-function permanentObstructions(level: Level): Set<string> {
-  const blocked = new Set(
-    level.layers.units
-      .filter((unit) => unit.type === 'rock' || unit.type === 'random-rock')
-      .map(key),
-  );
-  for (const terrain of level.layers.terrain) {
-    if (!isPassableTerrain(terrain.terrain)) blocked.add(key(terrain));
-  }
-  for (const placed of level.layers.props ?? []) {
-    const def = propDef(placed.propId);
-    if (!def?.blocking) continue;
-    for (const cell of propCells(placed.x, placed.y, def)) blocked.add(key(cell));
-  }
-  return blocked;
-}
-
-function isOpenFile(level: Level, cell: Vec): boolean {
-  const blocked = permanentObstructions(level);
-  for (let y = cell.y - 1; y >= 0; y -= 1) {
-    if (blocked.has(key({ x: cell.x, y }))) return false;
-  }
-  return true;
-}
-
-function placedOfType(run: RunDocument, placements: Readonly<Record<string, Vec>>, type: PlayablePieceType): Vec[] {
-  return Object.entries(placements).flatMap(([unitId, cell]) => (
-    run.army.find((candidate) => candidate.id === unitId)?.type === type ? [cell] : []
-  ));
-}
-
-function chooseAgminateCandidates(
-  run: RunDocument,
-  level: Level,
-  unit: RunArmyUnit,
-  candidates: readonly Vec[],
-  placements: Readonly<Record<string, Vec>>,
-  rng: ReturnType<typeof createRng>,
-): Vec[] {
-  if (!hasRunAbility(run, unit, 'agminate') || !candidates.length) return [...candidates];
-  if (unit.type === 'pawn') {
-    const pawns = placedOfType(run, placements, 'pawn');
-    const alongside = candidates.filter((cell) => pawns.some((pawn) => pawn.y === cell.y && Math.abs(pawn.x - cell.x) === 1));
-    const open = candidates.filter((cell) => isOpenFile(level, cell));
-    if (alongside.length && open.length) return rng.int(2) === 0 ? alongside : open;
-    if (alongside.length) return alongside;
-    if (open.length) return open;
-    return [...candidates];
-  }
-  if (unit.type === 'bishop') {
-    const bishops = placedOfType(run, placements, 'bishop');
-    if (!bishops.length) return [...candidates];
-    const opposite = candidates.filter((cell) => bishops.some((bishop) => (bishop.x + bishop.y) % 2 !== (cell.x + cell.y) % 2));
-    if (!opposite.length) return [...candidates];
-    const minimum = Math.min(...opposite.map((cell) => Math.min(...bishops.map((bishop) => (
-      Math.abs(bishop.x - cell.x) + Math.abs(bishop.y - cell.y)
-    )))));
-    return opposite.filter((cell) => Math.min(...bishops.map((bishop) => (
-      Math.abs(bishop.x - cell.x) + Math.abs(bishop.y - cell.y)
-    ))) === minimum);
-  }
-  if (unit.type === 'queen') {
-    const best = Math.max(...candidates.map((cell) => edgeDistance(cell, level)));
-    return candidates.filter((cell) => edgeDistance(cell, level) === best);
-  }
-  if (unit.type === 'knight') {
-    const best = Math.min(...candidates.map((cell) => Math.abs(edgeDistance(cell, level) - 1)));
-    return candidates.filter((cell) => Math.abs(edgeDistance(cell, level) - 1) === best);
-  }
-  if (unit.type === 'king') {
-    const best = Math.min(...candidates.map((cell) => edgeDistance(cell, level)));
-    return candidates.filter((cell) => edgeDistance(cell, level) === best);
-  }
-  if (unit.type === 'rook') {
-    const king = run.army.find((candidate) => candidate.type === 'king');
-    const kingCell = king ? placements[king.id] : undefined;
-    const rooks = placedOfType(run, placements, 'rook');
-    if (kingCell && hasRunAbility(run, king!, 'agminate') && rooks.length === 0) {
-      const adjacent = candidates.filter((cell) => Math.abs(cell.x - kingCell.x) + Math.abs(cell.y - kingCell.y) === 1);
-      if (adjacent.length) return adjacent;
-    }
-    const backRow = Math.max(...candidates.map((cell) => cell.y));
-    const backCandidates = candidates.filter((cell) => cell.y === backRow);
-    const minBackX = Math.min(...backCandidates.map((cell) => cell.x));
-    const maxBackX = Math.max(...backCandidates.map((cell) => cell.x));
-    const corners = backCandidates.filter((cell) => cell.x === minBackX || cell.x === maxBackX);
-    if (corners.length) return corners;
-    if (kingCell) {
-      const farthest = Math.max(...candidates.map((cell) => Math.abs(cell.x - kingCell.x)));
-      const far = candidates.filter((cell) => Math.abs(cell.x - kingCell.x) === farthest);
-      if (far.length) return far;
-    }
-  }
-  return [...candidates];
-}
-
 type PlacementChoice = Readonly<{
   cell: Vec | null;
   trace: RunDeploymentTraceEntry;
@@ -258,24 +128,10 @@ function automaticPlacementChoice(
   order: number,
 ): PlacementChoice {
   const pools = playerDeploymentPools(level);
-  const authoredPools = deploymentPools(level, new Set());
   const used = new Set(Object.values(placements).map(key));
-  let candidates = pools.byType[unit.type].filter((cell) => !used.has(key(cell)));
+  const candidates = pools.byType[unit.type].filter((cell) => !used.has(key(cell)));
   const availableCellCount = candidates.length;
   const rng = createRng(mixSeed(run.deployment?.seed ?? run.seed, `placement:${unit.id}`, order));
-  let eutacticTargetRowIndexValue: number | undefined;
-  let eutacticTargetRow: number | undefined;
-  let eutacticBestRows: number[] | undefined;
-  let selectedRow: number | undefined;
-  if (hasRunAbility(run, unit, 'eutactic') && authoredPools.byType[unit.type].length && candidates.length) {
-    const rows = [...new Set(authoredPools.byType[unit.type].map((cell) => cell.y))].sort((a, b) => a - b);
-    eutacticTargetRowIndexValue = eutacticTargetRowIndex(unit, authoredPools.byType[unit.type]);
-    eutacticTargetRow = rows[eutacticTargetRowIndexValue];
-    eutacticBestRows = eutacticBestFitRows(unit, authoredPools.byType[unit.type], candidates);
-    selectedRow = eutacticBestRows.length === 1 ? eutacticBestRows[0] : eutacticBestRows[rng.int(eutacticBestRows.length)];
-    candidates = candidates.filter((cell) => cell.y === selectedRow);
-  }
-  candidates = chooseAgminateCandidates(run, level, unit, candidates, placements, rng);
   const chosen = candidates.length ? candidates[rng.int(candidates.length)] : null;
   return {
     cell: chosen,
@@ -285,12 +141,7 @@ function automaticPlacementChoice(
       result: chosen ? 'automatic' : 'stranded',
       eligibleCellCount: pools.byType[unit.type].length,
       availableCellCount,
-      agminate: hasRunAbility(run, unit, 'agminate'),
       automaticOrder: order + 1,
-      eutacticTargetRowIndex: eutacticTargetRowIndexValue,
-      eutacticTargetRow,
-      eutacticBestRows,
-      selectedRow,
       candidateCount: candidates.length,
       ...(chosen ? { chosen } : {}),
     },
@@ -305,7 +156,7 @@ function decodedPlacements(run: RunDocument): Record<string, Vec> {
 }
 
 function temporaryTentRocks(run: RunDocument, level: Level, placements: Readonly<Record<string, Vec>>): Vec[] {
-  if (!hasLipsanon(run, 'royal-tent') || !hasLipsanon(run, 'royal-decree')) return [];
+  if (!hasLipsanon(run, 'royal-tent')) return [];
   const king = run.army.find((unit) => unit.type === 'king');
   const kingCell = king ? placements[king.id] : undefined;
   if (!kingCell) return [];
@@ -338,6 +189,111 @@ export function activeDeploymentCard(run: RunDocument): RunOwnedCard | null {
   return dealtCards(run)[run.deployment?.activeCardIndex ?? -1] ?? null;
 }
 
+type FormationPlan = Readonly<{
+  placements: Record<string, Vec>;
+  preserved: boolean;
+}>;
+
+function decodedFormationPlan(run: RunDocument, cardId: string): FormationPlan | null {
+  const encoded = run.deployment?.formationPlans?.[cardId];
+  if (!encoded) return null;
+  const placements = Object.fromEntries(Object.entries(encoded).flatMap(([unitId, value]) => {
+    const cell = fromKey(value);
+    return cell ? [[unitId, cell]] : [];
+  }));
+  return { placements, preserved: true };
+}
+
+/** Plan one complete visible card shape before any of its units arrive. The plan is
+ * persisted separately from committed placements so future figures do not appear early. */
+function planCardFormation(
+  run: RunDocument,
+  level: Level,
+  card: RunOwnedCard,
+  committed: Readonly<Record<string, Vec>>,
+): FormationPlan {
+  const definition = runCardDefinition(card.coreId);
+  const pools = playerDeploymentPools(level);
+  const occupied = new Set(Object.values(committed).map(key));
+  const formation = definition?.formation
+    ?? card.unitSeats.map((_, x) => ({ x, y: 0 }));
+  const seats = formation.flatMap((offset, index) => {
+    const unitId = card.unitSeats[index];
+    const unit = unitId ? run.army.find((candidate) => candidate.id === unitId) : undefined;
+    return unit && run.deployment?.deployingUnitIds.includes(unit.id) && !committed[unit.id]
+      ? [{ unit, offset }]
+      : [];
+  });
+  if (!seats.length) return { placements: {}, preserved: true };
+
+  const eligibleByType = new Map(
+    PLAYABLE_PIECE_TYPES.map((type) => [type, new Set(pools.byType[type].map(key))]),
+  );
+  const first = seats[0];
+  const anchors = pools.byType[first.unit.type].flatMap((firstCell) => {
+    const anchor = { x: firstCell.x - first.offset.x, y: firstCell.y - first.offset.y };
+    const targets = seats.map(({ unit, offset }) => ({
+      unitId: unit.id,
+      cell: { x: anchor.x + offset.x, y: anchor.y + offset.y },
+      type: unit.type,
+    }));
+    const keys = targets.map(({ cell }) => key(cell));
+    return keys.length === new Set(keys).size
+      && targets.every(({ cell, type }) => eligibleByType.get(type)?.has(key(cell)) && !occupied.has(key(cell)))
+      ? [targets]
+      : [];
+  });
+  if (anchors.length) {
+    const chosen = createRng(mixSeed(
+      run.deployment?.seed ?? run.seed,
+      `card-formation:${card.id}`,
+      run.deployment?.activeCardIndex ?? 0,
+    )).pick(anchors);
+    return {
+      placements: Object.fromEntries(chosen.map(({ unitId, cell }) => [unitId, cell])),
+      preserved: true,
+    };
+  }
+
+  // Pragmatic first-pass recovery: if the whole shape has no legal anchor, keep the
+  // card playable by placing its units individually in the same seeded order.
+  const fallback: Record<string, Vec> = {};
+  for (const { unit } of seats) {
+    const order = deploymentOrderedUnitIds(run).indexOf(unit.id);
+    const choice = automaticPlacementChoice(
+      run,
+      level,
+      unit,
+      { ...committed, ...fallback },
+      Math.max(0, order),
+    );
+    if (choice.cell) fallback[unit.id] = choice.cell;
+  }
+  return { placements: fallback, preserved: false };
+}
+
+function ensureActiveFormationPlan(
+  run: RunDocument,
+  level: Level,
+): Readonly<{ run: RunDocument; plan: FormationPlan }> {
+  const card = activeDeploymentCard(run);
+  if (!card || !run.deployment) return { run, plan: { placements: {}, preserved: false } };
+  const existing = decodedFormationPlan(run, card.id);
+  if (existing) return { run, plan: existing };
+  const plan = planCardFormation(run, level, card, decodedPlacements(run));
+  return {
+    run: setDeploymentChoices(run, {
+      formationPlans: {
+        ...(run.deployment.formationPlans ?? {}),
+        [card.id]: Object.fromEntries(
+          Object.entries(plan.placements).map(([unitId, cell]) => [unitId, key(cell)]),
+        ),
+      },
+    }),
+    plan,
+  };
+}
+
 export function deploymentOrderedUnitIds(run: RunDocument): string[] {
   return dealtCards(run).flatMap(runCardUnitIds);
 }
@@ -366,19 +322,7 @@ function currentLayout(run: RunDocument, level: Level): RunDeploymentLayout {
       const unit = run.army.find((candidate) => candidate.id === unitId);
       if (!unit || deployment.unavailableUnitIds.includes(unitId) || !persistedPlacements[unitId]) continue;
       const persisted = persistedPlacements[unitId];
-      if (deployment.manualPlacements[unitId]) {
-        trace.push({
-          unitId,
-          type: unit.type,
-          result: 'manual',
-          eligibleCellCount: playerDeploymentPools(level).all.length,
-          agminate: hasRunAbility(run, unit, 'agminate'),
-          automaticOrder: index + 1,
-          chosen: persisted,
-        });
-      } else {
-        trace.push(automaticPlacementChoice(run, level, unit, placements, index).trace);
-      }
+      trace.push(automaticPlacementChoice(run, level, unit, placements, index).trace);
       placements[unitId] = persisted;
     }
   }
@@ -396,7 +340,6 @@ function currentLayout(run: RunDocument, level: Level): RunDeploymentLayout {
         type: unit.type,
         result: 'blocked',
         eligibleCellCount: playerDeploymentPools(level).byType[unit.type].length,
-        agminate: hasRunAbility(run, unit, 'agminate'),
       })),
     ],
   };
@@ -410,28 +353,19 @@ export function resolveDeploymentCapacity(run: RunDocument, level: Level): RunDo
   const orderedUnitIds = deploymentOrderedUnitIds(run);
   const deployingUnitIds = orderedUnitIds.slice(0, capacity);
   const unavailableUnitIds = run.army.map((unit) => unit.id).filter((id) => !deployingUnitIds.includes(id));
-  const permanentAdlected = new Set(run.army.filter((unit) => unit.abilities.includes('adlected')).map((unit) => unit.id));
-  const dawnCandidates = deployingUnitIds.filter((id) => !permanentAdlected.has(id));
-  const fallbackCandidates = deployingUnitIds;
-  const temporaryAdlectedUnitId = hasLipsanon(run, 'inspirational-record') && fallbackCandidates.length
-    ? createRng(mixSeed(run.deployment.seed, 'inspirational-record')).pick(dawnCandidates.length ? dawnCandidates : fallbackCandidates)
-    : undefined;
   return setDeploymentChoices(run, {
     deployingUnitIds,
     unavailableUnitIds,
     blockedUnitIds: [...unavailableUnitIds],
     capacityResolved: true,
-    temporaryAdlectedUnitId,
   });
 }
 
 export function deploymentOptions(run: RunDocument, level: Level): RunDeploymentOptions {
   const layout = currentLayout(run, level);
   const capacity = playerDeploymentCells(level).length;
-  const queue = run.deployment?.deployingUnitIds ?? [];
   return {
     zoneCells: playerDeploymentCells(level),
-    adlectedUnitIds: queue.filter((id) => unitIsAdlected(run, id)),
     overflowCount: Math.max(0, deploymentOrderedUnitIds(run).length - capacity),
     hasBlockedChoice: false,
     needsBlockedChoice: false,
@@ -444,21 +378,12 @@ export function currentDeploymentUnit(run: RunDocument): RunArmyUnit | null {
   return activeCardSeat(run)?.unit ?? null;
 }
 
-export function disciplinePlacementCells(run: RunDocument, options: RunDeploymentOptions, unitId: string): Vec[] {
-  if (!unitIsAdlected(run, unitId) || currentDeploymentUnit(run)?.id !== unitId) return [];
-  const occupied = new Set(Object.entries(run.deployment?.placements ?? {})
-    .filter(([id]) => id !== unitId)
-    .map(([, cell]) => cell));
-  return options.zoneCells.filter((cell) => !occupied.has(key(cell)));
-}
-
 export type RunDeploymentInteractionStage =
   | 'await-deal'
   | 'dealing'
   | 'reveal-card'
   | 'revealing-card'
   | 'place'
-  | 'adlected'
   | 'settling'
   | 'discarding'
   | 'ready';
@@ -474,7 +399,7 @@ export function deploymentInteractionStage(run: RunDocument, _options?: RunDeplo
   if (deployment.stage === 'complete') return 'ready';
   const unit = currentDeploymentUnit(run);
   if (!unit) return 'ready';
-  return unitIsAdlected(run, unit.id) ? 'adlected' : 'place';
+  return 'place';
 }
 
 /** Crosses the persisted player/auto-deal boundary without revealing a card. */
@@ -503,9 +428,7 @@ function stageAfterCommittedUnits(run: RunDocument): RunDocument {
       ? completedCardPrefixPendingDiscard ? 'discarding' : 'unit'
       : 'discarding',
   });
-  return nextUnit && unitIsAdlected(next, nextUnit.id)
-    ? setDeploymentChoices(next, { transport: 'paused' })
-    : next;
+  return next;
 }
 
 function commitPlacement(
@@ -513,26 +436,22 @@ function commitPlacement(
   _level: Level,
   unit: RunArmyUnit,
   cell: Vec | null,
-  manual: boolean,
   deferSettlement = false,
 ): RunDocument {
   if (!run.deployment) return run;
   const seat = activeCardSeat(run);
   if (!seat || seat.unit.id !== unit.id) return run;
   const placements = { ...run.deployment.placements };
-  const manualPlacements = { ...run.deployment.manualPlacements };
   let deployingUnitIds = [...run.deployment.deployingUnitIds];
   let unavailableUnitIds = [...run.deployment.unavailableUnitIds];
   if (cell) {
     placements[unit.id] = key(cell);
-    if (manual) manualPlacements[unit.id] = key(cell);
   } else {
     deployingUnitIds = deployingUnitIds.filter((id) => id !== unit.id);
     unavailableUnitIds = [...new Set([...unavailableUnitIds, unit.id])];
   }
   const next = setDeploymentChoices(run, {
     placements,
-    manualPlacements,
     deployingUnitIds,
     unavailableUnitIds,
     blockedUnitIds: [...unavailableUnitIds],
@@ -572,24 +491,14 @@ function placeAutomaticDeploymentWave(run: RunDocument, level: Level): RunDocume
       });
       continue;
     }
-    if (unitIsAdlected(next, unit.id)) {
-      const card = activeDeploymentCard(next);
-      const deployment = next.deployment;
-      next = setDeploymentChoices(next, {
-        revealedCardIds: card
-          ? [...new Set([...deployment.revealedCardIds, card.id])]
-          : [...deployment.revealedCardIds],
-        stage: deployment.settlingUnitIds.length > 0
-          ? 'settling'
-          : deployment.activeCardIndex > deployment.discardCursor ? 'discarding' : 'unit',
-        transport: 'paused',
-      });
-      break;
-    }
-    const placements = decodedPlacements(next);
-    const order = deploymentOrderedUnitIds(next).indexOf(unit.id);
-    const choice = automaticPlacementChoice(next, level, unit, placements, Math.max(0, order));
-    next = commitPlacement(next, level, unit, choice.cell, false, true);
+    const planned = ensureActiveFormationPlan(next, level);
+    next = commitPlacement(
+      planned.run,
+      level,
+      unit,
+      planned.plan.placements[unit.id] ?? null,
+      true,
+    );
   }
   if (next.phase !== 'deployment' || !next.deployment) return next;
   if (next.deployment.stage === 'settling' || next.deployment.stage === 'discarding') return next;
@@ -607,10 +516,6 @@ export function setDeploymentTransport(
   if (run.deployment.stage === 'awaiting-deal' || run.deployment.stage === 'dealing' || run.deployment.stage === 'complete') {
     return run;
   }
-  const unit = currentDeploymentUnit(run);
-  if (transport !== 'paused' && unit && unitIsAdlected(run, unit.id)) {
-    return setDeploymentChoices(run, { transport: 'paused' });
-  }
   return setDeploymentChoices(run, { transport });
 }
 
@@ -625,28 +530,30 @@ export function revealActiveDeploymentCard(run: RunDocument): RunDocument {
 
 export function finishDeploymentCardReveal(run: RunDocument): RunDocument {
   if (run.phase !== 'deployment' || !run.deployment || run.deployment.stage !== 'revealing') return run;
-  const next = setDeploymentChoices(run, { stage: currentDeploymentUnit(run) ? 'unit' : 'discarding' });
-  const unit = currentDeploymentUnit(next);
-  return unit && unitIsAdlected(next, unit.id)
-    ? setDeploymentChoices(next, { transport: 'paused' })
-    : next;
+  return setDeploymentChoices(run, { stage: currentDeploymentUnit(run) ? 'unit' : 'discarding' });
 }
 
 export function placeRevealedDeploymentUnit(run: RunDocument, level: Level): RunDocument {
-  const unit = currentDeploymentUnit(run);
-  if (!unit || run.deployment?.stage !== 'unit' || unitIsAdlected(run, unit.id)) return run;
-  const placements = decodedPlacements(run);
-  const order = deploymentOrderedUnitIds(run).indexOf(unit.id);
-  const choice = automaticPlacementChoice(run, level, unit, placements, Math.max(0, order));
-  return commitPlacement(run, level, unit, choice.cell, false);
-}
-
-export function placeAdlectedDeploymentUnit(run: RunDocument, level: Level, cell: Vec): RunDocument {
-  const unit = currentDeploymentUnit(run);
-  if (!unit || run.deployment?.stage !== 'unit' || !unitIsAdlected(run, unit.id)) return run;
-  const options = deploymentOptions(run, level);
-  if (!disciplinePlacementCells(run, options, unit.id).some((candidate) => key(candidate) === key(cell))) return run;
-  return commitPlacement(setDeploymentChoices(run, { transport: 'paused' }), level, unit, cell, true);
+  const activeCardId = activeDeploymentCard(run)?.id;
+  if (!activeCardId || run.deployment?.stage !== 'unit') return run;
+  let next = run;
+  while (next.phase === 'deployment' && activeDeploymentCard(next)?.id === activeCardId) {
+    const unit = currentDeploymentUnit(next);
+    if (!unit) break;
+    const planned = ensureActiveFormationPlan(next, level);
+    next = commitPlacement(
+      planned.run,
+      level,
+      unit,
+      planned.plan.placements[unit.id] ?? null,
+      true,
+    );
+  }
+  if (next.phase !== 'deployment' || !next.deployment) return next;
+  if (next.deployment.settlingUnitIds.length > 0) {
+    return setDeploymentChoices(next, { stage: 'settling' });
+  }
+  return stageAfterCommittedUnits(next);
 }
 
 export function finishDeploymentUnitSettlement(run: RunDocument, _level?: Level): RunDocument {
@@ -708,7 +615,7 @@ export function advanceDeploymentTransport(run: RunDocument, level: Level): RunD
   }
   if (run.deployment.stage !== 'unit') return run;
   const unit = currentDeploymentUnit(run);
-  if (!unit || unitIsAdlected(run, unit.id)) {
+  if (!unit) {
     return setDeploymentChoices(run, { transport: 'paused' });
   }
   if (run.deployment.transport === 'playing') return placeRevealedDeploymentUnit(run, level);

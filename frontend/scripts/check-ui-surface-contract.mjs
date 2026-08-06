@@ -55,6 +55,12 @@ const APPROVED_FRAMELESS_SURFACE_RESETS = new Map([
     'background:transparent',
     'border:0',
   ])],
+  // ADR-0492 makes each formation piece itself the optional card-seat control. These declarations
+  // only remove native button paint; the shared card frame remains the complete owned surface.
+  ['src/style.css|.run-card-formation-cell, button.run-card-formation-cell', new Set([
+    'background:transparent',
+    'border:0',
+  ])],
 ]);
 
 function normalize(value) {

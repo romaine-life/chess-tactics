@@ -1,6 +1,8 @@
 import {
   RUN_STARTER_CARD_BY_ID,
   RUN_STARTER_CARDS,
+  RUN_CARD_DECK,
+  runCardDefinition,
   cardContentsLabel,
   type RunArmyPieceType,
   type AdlectablePieceType,
@@ -22,10 +24,10 @@ const CARD_PIECE_ORDER: readonly AdlectablePieceType[] = Object.freeze(['pawn', 
  * resolves any card to the deck's canonical id (piece initials in
  * Adlectio order), regardless of the carrier's own id or piece ordering.
  */
-type NameableRunCard = Readonly<{ id?: string; pieces: readonly RunArmyPieceType[] }>;
+type NameableRunCard = Readonly<{ id?: string; artId?: string; pieces: readonly RunArmyPieceType[] }>;
 
 export function canonicalCardId(card: NameableRunCard): string {
-  if (card.id === 'his-grace' || card.id === 'front-lines') return card.id;
+  if (card.id && runCardDefinition(card.id)) return card.id;
   return [...card.pieces]
     .filter((piece): piece is AdlectablePieceType => piece !== 'king')
     .sort((left, right) => CARD_PIECE_ORDER.indexOf(left) - CARD_PIECE_ORDER.indexOf(right))
@@ -38,7 +40,7 @@ export function canonicalCardId(card: NameableRunCard): string {
 // piece initials in Adlectio order (p/k/b/r/q — k is the Knight), so 'ppb' is two Pawns
 // and a Bishop. A card outside the deck (e.g. an art-review fixture) falls back to its
 // prose label.
-export const RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.freeze({
+const ALL_RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.freeze({
   // 1 gold
   p: 'The Volunteer',
   // 2 gold
@@ -97,12 +99,30 @@ export const RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.free
   ppppppppp: 'Nine Ranks Deep',
   ppppr: 'Garrison Relief',
   q: 'Regal Serenity',
+  'pk-front': "Squire's Shelter",
+  'pb-front': "Pilgrim's Shelter",
+  'ppk-reversed': 'The Late Escort',
+  'ppb-reversed': 'The Uncovered Office',
+  'bb-diagonal': 'Crooked Diocese',
+  'pr-front': "Gatekeeper's Charge",
+  'kk-horizontal': 'Thundering Lances',
+  'ppk-protected': 'Outrider Patrol',
+  'ppb-protected': 'Country Parish',
+  'pq-front': 'The Last Attendant',
+  'bb-vertical': 'Matins and Vespers',
+  'rr-vertical': 'The Twin Keeps',
 });
+
+/** Names for the active formation deck. Retired composition-card prose remains above as
+ * source history, but does not create Enchiridion routes or catalog identities. */
+export const RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.freeze(
+  Object.fromEntries(RUN_CARD_DECK.map((card) => [card.id, ALL_RUN_CARD_NAME_BY_ID[card.id]])),
+);
 
 // Original anti-story fragments tied to the same four historical pressure sources as
 // the core names and illustrations. They identify a card without explaining why this
 // history has surfaced in the game.
-export const RUN_CARD_FLAVOR_BY_ID: Readonly<Record<string, string>> = Object.freeze({
+const ALL_RUN_CARD_FLAVOR_BY_ID: Readonly<Record<string, string>> = Object.freeze({
   p: 'The frost came in June. By August, the road had found him.',
   pp: 'The road kept both pairs of boots, and returned neither name.',
   b: 'The sanctuary was gone. The lesson continued beside the road.',
@@ -152,7 +172,24 @@ export const RUN_CARD_FLAVOR_BY_ID: Readonly<Record<string, string>> = Object.fr
   ppppppppp: 'Nine sowed in frost. None called it winter.',
   ppppr: 'Relief entered through the breach after the city had left.',
   q: 'She watched the empty court until ceremony became weather.',
+  'pk-front': 'The rider waited behind the only order that had arrived.',
+  'pb-front': 'The lamp went first. The sermon followed where it could.',
+  'ppk-reversed': 'The men arrived to cover a rider already past them.',
+  'ppb-reversed': 'The blessing waited behind the office it was meant to guard.',
+  'bb-diagonal': 'Two offices agreed on the destination and not the road.',
+  'pr-front': 'The gatekeeper put one name between the wall and morning.',
+  'kk-horizontal': 'Neither rider yielded the width of the road.',
+  'ppk-protected': 'The horse advanced under two borrowed shields.',
+  'ppb-protected': 'The parish kept watch while the last lesson was read.',
+  'pq-front': 'One attendant remained after the court learned to empty itself.',
+  'bb-vertical': 'Matins stood before Vespers because the roof admitted only one.',
+  'rr-vertical': 'One keep watched the road. The other watched the first.',
 });
+
+/** Flavor for the active formation deck only. */
+export const RUN_CARD_FLAVOR_BY_ID: Readonly<Record<string, string>> = Object.freeze(
+  Object.fromEntries(RUN_CARD_DECK.map((card) => [card.id, ALL_RUN_CARD_FLAVOR_BY_ID[card.id]])),
+);
 
 /** The card's banner name; compositions outside the authored deck read as their contents. */
 export function runCardName(card: NameableRunCard): string {
@@ -172,7 +209,9 @@ export function runCardFlavor(card: NameableRunCard): string {
 export function runCardArtSlot(card: NameableRunCard): string {
   // Starter cards own their art identity just as firmly as the core deck. A shared
   // composition never aliases their accepted illustration bytes (ADR-0414).
-  return `ui/run/card-art/${canonicalCardId(card)}/illustration.png`;
+  const definition = card.id ? runCardDefinition(card.id) : undefined;
+  const artId = card.artId ?? definition?.artId ?? canonicalCardId({ pieces: card.pieces });
+  return `ui/run/card-art/${artId}/illustration.png`;
 }
 
 // A card is addressed by the name printed on its banner, not by the piece-initial id the

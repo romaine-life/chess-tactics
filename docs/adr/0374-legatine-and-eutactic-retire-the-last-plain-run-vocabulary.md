@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by ADR-0492
 date: 2026-08-03
 deciders: owner (Nelson) + Claude
 partially_supersedes:

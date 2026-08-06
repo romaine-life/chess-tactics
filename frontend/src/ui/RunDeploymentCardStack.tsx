@@ -392,8 +392,6 @@ export function RunDeploymentCardStack({
                       card={presentation.definition}
                       identityCard={identity}
                       mode="reference"
-                      cardType={owned.cardType}
-                      adlected
                       emptyPieceIndices={presentation.emptyPieceIndices}
                     />
                   ) : (
@@ -441,8 +439,6 @@ export function RunDeploymentCardStack({
                     card={activeDefinition}
                     identityCard={activeIdentity}
                     mode="reference"
-                    cardType={owned.cardType}
-                    adlected
                     emptyPieceIndices={activePresentation?.emptyPieceIndices ?? []}
                   />
                 </span>

@@ -3,7 +3,7 @@ import { readAdminBattleHref } from '../admin/battleRoute';
 import { type AdminBattleMode } from '../game/store';
 import { useSkirmish } from '../game/SkirmishStoreContext';
 import { authorizeAdminPlaytest } from '../net/adminPlaytest';
-import { acquireLipsanon, canTargetLipsanon, GOLD_SCALE, grantGold, lipsanonNeedsUnitTarget, PIECE_LABEL, LIPSANON_BY_ID, RUN_LIPSANA, type LipsanonId } from '../run/model';
+import { acquireLipsanon, GOLD_SCALE, grantGold, LIPSANON_BY_ID, RUN_LIPSANA, type LipsanonId } from '../run/model';
 import { useActiveRun } from '../run/store';
 import { navigateApp, readValidatedReturnTo } from './navigation';
 import { RunGoldIcon } from './RunResources';
@@ -35,7 +35,6 @@ export function AdminControls({
   const replaceRun = useActiveRun((state) => state.replace);
   const [goldAmount, setGoldAmount] = useState('5');
   const [lipsanonId, setLipsanonId] = useState<LipsanonChoice>('');
-  const [targetUnitId, setTargetUnitId] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [status, setStatus] = useState('');
 
@@ -55,16 +54,7 @@ export function AdminControls({
       .filter((lipsanon) => !run?.lipsana.includes(lipsanon.id))
       .map((lipsanon) => ({ value: lipsanon.id, label: lipsanon.name, title: lipsanon.description })),
   ], [run?.lipsana]);
-  const targetOptions = useMemo<HouseSelectOption<string>[]>(() => [
-    { value: '', label: 'Choose a unit' },
-    ...(run?.army.filter((unit) => !lipsanonId || !lipsanonNeedsUnitTarget(lipsanonId)
-      || canTargetLipsanon(run, lipsanonId, unit.id)).map((unit) => ({
-      value: unit.id,
-      label: `${PIECE_LABEL[unit.type]} · ${unit.id}`,
-    })) ?? []),
-  ], [lipsanonId, run]);
   const selectedLipsanon = lipsanonId ? LIPSANON_BY_ID[lipsanonId] : null;
-  const needsLipsanonTarget = lipsanonNeedsUnitTarget(lipsanonId);
 
   const armBattleAction = async (mode: AdminBattleMode): Promise<void> => {
     if (battleUnavailable || !battleHref) return;
@@ -104,21 +94,19 @@ export function AdminControls({
   };
 
   const gainLipsanon = async (): Promise<void> => {
-    if (!run || !lipsanonId || (needsLipsanonTarget && !targetUnitId)) return;
+    if (!run || !lipsanonId) return;
     setBusy('gain-lipsanon');
     setStatus('');
     try {
       await authorizeAdminPlaytest({
         action: 'gain-lipsanon',
         lipsanonId,
-        ...(targetUnitId ? { targetUnitId } : {}),
       });
-      const granted = acquireLipsanon(run, lipsanonId, targetUnitId || undefined);
+      const granted = acquireLipsanon(run, lipsanonId);
       if (granted === run) throw new Error('That lipsanon could not be granted to the current Run.');
       replaceRun(granted);
       setStatus(`Granted ${LIPSANON_BY_ID[lipsanonId].name}.`);
       setLipsanonId('');
-      setTargetUnitId('');
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'The lipsanon could not be granted.');
     } finally {
@@ -255,22 +243,13 @@ export function AdminControls({
                 <HouseSelect
                   value={lipsanonId}
                   options={lipsanonOptions}
-                  onChange={(value) => { setLipsanonId(value); setTargetUnitId(''); }}
+                  onChange={setLipsanonId}
                   ariaLabel="Lipsanon to grant"
                   disabled={!run || busy !== null}
                 />
-                {needsLipsanonTarget ? (
-                  <HouseSelect
-                    value={targetUnitId}
-                    options={targetOptions}
-                    onChange={setTargetUnitId}
-                    ariaLabel="Adlected target unit"
-                    disabled={!run || busy !== null}
-                  />
-                ) : null}
                 <SettingsButton
                   tone="primary"
-                  disabled={!run || !lipsanonId || (needsLipsanonTarget && !targetUnitId) || busy !== null}
+                  disabled={!run || !lipsanonId || busy !== null}
                   onClick={() => void gainLipsanon()}
                   data-testid="battle-admin-gain-lipsanon"
                 >
@@ -361,22 +340,13 @@ export function AdminControls({
             <HouseSelect
               value={lipsanonId}
               options={lipsanonOptions}
-              onChange={(value) => { setLipsanonId(value); setTargetUnitId(''); }}
+              onChange={setLipsanonId}
               ariaLabel="Lipsanon to grant"
               disabled={!run || busy !== null}
             />
-            {needsLipsanonTarget ? (
-              <HouseSelect
-                value={targetUnitId}
-                options={targetOptions}
-                onChange={setTargetUnitId}
-                ariaLabel="Adlected target unit"
-                disabled={!run || busy !== null}
-              />
-            ) : null}
             <SettingsButton
               tone="primary"
-              disabled={!run || !lipsanonId || (needsLipsanonTarget && !targetUnitId) || busy !== null}
+              disabled={!run || !lipsanonId || busy !== null}
               onClick={() => void gainLipsanon()}
               data-testid="admin-gain-lipsanon"
             >

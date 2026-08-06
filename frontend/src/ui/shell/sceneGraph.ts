@@ -1,4 +1,4 @@
-import type { LipsanonId, RunDocument, RunPhase } from '../../run/model';
+import type { RunDocument, RunPhase } from '../../run/model';
 
 /**
  * The authored scene vocabulary.
@@ -132,8 +132,7 @@ export type RunSceneWorkspace =
   | Readonly<{ view: 'expunctio' }>
   | Readonly<{ view: 'battle-preview' }>
   | Readonly<{ view: 'battle-review' }>
-  | Readonly<{ view: 'strategikon' }>
-  | Readonly<{ view: 'bona-target'; lipsanonId: LipsanonId; unitId: string | null }>;
+  | Readonly<{ view: 'strategikon' }>;
 
 export interface RunSceneSnapshot {
   kind: 'run';

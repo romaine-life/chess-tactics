@@ -4373,21 +4373,21 @@ async function main() {
     media: {},
   });
   const sharedPresentationSlot = 'wall-decor/test-banner-base.png';
-  const royalDecreeLipsanonSlot = 'ui/run/lipsana/royal-decree.png';
+  const royalTentLipsanonSlot = 'ui/run/lipsana/royal-tent.png';
   await seedSyntheticReadinessMedia({
-    slot: royalDecreeLipsanonSlot,
+    slot: royalTentLipsanonSlot,
     domain: 'ui-kit',
     role: 'icon',
     width: 64,
     height: 64,
   });
   await seedSyntheticDrawable({
-    id: 'run-lipsanon-royal-decree',
+    id: 'run-lipsanon-royal-tent',
     kind: 'run-lipsanon',
-    label: 'Royal Decree',
-    behavior: { lipsanonId: 'royal-decree' },
+    label: 'Royal Tent',
+    behavior: { lipsanonId: 'royal-tent' },
     metadata: { artFamily: 'synthetic-run-lipsanon-icons' },
-    media: { icon: royalDecreeLipsanonSlot },
+    media: { icon: royalTentLipsanonSlot },
   });
   await seedSyntheticDrawable({
     id: 'test-subterrain-opaque', kind: 'subterrain', label: 'Synthetic Subterrain',
@@ -4954,15 +4954,15 @@ async function main() {
   ) {
     throw new Error(`Official play page should advertise the level thumbnail: ${officialPlay.statusCode}`);
   }
-  const lipsanonReference = await get('/enchiridion/lipsana/royal-decree');
+  const lipsanonReference = await get('/enchiridion/lipsana/royal-tent');
   const lipsanonImageMatch = lipsanonReference.body.match(
     /<meta property="og:image" content="[^"]+(\/api\/media\/[0-9a-f]{64})">/,
   );
   if (
     lipsanonReference.statusCode !== 200
-    || !lipsanonReference.body.includes('<title>Royal Decree</title>')
-    || !lipsanonReference.body.includes('<meta property="og:title" content="Royal Decree">')
-    || !lipsanonReference.body.includes('<meta property="og:description" content="Your King gains Eutactic.">')
+    || !lipsanonReference.body.includes('<title>Royal Tent</title>')
+    || !lipsanonReference.body.includes('<meta property="og:title" content="Royal Tent">')
+    || !lipsanonReference.body.includes('<meta property="og:description" content="Place up to three temporary rocks in front of the King.">')
     || !lipsanonReference.body.includes('<meta property="og:image:width" content="64">')
     || !lipsanonReference.body.includes('<meta property="og:image:height" content="64">')
     || !lipsanonReference.body.includes('<meta name="twitter:card" content="summary">')
@@ -4978,7 +4978,7 @@ async function main() {
   if (
     unknownLipsanonReference.statusCode !== 200
     || !unknownLipsanonReference.body.includes('<meta property="og:title" content="Chess Tactics">')
-    || unknownLipsanonReference.body.includes('Your King gains Eutactic')
+    || unknownLipsanonReference.body.includes('temporary rocks in front of the King')
   ) {
     throw new Error(`Unknown lipsanon ids should retain the generic unfurl: ${unknownLipsanonReference.statusCode}`);
   }
@@ -5435,94 +5435,24 @@ async function main() {
   if (emptyRun.statusCode !== 200 || emptyRunBody.run !== null || emptyRunBody.revision !== 0) {
     throw new Error(`Active Run should begin empty: ${emptyRun.statusCode} ${emptyRun.body}`);
   }
-  const activeRunKing = {
-    id: 'run-king', name: 'David of Israel', type: 'king', number: 1,
-    inspectionSeed: 1701, abilities: [], modifiers: [], source: 'king',
-  };
-  const activeRunPawnA = {
-    id: 'run-pawn-a', name: 'Stephen Botiller', type: 'pawn', number: 1,
-    inspectionSeed: 1702, abilities: [], modifiers: [], source: 'starting',
-  };
-  const activeRunPawnB = {
-    id: 'run-pawn-b', name: 'Godwin Harper', type: 'pawn', number: 2,
-    inspectionSeed: 1703, abilities: [], modifiers: [], source: 'starting',
-  };
-  const activeRunStartingArmy = [activeRunKing, activeRunPawnA, activeRunPawnB];
-  const activeRunStarterCards = [{
-    id: 'run-card-his-grace', coreId: 'his-grace', cardType: null,
-    effectSeed: 0, effectTargetUnitId: null,
-    unitSeats: ['run-king'], lostUnitIds: [], cacochymicUnitId: null,
-    acquiredAfterBattleIndex: 0,
-  }, {
-    id: 'run-card-front-lines', coreId: 'front-lines', cardType: null,
-    effectSeed: 0, effectTargetUnitId: null,
-    unitSeats: ['run-pawn-a', 'run-pawn-b'], lostUnitIds: [], cacochymicUnitId: null,
-    acquiredAfterBattleIndex: 0,
-  }];
-  const activeRunNumberState = { pawn: 3, knight: 1, bishop: 1, rook: 1, queen: 1, king: 2 };
-  const activeRunOffers = [
-    { id: 'p', offerId: 'opening-0-p', pieces: ['pawn'], value: 1, cost: 1, cardType: null, effectSeed: 1704, cacochymicPieceIndex: null, effectTargetIndex: null },
-    { id: 'k', offerId: 'opening-1-k', pieces: ['knight'], value: 3, cost: 3, cardType: null, effectSeed: 1705, cacochymicPieceIndex: null, effectTargetIndex: null },
-    // Opening offers roll qualifiers like any other draw, at the shared affected price and
-    // at any core value — this Concinnous card costs more than the whole opening budget,
-    // which is legal as long as the deal keeps something affordable.
-    { id: 'rpp', offerId: 'opening-2-rpp', pieces: ['rook', 'pawn', 'pawn'], value: 7, cost: 9, cardType: 'concinnous', effectSeed: 1706, cacochymicPieceIndex: null, effectTargetIndex: 0 },
-  ];
   const activeRunDocument = {
-    runSaveVersion: boardRender.CURRENT_RUN_SAVE_VERSION,
-    id: 'run-smoke',
-    seed: 17,
-    ataraxiaTier: 1,
-    updatedAt: '2026-01-01T00:00:00.000Z',
-    war: {
-      id: 'war-smoke',
-      name: 'Smoke War',
-      description: 'Pinned War snapshot.',
-      battles: [{ level: warBattleLevel, loot: true }],
-    },
-    phase: 'sectio',
-    battleIndex: 0,
-    conflictIndex: 0,
-    goldTenths: 80,
-    army: activeRunStartingArmy,
-    cards: activeRunStarterCards,
-    pestiferousLosses: [],
-    lipsana: [],
-    seenLipsana: [],
-    conflictPaidLipsana: {},
-    nextArmyUnitSequence: 1,
-    nextArmyUnitNumberByType: activeRunNumberState,
-    nextCardSequence: 1,
-    deployment: null,
-    battleRuntime: null,
-    aftermath: null,
-    vacantia: null,
-    sectio: {
-      kind: 'opening',
-      afterBattleIndex: 0,
-      conflictIndex: 0,
-      victoryGoldTenths: 0,
-      cardOffers: activeRunOffers,
-      adlectedCardOfferIds: [],
-      paidLipsanonOffer: null,
-      paidLipsanonBought: false,
-      alienatedUnits: [],
-      expunctedCard: null,
-      entrySnapshot: {
-        goldTenths: 80,
-        army: activeRunStartingArmy,
-        cards: activeRunStarterCards,
-        pestiferousLosses: [],
-        lipsana: [],
-        seenLipsana: [],
-        conflictPaidLipsana: {},
-        nextArmyUnitSequence: 1,
-        nextArmyUnitNumberByType: activeRunNumberState,
-        nextCardSequence: 1,
-        paidLipsanonBought: false,
+    ...boardRender.craftRunDocument(
+      boardRender.runCraftSpecFromJson({ phase: 'sectio', seed: 17 }),
+      {
+        id: 'war-smoke',
+        name: 'Smoke War',
+        description: 'Pinned War snapshot.',
+        battles: [{ level: warBattleLevel, loot: false }],
       },
-    },
+    ),
+    id: 'run-smoke',
+    updatedAt: '2026-01-01T00:00:00.000Z',
   };
+  const [activeRunKing, activeRunPawnA, activeRunPawnB] = activeRunDocument.army;
+  const activeRunStartingArmy = activeRunDocument.army;
+  const activeRunStarterCards = activeRunDocument.cards;
+  const activeRunNumberState = activeRunDocument.nextArmyUnitNumberByType;
+  const activeRunOffers = activeRunDocument.sectio.cardOffers;
   const invalidPlaguedTarget = await request(
     'PUT', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
@@ -5589,8 +5519,9 @@ async function main() {
     throw new Error(`Current Run saves must persist their complete opening Sectio deal: ${invalidOpeningRun.statusCode} ${invalidOpeningRun.body}`);
   }
   const quartermasterOffer = {
-    id: 'r', offerId: 'opening-3-r', pieces: ['rook'], value: 5, cost: 5,
-    cardType: null, effectSeed: 1707, cacochymicPieceIndex: null, effectTargetIndex: null,
+    ...boardRender.RUN_CARD_BY_ID.r,
+    offerId: 'opening-3-r',
+    cost: boardRender.RUN_CARD_BY_ID.r.value,
   };
   const quartermasterOpeningRun = {
     ...activeRunDocument,
@@ -5701,7 +5632,7 @@ async function main() {
         ...activeRunDocument,
         army: [
           ...activeRunDocument.army,
-          { id: 'run-unit-1', name: 'Unexpected Pawn', type: 'pawn', number: 3, inspectionSeed: 1707, abilities: [], modifiers: [], source: 'adlectio' },
+          { id: 'run-unit-1', name: 'Unexpected Pawn', type: 'pawn', number: 3, inspectionSeed: 1707, source: 'adlectio' },
         ],
       },
       revision: 0,
@@ -5731,11 +5662,11 @@ async function main() {
   }
   const adlectedPawn = {
     id: 'run-unit-1', name: 'Eadric Miller', type: 'pawn', number: 3,
-    inspectionSeed: 1707, abilities: [], modifiers: [], source: 'adlectio',
+    inspectionSeed: 1707, source: 'adlectio',
   };
   const adlectedKnight = {
     id: 'run-unit-2', name: 'Richard Marshal', type: 'knight', number: 1,
-    inspectionSeed: 1708, abilities: [], modifiers: [], source: 'adlectio',
+    inspectionSeed: 1708, source: 'adlectio',
   };
   const multiAdlectioRun = {
     ...activeRunDocument,
@@ -5744,15 +5675,13 @@ async function main() {
     cards: [
       ...activeRunStarterCards,
       {
-        id: 'run-card-1', coreId: activeRunOffers[0].id, cardType: null,
-        effectSeed: activeRunOffers[0].effectSeed, effectTargetUnitId: null,
-        unitSeats: [adlectedPawn.id], lostUnitIds: [], cacochymicUnitId: null,
+        id: 'run-card-1', coreId: 'p',
+        unitSeats: [adlectedPawn.id],
         acquiredAfterBattleIndex: 0,
       },
       {
-        id: 'run-card-2', coreId: activeRunOffers[1].id, cardType: null,
-        effectSeed: activeRunOffers[1].effectSeed, effectTargetUnitId: null,
-        unitSeats: [adlectedKnight.id], lostUnitIds: [], cacochymicUnitId: null,
+        id: 'run-card-2', coreId: 'k',
+        unitSeats: [adlectedKnight.id],
         acquiredAfterBattleIndex: 0,
       },
     ],
@@ -5778,7 +5707,7 @@ async function main() {
   ) {
     throw new Error(`Active Run did not save: ${savedRun.statusCode} ${savedRun.body}`);
   }
-  const expunctioRun = boardRender.performExpunctio(savedRunBody.run, 'run-card-front-lines');
+  const expunctioRun = boardRender.performExpunctio(savedRunBody.run, 'run-card-1');
   const savedExpunctioRun = await request(
     'PUT', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
@@ -5788,15 +5717,15 @@ async function main() {
   if (
     savedExpunctioRun.statusCode !== 200
     || savedExpunctioRunBody.revision !== 2
-    || savedExpunctioRunBody.run.goldTenths !== 0
-    || savedExpunctioRunBody.run.cards.some((card) => card.coreId === 'front-lines')
-    || savedExpunctioRunBody.run.army.some((unit) => unit.source === 'starting')
-    || savedExpunctioRunBody.run.sectio.expunctedCard?.card?.id !== 'run-card-front-lines'
-    || savedExpunctioRunBody.run.sectio.expunctedCard?.priceTenths !== 40
+    || savedExpunctioRunBody.run.goldTenths !== 20
+    || savedExpunctioRunBody.run.cards.some((card) => card.id === 'run-card-1')
+    || savedExpunctioRunBody.run.army.some((unit) => unit.id === adlectedPawn.id)
+    || savedExpunctioRunBody.run.sectio.expunctedCard?.card?.id !== 'run-card-1'
+    || savedExpunctioRunBody.run.sectio.expunctedCard?.priceTenths !== 20
   ) {
     throw new Error(`Expunctio did not persist through the authenticated Run endpoint: ${savedExpunctioRun.statusCode} ${savedExpunctioRun.body}`);
   }
-  const concinnousSectioRun = {
+  const plainSectioRun = {
     ...activeRunDocument,
     phase: 'sectio',
     updatedAt: '2026-01-01T01:00:00.000Z',
@@ -5805,39 +5734,10 @@ async function main() {
       afterBattleIndex: 0,
       conflictIndex: 0,
       victoryGoldTenths: 10,
-      cardOffers: [{
-        id: 'q',
-        offerId: 'sectio-0-0-q',
-        pieces: ['queen'],
-        value: 9,
-        cost: 11,
-        cardType: 'concinnous',
-        effectSeed: 1706,
-        effectTargetIndex: 0,
-        cacochymicPieceIndex: null,
-      }, {
-        id: 'q',
-        offerId: 'sectio-0-1-q',
-        pieces: ['queen'],
-        value: 9,
-        cost: 12,
-        cardType: 'legatine',
-        effectSeed: 1707,
-        effectTargetIndex: null,
-        cacochymicPieceIndex: null,
-      }, {
-        // Hieratic prices Agminate exactly like Adlected and carries no seeded target,
-        // because its unit is drawn when the card is acquired.
-        id: 'q',
-        offerId: 'sectio-0-2-q',
-        pieces: ['queen'],
-        value: 9,
-        cost: 12,
-        cardType: 'hieratic',
-        effectSeed: 1708,
-        effectTargetIndex: null,
-        cacochymicPieceIndex: null,
-      }],
+      cardOffers: activeRunOffers.map((offer, index) => ({
+        ...offer,
+        offerId: `sectio-0-${index}-${offer.id}`,
+      })),
       adlectedCardOfferIds: [],
       paidLipsanonOffer: null,
       paidLipsanonBought: false,
@@ -5847,7 +5747,6 @@ async function main() {
         goldTenths: activeRunDocument.goldTenths,
         army: activeRunDocument.army,
         cards: activeRunDocument.cards,
-        pestiferousLosses: [],
         lipsana: [],
         seenLipsana: [],
         conflictPaidLipsana: {},
@@ -5858,41 +5757,37 @@ async function main() {
       },
     },
   };
-  const savedConcinnousSectioRun = await request(
+  const savedPlainSectioRun = await request(
     'PUT', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({ run: concinnousSectioRun, revision: 2 }),
+    JSON.stringify({ run: plainSectioRun, revision: 2 }),
   );
-  const savedConcinnousSectioRunBody = JSON.parse(savedConcinnousSectioRun.body);
+  const savedPlainSectioRunBody = JSON.parse(savedPlainSectioRun.body);
   if (
-    savedConcinnousSectioRun.statusCode !== 200
-    || savedConcinnousSectioRunBody.revision !== 3
-    || savedConcinnousSectioRunBody.run.sectio.cardOffers[0].effectTargetIndex !== 0
-    || savedConcinnousSectioRunBody.run.sectio.cardOffers[0].cost !== 11
-    || savedConcinnousSectioRunBody.run.sectio.cardOffers[1].cost !== 12
-    || savedConcinnousSectioRunBody.run.sectio.cardOffers[2].cardType !== 'hieratic'
-    || savedConcinnousSectioRunBody.run.sectio.cardOffers[2].cost !== 12
+    savedPlainSectioRun.statusCode !== 200
+    || savedPlainSectioRunBody.revision !== 3
+    || savedPlainSectioRunBody.run.sectio.cardOffers.some((offer) => offer.cost !== offer.value)
   ) {
-    throw new Error(`Concinnous Sectio Run did not save: ${savedConcinnousSectioRun.statusCode} ${savedConcinnousSectioRun.body}`);
+    throw new Error(`Plain formation Sectio Run did not save: ${savedPlainSectioRun.statusCode} ${savedPlainSectioRun.body}`);
   }
-  const mispricedHieraticRun = await request(
+  const mispricedFormationRun = await request(
     'PUT', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
       run: {
-        ...concinnousSectioRun,
+        ...plainSectioRun,
         sectio: {
-          ...concinnousSectioRun.sectio,
-          cardOffers: concinnousSectioRun.sectio.cardOffers.map((offer) => (
-            offer.cardType === 'hieratic' ? { ...offer, cost: 11 } : offer
+          ...plainSectioRun.sectio,
+          cardOffers: plainSectioRun.sectio.cardOffers.map((offer, index) => (
+            index === 0 ? { ...offer, cost: offer.cost + 1 } : offer
           )),
         },
       },
       revision: 3,
     }),
   );
-  if (mispricedHieraticRun.statusCode !== 400 || JSON.parse(mispricedHieraticRun.body).error !== 'invalid_active_run') {
-    throw new Error(`Hieratic offers must carry the Agminate price: ${mispricedHieraticRun.statusCode} ${mispricedHieraticRun.body}`);
+  if (mispricedFormationRun.statusCode !== 400 || JSON.parse(mispricedFormationRun.body).error !== 'invalid_active_run') {
+    throw new Error(`Formation offers must carry their printed price: ${mispricedFormationRun.statusCode} ${mispricedFormationRun.body}`);
   }
   const deploymentRun = {
     ...activeRunDocument,
@@ -5901,11 +5796,12 @@ async function main() {
     deployment: {
       battleIndex: 0,
       seed: 1709,
-      dealtCardIds: ['run-card-his-grace', 'run-card-front-lines'],
+      dealtCardIds: ['run-card-his-grace'],
       deployingUnitIds: ['run-king', 'run-pawn-a', 'run-pawn-b'],
       unavailableUnitIds: [],
       capacityResolved: false,
       placements: {},
+      formationPlans: {},
       activeCardIndex: 0,
       unitCursor: 0,
       discardCursor: 0,
@@ -5914,7 +5810,6 @@ async function main() {
       transport: 'paused',
       stage: 'awaiting-deal',
       blockedUnitIds: [],
-      manualPlacements: {},
     },
   };
   const savedDeploymentRun = await request(
@@ -6093,9 +5988,9 @@ async function main() {
   }
   const lipsanonEventsBody = JSON.stringify({
     events: [
-      { eventId: 'pick:run-smoke:conscription-notice', lipsanonId: 'conscription-notice', kind: 'picked' },
-      { eventId: 'battle-win:run-smoke:0', lipsanonId: 'conscription-notice', kind: 'battle-win' },
-      { eventId: 'battle-win:run-smoke:0', lipsanonId: 'training-linens', kind: 'battle-win' },
+      { eventId: 'pick:run-smoke:royal-tent', lipsanonId: 'royal-tent', kind: 'picked' },
+      { eventId: 'battle-win:run-smoke:0', lipsanonId: 'royal-tent', kind: 'battle-win' },
+      { eventId: 'battle-win:run-smoke:0', lipsanonId: 'fair-scales', kind: 'battle-win' },
     ],
   });
   const savedLipsanonEvents = await request(
@@ -6127,10 +6022,10 @@ async function main() {
   const loadedLipsanonStatisticsBody = JSON.parse(loadedLipsanonStatistics.body);
   if (
     loadedLipsanonStatistics.statusCode !== 200
-    || loadedLipsanonStatisticsBody.statistics['conscription-notice']?.timesPicked !== 1
-    || loadedLipsanonStatisticsBody.statistics['conscription-notice']?.battlesWonWhileHeld !== 1
-    || loadedLipsanonStatisticsBody.statistics['training-linens']?.timesPicked !== 0
-    || loadedLipsanonStatisticsBody.statistics['training-linens']?.battlesWonWhileHeld !== 1
+    || loadedLipsanonStatisticsBody.statistics['royal-tent']?.timesPicked !== 1
+    || loadedLipsanonStatisticsBody.statistics['royal-tent']?.battlesWonWhileHeld !== 1
+    || loadedLipsanonStatisticsBody.statistics['fair-scales']?.timesPicked !== 0
+    || loadedLipsanonStatisticsBody.statistics['fair-scales']?.battlesWonWhileHeld !== 1
   ) {
     throw new Error(`Lipsanon statistics did not aggregate exact facts: ${loadedLipsanonStatistics.statusCode} ${loadedLipsanonStatistics.body}`);
   }

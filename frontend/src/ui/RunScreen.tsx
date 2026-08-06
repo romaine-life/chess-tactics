@@ -5,7 +5,6 @@ import { defaultFacingForSide, paletteForSide, pieceSpritePath } from '../core/p
 import type { GameState, Piece } from '../core/types';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox } from './shared/ChromeBox';
-import { HouseSelect } from './shared/HouseSelect';
 import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
 import { TitleBarStatus } from './shell/TitleBarControls';
 import { TitleBarSlot } from './shell/TitleBarSlot';
@@ -25,26 +24,21 @@ import { useConfirm } from './shared/ConfirmDialog';
 import { RunSceneViewport } from './RunWorkspace';
 import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
 import {
-  ADLECTED_DISPLAY_NAME,
   ATARAXIA_BY_TIER,
-  CACOCHYMIC_DISPLAY_NAME,
   GOLD_SCALE,
   LIPSANON_BY_ID,
   performAdlectio,
   buyPaidLipsanon,
   canRerollDeployment,
   canRestartBattle,
-  canTargetLipsanon,
   canLeaveSectio,
   canUndoRunBattleMove,
   cashOutPawn,
   captureRunBattleUndo,
   closeBattle,
   hasLipsanon,
-  hasRunAbility,
   leaveAftermath,
   leaveSectio,
-  lipsanonNeedsUnitTarget,
   markReservistDeployed,
   observeRunUnitDeath,
   prepareDeployment,
@@ -55,8 +49,6 @@ import {
   RUN_DEPLOYMENT_REROLL_COST_TENTHS,
   restartBattle,
   runBattleActivityId,
-  runAbilityDescription,
-  runAbilityDisplayName,
   performAlienatio,
   performExpunctio,
   sectioHasChanges,
@@ -74,14 +66,12 @@ import {
   currentDeploymentUnit,
   deploymentInteractionStage,
   deploymentOptions,
-  disciplinePlacementCells,
   finishDeploymentCardDiscard,
   finishDeploymentCardReveal,
   finishDeploymentUnitSettlement,
   gameForRunDeployment,
   levelWithRunDeployment,
   normalReservistCell,
-  placeAdlectedDeploymentUnit,
   placeRevealedDeploymentUnit,
   revealActiveDeploymentCard,
   resolveForcedDeploymentChoices,
@@ -99,7 +89,7 @@ import { runLinkTargetMismatch } from '../run/craft';
 import { useRunCraft } from './useRunCraft';
 import { clearCraftedBattleResult, craftedBattleResultFor } from './craftedRunLanding';
 import { LipsanonIcon, LipsanaWorkspace } from './Lipsana';
-import { RunBonaVacantia, RunBonaVacantiaTarget } from './RunBonaVacantia';
+import { RunBonaVacantia } from './RunBonaVacantia';
 import { useLipsanonFlight } from './runLipsanonFlightView';
 import { RunGoldAmount } from './RunResources';
 import {
@@ -107,7 +97,6 @@ import {
   RUN_WORKSPACE_VIEW_LABEL,
   SECTIO_WORKSPACE_VIEWS,
   runArmyUnitHref,
-  runBonaTargetHref,
   runWorkspaceHref,
   runWorkspaceTitleSegment,
   type RunSelfInspectionView,
@@ -135,10 +124,7 @@ import { useRunUnitDepartures } from './runUnitDepartureView';
 import { isStrategikonPath, strategikonRouteCrumbs } from './strategikonRoute';
 import { createRunForm, runActivity, type RunForm } from './RunForm';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
-import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
 import type { SkirmishBoardSurfaceState, UnitDepartureRequest } from '../render/SkirmishBoard';
-import { boardLabCellPosition } from '../render/boardProjection';
-import { objectBaseZIndex } from '../render/sceneDepth';
 
 type RunScreenView = RunWorkspaceView;
 
@@ -398,12 +384,6 @@ function RunMetaControls({
   );
 }
 
-function deploymentSquareLabel(cellKey: string | undefined, rows: number): string | null {
-  const match = cellKey ? /^(\d+),(\d+)$/.exec(cellKey) : null;
-  if (!match) return null;
-  return `${String.fromCharCode(65 + Number(match[1]))}${rows - Number(match[2])}`;
-}
-
 function DeploymentControls({
   run,
   stage,
@@ -434,15 +414,7 @@ function DeploymentControls({
   const { abandonDialog, abandoning, requestAbandon } = useRunAbandon(run);
   const transport = run.deployment?.transport ?? 'paused';
   const transportReady = stage !== 'dealing' && stage !== 'ready';
-  const inputRequired = stage === 'adlected';
   const nextReady = stage === 'await-deal' || stage === 'reveal-card' || stage === 'place';
-  const abilities = activeUnit
-    ? (['adlected', 'eutactic', 'agminate'] as const).filter((ability) => (
-        ability === 'adlected'
-          ? activeUnit.abilities.includes('adlected') || run.deployment?.temporaryAdlectedUnitId === activeUnit.id
-          : hasRunAbility(run, activeUnit, ability)
-      ))
-    : [];
   return (
     <>
       {abandonDialog}
@@ -481,7 +453,7 @@ function DeploymentControls({
               aria-label="Play deployment"
               title="Play"
               aria-pressed={transport === 'playing'}
-              disabled={departing || !transportReady || inputRequired}
+              disabled={departing || !transportReady}
               onClick={() => onSetTransport('playing')}
             >
               ▶
@@ -502,7 +474,7 @@ function DeploymentControls({
               data-testid="deployment-full-deploy"
               className={chromeUnitClassNames('inner-text-button', 'app-header-button', transport === 'full-deploy' && 'active')}
               aria-pressed={transport === 'full-deploy'}
-              disabled={departing || !transportReady || inputRequired}
+              disabled={departing || !transportReady}
               onClick={() => onSetTransport('full-deploy')}
             >
               Full deploy
@@ -522,16 +494,11 @@ function DeploymentControls({
           <p className="skirmish-grid-hint">Redo every unit placement from the beginning.</p>
         </div>
 
-        {activeUnit && (stage === 'place' || stage === 'adlected') ? (
+        {activeUnit && stage === 'place' ? (
           <div className="skirmish-view-group run-deployment-control" data-testid="deployment-active-unit">
             <span className="skirmish-eyebrow">Deploying</span>
             <strong>{runUnitRosterLabel(activeUnit)}</strong>
-            {abilities.map((ability) => (
-              <p key={ability}>
-                <b>{runAbilityDisplayName(ability)}</b> · {runAbilityDescription(ability, activeUnit.type)}
-              </p>
-            ))}
-            {stage === 'adlected' ? <p>Select one of the highlighted squares.</p> : null}
+            <p>The full card formation is placed in one step.</p>
           </div>
         ) : null}
 
@@ -577,19 +544,8 @@ function useRunDeploymentPresentation({
   const options = useMemo(() => deploymentOptions(prepared, level), [level, prepared]);
   const stage = deploymentInteractionStage(prepared, options);
   const activeUnit = currentDeploymentUnit(prepared);
-  const activeAdlected = stage === 'adlected' ? activeUnit : null;
-  const legalCells = useMemo(
-    () => activeAdlected ? disciplinePlacementCells(prepared, options, activeAdlected.id) : [],
-    [activeAdlected, options, prepared],
-  );
-  const legalCellKeys = useMemo(() => new Set(legalCells.map((cell) => `${cell.x},${cell.y}`)), [legalCells]);
-  const [hoveredCellKey, setHoveredCellKey] = useState<string | null>(null);
   const [dealProgress, setDealProgress] = useState(0);
   const advanceOneAfterRevealRef = useRef(false);
-  const hoveredPlacementCell = hoveredCellKey
-    ? legalCells.find((cell) => `${cell.x},${cell.y}` === hoveredCellKey) ?? null
-    : null;
-  const hoveredPlacementSeat = hoveredPlacementCell ? boardLabCellPosition(hoveredPlacementCell) : null;
   const layout = selectedDeploymentLayout(prepared, options);
   const deploymentGame = useMemo(
     () => gameForRunDeployment(prepared, level, layout, true),
@@ -618,10 +574,6 @@ function useRunDeploymentPresentation({
       } else if (prepared.deployment.transport === 'playing') {
         replace(revealActiveDeploymentCard(prepared));
       }
-      return;
-    }
-    if (stage === 'adlected' && prepared.deployment?.transport !== 'paused') {
-      replace(setDeploymentTransport(prepared, 'paused'));
       return;
     }
     if (
@@ -733,6 +685,7 @@ function useRunDeploymentPresentation({
     boardClassName: 'run-deployment-board',
     boardAriaLabel: `${level.name} deployment battlefield`,
     onArrivingUnitIdsChange: reportArrivals,
+    renderCellOverlay: () => null,
     controlsContent: (
       <DeploymentControls
         run={prepared}
@@ -749,79 +702,29 @@ function useRunDeploymentPresentation({
         departing={departureActive}
       />
     ),
-    renderCellOverlay: ({ cell, visualFootprintStyle }) => {
-      const cellKey = `${cell.x},${cell.y}`;
-      const legal = !departureActive && legalCellKeys.has(cellKey);
-      if (!activeAdlected) return null;
-      const label = deploymentSquareLabel(cellKey, level.board.rows);
-      return (
-        <button
-          type="button"
-          className={`skirmish-board-cell-hit run-deployment-cell ${legal ? 'is-move' : 'is-deployment-blocked'}`}
-          aria-label={legal ? `Place ${runUnitRosterLabel(activeAdlected)} on ${label}` : `${label} is unavailable`}
-          aria-disabled={!legal}
-          style={visualFootprintStyle}
-          onPointerDown={(event) => {
-            // ViewPane owns primary-drag panning on its bubbling path. An Adlected square is
-            // a real button, so keep its primary press paired with its release; secondary
-            // button panning still reaches ViewPane's capture handler.
-            if (event.button === 0) event.stopPropagation();
-          }}
-          onPointerEnter={() => setHoveredCellKey(cellKey)}
-          onPointerLeave={() => setHoveredCellKey((current) => current === cellKey ? null : current)}
-          onClick={legal ? () => replace(placeAdlectedDeploymentUnit(prepared, level, cell)) : undefined}
-        >
-          <PredrawnMoveHighlightPaint />
-        </button>
-      );
-    },
     boardOverlay: (
-      <>
-        <RunDeploymentDeckDeal
-          run={prepared}
-          dealtCount={dealProgress}
-          onBeginDeal={beginDeal}
-          disabled={departureActive}
-        />
-        {activeAdlected && hoveredPlacementCell && hoveredPlacementSeat ? (
-          <span
-            className={`board-unit-seat is-${activeAdlected.type} run-deployment-placement-ghost`}
-            data-testid="deployment-placement-ghost"
-            style={{
-              left: hoveredPlacementSeat.left,
-              top: hoveredPlacementSeat.top,
-              zIndex: objectBaseZIndex(hoveredPlacementCell),
-            }}
-            aria-hidden="true"
-          >
-            <img
-              src={pieceSpritePath(activeAdlected.type, paletteForSide('player'), defaultFacingForSide('player'))}
-              alt=""
-              draggable={false}
-            />
-          </span>
-        ) : null}
-      </>
+      <RunDeploymentDeckDeal
+        run={prepared}
+        dealtCount={dealProgress}
+        onBeginDeal={beginDeal}
+        disabled={departureActive}
+      />
     ),
   };
 }
 
 function LipsanonOffer({
-  run,
   lipsanonId,
   action,
   actionLabel,
   disabled = false,
 }: {
-  run: RunDocument;
   lipsanonId: LipsanonId;
-  action: (targetUnitId?: string) => void;
+  action: () => void;
   actionLabel: ReactNode;
   disabled?: boolean;
 }): ReactElement {
   const lipsanon = LIPSANON_BY_ID[lipsanonId];
-  const [target, setTarget] = useState('');
-  const needsTarget = lipsanonNeedsUnitTarget(lipsanonId);
   return (
     <InnerChromeBox className="run-card run-lipsanon-card">
       <header className="run-lipsanon-card-heading">
@@ -829,23 +732,10 @@ function LipsanonOffer({
         <h3>{lipsanon.name}</h3>
       </header>
       <p>{lipsanon.description}</p>
-      {needsTarget ? (
-        <HouseSelect
-          value={target}
-          options={[
-            { value: '', label: 'Choose a unit…' },
-            ...run.army
-              .filter((unit) => canTargetLipsanon(run, lipsanonId, unit.id))
-              .map((unit) => ({ value: unit.id, label: runUnitRosterLabel(unit) })),
-          ]}
-          onChange={setTarget}
-          ariaLabel="Adlected target unit"
-        />
-      ) : null}
       <ChromeButton unit="inner-text-button"
         className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-        disabled={disabled || (needsTarget && !target)}
-        onClick={() => action(target || undefined)}
+        disabled={disabled}
+        onClick={action}
       >
         {actionLabel}
       </ChromeButton>
@@ -937,7 +827,6 @@ function SectioPanel({
   const sectio = run.sectio!;
   const availableOffers = sectio.cardOffers.filter((offer) => !sectio.adlectedCardOfferIds.includes(offer.offerId));
   const cardBackMediaUrl = resolvedLiveMediaUrl(RUN_CARD_BACK_SLOT);
-  const pestiferousLosses = run.pestiferousLosses.filter((loss) => loss.battleIndex === sectio.afterBattleIndex);
   return (
     <>
       {view === 'expunctio'
@@ -954,26 +843,6 @@ function SectioPanel({
             ariaLabel: 'Sectio',
           }}
         >
-        {/* What the Battle paid is reported on the Battle's own aftermath screen, which the
-            player has already passed through to reach this one. */}
-        {pestiferousLosses.length ? (
-          <InnerChromeBox className="run-pestiferous-losses" role="status">
-            <h3>Pestiferous attrition</h3>
-            <p>These {CACOCHYMIC_DISPLAY_NAME} units were lost after the Battle:</p>
-            <ul>
-              {pestiferousLosses.map((loss) => (
-                <li key={`${loss.cardId}:${loss.unit.id}`}>
-                  {loss.unit.name} · {loss.unit.type}
-                  {(() => {
-                    const card = run.cards.find((candidate) => candidate.id === loss.cardId);
-                    const next = run.army.find((unit) => unit.id === card?.cacochymicUnitId);
-                    return next ? ` — ${next.name} · ${next.type} is now ${CACOCHYMIC_DISPLAY_NAME}` : '';
-                  })()}
-                </li>
-              ))}
-            </ul>
-          </InnerChromeBox>
-        ) : null}
         <section
           className="run-sectio-cards-section"
           aria-label="Cards"
@@ -1012,7 +881,6 @@ function SectioPanel({
           <section>
             <h3>Merchant&apos;s Shopkey</h3>
             <LipsanonOffer
-              run={run}
               lipsanonId={sectio.paidLipsanonOffer}
               actionLabel={sectio.paidLipsanonBought ? 'Sold out this Conflict' : (
                 <span className="run-paid-lipsanon-price">
@@ -1021,7 +889,7 @@ function SectioPanel({
                 </span>
               )}
               disabled={sectio.paidLipsanonBought || run.goldTenths < 10 * GOLD_SCALE}
-              action={(target) => replace(buyPaidLipsanon(run, target))}
+              action={() => replace(buyPaidLipsanon(run))}
             />
           </section>
         ) : null}
@@ -1438,9 +1306,7 @@ export function RunScreen({
   const shellRun = hydrated ? run : null;
   const rawView: RunScreenView = sceneSnapshot.workspace.view === 'strategikon'
     ? 'primary'
-    : sceneSnapshot.workspace.view === 'bona-target'
-      ? 'primary'
-      : sceneSnapshot.workspace.view;
+    : sceneSnapshot.workspace.view;
   const battleReviewActivity = shellRun
     ? runBattleActivityId(shellRun.id, shellRun.battleIndex)
     : null;
@@ -1468,9 +1334,6 @@ export function RunScreen({
     navigateApp(runWorkspaceHref(`/run${routeSearch}`, 'primary'), { replace: true, scroll: false });
   }, [battleReviewAvailable, hydrated, rawView, routeSearch]);
   const strategikonOpen = sceneSnapshot.workspace.view === 'strategikon';
-  const bonaTarget = sceneSnapshot.workspace.view === 'bona-target'
-    ? sceneSnapshot.workspace
-    : null;
   const beginAdlectio = (offer: RunCardOffer, source: HTMLButtonElement): void => {
     const latest = useActiveRun.getState().run;
     if (!latest || latest.phase !== 'sectio' || !latest.sectio) return;
@@ -1485,9 +1348,8 @@ export function RunScreen({
     setAdlectioAnnouncement(`${runCardName(offer)} admitted by Adlectio and added to the Chartulary.`);
   };
   const selectedUnitId = sceneSnapshot.workspace.view === 'army'
-    || sceneSnapshot.workspace.view === 'bona-target'
-      ? sceneSnapshot.workspace.unitId
-      : null;
+    ? sceneSnapshot.workspace.unitId
+    : null;
   const armyFilters = armyFilterState.scope === filterScope
     ? armyFilterState.filters
     : { ...DEFAULT_RUN_ARMY_FILTERS };
@@ -1505,11 +1367,6 @@ export function RunScreen({
     current.pathname = '/run';
     navigateApp(runArmyUnitHref(current.toString(), unitId), { replace: true, scroll: false });
   };
-  const navigateBonaTarget = (lipsanonId: LipsanonId, unitId: string | null = null): void => {
-    const current = new URL(window.location.href);
-    current.pathname = '/run';
-    navigateApp(runBonaTargetHref(current.toString(), lipsanonId, unitId), { replace: true, scroll: false });
-  };
   // The Run phase owns this carry, not the selected Bona workspace. A targeted take keeps
   // the same phase scene mounted while the gameplay workspace deselects, so local mat state
   // would unmount during preparation and leave the continuity layer blank.
@@ -1519,10 +1376,6 @@ export function RunScreen({
   } = useLipsanonFlight((lipsanonId) => {
     const latest = useActiveRun.getState().run;
     if (!latest || latest.phase !== 'bona-vacantia') return;
-    if (lipsanonNeedsUnitTarget(lipsanonId)) {
-      navigateBonaTarget(lipsanonId);
-      return;
-    }
     replace(takeVacantiaLipsanon(latest, lipsanonId));
   }, { handoff: 'scene-settled' });
   const alieneUnit = (unitId: string, source?: HTMLImageElement | null): void => {
@@ -1678,32 +1531,13 @@ export function RunScreen({
             // Explicit, because the branch below is an else-fallthrough: any phase without
             // its own case silently renders Victory.
             : shellRun.phase === 'bona-vacantia' && shellRun.vacantia
-              ? bonaTarget
-                ? (
-                  <RunBonaVacantiaTarget
-                    run={shellRun}
-                    lipsanonId={bonaTarget.lipsanonId}
-                    selectedUnitId={bonaTarget.unitId}
-                    filters={armyFilters}
-                    onFiltersChange={(filters) => setArmyFilterState({ scope: filterScope, filters })}
-                    onSelectUnit={(unitId) => navigateBonaTarget(bonaTarget.lipsanonId, unitId)}
-                    onBackToUnits={() => navigateBonaTarget(bonaTarget.lipsanonId)}
-                    onBackToOffers={() => navigateRunView('primary')}
-                    onConfirm={(unitId) => replace(takeVacantiaLipsanon(
-                      shellRun,
-                      bonaTarget.lipsanonId,
-                      unitId,
-                    ))}
-                  />
-                )
-                : (
-                  <RunBonaVacantia
-                    run={shellRun}
-                    replace={replace}
-                    onTargetLipsanon={navigateBonaTarget}
-                    launchLipsanon={launchBonaLipsanon}
-                  />
-                )
+              ? (
+                <RunBonaVacantia
+                  run={shellRun}
+                  replace={replace}
+                  launchLipsanon={launchBonaLipsanon}
+                />
+              )
               : shellRun.phase === 'aftermath' && shellRun.aftermath
                 ? (
                   <AftermathPanel
@@ -1720,9 +1554,7 @@ export function RunScreen({
     ? `${shellRun.id}:battlefield:${shellRun.battleIndex}:${runSceneWorkspaceIdentity(sceneSnapshot.workspace)}`
     : `${shellRun?.id ?? 'none'}:${runSurfacePhase}:${runSceneWorkspaceIdentity(sceneSnapshot.workspace)}`;
   const visibleLipsanonIds = shellRun
-    ? bonaTarget
-      ? [...shellRun.lipsana, bonaTarget.lipsanonId]
-      : shellRun.lipsana
+    ? shellRun.lipsana
     : [];
   const form = createRunForm({
     run: shellRun,
@@ -1734,7 +1566,7 @@ export function RunScreen({
     ) : null,
     lipsanonIds: visibleLipsanonIds,
     inspectionWorkspace,
-    className: `run-screen${shellRun && (visibleLipsanonCount(shellRun) || bonaTarget) ? ' has-lipsana' : ''}`,
+    className: `run-screen${shellRun && visibleLipsanonCount(shellRun) ? ' has-lipsana' : ''}`,
   });
   const formSurface = battlefieldActive && battleSurfaceRun
     ? (
