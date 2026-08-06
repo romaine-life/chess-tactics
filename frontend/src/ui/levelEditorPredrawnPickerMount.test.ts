@@ -25,7 +25,7 @@ describe('Level Editor pre-drawn picker mount', () => {
   });
 
   it('exposes the owner-scoped version instrument and distinguishes mounted input from installed output', () => {
-    expect(editor).toContain('{targetLevelId && editorDocument && canonicalEditorBoard && canonicalLevelSignature ? (');
+    expect(editor).toContain('{targetLevelId && editorDocument ? (');
     expect(editor).toContain("levelArtworkWorkspace === 'source'");
     expect(editor).toContain('<PredrawnSourceArtworkPanel');
     expect(editor).toContain('<PredrawnBackgroundVersionsPanel');

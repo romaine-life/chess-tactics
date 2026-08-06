@@ -37,6 +37,10 @@ import {
 } from '../render/predrawnRasterOcclusion';
 import { loadDecodedImage } from '../render/imageResources';
 import { StudioReadOnlyBoard } from '../render/StudioReadOnlyBoard';
+import {
+  storedPredrawnBoardRegistration,
+  storePredrawnBoardRegistration,
+} from '../render/PredrawnBoardLayer';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { PredrawnCornerPicker } from './PredrawnCornerPicker';
 import { PredrawnMoveHighlightEditor } from './PredrawnMoveHighlightEditor';
@@ -52,6 +56,7 @@ import {
 } from './predrawnBackgroundVersionPolicy';
 import {
   predrawnBoardArtifactForSurface,
+  predrawnBoardSurfaceForBackgroundVersion,
   predrawnBoardSurfacesEqual,
   predrawnBoardSurfaceForArtifact,
   type PredrawnBoardArtifact,
@@ -63,7 +68,6 @@ import {
   predrawnAttemptCanProcess,
   predrawnAttemptForSurface,
   predrawnCreationAttemptModels,
-  predrawnGenerationReferenceLabel,
   predrawnLatestCommittedArtifact,
   type PredrawnCreationAttemptModel,
   type PredrawnPipelineSourceAttemptCreationIntent,
@@ -195,6 +199,8 @@ type StagedPipelineSource = {
   source: 'owner-upload' | 'manual-clipboard-handoff';
   originalFileName?: string;
 };
+
+const NEW_AI_ARTWORK_INTAKE_ID = 'new-ai-artwork-intake';
 
 function PredrawnArtifactBoardPreview({
   artifact,
@@ -390,7 +396,6 @@ export function PredrawnBackgroundVersionsPanel({
   board,
   initialSourceSrc,
   initialRegistration,
-  preferredAttemptId,
   documentRevision,
   workingBackgroundMode,
   currentSurface,
@@ -413,7 +418,6 @@ export function PredrawnBackgroundVersionsPanel({
   generationFrame?: PredrawnGenerationFrame;
   initialSourceSrc?: string;
   initialRegistration?: PredrawnBoardCornerRegistration;
-  preferredAttemptId?: string;
   documentRevision: number;
   workingBackgroundMode: BoardBackgroundMode;
   currentSurface?: VersionedPredrawnBoardSurface;
@@ -486,6 +490,7 @@ export function PredrawnBackgroundVersionsPanel({
   const [currentEnvironmentGeometry, setCurrentEnvironmentGeometry] = useState<{ v1: string; v2: string } | null>(null);
   const [selectedPreviewState, setSelectedPreviewState] = useState<ArtifactPreviewState | null>(null);
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  const newArtworkInputRef = useRef<HTMLInputElement>(null);
   const { ask: askArchiveConfirmation, dialog: archiveConfirmDialog } = useConfirm();
   const { ask: askDiscardWarpConfirmation, dialog: discardWarpConfirmDialog } = useConfirm();
   const {
@@ -526,11 +531,16 @@ export function PredrawnBackgroundVersionsPanel({
   }, [pngIngressGuard]);
 
   useEffect(() => {
+    if (
+      !stagedPipelineSource
+      || stagedPipelineSource.attemptId === NEW_AI_ARTWORK_INTAKE_ID
+      || stagedPipelineSource?.attemptId === selectedAttemptId
+    ) return;
     clearStagedPipelineSource();
     setHandoffBusy((current) => current === 'paste' || current === 'file' ? null : current);
     setClipboardStatus(null);
     setClipboardStatusTone('success');
-  }, [clearStagedPipelineSource, selectedAttemptId]);
+  }, [clearStagedPipelineSource, selectedAttemptId, stagedPipelineSource?.attemptId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -586,8 +596,7 @@ export function PredrawnBackgroundVersionsPanel({
       setVersions(loaded);
       setAttempts(loadedAttempts);
       const models = predrawnCreationAttemptModels(loadedAttempts, loaded);
-      const preferredAttempt = models.find((model) => model.attempt.id === preferredAttemptId)
-        ?? predrawnAttemptForSurface(models, currentSurface)
+      const preferredAttempt = predrawnAttemptForSurface(models, currentSurface)
         ?? models[0];
       const artifacts = preferredAttempt?.artifacts ?? [];
       const preferred = predrawnBoardArtifactForSurface(artifacts, currentSurface)
@@ -616,7 +625,6 @@ export function PredrawnBackgroundVersionsPanel({
       ? currentSurface.moveHighlightProfile.profileSha256
       : null,
     documentId,
-    preferredAttemptId,
   ]);
 
   const attemptModels = useMemo(
@@ -818,6 +826,17 @@ export function PredrawnBackgroundVersionsPanel({
   const selectedWarpRegistration = selectedAttempt?.warped
     ? predrawnDirectRegistrationForBackground(selectedAttempt.warped.backgroundVersion)
     : undefined;
+  const refitSelectedWarpDisabledReason = !canWrite
+    ? 'Reload an owner editing page before refitting this board.'
+    : busy
+      ? 'Wait for the current pipeline action to finish.'
+      : !selectedAttempt?.generated
+        ? 'This corrected board has no available Raw Pipeline Source.'
+        : !selectedWarpRegistration
+          ? 'This corrected board does not carry its saved grid placement.'
+          : !pipelineSources.some((source) => source.id === selectedAttempt.generated?.backgroundVersion.id)
+            ? 'The original Raw Pipeline Source no longer matches the current level geometry.'
+            : undefined;
   const warpDiscardDisabledReason = !canWrite
     ? 'Reload an owner editing page before discarding this warped board.'
     : busy
@@ -1410,7 +1429,7 @@ export function PredrawnBackgroundVersionsPanel({
       setSelectedArtifactId(version.id);
       setRegistration(nextRegistration);
       const refreshed = await refreshAfterCompletedMutation('The raw AI-painted board was committed to this pipeline slot.');
-      if (refreshed) onStatus('Raw pipeline source added.', 'success', 'Its pixels are untouched and ready for grid adjustment.');
+      if (refreshed) onStatus('AI artwork added.', 'success', 'Its exact pixels are ready to use unchanged. Grid correction and occlusion remain optional.');
       return true;
     } catch (cause) {
       if (onMutationError(cause)) {
@@ -1425,6 +1444,135 @@ export function PredrawnBackgroundVersionsPanel({
     } finally {
       setBusy(null);
     }
+  };
+
+  const importNewAiArtwork = async (): Promise<void> => {
+    if (
+      !stagedPipelineSource
+      || stagedPipelineSource.attemptId !== NEW_AI_ARTWORK_INTAKE_ID
+      || !canWrite
+      || busy
+      || handoffBusy
+    ) return;
+    const generationFrame = board.predrawnGenerationFrame;
+    if (!generationFrame || !currentEnvironmentGeometry) {
+      setClipboardStatusTone('error');
+      setClipboardStatus('Save a valid 16:9 viewing pane before importing AI artwork.');
+      return;
+    }
+    setBusy('raw');
+    setError(null);
+    try {
+      const fence = getEditFence();
+      if (!fence) throw new Error('Reload an owner editing page before adding AI artwork.');
+      await assertDecodablePngBlob(stagedPipelineSource.blob);
+      const sha256 = await sha256Hex(stagedPipelineSource.blob);
+      const rawWorldBounds = {
+        minX: generationFrame.x,
+        minY: generationFrame.y,
+        width: generationFrame.width,
+        height: generationFrame.height,
+      };
+      const rawIdentityHash = await sha256Hex(new Blob([JSON.stringify({
+        schema: 'predrawn-ai-artwork-intake-identity-v1',
+        documentId,
+        sha256,
+        worldBounds: rawWorldBounds,
+        environmentGeometrySha256: currentEnvironmentGeometry.v2,
+        source: stagedPipelineSource.source,
+        originalFileName: stagedPipelineSource.originalFileName ?? null,
+      })]));
+      let version = await createPredrawnBackgroundVersion(documentId, {
+        kind: 'raw',
+        label: `AI artwork ${sha256.slice(0, 8)}`,
+        world_bounds: rawWorldBounds,
+        operation: {
+          kind: 'raw-generated-v2',
+          intakeSchema: 'predrawn-ai-artwork-intake-v1',
+          untouched: true,
+          outputSha256: sha256,
+          coordinateBasis: 'board-world-pixels-v1',
+          viewingPane: rawWorldBounds,
+          environmentGeometrySha256: currentEnvironmentGeometry.v2,
+          environmentGeometrySchema: 'predrawn-environment-geometry-v2',
+        },
+        provenance: {
+          sourceSha256: sha256,
+          outputSha256: sha256,
+          source: stagedPipelineSource.source,
+          levelId,
+          environmentGeometrySha256: currentEnvironmentGeometry.v2,
+          ...(stagedPipelineSource.originalFileName
+            ? { originalFileName: stagedPipelineSource.originalFileName.slice(0, 240) }
+            : {}),
+        },
+        idempotency_key: predrawnBackgroundVersionIdempotencyKey(
+          'raw',
+          rawIdentityHash,
+          'ai-intake',
+        ),
+      }, fence);
+      upsertVersion(version);
+      if (!version.content_sha256) {
+        version = await uploadPredrawnBackgroundVersionContent({
+          documentId,
+          versionId: version.id,
+          expectedRevision: version.row_revision,
+          bytes: stagedPipelineSource.blob,
+          fence,
+        });
+        upsertVersion(version);
+      }
+      const attempt = await createPredrawnGenerationAttempt({
+        documentId,
+        intakeSourceVersionId: version.id,
+        label: `Pipeline slot ${attemptModels.length + 1}`,
+        idempotencyKey: `attempt:intake:${version.id}:${documentRevision}`,
+        fence,
+      });
+      setAttempts((current) => [
+        attempt,
+        ...current.filter((candidate) => candidate.id !== attempt.id),
+      ]);
+      selectAttemptId(attempt.id);
+      setSelectedArtifactId(version.id);
+      setRegistration(undefined);
+      clearStagedPipelineSource();
+      const refreshed = await refreshAfterCompletedMutation('The AI artwork was added to a new pipeline slot.');
+      if (refreshed) {
+        setClipboardStatusTone('success');
+        setClipboardStatus('AI artwork added. Adjust its grid to continue.');
+        onStatus('AI artwork added.', 'success', 'Its exact pixels are now ready for board-art processing.');
+      }
+    } catch (cause) {
+      if (onMutationError(cause)) {
+        void refresh().catch(() => {});
+        return;
+      }
+      void refresh().catch(() => {});
+      const message = cause instanceof Error ? cause.message : 'The AI artwork could not be added.';
+      setError(message);
+      setClipboardStatusTone('error');
+      setClipboardStatus(message);
+      onStatus('AI artwork intake failed.', 'error', message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const refitSelectedWarp = async (): Promise<void> => {
+    const pipelineSource = selectedAttempt?.generated?.backgroundVersion;
+    const savedRegistration = selectedWarpRegistration;
+    if (!pipelineSource || !savedRegistration || refitSelectedWarpDisabledReason) return;
+    const created = await createAttemptFromPipelineSource(pipelineSource);
+    if (!created) return;
+    setRegistration(savedRegistration);
+    setPickerOpen(true);
+    onStatus(
+      'The saved grid is open in a new slot.',
+      'success',
+      'Its exact prior placement is restored. Adjust it, then choose Use fitted board.',
+    );
   };
 
   const importMountedRaw = async (): Promise<void> => {
@@ -1515,6 +1663,48 @@ export function PredrawnBackgroundVersionsPanel({
     );
   }, [pngIngressGuard, replaceStagedPipelineSource]);
 
+  const stageNewAiArtwork = async (
+    blob: Blob,
+    source: StagedPipelineSource['source'],
+    originalFileName?: string,
+  ): Promise<void> => {
+    if (!canWrite || busy) return;
+    pngIngressGuard.selectAttempt(NEW_AI_ARTWORK_INTAKE_ID);
+    const operation = pngIngressGuard.begin(NEW_AI_ARTWORK_INTAKE_ID);
+    await previewPipelineSource(blob, operation, source, originalFileName);
+  };
+
+  const pasteNewAiArtworkFromClipboard = async (): Promise<void> => {
+    if (!canWrite || busy || handoffBusy) return;
+    setHandoffBusy('paste');
+    setClipboardStatus(null);
+    setClipboardStatusTone('success');
+    setError(null);
+    try {
+      const blob = await readPredrawnPngFromClipboard();
+      await stageNewAiArtwork(blob, 'manual-clipboard-handoff');
+    } catch (cause) {
+      reportClipboardFailure(cause, 'paste');
+    } finally {
+      setHandoffBusy(null);
+    }
+  };
+
+  const previewNewAiArtworkFromFile = async (file: File): Promise<void> => {
+    if (!canWrite || busy || handoffBusy) return;
+    setHandoffBusy('file');
+    setClipboardStatus(null);
+    setClipboardStatusTone('success');
+    setError(null);
+    try {
+      await stageNewAiArtwork(file, 'owner-upload', file.name);
+    } catch (cause) {
+      reportFilePreviewFailure(cause);
+    } finally {
+      setHandoffBusy(null);
+    }
+  };
+
   const pastePipelineSourceFromClipboard = async (): Promise<void> => {
     const attemptId = selectedAttempt?.attempt.id;
     if (
@@ -1595,7 +1785,6 @@ export function PredrawnBackgroundVersionsPanel({
     const handlePaste = (event: ClipboardEvent): void => {
       const target = event.target instanceof Element ? event.target : null;
       if (target?.closest('input, textarea, [contenteditable="true"]')) return;
-      const attemptId = selectedAttempt?.attempt.id;
       const hasPngItem = Array.from(event.clipboardData?.items ?? []).some((item) => (
         item.kind === 'file' && item.type.split(';', 1)[0]?.trim().toLowerCase() === 'image/png'
       ));
@@ -1603,16 +1792,14 @@ export function PredrawnBackgroundVersionsPanel({
         file.type.split(';', 1)[0]?.trim().toLowerCase() === 'image/png'
       ));
       if (
-        !attemptId
-        || (!hasPngItem && !hasPngFile)
+        (!hasPngItem && !hasPngFile)
         || !canWrite
-        || !selectedAttemptCanProcess
-        || !generatedSlotResumable
         || busy
         || handoffBusy
       ) return;
       event.preventDefault();
-      const operation = pngIngressGuard.begin(attemptId);
+      pngIngressGuard.selectAttempt(NEW_AI_ARTWORK_INTAKE_ID);
+      const operation = pngIngressGuard.begin(NEW_AI_ARTWORK_INTAKE_ID);
       setHandoffBusy('paste');
       setClipboardStatus(null);
       setClipboardStatusTone('success');
@@ -1631,16 +1818,21 @@ export function PredrawnBackgroundVersionsPanel({
   }, [
     busy,
     canWrite,
-    generatedSlotResumable,
     handoffBusy,
     pngIngressGuard,
     previewPipelineSource,
     reportClipboardFailure,
-    selectedAttempt?.attempt.id,
-    selectedAttemptCanProcess,
   ]);
 
-  const generateWarp = async (): Promise<void> => {
+  const generateWarp = async ({
+    registrationOverride,
+    setWorkingCopy = false,
+    inspectAfterSave = true,
+  }: {
+    registrationOverride?: PredrawnBoardCornerRegistration;
+    setWorkingCopy?: boolean;
+    inspectAfterSave?: boolean;
+  } = {}): Promise<void> => {
     if (
       !canWrite
       || !selectedAttempt
@@ -1660,7 +1852,7 @@ export function PredrawnBackgroundVersionsPanel({
       const pendingRegistration = selectedAttempt.warpedPending
         ? predrawnRegistrationForBackground(selectedAttempt.warpedPending, versions)
         : undefined;
-      const effectiveRegistration = pendingRegistration ?? registration;
+      const effectiveRegistration = pendingRegistration ?? registrationOverride ?? registration;
       if (!effectiveRegistration) throw new Error('Adjust the grid before generating the warped board.');
       const currentGeometrySha256 = processing.environmentGeometrySha256;
       const generated = await generateWarpedPredrawnRaster({
@@ -1726,13 +1918,24 @@ export function PredrawnBackgroundVersionsPanel({
       setSelectedArtifactId(version.id);
       setRegistration(undefined);
       const refreshed = await refreshAfterCompletedMutation('The warped background version was saved.');
+      if (setWorkingCopy) {
+        onSetSurface(predrawnBoardSurfaceForBackgroundVersion(version));
+      }
       if (refreshed) {
-        setInspectedArtifactId(version.id);
-        onStatus(
-          'The exact warped background version is ready for full-size inspection.',
-          'success',
-          'Review the saved grid, tile highlights, and camera travel before applying occlusion.',
-        );
+        if (inspectAfterSave) setInspectedArtifactId(version.id);
+        if (setWorkingCopy) {
+          onStatus(
+            'Your fitted board is selected.',
+            'success',
+            'The exact grid placement is saved with this corrected board. The working copy is autosaving; occlusion remains optional.',
+          );
+        } else {
+          onStatus(
+            'The exact warped background version is ready for full-size inspection.',
+            'success',
+            'Review the saved grid, tile highlights, and camera travel before applying occlusion.',
+          );
+        }
       }
     } catch (cause) {
       if (onMutationError(cause)) {
@@ -2100,7 +2303,6 @@ export function PredrawnBackgroundVersionsPanel({
   const selectedAttemptArchiveExplanation = selectedAttemptArchiveAction.explanation;
   const canonicalStateLabel = canonicalActionLabel === 'Publish' ? 'Published' : 'Saved';
   const selectedParentArtifact = artifacts.find((artifact) => artifact.id === selectedArtifact?.parentArtifactId);
-  const selectedAttemptUsesPipelineSource = selectedAttempt?.attempt.origin === 'pipeline-source';
   const workingSelectionState = workingCopySyncState === 'saved'
     ? 'Cloud working copy synced'
     : workingCopySyncState === 'pending' || workingCopySyncState === 'saving'
@@ -2218,6 +2420,83 @@ export function PredrawnBackgroundVersionsPanel({
         <span><strong>Working:</strong> {surfaceSelectionLabel(workingArtifact, currentSurface)} · {workingSelectionState}</span>
         <span><strong>{canonicalStateLabel}:</strong> {surfaceSelectionLabel(canonicalArtifact, canonicalSurface)}</span>
       </div>
+      <section
+        className="le-predrawn-attempt-create is-artwork-ingress"
+        data-testid="add-ai-artwork"
+        aria-label="Add AI artwork"
+      >
+        <div className="le-predrawn-attempt-source">
+          <span>Add AI artwork</span>
+          <small>Paste or choose any full-resolution PNG.</small>
+        </div>
+        <input
+          ref={newArtworkInputRef}
+          className="le-predrawn-raw-file-input"
+          data-testid="new-ai-artwork-file-input"
+          type="file"
+          accept="image/png,.png"
+          disabled={!canWrite || Boolean(busy) || Boolean(handoffBusy)}
+          onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            event.currentTarget.value = '';
+            if (file) void previewNewAiArtworkFromFile(file);
+          }}
+        />
+        <div className="le-predrawn-version-actions">
+          <ChromeButton unit="inner-text-button"
+            data-testid="paste-new-ai-artwork"
+            className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
+            disabled={!canWrite || Boolean(busy) || Boolean(handoffBusy)}
+            onClick={() => { void pasteNewAiArtworkFromClipboard(); }}
+            title="Paste any AI artwork PNG and review it before adding it to the board-art pipeline."
+          >{handoffBusy === 'paste' ? 'Reading clipboard…' : 'Paste AI artwork'}</ChromeButton>
+          <ChromeButton unit="inner-text-button"
+            data-testid="choose-new-ai-artwork-file"
+            className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+            disabled={!canWrite || Boolean(busy) || Boolean(handoffBusy)}
+            onClick={() => newArtworkInputRef.current?.click()}
+            title="Choose any full-resolution AI artwork PNG and review it before adding it to the board-art pipeline."
+          >{handoffBusy === 'file' ? 'Reading PNG…' : 'Choose PNG file'}</ChromeButton>
+        </div>
+        {stagedPipelineSource?.attemptId === NEW_AI_ARTWORK_INTAKE_ID ? (
+          <div className="le-predrawn-pasted-source-review" data-testid="new-ai-artwork-review">
+            <img src={stagedPipelineSource.previewUrl} alt="AI artwork awaiting intake" />
+            <div>
+              <span className="skirmish-eyebrow">
+                {stagedPipelineSource.source === 'owner-upload' ? 'Chosen PNG file' : 'Pasted from clipboard'}
+              </span>
+              <strong>Review AI artwork</strong>
+              <span>
+                {stagedPipelineSource.width} × {stagedPipelineSource.height} PNG · exact source bytes
+                {stagedPipelineSource.originalFileName ? ` · ${stagedPipelineSource.originalFileName}` : ''}
+              </span>
+              <div className="le-predrawn-version-actions">
+                <ChromeButton unit="inner-text-button"
+                  data-testid="commit-new-ai-artwork"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
+                  disabled={!canWrite || Boolean(busy) || Boolean(handoffBusy)}
+                  onClick={() => { void importNewAiArtwork(); }}
+                >{busy === 'raw' ? 'Adding artwork…' : 'Use this board'}</ChromeButton>
+                <ChromeButton unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  disabled={Boolean(busy) || Boolean(handoffBusy)}
+                  onClick={() => {
+                    clearStagedPipelineSource();
+                    setClipboardStatus(null);
+                  }}
+                >Discard image</ChromeButton>
+              </div>
+            </div>
+          </div>
+        ) : null}
+        {clipboardStatus ? (
+          <output
+            className={clipboardStatusTone === 'error' ? 'le-predrawn-version-error' : 'le-predrawn-version-ready'}
+            data-testid="new-ai-artwork-status"
+            role="status"
+          >{clipboardStatus}</output>
+        ) : null}
+      </section>
       <section className="le-predrawn-attempt-create" aria-label="Create pipeline attempt from a saved Pipeline Source">
         <div className="le-predrawn-attempt-source">
           <span>Pipeline Source for a new attempt</span>
@@ -2266,16 +2545,16 @@ export function PredrawnBackgroundVersionsPanel({
         <output className="le-predrawn-version-help">
           {unavailablePipelineSourceIssue
             ? `A saved Pipeline Source is unavailable: ${unavailablePipelineSourceIssue}`
-            : 'No saved Pipeline Source matches this saved viewing pane and board layout. Open Generation References to create one through the manual AI handoff.'}
+            : 'No saved Pipeline Source matches this viewing pane and board layout. Add AI artwork above.'}
         </output>
       ) : null}
       <div className="le-predrawn-attempt-tabs" role="list" aria-label="Pipeline slots">
         {attemptModels.map((model, index) => {
           const isSelected = model.attempt.id === selectedAttempt?.attempt.id;
-          const stage = model.occlusionReady ? 'Board with occlusion mask'
-            : model.warped ? 'Warped'
-              : model.generated ? 'Raw source ready'
-                : 'Waiting for AI-painted board';
+          const stage = model.occlusionReady ? 'Using optional occlusion'
+            : model.warped ? 'Using optional grid correction'
+              : model.generated ? 'Unchanged board ready'
+                : 'Legacy empty slot';
           return (
             <ChromeButton unit="inner-text-button"
               role="listitem"
@@ -2314,18 +2593,7 @@ export function PredrawnBackgroundVersionsPanel({
       </div>
       <div className="le-predrawn-artifact-browser">
         <div className="le-predrawn-artifact-track" role="list" aria-label="Selected pipeline slot stages">
-          {selectedAttempt?.sourceArtwork && !selectedAttemptUsesPipelineSource ? (
-            <div className="le-predrawn-artifact-track-item" role="listitem">
-              <div className="le-predrawn-artifact-card is-source">
-                <img src={predrawnBackgroundVersionContentUrl(selectedAttempt.sourceArtwork.id)} alt="" aria-hidden="true" />
-                <span className="le-predrawn-artifact-card-copy">
-                  <small>Sent to the AI model</small>
-                  <strong>Generation reference</strong>
-                  <span>{predrawnGenerationReferenceLabel(selectedAttempt.sourceArtwork)}</span>
-                </span>
-              </div>
-            </div>
-          ) : selectedAttempt?.attempt.origin === 'migrated-history' ? (
+          {selectedAttempt?.attempt.origin === 'migrated-history' ? (
             <div className="le-predrawn-artifact-track-item" role="listitem">
               <div className="le-predrawn-artifact-card is-empty">
                 <span className="le-predrawn-artifact-card-copy">
@@ -2354,14 +2622,16 @@ export function PredrawnBackgroundVersionsPanel({
                   <span className="le-predrawn-artifact-connector" aria-hidden="true">→</span>
                   <div className="le-predrawn-artifact-card is-empty" data-stage={stage}>
                     <span className="le-predrawn-artifact-card-copy">
-                      <small>{pendingVersion ? 'Upload interrupted' : 'Not committed'}</small>
+                      <small>{pendingVersion ? 'Upload interrupted' : stage === 'generated' ? 'Not added' : 'Optional'}</small>
                       <strong>{title}</strong>
                       <span>
                         {pendingVersion
                           ? 'Resume this exact reserved stage below'
                           : stage === 'generated'
-                            ? 'Paste the AI-painted board returned by Codex'
-                            : 'Complete the previous stage first'}
+                            ? 'Add AI artwork above to create a new slot'
+                            : stage === 'warped'
+                              ? 'Only if the painted grid needs correction'
+                              : 'Only if live units should pass behind painted scenery'}
                       </span>
                     </span>
                   </div>
@@ -2394,7 +2664,7 @@ export function PredrawnBackgroundVersionsPanel({
           {!selectedAttempt ? (
             <div className="le-predrawn-artifact-empty" role="status">
               <strong>No pipeline slot selected</strong>
-              <span>Choose a saved generation reference and start a manual AI handoff above.</span>
+              <span>Paste AI artwork or choose a PNG file above.</span>
             </div>
           ) : null}
         </div>
@@ -2431,10 +2701,20 @@ export function PredrawnBackgroundVersionsPanel({
             <h3 id="predrawn-selected-artifact-title">{selectedArtifact.title}</h3>
 
             {selectedArtifact.stage === 'generated' ? (
-              <div className="le-predrawn-workflow-action-group is-next-step">
-                <span className="skirmish-eyebrow">Next: fit the board grid</span>
-                <p>Adjust the grid on this untouched board, then create its separate warped version.</p>
+              <div className="le-predrawn-workflow-action-group is-finished">
+                <span className="skirmish-eyebrow">Ready to use unchanged</span>
+                <p>Use these exact pixels as the board now. Grid correction and occlusion are optional tools, not acceptance steps.</p>
                 <div className="le-predrawn-version-actions">
+                  <ChromeButton unit="inner-text-button"
+                    data-testid="use-unchanged-predrawn-board"
+                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', active && 'active')}
+                    disabled={active || Boolean(selectedSetDisabledReason)}
+                    onClick={setSelected}
+                    title={active
+                      ? 'The unchanged AI artwork is already set in the working copy.'
+                      : selectedSetDisabledReason
+                        ?? `Use these exact pixels in the editor working copy. ${canonicalActionLabel} remains a separate action.`}
+                  >{active ? 'Using unchanged board' : 'Use unchanged board'}</ChromeButton>
                   <ChromeButton unit="inner-text-button"
                     data-testid="adjust-predrawn-grid"
                     className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
@@ -2443,42 +2723,37 @@ export function PredrawnBackgroundVersionsPanel({
                     title={adjustGridDisabledReason
                       ?? 'Visually fit the board grid over this raw AI-painted source. This stages alignment; it does not change the art yet.'}
                   >
-                    Adjust grid
+                    Adjust grid (optional)
                   </ChromeButton>
-                  <ChromeButton unit="inner-text-button"
-                    data-testid="generate-predrawn-warp"
-                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
-                    disabled={Boolean(generateWarpDisabledReason)}
-                    onClick={() => { void generateWarp(); }}
-                    title={generateWarpDisabledReason
-                      ?? 'Apply the staged grid once and save the result as a new immutable board version.'}
-                  >
-                    {busy === 'warp'
-                      ? 'Generating warped board…'
-                      : selectedAttempt?.warpedPending
-                        ? 'Resume warped upload'
-                      : 'Generate warped board'}
-                  </ChromeButton>
+                  {selectedAttempt?.warpedPending ? (
+                    <ChromeButton unit="inner-text-button"
+                      data-testid="generate-predrawn-warp"
+                      className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                      disabled={Boolean(generateWarpDisabledReason)}
+                      onClick={() => { void generateWarp({ setWorkingCopy: true, inspectAfterSave: false }); }}
+                      title={generateWarpDisabledReason
+                        ?? 'Resume saving and selecting the fitted board from its exact reserved grid placement.'}
+                    >
+                      {busy === 'warp'
+                        ? 'Creating corrected copy…'
+                        : 'Resume saving fitted board'}
+                    </ChromeButton>
+                  ) : null}
                 </div>
                 <small className="le-predrawn-version-help">
-                  {adjustGridDisabledReason
-                    ?? generateWarpDisabledReason
-                    ?? 'Adjust grid opens the full grid editor. Generate warped board remains a separate action.'}
+                  {selectedSetDisabledReason
+                    ?? 'Use unchanged board keeps the original viewing-pane placement and ignores grid fitting. Adjust grid if the painted cells need a different placement.'}
                 </small>
               </div>
             ) : null}
 
             {selectedArtifact.stage === 'warped' ? (
-              <div className="le-predrawn-workflow-action-group is-next-step">
-                <span className="skirmish-eyebrow">
-                  {selectedMoveHighlightCalibrationReady
-                    ? 'Tile highlights fitted · Next: create board with occlusion mask'
-                    : 'Required next: fit tile highlights'}
-                </span>
+              <div className="le-predrawn-workflow-action-group">
+                <span className="skirmish-eyebrow">Optional processing</span>
                 <p>
                   {selectedMoveHighlightCalibrationReady
-                    ? 'The visual highlight footprints are saved for this exact warp. You can refine them or create the separate version that lets scenery pass in front of live units.'
-                    : 'Fit every square-local highlight to its painted cell at full working size. Cyan is the editing preview; gameplay cells and click targets stay unchanged.'}
+                    ? 'This corrected board is ready to use. Its optional highlight fit is saved, so you may add occlusion if live units should pass behind painted scenery.'
+                    : 'This corrected board is ready to use. Fit tile highlights only if you later choose to add an occlusion mask.'}
                 </p>
                 <div className="le-predrawn-version-actions">
                   <ChromeButton unit="inner-text-button"
@@ -2492,7 +2767,6 @@ export function PredrawnBackgroundVersionsPanel({
                     className={chromeUnitClassNames(
                       'inner-text-button',
                       'le-seg-btn',
-                      !selectedMoveHighlightCalibrationReady && 'active',
                     )}
                     disabled={Boolean(moveHighlightCalibrationDisabledReason)}
                     onClick={() => openMoveHighlightEditor(
@@ -2503,8 +2777,8 @@ export function PredrawnBackgroundVersionsPanel({
                       ?? 'Open the full tile-highlight workspace and fit visual footprints without changing gameplay geometry.'}
                   >
                     {selectedMoveHighlightCalibrationReady
-                      ? 'Edit tile highlights'
-                      : 'Fit tile highlights'}
+                      ? 'Edit tile highlights (optional)'
+                      : 'Fit tile highlights (optional)'}
                   </ChromeButton>
                   <ChromeButton unit="inner-text-button"
                     data-testid="discard-predrawn-warp"
@@ -2515,11 +2789,18 @@ export function PredrawnBackgroundVersionsPanel({
                       ?? 'Discard this warped result, preserve its grid fit, and return to grid editing in this same slot.'}
                   >{busy === 'discard-warp' ? 'Discarding warped board…' : 'Discard & adjust grid'}</ChromeButton>
                   <ChromeButton unit="inner-text-button"
+                    data-testid="refit-predrawn-board"
+                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                    disabled={Boolean(refitSelectedWarpDisabledReason)}
+                    onClick={() => { void refitSelectedWarp(); }}
+                    title={refitSelectedWarpDisabledReason
+                      ?? 'Open the exact saved grid over the original Raw Pipeline Source in a new slot, without changing this board.'}
+                  >Refit board</ChromeButton>
+                  <ChromeButton unit="inner-text-button"
                     data-testid="edit-predrawn-occlusion-mask"
                     className={chromeUnitClassNames(
                       'inner-text-button',
                       'le-seg-btn',
-                      selectedMoveHighlightCalibrationReady && 'active',
                     )}
                     disabled={Boolean(openOcclusionEditorDisabledReason)}
                     onClick={() => openOcclusionEditor(
@@ -2530,8 +2811,8 @@ export function PredrawnBackgroundVersionsPanel({
                       ?? 'Open the exact warped pixels at full size, select foreground scenery with local AI or manual tools, then create a separate board with an occlusion mask.'}
                   >
                     {selectedAttempt?.occlusionPending
-                      ? 'Resume occlusion mask'
-                      : 'Edit occlusion mask'}
+                      ? 'Resume optional occlusion'
+                      : 'Add occlusion (optional)'}
                   </ChromeButton>
                 </div>
               </div>
@@ -2572,25 +2853,27 @@ export function PredrawnBackgroundVersionsPanel({
             ) : null}
 
             <div className="le-predrawn-version-actions le-predrawn-selection-actions">
-              <ChromeButton unit="inner-text-button"
-                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', active && 'active')}
-                disabled={active || Boolean(selectedSetDisabledReason)}
-                onClick={setSelected}
-                title={active
-                  ? 'This exact board version is already set in the working copy.'
-                  : selectedSetDisabledReason
-                    ?? `Use this exact artwork version in the editor working copy. ${canonicalActionLabel} is still required to make it canonical.`}
-              >
-                {active
-                  ? workingCopySyncState === 'saved'
-                    ? 'Set · cloud synced'
-                    : workingCopySyncState === 'pending' || workingCopySyncState === 'saving'
-                      ? 'Set · autosave pending'
-                      : workingCopySyncState === 'error' || workingCopySyncState === 'conflict'
-                        ? 'Set · autosave blocked'
-                        : 'Set in this tab'
-                  : 'Set this board version'}
-              </ChromeButton>
+              {selectedArtifact.stage !== 'generated' ? (
+                <ChromeButton unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', active && 'active')}
+                  disabled={active || Boolean(selectedSetDisabledReason)}
+                  onClick={setSelected}
+                  title={active
+                    ? 'This exact board version is already set in the working copy.'
+                    : selectedSetDisabledReason
+                      ?? `Use this exact artwork version in the editor working copy. ${canonicalActionLabel} is still required to make it canonical.`}
+                >
+                  {active
+                    ? workingCopySyncState === 'saved'
+                      ? 'Set · cloud synced'
+                      : workingCopySyncState === 'pending' || workingCopySyncState === 'saving'
+                        ? 'Set · autosave pending'
+                        : workingCopySyncState === 'error' || workingCopySyncState === 'conflict'
+                          ? 'Set · autosave blocked'
+                          : 'Set in this tab'
+                    : 'Set this board version'}
+                </ChromeButton>
+              ) : null}
               <ChromeButton unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                 disabled={!active || !selectedPreviewReady || workingCopySyncState !== 'saved' || Boolean(busy)}
@@ -2605,164 +2888,17 @@ export function PredrawnBackgroundVersionsPanel({
                 data-state={selectedSetBlockerIsError ? 'error' : 'blocked'}
                 role={selectedSetBlockerIsError ? 'alert' : 'status'}
               >
-                <strong>Set unavailable</strong>
+                <strong>{selectedArtifact.stage === 'generated' ? 'Use unchanged board unavailable' : 'Set unavailable'}</strong>
                 <span>{selectedSetDisabledReason}</span>
               </output>
             ) : null}
             <span>{selectedBackground.frame_width ?? '—'} × {selectedBackground.frame_height ?? '—'} px · {createdLabel(selectedArtifact.version)}</span>
-            <span>{selectedParentArtifact ? `Created from ${selectedParentArtifact.title}` : 'Untouched raw pipeline source'}</span>
+            <span>{selectedParentArtifact ? `Created from ${selectedParentArtifact.title}` : 'Exact unchanged AI artwork'}</span>
             <span>{active ? `Working · ${workingSelectionState}` : 'Not set on the working copy'}</span>
             <span>{canonicalActive ? `${canonicalStateLabel} canonical version` : `${canonicalActionLabel} has not made this version canonical`}</span>
           </div>
         </section>
       ) : null}
-
-      {!selectedAttemptUsesPipelineSource
-        && selectedAttempt?.attempt.origin === 'source'
-        && generatedSlotResumable ? <section
-        className="le-predrawn-workflow-actions"
-        data-testid="manual-generation-handoff"
-        aria-label="Manual AI generation handoff"
-      >
-        <div className="le-predrawn-workflow-action-group is-next-step">
-          <span className="skirmish-eyebrow">Manual Codex handoff</span>
-          <p>
-            {selectedAttempt?.generatedPending
-              ? 'This raw pipeline-source upload was interrupted. Paste or choose the same exact PNG to resume it.'
-              : selectedAttempt?.attempt.generated_version_id
-              ? 'This attempt already has a saved Pipeline Source. Start another handoff for a different AI-painted result.'
-              : selectedAttemptCanProcess
-                ? 'Copy the bound Generation Reference, work with Codex, then paste the returned full-resolution PNG here.'
-                : selectedAttempt
-                  ? 'This historical or invalid slot is inspection-only.'
-                : 'Start or select a manual handoff slot before adding AI-painted board art.'}
-          </p>
-          {selectedAttempt?.sourceArtwork && generatedSlotResumable ? (
-            <div className="le-predrawn-handoff-steps" aria-label="Manual handoff steps">
-              <span>
-                <strong>1.</strong>{' '}
-                Copy the exact level-derived reference and paste it into the Codex conversation.
-              </span>
-              <span><strong>2.</strong> When the AI-painted board is ready, copy that image in Codex.</span>
-              <span><strong>3.</strong> Return here and paste it into this waiting slot.</span>
-            </div>
-          ) : null}
-          <input
-            ref={uploadInputRef}
-            className="le-predrawn-raw-file-input"
-            data-testid="predrawn-raw-file-input"
-            type="file"
-            accept="image/png,.png"
-            disabled={!canWrite || !selectedAttemptCanProcess || !generatedSlotResumable || Boolean(busy) || Boolean(handoffBusy)}
-            onChange={(event) => {
-              const file = event.currentTarget.files?.[0];
-              event.currentTarget.value = '';
-              if (file) void previewPipelineSourceFromFile(file);
-            }}
-          />
-          {selectedAttempt?.sourceArtwork && generatedSlotResumable ? (
-            <div className="le-predrawn-version-actions">
-              <ChromeButton unit="inner-text-button"
-                data-testid="copy-generation-reference"
-                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                disabled={Boolean(handoffBusy)}
-                onClick={() => { void copyAttemptInput(); }}
-                title="Copy the exact stored full-resolution Generation Reference PNG. This is the image you hand to Codex."
-              >{handoffBusy === 'copy'
-                  ? 'Copying AI input…'
-                  : 'Copy generation reference'}</ChromeButton>
-              <ChromeButton unit="inner-text-button"
-                data-testid="paste-generated-board"
-                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
-                disabled={!canWrite || !selectedAttemptCanProcess || !generatedSlotResumable || Boolean(busy) || Boolean(handoffBusy)}
-                onClick={() => { void pastePipelineSourceFromClipboard(); }}
-                title={canWrite
-                  ? 'Read one exact image/png from the system clipboard, then show it for review before committing it.'
-                  : 'Reload an owner editing page before pasting a pipeline source.'}
-              >{handoffBusy === 'paste' ? 'Reading clipboard…' : 'Paste AI-painted board'}</ChromeButton>
-              <ChromeButton unit="inner-text-button"
-                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                disabled={!canWrite || !selectedAttemptCanProcess || !generatedSlotResumable || Boolean(busy) || Boolean(handoffBusy)}
-                onClick={() => uploadInputRef.current?.click()}
-                title={selectedAttempt?.generatedPending
-                  ? 'Choose the same exact PNG, review it, then resume the interrupted raw pipeline-source upload.'
-                  : 'Fallback: choose the full-resolution PNG file, then review it before committing.'}
-              >{handoffBusy === 'file'
-                  ? 'Reading PNG file…'
-                  : selectedAttempt?.generatedPending
-                    ? 'Resume from PNG file'
-                    : 'Choose PNG file instead'}</ChromeButton>
-            </div>
-          ) : null}
-          {initialSourceSrc && selectedAttemptCanProcess && generatedSlotResumable ? (
-            <div className="le-predrawn-mounted-pipeline-source">
-              <img src={initialSourceSrc} alt="Existing Codex-painted board mounted in the editor" />
-              <div>
-                <strong>Existing Codex-painted board</strong>
-                <span>This is already available to the editor. Use it directly as the raw pipeline source; no clipboard round trip is needed.</span>
-                <ChromeButton unit="inner-text-button"
-                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                  disabled={!canWrite || Boolean(busy) || Boolean(handoffBusy)}
-                  onClick={() => { void importMountedRaw(); }}
-                  title="Save the exact mounted Codex-painted PNG as a reusable Pipeline Source for this and future attempts."
-                >{busy === 'raw'
-                    ? 'Adding existing board…'
-                    : selectedAttempt?.generatedPending
-                      ? 'Resume with existing board'
-                      : 'Use existing Codex-painted board'}</ChromeButton>
-              </div>
-            </div>
-          ) : null}
-          {stagedPipelineSource
-            && stagedPipelineSource.attemptId === selectedAttempt?.attempt.id ? (
-            <div className="le-predrawn-pasted-source-review">
-              <img
-                src={stagedPipelineSource.previewUrl}
-                alt="AI-painted board awaiting confirmation"
-              />
-              <div>
-                <span className="skirmish-eyebrow">
-                  {stagedPipelineSource.source === 'owner-upload'
-                    ? 'Chosen PNG file'
-                    : 'Pasted from clipboard'}
-                </span>
-                <strong>Review raw pipeline source</strong>
-                <span>
-                  {stagedPipelineSource.width} × {stagedPipelineSource.height} PNG · exact source bytes
-                  {stagedPipelineSource.originalFileName ? ` · ${stagedPipelineSource.originalFileName}` : ''}
-                </span>
-                <div className="le-predrawn-version-actions">
-                  <ChromeButton unit="inner-text-button"
-                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
-                    disabled={!canWrite || !selectedAttemptCanProcess || !generatedSlotResumable || Boolean(busy) || Boolean(handoffBusy)}
-                    onClick={() => { void commitStagedPipelineSource(); }}
-                    title="Save these exact PNG bytes as a reusable Pipeline Source for this and future attempts."
-                  >{busy === 'raw' ? 'Committing source…' : 'Use this board'}</ChromeButton>
-                  <ChromeButton unit="inner-text-button"
-                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                    disabled={Boolean(busy) || Boolean(handoffBusy)}
-                    onClick={() => {
-                      clearStagedPipelineSource();
-                      setClipboardStatusTone('success');
-                      setClipboardStatus('Image discarded. This pipeline slot is still waiting.');
-                    }}
-                  >Discard image</ChromeButton>
-                </div>
-              </div>
-            </div>
-          ) : null}
-          {clipboardStatus ? (
-            <output
-              className={clipboardStatusTone === 'error' ? 'le-predrawn-version-error' : 'le-predrawn-version-ready'}
-              data-testid="clipboard-handoff-status"
-              role="status"
-            >{clipboardStatus}</output>
-          ) : null}
-          {selectedAttemptCanProcess && generatedSlotResumable ? (
-            <small className="le-predrawn-version-help">You can also press Ctrl+V anywhere in this workspace while a waiting slot is selected.</small>
-          ) : null}
-        </div>
-      </section> : null}
 
       {inspectMask && selectedMask && selectedMaskSrc && previewSrc ? (
         <PredrawnOcclusionDepthPreview
@@ -2807,7 +2943,7 @@ export function PredrawnBackgroundVersionsPanel({
           </output>
         ) : null}
       </div>
-      {selectedBackground?.kind === 'raw' && registration && selectedMatchesCurrentGeometry ? <output className="le-predrawn-version-ready">Grid ready — generate a warped child when the preview looks right.</output> : null}
+      {selectedBackground?.kind === 'raw' && registration && selectedMatchesCurrentGeometry ? <output className="le-predrawn-version-ready">Saving the exact fitted board and its grid placement…</output> : null}
       {selectedBackground && currentEnvironmentGeometry && !selectedMatchesCurrentGeometry ? <output className="le-predrawn-version-error" role="alert">This version belongs to an earlier environment layout and cannot be derived or Set on the current board.</output> : null}
       {invalidAttempts.length ? (
         <output className="le-predrawn-version-error" role="alert">
@@ -2844,20 +2980,26 @@ export function PredrawnBackgroundVersionsPanel({
       {pickerOpen && selectedBackground?.content_url && selectedOwned ? (
         <PredrawnCornerPicker
           src={predrawnBackgroundVersionContentUrl(selectedBackground.id)}
-          initialRegistration={registration ?? predrawnRegistrationForBackground(selectedBackground, versions)}
+          initialRegistration={registration
+            ?? predrawnRegistrationForBackground(selectedBackground, versions)
+            ?? storedPredrawnBoardRegistration(predrawnBackgroundVersionContentUrl(selectedBackground.id))}
           columns={board.cols}
           rows={board.rows}
           onChange={setRegistration}
           onSaveRegistration={(next) => {
+            storePredrawnBoardRegistration(
+              predrawnBackgroundVersionContentUrl(selectedBackground.id),
+              next,
+            );
             setRegistration(next);
             setPickerOpen(false);
-            onStatus(
-              'Grid adjustment staged.',
-              'success',
-              'No art changed yet. Choose Generate warped board to create the next immutable version.',
-            );
+            void generateWarp({
+              registrationOverride: next,
+              setWorkingCopy: true,
+              inspectAfterSave: false,
+            });
           }}
-          saveLabel="USE THIS GRID"
+          saveLabel="USE FITTED BOARD"
           showCodexHandoff={false}
           onClose={() => setPickerOpen(false)}
         />

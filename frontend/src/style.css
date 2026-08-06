@@ -1236,6 +1236,21 @@ h1 {
   gap: 5px;
   justify-content: end;
 }
+.predrawn-grid-uniform-scale {
+  align-items: center;
+  display: flex;
+  gap: 4px;
+  padding-left: 6px;
+}
+.predrawn-grid-uniform-scale > span {
+  color: var(--ds-ink-3, #9eb1c5);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.predrawn-grid-calibration-bar .predrawn-grid-uniform-scale .le-seg-btn {
+  min-width: 34px;
+  padding-inline: 6px;
+}
 .predrawn-grid-history {
   border-right: 1px solid rgba(91, 157, 216, .24);
   display: flex;
@@ -24304,8 +24319,26 @@ button.tileset-relationship-cell {
   justify-content: space-between;
 }
 
-.predrawn-reference-download {
+.predrawn-reference-actions {
+  align-items: center;
+  display: flex;
   flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+  max-width: 460px;
+}
+
+.predrawn-reference-copy-status {
+  color: #9fe0b2;
+  flex: 1 0 100%;
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.predrawn-reference-copy-status.is-error {
+  color: #ff9f9f;
 }
 
 .predrawn-reference-meta strong {

@@ -105,6 +105,7 @@ const {
   wallMaterialSlot,
 } = require(path.join(bakedBackendDir, 'liveMediaPolicy'));
 const {
+  ATTEMPT_INTAKE_SOURCE_REQUEST_SCHEMA,
   ATTEMPT_PIPELINE_SOURCE_REQUEST_SCHEMA,
   ATTEMPT_SOURCE_REQUEST_SCHEMA,
   ENVIRONMENT_GEOMETRY_SCHEMA,
@@ -9987,11 +9988,11 @@ async function dbRecordGenerationAttemptEvent(
   );
 }
 
-function canonicalLevelSha256(level) {
+function levelSha256(level) {
   return crypto.createHash('sha256').update(canonicalJson(level)).digest('hex');
 }
 
-function predrawnSourceCanonicalFields(level, { levelId, documentRevision }) {
+function predrawnSourceWorkingCopyFields(level, { levelId, documentRevision }) {
   if (!level?.boardCode || typeof level.boardCode !== 'string' || !serverRender?.decodeBoard) {
     throw editorDocumentError(503, 'board_renderer_unavailable');
   }
@@ -10059,13 +10060,13 @@ function predrawnSourceCanonicalFields(level, { levelId, documentRevision }) {
     coverTypes: {},
   });
   const semanticBoardSha256 = crypto.createHash('sha256').update(semanticBoardCode, 'utf8').digest('hex');
-  const canonicalLevelDigest = canonicalLevelSha256(level);
+  const workingCopyLevelDigest = levelSha256(level);
   const environmentGeometryDigests = predrawnEnvironmentGeometryDigests(level);
   const semanticRequest = {
     schema: SOURCE_SEMANTIC_REQUEST_SCHEMA,
     levelId,
-    canonicalDocumentRevision: Number(documentRevision),
-    canonicalLevelSha256: canonicalLevelDigest,
+    workingCopyDocumentRevision: Number(documentRevision),
+    workingCopyLevelSha256: workingCopyLevelDigest,
     boardCode: semanticBoardCode,
     boardSha256: semanticBoardSha256,
     generationFrame: {
@@ -10104,8 +10105,8 @@ function predrawnSourceCanonicalFields(level, { levelId, documentRevision }) {
     },
     sourceBackgroundVersionId,
     sourceOcclusionVersionId,
-    canonicalDocumentRevision: Number(documentRevision),
-    canonicalLevelSha256: canonicalLevelDigest,
+    workingCopyDocumentRevision: Number(documentRevision),
+    workingCopyLevelSha256: workingCopyLevelDigest,
     environmentGeometrySha256: semanticRequest.environmentGeometrySha256,
     environmentGeometryDigests,
     semanticBoardSha256,
@@ -10116,54 +10117,30 @@ function predrawnSourceCanonicalFields(level, { levelId, documentRevision }) {
   };
 }
 
-async function dbCanonicalPredrawnAttemptFields(client, documentRow) {
-  if (
-    Number(documentRow.revision) !== Number(documentRow.saved_revision)
-    || !documentRow.baseline_hash
-  ) {
-    throw backgroundVersionError(
-      409,
-      'background_source_level_unsaved',
-      'Save the current Level before creating a Generation Reference.',
-    );
-  }
-  const canonical = await dbCanonicalLevel(
-    client,
-    documentRow.owner_email,
-    { kind: documentRow.workspace_kind, id: documentRow.workspace_id },
-    documentRow.level_id,
-    { lock: true },
-  );
-  if (!canonical.level || editorDocumentBaselineChanged(documentRow, canonical)) {
-    throw backgroundVersionError(
-      409,
-      'background_source_level_changed',
-      'The saved Level changed before the Generation Reference could be created.',
-    );
-  }
+async function dbWorkingCopyPredrawnAttemptFields(client, documentRow) {
   // Board-code normalization consults the live drawable catalog (macro tiles
   // are one example). Perform every decode, validation, re-encode, and geometry
   // digest under one bounded server-render snapshot so a cold backend cannot
-  // misreport a valid saved frame as missing.
-  return withThumbnailRenderInputs(() => predrawnSourceCanonicalFields(canonical.level, {
+  // misreport a valid autosaved frame as missing.
+  return withThumbnailRenderInputs(() => predrawnSourceWorkingCopyFields(documentRow.body, {
     levelId: documentRow.level_id,
-    documentRevision: documentRow.saved_revision,
+    documentRevision: documentRow.revision,
   }), client);
 }
 
-async function dbCanonicalizePredrawnSourceVersion(client, documentRow, value) {
-  const fields = await dbCanonicalPredrawnAttemptFields(client, documentRow);
+async function dbBindPredrawnSourceToWorkingCopy(client, documentRow, value) {
+  const fields = await dbWorkingCopyPredrawnAttemptFields(client, documentRow);
   const operation = {
     ...value.operation,
-    kind: 'generation-source-v1',
+    kind: 'generation-source-v2',
     coordinateBasis: 'board-world-pixels-v1',
     viewingPane: fields.worldBounds,
     generationFrame: fields.frame,
     backgroundMode: fields.backgroundMode,
     sourceBackgroundVersionId: fields.sourceBackgroundVersionId,
     sourceOcclusionVersionId: fields.sourceOcclusionVersionId,
-    canonicalDocumentRevision: fields.canonicalDocumentRevision,
-    canonicalLevelSha256: fields.canonicalLevelSha256,
+    workingCopyDocumentRevision: fields.workingCopyDocumentRevision,
+    workingCopyLevelSha256: fields.workingCopyLevelSha256,
     environmentGeometrySchema: ENVIRONMENT_GEOMETRY_SCHEMA,
     environmentGeometrySha256: fields.environmentGeometrySha256,
     semanticBoardSha256: fields.semanticBoardSha256,
@@ -10172,8 +10149,8 @@ async function dbCanonicalizePredrawnSourceVersion(client, documentRow, value) {
   };
   const provenance = {
     ...value.provenance,
-    canonicalDocumentRevision: fields.canonicalDocumentRevision,
-    canonicalLevelSha256: fields.canonicalLevelSha256,
+    workingCopyDocumentRevision: fields.workingCopyDocumentRevision,
+    workingCopyLevelSha256: fields.workingCopyLevelSha256,
     backgroundMode: fields.backgroundMode,
     sourceBackgroundVersionId: fields.sourceBackgroundVersionId,
     sourceOcclusionVersionId: fields.sourceOcclusionVersionId,
@@ -10182,22 +10159,22 @@ async function dbCanonicalizePredrawnSourceVersion(client, documentRow, value) {
     semanticBoardSha256: fields.semanticBoardSha256,
     semanticRequestSha256: fields.semanticRequestSha256,
   };
-  const canonicalValue = {
+  const workingCopyValue = {
     ...value,
     world_bounds: fields.worldBounds,
     operation,
     provenance,
   };
-  const issue = sourceArtworkVersionContractIssue(canonicalValue);
+  const issue = sourceArtworkVersionContractIssue(workingCopyValue);
   if (issue) throw backgroundVersionError(409, 'invalid_background_source', issue);
-  return canonicalValue;
+  return workingCopyValue;
 }
 
-function sourceVersionCanonicalMetadataMatches(current, canonicalValue) {
+function sourceVersionWorkingCopyMetadataMatches(current, workingCopyValue) {
   return current.kind === 'source'
-    && sameBackgroundWorldBounds(current.world_bounds, canonicalValue.world_bounds)
-    && canonicalJson(current.operation) === canonicalJson(canonicalValue.operation)
-    && canonicalJson(current.provenance) === canonicalJson(canonicalValue.provenance);
+    && sameBackgroundWorldBounds(current.world_bounds, workingCopyValue.world_bounds)
+    && canonicalJson(current.operation) === canonicalJson(workingCopyValue.operation)
+    && canonicalJson(current.provenance) === canonicalJson(workingCopyValue.provenance);
 }
 
 function generationAttemptSourceRequest(sourceArtwork) {
@@ -10221,6 +10198,21 @@ function generationAttemptPipelineSourceRequest(sourceVersion, sourceAttempt, fi
     inputVersionId: String(sourceVersion.id),
     inputSha256: sourceVersion.blob_sha256,
     sourceAttemptId: String(sourceAttempt.id),
+    semanticRequestSha256: fields.semanticRequestSha256,
+    semanticRequest: fields.semanticRequest,
+  };
+  return {
+    ...request,
+    requestSha256: crypto.createHash('sha256').update(canonicalJson(request)).digest('hex'),
+  };
+}
+
+function generationAttemptIntakeSourceRequest(sourceVersion, fields) {
+  const request = {
+    schema: ATTEMPT_INTAKE_SOURCE_REQUEST_SCHEMA,
+    inputRole: 'raw-ai-artwork',
+    inputVersionId: String(sourceVersion.id),
+    inputSha256: sourceVersion.blob_sha256,
     semanticRequestSha256: fields.semanticRequestSha256,
     semanticRequest: fields.semanticRequest,
   };
@@ -11682,6 +11674,7 @@ function normalizeGenerationAttemptCreate(raw) {
     'label',
     'source_version_id', 'sourceVersionId',
     'pipeline_source_version_id', 'pipelineSourceVersionId',
+    'intake_source_version_id', 'intakeSourceVersionId',
     'idempotency_key', 'idempotencyKey',
     'edit_session_id', 'edit_session_key', 'edit_generation',
   ]);
@@ -11696,25 +11689,41 @@ function normalizeGenerationAttemptCreate(raw) {
   ) {
     return { error: 'pipeline_source_version_id must not be supplied twice' };
   }
+  if (
+    Object.hasOwn(raw, 'intake_source_version_id')
+    && Object.hasOwn(raw, 'intakeSourceVersionId')
+  ) {
+    return { error: 'intake_source_version_id must not be supplied twice' };
+  }
   const sourceVersionRaw = raw.source_version_id ?? raw.sourceVersionId;
   const pipelineSourceVersionRaw = raw.pipeline_source_version_id ?? raw.pipelineSourceVersionId;
+  const intakeSourceVersionRaw = raw.intake_source_version_id ?? raw.intakeSourceVersionId;
   const hasGenerationReference = sourceVersionRaw !== undefined;
   const hasPipelineSource = pipelineSourceVersionRaw !== undefined;
-  if (hasGenerationReference === hasPipelineSource) {
+  const hasIntakeSource = intakeSourceVersionRaw !== undefined;
+  if (Number(hasGenerationReference) + Number(hasPipelineSource) + Number(hasIntakeSource) !== 1) {
     return {
-      error: 'supply either source_version_id or pipeline_source_version_id, not both',
+      error: 'supply exactly one artwork input version',
     };
   }
   let sourceVersionId;
   let origin;
+  let inputRole;
   if (hasGenerationReference) {
     sourceVersionId = backgroundVersionId(sourceVersionRaw);
     if (!sourceVersionId) return { error: 'source_version_id must be a UUID' };
     origin = 'source';
-  } else {
+    inputRole = 'generation-reference';
+  } else if (hasPipelineSource) {
     sourceVersionId = backgroundVersionId(pipelineSourceVersionRaw);
     if (!sourceVersionId) return { error: 'pipeline_source_version_id must be a UUID' };
     origin = 'pipeline-source';
+    inputRole = 'raw-pipeline-source';
+  } else {
+    sourceVersionId = backgroundVersionId(intakeSourceVersionRaw);
+    if (!sourceVersionId) return { error: 'intake_source_version_id must be a UUID' };
+    origin = 'source';
+    inputRole = 'raw-ai-artwork';
   }
   const label = raw.label === undefined ? 'AI artwork attempt' : String(raw.label).trim();
   if (!label || label.length > 160) return { error: 'label must contain 1 to 160 characters' };
@@ -11723,6 +11732,7 @@ function normalizeGenerationAttemptCreate(raw) {
       label,
       origin,
       source_version_id: sourceVersionId,
+      input_role: inputRole,
     },
   };
 }
@@ -11832,12 +11842,12 @@ async function dbValidatedPipelineSourceAttemptInput(
     );
   }
 
-  const fields = await dbCanonicalPredrawnAttemptFields(client, currentDocument);
+  const fields = await dbWorkingCopyPredrawnAttemptFields(client, currentDocument);
   if (!sameBackgroundWorldBounds(source.world_bounds, fields.worldBounds)) {
     throw backgroundVersionError(
       409,
       'generation_attempt_pipeline_source_stale',
-      'This Raw Pipeline Source uses a different viewing pane than the saved Level.',
+      'This Raw Pipeline Source uses a different viewing pane than the autosaved working copy.',
     );
   }
   const geometryDigests = fields.environmentGeometryDigests;
@@ -11861,7 +11871,7 @@ async function dbValidatedPipelineSourceAttemptInput(
     throw backgroundVersionError(
       409,
       'generation_attempt_pipeline_source_stale',
-      'This Raw Pipeline Source uses a different board layout than the saved Level.',
+      'This Raw Pipeline Source uses a different board layout than the autosaved working copy.',
     );
   }
   const sourceContractIssue = backgroundVersionStoredContractIssue(source);
@@ -11967,7 +11977,7 @@ async function dbCreateGenerationAttempt(documentRow, user, authority, value, id
     );
     let sourceAttempt = null;
     let sourceRequest;
-    if (value.origin === 'pipeline-source') {
+    if (value.input_role === 'raw-pipeline-source') {
       ({ sourceAttempt, sourceRequest } = await dbValidatedPipelineSourceAttemptInput(
         client,
         currentDocument,
@@ -11976,6 +11986,35 @@ async function dbCreateGenerationAttempt(documentRow, user, authority, value, id
         writerSession,
         source,
       ));
+    } else if (value.input_role === 'raw-ai-artwork') {
+      const fields = await dbWorkingCopyPredrawnAttemptFields(client, currentDocument);
+      if (
+        !source
+        || source.kind !== 'raw'
+        || !source.blob_sha256
+        || !['ready', 'published'].includes(source.status)
+        || source.owner_email !== documentRow.owner_email
+        || source.level_id !== documentRow.level_id
+        || backgroundVersionStoredContractIssue(source)
+        || !backgroundVersionContentDigestMatches(source)
+      ) {
+        throw backgroundVersionError(
+          409,
+          'generation_attempt_intake_source_not_ready',
+          'Choose a ready PNG imported into this Level.',
+        );
+      }
+      if (
+        !sameBackgroundWorldBounds(source.world_bounds, fields.worldBounds)
+        || !backgroundVersionHasEnvironmentGeometry(source, fields.environmentGeometrySha256)
+      ) {
+        throw backgroundVersionError(
+          409,
+          'generation_attempt_intake_source_stale',
+          'This PNG does not match the current viewing pane and board layout.',
+        );
+      }
+      sourceRequest = generationAttemptIntakeSourceRequest(source, fields);
     } else {
       if (
         !source
@@ -11995,7 +12034,7 @@ async function dbCreateGenerationAttempt(documentRow, user, authority, value, id
       }
       sourceRequest = generationAttemptSourceRequest(source);
     }
-    if (value.origin !== 'pipeline-source') {
+    if (value.input_role !== 'raw-pipeline-source') {
       const sourceRequestIssue = generationAttemptSourceRequestIssue(
         {
           document_id: documentRow.document_id,
@@ -12004,6 +12043,9 @@ async function dbCreateGenerationAttempt(documentRow, user, authority, value, id
           source_version_id: value.source_version_id,
           source_attempt_id: sourceAttempt?.id ?? null,
           source_request: sourceRequest,
+          generated_version_id: value.input_role === 'raw-ai-artwork'
+            ? value.source_version_id
+            : null,
         },
         source,
       );
@@ -12035,7 +12077,7 @@ async function dbCreateGenerationAttempt(documentRow, user, authority, value, id
         value.source_version_id,
         sourceAttempt?.id ?? null,
         JSON.stringify(sourceRequest),
-        value.origin === 'pipeline-source' ? value.source_version_id : null,
+        value.input_role === 'generation-reference' ? null : value.source_version_id,
         idempotencyKey ? actor : null,
         idempotencyKey,
         idempotencyKey ? fingerprint : null,
@@ -12063,15 +12105,13 @@ async function dbCreateGenerationAttempt(documentRow, user, authority, value, id
     }
     const row = await dbGenerationAttemptRow(documentRow.document_id, requestedId, client);
     await dbRecordGenerationAttemptEvent(client, row, 'created', user.email, user.name, {
-      input_role: value.origin === 'pipeline-source'
-        ? 'raw-pipeline-source'
-        : 'generation-reference',
+      input_role: value.input_role,
       source_version_id: value.source_version_id,
       source_attempt_id: sourceAttempt?.id ?? null,
-      raw_pipeline_source_version_id: value.origin === 'pipeline-source'
+      raw_pipeline_source_version_id: value.input_role !== 'generation-reference'
         ? value.source_version_id
         : null,
-      waiting_for_ai_result: value.origin !== 'pipeline-source',
+      waiting_for_ai_result: value.input_role === 'generation-reference',
       source_request_sha256: sourceRequest.requestSha256,
       edit_session_id: writerSession.session_id,
       edit_generation: Number(writerSession.edit_generation),
@@ -12159,6 +12199,12 @@ async function dbListBackgroundVersions(documentRow, status = 'all', kind = 'all
   return rows;
 }
 
+function isStandaloneAiArtworkIntake(value) {
+  return value?.kind === 'raw'
+    && !value.attempt_id
+    && value.operation?.intakeSchema === ATTEMPT_INTAKE_SOURCE_REQUEST_SCHEMA;
+}
+
 async function dbCreateBackgroundVersion(documentRow, user, authority, value, idempotencyKey) {
   const actor = String(user.email).trim().toLowerCase();
   const fingerprint = crypto.createHash('sha256').update(canonicalJson({
@@ -12180,7 +12226,8 @@ async function dbCreateBackgroundVersion(documentRow, user, authority, value, id
       authority.sessionKeyHash,
     );
     const attemptId = value.attempt_id || null;
-    if (value.kind === 'source' ? Boolean(attemptId) : !attemptId) {
+    const standaloneAiArtworkIntake = isStandaloneAiArtworkIntake(value);
+    if (value.kind === 'source' ? Boolean(attemptId) : !attemptId && !standaloneAiArtworkIntake) {
       throw backgroundVersionError(
         400,
         'background_version_attempt_required',
@@ -12222,8 +12269,24 @@ async function dbCreateBackgroundVersion(documentRow, user, authority, value, id
     }
 
     let storedValue = value.kind === 'source'
-      ? await dbCanonicalizePredrawnSourceVersion(client, currentDocument, value)
+      ? await dbBindPredrawnSourceToWorkingCopy(client, currentDocument, value)
       : { ...value };
+    if (standaloneAiArtworkIntake) {
+      const fields = await dbWorkingCopyPredrawnAttemptFields(client, currentDocument);
+      if (
+        !sameBackgroundWorldBounds(storedValue.world_bounds, fields.worldBounds)
+        || !backgroundVersionHasEnvironmentGeometry(
+          storedValue,
+          fields.environmentGeometrySha256,
+        )
+      ) {
+        throw backgroundVersionError(
+          409,
+          'background_version_intake_stale',
+          'This AI artwork intake does not match the current viewing pane and board layout.',
+        );
+      }
+    }
     let attempt = null;
     let attemptSource = null;
     let attemptGenerated = null;
@@ -12559,7 +12622,7 @@ async function dbUploadBackgroundVersionContent(
       throw backgroundVersionError(409, 'background_version_locked', { status: current.status });
     }
     if (current.kind === 'source') {
-      const canonicalValue = await dbCanonicalizePredrawnSourceVersion(client, currentDocument, {
+      const workingCopyValue = await dbBindPredrawnSourceToWorkingCopy(client, currentDocument, {
         kind: current.kind,
         label: current.label,
         parent_version_id: null,
@@ -12568,11 +12631,11 @@ async function dbUploadBackgroundVersionContent(
         operation: current.operation,
         provenance: current.provenance,
       });
-      if (!sourceVersionCanonicalMetadataMatches(current, canonicalValue)) {
+      if (!sourceVersionWorkingCopyMetadataMatches(current, workingCopyValue)) {
         throw backgroundVersionError(
           409,
-          'background_source_level_changed',
-          'The saved Level changed after this Generation Reference record was created.',
+          'background_source_working_copy_changed',
+          'The autosaved working copy changed after this Generation Reference record was created.',
         );
       }
       if (
@@ -12582,7 +12645,7 @@ async function dbUploadBackgroundVersionContent(
         throw backgroundVersionError(
           409,
           'background_source_content_dimensions_mismatch',
-          'Generation Reference pixels must exactly match the saved generation frame.',
+          'Generation Reference pixels must exactly match the autosaved generation frame.',
         );
       }
     }

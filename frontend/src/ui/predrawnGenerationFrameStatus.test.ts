@@ -34,7 +34,8 @@ describe('pre-drawn generation frame status', () => {
       promotionVerb: 'publish',
     });
     expect(working.kind).toBe('working-copy');
-    expect(working.detail).toContain('not the pipeline input until you publish');
+    expect(working.detail).toContain('ready for a Generation Reference');
+    expect(working.detail).toContain('Publishing is separate');
 
     const canonical = predrawnGenerationFrameStatus({
       frame,

@@ -67,47 +67,59 @@ describe('Level Artwork controls and workspaces', () => {
 });
 
 describe('AI generation references', () => {
-  it('captures the saved level background as an immutable, unit-free and cover-free AI input', () => {
-    expect(sourcePanel).toContain('canonicalBoard');
-    expect(sourcePanel).toContain('canonicalReady');
-    expect(sourcePanel).toContain('boardForPredrawnSourceArtwork(canonicalBoard)');
+  it('captures the autosaved working-copy background as an immutable, unit-free and cover-free AI input', () => {
+    expect(sourcePanel).toContain('workingCopyBoard');
+    expect(sourcePanel).toContain('workingCopyReady');
+    expect(sourcePanel).toContain('boardForPredrawnSourceArtwork(workingCopyBoard)');
     expect(sourcePanel).toContain('hidden={{ tile: false, unit: true, doodad: false }}');
     expect(sourcePanel).toContain("kind: 'source'");
-    expect(sourcePanel).toContain('Create reference from saved level');
+    expect(sourcePanel).toContain('Create reference from working copy');
     expect(sourcePanel).toContain('Saved generation references');
     expect(sourcePanel).toContain('Copy generation reference');
-    expect(sourcePanel).toContain('Start manual AI handoff');
+    expect(sourcePanel).not.toContain('Start manual AI handoff');
+    expect(sourcePanel).not.toContain('onStartAttempt');
   });
 
-  it('keeps the source manager busy until pipeline-slot creation actually finishes', () => {
-    expect(editor).toContain('onStartAttempt={startArtworkAttempt}');
-    expect(editor).not.toContain('onStartAttempt={(sourceVersionId) => { void startArtworkAttempt(sourceVersionId); }}');
-    expect(sourcePanel).toContain('await onStartAttempt(selected.id)');
+  it('leaves returned-image and attempt creation entirely to Board Art Pipeline', () => {
+    expect(editor).not.toContain('startArtworkAttempt');
+    expect(sourcePanel).not.toContain('createPredrawnGenerationAttempt');
+    expect(panel).toContain('data-testid="add-ai-artwork"');
+    expect(panel).toContain('Add AI artwork');
+    expect(panel).toContain('Paste or choose any full-resolution PNG.');
+    expect(panel).not.toContain('Generation Reference used to create this AI artwork');
+    expect(panel).not.toContain('selectedNewArtworkReference');
   });
 
-  it('can use either the saved Legacy tileset or the saved AI artwork as another source', () => {
-    expect(sourcePanel).toContain('boardBackgroundMode(canonicalBoard)');
+  it('can use either the autosaved Legacy tileset or autosaved AI artwork as another source', () => {
+    expect(sourcePanel).toContain('boardBackgroundMode(workingCopyBoard)');
     expect(sourcePanel).toContain("topSurfacesOnly={backgroundMode === 'legacy'}");
     expect(sourcePanel).not.toContain('surface: undefined');
   });
 
-  it('does not reuse pixel-equivalent sources across distinct canonical revisions', () => {
-    expect(editor).toContain('canonicalRevision={editorDocument.saved_revision}');
-    expect(sourcePanel).toContain('canonicalRevision: number');
-    expect(sourcePanel).toMatch(/canonicalLevelSignature,\s+canonicalRevision,\s+backgroundMode/);
+  it('does not reuse pixel-equivalent sources across distinct working-copy revisions', () => {
+    expect(editor).toContain('workingCopyRevision={editorDocument.revision}');
+    expect(sourcePanel).toContain('workingCopyRevision: number');
+    expect(sourcePanel).toMatch(/workingCopyLevelSignature,\s+workingCopyRevision,\s+backgroundMode/);
     expect(sourcePanel).not.toContain('const existing = sources.find');
+  });
+
+  it('keeps artwork handoff independent from Save and Publish', () => {
+    expect(editor).not.toContain('review-predrawn-generation-frame-save');
+    expect(editor).not.toContain('Review & publish pane');
+    expect(sourcePanel).not.toContain('Save or publish the current level first');
+    expect(sourcePanel).toContain('Waiting for the current level and viewing pane to finish autosaving.');
   });
 });
 
 describe('creation attempts', () => {
-  it('shows a Generation Reference only for manual handoff slots and one processing stage per result', () => {
+  it('shows only processing stages in Pipeline, without a Generation Reference stage', () => {
     expect(panel).toContain('Pipeline slots');
     expect(panel).toContain('Selected pipeline slot stages');
-    expect(panel).toContain('selectedAttempt?.sourceArtwork && !selectedAttemptUsesPipelineSource');
+    expect(panel).not.toContain('<strong>Generation reference</strong>');
     expect(panel).toContain("(['generated', 'warped', 'occlusion-ready'] as const)");
     expect(panel).toContain('Raw pipeline source');
-    expect(panel).toContain('Generate warped board');
-    expect(panel).toContain('Edit occlusion mask');
+    expect(panel).toContain('saveLabel="USE FITTED BOARD"');
+    expect(panel).toContain('Add occlusion (optional)');
     expect(panel).toContain('Create board with occlusion mask');
     expect(panel).toContain("'Board with occlusion mask'");
     expect(panel).not.toContain('Occlusion-ready board');
@@ -121,6 +133,43 @@ describe('creation attempts', () => {
     expect(panel).toContain('Set will unlock automatically when its artwork and live-scene layers have painted.');
     expect(panel).toContain('<StudioReadOnlyBoard');
     expect(panel).toContain('hidden={{ tile: false, unit: true, doodad: false }}');
+  });
+
+  it('lets the unchanged board bypass optional grid correction and occlusion', () => {
+    expect(editor).toContain(
+      'Use the unchanged AI-painted board immediately. Grid correction and occlusion are optional tools you can apply later.',
+    );
+    expect(panel).toContain('data-testid="use-unchanged-predrawn-board"');
+    expect(panel).toContain('Use unchanged board');
+    expect(panel).toContain('Adjust grid (optional)');
+    expect(panel).toContain('saveLabel="USE FITTED BOARD"');
+    expect(panel).toContain('Add occlusion (optional)');
+    expect(panel).toContain("stage === 'generated' ? 'Not added' : 'Optional'");
+    expect(panel).toContain('Only if the painted grid needs correction');
+    expect(panel).toContain('Only if live units should pass behind painted scenery');
+    expect(panel).not.toContain('Next: fit the board grid');
+    expect(panel).not.toContain('Required next: fit tile highlights');
+    expect(panel).not.toContain('Complete the previous stage first');
+  });
+
+  it('persists and applies the fitted grid instead of losing it as screen state', () => {
+    expect(panel).toContain('storePredrawnBoardRegistration(');
+    expect(panel).toContain('storedPredrawnBoardRegistration(predrawnBackgroundVersionContentUrl(selectedBackground.id))');
+    expect(panel).toContain('registrationOverride: next');
+    expect(panel).toContain('setWorkingCopy: true');
+    expect(panel).toContain('inspectAfterSave: false');
+    expect(panel).toContain('onSetSurface(predrawnBoardSurfaceForBackgroundVersion(version))');
+    expect(panel).toContain('Use unchanged board keeps the original viewing-pane placement and ignores grid fitting.');
+    expect(panel).not.toContain('saveLabel="USE THIS GRID"');
+  });
+
+  it('reopens a retained corrected board from its exact saved grid', () => {
+    expect(panel).toContain('data-testid="refit-predrawn-board"');
+    expect(panel).toContain('const savedRegistration = selectedWarpRegistration');
+    expect(panel).toContain('await createAttemptFromPipelineSource(pipelineSource)');
+    expect(panel).toContain('setRegistration(savedRegistration)');
+    expect(panel).toContain('setPickerOpen(true)');
+    expect(panel).toContain('Its exact prior placement is restored. Adjust it, then choose Use fitted board.');
   });
 
   it('gives committed derived pixels a focused full-workspace grid and cyan inspection instrument', () => {
@@ -218,8 +267,8 @@ describe('creation attempts', () => {
     expect(moveHighlightEditor).toContain('activeBoundaryBar.includes(key)');
     expect(moveHighlightEditor).toContain('footprintEdgeButtonStyle(footprint, typedEdge)');
     expect(moveHighlightEditor).toContain("selectedCellKeys.length > 1 ? 'Reset selected' : 'Reset tile'");
-    expect(panel).toContain('Fit every square-local highlight to its painted cell');
-    expect(panel).toContain('Fit tile highlights');
+    expect(panel).toContain('Fit tile highlights only if you later choose to add an occlusion mask.');
+    expect(panel).toContain('Fit tile highlights (optional)');
     expect(moveHighlightEditor).toContain('onPointerCancel={cancelHandleDrag}');
     expect(moveHighlightEditor).toContain('replaceCells(drag.before)');
     const precisionRows = style.match(/\.le-predrawn-move-highlight-editor\s*\{([^}]*)\}/)?.[1] ?? '';
@@ -287,51 +336,68 @@ describe('creation attempts', () => {
     expect(panel).toContain('`${selectedAttempt.attempt.id}:${attemptProcessingRevision}`');
   });
 
-  it('makes the manual clipboard boundary explicit without conflating either side of it', () => {
-    expect(panel).toContain('Manual Codex handoff');
-    expect(panel).toContain('data-testid="copy-generation-reference"');
+  it('makes AI-result ingress explicit in Pipeline without conflating either side of it', () => {
+    expect(panel).toContain('Add AI artwork');
+    expect(panel).toContain('data-testid="paste-new-ai-artwork"');
+    expect(panel).toContain('Paste AI artwork');
+    expect(panel).not.toContain('data-testid="copy-generation-reference"');
     expect(panel).not.toContain('copy-pipeline-source');
-    expect(panel).toContain('data-testid="paste-generated-board"');
-    expect(panel).toContain('data-testid="clipboard-handoff-status"');
+    expect(panel).toContain('data-testid="commit-new-ai-artwork"');
+    expect(panel).toContain('data-testid="new-ai-artwork-status"');
     expect(panel).toContain('predrawnPngFromPasteEvent');
     expect(panel).toContain("'manual-clipboard-handoff'");
     expect(panel).toContain("'owner-upload'");
-    expect(panel).toContain('Use existing Codex-painted board');
-    expect(panel).toContain("selectedAttempt?.attempt.origin === 'source'");
-    expect(panel).toContain('&& generatedSlotResumable ? <section');
+    expect(panel).toContain("intakeSchema: 'predrawn-ai-artwork-intake-v1'");
+    expect(panel).toContain('intakeSourceVersionId: version.id');
+    expect(panel).not.toContain('Generation Reference used to create this AI artwork');
   });
 
-  it('binds an asynchronous pasted preview to the slot that initiated the paste', () => {
+  it('validates AI artwork before committing source-agnostic intake', () => {
+    const ingress = panel.match(
+      /const importNewAiArtwork = async \(\): Promise<void> => \{[\s\S]*?\n  };/,
+    )?.[0] ?? '';
+    expect(ingress).toContain('await assertDecodablePngBlob(stagedPipelineSource.blob)');
+    expect(ingress).toContain('intakeSourceVersionId: version.id');
+    expect(ingress.indexOf('await assertDecodablePngBlob(stagedPipelineSource.blob)')).toBeLessThan(
+      ingress.indexOf('await createPredrawnBackgroundVersion'),
+    );
+    expect(ingress.indexOf('await createPredrawnBackgroundVersion')).toBeLessThan(
+      ingress.indexOf('await createPredrawnGenerationAttempt'),
+    );
+  });
+
+  it('binds an asynchronous pasted preview to the intake operation that initiated it', () => {
     expect(panel).toContain('attemptId: string;');
     expect(panel).toContain('createPredrawnPngIngressGuard(selectedAttemptId)');
+    expect(panel).toContain('pngIngressGuard.selectAttempt(NEW_AI_ARTWORK_INTAKE_ID)');
     expect(panel).toContain('pngIngressGuard.isCurrent(operation)');
-    expect(panel).toContain('stagedPipelineSource.attemptId !== selectedAttempt?.attempt.id');
+    expect(panel).toContain('stagedPipelineSource.attemptId !== NEW_AI_ARTWORK_INTAKE_ID');
     expect(panel).toContain('{stagedPipelineSource');
-    expect(panel).toContain('stagedPipelineSource.attemptId === selectedAttempt?.attempt.id');
+    expect(panel).toContain('stagedPipelineSource?.attemptId === NEW_AI_ARTWORK_INTAKE_ID');
     expect(panel).toContain('pngIngressGuard.dispose()');
     expect(panel).toContain('URL.revokeObjectURL(previewUrl)');
   });
 
-  it('routes clipboard paste, native Ctrl+V, and chosen files through preview and confirmation', () => {
+  it('routes clipboard paste and chosen files through preview and confirmation', () => {
     expect(panel).toContain('event.clipboardData?.items');
     expect(panel).toContain('event.clipboardData?.files');
-    expect(panel).toContain('previewPipelineSourceFromFile(file)');
-    expect(panel).toContain("await previewPipelineSource(file, operation, 'owner-upload', file.name)");
-    expect(panel).toContain('commitStagedPipelineSource');
+    expect(panel).toContain('previewNewAiArtworkFromFile(file)');
+    expect(panel).toContain("await stageNewAiArtwork(file, 'owner-upload', file.name)");
+    expect(panel).toContain('void importNewAiArtwork()');
     expect(panel).toContain('stagedPipelineSource.originalFileName');
     expect(panel).not.toContain("importRawBlob(file, 'owner-upload'");
   });
 
   it('disables every handoff ingress and commit while another operation or writer gate blocks it', () => {
-    expect(panel).toContain('disabled={Boolean(handoffBusy)}');
     expect(panel).toContain(
-      'disabled={!canWrite || !selectedAttemptCanProcess || !generatedSlotResumable || Boolean(busy) || Boolean(handoffBusy)}',
+      'disabled={!canWrite || Boolean(busy) || Boolean(handoffBusy)}',
     );
   });
 
   it('requires a new attempt for alternatives instead of exposing arbitrary stage branches', () => {
     expect(panel).not.toContain('Start manual AI handoff');
-    expect(sourcePanel).toContain('Start manual AI handoff');
+    expect(sourcePanel).not.toContain('Start manual AI handoff');
+    expect(panel).toContain('data-testid="add-ai-artwork"');
     expect(panel).toContain('data-testid="start-attempt-from-pipeline-source"');
     expect(panel).toContain('Pipeline Source for a new attempt');
     expect(panel).toContain('selectedNewPipelineSource');
@@ -339,7 +405,7 @@ describe('creation attempts', () => {
     expect(panel).not.toContain('createAttemptFromSelectedPipelineSource');
     expect(panel).not.toContain('pipelineSourceAttemptId');
     expect(panel).not.toContain('Start new attempt from this image');
-    expect(panel).toContain('This attempt already has a saved Pipeline Source.');
+    expect(panel).toContain('AI artwork added. Adjust its grid to continue.');
     expect(panel).toContain('Archive slot');
     expect(panel).not.toContain('predrawnBoardArtifactStoredChildren');
     expect(panel).not.toContain('aria-label="Occlusion version"');

@@ -40,10 +40,10 @@ const BOARD_CODE = encodeBoard({
   zones: {},
 });
 const SEMANTIC_REQUEST = {
-  schema: 'predrawn-generation-semantic-request-v1' as const,
+  schema: 'predrawn-generation-semantic-request-v2' as const,
   levelId: 'level-1',
-  canonicalDocumentRevision: 4,
-  canonicalLevelSha256: 'd'.repeat(64),
+  workingCopyDocumentRevision: 4,
+  workingCopyLevelSha256: 'd'.repeat(64),
   boardCode: BOARD_CODE,
   boardSha256: 'e'.repeat(64),
   generationFrame: { version: 1 as const, x: -100, y: -50, width: 1600, height: 900 },
@@ -246,6 +246,36 @@ describe('pre-drawn creation attempts', () => {
       occlusionVersionId: MASK_A,
     });
     expect(predrawnLatestCommittedArtifact(model)?.id).toBe(MASK_A);
+    expect(predrawnAttemptCanProcess(model)).toBe(true);
+  });
+
+  it('resolves imported AI artwork without a Generation Reference binding', () => {
+    const raw = version('raw', RAW_A, {
+      content_sha256: SOURCE_CONTENT_SHA256,
+      operation: { environmentGeometrySha256: GEOMETRY_SHA256 },
+      provenance: {},
+    });
+    const intakeRequest = {
+      schema: 'predrawn-ai-artwork-intake-v1' as const,
+      inputRole: 'raw-ai-artwork' as const,
+      inputVersionId: RAW_A,
+      inputSha256: SOURCE_CONTENT_SHA256,
+      semanticRequestSha256: SEMANTIC_REQUEST_SHA256,
+      semanticRequest: SEMANTIC_REQUEST,
+      requestSha256: 'f'.repeat(64),
+    };
+    const [model] = predrawnCreationAttemptModels([attempt(ATTEMPT_A, {
+      source_version_id: RAW_A,
+      source_request: intakeRequest,
+      source_attempt_id: null,
+      generated_version_id: RAW_A,
+      warped_version_id: null,
+      occlusion_version_id: null,
+    })], [raw]);
+
+    expect(model.issue).toBeUndefined();
+    expect(model.sourceArtwork?.id).toBe(RAW_A);
+    expect(model.generated?.id).toBe(RAW_A);
     expect(predrawnAttemptCanProcess(model)).toBe(true);
   });
 

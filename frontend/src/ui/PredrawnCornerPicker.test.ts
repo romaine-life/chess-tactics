@@ -4,10 +4,12 @@ import {
   clonePredrawnGridCalibrationSnapshot,
   emptyPredrawnGridHistory,
   predrawnGridStretchSummary,
+  predrawnIdealGridSeed,
   predrawnIdealGridSnap,
   predrawnLocalCellNodes,
   predrawnLocalNodeIsBoundary,
   predrawnSourcePointForClient,
+  predrawnUniformGridScale,
   predrawnViewportScrollForZoomAnchor,
   predrawnZoomAfterWheel,
   predrawnZoomAnchorForViewport,
@@ -124,6 +126,42 @@ describe('pre-drawn source corner picking', () => {
     expect(columnStep[1] / columnStep[0]).toBeCloseTo(27 / 48, 5);
     expect(rowStep[1] / -rowStep[0]).toBeCloseTo(27 / 48, 5);
     expect(columnStep[0]).toBeCloseTo(-rowStep[0], 3);
+  });
+
+  it('seeds the first fit with the centered canonical game-grid shape', () => {
+    const seeded = predrawnIdealGridSeed({ width: 2000, height: 1200 }, 6, 10)!;
+    const points = [seeded.north!, seeded.east!, seeded.south!, seeded.west!];
+    expect(points.every(([x, y]) => x > 0 && x < 2000 && y > 0 && y < 1200)).toBe(true);
+    expect(points.reduce((sum, [x]) => sum + x, 0) / 4).toBeCloseTo(1000, 3);
+    expect(points.reduce((sum, [, y]) => sum + y, 0) / 4).toBeCloseTo(600, 3);
+    const columnStep = [
+      (seeded.east![0] - seeded.north![0]) / 6,
+      (seeded.east![1] - seeded.north![1]) / 6,
+    ];
+    const rowStep = [
+      (seeded.west![0] - seeded.north![0]) / 10,
+      (seeded.west![1] - seeded.north![1]) / 10,
+    ];
+    expect(columnStep[1] / columnStep[0]).toBeCloseTo(27 / 48, 5);
+    expect(rowStep[1] / -rowStep[0]).toBeCloseTo(27 / 48, 5);
+  });
+
+  it('scales a complete grid around its center without changing its proportions', () => {
+    const seeded = predrawnIdealGridSeed({ width: 2000, height: 1200 }, 6, 10)!;
+    const scaled = predrawnUniformGridScale(seeded, { width: 2000, height: 1200 }, 1.02)!;
+    const center = (points: typeof seeded): [number, number] => [
+      (points.north![0] + points.east![0] + points.south![0] + points.west![0]) / 4,
+      (points.north![1] + points.east![1] + points.south![1] + points.west![1]) / 4,
+    ];
+    expect(center(scaled)).toEqual(center(seeded));
+    expect(scaled.east![0] - scaled.north![0]).toBeCloseTo(
+      (seeded.east![0] - seeded.north![0]) * 1.02,
+      3,
+    );
+    expect(scaled.east![1] - scaled.north![1]).toBeCloseTo(
+      (seeded.east![1] - seeded.north![1]) * 1.02,
+      3,
+    );
   });
 
   it('addresses one tile through four shared mesh intersections', () => {

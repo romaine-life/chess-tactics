@@ -24,14 +24,24 @@ describe('pre-drawn reference navigation', () => {
 
     expect(control).toContain('predrawnReferenceHref(');
     expect(control).toContain('levelEditorHrefForDocument(window.location.href');
+    expect(control).toContain('editorDocument.document_id');
     expect(control).not.toContain('target="_blank"');
   });
 
-  it('previews the saved background mode instead of forcing the legacy export', () => {
+  it('previews the addressed working-copy background mode instead of forcing the legacy export', () => {
+    expect(reference).toContain('loadPredrawnReferenceLevel(levelId, documentId)');
     expect(reference).toContain('boardForPredrawnSourceArtwork(levelToEditorBoard(state.level))');
     expect(reference).toContain('const backgroundMode = board ? boardBackgroundMode(board) : undefined');
     expect(reference).toContain("topSurfacesOnly={backgroundMode === 'legacy'}");
     expect(reference).toContain("topSurfacesOnly: backgroundMode === 'legacy'");
     expect(reference).not.toContain('boardForTopSurfaceArtExport(levelToEditorBoard(state.level))');
+  });
+
+  it('copies the exact rendered snapshot PNG from the preview toolbar', () => {
+    expect(reference).toContain('data-testid="copy-predrawn-reference-png"');
+    expect(reference).toContain('copyPredrawnPngBlobToClipboard(predrawnReferencePngBlob(frameRef.current))');
+    expect(reference).toContain("querySelectorAll<HTMLCanvasElement | HTMLImageElement>('canvas, img')");
+    expect(reference).toContain("'Copy PNG'");
+    expect(reference).toContain('Copied ${frame.width} × ${frame.height} PNG to the clipboard.');
   });
 });

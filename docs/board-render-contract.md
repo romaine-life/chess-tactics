@@ -621,6 +621,23 @@ the four source corners and full internal row/column fit remain owner-authorable
 in the running app against the untouched raster. Automatic geometry may seed
 that instrument, but it never outranks an owner-picked control. Guide movement
 is clamped between neighboring guides so the board cannot fold or reorder cells.
+Per [ADR-0467](adr/0467-first-time-grid-fitting-starts-from-the-game-grid.md),
+an unregistered raw opens with the Level's real row/column count already rendered
+as a centered canonical isometric grid at one uniform scale. Coarse-mode uniform
+size controls scale all four corners around their shared center, stop at the
+source boundary, remain unavailable while local corrections exist, and enter the
+shared Undo/Redo history as one edit. The seed is pending owner-editable state;
+it never saves or derives artwork automatically.
+Per [ADR-0468](adr/0468-using-a-fitted-grid-saves-and-selects-its-board.md),
+the fitter's final **Use fitted board** action submits the exact displayed grid,
+creates or resumes its immutable corrected raster, and selects that result on the
+working copy. Exact-source browser recovery prevents an interrupted create from
+silently reseeding, but the corrected version remains installation authority.
+**Use unchanged board** retains the raw version's original viewing-pane placement
+and never claims to consume a fitted grid.
+For a retained or published corrected board, **Refit board** creates a new slot
+from its exact raw parent and opens the fitter with the corrected version's
+durable registration. The retained version is never mutated.
 Per ADR-0171, explicit **Coarse grid** and **Local cells** modes make the
 precision sequence legible. Local mode renders the fitted grid as shared
 piecewise segments, lets the owner select one cell and drag or nudge its four
@@ -633,9 +650,11 @@ affected cell.
 Refit count changes rebuild only the changed axis with equal spacing and never
 resize the Level or select a playable subset. Clicks, drags, nudges, count
 changes, spacing reset, and restore change pending authoring state. The explicit
-derive action submits the exact displayed state, persists the resulting raster
-child and lineage, reads it back, and only then reports success. Browser-local
-or URL state is never installation authority.
+**Use fitted board** action submits the exact displayed state, persists the
+resulting raster child and lineage, selects it on the working copy, reads it
+back, and only then reports success. Source-scoped browser recovery may restore
+an interrupted submission but is never installation authority; URL state is
+never installation authority.
 
 Per
 [ADR-0178](adr/0178-predrawn-grid-fitting-uses-one-reversible-edit-history.md),
@@ -769,9 +788,12 @@ buttons to the URL-addressable **Generation References** and **Board Art
 Pipeline** center workspaces. Its canonical route layer and process namespace
 are `level-artwork` and `levelArtworkEditor`; they never reuse Placed Art brush
 state. Only an open process workspace covers and makes the still-mounted board
-inert. Generation References manages immutable level-derived model inputs and
-their manual AI handoff. Board Art Pipeline presents separate deterministic
-creation slots, each with one exact Raw Pipeline Source input and at most one
+  inert. Generation References manages immutable level-derived model inputs and
+  their exact copy/download. Per
+  [ADR-0466](adr/0466-ai-artwork-intake-is-source-agnostic.md), Board Art
+  Pipeline ingests any valid AI-artwork PNG without requiring a Generation
+  Reference relation and presents deterministic creation
+  slots, each with one exact Raw Pipeline Source input and at most one
 current warped board and **Board with occlusion mask**. Workspace-level **New
 attempt** chooses an eligible retained raw and creates a slot already ready for
 grid fitting; warped and mask-bearing artifacts may not be slot inputs. The

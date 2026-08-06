@@ -6965,6 +6965,46 @@ async function main() {
   if (newEditorAutosave.statusCode !== 200 || JSON.parse(newEditorAutosave.body).document.revision !== 2) {
     throw new Error(`New document autosave failed: ${newEditorAutosave.statusCode} ${newEditorAutosave.body}`);
   }
+  // Generation References freeze the acknowledged working copy. This document has never crossed
+  // Save, so successful creation here proves artwork handoff is independent from publication.
+  const sourcePng = syntheticPng(
+    sourceCaptureFrame.width,
+    sourceCaptureFrame.height,
+    '#102030',
+    '#6090a0',
+  );
+  const sourcePngSha256 = crypto.createHash('sha256').update(sourcePng).digest('hex');
+  const sourceArtworkPayload = {
+    kind: 'source',
+    label: 'Working-copy generation source',
+    operation: {
+      kind: 'generation-source-v2',
+      capture: 'working-copy-generation-frame',
+    },
+    provenance: {
+      pipeline: 'smoke-source-capture',
+      sourceSha256: sourcePngSha256,
+    },
+    idempotency_key: `background-source:${newDocumentId}`,
+  };
+  const sourceArtworkCreate = await createBackgroundVersionRequest(
+    newDocumentId,
+    sourceArtworkPayload,
+  );
+  const sourceArtworkCreateBody = JSON.parse(sourceArtworkCreate.body);
+  const sourceArtworkDraft = sourceArtworkCreateBody.version;
+  const prematureAttempt = await createGenerationAttemptRequest(newDocumentId, {
+    label: 'Source must be uploaded first',
+    source_version_id: sourceArtworkDraft?.id,
+    idempotency_key: `generation-attempt-premature:${newDocumentId}`,
+  });
+  const sourceArtworkUpload = await uploadBackgroundVersionRequest(
+    newDocumentId,
+    sourceArtworkDraft.id,
+    sourceArtworkDraft.row_revision,
+    sourcePng,
+  );
+  const sourceArtworkReady = JSON.parse(sourceArtworkUpload.body).version;
   const firstNewEditorSave = await request(
     'POST', `/api/editor-documents/${newDocumentId}/save`,
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
@@ -7094,44 +7134,6 @@ async function main() {
   const privateEnvironmentGeometrySha256 = environmentGeometrySha256(
     versionedBoardCode(crypto.randomUUID(), null),
   );
-  const sourcePng = syntheticPng(
-    sourceCaptureFrame.width,
-    sourceCaptureFrame.height,
-    '#102030',
-    '#6090a0',
-  );
-  const sourcePngSha256 = crypto.createHash('sha256').update(sourcePng).digest('hex');
-  const sourceArtworkPayload = {
-    kind: 'source',
-    label: 'Saved generation source',
-    operation: {
-      kind: 'generation-source-v1',
-      capture: 'canonical-generation-frame',
-    },
-    provenance: {
-      pipeline: 'smoke-source-capture',
-      sourceSha256: sourcePngSha256,
-    },
-    idempotency_key: `background-source:${newDocumentId}`,
-  };
-  const sourceArtworkCreate = await createBackgroundVersionRequest(
-    newDocumentId,
-    sourceArtworkPayload,
-  );
-  const sourceArtworkCreateBody = JSON.parse(sourceArtworkCreate.body);
-  const sourceArtworkDraft = sourceArtworkCreateBody.version;
-  const prematureAttempt = await createGenerationAttemptRequest(newDocumentId, {
-    label: 'Source must be uploaded first',
-    source_version_id: sourceArtworkDraft?.id,
-    idempotency_key: `generation-attempt-premature:${newDocumentId}`,
-  });
-  const sourceArtworkUpload = await uploadBackgroundVersionRequest(
-    newDocumentId,
-    sourceArtworkDraft.id,
-    sourceArtworkDraft.row_revision,
-    sourcePng,
-  );
-  const sourceArtworkReady = JSON.parse(sourceArtworkUpload.body).version;
   const sourceArtworkReplay = await createBackgroundVersionRequest(
     newDocumentId,
     sourceArtworkPayload,
@@ -7162,6 +7164,11 @@ async function main() {
     sourceArtworkCreate.statusCode !== 201
     || sourceArtworkDraft?.kind !== 'source'
     || sourceArtworkDraft?.status !== 'draft'
+    || sourceArtworkDraft?.operation?.kind !== 'generation-source-v2'
+    || sourceArtworkDraft?.operation?.workingCopyDocumentRevision !== 2
+    || !/^[0-9a-f]{64}$/.test(sourceArtworkDraft?.operation?.workingCopyLevelSha256 || '')
+    || sourceArtworkDraft?.operation?.semanticRequest?.schema
+      !== 'predrawn-generation-semantic-request-v2'
     || sourceArtworkDraft?.operation?.backgroundMode !== 'legacy'
     || sourceArtworkDraft?.operation?.coordinateBasis !== 'board-world-pixels-v1'
     || sourceArtworkDraft?.operation?.environmentGeometrySha256
@@ -7258,7 +7265,7 @@ async function main() {
     const semanticBoardSha256 = crypto.createHash('sha256')
       .update(semanticBoardCode, 'utf8')
       .digest('hex');
-    const canonicalLevelSha256 = sha256FixtureJson(fixtureLevel);
+    const workingCopyLevelSha256 = sha256FixtureJson(fixtureLevel);
     const generationFrame = {
       version: sourceCaptureFrame.version,
       x: sourceCaptureFrame.x,
@@ -7269,8 +7276,8 @@ async function main() {
     const semanticRequest = {
       schema: SOURCE_SEMANTIC_REQUEST_SCHEMA,
       levelId: document.level_id,
-      canonicalDocumentRevision: documentRevision,
-      canonicalLevelSha256,
+      workingCopyDocumentRevision: documentRevision,
+      workingCopyLevelSha256,
       boardCode: semanticBoardCode,
       boardSha256: semanticBoardSha256,
       generationFrame,
@@ -7283,15 +7290,15 @@ async function main() {
     };
     const semanticRequestSha256 = sha256FixtureJson(semanticRequest);
     const sourceOperation = {
-      kind: 'generation-source-v1',
+      kind: 'generation-source-v2',
       coordinateBasis: 'board-world-pixels-v1',
       viewingPane: backgroundWorldBounds,
       generationFrame,
       backgroundMode: 'legacy',
       sourceBackgroundVersionId: null,
       sourceOcclusionVersionId: null,
-      canonicalDocumentRevision: documentRevision,
-      canonicalLevelSha256,
+      workingCopyDocumentRevision: documentRevision,
+      workingCopyLevelSha256,
       environmentGeometrySchema: ENVIRONMENT_GEOMETRY_SCHEMA,
       environmentGeometrySha256: expectedEnvironmentGeometrySha256,
       semanticBoardSha256,
@@ -7301,8 +7308,8 @@ async function main() {
     const sourceProvenance = {
       pipeline: 'smoke-seeded-source',
       sourceSha256: sourcePngSha256,
-      canonicalDocumentRevision: documentRevision,
-      canonicalLevelSha256,
+      workingCopyDocumentRevision: documentRevision,
+      workingCopyLevelSha256,
       backgroundMode: 'legacy',
       sourceBackgroundVersionId: null,
       sourceOcclusionVersionId: null,

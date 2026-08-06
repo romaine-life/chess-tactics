@@ -172,11 +172,12 @@ uses an authored-level packet containing:
 - a canonical coordinate-by-coordinate terrain and footprint dump;
 - exact road connectivity, blocking shared edges, exits, and outer boundary
   edges;
-- a saved owner-authored 16:9 generation frame in canonical projected-board
+- an autosaved owner-authored 16:9 generation frame in projected-board
   coordinates that fully contains the required gameplay-authoritative reference
   geometry;
 - one immutable Generation Reference. It is unit-free and
-  cover-free and is captured from the saved frame and saved background mode. A
+  cover-free and is captured from the acknowledged working-copy frame and
+  background mode. A
   Legacy reference contains the ordinary composed environment, including only
   explicitly persisted and exposed Subterrain. An AI reference contains the
   exact selected raster pixels and is explicitly non-isolated. The reference
@@ -304,20 +305,21 @@ parent lineage, all reference hashes, the fixed operation, and
 raw result to the prior handoff, masquerade as an isolated result, or skip a
 fresh game-surface review.
 
-The generation handoff records the exact Generation Reference identity and
-hash, canonical semantic request and hashes, request hash, returned Raw Pipeline
-Source, and actor/time. Manual Codex generation occurs outside the application,
-so the application does not know or claim that conversation's model, prompt, or
-generation parameters. Changing the canonical semantic request or Generation
-Reference requires another generation handoff. A Generation Reference's saved
-frame and hash remain part of its provenance; changing the current Level frame
-does not mutate it.
+Generation preparation records the exact Generation Reference identity and
+hash, working-copy semantic request and hashes, request hash, and actor/time.
+Manual Codex generation occurs outside the application, so the application does
+not know or claim that conversation's model, prompt, generation parameters, or
+relationship to a later imported PNG. Changing the captured semantic request or
+Generation Reference requires another prepared request. A Generation
+Reference's saved frame and hash remain part of its provenance; changing the
+current Level frame does not mutate it.
 
 The owner-facing Board Art Pipeline separately records each creation slot's
 exact Raw Pipeline Source identity and hash plus compatible canonical geometry
 and deterministic processing context. It may record where the raw first entered
 storage as descriptive provenance, but that slot does not own the raw and
-another slot may reference the same immutable input.
+another slot may reference the same immutable input. Intake does not require a
+Generation Reference identity.
 
 A lower-level preflight builder may separately resolve the same typed image
 input and semantic-request identity and materialize a complete
@@ -353,15 +355,16 @@ a runtime warp instruction. Canonical level dimensions, interactive cells, and
 gameplay remain unchanged, leaving generated excess visible as evidence for the
 next generation pass.
 
-Per ADR-0158, ADR-0165, ADR-0166, and ADR-0168, the backend separately owns the
-manual Generation Reference handoff and each deterministic creation slot.
+Per ADR-0158, ADR-0165, ADR-0166, ADR-0168, and ADR-0466, the backend separately
+owns optional Generation Reference records and each deterministic creation slot.
 **Copy generation reference** reads the exact stored full-resolution reference
-for the manual Codex boundary. **Paste AI-painted board**, direct `Ctrl+V`, and
-**Choose PNG file instead** stage one exact PNG as a local preview; the named
-raw-source commit stores those unchanged bytes as an immutable, settable Raw
-Pipeline Source without browser cropping, resampling, compositing, or warping.
-An explicit **Use existing Codex-painted board** action may instead import an
-editor-mounted preexisting result through the same raw-source ingress.
+for an optional manual Codex boundary. Independently, Pipeline **Add AI
+artwork** validates **Paste AI artwork**, native paste, or **Choose PNG file**
+and stages one exact PNG as a local preview; invalid ingress creates no version
+or slot. **Use this board** stores those unchanged bytes as an immutable,
+settable Raw Pipeline Source and creates a slot bound to current working-copy
+semantics and geometry without browser cropping, resampling, compositing,
+warping, or a Generation Reference relation.
 
 The Board Art Pipeline's workspace-level **New attempt** action remains
 available with zero, one, or many slots and opens the eligible Raw Pipeline
@@ -407,9 +410,10 @@ The Level Editor's **Level Artwork** side controls leave the board visible and
 navigate to separate URL-addressable **Generation References** and **Board Art
 Pipeline** workspaces. This process destination uses the `level-artwork` route
 layer and `levelArtworkEditor` workspace namespace; it never shares the
-`placed-art` brush destination or subtype state. Generation References owns the
-waiting/manual-handoff state that creates Raw Pipeline Sources. The Pipeline
-shows the owner-facing sequence **Raw Pipeline Source → Warped board → Board
+`placed-art` brush destination or subtype state. Generation References owns
+immutable input capture and exact-reference copy/download. The Pipeline owns
+source-agnostic **Add AI artwork**, exact-PNG preview, Raw Pipeline Source
+commit, and current-board processing-slot creation. The Pipeline shows the owner-facing sequence **Raw Pipeline Source → Warped board → Board
 with occlusion mask** for every slot and keeps **New attempt** outside any existing
 slot. Neither raw reuse nor either deterministic transform requires an agent,
 copied registration packet, or filesystem operation. Warped and

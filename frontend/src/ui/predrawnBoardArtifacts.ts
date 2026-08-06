@@ -106,7 +106,7 @@ function sameScope(left: PredrawnBackgroundVersion, right: PredrawnBackgroundVer
   return left.document_id === right.document_id && left.level_id === right.level_id;
 }
 
-function surfaceFor(
+export function predrawnBoardSurfaceForBackgroundVersion(
   background: PredrawnBackgroundVersion,
   occlusion?: PredrawnBackgroundVersion,
 ): VersionedPredrawnBoardSurface {
@@ -207,7 +207,7 @@ export function predrawnBoardArtifactWorkflow(
           backgroundVersion: version,
           parentArtifactId: null,
           lineageRootVersionId: version.id,
-          surface: surfaceFor(version),
+          surface: predrawnBoardSurfaceForBackgroundVersion(version),
         };
       }
     } else if (version.kind === 'warped') {
@@ -235,7 +235,7 @@ export function predrawnBoardArtifactWorkflow(
               backgroundVersion: version,
               parentArtifactId: parentArtifact.id,
               lineageRootVersionId: parentArtifact.lineageRootVersionId,
-              surface: surfaceFor(version),
+              surface: predrawnBoardSurfaceForBackgroundVersion(version),
             };
           }
         }
@@ -292,7 +292,7 @@ export function predrawnBoardArtifactWorkflow(
               occlusionVersion: version,
               parentArtifactId,
               lineageRootVersionId: sourceArtifact.lineageRootVersionId,
-              surface: surfaceFor(source, version),
+              surface: predrawnBoardSurfaceForBackgroundVersion(source, version),
             };
           }
         }
