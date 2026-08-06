@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:e990ee7f02c058308e663e47c16f84e59b778ce84b318a0d57bae7703b95d63c"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:a2ddb931412dd7d658c8d3a7db342209f4b0706dc5442512c236e9dda2089157"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Replace run abilities with authored formation cards"
-  prNumber: "732"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/732"
-  commit: "c360b291"
+  prTitle: "Manual outage release v0.1.310: generated formations, market pile, and rarity artwork frames"
+  prNumber: ""
+  prUrl: "https://github.com/romaine-life/chess-tactics/tree/v0.1.310"
+  commit: "0fedd4ce"
 
 name: chess-tactics
 namespace: chess-tactics
