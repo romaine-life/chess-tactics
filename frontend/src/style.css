@@ -15636,6 +15636,60 @@ button.tileset-relationship-cell {
   touch-action: none;
 }
 
+.le-artwork-selection-surface {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.le-artwork-selection-surface.has-candidate {
+  cursor: pointer;
+}
+
+.le-floating-artwork-hover {
+  position: absolute;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  outline: 2px dashed rgba(111, 210, 255, 0.94);
+  outline-offset: 4px;
+}
+
+.le-floating-artwork-hover.is-current {
+  outline-style: dotted;
+  outline-color: rgba(255, 226, 126, 0.98);
+}
+
+.le-artwork-pick-status {
+  position: absolute;
+  z-index: 1;
+  max-width: min(320px, calc(100% - 24px));
+  padding: 4px 7px;
+  color: rgb(222, 244, 255);
+  font-size: 12px;
+  line-height: 1.25;
+  pointer-events: none;
+  transform: translate(12px, 12px);
+  white-space: nowrap;
+}
+
+.le-artwork-pick-preparing {
+  position: absolute;
+  z-index: 1;
+  top: 10px;
+  left: 50%;
+  padding: 4px 7px;
+  color: rgb(197, 228, 241);
+  font-size: 12px;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.le-artwork-pick-preparing.is-error {
+  color: rgb(255, 198, 187);
+}
+
 /* The size example standing on the board. Layout only; the art carries its own appearance. */
 .le-town-size-example {
   position: absolute;
@@ -15687,16 +15741,21 @@ button.tileset-relationship-cell {
   text-shadow: 0 1px 2px rgb(8, 12, 20), 0 0 6px rgb(8, 12, 20);
 }
 
-.le-floating-artwork-hit.is-selectable {
-  outline: 2px dashed rgba(111, 210, 255, 0.94);
-  outline-offset: 4px;
-  box-shadow: 0 0 0 1px rgba(3, 25, 38, 0.88), 0 0 10px rgba(68, 194, 255, 0.42);
-}
-
 .le-floating-artwork-hit.is-selected {
   outline: 2px dotted rgba(255, 226, 126, 0.98);
   outline-offset: 4px;
   box-shadow: 0 0 0 1px rgba(23, 13, 4, 0.82);
+}
+
+.le-artwork-current {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--skirmish-ink);
+  font-size: var(--ds-text-sm);
+  text-align: end;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tileset-placement-cell.is-empty::before {

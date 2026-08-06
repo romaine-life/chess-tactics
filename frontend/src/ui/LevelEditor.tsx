@@ -89,6 +89,7 @@ import { CyclePicker } from './shared/CyclePicker';
 import { AssetSwatchList } from './shared/AssetSwatchList';
 import { GeneratorRecipePresetList } from './shared/GeneratorRecipePresetList';
 import { GeneratorSeedControl } from './shared/GeneratorSeedControl';
+import { ArtworkSelectionSurface } from './ArtworkSelectionSurface';
 import {
   FOREST_ART_PRESETS,
   forestPresetConfiguration,
@@ -505,13 +506,11 @@ function StudioEditableBoard({
   onPaint,
   onErase,
   onSelect,
-  onSelectArtwork,
   onMoveArtwork,
   onMove,
   canMoveTo,
   propBrush,
   artworkEditing = false,
-  artworkSelectionActive = false,
   macroTileBrush,
   hidden,
   regionCells,
@@ -611,7 +610,6 @@ function StudioEditableBoard({
   onPaint: (x: number, y: number) => void;
   onErase: (x: number, y: number) => void;
   onSelect: (x: number, y: number) => void;
-  onSelectArtwork?: (id: string) => void;
   onMoveArtwork?: (id: string, to: { pixelX: number; pixelY: number }) => void;
   /** Move tool: drag a placed unit or prop to another cell (drop cancelled if omitted). */
   onMove?: (subject: MoveSubject, to: { x: number; y: number }) => void;
@@ -621,8 +619,6 @@ function StudioEditableBoard({
   propBrush?: { def: PropDef; canPlaceAt: (ax: number, ay: number) => boolean } | null;
   /** Artwork-layer interaction is object-only; tile, prop, and doodad targets stand down. */
   artworkEditing?: boolean;
-  /** Select is an explicit discovery toggle: every eligible artwork advertises its image bounds. */
-  artworkSelectionActive?: boolean;
   /** When a composite terrain brush is armed, preview its full footprint at the hovered anchor. */
   macroTileBrush?: MacroTileAsset | null;
   /** Per-layer visibility — a true value hides that layer's elements on the board. */
@@ -1221,9 +1217,8 @@ function StudioEditableBoard({
   if (artworkEditing) {
     for (const [index, placement] of placedFloatingArtwork.entries()) {
       const selected = placement.id === selectedArtworkId;
-      const canSelect = artworkSelectionActive && tool === 'select';
       const canMove = tool === 'move' && selected;
-      const interactive = canSelect || canMove;
+      const interactive = canMove;
       const sourceSprite = structureArtDirectionSprite(placement.sourceArtId, placement.direction);
       const sourceScale = sourceSprite ? sourceSprite.scale * placement.scale : 1;
       const hitWidth = sourceSprite ? Math.max(54, sourceSprite.w * sourceScale) : 54;
@@ -1233,10 +1228,10 @@ function StudioEditableBoard({
           key={`artwork-hit-${placement.id}`}
           role={interactive ? 'button' : undefined}
           tabIndex={interactive ? 0 : undefined}
-          className={`tileset-doodad-hit le-floating-artwork-hit${canSelect ? ' is-selectable' : ''}${selected ? ' is-selected' : ''}`}
+          className={`tileset-doodad-hit le-floating-artwork-hit${selected ? ' is-selected' : ''}`}
           aria-pressed={selected}
           aria-label={interactive
-            ? `${canMove ? 'Move' : 'Select'} ${structureArtAsset(placement.sourceArtId)?.label ?? placement.sourceArtId}`
+            ? `Move ${structureArtAsset(placement.sourceArtId)?.label ?? placement.sourceArtId}`
             : undefined}
           // The object-sized target draws only the selected-instance outline. It carries no tile,
           // footprint, contact marker, or board-depth meaning.
@@ -1251,24 +1246,14 @@ function StudioEditableBoard({
             background: 'transparent',
             transform: 'translate(-50%, -50%)',
             pointerEvents: interactive ? 'auto' : 'none',
-            cursor: canMove ? 'grab' : canSelect ? 'pointer' : 'default',
+            cursor: canMove ? 'grab' : 'default',
             touchAction: 'none',
             zIndex: 1_100_000 + index,
-          }}
-          onKeyDown={(event) => {
-            if (event.key !== 'Enter' && event.key !== ' ') return;
-            event.preventDefault();
-            event.stopPropagation();
-            if (canSelect) onSelectArtwork?.(placement.id);
           }}
           onPointerDown={(event) => {
             if (event.button !== 0 || !interactive) return;
             event.preventDefault();
             event.stopPropagation();
-            if (canSelect) {
-              onSelectArtwork?.(placement.id);
-              return;
-            }
             event.currentTarget.setPointerCapture(event.pointerId);
             setArtworkDrag({
               id: placement.id,
@@ -8297,22 +8282,6 @@ export function LevelEditor(): ReactElement {
   const selectedArtworkForDetails = layer === 'placed-art' && brushKind === 'artwork'
     ? selectedArtwork
     : undefined;
-  const artworkSelectionOptions = useMemo<HouseSelectOption<string>[]>(() => {
-    const sourceCounts = new Map<string, number>();
-    return [
-      { value: '', label: 'None' },
-      ...boardFloatingArtwork.map((placement) => {
-        const instance = (sourceCounts.get(placement.sourceArtId) ?? 0) + 1;
-        sourceCounts.set(placement.sourceArtId, instance);
-        const label = structureArtAsset(placement.sourceArtId)?.label ?? placement.sourceArtId;
-        return {
-          value: placement.id,
-          label: `${label} · ${instance}`,
-          title: `${label} at X ${placement.pixelX}, Y ${placement.pixelY}`,
-        };
-      }),
-    ];
-  }, [boardFloatingArtwork]);
   const selectedArtworkAsset = selectedArtwork ? structureArtAsset(selectedArtwork.sourceArtId) : undefined;
   const selectedArtworkDirections = selectedArtwork ? structureArtDirections(selectedArtwork.sourceArtId) : [];
   const artworkFacingDirections = selectedArtwork ? selectedArtworkDirections : artworkBrushDirections;
@@ -8766,7 +8735,6 @@ export function LevelEditor(): ReactElement {
                     tool={layer === 'level-artwork' ? 'select' : tool}
                     selectedCell={selectedCell}
                     selectedArtworkId={selectedArtworkId}
-                    artworkSelectionActive={artworkSelectionActive}
                     boardZoom={viewZoom}
                     boardPan={viewPan}
                     gridScope={gridScope}
@@ -8782,7 +8750,6 @@ export function LevelEditor(): ReactElement {
                     onPaint={paintCell}
                     onErase={eraseCell}
                     onSelect={selectCell}
-                    onSelectArtwork={selectArtwork}
                     onMoveArtwork={moveArtwork}
                     onMove={moveObject}
                     canMoveTo={canMoveObjectTo}
@@ -9053,6 +9020,17 @@ export function LevelEditor(): ReactElement {
                         ) / viewZoom - artworkBoardOrigin.originTop,
                       });
                     }}
+                  />
+                ) : null}
+                {editorReady && !saving && !editorLoadError && layer === 'placed-art' && brushKind === 'artwork'
+                  && tool === 'select' && artworkSelectionActive ? (
+                  <ArtworkSelectionSurface
+                    placements={boardFloatingArtwork}
+                    selectedArtworkId={selectedArtworkId}
+                    origin={{ left: artworkBoardOrigin.originLeft, top: artworkBoardOrigin.originTop }}
+                    zoom={viewZoom}
+                    pan={viewPan}
+                    onSelect={selectArtwork}
                   />
                 ) : null}
               </div>
@@ -10970,18 +10948,20 @@ export function LevelEditor(): ReactElement {
             <h2>Scene Art</h2>
             <div className="le-ctrlrow le-artwork-selection-row">
               <span className="le-ctrllabel">Selected</span>
-              <HouseSelect<string>
-                ariaLabel="Selected artwork"
-                value={selectedArtworkId ?? ''}
-                options={artworkSelectionOptions}
-                onChange={(id) => {
-                  if (id) selectArtwork(id);
-                  else {
-                    setSelectedCell(null);
-                    setSelectedArtworkId(null);
-                  }
+              <span className="le-artwork-current" data-testid="selected-artwork-readout">
+                {selectedArtwork
+                  ? `${selectedArtworkAsset?.label ?? selectedArtwork.sourceArtId} · X ${selectedArtwork.pixelX}, Y ${selectedArtwork.pixelY}`
+                  : 'None'}
+              </span>
+              <ChromeButton
+                unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                disabled={!selectedArtwork}
+                onClick={() => {
+                  setSelectedCell(null);
+                  setSelectedArtworkId(null);
                 }}
-              />
+              >Clear</ChromeButton>
             </div>
             <h2 className="le-card-subhead">Facing</h2>
             <FacingCompass
@@ -11046,7 +11026,7 @@ export function LevelEditor(): ReactElement {
                 </div>
               );
             })}
-            <p className="le-board-note">Click a source once to arm its free-placement brush; click it again to disarm. Facing controls the next placement and rotates the currently selected artwork. Place it anywhere in the scene with no tile, footprint, terrain rule, or collision; its installed ground anchor automatically resolves overlap with walls and other scene objects. Select toggles image-bounds highlights for every selectable artwork and changes the current artwork; click Select again to clear selection mode and its outlines. Move drags only the current artwork, and Details keeps its exact pixel X/Y and scale controls.</p>
+            <p className="le-board-note">Click a source once to arm its free-placement brush; click it again to disarm. Facing controls the next placement and rotates the currently selected artwork. Place it anywhere in the scene with no tile, footprint, terrain rule, or collision; its installed ground anchor automatically resolves overlap with walls and other scene objects. Select follows the visible art under the pointer without outlining the whole scene. Click again in the same overlap to cycle through it. Move drags only the current artwork, and Details keeps its exact pixel X/Y and scale controls.</p>
           </section>
         ) : subterrainTool ? (
           <section className="skirmish-card le-brush-panel">

@@ -43,6 +43,7 @@ import {
   boardBackgroundMode,
   isVersionedPredrawnBoardSurface,
   type EditorBoard,
+  type FloatingArtworkPlacement,
 } from '../ui/boardCode';
 import { macroTileAsset, macroTileBreakIndices, macroTileFrame, macroTileOwnedCellIndices, resolveMacroTilePlacements } from '../core/macroTiles';
 import { liveMediaSlotUrl } from '../art/liveMediaCatalog';
@@ -352,25 +353,28 @@ function pushStructureDrawOps(
   }
 }
 
-function pushFloatingArtworkDrawOps(
-  ops: BoardDrawOp[],
-  sourceArtId: string,
-  direction: Direction,
-  sourceSprite: { w: number; h: number },
-  anchorY: number,
-  scale: number,
-  dx: number,
-  dy: number,
-  backZ: number,
-  frontZ: number,
-): void {
+export function floatingArtworkDrawOps(
+  placement: FloatingArtworkPlacement,
+): BoardDrawOp[] {
+  const ops: BoardDrawOp[] = [];
+  const sourceSprite = structureArtDirectionSprite(placement.sourceArtId, placement.direction);
+  if (!sourceSprite) return ops;
+  const scale = sourceSprite.scale * placement.scale;
   const fullW = sourceSprite.w * scale;
   const fullH = sourceSprite.h * scale;
+  const dx = placement.pixelX - fullW / 2;
+  const dy = placement.pixelY - fullH / 2;
+  const { back: backZ, front: frontZ } = projectedSceneObjectZBracket(
+    dy + sourceSprite.anchorY * scale,
+  );
+  const sourceArtId = placement.sourceArtId;
+  const direction = placement.direction;
+  const anchorY = sourceSprite.anchorY;
   const srcFor = (half: 'back' | 'front') => structureArtDirectionHalfSrc(sourceArtId, direction, half);
   if (structureArtDirectionSplitMode(sourceArtId, direction) !== 'flat-contact') {
     ops.push({ layer: 'scene', src: srcFor('back'), dx, dy, dw: fullW, dh: fullH, z: backZ });
     ops.push({ layer: 'scene', src: srcFor('front'), dx, dy, dw: fullW, dh: fullH, z: frontZ });
-    return;
+    return ops;
   }
   const clips = flatContactClipRects({ w: sourceSprite.w, h: sourceSprite.h, anchorY });
   if (clips.back.sh > 0) {
@@ -403,6 +407,7 @@ function pushFloatingArtworkDrawOps(
       z: frontZ,
     });
   }
+  return ops;
 }
 
 function pushFenceDrawOps(
@@ -715,29 +720,10 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
   }
 
   for (const placement of predrawnBackgroundActive ? [] : (board.floatingArtwork ?? [])) {
-    const sprite = structureArtDirectionSprite(placement.sourceArtId, placement.direction);
-    if (!sprite) continue;
-    const scale = sprite.scale * placement.scale;
-    const width = sprite.w * scale;
-    const height = sprite.h * scale;
-    const dx = placement.pixelX - width / 2;
-    const dy = placement.pixelY - height / 2;
     // The placement remains free projected-pixel art. Its installed directional anchor supplies
     // only a render-time ground contact, which seats it in the same continuous depth bands as
     // walls and board-addressed objects. No board coordinate or z enters persisted content.
-    const { back, front } = projectedSceneObjectZBracket(dy + sprite.anchorY * scale);
-    pushFloatingArtworkDrawOps(
-      ops,
-      placement.sourceArtId,
-      placement.direction,
-      sprite,
-      sprite.anchorY,
-      scale,
-      dx,
-      dy,
-      back,
-      front,
-    );
+    ops.push(...floatingArtworkDrawOps(placement));
   }
 
   // Ambient/legacy fallback only. A painted cell uses the seed baked into it at paint time.
