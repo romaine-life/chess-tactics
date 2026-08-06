@@ -810,6 +810,8 @@ try {
         const boundary = document.querySelector('.scene-boundary[data-scene-visual-role="outgoing"]')
           ?? document.querySelector('.scene-boundary');
         const incoming = document.querySelector('.scene-boundary[data-scene-visual-role="incoming"]');
+        const incomingMenu = incoming?.querySelector('.main-menu-layer') ?? null;
+        const incomingMenuControls = incomingMenu?.querySelector('.main-menu-twin-screen') ?? null;
         window.__ctIncomingSceneBoundary = incoming;
         return {
           phases: window.__ctFullScenePhases ?? [],
@@ -818,6 +820,11 @@ try {
           opacity: boundary ? Number.parseFloat(getComputedStyle(boundary).opacity) : null,
           incomingMounted: Boolean(incoming),
           incomingOpacity: incoming ? Number.parseFloat(getComputedStyle(incoming).opacity) : null,
+          incomingMenuControlsPrecomposed: incomingMenu
+            ? incomingMenu.hasAttribute('data-reveal-buttons')
+              && Boolean(incomingMenuControls)
+              && Number.parseFloat(getComputedStyle(incomingMenuControls).opacity) > 0.99
+            : null,
         };
       });
       if (
@@ -829,6 +836,7 @@ try {
         || !exitSample.incomingMounted
         || exitSample.incomingOpacity === null
         || exitSample.incomingOpacity > 0.01
+        || exitSample.incomingMenuControlsPrecomposed === false
       ) {
         throw new Error(`full-scene wait did not retain the painted outgoing boundary beneath the hidden destination: ${JSON.stringify(exitSample)}`);
       }
