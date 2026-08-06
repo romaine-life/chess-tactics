@@ -132,6 +132,10 @@ these.
   complete hidden destination plan before the visible sideways arrival.
   Revealing a card and committing its formation are distinct animation boundaries,
   but there is no per-unit placement choice.
+- The card face prints that formation on a miniature crop of the player-side
+  isometric battlefield, using the same projected axes and north-facing unit art as
+  combat. Its complete two-row footprint is solid while one ring of neighboring
+  diamonds fades away; empty front or back seats remain visible rules information.
 - If no legal translation fits the whole shape, Deployment makes a deterministic
   seeded best effort by placing individual units on legal squares. Board capacity
   may cut off units only after those whole-shape and fallback attempts. Blocked

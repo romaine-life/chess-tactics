@@ -4,8 +4,8 @@ import { RUN_CARD_BY_ID } from '../run/model';
 import { runCardFaceContent } from './runCardFaceContent';
 import {
   requiredRunCardImageKinds,
-  runCardFormationDisplayRow,
-  runCardFormationGridCells,
+  runCardFormationBoardCells,
+  runCardFormationIsoPoint,
   runCardContentCanUpdateWithoutMediaLoad,
   runCardPresentationCanPromote,
   runCardPresentationSignature,
@@ -44,29 +44,41 @@ describe('formation-only Run card face', () => {
     expect(source).toContain('<FormationDiagram');
   });
 
-  it('places every figure in its authored formation grid cell', () => {
+  it('places every figure on its authored isometric board seat', () => {
     const styles = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
-    expect(styles).toMatch(/\.run-card-formation-cell,[\s\S]*?grid-column:\s*calc\(var\(--run-card-formation-x\) \+ 1\)/);
-    expect(styles).toMatch(/\.run-card-formation-cell,[\s\S]*?grid-row:\s*calc\(var\(--run-card-formation-y\) \+ 1\)/);
+    expect(styles).toMatch(/\.run-card-formation-cell,[\s\S]*?inset-block-start:\s*var\(--run-card-formation-top\)/);
+    expect(styles).toMatch(/\.run-card-formation-cell,[\s\S]*?inset-inline-start:\s*var\(--run-card-formation-left\)/);
   });
 
-  it('prints a complete square grid around the formation', () => {
-    expect(runCardFormationGridCells(3, 2)).toEqual([
-      { x: 0, y: 0, dark: false },
-      { x: 1, y: 0, dark: true },
-      { x: 2, y: 0, dark: false },
-      { x: 0, y: 1, dark: true },
-      { x: 1, y: 1, dark: false },
-      { x: 2, y: 1, dark: true },
+  it('prints a complete isometric board footprint with fading neighboring tiles', () => {
+    const cells = runCardFormationBoardCells(3, 2);
+    expect(cells.filter((cell) => !cell.faded)).toEqual([
+      { x: 0, y: 0, dark: false, faded: false },
+      { x: 1, y: 0, dark: true, faded: false },
+      { x: 2, y: 0, dark: false, faded: false },
+      { x: 0, y: 1, dark: true, faded: false },
+      { x: 1, y: 1, dark: false, faded: false },
+      { x: 2, y: 1, dark: true, faded: false },
     ]);
+    expect(cells.filter((cell) => cell.faded)).toHaveLength(10);
     const styles = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
-    expect(styles).toMatch(/grid-template-columns:\s*repeat\(var\(--run-card-formation-columns\),\s*10\.8cqw\)/);
-    expect(styles).toMatch(/grid-template-rows:\s*repeat\(var\(--run-card-formation-rows\),\s*10\.8cqw\)/);
-    expect(styles).toMatch(/\.run-card-formation-extension path[\s\S]*?stroke:\s*currentColor/);
+    expect(styles).toMatch(/\.run-card-formation-square polygon[\s\S]*?stroke:/);
+    expect(styles).toMatch(/\.run-card-formation-square\.is-faded[\s\S]*?opacity:\s*\.22/);
   });
 
-  it('prints the front formation row above the back row', () => {
-    expect(runCardFormationDisplayRow(0)).toBe(0);
-    expect(runCardFormationDisplayRow(1)).toBe(1);
+  it('uses the battlefield projection and the player army facing', () => {
+    expect(runCardFormationIsoPoint(0, 0)).toEqual({ left: 0, top: 0, depth: 0 });
+    expect(runCardFormationIsoPoint(1, 0)).toMatchObject({
+      left: expect.closeTo(7.2),
+      top: expect.closeTo(4.05),
+      depth: 1,
+    });
+    expect(runCardFormationIsoPoint(0, 1)).toMatchObject({
+      left: expect.closeTo(-7.2),
+      top: expect.closeTo(4.05),
+      depth: 1,
+    });
+    const source = readFileSync(new URL('./RunCardFace.tsx', import.meta.url), 'utf8');
+    expect(source).toContain("defaultFacingForSide('player')");
   });
 });

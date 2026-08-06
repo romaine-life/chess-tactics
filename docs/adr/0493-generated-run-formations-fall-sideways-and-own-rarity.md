@@ -49,7 +49,10 @@ temporary composition-art id. Existing accepted composition artwork, title, and 
 shared by every formation with that roster. Shared presentation is deliberate prototype debt,
 not missing content, and never changes the exact formation diagram. The diagram always prints
 both deployment rows, including an empty row, so front and back singleton cards remain visibly
-different.
+different. It is a miniature player-side battlefield rather than a flat Cartesian chart: cells
+use the canonical isometric board projection, figures use the player's in-game facing, the full
+formation footprint is solid, and one neighboring ring fades out to show that the printed crop
+continues onto the combat board.
 
 Every offer card owns one of three rarities:
 
