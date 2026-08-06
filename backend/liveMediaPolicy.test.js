@@ -27,6 +27,8 @@ const {
   RUN_CARD_BACK_PROOF_RENDERER,
   RUN_CARD_BACK_PROOF_SCHEMA,
   RUN_CARD_BACK_SLOT,
+  RUN_CARD_RARITY_FRAME_PROOF_RENDERER,
+  RUN_CARD_RARITY_FRAME_PROOF_SCHEMA,
   RUN_STARTER_SELECTED_DERIVATIVE_EXCEPTION_SCHEMA,
   RUN_RESOURCE_ICON_COMPONENT,
   RUN_SECTIO_WRAP_COMPONENT,
@@ -60,6 +62,8 @@ const {
   runCardBackMediaIssue,
   runCardBackOwnerProofIssue,
   runCardBackSlot,
+  runCardRarityFrameOwnerProofIssue,
+  runCardRarityFrameSlot,
   runResourceIconMediaIssue,
   runResourceIconSlotId,
   runExpunctioReviewSurface,
@@ -1265,4 +1269,55 @@ test('Run card-back review pins exact native pixels on Card Layout', () => {
     ...proof,
     selectedCandidates: [{ ...proof.selectedCandidates[0], sha256: 'a'.repeat(64) }],
   }, cardBackSurfaceUrl), /candidate bytes/);
+});
+
+const rarityFrameVersionId = '55555555-5555-4555-8555-555555555555';
+const rarityFrameSha = 'e'.repeat(64);
+const rarityFrameRow = (overrides = {}) => ({
+  id: rarityFrameVersionId,
+  slot: 'ui/run/card-prototypes/standard-uncommon-frame-v1.png',
+  domain: 'ui',
+  role: 'card-frame',
+  media_type: 'image/png',
+  blob_sha256: rarityFrameSha,
+  width: 1060,
+  height: 1484,
+  ...overrides,
+});
+const rarityFrameSurfaceUrl = `http://127.0.0.1:5173/studio?mode=viewer&vk=cardlayout&rarityStudy=1&uncommonCandidate=${rarityFrameSha}&rareCandidate=${'d'.repeat(64)}`;
+const rarityFrameProof = (row, overrides = {}) => ({
+  schema: RUN_CARD_RARITY_FRAME_PROOF_SCHEMA,
+  renderer: RUN_CARD_RARITY_FRAME_PROOF_RENDERER,
+  surfaceUrl: rarityFrameSurfaceUrl,
+  rarity: 'uncommon',
+  frameType: 'standard',
+  rarityAffects: 'existing-metalwork-only',
+  woodMaterialReview: true,
+  canonicalScale: 1,
+  assetLocalScale: 1,
+  spatialResampling: false,
+  decodedNativeRaster: { width: 1060, height: 1484 },
+  selectedCandidates: [{ slot: row.slot, versionId: row.id, sha256: row.blob_sha256, rowRevision: 1 }],
+  slotSnapshots: [{ slot: row.slot, rowRevision: 0, activeVersionId: null }],
+  ...overrides,
+});
+
+test('Run card rarity frames are closed Standard-frame rarity slots', () => {
+  assert.equal(runCardRarityFrameSlot(rarityFrameRow().slot), 'uncommon');
+  assert.equal(runCardRarityFrameSlot('ui/run/card-prototypes/standard-rare-frame-v1.png'), 'rare');
+  assert.equal(runCardRarityFrameSlot('ui/run/card-prototypes/concinnous-frame-v1.png'), null);
+});
+
+test('Run card rarity-frame review pins native pixels and the wood-preserving material decision', () => {
+  const row = rarityFrameRow();
+  const proof = rarityFrameProof(row);
+  assert.equal(runCardRarityFrameOwnerProofIssue(row, proof, rarityFrameSurfaceUrl), null);
+  assert.match(runCardRarityFrameOwnerProofIssue(row, { ...proof, woodMaterialReview: false }, rarityFrameSurfaceUrl), /wood identity/);
+  assert.match(runCardRarityFrameOwnerProofIssue(row, { ...proof, assetLocalScale: 0.5 }, rarityFrameSurfaceUrl), /exact scale/);
+  assert.match(runCardRarityFrameOwnerProofIssue(row, {
+    ...proof,
+    selectedCandidates: [{ ...proof.selectedCandidates[0], sha256: 'a'.repeat(64) }],
+  }, rarityFrameSurfaceUrl), /candidate bytes/);
+  const wrongUrl = rarityFrameSurfaceUrl.replace(rarityFrameSha, 'a'.repeat(64));
+  assert.match(runCardRarityFrameOwnerProofIssue(row, { ...proof, surfaceUrl: wrongUrl }, wrongUrl), /exact Card Layout/);
 });

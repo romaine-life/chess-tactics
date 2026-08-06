@@ -805,7 +805,7 @@ export function parseCli(argv) {
   const options = {
     command: '',
     headers: process.env.LIVE_MEDIA_COOKIE ? { Cookie: process.env.LIVE_MEDIA_COOKIE } : {},
-    metadata: '', provenance: '', nativeEvidence: '', evidence: '', force: false,
+    metadata: '', slotMetadata: '', provenance: '', nativeEvidence: '', evidence: '', force: false,
   };
   let index = 0;
   if (argv[0] && !argv[0].startsWith('-')) options.command = argv[index++];
@@ -830,6 +830,7 @@ export function parseCli(argv) {
     else if (flag === '--availability-policy') options.availabilityPolicy = next();
     else if (flag === '--media-type') options.mediaType = next();
     else if (flag === '--metadata-json') options.metadata = next();
+    else if (flag === '--slot-metadata-json') options.slotMetadata = next();
     else if (flag === '--provenance-json') options.provenance = next();
     else if (flag === '--native-evidence-json') options.nativeEvidence = next();
     else if (flag === '--evidence-json') options.evidence = next();
@@ -918,9 +919,11 @@ async function runCli() {
   if (options.sourcePath) payload.sourcePath = options.sourcePath;
   if (options.availabilityPolicy) payload.availabilityPolicy = options.availabilityPolicy;
   const metadata = readJsonObject(options.metadata, '--metadata-json');
+  const slotMetadata = readJsonObject(options.slotMetadata, '--slot-metadata-json');
   const provenance = readJsonObject(options.provenance, '--provenance-json');
   const nativeEvidence = readJsonObject(options.nativeEvidence, '--native-evidence-json');
   if (metadata) payload.metadata = metadata;
+  if (slotMetadata) payload.slotMetadata = slotMetadata;
   if (provenance) payload.provenance = provenance;
   if (nativeEvidence) payload.nativeEvidence = nativeEvidence;
 

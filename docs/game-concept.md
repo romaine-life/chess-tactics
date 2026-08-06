@@ -87,11 +87,13 @@ these.
   retired (ADR-0216, ADR-0217, ADR-0368).
 - Run cards keep the familiar trading-card anatomy: title, one live whole-number
   gold cost, illustration, the **Units** type line, a positional unit diagram, and
-  flavor text. The Standard, accepted white, and accepted steel frames mean Common,
-  Uncommon, and Rare. Unit abilities, modifier icons, and acquisition targeting are
+  flavor text. Rarity is independent from frame type. In the active Standard family,
+  Common keeps dark steel, Uncommon colors every existing metal band light blue, and
+  Rare colors it antique gold while all three retain the same carved brown wood.
+  Unit abilities, modifier icons, and acquisition targeting are
   outside the active ruleset. Existing accepted composition illustrations, names, and
   flavor may be reused while dedicated formation identities are authored; the diagram
-  is always the rules authority.
+  is always the rules authority (ADR-0495).
 - The active offer deck contains a deterministic 714-card generated core plus seven
   retained authored exceptions. The core assigns Pawn, Knight, Bishop, Rook, and Queen
   rosters worth at most nine material to every edge-connected one-to-four-cell footprint

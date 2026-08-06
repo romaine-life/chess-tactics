@@ -8,8 +8,11 @@ import {
   RUN_CARD_FRAME_VARIANTS,
   RUN_CARD_HIERATIC_STEEL_FRAME_GEOMETRY,
   RUN_CARD_PRAECIPUUS_FRAME_GEOMETRY,
+  RUN_CARD_RARE_FRAME_SLOT,
   RUN_CARD_STANDARD_FRAME_GEOMETRY,
+  RUN_CARD_STANDARD_FRAME_SLOT_BY_RARITY,
   RUN_CARD_TEXT_PLACEMENT,
+  RUN_CARD_UNCOMMON_FRAME_SLOT,
   runCardFrameGeometryForSlot,
   runCardFrameGeometryKnowsPixels,
   runCardFramePaintInsetRatios,
@@ -30,6 +33,18 @@ describe('Run card frame geometry', () => {
     // A re-generated frame keeps its own boxes instead of inheriting Standard's.
     expect(new Set(RUN_CARD_FRAME_VARIANTS.map((v) => RUN_CARD_FRAME_SLOT_BY_VARIANT[v])).size)
       .toBe(RUN_CARD_FRAME_VARIANTS.length);
+  });
+
+  it('keeps the rarity triplet on the Standard frame geometry', () => {
+    expect(RUN_CARD_STANDARD_FRAME_SLOT_BY_RARITY).toEqual({
+      common: RUN_CARD_FRAME_SLOT_BY_VARIANT.standard,
+      uncommon: RUN_CARD_UNCOMMON_FRAME_SLOT,
+      rare: RUN_CARD_RARE_FRAME_SLOT,
+    });
+    expect(runCardFrameGeometryForSlot(RUN_CARD_UNCOMMON_FRAME_SLOT)).toBe(RUN_CARD_STANDARD_FRAME_GEOMETRY);
+    expect(runCardFrameGeometryForSlot(RUN_CARD_RARE_FRAME_SLOT)).toBe(RUN_CARD_STANDARD_FRAME_GEOMETRY);
+    expect(RUN_CARD_STANDARD_FRAME_GEOMETRY.frameSha256s).toContain('037ac0896d4a9307b27ff909197b1d769c04311a2deb59e5ae7d2041bce3e2b1');
+    expect(RUN_CARD_STANDARD_FRAME_GEOMETRY.frameSha256s).toContain('a5ff21ff0c821f93bb78338401c663169ed7a08e295754ee00fefc8d359a4eca');
   });
 
   it('places the Standard boxes on the painted plates that frame draws', () => {
@@ -132,10 +147,11 @@ describe('Run card frame geometry', () => {
       expect(runCardFrameGeometryKnowsPixels(geometry, 'a'.repeat(64))).toBe(false);
       expect(runCardFrameGeometryKnowsPixels(geometry, null)).toBe(false);
     }
-    // Each frame answers to exactly the bytes its boxes were measured on.
-
+    // Each frame family answers to exactly the bytes its boxes were measured on;
+    // Standard owns three rarity materials over the same locked geometry.
+    expect(RUN_CARD_FRAME_GEOMETRY_BY_VARIANT.standard.frameSha256s).toHaveLength(3);
     expect(RUN_CARD_FRAME_GEOMETRY_BY_VARIANT.hieratic.frameSha256s).toHaveLength(1);
-    expect(seen.size).toBe(RUN_CARD_FRAME_VARIANTS.length);
+    expect(seen.size).toBe(RUN_CARD_FRAME_VARIANTS.length + 2);
   });
 
   it('keeps every declared box inside the native source image', () => {
