@@ -6,10 +6,12 @@ export function AtaraxiaSelector({
   value,
   highestUnlockedTier,
   onChange,
+  fillSurface,
 }: {
   value: AtaraxiaTier;
   highestUnlockedTier: AtaraxiaTier;
   onChange: (tier: AtaraxiaTier) => void;
+  fillSurface?: string;
 }): ReactElement {
   const options: readonly HouseSelectOption[] = ATARAXIA_TIERS.map((tier) => {
     const definition = ATARAXIA_BY_TIER[tier];
@@ -41,6 +43,7 @@ export function AtaraxiaSelector({
         ariaLabel="Ataraxia"
         className="run-ataraxia-select"
         testId="run-ataraxia-select"
+        fillSurface={fillSurface}
       />
       <p className="run-ataraxia-effect">{ATARAXIA_BY_TIER[value].effect}</p>
     </section>
