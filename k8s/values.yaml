@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:c955f05f577b96e277b2e92d811a744791c888451213526cd1038fbde8cc220a"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:6174a320fe82143839022f6b042032293b79e8ded79bf07742bf1ffd0dd62892"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Streamline AI board artwork intake and fitting"
-  prNumber: "726"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/726"
-  commit: "a9323bdf"
+  prTitle: "Reveal Sectio card piles after Adlectio"
+  prNumber: "727"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/727"
+  commit: "4a398fc5"
 
 name: chess-tactics
 namespace: chess-tactics
