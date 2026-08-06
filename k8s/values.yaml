@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:ed19a2ec503e246b0f3dcebd93796180d8259cb5594dd39683a211f2e77d9254"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:d3473422a97a1db5178b50bab8475d740930199021363a6530e6041be66c2068"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Add stable unit tooltips to Run cards"
-  prNumber: "729"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/729"
-  commit: "1384d6e8"
+  prTitle: "Add camera boundary capture from view"
+  prNumber: "730"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/730"
+  commit: "a1dee2bb"
 
 name: chess-tactics
 namespace: chess-tactics
