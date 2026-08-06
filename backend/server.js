@@ -21328,8 +21328,9 @@ function validateActiveRunBody(run) {
           || run.sectio.afterBattleIndex !== 0
           || run.sectio.conflictIndex !== 0
           || run.sectio.victoryGoldTenths !== 0
-          || run.sectio.cardOffers.length !== 3
-          || offerValues.size !== 3
+          || typeof serverRender?.runSectioCardOfferCount !== 'function'
+          || run.sectio.cardOffers.length !== serverRender.runSectioCardOfferCount(run)
+          || offerValues.size !== serverRender.runSectioCardOfferCount(run)
           // Opening offers carry the same qualifiers as any other draw and are priced by the
           // shared affected-pricing rule checked above, so a qualifier may price one past the
           // starting gold. At least one remains buyable even though leaving without Adlectio is

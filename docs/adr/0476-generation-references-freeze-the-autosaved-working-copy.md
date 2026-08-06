@@ -8,7 +8,7 @@ refines:
   - "[ADR-0304](0304-level-editor-documents-are-live-shared-working-copies.md)"
 ---
 
-# ADR-0464: Generation References freeze the autosaved working copy
+# ADR-0476: Generation References freeze the autosaved working copy
 
 ## Context
 

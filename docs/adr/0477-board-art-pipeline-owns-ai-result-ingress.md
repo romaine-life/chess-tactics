@@ -3,16 +3,16 @@ status: accepted
 date: 2026-08-05
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0466](0466-ai-artwork-intake-is-source-agnostic.md)"
+  - "[ADR-0478](0478-ai-artwork-intake-is-source-agnostic.md)"
 partially_supersedes:
   - "[ADR-0166](0166-manual-ai-handoff-separates-generation-references-from-raw-pipeline-sources.md)'s Generation-References-owned attempt start and returned-image ingress"
 refines:
   - "[ADR-0071](0071-the-deliverable-is-the-instrument.md)"
   - "[ADR-0168](0168-creation-slots-begin-with-reusable-raw-pipeline-sources.md)"
-  - "[ADR-0464](0464-generation-references-freeze-the-autosaved-working-copy.md)"
+  - "[ADR-0476](0476-generation-references-freeze-the-autosaved-working-copy.md)"
 ---
 
-# ADR-0465: Board Art Pipeline owns AI-result ingress
+# ADR-0477: Board Art Pipeline owns AI-result ingress
 
 ## Context
 

@@ -21,7 +21,7 @@ import { isPlaySelectorPath, PLAY_SELECTOR_ROOT } from './playHubRoute';
 // keeps the destination unrevealed while its shared Suspense boundary resolves.
 const CampaignEditor = lazy(() => import('./CampaignEditor').then((m) => ({ default: m.CampaignEditor })));
 import { drawableAssets } from '@chess-tactics/board-render';
-import { useSceneReveal } from './shell/SceneBoundary';
+import { useStartupScene } from './shell/startupScene';
 import { menuModeIcon } from './menuModeIcon';
 import { MenuDestinationSceneSlot } from './shell/AuthoredSceneSlot';
 
@@ -108,10 +108,10 @@ export function MainMenu({
   // destination just occupies the previously-empty grid track to its right.
   const dest = shellDest(path);
   const enchiridionSection = enchiridionSectionFromPath(path);
-  // The menu is an ordinary scene now. Its body reveals on the director's final ladder
-  // rung, gated by the boundary's painted contract — which already decodes every image
-  // this subtree references, including the rail icons this screen used to decode itself.
-  const sceneRevealed = useSceneReveal();
+  // Only cold startup builds the shell in ordered rungs. During an ordinary return home,
+  // the complete menu must already be composed behind the incoming scene boundary so the
+  // director crossfades its background and controls as one painted scene (ADR-0462).
+  const startup = useStartupScene();
   useEffect(() => {
     const shell = document.querySelector('.shell');
     shell?.classList.add('main-menu-active');
@@ -126,7 +126,7 @@ export function MainMenu({
       className="menu-layer main-menu-layer"
       data-testid="main-menu-next"
       data-reveal-bg=""
-      data-reveal-buttons={sceneRevealed ? '' : undefined}
+      data-reveal-buttons={startup.revealed('scene') ? '' : undefined}
     >
       <HomepageBackdrop />
       {/* Settings-twin layout (ADR-0003 superseded): shared app title bar + a rail of

@@ -355,7 +355,7 @@ a runtime warp instruction. Canonical level dimensions, interactive cells, and
 gameplay remain unchanged, leaving generated excess visible as evidence for the
 next generation pass.
 
-Per ADR-0158, ADR-0165, ADR-0166, ADR-0168, and ADR-0466, the backend separately
+Per ADR-0158, ADR-0165, ADR-0166, ADR-0168, and ADR-0478, the backend separately
 owns optional Generation Reference records and each deterministic creation slot.
 **Copy generation reference** reads the exact stored full-resolution reference
 for an optional manual Codex boundary. Independently, Pipeline **Add AI

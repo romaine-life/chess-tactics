@@ -641,7 +641,7 @@ selection rather than runtime alignment instructions.
 ## Amendment log
 
 - **2026-08-05 — fitted grid is one durable selection action:**
-  [ADR-0468](../adr/0468-using-a-fitted-grid-saves-and-selects-its-board.md)
+  [ADR-0480](../adr/0480-using-a-fitted-grid-saves-and-selects-its-board.md)
   makes **Use fitted board** create/resume the immutable corrected raster and
   select it on the working copy. Exact-source recovery prevents silent reseeding;
   unchanged raw selection explicitly ignores the fit.
@@ -650,7 +650,7 @@ selection rather than runtime alignment instructions.
   as **Use unchanged board**. Grid correction and occlusion remain available as
   optional derived tools rather than acceptance gates.
 - **2026-08-05 — source-agnostic AI artwork intake:**
-  [ADR-0466](../adr/0466-ai-artwork-intake-is-source-agnostic.md) keeps
+  [ADR-0478](../adr/0478-ai-artwork-intake-is-source-agnostic.md) keeps
   Generation References as an optional model-input library while Board Art
   Pipeline accepts any valid PNG. Intake records exact raw bytes plus current
   working-copy semantics and geometry, not a producing-reference relation.

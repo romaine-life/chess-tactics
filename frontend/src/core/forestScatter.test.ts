@@ -1,15 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
   FOREST_SCATTER_DEFAULTS,
-  eraseForestArea,
   floatingArtworkGroundPoint,
-  forestLatticeStep,
+  forestGroundFootprint,
+  forestGroundFootprintWithinArea,
   forestPlacementId,
+  isForestMember,
   scatterForest,
   sortFloatingArtworkByDepth,
   type ForestScatterParams,
   type ForestSpeciesGeometry,
 } from './forestScatter';
+import { unprojectBoardPoint } from '../render/boardProjection';
 import type { Direction } from '../ui/unitCatalog';
 import type { FloatingArtworkPlacement } from '../ui/boardCode';
 
@@ -19,10 +21,23 @@ const ALL_DIRECTIONS: Direction[] = [
 
 // Two deliberately different-sized sources: a mixed-size forest is where ground-plane seating
 // either works or visibly fails.
-const SPRITES: Record<string, { w: number; h: number; anchorX: number; anchorY: number; scale: number }> = {
-  'tall-tree': { w: 200, h: 400, anchorX: 100, anchorY: 380, scale: 0.4 },
-  'short-tree': { w: 100, h: 120, anchorX: 50, anchorY: 110, scale: 0.3 },
-  'one-view': { w: 64, h: 64, anchorX: 32, anchorY: 60, scale: 1 },
+const SPRITES: Record<string, {
+  w: number;
+  h: number;
+  anchorX: number;
+  anchorY: number;
+  scale: number;
+  groundFootprint: { w: number; h: number };
+}> = {
+  'tall-tree': {
+    w: 200, h: 400, anchorX: 100, anchorY: 380, scale: 0.4, groundFootprint: { w: 40, h: 20 },
+  },
+  'short-tree': {
+    w: 100, h: 120, anchorX: 50, anchorY: 110, scale: 0.3, groundFootprint: { w: 30, h: 16 },
+  },
+  'one-view': {
+    w: 64, h: 64, anchorX: 32, anchorY: 60, scale: 1, groundFootprint: { w: 12, h: 8 },
+  },
 };
 
 const geometry: ForestSpeciesGeometry = {
@@ -32,35 +47,70 @@ const geometry: ForestSpeciesGeometry = {
 
 const params = (overrides: Partial<ForestScatterParams> = {}): ForestScatterParams => ({
   ...FOREST_SCATTER_DEFAULTS,
-  speciesIds: ['tall-tree'],
+  trees: [{ sourceArtId: 'tall-tree', weight: 1 }],
   spacing: 0,
   clumping: 0,
   falloff: 0,
   ...overrides,
 });
 
-const area = { centerX: 900, centerY: 900, radius: 220 };
+const area = { minX: 2, minY: 3, maxX: 13, maxY: 14 };
 
 const run = (
   overrides: Partial<ForestScatterParams> = {},
   existing: FloatingArtworkPlacement[] = [],
-  brush = area,
+  selection = area,
 ): FloatingArtworkPlacement[] => scatterForest({
-  area: brush, params: params(overrides), geometry, existing,
+  forestId: 'forest-a', area: selection, params: params(overrides), geometry, existing,
 });
 
 describe('scatterForest', () => {
-  it('produces trees inside the brush and none outside it', () => {
+  it('uses the measured root contact instead of the sprite rectangle', () => {
+    expect(forestGroundFootprint({ x: 10, y: 20 }, SPRITES['tall-tree'], 1)).toEqual({
+      x: 10,
+      y: 20,
+      rx: 8,
+      ry: 4,
+    });
+    // The rendered frame is 80x160 after source scale; none of that canopy/frame extent enters
+    // the 16x8 root/base footprint above.
+    expect(SPRITES['tall-tree'].w * SPRITES['tall-tree'].scale).toBe(80);
+    expect(SPRITES['tall-tree'].h * SPRITES['tall-tree'].scale).toBe(160);
+  });
+
+  it('keeps every tree root/base footprint inside the selected grid cells', () => {
     const placements = run();
     expect(placements.length).toBeGreaterThan(5);
     for (const placement of placements) {
       const ground = floatingArtworkGroundPoint(placement, geometry);
       expect(ground).toBeDefined();
-      expect(Math.hypot(ground!.x - area.centerX, ground!.y - area.centerY)).toBeLessThanOrEqual(area.radius);
+      const sprite = geometry.sprite(placement.sourceArtId, placement.direction)!;
+      const footprint = forestGroundFootprint(ground!, sprite, placement.scale);
+      expect(forestGroundFootprintWithinArea(footprint, area)).toBe(true);
     }
   });
 
-  it('is deterministic for the same seed and stroke', () => {
+  it('allows the sprite and canopy to overhang while the root/base stays inside', () => {
+    const selection = { minX: 2, minY: 3, maxX: 5, maxY: 6 };
+    const placements = run({ density: 4, jitter: 1, scaleMin: 1, scaleMax: 1 }, [], selection);
+    expect(placements.length).toBeGreaterThan(0);
+    expect(placements.some((placement) => {
+      const sprite = geometry.sprite(placement.sourceArtId, placement.direction)!;
+      const scale = sprite.scale * placement.scale;
+      const boxCorners = [
+        { left: placement.pixelX - sprite.w * scale / 2, top: placement.pixelY - sprite.h * scale / 2 },
+        { left: placement.pixelX + sprite.w * scale / 2, top: placement.pixelY - sprite.h * scale / 2 },
+        { left: placement.pixelX - sprite.w * scale / 2, top: placement.pixelY + sprite.h * scale / 2 },
+        { left: placement.pixelX + sprite.w * scale / 2, top: placement.pixelY + sprite.h * scale / 2 },
+      ].map(unprojectBoardPoint);
+      return boxCorners.some((corner) => (
+        corner.x < selection.minX - 0.5 || corner.x > selection.maxX + 0.5
+        || corner.y < selection.minY - 0.5 || corner.y > selection.maxY + 0.5
+      ));
+    })).toBe(true);
+  });
+
+  it('is deterministic for the same seed and grid selection', () => {
     expect(run()).toEqual(run());
   });
 
@@ -77,9 +127,11 @@ describe('scatterForest', () => {
     expect(run({}, first)).toEqual([]);
   });
 
-  it('adds only the new cells when a second stroke overlaps the first', () => {
+  it('adds only the new cells when a second selection overlaps the first', () => {
     const first = run();
-    const second = run({}, first, { centerX: area.centerX + 200, centerY: area.centerY, radius: area.radius });
+    const second = run({}, first, {
+      minX: area.minX + 8, minY: area.minY, maxX: area.maxX + 8, maxY: area.maxY,
+    });
     const firstIds = new Set(first.map((placement) => placement.id));
     expect(second.length).toBeGreaterThan(0);
     expect(second.some((placement) => firstIds.has(placement.id))).toBe(false);
@@ -87,22 +139,30 @@ describe('scatterForest', () => {
 
   it('raises the tree count with density', () => {
     expect(run({ density: 3 }).length).toBeGreaterThan(run({ density: 0.5 }).length);
-    expect(forestLatticeStep(3)).toBeLessThan(forestLatticeStep(0.5));
   });
 
-  it('seats every tree on the lattice at zero jitter and scatters it off-lattice above zero', () => {
-    const step = forestLatticeStep(FOREST_SCATTER_DEFAULTS.density);
-    const offLattice = (placements: FloatingArtworkPlacement[]): number => placements.filter((placement) => {
+  it('keeps every candidate in its actual board cell while randomness moves it off the clean grid point', () => {
+    const offCentre = (placements: FloatingArtworkPlacement[]): number => placements.filter((placement) => {
       const ground = floatingArtworkGroundPoint(placement, geometry)!;
-      const dx = Math.abs(((ground.x / step) % 1) - 0.5);
-      return dx > 0.02;
+      const cell = unprojectBoardPoint({ left: ground.x, top: ground.y });
+      const [, , gridX, gridY] = placement.id.split('.');
+      expect(cell.x).toBeGreaterThanOrEqual(Number(gridX) - 0.5);
+      expect(cell.x).toBeLessThanOrEqual(Number(gridX) + 0.5);
+      expect(cell.y).toBeGreaterThanOrEqual(Number(gridY) - 0.5);
+      expect(cell.y).toBeLessThanOrEqual(Number(gridY) + 0.5);
+      return Math.hypot(cell.x - Number(gridX), cell.y - Number(gridY)) > 0.05;
     }).length;
-    expect(offLattice(run({ jitter: 0 }))).toBe(0);
-    expect(offLattice(run({ jitter: 1 }))).toBeGreaterThan(0);
+    expect(offCentre(run({ density: 1, jitter: 0 }))).toBe(0);
+    expect(offCentre(run({ density: 1, jitter: 1 }))).toBeGreaterThan(0);
   });
 
-  it('keeps a mixed-size species list on one ground plane', () => {
-    const placements = run({ speciesIds: ['tall-tree', 'short-tree'], jitter: 0, scaleMin: 1, scaleMax: 1 });
+  it('keeps mixed-size Forest art on one ground plane', () => {
+    const placements = run({
+      trees: [{ sourceArtId: 'tall-tree', weight: 1 }, { sourceArtId: 'short-tree', weight: 1 }],
+      jitter: 0,
+      scaleMin: 1,
+      scaleMax: 1,
+    });
     const sources = new Set(placements.map((placement) => placement.sourceArtId));
     expect(sources.size).toBe(2);
     // Different sprite heights and anchors, but the derived ground rows must still line up.
@@ -141,14 +201,16 @@ describe('scatterForest', () => {
   });
 
   it('falls back to an installed facing when the requested one is missing', () => {
-    const placements = run({ speciesIds: ['one-view'], randomFacing: false, facing: 'west' });
+    const placements = run({ trees: [{ sourceArtId: 'one-view', weight: 1 }], randomFacing: false, facing: 'west' });
     expect(placements.length).toBeGreaterThan(0);
     expect(new Set(placements.map((placement) => placement.direction))).toEqual(new Set(['south']));
   });
 
-  it('drops species with no installed artwork instead of emitting broken placements', () => {
-    expect(run({ speciesIds: ['missing'] })).toEqual([]);
-    const mixed = run({ speciesIds: ['missing', 'tall-tree'] });
+  it('drops recipe entries with no installed artwork instead of emitting broken placements', () => {
+    expect(run({ trees: [{ sourceArtId: 'missing', weight: 1 }] })).toEqual([]);
+    const mixed = run({
+      trees: [{ sourceArtId: 'missing', weight: 1 }, { sourceArtId: 'tall-tree', weight: 1 }],
+    });
     expect(mixed.length).toBeGreaterThan(0);
     expect(new Set(mixed.map((placement) => placement.sourceArtId))).toEqual(new Set(['tall-tree']));
   });
@@ -164,12 +226,14 @@ describe('scatterForest', () => {
     expect(run({ spacing: 80, density: 4 }).length).toBeLessThan(run({ spacing: 0, density: 4 }).length);
   });
 
-  it('thins the brush edge when falloff is on', () => {
+  it('thins the selected grid edge when falloff is on', () => {
     const edgeShare = (placements: FloatingArtworkPlacement[]): number => {
       if (!placements.length) return 0;
       const outer = placements.filter((placement) => {
-        const ground = floatingArtworkGroundPoint(placement, geometry)!;
-        return Math.hypot(ground.x - area.centerX, ground.y - area.centerY) > area.radius * 0.75;
+        const [, , xText, yText] = placement.id.split('.');
+        const x = Number(xText);
+        const y = Number(yText);
+        return x === area.minX || x === area.maxX || y === area.minY || y === area.maxY;
       });
       return outer.length / placements.length;
     };
@@ -184,7 +248,47 @@ describe('scatterForest', () => {
       expect(placement.scale).toBeGreaterThanOrEqual(0.1);
       expect(placement.scale).toBeLessThanOrEqual(8);
     }
-    expect(forestPlacementId(1, -3, 7)).toMatch(/^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,127}$/);
+    expect(forestPlacementId('forest-a', 1, -3, 7, 2)).toMatch(/^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,127}$/);
+  });
+
+  it('scopes generated placement membership to one saved Forest instance', () => {
+    const placement = (id: string): FloatingArtworkPlacement => ({
+      id, sourceArtId: 'tall-tree', pixelX: 0, pixelY: 0, direction: 'south', scale: 1,
+    });
+    const member = placement(forestPlacementId('forest-a', 12, -3, 7, 2));
+    expect(isForestMember(member, 'forest-a')).toBe(true);
+    expect(isForestMember(member, 'forest-b')).toBe(false);
+    expect(isForestMember(placement('art-owner-tree'), 'forest-a')).toBe(false);
+  });
+
+  it('keeps mixed Section identities unique while preserving Forest ownership', () => {
+    const first = forestPlacementId('forest-a', 12, 3, 7, 0, 'section-a');
+    const second = forestPlacementId('forest-a', 12, 3, 7, 0, 'section-b');
+    expect(first).not.toBe(second);
+    for (const id of [first, second]) {
+      expect(isForestMember({ id, sourceArtId: 'tall-tree', pixelX: 0, pixelY: 0, direction: 'south', scale: 1 }, 'forest-a')).toBe(true);
+    }
+  });
+
+  it('uses explicit relative weights when choosing Forest art', () => {
+    const placements = run({
+      density: 6,
+      trees: [{ sourceArtId: 'tall-tree', weight: 9 }, { sourceArtId: 'short-tree', weight: 1 }],
+    });
+    const tall = placements.filter((placement) => placement.sourceArtId === 'tall-tree').length;
+    const short = placements.filter((placement) => placement.sourceArtId === 'short-tree').length;
+    expect(short).toBeGreaterThan(0);
+    expect(tall).toBeGreaterThan(short * 4);
+  });
+
+  it('does not collide when two saved Forests reuse the same seed and cells', () => {
+    const first = run();
+    const second = scatterForest({
+      forestId: 'forest-b', area, params: params(), geometry, existing: first,
+    });
+    expect(second.length).toBeGreaterThan(0);
+    expect(second.some((placement) => isForestMember(placement, 'forest-b'))).toBe(true);
+    expect(second.some((placement) => isForestMember(placement, 'forest-a'))).toBe(false);
   });
 
   it('returns a batch already in back-to-front paint order', () => {
@@ -192,9 +296,9 @@ describe('scatterForest', () => {
     expect([...grounds].sort((a, b) => a - b)).toEqual(grounds);
   });
 
-  it('produces nothing without a species, a radius, or density', () => {
-    expect(run({ speciesIds: [] })).toEqual([]);
-    expect(run({}, [], { ...area, radius: 0 })).toEqual([]);
+  it('produces nothing without a positive recipe entry or density', () => {
+    expect(run({ trees: [] })).toEqual([]);
+    expect(run({ trees: [{ sourceArtId: 'tall-tree', weight: 0 }] })).toEqual([]);
     expect(run({ density: 0 })).toEqual([]);
   });
 });
@@ -220,24 +324,5 @@ describe('sortFloatingArtworkByDepth', () => {
       id: 'y', sourceArtId: 'tall-tree', pixelX: 0, pixelY: 0, direction: 'south', scale: 1,
     };
     expect(sortFloatingArtworkByDepth([known, unknown], geometry)).toEqual([unknown, known]);
-  });
-});
-
-describe('eraseForestArea', () => {
-  it('removes only the art standing inside the brush', () => {
-    const placements = run();
-    const kept = eraseForestArea(placements, { centerX: area.centerX, centerY: area.centerY, radius: 60 }, geometry);
-    expect(kept.length).toBeLessThan(placements.length);
-    for (const placement of kept) {
-      const ground = floatingArtworkGroundPoint(placement, geometry)!;
-      expect(Math.hypot(ground.x - area.centerX, ground.y - area.centerY)).toBeGreaterThan(60);
-    }
-  });
-
-  it('never drops art whose source geometry is unresolvable', () => {
-    const unknown: FloatingArtworkPlacement = {
-      id: 'x', sourceArtId: 'missing', pixelX: area.centerX, pixelY: area.centerY, direction: 'south', scale: 1,
-    };
-    expect(eraseForestArea([unknown], area, geometry)).toEqual([unknown]);
   });
 });

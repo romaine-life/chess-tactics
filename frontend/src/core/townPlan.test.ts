@@ -693,6 +693,20 @@ describe('townIdPrefix', () => {
     for (const placement of second.placements) expect(isTownMember(placement, 'b2')).toBe(true);
   });
 
+  it('keeps independently planned Section ids unique under one Town owner', () => {
+    const first = planTown({
+      townId: 'a1', scopeId: 'section-a', bounds: AREA, params: params({ size: 4 }), geometry, existing: [],
+    });
+    const second = planTown({
+      townId: 'a1', scopeId: 'section-b', bounds: AREA, params: params({ size: 4 }), geometry, existing: [],
+    });
+    expect(new Set([...first.placements, ...second.placements].map((placement) => placement.id)).size)
+      .toBe(first.placements.length + second.placements.length);
+    for (const placement of [...first.placements, ...second.placements]) {
+      expect(isTownMember(placement, 'a1')).toBe(true);
+    }
+  });
+
   it('produces a prefix the sanitizer accepts', () => {
     expect(`${townIdPrefix('a1')}0`).toMatch(/^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,127}$/);
   });

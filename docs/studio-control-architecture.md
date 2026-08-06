@@ -205,7 +205,7 @@ state or the retired `artworkEditor` namespace.
 Per
 [ADR-0166](adr/0166-manual-ai-handoff-separates-generation-references-from-raw-pipeline-sources.md)
 as refined by
-[ADR-0466](adr/0466-ai-artwork-intake-is-source-agnostic.md), the Generation
+[ADR-0478](adr/0478-ai-artwork-intake-is-source-agnostic.md), the Generation
 References instrument owns saved-frame authoring and the immutable, unit-free,
 cover-free images supplied to AI generation. It owns reference capture and
 exact-reference copy/download only.
@@ -393,6 +393,57 @@ and Tile share one connected-terrain-area selector over the resolved playable-pl
 Generate may save and rerun that scope; Tile selection remains transient. Tile's Fill selected area
 action stamps the exact armed single tile across the selected area in one undoable edit and leaves
 every coordinate outside it unchanged.
+
+## Saved placement generators
+
+Per [ADR-0464](adr/0464-forests-are-saved-rerunnable-generator-instances.md), Town and Forest use
+the same saved-unit interaction already established by Terrain Generate. Dragging a logical-grid
+area, or using the view-centred Add action, creates and selects a named persisted generator instance
+without materializing output. Its settled area remains highlighted; a selector reopens any saved
+instance after reload; and Generate or Regenerate is the sole action that replaces its output.
+
+Per [ADR-0468](adr/0468-placement-generators-randomize-unless-fixed-seed-is-enabled.md), each Town
+or Forest Generate chooses and saves a fresh seed by default. Reproducibility is opt-in through the
+shared **Fixed seed** toggle; only that state reveals the numeric seed controls and reuses the same
+seed on Generate. The automatic seed update and owned-output replacement are one committed edit.
+
+Generator recipes use explicit named entry rows with add, remove, disclosure, and relative weight.
+An artwork swatch catalog may choose one row's source while open, but selected thumbnail borders are
+not a recipe representation. Town output is owned by its Town id and Forest output by its Forest id,
+so regeneration, removal, area erase, and layer clear affect only that saved instance's ordinary
+visual-only Scene Art. Hand-placed Scene Art and output owned by other generators remain unchanged.
+
+Per [ADR-0470](adr/0470-placement-generator-sections-compose-mixed-and-distinct-approaches.md), the
+selected logical-grid patch is the only geometry an author controls. Town and Forest each
+hold complete editable **Sections**. A later Section may be **Mixed**, sharing the preceding
+Section group's generated territory, or **Distinct**, beginning another generator-chosen territory
+inside the same patch. Consecutive mixed Sections make combined groups, so one container can mix
+some approaches while keeping others spatially separate. Territory bounds and equal allocation
+between distinct groups are transient seeded generation results, never author-managed or persisted
+subareas; Sections expose no area or territory-weight control.
+
+Zero Sections and empty Sections are valid intermediate recipes. Section disclosure and removal
+remain author-controlled in those states. Only Generate is disabled when no Section contains
+positive-weight content; validation must not disable the editing controls above it.
+
+A Town Section owns its Plan, building recipe, count, size range, frontage,
+landmarks, street setback, spacing, fit policy, looseness, and facing variation. **Village Hamlet**,
+**Mill Village**, and **Castle Borough** are Town-level presets rendered above the Section
+collection. Each replaces that complete collection with one or more explicit Sections, including
+their Plans and mixed/distinct relationships. A Forest Section owns contents, density, randomness,
+spacing, clumping, feathering, scale range, and orientation; **All Trees**, **Lush Woodland**, and
+**Rocky Grove** likewise replace the Forest's complete Section collection. The resulting Sections
+remain ordinary editable fields. Presets preserve the outer patch and generated output and never
+generate by themselves.
+Town Plans remain invisible building guides; no road tiles or connectivity behavior are implied.
+
+Per [ADR-0472](adr/0472-forest-generation-bounds-ground-contact-not-sprite-frames.md) and
+[ADR-0473](adr/0473-source-art-ground-contact-is-measured-from-base-alpha.md), Forest placement
+bounds its measured direction-specific ground-contact geometry rather than a frame-centre point or
+complete image box. The whole projected root/base ellipse must remain inside the selected cells
+(and inside a generated Distinct Section territory), while the trunk above contact, branches,
+canopy, transparent gutters, and other elevated pixels may overhang. Source-art candidate metadata
+and installed drawable behavior carry the base-alpha-derived anchor and footprint.
 
 Per [ADR-0131](adr/0131-sparse-scenic-terrain-separates-footprint-from-material.md), the Scenic
 terrain instrument keeps its North, East, South, West, and All directions rectangle controls and

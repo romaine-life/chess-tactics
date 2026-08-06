@@ -369,7 +369,11 @@ stable tie-breaker for exact equal-depth operations. A change of direction selec
 installed `<direction>-back`/`<direction>-front` media pair. South may use the
 legacy `back`/`front` pair. Missing pairs are unavailable rather than flattened,
 planar-rotated, or silently substituted. Per-direction source calibration may
-override the drawable's default scale and split geometry.
+override the drawable's default scale and split geometry. Per ADR-0473, every
+new source-art candidate also carries its measured bottom-alpha contact anchor
+and root/base footprint; installation preserves that per-facing geometry. The
+Forest boundary test consumes only that scaled contact footprint, never the
+complete source frame or elevated alpha.
 
 Per [ADR-0150](adr/0150-structure-source-art-turntables-are-complete-source-only-live-groups.md),
 [ADR-0151](adr/0151-source-art-review-requires-interactive-board-placement.md),
@@ -621,14 +625,14 @@ the four source corners and full internal row/column fit remain owner-authorable
 in the running app against the untouched raster. Automatic geometry may seed
 that instrument, but it never outranks an owner-picked control. Guide movement
 is clamped between neighboring guides so the board cannot fold or reorder cells.
-Per [ADR-0467](adr/0467-first-time-grid-fitting-starts-from-the-game-grid.md),
+Per [ADR-0479](adr/0479-first-time-grid-fitting-starts-from-the-game-grid.md),
 an unregistered raw opens with the Level's real row/column count already rendered
 as a centered canonical isometric grid at one uniform scale. Coarse-mode uniform
 size controls scale all four corners around their shared center, stop at the
 source boundary, remain unavailable while local corrections exist, and enter the
 shared Undo/Redo history as one edit. The seed is pending owner-editable state;
 it never saves or derives artwork automatically.
-Per [ADR-0468](adr/0468-using-a-fitted-grid-saves-and-selects-its-board.md),
+Per [ADR-0480](adr/0480-using-a-fitted-grid-saves-and-selects-its-board.md),
 the fitter's final **Use fitted board** action submits the exact displayed grid,
 creates or resumes its immutable corrected raster, and selects that result on the
 working copy. Exact-source browser recovery prevents an interrupted create from
@@ -790,7 +794,7 @@ are `level-artwork` and `levelArtworkEditor`; they never reuse Placed Art brush
 state. Only an open process workspace covers and makes the still-mounted board
   inert. Generation References manages immutable level-derived model inputs and
   their exact copy/download. Per
-  [ADR-0466](adr/0466-ai-artwork-intake-is-source-agnostic.md), Board Art
+  [ADR-0478](adr/0478-ai-artwork-intake-is-source-agnostic.md), Board Art
   Pipeline ingests any valid AI-artwork PNG without requiring a Generation
   Reference relation and presents deterministic creation
   slots, each with one exact Raw Pipeline Source input and at most one

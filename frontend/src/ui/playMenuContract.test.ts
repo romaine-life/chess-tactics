@@ -63,11 +63,11 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playContinue).not.toContain('ContinueOption');
     expect(playMenu).not.toContain("?? 'Nothing to continue'");
     expect(playMenu).not.toContain('inventory.options');
-    // Continue's action column is the resume card itself: facts plus one Play verb.
+    // Continue's action column is the resume card itself: facts plus one self-labeling Continue verb.
     expect(playMenu).toContain('const selected = inventory.activities[0] ?? null;');
     expect(playMenu).toContain('data-testid="continue-detail"');
     expect(playMenu).toContain('className="play-detail-facts"');
-    expect(playMenu).toContain('to={selected.playHref}><span>Play</span>');
+    expect(playMenu).toContain('to={selected.playHref}><span>Continue</span>');
     expect(playMenu).toContain('<ContinuePanel inventory={resumeInventory} />');
     expect(style).toContain('.continue-resume {');
     // No fourth column for Continue, so the action column must not narrow for one.
@@ -85,6 +85,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
 
   it('keeps ordinary Run preparation separate from Continue', () => {
     expect(playMenu).toContain('data-testid="run-choice-current"');
+    expect(playMenu).toMatch(/<ChromeNavButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-choice-current"/);
     expect(playMenu).toContain('to={PLAY_RUN_CURRENT_SELECTOR_HREF}');
     expect(playMenu).toContain('<h4>Current Run</h4>');
     expect(playMenu).toContain("'settings-row play-choice-row'");
@@ -112,12 +113,15 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).not.toContain('<h3>{run.war.name}</h3>');
     expect(playMenu).not.toContain("run.war.description || 'Active War'");
     expect(playMenu).toContain('data-testid="run-choice-new"');
+    expect(playMenu).toMatch(/<ChromeNavButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-choice-new"/);
     expect(playMenu).toContain('to={PLAY_RUN_NEW_SELECTOR_HREF}');
     expect(playMenu).toContain('data-testid="run-detail-new"');
     expect(playMenu).toContain('<RunDetailContentSceneSlot');
     expect(authoredSceneSlots).toContain('region="run-detail" mode="contents"');
     expect(playMenu).not.toContain("sceneTransitionTargetAttributes('run-detail'");
     expect(playMenu).toMatch(/choice === 'new'[\s\S]*?<AtaraxiaSelector/);
+    expect(playMenu).toMatch(/<AtaraxiaSelector[\s\S]*?fillSurface=\{CHROME_LEAF_FILL_SURFACE\}/);
+    expect(ataraxiaSelector).toContain('fillSurface={fillSurface}');
     expect(ataraxiaSelector).toContain('<HouseSelect');
     expect(ataraxiaSelector).toContain('disabled: locked');
     expect(ataraxiaSelector).toContain('{definition.label} — {definition.title}');
@@ -127,6 +131,9 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(ataraxiaSelector).not.toContain("'Complete Ataraxia 0 to unlock'");
     expect(ataraxiaSelector).toContain('<p className="run-ataraxia-effect">{ATARAXIA_BY_TIER[value].effect}</p>');
     expect(ataraxiaSelector).not.toContain('role="radiogroup"');
+    const detailBodyRule = style.match(/\.play-detail-body\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(detailBodyRule).toContain('flex: 0 0 auto');
+    expect(detailBodyRule).not.toContain('flex: 1 1 auto');
   });
 
   it('resolves Play rail icons from installed drawable membership, not retired path-shaped app-ui roles', () => {
@@ -195,6 +202,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('if (run) await abandon();');
     expect(playMenu).toMatch(/await abandon\(\);[\s\S]*?replace\(createRun\([\s\S]*?navigateApp\('\/run'\)/);
     expect(playMenu).toContain("<span>{starting ? 'Starting…' : 'Start Run'}</span>");
+    expect(playMenu).toMatch(/<ChromeButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-start"/);
   });
 
   it('confirms Run replacement inline in the detail column instead of a popup', () => {
@@ -202,11 +210,14 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // arms an explicit Keep Run / Abandon and Start pair in the same actions row.
     expect(playMenu).not.toContain('useConfirm');
     expect(playMenu).toContain('data-testid="run-replace-warning"');
+    expect(playMenu).toMatch(/<InnerChromeBox[^>]*fillSurface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-replace-warning"/);
     expect(playMenu).toContain('This cannot be undone.');
     expect(playMenu).toContain('if (run) { setArmed(true); return; }');
     expect(playMenu).toContain('data-testid="run-keep"');
     expect(playMenu).toContain('data-testid="run-abandon-and-start"');
-    // Danger tone rides the ce-family's registered variant — no new surface paint.
+    expect(playMenu).toMatch(/<ChromeButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-keep"/);
+    expect(playMenu).toMatch(/<ChromeButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-abandon-and-start"/);
+    // Danger tone rides the ce-family's registered variant over the shared oak surface.
     expect(playMenu).toContain("'ce-asset-button', 'is-danger'");
     expect(playMenu).toContain('keepRunButtonRef.current?.focus();');
     expect(style).toContain('.run-replace-note');

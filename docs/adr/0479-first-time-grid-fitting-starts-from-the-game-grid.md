@@ -8,7 +8,7 @@ refines:
   - "[ADR-0178](0178-predrawn-grid-fitting-uses-one-reversible-edit-history.md)"
 ---
 
-# ADR-0467: First-time grid fitting starts from the game grid
+# ADR-0479: First-time grid fitting starts from the game grid
 
 ## Context
 

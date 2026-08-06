@@ -5,10 +5,10 @@ deciders: owner (Nelson) + Codex
 refines:
   - "[ADR-0158](0158-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)"
   - "[ADR-0178](0178-predrawn-grid-fitting-uses-one-reversible-edit-history.md)"
-  - "[ADR-0467](0467-first-time-grid-fitting-starts-from-the-game-grid.md)"
+  - "[ADR-0479](0479-first-time-grid-fitting-starts-from-the-game-grid.md)"
 ---
 
-# ADR-0468: Using a fitted grid saves and selects its board
+# ADR-0480: Using a fitted grid saves and selects its board
 
 ## Context
 

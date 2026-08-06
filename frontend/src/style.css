@@ -976,13 +976,10 @@ h1 {
 .main-menu-twin-screen {
   transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
 }
-/* Buttons hidden until revealed. On COLD load the director opens this stage in order
-   (bg -> title -> buttons). On a SOFT nav INTO the menu (e.g. campaign editor -> menu),
-   the store is already fully revealed, so MainMenu withholds data-reveal-buttons for one
-   frame after mount (its `entered` state) — that runs this same opacity transition as an
-   arrival fade, matching the editor's entrance so the hop dissolves the chrome both ways
-   while the shared backdrop + rain stay put. (Campaign reuses this class but hardcodes
-   data-reveal-buttons, so its play surface is never gated by this.) */
+/* Buttons are hidden only while cold startup walks bg -> title -> scene. Warm navigation
+   composes them at full local opacity before the incoming scene is revealed, leaving the
+   director's scene boundary as the one fade (ADR-0462). Campaign reuses this class but
+   hardcodes data-reveal-buttons, so its play surface is never gated by startup. */
 .main-menu-layer:not([data-reveal-buttons]) .main-menu-twin-screen {
   opacity: 0;
 }
@@ -6960,7 +6957,8 @@ body.loading-bootstrap .app-startup-status {
   text-align: right;
 }
 
-.le-town-building-pick {
+.le-town-building-pick,
+.le-generator-art-pick {
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
@@ -6968,14 +6966,16 @@ body.loading-bootstrap .app-startup-status {
   gap: 6px;
   overflow: hidden;
 }
-.le-town-building-pick img {
+.le-town-building-pick img,
+.le-generator-art-pick img {
   flex: 0 0 auto;
   width: 22px;
   height: 22px;
   object-fit: contain;
   image-rendering: pixelated;
 }
-.le-town-building-pick > span {
+.le-town-building-pick > span,
+.le-generator-art-pick > span {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
@@ -6984,8 +6984,35 @@ body.loading-bootstrap .app-startup-status {
   text-align: left;
 }
 /* The picker grid, open only while choosing. */
-.le-town-building-picker {
+.le-town-building-picker,
+.le-generator-art-picker {
   margin: 4px 0 2px;
+}
+
+.le-generator-preset-list {
+  display: grid;
+  gap: 4px;
+  margin: 4px 0 6px;
+}
+
+.le-generator-preset {
+  display: grid;
+  justify-items: start;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.le-generator-preset > strong,
+.le-generator-preset > small {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+}
+
+.le-generator-preset > small {
+  opacity: .78;
 }
 
 .le-gen-cover-add {
@@ -15609,15 +15636,6 @@ button.tileset-relationship-cell {
   touch-action: none;
 }
 
-/* The forest brush footprint, so the author paints an area they can see rather than guess.
-   Drawn as SVG geometry (like .le-fence-edge-hint), not CSS surface paint. */
-.le-forest-brush-ring {
-  position: absolute;
-  pointer-events: none;
-  overflow: visible;
-}
-
-/* The area being dragged for a town, drawn as SVG geometry rather than CSS surface paint. */
 /* The size example standing on the board. Layout only; the art carries its own appearance. */
 .le-town-size-example {
   position: absolute;
@@ -15631,7 +15649,8 @@ button.tileset-relationship-cell {
 
 /* The selection's tiles. Amber rather than the region tool's cyan because a town is normally sited
    over grass, and cyan at low alpha disappears into green. */
-.le-town-cells {
+.le-town-cells,
+.le-forest-cells {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -15640,8 +15659,9 @@ button.tileset-relationship-cell {
   overflow: visible;
   z-index: 3;
 }
-/* A settled town's tiles sit quieter than the drag in progress, so the live one reads as active. */
-.le-town-cells.is-settled {
+/* A settled generator area sits quieter than the drag in progress, so the live one reads as active. */
+.le-town-cells.is-settled,
+.le-forest-cells.is-settled {
   opacity: 0.6;
 }
 
@@ -15653,6 +15673,17 @@ button.tileset-relationship-cell {
   white-space: nowrap;
   font-size: 12px;
   color: rgb(244, 214, 150);
+  text-shadow: 0 1px 2px rgb(8, 12, 20), 0 0 6px rgb(8, 12, 20);
+}
+
+/* Forest uses the same projected-cell selection as Town, with its own green authoring cue. */
+.le-forest-drag-size {
+  position: absolute;
+  transform: translateY(-1.35em);
+  pointer-events: none;
+  white-space: nowrap;
+  font-size: 12px;
+  color: rgb(166, 236, 190);
   text-shadow: 0 1px 2px rgb(8, 12, 20), 0 0 6px rgb(8, 12, 20);
 }
 
@@ -25091,7 +25122,10 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
 .play-detail-body {
   align-content: start;
   display: grid;
-  flex: 1 1 auto;
+  /* Run's final verb completes the facts or Ataraxia choice directly above it.
+     Do not grow this body into an empty spacer that strands the verb at the
+     bottom of the scenic detail column (ADR-0475). */
+  flex: 0 0 auto;
   min-block-size: 0;
 }
 

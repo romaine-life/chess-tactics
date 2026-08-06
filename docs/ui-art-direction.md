@@ -255,22 +255,24 @@ The default work surfaces are `/`, `/enchiridion`, `/enchiridion/units`,
 `/editor/level`, and exact `/play?...` for a selected live board. The main menu has
 five top-level controls — Play, Editor, Lobbies, Enchiridion, Settings — and Play owns the shared
 Continue/Skirmish/Run/Levels/Campaign selector described by ADR-0074, ADR-0232,
-ADR-0294, and ADR-0356. Clicking Play lands on Continue after content and Run
+ADR-0294, ADR-0356, and ADR-0474. Clicking Play lands on Continue after content and Run
 authority settle. Its rail control says only **Continue**. The action column is
 the resume surface itself and mounts no detail column: it shows exactly one
 activity — the most recently updated resumable one, as its title, facts, and one
-final Play action — offering no mode list and no second activity, and states
+final **Continue** action — offering no mode list and no second activity, and states
 **Nothing to continue** once when there is none. Ordinary Run remains a
 separate neutral preparation surface between Current Run and Start New Run.
 Run preparation uses Campaign Levels' master-detail geometry, with current-Run
-facts plus Play or Ataraxia plus Start Run in the right detail column. It omits feature-pitch and
+facts plus Play or Ataraxia plus Start Run in the right detail column. Play follows the current-Run
+facts, and Start Run follows the Ataraxia selector plus any replacement disclosure instead of
+pinning either final action below an empty column spacer. It omits feature-pitch and
 authored-War copy, and the Ataraxia choice is the shared scrollable dropdown
 with unavailable installed tiers visible but disabled. Every tier, including **Ataraxia 0 — The
 Untroubled Mind**, presents its subtitle in the selector and its literal impact
 beneath it. In the Run title bar, Ataraxia's tooltip is instead a compact cumulative
 list headed only **Ataraxia**: every active tier is one small canonical carved-numeral
 row beside its model-owned effect, with no appended mechanic-definition panes; tier
-zero reads **Standard rules.** (ADR-0289, ADR-0290, ADR-0291, ADR-0390, ADR-0391).
+zero reads **Standard rules.** (ADR-0289, ADR-0290, ADR-0291, ADR-0390, ADR-0391, ADR-0475).
 On Run defeat, the result shade belongs only to the battlefield viewport. The persistent
 title bar and right Controls panel remain fully visible and operable for post-Battle
 inspection. The result is therefore non-modal and offers paid **Retry**, **New Run**, and

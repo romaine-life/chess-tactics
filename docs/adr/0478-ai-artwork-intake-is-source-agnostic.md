@@ -4,13 +4,13 @@ date: 2026-08-05
 deciders: owner (Nelson) + Codex
 partially_supersedes:
   - "[ADR-0166](0166-manual-ai-handoff-separates-generation-references-from-raw-pipeline-sources.md)'s mandatory Generation Reference binding for every new AI result"
-  - "[ADR-0465](0465-board-art-pipeline-owns-ai-result-ingress.md)'s producing-reference selector and reference-bound waiting attempt"
+  - "[ADR-0477](0477-board-art-pipeline-owns-ai-result-ingress.md)'s producing-reference selector and reference-bound waiting attempt"
 refines:
   - "[ADR-0168](0168-creation-slots-begin-with-reusable-raw-pipeline-sources.md)"
-  - "[ADR-0464](0464-generation-references-freeze-the-autosaved-working-copy.md)"
+  - "[ADR-0476](0476-generation-references-freeze-the-autosaved-working-copy.md)"
 ---
 
-# ADR-0466: AI artwork intake is source-agnostic
+# ADR-0478: AI artwork intake is source-agnostic
 
 ## Context
 

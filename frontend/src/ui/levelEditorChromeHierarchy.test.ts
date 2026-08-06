@@ -233,6 +233,82 @@ describe('Level Editor chrome hierarchy', () => {
     expectRegisteredFamily(levelEditor, 'le-gen-cover-add', 'inner-text-button');
   });
 
+  it('keeps Town and Forest as saved rerunnable units with explicit generation', () => {
+    const createTownStart = levelEditor.indexOf('const createTown = (bounds: TownBounds): void => {');
+    const createTownEnd = levelEditor.indexOf('const resetTownParams', createTownStart);
+    const createTown = levelEditor.slice(createTownStart, createTownEnd);
+    expect(createTown).not.toContain('generateTown(');
+    expect(createTown).toContain('next.towns = towns;');
+
+    const createForestStart = levelEditor.indexOf('const createForest = (bounds: ForestGridArea): void => {');
+    const createForestEnd = levelEditor.indexOf('const addForestAtView', createForestStart);
+    const createForest = levelEditor.slice(createForestStart, createForestEnd);
+    expect(createForest).not.toContain('generateForest(');
+    expect(createForest).toContain('next.forests = forests;');
+
+    const forestSurfaceStart = levelEditor.indexOf('data-testid="forest-placement-surface"');
+    const forestSurfaceEnd = levelEditor.indexOf('data-testid="artwork-free-placement-surface"', forestSurfaceStart);
+    const forestSurface = levelEditor.slice(forestSurfaceStart, forestSurfaceEnd);
+    expect(forestSurface).toContain('createForest(area);');
+    expect(forestSurface).not.toContain('generateForest(');
+
+    expect(levelEditor).toContain('onClick={() => generateForest(selectedForest)}');
+    expect(levelEditor).toContain("{selectedForestGenerated ? 'Regenerate' : 'Generate'}");
+    expect(levelEditor).toContain("{selectedTownGenerated ? 'Regenerate' : 'Generate'}");
+    expect(levelEditor).toContain('generatorSeedForRun(forest.seed, forest.fixedSeed === true)');
+    expect(levelEditor).toContain('generatorSeedForRun(town.seed, town.fixedSeed === true)');
+    expect(levelEditor.match(/<GeneratorSeedControl/g)).toHaveLength(2);
+    expect(levelEditor).toContain('fixed={selectedForest.fixedSeed === true}');
+    expect(levelEditor).toContain('fixed={selectedTown.fixedSeed === true}');
+    expect(levelEditor).toContain('setBoardForests(board.forests ?? []);');
+    expect(levelEditor).toContain('forests: boardForests');
+  });
+
+  it('uses container-level Forest presets to stamp explicit editable Section collections', () => {
+    expect(levelEditor).toContain('>+ Add Forest art</ChromeButton>');
+    expect(levelEditor).toContain('label={`How often · ${tree.weight.toFixed(1)}`}');
+    expect(levelEditor).toContain('Remove this Forest art entry');
+    expect(levelEditor).toContain('FOREST_ART_PRESETS.map((preset) => {');
+    expect(levelEditor).toContain('forestPresetConfiguration(preset.id, forestSpeciesCatalog)');
+    expect(levelEditor).toContain('configured.sections.map(({ relationship, ...approach }) => (');
+    expect(levelEditor).toContain('materializeForestApproach(approach, relationship)');
+    expect(levelEditor).toContain('updateForest(selectedForest.id, { sections });');
+    expect(levelEditor).toContain("A preset replaces this Forest's complete Section collection.");
+    const forestPreset = levelEditor.indexOf('ariaLabel="Forest presets"');
+    const forestAdd = levelEditor.indexOf('>+ Add Forest art</ChromeButton>');
+    expect(forestPreset).toBeGreaterThan(0);
+    expect(forestPreset).toBeLessThan(forestAdd);
+    expect(levelEditor).toContain("{selectedForest.sections.length ? '+ Add mixed Section' : '+ Add Section'}");
+    expect(levelEditor).toContain('>+ Add distinct Section</ChromeButton>');
+    expect(levelEditor).not.toContain('disabled={!section.trees.length}');
+    expect(levelEditor).not.toContain('selectedForest.sections.length > 1 ?');
+    expect(levelEditor).not.toContain('setForestSpecies');
+  });
+
+  it('uses container-level Town presets to stamp Plan-owning Section collections', () => {
+    expect(levelEditor).toContain('TOWN_PRESETS.map((preset) => {');
+    expect(levelEditor).toContain('townPresetConfiguration(preset.id, townBuildingCatalog)');
+    expect(levelEditor).toContain('materializeTownApproach(approach, relationship)');
+    expect(levelEditor).toContain('updateTown(selectedTown.id, { sections });');
+    expect(levelEditor).toContain("A preset replaces this Town's complete Section collection.");
+    const sectionPreset = levelEditor.indexOf('ariaLabel="Town presets"');
+    const plan = levelEditor.indexOf('aria-label={`Section ${index + 1} plan`}');
+    const townAdd = levelEditor.indexOf('>+ Add building</ChromeButton>');
+    expect(sectionPreset).toBeGreaterThan(0);
+    expect(sectionPreset).toBeLessThan(plan);
+    expect(plan).toBeLessThan(townAdd);
+    expect(levelEditor).toContain("newTownSection(selectedTown.sections.length ? 'mixed' : 'distinct')");
+    expect(levelEditor).toContain("newTownSection('distinct')");
+    expect(levelEditor).toContain('composeGeneratorSections(generatedTown.bounds, generatedTown.sections, generatedTown.seed)');
+    expect(levelEditor).toContain('composeGeneratorSections(generatedForest.bounds, generatedForest.sections, generatedForest.seed)');
+    expect(levelEditor).toContain('scopeId: section.id');
+    expect(levelEditor).not.toContain('aria-label="Town plan"');
+    expect(levelEditor).not.toContain('Territory weight');
+    expect(levelEditor).toContain("{selectedTown.sections.length ? '+ Add mixed Section' : '+ Add Section'}");
+    expect(levelEditor).not.toMatch(/aria-expanded=\{townSectionOpen\(section\)\}[\s\S]{0,120}disabled=/);
+    expect(levelEditor).not.toContain('selectedTown.sections.length > 1 ?');
+  });
+
   it('registers both facing-cell implementations as tool squares', () => {
     expectRegisteredFamily(levelEditor, 'unit-facing-cell', 'inner-tool-square');
     expectRegisteredFamily(studioBoard, 'unit-facing-cell', 'inner-tool-square');
