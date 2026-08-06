@@ -1438,14 +1438,6 @@
       "kind": "css",
       "file": "src/style.css",
       "context": "",
-      "selector": ".le-floating-artwork-hit.is-selectable",
-      "surfaceHash": "f2b278a0e2a6408749f498510d6627daef4010b8969c2f35218cfe2549c55d50",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
       "selector": ".le-floating-artwork-hit.is-selected",
       "surfaceHash": "45984d2fce37dfd2e24a65ae0174282d80be4954a4071fefe7b0c17d13fcd2b0",
       "occurrence": 1

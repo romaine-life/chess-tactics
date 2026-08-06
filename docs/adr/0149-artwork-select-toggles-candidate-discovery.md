@@ -1,9 +1,9 @@
 ---
-status: "accepted; Artwork-layer naming superseded by ADR-0176"
+status: "superseded by ADR-0500; Artwork-layer naming previously superseded by ADR-0176"
 date: 2026-07-24
 deciders: Nelson, Codex
 supersedes: ADR-0148 Select activation and current-outline visibility clauses
-partially_superseded_by: "[ADR-0176](0176-placed-art-and-level-artwork-are-separate-editor-destinations.md)"
+superseded_by: "[ADR-0500](0500-scene-art-select-is-local-alpha-aware-and-stack-cycling.md)"
 ---
 
 # ADR-0149: Artwork Select toggles candidate discovery
