@@ -5,6 +5,10 @@ import type {
 } from '../net/liveMediaAdmin';
 import type { SaveDrawableAssetInput, AdminDrawableCatalog } from '../net/drawableCatalogAdmin';
 import {
+  sourceArtGroundContactCalibration,
+  type SourceArtGroundContact,
+} from '../core/sourceArtGroundContact';
+import {
   acceptanceGroupForSlot,
   candidateVersionsForSlot,
   isReviewedForCurrentSurfaceSnapshot,
@@ -35,6 +39,7 @@ export interface SourceArtTurntableGroup {
   placementScale: number;
   license: string;
   requiredSlots: string[];
+  groundContactByDirection: Partial<Record<SourceArtTurntableDirection, SourceArtGroundContact>>;
 }
 
 export interface SourceArtBoardProofPlacement {
@@ -108,6 +113,18 @@ function sourceArtDirection(value: unknown): value is SourceArtTurntableDirectio
   return typeof value === 'string' && (SOURCE_ART_DIRECTIONS as readonly string[]).includes(value);
 }
 
+function sourceArtGroundContact(value: unknown): SourceArtGroundContact | null {
+  if (!isRecord(value) || !isRecord(value.groundFootprint)) return null;
+  const anchorX = Number(value.anchorX);
+  const anchorY = Number(value.anchorY);
+  const w = Number(value.groundFootprint.w);
+  const h = Number(value.groundFootprint.h);
+  return Number.isFinite(anchorX) && Number.isFinite(anchorY)
+    && Number.isFinite(w) && w > 0 && Number.isFinite(h) && h > 0
+    ? { anchorX, anchorY, groundFootprint: { w, h } }
+    : null;
+}
+
 function latestVersionWithSourceMetadata(catalog: AdminLiveMediaCatalog, slots: readonly string[]): AdminLiveMediaVersion | undefined {
   return catalog.versions
     .filter((version) => version.slot && slots.includes(version.slot) && sourceArtMetadata(version))
@@ -153,6 +170,14 @@ export function sourceArtTurntableGroups(catalog: AdminLiveMediaCatalog): Source
       placementScale: metadata.placementScale,
       license: typeof metadata.license === 'string' ? metadata.license : 'unspecified',
       requiredSlots: acceptance.requiredSlots,
+      groundContactByDirection: Object.fromEntries(SOURCE_ART_DIRECTIONS.flatMap((direction) => {
+        const directionVersion = latestVersionWithSourceMetadata(
+          catalog,
+          [`source-art/${source.assetId}/${direction}.png`],
+        );
+        const contact = sourceArtGroundContact(sourceArtMetadata(directionVersion)?.groundContact);
+        return contact ? [[direction, contact]] : [];
+      })),
     };
     const key = `${group.groupId}\0${group.requiredSlots.join('\0')}`;
     const prior = groups.get(key);
@@ -271,12 +296,17 @@ function slotRoleMap(group: SourceArtTurntableGroup): Record<string, string> {
 }
 
 function directionBehavior(group: SourceArtTurntableGroup): Record<string, unknown> {
-  return Object.fromEntries(SOURCE_ART_DIRECTIONS.map((direction) => [direction, {
-    anchorX: 256,
-    anchorY: 256,
-    scale: group.placementScale,
-    splitMode: 'flat-contact',
-  }]));
+  return Object.fromEntries(SOURCE_ART_DIRECTIONS.map((direction) => {
+    const contact = group.groundContactByDirection[direction]
+      ?? sourceArtGroundContactCalibration(group.assetId, direction);
+    return [direction, {
+      anchorX: contact?.anchorX ?? 256,
+      anchorY: contact?.anchorY ?? 256,
+      scale: group.placementScale,
+      splitMode: 'flat-contact',
+      ...(contact ? { groundFootprint: contact.groundFootprint } : {}),
+    }];
+  }));
 }
 
 export function sourceArtDrawableInstallInput(
@@ -298,6 +328,8 @@ export function sourceArtDrawableInstallInput(
     referenceOnly: true,
     license: group.license,
   };
+  const southContact = group.groundContactByDirection.south
+    ?? sourceArtGroundContactCalibration(group.assetId, 'south');
   return {
     id: group.structureId,
     kind: 'structure',
@@ -314,10 +346,11 @@ export function sourceArtDrawableInstallInput(
       value: group.assetId,
       structureKind: group.structureKind ?? 'landmark',
       sourceOnly: true,
-      anchorX: 256,
-      anchorY: 256,
+      anchorX: southContact?.anchorX ?? 256,
+      anchorY: southContact?.anchorY ?? 256,
       scale: group.placementScale,
       splitMode: 'flat-contact',
+      ...(southContact ? { groundFootprint: southContact.groundFootprint } : {}),
       directions: directionBehavior(group),
     },
     metadata: {

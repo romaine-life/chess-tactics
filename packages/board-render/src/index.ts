@@ -144,8 +144,10 @@ export * from './core/level';
 export * from './core/levelMigration';
 export * from './core/levelBoard';
 export * from './core/sharedLevelMerge';
+export * from './core/sourceArtGroundContact';
 export * from './core/predrawnLevel';
 export * from './core/predrawnGeneration';
+export * from './core/projectedGroundFootprint';
 // Canonical persistence shape for the owner-authored Image 1 crop.
 export * from './core/predrawnGenerationFrame';
 export * from './core/pieces';
@@ -177,6 +179,7 @@ export * from './render/sceneDepth';
 export * from './render/structureGeometry';
 export * from './render/terrainSides';
 export * from './ui/boardCode';
+export * from './core/generatorComposition';
 export * from './ui/doodadCatalog';
 export * from './ui/studioBoard';
 export * from './ui/unitCatalog';

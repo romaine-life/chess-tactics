@@ -1,5 +1,6 @@
 import { drawableAssets } from '../art/drawableCatalog';
 import { rookDirections, type Direction } from '../ui/unitCatalog';
+import { sourceArtGroundContactCalibration } from './sourceArtGroundContact';
 
 export type StructureArtKind = 'tree' | 'house' | 'rock' | 'doodad' | 'landmark';
 export type StructureSplitMode = 'authored' | 'flat-contact';
@@ -13,7 +14,15 @@ export interface StructureArtAsset {
   propKind?: 'tree' | 'house' | 'rock';
   terrains: string[];
   blocking: boolean;
-  sprite: { w: number; h: number; anchorX: number; anchorY: number; scale: number };
+  sprite: {
+    w: number;
+    h: number;
+    anchorX: number;
+    anchorY: number;
+    scale: number;
+    /** Ground-contact extent in source pixels; elevated sprite alpha is not included. */
+    groundFootprint?: { w: number; h: number };
+  };
   footprint?: { w: number; h: number };
   /**
    * Authored halves already contain distinct alpha. Flat imagegen/restyle sprites ship the same
@@ -26,10 +35,17 @@ export type StructureArtDefinition = Omit<StructureArtAsset, 'sprite'> & {
   sprite: Omit<StructureArtAsset['sprite'], 'w' | 'h'>;
 };
 
+function parsedGroundFootprint(value: unknown): { w: number; h: number } | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const w = Number((value as Record<string, unknown>).w);
+  const h = Number((value as Record<string, unknown>).h);
+  return Number.isFinite(w) && w > 0 && Number.isFinite(h) && h > 0 ? { w, h } : undefined;
+}
+
 const definitions = (): StructureArtDefinition[] => drawableAssets('structure').map((asset) => {
   const {
     value, structureKind, sourceOnly: rawSourceOnly, propKind, terrains, blocking,
-    anchorX, anchorY, scale, footprint, splitMode,
+    anchorX, anchorY, scale, groundFootprint, footprint, splitMode,
   } = asset.behavior;
   const sourceOnly = rawSourceOnly === true;
   if ((structureKind !== 'tree' && structureKind !== 'house' && structureKind !== 'rock'
@@ -54,7 +70,12 @@ const definitions = (): StructureArtDefinition[] => drawableAssets('structure').
     ...(typeof propKind === 'string' ? { propKind: propKind as StructureArtDefinition['propKind'] } : {}),
     terrains: sourceOnly ? [] : terrains as string[],
     blocking: sourceOnly ? false : blocking as boolean,
-    sprite: { anchorX: Number(anchorX), anchorY: Number(anchorY), scale },
+    sprite: {
+      anchorX: Number(anchorX),
+      anchorY: Number(anchorY),
+      scale,
+      ...(parsedGroundFootprint(groundFootprint) ? { groundFootprint: parsedGroundFootprint(groundFootprint) } : {}),
+    },
     ...(footprint && typeof footprint === 'object' ? { footprint: footprint as { w: number; h: number } } : {}),
     splitMode,
   };
@@ -171,18 +192,31 @@ export function structureArtDirectionSprite(
   const override = rawDirections && typeof rawDirections === 'object' && !Array.isArray(rawDirections)
     ? (rawDirections as Record<string, unknown>)[direction]
     : undefined;
-  const record = override && typeof override === 'object' && !Array.isArray(override)
+  const hasDirectionOverride = !!override && typeof override === 'object' && !Array.isArray(override);
+  const record = hasDirectionOverride
     ? override as Record<string, unknown>
     : {};
   const anchorX = Number(record.anchorX);
   const anchorY = Number(record.anchorY);
   const scale = Number(record.scale);
+  const explicitGroundFootprint = parsedGroundFootprint(record.groundFootprint);
+  // Existing accepted source rows predate contact measurement and all carry the placeholder
+  // 256,256 anchor. Use the measured natural-art calibration until they are reinstalled with
+  // explicit per-direction geometry; explicit catalog geometry always wins thereafter.
+  const hasExplicitAnchor = Number.isFinite(anchorX) && Number.isFinite(anchorY)
+    && (anchorX !== 256 || anchorY !== 256);
+  const calibrated = hasDirectionOverride && !explicitGroundFootprint && !hasExplicitAnchor
+    ? sourceArtGroundContactCalibration(id, direction)
+    : undefined;
   if (!base) return undefined;
   return {
     ...structureArtDirectionRasterDimensions(id, direction),
-    anchorX: Number.isFinite(anchorX) ? anchorX : base.sprite.anchorX,
-    anchorY: Number.isFinite(anchorY) ? anchorY : base.sprite.anchorY,
+    anchorX: calibrated?.anchorX ?? (Number.isFinite(anchorX) ? anchorX : base.sprite.anchorX),
+    anchorY: calibrated?.anchorY ?? (Number.isFinite(anchorY) ? anchorY : base.sprite.anchorY),
     scale: Number.isFinite(scale) && scale > 0 ? scale : base.sprite.scale,
+    ...((explicitGroundFootprint ?? calibrated?.groundFootprint)
+      ? { groundFootprint: explicitGroundFootprint ?? calibrated!.groundFootprint }
+      : {}),
   };
 }
 

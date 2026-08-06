@@ -21,7 +21,7 @@
 // turn off-axis. `looseness` scales that profile from surveyed grid to organic village, which is
 // the "which variations are acceptable" dial. A plan cannot be violated, only loosened.
 
-import { TILE_STEP_X, TILE_STEP_Y, TILE_TOP_HEIGHT, TILE_TOP_WIDTH } from '../art/projectionContract';
+import { TILE_TOP_HEIGHT, TILE_TOP_WIDTH } from '../art/projectionContract';
 import { projectBoardPoint, unprojectBoardPoint } from '../render/boardProjection';
 import { rookDirections, type Direction } from '../ui/unitCatalog';
 import {
@@ -31,6 +31,10 @@ import {
   type ForestGroundPoint,
   type ForestSpeciesGeometry,
 } from './forestScatter';
+import {
+  projectedGroundFootprintGridRadius,
+  projectedGroundFootprintWithinGridRect,
+} from './projectedGroundFootprint';
 import type { FloatingArtworkPlacement } from '../ui/boardCode';
 
 export type TownPlanKind = 'linear' | 'crossroads' | 'green' | 'cluster';
@@ -445,15 +449,12 @@ export function footprintsOverlap(a: TownFootprint, b: TownFootprint): boolean {
  * bounding-box corners overshoots it and throws away usable ground.
  */
 export function footprintGridRadius(box: TownFootprint): number {
-  return Math.sqrt((box.rx / TILE_STEP_X) ** 2 + (box.ry / TILE_STEP_Y) ** 2) / 2;
+  return projectedGroundFootprintGridRadius(box);
 }
 
 /** True when the whole footprint sits inside the selection, not merely its centre. */
 function footprintWithin(box: TownFootprint, area: TownBounds): boolean {
-  const radius = footprintGridRadius(box);
-  const centre = unprojectBoardPoint({ left: box.x, top: box.y });
-  return centre.x - radius >= area.minX && centre.x + radius <= area.maxX
-    && centre.y - radius >= area.minY && centre.y + radius <= area.maxY;
+  return projectedGroundFootprintWithinGridRect(box, area);
 }
 
 interface TownPlot {
@@ -471,6 +472,8 @@ interface TownPlot {
 export interface TownPlanInput {
   /** Identity of the town being planned. Its buildings are tagged with it. */
   townId: string;
+  /** Optional section identity, keeping independently planned approaches collision-free. */
+  scopeId?: string;
   /** The area the author dragged. The town fills it and never leaves it. */
   bounds: TownBounds;
   params: TownPlanParams;
@@ -510,7 +513,7 @@ export interface TownPlanResult {
  * can name the real cause instead of blaming frontage for a town the board filter rejected.
  */
 export function planTown(input: TownPlanInput): TownPlanResult {
-  const { townId, bounds, params, geometry, existing } = input;
+  const { townId, scopeId, bounds, params, geometry, existing } = input;
   const empty: TownPlanResult = {
     placements: [], plotsOffered: 0, rejectedSpacing: 0, rejectedOutside: 0,
   };
@@ -641,7 +644,7 @@ export function planTown(input: TownPlanInput): TownPlanResult {
     return a - b;
   });
 
-  const prefix = townIdPrefix(townId);
+  const prefix = `${townIdPrefix(townId)}${scopeId ? `${scopeId}.` : ''}`;
   const spacing = Math.max(0, params.spacing);
 
   // Scene art already on the board takes up ground too, so a town cannot be built through it.

@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
 import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, cameraToContainBounds, defaultBoardCameraBounds, defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, MAX_FLOATING_ARTWORK_PIXEL, mergeSharedLevel, normalizeBoardCameraBounds, predrawnEnvironmentGeometryFingerprintInputV2, predrawnVisualFootprintClipStyleForCell, resolvedBoardCameraBounds, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, type BoardBackgroundMode, type BoardCameraBounds, type BoardCameraSnapMode, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
 import { boardLabCellPosition, boardLabMetrics, immutableBoardLabTerrainSrc } from '../render/BoardLabBoard';
-import { projectBoardPoint, unprojectBoardPoint, type BoardTown, type BoardTownSection } from '@chess-tactics/board-render';
+import { projectBoardPoint, unprojectBoardPoint, type BoardForest, type BoardForestSection, type BoardForestTree, type BoardTown, type BoardTownSection } from '@chess-tactics/board-render';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { PropSprite, propHalfSrc } from '../render/BoardStructure';
 import { PROP_DEFS, defaultPropDef, propCells, propDef, type PropDef, type PropKind } from '../core/props';
@@ -20,14 +20,16 @@ import {
 } from '../core/structureArt';
 import {
   FOREST_SCATTER_DEFAULTS,
-  eraseForestArea,
   groundPointToPixel,
+  hashUnit,
+  isForestMember,
   scatterForest,
   sortFloatingArtworkByDepth,
-  type ForestBrushArea,
+  type ForestGridArea,
   type ForestScatterParams,
   type ForestSpeciesGeometry,
 } from '../core/forestScatter';
+import { composeGeneratorSections, type GeneratorSectionRelationship } from '../core/generatorComposition';
 import {
   TOWN_FIT_LABELS,
   TOWN_FIT_NOTES,
@@ -42,8 +44,6 @@ import {
   townBoundsCentre,
   planTown,
   snapGridPoint,
-  townBoundsInTiles,
-  townBoundsScenePolygon,
   type TownBounds,
   type TownFitPolicy,
   type TownPlanKind,
@@ -87,6 +87,19 @@ import { PaletteSelect } from './shared/PaletteSelect';
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
 import { CyclePicker } from './shared/CyclePicker';
 import { AssetSwatchList } from './shared/AssetSwatchList';
+import { GeneratorRecipePresetList } from './shared/GeneratorRecipePresetList';
+import { GeneratorSeedControl } from './shared/GeneratorSeedControl';
+import {
+  FOREST_ART_PRESETS,
+  forestPresetConfiguration,
+  type ForestApproachConfiguration,
+} from './forestArtPresets';
+import {
+  TOWN_PRESETS,
+  townPresetConfiguration,
+  type TownApproachConfiguration,
+} from './townPresets';
+import { generatorSeedForRun, MAX_GENERATOR_SEED, randomGeneratorSeed } from './generatorSeed';
 import { BoardSizePanel, type BoardResizeSide } from './shared/BoardSizePanel';
 import { DEFAULT_LEVEL_NAME, LEVEL_NAME_MAX, normalizeLevelName } from './shared/levelNamePolicy';
 import {
@@ -1838,15 +1851,6 @@ function editorRecoveryFileStem(levelName: string, documentId: string): string {
 const boardSignature = (board: EditorBoard): string => encodeBoard(board);
 const cloneEditorBoard = (board: EditorBoard): EditorBoard => structuredClone(board) as EditorBoard;
 const HISTORY_LIMIT = 100;
-/** Forest brush footprint in scene pixels — roughly two tiles across at the default. */
-const FOREST_DEFAULT_RADIUS = 160;
-const MAX_GENERATOR_SEED = 9999;
-/**
- * A genuinely random seed. The +/- steppers walk to a NEIGHBOURING seed (which the hash already
- * decorrelates, so it looks entirely different); this jumps somewhere else in the range. Both are
- * reversible because the seed is a plain number the author can dial back to.
- */
-const randomGeneratorSeed = (): number => Math.floor(Math.random() * MAX_GENERATOR_SEED) + 1;
 
 const zoneEntriesForBoard = (board: EditorBoard): EditorZoneEntry[] =>
   board.zoneEntries ? board.zoneEntries : zoneEntriesFromCellMap(board.zones, board.cols, board.rows);
@@ -3125,25 +3129,70 @@ export function LevelEditor(): ReactElement {
       ))
       .sort((left, right) => rank(left) - rank(right));
   }, [artworkAssets]);
-  const [forestSpecies, setForestSpecies] = useState<string[]>([]);
-  const [forestRadius, setForestRadius] = useState(FOREST_DEFAULT_RADIUS);
-  const [forestDensity, setForestDensity] = useState(FOREST_SCATTER_DEFAULTS.density);
-  const [forestJitter, setForestJitter] = useState(FOREST_SCATTER_DEFAULTS.jitter);
-  const [forestScaleMin, setForestScaleMin] = useState(FOREST_SCATTER_DEFAULTS.scaleMin);
-  const [forestScaleMax, setForestScaleMax] = useState(FOREST_SCATTER_DEFAULTS.scaleMax);
-  const [forestRandomFacing, setForestRandomFacing] = useState(FOREST_SCATTER_DEFAULTS.randomFacing);
-  const [forestFacing, setForestFacing] = useState<Direction>(FOREST_SCATTER_DEFAULTS.facing);
-  const [forestSpacing, setForestSpacing] = useState(FOREST_SCATTER_DEFAULTS.spacing);
-  const [forestClumping, setForestClumping] = useState(FOREST_SCATTER_DEFAULTS.clumping);
-  const [forestFalloff, setForestFalloff] = useState(FOREST_SCATTER_DEFAULTS.falloff);
-  // Start somewhere random so a fresh session is not always the same forest. Reset still returns
-  // to the documented baseline (ADR-0057). Unlike the ground-cover seed this is safe to randomise:
-  // it only shapes NEWLY generated placements, which are then baked into the document, whereas
-  // cover is re-rolled from its seed at render time and must stay stable across sessions.
-  const [forestSeed, setForestSeed] = useState(randomGeneratorSeed);
-  // Brush-ring position in surface pixels, so the author sees the footprint being painted.
-  const [forestCursor, setForestCursor] = useState<{ x: number; y: number } | null>(null);
-  const forestStrokeRef = useRef<{ pointerId: number; lastX: number; lastY: number } | null>(null);
+  const initialForestSourceId = studioArm.kind === 'forest'
+    && studioArm.brush
+    && forestSpeciesCatalog.some((asset) => asset.id === studioArm.brush)
+    ? studioArm.brush
+    : null;
+  /** Saved Forest instances. Each owns its area, weighted art recipe, settings, and generated output. */
+  const [boardForests, setBoardForests] = useState<BoardForest[]>(initialBoard?.forests ?? []);
+  const [selectedForestId, setSelectedForestId] = useState<string | null>(null);
+  /** Open art chooser: null entryId appends; a concrete id replaces that recipe entry. */
+  const [forestPicker, setForestPicker] = useState<{ sectionId: string; entryId: string | null } | null>(null);
+  const [expandedForestSections, setExpandedForestSections] = useState<Set<string>>(() => new Set());
+  const [expandedForestTrees, setExpandedForestTrees] = useState<Set<string>>(() => new Set());
+  const [forestGenerationResult, setForestGenerationResult] = useState<{ forestId: string; count: number } | null>(null);
+  /** The live Forest drag in the same snapped logical cells used by Town. */
+  const [forestDragBounds, setForestDragBounds] = useState<ForestGridArea | null>(null);
+  const forestDragRef = useRef<{ pointerId: number; cellX: number; cellY: number } | null>(null);
+  useEffect(() => {
+    if (!boardForests.length) {
+      if (selectedForestId !== null) setSelectedForestId(null);
+      return;
+    }
+    if (!boardForests.some((forest) => forest.id === selectedForestId)) setSelectedForestId(boardForests[0].id);
+  }, [boardForests, selectedForestId]);
+  const selectedForest = boardForests.find((forest) => forest.id === selectedForestId) ?? null;
+  const forestArea: ForestGridArea | null = selectedForest?.bounds ?? null;
+  const selectedForestGenerated = selectedForest
+    ? boardFloatingArtwork.some((placement) => isForestMember(placement, selectedForest.id))
+      || forestGenerationResult?.forestId === selectedForest.id
+    : false;
+  const updateForest = (id: string, change: Partial<BoardForest>): void => {
+    setBoardForests((current) => current.map((forest) => (forest.id === id ? { ...forest, ...change } : forest)));
+  };
+  const updateForestSection = (forestId: string, sectionId: string, change: Partial<BoardForestSection>): void => {
+    setBoardForests((current) => current.map((forest) => (forest.id === forestId
+      ? { ...forest, sections: forest.sections.map((section) => section.id === sectionId ? { ...section, ...change } : section) }
+      : forest)));
+  };
+  const forestSectionOpen = (section: BoardForestSection): boolean => expandedForestSections.has(section.id);
+  const newForestSection = (relationship: GeneratorSectionRelationship = 'distinct'): BoardForestSection => ({
+    id: `s${Math.random().toString(36).slice(2, 8)}`,
+    relationship,
+    trees: [],
+    density: FOREST_SCATTER_DEFAULTS.density,
+    jitter: FOREST_SCATTER_DEFAULTS.jitter,
+    scaleMin: FOREST_SCATTER_DEFAULTS.scaleMin,
+    scaleMax: FOREST_SCATTER_DEFAULTS.scaleMax,
+    randomFacing: FOREST_SCATTER_DEFAULTS.randomFacing,
+    facing: FOREST_SCATTER_DEFAULTS.facing,
+    spacing: FOREST_SCATTER_DEFAULTS.spacing,
+    clumping: FOREST_SCATTER_DEFAULTS.clumping,
+    falloff: FOREST_SCATTER_DEFAULTS.falloff,
+  });
+  const materializeForestApproach = (
+    configuration: ForestApproachConfiguration,
+    relationship: GeneratorSectionRelationship,
+  ): BoardForestSection => ({
+    id: newForestSection(relationship).id,
+    relationship,
+    ...configuration,
+    trees: configuration.trees.map((tree) => ({
+      id: `tr${Math.random().toString(36).slice(2, 8)}`,
+      ...tree,
+    })),
+  });
   // A town is sited, not painted: click to place its centre, then tune and regenerate in place.
   // Buildings are the built structures the forest list deliberately excludes.
   const townBuildingCatalog = useMemo(() => {
@@ -3168,14 +3217,8 @@ export function LevelEditor(): ReactElement {
    * saved town starts collapsed so a town of five sections is not a wall of sliders.
    */
   const [expandedTownSections, setExpandedTownSections] = useState<Set<string>>(() => new Set());
-  /**
-   * A section is open if the author opened it — or if it has no buildings at all, because a
-   * collapsed empty section hides the only thing standing between the town and Regenerate doing
-   * nothing. You cannot be finished with a section you have not filled.
-   */
-  const townSectionOpen = (section: BoardTownSection): boolean => (
-    !section.buildings.length || expandedTownSections.has(section.id)
-  );
+  /** Disclosure is author-controlled. Recipe validity belongs to Generate, not the Section header. */
+  const townSectionOpen = (section: BoardTownSection): boolean => expandedTownSections.has(section.id);
   const toggleTownSectionExpand = (sectionId: string): void => {
     setExpandedTownSections((current) => {
       const next = new Set(current);
@@ -3205,21 +3248,41 @@ export function LevelEditor(): ReactElement {
       return next;
     });
   };
-  const newTownSection = (): BoardTownSection => ({
+  const newTownSection = (relationship: GeneratorSectionRelationship = 'distinct'): BoardTownSection => ({
     id: `s${Math.random().toString(36).slice(2, 8)}`,
+    relationship,
+    plan: TOWN_PLAN_DEFAULTS.plan,
+    size: TOWN_PLAN_DEFAULTS.size,
     buildings: [],
-    share: 1,
     scaleMean: 1,
     scaleMin: 0.75,
     scaleMax: 1.35,
     plotWidth: DEFAULT_TOWN_SECTION.plotWidth,
+    landmarkIds: [],
+    setback: TOWN_PLAN_DEFAULTS.setback,
+    looseness: TOWN_PLAN_DEFAULTS.looseness,
+    facingWobble: TOWN_PLAN_DEFAULTS.facingWobble,
+    spacing: TOWN_PLAN_DEFAULTS.spacing,
+    fit: TOWN_PLAN_DEFAULTS.fit,
+  });
+  const materializeTownApproach = (
+    configuration: TownApproachConfiguration,
+    relationship: GeneratorSectionRelationship,
+  ): BoardTownSection => ({
+    id: newTownSection(relationship).id,
+    relationship,
+    ...configuration,
+    buildings: configuration.buildings.map((building) => ({
+      id: `b${Math.random().toString(36).slice(2, 8)}`,
+      ...building,
+    })),
   });
   const [selectedTownId, setSelectedTownId] = useState<string | null>(null);
   /** The live selection in grid cells, snapped, so the preview shows exactly what will be used. */
   const [townDragBounds, setTownDragBounds] = useState<TownBounds | null>(null);
   const townDragRef = useRef<{ pointerId: number; cellX: number; cellY: number } | null>(null);
   const [townSited, setTownSited] = useState<
-    { placed: number; spacing: number; outside: number; offered: number } | null>(null);
+    { placed: number; target: number; spacing: number; outside: number; offered: number } | null>(null);
   // Keep the selection on a town that exists. Without this the dropdown opens empty on a board
   // that already has towns, and lands on empty again whenever the selected one is removed.
   useEffect(() => {
@@ -3231,6 +3294,9 @@ export function LevelEditor(): ReactElement {
   }, [boardTowns, selectedTownId]);
   const selectedTown = boardTowns.find((town) => town.id === selectedTownId) ?? null;
   const townArea: TownBounds | null = selectedTown?.bounds ?? null;
+  const selectedTownGenerated = selectedTown
+    ? boardFloatingArtwork.some((placement) => isTownMember(placement, selectedTown.id))
+    : false;
   // Knob edits live in React state and are written into the document by Regenerate, the same way
   // the Generate panel holds its scatter rows until you press Generate.
   const updateTown = (id: string, change: Partial<BoardTown>): void => {
@@ -3650,6 +3716,7 @@ export function LevelEditor(): ReactElement {
     setBoardDoodads(board.doodads);
     setBoardProps(board.props);
     setBoardFloatingArtwork(board.floatingArtwork ?? []);
+    setBoardForests(board.forests ?? []);
     setBoardCover(board.cover);
     setBoardTowns(board.towns ?? []);
     setBoardCoverSeeds(board.coverSeeds ?? {});
@@ -3686,8 +3753,8 @@ export function LevelEditor(): ReactElement {
   // The current painted board as a single EditorBoard — the one shape both the transient
   // play-test URL and the level save serialize from, so they can never describe different boards.
   const currentEditorBoard = useMemo<EditorBoard>(
-    () => ({ cols: boardCols, rows: boardRows, cameraBounds: boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, backgroundMode: boardBackgroundModeState, surface: boardSurface, predrawnGenerationFrame: boardPredrawnGenerationFrame, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, floatingArtwork: boardFloatingArtwork, cover: boardCover, coverTypes: boardCoverTypes, coverSeeds: boardCoverSeeds, features: boardFeatures, fences: boardFences, fencePosts: boardFencePosts, walls: boardWalls, wallArt: boardWallArt, subterrain: boardSubterrain, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions, towns: boardTowns }),
-    [boardCols, boardRows, boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, boardFactionDirections, boardCells, boardBackgroundModeState, boardSurface, boardPredrawnGenerationFrame, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardFloatingArtwork, boardCover, boardCoverTypes, boardCoverSeeds, boardFeatures, boardFences, boardFencePosts, boardWalls, boardWallArt, boardSubterrain, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions, boardTowns],
+    () => ({ cols: boardCols, rows: boardRows, cameraBounds: boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, backgroundMode: boardBackgroundModeState, surface: boardSurface, predrawnGenerationFrame: boardPredrawnGenerationFrame, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, floatingArtwork: boardFloatingArtwork, cover: boardCover, coverTypes: boardCoverTypes, coverSeeds: boardCoverSeeds, features: boardFeatures, fences: boardFences, fencePosts: boardFencePosts, walls: boardWalls, wallArt: boardWallArt, subterrain: boardSubterrain, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions, towns: boardTowns, forests: boardForests }),
+    [boardCols, boardRows, boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, boardFactionDirections, boardCells, boardBackgroundModeState, boardSurface, boardPredrawnGenerationFrame, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardFloatingArtwork, boardCover, boardCoverTypes, boardCoverSeeds, boardFeatures, boardFences, boardFencePosts, boardWalls, boardWallArt, boardSubterrain, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions, boardTowns, boardForests],
   );
   const predrawnVersionCells = useMemo(
     () => Array.from({ length: boardRows }, (_, y) => (
@@ -3752,6 +3819,11 @@ export function LevelEditor(): ReactElement {
     if (activeGeneratedRegionId && !nextGeneratedRegions.some((region) => region.id === activeGeneratedRegionId)) {
       setActiveGeneratedRegionId(null);
       setRegionSelection(new Set());
+    }
+    const nextForests = board.forests ?? [];
+    if (selectedForestId && !nextForests.some((forest) => forest.id === selectedForestId)) {
+      setSelectedForestId(null);
+      setForestGenerationResult(null);
     }
   };
   // A Level load and an undo/import restore must hydrate the exact same complete EditorBoard.
@@ -4039,6 +4111,8 @@ export function LevelEditor(): ReactElement {
     );
     currentEditorBoardRef.current = restored;
     applyEditorBoardWithSelectionSafety(restored);
+    setForestDragBounds(null);
+    setForestGenerationResult(null);
     setSelectedCell(null);
     setSelectedArtworkId(null);
   };
@@ -4057,6 +4131,8 @@ export function LevelEditor(): ReactElement {
     );
     currentEditorBoardRef.current = restored;
     applyEditorBoardWithSelectionSafety(restored);
+    setForestDragBounds(null);
+    setForestGenerationResult(null);
     setSelectedCell(null);
     setSelectedArtworkId(null);
   };
@@ -4258,19 +4334,19 @@ export function LevelEditor(): ReactElement {
   };
 
   /** Viewport pointer -> scene pixels, the space `FloatingArtworkPlacement` stores. */
-  const forestScenePoint = (clientX: number, clientY: number, rect: DOMRect): { x: number; y: number } => ({
+  const placementScenePoint = (clientX: number, clientY: number, rect: DOMRect): { x: number; y: number } => ({
     x: (clientX - (rect.left + rect.width / 2) - viewPan.x) / viewZoom - artworkBoardOrigin.originLeft,
     y: (clientY - (rect.top + rect.height / 2) - viewPan.y) / viewZoom - artworkBoardOrigin.originTop,
   });
 
-  /** Viewport pointer -> the whole board cell under it. The town selection snaps to these. */
-  const townCellAt = (clientX: number, clientY: number, rect: DOMRect): { x: number; y: number } => {
-    const scene = forestScenePoint(clientX, clientY, rect);
+  /** Viewport pointer -> the logical board cell under it. Town and Forest share this grid. */
+  const placementCellAt = (clientX: number, clientY: number, rect: DOMRect): { x: number; y: number } => {
+    const scene = placementScenePoint(clientX, clientY, rect);
     return snapGridPoint(unprojectBoardPoint({ left: scene.x, top: scene.y }));
   };
 
-  /** Scene pixels -> pixels inside the placement surface. Inverse of forestScenePoint. */
-  const townSurfacePoint = (
+  /** Scene pixels -> pixels inside the placement surface. Inverse of placementScenePoint. */
+  const placementSurfacePoint = (
     scene: { x: number; y: number },
     rect: { width: number; height: number },
   ): { x: number; y: number } => ({
@@ -4278,23 +4354,13 @@ export function LevelEditor(): ReactElement {
     y: (scene.y + artworkBoardOrigin.originTop) * viewZoom + viewPan.y + rect.height / 2,
   });
 
-  // A grid rect projects to a diamond, so a selection outline is four projected corners rather
-  // than a screen-space rectangle.
-  const townSurfacePolygon = useCallback((bounds: TownBounds | null) => {
-    if (!bounds || !viewViewportSize) return null;
-    return townBoundsScenePolygon(bounds).map((corner) => townSurfacePoint(corner, viewViewportSize));
-  }, [viewViewportSize, viewZoom, viewPan.x, viewPan.y,
-    artworkBoardOrigin.originLeft, artworkBoardOrigin.originTop]);
   /**
-   * The selection as highlighted TILES, the same cyan diamond the region tool uses.
+   * A placement selection as highlighted TILES, derived from the same projection as the board.
    *
    * Drawn here rather than through the board's renderCellOverlay because that only runs for
-   * playable cells, and a town normally sits out in the scenic apron where there are none — the
-   * highlight would vanish exactly where towns go. Positions come from the same projection the
-   * board uses, so the diamonds sit on the tiles rather than near them.
+   * playable cells, while Town and Forest both belong in the scenic apron too.
    */
-  const townHighlight = useMemo(() => {
-    const bounds = townDragBounds ?? townArea;
+  const placementGridHighlight = useCallback((bounds: TownBounds | null) => {
     if (!bounds || !viewViewportSize) return null;
     const minX = Math.min(bounds.minX, bounds.maxX);
     const maxX = Math.max(bounds.minX, bounds.maxX);
@@ -4302,7 +4368,7 @@ export function LevelEditor(): ReactElement {
     const maxY = Math.max(bounds.minY, bounds.maxY);
     const across = maxX - minX;
     const down = maxY - minY;
-    // A selection this large is a mis-drag, not a town; drawing every tile would stall the editor.
+    // A selection this large is a mis-drag; drawing every tile would stall the editor.
     if ((across + 1) * (down + 1) > 4096) return null;
     const halfWidth = (TILE_TEMPLATE.topWidth / 2) * viewZoom;
     const halfHeight = (TILE_TEMPLATE.topHeight / 2) * viewZoom;
@@ -4313,7 +4379,7 @@ export function LevelEditor(): ReactElement {
     for (let y = minY; y <= maxY; y += 1) {
       for (let x = minX; x <= maxX; x += 1) {
         const seat = projectBoardPoint({ x, y });
-        const point = townSurfacePoint({ x: seat.left, y: seat.top }, viewViewportSize);
+        const point = placementSurfacePoint({ x: seat.left, y: seat.top }, viewViewportSize);
         cells.push({
           key: `${x},${y}`,
           points: [
@@ -4325,13 +4391,29 @@ export function LevelEditor(): ReactElement {
         });
       }
     }
-    const corner = townSurfacePoint(
+    const corner = placementSurfacePoint(
       (() => { const seat = projectBoardPoint({ x: minX, y: minY }); return { x: seat.left, y: seat.top }; })(),
       viewViewportSize,
     );
-    return { cells, across, down, labelX: corner.x - halfWidth, labelY: corner.y - halfHeight * 2 };
-  }, [townDragBounds, townArea, viewViewportSize, viewZoom, viewPan.x, viewPan.y,
+    return {
+      cells,
+      across,
+      down,
+      cellCountAcross: across + 1,
+      cellCountDown: down + 1,
+      labelX: corner.x - halfWidth,
+      labelY: corner.y - halfHeight * 2,
+    };
+  }, [viewViewportSize, viewZoom, viewPan.x, viewPan.y,
     artworkBoardOrigin.originLeft, artworkBoardOrigin.originTop]);
+  const townHighlight = useMemo(
+    () => placementGridHighlight(townDragBounds ?? townArea),
+    [placementGridHighlight, townDragBounds, townArea],
+  );
+  const forestHighlight = useMemo(
+    () => placementGridHighlight(forestDragBounds ?? forestArea),
+    [placementGridHighlight, forestDragBounds, forestArea],
+  );
 
   /**
    * The example building for the size bound being previewed, stood in the middle of the playable
@@ -4351,7 +4433,7 @@ export function LevelEditor(): ReactElement {
     // Stand it on the middle of the playable board, where there are tiles to judge it against.
     const seat = projectBoardPoint({ x: (boardCols - 1) / 2, y: (boardRows - 1) / 2 });
     const centre = groundPointToPixel({ x: seat.left, y: seat.top }, sprite, scale);
-    const corner = townSurfacePoint(
+    const corner = placementSurfacePoint(
       { x: centre.pixelX - drawnWidth / 2, y: centre.pixelY - drawnHeight / 2 },
       viewViewportSize,
     );
@@ -4372,61 +4454,154 @@ export function LevelEditor(): ReactElement {
     sprite: (id, direction) => structureArtDirectionSprite(id, direction),
   }), []);
 
-  const forestParams = (): ForestScatterParams => ({
-    speciesIds: forestSpecies,
-    density: forestDensity,
-    jitter: forestJitter,
-    scaleMin: forestScaleMin,
-    scaleMax: forestScaleMax,
-    randomFacing: forestRandomFacing,
-    facing: forestFacing,
-    spacing: forestSpacing,
-    clumping: forestClumping,
-    falloff: forestFalloff,
-    seed: forestSeed,
+  const sectionSeed = (seed: number, index: number): number => (
+    Math.max(1, Math.floor(hashUnit(index + 1, 0, seed, 0x4a17) * 0xffffffff))
+  );
+
+  const forestParams = (section: BoardForestSection, seed: number): ForestScatterParams => ({
+    trees: section.trees,
+    density: section.density,
+    jitter: section.jitter,
+    scaleMin: section.scaleMin,
+    scaleMax: section.scaleMax,
+    randomFacing: section.randomFacing,
+    facing: section.facing,
+    spacing: section.spacing,
+    clumping: section.clumping,
+    falloff: section.falloff,
+    seed,
   });
 
-  const paintForest = (area: ForestBrushArea): void => {
-    if (!forestSpecies.length) return;
+  /** Rebuild exactly one saved Forest, replacing only the Scene Art owned by that instance. */
+  const generateForest = (forest: BoardForest, forestsOverride?: BoardForest[]): void => {
+    if (!forest.sections.some((section) => section.trees.some((tree) => tree.weight > 0))) return;
+    const seed = generatorSeedForRun(forest.seed, forest.fixedSeed === true);
+    const generatedForest = seed === forest.seed ? forest : { ...forest, seed };
+    const forests = (forestsOverride ?? boardForests)
+      .map((entry) => (entry.id === forest.id ? generatedForest : entry));
     const current = currentEditorBoardRef.current;
     const existing = current.floatingArtwork ?? [];
-    const grown = scatterForest({
-      area,
-      params: forestParams(),
-      geometry: forestGeometry,
-      existing,
-    });
-    if (!grown.length) return;
+    const preserved = existing.filter((placement) => !isForestMember(placement, forest.id));
+    const groups = composeGeneratorSections(generatedForest.bounds, generatedForest.sections, generatedForest.seed);
+    const grown: FloatingArtworkPlacement[] = [];
+    for (const group of groups) {
+      for (const sectionId of group.sectionIds) {
+        const section = generatedForest.sections.find((candidate) => candidate.id === sectionId);
+        if (!section?.trees.some((tree) => tree.weight > 0)) continue;
+        const index = generatedForest.sections.indexOf(section);
+        grown.push(...scatterForest({
+          forestId: forest.id,
+          scopeId: section.id,
+          area: group.bounds,
+          params: forestParams(section, sectionSeed(generatedForest.seed, index)),
+          geometry: forestGeometry,
+          existing: [...preserved, ...grown],
+        }));
+      }
+    }
     const next = cloneEditorBoard(current);
-    // Canonical rendering derives visible depth from ground contact. Keep the stored batch sorted
-    // as deterministic content and as a stable tie-breaker for identical contacts.
-    next.floatingArtwork = sortFloatingArtworkByDepth([...existing, ...grown], forestGeometry);
+    next.forests = forests;
+    // Canonical rendering derives visible depth from ground contact. Keep the stored collection
+    // sorted as deterministic content and as a stable tie-breaker for identical contacts.
+    next.floatingArtwork = sortFloatingArtworkByDepth([...preserved, ...grown], forestGeometry);
+    setBoardForests(forests);
+    setForestGenerationResult({ forestId: forest.id, count: grown.length });
     commitEditorBoard(next, null);
   };
 
-  const eraseForest = (area: ForestBrushArea): void => {
+  /** Drop saved Forest instances and only the generated Scene Art they own. */
+  const removeForests = (forestIds: ReadonlySet<string>): void => {
+    if (!forestIds.size) return;
     const current = currentEditorBoardRef.current;
-    const existing = current.floatingArtwork ?? [];
-    if (!existing.length) return;
-    const kept = eraseForestArea(existing, area, forestGeometry);
-    if (kept.length === existing.length) return;
+    const forests = boardForests.filter((forest) => !forestIds.has(forest.id));
     const next = cloneEditorBoard(current);
-    next.floatingArtwork = kept;
+    next.forests = forests;
+    next.floatingArtwork = (current.floatingArtwork ?? []).filter(
+      (placement) => ![...forestIds].some((id) => isForestMember(placement, id)),
+    );
+    setBoardForests(forests);
+    setSelectedForestId((id) => (id && forestIds.has(id) ? null : id));
+    setForestGenerationResult(null);
     commitEditorBoard(next, null);
   };
+  const removeForest = (forest: BoardForest): void => removeForests(new Set([forest.id]));
+
+  /** A view-centred grid area shared by the Town and Forest no-drag entry points. */
+  const placementAreaAtView = (half: { x: number; y: number }): ForestGridArea => {
+    const centre = unprojectBoardPoint({
+      left: -viewPan.x / viewZoom - artworkBoardOrigin.originLeft,
+      top: -viewPan.y / viewZoom - artworkBoardOrigin.originTop,
+    });
+    const cell = snapGridPoint(centre);
+    const terrain = {
+      minX: -(decorativeApron?.left ?? 0),
+      maxX: boardCols - 1 + (decorativeApron?.right ?? 0),
+      minY: -(decorativeApron?.top ?? 0),
+      maxY: boardRows - 1 + (decorativeApron?.bottom ?? 0),
+    };
+    const width = Math.min(half.x * 2, terrain.maxX - terrain.minX);
+    const height = Math.min(half.y * 2, terrain.maxY - terrain.minY);
+    const minX = Math.max(terrain.minX, Math.min(cell.x - Math.round(width / 2), terrain.maxX - width));
+    const minY = Math.max(terrain.minY, Math.min(cell.y - Math.round(height / 2), terrain.maxY - height));
+    return { minX, minY, maxX: minX + width, maxY: minY + height };
+  };
+
+  /** Save a newly selected Forest area and recipe without materializing any trees. */
+  const createForest = (bounds: ForestGridArea): void => {
+    const template = selectedForest;
+    const sections = template?.sections.map((section, index) => ({
+      ...section,
+      id: `s${Math.random().toString(36).slice(2, 8)}`,
+      relationship: index === 0 ? 'distinct' as const : section.relationship,
+      trees: section.trees.map((tree) => ({
+        ...tree,
+        id: `tr${Math.random().toString(36).slice(2, 8)}`,
+      })),
+    })) ?? [{
+      ...newForestSection(),
+      trees: initialForestSourceId ? [{
+        id: `tr${Math.random().toString(36).slice(2, 8)}`,
+        sourceArtId: initialForestSourceId,
+        weight: 1,
+      }] : [],
+    }];
+    const forest: BoardForest = {
+      id: `f${Math.random().toString(36).slice(2, 8)}`,
+      name: `Forest ${boardForests.length + 1}`,
+      bounds,
+      sections,
+      seed: randomGeneratorSeed(),
+    };
+    const forests = [...boardForests, forest];
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    next.forests = forests;
+    setBoardForests(forests);
+    setSelectedForestId(forest.id);
+    setExpandedForestSections(new Set(sections.map((section) => section.id)));
+    setForestGenerationResult(null);
+    setForestPicker(sections[0].trees.length ? null : { sectionId: sections[0].id, entryId: null });
+    commitEditorBoard(next, null);
+  };
+  const addForestAtView = (): void => createForest(placementAreaAtView({ x: 6, y: 6 }));
 
   const resetForestParams = (): void => {
-    setForestRadius(FOREST_DEFAULT_RADIUS);
-    setForestDensity(FOREST_SCATTER_DEFAULTS.density);
-    setForestJitter(FOREST_SCATTER_DEFAULTS.jitter);
-    setForestScaleMin(FOREST_SCATTER_DEFAULTS.scaleMin);
-    setForestScaleMax(FOREST_SCATTER_DEFAULTS.scaleMax);
-    setForestRandomFacing(FOREST_SCATTER_DEFAULTS.randomFacing);
-    setForestFacing(FOREST_SCATTER_DEFAULTS.facing);
-    setForestSpacing(FOREST_SCATTER_DEFAULTS.spacing);
-    setForestClumping(FOREST_SCATTER_DEFAULTS.clumping);
-    setForestFalloff(FOREST_SCATTER_DEFAULTS.falloff);
-    setForestSeed(FOREST_SCATTER_DEFAULTS.seed);
+    if (!selectedForest) return;
+    updateForest(selectedForest.id, {
+      sections: selectedForest.sections.map((section) => ({
+        ...section,
+        density: FOREST_SCATTER_DEFAULTS.density,
+        jitter: FOREST_SCATTER_DEFAULTS.jitter,
+        scaleMin: FOREST_SCATTER_DEFAULTS.scaleMin,
+        scaleMax: FOREST_SCATTER_DEFAULTS.scaleMax,
+        randomFacing: FOREST_SCATTER_DEFAULTS.randomFacing,
+        facing: FOREST_SCATTER_DEFAULTS.facing,
+        spacing: FOREST_SCATTER_DEFAULTS.spacing,
+        clumping: FOREST_SCATTER_DEFAULTS.clumping,
+        falloff: FOREST_SCATTER_DEFAULTS.falloff,
+      })),
+      seed: FOREST_SCATTER_DEFAULTS.seed,
+      fixedSeed: false,
+    });
   };
 
   /**
@@ -4435,40 +4610,65 @@ export function LevelEditor(): ReactElement {
    */
   /** Rebuild one town in place from its saved settings. */
   const generateTown = (town: BoardTown, townsOverride?: BoardTown[]): void => {
-    const towns = townsOverride ?? boardTowns;
+    if (!town.sections.some((section) => section.buildings.some((building) => building.weight > 0))) return;
+    const seed = generatorSeedForRun(town.seed, town.fixedSeed === true);
+    const generatedTown = seed === town.seed ? town : { ...town, seed };
+    const towns = (townsOverride ?? boardTowns)
+      .map((entry) => (entry.id === town.id ? generatedTown : entry));
     const current = currentEditorBoardRef.current;
     const all = current.floatingArtwork ?? [];
     const others = all.filter((placement) => !isTownMember(placement, town.id));
-    const result = planTown({
-      townId: town.id,
-      bounds: town.bounds,
-      params: {
-        sections: town.sections,
-        blend: town.blend,
-        landmarkIds: town.landmarkIds,
-        plan: town.plan as TownPlanKind,
-        size: town.size,
-        setback: town.setback,
-        looseness: town.looseness,
-        facingWobble: town.facingWobble,
-        spacing: town.spacing,
-        fit: town.fit as TownFitPolicy,
-        seed: town.seed,
-      },
-      geometry: forestGeometry,
-      existing: others,
-    });
+    const groups = composeGeneratorSections(generatedTown.bounds, generatedTown.sections, generatedTown.seed);
+    const placements: FloatingArtworkPlacement[] = [];
+    let offered = 0;
+    let rejectedSpacing = 0;
+    let rejectedOutside = 0;
+    let target = 0;
+    for (const group of groups) {
+      for (const sectionId of group.sectionIds) {
+        const section = generatedTown.sections.find((candidate) => candidate.id === sectionId);
+        if (!section?.buildings.some((building) => building.weight > 0)) continue;
+        const index = generatedTown.sections.indexOf(section);
+        target += section.size;
+        const result = planTown({
+          townId: town.id,
+          scopeId: section.id,
+          bounds: group.bounds,
+          params: {
+            sections: [{ ...section, share: 1 }],
+            blend: 0,
+            landmarkIds: section.landmarkIds,
+            plan: section.plan as TownPlanKind,
+            size: section.size,
+            setback: section.setback,
+            looseness: section.looseness,
+            facingWobble: section.facingWobble,
+            spacing: section.spacing,
+            fit: section.fit as TownFitPolicy,
+            seed: sectionSeed(generatedTown.seed, index),
+          },
+          geometry: forestGeometry,
+          existing: [...others, ...placements],
+        });
+        placements.push(...result.placements);
+        offered += result.plotsOffered;
+        rejectedSpacing += result.rejectedSpacing;
+        rejectedOutside += result.rejectedOutside;
+      }
+    }
     setTownSited({
-      placed: result.placements.length,
-      spacing: result.rejectedSpacing,
-      outside: result.rejectedOutside,
-      offered: result.plotsOffered,
+      placed: placements.length,
+      target,
+      spacing: rejectedSpacing,
+      outside: rejectedOutside,
+      offered,
     });
     const next = cloneEditorBoard(current);
     // The town list rides the committed board, like generatedRegions. Writing placements without
     // it would hand back a board still carrying the old list and wipe the town that made them.
     next.towns = towns;
-    next.floatingArtwork = sortFloatingArtworkByDepth([...others, ...result.placements], forestGeometry);
+    next.floatingArtwork = sortFloatingArtworkByDepth([...others, ...placements], forestGeometry);
+    setBoardTowns(towns);
     commitEditorBoard(next, null);
   };
 
@@ -4493,28 +4693,9 @@ export function LevelEditor(): ReactElement {
    * knowing that.
    */
   const addTownAtView = (): void => {
-    // Centre of the viewport in scene pixels: the pointer conversion with a centred pointer.
-    const centre = unprojectBoardPoint({
-      left: -viewPan.x / viewZoom - artworkBoardOrigin.originLeft,
-      top: -viewPan.y / viewZoom - artworkBoardOrigin.originTop,
-    });
-    const cell = snapGridPoint(centre);
-    // Keep the town on TERRAIN and where the author is looking. An earlier version shifted it
-    // clear of the playable board and panned to it, which sent it out onto the void beyond the
-    // apron — grass is what a town needs to sit on, not merely "not the board".
-    const half = { x: 9, y: 7 };
-    const terrain = {
-      minX: -(decorativeApron?.left ?? 0),
-      maxX: boardCols - 1 + (decorativeApron?.right ?? 0),
-      minY: -(decorativeApron?.top ?? 0),
-      maxY: boardRows - 1 + (decorativeApron?.bottom ?? 0),
-    };
-    // Fit the default inside the terrain rather than dwarfing it on a small board.
-    const width = Math.min(half.x * 2, terrain.maxX - terrain.minX);
-    const height = Math.min(half.y * 2, terrain.maxY - terrain.minY);
-    const minX = Math.max(terrain.minX, Math.min(cell.x - Math.round(width / 2), terrain.maxX - width));
-    const minY = Math.max(terrain.minY, Math.min(cell.y - Math.round(height / 2), terrain.maxY - height));
-    createTown({ minX, minY, maxX: minX + width, maxY: minY + height });
+    // Keep the town on TERRAIN and where the author is looking. The shared helper fits the
+    // default inside small authored surfaces instead of shifting it onto projected void.
+    createTown(placementAreaAtView({ x: 9, y: 7 }));
   };
 
   /** A fresh town on newly dragged ground. Each drag is its own instance, never a replacement. */
@@ -4524,22 +4705,14 @@ export function LevelEditor(): ReactElement {
       id: `t${Math.random().toString(36).slice(2, 8)}`,
       name: `Town ${boardTowns.length + 1}`,
       bounds,
-      plan: template?.plan ?? TOWN_PLAN_DEFAULTS.plan,
-      size: template?.size ?? TOWN_PLAN_DEFAULTS.size,
       // Carry the last town's recipe forward so placing a second one does not start from nothing.
       sections: (template?.sections ?? [newTownSection()])
-        .map((section) => ({
+        .map((section, index) => ({
           ...section,
           buildings: section.buildings.map((entry) => ({ ...entry })),
           id: newTownSection().id,
+          relationship: index === 0 ? 'distinct' : section.relationship,
         })),
-      blend: template?.blend ?? TOWN_PLAN_DEFAULTS.blend,
-      landmarkIds: template?.landmarkIds ?? [],
-      setback: template?.setback ?? TOWN_PLAN_DEFAULTS.setback,
-      looseness: template?.looseness ?? TOWN_PLAN_DEFAULTS.looseness,
-      facingWobble: template?.facingWobble ?? TOWN_PLAN_DEFAULTS.facingWobble,
-      spacing: template?.spacing ?? TOWN_PLAN_DEFAULTS.spacing,
-      fit: template?.fit ?? TOWN_PLAN_DEFAULTS.fit,
       seed: randomGeneratorSeed(),
     };
     setExpandedTownSections((current) => {
@@ -4550,20 +4723,29 @@ export function LevelEditor(): ReactElement {
     const towns = [...boardTowns, town];
     setBoardTowns(towns);
     setSelectedTownId(town.id);
-    generateTown(town, towns);
+    setTownSited(null);
+    // The area and recipe are now selected, but no buildings materialize until Generate. This is
+    // intentionally the same interaction boundary used by every settings-backed generator.
+    const current = currentEditorBoardRef.current;
+    const next = cloneEditorBoard(current);
+    next.towns = towns;
+    commitEditorBoard(next, null);
   };
 
   const resetTownParams = (): void => {
     if (!selectedTown) return;
     updateTown(selectedTown.id, {
-      plan: TOWN_PLAN_DEFAULTS.plan,
-      size: TOWN_PLAN_DEFAULTS.size,
-      blend: TOWN_PLAN_DEFAULTS.blend,
-      setback: TOWN_PLAN_DEFAULTS.setback,
-      looseness: TOWN_PLAN_DEFAULTS.looseness,
-      facingWobble: TOWN_PLAN_DEFAULTS.facingWobble,
-      spacing: TOWN_PLAN_DEFAULTS.spacing,
-      fit: TOWN_PLAN_DEFAULTS.fit,
+      sections: selectedTown.sections.map((section) => ({
+        ...section,
+        plan: TOWN_PLAN_DEFAULTS.plan,
+        size: TOWN_PLAN_DEFAULTS.size,
+        setback: TOWN_PLAN_DEFAULTS.setback,
+        looseness: TOWN_PLAN_DEFAULTS.looseness,
+        facingWobble: TOWN_PLAN_DEFAULTS.facingWobble,
+        spacing: TOWN_PLAN_DEFAULTS.spacing,
+        fit: TOWN_PLAN_DEFAULTS.fit,
+      })),
+      fixedSeed: false,
     });
   };
 
@@ -4875,10 +5057,12 @@ export function LevelEditor(): ReactElement {
     setWallArtPlacementFeedback({ tone: 'ready', message: `Removed ${wallArtLabel(hit.artId)}.` });
   };
   const clearBoard = (): void => {
-    commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, decorativeCells: {}, decorativeFootprint: [], decorativeFeatures: {}, decorativeFences: {}, decorativeFencePosts: {}, decorativeWalls: {}, macroTiles: [], units: {}, doodads: {}, props: {}, floatingArtwork: [], cover: {}, coverTypes: {}, features: {}, fences: {}, fencePosts: {}, walls: {}, wallArt: {}, subterrain: {}, featureCuts: {}, featureExits: {}, zoneEntries: [], zones: {}, generatedRegions: [] }, null);
+    commitEditorBoard({ ...cloneEditorBoard(currentEditorBoardRef.current), cells: {}, decorativeCells: {}, decorativeFootprint: [], decorativeFeatures: {}, decorativeFences: {}, decorativeFencePosts: {}, decorativeWalls: {}, macroTiles: [], units: {}, doodads: {}, props: {}, floatingArtwork: [], cover: {}, coverTypes: {}, features: {}, fences: {}, fencePosts: {}, walls: {}, wallArt: {}, subterrain: {}, featureCuts: {}, featureExits: {}, zoneEntries: [], zones: {}, generatedRegions: [], towns: [], forests: [] }, null);
     setSelectedArtworkId(null);
     setActiveGeneratedRegionId(null);
     setRegionSelection(new Set());
+    setSelectedForestId(null);
+    setForestGenerationResult(null);
   };
   const clearActiveLayer = (): void => {
     const next = cloneEditorBoard(currentEditorBoardRef.current);
@@ -4887,6 +5071,20 @@ export function LevelEditor(): ReactElement {
     else if (brushKind === 'doodad') next.doodads = {};
     else if (brushKind === 'prop') next.props = {};
     else if (brushKind === 'artwork') next.floatingArtwork = [];
+    else if (brushKind === 'forest') {
+      const forestIds = new Set((next.forests ?? []).map((forest) => forest.id));
+      next.floatingArtwork = (next.floatingArtwork ?? []).filter(
+        (placement) => ![...forestIds].some((id) => isForestMember(placement, id)),
+      );
+      next.forests = [];
+    }
+    else if (brushKind === 'town') {
+      const townIds = new Set((next.towns ?? []).map((town) => town.id));
+      next.floatingArtwork = (next.floatingArtwork ?? []).filter(
+        (placement) => ![...townIds].some((id) => isTownMember(placement, id)),
+      );
+      next.towns = [];
+    }
     else if (brushKind === 'cover') { next.cover = {}; next.coverTypes = {}; }
     else if (brushKind === 'zone') {
       const entries = zoneEntriesForBoard(next);
@@ -4911,6 +5109,10 @@ export function LevelEditor(): ReactElement {
     }
     commitEditorBoard(next, null);
     if (brushKind === 'artwork') setSelectedArtworkId(null);
+    if (brushKind === 'forest') {
+      setSelectedForestId(null);
+      setForestGenerationResult(null);
+    }
   };
   const fillBoard = (mode: 'empty' | 'all'): void => {
     const next = cloneEditorBoard(currentEditorBoardRef.current);
@@ -8671,14 +8873,14 @@ export function LevelEditor(): ReactElement {
                       event.stopPropagation();
                       const surface = event.currentTarget;
                       surface.setPointerCapture(event.pointerId);
-                      const cell = townCellAt(event.clientX, event.clientY, surface.getBoundingClientRect());
+                      const cell = placementCellAt(event.clientX, event.clientY, surface.getBoundingClientRect());
                       townDragRef.current = { pointerId: event.pointerId, cellX: cell.x, cellY: cell.y };
                       setTownDragBounds({ minX: cell.x, minY: cell.y, maxX: cell.x, maxY: cell.y });
                     }}
                     onPointerMove={(event) => {
                       const drag = townDragRef.current;
                       if (!drag || drag.pointerId !== event.pointerId) return;
-                      const cell = townCellAt(
+                      const cell = placementCellAt(
                         event.clientX, event.clientY, event.currentTarget.getBoundingClientRect(),
                       );
                       setTownDragBounds({
@@ -8694,7 +8896,7 @@ export function LevelEditor(): ReactElement {
                       townDragRef.current = null;
                       setTownDragBounds(null);
                       if (!drag || drag.pointerId !== event.pointerId) return;
-                      const cell = townCellAt(
+                      const cell = placementCellAt(
                         event.clientX, event.clientY, event.currentTarget.getBoundingClientRect(),
                       );
                       const area: TownBounds = {
@@ -8778,63 +8980,89 @@ export function LevelEditor(): ReactElement {
                   <div
                     className="le-artwork-free-placement-surface le-forest-placement-surface"
                     data-testid="forest-placement-surface"
-                    aria-label={tool === 'erase' ? 'Erase scene art under the forest brush' : 'Paint a forest'}
+                    aria-label={tool === 'erase'
+                      ? 'Drag out grid cells to remove saved Forests'
+                      : 'Drag out the grid cells for a new Forest'}
                     onPointerDown={(event) => {
                       if (event.button !== 0) return;
                       event.preventDefault();
                       event.stopPropagation();
                       const surface = event.currentTarget;
                       surface.setPointerCapture(event.pointerId);
-                      const point = forestScenePoint(event.clientX, event.clientY, surface.getBoundingClientRect());
-                      forestStrokeRef.current = { pointerId: event.pointerId, lastX: point.x, lastY: point.y };
-                      const area = { centerX: point.x, centerY: point.y, radius: forestRadius };
-                      if (tool === 'erase') eraseForest(area); else paintForest(area);
+                      const cell = placementCellAt(
+                        event.clientX, event.clientY, surface.getBoundingClientRect(),
+                      );
+                      forestDragRef.current = {
+                        pointerId: event.pointerId, cellX: cell.x, cellY: cell.y,
+                      };
+                      setForestDragBounds({
+                        minX: cell.x, minY: cell.y, maxX: cell.x, maxY: cell.y,
+                      });
                     }}
                     onPointerMove={(event) => {
-                      const rect = event.currentTarget.getBoundingClientRect();
-                      setForestCursor({ x: event.clientX - rect.left, y: event.clientY - rect.top });
-                      const stroke = forestStrokeRef.current;
-                      if (!stroke || stroke.pointerId !== event.pointerId) return;
-                      const point = forestScenePoint(event.clientX, event.clientY, rect);
-                      // Stamp at a fraction of the radius so a fast drag still lays a continuous
-                      // band, without re-running the scatter on every pointer pixel.
-                      if (Math.hypot(point.x - stroke.lastX, point.y - stroke.lastY) < forestRadius / 3) return;
-                      stroke.lastX = point.x;
-                      stroke.lastY = point.y;
-                      const area = { centerX: point.x, centerY: point.y, radius: forestRadius };
-                      if (tool === 'erase') eraseForest(area); else paintForest(area);
+                      const drag = forestDragRef.current;
+                      if (!drag || drag.pointerId !== event.pointerId) return;
+                      const cell = placementCellAt(
+                        event.clientX, event.clientY, event.currentTarget.getBoundingClientRect(),
+                      );
+                      setForestDragBounds({
+                        minX: Math.min(drag.cellX, cell.x), minY: Math.min(drag.cellY, cell.y),
+                        maxX: Math.max(drag.cellX, cell.x), maxY: Math.max(drag.cellY, cell.y),
+                      });
                     }}
                     onPointerUp={(event) => {
                       if (event.currentTarget.hasPointerCapture(event.pointerId)) {
                         event.currentTarget.releasePointerCapture(event.pointerId);
                       }
-                      forestStrokeRef.current = null;
+                      const drag = forestDragRef.current;
+                      forestDragRef.current = null;
+                      setForestDragBounds(null);
+                      if (!drag || drag.pointerId !== event.pointerId) return;
+                      const cell = placementCellAt(
+                        event.clientX, event.clientY, event.currentTarget.getBoundingClientRect(),
+                      );
+                      const area: ForestGridArea = {
+                        minX: Math.min(drag.cellX, cell.x), minY: Math.min(drag.cellY, cell.y),
+                        maxX: Math.max(drag.cellX, cell.x), maxY: Math.max(drag.cellY, cell.y),
+                      };
+                      if (tool === 'erase') {
+                        const overlapped = boardForests.filter((forest) => (
+                          forest.bounds.minX <= area.maxX && forest.bounds.maxX >= area.minX
+                          && forest.bounds.minY <= area.maxY && forest.bounds.maxY >= area.minY
+                        ));
+                        removeForests(new Set(overlapped.map((forest) => forest.id)));
+                        return;
+                      }
+                      createForest(area);
                     }}
-                    onPointerCancel={() => { forestStrokeRef.current = null; }}
-                    onPointerLeave={() => { setForestCursor(null); }}
+                    onPointerCancel={() => {
+                      forestDragRef.current = null;
+                      setForestDragBounds(null);
+                    }}
                   >
-                    {forestCursor ? (
+                    {forestHighlight ? (
                       <svg
-                        className="le-forest-brush-ring"
+                        className={`le-forest-cells${forestDragBounds ? '' : ' is-settled'}`}
                         aria-hidden="true"
-                        viewBox="0 0 100 100"
-                        preserveAspectRatio="none"
-                        style={{
-                          left: `${forestCursor.x - forestRadius * viewZoom}px`,
-                          top: `${forestCursor.y - forestRadius * viewZoom}px`,
-                          width: `${forestRadius * viewZoom * 2}px`,
-                          height: `${forestRadius * viewZoom * 2}px`,
-                        }}
                       >
-                        <circle
-                          cx="50" cy="50" r="49"
-                          fill="rgba(74, 196, 126, 0.1)"
-                          stroke="rgba(126, 232, 168, 0.9)"
-                          strokeWidth="1.5"
-                          strokeDasharray="4 3"
-                          vectorEffect="non-scaling-stroke"
-                        />
+                        {forestHighlight.cells.map((cell) => (
+                          <polygon
+                            key={cell.key}
+                            points={cell.points}
+                            fill="rgba(74, 196, 126, 0.16)"
+                            stroke="rgba(126, 232, 168, 0.9)"
+                            strokeWidth="1"
+                            vectorEffect="non-scaling-stroke"
+                          />
+                        ))}
                       </svg>
+                    ) : null}
+                    {forestHighlight ? (
+                      <span
+                        className="le-forest-drag-size"
+                        aria-hidden="true"
+                        style={{ left: `${forestHighlight.labelX}px`, top: `${forestHighlight.labelY}px` }}
+                      >{forestHighlight.cellCountAcross} × {forestHighlight.cellCountDown} grid cells</span>
                     ) : null}
                   </div>
                 ) : null}
@@ -9814,7 +10042,7 @@ export function LevelEditor(): ReactElement {
               {placedArtKind === 'artwork'
                 ? 'Scene Art can be placed anywhere in the scene and never affects movement.'
                 : placedArtKind === 'forest'
-                  ? 'Forest scatters Scene Art trees anywhere in the scene and never affects movement.'
+                  ? 'Forest fills a tile-aligned area with Scene Art trees and never affects movement.'
                 : placedArtKind === 'town'
                   ? 'Town lays out Scene Art buildings along streets and never affects movement.'
                 : placedArtKind === 'doodad'
@@ -10101,7 +10329,7 @@ export function LevelEditor(): ReactElement {
         ) : brushKind === 'town' ? (
           <section className="skirmish-card le-brush-panel le-town-panel" data-testid="town-controls">
             <h2>Towns</h2>
-            <p className="le-board-note">Drag out an area on the board and a town fills it, or press Add town for one in the middle of the view. Every town is kept — pick one to retune and regenerate it. Buildings are Scene Art: visual only, never on the playable grid, no collision.</p>
+            <p className="le-board-note">Drag out the grid cells the town will use, or press Add town for an area in the middle of the view. Tune its settings, then press Generate. Every town is kept so you can select, retune, and regenerate it. Buildings are Scene Art: visual only, never on the playable grid, no collision.</p>
             {/* Same shape the Generate panel uses for its saved regions: one dropdown of saved
                 instances, with a danger icon to drop the active one. */}
             <div className="le-gen-unit-row">
@@ -10138,22 +10366,34 @@ export function LevelEditor(): ReactElement {
               <p className="le-board-note">Or drag out an area on the board to choose the ground yourself.</p>
             )}
             {selectedTown ? (<>
-              <h2 className="le-card-subhead">Plan</h2>
-              <div className="le-seg le-town-plan-seg" role="group" aria-label="Town plan">
-                {TOWN_PLAN_KINDS.map((kind) => (
-                  <ChromeButton unit="inner-text-button"
-                    key={kind}
-                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', selectedTown.plan === kind && 'active')}
-                    aria-pressed={selectedTown.plan === kind}
-                    title={TOWN_PLAN_NOTES[kind]}
-                    onClick={() => updateTown(selectedTown.id, { plan: kind })}
-                  >{TOWN_PLAN_LABELS[kind]}</ChromeButton>
-                ))}
-              </div>
-              <p className="le-board-note">{TOWN_PLAN_NOTES[selectedTown.plan as TownPlanKind]}</p>
-
               <h2 className="le-card-subhead">Sections</h2>
-              <p className="le-board-note">Each section takes a share of the town and brings its own buildings and its own size range — a row of large houses and a quarter of small ones are two sections of one town, not two towns.</p>
+              <p className="le-board-note">You define each approach; the generator decides where it belongs inside the selected patch. A mixed Section shares the preceding Section's generated territory. A distinct Section receives another automatically generated territory.</p>
+              <GeneratorRecipePresetList
+                label="Town presets"
+                ariaLabel="Town presets"
+                presets={TOWN_PRESETS.map((preset) => {
+                  const configured = townPresetConfiguration(preset.id, townBuildingCatalog);
+                  return {
+                    id: preset.id,
+                    label: preset.label,
+                    description: preset.description,
+                    disabled: !configured,
+                    title: `${preset.description} Replaces this Town's complete Section collection without generating.`,
+                    onSelect: () => {
+                      if (!configured) return;
+                      const sections = configured.sections.map(({ relationship, ...approach }) => (
+                        materializeTownApproach(approach, relationship)
+                      ));
+                      updateTown(selectedTown.id, { sections });
+                      setExpandedTownSections(new Set());
+                      setExpandedTownBuildings(new Set());
+                      setTownPicker(null);
+                      setTownSited(null);
+                    },
+                  };
+                })}
+                note="A preset replaces this Town's complete Section collection. Every resulting Section remains explicit and editable; the outer patch and generated output stay unchanged until Generate."
+              />
               {selectedTown.sections.map((section, index) => (
                 <div className="le-town-section le-gen-region-group" key={section.id}>
                   <div className="le-ctrlrow le-town-section-head">
@@ -10161,8 +10401,7 @@ export function LevelEditor(): ReactElement {
                       className={chromeUnitClassNames('inner-tool-square', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-gen-cover-caret-btn', townSectionOpen(section) && 'active')}
                       onClick={() => toggleTownSectionExpand(section.id)}
                       aria-expanded={townSectionOpen(section)}
-                      disabled={!section.buildings.length}
-                      aria-label={townSectionOpen(section) ? `Collapse section ${index + 1}` : `Expand section ${index + 1}`}
+                      aria-label={townSectionOpen(section) ? `Collapse Section ${index + 1}` : `Expand Section ${index + 1}`}
                     >
                       <span className="le-gen-cover-caret" aria-hidden="true">{townSectionOpen(section) ? '▾' : '▸'}</span>
                     </ChromeButton>
@@ -10172,18 +10411,55 @@ export function LevelEditor(): ReactElement {
                         ? `${section.buildings.length} kind${section.buildings.length === 1 ? '' : 's'} · ${section.scaleMean.toFixed(2)}×`
                         : 'add a building below'}
                     </span>
-                    {selectedTown.sections.length > 1 ? (
-                      <ChromeButton unit="inner-tool-square"
-                        className={chromeUnitClassNames('inner-tool-square', 'le-gen-icon', 'danger')}
-                        onClick={() => updateTown(selectedTown.id, {
+                    <ChromeButton unit="inner-tool-square"
+                      className={chromeUnitClassNames('inner-tool-square', 'le-gen-icon', 'danger')}
+                      onClick={() => {
+                        setExpandedTownSections((current) => {
+                          const next = new Set(current);
+                          next.delete(section.id);
+                          return next;
+                        });
+                        if (townPicker?.sectionId === section.id) setTownPicker(null);
+                        updateTown(selectedTown.id, {
                           sections: selectedTown.sections.filter((entry) => entry.id !== section.id),
-                        })}
-                        title={`Remove section ${index + 1}`}
-                        aria-label={`Remove section ${index + 1}`}
-                      >×</ChromeButton>
-                    ) : null}
+                        });
+                      }}
+                      title={`Remove Section ${index + 1}`}
+                      aria-label={`Remove Section ${index + 1}`}
+                    >×</ChromeButton>
                   </div>
                   {townSectionOpen(section) ? (<>
+                  {index > 0 ? (
+                    <div className="le-ctrlrow">
+                      <span className="le-ctrllabel">How it joins</span>
+                      <div className="le-seg" role="group" aria-label={`Section ${index + 1} relationship`}>
+                        {([['mixed', 'Mixed'], ['distinct', 'Distinct']] as const).map(([relationship, label]) => (
+                          <ChromeButton unit="inner-text-button"
+                            key={relationship}
+                            className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', section.relationship === relationship && 'active')}
+                            aria-pressed={section.relationship === relationship}
+                            title={relationship === 'mixed'
+                              ? 'Share the preceding Section’s automatically chosen territory.'
+                              : 'Receive another automatically chosen territory inside the Town patch.'}
+                            onClick={() => updateTownSection(selectedTown.id, section.id, { relationship })}
+                          >{label}</ChromeButton>
+                        ))}
+                      </div>
+                    </div>
+                  ) : <p className="le-board-note">This first Section starts the composition and uses the full patch unless another distinct Section is added.</p>}
+                  <span className="le-pal-grouplabel">Plan</span>
+                  <div className="le-seg le-town-plan-seg" role="group" aria-label={`Section ${index + 1} plan`}>
+                    {TOWN_PLAN_KINDS.map((kind) => (
+                      <ChromeButton unit="inner-text-button"
+                        key={kind}
+                        className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', section.plan === kind && 'active')}
+                        aria-pressed={section.plan === kind}
+                        title={TOWN_PLAN_NOTES[kind]}
+                        onClick={() => updateTownSection(selectedTown.id, section.id, { plan: kind })}
+                      >{TOWN_PLAN_LABELS[kind]}</ChromeButton>
+                    ))}
+                  </div>
+                  <p className="le-board-note">{TOWN_PLAN_NOTES[section.plan as TownPlanKind]}</p>
                   <span className="le-pal-grouplabel">Buildings</span>
                   {/* Buildings are entries you add, exactly like the Generate panel's cover sets:
                       each names itself in a dropdown and carries its own weight. A swatch grid
@@ -10248,10 +10524,11 @@ export function LevelEditor(): ReactElement {
                           ? null
                           : { sectionId: section.id, entryId: null }
                       ))}
-                      title="Add a building kind to this section."
+                      title="Add a building kind to this District."
                     >+ Add building</ChromeButton>
                     {townPicker?.sectionId === section.id ? (
                       <div className="le-town-building-picker">
+                        <span className="le-pal-grouplabel">Choose an individual building</span>
                         <AssetSwatchList
                           ariaLabel={townPicker.entryId ? 'Choose a building' : 'Add a building'}
                           items={townBuildingCatalog.map((asset) => ({
@@ -10290,10 +10567,10 @@ export function LevelEditor(): ReactElement {
                       </div>
                     ) : null}
                   </div>
-                  {/* These belong to the SECTION, not to a building. Without a label of their own
+                  {/* These belong to the DISTRICT, not to a building. Without a label of their own
                       they read as more knobs on the last building entry. */}
-                  <span className="le-pal-grouplabel">This section</span>
-                  <SliderRow label={`Share of the town · ${section.share.toFixed(1)}`} value={section.share} set={(value) => updateTownSection(selectedTown.id, section.id, { share: value })} min={0} max={5} step={0.1} nudge={0.1} dflt={1} />
+                  <span className="le-pal-grouplabel">This Section</span>
+                  <SliderRow label={`Buildings · ${section.size}`} value={section.size} set={(value) => updateTownSection(selectedTown.id, section.id, { size: Math.round(value) })} min={2} max={80} step={1} nudge={1} dflt={TOWN_PLAN_DEFAULTS.size} />
                   <SliderRow label={`Average building · ${section.scaleMean.toFixed(2)}×`} value={section.scaleMean} set={(value) => updateTownSection(selectedTown.id, section.id, { scaleMean: value })} min={0.3} max={2.5} step={0.05} nudge={0.05} dflt={1} />
                   <SliderRow label={`Smallest · ${section.scaleMin.toFixed(2)}×`} value={section.scaleMin} set={(value) => updateTownSection(selectedTown.id, section.id, { scaleMin: value })} min={0.2} max={2.5} step={0.05} nudge={0.05} dflt={0.75} />
                   <SliderRow label={`Largest · ${section.scaleMax.toFixed(2)}×`} value={section.scaleMax} set={(value) => updateTownSection(selectedTown.id, section.id, { scaleMax: value })} min={0.2} max={3} step={0.05} nudge={0.05} dflt={1.35} />
@@ -10318,69 +10595,83 @@ export function LevelEditor(): ReactElement {
                     })}
                   </div>
                   <SliderRow label={`Frontage each · ${pixelsInTilesAcross(section.plotWidth).toFixed(1)} tiles`} value={section.plotWidth} set={(value) => updateTownSection(selectedTown.id, section.id, { plotWidth: value })} min={40} max={300} step={5} nudge={5} dflt={DEFAULT_TOWN_SECTION.plotWidth} />
+                  <SliderRow label={`Street setback · ${pixelsInTilesAcross(section.setback).toFixed(1)} tiles`} value={section.setback} set={(value) => updateTownSection(selectedTown.id, section.id, { setback: value })} min={20} max={260} step={2} nudge={2} dflt={TOWN_PLAN_DEFAULTS.setback} />
+                  <SliderRow label={`Gap between buildings · ${pixelsInTilesAcross(section.spacing).toFixed(1)} tiles`} value={section.spacing} set={(value) => updateTownSection(selectedTown.id, section.id, { spacing: value })} min={0} max={200} step={2} nudge={2} dflt={TOWN_PLAN_DEFAULTS.spacing} />
+                  <span className="le-pal-grouplabel">When a building will not fit</span>
+                  <div className="le-seg" role="group" aria-label={`Section ${index + 1} fit policy`}>
+                    {TOWN_FIT_POLICIES.map((policy) => (
+                      <ChromeButton unit="inner-text-button"
+                        key={policy}
+                        className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', section.fit === policy && 'active')}
+                        aria-pressed={section.fit === policy}
+                        title={TOWN_FIT_NOTES[policy]}
+                        onClick={() => updateTownSection(selectedTown.id, section.id, { fit: policy })}
+                      >{TOWN_FIT_LABELS[policy]}</ChromeButton>
+                    ))}
+                  </div>
+                  <p className="le-board-note">{TOWN_FIT_NOTES[section.fit as TownFitPolicy]} Buildings never overlap each other and never overhang the generated territory.</p>
+                  <span className="le-pal-grouplabel">Acceptable variation</span>
+                  <SliderRow label={`Looseness · ${Math.round(section.looseness * 100)}%`} value={section.looseness} set={(value) => updateTownSection(selectedTown.id, section.id, { looseness: value })} min={0} max={1} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.looseness} />
+                  <SliderRow label={`Off-axis buildings · ${Math.round(section.facingWobble * 100)}%`} value={section.facingWobble} set={(value) => updateTownSection(selectedTown.id, section.id, { facingWobble: value })} min={0} max={1} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.facingWobble} />
                   </>) : null}
                 </div>
               ))}
+              {!selectedTown.sections.length ? (
+                <p className="le-board-note">No Sections yet. Add one to define what this Town can generate.</p>
+              ) : null}
               <ChromeButton unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                 onClick={() => {
-                  const added = newTownSection();
+                  const added = newTownSection(selectedTown.sections.length ? 'mixed' : 'distinct');
                   setExpandedTownSections((current) => new Set(current).add(added.id));
                   updateTown(selectedTown.id, { sections: [...selectedTown.sections, added] });
                 }}
-              >Add section</ChromeButton>
-              <SliderRow label={`Blend · ${Math.round(selectedTown.blend * 100)}%`} value={selectedTown.blend} set={(value) => updateTown(selectedTown.id, { blend: value })} min={0} max={1} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.blend} />
-              <p className="le-board-note">At 0% each section keeps to its own stretch of the town, divided sharply. At 100% they interleave completely. In between they hold their ground but mingle across a band at the divide, and the band widens as it rises.</p>
-
-              <h2 className="le-card-subhead">How many</h2>
-              <SliderRow label={`Buildings · ${selectedTown.size}`} value={selectedTown.size} set={(value) => updateTown(selectedTown.id, { size: Math.round(value) })} min={2} max={80} step={1} nudge={1} dflt={TOWN_PLAN_DEFAULTS.size} />
-              <h2 className="le-card-subhead">Streets</h2>
-              <SliderRow label={`Street setback · ${pixelsInTilesAcross(selectedTown.setback).toFixed(1)} tiles`} value={selectedTown.setback} set={(value) => updateTown(selectedTown.id, { setback: value })} min={20} max={260} step={2} nudge={2} dflt={TOWN_PLAN_DEFAULTS.setback} />
-              <SliderRow label={`Gap between buildings · ${pixelsInTilesAcross(selectedTown.spacing).toFixed(1)} tiles`} value={selectedTown.spacing} set={(value) => updateTown(selectedTown.id, { spacing: value })} min={0} max={200} step={2} nudge={2} dflt={TOWN_PLAN_DEFAULTS.spacing} />
-              <h2 className="le-card-subhead">When a building will not fit</h2>
-              <div className="le-seg" role="group" aria-label="Fit policy">
-                {TOWN_FIT_POLICIES.map((policy) => (
-                  <ChromeButton unit="inner-text-button"
-                    key={policy}
-                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', selectedTown.fit === policy && 'active')}
-                    aria-pressed={selectedTown.fit === policy}
-                    title={TOWN_FIT_NOTES[policy]}
-                    onClick={() => updateTown(selectedTown.id, { fit: policy })}
-                  >{TOWN_FIT_LABELS[policy]}</ChromeButton>
-                ))}
-              </div>
-              <p className="le-board-note">{TOWN_FIT_NOTES[selectedTown.fit as TownFitPolicy]} Buildings never overlap each other and never overhang the area either way.</p>
-              <h2 className="le-card-subhead">Acceptable variation</h2>
-              <SliderRow label={`Looseness · ${Math.round(selectedTown.looseness * 100)}%`} value={selectedTown.looseness} set={(value) => updateTown(selectedTown.id, { looseness: value })} min={0} max={1} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.looseness} />
-              <SliderRow label={`Off-axis buildings · ${Math.round(selectedTown.facingWobble * 100)}%`} value={selectedTown.facingWobble} set={(value) => updateTown(selectedTown.id, { facingWobble: value })} min={0} max={1} step={0.05} nudge={0.05} dflt={TOWN_PLAN_DEFAULTS.facingWobble} />
+              >{selectedTown.sections.length ? '+ Add mixed Section' : '+ Add Section'}</ChromeButton>
+              {selectedTown.sections.length ? (
+                <ChromeButton unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  onClick={() => {
+                    const added = newTownSection('distinct');
+                    setExpandedTownSections((current) => new Set(current).add(added.id));
+                    updateTown(selectedTown.id, { sections: [...selectedTown.sections, added] });
+                  }}
+                >+ Add distinct Section</ChromeButton>
+              ) : null}
+              <p className="le-board-note">Mixed Sections share generated ground. Distinct Sections receive separate generator-chosen ground inside the same Town patch; you never draw internal areas.</p>
+              {/* Counts and placement settings live inside each Section. */}
               <h2 className="le-card-subhead">Placement</h2>
+              <GeneratorSeedControl
+                generatorName="this Town"
+                seedLabel="Layout seed"
+                fixed={selectedTown.fixedSeed === true}
+                seed={selectedTown.seed}
+                defaultSeed={TOWN_PLAN_DEFAULTS.seed}
+                onFixedChange={(fixedSeed) => updateTown(selectedTown.id, { fixedSeed })}
+                onSeedChange={(seed) => updateTown(selectedTown.id, { seed })}
+              />
               <div className="le-ctrlrow">
-                <span className="le-ctrllabel">Layout seed</span>
                 <ChromeButton unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                  onClick={() => updateTown(selectedTown.id, { seed: randomGeneratorSeed() })}
-                >Random</ChromeButton>
-              </div>
-              <SliderRow label={`Seed · ${selectedTown.seed}`} value={selectedTown.seed} set={(value) => updateTown(selectedTown.id, { seed: Math.round(value) })} min={1} max={MAX_GENERATOR_SEED} step={1} nudge={1} dflt={TOWN_PLAN_DEFAULTS.seed} />
-              <div className="le-ctrlrow">
-                <ChromeButton unit="inner-text-button"
-                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                  disabled={selectedTown.sections.every((section) => !section.buildings.length)}
-                  title={selectedTown.sections.every((section) => !section.buildings.length)
-                    ? 'Add a building to a section first — there is nothing to build yet.'
-                    : 'Rebuild this town from its current settings.'}
+                  disabled={selectedTown.sections.every((section) => !section.buildings.some((building) => building.weight > 0))}
+                  title={selectedTown.sections.every((section) => !section.buildings.some((building) => building.weight > 0))
+                    ? selectedTown.sections.length
+                      ? 'Add a building to a Section first — there is nothing to build yet.'
+                      : 'Add a Section first — there is nothing to build yet.'
+                    : selectedTownGenerated
+                      ? 'Rebuild this town from its current settings.'
+                      : 'Build this town from its current settings.'}
                   onClick={() => generateTown(selectedTown)}
-                >Regenerate</ChromeButton>
+                >{selectedTownGenerated ? 'Regenerate' : 'Generate'}</ChromeButton>
                 <ChromeButton unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                   onClick={resetTownParams}
                 >Reset settings</ChromeButton>
               </div>
-              {selectedTown.sections.every((section) => !section.buildings.length)
+              {selectedTown.sections.every((section) => !section.buildings.some((building) => building.weight > 0))
                 ? null
-                : townSited && townSited.placed < selectedTown.size ? (
+                : townSited && townSited.placed < townSited.target ? (
                 <p className="le-board-note">
-                  Placed {townSited.placed} of {selectedTown.size}.{' '}
+                  Placed {townSited.placed} of {townSited.target}.{' '}
                   {townSited.outside >= Math.max(1, townSited.spacing)
                       ? `${townSited.outside} building${townSited.outside === 1 ? '' : 's'} would have overhung the area — drag a bigger area, or build smaller.`
                       : townSited.spacing > 0
@@ -10388,109 +10679,318 @@ export function LevelEditor(): ReactElement {
                         : 'The area ran out of street frontage — drag a bigger area or lower Frontage per building.'}
                 </p>
               ) : townSited ? <p className="le-board-note">Placed {townSited.placed} buildings.</p> : null}
-              {selectedTown.sections.every((section) => !section.buildings.length)
-                ? <p className="le-board-note">Pick at least one building for a section, then press Regenerate.</p>
+              {selectedTown.sections.every((section) => !section.buildings.some((building) => building.weight > 0))
+                ? <p className="le-board-note">{selectedTown.sections.length ? 'Pick at least one building for a Section' : 'Add a Section and pick at least one building'}, then press Generate.</p>
                 : null}
             </>) : null}
           </section>
         ) : brushKind === 'forest' ? (
           <section className="skirmish-card le-brush-panel le-forest-panel" data-testid="forest-controls">
             <h2>Forest</h2>
-            <p className="le-board-note">Drag over the scene to grow trees. Painting the same ground again changes nothing — change the seed for a different forest. Trees are Scene Art: visual only, never on the playable grid, no collision.</p>
-            <div className="le-pal-group">
-              <span className="le-pal-grouplabel">Species</span>
-              <AssetSwatchList
-                ariaLabel="Forest species"
-                items={forestSpeciesCatalog.map((asset) => ({
-                  id: `forest-${asset.id}`,
-                  label: asset.label,
-                  title: `${asset.label} · include in the forest`,
-                  selected: forestSpecies.includes(asset.id),
-                  onSelect: () => setForestSpecies((current) => (
-                    current.includes(asset.id)
-                      ? current.filter((id) => id !== asset.id)
-                      : [...current, asset.id]
-                  )),
-                  content: <>
-                    <img src={structureArtDirectionHalfSrc(asset.id, 'south', 'front')} alt="" draggable={false} />
-                    <small>{asset.label}</small>
-                  </>,
-                }))}
+            <p className="le-board-note">Drag out the grid cells for a saved Forest, including cells in the scenic apron, or add one in the middle of the view. Choose its contents and settings, then press Generate. Every Forest remains selectable, editable, and rerunnable.</p>
+            <div className="le-gen-unit-row">
+              <div className="le-gen-unit-select">
+                <span>Forest</span>
+                <HouseSelect<string>
+                  value={selectedForestId ?? ''}
+                  onChange={(id) => {
+                    setSelectedForestId(id || null);
+                    setForestPicker(null);
+                    setForestGenerationResult(null);
+                  }}
+                  ariaLabel="Saved Forest"
+                  options={boardForests.length
+                    ? boardForests.map((forest) => ({
+                      value: forest.id,
+                      label: `${forest.name} · ${Math.abs(forest.bounds.maxX - forest.bounds.minX)}×${Math.abs(forest.bounds.maxY - forest.bounds.minY)} tiles`,
+                    }))
+                    : [{ value: '', label: 'No Forests yet' }]}
+                />
+              </div>
+              {selectedForest ? (
+                <ChromeButton unit="inner-tool-square"
+                  className={chromeUnitClassNames('inner-tool-square', 'le-gen-icon', 'danger')}
+                  onClick={() => removeForest(selectedForest)}
+                  title={`Remove ${selectedForest.name}`}
+                  aria-label={`Remove ${selectedForest.name}`}
+                >×</ChromeButton>
+              ) : null}
+            </div>
+            <ChromeButton unit="inner-text-button"
+              className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+              style={{ width: '100%' }}
+              onClick={addForestAtView}
+              title="Place a saved Forest in the middle of the current view. Drag on the board to choose the ground yourself."
+            >+ Add Forest</ChromeButton>
+            {boardForests.length ? null : (
+              <p className="le-board-note">Or drag out an area on the board to choose the ground yourself. Nothing is generated until you press Generate.</p>
+            )}
+            {selectedForest ? (<>
+              <h2 className="le-card-subhead">Sections</h2>
+              <p className="le-board-note">You define each Forest approach; the generator decides where it belongs inside the selected patch. Mixed Sections share generated ground, while distinct Sections receive separate generated ground.</p>
+              <GeneratorRecipePresetList
+                label="Forest presets"
+                ariaLabel="Forest presets"
+                presets={FOREST_ART_PRESETS.map((preset) => {
+                  const configured = forestPresetConfiguration(preset.id, forestSpeciesCatalog);
+                  return {
+                    id: preset.id,
+                    label: preset.label,
+                    description: preset.description,
+                    disabled: !configured,
+                    title: `${preset.description} Replaces this Forest's complete Section collection without generating.`,
+                    onSelect: () => {
+                      if (!configured) return;
+                      const sections = configured.sections.map(({ relationship, ...approach }) => (
+                        materializeForestApproach(approach, relationship)
+                      ));
+                      updateForest(selectedForest.id, { sections });
+                      setExpandedForestSections(new Set());
+                      setExpandedForestTrees(new Set());
+                      setForestPicker(null);
+                      setForestGenerationResult(null);
+                    },
+                  };
+                })}
+                note="A preset replaces this Forest's complete Section collection. Every resulting Section remains explicit and editable; the outer patch and generated output stay unchanged until Generate."
+              />
+              {selectedForest.sections.map((section, sectionIndex) => (
+                <div className="le-town-section le-gen-region-group" key={section.id}>
+                  <div className="le-ctrlrow le-town-section-head">
+                    <ChromeButton unit="inner-tool-square"
+                      className={chromeUnitClassNames('inner-tool-square', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-gen-cover-caret-btn', forestSectionOpen(section) && 'active')}
+                      onClick={() => setExpandedForestSections((current) => {
+                        const next = new Set(current);
+                        if (next.has(section.id)) next.delete(section.id); else next.add(section.id);
+                        return next;
+                      })}
+                      aria-expanded={forestSectionOpen(section)}
+                      aria-label={forestSectionOpen(section) ? `Collapse Forest Section ${sectionIndex + 1}` : `Expand Forest Section ${sectionIndex + 1}`}
+                    ><span className="le-gen-cover-caret" aria-hidden="true">{forestSectionOpen(section) ? '▾' : '▸'}</span></ChromeButton>
+                    <h2 className="le-card-subhead le-town-section-title">Section {sectionIndex + 1}</h2>
+                    <span className="le-ctrllabel le-town-section-summary">{section.trees.length ? `${section.trees.length} kind${section.trees.length === 1 ? '' : 's'} · ${section.density.toFixed(1)}/tile` : 'add Forest art below'}</span>
+                    <ChromeButton unit="inner-tool-square"
+                      className={chromeUnitClassNames('inner-tool-square', 'le-gen-icon', 'danger')}
+                      onClick={() => {
+                        setExpandedForestSections((current) => {
+                          const next = new Set(current);
+                          next.delete(section.id);
+                          return next;
+                        });
+                        if (forestPicker?.sectionId === section.id) setForestPicker(null);
+                        updateForest(selectedForest.id, { sections: selectedForest.sections.filter((candidate) => candidate.id !== section.id) });
+                      }}
+                      title={`Remove Forest Section ${sectionIndex + 1}`}
+                      aria-label={`Remove Forest Section ${sectionIndex + 1}`}
+                    >×</ChromeButton>
+                  </div>
+                  {forestSectionOpen(section) ? (<>
+                  {sectionIndex > 0 ? (
+                    <div className="le-ctrlrow">
+                      <span className="le-ctrllabel">How it joins</span>
+                      <div className="le-seg" role="group" aria-label={`Forest Section ${sectionIndex + 1} relationship`}>
+                        {([['mixed', 'Mixed'], ['distinct', 'Distinct']] as const).map(([relationship, label]) => (
+                          <ChromeButton unit="inner-text-button"
+                            key={relationship}
+                            className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', section.relationship === relationship && 'active')}
+                            aria-pressed={section.relationship === relationship}
+                            onClick={() => updateForestSection(selectedForest.id, section.id, { relationship })}
+                          >{label}</ChromeButton>
+                        ))}
+                      </div>
+                    </div>
+                  ) : <p className="le-board-note">This first Section starts the composition and uses the full patch unless another distinct Section is added.</p>}
+              <h2 className="le-card-subhead">Contents</h2>
+              <p className="le-board-note">Each entry names exactly what this Section can place. “How often” controls its weight relative to the other entries.</p>
+              <div className="le-gen-cover">
+                {section.trees.map((tree, treeIndex) => {
+                  const asset = forestSpeciesCatalog.find((candidate) => candidate.id === tree.sourceArtId);
+                  const expanded = expandedForestTrees.has(tree.id);
+                  return (
+                    <div className="le-gen-cover-entry" key={tree.id}>
+                      <div className="le-gen-cover-head">
+                        <ChromeButton unit="inner-tool-square"
+                          className={chromeUnitClassNames('inner-tool-square', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-gen-cover-caret-btn', expanded && 'active')}
+                          onClick={() => setExpandedForestTrees((current) => {
+                            const next = new Set(current);
+                            if (next.has(tree.id)) next.delete(tree.id); else next.add(tree.id);
+                            return next;
+                          })}
+                          aria-expanded={expanded}
+                          aria-label={expanded ? 'Collapse Forest art settings' : 'Expand Forest art settings'}
+                        ><span className="le-gen-cover-caret" aria-hidden="true">{expanded ? '▾' : '▸'}</span></ChromeButton>
+                        <ChromeButton unit="inner-text-button"
+                          className={chromeUnitClassNames('inner-text-button', 'le-generator-art-pick', forestPicker?.sectionId === section.id && forestPicker.entryId === tree.id && 'active')}
+                          aria-expanded={forestPicker?.sectionId === section.id && forestPicker.entryId === tree.id}
+                          aria-label={`Forest Section ${sectionIndex + 1} art ${treeIndex + 1}`}
+                          title="Choose different Forest art"
+                          onClick={() => setForestPicker((current) => (
+                            current?.sectionId === section.id && current.entryId === tree.id ? null : { sectionId: section.id, entryId: tree.id }
+                          ))}
+                        >
+                          {asset ? <img src={structureArtDirectionHalfSrc(asset.id, 'south', 'front')} alt="" draggable={false} /> : null}
+                          <span>{asset?.label ?? tree.sourceArtId}</span>
+                        </ChromeButton>
+                        <ChromeButton unit="inner-tool-square"
+                          className={chromeUnitClassNames('inner-tool-square', 'le-gen-icon', 'danger')}
+                          onClick={() => {
+                            updateForestSection(selectedForest.id, section.id, { trees: section.trees.filter((other) => other.id !== tree.id) });
+                            if (forestPicker?.sectionId === section.id && forestPicker.entryId === tree.id) setForestPicker(null);
+                          }}
+                          title="Remove this Forest art entry"
+                          aria-label="Remove this Forest art entry"
+                        >×</ChromeButton>
+                      </div>
+                      {expanded ? (
+                        <div className="le-gen-cover-knobs">
+                          <SliderRow
+                            label={`How often · ${tree.weight.toFixed(1)}`}
+                            value={tree.weight}
+                            set={(weight) => updateForestSection(selectedForest.id, section.id, {
+                              trees: section.trees.map((other) => other.id === tree.id ? { ...other, weight } : other),
+                            })}
+                            min={0}
+                            max={10}
+                            step={0.1}
+                            nudge={0.1}
+                            dflt={1}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+                <ChromeButton unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-gen-cover-add', forestPicker?.sectionId === section.id && forestPicker.entryId === null && 'active')}
+                  aria-expanded={forestPicker?.sectionId === section.id && forestPicker.entryId === null}
+                  onClick={() => setForestPicker((current) => current?.sectionId === section.id && current.entryId === null ? null : { sectionId: section.id, entryId: null })}
+                  title="Add a tree, understory plant, rock, or other natural Scene Art entry."
+                >+ Add Forest art</ChromeButton>
+                {forestPicker?.sectionId === section.id ? (
+                  <div className="le-generator-art-picker">
+                    <span className="le-pal-grouplabel">Choose individual art</span>
+                    <AssetSwatchList
+                      ariaLabel={forestPicker.entryId ? 'Choose Forest art' : 'Add Forest art'}
+                      items={forestSpeciesCatalog.map((asset) => ({
+                        id: `forest-pick-${selectedForest.id}-${asset.id}`,
+                        label: asset.label,
+                        title: asset.label,
+                        selected: forestPicker.entryId
+                          ? section.trees.some((tree) => tree.id === forestPicker.entryId && tree.sourceArtId === asset.id)
+                          : false,
+                        onSelect: () => {
+                          const addedTreeId = `tr${Math.random().toString(36).slice(2, 8)}`;
+                          const trees: BoardForestTree[] = forestPicker.entryId
+                            ? section.trees.map((tree) => tree.id === forestPicker.entryId ? { ...tree, sourceArtId: asset.id } : tree)
+                            : [...section.trees, { id: addedTreeId, sourceArtId: asset.id, weight: 1 }];
+                          updateForestSection(selectedForest.id, section.id, { trees });
+                          if (!forestPicker.entryId) setExpandedForestTrees((current) => new Set(current).add(addedTreeId));
+                          setForestPicker(null);
+                        },
+                        content: <>
+                          <img src={structureArtDirectionHalfSrc(asset.id, 'south', 'front')} alt="" draggable={false} />
+                          <small>{asset.label}</small>
+                        </>,
+                      }))}
+                    />
+                  </div>
+                ) : null}
+              </div>
+              <h2 className="le-card-subhead">Shape</h2>
+              <SliderRow label={`Density · ${section.density.toFixed(1)} per tile`} value={section.density} set={(density) => updateForestSection(selectedForest.id, section.id, { density })} min={0.2} max={6} step={0.1} nudge={0.1} dflt={FOREST_SCATTER_DEFAULTS.density} />
+              <SliderRow label={`Within-cell randomness · ${Math.round(section.jitter * 100)}%`} value={section.jitter} set={(jitter) => updateForestSection(selectedForest.id, section.id, { jitter })} min={0} max={1} step={0.05} nudge={0.05} dflt={FOREST_SCATTER_DEFAULTS.jitter} />
+              <SliderRow label={`Minimum spacing · ${section.spacing}px`} value={section.spacing} set={(spacing) => updateForestSection(selectedForest.id, section.id, { spacing })} min={0} max={120} step={2} nudge={2} dflt={FOREST_SCATTER_DEFAULTS.spacing} />
+              <SliderRow label={`Clumping · ${Math.round(section.clumping * 100)}%`} value={section.clumping} set={(clumping) => updateForestSection(selectedForest.id, section.id, { clumping })} min={0} max={1} step={0.05} nudge={0.05} dflt={FOREST_SCATTER_DEFAULTS.clumping} />
+              <SliderRow label={`Edge feathering · ${Math.round(section.falloff * 100)}%`} value={section.falloff} set={(falloff) => updateForestSection(selectedForest.id, section.id, { falloff })} min={0} max={1} step={0.05} nudge={0.05} dflt={FOREST_SCATTER_DEFAULTS.falloff} />
+              <h2 className="le-card-subhead">Variation</h2>
+              <SliderRow label={`Smallest · ${section.scaleMin.toFixed(2)}×`} value={section.scaleMin} set={(scaleMin) => updateForestSection(selectedForest.id, section.id, { scaleMin })} min={0.2} max={3} step={0.05} nudge={0.05} dflt={FOREST_SCATTER_DEFAULTS.scaleMin} />
+              <SliderRow label={`Largest · ${section.scaleMax.toFixed(2)}×`} value={section.scaleMax} set={(scaleMax) => updateForestSection(selectedForest.id, section.id, { scaleMax })} min={0.2} max={3} step={0.05} nudge={0.05} dflt={FOREST_SCATTER_DEFAULTS.scaleMax} />
+              <div className="le-ctrlrow">
+                <span className="le-ctrllabel">Orientation</span>
+                <div className="le-seg" role="group" aria-label="Forest orientation">
+                  {([[true, 'Random'], [false, 'Fixed']] as const).map(([random, label]) => (
+                    <ChromeButton unit="inner-text-button"
+                      key={label}
+                      className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', section.randomFacing === random && 'active')}
+                      aria-pressed={section.randomFacing === random}
+                      onClick={() => updateForestSection(selectedForest.id, section.id, { randomFacing: random })}
+                    >{label}</ChromeButton>
+                  ))}
+                </div>
+                {ctlReset(() => updateForestSection(selectedForest.id, section.id, { randomFacing: FOREST_SCATTER_DEFAULTS.randomFacing }))}
+              </div>
+              {section.randomFacing ? null : (
+                <FacingCompass
+                  direction={section.facing}
+                  onSelect={(facing) => updateForestSection(selectedForest.id, section.id, { facing })}
+                  onRotate={() => updateForestSection(selectedForest.id, section.id, {
+                    facing: rookDirections[(rookDirections.indexOf(section.facing) + 1) % rookDirections.length],
+                  })}
+                  available={() => true}
+                  ariaLabel="Forest facing"
+                />
+              )}
+                  </>) : null}
+                </div>
+              ))}
+              {!selectedForest.sections.length ? (
+                <p className="le-board-note">No Sections yet. Add one to define what this Forest can generate.</p>
+              ) : null}
+              <ChromeButton unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                onClick={() => {
+                  const added = newForestSection(selectedForest.sections.length ? 'mixed' : 'distinct');
+                  setExpandedForestSections((current) => new Set(current).add(added.id));
+                  updateForest(selectedForest.id, { sections: [...selectedForest.sections, added] });
+                }}
+              >{selectedForest.sections.length ? '+ Add mixed Section' : '+ Add Section'}</ChromeButton>
+              {selectedForest.sections.length ? (
+                <ChromeButton unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  onClick={() => {
+                    const added = newForestSection('distinct');
+                    setExpandedForestSections((current) => new Set(current).add(added.id));
+                    updateForest(selectedForest.id, { sections: [...selectedForest.sections, added] });
+                  }}
+                >+ Add distinct Section</ChromeButton>
+              ) : null}
+              <p className="le-board-note">The generator assigns every internal territory. You only choose whether a new Section mixes with the current territory or starts another one.</p>
+              <h2 className="le-card-subhead">Placement</h2>
+              <GeneratorSeedControl
+                generatorName="this Forest"
+                seedLabel="Forest seed"
+                fixed={selectedForest.fixedSeed === true}
+                seed={selectedForest.seed}
+                defaultSeed={FOREST_SCATTER_DEFAULTS.seed}
+                onFixedChange={(fixedSeed) => updateForest(selectedForest.id, { fixedSeed })}
+                onSeedChange={(seed) => updateForest(selectedForest.id, { seed })}
               />
               <div className="le-ctrlrow">
                 <ChromeButton unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                  onClick={() => setForestSpecies(forestSpeciesCatalog.map((asset) => asset.id))}
-                >All</ChromeButton>
+                  disabled={!selectedForest.sections.some((section) => section.trees.some((tree) => tree.weight > 0))}
+                  title={selectedForest.sections.some((section) => section.trees.some((tree) => tree.weight > 0))
+                    ? selectedForestGenerated
+                      ? 'Rebuild this saved Forest from its current recipe and settings.'
+                      : 'Generate this saved Forest from its current recipe and settings.'
+                    : selectedForest.sections.length
+                      ? 'Add Forest art with a positive How often value first.'
+                      : 'Add a Section first — there is nothing to generate yet.'}
+                  onClick={() => generateForest(selectedForest)}
+                >{selectedForestGenerated ? 'Regenerate' : 'Generate'}</ChromeButton>
                 <ChromeButton unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                  onClick={() => setForestSpecies([])}
-                >None</ChromeButton>
-                <span className="le-ctrllabel">{forestSpecies.length} selected</span>
+                  onClick={resetForestParams}
+                >Reset forest settings</ChromeButton>
               </div>
-            </div>
-            <h2 className="le-card-subhead">Shape</h2>
-            <SliderRow label={`Brush size · ${forestRadius}px`} value={forestRadius} set={setForestRadius} min={40} max={600} step={10} nudge={10} dflt={FOREST_DEFAULT_RADIUS} />
-            <SliderRow label={`Density · ${forestDensity.toFixed(1)} per tile`} value={forestDensity} set={setForestDensity} min={0.2} max={6} step={0.1} nudge={0.1} dflt={FOREST_SCATTER_DEFAULTS.density} />
-            <SliderRow label={`Grid randomness · ${Math.round(forestJitter * 100)}%`} value={forestJitter} set={setForestJitter} min={0} max={1} step={0.05} nudge={0.05} dflt={FOREST_SCATTER_DEFAULTS.jitter} />
-            <SliderRow label={`Minimum spacing · ${forestSpacing}px`} value={forestSpacing} set={setForestSpacing} min={0} max={120} step={2} nudge={2} dflt={FOREST_SCATTER_DEFAULTS.spacing} />
-            <SliderRow label={`Clumping · ${Math.round(forestClumping * 100)}%`} value={forestClumping} set={setForestClumping} min={0} max={1} step={0.05} nudge={0.05} dflt={FOREST_SCATTER_DEFAULTS.clumping} />
-            <SliderRow label={`Edge feathering · ${Math.round(forestFalloff * 100)}%`} value={forestFalloff} set={setForestFalloff} min={0} max={1} step={0.05} nudge={0.05} dflt={FOREST_SCATTER_DEFAULTS.falloff} />
-            <h2 className="le-card-subhead">Variation</h2>
-            <SliderRow label={`Smallest tree · ${forestScaleMin.toFixed(2)}×`} value={forestScaleMin} set={setForestScaleMin} min={0.2} max={3} step={0.05} nudge={0.05} dflt={FOREST_SCATTER_DEFAULTS.scaleMin} />
-            <SliderRow label={`Largest tree · ${forestScaleMax.toFixed(2)}×`} value={forestScaleMax} set={setForestScaleMax} min={0.2} max={3} step={0.05} nudge={0.05} dflt={FOREST_SCATTER_DEFAULTS.scaleMax} />
-            <div className="le-ctrlrow">
-              <span className="le-ctrllabel">Orientation</span>
-              <div className="le-seg" role="group" aria-label="Forest orientation">
-                {([[true, 'Random'], [false, 'Fixed']] as const).map(([random, label]) => (
-                  <ChromeButton unit="inner-text-button"
-                    key={label}
-                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', forestRandomFacing === random && 'active')}
-                    aria-pressed={forestRandomFacing === random}
-                    onClick={() => setForestRandomFacing(random)}
-                  >{label}</ChromeButton>
-                ))}
-              </div>
-              {ctlReset(() => setForestRandomFacing(FOREST_SCATTER_DEFAULTS.randomFacing))}
-            </div>
-            {forestRandomFacing ? null : (
-              <FacingCompass
-                direction={forestFacing}
-                onSelect={setForestFacing}
-                onRotate={() => setForestFacing((current) => (
-                  rookDirections[(rookDirections.indexOf(current) + 1) % rookDirections.length]
-                ))}
-                available={() => true}
-                ariaLabel="Forest facing"
-              />
-            )}
-            <h2 className="le-card-subhead">Placement</h2>
-            <div className="le-ctrlrow">
-              <span className="le-ctrllabel">Forest seed</span>
-              <ChromeButton unit="inner-text-button"
-                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                onClick={() => setForestSeed(randomGeneratorSeed())}
-              >Random</ChromeButton>
-            </div>
-            <SliderRow
-              label={`Seed · ${forestSeed}`}
-              value={forestSeed}
-              set={(value) => setForestSeed(Math.round(value))}
-              min={1}
-              max={MAX_GENERATOR_SEED}
-              step={1}
-              nudge={1}
-              dflt={FOREST_SCATTER_DEFAULTS.seed}
-            />
-            <div className="le-ctrlrow">
-              <ChromeButton unit="inner-text-button"
-                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                onClick={resetForestParams}
-              >Reset forest settings</ChromeButton>
-            </div>
-            {forestSpecies.length ? null : (
-              <p className="le-board-note">Pick at least one species above before painting.</p>
-            )}
+              {!selectedForest.sections.some((section) => section.trees.some((tree) => tree.weight > 0)) ? (
+                <p className="le-board-note">{selectedForest.sections.length ? 'Add at least one Forest art entry with a positive “How often” value to a Section' : 'Add a Section and at least one Forest art entry'}, then press Generate.</p>
+              ) : forestGenerationResult?.forestId === selectedForest.id ? (
+                <p className="le-board-note">Generated {forestGenerationResult.count} placement{forestGenerationResult.count === 1 ? '' : 's'}.</p>
+              ) : (
+                <p className="le-board-note">Area and recipe saved. Tune the settings, then press {selectedForestGenerated ? 'Regenerate' : 'Generate'}.</p>
+              )}
+            </>) : null}
           </section>
         ) : brushKind === 'artwork' ? (
           <section className="skirmish-card le-brush-panel">
