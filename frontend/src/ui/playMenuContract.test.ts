@@ -131,6 +131,9 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(ataraxiaSelector).not.toContain("'Complete Ataraxia 0 to unlock'");
     expect(ataraxiaSelector).toContain('<p className="run-ataraxia-effect">{ATARAXIA_BY_TIER[value].effect}</p>');
     expect(ataraxiaSelector).not.toContain('role="radiogroup"');
+    const detailBodyRule = style.match(/\.play-detail-body\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(detailBodyRule).toContain('flex: 0 0 auto');
+    expect(detailBodyRule).not.toContain('flex: 1 1 auto');
   });
 
   it('resolves Play rail icons from installed drawable membership, not retired path-shaped app-ui roles', () => {
