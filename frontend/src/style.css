@@ -25092,7 +25092,10 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
 .play-detail-body {
   align-content: start;
   display: grid;
-  flex: 1 1 auto;
+  /* Run's final verb completes the facts or Ataraxia choice directly above it.
+     Do not grow this body into an empty spacer that strands the verb at the
+     bottom of the scenic detail column (ADR-0475). */
+  flex: 0 0 auto;
   min-block-size: 0;
 }
 
