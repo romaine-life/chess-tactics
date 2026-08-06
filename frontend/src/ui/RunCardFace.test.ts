@@ -4,6 +4,8 @@ import { RUN_CARD_BY_ID } from '../run/model';
 import { runCardFaceContent } from './runCardFaceContent';
 import {
   requiredRunCardImageKinds,
+  runCardFormationDisplayRow,
+  runCardFormationGridCells,
   runCardContentCanUpdateWithoutMediaLoad,
   runCardPresentationCanPromote,
   runCardPresentationSignature,
@@ -46,5 +48,25 @@ describe('formation-only Run card face', () => {
     const styles = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
     expect(styles).toMatch(/\.run-card-formation-cell,[\s\S]*?grid-column:\s*calc\(var\(--run-card-formation-x\) \+ 1\)/);
     expect(styles).toMatch(/\.run-card-formation-cell,[\s\S]*?grid-row:\s*calc\(var\(--run-card-formation-y\) \+ 1\)/);
+  });
+
+  it('prints a complete square grid around the formation', () => {
+    expect(runCardFormationGridCells(3, 2)).toEqual([
+      { x: 0, y: 0, dark: false },
+      { x: 1, y: 0, dark: true },
+      { x: 2, y: 0, dark: false },
+      { x: 0, y: 1, dark: true },
+      { x: 1, y: 1, dark: false },
+      { x: 2, y: 1, dark: true },
+    ]);
+    const styles = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+    expect(styles).toMatch(/grid-template-columns:\s*repeat\(var\(--run-card-formation-columns\),\s*10\.8cqw\)/);
+    expect(styles).toMatch(/grid-template-rows:\s*repeat\(var\(--run-card-formation-rows\),\s*10\.8cqw\)/);
+    expect(styles).toMatch(/\.run-card-formation-extension path[\s\S]*?stroke:\s*currentColor/);
+  });
+
+  it('prints the front formation row above the back row', () => {
+    expect(runCardFormationDisplayRow(0)).toBe(0);
+    expect(runCardFormationDisplayRow(1)).toBe(1);
   });
 });

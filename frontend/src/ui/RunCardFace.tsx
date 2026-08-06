@@ -176,6 +176,56 @@ export function runCardFormationRows(pieces: readonly Pick<RunCardFormationPiece
   return Math.max(2, ...pieces.map((piece) => piece.y + 1));
 }
 
+export type RunCardFormationGridCell = Readonly<{
+  x: number;
+  y: number;
+  dark: boolean;
+}>;
+
+/** The printed diagram uses the player's board orientation: formation row zero is the
+ * front rank and therefore prints above row one. */
+export function runCardFormationDisplayRow(y: number): number {
+  return Math.max(0, Math.floor(y));
+}
+
+export function runCardFormationGridCells(columns: number, rows: number): RunCardFormationGridCell[] {
+  const safeColumns = Math.max(1, Math.floor(columns));
+  const safeRows = Math.max(1, Math.floor(rows));
+  return Array.from({ length: safeColumns * safeRows }, (_, index) => {
+    const x = index % safeColumns;
+    const y = Math.floor(index / safeColumns);
+    return {
+      x,
+      y,
+      dark: (x + y) % 2 === 1,
+    };
+  });
+}
+
+function FormationGridExtension({ side }: { side: 'left' | 'right' }): ReactElement {
+  return (
+    <svg
+      aria-hidden="true"
+      className={`run-card-formation-extension is-${side}`}
+      preserveAspectRatio="none"
+      viewBox="0 0 100 100"
+    >
+      {[0, 1, 2, 3].map((segment) => {
+        const start = segment * 25;
+        const end = start + 25;
+        return (
+          <path
+            d={`M ${start} 1 H ${end} M ${start} 50 H ${end} M ${start} 99 H ${end}`}
+            key={segment}
+            opacity={(segment + 1) * .2}
+            vectorEffect="non-scaling-stroke"
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
 function FormationDiagram({
   pieces,
   pending,
@@ -195,6 +245,7 @@ function FormationDiagram({
   // The formation's empty front/back row is rules information. Cropping a singleton
   // to its occupied cell made "Queen in front" and "Queen in back" print identically.
   const rows = runCardFormationRows(pieces);
+  const gridCells = runCardFormationGridCells(columns, rows);
   return (
     <span
       className="run-card-formation"
@@ -206,6 +257,21 @@ function FormationDiagram({
       } as CSSProperties}
       aria-label="Authored deployment formation"
     >
+      <FormationGridExtension side="left" />
+      <FormationGridExtension side="right" />
+      {gridCells.map((cell) => (
+        <span
+          aria-hidden="true"
+          className={`run-card-formation-square${cell.dark ? ' is-dark' : ''}`}
+          data-formation-grid-x={cell.x}
+          data-formation-grid-y={cell.y}
+          key={`grid:${cell.x}:${cell.y}`}
+          style={{
+            '--run-card-formation-x': cell.x,
+            '--run-card-formation-y': cell.y,
+          } as CSSProperties}
+        />
+      ))}
       {pieces.map((piece) => {
         const kind = runCardUnitImageKind(piece.pieceIndex, piece.unit, piece.occurrenceIndex);
         const selectionLabel = pending || piece.empty
@@ -238,10 +304,11 @@ function FormationDiagram({
           <span
             className={`run-card-formation-cell${piece.empty ? ' is-empty' : ''}${unitHighlight?.unit === piece.unit && unitHighlight.index === piece.occurrenceIndex ? ' is-highlighted' : ''}`}
             data-piece-index={piece.pieceIndex}
+            data-formation-row={piece.y === 0 ? 'front' : 'back'}
             key={piece.pieceIndex}
             style={{
               '--run-card-formation-x': piece.x,
-              '--run-card-formation-y': rows - piece.y - 1,
+              '--run-card-formation-y': runCardFormationDisplayRow(piece.y),
             } as CSSProperties}
           >
             {content}

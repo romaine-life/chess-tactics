@@ -25180,15 +25180,45 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   align-self: center;
   display: grid;
   flex: 0 0 auto;
-  grid-template-columns: repeat(var(--run-card-formation-columns), 12cqw);
-  grid-template-rows: repeat(var(--run-card-formation-rows), 9.2cqw);
+  grid-template-columns: repeat(var(--run-card-formation-columns), 10.8cqw);
+  grid-template-rows: repeat(var(--run-card-formation-rows), 10.8cqw);
+  isolation: isolate;
   margin-block-start: -.6cqw;
   position: relative;
+}
+
+.run-card-formation-extension {
+  block-size: 100%;
+  color: rgba(58, 49, 39, .42);
+  inline-size: 5.2cqw;
+  overflow: visible;
+  pointer-events: none;
+  position: absolute;
+  inset-block-start: 0;
+  z-index: 0;
+}
+
+.run-card-formation-extension.is-left {
+  inset-inline-end: 100%;
+}
+
+.run-card-formation-extension.is-right {
+  inset-inline-start: 100%;
+  transform: scaleX(-1);
+}
+
+.run-card-formation-extension path {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: butt;
+  stroke-width: 1;
 }
 
 .run-card-formation-square {
   box-sizing: border-box;
   color: rgba(58, 49, 39, .2);
+  grid-column: calc(var(--run-card-formation-x) + 1);
+  grid-row: calc(var(--run-card-formation-y) + 1);
   outline: .22cqw solid currentColor;
   outline-offset: -.22cqw;
   z-index: 0;
