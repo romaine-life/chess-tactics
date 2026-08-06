@@ -63,11 +63,11 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playContinue).not.toContain('ContinueOption');
     expect(playMenu).not.toContain("?? 'Nothing to continue'");
     expect(playMenu).not.toContain('inventory.options');
-    // Continue's action column is the resume card itself: facts plus one Play verb.
+    // Continue's action column is the resume card itself: facts plus one self-labeling Continue verb.
     expect(playMenu).toContain('const selected = inventory.activities[0] ?? null;');
     expect(playMenu).toContain('data-testid="continue-detail"');
     expect(playMenu).toContain('className="play-detail-facts"');
-    expect(playMenu).toContain('to={selected.playHref}><span>Play</span>');
+    expect(playMenu).toContain('to={selected.playHref}><span>Continue</span>');
     expect(playMenu).toContain('<ContinuePanel inventory={resumeInventory} />');
     expect(style).toContain('.continue-resume {');
     // No fourth column for Continue, so the action column must not narrow for one.

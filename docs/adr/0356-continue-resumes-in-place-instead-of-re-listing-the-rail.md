@@ -7,6 +7,7 @@ partially_supersedes:
 refines:
   - "[ADR-0074](0074-one-play-entry-one-shared-selector.md)"
   - "[ADR-0334](0334-current-run-stays-visible-disabled-without-an-active-run.md)"
+partially_superseded_by: "[ADR-0474](0474-continue-resume-action-is-labeled-continue.md)'s resume-action label"
 ---
 
 # ADR-0356: Continue resumes in place instead of re-listing the rail

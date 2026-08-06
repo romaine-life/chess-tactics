@@ -350,13 +350,13 @@ these.
   only difference is which cards are in it (ADR-0371).
 - Play defaults to one activity-agnostic, descriptor-free **Continue** rail
   destination. Its column resumes in place and shows exactly one activity: the
-  most recently updated resumable one, with its facts and one final **Play**
+  most recently updated resumable one, with its facts and one final **Continue**
   action. Any other unfinished activity is reached through its own rail
   destination, and an empty Continue says **Nothing to continue** once.
   Ordinary Run remains a
   separate preparation destination between Current Run and **Start New Run**,
   with Ataraxia setup and confirmed replacement (ADR-0232, ADR-0289, ADR-0290,
-  ADR-0294, ADR-0356).
+  ADR-0294, ADR-0356, ADR-0474).
 - Army and Lipsana are grouped as player **Self inspection** in Run Controls.
   Either replaces the complete left Play workspace through the shared
   fill-only shell surface while the current phase stays mounted underneath;
