@@ -20,9 +20,11 @@ const WARP_PROCESSOR_BY_OPERATION = Object.freeze({
   'grid-warp-v2': 'shared-predrawn-rasterizer-v2',
 });
 const OCCLUSION_PROCESSOR = 'canonical-depth-mask-v1';
-const SOURCE_SEMANTIC_REQUEST_SCHEMA = 'predrawn-generation-semantic-request-v1';
+const LEGACY_SOURCE_SEMANTIC_REQUEST_SCHEMA = 'predrawn-generation-semantic-request-v1';
+const SOURCE_SEMANTIC_REQUEST_SCHEMA = 'predrawn-generation-semantic-request-v2';
 const ATTEMPT_SOURCE_REQUEST_SCHEMA = 'predrawn-generation-attempt-source-v1';
 const ATTEMPT_PIPELINE_SOURCE_REQUEST_SCHEMA = 'predrawn-processing-attempt-input-v1';
+const ATTEMPT_INTAKE_SOURCE_REQUEST_SCHEMA = 'predrawn-ai-artwork-intake-v1';
 const MOVE_HIGHLIGHT_PROFILE_SCHEMA = 'predrawn-move-highlight-profile-v1';
 const MOVE_HIGHLIGHT_COORDINATE_BASIS = 'cell-diamond-10000-v1';
 const DEFAULT_MOVE_HIGHLIGHT_FOOTPRINT = Object.freeze([
@@ -456,26 +458,61 @@ function rawBackgroundVersionContractIssue(candidate) {
   return null;
 }
 
+function sourceSnapshotFieldsForOperation(operation) {
+  if (operation?.kind === 'generation-source-v2') {
+    return {
+      schema: SOURCE_SEMANTIC_REQUEST_SCHEMA,
+      revisionKey: 'workingCopyDocumentRevision',
+      levelSha256Key: 'workingCopyLevelSha256',
+      label: 'working-copy',
+    };
+  }
+  if (operation?.kind === 'generation-source-v1') {
+    return {
+      schema: LEGACY_SOURCE_SEMANTIC_REQUEST_SCHEMA,
+      revisionKey: 'canonicalDocumentRevision',
+      levelSha256Key: 'canonicalLevelSha256',
+      label: 'canonical',
+    };
+  }
+  return null;
+}
+
+function sourceSnapshotFieldsForSemanticRequest(request) {
+  if (request?.schema === SOURCE_SEMANTIC_REQUEST_SCHEMA) {
+    return {
+      revisionKey: 'workingCopyDocumentRevision',
+      levelSha256Key: 'workingCopyLevelSha256',
+    };
+  }
+  if (request?.schema === LEGACY_SOURCE_SEMANTIC_REQUEST_SCHEMA) {
+    return {
+      revisionKey: 'canonicalDocumentRevision',
+      levelSha256Key: 'canonicalLevelSha256',
+    };
+  }
+  return null;
+}
+
 function sourceArtworkVersionContractIssue(candidate) {
   if (!candidate || candidate.kind !== 'source') return 'background version must be a Generation Reference';
   const operation = candidate.operation;
   const provenance = candidate.provenance;
   if (!isObjectRecord(operation)) return 'source operation must be an object';
   if (!isObjectRecord(provenance)) return 'source provenance must be an object';
-  if (operation.kind !== 'generation-source-v1') {
-    return 'source operation.kind must be generation-source-v1';
-  }
+  const snapshotFields = sourceSnapshotFieldsForOperation(operation);
+  if (!snapshotFields) return 'source operation.kind must be generation-source-v1 or generation-source-v2';
   if (operation.coordinateBasis !== PREDRAWN_COORDINATE_BASIS) {
     return `source operation.coordinateBasis must be ${PREDRAWN_COORDINATE_BASIS}`;
   }
   if (operation.backgroundMode !== 'legacy' && operation.backgroundMode !== 'ai') {
     return 'source operation.backgroundMode must be legacy or ai';
   }
-  if (!SHA256.test(operation.canonicalLevelSha256 || '')) {
-    return 'source operation.canonicalLevelSha256 must be a lowercase SHA-256 digest';
+  if (!SHA256.test(operation[snapshotFields.levelSha256Key] || '')) {
+    return `source operation.${snapshotFields.levelSha256Key} must be a lowercase SHA-256 digest`;
   }
-  if (provenance.canonicalLevelSha256 !== operation.canonicalLevelSha256) {
-    return 'source provenance.canonicalLevelSha256 must equal the operation canonical Level digest';
+  if (provenance[snapshotFields.levelSha256Key] !== operation[snapshotFields.levelSha256Key]) {
+    return `source provenance.${snapshotFields.levelSha256Key} must equal the operation ${snapshotFields.label} Level digest`;
   }
   if (provenance.backgroundMode !== operation.backgroundMode) {
     return 'source provenance.backgroundMode must equal operation.backgroundMode';
@@ -490,13 +527,13 @@ function sourceArtworkVersionContractIssue(candidate) {
     return 'source provenance.environmentGeometrySha256 must equal the operation geometry digest';
   }
   if (
-    !Number.isSafeInteger(operation.canonicalDocumentRevision)
-    || operation.canonicalDocumentRevision < 1
+    !Number.isSafeInteger(operation[snapshotFields.revisionKey])
+    || operation[snapshotFields.revisionKey] < 1
   ) {
-    return 'source operation.canonicalDocumentRevision must be a positive saved document revision';
+    return `source operation.${snapshotFields.revisionKey} must be a positive document revision`;
   }
-  if (provenance.canonicalDocumentRevision !== operation.canonicalDocumentRevision) {
-    return 'source provenance.canonicalDocumentRevision must equal the operation';
+  if (provenance[snapshotFields.revisionKey] !== operation[snapshotFields.revisionKey]) {
+    return `source provenance.${snapshotFields.revisionKey} must equal the operation`;
   }
 
   const bounds = normalizeWorldBounds(candidate.world_bounds);
@@ -555,8 +592,8 @@ function sourceArtworkVersionContractIssue(candidate) {
   }
 
   const semanticRequest = operation.semanticRequest;
-  if (!isObjectRecord(semanticRequest) || semanticRequest.schema !== SOURCE_SEMANTIC_REQUEST_SCHEMA) {
-    return `source operation.semanticRequest.schema must be ${SOURCE_SEMANTIC_REQUEST_SCHEMA}`;
+  if (!isObjectRecord(semanticRequest) || semanticRequest.schema !== snapshotFields.schema) {
+    return `source operation.semanticRequest.schema must be ${snapshotFields.schema}`;
   }
   if (
     typeof semanticRequest.levelId !== 'string'
@@ -582,8 +619,8 @@ function sourceArtworkVersionContractIssue(candidate) {
     return 'source semantic board snapshot digest is invalid';
   }
   if (
-    semanticRequest.canonicalDocumentRevision !== operation.canonicalDocumentRevision
-    || semanticRequest.canonicalLevelSha256 !== operation.canonicalLevelSha256
+    semanticRequest[snapshotFields.revisionKey] !== operation[snapshotFields.revisionKey]
+    || semanticRequest[snapshotFields.levelSha256Key] !== operation[snapshotFields.levelSha256Key]
     || semanticRequest.backgroundMode !== operation.backgroundMode
     || (semanticRequest.sourceBackgroundVersionId ?? null) !== sourceBackgroundVersionId
     || (semanticRequest.sourceOcclusionVersionId ?? null) !== sourceOcclusionVersionId
@@ -592,7 +629,7 @@ function sourceArtworkVersionContractIssue(candidate) {
     || !sameWorldBounds(semanticRequest.worldBounds, bounds.value)
     || canonicalJson(semanticRequest.generationFrame) !== canonicalJson(frame)
   ) {
-    return 'source semantic request must exactly bind its canonical revision, frame, bounds, and geometry';
+    return `source semantic request must exactly bind its ${snapshotFields.label} revision, frame, bounds, and geometry`;
   }
   const semanticRequestSha256 = sha256Text(canonicalJson(semanticRequest));
   if (
@@ -606,8 +643,11 @@ function sourceArtworkVersionContractIssue(candidate) {
 
 function generationAttemptSourceRequestIssue(attempt, sourceArtwork) {
   if (!isObjectRecord(attempt)) return 'generation attempt was not found';
-  if (!isObjectRecord(sourceArtwork)) return 'the pipeline slot’s Generation Reference was not found';
-  if (attempt.origin === 'pipeline-source') {
+  if (!isObjectRecord(sourceArtwork)) return 'the pipeline slot’s input artwork was not found';
+  const request = attempt.source_request;
+  const intakeBinding = request?.schema === ATTEMPT_INTAKE_SOURCE_REQUEST_SCHEMA;
+  const pipelineSourceBinding = request?.schema === ATTEMPT_PIPELINE_SOURCE_REQUEST_SCHEMA;
+  if (pipelineSourceBinding || intakeBinding) {
     if (
       sourceArtwork.kind !== 'raw'
       || !sourceArtwork.blob_sha256
@@ -619,31 +659,38 @@ function generationAttemptSourceRequestIssue(attempt, sourceArtwork) {
     if (rawIssue) {
       return `the processing attempt’s Raw Pipeline Source is invalid: ${rawIssue}`;
     }
-    const request = attempt.source_request;
     if (
       !isObjectRecord(request)
-      || request.schema !== ATTEMPT_PIPELINE_SOURCE_REQUEST_SCHEMA
-      || request.inputRole !== 'raw-pipeline-source'
+      || (
+        pipelineSourceBinding
+          ? attempt.origin !== 'pipeline-source'
+            || request.inputRole !== 'raw-pipeline-source'
+            || request.sourceAttemptId !== String(attempt.source_attempt_id || '')
+          : attempt.origin !== 'source'
+            || request.inputRole !== 'raw-ai-artwork'
+            || attempt.source_attempt_id !== null
+            || String(attempt.generated_version_id || '') !== String(sourceArtwork.id)
+      )
     ) {
-      return 'processing attempt has no immutable Raw Pipeline Source request';
+      return 'processing attempt has no immutable raw artwork request';
     }
     if (
       request.inputVersionId !== String(sourceArtwork.id)
       || request.inputSha256 !== sourceArtwork.blob_sha256
-      || request.sourceAttemptId !== String(attempt.source_attempt_id || '')
     ) {
-      return 'the processing attempt does not exactly match its Raw Pipeline Source';
+      return 'the processing attempt does not exactly match its raw artwork input';
     }
     const semanticRequest = request.semanticRequest;
+    const semanticSnapshotFields = sourceSnapshotFieldsForSemanticRequest(semanticRequest);
     const bounds = normalizeWorldBounds(sourceArtwork.world_bounds);
     const frame = semanticRequest?.generationFrame;
     if (
       !isObjectRecord(semanticRequest)
-      || semanticRequest.schema !== SOURCE_SEMANTIC_REQUEST_SCHEMA
+      || !semanticSnapshotFields
       || semanticRequest.levelId !== attempt.level_id
-      || !Number.isSafeInteger(semanticRequest.canonicalDocumentRevision)
-      || semanticRequest.canonicalDocumentRevision < 1
-      || !SHA256.test(semanticRequest.canonicalLevelSha256 || '')
+      || !Number.isSafeInteger(semanticRequest[semanticSnapshotFields?.revisionKey])
+      || semanticRequest[semanticSnapshotFields?.revisionKey] < 1
+      || !SHA256.test(semanticRequest[semanticSnapshotFields?.levelSha256Key] || '')
       || typeof semanticRequest.boardCode !== 'string'
       || semanticRequest.boardCode.length < 1
       || Buffer.byteLength(semanticRequest.boardCode, 'utf8') > 512 * 1024
@@ -662,26 +709,25 @@ function generationAttemptSourceRequestIssue(attempt, sourceArtwork) {
       || semanticRequest.environmentGeometrySchema !== ENVIRONMENT_GEOMETRY_SCHEMA
       || semanticRequest.environmentGeometrySha256 !== backgroundVersionV2GeometrySha256(sourceArtwork)
     ) {
-      return 'the Raw Pipeline Source request has an invalid canonical semantic snapshot';
+      return 'the raw artwork request has an invalid canonical semantic snapshot';
     }
     const semanticRequestSha256 = sha256Text(canonicalJson(semanticRequest));
     if (
       request.semanticRequestSha256 !== semanticRequestSha256
       || !SHA256.test(request.semanticRequestSha256 || '')
     ) {
-      return 'the Raw Pipeline Source semantic request digest is invalid';
+      return 'the raw artwork semantic request digest is invalid';
     }
     const requestWithoutDigest = { ...request };
     delete requestWithoutDigest.requestSha256;
     const requestSha256 = sha256Text(canonicalJson(requestWithoutDigest));
     if (!SHA256.test(request.requestSha256 || '') || request.requestSha256 !== requestSha256) {
-      return 'processing attempt Raw Pipeline Source request digest is invalid';
+      return 'processing attempt raw artwork request digest is invalid';
     }
     return null;
   }
   const sourceIssue = sourceArtworkVersionContractIssue(sourceArtwork);
   if (sourceIssue) return `the pipeline slot’s Generation Reference is invalid: ${sourceIssue}`;
-  const request = attempt.source_request;
   if (!isObjectRecord(request) || request.schema !== ATTEMPT_SOURCE_REQUEST_SCHEMA) {
     return 'generation attempt has no immutable source request';
   }
@@ -817,8 +863,11 @@ function normalizeBackgroundVersionCreate(raw, { allowLegacyEnvironmentGeometry 
   const operation = raw.operation;
   const provenance = raw.provenance;
   if (kind === 'source') {
-    if (operation.kind !== 'generation-source-v1') {
-      return { error: 'source operation.kind must be generation-source-v1' };
+    if (
+      operation.kind !== 'generation-source-v2'
+      && !(allowLegacyEnvironmentGeometry && operation.kind === 'generation-source-v1')
+    ) {
+      return { error: 'source operation.kind must be generation-source-v2' };
     }
     if (!SHA256.test(provenance.sourceSha256 || '')) {
       return { error: 'source provenance.sourceSha256 must be a lowercase SHA-256 digest' };
@@ -1077,7 +1126,9 @@ function backgroundVersionAttemptStageIssue(candidate, attempt, {
   if (!['source', 'pipeline-source'].includes(attempt.origin) || !attempt.source_version_id) {
     return 'migrated historical attempts cannot accept new stages';
   }
-  const expectedInputKind = attempt.origin === 'pipeline-source' ? 'raw' : 'source';
+  const rawInputBinding = attempt.origin === 'pipeline-source'
+    || attempt.source_request?.schema === ATTEMPT_INTAKE_SOURCE_REQUEST_SCHEMA;
+  const expectedInputKind = rawInputBinding ? 'raw' : 'source';
   if (
     !sourceArtwork
     || sourceArtwork.kind !== expectedInputKind
@@ -1090,17 +1141,19 @@ function backgroundVersionAttemptStageIssue(candidate, attempt, {
         : rawBackgroundVersionContractIssue(sourceArtwork)
     )
   ) {
-    return attempt.origin === 'pipeline-source'
-      ? 'the processing attempt’s Raw Pipeline Source is not ready'
+    return rawInputBinding
+      ? 'the processing attempt’s raw artwork input is not ready'
       : 'the pipeline slot’s Generation Reference is not ready';
   }
   const sourceRequestIssue = generationAttemptSourceRequestIssue(attempt, sourceArtwork);
   if (sourceRequestIssue) return sourceRequestIssue;
   if (
-    attempt.origin === 'pipeline-source'
+    rawInputBinding
     && String(attempt.generated_version_id || '') !== String(sourceArtwork.id)
   ) {
-    return 'the processing attempt must begin with its exact Raw Pipeline Source';
+    return attempt.origin === 'pipeline-source'
+      ? 'the processing attempt must begin with its exact Raw Pipeline Source'
+      : 'the processing attempt must begin with its exact raw artwork input';
   }
   if (
     candidate.document_id !== undefined
@@ -1123,7 +1176,7 @@ function backgroundVersionAttemptStageIssue(candidate, attempt, {
     if (!sameEnvironmentGeometry(candidate, sourceArtwork)) {
       return 'Raw Pipeline Source geometry must equal its Generation Reference';
     }
-    if (attempt.origin !== 'pipeline-source' && (
+    if (!rawInputBinding && (
       candidate.operation?.sourceArtworkVersionId !== String(sourceArtwork.id)
       || candidate.operation?.sourceArtworkSha256 !== sourceArtwork.blob_sha256
       || candidate.provenance?.sourceArtworkVersionId !== String(sourceArtwork.id)
@@ -1263,10 +1316,12 @@ function generationAttemptSelectionDisposition(backgroundMode, selectedSurface, 
 }
 
 module.exports = {
+  ATTEMPT_INTAKE_SOURCE_REQUEST_SCHEMA,
   ATTEMPT_PIPELINE_SOURCE_REQUEST_SCHEMA,
   ATTEMPT_SOURCE_REQUEST_SCHEMA,
   ENVIRONMENT_GEOMETRY_SCHEMA,
   LEGACY_ENVIRONMENT_GEOMETRY_SCHEMA,
+  LEGACY_SOURCE_SEMANTIC_REQUEST_SCHEMA,
   MOVE_HIGHLIGHT_COORDINATE_BASIS,
   MOVE_HIGHLIGHT_PROFILE_SCHEMA,
   PREDRAWN_COORDINATE_BASIS,

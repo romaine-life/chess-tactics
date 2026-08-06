@@ -82,10 +82,10 @@ function sourceMetadata(backgroundMode = 'legacy') {
     height: BOUNDS.height,
   };
   const semanticRequest = {
-    schema: 'predrawn-generation-semantic-request-v1',
+    schema: 'predrawn-generation-semantic-request-v2',
     levelId: 'level-a',
-    canonicalDocumentRevision: 7,
-    canonicalLevelSha256: 'a'.repeat(64),
+    workingCopyDocumentRevision: 7,
+    workingCopyLevelSha256: 'a'.repeat(64),
     boardCode: SEMANTIC_BOARD_CODE,
     boardSha256: SEMANTIC_BOARD_SHA256,
     generationFrame: frame,
@@ -100,15 +100,15 @@ function sourceMetadata(backgroundMode = 'legacy') {
   return {
     world_bounds: BOUNDS,
     operation: {
-      kind: 'generation-source-v1',
+      kind: 'generation-source-v2',
       coordinateBasis: PREDRAWN_COORDINATE_BASIS,
       viewingPane: BOUNDS,
       generationFrame: frame,
       backgroundMode,
       sourceBackgroundVersionId,
       sourceOcclusionVersionId,
-      canonicalDocumentRevision: 7,
-      canonicalLevelSha256: 'a'.repeat(64),
+      workingCopyDocumentRevision: 7,
+      workingCopyLevelSha256: 'a'.repeat(64),
       environmentGeometrySchema: ENVIRONMENT_GEOMETRY_SCHEMA,
       environmentGeometrySha256: GEOMETRY_SHA256,
       semanticBoardSha256: SEMANTIC_BOARD_SHA256,
@@ -117,11 +117,11 @@ function sourceMetadata(backgroundMode = 'legacy') {
     },
     provenance: {
       sourceSha256: 'b'.repeat(64),
-      canonicalLevelSha256: 'a'.repeat(64),
+      workingCopyLevelSha256: 'a'.repeat(64),
       backgroundMode,
       sourceBackgroundVersionId,
       sourceOcclusionVersionId,
-      canonicalDocumentRevision: 7,
+      workingCopyDocumentRevision: 7,
       generationFrame: frame,
       environmentGeometrySha256: GEOMETRY_SHA256,
       semanticBoardSha256: SEMANTIC_BOARD_SHA256,
@@ -233,7 +233,7 @@ test('accepts minimal source metadata for server canonicalization and validates 
   const minimal = normalizeBackgroundVersionCreate({
     kind: 'source',
     label: 'Saved legacy source',
-    operation: { kind: 'generation-source-v1', capture: 'owner-frame' },
+    operation: { kind: 'generation-source-v2', capture: 'owner-frame' },
     provenance: { sourceSha256: 'b'.repeat(64), originalFileName: 'source.png' },
   });
   assert.deepEqual(minimal.value, {
@@ -242,7 +242,7 @@ test('accepts minimal source metadata for server canonicalization and validates 
     parent_version_id: null,
     source_background_version_id: null,
     world_bounds: null,
-    operation: { kind: 'generation-source-v1', capture: 'owner-frame' },
+    operation: { kind: 'generation-source-v2', capture: 'owner-frame' },
     provenance: { sourceSha256: 'b'.repeat(64), originalFileName: 'source.png' },
   });
 
@@ -262,6 +262,24 @@ test('accepts minimal source metadata for server canonicalization and validates 
   };
   assert.equal(sourceArtworkVersionContractIssue(stored), null);
   assert.equal(backgroundVersionStoredContractIssue(stored), null);
+  const legacyStored = JSON.parse(JSON.stringify(stored));
+  legacyStored.operation.kind = 'generation-source-v1';
+  legacyStored.operation.canonicalDocumentRevision = legacyStored.operation.workingCopyDocumentRevision;
+  legacyStored.operation.canonicalLevelSha256 = legacyStored.operation.workingCopyLevelSha256;
+  delete legacyStored.operation.workingCopyDocumentRevision;
+  delete legacyStored.operation.workingCopyLevelSha256;
+  legacyStored.provenance.canonicalDocumentRevision = legacyStored.provenance.workingCopyDocumentRevision;
+  legacyStored.provenance.canonicalLevelSha256 = legacyStored.provenance.workingCopyLevelSha256;
+  delete legacyStored.provenance.workingCopyDocumentRevision;
+  delete legacyStored.provenance.workingCopyLevelSha256;
+  legacyStored.operation.semanticRequest.schema = 'predrawn-generation-semantic-request-v1';
+  legacyStored.operation.semanticRequest.canonicalDocumentRevision = legacyStored.operation.semanticRequest.workingCopyDocumentRevision;
+  legacyStored.operation.semanticRequest.canonicalLevelSha256 = legacyStored.operation.semanticRequest.workingCopyLevelSha256;
+  delete legacyStored.operation.semanticRequest.workingCopyDocumentRevision;
+  delete legacyStored.operation.semanticRequest.workingCopyLevelSha256;
+  legacyStored.operation.semanticRequestSha256 = sha256Canonical(legacyStored.operation.semanticRequest);
+  legacyStored.provenance.semanticRequestSha256 = legacyStored.operation.semanticRequestSha256;
+  assert.equal(sourceArtworkVersionContractIssue(legacyStored), null);
   assert.match(sourceArtworkVersionContractIssue({
     ...stored,
     operation: { ...stored.operation, backgroundMode: 'ai' },
@@ -269,16 +287,16 @@ test('accepts minimal source metadata for server canonicalization and validates 
   }), /requires sourceBackgroundVersionId/);
   assert.match(sourceArtworkVersionContractIssue({
     ...stored,
-    provenance: { ...stored.provenance, canonicalLevelSha256: 'c'.repeat(64) },
-  }), /canonical Level digest/);
+    provenance: { ...stored.provenance, workingCopyLevelSha256: 'c'.repeat(64) },
+  }), /working-copy Level digest/);
   assert.match(sourceArtworkVersionContractIssue({
     ...stored,
     operation: { ...stored.operation, environmentGeometrySha256: 'c'.repeat(64) },
   }), /geometry digest/);
   assert.match(sourceArtworkVersionContractIssue({
     ...stored,
-    operation: { ...stored.operation, canonicalDocumentRevision: 0 },
-  }), /saved document revision/);
+    operation: { ...stored.operation, workingCopyDocumentRevision: 0 },
+  }), /positive document revision/);
   assert.match(sourceArtworkVersionContractIssue({
     ...stored,
     operation: {
@@ -542,6 +560,76 @@ test('attempt policy lets an exact Raw Pipeline Source immediately seed a separa
   }, attempt, {
     sourceArtwork: pipelineSource,
   }), /already has a Raw Pipeline Source/);
+});
+
+test('attempt policy accepts source-agnostic AI artwork intake without a Generation Reference', () => {
+  const pipelineSource = {
+    id: RAW_ID,
+    document_id: 'document-a',
+    level_id: 'level-a',
+    kind: 'raw',
+    label: 'Imported AI artwork',
+    status: 'ready',
+    blob_sha256: 'e'.repeat(64),
+    width: SOURCE_WIDTH,
+    height: SOURCE_HEIGHT,
+    parent_version_id: null,
+    source_background_version_id: null,
+    ...base,
+  };
+  const semanticRequest = sourceMetadata().operation.semanticRequest;
+  const requestWithoutDigest = {
+    schema: 'predrawn-ai-artwork-intake-v1',
+    inputRole: 'raw-ai-artwork',
+    inputVersionId: RAW_ID,
+    inputSha256: pipelineSource.blob_sha256,
+    semanticRequestSha256: sha256Canonical(semanticRequest),
+    semanticRequest,
+  };
+  const attempt = {
+    id: ATTEMPT_ID,
+    document_id: 'document-a',
+    level_id: 'level-a',
+    origin: 'source',
+    source_version_id: RAW_ID,
+    source_attempt_id: null,
+    source_request: {
+      ...requestWithoutDigest,
+      requestSha256: sha256Canonical(requestWithoutDigest),
+    },
+    generated_version_id: RAW_ID,
+    warped_version_id: null,
+    occlusion_version_id: null,
+    status: 'active',
+  };
+  const warpMetadata = metadataFor('warped');
+  const warped = {
+    id: WARPED_ID,
+    document_id: 'document-a',
+    level_id: 'level-a',
+    kind: 'warped',
+    status: 'ready',
+    blob_sha256: '8'.repeat(64),
+    width: SOURCE_WIDTH,
+    height: SOURCE_HEIGHT,
+    parent_version_id: RAW_ID,
+    source_background_version_id: RAW_ID,
+    world_bounds: BOUNDS,
+    operation: warpMetadata.operation,
+    provenance: warpMetadata.provenance,
+  };
+
+  assert.equal(backgroundVersionAttemptStageIssue(warped, attempt, {
+    sourceArtwork: pipelineSource,
+    generated: pipelineSource,
+  }), null);
+  assert.match(backgroundVersionAttemptStageIssue(warped, {
+    ...attempt,
+    source_request: { ...attempt.source_request, inputRole: 'raw-pipeline-source' },
+  }, {
+    sourceArtwork: pipelineSource,
+    generated: pipelineSource,
+  }), /immutable raw artwork request/);
 });
 
 test('new versions require v2 while immutable v1 rows resolve only through an exact external binding', () => {

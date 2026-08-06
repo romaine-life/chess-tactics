@@ -3,6 +3,7 @@ import { createBlankLevel } from '@chess-tactics/board-render';
 import type { RevisionedWorkspace } from '../net/campaignWorkspace';
 import {
   decodePredrawnReferenceImage,
+  predrawnReferenceDocumentId,
   predrawnReferenceHref,
   predrawnReferenceFilename,
   predrawnReferenceLevelFromWorkspaces,
@@ -27,11 +28,12 @@ describe('pre-drawn generation reference route', () => {
 
   it('carries the exact launching editor document and view back through the route', () => {
     const returnTo = '/editor/level?document=doc-1&levelId=l29&layer=board';
-    const href = predrawnReferenceHref('l29', returnTo);
+    const href = predrawnReferenceHref('l29', returnTo, 'doc-1');
     const params = new URL(href, 'http://localhost').searchParams;
 
     expect(params.get('levelId')).toBe('l29');
     expect(params.get('returnTo')).toBe(returnTo);
+    expect(predrawnReferenceDocumentId(params.toString())).toBe('doc-1');
   });
 
   it('selects official ids only from canonical official content', () => {

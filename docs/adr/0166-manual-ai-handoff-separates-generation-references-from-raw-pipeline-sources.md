@@ -5,6 +5,9 @@ deciders: Nelson, Codex
 partially_superseded_by:
   - "[ADR-0167](0167-raw-pipeline-sources-can-seed-new-attempts.md)"
   - "[ADR-0168](0168-creation-slots-begin-with-reusable-raw-pipeline-sources.md)"
+  - "[ADR-0476](0476-generation-references-freeze-the-autosaved-working-copy.md)"
+  - "[ADR-0477](0477-board-art-pipeline-owns-ai-result-ingress.md)"
+  - "[ADR-0478](0478-ai-artwork-intake-is-source-agnostic.md)"
 partially_supersedes:
   - "[ADR-0165](0165-ai-artwork-separates-sources-attempts-and-background-mode.md)'s owner-facing Source Artwork terminology"
   - "[ADR-0165](0165-ai-artwork-separates-sources-attempts-and-background-mode.md)'s owner-facing AI Generation Pipeline workspace name"

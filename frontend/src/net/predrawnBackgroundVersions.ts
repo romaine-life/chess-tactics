@@ -16,11 +16,8 @@ export type PredrawnBackgroundVersionStatus = 'draft' | 'ready' | 'published' | 
 export type PredrawnGenerationAttemptStatus = 'active' | 'archived';
 export type PredrawnGenerationAttemptOrigin = 'source' | 'pipeline-source' | 'migrated-history';
 
-export interface PredrawnGenerationSemanticRequest {
-  schema: 'predrawn-generation-semantic-request-v1';
+interface PredrawnGenerationSemanticRequestBase {
   levelId: string;
-  canonicalDocumentRevision: number;
-  canonicalLevelSha256: string;
   boardCode: string;
   boardSha256: string;
   generationFrame: {
@@ -38,6 +35,16 @@ export interface PredrawnGenerationSemanticRequest {
   environmentGeometrySha256: string;
 }
 
+export type PredrawnGenerationSemanticRequest = PredrawnGenerationSemanticRequestBase & ({
+  schema: 'predrawn-generation-semantic-request-v1';
+  canonicalDocumentRevision: number;
+  canonicalLevelSha256: string;
+} | {
+  schema: 'predrawn-generation-semantic-request-v2';
+  workingCopyDocumentRevision: number;
+  workingCopyLevelSha256: string;
+});
+
 export interface PredrawnGenerationAttemptSourceRequest {
   schema: 'predrawn-generation-attempt-source-v1';
   sourceArtworkVersionId: string;
@@ -53,6 +60,16 @@ export interface PredrawnGenerationAttemptPipelineSourceRequest {
   inputVersionId: string;
   inputSha256: string;
   sourceAttemptId: string;
+  semanticRequestSha256: string;
+  semanticRequest: PredrawnGenerationSemanticRequest;
+  requestSha256: string;
+}
+
+export interface PredrawnGenerationAttemptIntakeSourceRequest {
+  schema: 'predrawn-ai-artwork-intake-v1';
+  inputRole: 'raw-ai-artwork';
+  inputVersionId: string;
+  inputSha256: string;
   semanticRequestSha256: string;
   semanticRequest: PredrawnGenerationSemanticRequest;
   requestSha256: string;
@@ -108,6 +125,7 @@ export interface PredrawnGenerationAttempt {
   source_request:
     | PredrawnGenerationAttemptSourceRequest
     | PredrawnGenerationAttemptPipelineSourceRequest
+    | PredrawnGenerationAttemptIntakeSourceRequest
     | null;
   generated_version_id: string | null;
   warped_version_id: string | null;
@@ -315,6 +333,7 @@ export function predrawnBackgroundVersionErrorDetails(body: unknown): string | u
     || record.error === 'background_source_board_invalid'
     || record.error === 'background_source_level_unsaved'
     || record.error === 'background_source_level_changed'
+    || record.error === 'background_source_working_copy_changed'
   ) {
     return detailText
       ?? 'This saved Pipeline Source cannot start a processing attempt. Refresh the artwork workspace and choose an available source.';
@@ -464,6 +483,12 @@ type CreatePredrawnGenerationAttemptInput = {
   | {
       sourceVersionId?: never;
       pipelineSourceVersionId: string;
+      intakeSourceVersionId?: never;
+    }
+  | {
+      sourceVersionId?: never;
+      pipelineSourceVersionId?: never;
+      intakeSourceVersionId: string;
     }
 );
 
@@ -474,7 +499,9 @@ export async function createPredrawnGenerationAttempt(
     ? {
         pipeline_source_version_id: input.pipelineSourceVersionId,
       }
-    : { source_version_id: input.sourceVersionId };
+    : 'intakeSourceVersionId' in input && input.intakeSourceVersionId
+      ? { intake_source_version_id: input.intakeSourceVersionId }
+      : { source_version_id: input.sourceVersionId };
   const response = await fetch(attemptsUrl(input.documentId), {
     method: 'POST',
     credentials: 'include',

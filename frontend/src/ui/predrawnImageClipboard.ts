@@ -282,14 +282,30 @@ export async function copyPredrawnPngToClipboard(
     throw unsupportedError('copy');
   }
 
-  const png = loadExactPng(sourceUrl, fetchPng);
+  return copyPredrawnPngBlobToClipboard(loadExactPng(sourceUrl, fetchPng), {
+    clipboard,
+    ClipboardItem: ClipboardItemConstructor,
+  });
+}
+
+/** Copy an exact rendered PNG while preserving the click's clipboard activation. */
+export async function copyPredrawnPngBlobToClipboard(
+  png: Blob | Promise<Blob>,
+  dependencies: Pick<PredrawnImageClipboardDependencies, 'clipboard' | 'ClipboardItem'> = {},
+): Promise<Blob> {
+  const clipboard = clipboardDependency(dependencies);
+  const ClipboardItemConstructor = clipboardItemDependency(dependencies);
+  const exactPng = Promise.resolve(png).then((blob) => requireExactPng(blob, 'generation-reference'));
   // A permission failure may reject write before the ClipboardItem consumes its promised payload.
-  // Keep that later fetch rejection observed without delaying the actionable clipboard error.
-  void png.catch(() => {});
+  // Keep a later render rejection observed without delaying the actionable clipboard error.
+  void exactPng.catch(() => {});
+  if (!clipboard?.write || !ClipboardItemConstructor) {
+    throw unsupportedError('copy');
+  }
   try {
-    const item = new ClipboardItemConstructor({ [PNG_MEDIA_TYPE]: png });
+    const item = new ClipboardItemConstructor({ [PNG_MEDIA_TYPE]: exactPng });
     await clipboard.write([item]);
-    return await png;
+    return await exactPng;
   } catch (cause) {
     throw clipboardFailure('copy', cause);
   }

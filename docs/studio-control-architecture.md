@@ -203,15 +203,19 @@ workspace state uses `levelArtworkEditor` and never shares Placed Art brush
 state or the retired `artworkEditor` namespace.
 
 Per
-[ADR-0166](adr/0166-manual-ai-handoff-separates-generation-references-from-raw-pipeline-sources.md),
-the Generation References instrument owns saved-frame authoring and the
-immutable, unit-free, cover-free images supplied to AI generation. It also owns
-the explicit manual handoff that copies an exact full-resolution Generation
-Reference and stages the returned AI-painted PNG through paste, direct `Ctrl+V`,
-or **Choose PNG file instead**. The named commit stores those unchanged bytes
-as an immutable Raw Pipeline Source. **Use existing Codex-painted board** may
-explicitly import an editor-mounted result through that same raw-source ingress.
-Neither path promotes or reclassifies the result as a Generation Reference.
+[ADR-0166](adr/0166-manual-ai-handoff-separates-generation-references-from-raw-pipeline-sources.md)
+as refined by
+[ADR-0478](adr/0478-ai-artwork-intake-is-source-agnostic.md), the Generation
+References instrument owns saved-frame authoring and the immutable, unit-free,
+cover-free images supplied to AI generation. It owns reference capture and
+exact-reference copy/download only.
+
+The Pipeline independently owns AI-artwork ingress. Its persistent **Add AI
+artwork** instrument accepts any valid PNG through paste or **Choose PNG file**,
+stages the unchanged bytes for review, and commits them with **Use this board**
+as a source-agnostic raw input bound only to the current autosaved viewing pane,
+board semantics, and environment geometry. It neither requires nor records a
+producing Generation Reference and never reclassifies the result as one.
 
 Per
 [ADR-0168](adr/0168-creation-slots-begin-with-reusable-raw-pipeline-sources.md),
@@ -220,9 +224,9 @@ workspace-level **New attempt** action is available with zero, one, or many
 slots and opens a chooser of eligible retained Raw Pipeline Sources. Selecting
 one creates a slot that already references those exact bytes and begins at grid
 fitting. The owner never has to enter the slot where the source first appeared,
-and the new slot does not repeat the Copy/Paste/**Use this board** model
-handoff. If no raw source exists, the chooser directs the owner to generation
-handoff or the named exact-PNG raw-source import.
+   and the new slot does not repeat the Copy/Paste/**Use this board** model
+   handoff. If no raw source exists, the same Pipeline exposes source-agnostic
+   **Add AI artwork** intake.
 
 Per
 [ADR-0170](adr/0170-derived-board-inspection-is-a-full-workspace-revision-gate.md)

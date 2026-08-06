@@ -16,7 +16,9 @@ import {
   loadWorkspace,
   type RevisionedWorkspace,
 } from '../net/campaignWorkspace';
+import { loadEditorDocument } from '../net/editorDocuments';
 import { readValidatedReturnTo } from './navigation';
+import { copyPredrawnPngBlobToClipboard } from './predrawnImageClipboard';
 import { TitleBarControlContribution } from './shell/TitleBarControls';
 import { useSceneParticipant } from './shell/SceneBoundary';
 
@@ -33,9 +35,14 @@ export function predrawnReferenceLevelId(search: string): string {
   return new URLSearchParams(search).get('levelId')?.trim() ?? '';
 }
 
-export function predrawnReferenceHref(levelId: string, returnTo?: string): string {
+export function predrawnReferenceDocumentId(search: string): string {
+  return new URLSearchParams(search).get('document')?.trim() ?? '';
+}
+
+export function predrawnReferenceHref(levelId: string, returnTo?: string, documentId?: string): string {
   const query = new URLSearchParams({ levelId: levelId.trim() });
   if (returnTo) query.set('returnTo', returnTo);
+  if (documentId) query.set('document', documentId.trim());
   return `${PREDRAWN_REFERENCE_ROUTE}?${query.toString()}`;
 }
 
@@ -49,7 +56,14 @@ export function predrawnReferenceLevelFromWorkspaces(
   return user?.levels[levelId] ?? official?.levels[levelId];
 }
 
-export async function loadPredrawnReferenceLevel(levelId: string): Promise<Level> {
+export async function loadPredrawnReferenceLevel(levelId: string, documentId?: string): Promise<Level> {
+  if (documentId) {
+    const document = await loadEditorDocument(documentId);
+    if (document.level_id !== levelId) {
+      throw new Error('This working copy belongs to a different level.');
+    }
+    return document.level;
+  }
   const officialResult = await loadOfficialCampaignsResult();
   const officialLevel = predrawnReferenceLevelFromWorkspaces(levelId, officialResult.workspace, undefined);
   if (officialLevel) return officialLevel;
@@ -161,11 +175,13 @@ export async function predrawnReferencePngBlob(frame: HTMLElement): Promise<Blob
 
 /**
  * Development owner tool for the one allowed visual input to a pre-drawn generation run.
- * It loads canonical saved content from `levelId`; the route itself never mutates that content.
+ * It loads an explicitly addressed autosaved working copy when `document` is present, otherwise
+ * canonical content from `levelId`; the route itself never mutates either source.
  */
 export function PredrawnReference(): ReactElement {
   const routeParams = new URLSearchParams(window.location.search);
   const levelId = predrawnReferenceLevelId(window.location.search);
+  const documentId = predrawnReferenceDocumentId(window.location.search);
   const captureMode = routeParams.get('capture') === '1';
   const requestedReturnHref = readValidatedReturnTo(window.location.search);
   const returnHref = requestedReturnHref
@@ -176,6 +192,8 @@ export function PredrawnReference(): ReactElement {
   const [terrainPainted, setTerrainPainted] = useState(false);
   const [scenePainted, setScenePainted] = useState(false);
   const [downloadState, setDownloadState] = useState<'idle' | 'working' | 'error'>('idle');
+  const [copyState, setCopyState] = useState<'idle' | 'working' | 'copied' | 'error'>('idle');
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const frameRef = useRef<HTMLDivElement | null>(null);
   const acknowledgeTerrain = useCallback(() => setTerrainPainted(true), []);
   const acknowledgeScene = useCallback(() => setScenePainted(true), []);
@@ -189,13 +207,15 @@ export function PredrawnReference(): ReactElement {
     setTerrainPainted(false);
     setScenePainted(false);
     setDownloadState('idle');
+    setCopyState('idle');
+    setCopyStatus(null);
     if (!levelId) {
       setState({ kind: 'idle' });
       return undefined;
     }
     let cancelled = false;
     setState({ kind: 'loading' });
-    void loadPredrawnReferenceLevel(levelId)
+    void loadPredrawnReferenceLevel(levelId, documentId)
       .then((level) => {
         if (!cancelled) setState({ kind: 'ready', level });
       })
@@ -203,7 +223,7 @@ export function PredrawnReference(): ReactElement {
         if (!cancelled) setState({ kind: 'error', message: error instanceof Error ? error.message : String(error) });
       });
     return () => { cancelled = true; };
-  }, [levelId]);
+  }, [documentId, levelId]);
 
   const board = useMemo(() => state.kind === 'ready'
     ? boardForPredrawnSourceArtwork(levelToEditorBoard(state.level))
@@ -272,9 +292,13 @@ export function PredrawnReference(): ReactElement {
               `Saved generation frame rendered at ${rect.width} × ${rect.height}, expected ${frame.width} × ${frame.height}.`,
             );
           }
-          const canvases = frameRef.current.querySelectorAll('canvas');
-          if (canvases.length === 0 || [...canvases].some((canvas) => canvas.width < 1 || canvas.height < 1)) {
-            throw new Error('Reference renderer produced no measurable canvas layers.');
+          const layers = frameRef.current.querySelectorAll<HTMLCanvasElement | HTMLImageElement>('canvas, img');
+          if (layers.length === 0 || [...layers].some((layer) => (
+            layer instanceof HTMLCanvasElement
+              ? layer.width < 1 || layer.height < 1
+              : !layer.complete || layer.naturalWidth < 1 || layer.naturalHeight < 1
+          ))) {
+            throw new Error('Reference renderer produced no measurable image layers.');
           }
           setLocalCaptureReady(true);
         } catch (error) {
@@ -304,6 +328,20 @@ export function PredrawnReference(): ReactElement {
       setDownloadState('idle');
     } catch {
       setDownloadState('error');
+    }
+  };
+
+  const copyReference = async (): Promise<void> => {
+    if (!frameRef.current || state.kind !== 'ready' || !captureReady || !frame) return;
+    setCopyState('working');
+    setCopyStatus(null);
+    try {
+      await copyPredrawnPngBlobToClipboard(predrawnReferencePngBlob(frameRef.current));
+      setCopyState('copied');
+      setCopyStatus(`Copied ${frame.width} × ${frame.height} PNG to the clipboard.`);
+    } catch (cause) {
+      setCopyState('error');
+      setCopyStatus(cause instanceof Error ? cause.message : 'The reference PNG could not be copied.');
     }
   };
 
@@ -337,12 +375,13 @@ export function PredrawnReference(): ReactElement {
       <main className={`predrawn-reference-tool${captureMode ? ' is-capture-mode' : ''}`}>
         <section className="predrawn-reference-toolbar" aria-label="Pre-drawn reference controls">
           <div>
-            <h1>Canonical generation reference</h1>
-            <p>Loads the exact saved 16:9 scene frame at the canonical renderer’s native 1× scale. The capture uses the saved Legacy tileset or exact AI artwork background while removing units, ground cover, grids, tactical overlays, and editor UI.</p>
+            <h1>{documentId ? 'Working-copy generation reference' : 'Canonical generation reference'}</h1>
+            <p>Loads the exact {documentId ? 'autosaved working-copy' : 'saved'} 16:9 scene frame at the canonical renderer’s native 1× scale. The capture uses the {documentId ? 'working copy’s' : 'saved'} Legacy tileset or exact AI artwork background while removing units, ground cover, grids, tactical overlays, and editor UI.</p>
           </div>
           <form action={PREDRAWN_REFERENCE_ROUTE} method="get">
             <label htmlFor="predrawn-reference-level-id">Level ID</label>
             <input id="predrawn-reference-level-id" name="levelId" defaultValue={levelId} required spellCheck={false} />
+            {documentId ? <input type="hidden" name="document" value={documentId} /> : null}
             {requestedReturnHref ? <input type="hidden" name="returnTo" value={requestedReturnHref} /> : null}
             <button type="submit">Load level</button>
           </form>
@@ -354,12 +393,26 @@ export function PredrawnReference(): ReactElement {
                 <span>{frame.width} × {frame.height} capture</span>
                 <span>origin {frame.x}, {frame.y} · native 1×</span>
               </p>
-              <button
-                type="button"
-                className="predrawn-reference-download"
-                disabled={!captureReady || downloadState === 'working'}
-                onClick={() => { void downloadReference(); }}
-              >{downloadState === 'working' ? 'Preparing PNG…' : downloadState === 'error' ? 'Download failed — retry' : 'Download reference PNG'}</button>
+              <div className="predrawn-reference-actions">
+                <button
+                  type="button"
+                  data-testid="copy-predrawn-reference-png"
+                  disabled={!captureReady || copyState === 'working'}
+                  onClick={() => { void copyReference(); }}
+                >{copyState === 'working' ? 'Copying PNG…' : copyState === 'copied' ? 'PNG copied' : copyState === 'error' ? 'Copy failed — retry' : 'Copy PNG'}</button>
+                <button
+                  type="button"
+                  className="predrawn-reference-download"
+                  disabled={!captureReady || downloadState === 'working'}
+                  onClick={() => { void downloadReference(); }}
+                >{downloadState === 'working' ? 'Preparing PNG…' : downloadState === 'error' ? 'Download failed — retry' : 'Download reference PNG'}</button>
+                {copyStatus ? (
+                  <output
+                    className={`predrawn-reference-copy-status${copyState === 'error' ? ' is-error' : ''}`}
+                    role={copyState === 'error' ? 'alert' : 'status'}
+                  >{copyStatus}</output>
+                ) : null}
+              </div>
             </div>
           ) : null}
         </section>
@@ -369,12 +422,12 @@ export function PredrawnReference(): ReactElement {
         {state.kind === 'error' ? <p className="predrawn-reference-message is-error" role="alert">{state.message}</p> : null}
         {state.kind === 'ready' && board && frameValidation && !frameValidation.ok ? (
           <p className="predrawn-reference-message is-error" role="alert">
-            This saved level has no valid generation frame. Return to the Level Editor, choose <strong>Frame</strong>, then Save. {frameValidation.errors.join(' ')}
+            This {documentId ? 'working copy' : 'saved level'} has no valid generation frame. Return to the Level Editor and choose <strong>Frame</strong>. {frameValidation.errors.join(' ')}
           </p>
         ) : null}
 
         {state.kind === 'ready' && board && frame ? (
-          <section className="predrawn-reference-scroll" aria-label="Saved generation reference">
+          <section className="predrawn-reference-scroll" aria-label={`${documentId ? 'Working-copy' : 'Saved'} generation reference`}>
             <div
               ref={frameRef}
               className="predrawn-reference-export-frame"
@@ -394,7 +447,7 @@ export function PredrawnReference(): ReactElement {
                 board={board}
                 boardZoom={1}
                 boardPan={boardPan}
-                ariaLabel={`${state.level.name} canonical generation-reference art export`}
+                ariaLabel={`${state.level.name} ${documentId ? 'working-copy' : 'canonical'} generation-reference art export`}
                 hidden={{ tile: false, unit: true, doodad: false }}
                 topSurfacesOnly={backgroundMode === 'legacy'}
                 onTerrainFirstFrame={acknowledgeTerrain}

@@ -63,7 +63,7 @@ export function predrawnGenerationFrameStatus({
     return {
       kind: 'missing',
       title: 'No generation frame',
-      detail: `Choose a 16:9 frame before you ${promotionVerb}; the art pipeline has no Image 1 crop yet.`,
+      detail: 'Choose a 16:9 frame; the art pipeline has no Image 1 crop yet.',
       tone: 'blocked',
     };
   }
@@ -73,7 +73,7 @@ export function predrawnGenerationFrameStatus({
     return {
       kind: 'canonical',
       title: `Canonical pipeline frame · ${readout}`,
-      detail: `The ${promotionVerb === 'publish' ? 'published' : 'saved'} level makes this exact crop the Image 1 pipeline input.`,
+      detail: `This autosaved crop is ready for a Generation Reference and also matches the ${promotionVerb === 'publish' ? 'published' : 'saved'} level.`,
       tone: 'ready',
     };
   }
@@ -91,8 +91,8 @@ export function predrawnGenerationFrameStatus({
     return {
       kind: 'working-copy',
       title: `Working-copy frame saved · ${readout}`,
-      detail: `This exact crop is autosaved, but it is not the pipeline input until you ${promotionVerb}.`,
-      tone: 'neutral',
+      detail: 'This exact crop is autosaved and ready for a Generation Reference. Publishing is separate.',
+      tone: 'ready',
     };
   }
 

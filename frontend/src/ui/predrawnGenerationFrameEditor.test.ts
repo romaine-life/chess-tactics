@@ -31,7 +31,7 @@ describe('Level Editor pre-drawn generation frame handoff', () => {
     expect(control).toContain("currentEditorBoard.predrawnGenerationFrame ? 'Edit viewing pane' : 'Choose viewing pane'");
   });
 
-  it('applies the selected frame to the working editor while leaving canonical promotion explicit', () => {
+  it('applies the selected frame to the autosaved working editor without publishing', () => {
     const apply = levelEditor.match(
       /const applyPredrawnGenerationFrame = \(frame: PredrawnGenerationFrame\): void => \{([\s\S]*?)\n  \};/,
     )?.[1] ?? '';
@@ -52,18 +52,13 @@ describe('Level Editor pre-drawn generation frame handoff', () => {
     );
   });
 
-  it('keeps post-apply state visible and routes review to the existing persistence surface', () => {
-    const review = levelEditor.match(
-      /const reviewPredrawnGenerationFrameSave = \(\): void => \{([\s\S]*?)\n  \};/,
-    )?.[1] ?? '';
-
+  it('keeps post-apply state visible without routing artwork preparation to Publish', () => {
     expect(picker).toContain("'Apply to working copy'");
     expect(picker).toContain("'Applied to working copy'");
     expect(picker).toContain('data-testid="predrawn-generation-frame-application-status"');
-    expect(picker).toContain('data-testid="predrawn-generation-frame-review-save"');
-    expect(review).toContain("setLayer('status')");
-    expect(review).toContain("setTool('select')");
-    expect(review).not.toContain('saveLevel');
+    expect(picker).not.toContain('predrawn-generation-frame-review-save');
+    expect(levelEditor).not.toContain('reviewPredrawnGenerationFrameSave');
+    expect(levelEditor).not.toContain('Review & publish pane');
     expect(levelEditor).toContain('data-testid="predrawn-generation-frame-status"');
     expect(levelEditor).toContain('>Preview current input</ChromeNavButton>');
   });

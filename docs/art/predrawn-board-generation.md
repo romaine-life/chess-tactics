@@ -16,17 +16,19 @@ Per
 [ADR-0165](../adr/0165-ai-artwork-separates-sources-attempts-and-background-mode.md)
 and
 [ADR-0166](../adr/0166-manual-ai-handoff-separates-generation-references-from-raw-pipeline-sources.md),
-the reference-first owner-operated path begins in the Level Editor's **AI
-Artwork** side controls:
+the optional reference-first generation path and the independent artwork-intake
+path begin in the Level Editor's **AI Artwork** side controls:
 
 1. choose the intended **Legacy** or **AI** background mode and 16:9 generation
-   frame, then Save the Level so both choices are canonical;
+   frame, then wait for the Level Editor working copy to finish autosaving;
 2. open **Generation References** and create an immutable reference from that
-   canonical saved appearance and frame, copy its full-resolution PNG for
-   manual Codex generation, stage the returned PNG for review, and explicitly
-   commit it as a **Raw Pipeline Source**; and
-3. open **Board Art Pipeline**, choose **New attempt**, select that Raw Pipeline
-   Source as the slot's pre-modification input, and begin grid fitting.
+   exact acknowledged working-copy appearance and frame, then copy its
+   full-resolution PNG for manual Codex generation; and
+3. when any finished AI-artwork PNG is available, open **Board Art Pipeline**,
+   use **Add AI artwork** to paste or choose it, review and explicitly commit it
+   as a **Raw Pipeline Source**, then begin grid fitting. Pipeline intake does
+   not require or bind the Generation Reference from step 2. A later **New
+   attempt** may reuse that Raw Pipeline Source without another upload.
 
 Per
 [ADR-0168](../adr/0168-creation-slots-begin-with-reusable-raw-pipeline-sources.md),
@@ -41,25 +43,25 @@ A Legacy reference captures the ordinary composed environment through the saved
 frame. An AI reference captures the exact selected AI raster. Both are unit-free,
 ground-cover-free, grid-free, tactical-overlay-free, and UI-free. The saved
 Generation Reference records its exact bytes and hash, dimensions, frame,
-source mode, selected raster when applicable, canonical Level revision,
+source mode, selected raster when applicable, working-copy Level revision,
 geometry digest, semantic-packet identity, and provenance. Later Level edits
 never change it.
 
-The generation handoff resolves the saved Generation Reference rather than
+The optional generation-preparation handoff resolves the saved Generation Reference rather than
 recapturing the current Level. Its durable request records the exact reference
-identity and hash, canonical semantic request and hashes, request hash,
+identity and hash, working-copy semantic request and hashes, request hash,
 actor/time, and whether the generation is non-isolated. The application does
 not know or claim the external Codex conversation's model, prompt, or
 parameters.
 
-**Copy generation reference** reads the exact original PNG. Clipboard paste,
-direct `Ctrl+V`, and **Choose PNG file instead** stage the returned PNG as a
-local review preview; they do not create a slot. The explicit raw-source commit
-stores those unchanged bytes as one immutable Raw Pipeline Source. An
-explicitly editor-mounted preexisting Codex result may instead be imported
-directly with **Use existing Codex-painted board**. That is direct raw-source
-ingress without source reclassification. Mandatory owner judgment begins with
-the candidate on the game-owned review surface.
+**Copy generation reference** reads the exact original PNG when an owner wants
+that model input. Pipeline **Add AI artwork** independently validates clipboard
+paste, native paste, or **Choose PNG file** and stages any finished PNG as a
+local review preview. Invalid input creates no version or slot. The explicit
+raw-source commit stores those unchanged bytes as one immutable Raw Pipeline
+Source and creates a processing slot bound only to current working-copy
+semantics and geometry. Mandatory owner judgment begins with the candidate on
+the game-owned review surface.
 
 The Board Art creation slot separately records one exact Raw Pipeline Source
 input plus compatible canonical geometry and processing context. Several slots
@@ -142,15 +144,15 @@ stating which questions each is allowed to answer.
 
 1. **Model image input:** one exact immutable Generation Reference. It is the
    unit-free, ground-cover-free,
-   overlay-free crop from the canonical Level's saved background mode and 16:9
-   frame. In Legacy mode it contains the ordinary composed authored surface,
-   including only explicitly persisted Subterrain that canonical topology
+   overlay-free crop from one acknowledged autosaved working-copy revision and
+   its 16:9 frame. In Legacy mode it contains the ordinary composed authored
+   surface, including only explicitly persisted Subterrain that captured topology
    resolves onto exposed faces. In AI mode it contains the exact selected
    raster and records non-isolated provenance. The reference owns appearance
    evidence only: environment, materials, palette, lighting, texture language,
    boundary vocabulary, and finish. An image edge or model-painted feature is
    never gameplay-perimeter or topology authority.
-2. **Semantic packet:** canonical dimensions, coordinate convention, projection,
+2. **Semantic packet:** captured working-copy dimensions, coordinate convention, projection,
    per-address contents, linear-feature graphs, blocking edges, footprints,
    exits, the full outer grid envelope, and internal playable/non-playable
    transitions. It owns deterministic gameplay meaning.
@@ -172,12 +174,11 @@ Before generation:
    **Legacy** or **AI** background mode. Open **Level Artwork → Generation
    References**, position the scene beneath the visible 16:9 frame, then choose
    **Apply to working copy**. The exact preview identifies whether the crop is
-   preview-only, saving, durably acknowledged, or already canonical. Applying
-   never promotes by itself: Save/Publish so both mode and frame are canonical
-   before choosing **Create generation reference**. The frame is a
+   preview-only, saving, or durably acknowledged. Applying never publishes by
+   itself: wait for autosave, then choose **Create generation reference**. The frame is a
    screen-aligned rectangle in canonical projected-board coordinates, never raw
    browser pan, zoom, CSS pixels, viewport dimensions, or device-pixel ratio.
-   Capture loads that canonical saved Level and fails when the frame is missing,
+   Capture locks that acknowledged working-copy Level and fails when the frame is missing,
    invalid, or does not fully contain the playable outer envelope and every
    gameplay-authoritative reference draw represented by the semantic packet.
 
@@ -199,7 +200,7 @@ Before generation:
    supplies perimeter evidence.
 
    Read back the persisted Generation Reference and its exact hash, source mode,
-   frame, canonical Level revision, selected AI identity when applicable,
+   frame, working-copy Level revision, selected AI identity when applicable,
    geometry digest, and semantic-packet identity before creating a generation
    handoff.
    Later changes to the Level or frame create another reference; they never
@@ -422,14 +423,15 @@ Geometry and semantics above override all artistic discretion.
 
 ## Review loop
 
-1. When new model art is required, select an exact immutable Generation
-   Reference and choose **Copy generation reference** to place its exact
-   full-resolution PNG on the clipboard. Work with Codex, then use **Paste
-   AI-painted board**, direct `Ctrl+V`, or **Choose PNG file instead** to stage
-   the exact returned PNG. Review the local preview and explicitly commit those
-   unchanged bytes as a Raw Pipeline Source. The **Use existing Codex-painted
-   board** path may instead import an editor-mounted result through the same
-   raw-source ingress. Do not silently weaken the semantic request to obtain
+1. When a level-derived model input is useful, select an exact immutable Generation
+   Reference in **Generation References** and choose **Copy generation
+   reference** to place its exact full-resolution PNG on the clipboard. Work
+   with Codex. Whenever finished artwork is available—from that handoff or any
+   other source—open **Board Art Pipeline** and use **Add AI artwork**, **Paste
+   AI artwork**, native paste, or **Choose PNG file**. Review
+   the local preview and explicitly commit those unchanged bytes as a Raw
+   Pipeline Source. This raw-source intake does not require or record the Generation Reference used
+   upstream. Do not silently weaken a prepared semantic request to obtain
    prettier art. The application does not claim the model, prompt, or
    parameters used in the external conversation.
 2. In **Board Art Pipeline**, choose the persistent workspace-level **New
@@ -441,11 +443,15 @@ Geometry and semantics above override all artistic discretion.
    provably compatible historical raw missing later coordinate metadata, the
    fenced create transaction establishes ADR-0169's external binding from the
    exact saved Level without rewriting the source. The new slot immediately
-   starts at grid fitting; it does
-   not copy the source back to Codex, wait for another PNG, or create another
-   raw output. A compatible historical raw may be selected without fabricating
-   its missing generation provenance.
-3. Preview grid fitting against that Raw Pipeline Source. Place the complete grid
+   exposes the unchanged Raw Pipeline Source as a selectable board; it does not
+   copy the source back to Codex, wait for another PNG, or create another raw
+   output. A compatible historical raw may be selected without fabricating its
+   missing generation provenance.
+3. The Raw Pipeline Source is immediately usable through **Use unchanged
+   board**. This sets its exact pixels at the original viewing-pane placement
+   with no corrected raster and no occlusion mask; it does not apply a fitted
+   grid. If the painted grid needs a different placement, open **Adjust grid
+   (optional)** against that Raw Pipeline Source. Place the complete grid
    with the owner calibration instrument. First set the
    refit row/column counts to the grid actually painted by the candidate (which
    may expose an unwanted extra row or column), register its N/E/S/W painted-image
@@ -467,8 +473,10 @@ Geometry and semantics above override all artistic discretion.
    dimension, spacing, snap, local, and opening-restore edit. A completed drag
    is one step and compound operations remain atomic; pan, zoom, mode, and
    selection changes are not history.
-4. Choose **Generate warped board** once the preview is correct. This fills the
-   creation slot's one warped-artwork stage. The versioned deterministic rasterizer
+4. Once the fit is correct, choose **Use fitted board**. This single owner action
+   saves exact-source recovery state, fills the creation slot's one corrected-
+   artwork stage, and selects that result on the working copy. There is no
+   separate ordinary create or acceptance step. The versioned deterministic rasterizer
    applies the complete guide map, optional shared-vertex mesh, and four-corner
    transform once, persists a new
    full-scene raster and exact parent/provenance, and leaves the generated
@@ -492,10 +500,15 @@ Geometry and semantics above override all artistic discretion.
    Pipeline Source with this child's direct saved registration preloaded. The
    next warp remains in the same slot. This performs no model call, clipboard
    handoff, upload, or media copy.
+   A retained or published corrected board instead exposes **Refit board**. That
+   action starts a new slot from the exact raw parent and opens the fitter with
+   the retained version's durable registration; it never mutates the retained
+   artifact.
    At the centered viewport-cover zoom floor, pan in all four screen directions.
    Reject the composition for production if useful camera travel requires first
    zooming far in, even when the cover floor successfully hides every frame edge.
-5. Fit and explicitly save the cell visual footprints for this exact warp. The
+5. Only when preparing optional occlusion, fit and explicitly save the cell
+   visual footprints for this exact warp. The
    persisted profile and existing controls retain their cyan move-highlight
    compatibility names. Per
    [ADR-0183](../adr/0183-cyan-footprint-fitting-is-viewport-level-and-edits-points-or-edges.md),
@@ -539,9 +552,10 @@ Geometry and semantics above override all artistic discretion.
    sparse profile as the attempt's revision-CAS latest draft bound to this warp,
    not tile/primary/boundary selection, axis state, undo history, or another
    media version.
-6. Per
+6. Occlusion is optional and is not required to set either the unchanged or
+   corrected board. When live units should pass behind painted scenery, per
    [ADR-0180](../adr/0180-predrawn-occlusion-selects-final-raster-pixels.md),
-   choose **Edit occlusion mask** for that exact warped raster after its valid
+   choose **Add occlusion (optional)** for that exact warped raster after its valid
    cyan profile is saved. The focused full Board Art Pipeline workspace shows
    only the exact immutable warped PNG that will become the mask's parent;
    Legacy tiles, terrain, props, doodads, Scene Art, and their silhouettes are
@@ -584,7 +598,8 @@ Geometry and semantics above override all artistic discretion.
    remains unchanged until the ordinary Save or Publish boundary. The old
    immutable result is archived when unreferenced or retained as canonical
    history when still needed.
-7. Choose the exact artifact and press **Set this board version**. Verify the
+7. Choose **Use unchanged board** for a Raw Pipeline Source, or choose the exact
+   optional derived artifact and press **Set this board version**. Verify the
    editor identifies it as the remembered working-copy AI selection. A fitted
    selection embeds the exact canonical compatibility-named profile and digest
    in the Level's schema-version-3 surface; later edits to the attempt draft
@@ -603,7 +618,7 @@ Geometry and semantics above override all artistic discretion.
    perimeter readability, invented height, extra perimeter strips, visible
    square terrain patching, footprint scale, occlusion, or style.
 9. Change the smallest relevant prompt section and preserve the rest. Start a
-   new generation handoff for a changed canonical semantic request or
+   new generation handoff for a changed working-copy semantic request or
    Generation Reference. If the exact external prompt is retained as text
    provenance, keep it separately; the application does not claim that prompt,
    its model, or its parameters.
@@ -625,6 +640,20 @@ selection rather than runtime alignment instructions.
 
 ## Amendment log
 
+- **2026-08-05 — fitted grid is one durable selection action:**
+  [ADR-0480](../adr/0480-using-a-fitted-grid-saves-and-selects-its-board.md)
+  makes **Use fitted board** create/resume the immutable corrected raster and
+  select it on the working copy. Exact-source recovery prevents silent reseeding;
+  unchanged raw selection explicitly ignores the fit.
+- **2026-08-05 — raw boards bypass optional processing:** ADR-0158's selectable
+  immutable raw root and explicit no-occlusion selection are surfaced directly
+  as **Use unchanged board**. Grid correction and occlusion remain available as
+  optional derived tools rather than acceptance gates.
+- **2026-08-05 — source-agnostic AI artwork intake:**
+  [ADR-0478](../adr/0478-ai-artwork-intake-is-source-agnostic.md) keeps
+  Generation References as an optional model-input library while Board Art
+  Pipeline accepts any valid PNG. Intake records exact raw bytes plus current
+  working-copy semantics and geometry, not a producing-reference relation.
 - **2026-07-26 — fitted cells shape every square-local visual:**
   [ADR-0185](../adr/0185-predrawn-fitted-cell-footprints-shape-every-square-local-visual-highlight.md)
   broadens the fitted quadrilateral from cyan move paint to all runtime and
