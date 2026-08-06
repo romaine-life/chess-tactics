@@ -7,6 +7,7 @@ partially_superseded_by:
   - "[ADR-0386](0386-shops-offer-read-only-intelligence-on-the-upcoming-battle.md)'s addition of View Battle"
   - "[ADR-0392](0392-sectio-is-the-run-disposal-and-acquisition-phase.md)'s replacement of the Shop terminology with Sectio"
   - "[ADR-0393](0393-adlectio-and-alienatio-are-the-movements-within-sectio.md)'s replacement of buying and selling with Adlectio and Alienatio"
+  - "[ADR-0482](0482-expunctio-owns-card-aware-alienatio.md)'s consolidation of unit Alienatio into the card-first Expunctio workspace"
 ---
 
 # ADR-0230: Run shops separate buying, army inspection, and selling

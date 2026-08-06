@@ -1,15 +1,14 @@
 
 export type RunSelfInspectionView = 'army' | 'lipsana';
-export type RunWorkspaceView = 'primary' | 'alienatio' | 'expunctio' | 'battle-preview' | 'battle-review' | RunSelfInspectionView;
+export type RunWorkspaceView = 'primary' | 'expunctio' | 'battle-preview' | 'battle-review' | RunSelfInspectionView;
 
-export const SECTIO_WORKSPACE_VIEWS = ['battle-preview', 'alienatio', 'expunctio'] as const;
+export const SECTIO_WORKSPACE_VIEWS = ['battle-preview', 'expunctio'] as const;
 export type SectioWorkspaceView = typeof SECTIO_WORKSPACE_VIEWS[number];
 
 /** One label inventory for Run workspace controls and the persistent title breadcrumb. */
 export const RUN_WORKSPACE_VIEW_LABEL: Readonly<Record<Exclude<RunWorkspaceView, 'primary'>, string>> = Object.freeze({
   army: 'Army',
   lipsana: 'Lipsana',
-  alienatio: 'Alienatio',
   expunctio: 'Expunctio',
   'battle-preview': 'View Battle',
   'battle-review': 'Battle',
@@ -21,7 +20,7 @@ export function isSectioWorkspaceView(view: RunWorkspaceView): view is SectioWor
 
 export function runWorkspaceViewFromSearch(search: string): RunWorkspaceView {
   const view = new URLSearchParams(search).get('view');
-  return view === 'army' || view === 'lipsana' || view === 'alienatio' || view === 'expunctio' || view === 'battle-preview' || view === 'battle-review'
+  return view === 'army' || view === 'lipsana' || view === 'expunctio' || view === 'battle-preview' || view === 'battle-review'
     ? view
     : 'primary';
 }

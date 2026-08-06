@@ -329,7 +329,7 @@ That reading repeats the same canonical player-side sprite at a materially large
 its chess role in live prose; repeated units of one role share one stable reading, so crossing
 between them does not replace or move the popup. An unacquired offer never invents a persistent
 personal name. In Sectio the complete card remains the one action, so unit readings introduce no
-nested controls (ADR-0482). The persistent
+nested controls (ADR-0490). The persistent
 active Deployment card never compacts around a played unit: its authored density, sprite scale,
 and stack seats remain fixed while the departed occurrence becomes a visible vacancy (ADR-0427).
 title route always appends the visible Enchiridion section on the standalone host,
@@ -414,6 +414,11 @@ Expunctio does not repeat the card's printed title beside its canonical face.
 Each tile keeps its inner frame but borrows the installed outer-role surface used
 by the title bar and Controls panel; its action keeps the canonical control frame
 over the registered `hybrid-wood-oak` surface.
+Per [ADR-0489](adr/0489-alienatio-fades-the-departure-and-flips-the-next-card-frame.md),
+Aliene commits immediately but remains visually legible: the sold figure fades over
+its exact old card seat while each stable survivor glides into the compact committed
+stack. Selection and cycling remain stationary; only the completed transaction moves
+the affected figures, and the surrounding physical panel never reflows.
 Per [ADR-0448](adr/0448-expunctio-scrollbar-keys-to-the-terminal-frame-rail.md),
 the final tile's straight frame rail and the shared drawn scrollbar meet one
 bottom keyline at the end of the gallery. The corner atom may continue below

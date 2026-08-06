@@ -24,7 +24,6 @@ const SCREEN_ART_SLOT = /^review\/run-screen-art\/([a-z][a-z0-9-]*)\/([a-z][a-z0
 
 const SCREEN_LABELS: Record<string, string> = {
   deployment: 'Deployment',
-  alienatio: 'Alienatio',
   expunctio: 'Expunctio',
   army: 'Army',
   lipsana: 'Lipsana',
@@ -61,6 +60,7 @@ export function screenArtCandidates(catalog: AdminLiveMediaCatalog): ScreenArtCa
     const match = SCREEN_ART_SLOT.exec(version.slot ?? '');
     if (!match || !version.media) continue;
     const [, screen, generator] = match;
+    if (!(screen in SCREEN_LABELS)) continue;
     const id = `${screen}--${generator}`;
     const prior = newest.get(id);
     if (!prior || version.rowRevision > prior.version.rowRevision) {

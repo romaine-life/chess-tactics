@@ -9,7 +9,7 @@ refines:
   - "[ADR-0283](0283-run-card-face-is-one-shared-live-runtime-component.md)"
 ---
 
-# ADR-0482: Run card units reveal a larger named reading
+# ADR-0490: Run card units reveal a larger named reading
 
 ## Context
 

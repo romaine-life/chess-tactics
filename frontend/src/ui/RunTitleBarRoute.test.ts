@@ -7,7 +7,6 @@ const runInPhase = (phase: RunDocument['phase']): RunDocument => ({ phase } as R
 describe('Run title route', () => {
   it.each([
     ['battle-preview', 'View Battle'],
-    ['alienatio', 'Alienatio'],
     ['expunctio', 'Expunctio'],
   ] as const)('appends the addressed Sectio room %s', (view, label) => {
     expect(runTitleBarRouteSegments(
@@ -34,8 +33,8 @@ describe('Run title route', () => {
     expect(runTitleBarRouteSegments(
       runInPhase('battle'),
       '/run',
-      '?run=1&view=alienatio',
-      'alienatio',
+      '?run=1&view=expunctio',
+      'expunctio',
     )).toEqual([{ label: 'Battle', to: '/run?run=1' }]);
   });
 });

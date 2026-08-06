@@ -62,6 +62,8 @@ const {
   runCardBackSlot,
   runResourceIconMediaIssue,
   runResourceIconSlotId,
+  runExpunctioReviewSurface,
+  runGoldTransactionReviewSurface,
   runSectioWrapMediaIssue,
   runSectioWrapSlotId,
   sfxSampleMediaIssue,
@@ -422,6 +424,16 @@ test('Run resource icon projection binds one native reviewed icon to its resourc
   assert.match(runResourceIconMediaIssue(runResourceIcon({
     metadata: { runtime: { ...row.metadata.runtime, altText: 'Gold' } },
   })), /altText/);
+});
+
+test('Run gold transaction proof is restricted to its exact Expunctio surface and slots', () => {
+  const review = new URL('https://chess-tactics.com/run?view=expunctio&goldGainCandidate=' + 'a'.repeat(64));
+  assert.equal(runExpunctioReviewSurface(review), true);
+  assert.equal(runGoldTransactionReviewSurface(review, 'ui/run/resources/gain-gold.png'), true);
+  assert.equal(runGoldTransactionReviewSurface(review, 'ui/run/resources/lose-gold.png'), true);
+  assert.equal(runGoldTransactionReviewSurface(review, 'ui/run/resources/gold.png'), false);
+  assert.equal(runExpunctioReviewSurface(new URL('https://chess-tactics.com/run?view=sectio')), false);
+  assert.equal(runExpunctioReviewSurface(new URL('https://chess-tactics.com/studio?view=expunctio')), false);
 });
 
 function runCardCostCoin(overrides = {}) {

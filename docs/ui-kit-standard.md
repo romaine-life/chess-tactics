@@ -162,7 +162,7 @@ adlected face reveals the accepted universal back in the pile's unchanged origin
 remaining piles never reflow, the revealed back is not interactive, and a later Adlectio can
 launch immediately while independent card flights play out in the continuity layer.
 
-Under [ADR-0482](adr/0482-run-card-units-reveal-a-larger-named-reading.md), every
+Under [ADR-0490](adr/0490-run-card-units-reveal-a-larger-named-reading.md), every
 occupied same-role unit stack on the canonical Run card face reuses one shared fixed
 tooltip to show that canonical sprite at a larger reading size and spell out its chess
 role. Repeated units therefore keep one stable popup as the pointer crosses between
@@ -218,7 +218,7 @@ omit either layer or provide an inline-end value.
 
 Under [ADR-0237](adr/0237-run-destinations-fill-the-shell-workspace.md), the same
 ownership test applies to player-facing non-Battle Run destinations. Sectio/Loot,
-the Sectio's upcoming-Battle preview, Victory, Army ledger and profile, Alienatio,
+the Sectio's upcoming-Battle preview, Victory, Army ledger and profile, card-aware Expunctio,
 loading, and empty states fill the shell-owned playfield through the shared `RunWorkspace`/`ShellWorkspace`
 composition. `RunWorkspace` supplies the
 workflow content; `ShellWorkspace` itself supplies the same Controls-attached

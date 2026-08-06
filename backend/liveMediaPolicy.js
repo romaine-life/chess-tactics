@@ -83,6 +83,10 @@ const RUN_STARTER_SELECTED_DERIVATIVE_BY_SLOT = Object.freeze({
 });
 const RUN_RESOURCE_ICON_COMPONENT = 'run-resource-icon';
 const RUN_RESOURCE_ICON_SLOT = /^ui\/run\/resources\/([a-z][a-z0-9-]{0,79})\.png$/;
+const RUN_GOLD_TRANSACTION_REVIEW_SLOTS = new Set([
+  'ui/run/resources/gain-gold.png',
+  'ui/run/resources/lose-gold.png',
+]);
 const RUN_CARD_COST_COIN_COMPONENT = 'run-card-cost-coin';
 const RUN_CARD_COST_COIN_SLOT = 'ui/run/card-prototypes/cost-coin-v1.png';
 const RUN_SECTIO_WRAP_COMPONENT = 'run-sectio-wrap';
@@ -607,6 +611,17 @@ function runResourceIconMediaIssue(row, projectedRuntime = null) {
     return 'Run resource icon metadata.runtime.altText must be empty because the live value owns its accessible name';
   }
   return null;
+}
+
+function runExpunctioReviewSurface(url) {
+  return url instanceof URL
+    && url.pathname === '/run'
+    && url.searchParams.get('view') === 'expunctio';
+}
+
+function runGoldTransactionReviewSurface(url, slot) {
+  return RUN_GOLD_TRANSACTION_REVIEW_SLOTS.has(String(slot || ''))
+    && runExpunctioReviewSurface(url);
 }
 
 /**
@@ -1583,6 +1598,8 @@ module.exports = {
   runCardBackSlot,
   runResourceIconMediaIssue,
   runResourceIconSlotId,
+  runExpunctioReviewSurface,
+  runGoldTransactionReviewSurface,
   runSectioWrapMediaIssue,
   workspaceBackgroundSlotId,
   workspaceBackgroundMediaIssue,
