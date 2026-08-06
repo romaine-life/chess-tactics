@@ -9,6 +9,7 @@ export interface AppSettings {
   musicVolume: number;
   effectsVolume: number;
   interfaceSounds: boolean;
+  showBoardGrid: boolean;
   autoDealDeployment: boolean;
 }
 
@@ -18,6 +19,7 @@ export const DEFAULT_APP_SETTINGS: Readonly<AppSettings> = Object.freeze({
   musicVolume: 70,
   effectsVolume: 80,
   interfaceSounds: true,
+  showBoardGrid: true,
   autoDealDeployment: false,
 });
 
@@ -44,6 +46,9 @@ export function normalizeAppSettings(value: unknown): AppSettings {
     interfaceSounds: typeof parsed.interfaceSounds === 'boolean'
       ? parsed.interfaceSounds
       : DEFAULT_APP_SETTINGS.interfaceSounds,
+    showBoardGrid: typeof parsed.showBoardGrid === 'boolean'
+      ? parsed.showBoardGrid
+      : DEFAULT_APP_SETTINGS.showBoardGrid,
     autoDealDeployment: typeof parsed.autoDealDeployment === 'boolean'
       ? parsed.autoDealDeployment
       : DEFAULT_APP_SETTINGS.autoDealDeployment,

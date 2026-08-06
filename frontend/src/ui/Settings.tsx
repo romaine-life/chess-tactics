@@ -565,6 +565,16 @@ export function Settings({
   const renderGameplay = () => (
     <SettingsSection title="Gameplay">
       <SettingsRow
+        title="Board grid"
+        description="Show the board grid whenever a battlefield loads."
+      >
+        <Toggle
+          checked={settings.showBoardGrid}
+          label="Show the board grid when a battlefield loads"
+          onChange={(value) => updateSetting('showBoardGrid', value)}
+        />
+      </SettingsRow>
+      <SettingsRow
         title="Deal automatically"
         description="Begin the Deployment deal as soon as the battlefield is ready."
       >
