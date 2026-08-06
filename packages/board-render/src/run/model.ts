@@ -796,18 +796,23 @@ const OPENING_SECTIO_VALUES: readonly number[] = Object.freeze(
  * rolls its qualifier independently. */
 export const OPENING_SECTIO_ROLL_BATTLE_INDEX = -1;
 
-/** Deal three distinct uniformly sampled values, then one seeded core card at
- * each value. Sampling values first prevents dense high-value ranks in the
- * 49-card deck from crowding low-value openings out of the Run.
+/** Deal the requested number of distinct uniformly sampled values, then one seeded
+ * core card at each value. The ordinary opening requests three; Quartermaster's
+ * Ledger requests four. Sampling values first prevents dense high-value ranks in
+ * the 49-card deck from crowding low-value openings out of the Run.
  *
  * Opening draws roll qualifiers exactly like every later Sectio draw, at every core
  * value: a Tactical surcharge may price an opening card past the starting gold and
  * out of reach. The one repair is the degenerate deal — ADR-0323 requires a
  * Adlectio before Continue, so if no offer is affordable the cheapest one drops its
  * qualifier and is offered standard, which no other opening card ever does. */
-export function openingSectioOffers(seed: number, ataraxiaTier: AtaraxiaTier = 0): RunCardOffer[] {
+function openingSectioOffersWithCount(
+  seed: number,
+  ataraxiaTier: AtaraxiaTier = 0,
+  offerCount = RUN_OPENING_OFFER_COUNT,
+): RunCardOffer[] {
   const values = shuffled(OPENING_SECTIO_VALUES, mixSeed(seed, 'opening-shop-values'))
-    .slice(0, RUN_OPENING_OFFER_COUNT);
+    .slice(0, offerCount);
   const offers = values.map((value, slotIndex) => {
     const candidates = RUN_CARD_DECK.filter((card) => card.value === value);
     const card = shuffled(
@@ -831,6 +836,10 @@ export function openingSectioOffers(seed: number, ataraxiaTier: AtaraxiaTier = 0
   return offers.map((offer) => (offer === cheapest
     ? { ...offer, cost: offer.value, cardType: null, cacochymicPieceIndex: null, effectTargetIndex: null }
     : offer));
+}
+
+export function openingSectioOffers(seed: number, ataraxiaTier: AtaraxiaTier = 0): RunCardOffer[] {
+  return openingSectioOffersWithCount(seed, ataraxiaTier, RUN_OPENING_OFFER_COUNT);
 }
 
 function freshRunId(): string {
@@ -985,7 +994,7 @@ function openOpeningSectio(run: RunDocument, seed: number, ataraxiaTier: Ataraxi
       afterBattleIndex: 0,
       conflictIndex: 0,
       victoryGoldTenths: 0,
-      cardOffers: openingSectioOffers(seed, ataraxiaTier),
+      cardOffers: openingSectioOffersWithCount(seed, ataraxiaTier, runSectioCardOfferCount(run)),
       adlectedCardOfferIds: [],
       paidLipsanonOffer: null,
       paidLipsanonBought: false,
@@ -1447,6 +1456,17 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
   let sectio = stored.sectio;
   if (sectio && sectio.kind !== 'opening' && sectio.kind !== 'post-battle') {
     sectio = { ...sectio, kind: 'post-battle' };
+  }
+  if (
+    sectio?.kind === 'opening'
+    && runSectioCardOfferCount(next) === 4
+    && sectio.cardOffers.length === RUN_OPENING_OFFER_COUNT
+  ) {
+    const completeOpening = openingSectioOffersWithCount(next.seed, ataraxiaTier, 4);
+    const persistedOfferIds = sectio.cardOffers.map((offer) => offer.offerId);
+    if (persistedOfferIds.every((offerId, index) => completeOpening[index]?.offerId === offerId)) {
+      sectio = { ...sectio, cardOffers: completeOpening };
+    }
   }
   if (sectio && (
     offersNeedRepair(sectio.cardOffers)
@@ -1986,6 +2006,11 @@ export function addArmyPieces(
 
 export function hasLipsanon(run: RunDocument, lipsanon: LipsanonId): boolean {
   return run.lipsana.includes(lipsanon);
+}
+
+/** One shared answer for every Sectio deal and the server-side persistence contract. */
+export function runSectioCardOfferCount(run: Pick<RunDocument, 'lipsana'>): number {
+  return run.lipsana.includes('quartermasters-ledger') ? 4 : RUN_OPENING_OFFER_COUNT;
 }
 
 export function lipsanonGrantingRunAbility(
@@ -2617,7 +2642,7 @@ export function openSectio(run: RunDocument, survivingUnitIds: readonly string[]
  */
 function openPostBattleSectio(run: RunDocument, victoryGoldTenths: number): RunDocument {
   let next: RunDocument = { ...run, phase: 'sectio', vacantia: null };
-  const cardCount = hasLipsanon(next, 'quartermasters-ledger') ? 4 : 3;
+  const cardCount = runSectioCardOfferCount(next);
   const cardOffers = shuffled(RUN_CARD_DECK, mixSeed(next.seed, 'shop-cards', next.battleIndex))
     .slice(0, cardCount)
     .map((card, slotIndex) => createRunCardOffer(next, card, next.battleIndex, slotIndex));

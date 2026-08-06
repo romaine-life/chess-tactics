@@ -5586,7 +5586,37 @@ async function main() {
     }),
   );
   if (invalidOpeningRun.statusCode !== 400 || JSON.parse(invalidOpeningRun.body).error !== 'invalid_active_run') {
-    throw new Error(`Current Run saves must persist three opening Sectio offers: ${invalidOpeningRun.statusCode} ${invalidOpeningRun.body}`);
+    throw new Error(`Current Run saves must persist their complete opening Sectio deal: ${invalidOpeningRun.statusCode} ${invalidOpeningRun.body}`);
+  }
+  const quartermasterOffer = {
+    id: 'r', offerId: 'opening-3-r', pieces: ['rook'], value: 5, cost: 5,
+    cardType: null, effectSeed: 1707, cacochymicPieceIndex: null, effectTargetIndex: null,
+  };
+  const quartermasterOpeningRun = {
+    ...activeRunDocument,
+    id: 'run-quartermaster-smoke',
+    lipsana: ['quartermasters-ledger'],
+    seenLipsana: ['quartermasters-ledger'],
+    sectio: {
+      ...activeRunDocument.sectio,
+      cardOffers: [...activeRunOffers, quartermasterOffer],
+      entrySnapshot: {
+        ...activeRunDocument.sectio.entrySnapshot,
+        lipsana: ['quartermasters-ledger'],
+        seenLipsana: ['quartermasters-ledger'],
+      },
+    },
+  };
+  const savedQuartermasterOpening = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' },
+    JSON.stringify({ run: quartermasterOpeningRun, revision: 0 }),
+  );
+  if (
+    savedQuartermasterOpening.statusCode !== 200
+    || JSON.parse(savedQuartermasterOpening.body).run.sectio.cardOffers.length !== 4
+  ) {
+    throw new Error(`Quartermaster's Ledger must permit four opening unit cards: ${savedQuartermasterOpening.statusCode} ${savedQuartermasterOpening.body}`);
   }
   const unaffordableOpeningRun = await request(
     'PUT', '/api/active-run',
