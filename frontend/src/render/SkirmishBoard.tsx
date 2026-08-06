@@ -540,6 +540,9 @@ const isRoyal = (type: Piece['type']): boolean => type === 'king' || type === 'q
 export interface UnitArrivalPlan {
   startMs: number | null;
   delayMs: number;
+  /** A sideways formation owns one shared rigid translation large enough to begin
+   * completely beyond the board's right edge. Ordinary drop entrances omit it. */
+  distancePx?: number;
 }
 
 /**
@@ -628,6 +631,7 @@ export function unitDeparturePose(
  * staging, because the scene entrance reveals the board before it activates it.
  */
 export type UnitArrivalLifecycle = 'pending' | 'active' | 'settled';
+export type UnitArrivalTrack = 'drop' | 'slide-from-right';
 
 export function unitArrivalPlan(
   lifecycle: UnitArrivalLifecycle,
@@ -794,28 +798,43 @@ function moveHopOffset(progress: number, side: Piece['side']): number {
   return Math.sin(progress * Math.PI) * peak;
 }
 
-export function arrivalOffset(timeMs: number, plan: UnitArrivalPlan | undefined): { dy: number; opacity: number } {
+export function arrivalOffset(
+  timeMs: number,
+  plan: UnitArrivalPlan | undefined,
+  track: UnitArrivalTrack = 'drop',
+): { dx: number; dy: number; opacity: number } {
   // No plan means this piece is scenery, or its arrival has already finished: it stands seated.
-  if (!plan) return { dy: 0, opacity: 1 };
+  if (!plan) return { dx: 0, dy: 0, opacity: 1 };
+  const staged = track === 'slide-from-right'
+    ? { dx: plan.distancePx ?? 160, dy: 0, opacity: 0 }
+    : { dx: 0, dy: -60, opacity: 0 };
   // Staged but not yet released. A unit awaiting its entrance waits OFF the board — painting it
   // seated here is what made a revealed battlefield show its army, drop it, and re-enter it.
-  if (plan.startMs == null) return { dy: -60, opacity: 0 };
+  if (plan.startMs == null) return staged;
   const elapsed = timeMs - plan.startMs - plan.delayMs;
-  if (elapsed < 0) return { dy: -60, opacity: 0 };
+  if (elapsed < 0) return staged;
   const progress = clamp01(elapsed / ARRIVAL_ANIM_MS);
-  if (progress < 0.26) return { dy: -60, opacity: progress / 0.26 };
-  if (progress < 0.46) return { dy: -60, opacity: 1 };
+  if (track === 'slide-from-right') {
+    const slide = easeOutCubic(progress);
+    return {
+      dx: lerp(plan.distancePx ?? 160, 0, slide),
+      dy: 0,
+      opacity: Math.min(1, progress / .18),
+    };
+  }
+  if (progress < 0.26) return { dx: 0, dy: -60, opacity: progress / 0.26 };
+  if (progress < 0.46) return { dx: 0, dy: -60, opacity: 1 };
   if (progress < 0.82) {
     const fall = easeInQuad((progress - 0.46) / 0.36);
-    return { dy: lerp(-60, 0, fall), opacity: 1 };
+    return { dx: 0, dy: lerp(-60, 0, fall), opacity: 1 };
   }
-  return { dy: 0, opacity: 1 };
+  return { dx: 0, dy: 0, opacity: 1 };
 }
 
 export function pieceOp(
   piece: Piece,
   seat: { left: number; top: number },
-  options: { dy?: number; opacity?: number; scale?: number } = {},
+  options: { dx?: number; dy?: number; opacity?: number; scale?: number } = {},
 ): BoardDrawOp | null {
   const src = pieceImageSrc(piece);
   if (!src) return null;
@@ -829,7 +848,7 @@ export function pieceOp(
     return {
       layer: 'scene',
       src,
-      dx: seat.left - dw * ROCK_ANCHOR_X,
+      dx: seat.left - dw * ROCK_ANCHOR_X + (options.dx ?? 0),
       dy: seat.top - dh * ROCK_ANCHOR_Y + (options.dy ?? 0),
       dw,
       dh,
@@ -849,7 +868,7 @@ export function pieceOp(
   return {
     layer: 'scene',
     src,
-    dx: seatLeft + (seatW - imageW) / 2,
+    dx: seatLeft + (seatW - imageW) / 2 + (options.dx ?? 0),
     dy: seatTop + (seatH - imageH) / 2 + (options.dy ?? 0),
     dw: imageW,
     dh: imageH,
@@ -894,6 +913,7 @@ function SkirmishSceneLayer({
   ambientCover,
   livePieces,
   unitArrivals,
+  unitArrivalTrack,
   onArrivingUnitIdsChange,
   unitDeparture,
   onDepartingUnitIdsChange,
@@ -913,6 +933,7 @@ function SkirmishSceneLayer({
   ambientCover: boolean;
   livePieces: readonly Piece[];
   unitArrivals: UnitArrivalLifecycle;
+  unitArrivalTrack: UnitArrivalTrack;
   onArrivingUnitIdsChange: (unitIds: readonly string[]) => void;
   unitDeparture: UnitDepartureRequest | null;
   onDepartingUnitIdsChange: (unitIds: readonly string[]) => void;
@@ -1008,6 +1029,7 @@ function SkirmishSceneLayer({
     onFrameError,
     unitDeparture,
     onUnitDepartureComplete,
+    unitArrivalTrack,
   });
 
   const requestSceneFrame = useCallback(() => {
@@ -1052,6 +1074,7 @@ function SkirmishSceneLayer({
       onFrameError,
       unitDeparture,
       onUnitDepartureComplete,
+      unitArrivalTrack,
     };
     if (acknowledgedFrameKeyRef.current !== frameKey && acknowledgementFrameRef.current !== null) {
       window.cancelAnimationFrame(acknowledgementFrameRef.current);
@@ -1078,7 +1101,10 @@ function SkirmishSceneLayer({
         const target = boardLabCellPosition(piece);
         const motion = motionRef.current.get(piece.id);
         const seated = motion ? motionSeat(motion, now) : { ...target, progress: 1, active: false };
-        const arrival = arrivalOffset(now, arrivalPlansRef.current.get(piece.id));
+        const arrivalTrack = unitArrivalTrack === 'slide-from-right' && piece.side === 'player'
+          ? 'slide-from-right'
+          : 'drop';
+        const arrival = arrivalOffset(now, arrivalPlansRef.current.get(piece.id), arrivalTrack);
         const destination = unitDepartureDestination(piece, sceneBoard, track);
         departurePlansRef.current.set(piece.id, {
           requestId: unitDeparture.id,
@@ -1086,7 +1112,7 @@ function SkirmishSceneLayer({
           startMs: now,
           delayMs: index * DEPARTURE_STEP_MS,
           durationMs: DEPARTURE_ANIM_MS,
-          startLeft: seated.left,
+          startLeft: seated.left + arrival.dx,
           startTop: seated.top + arrival.dy,
           endLeft: destination.left,
           endTop: destination.top,
@@ -1115,6 +1141,17 @@ function SkirmishSceneLayer({
       additions,
       arrivalLifecycleStartedRef.current ? 0 : ARRIVAL_BASE_MS,
     );
+    const sidewaysAdditions = unitArrivalTrack === 'slide-from-right'
+      ? additions.filter((piece) => piece.side === 'player')
+      : [];
+    const sidewaysDistance = sidewaysAdditions.length
+      ? Math.max(
+          160,
+          bounds.minX + bounds.width + UNIT_SEAT_W
+            - Math.min(...sidewaysAdditions.map((piece) => boardLabCellPosition(piece).left)),
+        )
+      : 160;
+    for (const piece of sidewaysAdditions) delays.set(piece.id, 0);
     for (const piece of livePieces) visibleUnitIdsRef.current.add(piece.id);
     arrivalLifecycleStartedRef.current = true;
     // Admission happens whether or not the entrance may play yet, so a battlefield preparing
@@ -1124,11 +1161,15 @@ function SkirmishSceneLayer({
     if (unitArrivals === 'settled') arrivalPlansRef.current.clear();
     for (const piece of additions) {
       const plan = unitArrivalPlan(unitArrivals, now, delays.get(piece.id) ?? 0);
-      if (plan) arrivalPlansRef.current.set(piece.id, plan);
+      if (plan) {
+        arrivalPlansRef.current.set(piece.id, piece.side === 'player' && unitArrivalTrack === 'slide-from-right'
+          ? { ...plan, distancePx: sidewaysDistance }
+          : plan);
+      }
     }
     if (unitArrivals === 'active') {
       for (const [pieceId, plan] of arrivalPlansRef.current) {
-        if (plan.startMs == null) arrivalPlansRef.current.set(pieceId, { startMs: now, delayMs: plan.delayMs });
+        if (plan.startMs == null) arrivalPlansRef.current.set(pieceId, { ...plan, startMs: now });
       }
     }
     reportArrivingUnits();
@@ -1185,6 +1226,7 @@ function SkirmishSceneLayer({
     reportDepartingUnits,
     staticOps,
     unitDeparture,
+    unitArrivalTrack,
     unitArrivals,
   ]);
 
@@ -1215,13 +1257,19 @@ function SkirmishSceneLayer({
           const departurePlan = departurePlansRef.current.get(piece.id);
           const departure = departurePlan ? unitDeparturePose(timeMs, departurePlan) : null;
           const seat = departure ?? seated;
-          const arrival = departure ? { dy: 0, opacity: departure.opacity } : arrivalOffset(timeMs, arrivalPlansRef.current.get(piece.id));
+          const arrivalTrack = state.unitArrivalTrack === 'slide-from-right' && piece.side === 'player'
+            ? 'slide-from-right'
+            : 'drop';
+          const arrival = departure
+            ? { dx: 0, dy: 0, opacity: departure.opacity }
+            : arrivalOffset(timeMs, arrivalPlansRef.current.get(piece.id), arrivalTrack);
           const baseOpacity = state.draggingId === piece.id ? 0.3 : state.premovedIds.has(piece.id) ? 0.4 : 1;
           const presentedPiece = departurePlan ? { ...piece, facing: departurePlan.facing } : piece;
           const depthPiece = departure
             ? { ...presentedPiece, ...unprojectBoardPoint(seat) }
             : presentedPiece;
           const op = pieceOp(depthPiece, seat, {
+            dx: arrival.dx,
             dy: (departure ? 0 : moveHopOffset(seated.progress, piece.side)) + arrival.dy,
             opacity: baseOpacity * arrival.opacity,
           });
@@ -1400,6 +1448,7 @@ export function SkirmishBoard({
   reveal = true,
   activate = reveal,
   unitArrivals = activate ? 'active' : 'pending',
+  unitArrivalTrack = 'drop',
   revealTransition = 'local',
 }: {
   interactive?: boolean;
@@ -1435,6 +1484,8 @@ export function SkirmishBoard({
    * `settled` is reserved for a position being revisited after its arrival already happened.
    */
   unitArrivals?: UnitArrivalLifecycle;
+  /** Deployment may use the same compositor lifecycle with a horizontal entrance. */
+  unitArrivalTrack?: UnitArrivalTrack;
   /**
    * `scene` delegates the visible opacity entrance to the surrounding SceneBoundary. The local
    * readiness gate still keeps incomplete pixels hidden, but does not start a second fade.
@@ -2125,6 +2176,7 @@ export function SkirmishBoard({
       data-arrival-state={arrivalState}
       data-arriving-unit-ids={presentingArrivals ? arrivingUnitIds.join(',') : ''}
       data-unit-arrivals={unitArrivals}
+      data-unit-arrival-track={unitArrivalTrack}
       data-reveal-transition={revealTransition}
       data-departure-state={departing ? 'withdrawing' : 'none'}
       data-departure-track={unitDeparture ? unitDepartureTrack(unitDeparture) : undefined}
@@ -2178,6 +2230,7 @@ export function SkirmishBoard({
               ambientCover={ambientSceneCover}
               livePieces={livePieces}
               unitArrivals={arrivalLifecycle}
+              unitArrivalTrack={unitArrivalTrack}
               onArrivingUnitIdsChange={handleArrivingUnitIdsChange}
               unitDeparture={unitDeparture}
               onDepartingUnitIdsChange={setDepartingUnitIds}

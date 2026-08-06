@@ -342,6 +342,20 @@ The Level Editor anchors its `TileGrid` origin to the playable cells. Adding or 
 or sparse scenic terrain therefore does not recenter the projected board or move the camera; the
 canonical board-space projection itself remains unchanged.
 
+Per [ADR-0498](adr/0498-level-editor-moves-the-playable-grid-within-the-authored-scene.md), the
+Board page may move the complete playable projection one tile North, East, South, or West inside
+the existing rectangular scenic surface. A move consumes one scenic row or column on that side and
+adds one to the opposite side, leaves playable dimensions and the total authored rectangle
+unchanged, and is unavailable without entering scenic terrain or opposite-side extent capacity.
+Because persisted coordinates remain relative to the canonical zero-based playable origin, one
+atomic move rebases the complete authored scene by the opposite grid delta. Tile-addressed visual
+channels, projected-pixel Scene Art, generation frame, camera boundary, generated selections, and
+saved Town/Forest bounds retain their mutual alignment. Exact clamped scenic terrain is materialized
+when it enters play. Units, Doodads, and zone tiles that leave the playable projection are removed
+and reported; Props continue to require a wholly playable or wholly scenic authored-ground
+footprint under ADR-0365. Accepted pre-drawn registrations remain locked to their fitting workflow
+and do not expose this ordinary Board-page operation.
+
 ### Placed Art and Scene Art
 
 Per

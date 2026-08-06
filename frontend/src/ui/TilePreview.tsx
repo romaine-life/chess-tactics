@@ -428,7 +428,7 @@ function preserveChromeLabRouteParams(params: URLSearchParams, route: TilesetStu
 function preserveCardLayoutRouteParams(params: URLSearchParams, route: TilesetStudioRouteState): void {
   if (route.viewerKind !== 'cardlayout') return;
   const current = new URLSearchParams(window.location.search);
-  (['frameCandidate', 'coinCandidate', 'artCandidate', 'propertyCandidate', 'unitStateCandidate', 'cardVariant', 'contentsStudy', 'tacticalSpecimen', 'concinnousTarget', 'starterCard'] as const).forEach((key) => {
+  (['frameCandidate', 'coinCandidate', 'artCandidate', 'propertyCandidate', 'unitStateCandidate', 'cardVariant', 'contentsStudy', 'tacticalSpecimen', 'concinnousTarget', 'starterCard', 'rarityStudy', 'uncommonCandidate', 'rareCandidate'] as const).forEach((key) => {
     const value = current.get(key);
     if (value) params.set(key, value);
   });

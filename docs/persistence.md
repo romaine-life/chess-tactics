@@ -68,7 +68,9 @@ vocabulary into RunSaveVersion 18's Sectio, Adlectio, and Alienatio vocabulary, 
 advances version 20 to RunSaveVersion 21's stable nullable card seats and card-ordered Deployment,
 advances version 21 to RunSaveVersion 22's explicit deal boundary and persisted transport, then
 advances version 22 to RunSaveVersion 23 by migrating every embedded Battle Level to Level format
-version 2.
+version 2, advances version 23 to RunSaveVersion 24's ability-free authored formation cards,
+advances version 24 to RunSaveVersion 25's generated rarity deck and sideways formation settling,
+and advances version 25 to RunSaveVersion 26's Battle-first opening and derived Sectio pile cursor.
 Migration 54 owns the marker rename; migration 55 advances the Sectio vocabulary; migration 56
 adds His Grace and Front Lines and returns a version-18 Deployment or Battle to its then-current
 pre-information boundary because that version did not persist exact automatic destinations.
@@ -80,6 +82,17 @@ Migration 60 removes the retired Deployment mode, maps a not-yet-settled old dea
 `awaiting-deal`, maps an already-settled old pace boundary to the active card, and preserves every
 later reveal, placement, settlement, and discard boundary while resuming it paused.
 Migration 61 advances every embedded Battle Level and the containing Run marker together.
+Migration 63 owns the two subsequent account-document edges that do not change PostgreSQL's
+relational shape. It advances any durable version-23 or version-24 `active_runs.body` directly to
+version 25: retired ability state is removed, valid held formation identities and every persistent
+unit are preserved, offers receive canonical rarity, and in-flight Deployment or Battle state
+returns to the formation-card deal boundary. The browser applies the equivalent version-23 to 24
+and version-24 to 25 transforms to its local copy, so no persisted random translation survives
+into deterministic right-to-left settling.
+Migration 64 then advances version 25 to 26. It adds `sectioCardCursor`, removes the obsolete
+Sectio `kind`, preserves a visible post-Battle offer row, and moves an in-progress opening Sectio
+to Battle 1's Deployment without losing completed transactions. The browser performs the same
+deterministic transform on first load.
 Each account migration advances the Run's CAS revision, while the browser applies the same chain
 to its local document on first load. Saves older than version 16 remain unavailable because their
 retired gameplay state has no declared lossless transform. See
@@ -95,15 +108,19 @@ migration for account and browser storage. Retired content maps to a typed tombs
 replacement—for example, a removed card remains in the deck as **Removed card**—rather than
 invalidating the Run.
 
-RunSaveVersion 23 begins in Bona Vacantia when the opening Conflict offers a lipsanon, otherwise
-in the normal Sectio with kind `opening`. The Run carries the permanent King and two starting Pawns
-through the starter-only His Grace and Front Lines cards, eight gold, and three seeded card offers.
-Adlectio remains in the same Sectio transaction; Army, card-aware Alienatio within Expunctio,
-Expunctio, Reset Sectio, and
-Continue reuse the post-Battle model. Expunctio may remove one held card and its remaining units
+RunSaveVersion 26 begins in Bona Vacantia when the opening Conflict offers a lipsanon, otherwise
+in Battle 1's Deployment. Taking that opening lipsanon also enters Deployment; there is no opening
+Sectio. The Run carries the permanent King and two starting Pawns through the single starter-only
+His Grace card and retains eight starting gold. The first Sectio follows Battle 1.
+
+Every Run persists a non-negative `sectioCardCursor` into its seed-derived hidden card sequence.
+Each 180-card pile contains exactly 135 Common, 36 Uncommon, and 9 Rare cards. Per-rarity queues
+include all still-unseen identities before recycling; their selected quotas are shuffled together.
+A normal Sectio consumes three positions and Quartermaster's Ledger consumes four. Reset Sectio
+retains the same visible offers and cursor rather than redrawing. Army, card-aware Alienatio within
+Expunctio, Adlectio, Reset Sectio, and Continue reuse the post-Battle model. Expunctio may remove one held card and its remaining units
 per visit for its printed value plus those units' standard value; His Grace is never eligible.
-Continue may perform no
-Adlectio and enters Deployment at Battle index 0. Deployment always persists the exact dealt-card
+Continue may perform no Adlectio. Deployment always persists the exact dealt-card
 order, stable nullable seats, capacity decision, active card, revealed-card prefix, seat cursor,
 deal boundary, paused/play/full-deploy transport, committed placements, settlement boundary, and
 discard cursor. A one-gold in-Deployment or five-gold in-Battle position reroll replaces those
@@ -134,9 +151,9 @@ Discard. Browser imports use the same shared transform, and embedded browser Run
 RunSaveVersion 23. See [ADR-0429](adr/0429-level-format-versions-always-migrate.md) and
 [ADR-0430](adr/0430-pruned-saved-revisions-retain-baseline-evidence.md).
 
-The save stores the selected Ataraxia tier, named and numbered army units, held cards, exact card
-and offer targets, Cacochymic loss history, lipsana and their Conflict state, current deployment
-or Battle runtime, aftermath, and the complete Sectio reset snapshot. The retired `draft` phase,
+The save stores the selected Ataraxia tier, named and numbered army units, held formation cards,
+the derived Sectio pile cursor, lipsana and their Conflict state, current deployment or Battle
+runtime, aftermath, and the complete Sectio reset snapshot. The retired `draft` phase,
 `draftOffers`, and `chosenDraftId` are rejected. The generic `formatVersion` field is accepted only
 by the exact version-16 storage migration; normalization and writes never treat it as a current
 shape. Likewise, version 17's `shop` phase/property and `shop` unit source exist only on the
@@ -144,7 +161,7 @@ explicit migration boundary. Its `purchasedCardOfferIds` and `soldUnits` fields 
 to `adlectedCardOfferIds` and `alienatedUnits`; current admitted units use source `adlectio`.
 `normalizeRunDocument` repairs incomplete data only inside the
 current RunSaveVersion; it contains no historical version upgrade path. The browser storage
-boundary owns the explicit historical chain through version 23.
+boundary owns the explicit historical chain through version 26.
 
 Run Battle Undo does not add another authority to `RunDocument`. The browser-owned resumable
 match snapshot keeps one checkpoint from immediately before the latest player move, including the

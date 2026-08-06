@@ -937,7 +937,7 @@ function inlineMigrationSql(version) {
   return inlineMigrationDefinition(version).sql;
 }
 
-async function validatePrimarySparseNumericMigrationUpgrade62() {
+async function validatePrimarySparseNumericMigrationUpgrade64() {
   const history = await queryDb(
     `SELECT version, name, checksum
        FROM schema_migrations
@@ -952,7 +952,7 @@ async function validatePrimarySparseNumericMigrationUpgrade62() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 62 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 64 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -967,7 +967,7 @@ async function validatePrimarySparseNumericMigrationUpgrade62() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 26 }, (_, index) => index + 37),
+    ...Array.from({ length: 28 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1081,7 +1081,7 @@ async function validatePrimarySparseNumericMigrationUpgrade62() {
     )
   ) {
     throw new Error(
-      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 62: `
+      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 64: `
       + `${JSON.stringify({
         history: history.rows,
         identity_columns: identityColumns.rows,
@@ -2567,6 +2567,216 @@ async function validateRetainedEditorBaselineEvidenceMigration62() {
   }
 }
 
+async function validateGeneratedFormationRunMigration63() {
+  const { Client } = require('pg');
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('CREATE SCHEMA smoke_generated_formation_run_migration_63');
+    await client.query('SET LOCAL search_path TO smoke_generated_formation_run_migration_63');
+    await client.query(`
+      CREATE TABLE active_runs (
+        owner_email text PRIMARY KEY, body jsonb NOT NULL, revision integer NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+    `);
+    const unit = (id, type, source, extra = {}) => ({
+      id, type, source, name: id, number: 1, inspectionSeed: 17, ...extra,
+    });
+    const v23Army = [
+      unit('run-king', 'king', 'king', { abilities: ['eutactic'] }),
+      unit('run-pawn-a', 'pawn', 'starting', { modifiers: ['cacochymic'] }),
+      unit('run-pawn-b', 'pawn', 'starting'),
+      unit('run-knight-1', 'knight', 'adlectio', { abilities: ['adlected'] }),
+      unit('run-bishop-1', 'bishop', 'adlectio'),
+      unit('run-pawn-3', 'pawn', 'adlectio'),
+    ];
+    const oldCard = (id, coreId, unitSeats, extra = {}) => ({
+      id, coreId, unitSeats, acquiredAfterBattleIndex: 0,
+      cardType: null, effectSeed: 9, effectTargetUnitId: null,
+      lostUnitIds: [], cacochymicUnitId: null, ...extra,
+    });
+    const v23Cards = [
+      oldCard('run-card-his-grace', 'his-grace', ['run-king']),
+      oldCard('run-card-front-lines', 'front-lines', ['run-pawn-a', 'run-pawn-b']),
+      oldCard('run-card-knight', 'k', ['run-knight-1']),
+      oldCard('run-card-old-pb', 'pb', ['run-bishop-1', 'run-pawn-3']),
+    ];
+    const v23 = {
+      runSaveVersion: 23,
+      id: 'run-v23', seed: 23, ataraxiaTier: 1, updatedAt: new Date().toISOString(),
+      phase: 'sectio', battleIndex: 0, conflictIndex: 0, goldTenths: 80,
+      war: { id: 'war', name: 'War', description: '', battles: [{ level: { formatVersion: 2 }, loot: false }] },
+      army: v23Army, cards: v23Cards,
+      lipsana: ['quartermasters-ledger', 'training-linens'],
+      seenLipsana: ['quartermasters-ledger', 'training-linens'],
+      conflictPaidLipsana: {
+        0: { lipsanonId: 'fair-scales', bought: false },
+        1: { lipsanonId: 'royal-decree', bought: false },
+      },
+      nextArmyUnitSequence: 7,
+      nextArmyUnitNumberByType: { pawn: 4, knight: 2, bishop: 2, rook: 1, queen: 1, king: 2 },
+      nextCardSequence: 5,
+      deployment: null, battleRuntime: null, aftermath: null,
+      vacantia: null, pestiferousLosses: [],
+      sectio: {
+        kind: 'opening', afterBattleIndex: 0, conflictIndex: 0, victoryGoldTenths: 0,
+        cardOffers: [], adlectedCardOfferIds: ['old-offer'], paidLipsanonOffer: 'royal-decree',
+        paidLipsanonBought: true, alienatedUnits: [], expunctedCard: null,
+        entrySnapshot: {},
+      },
+    };
+    const offer = (id, artId, pieces, formation, value) => ({
+      id, artId, pieces, formation, value, offerId: `offer-${id}`, cost: value,
+    });
+    const v24Sectio = {
+      runSaveVersion: 24, phase: 'sectio', deployment: null, battleRuntime: null, aftermath: null,
+      sectio: {
+        cardOffers: [
+          offer('p', 'p', ['pawn'], [{ x: 0, y: 0 }], 1),
+          offer('r', 'r', ['rook'], [{ x: 0, y: 0 }], 5),
+          offer('bb-vertical', 'bb', ['bishop', 'bishop'], [{ x: 0, y: 0 }, { x: 0, y: 1 }], 6),
+        ],
+      },
+    };
+    const v24Battle = {
+      runSaveVersion: 24, phase: 'battle', deployment: { placements: { king: '2,6' } },
+      battleRuntime: { battleIndex: 0 }, aftermath: { stale: true }, sectio: null,
+    };
+    const v25 = { runSaveVersion: 25, phase: 'sectio', deployment: null, sectio: { cardOffers: [] } };
+    await client.query(
+      `INSERT INTO active_runs (owner_email, body, revision) VALUES
+        ('v23@example.com', $1::jsonb, 1),
+        ('v24-sectio@example.com', $2::jsonb, 3),
+        ('v24-battle@example.com', $3::jsonb, 5),
+        ('v25@example.com', $4::jsonb, 7)`,
+      [v23, v24Sectio, v24Battle, v25].map(JSON.stringify),
+    );
+
+    await client.query(inlineMigrationSql(63));
+    await client.query(inlineMigrationSql(63));
+
+    const rows = (await client.query(
+      'SELECT owner_email, body, revision FROM active_runs ORDER BY owner_email',
+    )).rows;
+    const byOwner = new Map(rows.map((row) => [row.owner_email, row]));
+    const migrated23 = byOwner.get('v23@example.com');
+    const migrated24Sectio = byOwner.get('v24-sectio@example.com');
+    const migrated24Battle = byOwner.get('v24-battle@example.com');
+    const current25 = byOwner.get('v25@example.com');
+    const v23UnitSeats = migrated23?.body?.cards?.flatMap((card) => card.unitSeats.filter(Boolean)) ?? [];
+    if (
+      migrated23?.body?.runSaveVersion !== 25
+      || migrated23?.body?.ataraxiaTier !== 0
+      || Number(migrated23?.revision) !== 2
+      || JSON.stringify(migrated23.body).match(/abilities|modifiers|cardType|pestiferousLosses/)
+      || migrated23.body.cards?.[0]?.id !== 'run-card-his-grace'
+      || JSON.stringify(migrated23.body.cards?.[0]?.unitSeats) !== JSON.stringify(['run-king', 'run-pawn-a', 'run-pawn-b'])
+      || migrated23.body.cards?.find((card) => card.id === 'run-card-knight')?.coreId !== 'k'
+      || new Set(v23UnitSeats).size !== v23Army.length
+      || v23UnitSeats.length !== v23Army.length
+      || JSON.stringify(migrated23.body.lipsana) !== JSON.stringify(['quartermasters-ledger'])
+      || Object.keys(migrated23.body.conflictPaidLipsana).length !== 1
+      || migrated23.body.sectio?.cardOffers?.length !== 4
+      || migrated23.body.sectio?.cardOffers?.some((candidate) => !candidate.rarity)
+      || migrated23.body.sectio?.paidLipsanonOffer !== null
+      || migrated24Sectio?.body?.runSaveVersion !== 25
+      || Number(migrated24Sectio?.revision) !== 4
+      || JSON.stringify(migrated24Sectio.body.sectio.cardOffers.map((candidate) => candidate.rarity))
+        !== JSON.stringify(['common', 'uncommon', 'rare'])
+      || migrated24Battle?.body?.runSaveVersion !== 25
+      || migrated24Battle?.body?.phase !== 'deployment'
+      || migrated24Battle?.body?.deployment !== null
+      || migrated24Battle?.body?.battleRuntime !== null
+      || migrated24Battle?.body?.aftermath !== null
+      || Number(migrated24Battle?.revision) !== 6
+      || current25?.body?.runSaveVersion !== 25
+      || Number(current25?.revision) !== 7
+    ) {
+      throw new Error(`Migration 63 did not produce canonical generated formation Runs: ${JSON.stringify(rows)}`);
+    }
+    await client.query('ROLLBACK');
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve validation error */ }
+    throw error;
+  } finally {
+    await client.end();
+  }
+}
+
+async function validateDerivedSectioPileRunMigration64() {
+  const { Client } = require('pg');
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('CREATE SCHEMA smoke_derived_sectio_pile_run_migration_64');
+    await client.query('SET LOCAL search_path TO smoke_derived_sectio_pile_run_migration_64');
+    await client.query(`
+      CREATE TABLE active_runs (
+        owner_email text PRIMARY KEY, body jsonb NOT NULL, revision integer NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+    `);
+    const opening = {
+      runSaveVersion: 25, phase: 'sectio', battleIndex: 0, conflictIndex: 0,
+      goldTenths: 65, army: [{ id: 'survivor' }], cards: [{ id: 'held' }],
+      deployment: null, battleRuntime: null, aftermath: null, vacantia: null,
+      sectio: { kind: 'opening', cardOffers: [{ id: 'visible-opening' }] },
+    };
+    const postBattle = {
+      runSaveVersion: 25, phase: 'sectio', battleIndex: 2,
+      deployment: null, battleRuntime: null, aftermath: null, vacantia: null,
+      sectio: { kind: 'post-battle', cardOffers: [{ id: 'visible-post-battle' }] },
+    };
+    const current = { runSaveVersion: 26, phase: 'deployment', sectioCardCursor: 17, sectio: null };
+    await client.query(
+      `INSERT INTO active_runs (owner_email, body, revision) VALUES
+        ('opening@example.com', $1::jsonb, 4),
+        ('post-battle@example.com', $2::jsonb, 7),
+        ('current@example.com', $3::jsonb, 9)`,
+      [opening, postBattle, current].map(JSON.stringify),
+    );
+
+    await client.query(inlineMigrationSql(64));
+    await client.query(inlineMigrationSql(64));
+    const rows = (await client.query(
+      'SELECT owner_email, body, revision FROM active_runs ORDER BY owner_email',
+    )).rows;
+    const byOwner = new Map(rows.map((row) => [row.owner_email, row]));
+    const migratedOpening = byOwner.get('opening@example.com');
+    const migratedPostBattle = byOwner.get('post-battle@example.com');
+    const untouchedCurrent = byOwner.get('current@example.com');
+    if (
+      migratedOpening?.body?.runSaveVersion !== 26
+      || migratedOpening.body.phase !== 'deployment'
+      || migratedOpening.body.sectioCardCursor !== 0
+      || migratedOpening.body.sectio !== null
+      || migratedOpening.body.goldTenths !== 65
+      || migratedOpening.body.army?.[0]?.id !== 'survivor'
+      || migratedOpening.body.cards?.[0]?.id !== 'held'
+      || Number(migratedOpening.revision) !== 5
+      || migratedPostBattle?.body?.runSaveVersion !== 26
+      || migratedPostBattle.body.phase !== 'sectio'
+      || migratedPostBattle.body.sectioCardCursor !== 0
+      || migratedPostBattle.body.sectio?.kind !== undefined
+      || migratedPostBattle.body.sectio?.cardOffers?.[0]?.id !== 'visible-post-battle'
+      || Number(migratedPostBattle.revision) !== 8
+      || untouchedCurrent?.body?.sectioCardCursor !== 17
+      || Number(untouchedCurrent?.revision) !== 9
+    ) {
+      throw new Error(`Migration 64 did not produce Battle-first derived-pile Runs: ${JSON.stringify(rows)}`);
+    }
+    await client.query('ROLLBACK');
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve validation error */ }
+    throw error;
+  } finally {
+    await client.end();
+  }
+}
+
 async function validateRepairedEditorDocumentDiscardOperation62() {
   const documentId = '00000000-0000-4000-8000-000000000262';
   const levelId = 'migration-operation-level';
@@ -2691,7 +2901,7 @@ async function main() {
   await new Promise((resolve) => mockAuth.listen(authPort, '127.0.0.1', resolve));
   await new Promise((resolve) => mockBgm.listen(bgmPort, '127.0.0.1', resolve));
   await waitForServer();
-  await validatePrimarySparseNumericMigrationUpgrade62();
+  await validatePrimarySparseNumericMigrationUpgrade64();
   const databaseRuntime = await queryDb('SELECT version() AS version');
   const isPgliteRuntime = /\bPGlite\b/i.test(String(databaseRuntime.rows[0]?.version || ''));
   if (!isPgliteRuntime) {
@@ -2728,6 +2938,8 @@ async function main() {
   await validateDeploymentTransportMigration60();
   await validateLevelFormatAndEditorBaselineMigration61();
   await validateRetainedEditorBaselineEvidenceMigration62();
+  await validateGeneratedFormationRunMigration63();
+  await validateDerivedSectioPileRunMigration64();
   await validateRepairedEditorDocumentDiscardOperation62();
   await resetDb();
 
@@ -5437,21 +5649,21 @@ async function main() {
   }
   const activeRunDocument = {
     ...boardRender.craftRunDocument(
-      boardRender.runCraftSpecFromJson({ phase: 'sectio', seed: 17 }),
+      boardRender.runCraftSpecFromJson({ phase: 'sectio', battle: 2, seed: 17 }),
       {
         id: 'war-smoke',
         name: 'Smoke War',
         description: 'Pinned War snapshot.',
-        battles: [{ level: warBattleLevel, loot: false }],
+        battles: [
+          { level: warBattleLevel, loot: false },
+          { level: structuredClone(warBattleLevel), loot: false },
+        ],
       },
     ),
     id: 'run-smoke',
     updatedAt: '2026-01-01T00:00:00.000Z',
   };
   const [activeRunKing, activeRunPawnA, activeRunPawnB] = activeRunDocument.army;
-  const activeRunStartingArmy = activeRunDocument.army;
-  const activeRunStarterCards = activeRunDocument.cards;
-  const activeRunNumberState = activeRunDocument.nextArmyUnitNumberByType;
   const activeRunOffers = activeRunDocument.sectio.cardOffers;
   const invalidPlaguedTarget = await request(
     'PUT', '/api/active-run',
@@ -5504,7 +5716,7 @@ async function main() {
   if (retiredShopState.statusCode !== 400 || JSON.parse(retiredShopState.body).error !== 'invalid_active_run') {
     throw new Error(`Active Runs must reject the retired Shop property: ${retiredShopState.statusCode} ${retiredShopState.body}`);
   }
-  const invalidOpeningRun = await request(
+  const invalidOfferCountRun = await request(
     'PUT', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
@@ -5515,19 +5727,21 @@ async function main() {
       revision: 0,
     }),
   );
-  if (invalidOpeningRun.statusCode !== 400 || JSON.parse(invalidOpeningRun.body).error !== 'invalid_active_run') {
-    throw new Error(`Current Run saves must persist their complete opening Sectio deal: ${invalidOpeningRun.statusCode} ${invalidOpeningRun.body}`);
+  if (invalidOfferCountRun.statusCode !== 400 || JSON.parse(invalidOfferCountRun.body).error !== 'invalid_active_run') {
+    throw new Error(`Current Run saves must persist their complete Sectio deal: ${invalidOfferCountRun.statusCode} ${invalidOfferCountRun.body}`);
   }
-  const quartermasterOffer = {
-    ...boardRender.RUN_CARD_BY_ID.r,
-    offerId: 'opening-3-r',
-    cost: boardRender.RUN_CARD_BY_ID.r.value,
-  };
+  const quartermasterOffer = boardRender.sectioCardOffersAtCursor(
+    activeRunDocument.seed,
+    activeRunDocument.battleIndex,
+    0,
+    4,
+  )[3];
   const quartermasterOpeningRun = {
     ...activeRunDocument,
     id: 'run-quartermaster-smoke',
     lipsana: ['quartermasters-ledger'],
     seenLipsana: ['quartermasters-ledger'],
+    sectioCardCursor: 4,
     sectio: {
       ...activeRunDocument.sectio,
       cardOffers: [...activeRunOffers, quartermasterOffer],
@@ -5547,9 +5761,9 @@ async function main() {
     savedQuartermasterOpening.statusCode !== 200
     || JSON.parse(savedQuartermasterOpening.body).run.sectio.cardOffers.length !== 4
   ) {
-    throw new Error(`Quartermaster's Ledger must permit four opening unit cards: ${savedQuartermasterOpening.statusCode} ${savedQuartermasterOpening.body}`);
+    throw new Error(`Quartermaster's Ledger must permit four Sectio cards: ${savedQuartermasterOpening.statusCode} ${savedQuartermasterOpening.body}`);
   }
-  const unaffordableOpeningRun = await request(
+  const retiredAffectedOfferRun = await request(
     'PUT', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
@@ -5567,31 +5781,31 @@ async function main() {
       revision: 0,
     }),
   );
-  if (unaffordableOpeningRun.statusCode !== 400 || JSON.parse(unaffordableOpeningRun.body).error !== 'invalid_active_run') {
-    throw new Error(`Opening offers must carry the shared affected price: ${unaffordableOpeningRun.statusCode} ${unaffordableOpeningRun.body}`);
+  if (retiredAffectedOfferRun.statusCode !== 400 || JSON.parse(retiredAffectedOfferRun.body).error !== 'invalid_active_run') {
+    throw new Error(`Current Sectio offers must reject retired affected-card state: ${retiredAffectedOfferRun.statusCode} ${retiredAffectedOfferRun.body}`);
   }
-  const noAffordableAdlectioRun = await request(
+  const expensiveDefinitions = Object.values(boardRender.RUN_CARD_BY_ID)
+    .filter((card) => card.value === 9)
+    .slice(0, 3);
+  const expensiveSectioRun = {
+    ...activeRunDocument,
+    id: 'run-expensive-sectio-smoke',
+    sectio: {
+      ...activeRunDocument.sectio,
+      cardOffers: expensiveDefinitions.map((card, index) => ({
+        ...card,
+        offerId: `sectio-expensive-${index}-${card.id}`,
+        cost: card.value,
+      })),
+    },
+  };
+  const savedExpensiveSectioRun = await request(
     'PUT', '/api/active-run',
-    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({
-      run: {
-        ...activeRunDocument,
-        sectio: {
-          ...activeRunDocument.sectio,
-          // A qualifier may price a single opening card past the starting gold, but a deal
-          // in which every card is out of reach cannot satisfy the required Adlectio.
-          cardOffers: [
-            { ...activeRunOffers[0], id: 'rp', pieces: ['rook', 'pawn'], value: 6, cost: 9, cardType: 'legatine', effectTargetIndex: null },
-            { ...activeRunOffers[1], id: 'rpp', pieces: ['rook', 'pawn', 'pawn'], value: 7, cost: 10, cardType: 'legatine', effectTargetIndex: null },
-            { ...activeRunOffers[2], id: 'rn', pieces: ['rook', 'knight'], value: 8, cost: 11, cardType: 'legatine', effectTargetIndex: null },
-          ],
-        },
-      },
-      revision: 0,
-    }),
+    { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' },
+    JSON.stringify({ run: expensiveSectioRun, revision: 0 }),
   );
-  if (noAffordableAdlectioRun.statusCode !== 400 || JSON.parse(noAffordableAdlectioRun.body).error !== 'invalid_active_run') {
-    throw new Error(`Opening Sectio deals must keep one affordable offer: ${noAffordableAdlectioRun.statusCode} ${noAffordableAdlectioRun.body}`);
+  if (savedExpensiveSectioRun.statusCode !== 200) {
+    throw new Error(`A Sectio may validly deal three cards above the player's current gold: ${savedExpensiveSectioRun.statusCode} ${savedExpensiveSectioRun.body}`);
   }
   const retiredSectioFieldRun = await request(
     'PUT', '/api/active-run',
@@ -5624,7 +5838,7 @@ async function main() {
   if (duplicateAdlectedCardRun.statusCode !== 400 || JSON.parse(duplicateAdlectedCardRun.body).error !== 'invalid_active_run') {
     throw new Error(`Current Run saves must reject a duplicate Adlectio: ${duplicateAdlectedCardRun.statusCode} ${duplicateAdlectedCardRun.body}`);
   }
-  const invalidOpeningArmy = await request(
+  const invalidUnseatedArmy = await request(
     'PUT', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({
@@ -5638,8 +5852,8 @@ async function main() {
       revision: 0,
     }),
   );
-  if (invalidOpeningArmy.statusCode !== 400 || JSON.parse(invalidOpeningArmy.body).error !== 'invalid_active_run') {
-    throw new Error(`An opening Sectio before Adlectio must contain only the starting army: ${invalidOpeningArmy.statusCode} ${invalidOpeningArmy.body}`);
+  if (invalidUnseatedArmy.statusCode !== 400 || JSON.parse(invalidUnseatedArmy.body).error !== 'invalid_active_run') {
+    throw new Error(`A persisted Run must reject an army unit outside the Chartulary: ${invalidUnseatedArmy.statusCode} ${invalidUnseatedArmy.body}`);
   }
   const retiredDraftRun = await request(
     'PUT', '/api/active-run',
@@ -5660,39 +5874,24 @@ async function main() {
   if (retiredDraftSourceRun.statusCode !== 400 || JSON.parse(retiredDraftSourceRun.body).error !== 'invalid_active_run') {
     throw new Error(`Current Run saves must reject retired draft unit sources: ${retiredDraftSourceRun.statusCode} ${retiredDraftSourceRun.body}`);
   }
-  const adlectedPawn = {
-    id: 'run-unit-1', name: 'Eadric Miller', type: 'pawn', number: 3,
-    inspectionSeed: 1707, source: 'adlectio',
-  };
-  const adlectedKnight = {
-    id: 'run-unit-2', name: 'Richard Marshal', type: 'knight', number: 1,
-    inspectionSeed: 1708, source: 'adlectio',
-  };
-  const multiAdlectioRun = {
+  const fundedSectioRun = {
     ...activeRunDocument,
-    goldTenths: 40,
-    army: [...activeRunDocument.army, adlectedPawn, adlectedKnight],
-    cards: [
-      ...activeRunStarterCards,
-      {
-        id: 'run-card-1', coreId: 'p',
-        unitSeats: [adlectedPawn.id],
-        acquiredAfterBattleIndex: 0,
-      },
-      {
-        id: 'run-card-2', coreId: 'k',
-        unitSeats: [adlectedKnight.id],
-        acquiredAfterBattleIndex: 0,
-      },
-    ],
-    nextArmyUnitSequence: 3,
-    nextArmyUnitNumberByType: { ...activeRunNumberState, pawn: 4, knight: 2 },
-    nextCardSequence: 3,
+    goldTenths: 1000,
     sectio: {
       ...activeRunDocument.sectio,
-      adlectedCardOfferIds: [activeRunOffers[0].offerId, activeRunOffers[1].offerId],
+      entrySnapshot: { ...activeRunDocument.sectio.entrySnapshot, goldTenths: 1000 },
     },
   };
+  const multiAdlectioRun = boardRender.performAdlectio(
+    boardRender.performAdlectio(fundedSectioRun, activeRunOffers[0].offerId),
+    activeRunOffers[1].offerId,
+  );
+  const firstAdlectedCard = multiAdlectioRun.cards.find((card) => card.coreId !== 'his-grace');
+  const firstAdlectedUnitIds = firstAdlectedCard.unitSeats.filter(Boolean);
+  const firstAdlectedUnits = firstAdlectedUnitIds.map(
+    (unitId) => multiAdlectioRun.army.find((unit) => unit.id === unitId),
+  );
+  const expunctioPriceTenths = boardRender.cardExpunctioPriceTenths(firstAdlectedCard, firstAdlectedUnits);
   const savedRun = await request(
     'PUT', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
@@ -5707,7 +5906,7 @@ async function main() {
   ) {
     throw new Error(`Active Run did not save: ${savedRun.statusCode} ${savedRun.body}`);
   }
-  const expunctioRun = boardRender.performExpunctio(savedRunBody.run, 'run-card-1');
+  const expunctioRun = boardRender.performExpunctio(savedRunBody.run, firstAdlectedCard.id);
   const savedExpunctioRun = await request(
     'PUT', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
@@ -5717,45 +5916,17 @@ async function main() {
   if (
     savedExpunctioRun.statusCode !== 200
     || savedExpunctioRunBody.revision !== 2
-    || savedExpunctioRunBody.run.goldTenths !== 20
-    || savedExpunctioRunBody.run.cards.some((card) => card.id === 'run-card-1')
-    || savedExpunctioRunBody.run.army.some((unit) => unit.id === adlectedPawn.id)
-    || savedExpunctioRunBody.run.sectio.expunctedCard?.card?.id !== 'run-card-1'
-    || savedExpunctioRunBody.run.sectio.expunctedCard?.priceTenths !== 20
+    || savedExpunctioRunBody.run.goldTenths !== multiAdlectioRun.goldTenths - expunctioPriceTenths
+    || savedExpunctioRunBody.run.cards.some((card) => card.id === firstAdlectedCard.id)
+    || savedExpunctioRunBody.run.army.some((unit) => firstAdlectedUnitIds.includes(unit.id))
+    || savedExpunctioRunBody.run.sectio.expunctedCard?.card?.id !== firstAdlectedCard.id
+    || savedExpunctioRunBody.run.sectio.expunctedCard?.priceTenths !== expunctioPriceTenths
   ) {
     throw new Error(`Expunctio did not persist through the authenticated Run endpoint: ${savedExpunctioRun.statusCode} ${savedExpunctioRun.body}`);
   }
   const plainSectioRun = {
     ...activeRunDocument,
-    phase: 'sectio',
     updatedAt: '2026-01-01T01:00:00.000Z',
-    sectio: {
-      kind: 'post-battle',
-      afterBattleIndex: 0,
-      conflictIndex: 0,
-      victoryGoldTenths: 10,
-      cardOffers: activeRunOffers.map((offer, index) => ({
-        ...offer,
-        offerId: `sectio-0-${index}-${offer.id}`,
-      })),
-      adlectedCardOfferIds: [],
-      paidLipsanonOffer: null,
-      paidLipsanonBought: false,
-      alienatedUnits: [],
-      expunctedCard: null,
-      entrySnapshot: {
-        goldTenths: activeRunDocument.goldTenths,
-        army: activeRunDocument.army,
-        cards: activeRunDocument.cards,
-        lipsana: [],
-        seenLipsana: [],
-        conflictPaidLipsana: {},
-        nextArmyUnitSequence: activeRunDocument.nextArmyUnitSequence,
-        nextArmyUnitNumberByType: activeRunNumberState,
-        nextCardSequence: activeRunDocument.nextCardSequence,
-        paidLipsanonBought: false,
-      },
-    },
   };
   const savedPlainSectioRun = await request(
     'PUT', '/api/active-run',

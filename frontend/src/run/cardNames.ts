@@ -1,6 +1,7 @@
 import {
   RUN_STARTER_CARD_BY_ID,
   RUN_STARTER_CARDS,
+  RUN_CARD_CATALOG,
   RUN_CARD_DECK,
   runCardDefinition,
   cardContentsLabel,
@@ -113,10 +114,15 @@ const ALL_RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.freeze(
   'rr-vertical': 'The Twin Keeps',
 });
 
-/** Names for the active formation deck. Retired composition-card prose remains above as
- * source history, but does not create Enchiridion routes or catalog identities. */
+/** Generated formations intentionally borrow their composition's existing title during the
+ * playable prototype. Exact ids and diagrams remain distinct even when prose repeats. */
 export const RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.freeze(
-  Object.fromEntries(RUN_CARD_DECK.map((card) => [card.id, ALL_RUN_CARD_NAME_BY_ID[card.id]])),
+  Object.fromEntries(RUN_CARD_DECK.map((card) => [
+    card.id,
+    ALL_RUN_CARD_NAME_BY_ID[card.id]
+      ?? ALL_RUN_CARD_NAME_BY_ID[card.artId ?? '']
+      ?? cardContentsLabel(card),
+  ])),
 );
 
 // Original anti-story fragments tied to the same four historical pressure sources as
@@ -186,9 +192,14 @@ const ALL_RUN_CARD_FLAVOR_BY_ID: Readonly<Record<string, string>> = Object.freez
   'rr-vertical': 'One keep watched the road. The other watched the first.',
 });
 
-/** Flavor for the active formation deck only. */
+/** Generated formations borrow the same temporary composition prose as their art. */
 export const RUN_CARD_FLAVOR_BY_ID: Readonly<Record<string, string>> = Object.freeze(
-  Object.fromEntries(RUN_CARD_DECK.map((card) => [card.id, ALL_RUN_CARD_FLAVOR_BY_ID[card.id]])),
+  Object.fromEntries(RUN_CARD_DECK.map((card) => [
+    card.id,
+    ALL_RUN_CARD_FLAVOR_BY_ID[card.id]
+      ?? ALL_RUN_CARD_FLAVOR_BY_ID[card.artId ?? '']
+      ?? 'No account survives.',
+  ])),
 );
 
 /** The card's banner name; compositions outside the authored deck read as their contents. */
@@ -224,9 +235,20 @@ const slugify = (name: string): string => name
   .replace(/^-+|-+$/g, '');
 
 /** The address form of a card id: its banner name, hyphenated. Unnamed ids address as themselves. */
+const RUN_CARD_SLUG_BY_ID: Readonly<Record<string, string>> = Object.freeze((() => {
+  const byBase = new Map<string, string[]>();
+  for (const card of RUN_CARD_CATALOG) {
+    const base = slugify(runCardName(card));
+    byBase.set(base, [...(byBase.get(base) ?? []), card.id]);
+  }
+  return Object.fromEntries([...byBase.entries()].flatMap(([base, ids]) => {
+    const primary = ids.find((id) => ALL_RUN_CARD_NAME_BY_ID[id]) ?? ids[0];
+    return ids.map((id) => [id, id === primary ? base : `${base}-${id}`]);
+  }));
+})());
+
 export function runCardSlug(cardId: string): string {
-  const name = RUN_STARTER_CARD_BY_ID[cardId as RunStarterCardId]?.name ?? RUN_CARD_NAME_BY_ID[cardId];
-  return name ? slugify(name) : cardId;
+  return RUN_CARD_SLUG_BY_ID[cardId] ?? slugify(cardId);
 }
 
 /** Every authored card address, resolved back to the catalog id it names. */

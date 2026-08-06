@@ -2,12 +2,16 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { RUN_CARD_BY_ID, RUN_STARTER_CARD_BY_ID, createRunCardOffer } from '../run/model';
 import { runCardFaceContent, runCardFrameSlot, runCardSpecimen } from './runCardFaceContent';
-import { RUN_CARD_FRAME_SLOT } from './runCardFrameGeometry';
+import {
+  RUN_CARD_FRAME_SLOT,
+  RUN_CARD_RARE_FRAME_SLOT,
+  RUN_CARD_UNCOMMON_FRAME_SLOT,
+} from './runCardFrameGeometry';
 
 describe('the canonical formation card projection', () => {
   it('exposes only printed card facts', () => {
     const face = runCardFaceContent(runCardSpecimen({ pieces: ['pawn', 'pawn'] }));
-    expect(Object.keys(face).sort()).toEqual(['cost', 'flavor', 'formation', 'grants', 'name', 'showsCost', 'typeLine']);
+    expect(Object.keys(face).sort()).toEqual(['cost', 'flavor', 'formation', 'grants', 'name', 'rarity', 'showsCost', 'typeLine']);
   });
 
   it('projects exact authored coordinates and empty seats', () => {
@@ -20,11 +24,12 @@ describe('the canonical formation card projection', () => {
     expect(runCardFaceContent(RUN_CARD_BY_ID['ppk-protected'], { emptyPieceIndices: [1] }).formation[1].empty).toBe(true);
   });
 
-  it('prices offers plainly and uses the same frame everywhere', () => {
+  it('prices offers plainly and projects rarity inside the Standard frame family', () => {
     const offer = createRunCardOffer({ seed: 17 }, RUN_CARD_BY_ID.q, 0, 0);
     expect(offer.cost).toBe(RUN_CARD_BY_ID.q.value);
-    expect(runCardFrameSlot(offer)).toBe(RUN_CARD_FRAME_SLOT);
+    expect(runCardFrameSlot(offer)).toBe(RUN_CARD_RARE_FRAME_SLOT);
     expect(runCardFrameSlot(RUN_STARTER_CARD_BY_ID['his-grace'])).toBe(RUN_CARD_FRAME_SLOT);
+    expect(runCardFrameSlot(runCardSpecimen({ pieces: ['rook'] }))).toBe(RUN_CARD_UNCOMMON_FRAME_SLOT);
   });
 
   it('contains no ability projection branch', () => {

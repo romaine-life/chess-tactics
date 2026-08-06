@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-08-05
 deciders: owner (Nelson) + Codex
+partially_superseded_by:
+  - "[ADR-0499](0499-generation-references-may-bake-the-playable-grid.md)"
 partially_supersedes:
   - "[ADR-0166](0166-manual-ai-handoff-separates-generation-references-from-raw-pipeline-sources.md)'s canonical-saved-Level capture requirement"
 refines:

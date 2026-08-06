@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { RUN_CARD_CATALOG } from '../run/model';
+import { RUN_CARD_CATALOG, RUN_OFFER_CARD_COUNT } from '../run/model';
 import { cardMatchesFilters } from './Enchiridion';
 
 describe('Enchiridion card filters', () => {
   it('shows the combined starter and complete formation deck when both filters are All', () => {
     const visible = RUN_CARD_CATALOG.filter((card) => cardMatchesFilters(card, 'all', 'all'));
-    expect(visible).toHaveLength(20);
+    expect(visible).toHaveLength(RUN_OFFER_CARD_COUNT + 1);
     expect(visible[0].id).toBe('his-grace');
   });
 

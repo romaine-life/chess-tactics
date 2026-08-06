@@ -7,8 +7,8 @@ import {
   type CSSProperties,
   type ReactElement,
 } from 'react';
-import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
-import { paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
+import { projectBoardPoint, resolvedLiveMediaUrl, TILE_TEMPLATE } from '@chess-tactics/board-render';
+import { defaultFacingForSide, paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
 import type { RunCardFaceContent, RunCardFormationPiece, RunCardGrant } from './runCardFaceContent';
 import {
   RUN_CARD_FRAME_BOX_NAMES,
@@ -26,7 +26,7 @@ export const RUN_CARD_COST_COIN_SOURCE_SLOT = 'ui/run/card-prototypes/cost-coin-
 export const RUN_CARD_REFERENCE_WIDTH = 360;
 
 const PLAYER_CARD_PALETTE = paletteForSide('player');
-const PLAYER_CARD_FACING = 'south';
+const PLAYER_CARD_FACING = defaultFacingForSide('player');
 
 export type RunCardUnitHighlight = Readonly<{
   unit: PlayablePieceType;
@@ -133,6 +133,7 @@ export function runCardPresentationSignature(
     frameGeometry.id,
     frameGeometry.frameSha256s,
     card.name,
+    card.rarity,
     card.cost,
     card.showsCost,
     card.typeLine,
@@ -171,6 +172,94 @@ function grantsLabel(grants: readonly RunCardGrant[]): string {
   return visible.length ? visible.join(', ') : 'no units';
 }
 
+export function runCardFormationRows(pieces: readonly Pick<RunCardFormationPiece, 'y'>[]): number {
+  return Math.max(2, ...pieces.map((piece) => piece.y + 1));
+}
+
+export const RUN_CARD_FORMATION_ISO_TILE = Object.freeze({
+  scale: .12,
+  width: TILE_TEMPLATE.topWidth * .12,
+  height: TILE_TEMPLATE.topHeight * .12,
+});
+
+export type RunCardFormationBoardCell = Readonly<{
+  x: number;
+  y: number;
+  dark: boolean;
+  faded: boolean;
+}>;
+
+/** The card uses the same two-axis projection as the battlefield, scaled into card units. */
+export function runCardFormationIsoPoint(x: number, y: number): Readonly<{
+  left: number;
+  top: number;
+  depth: number;
+}> {
+  const boardPoint = projectBoardPoint({ x, y });
+  return {
+    left: boardPoint.left * RUN_CARD_FORMATION_ISO_TILE.scale,
+    top: boardPoint.top * RUN_CARD_FORMATION_ISO_TILE.scale,
+    depth: x + y,
+  };
+}
+
+/** Print the complete two-rank footprint, plus one faint ring of neighboring board squares. */
+export function runCardFormationBoardCells(columns: number, rows: number): RunCardFormationBoardCell[] {
+  const safeColumns = Math.max(1, Math.floor(columns));
+  const safeRows = Math.max(1, Math.floor(rows));
+  const solid = Array.from({ length: safeColumns * safeRows }, (_, index) => {
+    const x = index % safeColumns;
+    const y = Math.floor(index / safeColumns);
+    return {
+      x,
+      y,
+      dark: (x + y) % 2 === 1,
+      faded: false,
+    };
+  });
+  const faded = new Map<string, RunCardFormationBoardCell>();
+  for (const cell of solid) {
+    for (const neighbor of [
+      { x: cell.x - 1, y: cell.y },
+      { x: cell.x + 1, y: cell.y },
+      { x: cell.x, y: cell.y - 1 },
+      { x: cell.x, y: cell.y + 1 },
+    ]) {
+      if (neighbor.x >= 0 && neighbor.x < safeColumns && neighbor.y >= 0 && neighbor.y < safeRows) continue;
+      faded.set(`${neighbor.x}:${neighbor.y}`, {
+        ...neighbor,
+        dark: (neighbor.x + neighbor.y) % 2 !== 0,
+        faded: true,
+      });
+    }
+  }
+  return [...faded.values(), ...solid];
+}
+
+function runCardFormationBoardMetrics(columns: number, rows: number): Readonly<{
+  width: number;
+  height: number;
+  minLeft: number;
+  minTop: number;
+}> {
+  const corners = [
+    runCardFormationIsoPoint(0, 0),
+    runCardFormationIsoPoint(columns - 1, 0),
+    runCardFormationIsoPoint(0, rows - 1),
+    runCardFormationIsoPoint(columns - 1, rows - 1),
+  ];
+  const minLeft = Math.min(...corners.map((point) => point.left));
+  const maxLeft = Math.max(...corners.map((point) => point.left));
+  const minTop = Math.min(...corners.map((point) => point.top));
+  const maxTop = Math.max(...corners.map((point) => point.top));
+  return {
+    width: maxLeft - minLeft + RUN_CARD_FORMATION_ISO_TILE.width,
+    height: maxTop - minTop + RUN_CARD_FORMATION_ISO_TILE.height,
+    minLeft,
+    minTop,
+  };
+}
+
 function FormationDiagram({
   pieces,
   pending,
@@ -187,18 +276,46 @@ function FormationDiagram({
   onError: (kind: RunCardImageKind) => void;
 }): ReactElement {
   const columns = Math.max(1, ...pieces.map((piece) => piece.x + 1));
-  const rows = Math.max(1, ...pieces.map((piece) => piece.y + 1));
+  // The formation's empty front/back row is rules information. Cropping a singleton
+  // to its occupied cell made "Queen in front" and "Queen in back" print identically.
+  const rows = runCardFormationRows(pieces);
+  const boardCells = runCardFormationBoardCells(columns, rows);
+  const metrics = runCardFormationBoardMetrics(columns, rows);
+  const position = (x: number, y: number): CSSProperties => {
+    const point = runCardFormationIsoPoint(x, y);
+    return {
+      '--run-card-formation-left': `${point.left - metrics.minLeft + RUN_CARD_FORMATION_ISO_TILE.width / 2}cqw`,
+      '--run-card-formation-top': `${point.top - metrics.minTop + RUN_CARD_FORMATION_ISO_TILE.height / 2}cqw`,
+      '--run-card-formation-depth': point.depth,
+    } as CSSProperties;
+  };
   return (
     <span
       className="run-card-formation"
       data-formation-columns={columns}
       data-formation-rows={rows}
       style={{
-        '--run-card-formation-columns': columns,
-        '--run-card-formation-rows': rows,
+        '--run-card-formation-width': `${metrics.width}cqw`,
+        '--run-card-formation-height': `${metrics.height}cqw`,
+        '--run-card-formation-tile-width': `${RUN_CARD_FORMATION_ISO_TILE.width}cqw`,
+        '--run-card-formation-tile-height': `${RUN_CARD_FORMATION_ISO_TILE.height}cqw`,
       } as CSSProperties}
       aria-label="Authored deployment formation"
     >
+      {boardCells.map((cell) => (
+        <span
+          aria-hidden="true"
+          className={`run-card-formation-square${cell.dark ? ' is-dark' : ''}${cell.faded ? ' is-faded' : ''}`}
+          data-formation-grid-x={cell.x}
+          data-formation-grid-y={cell.y}
+          key={`grid:${cell.x}:${cell.y}`}
+          style={position(cell.x, cell.y)}
+        >
+          <svg preserveAspectRatio="none" viewBox="0 0 96 54">
+            <polygon points="48,1 95,27 48,53 1,27" vectorEffect="non-scaling-stroke" />
+          </svg>
+        </span>
+      ))}
       {pieces.map((piece) => {
         const kind = runCardUnitImageKind(piece.pieceIndex, piece.unit, piece.occurrenceIndex);
         const selectionLabel = pending || piece.empty
@@ -231,10 +348,13 @@ function FormationDiagram({
           <span
             className={`run-card-formation-cell${piece.empty ? ' is-empty' : ''}${unitHighlight?.unit === piece.unit && unitHighlight.index === piece.occurrenceIndex ? ' is-highlighted' : ''}`}
             data-piece-index={piece.pieceIndex}
+            data-formation-row={piece.y === 0 ? 'front' : 'back'}
             key={piece.pieceIndex}
             style={{
-              '--run-card-formation-x': piece.x,
-              '--run-card-formation-y': rows - piece.y - 1,
+              ...position(piece.x, piece.y),
+              '--run-card-unit-scale': `var(--unit-scale-${piece.unit}, 1)`,
+              '--run-card-unit-anchor-x': `var(--unit-anchor-x-${piece.unit}, -50%)`,
+              '--run-card-unit-anchor-y': `var(--unit-anchor-y-${piece.unit}, -78%)`,
             } as CSSProperties}
           >
             {content}
@@ -311,6 +431,7 @@ function RunCardFaceLayer({
     <span
       className={`run-card-face-layer${pending ? ' is-pending' : ' is-presented'}`}
       data-card-presentation={signature}
+      data-card-rarity={card.rarity}
       data-frame-geometry={frameGeometry.id}
       style={{
         ...runCardFrameGeometryVariables(frameGeometry),
@@ -463,7 +584,8 @@ export function RunCardFace({
       } as CSSProperties}
       aria-hidden={ariaHidden || undefined}
       aria-busy={pending ? true : undefined}
-      aria-label={ariaHidden ? undefined : `${displayed.card.name}. ${displayed.card.typeLine}.${displayed.card.showsCost ? ` Costs ${displayed.card.cost} gold.` : ''} Grants ${grantsLabel(displayed.card.grants)} in the shown formation.`}
+      data-card-rarity={displayed.card.rarity}
+      aria-label={ariaHidden ? undefined : `${displayed.card.name}. ${displayed.card.rarity} ${displayed.card.typeLine}.${displayed.card.showsCost ? ` Costs ${displayed.card.cost} gold.` : ''} Grants ${grantsLabel(displayed.card.grants)} in the shown formation.`}
     >
       {layers.map((layer) => (
         <RunCardFaceLayer key={`${layer.presentation.signature}:${layer.pending ? 'pending' : 'shown'}`}

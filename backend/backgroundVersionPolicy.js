@@ -22,6 +22,7 @@ const WARP_PROCESSOR_BY_OPERATION = Object.freeze({
 const OCCLUSION_PROCESSOR = 'canonical-depth-mask-v1';
 const LEGACY_SOURCE_SEMANTIC_REQUEST_SCHEMA = 'predrawn-generation-semantic-request-v1';
 const SOURCE_SEMANTIC_REQUEST_SCHEMA = 'predrawn-generation-semantic-request-v2';
+const GENERATION_REFERENCE_GRID_OVERLAYS = new Set(['none', 'playable']);
 const ATTEMPT_SOURCE_REQUEST_SCHEMA = 'predrawn-generation-attempt-source-v1';
 const ATTEMPT_PIPELINE_SOURCE_REQUEST_SCHEMA = 'predrawn-processing-attempt-input-v1';
 const ATTEMPT_INTAKE_SOURCE_REQUEST_SCHEMA = 'predrawn-ai-artwork-intake-v1';
@@ -517,6 +518,13 @@ function sourceArtworkVersionContractIssue(candidate) {
   if (provenance.backgroundMode !== operation.backgroundMode) {
     return 'source provenance.backgroundMode must equal operation.backgroundMode';
   }
+  const gridOverlay = operation.gridOverlay ?? 'none';
+  if (!GENERATION_REFERENCE_GRID_OVERLAYS.has(gridOverlay)) {
+    return 'source operation.gridOverlay must be none or playable';
+  }
+  if ((provenance.gridOverlay ?? 'none') !== gridOverlay) {
+    return 'source provenance.gridOverlay must equal operation.gridOverlay';
+  }
   if (operation.environmentGeometrySchema !== ENVIRONMENT_GEOMETRY_SCHEMA) {
     return `source operation.environmentGeometrySchema must be ${ENVIRONMENT_GEOMETRY_SCHEMA}`;
   }
@@ -626,6 +634,7 @@ function sourceArtworkVersionContractIssue(candidate) {
     || (semanticRequest.sourceOcclusionVersionId ?? null) !== sourceOcclusionVersionId
     || semanticRequest.environmentGeometrySchema !== operation.environmentGeometrySchema
     || semanticRequest.environmentGeometrySha256 !== operation.environmentGeometrySha256
+    || (semanticRequest.gridOverlay ?? 'none') !== gridOverlay
     || !sameWorldBounds(semanticRequest.worldBounds, bounds.value)
     || canonicalJson(semanticRequest.generationFrame) !== canonicalJson(frame)
   ) {

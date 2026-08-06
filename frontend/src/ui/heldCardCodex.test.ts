@@ -5,6 +5,7 @@ import { createBlankLevel } from '../core/level';
 import {
   performAdlectio,
   createRun,
+  openSectio,
   performAlienatio,
   runCardUnitIds,
   type RunDocument,
@@ -31,9 +32,13 @@ function war(battles = 4): RunWarSnapshot {
 
 function boughtOne(): RunDocument {
   const fresh = createRun(war(), 91);
-  const offers = fresh.sectio!.cardOffers;
+  const sectio = openSectio(
+    { ...fresh, phase: 'battle' },
+    fresh.army.map((unit) => unit.id),
+  );
+  const offers = sectio.sectio!.cardOffers;
   const affordable = offers.reduce((cheapest, offer) => (offer.cost < cheapest.cost ? offer : cheapest));
-  return performAdlectio(fresh, affordable.offerId);
+  return performAdlectio(sectio, affordable.offerId);
 }
 
 describe('the Chartulary reads the Run rather than the deck', () => {
