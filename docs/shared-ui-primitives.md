@@ -80,14 +80,18 @@ search for before constructing a control or repeated surface.
 - `ui/RunCard.tsx` — the canonical interactive/reference host around
   `RunCardFace`; Sectio mode owns the gold transaction cue and supplies the exact
   source face used by the Adlectio transfer.
+- `ui/RunCardPile.tsx` — the canonical physical face-over-back composition. Sectio
+  gives every original offer one pile and reveals its accepted universal back after
+  Adlectio without moving that seat or implying a replacement offer.
 - `ui/runCardFlightView.tsx` — the shared geometry for transferring that canonical
   face into the Chartulary during Sectio. It measures live endpoints, contributes through the director-owned
   continuity layer above clipped shell layers, and owns any number of independent
   presentation-only flights after their transactions commit immediately. It exposes the transfer
-  and survivor-reflow geometry plus the CSS-token duration parser for regression tests.
-  `SectioCardRow` owns the live, still-interactive FLIP measurement for both plain and
-  installed-wrap layouts, including interruption from the survivor's current visual rectangle
-  ([ADR-0431](adr/0431-sectio-transactions-never-wait-for-presentation.md)).
+  geometry plus the CSS-token duration parser for regression tests. `SectioCardRow`
+  retains every original pile in both plain and installed-wrap layouts, so no survivor
+  measurement or FLIP path remains
+  ([ADR-0431](adr/0431-sectio-transactions-never-wait-for-presentation.md),
+  [ADR-0476](adr/0476-sectio-offers-reveal-the-face-down-pile-beneath-them.md)).
 - `ui/RunDeploymentCardStack.tsx` — the Controls-owned projection of the persisted
   Deployment deck and deal. It presents the complete face-down center deck, partitions the
   exact combat count deliberately into the prominent Controls stack, transfers the counted

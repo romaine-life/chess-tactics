@@ -1,4 +1,5 @@
-import { Children, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
+import { Children, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
+import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import type { RunBattleTransformSink, RunBattleUndoAdapter } from '../game/store';
 import { defaultFacingForSide, paletteForSide, pieceSpritePath } from '../core/pieces';
 import type { GameState, Piece } from '../core/types';
@@ -123,17 +124,15 @@ import {
   type RunAlienatioFilters,
 } from './RunArmyWorkspace';
 import { RunCard } from './RunCard';
+import { RUN_CARD_BACK_SLOT } from './RunCardBack';
+import { RunCardPile } from './RunCardPile';
 import { RunBattlePreview } from './RunBattlePreview';
 import { RunDeploymentCardStack, RunDeploymentDeckDeal } from './RunDeploymentCardStack';
 import { RunDeploymentRerollButton } from './RunDeploymentRerollButton';
-import { useSceneMotion } from './shell/SceneActivity';
 import { RunExpunctioWorkspace } from './RunExpunctioWorkspace';
 import { runCardName } from '../run/cardNames';
 import {
-  runCardMotionDurationMs,
-  runCardReflowOffset,
   useRunCardFlights,
-  type RunCardFlightRect,
 } from './runCardFlightView';
 import { isStrategikonPath, strategikonRouteCrumbs } from './strategikonRoute';
 import { createRunForm, runActivity, type RunForm } from './RunForm';
@@ -863,20 +862,13 @@ function LipsanonOffer({
  */
 function SectioCardRow({
   children,
-  offerIds,
 }: {
   children: ReactNode;
-  offerIds: string[];
 }): ReactElement {
-  const sceneMotion = useSceneMotion();
   const wrap = useMemo(() => installedRunSectioWrap(), []);
   const [box, setBox] = useState({ width: 0, height: 0 });
   const hostRef = useRef<HTMLDivElement | null>(null);
-  const rowRef = useRef<HTMLDivElement | null>(null);
-  const previousRectsRef = useRef(new Map<string, RunCardFlightRect>());
-  const previousLayoutKeyRef = useRef<string | null>(null);
   const cardCount = Children.count(children);
-  const layoutKey = offerIds.join('|');
   // Only a band wrap measures anything: it is a frame around the row, so the
   // row has to fit inside it. A screen scene is a background and never
   // participates — the cards lay out normally and the art sits behind them.
@@ -893,89 +885,8 @@ function SectioCardRow({
     return () => observer.disconnect();
   }, [wrap]);
 
-  useLayoutEffect(() => {
-    const row = rowRef.current;
-    if (!row) return undefined;
-    const currentRects = new Map<string, RunCardFlightRect>();
-    const elements = new Map<string, HTMLElement>();
-    row.querySelectorAll<HTMLElement>('[data-run-sectio-offer-id]').forEach((element) => {
-      const id = element.dataset.runSectioOfferId;
-      if (!id) return;
-      const rect = element.getBoundingClientRect();
-      currentRects.set(id, rect);
-      elements.set(id, element);
-    });
-
-    const previousKey = previousLayoutKeyRef.current;
-    const previousRects = previousRectsRef.current;
-    previousLayoutKeyRef.current = layoutKey;
-    previousRectsRef.current = currentRects;
-    if (previousKey === null || previousKey === layoutKey) {
-      return undefined;
-    }
-
-    const moving = [...currentRects].flatMap(([id, rect]) => {
-      const previous = previousRects.get(id);
-      const element = elements.get(id);
-      const offset = previous ? runCardReflowOffset(previous, rect) : null;
-      if (!element || !offset || (Math.abs(offset.x) < 0.5 && Math.abs(offset.y) < 0.5)) return [];
-      return [{ element, offset }];
-    });
-    if (!moving.length) return undefined;
-
-    const rowStyle = getComputedStyle(row);
-    const duration = runCardMotionDurationMs(rowStyle.getPropertyValue('--ds-duration-fade'));
-    const easing = rowStyle.getPropertyValue('--ds-ease-standard').trim();
-    if (!duration || !easing || typeof Element.prototype.animate !== 'function') return undefined;
-
-    let cancelled = false;
-    let animations: Animation[];
-    const clearPresentation = (): void => {
-      moving.forEach(({ element }) => {
-        element.classList.remove('is-reflowing');
-      });
-    };
-    const finish = (): void => {
-      if (cancelled) return;
-      clearPresentation();
-    };
-
-    animations = moving.map(({ element, offset }) => {
-      element.classList.add('is-reflowing');
-      return sceneMotion.animate(
-        element,
-        [
-          { translate: `${offset.x}px ${offset.y}px` },
-          { translate: '0 0' },
-        ],
-        { duration, easing },
-      );
-    }).flatMap((animation) => animation ? [animation] : []);
-    if (animations.length !== moving.length) {
-      clearPresentation();
-      return undefined;
-    }
-    void Promise.allSettled(animations.map((animation) => animation.finished)).then(finish);
-
-    return () => {
-      cancelled = true;
-      // A second Adlectio can change the row while this FLIP is mid-flight. Preserve
-      // each survivor's current visual rectangle so the replacement FLIP continues
-      // from the pixels the player just clicked beside instead of snapping to a stale
-      // logical seat before beginning again.
-      const interruptedRects = new Map<string, RunCardFlightRect>();
-      row.querySelectorAll<HTMLElement>('[data-run-sectio-offer-id]').forEach((element) => {
-        const id = element.dataset.runSectioOfferId;
-        if (id) interruptedRects.set(id, element.getBoundingClientRect());
-      });
-      if (interruptedRects.size) previousRectsRef.current = interruptedRects;
-      animations.forEach((animation) => animation.cancel());
-      clearPresentation();
-    };
-  }, [box.height, box.width, layoutKey, sceneMotion]);
-
   if (!wrap || wrap.kind !== 'band' || cardCount < 1) {
-    return <div className="run-card-grid" ref={rowRef}>{children}</div>;
+    return <div className="run-card-grid">{children}</div>;
   }
   const mount = box.width > 0 && box.height > 0
     ? runSectioWrapLiveMount(wrap, cardCount, box.width, box.height)
@@ -995,7 +906,6 @@ function SectioCardRow({
           <img className="run-sectio-wrap-art" src={wrap.src} alt="" draggable={false} />
           <div
             className="run-sectio-wrap-cards"
-            ref={rowRef}
             style={{
               insetInlineStart: `${mount.cards.left}px`,
               insetBlockStart: `${mount.cards.top}px`,
@@ -1030,6 +940,7 @@ function SectioPanel({
   const replace = useActiveRun((state) => state.replace);
   const sectio = run.sectio!;
   const availableOffers = sectio.cardOffers.filter((offer) => !sectio.adlectedCardOfferIds.includes(offer.offerId));
+  const cardBackMediaUrl = resolvedLiveMediaUrl(RUN_CARD_BACK_SLOT);
   const pestiferousLosses = run.pestiferousLosses.filter((loss) => loss.battleIndex === sectio.afterBattleIndex);
   return (
     <>
@@ -1074,19 +985,26 @@ function SectioPanel({
           aria-label="Cards"
         >
           <span className="sr-only" role="status" aria-live="polite">{adlectioAnnouncement}</span>
-          <SectioCardRow
-            offerIds={availableOffers.map((offer) => offer.offerId)}
-          >
-            {availableOffers.map((offer) => (
-              <RunCard
-                card={offer}
-                mode="sectio"
-                layoutId={offer.offerId}
-                key={offer.offerId}
-                disabled={run.goldTenths < offer.cost * GOLD_SCALE}
-                onSelect={(source) => onAdlect(offer, source)}
-              />
-            ))}
+          <SectioCardRow>
+            {sectio.cardOffers.map((offer) => {
+              const adlected = sectio.adlectedCardOfferIds.includes(offer.offerId);
+              return (
+                <RunCardPile
+                  backMediaUrl={cardBackMediaUrl}
+                  key={offer.offerId}
+                >
+                  {adlected ? null : (
+                    <RunCard
+                      card={offer}
+                      mode="sectio"
+                      layoutId={offer.offerId}
+                      disabled={run.goldTenths < offer.cost * GOLD_SCALE}
+                      onSelect={(source) => onAdlect(offer, source)}
+                    />
+                  )}
+                </RunCardPile>
+              );
+            })}
           </SectioCardRow>
           {availableOffers.length === 0 ? (
             <InnerChromeBox className="run-sectio-cards-empty" role="status">

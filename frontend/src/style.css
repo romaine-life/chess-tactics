@@ -19249,12 +19249,29 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
-/* Once an adlected card leaves, surviving offers keep their old visual seats
-   and settle into the newly centred grid instead of snapping with the layout.
-   JS reads the shared motion tokens into the FLIP animation; this class owns only
-   the compositor hint while that bounded functional relocation is active. */
-.run-card-offer.is-reflowing {
-  will-change: translate;
+/* Every Sectio offer is the face of a physical pile. The accepted universal
+   back occupies the exact same seat beneath it, so Adlectio reveals that back
+   without moving the remaining piles or suggesting a replacement offer. */
+.run-card-pile {
+  display: grid;
+  min-inline-size: 0;
+}
+
+.run-card-pile > :is(.run-card-pile-back, .run-card-offer) {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.run-card-pile-back {
+  pointer-events: none;
+}
+
+.run-card-pile-back > .run-card-back {
+  inline-size: 100%;
+}
+
+.run-card-pile > .run-card-offer {
+  z-index: 1;
 }
 
 .run-card-action {

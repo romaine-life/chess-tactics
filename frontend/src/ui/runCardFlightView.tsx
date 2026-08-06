@@ -20,26 +20,6 @@ export interface RunCardFlightGeometry {
   scale: number;
 }
 
-export interface RunCardReflowOffset {
-  x: number;
-  y: number;
-}
-
-/**
- * FLIP's inverse step: after layout commits the destination seat, translate a
- * surviving card back over its previous seat and let the UI settle it to zero.
- */
-export function runCardReflowOffset(
-  from: RunCardFlightRect,
-  to: RunCardFlightRect,
-): RunCardReflowOffset | null {
-  if (from.width <= 0 || from.height <= 0 || to.width <= 0 || to.height <= 0) return null;
-  return {
-    x: from.left - to.left,
-    y: from.top - to.top,
-  };
-}
-
 /** Reads a CSS duration token for the Web Animations API without duplicating its value in JS. */
 export function runCardMotionDurationMs(value: string): number | null {
   const match = /^(\d+(?:\.\d+)?)(ms|s)$/.exec(value.trim());

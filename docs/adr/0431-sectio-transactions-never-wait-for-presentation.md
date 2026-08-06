@@ -5,6 +5,8 @@ deciders: owner (Nelson) + Codex
 partially_supersedes:
   - "[ADR-0387](0387-bought-cards-travel-into-a-title-reachable-chartulary.md)'s commit-on-landing and inert-Sectio clauses"
   - "[ADR-0388](0388-remaining-shop-cards-settle-into-their-new-seats.md)'s inert-Sectio and moving-target prohibition"
+partially_superseded_by:
+  - "[ADR-0476](0476-sectio-offers-reveal-the-face-down-pile-beneath-them.md)'s stable pile seats and retirement of survivor FLIP"
 refines:
   - "[ADR-0043](0043-ui-motion-system.md)"
   - "[ADR-0421](0421-a-preparing-scene-has-no-permission-to-perform.md)"

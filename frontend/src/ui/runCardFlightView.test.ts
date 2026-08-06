@@ -5,10 +5,7 @@ import {
   RUN_CARD_FLIGHT_MS,
   runCardFlightGeometry,
   runCardMotionDurationMs,
-  runCardReflowOffset,
 } from './runCardFlightView';
-
-const cardRect = (left: number) => ({ left, top: 180, width: 236, height: 330 });
 
 describe('Run card Adlectio transfer', () => {
   it('moves centre to centre and minimizes inside the destination mark', () => {
@@ -36,46 +33,6 @@ describe('Run card Adlectio transfer', () => {
     expect(runCardMotionDurationMs('')).toBeNull();
   });
 
-  it.each([
-    {
-      position: 'first of three',
-      before: { b: 252, c: 504 },
-      after: { b: 126, c: 378 },
-      offsets: { b: 126, c: 126 },
-    },
-    {
-      position: 'middle of three',
-      before: { a: 0, c: 504 },
-      after: { a: 126, c: 378 },
-      offsets: { a: -126, c: 126 },
-    },
-    {
-      position: 'last of three',
-      before: { a: 0, b: 252 },
-      after: { a: 126, b: 378 },
-      offsets: { a: -126, b: -126 },
-    },
-    {
-      position: 'first of two',
-      before: { b: 378 },
-      after: { b: 252 },
-      offsets: { b: 126 },
-    },
-    {
-      position: 'last of two',
-      before: { a: 126 },
-      after: { a: 252 },
-      offsets: { a: -126 },
-    },
-  ])('inverts every survivor before settling after the $position Adlectio', ({ before, after, offsets }) => {
-    for (const [id, previousLeft] of Object.entries(before)) {
-      expect(runCardReflowOffset(cardRect(previousLeft), cardRect(after[id]))).toEqual({
-        x: offsets[id],
-        y: 0,
-      });
-    }
-  });
-
   it('commits immediately and lets independent canonical faces fly without blocking input', () => {
     const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
     const source = readFileSync(new URL('./runCardFlightView.tsx', import.meta.url), 'utf8');
@@ -89,13 +46,11 @@ describe('Run card Adlectio transfer', () => {
     expect(source).not.toContain('run-card-flight-shield');
     expect(source).not.toContain('createPortal');
     expect(source).toContain("event.propertyName === 'translate'");
-    expect(css).toMatch(/\.run-card-offer\.is-reflowing\s*\{[\s\S]*?will-change:\s*translate;/);
-    expect(screen).toContain('const offset = previous ? runCardReflowOffset(previous, rect) : null;');
-    expect(screen).toContain("rowStyle.getPropertyValue('--ds-duration-fade')");
-    expect(screen).toContain("rowStyle.getPropertyValue('--ds-ease-standard')");
-    expect(screen).toContain('return sceneMotion.animate(');
-    expect(screen).toContain("import { useSceneMotion } from './shell/SceneActivity'");
-    expect(screen).toContain('interruptedRects.set(id, element.getBoundingClientRect())');
+    expect(screen).toContain('<RunCardPile');
+    expect(screen).toContain('sectio.cardOffers.map((offer) => {');
+    expect(screen).toContain('sectio.adlectedCardOfferIds.includes(offer.offerId)');
+    expect(screen).not.toContain('runCardReflowOffset');
+    expect(screen).not.toContain('is-reflowing');
     expect(screen).toContain('const adlected = performAdlectio(latest, offer.offerId);');
     expect(screen).toMatch(/launchCardFlight\(offer, source, target\);[\s\S]*?replace\(adlected\);/);
     expect(screen).toContain('useRunCardFlights()');
