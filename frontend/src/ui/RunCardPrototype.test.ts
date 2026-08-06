@@ -21,6 +21,6 @@ describe('formation card Studio gallery', () => {
     expect(source).toContain('acceptLiveMediaVersions');
     expect(source).not.toContain('/tmp-shots/');
     expect(source).toContain('<RunCardFace');
-    expect(source).toContain('Rarity colors the whole structural frame');
+    expect(source).toContain('Rarity colors the artwork frame');
   });
 });

@@ -1,7 +1,8 @@
 ---
-status: accepted
+status: superseded
 date: 2026-08-06
 deciders: owner (Nelson) + Codex
+superseded_by: "[ADR-0497](0497-rarity-colors-the-standard-artwork-frame.md)"
 supersedes:
   - "[ADR-0495](0495-rarity-colors-the-standard-frame-metalwork.md)"
 ---

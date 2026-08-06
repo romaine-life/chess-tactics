@@ -10,7 +10,7 @@ import {
 } from './runCardFrameGeometry';
 
 export { RUN_CARD_RARE_FRAME_SLOT, RUN_CARD_UNCOMMON_FRAME_SLOT };
-export const RUN_CARD_RARITY_FRAME_PROOF_SCHEMA = 'run-card-rarity-frame-card-layout-proof-v2';
+export const RUN_CARD_RARITY_FRAME_PROOF_SCHEMA = 'run-card-rarity-frame-card-layout-proof-v3';
 export const RUN_CARD_RARITY_FRAME_PROOF_RENDERER = 'RunCardFace/CardLayout';
 
 export type RunCardVisualRarity = 'uncommon' | 'rare';
@@ -58,8 +58,8 @@ export function runCardRarityFrameReviewProof(input: {
     surfaceUrl,
     rarity,
     frameType: 'standard',
-    rarityAffects: 'complete-structural-frame',
-    standardWoodPreserved: false,
+    rarityAffects: 'artwork-bezel-only',
+    outerFrameTreatment: 'standard-original',
     canonicalScale: 1,
     assetLocalScale: 1,
     spatialResampling: false,
