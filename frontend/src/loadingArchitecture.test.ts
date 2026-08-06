@@ -143,7 +143,7 @@ describe('professional loading architecture guards', () => {
 
   it('precomposes main-menu controls for warm scene returns and gates them only during cold startup', () => {
     const menu = read('./ui/MainMenu.tsx');
-    const styles = read('./style.css');
+    const styles = read('./style.css').replace(/\r\n/g, '\n');
     expect(menu).toContain("import { useStartupScene } from './shell/startupScene';");
     expect(menu).toContain('const startup = useStartupScene();');
     expect(menu).toContain("data-reveal-buttons={startup.revealed('scene') ? '' : undefined}");
