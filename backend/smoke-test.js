@@ -5609,7 +5609,7 @@ async function main() {
   };
   const savedQuartermasterOpening = await request(
     'PUT', '/api/active-run',
-    { cookie: '__Host-chess-tactics-access=rival', 'content-type': 'application/json' },
+    { cookie: '__Host-chess-tactics-access=second-admin', 'content-type': 'application/json' },
     JSON.stringify({ run: quartermasterOpeningRun, revision: 0 }),
   );
   if (
