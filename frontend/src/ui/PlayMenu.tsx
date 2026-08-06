@@ -58,6 +58,7 @@ import { AtaraxiaSelector } from './AtaraxiaSelector';
 import { ActionList } from './shared/ActionList';
 import { SettingsRow, SettingsSection } from './shared/SettingsControls';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
+import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
 
 type PlayIcon = 'solo-skirmish' | 'campaign-editor' | 'level-editor' | 'lobbies';
 
@@ -147,7 +148,7 @@ function ContinuePanel({ inventory }: { inventory: ContinueInventory }): ReactEl
                 </dl>
               </InnerChromeBox>
               <div className="ce-preview-actions is-single">
-                <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} to={selected.playHref}><span>Play</span></ChromeNavButton>
+                <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} to={selected.playHref}><span>Continue</span></ChromeNavButton>
               </div>
             </div>
           ) : (
@@ -277,6 +278,7 @@ function RunPanel({
                 <ChromeNavButton unit="inner-list-row"
                   to={PLAY_RUN_CURRENT_SELECTOR_HREF}
                   className={chromeUnitClassNames('inner-list-row', 'settings-row play-choice-row', !run && 'is-disabled', choice === 'current' && 'active is-selected')}
+                  data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                   disabled={!run}
                   aria-current={choice === 'current' ? 'page' : undefined}
                   data-testid="run-choice-current"
@@ -308,6 +310,7 @@ function RunPanel({
               <ChromeNavButton unit="inner-list-row"
                 to={PLAY_RUN_NEW_SELECTOR_HREF}
                 className={chromeUnitClassNames('inner-list-row', 'settings-row play-choice-row', newRunUnavailable && 'is-disabled', choice === 'new' && 'active is-selected')}
+                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                 disabled={newRunUnavailable}
                 aria-current={choice === 'new' ? 'page' : undefined}
                 data-testid="run-choice-new"
@@ -354,10 +357,16 @@ function RunPanel({
                 value={ataraxiaTier}
                 highestUnlockedTier={highestUnlockedTier}
                 onChange={(tier) => { setArmed(false); setAtaraxiaTier(tier); }}
+                fillSurface={CHROME_LEAF_FILL_SURFACE}
               />
             </div>
             {run ? (
-              <InnerChromeBox className="run-replace-note" role="note" data-testid="run-replace-warning">
+              <InnerChromeBox
+                className="run-replace-note"
+                fillSurface={CHROME_LEAF_FILL_SURFACE}
+                role="note"
+                data-testid="run-replace-warning"
+              >
                 <h3>Replaces your current Run</h3>
                 <p>Starting a new Run abandons {run.war.name} — Battle {run.battleIndex + 1} of {run.war.battles.length} · {formatGold(run.goldTenths)} gold. This cannot be undone.</p>
               </InnerChromeBox>
@@ -367,6 +376,7 @@ function RunPanel({
                 <ChromeButton unit="inner-text-button"
                   ref={keepRunButtonRef}
                   className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
+                  data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                   data-testid="run-keep"
                   disabled={starting}
                   onClick={() => setArmed(false)}
@@ -375,6 +385,7 @@ function RunPanel({
                 </ChromeButton>
                 <ChromeButton unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'ce-asset-button', 'is-danger')}
+                  data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                   data-testid="run-abandon-and-start"
                   disabled={starting}
                   onClick={() => { void start(); }}
@@ -386,6 +397,8 @@ function RunPanel({
               <div className="ce-preview-actions is-single">
                 <ChromeButton unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
+                  data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                  data-testid="run-start"
                   disabled={newRunUnavailable || starting}
                   onClick={() => { if (run) { setArmed(true); return; } void start(); }}
                 >
