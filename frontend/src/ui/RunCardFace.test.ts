@@ -63,19 +63,19 @@ describe('formation-only Run card face', () => {
     expect(cells.filter((cell) => cell.faded)).toHaveLength(10);
     const styles = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
     expect(styles).toMatch(/\.run-card-formation-square polygon[\s\S]*?stroke:/);
-    expect(styles).toMatch(/\.run-card-formation-square\.is-faded[\s\S]*?opacity:\s*\.22/);
+    expect(styles).toMatch(/\.run-card-formation-square\.is-faded[\s\S]*?opacity:\s*\.14/);
   });
 
   it('uses the battlefield projection and the player army facing', () => {
     expect(runCardFormationIsoPoint(0, 0)).toEqual({ left: 0, top: 0, depth: 0 });
     expect(runCardFormationIsoPoint(1, 0)).toMatchObject({
-      left: expect.closeTo(7.2),
-      top: expect.closeTo(4.05),
+      left: expect.closeTo(5.76),
+      top: expect.closeTo(3.24),
       depth: 1,
     });
     expect(runCardFormationIsoPoint(0, 1)).toMatchObject({
-      left: expect.closeTo(-7.2),
-      top: expect.closeTo(4.05),
+      left: expect.closeTo(-5.76),
+      top: expect.closeTo(3.24),
       depth: 1,
     });
     const source = readFileSync(new URL('./RunCardFace.tsx', import.meta.url), 'utf8');

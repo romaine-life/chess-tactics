@@ -25183,7 +25183,7 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   flex: 0 0 auto;
   inline-size: var(--run-card-formation-width);
   isolation: isolate;
-  margin-block: 1.8cqw 1.2cqw;
+  margin-block: 8.7cqw .4cqw;
   position: relative;
 }
 
@@ -25206,17 +25206,17 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
 }
 
 .run-card-formation-square polygon {
-  fill: rgba(212, 196, 161, .62);
-  stroke: rgba(55, 48, 39, .68);
+  fill: rgba(212, 196, 161, .46);
+  stroke: rgba(55, 48, 39, .56);
   stroke-width: 1.15;
 }
 
 .run-card-formation-square.is-dark polygon {
-  fill: rgba(101, 115, 113, .44);
+  fill: rgba(101, 115, 113, .34);
 }
 
 .run-card-formation-square.is-faded {
-  opacity: .22;
+  opacity: .14;
 }
 
 .run-card-formation-square.is-faded polygon {
@@ -25274,8 +25274,8 @@ button.run-card-formation-cell.is-selectable {
 }
 
 .run-card-formation-cell.is-highlighted .run-card-formation-unit,
-button.run-card-formation-cell.is-selectable:hover .run-card-formation-unit,
-button.run-card-formation-cell.is-selectable:focus-visible .run-card-formation-unit {
+.run-card-formation-cell-button:hover .run-card-formation-unit,
+.run-card-formation-cell-button:focus-visible .run-card-formation-unit {
   filter: drop-shadow(0 0 .7cqw var(--skirmish-cyan));
 }
 
@@ -25289,12 +25289,13 @@ button.run-card-formation-cell.is-selectable:focus-visible .run-card-formation-u
 }
 
 .run-card-formation-unit {
-  block-size: 11.2cqw;
+  block-size: 17.2cqw;
+  filter: drop-shadow(0 .45cqw .35cqw rgba(19, 29, 32, .45));
   inset-block-end: 38%;
   inset-inline-start: 50%;
   image-rendering: pixelated;
   inline-size: auto;
-  max-inline-size: 12.4cqw;
+  max-inline-size: 19cqw;
   object-fit: contain;
   position: absolute;
   transform: translateX(-50%);

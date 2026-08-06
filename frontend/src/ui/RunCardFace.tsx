@@ -177,9 +177,9 @@ export function runCardFormationRows(pieces: readonly Pick<RunCardFormationPiece
 }
 
 export const RUN_CARD_FORMATION_ISO_TILE = Object.freeze({
-  scale: .15,
-  width: TILE_TEMPLATE.topWidth * .15,
-  height: TILE_TEMPLATE.topHeight * .15,
+  scale: .12,
+  width: TILE_TEMPLATE.topWidth * .12,
+  height: TILE_TEMPLATE.topHeight * .12,
 });
 
 export type RunCardFormationBoardCell = Readonly<{
