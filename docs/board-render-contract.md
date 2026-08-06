@@ -909,6 +909,14 @@ visibly disables Edit rather than removing the capability, and explains that an
 editor lease is required. The Camera page owns the Balanced, Proportional, and
 Fixed snap presets, the explicit Snap action, and the resolved world-space size
 readout; Snap returns a writer to Edit mode.
+Per [ADR-0491](adr/0491-camera-boundary-can-adopt-the-current-editor-view.md),
+the Camera page also owns **Set from view**. It converts the complete measured
+authoring viewport at its current zoom and pan into a world-space boundary and
+commits it through the same normalization, undo, autosave, and persistence path.
+The required opening board frame may expand that rectangle, the action does not
+reframe the editor after capture, and it leaves writers in Edit mode. The
+full-interior move control is transparent and must never paint an opaque field
+over the artwork.
 Leaving Camera hides the authoring overlay. Board retains only board-owned zoom,
 tactical overlay, and grid controls. The main editor camera remains unconstrained
 so authors can work across the full canvas. There is no separate “what the

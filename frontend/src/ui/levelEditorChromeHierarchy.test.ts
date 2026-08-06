@@ -159,6 +159,7 @@ describe('Level Editor chrome hierarchy', () => {
       ['setShowBlocked', 'inner-text-button'],
       ['setShowPromotionZones', 'inner-text-button'],
       ['setGridScope', 'inner-text-button'],
+      ['setCameraBoundaryFromView', 'inner-text-button'],
       ['snapCameraBoundary', 'inner-text-button'],
     ] as const;
     const blocks = buttonBlocks(levelEditor);
@@ -174,7 +175,9 @@ describe('Level Editor chrome hierarchy', () => {
     expect(levelEditor).toContain('ariaLabel="Camera boundary interaction mode"');
     expect(levelEditor).toContain("cameraBoundaryInteractionMode === 'edit' && editorSessionCanWrite");
     expect(levelEditor).toContain('ariaLabel="Camera boundary snap preset"');
+    expect(levelEditor).toContain('>Set from view</ChromeButton>');
     expect(levelEditor).toContain('>Snap</ChromeButton>');
+    expect(styleCss).toMatch(/\.le-camera-boundary-handle\s*\{[\s\S]*?all:\s*unset;/);
     expect(styleCss).toMatch(/\.le-camera-boundary-handle\.is-move\s*\{[\s\S]*?height:\s*100%;[\s\S]*?inset:\s*0;[\s\S]*?width:\s*100%;/);
     expect(levelEditor).not.toContain('app-header-button');
   });

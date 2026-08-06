@@ -189,6 +189,39 @@ export function cameraToContainBounds({
 }
 
 /**
+ * World-space rectangle currently visible through a measured ViewPane camera.
+ *
+ * This is the inverse of the ViewPane/TileGrid camera convention used by
+ * `cameraToContainBounds`: board-space is scaled around the viewport centre,
+ * then translated by `pan` in screen pixels.
+ */
+export function worldViewportForCamera({
+  viewport,
+  camera,
+}: {
+  viewport: BoardFramingViewport;
+  camera: BoardFramingCamera;
+}): BoardFramingBounds {
+  const zoom = Number.isFinite(camera.zoom) && camera.zoom > 0 ? camera.zoom : 0.01;
+  const width = Number.isFinite(viewport.width) && viewport.width > 0
+    ? viewport.width / zoom
+    : 0;
+  const height = Number.isFinite(viewport.height) && viewport.height > 0
+    ? viewport.height / zoom
+    : 0;
+  const panX = Number.isFinite(camera.pan.x) ? camera.pan.x : 0;
+  const panY = Number.isFinite(camera.pan.y) ? camera.pan.y : 0;
+  const centerX = -panX / zoom;
+  const centerY = -panY / zoom;
+  return {
+    minX: centerX - width / 2,
+    minY: centerY - height / 2,
+    width,
+    height,
+  };
+}
+
+/**
  * Minimum zoom that lets a rectangular art boundary cover a viewport while retaining a chosen
  * world-space centre. This is the static-renderer equivalent of ViewPane's polygon safety floor.
  */
