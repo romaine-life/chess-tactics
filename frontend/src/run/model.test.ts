@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { createBlankLevel } from '../core/level';
 import {
   CURRENT_RUN_SAVE_VERSION,
+  RUN_GENERATED_CARD_COUNT,
+  RUN_OFFER_CARD_COUNT,
   RUN_CARD_BY_ID,
   RUN_CARD_CATALOG,
   RUN_CARD_DECK,
@@ -15,6 +17,7 @@ import {
   normalizeRunDocument,
   performAdlectio,
   runCardUnitIds,
+  runCardRarityForRoll,
   type RunDocument,
   type RunWarSnapshot,
 } from './model';
@@ -30,17 +33,13 @@ function war(): RunWarSnapshot {
   };
 }
 
-const ACTIVE_CARD_IDS = [
-  'p', 'pp', 'b', 'k', 'ppp', 'pb-front', 'pk-front', 'ppb-protected',
-  'ppb-reversed', 'ppk-protected', 'ppk-reversed', 'r', 'bb-diagonal', 'bb-vertical',
-  'kk-horizontal', 'pr-front', 'q', 'pq-front', 'rr-vertical',
-];
-
 describe('formation card catalog', () => {
-  it('contains exactly the 19 authored one-to-three-unit cards', () => {
-    expect(RUN_CARD_DECK.map((card) => card.id)).toEqual(ACTIVE_CARD_IDS);
-    expect(RUN_CARD_DECK.every((card) => card.pieces.length >= 1 && card.pieces.length <= 3)).toBe(true);
-    expect(RUN_CARD_CATALOG).toHaveLength(20);
+  it('contains the complete generated core, seven authored exceptions, and the starter', () => {
+    expect(RUN_GENERATED_CARD_COUNT).toBe(714);
+    expect(RUN_CARD_DECK).toHaveLength(RUN_OFFER_CARD_COUNT);
+    expect(RUN_OFFER_CARD_COUNT).toBe(721);
+    expect(RUN_CARD_DECK.every((card) => card.pieces.length >= 1 && card.pieces.length <= 4)).toBe(true);
+    expect(RUN_CARD_CATALOG).toHaveLength(722);
   });
 
   it('gives every card one coordinate per unit and keeps coordinates unique', () => {
@@ -57,6 +56,31 @@ describe('formation card catalog', () => {
     expect(RUN_CARD_BY_ID['ppk-reversed'].formation).toEqual([
       { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 2, y: 1 },
     ]);
+  });
+
+  it('uses rarity as desirability rather than material value', () => {
+    expect(RUN_CARD_BY_ID.p.rarity).toBe('common');
+    expect(RUN_CARD_BY_ID.r.rarity).toBe('uncommon');
+    expect(RUN_CARD_BY_ID.q.rarity).toBe('rare');
+    expect(RUN_CARD_BY_ID['rr-vertical'].rarity).toBe('rare');
+    expect(RUN_CARD_BY_ID['bb-diagonal'].rarity).toBe('common');
+    expect(RUN_CARD_BY_ID['bb-vertical'].rarity).toBe('rare');
+    expect(runCardRarityForRoll(0)).toBe('common');
+    expect(runCardRarityForRoll(74)).toBe('common');
+    expect(runCardRarityForRoll(75)).toBe('uncommon');
+    expect(runCardRarityForRoll(94)).toBe('uncommon');
+    expect(runCardRarityForRoll(95)).toBe('rare');
+  });
+
+  it('makes every opposite-color Bishop pair rare', () => {
+    const paired = RUN_CARD_DECK.filter((card) => card.pieces.filter((piece) => piece === 'bishop').length >= 2);
+    const opposite = paired.filter((card) => {
+      const bishops = card.pieces.flatMap((piece, index) => piece === 'bishop' ? [card.formation![index]] : []);
+      return bishops.some((left, index) => bishops.slice(index + 1)
+        .some((right) => (left.x + left.y) % 2 !== (right.x + right.y) % 2));
+    });
+    expect(opposite.length).toBeGreaterThan(0);
+    expect(opposite.every((card) => card.rarity === 'rare')).toBe(true);
   });
 
   it('keeps His Grace on one protected three-unit starter card', () => {
@@ -88,12 +112,13 @@ describe('plain Run creation and acquisition', () => {
     expect(runCardUnitIds(run.cards[0])).toEqual(run.army.map((unit) => unit.id));
   });
 
-  it('deals three affordable opening cards with distinct material values', () => {
+  it('deals three distinct affordable opening cards after rolling rarity first', () => {
     const run = createRun(war(), 23);
     const offers = run.sectio!.cardOffers;
     expect(offers).toHaveLength(3);
-    expect(new Set(offers.map((offer) => offer.value)).size).toBe(3);
+    expect(new Set(offers.map((offer) => offer.id)).size).toBe(3);
     expect(offers.every((offer) => offer.cost <= 8)).toBe(true);
+    expect(offers.every((offer) => ['common', 'uncommon', 'rare'].includes(offer.rarity))).toBe(true);
   });
 
   it('preserves the authored unit order when a formation is acquired', () => {
@@ -139,7 +164,7 @@ describe('ability retirement migration', () => {
     };
     const migrated = migrateRunSaveDocument(raw);
     const serialized = JSON.stringify(migrated);
-    expect(migrated.runSaveVersion).toBe(24);
+    expect(migrated.runSaveVersion).toBe(CURRENT_RUN_SAVE_VERSION);
     expect(migrated.ataraxiaTier).toBe(0);
     expect(migrated.army).toHaveLength(current.army.length);
     expect(migrated.lipsana).toEqual(['congressional-approval']);

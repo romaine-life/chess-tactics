@@ -56,16 +56,16 @@ describe('retained-board unit arrivals', () => {
   // completes. A unit staged for arrival must therefore already be OFF the board while it waits,
   // or the reveal shows the whole army seated and the entrance then takes it away again.
   it('holds a staged unit off the board until its entrance is released', () => {
-    expect(arrivalOffset(1_000, { startMs: null, delayMs: 400 })).toEqual({ dy: -60, opacity: 0 });
+    expect(arrivalOffset(1_000, { startMs: null, delayMs: 400 })).toEqual({ dx: 0, dy: -60, opacity: 0 });
   });
 
   it('seats a unit that has no entrance to play', () => {
-    expect(arrivalOffset(1_000, undefined)).toEqual({ dy: 0, opacity: 1 });
+    expect(arrivalOffset(1_000, undefined)).toEqual({ dx: 0, dy: 0, opacity: 1 });
   });
 
   it('gives a terminal review no arrival plan, so its existing position stays seated', () => {
     expect(unitArrivalPlan('settled', 1_000, 400)).toBeUndefined();
-    expect(arrivalOffset(1_000, unitArrivalPlan('settled', 1_000, 400))).toEqual({ dy: 0, opacity: 1 });
+    expect(arrivalOffset(1_000, unitArrivalPlan('settled', 1_000, 400))).toEqual({ dx: 0, dy: 0, opacity: 1 });
   });
 
   it('keeps ordinary entrances staged until activation and releases them afterward', () => {
@@ -76,10 +76,24 @@ describe('retained-board unit arrivals', () => {
   it('runs a released entrance from off the board down to its seat', () => {
     const plan = { startMs: 1_000, delayMs: 400 };
 
-    expect(arrivalOffset(1_200, plan)).toEqual({ dy: -60, opacity: 0 });
+    expect(arrivalOffset(1_200, plan)).toEqual({ dx: 0, dy: -60, opacity: 0 });
     expect(arrivalOffset(1_400, plan).opacity).toBe(0);
-    expect(arrivalOffset(1_650, plan)).toEqual({ dy: -60, opacity: 1 });
-    expect(arrivalOffset(2_400, plan)).toEqual({ dy: 0, opacity: 1 });
+    expect(arrivalOffset(1_650, plan)).toEqual({ dx: 0, dy: -60, opacity: 1 });
+    expect(arrivalOffset(2_400, plan)).toEqual({ dx: 0, dy: 0, opacity: 1 });
+  });
+
+  it('slides Run formations in from the right while keeping their authored row', () => {
+    const plan = { startMs: 1_000, delayMs: 0, distancePx: 480 };
+
+    expect(arrivalOffset(1_000, plan, 'slide-from-right')).toEqual({ dx: 480, dy: 0, opacity: 0 });
+    expect(arrivalOffset(1_250, plan, 'slide-from-right')).toEqual({
+      dx: expect.any(Number),
+      dy: 0,
+      opacity: 1,
+    });
+    expect(arrivalOffset(1_250, plan, 'slide-from-right').dx).toBeGreaterThan(0);
+    expect(arrivalOffset(1_250, plan, 'slide-from-right').dx).toBeLessThan(480);
+    expect(arrivalOffset(2_000, plan, 'slide-from-right')).toEqual({ dx: 0, dy: 0, opacity: 1 });
   });
 });
 

@@ -1,7 +1,8 @@
 ---
-status: accepted
+status: superseded by ADR-0493
 date: 2026-08-06
 deciders: owner (Nelson) + Codex
+superseded_by: 0493-generated-run-formations-fall-sideways-and-own-rarity.md
 supersedes:
   - "[ADR-0265](0265-run-cards-keep-core-identities-while-units-carry-modifiers.md)"
   - "[ADR-0271](0271-core-cards-become-affected-when-drawn.md)"

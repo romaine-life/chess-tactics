@@ -74,10 +74,26 @@ function authoredOccupied(level: Level): Set<string> {
   return occupied;
 }
 
+function authoredDeploymentLaneRows(level: Level): number[] {
+  return [...new Set(level.layers.zones
+    .filter((zone) => zone.type === 'player-spawn' || zone.type === 'player-king-spawn')
+    .flatMap((zone) => zone.tiles.map(([, y]) => y))
+    .filter((y) => y >= 0 && y < level.board.rows))]
+    .sort((left, right) => left - right)
+    .slice(0, 2);
+}
+
+/** The generated card grammar has two absolute lanes. Lower y is the enemy-facing
+ * front lane; the next authored deployment row is the back lane. */
+export function playerDeploymentLaneRows(level: Level): number[] {
+  return authoredDeploymentLaneRows(level);
+}
+
 /** Pawn-only deployment geometry is retired. The general player zone owns every unit;
  * existing King-only geometry remains readable for old authored levels but is not required. */
 function deploymentPools(level: Level, occupied: ReadonlySet<string>): PlayerDeploymentPools {
   const terrain = new Map(level.layers.terrain.map((cell) => [key(cell), cell]));
+  const laneRows = new Set(authoredDeploymentLaneRows(level));
   const all = new Map<string, Vec>();
   const byType = new Map<PlayablePieceType, Map<string, Vec>>(
     PLAYABLE_PIECE_TYPES.map((type) => [type, new Map<string, Vec>()]),
@@ -91,7 +107,8 @@ function deploymentPools(level: Level, occupied: ReadonlySet<string>): PlayerDep
       const cell = { x, y };
       const terrainCell = terrain.get(key(cell));
       if (
-        x < 0 || y < 0 || x >= level.board.cols || y >= level.board.rows
+        !laneRows.has(y)
+        || x < 0 || y < 0 || x >= level.board.cols || y >= level.board.rows
         || occupied.has(key(cell))
         || (terrainCell && !isPassableTerrain(terrainCell.terrain))
       ) continue;
@@ -229,45 +246,57 @@ function planCardFormation(
   const eligibleByType = new Map(
     PLAYABLE_PIECE_TYPES.map((type) => [type, new Set(pools.byType[type].map(key))]),
   );
-  const first = seats[0];
-  const anchors = pools.byType[first.unit.type].flatMap((firstCell) => {
-    const anchor = { x: firstCell.x - first.offset.x, y: firstCell.y - first.offset.y };
-    const targets = seats.map(({ unit, offset }) => ({
+  const laneRows = playerDeploymentLaneRows(level);
+  const bandMinX = Math.min(...pools.all.map((cell) => cell.x));
+  const bandMaxX = Math.max(...pools.all.map((cell) => cell.x));
+  const shapeMinX = Math.min(...seats.map(({ offset }) => offset.x));
+  const shapeMaxX = Math.max(...seats.map(({ offset }) => offset.x));
+  const targetsAt = (anchorX: number) => seats.flatMap(({ unit, offset }) => {
+    const y = laneRows[offset.y];
+    return y === undefined ? [] : [{
       unitId: unit.id,
-      cell: { x: anchor.x + offset.x, y: anchor.y + offset.y },
+      cell: { x: anchorX + offset.x, y },
       type: unit.type,
-    }));
-    const keys = targets.map(({ cell }) => key(cell));
-    return keys.length === new Set(keys).size
-      && targets.every(({ cell, type }) => eligibleByType.get(type)?.has(key(cell)) && !occupied.has(key(cell)))
-      ? [targets]
-      : [];
+    }];
   });
-  if (anchors.length) {
-    const chosen = createRng(mixSeed(
-      run.deployment?.seed ?? run.seed,
-      `card-formation:${card.id}`,
-      run.deployment?.activeCardIndex ?? 0,
-    )).pick(anchors);
+  const legalTargetsAt = (anchorX: number) => {
+    const targets = targetsAt(anchorX);
+    const keys = targets.map(({ cell }) => key(cell));
+    return targets.length === seats.length
+      && keys.length === new Set(keys).size
+      && targets.every(({ cell, type }) => eligibleByType.get(type)?.has(key(cell)) && !occupied.has(key(cell)))
+      ? targets
+      : null;
+  };
+
+  // Enter fully from the right, then advance left until the next one-cell shift
+  // would collide. This is horizontal gravity rather than a random legal anchor.
+  const rightmostAnchor = bandMaxX - shapeMaxX;
+  const leftmostAnchor = bandMinX - shapeMinX;
+  let settled = Number.isFinite(rightmostAnchor) ? legalTargetsAt(rightmostAnchor) : null;
+  if (settled) {
+    for (let anchorX = rightmostAnchor - 1; anchorX >= leftmostAnchor; anchorX -= 1) {
+      const shifted = legalTargetsAt(anchorX);
+      if (!shifted) break;
+      settled = shifted;
+    }
     return {
-      placements: Object.fromEntries(chosen.map(({ unitId, cell }) => [unitId, cell])),
+      placements: Object.fromEntries(settled.map(({ unitId, cell }) => [unitId, cell])),
       preserved: true,
     };
   }
 
-  // Pragmatic first-pass recovery: if the whole shape has no legal anchor, keep the
-  // card playable by placing its units individually in the same seeded order.
+  // Pragmatic recovery: preserve each seat's authored lane where possible, filling
+  // that lane from the left. Only then use any remaining legal band cell.
   const fallback: Record<string, Vec> = {};
-  for (const { unit } of seats) {
-    const order = deploymentOrderedUnitIds(run).indexOf(unit.id);
-    const choice = automaticPlacementChoice(
-      run,
-      level,
-      unit,
-      { ...committed, ...fallback },
-      Math.max(0, order),
-    );
-    if (choice.cell) fallback[unit.id] = choice.cell;
+  for (const { unit, offset } of seats) {
+    const used = new Set([...occupied, ...Object.values(fallback).map(key)]);
+    const candidates = pools.byType[unit.type]
+      .filter((cell) => !used.has(key(cell)))
+      .sort((left, right) => left.x - right.x || left.y - right.y);
+    const preferredY = laneRows[offset.y];
+    const chosen = candidates.find((cell) => cell.y === preferredY) ?? candidates[0] ?? null;
+    if (chosen) fallback[unit.id] = chosen;
   }
   return { placements: fallback, preserved: false };
 }

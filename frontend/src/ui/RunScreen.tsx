@@ -684,6 +684,7 @@ function useRunDeploymentPresentation({
     screenClassName: 'run-deployment-screen',
     boardClassName: 'run-deployment-board',
     boardAriaLabel: `${level.name} deployment battlefield`,
+    unitArrivalTrack: 'slide-from-right',
     onArrivingUnitIdsChange: reportArrivals,
     renderCellOverlay: () => null,
     controlsContent: (

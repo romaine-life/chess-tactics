@@ -1,12 +1,18 @@
 import { runCardArtSlot, runCardFlavor, runCardName } from '../run/cardNames';
 import {
   PIECE_VALUE,
+  runCardRarity,
   type AdlectablePieceType,
   type RunArmyPieceType,
   type RunCardDefinition,
   type RunCardOffer,
+  type RunCardRarity,
 } from '../run/model';
-import { RUN_CARD_FRAME_SLOT } from './runCardFrameGeometry';
+import {
+  RUN_CARD_CONCINNOUS_FRAME_SLOT,
+  RUN_CARD_FRAME_SLOT,
+  RUN_CARD_HIERATIC_FRAME_SLOT,
+} from './runCardFrameGeometry';
 
 declare const RUN_CARD_FACE_PROJECTION: unique symbol;
 
@@ -27,6 +33,7 @@ export type RunCardFormationPiece = Readonly<{
 
 export type RunCardFaceContent = Readonly<{
   name: string;
+  rarity: RunCardRarity;
   cost: number;
   showsCost: boolean;
   typeLine: string;
@@ -50,8 +57,10 @@ export function isRunCardOffer(card: RunCardDefinition | RunCardOffer): card is 
   return 'offerId' in card;
 }
 
-/** Rarity is tabled and unit abilities are absent, so every live card uses one frame. */
-export function runCardFrameSlot(_card: RunCardDefinition | RunCardOffer): string {
+/** Frame color speaks only for rarity: ordinary, white, then forged steel. */
+export function runCardFrameSlot(card: RunCardDefinition | RunCardOffer): string {
+  if (card.rarity === 'rare') return RUN_CARD_HIERATIC_FRAME_SLOT;
+  if (card.rarity === 'uncommon') return RUN_CARD_CONCINNOUS_FRAME_SLOT;
   return RUN_CARD_FRAME_SLOT;
 }
 
@@ -106,6 +115,7 @@ export function runCardFaceContent(
   const offer = isRunCardOffer(card) ? card : null;
   return {
     name: runCardName(identity),
+    rarity: identity.rarity,
     cost: offer?.cost ?? card.value,
     showsCost: identity.id !== 'his-grace',
     typeLine: RUN_CARD_TYPE_LINE,
@@ -133,6 +143,7 @@ export function runCardSpecimen({ pieces, cost, formation }: RunCardSpecimenSpec
     artId: id,
     formation: formation?.map((cell) => ({ ...cell })) ?? pieces.map((_, x) => ({ x, y: 0 })),
     value,
+    rarity: runCardRarity(pieces, formation ?? pieces.map((_, x) => ({ x, y: 0 }))),
     offerId: `specimen-${pieces.join('-')}`,
     cost: cost ?? value,
   };

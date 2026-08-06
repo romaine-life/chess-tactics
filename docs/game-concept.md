@@ -87,18 +87,23 @@ these.
   retired (ADR-0216, ADR-0217, ADR-0368).
 - Run cards keep the familiar trading-card anatomy: title, one live whole-number
   gold cost, illustration, the **Units** type line, a positional unit diagram, and
-  flavor text. Every live card currently uses the Standard frame. Rarity frames,
-  card qualifiers, unit abilities, modifier icons, and acquisition targeting are
-  outside the active ruleset. Existing accepted composition illustrations may be
-  reused while dedicated formation art is authored.
-- The active offer deck is a deliberately bounded set of nineteen authored
-  formations containing one, two, or three units. A card's identity includes both
-  its ordered piece seats and their board-relative offsets; lower y is toward the
-  enemy. The set includes single Pawn, Knight, Bishop, Rook, and Queen cards;
-  horizontal two- and three-Pawn lines; front-Pawn pairs with Bishop, Knight,
-  Rook, or Queen; protected and reversed two-Pawn triangles for Bishops and
-  Knights; horizontal Knights; diagonal and vertical Bishops; and vertical Rooks.
-  Material composition alone does not generate additional cards.
+  flavor text. The Standard, accepted white, and accepted steel frames mean Common,
+  Uncommon, and Rare. Unit abilities, modifier icons, and acquisition targeting are
+  outside the active ruleset. Existing accepted composition illustrations, names, and
+  flavor may be reused while dedicated formation identities are authored; the diagram
+  is always the rules authority.
+- The active offer deck contains a deterministic 714-card generated core plus seven
+  retained authored exceptions. The core assigns Pawn, Knight, Bishop, Rook, and Queen
+  rosters worth at most nine material to every edge-connected one-to-four-cell footprint
+  in a two-row, four-column band. Horizontal translation is normalized, front/back is
+  preserved, and left/right mirrors remain distinct. The retained exceptions preserve
+  useful existing triangles, a diagonal Bishop pair, Queen behind Pawn, and vertical
+  Rook pair outside that grammar. His Grace remains the separate starter.
+- Rarity describes desirability rather than material price. Queens, two Rooks, three
+  non-Pawns, and every formation containing Bishops on opposite-colored squares are
+  Rare. A Rook or two non-Pawns is ordinarily Uncommon; same-color Bishop pairs remain
+  Common. Each offer seat rolls its tier first at 75% Common, 20% Uncommon, and 5% Rare,
+  then selects a distinct seeded formation from that tier.
 - A Sectio reveals three seeded formation-card offers, or four while
   Quartermaster's Ledger is held. Each offer costs exactly its printed material
   value. Adlectio adds the card and its units without rolling, assigning, or
@@ -106,8 +111,8 @@ these.
   Chartulary flight remain presentation-only; they do not imply a hidden market
   or a replacement draw.
 - Run difficulty currently exposes only **Ataraxia 0 — The Untroubled Mind**,
-  displayed as **Standard rules.** Higher tiers and card rarity remain tabled
-  until the baseline economy has supported a completed Run.
+  displayed as **Standard rules.** Higher difficulty tiers remain tabled until the
+  baseline economy has supported a completed Run.
 - A fresh Run starts with one non-removable card, **His Grace**: the King behind
   two protecting Pawns in a three-cell triangle. The earlier separate Front Lines
   card is retired. The starter's units, order, and formation are the same facts
@@ -117,8 +122,9 @@ these.
   Grace first and up to three cards in the first Conflict; later Conflicts add one
   card. The undrawn remainder returns to the persistent Chartulary mark.
 - When a card is played, all of its remaining units deploy as one atomic authored
-  formation. Deployment searches legal translations of that exact shape and
-  persists the complete hidden destination plan before the visible arrival.
+  formation. Its front and back rows enter the two-row Deployment band from the right
+  and advance left until the next translation would collide. Deployment persists the
+  complete hidden destination plan before the visible sideways arrival.
   Revealing a card and committing its formation are distinct animation boundaries,
   but there is no per-unit placement choice.
 - If no legal translation fits the whole shape, Deployment makes a deterministic
@@ -131,7 +137,7 @@ these.
   across reload and Battle retry. **Next** advances one card boundary, **Play**
   advances the sequence, **Full deploy** commits the remaining formations, and
   **Pause** stops after the current atomic card arrival settles (ADR-0346,
-  ADR-0419, ADR-0422, ADR-0435, ADR-0492).
+  ADR-0419, ADR-0422, ADR-0435, ADR-0492, ADR-0493).
 - Every persistent Run unit receives a seeded, stored historical identity when
   it joins the army. Piece type chooses the register: recorded archers for
   Pawns, documented knights, religious leaders, real castles for Rooks, queens

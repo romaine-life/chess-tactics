@@ -88,7 +88,7 @@ export function RunCard({
   );
   if (mode === 'reference') {
     return (
-      <span className="run-card-action is-reference" aria-label={`${name}. ${label}.${emptySeatLabel}${valueLabel}`}>
+      <span className="run-card-action is-reference" aria-label={`${name}. ${card.rarity} card. ${label}.${emptySeatLabel}${valueLabel}`}>
         {face}
       </span>
     );
@@ -99,7 +99,7 @@ export function RunCard({
         type="button"
         data-ui-sfx="gold"
         className="run-card-action"
-        aria-label={`Acquire ${name} — ${label} — for ${faceContent.cost} gold.`}
+        aria-label={`Acquire ${name} — ${card.rarity} — ${label} — for ${faceContent.cost} gold.`}
         disabled={disabled}
         onClick={(event) => onSelect?.(event.currentTarget)}
       >

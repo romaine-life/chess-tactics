@@ -133,6 +133,7 @@ export function runCardPresentationSignature(
     frameGeometry.id,
     frameGeometry.frameSha256s,
     card.name,
+    card.rarity,
     card.cost,
     card.showsCost,
     card.typeLine,
@@ -171,6 +172,10 @@ function grantsLabel(grants: readonly RunCardGrant[]): string {
   return visible.length ? visible.join(', ') : 'no units';
 }
 
+export function runCardFormationRows(pieces: readonly Pick<RunCardFormationPiece, 'y'>[]): number {
+  return Math.max(2, ...pieces.map((piece) => piece.y + 1));
+}
+
 function FormationDiagram({
   pieces,
   pending,
@@ -187,7 +192,9 @@ function FormationDiagram({
   onError: (kind: RunCardImageKind) => void;
 }): ReactElement {
   const columns = Math.max(1, ...pieces.map((piece) => piece.x + 1));
-  const rows = Math.max(1, ...pieces.map((piece) => piece.y + 1));
+  // The formation's empty front/back row is rules information. Cropping a singleton
+  // to its occupied cell made "Queen in front" and "Queen in back" print identically.
+  const rows = runCardFormationRows(pieces);
   return (
     <span
       className="run-card-formation"
@@ -311,6 +318,7 @@ function RunCardFaceLayer({
     <span
       className={`run-card-face-layer${pending ? ' is-pending' : ' is-presented'}`}
       data-card-presentation={signature}
+      data-card-rarity={card.rarity}
       data-frame-geometry={frameGeometry.id}
       style={{
         ...runCardFrameGeometryVariables(frameGeometry),
@@ -463,7 +471,8 @@ export function RunCardFace({
       } as CSSProperties}
       aria-hidden={ariaHidden || undefined}
       aria-busy={pending ? true : undefined}
-      aria-label={ariaHidden ? undefined : `${displayed.card.name}. ${displayed.card.typeLine}.${displayed.card.showsCost ? ` Costs ${displayed.card.cost} gold.` : ''} Grants ${grantsLabel(displayed.card.grants)} in the shown formation.`}
+      data-card-rarity={displayed.card.rarity}
+      aria-label={ariaHidden ? undefined : `${displayed.card.name}. ${displayed.card.rarity} ${displayed.card.typeLine}.${displayed.card.showsCost ? ` Costs ${displayed.card.cost} gold.` : ''} Grants ${grantsLabel(displayed.card.grants)} in the shown formation.`}
     >
       {layers.map((layer) => (
         <RunCardFaceLayer key={`${layer.presentation.signature}:${layer.pending ? 'pending' : 'shown'}`}
