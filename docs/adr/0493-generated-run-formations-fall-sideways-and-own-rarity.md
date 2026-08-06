@@ -65,6 +65,8 @@ Sectio rolls rarity before identity: 75% Common, 20% Uncommon, and 5% Rare per o
 chooses a distinct seeded card from that tier. The opening applies the same roll while limiting
 candidates to the eight starting gold. If a requested tier has no eligible unused card, the
 draw falls back to the complete eligible pool rather than leaving a seat empty.
+The generated and retained pool contains 197 Common, 415 Uncommon, and 109 Rare cards; those
+inventory counts never replace the explicit 75/20/5 appearance rate.
 
 Formation `y = 0` is the front deployment row and `y = 1` is the row behind it. A card enters
 the two-row deployment band from the right and advances left as one rigid piece until its next

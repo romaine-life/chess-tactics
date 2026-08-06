@@ -83,6 +83,13 @@ describe('formation card catalog', () => {
     expect(opposite.every((card) => card.rarity === 'rare')).toBe(true);
   });
 
+  it('keeps pool size separate from the tier-first appearance rate', () => {
+    expect(Object.fromEntries(['common', 'uncommon', 'rare'].map((rarity) => [
+      rarity,
+      RUN_CARD_DECK.filter((card) => card.rarity === rarity).length,
+    ]))).toEqual({ common: 197, uncommon: 415, rare: 109 });
+  });
+
   it('keeps His Grace on one protected three-unit starter card', () => {
     expect(RUN_STARTER_CARD_BY_ID['his-grace']).toMatchObject({
       pieces: ['king', 'pawn', 'pawn'],
