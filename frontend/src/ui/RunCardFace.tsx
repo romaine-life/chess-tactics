@@ -4,9 +4,9 @@ import { paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core
 import {
   CACOCHYMIC_DESCRIPTION,
   CACOCHYMIC_DISPLAY_NAME,
+  PIECE_LABEL,
   runAbilityDescription,
   runAbilityDisplayName,
-  type RunAbility,
   type RunCardType,
 } from '../run/model';
 import type { RunCardFaceContent, RunCardGrant } from './runCardFaceContent';
@@ -635,61 +635,66 @@ function setRunCardUnitStackPointerTarget(
   ).forEach((button) => button.classList.toggle('is-pixel-hovered', button === target));
 }
 
-function UnitStackSprite({
+function UnitGrantStack({
   cell,
-  unit,
-  index,
-  stackIndex,
-  stackCount,
-  plagued,
-  plaguedIconUrl,
-  ability,
-  abilityIconUrl,
-  abilityStackIndex,
-  highlighted,
-  selectionId,
-  selectionLabel,
-  onSelect,
+  grant,
+  iconMedia,
+  stackLayout,
+  pending,
+  unitHighlight,
+  unitSelection,
   tuning,
   onReady,
   onError,
 }: {
   cell: number;
-  unit: PlayablePieceType;
-  index: number;
-  stackIndex: number;
-  stackCount: number;
-  plagued: boolean;
-  plaguedIconUrl?: string;
-  ability?: RunAbility;
-  abilityIconUrl?: string;
-  abilityStackIndex?: number;
-  highlighted: boolean;
-  selectionId: string | null;
-  selectionLabel: string | null;
-  onSelect?: () => void;
+  grant: RunCardGrant;
+  iconMedia: RunCardIconMedia;
+  stackLayout: RunCardUnitStackLayout;
+  pending: boolean;
+  unitHighlight?: RunCardUnitHighlight | null;
+  unitSelection?: RunCardUnitSelection | null;
   tuning: RunCardContentsTuning;
   onReady: (kind: RunCardImageKind) => void;
   onError: (kind: RunCardImageKind) => void;
 }): ReactElement {
   const [metrics, setMetrics] = useState<UnitSpriteMetrics | null>(null);
-  const kind = runCardUnitImageKind(cell, unit, index);
+  const { unit } = grant;
+  const emptyIndices = grant.emptyIndices ?? [];
+  const cacochymicIndices = grant.cacochymicIndices ?? [];
+  const stackCount = stackLayout.stackCount;
   const source = pieceSpritePath(unit, PLAYER_CARD_PALETTE, PLAYER_CARD_FACING);
+  const unitName = PIECE_LABEL[unit];
   const visibleWidth = metrics ? metrics.opaqueWidthPerHeight * tuning.unitHeight : 0;
   const canvasWidth = metrics ? metrics.canvasWidthPerHeight * tuning.unitHeight : 0;
   const canvasLeft = metrics ? -metrics.opaqueLeftPerHeight * tuning.unitHeight : 0;
-  const seatLeft = runCardUnitStackSeatLeft(
-    stackIndex,
-    stackCount,
-    visibleWidth,
-    tuning.unitNaturalGap,
-  );
-  const markerSeatLeft = runCardUnitStackSeatLeft(
-    stackIndex + 1,
-    stackCount,
-    visibleWidth,
-    tuning.unitNaturalGap,
-  );
+  const placements = Array.from({ length: grant.count }, (_, index) => index)
+    .filter((index) => !emptyIndices.includes(index))
+    .map((index) => {
+      const stackIndex = stackLayout.stackIndices[index]!;
+      const selectionId = pending ? null : unitSelection?.id(unit, index) ?? null;
+      return {
+        index,
+        stackIndex,
+        plagued: cacochymicIndices.includes(index),
+        highlighted: unitHighlight?.unit === unit && unitHighlight.index === index,
+        selectionId,
+        selectionLabel: pending ? null : unitSelection?.label(unit, index) ?? null,
+        seatLeft: runCardUnitStackSeatLeft(
+          stackIndex,
+          stackCount,
+          visibleWidth,
+          tuning.unitNaturalGap,
+        ),
+      };
+    });
+  const firstSeatLeft = placements[0]?.seatLeft ?? '0cqw';
+  const lastSeatLeft = placements[placements.length - 1]?.seatLeft ?? firstSeatLeft;
+  const tooltipWidth = metrics && placements.length
+    ? `calc(${lastSeatLeft} - ${firstSeatLeft} + ${visibleWidth.toFixed(4)}cqw)`
+    : '0cqw';
+  const abilityUnitIndex = grant.ability?.index ?? -1;
+  const abilityStackIndex = stackLayout.abilityStackIndex;
   const abilitySeatLeft = abilityStackIndex === undefined
     ? null
     : runCardUnitStackSeatLeft(
@@ -699,74 +704,115 @@ function UnitStackSprite({
       tuning.unitNaturalGap,
     );
 
-  const seatClassName = `run-card-prototype-unit-icon-seat${plagued ? ' is-plagued' : ''}${highlighted ? ' is-highlighted' : ''}${selectionLabel ? ' is-selectable' : ''}`;
-  const seatStyle = {
-    '--run-card-unit-canvas-left': `${canvasLeft.toFixed(4)}cqw`,
-    '--run-card-unit-canvas-width': `${canvasWidth.toFixed(4)}cqw`,
-    '--run-card-unit-seat-left': seatLeft,
-    '--run-card-unit-seat-width': `${visibleWidth.toFixed(4)}cqw`,
-    zIndex: stackIndex + 1,
-  } as CSSProperties;
-  const sprite = (
-    <img
-      className="run-card-prototype-unit-icon"
-      data-unit-facing={PLAYER_CARD_FACING}
-      data-unit-palette={PLAYER_CARD_PALETTE}
-      src={source}
-      alt=""
-      draggable={false}
-      onLoad={(event) => {
-        try {
-          setMetrics(measureUnitSprite(event.currentTarget));
-          onReady(kind);
-        } catch {
-          onError(kind);
-        }
-      }}
-      onError={() => onError(kind)}
-    />
-  );
-
   return (
     <>
-      {selectionLabel ? (
-        <button
-          type="button"
-          className={seatClassName}
-          data-stack-index={stackIndex}
-          data-unit-index={index}
-          data-run-card-unit-id={selectionId ?? undefined}
-          style={seatStyle}
-          aria-label={selectionLabel}
-          aria-pressed={highlighted}
-          onClick={(event) => {
-            if (event.detail !== 0) return;
-            onSelect?.();
-          }}
+      {placements.length ? (
+        <Tooltip
+          className="run-card-prototype-unit-tooltip"
+          triggerClassName="run-card-prototype-unit-tooltip-trigger"
+          popupClassName="run-card-prototype-unit-tooltip-popup"
+          popupMaxInlineSize={168}
+          focusable={false}
+          explainMechanics={false}
+          label={unitName}
+          title={unitName}
+          style={{ insetInlineStart: firstSeatLeft, inlineSize: tooltipWidth }}
+          trigger={placements.map(({
+            index,
+            stackIndex,
+            plagued,
+            highlighted,
+            selectionId,
+            selectionLabel,
+            seatLeft,
+          }) => {
+            const kind = runCardUnitImageKind(cell, unit, index);
+            const seatClassName = `run-card-prototype-unit-icon-seat${plagued ? ' is-plagued' : ''}${highlighted ? ' is-highlighted' : ''}${selectionLabel ? ' is-selectable' : ''}`;
+            const seatStyle = {
+              '--run-card-unit-canvas-left': `${canvasLeft.toFixed(4)}cqw`,
+              '--run-card-unit-canvas-width': `${canvasWidth.toFixed(4)}cqw`,
+              '--run-card-unit-seat-left': seatLeft === firstSeatLeft
+                ? '0cqw'
+                : `calc(${seatLeft} - ${firstSeatLeft})`,
+              '--run-card-unit-seat-width': `${visibleWidth.toFixed(4)}cqw`,
+              zIndex: stackIndex + 1,
+            } as CSSProperties;
+            const sprite = (
+              <img
+                className="run-card-prototype-unit-icon"
+                data-unit-facing={PLAYER_CARD_FACING}
+                data-unit-palette={PLAYER_CARD_PALETTE}
+                src={source}
+                alt=""
+                draggable={false}
+                onLoad={(event) => {
+                  try {
+                    setMetrics(measureUnitSprite(event.currentTarget));
+                    onReady(kind);
+                  } catch {
+                    onError(kind);
+                  }
+                }}
+                onError={() => onError(kind)}
+              />
+            );
+            return selectionLabel ? (
+              <button
+                type="button"
+                className={seatClassName}
+                data-stack-index={stackIndex}
+                data-unit-index={index}
+                data-run-card-unit-id={selectionId ?? undefined}
+                key={selectionId ?? `${grant.unit}-${index}`}
+                style={seatStyle}
+                aria-label={selectionLabel}
+                aria-pressed={highlighted}
+                onClick={(event) => {
+                  if (event.detail !== 0) return;
+                  unitSelection?.onSelect(unit, index);
+                }}
+              >
+                {sprite}
+              </button>
+            ) : (
+              <span
+                className={seatClassName}
+                data-stack-index={stackIndex}
+                data-unit-index={index}
+                data-run-card-unit-id={selectionId ?? undefined}
+                key={selectionId ?? `${grant.unit}-${index}`}
+                style={seatStyle}
+              >
+                {sprite}
+              </span>
+            );
+          })}
         >
-          {sprite}
-        </button>
-      ) : (
-        <span
-          className={seatClassName}
-          data-stack-index={stackIndex}
-          data-unit-index={index}
-          data-run-card-unit-id={selectionId ?? undefined}
-          style={seatStyle}
-        >
-          {sprite}
-        </span>
-      )}
-      {plagued ? (
+          <img
+            className="run-card-prototype-unit-tooltip-sprite"
+            src={source}
+            alt=""
+            aria-hidden="true"
+            draggable={false}
+          />
+        </Tooltip>
+      ) : null}
+      {placements.map(({ index, stackIndex, plagued }) => plagued ? (
         <span
           className="run-card-prototype-unit-icon-seat run-card-prototype-unit-marker-seat"
           data-stack-index={stackIndex + 1}
           data-target-unit-index={index}
           style={{
-            '--run-card-unit-seat-left': markerSeatLeft,
+            '--run-card-unit-seat-left': runCardUnitStackSeatLeft(
+              stackIndex + 1,
+              stackCount,
+              visibleWidth,
+              tuning.unitNaturalGap,
+            ),
             '--run-card-unit-seat-width': `${visibleWidth.toFixed(4)}cqw`,
             zIndex: stackIndex + 2,
           } as CSSProperties}
+          key={`cacochymic-${unit}-${index}`}
         >
           <Tooltip
             className="run-card-prototype-unit-marker-tooltip"
@@ -778,7 +824,7 @@ function UnitStackSprite({
               <RunAbilityIcon
                 ability="cacochymic"
                 className="run-card-prototype-unit-marker"
-                src={plaguedIconUrl}
+                src={iconMedia.unitStateUrls?.cacochymic}
                 onLoad={(event) => {
                   void acknowledgeDecodedImage(
                     event.currentTarget,
@@ -794,12 +840,15 @@ function UnitStackSprite({
             <span>{CACOCHYMIC_DESCRIPTION}</span>
           </Tooltip>
         </span>
-      ) : null}
-      {ability && abilitySeatLeft !== null && abilityStackIndex !== undefined ? (
+      ) : null)}
+      {grant.ability
+        && !emptyIndices.includes(abilityUnitIndex)
+        && abilitySeatLeft !== null
+        && abilityStackIndex !== undefined ? (
         <span
           className="run-card-prototype-unit-icon-seat run-card-prototype-unit-marker-seat"
           data-stack-index={abilityStackIndex}
-          data-unit-state={ability}
+          data-unit-state={grant.ability.state}
           style={{
             '--run-card-unit-seat-left': abilitySeatLeft,
             '--run-card-unit-seat-width': `${visibleWidth.toFixed(4)}cqw`,
@@ -810,26 +859,26 @@ function UnitStackSprite({
             className="run-card-prototype-unit-marker-tooltip"
             triggerClassName="run-card-prototype-unit-marker-trigger"
             focusable={false}
-            label={runAbilityDisplayName(ability)}
-            title={runAbilityDisplayName(ability)}
+            label={runAbilityDisplayName(grant.ability.state)}
+            title={runAbilityDisplayName(grant.ability.state)}
             trigger={(
               <RunAbilityIcon
-                ability={ability}
+                ability={grant.ability.state}
                 className="run-card-prototype-unit-marker is-ability"
-                src={abilityIconUrl}
+                src={iconMedia.unitStateUrls?.[grant.ability.state]}
                 onLoad={(event) => {
                   void acknowledgeDecodedImage(
                     event.currentTarget,
-                    runCardUnitStateImageKind(ability),
+                    runCardUnitStateImageKind(grant.ability!.state),
                     onReady,
                     onError,
                   );
                 }}
-                onError={() => onError(runCardUnitStateImageKind(ability))}
+                onError={() => onError(runCardUnitStateImageKind(grant.ability!.state))}
               />
             )}
           >
-            <span>{runAbilityDescription(ability, unit)}</span>
+            <span>{runAbilityDescription(grant.ability.state, unit)}</span>
           </Tooltip>
         </span>
       ) : null}
@@ -1032,11 +1081,7 @@ function RunCardFaceLayer({
         >
           {card.grants.map((grant, cell) => {
             const emptyIndices = grant.emptyIndices ?? [];
-            const cacochymicIndices = grant.cacochymicIndices ?? [];
             const stackLayout = runCardUnitStackLayout(grant, compactEmptySeats);
-            // The marker seats immediately after the unit that actually carries the state,
-            // so a revealed target on a multi-unit card is marked where it stands.
-            const abilityUnitIndex = grant.ability?.index ?? -1;
             return (
               <span
                 className="run-card-prototype-ledger-row"
@@ -1065,34 +1110,18 @@ function RunCardFaceLayer({
                     if (Number.isSafeInteger(selectedIndex)) unitSelection.onSelect(grant.unit, selectedIndex);
                   }}
                 >
-                  {Array.from({ length: grant.count }, (_, index) => {
-                    if (emptyIndices.includes(index)) return null;
-                    const selectionId = pending ? null : unitSelection?.id(grant.unit, index) ?? null;
-                    return (
-                      <UnitStackSprite
-                        ability={index === abilityUnitIndex ? grant.ability?.state : undefined}
-                        abilityIconUrl={index === abilityUnitIndex && grant.ability
-                          ? iconMedia.unitStateUrls?.[grant.ability.state]
-                          : undefined}
-                        abilityStackIndex={index === abilityUnitIndex ? stackLayout.abilityStackIndex : undefined}
-                        highlighted={unitHighlight?.unit === grant.unit && unitHighlight.index === index}
-                        selectionId={selectionId}
-                        selectionLabel={pending ? null : unitSelection?.label(grant.unit, index) ?? null}
-                        onSelect={pending || !unitSelection ? undefined : () => unitSelection.onSelect(grant.unit, index)}
-                        cell={cell}
-                        index={index}
-                        key={selectionId ?? `${grant.unit}-${index}`}
-                        unit={grant.unit}
-                        plagued={cacochymicIndices.includes(index)}
-                        plaguedIconUrl={iconMedia.unitStateUrls?.cacochymic}
-                        stackCount={stackLayout.stackCount}
-                        stackIndex={stackLayout.stackIndices[index]!}
-                        tuning={contentsTuning}
-                        onReady={acknowledgeLoad}
-                        onError={acknowledgeError}
-                      />
-                    );
-                  })}
+                  <UnitGrantStack
+                    cell={cell}
+                    grant={grant}
+                    iconMedia={iconMedia}
+                    stackLayout={stackLayout}
+                    pending={pending}
+                    unitHighlight={unitHighlight}
+                    unitSelection={unitSelection}
+                    tuning={contentsTuning}
+                    onReady={acknowledgeLoad}
+                    onError={acknowledgeError}
+                  />
                 </span>
               </span>
             );
