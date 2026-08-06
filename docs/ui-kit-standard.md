@@ -162,6 +162,13 @@ adlected face reveals the accepted universal back in the pile's unchanged origin
 remaining piles never reflow, the revealed back is not interactive, and a later Adlectio can
 launch immediately while independent card flights play out in the continuity layer.
 
+Under [ADR-0482](adr/0482-run-card-units-reveal-a-larger-named-reading.md), every
+occupied same-role unit stack on the canonical Run card face reuses one shared fixed
+tooltip to show that canonical sprite at a larger reading size and spell out its chess
+role. Repeated units therefore keep one stable popup as the pointer crosses between
+them. The card remains the only Sectio action; the hover reading does not add a nested
+control.
+
 Under [ADR-0389](adr/0389-the-title-route-names-the-visible-strategikon-address.md),
 the gameplay screen-name route retains the underlying Run phase and appends every
 visible Strategikon address segment. Its section and nested Enchiridion labels come

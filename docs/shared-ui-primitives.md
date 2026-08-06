@@ -75,8 +75,9 @@ search for before constructing a control or repeated surface.
   [ADR-0463](adr/0463-continuity-handoffs-settle-with-the-director.md)).
 - `ui/RunCardFace.tsx` — the canonical visible Run-card anatomy shared by Card
   Layout, Sectio visits, review, Enchiridion, and Deployment; it owns the paired property/state
-  icon seats, retains authored geometry for optional empty occurrences, and includes only visible
-  media in atomic face promotion.
+  icon seats, retains authored geometry for optional empty occurrences, includes only visible
+  media in atomic face promotion, and gives each occupied same-role unit stack one stable shared
+  larger prose-named hover reading from `Tooltip` (ADR-0482).
 - `ui/RunCard.tsx` — the canonical interactive/reference host around
   `RunCardFace`; Sectio mode owns the gold transaction cue and supplies the exact
   source face used by the Adlectio transfer.

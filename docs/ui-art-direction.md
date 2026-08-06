@@ -323,7 +323,13 @@ the measured endpoint for an adlected card's shrinking transfer and the measured
 the face-down Deployment deal into the numbered Controls stack. When an adlected card leaves
 the Sectio layout, it reveals the accepted face-down card registered beneath it in the same pile
 seat. Every original pile remains fixed; the back is non-interactive presentation rather than a
-replacement offer or stock count (ADR-0387, ADR-0419, ADR-0420, ADR-0481). The persistent
+replacement offer or stock count (ADR-0387, ADR-0419, ADR-0420, ADR-0481). Every occupied unit
+sprite on the canonical card face immediately raises the shared fixed tooltip on pointer hover.
+That reading repeats the same canonical player-side sprite at a materially larger scale and names
+its chess role in live prose; repeated units of one role share one stable reading, so crossing
+between them does not replace or move the popup. An unacquired offer never invents a persistent
+personal name. In Sectio the complete card remains the one action, so unit readings introduce no
+nested controls (ADR-0482). The persistent
 active Deployment card never compacts around a played unit: its authored density, sprite scale,
 and stack seats remain fixed while the departed occurrence becomes a visible vacancy (ADR-0427).
 title route always appends the visible Enchiridion section on the standalone host,
