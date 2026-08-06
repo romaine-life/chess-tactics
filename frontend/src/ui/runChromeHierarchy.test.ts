@@ -89,7 +89,6 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('runWorkspaceHref(current.toString(), nextView)');
     expect(runScreen).toContain("navigateApp(nextHref, { replace: true, scroll: false })");
     expect(metaControls).toContain('Reset Sectio');
-    expect(metaControls).toContain('Continue to first Battle');
     expect(metaControls).toContain('Continue to next Battle');
     expect(metaControls).not.toContain('openingNeedsPurchase');
     expect(metaControls).not.toContain('Buy one card before continuing.');

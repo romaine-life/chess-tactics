@@ -25,9 +25,10 @@ describe('Run card names', () => {
     }
   });
 
-  it('keeps every authored name unique', () => {
+  it('reuses the authored scene names while generated formation ids remain distinct', () => {
     const names = Object.values(RUN_CARD_NAME_BY_ID);
-    expect(new Set(names).size).toBe(names.length);
+    expect(new Set(names).size).toBeLessThan(names.length);
+    expect(new Set(RUN_CARD_DECK.map((card) => card.id)).size).toBe(RUN_CARD_DECK.length);
   });
 
   it('names the lone queen Regal Serenity', () => {

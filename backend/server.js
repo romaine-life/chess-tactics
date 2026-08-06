@@ -86,6 +86,8 @@ const {
   runCardBackMediaIssue,
   runCardBackOwnerProofIssue,
   runCardBackSlot,
+  runCardRarityFrameOwnerProofIssue,
+  runCardRarityFrameSlot,
   runResourceIconMediaIssue,
   runResourceIconSlotId,
   runExpunctioReviewSurface,
@@ -4611,6 +4613,607 @@ const MIGRATIONS = [
       ON CONFLICT (document_id, revision) DO NOTHING;
     `,
   },
+  {
+    version: 63,
+    name: 'ability-free generated formation Runs',
+    // ADR-0492/0493: the previous application release advanced browser-owned Runs
+    // to version 24 but omitted the equivalent account-document migration. Advance
+    // both possible durable predecessors directly to version 25. Version 23 loses
+    // retired ability state while preserving its army, economy, and every card whose
+    // seats already match an active formation; other surviving units receive neutral
+    // singleton cards. Version 24 keeps its card identities and gains canonical offer
+    // rarity. Both versions abandon an in-flight destination plan at Deployment's
+    // pre-information boundary before sideways settling becomes authoritative.
+    sql: `
+      CREATE OR REPLACE FUNCTION pg_temp.run25_is_current_lipsanon(lipsanon_id text)
+      RETURNS boolean
+      LANGUAGE sql
+      IMMUTABLE
+      AS $function$
+        SELECT lipsanon_id = ANY (ARRAY[
+          'congressional-approval', 'royal-tent', 'mercenarys-rifle',
+          'merchants-shopkey', 'occult-dagger', 'deployment-vehicle',
+          'mercenary-boat', 'quartermasters-ledger', 'fair-scales'
+        ]::text[])
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.run25_plain_unit(unit_value jsonb)
+      RETURNS jsonb
+      LANGUAGE sql
+      IMMUTABLE
+      AS $function$
+        SELECT CASE WHEN jsonb_typeof(unit_value) = 'object'
+          THEN unit_value - 'abilities' - 'modifiers'
+          ELSE unit_value
+        END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.run25_plain_army(army_value jsonb)
+      RETURNS jsonb
+      LANGUAGE sql
+      IMMUTABLE
+      AS $function$
+        SELECT CASE WHEN jsonb_typeof(army_value) = 'array' THEN COALESCE((
+          SELECT jsonb_agg(pg_temp.run25_plain_unit(value) ORDER BY ordinality)
+            FROM jsonb_array_elements(army_value) WITH ORDINALITY
+        ), '[]'::jsonb) ELSE '[]'::jsonb END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.run25_filter_lipsana(lipsana_value jsonb)
+      RETURNS jsonb
+      LANGUAGE sql
+      IMMUTABLE
+      AS $function$
+        SELECT COALESCE(jsonb_agg(value ORDER BY first_ordinality), '[]'::jsonb)
+          FROM (
+            SELECT value, min(ordinality) AS first_ordinality
+              FROM jsonb_array_elements(
+                CASE WHEN jsonb_typeof(lipsana_value) = 'array'
+                  THEN lipsana_value ELSE '[]'::jsonb END
+              ) WITH ORDINALITY
+             WHERE jsonb_typeof(value) = 'string'
+               AND pg_temp.run25_is_current_lipsanon(value #>> '{}')
+             GROUP BY value
+          ) current_lipsana
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.run25_distinct_array_concat(left_value jsonb, right_value jsonb)
+      RETURNS jsonb
+      LANGUAGE sql
+      IMMUTABLE
+      AS $function$
+        SELECT COALESCE(jsonb_agg(value ORDER BY first_ordinality), '[]'::jsonb)
+          FROM (
+            SELECT value, min(ordinality) AS first_ordinality
+              FROM jsonb_array_elements(
+                CASE WHEN jsonb_typeof(left_value) = 'array' THEN left_value ELSE '[]'::jsonb END
+                || CASE WHEN jsonb_typeof(right_value) = 'array' THEN right_value ELSE '[]'::jsonb END
+              ) WITH ORDINALITY
+             GROUP BY value
+          ) distinct_values
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.run25_filter_conflict_paid(value jsonb)
+      RETURNS jsonb
+      LANGUAGE sql
+      IMMUTABLE
+      AS $function$
+        SELECT CASE WHEN jsonb_typeof(value) = 'object' THEN COALESCE((
+          SELECT jsonb_object_agg(key, entry)
+            FROM jsonb_each(value) paid(key, entry)
+           WHERE jsonb_typeof(entry) = 'object'
+             AND pg_temp.run25_is_current_lipsanon(entry->>'lipsanonId')
+        ), '{}'::jsonb) ELSE '{}'::jsonb END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.run25_expected_formation_pieces(core_id text)
+      RETURNS jsonb
+      LANGUAGE sql
+      IMMUTABLE
+      AS $function$
+        SELECT CASE core_id
+          WHEN 'p' THEN '["pawn"]'::jsonb
+          WHEN 'pp' THEN '["pawn","pawn"]'::jsonb
+          WHEN 'ppp' THEN '["pawn","pawn","pawn"]'::jsonb
+          WHEN 'k' THEN '["knight"]'::jsonb
+          WHEN 'b' THEN '["bishop"]'::jsonb
+          WHEN 'pk-front' THEN '["knight","pawn"]'::jsonb
+          WHEN 'pb-front' THEN '["bishop","pawn"]'::jsonb
+          WHEN 'ppk-reversed' THEN '["knight","pawn","pawn"]'::jsonb
+          WHEN 'ppb-reversed' THEN '["bishop","pawn","pawn"]'::jsonb
+          WHEN 'bb-diagonal' THEN '["bishop","bishop"]'::jsonb
+          WHEN 'r' THEN '["rook"]'::jsonb
+          WHEN 'pr-front' THEN '["rook","pawn"]'::jsonb
+          WHEN 'kk-horizontal' THEN '["knight","knight"]'::jsonb
+          WHEN 'ppk-protected' THEN '["knight","pawn","pawn"]'::jsonb
+          WHEN 'ppb-protected' THEN '["bishop","pawn","pawn"]'::jsonb
+          WHEN 'q' THEN '["queen"]'::jsonb
+          WHEN 'pq-front' THEN '["queen","pawn"]'::jsonb
+          WHEN 'bb-vertical' THEN '["bishop","bishop"]'::jsonb
+          WHEN 'rr-vertical' THEN '["rook","rook"]'::jsonb
+          ELSE NULL
+        END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.run25_singleton_core(piece_type text)
+      RETURNS text
+      LANGUAGE sql
+      IMMUTABLE
+      AS $function$
+        SELECT CASE piece_type
+          WHEN 'pawn' THEN 'p'
+          WHEN 'knight' THEN 'k'
+          WHEN 'bishop' THEN 'b'
+          WHEN 'rook' THEN 'r'
+          WHEN 'queen' THEN 'q'
+          ELSE NULL
+        END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.run25_unit_type(army_value jsonb, unit_id text)
+      RETURNS text
+      LANGUAGE sql
+      IMMUTABLE
+      AS $function$
+        SELECT unit_value->>'type'
+          FROM jsonb_array_elements(
+            CASE WHEN jsonb_typeof(army_value) = 'array' THEN army_value ELSE '[]'::jsonb END
+          ) WITH ORDINALITY AS units(unit_value, ordinality)
+         WHERE unit_value->>'id' = unit_id
+         ORDER BY ordinality
+         LIMIT 1
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.run25_migrate_cards(cards_value jsonb, army_value jsonb)
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      IMMUTABLE
+      AS $function$
+      DECLARE
+        migrated jsonb := '[]'::jsonb;
+        used_units text[] := ARRAY[]::text[];
+        used_cards text[] := ARRAY['run-card-his-grace']::text[];
+        card_value jsonb;
+        seat_record record;
+        unit_record record;
+        seats jsonb;
+        expected jsonb;
+        core_id text;
+        unit_id text;
+        unit_type text;
+        preferred_id text;
+        card_id text;
+        suffix integer;
+        acquired_after integer;
+        matches boolean;
+        king_id text;
+        pawn_a text;
+        pawn_b text;
+      BEGIN
+        SELECT unit_value->>'id' INTO king_id
+          FROM jsonb_array_elements(army_value) WITH ORDINALITY AS units(unit_value, ordinality)
+         WHERE unit_value->>'id' = 'run-king' AND unit_value->>'type' = 'king'
+         ORDER BY ordinality LIMIT 1;
+        SELECT unit_value->>'id' INTO pawn_a
+          FROM jsonb_array_elements(army_value) WITH ORDINALITY AS units(unit_value, ordinality)
+         WHERE unit_value->>'id' = 'run-pawn-a' AND unit_value->>'type' = 'pawn'
+         ORDER BY ordinality LIMIT 1;
+        SELECT unit_value->>'id' INTO pawn_b
+          FROM jsonb_array_elements(army_value) WITH ORDINALITY AS units(unit_value, ordinality)
+         WHERE unit_value->>'id' = 'run-pawn-b' AND unit_value->>'type' = 'pawn'
+         ORDER BY ordinality LIMIT 1;
+
+        migrated := migrated || jsonb_build_array(jsonb_build_object(
+          'id', 'run-card-his-grace',
+          'coreId', 'his-grace',
+          'unitSeats', jsonb_build_array(king_id, pawn_a, pawn_b),
+          'acquiredAfterBattleIndex', 0
+        ));
+        IF king_id IS NOT NULL THEN used_units := array_append(used_units, king_id); END IF;
+        IF pawn_a IS NOT NULL THEN used_units := array_append(used_units, pawn_a); END IF;
+        IF pawn_b IS NOT NULL THEN used_units := array_append(used_units, pawn_b); END IF;
+
+        FOR card_value IN
+          SELECT value FROM jsonb_array_elements(
+            CASE WHEN jsonb_typeof(cards_value) = 'array' THEN cards_value ELSE '[]'::jsonb END
+          ) WITH ORDINALITY ORDER BY ordinality
+        LOOP
+          core_id := card_value->>'coreId';
+          IF core_id IN ('his-grace', 'front-lines') THEN CONTINUE; END IF;
+          seats := '[]'::jsonb;
+          FOR seat_record IN
+            SELECT value, ordinality FROM jsonb_array_elements(
+              CASE WHEN jsonb_typeof(card_value->'unitSeats') = 'array'
+                THEN card_value->'unitSeats' ELSE '[]'::jsonb END
+            ) WITH ORDINALITY ORDER BY ordinality
+          LOOP
+            IF jsonb_typeof(seat_record.value) = 'string' THEN
+              unit_id := seat_record.value #>> '{}';
+              IF NOT (unit_id = ANY(used_units)) THEN seats := seats || seat_record.value; END IF;
+            END IF;
+          END LOOP;
+          acquired_after := CASE WHEN COALESCE(card_value->>'acquiredAfterBattleIndex', '') ~ '^\\d+$'
+            THEN GREATEST(0, (card_value->>'acquiredAfterBattleIndex')::integer) ELSE 0 END;
+          expected := pg_temp.run25_expected_formation_pieces(core_id);
+          matches := expected IS NOT NULL AND jsonb_array_length(seats) = jsonb_array_length(expected);
+          IF matches THEN
+            FOR seat_record IN SELECT value, ordinality FROM jsonb_array_elements(seats) WITH ORDINALITY LOOP
+              unit_id := seat_record.value #>> '{}';
+              IF pg_temp.run25_unit_type(army_value, unit_id) IS DISTINCT FROM expected->>((seat_record.ordinality - 1)::integer) THEN
+                matches := false;
+                EXIT;
+              END IF;
+            END LOOP;
+          END IF;
+          IF matches THEN
+            preferred_id := COALESCE(NULLIF(card_value->>'id', ''), 'run-card-formation-' || core_id);
+            card_id := preferred_id;
+            suffix := 2;
+            WHILE card_id = ANY(used_cards) LOOP
+              card_id := preferred_id || '-' || suffix;
+              suffix := suffix + 1;
+            END LOOP;
+            used_cards := array_append(used_cards, card_id);
+            migrated := migrated || jsonb_build_array(jsonb_build_object(
+              'id', card_id, 'coreId', core_id, 'unitSeats', seats,
+              'acquiredAfterBattleIndex', acquired_after
+            ));
+            FOR seat_record IN SELECT value FROM jsonb_array_elements(seats) LOOP
+              used_units := array_append(used_units, seat_record.value #>> '{}');
+            END LOOP;
+          ELSE
+            FOR seat_record IN SELECT value FROM jsonb_array_elements(seats) LOOP
+              unit_id := seat_record.value #>> '{}';
+              unit_type := pg_temp.run25_unit_type(army_value, unit_id);
+              core_id := pg_temp.run25_singleton_core(unit_type);
+              IF core_id IS NULL OR unit_id = ANY(used_units) THEN CONTINUE; END IF;
+              preferred_id := 'run-card-formation-' || unit_id;
+              card_id := preferred_id;
+              suffix := 2;
+              WHILE card_id = ANY(used_cards) LOOP
+                card_id := preferred_id || '-' || suffix;
+                suffix := suffix + 1;
+              END LOOP;
+              used_cards := array_append(used_cards, card_id);
+              used_units := array_append(used_units, unit_id);
+              migrated := migrated || jsonb_build_array(jsonb_build_object(
+                'id', card_id, 'coreId', core_id, 'unitSeats', jsonb_build_array(unit_id),
+                'acquiredAfterBattleIndex', acquired_after
+              ));
+            END LOOP;
+          END IF;
+        END LOOP;
+
+        FOR unit_record IN
+          SELECT unit_value, ordinality FROM jsonb_array_elements(army_value)
+            WITH ORDINALITY AS units(unit_value, ordinality) ORDER BY ordinality
+        LOOP
+          unit_id := unit_record.unit_value->>'id';
+          unit_type := unit_record.unit_value->>'type';
+          core_id := pg_temp.run25_singleton_core(unit_type);
+          IF core_id IS NULL OR unit_id IS NULL OR unit_id = ANY(used_units) THEN CONTINUE; END IF;
+          preferred_id := 'run-card-formation-' || unit_id;
+          card_id := preferred_id;
+          suffix := 2;
+          WHILE card_id = ANY(used_cards) LOOP
+            card_id := preferred_id || '-' || suffix;
+            suffix := suffix + 1;
+          END LOOP;
+          used_cards := array_append(used_cards, card_id);
+          used_units := array_append(used_units, unit_id);
+          migrated := migrated || jsonb_build_array(jsonb_build_object(
+            'id', card_id, 'coreId', core_id, 'unitSeats', jsonb_build_array(unit_id),
+            'acquiredAfterBattleIndex', 0
+          ));
+        END LOOP;
+        RETURN migrated;
+      END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.run25_static_offer(slot_index integer)
+      RETURNS jsonb
+      LANGUAGE sql
+      IMMUTABLE
+      AS $function$
+        SELECT CASE slot_index
+          WHEN 0 THEN jsonb_build_object(
+            'id', 'p', 'artId', 'p', 'pieces', '["pawn"]'::jsonb,
+            'formation', '[{"x":0,"y":0}]'::jsonb, 'value', 1,
+            'rarity', 'common', 'offerId', 'migration-63-0-p', 'cost', 1
+          )
+          WHEN 1 THEN jsonb_build_object(
+            'id', 'k', 'artId', 'k', 'pieces', '["knight"]'::jsonb,
+            'formation', '[{"x":0,"y":0}]'::jsonb, 'value', 3,
+            'rarity', 'common', 'offerId', 'migration-63-1-k', 'cost', 3
+          )
+          WHEN 2 THEN jsonb_build_object(
+            'id', 'b', 'artId', 'b', 'pieces', '["bishop"]'::jsonb,
+            'formation', '[{"x":0,"y":0}]'::jsonb, 'value', 3,
+            'rarity', 'common', 'offerId', 'migration-63-2-b', 'cost', 3
+          )
+          ELSE jsonb_build_object(
+            'id', 'r', 'artId', 'r', 'pieces', '["rook"]'::jsonb,
+            'formation', '[{"x":0,"y":0}]'::jsonb, 'value', 5,
+            'rarity', 'uncommon', 'offerId', 'migration-63-3-r', 'cost', 5
+          )
+        END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.run25_migrate_sectio(
+        sectio_value jsonb,
+        run_value jsonb,
+        army_value jsonb,
+        cards_value jsonb,
+        lipsana_value jsonb,
+        seen_value jsonb,
+        conflict_paid_value jsonb
+      ) RETURNS jsonb
+      LANGUAGE plpgsql
+      IMMUTABLE
+      AS $function$
+      DECLARE
+        offer_count integer := CASE WHEN lipsana_value ? 'quartermasters-ledger' THEN 4 ELSE 3 END;
+        offers jsonb;
+        paid_offer text;
+        paid_bought boolean;
+      BEGIN
+        IF jsonb_typeof(sectio_value) <> 'object' THEN RETURN 'null'::jsonb; END IF;
+        SELECT jsonb_agg(pg_temp.run25_static_offer(index) ORDER BY index)
+          INTO offers FROM generate_series(0, offer_count - 1) AS index;
+        paid_offer := CASE WHEN pg_temp.run25_is_current_lipsanon(sectio_value->>'paidLipsanonOffer')
+          THEN sectio_value->>'paidLipsanonOffer' ELSE NULL END;
+        paid_bought := paid_offer IS NOT NULL AND COALESCE((sectio_value->>'paidLipsanonBought')::boolean, false);
+        RETURN jsonb_build_object(
+          'kind', COALESCE(sectio_value->'kind', '"post-battle"'::jsonb),
+          'afterBattleIndex', COALESCE(sectio_value->'afterBattleIndex', run_value->'battleIndex'),
+          'conflictIndex', COALESCE(sectio_value->'conflictIndex', run_value->'conflictIndex'),
+          'victoryGoldTenths', COALESCE(sectio_value->'victoryGoldTenths', '0'::jsonb),
+          'cardOffers', offers,
+          'adlectedCardOfferIds', '[]'::jsonb,
+          'paidLipsanonOffer', to_jsonb(paid_offer),
+          'paidLipsanonBought', to_jsonb(paid_bought),
+          'alienatedUnits', '[]'::jsonb,
+          'expunctedCard', 'null'::jsonb,
+          'entrySnapshot', jsonb_build_object(
+            'goldTenths', run_value->'goldTenths',
+            'army', army_value,
+            'cards', cards_value,
+            'lipsana', lipsana_value,
+            'seenLipsana', seen_value,
+            'conflictPaidLipsana', conflict_paid_value,
+            'nextArmyUnitSequence', run_value->'nextArmyUnitSequence',
+            'nextArmyUnitNumberByType', run_value->'nextArmyUnitNumberByType',
+            'nextCardSequence', run_value->'nextCardSequence',
+            'paidLipsanonBought', to_jsonb(paid_bought)
+          )
+        );
+      END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.run25_migrate_vacantia(vacantia_value jsonb, lipsana_value jsonb)
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      IMMUTABLE
+      AS $function$
+      DECLARE
+        offers text[] := ARRAY[]::text[];
+        offer_value jsonb;
+        candidate text;
+      BEGIN
+        IF jsonb_typeof(vacantia_value) <> 'object' THEN RETURN 'null'::jsonb; END IF;
+        FOR offer_value IN SELECT value FROM jsonb_array_elements(
+          CASE WHEN jsonb_typeof(vacantia_value->'offers') = 'array'
+            THEN vacantia_value->'offers' ELSE '[]'::jsonb END
+        ) LOOP
+          candidate := offer_value #>> '{}';
+          IF pg_temp.run25_is_current_lipsanon(candidate) AND NOT (candidate = ANY(offers)) THEN
+            offers := array_append(offers, candidate);
+          END IF;
+          EXIT WHEN cardinality(offers) >= 3;
+        END LOOP;
+        FOREACH candidate IN ARRAY ARRAY[
+          'congressional-approval', 'royal-tent', 'mercenarys-rifle',
+          'merchants-shopkey', 'occult-dagger', 'deployment-vehicle',
+          'mercenary-boat', 'quartermasters-ledger', 'fair-scales'
+        ]::text[] LOOP
+          EXIT WHEN cardinality(offers) >= 3;
+          IF NOT (candidate = ANY(offers)) AND NOT (lipsana_value ? candidate) THEN
+            offers := array_append(offers, candidate);
+          END IF;
+        END LOOP;
+        IF cardinality(offers) = 0 THEN offers := ARRAY['congressional-approval']::text[]; END IF;
+        RETURN jsonb_build_object(
+          'kind', vacantia_value->'kind',
+          'conflictIndex', vacantia_value->'conflictIndex',
+          'afterBattleIndex', vacantia_value->'afterBattleIndex',
+          'victoryGoldTenths', vacantia_value->'victoryGoldTenths',
+          'offers', to_jsonb(offers)
+        );
+      END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.run25_offer_rarity(offer_value jsonb)
+      RETURNS text
+      LANGUAGE plpgsql
+      IMMUTABLE
+      AS $function$
+      DECLARE
+        piece_record record;
+        formation_cell jsonb;
+        non_pawns integer := 0;
+        rooks integer := 0;
+        bishops integer := 0;
+        bishop_parities integer[] := ARRAY[]::integer[];
+        parity integer;
+        has_opposite_bishops boolean := false;
+      BEGIN
+        IF jsonb_typeof(offer_value->'pieces') <> 'array'
+           OR jsonb_typeof(offer_value->'formation') <> 'array' THEN RETURN 'common'; END IF;
+        FOR piece_record IN SELECT value #>> '{}' AS piece, ordinality
+          FROM jsonb_array_elements(offer_value->'pieces') WITH ORDINALITY
+        LOOP
+          IF piece_record.piece <> 'pawn' THEN non_pawns := non_pawns + 1; END IF;
+          IF piece_record.piece = 'rook' THEN rooks := rooks + 1; END IF;
+          IF piece_record.piece = 'bishop' THEN
+            bishops := bishops + 1;
+            formation_cell := offer_value->'formation'->((piece_record.ordinality - 1)::integer);
+            parity := (COALESCE((formation_cell->>'x')::integer, 0)
+              + COALESCE((formation_cell->>'y')::integer, 0)) % 2;
+            IF cardinality(bishop_parities) > 0 AND EXISTS (
+              SELECT 1 FROM unnest(bishop_parities) prior(value) WHERE value <> parity
+            ) THEN has_opposite_bishops := true; END IF;
+            bishop_parities := array_append(bishop_parities, parity);
+          END IF;
+        END LOOP;
+        IF offer_value->'pieces' ? 'queen' OR rooks >= 2 OR non_pawns >= 3 OR has_opposite_bishops THEN
+          RETURN 'rare';
+        END IF;
+        IF bishops >= 2 THEN RETURN 'common'; END IF;
+        IF rooks >= 1 OR non_pawns >= 2 THEN RETURN 'uncommon'; END IF;
+        RETURN 'common';
+      END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.run25_add_offer_rarity(offer_value jsonb)
+      RETURNS jsonb
+      LANGUAGE sql
+      IMMUTABLE
+      AS $function$
+        SELECT CASE WHEN jsonb_typeof(offer_value) = 'object'
+          THEN jsonb_set(offer_value, '{rarity}', to_jsonb(pg_temp.run25_offer_rarity(offer_value)), true)
+          ELSE offer_value END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.run25_add_sectio_rarity(sectio_value jsonb)
+      RETURNS jsonb
+      LANGUAGE sql
+      IMMUTABLE
+      AS $function$
+        SELECT CASE WHEN jsonb_typeof(sectio_value) = 'object'
+          AND jsonb_typeof(sectio_value->'cardOffers') = 'array' THEN jsonb_set(
+            sectio_value,
+            '{cardOffers}',
+            COALESCE((SELECT jsonb_agg(pg_temp.run25_add_offer_rarity(value) ORDER BY ordinality)
+              FROM jsonb_array_elements(sectio_value->'cardOffers') WITH ORDINALITY), '[]'::jsonb),
+            false
+          ) ELSE sectio_value END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_active_run_v23_to_v25(run_value jsonb)
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      AS $function$
+      DECLARE
+        migrated jsonb := run_value - 'pestiferousLosses';
+        army_value jsonb := pg_temp.run25_plain_army(run_value->'army');
+        cards_value jsonb;
+        lipsana_value jsonb := pg_temp.run25_filter_lipsana(run_value->'lipsana');
+        seen_value jsonb := pg_temp.run25_filter_lipsana(run_value->'seenLipsana');
+        conflict_paid_value jsonb := pg_temp.run25_filter_conflict_paid(run_value->'conflictPaidLipsana');
+        vacantia_value jsonb;
+      BEGIN
+        IF run_value->'runSaveVersion' <> '23'::jsonb THEN RETURN run_value; END IF;
+        cards_value := pg_temp.run25_migrate_cards(run_value->'cards', army_value);
+        vacantia_value := pg_temp.run25_migrate_vacantia(run_value->'vacantia', lipsana_value);
+        IF jsonb_typeof(vacantia_value) = 'object' THEN
+          seen_value := pg_temp.run25_distinct_array_concat(seen_value, vacantia_value->'offers');
+        END IF;
+        migrated := jsonb_set(migrated, '{runSaveVersion}', '25'::jsonb, false);
+        migrated := jsonb_set(migrated, '{ataraxiaTier}', '0'::jsonb, true);
+        migrated := jsonb_set(migrated, '{army}', army_value, false);
+        migrated := jsonb_set(migrated, '{cards}', cards_value, false);
+        migrated := jsonb_set(migrated, '{lipsana}', lipsana_value, false);
+        migrated := jsonb_set(migrated, '{seenLipsana}', seen_value, false);
+        migrated := jsonb_set(migrated, '{conflictPaidLipsana}', conflict_paid_value, false);
+        migrated := jsonb_set(migrated, '{sectio}', pg_temp.run25_migrate_sectio(
+          run_value->'sectio', run_value, army_value, cards_value,
+          lipsana_value, seen_value, conflict_paid_value
+        ), false);
+        migrated := jsonb_set(migrated, '{vacantia}', vacantia_value, false);
+        IF run_value->>'phase' IN ('deployment', 'battle') THEN
+          migrated := jsonb_set(migrated, '{phase}', '"deployment"'::jsonb, false);
+          migrated := jsonb_set(migrated, '{deployment}', 'null'::jsonb, false);
+          migrated := jsonb_set(migrated, '{battleRuntime}', 'null'::jsonb, false);
+          migrated := jsonb_set(migrated, '{aftermath}', 'null'::jsonb, false);
+        END IF;
+        RETURN migrated;
+      END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_active_run_v24_to_v25(run_value jsonb)
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      AS $function$
+      DECLARE
+        migrated jsonb := run_value;
+      BEGIN
+        IF run_value->'runSaveVersion' <> '24'::jsonb THEN RETURN run_value; END IF;
+        migrated := jsonb_set(migrated, '{runSaveVersion}', '25'::jsonb, false);
+        IF jsonb_typeof(migrated->'sectio') = 'object' THEN
+          migrated := jsonb_set(migrated, '{sectio}', pg_temp.run25_add_sectio_rarity(migrated->'sectio'), false);
+        END IF;
+        IF run_value->>'phase' IN ('deployment', 'battle') THEN
+          migrated := jsonb_set(migrated, '{phase}', '"deployment"'::jsonb, false);
+          migrated := jsonb_set(migrated, '{deployment}', 'null'::jsonb, false);
+          migrated := jsonb_set(migrated, '{battleRuntime}', 'null'::jsonb, false);
+          migrated := jsonb_set(migrated, '{aftermath}', 'null'::jsonb, false);
+        END IF;
+        RETURN migrated;
+      END
+      $function$;
+
+      UPDATE active_runs
+         SET body = CASE body->'runSaveVersion'
+           WHEN '23'::jsonb THEN pg_temp.migrate_active_run_v23_to_v25(body)
+           WHEN '24'::jsonb THEN pg_temp.migrate_active_run_v24_to_v25(body)
+           ELSE body
+         END,
+             revision = revision + 1,
+             updated_at = now()
+      WHERE body->'runSaveVersion' IN ('23'::jsonb, '24'::jsonb);
+    `,
+  },
+  {
+    version: 64,
+    name: 'Battle-first opening and derived Sectio card pile',
+    // ADR-0494: version 26 removes the opening Sectio and stores only the cursor into
+    // the seed-derived 180-card pile. Existing post-Battle offers remain visible and
+    // begin the new sequence at zero; an in-progress opening Sectio keeps completed
+    // transactions and proceeds directly to Battle 1's Deployment.
+    sql: `
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_active_run_v25_to_v26(run_value jsonb)
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      AS $function$
+      DECLARE
+        migrated jsonb := run_value;
+        opening_sectio boolean := run_value->>'phase' = 'sectio'
+          AND run_value->'sectio'->>'kind' = 'opening';
+      BEGIN
+        IF run_value->'runSaveVersion' <> '25'::jsonb THEN RETURN run_value; END IF;
+        migrated := jsonb_set(migrated, '{runSaveVersion}', '26'::jsonb, false);
+        migrated := jsonb_set(migrated, '{sectioCardCursor}', '0'::jsonb, true);
+        IF opening_sectio THEN
+          migrated := jsonb_set(migrated, '{phase}', '"deployment"'::jsonb, false);
+          migrated := jsonb_set(migrated, '{sectio}', 'null'::jsonb, false);
+          migrated := jsonb_set(migrated, '{vacantia}', 'null'::jsonb, false);
+          migrated := jsonb_set(migrated, '{deployment}', 'null'::jsonb, false);
+          migrated := jsonb_set(migrated, '{battleRuntime}', 'null'::jsonb, false);
+          migrated := jsonb_set(migrated, '{aftermath}', 'null'::jsonb, false);
+        ELSIF jsonb_typeof(migrated->'sectio') = 'object' THEN
+          migrated := jsonb_set(migrated, '{sectio}', (migrated->'sectio') - 'kind', false);
+        END IF;
+        RETURN migrated;
+      END
+      $function$;
+
+      UPDATE active_runs
+         SET body = pg_temp.migrate_active_run_v25_to_v26(body),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE body->'runSaveVersion' = '25'::jsonb;
+    `,
+  },
 ];
 
 let pool = null;
@@ -5214,7 +5817,16 @@ async function unmigratedActiveRunSaveCounts(client) {
        )::integer AS version_21_count,
        count(*) FILTER (
          WHERE body->'runSaveVersion' = '22'::jsonb
-       )::integer AS version_22_count
+       )::integer AS version_22_count,
+       count(*) FILTER (
+         WHERE body->'runSaveVersion' = '23'::jsonb
+       )::integer AS version_23_count,
+       count(*) FILTER (
+         WHERE body->'runSaveVersion' = '24'::jsonb
+       )::integer AS version_24_count,
+       count(*) FILTER (
+         WHERE body->'runSaveVersion' = '25'::jsonb
+       )::integer AS version_25_count
        FROM active_runs`,
   );
   return Object.freeze({
@@ -5225,6 +5837,9 @@ async function unmigratedActiveRunSaveCounts(client) {
     version_20_count: Number(rows[0]?.version_20_count) || 0,
     version_21_count: Number(rows[0]?.version_21_count) || 0,
     version_22_count: Number(rows[0]?.version_22_count) || 0,
+    version_23_count: Number(rows[0]?.version_23_count) || 0,
+    version_24_count: Number(rows[0]?.version_24_count) || 0,
+    version_25_count: Number(rows[0]?.version_25_count) || 0,
   });
 }
 
@@ -5349,7 +5964,10 @@ async function requiredSchemaContractIssues(client) {
       + unmigratedActiveRunSaves.version_19_count
       + unmigratedActiveRunSaves.version_20_count
       + unmigratedActiveRunSaves.version_21_count
-      + unmigratedActiveRunSaves.version_22_count,
+      + unmigratedActiveRunSaves.version_22_count
+      + unmigratedActiveRunSaves.version_23_count
+      + unmigratedActiveRunSaves.version_24_count
+      + unmigratedActiveRunSaves.version_25_count,
     unmigrated_active_run_version_16_count: unmigratedActiveRunSaves.version_16_count,
     unmigrated_active_run_version_17_count: unmigratedActiveRunSaves.version_17_count,
     unmigrated_active_run_version_18_count: unmigratedActiveRunSaves.version_18_count,
@@ -5357,6 +5975,9 @@ async function requiredSchemaContractIssues(client) {
     unmigrated_active_run_version_20_count: unmigratedActiveRunSaves.version_20_count,
     unmigrated_active_run_version_21_count: unmigratedActiveRunSaves.version_21_count,
     unmigrated_active_run_version_22_count: unmigratedActiveRunSaves.version_22_count,
+    unmigrated_active_run_version_23_count: unmigratedActiveRunSaves.version_23_count,
+    unmigrated_active_run_version_24_count: unmigratedActiveRunSaves.version_24_count,
+    unmigrated_active_run_version_25_count: unmigratedActiveRunSaves.version_25_count,
     unmigrated_level_format_1_count: unmigratedLevelDocuments,
     unrepaired_saved_editor_baseline_count: unrepairedSavedEditorBaselines,
     primogeniture_non_retired_slot_count: primogenitureRetirement.non_retired_slot_count,
@@ -5521,6 +6142,31 @@ async function repairRequiredSchemaContracts(
     await executeMigration(migration, 'repair Level format 2 and exact saved editor baseline contract');
     completedSteps.push(Object.freeze({
       contract: 'Level format 2, embedded Run save version, and exact saved editor baselines',
+      migration_version: migration.version,
+    }));
+    markInspection(`inspect required contract repairs after migration ${migration.version}`);
+    issues = await requiredSchemaContractIssues(client);
+  }
+  if (
+    issues.unmigrated_active_run_version_23_count > 0
+    || issues.unmigrated_active_run_version_24_count > 0
+  ) {
+    const migration = MIGRATIONS.find((candidate) => candidate.version === 63);
+    if (!migration) throw new Error('generated formation active Run repair migration is unavailable');
+    await executeMigration(migration, 'repair ability-free generated formation Run contract');
+    completedSteps.push(Object.freeze({
+      contract: 'ability-free generated formation Run save version',
+      migration_version: migration.version,
+    }));
+    markInspection(`inspect required contract repairs after migration ${migration.version}`);
+    issues = await requiredSchemaContractIssues(client);
+  }
+  if (issues.unmigrated_active_run_version_25_count > 0) {
+    const migration = MIGRATIONS.find((candidate) => candidate.version === 64);
+    if (!migration) throw new Error('derived Sectio card pile active Run repair migration is unavailable');
+    await executeMigration(migration, 'repair Battle-first opening and derived Sectio card pile contract');
+    completedSteps.push(Object.freeze({
+      contract: 'Battle-first opening and derived Sectio card pile Run save version',
       migration_version: migration.version,
     }));
     markInspection(`inspect required contract repairs after migration ${migration.version}`);
@@ -16916,6 +17562,11 @@ function reviewedMediaEvidenceIssue(row) {
     if (projectionIssue) return projectionIssue;
     const issue = runCardBackOwnerProofIssue(row, proof, evidence.surfaceUrl);
     if (issue) return issue;
+  } else if (runCardRarityFrameSlot(row.slot)) {
+    const projectionIssue = runCardFrameProjection(row);
+    if (projectionIssue.issue) return projectionIssue.issue;
+    const issue = runCardRarityFrameOwnerProofIssue(row, proof, evidence.surfaceUrl);
+    if (issue) return issue;
   } else if (wallMaterialSlot(row.slot)) {
     const issue = wallMaterialOwnerProofIssue(row, proof, evidence.surfaceUrl);
     if (issue) return issue;
@@ -16986,6 +17637,8 @@ const RUN_CARD_ART_PIECE_VALUE = Object.freeze({ pawn: 1, knight: 3, bishop: 3, 
 const RUN_CARD_ART_PIECE_INITIAL = Object.freeze({ pawn: 'p', knight: 'k', bishop: 'b', rook: 'r', queen: 'q' });
 const RUN_CARD_ART_PIECE_ORDER = Object.freeze(['pawn', 'knight', 'bishop', 'rook', 'queen']);
 const RUN_CARD_FRAME_SLOT = 'ui/run/card-prototypes/frame-v1.png';
+const RUN_CARD_UNCOMMON_FRAME_SLOT = 'ui/run/card-prototypes/standard-uncommon-frame-v1.png';
+const RUN_CARD_RARE_FRAME_SLOT = 'ui/run/card-prototypes/standard-rare-frame-v1.png';
 const RUN_CARD_PESTIFEROUS_FRAME_SLOT = 'ui/run/card-prototypes/pestiferous-frame-v1.png';
 const RUN_CARD_CONCINNOUS_FRAME_SLOT = 'ui/run/card-prototypes/concinnous-frame-v1.png';
 const RUN_CARD_LEGATINE_FRAME_SLOT = 'ui/run/card-prototypes/legatine-adlected-frame-v1.png';
@@ -16994,6 +17647,8 @@ const RUN_CARD_PRAECIPUUS_FRAME_SLOT = 'ui/run/card-prototypes/praecipuus-frame-
 const RUN_CARD_COST_COIN_SOURCE_SLOT = 'ui/run/card-prototypes/cost-coin-source-v1.png';
 const RUN_CARD_FRAME_VARIANT_BY_SLOT = Object.freeze({
   [RUN_CARD_FRAME_SLOT]: 'standard',
+  [RUN_CARD_UNCOMMON_FRAME_SLOT]: 'standard',
+  [RUN_CARD_RARE_FRAME_SLOT]: 'standard',
   [RUN_CARD_PESTIFEROUS_FRAME_SLOT]: 'pestiferous',
   [RUN_CARD_CONCINNOUS_FRAME_SLOT]: 'concinnous',
   [RUN_CARD_LEGATINE_FRAME_SLOT]: 'legatine',
@@ -17002,6 +17657,7 @@ const RUN_CARD_FRAME_VARIANT_BY_SLOT = Object.freeze({
   [RUN_CARD_COST_COIN_SOURCE_SLOT]: 'cost-coin-source',
 });
 const RUN_CARD_FRAME_SCHEMA = 'run-card-frame-v1';
+const RUN_CARD_RARITY_FRAME_SCHEMA = 'run-card-frame-v2';
 const SOURCE_ART_TURNTABLE_SCHEMA = 'structure-source-art-turntable-v1';
 const SOURCE_ART_TURNTABLE_DIRECTIONS = Object.freeze([
   'south', 'south-west', 'west', 'north-west', 'north', 'north-east', 'east', 'south-east',
@@ -17128,6 +17784,7 @@ function sourceArtTurntableOwnerProofIssue(sourceArt, proof, surfaceUrl) {
 
 function runCardFrameProjection(row) {
   const variant = RUN_CARD_FRAME_VARIANT_BY_SLOT[row.slot];
+  const rarity = runCardRarityFrameSlot(row.slot);
   const claimed = Boolean(variant) || row.role === 'card-frame';
   if (!claimed) return { claimed: false, issue: null };
   if (!variant) return { claimed: true, issue: 'Run card frame role is restricted to the canonical semantic frame slots' };
@@ -17140,13 +17797,21 @@ function runCardFrameProjection(row) {
   const metadata = isObjectRecord(row.version_metadata) ? row.version_metadata
     : isObjectRecord(row.metadata) ? row.metadata : {};
   const slotMetadata = isObjectRecord(row.slot_metadata) ? row.slot_metadata : {};
-  if (
+  if (rarity) {
+    if (
+      metadata.schema !== RUN_CARD_RARITY_FRAME_SCHEMA || slotMetadata.schema !== RUN_CARD_RARITY_FRAME_SCHEMA
+      || metadata.frameType !== 'standard' || slotMetadata.frameType !== 'standard'
+      || metadata.rarity !== rarity || slotMetadata.rarity !== rarity
+      || metadata.referenceWidthPx !== 360 || slotMetadata.referenceWidthPx !== 360
+      || metadata.aspectRatio !== '5:7' || slotMetadata.aspectRatio !== '5:7'
+    ) return { claimed: true, issue: 'Run card rarity frame requires its typed Standard-family rarity metadata' };
+  } else if (
     metadata.schema !== RUN_CARD_FRAME_SCHEMA || slotMetadata.schema !== RUN_CARD_FRAME_SCHEMA
     || metadata.referenceWidthPx !== 360 || slotMetadata.referenceWidthPx !== 360
     || metadata.aspectRatio !== '5:7' || slotMetadata.aspectRatio !== '5:7'
   ) return { claimed: true, issue: 'Run card frame requires its typed Card Layout projection metadata' };
   if (
-    variant !== 'standard'
+    !rarity && variant !== 'standard'
     && (metadata.variant !== variant || slotMetadata.variant !== variant)
   ) return { claimed: true, issue: `${variant} Run card frame requires its typed variant metadata` };
   if (mediaAcceptanceContract(row).mode !== 'standalone') {
@@ -18514,6 +19179,32 @@ async function validateMediaReviewProofSnapshot(client, current, evidence, surfa
     }
     return;
   }
+  if (runCardRarityFrameSlot(current.slot)) {
+    const projectionIssue = runCardFrameProjection(current).issue;
+    if (projectionIssue) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: projectionIssue });
+    }
+    const proofIssue = runCardRarityFrameOwnerProofIssue(current, evidence, surfaceUrl);
+    if (proofIssue) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: proofIssue });
+    }
+    const selected = evidence.selectedCandidates[0];
+    const snapshot = evidence.slotSnapshots[0];
+    const slotResult = await client.query(
+      'SELECT slot, active_version_id, row_revision FROM media_slots WHERE slot = $1',
+      [current.slot],
+    );
+    const slotRow = slotResult.rows[0];
+    if (!slotRow) throw mediaMutationError('media_slot_not_found', 404);
+    if (
+      Number(snapshot.rowRevision) !== Number(slotRow.row_revision)
+      || (snapshot.activeVersionId ?? null) !== (slotRow.active_version_id ? String(slotRow.active_version_id) : null)
+    ) throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: 'slot snapshot mismatch' });
+    if (current.status !== 'candidate' || Number(selected.rowRevision) !== Number(current.row_revision)) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: 'candidate snapshot mismatch' });
+    }
+    return;
+  }
   if (ataraxiaNumeralSlot(current.slot)) {
     const projectionIssue = mediaDomainProjectionIssue(current);
     if (projectionIssue) {
@@ -18916,6 +19607,24 @@ function assertStrategikonBackgroundAcceptanceProof(row, slot) {
   ) throw mediaMutationError('media_review_slot_snapshot_stale', 409, { slot: row.slot });
 }
 
+function assertRunCardRarityFrameAcceptanceProof(row, slot) {
+  if (!runCardRarityFrameSlot(row.slot)) return;
+  if (mediaAcceptanceContract(row).mode !== 'standalone') {
+    throw mediaMutationError('media_group_contract_mismatch', 409, { slot: row.slot });
+  }
+  const review = isObjectRecord(row.review_evidence) ? row.review_evidence : {};
+  const proof = isObjectRecord(review.evidence) ? review.evidence : {};
+  const issue = runCardRarityFrameOwnerProofIssue(row, proof, review.surfaceUrl);
+  if (issue) throw mediaMutationError('media_owner_review_required', 409, { slot: row.slot, reason: issue });
+  const selected = proof.selectedCandidates[0];
+  const snapshot = proof.slotSnapshots[0];
+  if (
+    Number(selected.rowRevision) + 1 !== Number(row.row_revision)
+    || !slot || Number(snapshot.rowRevision) !== Number(slot.row_revision)
+    || (snapshot.activeVersionId ?? null) !== (slot.active_version_id ? String(slot.active_version_id) : null)
+  ) throw mediaMutationError('media_review_slot_snapshot_stale', 409, { slot: row.slot });
+}
+
 function assertTerrainAcceptanceProof(rows, slotById, contract = null) {
   if (!rows.length || rows.some((row) => row.domain !== 'terrain')) return;
   const expectedSlots = contract?.mode === 'group' ? contract.requiredSlots : rows.map((row) => row.slot).sort();
@@ -19136,6 +19845,7 @@ async function acceptMediaVersionBatch(items, actorEmail) {
       assertSfxSampleAcceptanceProof(row, slotById.get(row.slot));
       assertLevelEditorBrushIconAcceptanceProof(row, slotById.get(row.slot));
       assertStrategikonBackgroundAcceptanceProof(row, slotById.get(row.slot));
+      assertRunCardRarityFrameAcceptanceProof(row, slotById.get(row.slot));
     }
 
     const bySlot = new Map(rows.map((row) => [row.slot, row]));
@@ -20639,7 +21349,6 @@ const ACTIVE_RUN_ABILITIES = new Set(['adlected', 'eutactic', 'agminate']);
 const ACTIVE_RUN_MODIFIERS = new Set(['cacochymic']);
 const ACTIVE_RUN_CACOCHYMIC_DISCOUNTS = Object.freeze({ pawn: 0, knight: 1, bishop: 1, rook: 2, queen: 3 });
 const ACTIVE_RUN_SECTIO_FIELDS = new Set([
-  'kind',
   'afterBattleIndex',
   'conflictIndex',
   'victoryGoldTenths',
@@ -21462,6 +22171,7 @@ function formationRunOfferIssue(offer) {
   if (!Array.isArray(offer.pieces) || offer.pieces.join(',') !== definition.pieces.join(',')) return 'offer.pieces is invalid';
   if (!isFiniteInteger(offer.value) || offer.value !== definition.value) return 'offer.value is invalid';
   if (!isFiniteInteger(offer.cost) || offer.cost !== definition.value) return 'offer.cost is invalid';
+  if (offer.rarity !== definition.rarity) return 'offer.rarity is invalid';
   if (!Array.isArray(offer.formation) || offer.formation.length !== definition.formation.length) {
     return 'offer.formation is invalid';
   }
@@ -21490,9 +22200,9 @@ function formationRunSnapshotIssue(snapshot, warBattleCount) {
 }
 
 /**
- * Current Run persistence boundary. Version 24 deliberately knows nothing about card
- * qualifiers or unit abilities: a card is an authored one-to-three-unit formation and
- * every unit on it is committed together during Deployment.
+ * Current Run persistence boundary. Version 26 deliberately knows nothing about card
+ * qualifiers or unit abilities: a card resolves through the generated one-to-four-unit
+ * formation catalog and every unit on it is committed together during Deployment.
  */
 function validateFormationRunBody(run) {
   if (!isObjectRecord(run)) return 'run must be an object';
@@ -21509,6 +22219,9 @@ function validateFormationRunBody(run) {
   if (!isFiniteInteger(run.battleIndex) || run.battleIndex < 0) return 'run.battleIndex is invalid';
   if (!isFiniteInteger(run.conflictIndex) || run.conflictIndex < 0) return 'run.conflictIndex is invalid';
   if (!isFiniteInteger(run.goldTenths) || run.goldTenths < 0) return 'run.goldTenths is invalid';
+  if (!isFiniteInteger(run.sectioCardCursor) || run.sectioCardCursor < 0) {
+    return 'run.sectioCardCursor is invalid';
+  }
 
   if (!isObjectRecord(run.war) || typeof run.war.id !== 'string' || !run.war.id) return 'run.war is invalid';
   if (typeof run.war.name !== 'string' || typeof run.war.description !== 'string') return 'run.war is invalid';

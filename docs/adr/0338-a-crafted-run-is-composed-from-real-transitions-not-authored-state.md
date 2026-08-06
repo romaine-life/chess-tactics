@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-08-02
 deciders: owner (Nelson) + Claude
+partially_superseded_by:
+  - "[ADR-0494](0494-runs-begin-in-battle-and-sectio-deals-a-derived-rarity-pile.md)'s removal of the craftable opening Sectio"
 refines:
   - "[ADR-0193](0193-runs-are-persistent-wars-around-unchanged-chess-battles.md)"
 ---

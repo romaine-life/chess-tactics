@@ -49,6 +49,12 @@ const RUN_CARD_BACK_SLOT = 'ui/run/card-back/standard.png';
 const RUN_CARD_BACK_COMPONENT = 'run-card-back';
 const RUN_CARD_BACK_PROOF_SCHEMA = 'run-card-back-card-layout-proof-v1';
 const RUN_CARD_BACK_PROOF_RENDERER = 'RunCardBack/CardLayout';
+const RUN_CARD_RARITY_FRAME_PROOF_SCHEMA = 'run-card-rarity-frame-card-layout-proof-v3';
+const RUN_CARD_RARITY_FRAME_PROOF_RENDERER = 'RunCardFace/CardLayout';
+const RUN_CARD_RARITY_FRAME_BY_SLOT = Object.freeze({
+  'ui/run/card-prototypes/standard-uncommon-frame-v1.png': 'uncommon',
+  'ui/run/card-prototypes/standard-rare-frame-v1.png': 'rare',
+});
 const RUN_STARTER_SELECTED_DERIVATIVE_BY_SLOT = Object.freeze({
   'ui/run/card-art/his-grace/illustration.png': Object.freeze({
     outputSha256: '3911aa54c164a29837ac99d4d34bfc468c80af7ed8e4e41246c7431d9b394ec2',
@@ -744,6 +750,64 @@ function runCardBackOwnerProofIssue(row, proof, surfaceUrl = null) {
   }
   if (!isObjectRecord(proof.slotSnapshots[0]) || proof.slotSnapshots[0].slot !== row.slot) {
     return 'Run card-back proof slot snapshot is invalid';
+  }
+  return null;
+}
+
+function runCardRarityFrameSlot(slot) {
+  return RUN_CARD_RARITY_FRAME_BY_SLOT[String(slot || '')] ?? null;
+}
+
+/**
+ * Rarity frames are reviewed on the shared Card Layout face, where the accepted
+ * Common frame and both candidate colors remain visible together. The proof is
+ * deliberately byte- and slot-specific: approval of one light-blue or gold artwork-bezel
+ * raster cannot authorize a later regeneration or a different frame family.
+ */
+function runCardRarityFrameOwnerProofIssue(row, proof, surfaceUrl = null) {
+  const rarity = runCardRarityFrameSlot(row.slot);
+  if (!rarity) return 'Run card rarity-frame proof requires a registered Standard rarity slot';
+  if (!isObjectRecord(proof) || proof.schema !== RUN_CARD_RARITY_FRAME_PROOF_SCHEMA) {
+    return `Run card rarity-frame review requires ${RUN_CARD_RARITY_FRAME_PROOF_SCHEMA}`;
+  }
+  if (proof.renderer !== RUN_CARD_RARITY_FRAME_PROOF_RENDERER) {
+    return 'Run card rarity-frame proof does not name the shared Card Layout face renderer';
+  }
+  if (surfaceUrl !== null && proof.surfaceUrl !== surfaceUrl) {
+    return 'Run card rarity-frame proof surfaceUrl does not match the reviewed surface';
+  }
+  let parsedSurface;
+  try { parsedSurface = new URL(proof.surfaceUrl); } catch { return 'Run card rarity-frame proof surfaceUrl is invalid'; }
+  const candidateSha256 = normalizedSha(row.blob_sha256);
+  if (
+    parsedSurface.pathname !== '/studio'
+    || parsedSurface.searchParams.get('mode') !== 'viewer'
+    || parsedSurface.searchParams.get('vk') !== 'cardlayout'
+    || parsedSurface.searchParams.get('rarityStudy') !== '1'
+    || normalizedSha(parsedSurface.searchParams.get(`${rarity}Candidate`)) !== candidateSha256
+  ) return 'Run card rarity-frame proof must identify the exact Card Layout rarity candidate';
+  if (
+    proof.rarity !== rarity || proof.frameType !== 'standard'
+    || proof.rarityAffects !== 'artwork-bezel-only' || proof.outerFrameTreatment !== 'standard-original'
+  ) return 'Run card rarity-frame proof must recolor only the Standard artwork bezel';
+  if (
+    proof.canonicalScale !== 1 || proof.assetLocalScale !== 1 || proof.spatialResampling !== false
+    || !isObjectRecord(proof.decodedNativeRaster)
+    || proof.decodedNativeRaster.width !== 1060 || proof.decodedNativeRaster.height !== 1484
+  ) return 'Run card rarity-frame proof must cover the decoded native 1060x1484 pixels at exact scale';
+  if (!candidateSha256 || !Array.isArray(proof.selectedCandidates) || proof.selectedCandidates.length !== 1) {
+    return 'Run card rarity-frame proof must identify exactly one candidate';
+  }
+  const selected = proof.selectedCandidates[0];
+  if (
+    !isObjectRecord(selected) || selected.slot !== row.slot || selected.versionId !== String(row.id)
+    || normalizedSha(selected.sha256) !== candidateSha256
+  ) return 'Run card rarity-frame proof does not identify the reviewed candidate bytes';
+  if (!Array.isArray(proof.slotSnapshots) || proof.slotSnapshots.length !== 1) {
+    return 'Run card rarity-frame proof must snapshot the candidate semantic slot';
+  }
+  if (!isObjectRecord(proof.slotSnapshots[0]) || proof.slotSnapshots[0].slot !== row.slot) {
+    return 'Run card rarity-frame proof slot snapshot is invalid';
   }
   return null;
 }
@@ -1558,6 +1622,8 @@ module.exports = {
   RUN_CARD_BACK_PROOF_RENDERER,
   RUN_CARD_BACK_PROOF_SCHEMA,
   RUN_CARD_BACK_SLOT,
+  RUN_CARD_RARITY_FRAME_PROOF_RENDERER,
+  RUN_CARD_RARITY_FRAME_PROOF_SCHEMA,
   RUN_STARTER_SELECTED_DERIVATIVE_EXCEPTION_SCHEMA,
   RUN_RESOURCE_ICON_COMPONENT,
   RUN_SECTIO_WRAP_COMPONENT,
@@ -1596,6 +1662,8 @@ module.exports = {
   runCardBackMediaIssue,
   runCardBackOwnerProofIssue,
   runCardBackSlot,
+  runCardRarityFrameOwnerProofIssue,
+  runCardRarityFrameSlot,
   runResourceIconMediaIssue,
   runResourceIconSlotId,
   runExpunctioReviewSurface,

@@ -24598,6 +24598,91 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   justify-items: stretch;
 }
 
+.run-card-rarity-study {
+  align-content: start;
+  display: grid;
+  gap: var(--ds-space-5);
+  inline-size: 100%;
+  justify-items: center;
+  overflow: auto;
+  padding-block-end: var(--ds-space-6);
+}
+
+.run-card-rarity-study-heading {
+  display: grid;
+  gap: var(--ds-space-1);
+  inline-size: min(760px, calc(100% - 2 * var(--ds-space-4)));
+  text-align: center;
+}
+
+.run-card-rarity-study-heading > span {
+  color: var(--ds-color-text-muted, #a9a393);
+  font: 700 11px/1.2 var(--ds-font-display);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.run-card-rarity-study-heading > h2 {
+  color: var(--ds-color-text, #e9e3d2);
+  font: 700 19px/1.2 var(--ds-font-display);
+  margin: 0;
+}
+
+.run-card-rarity-study-heading > p,
+.run-card-rarity-study-footnote {
+  color: var(--ds-color-text-muted, #a9a393);
+  font-size: 13px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.run-card-rarity-study-grid {
+  display: grid;
+  gap: var(--ds-space-5) var(--ds-space-4);
+  grid-template-columns: repeat(3, max-content);
+  justify-content: center;
+  min-inline-size: max-content;
+}
+
+.run-card-rarity-study-specimen {
+  display: grid;
+  gap: var(--ds-space-2);
+  justify-items: center;
+  margin: 0;
+}
+
+.run-card-rarity-study-specimen > figcaption {
+  align-items: baseline;
+  color: var(--ds-color-text, #e9e3d2);
+  display: flex;
+  font-family: var(--ds-font-display);
+  gap: var(--ds-inline-tight);
+  justify-content: space-between;
+  inline-size: 100%;
+}
+
+.run-card-rarity-study-specimen > figcaption > span {
+  color: var(--ds-color-text-muted, #a9a393);
+  font-size: 11px;
+}
+
+.run-card-rarity-study-footnote {
+  inline-size: min(760px, calc(100% - 2 * var(--ds-space-4)));
+  text-align: center;
+}
+
+@media (max-width: 980px) {
+  .run-card-rarity-study-grid {
+    grid-template-columns: repeat(2, max-content);
+  }
+}
+
+@media (max-width: 620px) {
+  .run-card-rarity-study-grid {
+    grid-template-columns: max-content;
+  }
+}
+
 .run-card-back {
   aspect-ratio: 5 / 7;
   block-size: auto;
@@ -25116,24 +25201,50 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
 
 .run-card-formation {
   align-self: center;
-  display: grid;
+  block-size: var(--run-card-formation-height);
+  display: block;
   flex: 0 0 auto;
-  grid-template-columns: repeat(var(--run-card-formation-columns), 12cqw);
-  grid-template-rows: repeat(var(--run-card-formation-rows), 9.2cqw);
-  margin-block-start: -.6cqw;
+  inline-size: var(--run-card-formation-width);
+  isolation: isolate;
+  margin-block: 8.7cqw .4cqw;
   position: relative;
 }
 
 .run-card-formation-square {
-  box-sizing: border-box;
-  color: rgba(58, 49, 39, .2);
-  outline: .22cqw solid currentColor;
-  outline-offset: -.22cqw;
-  z-index: 0;
+  block-size: var(--run-card-formation-tile-height);
+  inline-size: var(--run-card-formation-tile-width);
+  inset-block-start: var(--run-card-formation-top);
+  inset-inline-start: var(--run-card-formation-left);
+  pointer-events: none;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: calc(var(--run-card-formation-depth) + 1);
 }
 
-.run-card-formation-square.is-dark {
-  color: rgba(58, 49, 39, .36);
+.run-card-formation-square svg {
+  block-size: 100%;
+  display: block;
+  inline-size: 100%;
+  overflow: visible;
+}
+
+.run-card-formation-square polygon {
+  fill: rgba(212, 196, 161, .46);
+  stroke: rgba(55, 48, 39, .56);
+  stroke-width: 1.15;
+}
+
+.run-card-formation-square.is-dark polygon {
+  fill: rgba(101, 115, 113, .34);
+}
+
+.run-card-formation-square.is-faded {
+  opacity: .14;
+}
+
+.run-card-formation-square.is-faded polygon {
+  fill: none;
+  stroke-width: .9;
 }
 
 .run-card-formation-tooltip {
@@ -25157,17 +25268,30 @@ button.run-card-formation-cell {
   align-items: center;
   background: transparent;
   border: 0;
+  block-size: calc(16.08cqw * var(--run-card-unit-scale));
   box-sizing: border-box;
-  display: flex;
-  grid-column: calc(var(--run-card-formation-x) + 1);
-  grid-row: calc(var(--run-card-formation-y) + 1);
-  inline-size: 100%;
-  justify-content: center;
+  display: grid;
+  inline-size: calc(13.46cqw * var(--run-card-unit-scale));
+  inset-block-start: var(--run-card-formation-top);
+  inset-inline-start: var(--run-card-formation-left);
+  justify-items: center;
   min-block-size: 0;
   min-inline-size: 0;
   padding: 0;
+  position: absolute;
+  transform: translate(var(--run-card-unit-anchor-x), var(--run-card-unit-anchor-y));
+  z-index: calc(var(--run-card-formation-depth) + 20);
+}
+
+.run-card-formation-cell-button {
+  all: unset;
+  align-items: center;
+  block-size: 100%;
+  cursor: pointer;
+  display: grid;
+  inline-size: 100%;
+  justify-items: center;
   position: relative;
-  z-index: 1;
 }
 
 button.run-card-formation-cell.is-selectable {
@@ -25175,24 +25299,31 @@ button.run-card-formation-cell.is-selectable {
 }
 
 .run-card-formation-cell.is-highlighted .run-card-formation-unit,
-button.run-card-formation-cell.is-selectable:hover .run-card-formation-unit,
-button.run-card-formation-cell.is-selectable:focus-visible .run-card-formation-unit {
+.run-card-formation-cell-button:hover .run-card-formation-unit,
+.run-card-formation-cell-button:focus-visible .run-card-formation-unit {
   filter: drop-shadow(0 0 .7cqw var(--skirmish-cyan));
 }
 
 .run-card-formation-cell.is-empty::after {
-  block-size: 64%;
+  block-size: 38%;
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
   color: rgba(51, 44, 35, .32);
   content: '';
-  inline-size: 54%;
+  inline-size: 48%;
   outline: .3cqw dashed currentColor;
 }
 
+.run-card-formation-cell.is-empty {
+  block-size: var(--run-card-formation-tile-height);
+  inline-size: var(--run-card-formation-tile-width);
+  transform: translate(-50%, -50%);
+}
+
 .run-card-formation-unit {
-  block-size: 8.4cqw;
+  block-size: calc(17.2cqw * var(--run-card-unit-scale));
+  filter: drop-shadow(0 .45cqw .35cqw rgba(19, 29, 32, .45));
   image-rendering: pixelated;
-  inline-size: auto;
-  max-inline-size: 10.8cqw;
+  inline-size: calc(14.58cqw * var(--run-card-unit-scale));
   object-fit: contain;
 }
 

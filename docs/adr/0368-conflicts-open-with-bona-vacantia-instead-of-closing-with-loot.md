@@ -3,7 +3,9 @@
 ## Status
 
 Accepted; the immediate-commit and choice-presentation clause is partially superseded by
-[ADR-0382](0382-bona-vacantia-keeps-a-targeted-take-provisional-until-the-shop.md).
+[ADR-0382](0382-bona-vacantia-keeps-a-targeted-take-provisional-until-the-shop.md), and the
+opening handoff now leads directly to Battle 1 under
+[ADR-0494](0494-runs-begin-in-battle-and-sectio-deals-a-derived-rarity-pile.md).
 
 ## Context
 

@@ -373,15 +373,27 @@ an incomplete row is an availability failure.
   `{1.35, -1.05, 2.4}` on canonical His Grace. Card Icon Fitting no longer projects a
   Praecipuus/Primogeniture pair, and `ui/kit/icons/game/primogeniture.png` is retired from
   active runtime policy (ADR-0419).
-  Run-card frame variants use typed standalone native 1060×1484 PNG slots:
-  `ui/run/card-prototypes/frame-v1.png`,
+  Run-card frame families use typed standalone native 1060×1484 PNG slots. The
+  active Standard family resolves its explicit card rarity through
+  `ui/run/card-prototypes/frame-v1.png` (Common),
+  `ui/run/card-prototypes/standard-uncommon-frame-v1.png` (light-blue artwork
+  bezel), and `ui/run/card-prototypes/standard-rare-frame-v1.png`
+  (gold artwork bezel). All three share the Standard outer body, measured
+  openings, and geometry; Uncommon and Rare recolor only the frame immediately
+  surrounding the illustration. Promotion
+  of the two colored slots requires the exact-byte
+  `run-card-rarity-frame-card-layout-proof-v3` from the shared Card Layout face,
+  at native 1060×1484 and 1× without resampling (ADR-0497).
+  The historical property-frame slots
   `ui/run/card-prototypes/pestiferous-frame-v1.png`,
   `ui/run/card-prototypes/legatine-adlected-frame-v1.png`,
-  `ui/run/card-prototypes/concinnous-frame-v1.png`, and
-  `ui/run/card-prototypes/hieratic-frame-v1.png`, plus the dedicated
-  `ui/run/card-prototypes/praecipuus-frame-v1.png`. The shared face selects the
-  semantic slot from the persisted qualifier; no frame owns live title, art,
-  price, type, ledger, property, or flavor pixels. Every variant clips the same
+  `ui/run/card-prototypes/concinnous-frame-v1.png`,
+  `ui/run/card-prototypes/hieratic-frame-v1.png`, and
+  `ui/run/card-prototypes/praecipuus-frame-v1.png` remain typed media identities,
+  but they are not rarity aliases. A future ability-owned frame family must add
+  a complete Common/Uncommon/Rare triplet before runtime may combine it with
+  rarity. No frame owns live title, art, price, type, ledger, property, or flavor
+  pixels. Every variant clips the same
   accepted gold-coin pixels from
   `ui/run/card-prototypes/cost-coin-source-v1.png` and overlays the live integer,
     so a frame cannot silently introduce a private coin treatment (ADR-0283,
