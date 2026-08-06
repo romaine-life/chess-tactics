@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-08-05
 deciders: owner (Nelson) + Codex
+partially_superseded_by:
+  - "[ADR-0482](0482-expunctio-owns-card-aware-alienatio.md)'s removal of Alienatio from the separate Sectio-workspace inventory"
 partially_supersedes:
   - "[ADR-0205](0205-navigation-loads-atomic-scenes-through-one-director.md)'s universal fade-to-background sequence"
   - "[ADR-0307](0307-every-replaceable-region-is-a-director-owned-scene-slot.md)'s treatment of every slot change as one visual class"

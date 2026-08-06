@@ -74,6 +74,18 @@ export type RunCardIconPlacement = Readonly<{
   scale: number;
 }>;
 
+export type RunCardUnitHighlight = Readonly<{
+  unit: PlayablePieceType;
+  /** Zero-based occurrence inside this piece type's visible card stack. */
+  index: number;
+}>;
+
+export type RunCardUnitSelection = Readonly<{
+  id: (unit: PlayablePieceType, index: number) => string | null;
+  label: (unit: PlayablePieceType, index: number) => string | null;
+  onSelect: (unit: PlayablePieceType, index: number) => void;
+}>;
+
 export type RunCardIconTuning = Readonly<{
   property: RunCardIconPlacement;
   unitState: RunCardIconPlacement;
@@ -433,6 +445,11 @@ export function runCardUnitStackSeatLeft(
 }
 
 type UnitSpriteMetrics = Readonly<{
+  alphaMask: Uint8Array;
+  naturalHeight: number;
+  naturalWidth: number;
+  opaqueLeft: number;
+  opaqueWidth: number;
   canvasWidthPerHeight: number;
   opaqueLeftPerHeight: number;
   opaqueWidthPerHeight: number;
@@ -453,23 +470,169 @@ function measureUnitSprite(image: HTMLImageElement): UnitSpriteMetrics {
   if (!context) throw new Error('unit sprite alpha measurement is unavailable');
   context.drawImage(image, 0, 0);
   const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+  const alphaMask = new Uint8Array(canvas.width * canvas.height);
   let minX = canvas.width;
   let maxX = -1;
   for (let y = 0; y < canvas.height; y += 1) {
     for (let x = 0; x < canvas.width; x += 1) {
       if (pixels[((y * canvas.width + x) * 4) + 3] <= 8) continue;
+      alphaMask[(y * canvas.width) + x] = 1;
       minX = Math.min(minX, x);
       maxX = Math.max(maxX, x);
     }
   }
   if (maxX < minX) throw new Error('unit sprite contains no visible pixels');
   const measured = Object.freeze({
+    alphaMask,
+    naturalHeight: canvas.height,
+    naturalWidth: canvas.width,
+    opaqueLeft: minX,
+    opaqueWidth: maxX - minX + 1,
     canvasWidthPerHeight: canvas.width / canvas.height,
     opaqueLeftPerHeight: minX / canvas.height,
     opaqueWidthPerHeight: (maxX - minX + 1) / canvas.height,
   });
   unitSpriteMetrics.set(source, measured);
   return measured;
+}
+
+/** A removal-only face update needs no new pixels and may commit in the current frame. */
+export function runCardContentCanUpdateWithoutMediaLoad(
+  current: RunCardFaceContent,
+  requested: RunCardFaceContent,
+): boolean {
+  if (current.cardProperty?.id !== requested.cardProperty?.id) return false;
+  const currentKinds = new Set(requiredRunCardImageKinds(current));
+  return requiredRunCardImageKinds(requested).every((kind) => currentKinds.has(kind));
+}
+
+export type RunCardUnitStackLayout = Readonly<{
+  stackCount: number;
+  stackIndices: readonly (number | null)[];
+  abilityStackIndex?: number;
+}>;
+
+/** Resolves either authored empty seats or the compact post-Alienatio next frame. */
+export function runCardUnitStackLayout(
+  grant: Pick<RunCardGrant, 'count' | 'emptyIndices' | 'cacochymicIndices' | 'ability'>,
+  compactEmptySeats: boolean,
+): RunCardUnitStackLayout {
+  const emptyIndices = new Set(grant.emptyIndices ?? []);
+  const visibleIndices = Array.from({ length: grant.count }, (_, index) => index)
+    .filter((index) => !emptyIndices.has(index));
+  const cacochymicIndices = grant.cacochymicIndices ?? [];
+  const visibleCacochymicIndices = cacochymicIndices.filter((index) => !emptyIndices.has(index));
+  const abilityUnitIndex = grant.ability?.index ?? -1;
+  const abilityVisible = abilityUnitIndex >= 0 && !emptyIndices.has(abilityUnitIndex);
+  const stackIndices = Array.from({ length: grant.count }, (_, index): number | null => {
+    if (emptyIndices.has(index)) return null;
+    const unitIndex = compactEmptySeats ? visibleIndices.indexOf(index) : index;
+    const markersBefore = (compactEmptySeats ? visibleCacochymicIndices : cacochymicIndices)
+      .filter((plaguedIndex) => plaguedIndex < index).length;
+    return unitIndex + markersBefore;
+  });
+  const markerIndices = compactEmptySeats ? visibleCacochymicIndices : cacochymicIndices;
+  const stackCount = (compactEmptySeats ? visibleIndices.length : grant.count)
+    + markerIndices.length
+    + (compactEmptySeats ? Number(abilityVisible) : Number(Boolean(grant.ability)));
+  const abilityStackIndex = grant.ability && (!compactEmptySeats || abilityVisible)
+    ? (compactEmptySeats ? visibleIndices.indexOf(abilityUnitIndex) : abilityUnitIndex)
+      + markerIndices.filter((plaguedIndex) => plaguedIndex <= abilityUnitIndex).length
+      + 1
+    : undefined;
+  return { stackCount, stackIndices, abilityStackIndex };
+}
+
+export function runCardUnitSpriteAlphaHit(
+  sprite: Pick<UnitSpriteMetrics, 'alphaMask' | 'naturalHeight' | 'naturalWidth' | 'opaqueLeft' | 'opaqueWidth'>,
+  inlineRatio: number,
+  blockRatio: number,
+  hitSlop = 0,
+): boolean {
+  return runCardUnitSpriteAlphaDistance(sprite, inlineRatio, blockRatio, hitSlop) !== null;
+}
+
+export function runCardUnitSpriteAlphaDistance(
+  sprite: Pick<UnitSpriteMetrics, 'alphaMask' | 'naturalHeight' | 'naturalWidth' | 'opaqueLeft' | 'opaqueWidth'>,
+  inlineRatio: number,
+  blockRatio: number,
+  hitSlop = 0,
+): number | null {
+  const radius = Math.max(0, Math.floor(hitSlop));
+  const x = sprite.opaqueLeft + Math.floor(inlineRatio * sprite.opaqueWidth);
+  const y = Math.floor(blockRatio * sprite.naturalHeight);
+  let closestDistance: number | null = null;
+  for (let sampleY = Math.max(0, y - radius); sampleY <= Math.min(sprite.naturalHeight - 1, y + radius); sampleY += 1) {
+    for (let sampleX = Math.max(0, x - radius); sampleX <= Math.min(sprite.naturalWidth - 1, x + radius); sampleX += 1) {
+      if (sprite.alphaMask[(sampleY * sprite.naturalWidth) + sampleX] !== 1) continue;
+      const distance = ((sampleX - x) ** 2) + ((sampleY - y) ** 2);
+      if (distance > radius ** 2) continue;
+      closestDistance = closestDistance === null ? distance : Math.min(closestDistance, distance);
+    }
+  }
+  return closestDistance;
+}
+
+type RunCardUnitAlphaSample = Readonly<{
+  sprite: Pick<UnitSpriteMetrics, 'alphaMask' | 'naturalHeight' | 'naturalWidth' | 'opaqueLeft' | 'opaqueWidth'>;
+  inlineRatio: number;
+  blockRatio: number;
+  hitSlop?: number;
+}>;
+
+export function runCardUnitClosestAlphaHit(
+  samples: readonly (RunCardUnitAlphaSample | null)[],
+): number | null {
+  let closestIndex: number | null = null;
+  let closestDistance = Number.POSITIVE_INFINITY;
+  for (let index = 0; index < samples.length; index += 1) {
+    const sample = samples[index];
+    if (!sample) continue;
+    const distance = runCardUnitSpriteAlphaDistance(
+      sample.sprite,
+      sample.inlineRatio,
+      sample.blockRatio,
+      sample.hitSlop,
+    );
+    // Equal-distance overlaps belong to the later painted sprite.
+    if (distance === null || distance > closestDistance) continue;
+    closestIndex = index;
+    closestDistance = distance;
+  }
+  return closestIndex;
+}
+
+function runCardUnitStackPointerTarget(
+  stack: HTMLSpanElement,
+  clientX: number,
+  clientY: number,
+): HTMLButtonElement | null {
+  const buttons = Array.from(stack.querySelectorAll<HTMLButtonElement>(
+    'button.run-card-prototype-unit-icon-seat.is-selectable',
+  ));
+  const hitIndex = runCardUnitClosestAlphaHit(buttons.map((button) => {
+    const image = button.querySelector<HTMLImageElement>('.run-card-prototype-unit-icon');
+    const metrics = image ? unitSpriteMetrics.get(image.currentSrc || image.src) : null;
+    if (!metrics) return null;
+    const bounds = button.getBoundingClientRect();
+    return {
+      sprite: metrics,
+      inlineRatio: (clientX - bounds.left) / bounds.width,
+      blockRatio: (clientY - bounds.top) / bounds.height,
+      hitSlop: Math.max(2, Math.round(metrics.naturalHeight * .06)),
+    };
+  }));
+  return hitIndex === null ? null : buttons[hitIndex];
+}
+
+function setRunCardUnitStackPointerTarget(
+  stack: HTMLSpanElement,
+  target: HTMLButtonElement | null,
+): void {
+  stack.classList.toggle('has-pixel-hover', target !== null);
+  stack.querySelectorAll<HTMLButtonElement>(
+    'button.run-card-prototype-unit-icon-seat.is-selectable',
+  ).forEach((button) => button.classList.toggle('is-pixel-hovered', button === target));
 }
 
 function UnitStackSprite({
@@ -483,6 +646,10 @@ function UnitStackSprite({
   ability,
   abilityIconUrl,
   abilityStackIndex,
+  highlighted,
+  selectionId,
+  selectionLabel,
+  onSelect,
   tuning,
   onReady,
   onError,
@@ -497,6 +664,10 @@ function UnitStackSprite({
   ability?: RunAbility;
   abilityIconUrl?: string;
   abilityStackIndex?: number;
+  highlighted: boolean;
+  selectionId: string | null;
+  selectionLabel: string | null;
+  onSelect?: () => void;
   tuning: RunCardContentsTuning;
   onReady: (kind: RunCardImageKind) => void;
   onError: (kind: RunCardImageKind) => void;
@@ -528,37 +699,64 @@ function UnitStackSprite({
       tuning.unitNaturalGap,
     );
 
+  const seatClassName = `run-card-prototype-unit-icon-seat${plagued ? ' is-plagued' : ''}${highlighted ? ' is-highlighted' : ''}${selectionLabel ? ' is-selectable' : ''}`;
+  const seatStyle = {
+    '--run-card-unit-canvas-left': `${canvasLeft.toFixed(4)}cqw`,
+    '--run-card-unit-canvas-width': `${canvasWidth.toFixed(4)}cqw`,
+    '--run-card-unit-seat-left': seatLeft,
+    '--run-card-unit-seat-width': `${visibleWidth.toFixed(4)}cqw`,
+    zIndex: stackIndex + 1,
+  } as CSSProperties;
+  const sprite = (
+    <img
+      className="run-card-prototype-unit-icon"
+      data-unit-facing={PLAYER_CARD_FACING}
+      data-unit-palette={PLAYER_CARD_PALETTE}
+      src={source}
+      alt=""
+      draggable={false}
+      onLoad={(event) => {
+        try {
+          setMetrics(measureUnitSprite(event.currentTarget));
+          onReady(kind);
+        } catch {
+          onError(kind);
+        }
+      }}
+      onError={() => onError(kind)}
+    />
+  );
+
   return (
     <>
-      <span
-        className={`run-card-prototype-unit-icon-seat${plagued ? ' is-plagued' : ''}`}
-        data-stack-index={stackIndex}
-        style={{
-          '--run-card-unit-canvas-left': `${canvasLeft.toFixed(4)}cqw`,
-          '--run-card-unit-canvas-width': `${canvasWidth.toFixed(4)}cqw`,
-          '--run-card-unit-seat-left': seatLeft,
-          '--run-card-unit-seat-width': `${visibleWidth.toFixed(4)}cqw`,
-          zIndex: stackIndex + 1,
-        } as CSSProperties}
-      >
-        <img
-          className="run-card-prototype-unit-icon"
-          data-unit-facing={PLAYER_CARD_FACING}
-          data-unit-palette={PLAYER_CARD_PALETTE}
-          src={source}
-          alt=""
-          draggable={false}
-          onLoad={(event) => {
-            try {
-              setMetrics(measureUnitSprite(event.currentTarget));
-              onReady(kind);
-            } catch {
-              onError(kind);
-            }
+      {selectionLabel ? (
+        <button
+          type="button"
+          className={seatClassName}
+          data-stack-index={stackIndex}
+          data-unit-index={index}
+          data-run-card-unit-id={selectionId ?? undefined}
+          style={seatStyle}
+          aria-label={selectionLabel}
+          aria-pressed={highlighted}
+          onClick={(event) => {
+            if (event.detail !== 0) return;
+            onSelect?.();
           }}
-          onError={() => onError(kind)}
-        />
-      </span>
+        >
+          {sprite}
+        </button>
+      ) : (
+        <span
+          className={seatClassName}
+          data-stack-index={stackIndex}
+          data-unit-index={index}
+          data-run-card-unit-id={selectionId ?? undefined}
+          style={seatStyle}
+        >
+          {sprite}
+        </span>
+      )}
       {plagued ? (
         <span
           className="run-card-prototype-unit-icon-seat run-card-prototype-unit-marker-seat"
@@ -669,6 +867,19 @@ type RunCardPresentation = Readonly<{
   iconMedia: RunCardIconMedia;
 }>;
 
+function runCardPresentationCanUpdateInPlace(
+  current: RunCardPresentation,
+  requested: RunCardPresentation,
+): boolean {
+  return requested.frameUrl === current.frameUrl
+    && requested.coinSourceUrl === current.coinSourceUrl
+    && requested.artUrl === current.artUrl
+    && requested.frameGeometry.id === current.frameGeometry.id
+    && JSON.stringify(requested.frameGeometry.frameSha256s) === JSON.stringify(current.frameGeometry.frameSha256s)
+    && JSON.stringify(requested.iconMedia) === JSON.stringify(current.iconMedia)
+    && runCardContentCanUpdateWithoutMediaLoad(current.card, requested.card);
+}
+
 async function acknowledgeDecodedImage(
   image: HTMLImageElement,
   kind: Exclude<RunCardImageKind, `unit:${number}:${PlayablePieceType}:${number}`>,
@@ -692,6 +903,9 @@ function RunCardFaceLayer({
   explicitIconTuning,
   frameBoxStyle,
   selectedFrameBox,
+  unitHighlight,
+  unitSelection,
+  compactEmptySeats,
   propertyTooltipFocusable,
   onImageLoad,
   onImageError,
@@ -703,6 +917,9 @@ function RunCardFaceLayer({
   explicitIconTuning: RunCardIconTuning | null;
   frameBoxStyle: RunCardFrameBoxStyle;
   selectedFrameBox: RunCardFrameBoxName | null;
+  unitHighlight: RunCardUnitHighlight | null;
+  unitSelection: RunCardUnitSelection | null;
+  compactEmptySeats: boolean;
   propertyTooltipFocusable: boolean;
   onImageLoad: (signature: string, pending: boolean, kind: RunCardImageKind) => void;
   onImageError: (signature: string, pending: boolean, kind: RunCardImageKind) => void;
@@ -816,15 +1033,10 @@ function RunCardFaceLayer({
           {card.grants.map((grant, cell) => {
             const emptyIndices = grant.emptyIndices ?? [];
             const cacochymicIndices = grant.cacochymicIndices ?? [];
-            const stackCount = grant.count + cacochymicIndices.length + (grant.ability ? 1 : 0);
+            const stackLayout = runCardUnitStackLayout(grant, compactEmptySeats);
             // The marker seats immediately after the unit that actually carries the state,
             // so a revealed target on a multi-unit card is marked where it stands.
             const abilityUnitIndex = grant.ability?.index ?? -1;
-            const abilityStackIndex = grant.ability
-              ? abilityUnitIndex
-                + cacochymicIndices.filter((plaguedIndex) => plaguedIndex <= abilityUnitIndex).length
-                + 1
-              : undefined;
             return (
               <span
                 className="run-card-prototype-ledger-row"
@@ -834,27 +1046,53 @@ function RunCardFaceLayer({
                 <strong className="run-card-prototype-ledger-count" aria-hidden="true">
                   {Math.max(0, grant.count - emptyIndices.length)}
                 </strong>
-                <span className="run-card-prototype-unit-stack" aria-hidden="true">
-                  {Array.from({ length: grant.count }, (_, index) => emptyIndices.includes(index) ? null : (
-                    <UnitStackSprite
-                      ability={index === abilityUnitIndex ? grant.ability?.state : undefined}
-                      abilityIconUrl={index === abilityUnitIndex && grant.ability
-                        ? iconMedia.unitStateUrls?.[grant.ability.state]
-                        : undefined}
-                      abilityStackIndex={index === abilityUnitIndex ? abilityStackIndex : undefined}
-                      cell={cell}
-                      index={index}
-                      key={`${grant.unit}-${index}`}
-                      unit={grant.unit}
-                      plagued={cacochymicIndices.includes(index)}
-                      plaguedIconUrl={iconMedia.unitStateUrls?.cacochymic}
-                      stackCount={stackCount}
-                      stackIndex={index + cacochymicIndices.filter((plaguedIndex) => plaguedIndex < index).length}
-                      tuning={contentsTuning}
-                      onReady={acknowledgeLoad}
-                      onError={acknowledgeError}
-                    />
-                  ))}
+                <span
+                  className="run-card-prototype-unit-stack"
+                  aria-hidden={unitSelection ? undefined : true}
+                  onPointerMove={pending || !unitSelection ? undefined : (event) => {
+                    const target = runCardUnitStackPointerTarget(event.currentTarget, event.clientX, event.clientY);
+                    setRunCardUnitStackPointerTarget(event.currentTarget, target);
+                  }}
+                  onPointerLeave={pending || !unitSelection ? undefined : (event) => {
+                    setRunCardUnitStackPointerTarget(event.currentTarget, null);
+                  }}
+                  onClick={pending || !unitSelection ? undefined : (event) => {
+                    if (event.detail === 0) return;
+                    const target = runCardUnitStackPointerTarget(event.currentTarget, event.clientX, event.clientY);
+                    if (!target) return;
+                    event.preventDefault();
+                    const selectedIndex = Number(target.dataset.unitIndex);
+                    if (Number.isSafeInteger(selectedIndex)) unitSelection.onSelect(grant.unit, selectedIndex);
+                  }}
+                >
+                  {Array.from({ length: grant.count }, (_, index) => {
+                    if (emptyIndices.includes(index)) return null;
+                    const selectionId = pending ? null : unitSelection?.id(grant.unit, index) ?? null;
+                    return (
+                      <UnitStackSprite
+                        ability={index === abilityUnitIndex ? grant.ability?.state : undefined}
+                        abilityIconUrl={index === abilityUnitIndex && grant.ability
+                          ? iconMedia.unitStateUrls?.[grant.ability.state]
+                          : undefined}
+                        abilityStackIndex={index === abilityUnitIndex ? stackLayout.abilityStackIndex : undefined}
+                        highlighted={unitHighlight?.unit === grant.unit && unitHighlight.index === index}
+                        selectionId={selectionId}
+                        selectionLabel={pending ? null : unitSelection?.label(grant.unit, index) ?? null}
+                        onSelect={pending || !unitSelection ? undefined : () => unitSelection.onSelect(grant.unit, index)}
+                        cell={cell}
+                        index={index}
+                        key={selectionId ?? `${grant.unit}-${index}`}
+                        unit={grant.unit}
+                        plagued={cacochymicIndices.includes(index)}
+                        plaguedIconUrl={iconMedia.unitStateUrls?.cacochymic}
+                        stackCount={stackLayout.stackCount}
+                        stackIndex={stackLayout.stackIndices[index]!}
+                        tuning={contentsTuning}
+                        onReady={acknowledgeLoad}
+                        onError={acknowledgeError}
+                      />
+                    );
+                  })}
                 </span>
               </span>
             );
@@ -898,6 +1136,9 @@ export function RunCardFace({
   frameGeometry = RUN_CARD_STANDARD_FRAME_GEOMETRY,
   frameBoxStyle = 'off',
   selectedFrameBox = null,
+  unitHighlight = null,
+  unitSelection = null,
+  compactEmptySeats = false,
   onImageLoad = () => undefined,
   onImageError = () => undefined,
   ariaHidden = false,
@@ -916,6 +1157,12 @@ export function RunCardFace({
   frameGeometry?: RunCardFrameGeometry;
   frameBoxStyle?: RunCardFrameBoxStyle;
   selectedFrameBox?: RunCardFrameBoxName | null;
+  /** Transactional hosts may mark one exact unit without changing canonical face content. */
+  unitHighlight?: RunCardUnitHighlight | null;
+  /** Transactional hosts may make occupied unit figures directly selectable. */
+  unitSelection?: RunCardUnitSelection | null;
+  /** Expunctio may compose the exact post-sale stack instead of retaining vacant authored seats. */
+  compactEmptySeats?: boolean;
   onImageLoad?: (kind: RunCardImageKind) => void;
   onImageError?: (kind: RunCardImageKind) => void;
   ariaHidden?: boolean;
@@ -937,11 +1184,14 @@ export function RunCardFace({
     iconMedia,
   }), [requestedSignature, boxesKey]);
   const [displayed, setDisplayed] = useState<RunCardPresentation>(requested);
+  const [displayedLayerKey, setDisplayedLayerKey] = useState('run-card-layer:0');
   const [pending, setPending] = useState<RunCardPresentation | null>(null);
+  const [pendingLayerKey, setPendingLayerKey] = useState<string | null>(null);
   const [pendingSettled, setPendingSettled] = useState<ReadonlySet<RunCardImageKind>>(() => new Set());
   const displayedRef = useRef(displayed);
   const pendingRef = useRef(pending);
   const promotionFramesRef = useRef<number[]>([]);
+  const layerSequenceRef = useRef(0);
   displayedRef.current = displayed;
   pendingRef.current = pending;
 
@@ -958,10 +1208,20 @@ export function RunCardFace({
       // Same media, retuned boxes: apply the new layout in place, no crossfade.
       if (requested !== displayedRef.current) setDisplayed(requested);
       setPending(null);
+      setPendingLayerKey(null);
       setPendingSettled(new Set());
       return;
     }
+    if (runCardPresentationCanUpdateInPlace(displayed, requested)) {
+      setDisplayed(requested);
+      setPending(null);
+      setPendingLayerKey(null);
+      setPendingSettled(new Set());
+      return;
+    }
+    layerSequenceRef.current += 1;
     setPending(requested);
+    setPendingLayerKey(`run-card-layer:${layerSequenceRef.current}`);
     setPendingSettled(new Set());
   }, [cancelPromotion, displayed.signature, requested]);
 
@@ -1000,7 +1260,7 @@ export function RunCardFace({
 
   useEffect(() => {
     cancelPromotion();
-    if (!pending) return undefined;
+    if (!pending || !pendingLayerKey) return undefined;
     if (!runCardPresentationCanPromote(
       pending.signature,
       pendingRef.current?.signature ?? null,
@@ -1008,27 +1268,34 @@ export function RunCardFace({
       pendingSettled,
     )) return undefined;
     const signature = pending.signature;
+    const readyLayerKey = pendingLayerKey;
     const firstFrame = requestAnimationFrame(() => {
       const secondFrame = requestAnimationFrame(() => {
         promotionFramesRef.current = [];
         const ready = pendingRef.current;
         if (!ready || ready.signature !== signature) return;
         setDisplayed(ready);
+        setDisplayedLayerKey(readyLayerKey);
         setPending(null);
+        setPendingLayerKey(null);
         setPendingSettled(new Set());
       });
       promotionFramesRef.current = [secondFrame];
     });
     promotionFramesRef.current = [firstFrame];
     return cancelPromotion;
-  }, [cancelPromotion, pending, pendingSettled]);
+  }, [cancelPromotion, pending, pendingLayerKey, pendingSettled]);
 
-  const layers = pending
+  const updatesInCurrentFrame = requested.signature !== displayed.signature
+    && runCardPresentationCanUpdateInPlace(displayed, requested);
+  const presented = updatesInCurrentFrame ? requested : displayed;
+  const visiblePending = updatesInCurrentFrame ? null : pending;
+  const layers = visiblePending
     ? [
-        { presentation: displayed, pending: false },
-        { presentation: pending, pending: true },
+        { key: displayedLayerKey, presentation: presented, pending: false },
+        { key: pendingLayerKey!, presentation: visiblePending, pending: true },
       ]
-    : [{ presentation: displayed, pending: false }];
+    : [{ key: displayedLayerKey, presentation: presented, pending: false }];
 
   return (
     <span
@@ -1037,20 +1304,20 @@ export function RunCardFace({
         '--run-card-prototype-width': width,
         // The reading is sized to the coin's face, so a two-digit cost stops
         // crowding the rim while a one-digit cost keeps the approved size.
-        '--run-card-cost-size': `${runCardCostSizeCqw(displayed.card.cost, tuning.costSize)}cqw`,
+        '--run-card-cost-size': `${runCardCostSizeCqw(presented.card.cost, tuning.costSize)}cqw`,
         '--run-card-title-size': `${tuning.titleSize}cqw`,
         '--run-card-type-size': `${tuning.typeSize}cqw`,
         '--run-card-text-inset': `${tuning.textInset}cqw`,
         '--run-card-text-ink-centre': tuning.textInkCentre,
       } as CSSProperties}
       aria-hidden={ariaHidden || undefined}
-      aria-busy={pending ? true : undefined}
-      data-frame-geometry={displayed.frameGeometry.id}
-      aria-label={ariaHidden ? undefined : `${displayed.card.name}. ${displayed.card.typeLine}${displayed.card.cardProperty ? `, ${displayed.card.cardProperty.name}: ${displayed.card.cardProperty.effect}` : ''}.${displayed.card.showsCost ? ` Costs ${displayed.card.cost} gold.` : ''} Grants ${grantsLabel(displayed.card.grants)}.`}
+      aria-busy={visiblePending ? true : undefined}
+      data-frame-geometry={presented.frameGeometry.id}
+      aria-label={ariaHidden ? undefined : `${presented.card.name}. ${presented.card.typeLine}${presented.card.cardProperty ? `, ${presented.card.cardProperty.name}: ${presented.card.cardProperty.effect}` : ''}.${presented.card.showsCost ? ` Costs ${presented.card.cost} gold.` : ''} Grants ${grantsLabel(presented.card.grants)}.`}
     >
       {layers.map((layer) => (
         <RunCardFaceLayer
-          key={layer.presentation.signature}
+          key={layer.key}
           presentation={layer.presentation}
           pending={layer.pending}
           explicitContentsTuning={contentsTuning}
@@ -1058,6 +1325,9 @@ export function RunCardFace({
           explicitIconTuning={iconTuning}
           frameBoxStyle={frameBoxStyle}
           selectedFrameBox={selectedFrameBox}
+          unitHighlight={unitHighlight}
+          unitSelection={unitSelection}
+          compactEmptySeats={compactEmptySeats}
           propertyTooltipFocusable={propertyTooltipFocusable}
           onImageLoad={handleImageLoad}
           onImageError={handleImageError}

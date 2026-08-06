@@ -40,6 +40,7 @@ const useRunCraft = readFileSync(new URL('./useRunCraft.ts', import.meta.url), '
 const craftedRunLanding = readFileSync(new URL('./craftedRunLanding.ts', import.meta.url), 'utf8');
 const bonaVacantia = readFileSync(new URL('./RunBonaVacantia.tsx', import.meta.url), 'utf8');
 const lipsanonFlight = readFileSync(new URL('./runLipsanonFlightView.tsx', import.meta.url), 'utf8');
+const runUnitDeparture = readFileSync(new URL('./runUnitDepartureView.tsx', import.meta.url), 'utf8');
 const sceneContinuity = readFileSync(new URL('./shell/SceneContinuity.tsx', import.meta.url), 'utf8');
 
 describe('Run chrome hierarchy', () => {
@@ -95,7 +96,7 @@ describe('Run chrome hierarchy', () => {
     expect(metaControls).not.toContain('data-ui-sfx="gold"');
     expect(metaControls).not.toContain('<OuterChromeBox');
     expect(metaControls).not.toContain('data-chrome-unit="outer-panel"');
-    expect(runArmyWorkspace).toContain('data-ui-sfx={status === \'alienable\' ? \'gold\' : undefined}');
+    expect(runArmyWorkspace).toContain("data-ui-sfx={unavailableReason ? undefined : 'gold'}");
     expect(runArmyWorkspace).not.toContain('chromeConsumer="run-army-ledger"');
     expect(runArmyWorkspace).not.toContain('chromeConsumer="run-army-profile"');
     expect(runArmyWorkspace).toContain('<RunSceneViewport');
@@ -291,7 +292,6 @@ describe('Run chrome hierarchy', () => {
       'run-victory-workspace',
       'run-army-ledger-workspace',
       'run-army-profile-workspace',
-      'run-alienatio-workspace',
       'run-expunctio-workspace',
       'run-lipsana-workspace',
       'run-loading-workspace',
@@ -343,7 +343,7 @@ describe('Run chrome hierarchy', () => {
     expect(runExpunctioWorkspace).toContain('runCardFramePaintInsetRatios');
     expect(runExpunctioWorkspace).toContain('fillRole="outer"');
     expect(runExpunctioWorkspace).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
-    expect(runExpunctioWorkspace).not.toContain('runCardName');
+    expect(runExpunctioWorkspace).not.toContain('<h3>{runCardName');
     expect(styleCss).not.toContain('.run-expunctio-row:is(.is-expuncted, .is-spent, .is-unavailable, .is-unaffordable)');
     expect(styleCss).toMatch(/\.run-expunctio-workspace \.run-sectio-operation-list-scroll > \.kit-scroll-content\s*\{[\s\S]*?padding-inline-start:\s*var\(--ds-space-1\)/);
     expect(styleCss).toMatch(/\.run-expunctio-list\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
@@ -434,27 +434,19 @@ describe('Run chrome hierarchy', () => {
   it('keeps Sectio operation lists on the canonical drawn scrollbar', () => {
     const operationListRule = styleCss.match(/\.run-sectio-operation-list\s*\{([^}]*)\}/)?.[1] ?? '';
 
-    expect(runArmyWorkspace).toContain('<KitScroll className="run-sectio-operation-list-scroll">');
     expect(runExpunctioWorkspace).toContain('<KitScroll className="run-sectio-operation-list-scroll">');
-    expect(runArmyWorkspace).toContain('className="run-sectio-operation-list run-alienatio-list"');
     expect(runExpunctioWorkspace).toContain('className="run-sectio-operation-list run-expunctio-list"');
-    expect(runArmyWorkspace).toContain('data-chrome-fill-surface="baseline-stone-blue"');
     expect(runExpunctioWorkspace).toContain('fillRole="outer"');
-    expect(runArmyWorkspace).toContain("['--run-operation-row-index' as string]: index");
     expect(runExpunctioWorkspace).toContain("['--run-operation-row-index' as string]: index");
-    expect(styleCss).toMatch(/\.run-alienatio-row\s*\{[\s\S]*?--chrome-surface-position-y:\s*calc\(var\(--run-operation-row-index, 0\)/);
     expect(styleCss).toMatch(/\.run-expunctio-row\s*\{[\s\S]*?--chrome-surface-position-y:\s*calc\(var\(--run-operation-row-index, 0\)/);
-    expect(styleCss).toMatch(/\.run-alienatio-row\s*\{[^}]*--run-operation-surface-pitch:\s*calc\(112px \+ var\(--ds-inline-tight\)\);[^}]*block-size:\s*112px;/s);
     expect(styleCss).toMatch(/\.run-expunctio-row\s*\{[\s\S]*?--run-operation-surface-pitch:\s*calc\([\s\S]*?var\(--run-expunctio-card-inline-size\) \* 7 \/ 5[\s\S]*?var\(--ds-stack\)[\s\S]*?\);/);
-    expect(styleCss).toMatch(/@media \(max-width: 960px\)[\s\S]*?\.run-alienatio-row\s*\{[^}]*--run-operation-surface-pitch:\s*calc\(224px \+ var\(--ds-inline-tight\)\);[^}]*block-size:\s*224px;/s);
     expect(styleCss).toMatch(/\.run-sectio-operation-list-scroll\s*\{[^}]*--run-operation-clip-apron-block-start:\s*var\(--le-inner-atom-top-overhang, 0px\);[^}]*--run-operation-clip-apron-block-end:\s*var\(--le-inner-atom-bottom-overhang, 0px\);/s);
     expect(styleCss).toMatch(/\.run-sectio-operation-list-scroll > \.kit-scroll-rail\s*\{[^}]*bottom:\s*var\(--run-operation-clip-apron-block-end\);[^}]*top:\s*var\(--run-operation-clip-apron-block-start\);/s);
     expect(operationListRule).toMatch(/overflow-block:\s*clip/);
     expect(operationListRule).toMatch(/overflow-inline:\s*visible/);
     expect(operationListRule).toMatch(/padding-block:\s*var\(--run-operation-clip-apron-block-start\)\s*var\(--run-operation-clip-apron-block-end\)/);
     expect(operationListRule).not.toMatch(/overflow(?:-[xy])?:\s*(?:auto|scroll)/);
-    expect(styleCss).not.toMatch(/\.run-(?:alienatio|expunctio)-row:nth-child/);
-    expect(styleCss).not.toMatch(/\.run-alienatio-row(?:\.is-aliened|:is\([^}]+\))\s*\{[^}]*opacity:/);
+    expect(styleCss).not.toMatch(/\.run-expunctio-row:nth-child/);
     expect(styleCss).not.toMatch(/\.run-expunctio-row:is\([^}]+\)\s*\{[^}]*opacity:/);
   });
 
@@ -466,8 +458,8 @@ describe('Run chrome hierarchy', () => {
     expect(chromeSurfacePolicy).toContain("export const CHROME_LEAF_FILL_SURFACE = 'hybrid-wood-oak'");
     expect(houseSelect).toContain('fillSurface?: string;');
     expect(houseSelect).toContain('data-chrome-fill-surface={fillSurface}');
-    expect((runArmyWorkspace.match(/fillSurface=\{CHROME_LEAF_FILL_SURFACE\}/g) ?? [])).toHaveLength(4);
-    expect(runArmyWorkspace).toContain("['--run-roster-filter-index' as string]: 3");
+    expect((runArmyWorkspace.match(/fillSurface=\{CHROME_LEAF_FILL_SURFACE\}/g) ?? [])).toHaveLength(3);
+    expect(runArmyWorkspace).toContain("['--run-roster-filter-index' as string]: 2");
     expect(styleCss).toMatch(/\.run-roster-filters \.house-select\s*\{[\s\S]*?--chrome-surface-position-y:\s*calc\(var\(--run-roster-filter-index, 0\)/);
 
     expect(metaControls).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
@@ -479,24 +471,48 @@ describe('Run chrome hierarchy', () => {
     expect(runArmyWorkspace).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
     expect(runExpunctioWorkspace).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
     expect(runTitleBarChips).toMatch(/<TitleBarStatus[\s\S]*?data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}/);
-    expect(runArmyWorkspace).toContain('data-chrome-fill-surface="baseline-stone-blue"');
     expect(runExpunctioWorkspace).toContain('fillRole="outer"');
     expect(styleCss).not.toMatch(/\.run-(?:roster-filters|meta-controls)[^}]*:nth-child/);
   });
 
-  it('uses Alienatio as the operation noun and Aliene as its action verb', () => {
-    expect(runArmyWorkspace).toContain('<h2 id="run-alienatio-workspace-title">Alienatio</h2>');
-    expect(runArmyWorkspace).toContain("status === 'alienable' ? 'Aliene'");
-    expect(runArmyWorkspace).toContain("status === 'aliened' ? 'Aliened this visit'");
-    expect(runArmyWorkspace).toContain("{ value: 'aliened', label: 'Aliened this visit' }");
-    expect(runArmyWorkspace).toContain("? 'Aliened during this Sectio visit. Reset Sectio to restore this unit.'");
+  it('keeps Alienatio as the operation noun and Aliene as its card-aware action verb', () => {
+    expect(runExpunctioWorkspace).toContain('<small>Alienatio</small>');
+    expect(runExpunctioWorkspace).toContain('<CyclePicker');
+    expect(runExpunctioWorkspace).toContain('useState<string | null>(null)');
+    expect(runExpunctioWorkspace).toContain('highlightedPieceIndex=');
+    expect(runExpunctioWorkspace).toContain('onPieceSelect=');
+    expect(runExpunctioWorkspace).toContain('setSelectedUnitId(units[nextIndex].unit.id);');
+    expect(runExpunctioWorkspace).toContain('if (attached) setSelectedUnitId(attached.unit.id);');
+    expect(runExpunctioWorkspace).toContain(": 'Select a unit'");
+    expect(runExpunctioWorkspace).toContain("selected.unit.type === 'king' ? 'Retained' : 'Aliene'");
     expect(runArmyWorkspace).toContain("<span>{unit.type === 'king' ? 'Retained' : 'Aliene'}</span>");
-    expect(runArmyWorkspace).not.toContain("status === 'alienable' ? 'Alienatio'");
-    expect(runArmyWorkspace).not.toContain('Alienated this visit');
+    expect(runArmyWorkspace).not.toContain('run-alienatio-workspace');
+    expect(runExpunctioWorkspace).not.toContain('Alienated this visit');
+    expect(runExpunctioWorkspace).toContain('<RunGoldTransactionAmount');
+    expect(runExpunctioWorkspace).toContain('direction="gain"');
+    expect(runExpunctioWorkspace).toContain('direction="loss"');
+    expect(runExpunctioWorkspace).not.toContain('<RunGoldAmount');
+    expect(runExpunctioWorkspace).toContain('className="run-expunctio-unit-traits-seat"');
+    expect(runExpunctioWorkspace).toMatch(/unitAlienatioTenths\(run, selected\.unit\)\s*: null/);
+    expect(styleCss).toMatch(/\.run-gold-transaction-amount\s*\{[\s\S]*?min-block-size:\s*64px;/);
+    expect(styleCss).toMatch(/\.run-expunctio-unit-traits-seat\s*\{[\s\S]*?block-size:\s*20px;/);
     expect(runArmyWorkspace).not.toContain('onAlienate');
-    expect(runScreen).toContain('const alieneUnit = (unitId: string): void => {');
-    expect(runScreen).toContain('onAliene={alieneUnit}');
-    expect(styleCss).toContain('.run-alienatio-row:is(.is-aliened, .is-retained) > *');
+    expect(runScreen).toContain('const alieneUnit = (unitId: string, source?: HTMLImageElement | null): void => {');
+    expect(runScreen).toContain('<RunExpunctioWorkspace run={shellRun} onAliene={alieneUnit} onExpunct={expunctCard} />');
+    expect(runExpunctioWorkspace).toContain('compactEmptyPieceSeats');
+    expect(runExpunctioWorkspace).toContain('pieceSelectionIds=');
+    expect(runExpunctioWorkspace).toContain('previousUnitRectsRef.current = new Map');
+    expect(runExpunctioWorkspace).toContain('function runUnitReflowOffset(');
+    expect(runExpunctioWorkspace).not.toContain('runCardReflowOffset');
+    expect(runExpunctioWorkspace).toContain('sceneMotion.animate(');
+    expect(runScreen).toContain('launchUnitDeparture(unitId, source ?? null);');
+    expect(runScreen).toContain('{unitDepartureElement}');
+    expect(runUnitDeparture).toContain('<SceneContinuityPortal');
+    expect(runUnitDeparture).toContain('getBoundingClientRect()');
+    expect(runUnitDeparture).not.toContain('performAlienatio');
+    expect(styleCss).toMatch(/\.run-unit-departure\s*\{[\s\S]*?transition:\s*opacity/);
+    expect(styleCss).toContain('.run-card-prototype-unit-icon-seat.is-highlighted .run-card-prototype-unit-icon');
+    expect(styleCss).toMatch(/\.is-pixel-hovered:not\(\.is-highlighted\)[^{]+,\s*\.run-card-prototype-unit-icon-seat\.is-highlighted/);
   });
 
   it('previews the upcoming Sectio Battle through the canonical read-only board and Level ledger', () => {
@@ -569,7 +585,7 @@ describe('Run chrome hierarchy', () => {
   it('uses one divided Army ledger grid with readable metadata and value hierarchy', () => {
     const ledgerBranch = runArmyWorkspace.slice(
       runArmyWorkspace.indexOf('className="run-self-inspection-workspace run-army-workspace run-army-ledger"'),
-      runArmyWorkspace.indexOf('interface AlienatioRow'),
+      runArmyWorkspace.length,
     );
     expect(runArmyWorkspace).toContain('<DividedInnerChromeBox');
     expect(runArmyWorkspace).toContain('className="run-army-ledger-grid"');

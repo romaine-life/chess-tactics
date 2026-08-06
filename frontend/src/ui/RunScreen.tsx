@@ -115,13 +115,10 @@ import {
 } from './RunSelfInspection';
 import {
   DEFAULT_RUN_ARMY_FILTERS,
-  DEFAULT_RUN_ALIENATIO_FILTERS,
   RunArmyWorkspace,
-  RunAlienatioWorkspace,
   runUnitIdentifier,
   runUnitRosterLabel,
   type RunArmyFilters,
-  type RunAlienatioFilters,
 } from './RunArmyWorkspace';
 import { RunCard } from './RunCard';
 import { RUN_CARD_BACK_SLOT } from './RunCardBack';
@@ -134,6 +131,7 @@ import { runCardName } from '../run/cardNames';
 import {
   useRunCardFlights,
 } from './runCardFlightView';
+import { useRunUnitDepartures } from './runUnitDepartureView';
 import { isStrategikonPath, strategikonRouteCrumbs } from './strategikonRoute';
 import { createRunForm, runActivity, type RunForm } from './RunForm';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
@@ -925,14 +923,12 @@ function SectioCardRow({
 function SectioPanel({
   run,
   view,
-  alienatioWorkspace,
   expunctioWorkspace,
   adlectioAnnouncement,
   onAdlect,
 }: {
   run: RunDocument;
   view: RunScreenView;
-  alienatioWorkspace: ReactElement;
   expunctioWorkspace: ReactElement;
   adlectioAnnouncement: string;
   onAdlect: (offer: RunCardOffer, source: HTMLButtonElement) => void;
@@ -944,9 +940,7 @@ function SectioPanel({
   const pestiferousLosses = run.pestiferousLosses.filter((loss) => loss.battleIndex === sectio.afterBattleIndex);
   return (
     <>
-      {view === 'alienatio'
-        ? alienatioWorkspace
-        : view === 'expunctio'
+      {view === 'expunctio'
           ? expunctioWorkspace
           : view === 'battle-preview' ? <RunBattlePreview run={run} /> : (
         // The title bar already says Run › Sectio, so a heading painted into the
@@ -1417,6 +1411,7 @@ export function RunScreen({
   const replace = useActiveRun((state) => state.replace);
   const [adlectioAnnouncement, setAdlectioAnnouncement] = useState('');
   const { launch: launchCardFlight, element: cardFlightElement } = useRunCardFlights();
+  const { launch: launchUnitDeparture, element: unitDepartureElement } = useRunUnitDepartures();
   // A craft address sets the account's Run to the state it names before the screen reads one,
   // every time it is opened, then lands here without its craft parameters (ADR-0354).
   const craft = useRunCraft(routePath, routeSearch);
@@ -1428,10 +1423,6 @@ export function RunScreen({
   const [armyFilterState, setArmyFilterState] = useState<{ scope: string; filters: RunArmyFilters }>({
     scope: 'no-run',
     filters: { ...DEFAULT_RUN_ARMY_FILTERS },
-  });
-  const [alienatioFilterState, setAlienatioFilterState] = useState<{ scope: string; filters: RunAlienatioFilters }>({
-    scope: 'no-run',
-    filters: { ...DEFAULT_RUN_ALIENATIO_FILTERS },
   });
   // The Strategikon is the Run's reference workspace in EVERY phase, not just Battle —
   // Deployment, Sectio, and Victory all open it from the same Controls title mark. Only an
@@ -1463,7 +1454,7 @@ export function RunScreen({
   );
   const view = rawView === 'battle-review' && !battleReviewAvailable
     ? 'primary'
-    : shellRun?.phase !== 'sectio' && (rawView === 'alienatio' || rawView === 'expunctio')
+    : shellRun?.phase !== 'sectio' && rawView === 'expunctio'
       ? 'primary'
       : rawView;
   const reviewingWonBattle = rawView === 'battle-review' && battleReviewAvailable;
@@ -1500,10 +1491,7 @@ export function RunScreen({
   const armyFilters = armyFilterState.scope === filterScope
     ? armyFilterState.filters
     : { ...DEFAULT_RUN_ARMY_FILTERS };
-  const alienatioFilters = alienatioFilterState.scope === filterScope
-    ? alienatioFilterState.filters
-    : { ...DEFAULT_RUN_ALIENATIO_FILTERS };
-  // Army, Lipsana, and Alienatio are workspaces of the Run screen itself, so they always
+  // Army, Lipsana, and Expunctio are workspaces of the Run screen itself, so they always
   // address the Run root. Dropping any open Strategikon address keeps these Controls
   // live instead of navigating to a path the reference workspace still covers.
   const navigateRunView = (nextView: RunScreenView): void => {
@@ -1537,12 +1525,15 @@ export function RunScreen({
     }
     replace(takeVacantiaLipsanon(latest, lipsanonId));
   }, { handoff: 'scene-settled' });
-  const alieneUnit = (unitId: string): void => {
+  const alieneUnit = (unitId: string, source?: HTMLImageElement | null): void => {
     if (!shellRun) return;
     const latest = useActiveRun.getState().run;
     if (!latest || latest.id !== shellRun.id) return;
     const aliened = performAlienatio(latest, unitId);
-    if (aliened !== latest) replace(aliened);
+    if (aliened !== latest) {
+      launchUnitDeparture(unitId, source ?? null);
+      replace(aliened);
+    }
   };
   const expunctCard = (cardId: string): void => {
     if (!shellRun) return;
@@ -1569,20 +1560,12 @@ export function RunScreen({
       ? lipsanaWorkspace
       : null;
   const sectioScene = useInstalledSectioScene();
-  const alienatioWorkspace = shellRun ? (
-    <RunAlienatioWorkspace
-      run={shellRun}
-      filters={alienatioFilters}
-      onFiltersChange={(filters) => setAlienatioFilterState({ scope: filterScope, filters })}
-      onAliene={alieneUnit}
-    />
-  ) : null;
   const expunctioWorkspace = shellRun ? (
-    <RunExpunctioWorkspace run={shellRun} onExpunct={expunctCard} />
+    <RunExpunctioWorkspace run={shellRun} onAliene={alieneUnit} onExpunct={expunctCard} />
   ) : null;
   // The Sectio scene belongs to the retained shell viewport, not to whichever Sectio
   // workspace happens to be in front of it. Keeping it outside the transition region
-  // prevents Sectio/View Battle/Alienatio/Expunctio swaps from fading or remounting the room.
+  // prevents Sectio/View Battle/Expunctio swaps from fading or remounting the room.
   const persistentSectioScene = shellRun?.phase === 'sectio' ? sectioScene : null;
   // A craft request speaks for the whole screen while it runs: the Run it is about to replace must
   // not flash its own phase first, and a refused spec has to say why instead of silently doing
@@ -1687,7 +1670,6 @@ export function RunScreen({
               <SectioPanel
                 run={shellRun}
                 view={view}
-                alienatioWorkspace={alienatioWorkspace!}
                 expunctioWorkspace={expunctioWorkspace!}
                 adlectioAnnouncement={adlectioAnnouncement}
                 onAdlect={beginAdlectio}
@@ -1795,6 +1777,7 @@ export function RunScreen({
   return (
     <RunPresentationSceneSlot className="run-scene-slot" sceneInstance={sceneInstance}>
       {cardFlightElement}
+      {unitDepartureElement}
       {bonaLipsanonFlightElement}
       {formSurface}
     </RunPresentationSceneSlot>

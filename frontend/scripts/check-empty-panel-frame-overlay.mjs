@@ -1051,7 +1051,6 @@ for (const testId of [
   'run-victory-workspace',
   'run-army-ledger-workspace',
   'run-army-profile-workspace',
-  'run-alienatio-workspace',
   'run-expunctio-workspace',
   'run-lipsana-workspace',
   'run-loading-workspace',
@@ -1080,7 +1079,7 @@ if (!/<RunDeploymentCardStack/.test(runScreen)
   || /KlerosisOverlay|RunKlerosisWorkspace/.test(runScreen)) {
   failures.push('Deployment must own one hidden Controls card stack on the canonical battlefield without a separate confirmation workspace');
 }
-if (/<OuterChromeBox\b|<OuterChromeHeader\b|chromeConsumer="run-(?:draft|deployment|sectio|victory|army-ledger|army-profile|alienatio|expunctio|empty)"/.test(playerRunSources)) {
+if (/<OuterChromeBox\b|<OuterChromeHeader\b|chromeConsumer="run-(?:draft|deployment|sectio|victory|army-ledger|army-profile|expunctio|empty)"/.test(playerRunSources)) {
   failures.push('player-facing Run destinations must not restore top-level outer panels');
 }
 if (/<select\b|type="checkbox"/.test(playerRunSources)) {
