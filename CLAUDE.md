@@ -349,7 +349,7 @@ hand-authored one-off leaves a durable link behind:
   Battle just won; the FINAL Battle has no aftermath (its report is the War victory
   screen), so craft `victory` for that one.
 - `war=<id>` picks the War (default: the first Run-eligible official one), `seed=<n>` and
-  `tier=0|1` fix the roll. `view=army|lipsana|alienatio|expunctio` still applies and survives the craft.
+  `tier=0|1` fix the roll. `view=army|lipsana|expunctio` still applies and survives the craft.
 - `cards=<card>[,<card>]` — the cards the Run already HOLDS, written exactly like `offers`.
 - Units carrying abilities cannot be written as an address — use the JSON spec above, which has
   no such limit because the link is an id either way.

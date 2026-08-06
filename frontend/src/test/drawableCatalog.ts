@@ -359,17 +359,30 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
     rowRevision: 1,
     media: { icon: descriptor(`test/run/lipsana/${lipsanonId}.png`, 64, 64) },
   }));
-  const runResourceSpecs: DrawableCatalog['assets'] = [{
-    id: 'run-resource-gold',
-    kind: 'run-resource',
-    label: 'Test Run gold',
-    sortOrder: 0,
-    lifecycleState: 'active',
-    behavior: { resourceId: 'gold' },
-    metadata: {},
-    rowRevision: 1,
-    media: { icon: descriptor('test/run/resources/gold.png', 64, 64) },
-  }];
+  const runResourceSpecs: DrawableCatalog['assets'] = [
+    {
+      id: 'run-resource-gold',
+      kind: 'run-resource',
+      label: 'Test Run gold',
+      sortOrder: 0,
+      lifecycleState: 'active',
+      behavior: { resourceId: 'gold' },
+      metadata: {},
+      rowRevision: 1,
+      media: { icon: descriptor('test/run/resources/gold.png', 64, 64) },
+    },
+    ...(['gain', 'loss'] as const).map((direction, sortOrder) => ({
+      id: `run-gold-transaction-${direction}`,
+      kind: 'run-gold-transaction',
+      label: `Test Run gold ${direction}`,
+      sortOrder,
+      lifecycleState: 'active' as const,
+      behavior: { direction },
+      metadata: {},
+      rowRevision: 1,
+      media: { icon: descriptor(`test/run/resources/${direction}-gold.png`, 64, 64) },
+    })),
+  ];
   return {
     schemaVersion: 1,
     revision: 1,

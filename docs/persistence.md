@@ -98,7 +98,8 @@ invalidating the Run.
 RunSaveVersion 23 begins in Bona Vacantia when the opening Conflict offers a lipsanon, otherwise
 in the normal Sectio with kind `opening`. The Run carries the permanent King and two starting Pawns
 through the starter-only His Grace and Front Lines cards, eight gold, and three seeded card offers.
-Adlectio remains in the same Sectio transaction; Army, Alienatio, Expunctio, Reset Sectio, and
+Adlectio remains in the same Sectio transaction; Army, card-aware Alienatio within Expunctio,
+Expunctio, Reset Sectio, and
 Continue reuse the post-Battle model. Expunctio may remove one held card and its remaining units
 per visit for its printed value plus those units' standard value; His Grace is never eligible.
 Continue may perform no

@@ -409,6 +409,12 @@ an incomplete row is an availability failure.
   The Run gold resource is likewise an exact native 64×64 PNG with typed
   `run-resource-icon` metadata; one installed `kind='run-resource'` drawable
   record binds `behavior.resourceId='gold'` to its `icon` media role.
+  The directional Run transaction marks occupy additive native 64×64
+  `ui/run/resources/gain-gold.png` and `ui/run/resources/lose-gold.png` slots
+  under the same typed projection. Separate installed
+  `kind='run-gold-transaction'` drawables bind `behavior.direction='gain'` and
+  `behavior.direction='loss'`; Expunctio draws those exact canvases at 1× while
+  retaining its live values and text labels (ADR-0486).
   Strategikon's command-archive background is the exact closed hash named by
   ADR-0336. Its typed validator and owner proof record the 688×384 source plus
   approved cover presentation, while the required `app-ui` drawable role owns

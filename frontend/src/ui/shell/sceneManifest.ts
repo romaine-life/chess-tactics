@@ -64,9 +64,7 @@ function runSceneSnapshot(
         ? Object.freeze({ view: 'army' as const, unitId })
         : requestedView === 'lipsana'
           ? Object.freeze({ view: 'lipsana' as const })
-          : requestedView === 'alienatio' && phase === 'sectio'
-            ? Object.freeze({ view: 'alienatio' as const })
-            : requestedView === 'expunctio' && phase === 'sectio'
+          : requestedView === 'expunctio' && phase === 'sectio'
               ? Object.freeze({ view: 'expunctio' as const })
               : requestedView === 'battle-preview' && phase === 'sectio'
                 ? Object.freeze({ view: 'battle-preview' as const })

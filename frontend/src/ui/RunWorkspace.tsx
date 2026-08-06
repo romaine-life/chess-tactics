@@ -10,7 +10,6 @@ export type RunViewportSceneView =
   | 'bona-target'
   | 'army'
   | 'lipsana'
-  | 'alienatio'
   | 'expunctio'
   | 'battle-preview';
 

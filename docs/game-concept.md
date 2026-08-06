@@ -306,23 +306,35 @@ these.
   King is worth 1 gold and every other enemy chess piece pays 50% of its
   standard value (ADR-0220).
 - Sectio visits separate Adlectio, upcoming-Battle reconnaissance, detailed army
-  inspection, a compact decision-complete Alienatio list, and **Expunctio** into explicit
-  main-pane destinations. **View Battle** shows the next canonical Level in a
+  inspection, and card-aware **Expunctio** into explicit main-pane destinations.
+  **View Battle** shows the next canonical Level in a
   pannable read-only board beside its rules, zones, time control, and forces.
   Fixed opponents appear on the map; known setup-event rosters appear in the
   ledger without resolving their exact squares, and the persistent Run army
   still waits for Deployment. The persistent Controls panel navigates these
   destinations, resets the complete same-offer Sectio visit, and continues the
   Run; Army inspection remains available in every Run phase without pausing an
-  active Battle. Within the Expunctio workspace, the player **athetizes** one held card at most
-  once per visit; the card and every unit still attached to it leave the Chartulary. Its fee is
-  the card's full printed value plus the standard value of those
-  remaining units; His Grace is unavailable. Alienatio still sells individual units without
-  removing their cards, so it discounts a later Expunctio without ever paying the complete
-  fee. The operation names remain nouns while their unit/card commands are the obscure English
+  active Battle. Within the Expunctio workspace, each canonical card face begins with no unit
+  selected. Clicking an attached figure's visible outline or using the keyboard-and-touch
+  cycle control selects and marks that exact stationary unit with the same blue highlight,
+  identifies it, and offers its immediate **Aliene**
+  command and return. The player may instead **athetize** one held card at most once
+  per visit; the card and every unit still attached to it leave the Chartulary. Its fee is the
+  card's full printed value plus the standard value of those remaining units; His Grace is
+  unavailable. Alienatio sells individual units without removing their cards, so it discounts
+  a later Expunctio without ever paying the complete fee. Prosopography remains the detailed
+  unit ledger rather than a second Alienatio list. The two opposite gold movements keep their
+  visible text and live value but use distinct native marks: a green plus for Alienatio's gain
+  and a red minus for the Expunctio fee or Paid state. The card companion reserves those
+  controls and its compact ability band before selection, so choosing or cycling a unit changes
+  their contents in place without moving the surrounding physical panel. When Aliene commits,
+  the sold figure fades from its old card seat while each surviving figure glides into the exact
+  compact post-sale frame; the visual settlement never delays the transaction or disables input
+  (ADR-0486, ADR-0487, ADR-0489).
+  The operation names remain nouns while their unit/card commands are the obscure English
   verbs **Adlect**, **Aliene**, and **Athetize**; completed Alienatio and Expunctio records are
   **Aliened** and **Athetized this visit**, respectively
-  (ADR-0230, ADR-0386, ADR-0393, ADR-0407, ADR-0432, ADR-0443).
+  (ADR-0230, ADR-0386, ADR-0393, ADR-0407, ADR-0432, ADR-0443, ADR-0482, ADR-0483, ADR-0485, ADR-0486, ADR-0487, ADR-0488, ADR-0489).
 - **Enchiridion** is the player-facing reference for unit movement, terrain
   rules, the filterable card catalog (the two starter cards and 49-card core
   deck), affected card types, all lipsana, and the

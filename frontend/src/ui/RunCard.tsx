@@ -11,7 +11,7 @@ import {
   type RunCardType,
   type RunCoreCard,
 } from '../run/model';
-import { RunCardFace } from './RunCardFace';
+import { RunCardFace, type RunCardUnitSelection } from './RunCardFace';
 import {
   isRunCardOffer,
   runCardFaceContent,
@@ -57,9 +57,14 @@ export function RunCard({
   cardType: ownedCardType = null,
   adlected = false,
   emptyPieceIndices = [],
+  compactEmptyPieceSeats = false,
+  highlightedPieceIndex = null,
+  pieceSelectionIds = [],
+  pieceSelectionLabels = [],
   layoutId,
   disabled = false,
   onSelect,
+  onPieceSelect,
 }: {
   card: RunCardDefinition | RunCardOffer;
   /** Stable authored card behind a transient contents projection, such as Deployment discard. */
@@ -72,12 +77,21 @@ export function RunCard({
    */
   cardType?: RunCardType | null;
   adlected?: boolean;
-  /** Authored card seats whose units have left; retained so the face does not reflow. */
+  /** Authored card seats whose units have left; retained unless the host explicitly composes its next frame. */
   emptyPieceIndices?: readonly number[];
+  /** Expunctio compacts survivors after Alienatio; Deployment retains authored empty seats. */
+  compactEmptyPieceSeats?: boolean;
+  /** Canonical authored piece occurrence to mark for a card-aware transaction. */
+  highlightedPieceIndex?: number | null;
+  /** Stable Run unit identities for authored piece occurrences on a transactional face. */
+  pieceSelectionIds?: readonly (string | null)[];
+  /** Accessible labels for authored piece occurrences that may be selected on this face. */
+  pieceSelectionLabels?: readonly (string | null)[];
   /** Stable Sectio identity used to preserve the card's visual seat across reflow. */
   layoutId?: string;
   disabled?: boolean;
   onSelect?: (element: HTMLButtonElement) => void;
+  onPieceSelect?: (pieceIndex: number) => void;
 }): ReactElement {
   const identity = identityCard ?? card;
   const emptyPieces = new Set(emptyPieceIndices);
@@ -96,12 +110,47 @@ export function RunCard({
   });
   const valueLabel = faceContent.showsCost ? ` Worth ${faceContent.cost} gold.` : '';
   const targetLabel = publicTargetLabel(card, adlected);
+  const highlightedIndex = highlightedPieceIndex ?? -1;
+  const highlightedUnit = card.pieces[highlightedIndex] ?? null;
+  const unitHighlight = highlightedUnit === null ? null : {
+    unit: highlightedUnit,
+    index: card.pieces
+      .slice(0, highlightedIndex)
+      .filter((piece) => piece === highlightedUnit)
+      .length,
+  };
+  const pieceIndexForOccurrence = (unit: typeof card.pieces[number], occurrence: number): number => {
+    let seen = 0;
+    return card.pieces.findIndex((piece) => {
+      if (piece !== unit) return false;
+      if (seen === occurrence) return true;
+      seen += 1;
+      return false;
+    });
+  };
+  const unitSelection: RunCardUnitSelection | null = onPieceSelect ? {
+    id: (unit, occurrence) => {
+      const pieceIndex = pieceIndexForOccurrence(unit, occurrence);
+      return pieceIndex < 0 ? null : pieceSelectionIds[pieceIndex] ?? null;
+    },
+    label: (unit, occurrence) => {
+      const pieceIndex = pieceIndexForOccurrence(unit, occurrence);
+      return pieceIndex < 0 ? null : pieceSelectionLabels[pieceIndex] ?? null;
+    },
+    onSelect: (unit, occurrence) => {
+      const pieceIndex = pieceIndexForOccurrence(unit, occurrence);
+      if (pieceIndex >= 0) onPieceSelect(pieceIndex);
+    },
+  } : null;
   const face = (
     <RunCardFace
       card={faceContent}
       frameUrl={liveMediaForSlot(frameSlot).media.immutableUrl}
       artUrl={resolvedLiveMediaUrl(runCardArtSlot(identity))}
       frameGeometry={runCardFrameGeometryForSlot(frameSlot)}
+      unitHighlight={unitHighlight}
+      unitSelection={unitSelection}
+      compactEmptySeats={compactEmptyPieceSeats}
       ariaHidden={mode !== 'reference'}
     />
   );

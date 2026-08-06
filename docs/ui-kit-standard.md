@@ -211,7 +211,7 @@ omit either layer or provide an inline-end value.
 
 Under [ADR-0237](adr/0237-run-destinations-fill-the-shell-workspace.md), the same
 ownership test applies to player-facing non-Battle Run destinations. Sectio/Loot,
-the Sectio's upcoming-Battle preview, Victory, Army ledger and profile, Alienatio,
+the Sectio's upcoming-Battle preview, Victory, Army ledger and profile, card-aware Expunctio,
 loading, and empty states fill the shell-owned playfield through the shared `RunWorkspace`/`ShellWorkspace`
 composition. `RunWorkspace` supplies the
 workflow content; `ShellWorkspace` itself supplies the same Controls-attached

@@ -6,6 +6,7 @@ partially_supersedes:
   - "[ADR-0393](0393-adlectio-and-alienatio-are-the-movements-within-sectio.md)'s use of Alienatio as the player-facing unit-action label"
 partially_superseded_by:
   - "[ADR-0443](0443-athetize-is-the-card-action-within-expunctio.md)'s replacement of the Expunct card-action command"
+  - "[ADR-0482](0482-expunctio-owns-card-aware-alienatio.md)'s retirement of the standalone Alienatio destination and presentation family"
 refines:
   - "[ADR-0374](0374-legatine-and-eutactic-retire-the-last-plain-run-vocabulary.md)"
   - "[ADR-0392](0392-sectio-is-the-run-disposal-and-acquisition-phase.md)"

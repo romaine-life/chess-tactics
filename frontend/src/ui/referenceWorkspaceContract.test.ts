@@ -17,6 +17,7 @@ const skirmishShell = readFileSync(new URL('./SkirmishShell.tsx', import.meta.ur
 const runForm = readFileSync(new URL('./RunForm.tsx', import.meta.url), 'utf8');
 const hud = readFileSync(new URL('./SkirmishHud.tsx', import.meta.url), 'utf8');
 const runArmy = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url), 'utf8');
+const runExpunctio = readFileSync(new URL('./RunExpunctioWorkspace.tsx', import.meta.url), 'utf8');
 const ataraxiaNumeral = readFileSync(new URL('./ataraxiaNumeral.ts', import.meta.url), 'utf8');
 
 describe('Enchiridion and Strategikon contract (ADR-0231)', () => {
@@ -532,8 +533,9 @@ describe('interface cues are owner-assigned, not committed (ADR-0071, ADR-0375)'
     expect(enchiridion.match(/data-ui-sfx="card"/g)).toHaveLength(2);
     expect(runCard).toContain('data-ui-sfx="gold"');
     expect(runArmy).toContain("data-ui-sfx={unavailableReason ? undefined : 'gold'}");
-    expect(runArmy).toContain("data-ui-sfx={status === 'alienable' ? 'gold' : undefined}");
-    for (const source of [enchiridion, runArmy, runCard]) {
+    expect(runExpunctio).toContain("data-ui-sfx={unitCanAliene ? 'gold' : undefined}");
+    expect(runExpunctio).toContain("data-ui-sfx={status === 'available' ? 'gold' : undefined}");
+    for (const source of [enchiridion, runArmy, runExpunctio, runCard]) {
       // Sound-set keys, not an unrelated card-Adlectio indicator class beside them.
       expect(source).not.toContain('data-ui-sfx="card-purchase"');
       expect(source).not.toContain('data-ui-sfx="gold-sell"');

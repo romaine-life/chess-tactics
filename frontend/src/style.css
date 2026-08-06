@@ -19056,7 +19056,7 @@ button.tileset-relationship-cell {
 
 /* The primary Sectio workspaces normally paint the shell's standard fill. When the
    retained viewport artwork is installed, that fill must yield so the shared scene
-   remains visible beneath Sectio, View Battle, and Alienatio alike. */
+   remains visible beneath Sectio, View Battle, and Expunctio alike. */
 .run-screen.has-persistent-viewport-artwork .run-phase-primary > .run-workspace .shell-workspace-fill {
   visibility: hidden;
 }
@@ -19350,6 +19350,22 @@ button.tileset-relationship-cell {
   translate: var(--run-card-flight-x) var(--run-card-flight-y);
 }
 
+/* Alienatio commits first. These source pixels then recede over their exact old
+   card seat while the surviving real figures settle into the committed stack. */
+.run-unit-departure {
+  image-rendering: pixelated;
+  opacity: 1;
+  pointer-events: none;
+  position: fixed;
+  transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
+  will-change: opacity;
+  z-index: 10011;
+}
+
+.run-unit-departure.is-departed {
+  opacity: 0;
+}
+
 .run-paid-lipsanon-price,
 .run-victory-summary {
   align-items: center;
@@ -19382,6 +19398,48 @@ button.tileset-relationship-cell {
 }
 
 .run-gold-icon.is-unavailable {
+  font-size: var(--ds-text-sm);
+}
+
+/* Gain and loss are complete native 64px transaction marks, not small status
+   glyphs applied to the shared coin. Their plus/minus and color remain part of
+   the accepted generated pixels, while the adjacent live value stays type. */
+.run-gold-transaction-amount {
+  align-items: center;
+  display: inline-flex;
+  font: var(--ds-weight-bold) var(--ds-text-lg)/1 var(--ds-font-display);
+  gap: var(--ds-space-1);
+  min-block-size: 64px;
+  min-inline-size: calc(64px + var(--ds-space-1) + 4ch);
+  white-space: nowrap;
+}
+
+.run-gold-transaction-amount.is-pending {
+  color: var(--skirmish-muted);
+}
+
+.run-gold-transaction-value {
+  min-inline-size: 4ch;
+}
+
+.run-gold-transaction-icon {
+  align-items: center;
+  block-size: 64px;
+  display: inline-flex;
+  flex: none;
+  inline-size: 64px;
+  justify-content: center;
+}
+
+.run-gold-transaction-icon img {
+  block-size: 64px;
+  image-rendering: pixelated;
+  inline-size: 64px;
+  max-inline-size: none;
+  object-fit: contain;
+}
+
+.run-gold-transaction-icon.is-unavailable {
   font-size: var(--ds-text-sm);
 }
 
@@ -20680,9 +20738,9 @@ button.tileset-relationship-cell {
   object-fit: cover;
 }
 
-/* Selling is a Sectio activity and stands in the same scene, so its heading reads
-   over the scene art rather than above it. */
-.run-screen.has-persistent-viewport-artwork :is(.run-alienatio-workspace-content, .run-expunctio-workspace-content) > :is(h2, p) {
+/* Sectio operations stand in the same scene, so their heading reads over the
+   scene art rather than above it. */
+.run-screen.has-persistent-viewport-artwork .run-expunctio-workspace-content > :is(h2, p) {
   text-shadow: 0 2px 6px rgba(2, 7, 12, .85);
 }
 .run-wrap-slot-card {
@@ -21432,11 +21490,6 @@ button.tileset-relationship-cell {
   margin-block-start: auto;
 }
 
-.run-alienatio-workspace {
-  position: relative;
-  z-index: 35;
-}
-
 .run-expunctio-workspace {
   position: relative;
   z-index: 35;
@@ -21565,8 +21618,7 @@ button.tileset-relationship-cell {
   inline-size: 100%;
 }
 
-.run-army-ledger-copy,
-.run-alienatio-copy {
+.run-army-ledger-copy {
   align-content: center;
   display: grid;
   gap: var(--ds-space-1);
@@ -21577,8 +21629,7 @@ button.tileset-relationship-cell {
   padding-inline: var(--ds-inset);
 }
 
-.run-army-ledger-copy > strong,
-.run-alienatio-copy > strong {
+.run-army-ledger-copy > strong {
   font: var(--ds-weight-regular) var(--ds-text-lg)/1 var(--ds-font-display);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -21586,7 +21637,6 @@ button.tileset-relationship-cell {
 }
 
 .run-army-ledger-copy > small,
-.run-alienatio-copy > small,
 .run-unit-no-traits,
 .run-unit-trait-source {
   color: var(--skirmish-muted);
@@ -21601,8 +21651,7 @@ button.tileset-relationship-cell {
   font-size: var(--ds-text-md);
 }
 
-.run-army-ledger-value,
-.run-alienatio-return {
+.run-army-ledger-value {
   align-items: end;
   display: grid;
   gap: var(--ds-space-1);
@@ -21832,12 +21881,6 @@ button.tileset-relationship-cell {
   margin: 0;
 }
 
-.run-alienatio-workspace-content {
-  grid-template-rows: auto auto auto minmax(0, 1fr);
-  min-block-size: 0;
-  overflow: hidden;
-}
-
 .run-expunctio-workspace-content {
   grid-template-rows: auto auto auto minmax(0, 1fr);
   min-block-size: 0;
@@ -21928,8 +21971,13 @@ button.tileset-relationship-cell {
   block-size: calc(var(--run-expunctio-card-inline-size) * 7 / 5);
   box-sizing: border-box;
   display: grid;
-  gap: var(--ds-stack);
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: var(--ds-space-1);
+  grid-template-areas:
+    "copy"
+    "unit"
+    "price"
+    "action";
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   min-inline-size: 0;
   padding-block: var(--run-expunctio-card-paint-start-inset) var(--run-expunctio-card-paint-end-inset);
 }
@@ -21937,8 +21985,9 @@ button.tileset-relationship-cell {
 .run-expunctio-copy {
   align-content: center;
   display: grid;
-  gap: var(--ds-space-2);
+  gap: var(--ds-space-1);
   min-inline-size: 0;
+  grid-area: copy;
 }
 
 .run-expunctio-copy > :is(small, span),
@@ -21950,12 +21999,19 @@ button.tileset-relationship-cell {
 .run-expunctio-price {
   align-content: center;
   display: grid;
-  gap: var(--ds-space-2);
+  gap: var(--ds-space-1);
   justify-items: start;
+  grid-area: price;
+}
+
+.run-expunctio-price .run-gold-transaction-amount,
+.run-expunctio-alienatio-return .run-gold-transaction-amount {
+  margin-block-start: calc(-1 * var(--ds-space-1));
 }
 
 .run-expunctio-companion > button {
   align-self: end;
+  grid-area: action;
   inline-size: 100%;
 }
 
@@ -21963,36 +22019,76 @@ button.tileset-relationship-cell {
   translate: 0 -.34em;
 }
 
-.run-alienatio-row {
-  --run-operation-surface-pitch: calc(112px + var(--ds-inline-tight));
-  --chrome-surface-position-y: calc(var(--run-operation-row-index, 0) * -1 * var(--run-operation-surface-pitch));
-  align-items: center;
-  block-size: 112px;
-  box-sizing: border-box;
+.run-expunctio-alienatio {
+  align-content: start;
   display: grid;
-  gap: var(--ds-inline);
-  grid-template-columns: 86px minmax(0, 1fr) minmax(110px, auto) minmax(140px, auto);
-  min-block-size: 112px;
-  padding: var(--ds-space-2) var(--ds-inset);
+  gap: var(--ds-space-1);
+  grid-area: unit;
+  min-inline-size: 0;
 }
 
-.run-alienatio-row:is(.is-aliened, .is-retained) > * {
-  opacity: .7;
+.run-expunctio-alienatio > small,
+.run-expunctio-unit-choice > small,
+.run-expunctio-alienatio-return > small {
+  color: var(--skirmish-muted);
+  font: var(--ds-weight-regular) var(--ds-text-sm)/1.2 var(--ds-font-display);
 }
 
-.run-alienatio-board-piece {
-  block-size: 92px;
-  inline-size: 78px;
-  object-fit: contain;
+.run-expunctio-unit-picker {
+  align-items: stretch;
+  display: grid;
+  gap: var(--ds-space-1);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-inline-size: 0;
 }
 
-.run-alienatio-row > .tooltip {
+.run-expunctio-unit-picker-key {
+  block-size: 42px;
+  inline-size: 34px;
+}
+
+.run-expunctio-unit-choice {
+  align-content: center;
+  display: grid;
+  min-inline-size: 0;
+  text-align: center;
+}
+
+.run-expunctio-unit-choice > strong,
+.run-expunctio-unit-choice > small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-expunctio-unit-choice > strong {
+  font: var(--ds-weight-regular) var(--ds-text-md)/1.1 var(--ds-font-display);
+}
+
+.run-expunctio-unit-traits-seat {
+  align-items: center;
+  block-size: 20px;
+  display: flex;
+  min-inline-size: 0;
+}
+
+.run-expunctio-unit-traits-seat .run-unit-traits {
+  flex-wrap: nowrap;
+}
+
+.run-expunctio-alienatio-action,
+.run-expunctio-alienatio-return {
+  display: grid;
+  gap: var(--ds-space-1);
+}
+
+.run-expunctio-alienatio-action > button {
   inline-size: 100%;
 }
 
-.run-alienatio-row > .tooltip .tooltip-trigger,
-.run-alienatio-row > .tooltip button {
-  inline-size: 100%;
+.run-expunctio-alienatio.is-empty > span {
+  color: var(--skirmish-muted);
+  font: var(--ds-weight-regular) var(--ds-text-md)/1.35 var(--ds-font-display);
 }
 
 /* ===== Enchiridion + Strategikon (ADR-0231) ==============================
@@ -22920,22 +23016,24 @@ button.tileset-relationship-cell {
     max-inline-size: 360px;
   }
 
-  .run-alienatio-row {
-    --run-operation-surface-pitch: calc(224px + var(--ds-inline-tight));
-    block-size: 224px;
-    grid-template-columns: 72px minmax(0, 1fr);
-    min-block-size: 224px;
-  }
-
   .run-expunctio-row {
     --run-expunctio-card-inline-size: 240px;
   }
 
-  .run-alienatio-return,
-  .run-alienatio-row > :is(button, .tooltip) {
-    grid-column: 2;
-    justify-self: stretch;
+  .run-expunctio-companion {
+    grid-template-areas:
+      "copy copy"
+      "unit unit"
+      "price action";
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
   }
+
+  .run-expunctio-alienatio-action {
+    align-items: end;
+    grid-template-columns: minmax(0, 1fr) minmax(150px, 1fr);
+  }
+
 }
 
 @media (max-width: 620px) {
@@ -25013,12 +25111,30 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   position: relative;
 }
 
-.run-card-prototype-unit-icon-seat {
+button.run-card-prototype-unit-icon-seat.is-selectable {
+  all: unset;
+}
+
+.run-card-prototype-unit-icon-seat,
+button.run-card-prototype-unit-icon-seat.is-selectable {
   block-size: var(--run-card-unit-height, 9cqw);
   inline-size: var(--run-card-unit-seat-width);
   inset-inline-start: var(--run-card-unit-seat-left);
   opacity: 1;
   position: absolute;
+}
+
+.run-card-prototype-unit-stack.has-pixel-hover {
+  cursor: pointer;
+}
+
+button.run-card-prototype-unit-icon-seat.is-selectable.is-pixel-hovered:not(.is-highlighted) .run-card-prototype-unit-icon,
+.run-card-prototype-unit-icon-seat.is-highlighted .run-card-prototype-unit-icon {
+  filter: drop-shadow(0 0 .7cqw var(--skirmish-cyan));
+}
+
+.run-card-prototype-unit-icon-seat.is-reflowing {
+  will-change: translate;
 }
 
 /* The marker rides the unit it marks: the density ladder resizes the sprite per

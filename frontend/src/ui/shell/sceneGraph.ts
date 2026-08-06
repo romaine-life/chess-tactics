@@ -129,7 +129,6 @@ export type RunSceneWorkspace =
   | Readonly<{ view: 'primary' }>
   | Readonly<{ view: 'army'; unitId: string | null }>
   | Readonly<{ view: 'lipsana' }>
-  | Readonly<{ view: 'alienatio' }>
   | Readonly<{ view: 'expunctio' }>
   | Readonly<{ view: 'battle-preview' }>
   | Readonly<{ view: 'battle-review' }>

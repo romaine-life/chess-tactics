@@ -17,6 +17,7 @@ import { SceneContinuityPortal } from './shell/SceneContinuity';
 import { ChromeButton } from './shared/ChromeButton';
 import { Toggle } from './shared/Toggle';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
+import { emptyRunCardPieceIndices, projectRunCardUnitSeats } from './runCardUnitProjection';
 
 export function deploymentCardIsDiscarding(
   deployment: Pick<RunDeploymentState, 'stage' | 'activeCardIndex' | 'discardCursor'> | null | undefined,
@@ -35,32 +36,11 @@ export function deploymentCardEmptyPieceIndices(
   unitTypeById: ReadonlyMap<string, RunArmyPieceType>,
   fromSeat: number,
 ): readonly number[] {
-  const openPieceIndicesByType = new Map<RunArmyPieceType, number[]>();
-  pieces.forEach((piece, pieceIndex) => {
-    const openIndices = openPieceIndicesByType.get(piece) ?? [];
-    openIndices.push(pieceIndex);
-    openPieceIndicesByType.set(piece, openIndices);
-  });
-
-  const pieceIndexBySeat = new Map<number, number>();
-  unitSeats.forEach((unitId, seatIndex) => {
-    if (!unitId) return;
-    const unitType = unitTypeById.get(unitId);
-    if (!unitType) return;
-    const openIndices = openPieceIndicesByType.get(unitType);
-    const pieceIndex = openIndices?.shift();
-    if (pieceIndex !== undefined) pieceIndexBySeat.set(seatIndex, pieceIndex);
-  });
-
-  const occupiedPieceIndices = new Set(pieceIndexBySeat.values());
-  const emptyPieceIndices = new Set<number>();
-  pieces.forEach((_, pieceIndex) => {
-    if (!occupiedPieceIndices.has(pieceIndex)) emptyPieceIndices.add(pieceIndex);
-  });
-  pieceIndexBySeat.forEach((pieceIndex, seatIndex) => {
-    if (seatIndex < fromSeat) emptyPieceIndices.add(pieceIndex);
-  });
-  return [...emptyPieceIndices].sort((left, right) => left - right);
+  return emptyRunCardPieceIndices(
+    pieces,
+    projectRunCardUnitSeats(pieces, unitSeats, unitTypeById),
+    fromSeat,
+  );
 }
 
 function deploymentCardPresentation(run: RunDocument, owned: RunOwnedCard, fromSeat: number): Readonly<{

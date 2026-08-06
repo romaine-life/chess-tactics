@@ -88,6 +88,8 @@ const {
   runCardBackSlot,
   runResourceIconMediaIssue,
   runResourceIconSlotId,
+  runExpunctioReviewSurface,
+  runGoldTransactionReviewSurface,
   runSectioWrapMediaIssue,
   workspaceBackgroundSlotId,
   workspaceBackgroundMediaIssue,
@@ -18398,6 +18400,7 @@ function gameOwnedReviewSurfaceUrl(req, raw) {
     // marks are worn by the Ataraxia reference rows, on either host (ADR-0363).
     const gameOwnedPath = url.pathname === '/studio' || url.pathname === '/editor/level'
       || url.pathname === '/play/strategikon/enchiridion/units'
+      || runExpunctioReviewSurface(url)
       || ATARAXIA_NUMERAL_REVIEW_PATH.test(url.pathname);
     if (!sameOrigin || (url.protocol !== 'http:' && url.protocol !== 'https:') || !gameOwnedPath || url.hash) return null;
     return url.toString();
@@ -18537,8 +18540,14 @@ async function validateMediaReviewProofSnapshot(client, current, evidence, surfa
     }
     return;
   }
-  if (new URL(surfaceUrl).pathname !== '/studio') {
-    throw mediaMutationError('invalid_media_review_proof', 409, 'this media domain requires its Studio proof surface');
+  const genericReviewUrl = new URL(surfaceUrl);
+  const runExpunctioTransactionReview = runGoldTransactionReviewSurface(genericReviewUrl, current.slot);
+  if (genericReviewUrl.pathname !== '/studio' && !runExpunctioTransactionReview) {
+    throw mediaMutationError(
+      'invalid_media_review_proof',
+      409,
+      'this media domain requires its registered game-owned proof surface',
+    );
   }
   if (wallMaterialSlot(current.slot)) {
     const projectionIssue = mediaDomainProjectionIssue(current);

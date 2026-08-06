@@ -107,7 +107,7 @@ describe('scene manifests', () => {
       ['/run', '', { run: { hydrated: true, document: null } }],
       ['/run', '', { run: { hydrated: true, document: run } }],
       ['/run', '?view=army', { run: { hydrated: true, document: run } }],
-      ['/run', '?view=alienatio', { run: { hydrated: true, document: run } }],
+      ['/run', '?view=expunctio', { run: { hydrated: true, document: run } }],
       ['/run', '?view=battle-preview', { run: { hydrated: true, document: run } }],
       ['/play/select'], ['/play/select/continue'], ['/play/select/continue/campaign'],
       ['/play/select/continue/skirmish'], ['/play/select/continue/run'], ['/play/select/continue/levels'],
@@ -583,15 +583,12 @@ describe('scene manifests', () => {
     const document = createRun(war, 19, '2026-08-01T00:00:00.000Z');
     const source = { run: { hydrated: true, document } };
     const sectio = sceneManifest('/run', '', source);
-    const alienatio = sceneManifest('/run', '?view=alienatio', source);
     const expunctio = sceneManifest('/run', '?view=expunctio', source);
     const army = sceneManifest('/run', '?view=army', source);
     const battlePreview = sceneManifest('/run', '?view=battle-preview', source);
     const strategikon = sceneManifest('/run/strategikon/prosopography', '', source);
 
     for (const [current, destination] of [
-      [sectio, alienatio],
-      [alienatio, sectio],
       [sectio, expunctio],
       [expunctio, sectio],
       [sectio, army],

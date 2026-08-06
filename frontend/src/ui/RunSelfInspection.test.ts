@@ -18,7 +18,6 @@ describe('Run self-inspection links', () => {
   });
 
   it('recognizes the Sectio-only workspaces as addressable Run views', () => {
-    expect(runWorkspaceViewFromSearch('?view=alienatio')).toBe('alienatio');
     expect(runWorkspaceViewFromSearch('?view=expunctio')).toBe('expunctio');
     expect(runWorkspaceViewFromSearch('?view=sell')).toBe('primary');
     expect(runWorkspaceViewFromSearch('?view=battle-preview')).toBe('battle-preview');
@@ -34,10 +33,6 @@ describe('Run self-inspection links', () => {
   });
 
   it('derives title segments from the same Run workspace labels and addresses', () => {
-    expect(runWorkspaceTitleSegment('/run?run=1&view=alienatio', 'alienatio')).toEqual({
-      label: 'Alienatio',
-      to: '/run?run=1&view=alienatio',
-    });
     expect(runWorkspaceTitleSegment('/run?run=1&view=army&unit=run-king', 'army')).toEqual({
       label: 'Army',
       to: '/run?run=1&view=army',

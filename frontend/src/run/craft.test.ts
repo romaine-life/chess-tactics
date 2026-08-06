@@ -95,7 +95,7 @@ describe('run craft spec parsing', () => {
   });
 
   it('keeps the Run screen own parameters when the craft request is spent', () => {
-    expect(searchWithoutCraftParams('?craft=sectio&battle=3&gold=25&view=alienatio')).toBe('?view=alienatio');
+    expect(searchWithoutCraftParams('?craft=sectio&battle=3&gold=25&view=expunctio')).toBe('?view=expunctio');
     expect(searchWithoutCraftParams('?craft=sectio')).toBe('');
   });
 });

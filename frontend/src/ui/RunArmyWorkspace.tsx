@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { defaultBackgroundSet } from '../art/backgroundSets';
-import { paletteForSide, pieceSpritePath } from '../core/pieces';
+import { paletteForSide } from '../core/pieces';
 import {
   ADLECTED_DISPLAY_NAME,
   CACOCHYMIC_DESCRIPTION,
@@ -38,27 +38,16 @@ import { KitScroll } from './KitScroll';
 export type RunRosterOrder = 'type' | 'value' | 'ability' | 'acquired';
 export type RunRosterTypeFilter = 'all' | RunArmyPieceType;
 export type RunRosterAbilityFilter = 'all' | RunUnitTraitId;
-export type RunAlienatioStateFilter = 'all' | 'alienable' | 'aliened' | 'retained';
 
 export interface RunArmyFilters {
   order: RunRosterOrder;
   type: RunRosterTypeFilter;
   ability: RunRosterAbilityFilter;
 }
-
-export interface RunAlienatioFilters extends RunArmyFilters {
-  alienatioState: RunAlienatioStateFilter;
-}
-
 export const DEFAULT_RUN_ARMY_FILTERS: RunArmyFilters = Object.freeze({
   order: 'type',
   type: 'all',
   ability: 'all',
-});
-
-export const DEFAULT_RUN_ALIENATIO_FILTERS: RunAlienatioFilters = Object.freeze({
-  ...DEFAULT_RUN_ARMY_FILTERS,
-  alienatioState: 'all',
 });
 
 export interface RunArmyProfileAction {
@@ -70,7 +59,6 @@ export interface RunArmyProfileAction {
 const PLAYER_PORTRAIT_PALETTE = paletteForSide('player') as PortraitPalette;
 // A unit identifying itself in a chrome list faces the reader, the same choice the run
 // card faces and the shared piece icon make; the board's deployment facing would show a back.
-const PLAYER_PIECE_FACING = 'south';
 const TYPE_ORDER: readonly RunArmyPieceType[] = ['king', 'pawn', 'knight', 'bishop', 'rook', 'queen'];
 
 export type RunUnitTraitId =
@@ -222,7 +210,7 @@ function unitSourceLabel(unit: RunArmyUnit): string {
   return 'Sectio Adlectio';
 }
 
-function unitAlienatioTenths(run: RunDocument, unit: RunArmyUnit): number {
+export function unitAlienatioTenths(run: RunDocument, unit: RunArmyUnit): number {
   return PIECE_VALUE[unit.type] * GOLD_SCALE * (hasLipsanon(run, 'fair-scales') ? 0.75 : 0.5);
 }
 
@@ -270,7 +258,7 @@ function RunArmyPortrait({
   );
 }
 
-function RunUnitTraitList({
+export function RunUnitTraitList({
   run,
   unit,
   compact = false,
@@ -314,13 +302,9 @@ function RunUnitTraitList({
 function RunRosterFilters({
   filters,
   onChange,
-  alienatioState = null,
-  onAlienatioStateChange,
 }: {
   filters: RunArmyFilters;
   onChange: (filters: RunArmyFilters) => void;
-  alienatioState?: RunAlienatioStateFilter | null;
-  onAlienatioStateChange?: (state: RunAlienatioStateFilter) => void;
 }): ReactElement {
   return (
     <section className="run-roster-filters" aria-label="Army filters">
@@ -370,23 +354,6 @@ function RunRosterFilters({
           fillSurface={CHROME_LEAF_FILL_SURFACE}
         />
       </label>
-      {alienatioState !== null && onAlienatioStateChange ? (
-        <label style={{ ['--run-roster-filter-index' as string]: 3 } as CSSProperties}>
-          <span>Alienatio state</span>
-          <HouseSelect
-            value={alienatioState}
-            options={[
-              { value: 'all', label: 'All units' },
-              { value: 'alienable', label: 'Alienable' },
-              { value: 'aliened', label: 'Aliened this visit' },
-              { value: 'retained', label: 'Retained' },
-            ]}
-            onChange={onAlienatioStateChange}
-            ariaLabel="Unit Alienatio state"
-            fillSurface={CHROME_LEAF_FILL_SURFACE}
-          />
-        </label>
-      ) : null}
     </section>
   );
 }
@@ -672,125 +639,5 @@ export function RunArmyWorkspace({
           ) : null}
         </DividedInnerChromeBox>
     </RunArmyWorkspaceHost>
-  );
-}
-
-interface AlienatioRow {
-  unit: RunArmyUnit;
-  status: 'alienable' | 'aliened' | 'retained';
-  proceedsTenths: number;
-}
-
-function alienatioRows(run: RunDocument): AlienatioRow[] {
-  const current = run.army.map((unit): AlienatioRow => ({
-    unit,
-    status: unit.type === 'king' ? 'retained' : 'alienable',
-    proceedsTenths: unitAlienatioTenths(run, unit),
-  }));
-  const aliened = (run.sectio?.alienatedUnits ?? []).map(({ unit, proceedsTenths }): AlienatioRow => ({
-    unit,
-    status: 'aliened',
-    proceedsTenths,
-  }));
-  return [...current, ...aliened];
-}
-
-export function RunAlienatioWorkspace({
-  run,
-  filters,
-  onFiltersChange,
-  onAliene,
-}: {
-  run: RunDocument;
-  filters: RunAlienatioFilters;
-  onFiltersChange: (filters: RunAlienatioFilters) => void;
-  onAliene: (unitId: string) => void;
-}): ReactElement {
-  const rows = useMemo(() => {
-    const byId = new Map(alienatioRows(run).map((row) => [row.unit.id, row]));
-    return filteredAndSortedUnits(run, [...byId.values()].map((row) => row.unit), filters)
-      .map((unit) => byId.get(unit.id)!)
-      .filter((row) => filters.alienatioState === 'all' || row.status === filters.alienatioState);
-  }, [filters, run]);
-
-  return (
-    <RunSceneViewport
-      scene={{
-        view: 'alienatio',
-        className: 'run-alienatio-workspace',
-        contentClassName: 'run-alienatio-workspace-content',
-        testId: 'run-alienatio-workspace',
-        ariaLabelledBy: 'run-alienatio-workspace-title',
-      }}
-    >
-      <h2 id="run-alienatio-workspace-title">Alienatio</h2>
-      <p>Alienatio applies immediately. Reset Sectio restores every act from this visit.</p>
-      <RunRosterFilters
-        filters={filters}
-        onChange={(next) => onFiltersChange({ ...filters, ...next })}
-        alienatioState={filters.alienatioState}
-        onAlienatioStateChange={(alienatioState) => onFiltersChange({ ...filters, alienatioState })}
-      />
-      <KitScroll className="run-sectio-operation-list-scroll">
-        <div className="run-sectio-operation-list run-alienatio-list" aria-label="Units available for Alienatio">
-          {rows.map(({ unit, status, proceedsTenths }, index) => {
-            const alienatioButton = (
-              <ChromeButton unit="inner-text-button"
-                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                data-ui-sfx={status === 'alienable' ? 'gold' : undefined}
-                className={chromeUnitClassNames('inner-text-button', 'app-header-button', status === 'alienable' && 'danger')}
-                disabled={status !== 'alienable'}
-                onClick={() => onAliene(unit.id)}
-              >
-                {status === 'alienable' ? 'Aliene' : status === 'aliened' ? 'Aliened this visit' : 'Retained'}
-              </ChromeButton>
-            );
-            const alienatioAction = status === 'alienable' ? alienatioButton : (
-              <Tooltip
-                trigger={alienatioButton}
-                label={status === 'aliened'
-                  ? `${runUnitDisplayName(unit)} underwent Alienatio during this Sectio visit. Reset Sectio to restore it.`
-                  : 'The King is permanently retained and cannot undergo Alienatio.'}
-                popupMaxInlineSize={300}
-              >
-                <span>
-                  {status === 'aliened'
-                    ? 'Aliened during this Sectio visit. Reset Sectio to restore this unit.'
-                    : 'The King is permanently retained and cannot undergo Alienatio.'}
-                </span>
-              </Tooltip>
-            );
-            return (
-              <InnerChromeBox
-                className={`run-alienatio-row is-${status}`}
-                data-chrome-fill-surface="baseline-stone-blue"
-                key={unit.id}
-                style={{ ['--run-operation-row-index' as string]: index } as CSSProperties}
-              >
-                <img
-                  className="run-alienatio-board-piece"
-                  src={pieceSpritePath(unit.type, PLAYER_PORTRAIT_PALETTE, PLAYER_PIECE_FACING)}
-                  alt=""
-                  draggable={false}
-                />
-                <span className="run-alienatio-copy">
-                  <strong>{runUnitDisplayName(unit)}</strong>
-                  <small>{runUnitIdentifier(unit)} · {unitSourceLabel(unit)} · Base value {PIECE_VALUE[unit.type]}</small>
-                  <RunUnitTraitList run={run} unit={unit} compact />
-                </span>
-                <span className="run-alienatio-return">
-                  <small>{status === 'aliened' ? 'Received' : 'Alienatio return'}</small>
-                  {unit.type === 'king'
-                    ? <strong>Retained</strong>
-                    : <RunGoldAmount valueTenths={proceedsTenths} />}
-                </span>
-                {alienatioAction}
-              </InnerChromeBox>
-            );
-          })}
-          {!rows.length ? <p>No units match these filters.</p> : null}
-        </div>
-      </KitScroll>
-    </RunSceneViewport>
   );
 }
