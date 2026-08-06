@@ -165,6 +165,10 @@ search for before constructing a control or repeated surface.
 
 ## Non-visual repeated boundaries
 
+- `render/rasterAlpha.ts` — the shared browser-side decoded-source alpha cache
+  and exact board-draw-op source-coordinate sampler. Scene Art selection and
+  mirror line-of-sight proofs consume it instead of measuring media in
+  feature-local caches ([ADR-0500](adr/0500-scene-art-select-is-local-alpha-aware-and-stack-cycling.md)).
 - `net/http.ts#requestJson` — authenticated JSON request construction and
   shared `HttpError` handling for account-scoped API clients.
 

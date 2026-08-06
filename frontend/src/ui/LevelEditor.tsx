@@ -89,6 +89,7 @@ import { CyclePicker } from './shared/CyclePicker';
 import { AssetSwatchList } from './shared/AssetSwatchList';
 import { GeneratorRecipePresetList } from './shared/GeneratorRecipePresetList';
 import { GeneratorSeedControl } from './shared/GeneratorSeedControl';
+import { ArtworkSelectionSurface } from './ArtworkSelectionSurface';
 import {
   FOREST_ART_PRESETS,
   forestPresetConfiguration,
@@ -101,6 +102,13 @@ import {
 } from './townPresets';
 import { generatorSeedForRun, MAX_GENERATOR_SEED, randomGeneratorSeed } from './generatorSeed';
 import { BoardSizePanel, type BoardResizeSide } from './shared/BoardSizePanel';
+import {
+  MAX_SCENIC_TERRAIN_EXTENT,
+  PLAYABLE_GRID_MOVE_DIRECTIONS,
+  movePlayableGrid,
+  playableGridMoveAvailability,
+  type PlayableGridMoveDirection,
+} from './levelEditorPlayableGridMove';
 import { DEFAULT_LEVEL_NAME, LEVEL_NAME_MAX, normalizeLevelName } from './shared/levelNamePolicy';
 import {
   levelEditorHrefWithRouteState,
@@ -364,7 +372,6 @@ const SCENIC_TERRAIN_EXTENT_BY_BOARD_EDGE = {
 const SCENIC_TERRAIN_SIDES: readonly DecorativeTerrainSide[] = socketEdges.map(
   (edge) => SCENIC_TERRAIN_EXTENT_BY_BOARD_EDGE[edge],
 );
-const MAX_SCENIC_TERRAIN_EXTENT = 16;
 const MAX_SCENIC_TERRAIN_GENERATION_AREA = 250_000;
 type ScenicTerrainGenerationMode = 'match-reference' | 'grass';
 const SCENIC_TERRAIN_GENERATION_OPTIONS: ReadonlyArray<{ value: ScenicTerrainGenerationMode; label: string }> = [
@@ -505,13 +512,11 @@ function StudioEditableBoard({
   onPaint,
   onErase,
   onSelect,
-  onSelectArtwork,
   onMoveArtwork,
   onMove,
   canMoveTo,
   propBrush,
   artworkEditing = false,
-  artworkSelectionActive = false,
   macroTileBrush,
   hidden,
   regionCells,
@@ -611,7 +616,6 @@ function StudioEditableBoard({
   onPaint: (x: number, y: number) => void;
   onErase: (x: number, y: number) => void;
   onSelect: (x: number, y: number) => void;
-  onSelectArtwork?: (id: string) => void;
   onMoveArtwork?: (id: string, to: { pixelX: number; pixelY: number }) => void;
   /** Move tool: drag a placed unit or prop to another cell (drop cancelled if omitted). */
   onMove?: (subject: MoveSubject, to: { x: number; y: number }) => void;
@@ -621,8 +625,6 @@ function StudioEditableBoard({
   propBrush?: { def: PropDef; canPlaceAt: (ax: number, ay: number) => boolean } | null;
   /** Artwork-layer interaction is object-only; tile, prop, and doodad targets stand down. */
   artworkEditing?: boolean;
-  /** Select is an explicit discovery toggle: every eligible artwork advertises its image bounds. */
-  artworkSelectionActive?: boolean;
   /** When a composite terrain brush is armed, preview its full footprint at the hovered anchor. */
   macroTileBrush?: MacroTileAsset | null;
   /** Per-layer visibility — a true value hides that layer's elements on the board. */
@@ -1221,9 +1223,8 @@ function StudioEditableBoard({
   if (artworkEditing) {
     for (const [index, placement] of placedFloatingArtwork.entries()) {
       const selected = placement.id === selectedArtworkId;
-      const canSelect = artworkSelectionActive && tool === 'select';
       const canMove = tool === 'move' && selected;
-      const interactive = canSelect || canMove;
+      const interactive = canMove;
       const sourceSprite = structureArtDirectionSprite(placement.sourceArtId, placement.direction);
       const sourceScale = sourceSprite ? sourceSprite.scale * placement.scale : 1;
       const hitWidth = sourceSprite ? Math.max(54, sourceSprite.w * sourceScale) : 54;
@@ -1233,10 +1234,10 @@ function StudioEditableBoard({
           key={`artwork-hit-${placement.id}`}
           role={interactive ? 'button' : undefined}
           tabIndex={interactive ? 0 : undefined}
-          className={`tileset-doodad-hit le-floating-artwork-hit${canSelect ? ' is-selectable' : ''}${selected ? ' is-selected' : ''}`}
+          className={`tileset-doodad-hit le-floating-artwork-hit${selected ? ' is-selected' : ''}`}
           aria-pressed={selected}
           aria-label={interactive
-            ? `${canMove ? 'Move' : 'Select'} ${structureArtAsset(placement.sourceArtId)?.label ?? placement.sourceArtId}`
+            ? `Move ${structureArtAsset(placement.sourceArtId)?.label ?? placement.sourceArtId}`
             : undefined}
           // The object-sized target draws only the selected-instance outline. It carries no tile,
           // footprint, contact marker, or board-depth meaning.
@@ -1251,24 +1252,14 @@ function StudioEditableBoard({
             background: 'transparent',
             transform: 'translate(-50%, -50%)',
             pointerEvents: interactive ? 'auto' : 'none',
-            cursor: canMove ? 'grab' : canSelect ? 'pointer' : 'default',
+            cursor: canMove ? 'grab' : 'default',
             touchAction: 'none',
             zIndex: 1_100_000 + index,
-          }}
-          onKeyDown={(event) => {
-            if (event.key !== 'Enter' && event.key !== ' ') return;
-            event.preventDefault();
-            event.stopPropagation();
-            if (canSelect) onSelectArtwork?.(placement.id);
           }}
           onPointerDown={(event) => {
             if (event.button !== 0 || !interactive) return;
             event.preventDefault();
             event.stopPropagation();
-            if (canSelect) {
-              onSelectArtwork?.(placement.id);
-              return;
-            }
             event.currentTarget.setPointerCapture(event.pointerId);
             setArtworkDrag({
               id: placement.id,
@@ -8260,6 +8251,67 @@ export function LevelEditor(): ReactElement {
     }
   };
 
+  const moveGrid = (direction: PlayableGridMoveDirection): void => {
+    const result = movePlayableGrid(currentEditorBoardRef.current, direction);
+    if (!result) {
+      const availability = playableGridMoveAvailability(currentEditorBoardRef.current, direction);
+      reportStatus(
+        `Could not move the playable grid ${direction}.`,
+        'warning',
+        availability.reason ?? 'The authored scene has no room in that direction.',
+      );
+      return;
+    }
+
+    const { x: dx, y: dy } = result.contentDelta;
+    const shiftedKey = (key: string): string | undefined => {
+      const match = /^(-?\d+),(-?\d+)$/.exec(key);
+      if (!match) return undefined;
+      return `${Number(match[1]) + dx},${Number(match[2]) + dy}`;
+    };
+    const authoredScenicKeys = new Set(
+      decorativeTerrainApronCoordinates(
+        result.board.cols,
+        result.board.rows,
+        result.board.decorativeApron ?? { top: 0, right: 0, bottom: 0, left: 0 },
+        result.board.decorativeFootprint ?? [],
+      ).map(({ x, y }) => `${x},${y}`),
+    );
+    const onAuthoredSurface = (key: string): boolean => {
+      const [x, y] = key.split(',').map(Number);
+      return (x >= 0 && x < result.board.cols && y >= 0 && y < result.board.rows)
+        || authoredScenicKeys.has(key);
+    };
+    const shiftedSelection = selectedCell
+      ? { x: selectedCell.x + dx, y: selectedCell.y + dy }
+      : null;
+    const selectedKey = shiftedSelection ? `${shiftedSelection.x},${shiftedSelection.y}` : '';
+    if (!commitEditorBoard(
+      result.board,
+      shiftedSelection && onAuthoredSurface(selectedKey) ? shiftedSelection : null,
+    )) return;
+
+    if (activeGeneratedRegionId) {
+      const activeRegion = result.board.generatedRegions?.find((region) => region.id === activeGeneratedRegionId);
+      setRegionSelection(new Set(activeRegion?.cells ?? []));
+    } else {
+      setRegionSelection((current) => new Set(
+        [...current]
+          .map(shiftedKey)
+          .filter((key): key is string => key !== undefined && onAuthoredSurface(key)),
+      ));
+    }
+
+    const label = direction[0].toUpperCase() + direction.slice(1);
+    reportStatus(
+      `Moved the playable grid ${label}.`,
+      result.dropped.total ? 'warning' : 'success',
+      result.dropped.total
+        ? `${result.dropped.total} gameplay placement${result.dropped.total === 1 ? '' : 's'} left the playable rectangle and ${result.dropped.total === 1 ? 'was' : 'were'} removed.`
+        : 'The authored scene stayed aligned. Undo restores the previous grid position.',
+    );
+  };
+
   const paintedCount = Object.keys(boardCells).length;
   const unitCount = Object.keys(boardUnits).length;
   const doodadCount = Object.keys(boardDoodads).length;
@@ -8297,22 +8349,6 @@ export function LevelEditor(): ReactElement {
   const selectedArtworkForDetails = layer === 'placed-art' && brushKind === 'artwork'
     ? selectedArtwork
     : undefined;
-  const artworkSelectionOptions = useMemo<HouseSelectOption<string>[]>(() => {
-    const sourceCounts = new Map<string, number>();
-    return [
-      { value: '', label: 'None' },
-      ...boardFloatingArtwork.map((placement) => {
-        const instance = (sourceCounts.get(placement.sourceArtId) ?? 0) + 1;
-        sourceCounts.set(placement.sourceArtId, instance);
-        const label = structureArtAsset(placement.sourceArtId)?.label ?? placement.sourceArtId;
-        return {
-          value: placement.id,
-          label: `${label} · ${instance}`,
-          title: `${label} at X ${placement.pixelX}, Y ${placement.pixelY}`,
-        };
-      }),
-    ];
-  }, [boardFloatingArtwork]);
   const selectedArtworkAsset = selectedArtwork ? structureArtAsset(selectedArtwork.sourceArtId) : undefined;
   const selectedArtworkDirections = selectedArtwork ? structureArtDirections(selectedArtwork.sourceArtId) : [];
   const artworkFacingDirections = selectedArtwork ? selectedArtworkDirections : artworkBrushDirections;
@@ -8766,7 +8802,6 @@ export function LevelEditor(): ReactElement {
                     tool={layer === 'level-artwork' ? 'select' : tool}
                     selectedCell={selectedCell}
                     selectedArtworkId={selectedArtworkId}
-                    artworkSelectionActive={artworkSelectionActive}
                     boardZoom={viewZoom}
                     boardPan={viewPan}
                     gridScope={gridScope}
@@ -8782,7 +8817,6 @@ export function LevelEditor(): ReactElement {
                     onPaint={paintCell}
                     onErase={eraseCell}
                     onSelect={selectCell}
-                    onSelectArtwork={selectArtwork}
                     onMoveArtwork={moveArtwork}
                     onMove={moveObject}
                     canMoveTo={canMoveObjectTo}
@@ -9053,6 +9087,17 @@ export function LevelEditor(): ReactElement {
                         ) / viewZoom - artworkBoardOrigin.originTop,
                       });
                     }}
+                  />
+                ) : null}
+                {editorReady && !saving && !editorLoadError && layer === 'placed-art' && brushKind === 'artwork'
+                  && tool === 'select' && artworkSelectionActive ? (
+                  <ArtworkSelectionSurface
+                    placements={boardFloatingArtwork}
+                    selectedArtworkId={selectedArtworkId}
+                    origin={{ left: artworkBoardOrigin.originLeft, top: artworkBoardOrigin.originTop }}
+                    zoom={viewZoom}
+                    pan={viewPan}
+                    onSelect={selectArtwork}
                   />
                 ) : null}
               </div>
@@ -9569,6 +9614,27 @@ export function LevelEditor(): ReactElement {
               <>
                 <BoardSizePanel cols={boardCols} rows={boardRows} onResize={resizeBoard} />
                 <p className="le-board-note">Choose the side, then add or remove columns and rows there. Shrinking drops content outside the new bounds.</p>
+                <h3>Move playable grid</h3>
+                <div className="le-grid-nudge" aria-label="Move playable grid one tile">
+                  {PLAYABLE_GRID_MOVE_DIRECTIONS.map((direction) => {
+                    const availability = playableGridMoveAvailability(currentEditorBoard, direction);
+                    const label = direction[0].toUpperCase();
+                    const fullLabel = direction[0].toUpperCase() + direction.slice(1);
+                    return (
+                      <ChromeButton unit="inner-text-button"
+                        key={direction}
+                        className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', `is-${direction}`)}
+                        data-testid={`le-move-grid-${direction}`}
+                        aria-label={`Move playable grid ${fullLabel}`}
+                        title={availability.reason ?? `Move the playable grid one tile ${direction}.`}
+                        disabled={!availability.allowed}
+                        onClick={() => moveGrid(direction)}
+                      >{label}</ChromeButton>
+                    );
+                  })}
+                  <span className="le-grid-nudge-centre" aria-hidden="true">Grid</span>
+                </div>
+                <p className="le-board-note">Move one tile into existing scenic terrain while keeping the authored scene aligned. Gameplay-only placements pushed outside the grid are removed.</p>
                 <h3>Scenic terrain rectangle</h3>
                 <div className="le-ctrlrow">
                   <span className="le-ctrllabel">Generation</span>
@@ -10970,18 +11036,20 @@ export function LevelEditor(): ReactElement {
             <h2>Scene Art</h2>
             <div className="le-ctrlrow le-artwork-selection-row">
               <span className="le-ctrllabel">Selected</span>
-              <HouseSelect<string>
-                ariaLabel="Selected artwork"
-                value={selectedArtworkId ?? ''}
-                options={artworkSelectionOptions}
-                onChange={(id) => {
-                  if (id) selectArtwork(id);
-                  else {
-                    setSelectedCell(null);
-                    setSelectedArtworkId(null);
-                  }
+              <span className="le-artwork-current" data-testid="selected-artwork-readout">
+                {selectedArtwork
+                  ? `${selectedArtworkAsset?.label ?? selectedArtwork.sourceArtId} · X ${selectedArtwork.pixelX}, Y ${selectedArtwork.pixelY}`
+                  : 'None'}
+              </span>
+              <ChromeButton
+                unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                disabled={!selectedArtwork}
+                onClick={() => {
+                  setSelectedCell(null);
+                  setSelectedArtworkId(null);
                 }}
-              />
+              >Clear</ChromeButton>
             </div>
             <h2 className="le-card-subhead">Facing</h2>
             <FacingCompass
@@ -11046,7 +11114,7 @@ export function LevelEditor(): ReactElement {
                 </div>
               );
             })}
-            <p className="le-board-note">Click a source once to arm its free-placement brush; click it again to disarm. Facing controls the next placement and rotates the currently selected artwork. Place it anywhere in the scene with no tile, footprint, terrain rule, or collision; its installed ground anchor automatically resolves overlap with walls and other scene objects. Select toggles image-bounds highlights for every selectable artwork and changes the current artwork; click Select again to clear selection mode and its outlines. Move drags only the current artwork, and Details keeps its exact pixel X/Y and scale controls.</p>
+            <p className="le-board-note">Click a source once to arm its free-placement brush; click it again to disarm. Facing controls the next placement and rotates the currently selected artwork. Place it anywhere in the scene with no tile, footprint, terrain rule, or collision; its installed ground anchor automatically resolves overlap with walls and other scene objects. Select follows the visible art under the pointer without outlining the whole scene. Click again in the same overlap to cycle through it. Move drags only the current artwork, and Details keeps its exact pixel X/Y and scale controls.</p>
           </section>
         ) : subterrainTool ? (
           <section className="skirmish-card le-brush-panel">

@@ -349,6 +349,20 @@ The Level Editor anchors its `TileGrid` origin to the playable cells. Adding or 
 or sparse scenic terrain therefore does not recenter the projected board or move the camera; the
 canonical board-space projection itself remains unchanged.
 
+Per [ADR-0498](adr/0498-level-editor-moves-the-playable-grid-within-the-authored-scene.md), the
+Board page may move the complete playable projection one tile North, East, South, or West inside
+the existing rectangular scenic surface. A move consumes one scenic row or column on that side and
+adds one to the opposite side, leaves playable dimensions and the total authored rectangle
+unchanged, and is unavailable without entering scenic terrain or opposite-side extent capacity.
+Because persisted coordinates remain relative to the canonical zero-based playable origin, one
+atomic move rebases the complete authored scene by the opposite grid delta. Tile-addressed visual
+channels, projected-pixel Scene Art, generation frame, camera boundary, generated selections, and
+saved Town/Forest bounds retain their mutual alignment. Exact clamped scenic terrain is materialized
+when it enters play. Units, Doodads, and zone tiles that leave the playable projection are removed
+and reported; Props continue to require a wholly playable or wholly scenic authored-ground
+footprint under ADR-0365. Accepted pre-drawn registrations remain locked to their fitting workflow
+and do not expose this ordinary Board-page operation.
+
 ### Placed Art and Scene Art
 
 Per
@@ -403,17 +417,19 @@ The Level Editor's Placed Art destination begins with a Scene Art / Doodads /
 Props selector. Scene Art lists the installed raw structure catalog.
 Clicking a source swatch toggles a viewport-sized free-placement brush that
 converts the primary pointer directly to projected-scene pixels; tile,
-prop/doodad, and barrier hit targets do not participate. A dynamically growing
-Selected dropdown lists stable placed instances and includes None. Select may
-change that current instance but never move it. Per
-[ADR-0149](adr/0149-artwork-select-toggles-candidate-discovery.md), Select is
-a toggleable discovery mode: its first click draws image-bounds candidate
-outlines around every selectable artwork, and its second click exits that mode,
-clears the current artwork, and removes candidate plus current outlines. Move
-drags only the current instance and suppresses candidate outlines; the
-Scene Art Delete toolbar action immediately deletes the current instance.
-The current instance has a distinct dotted image-bounds outline, and blank-board
-clicks do not clear it. Details remains locked to that instance and provides
+prop/doodad, and barrier hit targets do not participate. Per
+[ADR-0500](adr/0500-scene-art-select-is-local-alpha-aware-and-stack-cycling.md),
+Select is a toggleable local spatial picker: it draws no global candidates, tests
+the exact source alpha painted by the shared directional draw operations, and
+orders eligible overlaps by live render depth. Hover outlines and names only the
+current candidate. Repeated clicks within six real viewport pixels cycle the
+unchanged painted stack front-to-back with a visible position/total readout.
+The unbounded instance dropdown is retired in favor of a compact current-object
+readout and explicit Clear action. Select may change that current instance but
+never move it; its second toolbar click exits the mode and clears the current
+artwork. Move drags only the current instance; the Scene Art Delete toolbar action
+immediately deletes it. The current instance has a distinct dotted image-bounds
+outline, and blank-board clicks do not clear it. Details remains locked to that instance and provides
 full-width slider-plus-number rows for X px, Y px, and Scale, installed-direction
 selection, duplicate, and delete. The layer introduces no visible placement
 marker or alternate grid geometry. Board resizing neither shifts nor prunes it.

@@ -6,16 +6,13 @@ import {
   type MirrorReflectionSubject,
   type MirrorSurface,
 } from '@chess-tactics/board-render';
+import { sourcePointForDrawOp, type RasterAlphaMask } from './rasterAlpha';
+
+export type { RasterAlphaMask } from './rasterAlpha';
 
 export interface LosPoint {
   x: number;
   y: number;
-}
-
-export interface RasterAlphaMask {
-  rgba: ArrayLike<number>;
-  width: number;
-  height: number;
 }
 
 export type MirrorLosClassification = 'pass' | 'floor-occluded' | 'outside-glass' | 'unsupported' | 'invalid';
@@ -72,31 +69,6 @@ export function pointInMirrorPolygon(point: LosPoint, polygon: readonly number[]
   return inside;
 }
 
-function sourcePointForDestination(
-  op: BoardDrawOp,
-  source: Pick<RasterAlphaMask, 'width' | 'height'>,
-  point: LosPoint,
-): LosPoint | null {
-  let scaleX = op.dw / source.width;
-  let scaleY = op.dh / source.height;
-  let innerLeft = 0;
-  let innerTop = 0;
-  if (op.contain) {
-    const fit = Math.min(scaleX, scaleY);
-    scaleX = fit;
-    scaleY = fit;
-    innerLeft = (op.dw - source.width * fit) / 2;
-    innerTop = (op.dh - source.height * fit) / 2;
-  }
-  let localX = point.x - op.dx;
-  const localY = point.y - op.dy;
-  if (op.flipX) localX = op.dw - localX;
-  const x = (localX - innerLeft) / scaleX;
-  const y = (localY - innerTop) / scaleY;
-  if (x < 0 || y < 0 || x >= source.width || y >= source.height) return null;
-  return { x, y };
-}
-
 /** Rasterize the same destination-pixel centers the live op occupies, then sample source alpha. */
 export function opaqueDestinationPixels(op: BoardDrawOp, source: RasterAlphaMask): LosPoint[] {
   if (source.width <= 0 || source.height <= 0 || source.rgba.length < source.width * source.height * 4) return [];
@@ -108,7 +80,7 @@ export function opaqueDestinationPixels(op: BoardDrawOp, source: RasterAlphaMask
   for (let y = top; y < bottom; y += 1) {
     for (let x = left; x < right; x += 1) {
       const destination = { x: x + 0.5, y: y + 0.5 };
-      const sourcePoint = sourcePointForDestination(op, source, destination);
+      const sourcePoint = sourcePointForDrawOp(op, source, destination);
       if (!sourcePoint) continue;
       const sourceX = Math.min(source.width - 1, Math.floor(sourcePoint.x));
       const sourceY = Math.min(source.height - 1, Math.floor(sourcePoint.y));
