@@ -95,16 +95,12 @@ export function PredrawnGenerationFramePicker({
   applicationStatus,
   onApply,
   onClose,
-  onReviewSave,
-  reviewSaveLabel,
 }: {
   board: EditorBoard;
   initialFrame?: PredrawnGenerationFrame;
   applicationStatus: PredrawnGenerationFrameStatus;
   onApply: (frame: PredrawnGenerationFrame) => void;
   onClose: () => void;
-  onReviewSave: () => void;
-  reviewSaveLabel: string;
 }): ReactElement {
   const sourceBoard = useMemo(() => boardForTopSurfaceArtExport(board), [board]);
   const requiredBounds = useMemo(() => predrawnGenerationRequiredBounds(sourceBoard), [sourceBoard]);
@@ -445,13 +441,6 @@ export function PredrawnGenerationFramePicker({
               className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
               onClick={onClose}
             >{frameAppliedToEditor ? 'Done' : initialFrame ? 'Discard preview' : 'Cancel'}</ChromeButton>
-            {frameAppliedToEditor ? (
-              <ChromeButton unit="inner-text-button"
-                data-testid="predrawn-generation-frame-review-save"
-                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                onClick={onReviewSave}
-              >{reviewSaveLabel}</ChromeButton>
-            ) : null}
             <ChromeButton unit="inner-text-button"
               data-testid="predrawn-generation-frame-apply"
               className={chromeUnitClassNames(

@@ -151,13 +151,7 @@ import { predrawnGenerationFrameStatus } from './predrawnGenerationFrameStatus';
 import { isPredrawnLockedLayer, predrawnEditorHrefAfterPicker, preservesPredrawnBakedArt } from './predrawnEditorPolicy';
 import { predrawnReferenceHref } from './PredrawnReference';
 import {
-  nextPredrawnAttemptCreationIntent,
-  type PredrawnAttemptCreationIntent,
-} from './predrawnCreationAttempts';
-import {
-  createPredrawnGenerationAttempt,
   listPredrawnBackgroundVersions,
-  listPredrawnGenerationAttempts,
   type PredrawnGenerationAttemptWorkspaceMutationResult,
 } from '../net/predrawnBackgroundVersions';
 import {
@@ -3519,8 +3513,6 @@ export function LevelEditor(): ReactElement {
   const [levelArtworkWorkspace, setLevelArtworkWorkspace] = useState<LevelArtworkWorkspace | undefined>(
     initialLevelArtworkWorkspace,
   );
-  const [preferredArtworkAttemptId, setPreferredArtworkAttemptId] = useState<string>();
-  const artworkAttemptCreationIntentRef = useRef<PredrawnAttemptCreationIntent | undefined>(undefined);
 
   // The level being edited (campaign path). `levelId` is the store key the Save writes back
   // through; `editingId` may differ once a cold board is saved (Phase 3). The name is edited in
@@ -3981,16 +3973,6 @@ export function LevelEditor(): ReactElement {
         'It is being autosaved to the working copy. Publishing or saving the level remains a separate action.',
       );
     }
-  };
-  const reviewPredrawnGenerationFrameSave = (): void => {
-    closePredrawnGenerationFrame();
-    setLayer('status');
-    setTool('select');
-    reportStatus(
-      'Generation frame ready for persistence review.',
-      'info',
-      'Confirm the working-copy state here, then use the existing Save or Publish action when you are ready.',
-    );
   };
   const fillVisibleScenicTerrain = (): void => {
     if (!viewViewportSize) {
@@ -5583,13 +5565,15 @@ export function LevelEditor(): ReactElement {
     () => targetLevel ? levelToEditorBoard(targetLevel) : undefined,
     [targetLevel],
   );
-  const canonicalLevelSignature = useMemo(
-    () => targetLevel ? normalizedLevelEditorSignature(targetLevel) : undefined,
-    [targetLevel],
+  const workingCopyEditorBoard = useMemo(
+    () => editorDocument ? levelToEditorBoard(editorDocument.level) : undefined,
+    [editorDocument],
   );
-  const workingDocumentPredrawnGenerationFrame = editorDocument
-    ? levelToEditorBoard(editorDocument.level).predrawnGenerationFrame
-    : undefined;
+  const workingCopyLevelSignature = useMemo(
+    () => editorDocument ? normalizedLevelEditorSignature(editorDocument.level) : undefined,
+    [editorDocument],
+  );
+  const workingDocumentPredrawnGenerationFrame = workingCopyEditorBoard?.predrawnGenerationFrame;
   const canonicalPredrawnGenerationFrame = canonicalEditorBoard?.predrawnGenerationFrame;
   const canonicalBoardSurface = canonicalEditorBoard?.surface;
   const canonicalVersionedPredrawnSurface = canonicalBoardSurface && isVersionedPredrawnBoardSurface(canonicalBoardSurface)
@@ -5920,50 +5904,6 @@ export function LevelEditor(): ReactElement {
     const nextHref = levelArtworkWorkspaceHref();
     setLevelArtworkWorkspace(undefined);
     navigateApp(nextHref, { replace: true, scroll: false });
-  };
-
-  const startArtworkAttempt = async (sourceVersionId: string): Promise<void> => {
-    if (!editorDocument || !targetLevelId) return;
-    const fence = currentEditFence();
-    if (!fence) {
-      reportStatus(
-        'This review page is read-only.',
-        'warning',
-        'Pipeline slots belong to the active editor session.',
-      );
-      return;
-    }
-    try {
-      const attempts = await listPredrawnGenerationAttempts(editorDocument.document_id);
-      const intent = nextPredrawnAttemptCreationIntent(
-        artworkAttemptCreationIntentRef.current,
-        sourceVersionId,
-        `Pipeline slot ${attempts.length + 1}`,
-      );
-      artworkAttemptCreationIntentRef.current = intent;
-      const attempt = await createPredrawnGenerationAttempt({
-        documentId: editorDocument.document_id,
-        sourceVersionId: intent.sourceVersionId,
-        label: intent.label,
-        idempotencyKey: intent.idempotencyKey,
-        fence,
-      });
-      artworkAttemptCreationIntentRef.current = undefined;
-      setPreferredArtworkAttemptId(attempt.id);
-      reportStatus(
-        `${attempt.label} is waiting for AI artwork.`,
-        'success',
-        'Its Generation Reference is fixed. Copy it, work with Codex, then paste the returned AI-painted PNG into the slot.',
-      );
-      openLevelArtworkWorkspace('pipeline');
-    } catch (cause) {
-      if (handlePredrawnVersionMutationError(cause)) return;
-      reportStatus(
-        'The pipeline slot could not be started.',
-        'error',
-        cause instanceof Error ? cause.message : 'The artwork service rejected the request.',
-      );
-    }
   };
 
   useLayoutEffect(() => {
@@ -8657,8 +8597,6 @@ export function LevelEditor(): ReactElement {
             applicationStatus={generationFrameStatus}
             onApply={applyPredrawnGenerationFrame}
             onClose={closePredrawnGenerationFrame}
-            onReviewSave={reviewPredrawnGenerationFrameSave}
-            reviewSaveLabel={isOfficialTarget ? 'Review & publish' : 'Review & save'}
           />
         ) : null}
         {/* Ordinary editor status stays in Status. Optional version history has its own layer. */}
@@ -9109,7 +9047,7 @@ export function LevelEditor(): ReactElement {
                   <p>
                     {levelArtworkWorkspace === 'source'
                       ? 'Save and copy exact level-derived pictures to hand to the AI model.'
-                      : 'Each slot receives one raw AI-painted board, then keeps one warped board and one board with an occlusion mask.'}
+                      : 'Use the unchanged AI-painted board immediately. Grid correction and occlusion are optional tools you can apply later.'}
                   </p>
                 </div>
                 <ChromeButton unit="inner-text-button"
@@ -9117,7 +9055,7 @@ export function LevelEditor(): ReactElement {
                   onClick={closeLevelArtworkWorkspace}
                 >Done</ChromeButton>
               </header>
-              {targetLevelId && editorDocument && canonicalEditorBoard && canonicalLevelSignature ? (
+              {targetLevelId && editorDocument ? (
                 <div className="le-artwork-workspace-scroll">
                   {levelArtworkWorkspace === 'source' ? (
                     <>
@@ -9145,17 +9083,11 @@ export function LevelEditor(): ReactElement {
                                 levelId: editorDocument.level_id,
                                 documentId: editorDocument.document_id,
                               }),
+                              editorDocument.document_id,
                             )}
                             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
                             data-testid="open-predrawn-reference"
                           >Preview current input</ChromeNavButton>
-                          {currentEditorBoard.predrawnGenerationFrame && generationFrameStatus.kind !== 'canonical' ? (
-                            <ChromeButton unit="inner-text-button"
-                              data-testid="review-predrawn-generation-frame-save"
-                              className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                              onClick={reviewPredrawnGenerationFrameSave}
-                            >{isOfficialTarget ? 'Review & publish pane' : 'Review & save pane'}</ChromeButton>
-                          ) : null}
                         </div>
                         <div
                           className={`le-status-current${generationFrameStatus.tone === 'ready' ? ' is-ready' : generationFrameStatus.tone === 'blocked' ? ' is-blocked' : ''}`}
@@ -9171,18 +9103,19 @@ export function LevelEditor(): ReactElement {
                       <PredrawnSourceArtworkPanel
                         documentId={editorDocument.document_id}
                         levelId={editorDocument.level_id}
-                        canonicalBoard={canonicalEditorBoard}
-                        canonicalLevelSignature={canonicalLevelSignature}
-                        canonicalRevision={editorDocument.saved_revision}
-                        canonicalReady={Boolean(
-                          editorDocument.has_saved_baseline
-                          && !editorDocument.dirty
-                          && cloudSaveState === 'saved'
-                          && generationFrameStatus.kind === 'canonical'
+                        workingCopyBoard={currentEditorBoard}
+                        workingCopyLevelSignature={currentSig}
+                        workingCopyRevision={editorDocument.revision}
+                        workingCopyReady={Boolean(
+                          cloudSaveState === 'saved'
+                          && workingCopyLevelSignature === currentSig
+                          && (
+                            generationFrameStatus.kind === 'working-copy'
+                            || generationFrameStatus.kind === 'canonical'
+                          )
                         )}
                         canWrite={editorSessionCanWrite && !saving}
                         getEditFence={currentEditFence}
-                        onStartAttempt={startArtworkAttempt}
                         onMutationError={handlePredrawnVersionMutationError}
                         onStatus={reportStatus}
                       />
@@ -9196,7 +9129,6 @@ export function LevelEditor(): ReactElement {
                       generationFrame={currentEditorBoard.predrawnGenerationFrame}
                       initialSourceSrc={predrawnPreview ?? (currentVersionedPredrawnSurface ? undefined : editorPredrawnPlate?.src)}
                       initialRegistration={predrawnRegistration}
-                      preferredAttemptId={preferredArtworkAttemptId}
                       documentRevision={editorDocument.revision}
                       workingBackgroundMode={boardBackgroundMode(currentEditorBoard)}
                       currentSurface={currentVersionedPredrawnSurface}

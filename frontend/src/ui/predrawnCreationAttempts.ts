@@ -299,12 +299,22 @@ function sourceProcessingContext(
   const semantic = binding?.semanticRequest;
   const generationReferenceBinding = binding?.schema === 'predrawn-generation-attempt-source-v1';
   const pipelineSourceBinding = binding?.schema === 'predrawn-processing-attempt-input-v1';
+  const intakeSourceBinding = binding?.schema === 'predrawn-ai-artwork-intake-v1';
   const sourceSemantic = source.operation.semanticRequest;
   const sourceEnvironmentGeometrySha256 = effectiveEnvironmentGeometrySha256(source);
+  const semanticSnapshotValid = semantic?.schema === 'predrawn-generation-semantic-request-v2'
+    ? Number.isSafeInteger(semantic.workingCopyDocumentRevision)
+      && semantic.workingCopyDocumentRevision > 0
+      && digest(semantic.workingCopyLevelSha256)
+    : semantic?.schema === 'predrawn-generation-semantic-request-v1'
+      && Number.isSafeInteger(semantic.canonicalDocumentRevision)
+      && semantic.canonicalDocumentRevision > 0
+      && digest(semantic.canonicalLevelSha256);
   if (
     (
       !generationReferenceBinding
       && !pipelineSourceBinding
+      && !intakeSourceBinding
     )
     || (
       generationReferenceBinding
@@ -326,13 +336,22 @@ function sourceProcessingContext(
         || binding.sourceAttemptId !== attempt.source_attempt_id
       )
     )
+    || (
+      intakeSourceBinding
+      && (
+        attempt.origin !== 'source'
+        || binding.inputRole !== 'raw-ai-artwork'
+        || binding.inputVersionId !== source.id
+        || binding.inputSha256 !== source.content_sha256
+        || attempt.source_attempt_id !== null
+        || attempt.generated_version_id !== source.id
+      )
+    )
     || !digest(binding.requestSha256)
     || !digest(binding.semanticRequestSha256)
-    || semantic?.schema !== 'predrawn-generation-semantic-request-v1'
+    || !semantic
+    || !semanticSnapshotValid
     || semantic.levelId !== attempt.level_id
-    || !Number.isSafeInteger(semantic.canonicalDocumentRevision)
-    || semantic.canonicalDocumentRevision < 1
-    || !digest(semantic.canonicalLevelSha256)
     || !digest(semantic.boardSha256)
     || !digest(semantic.environmentGeometrySha256)
     || semantic.environmentGeometrySchema !== 'predrawn-environment-geometry-v2'
@@ -369,6 +388,8 @@ function generatedSlotIssue(
   source: PredrawnBackgroundVersion,
   processing: NonNullable<PredrawnCreationAttemptModel['processing']>,
 ): string | undefined {
+  const rawInputBinding = attempt.origin === 'pipeline-source'
+    || attempt.source_request?.schema === 'predrawn-ai-artwork-intake-v1';
   if (
     version.kind !== 'raw'
     || version.document_id !== attempt.document_id
@@ -380,11 +401,11 @@ function generatedSlotIssue(
     || !sameBounds(version.world_bounds, processing.worldBounds)
     || effectiveEnvironmentGeometrySha256(version) !== processing.environmentGeometrySha256
   ) {
-    return attempt.origin === 'pipeline-source'
+    return rawInputBinding
       ? 'The saved Pipeline Source does not match this processing attempt.'
       : 'The Raw Pipeline Source does not match the immutable Generation Reference request.';
   }
-  if (attempt.origin === 'pipeline-source') {
+  if (rawInputBinding) {
     if (version.id !== source.id) {
       return 'The pipeline slot does not use its exact saved Raw Pipeline Source.';
     }
@@ -559,16 +580,18 @@ export function predrawnCreationAttemptModels(
         artifacts: [],
       };
       if (attempt.origin === 'source' || attempt.origin === 'pipeline-source') {
-        const expectedSourceKind = attempt.origin === 'pipeline-source' ? 'raw' : 'source';
+        const intakeSourceBinding = attempt.source_request?.schema === 'predrawn-ai-artwork-intake-v1';
+        const rawInputBinding = attempt.origin === 'pipeline-source' || intakeSourceBinding;
+        const expectedSourceKind = rawInputBinding ? 'raw' : 'source';
         if (!usable(model.sourceArtwork) || model.sourceArtwork.kind !== expectedSourceKind) {
-          model.issue = attempt.origin === 'pipeline-source'
+          model.issue = rawInputBinding
             ? 'The saved Raw Pipeline Source selected for this processing attempt is unavailable.'
             : 'The saved Generation Reference for this pipeline slot is unavailable.';
           return model;
         }
         model.processing = sourceProcessingContext(attempt, model.sourceArtwork);
         if (!model.processing) {
-          model.issue = attempt.origin === 'pipeline-source'
+          model.issue = rawInputBinding
             ? 'This processing attempt has no valid immutable Pipeline Source request.'
             : 'This pipeline slot has no valid immutable Generation Reference request.';
           return model;

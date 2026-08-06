@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   PredrawnImageClipboardError,
+  copyPredrawnPngBlobToClipboard,
   copyPredrawnPngToClipboard,
   createPredrawnPngIngressGuard,
   predrawnPngFromDataTransfer,
@@ -158,6 +159,29 @@ describe('copyPredrawnPngToClipboard', () => {
         { headers: { 'Content-Type': 'image/png' } },
       )),
     }), 'load-failed', /stored generation reference is labeled as PNG.*bytes are invalid/i);
+  });
+});
+
+describe('copyPredrawnPngBlobToClipboard', () => {
+  it('copies an exact rendered PNG through a promised ClipboardItem payload', async () => {
+    const source = pngBlob(new Uint8Array([4, 5, 6]));
+    let clipboardPayload: Promise<Blob> | undefined;
+    class FakeClipboardItem implements PredrawnClipboardWriteItem {
+      constructor(items: Record<string, Blob | Promise<Blob>>) {
+        clipboardPayload = items['image/png'] as Promise<Blob>;
+      }
+    }
+    const write = vi.fn(async () => {});
+
+    const copied = await copyPredrawnPngBlobToClipboard(Promise.resolve(source), {
+      clipboard: { write },
+      ClipboardItem: FakeClipboardItem as PredrawnClipboardItemConstructor,
+    });
+
+    const clipboardBlob = await clipboardPayload!;
+    expect(write).toHaveBeenCalledTimes(1);
+    expect(await copied.arrayBuffer()).toEqual(await source.arrayBuffer());
+    expect(await clipboardBlob.arrayBuffer()).toEqual(await source.arrayBuffer());
   });
 });
 

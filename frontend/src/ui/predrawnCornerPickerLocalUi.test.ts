@@ -36,6 +36,17 @@ describe('pre-drawn grid calibration instrument', () => {
     expect(picker).toContain('before changing grid dimensions, snapping, or resetting spacing.');
   });
 
+  it('starts first-time fitting from the real game grid and scales it proportionally', () => {
+    expect(picker).toContain('predrawnIdealGridSeed(');
+    expect(picker).toContain('Started with the real game grid, centered and uniformly scaled.');
+    expect(picker).toContain('aria-label="Uniform grid size"');
+    expect(picker).toContain('data-testid="predrawn-grid-scale-down"');
+    expect(picker).toContain('data-testid="predrawn-grid-scale-up"');
+    expect(picker).toContain('scaleGridUniformly(0.98)');
+    expect(picker).toContain('scaleGridUniformly(1.02)');
+    expect(style).toMatch(/\.predrawn-grid-uniform-scale\s*\{/);
+  });
+
   it('offers full-grid undo and redo with one history entry per completed drag', () => {
     const toolbar = picker.indexOf('<div className="predrawn-corner-picker-toolbar">');
     const calibrationBar = picker.indexOf('<div className={`predrawn-grid-calibration-bar is-${editMode}`}>');
@@ -80,6 +91,7 @@ describe('pre-drawn grid calibration instrument', () => {
       'reset',
       'resetSpacing',
       'snapToIdealGrid',
+      'scaleGridUniformly',
       'pinBoundaryReference',
       'clearBoundaryReference',
       'changeGridColumns',

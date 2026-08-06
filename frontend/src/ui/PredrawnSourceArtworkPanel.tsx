@@ -68,25 +68,23 @@ function isUsableSourceArtwork(version: PredrawnBackgroundVersion): boolean {
 export function PredrawnSourceArtworkPanel({
   documentId,
   levelId,
-  canonicalBoard,
-  canonicalLevelSignature,
-  canonicalRevision,
+  workingCopyBoard,
+  workingCopyLevelSignature,
+  workingCopyRevision,
   canWrite,
-  canonicalReady,
+  workingCopyReady,
   getEditFence,
-  onStartAttempt,
   onMutationError,
   onStatus,
 }: {
   documentId: string;
   levelId: string;
-  canonicalBoard: EditorBoard;
-  canonicalLevelSignature: string;
-  canonicalRevision: number;
+  workingCopyBoard: EditorBoard;
+  workingCopyLevelSignature: string;
+  workingCopyRevision: number;
   canWrite: boolean;
-  canonicalReady: boolean;
+  workingCopyReady: boolean;
   getEditFence: () => EditorDocumentEditFence | null;
-  onStartAttempt: (sourceVersionId: string) => void | Promise<void>;
   onMutationError: (error: unknown) => boolean;
   onStatus: (message: string, tone?: StatusTone, detail?: string) => void;
 }): ReactElement {
@@ -97,15 +95,15 @@ export function PredrawnSourceArtworkPanel({
   const [terrainReady, setTerrainReady] = useState(false);
   const [sceneReady, setSceneReady] = useState(false);
   const [previewScale, setPreviewScale] = useState(1);
-  const [busy, setBusy] = useState<'load' | 'capture' | 'attempt' | null>('load');
+  const [busy, setBusy] = useState<'load' | 'capture' | null>('load');
   const [copying, setCopying] = useState(false);
   const [clipboardStatus, setClipboardStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const backgroundMode = boardBackgroundMode(canonicalBoard);
+  const backgroundMode = boardBackgroundMode(workingCopyBoard);
   const sourceBoard = useMemo<EditorBoard>(
-    () => boardForPredrawnSourceArtwork(canonicalBoard),
-    [canonicalBoard],
+    () => boardForPredrawnSourceArtwork(workingCopyBoard),
+    [workingCopyBoard],
   );
   const frameValidation = useMemo(
     () => validatePredrawnGenerationFrame(sourceBoard, sourceBoard.predrawnGenerationFrame),
@@ -154,7 +152,7 @@ export function PredrawnSourceArtworkPanel({
   useEffect(() => {
     setTerrainReady(false);
     setSceneReady(false);
-  }, [backgroundMode, canonicalLevelSignature]);
+  }, [backgroundMode, workingCopyLevelSignature]);
 
   useLayoutEffect(() => {
     const host = previewHostRef.current;
@@ -171,7 +169,7 @@ export function PredrawnSourceArtworkPanel({
   }, [frame]);
 
   const saveCurrentSource = async (): Promise<void> => {
-    if (!frame || !frameRef.current || !canWrite || !canonicalReady || !previewReady || busy) return;
+    if (!frame || !frameRef.current || !canWrite || !workingCopyReady || !previewReady || busy) return;
     setBusy('capture');
     setError(null);
     try {
@@ -181,7 +179,7 @@ export function PredrawnSourceArtworkPanel({
       await assertDecodablePngBlob(blob);
       const [sourceSha256, environmentGeometrySha256] = await Promise.all([
         sha256Hex(blob),
-        predrawnEnvironmentGeometrySha256(canonicalBoard),
+        predrawnEnvironmentGeometrySha256(workingCopyBoard),
       ]);
       const worldBounds = {
         minX: frame.x,
@@ -190,12 +188,12 @@ export function PredrawnSourceArtworkPanel({
         height: frame.height,
       };
       const identity = await sha256Hex(JSON.stringify({
-        schema: 'generation-source-identity-v1',
+        schema: 'generation-source-identity-v2',
         documentId,
         levelId,
         sourceSha256,
-        canonicalLevelSignature,
-        canonicalRevision,
+        workingCopyLevelSignature,
+        workingCopyRevision,
         backgroundMode,
         worldBounds,
       }));
@@ -203,12 +201,12 @@ export function PredrawnSourceArtworkPanel({
         kind: 'source',
         label: `Generation reference ${sources.length + 1}`,
         operation: {
-          kind: 'generation-source-v1',
+          kind: 'generation-source-v2',
           captureClient: 'level-editor-source-artwork-v1',
         },
         provenance: {
           sourceSha256,
-          source: 'saved-level-background',
+          source: 'autosaved-working-copy-background',
         },
         idempotency_key: `source:${identity}`,
       }, fence);
@@ -226,24 +224,13 @@ export function PredrawnSourceArtworkPanel({
       onStatus(
         'Generation reference saved.',
         'success',
-        `This exact ${backgroundMode === 'ai' ? 'AI artwork' : 'Legacy tileset'} picture can now be copied to the AI model and bound to a waiting pipeline slot.`,
+        `This exact ${backgroundMode === 'ai' ? 'AI artwork' : 'Legacy tileset'} picture can now be copied to the AI model. Add the returned image from Board Art Pipeline.`,
       );
     } catch (cause) {
       if (onMutationError(cause)) return;
       const message = cause instanceof Error ? cause.message : 'The generation reference could not be saved.';
       setError(message);
       onStatus('Generation reference capture failed.', 'error', message);
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const startSelectedAttempt = async (): Promise<void> => {
-    if (!selected || !canWrite || busy) return;
-    setBusy('attempt');
-    setError(null);
-    try {
-      await onStartAttempt(selected.id);
     } finally {
       setBusy(null);
     }
@@ -278,32 +265,32 @@ export function PredrawnSourceArtworkPanel({
     <div className="le-source-artwork-manager" data-testid="predrawn-source-artwork-manager">
       <section className="le-artwork-frame-card" aria-labelledby="source-artwork-current-title">
         <div className="le-artwork-frame-copy">
-          <span className="skirmish-eyebrow">Current saved level</span>
+          <span className="skirmish-eyebrow">Current working copy</span>
           <h3 id="source-artwork-current-title">
             {backgroundMode === 'ai' ? 'AI artwork generation reference' : 'Legacy tileset generation reference'}
           </h3>
           <p>
             This is the exact full-resolution picture sent to the AI model. It comes from the
-            saved level background inside the viewing pane; units, Cover, grids, tactical
+            autosaved working-copy background inside the viewing pane; units, Cover, grids, tactical
             overlays, and editor UI are excluded.
           </p>
         </div>
         <div className="le-artwork-frame-actions">
           <ChromeButton unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', previewReady && 'active')}
-            disabled={!canWrite || !canonicalReady || !previewReady || Boolean(busy)}
+            disabled={!canWrite || !workingCopyReady || !previewReady || Boolean(busy)}
             onClick={() => { void saveCurrentSource(); }}
-            title={!canonicalReady ? 'Save or publish the current level before creating a reference.' : 'Create an immutable AI generation reference from this exact saved level picture.'}
-          >{busy === 'capture' ? 'Creating reference…' : 'Create reference from saved level'}</ChromeButton>
+            title={!workingCopyReady ? 'Wait for the current working copy to finish autosaving.' : 'Create an immutable AI generation reference from this exact autosaved working-copy picture.'}
+          >{busy === 'capture' ? 'Creating reference…' : 'Create reference from working copy'}</ChromeButton>
         </div>
-        {!canonicalReady ? (
+        {!workingCopyReady ? (
           <output className="le-predrawn-version-error" role="status">
-            Save or publish the current level first. A generation reference always records canonical level state.
+            Waiting for the current level and viewing pane to finish autosaving.
           </output>
         ) : null}
         {!frame ? (
           <output className="le-predrawn-version-error" role="alert">
-            Choose and save a valid 16:9 viewing pane before creating a generation reference.
+            Choose and apply a valid 16:9 viewing pane before creating a generation reference.
           </output>
         ) : null}
       </section>
@@ -334,7 +321,7 @@ export function PredrawnSourceArtworkPanel({
                 board={sourceBoard}
                 boardZoom={1}
                 boardPan={boardPan}
-                ariaLabel={`Current saved ${backgroundMode === 'ai' ? 'AI artwork' : 'Legacy tileset'} generation reference`}
+                ariaLabel={`Current working-copy ${backgroundMode === 'ai' ? 'AI artwork' : 'Legacy tileset'} generation reference`}
                 hidden={{ tile: false, unit: true, doodad: false }}
                 topSurfacesOnly={backgroundMode === 'legacy'}
                 onTerrainFirstFrame={() => setTerrainReady(true)}
@@ -385,7 +372,7 @@ export function PredrawnSourceArtworkPanel({
           {!sources.length && busy !== 'load' ? (
             <div className="le-predrawn-artifact-empty" role="status">
               <strong>No saved generation references</strong>
-              <span>Create one from the saved level picture above before starting a manual AI handoff.</span>
+              <span>Create one from the autosaved working-copy picture above, then add the returned artwork from Board Art Pipeline.</span>
             </div>
           ) : null}
         </div>
@@ -405,12 +392,6 @@ export function PredrawnSourceArtworkPanel({
               download
               title="Download the exact full-resolution reference PNG. This does not create a pipeline slot."
             >Download reference PNG</a>
-            <ChromeButton unit="inner-text-button"
-              className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
-              disabled={!canWrite || Boolean(busy)}
-              onClick={() => { void startSelectedAttempt(); }}
-              title="Create a waiting pipeline slot bound to this exact reference. AI generation still happens through the manual Codex handoff."
-            >{busy === 'attempt' ? 'Starting handoff…' : 'Start manual AI handoff'}</ChromeButton>
           </div>
         ) : null}
         {clipboardStatus ? (

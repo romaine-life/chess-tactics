@@ -256,6 +256,39 @@ describe('pre-drawn generation attempt API', () => {
     expect(JSON.parse(String(init?.body))).not.toHaveProperty('pipeline_source_attempt_id');
   });
 
+  it('creates a source-agnostic intake attempt from an imported AI artwork PNG', async () => {
+    const returned = {
+      id: 'attempt-3',
+      origin: 'source',
+      source_version_id: 'raw-ai-1',
+      generated_version_id: 'raw-ai-1',
+      source_attempt_id: null,
+    };
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => new Response(JSON.stringify({ attempt: returned }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(createPredrawnGenerationAttempt({
+      documentId: 'doc-1',
+      intakeSourceVersionId: 'raw-ai-1',
+      label: 'Imported forest',
+      idempotencyKey: 'attempt:intake:raw-ai-1',
+      fence,
+    })).resolves.toEqual(returned);
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(String(init?.body))).toMatchObject({
+      intake_source_version_id: 'raw-ai-1',
+      label: 'Imported forest',
+      edit_session_id: fence.edit_session_id,
+      edit_generation: fence.edit_generation,
+    });
+    expect(JSON.parse(String(init?.body))).not.toHaveProperty('source_version_id');
+    expect(JSON.parse(String(init?.body))).not.toHaveProperty('pipeline_source_version_id');
+  });
+
   it('archives the whole creation attempt using its row revision', async () => {
     const returned = { id: 'attempt/1', status: 'archived', row_revision: 5 };
     const archiveResult = {

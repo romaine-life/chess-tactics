@@ -349,6 +349,75 @@ function roundedSourceCoordinate(value: number): number {
 }
 
 /** Snap a placed refit grid to the exact accepted board projection at its current count. */
+export function predrawnIdealGridSeed(
+  sourceSize: { width: number; height: number },
+  columns: number,
+  rows: number,
+): PredrawnCornerPoints | undefined {
+  if (
+    sourceSize.width <= 0
+    || sourceSize.height <= 0
+    || columns < 1
+    || rows < 1
+  ) return undefined;
+
+  const ideal: Record<PredrawnCornerName, PredrawnPoint> = {
+    north: [0, -TILE_STEP_Y],
+    east: [columns * TILE_STEP_X, (columns - 1) * TILE_STEP_Y],
+    south: [(columns - rows) * TILE_STEP_X, (columns + rows - 1) * TILE_STEP_Y],
+    west: [-rows * TILE_STEP_X, (rows - 1) * TILE_STEP_Y],
+  };
+  const idealPoints = CORNERS.map((corner) => ideal[corner]);
+  const idealCenter: PredrawnPoint = [
+    idealPoints.reduce((sum, point) => sum + point[0], 0) / idealPoints.length,
+    idealPoints.reduce((sum, point) => sum + point[1], 0) / idealPoints.length,
+  ];
+  const offsets = idealPoints.map(([x, y]) => [x - idealCenter[0], y - idealCenter[1]] as const);
+  const idealWidth = Math.max(...offsets.map(([x]) => x)) - Math.min(...offsets.map(([x]) => x));
+  const idealHeight = Math.max(...offsets.map(([, y]) => y)) - Math.min(...offsets.map(([, y]) => y));
+  const scale = Math.min(sourceSize.width / idealWidth, sourceSize.height / idealHeight) * 0.8;
+  const center: PredrawnPoint = [sourceSize.width / 2, sourceSize.height / 2];
+
+  return Object.fromEntries(CORNERS.map((corner, index) => [corner, [
+    roundedSourceCoordinate(center[0] + offsets[index][0] * scale),
+    roundedSourceCoordinate(center[1] + offsets[index][1] * scale),
+  ] as PredrawnPoint])) as PredrawnCornerPoints;
+}
+
+/** Scale every coarse corner around the shared center without changing the grid's proportions. */
+export function predrawnUniformGridScale(
+  points: PredrawnCornerPoints,
+  sourceSize: { width: number; height: number },
+  factor: number,
+): PredrawnCornerPoints | undefined {
+  const placed = CORNERS.map((corner) => points[corner]);
+  if (
+    placed.some((point) => !point)
+    || sourceSize.width <= 0
+    || sourceSize.height <= 0
+    || !Number.isFinite(factor)
+    || factor <= 0
+  ) return undefined;
+  const current = placed as PredrawnPoint[];
+  const center: PredrawnPoint = [
+    current.reduce((sum, point) => sum + point[0], 0) / current.length,
+    current.reduce((sum, point) => sum + point[1], 0) / current.length,
+  ];
+  const next = Object.fromEntries(CORNERS.map((corner, index) => [corner, [
+    roundedSourceCoordinate(center[0] + (current[index][0] - center[0]) * factor),
+    roundedSourceCoordinate(center[1] + (current[index][1] - center[1]) * factor),
+  ] as PredrawnPoint])) as PredrawnCornerPoints;
+  if (CORNERS.some((corner) => {
+    const point = next[corner]!;
+    return point[0] < 0
+      || point[0] > sourceSize.width
+      || point[1] < 0
+      || point[1] > sourceSize.height;
+  })) return undefined;
+  return next;
+}
+
+/** Snap a placed refit grid to the exact accepted board projection at its current count. */
 export function predrawnIdealGridSnap(
   points: PredrawnCornerPoints,
   sourceSize: { width: number; height: number },
@@ -595,7 +664,7 @@ export function PredrawnCornerPicker({
   rows: number;
   onChange: (registration: PredrawnBoardCornerRegistration) => void;
   onClose: () => void;
-  /** Version-pipeline mode keeps pending calibration in the instrument until it emits a child. */
+  /** Version-pipeline mode hands the exact calibration to its durable create-and-select action. */
   onSaveRegistration?: (registration: PredrawnBoardCornerRegistration) => void;
   saveLabel?: string;
   showCodexHandoff?: boolean;
@@ -1452,7 +1521,10 @@ export function PredrawnCornerPicker({
 
   const reset = (): void => {
     const before = currentGridSnapshot();
-    const nextPoints = pointsFromRegistration(openingRegistration.current, sourceSize.width, sourceSize.height);
+    const nextPoints = openingRegistration.current
+      ? pointsFromRegistration(openingRegistration.current, sourceSize.width, sourceSize.height)
+      : predrawnIdealGridSeed(sourceSize, openingGrid.current.columns, openingGrid.current.rows)
+        ?? pointsFromRegistration(undefined, sourceSize.width, sourceSize.height);
     pointsRef.current = nextPoints;
     const nextBoundaryPoints = boundaryPointsFromRegistration(
       openingRegistration.current,
@@ -1479,12 +1551,16 @@ export function PredrawnCornerPicker({
     setMeshOverrides(nextMeshOverrides);
     setEditMode(nextMeshOverrides.length ? 'local' : 'coarse');
     setSelectedCell(null);
-    setActiveControl({ kind: 'corner', corner: 'south' });
-    setPlacingCorner(null);
+    setActiveControl(openingRegistration.current
+      ? { kind: 'corner', corner: 'south' }
+      : { kind: 'move' });
+    setPlacingCorner(openingRegistration.current ? null : CORNERS.find((corner) => !nextPoints[corner]) ?? null);
     setSaveState('pending');
     setHandoffCopyState('idle');
     setLocalConstraintState('reset');
-    setLocalFeedback('Restored every coarse and local control to the opening calibration.');
+    setLocalFeedback(openingRegistration.current
+      ? 'Restored every coarse and local control to the opening calibration.'
+      : 'Restored the centered game grid at its canonical isometric proportions.');
     recordGridEdit(before);
   };
 
@@ -1551,6 +1627,27 @@ export function PredrawnCornerPicker({
     commitMeshRegistration(snapped);
     setActiveControl({ kind: 'move' });
     setPlacingCorner(null);
+    recordGridEdit(before);
+  };
+
+  const scaleGridUniformly = (factor: number): void => {
+    if (meshOverridesRef.current.length) {
+      const count = meshOverridesRef.current.length;
+      setLocalConstraintState('constrained');
+      setLocalFeedback(`Clear all ${count} local adjustment${count === 1 ? '' : 's'} before scaling the coarse grid.`);
+      return;
+    }
+    const nextPoints = predrawnUniformGridScale(pointsRef.current, sourceSize, factor);
+    if (!nextPoints) {
+      setLocalConstraintState('constrained');
+      setLocalFeedback('The grid has reached the artwork edge. Move it inward or scale it down.');
+      return;
+    }
+    const before = currentGridSnapshot();
+    commitPoints(nextPoints);
+    setActiveControl({ kind: 'move' });
+    setPlacingCorner(null);
+    setLocalFeedback(`Scaled the whole grid ${factor < 1 ? 'down' : 'up'} with its proportions locked.`);
     recordGridEdit(before);
   };
 
@@ -1984,6 +2081,23 @@ export function PredrawnCornerPicker({
                   title={coarseRebaseTitle ?? 'Snap the coarse grid to ideal board projection spacing.'}
                   onClick={snapToIdealGrid}
                 >Snap ideal grid</ChromeButton>
+                <div className="predrawn-grid-uniform-scale" role="group" aria-label="Uniform grid size">
+                  <span>Uniform size</span>
+                  <ChromeButton unit="inner-text-button"
+                    data-testid="predrawn-grid-scale-down"
+                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                    disabled={!complete || coarseRebaseLocked}
+                    title="Scale the whole grid down 2% around its center while preserving its proportions."
+                    onClick={() => scaleGridUniformly(0.98)}
+                  >−</ChromeButton>
+                  <ChromeButton unit="inner-text-button"
+                    data-testid="predrawn-grid-scale-up"
+                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                    disabled={!complete || coarseRebaseLocked}
+                    title="Scale the whole grid up 2% around its center while preserving its proportions."
+                    onClick={() => scaleGridUniformly(1.02)}
+                  >+</ChromeButton>
+                </div>
                 <ChromeButton unit="inner-text-button"
                   data-testid="predrawn-grid-reset-spacing"
                   className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
@@ -2048,7 +2162,13 @@ export function PredrawnCornerPicker({
                 setSourceSize({ width, height });
                 setLoadError(false);
                 if (!normalizedForImage.current) {
-                  const normalizedPoints = pointsFromRegistration(openingRegistration.current, width, height);
+                  const normalizedPoints = openingRegistration.current
+                    ? pointsFromRegistration(openingRegistration.current, width, height)
+                    : predrawnIdealGridSeed(
+                      { width, height },
+                      openingGrid.current.columns,
+                      openingGrid.current.rows,
+                    ) ?? pointsFromRegistration(undefined, width, height);
                   const normalizedBoundaryPoints = boundaryPointsFromRegistration(
                     openingRegistration.current,
                     width,
@@ -2066,6 +2186,12 @@ export function PredrawnCornerPicker({
                   setPoints(normalizedPoints);
                   setBoundaryPoints(normalizedBoundaryPoints);
                   setMeshOverrides(normalizedMeshOverrides);
+                  if (!openingRegistration.current && CORNERS.every((corner) => normalizedPoints[corner])) {
+                    setActiveControl({ kind: 'move' });
+                    setPlacingCorner(null);
+                    setSaveState('pending');
+                    setLocalFeedback('Started with the real game grid, centered and uniformly scaled.');
+                  }
                   normalizedForImage.current = true;
                 }
               }}
@@ -2296,11 +2422,11 @@ export function PredrawnCornerPicker({
                     : 'Click a painted tile to begin local refinement.'
                   : saveState === 'pending'
                     ? onSaveRegistration
-                      ? `CALIBRATION CHANGED — click ${saveLabel} to stage it for a new warped version.`
+                      ? `CALIBRATION CHANGED — click ${saveLabel} to save this grid and apply its fitted board.`
                       : 'CALIBRATION CHANGED — click SAVE REGISTRATION to apply the inverse warp.'
                     : saveState === 'saved'
                       ? onSaveRegistration
-                        ? 'GRID STAGED — generate a warped version to create new art.'
+                        ? 'GRID SUBMITTED — saving and selecting the fitted board.'
                         : 'SAVED LOCALLY — the exact grid registration was read back and applied.'
                       : saveState === 'error'
                         ? 'LOCAL SAVE FAILED — registration was not saved.'
@@ -2320,7 +2446,7 @@ export function PredrawnCornerPicker({
               className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
               disabled={!complete || loadError}
               title={onSaveRegistration
-                ? 'Stage this grid calibration. No pixels change until you generate a warped version.'
+                ? 'Save this exact grid and use the resulting fitted board.'
                 : 'Save this exact grid registration.'}
               onClick={saveRegistration}
             >{saveLabel}</ChromeButton>
