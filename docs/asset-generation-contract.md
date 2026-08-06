@@ -192,8 +192,12 @@ Pipeline Source. That exact raw is the pre-modification input of the
 deterministic Board Art creation slot; it is not another model input merely
 because several slots may reuse it.
 
-Every Generation Reference suppresses units, additive ground cover, grid and
-tactical overlays, labels, and UI. Cover creates avoidable occlusion around
+Every Generation Reference suppresses units, additive ground cover, tactical
+overlays, labels, and UI. Per
+[ADR-0499](adr/0499-generation-references-may-bake-the-playable-grid.md), each
+new reference explicitly records whether it is clean (the default) or bakes the
+canonical playable grid as additional visual geometry evidence; scenic terrain
+is never gridded. Cover creates avoidable occlusion around
 geometry in the input. Per
 [ADR-0162](adr/0162-predrawn-backgrounds-retain-live-ground-cover.md), this clean
 generation input is independent of final composition: explicitly authored

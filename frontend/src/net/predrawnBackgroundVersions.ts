@@ -29,6 +29,8 @@ interface PredrawnGenerationSemanticRequestBase {
   };
   worldBounds: PredrawnBoardWorldBounds;
   backgroundMode: 'legacy' | 'ai';
+  /** Historical requests omit this field and are interpreted as grid-free. */
+  gridOverlay?: 'none' | 'playable';
   sourceBackgroundVersionId: string | null;
   sourceOcclusionVersionId: string | null;
   environmentGeometrySchema: 'predrawn-environment-geometry-v2';

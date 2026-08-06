@@ -8434,6 +8434,14 @@ body.loading-bootstrap .app-startup-status {
 
 .le-source-artwork-manager,
 .le-source-artwork-library { display: grid; gap: 16px; min-width: 0; }
+.le-source-artwork-grid-choice {
+  align-items: center;
+  color: var(--skirmish-muted);
+  display: flex;
+  font-size: var(--ds-text-xs);
+  gap: 8px;
+  white-space: nowrap;
+}
 .le-source-artwork-live-scroll {
   background: rgba(2, 7, 12, .82);
   border: 1px solid rgba(126, 164, 183, .24);
@@ -24496,6 +24504,14 @@ button.tileset-relationship-cell {
   gap: 8px;
   justify-content: flex-end;
   max-width: 460px;
+}
+.predrawn-reference-grid-choice {
+  align-items: center;
+  color: #c4d4e5;
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+  white-space: nowrap;
 }
 
 .predrawn-reference-copy-status {
