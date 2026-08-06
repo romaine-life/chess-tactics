@@ -1291,8 +1291,8 @@ const rarityFrameProof = (row, overrides = {}) => ({
   surfaceUrl: rarityFrameSurfaceUrl,
   rarity: 'uncommon',
   frameType: 'standard',
-  rarityAffects: 'existing-metalwork-only',
-  woodMaterialReview: true,
+  rarityAffects: 'complete-structural-frame',
+  standardWoodPreserved: false,
   canonicalScale: 1,
   assetLocalScale: 1,
   spatialResampling: false,
@@ -1308,11 +1308,11 @@ test('Run card rarity frames are closed Standard-frame rarity slots', () => {
   assert.equal(runCardRarityFrameSlot('ui/run/card-prototypes/concinnous-frame-v1.png'), null);
 });
 
-test('Run card rarity-frame review pins native pixels and the wood-preserving material decision', () => {
+test('Run card rarity-frame review pins native pixels and the full-color material decision', () => {
   const row = rarityFrameRow();
   const proof = rarityFrameProof(row);
   assert.equal(runCardRarityFrameOwnerProofIssue(row, proof, rarityFrameSurfaceUrl), null);
-  assert.match(runCardRarityFrameOwnerProofIssue(row, { ...proof, woodMaterialReview: false }, rarityFrameSurfaceUrl), /wood identity/);
+  assert.match(runCardRarityFrameOwnerProofIssue(row, { ...proof, standardWoodPreserved: true }, rarityFrameSurfaceUrl), /complete Standard structural frame/);
   assert.match(runCardRarityFrameOwnerProofIssue(row, { ...proof, assetLocalScale: 0.5 }, rarityFrameSurfaceUrl), /exact scale/);
   assert.match(runCardRarityFrameOwnerProofIssue(row, {
     ...proof,

@@ -49,7 +49,7 @@ const RUN_CARD_BACK_SLOT = 'ui/run/card-back/standard.png';
 const RUN_CARD_BACK_COMPONENT = 'run-card-back';
 const RUN_CARD_BACK_PROOF_SCHEMA = 'run-card-back-card-layout-proof-v1';
 const RUN_CARD_BACK_PROOF_RENDERER = 'RunCardBack/CardLayout';
-const RUN_CARD_RARITY_FRAME_PROOF_SCHEMA = 'run-card-rarity-frame-card-layout-proof-v1';
+const RUN_CARD_RARITY_FRAME_PROOF_SCHEMA = 'run-card-rarity-frame-card-layout-proof-v2';
 const RUN_CARD_RARITY_FRAME_PROOF_RENDERER = 'RunCardFace/CardLayout';
 const RUN_CARD_RARITY_FRAME_BY_SLOT = Object.freeze({
   'ui/run/card-prototypes/standard-uncommon-frame-v1.png': 'uncommon',
@@ -761,7 +761,7 @@ function runCardRarityFrameSlot(slot) {
 /**
  * Rarity frames are reviewed on the shared Card Layout face, where the accepted
  * Common frame and both candidate colors remain visible together. The proof is
- * deliberately byte- and slot-specific: approval of one light-blue or gold
+ * deliberately byte- and slot-specific: approval of one full light-blue or gold
  * raster cannot authorize a later regeneration or a different frame family.
  */
 function runCardRarityFrameOwnerProofIssue(row, proof, surfaceUrl = null) {
@@ -788,8 +788,8 @@ function runCardRarityFrameOwnerProofIssue(row, proof, surfaceUrl = null) {
   ) return 'Run card rarity-frame proof must identify the exact Card Layout rarity candidate';
   if (
     proof.rarity !== rarity || proof.frameType !== 'standard'
-    || proof.rarityAffects !== 'existing-metalwork-only' || proof.woodMaterialReview !== true
-  ) return 'Run card rarity-frame proof must preserve the Standard wood identity and vary only existing metalwork';
+    || proof.rarityAffects !== 'complete-structural-frame' || proof.standardWoodPreserved !== false
+  ) return 'Run card rarity-frame proof must recolor the complete Standard structural frame';
   if (
     proof.canonicalScale !== 1 || proof.assetLocalScale !== 1 || proof.spatialResampling !== false
     || !isObjectRecord(proof.decodedNativeRaster)

@@ -50,9 +50,9 @@ function RunCardRarityStudy({ header, viewerZoom }: { header: ReactNode; viewerZ
   const face = runCardFaceContent(card);
   const artUrl = resolvedLiveMediaUrl(runCardArtSlot(card));
   const specimens: readonly RarityStudySpecimen[] = [
-    { label: 'Common', note: 'Dark steel + wood', frameUrl: liveMediaForSlot(RUN_CARD_FRAME_SLOT).media.immutableUrl },
-    { label: 'Uncommon', note: 'Light-blue metal + wood', frameUrl: uncommon?.version.media?.immutableUrl ?? uncommon?.version.media?.url ?? null },
-    { label: 'Rare', note: 'Antique-gold metal + wood', frameUrl: rare?.version.media?.immutableUrl ?? rare?.version.media?.url ?? null },
+    { label: 'Common', note: 'Original frame', frameUrl: liveMediaForSlot(RUN_CARD_FRAME_SLOT).media.immutableUrl },
+    { label: 'Uncommon', note: 'Full light-blue frame', frameUrl: uncommon?.version.media?.immutableUrl ?? uncommon?.version.media?.url ?? null },
+    { label: 'Rare', note: 'Full gold frame', frameUrl: rare?.version.media?.immutableUrl ?? rare?.version.media?.url ?? null },
   ];
   const selections = { uncommon, rare } as const;
   const canPublish = uncommon?.version.status === 'candidate' && rare?.version.status === 'candidate';
@@ -63,7 +63,7 @@ function RunCardRarityStudy({ header, viewerZoom }: { header: ReactNode; viewerZ
       || uncommon.version.status !== 'candidate' || rare.version.status !== 'candidate' || busy
     ) return;
     setBusy(true);
-    setStatus('Recording approval for the exact light-blue and gold frame bytes…');
+    setStatus('Recording approval for the exact full light-blue and gold frame bytes…');
     try {
       const surfaceUrl = window.location.href;
       const reviewed = await Promise.all((['uncommon', 'rare'] as const).map((rarity: RunCardVisualRarity) => {
@@ -72,7 +72,7 @@ function RunCardRarityStudy({ header, viewerZoom }: { header: ReactNode; viewerZ
         return reviewLiveMediaVersion({
           id: selection.version.id,
           expectedRevision: selection.version.rowRevision,
-          notes: `${rarity === 'uncommon' ? 'Light-blue' : 'Antique-gold'} metalwork selected; Standard wood identity preserved.`,
+          notes: `${rarity === 'uncommon' ? 'Full light-blue' : 'Full gold'} Standard frame selected; geometry and live-content openings preserved.`,
           surfaceUrl,
           evidence: runCardRarityFrameReviewProof({ rarity, ...selection, surfaceUrl }),
         });
@@ -95,8 +95,8 @@ function RunCardRarityStudy({ header, viewerZoom }: { header: ReactNode; viewerZ
       {header}
       <header className="run-card-rarity-study-heading">
         <span>Standard frame family · exact live-media review</span>
-        <h2>Wood stays wood; rarity colors the metalwork</h2>
-        <p>Common keeps dark steel. Uncommon changes every existing metal band, bezel, fastener, and trim to light blue. Rare uses antique gold. The carved brown structure remains the same card in all three.</p>
+        <h2>Rarity colors the whole structural frame</h2>
+        <p>Common keeps the original card. Uncommon makes the complete structural frame light blue; Rare makes it gold. The title, artwork, type, ledger openings, and coin remain the shared live card anatomy.</p>
       </header>
       <div className="run-card-rarity-study-grid" style={{ '--run-card-gallery-zoom': viewerZoom } as CSSProperties}>
         {specimens.map((specimen) => (
@@ -116,7 +116,7 @@ function RunCardRarityStudy({ header, viewerZoom }: { header: ReactNode; viewerZ
       </div>
       {canPublish ? (
         <ChromeButton unit="inner-text-button" disabled={busy} onClick={() => { void publish(); }}>
-          {busy ? 'Publishing…' : 'Approve and publish light blue + gold'}
+          {busy ? 'Publishing…' : 'Approve and publish full light blue + full gold'}
         </ChromeButton>
       ) : null}
       <p className="run-card-rarity-study-footnote" role="status">{status || 'This surface reads candidate or accepted bytes from live storage; no review PNG is packaged with the application.'}</p>

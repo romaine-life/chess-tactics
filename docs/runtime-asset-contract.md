@@ -376,14 +376,14 @@ an incomplete row is an availability failure.
   Run-card frame families use typed standalone native 1060×1484 PNG slots. The
   active Standard family resolves its explicit card rarity through
   `ui/run/card-prototypes/frame-v1.png` (Common),
-  `ui/run/card-prototypes/standard-uncommon-frame-v1.png` (light-blue metalwork),
-  and `ui/run/card-prototypes/standard-rare-frame-v1.png` (antique-gold
-  metalwork). All three share the Standard measured openings and retain the
-  same brown wood, grain, and carved-joint identity; rarity changes the existing
-  perimeter bands, artwork bezel, fasteners, and thin metal trim only. Promotion
+  `ui/run/card-prototypes/standard-uncommon-frame-v1.png` (complete light-blue
+  structural frame), and `ui/run/card-prototypes/standard-rare-frame-v1.png`
+  (complete gold structural frame). All three share the Standard measured
+  openings and geometry; Uncommon and Rare recolor the perimeter, former wood
+  structure, artwork bezel, dividers, fasteners, and trim. Promotion
   of the two colored slots requires the exact-byte
-  `run-card-rarity-frame-card-layout-proof-v1` from the shared Card Layout face,
-  at native 1060×1484 and 1× without resampling (ADR-0495).
+  `run-card-rarity-frame-card-layout-proof-v2` from the shared Card Layout face,
+  at native 1060×1484 and 1× without resampling (ADR-0496).
   The historical property-frame slots
   `ui/run/card-prototypes/pestiferous-frame-v1.png`,
   `ui/run/card-prototypes/legatine-adlected-frame-v1.png`,

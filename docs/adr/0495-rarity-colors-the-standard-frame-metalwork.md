@@ -1,7 +1,8 @@
 ---
-status: accepted
+status: superseded
 date: 2026-08-06
 deciders: owner (Nelson) + Codex
+superseded_by: "[ADR-0496](0496-rarity-colors-the-complete-standard-frame.md)"
 partially_supersedes:
   - "[ADR-0493](0493-generated-run-formations-fall-sideways-and-own-rarity.md)'s white/steel rarity-to-frame mapping"
 ---

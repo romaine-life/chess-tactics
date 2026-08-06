@@ -32,7 +32,7 @@ describe('Run card rarity-frame live media', () => {
     expect(runCardRarityFrameSelection(catalog, 'uncommon', new URLSearchParams({ uncommonCandidate: 'b'.repeat(64) }))).toBeNull();
   });
 
-  it('builds an exact native proof for Standard wood with rarity-colored metalwork', () => {
+  it('builds an exact native proof for the full-color Standard rarity frame', () => {
     const surfaceUrl = `http://localhost${runCardRarityFrameReviewHref(sha256, 'b'.repeat(64))}`;
     expect(runCardRarityFrameReviewProof({ rarity: 'uncommon', version, slot, surfaceUrl })).toEqual({
       schema: RUN_CARD_RARITY_FRAME_PROOF_SCHEMA,
@@ -40,8 +40,8 @@ describe('Run card rarity-frame live media', () => {
       surfaceUrl,
       rarity: 'uncommon',
       frameType: 'standard',
-      rarityAffects: 'existing-metalwork-only',
-      woodMaterialReview: true,
+      rarityAffects: 'complete-structural-frame',
+      standardWoodPreserved: false,
       canonicalScale: 1,
       assetLocalScale: 1,
       spatialResampling: false,
