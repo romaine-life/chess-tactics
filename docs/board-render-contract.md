@@ -42,6 +42,13 @@ gameplay behavior, never camera preparation. Retained Deployment-to-Battle promo
 view-store instance; independently mounted outgoing and incoming battlefields never share mutable
 zoom, pan, limits, opening-camera, reset, or overlay state.
 
+Per [ADR-0501](adr/0501-play-surfaces-load-with-the-board-grid-enabled.md), every newly mounted
+play battlefield seeds its instance-owned grid overlay from the device-local **Board grid**
+Gameplay setting. The installed default is enabled, including for an older settings blob that
+does not yet contain the preference. The in-battle Grid and Clear all controls may override that
+value for the current mounted battlefield without changing the saved default; the next distinct
+battlefield mount reads the setting again.
+
 If the camera ever needs to move, this contract is void and the board must become a
 real-time 3D scene (and the units re-authored as meshes).
 
