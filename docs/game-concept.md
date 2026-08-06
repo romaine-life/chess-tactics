@@ -145,12 +145,13 @@ these.
   Quartermaster's Ledger is held.
   Each card may undergo Adlectio once while the player can afford it. Every adlected card
   keeps the Sectio open, flies from its Sectio seat into the title-reachable
-  Chartulary, leaves the deal once it lands, and uses the same gold transaction
-  cue as Alienatio. The surviving offers then glide from their measured old seats into the newly centred
-  deal instead of snapping when the adlected card leaves. Only the explicit
+  Chartulary, reveals the accepted universal face-down card beneath it in the unchanged
+  original pile seat, and uses the same gold transaction cue as Alienatio. That revealed back
+  is presentation only—not a replacement offer or a persisted remainder—and the surviving
+  piles do not move. Only the explicit
   Continue action enters the first Battle, and it is available without requiring
   an Adlectio. **Card** is the sole current gameplay noun for these deck entries
-  and offers (ADR-0321, ADR-0322, ADR-0323, ADR-0344, ADR-0347, ADR-0387, ADR-0388).
+  and offers (ADR-0321, ADR-0322, ADR-0323, ADR-0344, ADR-0347, ADR-0387, ADR-0481).
 - Each of those 49 Units cards owns one native 400×280 PixelLab illustration
   keyed by its canonical composition id. Human unit roles and readable
   equipment control the composition; historical pressure supplies secondary

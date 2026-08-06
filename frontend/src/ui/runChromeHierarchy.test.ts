@@ -16,6 +16,7 @@ const titleBarPortal = readFileSync(new URL('./shell/TitleBarPortalContext.tsx',
 const runWorkspace = readFileSync(new URL('./RunWorkspace.tsx', import.meta.url), 'utf8');
 const runUnitInspectionScene = readFileSync(new URL('./RunUnitInspectionScene.tsx', import.meta.url), 'utf8');
 const runCard = readFileSync(new URL('./RunCard.tsx', import.meta.url), 'utf8');
+const runCardPile = readFileSync(new URL('./RunCardPile.tsx', import.meta.url), 'utf8');
 const runCardFlight = readFileSync(new URL('./runCardFlightView.tsx', import.meta.url), 'utf8');
 const strategikonTitleNavigation = readFileSync(new URL('./StrategikonTitleNavigation.tsx', import.meta.url), 'utf8');
 const runCardFace = readFileSync(new URL('./RunCardFace.tsx', import.meta.url), 'utf8');
@@ -260,7 +261,10 @@ describe('Run chrome hierarchy', () => {
     expect(runCard).toContain('data-ui-sfx="gold"');
     expect(runScreen).toContain('useRunCardFlights()');
     expect(runScreen).toContain("document.querySelector('[data-run-card-flight-target]')");
-    expect(runScreen).toContain('sectio.cardOffers.filter((offer) => !sectio.adlectedCardOfferIds.includes(offer.offerId))');
+    expect(runScreen).toContain('sectio.cardOffers.map((offer) => {');
+    expect(runScreen).toContain('sectio.adlectedCardOfferIds.includes(offer.offerId)');
+    expect(runScreen).toContain('<RunCardPile');
+    expect(runCardPile).toContain('<RunCardBack');
     expect(runScreen).toContain('admitted by Adlectio and added to the Chartulary.');
     expect(runScreen).toContain('All offered cards are in the Chartulary.');
     expect(runCardFlight).toContain('<RunCard card={flight.offer} mode="reference" />');
@@ -555,6 +559,7 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain("import { RunCard } from './RunCard';");
     expect(styleCss).toMatch(/\.run-card-action\s*\{[\s\S]*?aspect-ratio:\s*5 \/ 7;/);
     expect(styleCss).toMatch(/\.run-card-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,[\s\S]*?justify-content:\s*center;/);
+    expect(styleCss).toMatch(/\.run-card-pile > :is\(\.run-card-pile-back, \.run-card-offer\)\s*\{[\s\S]*?grid-column:\s*1;[\s\S]*?grid-row:\s*1;/);
     // Cold route entry still holds the veil for any nested painted surface: the
     // shell's painted-surface boundary waits for loading surfaces before painting.
     expect(paintedSurfaceBoundary).toContain(".querySelector('.painted-surface.is-loading')");
