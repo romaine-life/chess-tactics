@@ -55,20 +55,6 @@ export function runArmyUnitHref(currentHref: string, unitId: string | null): str
   return `${url.pathname}${query ? `?${query}` : ''}${url.hash}`;
 }
 
-export function runBonaTargetHref(
-  currentHref: string,
-  lipsanonId: string,
-  unitId: string | null = null,
-): string {
-  const url = new URL(currentHref, 'http://localhost');
-  url.searchParams.set('view', 'bona-target');
-  url.searchParams.set('lipsanon', lipsanonId);
-  if (unitId) url.searchParams.set('unit', unitId);
-  else url.searchParams.delete('unit');
-  const query = url.searchParams.toString();
-  return `${url.pathname}${query ? `?${query}` : ''}${url.hash}`;
-}
-
 export function runSelfInspectionViewFromSearch(search: string): RunSelfInspectionView | null {
   const view = runWorkspaceViewFromSearch(search);
   return view === 'army' || view === 'lipsana' ? view : null;

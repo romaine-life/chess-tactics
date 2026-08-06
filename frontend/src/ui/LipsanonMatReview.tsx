@@ -62,7 +62,7 @@ const GENERATOR_LABELS: Record<string, string> = {
 };
 
 /** Lipsana whose icons are installed, chosen to read as an estate inventory. */
-const REVIEW_LIPSANA: readonly LipsanonId[] = ['congressional-approval', 'training-linens', 'quartermasters-ledger'];
+const REVIEW_LIPSANA: readonly LipsanonId[] = ['congressional-approval', 'fair-scales', 'quartermasters-ledger'];
 
 export interface LipsanonMatCandidate {
   id: string;

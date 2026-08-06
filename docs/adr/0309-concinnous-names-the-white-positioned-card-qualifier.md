@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by ADR-0492
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
 partially_supersedes:

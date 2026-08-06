@@ -85,7 +85,6 @@ import { listEditorDocuments } from '../net/editorDocuments';
 import { fetchAdminLiveMediaCatalog, type AdminLiveMediaCatalog } from '../net/liveMediaAdmin';
 import { TitleBarControlContribution, type TitleBarControlSpec } from './shell/TitleBarControls';
 import { RunCardPrototypeCatalog, RunCardPrototypeViewer } from './RunCardPrototype';
-import { RunCardIconFittingCatalog, RunCardIconFittingViewer } from './RunIconPairReview';
 import { RunCardPromptCatalog, RunCardPromptViewer } from './RunCardPromptStudio';
 import {
   activeUnitFamilies,
@@ -2039,11 +2038,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       controls: <button type="button" className="tileset-view-action" onClick={() => openViewer('cardlayout')}>Open Card Layout</button>,
     },
     {
-      id: 'cardicons', label: 'Card Icon Fitting', hint: 'Select and fit every card-property and unit-state icon on the canonical Run card face.',
-      main: <RunCardIconFittingCatalog onOpen={() => openViewer('cardicons')} />,
-      controls: <button type="button" className="tileset-view-action" onClick={() => openViewer('cardicons')}>Open Card Icon Fitting</button>,
-    },
-    {
       id: 'cardprompts', label: 'Card Prompts', hint: 'Review and copy the exact database prompt provenance for every core Units card.',
       main: (
         <RunCardPromptCatalog
@@ -2255,8 +2249,6 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                               ? <RunCardPromptViewer cardId={selectedRunCardPromptId} onCardId={setSelectedRunCardPromptId} header={studioViewerHeader} />
                             : viewerKind === 'cardlayout'
                               ? <RunCardPrototypeViewer header={studioViewerHeader} viewerZoom={viewerZoom} />
-                              : viewerKind === 'cardicons'
-                                ? <RunCardIconFittingViewer header={studioViewerHeader} viewerZoom={viewerZoom} />
                               : <AssetLab library={studioMedia.assets} name={selectedAssetName} header={studioViewerHeader} onEditFrame={(id) => { setSelectedFrameName(id); openViewer('nineslice'); }} onOpenDivider={(id) => { setSelectedDividerName(id); openViewer('divider'); }} />
         ) : null}
       </section>

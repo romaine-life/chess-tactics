@@ -280,8 +280,8 @@ The Studio encodes its state in the URL, so deep-link instead of clicking:
 
 Run screens need an active Run, so `/run` alone lands wherever the account already is. Craft the
 state first, then hand over the craft link. Never hand-author a Run document or edit
-`active_runs`: the server validator cross-checks army/card membership, Plagued targets and offer
-pricing, and a crafted document passes because the game built it.
+`active_runs`: the server validator cross-checks army/card membership, authored formation ids,
+complete placement plans, and offer pricing, and a crafted document passes because the game built it.
 
 **Every Run state you put Nelson on is handed over as a link that CRAFTS it.** Opening the link
 sets his active Run to that state and lands on the Run screen — every time, from whatever the Run
@@ -300,18 +300,18 @@ Run to that state, and answers with both:
 ```
 curl -X POST <url>/api/active-run/craft -H 'content-type: application/json' -d '{
   "phase": "sectio", "battle": 4, "gold": 33.5,
-  "army": [{ "type": "rook", "abilities": ["agminate"] }, "knight", "pawn"],
-  "offers": [{ "pieces": ["queen"] }, { "pieces": ["pawn","pawn"], "type": "concinnous" }],
+  "army": [{ "type": "rook" }, "knight", "pawn"],
+  "offers": [{ "id": "q" }, { "id": "ppb-protected" }],
   "loot": ["fair-scales"], "lipsana": ["quartermasters-ledger"] }'
 ```
 
-Same fields as the address grammar below, plus what an address cannot carry: units as objects
-with `abilities`, offers as objects. An unknown field is refused, not ignored.
+Same fields as the address grammar below, plus structured plain units and exact formation-card
+objects. An unknown field is refused, not ignored.
 
 `cards` is the field for a Run that has already performed Adlectio — the Chartulary, and anything
 downstream of that admission. Each is adlected in the opening Sectio and carried through every
-Battle before the target, so it arrives with a history (units lost, Pestiferous cards
-deteriorated) rather than as a fresh Adlectio; gold is restored afterwards. It cannot be given
+Battle before the target, so it arrives with its persistent units and card seats rather than as
+a fresh Adlectio; gold is restored afterwards. It cannot be given
 beside `army`, which replaces the roster those cards put there — use `add` for extra units.
 
 **The `url` it answers with — `/run/craft/<id>` — is the link to hand over, exactly as given.**
@@ -326,7 +326,7 @@ browser and it is minted into its `/run/craft/<id>` address before anything is c
 hand-authored one-off leaves a durable link behind:
 
 ```
-/run?craft=sectio&battle=3&gold=25&army=knight,rook&offers=queen,pawn+pawn:concinnous,rook:legatine
+/run?craft=sectio&battle=3&gold=25&army=knight,rook&offers=q,ppb-protected,rr-vertical
 /run?craft=deployment&battle=2&army=rook,rook,bishop,pawn&gold=12
 /run?craft=battle&battle=4&lipsana=fair-scales
 /run?craft=battle-victory&battle=4&lipsana=fair-scales
@@ -341,18 +341,17 @@ hand-authored one-off leaves a durable link behind:
   pins its offers, army and 8 gold).
 - `gold=25` (decimals fine), `army=knight,rook` (the exact non-King army; `add=queen`
   appends instead), `lipsana=<id,id>`.
-- Sectio only: `offers=<card>[,<card>]` where a card is its pieces joined by `+` with an
-  optional `:legatine|:concinnous|:pestiferous|:hieratic`; `loot=<id,id>`; `paid=<id>`. Pieces accept
-  names, chess letters, or a bare deck id (`pawn,pawn,knight` = `p,p,n` = `ppk`).
+- Sectio only: `offers=<card-id>[,<card-id>]`; `loot=<id,id>`; `paid=<id>`. Use exact
+  authored ids such as `p`, `pp`, `ppb-protected`, `bb-diagonal`, and `rr-vertical`.
+  Composition shorthand is accepted only when it identifies one formation unambiguously.
 - Aftermath only: `turns=<n>`, `seconds=<n>` and `fallen=<n>` write the Battle report a
   crafted Battle cannot produce on its own — it is placed, not played. `battle=N` is the
   Battle just won; the FINAL Battle has no aftermath (its report is the War victory
   screen), so craft `victory` for that one.
 - `war=<id>` picks the War (default: the first Run-eligible official one), `seed=<n>` and
-  `tier=0|1` fix the roll. `view=army|lipsana|expunctio` still applies and survives the craft.
+  `tier=0` fix the roll. `view=army|lipsana|expunctio` still applies and survives the craft.
 - `cards=<card>[,<card>]` — the cards the Run already HOLDS, written exactly like `offers`.
-- Units carrying abilities cannot be written as an address — use the JSON spec above, which has
-  no such limit because the link is an id either way.
+- Run units and cards carry no ability or qualifier fields in the current save format.
 
 **Append `?to=<address>` to a craft link to land inside a Run workspace** rather than one click
 short of it — `/run/craft/<id>?to=/run/strategikon/chartulary` crafts the state and opens the

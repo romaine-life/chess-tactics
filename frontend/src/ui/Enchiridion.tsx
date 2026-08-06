@@ -4,31 +4,19 @@ import { createBlankLevel } from '../core/level';
 import { levelToEditorBoard, unitsForGamePieces } from '../core/levelBoard';
 import { PIECE_LABEL, PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import type { BoardSize, Piece } from '../core/types';
-import {
-  currentLiveMediaCatalog,
-  liveMediaForSlot,
-  resolvedLiveMediaUrl,
-} from '@chess-tactics/board-render';
+import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
 import { runCardArtSlot, runCardName } from '../run/cardNames';
 import {
-  ADLECTED_DISPLAY_NAME,
-  AGMINATE_DISPLAY_NAME,
   ATARAXIA_BY_TIER,
   ATARAXIA_TIERS,
-  CACOCHYMIC_DESCRIPTION,
-  CACOCHYMIC_DISPLAY_NAME,
-  EUTACTIC_DISPLAY_NAME,
   RUN_CARD_BY_ID,
   RUN_CARD_CATALOG,
-  RUN_STARTER_CARD_BY_ID,
-  RUN_CARD_TYPE_REFERENCE,
   RUN_LIPSANA,
   cardContentsLabel,
   type AtaraxiaTier,
   type RunArmyPieceType,
   type RunCardDefinition,
-  type RunCardType,
   type LipsanonId,
 } from '../run/model';
 import {
@@ -40,10 +28,6 @@ import {
 } from '../run/progression';
 import { generateTerrainDressing } from './generatedReferenceBoard';
 import { RunCard } from './RunCard';
-import { RunCardFace, runCardPropertyIconUrl } from './RunCardFace';
-import { runCardFaceContent, runCardFrameSlot, runCardSpecimen } from './runCardFaceContent';
-import { runUnitStateIconUrl, type RunUnitState } from './shared/RunAbilityIcon';
-import { runCardFrameGeometryForSlot } from './runCardFrameGeometry';
 import { StaticReadOnlyBoardView } from './shared/BoardViewFraming';
 import { AlphaBoundIcon } from './shared/AlphaBoundIcon';
 import {
@@ -56,7 +40,6 @@ import {
   ENCHIRIDION_SECTIONS,
   ENCHIRIDION_SECTION_LABEL,
   enchiridionSectionHref,
-  type EnchiridionCardType,
   type EnchiridionSection,
 } from './enchiridionRoute';
 import { installedUiMedia } from './installedUiMedia';
@@ -72,13 +55,6 @@ import { RunCardCostCoin } from './shared/RunCardCostCoin';
 import { RUN_PROGRESS_MEDIA_ROLE } from './shared/RunProgressIcon';
 import { KitScroll } from './KitScroll';
 import { EnchiridionContentSceneSlot } from './shell/AuthoredSceneSlot';
-import { fetchAdminLiveMediaCatalog } from '../net/liveMediaAdmin';
-import {
-  acceptedCardTypeTextureUrls,
-  cardTypeTextureUrls,
-  hasCompleteCardTypeTextureSet,
-  type CardTypeTextureUrls,
-} from './cardTypeTextureReview';
 
 /**
  * Every section's mark, resolved to installed media. These are the same kit icons the
@@ -95,9 +71,7 @@ const SECTION_ICON_SRC: Record<EnchiridionSection, string> = {
   units: installedUiMedia('ui-kit-icons-unit-studio-png'),
   terrain: installedUiMedia('ui-kit-icons-tileset-studio-png'),
   cards: installedUiMedia('ui-kit-icons-players-png'),
-  'card-types': installedUiMedia('ui-kit-icons-game-power-png'),
   lipsana: installedUiMedia('ui-kit-icons-info-png'),
-  abilities: installedUiMedia('ui-kit-icons-game-defend-png'),
   ataraxia: installedUiMedia(RUN_PROGRESS_MEDIA_ROLE.ataraxia),
 };
 
@@ -706,298 +680,6 @@ export function CardCodex({
 }
 
 /**
- * The reference adds only what the model does not already carry: the specimen's printed
- * cost and the longer authored gloss. Its name and frame are read from the card type
- * itself, never restated here.
- */
-type CardTypeReferenceDefinition = Readonly<{
-  id: EnchiridionCardType;
-  cost: number;
-  description: string;
-  provisional?: boolean;
-}>;
-
-const CARD_TYPE_REFERENCES: readonly CardTypeReferenceDefinition[] = Object.freeze([
-  {
-    id: 'praecipuus',
-    cost: 0,
-    description: 'Moves this card to the top of every deployment deal.',
-  },
-  {
-    id: 'pestiferous',
-    cost: 1,
-    description: `Marks one contained unit ${CACOCHYMIC_DISPLAY_NAME}. Whenever that unit dies, the card marks another remaining unit; the empty card remains in the deck.`,
-  },
-  {
-    id: 'concinnous',
-    cost: 3,
-    description: `Skillfully and harmoniously arranged. One persisted contained unit becomes ${EUTACTIC_DISPLAY_NAME} upon Adlectio; its target may remain hidden until then.`,
-  },
-  {
-    id: 'legatine',
-    cost: 4,
-    description: `Of a legate, a commander's deputy entrusted with a detached force. One contained unit gains ${ADLECTED_DISPLAY_NAME} upon Adlectio. The target is hidden on multi-unit offers; this one-unit Volunteer shows the state because its target is forced.`,
-  },
-  {
-    id: 'hieratic',
-    cost: 4,
-    description: `One contained unit gains ${AGMINATE_DISPLAY_NAME} upon Adlectio and prefers its piece-specific station during automatic deployment.`,
-  },
-]);
-
-const cardTypeName = (definition: CardTypeReferenceDefinition): string => (
-  definition.id === 'praecipuus' ? 'Praecipuus' : RUN_CARD_TYPE_REFERENCE[definition.id].name
-);
-
-const VOLUNTEER_CARD = RUN_CARD_BY_ID.p;
-const CARD_TYPE_TEXTURE_TILE_COUNT = 24;
-
-function CardTypeRowMaterial({
-  cardType,
-  src,
-}: {
-  cardType: EnchiridionCardType;
-  src?: string;
-}): ReactElement | null {
-  if (!src) return null;
-  return (
-    <span
-      aria-hidden="true"
-      className="enchiridion-card-type-row-material"
-      data-card-type-texture={cardType}
-    >
-      {Array.from({ length: CARD_TYPE_TEXTURE_TILE_COUNT }, (_, index) => (
-        <img
-          alt=""
-          draggable={false}
-          key={index}
-          src={src}
-        />
-      ))}
-    </span>
-  );
-}
-
-/**
- * Ordinary properties draw a real one-unit Volunteer offer, while Praecipuus draws
- * canonical His Grace. The glossary therefore cannot show a card the game never deals.
- */
-function CardTypeReference({ definition }: { definition: CardTypeReferenceDefinition }): ReactElement {
-  const specimen = definition.id === 'praecipuus'
-    ? RUN_STARTER_CARD_BY_ID['his-grace']
-    : runCardSpecimen({
-      pieces: VOLUNTEER_CARD.pieces,
-      cardType: definition.id,
-      cost: definition.cost,
-      cacochymicPieceIndex: definition.id === 'pestiferous' ? 0 : null,
-      effectTargetIndex: definition.id === 'concinnous' ? 0 : null,
-    });
-  const frameSlot = runCardFrameSlot(specimen);
-  return (
-    <div className="enchiridion-card-type-preview">
-      <RunCardFace
-        card={runCardFaceContent(specimen, { adlected: true })}
-        frameUrl={liveMediaForSlot(frameSlot).media.immutableUrl}
-        artUrl={resolvedLiveMediaUrl(runCardArtSlot(specimen))}
-        frameGeometry={runCardFrameGeometryForSlot(frameSlot)}
-      />
-    </div>
-  );
-}
-
-function CardTypesSection({
-  framed,
-  textureBatch,
-  selectedCardTypeId = null,
-  cardTypeHref,
-}: {
-  framed: boolean;
-  textureBatch: string | null;
-  /** The route-addressed property; read only when cardTypeHref makes selection navigational. */
-  selectedCardTypeId?: EnchiridionCardType | null;
-  /** When present, selecting a property navigates to this address instead of setting local state. */
-  cardTypeHref?: (cardType: EnchiridionCardType) => string;
-}): ReactElement {
-  const [localSelectedTypeId, setLocalSelectedTypeId] = useState<EnchiridionCardType>('praecipuus');
-  // Routed hosts derive the selection from the address every render; an unknown or absent
-  // card-type address falls back to the first property without rewriting the URL.
-  const selectedTypeId = cardTypeHref
-    ? selectedCardTypeId ?? CARD_TYPE_REFERENCES[0].id
-    : localSelectedTypeId;
-  const [loadedTextureBatch, setLoadedTextureBatch] = useState<string | null>(null);
-  const [textureUrls, setTextureUrls] = useState<CardTypeTextureUrls>({});
-  const [textureLoadFailed, setTextureLoadFailed] = useState(false);
-  const selected = CARD_TYPE_REFERENCES.find((definition) => definition.id === selectedTypeId)
-    ?? CARD_TYPE_REFERENCES[0];
-  const acceptedTextureUrls = acceptedCardTypeTextureUrls(currentLiveMediaCatalog());
-  const displayedTextureUrls = textureBatch ? textureUrls : acceptedTextureUrls;
-  const textureReviewStatus = textureBatch
-    ? loadedTextureBatch !== textureBatch
-      ? 'loading'
-      : textureLoadFailed || !hasCompleteCardTypeTextureSet(textureUrls) ? 'error' : 'ready'
-    : undefined;
-
-  useEffect(() => {
-    if (!textureBatch) return undefined;
-    let active = true;
-    void fetchAdminLiveMediaCatalog()
-      .then((catalog) => {
-        if (!active) return;
-        const nextUrls = cardTypeTextureUrls(catalog, textureBatch);
-        setTextureUrls(nextUrls);
-        setTextureLoadFailed(!hasCompleteCardTypeTextureSet(nextUrls));
-        setLoadedTextureBatch(textureBatch);
-      })
-      .catch(() => {
-        if (!active) return;
-        setTextureUrls({});
-        setTextureLoadFailed(true);
-        setLoadedTextureBatch(textureBatch);
-      });
-    return () => { active = false; };
-  }, [textureBatch]);
-
-  return (
-    <ReferenceSectionFrame
-      chromeConsumer="enchiridion-card-types"
-      className="enchiridion-card-types-panel"
-      framed={framed}
-      title={textureBatch ? 'Card Types · PixelLab candidates' : 'Card Types'}
-    >
-      <div
-        className="enchiridion-card-type-layout"
-        data-card-type-texture-review={textureReviewStatus}
-      >
-        <KitScroll className="enchiridion-reference-scroll">
-          <ul className="enchiridion-card-type-rows" aria-label="Card types">
-            {CARD_TYPE_REFERENCES.map((definition) => (
-              <li key={definition.id}>
-                <ReferenceTrigger
-                  to={cardTypeHref?.(definition.id)}
-                  onSelect={() => setLocalSelectedTypeId(definition.id)}
-                  data-ui-sfx="card"
-                  data-chrome-unit="inner-list-row"
-                  data-testid={`enchiridion-card-type-${definition.id}`}
-                  className={chromeUnitClassNames(
-                    'inner-list-row',
-                    'enchiridion-card-type-row',
-                    selected.id === definition.id && 'is-active',
-                  )}
-                  aria-label={`${cardTypeName(definition)}. ${definition.description}`}
-                  aria-pressed={selected.id === definition.id}
-                >
-                  <CardTypeRowMaterial
-                    cardType={definition.id}
-                    src={displayedTextureUrls[definition.id === 'praecipuus' ? 'hieratic' : definition.id]}
-                  />
-                  <span className="enchiridion-card-type-row-identity">
-                    <AlphaBoundIcon
-                      className="enchiridion-card-type-row-icon"
-                      src={runCardPropertyIconUrl(definition.id)}
-                      draggable={false}
-                    />
-                    <span className="enchiridion-card-type-row-name">{cardTypeName(definition)}</span>
-                  </span>
-                  {definition.provisional ? <small>Provisional</small> : null}
-                </ReferenceTrigger>
-              </li>
-            ))}
-          </ul>
-        </KitScroll>
-        <div className="enchiridion-card-type-detail">
-          <CardTypeReference definition={selected} />
-        </div>
-      </div>
-    </ReferenceSectionFrame>
-  );
-}
-
-/**
- * The unit states a card property bestows. Each entry names its own accepted
- * `unit-ability-icon` role; the glossary never draws a stand-in glyph (ADR-0339).
- */
-const UNIT_STATE_REFERENCES: readonly Readonly<{
-  state: RunUnitState;
-  name: string;
-  description: string;
-}>[] = Object.freeze([
-  {
-    state: 'adlected',
-    name: ADLECTED_DISPLAY_NAME,
-    description: 'The player chooses its square when its deployment turn arrives.',
-  },
-  {
-    state: 'eutactic',
-    name: EUTACTIC_DISPLAY_NAME,
-    description: 'During automatic deployment, Pawns prefer the front row; Knights and Bishops prefer the row immediately behind the front; and Rooks, Queens, and the King prefer the back row. If the preferred row is full, the unit uses the nearest available row.',
-  },
-  {
-    state: 'agminate',
-    name: AGMINATE_DISPLAY_NAME,
-    description: 'Pawns prefer another Pawn or an open file; Knights prefer squares one step in from the edge; Bishops prefer the nearest opposite-color square from another Bishop; Rooks prefer a back-row corner, except the first Rook flanks an Agminate King when possible; Queens prefer the middle; and the King prefers a board edge.',
-  },
-  {
-    state: 'cacochymic',
-    name: CACOCHYMIC_DISPLAY_NAME,
-    description: CACOCHYMIC_DESCRIPTION,
-  },
-]);
-
-// A unit state inherits the surface of the one card property that grants it. Derive
-// that pairing from the Run model so the two Enchiridion sections cannot drift apart.
-const CARD_TYPE_BY_UNIT_STATE = Object.freeze({
-  ...Object.fromEntries(
-  (Object.entries(RUN_CARD_TYPE_REFERENCE) as [
-    RunCardType,
-    (typeof RUN_CARD_TYPE_REFERENCE)[RunCardType],
-  ][]).map(([cardType, definition]) => [definition.grants, cardType]),
-  ),
-}) as Readonly<Record<RunUnitState, RunCardType>>;
-
-function AbilitiesSection({ framed }: { framed: boolean }): ReactElement {
-  const textureUrls = acceptedCardTypeTextureUrls(currentLiveMediaCatalog());
-  return (
-    <ReferenceSectionFrame
-      chromeConsumer="enchiridion-abilities"
-      className="enchiridion-abilities-panel"
-      framed={framed}
-      title="Abilities"
-    >
-      <KitScroll className="enchiridion-reference-scroll">
-        <div className="enchiridion-ability-list">
-          {UNIT_STATE_REFERENCES.map(({ state, name, description }) => {
-            const cardType = CARD_TYPE_BY_UNIT_STATE[state];
-            return (
-              <InnerChromeBox
-                className="enchiridion-ability-card"
-                data-card-type={cardType}
-                key={state}
-              >
-                <CardTypeRowMaterial
-                  cardType={cardType}
-                  src={textureUrls[cardType]}
-                />
-                <img
-                  className="enchiridion-ability-icon"
-                  src={runUnitStateIconUrl(state)}
-                  alt=""
-                  aria-hidden="true"
-                  draggable={false}
-                />
-                <span>
-                  <h3>{name}</h3>
-                  <p>{description}</p>
-                </span>
-              </InnerChromeBox>
-            );
-          })}
-        </div>
-      </KitScroll>
-    </ReferenceSectionFrame>
-  );
-}
-
-/**
  * Optional Run difficulty as a reference record (ADR-0266, ADR-0268, ADR-0291). Every
  * installed tier presents the one anatomy the selector presents — numbered label,
  * subtitle, literal impact — read from the same `ATARAXIA_BY_TIER` the Run reads, so the
@@ -1088,9 +770,6 @@ export function EnchiridionReference({
   lipsanonHref,
   selectedCardId,
   cardHref,
-  selectedCardTypeId,
-  cardTypeHref,
-  cardTypeTextureBatch = null,
 }: {
   section: EnchiridionSection;
   framed: boolean;
@@ -1098,24 +777,10 @@ export function EnchiridionReference({
   lipsanonHref?: (lipsanonId: LipsanonId) => string;
   selectedCardId: string | null;
   cardHref?: (cardId: string) => string;
-  selectedCardTypeId: EnchiridionCardType | null;
-  cardTypeHref?: (cardType: EnchiridionCardType) => string;
-  cardTypeTextureBatch?: string | null;
 }): ReactElement {
   if (section === 'terrain') return <TerrainSection framed={framed} />;
   if (section === 'cards') return <CardCodex framed={framed} selectedCardId={selectedCardId} cardHref={cardHref} />;
-  if (section === 'card-types') {
-    return (
-      <CardTypesSection
-        framed={framed}
-        textureBatch={cardTypeTextureBatch}
-        selectedCardTypeId={selectedCardTypeId}
-        cardTypeHref={cardTypeHref}
-      />
-    );
-  }
   if (section === 'lipsana') return <LipsanaCodex framed={framed} selectedLipsanonId={selectedLipsanonId} lipsanonHref={lipsanonHref} />;
-  if (section === 'abilities') return <AbilitiesSection framed={framed} />;
   if (section === 'ataraxia') return <AtaraxiaSection framed={framed} />;
   return <UnitsSection framed={framed} />;
 }
@@ -1127,12 +792,9 @@ export function Enchiridion({
   lipsanonHref,
   selectedCardId = null,
   cardHref,
-  selectedCardTypeId = null,
-  cardTypeHref,
   showSectionRail = true,
   sceneInstanceKey = `enchiridion/${section ?? 'root'}`,
   framed = true,
-  cardTypeTextureBatch = null,
 }: {
   section?: EnchiridionSection | null;
   sectionHref?: (section: EnchiridionSection) => string;
@@ -1144,15 +806,9 @@ export function Enchiridion({
   selectedCardId?: string | null;
   /** When present, card focus in the cards section navigates to this address. */
   cardHref?: (cardId: string) => string;
-  /** The route-addressed property for the card-types section; see CardTypesSection. */
-  selectedCardTypeId?: EnchiridionCardType | null;
-  /** When present, property selection in the card-types section navigates to this address. */
-  cardTypeHref?: (cardType: EnchiridionCardType) => string;
   showSectionRail?: boolean;
   sceneInstanceKey?: string;
   framed?: boolean;
-  /** Exact private PixelLab batch mounted only for an explicit Card Types review URL. */
-  cardTypeTextureBatch?: string | null;
 }): ReactElement {
   return (
     <div className={`enchiridion-workspace${showSectionRail ? ' has-section-rail' : ''}`}>
@@ -1169,9 +825,6 @@ export function Enchiridion({
             lipsanonHref={lipsanonHref}
             selectedCardId={selectedCardId}
             cardHref={cardHref}
-            selectedCardTypeId={selectedCardTypeId}
-            cardTypeHref={cardTypeHref}
-            cardTypeTextureBatch={cardTypeTextureBatch}
           />
         </EnchiridionContentSceneSlot>
       ) : null}

@@ -4,7 +4,6 @@ import type { PieceType } from '../core/types';
 import {
   LIPSANON_BY_ID,
   RUN_LIPSANA,
-  lipsanonNeedsUnitTarget,
   RUN_LIPSANON_OFFER_POOL,
   type LipsanonDefinition,
   type LipsanonId,
@@ -16,14 +15,13 @@ import { runUnitName } from './unitNames';
 export {
   LIPSANON_BY_ID,
   RUN_LIPSANA,
-  lipsanonNeedsUnitTarget,
   RUN_LIPSANON_OFFER_POOL,
   type LipsanonDefinition,
   type LipsanonId,
 };
 
 /** The schema version of one persisted in-progress Run. Only this exact save shape is read. */
-export const CURRENT_RUN_SAVE_VERSION = 23;
+export const CURRENT_RUN_SAVE_VERSION = 24;
 export type RunSaveVersion = typeof CURRENT_RUN_SAVE_VERSION;
 
 export class UnsupportedRunSaveError extends Error {
@@ -40,6 +38,7 @@ const RUN_SAVE_VERSION_EXPUNCTIO_SOURCE = 19;
 const RUN_SAVE_VERSION_CARD_ORDER_SOURCE = 20;
 const RUN_SAVE_VERSION_DEPLOYMENT_TRANSPORT_SOURCE = 21;
 const RUN_SAVE_VERSION_LEVEL_FORMAT_SOURCE = 22;
+const RUN_SAVE_VERSION_FORMATION_CARDS_SOURCE = 23;
 export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
@@ -47,21 +46,8 @@ export const RUN_BATTLE_RETRY_COST_TENTHS = 3 * GOLD_SCALE;
 export const RUN_DEPLOYMENT_REROLL_COST_TENTHS = GOLD_SCALE;
 export const RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS = 5 * GOLD_SCALE;
 export const RUN_OPENING_OFFER_COUNT = 3;
-export const INSTALLED_ATARAXIA_MAX_TIER = 1;
-export const PESTIFEROUS_OFFER_DENOMINATOR = 8;
-export const CONCINNOUS_OFFER_DENOMINATOR = 8;
-export const LEGATINE_ADLECTED_OFFER_DENOMINATOR = 8;
-export const HIERATIC_AGMINATE_OFFER_DENOMINATOR = 8;
-export const EUTACTIC_COST = 2;
-export const ADLECTED_COST = 3;
-/** Agminate applies one piece-specific station rule during automatic deployment.
- * Its six roles and relational formation rules justify the same premium as Adlected. */
-export const AGMINATE_COST = 3;
-
-export type AtaraxiaTier = 0 | 1;
-export type RunCardType = 'pestiferous' | 'concinnous' | 'legatine' | 'hieratic';
-export type RunUnitModifier = 'cacochymic';
-export const CACOCHYMIC_DISPLAY_NAME = 'Cacochymic';
+export const INSTALLED_ATARAXIA_MAX_TIER = 0;
+export type AtaraxiaTier = 0;
 
 /**
  * Each tier's presentation. `numeral` is the rung itself and `label` is that rung
@@ -83,13 +69,6 @@ export const ATARAXIA_BY_TIER: Readonly<Record<AtaraxiaTier, Readonly<{
     title: 'The Untroubled Mind',
     effect: 'Standard rules.',
   }),
-  1: Object.freeze({
-    tier: 1,
-    numeral: 'I',
-    label: 'Ataraxia I',
-    title: 'The Great Mortality',
-    effect: `About one in eight Sectio cards is Pestiferous. Its marked ${CACOCHYMIC_DISPLAY_NAME} unit dies when combat ends; when it does, the card marks another remaining unit.`,
-  }),
 });
 
 /**
@@ -103,98 +82,6 @@ export const ATARAXIA_TIERS: readonly AtaraxiaTier[] = Object.freeze(
 
 export type AdlectablePieceType = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen';
 export type RunArmyPieceType = AdlectablePieceType | 'king';
-export type RunAbility = 'adlected' | 'eutactic' | 'agminate';
-
-export const AGMINATE_DISPLAY_NAME = 'Agminate';
-export const EUTACTIC_DISPLAY_NAME = 'Eutactic';
-export const ADLECTED_DISPLAY_NAME = 'Adlected';
-
-/**
- * Every unit state's player-facing name (ADR-0374). Since the vocabulary cutover a stored
- * value and its name are the same word, so this resolves a complete table rather than
- * capitalizing the storage identity: a fallback would surface whatever a state was
- * spelled as the moment one was left out.
- */
-const RUN_ABILITY_DISPLAY_NAME: Readonly<Record<RunAbility, string>> = Object.freeze({
-  adlected: ADLECTED_DISPLAY_NAME,
-  eutactic: EUTACTIC_DISPLAY_NAME,
-  agminate: AGMINATE_DISPLAY_NAME,
-});
-
-export function runAbilityDisplayName(ability: RunAbility): string {
-  return RUN_ABILITY_DISPLAY_NAME[ability];
-}
-
-/**
- * What a state means to the player, in one vocabulary (ADR-0339). The Army ledger's
- * ability tips and the card face's contents markers both read this, so a state cannot
- * come to mean two things depending on where it is shown. Eutactic and Agminate read
- * per piece because their deployment rule genuinely differs by piece.
- */
-export function runAbilityDescription(ability: RunAbility, unit: RunArmyPieceType): string {
-  if (ability === 'adlected') {
-    return runAbilityGeneralDescription('adlected');
-  }
-  if (ability === 'eutactic') {
-    if (unit === 'pawn') return 'Prefers the front row during automatic deployment.';
-    if (unit === 'knight' || unit === 'bishop') return 'Prefers the row immediately behind the front during automatic deployment.';
-    return 'Prefers the back row during automatic deployment.';
-  }
-  if (unit === 'pawn') return 'Prefers a square alongside another Pawn or in an open file.';
-  if (unit === 'queen') return 'Gravitates toward the middle of the board.';
-  if (unit === 'knight') return 'Prefers squares one step in from the board edge.';
-  if (unit === 'king') return 'Prefers a board-edge square in the player placement zone.';
-  if (unit === 'rook') return 'Prefers a back-row corner, except the first Rook flanks an Agminate King when possible.';
-  if (unit === 'bishop') return 'Prefers the nearest square of opposite color from another Bishop.';
-  return runAbilityGeneralDescription('agminate');
-}
-
-/**
- * The same rule with no unit in hand — what the keyword means before it is attached to a
- * piece (ADR-0370). `runAbilityDescription` states the piece-specific case and falls back
- * to this one, so the glossary and the per-unit tip cannot drift apart.
- */
-export function runAbilityGeneralDescription(ability: RunAbility): string {
-  if (ability === 'adlected') {
-    return 'The player chooses its square when its deployment turn arrives.';
-  }
-  if (ability === 'eutactic') return "Prefers its piece type's formation row during automatic deployment.";
-  return 'Prefers its piece-specific station during automatic deployment.';
-}
-
-export const CACOCHYMIC_DESCRIPTION = 'Dies when combat ends.';
-
-/**
- * The four causal card properties and the unit state each one bestows (ADR-0339). Card
- * faces, the Enchiridion and the Studio fitting instrument all name a property from here
- * so cause and result stay one paired vocabulary instead of lookalike copies.
- */
-export const RUN_CARD_TYPE_REFERENCE: Readonly<Record<RunCardType, Readonly<{
-  name: string;
-  grants: RunAbility | RunUnitModifier;
-  effect: string;
-}>>> = Object.freeze({
-  pestiferous: Object.freeze({
-    name: 'Pestiferous',
-    grants: 'cacochymic',
-    effect: `Marks one contained unit ${CACOCHYMIC_DISPLAY_NAME}; whenever that unit dies, the card marks another remaining unit.`,
-  }),
-  concinnous: Object.freeze({
-    name: 'Concinnous',
-    grants: 'eutactic',
-    effect: `Makes one contained unit ${EUTACTIC_DISPLAY_NAME} when the card is acquired.`,
-  }),
-  legatine: Object.freeze({
-    name: 'Legatine',
-    grants: 'adlected',
-    effect: `Grants ${ADLECTED_DISPLAY_NAME} to one contained unit when the card is acquired.`,
-  }),
-  hieratic: Object.freeze({
-    name: 'Hieratic',
-    grants: 'agminate',
-    effect: `Grants ${AGMINATE_DISPLAY_NAME} to one contained unit when the card is acquired.`,
-  }),
-});
 
 export const PIECE_VALUE: Readonly<Record<RunArmyPieceType, number>> = Object.freeze({
   pawn: 1,
@@ -243,8 +130,6 @@ export interface RunArmyUnit {
   number: number;
   /** Persistent seed for the unit's tile-backed Army inspection scene. */
   inspectionSeed: number;
-  abilities: RunAbility[];
-  modifiers: RunUnitModifier[];
   source: 'king' | 'starting' | 'adlectio';
 }
 
@@ -253,45 +138,45 @@ export type RunArmyNumberState = Record<RunArmyPieceType, number>;
 export interface RunCoreCard {
   id: string;
   pieces: AdlectablePieceType[];
+  /** Temporary shared illustration identity. Formation is the card's gameplay identity;
+   * cards may reuse composition art until dedicated scenes are authored. */
+  artId?: string;
+  /** Board-relative offsets, parallel to `pieces`. Lower y is toward the enemy. */
+  formation?: RunCardFormationCell[];
   value: number;
 }
 
-export type RunStarterCardId = 'his-grace' | 'front-lines';
+export interface RunCardFormationCell {
+  x: number;
+  y: number;
+}
+
+export type RunStarterCardId = 'his-grace';
 
 /** Starter-only Chartulary cards. They are never offered by Adlectio, but otherwise
  * participate in the Deployment deal exactly like every card the player holds. */
 export interface RunStarterCard {
   id: RunStarterCardId;
   pieces: RunArmyPieceType[];
+  artId?: string;
+  formation?: RunCardFormationCell[];
   value: number;
   name: string;
   flavor: string;
-  property: 'praecipuus' | null;
   removable: boolean;
 }
 
 export interface RunCardOffer extends RunCoreCard {
   offerId: string;
   cost: number;
-  cardType: RunCardType | null;
-  effectSeed: number;
-  cacochymicPieceIndex: number | null;
-  /** Stored zero-based unit occurrence selected before a Concinnous Adlectio. */
-  effectTargetIndex: number | null;
 }
 
 export interface RunOwnedCard {
   id: string;
   coreId: string;
-  cardType: RunCardType | null;
-  effectSeed: number;
-  /** Exact acquired unit enhanced by this card, or null for other card types. */
-  effectTargetUnitId: string | null;
   /** Stable left-to-right seats. A sold or lost unit leaves null rather than reordering
    * the card; presentation may compact the surviving seats without changing this identity. */
   unitSeats: Array<string | null>;
-  lostUnitIds: string[];
-  cacochymicUnitId: string | null;
   acquiredAfterBattleIndex: number;
 }
 
@@ -300,32 +185,12 @@ export function runCardUnitIds(card: Pick<RunOwnedCard, 'unitSeats'>): string[] 
   return card.unitSeats.filter((unitId): unitId is string => typeof unitId === 'string');
 }
 
-export interface RunPestiferousLoss {
-  battleIndex: number;
-  cardId: string;
-  unit: RunArmyUnit;
-}
-
 export interface RunExpunctioRecord {
   card: RunOwnedCard;
   units: RunArmyUnit[];
   priceTenths: number;
 }
 
-export interface LipsanonAbilityGrant {
-  ability: Extract<RunAbility, 'eutactic' | 'agminate'>;
-  unitType: RunArmyPieceType;
-}
-
-export const RUN_LIPSANON_ABILITY_GRANTS: Readonly<Partial<Record<LipsanonId, LipsanonAbilityGrant>>> = Object.freeze({
-  'training-linens': { ability: 'eutactic', unitType: 'pawn' },
-  'royal-decree': { ability: 'eutactic', unitType: 'king' },
-  'crenellated-rampart': { ability: 'eutactic', unitType: 'rook' },
-  'popes-staff': { ability: 'eutactic', unitType: 'bishop' },
-  'ghibelline-rampart': { ability: 'agminate', unitType: 'rook' },
-  'popes-robes': { ability: 'agminate', unitType: 'bishop' },
-  'royal-sceptre': { ability: 'agminate', unitType: 'king' },
-});
 export interface RunWarBattleSnapshot {
   level: Level;
   loot: boolean;
@@ -362,6 +227,8 @@ export interface RunDeploymentState {
   capacityResolved: boolean;
   /** Exact committed formation, preserved across reload and Battle retry. */
   placements: Record<string, string>;
+  /** Precommitted whole-card destinations. They remain invisible until each card plays. */
+  formationPlans?: Record<string, Record<string, string>>;
   /** Zero-based cursor into the dealt cards and that card's stable seat order. */
   activeCardIndex: number;
   unitCursor: number;
@@ -374,10 +241,8 @@ export interface RunDeploymentState {
   transport: RunDeploymentTransport;
   /** Each value is a persisted information or animation boundary. */
   stage: 'awaiting-deal' | 'dealing' | 'card' | 'revealing' | 'unit' | 'settling' | 'discarding' | 'complete';
-  /** Compatibility aliases used by the Battle runtime while reservists are retired. */
+  /** Battle-runtime aliases for formation units that could not enter the board. */
   blockedUnitIds: string[];
-  manualPlacements: Record<string, string>;
-  temporaryAdlectedUnitId?: string;
 }
 
 export interface RunBattleRuntime {
@@ -482,7 +347,6 @@ export interface RunSectioEntrySnapshot {
   goldTenths: number;
   army: RunArmyUnit[];
   cards: RunOwnedCard[];
-  pestiferousLosses: RunPestiferousLoss[];
   lipsana: LipsanonId[];
   seenLipsana: LipsanonId[];
   conflictPaidLipsana: Record<string, { lipsanonId: LipsanonId; bought: boolean }>;
@@ -505,7 +369,6 @@ export interface RunDocument {
   goldTenths: number;
   army: RunArmyUnit[];
   cards: RunOwnedCard[];
-  pestiferousLosses: RunPestiferousLoss[];
   lipsana: LipsanonId[];
   seenLipsana: LipsanonId[];
   conflictPaidLipsana: Record<string, { lipsanonId: LipsanonId; bought: boolean }>;
@@ -539,30 +402,59 @@ function initialArmyNumberState(): RunArmyNumberState {
   };
 }
 
-function cardId(pieces: readonly AdlectablePieceType[]): string {
-  return pieces.map((piece) => piece[0]).join('');
-}
+const formationCard = (
+  id: string,
+  artId: string,
+  pieces: readonly AdlectablePieceType[],
+  formation: readonly RunCardFormationCell[],
+): RunCoreCard => {
+  if (pieces.length !== formation.length || pieces.length < 1 || pieces.length > 3) {
+    throw new Error(`Formation card ${id} must place each of its one-to-three units exactly once.`);
+  }
+  return Object.freeze({
+    id,
+    artId,
+    pieces: [...pieces],
+    formation: formation.map((cell) => ({ ...cell })),
+    value: pieces.reduce((total, piece) => total + PIECE_VALUE[piece], 0),
+  });
+};
 
+/**
+ * The deliberately small positional card deck. A card is now a visible micro-formation,
+ * not every material composition up to nine points. Coordinates face the enemy: y=0 is
+ * the formation's front and greater y values sit behind it.
+ */
 export function allRunCards(): RunCoreCard[] {
-  const cards: RunCoreCard[] = [];
-  const visit = (typeIndex: number, remaining: number, pieces: AdlectablePieceType[]): void => {
-    if (remaining === 0) {
-      const value = pieces.reduce((sum, piece) => sum + PIECE_VALUE[piece], 0);
-      if (value >= 1 && value <= 9) cards.push({ id: cardId(pieces), pieces: [...pieces], value });
-      return;
-    }
-    if (typeIndex >= ADLECTIO_PIECE_ORDER.length) return;
-    const piece = ADLECTIO_PIECE_ORDER[typeIndex];
-    const value = PIECE_VALUE[piece];
-    const max = Math.floor(remaining / value);
-    for (let count = 0; count <= max; count += 1) {
-      for (let index = 0; index < count; index += 1) pieces.push(piece);
-      visit(typeIndex + 1, remaining - count * value, pieces);
-      pieces.splice(pieces.length - count, count);
-    }
-  };
-  for (let total = 1; total <= 9; total += 1) visit(0, total, []);
-  return cards.sort((a, b) => a.value - b.value || a.id.localeCompare(b.id));
+  return [
+    formationCard('p', 'p', ['pawn'], [{ x: 0, y: 0 }]),
+    formationCard('pp', 'pp', ['pawn', 'pawn'], [{ x: 0, y: 0 }, { x: 1, y: 0 }]),
+    formationCard('ppp', 'ppp', ['pawn', 'pawn', 'pawn'], [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }]),
+    formationCard('k', 'k', ['knight'], [{ x: 0, y: 0 }]),
+    formationCard('b', 'b', ['bishop'], [{ x: 0, y: 0 }]),
+    formationCard('pk-front', 'pk', ['knight', 'pawn'], [{ x: 0, y: 1 }, { x: 0, y: 0 }]),
+    formationCard('pb-front', 'pb', ['bishop', 'pawn'], [{ x: 0, y: 1 }, { x: 0, y: 0 }]),
+    formationCard('ppk-reversed', 'ppk', ['knight', 'pawn', 'pawn'], [
+      { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 2, y: 1 },
+    ]),
+    formationCard('ppb-reversed', 'ppb', ['bishop', 'pawn', 'pawn'], [
+      { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 2, y: 1 },
+    ]),
+    formationCard('bb-diagonal', 'bb', ['bishop', 'bishop'], [{ x: 0, y: 0 }, { x: 1, y: 1 }]),
+    formationCard('r', 'r', ['rook'], [{ x: 0, y: 0 }]),
+    formationCard('pr-front', 'pr', ['rook', 'pawn'], [{ x: 0, y: 1 }, { x: 0, y: 0 }]),
+    formationCard('kk-horizontal', 'kk', ['knight', 'knight'], [{ x: 0, y: 0 }, { x: 1, y: 0 }]),
+    formationCard('ppk-protected', 'ppk', ['knight', 'pawn', 'pawn'], [
+      { x: 1, y: 1 }, { x: 0, y: 0 }, { x: 2, y: 0 },
+    ]),
+    formationCard('ppb-protected', 'ppb', ['bishop', 'pawn', 'pawn'], [
+      { x: 1, y: 1 }, { x: 0, y: 0 }, { x: 2, y: 0 },
+    ]),
+    formationCard('q', 'q', ['queen'], [{ x: 0, y: 0 }]),
+    formationCard('pq-front', 'q', ['queen', 'pawn'], [{ x: 0, y: 1 }, { x: 0, y: 0 }]),
+    formationCard('bb-vertical', 'bb', ['bishop', 'bishop'], [{ x: 0, y: 0 }, { x: 0, y: 1 }]),
+    formationCard('rr-vertical', 'r', ['rook', 'rook'], [{ x: 0, y: 0 }, { x: 0, y: 1 }]),
+  ].sort((a, b) => a.value - b.value || a.id.localeCompare(b.id));
 }
 
 export const RUN_CARD_DECK: readonly RunCoreCard[] = Object.freeze(allRunCards());
@@ -573,21 +465,13 @@ export const RUN_CARD_BY_ID: Readonly<Record<string, RunCoreCard>> = Object.free
 export const RUN_STARTER_CARDS: readonly RunStarterCard[] = Object.freeze([
   Object.freeze<RunStarterCard>({
     id: 'his-grace',
-    pieces: ['king'],
-    value: 0,
-    name: 'His Grace',
-    flavor: 'None before the King.',
-    property: 'praecipuus',
-    removable: false,
-  }),
-  Object.freeze<RunStarterCard>({
-    id: 'front-lines',
-    pieces: ['pawn', 'pawn'],
+    pieces: ['king', 'pawn', 'pawn'],
+    artId: 'his-grace',
+    formation: [{ x: 1, y: 1 }, { x: 0, y: 0 }, { x: 2, y: 0 }],
     value: 2,
-    name: 'Front Lines',
-    flavor: 'The first order was enough.',
-    property: null,
-    removable: true,
+    name: 'His Grace',
+    flavor: 'Two names stood before his. Neither was entered twice.',
+    removable: false,
   }),
 ]);
 
@@ -605,7 +489,8 @@ export const RUN_CARD_CATALOG: readonly RunCardDefinition[] = Object.freeze([
 ]);
 
 export function runCardDefinition(coreId: string): RunCardDefinition | undefined {
-  return RUN_CARD_BY_ID[coreId] ?? RUN_STARTER_CARD_BY_ID[coreId as RunStarterCardId];
+  return RUN_CARD_BY_ID[coreId]
+    ?? RUN_STARTER_CARD_BY_ID[coreId as RunStarterCardId];
 }
 
 export function mixSeed(seed: number, label: string, index = 0): number {
@@ -627,168 +512,28 @@ export function shuffled<T>(values: readonly T[], seed: number): T[] {
   return result;
 }
 
-export const CACOCHYMIC_DISCOUNT: Readonly<Record<AdlectablePieceType, number>> = Object.freeze({
-  pawn: 0,
-  knight: 1,
-  bishop: 1,
-  rook: 2,
-  queen: 3,
-});
-
-/**
- * What a card's qualifier does to its price: Pestiferous discounts by the marked piece,
- * every other property charges its state's surcharge. Offer creation, stored-offer
- * normalization and review specimens all price through here, so a card cannot cost one
- * thing in the Sectio and another wherever else it is shown.
- */
-export function runCardOfferCost(
-  value: number,
-  cardType: RunCardType | null,
-  plaguedPiece: AdlectablePieceType | null,
-): number {
-  if (plaguedPiece) return value - CACOCHYMIC_DISCOUNT[plaguedPiece];
-  if (cardType === 'legatine') return value + ADLECTED_COST;
-  if (cardType === 'concinnous') return value + EUTACTIC_COST;
-  if (cardType === 'hieratic') return value + AGMINATE_COST;
-  return value;
-}
-
-export function seededPestiferousTarget<T>(
-  effectSeed: number,
-  candidates: readonly T[],
-  sequence: number,
-): T | null {
-  if (!candidates.length) return null;
-  return createRng(mixSeed(effectSeed, 'pestiferous-target', sequence)).pick(candidates);
-}
-
-export function pestiferousOfferRoll(
-  seed: number,
-  battleIndex: number,
-  slotIndex: number,
-  coreId: string,
-  denominator = PESTIFEROUS_OFFER_DENOMINATOR,
-): boolean {
-  if (!Number.isSafeInteger(denominator) || denominator < 1) return false;
-  const rollSeed = mixSeed(seed, `ataraxia-i:pestiferous:${coreId}`, battleIndex * 8 + slotIndex);
-  return createRng(rollSeed).int(denominator) === 0;
-}
-
-export function concinnousOfferRoll(
-  seed: number,
-  battleIndex: number,
-  slotIndex: number,
-  coreId: string,
-  denominator = CONCINNOUS_OFFER_DENOMINATOR,
-): boolean {
-  if (!Number.isSafeInteger(denominator) || denominator < 1) return false;
-  const rollSeed = mixSeed(seed, `concinnous:${coreId}`, battleIndex * 8 + slotIndex);
-  return createRng(rollSeed).int(denominator) === 0;
-}
-
-export function legatineAdlectedOfferRoll(
-  seed: number,
-  battleIndex: number,
-  slotIndex: number,
-  coreId: string,
-  denominator = LEGATINE_ADLECTED_OFFER_DENOMINATOR,
-): boolean {
-  if (!Number.isSafeInteger(denominator) || denominator < 1) return false;
-  const rollSeed = mixSeed(seed, `tactical:discipline:${coreId}`, battleIndex * 8 + slotIndex);
-  return createRng(rollSeed).int(denominator) === 0;
-}
-
-export function hieraticAgminateOfferRoll(
-  seed: number,
-  battleIndex: number,
-  slotIndex: number,
-  coreId: string,
-  denominator = HIERATIC_AGMINATE_OFFER_DENOMINATOR,
-): boolean {
-  if (!Number.isSafeInteger(denominator) || denominator < 1) return false;
-  const rollSeed = mixSeed(seed, `hieratic:agminate:${coreId}`, battleIndex * 8 + slotIndex);
-  return createRng(rollSeed).int(denominator) === 0;
-}
-
-function acquisitionTarget(effectSeed: number, pieceCount: number, label: string): number | null {
-  if (!Number.isSafeInteger(pieceCount) || pieceCount < 1) return null;
-  return createRng(mixSeed(effectSeed, label)).int(pieceCount);
-}
-
-export function legatineAdlectedAcquisitionTarget(
-  effectSeed: number,
-  pieceCount: number,
-): number | null {
-  return acquisitionTarget(effectSeed, pieceCount, 'tactical-discipline-acquisition-target');
-}
-
-export function hieraticAgminateAcquisitionTarget(
-  effectSeed: number,
-  pieceCount: number,
-): number | null {
-  return acquisitionTarget(effectSeed, pieceCount, 'hieratic-agminate-acquisition-target');
-}
-
 export function createRunCardOffer(
-  run: Pick<RunDocument, 'seed' | 'ataraxiaTier'>,
+  run: Pick<RunDocument, 'seed'>,
   card: RunCoreCard,
   battleIndex: number,
   slotIndex: number,
-  pestiferousDenominator = PESTIFEROUS_OFFER_DENOMINATOR,
-  concinnousDenominator = CONCINNOUS_OFFER_DENOMINATOR,
-  tacticalDenominator = LEGATINE_ADLECTED_OFFER_DENOMINATOR,
-  hieraticDenominator = HIERATIC_AGMINATE_OFFER_DENOMINATOR,
 ): RunCardOffer {
-  const tactical = legatineAdlectedOfferRoll(
-    run.seed,
-    battleIndex,
-    slotIndex,
-    card.id,
-    tacticalDenominator,
-  );
-  const pestiferous = !tactical && run.ataraxiaTier >= 1
-    && pestiferousOfferRoll(run.seed, battleIndex, slotIndex, card.id, pestiferousDenominator);
-  const effectSeed = mixSeed(run.seed, `shop-card:${card.id}`, battleIndex * 8 + slotIndex);
-  const concinnous = !tactical
-    && !pestiferous
-    && concinnousOfferRoll(run.seed, battleIndex, slotIndex, card.id, concinnousDenominator);
-  const hieratic = !tactical
-    && !pestiferous
-    && !concinnous
-    && hieraticAgminateOfferRoll(run.seed, battleIndex, slotIndex, card.id, hieraticDenominator);
-  const cacochymicPieceIndex = pestiferous
-    ? seededPestiferousTarget(effectSeed, card.pieces.map((_, index) => index), 0)
-    : null;
-  const plaguedPiece = cacochymicPieceIndex === null ? null : card.pieces[cacochymicPieceIndex];
-  const cost = runCardOfferCost(
-    card.value,
-    pestiferous ? 'pestiferous' : tactical ? 'legatine' : concinnous ? 'concinnous' : hieratic ? 'hieratic' : null,
-    plaguedPiece,
-  );
+  void run.seed;
   return {
     ...card,
     pieces: [...card.pieces],
+    formation: card.formation?.map((cell) => ({ ...cell })),
     offerId: `sectio-${battleIndex}-${slotIndex}-${card.id}`,
-    cost,
-    cardType: pestiferous
-      ? 'pestiferous'
-      : tactical
-        ? 'legatine'
-        : concinnous
-          ? 'concinnous'
-          : hieratic
-            ? 'hieratic'
-            : null,
-    effectSeed,
-    cacochymicPieceIndex,
-    effectTargetIndex: concinnous
-      ? createRng(mixSeed(effectSeed, 'concinnous-target')).int(card.pieces.length)
-      : null,
+    cost: card.value,
   };
 }
 
 const OPENING_SECTIO_VALUES: readonly number[] = Object.freeze(
-  Array.from({ length: RUN_STARTING_GOLD }, (_, index) => index + 1),
+  Array.from(new Set(
+    RUN_CARD_DECK
+      .map((card) => card.value)
+      .filter((value) => value <= RUN_STARTING_GOLD),
+  )).sort((a, b) => a - b),
 );
 
 /** Opening draws roll in their own index space so a core identity offered in the
@@ -796,19 +541,13 @@ const OPENING_SECTIO_VALUES: readonly number[] = Object.freeze(
  * rolls its qualifier independently. */
 export const OPENING_SECTIO_ROLL_BATTLE_INDEX = -1;
 
-/** Deal the requested number of distinct uniformly sampled values, then one seeded
- * core card at each value. The ordinary opening requests three; Quartermaster's
- * Ledger requests four. Sampling values first prevents dense high-value ranks in
- * the 49-card deck from crowding low-value openings out of the Run.
- *
- * Opening draws roll qualifiers exactly like every later Sectio draw, at every core
- * value: a Tactical surcharge may price an opening card past the starting gold and
- * out of reach. The one repair is the degenerate deal — ADR-0323 requires a
- * Adlectio before Continue, so if no offer is affordable the cheapest one drops its
- * qualifier and is offered standard, which no other opening card ever does. */
+/** Deal the requested number of distinct uniformly sampled affordable values, then
+ * one seeded formation card at each value. The ordinary opening requests three;
+ * Quartermaster's Ledger requests four. Sampling values first keeps the opening
+ * varied even when several authored formations share the same material value. */
 function openingSectioOffersWithCount(
   seed: number,
-  ataraxiaTier: AtaraxiaTier = 0,
+  _ataraxiaTier: AtaraxiaTier = 0,
   offerCount = RUN_OPENING_OFFER_COUNT,
 ): RunCardOffer[] {
   const values = shuffled(OPENING_SECTIO_VALUES, mixSeed(seed, 'opening-shop-values'))
@@ -821,7 +560,7 @@ function openingSectioOffersWithCount(
     )[0];
     if (!card) throw new Error(`Opening Sectio has no core card worth ${value} gold.`);
     const rolled = createRunCardOffer(
-      { seed, ataraxiaTier },
+      { seed },
       card,
       OPENING_SECTIO_ROLL_BATTLE_INDEX,
       slotIndex,
@@ -833,9 +572,7 @@ function openingSectioOffersWithCount(
     (best, offer) => (offer.cost < best.cost ? offer : best),
     offers[0],
   );
-  return offers.map((offer) => (offer === cheapest
-    ? { ...offer, cost: offer.value, cardType: null, cacochymicPieceIndex: null, effectTargetIndex: null }
-    : offer));
+  return offers.map((offer) => (offer === cheapest ? { ...offer, cost: offer.value } : offer));
 }
 
 export function openingSectioOffers(seed: number, ataraxiaTier: AtaraxiaTier = 0): RunCardOffer[] {
@@ -867,8 +604,6 @@ function initialArmy(seed: number): RunArmyUnit[] {
       type: 'king',
       number: 1,
       inspectionSeed: mixSeed(seed, 'run-unit-inspection:run-king'),
-      abilities: [],
-      modifiers: [],
       source: 'king',
     },
     {
@@ -877,8 +612,6 @@ function initialArmy(seed: number): RunArmyUnit[] {
       type: 'pawn',
       number: 1,
       inspectionSeed: mixSeed(seed, 'run-unit-inspection:run-pawn-a'),
-      abilities: [],
-      modifiers: [],
       source: 'starting',
     },
     {
@@ -887,35 +620,18 @@ function initialArmy(seed: number): RunArmyUnit[] {
       type: 'pawn',
       number: 2,
       inspectionSeed: mixSeed(seed, 'run-unit-inspection:run-pawn-b'),
-      abilities: [],
-      modifiers: [],
       source: 'starting',
     },
   ];
 }
 
 function initialCards(seed: number): RunOwnedCard[] {
+  void seed;
   return [
     {
       id: 'run-card-his-grace',
       coreId: 'his-grace',
-      cardType: null,
-      effectSeed: 0,
-      effectTargetUnitId: null,
-      unitSeats: ['run-king'],
-      lostUnitIds: [],
-      cacochymicUnitId: null,
-      acquiredAfterBattleIndex: 0,
-    },
-    {
-      id: 'run-card-front-lines',
-      coreId: 'front-lines',
-      cardType: null,
-      effectSeed: 0,
-      effectTargetUnitId: null,
-      unitSeats: shuffled(['run-pawn-a', 'run-pawn-b'], mixSeed(seed, 'card-unit-seats:run-card-front-lines')),
-      lostUnitIds: [],
-      cacochymicUnitId: null,
+      unitSeats: ['run-king', 'run-pawn-a', 'run-pawn-b'],
       acquiredAfterBattleIndex: 0,
     },
   ];
@@ -927,7 +643,7 @@ export function createRun(
   ataraxiaTierOrNow: AtaraxiaTier | string = 0,
   now = new Date().toISOString(),
 ): RunDocument {
-  const ataraxiaTier = typeof ataraxiaTierOrNow === 'number' ? ataraxiaTierOrNow : 0;
+  const ataraxiaTier: AtaraxiaTier = 0;
   const createdAt = typeof ataraxiaTierOrNow === 'string' ? ataraxiaTierOrNow : now;
   const run: RunDocument = {
     runSaveVersion: CURRENT_RUN_SAVE_VERSION,
@@ -942,7 +658,6 @@ export function createRun(
     goldTenths: RUN_STARTING_GOLD_TENTHS,
     army: initialArmy(seed),
     cards: initialCards(seed),
-    pestiferousLosses: [],
     lipsana: [],
     seenLipsana: [],
     conflictPaidLipsana: {},
@@ -1020,77 +735,30 @@ function touch(run: RunDocument): RunDocument {
 }
 
 function cloneArmy(army: readonly RunArmyUnit[]): RunArmyUnit[] {
-  return army.map((unit) => ({
-    ...unit,
-    abilities: [...unit.abilities],
-    modifiers: [...(unit.modifiers ?? [])],
-  }));
+  return army.map((unit) => ({ ...unit }));
 }
 
 function cloneCards(cards: readonly RunOwnedCard[]): RunOwnedCard[] {
   return cards.map((card) => ({
     ...card,
     unitSeats: [...card.unitSeats],
-    lostUnitIds: [...card.lostUnitIds],
   }));
 }
 
-function clonePestiferousLosses(losses: readonly RunPestiferousLoss[]): RunPestiferousLoss[] {
-  return losses.map((loss) => ({
-    ...loss,
-    unit: cloneArmy([loss.unit])[0],
-  }));
-}
-
-function repairRunCards(value: unknown, seed: number): RunOwnedCard[] {
+function repairRunCards(value: unknown): RunOwnedCard[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((candidate): RunOwnedCard[] => {
     if (!candidate || typeof candidate !== 'object') return [];
-    const card = candidate as Partial<RunOwnedCard> & {
-      effect?: { ability?: unknown; targetUnitId?: unknown } | null;
-    };
+    const card = candidate as Record<string, unknown>;
     if (typeof card.id !== 'string' || typeof card.coreId !== 'string') return [];
-    const cardType = card.cardType === 'pestiferous'
-      ? 'pestiferous'
-      : card.cardType === 'concinnous'
-        ? 'concinnous'
-        : card.cardType === 'legatine'
-          ? 'legatine'
-          : card.cardType === 'hieratic'
-            ? 'hieratic'
-        : null;
-    const effectSeed = Number.isSafeInteger(card.effectSeed)
-      ? Number(card.effectSeed) >>> 0
-      : mixSeed(seed, card.id);
+    if (!runCardDefinition(card.coreId)) return [];
     const unitSeats = Array.isArray(card.unitSeats)
       ? card.unitSeats.filter((id): id is string | null => id === null || typeof id === 'string')
       : [];
-    const unitIds = unitSeats.filter((id): id is string => typeof id === 'string');
-    const lostUnitIds = Array.isArray(card.lostUnitIds)
-      ? card.lostUnitIds.filter((id): id is string => typeof id === 'string')
-      : [];
-    const storedEffectTargetUnitId = typeof card.effectTargetUnitId === 'string'
-      ? card.effectTargetUnitId
-      : typeof card.effect?.targetUnitId === 'string'
-        ? card.effect.targetUnitId
-        : null;
     return [{
       id: card.id,
       coreId: card.coreId,
-      cardType,
-      effectSeed,
-      effectTargetUnitId: (cardType === 'concinnous' || cardType === 'legatine' || cardType === 'hieratic')
-        && storedEffectTargetUnitId !== null
-        && unitIds.includes(storedEffectTargetUnitId)
-        ? storedEffectTargetUnitId
-        : null,
       unitSeats,
-      lostUnitIds,
-      cacochymicUnitId: cardType === 'pestiferous'
-        ? typeof card.cacochymicUnitId === 'string' && unitIds.includes(card.cacochymicUnitId)
-          ? card.cacochymicUnitId
-          : seededPestiferousTarget(effectSeed, unitIds, lostUnitIds.length)
-        : null,
       acquiredAfterBattleIndex: Number.isSafeInteger(card.acquiredAfterBattleIndex)
         ? Math.max(0, Number(card.acquiredAfterBattleIndex))
         : 0,
@@ -1100,107 +768,19 @@ function repairRunCards(value: unknown, seed: number): RunOwnedCard[] {
 
 function repairRunCardOffers(value: unknown): RunCardOffer[] {
   if (!Array.isArray(value)) return [];
-  return value.map((candidate) => {
-    const offer = candidate as RunCardOffer & {
-      effect?: { ability?: unknown; targetPieceIndex?: unknown } | null;
-    };
-    const cardType = offer.cardType === 'pestiferous'
-      ? 'pestiferous'
-      : offer.cardType === 'concinnous'
-        ? 'concinnous'
-        : offer.cardType === 'legatine'
-          ? 'legatine'
-          : offer.cardType === 'hieratic'
-            ? 'hieratic'
-        : null;
-    const cacochymicPieceIndex = cardType === 'pestiferous'
-      ? Number.isSafeInteger(offer.cacochymicPieceIndex)
-        && offer.cacochymicPieceIndex !== null
-        && offer.cacochymicPieceIndex >= 0
-        && offer.cacochymicPieceIndex < offer.pieces.length
-        ? offer.cacochymicPieceIndex
-        : seededPestiferousTarget(offer.effectSeed, offer.pieces.map((_, index) => index), 0)
-      : null;
-    const plaguedPiece = cacochymicPieceIndex === null ? null : offer.pieces[cacochymicPieceIndex];
-    const storedEffectTargetIndex = Number.isSafeInteger(offer.effectTargetIndex)
-      ? offer.effectTargetIndex
-      : Number.isSafeInteger(offer.effect?.targetPieceIndex)
-        ? Number(offer.effect?.targetPieceIndex)
-        : null;
-    const effectTargetIndex = cardType === 'concinnous'
-      ? Number.isSafeInteger(storedEffectTargetIndex)
-        && storedEffectTargetIndex !== null
-        && storedEffectTargetIndex >= 0
-        && storedEffectTargetIndex < offer.pieces.length
-        ? storedEffectTargetIndex
-        : createRng(mixSeed(offer.effectSeed, 'concinnous-target')).int(offer.pieces.length)
-      : null;
-    return {
-      ...offer,
-      cardType,
-      cost: runCardOfferCost(offer.value, cardType, plaguedPiece),
-      cacochymicPieceIndex,
-      effectTargetIndex,
-    };
+  return value.flatMap((candidate): RunCardOffer[] => {
+    if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return [];
+    const offer = candidate as Record<string, unknown>;
+    const core = typeof offer.id === 'string' ? RUN_CARD_BY_ID[offer.id] : undefined;
+    if (!core || typeof offer.offerId !== 'string') return [];
+    return [{
+      ...core,
+      pieces: [...core.pieces],
+      formation: core.formation?.map((cell) => ({ ...cell })),
+      offerId: offer.offerId,
+      cost: core.value,
+    }];
   });
-}
-
-function cardsNeedRepair(cards: readonly RunOwnedCard[]): boolean {
-  return cards.some((card) => (
-    card.cardType === 'pestiferous'
-      ? runCardUnitIds(card).length > 0
-        ? typeof card.cacochymicUnitId !== 'string' || !runCardUnitIds(card).includes(card.cacochymicUnitId)
-        : card.cacochymicUnitId !== null
-      : card.cacochymicUnitId !== null
-  )) || cards.some((card) => (
-    (card.cardType === 'concinnous' || card.cardType === 'legatine' || card.cardType === 'hieratic')
-      ? card.effectTargetUnitId !== null
-        && (typeof card.effectTargetUnitId !== 'string'
-          || card.effectTargetUnitId.length === 0
-          || !runCardUnitIds(card).includes(card.effectTargetUnitId))
-      : card.effectTargetUnitId !== null
-  ));
-}
-
-function offersNeedRepair(offers: readonly RunCardOffer[]): boolean {
-  return offers.some((offer) => (
-    offer.cardType === 'pestiferous'
-      ? !Number.isSafeInteger(offer.cacochymicPieceIndex)
-        || offer.cacochymicPieceIndex === null
-        || offer.cacochymicPieceIndex < 0
-        || offer.cacochymicPieceIndex >= offer.pieces.length
-      : offer.cacochymicPieceIndex !== null
-  )) || offers.some((offer) => (
-    offer.cardType === 'concinnous'
-      ? !Number.isSafeInteger(offer.effectTargetIndex)
-        || offer.effectTargetIndex === null
-        || offer.effectTargetIndex < 0
-        || offer.effectTargetIndex >= offer.pieces.length
-      : offer.effectTargetIndex !== null
-  ));
-}
-
-function synchronizePlaguedModifiers(
-  army: RunArmyUnit[],
-  cards: readonly RunOwnedCard[],
-): RunArmyUnit[] {
-  const cacochymicUnitIds = new Set(cards.flatMap((card) => (
-    card.cardType === 'pestiferous' && card.cacochymicUnitId ? [card.cacochymicUnitId] : []
-  )));
-  let changed = false;
-  const synchronized = army.map((unit) => {
-    const shouldBePlagued = cacochymicUnitIds.has(unit.id);
-    const isPlagued = unit.modifiers.includes('cacochymic');
-    if (shouldBePlagued === isPlagued) return unit;
-    changed = true;
-    return {
-      ...unit,
-      modifiers: shouldBePlagued
-        ? [...unit.modifiers, 'cacochymic' as const]
-        : unit.modifiers.filter((modifier) => modifier !== 'cacochymic'),
-    };
-  });
-  return changed ? synchronized : army;
 }
 
 function cloneConflictPaidLipsana(
@@ -1216,7 +796,6 @@ function createSectioEntrySnapshot(run: RunDocument, paidLipsanonBought: boolean
     goldTenths: run.goldTenths,
     army: cloneArmy(run.army),
     cards: cloneCards(run.cards),
-    pestiferousLosses: clonePestiferousLosses(run.pestiferousLosses),
     lipsana: [...run.lipsana],
     seenLipsana: [...run.seenLipsana],
     conflictPaidLipsana: cloneConflictPaidLipsana(run.conflictPaidLipsana),
@@ -1234,10 +813,9 @@ function normalizedArmyIdentity(run: RunDocument): {
   changed: boolean;
 } {
   const entryArmy = run.sectio?.entrySnapshot?.army ?? [];
-  const entryLossArmy = run.sectio?.entrySnapshot?.pestiferousLosses?.map((loss) => loss.unit) ?? [];
   const alienatedArmy = run.sectio?.alienatedUnits?.map((entry) => entry.unit) ?? [];
   const expunctedArmy = run.sectio?.expunctedCard?.units ?? [];
-  const units = [...entryArmy, ...entryLossArmy, ...run.army, ...alienatedArmy, ...expunctedArmy];
+  const units = [...entryArmy, ...run.army, ...alienatedArmy, ...expunctedArmy];
   const byId = new Map<string, RunArmyUnit>();
   for (const unit of units) {
     if (!byId.has(unit.id)) byId.set(unit.id, unit);
@@ -1285,20 +863,22 @@ function normalizedArmyIdentity(run: RunDocument): {
     const name = assignedNames.get(unit.id) ?? runUnitName(run.seed, unit.type, number - 1);
     const inspectionSeed = assignedInspectionSeeds.get(unit.id)
       ?? mixSeed(run.seed, `run-unit-inspection:${unit.id}`, number - 1);
-    const modifiers = Array.isArray(unit.modifiers)
-      ? unit.modifiers.filter((modifier): modifier is RunUnitModifier => modifier === 'cacochymic')
-      : [];
     const source = unit.source;
     if (
       unit.number === number
       && unit.name === name
       && unit.inspectionSeed === inspectionSeed
-      && Array.isArray(unit.modifiers)
-      && modifiers.length === unit.modifiers.length
       && unit.source === source
     ) return unit;
     changed = true;
-    return { ...unit, name, number, inspectionSeed, modifiers, source };
+    return {
+      id: unit.id,
+      name,
+      type: unit.type,
+      number,
+      inspectionSeed,
+      source,
+    };
   });
   const army = rewriteArmy(run.army);
   let sectio = run.sectio;
@@ -1314,10 +894,6 @@ function normalizedArmyIdentity(run: RunDocument): {
       ? {
           ...sectio.entrySnapshot,
           army: rewriteArmy(sectio.entrySnapshot.army),
-          pestiferousLosses: (sectio.entrySnapshot.pestiferousLosses ?? []).map((loss) => ({
-            ...loss,
-            unit: rewriteArmy([loss.unit])[0],
-          })),
         }
       : sectio.entrySnapshot;
     if (
@@ -1378,17 +954,11 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
   }
   const persistedUnits: unknown[] = [
     ...(Array.isArray(run.army) ? run.army : []),
-    ...(Array.isArray(run.pestiferousLosses)
-      ? run.pestiferousLosses.map((loss) => loss?.unit)
-      : []),
     ...(Array.isArray(run.sectio?.alienatedUnits)
       ? run.sectio.alienatedUnits.map((alienated) => alienated?.unit)
       : []),
     ...(Array.isArray(run.sectio?.expunctedCard?.units) ? run.sectio.expunctedCard.units : []),
     ...(Array.isArray(run.sectio?.entrySnapshot?.army) ? run.sectio.entrySnapshot.army : []),
-    ...(Array.isArray(run.sectio?.entrySnapshot?.pestiferousLosses)
-      ? run.sectio.entrySnapshot.pestiferousLosses.map((loss) => loss?.unit)
-      : []),
   ];
   if (persistedUnits.some((value) => (
     value
@@ -1439,17 +1009,10 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
   const stored = next as RunDocument & {
     ataraxiaTier?: unknown;
     cards?: unknown;
-    pestiferousLosses?: unknown;
     nextCardSequence?: unknown;
   };
-  const ataraxiaTier: AtaraxiaTier = stored.ataraxiaTier === 1 ? 1 : 0;
-  const storedCards = Array.isArray(stored.cards) ? stored.cards as RunOwnedCard[] : [];
-  const cards = !cardsNeedRepair(storedCards)
-    ? storedCards
-    : repairRunCards(stored.cards, next.seed);
-  const pestiferousLosses = Array.isArray(stored.pestiferousLosses)
-    ? stored.pestiferousLosses as RunPestiferousLoss[]
-    : [];
+  const ataraxiaTier: AtaraxiaTier = 0;
+  const cards = repairRunCards(stored.cards);
   const nextCardSequence = Number.isSafeInteger(stored.nextCardSequence) && Number(stored.nextCardSequence) > 0
     ? Number(stored.nextCardSequence)
     : cards.length + 1;
@@ -1468,10 +1031,7 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
       sectio = { ...sectio, cardOffers: completeOpening };
     }
   }
-  if (sectio && (
-    offersNeedRepair(sectio.cardOffers)
-    || (sectio.entrySnapshot && cardsNeedRepair(sectio.entrySnapshot.cards))
-  )) {
+  if (sectio) {
     sectio = {
       ...sectio,
       cardOffers: repairRunCardOffers(sectio.cardOffers),
@@ -1479,7 +1039,7 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
         ? {
             entrySnapshot: {
               ...sectio.entrySnapshot,
-              cards: repairRunCards(sectio.entrySnapshot.cards, next.seed),
+              cards: repairRunCards(sectio.entrySnapshot.cards),
             },
           }
         : {}),
@@ -1487,34 +1047,19 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
   }
   if (
     next.ataraxiaTier !== ataraxiaTier
-    || next.cards !== cards
-    || next.pestiferousLosses !== pestiferousLosses
+    || JSON.stringify(next.cards) !== JSON.stringify(cards)
     || next.nextCardSequence !== nextCardSequence
     || next.sectio !== sectio
   ) {
-    next = { ...next, ataraxiaTier, cards, pestiferousLosses, nextCardSequence, sectio };
+    next = { ...next, ataraxiaTier, cards, nextCardSequence, sectio };
   }
 
   const identity = normalizedArmyIdentity(next);
-  const army = synchronizePlaguedModifiers(identity.army, next.cards);
-  let identitySectio = identity.sectio;
-  if (identitySectio?.entrySnapshot) {
-    const entryArmy = synchronizePlaguedModifiers(
-      identitySectio.entrySnapshot.army,
-      identitySectio.entrySnapshot.cards,
-    );
-    if (entryArmy !== identitySectio.entrySnapshot.army) {
-      identitySectio = {
-        ...identitySectio,
-        entrySnapshot: { ...identitySectio.entrySnapshot, army: entryArmy },
-      };
-    }
-  }
-  if (identity.changed || army !== identity.army || identitySectio !== identity.sectio) {
+  if (identity.changed) {
     next = {
       ...next,
-      army,
-      sectio: identitySectio,
+      army: identity.army,
+      sectio: identity.sectio,
       nextArmyUnitNumberByType: identity.nextArmyUnitNumberByType,
     };
   }
@@ -1526,7 +1071,6 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
       || !Array.isArray(next.sectio.alienatedUnits)
       || next.sectio.expunctedCard === undefined
       || !Array.isArray(next.sectio.entrySnapshot.cards)
-      || !Array.isArray(next.sectio.entrySnapshot.pestiferousLosses)
       || !Number.isSafeInteger(next.sectio.entrySnapshot.nextCardSequence)
     )
   ) {
@@ -1543,9 +1087,6 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
               cards: Array.isArray(next.sectio.entrySnapshot.cards)
                 ? cloneCards(next.sectio.entrySnapshot.cards)
                 : cloneCards(next.cards),
-              pestiferousLosses: Array.isArray(next.sectio.entrySnapshot.pestiferousLosses)
-                ? clonePestiferousLosses(next.sectio.entrySnapshot.pestiferousLosses)
-                : clonePestiferousLosses(next.pestiferousLosses),
               nextCardSequence: Number.isSafeInteger(next.sectio.entrySnapshot.nextCardSequence)
                 ? next.sectio.entrySnapshot.nextCardSequence
                 : next.nextCardSequence,
@@ -1892,7 +1433,7 @@ function migrateRunToCurrentLevelFormat(stored: Record<string, unknown>): Record
   if (!war || !Array.isArray(war.battles)) throw new UnsupportedRunSaveError();
   return {
     ...stored,
-    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    runSaveVersion: RUN_SAVE_VERSION_FORMATION_CARDS_SOURCE,
     war: {
       ...war,
       battles: war.battles.map((battle) => {
@@ -1906,6 +1447,215 @@ function migrateRunToCurrentLevelFormat(stored: Record<string, unknown>): Record
   };
 }
 
+const CURRENT_LIPSANON_IDS = new Set<LipsanonId>(RUN_LIPSANA.map((lipsanon) => lipsanon.id));
+
+function migratePlainRunUnit(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const {
+    abilities: _retiredAbilities,
+    modifiers: _retiredModifiers,
+    ...unit
+  } = value as Record<string, unknown>;
+  return unit;
+}
+
+function migratePlainRunArmy(value: unknown): unknown {
+  return Array.isArray(value) ? value.map(migratePlainRunUnit) : value;
+}
+
+function migratedOwnedCard(
+  id: string,
+  coreId: string,
+  unitSeats: Array<string | null>,
+  acquiredAfterBattleIndex: number,
+): Record<string, unknown> {
+  return { id, coreId, unitSeats, acquiredAfterBattleIndex };
+}
+
+/** Rewrite every predecessor card into the active formation catalog. Existing active shapes are
+ * preserved; an old large composition becomes one plain single-piece card per surviving unit. */
+function migrateOwnedFormationCards(value: unknown, armyValue: unknown): Record<string, unknown>[] {
+  const cards = Array.isArray(value) ? value.filter((card): card is Record<string, unknown> => (
+    Boolean(card && typeof card === 'object' && !Array.isArray(card))
+  )) : [];
+  const army = Array.isArray(armyValue)
+    ? armyValue.filter((unit): unit is Record<string, unknown> => (
+        Boolean(unit && typeof unit === 'object' && !Array.isArray(unit))
+      ))
+    : [];
+  const typeById = new Map<string, RunArmyPieceType>(army.flatMap((unit) => (
+    typeof unit.id === 'string'
+      && (unit.type === 'king' || ADLECTIO_PIECE_ORDER.includes(unit.type as AdlectablePieceType))
+      ? [[unit.id, unit.type as RunArmyPieceType]]
+      : []
+  )));
+  const usedUnitIds = new Set<string>();
+  const usedCardIds = new Set<string>();
+  const result: Record<string, unknown>[] = [];
+  const existingStarter = cards.find((card) => card.coreId === 'his-grace');
+  const kingId = army.find((unit) => unit.type === 'king' && typeof unit.id === 'string')?.id as string | undefined;
+  const pawnIds = army
+    .filter((unit) => unit.type === 'pawn' && unit.source === 'starting' && typeof unit.id === 'string')
+    .map((unit) => unit.id as string)
+    .slice(0, 2);
+  const starterId = typeof existingStarter?.id === 'string' ? existingStarter.id : 'run-card-his-grace';
+  result.push(migratedOwnedCard(starterId, 'his-grace', [kingId ?? null, pawnIds[0] ?? null, pawnIds[1] ?? null], 0));
+  usedCardIds.add(starterId);
+  if (kingId) usedUnitIds.add(kingId);
+  pawnIds.forEach((id) => usedUnitIds.add(id));
+
+  const uniqueCardId = (preferred: string): string => {
+    let id = preferred;
+    let suffix = 2;
+    while (usedCardIds.has(id)) id = `${preferred}-${suffix++}`;
+    usedCardIds.add(id);
+    return id;
+  };
+  const addSingle = (unitId: string, afterBattle: number): void => {
+    const type = typeById.get(unitId);
+    if (!type || type === 'king' || usedUnitIds.has(unitId)) return;
+    usedUnitIds.add(unitId);
+    result.push(migratedOwnedCard(
+      uniqueCardId(`run-card-formation-${unitId}`),
+      type === 'knight' ? 'k' : type[0],
+      [unitId],
+      afterBattle,
+    ));
+  };
+
+  for (const card of cards) {
+    if (card === existingStarter || card.coreId === 'front-lines') continue;
+    const seats = Array.isArray(card.unitSeats)
+      ? card.unitSeats.filter((unitId): unitId is string => typeof unitId === 'string' && !usedUnitIds.has(unitId))
+      : [];
+    const afterBattle = Number.isSafeInteger(card.acquiredAfterBattleIndex)
+      ? Math.max(0, Number(card.acquiredAfterBattleIndex))
+      : 0;
+    const definition = typeof card.coreId === 'string' ? RUN_CARD_BY_ID[card.coreId] : undefined;
+    if (
+      definition
+      && seats.length === definition.pieces.length
+      && seats.every((unitId, index) => typeById.get(unitId) === definition.pieces[index])
+    ) {
+      const id = uniqueCardId(typeof card.id === 'string' ? card.id : `run-card-formation-${definition.id}`);
+      seats.forEach((unitId) => usedUnitIds.add(unitId));
+      result.push(migratedOwnedCard(id, definition.id, [...seats], afterBattle));
+    } else {
+      seats.forEach((unitId) => addSingle(unitId, afterBattle));
+    }
+  }
+  for (const unitId of typeById.keys()) addSingle(unitId, 0);
+  return result;
+}
+
+function retireLipsanonIds(value: unknown): unknown {
+  return Array.isArray(value)
+    ? value.filter((id): id is LipsanonId => typeof id === 'string' && CURRENT_LIPSANON_IDS.has(id as LipsanonId))
+    : value;
+}
+
+function retireConflictPaidLipsana(value: unknown): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => (
+    Boolean(entry && typeof entry === 'object' && !Array.isArray(entry)
+      && typeof (entry as Record<string, unknown>).lipsanonId === 'string'
+      && CURRENT_LIPSANON_IDS.has((entry as Record<string, unknown>).lipsanonId as LipsanonId))
+  )));
+}
+
+function migrateFormationSectio(
+  value: unknown,
+  stored: Record<string, unknown>,
+  army: unknown,
+  cards: Record<string, unknown>[],
+  lipsana: unknown,
+  seenLipsana: unknown,
+  conflictPaidLipsana: unknown,
+): unknown {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+  const sectio = value as Record<string, unknown>;
+  const seed = Number(stored.seed) >>> 0;
+  const battleIndex = Number.isSafeInteger(stored.battleIndex) ? Number(stored.battleIndex) : 0;
+  const offerCount = Array.isArray(lipsana) && lipsana.includes('quartermasters-ledger') ? 4 : RUN_OPENING_OFFER_COUNT;
+  const cardOffers = sectio.kind === 'opening'
+    ? openingSectioOffersWithCount(seed, 0, offerCount)
+    : shuffled(RUN_CARD_DECK, mixSeed(seed, 'shop-cards', battleIndex))
+      .slice(0, offerCount)
+      .map((card, slotIndex) => createRunCardOffer({ seed }, card, battleIndex, slotIndex));
+  const paidLipsanonOffer = typeof sectio.paidLipsanonOffer === 'string'
+    && CURRENT_LIPSANON_IDS.has(sectio.paidLipsanonOffer as LipsanonId)
+    ? sectio.paidLipsanonOffer
+    : null;
+  return {
+    ...sectio,
+    cardOffers,
+    adlectedCardOfferIds: [],
+    paidLipsanonOffer,
+    paidLipsanonBought: paidLipsanonOffer === null ? false : sectio.paidLipsanonBought,
+    alienatedUnits: [],
+    expunctedCard: null,
+    entrySnapshot: {
+      goldTenths: stored.goldTenths,
+      army,
+      cards,
+      lipsana,
+      seenLipsana,
+      conflictPaidLipsana,
+      nextArmyUnitSequence: stored.nextArmyUnitSequence,
+      nextArmyUnitNumberByType: stored.nextArmyUnitNumberByType,
+      nextCardSequence: stored.nextCardSequence,
+      paidLipsanonBought: paidLipsanonOffer === null ? false : sectio.paidLipsanonBought === true,
+    },
+  };
+}
+
+/** Version 24 installs positional cards as the only live card ruleset. Existing units and
+ * material remain intact, while retired qualifiers, states, and their relics are neutralized.
+ * A Battle is returned to Deployment so its new formation plan is derived honestly. */
+function migrateRunToFormationCards(stored: Record<string, unknown>): Record<string, unknown> {
+  const army = migratePlainRunArmy(stored.army);
+  const cards = migrateOwnedFormationCards(stored.cards, army);
+  const lipsana = retireLipsanonIds(stored.lipsana);
+  let seenLipsana = retireLipsanonIds(stored.seenLipsana);
+  const conflictPaidLipsana = retireConflictPaidLipsana(stored.conflictPaidLipsana);
+  const reenterDeployment = stored.phase === 'battle' || stored.phase === 'deployment';
+  const vacantia = stored.vacantia && typeof stored.vacantia === 'object' && !Array.isArray(stored.vacantia)
+    ? stored.vacantia as Record<string, unknown>
+    : null;
+  let migratedVacantia = stored.vacantia;
+  if (vacantia) {
+    const existing = retireLipsanonIds(vacantia.offers);
+    const held = new Set(Array.isArray(lipsana) ? lipsana : []);
+    const active = Array.isArray(existing) ? [...existing] : [];
+    const candidates = shuffled(
+      RUN_LIPSANON_OFFER_POOL.map((entry) => entry.id).filter((id) => !held.has(id) && !active.includes(id)),
+      mixSeed(Number(stored.seed) >>> 0, 'vacantia-formation-migration', Number(vacantia.conflictIndex) || 0),
+    );
+    const offers = [...active, ...candidates].slice(0, 3);
+    seenLipsana = [...new Set([...(Array.isArray(seenLipsana) ? seenLipsana : []), ...offers])];
+    migratedVacantia = { ...vacantia, offers };
+  }
+  const {
+    pestiferousLosses: _retiredPestiferousLosses,
+    ...current
+  } = stored;
+  return {
+    ...current,
+    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    ataraxiaTier: 0,
+    phase: reenterDeployment ? 'deployment' : stored.phase,
+    army,
+    cards,
+    lipsana,
+    seenLipsana,
+    conflictPaidLipsana,
+    deployment: reenterDeployment ? null : stored.deployment,
+    ...(reenterDeployment ? { battleRuntime: null, aftermath: null } : {}),
+    sectio: migrateFormationSectio(stored.sectio, stored, army, cards, lipsana, seenLipsana, conflictPaidLipsana),
+    vacantia: migratedVacantia,
+  };
+}
+
 /**
  * Advances every losslessly migratable predecessor through the declared save chain.
  * Version 16 first receives the version-marker rename from 17, version 17's Shop
@@ -1915,8 +1665,8 @@ function migrateRunToCurrentLevelFormat(stored: Record<string, unknown>): Record
  * Primogeniture and replaces shrinking card membership plus the independent unit shuffle
  * with stable card seats and card-ordered Deployment. Version 21 replaces the one-time
  * Deployment mode choice with an explicit deal boundary and persisted transport. Version 22
- * then advances every embedded War Battle through the Level document chain. Older saves remain
- * unsupported.
+ * advances every embedded War Battle through the Level document chain. Version 23 then retires
+ * unit abilities and installs authored 1–3 unit formation cards. Older saves remain unsupported.
  */
 export function migrateRunSaveDocument(value: unknown): RunDocument {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -1967,6 +1717,9 @@ export function migrateRunSaveDocument(value: unknown): RunDocument {
   if (stored.runSaveVersion === RUN_SAVE_VERSION_LEVEL_FORMAT_SOURCE) {
     stored = migrateRunToCurrentLevelFormat(stored);
   }
+  if (stored.runSaveVersion === RUN_SAVE_VERSION_FORMATION_CARDS_SOURCE) {
+    stored = migrateRunToFormationCards(stored);
+  }
   return normalizeRunDocument(stored as unknown as RunDocument);
 }
 
@@ -1974,7 +1727,6 @@ export function addArmyPieces(
   run: RunDocument,
   pieces: readonly AdlectablePieceType[],
   source: RunArmyUnit['source'],
-  modifiers: readonly RunUnitModifier[] = [],
 ): Pick<RunDocument, 'army' | 'nextArmyUnitSequence' | 'nextArmyUnitNumberByType'> & {
   addedUnits: RunArmyUnit[];
 } {
@@ -1988,8 +1740,6 @@ export function addArmyPieces(
       type,
       number,
       inspectionSeed: mixSeed(run.seed, `run-unit-inspection:run-unit-${sequence}`, sequence),
-      abilities: [],
-      modifiers: [...modifiers],
       source,
     };
     sequence += 1;
@@ -2013,39 +1763,6 @@ export function runSectioCardOfferCount(run: Pick<RunDocument, 'lipsana'>): numb
   return run.lipsana.includes('quartermasters-ledger') ? 4 : RUN_OPENING_OFFER_COUNT;
 }
 
-export function lipsanonGrantingRunAbility(
-  run: RunDocument,
-  unit: RunArmyUnit,
-  ability: RunAbility,
-): LipsanonId | null {
-  // Unit-type lipsana never pile a second deployment rule onto a unit that already owns one.
-  // If several matching lipsana are held, their stable acquisition order decides which one
-  // is effective.
-  if (unit.abilities.length > 0) return null;
-  for (const lipsanonId of run.lipsana) {
-    const grant = RUN_LIPSANON_ABILITY_GRANTS[lipsanonId];
-    if (grant?.unitType !== unit.type) continue;
-    return grant.ability === ability ? lipsanonId : null;
-  }
-  return null;
-}
-
-export function hasRunAbility(run: RunDocument, unit: RunArmyUnit, ability: RunAbility): boolean {
-  return unit.abilities.includes(ability) || lipsanonGrantingRunAbility(run, unit, ability) !== null;
-}
-
-/** Whether a target-required lipsanon can add its permanent state without violating
- * one-inherent-ability cardinality. */
-export function canTargetLipsanon(run: RunDocument, lipsanon: LipsanonId, unitId: string): boolean {
-  if (!lipsanonNeedsUnitTarget(lipsanon)) return false;
-  const unit = run.army.find((candidate) => candidate.id === unitId);
-  if (!unit) return false;
-  if (lipsanon === 'conscription-notice') {
-    return unit.abilities.length === 0;
-  }
-  return true;
-}
-
 function availableLipsana(run: RunDocument): LipsanonId[] {
   const held = new Set(run.lipsana);
   const seen = new Set(run.seenLipsana);
@@ -2054,7 +1771,6 @@ function availableLipsana(run: RunDocument): LipsanonId[] {
       !held.has(lipsanon.id)
       && !seen.has(lipsanon.id)
       && (!lipsanon.requires || held.has(lipsanon.requires))
-      && (!lipsanon.unitTarget || run.army.some((unit) => canTargetLipsanon(run, lipsanon.id, unit.id)))
     ))
     .map((lipsanon) => lipsanon.id);
 }
@@ -2090,6 +1806,7 @@ function freshDeploymentState(
     unavailableUnitIds,
     capacityResolved: false,
     placements: {},
+    formationPlans: {},
     activeCardIndex: 0,
     unitCursor: 0,
     discardCursor: 0,
@@ -2098,7 +1815,6 @@ function freshDeploymentState(
     transport: 'paused',
     stage: 'awaiting-deal',
     blockedUnitIds: [...unavailableUnitIds],
-    manualPlacements: {},
   };
 }
 
@@ -2160,8 +1876,8 @@ export function rerollDeployment(run: RunDocument): RunDocument {
 export function setDeploymentChoices(
   run: RunDocument,
   choices: Partial<Pick<RunDeploymentState,
-    | 'manualPlacements'
     | 'placements'
+    | 'formationPlans'
     | 'activeCardIndex'
     | 'unitCursor'
     | 'discardCursor'
@@ -2173,7 +1889,6 @@ export function setDeploymentChoices(
     | 'unavailableUnitIds'
     | 'capacityResolved'
     | 'blockedUnitIds'
-    | 'temporaryAdlectedUnitId'
   >>,
 ): RunDocument {
   if (run.phase !== 'deployment' || !run.deployment) return run;
@@ -2253,18 +1968,13 @@ function cloneRunBattleRuntime(runtime: RunBattleRuntime): RunBattleRuntime {
 }
 
 function cloneRunBattleUndoArmy(army: readonly RunArmyUnit[]): RunArmyUnit[] {
-  return army.map((unit) => ({
-    ...unit,
-    abilities: [...unit.abilities],
-    modifiers: [...unit.modifiers],
-  }));
+  return cloneArmy(army);
 }
 
 function cloneRunBattleUndoCards(cards: readonly RunOwnedCard[]): RunOwnedCard[] {
   return cards.map((card) => ({
     ...card,
     unitSeats: [...card.unitSeats],
-    lostUnitIds: [...card.lostUnitIds],
   }));
 }
 
@@ -2288,15 +1998,13 @@ function isRunBattleUndoCheckpoint(value: unknown): value is RunBattleUndoCheckp
     && checkpoint.army.every((unit) => Boolean(
       unit
       && typeof unit === 'object'
-      && Array.isArray(unit.abilities)
-      && Array.isArray(unit.modifiers),
+      && typeof unit.id === 'string',
     ));
   const cardsAreValid = Array.isArray(checkpoint.cards)
     && checkpoint.cards.every((card) => Boolean(
       card
       && typeof card === 'object'
-      && Array.isArray(card.unitSeats)
-      && Array.isArray(card.lostUnitIds),
+      && Array.isArray(card.unitSeats),
     ));
   const runtimeIsValid = Boolean(
     runtime
@@ -2428,27 +2136,17 @@ export function lipsanonImmediateGoldTenths(lipsana: readonly LipsanonId[]): num
   return lipsana.reduce((total, lipsanon) => total + (RUN_LIPSANON_IMMEDIATE_GOLD[lipsanon] ?? 0) * GOLD_SCALE, 0);
 }
 
-function immediateLipsanon(run: RunDocument, lipsanon: LipsanonId, targetUnitId?: string): RunDocument {
+function immediateLipsanon(run: RunDocument, lipsanon: LipsanonId): RunDocument {
   let next = run;
   const payout = RUN_LIPSANON_IMMEDIATE_GOLD[lipsanon];
   if (payout) next = { ...next, goldTenths: next.goldTenths + payout * GOLD_SCALE };
-  if (lipsanonNeedsUnitTarget(lipsanon) && targetUnitId) {
-    next = {
-      ...next,
-      army: next.army.map((unit) => (
-        unit.id === targetUnitId && !unit.abilities.includes('adlected')
-          ? { ...unit, abilities: [...unit.abilities, 'adlected'] }
-          : unit
-      )),
-    };
-  }
   return next;
 }
 
-export function acquireLipsanon(run: RunDocument, lipsanon: LipsanonId, targetUnitId?: string): RunDocument {
+export function acquireLipsanon(run: RunDocument, lipsanon: LipsanonId): RunDocument {
   if (run.lipsana.includes(lipsanon)) return run;
-  if (lipsanonNeedsUnitTarget(lipsanon) && !canTargetLipsanon(run, lipsanon, targetUnitId ?? '')) return run;
-  return touch(immediateLipsanon({ ...run, lipsana: [...run.lipsana, lipsanon] }, lipsanon, targetUnitId));
+  if (!CURRENT_LIPSANON_IDS.has(lipsanon)) return run;
+  return touch(immediateLipsanon({ ...run, lipsana: [...run.lipsana, lipsanon] }, lipsanon));
 }
 
 /** Administrator-only caller helper. Authorization belongs to the server endpoint;
@@ -2462,17 +2160,7 @@ function cardsWithoutUnit(cards: readonly RunOwnedCard[], unitId: string): RunOw
   return cards.map((card) => {
     if (!card.unitSeats.includes(unitId)) return card;
     const unitSeats = card.unitSeats.map((id) => id === unitId ? null : id);
-    const unitIds = unitSeats.filter((id): id is string => typeof id === 'string');
-    const cacochymicUnitId = card.cardType === 'pestiferous'
-      ? card.cacochymicUnitId === unitId || !unitIds.includes(card.cacochymicUnitId ?? '')
-        ? seededPestiferousTarget(card.effectSeed, unitIds, card.lostUnitIds.length)
-        : card.cacochymicUnitId
-      : null;
-    const effectTargetUnitId = card.effectTargetUnitId === unitId
-      || !unitIds.includes(card.effectTargetUnitId ?? '')
-      ? null
-      : card.effectTargetUnitId;
-    return { ...card, unitSeats, effectTargetUnitId, cacochymicUnitId };
+    return { ...card, unitSeats };
   });
 }
 
@@ -2481,58 +2169,8 @@ export function removeUnitFromArmyAndCards(
   unitId: string,
 ): Pick<RunDocument, 'army' | 'cards'> {
   const cards = cardsWithoutUnit(run.cards, unitId);
-  const army = synchronizePlaguedModifiers(
-    run.army.filter((candidate) => candidate.id !== unitId),
-    cards,
-  );
+  const army = run.army.filter((candidate) => candidate.id !== unitId);
   return { army, cards };
-}
-
-/** Resolve Cacochymic units' committed combat-end deaths. Each owning Pestiferous card
- * then selects its next surviving member, while the battle-index ledger keeps retries idempotent. */
-export function resolveCacochymicCombatDeaths(run: RunDocument, battleIndex: number): RunDocument {
-  const armyById = new Map(run.army.map((unit) => [unit.id, unit]));
-  const removedIds = new Set<string>();
-  const losses: RunPestiferousLoss[] = [];
-  const cards = run.cards.map((card) => {
-    if (card.cardType !== 'pestiferous') return card;
-    if (run.pestiferousLosses.some((loss) => loss.cardId === card.id && loss.battleIndex === battleIndex)) {
-      return card;
-    }
-    const remaining = runCardUnitIds(card).filter((id) => armyById.has(id) && !removedIds.has(id));
-    if (!remaining.length) return card;
-    const unitId = card.cacochymicUnitId && remaining.includes(card.cacochymicUnitId)
-      ? card.cacochymicUnitId
-      : seededPestiferousTarget(card.effectSeed, remaining, card.lostUnitIds.length);
-    if (!unitId) return card;
-    const unit = armyById.get(unitId);
-    if (!unit) return card;
-    removedIds.add(unitId);
-    const plaguedUnit = unit.modifiers.includes('cacochymic')
-      ? unit
-      : { ...unit, modifiers: [...unit.modifiers, 'cacochymic' as const] };
-    losses.push({ battleIndex, cardId: card.id, unit: cloneArmy([plaguedUnit])[0] });
-    const unitSeats = card.unitSeats.map((id) => id === unitId ? null : id);
-    const unitIds = unitSeats.filter((id): id is string => typeof id === 'string');
-    const lostUnitIds = [...card.lostUnitIds, unitId];
-    return {
-      ...card,
-      unitSeats,
-      lostUnitIds,
-      cacochymicUnitId: seededPestiferousTarget(card.effectSeed, unitIds, lostUnitIds.length),
-    };
-  });
-  if (!losses.length) return run;
-  const army = synchronizePlaguedModifiers(
-    run.army.filter((unit) => !removedIds.has(unit.id)),
-    cards,
-  );
-  return {
-    ...run,
-    army,
-    cards,
-    pestiferousLosses: [...run.pestiferousLosses, ...losses],
-  };
 }
 
 /**
@@ -2601,12 +2239,11 @@ export function openSectio(run: RunDocument, survivingUnitIds: readonly string[]
   const finalBattle = run.battleIndex >= run.war.battles.length - 1;
 
   const { victoryGoldTenths, bonusGoldTenths: rifleTenths } = battleRewardTenths(run, survivingUnitIds);
-  const resolvedDeaths = resolveCacochymicCombatDeaths(run, run.battleIndex);
   if (finalBattle) {
-    return touch({ ...resolvedDeaths, phase: 'victory', sectio: null, deployment: null, battleRuntime: null, aftermath: null });
+    return touch({ ...run, phase: 'victory', sectio: null, deployment: null, battleRuntime: null, aftermath: null });
   }
   const banked: RunDocument = {
-    ...resolvedDeaths,
+    ...run,
     goldTenths: run.goldTenths + victoryGoldTenths + rifleTenths,
     deployment: null,
     battleRuntime: null,
@@ -2698,53 +2335,17 @@ export function performAdlectio(run: RunDocument, offerId: string): RunDocument 
   const cost = offer.cost * GOLD_SCALE;
   if (run.goldTenths < cost) return run;
   const { addedUnits, ...armyUpdate } = addArmyPieces(run, offer.pieces, 'adlectio');
-  const cacochymicUnitId = offer.cardType === 'pestiferous' && offer.cacochymicPieceIndex !== null
-    ? addedUnits[offer.cacochymicPieceIndex]?.id ?? null
-    : null;
-  const effectTargetUnit = offer.cardType === 'concinnous'
-    && Number.isSafeInteger(offer.effectTargetIndex)
-    ? addedUnits[offer.effectTargetIndex!]
-    : offer.cardType === 'legatine'
-      ? addedUnits[legatineAdlectedAcquisitionTarget(offer.effectSeed, addedUnits.length) ?? -1]
-      : offer.cardType === 'hieratic'
-        ? addedUnits[hieraticAgminateAcquisitionTarget(offer.effectSeed, addedUnits.length) ?? -1]
-        : undefined;
-  const grantedAbility: RunAbility | null = offer.cardType === 'legatine'
-    ? 'adlected'
-    : offer.cardType === 'concinnous'
-      ? 'eutactic'
-      : offer.cardType === 'hieratic'
-        ? 'agminate'
-        : null;
-  const abilityArmy = effectTargetUnit
-    ? armyUpdate.army.map((unit): RunArmyUnit => unit.id === effectTargetUnit.id
-      ? {
-          ...unit,
-          abilities: grantedAbility && !unit.abilities.includes(grantedAbility)
-            ? [...unit.abilities, grantedAbility]
-            : unit.abilities,
-        }
-      : unit)
-    : armyUpdate.army;
   const card: RunOwnedCard = {
     id: `run-card-${run.nextCardSequence}`,
     coreId: offer.id,
-    cardType: offer.cardType,
-    effectSeed: offer.effectSeed,
-    effectTargetUnitId: effectTargetUnit?.id ?? null,
-    unitSeats: shuffled(
-      addedUnits.map((unit) => unit.id),
-      mixSeed(offer.effectSeed, 'card-unit-seat-order'),
-    ),
-    lostUnitIds: [],
-    cacochymicUnitId,
+    unitSeats: addedUnits.map((unit) => unit.id),
     acquiredAfterBattleIndex: run.sectio.afterBattleIndex,
   };
   const cards = [...run.cards, card];
   return touch({
     ...run,
     ...armyUpdate,
-    army: synchronizePlaguedModifiers(abilityArmy, cards),
+    army: armyUpdate.army,
     cards,
     nextCardSequence: run.nextCardSequence + 1,
     goldTenths: run.goldTenths - cost,
@@ -2805,16 +2406,12 @@ export function performExpunctio(run: RunDocument, cardId: string): RunDocument 
   if (priceTenths === null || run.goldTenths < priceTenths) return run;
   const removedUnitIds = new Set(attachedUnitIds);
   const cards = run.cards.filter((candidate) => candidate.id !== card.id);
-  const army = synchronizePlaguedModifiers(
-    run.army.filter((unit) => !removedUnitIds.has(unit.id)),
-    cards,
-  );
+  const army = run.army.filter((unit) => !removedUnitIds.has(unit.id));
   return touch({
     ...run,
     goldTenths: run.goldTenths - priceTenths,
     army,
     cards,
-    pestiferousLosses: run.pestiferousLosses.filter((loss) => loss.cardId !== card.id),
     sectio: {
       ...run.sectio,
       expunctedCard: {
@@ -2834,7 +2431,6 @@ export function resetSectio(run: RunDocument): RunDocument {
     goldTenths: snapshot.goldTenths,
     army: cloneArmy(snapshot.army),
     cards: cloneCards(snapshot.cards),
-    pestiferousLosses: clonePestiferousLosses(snapshot.pestiferousLosses),
     lipsana: [...snapshot.lipsana],
     seenLipsana: [...snapshot.seenLipsana],
     conflictPaidLipsana: cloneConflictPaidLipsana(snapshot.conflictPaidLipsana),
@@ -2863,7 +2459,6 @@ export function sectioHasChanges(run: RunDocument): boolean {
     || run.sectio.expunctedCard !== null
     || JSON.stringify(run.army) !== JSON.stringify(snapshot.army)
     || JSON.stringify(run.cards) !== JSON.stringify(snapshot.cards)
-    || JSON.stringify(run.pestiferousLosses) !== JSON.stringify(snapshot.pestiferousLosses)
     || JSON.stringify(run.lipsana) !== JSON.stringify(snapshot.lipsana)
     || JSON.stringify(run.conflictPaidLipsana) !== JSON.stringify(snapshot.conflictPaidLipsana)
   );
@@ -2877,9 +2472,9 @@ export function canLeaveSectio(run: RunDocument): boolean {
  * Take the Conflict's lipsanon. Mandatory, as the loot lipsanon was: there is no way past this
  * screen without one, so taking it is also what opens the Sectio behind it.
  */
-export function takeVacantiaLipsanon(run: RunDocument, lipsanon: LipsanonId, targetUnitId?: string): RunDocument {
+export function takeVacantiaLipsanon(run: RunDocument, lipsanon: LipsanonId): RunDocument {
   if (run.phase !== 'bona-vacantia' || !run.vacantia || !run.vacantia.offers.includes(lipsanon)) return run;
-  const acquired = acquireLipsanon(run, lipsanon, targetUnitId);
+  const acquired = acquireLipsanon(run, lipsanon);
   if (acquired === run) return run;
   const vacantia = run.vacantia;
   const opened = vacantia.kind === 'opening'
@@ -2888,9 +2483,9 @@ export function takeVacantiaLipsanon(run: RunDocument, lipsanon: LipsanonId, tar
   return touch(opened);
 }
 
-export function buyPaidLipsanon(run: RunDocument, targetUnitId?: string): RunDocument {
+export function buyPaidLipsanon(run: RunDocument): RunDocument {
   if (run.phase !== 'sectio' || !run.sectio || !run.sectio.paidLipsanonOffer || run.sectio.paidLipsanonBought || run.goldTenths < 10 * GOLD_SCALE) return run;
-  const acquired = acquireLipsanon(run, run.sectio.paidLipsanonOffer, targetUnitId);
+  const acquired = acquireLipsanon(run, run.sectio.paidLipsanonOffer);
   if (acquired === run) return run;
   return touch({
     ...acquired,

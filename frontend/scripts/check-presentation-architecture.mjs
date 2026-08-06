@@ -272,8 +272,6 @@ for (const forbidden of [
 for (const required of [
   '<RunSceneViewport',
   "view: 'bona-mat'",
-  "view: 'bona-target'",
-  'onTargetLipsanon(lipsanonId)',
   'launchLipsanon(lipsanonId, icon, destination)',
 ]) {
   if (!bona.includes(required)) fail(bonaPath, `missing authored Bona scene contribution: ${required}`);

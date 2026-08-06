@@ -2,19 +2,11 @@ import { useLayoutEffect, useMemo, useRef, type CSSProperties, type ReactElement
 import { defaultBackgroundSet } from '../art/backgroundSets';
 import { paletteForSide } from '../core/pieces';
 import {
-  ADLECTED_DISPLAY_NAME,
-  CACOCHYMIC_DESCRIPTION,
-  CACOCHYMIC_DISPLAY_NAME,
-  EUTACTIC_DISPLAY_NAME,
   GOLD_SCALE,
   PIECE_LABEL,
   PIECE_VALUE,
   LIPSANON_BY_ID,
   hasLipsanon,
-  lipsanonGrantingRunAbility,
-  runAbilityDescription,
-  runAbilityDisplayName,
-  type RunAbility,
   type RunArmyPieceType,
   type RunArmyUnit,
   type RunDocument,
@@ -32,7 +24,6 @@ import { Tooltip } from './shared/InfoTip';
 import { RunUnitInspectionScene } from './RunUnitInspectionScene';
 import { ChromeButton } from './shared/ChromeButton';
 import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
-import { RunAbilityIcon, type RunUnitState } from './shared/RunAbilityIcon';
 import { KitScroll } from './KitScroll';
 
 export type RunRosterOrder = 'type' | 'value' | 'ability' | 'acquired';
@@ -62,10 +53,6 @@ const PLAYER_PORTRAIT_PALETTE = paletteForSide('player') as PortraitPalette;
 const TYPE_ORDER: readonly RunArmyPieceType[] = ['king', 'pawn', 'knight', 'bishop', 'rook', 'queen'];
 
 export type RunUnitTraitId =
-  | 'adlected'
-  | 'eutactic'
-  | 'agminate'
-  | 'cacochymic'
   | 'royal-tent'
   | 'pawn-cash-out';
 
@@ -73,9 +60,7 @@ export type RunUnitTraitId =
  * A paired unit state draws its own accepted icon; a lipsanon-derived trait is not one of
  * the paired states and keeps a kit glyph (ADR-0339).
  */
-export type RunUnitTraitIcon =
-  | Readonly<{ state: RunUnitState }>
-  | Readonly<{ glyphClass: string }>;
+export type RunUnitTraitIcon = Readonly<{ glyphClass: string }>;
 
 export interface RunUnitTrait {
   id: RunUnitTraitId;
@@ -96,64 +81,8 @@ function inheritedTrait(
   return { id, label, description, source, inherited: true, icon };
 }
 
-function deploymentAbilityTrait(
-  run: RunDocument,
-  unit: RunArmyUnit,
-  ability: Extract<RunAbility, 'eutactic' | 'agminate'>,
-): RunUnitTrait | null {
-  const label = runAbilityDisplayName(ability);
-  const icon = { state: ability } as const;
-  if (unit.abilities.includes(ability)) {
-    return {
-      id: ability,
-      label,
-      description: runAbilityDescription(ability, unit.type),
-      source: 'Permanent unit ability',
-      inherited: false,
-      icon,
-    };
-  }
-  const lipsanonId = lipsanonGrantingRunAbility(run, unit, ability);
-  return lipsanonId
-    ? inheritedTrait(ability, label, runAbilityDescription(ability, unit.type), LIPSANON_BY_ID[lipsanonId].name, icon)
-    : null;
-}
-
 export function runUnitTraits(run: RunDocument, unit: RunArmyUnit): RunUnitTrait[] {
   const traits: RunUnitTrait[] = [];
-  if (unit.modifiers.includes('cacochymic')) {
-    traits.push({
-      id: 'cacochymic',
-      label: CACOCHYMIC_DISPLAY_NAME,
-      description: CACOCHYMIC_DESCRIPTION,
-      source: 'The Great Mortality',
-      inherited: false,
-      icon: { state: 'cacochymic' },
-    });
-  }
-  if (unit.abilities.includes('adlected')) {
-    traits.push({
-      id: 'adlected',
-      label: ADLECTED_DISPLAY_NAME,
-      description: runAbilityDescription('adlected', unit.type),
-      source: 'Permanent unit ability',
-      inherited: false,
-      icon: { state: 'adlected' },
-    });
-  } else if (run.deployment?.temporaryAdlectedUnitId === unit.id) {
-    traits.push(inheritedTrait(
-      'adlected',
-      ADLECTED_DISPLAY_NAME,
-      runAbilityDescription('adlected', unit.type),
-      LIPSANON_BY_ID['inspirational-record'].name,
-      { state: 'adlected' },
-    ));
-  }
-
-  const eutactic = deploymentAbilityTrait(run, unit, 'eutactic');
-  if (eutactic) traits.push(eutactic);
-  const agminate = deploymentAbilityTrait(run, unit, 'agminate');
-  if (agminate) traits.push(agminate);
   if (unit.type === 'king' && hasLipsanon(run, 'royal-tent')) {
     traits.push(inheritedTrait(
       'royal-tent',
@@ -224,7 +153,6 @@ function unitRunStatus(run: RunDocument, unit: RunArmyUnit): string {
   }
   if (run.phase === 'deployment') {
     if (run.deployment?.unavailableUnitIds.includes(unit.id)) return 'Unavailable this combat';
-    if (run.deployment?.manualPlacements[unit.id]) return `Placed with ${ADLECTED_DISPLAY_NAME}`;
     if (run.deployment?.placements[unit.id]) return 'Placed';
     if (!run.deployment?.deployingUnitIds.includes(unit.id)) return 'Not dealt';
     return 'Preparing to deploy';
@@ -268,7 +196,7 @@ export function RunUnitTraitList({
   compact?: boolean;
 }): ReactElement {
   const traits = runUnitTraits(run, unit);
-  if (!traits.length) return <small className="run-unit-no-traits">No abilities</small>;
+  if (!traits.length) return <small className="run-unit-no-traits">No traits</small>;
   return (
     <span className={`run-unit-traits${compact ? ' is-compact' : ''}`}>
       {traits.map((trait) => (
@@ -278,9 +206,7 @@ export function RunUnitTraitList({
             popupMaxInlineSize={300}
             label={`${trait.label}. ${trait.description} ${trait.inherited ? `Inherited from ${trait.source}.` : trait.source}.`}
             title={trait.label}
-            trigger={'state' in trait.icon ? (
-              <RunAbilityIcon ability={trait.icon.state} className="run-unit-trait-icon" />
-            ) : (
+            trigger={(
               <span
                 className={`run-unit-trait-icon skirmish-icon ${trait.icon.glyphClass}`}
                 aria-hidden="true"
@@ -315,7 +241,7 @@ function RunRosterFilters({
           options={[
             { value: 'type', label: 'Type' },
             { value: 'value', label: 'Value' },
-            { value: 'ability', label: 'Ability' },
+            { value: 'ability', label: 'Trait' },
             { value: 'acquired', label: 'Acquisition order' },
           ]}
           onChange={(order) => onChange({ ...filters, order })}
@@ -337,20 +263,16 @@ function RunRosterFilters({
         />
       </label>
       <label style={{ ['--run-roster-filter-index' as string]: 2 } as CSSProperties}>
-        <span>Ability</span>
+        <span>Trait</span>
         <HouseSelect
           value={filters.ability}
           options={[
-            { value: 'all', label: 'All abilities' },
-            { value: 'adlected', label: ADLECTED_DISPLAY_NAME },
-            { value: 'eutactic', label: EUTACTIC_DISPLAY_NAME },
-            { value: 'agminate', label: runAbilityDisplayName('agminate') },
-            { value: 'cacochymic', label: CACOCHYMIC_DISPLAY_NAME },
+            { value: 'all', label: 'All traits' },
             { value: 'royal-tent', label: 'Royal Tent' },
             { value: 'pawn-cash-out', label: 'Cash Out' },
           ]}
           onChange={(ability) => onChange({ ...filters, ability })}
-          ariaLabel="Army ability"
+          ariaLabel="Army trait"
           fillSurface={CHROME_LEAF_FILL_SURFACE}
         />
       </label>

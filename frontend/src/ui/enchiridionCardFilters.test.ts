@@ -3,10 +3,10 @@ import { RUN_CARD_CATALOG } from '../run/model';
 import { cardMatchesFilters } from './Enchiridion';
 
 describe('Enchiridion card filters', () => {
-  it('shows both starter cards and the complete core deck when both filters are All', () => {
+  it('shows the combined starter and complete formation deck when both filters are All', () => {
     const visible = RUN_CARD_CATALOG.filter((card) => cardMatchesFilters(card, 'all', 'all'));
-    expect(visible).toHaveLength(51);
-    expect(visible.slice(0, 2).map((card) => card.id)).toEqual(['his-grace', 'front-lines']);
+    expect(visible).toHaveLength(20);
+    expect(visible[0].id).toBe('his-grace');
   });
 
   it('matches exact gold and contained unit type independently', () => {
@@ -26,10 +26,10 @@ describe('Enchiridion card filters', () => {
     expect(oneGoldQueens).toEqual([]);
   });
 
-  it('filters the zero-gold King starter card and the two-gold Pawn starter card normally', () => {
-    expect(RUN_CARD_CATALOG.filter((card) => cardMatchesFilters(card, '0', 'king')).map((card) => card.id))
+  it('filters the two-gold combined starter normally', () => {
+    expect(RUN_CARD_CATALOG.filter((card) => cardMatchesFilters(card, '2', 'king')).map((card) => card.id))
       .toEqual(['his-grace']);
     expect(RUN_CARD_CATALOG.filter((card) => cardMatchesFilters(card, '2', 'pawn')).map((card) => card.id))
-      .toContain('front-lines');
+      .toEqual(expect.arrayContaining(['his-grace', 'pp']));
   });
 });

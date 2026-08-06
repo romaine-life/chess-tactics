@@ -13,12 +13,12 @@ describe('Run lipsanon art review', () => {
       revision: 1,
       updatedAt: '2026-07-29T00:00:00.000Z',
       slots: [{
-        slot: 'ui/run/lipsana/royal-decree.png',
+        slot: 'ui/run/lipsana/fair-scales.png',
         domain: 'ui-kit',
         role: 'icon',
         availabilityPolicy: 'decorative',
         lifecycleState: 'active',
-        activeVersionId: 'royal-decree-version',
+        activeVersionId: 'fair-scales-version',
         rowRevision: 2,
         metadata: {},
         versionStatus: 'accepted',
@@ -46,12 +46,12 @@ describe('Run lipsanon art review', () => {
           media: null,
         },
         {
-          id: 'royal-decree-version',
-          slot: 'ui/run/lipsana/royal-decree.png',
+          id: 'fair-scales-version',
+          slot: 'ui/run/lipsana/fair-scales.png',
           sourcePath: null,
           domain: 'ui-kit',
           role: 'icon',
-          label: 'Royal Decree',
+          label: 'Fair Scales',
           status: 'accepted',
           productionEligible: true,
           metadata: {},
@@ -63,7 +63,7 @@ describe('Run lipsanon art review', () => {
           updatedAt: '2026-07-29T00:00:00.000Z',
           updatedBy: null,
           media: {
-            url: '/api/admin/media/royal-decree',
+            url: '/api/admin/media/fair-scales',
             sha256: 'a'.repeat(64),
             mediaType: 'image/png',
             width: 64,
@@ -75,13 +75,13 @@ describe('Run lipsanon art review', () => {
     } satisfies AdminLiveMediaCatalog;
 
     expect(runLipsanonReviewCandidates(catalog)).toEqual([
-      expect.objectContaining({ lipsanonId: 'royal-decree' }),
+      expect.objectContaining({ lipsanonId: 'fair-scales' }),
     ]);
   });
 
   it('separates new candidates from already installed reference art', () => {
     const installed = {
-      lipsanonId: 'royal-decree',
+      lipsanonId: 'fair-scales',
       version: { status: 'accepted' },
     } as LipsanonReviewCandidate;
     const candidate = {

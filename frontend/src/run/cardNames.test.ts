@@ -35,11 +35,9 @@ describe('Run card names', () => {
     expect(runCardArtSlot({ pieces: ['queen'] })).toBe('ui/run/card-art/q/illustration.png');
   });
 
-  it('gives both starter cards dedicated illustration slots', () => {
-    expect(runCardArtSlot({ id: 'his-grace', pieces: ['king'] }))
+  it('gives the starter formation a dedicated illustration slot', () => {
+    expect(runCardArtSlot({ id: 'his-grace', pieces: ['king', 'pawn', 'pawn'] }))
       .toBe('ui/run/card-art/his-grace/illustration.png');
-    expect(runCardArtSlot({ id: 'front-lines', pieces: ['pawn', 'pawn'] }))
-      .toBe('ui/run/card-art/front-lines/illustration.png');
   });
 
   it('authors one nonempty flavor fragment for every core card and no orphan flavor', () => {
@@ -53,23 +51,23 @@ describe('Run card names', () => {
     }
   });
 
-  it('resolves card identity from the composition, not the carrier id or piece order', () => {
+  it('uses authored formation identity when present and composition only as a legacy fallback', () => {
     expect(canonicalCardId({ pieces: ['bishop', 'knight'] as RunCoreCard['pieces'] })).toBe('kb');
     for (const card of RUN_CARD_DECK) {
       expect(canonicalCardId(card)).toBe(card.id);
     }
-    // A sectio offer and an art-review fixture with deck compositions read as their card.
-    expect(runCardName({ pieces: ['knight', 'bishop'] as RunCoreCard['pieces'] })).toBe(RUN_CARD_NAME_BY_ID.kb);
-    expect(runCardName({ pieces: ['pawn', 'rook'] as RunCoreCard['pieces'] })).toBe(RUN_CARD_NAME_BY_ID.pr);
+    expect(runCardName({ id: 'bb-diagonal', pieces: ['bishop', 'bishop'] })).toBe('Crooked Diocese');
+    expect(runCardName({ id: 'bb-vertical', pieces: ['bishop', 'bishop'] })).toBe('Matins and Vespers');
+    expect(runCardName({ pieces: ['knight', 'bishop'] as RunCoreCard['pieces'] }))
+      .toBe(cardContentsLabel({ pieces: ['knight', 'bishop'] }));
   });
 
   it('addresses every card by its printed name, hyphenated, with no collision', () => {
-    expect(runCardSlug('ppb')).toBe('country-parish');
+    expect(runCardSlug('ppb-protected')).toBe('country-parish');
     // Apostrophes are dropped rather than hyphenated, so a possessive reads as one word.
-    expect(runCardSlug('pb')).toBe('pilgrims-escort');
-    expect(runCardSlug('ppkb')).toBe('wayfarers-compact');
+    expect(runCardSlug('pb-front')).toBe('pilgrims-shelter');
+    expect(runCardSlug('rr-vertical')).toBe('the-twin-keeps');
     expect(runCardSlug('his-grace')).toBe('his-grace');
-    expect(runCardSlug('front-lines')).toBe('front-lines');
     const slugs = RUN_CARD_CATALOG.map((card) => runCardSlug(card.id));
     expect(new Set(slugs).size).toBe(slugs.length);
     for (const slug of slugs) expect(slug).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);

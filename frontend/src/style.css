@@ -24920,6 +24920,12 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   transform: translateY(calc(var(--run-card-text-ink-centre, .0667) * 1em));
 }
 
+.run-card-prototype-cost.is-multi-digit {
+  font-size: calc(var(--run-card-cost-size, 6.2cqw) * .76);
+  letter-spacing: -.35cqw;
+  padding-inline-end: .35cqw;
+}
+
 .run-card-prototype-type {
   font-size: var(--run-card-type-size, 3.7cqw);
   inset-block-start: var(--run-card-type-top, 58.2%);
@@ -25083,6 +25089,88 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   column-gap: var(--run-card-ledger-column-gap, 2cqw);
   grid-template-columns: repeat(2, minmax(0, 1fr));
   row-gap: var(--run-card-ledger-row-gap, .8cqw);
+}
+
+.run-card-formation {
+  align-self: center;
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-columns: repeat(var(--run-card-formation-columns), 12cqw);
+  grid-template-rows: repeat(var(--run-card-formation-rows), 9.2cqw);
+  margin-block-start: -.6cqw;
+  position: relative;
+}
+
+.run-card-formation-square {
+  box-sizing: border-box;
+  color: rgba(58, 49, 39, .2);
+  outline: .22cqw solid currentColor;
+  outline-offset: -.22cqw;
+  z-index: 0;
+}
+
+.run-card-formation-square.is-dark {
+  color: rgba(58, 49, 39, .36);
+}
+
+.run-card-formation-tooltip {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  min-block-size: 0;
+  min-inline-size: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.run-card-formation-tooltip > .run-card-formation-tooltip-trigger {
+  block-size: 100%;
+  display: block;
+  inline-size: 100%;
+}
+
+.run-card-formation-cell,
+button.run-card-formation-cell {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  box-sizing: border-box;
+  display: flex;
+  grid-column: calc(var(--run-card-formation-x) + 1);
+  grid-row: calc(var(--run-card-formation-y) + 1);
+  inline-size: 100%;
+  justify-content: center;
+  min-block-size: 0;
+  min-inline-size: 0;
+  padding: 0;
+  position: relative;
+  z-index: 1;
+}
+
+button.run-card-formation-cell.is-selectable {
+  cursor: pointer;
+}
+
+.run-card-formation-cell.is-highlighted .run-card-formation-unit,
+button.run-card-formation-cell.is-selectable:hover .run-card-formation-unit,
+button.run-card-formation-cell.is-selectable:focus-visible .run-card-formation-unit {
+  filter: drop-shadow(0 0 .7cqw var(--skirmish-cyan));
+}
+
+.run-card-formation-cell.is-empty::after {
+  block-size: 64%;
+  color: rgba(51, 44, 35, .32);
+  content: '';
+  inline-size: 54%;
+  outline: .3cqw dashed currentColor;
+}
+
+.run-card-formation-unit {
+  block-size: 8.4cqw;
+  image-rendering: pixelated;
+  inline-size: auto;
+  max-inline-size: 10.8cqw;
+  object-fit: contain;
 }
 
 .run-card-prototype-ledger:is(.is-1-cells, .is-2-cells) > .run-card-prototype-ledger-row,

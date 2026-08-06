@@ -81,221 +81,57 @@ these.
   and replacement-confirmation flow rather than replacing the Run immediately (ADR-0428).
 - Acquired lipsana read as persistent Run state: one frameless native-size icon
   strip stays at the upper-left beneath the title bar in Battles and between-Battle
-  screens, independent of the Battle Controls panel; pointing at or focusing an
-  icon immediately explains its name and complete effect (ADR-0216, ADR-0217).
-- A Conflict whose authored span still contains a loot Battle opens with **Bona
-  Vacantia** before its Sectio. The mat presents three lipsana and no unrelated
-  unit selector. An ordinary choice commits when it lands in the held strip; a
-  choice that needs a named unit lands provisionally and opens the exact Martial
-  Prosopography ledger/profile, with the lipsanon and ability explanation in the
-  absent tab rail's column. Confirming a unit commits both facts and reveals the
-  Sectio. Until then, **Return to the three offers** restores the untouched mat,
-  with no pending acquisition in the Run document. The target ledger and each
-  unit profile are addressable authored Run scenes rather than local screen state
-  (ADR-0368, ADR-0383). The landed lipsanon remains continuously visible while
-  scene ownership passes from the flight to the held strip (ADR-0385).
-- Run cards use a familiar trading-card anatomy: a
-  title at upper left, one compact gold coin with a live positive whole-number cost
-  at upper right, a large pane for the card's accepted PixelLab illustration, a narrow card-
-  type line, and a Contents Box whose flavor text remains at the bottom. The type
-  line is never empty: ordinary and affected unit cards say **Units** at left.
-  An affected card uses the strip's right-side symbol seat for its causal
-  card-property icon instead of appending a written qualifier. Ordinary cards
-  leave that seat empty. The primary label uses one shared optically centered
-  scale and baseline rather than per-property positioning.
-  Detecting an ability, modifier, or affected card type does not automatically
-  synthesize explanatory prose in the Contents Box; those definitions will use a
-  later tooltip, reference, or inspection system. The shared face still permits
-  separately authored card content.
-  Future mechanically different primary families may use
-  types such as **Event**. Ordinary costs remain from one through nine;
-  Concinnous's two-gold premium may produce a live 10 or 11 and Legatine's
-  three-gold premium may produce a live 10 through 12 in the same coin.
-  Cost is never decimal, fractional, or zero and never uses separate numbered
-  coin art. Each actual unit in the ledger appears as the same
-  canonical player-side sprite used on the board. Card Layout, Sectio,
-  review, and Enchiridion use the same face rather than parallel card shells
-  Each frame declares title, cost, art, type, and contents rectangles in its
-  native 1060×1484 coordinate system. Those measurements are bound to the exact
-  frame SHA-256, projected through one shared responsive formula, and reviewable
-  as an overlay in Card Layout; unmatched pixels use the Standard profile
-  (ADR-0219, ADR-0225, ADR-0270, ADR-0275, ADR-0276, ADR-0283, ADR-0285,
-  ADR-0305, ADR-0309, ADR-0324, ADR-0325, ADR-0327, ADR-0329, ADR-0330,
-  ADR-0339).
-  In-place card changes retain the last complete face until the requested card's
-  actual image layer is ready, then promote content, art, frame, and frame
-  geometry together; rapid newer selections cancel older pending cards
-  (ADR-0314, ADR-0324).
-- The card deck's 49 unique one-through-nine-point compositions are the
-  authored **core cards**. Each keeps one title and flavor text while its
-  drawn offer may give particular units more than one modifier. The 49 cores do
-  not multiply into variant deck entries: effects are rolled and persisted when
-  a Sectio reveals the card, promoted unchanged if adlected, and discarded if
-  passed so a later shuffle may affect that core differently. Adlected adds
-  3 gold, Eutactic adds 2 (and can raise Concinnous cards to 10 or 11), and
-  Pestiferous reduces its offer price according to the marked unit's piece tier—Pawn 0, minor
-  1, Rook 2, Queen 3—so Sectio-card prices remain whole gold and a marked Pawn
-  still costs 1. Exact public contents and modifier markers belong in the Contents Box
-  unit ledger, not generated card-name permutations; an explicitly concealed
-  Concinnous target appears there as hidden until Adlectio (ADR-0265, ADR-0271,
-  ADR-0272, ADR-0305, ADR-0309).
-- After the opening Bona Vacantia choice, a fresh Run enters the normal Sectio with
-  the permanent King, two free Pawns, 8 gold plus any immediate lipsanon payout,
-  and three seeded card offers at distinct core values from 1 through 8, or four while
-  Quartermaster's Ledger is held.
-  Each card may undergo Adlectio once while the player can afford it. Every adlected card
-  keeps the Sectio open, flies from its Sectio seat into the title-reachable
-  Chartulary, reveals the accepted universal face-down card beneath it in the unchanged
-  original pile seat, and uses the same gold transaction cue as Alienatio. That revealed back
-  is presentation only—not a replacement offer or a persisted remainder—and the surviving
-  piles do not move. Only the explicit
-  Continue action enters the first Battle, and it is available without requiring
-  an Adlectio. **Card** is the sole current gameplay noun for these deck entries
-  and offers (ADR-0321, ADR-0322, ADR-0323, ADR-0344, ADR-0347, ADR-0387, ADR-0481).
-- Each of those 49 Units cards owns one native 400×280 PixelLab illustration
-  keyed by its canonical composition id. Human unit roles and readable
-  equipment control the composition; historical pressure supplies secondary
-  setting and anti-story residue. Faces and eyes may appear naturally—the
-  rejected global eye-concealment rule is retired. The 49 slots are reviewed
-  and accepted atomically, with exact or explicitly reconstructed PixelLab
-  prompt provenance and no packaged fallback (ADR-0281, ADR-0282).
-- A card's affected **qualifiers** identify causal rules rather than replacing
-  its primary type. Pestiferous changes the card lifecycle and publicly marks
-  one current unit with the Cacochymic status icon; the card face does not spell
-  out **Pestiferous** in the type strip or **Cacochymic** beside that unit. Its
-  right-side Pestiferous property icon is distinct from the Cacochymic state icon.
-  **Legatine** causes exactly one unit to gain Adlected when the card is
-  acquired. Every Sectio-card draw has a seeded one-in-eight Legatine chance,
-  including the opening Sectio, at every core value: an opening card whose
-  surcharge passes the starting eight gold is offered out of reach rather than
-  suppressed, and only a deal with nothing affordable at all repairs its cheapest
-  card (ADR-0344). Legatine resolves before
-  the other qualifiers and adds three gold even when the resulting price reaches
-  ten through twelve. The unit is chosen only at acquisition. Multi-unit offers
-  therefore conceal the outcome, while a one-unit offer shows the dedicated
-  Adlected icon because the result is forced. The Legatine property icon in
-  the type strip is a separate symbol. Legatine uses the dedicated blue-water
-  frame.
-  **Concinnous** means skillfully and harmoniously arranged and causes exactly
-  one contained unit to become Eutactic upon acquisition. The right-side
-  Concinnous icon declares the property; detecting it does not automatically restate its
-  behavior as Contents Box prose. Before Adlectio, direct unit-property
-  presentation marks the target as hidden. The target is seeded and persisted
-  with the offer, priced normally, and merely revealed—not rerolled—after
-  Adlectio. A card does not become Concinnous just because an external lipsanon
-  later modifies one of its units. Concinnous owns its dedicated white frame
-  treatment while retaining the shared anatomy. After Legatine and Pestiferous precedence, every remaining Sectio
-  offer—regardless of core value—has a seeded one-in-eight Concinnous roll. It
-  costs two additional gold, may reach eleven, and cannot carry another
-  qualifier. Every frame uses one shared accepted gold-coin source with its live
-  price overlaid (ADR-0272, ADR-0276, ADR-0305, ADR-0309, ADR-0310, ADR-0311,
-  ADR-0324, ADR-0325, ADR-0327, ADR-0328, ADR-0329, ADR-0339, ADR-0341).
-  **Hieratic** is the deliberately formal fourth card-property name paired with
-  **Agminate**, and it draws in every Sectio. It resolves last, after Legatine,
-  Pestiferous and Concinnous, at the same seeded one-in-eight chance on the draws
-  that remain. Exactly one contained unit gains Agminate at acquisition, chosen
-  the way a Legatine target is: drawn on Adlectio, concealed by a multi-unit
-  offer, and shown as the forced result on a one-unit offer. Agminate seats a
-  unit in its piece-specific station during automatic deployment, so it carries
-  Adlected's three-gold price. Hieratic owns the
-  dedicated steel-armor frame (ADR-0339, ADR-0345).
-- Run difficulty is **Ataraxia**. The first Run uses **Ataraxia 0 — The
-  Untroubled Mind**, whose displayed impact is **Standard rules.**; later Runs may opt into historically named
-  conditions. Completing the highest available tier unlocks exactly the next
-  one, and the ladder stacks: selecting tier N applies every condition from 1
-  through N. The title-bar tooltip names **Ataraxia** once, then lists every active
-  tier as a small carved numeral beside that tier's effect and adds no glossary
-  panes of its own (ADR-0266, ADR-0268, ADR-0291, ADR-0390, ADR-0391).
-- **Ataraxia I — The Great Mortality** initially targets Pestiferous status for
-  roughly one in eight otherwise eligible Sectio draws. Pestiferous status is
-  rolled with the rest of that affected offer, not added as another deck copy.
-  A nonempty Pestiferous card publicly marks exactly one unit Cacochymic. The offer's
-  price reduction is based on that unit's piece tier. The unit ledger identifies it
-  with the dedicated Cacochymic icon rather than a written label. The marked Cacochymic
-  unit on every owned nonempty Pestiferous card dies when combat ends, whether or not its card was drawn or deployed.
-  Whenever that unit dies, its Pestiferous card immediately marks one remaining unit.
-  Alienatio, cashing out, or otherwise permanently removing the marked unit also
-  retargets the card while it remains nonempty. The empty card remains as a possible dead draw until an explicit
-  effect removes it. Affected Sectio offers, their exact public target, Adlectio state,
-  card membership, and losses are persisted; the seeded draw-time roll is one in
-  eight and is inspectable in Card Layout. Pestiferous cards retain the shared
-  face geometry but resolve their dedicated black bubbling-crude frame slot;
-  ordinary cards keep the standard frame (ADR-0267, ADR-0269, ADR-0271, ADR-0286,
-  ADR-0311, ADR-0312, ADR-0397).
-- Card ledgers have no assumed row cap before live experimentation. Dense cards
-  may step down row spacing, icons, and type within readable bounds, but they
-  must continue to show every unit property and retain the core card's flavor
-  text in its bottom region. Repeated-unit grouping and a demonstrated maximum
-  row count remain open presentation decisions (ADR-0270).
-- The starter army belongs to two starter-only cards in the Chartulary.
-  **His Grace** contains the King and alone uses the royal-purple frame;
-  Praecipuus puts that card at the top of every Battle deal. Because cards now
-  own deployment order, His Grace's first seat places the King before every
-  other unit without a second unit ability. **Front Lines** contains the two ordinary starting Pawns
-  and uses the Standard Units frame because it has no card property.
-  His Grace is not removable and neither card appears in ordinary Adlectio
-  offers (ADR-0406, ADR-0407, ADR-0413).
-- Every Battle enters Deployment on the canonical empty battlefield with the complete face-down
-  Chartulary deck visible in the center. **Deal** partitions that deck only after the battlefield
-  scene is committed; a device-local **Deal automatically** preference may perform the same
-  action on later Deployments. The first Conflict deals at most three cards, one at a time, into
-  the numbered stack at the top-left of Controls so each landing remains legible. Each later
-  Conflict adds one card. His Grace consumes the first slot and the rest come from a fresh seeded
-  shuffle. The undrawn remainder moves as one counted face-down stack into the persistent
-  Chartulary mark. Dealt cards contribute their remaining units individually, so one card may be
-  split by limited board capacity. The top card flips only when it becomes active; later cards
-  remain hidden (ADR-0419, ADR-0422).
-- Card order, followed by each card's persisted left-to-right unit seats, owns both capacity and
-  placement order. A sold or lost unit leaves an empty seat rather than changing the durable
-  order. The revealed card retains its authored ledger, density, unit scale, and stack positions;
-  a unit that leaves becomes a visibly vacant seat and only the occupied count changes. Units resolve one at a time from
-  their own rules; Adlected
-  pauses for a highlighted-square choice when that unit reaches the front.
-  Deployment transport begins paused, but **Play**, **Next**, and **Full deploy** are available
-  before Deal and perform that Deal before continuing their requested pace. The dedicated Deal
-  action leaves the pile paused and face down. **Next** reveals and advances exactly one ordinary
-  unit before pausing; **Play** advances ordinary units one at a time; **Full deploy** reveals no
-  cards and commits every remaining automatic unit across all remaining cards at once as one
-  arrival wave. **Pause** finishes the current atomic arrival before stopping.
-  Adlected and any later required input always pause transport, and a resolved choice never
-  silently resumes it. Under Play or Next, each unit finishes its board arrival before the next
-  seat advances and a card discards after its final unit settles. Under Full deploy, remaining
-  cards stay motionless and face down while the one unit wave lands. Only after every unit settles
-  do those cards fly from their measured Controls pile into the measured Chartulary mark together.
-  After the final discard, the already-mounted battlefield promotes directly into Battle. The exact deal,
-  seat order, active card, reveal
-  state, unit cursor, transport, capacity result, choices, discards, and formation persist across
-  reload and Battle retry (ADR-0346, ADR-0350, ADR-0351, ADR-0419, ADR-0422, ADR-0427, ADR-0435,
-  ADR-0436).
-- Deployment modifiers may be contextual rather than linearly valuable. An
-  Agminate Pawn inspects prior Pawns for adjacency or an open file, and an
-  Agminate Bishop prefers the nearest opposite-color square relative to a prior
-  Bishop. They receive no late phase: whether a reference already exists is a
-  consequence of the card and seat order (ADR-0273, ADR-0274, ADR-0419).
-- Muster Roll and Surveyor's Compass are registered only for existing Runs that
-  already reference them and explicit playtests. New reveals omit both from the
-  seeded lipsanon offer surfaces until the developing Deployment choices and
-  information locks are settled; no RunSaveVersion or database migration is
-  introduced by that availability change. Surveyor's Compass's former
-  two-formation behavior is superseded by one-unit-at-a-time card order (ADR-0404,
-  ADR-0405, ADR-0419).
-- Placement lipsana grant shared unit abilities rather than owning bespoke
-  placement rules. Field Linens grants Eutactic to Pawns; Royal Decree to the
-  King; Crenellated Rampart to Rooks; and Pope's Staff to Bishops. Ghibelline
-  Rampart grants Agminate to Rooks; Pope's Robes to Bishops; and Royal Sceptre
-  to the King. Their rules text names only the grant, while the unit-ability
-  reference owns the piece-specific behavior. Permanent and lipsanon-granted
-  copies do not stack. Ordinary units carry at most one deployment ability;
-  unit-type lipsana skip units that already have an inherent ability. Every unit carries at most
-  one deployment ability; the King begins without one and may receive one from a lipsanon.
-  Eutactic is a closest-available best-fit row preference:
-  Pawns prefer the front row; Knights and Bishops the row immediately behind
-  it; and Rooks, Queens, and the King the back row. Agminate separately gives
-  Pawns a preference for adjacency to another Pawn or an open file, Queens a
-  pull toward the middle, Knights a preference one square in from an edge,
-  the King to an edge, Rooks into their King-flank/corner formation, and
-  Bishops onto the nearest opposite square color from a prior Bishop
-  (ADR-0274, ADR-0395, ADR-0396, ADR-0419).
+  screens, independent of the Battle Controls panel. Pointing at or focusing an
+  icon explains its name and complete effect. Bona Vacantia presents three active
+  lipsana and every choice commits directly; unit-targeting relic branches are
+  retired (ADR-0216, ADR-0217, ADR-0368).
+- Run cards keep the familiar trading-card anatomy: title, one live whole-number
+  gold cost, illustration, the **Units** type line, a positional unit diagram, and
+  flavor text. Every live card currently uses the Standard frame. Rarity frames,
+  card qualifiers, unit abilities, modifier icons, and acquisition targeting are
+  outside the active ruleset. Existing accepted composition illustrations may be
+  reused while dedicated formation art is authored.
+- The active offer deck is a deliberately bounded set of nineteen authored
+  formations containing one, two, or three units. A card's identity includes both
+  its ordered piece seats and their board-relative offsets; lower y is toward the
+  enemy. The set includes single Pawn, Knight, Bishop, Rook, and Queen cards;
+  horizontal two- and three-Pawn lines; front-Pawn pairs with Bishop, Knight,
+  Rook, or Queen; protected and reversed two-Pawn triangles for Bishops and
+  Knights; horizontal Knights; diagonal and vertical Bishops; and vertical Rooks.
+  Material composition alone does not generate additional cards.
+- A Sectio reveals three seeded formation-card offers, or four while
+  Quartermaster's Ledger is held. Each offer costs exactly its printed material
+  value. Adlectio adds the card and its units without rolling, assigning, or
+  revealing another property. The accepted face-down pile behavior and direct
+  Chartulary flight remain presentation-only; they do not imply a hidden market
+  or a replacement draw.
+- Run difficulty currently exposes only **Ataraxia 0 — The Untroubled Mind**,
+  displayed as **Standard rules.** Higher tiers and card rarity remain tabled
+  until the baseline economy has supported a completed Run.
+- A fresh Run starts with one non-removable card, **His Grace**: the King behind
+  two protecting Pawns in a three-cell triangle. The earlier separate Front Lines
+  card is retired. The starter's units, order, and formation are the same facts
+  shown on its face and used in Deployment.
+- Every Battle enters Deployment on the canonical empty battlefield with the
+  face-down Chartulary in the center. Deal order is seeded per combat, with His
+  Grace first and up to three cards in the first Conflict; later Conflicts add one
+  card. The undrawn remainder returns to the persistent Chartulary mark.
+- When a card is played, all of its remaining units deploy as one atomic authored
+  formation. Deployment searches legal translations of that exact shape and
+  persists the complete hidden destination plan before the visible arrival.
+  Revealing a card and committing its formation are distinct animation boundaries,
+  but there is no per-unit placement choice.
+- If no legal translation fits the whole shape, Deployment makes a deterministic
+  seeded best effort by placing individual units on legal squares. Board capacity
+  may cut off units only after those whole-shape and fallback attempts. Blocked
+  units remain recorded for Reservist mechanics. This recovery rule is provisional
+  and favors completing a Run over adding a new placement dialogue.
+- Deal, reveal, card cursor, transport, complete formation plans, committed
+  placements, settling units, capacity result, discards, and blocked units persist
+  across reload and Battle retry. **Next** advances one card boundary, **Play**
+  advances the sequence, **Full deploy** commits the remaining formations, and
+  **Pause** stops after the current atomic card arrival settles (ADR-0346,
+  ADR-0419, ADR-0422, ADR-0435, ADR-0492).
 - Every persistent Run unit receives a seeded, stored historical identity when
   it joins the army. Piece type chooses the register: recorded archers for
   Pawns, documented knights, religious leaders, real castles for Rooks, queens
@@ -326,7 +162,7 @@ these.
   unit ledger rather than a second Alienatio list. The two opposite gold movements keep their
   visible text and live value but use distinct native marks: a green plus for Alienatio's gain
   and a red minus for the Expunctio fee or Paid state. The card companion reserves those
-  controls and its compact ability band before selection, so choosing or cycling a unit changes
+  controls and its compact detail band before selection, so choosing or cycling a unit changes
   their contents in place without moving the surrounding physical panel. When Aliene commits,
   the sold figure fades from its old card seat while each surviving figure glides into the exact
   compact post-sale frame; the visual settlement never delays the transaction or disables input
@@ -336,21 +172,12 @@ these.
   **Aliened** and **Athetized this visit**, respectively
   (ADR-0230, ADR-0386, ADR-0393, ADR-0407, ADR-0432, ADR-0443, ADR-0482, ADR-0483, ADR-0485, ADR-0486, ADR-0487, ADR-0488, ADR-0489).
 - **Enchiridion** is the player-facing reference for unit movement, terrain
-  rules, the filterable card catalog (the two starter cards and 49-card core
-  deck), affected card types, all lipsana, and the
-  behavior of the current unit abilities: Adlected, Eutactic, Agminate, and
-  Cacochymic. Card Types includes the starter-only Praecipuus
-  property on canonical His Grace. Card filters combine exact gold value with
-  contained unit type. Cards uses no fourth column: its terminal third column
-  fills the remaining Enchiridion canvas with real card faces in a vertically
-  scrolling gallery, while individual card addresses focus those faces without
-  introducing a separate detail (ADR-0364). The Card Types reference uses the
-  third column for its five affected-type names and the fourth for one selected
-  card face: canonical His Grace for Praecipuus and The Volunteer for the four
-  ordinary properties. Praecipuus, Pestiferous, Concinnous, Legatine, and Hieratic
-  all state their accepted effects, and none
-  remains provisional
-  (ADR-0313, ADR-0315, ADR-0329, ADR-0339, ADR-0341, ADR-0345). During Battle,
+  rules, the complete twenty-card catalog (His Grace plus nineteen offer cards),
+  all active lipsana, and Ataraxia. Card filters combine exact gold value with
+  contained unit type. The retired Abilities and Card Types sections have no
+  route or gallery of their own. Cards uses no fourth column: its terminal third
+  column fills the remaining canvas with the same real positional card faces used
+  everywhere else (ADR-0364, ADR-0492). During Battle,
   the Controls title bar opens **Strategikon** over the board without unmounting
   the fight. Its four section marks sit beside the book and directly open the
   Enchiridion, Martial Prosopography, Chartulary, and Lipsanotheca; the same

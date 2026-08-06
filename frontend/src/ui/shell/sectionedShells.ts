@@ -221,9 +221,7 @@ const ENCHIRIDION_SECTION_DEFINITIONS: Readonly<Record<string, SceneDefinition>>
   units: SCENE_DEFINITIONS.enchiridionUnits,
   terrain: SCENE_DEFINITIONS.enchiridionTerrain,
   cards: SCENE_DEFINITIONS.enchiridionCards,
-  'card-types': SCENE_DEFINITIONS.enchiridionCardTypes,
   lipsana: SCENE_DEFINITIONS.enchiridionLipsana,
-  abilities: SCENE_DEFINITIONS.enchiridionAbilities,
   ataraxia: SCENE_DEFINITIONS.enchiridionAtaraxia,
 });
 
@@ -361,9 +359,7 @@ const STRATEGIKON_REFERENCE_DEFINITIONS: Readonly<Record<string, SceneDefinition
   units: SCENE_DEFINITIONS.strategikonReferenceUnits,
   terrain: SCENE_DEFINITIONS.strategikonReferenceTerrain,
   cards: SCENE_DEFINITIONS.strategikonReferenceCards,
-  'card-types': SCENE_DEFINITIONS.strategikonReferenceCardTypes,
   lipsana: SCENE_DEFINITIONS.strategikonReferenceLipsana,
-  abilities: SCENE_DEFINITIONS.strategikonReferenceAbilities,
   ataraxia: SCENE_DEFINITIONS.strategikonReferenceAtaraxia,
 });
 

@@ -46,7 +46,7 @@ const sceneContinuity = readFileSync(new URL('./shell/SceneContinuity.tsx', impo
 describe('Run chrome hierarchy', () => {
   it('admits every Run phase through the form-owned shell and HUD', () => {
     const metaControls = runScreen.match(
-      /function RunMetaControls\b[\s\S]*?\r?\n}\r?\n\r?\nfunction deploymentSquareLabel/,
+      /function RunMetaControls\b[\s\S]*?\r?\n}\r?\n\r?\nfunction DeploymentControls/,
     )?.[0] ?? '';
 
     expect(runForm).toContain('export function createRunForm');
@@ -315,12 +315,12 @@ describe('Run chrome hierarchy', () => {
     expect(playerRunSources).not.toContain('<OuterChromeHeader');
     expect(playerRunSources).not.toContain('<select');
     expect(playerRunSources).not.toContain('type="checkbox"');
-    expect(runScreen).toContain('<HouseSelect');
+    expect(runScreen).not.toContain('<HouseSelect');
     expect(runArmyWorkspace).toContain('<HouseSelect');
     expect(runWorkspaceRule).toContain('position: relative');
     expect(runWorkspaceRule).not.toMatch(/\b(?:padding|gap)\s*:/);
     expect(runScreen).toContain('visibleLipsanonCount(shellRun)');
-    expect(runScreen).toContain('|| bonaTarget');
+    expect(runScreen).not.toContain('bonaTarget');
     expect(styleCss).toMatch(/\.skirmish-screen\s*\{[\s\S]*?column-gap:\s*0/);
     expect(styleCss).toMatch(/\.skirmish-screen:not\(\.level-editor-screen\) \.skirmish-war-room > \.skirmish-field\s*\{[\s\S]*?margin-inline-end:\s*var\(--skirmish-board-controls-gutter\)/);
     expect(styleCss).not.toContain('.skirmish-screen.is-run-self-inspection-open');
@@ -395,20 +395,12 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain("placeRevealedDeploymentUnit(paused, level)");
     expect(runScreen).not.toContain('View Formation {index + 1}');
     expect(runScreen).not.toContain('Deploy this formation');
-    expect(runScreen).toContain('renderCellOverlay: ({ cell, visualFootprintStyle }) => {');
+    expect(runScreen).toContain('renderCellOverlay: () => null');
     expect(runScreen).not.toContain('FramedReadOnlyBoardView');
     expect(runScreen).not.toContain('levelToEditorBoard');
-    expect(runScreen).toContain("legal ? 'is-move' : 'is-deployment-blocked'");
-    expect(runScreen).toContain('aria-disabled={!legal}');
-    expect(runScreen).toContain('if (event.button === 0) event.stopPropagation();');
-    expect(runScreen).toContain('onClick={legal ? () => replace(placeAdlectedDeploymentUnit(prepared, level, cell)) : undefined}');
-    expect(runScreen).toContain('boardLabCellPosition(hoveredPlacementCell)');
-    expect(runScreen).toContain('left: hoveredPlacementSeat.left');
-    expect(runScreen).toContain('zIndex: objectBaseZIndex(hoveredPlacementCell)');
-    expect(runScreen).toContain('data-testid="deployment-placement-ghost"');
-    expect(runScreen).not.toContain('const showGhost = hoveredCellKey === cellKey');
     expect(runScreen).toContain('gameForRunDeployment(prepared, level, layout, true)');
-    expect(runScreen).toContain("stage === 'adlected'");
+    expect(runScreen).not.toContain('placeAdlectedDeploymentUnit');
+    expect(runScreen).not.toContain('deployment-placement-ghost');
     expect(runScreen).toContain('advanceAutomaticDeployment(deployment, level)');
     expect(runScreen).toContain('placeRevealedDeploymentUnit(paused, level)');
     expect(runScreen).not.toContain('data-testid="begin-run-battle"');
@@ -452,7 +444,7 @@ describe('Run chrome hierarchy', () => {
 
   it('reserves structural teal for containers and paints Run leaf chrome with data-phased oak', () => {
     const metaControls = runScreen.match(
-      /function RunMetaControls\b[\s\S]*?\r?\n}\r?\n\r?\nfunction deploymentSquareLabel/,
+      /function RunMetaControls\b[\s\S]*?\r?\n}\r?\n\r?\nfunction DeploymentControls/,
     )?.[0] ?? '';
 
     expect(chromeSurfacePolicy).toContain("export const CHROME_LEAF_FILL_SURFACE = 'hybrid-wood-oak'");
@@ -552,17 +544,15 @@ describe('Run chrome hierarchy', () => {
     // and authors no face of its own. Every one of those belongs to the single
     // projection in runCardFaceContent.ts, and this guard keeps them from creeping back.
     expect(runCard).toContain("from './runCardFaceContent'");
-    // A held card's property (ADR-0371) reaches the face through the projection too,
-    // rather than RunCard re-deriving a frame or a face from it.
-    expect(runCard).toContain('emptyPieceIndices,');
+    expect(runCard).toContain('emptyPieceIndices = []');
     expect(runCard).toContain('runCardFaceContent(card, {');
-    expect(runCard).toContain('runCardFrameSlot(card, ownedCardType)');
+    expect(runCard).toContain('runCardFrameSlot(card)');
     expect(runCard).not.toContain('RUN_CARD_PESTIFEROUS_FRAME_SLOT');
     expect(runCard).not.toContain('RUN_CARD_LEGATINE_FRAME_SLOT');
     expect(runCard).not.toContain('RUN_CARD_CONCINNOUS_FRAME_SLOT');
     expect(runCard).not.toContain('RUN_CARD_HIERATIC_FRAME_SLOT');
-    expect(runCard).not.toContain("'adlected' as const");
-    expect(runCard).not.toContain("'agminate' as const");
+    expect(runCard).not.toMatch(/cardType|ability|adlected|agminate/);
+    expect(runCardFace).toContain('<FormationDiagram');
     expect(runCardFace).toContain('RUN_CARD_COST_COIN_SOURCE_SLOT');
     expect(runCardFace).toContain('run-card-prototype-cost-coin-source');
     expect(runCard).not.toMatch(/\brules\s*:/);
