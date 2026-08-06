@@ -976,13 +976,10 @@ h1 {
 .main-menu-twin-screen {
   transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
 }
-/* Buttons hidden until revealed. On COLD load the director opens this stage in order
-   (bg -> title -> buttons). On a SOFT nav INTO the menu (e.g. campaign editor -> menu),
-   the store is already fully revealed, so MainMenu withholds data-reveal-buttons for one
-   frame after mount (its `entered` state) — that runs this same opacity transition as an
-   arrival fade, matching the editor's entrance so the hop dissolves the chrome both ways
-   while the shared backdrop + rain stay put. (Campaign reuses this class but hardcodes
-   data-reveal-buttons, so its play surface is never gated by this.) */
+/* Buttons are hidden only while cold startup walks bg -> title -> scene. Warm navigation
+   composes them at full local opacity before the incoming scene is revealed, leaving the
+   director's scene boundary as the one fade (ADR-0462). Campaign reuses this class but
+   hardcodes data-reveal-buttons, so its play surface is never gated by startup. */
 .main-menu-layer:not([data-reveal-buttons]) .main-menu-twin-screen {
   opacity: 0;
 }

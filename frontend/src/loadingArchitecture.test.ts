@@ -82,6 +82,7 @@ describe('professional loading architecture guards', () => {
     expect(read('../scripts/shot.mjs')).toContain('assertImmediateLocalControl || backAfterClickMs !== undefined');
     expect(read('../scripts/shot.mjs')).toContain('full-scene wait did not retain the painted outgoing boundary');
     expect(read('../scripts/shot.mjs')).toContain('painted destination was remounted instead of promoted in place');
+    expect(read('../scripts/shot.mjs')).toContain('incomingMenuControlsPrecomposed');
     expect(read('../scripts/shot.mjs')).toContain('rail.getClientRects().length > 0');
     expect(read('../scripts/shot.mjs')).toContain('.main-menu-mode-tab[data-nav="/editor"]');
     expect(app).toContain("const mountedScene = scene.phase === 'exiting'");
@@ -138,6 +139,16 @@ describe('professional loading architecture guards', () => {
     expect(menu.indexOf('<Suspense fallback={null}>')).toBeGreaterThan(menu.indexOf('className="menu-dest"'));
     expect(menu).toContain(': null}');
     expect(menu).not.toContain('{dest ? (');
+  });
+
+  it('precomposes main-menu controls for warm scene returns and gates them only during cold startup', () => {
+    const menu = read('./ui/MainMenu.tsx');
+    const styles = read('./style.css');
+    expect(menu).toContain("import { useStartupScene } from './shell/startupScene';");
+    expect(menu).toContain('const startup = useStartupScene();');
+    expect(menu).toContain("data-reveal-buttons={startup.revealed('scene') ? '' : undefined}");
+    expect(menu).not.toContain('useSceneReveal');
+    expect(styles).toContain('Warm navigation\n   composes them at full local opacity');
   });
 
   it('visibly fades a preserved host child before committing an empty slot', () => {
