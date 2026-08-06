@@ -147,7 +147,7 @@ function ContinuePanel({ inventory }: { inventory: ContinueInventory }): ReactEl
                 </dl>
               </InnerChromeBox>
               <div className="ce-preview-actions is-single">
-                <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} to={selected.playHref}><span>Play</span></ChromeNavButton>
+                <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} to={selected.playHref}><span>Continue</span></ChromeNavButton>
               </div>
             </div>
           ) : (
