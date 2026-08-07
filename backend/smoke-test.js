@@ -952,7 +952,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 65 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 66 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -967,7 +967,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 29 }, (_, index) => index + 37),
+    ...Array.from({ length: 30 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),

@@ -1164,8 +1164,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*65\s*\}/,
-    'the production upgrade proof must require a complete 1-65 history',
+    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*66\s*\}/,
+    'the production upgrade proof must require a complete 1-66 history',
   );
   assert.match(
     primaryUpgradeProof,
@@ -1179,8 +1179,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /length:\s*29[\s\S]*index\s*\+\s*37/,
-    'the production report must include every post-36 migration through 65',
+    /length:\s*30[\s\S]*index\s*\+\s*37/,
+    'the production report must include every post-36 migration through 66',
   );
   assert.match(
     primaryUpgradeProof,
