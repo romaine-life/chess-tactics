@@ -19484,7 +19484,7 @@ button.tileset-relationship-cell {
 }
 
 /* Alienatio commits first. These source pixels then recede over their exact old
-   card seat while the surviving real figures settle into the committed stack. */
+   formation cell while every surviving real figure remains in its authored cell. */
 .run-unit-departure {
   image-rendering: pixelated;
   opacity: 1;
@@ -25618,10 +25618,6 @@ button.run-card-prototype-unit-icon-seat.is-selectable {
 button.run-card-prototype-unit-icon-seat.is-selectable.is-pixel-hovered:not(.is-highlighted) .run-card-prototype-unit-icon,
 .run-card-prototype-unit-icon-seat.is-highlighted .run-card-prototype-unit-icon {
   filter: drop-shadow(0 0 .7cqw var(--skirmish-cyan));
-}
-
-.run-card-prototype-unit-icon-seat.is-reflowing {
-  will-change: translate;
 }
 
 /* The marker rides the unit it marks: the density ladder resizes the sprite per

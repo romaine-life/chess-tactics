@@ -7,29 +7,19 @@ export interface RunCardUnitSeatProjection {
   pieceIndex: number;
 }
 
-/**
- * Maps persisted, shuffled card seats back onto the canonical face's grouped piece
- * occurrences. Every card-aware runtime surface uses this projection so an empty,
- * selected, dealt, or discarded occurrence refers to the same visible figure.
- */
+/** Maps each persisted card seat to the same-index authored formation cell. Every
+ * card-aware runtime surface uses this projection so a vacancy or surviving unit
+ * retains one stable visible position for the lifetime of the card. */
 export function projectRunCardUnitSeats(
   pieces: readonly RunArmyPieceType[],
   unitSeats: readonly (string | null)[],
   unitTypeById: ReadonlyMap<string, RunArmyPieceType>,
 ): readonly RunCardUnitSeatProjection[] {
-  const openPieceIndicesByType = new Map<RunArmyPieceType, number[]>();
-  pieces.forEach((piece, pieceIndex) => {
-    const openIndices = openPieceIndicesByType.get(piece) ?? [];
-    openIndices.push(pieceIndex);
-    openPieceIndicesByType.set(piece, openIndices);
-  });
-
   return unitSeats.flatMap((unitId, seatIndex): RunCardUnitSeatProjection[] => {
     if (!unitId) return [];
     const unitType = unitTypeById.get(unitId);
-    if (!unitType) return [];
-    const pieceIndex = openPieceIndicesByType.get(unitType)?.shift();
-    return pieceIndex === undefined ? [] : [{ seatIndex, unitId, unitType, pieceIndex }];
+    if (!unitType || pieces[seatIndex] !== unitType) return [];
+    return [{ seatIndex, unitId, unitType, pieceIndex: seatIndex }];
   });
 }
 

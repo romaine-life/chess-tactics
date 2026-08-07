@@ -13,7 +13,6 @@ export function RunCard({
   identityCard,
   mode,
   emptyPieceIndices = [],
-  compactEmptyPieceSeats = false,
   highlightedPieceIndex = null,
   pieceSelectionIds = [],
   pieceSelectionLabels = [],
@@ -26,7 +25,6 @@ export function RunCard({
   identityCard?: RunCardDefinition | RunCardOffer;
   mode: 'sectio' | 'reference';
   emptyPieceIndices?: readonly number[];
-  compactEmptyPieceSeats?: boolean;
   highlightedPieceIndex?: number | null;
   pieceSelectionIds?: readonly (string | null)[];
   pieceSelectionLabels?: readonly (string | null)[];

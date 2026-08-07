@@ -490,20 +490,20 @@ describe('Run chrome hierarchy', () => {
     expect(runArmyWorkspace).not.toContain('onAlienate');
     expect(runScreen).toContain('const alieneUnit = (unitId: string, source?: HTMLImageElement | null): void => {');
     expect(runScreen).toContain('<RunExpunctioWorkspace run={shellRun} onAliene={alieneUnit} onExpunct={expunctCard} />');
-    expect(runExpunctioWorkspace).toContain('compactEmptyPieceSeats');
     expect(runExpunctioWorkspace).toContain('pieceSelectionIds=');
-    expect(runExpunctioWorkspace).toContain('previousUnitRectsRef.current = new Map');
-    expect(runExpunctioWorkspace).toContain('function runUnitReflowOffset(');
-    expect(runExpunctioWorkspace).not.toContain('runCardReflowOffset');
-    expect(runExpunctioWorkspace).toContain('sceneMotion.animate(');
+    expect(runExpunctioWorkspace).toContain("'.run-card-formation-unit'");
+    expect(runExpunctioWorkspace).not.toContain('compactEmptyPieceSeats');
+    expect(runExpunctioWorkspace).not.toContain('previousUnitRectsRef');
+    expect(runExpunctioWorkspace).not.toContain('runUnitReflowOffset');
+    expect(runExpunctioWorkspace).not.toContain('sceneMotion.animate(');
     expect(runScreen).toContain('launchUnitDeparture(unitId, source ?? null);');
     expect(runScreen).toContain('{unitDepartureElement}');
     expect(runUnitDeparture).toContain('<SceneContinuityPortal');
     expect(runUnitDeparture).toContain('getBoundingClientRect()');
     expect(runUnitDeparture).not.toContain('performAlienatio');
     expect(styleCss).toMatch(/\.run-unit-departure\s*\{[\s\S]*?transition:\s*opacity/);
-    expect(styleCss).toContain('.run-card-prototype-unit-icon-seat.is-highlighted .run-card-prototype-unit-icon');
-    expect(styleCss).toMatch(/\.is-pixel-hovered:not\(\.is-highlighted\)[^{]+,\s*\.run-card-prototype-unit-icon-seat\.is-highlighted/);
+    expect(styleCss).toContain('.run-card-formation-cell.is-highlighted .run-card-formation-unit');
+    expect(styleCss).toContain('.run-card-formation-cell-button:hover .run-card-formation-unit');
   });
 
   it('previews the upcoming Sectio Battle through the canonical read-only board and Level ledger', () => {
