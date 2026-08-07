@@ -3,7 +3,7 @@ status: accepted
 date: 2026-08-05
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0510](0510-held-cards-are-immutable-formations.md)'s retirement of the gain transaction"
+  - "[ADR-0511](0511-held-cards-are-immutable-formations.md)'s retirement of the gain transaction"
 refines:
   - "[ADR-0026](0026-ui-icons-are-generated-as-a-cohesive-kit.md)"
   - "[ADR-0076](0076-generated-raster-assets-render-at-native-1x.md)"

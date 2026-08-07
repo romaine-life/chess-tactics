@@ -131,7 +131,9 @@ these.
 - When a card is played, all of its remaining units deploy as one atomic authored
   formation. Its front and back rows enter the two-row Deployment band from the right
   and advance left until the next translation would collide. Deployment persists the
-  complete hidden destination plan before the visible sideways arrival.
+  complete hidden destination plan before the visible arrival. Each unit first summons
+  onto its off-board formation seat; once the final unit lands, the complete rigid shape
+  begins its sideways slide.
   Revealing a card and committing its formation are distinct animation boundaries,
   but there is no per-unit placement choice.
 - The card face prints that formation on a miniature crop of the player-side
@@ -175,7 +177,7 @@ these.
   but voluntary individual-unit disposal, Alienatio, and promotion cash-out are retired.
   Expunctio uses the native red-minus loss mark for its live fee or Paid state. The action names
   remain **Adlect** and **Athetize**, with a completed card reading **Athetized this visit**
-  (ADR-0230, ADR-0386, ADR-0407, ADR-0443, ADR-0510).
+  (ADR-0230, ADR-0386, ADR-0407, ADR-0443, ADR-0511).
 - **Enchiridion** is the player-facing reference for unit movement, terrain
   rules, the complete 727-card catalog (His Grace plus 726 offer cards),
   all active lipsana, and Ataraxia. Card filters combine exact gold value,
@@ -192,7 +194,7 @@ these.
   visible address—`Sectio › Strategikon › Chartulary`, or one further segment for an
   Enchiridion subcategory (ADR-0231, ADR-0387, ADR-0389). The Chartulary is the Cards gallery itself — same
   filters, same gold groups, same faces, no annotation beside them — and the
-  only difference is which cards are in it (ADR-0371, ADR-0509).
+  only difference is which cards are in it (ADR-0371, ADR-0510).
 - Play defaults to one activity-agnostic, descriptor-free **Continue** rail
   destination. Its column resumes in place and shows exactly one activity: the
   most recently updated resumable one, with its facts and one final **Continue**

@@ -542,9 +542,12 @@ const isRoyal = (type: Piece['type']): boolean => type === 'king' || type === 'q
 export interface UnitArrivalPlan {
   startMs: number | null;
   delayMs: number;
-  /** A sideways formation owns one shared rigid translation large enough to begin
-   * completely beyond the board's right edge. Ordinary drop entrances omit it. */
-  distancePx?: number;
+  /** A Deployment formation owns one shared projected board-space translation from
+   * its horizontal-gravity entry anchor. Ordinary drop entrances omit it. */
+  startOffset?: { dx: number; dy: number };
+  /** Delay of the formation's final staggered summon. Every member waits for that unit to
+   * complete ADR-0045's drop before the shared horizontal slide may begin. */
+  summonWaveDelayMs?: number;
 }
 
 /**
@@ -735,6 +738,8 @@ const ROCK_ANCHOR_X = 0.5;
 const ROCK_ANCHOR_Y = 0.78;
 const SCENE_BOUNDS_PAD = 96;
 const ARRIVAL_ANIM_MS = 620;
+const FORMATION_SLIDE_ANIM_MS = 560;
+const ZERO_BOARD_DELTA: Vec = { x: 0, y: 0 };
 
 type PieceMotion = {
   gridX: number;
@@ -808,29 +813,40 @@ export function arrivalOffset(
   // No plan means this piece is scenery, or its arrival has already finished: it stands seated.
   if (!plan) return { dx: 0, dy: 0, opacity: 1 };
   const staged = track === 'slide-from-right'
-    ? { dx: plan.distancePx ?? 160, dy: 0, opacity: 0 }
+    ? { dx: plan.startOffset?.dx ?? 160, dy: (plan.startOffset?.dy ?? 90) - 60, opacity: 0 }
     : { dx: 0, dy: -60, opacity: 0 };
-  // Staged but not yet released. A unit awaiting its entrance waits OFF the board — painting it
-  // seated here is what made a revealed battlefield show its army, drop it, and re-enter it.
+  // Staged but not yet released. Every unit waits invisibly above the seat it will summon onto;
+  // a Run formation's seats happen to be beyond the board's right edge.
   if (plan.startMs == null) return staged;
-  const elapsed = timeMs - plan.startMs - plan.delayMs;
-  if (elapsed < 0) return staged;
-  const progress = clamp01(elapsed / ARRIVAL_ANIM_MS);
+  const activeElapsed = timeMs - plan.startMs;
+  const summonOffset = (elapsed: number): { dy: number; opacity: number } => {
+    if (elapsed < 0) return { dy: -60, opacity: 0 };
+    const progress = clamp01(elapsed / ARRIVAL_ANIM_MS);
+    if (progress < 0.26) return { dy: -60, opacity: progress / 0.26 };
+    if (progress < 0.46) return { dy: -60, opacity: 1 };
+    if (progress < 0.82) {
+      const fall = easeInQuad((progress - 0.46) / 0.36);
+      return { dy: lerp(-60, 0, fall), opacity: 1 };
+    }
+    return { dy: 0, opacity: 1 };
+  };
   if (track === 'slide-from-right') {
-    const slide = easeOutCubic(progress);
+    const start = plan.startOffset ?? { dx: 160, dy: 90 };
+    const slideStartMs = (plan.summonWaveDelayMs ?? plan.delayMs) + ARRIVAL_ANIM_MS;
+    if (activeElapsed < slideStartMs) {
+      const summon = summonOffset(activeElapsed - plan.delayMs);
+      return { dx: start.dx, dy: start.dy + summon.dy, opacity: summon.opacity };
+    }
+    // Only the complete, landed silhouette may move. From here every member shares the same
+    // clock and canonical board-x vector, so the stagger cannot shear the formation.
+    const slide = easeInQuad((activeElapsed - slideStartMs) / FORMATION_SLIDE_ANIM_MS);
     return {
-      dx: lerp(plan.distancePx ?? 160, 0, slide),
-      dy: 0,
-      opacity: Math.min(1, progress / .18),
+      dx: lerp(start.dx, 0, slide),
+      dy: lerp(start.dy, 0, slide),
+      opacity: 1,
     };
   }
-  if (progress < 0.26) return { dx: 0, dy: -60, opacity: progress / 0.26 };
-  if (progress < 0.46) return { dx: 0, dy: -60, opacity: 1 };
-  if (progress < 0.82) {
-    const fall = easeInQuad((progress - 0.46) / 0.36);
-    return { dx: 0, dy: lerp(-60, 0, fall), opacity: 1 };
-  }
-  return { dx: 0, dy: 0, opacity: 1 };
+  return { dx: 0, ...summonOffset(activeElapsed - plan.delayMs) };
 }
 
 export function pieceOp(
@@ -916,6 +932,7 @@ function SkirmishSceneLayer({
   livePieces,
   unitArrivals,
   unitArrivalTrack,
+  unitArrivalStartDelta,
   onArrivingUnitIdsChange,
   unitDeparture,
   onDepartingUnitIdsChange,
@@ -936,6 +953,7 @@ function SkirmishSceneLayer({
   livePieces: readonly Piece[];
   unitArrivals: UnitArrivalLifecycle;
   unitArrivalTrack: UnitArrivalTrack;
+  unitArrivalStartDelta: Vec;
   onArrivingUnitIdsChange: (unitIds: readonly string[]) => void;
   unitDeparture: UnitDepartureRequest | null;
   onDepartingUnitIdsChange: (unitIds: readonly string[]) => void;
@@ -1143,17 +1161,14 @@ function SkirmishSceneLayer({
       additions,
       arrivalLifecycleStartedRef.current ? 0 : ARRIVAL_BASE_MS,
     );
-    const sidewaysAdditions = unitArrivalTrack === 'slide-from-right'
+    const formationAdditions = unitArrivalTrack === 'slide-from-right'
       ? additions.filter((piece) => piece.side === 'player')
       : [];
-    const sidewaysDistance = sidewaysAdditions.length
-      ? Math.max(
-          160,
-          bounds.minX + bounds.width + UNIT_SEAT_W
-            - Math.min(...sidewaysAdditions.map((piece) => boardLabCellPosition(piece).left)),
-        )
-      : 160;
-    for (const piece of sidewaysAdditions) delays.set(piece.id, 0);
+    const projectedEntryDelta = boardLabCellPosition(unitArrivalStartDelta);
+    const formationOffset = { dx: projectedEntryDelta.left, dy: projectedEntryDelta.top };
+    const summonWaveDelayMs = formationAdditions.length
+      ? Math.max(...formationAdditions.map((piece) => delays.get(piece.id) ?? 0))
+      : 0;
     for (const piece of livePieces) visibleUnitIdsRef.current.add(piece.id);
     arrivalLifecycleStartedRef.current = true;
     // Admission happens whether or not the entrance may play yet, so a battlefield preparing
@@ -1165,7 +1180,7 @@ function SkirmishSceneLayer({
       const plan = unitArrivalPlan(unitArrivals, now, delays.get(piece.id) ?? 0);
       if (plan) {
         arrivalPlansRef.current.set(piece.id, piece.side === 'player' && unitArrivalTrack === 'slide-from-right'
-          ? { ...plan, distancePx: sidewaysDistance }
+          ? { ...plan, startOffset: formationOffset, summonWaveDelayMs }
           : plan);
       }
     }
@@ -1228,6 +1243,7 @@ function SkirmishSceneLayer({
     reportDepartingUnits,
     staticOps,
     unitDeparture,
+    unitArrivalStartDelta,
     unitArrivalTrack,
     unitArrivals,
   ]);
@@ -1340,7 +1356,15 @@ function SkirmishSceneLayer({
         // A staged entrance holds its unit off the board indefinitely and drives no frames of
         // its own; releasing it is a state change, which schedules the next frame itself.
         if (plan.startMs == null) continue;
-        if (timeMs < plan.startMs + plan.delayMs + ARRIVAL_ANIM_MS) {
+        const piece = state.livePieces.find((candidate) => candidate.id === pieceId);
+        const arrivalTrack = piece?.side === 'player' && state.unitArrivalTrack === 'slide-from-right'
+          ? 'slide-from-right'
+          : 'drop';
+        const endMs = arrivalTrack === 'slide-from-right'
+          ? plan.startMs + (plan.summonWaveDelayMs ?? plan.delayMs)
+            + ARRIVAL_ANIM_MS + FORMATION_SLIDE_ANIM_MS
+          : plan.startMs + plan.delayMs + ARRIVAL_ANIM_MS;
+        if (timeMs < endMs) {
           hasActiveArrivals = true;
         } else {
           arrivalPlansRef.current.delete(pieceId);
@@ -1451,6 +1475,7 @@ export function SkirmishBoard({
   activate = reveal,
   unitArrivals = activate ? 'active' : 'pending',
   unitArrivalTrack = 'drop',
+  unitArrivalStartDelta = ZERO_BOARD_DELTA,
   revealTransition = 'local',
 }: {
   interactive?: boolean;
@@ -1486,8 +1511,10 @@ export function SkirmishBoard({
    * `settled` is reserved for a position being revisited after its arrival already happened.
    */
   unitArrivals?: UnitArrivalLifecycle;
-  /** Deployment may use the same compositor lifecycle with a horizontal entrance. */
+  /** Deployment may use the same compositor lifecycle with a rigid horizontal-gravity entrance. */
   unitArrivalTrack?: UnitArrivalTrack;
+  /** Shared board-space translation from a rigid formation's off-board entry position. */
+  unitArrivalStartDelta?: Vec;
   /**
    * `scene` delegates the visible opacity entrance to the surrounding SceneBoundary. The local
    * readiness gate still keeps incomplete pixels hidden, but does not start a second fade.
@@ -2191,6 +2218,7 @@ export function SkirmishBoard({
       data-arriving-unit-ids={presentingArrivals ? arrivingUnitIds.join(',') : ''}
       data-unit-arrivals={unitArrivals}
       data-unit-arrival-track={unitArrivalTrack}
+      data-unit-arrival-start-delta={`${unitArrivalStartDelta.x},${unitArrivalStartDelta.y}`}
       data-reveal-transition={revealTransition}
       data-departure-state={departing ? 'withdrawing' : 'none'}
       data-departure-track={unitDeparture ? unitDepartureTrack(unitDeparture) : undefined}
@@ -2245,6 +2273,7 @@ export function SkirmishBoard({
               livePieces={livePieces}
               unitArrivals={arrivalLifecycle}
               unitArrivalTrack={unitArrivalTrack}
+              unitArrivalStartDelta={unitArrivalStartDelta}
               onArrivingUnitIdsChange={handleArrivingUnitIdsChange}
               unitDeparture={unitDeparture}
               onDepartingUnitIdsChange={setDepartingUnitIds}

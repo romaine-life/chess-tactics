@@ -493,22 +493,46 @@ try {
       await page.waitForFunction(() => {
         const board = document.querySelector('[data-testid="skirmish-board"]');
         return board?.getAttribute('data-unit-arrival-track') === 'slide-from-right'
-          && board.getAttribute('data-arriving') === 'true';
+          && board.getAttribute('data-arrival-state') === 'entering';
       }, { timeout: 5_000 });
-      arrival = await page.evaluate(() => {
+      arrival = await page.evaluate(async () => {
         const board = document.querySelector('[data-testid="skirmish-board"]');
+        const [{ useActiveRun }, deployment] = await Promise.all([
+          import('/src/run/store.ts'),
+          import('/src/run/deployment.ts'),
+        ]);
+        const run = useActiveRun.getState().run;
+        const level = run?.war.battles[run.battleIndex].level;
+        const settlingUnitIds = new Set(run?.deployment?.settlingUnitIds ?? []);
+        const layout = run && level
+          ? deployment.selectedDeploymentLayout(run, deployment.deploymentOptions(run, level))
+          : null;
+        const pieces = run && level && layout
+          ? deployment.gameForRunDeployment(run, level, layout, true).pieces
+            .filter((piece) => settlingUnitIds.has(piece.id))
+          : [];
         return {
           track: board?.getAttribute('data-unit-arrival-track') ?? null,
           arriving: board?.getAttribute('data-arriving') ?? null,
+          state: board?.getAttribute('data-arrival-state') ?? null,
+          startDelta: board?.getAttribute('data-unit-arrival-start-delta') ?? null,
           unitIds: (board?.getAttribute('data-arriving-unit-ids') ?? '').split(',').filter(Boolean),
+          model: level ? {
+            boardCols: level.board.cols,
+            pieces: pieces.map(({ id, x, y }) => ({ id, x, y })),
+            startDelta: deployment.deploymentFormationEntryDelta(level, pieces),
+          } : null,
         };
       });
     } catch {
-      await fail('deployment-sideways-arrival', JSON.stringify(await sceneDiagnostics()));
+      await fail('deployment-formation-entry', JSON.stringify(await sceneDiagnostics()));
     }
     await new Promise((resolve) => setTimeout(resolve, 220));
-    const arrivalShot = 'tmp-shots/run-deployment-sideways-arrival.png';
+    const arrivalShot = 'tmp-shots/run-deployment-formation-summon.png';
     await page.screenshot({ path: arrivalShot });
+    await new Promise((resolve) => setTimeout(resolve, 780));
+    const slideShot = 'tmp-shots/run-deployment-formation-slide.png';
+    await page.screenshot({ path: slideShot });
 
     try {
       await page.waitForFunction(async () => {
@@ -518,7 +542,7 @@ try {
           && document.querySelector('[data-testid="skirmish-board"]')?.getAttribute('data-arriving') === 'false';
       }, { timeout: 15_000 });
     } catch {
-      await fail('deployment-sideways-settle', JSON.stringify(await sceneDiagnostics()));
+      await fail('deployment-formation-settle', JSON.stringify(await sceneDiagnostics()));
     }
 
     const settled = await page.evaluate(async () => {
@@ -533,21 +557,30 @@ try {
     });
     const occupied = settled.seats.map(({ cell }) => cell).filter(Boolean);
     const parsed = occupied.map((cell) => cell.split(',').map(Number));
-    const xs = parsed.map(([x]) => x).sort((a, b) => a - b);
     const ys = new Set(parsed.map(([, y]) => y));
+    const [startDeltaX, startDeltaY] = (arrival?.startDelta ?? '').split(',').map(Number);
+    const stagedMinX = Math.min(...(arrival?.model?.pieces ?? [])
+      .map((piece) => piece.x + startDeltaX));
     if (
       arrival?.track !== 'slide-from-right'
       || arrival.arriving !== 'true'
+      || arrival.state !== 'entering'
+      || !(startDeltaX > 0)
+      || startDeltaY !== 0
+      || startDeltaX !== arrival.model?.startDelta.x
+      || startDeltaY !== arrival.model?.startDelta.y
+      || stagedMinX < arrival.model?.boardCols
       || arrival.unitIds.length !== 3
       || settled.phase !== 'battle'
       || occupied.length !== 3
-      || JSON.stringify(xs) !== JSON.stringify([0, 1, 2])
+      || new Set(occupied).size !== 3
       || ys.size !== 2
     ) {
       await fail('deployment-sideways-formation', JSON.stringify({ arrival, settled }));
     }
-    console.log('Sideways arrival screenshot:', arrivalShot);
-    console.log('PASS — one card reveals, slides its complete two-row formation from the right, settles left, and promotes the same Battle');
+    console.log('Off-board formation summon screenshot:', arrivalShot);
+    console.log('Rigid board-axis slide screenshot:', slideShot);
+    console.log('PASS — one card summons every unit completely beyond the board\'s right edge, waits for the final drop, slides as one rigid formation toward decreasing board x, settles, and promotes the same Battle');
     await browser.close();
     rmSync(browserProfile, { recursive: true, force: true });
     process.exit(0);

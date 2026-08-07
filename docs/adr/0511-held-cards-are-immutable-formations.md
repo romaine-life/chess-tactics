@@ -21,7 +21,7 @@ refines:
   - "[ADR-0493](0493-generated-run-formations-fall-sideways-and-own-rarity.md)"
 ---
 
-# ADR-0510: Held cards are immutable formations
+# ADR-0511: Held cards are immutable formations
 
 ## Context
 

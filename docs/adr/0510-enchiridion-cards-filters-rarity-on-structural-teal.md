@@ -11,7 +11,7 @@ refines:
   - "[ADR-0493](0493-generated-run-formations-fall-sideways-and-own-rarity.md)"
 ---
 
-# ADR-0509: Enchiridion Cards filters rarity on structural teal
+# ADR-0510: Enchiridion Cards filters rarity on structural teal
 
 ## Context
 

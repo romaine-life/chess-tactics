@@ -5249,7 +5249,7 @@ const MIGRATIONS = [
   {
     version: 66,
     name: 'immutable held formations and retired unit disposal',
-    // ADR-0510: version 28 removes voluntary one-unit disposal. A Sectio that was
+    // ADR-0511: version 28 removes voluntary one-unit disposal. A Sectio that was
     // already open returns to its entry snapshot so a previously completed Alienatio
     // cannot leave a card with a newly invented gap. Fair Scales, The Paid Crossing,
     // and the now-unused gain transaction mark retire as one installed-content graph.
@@ -5503,8 +5503,8 @@ const MIGRATIONS = [
                lifecycle_state = 'retired',
                retired_at = now(),
                retirement_evidence = jsonb_build_object(
-                 'reason', 'Individual-unit disposal retired by ADR-0510',
-                 'evidence', jsonb_build_object('decision', 'ADR-0510'),
+                 'reason', 'Individual-unit disposal retired by ADR-0511',
+                 'evidence', jsonb_build_object('decision', 'ADR-0511'),
                  'retiredBy', 'migration-66',
                  'retiredAt', now(),
                  'previousVersionId', current.active_version_id
@@ -5522,8 +5522,8 @@ const MIGRATIONS = [
         SELECT retired.slot, NULL, retired.active_version_id,
                'slot-retired', 'migration-66',
                jsonb_build_object(
-                 'reason', 'Individual-unit disposal retired by ADR-0510',
-                 'decision', 'ADR-0510',
+                 'reason', 'Individual-unit disposal retired by ADR-0511',
+                 'decision', 'ADR-0511',
                  'previousVersionId', retired.active_version_id
                )
           FROM retired_slots retired

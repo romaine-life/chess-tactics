@@ -1,10 +1,10 @@
 ---
-status: superseded by ADR-0510
+status: superseded by ADR-0511
 date: 2026-08-05
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
   - "[ADR-0488](0488-expunctio-unit-selection-uses-one-blue-mark.md)"
-  - "[ADR-0510](0510-held-cards-are-immutable-formations.md)"
+  - "[ADR-0511](0511-held-cards-are-immutable-formations.md)"
 partially_supersedes:
   - "[ADR-0482](0482-expunctio-owns-card-aware-alienatio.md)'s initially selected unit, cycle-primary interaction, and rejection of direct figure selection"
 refines:

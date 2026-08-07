@@ -142,6 +142,8 @@ export interface RunDeploymentPresentation {
   boardAriaLabel: string;
   onArrivingUnitIdsChange: (unitIds: readonly string[]) => void;
   unitArrivalTrack: UnitArrivalTrack;
+  /** Board-space vector from the off-board horizontal-gravity entry to the settled seats. */
+  unitArrivalStartDelta: { x: number; y: number };
 }
 
 interface StandaloneSkirmishProps {
@@ -1516,6 +1518,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
             activate={!runDeployment && sceneActivated}
             unitArrivals={runBattleReviewTerminal ? 'settled' : sceneActivated ? 'active' : 'pending'}
             unitArrivalTrack={runDeployment?.unitArrivalTrack}
+            unitArrivalStartDelta={runDeployment?.unitArrivalStartDelta}
             predrawnReview={predrawnPreview ? {
               src: predrawnPreview,
               registration: predrawnRegistration,

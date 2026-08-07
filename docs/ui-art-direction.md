@@ -377,7 +377,7 @@ owns the remaining canvas and shows real card faces in left-to-right rows with
 one top-to-bottom drawn scroll; its pinned filters do not create another scroll
 region. Gold, Contains, and Rarity sit inside one structural teal field; their
 closed dropdowns are separately phased oak leaves while their open menus remain
-structural teal (ADR-0364, ADR-0433, ADR-0509). In the main-menu host, the two canonical rail
+structural teal (ADR-0364, ADR-0433, ADR-0510). In the main-menu host, the two canonical rail
 anchors remain fixed while Enchiridion content consumes the remaining visible
 canvas; the ordinary action-column width does not cap it. The generated no-board scenic
 background remains the accepted background-only scene. Daily/news and the duplicate
@@ -418,7 +418,7 @@ Expunctio does not repeat the card's printed title beside its canonical face.
 Each tile keeps its inner frame but borrows the installed outer-role surface used
 by the title bar and Controls panel; its action keeps the canonical control frame
 over the registered `hybrid-wood-oak` surface.
-Per [ADR-0510](adr/0510-held-cards-are-immutable-formations.md), Expunctio presents each held
+Per [ADR-0511](adr/0511-held-cards-are-immutable-formations.md), Expunctio presents each held
 card as one immutable formation. The companion describes the complete removal, shows only the
 loss-direction fee, and offers one Athetize action; no figure receives selection, hover emphasis,
 departure copy, or survivor-reflow motion.

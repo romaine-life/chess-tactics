@@ -101,7 +101,7 @@ search for before constructing a control or repeated surface.
   Expunctio uses the same mapping to show Battle casualties while keeping the complete card as
   its only action. Card figures are informative rather than individual shop controls
   ([ADR-0508](adr/0508-alienatio-leaves-the-authored-formation-seat-vacant.md),
-  [ADR-0510](adr/0510-held-cards-are-immutable-formations.md)).
+  [ADR-0511](adr/0511-held-cards-are-immutable-formations.md)).
 - `ui/runCardFlightView.tsx` — the shared geometry for transferring that canonical
   face into the Chartulary during Sectio. It measures live endpoints, contributes through the director-owned
   continuity layer above clipped shell layers, and owns any number of independent
@@ -151,7 +151,7 @@ search for before constructing a control or repeated surface.
 - `ui/RunResources.tsx#RunGoldTransactionAmount` — the shared Run-gold loss amount. It resolves
   the installed native loss mark, keeps the numeric value as live type, names the complete
   transaction accessibly, and retains its native 64px physical seat while a fee is pending;
-  Expunctio uses it for its fee/Paid state (ADR-0486, ADR-0510).
+  Expunctio uses it for its fee/Paid state (ADR-0486, ADR-0511).
 - `ui/shared/PieceTypeIcon.tsx` — the accepted player-side, north-facing Battle
   sprite alpha-fitted for filters and pickers; consumers select a stable piece
   type and supply only local seat sizing while the shared live registry owns pixels.

@@ -178,7 +178,7 @@ linen bundle; Returned Rifle an unloaded tagged rifle; After-Hours Key a worn
 tagged key; Unclaimed Dagger a plain tagged utility blade; and The Waiting Cart an
 empty handcart. These are approved material motifs and exact reviewed pixels, not a general
 license to resize other production art. The Paid Crossing's toll-skiff pixels remain archived
-historical evidence after that lipsanon's ADR-0510 retirement, not an active motif.
+historical evidence after that lipsanon's ADR-0511 retirement, not an active motif.
 
 ## Ataraxia And Public History
 

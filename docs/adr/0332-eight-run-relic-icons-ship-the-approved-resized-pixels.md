@@ -3,7 +3,7 @@ status: accepted
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
-  - "[ADR-0510](0510-held-cards-are-immutable-formations.md)'s retirement of The Paid Crossing"
+  - "[ADR-0511](0511-held-cards-are-immutable-formations.md)'s retirement of The Paid Crossing"
 supersedes:
   - "[ADR-0331](0331-run-lipsanon-replacements-use-owner-selected-material-motifs.md)"
 partially_supersedes:

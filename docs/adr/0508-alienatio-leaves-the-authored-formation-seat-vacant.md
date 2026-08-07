@@ -3,7 +3,7 @@ status: superseded
 date: 2026-08-06
 deciders: owner (Nelson) + Codex
 superseded_by:
-  - "[ADR-0510](0510-held-cards-are-immutable-formations.md)"
+  - "[ADR-0511](0511-held-cards-are-immutable-formations.md)"
 supersedes:
   - "[ADR-0489](0489-alienatio-fades-the-departure-and-flips-the-next-card-frame.md)'s compact post-sale frame and survivor FLIP"
 refines:
@@ -59,7 +59,7 @@ any surviving figure to move.
 
 ## More Information
 
-- [Immutable held formations](0510-held-cards-are-immutable-formations.md)
+- [Immutable held formations](0511-held-cards-are-immutable-formations.md)
 - [Persistent Deployment seats](0427-deployment-cards-retain-their-authored-seat-geometry.md)
 - [Card-aware Alienatio](0482-expunctio-owns-card-aware-alienatio.md)
 - [Persistent Expunctio controls](0487-expunctio-selection-swaps-content-within-persistent-seats.md)

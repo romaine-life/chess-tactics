@@ -339,7 +339,7 @@ an incomplete row is an availability failure.
   1254×1254 source and exact nearest-neighbor 64×64 transform. They still render
   1:1 from the accepted 64×64 output and cannot authorize different bytes. The Paid
   Crossing slot and drawable are retired by migration 66; its archived evidence does
-  not make it an active installed lipsanon (ADR-0510).
+  not make it an active installed lipsanon (ADR-0511).
   Run affected-card properties and their granted unit states use paired native
   64×64 transparent PNG roles. Property roles use component
   `card-property-icon` under `ui/kit/icons/card-properties/<property>.png`;
@@ -437,7 +437,7 @@ an incomplete row is an availability failure.
   `ui/run/resources/lose-gold.png` slot under the same typed projection. Its installed
   `kind='run-gold-transaction'` drawable binds `behavior.direction='loss'`; Expunctio draws
   that exact canvas at 1× while retaining its live value and text label. The former gain slot
-  and drawable retire with Alienatio in migration 66 (ADR-0486, ADR-0510).
+  and drawable retire with Alienatio in migration 66 (ADR-0486, ADR-0511).
   Strategikon's command-archive background is the exact closed hash named by
   ADR-0336. Its typed validator and owner proof record the 688×384 source plus
   approved cover presentation, while the required `app-ui` drawable role owns
