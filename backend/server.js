@@ -5217,7 +5217,7 @@ const MIGRATIONS = [
   {
     version: 65,
     name: 'complete Queen and Pawn formation catalog',
-    // ADR-0498: version 27 adds the five missing connected Queen + Pawn identities.
+    // ADR-0502: version 27 adds the five missing connected Queen + Pawn identities.
     // Visible and held state remains exact; only the seed-derived unseen sequence restarts
     // because an old cursor cannot retain its meaning across a changed master catalog.
     sql: `
