@@ -10,7 +10,7 @@ refines:
   - "[ADR-0487](0487-expunctio-selection-swaps-content-within-persistent-seats.md)"
 ---
 
-# ADR-0506: Alienatio leaves the authored formation seat vacant
+# ADR-0508: Alienatio leaves the authored formation seat vacant
 
 ## Context
 

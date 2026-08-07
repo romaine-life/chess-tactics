@@ -104,7 +104,7 @@ search for before constructing a control or repeated surface.
   ([ADR-0482](adr/0482-expunctio-owns-card-aware-alienatio.md),
   [ADR-0483](adr/0483-expunctio-unit-selection-is-explicit.md),
   [ADR-0488](adr/0488-expunctio-unit-selection-uses-one-blue-mark.md),
-  [ADR-0506](adr/0506-alienatio-leaves-the-authored-formation-seat-vacant.md)).
+  [ADR-0508](adr/0508-alienatio-leaves-the-authored-formation-seat-vacant.md)).
 - `ui/runCardFlightView.tsx` — the shared geometry for transferring that canonical
   face into the Chartulary during Sectio. It measures live endpoints, contributes through the director-owned
   continuity layer above clipped shell layers, and owns any number of independent
@@ -119,7 +119,7 @@ search for before constructing a control or repeated surface.
   continuity, fades it after the immediate transaction, and owns no gameplay or input authority.
   The canonical face leaves that authored formation cell vacant while every survivor remains
   stationary
-  ([ADR-0506](adr/0506-alienatio-leaves-the-authored-formation-seat-vacant.md)).
+  ([ADR-0508](adr/0508-alienatio-leaves-the-authored-formation-seat-vacant.md)).
 - `ui/RunDeploymentCardStack.tsx` — the Controls-owned projection of the persisted
   Deployment deck and deal. It presents the complete face-down center deck, partitions the
   exact combat count deliberately into the prominent Controls stack, transfers the counted
@@ -150,6 +150,13 @@ search for before constructing a control or repeated surface.
 - `ui/shared/RunCardCostCoin.tsx` — the shared compact numbered card-cost coin,
   drawing the dedicated transparent derivative of the accepted card coin,
   overlaying the live value, and keeping the currency name in its accessible label.
+- `ui/shared/RunCardGoldTierDivider.tsx` — the shared Cards/Chartulary gold-group
+  heading. It resolves the exact live PixelLab ornament, preserves the cradle and
+  end cap through the ADR-0506 three-slice renderer, and seats `RunCardCostCoin`
+  as the only live numeral; the rails contain no text. The click-reachable Studio
+  Card Gold Divider Viewer renders this same primitive at canonical widths, tunes
+  coin size and pixel offsets through shared controls, and atomically saves the
+  Git-owned geometry that both runtime galleries import (ADR-0507).
 - `ui/RunResources.tsx#RunGoldTransactionAmount` — the shared directional Run-gold
   amount. It resolves the installed native gain or loss mark, keeps the numeric
   value as live type, names the complete transaction accessibly, and retains its

@@ -419,7 +419,7 @@ Expunctio does not repeat the card's printed title beside its canonical face.
 Each tile keeps its inner frame but borrows the installed outer-role surface used
 by the title bar and Controls panel; its action keeps the canonical control frame
 over the registered `hybrid-wood-oak` surface.
-Per [ADR-0506](adr/0506-alienatio-leaves-the-authored-formation-seat-vacant.md),
+Per [ADR-0508](adr/0508-alienatio-leaves-the-authored-formation-seat-vacant.md),
 Aliene commits immediately but remains visually legible: the sold figure fades over
 its exact authored formation cell, which remains vacant after the transaction. Every
 survivor stays in its indexed cell at the same scale; selection, cycling, and the
@@ -499,6 +499,10 @@ scaling is allowed to calibrate an asset's required footprint, but the scaled
 candidate is not production art. Once its 1× frame, visible subject bounds, and
 anchor are approved, regenerate/re-render it at those pixels and serve it 1:1;
 offline downscaling and asset-local live scale are not acceptance paths.
+ADR-0506 defines one closed exception for the exact live-stored card gold-tier
+divider: its shared renderer preserves fixed generated end anatomy and stretches
+only the plain center rails at the recorded three-slice geometry. This exception
+does not apply to other UI art.
 
 The goal is to use generated art as the source for production sprites and tiles,
 not merely as inspiration. The implementation should still treat those outputs

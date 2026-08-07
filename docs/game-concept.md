@@ -183,11 +183,11 @@ these.
   their contents in place without moving the surrounding physical panel. When Aliene commits,
   the sold figure fades from its authored formation cell, that cell remains vacant, and every
   survivor stays in its own indexed cell; the visual settlement never delays the transaction or
-  disables input (ADR-0486, ADR-0487, ADR-0506).
+  disables input (ADR-0486, ADR-0487, ADR-0508).
   The operation names remain nouns while their unit/card commands are the obscure English
   verbs **Adlect**, **Aliene**, and **Athetize**; completed Alienatio and Expunctio records are
   **Aliened** and **Athetized this visit**, respectively
-  (ADR-0230, ADR-0386, ADR-0393, ADR-0407, ADR-0432, ADR-0443, ADR-0482, ADR-0483, ADR-0485, ADR-0486, ADR-0487, ADR-0488, ADR-0506).
+  (ADR-0230, ADR-0386, ADR-0393, ADR-0407, ADR-0432, ADR-0443, ADR-0482, ADR-0483, ADR-0485, ADR-0486, ADR-0487, ADR-0488, ADR-0508).
 - **Enchiridion** is the player-facing reference for unit movement, terrain
   rules, the complete twenty-card catalog (His Grace plus nineteen offer cards),
   all active lipsana, and Ataraxia. Card filters combine exact gold value with

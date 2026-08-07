@@ -3,7 +3,7 @@ status: superseded
 date: 2026-08-05
 deciders: owner (Nelson) + Codex
 superseded_by:
-  - "[ADR-0506](0506-alienatio-leaves-the-authored-formation-seat-vacant.md)"
+  - "[ADR-0508](0508-alienatio-leaves-the-authored-formation-seat-vacant.md)"
 refines:
   - "[ADR-0421](0421-scene-activity-owns-imperative-motion.md)"
   - "[ADR-0431](0431-sectio-transactions-never-wait-for-presentation.md)"
