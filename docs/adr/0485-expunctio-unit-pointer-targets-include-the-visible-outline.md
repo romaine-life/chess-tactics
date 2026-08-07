@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-08-05
 deciders: owner (Nelson) + Codex
+partially_superseded_by:
+  - "[ADR-0511](0511-held-cards-are-immutable-formations.md)'s removal of Expunctio unit selection"
 supersedes:
   - "[ADR-0484](0484-expunctio-unit-pointers-follow-sprite-alpha.md)"
 refines:

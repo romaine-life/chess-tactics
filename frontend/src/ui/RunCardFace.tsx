@@ -28,17 +28,6 @@ export const RUN_CARD_REFERENCE_WIDTH = 360;
 const PLAYER_CARD_PALETTE = paletteForSide('player');
 const PLAYER_CARD_FACING = defaultFacingForSide('player');
 
-export type RunCardUnitHighlight = Readonly<{
-  unit: PlayablePieceType;
-  index: number;
-}>;
-
-export type RunCardUnitSelection = Readonly<{
-  id: (unit: PlayablePieceType, index: number) => string | null;
-  label: (unit: PlayablePieceType, index: number) => string | null;
-  onSelect: (unit: PlayablePieceType, index: number) => void;
-}>;
-
 export type RunCardImageKind =
   | 'frame'
   | 'coin'
@@ -263,15 +252,11 @@ function runCardFormationBoardMetrics(columns: number, rows: number): Readonly<{
 function FormationDiagram({
   pieces,
   pending,
-  unitHighlight,
-  unitSelection,
   onReady,
   onError,
 }: {
   pieces: readonly RunCardFormationPiece[];
   pending: boolean;
-  unitHighlight?: RunCardUnitHighlight | null;
-  unitSelection?: RunCardUnitSelection | null;
   onReady: (kind: RunCardImageKind) => void;
   onError: (kind: RunCardImageKind) => void;
 }): ReactElement {
@@ -318,9 +303,6 @@ function FormationDiagram({
       ))}
       {pieces.map((piece) => {
         const kind = runCardUnitImageKind(piece.pieceIndex, piece.unit, piece.occurrenceIndex);
-        const selectionLabel = pending || piece.empty
-          ? null
-          : unitSelection?.label(piece.unit, piece.occurrenceIndex) ?? null;
         const sprite = piece.empty ? null : (
           <img
             className="run-card-formation-unit"
@@ -333,20 +315,9 @@ function FormationDiagram({
             onError={() => onError(kind)}
           />
         );
-        const content = selectionLabel ? (
-          <button
-            type="button"
-            className="run-card-formation-cell-button"
-            aria-label={selectionLabel}
-            data-selection-id={unitSelection?.id(piece.unit, piece.occurrenceIndex) ?? undefined}
-            onClick={() => unitSelection?.onSelect(piece.unit, piece.occurrenceIndex)}
-          >
-            {sprite}
-          </button>
-        ) : sprite;
         return (
           <span
-            className={`run-card-formation-cell${piece.empty ? ' is-empty' : ''}${unitHighlight?.unit === piece.unit && unitHighlight.index === piece.occurrenceIndex ? ' is-highlighted' : ''}`}
+            className={`run-card-formation-cell${piece.empty ? ' is-empty' : ''}`}
             data-piece-index={piece.pieceIndex}
             data-formation-row={piece.y === 0 ? 'front' : 'back'}
             key={piece.pieceIndex}
@@ -357,7 +328,7 @@ function FormationDiagram({
               '--run-card-unit-anchor-y': `var(--unit-anchor-y-${piece.unit}, -78%)`,
             } as CSSProperties}
           >
-            {content}
+            {sprite}
           </span>
         );
       })}
@@ -408,8 +379,6 @@ function RunCardFaceLayer({
   faceTuning,
   frameBoxStyle,
   selectedFrameBox,
-  unitHighlight,
-  unitSelection,
   onImageLoad,
   onImageError,
 }: {
@@ -419,8 +388,6 @@ function RunCardFaceLayer({
   faceTuning: RunCardFaceTuning;
   frameBoxStyle: RunCardFrameBoxStyle;
   selectedFrameBox: RunCardFrameBoxName | null;
-  unitHighlight: RunCardUnitHighlight | null;
-  unitSelection: RunCardUnitSelection | null;
   onImageLoad: (signature: string, pending: boolean, kind: RunCardImageKind) => void;
   onImageError: (signature: string, pending: boolean, kind: RunCardImageKind) => void;
 }): ReactElement {
@@ -463,8 +430,7 @@ function RunCardFaceLayer({
       ) : null}
       <span className="run-card-prototype-type"><span className="run-card-prototype-type-label">{card.typeLine}</span></span>
       <span className="run-card-prototype-contents is-ledger-1-rows">
-        <FormationDiagram pieces={card.formation} pending={pending} unitHighlight={unitHighlight}
-          unitSelection={unitSelection} onReady={ready} onError={error} />
+        <FormationDiagram pieces={card.formation} pending={pending} onReady={ready} onError={error} />
         <span className="run-card-prototype-flavor">{card.flavor}</span>
       </span>
       {frameBoxStyle !== 'off' ? (
@@ -492,8 +458,6 @@ export function RunCardFace({
   frameGeometry = RUN_CARD_STANDARD_FRAME_GEOMETRY,
   frameBoxStyle = 'off',
   selectedFrameBox = null,
-  unitHighlight = null,
-  unitSelection = null,
   onImageLoad = () => undefined,
   onImageError = () => undefined,
   ariaHidden = false,
@@ -508,8 +472,6 @@ export function RunCardFace({
   frameGeometry?: RunCardFrameGeometry;
   frameBoxStyle?: RunCardFrameBoxStyle;
   selectedFrameBox?: RunCardFrameBoxName | null;
-  unitHighlight?: RunCardUnitHighlight | null;
-  unitSelection?: RunCardUnitSelection | null;
   onImageLoad?: (kind: RunCardImageKind) => void;
   onImageError?: (kind: RunCardImageKind) => void;
   ariaHidden?: boolean;
@@ -591,7 +553,7 @@ export function RunCardFace({
         <RunCardFaceLayer key={`${layer.presentation.signature}:${layer.pending ? 'pending' : 'shown'}`}
           presentation={layer.presentation} pending={layer.pending} contentsTuning={contentsTuning}
           faceTuning={tuning} frameBoxStyle={frameBoxStyle} selectedFrameBox={selectedFrameBox}
-          unitHighlight={unitHighlight} unitSelection={unitSelection} onImageLoad={settle}
+          onImageLoad={settle}
           onImageError={(signature, isPending, kind) => {
             onImageError(kind);
             settle(signature, isPending, kind);

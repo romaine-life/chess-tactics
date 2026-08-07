@@ -1,7 +1,10 @@
 ---
-status: accepted
+status: superseded
 date: 2026-08-05
 deciders: owner (Nelson) + Codex
+superseded_by:
+  - "[ADR-0508](0508-alienatio-leaves-the-authored-formation-seat-vacant.md)"
+  - "[ADR-0511](0511-held-cards-are-immutable-formations.md)"
 refines:
   - "[ADR-0421](0421-scene-activity-owns-imperative-motion.md)"
   - "[ADR-0431](0431-sectio-transactions-never-wait-for-presentation.md)"

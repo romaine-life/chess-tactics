@@ -5865,11 +5865,6 @@ body.loading-bootstrap .app-startup-status {
   min-height: 60px;
 }
 
-.skirmish-promotion-picker .skirmish-promotion-option.is-cash-out {
-  grid-column: 1 / -1;
-  min-height: 44px;
-}
-
 /* ============================================================
    LEVEL EDITOR — Skirmish-sibling rail helpers.
    The /edit shell reuses the real .skirmish-screen / .skirmish-war-room /
@@ -19483,22 +19478,6 @@ button.tileset-relationship-cell {
   translate: var(--run-card-flight-x) var(--run-card-flight-y);
 }
 
-/* Alienatio commits first. These source pixels then recede over their exact old
-   card seat while the surviving real figures settle into the committed stack. */
-.run-unit-departure {
-  image-rendering: pixelated;
-  opacity: 1;
-  pointer-events: none;
-  position: fixed;
-  transition: opacity var(--ds-duration-fade) var(--ds-ease-standard);
-  will-change: opacity;
-  z-index: 10011;
-}
-
-.run-unit-departure.is-departed {
-  opacity: 0;
-}
-
 .run-paid-lipsanon-price,
 .run-victory-summary {
   align-items: center;
@@ -22107,10 +22086,9 @@ button.tileset-relationship-cell {
   gap: var(--ds-space-1);
   grid-template-areas:
     "copy"
-    "unit"
     "price"
     "action";
-  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto auto;
   min-inline-size: 0;
   padding-block: var(--run-expunctio-card-paint-start-inset) var(--run-expunctio-card-paint-end-inset);
 }
@@ -22137,8 +22115,7 @@ button.tileset-relationship-cell {
   grid-area: price;
 }
 
-.run-expunctio-price .run-gold-transaction-amount,
-.run-expunctio-alienatio-return .run-gold-transaction-amount {
+.run-expunctio-price .run-gold-transaction-amount {
   margin-block-start: calc(-1 * var(--ds-space-1));
 }
 
@@ -22150,78 +22127,6 @@ button.tileset-relationship-cell {
 
 .run-expunctio-copy > :first-child {
   translate: 0 -.34em;
-}
-
-.run-expunctio-alienatio {
-  align-content: start;
-  display: grid;
-  gap: var(--ds-space-1);
-  grid-area: unit;
-  min-inline-size: 0;
-}
-
-.run-expunctio-alienatio > small,
-.run-expunctio-unit-choice > small,
-.run-expunctio-alienatio-return > small {
-  color: var(--skirmish-muted);
-  font: var(--ds-weight-regular) var(--ds-text-sm)/1.2 var(--ds-font-display);
-}
-
-.run-expunctio-unit-picker {
-  align-items: stretch;
-  display: grid;
-  gap: var(--ds-space-1);
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  min-inline-size: 0;
-}
-
-.run-expunctio-unit-picker-key {
-  block-size: 42px;
-  inline-size: 34px;
-}
-
-.run-expunctio-unit-choice {
-  align-content: center;
-  display: grid;
-  min-inline-size: 0;
-  text-align: center;
-}
-
-.run-expunctio-unit-choice > strong,
-.run-expunctio-unit-choice > small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.run-expunctio-unit-choice > strong {
-  font: var(--ds-weight-regular) var(--ds-text-md)/1.1 var(--ds-font-display);
-}
-
-.run-expunctio-unit-traits-seat {
-  align-items: center;
-  block-size: 20px;
-  display: flex;
-  min-inline-size: 0;
-}
-
-.run-expunctio-unit-traits-seat .run-unit-traits {
-  flex-wrap: nowrap;
-}
-
-.run-expunctio-alienatio-action,
-.run-expunctio-alienatio-return {
-  display: grid;
-  gap: var(--ds-space-1);
-}
-
-.run-expunctio-alienatio-action > button {
-  inline-size: 100%;
-}
-
-.run-expunctio-alienatio.is-empty > span {
-  color: var(--skirmish-muted);
-  font: var(--ds-weight-regular) var(--ds-text-md)/1.35 var(--ds-font-display);
 }
 
 /* ===== Enchiridion + Strategikon (ADR-0231) ==============================
@@ -22645,10 +22550,11 @@ button.tileset-relationship-cell {
 }
 
 .enchiridion-card-filters {
+  --enchiridion-card-filter-surface-pitch: calc(var(--le-inner-field-h, 38px) + var(--ds-stack));
   align-items: end;
   display: grid;
   gap: var(--ds-stack);
-  grid-template-columns: repeat(2, minmax(132px, 1fr)) auto;
+  grid-template-columns: repeat(3, minmax(132px, 1fr)) auto;
   padding: var(--ds-space-2) var(--ds-inset);
 }
 
@@ -22667,6 +22573,7 @@ button.tileset-relationship-cell {
 }
 
 .enchiridion-card-filter .house-select {
+  --chrome-surface-position-y: calc(var(--enchiridion-card-filter-index, 0) * -1 * var(--enchiridion-card-filter-surface-pitch));
   inline-size: 100%;
 }
 
@@ -23251,15 +23158,9 @@ button.tileset-relationship-cell {
   .run-expunctio-companion {
     grid-template-areas:
       "copy copy"
-      "unit unit"
       "price action";
     grid-template-columns: minmax(0, 1fr) minmax(150px, 1fr);
-    grid-template-rows: auto minmax(0, 1fr) auto;
-  }
-
-  .run-expunctio-alienatio-action {
-    align-items: end;
-    grid-template-columns: minmax(0, 1fr) minmax(150px, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
   }
 
 }
@@ -25496,27 +25397,6 @@ button.run-card-formation-cell {
   z-index: calc(var(--run-card-formation-depth) + 20);
 }
 
-.run-card-formation-cell-button {
-  all: unset;
-  align-items: center;
-  block-size: 100%;
-  cursor: pointer;
-  display: grid;
-  inline-size: 100%;
-  justify-items: center;
-  position: relative;
-}
-
-button.run-card-formation-cell.is-selectable {
-  cursor: pointer;
-}
-
-.run-card-formation-cell.is-highlighted .run-card-formation-unit,
-.run-card-formation-cell-button:hover .run-card-formation-unit,
-.run-card-formation-cell-button:focus-visible .run-card-formation-unit {
-  filter: drop-shadow(0 0 .7cqw var(--skirmish-cyan));
-}
-
 .run-card-formation-cell.is-empty::after {
   block-size: 38%;
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
@@ -25566,12 +25446,7 @@ button.run-card-formation-cell.is-selectable {
   position: relative;
 }
 
-button.run-card-prototype-unit-icon-seat.is-selectable {
-  all: unset;
-}
-
-.run-card-prototype-unit-icon-seat,
-button.run-card-prototype-unit-icon-seat.is-selectable {
+.run-card-prototype-unit-icon-seat {
   block-size: var(--run-card-unit-height, 9cqw);
   inline-size: var(--run-card-unit-seat-width);
   inset-inline-start: var(--run-card-unit-seat-left);
@@ -25609,19 +25484,6 @@ button.run-card-prototype-unit-icon-seat.is-selectable {
   image-rendering: pixelated;
   max-inline-size: 136px;
   object-fit: contain;
-}
-
-.run-card-prototype-unit-stack.has-pixel-hover {
-  cursor: pointer;
-}
-
-button.run-card-prototype-unit-icon-seat.is-selectable.is-pixel-hovered:not(.is-highlighted) .run-card-prototype-unit-icon,
-.run-card-prototype-unit-icon-seat.is-highlighted .run-card-prototype-unit-icon {
-  filter: drop-shadow(0 0 .7cqw var(--skirmish-cyan));
-}
-
-.run-card-prototype-unit-icon-seat.is-reflowing {
-  will-change: translate;
 }
 
 /* The marker rides the unit it marks: the density ladder resizes the sprite per

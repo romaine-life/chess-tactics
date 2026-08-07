@@ -1,7 +1,6 @@
 import type { CSSProperties, ReactElement } from 'react';
 import type { Piece, PromotionPieceType } from '../core/types';
 import { paletteForSide, pieceSpritePath } from '../core/pieces';
-import { LIPSANON_BY_ID } from '../run/model';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { ChromeButton } from './shared/ChromeButton';
 import { InnerChromeBox } from './shared/ChromeBox';
@@ -46,14 +45,12 @@ export function PawnPromotionPicker({
   boardSeat,
   boardZoom,
   onChoose,
-  onCashOut = null,
 }: {
   piece: Piece;
   choices: readonly PromotionPieceType[];
   boardSeat: { left: number; top: number };
   boardZoom: number;
   onChoose: (type: PromotionPieceType) => void;
-  onCashOut?: (() => void) | null;
 }): ReactElement {
   const side = promotionPickerSideForSeat(boardSeat.left);
   const palette = paletteForSide(piece.side, piece.palette);
@@ -94,20 +91,6 @@ export function PawnPromotionPicker({
               <span>{PROMOTION_LABEL[type]}</span>
             </ChromeButton>
           ))}
-          {onCashOut ? (
-            <ChromeButton
-              unit="inner-text-button"
-              data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-              className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'skirmish-promotion-option', 'is-cash-out')}
-              style={{ ['--promotion-leaf-index' as string]: choices.length }}
-              onClick={onCashOut}
-              aria-label="Take 2 gold and permanently remove this Pawn"
-              title={`${LIPSANON_BY_ID['mercenary-boat'].name}: take 2 gold; this Pawn leaves the army permanently.`}
-            >
-              <span aria-hidden="true">¤</span>
-              <span>Take 2 gold</span>
-            </ChromeButton>
-          ) : null}
         </div>
       </InnerChromeBox>
     </div>

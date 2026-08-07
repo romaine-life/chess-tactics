@@ -952,7 +952,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 65 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 66 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -967,7 +967,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 29 }, (_, index) => index + 37),
+    ...Array.from({ length: 30 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1081,7 +1081,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
     )
   ) {
     throw new Error(
-      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 65: `
+      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 66: `
       + `${JSON.stringify({
         history: history.rows,
         identity_columns: identityColumns.rows,
@@ -2838,6 +2838,155 @@ async function validateQueenPawnCatalogRunMigration65() {
   }
 }
 
+async function validateImmutableFormationRunMigration66() {
+  const { Client } = require('pg');
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('CREATE SCHEMA smoke_immutable_formation_run_migration_66');
+    await client.query('SET LOCAL search_path TO smoke_immutable_formation_run_migration_66');
+    await client.query(`
+      CREATE TABLE active_runs (
+        owner_email text PRIMARY KEY, body jsonb NOT NULL, revision integer NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE drawable_assets (
+        id text PRIMARY KEY, lifecycle_state text NOT NULL, row_revision integer NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now(), updated_by text
+      );
+      CREATE TABLE drawable_asset_media (asset_id text NOT NULL, role text NOT NULL DEFAULT 'icon');
+      CREATE TABLE drawable_catalog_state (
+        singleton boolean PRIMARY KEY, revision integer NOT NULL, updated_at timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE media_versions (
+        id text PRIMARY KEY, status text NOT NULL, row_revision integer NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now(), updated_by text
+      );
+      CREATE TABLE media_slots (
+        slot text PRIMARY KEY, active_version_id text, lifecycle_state text NOT NULL,
+        retired_at timestamptz, retirement_evidence jsonb, row_revision integer NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now(), updated_by text
+      );
+      CREATE TABLE media_asset_events (
+        id bigserial PRIMARY KEY, slot text NOT NULL, source_path text, version_id text,
+        action text NOT NULL, actor_email text, details jsonb
+      );
+      CREATE TABLE media_catalog_state (
+        singleton boolean PRIMARY KEY, revision integer NOT NULL, updated_at timestamptz NOT NULL DEFAULT now()
+      );
+    `);
+    const snapshot = {
+      goldTenths: 40,
+      army: [{ id: 'pawn-a' }, { id: 'pawn-b' }],
+      cards: [{ id: 'held', unitSeats: ['pawn-a', 'pawn-b'] }],
+      lipsana: ['royal-tent', 'fair-scales'],
+      seenLipsana: ['royal-tent', 'fair-scales', 'mercenary-boat'],
+      conflictPaidLipsana: { 0: { lipsanonId: 'fair-scales', bought: false } },
+      nextArmyUnitSequence: 3,
+      nextArmyUnitNumberByType: { pawn: 3 },
+      nextCardSequence: 2,
+      paidLipsanonBought: false,
+    };
+    const legacy = {
+      runSaveVersion: 27,
+      phase: 'sectio',
+      goldTenths: 45,
+      army: [{ id: 'pawn-b' }],
+      cards: [{ id: 'held', unitSeats: [null, 'pawn-b'] }],
+      lipsana: ['royal-tent', 'fair-scales'],
+      seenLipsana: ['royal-tent', 'fair-scales', 'mercenary-boat'],
+      conflictPaidLipsana: { 0: { lipsanonId: 'fair-scales', bought: false } },
+      nextArmyUnitSequence: 3,
+      nextArmyUnitNumberByType: { pawn: 3 },
+      nextCardSequence: 2,
+      battleRuntime: { battleIndex: 0, cashedOutUnitIds: ['pawn-a'] },
+      vacantia: null,
+      sectio: {
+        conflictIndex: 0,
+        cardOffers: [{ offerId: 'visible-offer' }],
+        adlectedCardOfferIds: ['visible-offer'],
+        paidLipsanonOffer: 'fair-scales',
+        paidLipsanonBought: false,
+        alienatedUnits: [{ unit: { id: 'pawn-a' }, proceedsTenths: 5 }],
+        expunctedCard: { card: { id: 'other' } },
+        entrySnapshot: snapshot,
+      },
+    };
+    await client.query(
+      `INSERT INTO active_runs (owner_email, body, revision) VALUES ('legacy@example.com', $1::jsonb, 4)`,
+      [JSON.stringify(legacy)],
+    );
+    await client.query(`
+      INSERT INTO drawable_catalog_state (singleton, revision) VALUES (true, 1);
+      INSERT INTO media_catalog_state (singleton, revision) VALUES (true, 1);
+      INSERT INTO drawable_assets (id, lifecycle_state, row_revision) VALUES
+        ('run-lipsanon-mercenary-boat', 'active', 1),
+        ('run-lipsanon-fair-scales', 'active', 1),
+        ('run-gold-transaction-gain', 'active', 1);
+      INSERT INTO drawable_asset_media (asset_id) VALUES
+        ('run-lipsanon-mercenary-boat'),
+        ('run-lipsanon-fair-scales'),
+        ('run-gold-transaction-gain');
+      INSERT INTO media_versions (id, status, row_revision) VALUES
+        ('boat-version', 'accepted', 1),
+        ('scales-version', 'accepted', 1),
+        ('gain-version', 'accepted', 1);
+      INSERT INTO media_slots (slot, active_version_id, lifecycle_state, row_revision) VALUES
+        ('ui/run/lipsana/mercenary-boat.png', 'boat-version', 'active', 1),
+        ('ui/run/lipsana/fair-scales.png', 'scales-version', 'active', 1),
+        ('ui/run/resources/gain-gold.png', 'gain-version', 'active', 1);
+    `);
+
+    await client.query(inlineMigrationSql(66));
+    await client.query(inlineMigrationSql(66));
+
+    const migrated = (await client.query(
+      `SELECT body, revision FROM active_runs WHERE owner_email = 'legacy@example.com'`,
+    )).rows[0];
+    const installed = (await client.query(`
+      SELECT
+        (SELECT count(*)::integer FROM drawable_assets WHERE lifecycle_state <> 'retired') AS active_assets,
+        (SELECT count(*)::integer FROM drawable_asset_media) AS bindings,
+        (SELECT count(*)::integer FROM media_slots WHERE lifecycle_state <> 'retired' OR active_version_id IS NOT NULL) AS active_slots,
+        (SELECT count(*)::integer FROM media_versions WHERE status <> 'archived') AS active_versions,
+        (SELECT count(*)::integer FROM media_asset_events WHERE action = 'slot-retired') AS retirement_events,
+        (SELECT revision FROM drawable_catalog_state WHERE singleton = true) AS drawable_revision,
+        (SELECT revision FROM media_catalog_state WHERE singleton = true) AS media_revision
+    `)).rows[0];
+    if (
+      migrated?.body?.runSaveVersion !== 28
+      || migrated.body.goldTenths !== 40
+      || migrated.body.army?.length !== 2
+      || migrated.body.cards?.[0]?.unitSeats?.[0] !== 'pawn-a'
+      || JSON.stringify(migrated.body.lipsana) !== JSON.stringify(['royal-tent'])
+      || JSON.stringify(migrated.body.seenLipsana) !== JSON.stringify(['royal-tent'])
+      || Object.keys(migrated.body.conflictPaidLipsana || {}).length !== 0
+      || migrated.body.sectio?.paidLipsanonOffer !== null
+      || migrated.body.sectio?.adlectedCardOfferIds?.length !== 0
+      || migrated.body.sectio?.expunctedCard !== null
+      || Object.hasOwn(migrated.body.sectio || {}, 'alienatedUnits')
+      || Object.hasOwn(migrated.body.battleRuntime || {}, 'cashedOutUnitIds')
+      || Number(migrated.revision) !== 5
+      || Number(installed.active_assets) !== 0
+      || Number(installed.bindings) !== 0
+      || Number(installed.active_slots) !== 0
+      || Number(installed.active_versions) !== 0
+      || Number(installed.retirement_events) !== 3
+      || Number(installed.drawable_revision) !== 2
+      || Number(installed.media_revision) !== 2
+    ) {
+      throw new Error(`Migration 66 did not retire individual disposal atomically: ${JSON.stringify({ migrated, installed })}`);
+    }
+    await client.query('ROLLBACK');
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve validation error */ }
+    throw error;
+  } finally {
+    await client.end();
+  }
+}
+
 async function validateRepairedEditorDocumentDiscardOperation62() {
   const documentId = '00000000-0000-4000-8000-000000000262';
   const levelId = 'migration-operation-level';
@@ -3002,6 +3151,7 @@ async function main() {
   await validateGeneratedFormationRunMigration63();
   await validateDerivedSectioPileRunMigration64();
   await validateQueenPawnCatalogRunMigration65();
+  await validateImmutableFormationRunMigration66();
   await validateRepairedEditorDocumentDiscardOperation62();
   await resetDb();
 
@@ -6228,7 +6378,7 @@ async function main() {
     events: [
       { eventId: 'pick:run-smoke:royal-tent', lipsanonId: 'royal-tent', kind: 'picked' },
       { eventId: 'battle-win:run-smoke:0', lipsanonId: 'royal-tent', kind: 'battle-win' },
-      { eventId: 'battle-win:run-smoke:0', lipsanonId: 'fair-scales', kind: 'battle-win' },
+      { eventId: 'battle-win:run-smoke:0', lipsanonId: 'quartermasters-ledger', kind: 'battle-win' },
     ],
   });
   const savedLipsanonEvents = await request(
@@ -6262,8 +6412,8 @@ async function main() {
     loadedLipsanonStatistics.statusCode !== 200
     || loadedLipsanonStatisticsBody.statistics['royal-tent']?.timesPicked !== 1
     || loadedLipsanonStatisticsBody.statistics['royal-tent']?.battlesWonWhileHeld !== 1
-    || loadedLipsanonStatisticsBody.statistics['fair-scales']?.timesPicked !== 0
-    || loadedLipsanonStatisticsBody.statistics['fair-scales']?.battlesWonWhileHeld !== 1
+    || loadedLipsanonStatisticsBody.statistics['quartermasters-ledger']?.timesPicked !== 0
+    || loadedLipsanonStatisticsBody.statistics['quartermasters-ledger']?.battlesWonWhileHeld !== 1
   ) {
     throw new Error(`Lipsanon statistics did not aggregate exact facts: ${loadedLipsanonStatistics.statusCode} ${loadedLipsanonStatistics.body}`);
   }

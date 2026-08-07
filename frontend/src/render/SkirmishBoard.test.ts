@@ -82,18 +82,30 @@ describe('retained-board unit arrivals', () => {
     expect(arrivalOffset(2_400, plan)).toEqual({ dx: 0, dy: 0, opacity: 1 });
   });
 
-  it('slides Run formations in from the right while keeping their authored row', () => {
-    const plan = { startMs: 1_000, delayMs: 0, distancePx: 480 };
+  it('summons onto off-board seats and waits for the final drop before sliding', () => {
+    const early = {
+      startMs: 1_000,
+      delayMs: 0,
+      summonWaveDelayMs: 100,
+      startOffset: { dx: 240, dy: 135 },
+    };
+    const last = { ...early, delayMs: 100 };
 
-    expect(arrivalOffset(1_000, plan, 'slide-from-right')).toEqual({ dx: 480, dy: 0, opacity: 0 });
-    expect(arrivalOffset(1_250, plan, 'slide-from-right')).toEqual({
-      dx: expect.any(Number),
-      dy: 0,
-      opacity: 1,
-    });
-    expect(arrivalOffset(1_250, plan, 'slide-from-right').dx).toBeGreaterThan(0);
-    expect(arrivalOffset(1_250, plan, 'slide-from-right').dx).toBeLessThan(480);
-    expect(arrivalOffset(2_000, plan, 'slide-from-right')).toEqual({ dx: 0, dy: 0, opacity: 1 });
+    expect(arrivalOffset(1_000, early, 'slide-from-right')).toEqual({ dx: 240, dy: 75, opacity: 0 });
+    expect(arrivalOffset(1_000, last, 'slide-from-right')).toEqual({ dx: 240, dy: 75, opacity: 0 });
+    expect(arrivalOffset(1_200, early, 'slide-from-right')).toEqual({ dx: 240, dy: 75, opacity: 1 });
+    expect(arrivalOffset(1_200, last, 'slide-from-right').opacity).toBeGreaterThan(0);
+    expect(arrivalOffset(1_550, early, 'slide-from-right')).toEqual({ dx: 240, dy: 135, opacity: 1 });
+    expect(arrivalOffset(1_550, last, 'slide-from-right').dy).toBeLessThan(135);
+    expect(arrivalOffset(1_720, early, 'slide-from-right')).toEqual({ dx: 240, dy: 135, opacity: 1 });
+    expect(arrivalOffset(1_720, last, 'slide-from-right')).toEqual({ dx: 240, dy: 135, opacity: 1 });
+    const sliding = arrivalOffset(2_000, early, 'slide-from-right');
+    expect(sliding.dx).toBeGreaterThan(0);
+    expect(sliding.dx).toBeLessThan(240);
+    expect(sliding.dy).toBeGreaterThan(0);
+    expect(sliding.dy).toBeLessThan(135);
+    expect(sliding.opacity).toBe(1);
+    expect(arrivalOffset(2_280, early, 'slide-from-right')).toEqual({ dx: 0, dy: 0, opacity: 1 });
   });
 });
 

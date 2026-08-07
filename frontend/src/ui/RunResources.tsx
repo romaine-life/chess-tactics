@@ -3,13 +3,10 @@ import type { ReactElement } from 'react';
 import { formatGold } from '../run/model';
 
 const GOLD_CANDIDATE_QUERY = 'goldCandidate';
-const GOLD_TRANSACTION_CANDIDATE_QUERY = {
-  gain: 'goldGainCandidate',
-  loss: 'goldLossCandidate',
-} as const;
+const GOLD_TRANSACTION_CANDIDATE_QUERY = 'goldLossCandidate';
 const SHA256 = /^[0-9a-f]{64}$/;
 
-export type RunGoldTransactionDirection = keyof typeof GOLD_TRANSACTION_CANDIDATE_QUERY;
+export type RunGoldTransactionDirection = 'loss';
 
 function reviewedGoldCandidateSrc(): string | null {
   if (typeof window === 'undefined') return null;
@@ -28,8 +25,8 @@ function installedGoldIconSrc(): string | null {
 
 function reviewedGoldTransactionCandidateSrc(direction: RunGoldTransactionDirection): string | null {
   if (typeof window === 'undefined') return null;
-  const query = GOLD_TRANSACTION_CANDIDATE_QUERY[direction];
-  const sha256 = new URLSearchParams(window.location.search).get(query)?.trim().toLowerCase();
+  void direction;
+  const sha256 = new URLSearchParams(window.location.search).get(GOLD_TRANSACTION_CANDIDATE_QUERY)?.trim().toLowerCase();
   return sha256 && SHA256.test(sha256) ? `/api/admin/media/${sha256}` : null;
 }
 
@@ -113,11 +110,10 @@ export function RunGoldTransactionAmount({
   pendingValue?: string;
 }): ReactElement {
   const value = valueTenths === null ? null : formatGold(valueTenths);
-  const disposition = direction === 'gain' ? 'gained' : 'lost';
   return (
     <span
       className={`run-gold-transaction-amount is-${direction}${value === null ? ' is-pending' : ''} ${className}`.trim()}
-      aria-label={value === null ? pendingLabel : `${value} gold ${disposition}`}
+      aria-label={value === null ? pendingLabel : `${value} gold lost`}
     >
       {value === null ? null : <RunGoldTransactionIcon direction={direction} src={iconSrc} />}
       <span className="run-gold-transaction-value" aria-hidden="true">{value ?? pendingValue}</span>

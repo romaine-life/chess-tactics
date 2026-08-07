@@ -161,7 +161,6 @@ describe('match persistence', () => {
           reservistPoolUnitIds: [],
           deployedReservistUnitIds: [],
           observedDeadUnitIds: [],
-          cashedOutUnitIds: [],
           reinforcementSequence: 0,
         },
       },

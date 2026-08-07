@@ -61,7 +61,7 @@ test('already-applied migration 36 remains the immutable drawable-media migratio
   );
 });
 
-test('the exact sparse numeric legacy history upgrades through migration 65', () => {
+test('the exact sparse numeric legacy history upgrades through migration 66', () => {
   const versions = migrationVersions();
   const appliedBeforeUpgrade = new Set(
     versions.filter((version) => version <= 27 || version === 36),
@@ -507,6 +507,17 @@ test('the exact sparse numeric legacy history upgrades through migration 65', ()
     /migrate_active_run_v26_to_v27[\s\S]*runSaveVersion}[\s\S]*'27'[\s\S]*sectioCardCursor}[\s\S]*'0'[\s\S]*runSaveVersion'[\s\S]*'26'/i,
     'migration 65 must restart the derived cursor while advancing version 26 to 27',
   );
+  const migration66 = inlineMigration(66);
+  assert.equal(
+    migration66.name,
+    'immutable held formations and retired unit disposal',
+    'migration 66 must own the immutable-formation boundary',
+  );
+  assert.match(
+    migration66.sql,
+    /migrate_active_run_v27_to_v28[\s\S]*entrySnapshot[\s\S]*alienatedUnits[\s\S]*fair-scales[\s\S]*mercenary-boat[\s\S]*gain-gold/i,
+    'migration 66 must rewind an open Sectio and retire the complete individual-disposal graph',
+  );
   assert.equal(
     (serverSource.match(/never_saved: savedRevision === 0/g) || []).length,
     2,
@@ -543,7 +554,7 @@ test('the exact sparse numeric legacy history upgrades through migration 65', ()
   );
   assert.deepEqual(
     plan.pending.map((entry) => entry.version),
-    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65],
+    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66],
     'the bridge must fill the historical gap before applying every post-36 contract',
   );
   assert.throws(
@@ -575,7 +586,7 @@ test('the exact sparse numeric legacy history upgrades through migration 65', ()
   );
 });
 
-test('required-schema readiness and repair enforce the migrations 37 through 65 contracts', () => {
+test('required-schema readiness and repair enforce the migrations 37 through 66 contracts', () => {
   const relations = sourceSection(
     serverSource,
     'const REQUIRED_SCHEMA_RELATIONS = [',
@@ -771,6 +782,11 @@ test('required-schema readiness and repair enforce the migrations 37 through 65 
     contractReadiness,
     /unmigrated_active_run_version_26_count[\s\S]*version === 65[\s\S]*repair complete Queen and Pawn formation catalog contract/,
     'readiness must route version-26 account Runs through migration 65',
+  );
+  assert.match(
+    contractReadiness,
+    /unmigrated_active_run_version_27_count[\s\S]*version === 66[\s\S]*repair immutable held formations contract/,
+    'readiness must route version-27 account Runs through migration 66',
   );
   assert.match(
     contractReadiness,
@@ -1148,8 +1164,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*65\s*\}/,
-    'the production upgrade proof must require a complete 1-65 history',
+    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*66\s*\}/,
+    'the production upgrade proof must require a complete 1-66 history',
   );
   assert.match(
     primaryUpgradeProof,
@@ -1163,8 +1179,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /length:\s*29[\s\S]*index\s*\+\s*37/,
-    'the production report must include every post-36 migration through 65',
+    /length:\s*30[\s\S]*index\s*\+\s*37/,
+    'the production report must include every post-36 migration through 66',
   );
   assert.match(
     primaryUpgradeProof,

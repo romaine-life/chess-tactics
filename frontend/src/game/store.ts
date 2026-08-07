@@ -421,8 +421,6 @@ export interface SkirmishState {
    *  live move; both paths still perform their canonical fresh legality check. */
   releaseMoveGesture: (pieceId: string, x: number, y: number, startedAsPremove: boolean) => void;
   choosePromotion: (type: PromotionPieceType) => void;
-  /** Run-only Paid Crossing choice: complete the pending move, then remove the Pawn. */
-  cashOutPromotion: (commitRunCashOut?: (pieceId: string) => void) => void;
   /** One Run-only checkpoint before the latest committed player move (ADR-0394). */
   undoCheckpoint: PlayerMoveUndoCheckpoint | null;
   /** True while this mounted Battle supplies the Run economy half of Undo. */
@@ -925,26 +923,15 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     piece: Piece,
     mv: Move,
     promotion?: PromotionPieceType,
-    removeAfterMove = false,
-    beforeApply?: (pieceId: string) => void,
     landingAlreadyPresented = false,
   ) => {
     const s = get();
     const undoCheckpoint = capturePlayerMoveUndo();
     pauseClockWithIncrement();
-    beforeApply?.(piece.id);
     const playerRes = applyMove(s.game, piece.id, mv, { promotion });
-    const afterSpecial = removeAfterMove
-      ? {
-          ...playerRes.state,
-          pieces: playerRes.state.pieces.map((candidate) => (
-            candidate.id === piece.id ? { ...candidate, alive: false } : candidate
-          )),
-        }
-      : playerRes.state;
     const transformed = runBattleTransformSink
-      ? runBattleTransformSink(afterSpecial, playerRes.events)
-      : afterSpecial;
+      ? runBattleTransformSink(playerRes.state, playerRes.events)
+      : playerRes.state;
     // The settled position joins the threefold table BEFORE the terminal checks read it
     // (a no-op unless this game enforces threefold). enemyEnv matches the post-move state.
     const enemyEnv = envFor(transformed);
@@ -955,7 +942,6 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       playLandingSfx(s.env, mv.castle?.kingTo.x ?? mv.x, mv.castle?.kingTo.y ?? mv.y, LANDING_SFX_DELAY);
     }
     const msgs = playerRes.events.map(describeEvent).filter((m): m is string => m !== null);
-    if (removeAfterMove) msgs.push('A Pawn leaves the army with its pay.');
     const ctx = { ...(s.objectiveCtx ?? {}), turnsElapsed: s.turnsElapsed ?? 0 };
     const settled = settleCommittedPosition(committed, {
       victoryRules: s.victoryOverride ?? victoryRulesForObjective(s.objective, ctx),
@@ -1827,23 +1813,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     if (pending.mode === 'move' && (s.premoves.length || s.premoveInputOpen)) {
       set({ premoves: [], premoveInputOpen: false });
     }
-    commitPlayerMove(p, mv, type, false, undefined, true);
-  },
-
-  cashOutPromotion: (commitRunCashOut) => {
-    const s = get();
-    const pending = s.pendingPromotion;
-    if (!pending || pending.mode !== 'move' || pending.phase !== 'choosing' || s.net) return;
-    const p = s.game.pieces.find((piece) => piece.id === pending.pieceId && piece.alive && piece.side === 'player');
-    const mv = p
-      ? legalMoves(p, s.game.pieces, s.game.size, s.env).find((move) => move.x === pending.move.x && move.y === pending.move.y)
-      : undefined;
-    if (!p || p.type !== 'pawn' || !mv || !movePromotesPawn(s.game, p, mv)) {
-      set({ pendingPromotion: null, premoveInputOpen: false });
-      return;
-    }
-    if (s.premoves.length || s.premoveInputOpen) set({ premoves: [], premoveInputOpen: false });
-    commitPlayerMove(p, mv, undefined, true, commitRunCashOut, true);
+    commitPlayerMove(p, mv, type, true);
   },
 
   queueMove: (pieceId, x, y) => {

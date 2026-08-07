@@ -115,7 +115,6 @@ function runUndoCheckpoint(goldTenths = 20): RunBattleUndoCheckpoint {
       reservistPoolUnitIds: [],
       deployedReservistUnitIds: [],
       observedDeadUnitIds: [],
-      cashedOutUnitIds: [],
       reinforcementSequence: 0,
     },
   };

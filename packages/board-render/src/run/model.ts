@@ -21,7 +21,7 @@ export {
 };
 
 /** The schema version of one persisted in-progress Run. Only this exact save shape is read. */
-export const CURRENT_RUN_SAVE_VERSION = 27;
+export const CURRENT_RUN_SAVE_VERSION = 28;
 export type RunSaveVersion = typeof CURRENT_RUN_SAVE_VERSION;
 
 export class UnsupportedRunSaveError extends Error {
@@ -42,6 +42,7 @@ const RUN_SAVE_VERSION_FORMATION_CARDS_SOURCE = 23;
 const RUN_SAVE_VERSION_SIDEWAYS_FORMATIONS_SOURCE = 24;
 const RUN_SAVE_VERSION_SECTIO_PILE_SOURCE = 25;
 const RUN_SAVE_VERSION_QUEEN_PAWN_FORMATIONS_SOURCE = 26;
+const RUN_SAVE_VERSION_IMMUTABLE_FORMATIONS_SOURCE = 27;
 export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
@@ -186,8 +187,8 @@ export interface RunCardOffer extends RunCoreCard {
 export interface RunOwnedCard {
   id: string;
   coreId: string;
-  /** Stable left-to-right seats. A sold or lost unit leaves null rather than reordering
-   * the card; presentation may compact the surviving seats without changing this identity. */
+  /** Stable authored formation seats. A sold or lost unit leaves null at the same index;
+   * presentation never reorders or compacts surviving units into another formation cell. */
   unitSeats: Array<string | null>;
   acquiredAfterBattleIndex: number;
 }
@@ -267,7 +268,6 @@ export interface RunBattleRuntime {
   reservistPoolUnitIds: string[];
   deployedReservistUnitIds: string[];
   observedDeadUnitIds: string[];
-  cashedOutUnitIds: string[];
   reinforcementSequence: number;
 }
 
@@ -330,10 +330,6 @@ export interface RunSectioState {
   adlectedCardOfferIds: string[];
   paidLipsanonOffer: LipsanonId | null;
   paidLipsanonBought: boolean;
-  alienatedUnits: Array<{
-    unit: RunArmyUnit;
-    proceedsTenths: number;
-  }>;
   /** The sole card struck from the Chartulary during this visit, or null while unused. */
   expunctedCard: RunExpunctioRecord | null;
   entrySnapshot: RunSectioEntrySnapshot;
@@ -1023,9 +1019,8 @@ function normalizedArmyIdentity(run: RunDocument): {
   changed: boolean;
 } {
   const entryArmy = run.sectio?.entrySnapshot?.army ?? [];
-  const alienatedArmy = run.sectio?.alienatedUnits?.map((entry) => entry.unit) ?? [];
   const expunctedArmy = run.sectio?.expunctedCard?.units ?? [];
-  const units = [...entryArmy, ...run.army, ...alienatedArmy, ...expunctedArmy];
+  const units = [...entryArmy, ...run.army, ...expunctedArmy];
   const byId = new Map<string, RunArmyUnit>();
   for (const unit of units) {
     if (!byId.has(unit.id)) byId.set(unit.id, unit);
@@ -1093,10 +1088,6 @@ function normalizedArmyIdentity(run: RunDocument): {
   const army = rewriteArmy(run.army);
   let sectio = run.sectio;
   if (sectio) {
-    const alienatedUnits = (sectio.alienatedUnits ?? []).map((entry) => {
-      const [unit] = rewriteArmy([entry.unit]);
-      return unit === entry.unit ? entry : { ...entry, unit };
-    });
     const expunctedCard = sectio.expunctedCard
       ? { ...sectio.expunctedCard, units: rewriteArmy(sectio.expunctedCard.units) }
       : null;
@@ -1107,11 +1098,10 @@ function normalizedArmyIdentity(run: RunDocument): {
         }
       : sectio.entrySnapshot;
     if (
-      alienatedUnits !== sectio.alienatedUnits
-      || expunctedCard !== sectio.expunctedCard
+      expunctedCard !== sectio.expunctedCard
       || entrySnapshot !== sectio.entrySnapshot
     ) {
-      sectio = { ...sectio, alienatedUnits, expunctedCard, entrySnapshot };
+      sectio = { ...sectio, expunctedCard, entrySnapshot };
     }
   }
 
@@ -1159,7 +1149,7 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
   const rawSectio = raw.sectio && typeof raw.sectio === 'object' && !Array.isArray(raw.sectio)
     ? raw.sectio as unknown as Record<string, unknown>
     : null;
-  if (rawSectio && ('purchasedCardOfferIds' in rawSectio || 'soldUnits' in rawSectio)) {
+  if (rawSectio && ('purchasedCardOfferIds' in rawSectio || 'soldUnits' in rawSectio || 'alienatedUnits' in rawSectio)) {
     throw new UnsupportedRunSaveError('This Run contains retired Sectio operation data. Start a new Run.');
   }
   if (rawSectio && 'kind' in rawSectio) {
@@ -1170,9 +1160,6 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
   }
   const persistedUnits: unknown[] = [
     ...(Array.isArray(run.army) ? run.army : []),
-    ...(Array.isArray(run.sectio?.alienatedUnits)
-      ? run.sectio.alienatedUnits.map((alienated) => alienated?.unit)
-      : []),
     ...(Array.isArray(run.sectio?.expunctedCard?.units) ? run.sectio.expunctedCard.units : []),
     ...(Array.isArray(run.sectio?.entrySnapshot?.army) ? run.sectio.entrySnapshot.army : []),
   ];
@@ -1270,7 +1257,6 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
     && next.sectio
     && (
       !next.sectio.entrySnapshot
-      || !Array.isArray(next.sectio.alienatedUnits)
       || next.sectio.expunctedCard === undefined
       || !Array.isArray(next.sectio.entrySnapshot.cards)
       || !Number.isSafeInteger(next.sectio.entrySnapshot.nextCardSequence)
@@ -1281,7 +1267,6 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
       ...next,
       sectio: {
         ...next.sectio,
-        alienatedUnits: Array.isArray(next.sectio.alienatedUnits) ? next.sectio.alienatedUnits : [],
         expunctedCard: next.sectio.expunctedCard ?? null,
         entrySnapshot: next.sectio.entrySnapshot
           ? {
@@ -1905,8 +1890,130 @@ function migrateRunToSectioPile(stored: Record<string, unknown>): Record<string,
 function migrateRunToQueenPawnFormations(stored: Record<string, unknown>): Record<string, unknown> {
   return {
     ...stored,
-    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    runSaveVersion: RUN_SAVE_VERSION_IMMUTABLE_FORMATIONS_SOURCE,
     sectioCardCursor: 0,
+  };
+}
+
+function currentLipsanonList(value: unknown): LipsanonId[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.filter((id): id is LipsanonId => (
+    typeof id === 'string' && CURRENT_LIPSANON_IDS.has(id as LipsanonId)
+  )))];
+}
+
+function refillCurrentLipsanonOffers(
+  value: unknown,
+  held: readonly LipsanonId[],
+  count: number,
+): LipsanonId[] {
+  const active = currentLipsanonList(value).slice(0, count);
+  const heldIds = new Set(held);
+  const candidates = RUN_LIPSANON_OFFER_POOL
+    .map((entry) => entry.id)
+    .filter((id) => !heldIds.has(id) && !active.includes(id));
+  return [...active, ...candidates].slice(0, count);
+}
+
+/** Version 28 retires every action that can remove one member from a held formation.
+ * An in-progress Sectio returns to its exact entry snapshot so no partial Alienatio
+ * transaction survives. The two lipsana that mutated individual units leave every
+ * held/seen/offer collection, and in-flight Battle runtime drops its cash-out ledger. */
+function migrateRunToImmutableFormations(stored: Record<string, unknown>): Record<string, unknown> {
+  const rawSectio = stored.sectio && typeof stored.sectio === 'object' && !Array.isArray(stored.sectio)
+    ? stored.sectio as Record<string, unknown>
+    : null;
+  const rawSnapshot = stored.phase === 'sectio'
+    && rawSectio?.entrySnapshot
+    && typeof rawSectio.entrySnapshot === 'object'
+    && !Array.isArray(rawSectio.entrySnapshot)
+    ? rawSectio.entrySnapshot as Record<string, unknown>
+    : null;
+  const restored = rawSnapshot ?? stored;
+  const lipsana = currentLipsanonList(restored.lipsana);
+  let seenLipsana = currentLipsanonList(restored.seenLipsana);
+  let conflictPaidLipsana = retireConflictPaidLipsana(restored.conflictPaidLipsana) as RunDocument['conflictPaidLipsana'];
+  const battleRuntime = stored.battleRuntime && typeof stored.battleRuntime === 'object' && !Array.isArray(stored.battleRuntime)
+    ? (({ cashedOutUnitIds: _retiredCashOuts, ...runtime }) => runtime)(stored.battleRuntime as Record<string, unknown>)
+    : stored.battleRuntime;
+
+  let vacantia = stored.vacantia;
+  if (vacantia && typeof vacantia === 'object' && !Array.isArray(vacantia)) {
+    const current = vacantia as Record<string, unknown>;
+    const offers = refillCurrentLipsanonOffers(
+      current.offers,
+      lipsana,
+      3,
+    );
+    seenLipsana = [...new Set([...seenLipsana, ...offers])];
+    vacantia = { ...current, offers };
+  }
+
+  let sectio: unknown = rawSectio;
+  if (rawSectio) {
+    const {
+      alienatedUnits: _retiredAlienatedUnits,
+      ...currentSectio
+    } = rawSectio;
+    let paidLipsanonOffer = typeof currentSectio.paidLipsanonOffer === 'string'
+      && CURRENT_LIPSANON_IDS.has(currentSectio.paidLipsanonOffer as LipsanonId)
+      ? currentSectio.paidLipsanonOffer as LipsanonId
+      : null;
+    let paidLipsanonBought = rawSnapshot?.paidLipsanonBought === true && paidLipsanonOffer !== null;
+    const conflictKey = String(Number(currentSectio.conflictIndex) || 0);
+    if (paidLipsanonOffer) {
+      conflictPaidLipsana = {
+        ...conflictPaidLipsana,
+        [conflictKey]: { lipsanonId: paidLipsanonOffer, bought: paidLipsanonBought },
+      };
+      seenLipsana = [...new Set([...seenLipsana, paidLipsanonOffer])];
+    } else {
+      const { [conflictKey]: _retiredPaidOffer, ...remainingPaid } = conflictPaidLipsana;
+      conflictPaidLipsana = remainingPaid;
+    }
+    const army = Array.isArray(restored.army) ? restored.army : stored.army;
+    const cards = Array.isArray(restored.cards) ? restored.cards : stored.cards;
+    const nextArmyUnitSequence = restored.nextArmyUnitSequence ?? stored.nextArmyUnitSequence;
+    const nextArmyUnitNumberByType = restored.nextArmyUnitNumberByType ?? stored.nextArmyUnitNumberByType;
+    const nextCardSequence = restored.nextCardSequence ?? stored.nextCardSequence;
+    sectio = {
+      ...currentSectio,
+      adlectedCardOfferIds: [],
+      paidLipsanonOffer,
+      paidLipsanonBought,
+      expunctedCard: null,
+      entrySnapshot: {
+        goldTenths: restored.goldTenths,
+        army,
+        cards,
+        lipsana,
+        seenLipsana,
+        conflictPaidLipsana,
+        nextArmyUnitSequence,
+        nextArmyUnitNumberByType,
+        nextCardSequence,
+        paidLipsanonBought,
+      },
+    };
+  }
+
+  return {
+    ...stored,
+    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    ...(rawSnapshot ? {
+      goldTenths: restored.goldTenths,
+      army: restored.army,
+      cards: restored.cards,
+      nextArmyUnitSequence: restored.nextArmyUnitSequence,
+      nextArmyUnitNumberByType: restored.nextArmyUnitNumberByType,
+      nextCardSequence: restored.nextCardSequence,
+    } : {}),
+    lipsana,
+    seenLipsana,
+    conflictPaidLipsana,
+    battleRuntime,
+    vacantia,
+    sectio,
   };
 }
 
@@ -1923,7 +2030,9 @@ function migrateRunToQueenPawnFormations(stored: Record<string, unknown>): Recor
  * unit abilities and installs authored formation cards. Version 24 expands that catalog and
  * resets in-flight placement plans for sideways settling. Version 25 removes the opening
  * Sectio and begins a seed-derived card pile. Version 26 then restarts that hidden sequence
- * against the expanded Queen + Pawn formation catalog. Older saves remain unsupported.
+ * against the expanded Queen + Pawn formation catalog. Version 27 retires individual
+ * against the expanded Queen + Pawn formation catalog. Version 28 retires individual
+ * formation mutation and its two dependent lipsana. Older saves remain unsupported.
  */
 export function migrateRunSaveDocument(value: unknown): RunDocument {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -1985,6 +2094,9 @@ export function migrateRunSaveDocument(value: unknown): RunDocument {
   }
   if (stored.runSaveVersion === RUN_SAVE_VERSION_QUEEN_PAWN_FORMATIONS_SOURCE) {
     stored = migrateRunToQueenPawnFormations(stored);
+  }
+  if (stored.runSaveVersion === RUN_SAVE_VERSION_IMMUTABLE_FORMATIONS_SOURCE) {
+    stored = migrateRunToImmutableFormations(stored);
   }
   return normalizeRunDocument(stored as unknown as RunDocument);
 }
@@ -2186,7 +2298,6 @@ export function beginBattle(
       reservistPoolUnitIds: [],
       deployedReservistUnitIds: [],
       observedDeadUnitIds: [],
-      cashedOutUnitIds: [],
       reinforcementSequence: 0,
     },
   });
@@ -2213,7 +2324,6 @@ export function restartBattle(run: RunDocument): RunDocument {
       reservistPoolUnitIds: [],
       deployedReservistUnitIds: [],
       observedDeadUnitIds: [],
-      cashedOutUnitIds: [],
       reinforcementSequence: 0,
     },
   });
@@ -2229,7 +2339,6 @@ function cloneRunBattleRuntime(runtime: RunBattleRuntime): RunBattleRuntime {
     reservistPoolUnitIds: [...runtime.reservistPoolUnitIds],
     deployedReservistUnitIds: [...runtime.deployedReservistUnitIds],
     observedDeadUnitIds: [...runtime.observedDeadUnitIds],
-    cashedOutUnitIds: [...runtime.cashedOutUnitIds],
   };
 }
 
@@ -2281,7 +2390,6 @@ function isRunBattleUndoCheckpoint(value: unknown): value is RunBattleUndoCheckp
     && Array.isArray(runtime.reservistPoolUnitIds)
     && Array.isArray(runtime.deployedReservistUnitIds)
     && Array.isArray(runtime.observedDeadUnitIds)
-    && Array.isArray(runtime.cashedOutUnitIds)
     && Number.isSafeInteger(runtime.reinforcementSequence),
   );
   return typeof checkpoint.runId === 'string'
@@ -2320,23 +2428,6 @@ export function undoRunBattleMove(
   });
 }
 
-export function cashOutPawn(run: RunDocument, unitId: string): RunDocument {
-  const unit = run.army.find((candidate) => candidate.id === unitId);
-  if (run.phase !== 'battle' || unit?.type !== 'pawn') return run;
-  const removal = removeUnitFromArmyAndCards(run, unitId);
-  return touch({
-    ...run,
-    ...removal,
-    goldTenths: run.goldTenths + 2 * GOLD_SCALE,
-    battleRuntime: run.battleRuntime
-      ? {
-          ...run.battleRuntime,
-          cashedOutUnitIds: [...new Set([...run.battleRuntime.cashedOutUnitIds, unitId])],
-        }
-      : null,
-  });
-}
-
 export function observeRunUnitDeath(run: RunDocument, unitId: string): {
   run: RunDocument;
   reservistUnitId: string | null;
@@ -2350,7 +2441,7 @@ export function observeRunUnitDeath(run: RunDocument, unitId: string): {
     observedDeadUnitIds: [...runtime.observedDeadUnitIds, unitId],
     reinforcementSequence: runtime.reinforcementSequence + 1,
   };
-  if (!hasLipsanon(run, 'deployment-vehicle') || runtime.cashedOutUnitIds.includes(unitId)) {
+  if (!hasLipsanon(run, 'deployment-vehicle')) {
     return { run: touch({ ...run, battleRuntime: nextRuntime }), reservistUnitId: null };
   }
   const dead = run.army.find((unit) => unit.id === unitId);
@@ -2420,28 +2511,33 @@ export function grantGold(run: RunDocument, amountTenths: number): RunDocument {
   return touch({ ...run, goldTenths: run.goldTenths + amountTenths });
 }
 
-function cardsWithoutUnit(cards: readonly RunOwnedCard[], unitId: string): RunOwnedCard[] {
-  return cards.map((card) => {
-    if (!card.unitSeats.includes(unitId)) return card;
-    const unitSeats = card.unitSeats.map((id) => id === unitId ? null : id);
-    return { ...card, unitSeats };
-  });
-}
-
-export function removeUnitFromArmyAndCards(
-  run: Pick<RunDocument, 'army' | 'cards'>,
-  unitId: string,
-): Pick<RunDocument, 'army' | 'cards'> {
-  const cards = cardsWithoutUnit(run.cards, unitId);
-  const army = run.army.filter((candidate) => candidate.id !== unitId);
-  return { army, cards };
-}
-
 /**
  * What the Battle just fought pays out: its own reward, plus whatever a lipsanon adds on top
  * of it. Shared by the aftermath report and the transition that banks it, so the screen
  * cannot quote a number the Run then fails to pay.
  */
+function cardsWithoutFallenUnit(cards: readonly RunOwnedCard[], unitId: string): RunOwnedCard[] {
+  return cards.map((card) => {
+    if (!card.unitSeats.includes(unitId)) return card;
+    return {
+      ...card,
+      unitSeats: card.unitSeats.map((id) => id === unitId ? null : id),
+    };
+  });
+}
+
+/** Removes a casualty from the army and its original card seat. This remains a
+ * Battle/craft primitive; voluntary individual-unit disposal is not a Run rule. */
+export function removeUnitFromArmyAndCards(
+  run: Pick<RunDocument, 'army' | 'cards'>,
+  unitId: string,
+): Pick<RunDocument, 'army' | 'cards'> {
+  return {
+    army: run.army.filter((candidate) => candidate.id !== unitId),
+    cards: cardsWithoutFallenUnit(run.cards, unitId),
+  };
+}
+
 function battleRewardTenths(run: RunDocument, survivingUnitIds: readonly string[]): {
   victoryGoldTenths: number;
   bonusGoldTenths: number;
@@ -2584,7 +2680,6 @@ function openPostBattleSectio(run: RunDocument, victoryGoldTenths: number): RunD
       adlectedCardOfferIds: [],
       paidLipsanonOffer,
       paidLipsanonBought,
-      alienatedUnits: [],
       expunctedCard: null,
       entrySnapshot,
     },
@@ -2623,27 +2718,7 @@ export function performAdlectio(run: RunDocument, offerId: string): RunDocument 
   });
 }
 
-export function performAlienatio(run: RunDocument, unitId: string): RunDocument {
-  if (run.phase !== 'sectio') return run;
-  const unit = run.army.find((candidate) => candidate.id === unitId);
-  if (!unit || unit.type === 'king') return run;
-  const numerator = hasLipsanon(run, 'fair-scales') ? 75 : 50;
-  const proceedsTenths = (PIECE_VALUE[unit.type] * GOLD_SCALE * numerator) / 100;
-  const removal = removeUnitFromArmyAndCards(run, unitId);
-  return touch({
-    ...run,
-    ...removal,
-    goldTenths: run.goldTenths + proceedsTenths,
-    sectio: run.sectio
-      ? {
-          ...run.sectio,
-          alienatedUnits: [...run.sectio.alienatedUnits, { unit: cloneArmy([unit])[0], proceedsTenths }],
-        }
-      : null,
-  });
-}
-
-/** The exact fee for striking a held card: its printed value remains after every unit leaves. */
+/** The exact fee for striking a held card and its intact formation. */
 export function cardExpunctioPriceTenths(
   card: RunOwnedCard,
   attachedUnits: readonly RunArmyUnit[],
@@ -2708,7 +2783,6 @@ export function resetSectio(run: RunDocument): RunDocument {
       ...run.sectio,
       adlectedCardOfferIds: [],
       paidLipsanonBought: snapshot.paidLipsanonBought,
-      alienatedUnits: [],
       expunctedCard: null,
     },
   });
@@ -2722,7 +2796,6 @@ export function sectioHasChanges(run: RunDocument): boolean {
     || run.nextArmyUnitSequence !== snapshot.nextArmyUnitSequence
     || run.sectio.adlectedCardOfferIds.length > 0
     || run.sectio.paidLipsanonBought !== snapshot.paidLipsanonBought
-    || run.sectio.alienatedUnits.length > 0
     || run.sectio.expunctedCard !== null
     || JSON.stringify(run.army) !== JSON.stringify(snapshot.army)
     || JSON.stringify(run.cards) !== JSON.stringify(snapshot.cards)

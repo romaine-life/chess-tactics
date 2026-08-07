@@ -54,7 +54,6 @@ describe('Run browser persistence', () => {
     } = current;
     const {
       adlectedCardOfferIds,
-      alienatedUnits,
       ...version16Shop
     } = sectio!;
     storage.setItem('chess-tactics:active-run:v1', JSON.stringify({
@@ -70,7 +69,7 @@ describe('Run browser persistence', () => {
           cards: legacyCards(version16Shop.entrySnapshot.cards),
         },
         purchasedCardOfferIds: adlectedCardOfferIds,
-        soldUnits: alienatedUnits,
+        soldUnits: [],
       },
     }));
     vi.stubGlobal('localStorage', storage);

@@ -40,7 +40,6 @@ const useRunCraft = readFileSync(new URL('./useRunCraft.ts', import.meta.url), '
 const craftedRunLanding = readFileSync(new URL('./craftedRunLanding.ts', import.meta.url), 'utf8');
 const bonaVacantia = readFileSync(new URL('./RunBonaVacantia.tsx', import.meta.url), 'utf8');
 const lipsanonFlight = readFileSync(new URL('./runLipsanonFlightView.tsx', import.meta.url), 'utf8');
-const runUnitDeparture = readFileSync(new URL('./runUnitDepartureView.tsx', import.meta.url), 'utf8');
 const sceneContinuity = readFileSync(new URL('./shell/SceneContinuity.tsx', import.meta.url), 'utf8');
 
 describe('Run chrome hierarchy', () => {
@@ -95,7 +94,8 @@ describe('Run chrome hierarchy', () => {
     expect(metaControls).not.toContain('data-ui-sfx="gold"');
     expect(metaControls).not.toContain('<OuterChromeBox');
     expect(metaControls).not.toContain('data-chrome-unit="outer-panel"');
-    expect(runArmyWorkspace).toContain("data-ui-sfx={unavailableReason ? undefined : 'gold'}");
+    expect(runArmyWorkspace).toContain('{profileAction ? (');
+    expect(runArmyWorkspace).not.toContain('data-ui-sfx="gold"');
     expect(runArmyWorkspace).not.toContain('chromeConsumer="run-army-ledger"');
     expect(runArmyWorkspace).not.toContain('chromeConsumer="run-army-profile"');
     expect(runArmyWorkspace).toContain('<RunSceneViewport');
@@ -466,44 +466,19 @@ describe('Run chrome hierarchy', () => {
     expect(styleCss).not.toMatch(/\.run-(?:roster-filters|meta-controls)[^}]*:nth-child/);
   });
 
-  it('keeps Alienatio as the operation noun and Aliene as its card-aware action verb', () => {
-    expect(runExpunctioWorkspace).toContain('<small>Alienatio</small>');
-    expect(runExpunctioWorkspace).toContain('<CyclePicker');
-    expect(runExpunctioWorkspace).toContain('useState<string | null>(null)');
-    expect(runExpunctioWorkspace).toContain('highlightedPieceIndex=');
-    expect(runExpunctioWorkspace).toContain('onPieceSelect=');
-    expect(runExpunctioWorkspace).toContain('setSelectedUnitId(units[nextIndex].unit.id);');
-    expect(runExpunctioWorkspace).toContain('if (attached) setSelectedUnitId(attached.unit.id);');
-    expect(runExpunctioWorkspace).toContain(": 'Select a unit'");
-    expect(runExpunctioWorkspace).toContain("selected.unit.type === 'king' ? 'Retained' : 'Aliene'");
-    expect(runArmyWorkspace).toContain("<span>{unit.type === 'king' ? 'Retained' : 'Aliene'}</span>");
-    expect(runArmyWorkspace).not.toContain('run-alienatio-workspace');
-    expect(runExpunctioWorkspace).not.toContain('Alienated this visit');
-    expect(runExpunctioWorkspace).toContain('<RunGoldTransactionAmount');
-    expect(runExpunctioWorkspace).toContain('direction="gain"');
-    expect(runExpunctioWorkspace).toContain('direction="loss"');
-    expect(runExpunctioWorkspace).not.toContain('<RunGoldAmount');
-    expect(runExpunctioWorkspace).toContain('className="run-expunctio-unit-traits-seat"');
-    expect(runExpunctioWorkspace).toMatch(/unitAlienatioTenths\(run, selected\.unit\)\s*: null/);
-    expect(styleCss).toMatch(/\.run-gold-transaction-amount\s*\{[\s\S]*?min-block-size:\s*64px;/);
-    expect(styleCss).toMatch(/\.run-expunctio-unit-traits-seat\s*\{[\s\S]*?block-size:\s*20px;/);
-    expect(runArmyWorkspace).not.toContain('onAlienate');
-    expect(runScreen).toContain('const alieneUnit = (unitId: string, source?: HTMLImageElement | null): void => {');
-    expect(runScreen).toContain('<RunExpunctioWorkspace run={shellRun} onAliene={alieneUnit} onExpunct={expunctCard} />');
-    expect(runExpunctioWorkspace).toContain('compactEmptyPieceSeats');
-    expect(runExpunctioWorkspace).toContain('pieceSelectionIds=');
-    expect(runExpunctioWorkspace).toContain('previousUnitRectsRef.current = new Map');
-    expect(runExpunctioWorkspace).toContain('function runUnitReflowOffset(');
-    expect(runExpunctioWorkspace).not.toContain('runCardReflowOffset');
-    expect(runExpunctioWorkspace).toContain('sceneMotion.animate(');
-    expect(runScreen).toContain('launchUnitDeparture(unitId, source ?? null);');
-    expect(runScreen).toContain('{unitDepartureElement}');
-    expect(runUnitDeparture).toContain('<SceneContinuityPortal');
-    expect(runUnitDeparture).toContain('getBoundingClientRect()');
-    expect(runUnitDeparture).not.toContain('performAlienatio');
-    expect(styleCss).toMatch(/\.run-unit-departure\s*\{[\s\S]*?transition:\s*opacity/);
-    expect(styleCss).toContain('.run-card-prototype-unit-icon-seat.is-highlighted .run-card-prototype-unit-icon');
-    expect(styleCss).toMatch(/\.is-pixel-hovered:not\(\.is-highlighted\)[^{]+,\s*\.run-card-prototype-unit-icon-seat\.is-highlighted/);
+  it('keeps Expunctio card-first and removes only complete held formations', () => {
+    expect(runExpunctioWorkspace).toContain('<h2 id="run-expunctio-workspace-title">Expunctio</h2>');
+    expect(runExpunctioWorkspace).toContain('Athetize one complete formation.');
+    expect(runExpunctioWorkspace).toContain('Individual units cannot be removed from a held card.');
+    expect(runExpunctioWorkspace).toContain('Athetize removes this card and every attached unit as one formation.');
+    expect(runExpunctioWorkspace).toContain('<RunGoldTransactionAmount direction="loss"');
+    expect(runExpunctioWorkspace).toContain('onExpunct(card.id)');
+    expect(runScreen).toContain('<RunExpunctioWorkspace run={shellRun} onExpunct={expunctCard} />');
+    expect(runExpunctioWorkspace).not.toMatch(/Alienatio|Aliene|CyclePicker|onPieceSelect|highlightedPieceIndex/);
+    expect(runArmyWorkspace).not.toMatch(/Alienatio|Aliene|onAlienate/);
+    expect(runScreen).not.toMatch(/performAlienatio|launchUnitDeparture|unitDepartureElement/);
+    expect(styleCss).not.toContain('.run-unit-departure');
+    expect(styleCss).not.toContain('.run-card-prototype-unit-icon-seat.is-highlighted');
   });
 
   it('previews the upcoming Sectio Battle through the canonical read-only board and Level ledger', () => {
@@ -715,8 +690,7 @@ describe('Run chrome hierarchy', () => {
     expect(skirmish).toContain('setRunBattleUndoAdapter(runBattle?.undoAdapter ?? null)');
     expect(gameStore).toContain('const undoCheckpoint = capturePlayerMoveUndo();');
     expect(gameStore).toContain("log: ['Move undone — 1 gold paid.', ...checkpoint.log]");
-    expect(gameStore).toContain('beforeApply?.(piece.id);');
-    expect(gameStore).toContain('commitPlayerMove(p, mv, undefined, true, commitRunCashOut, true);');
+    expect(gameStore).toContain('commitPlayerMove(p, mv, type, true);');
     expect(matchPersistence).toContain('undoCheckpoint: state.undoCheckpoint ?? null');
   });
 });

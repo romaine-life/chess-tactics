@@ -13,12 +13,12 @@ describe('Run lipsanon art review', () => {
       revision: 1,
       updatedAt: '2026-07-29T00:00:00.000Z',
       slots: [{
-        slot: 'ui/run/lipsana/fair-scales.png',
+        slot: 'ui/run/lipsana/royal-tent.png',
         domain: 'ui-kit',
         role: 'icon',
         availabilityPolicy: 'decorative',
         lifecycleState: 'active',
-        activeVersionId: 'fair-scales-version',
+        activeVersionId: 'royal-tent-version',
         rowRevision: 2,
         metadata: {},
         versionStatus: 'accepted',
@@ -46,12 +46,12 @@ describe('Run lipsanon art review', () => {
           media: null,
         },
         {
-          id: 'fair-scales-version',
-          slot: 'ui/run/lipsana/fair-scales.png',
+          id: 'royal-tent-version',
+          slot: 'ui/run/lipsana/royal-tent.png',
           sourcePath: null,
           domain: 'ui-kit',
           role: 'icon',
-          label: 'Fair Scales',
+          label: 'Royal Tent',
           status: 'accepted',
           productionEligible: true,
           metadata: {},
@@ -63,7 +63,7 @@ describe('Run lipsanon art review', () => {
           updatedAt: '2026-07-29T00:00:00.000Z',
           updatedBy: null,
           media: {
-            url: '/api/admin/media/fair-scales',
+            url: '/api/admin/media/royal-tent',
             sha256: 'a'.repeat(64),
             mediaType: 'image/png',
             width: 64,
@@ -75,19 +75,21 @@ describe('Run lipsanon art review', () => {
     } satisfies AdminLiveMediaCatalog;
 
     expect(runLipsanonReviewCandidates(catalog)).toEqual([
-      expect.objectContaining({ lipsanonId: 'fair-scales' }),
+      expect.objectContaining({ lipsanonId: 'royal-tent' }),
     ]);
   });
 
   it('separates new candidates from already installed reference art', () => {
     const installed = {
-      lipsanonId: 'fair-scales',
+      lipsanonId: 'royal-tent',
+      slot: 'ui/run/lipsana/royal-tent.png',
       version: { status: 'accepted' },
-    } as LipsanonReviewCandidate;
+    } as unknown as LipsanonReviewCandidate;
     const candidate = {
-      lipsanonId: 'fair-scales',
+      lipsanonId: 'royal-tent',
+      slot: 'ui/run/lipsana/royal-tent.png',
       version: { status: 'candidate' },
-    } as LipsanonReviewCandidate;
+    } as unknown as LipsanonReviewCandidate;
 
     expect(partitionLipsanonReviewCandidates([installed, candidate])).toEqual({
       newCandidates: [candidate],
