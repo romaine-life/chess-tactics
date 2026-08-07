@@ -5795,12 +5795,8 @@ body.loading-bootstrap .app-startup-status {
   min-width: 56px;
 }
 
-.skirmish-promotion-card {
-  display: grid;
-  gap: var(--ds-inline);
-}
-
 .skirmish-promotion-options {
+  --promotion-leaf-surface-pitch: calc(60px + var(--ds-inline-tight));
   display: grid;
   gap: var(--ds-inline-tight);
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5825,6 +5821,53 @@ body.loading-bootstrap .app-startup-status {
 .skirmish-promotion-option span {
   font-size: var(--ds-text-xs);
   line-height: 1;
+}
+
+/* Promotion is caused by the Pawn on the board, so its blocking choice follows that Pawn
+   instead of appearing as an unrelated Controls card. The zero-size anchor inherits pan/zoom;
+   the picker applies the inverse zoom inline so its controls stay one readable screen size. */
+.skirmish-promotion-picker-anchor {
+  height: 0;
+  pointer-events: none;
+  position: absolute;
+  width: 0;
+  z-index: 40000;
+}
+
+.skirmish-promotion-picker {
+  color: #eff9ff;
+  display: grid;
+  gap: var(--ds-inline);
+  inline-size: 296px;
+  padding: 8px;
+  pointer-events: auto;
+  position: absolute;
+}
+
+.skirmish-promotion-options [data-chrome-fill-surface] {
+  --chrome-surface-position-y: calc(var(--promotion-leaf-index, 0) * -1 * var(--promotion-leaf-surface-pitch));
+}
+
+.skirmish-promotion-picker-heading {
+  display: grid;
+  gap: 2px;
+}
+
+.skirmish-promotion-picker-heading .skirmish-eyebrow {
+  margin: 0;
+}
+
+.skirmish-promotion-picker-heading strong {
+  font: var(--ds-weight-regular) var(--ds-text-lg)/1.1 var(--ds-font-display);
+}
+
+.skirmish-promotion-picker .skirmish-promotion-option.app-header-button {
+  min-height: 60px;
+}
+
+.skirmish-promotion-picker .skirmish-promotion-option.is-cash-out {
+  grid-column: 1 / -1;
+  min-height: 44px;
 }
 
 /* ============================================================

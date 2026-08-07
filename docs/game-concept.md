@@ -249,6 +249,11 @@ The **default** ruleset is **real chess**:
   checkmate wins. **Castling, en passant, promotion, stalemate, and the draw rules
   (50-move and threefold repetition) are all in the v1 baseline** unless a board
   says otherwise.
+- A player Pawn visibly completes its move onto an authored promotion cell before the
+  replacement choices appear. The arrived Pawn's square is highlighted and its blocking picker
+  stays attached directly beside it rather than asking through ordinary HUD chrome. The complete
+  chosen move still commits atomically, including from a premove or multiplayer seat
+  (ADR-0503, ADR-0504).
 - **Capture is one-hit, like chess.** There are **no hit points, no action points,
   no command points, and no per-piece "powers."** The stat/RPG layer shown in the
   old `skirmish-concept.png` (HP bars, AP, "CP 8/12", a POWER action) is

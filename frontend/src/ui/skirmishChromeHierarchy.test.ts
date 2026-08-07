@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 const skirmishHud = readFileSync(new URL('./SkirmishHud.tsx', import.meta.url), 'utf8');
+const pawnPromotionPicker = readFileSync(new URL('./PawnPromotionPicker.tsx', import.meta.url), 'utf8');
 const portraitEditor = readFileSync(new URL('./PortraitEditor.tsx', import.meta.url), 'utf8');
 const stepper = readFileSync(new URL('./shared/Stepper.tsx', import.meta.url), 'utf8');
 const chromeBox = readFileSync(new URL('./shared/ChromeBox.tsx', import.meta.url), 'utf8');
@@ -223,11 +224,19 @@ describe('Skirmish chrome hierarchy', () => {
   });
 
   it('maps tabs, promotion choices, and command-grid cells to existing units', () => {
-    const promotion = buttonUsing('choosePromotion(type)');
+    const promotion = buttonBlocks(pawnPromotionPicker).find((candidate) => candidate.includes('onChoose(type)'));
     const tab = buttonUsing('setTab(t.id)');
     const commandKey = buttonUsing('runSkirmishShortcut(key, false, skirmishViewStore, skirmishStore)');
 
-    expectChromeUnit(promotion, 'inner-asset-swatch');
+    expect(promotion, 'expected anchored Pawn promotion choice').toBeDefined();
+    expectChromeUnit(promotion!, 'inner-asset-swatch');
+    expect(pawnPromotionPicker).toContain('<InnerChromeBox');
+    expect(pawnPromotionPicker).toContain('fillRole="outer"');
+    expect(pawnPromotionPicker).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
+    expect(pawnPromotionPicker).toContain('aria-label="Pawn promotion"');
+    expect(pawnPromotionPicker).toContain('onPointerDown={(event) => event.stopPropagation()}');
+    expect(pawnPromotionPicker).not.toContain('autoFocus');
+    expect(skirmishHud).not.toContain('aria-label="Pawn promotion"');
     expectChromeUnit(tab, 'inner-text-button');
     expect(tab).toContain("tab === t.id && 'active'");
     expectChromeUnit(commandKey, 'inner-text-button');

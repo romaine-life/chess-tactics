@@ -15,7 +15,7 @@
 // destinations, check. Reality is enforced once, at fire time, by the store's drain.
 
 import type { GameState, Move, Piece, PromotionPieceType, Side, Vec } from '../core/types';
-import { applyMove, gameEnv, pieceAt, speculativeMoves, type MoveEnv } from '../core/rules';
+import { applyMove, gameEnv, pieceAt, promotionRuleForMove, speculativeMoves, type MoveEnv } from '../core/rules';
 
 /** One queued move: a client-owned piece and where it will go. The "from" is implied by the piece's
  *  position along its own plan at that point. */
@@ -23,7 +23,10 @@ export interface PremoveStep {
   pieceId: string;
   x: number;
   y: number;
-  /** Queue-time promotion choice; speculative ghosts and the eventual intent use the same piece. */
+  /**
+   * Legacy/programmatic preselected choice. Player-authored premoves now leave this absent:
+   * the Pawn arrives first and asks what it became only when the premove actually fires.
+   */
   promotion?: PromotionPieceType;
 }
 
@@ -59,7 +62,15 @@ function applyFoldMove(state: GameState, piece: Piece, move: Move, promotion?: P
   const board = occupant && occupant.id !== piece.id
     ? { ...state, pieces: state.pieces.filter((candidate) => candidate.id !== occupant.id) }
     : state;
-  return applyMove(board, piece.id, move, { promotion }).state;
+  const defersPromotion = promotion === undefined && !!promotionRuleForMove(board, piece, move);
+  const applied = applyMove(board, piece.id, move, { promotion }).state;
+  if (!defersPromotion) return applied;
+  return {
+    ...applied,
+    pieces: applied.pieces.map((candidate) => (
+      candidate.id === piece.id ? { ...candidate, type: 'pawn' as const } : candidate
+    )),
+  };
 }
 
 // Fold ONLY one piece's queued steps onto the board, leaving every OTHER piece at its real
@@ -71,9 +82,10 @@ function foldPiece(
   premoves: readonly PremoveStep[],
   pieceId: string,
   localSide: Side,
-): { state: GameState; steps: { from: Vec; landed: Piece }[] } {
+): { state: GameState; steps: { from: Vec; landed: Piece }[]; awaitsPromotion: boolean } {
   let state = game;
   const steps: { from: Vec; landed: Piece }[] = [];
+  let awaitsPromotion = false;
   for (const step of premoves) {
     if (step.pieceId !== pieceId) continue;
     const p = state.pieces.find((q) => q.id === pieceId && q.alive && q.side === localSide && q.side !== 'neutral');
@@ -81,11 +93,13 @@ function foldPiece(
     const mv = speculativeMoves(p, state.pieces, state.size, envFor(state)).find((m) => m.x === step.x && m.y === step.y);
     if (!mv) break;
     const from: Vec = { x: p.x, y: p.y };
+    awaitsPromotion = step.promotion === undefined && !!promotionRuleForMove(state, p, mv);
     state = applyFoldMove(state, p, mv, step.promotion);
     const landed = state.pieces.find((q) => q.id === pieceId);
     if (landed && landed.alive) steps.push({ from, landed });
+    if (awaitsPromotion) break;
   }
-  return { state, steps };
+  return { state, steps, awaitsPromotion };
 }
 
 /** The board with each premoved piece moved to the TIP of its own plan (others at their real
@@ -137,7 +151,9 @@ export function premoveGhosts(game: GameState, premoves: readonly PremoveStep[],
  *  when the piece can't be premoved (gone, not owned by this client, or nothing selected). */
 export function premoveTargets(game: GameState, premoves: readonly PremoveStep[], pieceId: string | null, localSide: Side): Move[] {
   if (!pieceId) return [];
-  const state = foldPiece(game, premoves, pieceId, localSide).state;
+  const folded = foldPiece(game, premoves, pieceId, localSide);
+  if (folded.awaitsPromotion) return [];
+  const state = folded.state;
   const p = state.pieces.find((q) => q.id === pieceId && q.alive && q.side === localSide && q.side !== 'neutral');
   return p ? speculativeMoves(p, state.pieces, state.size, envFor(state)) : [];
 }

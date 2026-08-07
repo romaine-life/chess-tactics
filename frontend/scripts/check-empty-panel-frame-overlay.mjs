@@ -25,6 +25,7 @@ const chromeDividedGrid = readFileSync(join(frontend, 'src/ui/shared/ChromeDivid
 const skirmish = readFileSync(join(frontend, 'src/ui/Skirmish.tsx'), 'utf8');
 const skirmishShell = readFileSync(join(frontend, 'src/ui/SkirmishShell.tsx'), 'utf8');
 const skirmishHud = readFileSync(join(frontend, 'src/ui/SkirmishHud.tsx'), 'utf8');
+const pawnPromotionPicker = readFileSync(join(frontend, 'src/ui/PawnPromotionPicker.tsx'), 'utf8');
 const strategikon = readFileSync(join(frontend, 'src/ui/Strategikon.tsx'), 'utf8');
 const runScreen = readFileSync(join(frontend, 'src/ui/RunScreen.tsx'), 'utf8');
 const runForm = readFileSync(join(frontend, 'src/ui/RunForm.tsx'), 'utf8');
@@ -1153,10 +1154,12 @@ for (const selector of ['.skirmish-service-record', '.unit-portrait', '.unit-por
     failures.push(`${selector} must not own frame geometry after migrating to InnerChromeBox`);
   }
 }
-if (!/<ChromeButton unit="inner-asset-swatch"[\s\S]*?chromeUnitClassNames\('inner-asset-swatch',\s*'app-header-button',\s*'skirmish-promotion-option'\)/.test(skirmishHud)
+if (!/<InnerChromeBox[\s\S]*?className=\{`skirmish-promotion-picker is-\$\{side\}`\}/.test(pawnPromotionPicker)
+  || !/<ChromeButton[\s\S]*?unit="inner-asset-swatch"[\s\S]*?chromeUnitClassNames\('inner-asset-swatch',\s*'app-header-button',\s*'skirmish-promotion-option'\)/.test(pawnPromotionPicker)
+  || /aria-label="Pawn promotion"/.test(skirmishHud)
   || !/<ChromeButton unit="inner-text-button"[\s\S]*?chromeUnitClassNames\('inner-text-button',\s*'skirmish-hud-tab'/.test(skirmishHud)
   || !/<ChromeButton unit="inner-text-button"[\s\S]*?chromeUnitClassNames\('inner-text-button',\s*'app-header-button',\s*'skirmish-grid-key'/.test(skirmishHud)) {
-  failures.push('Skirmish promotion, tab, and command-grid controls must inherit existing registered inner units');
+  failures.push('Skirmish promotion must use its registered anchored inner composition while tab and command-grid controls inherit existing registered inner units');
 }
 for (const selector of ['.skirmish-hud-tab', '.skirmish-hud .app-header-button']) {
   const block = blockFor(selector);

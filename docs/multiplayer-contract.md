@@ -4,7 +4,8 @@ This is the consolidated current-state contract for lobby gameplay, derived from
 [ADR-0077](adr/0077-multiplayer-is-one-game-projected-through-seat-local-clients.md),
 [ADR-0078](adr/0078-lobby-authority-survives-retry-reconnect-and-departure.md), and
 [ADR-0079](adr/0079-lobby-recovery-pins-content-and-unresolved-intent.md), plus
-[ADR-0080](adr/0080-lobby-ambiguity-fails-closed-and-stays-resolvable.md).
+[ADR-0080](adr/0080-lobby-ambiguity-fails-closed-and-stays-resolvable.md) and
+[ADR-0503](adr/0503-pawns-arrive-before-their-promotion-choice.md).
 ADR-0064 governs ordered victory rules and ADR-0072 governs chess-draw and
 cross-consumer settlement parity.
 
@@ -23,8 +24,10 @@ cross-consumer settlement parity.
 
 Selection, focus, inspection, overlays, promotion choice and premoves are client-local
 interface features and must work for both lobby seats. A premove is queued only for
-`localSide`, may be entered only while the opponent owns the turn/landing beat, stores any
-promotion choice, and is revalidated against the authoritative board before submission.
+`localSide`, may be entered only while the opponent owns the turn/landing beat, and is
+revalidated against the authoritative board before submission. A promotion premove stores
+only its destination and cannot extend beyond that unresolved type boundary. When it reaches
+the front of the queue, the Pawn visibly arrives before the replacement choice appears.
 
 Objective and result presentation must use the same resolved `VictoryRule[]` as gameplay.
 Each seat is told its own win paths and threats. Authored rule names and exact draw reasons
@@ -35,6 +38,9 @@ survive settlement; only the relative Victory/Defeat wording changes by client.
 - The lobby server owns move ordering.
 - A client POST is an intent, not a board commit.
 - Only an ordered server echo or backfill mutates the multiplayer board.
+- A local promoting Pawn's arrived presentation before choice or echo is a client-local piece
+  projection, not a canonical board mutation. It remains visible through submission, and an
+  authoritative rejection removes it.
 - At most one local move intent may be pending for an expected relay index.
 - Every gesture has a stable `intentId`. All retries reuse it; the server returns an
   identical prior event for an identical id and rejects conflicting reuse.

@@ -24,6 +24,7 @@ import { PIECE_LABEL } from '../core/pieces';
 import { clearPersistedNetIntent, loadPersistedNetIntent, persistNetIntent } from './netIntentPersistence';
 import { adminMoveTargets, killUnitForAdmin } from './adminBattle';
 import type { RunBattleUndoCheckpoint } from '../run/model';
+import { PROMOTION_CHOICE_REVEAL_MS } from './promotionPresentation';
 
 // Seed the shipped-AI-weights cache once so the live enemy AI picks up any weights an
 // admin shipped for a level (ship-to-everyone). Best-effort; a failure leaves the
@@ -149,8 +150,8 @@ const ENEMY_REPLY_DELAY = 520;
 // premove reads as "the enemy moved, then I answered", not two moves at once.
 const PREMOVE_FIRE_DELAY = 620;
 
-// Landing-SFX timing. The move tween runs ~170ms (see SkirmishBoard); fire the
-// terrain footstep a beat into it so the sound lands as the piece *seats*, not as
+// Landing-SFX timing. The player move tween runs 360ms (see promotionPresentation);
+// fire the terrain footstep a beat into it so the sound lands as the piece *seats*, not as
 // it lifts off. Several enemy moves resolved in one reply are spread out so their
 // footsteps read as a sequence rather than one muddy stack; spawned units deploy as
 // a soft staggered roll-call.
@@ -305,6 +306,7 @@ export interface ClockState {
 
 export interface PendingPromotion {
   mode: 'move' | 'premove';
+  phase: 'landing' | 'choosing' | 'submitted';
   pieceId: string;
   move: Move;
   choices: readonly PromotionPieceType[];
@@ -356,7 +358,7 @@ export interface SkirmishState {
   /** Wall-clock duration of the current Battle. Untimed levels display this as a
    * count-up clock; it remains separate from the optional flag-fall clock. */
   battleElapsed: ElapsedClockState;
-  /** A local pawn has chosen a promotion-zone move and is waiting for the piece choice. */
+  /** Client-local arrival presentation and choice state for an otherwise atomic promotion move. */
   pendingPromotion: PendingPromotion | null;
   /** One explicitly authorized administrator intervention. Ephemeral and consumed once. */
   adminMode: AdminBattleMode | null;
@@ -555,6 +557,37 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
   const playLandingSfx = (env: MoveEnv, x: number, y: number, delayMs: number, gain?: number): void => {
     if (delayMs > 0) scheduleSessionEffect(() => playLandingTerrain(env, x, y, gain), delayMs);
     else playLandingTerrain(env, x, y, gain);
+  };
+
+  /**
+   * Present the Pawn's physical arrival before exposing the replacement decision.
+   * Canonical chess state stays untouched until choosePromotion commits/submits the
+   * complete atomic move; SkirmishBoard derives the arrived Pawn from this pending state.
+   */
+  const stagePromotionArrival = (
+    mode: PendingPromotion['mode'],
+    piece: Piece,
+    move: Move,
+    choices: readonly PromotionPieceType[],
+    remainingPremoves: PremoveStep[] = [],
+  ): void => {
+    const pending: PendingPromotion = {
+      mode,
+      phase: 'landing',
+      pieceId: piece.id,
+      move,
+      choices,
+    };
+    set({
+      pendingPromotion: pending,
+      premoves: mode === 'premove' ? remainingPremoves : [],
+      premoveInputOpen: mode === 'premove' ? get().premoveInputOpen : false,
+    });
+    playLandingSfx(get().env, move.x, move.y, LANDING_SFX_DELAY);
+    scheduleSessionEffect(() => {
+      if (get().pendingPromotion !== pending) return;
+      set({ pendingPromotion: { ...pending, phase: 'choosing' } });
+    }, PROMOTION_CHOICE_REVEAL_MS);
   };
 
   // Flag fall: losing on time is a defeat like any other — turn locks, result copy
@@ -856,6 +889,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     promotion?: PromotionPieceType,
     removeAfterMove = false,
     beforeApply?: (pieceId: string) => void,
+    landingAlreadyPresented = false,
   ) => {
     const s = get();
     const undoCheckpoint = capturePlayerMoveUndo();
@@ -879,7 +913,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     const committed = recordPosition(transformed, enemyEnv);
     // Footstep: only when the piece actually relocates, at the mover's real landing
     // square (a castle's gesture square can differ from where the king lands).
-    if (playerRes.events.some((e) => e.kind === 'moved')) {
+    if (!landingAlreadyPresented && playerRes.events.some((e) => e.kind === 'moved')) {
       playLandingSfx(s.env, mv.castle?.kingTo.x ?? mv.x, mv.castle?.kingTo.y ?? mv.y, LANDING_SFX_DELAY);
     }
     const msgs = playerRes.events.map(describeEvent).filter((m): m is string => m !== null);
@@ -938,6 +972,10 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     const p = s.game.pieces.find((q) => q.id === head.pieceId && q.alive && q.side === side);
     const mv = p ? legalMoves(p, s.game.pieces, s.game.size, s.env).find((m) => m.x === head.x && m.y === head.y) : undefined;
     if (!p || !mv) { set({ premoves: [], premoveInputOpen: false }); return false; }
+    if (movePromotesPawn(s.game, p, mv) && head.promotion === undefined) {
+      stagePromotionArrival('premove', p, mv, promotionChoicesForMove(s.game, p, mv), rest);
+      return true;
+    }
     if (s.net) {
       if (!submitNetMove(p.id, { x: mv.x, y: mv.y, promotion: head.promotion })) return false;
       set({ premoves: rest, premoveInputOpen: false });
@@ -949,24 +987,6 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     if (get().game.winner) set({ premoves: [], premoveInputOpen: false });
     return true;
   }
-
-  // Close out a promotion choice that was made while the picker held the premove input beat open.
-  // The picker is deliberation time, so control can already have returned to this client by the
-  // time the piece is picked: a step whose turn has arrived fires NOW rather than waiting for the
-  // next drain a full round later. Still the opponent's turn → it stays queued, as intended.
-  const resolvePremoveAfterPromotion = () => {
-    const s = get();
-    const side = s.net ? s.net.localSide : 'player';
-    if (s.game.winner || s.game.turn !== side || s.net?.pendingMove) return;
-    if (premoveFireTimer !== null) { clearTimeout(premoveFireTimer); premoveFireTimer = null; }
-    if (drainPremove()) return;
-    // Nothing to fire (the step went stale): release the held beat so live control resumes.
-    if (get().premoveInputOpen) {
-      set({ premoveInputOpen: false });
-      startClock();
-      persistMatch(get());
-    }
-  };
 
   // Apply ONE ordered move to a netplay board. Netplay is SERVER-SEQUENCED: the local
   // player's own move comes back through the server echo like any other, so this is the
@@ -1055,7 +1075,13 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
           : s.net.terminalResult,
       },
     });
-    if (moved) playLandingSfx(s.env, mv.castle?.kingTo.x ?? mv.x, mv.castle?.kingTo.y ?? mv.y, LANDING_SFX_DELAY);
+    const localPromotionArrivalWasPresented = s.pendingPromotion?.phase === 'submitted'
+      && s.pendingPromotion.pieceId === piece.id
+      && s.pendingPromotion.move.x === mv.x
+      && s.pendingPromotion.move.y === mv.y;
+    if (moved && !localPromotionArrivalWasPresented) {
+      playLandingSfx(s.env, mv.castle?.kingTo.x ?? mv.x, mv.castle?.kingTo.y ?? mv.y, LANDING_SFX_DELAY);
+    }
     if (returnedToLocal) schedulePremoveInputBeat(game);
     return true;
   };
@@ -1655,7 +1681,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     const mv = legalMoves(p, s.game.pieces, s.game.size, s.env).find((m) => m.x === x && m.y === y);
     if (!mv) return;
     if (movePromotesPawn(s.game, p, mv)) {
-      set({ pendingPromotion: { mode: 'move', pieceId: p.id, move: mv, choices: promotionChoicesForMove(s.game, p, mv) }, premoves: [], premoveInputOpen: false });
+      stagePromotionArrival('move', p, mv, promotionChoicesForMove(s.game, p, mv));
       return;
     }
     // Netplay is server-sequenced: DON'T apply locally — relay the target cell and let
@@ -1718,26 +1744,8 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
   choosePromotion: (type) => {
     const s = get();
     const pending = s.pendingPromotion;
-    if (!pending || !pending.choices.includes(type)) return;
+    if (!pending || pending.phase !== 'choosing' || !pending.choices.includes(type)) return;
     const side = s.net ? s.net.localSide : 'player';
-
-    if (pending.mode === 'premove') {
-      const projected = provisionalBoard(s.game, s.premoves, side);
-      const p = projected.pieces.find((q) => q.id === pending.pieceId && q.alive && q.side === side);
-      const mv = premoveTargets(s.game, s.premoves, pending.pieceId, side)
-        .find((move) => move.x === pending.move.x && move.y === pending.move.y);
-      if (!p || !mv || !movePromotesPawn(projected, p, mv)) {
-        set({ pendingPromotion: null });
-        resolvePremoveAfterPromotion();
-        return;
-      }
-      set({
-        pendingPromotion: null,
-        premoves: [...s.premoves, { pieceId: p.id, x: mv.x, y: mv.y, promotion: type }],
-      });
-      resolvePremoveAfterPromotion();
-      return;
-    }
 
     const p = s.game.pieces.find((q) => q.id === pending.pieceId && q.alive && q.side === side);
     const mv = p
@@ -1748,17 +1756,21 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       return;
     }
     if (s.net) {
-      if (submitNetMove(p.id, { x: mv.x, y: mv.y, promotion: type })) set({ pendingPromotion: null });
+      if (submitNetMove(p.id, { x: mv.x, y: mv.y, promotion: type })) {
+        set({ pendingPromotion: { ...pending, phase: 'submitted' } });
+      }
       return;
     }
-    if (s.premoves.length || s.premoveInputOpen) set({ premoves: [], premoveInputOpen: false });
-    commitPlayerMove(p, mv, type);
+    if (pending.mode === 'move' && (s.premoves.length || s.premoveInputOpen)) {
+      set({ premoves: [], premoveInputOpen: false });
+    }
+    commitPlayerMove(p, mv, type, false, undefined, true);
   },
 
   cashOutPromotion: (commitRunCashOut) => {
     const s = get();
     const pending = s.pendingPromotion;
-    if (!pending || pending.mode !== 'move' || s.net) return;
+    if (!pending || pending.mode !== 'move' || pending.phase !== 'choosing' || s.net) return;
     const p = s.game.pieces.find((piece) => piece.id === pending.pieceId && piece.alive && piece.side === 'player');
     const mv = p
       ? legalMoves(p, s.game.pieces, s.game.size, s.env).find((move) => move.x === pending.move.x && move.y === pending.move.y)
@@ -1768,7 +1780,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       return;
     }
     if (s.premoves.length || s.premoveInputOpen) set({ premoves: [], premoveInputOpen: false });
-    commitPlayerMove(p, mv, undefined, true, commitRunCashOut);
+    commitPlayerMove(p, mv, undefined, true, commitRunCashOut, true);
   },
 
   queueMove: (pieceId, x, y) => {
@@ -1784,14 +1796,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     const projected = provisionalBoard(s.game, s.premoves, side);
     const p = projected.pieces.find((q) => q.id === pieceId && q.alive && q.side === side);
     if (p && movePromotesPawn(projected, p, mv)) {
-      set({
-        pendingPromotion: {
-          mode: 'premove',
-          pieceId,
-          move: mv,
-          choices: promotionChoicesForMove(projected, p, mv),
-        },
-      });
+      set({ premoves: [...s.premoves, { pieceId, x, y }] });
       return;
     }
     set({ premoves: [...s.premoves, { pieceId, x, y }] });

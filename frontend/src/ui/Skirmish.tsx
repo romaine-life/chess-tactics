@@ -1289,7 +1289,6 @@ function SkirmishSession(props: SkirmishProps = {}) {
     returnLabel,
     netInteractive: netSeatInteractive,
     onOpenPredrawnRegistration: predrawnPreview ? () => setPredrawnPickerOpen(true) : null,
-    onPawnCashOut: runBattle?.onPawnCashOut ?? null,
     onAbandonRun: runBattle?.onAbandonRun ?? null,
     onRerollDeployment: runBattle ? () => { runBattle.onRerollDeployment(); } : null,
     canRerollDeployment: !unitDeparture && (runBattle?.canRerollDeployment ?? false),
@@ -1522,6 +1521,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
               src: predrawnPreview,
               registration: predrawnRegistration,
             } : undefined}
+            onPawnCashOut={runBattle?.onPawnCashOut ?? null}
           />
           {!playableSurfaceReady && !boardSurfaceError ? (
             <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate skirmish-surface-loading" role="status">
