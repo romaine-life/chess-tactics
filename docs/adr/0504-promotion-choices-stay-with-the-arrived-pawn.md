@@ -2,19 +2,19 @@
 status: accepted
 date: 2026-08-06
 deciders: Nelson
-partially_superseded_by: "[ADR-0501](0501-promotion-opens-without-a-preselected-looking-choice.md)'s removal of first-choice autofocus"
+partially_superseded_by: "[ADR-0505](0505-promotion-opens-without-a-preselected-looking-choice.md)'s removal of first-choice autofocus"
 supersedes:
-  - "[ADR-0499](0499-pawns-arrive-before-their-promotion-choice.md)'s Controls-rail placement for the post-arrival choices"
+  - "[ADR-0503](0503-pawns-arrive-before-their-promotion-choice.md)'s Controls-rail placement for the post-arrival choices"
 refines:
   - "[ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md)"
   - "[ADR-0102](0102-runtime-buttons-use-registered-inner-chrome.md)"
 ---
 
-# ADR-0500: Promotion choices stay with the arrived Pawn
+# ADR-0504: Promotion choices stay with the arrived Pawn
 
 ## Context and Problem Statement
 
-ADR-0499 made a Pawn arrive before asking what it became, but placed that question in the normal
+ADR-0503 made a Pawn arrive before asking what it became, but placed that question in the normal
 Controls rail. The timing was causal while the composition was not: the player's eye followed the
 Pawn across the battlefield, then had to discover that an ordinary-looking sidebar had changed.
 Nothing spatially joined the four replacement figures to the Pawn that had just triggered them.
@@ -49,7 +49,7 @@ middle rather than farther past an outside edge. Its own scale and offset cancel
 the relationship follows the battlefield while the text and targets remain a stable screen size.
 The normal Controls rail continues to show unit context but owns no duplicate promotion controls.
 
-This changes presentation only. ADR-0499's local arrival projection, choice timing, atomic solo
+This changes presentation only. ADR-0503's local arrival projection, choice timing, atomic solo
 commit, premove boundary, and ordered multiplayer submission remain unchanged.
 
 ### Consequences

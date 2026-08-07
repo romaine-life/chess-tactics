@@ -158,7 +158,11 @@ selector:
   gameplay-inert and is the only Placed Art type that accepts positions outside
   the playable board. Its installed directional ground anchor automatically
   interleaves it with the shared board depth stack; authors never manage a z
-  value or repair overlap by reordering instances (ADR-0434).
+  value or repair overlap by reordering instances (ADR-0434). Select is a local
+  alpha-aware spatial picker: it outlines only the hovered rendered candidate,
+  orders overlaps by that shared depth stack, and cycles an unchanged local stack
+  on repeated clicks instead of outlining the complete Scene Art collection
+  (ADR-0500).
 - **Doodads** are tile-addressed, nonblocking, and board-only.
 - **Props** are tile-addressed and blocking; their complete footprint must
   remain inside the playable board.

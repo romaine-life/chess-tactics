@@ -95,12 +95,13 @@ these.
   outside the active ruleset. Existing accepted composition illustrations, names, and
   flavor may be reused while dedicated formation identities are authored; the diagram
   is always the rules authority (ADR-0497).
-- The active offer deck contains a deterministic 714-card generated core plus seven
+- The active offer deck contains a deterministic 720-card generated core plus six
   retained authored exceptions. The core assigns Pawn, Knight, Bishop, Rook, and Queen
   rosters worth at most nine material to every edge-connected one-to-four-cell footprint
-  in a two-row, four-column band. Horizontal translation is normalized, front/back is
-  preserved, and left/right mirrors remain distinct. The retained exceptions preserve
-  useful existing triangles, a diagonal Bishop pair, Queen behind Pawn, and vertical
+  in a two-row, four-column band, with Queen + Pawn admitted as the one ten-material
+  roster so it receives all six connected arrangements. Horizontal translation is
+  normalized, front/back is preserved, and left/right mirrors remain distinct. The retained
+  exceptions preserve useful existing triangles, a diagonal Bishop pair, and the vertical
   Rook pair outside that grammar. His Grace remains the separate starter.
 - Rarity describes desirability rather than material price. Queens, two Rooks, three
   non-Pawns, and every formation containing Bishops on opposite-colored squares are
@@ -252,7 +253,7 @@ The **default** ruleset is **real chess**:
   replacement choices appear. The arrived Pawn's square is highlighted and its blocking picker
   stays attached directly beside it rather than asking through ordinary HUD chrome. The complete
   chosen move still commits atomically, including from a premove or multiplayer seat
-  (ADR-0499, ADR-0500).
+  (ADR-0503, ADR-0504).
 - **Capture is one-hit, like chess.** There are **no hit points, no action points,
   no command points, and no per-piece "powers."** The stat/RPG layer shown in the
   old `skirmish-concept.png` (HP bars, AP, "CP 8/12", a POWER action) is

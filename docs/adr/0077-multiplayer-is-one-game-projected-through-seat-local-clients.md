@@ -2,7 +2,7 @@
 status: accepted
 date: 2026-07-11
 deciders: owner (Nelson) + Codex
-partially_superseded_by: "[ADR-0188](0188-committed-movers-release-client-selection.md), [ADR-0499](0499-pawns-arrive-before-their-promotion-choice.md)"
+partially_superseded_by: "[ADR-0188](0188-committed-movers-release-client-selection.md), [ADR-0503](0503-pawns-arrive-before-their-promotion-choice.md)"
 ---
 
 # ADR-0077: Multiplayer is one game projected through seat-local clients

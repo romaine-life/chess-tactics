@@ -35,6 +35,7 @@ import { copyPredrawnPngToClipboard } from './predrawnImageClipboard';
 import { predrawnGenerationReferenceLabel } from './predrawnCreationAttempts';
 import { predrawnReferencePngBlob } from './PredrawnReference';
 import { ChromeButton } from './shared/ChromeButton';
+import { Toggle } from './shared/Toggle';
 
 type StatusTone = 'info' | 'success' | 'warning' | 'error';
 
@@ -97,6 +98,7 @@ export function PredrawnSourceArtworkPanel({
   const [previewScale, setPreviewScale] = useState(1);
   const [busy, setBusy] = useState<'load' | 'capture' | null>('load');
   const [copying, setCopying] = useState(false);
+  const [bakePlayableGrid, setBakePlayableGrid] = useState(false);
   const [clipboardStatus, setClipboardStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -120,6 +122,7 @@ export function PredrawnSourceArtworkPanel({
   );
   const selected = sources.find((source) => source.id === selectedId);
   const previewReady = Boolean(frame && terrainReady && sceneReady);
+  const gridOverlay = bakePlayableGrid ? 'playable' : 'none';
 
   const refresh = useCallback(async (): Promise<void> => {
     const loaded = await listPredrawnBackgroundVersions(documentId);
@@ -196,6 +199,7 @@ export function PredrawnSourceArtworkPanel({
         workingCopyRevision,
         backgroundMode,
         worldBounds,
+        gridOverlay,
       }));
       let version = await createPredrawnBackgroundVersion(documentId, {
         kind: 'source',
@@ -203,10 +207,12 @@ export function PredrawnSourceArtworkPanel({
         operation: {
           kind: 'generation-source-v2',
           captureClient: 'level-editor-source-artwork-v1',
+          gridOverlay,
         },
         provenance: {
           sourceSha256,
           source: 'autosaved-working-copy-background',
+          gridOverlay,
         },
         idempotency_key: `source:${identity}`,
       }, fence);
@@ -271,11 +277,20 @@ export function PredrawnSourceArtworkPanel({
           </h3>
           <p>
             This is the exact full-resolution picture sent to the AI model. It comes from the
-            autosaved working-copy background inside the viewing pane; units, Cover, grids, tactical
-            overlays, and editor UI are excluded.
+            autosaved working-copy background inside the viewing pane; units, Cover, tactical
+            overlays, and editor UI are excluded. Choose whether its playable grid is baked into
+            this new immutable reference.
           </p>
         </div>
         <div className="le-artwork-frame-actions">
+          <span className="le-source-artwork-grid-choice">
+            <span>Bake playable grid</span>
+            <Toggle
+              checked={bakePlayableGrid}
+              label="Bake playable grid into this generation reference"
+              onChange={setBakePlayableGrid}
+            />
+          </span>
           <ChromeButton unit="inner-text-button"
             className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', previewReady && 'active')}
             disabled={!canWrite || !workingCopyReady || !previewReady || Boolean(busy)}
@@ -314,6 +329,7 @@ export function PredrawnSourceArtworkPanel({
               } as CSSProperties}
               data-ready={previewReady ? 'true' : 'false'}
               data-background-mode={backgroundMode}
+              data-grid-overlay={gridOverlay}
               data-capture-width={frame.width}
               data-capture-height={frame.height}
             >
@@ -323,6 +339,7 @@ export function PredrawnSourceArtworkPanel({
                 boardPan={boardPan}
                 ariaLabel={`Current working-copy ${backgroundMode === 'ai' ? 'AI artwork' : 'Legacy tileset'} generation reference`}
                 hidden={{ tile: false, unit: true, doodad: false }}
+                showGrid={bakePlayableGrid}
                 topSurfacesOnly={backgroundMode === 'legacy'}
                 onTerrainFirstFrame={() => setTerrainReady(true)}
                 onSceneFirstFrame={() => setSceneReady(true)}
@@ -361,6 +378,8 @@ export function PredrawnSourceArtworkPanel({
                 <strong>{predrawnGenerationReferenceLabel(source, index)}</strong>
                 <small>
                   {source.operation.backgroundMode === 'ai' ? 'Captured from AI artwork' : 'Captured from Legacy tileset'}
+                  {' · '}
+                  {source.operation.gridOverlay === 'playable' ? 'Playable grid baked' : 'Grid-free'}
                   {' · '}
                   {source.frame_width} × {source.frame_height} PNG
                   {' · '}

@@ -2,10 +2,10 @@
 status: accepted
 date: 2026-08-06
 deciders: Nelson
-partially_superseded_by: "[ADR-0500](0500-promotion-choices-stay-with-the-arrived-pawn.md)'s board-anchored choice presentation"
+partially_superseded_by: "[ADR-0504](0504-promotion-choices-stay-with-the-arrived-pawn.md)'s board-anchored choice presentation"
 ---
 
-# ADR-0499: Pawns arrive before their promotion choice
+# ADR-0503: Pawns arrive before their promotion choice
 
 ## Context and Problem Statement
 

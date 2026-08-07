@@ -41,7 +41,8 @@ cannot start slots.
 
 A Legacy reference captures the ordinary composed environment through the saved
 frame. An AI reference captures the exact selected AI raster. Both are unit-free,
-ground-cover-free, grid-free, tactical-overlay-free, and UI-free. The saved
+ground-cover-free, tactical-overlay-free, and UI-free. It is grid-free by
+default, or may explicitly bake the canonical playable grid under ADR-0499. The saved
 Generation Reference records its exact bytes and hash, dimensions, frame,
 source mode, selected raster when applicable, working-copy Level revision,
 geometry digest, semantic-packet identity, and provenance. Later Level edits
@@ -144,7 +145,7 @@ stating which questions each is allowed to answer.
 
 1. **Model image input:** one exact immutable Generation Reference. It is the
    unit-free, ground-cover-free,
-   overlay-free crop from one acknowledged autosaved working-copy revision and
+   tactical-overlay-free crop from one acknowledged autosaved working-copy revision and
    its 16:9 frame. In Legacy mode it contains the ordinary composed authored
    surface, including only explicitly persisted Subterrain that captured topology
    resolves onto exposed faces. In AI mode it contains the exact selected
@@ -183,7 +184,9 @@ Before generation:
    gameplay-authoritative reference draw represented by the semantic packet.
 
    The resulting Generation Reference contains no units, additive ground cover,
-   grid, selection, tactical overlay, labels, or UI. A Legacy capture preserves
+   selection, tactical overlay, labels, or UI. It contains no grid by default;
+   the owner may explicitly bake the canonical playable grid into that immutable
+   reference under ADR-0499. A Legacy capture preserves
    the composed authored environment—terrain tops, linear features, barriers,
    scenery, props, doodads, walls, Placed Art's visual-only Scene Art, and
    explicitly persisted Subterrain on canonically exposed active faces. A face

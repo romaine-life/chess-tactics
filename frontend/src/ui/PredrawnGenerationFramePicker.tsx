@@ -395,6 +395,7 @@ export function PredrawnGenerationFramePicker({
               boardPan={previewBoardPan}
               ariaLabel="Owner-selected pre-drawn generation frame"
               hidden={{ tile: false, unit: true, doodad: false }}
+              showGrid
               topSurfacesOnly
               onTerrainFirstFrame={acknowledgeTerrain}
               onSceneFirstFrame={acknowledgeScene}

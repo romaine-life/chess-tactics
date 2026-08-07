@@ -4,6 +4,7 @@
 // opening framing, or overlays (ADR-0307/ADR-0353).
 
 import { createStore, type StoreApi } from 'zustand/vanilla';
+import { appSettingsSnapshot } from '../settings/appSettings';
 import { PLAYER_MAXIMUM_ZOOM, PLAYER_TECHNICAL_MINIMUM_ZOOM } from './boardCameraPolicy';
 
 const DEFAULT_ZOOM = 0.9;
@@ -35,7 +36,7 @@ export interface SkirmishViewState {
   showPlayerMoves: boolean;
   /** Highlight authored pawn-promotion cells. Opt-in so gameplay stays visually clean. */
   showPromotionZones: boolean;
-  /** Draw a deliberate board grid overlay. Default off so terrain can flow naturally. */
+  /** Draw the board grid overlay. Each battlefield seeds this from the device setting. */
   showGrid: boolean;
   zoom: number;
   /** Level-specific floor derived from the live viewport and effective camera coverage polygon. */
@@ -60,6 +61,7 @@ export type SkirmishViewStore = StoreApi<SkirmishViewState>;
 
 /** Construct the closed view state for one mounted battlefield activity. */
 export function createSkirmishViewStore(): SkirmishViewStore {
+  const { showBoardGrid } = appSettingsSnapshot();
   return createStore<SkirmishViewState>((set) => ({
     showMoves: true,
     showEnemyAttacks: true,
@@ -68,7 +70,7 @@ export function createSkirmishViewStore(): SkirmishViewStore {
     showPlayerAttacks: false,
     showPlayerMoves: false,
     showPromotionZones: false,
-    showGrid: false,
+    showGrid: showBoardGrid,
     zoom: DEFAULT_ZOOM,
     minZoom: PLAYER_TECHNICAL_MINIMUM_ZOOM,
     maxZoom: PLAYER_MAXIMUM_ZOOM,

@@ -7,6 +7,7 @@ supersedes:
 partially_superseded_by:
   - "[ADR-0494](0494-runs-begin-in-battle-and-sectio-deals-a-derived-rarity-pile.md)'s exact hidden rarity pile and removal of the affordable opening deal"
   - "[ADR-0495](0495-rarity-colors-the-standard-frame-metalwork.md)'s independent frame-family rarity materials"
+  - "[ADR-0502](0502-queen-and-pawn-receive-the-complete-connected-set.md)'s complete six-card Queen + Pawn roster and revised catalog counts"
 ---
 
 # ADR-0493: Generated Run formations fall sideways and own rarity

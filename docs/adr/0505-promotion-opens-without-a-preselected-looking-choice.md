@@ -3,14 +3,14 @@ status: accepted
 date: 2026-08-06
 deciders: Nelson
 supersedes:
-  - "[ADR-0500](0500-promotion-choices-stay-with-the-arrived-pawn.md)'s first-choice autofocus clause"
+  - "[ADR-0504](0504-promotion-choices-stay-with-the-arrived-pawn.md)'s first-choice autofocus clause"
 ---
 
-# ADR-0501: Promotion opens without a preselected-looking choice
+# ADR-0505: Promotion opens without a preselected-looking choice
 
 ## Context and Problem Statement
 
-ADR-0500 automatically focused the first promotion button when the arrived-Pawn picker opened.
+ADR-0504 automatically focused the first promotion button when the arrived-Pawn picker opened.
 The browser's accepted focus treatment therefore drew a strong cyan ring around Queen before the
 player had chosen anything. Although technically keyboard focus, it read as a selected or default
 promotion and was not an accepted state for this choice surface.

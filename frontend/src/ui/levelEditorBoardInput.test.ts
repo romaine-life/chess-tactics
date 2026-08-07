@@ -9,6 +9,7 @@ const levelEditor = readFileSync(new URL('./LevelEditor.tsx', import.meta.url), 
 const levelEditorControls = readFileSync(new URL('./LevelEditorChromeConsumers.tsx', import.meta.url), 'utf8');
 const viewPane = readFileSync(new URL('./shared/ViewPane.tsx', import.meta.url), 'utf8');
 const styles = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+const artworkSelectionSurface = readFileSync(new URL('./ArtworkSelectionSurface.tsx', import.meta.url), 'utf8');
 
 const editableBoardStart = levelEditor.indexOf('function StudioEditableBoard({');
 const editableBoardEnd = levelEditor.indexOf('\n// ---------------------------------------------------------------------------', editableBoardStart);
@@ -69,7 +70,7 @@ describe('Level Editor board pointer contract', () => {
       .map((line, index) => line.includes('onPointerDown={(event) => {') ? index : -1)
       .filter((index) => index >= 0);
 
-    // Playable cells, scenic cells, wall faces, doodad bodies, prop bodies, and floating artwork.
+    // Playable cells, scenic cells, wall faces, doodad bodies, prop bodies, and selected-artwork Move.
     expect(pointerDownLines).toHaveLength(6);
     for (const lineIndex of pointerDownLines) {
       const handlerPrefix = lines.slice(lineIndex, lineIndex + 8).join('\n');
@@ -151,14 +152,15 @@ describe('Level Editor board pointer contract', () => {
     expect(levelEditor).toContain("setTool(placedArtKind === 'artwork' ? 'select' : 'brush');");
     expect(levelEditor).toContain("const disarming = artworkBrushId === asset.id && tool === 'brush';");
     expect(levelEditor).toContain("setTool(disarming ? 'select' : 'brush');");
-    expect(levelEditor).toContain("{ value: '', label: 'None' }");
-    expect(levelEditor).toContain('ariaLabel="Selected artwork"');
-    expect(levelEditor).toContain("value={selectedArtworkId ?? ''}");
-    expect(levelEditor).toMatch(/onChange=\{\(id\) => \{\s+if \(id\) selectArtwork\(id\);\s+else \{\s+setSelectedCell\(null\);\s+setSelectedArtworkId\(null\);/);
-    expect(editableBoard).toContain("const canSelect = artworkSelectionActive && tool === 'select';");
+    expect(levelEditor).toContain('data-testid="selected-artwork-readout"');
+    expect(levelEditor).not.toContain('ariaLabel="Selected artwork"');
+    expect(levelEditor).toContain('<ArtworkSelectionSurface');
+    expect(levelEditor).toContain('placements={boardFloatingArtwork}');
+    expect(levelEditor).toContain('onSelect={selectArtwork}');
     expect(editableBoard).toContain("const canMove = tool === 'move' && selected;");
-    expect(editableBoard).toContain("${canSelect ? ' is-selectable' : ''}");
-    expect(editableBoard).toMatch(/if \(canSelect\) \{\s+onSelectArtwork\?\.\(placement\.id\);\s+return;\s+\}\s+event\.currentTarget\.setPointerCapture/);
+    expect(editableBoard).not.toContain('canSelect');
+    expect(editableBoard).not.toContain('onSelectArtwork');
+    expect(editableBoard).toContain('event.currentTarget.setPointerCapture(event.pointerId);');
     expect(levelEditor).toContain('const [artworkSelectionActive, setArtworkSelectionActive] = useState(false);');
     expect(levelEditor).toMatch(/if \(brushKind === 'artwork' && nextTool === 'select'\) \{[\s\S]*?if \(artworkSelectionActive\) \{[\s\S]*?setArtworkSelectionActive\(false\);[\s\S]*?setSelectedArtworkId\(null\);[\s\S]*?\} else \{[\s\S]*?setArtworkSelectionActive\(true\);[\s\S]*?setTool\('select'\);/);
     expect(levelEditor).toContain("tool === 'select' && !artworkSelectionActive");
@@ -176,7 +178,9 @@ describe('Level Editor board pointer contract', () => {
       expect(button).toContain('disabled={toolsDisabled}');
       expect(button).not.toContain('disabled={tool === null}');
     }
-    expect(styles).toContain('.le-floating-artwork-hit.is-selectable');
+    expect(artworkSelectionSurface).toContain('floatingArtworkHitCandidatesAtPoint');
+    expect(artworkSelectionSurface).toContain('nextFloatingArtworkCycleIndex');
+    expect(styles).toContain('.le-floating-artwork-hover');
     expect(styles).toContain('outline: 2px dashed');
     expect(styles).toContain('.le-floating-artwork-hit.is-selected');
     expect(styles).toContain('outline: 2px dotted');

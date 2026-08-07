@@ -42,6 +42,13 @@ gameplay behavior, never camera preparation. Retained Deployment-to-Battle promo
 view-store instance; independently mounted outgoing and incoming battlefields never share mutable
 zoom, pan, limits, opening-camera, reset, or overlay state.
 
+Per [ADR-0501](adr/0501-play-surfaces-load-with-the-board-grid-enabled.md), every newly mounted
+play battlefield seeds its instance-owned grid overlay from the device-local **Board grid**
+Gameplay setting. The installed default is enabled, including for an older settings blob that
+does not yet contain the preference. The in-battle Grid and Clear all controls may override that
+value for the current mounted battlefield without changing the saved default; the next distinct
+battlefield mount reads the setting again.
+
 If the camera ever needs to move, this contract is void and the board must become a
 real-time 3D scene (and the units re-authored as meshes).
 
@@ -410,17 +417,19 @@ The Level Editor's Placed Art destination begins with a Scene Art / Doodads /
 Props selector. Scene Art lists the installed raw structure catalog.
 Clicking a source swatch toggles a viewport-sized free-placement brush that
 converts the primary pointer directly to projected-scene pixels; tile,
-prop/doodad, and barrier hit targets do not participate. A dynamically growing
-Selected dropdown lists stable placed instances and includes None. Select may
-change that current instance but never move it. Per
-[ADR-0149](adr/0149-artwork-select-toggles-candidate-discovery.md), Select is
-a toggleable discovery mode: its first click draws image-bounds candidate
-outlines around every selectable artwork, and its second click exits that mode,
-clears the current artwork, and removes candidate plus current outlines. Move
-drags only the current instance and suppresses candidate outlines; the
-Scene Art Delete toolbar action immediately deletes the current instance.
-The current instance has a distinct dotted image-bounds outline, and blank-board
-clicks do not clear it. Details remains locked to that instance and provides
+prop/doodad, and barrier hit targets do not participate. Per
+[ADR-0500](adr/0500-scene-art-select-is-local-alpha-aware-and-stack-cycling.md),
+Select is a toggleable local spatial picker: it draws no global candidates, tests
+the exact source alpha painted by the shared directional draw operations, and
+orders eligible overlaps by live render depth. Hover outlines and names only the
+current candidate. Repeated clicks within six real viewport pixels cycle the
+unchanged painted stack front-to-back with a visible position/total readout.
+The unbounded instance dropdown is retired in favor of a compact current-object
+readout and explicit Clear action. Select may change that current instance but
+never move it; its second toolbar click exits the mode and clears the current
+artwork. Move drags only the current instance; the Scene Art Delete toolbar action
+immediately deletes it. The current instance has a distinct dotted image-bounds
+outline, and blank-board clicks do not clear it. Details remains locked to that instance and provides
 full-width slider-plus-number rows for X px, Y px, and Scale, installed-direction
 selection, duplicate, and delete. The layer introduces no visible placement
 marker or alternate grid geometry. Board resizing neither shifts nor prunes it.

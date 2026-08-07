@@ -262,6 +262,13 @@ test('accepts minimal source metadata for server canonicalization and validates 
   };
   assert.equal(sourceArtworkVersionContractIssue(stored), null);
   assert.equal(backgroundVersionStoredContractIssue(stored), null);
+  const griddedStored = JSON.parse(JSON.stringify(stored));
+  griddedStored.operation.gridOverlay = 'playable';
+  griddedStored.provenance.gridOverlay = 'playable';
+  griddedStored.operation.semanticRequest.gridOverlay = 'playable';
+  griddedStored.operation.semanticRequestSha256 = sha256Canonical(griddedStored.operation.semanticRequest);
+  griddedStored.provenance.semanticRequestSha256 = griddedStored.operation.semanticRequestSha256;
+  assert.equal(sourceArtworkVersionContractIssue(griddedStored), null);
   const legacyStored = JSON.parse(JSON.stringify(stored));
   legacyStored.operation.kind = 'generation-source-v1';
   legacyStored.operation.canonicalDocumentRevision = legacyStored.operation.workingCopyDocumentRevision;
@@ -280,6 +287,11 @@ test('accepts minimal source metadata for server canonicalization and validates 
   legacyStored.operation.semanticRequestSha256 = sha256Canonical(legacyStored.operation.semanticRequest);
   legacyStored.provenance.semanticRequestSha256 = legacyStored.operation.semanticRequestSha256;
   assert.equal(sourceArtworkVersionContractIssue(legacyStored), null);
+  assert.match(sourceArtworkVersionContractIssue({
+    ...stored,
+    operation: { ...stored.operation, gridOverlay: 'whole' },
+    provenance: { ...stored.provenance, gridOverlay: 'whole' },
+  }), /gridOverlay must be none or playable/);
   assert.match(sourceArtworkVersionContractIssue({
     ...stored,
     operation: { ...stored.operation, backgroundMode: 'ai' },

@@ -15,7 +15,8 @@ import {
 import { WALL_DECOR_ASSETS, defaultWallDecorAsset, wallDecorAsset, type WallDecorFaceId } from '../core/wallDecor';
 import { solveSocketBoard } from '../core/tileBoardGenerator';
 import { BoardLabBoard, boardLabCellPosition } from '../render/BoardLabBoard';
-import { BoardCanvasLayer, boundsForOps, loadCanvasImage } from '../render/BoardCanvasLayer';
+import { BoardCanvasLayer, boundsForOps } from '../render/BoardCanvasLayer';
+import { loadRasterAlphaMask } from '../render/rasterAlpha';
 import {
   buildMirrorLosProofPlan,
   type MirrorLosClassification,
@@ -268,27 +269,6 @@ function testPieceSubjects(pieces: readonly TestPiece[], bounds: { cols: number;
         : op.src,
     } satisfies MirrorReflectionSubject];
   });
-}
-
-const rasterAlphaMaskCache = new Map<string, Promise<RasterAlphaMask | null>>();
-
-function loadRasterAlphaMask(src: string): Promise<RasterAlphaMask | null> {
-  const cached = rasterAlphaMaskCache.get(src);
-  if (cached) return cached;
-  const promise = loadCanvasImage(src).then((image) => {
-    const width = image.naturalWidth;
-    const height = image.naturalHeight;
-    if (!width || !height) return null;
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext('2d', { willReadFrequently: true });
-    if (!context) return null;
-    context.drawImage(image, 0, 0);
-    return { rgba: context.getImageData(0, 0, width, height).data, width, height };
-  });
-  rasterAlphaMaskCache.set(src, promise);
-  return promise;
 }
 
 function useMirrorLosProofPlans(

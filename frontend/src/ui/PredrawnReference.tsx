@@ -19,6 +19,7 @@ import {
 import { loadEditorDocument } from '../net/editorDocuments';
 import { readValidatedReturnTo } from './navigation';
 import { copyPredrawnPngBlobToClipboard } from './predrawnImageClipboard';
+import { Toggle } from './shared/Toggle';
 import { TitleBarControlContribution } from './shell/TitleBarControls';
 import { useSceneParticipant } from './shell/SceneBoundary';
 
@@ -116,6 +117,44 @@ export function predrawnReferenceFilename(levelId: string): string {
   return `${safeId}-generation-reference.png`;
 }
 
+async function drawReferenceSvg(
+  context: CanvasRenderingContext2D,
+  layer: SVGSVGElement,
+  destination: { x: number; y: number; width: number; height: number },
+): Promise<void> {
+  const clone = layer.cloneNode(true) as SVGSVGElement;
+  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  const sources = [layer, ...layer.querySelectorAll<SVGElement>('*')];
+  const targets = [clone, ...clone.querySelectorAll<SVGElement>('*')];
+  sources.forEach((source, index) => {
+    const target = targets[index];
+    if (!target) return;
+    const computed = getComputedStyle(source);
+    for (let propertyIndex = 0; propertyIndex < computed.length; propertyIndex += 1) {
+      const property = computed.item(propertyIndex);
+      target.style.setProperty(
+        property,
+        computed.getPropertyValue(property),
+        computed.getPropertyPriority(property),
+      );
+    }
+  });
+  const serialized = new XMLSerializer().serializeToString(clone);
+  const url = URL.createObjectURL(new Blob([serialized], { type: 'image/svg+xml' }));
+  try {
+    const image = new Image();
+    image.decoding = 'async';
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error('The playable grid could not be rasterized into the reference PNG.'));
+      image.src = url;
+    });
+    context.drawImage(image, destination.x, destination.y, destination.width, destination.height);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 /** Composite the exact saved frame's canonical canvas layers into one downloadable PNG. */
 export async function predrawnReferencePngBlob(frame: HTMLElement): Promise<Blob> {
   const frameRect = frame.getBoundingClientRect();
@@ -140,7 +179,7 @@ export async function predrawnReferencePngBlob(frame: HTMLElement): Promise<Blob
   context.fillStyle = getComputedStyle(frame).backgroundColor || '#0c0d11';
   context.fillRect(0, 0, width, height);
 
-  const layers = [...frame.querySelectorAll<HTMLCanvasElement | HTMLImageElement>('canvas, img')].sort((left, right) => {
+  const layers = [...frame.querySelectorAll<HTMLCanvasElement | HTMLImageElement | SVGSVGElement>('canvas, img, svg')].sort((left, right) => {
     const leftZ = Number.parseInt(getComputedStyle(left).zIndex, 10) || 0;
     const rightZ = Number.parseInt(getComputedStyle(right).zIndex, 10) || 0;
     return leftZ - rightZ;
@@ -152,13 +191,17 @@ export async function predrawnReferencePngBlob(frame: HTMLElement): Promise<Blob
     }
     const rect = layer.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0 || getComputedStyle(layer).visibility === 'hidden') continue;
-    context.drawImage(
-      layer,
-      Math.round((rect.left - frameRect.left) / scaleX),
-      Math.round((rect.top - frameRect.top) / scaleY),
-      Math.round(rect.width / scaleX),
-      Math.round(rect.height / scaleY),
-    );
+    const destination = {
+      x: Math.round((rect.left - frameRect.left) / scaleX),
+      y: Math.round((rect.top - frameRect.top) / scaleY),
+      width: Math.round(rect.width / scaleX),
+      height: Math.round(rect.height / scaleY),
+    };
+    if (layer instanceof SVGSVGElement) {
+      await drawReferenceSvg(context, layer, destination);
+    } else {
+      context.drawImage(layer, destination.x, destination.y, destination.width, destination.height);
+    }
   }
 
   return new Promise<Blob>((resolve, reject) => {
@@ -183,6 +226,9 @@ export function PredrawnReference(): ReactElement {
   const levelId = predrawnReferenceLevelId(window.location.search);
   const documentId = predrawnReferenceDocumentId(window.location.search);
   const captureMode = routeParams.get('capture') === '1';
+  const [bakePlayableGrid, setBakePlayableGrid] = useState(
+    () => routeParams.get('grid') === 'playable' || routeParams.get('grid') === '1',
+  );
   const requestedReturnHref = readValidatedReturnTo(window.location.search);
   const returnHref = requestedReturnHref
     ?? (levelId ? `/editor/level?levelId=${encodeURIComponent(levelId)}` : '/editor/level');
@@ -376,7 +422,7 @@ export function PredrawnReference(): ReactElement {
         <section className="predrawn-reference-toolbar" aria-label="Pre-drawn reference controls">
           <div>
             <h1>{documentId ? 'Working-copy generation reference' : 'Canonical generation reference'}</h1>
-            <p>Loads the exact {documentId ? 'autosaved working-copy' : 'saved'} 16:9 scene frame at the canonical renderer’s native 1× scale. The capture uses the {documentId ? 'working copy’s' : 'saved'} Legacy tileset or exact AI artwork background while removing units, ground cover, grids, tactical overlays, and editor UI.</p>
+            <p>Loads the exact {documentId ? 'autosaved working-copy' : 'saved'} 16:9 scene frame at the canonical renderer’s native 1× scale. The capture uses the {documentId ? 'working copy’s' : 'saved'} Legacy tileset or exact AI artwork background while removing units, ground cover, tactical overlays, and editor UI. The playable grid is optional.</p>
           </div>
           <form action={PREDRAWN_REFERENCE_ROUTE} method="get">
             <label htmlFor="predrawn-reference-level-id">Level ID</label>
@@ -394,6 +440,14 @@ export function PredrawnReference(): ReactElement {
                 <span>origin {frame.x}, {frame.y} · native 1×</span>
               </p>
               <div className="predrawn-reference-actions">
+                <span className="predrawn-reference-grid-choice">
+                  <span>Bake playable grid</span>
+                  <Toggle
+                    checked={bakePlayableGrid}
+                    label="Bake playable grid into this generation reference"
+                    onChange={setBakePlayableGrid}
+                  />
+                </span>
                 <button
                   type="button"
                   data-testid="copy-predrawn-reference-png"
@@ -442,6 +496,7 @@ export function PredrawnReference(): ReactElement {
               data-frame-width={frame.width}
               data-frame-height={frame.height}
               data-background-mode={backgroundMode}
+              data-grid-overlay={bakePlayableGrid ? 'playable' : 'none'}
             >
               <StudioReadOnlyBoard
                 board={board}
@@ -449,6 +504,7 @@ export function PredrawnReference(): ReactElement {
                 boardPan={boardPan}
                 ariaLabel={`${state.level.name} ${documentId ? 'working-copy' : 'canonical'} generation-reference art export`}
                 hidden={{ tile: false, unit: true, doodad: false }}
+                showGrid={bakePlayableGrid}
                 topSurfacesOnly={backgroundMode === 'legacy'}
                 onTerrainFirstFrame={acknowledgeTerrain}
                 onSceneFirstFrame={acknowledgeScene}

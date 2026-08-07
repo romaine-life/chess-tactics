@@ -21,7 +21,7 @@ export {
 };
 
 /** The schema version of one persisted in-progress Run. Only this exact save shape is read. */
-export const CURRENT_RUN_SAVE_VERSION = 26;
+export const CURRENT_RUN_SAVE_VERSION = 27;
 export type RunSaveVersion = typeof CURRENT_RUN_SAVE_VERSION;
 
 export class UnsupportedRunSaveError extends Error {
@@ -41,6 +41,7 @@ const RUN_SAVE_VERSION_LEVEL_FORMAT_SOURCE = 22;
 const RUN_SAVE_VERSION_FORMATION_CARDS_SOURCE = 23;
 const RUN_SAVE_VERSION_SIDEWAYS_FORMATIONS_SOURCE = 24;
 const RUN_SAVE_VERSION_SECTIO_PILE_SOURCE = 25;
+const RUN_SAVE_VERSION_QUEEN_PAWN_FORMATIONS_SOURCE = 26;
 export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
@@ -413,8 +414,8 @@ function initialArmyNumberState(): RunArmyNumberState {
   };
 }
 
-export const RUN_GENERATED_CARD_COUNT = 714;
-export const RUN_AUTHORED_FORMATION_EXCEPTION_COUNT = 7;
+export const RUN_GENERATED_CARD_COUNT = 720;
+export const RUN_AUTHORED_FORMATION_EXCEPTION_COUNT = 6;
 export const RUN_OFFER_CARD_COUNT = RUN_GENERATED_CARD_COUNT + RUN_AUTHORED_FORMATION_EXCEPTION_COUNT;
 
 const FORMATION_COLUMNS = 4;
@@ -435,10 +436,14 @@ const CARD_INITIAL_BY_PIECE = new Map(ADLECTABLE_CARD_PIECES.map(({ type, initia
 const CARD_PIECE_ORDER = new Map(ADLECTABLE_CARD_PIECES.map(({ type }, index) => [type, index]));
 
 function cardCompositionArtId(pieces: readonly AdlectablePieceType[]): string {
-  return [...pieces]
+  const composition = [...pieces]
     .sort((left, right) => (CARD_PIECE_ORDER.get(left) ?? 0) - (CARD_PIECE_ORDER.get(right) ?? 0))
     .map((piece) => CARD_INITIAL_BY_PIECE.get(piece))
     .join('');
+  // Queen + Pawn is the one ten-material roster admitted by the formation grammar.
+  // It temporarily shares the accepted Queen illustration until dedicated composition
+  // artwork is selected; exact formation remains authoritative on the card face.
+  return composition === 'pq' ? 'q' : composition;
 }
 
 /** Rarity is desirability data, not a material band. Exact formation may therefore
@@ -546,7 +551,13 @@ function generatedCardsForFootprint(formation: readonly RunCardFormationCell[]):
     }
     for (const { type } of ADLECTABLE_CARD_PIECES) {
       const nextValue = value + PIECE_VALUE[type];
-      if (nextValue > FORMATION_MAX_VALUE) continue;
+      const completesQueenPawnPair = formation.length === 2
+        && index === 1
+        && (
+          (pieces[0] === 'queen' && type === 'pawn')
+          || (pieces[0] === 'pawn' && type === 'queen')
+        );
+      if (nextValue > FORMATION_MAX_VALUE && !completesQueenPawnPair) continue;
       pieces.push(type);
       visit(index + 1, nextValue);
       pieces.pop();
@@ -564,7 +575,7 @@ function semanticFormationId(card: Pick<RunCoreCard, 'pieces' | 'formation'>): s
 }
 
 /** Existing named formations replace an equivalent generated identity when one exists;
- * the seven shapes outside the connected/nine-material grammar remain explicit additions. */
+ * six shapes outside the connected roster grammar remain explicit additions. */
 function existingFormationCards(): RunCoreCard[] {
   return [
     formationCard('p', 'p', ['pawn'], [{ x: 0, y: 0 }]),
@@ -1875,7 +1886,7 @@ function migrateRunToSectioPile(stored: Record<string, unknown>): Record<string,
   }
   return {
     ...stored,
-    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    runSaveVersion: RUN_SAVE_VERSION_QUEEN_PAWN_FORMATIONS_SOURCE,
     phase: openingSectio ? 'deployment' : stored.phase,
     sectioCardCursor: 0,
     sectio: openingSectio ? null : sectio,
@@ -1885,6 +1896,17 @@ function migrateRunToSectioPile(stored: Record<string, unknown>): Record<string,
       battleRuntime: null,
       aftermath: null,
     } : {}),
+  };
+}
+
+/** Version 27 admits every connected Queen + Pawn arrangement into the generated catalog.
+ * Existing visible offers, held cards, and Deployment state keep their exact identities. The
+ * hidden cursor restarts explicitly because its seed-derived future changed with the catalog. */
+function migrateRunToQueenPawnFormations(stored: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...stored,
+    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    sectioCardCursor: 0,
   };
 }
 
@@ -1900,7 +1922,8 @@ function migrateRunToSectioPile(stored: Record<string, unknown>): Record<string,
  * advances every embedded War Battle through the Level document chain. Version 23 then retires
  * unit abilities and installs authored formation cards. Version 24 expands that catalog and
  * resets in-flight placement plans for sideways settling. Version 25 removes the opening
- * Sectio and begins a seed-derived card pile. Older saves remain unsupported.
+ * Sectio and begins a seed-derived card pile. Version 26 then restarts that hidden sequence
+ * against the expanded Queen + Pawn formation catalog. Older saves remain unsupported.
  */
 export function migrateRunSaveDocument(value: unknown): RunDocument {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -1959,6 +1982,9 @@ export function migrateRunSaveDocument(value: unknown): RunDocument {
   }
   if (stored.runSaveVersion === RUN_SAVE_VERSION_SECTIO_PILE_SOURCE) {
     stored = migrateRunToSectioPile(stored);
+  }
+  if (stored.runSaveVersion === RUN_SAVE_VERSION_QUEEN_PAWN_FORMATIONS_SOURCE) {
+    stored = migrateRunToQueenPawnFormations(stored);
   }
   return normalizeRunDocument(stored as unknown as RunDocument);
 }

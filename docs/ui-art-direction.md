@@ -166,7 +166,7 @@ Do:
   highlights the arrived square and opens its registered callout beside the Pawn, never as an
   ordinary Controls-rail card. Its containing field is structural teal stone and its terminal
   choice buttons are oak leaves; none appears focused, selected, or default until the player
-  deliberately enters or activates it (ADR-0433, ADR-0500, ADR-0501).
+  deliberately enters or activates it (ADR-0433, ADR-0504, ADR-0505).
 - Keep pixel typography restrained and readable.
 - Let pieces, overlays, and select terrain accents carry most of the saturated
   color.

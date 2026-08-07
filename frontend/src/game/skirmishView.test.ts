@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { appSettingsSnapshot, updateAppSettings } from '../settings/appSettings';
 import { createSkirmishViewStore, type SkirmishViewStore } from './skirmishView';
 
 let viewStore: SkirmishViewStore;
@@ -8,6 +9,18 @@ beforeEach(() => {
 });
 
 describe('skirmish dynamic zoom floor', () => {
+  it('loads with the device board-grid preference, which defaults on', () => {
+    expect(viewStore.getState().showGrid).toBe(true);
+
+    const previous = appSettingsSnapshot().showBoardGrid;
+    try {
+      updateAppSettings({ showBoardGrid: false });
+      expect(createSkirmishViewStore().getState().showGrid).toBe(false);
+    } finally {
+      updateAppSettings({ showBoardGrid: previous });
+    }
+  });
+
   it('prevents HUD, keyboard, and reset paths from crossing the viewport floor', () => {
     viewStore.getState().setMinZoom(1.1);
     viewStore.getState().setZoom(0.6);
