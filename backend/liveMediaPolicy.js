@@ -95,6 +95,20 @@ const RUN_GOLD_TRANSACTION_REVIEW_SLOTS = new Set([
 ]);
 const RUN_CARD_COST_COIN_COMPONENT = 'run-card-cost-coin';
 const RUN_CARD_COST_COIN_SLOT = 'ui/run/card-prototypes/cost-coin-v1.png';
+const RUN_CARD_GOLD_TIER_DIVIDER_COMPONENT = 'run-card-gold-tier-divider';
+const RUN_CARD_GOLD_TIER_DIVIDER_SLOT = 'ui/run/card-prototypes/gold-tier-divider-v1.png';
+const RUN_CARD_GOLD_TIER_DIVIDER_PROOF_SCHEMA = 'run-card-gold-tier-divider-enchiridion-proof-v1';
+const RUN_CARD_GOLD_TIER_DIVIDER_PROOF_RENDERER = 'RunCardGoldTierDivider/Enchiridion';
+const RUN_CARD_GOLD_TIER_DIVIDER_SCALED_PRODUCTION_EXCEPTION_SCHEMA =
+  'run-card-gold-tier-divider-scaled-production-exception-v1';
+// The accepted shared-dev evidence predates the final ADR renumbering. Because
+// native evidence is immutable, the exact selected SHA retains that historical
+// tag while every new record uses the canonical ADR-0506 identity.
+const RUN_CARD_GOLD_TIER_DIVIDER_EVIDENCE_DECISIONS = new Set(['ADR-0506', 'ADR-0503']);
+const RUN_CARD_GOLD_TIER_DIVIDER_SHA256 =
+  '230eab0e82646434ee603bbcb624a27d44dc3c4f81e2f68c2fa23ae1d0fb18c0';
+const RUN_CARD_GOLD_TIER_DIVIDER_SLICE = Object.freeze({ top: 138, right: 56, bottom: 139, left: 132 });
+const RUN_CARD_GOLD_TIER_DIVIDER_DRAW = Object.freeze({ height: 38, left: 47, right: 20 });
 const RUN_SECTIO_WRAP_COMPONENT = 'run-sectio-wrap';
 const RUN_SECTIO_WRAP_SLOT = /^ui\/run\/sectio-wrap\/([a-z][a-z0-9-]{0,79})\.png$/;
 // A wrap frames live cards rather than replacing them, so the only geometry the
@@ -210,6 +224,10 @@ function runResourceIconSlotId(slot) {
 
 function runCardCostCoinSlot(slot) {
   return String(slot || '') === RUN_CARD_COST_COIN_SLOT;
+}
+
+function runCardGoldTierDividerSlot(slot) {
+  return String(slot || '') === RUN_CARD_GOLD_TIER_DIVIDER_SLOT;
 }
 
 function runCardBackSlot(slot) {
@@ -666,6 +684,97 @@ function runCardCostCoinMediaIssue(row, projectedRuntime = null) {
   }
   if (runtime.altText !== '') {
     return 'Run card cost coin metadata.runtime.altText must be empty because the live value owns its accessible name';
+  }
+  return null;
+}
+
+/**
+ * The Cards/Chartulary gold-tier divider is one owner-selected transparent
+ * PixelLab raster. The shared renderer preserves its circular cradle and end
+ * cap while stretching only the undecorated middle rail span (ADR-0506).
+ */
+function runCardGoldTierDividerMediaIssue(row, projectedRuntime = null) {
+  if (!runCardGoldTierDividerSlot(row.slot)) return 'Run card gold-tier dividers require their registered semantic slot';
+  if (row.domain !== 'ui-kit') return 'Run card gold-tier dividers require the ui-kit domain';
+  if (row.role !== 'divider') return 'Run card gold-tier dividers require the divider role';
+  if (row.media_type !== 'image/png') return 'Run card gold-tier dividers require image/png';
+  if (Number(row.width) !== 688 || Number(row.height) !== 384) {
+    return 'Run card gold-tier dividers must preserve the approved 688x384 transparent raster';
+  }
+  if (normalizedSha(row.blob_sha256) !== RUN_CARD_GOLD_TIER_DIVIDER_SHA256) {
+    return 'ADR-0506 authorizes only the exact owner-approved gold-tier divider bytes';
+  }
+
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime)) return 'Run card gold-tier dividers require metadata.runtime';
+  const allowed = new Set([
+    'component', 'variant', 'frameWidth', 'frameHeight', 'frameCount', 'altText', 'nativeRole', 'slice',
+  ]);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `Run card gold-tier divider runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== RUN_CARD_GOLD_TIER_DIVIDER_COMPONENT) {
+    return `Run card gold-tier divider metadata.runtime.component must be ${RUN_CARD_GOLD_TIER_DIVIDER_COMPONENT}`;
+  }
+  if (runtime.variant !== 'open-rail') return 'Run card gold-tier divider variant must be open-rail';
+  if (runtime.frameWidth !== 688 || runtime.frameHeight !== 384 || runtime.frameCount !== 1) {
+    return 'Run card gold-tier divider runtime geometry must describe one 688x384 source frame';
+  }
+  if (runtime.nativeRole !== RUN_CARD_GOLD_TIER_DIVIDER_COMPONENT) {
+    return `Run card gold-tier divider metadata.runtime.nativeRole must be ${RUN_CARD_GOLD_TIER_DIVIDER_COMPONENT}`;
+  }
+  if (runtime.altText !== '') {
+    return 'Run card gold-tier divider metadata.runtime.altText must be empty because the live coin owns the heading name';
+  }
+  if (!isObjectRecord(runtime.slice) || ['top', 'right', 'bottom', 'left'].some(
+    (edge) => runtime.slice[edge] !== RUN_CARD_GOLD_TIER_DIVIDER_SLICE[edge],
+  )) return 'Run card gold-tier divider runtime slice must preserve the approved cradle, rails, and end cap';
+  return null;
+}
+
+function runCardGoldTierDividerOwnerProofIssue(row, proof, surfaceUrl = null) {
+  if (!runCardGoldTierDividerSlot(row.slot)) return 'Run card gold-tier divider proof requires the registered semantic slot';
+  if (!isObjectRecord(proof) || proof.schema !== RUN_CARD_GOLD_TIER_DIVIDER_PROOF_SCHEMA) {
+    return `Run card gold-tier divider review requires ${RUN_CARD_GOLD_TIER_DIVIDER_PROOF_SCHEMA}`;
+  }
+  if (
+    proof.renderer !== RUN_CARD_GOLD_TIER_DIVIDER_PROOF_RENDERER
+    || proof.canonicalScale !== 1 || proof.spatialResampling !== true
+    || proof.frameWidth !== 688 || proof.frameHeight !== 384
+    || proof.drawHeight !== RUN_CARD_GOLD_TIER_DIVIDER_DRAW.height
+    || proof.leftCapWidth !== RUN_CARD_GOLD_TIER_DIVIDER_DRAW.left
+    || proof.rightCapWidth !== RUN_CARD_GOLD_TIER_DIVIDER_DRAW.right
+    || !isObjectRecord(proof.slice)
+    || ['top', 'right', 'bottom', 'left'].some(
+      (edge) => proof.slice[edge] !== RUN_CARD_GOLD_TIER_DIVIDER_SLICE[edge],
+    )
+  ) return 'Run card gold-tier divider proof does not match the exact shared three-slice renderer';
+  if (surfaceUrl !== null && proof.surfaceUrl !== surfaceUrl) {
+    return 'Run card gold-tier divider proof surfaceUrl does not match the reviewed surface';
+  }
+  let parsedSurface;
+  try { parsedSurface = new URL(proof.surfaceUrl); } catch { return 'Run card gold-tier divider proof surfaceUrl is invalid'; }
+  if (
+    parsedSurface.pathname !== '/enchiridion/cards'
+    || parsedSurface.searchParams.get('goldTierDividerReview') !== String(row.id)
+  ) return 'Run card gold-tier divider proof must identify its exact candidate in the real Cards gallery';
+  const candidateSha256 = normalizedSha(row.blob_sha256);
+  if (!candidateSha256 || !Array.isArray(proof.selectedCandidates) || proof.selectedCandidates.length !== 1) {
+    return 'Run card gold-tier divider proof must identify exactly one candidate';
+  }
+  const selected = proof.selectedCandidates[0];
+  if (
+    !isObjectRecord(selected) || selected.slot !== row.slot || selected.versionId !== String(row.id)
+    || normalizedSha(selected.sha256) !== candidateSha256
+  ) return 'Run card gold-tier divider proof does not identify the reviewed candidate bytes';
+  if (!Array.isArray(proof.slotSnapshots) || proof.slotSnapshots.length !== 1) {
+    return 'Run card gold-tier divider proof must snapshot exactly one semantic slot';
+  }
+  const snapshot = proof.slotSnapshots[0];
+  if (!isObjectRecord(snapshot) || snapshot.slot !== row.slot) {
+    return 'Run card gold-tier divider proof slot snapshot is invalid';
   }
   return null;
 }
@@ -1495,6 +1604,29 @@ function nativeMediaEvidenceIssue(row) {
     ) return 'ADR-0414 selected-derivative evidence has invalid geometry or transform';
     return null;
   }
+  if (evidence.schema === RUN_CARD_GOLD_TIER_DIVIDER_SCALED_PRODUCTION_EXCEPTION_SCHEMA) {
+    if (
+      String(row.slot || '') !== RUN_CARD_GOLD_TIER_DIVIDER_SLOT
+      || normalizedSha(row.blob_sha256) !== RUN_CARD_GOLD_TIER_DIVIDER_SHA256
+      || normalizedSha(evidence.sourceSha256) !== RUN_CARD_GOLD_TIER_DIVIDER_SHA256
+    ) return 'ADR-0506 scaled divider evidence is restricted to the exact owner-selected PixelLab bytes';
+    if (
+      !RUN_CARD_GOLD_TIER_DIVIDER_EVIDENCE_DECISIONS.has(evidence.decision)
+      || evidence.status !== 'owner-approved-production-exception'
+      || evidence.native1x !== false || evidence.spatialResampling !== true
+      || Number(row.width) !== 688 || Number(row.height) !== 384
+      || Number(evidence.sourceWidth) !== 688 || Number(evidence.sourceHeight) !== 384
+      || Number(evidence.drawHeight) !== RUN_CARD_GOLD_TIER_DIVIDER_DRAW.height
+      || Number(evidence.leftCapWidth) !== RUN_CARD_GOLD_TIER_DIVIDER_DRAW.left
+      || Number(evidence.rightCapWidth) !== RUN_CARD_GOLD_TIER_DIVIDER_DRAW.right
+      || !isObjectRecord(evidence.slice)
+      || ['top', 'right', 'bottom', 'left'].some(
+        (edge) => evidence.slice[edge] !== RUN_CARD_GOLD_TIER_DIVIDER_SLICE[edge],
+      )
+      || evidence.transform !== 'svg-three-slice-138-56-139-132-to-38px-47px-20px-stretch'
+    ) return 'ADR-0506 scaled divider evidence is incomplete';
+    return null;
+  }
   if (evidence.schema === LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SCHEMA) {
     if (
       String(row.slot || '') !== LEVEL_EDITOR_BRUSH_ICON_SLOT
@@ -1618,6 +1750,12 @@ module.exports = {
   LIPSANON_ICON_COMPONENT,
   LIPSANON_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
   RUN_CARD_COST_COIN_COMPONENT,
+  RUN_CARD_GOLD_TIER_DIVIDER_COMPONENT,
+  RUN_CARD_GOLD_TIER_DIVIDER_PROOF_RENDERER,
+  RUN_CARD_GOLD_TIER_DIVIDER_PROOF_SCHEMA,
+  RUN_CARD_GOLD_TIER_DIVIDER_SCALED_PRODUCTION_EXCEPTION_SCHEMA,
+  RUN_CARD_GOLD_TIER_DIVIDER_SHA256,
+  RUN_CARD_GOLD_TIER_DIVIDER_SLOT,
   RUN_CARD_BACK_COMPONENT,
   RUN_CARD_BACK_PROOF_RENDERER,
   RUN_CARD_BACK_PROOF_SCHEMA,
@@ -1659,6 +1797,9 @@ module.exports = {
   runLipsanonIconSlotId,
   runCardCostCoinMediaIssue,
   runCardCostCoinSlot,
+  runCardGoldTierDividerMediaIssue,
+  runCardGoldTierDividerOwnerProofIssue,
+  runCardGoldTierDividerSlot,
   runCardBackMediaIssue,
   runCardBackOwnerProofIssue,
   runCardBackSlot,

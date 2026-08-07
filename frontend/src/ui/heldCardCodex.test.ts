@@ -85,7 +85,7 @@ describe('the Chartulary is the reference gallery, not a lookalike (ADR-0371)', 
     expect(heldCardCodex).toContain('cardsByGoldValue(visible, (held) => held.core)');
     expect(heldCardCodex).toContain('className="enchiridion-card-gallery-layout"');
     expect(heldCardCodex).toContain('className="enchiridion-card-gallery-grid"');
-    expect(heldCardCodex).toContain('<RunCardCostCoin value={value}');
+    expect(heldCardCodex).toContain('<RunCardGoldTierDivider value={value}');
     expect(heldCardCodex).toContain('<RunCard card={held.core} mode="reference"');
     // A card IS its own record (ADR-0364). The gallery item is the face and nothing else:
     // no annotation box, no unit roster, no second copy of what the Prosopography shows.

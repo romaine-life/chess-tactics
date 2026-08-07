@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ButtonHTMLAttributes, type ReactElement, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ButtonHTMLAttributes, type ReactElement, type ReactNode } from 'react';
 import { legalMoves } from '../core/rules';
 import { createBlankLevel } from '../core/level';
 import { levelToEditorBoard, unitsForGamePieces } from '../core/levelBoard';
@@ -52,6 +52,10 @@ import { NavButton } from './shared/NavButton';
 import { ChromeButton } from './shared/ChromeButton';
 import { PieceTypeIcon } from './shared/PieceTypeIcon';
 import { RunCardCostCoin } from './shared/RunCardCostCoin';
+import {
+  RunCardGoldTierDivider,
+  useRunCardGoldTierDividerSource,
+} from './shared/RunCardGoldTierDivider';
 import { RUN_PROGRESS_MEDIA_ROLE } from './shared/RunProgressIcon';
 import { KitScroll } from './KitScroll';
 import { EnchiridionContentSceneSlot } from './shell/AuthoredSceneSlot';
@@ -601,6 +605,7 @@ export function CardCodex({
   const [localSelectedId, setLocalSelectedId] = useState<string | null>(null);
   const [goldFilter, setGoldFilter] = useState<CardGoldFilter>('all');
   const [unitFilter, setUnitFilter] = useState<CardUnitFilter>('all');
+  const goldTierDividerSource = useRunCardGoldTierDividerSource();
   const focusedCardId = cardHref ? selectedCardId : localSelectedId;
   const galleryRef = useRef<HTMLDivElement | null>(null);
   const visibleCards = useMemo(
@@ -642,7 +647,7 @@ export function CardCodex({
             {groups.map(([value, cards]) => (
               <section className="enchiridion-card-gallery-group" key={value} aria-label={`${value} gold cards`}>
                 <h3 className="enchiridion-card-gallery-heading">
-                  <RunCardCostCoin value={value} className="enchiridion-card-group-gold" />
+                  <RunCardGoldTierDivider value={value} source={goldTierDividerSource} />
                 </h3>
                 <div className="enchiridion-card-gallery-grid">
                   {cards.map((card) => {

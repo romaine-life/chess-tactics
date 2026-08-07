@@ -150,6 +150,13 @@ search for before constructing a control or repeated surface.
 - `ui/shared/RunCardCostCoin.tsx` — the shared compact numbered card-cost coin,
   drawing the dedicated transparent derivative of the accepted card coin,
   overlaying the live value, and keeping the currency name in its accessible label.
+- `ui/shared/RunCardGoldTierDivider.tsx` — the shared Cards/Chartulary gold-group
+  heading. It resolves the exact live PixelLab ornament, preserves the cradle and
+  end cap through the ADR-0506 three-slice renderer, and seats `RunCardCostCoin`
+  as the only live numeral; the rails contain no text. The click-reachable Studio
+  Card Gold Divider Viewer renders this same primitive at canonical widths, tunes
+  coin size and pixel offsets through shared controls, and atomically saves the
+  Git-owned geometry that both runtime galleries import (ADR-0507).
 - `ui/RunResources.tsx#RunGoldTransactionAmount` — the shared directional Run-gold
   amount. It resolves the installed native gain or loss mark, keeps the numeric
   value as live type, names the complete transaction accessibly, and retains its
