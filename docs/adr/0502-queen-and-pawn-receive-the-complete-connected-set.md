@@ -6,7 +6,7 @@ partially_supersedes:
   - "[ADR-0493](0493-generated-run-formations-fall-sideways-and-own-rarity.md)'s nine-material exclusion and seven authored-exception count"
 ---
 
-# ADR-0498: Queen and Pawn receive the complete connected set
+# ADR-0502: Queen and Pawn receive the complete connected set
 
 ## Context
 
