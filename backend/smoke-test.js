@@ -952,7 +952,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 64 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 65 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -967,7 +967,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 28 }, (_, index) => index + 37),
+    ...Array.from({ length: 29 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1081,7 +1081,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
     )
   ) {
     throw new Error(
-      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 64: `
+      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 65: `
       + `${JSON.stringify({
         history: history.rows,
         identity_columns: identityColumns.rows,
@@ -2777,6 +2777,67 @@ async function validateDerivedSectioPileRunMigration64() {
   }
 }
 
+async function validateQueenPawnCatalogRunMigration65() {
+  const { Client } = require('pg');
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('CREATE SCHEMA smoke_queen_pawn_catalog_run_migration_65');
+    await client.query('SET LOCAL search_path TO smoke_queen_pawn_catalog_run_migration_65');
+    await client.query(`
+      CREATE TABLE active_runs (
+        owner_email text PRIMARY KEY, body jsonb NOT NULL, revision integer NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+    `);
+    const legacy = {
+      runSaveVersion: 26,
+      phase: 'sectio',
+      sectioCardCursor: 117,
+      army: [{ id: 'survivor' }],
+      cards: [{ id: 'held' }],
+      sectio: { cardOffers: [{ id: 'visible-offer' }] },
+      deployment: null,
+    };
+    const current = { runSaveVersion: 27, phase: 'deployment', sectioCardCursor: 17, sectio: null };
+    await client.query(
+      `INSERT INTO active_runs (owner_email, body, revision) VALUES
+        ('legacy@example.com', $1::jsonb, 4),
+        ('current@example.com', $2::jsonb, 9)`,
+      [legacy, current].map(JSON.stringify),
+    );
+
+    await client.query(inlineMigrationSql(65));
+    await client.query(inlineMigrationSql(65));
+    const rows = (await client.query(
+      'SELECT owner_email, body, revision FROM active_runs ORDER BY owner_email',
+    )).rows;
+    const byOwner = new Map(rows.map((row) => [row.owner_email, row]));
+    const migratedLegacy = byOwner.get('legacy@example.com');
+    const untouchedCurrent = byOwner.get('current@example.com');
+    if (
+      migratedLegacy?.body?.runSaveVersion !== 27
+      || migratedLegacy.body.sectioCardCursor !== 0
+      || migratedLegacy.body.phase !== 'sectio'
+      || migratedLegacy.body.army?.[0]?.id !== 'survivor'
+      || migratedLegacy.body.cards?.[0]?.id !== 'held'
+      || migratedLegacy.body.sectio?.cardOffers?.[0]?.id !== 'visible-offer'
+      || Number(migratedLegacy.revision) !== 5
+      || untouchedCurrent?.body?.sectioCardCursor !== 17
+      || Number(untouchedCurrent?.revision) !== 9
+    ) {
+      throw new Error(`Migration 65 did not preserve visible Run state while restarting the hidden catalog: ${JSON.stringify(rows)}`);
+    }
+    await client.query('ROLLBACK');
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve validation error */ }
+    throw error;
+  } finally {
+    await client.end();
+  }
+}
+
 async function validateRepairedEditorDocumentDiscardOperation62() {
   const documentId = '00000000-0000-4000-8000-000000000262';
   const levelId = 'migration-operation-level';
@@ -2940,6 +3001,7 @@ async function main() {
   await validateRetainedEditorBaselineEvidenceMigration62();
   await validateGeneratedFormationRunMigration63();
   await validateDerivedSectioPileRunMigration64();
+  await validateQueenPawnCatalogRunMigration65();
   await validateRepairedEditorDocumentDiscardOperation62();
   await resetDb();
 

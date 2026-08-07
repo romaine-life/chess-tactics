@@ -70,7 +70,8 @@ advances version 21 to RunSaveVersion 22's explicit deal boundary and persisted 
 advances version 22 to RunSaveVersion 23 by migrating every embedded Battle Level to Level format
 version 2, advances version 23 to RunSaveVersion 24's ability-free authored formation cards,
 advances version 24 to RunSaveVersion 25's generated rarity deck and sideways formation settling,
-and advances version 25 to RunSaveVersion 26's Battle-first opening and derived Sectio pile cursor.
+advances version 25 to RunSaveVersion 26's Battle-first opening and derived Sectio pile cursor,
+and advances version 26 to RunSaveVersion 27's complete Queen + Pawn formation catalog.
 Migration 54 owns the marker rename; migration 55 advances the Sectio vocabulary; migration 56
 adds His Grace and Front Lines and returns a version-18 Deployment or Battle to its then-current
 pre-information boundary because that version did not persist exact automatic destinations.
@@ -93,6 +94,10 @@ Migration 64 then advances version 25 to 26. It adds `sectioCardCursor`, removes
 Sectio `kind`, preserves a visible post-Battle offer row, and moves an in-progress opening Sectio
 to Battle 1's Deployment without losing completed transactions. The browser performs the same
 deterministic transform on first load.
+Migration 65 advances version 26 to 27. It preserves every visible offer, held card, unit,
+economy field, phase, and Deployment field while resetting `sectioCardCursor` to zero so the next
+unrevealed sequence is derived explicitly from the expanded six-card Queen + Pawn catalog. The
+browser performs the same transform on first load.
 Each account migration advances the Run's CAS revision, while the browser applies the same chain
 to its local document on first load. Saves older than version 16 remain unavailable because their
 retired gameplay state has no declared lossless transform. See
@@ -108,7 +113,7 @@ migration for account and browser storage. Retired content maps to a typed tombs
 replacement—for example, a removed card remains in the deck as **Removed card**—rather than
 invalidating the Run.
 
-RunSaveVersion 26 begins in Bona Vacantia when the opening Conflict offers a lipsanon, otherwise
+RunSaveVersion 27 begins in Bona Vacantia when the opening Conflict offers a lipsanon, otherwise
 in Battle 1's Deployment. Taking that opening lipsanon also enters Deployment; there is no opening
 Sectio. The Run carries the permanent King and two starting Pawns through the single starter-only
 His Grace card and retains eight starting gold. The first Sectio follows Battle 1.
@@ -161,7 +166,7 @@ explicit migration boundary. Its `purchasedCardOfferIds` and `soldUnits` fields 
 to `adlectedCardOfferIds` and `alienatedUnits`; current admitted units use source `adlectio`.
 `normalizeRunDocument` repairs incomplete data only inside the
 current RunSaveVersion; it contains no historical version upgrade path. The browser storage
-boundary owns the explicit historical chain through version 26.
+boundary owns the explicit historical chain through version 27.
 
 Run Battle Undo does not add another authority to `RunDocument`. The browser-owned resumable
 match snapshot keeps one checkpoint from immediately before the latest player move, including the

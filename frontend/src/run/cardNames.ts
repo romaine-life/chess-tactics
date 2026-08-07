@@ -27,13 +27,17 @@ const CARD_PIECE_ORDER: readonly AdlectablePieceType[] = Object.freeze(['pawn', 
  */
 type NameableRunCard = Readonly<{ id?: string; artId?: string; pieces: readonly RunArmyPieceType[] }>;
 
-export function canonicalCardId(card: NameableRunCard): string {
-  if (card.id && runCardDefinition(card.id)) return card.id;
-  return [...card.pieces]
+function compositionCardId(pieces: readonly RunArmyPieceType[]): string {
+  return [...pieces]
     .filter((piece): piece is AdlectablePieceType => piece !== 'king')
     .sort((left, right) => CARD_PIECE_ORDER.indexOf(left) - CARD_PIECE_ORDER.indexOf(right))
     .map((piece) => CARD_INITIAL[piece])
     .join('');
+}
+
+export function canonicalCardId(card: NameableRunCard): string {
+  if (card.id && runCardDefinition(card.id)) return card.id;
+  return compositionCardId(card.pieces);
 }
 
 // Every card in the generated deck carries an authored banner name, in the same
@@ -100,6 +104,7 @@ const ALL_RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.freeze(
   ppppppppp: 'Nine Ranks Deep',
   ppppr: 'Garrison Relief',
   q: 'Regal Serenity',
+  pq: 'The Last Attendant',
   'pk-front': "Squire's Shelter",
   'pb-front': "Pilgrim's Shelter",
   'ppk-reversed': 'The Late Escort',
@@ -120,6 +125,7 @@ export const RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.free
   Object.fromEntries(RUN_CARD_DECK.map((card) => [
     card.id,
     ALL_RUN_CARD_NAME_BY_ID[card.id]
+      ?? ALL_RUN_CARD_NAME_BY_ID[compositionCardId(card.pieces)]
       ?? ALL_RUN_CARD_NAME_BY_ID[card.artId ?? '']
       ?? cardContentsLabel(card),
   ])),
@@ -178,6 +184,7 @@ const ALL_RUN_CARD_FLAVOR_BY_ID: Readonly<Record<string, string>> = Object.freez
   ppppppppp: 'Nine sowed in frost. None called it winter.',
   ppppr: 'Relief entered through the breach after the city had left.',
   q: 'She watched the empty court until ceremony became weather.',
+  pq: 'One attendant remained after the court learned to empty itself.',
   'pk-front': 'The rider waited behind the only order that had arrived.',
   'pb-front': 'The lamp went first. The sermon followed where it could.',
   'ppk-reversed': 'The men arrived to cover a rider already past them.',
@@ -197,6 +204,7 @@ export const RUN_CARD_FLAVOR_BY_ID: Readonly<Record<string, string>> = Object.fr
   Object.fromEntries(RUN_CARD_DECK.map((card) => [
     card.id,
     ALL_RUN_CARD_FLAVOR_BY_ID[card.id]
+      ?? ALL_RUN_CARD_FLAVOR_BY_ID[compositionCardId(card.pieces)]
       ?? ALL_RUN_CARD_FLAVOR_BY_ID[card.artId ?? '']
       ?? 'No account survives.',
   ])),

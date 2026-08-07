@@ -54,12 +54,35 @@ function firstSectio(seed: number): RunDocument {
 }
 
 describe('formation card catalog', () => {
-  it('contains the complete generated core, seven authored exceptions, and the starter', () => {
-    expect(RUN_GENERATED_CARD_COUNT).toBe(714);
+  it('contains the complete generated core, six authored exceptions, and the starter', () => {
+    expect(RUN_GENERATED_CARD_COUNT).toBe(720);
     expect(RUN_CARD_DECK).toHaveLength(RUN_OFFER_CARD_COUNT);
-    expect(RUN_OFFER_CARD_COUNT).toBe(721);
+    expect(RUN_OFFER_CARD_COUNT).toBe(726);
     expect(RUN_CARD_DECK.every((card) => card.pieces.length >= 1 && card.pieces.length <= 4)).toBe(true);
-    expect(RUN_CARD_CATALOG).toHaveLength(722);
+    expect(RUN_CARD_CATALOG).toHaveLength(727);
+  });
+
+  it('includes every connected two-cell Queen and Pawn arrangement', () => {
+    const queenPawnCards = RUN_CARD_DECK.filter((card) => (
+      card.pieces.length === 2
+      && card.pieces.includes('queen')
+      && card.pieces.includes('pawn')
+    ));
+    const signatures = queenPawnCards.map((card) => card.pieces
+      .map((piece, index) => `${piece}@${card.formation![index].x},${card.formation![index].y}`)
+      .sort()
+      .join('|'))
+      .sort();
+    expect(signatures).toEqual([
+      'pawn@0,0|queen@0,1',
+      'pawn@0,0|queen@1,0',
+      'pawn@0,1|queen@1,1',
+      'pawn@0,1|queen@0,0',
+      'pawn@1,0|queen@0,0',
+      'pawn@1,1|queen@0,1',
+    ].sort());
+    expect(queenPawnCards.every((card) => card.rarity === 'rare')).toBe(true);
+    expect(queenPawnCards.every((card) => card.artId === 'q')).toBe(true);
   });
 
   it('gives every card one coordinate per unit and keeps coordinates unique', () => {
@@ -107,7 +130,7 @@ describe('formation card catalog', () => {
     expect(Object.fromEntries(['common', 'uncommon', 'rare'].map((rarity) => [
       rarity,
       RUN_CARD_DECK.filter((card) => card.rarity === rarity).length,
-    ]))).toEqual({ common: 197, uncommon: 415, rare: 109 });
+    ]))).toEqual({ common: 197, uncommon: 415, rare: 114 });
   });
 
   it('keeps His Grace on one protected three-unit starter card', () => {
@@ -332,5 +355,24 @@ describe('ability retirement migration', () => {
     expect(migrated.sectioCardCursor).toBe(0);
     expect(migrated.sectio?.cardOffers).toEqual(current.sectio?.cardOffers);
     expect(migrated.sectio).not.toHaveProperty('kind');
+  });
+
+  it('keeps version-26 visible state while restarting the expanded hidden catalog', () => {
+    const current = firstSectio(79);
+    const legacy = {
+      ...current,
+      runSaveVersion: 26,
+      sectioCardCursor: 117,
+    };
+    const migrated = migrateRunSaveDocument(legacy);
+    expect(migrated).toMatchObject({
+      runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+      phase: current.phase,
+      sectioCardCursor: 0,
+    });
+    expect(migrated.sectio?.cardOffers).toEqual(current.sectio?.cardOffers);
+    expect(migrated.army).toEqual(current.army);
+    expect(migrated.cards).toEqual(current.cards);
+    expect(migrated.deployment).toEqual(current.deployment);
   });
 });
