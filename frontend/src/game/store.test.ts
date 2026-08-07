@@ -1041,7 +1041,7 @@ describe('skirmish store: premoves', () => {
     expect(duringBeat.selectedId).toBe('pr');
   });
 
-  it('accepts a premove queued while the enemy reply is visibly landing', () => {
+  it('accepts a premove drag released while the enemy reply is visibly landing', () => {
     loadBoard([piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 0, 7), piece('ek', 'enemy', 'king', 7, 7)], 'pk');
     useSkirmish.getState().tryMoveTo(1, 7);
 
@@ -1049,7 +1049,7 @@ describe('skirmish store: premoves', () => {
     expect(useSkirmish.getState().game.turn).toBe('player');
     expect(useSkirmish.getState().premoveInputOpen).toBe(true);
 
-    useSkirmish.getState().queueMove('pr', 0, 5);
+    useSkirmish.getState().releaseMoveGesture('pr', 0, 5, true);
     expect(useSkirmish.getState().premoves).toEqual([{ pieceId: 'pr', x: 0, y: 5 }]);
 
     vi.advanceTimersByTime(619);
@@ -1060,6 +1060,26 @@ describe('skirmish store: premoves', () => {
     expect(afterFire.premoveInputOpen).toBe(false);
     expect(afterFire.selectedId).toBeNull();
     expect(afterFire.focusedId).toBeNull();
+  });
+
+  it('reclassifies a premove drag released after the landing beat as a live move', () => {
+    loadBoard([piece('pr', 'player', 'rook', 0, 0), piece('pk', 'player', 'king', 0, 7), piece('ek', 'enemy', 'king', 7, 7)], 'pk');
+    useSkirmish.getState().tryMoveTo(1, 7);
+
+    vi.advanceTimersByTime(520); // pointer-down: reply landed, so the gesture begins as a premove
+    expect(useSkirmish.getState()).toMatchObject({
+      game: { turn: 'player' },
+      premoveInputOpen: true,
+    });
+    vi.advanceTimersByTime(620); // pointer-up happens after ordinary live control resumes
+    expect(useSkirmish.getState().premoveInputOpen).toBe(false);
+
+    useSkirmish.getState().releaseMoveGesture('pr', 0, 5, true);
+
+    expect(useSkirmish.getState().game.pieces.find((candidate) => candidate.id === 'pr'))
+      .toMatchObject({ x: 0, y: 5 });
+    expect(useSkirmish.getState().game.turn).toBe('enemy');
+    expect(useSkirmish.getState().premoves).toEqual([]);
   });
 
   // Promotion premoves carry only the destination. When the step reaches the front of the

@@ -15,6 +15,10 @@ const backendDir = path.resolve(scriptDir, '..');
 const repositoryDir = path.resolve(backendDir, '..');
 const currentSource = fs.readFileSync(path.join(backendDir, 'server.js'), 'utf8');
 const currentMigrations = extractInlineMigrations(currentSource);
+// `server.js` owns the inline migration registry and is intentionally a large monolithic
+// source file. Node's child-process default is only 1 MiB, so reading the base blob through
+// Git must provision enough output capacity for the complete source before comparing it.
+const gitSourceMaxBuffer = Math.max(16 * 1024 * 1024, Buffer.byteLength(currentSource, 'utf8') * 2);
 
 function requestedBaseRef() {
   const explicitArgument = process.argv.find((value) => value.startsWith('--base-ref='));
@@ -31,7 +35,12 @@ try {
   baseSource = execFileSync(
     'git',
     ['show', `${baseRef}:backend/server.js`],
-    { cwd: repositoryDir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] },
+    {
+      cwd: repositoryDir,
+      encoding: 'utf8',
+      maxBuffer: gitSourceMaxBuffer,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
   );
 } catch (error) {
   const detail = String(error.stderr || error.message || '').trim();

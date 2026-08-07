@@ -416,6 +416,10 @@ export interface SkirmishState {
   focus: (id: string | null) => void;
   movesForSelected: () => Move[];
   tryMoveTo: (x: number, y: number) => void;
+  /** Complete a board drag against the input authority that exists at release. A drag
+   *  begun as a premove may cross the landing-beat boundary and become an ordinary
+   *  live move; both paths still perform their canonical fresh legality check. */
+  releaseMoveGesture: (pieceId: string, x: number, y: number, startedAsPremove: boolean) => void;
   choosePromotion: (type: PromotionPieceType) => void;
   /** One Run-only checkpoint before the latest committed player move (ADR-0394). */
   undoCheckpoint: PlayerMoveUndoCheckpoint | null;
@@ -459,6 +463,40 @@ export interface SkirmishState {
   setRunBattleUndoAdapter: (adapter: RunBattleUndoAdapter | null) => void;
   setNetMoveSink: (sink: NetMoveSink | null) => void;
   setNetResignSink: (sink: NetResignSink | null) => void;
+}
+
+export type MoveGestureInputMode = 'move' | 'premove' | null;
+
+/** Resolve one continuous drag against the current input boundary. Only a gesture that
+ *  actually began during premove input may remain a premove; once that boundary closes,
+ *  the same gesture becomes a freshly validated live move. */
+export function moveGestureInputMode({
+  startedAsPremove,
+  adminMode,
+  gameTurn,
+  gameWinner,
+  localSide,
+  netMovePending,
+  pendingPromotion,
+  premoveInputOpen,
+}: {
+  startedAsPremove: boolean;
+  adminMode: AdminBattleMode | null;
+  gameTurn: GameState['turn'];
+  gameWinner: GameState['winner'];
+  localSide: PlayingSide;
+  netMovePending: boolean;
+  pendingPromotion: boolean;
+  premoveInputOpen: boolean;
+}): MoveGestureInputMode {
+  if (gameWinner || pendingPromotion || netMovePending) return null;
+  const premoveMode = !adminMode && (gameTurn !== localSide || premoveInputOpen);
+  if (startedAsPremove && premoveMode) return 'premove';
+  if (premoveMode) return null;
+  const liveMoveOpen = adminMode === 'free-move'
+    ? gameTurn === 'player' || gameTurn === 'enemy'
+    : gameTurn === localSide;
+  return liveMoveOpen ? 'move' : null;
 }
 
 /**
@@ -1682,6 +1720,31 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     // a beat, then the enemy answers — lives in commitPlayerMove, shared with the premove
     // drain so an auto-fired premove is byte-for-byte the same move a click would make.
     commitPlayerMove(p, mv);
+  },
+
+  releaseMoveGesture: (pieceId, x, y, startedAsPremove) => {
+    const s = get();
+    const side = s.net ? s.net.localSide : 'player';
+    const mode = moveGestureInputMode({
+      startedAsPremove,
+      adminMode: s.adminMode,
+      gameTurn: s.game.turn,
+      gameWinner: s.game.winner,
+      localSide: side,
+      netMovePending: Boolean(s.net?.pendingMove),
+      pendingPromotion: Boolean(s.pendingPromotion),
+      premoveInputOpen: s.premoveInputOpen,
+    });
+    if (mode === 'premove') {
+      get().queueMove(pieceId, x, y);
+      return;
+    }
+    if (mode !== 'move') return;
+    // The premove landing beat may have closed while the pointer was down. Re-enter through
+    // the ordinary selected-piece path so the current authoritative position, not the pickup
+    // snapshot, decides whether this destination commits.
+    get().select(pieceId);
+    get().tryMoveTo(x, y);
   },
 
   armAdminMode: (mode) => {
