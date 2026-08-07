@@ -132,6 +132,19 @@ export function playerDeploymentCells(level: Level): Vec[] {
   return playerDeploymentPools(level).all;
 }
 
+/** Translate a settled rigid formation fully beyond the board's right edge. The compositor
+ * projects this board-space vector once and gives it to every member, preserving rows, holes,
+ * and the planner's decreasing-x direction. The deployment band may stop before the board edge,
+ * so it cannot define the spawn boundary: every staged placement must begin at x >= board.cols. */
+export function deploymentFormationEntryDelta(
+  level: Level,
+  placements: readonly Vec[],
+): Vec {
+  if (!placements.length) return { x: 0, y: 0 };
+  const formationMinX = Math.min(...placements.map((cell) => cell.x));
+  return { x: Math.max(0, level.board.cols - formationMinX), y: 0 };
+}
+
 type PlacementChoice = Readonly<{
   cell: Vec | null;
   trace: RunDeploymentTraceEntry;

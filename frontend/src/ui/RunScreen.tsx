@@ -64,6 +64,7 @@ import {
   beginDeploymentDeal,
   completeDeploymentDeal,
   currentDeploymentUnit,
+  deploymentFormationEntryDelta,
   deploymentInteractionStage,
   deploymentOptions,
   finishDeploymentCardDiscard,
@@ -551,6 +552,13 @@ function useRunDeploymentPresentation({
     () => gameForRunDeployment(prepared, level, layout, true),
     [layout, level, prepared],
   );
+  const unitArrivalStartDelta = useMemo(() => {
+    const settlingUnitIds = new Set(prepared.deployment?.settlingUnitIds ?? []);
+    return deploymentFormationEntryDelta(
+      level,
+      deploymentGame.pieces.filter((piece) => settlingUnitIds.has(piece.id)),
+    );
+  }, [deploymentGame.pieces, level, prepared.deployment?.settlingUnitIds]);
   const deploymentSurfaceState = useMemo<SkirmishBoardSurfaceState>(() => ({
     game: deploymentGame,
     seed: prepared.deployment?.seed ?? prepared.seed,
@@ -685,6 +693,7 @@ function useRunDeploymentPresentation({
     boardClassName: 'run-deployment-board',
     boardAriaLabel: `${level.name} deployment battlefield`,
     unitArrivalTrack: 'slide-from-right',
+    unitArrivalStartDelta,
     onArrivingUnitIdsChange: reportArrivals,
     renderCellOverlay: () => null,
     controlsContent: (

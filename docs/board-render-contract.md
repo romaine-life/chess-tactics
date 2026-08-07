@@ -22,6 +22,16 @@ not replay their entrance. The final Adlected arrival completes before phase
 promotion introduces the remaining formation as a separate wave; the compositor's
 own active-id ledger supplies that boundary rather than a screen-owned timer
 ([ADR-0352](adr/0352-final-discipline-arrival-precedes-the-automatic-deployment-wave.md)).
+Run card formations implement [ADR-0493](adr/0493-generated-run-formations-fall-sideways-and-own-rarity.md)
+in board space. The compositor stages the complete new player group just beyond the
+board's right edge, projects the shared positive board-`x` delta through the
+canonical isometric projection, and translates every member toward decreasing `x` with zero stagger.
+It must not replace that physical direction with a screen-horizontal or destination-dependent
+path. The leftmost staged formation cell must be at or beyond `board.cols`, even when the legal
+deployment band ends sooner. At those off-board seats, units reuse ADR-0045's staggered summon:
+each fades in while hovering and drops into contact. The shared slide remains locked until the
+last summon has landed, after which rows, holes, and overhangs remain rigid throughout the slide
+([ADR-0506](adr/0506-run-formations-summon-off-board-before-sliding.md)).
 Per [ADR-0449](adr/0449-deployment-position-rerolls-cost-one-before-battle-and-five-after.md),
 a post-placement reroll returns that same mounted activity to Deployment. Per
 [ADR-0450](adr/0450-live-units-leave-mounted-boards-through-registered-departure-tracks.md),
