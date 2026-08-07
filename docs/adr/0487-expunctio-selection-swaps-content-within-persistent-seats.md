@@ -1,7 +1,9 @@
 ---
-status: accepted
+status: superseded by ADR-0510
 date: 2026-08-05
 deciders: owner (Nelson) + Codex
+superseded_by:
+  - "[ADR-0510](0510-held-cards-are-immutable-formations.md)"
 refines:
   - "[ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md)"
   - "[ADR-0483](0483-expunctio-unit-selection-is-explicit.md)"

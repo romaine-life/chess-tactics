@@ -19,6 +19,7 @@ import {
   CardGalleryFilters,
   ReferenceSectionFrame,
   type CardGoldFilter,
+  type CardRarityFilter,
   type CardUnitFilter,
 } from './Enchiridion';
 import { KitScroll } from './KitScroll';
@@ -55,6 +56,7 @@ export function HeldCardCodex({
 }): ReactElement {
   const [goldFilter, setGoldFilter] = useState<CardGoldFilter>('all');
   const [unitFilter, setUnitFilter] = useState<CardUnitFilter>('all');
+  const [rarityFilter, setRarityFilter] = useState<CardRarityFilter>('all');
   const [thisCombatOnly, setThisCombatOnly] = useState(false);
   const goldTierDividerSource = useRunCardGoldTierDividerSource();
   const all = useMemo(() => heldCards(run), [run]);
@@ -64,10 +66,10 @@ export function HeldCardCodex({
   const dealt = useMemo(() => new Set(run.deployment?.dealtCardIds ?? []), [run.deployment?.dealtCardIds]);
   const visible = useMemo(
     () => all.filter((held) => (
-      cardMatchesFilters(held.core, goldFilter, unitFilter)
+      cardMatchesFilters(held.core, goldFilter, unitFilter, rarityFilter)
       && (!thisCombatOnly || !thisCombatAvailable || dealt.has(held.owned.id))
     )),
-    [all, dealt, goldFilter, thisCombatAvailable, thisCombatOnly, unitFilter],
+    [all, dealt, goldFilter, rarityFilter, thisCombatAvailable, thisCombatOnly, unitFilter],
   );
   const groups = useMemo(() => cardsByGoldValue(visible, (held) => held.core), [visible]);
   return (
@@ -82,8 +84,10 @@ export function HeldCardCodex({
         <CardGalleryFilters
           goldFilter={goldFilter}
           unitFilter={unitFilter}
+          rarityFilter={rarityFilter}
           onGoldFilterChange={setGoldFilter}
           onUnitFilterChange={setUnitFilter}
+          onRarityFilterChange={setRarityFilter}
           count={visible.length}
           testIdPrefix="strategikon-chartulary"
         />
@@ -127,7 +131,7 @@ export function HeldCardCodex({
                 <h3>{all.length ? 'No matching cards' : 'No cards held'}</h3>
                 <p>
                   {all.length
-                    ? 'No held card has both of the selected properties.'
+                    ? 'No held card has all of the selected properties.'
                     : 'No cards are held.'}
                 </p>
               </InnerChromeBox>

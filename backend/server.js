@@ -5246,6 +5246,296 @@ const MIGRATIONS = [
        WHERE body->'runSaveVersion' = '26'::jsonb;
     `,
   },
+  {
+    version: 66,
+    name: 'immutable held formations and retired unit disposal',
+    // ADR-0510: version 28 removes voluntary one-unit disposal. A Sectio that was
+    // already open returns to its entry snapshot so a previously completed Alienatio
+    // cannot leave a card with a newly invented gap. Fair Scales, The Paid Crossing,
+    // and the now-unused gain transaction mark retire as one installed-content graph.
+    sql: `
+      CREATE OR REPLACE FUNCTION pg_temp.run28_is_current_lipsanon(lipsanon_id text)
+      RETURNS boolean
+      LANGUAGE sql
+      IMMUTABLE
+      AS $function$
+        SELECT lipsanon_id = ANY (ARRAY[
+          'congressional-approval', 'royal-tent', 'mercenarys-rifle',
+          'merchants-shopkey', 'occult-dagger', 'deployment-vehicle',
+          'quartermasters-ledger'
+        ]::text[])
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.run28_filter_lipsana(value jsonb)
+      RETURNS jsonb
+      LANGUAGE sql
+      IMMUTABLE
+      AS $function$
+        SELECT COALESCE(jsonb_agg(item ORDER BY first_ordinality), '[]'::jsonb)
+          FROM (
+            SELECT item, min(ordinality) AS first_ordinality
+              FROM jsonb_array_elements(
+                CASE WHEN jsonb_typeof(value) = 'array' THEN value ELSE '[]'::jsonb END
+              ) WITH ORDINALITY AS entries(item, ordinality)
+             WHERE jsonb_typeof(item) = 'string'
+               AND pg_temp.run28_is_current_lipsanon(item #>> '{}')
+             GROUP BY item
+          ) current_lipsana
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.run28_filter_paid_lipsana(value jsonb)
+      RETURNS jsonb
+      LANGUAGE sql
+      IMMUTABLE
+      AS $function$
+        SELECT COALESCE(jsonb_object_agg(entry.key, entry.value), '{}'::jsonb)
+          FROM jsonb_each(
+            CASE WHEN jsonb_typeof(value) = 'object' THEN value ELSE '{}'::jsonb END
+          ) entry
+         WHERE jsonb_typeof(entry.value) = 'object'
+           AND pg_temp.run28_is_current_lipsanon(entry.value->>'lipsanonId')
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.run28_refill_offers(value jsonb, held_value jsonb)
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      IMMUTABLE
+      AS $function$
+      DECLARE
+        offers text[] := ARRAY[]::text[];
+        held text[] := ARRAY[]::text[];
+        item jsonb;
+        candidate text;
+      BEGIN
+        SELECT COALESCE(array_agg(item #>> '{}'), ARRAY[]::text[])
+          INTO held
+          FROM jsonb_array_elements(pg_temp.run28_filter_lipsana(held_value)) AS entries(item);
+        FOR item IN SELECT offered FROM jsonb_array_elements(
+          CASE WHEN jsonb_typeof(value) = 'array' THEN value ELSE '[]'::jsonb END
+        ) AS entries(offered) LOOP
+          candidate := item #>> '{}';
+          IF pg_temp.run28_is_current_lipsanon(candidate)
+             AND NOT (candidate = ANY(offers))
+             AND NOT (candidate = ANY(held)) THEN
+            offers := array_append(offers, candidate);
+          END IF;
+          EXIT WHEN cardinality(offers) >= 3;
+        END LOOP;
+        FOREACH candidate IN ARRAY ARRAY[
+          'congressional-approval', 'royal-tent', 'mercenarys-rifle',
+          'merchants-shopkey', 'occult-dagger', 'deployment-vehicle',
+          'quartermasters-ledger'
+        ]::text[] LOOP
+          EXIT WHEN cardinality(offers) >= 3;
+          IF NOT (candidate = ANY(offers)) AND NOT (candidate = ANY(held)) THEN
+            offers := array_append(offers, candidate);
+          END IF;
+        END LOOP;
+        IF cardinality(offers) = 0 THEN offers := ARRAY['congressional-approval']::text[]; END IF;
+        RETURN to_jsonb(offers);
+      END
+      $function$;
+
+      CREATE OR REPLACE FUNCTION pg_temp.migrate_active_run_v27_to_v28(run_value jsonb)
+      RETURNS jsonb
+      LANGUAGE plpgsql
+      AS $function$
+      DECLARE
+        migrated jsonb := run_value;
+        sectio_value jsonb := run_value->'sectio';
+        snapshot jsonb;
+        lipsana_value jsonb;
+        seen_value jsonb;
+        paid_map jsonb;
+        paid_offer text;
+        paid_bought boolean := false;
+        conflict_key text;
+        vacantia_value jsonb;
+        offers jsonb;
+      BEGIN
+        IF run_value->'runSaveVersion' <> '27'::jsonb THEN RETURN run_value; END IF;
+        IF run_value->>'phase' = 'sectio'
+           AND jsonb_typeof(sectio_value) = 'object'
+           AND jsonb_typeof(sectio_value->'entrySnapshot') = 'object' THEN
+          snapshot := sectio_value->'entrySnapshot';
+        ELSE
+          snapshot := run_value;
+        END IF;
+
+        lipsana_value := pg_temp.run28_filter_lipsana(snapshot->'lipsana');
+        seen_value := pg_temp.run28_filter_lipsana(snapshot->'seenLipsana');
+        paid_map := pg_temp.run28_filter_paid_lipsana(snapshot->'conflictPaidLipsana');
+
+        migrated := migrated || jsonb_build_object(
+          'runSaveVersion', 28,
+          'lipsana', lipsana_value,
+          'seenLipsana', seen_value,
+          'conflictPaidLipsana', paid_map
+        );
+        IF jsonb_typeof(migrated->'battleRuntime') = 'object' THEN
+          migrated := jsonb_set(
+            migrated,
+            '{battleRuntime}',
+            (migrated->'battleRuntime') - 'cashedOutUnitIds',
+            false
+          );
+        END IF;
+
+        IF run_value->>'phase' = 'bona-vacantia'
+           AND jsonb_typeof(run_value->'vacantia') = 'object' THEN
+          vacantia_value := run_value->'vacantia';
+          offers := pg_temp.run28_refill_offers(vacantia_value->'offers', lipsana_value);
+          vacantia_value := jsonb_set(vacantia_value, '{offers}', offers, true);
+          seen_value := pg_temp.run28_filter_lipsana(seen_value || offers);
+          migrated := jsonb_set(migrated, '{vacantia}', vacantia_value, false);
+          migrated := jsonb_set(migrated, '{seenLipsana}', seen_value, false);
+        END IF;
+
+        IF run_value->>'phase' = 'sectio' AND snapshot IS DISTINCT FROM run_value THEN
+          migrated := migrated || jsonb_build_object(
+            'goldTenths', snapshot->'goldTenths',
+            'army', snapshot->'army',
+            'cards', snapshot->'cards',
+            'nextArmyUnitSequence', snapshot->'nextArmyUnitSequence',
+            'nextArmyUnitNumberByType', snapshot->'nextArmyUnitNumberByType',
+            'nextCardSequence', snapshot->'nextCardSequence'
+          );
+          paid_offer := CASE
+            WHEN pg_temp.run28_is_current_lipsanon(sectio_value->>'paidLipsanonOffer')
+              THEN sectio_value->>'paidLipsanonOffer'
+            ELSE NULL
+          END;
+          paid_bought := paid_offer IS NOT NULL
+            AND COALESCE((snapshot->>'paidLipsanonBought')::boolean, false);
+          conflict_key := COALESCE(sectio_value->>'conflictIndex', '0');
+          IF paid_offer IS NULL THEN
+            paid_map := paid_map - conflict_key;
+          ELSE
+            paid_map := jsonb_set(
+              paid_map,
+              ARRAY[conflict_key],
+              jsonb_build_object('lipsanonId', paid_offer, 'bought', paid_bought),
+              true
+            );
+            seen_value := pg_temp.run28_filter_lipsana(seen_value || jsonb_build_array(paid_offer));
+          END IF;
+          sectio_value := (sectio_value - 'alienatedUnits') || jsonb_build_object(
+            'adlectedCardOfferIds', '[]'::jsonb,
+            'paidLipsanonOffer', to_jsonb(paid_offer),
+            'paidLipsanonBought', paid_bought,
+            'expunctedCard', 'null'::jsonb,
+            'entrySnapshot', snapshot || jsonb_build_object(
+              'lipsana', lipsana_value,
+              'seenLipsana', seen_value,
+              'conflictPaidLipsana', paid_map,
+              'paidLipsanonBought', paid_bought
+            )
+          );
+          migrated := migrated || jsonb_build_object(
+            'sectio', sectio_value,
+            'lipsana', lipsana_value,
+            'seenLipsana', seen_value,
+            'conflictPaidLipsana', paid_map
+          );
+        ELSIF jsonb_typeof(sectio_value) = 'object' THEN
+          migrated := jsonb_set(migrated, '{sectio}', sectio_value - 'alienatedUnits', false);
+        END IF;
+        RETURN migrated;
+      END
+      $function$;
+
+      UPDATE active_runs
+         SET body = pg_temp.migrate_active_run_v27_to_v28(body),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE body->'runSaveVersion' = '27'::jsonb;
+
+      WITH target_assets(id) AS (
+        VALUES
+          ('run-lipsanon-mercenary-boat'::text),
+          ('run-lipsanon-fair-scales'::text),
+          ('run-gold-transaction-gain'::text)
+      ), removed_media AS (
+        DELETE FROM drawable_asset_media media
+         USING target_assets target
+         WHERE media.asset_id = target.id
+        RETURNING media.asset_id
+      ), retired_assets AS (
+        UPDATE drawable_assets asset
+           SET lifecycle_state = 'retired',
+               row_revision = row_revision + 1,
+               updated_at = now(),
+               updated_by = 'migration-66'
+          FROM target_assets target
+         WHERE asset.id = target.id
+           AND asset.lifecycle_state <> 'retired'
+        RETURNING asset.id
+      )
+      UPDATE drawable_catalog_state
+         SET revision = revision + 1,
+             updated_at = now()
+       WHERE singleton = true
+         AND (EXISTS (SELECT 1 FROM removed_media) OR EXISTS (SELECT 1 FROM retired_assets));
+
+      WITH target_slots(slot) AS (
+        VALUES
+          ('ui/run/lipsana/mercenary-boat.png'::text),
+          ('ui/run/lipsana/fair-scales.png'::text),
+          ('ui/run/resources/gain-gold.png'::text)
+      ), current_slots AS (
+        SELECT slot.slot, slot.active_version_id
+          FROM media_slots slot
+          JOIN target_slots target ON target.slot = slot.slot
+         WHERE slot.lifecycle_state <> 'retired'
+      ), archived_versions AS (
+        UPDATE media_versions version
+           SET status = 'archived',
+               row_revision = row_revision + 1,
+               updated_at = now(),
+               updated_by = 'migration-66'
+          FROM current_slots current
+         WHERE version.id = current.active_version_id
+           AND version.status <> 'archived'
+        RETURNING version.id
+      ), retired_slots AS (
+        UPDATE media_slots slot
+           SET active_version_id = NULL,
+               lifecycle_state = 'retired',
+               retired_at = now(),
+               retirement_evidence = jsonb_build_object(
+                 'reason', 'Individual-unit disposal retired by ADR-0510',
+                 'evidence', jsonb_build_object('decision', 'ADR-0510'),
+                 'retiredBy', 'migration-66',
+                 'retiredAt', now(),
+                 'previousVersionId', current.active_version_id
+               ),
+               row_revision = row_revision + 1,
+               updated_at = now(),
+               updated_by = 'migration-66'
+          FROM current_slots current
+         WHERE slot.slot = current.slot
+        RETURNING slot.slot, current.active_version_id
+      ), retirement_events AS (
+        INSERT INTO media_asset_events (
+          slot, source_path, version_id, action, actor_email, details
+        )
+        SELECT retired.slot, NULL, retired.active_version_id,
+               'slot-retired', 'migration-66',
+               jsonb_build_object(
+                 'reason', 'Individual-unit disposal retired by ADR-0510',
+                 'decision', 'ADR-0510',
+                 'previousVersionId', retired.active_version_id
+               )
+          FROM retired_slots retired
+        RETURNING id
+      )
+      UPDATE media_catalog_state
+         SET revision = revision + 1,
+             updated_at = now()
+       WHERE singleton = true
+         AND EXISTS (SELECT 1 FROM retired_slots);
+    `,
+  },
 ];
 
 let pool = null;
@@ -5861,7 +6151,10 @@ async function unmigratedActiveRunSaveCounts(client) {
        )::integer AS version_25_count,
        count(*) FILTER (
          WHERE body->'runSaveVersion' = '26'::jsonb
-       )::integer AS version_26_count
+       )::integer AS version_26_count,
+       count(*) FILTER (
+         WHERE body->'runSaveVersion' = '27'::jsonb
+       )::integer AS version_27_count
        FROM active_runs`,
   );
   return Object.freeze({
@@ -5876,6 +6169,7 @@ async function unmigratedActiveRunSaveCounts(client) {
     version_24_count: Number(rows[0]?.version_24_count) || 0,
     version_25_count: Number(rows[0]?.version_25_count) || 0,
     version_26_count: Number(rows[0]?.version_26_count) || 0,
+    version_27_count: Number(rows[0]?.version_27_count) || 0,
   });
 }
 
@@ -5942,6 +6236,37 @@ async function primogenitureRetirementContractRows(client) {
   });
 }
 
+async function unitDisposalRetirementContractRows(client) {
+  const { rows } = await client.query(
+    `WITH target_slots(slot) AS (
+       VALUES
+         ('ui/run/lipsana/mercenary-boat.png'::text),
+         ('ui/run/lipsana/fair-scales.png'::text),
+         ('ui/run/resources/gain-gold.png'::text)
+     ), target_assets(id) AS (
+       VALUES
+         ('run-lipsanon-mercenary-boat'::text),
+         ('run-lipsanon-fair-scales'::text),
+         ('run-gold-transaction-gain'::text)
+     )
+     SELECT
+       (SELECT count(*)::integer
+          FROM media_slots slot JOIN target_slots target ON target.slot = slot.slot
+         WHERE slot.lifecycle_state <> 'retired') AS non_retired_slot_count,
+       (SELECT count(*)::integer
+          FROM drawable_assets asset JOIN target_assets target ON target.id = asset.id
+         WHERE asset.lifecycle_state <> 'retired') AS non_retired_asset_count,
+       (SELECT count(*)::integer
+          FROM drawable_asset_media media JOIN target_assets target ON target.id = media.asset_id)
+         AS drawable_binding_count`,
+  );
+  return Object.freeze({
+    non_retired_slot_count: Number(rows[0]?.non_retired_slot_count) || 0,
+    non_retired_asset_count: Number(rows[0]?.non_retired_asset_count) || 0,
+    drawable_binding_count: Number(rows[0]?.drawable_binding_count) || 0,
+  });
+}
+
 async function requiredSchemaContractIssues(client) {
   const missingReasons = await missingRequiredSchemaRevisionReasons(client);
   const constraints = await workingCopyRevisionReasonConstraintRows(client);
@@ -5952,6 +6277,7 @@ async function requiredSchemaContractIssues(client) {
   const unmigratedLevelDocuments = await unmigratedLevelDocumentCount(client);
   const unrepairedSavedEditorBaselines = await unrepairedSavedEditorBaselineCount(client);
   const primogenitureRetirement = await primogenitureRetirementContractRows(client);
+  const unitDisposalRetirement = await unitDisposalRetirementContractRows(client);
   const migrationIdentityIssues = schemaMigrationIdentityBoundaryIssues(
     migrationIdentityRows.columns,
     migrationIdentityRows.constraints,
@@ -6004,7 +6330,8 @@ async function requiredSchemaContractIssues(client) {
       + unmigratedActiveRunSaves.version_23_count
       + unmigratedActiveRunSaves.version_24_count
       + unmigratedActiveRunSaves.version_25_count
-      + unmigratedActiveRunSaves.version_26_count,
+      + unmigratedActiveRunSaves.version_26_count
+      + unmigratedActiveRunSaves.version_27_count,
     unmigrated_active_run_version_16_count: unmigratedActiveRunSaves.version_16_count,
     unmigrated_active_run_version_17_count: unmigratedActiveRunSaves.version_17_count,
     unmigrated_active_run_version_18_count: unmigratedActiveRunSaves.version_18_count,
@@ -6016,11 +6343,15 @@ async function requiredSchemaContractIssues(client) {
     unmigrated_active_run_version_24_count: unmigratedActiveRunSaves.version_24_count,
     unmigrated_active_run_version_25_count: unmigratedActiveRunSaves.version_25_count,
     unmigrated_active_run_version_26_count: unmigratedActiveRunSaves.version_26_count,
+    unmigrated_active_run_version_27_count: unmigratedActiveRunSaves.version_27_count,
     unmigrated_level_format_1_count: unmigratedLevelDocuments,
     unrepaired_saved_editor_baseline_count: unrepairedSavedEditorBaselines,
     primogeniture_non_retired_slot_count: primogenitureRetirement.non_retired_slot_count,
     primogeniture_drawable_binding_count: primogenitureRetirement.drawable_binding_count,
     primogeniture_required_role_count: primogenitureRetirement.required_role_count,
+    unit_disposal_non_retired_slot_count: unitDisposalRetirement.non_retired_slot_count,
+    unit_disposal_non_retired_asset_count: unitDisposalRetirement.non_retired_asset_count,
+    unit_disposal_drawable_binding_count: unitDisposalRetirement.drawable_binding_count,
     ...generationAttemptRetryContractIssues(
       retryContractRows.columns,
       retryContractRows.constraints,
@@ -6038,6 +6369,14 @@ function primogenitureRetirementContractIssuesPresent(issues) {
     issues.primogeniture_non_retired_slot_count > 0
     || issues.primogeniture_drawable_binding_count > 0
     || issues.primogeniture_required_role_count > 0
+  );
+}
+
+function unitDisposalRetirementContractIssuesPresent(issues) {
+  return (
+    issues.unit_disposal_non_retired_slot_count > 0
+    || issues.unit_disposal_non_retired_asset_count > 0
+    || issues.unit_disposal_drawable_binding_count > 0
   );
 }
 
@@ -6060,6 +6399,7 @@ function schemaContractIssuesPresent(issues) {
     || issues.unmigrated_level_format_1_count > 0
     || issues.unrepaired_saved_editor_baseline_count > 0
     || primogenitureRetirementContractIssuesPresent(issues)
+    || unitDisposalRetirementContractIssuesPresent(issues)
   );
 }
 
@@ -6221,6 +6561,17 @@ async function repairRequiredSchemaContracts(
     markInspection(`inspect required contract repairs after migration ${migration.version}`);
     issues = await requiredSchemaContractIssues(client);
   }
+  if (issues.unmigrated_active_run_version_27_count > 0) {
+    const migration = MIGRATIONS.find((candidate) => candidate.version === 66);
+    if (!migration) throw new Error('immutable held formations active Run repair migration is unavailable');
+    await executeMigration(migration, 'repair immutable held formations contract');
+    completedSteps.push(Object.freeze({
+      contract: 'immutable held formations Run save version',
+      migration_version: migration.version,
+    }));
+    markInspection(`inspect required contract repairs after migration ${migration.version}`);
+    issues = await requiredSchemaContractIssues(client);
+  }
   if (issues.unrepaired_saved_editor_baseline_count > 0) {
     const migration = MIGRATIONS.find((candidate) => candidate.version === 62);
     if (!migration) throw new Error('retained saved editor baseline evidence repair migration is unavailable');
@@ -6238,6 +6589,17 @@ async function repairRequiredSchemaContracts(
     await executeMigration(migration, 'repair complete Primogeniture retirement contract');
     completedSteps.push(Object.freeze({
       contract: 'complete Primogeniture installed-content retirement',
+      migration_version: migration.version,
+    }));
+    markInspection(`inspect required contract repairs after migration ${migration.version}`);
+    issues = await requiredSchemaContractIssues(client);
+  }
+  if (unitDisposalRetirementContractIssuesPresent(issues)) {
+    const migration = MIGRATIONS.find((candidate) => candidate.version === 66);
+    if (!migration) throw new Error('individual-unit disposal retirement repair migration is unavailable');
+    await executeMigration(migration, 'repair individual-unit disposal installed-content retirement');
+    completedSteps.push(Object.freeze({
+      contract: 'individual-unit disposal installed-content retirement',
       migration_version: migration.version,
     }));
     markInspection(`inspect required contract repairs after migration ${migration.version}`);
@@ -21493,7 +21855,6 @@ const ACTIVE_RUN_SECTIO_FIELDS = new Set([
   'adlectedCardOfferIds',
   'paidLipsanonOffer',
   'paidLipsanonBought',
-  'alienatedUnits',
   'expunctedCard',
   'entrySnapshot',
 ]);
@@ -22001,7 +22362,6 @@ function validateActiveRunBody(run) {
     if (run.sectio.kind !== 'opening' && run.sectio.kind !== 'post-battle') {
       return 'run.sectio.kind is invalid';
     }
-    if (run.sectio.alienatedUnits !== undefined && !Array.isArray(run.sectio.alienatedUnits)) return 'run.sectio.alienatedUnits is invalid';
     if (!Object.hasOwn(run.sectio, 'expunctedCard')) return 'run.sectio.expunctedCard is required';
     if (run.sectio.expunctedCard !== null && !isObjectRecord(run.sectio.expunctedCard)) {
       return 'run.sectio.expunctedCard is invalid';
@@ -22009,14 +22369,6 @@ function validateActiveRunBody(run) {
     if (run.sectio.entrySnapshot !== undefined && !isObjectRecord(run.sectio.entrySnapshot)) {
       return 'run.sectio.entrySnapshot is invalid';
     }
-    if (
-      Array.isArray(run.sectio.alienatedUnits)
-      && run.sectio.alienatedUnits.some((alienated) => (
-        !isObjectRecord(alienated)
-        || !isObjectRecord(alienated.unit)
-        || !ACTIVE_RUN_UNIT_SOURCES.has(alienated.unit.source)
-      ))
-    ) return 'run.sectio.alienatedUnits contains an invalid unit source';
     if (
       Array.isArray(run.sectio.entrySnapshot?.army)
       && run.sectio.entrySnapshot.army.some((unit) => (
@@ -22511,10 +22863,6 @@ function validateFormationRunBody(run) {
       || new Set(sectio.adlectedCardOfferIds).size !== sectio.adlectedCardOfferIds.length
       || sectio.adlectedCardOfferIds.some((id) => !offerIds.has(id))) return 'run.sectio.adlectedCardOfferIds is invalid';
     if (formationRunSnapshotIssue(sectio.entrySnapshot, run.war.battles.length)) return 'run.sectio.entrySnapshot is invalid';
-    if (!Array.isArray(sectio.alienatedUnits) || sectio.alienatedUnits.some((record) => (
-      !isObjectRecord(record) || formationRunUnitIssue(record.unit)
-      || !isFiniteInteger(record.proceedsTenths) || record.proceedsTenths < 0
-    ))) return 'run.sectio.alienatedUnits is invalid';
     if (sectio.expunctedCard !== null) {
       const record = sectio.expunctedCard;
       if (!isObjectRecord(record) || formationRunOwnedCardIssue(record.card, run.war.battles.length)

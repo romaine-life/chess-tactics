@@ -1,7 +1,9 @@
 ---
-status: accepted
+status: superseded by ADR-0510
 date: 2026-08-05
 deciders: owner (Nelson) + Codex
+superseded_by:
+  - "[ADR-0510](0510-held-cards-are-immutable-formations.md)"
 partially_supersedes:
   - "[ADR-0483](0483-expunctio-unit-selection-is-explicit.md)'s magenta-edge and dark-violet-glow palette"
 refines:

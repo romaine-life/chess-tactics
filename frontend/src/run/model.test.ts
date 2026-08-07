@@ -274,11 +274,10 @@ describe('derived Sectio card pile', () => {
 });
 
 describe('ability retirement migration', () => {
-  it('exposes only the nine economy and run-flow relics', () => {
+  it('exposes only the seven economy and run-flow lipsana', () => {
     expect(RUN_LIPSANA.map((item) => item.id)).toEqual([
       'congressional-approval', 'royal-tent', 'mercenarys-rifle', 'merchants-shopkey',
-      'occult-dagger', 'deployment-vehicle', 'mercenary-boat', 'quartermasters-ledger',
-      'fair-scales',
+      'occult-dagger', 'deployment-vehicle', 'quartermasters-ledger',
     ]);
   });
 
@@ -374,5 +373,55 @@ describe('ability retirement migration', () => {
     expect(migrated.army).toEqual(current.army);
     expect(migrated.cards).toEqual(current.cards);
     expect(migrated.deployment).toEqual(current.deployment);
+  });
+
+  it('rewinds a version-27 Sectio and removes every individual-disposal trace', () => {
+    const current = firstSectio(83);
+    const removedUnit = current.army.find((unit) => unit.type !== 'king')!;
+    const legacySnapshot = {
+      ...current.sectio!.entrySnapshot,
+      lipsana: ['royal-tent', 'fair-scales'],
+      seenLipsana: ['royal-tent', 'fair-scales', 'mercenary-boat'],
+      conflictPaidLipsana: { 0: { lipsanonId: 'fair-scales', bought: false } },
+    };
+    const legacy = {
+      ...current,
+      runSaveVersion: 27,
+      goldTenths: current.goldTenths + 5,
+      army: current.army.filter((unit) => unit.id !== removedUnit.id),
+      cards: current.cards.map((card) => ({
+        ...card,
+        unitSeats: card.unitSeats.map((id) => id === removedUnit.id ? null : id),
+      })),
+      lipsana: ['royal-tent', 'fair-scales'],
+      seenLipsana: ['royal-tent', 'fair-scales', 'mercenary-boat'],
+      conflictPaidLipsana: { 0: { lipsanonId: 'fair-scales', bought: false } },
+      sectio: {
+        ...current.sectio!,
+        adlectedCardOfferIds: [current.sectio!.cardOffers[0].offerId],
+        paidLipsanonOffer: 'fair-scales',
+        paidLipsanonBought: false,
+        alienatedUnits: [{ unit: removedUnit, proceedsTenths: 5 }],
+        expunctedCard: { stale: true },
+        entrySnapshot: legacySnapshot,
+      },
+    };
+
+    const migrated = migrateRunSaveDocument(legacy);
+
+    expect(migrated.runSaveVersion).toBe(CURRENT_RUN_SAVE_VERSION);
+    expect(migrated.goldTenths).toBe(legacySnapshot.goldTenths);
+    expect(migrated.army).toEqual(legacySnapshot.army);
+    expect(migrated.cards).toEqual(legacySnapshot.cards);
+    expect(migrated.lipsana).toEqual(['royal-tent']);
+    expect(migrated.seenLipsana).toEqual(['royal-tent']);
+    expect(migrated.conflictPaidLipsana).toEqual({});
+    expect(migrated.sectio).toMatchObject({
+      adlectedCardOfferIds: [],
+      paidLipsanonOffer: null,
+      paidLipsanonBought: false,
+      expunctedCard: null,
+    });
+    expect(migrated.sectio).not.toHaveProperty('alienatedUnits');
   });
 });

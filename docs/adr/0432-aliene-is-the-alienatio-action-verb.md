@@ -1,5 +1,5 @@
 ---
-status: accepted
+status: superseded by ADR-0510
 date: 2026-08-04
 deciders: owner (Nelson) + Codex
 partially_supersedes:
@@ -7,6 +7,7 @@ partially_supersedes:
 partially_superseded_by:
   - "[ADR-0443](0443-athetize-is-the-card-action-within-expunctio.md)'s replacement of the Expunct card-action command"
   - "[ADR-0482](0482-expunctio-owns-card-aware-alienatio.md)'s retirement of the standalone Alienatio destination and presentation family"
+  - "[ADR-0510](0510-held-cards-are-immutable-formations.md)"
 refines:
   - "[ADR-0374](0374-legatine-and-eutactic-retire-the-last-plain-run-vocabulary.md)"
   - "[ADR-0392](0392-sectio-is-the-run-disposal-and-acquisition-phase.md)"

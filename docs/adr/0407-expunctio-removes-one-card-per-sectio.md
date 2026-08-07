@@ -2,6 +2,8 @@
 status: accepted
 date: 2026-08-04
 deciders: owner (Nelson) + Codex
+partially_superseded_by:
+  - "[ADR-0510](0510-held-cards-are-immutable-formations.md)'s retirement of individual-unit disposal and discounted Expunctio fees"
 partially_supersedes:
   - "[ADR-0393](0393-adlectio-and-alienatio-are-the-movements-within-sectio.md)'s two-movement inventory"
 refines:

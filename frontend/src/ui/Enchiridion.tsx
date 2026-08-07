@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type ButtonHTMLAttributes, type ReactElement, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ButtonHTMLAttributes, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { legalMoves } from '../core/rules';
 import { createBlankLevel } from '../core/level';
 import { levelToEditorBoard, unitsForGamePieces } from '../core/levelBoard';
@@ -17,6 +17,7 @@ import {
   type AtaraxiaTier,
   type RunArmyPieceType,
   type RunCardDefinition,
+  type RunCardRarity,
   type LipsanonId,
 } from '../run/model';
 import {
@@ -59,6 +60,7 @@ import {
 import { RUN_PROGRESS_MEDIA_ROLE } from './shared/RunProgressIcon';
 import { KitScroll } from './KitScroll';
 import { EnchiridionContentSceneSlot } from './shell/AuthoredSceneSlot';
+import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
 
 /**
  * Every section's mark, resolved to installed media. These are the same kit icons the
@@ -493,6 +495,7 @@ export function LipsanaCodex({
 
 export type CardGoldFilter = 'all' | '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9';
 export type CardUnitFilter = 'all' | RunArmyPieceType;
+export type CardRarityFilter = 'all' | RunCardRarity;
 
 const CARD_GOLD_FILTER_OPTIONS: readonly HouseSelectOption<CardGoldFilter>[] = Object.freeze([
   { value: 'all', label: 'All' },
@@ -518,13 +521,22 @@ const CARD_UNIT_FILTER_OPTIONS: readonly HouseSelectOption<CardUnitFilter>[] = O
   })),
 ]);
 
+const CARD_RARITY_FILTER_OPTIONS: readonly HouseSelectOption<CardRarityFilter>[] = Object.freeze([
+  { value: 'all', label: 'All rarities' },
+  { value: 'common', label: 'Common' },
+  { value: 'uncommon', label: 'Uncommon' },
+  { value: 'rare', label: 'Rare' },
+]);
+
 export function cardMatchesFilters(
   card: RunCardDefinition,
   goldFilter: CardGoldFilter,
   unitFilter: CardUnitFilter,
+  rarityFilter: CardRarityFilter,
 ): boolean {
   return (goldFilter === 'all' || card.value === Number(goldFilter))
-    && (unitFilter === 'all' || card.pieces.some((piece) => piece === unitFilter));
+    && (unitFilter === 'all' || card.pieces.some((piece) => piece === unitFilter))
+    && (rarityFilter === 'all' || card.rarity === rarityFilter);
 }
 
 // The card gallery's filter row, shared by the whole-catalog reference and the Run's held
@@ -533,21 +545,28 @@ export function cardMatchesFilters(
 export function CardGalleryFilters({
   goldFilter,
   unitFilter,
+  rarityFilter,
   onGoldFilterChange,
   onUnitFilterChange,
+  onRarityFilterChange,
   count,
   testIdPrefix,
 }: {
   goldFilter: CardGoldFilter;
   unitFilter: CardUnitFilter;
+  rarityFilter: CardRarityFilter;
   onGoldFilterChange: (filter: CardGoldFilter) => void;
   onUnitFilterChange: (filter: CardUnitFilter) => void;
+  onRarityFilterChange: (filter: CardRarityFilter) => void;
   count: number;
   testIdPrefix: string;
 }): ReactElement {
   return (
-    <InnerChromeBox className="enchiridion-card-filters" aria-label="Card filters">
-      <div className="enchiridion-card-filter">
+    <InnerChromeBox className="enchiridion-card-filters" fillRole="outer" aria-label="Card filters">
+      <div
+        className="enchiridion-card-filter"
+        style={{ ['--enchiridion-card-filter-index' as string]: 0 } as CSSProperties}
+      >
         <span>Gold</span>
         <HouseSelect
           value={goldFilter}
@@ -555,9 +574,13 @@ export function CardGalleryFilters({
           onChange={onGoldFilterChange}
           ariaLabel="Filter cards by gold value"
           testId={`${testIdPrefix}-gold-filter`}
+          fillSurface={CHROME_LEAF_FILL_SURFACE}
         />
       </div>
-      <div className="enchiridion-card-filter">
+      <div
+        className="enchiridion-card-filter"
+        style={{ ['--enchiridion-card-filter-index' as string]: 1 } as CSSProperties}
+      >
         <span>Contains</span>
         <HouseSelect
           value={unitFilter}
@@ -565,6 +588,21 @@ export function CardGalleryFilters({
           onChange={onUnitFilterChange}
           ariaLabel="Filter cards by contained unit type"
           testId={`${testIdPrefix}-unit-filter`}
+          fillSurface={CHROME_LEAF_FILL_SURFACE}
+        />
+      </div>
+      <div
+        className="enchiridion-card-filter"
+        style={{ ['--enchiridion-card-filter-index' as string]: 2 } as CSSProperties}
+      >
+        <span>Rarity</span>
+        <HouseSelect
+          value={rarityFilter}
+          options={CARD_RARITY_FILTER_OPTIONS}
+          onChange={onRarityFilterChange}
+          ariaLabel="Filter cards by rarity"
+          testId={`${testIdPrefix}-rarity-filter`}
+          fillSurface={CHROME_LEAF_FILL_SURFACE}
         />
       </div>
       <span className="enchiridion-card-filter-count" aria-live="polite">
@@ -606,11 +644,12 @@ export function CardCodex({
   const [goldFilter, setGoldFilter] = useState<CardGoldFilter>('all');
   const [unitFilter, setUnitFilter] = useState<CardUnitFilter>('all');
   const goldTierDividerSource = useRunCardGoldTierDividerSource();
+  const [rarityFilter, setRarityFilter] = useState<CardRarityFilter>('all');
   const focusedCardId = cardHref ? selectedCardId : localSelectedId;
   const galleryRef = useRef<HTMLDivElement | null>(null);
   const visibleCards = useMemo(
-    () => RUN_CARD_CATALOG.filter((card) => cardMatchesFilters(card, goldFilter, unitFilter)),
-    [goldFilter, unitFilter],
+    () => RUN_CARD_CATALOG.filter((card) => cardMatchesFilters(card, goldFilter, unitFilter, rarityFilter)),
+    [goldFilter, rarityFilter, unitFilter],
   );
   const groups = useMemo(() => cardsByGoldValue(visibleCards, (card) => card), [visibleCards]);
   useEffect(() => {
@@ -632,8 +671,10 @@ export function CardCodex({
         <CardGalleryFilters
           goldFilter={goldFilter}
           unitFilter={unitFilter}
+          rarityFilter={rarityFilter}
           onGoldFilterChange={setGoldFilter}
           onUnitFilterChange={setUnitFilter}
+          onRarityFilterChange={setRarityFilter}
           count={visibleCards.length}
           testIdPrefix="enchiridion-card"
         />
@@ -674,7 +715,7 @@ export function CardCodex({
             {!groups.length ? (
               <InnerChromeBox className="enchiridion-empty">
                 <h3>No matching cards</h3>
-                <p>No card has both of the selected properties.</p>
+                <p>No card has all of the selected properties.</p>
               </InnerChromeBox>
             ) : null}
           </div>

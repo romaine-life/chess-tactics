@@ -4,6 +4,7 @@ date: 2026-08-02
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
   - "[ADR-0373](0373-a-card-is-addressed-by-the-name-on-its-banner.md)'s name-slug card address and removal of the addressed-card marking"
+  - "[ADR-0509](0509-enchiridion-cards-filters-rarity-on-structural-teal.md)'s addition of Rarity to the pinned filter inventory"
 partially_supersedes:
   - "[ADR-0262](0262-bundle-cards-are-scene-vignettes-with-authored-names-and-a-codex.md)'s Enchiridion selected-record presentation"
 refines:

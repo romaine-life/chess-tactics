@@ -1,9 +1,10 @@
 ---
-status: accepted
+status: superseded by ADR-0510
 date: 2026-08-05
 deciders: owner (Nelson) + Codex
 partially_superseded_by:
   - "[ADR-0483](0483-expunctio-unit-selection-is-explicit.md)'s neutral initial state, direct figure selection, and stationary high-contrast mark"
+  - "[ADR-0510](0510-held-cards-are-immutable-formations.md)"
 partially_supersedes:
   - "[ADR-0230](0230-run-shops-separate-buying-army-inspection-and-selling.md)'s separate Sell Units destination"
   - "[ADR-0393](0393-adlectio-and-alienatio-are-the-movements-within-sectio.md)'s Alienatio destination, route, scene, workspace, filters, DOM/CSS family, and review-screen identity"

@@ -54,7 +54,8 @@ describe('formation Run craft parsing', () => {
   });
 
   it('accepts only active relic ids', () => {
-    expect(parseRunCraftSpec('?craft=battle&lipsana=fair-scales')?.lipsana).toEqual(['fair-scales']);
+    expect(parseRunCraftSpec('?craft=battle&lipsana=royal-tent')?.lipsana).toEqual(['royal-tent']);
+    expect(() => parseRunCraftSpec('?craft=battle&lipsana=fair-scales')).toThrow(/not an active lipsanon/i);
     expect(() => parseRunCraftSpec('?craft=battle&lipsana=conscription-notice')).toThrow(/not an active lipsanon/i);
   });
 
@@ -76,7 +77,7 @@ describe('formation Run craft parsing', () => {
       gold: 6,
       cards: ['ppb-protected'],
       add: ['rook'],
-      lipsana: ['fair-scales'],
+      lipsana: ['royal-tent'],
     });
     const address = runCraftAddress(spec);
     expect(hasRunCraftRequest(new URL(address, 'http://test').search)).toBe(true);

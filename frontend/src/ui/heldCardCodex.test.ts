@@ -6,7 +6,7 @@ import {
   performAdlectio,
   createRun,
   openSectio,
-  performAlienatio,
+  removeUnitFromArmyAndCards,
   runCardUnitIds,
   type RunDocument,
   type RunWarSnapshot,
@@ -58,11 +58,12 @@ describe('the Chartulary reads the Run rather than the deck', () => {
   it('keeps the card once its units leave the army', () => {
     const run = boughtOne();
     const owned = run.cards.find((card) => card.coreId !== 'his-grace')!;
-    const alienated = performAlienatio(run, runCardUnitIds(owned)[0]);
-    // A held-card page that dropped the card with its last unit would lose what the
-    // gold was spent on. Alienatio of a unit does not relinquish the card.
-    expect(heldCards(alienated)).toHaveLength(2);
-    expect(heldCards(alienated).some((held) => held.owned.id === owned.id)).toBe(true);
+    const casualty = removeUnitFromArmyAndCards(run, runCardUnitIds(owned)[0]);
+    // A Battle casualty empties its original formation seat; it does not erase the
+    // held card identity the player bought.
+    const after = { ...run, ...casualty };
+    expect(heldCards(after)).toHaveLength(2);
+    expect(heldCards(after).some((held) => held.owned.id === owned.id)).toBe(true);
   });
 
   it('drops a card whose core id is no longer in the deck instead of drawing a blank face', () => {
@@ -81,7 +82,8 @@ describe('the Chartulary is the reference gallery, not a lookalike (ADR-0371)', 
     expect(heldCardCodex).toContain('<ReferenceSectionFrame');
     expect(heldCardCodex).toContain('<CardGalleryFilters');
     expect(heldCardCodex).toContain('testIdPrefix="strategikon-chartulary"');
-    expect(heldCardCodex).toContain('cardMatchesFilters(held.core, goldFilter, unitFilter)');
+    expect(heldCardCodex).toContain('cardMatchesFilters(held.core, goldFilter, unitFilter, rarityFilter)');
+    expect(heldCardCodex).toContain('rarityFilter={rarityFilter}');
     expect(heldCardCodex).toContain('cardsByGoldValue(visible, (held) => held.core)');
     expect(heldCardCodex).toContain('className="enchiridion-card-gallery-layout"');
     expect(heldCardCodex).toContain('className="enchiridion-card-gallery-grid"');

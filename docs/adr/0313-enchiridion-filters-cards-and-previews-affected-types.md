@@ -5,13 +5,12 @@ deciders: owner (Nelson) + Codex
 partially_superseded_by:
   - "[ADR-0329](0329-concinnous-and-tactical-use-distinct-frames-and-one-shared-coin.md)'s replacement of Type III with Tactical"
   - "[ADR-0339](0339-run-card-properties-and-unit-states-use-paired-icons.md)'s replacement of Type IV with Hieratic"
+  - "[ADR-0509](0509-enchiridion-cards-filters-rarity-on-structural-teal.md)'s third independent Rarity filter and structural teal/oak filter hierarchy"
 extends:
   - 0231-strategikon-and-enchiridion-share-one-reference-workspace-language.md
   - 0272-card-types-author-effects-and-may-conceal-unit-targets.md
   - 0276-run-type-lines-declare-primary-families-and-affected-qualifiers.md
   - 0283-run-card-face-is-one-shared-live-runtime-component.md
-partially_superseded_by:
-  - "[ADR-0329](0329-concinnous-and-tactical-use-distinct-frames-and-one-shared-coin.md)'s replacement of Type III with Tactical"
 ---
 
 # ADR-0313: Enchiridion filters cards and previews four affected-type slots
