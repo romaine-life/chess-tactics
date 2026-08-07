@@ -6378,7 +6378,7 @@ async function main() {
     events: [
       { eventId: 'pick:run-smoke:royal-tent', lipsanonId: 'royal-tent', kind: 'picked' },
       { eventId: 'battle-win:run-smoke:0', lipsanonId: 'royal-tent', kind: 'battle-win' },
-      { eventId: 'battle-win:run-smoke:0', lipsanonId: 'fair-scales', kind: 'battle-win' },
+      { eventId: 'battle-win:run-smoke:0', lipsanonId: 'quartermasters-ledger', kind: 'battle-win' },
     ],
   });
   const savedLipsanonEvents = await request(
@@ -6412,8 +6412,8 @@ async function main() {
     loadedLipsanonStatistics.statusCode !== 200
     || loadedLipsanonStatisticsBody.statistics['royal-tent']?.timesPicked !== 1
     || loadedLipsanonStatisticsBody.statistics['royal-tent']?.battlesWonWhileHeld !== 1
-    || loadedLipsanonStatisticsBody.statistics['fair-scales']?.timesPicked !== 0
-    || loadedLipsanonStatisticsBody.statistics['fair-scales']?.battlesWonWhileHeld !== 1
+    || loadedLipsanonStatisticsBody.statistics['quartermasters-ledger']?.timesPicked !== 0
+    || loadedLipsanonStatisticsBody.statistics['quartermasters-ledger']?.battlesWonWhileHeld !== 1
   ) {
     throw new Error(`Lipsanon statistics did not aggregate exact facts: ${loadedLipsanonStatistics.statusCode} ${loadedLipsanonStatistics.body}`);
   }
