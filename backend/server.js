@@ -13,6 +13,7 @@ const { createOIDCSessionManager } = require(path.join(bakedBackendDir, 'oidcAut
 const { createByteReadBudget } = require(path.join(bakedBackendDir, 'liveMediaReadBudget'));
 const { createRenderCriticalSection } = require(path.join(bakedBackendDir, 'renderCriticalSection'));
 const { createAsyncWorkLimiter } = require(path.join(bakedBackendDir, 'asyncWorkLimiter'));
+const { saveRunCardGoldTierDividerGeometry } = require(path.join(bakedBackendDir, 'runCardGoldTierDividerGeometry'));
 const { THUMBNAIL_DEPENDENCY_SCHEMA_VERSION, thumbnailContentVersionForPlan } = require(path.join(bakedBackendDir, 'thumbnailVersion'));
 const { createRevisionMemo } = require(path.join(bakedBackendDir, 'revisionMemo'));
 const { backgroundStoreSchemaViolation } = require(path.join(bakedBackendDir, 'backgroundStoreError'));
@@ -83,6 +84,9 @@ const {
   runLipsanonIconSlotId,
   runCardCostCoinMediaIssue,
   runCardCostCoinSlot,
+  runCardGoldTierDividerMediaIssue,
+  runCardGoldTierDividerOwnerProofIssue,
+  runCardGoldTierDividerSlot,
   runCardBackMediaIssue,
   runCardBackOwnerProofIssue,
   runCardBackSlot,
@@ -7248,6 +7252,32 @@ app.get('/api/__devctl/health', (_req, res, next) => {
     port: Number(port),
     pid: process.pid,
   });
+});
+
+// ADR-0507: the divider fitting instrument writes deterministic Git-owned geometry, never
+// live-media bytes or database state. It exists only inside the named dev harness,
+// accepts no filesystem path from the client, and is additionally admin-gated.
+app.put('/api/studio/run-card-gold-tier-divider/defaults', async (req, res) => {
+  if (process.env.DEVCTL_MANAGED !== '1' || !isLoopbackRequest(req)) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  try {
+    const geometry = await saveRunCardGoldTierDividerGeometry({
+      repoDir: process.env.DEVCTL_REPO_DIR,
+      value: req.body,
+    });
+    res.setHeader('Cache-Control', 'no-store');
+    res.status(200).json(geometry);
+  } catch (error) {
+    console.error('run card gold-tier divider geometry save failed:', error);
+    res.status(error.statusCode || 500).json({
+      error: error.statusCode === 400 ? 'invalid_geometry' : 'geometry_save_failed',
+      details: error.message,
+    });
+  }
 });
 
 // Process liveness and application readiness are deliberately separate. The
@@ -17609,6 +17639,9 @@ function reviewedMediaEvidenceIssue(row) {
   } else if (levelEditorBrushIconSlot(row.slot)) {
     const issue = levelEditorBrushIconOwnerProofIssue(row, proof, evidence.surfaceUrl);
     if (issue) return issue;
+  } else if (runCardGoldTierDividerSlot(row.slot)) {
+    const issue = runCardGoldTierDividerOwnerProofIssue(row, proof, evidence.surfaceUrl);
+    if (issue) return issue;
   } else if (strategikonBackgroundSlot(row.slot)) {
     const issue = strategikonBackgroundOwnerProofIssue(row, proof, evidence.surfaceUrl);
     if (issue) return issue;
@@ -18239,6 +18272,9 @@ function mediaDomainProjectionIssue(row) {
   }
   if (runCardCostCoinSlot(row.slot)) {
     return runCardCostCoinMediaIssue(row, runtime.value);
+  }
+  if (runCardGoldTierDividerSlot(row.slot)) {
+    return runCardGoldTierDividerMediaIssue(row, runtime.value);
   }
   if (runCardBackSlot(row.slot) || row.role === 'card-back') {
     return runCardBackMediaIssue(row, runtime.value);
@@ -19119,6 +19155,7 @@ function gameOwnedReviewSurfaceUrl(req, raw) {
     // Each entry is a surface some art domain is genuinely reviewed on; the Ataraxia rung
     // marks are worn by the Ataraxia reference rows, on either host (ADR-0363).
     const gameOwnedPath = url.pathname === '/studio' || url.pathname === '/editor/level'
+      || url.pathname === '/enchiridion/cards'
       || url.pathname === '/play/strategikon/enchiridion/units'
       || runExpunctioReviewSurface(url)
       || ATARAXIA_NUMERAL_REVIEW_PATH.test(url.pathname);
@@ -19188,6 +19225,32 @@ async function validateMediaReviewProofSnapshot(client, current, evidence, surfa
     const proofIssue = levelEditorBrushIconSlot(current.slot)
       ? levelEditorBrushIconOwnerProofIssue(current, evidence, surfaceUrl)
       : strategikonBackgroundOwnerProofIssue(current, evidence, surfaceUrl);
+    if (proofIssue) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: proofIssue });
+    }
+    const selected = evidence.selectedCandidates[0];
+    const snapshot = evidence.slotSnapshots[0];
+    const slotResult = await client.query(
+      'SELECT slot, active_version_id, row_revision FROM media_slots WHERE slot = $1',
+      [current.slot],
+    );
+    const slotRow = slotResult.rows[0];
+    if (!slotRow) throw mediaMutationError('media_slot_not_found', 404);
+    if (
+      Number(snapshot.rowRevision) !== Number(slotRow.row_revision)
+      || (snapshot.activeVersionId ?? null) !== (slotRow.active_version_id ? String(slotRow.active_version_id) : null)
+    ) throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: 'slot snapshot mismatch' });
+    if (current.status !== 'candidate' || Number(selected.rowRevision) !== Number(current.row_revision)) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: 'candidate snapshot mismatch' });
+    }
+    return;
+  }
+  if (runCardGoldTierDividerSlot(current.slot)) {
+    const projectionIssue = mediaDomainProjectionIssue(current);
+    if (projectionIssue) {
+      throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: projectionIssue });
+    }
+    const proofIssue = runCardGoldTierDividerOwnerProofIssue(current, evidence, surfaceUrl);
     if (proofIssue) {
       throw mediaMutationError('invalid_media_review_proof', 409, { slot: current.slot, reason: proofIssue });
     }
@@ -19644,6 +19707,24 @@ function assertLevelEditorBrushIconAcceptanceProof(row, slot) {
   ) throw mediaMutationError('media_review_slot_snapshot_stale', 409, { slot: row.slot });
 }
 
+function assertRunCardGoldTierDividerAcceptanceProof(row, slot) {
+  if (!runCardGoldTierDividerSlot(row.slot)) return;
+  if (mediaAcceptanceContract(row).mode !== 'standalone') {
+    throw mediaMutationError('media_group_contract_mismatch', 409, { slot: row.slot });
+  }
+  const review = isObjectRecord(row.review_evidence) ? row.review_evidence : {};
+  const proof = isObjectRecord(review.evidence) ? review.evidence : {};
+  const issue = runCardGoldTierDividerOwnerProofIssue(row, proof, review.surfaceUrl);
+  if (issue) throw mediaMutationError('media_owner_review_required', 409, { slot: row.slot, reason: issue });
+  const selected = proof.selectedCandidates[0];
+  const snapshot = proof.slotSnapshots[0];
+  if (
+    Number(selected.rowRevision) + 1 !== Number(row.row_revision)
+    || !slot || Number(snapshot.rowRevision) !== Number(slot.row_revision)
+    || (snapshot.activeVersionId ?? null) !== (slot.active_version_id ? String(slot.active_version_id) : null)
+  ) throw mediaMutationError('media_review_slot_snapshot_stale', 409, { slot: row.slot });
+}
+
 function assertStrategikonBackgroundAcceptanceProof(row, slot) {
   if (!strategikonBackgroundSlot(row.slot)) return;
   if (mediaAcceptanceContract(row).mode !== 'standalone') {
@@ -19899,6 +19980,7 @@ async function acceptMediaVersionBatch(items, actorEmail) {
       assertPredrawnBoardAcceptanceProof(row, slotById.get(row.slot));
       assertSfxSampleAcceptanceProof(row, slotById.get(row.slot));
       assertLevelEditorBrushIconAcceptanceProof(row, slotById.get(row.slot));
+      assertRunCardGoldTierDividerAcceptanceProof(row, slotById.get(row.slot));
       assertStrategikonBackgroundAcceptanceProof(row, slotById.get(row.slot));
       assertRunCardRarityFrameAcceptanceProof(row, slotById.get(row.slot));
     }

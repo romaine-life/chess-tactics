@@ -499,6 +499,10 @@ scaling is allowed to calibrate an asset's required footprint, but the scaled
 candidate is not production art. Once its 1× frame, visible subject bounds, and
 anchor are approved, regenerate/re-render it at those pixels and serve it 1:1;
 offline downscaling and asset-local live scale are not acceptance paths.
+ADR-0506 defines one closed exception for the exact live-stored card gold-tier
+divider: its shared renderer preserves fixed generated end anatomy and stretches
+only the plain center rails at the recorded three-slice geometry. This exception
+does not apply to other UI art.
 
 The goal is to use generated art as the source for production sprites and tiles,
 not merely as inspiration. The implementation should still treat those outputs

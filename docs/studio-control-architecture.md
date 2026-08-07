@@ -93,7 +93,8 @@ workspace controls (Catalog · Lab · Viewer)    ← topbar · always present
         ├─ Unit Art → board-context unit art/size editor (live publish + candidates)
         ├─ Portrait → embedded unit-portrait crop editor (pan/zoom, per-piece)
         ├─ 9-Slice  → embedded kit 9-slice frame editor (nudge/align, dev-save)
-        └─ Card Icon Fitting → paired icon selection and placement draft
+        ├─ Card Icon Fitting → paired icon selection and placement draft
+        └─ Card Gold Divider → shared runtime divider fitting at canonical widths (nudge/reset/dev-save)
 
 Open/Inspect in Catalog enters a Viewer by item type. Place/Use opens the Level
 Editor where applicable. The title-bar Catalog affordance returns to the one

@@ -23,6 +23,12 @@ const {
   LIPSANON_ICON_COMPONENT,
   LIPSANON_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
   RUN_CARD_COST_COIN_COMPONENT,
+  RUN_CARD_GOLD_TIER_DIVIDER_COMPONENT,
+  RUN_CARD_GOLD_TIER_DIVIDER_PROOF_RENDERER,
+  RUN_CARD_GOLD_TIER_DIVIDER_PROOF_SCHEMA,
+  RUN_CARD_GOLD_TIER_DIVIDER_SCALED_PRODUCTION_EXCEPTION_SCHEMA,
+  RUN_CARD_GOLD_TIER_DIVIDER_SHA256,
+  RUN_CARD_GOLD_TIER_DIVIDER_SLOT,
   RUN_CARD_BACK_COMPONENT,
   RUN_CARD_BACK_PROOF_RENDERER,
   RUN_CARD_BACK_PROOF_SCHEMA,
@@ -59,6 +65,9 @@ const {
   runLipsanonIconSlotId,
   runCardCostCoinMediaIssue,
   runCardCostCoinSlot,
+  runCardGoldTierDividerMediaIssue,
+  runCardGoldTierDividerOwnerProofIssue,
+  runCardGoldTierDividerSlot,
   runCardBackMediaIssue,
   runCardBackOwnerProofIssue,
   runCardBackSlot,
@@ -476,6 +485,94 @@ test('Run card cost coin projection binds the transparent native coin to its one
   assert.match(runCardCostCoinMediaIssue(runCardCostCoin({
     metadata: { runtime: { ...row.metadata.runtime, altText: 'Gold coin' } },
   })), /altText must be empty/);
+});
+
+function runCardGoldTierDivider(overrides = {}) {
+  const slice = { top: 138, right: 56, bottom: 139, left: 132 };
+  return {
+    id: '50510000-0000-4000-8000-000000000001',
+    slot: RUN_CARD_GOLD_TIER_DIVIDER_SLOT,
+    domain: 'ui-kit',
+    role: 'divider',
+    media_type: 'image/png',
+    blob_sha256: RUN_CARD_GOLD_TIER_DIVIDER_SHA256,
+    width: 688,
+    height: 384,
+    metadata: {
+      runtime: {
+        component: RUN_CARD_GOLD_TIER_DIVIDER_COMPONENT,
+        variant: 'open-rail',
+        frameWidth: 688,
+        frameHeight: 384,
+        frameCount: 1,
+        nativeRole: RUN_CARD_GOLD_TIER_DIVIDER_COMPONENT,
+        altText: '',
+        slice,
+      },
+    },
+    native_evidence: {
+      schema: RUN_CARD_GOLD_TIER_DIVIDER_SCALED_PRODUCTION_EXCEPTION_SCHEMA,
+      decision: 'ADR-0506',
+      status: 'owner-approved-production-exception',
+      native1x: false,
+      spatialResampling: true,
+      sourceWidth: 688,
+      sourceHeight: 384,
+      sourceSha256: RUN_CARD_GOLD_TIER_DIVIDER_SHA256,
+      drawHeight: 38,
+      leftCapWidth: 47,
+      rightCapWidth: 20,
+      slice,
+      transform: 'svg-three-slice-138-56-139-132-to-38px-47px-20px-stretch',
+    },
+    ...overrides,
+  };
+}
+
+test('Run card gold-tier divider projection binds the exact approved open rail and three-slice geometry', () => {
+  const row = runCardGoldTierDivider();
+  assert.equal(runCardGoldTierDividerSlot(row.slot), true);
+  assert.equal(runCardGoldTierDividerMediaIssue(row), null);
+  assert.equal(nativeMediaEvidenceIssue(row), null);
+  assert.equal(nativeMediaEvidenceIssue(runCardGoldTierDivider({
+    native_evidence: { ...row.native_evidence, decision: 'ADR-0503' },
+  })), null, 'the immutable accepted evidence keeps its pre-merge ADR tag');
+  assert.match(runCardGoldTierDividerMediaIssue(runCardGoldTierDivider({ role: 'media' })), /divider role/);
+  assert.match(runCardGoldTierDividerMediaIssue(runCardGoldTierDivider({ width: 687 })), /688x384/);
+  assert.match(runCardGoldTierDividerMediaIssue(runCardGoldTierDivider({ blob_sha256: originalSha })), /exact owner-approved/);
+  assert.match(runCardGoldTierDividerMediaIssue(runCardGoldTierDivider({
+    metadata: { runtime: { ...row.metadata.runtime, slice: { ...row.metadata.runtime.slice, left: 131 } } },
+  })), /runtime slice/);
+  assert.match(nativeMediaEvidenceIssue(runCardGoldTierDivider({
+    native_evidence: { ...row.native_evidence, drawHeight: 39 },
+  })), /evidence is incomplete/);
+});
+
+test('Run card gold-tier divider proof binds the candidate to the real Cards gallery renderer', () => {
+  const row = runCardGoldTierDivider();
+  const surfaceUrl = `http://ui-generation.chess-tactics.localhost/enchiridion/cards?goldTierDividerReview=${row.id}`;
+  const proof = {
+    schema: RUN_CARD_GOLD_TIER_DIVIDER_PROOF_SCHEMA,
+    renderer: RUN_CARD_GOLD_TIER_DIVIDER_PROOF_RENDERER,
+    surfaceUrl,
+    canonicalScale: 1,
+    spatialResampling: true,
+    frameWidth: 688,
+    frameHeight: 384,
+    drawHeight: 38,
+    leftCapWidth: 47,
+    rightCapWidth: 20,
+    slice: { top: 138, right: 56, bottom: 139, left: 132 },
+    selectedCandidates: [{ slot: row.slot, versionId: row.id, sha256: row.blob_sha256, rowRevision: 2 }],
+    slotSnapshots: [{ slot: row.slot, rowRevision: 0, activeVersionId: null }],
+  };
+  assert.equal(runCardGoldTierDividerOwnerProofIssue(row, proof, surfaceUrl), null);
+  assert.match(runCardGoldTierDividerOwnerProofIssue(row, { ...proof, drawHeight: 37 }, surfaceUrl), /three-slice renderer/);
+  assert.match(runCardGoldTierDividerOwnerProofIssue(
+    row,
+    { ...proof, surfaceUrl: 'http://ui-generation.chess-tactics.localhost/enchiridion/cards' },
+    'http://ui-generation.chess-tactics.localhost/enchiridion/cards',
+  ), /exact candidate/);
 });
 
 function gameConditionIcon(overrides = {}) {
