@@ -131,7 +131,9 @@ these.
 - When a card is played, all of its remaining units deploy as one atomic authored
   formation. Its front and back rows enter the two-row Deployment band from the right
   and advance left until the next translation would collide. Deployment persists the
-  complete hidden destination plan before the visible sideways arrival.
+  complete hidden destination plan before the visible arrival. Each unit first summons
+  onto its off-board formation seat; once the final unit lands, the complete rigid shape
+  begins its sideways slide.
   Revealing a card and committing its formation are distinct animation boundaries,
   but there is no per-unit placement choice.
 - The card face prints that formation on a miniature crop of the player-side

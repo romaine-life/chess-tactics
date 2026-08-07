@@ -15,6 +15,7 @@ import {
 import {
   beginDeploymentDeal,
   completeDeploymentDeal,
+  deploymentFormationEntryDelta,
   deploymentInteractionStage,
   finishDeploymentCardDiscard,
   finishDeploymentCardReveal,
@@ -105,6 +106,31 @@ describe('formation deployment', () => {
     expect(king.x - leftPawn.x).toBe(1);
     expect(rightPawn.x - king.x).toBe(1);
     expect(rightPawn.y).toBe(leftPawn.y);
+  });
+
+  it('stages that rigid formation fully beyond the board right edge', () => {
+    const { run, level } = fixture();
+    const placed = placeRevealedDeploymentUnit(revealFirstCard(run, level), level);
+    const placements = placed.deployment!.settlingUnitIds
+      .map((id) => cell(placed.deployment!.placements[id]));
+
+    expect(deploymentFormationEntryDelta(level, placements)).toEqual({ x: 8, y: 0 });
+    expect(placements.map(({ x, y }) => ({ x: x + 8, y }))).toEqual([
+      { x: 9, y: 4 },
+      { x: 8, y: 3 },
+      { x: 10, y: 3 },
+    ]);
+  });
+
+  it('uses the board edge when the legal deployment band ends earlier', () => {
+    const { level } = fixture(8, 3);
+    level.layers.zones[0].tiles = level.layers.zones[0].tiles
+      .filter(([x]) => x < 2);
+    const placements = [{ x: 0, y: 4 }, { x: 0, y: 3 }, { x: 1, y: 3 }];
+    const delta = deploymentFormationEntryDelta(level, placements);
+
+    expect(delta).toEqual({ x: 3, y: 0 });
+    expect(placements.every(({ x }) => x + delta.x >= level.board.cols)).toBe(true);
   });
 
   it('keeps the authored rows and settles the first formation against the left edge', () => {
