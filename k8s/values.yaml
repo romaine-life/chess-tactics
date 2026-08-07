@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:86df126b6f11369fb5e6696ada43b7b7dbbc72d71234861814e5f71f0eacb32c"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:599d315247ce1ae6b764f718d12ceb48c1b4478cc6612e7194a15f027b749ab0"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Move the playable grid within authored scenes"
-  prNumber: "737"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/737"
-  commit: "958a3313"
+  prTitle: "Complete Queen and Pawn formation set"
+  prNumber: "741"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/741"
+  commit: "4f60c6c8"
 
 name: chess-tactics
 namespace: chess-tactics
