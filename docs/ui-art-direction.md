@@ -419,11 +419,11 @@ Expunctio does not repeat the card's printed title beside its canonical face.
 Each tile keeps its inner frame but borrows the installed outer-role surface used
 by the title bar and Controls panel; its action keeps the canonical control frame
 over the registered `hybrid-wood-oak` surface.
-Per [ADR-0489](adr/0489-alienatio-fades-the-departure-and-flips-the-next-card-frame.md),
+Per [ADR-0506](adr/0506-alienatio-leaves-the-authored-formation-seat-vacant.md),
 Aliene commits immediately but remains visually legible: the sold figure fades over
-its exact old card seat while each stable survivor glides into the compact committed
-stack. Selection and cycling remain stationary; only the completed transaction moves
-the affected figures, and the surrounding physical panel never reflows.
+its exact authored formation cell, which remains vacant after the transaction. Every
+survivor stays in its indexed cell at the same scale; selection, cycling, and the
+surrounding physical panel remain stationary.
 Per [ADR-0448](adr/0448-expunctio-scrollbar-keys-to-the-terminal-frame-rail.md),
 the final tile's straight frame rail and the shared drawn scrollbar meet one
 bottom keyline at the end of the gallery. The corner atom may continue below

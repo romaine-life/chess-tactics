@@ -80,9 +80,8 @@ search for before constructing a control or repeated surface.
   [ADR-0463](adr/0463-continuity-handoffs-settle-with-the-director.md)).
 - `ui/RunCardFace.tsx` — the canonical visible Run-card anatomy shared by Card
   Layout, Sectio visits, review, Enchiridion, and Deployment; it owns the paired property/state
-  icon seats, retains authored geometry for optional empty occurrences by default, and lets
-  Expunctio opt into the exact compact post-sale frame without waiting to reload already-present
-  media. It also owns the unit sprite's cached alpha mask: Expunctio
+  icon seats and retains authored formation geometry for optional empty occurrences in every
+  host. It also owns the unit sprite's cached alpha mask: Expunctio
   pointer hover and click reuse those installed source pixels as a silhouette hit test with a
   small scale-relative halo matching the visible outline; overlapping halos resolve to the nearest
   visible sprite pixel, while its semantic buttons retain ordinary keyboard activation. Every
@@ -97,14 +96,15 @@ search for before constructing a control or repeated surface.
   gives every original offer one pile and reveals its accepted universal back after
   Adlectio without moving that seat or implying a replacement offer.
 - `ui/runCardUnitProjection.ts` — the shared projection from persisted nullable card
-  seats and stable unit identities to grouped canonical face occurrences. Deployment uses it to
-  omit empty seats; Expunctio uses the same mapping to make occupied figures directly selectable
+  seats and stable unit identities to the same-index canonical formation cells. Deployment uses
+  it to omit empty seats; Expunctio uses the same mapping to make occupied figures directly selectable
   and mark only the exact unit deliberately selected for Alienatio. Figure activation and the
   Previous/Next control converge on one selected identity and one stationary blue mark; pointer
   hover previews that same mark without committing it
   ([ADR-0482](adr/0482-expunctio-owns-card-aware-alienatio.md),
   [ADR-0483](adr/0483-expunctio-unit-selection-is-explicit.md),
-  [ADR-0488](adr/0488-expunctio-unit-selection-uses-one-blue-mark.md)).
+  [ADR-0488](adr/0488-expunctio-unit-selection-uses-one-blue-mark.md),
+  [ADR-0506](adr/0506-alienatio-leaves-the-authored-formation-seat-vacant.md)).
 - `ui/runCardFlightView.tsx` — the shared geometry for transferring that canonical
   face into the Chartulary during Sectio. It measures live endpoints, contributes through the director-owned
   continuity layer above clipped shell layers, and owns any number of independent
@@ -117,9 +117,9 @@ search for before constructing a control or repeated surface.
 - `ui/runUnitDepartureView.tsx` — the presentation-only Alienatio departure layer. It snapshots
   the sold unit image over its exact old pixels, contributes that inert copy through scene
   continuity, fades it after the immediate transaction, and owns no gameplay or input authority.
-  `RunExpunctioWorkspace` separately FLIPs stable surviving unit identities from their captured
-  current rectangles into the compact committed face through `SceneActivity`
-  ([ADR-0489](adr/0489-alienatio-fades-the-departure-and-flips-the-next-card-frame.md)).
+  The canonical face leaves that authored formation cell vacant while every survivor remains
+  stationary
+  ([ADR-0506](adr/0506-alienatio-leaves-the-authored-formation-seat-vacant.md)).
 - `ui/RunDeploymentCardStack.tsx` — the Controls-owned projection of the persisted
   Deployment deck and deal. It presents the complete face-down center deck, partitions the
   exact combat count deliberately into the prominent Controls stack, transfers the counted
