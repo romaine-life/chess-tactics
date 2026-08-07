@@ -23,8 +23,8 @@ describe('Run lipsanon invariant', () => {
     }
   });
 
-  it('has nine player-facing, target-free relic definitions', () => {
-    expect(RUN_LIPSANA).toHaveLength(9);
+  it('has seven player-facing, target-free lipsanon definitions', () => {
+    expect(RUN_LIPSANA).toHaveLength(7);
     expect(RUN_LIPSANON_OFFER_POOL).toEqual(RUN_LIPSANA);
     for (const lipsanon of RUN_LIPSANA) {
       expect(Object.keys(lipsanon).every((key) => ['id', 'name', 'description', 'flavorText', 'immediate'].includes(key))).toBe(true);

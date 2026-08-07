@@ -59,8 +59,8 @@ these.
   layer: a persistent chess army, Sectio visits, and lipsana move through an authored War while
   every Battle still obeys recognizable chess-piece behavior (ADR-0193).
 - In an active Run Battle, **Undo** spends one gold to return to the checkpoint before
-  the latest player move. Its deterministic enemy reply and move-owned casualty,
-  Reservist, or Pawn cash-out effects rewind with it; the one-level checkpoint survives
+  the latest player move. Its deterministic enemy reply and move-owned casualty or
+  Reservist effects rewind with it; the one-level checkpoint survives
   an ordinary reload and never changes chess-piece behavior (ADR-0394).
 - Restarting or retrying an active Run Battle spends three gold. The paid reset is
   unavailable below that balance, keeps the deterministic deployment, and replaces the
@@ -169,31 +169,19 @@ these.
   still waits for Deployment. The persistent Controls panel navigates these
   destinations, resets the complete same-offer Sectio visit, and continues the
   Run; Army inspection remains available in every Run phase without pausing an
-  active Battle. Within the Expunctio workspace, each canonical card face begins with no unit
-  selected. Clicking an attached figure's visible outline or using the keyboard-and-touch
-  cycle control selects and marks that exact stationary unit with the same blue highlight,
-  identifies it, and offers its immediate **Aliene**
-  command and return. The player may instead **athetize** one held card at most once
-  per visit; the card and every unit still attached to it leave the Chartulary. Its fee is the
-  card's full printed value plus the standard value of those remaining units; His Grace is
-  unavailable. Alienatio sells individual units without removing their cards, so it discounts
-  a later Expunctio without ever paying the complete fee. Prosopography remains the detailed
-  unit ledger rather than a second Alienatio list. The two opposite gold movements keep their
-  visible text and live value but use distinct native marks: a green plus for Alienatio's gain
-  and a red minus for the Expunctio fee or Paid state. The card companion reserves those
-  controls and its compact detail band before selection, so choosing or cycling a unit changes
-  their contents in place without moving the surrounding physical panel. When Aliene commits,
-  the sold figure fades from its authored formation cell, that cell remains vacant, and every
-  survivor stays in its own indexed cell; the visual settlement never delays the transaction or
-  disables input (ADR-0486, ADR-0487, ADR-0508).
-  The operation names remain nouns while their unit/card commands are the obscure English
-  verbs **Adlect**, **Aliene**, and **Athetize**; completed Alienatio and Expunctio records are
-  **Aliened** and **Athetized this visit**, respectively
-  (ADR-0230, ADR-0386, ADR-0393, ADR-0407, ADR-0432, ADR-0443, ADR-0482, ADR-0483, ADR-0485, ADR-0486, ADR-0487, ADR-0488, ADR-0508).
+  active Battle. A held card is one formation: Sectio never sells, condenses, or rearranges an
+  individual attached unit. Within Expunctio, the player may **athetize** one eligible held card
+  at most once per visit; the card and every unit still attached to it leave the Chartulary
+  together. Its fee is the card's full printed value plus the standard value of those attached
+  units; His Grace is unavailable. Battle casualties may leave empty seats as combat history,
+  but voluntary individual-unit disposal, Alienatio, and promotion cash-out are retired.
+  Expunctio uses the native red-minus loss mark for its live fee or Paid state. The action names
+  remain **Adlect** and **Athetize**, with a completed card reading **Athetized this visit**
+  (ADR-0230, ADR-0386, ADR-0407, ADR-0443, ADR-0511).
 - **Enchiridion** is the player-facing reference for unit movement, terrain
-  rules, the complete twenty-card catalog (His Grace plus nineteen offer cards),
-  all active lipsana, and Ataraxia. Card filters combine exact gold value with
-  contained unit type. The retired Abilities and Card Types sections have no
+  rules, the complete 727-card catalog (His Grace plus 726 offer cards),
+  all active lipsana, and Ataraxia. Card filters combine exact gold value,
+  contained unit type, and rarity. The retired Abilities and Card Types sections have no
   route or gallery of their own. Cards uses no fourth column: its terminal third
   column fills the remaining canvas with the same real positional card faces used
   everywhere else (ADR-0364, ADR-0492). During Battle,
@@ -206,7 +194,7 @@ these.
   visible address—`Sectio › Strategikon › Chartulary`, or one further segment for an
   Enchiridion subcategory (ADR-0231, ADR-0387, ADR-0389). The Chartulary is the Cards gallery itself — same
   filters, same gold groups, same faces, no annotation beside them — and the
-  only difference is which cards are in it (ADR-0371).
+  only difference is which cards are in it (ADR-0371, ADR-0510).
 - Play defaults to one activity-agnostic, descriptor-free **Continue** rail
   destination. Its column resumes in place and shows exactly one activity: the
   most recently updated resumable one, with its facts and one final **Continue**

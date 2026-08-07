@@ -1477,7 +1477,6 @@ export function SkirmishBoard({
   unitArrivalTrack = 'drop',
   unitArrivalStartDelta = ZERO_BOARD_DELTA,
   revealTransition = 'local',
-  onPawnCashOut = null,
 }: {
   interactive?: boolean;
   /**
@@ -1521,8 +1520,6 @@ export function SkirmishBoard({
    * readiness gate still keeps incomplete pixels hidden, but does not start a second fade.
    */
   revealTransition?: 'local' | 'scene';
-  /** Run-only Paid Crossing action offered beside the arrived Pawn. */
-  onPawnCashOut?: ((pieceId: string) => void) | null;
 } = {}) {
   const interactionEnabled = interactive && !surfaceState;
   // Board-view state lives in the shared view store so the HUD's "View" tab owns
@@ -1561,7 +1558,6 @@ export function SkirmishBoard({
   const storedFocusedId = useSkirmish((s) => s.focusedId);
   const storedPendingPromotion = useSkirmish((s) => s.pendingPromotion);
   const choosePromotion = useSkirmish((s) => s.choosePromotion);
-  const cashOutPromotion = useSkirmish((s) => s.cashOutPromotion);
   const storedSeed = useSkirmish((s) => s.seed);
   const game = surfaceState?.game ?? storedGame;
   const env = useMemo(
@@ -2357,12 +2353,6 @@ export function SkirmishBoard({
               boardSeat={promotionPickerSeat}
               boardZoom={boardZoom}
               onChoose={choosePromotion}
-              onCashOut={onPawnCashOut
-                && choosingPromotion.mode === 'move'
-                && promotingPiece.type === 'pawn'
-                && promotingPiece.id.startsWith('run-')
-                ? () => cashOutPromotion(onPawnCashOut)
-                : null}
             />
           ) : null}
         </BoardLabBoard>

@@ -33,7 +33,6 @@ import {
   canRestartBattle,
   canLeaveSectio,
   canUndoRunBattleMove,
-  cashOutPawn,
   captureRunBattleUndo,
   closeBattle,
   hasLipsanon,
@@ -49,7 +48,6 @@ import {
   RUN_DEPLOYMENT_REROLL_COST_TENTHS,
   restartBattle,
   runBattleActivityId,
-  performAlienatio,
   performExpunctio,
   sectioHasChanges,
   takeVacantiaLipsanon,
@@ -121,7 +119,6 @@ import { runCardName } from '../run/cardNames';
 import {
   useRunCardFlights,
 } from './runCardFlightView';
-import { useRunUnitDepartures } from './runUnitDepartureView';
 import { isStrategikonPath, strategikonRouteCrumbs } from './strategikonRoute';
 import { createRunForm, runActivity, type RunForm } from './RunForm';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
@@ -1132,7 +1129,6 @@ function RunBattlefieldPanel({
   );
   const battleSeed = run.deployment?.seed ?? run.seed;
   const craftedBattleResult = onReviewRewards ? null : craftedBattleResultFor(run);
-  const canCashOutPawn = hasLipsanon(run, 'mercenary-boat');
   const latestRun = useActiveRun.getState().run;
   const retryRun = latestRun?.id === runId ? latestRun : run;
   const battleCanRestart = !onReviewRewards && canRestartBattle(retryRun);
@@ -1249,16 +1245,10 @@ function RunBattlefieldPanel({
     canRerollDeployment: battleCanReroll,
     deploymentRerollCostTenths: RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS,
     onAbandonRun: () => { void requestAbandon(); },
-    onPawnCashOut: canCashOutPawn && !onReviewRewards
-      ? (unitId) => {
-          const latest = useActiveRun.getState().run;
-          if (latest?.id === runId) replace(cashOutPawn(latest, unitId));
-        }
-      : undefined,
-  }), [battleCanReroll, battleCanRestart, battleLevel, battleSeed, canCashOutPawn, craftedBattleResult, onReviewRewards, replace, requestAbandon, requestDeploymentReroll, run.battleIndex, runId, transformCommittedBoard]);
+  }), [battleCanReroll, battleCanRestart, battleLevel, battleSeed, craftedBattleResult, onReviewRewards, requestAbandon, requestDeploymentReroll, run.battleIndex, runId, transformCommittedBoard]);
 
-  // Subscribe to the current document so a Paid Crossing cash-out or Reservist event
-  // refreshes the hook inputs without restarting the already-live matching board.
+  // Subscribe to the current document so Reservist events refresh the hook inputs
+  // without restarting the already-live matching board.
   return (
     <>
       {run.phase === 'battle' ? abandonDialog : null}
@@ -1289,7 +1279,6 @@ export function RunScreen({
   const replace = useActiveRun((state) => state.replace);
   const [adlectioAnnouncement, setAdlectioAnnouncement] = useState('');
   const { launch: launchCardFlight, element: cardFlightElement } = useRunCardFlights();
-  const { launch: launchUnitDeparture, element: unitDepartureElement } = useRunUnitDepartures();
   // A craft address sets the account's Run to the state it names before the screen reads one,
   // every time it is opened, then lands here without its craft parameters (ADR-0354).
   const craft = useRunCraft(routePath, routeSearch);
@@ -1388,16 +1377,6 @@ export function RunScreen({
     if (!latest || latest.phase !== 'bona-vacantia') return;
     replace(takeVacantiaLipsanon(latest, lipsanonId));
   }, { handoff: 'scene-settled' });
-  const alieneUnit = (unitId: string, source?: HTMLImageElement | null): void => {
-    if (!shellRun) return;
-    const latest = useActiveRun.getState().run;
-    if (!latest || latest.id !== shellRun.id) return;
-    const aliened = performAlienatio(latest, unitId);
-    if (aliened !== latest) {
-      launchUnitDeparture(unitId, source ?? null);
-      replace(aliened);
-    }
-  };
   const expunctCard = (cardId: string): void => {
     if (!shellRun) return;
     const latest = useActiveRun.getState().run;
@@ -1413,7 +1392,6 @@ export function RunScreen({
       onFiltersChange={(filters) => setArmyFilterState({ scope: filterScope, filters })}
       onSelectUnit={(unitId) => navigateArmyUnit(unitId)}
       onBack={() => navigateArmyUnit(null)}
-      onAliene={alieneUnit}
     />
   ) : null;
   const lipsanaWorkspace = shellRun ? <LipsanaWorkspace lipsanonIds={shellRun.lipsana} /> : null;
@@ -1424,7 +1402,7 @@ export function RunScreen({
       : null;
   const sectioScene = useInstalledSectioScene();
   const expunctioWorkspace = shellRun ? (
-    <RunExpunctioWorkspace run={shellRun} onAliene={alieneUnit} onExpunct={expunctCard} />
+    <RunExpunctioWorkspace run={shellRun} onExpunct={expunctCard} />
   ) : null;
   // The Sectio scene belongs to the retained shell viewport, not to whichever Sectio
   // workspace happens to be in front of it. Keeping it outside the transition region
@@ -1619,7 +1597,6 @@ export function RunScreen({
   return (
     <RunPresentationSceneSlot className="run-scene-slot" sceneInstance={sceneInstance}>
       {cardFlightElement}
-      {unitDepartureElement}
       {bonaLipsanonFlightElement}
       {formSurface}
     </RunPresentationSceneSlot>

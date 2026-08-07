@@ -371,14 +371,13 @@ ADR-0254 dual-view browser: a compact Rows/Grouped tab sits above the selection
 column; Rows uses corrected named list frames, while Grouped uses one containing
 inner frame around an otherwise unframed native-icon grid. Neither view opens
 lipsanon tooltips: the selected content-sized record is the sole visible
-name/effect/history authority. Card Types follows that master-detail reading:
-the third column contains the four affected-type names and the fourth contains
-only the selected Volunteer-based card face; it does not compare four card
-previews simultaneously (ADR-0315). Cards is intentionally different: it mounts
-no fourth column. After the two rail predecessors, the terminal third column
+name/effect/history authority. The retired Card Types reference has no active
+route or gallery. Cards mounts no fourth column. After the two rail predecessors, the terminal third column
 owns the remaining canvas and shows real card faces in left-to-right rows with
 one top-to-bottom drawn scroll; its pinned filters do not create another scroll
-region (ADR-0364). In the main-menu host, the two canonical rail
+region. Gold, Contains, and Rarity sit inside one structural teal field; their
+closed dropdowns are separately phased oak leaves while their open menus remain
+structural teal (ADR-0364, ADR-0433, ADR-0510). In the main-menu host, the two canonical rail
 anchors remain fixed while Enchiridion content consumes the remaining visible
 canvas; the ordinary action-column width does not cap it. The generated no-board scenic
 background remains the accepted background-only scene. Daily/news and the duplicate
@@ -419,11 +418,10 @@ Expunctio does not repeat the card's printed title beside its canonical face.
 Each tile keeps its inner frame but borrows the installed outer-role surface used
 by the title bar and Controls panel; its action keeps the canonical control frame
 over the registered `hybrid-wood-oak` surface.
-Per [ADR-0508](adr/0508-alienatio-leaves-the-authored-formation-seat-vacant.md),
-Aliene commits immediately but remains visually legible: the sold figure fades over
-its exact authored formation cell, which remains vacant after the transaction. Every
-survivor stays in its indexed cell at the same scale; selection, cycling, and the
-surrounding physical panel remain stationary.
+Per [ADR-0511](adr/0511-held-cards-are-immutable-formations.md), Expunctio presents each held
+card as one immutable formation. The companion describes the complete removal, shows only the
+loss-direction fee, and offers one Athetize action; no figure receives selection, hover emphasis,
+departure copy, or survivor-reflow motion.
 Per [ADR-0448](adr/0448-expunctio-scrollbar-keys-to-the-terminal-frame-rail.md),
 the final tile's straight frame rail and the shared drawn scrollbar meet one
 bottom keyline at the end of the gallery. The corner atom may continue below

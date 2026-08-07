@@ -343,9 +343,7 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
     'merchants-shopkey',
     'occult-dagger',
     'deployment-vehicle',
-    'mercenary-boat',
     'quartermasters-ledger',
-    'fair-scales',
     'muster-roll',
     'surveyors-compass',
   ].map((lipsanonId, sortOrder) => ({
@@ -371,7 +369,7 @@ export function testDrawableCatalog(ids: readonly string[] = ['earth', 'roots', 
       rowRevision: 1,
       media: { icon: descriptor('test/run/resources/gold.png', 64, 64) },
     },
-    ...(['gain', 'loss'] as const).map((direction, sortOrder) => ({
+    ...(['loss'] as const).map((direction, sortOrder) => ({
       id: `run-gold-transaction-${direction}`,
       kind: 'run-gold-transaction',
       label: `Test Run gold ${direction}`,

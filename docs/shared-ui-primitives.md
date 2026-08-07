@@ -80,8 +80,9 @@ search for before constructing a control or repeated surface.
   [ADR-0463](adr/0463-continuity-handoffs-settle-with-the-director.md)).
 - `ui/RunCardFace.tsx` — the canonical visible Run-card anatomy shared by Card
   Layout, Sectio visits, review, Enchiridion, and Deployment; it owns the paired property/state
-  icon seats and retains authored formation geometry for optional empty occurrences in every
-  host. It also owns the unit sprite's cached alpha mask: Expunctio
+  icon seats, retains authored geometry for optional empty occurrences by default, and lets
+  Expunctio opt into the exact compact post-sale frame without waiting to reload already-present
+  media. It also owns the unit sprite's cached alpha mask: Expunctio
   pointer hover and click reuse those installed source pixels as a silhouette hit test with a
   small scale-relative halo matching the visible outline; overlapping halos resolve to the nearest
   visible sprite pixel, while its semantic buttons retain ordinary keyboard activation. Every
@@ -95,16 +96,12 @@ search for before constructing a control or repeated surface.
 - `ui/RunCardPile.tsx` — the canonical physical face-over-back composition. Sectio
   gives every original offer one pile and reveals its accepted universal back after
   Adlectio without moving that seat or implying a replacement offer.
-- `ui/runCardUnitProjection.ts` — the shared projection from persisted nullable card
-  seats and stable unit identities to the same-index canonical formation cells. Deployment uses
-  it to omit empty seats; Expunctio uses the same mapping to make occupied figures directly selectable
-  and mark only the exact unit deliberately selected for Alienatio. Figure activation and the
-  Previous/Next control converge on one selected identity and one stationary blue mark; pointer
-  hover previews that same mark without committing it
-  ([ADR-0482](adr/0482-expunctio-owns-card-aware-alienatio.md),
-  [ADR-0483](adr/0483-expunctio-unit-selection-is-explicit.md),
-  [ADR-0488](adr/0488-expunctio-unit-selection-uses-one-blue-mark.md),
-  [ADR-0508](adr/0508-alienatio-leaves-the-authored-formation-seat-vacant.md)).
+- `ui/runCardUnitProjection.ts` — the shared same-index projection from persisted nullable card
+  seats and stable unit identities to authored formation cells. Deployment omits empty seats;
+  Expunctio uses the same mapping to show Battle casualties while keeping the complete card as
+  its only action. Card figures are informative rather than individual shop controls
+  ([ADR-0508](adr/0508-alienatio-leaves-the-authored-formation-seat-vacant.md),
+  [ADR-0511](adr/0511-held-cards-are-immutable-formations.md)).
 - `ui/runCardFlightView.tsx` — the shared geometry for transferring that canonical
   face into the Chartulary during Sectio. It measures live endpoints, contributes through the director-owned
   continuity layer above clipped shell layers, and owns any number of independent
@@ -114,12 +111,6 @@ search for before constructing a control or repeated surface.
   measurement or FLIP path remains
   ([ADR-0431](adr/0431-sectio-transactions-never-wait-for-presentation.md),
   [ADR-0481](adr/0481-sectio-offers-reveal-the-face-down-pile-beneath-them.md)).
-- `ui/runUnitDepartureView.tsx` — the presentation-only Alienatio departure layer. It snapshots
-  the sold unit image over its exact old pixels, contributes that inert copy through scene
-  continuity, fades it after the immediate transaction, and owns no gameplay or input authority.
-  The canonical face leaves that authored formation cell vacant while every survivor remains
-  stationary
-  ([ADR-0508](adr/0508-alienatio-leaves-the-authored-formation-seat-vacant.md)).
 - `ui/RunDeploymentCardStack.tsx` — the Controls-owned projection of the persisted
   Deployment deck and deal. It presents the complete face-down center deck, partitions the
   exact combat count deliberately into the prominent Controls stack, transfers the counted
@@ -157,11 +148,10 @@ search for before constructing a control or repeated surface.
   Card Gold Divider Viewer renders this same primitive at canonical widths, tunes
   coin size and pixel offsets through shared controls, and atomically saves the
   Git-owned geometry that both runtime galleries import (ADR-0507).
-- `ui/RunResources.tsx#RunGoldTransactionAmount` — the shared directional Run-gold
-  amount. It resolves the installed native gain or loss mark, keeps the numeric
-  value as live type, names the complete transaction accessibly, and retains its
-  native 64px physical seat while a transaction is pending; Expunctio uses gain
-  for Alienatio return and loss for its fee/Paid state (ADR-0486, ADR-0487).
+- `ui/RunResources.tsx#RunGoldTransactionAmount` — the shared Run-gold loss amount. It resolves
+  the installed native loss mark, keeps the numeric value as live type, names the complete
+  transaction accessibly, and retains its native 64px physical seat while a fee is pending;
+  Expunctio uses it for its fee/Paid state (ADR-0486, ADR-0511).
 - `ui/shared/PieceTypeIcon.tsx` — the accepted player-side, north-facing Battle
   sprite alpha-fitted for filters and pickers; consumers select a stable piece
   type and supply only local seat sizing while the shared live registry owns pixels.

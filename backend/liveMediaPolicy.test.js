@@ -226,7 +226,7 @@ test('same-dimension replacement bytes clear stale native evidence', () => {
   }), true);
 });
 
-test('only the eight exact ADR-0332 resized Run lipsanon outputs pass the production evidence gate', () => {
+test('only the seven active ADR-0332 resized Run lipsanon outputs pass the production evidence gate', () => {
   const outputSha256 = '928f9ceb7a5612ff0d2216b70422b972b04492a4c9ed277e5122721b390c52d0';
   const evidence = {
     schema: LIPSANON_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
@@ -439,10 +439,10 @@ test('Run resource icon projection binds one native reviewed icon to its resourc
   })), /altText/);
 });
 
-test('Run gold transaction proof is restricted to its exact Expunctio surface and slots', () => {
+test('Run gold transaction proof is restricted to Expunctio and the active loss slot', () => {
   const review = new URL('https://chess-tactics.com/run?view=expunctio&goldGainCandidate=' + 'a'.repeat(64));
   assert.equal(runExpunctioReviewSurface(review), true);
-  assert.equal(runGoldTransactionReviewSurface(review, 'ui/run/resources/gain-gold.png'), true);
+  assert.equal(runGoldTransactionReviewSurface(review, 'ui/run/resources/gain-gold.png'), false);
   assert.equal(runGoldTransactionReviewSurface(review, 'ui/run/resources/lose-gold.png'), true);
   assert.equal(runGoldTransactionReviewSurface(review, 'ui/run/resources/gold.png'), false);
   assert.equal(runExpunctioReviewSurface(new URL('https://chess-tactics.com/run?view=sectio')), false);

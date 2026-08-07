@@ -302,7 +302,7 @@ curl -X POST <url>/api/active-run/craft -H 'content-type: application/json' -d '
   "phase": "sectio", "battle": 4, "gold": 33.5,
   "army": [{ "type": "rook" }, "knight", "pawn"],
   "offers": [{ "id": "q" }, { "id": "ppb-protected" }],
-  "loot": ["fair-scales"], "lipsana": ["quartermasters-ledger"] }'
+  "loot": ["royal-tent"], "lipsana": ["quartermasters-ledger"] }'
 ```
 
 Same fields as the address grammar below, plus structured plain units and exact formation-card
@@ -328,8 +328,8 @@ hand-authored one-off leaves a durable link behind:
 ```
 /run?craft=sectio&battle=3&gold=25&army=knight,rook&offers=q,ppb-protected,rr-vertical
 /run?craft=deployment&battle=2&army=rook,rook,bishop,pawn&gold=12
-/run?craft=battle&battle=4&lipsana=fair-scales
-/run?craft=battle-victory&battle=4&lipsana=fair-scales
+/run?craft=battle&battle=4&lipsana=royal-tent
+/run?craft=battle-victory&battle=4&lipsana=royal-tent
 /run?craft=aftermath&battle=3&turns=21&seconds=402&fallen=2
 /run?craft=victory&gold=40
 ```

@@ -14,7 +14,6 @@ const LIPSANON_RESIZED_PRODUCTION_EXCEPTION_SHA_BY_SLOT = Object.freeze({
   'ui/run/lipsana/congressional-approval.png': '928f9ceb7a5612ff0d2216b70422b972b04492a4c9ed277e5122721b390c52d0',
   'ui/run/lipsana/deployment-vehicle.png': 'd004c0f5be36094ebc137a9cdbebfe69d847636a7c8ddaff50bac8b687aac0bc',
   'ui/run/lipsana/inspirational-record.png': 'b6d18510fcff3e374a1899421b2928fb16cd79c0108ad00179059cca539e309d',
-  'ui/run/lipsana/mercenary-boat.png': '9e5945cc9c200d1e3818e10f3f6e3494150ce83f30aa95c7e499daa4462ae1e8',
   'ui/run/lipsana/mercenarys-rifle.png': 'afe1a1f718a4406a60ae85adb002af846ef4a9c6000c20b97d67a0b57c06fa60',
   'ui/run/lipsana/merchants-shopkey.png': 'c8e0e45f9b863e42401c8e72cf0c42364a3c70c0c8dfb7362978b79e9b5adfa0',
   'ui/run/lipsana/occult-dagger.png': 'bc7984ccbabf45e39e672957d7ed1e2716c7e82e14b671fcbed38a7f82b9208d',
@@ -90,7 +89,6 @@ const RUN_STARTER_SELECTED_DERIVATIVE_BY_SLOT = Object.freeze({
 const RUN_RESOURCE_ICON_COMPONENT = 'run-resource-icon';
 const RUN_RESOURCE_ICON_SLOT = /^ui\/run\/resources\/([a-z][a-z0-9-]{0,79})\.png$/;
 const RUN_GOLD_TRANSACTION_REVIEW_SLOTS = new Set([
-  'ui/run/resources/gain-gold.png',
   'ui/run/resources/lose-gold.png',
 ]);
 const RUN_CARD_COST_COIN_COMPONENT = 'run-card-cost-coin';

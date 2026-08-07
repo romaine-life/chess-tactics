@@ -2,7 +2,7 @@ import type { ReactElement } from 'react';
 import { liveMediaForSlot, resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import { runCardArtSlot, runCardName } from '../run/cardNames';
 import { cardContentsLabel, type RunCardDefinition, type RunCardOffer } from '../run/model';
-import { RunCardFace, type RunCardUnitSelection } from './RunCardFace';
+import { RunCardFace } from './RunCardFace';
 import { runCardFaceContent, runCardFrameSlot } from './runCardFaceContent';
 import { runCardFrameGeometryForSlot } from './runCardFrameGeometry';
 
@@ -13,25 +13,17 @@ export function RunCard({
   identityCard,
   mode,
   emptyPieceIndices = [],
-  highlightedPieceIndex = null,
-  pieceSelectionIds = [],
-  pieceSelectionLabels = [],
   layoutId,
   disabled = false,
   onSelect,
-  onPieceSelect,
 }: {
   card: RunCardDefinition | RunCardOffer;
   identityCard?: RunCardDefinition | RunCardOffer;
   mode: 'sectio' | 'reference';
   emptyPieceIndices?: readonly number[];
-  highlightedPieceIndex?: number | null;
-  pieceSelectionIds?: readonly (string | null)[];
-  pieceSelectionLabels?: readonly (string | null)[];
   layoutId?: string;
   disabled?: boolean;
   onSelect?: (element: HTMLButtonElement) => void;
-  onPieceSelect?: (pieceIndex: number) => void;
 }): ReactElement {
   const identity = identityCard ?? card;
   const emptyPieces = new Set(emptyPieceIndices);
@@ -44,43 +36,12 @@ export function RunCard({
   const frameSlot = runCardFrameSlot(card);
   const faceContent = runCardFaceContent(card, { identity, emptyPieceIndices });
   const valueLabel = faceContent.showsCost ? ` Worth ${faceContent.cost} gold.` : '';
-  const highlightedIndex = highlightedPieceIndex ?? -1;
-  const highlightedUnit = card.pieces[highlightedIndex] ?? null;
-  const unitHighlight = highlightedUnit === null ? null : {
-    unit: highlightedUnit,
-    index: card.pieces.slice(0, highlightedIndex).filter((piece) => piece === highlightedUnit).length,
-  };
-  const pieceIndexForOccurrence = (unit: typeof card.pieces[number], occurrence: number): number => {
-    let seen = 0;
-    return card.pieces.findIndex((piece) => {
-      if (piece !== unit) return false;
-      if (seen === occurrence) return true;
-      seen += 1;
-      return false;
-    });
-  };
-  const unitSelection: RunCardUnitSelection | null = onPieceSelect ? {
-    id: (unit, occurrence) => {
-      const pieceIndex = pieceIndexForOccurrence(unit, occurrence);
-      return pieceIndex < 0 ? null : pieceSelectionIds[pieceIndex] ?? null;
-    },
-    label: (unit, occurrence) => {
-      const pieceIndex = pieceIndexForOccurrence(unit, occurrence);
-      return pieceIndex < 0 ? null : pieceSelectionLabels[pieceIndex] ?? null;
-    },
-    onSelect: (unit, occurrence) => {
-      const pieceIndex = pieceIndexForOccurrence(unit, occurrence);
-      if (pieceIndex >= 0) onPieceSelect(pieceIndex);
-    },
-  } : null;
   const face = (
     <RunCardFace
       card={faceContent}
       frameUrl={liveMediaForSlot(frameSlot).media.immutableUrl}
       artUrl={resolvedLiveMediaUrl(runCardArtSlot(identity))}
       frameGeometry={runCardFrameGeometryForSlot(frameSlot)}
-      unitHighlight={unitHighlight}
-      unitSelection={unitSelection}
       ariaHidden={mode !== 'reference'}
     />
   );

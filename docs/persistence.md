@@ -71,7 +71,8 @@ advances version 22 to RunSaveVersion 23 by migrating every embedded Battle Leve
 version 2, advances version 23 to RunSaveVersion 24's ability-free authored formation cards,
 advances version 24 to RunSaveVersion 25's generated rarity deck and sideways formation settling,
 advances version 25 to RunSaveVersion 26's Battle-first opening and derived Sectio pile cursor,
-and advances version 26 to RunSaveVersion 27's complete Queen + Pawn formation catalog.
+advances version 26 to RunSaveVersion 27's complete Queen + Pawn formation catalog, and advances
+version 27 to RunSaveVersion 28's immutable held formations.
 Migration 54 owns the marker rename; migration 55 advances the Sectio vocabulary; migration 56
 adds His Grace and Front Lines and returns a version-18 Deployment or Battle to its then-current
 pre-information boundary because that version did not persist exact automatic destinations.
@@ -98,6 +99,11 @@ Migration 65 advances version 26 to 27. It preserves every visible offer, held c
 economy field, phase, and Deployment field while resetting `sectioCardCursor` to zero so the next
 unrevealed sequence is derived explicitly from the expanded six-card Queen + Pawn catalog. The
 browser performs the same transform on first load.
+Migration 66 advances version 27 to 28. An open Sectio returns to its entry snapshot so no
+individual-unit disposal survives; retired Fair Scales and Paid Crossing references are filtered
+from held, seen, offered, and paid lipsanon state; Bona Vacantia offers are refilled from the active
+pool; and the obsolete Battle promotion-cash-out ledger is removed. The same migration retires the
+two lipsanon drawable/media graphs and the unused gain-transaction mark.
 Each account migration advances the Run's CAS revision, while the browser applies the same chain
 to its local document on first load. Saves older than version 16 remain unavailable because their
 retired gameplay state has no declared lossless transform. See
@@ -113,7 +119,7 @@ migration for account and browser storage. Retired content maps to a typed tombs
 replacement—for example, a removed card remains in the deck as **Removed card**—rather than
 invalidating the Run.
 
-RunSaveVersion 27 begins in Bona Vacantia when the opening Conflict offers a lipsanon, otherwise
+RunSaveVersion 28 begins in Bona Vacantia when the opening Conflict offers a lipsanon, otherwise
 in Battle 1's Deployment. Taking that opening lipsanon also enters Deployment; there is no opening
 Sectio. The Run carries the permanent King and two starting Pawns through the single starter-only
 His Grace card and retains eight starting gold. The first Sectio follows Battle 1.
@@ -122,8 +128,8 @@ Every Run persists a non-negative `sectioCardCursor` into its seed-derived hidde
 Each 180-card pile contains exactly 135 Common, 36 Uncommon, and 9 Rare cards. Per-rarity queues
 include all still-unseen identities before recycling; their selected quotas are shuffled together.
 A normal Sectio consumes three positions and Quartermaster's Ledger consumes four. Reset Sectio
-retains the same visible offers and cursor rather than redrawing. Army, card-aware Alienatio within
-Expunctio, Adlectio, Reset Sectio, and Continue reuse the post-Battle model. Expunctio may remove one held card and its remaining units
+retains the same visible offers and cursor rather than redrawing. Army, whole-card Expunctio,
+Adlectio, Reset Sectio, and Continue reuse the post-Battle model. Expunctio may remove one held card and its remaining units
 per visit for its printed value plus those units' standard value; His Grace is never eligible.
 Continue may perform no Adlectio. Deployment always persists the exact dealt-card
 order, stable nullable seats, capacity decision, active card, revealed-card prefix, seat cursor,
@@ -164,14 +170,15 @@ by the exact version-16 storage migration; normalization and writes never treat 
 shape. Likewise, version 17's `shop` phase/property and `shop` unit source exist only on the
 explicit migration boundary. Its `purchasedCardOfferIds` and `soldUnits` fields migrate directly
 to `adlectedCardOfferIds` and `alienatedUnits`; current admitted units use source `adlectio`.
-`normalizeRunDocument` repairs incomplete data only inside the
+The historical version-18 migration output includes `alienatedUnits`; version 28 removes that
+field from current Sectio state. `normalizeRunDocument` repairs incomplete data only inside the
 current RunSaveVersion; it contains no historical version upgrade path. The browser storage
-boundary owns the explicit historical chain through version 27.
+boundary owns the explicit historical chain through version 28.
 
 Run Battle Undo does not add another authority to `RunDocument`. The browser-owned resumable
 match snapshot keeps one checkpoint from immediately before the latest player move, including the
-bounded Run economy/runtime slice needed to reverse move-owned casualty, Reservist, and Pawn
-cash-out effects. Undo restores that slice through the normal active-Run write and deducts one gold;
+bounded Run economy/runtime slice needed to reverse move-owned casualty and Reservist effects.
+Undo restores that slice through the normal active-Run write and deducts one gold;
 the checkpoint exists only alongside the device-local live board and is replaced by the next move
 or cleared by Battle replacement (ADR-0394).
 
@@ -189,7 +196,7 @@ anonymous Run progress remains browser-local while a signed-in account owns one
 compare-and-swap protected `active_runs` document. Per
 [ADR-0230](adr/0230-run-shops-separate-buying-army-inspection-and-selling.md),
 that document also owns each unit's stable per-piece-type number and the current
-Sectio's entry snapshot. Sectio Adlectio, Alienatio, and lipsanon choices save normally;
+Sectio's entry snapshot. Sectio Adlectio, whole-card Expunctio, and lipsanon choices save normally;
 **Reset Sectio** restores the snapshot while retaining the exact offers already
 dealt for that visit. Ataraxia unlocks are separate monotonic progression because
 finishing or abandoning deletes the active Run document; the browser copy and

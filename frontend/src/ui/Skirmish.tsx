@@ -126,7 +126,6 @@ export interface RunBattlePresentation {
   onRerollDeployment: () => boolean;
   canRerollDeployment: boolean;
   deploymentRerollCostTenths: number;
-  onPawnCashOut?: (unitId: string) => void;
   onAbandonRun?: () => void;
   transformCommittedBoard?: RunBattleTransformSink;
   undoAdapter: RunBattleUndoAdapter;
@@ -1524,7 +1523,6 @@ function SkirmishSession(props: SkirmishProps = {}) {
               src: predrawnPreview,
               registration: predrawnRegistration,
             } : undefined}
-            onPawnCashOut={runBattle?.onPawnCashOut ?? null}
           />
           {!playableSurfaceReady && !boardSurfaceError ? (
             <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate skirmish-surface-loading" role="status">

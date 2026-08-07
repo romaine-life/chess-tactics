@@ -34,7 +34,7 @@ describe('main-menu Enchiridion addresses', () => {
   });
 
   it('keeps every per-item address inside the section that owns it', () => {
-    expect(enchiridionLipsanonFromPath(enchiridionLipsanonHref('fair-scales'))).toBe('fair-scales');
+    expect(enchiridionLipsanonFromPath(enchiridionLipsanonHref('royal-tent'))).toBe('royal-tent');
     expect(enchiridionLipsanonFromPath('/enchiridion/lipsana/royal-decree')).toBeNull();
     expect(enchiridionCardFromPath(enchiridionCardHref('ppb-protected'))).toBe('ppb-protected');
     expect(enchiridionCardHref('his-grace')).toBe('/enchiridion/cards/his-grace');

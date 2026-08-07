@@ -2,7 +2,6 @@ import { useLayoutEffect, useMemo, useRef, type CSSProperties, type ReactElement
 import { defaultBackgroundSet } from '../art/backgroundSets';
 import { paletteForSide } from '../core/pieces';
 import {
-  GOLD_SCALE,
   PIECE_LABEL,
   PIECE_VALUE,
   LIPSANON_BY_ID,
@@ -14,7 +13,6 @@ import {
 import { installedPortraitCrops } from './portraitCrops';
 import { runtimePortraitMasterSrc } from './portraitCandidates';
 import { UnitPortrait, type Palette as PortraitPalette, type Piece as PortraitPiece } from './PortraitEditor';
-import { RunGoldAmount } from './RunResources';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { RunSceneViewport } from './RunWorkspace';
 import { InnerChromeBox } from './shared/ChromeBox';
@@ -53,8 +51,7 @@ const PLAYER_PORTRAIT_PALETTE = paletteForSide('player') as PortraitPalette;
 const TYPE_ORDER: readonly RunArmyPieceType[] = ['king', 'pawn', 'knight', 'bishop', 'rook', 'queen'];
 
 export type RunUnitTraitId =
-  | 'royal-tent'
-  | 'pawn-cash-out';
+  | 'royal-tent';
 
 /**
  * A paired unit state draws its own accepted icon; a lipsanon-derived trait is not one of
@@ -90,15 +87,6 @@ export function runUnitTraits(run: RunDocument, unit: RunArmyUnit): RunUnitTrait
       'Places up to three temporary rocks in front of the King.',
       LIPSANON_BY_ID['royal-tent'].name,
       { glyphClass: 'skirmish-icon-shield' },
-    ));
-  }
-  if (unit.type === 'pawn' && hasLipsanon(run, 'mercenary-boat')) {
-    traits.push(inheritedTrait(
-      'pawn-cash-out',
-      'Cash Out',
-      'May leave the army for two gold instead of promoting.',
-      LIPSANON_BY_ID['mercenary-boat'].name,
-      { glyphClass: 'skirmish-icon-crossed-swords' },
     ));
   }
   return traits;
@@ -139,10 +127,6 @@ function unitSourceLabel(unit: RunArmyUnit): string {
   return 'Sectio Adlectio';
 }
 
-export function unitAlienatioTenths(run: RunDocument, unit: RunArmyUnit): number {
-  return PIECE_VALUE[unit.type] * GOLD_SCALE * (hasLipsanon(run, 'fair-scales') ? 0.75 : 0.5);
-}
-
 function unitRunStatus(run: RunDocument, unit: RunArmyUnit): string {
   if (run.phase === 'battle') {
     if (run.battleRuntime?.observedDeadUnitIds.includes(unit.id)) return 'Fallen this Battle';
@@ -157,7 +141,7 @@ function unitRunStatus(run: RunDocument, unit: RunArmyUnit): string {
     if (!run.deployment?.deployingUnitIds.includes(unit.id)) return 'Not dealt';
     return 'Preparing to deploy';
   }
-  if (run.phase === 'sectio') return unit.type === 'king' ? 'Permanently retained' : 'Available for Alienatio';
+  if (run.phase === 'sectio') return 'Held formation';
   if (run.phase === 'victory') return 'War survivor';
   return 'Mustering';
 }
@@ -269,7 +253,6 @@ function RunRosterFilters({
           options={[
             { value: 'all', label: 'All traits' },
             { value: 'royal-tent', label: 'Royal Tent' },
-            { value: 'pawn-cash-out', label: 'Cash Out' },
           ]}
           onChange={(ability) => onChange({ ...filters, ability })}
           ariaLabel="Army trait"
@@ -287,7 +270,6 @@ function acquisitionOrder(run: RunDocument): Map<string, number> {
   };
   run.sectio?.entrySnapshot?.army.forEach(push);
   run.army.forEach(push);
-  run.sectio?.alienatedUnits.forEach(({ unit }) => push(unit));
   return new Map(ids.map((id, index) => [id, index]));
 }
 
@@ -320,47 +302,6 @@ function filteredAndSortedUnits(
       return TYPE_ORDER.indexOf(left.type) - TYPE_ORDER.indexOf(right.type)
         || left.number - right.number;
     });
-}
-
-function ProfileAlienatioAction({
-  run,
-  unit,
-  onAliene,
-}: {
-  run: RunDocument;
-  unit: RunArmyUnit;
-  onAliene: (unitId: string) => void;
-}): ReactElement {
-  const unavailableReason = unit.type === 'king'
-    ? 'The King is permanently retained and cannot undergo Alienatio.'
-    : run.phase !== 'sectio'
-      ? 'Units can undergo Alienatio only during Sectio.'
-      : null;
-  const button = (
-    <ChromeButton unit="inner-text-button"
-      data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-      data-ui-sfx={unavailableReason ? undefined : 'gold'}
-      className={chromeUnitClassNames('inner-text-button', 'app-header-button', unavailableReason ? '' : 'danger')}
-      style={{ ['--run-leaf-control-index' as string]: 1 } as CSSProperties}
-      disabled={Boolean(unavailableReason)}
-      onClick={() => onAliene(unit.id)}
-    >
-      <span>{unit.type === 'king' ? 'Retained' : 'Aliene'}</span>
-      {unit.type !== 'king' ? (
-        <RunGoldAmount valueTenths={unitAlienatioTenths(run, unit)} className="run-gold-amount--button" />
-      ) : null}
-    </ChromeButton>
-  );
-  if (!unavailableReason) return button;
-  return (
-    <Tooltip
-      trigger={button}
-      label={unavailableReason}
-      popupMaxInlineSize={288}
-    >
-      <span>{unavailableReason}</span>
-    </Tooltip>
-  );
 }
 
 function RunArmyWorkspaceHost({
@@ -413,7 +354,6 @@ export function RunArmyWorkspace({
   onFiltersChange,
   onSelectUnit,
   onBack,
-  onAliene,
   profileAction,
 }: {
   run: RunDocument;
@@ -425,8 +365,7 @@ export function RunArmyWorkspace({
   onFiltersChange: (filters: RunArmyFilters) => void;
   onSelectUnit: (unitId: string) => void;
   onBack: () => void;
-  onAliene: (unitId: string) => void;
-  /** Replaces the ordinary Alienatio control when the profile is choosing a unit for another workflow. */
+  /** Adds a deliberate caller-owned action while the profile is choosing a unit. */
   profileAction?: RunArmyProfileAction;
 }): ReactElement {
   const selected = selectedUnitId ? run.army.find((unit) => unit.id === selectedUnitId) ?? null : null;
@@ -488,7 +427,7 @@ export function RunArmyWorkspace({
                   >
                     {profileAction.label}
                   </ChromeButton>
-                ) : <ProfileAlienatioAction run={run} unit={selected} onAliene={onAliene} />}
+                ) : null}
               </section>
             </div>
           </KitScroll>

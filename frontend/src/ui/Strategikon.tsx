@@ -146,7 +146,6 @@ export function Strategikon({
               onFiltersChange={setFilters}
               onSelectUnit={setSelectedUnitId}
               onBack={() => setSelectedUnitId(null)}
-              onAliene={() => undefined}
               framed={false}
             />
           ) : (
