@@ -147,7 +147,7 @@ describe('premoveGhosts', () => {
     expect(premoveGhosts(g, steps, 'enemy')[0]).toMatchObject({ key: '0,4', pieces: [{ id: 'er', side: 'enemy' }] });
   });
 
-  it('projects the promotion piece selected when the premove was queued', () => {
+  it('projects an unchosen promotion premove as the Pawn that will arrive', () => {
     const g: GameState = {
       ...board([
         piece('pp', 'player', 'pawn', 4, 1),
@@ -156,9 +156,10 @@ describe('premoveGhosts', () => {
       ]),
       promotionRules: [{ side: 'player', cells: [{ x: 4, y: 0 }], choices: ['queen', 'knight'] }],
     };
-    const steps = [{ pieceId: 'pp', x: 4, y: 0, promotion: 'knight' as const }];
+    const steps = [{ pieceId: 'pp', x: 4, y: 0 }];
 
-    expect(provisionalBoard(g, steps, 'player').pieces.find((p) => p.id === 'pp')?.type).toBe('knight');
-    expect(premoveGhosts(g, steps, 'player')[0]?.pieces[0]?.type).toBe('knight');
+    expect(provisionalBoard(g, steps, 'player').pieces.find((p) => p.id === 'pp')).toMatchObject({ type: 'pawn', x: 4, y: 0 });
+    expect(premoveGhosts(g, steps, 'player')[0]?.pieces[0]?.type).toBe('pawn');
+    expect(premoveTargets(g, steps, 'pp', 'player')).toEqual([]);
   });
 });

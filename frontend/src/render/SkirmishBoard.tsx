@@ -14,6 +14,7 @@ import { useSkirmishView } from '../game/SkirmishViewStoreContext';
 import { PLAYER_TECHNICAL_MINIMUM_ZOOM } from '../game/boardCameraPolicy';
 import { provisionalBoard, premoveArrows, premoveGhosts, premoveTargets, type PremoveArrow, type PremoveStep } from '../game/premoves';
 import { clientSide, opponentSide } from '../game/clientPerspective';
+import { PLAYER_MOVE_PRESENTATION_MS, promotionArrivalPieces } from '../game/promotionPresentation';
 import { BoardLabBoard, boardLabCellPosition, immutableBoardLabTerrainSrc } from './BoardLabBoard';
 import { PredrawnMoveHighlightPaint } from './PredrawnMoveHighlightPaint';
 import { terrainTopSrc, type TerrainCanvasCell } from './BoardTerrainLayer';
@@ -26,6 +27,7 @@ import {
 } from './BoardCanvasLayer';
 import { objectBaseZIndex } from './sceneDepth';
 import { ViewPane, minimumZoomToCoverViewport, type ViewPaneViewportSize } from '../ui/shared/ViewPane';
+import { PawnPromotionPicker } from '../ui/PawnPromotionPicker';
 import { useBoardCameraFraming } from '../ui/shared/BoardViewFraming';
 import { useBoardFrameReveal } from './boardArtReady';
 import { loadingMark } from '../diagnostics/loadingTimeline';
@@ -1200,7 +1202,7 @@ function SkirmishSceneLayer({
         targetLeft: target.left,
         targetTop: target.top,
         startTime: now,
-        duration: snap ? 0 : piece.side === 'enemy' ? 460 : 360,
+        duration: snap ? 0 : piece.side === 'enemy' ? 460 : PLAYER_MOVE_PRESENTATION_MS,
       });
     }
     for (const id of motionRef.current.keys()) {
@@ -1450,6 +1452,7 @@ export function SkirmishBoard({
   unitArrivals = activate ? 'active' : 'pending',
   unitArrivalTrack = 'drop',
   revealTransition = 'local',
+  onPawnCashOut = null,
 }: {
   interactive?: boolean;
   /**
@@ -1491,6 +1494,8 @@ export function SkirmishBoard({
    * readiness gate still keeps incomplete pixels hidden, but does not start a second fade.
    */
   revealTransition?: 'local' | 'scene';
+  /** Run-only Paid Crossing action offered beside the arrived Pawn. */
+  onPawnCashOut?: ((pieceId: string) => void) | null;
 } = {}) {
   const interactionEnabled = interactive && !surfaceState;
   // Board-view state lives in the shared view store so the HUD's "View" tab owns
@@ -1528,6 +1533,8 @@ export function SkirmishBoard({
   const storedSelectedId = useSkirmish((s) => s.selectedId);
   const storedFocusedId = useSkirmish((s) => s.focusedId);
   const storedPendingPromotion = useSkirmish((s) => s.pendingPromotion);
+  const choosePromotion = useSkirmish((s) => s.choosePromotion);
+  const cashOutPromotion = useSkirmish((s) => s.cashOutPromotion);
   const storedSeed = useSkirmish((s) => s.seed);
   const game = surfaceState?.game ?? storedGame;
   const env = useMemo(
@@ -1726,12 +1733,23 @@ export function SkirmishBoard({
     () => exactBoard ? wallArtSrcs(exactBoard.wallArt, { cols: game.size.cols, rows: game.size.rows }) : [],
     [exactBoard, game.size.cols, game.size.rows],
   );
+  const presentedPieces = useMemo(
+    () => pendingPromotion
+      ? promotionArrivalPieces(game, pendingPromotion.pieceId, pendingPromotion.move)
+      : game.pieces,
+    [game, pendingPromotion],
+  );
   const livePieces = useMemo(
     // Prop colliders (`prop-…`) block movement but render as the tall PropSprite, not a unit
     // seat — exclude them so they don't paint an empty/phantom seat over their footprint cells.
-    () => game.pieces.filter((piece) => piece.alive && !isPropCollider(piece)).sort((a, b) => a.x + a.y - (b.x + b.y)),
-    [game.pieces],
+    () => presentedPieces.filter((piece) => piece.alive && !isPropCollider(piece)).sort((a, b) => a.x + a.y - (b.x + b.y)),
+    [presentedPieces],
   );
+  const choosingPromotion = pendingPromotion?.phase === 'choosing' ? pendingPromotion : null;
+  const promotingPiece = choosingPromotion
+    ? livePieces.find((piece) => piece.id === choosingPromotion.pieceId && piece.alive) ?? null
+    : null;
+  const promotionPickerSeat = promotingPiece ? boardLabCellPosition(promotingPiece) : null;
   const sceneUrls = useMemo(
     () => sceneArtUrls(sceneBoard, seed, ambientSceneCover, predrawnBackgroundActive),
     [ambientSceneCover, predrawnBackgroundActive, sceneBoard, seed],
@@ -1871,7 +1889,7 @@ export function SkirmishBoard({
     const p = provGame.pieces.find((piece) => piece.id === premoveSelectedId && piece.alive && piece.side === localSide);
     return p ? `${p.x},${p.y}` : null;
   }, [localSide, premoveMode, premoveSelectedId, provGame.pieces]);
-  const showStoreSelection = !premoveMode || !premoveSelectedId;
+  const showStoreSelection = !pendingPromotion && (!premoveMode || !premoveSelectedId);
   // Pieces with a queued premove get TWO ghosts: the real piece dimmed in place (before) and a
   // translucent copy on its planned square (after). The before/origin square is also a precise
   // handle for continuing that unit's premove when several after-ghosts share one tile.
@@ -2275,6 +2293,7 @@ export function SkirmishBoard({
               showStoreSelection && game.pieces.some((piece) => piece.id === selectedId && piece.alive && piece.x === cell.x && piece.y === cell.y) ? 'is-selected' : '',
               premoveSelKey === key ? 'is-selected' : '',
               showStoreSelection && focusPiece && focusPiece.x === cell.x && focusPiece.y === cell.y ? 'is-focused-piece' : '',
+              choosingPromotion && choosingPromotion.move.x === cell.x && choosingPromotion.move.y === cell.y ? 'is-selected' : '',
             ].filter(Boolean).join(' ');
             return (
               <button
@@ -2302,6 +2321,21 @@ export function SkirmishBoard({
           }}
         >
           {!surfaceState ? <PremoveArrowLayer arrows={premoveChain} /> : null}
+          {choosingPromotion && promotingPiece && promotionPickerSeat ? (
+            <PawnPromotionPicker
+              piece={promotingPiece}
+              choices={choosingPromotion.choices}
+              boardSeat={promotionPickerSeat}
+              boardZoom={boardZoom}
+              onChoose={choosePromotion}
+              onCashOut={onPawnCashOut
+                && choosingPromotion.mode === 'move'
+                && promotingPiece.type === 'pawn'
+                && promotingPiece.id.startsWith('run-')
+                ? () => cashOutPromotion(onPawnCashOut)
+                : null}
+            />
+          ) : null}
         </BoardLabBoard>
       </ViewPane>
       {/* A battlefield overlay belongs to the measured screen viewport, not to the board world.

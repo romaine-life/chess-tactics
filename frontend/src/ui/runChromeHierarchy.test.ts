@@ -716,7 +716,7 @@ describe('Run chrome hierarchy', () => {
     expect(gameStore).toContain('const undoCheckpoint = capturePlayerMoveUndo();');
     expect(gameStore).toContain("log: ['Move undone — 1 gold paid.', ...checkpoint.log]");
     expect(gameStore).toContain('beforeApply?.(piece.id);');
-    expect(gameStore).toContain('commitPlayerMove(p, mv, undefined, true, commitRunCashOut);');
+    expect(gameStore).toContain('commitPlayerMove(p, mv, undefined, true, commitRunCashOut, true);');
     expect(matchPersistence).toContain('undoCheckpoint: state.undoCheckpoint ?? null');
   });
 });

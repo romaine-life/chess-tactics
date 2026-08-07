@@ -5,7 +5,8 @@ import { useSkirmishView, useSkirmishViewStoreApi } from '../game/SkirmishViewSt
 import type { SkirmishViewStore } from '../game/skirmishView';
 import { livingPieces } from '../core/rules';
 import { PIECE_LABEL, PIECE_MARK, isPlayablePieceType, paletteForSide, pieceSpritePath } from '../core/pieces';
-import type { Piece, PieceType, PromotionPieceType, Side } from '../core/types';
+import type { Piece, PieceType, Side } from '../core/types';
+import { promotionArrivalPieces } from '../game/promotionPresentation';
 import type { TimeControl } from '../core/level';
 import { defaultBackgroundSet } from '../art/backgroundSets';
 // One shared "unit portrait box" (master render + crop + the fill-frame) — the Selected-Unit
@@ -24,7 +25,6 @@ import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox, ShellControlsPanel } from './shared/ChromeBox';
 import { useAuthSession } from '../net/authSession';
 import { AdminControls } from './AdminControls';
-import { LIPSANON_BY_ID } from '../run/model';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 import { StrategikonTitleNavigation } from './StrategikonTitleNavigation';
 import { RunBattleUndoButton } from './RunBattleUndoButton';
@@ -119,13 +119,6 @@ export function runSkirmishShortcut(
   return true;
 }
 
-const PROMOTION_LABEL: Record<PromotionPieceType, string> = {
-  queen: 'Queen',
-  rook: 'Rook',
-  bishop: 'Bishop',
-  knight: 'Knight',
-};
-
 function unitSprite(piece: Piece | null): string | null {
   if (!piece || piece.side === 'neutral' || !isPlayablePieceType(piece.type)) return null;
   return pieceSpritePath(piece.type, paletteForSide(piece.side, piece.palette), piece.facing);
@@ -212,8 +205,6 @@ export type SkirmishHudProps = {
   netInteractive?: boolean;
   /** Development-only owner calibration for a temporary pre-drawn plate candidate. */
   onOpenPredrawnRegistration?: (() => void) | null;
-  /** Run-only Paid Crossing action for a persistent Pawn at promotion. */
-  onPawnCashOut?: ((pieceId: string) => void) | null;
   /** Permanently end the active Run. RunScreen owns confirmation and persistence. */
   onAbandonRun?: (() => void) | null;
   /** Battle-context reference workspace. The route owns whether it is open. */
@@ -248,7 +239,6 @@ export function SkirmishHud({
   returnLabel = 'Back',
   netInteractive = true,
   onOpenPredrawnRegistration = null,
-  onPawnCashOut = null,
   onAbandonRun = null,
   strategikonPath = null,
   strategikonSearch = '',
@@ -265,8 +255,6 @@ export function SkirmishHud({
   const resign = useSkirmish((s) => s.resign);
   const resignLocal = useSkirmish((s) => s.resignLocal);
   const pendingPromotion = useSkirmish((s) => s.pendingPromotion);
-  const choosePromotion = useSkirmish((s) => s.choosePromotion);
-  const cashOutPromotion = useSkirmish((s) => s.cashOutPromotion);
   const select = useSkirmish((s) => s.select);
   const focus = useSkirmish((s) => s.focus);
   const testMode = useSkirmish((s) => s.testMode);
@@ -330,12 +318,14 @@ export function SkirmishHud({
   // 'you' = the lobby seat this client controls (host='player', guest='enemy'), so the
   // guest sees "Victory" when the 'enemy' side wins and "Your turn" on the enemy turn.
   const localSide = clientSide(net);
-  const rosterRows = clientSideOrder(localSide).map((side) => ({ side, pieces: livingPieces(game.pieces, side) }));
-  const selected = game.pieces.find((piece) => piece.id === selectedId && piece.alive) ?? null;
-  const focused = game.pieces.find((piece) => piece.id === focusedId && piece.alive) ?? selected;
+  const presentedPieces = pendingPromotion
+    ? promotionArrivalPieces(game, pendingPromotion.pieceId, pendingPromotion.move)
+    : game.pieces;
+  const rosterRows = clientSideOrder(localSide).map((side) => ({ side, pieces: livingPieces(presentedPieces, side) }));
+  const selected = presentedPieces.find((piece) => piece.id === selectedId && piece.alive) ?? null;
+  const focused = presentedPieces.find((piece) => piece.id === focusedId && piece.alive) ?? selected;
   const logLines = log.length ? log.slice(0, 16) : ['Skirmish begins.'];
   const focusedPortraitBackdrop = focused && isPlayablePieceType(focused.type) ? defaultBackgroundSet().portraits[focused.type] : null;
-  const promotingPiece = pendingPromotion ? game.pieces.find((piece) => piece.id === pendingPromotion.pieceId) ?? null : null;
   const turnLabel = clientTurnLabel(game, localSide, !!net?.pendingMove);
   const strategikonNavigation = strategikonPath
     ? <StrategikonTitleNavigation path={strategikonPath} search={strategikonSearch} />
@@ -391,43 +381,6 @@ export function SkirmishHud({
             ))}
           </div>
         </section>
-
-      {pendingPromotion ? (
-        <section className="skirmish-card skirmish-promotion-card" aria-label="Pawn promotion">
-          <span className="skirmish-eyebrow">Promote Pawn</span>
-          <div className="skirmish-promotion-options">
-            {pendingPromotion.choices.map((type) => {
-              const palette = paletteForSide(promotingPiece?.side ?? localSide, promotingPiece?.palette);
-              const src = pieceSpritePath(type, palette, promotingPiece?.facing);
-              return (
-                <ChromeButton unit="inner-asset-swatch"
-                  key={type}
-                  className={chromeUnitClassNames('inner-asset-swatch', 'app-header-button', 'skirmish-promotion-option')}
-                  onClick={() => choosePromotion(type)}
-                  aria-label={`Promote to ${PROMOTION_LABEL[type]}`}
-                  title={`Promote to ${PROMOTION_LABEL[type]}`}
-                >
-                  <img src={src} alt="" draggable={false} />
-                  <span>{PROMOTION_LABEL[type]}</span>
-                </ChromeButton>
-              );
-            })}
-            {onPawnCashOut && pendingPromotion.mode === 'move' && promotingPiece?.type === 'pawn' && promotingPiece.id.startsWith('run-') ? (
-              <ChromeButton unit="inner-text-button"
-                className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'skirmish-promotion-option')}
-                onClick={() => {
-                  cashOutPromotion(onPawnCashOut);
-                }}
-                aria-label="Take 2 gold and permanently remove this Pawn"
-                title={`${LIPSANON_BY_ID['mercenary-boat'].name}: take 2 gold; this Pawn leaves the army permanently.`}
-              >
-                <span aria-hidden="true">¤</span>
-                <span>Take 2 gold</span>
-              </ChromeButton>
-            ) : null}
-          </div>
-        </section>
-      ) : null}
 
       <div
         className="skirmish-hud-panel"

@@ -28,6 +28,11 @@ search for before constructing a control or repeated surface.
   `RunForm` and standalone `Skirmish`. Its `persistentViewportArtwork` seat owns
   environment art shared by sibling viewport destinations and keeps that art
   outside their director-owned fade.
+- `ui/PawnPromotionPicker.tsx` — the blocking board-seated promotion callout. It
+  opens toward the board middle, cancels board zoom for stable control size, and
+  composes a structural teal field with registered oak leaf asset-swatch buttons
+  without duplicating the choice in the Controls rail or pre-focusing a replacement
+  (ADR-0433, ADR-0500, ADR-0501).
 - `ui/shell/SceneActivity.tsx` — the director-owned authority for functional
   scene time. Preparing scenes may render, decode, and measure, but their entered
   actions remain dormant. Entry motion is constructed during preparation and held
