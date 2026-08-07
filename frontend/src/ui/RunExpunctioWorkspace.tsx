@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement } from 'react';
 import {
   cardExpunctioPriceTenths,
   runCardDefinition,
@@ -10,10 +10,6 @@ import {
 import { runCardName } from '../run/cardNames';
 import { KitScroll } from './KitScroll';
 import { RunCard } from './RunCard';
-import {
-  runCardMotionDurationMs,
-  type RunCardFlightRect,
-} from './runCardFlightView';
 import {
   RunUnitTraitList,
   runUnitDisplayName,
@@ -31,20 +27,11 @@ import { ChromeButton } from './shared/ChromeButton';
 import { InnerChromeBox } from './shared/ChromeBox';
 import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
 import { CyclePicker } from './shared/CyclePicker';
-import { useSceneMotion } from './shell/SceneActivity';
 
 type AttachedUnit = Readonly<{
   unit: RunArmyUnit;
   pieceIndex: number;
 }>;
-
-function runUnitReflowOffset(
-  from: RunCardFlightRect,
-  to: RunCardFlightRect,
-): Readonly<{ x: number; y: number }> | null {
-  if (from.width <= 0 || from.height <= 0 || to.width <= 0 || to.height <= 0) return null;
-  return { x: from.left - to.left, y: from.top - to.top };
-}
 
 type ExpunctioRow = Readonly<{
   card: RunOwnedCard;
@@ -131,9 +118,7 @@ function ExpunctioCardTile({
   onExpunct: (cardId: string) => void;
 }): ReactElement {
   const { card, definition, units, emptyPieceIndices, priceTenths, status } = row;
-  const sceneMotion = useSceneMotion();
   const cardRef = useRef<HTMLSpanElement | null>(null);
-  const previousUnitRectsRef = useRef<Map<string, RunCardFlightRect> | null>(null);
   const cardName = runCardName(definition);
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
   const selectedIndex = units.findIndex(({ unit }) => unit.id === selectedUnitId);
@@ -159,61 +144,19 @@ function ExpunctioCardTile({
   const pieceSelectionIds = definition.pieces.map((_, pieceIndex) => (
     units.find((unit) => unit.pieceIndex === pieceIndex)?.unit.id ?? null
   ));
-  const unitLayoutKey = units.map(({ unit }) => unit.id).join('|');
   const unitCanAliene = status !== 'expuncted' && selected !== null && selected.unit.type !== 'king';
 
-  const cardUnitElements = (): Map<string, HTMLElement> => {
-    const elements = new Map<string, HTMLElement>();
+  const cardUnitSources = (): Map<string, HTMLImageElement> => {
+    const sources = new Map<string, HTMLImageElement>();
     cardRef.current?.querySelectorAll<HTMLElement>(
-      '.run-card-face-layer.is-presented [data-run-card-unit-id]',
+      '.run-card-face-layer.is-presented [data-selection-id]',
     ).forEach((element) => {
-      const unitId = element.dataset.runCardUnitId;
-      if (unitId) elements.set(unitId, element);
+      const unitId = element.dataset.selectionId;
+      const source = element.querySelector<HTMLImageElement>('.run-card-formation-unit');
+      if (unitId && source) sources.set(unitId, source);
     });
-    return elements;
+    return sources;
   };
-
-  useLayoutEffect(() => {
-    const previousRects = previousUnitRectsRef.current;
-    previousUnitRectsRef.current = null;
-    const cardHost = cardRef.current;
-    if (!previousRects || !cardHost) return undefined;
-    const elements = cardUnitElements();
-    const moving = [...elements].flatMap(([unitId, element]) => {
-      const previous = previousRects.get(unitId);
-      const offset = previous ? runUnitReflowOffset(previous, element.getBoundingClientRect()) : null;
-      if (!offset || (Math.abs(offset.x) < .5 && Math.abs(offset.y) < .5)) return [];
-      return [{ element, offset }];
-    });
-    if (!moving.length) return undefined;
-
-    const style = getComputedStyle(cardHost);
-    const duration = runCardMotionDurationMs(style.getPropertyValue('--ds-duration-fade'));
-    const easing = style.getPropertyValue('--ds-ease-standard').trim();
-    if (!duration || !easing) return undefined;
-    let cancelled = false;
-    const animations = moving.flatMap(({ element, offset }) => {
-      element.classList.add('is-reflowing');
-      const animation = sceneMotion.animate(
-        element,
-        [{ translate: `${offset.x}px ${offset.y}px` }, { translate: '0 0' }],
-        { duration, easing },
-      );
-      if (!animation) element.classList.remove('is-reflowing');
-      return animation ? [{ animation, element }] : [];
-    });
-    void Promise.allSettled(animations.map(({ animation }) => animation.finished)).then(() => {
-      if (cancelled) return;
-      animations.forEach(({ element }) => element.classList.remove('is-reflowing'));
-    });
-    return () => {
-      cancelled = true;
-      animations.forEach(({ animation, element }) => {
-        animation.cancel();
-        element.classList.remove('is-reflowing');
-      });
-    };
-  }, [sceneMotion, unitLayoutKey]);
 
   return (
     <InnerChromeBox
@@ -230,7 +173,6 @@ function ExpunctioCardTile({
           card={definition}
           mode="reference"
           emptyPieceIndices={status === 'expuncted' ? [] : emptyPieceIndices}
-          compactEmptyPieceSeats
           highlightedPieceIndex={status === 'expuncted' ? null : selected?.pieceIndex ?? null}
           pieceSelectionIds={status === 'expuncted' ? [] : pieceSelectionIds}
           pieceSelectionLabels={status === 'expuncted' ? [] : pieceSelectionLabels}
@@ -302,12 +244,7 @@ function ExpunctioCardTile({
                 disabled={!unitCanAliene}
                 onClick={() => {
                   if (!selected) return;
-                  const elements = cardUnitElements();
-                  previousUnitRectsRef.current = new Map(
-                    [...elements].map(([unitId, element]) => [unitId, element.getBoundingClientRect()]),
-                  );
-                  const source = elements.get(selected.unit.id)
-                    ?.querySelector<HTMLImageElement>('.run-card-prototype-unit-icon') ?? null;
+                  const source = cardUnitSources().get(selected.unit.id) ?? null;
                   onAliene(selected.unit.id, source);
                 }}
               >

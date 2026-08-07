@@ -403,6 +403,16 @@ an incomplete row is an availability failure.
   retain the same live integer. The dedicated alpha asset prevents surrounding
   frame pixels from entering non-card layouts; it does not introduce numbered
   coin artwork.
+  Gold-value group headings in Cards and the Chartulary compose that same live
+  coin over the exact text-free PixelLab ornament in
+  `ui/run/card-prototypes/gold-tier-divider-v1.png`. Its standalone typed slot is
+  SHA-bound to the ADR-0506 source. The shared renderer clips transparent source
+  rows and uses the declared `{top:138,right:56,bottom:139,left:132}` three-slice
+  geometry at 38px tall, preserving 47px/20px end caps while stretching only the
+  undecorated rail span. This is the closed ADR-0506 resampling exception, not a
+  general permission to scale UI art. Its live coin placement is deterministic
+  Git-owned geometry; the ADR-0507 Studio Viewer renders the same shared primitive
+  and saves only that fixed geometry record, never media bytes or live pointers.
   Starter status does not override that semantic frame selection. His Grace's
   Praecipuus property owns the selected royal-purple frame treatment, while
   property-free Front Lines uses the ordinary Standard Units frame and keeps
@@ -488,6 +498,7 @@ exact-byte review instrument exist:
 | Structure source-art turntables | Structure drawable catalog + shared live-media catalog/private Blob | Outside-repository batch manifest + canonical source archive client; one archived pack may supply multiple exact object-allowlisted Artwork groups | Complete; Studio validates all eight native 512×512 rasters, requires each exact direction to mount in the interactive board placement proof, records the typed owner group proof, accepts atomically, then installs the drawable record |
 | Strategikon command-archive background | `app-ui` drawable + shared live-media catalog/private Blob | Shared candidate API under the exact typed semantic slot | Complete; the live Strategikon surface records the closed ADR-0336 cover exception and exact candidate/slot proof, acceptance swaps the pointer atomically, and the drawable installs the required runtime role |
 | Universal Run card back | Shared live-media catalog + private Blob at `ui/run/card-back/standard.png` | Outside-repository batch manifest preserving the generated source and exact native candidate | Complete; Card Layout mounts the exact 1060×1484 candidate at full and Controls-stack scales, backend proof binds that SHA and semantic slot to the shared `RunCardBack` renderer, and standalone acceptance installs the current default without precluding later player selection among separately accepted backs |
+| Run card gold-tier divider | Shared live-media catalog + private Blob at `ui/run/card-prototypes/gold-tier-divider-v1.png` | Shared candidate API preserving the exact owner-selected PixelLab PNG | Complete; the Enchiridion Cards gallery mounts the exact candidate through `RunCardGoldTierDivider`, records the ADR-0506 three-slice presentation and slot snapshot, and standalone acceptance atomically installs the text-free ornament shared by Cards and the Chartulary |
 | Authored SFX one-shots | Shared live-media catalog/private Blob + revisioned `sfx_profiles/default` | Shared candidate API under typed `sfx/<sound-set>/v<n>.<format>` slots | Complete; the SFX Viewer mounts a complete private source waveform, lets the owner trim and audition an exact range, saves an immutable hash-verified derived candidate with frame/time provenance, then exact-byte auditions, atomically accepts, and declares that set in the live profile |
 | Other terrain and generic media domains | Shared live-media catalog + private Blob | Shared single/batch APIs | Deliberately blocked until that projection has a typed completeness validator, domain-owned exact-byte review instrument, backend proof validation, and atomic acceptance/rollback tests |
 | BGM | Backend-listed private Blob container; app-owned discovery/playback routes; per-Blob user-delegation SAS | Blob administration | Range-streamed by Azure after a bounded no-store redirect; intentionally not the generic candidate lifecycle (ADR-0200) |

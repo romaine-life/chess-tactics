@@ -7,7 +7,7 @@ refines:
   - "[ADR-0493](0493-generated-run-formations-fall-sideways-and-own-rarity.md)'s visible sideways Run arrival"
 ---
 
-# ADR-0506: Run formations summon off-board before sliding
+# ADR-0509: Run formations summon off-board before sliding
 
 ## Context
 

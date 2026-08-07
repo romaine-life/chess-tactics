@@ -24,7 +24,7 @@ import {
 import { KitScroll } from './KitScroll';
 import { RunCard } from './RunCard';
 import { InnerChromeBox } from './shared/ChromeBox';
-import { RunCardCostCoin } from './shared/RunCardCostCoin';
+import { RunCardGoldTierDivider, useRunCardGoldTierDividerSource } from './shared/RunCardGoldTierDivider';
 import { ChromeButton } from './shared/ChromeButton';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 
@@ -56,6 +56,7 @@ export function HeldCardCodex({
   const [goldFilter, setGoldFilter] = useState<CardGoldFilter>('all');
   const [unitFilter, setUnitFilter] = useState<CardUnitFilter>('all');
   const [thisCombatOnly, setThisCombatOnly] = useState(false);
+  const goldTierDividerSource = useRunCardGoldTierDividerSource();
   const all = useMemo(() => heldCards(run), [run]);
   const thisCombatAvailable = Boolean(
     run.deployment && (run.phase === 'deployment' || run.phase === 'battle'),
@@ -105,7 +106,7 @@ export function HeldCardCodex({
             {groups.map(([value, cards]) => (
               <section className="enchiridion-card-gallery-group" key={value} aria-label={`${value} gold cards`}>
                 <h3 className="enchiridion-card-gallery-heading">
-                  <RunCardCostCoin value={value} className="enchiridion-card-group-gold" />
+                  <RunCardGoldTierDivider value={value} source={goldTierDividerSource} />
                 </h3>
                 <div className="enchiridion-card-gallery-grid">
                   {cards.map((held) => (

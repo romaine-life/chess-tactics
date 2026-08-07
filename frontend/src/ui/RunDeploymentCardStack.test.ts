@@ -16,22 +16,22 @@ describe('deploymentCardEmptyPieceIndices', () => {
     )).toEqual([0]);
   });
 
-  it('matches shuffled deployment seats back to authored seats by piece type', () => {
+  it('keeps different unit types in their authored seats as deployment advances', () => {
     expect(deploymentCardEmptyPieceIndices(
       ['pawn', 'knight'],
-      ['knight-unit', 'pawn-unit'],
+      ['pawn-unit', 'knight-unit'],
       unitTypes([['knight-unit', 'knight'], ['pawn-unit', 'pawn']]),
       1,
-    )).toEqual([1]);
+    )).toEqual([0]);
   });
 
   it('leaves pre-existing losses vacant without needing their removed unit record', () => {
     expect(deploymentCardEmptyPieceIndices(
       ['pawn', 'knight'],
-      [null, 'pawn-unit'],
-      unitTypes([['pawn-unit', 'pawn']]),
+      [null, 'knight-unit'],
+      unitTypes([['knight-unit', 'knight']]),
       0,
-    )).toEqual([1]);
+    )).toEqual([0]);
   });
 });
 

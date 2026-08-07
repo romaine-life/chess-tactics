@@ -19484,7 +19484,7 @@ button.tileset-relationship-cell {
 }
 
 /* Alienatio commits first. These source pixels then recede over their exact old
-   card seat while the surviving real figures settle into the committed stack. */
+   formation cell while every surviving real figure remains in its authored cell. */
 .run-unit-departure {
   image-rendering: pixelated;
   opacity: 1;
@@ -22723,6 +22723,44 @@ button.tileset-relationship-cell {
 .enchiridion-card-gallery-heading {
   align-items: center;
   display: flex;
+  inline-size: 100%;
+  margin: 0;
+}
+
+.run-card-gold-tier-divider {
+  block-size: 38px;
+  display: block;
+  inline-size: calc(100% + 7px);
+  margin-inline-start: -7px;
+  position: relative;
+}
+
+.run-card-gold-tier-divider.is-loading {
+  visibility: hidden;
+}
+
+.run-card-gold-tier-divider-art {
+  block-size: 38px;
+  display: grid;
+  grid-template-columns: 47px minmax(0, 1fr) 20px;
+  inline-size: 100%;
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.run-card-gold-tier-divider-art svg {
+  block-size: 38px;
+  display: block;
+  inline-size: 100%;
+  overflow: hidden;
+}
+
+.run-card-gold-tier-divider > .run-card-cost-coin {
+  --run-card-cost-coin-size: var(--run-card-gold-tier-coin-size);
+  inset-block-start: var(--run-card-gold-tier-coin-y);
+  inset-inline-start: var(--run-card-gold-tier-coin-x);
+  position: absolute;
 }
 
 .enchiridion-card-gallery-grid {
@@ -23113,6 +23151,63 @@ button.tileset-relationship-cell {
   .enchiridion-card-filter-count {
     grid-column: 1 / -1;
   }
+
+}
+
+.run-card-gold-tier-divider-catalog-image {
+  min-height: 128px;
+}
+
+.run-card-gold-tier-divider-catalog-specimen {
+  display: block;
+  inline-size: min(100%, 420px);
+}
+
+.run-card-gold-tier-divider-studio-stage {
+  align-content: start;
+  display: grid;
+  gap: 22px;
+  min-block-size: 0;
+  overflow: auto;
+  padding: 22px;
+}
+
+.run-card-gold-tier-divider-studio-stage figure {
+  margin: 0;
+}
+
+.run-card-gold-tier-divider-studio-stage figcaption {
+  color: #a9bdd2;
+}
+
+.run-card-gold-tier-divider-studio-specimens {
+  display: grid;
+  gap: 18px;
+  zoom: var(--run-card-gold-tier-studio-zoom, 1);
+}
+
+.run-card-gold-tier-divider-studio-specimens figure,
+.run-card-gold-tier-divider-studio-magnifier {
+  display: grid;
+  gap: 8px;
+}
+
+.run-card-gold-tier-divider-studio-row {
+  max-inline-size: 100%;
+}
+
+.run-card-gold-tier-divider-studio-crop {
+  block-size: 168px;
+  inline-size: 220px;
+  outline: 1px solid rgba(91, 157, 216, 0.34);
+  overflow: hidden;
+  position: relative;
+}
+
+.run-card-gold-tier-divider-studio-crop-content {
+  inline-size: 360px;
+  transform: scale(4);
+  transform-origin: left top;
 }
 
 @media (max-width: 1400px) {
@@ -25523,10 +25618,6 @@ button.run-card-prototype-unit-icon-seat.is-selectable {
 button.run-card-prototype-unit-icon-seat.is-selectable.is-pixel-hovered:not(.is-highlighted) .run-card-prototype-unit-icon,
 .run-card-prototype-unit-icon-seat.is-highlighted .run-card-prototype-unit-icon {
   filter: drop-shadow(0 0 .7cqw var(--skirmish-cyan));
-}
-
-.run-card-prototype-unit-icon-seat.is-reflowing {
-  will-change: translate;
 }
 
 /* The marker rides the unit it marks: the density ladder resizes the sprite per

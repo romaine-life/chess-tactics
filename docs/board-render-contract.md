@@ -31,7 +31,7 @@ path. The leftmost staged formation cell must be at or beyond `board.cols`, even
 deployment band ends sooner. At those off-board seats, units reuse ADR-0045's staggered summon:
 each fades in while hovering and drops into contact. The shared slide remains locked until the
 last summon has landed, after which rows, holes, and overhangs remain rigid throughout the slide
-([ADR-0506](adr/0506-run-formations-summon-off-board-before-sliding.md)).
+([ADR-0509](adr/0509-run-formations-summon-off-board-before-sliding.md)).
 Per [ADR-0449](adr/0449-deployment-position-rerolls-cost-one-before-battle-and-five-after.md),
 a post-placement reroll returns that same mounted activity to Deployment. Per
 [ADR-0450](adr/0450-live-units-leave-mounted-boards-through-registered-departure-tracks.md),

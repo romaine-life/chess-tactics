@@ -186,8 +186,8 @@ export interface RunCardOffer extends RunCoreCard {
 export interface RunOwnedCard {
   id: string;
   coreId: string;
-  /** Stable left-to-right seats. A sold or lost unit leaves null rather than reordering
-   * the card; presentation may compact the surviving seats without changing this identity. */
+  /** Stable authored formation seats. A sold or lost unit leaves null at the same index;
+   * presentation never reorders or compacts surviving units into another formation cell. */
   unitSeats: Array<string | null>;
   acquiredAfterBattleIndex: number;
 }
