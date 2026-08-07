@@ -6077,7 +6077,12 @@ async function main() {
     throw new Error(`Active Runs must reject retired Deployment pace state: ${retiredDeploymentMode.statusCode} ${retiredDeploymentMode.body}`);
   }
   const rivalRun = await get('/api/active-run', { cookie: '__Host-chess-tactics-access=rival' });
-  if (rivalRun.statusCode !== 200 || JSON.parse(rivalRun.body).run !== null) {
+  const rivalRunBody = JSON.parse(rivalRun.body);
+  if (
+    rivalRun.statusCode !== 200
+    || rivalRunBody.run?.id !== 'run-expensive-sectio-smoke'
+    || rivalRunBody.run.id === savedDeploymentRunBody.run.id
+  ) {
     throw new Error(`Active Run should be owner-scoped: ${rivalRun.statusCode} ${rivalRun.body}`);
   }
   const staleRun = await request(
