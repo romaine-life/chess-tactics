@@ -9,6 +9,7 @@ import { attackedSquares, blockedCandidateSquares, enemyThreats, gameEnv, legalM
 import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, UNIT_FACINGS, defaultFacingForSide, paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
 import { defaultTerrainFamily, familyForGameplayTerrain, familyIdForAsset, tileSocketsForAsset, type TileFamilyId } from '../core/tileSockets';
 import { useSkirmish } from '../game/SkirmishStoreContext';
+import { moveGestureInputMode } from '../game/store';
 import { adminMoveTargets } from '../game/adminBattle';
 import { useSkirmishView } from '../game/SkirmishViewStoreContext';
 import { PLAYER_TECHNICAL_MINIMUM_ZOOM } from '../game/boardCameraPolicy';
@@ -1548,6 +1549,7 @@ export function SkirmishBoard({
   const select = useSkirmish((s) => s.select);
   const focus = useSkirmish((s) => s.focus);
   const tryMoveTo = useSkirmish((s) => s.tryMoveTo);
+  const releaseMoveGesture = useSkirmish((s) => s.releaseMoveGesture);
   const storedAdminMode = useSkirmish((s) => s.adminMode);
   const adminMode = surfaceState ? null : storedAdminMode;
   const adminKillUnit = useSkirmish((s) => s.adminKillUnit);
@@ -1585,11 +1587,10 @@ export function SkirmishBoard({
     startX: number;
     startY: number;
     active: boolean;
-    targets: Set<string>;
     src: string | null;
     side: Piece['side'];
-    /** True when this drag is queuing a PREMOVE (opponent's turn) rather than moving now. */
-    premove: boolean;
+    /** The pickup happened during premove input. Release may reclassify it as a live move. */
+    startedAsPremove: boolean;
   } | null>(null);
   const ghostRef = useRef<HTMLImageElement | null>(null);
   const lastCursorRef = useRef({ x: 0, y: 0 });
@@ -1600,6 +1601,7 @@ export function SkirmishBoard({
     side: Piece['side'];
     w: number;
     h: number;
+    startedAsPremove: boolean;
   } | null>(null);
   const [dropHoverKey, setDropHoverKey] = useState<string | null>(null);
   const [dropAimKey, setDropAimKey] = useState<string | null>(null);
@@ -1929,11 +1931,40 @@ export function SkirmishBoard({
     return () => window.removeEventListener('keydown', onKey);
   }, [premoves.length, premoveSelectedId, clearPremoves]);
 
-  // While a drag is live, the selected piece's legal squares always glow (even if the
-  // View→moves overlay is off) so the player can see where the drop will land.
+  // Resolve targets from the CURRENT input boundary, not the pickup boundary. In particular,
+  // a premove drag may outlive the post-reply landing beat; once live control resumes, both its
+  // green drop promise and its eventual commit must use exact live legality.
+  const dragInputModeFor = useCallback((startedAsPremove: boolean) => moveGestureInputMode({
+    startedAsPremove,
+    adminMode,
+    gameTurn: game.turn,
+    gameWinner: game.winner,
+    localSide,
+    netMovePending,
+    pendingPromotion: Boolean(pendingPromotion),
+    premoveInputOpen,
+  }), [adminMode, game.turn, game.winner, localSide, netMovePending, pendingPromotion, premoveInputOpen]);
+  const dragMovesFor = useCallback((pieceId: string, startedAsPremove: boolean): readonly Move[] => {
+    const inputMode = dragInputModeFor(startedAsPremove);
+    if (inputMode === 'premove') {
+      return premoveTargets(game, premoves, pieceId, localSide);
+    }
+    if (inputMode !== 'move') return [];
+    const piece = game.pieces.find((candidate) => (
+      candidate.id === pieceId
+      && candidate.alive
+      && candidate.side === (adminMode === 'free-move' ? game.turn : localSide)
+    ));
+    if (!piece) return [];
+    return adminMode === 'free-move'
+      ? adminMoveTargets(game, piece.id)
+      : legalMoves(piece, game.pieces, game.size, env);
+  }, [adminMode, dragInputModeFor, env, game, localSide, premoves]);
+  // While a drag is live, its currently valid squares always glow (even if the View→moves
+  // overlay is off) so the feedback cannot outlive the authority that will accept the drop.
   const dragTargetSet = useMemo(
-    () => new Set(drag ? selectedMoves.map((move) => `${move.x},${move.y}`) : []),
-    [drag, selectedMoves],
+    () => new Set(drag ? dragMovesFor(drag.pieceId, drag.startedAsPremove).map((move) => `${move.x},${move.y}`) : []),
+    [drag, dragMovesFor],
   );
 
   const handleTile = (x: number, y: number) => {
@@ -2077,17 +2108,9 @@ export function SkirmishBoard({
       startX: event.clientX,
       startY: event.clientY,
       active: false,
-      targets: new Set(
-        (canMove
-          ? adminMode === 'free-move'
-            ? adminMoveTargets(game, piece.id)
-            : legalMoves(piece, game.pieces, game.size, env)
-          : premoveTargets(game, premoves, piece.id, localSide))
-          .map((m) => `${m.x},${m.y}`),
-      ),
       src: pieceImageSrc(piece),
       side: piece.side,
-      premove: premoveMode,
+      startedAsPremove: premoveMode,
     };
     try {
       event.currentTarget.setPointerCapture(event.pointerId);
@@ -2111,6 +2134,7 @@ export function SkirmishBoard({
         side: d.side,
         w: DEFAULT_GHOST_W * boardZoom,
         h: DEFAULT_GHOST_H * boardZoom,
+        startedAsPremove: d.startedAsPremove,
       });
     }
     // Follow the cursor imperatively (no board re-render per frame).
@@ -2123,7 +2147,8 @@ export function SkirmishBoard({
     // layers on top only for targets that will actually commit.
     const hit = cellFromPoint(event.clientX, event.clientY);
     const aimKey = hit ? `${hit.x},${hit.y}` : null;
-    const dropKey = aimKey && d.targets.has(aimKey) ? aimKey : null;
+    const currentTargets = new Set(dragMovesFor(d.pieceId, d.startedAsPremove).map((move) => `${move.x},${move.y}`));
+    const dropKey = aimKey && currentTargets.has(aimKey) ? aimKey : null;
     setDropKeys(aimKey, dropKey);
   };
 
@@ -2133,7 +2158,8 @@ export function SkirmishBoard({
     dragRef.current = null;
     const releaseHit = cellFromPoint(event.clientX, event.clientY);
     const releaseAimKey = releaseHit ? `${releaseHit.x},${releaseHit.y}` : null;
-    const releaseDropKey = releaseAimKey && d.targets.has(releaseAimKey) ? releaseAimKey : null;
+    const releaseTargets = new Set(dragMovesFor(d.pieceId, d.startedAsPremove).map((move) => `${move.x},${move.y}`));
+    const releaseDropKey = releaseAimKey && releaseTargets.has(releaseAimKey) ? releaseAimKey : null;
     setDropKeys(null, null);
     if (!d.active) return; // a tap, not a drag — let the native click handle select/move
     // A completed drag emits a trailing click; swallow it so it doesn't re-select the piece.
@@ -2142,17 +2168,14 @@ export function SkirmishBoard({
       suppressClickRef.current = false;
     }, 0);
     if (releaseHit && releaseDropKey) {
-      if (d.premove) {
-        // Opponent's turn: the drop queues a premove step (no board move now).
-        queueMove(d.pieceId, releaseHit.x, releaseHit.y);
-      } else {
+      const releaseAsPremove = dragInputModeFor(d.startedAsPremove) === 'premove';
+      if (!releaseAsPremove) {
         // Legal drop: land with no hop (the drag already showed the travel). noHopId is set in
-        // the same handler as tryMoveTo so the destination render carries the suppress flag.
+        // the same handler as the store gesture so the destination render carries the flag.
         setNoHopId(d.pieceId);
         window.setTimeout(() => setNoHopId(null), 0);
-        select(d.pieceId);
-        tryMoveTo(releaseHit.x, releaseHit.y);
       }
+      releaseMoveGesture(d.pieceId, releaseHit.x, releaseHit.y, d.startedAsPremove);
     }
     // Illegal drop (or released off the board): keep the piece selected so its move dots
     // stay up and the player can click a destination instead — just release the ghost.
@@ -2289,7 +2312,7 @@ export function SkirmishBoard({
               premoveTargetSet.has(key) ? 'is-premove-target' : '',
               premoveDestSet.has(key) ? 'is-premove' : '',
               dropAimKey === key ? 'is-drop-aim' : '',
-              dropHoverKey === key ? 'is-drop-hover' : '',
+              dropHoverKey === key && dragTargetSet.has(key) ? 'is-drop-hover' : '',
               showStoreSelection && game.pieces.some((piece) => piece.id === selectedId && piece.alive && piece.x === cell.x && piece.y === cell.y) ? 'is-selected' : '',
               premoveSelKey === key ? 'is-selected' : '',
               showStoreSelection && focusPiece && focusPiece.x === cell.x && focusPiece.y === cell.y ? 'is-focused-piece' : '',
