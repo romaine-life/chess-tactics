@@ -24,7 +24,7 @@ const ANCHOR_LABEL: Readonly<Record<string, string>> = Object.freeze({
   'jerusalem-second-temple-70-ce': 'After the Sanctuary · 70 CE',
   'dissolution-of-the-monasteries': 'Stone After Prayer · 1536–1541',
   'year-without-a-summer-1816': 'The Summer That Failed · 1816',
-  'lijssenthoek-remy-farm-wwi': 'The Farm Behind the Line · 1914–1918',
+  'siege-of-orleans-1429': 'The Bridge and the Bastides · 1429',
 });
 
 interface PromptDraft {
@@ -278,7 +278,10 @@ export function RunCardPromptViewer({
               <dl className="run-card-prototype-source-readout">
                 <div><dt>State</dt><dd>{selected.version.media ? selected.version.status : 'prompt ready'}</dd></div>
                 <div><dt>Prompt</dt><dd>{selected.promptSha256.slice(0, 12)}</dd></div>
-                <div><dt>PixelLab</dt><dd>{selected.pixelLabJobId.slice(0, 12)}</dd></div>
+                <div>
+                  <dt>{selected.generationModel === 'codex-image-gen' ? 'Codex' : 'PixelLab'}</dt>
+                  <dd>{selected.generationJobId.slice(0, 12)}</dd>
+                </div>
                 <div><dt>Revision</dt><dd>{selected.version.rowRevision}</dd></div>
               </dl>
             ) : null}

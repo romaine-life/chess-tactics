@@ -138,6 +138,27 @@ export function structureRasterDimensions(id: string): { w: number; h: number } 
   return pairDimensions(id, installedMedia(id, 'back'), installedMedia(id, 'front'));
 }
 
+/**
+ * A structure's one-shot impact sheet, when it has one: the resting frame followed by what
+ * landing does to it. Absent for every structure that simply arrives and looks the same after.
+ * The frame geometry comes from the media's own runtime declaration, never from code, so the
+ * sheet and the numbers that cut it can only travel together.
+ */
+export function structureArtImpact(id: string): { src: string; frameCount: number; frameWidth: number; frameHeight: number } | undefined {
+  const record = structureRecord(id);
+  const entry = record?.media.impact;
+  const media = entry?.media;
+  if (!media?.immutableUrl) return undefined;
+  const runtime = (entry as { metadata?: { runtime?: Record<string, unknown> } } | undefined)?.metadata?.runtime
+    ?? (record?.metadata as { impact?: Record<string, unknown> } | undefined)?.impact;
+  const frameCount = Number(runtime?.frameCount);
+  const frameWidth = Number(runtime?.frameWidth);
+  const frameHeight = Number(runtime?.frameHeight ?? media.height);
+  if (!Number.isInteger(frameCount) || frameCount < 2) return undefined;
+  if (!Number.isInteger(frameWidth) || frameWidth < 1 || !Number.isInteger(frameHeight) || frameHeight < 1) return undefined;
+  return { src: media.immutableUrl, frameCount, frameWidth, frameHeight };
+}
+
 /** The frame of one directional SOURCE view, used only by floating artwork placement. */
 export function structureArtDirectionRasterDimensions(id: string, direction: Direction): { w: number; h: number } {
   return pairDimensions(id, directionMedia(id, direction, 'back'), directionMedia(id, direction, 'front'));

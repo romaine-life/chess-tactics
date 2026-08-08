@@ -19427,6 +19427,23 @@ button.tileset-relationship-cell {
   gap: var(--ds-inline-tight);
 }
 
+/* The Sectio's cards are the decision, so the card row takes the lane instead of
+   the first 236px of it — the same rule the Bona Vacantia grant already follows.
+   A shopkey section underneath still takes its own natural height; only the card
+   row is elastic. A band wrap frames the row itself and keeps its own flex lane
+   below, so it is excluded here (ADR-0522). */
+.run-sectio-workspace-content:not(:has(.run-sectio-wrap-host)) {
+  align-content: stretch;
+  grid-template-rows: minmax(0, 1fr);
+  min-block-size: 0;
+}
+
+.run-sectio-workspace-content:not(:has(.run-sectio-wrap-host)) > .run-sectio-cards-section {
+  grid-template-rows: minmax(0, 1fr);
+  min-block-size: 0;
+  padding: var(--ds-inset);
+}
+
 .run-battle-preview-content {
   align-content: stretch;
   grid-template-rows: minmax(0, 1fr);
@@ -19557,6 +19574,16 @@ button.tileset-relationship-cell {
   gap: var(--ds-inline);
   grid-template-columns: repeat(auto-fit, minmax(196px, 236px));
   justify-content: center;
+}
+
+/* A live Run card row owns the lane it was given: it measures that lane and writes
+   its own tracks, so the ladder above is only the pre-measurement fallback and the
+   review surfaces' layout. Centred in both axes, because a row that prints shorter
+   than its lane is a row of cards, not a banner (ADR-0522). */
+.run-card-row {
+  align-content: center;
+  block-size: 100%;
+  min-block-size: 0;
 }
 
 .run-card {
@@ -23314,6 +23341,22 @@ button.tileset-relationship-cell {
     grid-column: 1 / -1;
   }
 
+}
+
+/* Card Size instrument (ADR-0522). The stage is the shared window-scaled dressing-room
+   preview: the panel iframes the REAL Run route at live window size, so the lane being
+   tuned is the lane that ships. Only the catalog tile is bespoke. */
+.run-card-size-catalog-image {
+  min-height: 128px;
+}
+
+.run-card-size-catalog-specimen {
+  align-self: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* Three 5:7 faces that clear the tile's 128px image band without cropping. */
+  inline-size: min(100%, 252px);
 }
 
 .run-card-gold-tier-divider-catalog-image {

@@ -87,6 +87,7 @@ import { fetchAdminLiveMediaCatalog, type AdminLiveMediaCatalog } from '../net/l
 import { TitleBarControlContribution, type TitleBarControlSpec } from './shell/TitleBarControls';
 import { RunCardPrototypeCatalog, RunCardPrototypeViewer } from './RunCardPrototype';
 import { RunCardGoldTierDividerCatalog, RunCardGoldTierDividerViewer } from './RunCardGoldTierDividerStudio';
+import { RunCardSizeCatalog, RunCardSizeViewer } from './RunCardSizeStudio';
 import { RunCardPromptCatalog, RunCardPromptViewer } from './RunCardPromptStudio';
 import {
   activeUnitFamilies,
@@ -124,7 +125,7 @@ type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'sourceart' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'deployment' | 'gym' | 'solver' | 'cardlayout' | 'carddivider' | 'cardicons' | 'cardprompts' | 'screenart' | 'lipsanonmat';
+type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'sourceart' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'deployment' | 'gym' | 'solver' | 'cardlayout' | 'cardsize' | 'carddivider' | 'cardicons' | 'cardprompts' | 'screenart' | 'lipsanonmat';
 
 // Every prop KIND present in the catalog, in definition order — DERIVED from PROP_DEFS so a new
 // kind (e.g. 'rock') is a filter facet automatically. Hardcoding ['tree','house'] here silently
@@ -268,7 +269,7 @@ const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => Boolean(value && studioFamilies.some((family) => family.id === value));
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'sourceart' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'chromelab' || value === 'sfx' || value === 'gamelab' || value === 'deployment' || value === 'gym' || value === 'solver' || value === 'cardlayout' || value === 'carddivider' || value === 'cardicons' || value === 'cardprompts' || value === 'screenart' || value === 'lipsanonmat';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'sourceart' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'chromelab' || value === 'sfx' || value === 'gamelab' || value === 'deployment' || value === 'gym' || value === 'solver' || value === 'cardlayout' || value === 'cardsize' || value === 'carddivider' || value === 'cardicons' || value === 'cardprompts' || value === 'screenart' || value === 'lipsanonmat';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -383,7 +384,8 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedSfxReviewId: sfxReview && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sfxReview)
       ? sfxReview
       : undefined,
-    selectedRunCardPromptId: cardPrompt && /^[pkbrq]+$/.test(cardPrompt) ? cardPrompt : undefined,
+    // Roster ids (`ppkb`) and family ids (`00102021-ppkb`) both address a card prompt.
+    selectedRunCardPromptId: cardPrompt && /^(?:[0-9]+-)?[pkbrq]+$/.test(cardPrompt) ? cardPrompt : undefined,
     solverTab: stab === 'run' ? 'run' : stab === 'help' ? 'help' : stab === 'glossary' ? 'glossary' : stab === 'step' ? 'step' : undefined,
     selectedTileSideId: side || undefined,
     selectedFrameName: frame || undefined,
@@ -2052,6 +2054,11 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       controls: <button type="button" className="tileset-view-action" onClick={() => openViewer('cardlayout')}>Open Card Layout</button>,
     },
     {
+      id: 'cardsize', label: 'Card Size', hint: 'Tune how large the Bona Vacantia grant and the Sectio print their card rows.',
+      main: <RunCardSizeCatalog onOpen={() => openViewer('cardsize')} />,
+      controls: <button type="button" className="tileset-view-action" data-testid="open-run-card-size" onClick={() => openViewer('cardsize')}>Open Card Size</button>,
+    },
+    {
       id: 'carddivider', label: 'Card Gold Divider', hint: 'Tune the live cost coin inside the shared Cards and Chartulary gold-tier divider.',
       main: <RunCardGoldTierDividerCatalog onOpen={() => openViewer('carddivider')} />,
       controls: <button type="button" className="tileset-view-action" data-testid="open-run-card-gold-tier-divider" onClick={() => openViewer('carddivider')}>Open Card Gold Divider</button>,
@@ -2270,6 +2277,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                               ? <RunCardPromptViewer cardId={selectedRunCardPromptId} onCardId={setSelectedRunCardPromptId} header={studioViewerHeader} />
                             : viewerKind === 'cardlayout'
                               ? <RunCardPrototypeViewer header={studioViewerHeader} viewerZoom={viewerZoom} />
+                            : viewerKind === 'cardsize'
+                              ? <RunCardSizeViewer header={studioViewerHeader} viewerZoom={viewerZoom} />
                             : viewerKind === 'carddivider'
                               ? <RunCardGoldTierDividerViewer header={studioViewerHeader} viewerZoom={viewerZoom} />
                               : <AssetLab library={studioMedia.assets} name={selectedAssetName} header={studioViewerHeader} onEditFrame={(id) => { setSelectedFrameName(id); openViewer('nineslice'); }} onOpenDivider={(id) => { setSelectedDividerName(id); openViewer('divider'); }} />
