@@ -173,40 +173,11 @@ export const RUN_CARD_FORMATION_ISO_TILE = Object.freeze({
   height: TILE_TEMPLATE.topHeight * .12,
 });
 
-export type RunCardFormationEdge = 'north' | 'east' | 'south' | 'west';
-
 export type RunCardFormationBoardCell = Readonly<{
   x: number;
   y: number;
   dark: boolean;
-  /** The sides of this seat that face off the footprint. They carry the cluster silhouette. */
-  edges: readonly RunCardFormationEdge[];
 }>;
-
-export const RUN_CARD_FORMATION_EDGE_NAMES: readonly RunCardFormationEdge[] = Object.freeze([
-  'north',
-  'east',
-  'south',
-  'west',
-]);
-
-const RUN_CARD_FORMATION_EDGE_STEP: Readonly<Record<RunCardFormationEdge, Readonly<{ x: number; y: number }>>> =
-  Object.freeze({
-    north: Object.freeze({ x: 0, y: -1 }),
-    east: Object.freeze({ x: 1, y: 0 }),
-    south: Object.freeze({ x: 0, y: 1 }),
-    west: Object.freeze({ x: -1, y: 0 }),
-  });
-
-/** Each edge of the seat's own 96x54 diamond, named for the board neighbor it faces. */
-export const RUN_CARD_FORMATION_EDGE_LINE: Readonly<
-  Record<RunCardFormationEdge, readonly [number, number, number, number]>
-> = Object.freeze({
-  north: Object.freeze([48, 1, 95, 27]),
-  east: Object.freeze([95, 27, 48, 53]),
-  south: Object.freeze([48, 53, 1, 27]),
-  west: Object.freeze([1, 27, 48, 1]),
-} as Record<RunCardFormationEdge, readonly [number, number, number, number]>);
 
 /** The card uses the same two-axis projection as the battlefield, scaled into card units. */
 export function runCardFormationIsoPoint(x: number, y: number): Readonly<{
@@ -224,8 +195,8 @@ export function runCardFormationIsoPoint(x: number, y: number): Readonly<{
 
 /**
  * Print the card's own footprint and nothing else. A vacant board square is not part of what the
- * card grants, and drawing the whole enclosing rectangle turned every card into the same grid;
- * the occupied seats ARE the shape, so only they are printed and their outer edges are drawn heavy.
+ * card grants, and drawing the whole enclosing rectangle turned every card into the same grid.
+ * The squares themselves are unchanged; only the seats the card occupies are printed.
  */
 export function runCardFormationBoardCells(
   seats: readonly Readonly<{ x: number; y: number }>[],
@@ -234,17 +205,8 @@ export function runCardFormationBoardCells(
   return [...occupied]
     .map((key) => {
       const [x, y] = key.split(':').map(Number);
-      return {
-        x,
-        y,
-        dark: (x + y) % 2 === 1,
-        edges: RUN_CARD_FORMATION_EDGE_NAMES.filter((edge) => {
-          const step = RUN_CARD_FORMATION_EDGE_STEP[edge];
-          return !occupied.has(`${x + step.x}:${y + step.y}`);
-        }),
-      };
+      return { x, y, dark: (x + y) % 2 === 1 };
     })
-    // Paint back-to-front so a seat's silhouette never lands under the seat in front of it.
     .sort((left, right) => (left.x + left.y) - (right.x + right.y) || left.x - right.x);
 }
 
@@ -318,19 +280,11 @@ function FormationDiagram({
           className={`run-card-formation-square${cell.dark ? ' is-dark' : ''}`}
           data-formation-grid-x={cell.x}
           data-formation-grid-y={cell.y}
-          data-formation-edges={cell.edges.join(' ')}
           key={`grid:${cell.x}:${cell.y}`}
           style={position(cell.x, cell.y)}
         >
           <svg preserveAspectRatio="none" viewBox="0 0 96 54">
             <polygon points="48,1 95,27 48,53 1,27" vectorEffect="non-scaling-stroke" />
-            {cell.edges.map((edge) => {
-              const [x1, y1, x2, y2] = RUN_CARD_FORMATION_EDGE_LINE[edge];
-              return (
-                <line className="run-card-formation-silhouette" key={edge}
-                  x1={x1} y1={y1} x2={x2} y2={y2} vectorEffect="non-scaling-stroke" />
-              );
-            })}
           </svg>
         </span>
       ))}

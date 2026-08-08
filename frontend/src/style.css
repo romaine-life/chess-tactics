@@ -25605,22 +25605,13 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
 }
 
 .run-card-formation-square polygon {
-  fill: rgba(212, 196, 161, .52);
-  stroke: rgba(55, 48, 39, .26);
-  stroke-width: .85;
+  fill: rgba(212, 196, 161, .46);
+  stroke: rgba(55, 48, 39, .56);
+  stroke-width: 1.15;
 }
 
 .run-card-formation-square.is-dark polygon {
-  fill: rgba(101, 115, 113, .4);
-}
-
-/* Only the footprint is printed, so its outer edge is the card's silhouette. Drawing it heavy
-   while the shared seams stay faint makes the seats read as one cluster instead of a grid. */
-.run-card-formation-silhouette {
-  fill: none;
-  stroke: rgba(36, 31, 24, .82);
-  stroke-linecap: square;
-  stroke-width: 2.1;
+  fill: rgba(101, 115, 113, .34);
 }
 
 .run-card-formation-tooltip {

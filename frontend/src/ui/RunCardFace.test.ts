@@ -54,12 +54,12 @@ describe('formation-only Run card face', () => {
     expect(source).toContain("`var(--unit-anchor-y-${piece.unit}, -78%)`");
   });
 
-  it('prints the card footprint alone, with the cluster silhouette on its outward edges', () => {
+  it('prints the card footprint alone', () => {
     const cells = runCardFormationBoardCells([{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }]);
     expect(cells).toEqual([
-      { x: 0, y: 0, dark: false, edges: ['north', 'south', 'west'] },
-      { x: 1, y: 0, dark: true, edges: ['north', 'east'] },
-      { x: 1, y: 1, dark: false, edges: ['east', 'south', 'west'] },
+      { x: 0, y: 0, dark: false },
+      { x: 1, y: 0, dark: true },
+      { x: 1, y: 1, dark: false },
     ]);
   });
 
@@ -74,12 +74,12 @@ describe('formation-only Run card face', () => {
     }
   });
 
-  it('draws the outward edges heavy and the shared seams faint', () => {
+  // Hiding the vacant squares is the whole change. The square itself keeps the exact line and
+  // fill it has always had, so a card the player already knows is not repainted underneath them.
+  it('leaves the printed square line and fill untouched', () => {
     const styles = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
-    const seam = /\.run-card-formation-square polygon\s*\{[\s\S]*?stroke-width:\s*([\d.]+)/.exec(styles);
-    const silhouette = /\.run-card-formation-silhouette\s*\{[\s\S]*?stroke-width:\s*([\d.]+)/.exec(styles);
-    expect(Number(seam?.[1])).toBeGreaterThan(0);
-    expect(Number(silhouette?.[1])).toBeGreaterThan(Number(seam?.[1]));
+    expect(styles).toMatch(/\.run-card-formation-square polygon\s*\{\s*fill:\s*rgba\(212, 196, 161, \.46\);\s*stroke:\s*rgba\(55, 48, 39, \.56\);\s*stroke-width:\s*1\.15;/);
+    expect(styles).toMatch(/\.run-card-formation-square\.is-dark polygon\s*\{\s*fill:\s*rgba\(101, 115, 113, \.34\);/);
     expect(styles).not.toMatch(/\.run-card-formation-square\.is-faded/);
   });
 
