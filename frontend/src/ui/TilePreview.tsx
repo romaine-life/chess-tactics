@@ -56,6 +56,7 @@ import { UnitArtLab } from './UnitArtLab';
 import { PortraitLab } from './PortraitEditor';
 import { NineSliceLab, DEFAULT_NINE_SLICE_ASSET } from './NineSliceEditor';
 import { PropSeatLab, type StructureEditorDraft } from './PropSeatLab';
+import { PropCandidateLab } from './PropCandidateLab';
 import { PROP_DEFS, defaultPropDef, type PropDef, type PropKind } from '../core/props';
 import { TileCompareLab, COMPARE_TILES, COMPARE_TILE_FAMILIES, compareTileCap, defaultCompareTile, type CompareTile } from './TileCompareLab';
 import { SurfaceTilesLab, SURFACE_TILE_FAMILIES, surfaceTileCap } from './SurfaceTilesLab';
@@ -135,6 +136,13 @@ const CopyFromIcon = (): ReactElement => (
     <rect x="2.2" y="4.8" width="7.5" height="8.8" rx="1.2" fill="none" stroke="currentColor" strokeWidth="1.3" />
     <rect x="6.3" y="2.2" width="7.5" height="8.8" rx="1.2" fill="none" stroke="currentColor" strokeWidth="1.3" />
     <path d="M5.9 9.2 H9.7 M7.8 7.3 V11.1" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+  </svg>
+);
+
+const CandidateReviewIcon = (): ReactElement => (
+  <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+    <path d="M2 10.5 L8 13.4 L14 10.5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+    <path d="M5.4 4.2 h5.2 l1.5 3.4 -4.1 2 -4.1 -2 Z" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
   </svg>
 );
 
@@ -1236,6 +1244,11 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       title: `Create a new prop or doodad from ${p.label}`,
       icon: <CopyFromIcon />,
       run: () => openStructureDraft({ target: 'prop', copyFrom: { target: 'prop', id: p.id } }),
+    }, {
+      label: `Review ${p.label} candidates`,
+      title: `Judge staged replacement artwork for ${p.label} on the real board, and install the winner`,
+      icon: <CandidateReviewIcon />,
+      run: () => { setStructureDraft(null); setSelectedPropName(p.id); openViewer('propcandidates'); },
     }],
     onCreate: () => {
       const sourceProp = PROP_DEFS.find((p) => p.id === selectedPropName);
@@ -2195,6 +2208,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             ? <NineSliceLab assetId={selectedFrameName} onAssetId={setSelectedFrameName} header={studioViewerHeader} zoom={viewerZoom} />
             : viewerKind === 'propseat'
             ? <PropSeatLab propId={selectedPropName} onPropId={setSelectedPropName} header={studioViewerHeader} draft={structureDraft} onDraftChange={setStructureDraft} />
+            : viewerKind === 'propcandidates'
+            ? <PropCandidateLab propId={selectedPropName} onPropId={setSelectedPropName} header={studioViewerHeader} />
             : viewerKind === 'tilecompare'
             ? <TileCompareLab tileId={selectedTileCompareId} onTileId={setSelectedTileCompareId} header={studioViewerHeader} />
             : viewerKind === 'surfacetiles'
