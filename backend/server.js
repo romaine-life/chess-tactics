@@ -5757,9 +5757,14 @@ const MIGRATIONS = [
                (
                  SELECT coalesce(jsonb_agg(
                           CASE
-                            WHEN jsonb_typeof(battle->'level') <> 'object' THEN battle
+                            -- coalesce, because jsonb_typeof of a missing key is NULL, and a NULL
+                            -- comparison would fall through to the rewrite instead of skipping it.
+                            WHEN coalesce(jsonb_typeof(battle->'level'), 'null') <> 'object'
+                              THEN battle
                             WHEN jsonb_typeof(battle->'level'->'battle'->'cardsDealt') = 'number'
                               THEN battle
+                            -- create_missing, because a Battle level that carries no Battle block
+                            -- at all is exactly the case this migration exists to repair.
                             ELSE jsonb_set(
                                    battle,
                                    '{level,battle}',
@@ -5767,7 +5772,8 @@ const MIGRATIONS = [
                                      CASE WHEN jsonb_typeof(battle->'level'->'battle') = 'object'
                                        THEN battle->'level'->'battle' END,
                                      '{}'::jsonb
-                                   ) || jsonb_build_object('cardsDealt', 3)
+                                   ) || jsonb_build_object('cardsDealt', 3),
+                                   true
                                  )
                           END
                           ORDER BY ordinality
