@@ -19627,8 +19627,11 @@ button.tileset-relationship-cell {
 .run-battle-preview-board-frame {
   display: grid;
   grid-area: board;
-  /* Title bar, its registered divider, then the pane takes the whole remainder. */
-  grid-template-rows: auto auto minmax(0, 1fr);
+  /* Exactly two rows, no gap: title strip, then the pane takes the whole remainder. Any third
+     track or row gap would expose the frame's own surface as a band across the level art. */
+  gap: 0;
+  grid-area: board;
+  grid-template-rows: auto minmax(0, 1fr);
   min-block-size: 0;
   min-inline-size: 0;
   overflow: hidden;
@@ -19639,13 +19642,22 @@ button.tileset-relationship-cell {
   padding: 0;
 }
 
-/* The board's own title bar, seated ON the frame with no gap between it and the pane below. It
-   paints nothing of its own: the frame's registered inner surface is what shows behind it, and
-   the seam is a registered divider (ADR-0032/0059). */
+/* The board's own title bar, seated ON the frame with no gap between it and the pane below. Its
+   installed OUTER marble is bounded to this strip, so no painted area survives past it. */
 .run-battle-preview-board-head {
   align-items: center;
   display: flex;
   padding: var(--ds-space-1) var(--ds-space-2);
+  position: relative;
+}
+
+.run-battle-preview-board-head > .run-battle-preview-board-head-fill {
+  inset: 0;
+}
+
+.run-battle-preview-board-head > h2 {
+  position: relative;
+  z-index: 1;
 }
 
 .run-battle-preview-board-head h2 {

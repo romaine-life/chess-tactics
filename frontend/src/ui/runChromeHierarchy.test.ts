@@ -504,6 +504,12 @@ describe('Run chrome hierarchy', () => {
     // The board box carries its own title bar; nothing floats above it with a gap, and the
     // Battle position is a fact in the ledger rather than a second header.
     expect(runBattlePreview).toContain('className="run-battle-preview-board-head"');
+    // The marble is bounded to the title strip. A frame-wide fill shows through anywhere the
+    // board does not cover, which is the same bleeding band as an opaque padding.
+    expect(runBattlePreview).toContain('<ChromeSurfaceFill role="outer" className="run-battle-preview-board-head-fill" />');
+    expect(runBattlePreview).not.toMatch(/run-battle-preview-board-frame"\s+fillRole/);
+    expect(styleCss).toMatch(/\.run-battle-preview-board-frame\s*\{[^}]*gap:\s*0;/);
+    expect(styleCss).toMatch(/\.run-battle-preview-board-frame\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\);/);
     expect(runBattlePreview).toContain('<h2 id="run-battle-preview-title">{level.name}</h2>');
     expect(runBattlePreview).not.toContain('Drag to pan');
     expect(runBattlePreview).not.toContain('run-battle-preview-head');

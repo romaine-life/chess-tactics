@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { sectioUpcomingBattleIndex, type RunDocument } from '../run/model';
 import { levelToEditorBoard } from '../core/levelBoard';
-import { ChromeDivider, InnerChromeBox } from './shared/ChromeBox';
+import { ChromeSurfaceFill, InnerChromeBox } from './shared/ChromeBox';
 import { FramedReadOnlyBoardView } from './shared/BoardViewFraming';
 import { LevelInfoCompact } from './LevelInfoCompact';
 import { RunSceneViewport } from './RunWorkspace';
@@ -59,14 +59,15 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
               than floating above it. Both columns stretch to the one row, which is what makes
               their tops and bottoms agree; the pane FILLS the frame it is given (ADR-0201), so
               no surplus of the frame is left over to be painted as a band across the art. */}
-          {/* The title strip is chrome, not a window: it takes the same installed OUTER marble as
-              the title bar and the readout beside it. Without a fill it shows the frame's
-              semi-transparent surface, which lets the scene behind bleed against the level art. */}
-          <InnerChromeBox className="run-battle-preview-board-frame" fillRole="outer">
+          {/* The marble is painted by the TITLE STRIP, not by the frame. A frame-wide fill shows
+              through anywhere the board does not cover — under a divider, in a row gap — which is
+              the same bleeding band as an opaque padding. Bounding the paint to the strip means
+              there is no such area: strip, then board, then border. */}
+          <InnerChromeBox className="run-battle-preview-board-frame">
             <header className="run-battle-preview-board-head">
+              <ChromeSurfaceFill role="outer" className="run-battle-preview-board-head-fill" />
               <h2 id="run-battle-preview-title">{level.name}</h2>
             </header>
-            <ChromeDivider role="inner" />
             <div className="ce-level-viewer run-battle-preview-board-view">
               <FramedReadOnlyBoardView
                 board={board}
