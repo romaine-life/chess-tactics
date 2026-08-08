@@ -54,7 +54,7 @@ export const RUN_EN_PASSANT_BOUNTY_TENTHS = 5 * GOLD_SCALE;
 export const RUN_DEPLOYMENT_REROLL_COST_TENTHS = GOLD_SCALE;
 export const RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS = 5 * GOLD_SCALE;
 export const RUN_SECTIO_CARD_OFFER_COUNT = 3;
-export const RUN_SECTIO_CARD_PILE_SIZE = 272;
+export const RUN_SECTIO_CARD_PILE_SIZE = 269;
 export const RUN_SECTIO_CARD_PILE_RARITY_COUNT: Readonly<Record<RunCardRarity, number>> = Object.freeze({
   common: 135,
   uncommon: 36,
@@ -427,7 +427,7 @@ function initialArmyNumberState(): RunArmyNumberState {
 /** Raw labeled formations before quarter-turn-equivalent cards are collapsed. */
 export const RUN_GENERATED_CARD_COUNT = 720;
 export const RUN_AUTHORED_FORMATION_EXCEPTION_COUNT = 6;
-export const RUN_OFFER_CARD_COUNT = 272;
+export const RUN_OFFER_CARD_COUNT = 269;
 
 const FORMATION_COLUMNS = 4;
 const FORMATION_ROWS = 2;
@@ -675,11 +675,29 @@ function legacyRunCards(): RunCoreCard[] {
   return [...cards.values()].sort((a, b) => a.value - b.value || a.id.localeCompare(b.id));
 }
 
+/**
+ * A formation is a CLUSTER: its squares touch orthogonally, and the card face prints that shape as
+ * the thing the card grants. generatedFormationFootprints already refuses anything else, so a
+ * diagonal chain could only reach the market through the named-card injection below — which is
+ * exactly how Country Parish, Outrider Patrol and Crooked Diocese were still being dealt, three
+ * shapes the generator had closed the door on.
+ *
+ * A named card may still sit outside the grammar on MATERIAL — pq-front is the admitted
+ * ten-material roster. Connectivity is the part that is not negotiable, because squares that never
+ * touch cannot read as one shape however they are drawn.
+ *
+ * Dropping them here retires them from the OFFER deck only. legacyRunCards keeps every named id
+ * resolvable, so a Run already holding one still reads its name, art and formation.
+ */
 export function allRunCards(): RunCoreCard[] {
   const generated = generatedFormationFootprints().flatMap(generatedCardsForFootprint);
   const cards = new Map(generated.map((card) => [rotationalFormationId(card), card]));
   // Named cards remain the visual and textual anchor for their rotational class.
-  for (const existing of existingFormationCards()) cards.set(rotationalFormationId(existing), existing);
+  for (const existing of existingFormationCards()) {
+    const formation = existing.formation ?? [];
+    if (formation.length === 0 || !connectedFormation(formation)) continue;
+    cards.set(rotationalFormationId(existing), existing);
+  }
   if (cards.size !== RUN_OFFER_CARD_COUNT) {
     throw new Error(`Built ${cards.size} Run offer cards; expected ${RUN_OFFER_CARD_COUNT}.`);
   }
