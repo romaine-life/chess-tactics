@@ -22134,10 +22134,15 @@ button.tileset-relationship-cell {
 .run-deployment-card-stack {
   --deployment-deal-duration: 720ms;
   --deployment-deal-stagger: 130ms;
-  /* The hand is laid out, READ, and only then gathered. The beat is the whole reason the spread
-     exists: without it the cards would arrive and leave in one motion nobody could follow. */
-  --deployment-spread-beat: 620ms;
-  --deployment-gather-duration: 520ms;
+  /* Dealt face down, deck cleared, turned over, and only then gathered. The settle is the gap
+     between the deck finishing and the turn starting; the beat is the pause the player reads the
+     hand in, and is the whole reason the spread exists — without it the cards would arrive, turn
+     and leave in one motion nobody could follow. */
+  --deployment-flip-settle: 160ms;
+  --deployment-flip-duration: 400ms;
+  --deployment-flip-stagger: 70ms;
+  --deployment-spread-beat: 560ms;
+  --deployment-gather-duration: 500ms;
   --deployment-gather-stagger: 64ms;
   --deployment-discard-duration: 560ms;
   --deployment-discard-stagger: 72ms;
@@ -22199,6 +22204,36 @@ button.tileset-relationship-cell {
   position: fixed;
   transform-origin: center;
   will-change: opacity, transform;
+}
+
+/* The turn. It rides an inner box so the card's journey across the screen and its flip are never
+   two animations fighting over one element's transform. */
+.run-deployment-flight-faces {
+  block-size: 100%;
+  display: block;
+  inline-size: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.run-deployment-flight-side {
+  backface-visibility: hidden;
+  display: block;
+  inset: 0;
+  position: absolute;
+}
+
+/* Turned away until the parent box rotates, which brings it to 360 and the back to 180. */
+.run-deployment-flight-side.is-front {
+  transform: rotateY(180deg);
+}
+
+.run-deployment-flight-side > :is(.run-card-back, .run-card-action) {
+  block-size: 100%;
+  display: block;
+  inline-size: 100%;
+  object-fit: contain;
 }
 
 .run-deployment-deal-flight > :is(.run-card-back, .run-card-action) {

@@ -239,16 +239,32 @@ export function RunDeploymentCardStack({
       ?? runCardMotionDurationMs(style.getPropertyValue('--ds-duration-transfer'))
       ?? 520;
     const stagger = runCardMotionDurationMs(style.getPropertyValue('--deployment-deal-stagger')) ?? 320;
-    // The pause that makes the spread readable: the hand is dealt TO the player, and a hand that
-    // gathers the instant it lands was never shown to anybody.
-    const beat = runCardMotionDurationMs(style.getPropertyValue('--deployment-spread-beat')) ?? 520;
-    const gather = runCardMotionDurationMs(style.getPropertyValue('--deployment-gather-duration')) ?? 520;
+    // The pause that makes the turned hand readable: the hand is dealt TO the player, and a hand
+    // that gathers the instant it is turned over was never shown to anybody.
+    const beat = runCardMotionDurationMs(style.getPropertyValue('--deployment-spread-beat')) ?? 560;
+    const flip = runCardMotionDurationMs(style.getPropertyValue('--deployment-flip-duration')) ?? 400;
+    const flipStagger = runCardMotionDurationMs(style.getPropertyValue('--deployment-flip-stagger')) ?? 70;
+    const settle = runCardMotionDurationMs(style.getPropertyValue('--deployment-flip-settle')) ?? 160;
+    const gather = runCardMotionDurationMs(style.getPropertyValue('--deployment-gather-duration')) ?? 500;
     const gatherStagger = runCardMotionDurationMs(style.getPropertyValue('--deployment-gather-stagger')) ?? 64;
     const easing = style.getPropertyValue('--ds-ease-out').trim() || 'ease-out';
     const easeInOut = style.getPropertyValue('--ds-ease-in-out').trim() || easing;
     const animations: Animation[] = [];
     let cancelled = false;
     onDealProgress(0);
+
+    // Four acts, in this order: the hand is dealt face down, the deck clears, the hand turns
+    // over, and only then does it leave for the panel. The turn waits on the LATER of the pour
+    // and the sweep — a card turning over while the rest of the deck is still crossing the
+    // screen puts the reveal behind the traffic it was meant to follow.
+    const undealtCount = Math.max(0, run.cards.length - cards.length);
+    const sweeping = undealtCount > 0 && Boolean(chartulary);
+    const deckLeavesAt = flights.length * stagger;
+    const sweepDuration = sweeping ? duration : Math.max(160, Math.round(duration * 0.5));
+    const dealtAt = (flights.length - 1) * stagger + duration;
+    const clearedAt = Math.max(dealtAt, deckLeavesAt + sweepDuration);
+    const flipAt = clearedAt + settle;
+    const gatherAt = flipAt + (flights.length - 1) * flipStagger + flip + beat;
 
     // Every flight is positioned on the deck and moves by transform alone, so both legs of the
     // journey are expressed against the same base box and the second starts exactly where the
@@ -268,24 +284,38 @@ export function RunDeploymentCardStack({
         height: `${sourceRect.height}px`,
       });
       const laid = restingOn(seats[index]!.getBoundingClientRect());
-      // Leg one: out of the deck onto the table, face up, in a pour.
+      // Act one: out of the deck onto the table, face down, in a pour.
       const deal = scene.animate(flight, [
         { opacity: 0, transform: 'translate(0, 0) scale(1)' },
         { opacity: 1, offset: 0.08 },
         { opacity: 1, transform: laid },
       ], { duration, delay: index * stagger, easing, fill: 'both' });
       if (deal) animations.push(deal);
-      // Leg two: after the beat, the whole hand gathers into the Controls seat together.
+      // Act three: the turn, once the deck has cleared. It rides the inner face box, which owns
+      // no other transform, so `both` is safe here — its backwards fill is face-down, which is
+      // exactly what the card should be showing until this fires.
+      const faces = flight.querySelector<HTMLElement>('[data-deployment-flight-faces]');
+      const turn = faces && scene.animate(faces, [
+        { transform: 'perspective(1100px) rotateY(0deg)' },
+        { transform: 'perspective(1100px) rotateY(180deg)' },
+      ], {
+        duration: flip,
+        delay: flipAt + index * flipStagger,
+        easing: easeInOut,
+        fill: 'both',
+      });
+      if (turn) animations.push(turn);
+      // Act four: after the beat, the whole hand gathers into the Controls seat together.
       const gathered = restingOn(cards[index].getBoundingClientRect());
       const collect = scene.animate(flight, [
         { transform: laid },
         { transform: gathered },
       ], {
         duration: gather,
-        delay: (flights.length - 1) * stagger + duration + beat + index * gatherStagger,
+        delay: gatherAt + index * gatherStagger,
         easing: easeInOut,
         // FORWARDS only. `both` would back-fill `laid` from time zero, and because this is the
-        // later animation on the element it outranks leg one for the whole of the draw — every
+        // later animation on the element it outranks act one for the whole of the draw — every
         // card would be sitting on its seat before it had left the deck.
         fill: 'forwards',
       });
@@ -296,11 +326,9 @@ export function RunDeploymentCardStack({
       }).catch(() => undefined);
     });
 
-    // The rest of the deck goes back to the Chartulary face down while the hand is still being
-    // laid out — it is the deck leaving, not part of what the player is being shown.
-    const undealtCount = Math.max(0, run.cards.length - cards.length);
-    const deckLeavesAt = flights.length * stagger;
-    if (undealtCount > 0 && chartulary) {
+    // Act two: the rest of the deck goes back to the Chartulary face down while the hand is
+    // still being laid out — it is the deck leaving, not part of what the player is being shown.
+    if (sweeping && chartulary) {
       Object.assign(remainderFlight.style, {
         left: `${sourceRect.left}px`,
         top: `${sourceRect.top}px`,
@@ -321,7 +349,7 @@ export function RunDeploymentCardStack({
       if (sourceFade) animations.push(sourceFade);
     } else {
       const remainder = scene.animate(source, [{ opacity: 1 }, { opacity: 0 }], {
-        duration: Math.max(160, Math.round(duration * 0.5)),
+        duration: sweepDuration,
         delay: deckLeavesAt,
         easing,
         fill: 'both',
@@ -329,7 +357,8 @@ export function RunDeploymentCardStack({
       if (remainder) animations.push(remainder);
     }
 
-    const expectedAnimationCount = cards.length * 2 + 1 + (undealtCount > 0 && chartulary ? 1 : 0);
+    // Pour, turn and gather for every card, plus the deck's own fade and its remainder.
+    const expectedAnimationCount = cards.length * 3 + 1 + (sweeping ? 1 : 0);
     if (animations.length < expectedAnimationCount) {
       animations.forEach((animation) => animation.cancel());
       return scene.nextFrame(onDealComplete);
@@ -420,9 +449,10 @@ export function RunDeploymentCardStack({
       {deployment?.stage === 'dealing' ? (
         <SceneContinuityPortal contribution={{ kind: 'shared-element', id: `deployment-deal:${run.id}` }}>
           <div className="run-deployment-deal-flights">
-            {/* Face UP. These are the player's own cards being dealt to them; turning them over
-                afterwards would be a second ceremony for information they were owed on arrival.
-                Only the deck's remainder below stays face down — that one is leaving. */}
+            {/* Dealt FACE DOWN and turned over as an act of its own, once the deck has finished
+                clearing. Both faces ride the same element: the flight itself carries the journey
+                across the screen, and this inner box carries the turn, so a card being flipped
+                mid-flight would still be two transforms that never fight over one element. */}
             {remainingIds.map((cardId) => {
               const owned = cardById.get(cardId);
               const identity = owned ? runCardDefinition(owned.coreId) ?? null : null;
@@ -431,16 +461,21 @@ export function RunDeploymentCardStack({
                 : null;
               return (
                 <div className="run-deployment-deal-flight" data-deployment-flight-card={cardId} key={cardId}>
-                  {identity && presentation ? (
-                    <RunCard
-                      card={presentation.definition}
-                      identityCard={identity}
-                      mode="reference"
-                      emptyPieceIndices={presentation.emptyPieceIndices}
-                    />
-                  ) : (
-                    <RunCardBack mediaUrl={backMediaUrl} />
-                  )}
+                  <span className="run-deployment-flight-faces" data-deployment-flight-faces={cardId}>
+                    <span className="run-deployment-flight-side is-back">
+                      <RunCardBack mediaUrl={backMediaUrl} />
+                    </span>
+                    {identity && presentation ? (
+                      <span className="run-deployment-flight-side is-front">
+                        <RunCard
+                          card={presentation.definition}
+                          identityCard={identity}
+                          mode="reference"
+                          emptyPieceIndices={presentation.emptyPieceIndices}
+                        />
+                      </span>
+                    ) : null}
+                  </span>
                 </div>
               );
             })}
