@@ -12,7 +12,7 @@ afterAll(() => {
   resetPropSeats();
   resetLiveMediaCatalog();
 });
-import { createBlankLevel, type Level, type Zone } from './level';
+import { LEVEL_BATTLE_CARDS_DEALT_DEFAULT, createBlankLevel, type Level, type Zone } from './level';
 import type { PieceType, Side } from './types';
 
 // Builders: a 6×6 all-grass board (createBlankLevel) mutated per test. The helpers keep
@@ -83,8 +83,16 @@ describe('P1 — each side fields at least one piece', () => {
 });
 
 describe('War Battle playability', () => {
+  // Every War Battle authors how many cards its Deployment deals; these fixtures state it so the
+  // geometry rules below are what they test. The requirement itself is covered in
+  // run/battleCardsDealt.test.ts.
+  const warBattle = (id: string, name: string, cols = 6, rows = 6): Level => ({
+    ...createBlankLevel(id, name, cols, rows),
+    battle: { loot: false, cardsDealt: LEVEL_BATTLE_CARDS_DEALT_DEFAULT },
+  });
+
   it('supplies the player army at runtime but requires an enemy and a usable edge deployment square', () => {
-    const level = createBlankLevel('war-battle', 'War Battle', 6, 6);
+    const level = warBattle('war-battle', 'War Battle');
     level.objective = 'rival-kings';
     level.layers.units = [unit(5, 0, 'king', 'enemy')];
     level.layers.zones = [zone('player-deploy', 'player-spawn', [[0, 5], [1, 5]])];
@@ -97,7 +105,7 @@ describe('War Battle playability', () => {
   });
 
   it('accepts an enemy-only randomized roster beside the implicit Run army', () => {
-    const level = createBlankLevel('war-random-enemy', 'War Random Enemy', 6, 6);
+    const level = warBattle('war-random-enemy', 'War Random Enemy');
     level.objective = 'rival-kings';
     level.layers.units = [unit(5, 0, 'king', 'enemy')];
     level.layers.zones = [
@@ -114,7 +122,7 @@ describe('War Battle playability', () => {
   });
 
   it('rejects enemy deployment geometry that overlaps the implicit Run army zone', () => {
-    const level = createBlankLevel('war-overlap', 'War Overlap', 6, 6);
+    const level = warBattle('war-overlap', 'War Overlap');
     level.layers.units = [unit(5, 0, 'pawn', 'enemy')];
     level.layers.zones = [
       zone('player-deploy', 'player-spawn', [[0, 5], [1, 5]]),

@@ -952,7 +952,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 71 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 72 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -967,7 +967,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 35 }, (_, index) => index + 37),
+    ...Array.from({ length: 36 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1081,7 +1081,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
     )
   ) {
     throw new Error(
-      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 71: `
+      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 72: `
       + `${JSON.stringify({
         history: history.rows,
         identity_columns: identityColumns.rows,
@@ -3241,6 +3241,90 @@ async function validateCardRarityBandMigration71() {
   }
 }
 
+async function validateAuthoredDealMigration72() {
+  const { Client } = require('pg');
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('CREATE SCHEMA smoke_authored_deal_migration_72');
+    await client.query('SET LOCAL search_path TO smoke_authored_deal_migration_72');
+    await client.query(`
+      CREATE TABLE active_runs (
+        owner_email text PRIMARY KEY, body jsonb NOT NULL, revision integer NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+    `);
+    const battle = (level) => ({ loot: false, level });
+    // Three shapes a stored Battle level can be in: no Battle block at all, a Loot-only block,
+    // and one that already authors a count.
+    const plainRun = {
+      runSaveVersion: 32,
+      phase: 'battle',
+      war: {
+        id: 'w',
+        battles: [
+          battle({ id: 'a', name: 'A' }),
+          battle({ id: 'b', name: 'B', battle: { loot: true } }),
+          battle({ id: 'c', name: 'C', battle: { loot: false, cardsDealt: 7 } }),
+        ],
+      },
+    };
+    // A document with no readable War must still advance rather than be stranded at 32.
+    const warlessRun = { runSaveVersion: 32, phase: 'battle', war: null };
+    const alreadyCurrent = {
+      runSaveVersion: 33,
+      phase: 'battle',
+      war: { id: 'w', battles: [battle({ id: 'a', name: 'A', battle: { loot: false, cardsDealt: 5 } })] },
+    };
+    await client.query(
+      `INSERT INTO active_runs (owner_email, body, revision) VALUES
+        ('plain@example.com', $1::jsonb, 4),
+        ('warless@example.com', $2::jsonb, 2),
+        ('current@example.com', $3::jsonb, 9)`,
+      [JSON.stringify(plainRun), JSON.stringify(warlessRun), JSON.stringify(alreadyCurrent)],
+    );
+
+    await client.query(inlineMigrationSql(72));
+    await client.query(inlineMigrationSql(72));
+    const rows = (await client.query(
+      'SELECT owner_email, body, revision FROM active_runs ORDER BY owner_email',
+    )).rows;
+    const byOwner = new Map(rows.map((row) => [row.owner_email, row]));
+    const migrated = byOwner.get('plain@example.com');
+    const warless = byOwner.get('warless@example.com');
+    const untouched = byOwner.get('current@example.com');
+    const dealt = (row, index) => row?.body?.war?.battles?.[index]?.level?.battle?.cardsDealt;
+    if (
+      migrated?.body?.runSaveVersion !== 33
+      || dealt(migrated, 0) !== 3
+      || dealt(migrated, 1) !== 3
+      // A Battle that already authored its deal keeps it.
+      || dealt(migrated, 2) !== 7
+      // Loot is Battle content the migration has no business rewriting, in either direction.
+      || migrated.body.war.battles[1].level.battle.loot !== true
+      || migrated.body.war.battles[2].level.battle.loot !== false
+      // Battle order is content, so the rebuilt array must not be reordered.
+      || migrated.body.war.battles.map((entry) => entry.level.id).join(',') !== 'a,b,c'
+      // Applied twice, it advances the revision exactly once.
+      || Number(migrated.revision) !== 5
+      || warless?.body?.runSaveVersion !== 33
+      || Number(warless.revision) !== 3
+      || untouched?.body?.runSaveVersion !== 33
+      || dealt(untouched, 0) !== 5
+      || Number(untouched.revision) !== 9
+    ) {
+      throw new Error(`Migration 72 did not author the Deployment deal safely: ${JSON.stringify(rows)}`);
+    }
+    await client.query('ROLLBACK');
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve validation error */ }
+    throw error;
+  } finally {
+    await client.end();
+  }
+}
+
 async function validateRepairedEditorDocumentDiscardOperation62() {
   const documentId = '00000000-0000-4000-8000-000000000262';
   const levelId = 'migration-operation-level';
@@ -3409,6 +3493,7 @@ async function main() {
   await validatePlayerFormationMigrations68And69();
   await validateOpeningCardGrantMigration70();
   await validateCardRarityBandMigration71();
+  await validateAuthoredDealMigration72();
   await validateRepairedEditorDocumentDiscardOperation62();
   await resetDb();
 
@@ -5968,7 +6053,9 @@ async function main() {
     id: 'war-smoke-battle',
     name: 'Smoke War Battle',
     objective: 'rival-kings',
-    battle: { loot: true },
+    // Every War Battle authors how many cards its Deployment deals; a Run cannot be crafted on
+    // one that does not.
+    battle: { loot: true, cardsDealt: 3 },
     layers: {
       ...workspaceLevel.layers,
       zones: [{

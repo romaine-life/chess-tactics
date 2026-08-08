@@ -3,7 +3,14 @@ import { sceneManifest } from './sceneManifest';
 import { initialSceneState, reduceScene } from './sceneDirector';
 import { createRun, prepareDeployment } from '../../run/model';
 import { completeDeploymentDeal } from '../../run/deployment';
-import { createBlankLevel } from '../../core/level';
+import { createBlankLevel, LEVEL_BATTLE_CARDS_DEALT_DEFAULT, type Level } from '../../core/level';
+
+/** A War Battle level: every one authors how many cards its Deployment deals. */
+const battleLevel = (id: string, name: string): Level => ({
+  ...createBlankLevel(id, name, 8, 8),
+  battle: { loot: false, cardsDealt: LEVEL_BATTLE_CARDS_DEALT_DEFAULT },
+});
+
 
 describe('scene director', () => {
   it('declares Play as a host nested inside the persistent menu host', () => {
@@ -105,7 +112,7 @@ describe('scene director', () => {
       id: 'war',
       name: 'War',
       description: 'War',
-      battles: [{ level: createBlankLevel('battle', 'Battle', 8, 8), loot: false }],
+      battles: [{ level: battleLevel('battle', 'Battle'), loot: false }],
     }, 19, '2026-08-01T00:00:00.000Z');
     const deal = prepareDeployment({ ...run, phase: 'deployment' as const });
     const deployment = completeDeploymentDeal(deal, run.war.battles[0].level);

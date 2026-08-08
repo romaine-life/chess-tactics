@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createBlankLevel, type Level, type VictoryRules } from '../core/level';
 import { victoryRulesForObjective } from '../core/objectives';
 import { appendRules } from './VictoryConditionsEditor';
-import { RUN_DEPLOYMENT_BASE_DEAL } from '../run/model';
+import { LEVEL_BATTLE_CARDS_DEALT_DEFAULT } from '../core/level';
 import {
   battleSettingsForSave,
   guardRulesSeed,
@@ -125,28 +125,31 @@ describe('seededBaselineLevel', () => {
 });
 
 describe('the Battle Deployment deal', () => {
-  it('reads unauthored as off, showing the Run progression as the starting count', () => {
+  it('seeds the authoring default for a Battle that predates the requirement', () => {
     const seed = levelRulesSeed(kingAssaultLevel());
-    expect(seed.battleDeal).toEqual({ enabled: false, count: RUN_DEPLOYMENT_BASE_DEAL });
+    expect(seed.battleDeal).toBe(LEVEL_BATTLE_CARDS_DEALT_DEFAULT);
+    // The document itself is unchanged until a save writes one — the seed is what the panel shows.
     expect(seed.save.battle).toBeUndefined();
   });
 
   it('reads an authored count off the document', () => {
     const level: Level = { ...kingAssaultLevel(), battle: { loot: true, cardsDealt: 5 } };
     const seed = levelRulesSeed(level);
-    expect(seed.battleDeal).toEqual({ enabled: true, count: 5 });
+    expect(seed.battleDeal).toBe(5);
     expect(seed.save.battle).toEqual({ loot: true, cardsDealt: 5 });
   });
 
-  it('folds the authored deal into the Battle block without disturbing Loot', () => {
-    expect(battleSettingsForSave({ loot: true }, { enabled: true, count: 5 })).toEqual({ loot: true, cardsDealt: 5 });
-    // Turning it off drops only the count; a Battle block that is then empty stops being stored.
-    expect(battleSettingsForSave({ loot: true, cardsDealt: 5 }, { enabled: false, count: 5 })).toEqual({ loot: true });
-    expect(battleSettingsForSave({ cardsDealt: 5 }, { enabled: false, count: 5 })).toBeUndefined();
-    expect(battleSettingsForSave(undefined, { enabled: false, count: 3 })).toBeUndefined();
+  it('folds the count into the Battle block without disturbing Loot', () => {
+    expect(battleSettingsForSave({ loot: true }, 5)).toEqual({ loot: true, cardsDealt: 5 });
+    expect(battleSettingsForSave(undefined, 5)).toEqual({ cardsDealt: 5 });
+    // null is "this level is not a Battle": it must not pick the field up by passing through.
+    expect(battleSettingsForSave({ loot: true }, null)).toEqual({ loot: true });
+    expect(battleSettingsForSave(undefined, null)).toBeUndefined();
+    // A level that already carries one keeps it rather than being stripped by a non-Battle route.
+    expect(battleSettingsForSave({ cardsDealt: 5 }, null)).toEqual({ cardsDealt: 5 });
     // The panel can never write a count the level validator would reject.
-    expect(battleSettingsForSave(undefined, { enabled: true, count: 0 })).toEqual({ cardsDealt: 1 });
-    expect(battleSettingsForSave(undefined, { enabled: true, count: 400 })).toEqual({ cardsDealt: 12 });
+    expect(battleSettingsForSave(undefined, 0)).toEqual({ cardsDealt: 1 });
+    expect(battleSettingsForSave(undefined, 400)).toEqual({ cardsDealt: 12 });
   });
 
   it('withholds a late seed from a deal the user already authored, and keeps the baseline on the document', () => {

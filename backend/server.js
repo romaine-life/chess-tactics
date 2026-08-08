@@ -5737,6 +5737,68 @@ const MIGRATIONS = [
        WHERE body->'runSaveVersion' = '31'::jsonb;
     `,
   },
+  {
+    version: 72,
+    name: 'every War Battle authors its own Deployment deal',
+    // The deal stops being a function of run progress (`3 + conflictIndex`) and becomes a
+    // property of the Battle level. Every embedded Battle that predates the requirement receives
+    // the authoring default, so a Run in flight can still be dealt a hand at every Battle it has
+    // left to play.
+    //
+    // A neutral replacement, deliberately, not a reconstruction of what that Run was getting: the
+    // count now belongs to the board, and baking one player's progress into levels they merely
+    // snapshotted would make the same Battle deal differently for everyone who reached it. A Run
+    // deep into a War will find its later Battles dealing fewer cards than they did before. A
+    // Battle that already authored a count keeps it, and a Deployment already dealt keeps the
+    // hand it is holding — `dealtCardIds` is not touched here.
+    sql: `
+      UPDATE active_runs
+         SET body = jsonb_set(
+               body || jsonb_build_object('runSaveVersion', 33),
+               '{war,battles}',
+               (
+                 SELECT coalesce(jsonb_agg(
+                          CASE
+                            -- coalesce, because jsonb_typeof of a missing key is NULL, and a NULL
+                            -- comparison would fall through to the rewrite instead of skipping it.
+                            WHEN coalesce(jsonb_typeof(battle->'level'), 'null') <> 'object'
+                              THEN battle
+                            WHEN jsonb_typeof(battle->'level'->'battle'->'cardsDealt') = 'number'
+                              THEN battle
+                            -- create_missing, because a Battle level that carries no Battle block
+                            -- at all is exactly the case this migration exists to repair.
+                            ELSE jsonb_set(
+                                   battle,
+                                   '{level,battle}',
+                                   coalesce(
+                                     CASE WHEN jsonb_typeof(battle->'level'->'battle') = 'object'
+                                       THEN battle->'level'->'battle' END,
+                                     '{}'::jsonb
+                                   ) || jsonb_build_object('cardsDealt', 3),
+                                   true
+                                 )
+                          END
+                          ORDER BY ordinality
+                        ), '[]'::jsonb)
+                   FROM jsonb_array_elements(body->'war'->'battles')
+                        WITH ORDINALITY AS entries(battle, ordinality)
+               ),
+               false
+             ),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE body->'runSaveVersion' = '32'::jsonb
+         AND jsonb_typeof(body->'war'->'battles') = 'array';
+
+      -- A stored Run with no readable War array cannot carry Battle levels to repair; it advances
+      -- on the version alone rather than being left behind at 32 forever.
+      UPDATE active_runs
+         SET body = body || jsonb_build_object('runSaveVersion', 33),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE body->'runSaveVersion' = '32'::jsonb;
+    `,
+  },
 ];
 
 let pool = null;

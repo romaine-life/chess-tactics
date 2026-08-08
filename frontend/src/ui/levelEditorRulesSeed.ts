@@ -19,6 +19,7 @@
 // reads dirty and flows into drafts/saves — `seededBaselineLevel` reconstructs it.
 
 import {
+  LEVEL_BATTLE_CARDS_DEALT_DEFAULT,
   LEVEL_BATTLE_CARDS_DEALT_MAX,
   LEVEL_BATTLE_CARDS_DEALT_MIN,
   type BattleSettings,
@@ -28,7 +29,6 @@ import {
   type TimeControl,
   type VictoryRules,
 } from '../core/level';
-import { RUN_DEPLOYMENT_BASE_DEAL } from '../run/model';
 import { DEFAULT_SURVIVE_TURNS, victoryRulesForObjective } from '../core/objectives';
 import { effectiveLevelEvents } from '../core/levelEvents';
 import { DEFAULT_TIME_CONTROL } from '../core/clock';
@@ -43,8 +43,9 @@ export interface LevelRulesSeed {
   objective: ObjectiveType;
   surviveTurns: number;
   clock: { enabled: boolean; initialSeconds: number; incrementSeconds: number };
-  /** The Deployment deal this Battle authors, or the Run progression it defers to. */
-  battleDeal: { enabled: boolean; count: number };
+  /** The Deployment deal this Battle authors. A Battle level that predates the requirement seeds
+   * the default, which is what makes opening it enough to finish it. */
+  battleDeal: number;
   /** Working victory list — the objective preset materialized when the level stores none. */
   victory: VictoryRules;
   events: LevelEvents;
@@ -61,21 +62,24 @@ export interface LevelRulesSeed {
   };
 }
 
-/** The Battle block a save writes for an authored deal, preserving whatever else the document's
- * Battle block already carried (the War editor's Loot flag, which this editor never authors).
- * Returns undefined when nothing is left to store, so an untouched Battle-free level stays clean. */
+/**
+ * The Battle block a save writes, preserving whatever else the document's block already carried
+ * (the War editor's Loot flag, which this editor never authors).
+ *
+ * `deal` is the authored count for a War Battle, or null for anything else: a Campaign or
+ * standalone level is never dealt cards, so it must not pick the field up merely by passing
+ * through the editor. Returns undefined when nothing is left to store.
+ */
 export function battleSettingsForSave(
   base: BattleSettings | undefined,
-  deal: { enabled: boolean; count: number },
+  deal: number | null,
 ): BattleSettings | undefined {
   const next: BattleSettings = { ...base };
-  if (deal.enabled) {
+  if (deal !== null) {
     next.cardsDealt = Math.min(
       LEVEL_BATTLE_CARDS_DEALT_MAX,
-      Math.max(LEVEL_BATTLE_CARDS_DEALT_MIN, Math.round(deal.count)),
+      Math.max(LEVEL_BATTLE_CARDS_DEALT_MIN, Math.round(deal)),
     );
-  } else {
-    delete next.cardsDealt;
   }
   return Object.keys(next).length ? next : undefined;
 }
@@ -95,10 +99,7 @@ export function levelRulesSeed(level: Level): LevelRulesSeed {
       initialSeconds: level.timeControl?.initialSeconds ?? DEFAULT_TIME_CONTROL.initialSeconds,
       incrementSeconds: level.timeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds,
     },
-    battleDeal: {
-      enabled: level.battle?.cardsDealt !== undefined,
-      count: level.battle?.cardsDealt ?? RUN_DEPLOYMENT_BASE_DEAL,
-    },
+    battleDeal: level.battle?.cardsDealt ?? LEVEL_BATTLE_CARDS_DEALT_DEFAULT,
     victory,
     events,
     name: level.name,
