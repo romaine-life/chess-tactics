@@ -181,10 +181,19 @@ and don't tell the user screenshots are impossible. Use the helper below.
    ```
    # one element off a REAL screen — small, exact, no fixture needed:
    npm run shot -- <vite-url>/play/select/skirmish --select '.menu-dest'
-   npm run shot -- '<vite-url>/play?campaignId=off-c-crown-valoria&levelId=off-l-hold-bridge' --select '.skirmish-board-unit' --out tmp-shots/unit.png
+   npm run shot -- '<vite-url>/play?campaignId=off-c-crown-valoria&levelId=off-l-hold-bridge' --select '.skirmish-board-lab' --out tmp-shots/board.png
    # whole viewport / a small fixture page:
    npm run shot -- <vite-url>/unit-studio --size 1200x800
    ```
+   **Units are canvas-drawn, so there is no per-unit selector on a live board** — the board
+   element is the smallest thing you can clip a piece out of. (`.skirmish-board-unit` is not
+   in the DOM; a capture asking for it exits 3.)
+
+   A board capture waits for the army to finish ARRIVING before it fires. Scene activation is
+   what releases the unit entrance, so the scene director reaches `current` while the pieces
+   are still in the air — capturing there wrote boards that looked finished and had no pieces
+   on them at all. If the entrance never lands the capture fails loudly instead of writing
+   that; `--allow-arriving-units` opts out when the entrance itself is the subject.
    Level Editor captures automatically use an authenticated observation-only session: the real
    private document renders without gaining write access or changing its working copy. Do not
    replace this with a normal headless editor visit.

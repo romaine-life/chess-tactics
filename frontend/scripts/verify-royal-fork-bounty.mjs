@@ -94,7 +94,17 @@ try {
       () => document.querySelector('[data-scene-phase]')?.getAttribute('data-scene-phase') === 'current',
       { timeout: 60_000 },
     );
-  } catch { await fail('boot', 'the craft link never rendered a Battle board'); }
+    // A settled scene is not a composed board: activation is what RELEASES the unit entrance,
+    // so the army is still in the air here. Wait for it to land, or the capture at the end
+    // shows an empty battlefield and the clicks aim at pieces the player cannot see yet.
+    await page.waitForFunction(() => {
+      const board = document.querySelector('[data-arrival-state]');
+      return !!board
+        && board.getAttribute('data-unit-arrivals') !== 'pending'
+        && board.getAttribute('data-arrival-state') === 'none'
+        && !board.classList.contains('is-board-loading');
+    }, { timeout: 60_000 });
+  } catch { await fail('boot', 'the craft link never rendered a composed Battle board'); }
   try {
     await page.waitForFunction(async () => {
       const boards = await import('/src/game/SkirmishStoreContext.tsx');
