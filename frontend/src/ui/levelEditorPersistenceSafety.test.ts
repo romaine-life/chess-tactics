@@ -154,4 +154,35 @@ describe('level editor persistence safety UI', () => {
     // With no browser recovery the live board is the only copy, so sign-in must not navigate away.
     expect(source).toContain('if (localBackupAvailable === false) {');
   });
+
+  it('lets an unread artwork version list recover instead of hiding the plate for the page', () => {
+    // The whole defect was a one-shot check: a 401 or a restarted backend blanked a pre-drawn
+    // board with terrain suppressed, and nothing ever asked again.
+    const check = source.indexOf('listPredrawnBackgroundVersions(editorDocument.document_id)');
+    expect(check).toBeGreaterThan(0);
+    const effect = source.slice(check, source.indexOf('const currentEditorBoardRef', check));
+    expect(effect).toContain('predrawnSelectionReadFailure(cause, signedOut)');
+    // ADR-0306 owns the 401 verdict, and it is reported once per episode: re-reporting on every
+    // retry flips identity back and forth against ADR-0519's probe, which restores a session it
+    // disagrees with. Classifying the status code locally is the guard's own violation.
+    expect(effect).toContain('const signedOut = predrawnUnauthorizedReportedRef.current || reportAuthSessionFailure(cause);');
+    expect(effect).not.toContain('isUnauthorized');
+    expect(source).toContain('predrawnUnauthorizedReportedRef.current = false;');
+    // Without this dep nothing re-runs the check: its other inputs are the board's own geometry
+    // and identity, which neither a lost backend nor an expired cookie touches.
+    expect(effect).toContain('predrawnValidationAttempt,');
+
+    // The listeners key on the failure EPISODE, not the instantaneous state: keying them on the
+    // state tears them down for the length of each attempt, and a signal landing in that window
+    // is lost — the same "it never came back" this exists to prevent.
+    expect(source).toContain('const predrawnReadFailurePending = predrawnSelectionReadShouldRetry(predrawnSelectionValidation)');
+    expect(source).toContain('  }, [predrawnReadFailurePending]);');
+    expect(source).toContain("window.addEventListener('online', retry)");
+    expect(source).toContain('setPredrawnValidationAttempt((attempt) => attempt + 1)');
+    // Keying the sign-in retry on the check's own state would re-fire on every retry it causes.
+    expect(source).toContain('predrawnSelectionReadShouldRetry(predrawnSelectionCheckRef.current)');
+    expect(source).toContain('  }, [sharedAuthStatus]);');
+    // "Unavailable" is a verdict about the artwork; an unread list is not one.
+    expect(source).toContain("'AI artwork could not be checked'");
+  });
 });

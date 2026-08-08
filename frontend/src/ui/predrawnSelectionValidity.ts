@@ -41,6 +41,54 @@ export type PredrawnSelectionValidity =
   | { kind: 'stale'; artifact: PredrawnBoardArtifact }
   | { kind: 'valid'; artifact: PredrawnBoardArtifact };
 
+/**
+ * The version list could not be READ.
+ *
+ * This is never a verdict about the artwork. The level's selection, its published raster and its
+ * lineage are all untouched; the only thing missing is the answer. A backend restart or an expired
+ * sign-in must therefore leave a state that retries, not a permanent one that hides a plate the
+ * level still holds (ADR-0520).
+ */
+export type PredrawnSelectionReadFailure = {
+  kind: 'unreachable';
+  /** True only for an authoritative 401, which ADR-0306's session owner must also be told about. */
+  signedOut: boolean;
+  message: string;
+};
+
+/** Every state the editor can hold for its remembered selection, settled or not. */
+export type PredrawnSelectionCheck =
+  | PredrawnSelectionValidity
+  | { kind: 'checking' }
+  // The check could not be ATTEMPTED — distinct from a read that was attempted and failed, because
+  // this one clears when its missing input arrives rather than by asking the server again.
+  | { kind: 'error'; message: string }
+  | PredrawnSelectionReadFailure;
+
+export function predrawnSelectionReadFailure(
+  cause: unknown,
+  signedOut: boolean,
+): PredrawnSelectionReadFailure {
+  return {
+    kind: 'unreachable',
+    signedOut,
+    message: cause instanceof Error
+      ? cause.message
+      : 'The immutable artwork selection could not be checked.',
+  };
+}
+
+/**
+ * Only an unread list is worth asking about again. `stale` and `unavailable` are settled answers
+ * about the artwork itself, and retrying them would spin against a server that keeps saying the
+ * same thing; `missing` has nothing to ask about at all.
+ */
+export function predrawnSelectionReadShouldRetry(
+  check: PredrawnSelectionCheck,
+): check is PredrawnSelectionReadFailure {
+  return check.kind === 'unreachable';
+}
+
 export function predrawnEnvironmentGeometryFromVersion(
   version: PredrawnBackgroundVersion | undefined,
 ): PredrawnEnvironmentGeometryReference | undefined {
