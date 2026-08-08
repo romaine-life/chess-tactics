@@ -10,7 +10,7 @@ import {
   runCraftSpecFromJson,
   searchWithoutCraftParams,
 } from './craft';
-import type { RunWarSnapshot } from './model';
+import { runCardDefinition, type RunWarSnapshot } from './model';
 
 function craftWar(): RunWarSnapshot {
   return {
@@ -113,5 +113,56 @@ describe('formation Run craft parsing', () => {
     expect(run.battleIndex).toBe(1);
     expect(run.cards.map((card) => card.coreId)).toContain('p');
     expect(run.sectioCardCursor).toBe(3);
+  });
+
+  /**
+   * The Chartulary is the roster: every army unit sits in a seat of a held card, and the server
+   * refuses a document where one does not. A crafted army names UNITS, so craft has to mint the
+   * cards that supply them — it did not, which made `army` and `add` refused in every spec that
+   * carried them, including the worked example in CLAUDE.md.
+   */
+  it('seats every crafted army unit in a card that supplies it', () => {
+    for (const spec of [
+      { phase: 'deployment' as const, battle: 2, army: ['rook', 'rook', 'bishop', 'pawn'] },
+      { phase: 'deployment' as const, battle: 2, add: ['queen'] },
+      { phase: 'deployment' as const, battle: 3, army: ['pawn'], add: ['knight'] },
+    ]) {
+      const run = craftRunDocument(runCraftSpecFromJson(spec), craftWar());
+      const seated = new Set(run.cards.flatMap((card) => card.unitSeats.filter(Boolean)));
+      const unseated = run.army.filter((unit) => !seated.has(unit.id));
+      expect(unseated.map((unit) => unit.type), `${JSON.stringify(spec)} left units unseated`)
+        .toEqual([]);
+      // Each supplying card is a real card whose seats match the units sat in them.
+      for (const card of run.cards) {
+        const definition = runCardDefinition(card.coreId);
+        expect(definition, `${card.coreId} is not a card`).toBeTruthy();
+        expect(card.unitSeats).toHaveLength(definition!.pieces.length);
+        card.unitSeats.forEach((unitId, seatIndex) => {
+          if (!unitId) return;
+          const unit = run.army.find((candidate) => candidate.id === unitId);
+          expect(unit?.type).toBe(definition!.pieces[seatIndex]);
+        });
+      }
+      // Card ids stay unique and the sequence stays ahead of every id it minted.
+      const ids = run.cards.map((card) => card.id);
+      expect(new Set(ids).size).toBe(ids.length);
+      for (const id of ids) {
+        const minted = /^run-card-(\d+)$/.exec(id);
+        if (minted) expect(Number(minted[1])).toBeLessThan(run.nextCardSequence);
+      }
+    }
+  });
+
+  /**
+   * Holding a lipsanon implies having seen it. A granted one skipped the offer it would normally
+   * be seen in, which left `lipsana` outside `seenLipsana` and the whole document refused.
+   */
+  it('records a crafted lipsanon as seen, so the document stays consistent', () => {
+    const run = craftRunDocument(
+      runCraftSpecFromJson({ phase: 'deployment', battle: 2, lipsana: ['quartermasters-ledger'] }),
+      craftWar(),
+    );
+    expect(run.lipsana).toContain('quartermasters-ledger');
+    for (const held of run.lipsana) expect(run.seenLipsana).toContain(held);
   });
 });
