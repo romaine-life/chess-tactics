@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:8f55faa9ebe2930064e32a39534943f7cfc9d07ca5423fe9913cbb4fee77fca5"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:80376effa930f8134f5a593ff10c999ce659cba15b157f6913e056113024204f"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "One press installs a prop sheet, and a prop link arrives with that prop armed"
-  prNumber: "768"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/768"
-  commit: "c379a6c8"
+  prTitle: "Say in the file when a prompt manifest has been superseded"
+  prNumber: "769"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/769"
+  commit: "636b6684"
 
 name: chess-tactics
 namespace: chess-tactics
