@@ -61,6 +61,13 @@ const APPROVED_FRAMELESS_SURFACE_RESETS = new Map([
     'background:transparent',
     'border:0',
   ])],
+  // Each Deployment hand mark is the glyph itself — one dot per dealt formation, filled once it
+  // is on the board and pressable to go to it. These declarations remove native button paint
+  // from that glyph; the Controls panel's own frame remains the complete owned surface.
+  ['src/style.css|.run-arrangement-hand-mark', new Set([
+    'background:none',
+    'border:0',
+  ])],
 ]);
 
 function normalize(value) {

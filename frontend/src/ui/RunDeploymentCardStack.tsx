@@ -133,6 +133,10 @@ export function RunDeploymentDeckDeal({
 /**
  * The dealt combat stack in Controls. It owns the one scene-scoped partition motion; the Run
  * document owns every information boundary and the parent owns only its visible progress count.
+ *
+ * It renders into the arranging card's PINNED seat, not into the scrolling rail, and its pile is
+ * that card's box exactly. The deal reads its target rect off this element, so any difference
+ * between the two is a jump the player sees the moment dealing finishes.
  */
 export function RunDeploymentCardStack({
   run,
@@ -410,7 +414,9 @@ export function RunDeploymentCardStack({
         aria-label={`${visibleCount} deployment cards remaining`}
         data-deployment-card-stage={deployment?.stage ?? 'unprepared'}
       >
-      <span className="skirmish-eyebrow">Cards</span>
+      {/* No eyebrow. This pile is the seat the arranging card takes over the instant the deal
+          lands, so it must be that card's box exactly — a label above it would push the landing
+          down by its own height and the dealt card would jump the moment it arrived. */}
       <div className="run-deployment-card-pile" aria-live="polite">
         {remainingIds.map((cardId, index) => {
           const owned = cardById.get(cardId);

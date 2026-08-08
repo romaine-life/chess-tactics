@@ -21933,6 +21933,28 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
+/* The primary action is pinned to the foot of the panel: below the card, the steppers, the turns
+   and Remove there was no height left for it in the rail, so the one control that leaves the
+   screen sat under the fold. The rail above takes all the slack, so this never shrinks; the end
+   padding keeps its hint off the frame's edge rather than sitting on the boundary. */
+.run-arrangement-begin-group {
+  flex: 0 0 auto;
+  padding-block-end: var(--ds-space-1);
+}
+
+/* Begin Battle STATES the arrangement rather than sitting beside a line that states it, so it
+   stacks its two readings: the action, then how much of the hand is down. */
+.run-arrangement-begin {
+  flex-direction: column;
+}
+
+.run-arrangement-begin-go {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-space-1);
+  justify-content: center;
+}
+
 /* Whether the whole dealt hand is down. Always present so completion does not re-lay the panel
    at the moment the player is reading it; it changes state rather than appearing. */
 .run-arrangement-progress {
@@ -21964,12 +21986,40 @@ button.tileset-relationship-cell {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 }
 
-.run-arrangement-hand-position {
+/* The hand itself, one mark per admitted formation in deal order. It replaced a bare `2 / 4`,
+   which said where the player was standing and nothing about what they had already done. */
+.run-arrangement-hand-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-1);
+  justify-content: center;
+  max-inline-size: 120px;
+}
+
+.run-arrangement-hand-mark {
+  background: none;
+  border: 0;
   color: var(--skirmish-muted);
+  cursor: pointer;
+  display: block;
   font-size: var(--ds-text-xs);
-  font-weight: 700;
-  letter-spacing: .04em;
-  text-align: center;
+  line-height: 1;
+  padding: var(--ds-space-1);
+}
+
+/* Filled once its formation is on the board — the whole hand's state in one glance. */
+.run-arrangement-hand-mark[data-placed='true'] {
+  color: var(--good);
+}
+
+/* The one in hand. It is the card on screen, so it is the brightest thing in the row. */
+.run-arrangement-hand-mark[data-current='true'] {
+  color: #effcff;
+  transform: scale(1.35);
+}
+
+.run-arrangement-hand-mark[data-current='true'][data-placed='true'] {
+  color: var(--good);
 }
 
 /* Controls that wear the key that does the same thing, in the shared shortcut cap the in-match
@@ -22073,6 +22123,9 @@ button.tileset-relationship-cell {
   gap: var(--ds-space-2);
 }
 
+/* The dealt stack shares the arranging card's pinned seat, so it carries NO padding, no minimum
+   height and no label of its own: every one of those offset the landing from the box the card
+   takes over, and the hand jumped the instant the deal finished. */
 .run-deployment-card-stack {
   --deployment-deal-duration: 560ms;
   --deployment-deal-stagger: 340ms;
@@ -22080,16 +22133,17 @@ button.tileset-relationship-cell {
   --deployment-discard-stagger: 72ms;
   align-items: start;
   display: grid;
+  flex: 0 0 auto;
   gap: var(--ds-inline-tight);
-  justify-items: start;
-  min-block-size: 178px;
+  justify-items: stretch;
   overflow: visible;
-  padding: var(--ds-space-1) var(--ds-space-2) var(--ds-space-3);
+  padding: 0;
 }
 
+/* The same width the card takes: the whole panel. This IS the deal's target rect. */
 .run-deployment-card-pile {
   aspect-ratio: 5 / 7;
-  inline-size: clamp(104px, 8.5vw, 132px);
+  inline-size: 100%;
   perspective: 700px;
   position: relative;
 }

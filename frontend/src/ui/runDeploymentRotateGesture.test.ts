@@ -119,6 +119,7 @@ describe('Run Deployment secondary-click turn', () => {
 
 describe('Run Deployment hand', () => {
   const hand = readFileSync(new URL('./RunArrangementHand.tsx', import.meta.url), 'utf8');
+  const cardStack = readFileSync(new URL('./RunDeploymentCardStack.tsx', import.meta.url), 'utf8');
   const styles = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 
   // A formation card is read by its SHAPE, so laying the whole hand out at once squeezed away
@@ -135,7 +136,7 @@ describe('Run Deployment hand', () => {
     expect(hand).toContain('export function RunArrangementSteppers(');
     expect(styles).toContain('.run-arrangement-steppers {');
     expect(runScreen).toMatch(
-      /<RunArrangementCard run=\{run\} cards=\{cards\} selectedCardId=\{selectedCardId\} \/>\s*\) : null\}\s*<KitScroll className="run-arrangement-scroll">/,
+      /<RunArrangementCard run=\{run\} cards=\{cards\} selectedCardId=\{selectedCardId\} \/>\s*\) : null\}/,
     );
     // ...and the steppers are inside that rail, so they move while the card holds still.
     expect(runScreen).toMatch(/<KitScroll className="run-arrangement-scroll">[\s\S]*?<RunArrangementSteppers/);
@@ -149,26 +150,96 @@ describe('Run Deployment hand', () => {
 
   // Begin Battle asks only for His Grace, and the hand shows one card at a time, so nothing else
   // on screen answered "have I put everyone down?".
-  it('says how much of the hand is on the board, and marks it done', () => {
-    expect(hand).toContain('data-testid="arrangement-progress"');
+  //
+  // The answer is the BUTTON. It used to be a line of its own under the card, which read as the
+  // thing to press once it said the hand was down, and was not pressable — the sentence a player
+  // wants to act on and the control that acts are one control.
+  it('says how much of the hand is on the board on the control that acts on it', () => {
+    expect(runScreen).toContain('data-testid="arrangement-progress"');
     // It took over the row that used to read Place/Placed for the card on screen — which said
     // nothing the board and an enabled Remove formation were not already saying.
     expect(hand).not.toContain('run-arrangement-card-state');
     expect(hand).not.toContain("'Placed' : 'Place'");
     expect(styles).not.toContain('.run-arrangement-card-state');
-    expect(hand).toContain("data-complete={complete ? 'true' : 'false'}");
-    expect(hand).toContain("{complete ? '✓' : '·'}");
-    expect(hand).toContain('`All ${admitted.length} on the board`');
-    expect(hand).toContain('`${placed} of ${admitted.length} on the board`');
-    // Reserves cannot be placed this Battle, so completion counts only the admitted hand.
-    expect(hand).toMatch(/const placed = admitted\.filter\(\(\{ placed: seated \}\) => seated\)\.length;/);
-    expect(hand).toContain('const complete = admitted.length > 0 && placed === admitted.length;');
-    // It is pinned with the card, and always present — appearing only on completion would
-    // re-lay the panel at the moment the player is reading it.
-    expect(hand).toMatch(
-      /<\/div>\s*\{\/\*[\s\S]*?\*\/\}\s*<p\s*className=\{`run-arrangement-progress\$\{complete \? ' is-complete' : ''\}`\}/,
+    expect(runScreen).toContain("data-complete={progress.complete ? 'true' : 'false'}");
+    expect(runScreen).toContain("{progress.complete ? '✓' : '·'}");
+    expect(runScreen).toContain('`All ${progress.total} on the board`');
+    expect(runScreen).toContain('`${progress.placed} of ${progress.total} on the board`');
+    // Counted ONCE, by the Run's own helper — reserves cannot be placed this Battle, so
+    // completion counts only the admitted hand, and the panel does not recount it.
+    expect(runScreen).toContain('const progress = arrangedDeploymentProgress(run);');
+    expect(hand).not.toContain('const complete =');
+    // The reading and the action are one control, not two things side by side.
+    expect(runScreen).toMatch(
+      /data-testid="arrangement-begin-battle"[\s\S]*?data-testid="arrangement-progress"[\s\S]*?<\/ChromeButton>/,
     );
+    // Always rendered, changing state rather than appearing: a line that arrived on completion
+    // would re-lay the panel at the moment the player is reading it.
+    expect(runScreen).not.toMatch(/\{progress\.complete \? \(\s*<span\s*className=\{?`?run-arrangement-progress/);
     expect(styles).toMatch(/\.run-arrangement-progress\.is-complete \{\s*color: var\(--good\);\s*\}/);
+  });
+
+  // Below the card, the steppers, the turns and Remove there was no height left in the rail, so
+  // the one control that leaves the screen sat under the fold: the player finished arranging and
+  // had nothing to press.
+  it('pins Begin Battle to the foot of the panel, outside the rail', () => {
+    expect(runScreen).toMatch(
+      /<\/KitScroll>\s*\{\/\*[\s\S]*?\*\/\}\s*\{stage === 'arrange' \? \(\s*<div className="skirmish-view-group run-arrangement-begin-group">/,
+    );
+    expect(runScreen).toMatch(
+      /run-arrangement-begin-group"[\s\S]*?data-testid="arrangement-begin-battle"/,
+    );
+    // Pinned means it does not shrink with the rail's content.
+    expect(styles).toMatch(/\.run-arrangement-begin-group \{[^}]*flex: 0 0 auto;/);
+    // No survivor in the rail — one Begin Battle, never two paths into the same action.
+    expect((runScreen.match(/data-testid="arrangement-begin-battle"/g) ?? [])).toHaveLength(1);
+  });
+
+  // Stepping through a hand gave no way to tell an unplaced formation from one already seated:
+  // the card shows one at a time, and the counter it replaced said only where the player stood.
+  it('marks which dealt formations are already on the board', () => {
+    expect(hand).toContain('className="run-arrangement-hand-marks"');
+    expect(hand).toContain("data-placed={placed ? 'true' : 'false'}");
+    expect(hand).toContain("data-current={current ? 'true' : 'false'}");
+    expect(hand).toContain("{placed ? '●' : '○'}");
+    // Reserves cannot be placed this Battle, so the row is the admitted hand.
+    expect(hand).toMatch(/const admitted = admittedCards\(cards\);[\s\S]*?admitted\.map\(\(\{ card, placed \}, position\) =>/);
+    // Seeing the one you want and going to it are the same act.
+    expect(hand).toContain('onClick={() => onSelect(card.id)}');
+    expect(runScreen).toContain('onSelectCard={selectArrangementCard}');
+    expect(runScreen).toContain('onSelect={onSelectCard}');
+    // Placed is the good colour; the one in hand is the brightest thing in the row.
+    expect(styles).toMatch(
+      /\.run-arrangement-hand-mark\[data-placed='true'\] \{\s*color: var\(--good\);\s*\}/,
+    );
+    expect(styles).toContain(".run-arrangement-hand-mark[data-current='true'] {");
+    // No survivor of the bare counter it replaced.
+    expect(hand).not.toContain('run-arrangement-hand-position"');
+    expect(hand).not.toMatch(/\$\{Math\.max\(index, 0\) \+ 1\} \/ \$\{admitted\.length\}/);
+    expect(styles).not.toContain('.run-arrangement-hand-position {');
+  });
+
+  // The deal used to land inside the RAIL, in a pile a third of the card's width, so the hand
+  // jumped across the panel and more than doubled in size the instant dealing finished. The
+  // deal reads its target rect off this pile, so the pile must be the card's box exactly.
+  it('lands the deal in the very seat the arranging card takes over', () => {
+    // Both are pinned above the rail, in the same place, and neither is inside it.
+    expect(runScreen).toMatch(
+      /<RunArrangementCard[^/]*\/>\s*\) : null\}\s*\{stage === 'await-deal' \|\| stage === 'dealing' \? \(\s*<RunDeploymentCardStack/,
+    );
+    expect(runScreen).toMatch(
+      /<RunDeploymentCardStack[\s\S]*?\/>\s*\) : null\}\s*<KitScroll className="run-arrangement-scroll">/,
+    );
+    // The pile is the panel's whole width, the same width the card takes. Bounded to the rule's
+    // own block — `[\s\S]*?` walks straight past the closing brace into the next rule.
+    expect(styles).toMatch(/\.run-deployment-card-pile \{[^}]*inline-size: 100%;/);
+    expect(styles).not.toMatch(/\.run-deployment-card-pile \{[^}]*inline-size: clamp\(/);
+    // Nothing above or around the pile may push the landing off the card's box.
+    expect(styles).toMatch(/\.run-deployment-card-stack \{[^}]*padding: 0;/);
+    expect(styles).not.toMatch(/\.run-deployment-card-stack \{[^}]*min-block-size:/);
+    expect(cardStack).not.toContain('<span className="skirmish-eyebrow">Cards</span>');
+    // ...the card's own label included: it was spending the height the card wanted.
+    expect(hand).not.toContain('Dealt formations');
   });
 
   // A control that appears and disappears re-lays the panel under the player's hand.

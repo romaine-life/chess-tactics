@@ -20,6 +20,10 @@ function admittedCards(cards: readonly RunArrangedCardSummary[]): RunArrangedCar
  *
  * The card is PINNED: it is the subject of the whole panel, so it stays put while the controls
  * beneath it scroll. That is why it is a component of its own rather than the head of the strip.
+ *
+ * It wears no eyebrow. The card IS the panel's subject and reads as one at a glance, so a label
+ * over it only spent the height the card wanted — and that height is the seat the dealt stack
+ * lands in, which must be the SAME box or the deal ends somewhere the card does not live.
  */
 export function RunArrangementCard({
   cards,
@@ -32,11 +36,8 @@ export function RunArrangementCard({
   const admitted = admittedCards(cards);
   const current = admitted.find(({ card }) => card.id === selectedCardId) ?? null;
   const definition = current ? runCardDefinition(current.card.coreId) : null;
-  const placed = admitted.filter(({ placed: seated }) => seated).length;
-  const complete = admitted.length > 0 && placed === admitted.length;
   return (
     <section className="run-arrangement-hand" aria-label="Dealt formation cards">
-      <span className="skirmish-eyebrow">Dealt formations</span>
       <div className="run-arrangement-hand-card" data-testid="arrangement-hand-card">
         {definition && current ? (
           <RunCard card={definition} identityCard={definition} mode="reference" />
@@ -44,23 +45,6 @@ export function RunArrangementCard({
           <p className="skirmish-grid-hint">No formation is available to place this Battle.</p>
         )}
       </div>
-      {/* The one line under the card. It used to read Place/Placed for the card on screen, which
-          said nothing the board and an enabled Remove formation were not already saying. This
-          row answers the question nothing else did: Begin Battle asks only for His Grace and the
-          hand shows one card at a time, so "have I put everyone down?" had no answer. It is
-          pinned with the card and always present — a line that appeared only on completion would
-          re-lay the panel at the exact moment the player is reading it. */}
-      <p
-        className={`run-arrangement-progress${complete ? ' is-complete' : ''}`}
-        data-testid="arrangement-progress"
-        data-complete={complete ? 'true' : 'false'}
-        aria-live="polite"
-      >
-        <span className="run-arrangement-progress-mark" aria-hidden="true">{complete ? '✓' : '·'}</span>
-        {complete
-          ? `All ${admitted.length} on the board`
-          : `${placed} of ${admitted.length} on the board`}
-      </p>
     </section>
   );
 }
@@ -71,19 +55,27 @@ export function RunArrangementCard({
  * Each stepper wears the key that does the same thing, in the shared shortcut cap the in-match
  * grid uses, so the keyboard is discovered from the control rather than from a hint. The whole
  * dealt hand, reserves included, is read in the Chartulary.
+ *
+ * Between them stands the hand itself, one mark per admitted formation in deal order. It replaced
+ * a bare `2 / 4`, which said where the player was standing and NOTHING about what they had already
+ * done — the card shows one formation at a time, so stepping through a hand gave no way to tell an
+ * unplaced formation from one already seated without visiting every card and reading the board.
+ * A mark is filled once its formation is on the board, so the whole hand's state is one glance,
+ * and each is pressable: seeing the one you want is the same act as going to it.
  */
 export function RunArrangementSteppers({
   cards,
   selectedCardId,
   onStep,
+  onSelect,
 }: {
   cards: readonly RunArrangedCardSummary[];
   selectedCardId: string | null;
   onStep: (step: 1 | -1) => void;
+  onSelect: (cardId: string) => void;
 }): ReactElement {
   const admitted = admittedCards(cards);
   const reserves = cards.length - admitted.length;
-  const index = admitted.findIndex(({ card }) => card.id === selectedCardId);
   return (
     <div className="skirmish-view-group run-deployment-control">
       <div className="run-arrangement-steppers" role="group" aria-label="Choose a formation">
@@ -99,8 +91,26 @@ export function RunArrangementSteppers({
           <kbd className="skirmish-grid-cap">W</kbd>
           <span className="skirmish-grid-label">Back</span>
         </ChromeButton>
-        <span className="run-arrangement-hand-position" data-testid="arrangement-hand-position">
-          {admitted.length ? `${Math.max(index, 0) + 1} / ${admitted.length}` : '0 / 0'}
+        <span className="run-arrangement-hand-marks" data-testid="arrangement-hand-position">
+          {admitted.map(({ card, placed }, position) => {
+            const current = card.id === selectedCardId;
+            return (
+              <button
+                type="button"
+                className="run-arrangement-hand-mark"
+                data-placed={placed ? 'true' : 'false'}
+                data-current={current ? 'true' : 'false'}
+                aria-current={current ? 'true' : undefined}
+                aria-label={`Formation ${position + 1} of ${admitted.length}, ${
+                  placed ? 'on the board' : 'not yet placed'
+                }`}
+                key={card.id}
+                onClick={() => onSelect(card.id)}
+              >
+                <span aria-hidden="true">{placed ? '●' : '○'}</span>
+              </button>
+            );
+          })}
         </span>
         <ChromeButton
           unit="inner-text-button"
