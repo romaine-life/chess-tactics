@@ -248,7 +248,18 @@ function RunCardBackStudy({ header, viewerZoom }: { header: ReactNode; viewerZoo
       <div className="run-card-back-candidate-groups">
         {groups.map((group) => (
           <section key={group.key}>
-            <header><strong>{group.label}</strong><span>{group.note}</span></header>
+            <header>
+              <strong>{group.label}</strong>
+              <span>{group.note}</span>
+              {/* The approval belongs beside the candidate it acts on, and stays
+                  reachable there: below the cards it sat under the fold on any
+                  window short enough to need the cards scaled down. */}
+              {group.key === 'candidate' && reviewing ? (
+                <ChromeButton unit="inner-text-button" disabled={busy} onClick={() => { void publish(); }}>
+                  {busy ? 'Publishing…' : `Approve and publish ${reviewing.version.media?.sha256?.slice(0, 8)}`}
+                </ChromeButton>
+              ) : null}
+            </header>
             {/* One wrapping row, not a column. The offered-back family (ADR-0524)
                 makes this list long enough that a stack pushes the cards it
                 switches off the bottom of the screen. */}
@@ -288,11 +299,6 @@ function RunCardBackStudy({ header, viewerZoom }: { header: ReactNode; viewerZoo
           </p>
         )}
       </div>
-      {reviewing ? (
-        <ChromeButton unit="inner-text-button" disabled={busy} onClick={() => { void publish(); }}>
-          {busy ? 'Publishing…' : 'Approve and publish this card back'}
-        </ChromeButton>
-      ) : null}
       <p className="run-card-rarity-study-footnote" role="status">
         {status || 'This surface reads candidate or accepted bytes from live storage; no review PNG is packaged with the application.'}
       </p>
