@@ -23,7 +23,9 @@ import {
   beginDeploymentDeal,
   completeDeploymentDeal,
   deploymentInteractionStage,
+  arrangedDeploymentCards,
   distinctCardRotations,
+  nextArrangedCardToPlace,
   nextCardRotation,
   placeArrangedDeploymentCard,
   resolveForcedDeploymentChoices,
@@ -161,6 +163,64 @@ describe('formation deployment', () => {
     expect(rotationsFor('f-01112131-kppp')).toEqual([0, 1, 2, 3]);
     // A lone unit is the same shape whichever way it is turned.
     expect(rotationsFor('q')).toEqual([0]);
+  });
+
+  // Placing a formation finishes with it. Leaving it selected made the hand sit on something
+  // already on the board while the player waited for the next card to come up.
+  it('moves the hand to the next unplaced formation once one is seated', () => {
+    const { run, level } = fixture(8, 8, 61, ['ppp', 'q', 'pp']);
+    const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+    const hand = arrangedDeploymentCards(arranging).filter(({ admitted }) => admitted);
+
+    expect(hand.length).toBeGreaterThan(2);
+
+    // Placing the FIRST card advances to the second.
+    const first = hand[0].card.id;
+    const afterFirst = placeArrangedDeploymentCard(
+      arranging,
+      level,
+      first,
+      0,
+      arrangedCardPlacementOptions(arranging, level, first, 0)[0].anchor,
+    );
+    expect(nextArrangedCardToPlace(afterFirst, first)).toBe(hand[1].card.id);
+
+    // Placing out of order resumes AFTER the card just placed and wraps, rather than jumping
+    // back to the front of the hand every time.
+    const third = hand[2].card.id;
+    const afterThird = placeArrangedDeploymentCard(
+      afterFirst,
+      level,
+      third,
+      0,
+      arrangedCardPlacementOptions(afterFirst, level, third, 0)[0].anchor,
+    );
+    const following = nextArrangedCardToPlace(afterThird, third);
+    expect(following).not.toBe(first);
+    expect(following).not.toBe(third);
+    expect(arrangedDeploymentCards(afterThird).find(({ card }) => card.id === following)?.placed)
+      .toBe(false);
+  });
+
+  // With the hand fully seated there is nothing to advance to, and the just-placed card stays
+  // selected so it can still be moved or removed.
+  it('advances to nothing once every formation is placed', () => {
+    const { run, level } = fixture(8, 8, 67, ['q']);
+    const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+    let placed = arranging;
+    let last = '';
+    for (const { card } of arrangedDeploymentCards(arranging).filter(({ admitted }) => admitted)) {
+      const options = arrangedCardPlacementOptions(placed, level, card.id, 0);
+      if (!options.length) continue;
+      placed = placeArrangedDeploymentCard(placed, level, card.id, 0, options[0].anchor);
+      last = card.id;
+    }
+
+    expect(arrangedDeploymentCards(placed).filter(({ admitted, placed: seated }) => admitted && !seated))
+      .toEqual([]);
+    expect(nextArrangedCardToPlace(placed, last)).toBeNull();
+    // A card that is not in the hand at all cannot advance anything.
+    expect(nextArrangedCardToPlace(placed, 'no-such-card')).toBeNull();
   });
 
   // His Grace's L has no unit on one corner of its 2x2 box, and that corner is exactly the

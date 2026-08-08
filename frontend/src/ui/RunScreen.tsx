@@ -70,6 +70,7 @@ import {
   deploymentOptions,
   gameForRunDeployment,
   levelWithRunDeployment,
+  nextArrangedCardToPlace,
   nextCardRotation,
   normalReservistCell,
   placeArrangedDeploymentCard,
@@ -734,14 +735,23 @@ function useRunDeploymentPresentation({
               cell,
             );
             if (!seating) return;
-            replace(placeArrangedDeploymentCard(
+            const placed = placeArrangedDeploymentCard(
               latest,
               level,
               selectedCardId,
               arrangementRotation,
               seating.anchor,
-            ));
-            setPointedArrangementCell(null);
+            );
+            replace(placed);
+            // Placing finishes with a formation, so the hand moves on rather than leaving the
+            // player holding one already on the board. The pointed square is KEPT: the next
+            // formation appears under the cursor ready to place, so a whole hand is seated
+            // without the mouse having to leave the battlefield between cards.
+            const following = nextArrangedCardToPlace(placed, selectedCardId);
+            if (following) {
+              setSelectedCardId(following);
+              setArrangementRotation(0);
+            }
           }}
         >
           {filled ? <PredrawnMoveHighlightPaint /> : null}

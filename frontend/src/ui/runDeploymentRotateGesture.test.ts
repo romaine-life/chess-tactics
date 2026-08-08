@@ -88,6 +88,19 @@ describe('Run Deployment aiming', () => {
     expect(runScreen).toContain('seating.anchor,');
   });
 
+  // Placing finishes with a formation. The hand must move on by itself, and it must read the
+  // document it just wrote — the render-time card list is a placement behind.
+  it('hands the next formation to the cursor once one is seated', () => {
+    expect(runScreen).toContain('const following = nextArrangedCardToPlace(placed, selectedCardId);');
+    expect(runScreen).toMatch(
+      /if \(following\) \{\s*setSelectedCardId\(following\);\s*setArrangementRotation\(0\);\s*\}/,
+    );
+    // Advancing must NOT clear the pointed square: the next formation appears under the cursor.
+    const click = runScreen.match(/const placed = placeArrangedDeploymentCard\([\s\S]*?\n {10}\}\}/)?.[0];
+    expect(click).toBeDefined();
+    expect(click).not.toContain('setPointedArrangementCell');
+  });
+
   // While the formation is the cursor, the pointer hides under it; when no seating resolves the
   // pointer comes back, so the player is never left with neither.
   it('hides the pointer only while a seating is resolved', () => {

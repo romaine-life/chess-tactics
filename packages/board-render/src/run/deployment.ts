@@ -246,6 +246,29 @@ export function arrangedDeploymentCards(run: RunDocument): RunArrangedCardSummar
   });
 }
 
+/**
+ * The card the hand should move to once `placedCardId` has been seated.
+ *
+ * Placing a formation finishes with it, so the hand advances rather than leaving the player
+ * holding something already on the board. Search resumes AFTER the card just placed and wraps,
+ * so placing out of order still walks the rest of the hand instead of jumping back to the front.
+ * Returns null when nothing is left to place — the just-placed card stays selected then, so it
+ * can still be moved or removed.
+ */
+export function nextArrangedCardToPlace(
+  run: RunDocument,
+  placedCardId: string,
+): string | null {
+  const cards = arrangedDeploymentCards(run);
+  const from = cards.findIndex(({ card }) => card.id === placedCardId);
+  if (from < 0) return null;
+  for (let step = 1; step <= cards.length; step += 1) {
+    const candidate = cards[(from + step) % cards.length];
+    if (candidate.admitted && !candidate.placed) return candidate.card.id;
+  }
+  return null;
+}
+
 export function activeDeploymentCard(run: RunDocument): RunOwnedCard | null {
   return dealtCards(run)[run.deployment?.activeCardIndex ?? -1] ?? null;
 }

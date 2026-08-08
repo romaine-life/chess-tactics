@@ -88,6 +88,13 @@ the seating; a secondary click turns what is being carried.**
    own symmetry and placeable somewhere in this level's band. A clicked turn is therefore always
    one the player could have pressed; a formation with one distinct turn holds still; the cycle
    wraps.
+9. **Placing hands the next formation to the cursor.** Seating a formation finishes with it, so
+   the hand advances to the next admitted card still to be placed, resuming after the one just
+   seated and wrapping — placing out of order walks the rest of the hand rather than jumping back
+   to the front. The pointed square is deliberately kept, so the next formation appears under the
+   cursor ready to place and a whole hand is seated without the mouse leaving the battlefield.
+   When nothing is left to place the just-placed card stays selected, so it can still be moved or
+   removed.
 
 Keyboard access is unchanged. The four turn buttons remain, and the pointable squares remain the
 tab-reachable placement actions — squares the formation cannot cover are taken out of the tab
