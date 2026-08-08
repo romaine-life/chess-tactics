@@ -52,7 +52,7 @@ const FAMILIES: ReadonlyArray<{
     shell: 'main-menu',
     region: 'menu-shell',
     sections: {
-      play: address('/play/select/skirmish'),
+      play: address('/play/select/run'),
       settings: address('/settings/general'),
       enchiridion: address('/enchiridion'),
       'campaign-editor': address('/editor'),
@@ -89,7 +89,6 @@ const FAMILIES: ReadonlyArray<{
     sections: {
       campaign: address('/editor', '?campaign=crown-of-valoria'),
       wars: address('/editor/wars'),
-      'skirmish-profiles': address('/editor', '?collection=skirmish-profiles'),
       unassigned: address('/editor', '?collection=unassigned'),
     },
   },
@@ -98,7 +97,6 @@ const FAMILIES: ReadonlyArray<{
     region: 'play-shell',
     sections: {
       continue: address('/play/select/continue'),
-      skirmish: address('/play/select/skirmish'),
       run: address('/play/select/run'),
       levels: address('/play/select/levels'),
       campaign: address('/play/select/campaign/crown-of-valoria'),

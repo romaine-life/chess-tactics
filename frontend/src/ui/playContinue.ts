@@ -3,7 +3,6 @@ import type { PersistedMatch } from '../game/matchPersistence';
 import { ATARAXIA_BY_TIER, formatGold, runBattleActivityId, type RunDocument } from '../run/model';
 import { playContinueSelectorHref, type PlayContinueChoice } from './playHubRoute';
 import { playSkirmishLevelHref } from './skirmishMaps';
-import { isSkirmishProfileLevel } from './skirmishProfiles';
 import { playModeEntryEnabled } from './playModeAvailability';
 
 export interface ContinueActivity {
@@ -90,21 +89,18 @@ export function continueInventory(
           { label: 'Battle', value: level.name },
         ],
       });
-    } else if (level && !campaign) {
-      const mode: PlayContinueChoice = isSkirmishProfileLevel(level) ? 'skirmish' : 'levels';
-      if (playModeEntryEnabled(mode)) {
-        activities.set(mode, {
-          mode,
-          summary: level.name,
-          title: level.name,
-          playHref: playSkirmishLevelHref(match.levelId, playContinueSelectorHref(mode)),
-          updatedAt: matchTime,
-          facts: [
-            { label: 'Mode', value: mode === 'skirmish' ? 'Skirmish' : 'Levels' },
-            { label: 'Battle', value: 'In progress' },
-          ],
-        });
-      }
+    } else if (level && !campaign && playModeEntryEnabled('levels')) {
+      activities.set('levels', {
+        mode: 'levels',
+        summary: level.name,
+        title: level.name,
+        playHref: playSkirmishLevelHref(match.levelId, playContinueSelectorHref('levels')),
+        updatedAt: matchTime,
+        facts: [
+          { label: 'Mode', value: 'Levels' },
+          { label: 'Battle', value: 'In progress' },
+        ],
+      });
     }
   }
 

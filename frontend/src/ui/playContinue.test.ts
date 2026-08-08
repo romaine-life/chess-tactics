@@ -122,9 +122,9 @@ describe('Play Continue inventory', () => {
     expect(inventory.activities).toHaveLength(0);
   });
 
-  it('does not surface dormant Skirmish or Levels activity', () => {
-    const id = 'skirmish-profile-classic';
-    const inventory = continueInventory(null, match(id, '2026-01-02T00:00:00.000Z'), [], { [id]: level(id, 'Classic Skirmish') });
+  it('does not surface dormant standalone Levels activity', () => {
+    const id = 'l-standalone-arena';
+    const inventory = continueInventory(null, match(id, '2026-01-02T00:00:00.000Z'), [], { [id]: level(id, 'Arena') });
     expect(inventory.defaultMode).toBeNull();
     expect(inventory.activities).toHaveLength(0);
   });

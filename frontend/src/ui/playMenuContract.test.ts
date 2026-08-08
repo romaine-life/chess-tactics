@@ -7,7 +7,6 @@ const playMenu = readFileSync(new URL('./PlayMenu.tsx', import.meta.url), 'utf8'
 const style = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const campaignEditor = readFileSync(new URL('./CampaignEditor.tsx', import.meta.url), 'utf8');
 const headerAccountCluster = readFileSync(new URL('./shared/HeaderAccountCluster.tsx', import.meta.url), 'utf8');
-const profiles = readFileSync(new URL('./skirmishProfiles.ts', import.meta.url), 'utf8');
 const livePlay = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
 const ataraxiaSelector = readFileSync(new URL('./AtaraxiaSelector.tsx', import.meta.url), 'utf8');
 const authoredSceneSlots = readFileSync(new URL('./shell/AuthoredSceneSlot.tsx', import.meta.url), 'utf8');
@@ -43,7 +42,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
     const campaigns = playMenu.indexOf('className="play-campaign-region"');
     expect(fixed).toBeGreaterThan(-1);
     expect(campaigns).toBeGreaterThan(fixed);
-    expect(playModeAvailability).toMatch(/campaign:\s*false,[\s\S]*skirmish:\s*false,[\s\S]*run:\s*true,[\s\S]*levels:\s*false,/);
+    expect(playModeAvailability).toMatch(/campaign:\s*false,[\s\S]*run:\s*true,[\s\S]*levels:\s*false,/);
     expect(playModeAvailability).toContain('export const PLAY_SOURCE_RAIL_ENABLED');
     expect(playMenu).toContain('{PLAY_SOURCE_RAIL_ENABLED ? <ApparatusRailColumn');
     expect(playMenu).toContain("' is-source-rail-collapsed'");
@@ -51,20 +50,17 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('<KitScroll className="play-campaign-scroll">');
     expect(playMenu).toContain('testId="play-continue"');
     expect(playMenu).toContain('label="Continue"');
-    expect(playMenu).toContain('index={playModeRailIndex(\'skirmish\')}');
     expect(playMenu).toContain('index={playModeRailIndex(\'run\')}');
     expect(playMenu).toContain('index={playModeRailIndex(\'levels\')}');
     expect(playMenu).toContain('index={index + CAMPAIGN_RAIL_START_INDEX}');
   });
 
-  it('keeps dormant Campaign, Skirmish, and Levels implementations and direct routes intact', () => {
+  it('keeps dormant Campaign and Levels implementations and direct routes intact', () => {
     const route = readFileSync(new URL('./playHubRoute.ts', import.meta.url), 'utf8');
     expect(playMenu).toContain('function CampaignTab(');
     expect(playMenu).toContain('<CampaignLevelsPanel');
-    expect(playMenu).toContain('<SkirmishProfilesPanel');
     expect(playMenu).toContain('<StandaloneLevelsPanel');
     expect(route).toContain('export function playCampaignSelectorHref');
-    expect(route).toContain("if (path === PLAY_SKIRMISH_SELECTOR_HREF) return { mode: 'skirmish' };");
     expect(route).toContain("if (path === PLAY_LEVELS_SELECTOR_HREF) return { mode: 'levels' };");
     expect(route).toContain("return { mode: 'campaign', campaignId: decodeURIComponent(campaignMatch[1]) };");
   });
@@ -179,9 +175,17 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(existsSync(new URL('./SkirmishMapPicker.tsx', import.meta.url))).toBe(false);
   });
 
-  it('does not synthesize missing Skirmish content or a missing live level', () => {
-    expect(profiles).not.toContain('createBlankLevel');
-    expect(profiles).not.toContain('ensureDefaultSkirmishProfileLevel');
+  it('retires Skirmish profiles instead of keeping a dead collection', () => {
+    // The id-prefixed level class and both of its surfaces are gone; the levels themselves
+    // survive as ordinary unassigned/standalone levels (ADR-0529).
+    expect(existsSync(new URL('./skirmishProfiles.ts', import.meta.url))).toBe(false);
+    expect(playMenu).not.toContain('SkirmishProfilesPanel');
+    expect(campaignEditor).not.toContain('skirmish-profiles');
+    expect(readFileSync(new URL('./playHubRoute.ts', import.meta.url), 'utf8'))
+      .not.toContain('PLAY_SKIRMISH_SELECTOR_HREF');
+  });
+
+  it('does not synthesize a missing live level', () => {
     expect(livePlay).not.toContain('startOrResume(routeLevelId, null)');
     expect(livePlay).not.toContain("routeParams.get('random')");
     expect(livePlay).toContain('This level isn’t available');

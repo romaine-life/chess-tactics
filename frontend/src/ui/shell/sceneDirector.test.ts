@@ -8,21 +8,21 @@ import { createBlankLevel } from '../../core/level';
 describe('scene director', () => {
   it('declares Play as a host nested inside the persistent menu host', () => {
     expect(sceneManifest('/').host).toBe('menu-shell');
-    expect(sceneManifest('/play/select/skirmish').host).toBe('play-shell');
+    expect(sceneManifest('/play/select/run').host).toBe('play-shell');
     expect(sceneManifest('/play').host).toBe('gameplay-shell');
   });
   it('does not restart a generation when a redirect repeats the active destination', () => {
     const home = sceneManifest('/');
-    const play = sceneManifest('/play/select/skirmish');
+    const play = sceneManifest('/play/select/run');
     const navigating = reduceScene(initialSceneState(home), {
       type: 'navigate',
       destination: play,
-      href: '/play/select/skirmish',
+      href: '/play/select/run',
     });
     expect(reduceScene(navigating, {
       type: 'navigate',
       destination: play,
-      href: '/play/select/skirmish',
+      href: '/play/select/run',
     })).toBe(navigating);
   });
 
@@ -188,7 +188,7 @@ describe('scene director', () => {
   });
 
   it.each([
-    ['/play/select/skirmish', 'play-selector'],
+    ['/play/select/run', 'play-selector'],
     ['/editor/level', 'level-editor'],
     ['/', 'dom'],
   ])('cold-loads %s through the one shell ladder', (href, paintOwner) => {

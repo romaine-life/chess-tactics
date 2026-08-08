@@ -265,7 +265,6 @@ and don't tell the user screenshots are impossible. Use the helper below.
    Board reveal / unit-entrance changes additionally run the live entrance gate,
    which records the real transition and reads its pixels:
    ```
-   npm run verify:unit-arrival -- '<vite-url>/play/select/campaign/off-c-crown-valoria' --click '.campaign-level-row [aria-label^="Play "]'
    npm run verify:unit-arrival -- '<vite-url>/play/select/continue/run' --click 'a[href^="/run"], [data-nav^="/run"]'
    npm run verify:unit-arrival -- '<battle-victory-craft-url>' --settled
    ```

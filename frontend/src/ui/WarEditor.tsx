@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { useCampaigns } from '../campaign/store';
+import type { Level } from '../core/level';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { useAuthSession } from '../net/authSession';
 import { createRun, snapshotWar, type AtaraxiaTier } from '../run/model';
@@ -17,13 +18,23 @@ import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsC
 import { useConfirm } from './shared/ConfirmDialog';
 import { useDeleteKeyAction } from './shared/deleteKeyAction';
 import { useSceneParticipant } from './shell/SceneBoundary';
+import { chromeUnitClassNames } from './chromeUnitRegistry';
+import { ChromeNavButton } from './shared/ChromeButton';
 import { AtaraxiaSelector } from './AtaraxiaSelector';
-import { ActionList } from './shared/ActionList';
+import { levelObjectiveLine } from './LevelInfoCompact';
+import { EditorLevelRow } from './shared/EditorLevelRow';
 
 function seedForNewRun(): number {
   const values = new Uint32Array(1);
   globalThis.crypto?.getRandomValues?.(values);
   return values[0] || (Date.now() >>> 0);
+}
+
+const WAR_EDITOR_RETURN_TO = '/editor/wars';
+
+function editBattleBoardHref(warId: string, levelId: string): string {
+  return `/editor/level?levelId=${encodeURIComponent(levelId)}&warId=${encodeURIComponent(warId)}`
+    + `&returnTo=${encodeURIComponent(WAR_EDITOR_RETURN_TO)}`;
 }
 
 export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): ReactElement {
@@ -131,21 +142,21 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
     setStatus(`${selectedWar.origin === 'official' ? 'Publish' : 'Save'} to keep this deletion.`);
   };
 
-  const deleteSelectedBattle = async (): Promise<void> => {
-    if (!selectedWar || !selectedLevel || !canEditSelected) return;
+  const confirmDeleteBattle = async (level: Level): Promise<void> => {
+    if (!selectedWar || !canEditSelected) return;
     if (!(await ask({
       title: 'Delete Battle?',
-      message: <>Delete <b>{selectedLevel.name}</b> from this War?</>,
+      message: <>Delete <b>{level.name}</b> from this War?</>,
       confirmLabel: 'Delete',
       cancelLabel: 'Keep',
       tone: 'danger',
     }))) return;
-    useWars.getState().deleteBattle(selectedWar.id, selectedLevel.id);
+    useWars.getState().deleteBattle(selectedWar.id, level.id);
   };
 
   // Delete = the selected Battle's own Delete button. It stops at the Battle: a keypress must not
   // be able to take the War and every other Battle in it, so "Delete War" stays a button-only verb.
-  useDeleteKeyAction(selectedLevel && canEditSelected ? () => { void deleteSelectedBattle(); } : null);
+  useDeleteKeyAction(selectedLevel && canEditSelected ? () => { void confirmDeleteBattle(selectedLevel); } : null);
 
   const officialWars = wars.filter((war) => war.origin === 'official');
   const privateWars = wars.filter((war) => war.origin !== 'official');
@@ -156,6 +167,11 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
       <main className={embedded ? 'menu-dest-col menu-dest-action ce-editor-main' : 'settings-frame settings-main-frame ce-editor-main'}>
         <h2 className="sr-only">{selectedWar?.name ?? 'War Editor'}</h2>
         <div className="ce-editor-body">
+          {/* No ThumbnailSurface here. That primitive gates the scene on the FIRST VIEWPORT's
+              thumbnails, and the Battles list sits below the Wars / War / Ataraxia sections —
+              with no row on screen it falls back to demanding the first one, which the lazy
+              thumbnail never paints, and the entrance never settles. Battle thumbnails are
+              opportunistic below-fold content; they paint as the column scrolls. */}
           <KitScroll className="settings-scroll ce-editor-scroll">
             <div className="settings-panel-content">
               {status ? <p className="ce-status" role="status">{status}</p> : null}
@@ -242,45 +258,41 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
                   </SettingsSection>
 
                   <SettingsSection title="Battles">
-                    <ActionList
-                      className="war-battle-list"
-                      empty={<p className="ce-empty">No Battles. Add one to begin.</p>}
-                      items={orderedBattles.map((battle, index) => {
+                    {/* A Battle is an authored level in an ordered container, exactly like a
+                        campaign level, so it takes the same row: board thumbnail, goal line,
+                        and the carved edit / reorder / delete verbs (ADR-0529). */}
+                    <div className="ce-level-list war-battle-list">
+                      {orderedBattles.length === 0 ? <p className="ce-empty">No Battles. Add one to begin.</p> : null}
+                      {orderedBattles.map((battle, index) => {
                         const level = levels[battle.levelId];
-                        const selected = battle.levelId === selectedBattle?.levelId;
                         const name = level?.name ?? battle.levelId;
-                        return {
-                          id: battle.levelId,
-                          title: name,
-                          description: <small>{index === orderedBattles.length - 1 ? 'Final Battle · War ends here' : level?.battle?.loot ? 'Loot Battle' : 'Battle'}</small>,
-                          leading: index + 1,
-                          leadingChrome: false,
-                          leadingClassName: 'war-battle-number',
-                          selected,
-                          className: 'war-battle-row',
-                          copyClassName: 'war-battle-copy',
-                          actionsClassName: 'war-battle-actions',
-                          ariaLabel: `Select ${name}`,
-                          onSelect: () => useWars.getState().selectBattle(battle.levelId),
-                          actions: canEditSelected ? [
-                            {
-                              id: 'move-up',
-                              label: `Move ${name} up`,
-                              icon: '↑',
-                              disabled: index === 0,
-                              onPress: () => useWars.getState().moveBattle(selectedWar.id, battle.levelId, -1),
-                            },
-                            {
-                              id: 'move-down',
-                              label: `Move ${name} down`,
-                              icon: '↓',
-                              disabled: index === orderedBattles.length - 1,
-                              onPress: () => useWars.getState().moveBattle(selectedWar.id, battle.levelId, 1),
-                            },
-                          ] : undefined,
-                        };
+                        const role = index === orderedBattles.length - 1
+                          ? 'Final Battle · War ends here'
+                          : level?.battle?.loot ? 'Loot Battle' : 'Battle';
+                        return (
+                          <EditorLevelRow
+                            key={battle.levelId}
+                            levelId={battle.levelId}
+                            objective={level?.objective}
+                            level={level}
+                            index={index}
+                            active={battle.levelId === selectedBattle?.levelId}
+                            readOnly={!canEditSelected}
+                            description={level ? `${role} · ${levelObjectiveLine(level)}` : role}
+                            ariaLabel={`Select ${name}`}
+                            onSelect={() => useWars.getState().selectBattle(battle.levelId)}
+                            editHref={level ? editBattleBoardHref(selectedWar.id, battle.levelId) : undefined}
+                            onMoveUp={() => useWars.getState().moveBattle(selectedWar.id, battle.levelId, -1)}
+                            onMoveDown={() => useWars.getState().moveBattle(selectedWar.id, battle.levelId, 1)}
+                            canMoveUp={index > 0}
+                            canMoveDown={index < orderedBattles.length - 1}
+                            onDelete={level ? () => { void confirmDeleteBattle(level); } : undefined}
+                            deleteLabel={`Delete Battle ${name}`}
+                            deleteTitle="Delete Battle"
+                          />
+                        );
                       })}
-                    />
+                    </div>
                     {canEditSelected ? (
                       <div className="ce-section-action">
                         <SettingsButton onClick={() => useWars.getState().addBattle(selectedWar.id)}>+ Add Battle</SettingsButton>
@@ -311,7 +323,7 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
                         value={<span>{selectedBattleIndex + 1} of {orderedBattles.length}</span>}
                       />
                       <SettingsRow title="Delete Battle" description="Removes this Battle level from the War workspace.">
-                        <SettingsButton tone="danger" disabled={!canEditSelected} onClick={() => void deleteSelectedBattle()}>Delete</SettingsButton>
+                        <SettingsButton tone="danger" disabled={!canEditSelected} onClick={() => void confirmDeleteBattle(selectedLevel)}>Delete</SettingsButton>
                       </SettingsRow>
                     </SettingsSection>
                   ) : null}
@@ -335,13 +347,12 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
       {selectedLevel && selectedWar ? (
         <LevelPreviewColumn
           level={selectedLevel}
-          title={selectedLevel.name}
+          title={selectedBattleIndex >= 0 ? `Battle ${selectedBattleIndex + 1}: ${selectedLevel.name}` : selectedLevel.name}
           embedded={embedded}
           actions={(
             <div className="ce-preview-actions">
-              <SettingsButton
-                href={`/editor/level?levelId=${encodeURIComponent(selectedLevel.id)}&warId=${encodeURIComponent(selectedWar.id)}&returnTo=${encodeURIComponent('/editor/wars')}`}
-              >Edit Board</SettingsButton>
+              <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} to={editBattleBoardHref(selectedWar.id, selectedLevel.id)}><span>Edit Board</span></ChromeNavButton>
+              <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button ce-link-button-ghost')} to={`/play?levelId=${encodeURIComponent(selectedLevel.id)}&mode=test&returnTo=${encodeURIComponent(WAR_EDITOR_RETURN_TO)}`}><span>Test Play</span></ChromeNavButton>
             </div>
           )}
         />

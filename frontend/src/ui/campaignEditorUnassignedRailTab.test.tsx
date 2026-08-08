@@ -12,7 +12,8 @@ import {
 describe('UnassignedRailTab', () => {
   it('restores collection state from an Editor return URL', () => {
     expect(campaignCollectionFromSearch('?collection=unassigned')).toBe('unassigned');
-    expect(campaignCollectionFromSearch('?collection=skirmish-profiles')).toBe('skirmish-profiles');
+    // The retired Skirmish profiles collection resolves to Campaigns, not a dead panel.
+    expect(campaignCollectionFromSearch('?collection=skirmish-profiles')).toBe('campaign');
     expect(campaignCollectionFromSearch('?collection=unknown')).toBe('campaign');
     expect(campaignCollectionFromSearch('')).toBe('campaign');
     expect(campaignCollectionHref('/editor?keep=yes#section', 'unassigned'))
@@ -25,8 +26,8 @@ describe('UnassignedRailTab', () => {
       .toBe('/editor/wars?keep=yes#section');
     expect(campaignCollectionHref('/editor/wars?keep=yes#section', 'campaign'))
       .toBe('/editor?keep=yes#section');
-    expect(campaignCollectionHref('/editor/wars?keep=yes#section', 'skirmish-profiles'))
-      .toBe('/editor?keep=yes&collection=skirmish-profiles#section');
+    expect(campaignCollectionHref('/editor/wars?keep=yes#section', 'unassigned'))
+      .toBe('/editor?keep=yes&collection=unassigned#section');
     expect(editorCampaignHref('/editor?collection=unassigned&keep=yes#section', 'crown'))
       .toBe('/editor?keep=yes&campaign=crown#section');
     expect(editorCampaignIdFromSearch('?keep=yes&campaign=crown')).toBe('crown');

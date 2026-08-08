@@ -3,7 +3,7 @@ import { titleBarConfig } from './titleBarConfig';
 
 describe('titleBarConfig play route screen names', () => {
   it('uses one Play title across selector sections', () => {
-    expect(titleBarConfig('/play/select/skirmish')?.screenName).toBe('Play');
+    expect(titleBarConfig('/play/select/run')?.screenName).toBe('Play');
     expect(titleBarConfig('/play/select/levels')?.screenName).toBe('Play');
     expect(titleBarConfig('/play/select/campaign/off-c-crown')?.screenName).toBe('Play');
   });
@@ -20,7 +20,7 @@ describe('titleBarConfig play route screen names', () => {
   });
 
   it('returns from sign-in to the current Play selector section', () => {
-    expect(titleBarConfig('/play/select/skirmish')?.signInReturnTo).toBe('/play/select/skirmish');
+    expect(titleBarConfig('/play/select/run')?.signInReturnTo).toBe('/play/select/run');
     expect(titleBarConfig('/play/select/levels')?.signInReturnTo).toBe('/play/select/levels');
     expect(titleBarConfig('/play/select/campaign/off-c-crown')?.signInReturnTo)
       .toBe('/play/select/campaign/off-c-crown');

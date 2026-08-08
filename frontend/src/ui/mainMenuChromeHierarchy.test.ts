@@ -7,6 +7,8 @@ const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const playMenu = readFileSync(new URL('./PlayMenu.tsx', import.meta.url), 'utf8');
 const settings = readFileSync(new URL('./Settings.tsx', import.meta.url), 'utf8');
 const editor = readFileSync(new URL('./CampaignEditor.tsx', import.meta.url), 'utf8');
+const warEditor = readFileSync(new URL('./WarEditor.tsx', import.meta.url), 'utf8');
+const editorLevelRow = readFileSync(new URL('./shared/EditorLevelRow.tsx', import.meta.url), 'utf8');
 const lobbies = readFileSync(new URL('./Lobbies.tsx', import.meta.url), 'utf8');
 const settingsControls = readFileSync(new URL('./shared/SettingsControls.tsx', import.meta.url), 'utf8');
 const apparatusRailTab = readFileSync(new URL('./shared/ApparatusRailTab.tsx', import.meta.url), 'utf8');
@@ -67,7 +69,7 @@ describe('Main Menu chrome hierarchy', () => {
     expectTaggedLegacyControls(apparatusRailTab, 'settings-tab main-menu-mode-tab');
     for (const source of [settings, editor]) expectTaggedLegacyControls(source, 'settings-tab main-menu-mode-tab');
     expectTaggedLegacyControls(playMenu, 'ce-link-button');
-    expectTaggedLegacyControls(editor, 'ce-link-button');
+    for (const source of [editor, warEditor]) expectTaggedLegacyControls(source, 'ce-link-button');
     expectTaggedLegacyControls(lobbies, 'utility-button', 'utilityButtonClassNames(');
     expect(lobbies).toMatch(/utilityButtonClassNames[\s\S]*?chromeUnitClassNames\('inner-text-button'/);
 
@@ -77,14 +79,14 @@ describe('Main Menu chrome hierarchy', () => {
 
   it('registers selectable levels and settings option rows as inner boxes', () => {
     expect(settingsControls).toMatch(/function SettingsRow[\s\S]*?data-chrome-unit="inner-box"[\s\S]*?chromeUnitClassNames\('inner-box', 'settings-row'/);
-    expect(playMenu.match(/<ActionList\b/g)).toHaveLength(3);
+    expect(playMenu.match(/<ActionList\b/g)).toHaveLength(2);
     expect(playMenu).toContain('className: `campaign-level-row ${!unlocked ? \'is-disabled\' : \'\'}`.trim()');
-    expect(editor).toContain('<ActionListRow item={{');
+    expect(editorLevelRow).toContain('<ActionListRow item={{');
     expect(actionList).toContain('<InnerChromeBox');
     expect(actionList).toContain('settings-row action-list-row');
     expect(actionList).toContain('className={`settings-row-thumb');
     expect(playMenu).not.toContain('<section className="settings-row"');
-    expect(playMenu).toContain('<SettingsRow title="No skirmish profiles available"');
+    expect(playMenu).toContain('<SettingsRow title="No standalone levels"');
     expect(playMenu).not.toMatch(/\.settings-row\s*\+\s*\.settings-row/);
 
     expect(cssBlock('.settings-row')).not.toMatch(/border-image|baseline-stone-blue/);

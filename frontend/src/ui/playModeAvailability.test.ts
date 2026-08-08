@@ -10,7 +10,6 @@ describe('player-facing Play mode availability', () => {
   it('offers only Run and therefore needs no source rail', () => {
     expect(PLAY_MODE_ENTRY_ENABLED).toEqual({
       campaign: false,
-      skirmish: false,
       run: true,
       levels: false,
     });

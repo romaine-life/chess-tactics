@@ -258,7 +258,7 @@ function campaignEditorSection(path: string, search: string): SectionedShellReso
   if (normalizeRoutePath(path) === '/editor/wars') return { sectionId: 'wars' };
   const params = new URLSearchParams(search);
   const collection = params.get('collection');
-  if (collection === 'skirmish-profiles' || collection === 'unassigned') return { sectionId: collection };
+  if (collection === 'unassigned') return { sectionId: 'unassigned' };
   const campaignId = params.get('campaign')?.trim();
   return campaignId ? { sectionId: 'campaign', params: { campaignId } } : { sectionId: 'campaign' };
 }
@@ -280,7 +280,6 @@ const campaignEditorShell: SectionedShell = {
   sections: [
     section('campaign', SCENE_DEFINITIONS.editorCampaign),
     section('wars', SCENE_DEFINITIONS.editorWars),
-    section('skirmish-profiles', SCENE_DEFINITIONS.editorSkirmishProfiles),
     section('unassigned', SCENE_DEFINITIONS.editorUnassigned),
   ],
   sectionPath: (path, search) => {
@@ -329,7 +328,6 @@ const playShell: SectionedShell = {
   },
   sections: [
     section('continue', SCENE_DEFINITIONS.playContinue),
-    section('skirmish', SCENE_DEFINITIONS.playSkirmish),
     section('run', SCENE_DEFINITIONS.playRun),
     section('levels', SCENE_DEFINITIONS.playLevels),
     section('campaign', SCENE_DEFINITIONS.playCampaign),
@@ -345,7 +343,6 @@ const playShell: SectionedShell = {
     if (selection?.mode === 'campaign') {
       return { sectionId: 'campaign', params: { campaignId: selection.campaignId } };
     }
-    if (selection?.mode === 'skirmish') return { sectionId: 'skirmish' };
     if (selection?.mode === 'continue') return { sectionId: 'continue' };
     return { sectionId: 'run' };
   },

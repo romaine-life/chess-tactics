@@ -3553,7 +3553,7 @@ async function main() {
     '/design/level-editor/render',
     '/design/level-editor/render/hotspots',
     '/play/select',
-    '/play/select/skirmish',
+    '/play/select/run',
     '/play/select/levels',
     '/play/select/campaign/off-c-crown-valoria',
     '/design/skirmish/render',

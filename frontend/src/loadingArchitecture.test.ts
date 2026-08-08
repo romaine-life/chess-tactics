@@ -447,10 +447,16 @@ describe('professional loading architecture guards', () => {
 
   it('keeps campaign row thumbnails and the selected board preview inside the scene gate', () => {
     const campaign = read('./ui/CampaignEditor.tsx');
+    const war = read('./ui/WarEditor.tsx');
+    const editorRow = read('./ui/shared/EditorLevelRow.tsx');
     const preview = read('./ui/LevelPreviewColumn.tsx');
     const thumbnails = read('./ui/shell/ThumbnailSurface.tsx');
     expect(campaign).toContain('participantId="campaign-list-thumbnails"');
-    expect(campaign).toContain('<GatedLevelThumbnail');
+    expect(editorRow).toContain('<GatedLevelThumbnail');
+    // ThumbnailSurface gates the FIRST VIEWPORT. The War library's Battles list sits below
+    // its Wars / War sections, so gating on it demands a thumbnail the lazy row never paints
+    // and the entrance never settles; those rows are opportunistic below-fold content.
+    expect(war).not.toContain('<ThumbnailSurface');
     expect(read('./ui/PlayMenu.tsx')).toContain("from './shell/ThumbnailSurface'");
     expect(thumbnails).toContain('root.closest(viewportSelector)');
     expect(thumbnails).toContain('rect.bottom >= bounds.top && rect.top <= bounds.bottom');
