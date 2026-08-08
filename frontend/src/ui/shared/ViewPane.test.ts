@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   clientDeltaToLocal,
   constrainPanToCoverViewport,
+  exceedsViewPanePanThreshold,
   minimumZoomToCoverViewport,
   zoomAfterMinimumChange,
 } from './ViewPane';
@@ -50,6 +51,17 @@ describe('ViewPane viewport-cover zoom floor', () => {
       maxZoom: 4,
     });
     expect(large).toBe(small * 4);
+  });
+
+  // A press that never really moved is a click, and a viewport owner may claim the secondary
+  // one for a non-destructive mode change. The threshold is what separates the two, so it has
+  // to tolerate the tremor of an ordinary click without eating a deliberate short drag.
+  it('separates a click from a pan by a tremor-sized movement threshold', () => {
+    expect(exceedsViewPanePanThreshold(0, 0)).toBe(false);
+    expect(exceedsViewPanePanThreshold(4, -4)).toBe(false);
+    expect(exceedsViewPanePanThreshold(-4, 4)).toBe(false);
+    expect(exceedsViewPanePanThreshold(5, 0)).toBe(true);
+    expect(exceedsViewPanePanThreshold(0, -5)).toBe(true);
   });
 
   it('keeps the zoom floor independent of current pan', () => {

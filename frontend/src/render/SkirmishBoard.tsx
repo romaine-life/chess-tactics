@@ -1663,6 +1663,7 @@ export function SkirmishBoard({
   surfaceState,
   renderCellOverlay,
   boardOverlay,
+  onSecondaryClick,
   className = '',
   ariaLabel = 'Skirmish board',
   predrawnReview,
@@ -1688,6 +1689,8 @@ export function SkirmishBoard({
   renderCellOverlay?: (context: SkirmishBoardCellOverlayContext) => ReactNode;
   /** Board-space content, such as a placement ghost, seated in the canonical scene. */
   boardOverlay?: ReactNode;
+  /** A secondary click that never panned. Reserved for non-destructive phase modes. */
+  onSecondaryClick?: () => void;
   className?: string;
   ariaLabel?: string;
   predrawnReview?: {
@@ -2493,6 +2496,7 @@ export function SkirmishBoard({
         onMinimumZoomChange={setMinZoom}
         onViewportSizeChange={setViewViewportSize}
         onViewInteraction={markViewInteraction}
+        onSecondaryClick={onSecondaryClick}
       >
         <BoardLabBoard
           board={board}

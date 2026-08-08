@@ -21930,16 +21930,68 @@ button.tileset-relationship-cell {
 }
 
 .run-deployment-cell {
+  cursor: default;
+}
+
+/* A square the carried formation could cover. Aiming is the gesture, so every one of them
+   takes the pointer — not only the squares a bounding-box corner could sit on. */
+.run-deployment-cell.is-placeable {
   cursor: crosshair;
+}
+
+/* The deployable band, held at a fraction of the move paint so it reads UNDER the seating it
+   surrounds. It is on whenever a formation is in hand, so the board never goes blank between
+   one square and the next — the same paint at full strength marks where this seating lands.
+   Keyed to the BAND, not to the carried formation's current turn: the band answers "where may I
+   deploy", which does not change when the player turns the piece. */
+.run-deployment-cell.is-band > .predrawn-cyan-move-highlight-paint {
+  opacity: .6;
+}
+
+/* A formation already on the board is still the player's to move, so its squares read as
+   pickable rather than as inert ground. */
+.run-deployment-cell.is-seated-formation {
+  cursor: grab;
+}
+
+/* Squares outside the formation's reach carry a hit target only so the pointer can be located
+   over them — pointing at one is how a turn finds a fit that the current turn has not got. They
+   are not actions, so they take none of the shared board's square-local paint. Without this the
+   generic hover ring rides the cursor across ground nothing can be placed on, lighting a tile on
+   the far side of the board as if it were a target. Board-scoped to outrank `:hover`. */
+.run-deployment-board .run-deployment-cell:not(.is-placeable):not(.is-seated-formation)::before,
+.run-deployment-board .run-deployment-cell:not(.is-placeable):not(.is-seated-formation)::after {
+  opacity: 0;
+}
+
+/* The formation under the pointer IS the cursor while a seating resolves. */
+.run-deployment-board.is-carrying-formation .run-deployment-cell {
+  cursor: none;
 }
 
 .run-deployment-cell.is-deployment-blocked {
   cursor: not-allowed;
 }
 
-.run-arrangement-controls {
+/* The panel does not scroll; its KitScroll rail does (ADR-0030). Both class names are named so
+   this outranks `.run-meta-controls { overflow-y: auto }` whatever the source order — matched on
+   one class it loses to the later rule and the browser's own bar returns beside the drawn one. */
+.run-meta-controls.run-arrangement-controls {
   align-content: start;
-  overflow-y: auto;
+  overflow-y: hidden;
+}
+
+.run-arrangement-scroll {
+  flex: 1 1 auto;
+  min-block-size: 0;
+}
+
+/* The scrolled body keeps the panel's own stacking, so groups sit apart exactly as they did
+   when the section itself was the scroll pane. */
+.run-arrangement-scroll > .kit-scroll-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-stack);
 }
 
 .run-arrangement-hand {
@@ -21948,59 +22000,84 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
-.run-arrangement-hand-cards {
-  display: grid;
-  gap: var(--ds-space-2);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+/* The card is the subject of the panel, so it is pinned above the scroll rail and holds its
+   size while the controls beneath it move. */
+.run-arrangement-hand {
+  flex: 0 0 auto;
 }
 
-.run-arrangement-card {
-  appearance: none;
-  color: inherit;
-  cursor: pointer;
+/* The card takes the panel's whole width. A formation card is read by its SHAPE, so a hand laid
+   out at once squeezed away the only information on it — and steppers either side took width
+   the card needed, so they sit under it instead. */
+.run-arrangement-hand-card {
   display: grid;
   gap: var(--ds-space-1);
+  justify-items: center;
   min-inline-size: 0;
-  padding: var(--ds-space-1);
 }
 
-.run-arrangement-card > .run-card-action {
+/* Whether the whole dealt hand is down. Always present so completion does not re-lay the panel
+   at the moment the player is reading it; it changes state rather than appearing. */
+.run-arrangement-progress {
+  align-items: center;
+  color: var(--skirmish-muted);
+  display: flex;
+  font-size: var(--ds-text-xs);
+  font-weight: 700;
+  gap: var(--ds-space-1);
+  justify-content: center;
+  letter-spacing: .04em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.run-arrangement-progress.is-complete {
+  color: var(--good);
+}
+
+.run-arrangement-progress-mark {
+  font-size: var(--ds-text-sm);
+  line-height: 1;
+}
+
+.run-arrangement-steppers {
+  align-items: center;
+  display: grid;
+  gap: var(--ds-space-1);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+
+.run-arrangement-hand-position {
+  color: var(--skirmish-muted);
+  font-size: var(--ds-text-xs);
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-align: center;
+}
+
+/* Controls that wear the key that does the same thing, in the shared shortcut cap the in-match
+   grid uses: the cap, then what it does. */
+.run-arrangement-step,
+.run-arrangement-turn {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-space-1);
+  justify-content: center;
+  min-inline-size: 0;
+  padding-inline: var(--ds-space-1);
+}
+
+.run-arrangement-hand-card > .run-card-action {
   inline-size: 100%;
   pointer-events: none;
 }
 
-.run-arrangement-card:hover,
-.run-arrangement-card.is-selected {
-  filter: brightness(1.12);
-}
-
-.run-arrangement-card.is-placed:not(.is-selected) .run-arrangement-card-state {
-  color: var(--good);
-}
-
-.run-arrangement-card.is-reserve {
-  cursor: not-allowed;
-  filter: saturate(.45);
-  opacity: .52;
-}
-
-.run-arrangement-card-state {
-  color: var(--skirmish-muted);
-  font-size: var(--ds-text-2xs);
-  font-weight: 700;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-}
-
+/* Two turns, not four absolute angles: the formation on the board already shows which way it
+   faces, so the control is the verb. */
 .run-arrangement-rotations {
   display: grid;
   gap: var(--ds-space-1);
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.run-arrangement-rotations > button {
-  min-inline-size: 0;
-  padding-inline: var(--ds-space-1);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .run-deployment-deal-overlay {
