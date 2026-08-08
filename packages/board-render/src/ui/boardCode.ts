@@ -92,12 +92,13 @@ export type BoardFactionDirections = Partial<Record<UnitPalette, UnitFacing>>;
  * A board painting placed by hand: four corners dragged onto the board's own corners, which the
  * renderer honours as an exact projective registration.
  *
- * This is NOT a staging post on the way to the versioned pipeline, and nothing here is waiting to
- * be migrated. The two placements are different models — corners can sit slightly crooked, and a
- * versioned surface fits its raster to a rectangle that cannot. Converting one would mean redrawing
- * the artwork straight, so a level placed this way keeps its own registration for good.
+ * One level is still placed this way — Fortress Gate — and it has NOT been migrated to the versioned
+ * pipeline. Moving it is not a data copy. Its corners sit off-square by a few percent, and a
+ * versioned surface fits its raster to an axis-aligned rectangle, so the conversion has to go
+ * through the pipeline's warp stage and lands on different pixels than the owner placed. Whether
+ * that trade is worth making is a decision about the artwork, and it has not been made.
  *
- * It is a first-class saved selection. Every renderer draws it, and anything that decides whether
+ * Until it is, this is a saved selection that renders like any other, and anything deciding whether
  * artwork may paint must accept it (ADR-0527) — a check that understands only versioned surfaces
  * blanks the board of a level whose artwork is installed, published and serving.
  */

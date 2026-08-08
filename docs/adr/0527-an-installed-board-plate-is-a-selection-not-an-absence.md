@@ -63,9 +63,12 @@ plate is a settled, drawable one.** It gets its own kind, `plate`, beside the ve
 
 ## Consequences
 
-- Plates are not deprecated by this. They remain a first-class saved selection that every surface
-  draws, and the Board Art Pipeline remains the way to make a *new* one versioned. A level holding a
-  plate is not in a broken or partially-migrated state and needs no migration to render.
+- **This decides how a plate RENDERS, not whether plates survive.** Exactly one level is still placed
+  this way — Fortress Gate, off-square by a few percent — and it remains un-migrated. Migrating it
+  would mean running it through the warp stage and accepting different pixels than were placed by
+  hand; that trade is an open decision about the artwork, and this ADR does not make it. What it
+  settles is that an un-migrated level draws its artwork in the meantime instead of showing an empty
+  board, so the question can be answered on its merits rather than under a broken editor.
 - Anything new that keys off the selection check must ask `predrawnSelectionIsDrawable` rather than
   compare against `valid`, exactly as ADR-0521 requires `unreachable` to be handled explicitly.
 - Verified against the real document that showed the defect (`legacy-egkfkpjvhfph`, Fortress Gate,
