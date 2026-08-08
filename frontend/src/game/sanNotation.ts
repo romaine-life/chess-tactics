@@ -48,13 +48,13 @@ function checkSuffix(after: GameState, moverSide: Side): string {
   return anyReply ? '+' : '#';
 }
 
-/** SAN token for ply i of a recorded game (states from replayStates: states[i] is the
- * position the move was played FROM, states[i+1] the position after). */
-export function sanForPly(states: readonly GameState[], moves: readonly RecordedMove[], i: number): string {
-  const before = states[i];
-  const after = states[i + 1];
-  const m = moves[i];
-  if (!before || !after || !m) return '';
+/**
+ * SAN token for ONE move, given the position it was played from and the position it
+ * produced. This is the primitive: a recorded game notates ply by ply through it
+ * (sanForPly), and the live board notates each move as it commits (game/store's Event
+ * Log) — both from the same grammar, so a played game and its score sheet agree.
+ */
+export function sanForMove(before: GameState, after: GameState, m: RecordedMove): string {
   const rows = before.size.rows;
   if (before.size.cols > 26) return `${m.pieceId} (${m.from.x},${m.from.y})->(${m.move.x},${m.move.y})`;
 
@@ -90,6 +90,16 @@ export function sanForPly(states: readonly GameState[], moves: readonly Recorded
     disambig = fileUnique ? fileOf(mover.x) : rankUnique ? String(rows - mover.y) : `${fileOf(mover.x)}${rows - mover.y}`;
   }
   return `${letter}${disambig}${captures}${target}${suffix}`;
+}
+
+/** SAN token for ply i of a recorded game (states from replayStates: states[i] is the
+ * position the move was played FROM, states[i+1] the position after). */
+export function sanForPly(states: readonly GameState[], moves: readonly RecordedMove[], i: number): string {
+  const before = states[i];
+  const after = states[i + 1];
+  const m = moves[i];
+  if (!before || !after || !m) return '';
+  return sanForMove(before, after, m);
 }
 
 /** SAN token per ply for the whole record. */

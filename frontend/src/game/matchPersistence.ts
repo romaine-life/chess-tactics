@@ -14,11 +14,11 @@
 // transient (reset to the first player piece), so none of those are stored.
 // Serialization is plain JSON — core/types is serializable by construction.
 
-import type { SkirmishState } from './store';
+import type { LogEntry, SkirmishState } from './store';
 import { readElapsedClockMs } from '../core/clock';
 
 const KEY = 'chess-tactics-active-match-v1';
-const VERSION = 2;
+const VERSION = 3;
 
 // The fields that fully describe a resumable match. `env` (derived) and
 // `selectedId`/`focusedId` (transient) are deliberately omitted — see module note.
@@ -140,15 +140,34 @@ function hasResumableShape(value: unknown): value is Record<string, unknown> {
     && Array.isArray(v.log);
 }
 
+/**
+ * v3 turned each Event Log line into a `LogEntry` so a played move can carry its chess
+ * notation and half-move index (see store's LogEntry). A v1/v2 snapshot holds bare
+ * strings: they resume as prose rows, which is exactly what they were. Numbering picks
+ * up from the first move played after the resume, since a plain string never recorded
+ * which ply it was.
+ */
+function migrateLog(value: unknown): LogEntry[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((line) => (typeof line === 'string' ? { text: line } : line as LogEntry));
+}
+
 function migrateEnvelope(value: unknown): StoredEnvelope | null {
   if (!hasResumableShape(value)) return null;
-  const envelope = value as Record<string, unknown>;
+  let envelope = value as Record<string, unknown>;
+  // v1 predates the battle stopwatch: it resumes with an empty bank.
   if (envelope.version === 1) {
-    return {
+    envelope = { ...envelope, version: 2, battleElapsed: { elapsedMs: 0, startedAtMs: null } };
+  }
+  // v2 wrote the Event Log — and the undo checkpoint's copy of it — as bare strings.
+  if (envelope.version === 2) {
+    const undo = envelope.undoCheckpoint as Record<string, unknown> | null | undefined;
+    envelope = {
       ...envelope,
-      version: VERSION,
-      battleElapsed: { elapsedMs: 0, startedAtMs: null },
-    } as unknown as StoredEnvelope;
+      version: 3,
+      log: migrateLog(envelope.log),
+      ...(undo ? { undoCheckpoint: { ...undo, log: migrateLog(undo.log) } } : {}),
+    };
   }
   if (envelope.version !== VERSION) return null;
   const elapsed = envelope.battleElapsed as Record<string, unknown> | undefined;

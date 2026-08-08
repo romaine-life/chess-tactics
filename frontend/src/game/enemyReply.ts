@@ -6,11 +6,13 @@
 // premoves need) with ZERO change to the search, so the reply stays deterministic — node/depth-
 // bounded, no wall-clock budget — the way netplay lockstep, self-play, and replay all require.
 //
-// Pure: imports only the core (rules/ai/rng) + types. No store, no DOM, no localStorage, so the
-// worker bundle stays lean and the same function runs inline in tests unchanged.
+// Pure: imports only the core (rules/ai/rng) + types + the notation primitive. No store, no DOM,
+// no localStorage, so the worker bundle stays lean and the same function runs inline in tests
+// unchanged.
 
 import type { GameEvent, GameState, Move } from '../core/types';
 import { applyMove, enemyMove, gameEnv, recordPosition, type MoveEnv } from '../core/rules';
+import { sanForMove } from './sanNotation';
 import { searchEnemyMove, type EvalWeights } from '../core/ai';
 import { createRng, type Rng } from '../core/rng';
 import type { ObjectiveType, VictoryRules } from '../core/level';
@@ -54,6 +56,13 @@ export interface EnemyReplyResult {
   game: GameState;
   tick: number;
   events: GameEvent[];
+  /**
+   * Chess notation for each half-move of this reply, in the order played. Notated HERE
+   * because only this loop holds the position each half-move was played from — a reply
+   * that resolves several enemy moves collapses those intermediate boards before it
+   * returns, and the Event Log's score sheet needs one token per move, not per reply.
+   */
+  notation: string[];
 }
 
 /** Resolve the enemy half-turn(s) until it is the player's move again. Deterministic on
@@ -80,15 +89,26 @@ export function resolveEnemyReply(req: EnemyReplyRequest): EnemyReplyResult {
   let game = req.game;
   let tick = req.tick;
   const events: GameEvent[] = [];
+  const notation: string[] = [];
   while (game.turn === 'enemy' && !game.winner) {
     const move = pick(game, createRng(req.seed + tick), env);
     tick += 1;
     if (!move) { game = { ...game, turn: 'player' }; break; }
+    const mover = game.pieces.find((p) => p.id === move.pieceId);
+    const before = game;
     const res = applyMove(game, move.pieceId, move.move);
     // The committed enemy move joins the threefold table (no-op without the rule); the
     // key needs the POST-move lastMove, so rebuild that slice of the env.
     game = recordPosition(res.state, { ...env, lastMove: res.state.lastMove });
     events.push(...res.events);
+    if (mover) {
+      notation.push(sanForMove(before, game, {
+        pieceId: mover.id,
+        side: mover.side,
+        from: { x: mover.x, y: mover.y },
+        move: move.move,
+      }));
+    }
   }
-  return { game, tick, events };
+  return { game, tick, events, notation };
 }

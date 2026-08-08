@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { useSkirmish } from '../game/store';
 import { createSkirmishViewStore } from '../game/skirmishView';
-import { runSkirmishShortcut, SHORTCUT_BINDINGS, skirmishRosterAction, skirmishUnitOwnerLabel } from './SkirmishHud';
+import { hudTabFromRoute, moveNumberLabel, runSkirmishShortcut, SHORTCUT_BINDINGS, skirmishRosterAction, skirmishUnitOwnerLabel } from './SkirmishHud';
 
 const viewStore = createSkirmishViewStore();
 
@@ -113,6 +113,27 @@ describe('Skirmish HUD shortcuts', () => {
 
     expect(runSkirmishShortcut('d', false, viewStore)).toBe(true);
     expect(viewStore.getState().showPromotionZones).toBe(false);
+  });
+});
+
+describe('Skirmish HUD event log', () => {
+  it('numbers a move row the way a score sheet does, replies included', () => {
+    expect(moveNumberLabel({ text: 'e4', side: 'player', ply: 0 })).toBe('1.');
+    expect(moveNumberLabel({ text: 'e5', side: 'enemy', ply: 1 })).toBe('1…');
+    expect(moveNumberLabel({ text: 'Nf3', side: 'player', ply: 2 })).toBe('2.');
+    expect(moveNumberLabel({ text: 'Qxh7#', side: 'enemy', ply: 41 })).toBe('21…');
+  });
+
+  it('leaves the number column empty for a line that is not a move', () => {
+    expect(moveNumberLabel({ text: 'Your King is in check!' })).toBe('');
+  });
+
+  it('opens on the section a ?hud= link asks for, and on Unit for anything else', () => {
+    expect(hudTabFromRoute('log')).toBe('log');
+    expect(hudTabFromRoute('controls')).toBe('controls');
+    expect(hudTabFromRoute(null)).toBe('unit');
+    expect(hudTabFromRoute('admin')).toBe('unit'); // admin-only, never link-addressable
+    expect(hudTabFromRoute('nonsense')).toBe('unit');
   });
 });
 
