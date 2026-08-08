@@ -128,13 +128,13 @@ describe('board-assembly structure arrivals', () => {
     dw: 40,
     dh: 45,
     z: half === 'back' ? 1 : 2,
-    structure: { key, kind, x, y },
+    structure: { key, kind, x, y, artId: key },
   });
 
   it('admits rocks to the assembly and leaves other props as standing scenery', () => {
-    expect(structureArrives({ key: '1,1', kind: 'rock', x: 1, y: 1 })).toBe(true);
-    expect(structureArrives({ key: '2,2', kind: 'tree', x: 2, y: 2 })).toBe(false);
-    expect(structureArrives({ key: '3,3', kind: 'house', x: 3, y: 3 })).toBe(false);
+    expect(structureArrives({ key: '1,1', kind: 'rock', x: 1, y: 1, artId: 'art-rock' })).toBe(true);
+    expect(structureArrives({ key: '2,2', kind: 'tree', x: 2, y: 2, artId: 'art-tree' })).toBe(false);
+    expect(structureArrives({ key: '3,3', kind: 'house', x: 3, y: 3, artId: 'art-house' })).toBe(false);
   });
 
   // A prop draws several ops (two depth halves per authored part). The choreography is keyed by
@@ -152,9 +152,9 @@ describe('board-assembly structure arrivals', () => {
 
   it('lands the far corner first so the position lays itself down toward the player', () => {
     const delays = computeStructureArrivalDelays([
-      { key: '5,4', kind: 'rock', x: 5, y: 4 },
-      { key: '0,1', kind: 'rock', x: 0, y: 1 },
-      { key: '2,2', kind: 'rock', x: 2, y: 2 },
+      { key: '5,4', kind: 'rock', x: 5, y: 4, artId: 'art-rock' },
+      { key: '0,1', kind: 'rock', x: 0, y: 1, artId: 'art-rock' },
+      { key: '2,2', kind: 'rock', x: 2, y: 2, artId: 'art-rock' },
     ], 0);
 
     expect([...delays]).toEqual([['0,1', 0], ['2,2', 55], ['5,4', 110]]);

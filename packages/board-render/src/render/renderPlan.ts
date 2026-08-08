@@ -100,6 +100,22 @@ export interface BoardSpriteAnimation {
 }
 
 /**
+ * A sprite sheet played ONCE from a known moment and then held on its last frame forever. The
+ * board's only existing sheet policy loops (grass sway); an impact is the opposite — it happens,
+ * and what it leaves behind is the object's new resting appearance. A rock that cracks when it
+ * lands stays cracked, so the final frame is not the end of an animation, it is the sprite.
+ */
+export interface BoardSpriteImpact {
+  kind: 'structure-impact';
+  frameCount: number;
+  durationMs: number;
+  /** Timeline moment the first frame is shown, on the same clock the renderer paints with. */
+  startMs: number;
+}
+
+export type BoardSpritePlayback = BoardSpriteAnimation | BoardSpriteImpact;
+
+/**
  * Which placed structure an op's pixels belong to. A prop is drawn as several ops (two depth
  * halves, one pair per authored part), and a renderer that wants to move the WHOLE prop — the
  * board-assembly drop (ADR-0045) is the first such caller — has to move every one of them by
@@ -114,6 +130,8 @@ export interface BoardStructureIdentity {
   /** Anchor cell, pre-split so depth-ordered choreography needs no key parsing. */
   x: number;
   y: number;
+  /** The structure art this prop draws, so a renderer can look up its impact sheet. */
+  artId: string;
 }
 
 export interface BoardDrawOp {
@@ -133,7 +151,7 @@ export interface BoardDrawOp {
   sw?: number;
   sh?: number;
   /** Code-owned playback policy over catalog-declared sprite-sheet geometry. */
-  animation?: BoardSpriteAnimation;
+  animation?: BoardSpritePlayback;
   /** Present on every op drawn for a placed prop; absent on terrain, cover and units. */
   structure?: BoardStructureIdentity;
   /** Board-space polygon paths used to expose broken cells inside a composite terrain image. */
@@ -733,7 +751,7 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
     const parts = def.spriteParts?.length
       ? def.spriteParts
       : [{ source: def.spriteSource ?? { kind: 'prop' as const, id: def.spriteId }, anchorX: def.sprite.anchorX, anchorY: def.sprite.anchorY, scale: def.sprite.scale }];
-    const structure: BoardStructureIdentity = { key, kind: def.kind, x: ax, y: ay };
+    const structure: BoardStructureIdentity = { key, kind: def.kind, x: ax, y: ay, artId: def.spriteId };
     for (const part of parts) {
       const sourceSprite = structureSourceSprite(part.source);
       const s = part.scale;

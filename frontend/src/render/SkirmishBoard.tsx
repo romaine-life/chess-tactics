@@ -16,6 +16,7 @@ import { PLAYER_TECHNICAL_MINIMUM_ZOOM } from '../game/boardCameraPolicy';
 import { provisionalBoard, premoveArrows, premoveGhosts, premoveTargets, type PremoveArrow, type PremoveStep } from '../game/premoves';
 import { clientSide, opponentSide } from '../game/clientPerspective';
 import { PLAYER_MOVE_PRESENTATION_MS, promotionArrivalPieces } from '../game/promotionPresentation';
+import { structureArtImpact } from '../core/structureArt';
 import { BoardLabBoard, boardLabCellPosition, immutableBoardLabTerrainSrc } from './BoardLabBoard';
 import { PredrawnMoveHighlightPaint } from './PredrawnMoveHighlightPaint';
 import { terrainTopSrc, type TerrainCanvasCell } from './BoardTerrainLayer';
@@ -680,6 +681,9 @@ export function computeArrivalDelays(
 // set lands inside the reveal beat, before ARRIVAL_BASE_MS frees the first unit.
 const STRUCTURE_ARRIVAL_BASE_MS = 130;
 const STRUCTURE_ARRIVAL_STEP_MS = 55;
+// The impact reads as one event, not a performance: it resolves inside the deploy wave rather
+// than trailing behind it, and what it leaves is permanent.
+const STRUCTURE_IMPACT_MS = 320;
 
 /** Which placed props take part in the board-assembly drop. */
 export function structureArrives(structure: BoardStructureIdentity): boolean {
@@ -722,6 +726,38 @@ export function structureArrivalOp(
   const arrival = arrivalOffset(timeMs, plan);
   if (arrival.dy === 0 && arrival.opacity >= 1) return op;
   return { ...op, dy: op.dy + arrival.dy, opacity: (op.opacity ?? 1) * arrival.opacity };
+}
+
+/** The moment a prop's fall ends — where the impact belongs. */
+export function structureLandingMs(plan: UnitArrivalPlan): number | null {
+  return plan.startMs == null ? null : plan.startMs + plan.delayMs + ARRIVAL_ANIM_MS;
+}
+
+/**
+ * Redirect a landed prop's op at its impact sheet. The sheet's first frame IS the resting
+ * drawing, so this can be applied from the landing moment onward forever: during the impact it
+ * advances, and after it holds the last frame, which is what the prop looks like from then on.
+ * Props with no sheet, and props still in the air, are returned untouched.
+ */
+export function structureImpactOp(
+  op: BoardDrawOp,
+  landedAtMs: number | undefined,
+  timeMs: number,
+  durationMs = STRUCTURE_IMPACT_MS,
+): BoardDrawOp {
+  if (landedAtMs == null || timeMs < landedAtMs || !op.structure || op.sw == null) return op;
+  const impact = structureArtImpact(op.structure.artId);
+  if (!impact || impact.frameWidth !== op.sw) return op;
+  return {
+    ...op,
+    src: impact.src,
+    animation: {
+      kind: 'structure-impact',
+      frameCount: impact.frameCount,
+      durationMs,
+      startMs: landedAtMs,
+    },
+  };
 }
 
 /** Return only units which have newly joined the visible position. A retained battlefield uses
@@ -1031,6 +1067,7 @@ function SkirmishSceneLayer({
   const departurePlansRef = useRef<Map<string, UnitDeparturePlan>>(new Map());
   const visibleStructureKeysRef = useRef<Set<string>>(new Set());
   const structureArrivalPlansRef = useRef<Map<string, UnitArrivalPlan>>(new Map());
+  const structureLandingRef = useRef<Map<string, number>>(new Map());
   const structureLifecycleStartedRef = useRef(false);
   const arrivalLifecycleStartedRef = useRef(false);
   const reportedArrivalIdsRef = useRef('');
@@ -1073,8 +1110,18 @@ function SkirmishSceneLayer({
     () => [...new Set(mirrorSurfaces.map((surface) => surface.face))],
     [mirrorSurfaces],
   );
+  // A prop's impact sheet is a source no static op names — the op only points at it once the
+  // prop has landed. It has to be decoded before then, because the compositor skips an op whose
+  // image is not ready, which reads as the rock disappearing at the moment it touches down.
+  const impactSources = useMemo(() => [...new Set(
+    staticOps.flatMap((op) => {
+      const src = op.structure ? structureArtImpact(op.structure.artId)?.src : undefined;
+      return src ? [src] : [];
+    }),
+  )], [staticOps]);
   const requiredSources = useMemo(() => [...new Set([
     ...staticOps.map((op) => op.src),
+    ...impactSources,
     ...occlusionMasks.map((op) => op.src),
     ...(occlusionDepthMap ? [occlusionDepthMap.src] : []),
     ...livePieces.map(pieceImageSrc).filter((src): src is string => !!src),
@@ -1264,6 +1311,9 @@ function SkirmishSceneLayer({
     for (const key of structureArrivalPlansRef.current.keys()) {
       if (!nextStructures.has(key)) structureArrivalPlansRef.current.delete(key);
     }
+    for (const key of structureLandingRef.current.keys()) {
+      if (!nextStructures.has(key)) structureLandingRef.current.delete(key);
+    }
     const structureAdditions = [...nextStructures.values()]
       .filter((structure) => !visibleStructureKeysRef.current.has(structure.key));
     const structureDelays = computeStructureArrivalDelays(
@@ -1279,7 +1329,10 @@ function SkirmishSceneLayer({
     }
     if (unitArrivals === 'active') {
       for (const [key, plan] of structureArrivalPlansRef.current) {
-        if (plan.startMs == null) structureArrivalPlansRef.current.set(key, { ...plan, startMs: now });
+        const released = plan.startMs == null ? { ...plan, startMs: now } : plan;
+        if (plan.startMs == null) structureArrivalPlansRef.current.set(key, released);
+        const landing = structureLandingMs(released);
+        if (landing != null && !structureLandingRef.current.has(key)) structureLandingRef.current.set(key, landing);
       }
     }
     for (const piece of livePieces) {
@@ -1349,11 +1402,13 @@ function SkirmishSceneLayer({
       if (!canvas || !ctx || state.requiredSources.some((src) => !imagesRef.current.has(src))) return;
 
       try {
-        const ops: BoardDrawOp[] = state.staticOps.map((op) => structureArrivalOp(
-          op,
-          op.structure ? structureArrivalPlansRef.current.get(op.structure.key) : undefined,
-          timeMs,
-        ));
+        const ops: BoardDrawOp[] = state.staticOps.map((op) => {
+          if (!op.structure) return op;
+          const seated = structureArrivalOp(op, structureArrivalPlansRef.current.get(op.structure.key), timeMs);
+          // Landing outlives the arrival plan — the plan is discarded once the fall ends, but what
+          // the impact left behind has to keep being drawn for the rest of the battle.
+          return structureImpactOp(seated, structureLandingRef.current.get(op.structure.key), timeMs);
+        });
         const physicalPieceOps: BoardDrawOp[] = [];
         const reflectionSubjects: MirrorReflectionSubject[] = [];
         for (const piece of state.livePieces) {
@@ -1478,6 +1533,11 @@ function SkirmishSceneLayer({
         if (plan.startMs == null) continue;
         if (timeMs < plan.startMs + plan.delayMs + ARRIVAL_ANIM_MS) hasActiveStructureArrivals = true;
         else structureArrivalPlansRef.current.delete(key);
+      }
+      // An impact keeps painting only while it still has frames to advance; once it holds its
+      // last frame the scene is static again.
+      for (const landedAt of structureLandingRef.current.values()) {
+        if (timeMs >= landedAt && timeMs < landedAt + STRUCTURE_IMPACT_MS) hasActiveStructureArrivals = true;
       }
       let hasActiveDepartures = false;
       for (const plan of departurePlansRef.current.values()) {

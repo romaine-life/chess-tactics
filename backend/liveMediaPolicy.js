@@ -373,7 +373,9 @@ function ataraxiaNumeralOwnerProofIssue(row, proof, surfaceUrl = null) {
 // its ground contact. That is the completeness this validator exists to state, and its absence is
 // why the prop domain was refused acceptance outright and every prop in the game arrived over the
 // legacy bridge instead.
-const PROP_ART_SLOT = /^props\/([a-z][a-z0-9-]*)\/(back|front)\.png$/;
+// `impact` is a one-shot sprite sheet: the prop's resting frame followed by what happens to it
+// when it lands, ending on the appearance it keeps. It is a strip, so it is wider than a half.
+const PROP_ART_SLOT = /^props\/([a-z][a-z0-9-]*)\/(back|front|impact)\.png$/;
 
 /** The prop and depth half a slot names, or null when the slot is not prop artwork. */
 function propArtSlot(slot) {
@@ -400,7 +402,26 @@ function propArtMediaIssue(row, projectedRuntime = null) {
   // A prop frame is a sprite, not a scene. The upper bound is the largest installed prop frame
   // (the 192x300 oak) with room above it; anything larger is a source render that has not been
   // cropped to a placeable frame.
-  if (width > 512 || height > 512) return 'prop artwork frames are bounded at 512x512';
+  if (height > 512) return 'prop artwork frames are bounded at 512px tall';
+  if (contract.half === 'impact') {
+    // A strip is as wide as its frames; its frame is still bounded, and it must divide evenly or
+    // the renderer cannot cut a frame from it.
+    const metadata = mediaVersionMetadata(row);
+    const runtimeMeta = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+    const frameCount = Number(runtimeMeta?.frameCount);
+    const frameWidth = Number(runtimeMeta?.frameWidth);
+    if (!Number.isInteger(frameCount) || frameCount < 2 || frameCount > 32) {
+      return 'prop impact sheets require metadata.runtime.frameCount between 2 and 32';
+    }
+    if (!Number.isInteger(frameWidth) || frameWidth < 8 || frameWidth > 512) {
+      return 'prop impact sheets require a metadata.runtime.frameWidth between 8 and 512';
+    }
+    if (frameWidth * frameCount !== width) {
+      return 'prop impact sheet width must equal frameWidth times frameCount';
+    }
+    return null;
+  }
+  if (width > 512) return 'prop artwork frames are bounded at 512px wide';
   const metadata = mediaVersionMetadata(row);
   const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
   if (runtime && Object.keys(runtime).length) {
