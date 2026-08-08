@@ -14,6 +14,7 @@ import { StudioCatalogCard } from './studio/StudioCatalogCard';
 import { levelToEditorBoard, unitsForGamePieces } from '../core/levelBoard';
 import { FramedReadOnlyBoardView } from './shared/BoardViewFraming';
 import { InfoTip } from './shared/InfoTip';
+import { useDeleteKeyAction } from './shared/deleteKeyAction';
 import { SliderRow, ctlReset } from './dressing/SliderRow';
 import { createFromLevel } from '../game/setup';
 import { PARAM_LABELS, encodeWeights, decodeWeights } from '../game/tuning';
@@ -1354,6 +1355,16 @@ export function GymViewer({ levelId, header, initialMode }: { levelId?: string; 
   // The walk's forward edge caps the cursor: a game in play only exists up to its frontier.
   const tdReplayMax = tdWalking ? tdFrontier : tdReplayStates ? tdReplayStates.length - 1 : 0;
   const tdClampedReplayPly = Math.max(0, Math.min(tdReplayPly, tdReplayMax));
+  // Delete = whichever Delete button the open pane is showing, under that button's own enable
+  // condition: the run in Piece values, the opening book everywhere else.
+  useDeleteKeyAction(!level
+    ? null
+    : mode === 'values'
+      ? (tdBusy || loadingBooks
+        || (tdRunId === null && !tdStarted && tdSummary === null && !tdStopped && !tdError && !tdWalking)
+        ? null
+        : tdDeleteRun)
+      : activeId === undefined ? null : onDeleteBook);
   const tdReplayBoard = useMemo(() => {
     if (!level || !tdReplayStates) return null;
     const state = tdReplayStates[tdClampedReplayPly];

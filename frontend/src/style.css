@@ -15757,6 +15757,24 @@ button.tileset-relationship-cell {
   cursor: pointer;
 }
 
+/* Dragging out a rectangle: keep the crosshair and drop the per-instance hover cues, so the only
+   thing moving under the pointer is the box being drawn. Its fill and edge are drawn as SVG paint,
+   the same way the Town and Forest drags above draw theirs — this is authoring feedback, not a
+   surface, so it never asks the chrome kit for a frame. */
+.le-artwork-selection-surface.is-dragging {
+  cursor: crosshair;
+}
+
+.le-artwork-marquee {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 1;
+}
+
 .le-floating-artwork-hover {
   position: absolute;
   pointer-events: none;
@@ -20179,6 +20197,18 @@ button.tileset-relationship-cell {
   aspect-ratio: auto;
   block-size: 100%;
   min-block-size: 0;
+}
+
+/* The Run's opening grant is a card row rather than the relic mat, so it takes the whole
+   content lane and centers in it. Without this the content's justify-items:start leaves the
+   grid at one card's width and the row stacks into a clipped column. */
+.run-vacantia-content > .run-card-grid {
+  align-content: center;
+  block-size: 100%;
+  inline-size: 100%;
+  justify-self: stretch;
+  min-block-size: 0;
+  padding: var(--ds-inset);
 }
 
 /* A targeted lipsanon replaces the mat with the same ledger/profile instrument used by

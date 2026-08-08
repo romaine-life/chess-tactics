@@ -3,6 +3,7 @@ import type { BoardDrawOp, FloatingArtworkPlacement } from '@chess-tactics/board
 import type { RasterAlphaMask } from '../render/rasterAlpha';
 import {
   floatingArtworkHitCandidatesFromOps,
+  floatingArtworkIdsWithinRectFromOps,
   nextFloatingArtworkCycleIndex,
   type FloatingArtworkCycleState,
   type FloatingArtworkOpsCandidate,
@@ -12,8 +13,8 @@ function placement(id: string): FloatingArtworkPlacement {
   return { id, sourceArtId: 'oak', pixelX: 0, pixelY: 0, direction: 'south', scale: 1 };
 }
 
-function op(src: string, z: number): BoardDrawOp {
-  return { src, dx: 0, dy: 0, dw: 2, dh: 2, z };
+function op(src: string, z: number, dx = 0, dy = 0): BoardDrawOp {
+  return { src, dx, dy, dw: 2, dh: 2, z };
 }
 
 function alpha(opaque: boolean): RasterAlphaMask {
@@ -52,6 +53,26 @@ describe('Scene Art spatial selection', () => {
       { placement: placement('unmeasured'), placementIndex: 0, ops: [op('missing.png', 10)] },
     ];
     expect(floatingArtworkHitCandidatesFromOps(candidates, { x: .25, y: .25 }, new Map())).toEqual([]);
+  });
+
+  it('sweeps up every instance a dragged rectangle touches, back to front', () => {
+    // Each is a 2×2 destination whose only opaque source pixel is its top-left quarter.
+    const candidates: FloatingArtworkOpsCandidate[] = [
+      { placement: placement('near'), placementIndex: 0, ops: [op('painted.png', 10, 0, 0)] },
+      { placement: placement('far'), placementIndex: 1, ops: [op('painted.png', 10, 40, 0)] },
+      { placement: placement('ghost'), placementIndex: 2, ops: [op('transparent.png', 10, 0, 0)] },
+    ];
+    const masks = new Map([['painted.png', alpha(true)], ['transparent.png', alpha(false)]]);
+    const sweep = (minX: number, maxX: number): string[] => floatingArtworkIdsWithinRectFromOps(
+      candidates, { minX, minY: 0, maxX, maxY: 2 }, masks,
+    );
+    expect(sweep(-5, 50)).toEqual(['near', 'far']);
+    expect(sweep(-5, 0.5)).toEqual(['near']);
+    // Inside the far instance's image rectangle, but only over its transparent right half.
+    expect(sweep(41.5, 42)).toEqual([]);
+    // An unmeasured source stays inert rather than being swept up sight-unseen.
+    expect(floatingArtworkIdsWithinRectFromOps(candidates, { minX: -5, minY: 0, maxX: 50, maxY: 2 }, new Map()))
+      .toEqual([]);
   });
 
   it('cycles only while the pointer and complete overlap stack remain stable', () => {

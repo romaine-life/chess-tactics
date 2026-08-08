@@ -258,7 +258,9 @@ describe('Run chrome hierarchy', () => {
   });
 
   it('uses the gold transaction cue and transfers adlected cards into the Chartulary', () => {
-    expect(runCard).toContain('data-ui-sfx="gold"');
+    // A purchase keeps the gold cue; the Run's free opening grant is not a transaction
+    // and takes the card cue instead, from the same shared card primitive.
+    expect(runCard).toContain("data-ui-sfx={grant ? 'card' : 'gold'}");
     expect(runScreen).toContain('useRunCardFlights()');
     expect(runScreen).toContain("document.querySelector('[data-run-card-flight-target]')");
     expect(runScreen).toContain('sectio.cardOffers.map((offer) => {');

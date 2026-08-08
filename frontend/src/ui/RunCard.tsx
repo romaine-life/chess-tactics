@@ -19,7 +19,8 @@ export function RunCard({
 }: {
   card: RunCardDefinition | RunCardOffer;
   identityCard?: RunCardDefinition | RunCardOffer;
-  mode: 'sectio' | 'reference';
+  /** `grant` is a free take rather than a purchase: same face and affordance, no price. */
+  mode: 'sectio' | 'reference' | 'grant';
   emptyPieceIndices?: readonly number[];
   layoutId?: string;
   disabled?: boolean;
@@ -52,13 +53,16 @@ export function RunCard({
       </span>
     );
   }
+  const grant = mode === 'grant';
   return (
     <span className="run-card-offer" data-run-sectio-offer-id={layoutId}>
       <button
         type="button"
-        data-ui-sfx="gold"
+        data-ui-sfx={grant ? 'card' : 'gold'}
         className="run-card-action"
-        aria-label={`Acquire ${name} — ${card.rarity} — ${label} — for ${faceContent.cost} gold.`}
+        aria-label={grant
+          ? `Take ${name} — ${card.rarity} — ${label}.`
+          : `Acquire ${name} — ${card.rarity} — ${label} — for ${faceContent.cost} gold.`}
         disabled={disabled}
         onClick={(event) => onSelect?.(event.currentTarget)}
       >

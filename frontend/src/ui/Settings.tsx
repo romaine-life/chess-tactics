@@ -568,23 +568,11 @@ export function Settings({
 
   const renderGameplay = () => (
     <SettingsSection title="Gameplay">
-      <SettingsRow
-        title="Board grid"
-        description="Show the board grid whenever a battlefield loads."
-      >
-        <Toggle
-          checked={settings.showBoardGrid}
-          label="Show the board grid when a battlefield loads"
-          onChange={(value) => updateSetting('showBoardGrid', value)}
-        />
-      </SettingsRow>
+      {/* Showing or hiding the grid is a per-battle decision and already lives on the in-game HUD's
+          Grid toggle, so it is not duplicated here. This row is only what the grid LOOKS like. */}
       <SettingsRow
         title="Grid style"
-        description={
-          settings.showBoardGrid
-            ? BOARD_GRID_STYLE_LABELS[settings.boardGridStyle].detail
-            : 'Turn the board grid on to see this.'
-        }
+        description={BOARD_GRID_STYLE_LABELS[settings.boardGridStyle].detail}
       >
         <HouseSelect<BoardGridStyle>
           value={settings.boardGridStyle}
@@ -593,7 +581,6 @@ export function Settings({
             label: BOARD_GRID_STYLE_LABELS[style].label,
           }))}
           ariaLabel="Board grid style"
-          disabled={!settings.showBoardGrid}
           testId="settings-board-grid-style"
           onChange={(style) => updateSetting('boardGridStyle', style)}
         />
