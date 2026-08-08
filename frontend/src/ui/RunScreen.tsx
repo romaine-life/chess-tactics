@@ -71,6 +71,7 @@ import {
   deploymentOptions,
   gameForRunDeployment,
   levelWithRunDeployment,
+  openDeploymentBandCells,
   nextArrangedCardToPlace,
   nextCardRotation,
   normalReservistCell,
@@ -539,8 +540,15 @@ function useRunDeploymentPresentation({
   const [pointedArrangementCell, setPointedArrangementCell] = useState<string | null>(null);
   const arrangementCards = useMemo(() => arrangedDeploymentCards(prepared), [prepared]);
   const selectedArrangementCard = arrangementCards.find(({ card }) => card.id === selectedCardId) ?? null;
-  // The squares the player may point at — every square the formation could COVER, not the
-  // squares its bounding-box corner could sit on. Aiming at a unit is the whole gesture.
+  // Where deployment is allowed at all. A property of the level and of what is already seated,
+  // so it holds still while the carried formation is turned — turning a formation in one corner
+  // must not put out a square at the other end of the band.
+  const arrangementBandCells = useMemo(() => new Set(
+    (selectedCardId ? openDeploymentBandCells(prepared, level, selectedCardId) : [])
+      .map((cell) => `${cell.x},${cell.y}`),
+  ), [level, prepared, selectedCardId]);
+  // The squares the player may point at — every square the formation could COVER at this turn,
+  // not the squares its bounding-box corner could sit on. Aiming at a unit is the whole gesture.
   const arrangementPlaceableCells = useMemo(() => new Set(
     (selectedCardId
       ? arrangedCardPlaceableCells(prepared, level, selectedCardId, arrangementRotation)
@@ -709,6 +717,7 @@ function useRunDeploymentPresentation({
         return null;
       }
       const cellKey = `${cell.x},${cell.y}`;
+      const band = arrangementBandCells.has(cellKey);
       const placeable = arrangementPlaceableCells.has(cellKey);
       const filled = arrangementFootprint.has(cellKey);
       return (
@@ -717,6 +726,7 @@ function useRunDeploymentPresentation({
           className={[
             'skirmish-board-cell-hit',
             'run-deployment-cell',
+            band ? 'is-band' : '',
             placeable ? 'is-placeable' : '',
             filled ? 'is-move' : '',
           ].filter(Boolean).join(' ')}

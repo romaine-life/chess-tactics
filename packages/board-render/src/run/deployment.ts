@@ -758,6 +758,35 @@ export function cardRotationsAtCell(
   ));
 }
 
+/**
+ * The squares the player may deploy onto at all: the level's band, less what other formations
+ * have already taken.
+ *
+ * This answers "where may I deploy?", which is a question about the LEVEL and about what is
+ * already seated — not about the card in hand or which way it happens to be turned. Deriving the
+ * band from the carried formation's current turn instead made squares at one end blink out as the
+ * player turned a formation at the other end, six columns away: a tile reacting across the board
+ * to something with nothing to do with it.
+ *
+ * The selected card's own seats stay open, so a formation already on the board does not read as
+ * blocking the squares it is standing on while it is being moved.
+ */
+export function openDeploymentBandCells(
+  run: RunDocument,
+  level: Level,
+  exceptCardId?: string,
+): Vec[] {
+  if (run.phase !== 'deployment' || run.deployment?.stage !== 'arranging') return [];
+  const card = exceptCardId
+    ? dealtCards(run).find((candidate) => candidate.id === exceptCardId)
+    : undefined;
+  const own = new Set(card ? runCardUnitIds(card) : []);
+  const occupied = new Set(Object.entries(decodedPlacements(run))
+    .filter(([unitId]) => !own.has(unitId))
+    .map(([, cell]) => key(cell)));
+  return playerDeploymentPools(level).all.filter((cell) => !occupied.has(key(cell)));
+}
+
 /** Every square the player may point at to place this formation, in board order. */
 export function arrangedCardPlaceableCells(
   run: RunDocument,

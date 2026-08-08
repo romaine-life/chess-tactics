@@ -120,13 +120,29 @@ describe('Run Deployment aiming', () => {
     // One paint, two strengths — the band under the seating, never a second treatment.
     expect(runScreen).toContain('<PredrawnMoveHighlightPaint />');
     expect(runScreen).not.toContain('{filled ? <PredrawnMoveHighlightPaint /> : null}');
-    expect(styles).toContain('.run-deployment-cell.is-placeable > .predrawn-cyan-move-highlight-paint {');
+    expect(styles).toContain('.run-deployment-cell.is-band > .predrawn-cyan-move-highlight-paint {');
     const band = styles.match(
-      /\.run-deployment-cell\.is-placeable > \.predrawn-cyan-move-highlight-paint \{\s*opacity: ([\d.]+);/,
+      /\.run-deployment-cell\.is-band > \.predrawn-cyan-move-highlight-paint \{\s*opacity: ([\d.]+);/,
     );
     expect(band).toBeTruthy();
     expect(Number(band[1])).toBeGreaterThan(0);
     expect(Number(band[1])).toBeLessThan(1);
+  });
+
+  // The wash must key off the BAND, which does not move when the piece is turned. Keying it off
+  // the reachable set put out a square at one end of the band as the player turned a formation
+  // at the other end.
+  it('paints the band from the level and its occupancy, never from the current turn', () => {
+    expect(runScreen).toMatch(
+      /const arrangementBandCells = useMemo\(\(\) => new Set\(\s*\(selectedCardId \? openDeploymentBandCells\(prepared, level, selectedCardId\) : \[\]\)[\s\S]*?\), \[level, prepared, selectedCardId\]\);/,
+    );
+    // The rotation is deliberately absent from its dependencies — that is the whole fix.
+    const memo = runScreen.match(/const arrangementBandCells = useMemo\([\s\S]*?\);\n/)?.[0];
+    expect(memo).not.toContain('arrangementRotation');
+    expect(runScreen).toContain("band ? 'is-band' : ''");
+    // The reachable set stays per-turn: it drives the label, tab order, and crosshair.
+    expect(runScreen).toContain("placeable ? 'is-placeable' : ''");
+    expect(runScreen).toMatch(/arrangedCardPlaceableCells\(prepared, level, selectedCardId, arrangementRotation\)/);
   });
 
   // Aim-anywhere needs a hit target on every square, and that opted every square into the shared

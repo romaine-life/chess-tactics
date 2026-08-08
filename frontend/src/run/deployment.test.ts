@@ -24,6 +24,7 @@ import {
   completeDeploymentDeal,
   deploymentInteractionStage,
   arrangedDeploymentCards,
+  openDeploymentBandCells,
   cardRotationsAtCell,
   distinctCardRotations,
   nextArrangedCardToPlace,
@@ -284,6 +285,57 @@ describe('formation deployment', () => {
     }
     // A square nothing could ever cover resolves to no seating rather than a nearby guess.
     expect(arrangedCardPlacementAtCell(arranging, level, line.id, 0, { x: 0, y: 0 })).toBeNull();
+  });
+
+  // "Where may I deploy" is a question about the level and about what is already seated. Deriving
+  // it from the carried formation's current turn made squares at one end of the band go out as
+  // the player turned a formation at the other end — a tile reacting across the board to
+  // something with nothing to do with it.
+  it('holds the deployable band still while the carried formation is turned', () => {
+    const { run, level } = fixture(2, 7, 79);
+    const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+    const hisGrace = arranging.cards.find((card) => card.coreId === 'his-grace')!;
+    const band = openDeploymentBandCells(arranging, level, hisGrace.id)
+      .map((cell) => `${cell.x},${cell.y}`).sort();
+
+    // The whole authored band, not the subset one orientation happens to reach.
+    expect(band).toHaveLength(14);
+    for (const rotation of [0, 1, 2, 3] as const) {
+      expect(openDeploymentBandCells(arranging, level, hisGrace.id)
+        .map((cell) => `${cell.x},${cell.y}`).sort()).toEqual(band);
+      // The reachable set genuinely does move with the turn — which is why the band must not.
+      expect(arrangedCardPlaceableCells(arranging, level, hisGrace.id, rotation).length)
+        .toBeLessThanOrEqual(band.length);
+    }
+
+    const reachable = ([0, 1, 2, 3] as const).map((rotation) => (
+      arrangedCardPlaceableCells(arranging, level, hisGrace.id, rotation)
+        .map((cell) => `${cell.x},${cell.y}`).sort().join('|')
+    ));
+    expect(new Set(reachable).size).toBeGreaterThan(1);
+  });
+
+  // Squares another formation is standing on are not open, and that changes only when the player
+  // places or removes something — never on a turn.
+  it('closes the squares other formations have taken, and leaves the carried card its own', () => {
+    const { run, level } = fixture(8, 8, 83, ['ppp']);
+    const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+    const line = arranging.cards.find((card) => card.coreId === 'ppp')!;
+    const hisGrace = arranging.cards.find((card) => card.coreId === 'his-grace')!;
+    const before = openDeploymentBandCells(arranging, level, hisGrace.id).length;
+
+    const seated = placeArrangedDeploymentCard(
+      arranging,
+      level,
+      line.id,
+      0,
+      arrangedCardPlacementOptions(arranging, level, line.id, 0)[0].anchor,
+    );
+    const taken = Object.values(seated.deployment!.placements).length;
+
+    expect(openDeploymentBandCells(seated, level, hisGrace.id)).toHaveLength(before - taken);
+    // A formation being MOVED does not read as blocking the squares it currently stands on.
+    expect(openDeploymentBandCells(seated, level, line.id)).toHaveLength(before);
   });
 
   // Turning happens with the cursor on a square. Walking the band-wide list stepped onto turns

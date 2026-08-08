@@ -21421,8 +21421,10 @@ button.tileset-relationship-cell {
 
 /* The deployable band, held at a fraction of the move paint so it reads UNDER the seating it
    surrounds. It is on whenever a formation is in hand, so the board never goes blank between
-   one square and the next — the same paint at full strength marks where this seating lands. */
-.run-deployment-cell.is-placeable > .predrawn-cyan-move-highlight-paint {
+   one square and the next — the same paint at full strength marks where this seating lands.
+   Keyed to the BAND, not to the carried formation's current turn: the band answers "where may I
+   deploy", which does not change when the player turns the piece. */
+.run-deployment-cell.is-band > .predrawn-cyan-move-highlight-paint {
   opacity: .26;
 }
 

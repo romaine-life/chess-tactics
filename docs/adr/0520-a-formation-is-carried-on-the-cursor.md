@@ -73,11 +73,19 @@ the seating; a secondary click turns what is being carried.**
    that is the elbow. When the band cannot take the grip seating, the formation shifts to the
    legal candidate whose covering seat is nearest the grip, so the shift is the smallest one that
    works instead of a jump across the shape.
-4. **The highlight is the footprint, over a band that never goes dark.** One paint at two
-   strengths: quiet across every square the formation could take, full across the squares this
-   seating fills, under the ghosts standing on them. The band is painted whenever a formation is
-   in hand, so a moment with no seating resolved still shows where the player may deploy rather
-   than bare ground. It is not a static field of legal corners.
+4. **The highlight is the footprint, over a band that never goes dark and never moves.** One paint
+   at two strengths: quiet across the deployable band, full across the squares this seating fills,
+   under the ghosts standing on them. The band is painted whenever a formation is in hand, so a
+   moment with no seating resolved still shows where the player may deploy rather than bare
+   ground.
+
+   **The band is the level's, not the card's.** It is the authored deployment zone less the
+   squares other formations have already taken — a question about the level and about what is
+   seated, whose answer does not change when the player turns the piece. Painting the *reachable*
+   set instead tied it to the current turn, and a formation turned in one corner put out a square
+   at the far end of the band, six columns away: a tile reacting across the board to something
+   with nothing to do with it. The reachable set is still computed per turn, but it drives the
+   pointed square's marker, the tab order, and the cursor — never the band.
 5. **The formation is the cursor.** While a seating is resolved the pointer is hidden beneath it.
    When nothing resolves the pointer returns, so the player is never left with neither a cursor
    nor a formation.
