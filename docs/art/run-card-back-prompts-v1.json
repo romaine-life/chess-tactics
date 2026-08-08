@@ -1,4 +1,7 @@
 {
+  "status": "CLOSED — no candidate here became the card back. Non-runtime review history; do not generate a card back from this file. Three entries below carry an explicit rejected-before-review status; the two that do not (codex-01, pixellab-ui-01) simply lost to a later study.",
+  "supersededBy": "run-card-back-prompts-v2.json",
+  "decision": "ADR-0420 accepted The Fivefold Gambit (Codex) from the six-way study in run-card-back-prompts-v2.json as the universal Run card back at ui/run/card-back/standard.png. That decision is still in force — ADR-0481 refines it rather than superseding it.",
   "schema": "run-card-back-prompt-set-v1",
   "slot": "review/run-card-back/standard.png",
   "intent": "One universal face-down Run card that conceals every card identity.",
