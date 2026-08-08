@@ -87,6 +87,7 @@ import { fetchAdminLiveMediaCatalog, type AdminLiveMediaCatalog } from '../net/l
 import { TitleBarControlContribution, type TitleBarControlSpec } from './shell/TitleBarControls';
 import { RunCardPrototypeCatalog, RunCardPrototypeViewer } from './RunCardPrototype';
 import { RunCardGoldTierDividerCatalog, RunCardGoldTierDividerViewer } from './RunCardGoldTierDividerStudio';
+import { RunCardFitCatalog, RunCardFitViewer } from './RunCardFitStudio';
 import { RunCardOutlineCatalog, RunCardOutlineViewer } from './RunCardOutlineStudio';
 import { RunCardSizeCatalog, RunCardSizeViewer } from './RunCardSizeStudio';
 import { RunCardPromptCatalog, RunCardPromptViewer } from './RunCardPromptStudio';
@@ -126,7 +127,7 @@ type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'sourceart' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'deployment' | 'gym' | 'solver' | 'cardlayout' | 'cardsize' | 'carddivider' | 'cardicons' | 'cardoutline' | 'cardprompts' | 'screenart' | 'lipsanonmat';
+type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'sourceart' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'deployment' | 'gym' | 'solver' | 'cardlayout' | 'cardsize' | 'carddivider' | 'cardicons' | 'cardfit' | 'cardoutline' | 'cardprompts' | 'screenart' | 'lipsanonmat';
 
 // Every prop KIND present in the catalog, in definition order — DERIVED from PROP_DEFS so a new
 // kind (e.g. 'rock') is a filter facet automatically. Hardcoding ['tree','house'] here silently
@@ -270,7 +271,7 @@ const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => Boolean(value && studioFamilies.some((family) => family.id === value));
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'sourceart' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'chromelab' || value === 'sfx' || value === 'gamelab' || value === 'deployment' || value === 'gym' || value === 'solver' || value === 'cardlayout' || value === 'cardsize' || value === 'carddivider' || value === 'cardicons' || value === 'cardoutline' || value === 'cardprompts' || value === 'screenart' || value === 'lipsanonmat';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'sourceart' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'chromelab' || value === 'sfx' || value === 'gamelab' || value === 'deployment' || value === 'gym' || value === 'solver' || value === 'cardlayout' || value === 'cardsize' || value === 'carddivider' || value === 'cardicons' || value === 'cardfit' || value === 'cardoutline' || value === 'cardprompts' || value === 'screenart' || value === 'lipsanonmat';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -2071,6 +2072,11 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       controls: <button type="button" className="tileset-view-action" data-testid="open-run-card-size" onClick={() => openViewer('cardsize')}>Open Card Size</button>,
     },
     {
+      id: 'cardfit', label: 'Card Fit', hint: 'Tune how far a small formation grows into the room its card leaves, across every footprint the deck deals.',
+      main: <RunCardFitCatalog onOpen={() => openViewer('cardfit')} />,
+      controls: <button type="button" className="tileset-view-action" data-testid="open-run-card-fit" onClick={() => openViewer('cardfit')}>Open Card Fit</button>,
+    },
+    {
       id: 'cardoutline', label: 'Card Outline', hint: 'Compare how the formation outline rasterizes — antialiased against hard-edged — on real cards at printed size.',
       main: <RunCardOutlineCatalog onOpen={() => openViewer('cardoutline')} />,
       controls: <button type="button" className="tileset-view-action" data-testid="open-run-card-outline" onClick={() => openViewer('cardoutline')}>Open Card Outline</button>,
@@ -2296,6 +2302,8 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                               ? <RunCardPrototypeViewer header={studioViewerHeader} viewerZoom={viewerZoom} />
                             : viewerKind === 'cardsize'
                               ? <RunCardSizeViewer header={studioViewerHeader} viewerZoom={viewerZoom} />
+                            : viewerKind === 'cardfit'
+                              ? <RunCardFitViewer header={studioViewerHeader} viewerZoom={viewerZoom} />
                             : viewerKind === 'cardoutline'
                               ? <RunCardOutlineViewer header={studioViewerHeader} viewerZoom={viewerZoom} />
                             : viewerKind === 'carddivider'
