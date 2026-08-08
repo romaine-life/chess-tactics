@@ -336,10 +336,24 @@ export interface LevelEconomy {
   incomePerTurn: number;
 }
 
+/**
+ * Bounds on a Level-authored Deployment deal. One is the floor because His Grace is always the
+ * first card dealt, so a Battle can be authored down to the King alone and no further.
+ */
+export const LEVEL_BATTLE_CARDS_DEALT_MIN = 1;
+export const LEVEL_BATTLE_CARDS_DEALT_MAX = 12;
+
 /** War-specific metadata authored on the Level's Battle tab (ADR-0193). */
 export interface BattleSettings {
   /** This non-final Battle closes a Conflict whose successor opens with three lipsanon choices. */
   loot?: boolean;
+  /**
+   * How many cards this Battle's Deployment deals — the board's own answer to how large a force
+   * it can be asked to hold, so a cramped map is never handed one it has no room for. Absent ⇒
+   * the Run's progression (three, plus one per Conflict already cleared), which is what every
+   * Battle authored before this field keeps.
+   */
+  cardsDealt?: number;
 }
 
 export interface Level {
@@ -760,6 +774,11 @@ export function validateLevel(value: unknown): ValidateResult {
     if (!v.battle || typeof v.battle !== 'object' || Array.isArray(v.battle)
       || (v.battle.loot !== undefined && typeof v.battle.loot !== 'boolean')) {
       errors.push('battle must be an object with an optional boolean loot flag');
+    } else if (v.battle.cardsDealt !== undefined
+      && (!Number.isInteger(v.battle.cardsDealt)
+        || v.battle.cardsDealt < LEVEL_BATTLE_CARDS_DEALT_MIN
+        || v.battle.cardsDealt > LEVEL_BATTLE_CARDS_DEALT_MAX)) {
+      errors.push(`battle.cardsDealt must be a whole number from ${LEVEL_BATTLE_CARDS_DEALT_MIN} to ${LEVEL_BATTLE_CARDS_DEALT_MAX}`);
     }
   }
   if (v.runRules !== undefined) {

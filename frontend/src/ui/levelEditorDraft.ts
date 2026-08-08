@@ -1,5 +1,5 @@
 import { DEFAULT_SURVIVE_TURNS } from '../core/objectives';
-import { OBJECTIVE_TYPES, type LevelEvents, type ObjectiveType, type TimeControl, type VictoryRules } from '../core/level';
+import { LEVEL_BATTLE_CARDS_DEALT_MAX, LEVEL_BATTLE_CARDS_DEALT_MIN, OBJECTIVE_TYPES, type LevelEvents, type ObjectiveType, type TimeControl, type VictoryRules } from '../core/level';
 import { normalizeLevelEvents, type StoredLevelEvent } from '../core/levelEvents';
 import { decodeBoard, encodeBoard, type EditorBoard } from './boardCode';
 
@@ -36,6 +36,8 @@ export interface LevelEditorDraft {
   surviveTurns: number;
   // The battle clock (ADR-0053), or undefined when the level is untimed.
   timeControl?: TimeControl;
+  // The Battle's authored Deployment deal, or undefined when it defers to the Run's progression.
+  cardsDealt?: number;
   // Authored victory conditions (ADR-0064), or undefined when the level uses the objective preset.
   victory?: VictoryRules;
   // Authored non-victory events: setup spawns and trigger/action events.
@@ -577,6 +579,7 @@ export function serializeLevelEditorDraft(draft: LevelEditorDraft): string {
     objective: draft.objective,
     surviveTurns: draft.surviveTurns,
     timeControl: draft.timeControl,
+    cardsDealt: draft.cardsDealt,
     victory: draft.victory,
     events: draft.events,
   });
@@ -592,6 +595,16 @@ const cleanTimeControl = (raw: unknown): TimeControl | undefined => {
   if (typeof incrementSeconds !== 'number' || !Number.isInteger(incrementSeconds) || incrementSeconds < 0) return undefined;
   return { initialSeconds, incrementSeconds };
 };
+
+// A stored Deployment deal survives the round-trip only as a whole number inside the schema's
+// bounds; anything else restores as unauthored, so the Battle falls back to the Run's progression
+// rather than seeding a count the level validator would reject.
+const cleanCardsDealt = (raw: unknown): number | undefined => (
+  typeof raw === 'number' && Number.isInteger(raw)
+    && raw >= LEVEL_BATTLE_CARDS_DEALT_MIN && raw <= LEVEL_BATTLE_CARDS_DEALT_MAX
+    ? raw
+    : undefined
+);
 
 // A stored victory (ADR-0064 if-then rule list) survives the round-trip when it is an array; the
 // contents came from our own serialize, so a light shape check is enough — the real gate is
@@ -641,6 +654,7 @@ export function parseLevelEditorDraft(raw: string): LevelEditorDraft | null {
       objective,
       surviveTurns,
       timeControl: cleanTimeControl(value.timeControl),
+      cardsDealt: cleanCardsDealt(value.cardsDealt),
       victory: cleanVictory(value.victory),
       events: cleanEvents(value.events),
     };
