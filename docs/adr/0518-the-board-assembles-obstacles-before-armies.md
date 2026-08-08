@@ -6,7 +6,7 @@ refines:
   - "[ADR-0045](0045-units-deploy-with-a-staggered-drop-in.md)"
 ---
 
-# ADR-0516: The board assembles — its obstacles drop before its armies
+# ADR-0518: The board assembles — its obstacles drop before its armies
 
 ## Context and Problem Statement
 
