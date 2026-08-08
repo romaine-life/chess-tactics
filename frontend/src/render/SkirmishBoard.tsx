@@ -176,8 +176,9 @@ export type SkirmishTileClickIntent =
 /**
  * Resolve a live-board click before applying store actions. A legal destination still
  * wins over the occupant at that square (captures), and friendly pieces remain directly
- * selectable. Empty and neutral squares dismiss the current movement selection, while an
- * opponent remains an independent inspection focus.
+ * selectable. Clicking the already-selected unit again is the cancel gesture — the same
+ * square that picked it up puts it down. Empty and neutral squares dismiss the current
+ * movement selection, while an opponent remains an independent inspection focus.
  */
 export function skirmishTileClickIntent(
   x: number,
@@ -186,9 +187,14 @@ export function skirmishTileClickIntent(
   occupant: Pick<Piece, 'id' | 'side'> | undefined,
   /** The sides this click may pick up — one in play, both under an armed Free Move. */
   commanded: readonly Side[],
+  selectedId: string | null,
 ): SkirmishTileClickIntent {
   if (selectedMoves.some((move) => move.x === x && move.y === y)) return { kind: 'move' };
-  if (occupant && commanded.includes(occupant.side)) return { kind: 'select', pieceId: occupant.id };
+  if (occupant && commanded.includes(occupant.side)) {
+    return occupant.id === selectedId
+      ? { kind: 'clear-selection' }
+      : { kind: 'select', pieceId: occupant.id };
+  }
   if (occupant && occupant.side !== 'neutral') return { kind: 'focus', pieceId: occupant.id };
   return { kind: 'clear-selection' };
 }
@@ -1815,6 +1821,13 @@ export function SkirmishBoard({
   const ghostRef = useRef<HTMLImageElement | null>(null);
   const lastCursorRef = useRef({ x: 0, y: 0 });
   const suppressClickRef = useRef(false);
+  // The selection as it stood when the press that produced the pending click began. The press
+  // itself selects the piece under it (so the ring shows during a drag pickup), which would
+  // make EVERY tap on an own unit look like a click on an already-selected one. The click
+  // therefore judges "was this unit already selected?" against the pre-press value, so putting
+  // a unit down still takes a genuine second click. `undefined` = no press recorded (keyboard
+  // activation of the cell button), where the store's selection is already the pre-click value.
+  const selectionAtPressRef = useRef<string | null | undefined>(undefined);
   const [drag, setDrag] = useState<{
     pieceId: string;
     src: string | null;
@@ -2190,6 +2203,13 @@ export function SkirmishBoard({
   );
 
   const handleTile = (x: number, y: number) => {
+    // Consume the press record: this click owns it, and a later keyboard-activated click must
+    // not inherit it. Without a press (keyboard), the store selection is the pre-click value.
+    const pressedWithSelected = selectionAtPressRef.current;
+    selectionAtPressRef.current = undefined;
+    const selectedBeforeClick = pressedWithSelected === undefined
+      ? (premoveMode ? premoveSelectedId : selectedId)
+      : pressedWithSelected;
     if (!interactionEnabled) {
       // A secondary same-seat tab remains useful for inspection, but cannot build a
       // selection, drag, premove, promotion, or move gesture.
@@ -2211,6 +2231,9 @@ export function SkirmishBoard({
       // accidentally adds a return-to-origin step.
       const originalHere = premovedOriginPieceAt(x, y);
       if (originalHere) {
+        // Clicking the unit that is already selected puts it down, exactly as on the live
+        // board; anything already queued for it stays queued.
+        if (originalHere.id === selectedBeforeClick) { setPremoveSelectedId(null); select(null); return; }
         setPremoveSelectedId(originalHere.id);
         select(originalHere.id);
         return;
@@ -2222,6 +2245,7 @@ export function SkirmishBoard({
       // original piece square to choose the exact unit.
       const here = provisionalLocalPieceAt(x, y);
       if (here) {
+        if (here.id === selectedBeforeClick) { setPremoveSelectedId(null); select(null); return; }
         setPremoveSelectedId(here.id);
         select(here.id);
         return;
@@ -2233,7 +2257,7 @@ export function SkirmishBoard({
       return;
     }
     const here = game.pieces.find((piece) => piece.alive && piece.x === x && piece.y === y);
-    const intent = skirmishTileClickIntent(x, y, selectedMoves, here, commandedSides(adminMode, localSide));
+    const intent = skirmishTileClickIntent(x, y, selectedMoves, here, commandedSides(adminMode, localSide), selectedBeforeClick);
     switch (intent.kind) {
       case 'move':
         tryMoveTo(x, y);
@@ -2248,8 +2272,9 @@ export function SkirmishBoard({
         focus(intent.pieceId);
         break;
       case 'clear-selection':
-        // Chess-style cancellation: an invalid/empty destination removes the move dots and
-        // focus instead of leaving the player locked onto a unit they no longer care about.
+        // Chess-style cancellation: an invalid/empty destination — or a second click on the
+        // selected unit itself — removes the move dots and focus instead of leaving the
+        // player locked onto a unit they no longer care about.
         select(null);
         break;
     }
@@ -2287,6 +2312,9 @@ export function SkirmishBoard({
     // Right-click-and-hold always pans the board (ViewPane) — never swallow it, even on a unit.
     if (event.button === 2) return;
     if (!interactionEnabled) return;
+    // Record before any early return below: whatever this press does, the click it produces
+    // must compare against the selection that existed before the press touched it.
+    selectionAtPressRef.current = premoveMode ? premoveSelectedId : selectedId;
     // Left press stays on the cell: stop it bubbling so ViewPane doesn't start a pan.
     event.stopPropagation();
     // One drag at a time: while a gesture is armed, ignore any second concurrent pointer (a
@@ -2553,7 +2581,11 @@ export function SkirmishBoard({
                   // A drag emits a trailing click on release; the handler swallows it so the
                   // drop doesn't immediately re-select the piece it just moved. dragRef guards
                   // against a stray second-finger tap firing a move while a drag is in flight.
-                  if (suppressClickRef.current || dragRef.current) return;
+                  if (suppressClickRef.current || dragRef.current) {
+                    // The press record dies with the click it belonged to.
+                    selectionAtPressRef.current = undefined;
+                    return;
+                  }
                   handleTile(cell.x, cell.y);
                 }}
               >

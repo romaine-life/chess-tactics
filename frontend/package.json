@@ -41,7 +41,8 @@
     "check:media-final": "node scripts/check-no-committed-media.mjs",
     "verify:strategikon": "node scripts/check-strategikon-transition.mjs",
     "verify:run-scenes": "node scripts/check-run-scene-transitions.mjs",
-    "verify:grant-carry": "node scripts/check-run-grant-carry.mjs"
+    "verify:grant-carry": "node scripts/check-run-grant-carry.mjs",
+    "verify:board-selection": "node scripts/verify-board-selection.mjs"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",
