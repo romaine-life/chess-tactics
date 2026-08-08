@@ -242,6 +242,17 @@ and don't tell the user screenshots are impossible. Use the helper below.
    one; it was pinned to Conscription Notice, and when that left the offer pool
    every run timed out with no verdict. Do not reintroduce a named offer.
 
+   Card-admission changes additionally run the opening grant's carry gate, on a
+   craft link for the Run's opening Bona Vacantia (`craft=bona-vacantia&battle=1`):
+   ```
+   npm run verify:grant-carry -- '<opening-grant-craft-url>'
+   ```
+   It drives the real take and reads the real pixels: the admission must produce
+   a visible card carry, that carry must stay visible on every frame from launch
+   until the director settles Deployment underneath it, the taken card's own seat
+   must be empty while its copy is in the air, and the carry must be released
+   afterwards. It takes whichever card the grant dealt — do not name one.
+
    Board reveal / unit-entrance changes additionally run the live entrance gate,
    which records the real transition and reads its pixels:
    ```

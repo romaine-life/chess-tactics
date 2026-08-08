@@ -15,6 +15,7 @@ export function RunCard({
   emptyPieceIndices = [],
   layoutId,
   disabled = false,
+  flying = false,
   onSelect,
 }: {
   card: RunCardDefinition | RunCardOffer;
@@ -24,6 +25,8 @@ export function RunCard({
   emptyPieceIndices?: readonly number[];
   layoutId?: string;
   disabled?: boolean;
+  /** This card is currently travelling elsewhere as a carried copy, so its seat prints empty. */
+  flying?: boolean;
   onSelect?: (element: HTMLButtonElement) => void;
 }): ReactElement {
   const identity = identityCard ?? card;
@@ -55,7 +58,7 @@ export function RunCard({
   }
   const grant = mode === 'grant';
   return (
-    <span className="run-card-offer" data-run-sectio-offer-id={layoutId}>
+    <span className="run-card-offer" data-run-sectio-offer-id={layoutId} data-flying={flying ? '' : undefined}>
       <button
         type="button"
         data-ui-sfx={grant ? 'card' : 'gold'}
