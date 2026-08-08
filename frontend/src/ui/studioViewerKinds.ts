@@ -7,7 +7,7 @@ export const STUDIO_VIEWER_KIND_LABELS = {
   nineslice: '9-Slice',
   divider: 'Divider',
   propseat: 'Prop Seat',
-  propcandidates: 'Prop Candidates',
+  propcandidates: 'Animated Prop Artwork',
   tilecompare: 'Tile Pipeline',
   surfacetiles: 'Tileset Surfaces',
   sceneanim: 'Scene Animation',

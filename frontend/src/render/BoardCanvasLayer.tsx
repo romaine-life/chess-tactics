@@ -124,9 +124,30 @@ export function isAnimatedGroundCoverOp(op: BoardDrawOp): boolean {
   return op.animation?.kind === 'ground-cover-sway' && op.animation.frameCount > 1 && op.sw != null;
 }
 
+export function isImpactOp(op: BoardDrawOp): boolean {
+  return op.animation?.kind === 'structure-impact' && op.animation.frameCount > 1 && op.sw != null;
+}
+
+/** True while a one-shot impact still has frames to advance through. Once false the op is static
+ *  again — it keeps drawing its final frame, so nothing needs to keep repainting for it. */
+export function impactOpIsPlaying(op: BoardDrawOp, timeMs: number): boolean {
+  if (!isImpactOp(op) || op.animation?.kind !== 'structure-impact') return false;
+  return timeMs < op.animation.startMs + Math.max(1, op.animation.durationMs);
+}
+
 function liveSx(op: BoardDrawOp, _image: CanvasImage, timeMs: number): number {
-  if (!isAnimatedGroundCoverOp(op) || !op.sw) return op.sx ?? 0;
-  const animation = op.animation!;
+  if (!op.sw) return op.sx ?? 0;
+  if (isImpactOp(op) && op.animation?.kind === 'structure-impact') {
+    const { frameCount, durationMs, startMs } = op.animation;
+    const frames = Math.max(1, Math.floor(frameCount));
+    const frameMs = Math.max(1, durationMs) / frames;
+    // Advance, then HOLD. Clamping rather than wrapping is the whole difference from a loop:
+    // the last frame is what the object looks like from now on.
+    const frame = Math.min(frames - 1, Math.max(0, Math.floor((timeMs - startMs) / frameMs)));
+    return (op.sx ?? 0) + frame * op.sw;
+  }
+  if (!isAnimatedGroundCoverOp(op) || op.animation?.kind !== 'ground-cover-sway') return op.sx ?? 0;
+  const animation = op.animation;
   const frameCount = Math.max(1, Math.floor(animation.frameCount));
   const durationMs = Math.max(1, animation.durationMs);
   const phase = ((animation.phase % frameCount) + frameCount) % frameCount;
@@ -376,7 +397,10 @@ function opSignature(op: BoardDrawOp): string {
     op.contain ? 1 : 0,
     op.flipX ? 1 : 0,
     op.opacity ?? '',
-    op.animation ? `${op.animation.kind},${op.animation.frameCount},${op.animation.durationMs},${op.animation.phase}` : '',
+    op.animation
+      ? `${op.animation.kind},${op.animation.frameCount},${op.animation.durationMs},${
+        op.animation.kind === 'structure-impact' ? op.animation.startMs : op.animation.phase}`
+      : '',
     op.clipPolygons?.map((polygon) => polygon.join(',')).join(';') ?? '',
   ].join(':');
 }

@@ -10,6 +10,12 @@ export function propCandidateSlots(propId: string): string[] {
   return [`props/${propId}/back.png`, `props/${propId}/front.png`];
 }
 
+/** The single slot a prop's one-shot impact sheet occupies. Unlike still art it is one strip,
+ *  not a split pair, so a candidate is complete on its own. */
+export function propImpactSlots(propId: string): string[] {
+  return [`props/${propId}/impact.png`];
+}
+
 export interface PropCandidateGroup {
   /** Stable identity for one candidate across its half slots — its content hash. */
   key: string;
@@ -39,8 +45,9 @@ function reviewedForBytes(version: AdminLiveMediaVersion): boolean {
 export function propCandidateGroups(
   catalog: AdminLiveMediaCatalog,
   propId: string,
+  slotsFor: (id: string) => string[] = propCandidateSlots,
 ): PropCandidateGroup[] {
-  const slots = new Set(propCandidateSlots(propId));
+  const slots = new Set(slotsFor(propId));
   const byHash = new Map<string, PropCandidateGroup>();
   for (const version of catalog.versions) {
     if (!version.slot || !slots.has(version.slot)) continue;

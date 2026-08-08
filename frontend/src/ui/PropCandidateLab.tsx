@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { tileAssets, tileFamilies } from '../art/tileset';
 import { solveSocketBoard } from '../core/tileBoardGenerator';
 import { BoardLabBoard, boardLabCellPosition } from '../render/BoardLabBoard';
-import { StructureSprite } from '../render/BoardStructure';
+import { StructureSprite, seatTransformPercent, structureSeatPoint } from '../render/BoardStructure';
+import { arrivalOffset, structureLandingMs, STRUCTURE_ENTRANCE_MS, STRUCTURE_IMPACT_MS } from '../render/SkirmishBoard';
 import { objectBaseZIndex } from '../render/sceneDepth';
 import { PROP_DEFS, propDef } from '../core/props';
-import { structureArtAsset, structureArtHalfSrc } from '../core/structureArt';
+import { structureArtAsset, structureArtHalfSrc, structureArtImpact, structureRasterDimensions } from '../core/structureArt';
 import { pieceSpritePath } from '../core/pieces';
 import { terrainFamiliesForRole } from '../core/tileSockets';
 import { ViewPane } from './shared/ViewPane';
@@ -18,19 +19,33 @@ import {
   type AdminLiveMediaVersion,
 } from '../net/liveMediaAdmin';
 import {
+  formatVerdicts,
+  readVerdicts,
+  summarizeVerdicts,
+  toggleVerdict,
+  verdictKey,
+  writeVerdicts,
+  type ArtVerdict,
+  type VerdictMap,
+} from './animatedArtVerdicts';
+import {
   candidateSeat,
   propCandidateGroups,
   propCandidateSlots,
+  propImpactSlots,
   propsWithCandidates,
   type PropCandidateGroup,
   type PropCandidateSeat,
 } from './propCandidateReview';
 
-// The prop half of the acceptance story. /surface-lab already lets terrain candidates be judged
-// on the real board and installed from there; props had no equivalent, so generated prop art
-// could only ever be looked at on a contact sheet — and the accept path refuses art that carries
-// no live-surface proof. This is that surface: every staged candidate for one prop, mounted on
-// the real board renderer at canonical 1x over real terrain, beside the art it would replace.
+// Animated prop artwork, judged and installed. /surface-lab does this for terrain and
+// WallCandidateReview for walls; props had no equivalent, so generated prop art could only ever
+// be looked at on a contact sheet — and the accept path refuses art carrying no live-surface
+// proof. This surface mounts a prop on the real board renderer at canonical 1x and replays its
+// whole entrance, because an impact plays ONCE in a battle and cannot be watched twice there.
+//
+// It lists the props that HAVE animated artwork. The whole catalog would bury them among props
+// with nothing to judge; one prop would make it useless for a batch.
 //
 // Nothing here installs anything on its own. Review records the owner's approval against the
 // exact reviewed bytes plus this page's URL; Accept then swaps the slot pointers. A candidate
@@ -56,6 +71,18 @@ const PC_CSS = `
 .pc-row img { image-rendering: pixelated; }
 .pc-row-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pc-row-state { color: #8fb0c6; font-size: 11px; }
+.pc-entrance { position: absolute; left: var(--pc-left); top: var(--pc-top);
+  width: var(--pc-frame-w); height: var(--pc-frame-h); background-image: var(--pc-sheet);
+  background-size: var(--pc-sheet-w) var(--pc-frame-h); background-position: var(--pc-offset) 0;
+  background-repeat: no-repeat; image-rendering: pixelated; pointer-events: none;
+  opacity: var(--pc-alpha); transform: translate(var(--pc-shift-x), var(--pc-shift-y)); }
+.pc-verdicts { background: rgba(8,14,20,.75); border: 1px solid rgba(96,140,170,.35); border-radius: 4px;
+  color: #cfe2f0; font: 12px/1.45 ui-monospace, monospace; padding: 6px; resize: vertical; width: 100%; }
+.pc-impact { display: grid; gap: 6px; justify-items: start; }
+.pc-impact-stage { width: var(--pc-frame-w); height: var(--pc-frame-h); background-image: var(--pc-sheet);
+  background-size: var(--pc-sheet-w) var(--pc-frame-h); background-position: var(--pc-offset) 0;
+  background-repeat: no-repeat; background-color: #3f6d2f; border: 1px solid rgba(96,140,170,.35);
+  border-radius: 4px; image-rendering: pixelated; }
 `;
 
 function CandidateSprite({
@@ -80,6 +107,113 @@ function CandidateSprite({
   );
 }
 
+/**
+ * The prop's ENTRANCE, replayed on the board: the fall, the landing, and what the impact leaves.
+ * It runs the game's own `arrivalOffset` and impact frame policy against a local clock rather
+ * than a lookalike, so the Studio cannot drift from what a battle actually shows — if the
+ * choreography is retuned, this retunes with it.
+ */
+function EntrancePreview({ artId, cell, timeMs }: {
+  artId: string;
+  cell: { x: number; y: number };
+  timeMs: number | null;
+}): ReactElement | null {
+  const sheet = structureArtImpact(artId);
+  const art = structureArtAsset(artId);
+  if (!art) return null;
+  const sprite = art.sprite;
+  const raster = sheet
+    ? { w: sheet.frameWidth, h: sheet.frameHeight }
+    : structureRasterDimensions(artId);
+  const scale = sprite.scale;
+  const { left, top } = structureSeatPoint(cell, 1, 1);
+  const { x: tx, y: ty } = seatTransformPercent({ w: raster.w, h: raster.h, anchorX: sprite.anchorX, anchorY: sprite.anchorY });
+
+  // A null clock means "not playing" — show the resting frame, exactly as an unplayed prop.
+  const elapsed = timeMs ?? STRUCTURE_ENTRANCE_MS;
+  const plan = { startMs: 0, delayMs: 0 };
+  const fall = arrivalOffset(elapsed, plan);
+  const landedAt = structureLandingMs(plan) ?? 0;
+  const frames = sheet?.frameCount ?? 1;
+  const frame = elapsed < landedAt
+    ? 0
+    : Math.min(frames - 1, Math.floor((elapsed - landedAt) / (STRUCTURE_IMPACT_MS / frames)));
+
+  return (
+    <div
+      className="pc-entrance"
+      style={{
+        '--pc-left': `${left}px`,
+        '--pc-top': `${top}px`,
+        '--pc-frame-w': `${raster.w * scale}px`,
+        '--pc-frame-h': `${raster.h * scale}px`,
+        '--pc-sheet-w': `${raster.w * frames * scale}px`,
+        '--pc-offset': `-${frame * raster.w * scale}px`,
+        '--pc-sheet': `url(${sheet?.src ?? structureArtHalfSrc(artId, 'front')})`,
+        '--pc-shift-x': `${tx}%`,
+        '--pc-shift-y': `calc(${ty}% + ${fall.dy}px)`,
+        '--pc-alpha': `${fall.opacity}`,
+        zIndex: objectBaseZIndex(cell),
+      } as CSSProperties}
+      data-entrance-frame={frame}
+    />
+  );
+}
+
+/**
+ * The impact sheet, under the hand. On the board this plays once and holds forever, which is
+ * right for the game and useless for judging art — you cannot see it twice without reloading the
+ * board. Here it loops, steps, and replays on demand at a readable size, which is the whole
+ * reason a Studio surface exists.
+ */
+function ImpactReview({ artId }: { artId: string }): ReactElement | null {
+  const sheet = useMemo(() => structureArtImpact(artId), [artId]);
+  const [frame, setFrame] = useState(0);
+  const [playing, setPlaying] = useState(true);
+  const [zoom, setZoom] = useState(4);
+  const frames = sheet?.frameCount ?? 0;
+
+  useEffect(() => {
+    if (!playing || frames < 2) return undefined;
+    const timer = window.setInterval(() => setFrame((current) => (current + 1) % frames), 110);
+    return () => window.clearInterval(timer);
+  }, [frames, playing]);
+
+  useEffect(() => { setFrame(0); setPlaying(true); }, [artId]);
+
+  if (!sheet) return <p className="pc-note">No impact sheet installed for this prop — it lands and looks the same.</p>;
+  const step = (delta: number): void => { setPlaying(false); setFrame((current) => (current + delta + frames) % frames); };
+  return (
+    <div className="pc-impact">
+      {/* Geometry travels as custom properties; every painted property lives in the stylesheet,
+          so this stays a registered surface rather than inline chrome. */}
+      <div
+        className="pc-impact-stage"
+        style={{
+          '--pc-frame-w': `${sheet.frameWidth * zoom}px`,
+          '--pc-frame-h': `${sheet.frameHeight * zoom}px`,
+          '--pc-sheet-w': `${sheet.frameWidth * sheet.frameCount * zoom}px`,
+          '--pc-offset': `-${frame * sheet.frameWidth * zoom}px`,
+          '--pc-sheet': `url(${sheet.src})`,
+        } as CSSProperties}
+      />
+      <div className="ps-toggles">
+        <button type="button" className="ps-toggle" onClick={() => { setFrame(0); setPlaying(true); }}>Play again</button>
+        <button type="button" className={`ps-toggle ${playing ? 'is-on' : ''}`} onClick={() => setPlaying((on) => !on)}>
+          {playing ? 'Pause' : 'Loop'}
+        </button>
+        <button type="button" className="ps-toggle" onClick={() => step(-1)}>◀</button>
+        <button type="button" className="ps-toggle" onClick={() => step(1)}>▶</button>
+      </div>
+      <label className="tileset-catalog-zoom">
+        <span>Zoom {zoom}×</span>
+        <input type="range" min={1} max={10} step={1} value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
+      </label>
+      <p className="pc-note">Frame {frame + 1} of {frames} · {sheet.frameWidth}×{sheet.frameHeight} · frame 1 is the resting rock, the last is what it keeps.</p>
+    </div>
+  );
+}
+
 export function PropCandidateLab({ propId, onPropId, header }: {
   propId: string;
   onPropId: (id: string) => void;
@@ -99,6 +233,34 @@ export function PropCandidateLab({ propId, onPropId, header }: {
   const [notice, setNotice] = useState<string | null>(null);
   const [seats, setSeats] = useState<ReadonlyMap<string, PropCandidateSeat>>(new Map());
   const [seatError, setSeatError] = useState<string | null>(null);
+  const [entranceMs, setEntranceMs] = useState<number | null>(null);
+  const [entranceSpeed, setEntranceSpeed] = useState(1);
+  const [entranceCell, setEntranceCell] = useState({ x: 5, y: 4 });
+  // Each press is its own run. Keying the clock on the CURRENT time cannot work — the value is
+  // the same at rest as it is at the end of a run, so a second press changes no dependency and
+  // never restarts the loop. A token that only ever increments is what makes replay replay.
+  const [entranceRun, setEntranceRun] = useState(0);
+  const [verdicts, setVerdicts] = useState<VerdictMap>({});
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => { setVerdicts(readVerdicts(window.localStorage)); }, []);
+
+  useEffect(() => {
+    if (entranceRun === 0) return undefined;
+    let raf = 0;
+    const rate = Math.max(0.05, entranceSpeed);
+    const startedAt = performance.now();
+    const tick = (now: number): void => {
+      const elapsed = (now - startedAt) * rate;
+      if (elapsed >= STRUCTURE_ENTRANCE_MS) { setEntranceMs(STRUCTURE_ENTRANCE_MS); return; }
+      setEntranceMs(elapsed);
+      raf = window.requestAnimationFrame(tick);
+    };
+    raf = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(raf);
+  }, [entranceRun, entranceSpeed]);
+
+  const playEntrance = (): void => { setEntranceMs(0); setEntranceRun((run) => run + 1); };
 
   const refresh = useCallback(async (): Promise<void> => {
     setState((current) => (current === 'ready' ? current : 'loading'));
@@ -115,11 +277,66 @@ export function PropCandidateLab({ propId, onPropId, header }: {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  const reviewableProps = useMemo(() => catalog ? propsWithCandidates(catalog) : [], [catalog]);
+  // This surface reviews ANIMATED artwork, so it lists the props that have some. Listing the
+  // whole catalog buried the animated set among trees and houses with nothing to judge, and made
+  // the stepper walk mostly-empty entries; listing only one prop made it useless for a batch.
+  // The set is "props carrying an impact sheet", which is exactly what there is to approve.
+  const staged = useMemo(() => new Set(catalog ? propsWithCandidates(catalog) : []), [catalog]);
+  const animatedProps = useMemo(
+    () => PROP_DEFS.filter((def) => structureArtImpact(def.spriteId)).map((def) => def.id).sort(),
+    [],
+  );
+  const reviewableProps = animatedProps;
+  // A verdict is about the bytes on screen, so every prop is paired with the sheet it is
+  // currently showing. New art for a prop therefore arrives unjudged.
+  const animatedSheets = useMemo(
+    () => reviewableProps.flatMap((id) => {
+      const sheet = structureArtImpact(propDef(id)?.spriteId ?? id);
+      return sheet ? [{ propId: id, sha256: sheet.src.split('/').pop() ?? sheet.src }] : [];
+    }),
+    [reviewableProps],
+  );
+  const activeSheetSha = animatedSheets.find((entry) => entry.propId === propId)?.sha256 ?? '';
+  const activeVerdict = verdicts[verdictKey(propId, activeSheetSha)]?.verdict;
+  const verdictSummary = useMemo(() => summarizeVerdicts(verdicts, animatedSheets), [animatedSheets, verdicts]);
+  const verdictText = useMemo(
+    () => formatVerdicts(verdictSummary, verdicts, 'Animated prop artwork'),
+    [verdictSummary, verdicts],
+  );
+  const setVerdict = useCallback((verdict: ArtVerdict): void => {
+    if (!activeSheetSha) return;
+    setVerdicts((current) => {
+      const next = toggleVerdict(current, propId, activeSheetSha, verdict, new Date().toISOString());
+      writeVerdicts(window.localStorage, next);
+      return next;
+    });
+    setCopied(false);
+  }, [activeSheetSha, propId]);
+  const copyVerdicts = useCallback(async (): Promise<void> => {
+    try { await navigator.clipboard.writeText(verdictText); setCopied(true); } catch { setCopied(false); }
+  }, [verdictText]);
+
+  const propIndex = Math.max(0, reviewableProps.indexOf(reviewableProps.includes(propId) ? propId : reviewableProps[0] ?? propId));
+  const stepProp = useCallback((delta: number): void => {
+    if (!reviewableProps.length) return;
+    const next = (propIndex + delta + reviewableProps.length) % reviewableProps.length;
+    onPropId(reviewableProps[next]);
+    setSelectedKey('');
+    setNotice(null);
+  }, [onPropId, propIndex, reviewableProps]);
+  // Say what animation the prop carries, not whether stale still-art versions happen to linger on
+  // its slots — this list is about animated artwork, so that is what the label reports.
+  const propBadge = useCallback((id: string): string => {
+    const sheet = structureArtImpact(propDef(id)?.spriteId ?? id);
+    return sheet ? ` · ${sheet.frameCount} frames` : '';
+  }, []);
   const activeProp = reviewableProps.includes(propId) ? propId : (reviewableProps[0] ?? propId);
-  const slots = useMemo(() => propCandidateSlots(activeProp), [activeProp]);
+  const slots = useMemo(() => [...propCandidateSlots(activeProp), ...propImpactSlots(activeProp)], [activeProp]);
+  // The candidates this surface approves are ANIMATED ones: a staged impact sheet on the prop's
+  // own impact slot. Approving still halves is a different lane and a different surface; wiring
+  // this button to it left the control permanently dead on every prop listed here.
   const groups = useMemo(
-    () => catalog ? propCandidateGroups(catalog, activeProp) : [],
+    () => catalog ? propCandidateGroups(catalog, activeProp, propImpactSlots) : [],
     [activeProp, catalog],
   );
   const accepted = useMemo(() => propDef(activeProp) ?? null, [activeProp]);
@@ -158,7 +375,10 @@ export function PropCandidateLab({ propId, onPropId, header }: {
   const seated = groups.filter((group) => seats.has(group.key));
   // The proof this surface signs is "these bytes, mounted here, at 1x". Signing before every
   // candidate has decoded and been seated would attest to a board that was not on screen.
-  const proofMounted = zoom === 1 && seated.length === groups.length && groups.length > 0;
+  // The proof is 'this sheet, on this board, at 1x'. An impact candidate is a strip, not a
+  // seatable still, so what has to be true is that the board is showing the prop at canonical
+  // scale — the entrance preview above is the thing being attested to.
+  const proofMounted = zoom === 1;
 
   const cellFor = (index: number): { x: number; y: number } => ({
     x: 2 + (index % (COLS - 3)),
@@ -241,18 +461,7 @@ export function PropCandidateLab({ propId, onPropId, header }: {
                 attrsFor={(half) => ({ 'data-prop-accepted': accepted.id, 'data-half': half })}
               />
             ) : null}
-            {groups.map((group, index) => {
-              const seat = seats.get(group.key);
-              if (!seat) return null;
-              return (
-                <CandidateSprite
-                  key={group.key}
-                  seat={seat}
-                  cell={cellFor(index)}
-                  srcFor={() => group.previewUrl}
-                />
-              );
-            })}
+            <EntrancePreview artId={propDef(activeProp)?.spriteId ?? activeProp} cell={entranceCell} timeMs={entranceMs} />
             {showUnit ? (
               <span className="board-unit-seat is-knight" style={{ left: unitPos.left, top: unitPos.top, zIndex: objectBaseZIndex(unitCell) }}>
                 <img src={pieceSpritePath('knight')} alt="" draggable={false} />
@@ -270,11 +479,20 @@ export function PropCandidateLab({ propId, onPropId, header }: {
             {state === 'unauthorized' ? <p className="pc-note">Sign in as an owner to review candidates.</p> : null}
             {state === 'error' ? <p className="pc-note pc-note--bad">{error}</p> : null}
 
+            {/* Walking the catalog is how a batch gets judged — picking each id out of a
+                dropdown turns "compare seventeen rocks" into seventeen menu hunts. */}
+            <div className="ps-toggles">
+              <button type="button" className="ps-toggle" aria-label="Previous prop"
+                onClick={() => stepProp(-1)}>◀</button>
+              <span className="pc-note">{propIndex + 1} / {reviewableProps.length}</span>
+              <button type="button" className="ps-toggle" aria-label="Next prop"
+                onClick={() => stepProp(1)}>▶</button>
+            </div>
             <label className="tileset-catalog-zoom">
               <span>Prop</span>
               <select value={activeProp} onChange={(event) => { onPropId(event.target.value); setSelectedKey(''); }}>
-                {(reviewableProps.length ? reviewableProps : PROP_DEFS.map((entry) => entry.id)).map((id) => (
-                  <option key={id} value={id}>{structureArtAsset(id)?.label ?? id}</option>
+                {reviewableProps.map((id) => (
+                  <option key={id} value={id}>{(structureArtAsset(id)?.label ?? propDef(id)?.label ?? id) + propBadge(id)}</option>
                 ))}
               </select>
             </label>
@@ -322,9 +540,18 @@ export function PropCandidateLab({ propId, onPropId, header }: {
               <input value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="why this one" />
             </label>
 
-            {!proofMounted && groups.length > 0
-              ? <p className="pc-note">Set 1× and let every candidate paint before approving — the proof records this exact board.</p>
-              : null}
+            {/* A disabled control that will not say why is worse than no control. */}
+            <p className="pc-note">
+              {groups.length === 0
+                ? 'Nothing staged to approve — the sheet above is already installed. Stage a new one to replace it.'
+                : !proofMounted
+                  ? 'Set 1× before approving; the proof records this exact board.'
+                  : !selected
+                    ? 'Pick a staged sheet.'
+                    : !notes.trim()
+                      ? 'Add a review note.'
+                      : 'Ready to approve.'}
+            </p>
 
             <div className="ps-toggles">
               <button type="button" className="ps-toggle" disabled={!selected || !proofMounted || !notes.trim() || busy !== null} onClick={() => void handleReview()}>
@@ -335,6 +562,62 @@ export function PropCandidateLab({ propId, onPropId, header }: {
               </button>
             </div>
             {notice ? <p className="pc-note">{notice}</p> : null}
+            <h2>Verdict</h2>
+            <div className="ps-toggles">
+              {(['approved', 'rejected'] as const).map((verdict) => (
+                <button
+                  key={verdict}
+                  type="button"
+                  className={`ps-toggle ${activeVerdict === verdict ? 'is-on' : ''}`}
+                  disabled={!activeSheetSha}
+                  onClick={() => setVerdict(verdict)}
+                >{verdict === 'approved' ? 'Approve' : 'Reject'}</button>
+              ))}
+              <button type="button" className="ps-toggle" onClick={() => void copyVerdicts()}>
+                {copied ? 'Copied' : 'Copy list'}
+              </button>
+            </div>
+            <p className="pc-note">
+              {verdictSummary.approved.length} approved · {verdictSummary.rejected.length} rejected
+              · {verdictSummary.undecided.length} left. Press the same button again to un-judge.
+            </p>
+            <textarea className="pc-verdicts" readOnly value={verdictText} rows={8} aria-label="Approved artwork list" />
+
+            <h2>Entrance</h2>
+            <div className="ps-toggles">
+              <button type="button" className="ps-toggle" onClick={playEntrance}>Play entrance</button>
+              {[1, 0.5, 0.25].map((rate) => (
+                <button
+                  key={rate}
+                  type="button"
+                  className={`ps-toggle ${entranceSpeed === rate ? 'is-on' : ''}`}
+                  onClick={() => setEntranceSpeed(rate)}
+                >{rate === 1 ? '1×' : rate === 0.5 ? '½×' : '¼×'}</button>
+              ))}
+            </div>
+            <label className="tileset-catalog-zoom">
+              <span>Scrub {Math.round(entranceMs ?? STRUCTURE_ENTRANCE_MS)}ms</span>
+              <input
+                type="range" min={0} max={STRUCTURE_ENTRANCE_MS} step={10}
+                value={Math.round(entranceMs ?? STRUCTURE_ENTRANCE_MS)}
+                onChange={(event) => { setEntranceRun(0); setEntranceMs(Number(event.target.value)); }}
+              />
+            </label>
+            <div className="ps-toggles">
+              {(['x', 'y'] as const).map((axis) => (
+                <button key={axis} type="button" className="ps-toggle"
+                  onClick={() => setEntranceCell((cell) => ({
+                    ...cell,
+                    [axis]: (cell[axis] + 1) % (axis === 'x' ? COLS : ROWS),
+                  }))}
+                >Move {axis.toUpperCase()} ({entranceCell[axis]})</button>
+              ))}
+            </div>
+            <p className="pc-note">The fall is {STRUCTURE_ENTRANCE_MS - STRUCTURE_IMPACT_MS}ms, the impact {STRUCTURE_IMPACT_MS}ms. Same functions the battle runs.</p>
+
+            <h2>Impact frames</h2>
+            <ImpactReview artId={propDef(activeProp)?.spriteId ?? activeProp} />
+
             <p className="pc-note">Slots: {slots.join(' · ')}</p>
           </div>
         </section>
