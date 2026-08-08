@@ -19,7 +19,9 @@ export const RUN_UNIT_INSPECTION_CAMERA = {
   // unit are centred one canonical isometric half-step above that frame centre.
   pan: { x: 0, y: TILE_STEP_Y * 3.5 },
 } as const;
-const PLAYER_PROFILE_FACTION = paletteForSide('player');
+// Read per plan, not once at import: the player's color is a setting, and a value frozen into a
+// module constant would keep the old set on every profile until a reload.
+const playerProfileFaction = (): string => paletteForSide('player');
 const PLAYER_PROFILE_FACING = 'south' as const;
 
 export interface RunUnitInspectionPlan {
@@ -64,7 +66,7 @@ export function runUnitInspectionPlan(unit: RunArmyUnit): RunUnitInspectionPlan 
       '0,0': {
         unitId: unit.type,
         direction: PLAYER_PROFILE_FACING,
-        faction: PLAYER_PROFILE_FACTION,
+        faction: playerProfileFaction(),
       },
     },
     doodads: {},

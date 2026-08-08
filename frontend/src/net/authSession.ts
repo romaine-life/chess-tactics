@@ -16,6 +16,7 @@ export interface AuthSessionController {
   getSnapshot: () => AuthSessionSnapshot;
   subscribe: (listener: AuthSessionListener) => () => void;
   start: () => Promise<AuthStatus>;
+  refresh: () => Promise<AuthStatus>;
   replaceUser: (user: AuthUser) => void;
   reportFailure: (error: unknown) => boolean;
 }
@@ -36,6 +37,7 @@ export function createAuthSessionController(
 ): AuthSessionController {
   let snapshot = INITIAL_AUTH_SESSION;
   let inFlight: Promise<AuthStatus> | null = null;
+  let refreshInFlight: Promise<AuthStatus> | null = null;
   const listeners = new Set<AuthSessionListener>();
 
   const publish = (next: AuthSessionSnapshot): void => {
@@ -77,6 +79,38 @@ export function createAuthSessionController(
     return probe;
   };
 
+  /**
+   * Re-read the authoritative status once, even when a reachable snapshot already exists.
+   *
+   * `start` deliberately settles and stops; a session can still expire, or be restored in another
+   * tab, long after it settled. Callers that hold account-gated work — an open editor document —
+   * use this to notice either transition without polling or caching identity themselves. An
+   * unreachable probe keeps the last authoritative snapshot: a transport blip is not a sign-out,
+   * and must not knock a signed-in shell into `unavailable` behind the owner's back.
+   */
+  const refresh = (): Promise<AuthStatus> => {
+    if (refreshInFlight) return refreshInFlight;
+    const probe = (async (): Promise<AuthStatus> => {
+      let status: AuthStatus;
+      try {
+        status = await readStatus();
+      } catch {
+        status = { user: { signed_in: false }, reachable: false };
+      }
+      if (!status.reachable) return snapshot.status ?? status;
+      publish({
+        phase: status.user.signed_in ? 'authenticated' : 'anonymous',
+        status,
+      });
+      return status;
+    })();
+    refreshInFlight = probe;
+    void probe.finally(() => {
+      if (refreshInFlight === probe) refreshInFlight = null;
+    });
+    return probe;
+  };
+
   const replaceUser = (user: AuthUser): void => publish({
     phase: user.signed_in ? 'authenticated' : 'anonymous',
     status: { user, reachable: true },
@@ -89,6 +123,7 @@ export function createAuthSessionController(
       return () => listeners.delete(listener);
     },
     start,
+    refresh,
     replaceUser,
     reportFailure: (error) => {
       if (!isUnauthorized(error)) return false;
@@ -102,6 +137,13 @@ export const authSession = createAuthSessionController();
 
 export function startAuthSession(): Promise<AuthStatus> {
   return authSession.start();
+}
+
+/**
+ * Re-read the authoritative identity status once and publish it. See `refresh` above.
+ */
+export function refreshAuthSession(): Promise<AuthStatus> {
+  return authSession.refresh();
 }
 
 export function updateAuthSessionUser(user: AuthUser): void {

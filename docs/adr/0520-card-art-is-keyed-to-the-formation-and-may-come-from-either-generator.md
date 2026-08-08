@@ -8,7 +8,7 @@ extends:
   - "[ADR-0516](0516-the-run-opens-with-a-formation-card-grant-on-a-band-deep-enough-to-turn.md)"
 ---
 
-# ADR-0517: Card art is keyed to the formation and may come from either generator
+# ADR-0520: Card art is keyed to the formation and may come from either generator
 
 ## Context
 

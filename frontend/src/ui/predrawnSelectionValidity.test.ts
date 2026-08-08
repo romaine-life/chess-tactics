@@ -189,4 +189,37 @@ describe('pre-drawn Level selection validity', () => {
       v2: GEOMETRY,
     }, { cells: { '0,0': 'grass' } }).kind).toBe('unavailable');
   });
+
+  it('keeps a hand-placed grid valid while still proving the artwork is the exact artifact', () => {
+    const versions = [raw(), warped(), mask()];
+    const moved = { v1: 'b'.repeat(64), v2: 'b'.repeat(64) };
+    // Resizing or sliding the grid changes the environment geometry, and on a detached board that
+    // is the owner's decision rather than a defect: the picture keeps rendering and stays savable.
+    expect(predrawnSelectionValidity(surface(), versions, moved).kind).toBe('stale');
+    expect(predrawnSelectionValidity(surface(), versions, moved, {
+      cells: {},
+      predrawnGridDetached: true,
+    }).kind).toBe('valid');
+
+    // Detaching answers the geometry question only. A selection that does not resolve to one exact
+    // complete artifact is still unavailable, because that is about identity, not placement.
+    expect(predrawnSelectionValidity(surface(), [raw()], moved, {
+      cells: {},
+      predrawnGridDetached: true,
+    }).kind).toBe('unavailable');
+  });
+
+  it('lets a detached grid outgrow its move-highlight calibration without losing the artwork', () => {
+    const shrunk = { cells: { '0,0': 'grass' }, predrawnGridDetached: true };
+    // The profile calibrates cell 1,1. Once the grid has moved, a cell it no longer covers is
+    // simply uncalibrated — it falls back to the full-cell highlight instead of killing the plate.
+    expect(predrawnSelectionValidity(fittedSurface(), [raw(), warped()], {
+      v1: GEOMETRY,
+      v2: 'b'.repeat(64),
+    }, shrunk).kind).toBe('valid');
+    expect(predrawnSelectionValidity(fittedSurface(), [raw(), warped()], {
+      v1: GEOMETRY,
+      v2: GEOMETRY,
+    }, { cells: { '0,0': 'grass' } }).kind).toBe('unavailable');
+  });
 });

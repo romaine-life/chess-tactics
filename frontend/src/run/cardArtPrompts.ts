@@ -3,7 +3,7 @@ import type { AdlectablePieceType } from './model';
 
 export const RUN_CARD_ART_PROMPT_SCHEMA = 'run-card-art-prompt-v2';
 export const RUN_CARD_ART_PLAN_SCHEMA = 'run-card-art-plan-v2';
-// ADR-0517: art keyed to (footprint, roster). A v3 plan carries a family id and may come from
+// ADR-0520: art keyed to (footprint, roster). A v3 plan carries a family id and may come from
 // either generator, so the catalog surface has to admit both schema generations at once — the
 // roster set stays readable while the family set is reviewed.
 export const RUN_CARD_ART_FAMILY_PROMPT_SCHEMA = 'run-card-art-prompt-v3';

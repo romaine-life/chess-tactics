@@ -3,7 +3,13 @@ import {
   type BoardDrawOp,
   type FloatingArtworkPlacement,
 } from '@chess-tactics/board-render';
-import { drawOpPaintsPoint, type RasterAlphaMask, type RasterPoint } from '../render/rasterAlpha';
+import {
+  drawOpPaintsPoint,
+  drawOpPaintsWithinRect,
+  type RasterAlphaMask,
+  type RasterPoint,
+  type RasterRect,
+} from '../render/rasterAlpha';
 
 export interface FloatingArtworkHitCandidate {
   placement: FloatingArtworkPlacement;
@@ -90,6 +96,40 @@ export function floatingArtworkHitCandidatesAtPoint(
       ops: floatingArtworkDrawOps(placement),
     })),
     point,
+    alphaBySource,
+  );
+}
+
+/**
+ * Every Scene Art instance the dragged rectangle actually touches, back-to-front.
+ *
+ * Same honesty rule as the single pick: the rectangle takes an instance because it covers pixels
+ * that instance PAINTS, never because it clipped the transparent margin of its source image. A
+ * source whose alpha has not settled stays inert rather than being swept up sight-unseen.
+ */
+export function floatingArtworkIdsWithinRectFromOps(
+  candidates: readonly FloatingArtworkOpsCandidate[],
+  rect: RasterRect,
+  alphaBySource: ReadonlyMap<string, RasterAlphaMask>,
+): string[] {
+  return candidates.flatMap((candidate) => candidate.ops.some((op) => {
+    const source = alphaBySource.get(op.src);
+    return source ? drawOpPaintsWithinRect(op, source, rect) : false;
+  }) ? [candidate.placement.id] : []);
+}
+
+export function floatingArtworkIdsWithinRect(
+  placements: readonly FloatingArtworkPlacement[],
+  rect: RasterRect,
+  alphaBySource: ReadonlyMap<string, RasterAlphaMask>,
+): string[] {
+  return floatingArtworkIdsWithinRectFromOps(
+    placements.map((placement, placementIndex) => ({
+      placement,
+      placementIndex,
+      ops: floatingArtworkDrawOps(placement),
+    })),
+    rect,
     alphaBySource,
   );
 }

@@ -23,6 +23,12 @@ import {
   useAppSettings,
   type AppSettings,
 } from '../settings/appSettings';
+import { BOARD_GRID_STYLE_LABELS } from '../settings/boardGridStyle';
+import { PLAYER_PALETTE_LABELS } from '../settings/playerPalette';
+import { PLAYER_PALETTES, type PlayerPalette } from '../core/pieces';
+import { BoardGridStylePicker } from './shared/BoardGridStylePicker';
+import { HouseSelect } from './shared/HouseSelect';
+import { PieceTypeIcon } from './shared/PieceTypeIcon';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
 const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
@@ -564,14 +570,43 @@ export function Settings({
 
   const renderGameplay = () => (
     <SettingsSection title="Gameplay">
+      {/* Only the two player palettes are offered. The rest of the catalog is reserved for
+          opponents, so the color on the pieces you command is never on the pieces you fight.
+          The choice is shown as the accepted battlefield pawn in that set rather than as its
+          name: this picks how the player's army LOOKS, so it is judged by sight, and a colour
+          word cannot be compared against the sprite it actually produces. */}
       <SettingsRow
-        title="Board grid"
-        description="Show the board grid whenever a battlefield loads."
+        title="Your color"
+        description={PLAYER_PALETTE_LABELS[settings.playerPalette].detail}
       >
-        <Toggle
-          checked={settings.showBoardGrid}
-          label="Show the board grid when a battlefield loads"
-          onChange={(value) => updateSetting('showBoardGrid', value)}
+        <HouseSelect<PlayerPalette>
+          value={settings.playerPalette}
+          options={PLAYER_PALETTES.map((palette) => ({
+            value: palette,
+            title: PLAYER_PALETTE_LABELS[palette].label,
+            label: (
+              <span className="settings-piece-choice">
+                <PieceTypeIcon type="pawn" palette={palette} className="settings-piece-choice-icon" />
+                <span className="sr-only">{PLAYER_PALETTE_LABELS[palette].label}</span>
+              </span>
+            ),
+          }))}
+          ariaLabel={`Your piece color — ${PLAYER_PALETTE_LABELS[settings.playerPalette].label}`}
+          testId="settings-player-palette"
+          onChange={(palette) => updateSetting('playerPalette', palette)}
+        />
+      </SettingsRow>
+      {/* Showing or hiding the grid is a per-battle decision and already lives on the in-game HUD's
+          Grid toggle, so it is not duplicated here. This row is only what the grid LOOKS like. */}
+      <SettingsRow
+        title="Grid style"
+        description={BOARD_GRID_STYLE_LABELS[settings.boardGridStyle].detail}
+        className="settings-row-stacked-control"
+        tall
+      >
+        <BoardGridStylePicker
+          value={settings.boardGridStyle}
+          onChange={(style) => updateSetting('boardGridStyle', style)}
         />
       </SettingsRow>
       <SettingsRow

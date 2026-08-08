@@ -108,6 +108,8 @@ const {
   strategikonBackgroundMediaIssue,
   strategikonBackgroundOwnerProofIssue,
   strategikonBackgroundSlot,
+  propArtMediaIssue,
+  propArtSlot,
   wallMaterialMediaIssue,
   wallMaterialOwnerProofIssue,
   wallMaterialSlot,
@@ -18551,7 +18553,7 @@ function runStarterCardArtProjection(row, cardId, metadata, slotMetadata, proven
 }
 
 /**
- * Family-keyed Units-card art (ADR-0517). Same evidence bar as the roster set — exact prompt,
+ * Family-keyed Units-card art (ADR-0520). Same evidence bar as the roster set — exact prompt,
  * its SHA-256, the scene and unit direction, and a job identifier that ties the bytes to the
  * run that made them — but the identity is the family id and the generator may be either of
  * the two the owner uses. A PixelLab version still carries its job id; a Codex version carries
@@ -18649,7 +18651,7 @@ function runCardArtProjection(row) {
     ? runStarterCardArtProjection(row, starterId, metadata, slotMetadata, provenance)
     : null;
   if (starter) return starter;
-  // ADR-0517: family-keyed art. One illustration per (footprint, roster), either generator,
+  // ADR-0520: family-keyed art. One illustration per (footprint, roster), either generator,
   // promoted per family rather than as one atomic set — a family is a whole illustration on
   // its own, so holding 94 hostage to each other buys nothing the roster set needed.
   if (metadata.schema === 'run-card-art-plan-v3') {
@@ -18729,7 +18731,7 @@ function runCardArtOwnerProofIssue(runCardArt, proof, surfaceUrl) {
     }
     return null;
   }
-  // ADR-0517: a family illustration is complete on its own, so its proof mounts that one
+  // ADR-0520: a family illustration is complete on its own, so its proof mounts that one
   // family's exact native raster on the Studio Card Prompts surface rather than all 94. The
   // evidence bar is unchanged — the reviewed bytes must be the candidate's, at canonical 1x.
   if (runCardArt.kind === 'family') {
@@ -19013,6 +19015,9 @@ function mediaDomainProjectionIssue(row) {
   // tile projection, so they resolve before the board-tile rules below.
   if (wallMaterialSlot(row.slot)) {
     return wallMaterialMediaIssue(row, runtime.value);
+  }
+  if (propArtSlot(row.slot)) {
+    return propArtMediaIssue(row, runtime.value);
   }
   if (workspaceBackgroundSlotId(row.slot)) {
     return workspaceBackgroundMediaIssue(row, runtime.value);

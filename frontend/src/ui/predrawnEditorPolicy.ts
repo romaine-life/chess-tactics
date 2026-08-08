@@ -50,6 +50,19 @@ export function preservesPredrawnBakedArt(current: EditorBoard, next: EditorBoar
   return predrawnBakedArtSignature(current) === predrawnBakedArtSignature(next);
 }
 
+/**
+ * Whether two boards remember the exact same artwork selection.
+ *
+ * This is the undo/redo guard, and it deliberately ignores the baked-art signature. Every entry on
+ * the stack was already accepted by `commitEditorBoard`, so stepping between them can only replay
+ * decisions the owner was allowed to make — including a resize or a grid slide, which change that
+ * signature on purpose. What history must never do is restore a board from a DIFFERENT plate
+ * selection, because those pixels answer to different geometry entirely.
+ */
+export function sharesPredrawnSelection(current: EditorBoard, next: EditorBoard): boolean {
+  return JSON.stringify(current.surface ?? null) === JSON.stringify(next.surface ?? null);
+}
+
 export function predrawnEditorHrefAfterPicker(href: string): string {
   const url = new URL(href, 'http://local.test');
   url.searchParams.delete('predrawnPicker');

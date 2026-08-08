@@ -29,7 +29,7 @@ import {
 import { resolveWallArtFaces, slotSource, wallArtSlotsForFace } from '../core/wallArt';
 import { flatContactClipRects, propZBracket, structureSeatPoint, structureSourceHalfSrc, structureSourceSprite, structureSourceSplitMode } from './structureGeometry';
 import { fenceOverlayZIndex, fencePostZIndex, groundCoverZIndex, objectBaseZIndex, projectedSceneObjectZBracket, wallArtOverlayZIndex, wallOverlayZIndex } from './sceneDepth';
-import { propDef, type StructureSourceRef } from '../core/props';
+import { propDef, type PropKind, type StructureSourceRef } from '../core/props';
 import {
   structureArtAsset,
   structureArtDirectionHalfSrc,
@@ -42,6 +42,7 @@ import type { TileFamilyId } from '../core/tileSockets';
 import {
   boardBackgroundMode,
   isVersionedPredrawnBoardSurface,
+  predrawnRenderSurface,
   type EditorBoard,
   type FloatingArtworkPlacement,
 } from '../ui/boardCode';
@@ -98,6 +99,23 @@ export interface BoardSpriteAnimation {
   phase: number;
 }
 
+/**
+ * Which placed structure an op's pixels belong to. A prop is drawn as several ops (two depth
+ * halves, one pair per authored part), and a renderer that wants to move the WHOLE prop — the
+ * board-assembly drop (ADR-0045) is the first such caller — has to move every one of them by
+ * the same amount or the halves shear apart. Carrying the anchor identity on the op is how a
+ * flat op list stays groupable without the renderer re-deriving placement from board data.
+ */
+export interface BoardStructureIdentity {
+  /** Anchor cell key `"x,y"` of the placed prop, exactly as it is keyed in `board.props`. */
+  key: string;
+  /** Gameplay kind, so a caller can animate rocks without animating trees and houses. */
+  kind: PropKind;
+  /** Anchor cell, pre-split so depth-ordered choreography needs no key parsing. */
+  x: number;
+  y: number;
+}
+
 export interface BoardDrawOp {
   /** Semantic ownership used by composed renderers; never infer this from `src`. */
   layer?: BoardDrawLayer;
@@ -116,6 +134,8 @@ export interface BoardDrawOp {
   sh?: number;
   /** Code-owned playback policy over catalog-declared sprite-sheet geometry. */
   animation?: BoardSpriteAnimation;
+  /** Present on every op drawn for a placed prop; absent on terrain, cover and units. */
+  structure?: BoardStructureIdentity;
   /** Board-space polygon paths used to expose broken cells inside a composite terrain image. */
   clipPolygons?: number[][];
   /** Complete-scene inverse raster map. Present only on a persisted registered pre-drawn plate. */
@@ -311,12 +331,13 @@ function pushStructureDrawOps(
   dy: number,
   backZ: number,
   frontZ: number,
+  structure?: BoardStructureIdentity,
 ): void {
   const fullW = sourceSprite.w * scale;
   const fullH = sourceSprite.h * scale;
   if (structureSourceSplitMode(source) !== 'flat-contact') {
-    ops.push({ layer: 'scene', src: structureSourceHalfSrc(source, 'back'), dx, dy, dw: fullW, dh: fullH, z: backZ });
-    ops.push({ layer: 'scene', src: structureSourceHalfSrc(source, 'front'), dx, dy, dw: fullW, dh: fullH, z: frontZ });
+    ops.push({ layer: 'scene', src: structureSourceHalfSrc(source, 'back'), dx, dy, dw: fullW, dh: fullH, z: backZ, structure });
+    ops.push({ layer: 'scene', src: structureSourceHalfSrc(source, 'front'), dx, dy, dw: fullW, dh: fullH, z: frontZ, structure });
     return;
   }
 
@@ -334,6 +355,7 @@ function pushStructureDrawOps(
       dw: fullW,
       dh: clips.back.sh * scale,
       z: backZ,
+      structure,
     });
   }
   if (clips.front.sh > 0) {
@@ -349,6 +371,7 @@ function pushStructureDrawOps(
       dw: fullW,
       dh: clips.front.sh * scale,
       z: frontZ,
+      structure,
     });
   }
 }
@@ -446,7 +469,7 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
   const ops: BoardDrawOp[] = [];
   const visualTerrainCells = boardVisualTerrainCells(board);
   const predrawn = isPredrawnBackgroundActive(board) && board.surface?.kind === 'predrawn'
-    ? board.surface
+    ? predrawnRenderSurface(board)
     : undefined;
   const predrawnBackgroundActive = isPredrawnBackgroundActive(board, options);
   if (predrawn) {
@@ -710,12 +733,13 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
     const parts = def.spriteParts?.length
       ? def.spriteParts
       : [{ source: def.spriteSource ?? { kind: 'prop' as const, id: def.spriteId }, anchorX: def.sprite.anchorX, anchorY: def.sprite.anchorY, scale: def.sprite.scale }];
+    const structure: BoardStructureIdentity = { key, kind: def.kind, x: ax, y: ay };
     for (const part of parts) {
       const sourceSprite = structureSourceSprite(part.source);
       const s = part.scale;
       const dx = left - part.anchorX * s;
       const dy = top - part.anchorY * s;
-      pushStructureDrawOps(ops, part.source, sourceSprite, part.anchorY, s, dx, dy, back, front);
+      pushStructureDrawOps(ops, part.source, sourceSprite, part.anchorY, s, dx, dy, back, front, structure);
     }
   }
 

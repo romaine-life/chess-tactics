@@ -4,7 +4,7 @@
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
-import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, cameraToContainBounds, defaultBoardCameraBounds, defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, MAX_FLOATING_ARTWORK_PIXEL, mergeSharedLevel, normalizeBoardCameraBounds, predrawnEnvironmentGeometryFingerprintInputV2, predrawnVisualFootprintClipStyleForCell, resolvedBoardCameraBounds, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, worldViewportForCamera, type BoardBackgroundMode, type BoardCameraBounds, type BoardCameraSnapMode, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
+import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, cameraToContainBounds, defaultBoardCameraBounds, defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, MAX_FLOATING_ARTWORK_PIXEL, mergeSharedLevel, normalizeBoardCameraBounds, predrawnEnvironmentGeometryFingerprintInputV2, predrawnRenderSurface, predrawnVisualFootprintClipStyleForCell, resolvedBoardCameraBounds, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, worldViewportForCamera, type BoardBackgroundMode, type BoardCameraBounds, type BoardCameraSnapMode, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
 import { boardLabCellPosition, boardLabMetrics, immutableBoardLabTerrainSrc } from '../render/BoardLabBoard';
 import { projectBoardPoint, unprojectBoardPoint, type BoardForest, type BoardForestSection, type BoardForestTree, type BoardTown, type BoardTownSection } from '@chess-tactics/board-render';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
@@ -80,6 +80,7 @@ import { ViewPane, type ViewPaneViewportSize } from './shared/ViewPane';
 import { useBoardCameraFraming } from './shared/BoardViewFraming';
 import { CameraBoundaryOverlay } from './shared/CameraBoundaryOverlay';
 import { useConfirm } from './shared/ConfirmDialog';
+import { useDeleteKeyAction } from './shared/deleteKeyAction';
 import { TitleBarControlContribution, type TitleBarControlSpec } from './shell/TitleBarControls';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
@@ -105,6 +106,7 @@ import { BoardSizePanel, type BoardResizeSide } from './shared/BoardSizePanel';
 import {
   MAX_SCENIC_TERRAIN_EXTENT,
   PLAYABLE_GRID_MOVE_DIRECTIONS,
+  PLAYABLE_GRID_MOVE_PLATE_STEP,
   movePlayableGrid,
   playableGridMoveAvailability,
   type PlayableGridMoveDirection,
@@ -156,7 +158,7 @@ import { PredrawnBackgroundVersionsPanel } from './PredrawnBackgroundVersionsPan
 import { PredrawnSourceArtworkPanel } from './PredrawnSourceArtworkPanel';
 import { PredrawnGenerationFramePicker } from './PredrawnGenerationFramePicker';
 import { predrawnGenerationFrameStatus } from './predrawnGenerationFrameStatus';
-import { isPredrawnLockedLayer, predrawnEditorHrefAfterPicker, preservesPredrawnBakedArt } from './predrawnEditorPolicy';
+import { isPredrawnLockedLayer, predrawnEditorHrefAfterPicker, preservesPredrawnBakedArt, sharesPredrawnSelection } from './predrawnEditorPolicy';
 import { predrawnReferenceHref } from './PredrawnReference';
 import {
   listPredrawnBackgroundVersions,
@@ -215,10 +217,13 @@ import { levelEditorLevelSignature, normalizedLevelEditorSignature } from './lev
 import { levelEditorRouteIdentity } from './levelEditorRouteIdentity';
 import {
   editorDocumentWorkspaceForLevelId,
+  isInterruptedByCloudSignOut,
   levelEditorHrefForDocument,
   preservedEditorRecoveryIsRedundant,
   provisionalEditorRecoveryIsRedundant,
   shouldAdoptPreservedEditorBranch,
+  shouldOfferPreservedEditorBranch,
+  shouldResumeInterruptedCloudSync,
   shouldRestoreLocalEditorRecovery,
 } from './levelEditorPersistence';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
@@ -294,7 +299,7 @@ import { OBJECTIVE_LABEL } from '../core/objectives';
 import { VictoryConditionsEditor, appendRules, rulesEqual, type FactionOption } from './VictoryConditionsEditor';
 import { tierOf, mapSaveError } from '../campaign/save';
 import { goSignIn, signInHref } from '../net/auth';
-import { reportAuthSessionFailure, useAuthSession } from '../net/authSession';
+import { refreshAuthSession, reportAuthSessionFailure, useAuthSession } from '../net/authSession';
 import { fetchAdminLiveMediaCatalog, type AdminLiveMediaCatalog } from '../net/liveMediaAdmin';
 import {
   autosaveEditorDocument,
@@ -358,6 +363,9 @@ type LevelEditorLocalFallbackSnapshot = {
   cleanupDraftIdentity?: ScopedLevelEditorDraftIdentity;
 };
 
+// Bounded, only while an open document is waiting for its owner to sign back in. It covers a
+// sign-in completed in another tab, which produces no focus or online event in this one.
+const EDITOR_SIGNED_OUT_REPROBE_MS = 20_000;
 const EDIT_SESSION_HEARTBEAT_MS = 20_000;
 const EDITOR_SHARED_SYNC_POLL_MS = 1_000;
 const OFFLINE_LEVEL_EDITOR_OWNER = 'offline-browser@local.invalid';
@@ -497,6 +505,7 @@ function StudioEditableBoard({
   tool,
   selectedCell,
   selectedArtworkId,
+  selectedArtworkIds,
   boardZoom,
   boardPan,
   gridScope = 'off',
@@ -597,6 +606,8 @@ function StudioEditableBoard({
   tool: 'select' | 'brush' | 'erase' | 'move' | 'region';
   selectedCell: { x: number; y: number } | null;
   selectedArtworkId?: string | null;
+  /** Every selected Scene Art instance. Each one outlines, and the Move tool drags them together. */
+  selectedArtworkIds?: readonly string[];
   boardZoom: number;
   boardPan: { x: number; y: number };
   gridScope?: 'off' | 'playable' | 'whole';
@@ -1222,7 +1233,9 @@ function StudioEditableBoard({
 
   if (artworkEditing) {
     for (const [index, placement] of placedFloatingArtwork.entries()) {
-      const selected = placement.id === selectedArtworkId;
+      const selected = selectedArtworkIds
+        ? selectedArtworkIds.includes(placement.id)
+        : placement.id === selectedArtworkId;
       const canMove = tool === 'move' && selected;
       const interactive = canMove;
       const sourceSprite = structureArtDirectionSprite(placement.sourceArtId, placement.direction);
@@ -1428,9 +1441,19 @@ function StudioEditableBoard({
     units: placedUnits,
     doodads: placedDoodads,
     props: placedProps,
-    floatingArtwork: placedFloatingArtwork.map((placement) => (
-      artworkDrag?.id === placement.id ? { ...placement, ...artworkDrag.point } : placement
-    )),
+    // Live drag preview. Dragging one member of a selection previews the whole selection sliding
+    // by the same offset, so what the author releases is what they watched move.
+    floatingArtwork: placedFloatingArtwork.map((placement) => {
+      if (!artworkDrag) return placement;
+      const dx = artworkDrag.point.pixelX - artworkDrag.origin.pixelX;
+      const dy = artworkDrag.point.pixelY - artworkDrag.origin.pixelY;
+      if (artworkDrag.id === placement.id) return { ...placement, ...artworkDrag.point };
+      const grouped = selectedArtworkIds?.includes(artworkDrag.id)
+        && selectedArtworkIds.includes(placement.id);
+      return grouped
+        ? { ...placement, pixelX: placement.pixelX + dx, pixelY: placement.pixelY + dy }
+        : placement;
+    }),
     cover: placedCover,
     coverTypes: placedCoverTypes,
     features: placedFeatures as EditorBoard['features'],
@@ -1683,6 +1706,34 @@ const leSeedBoard = (): Record<string, string> => {
   const cells: Record<string, string> = {};
   for (let y = 0; y < LE_ROWS; y += 1) for (let x = 0; x < LE_COLS; x += 1) cells[`${x},${y}`] = leDefaultTile().id;
   return cells;
+};
+
+/**
+ * The authored terrain closest to (x, y), searched in rings so a square added at any edge inherits
+ * the ground it was added NEXT to. Returns undefined only for a board with no authored terrain at
+ * all, which the caller answers with the catalog default.
+ */
+const nearestAuthoredTileId = (
+  cells: Readonly<Record<string, string>>,
+  x: number,
+  y: number,
+): string | undefined => {
+  const authored = Object.keys(cells);
+  if (!authored.length) return undefined;
+  let best: string | undefined;
+  let bestDistance = Infinity;
+  for (const key of authored) {
+    const [cx, cy] = key.split(',').map(Number);
+    if (!Number.isFinite(cx) || !Number.isFinite(cy)) continue;
+    // Chebyshev distance, tie-broken by key order, so the result is deterministic for a given
+    // board rather than dependent on object-insertion history.
+    const distance = Math.max(Math.abs(cx - x), Math.abs(cy - y));
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = cells[key];
+    }
+  }
+  return best;
 };
 const LE_FACTION_LABELS = UNIT_PALETTE_LABELS;
 type FactionDirections = Partial<Record<UnitPalette, Direction>>;
@@ -1970,6 +2021,7 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
     setSel(Math.max(0, index - 1));
     onChange(value.filter((_, i) => i !== index), removed ? [removed] : undefined);
   };
+  useDeleteKeyAction(event ? () => removeEvent(selected) : null);
 
   return (
     <div className="le-md le-events-other">
@@ -2735,7 +2787,11 @@ export function LevelEditor(): ReactElement {
   const editSessionOpenPromiseRef = useRef<Promise<EditorDocumentEditSessionResult> | null>(null);
   const editorClientIdentityRef = useRef(editorClientIdentity);
   const pendingDraftIdentityRef = useRef<ScopedLevelEditorDraftIdentity | null>(null);
-  const [cloudSaveState, setCloudSaveState] = useState<'loading' | 'local' | 'pending' | 'saving' | 'saved' | 'error' | 'conflict'>('loading');
+  // `signed-out` is deliberately distinct from `error`: the working copy and its browser recovery
+  // are intact and the only missing thing is an account session, so the editor stays mounted,
+  // keeps buffering, and resumes automatically when the same owner signs back in.
+  const [cloudSaveState, setCloudSaveState] = useState<'loading' | 'local' | 'pending' | 'saving' | 'saved' | 'error' | 'conflict' | 'signed-out'>('loading');
+  const [preservedBranchOffer, setPreservedBranchOffer] = useState<LevelEditorLocalFallbackSnapshot | null>(null);
   const [cloudSaveDetail, setCloudSaveDetail] = useState<string | null>(null);
   const [localBackupAvailable, setLocalBackupAvailable] = useState<boolean | null>(null);
   const [revisionHistory, setRevisionHistory] = useState<EditorDocumentRevisionSummary[]>([]);
@@ -2782,6 +2838,12 @@ export function LevelEditor(): ReactElement {
   };
   const [boardCells, setBoardCells] = useState<Record<string, string>>(() => initialBoard?.cells ?? leSeedBoard());
   const [boardSurface, setBoardSurface] = useState<PredrawnBoardSurface | undefined>(() => initialBoard?.surface);
+  const [boardPredrawnGridDetached, setBoardPredrawnGridDetached] = useState<boolean>(
+    () => initialBoard?.predrawnGridDetached === true,
+  );
+  const [boardPredrawnPlateOffset, setBoardPredrawnPlateOffset] = useState<{ left: number; top: number } | undefined>(
+    () => initialBoard?.predrawnPlateOffset,
+  );
   const [boardBackgroundModeState, setBoardBackgroundModeState] = useState<BoardBackgroundMode>(
     () => boardBackgroundMode(initialBoard ?? {}),
   );
@@ -2810,12 +2872,14 @@ export function LevelEditor(): ReactElement {
     [predrawnPreview, predrawnReviewSearch],
   );
   const editorPredrawnPlate = useMemo<PredrawnBoardPlate | undefined>(() => {
+    // Drawn through the shared render seam so the editor plate, gameplay, and both thumbnail
+    // renderers place the owner's artwork identically.
     const activeSurface = boardBackgroundModeState === 'ai'
       && predrawnSelectionValidation.kind === 'valid'
-      ? boardSurface
+      ? predrawnRenderSurface({ surface: boardSurface, predrawnPlateOffset: boardPredrawnPlateOffset })
       : undefined;
     return predrawnBoardPlateForEditorReview(activeSurface, predrawnPreview, predrawnRegistration);
-  }, [boardBackgroundModeState, boardSurface, predrawnPreview, predrawnRegistration, predrawnSelectionValidation.kind]);
+  }, [boardBackgroundModeState, boardPredrawnPlateOffset, boardSurface, predrawnPreview, predrawnRegistration, predrawnSelectionValidation.kind]);
   const isPredrawnBoard = boardBackgroundModeState === 'ai' || editorPredrawnPlate !== undefined;
   const editorRouteError = useMemo(
     () => editorFrameError ?? (editorLoadError
@@ -2896,7 +2960,13 @@ export function LevelEditor(): ReactElement {
   const [macroTileBrushId, setMacroTileBrushId] = useState<string | null>(null);
   const [macroTileFootprint, setMacroTileFootprint] = useState(leMacroTileFootprints()[0] ?? '2x2');
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
-  const [selectedArtworkId, setSelectedArtworkId] = useState<string | null>(null);
+  // Scene Art selection is a LIST: one click picks one instance, a dragged rectangle picks every
+  // instance it touches. `selectedArtworkId` stays as the PRIMARY member — the last one picked —
+  // because Details, Facing, X/Y and Scale each edit exactly one object and must not go blank the
+  // moment a second instance joins the selection. Selection-wide verbs (Delete, Move) read the list.
+  const [selectedArtworkIds, setSelectedArtworkIds] = useState<readonly string[]>([]);
+  const selectedArtworkId = selectedArtworkIds.length ? selectedArtworkIds[selectedArtworkIds.length - 1] : null;
+  const setSelectedArtworkId = (id: string | null): void => setSelectedArtworkIds(id === null ? [] : [id]);
   const [artworkSelectionActive, setArtworkSelectionActive] = useState(false);
   // Connected terrain-area selection shared by Generate and raw Tile Fill. "x,y" cell keys.
   const [regionSelection, setRegionSelection] = useState<Set<string>>(() => new Set());
@@ -3692,6 +3762,8 @@ export function LevelEditor(): ReactElement {
     setDecorativeWalls(board.decorativeWalls ?? {});
     setBoardCells(board.cells);
     setBoardSurface(board.surface);
+    setBoardPredrawnGridDetached(board.predrawnGridDetached === true);
+    setBoardPredrawnPlateOffset(board.predrawnPlateOffset);
     setBoardBackgroundModeState(boardBackgroundMode(board));
     setBoardPredrawnGenerationFrame(board.predrawnGenerationFrame);
     setBoardMacroTiles(validMacroTilesForBoard(board));
@@ -3736,8 +3808,8 @@ export function LevelEditor(): ReactElement {
   // The current painted board as a single EditorBoard — the one shape both the transient
   // play-test URL and the level save serialize from, so they can never describe different boards.
   const currentEditorBoard = useMemo<EditorBoard>(
-    () => ({ cols: boardCols, rows: boardRows, cameraBounds: boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, backgroundMode: boardBackgroundModeState, surface: boardSurface, predrawnGenerationFrame: boardPredrawnGenerationFrame, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, floatingArtwork: boardFloatingArtwork, cover: boardCover, coverTypes: boardCoverTypes, coverSeeds: boardCoverSeeds, features: boardFeatures, fences: boardFences, fencePosts: boardFencePosts, walls: boardWalls, wallArt: boardWallArt, subterrain: boardSubterrain, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions, towns: boardTowns, forests: boardForests }),
-    [boardCols, boardRows, boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, boardFactionDirections, boardCells, boardBackgroundModeState, boardSurface, boardPredrawnGenerationFrame, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardFloatingArtwork, boardCover, boardCoverTypes, boardCoverSeeds, boardFeatures, boardFences, boardFencePosts, boardWalls, boardWallArt, boardSubterrain, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions, boardTowns, boardForests],
+    () => ({ cols: boardCols, rows: boardRows, cameraBounds: boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, backgroundMode: boardBackgroundModeState, surface: boardSurface, predrawnGridDetached: boardPredrawnGridDetached, predrawnPlateOffset: boardPredrawnPlateOffset, predrawnGenerationFrame: boardPredrawnGenerationFrame, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, floatingArtwork: boardFloatingArtwork, cover: boardCover, coverTypes: boardCoverTypes, coverSeeds: boardCoverSeeds, features: boardFeatures, fences: boardFences, fencePosts: boardFencePosts, walls: boardWalls, wallArt: boardWallArt, subterrain: boardSubterrain, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions, towns: boardTowns, forests: boardForests }),
+    [boardCols, boardRows, boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, boardFactionDirections, boardCells, boardBackgroundModeState, boardSurface, boardPredrawnGridDetached, boardPredrawnPlateOffset, boardPredrawnGenerationFrame, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardFloatingArtwork, boardCover, boardCoverTypes, boardCoverSeeds, boardFeatures, boardFences, boardFencePosts, boardWalls, boardWallArt, boardSubterrain, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions, boardTowns, boardForests],
   );
   const predrawnVersionCells = useMemo(
     () => Array.from({ length: boardRows }, (_, y) => (
@@ -3833,10 +3905,18 @@ export function LevelEditor(): ReactElement {
       needsBaselineRef.current = true;
     }
   };
-  const commitEditorBoard = (next: EditorBoard, selection?: { x: number; y: number } | null): boolean => {
+  const commitEditorBoard = (
+    next: EditorBoard,
+    selection?: { x: number; y: number } | null,
+    options: { playableWindow?: boolean } = {},
+  ): boolean => {
     const current = currentEditorBoardRef.current;
     const normalized = { ...next, macroTiles: validMacroTilesForBoard(next) };
-    if (isPredrawnBoard && !preservesPredrawnBakedArt(current, normalized)) {
+    // The baked-art guard stops an EDIT from silently contradicting pixels the plate already owns.
+    // Resizing the grid and sliding it across the artwork are not that: they declare themselves,
+    // they change no depicted family on purpose, and rebasing or pruning coordinates is the
+    // mechanical consequence the owner asked for. They pass `playableWindow` and are let through.
+    if (isPredrawnBoard && !options.playableWindow && !preservesPredrawnBakedArt(current, normalized)) {
       return false;
     }
     if (boardSignature(normalized) === boardSignature(current)) return false;
@@ -3923,7 +4003,14 @@ export function LevelEditor(): ReactElement {
       return;
     }
     const current = currentEditorBoardRef.current;
-    const next = { ...cloneEditorBoard(current), surface };
+    // Newly set artwork was generated FROM the geometry on screen, so it arrives bound to it again:
+    // the detachment and the hand placement both belong to the selection they were made against.
+    const next = {
+      ...cloneEditorBoard(current),
+      surface,
+      predrawnGridDetached: false,
+      predrawnPlateOffset: undefined,
+    };
     if (boardSignature(next) === boardSignature(current)) return;
     setPredrawnSelectionValidation({ kind: 'checking' });
     setUndoStack((previous) => [...previous, cloneEditorBoard(current)].slice(-HISTORY_LIMIT));
@@ -4102,7 +4189,7 @@ export function LevelEditor(): ReactElement {
   const undoBoard = (): void => {
     const prev = undoStack[undoStack.length - 1];
     if (!prev) return;
-    if (isPredrawnBoard && !preservesPredrawnBakedArt(currentEditorBoardRef.current, prev)) return;
+    if (isPredrawnBoard && !sharesPredrawnSelection(currentEditorBoardRef.current, prev)) return;
     const departing = cloneEditorBoard(currentEditorBoardRef.current);
     setRedoStack((next) => [departing, ...next].slice(0, HISTORY_LIMIT));
     setUndoStack((next) => next.slice(0, -1));
@@ -4122,7 +4209,7 @@ export function LevelEditor(): ReactElement {
   const redoBoard = (): void => {
     const next = redoStack[0];
     if (!next) return;
-    if (isPredrawnBoard && !preservesPredrawnBakedArt(currentEditorBoardRef.current, next)) return;
+    if (isPredrawnBoard && !sharesPredrawnSelection(currentEditorBoardRef.current, next)) return;
     const departing = cloneEditorBoard(currentEditorBoardRef.current);
     setUndoStack((prev) => [...prev, departing].slice(-HISTORY_LIMIT));
     setRedoStack((prev) => prev.slice(1));
@@ -5669,6 +5756,16 @@ export function LevelEditor(): ReactElement {
   signedInRef.current = Boolean(me?.signed_in);
   const ownerEmailRef = useRef(me?.email ?? '');
   ownerEmailRef.current = me?.email ?? '';
+  // The owner this document was resolved for. It deliberately survives a lost sign-in: the browser
+  // recovery address is keyed by account, so dropping it mid-session would stop buffering exactly
+  // when buffering is the only thing holding the owner's work.
+  const documentOwnerEmailRef = useRef<string>('');
+  // Set while an open document is waiting for the same owner to sign back in.
+  const signedOutInterruptionRef = useRef<string | null>(null);
+  /** The account email that owns the mounted document, whether or not a session is currently live. */
+  const activeOwnerEmail = (): string => (
+    me?.email?.trim().toLowerCase() || documentOwnerEmailRef.current || ''
+  );
   const currentEditFence = (): EditorDocumentEditFence | null => {
     const session = editSessionRef.current;
     const identity = editorClientIdentityRef.current;
@@ -5689,6 +5786,79 @@ export function LevelEditor(): ReactElement {
     // Owner pages no longer lose authority to sibling tabs. The browser draft
     // remains the bounded retry buffer if the page session itself fails.
   }, []);
+  /**
+   * Enter the paused-for-sign-in state without disturbing the mounted working copy. Nothing is
+   * unloaded, no recovery is archived and the page identity is kept, so the scoped browser draft
+   * keeps receiving every subsequent edit and a later sign-in resumes exactly where this left off.
+   */
+  const enterCloudSignOut = useCallback((): void => {
+    const alreadyInterrupted = signedOutInterruptionRef.current !== null;
+    signedOutInterruptionRef.current = documentOwnerEmailRef.current || ownerEmailRef.current || null;
+    setCloudSaveState('signed-out');
+    setCloudSaveDetail('Your sign-in expired, so cloud autosave paused. This tab still holds every edit and keeps writing a browser recovery copy; sign in again to resume syncing.');
+    if (alreadyInterrupted) return;
+    reportStatusRef.current(
+      'Signed out — autosave paused.',
+      'warning',
+      'Nothing was lost. Sign in again from this tab and your edits since the sign-out will sync automatically.',
+    );
+  }, []);
+  /**
+   * Resume the SAME mounted document after the same owner signs back in.
+   *
+   * This deliberately reopens the page session and re-reads the server body instead of re-entering
+   * document resolution: resolution would call applyLevelDocument, and any gate that declined to
+   * restore the browser branch would then paint the pre-sign-out body over the live editor — the
+   * exact loss this whole path exists to prevent. Reconnecting leaves the on-screen board alone and
+   * lets the ordinary compare-and-swap autosave carry the edits made while signed out.
+   */
+  const resumeInterruptedCloudSync = useCallback(async (): Promise<void> => {
+    const doc = editorDocumentRef.current;
+    const identity = editorClientIdentityRef.current;
+    if (!doc || !identity) return;
+    setCloudSaveDetail('Signed in again. Reconnecting this working copy…');
+    try {
+      const opened = await openEditorDocumentEditSession(doc.document_id, {
+        session_id: identity.sessionId,
+        session_key: identity.sessionKey,
+        device_id: identity.deviceId,
+        client_label: editorClientLabel,
+      });
+      editSessionRef.current = opened.session;
+      editPresenceRef.current = opened.presence;
+      setEditSession(opened.session);
+      setEditPresence(opened.presence);
+      setEditAuthorityState('writer');
+      // Another device may have advanced the shared working copy while this page was signed out.
+      // Rebasing onto the acknowledged revision keeps the resumed autosave a normal CAS, so a real
+      // divergence surfaces through the existing conflict/merge path rather than overwriting.
+      const server = await loadEditorDocument(doc.document_id);
+      editorDocumentRef.current = server;
+      setEditorDocument(server);
+      documentRevisionRef.current = server.revision;
+      lastCloudSyncedSigRef.current = normalizedLevelEditorSignature(server.level);
+      documentConflictRef.current = server.baseline_conflict;
+      documentConflictKindRef.current = server.baseline_conflict ? 'baseline' : null;
+      signedOutInterruptionRef.current = null;
+      setCloudSaveState(server.baseline_conflict ? 'conflict' : 'pending');
+      setCloudSaveDetail(server.baseline_conflict
+        ? 'The saved level changed while you were signed out. Your editor was preserved and autosave stays paused until you resolve it.'
+        : 'Signed in again. Syncing the edits you made while signed out…');
+      reportStatusRef.current(
+        'Autosave resumed.',
+        'success',
+        'Edits made while signed out are syncing into your cloud working copy.',
+      );
+    } catch (error) {
+      if (reportAuthSessionFailure(error)) {
+        enterCloudSignOut();
+        return;
+      }
+      setCloudSaveState('error');
+      setCloudSaveDetail('Reconnecting after sign-in failed. Your work remains in this tab and in its browser recovery copy; retry when connected.');
+      reportStatusRef.current('Could not reconnect after sign-in.', 'warning', (error as Error).message);
+    }
+  }, [editorClientLabel, enterCloudSignOut]);
   const mountAcknowledgedWorkingCopy = useCallback((latest: EditorDocument): void => {
     const latestSignature = levelEditorLevelSignature(latest.level);
     // The departure flush reads refs rather than React state. Replace its candidate and signature
@@ -5783,8 +5953,11 @@ export function LevelEditor(): ReactElement {
       : pendingDraftIdentity
       ? readScopedLevelEditorDraft(pendingDraftIdentity)
       : readLevelEditorDraft(draftKey);
+    // An open document keeps buffering under the owner it was resolved for even after the sign-in
+    // expires. Falling back to the live session email here would silently stop recovery writes at
+    // the exact moment they become the only copy of the owner's work.
     const ownerEmail = editorDocument
-      ? me?.email?.trim().toLowerCase()
+      ? activeOwnerEmail() || undefined
       : pendingDraftIdentity?.ownerEmail?.trim().toLowerCase() ?? existingRecovery?.ownerEmail;
     if (editorDocument) {
       if (!ownerEmail || !editorClientIdentity) return;
@@ -5952,6 +6125,30 @@ export function LevelEditor(): ReactElement {
   // nothing; access remains owner/admin gated independently of possession of the URL.
   useEffect(() => {
     if (!sharedAuthStatus) return undefined;
+    // A sign-in that expires under an open document must not re-enter document resolution: that
+    // path answers "sign in to open this editor document", which would block the board, stop the
+    // browser buffer, and strand every edit made since the expiry in RAM until the sign-in
+    // navigation discards it. Pause instead, and keep everything mounted.
+    if (isInterruptedByCloudSignOut({
+      documentOpen: Boolean(editorDocumentRef.current),
+      reachable: sharedAuthStatus.reachable,
+      signedIn: sharedAuthStatus.user.signed_in,
+    })) {
+      enterCloudSignOut();
+      return undefined;
+    }
+    // The same owner signing back in reconnects the document already on screen. A DIFFERENT owner
+    // falls through to normal resolution, so one account can never inherit another's mounted
+    // working copy or its browser buffer.
+    if (shouldResumeInterruptedCloudSync({
+      interruptedOwnerEmail: signedOutInterruptionRef.current,
+      reachable: sharedAuthStatus.reachable,
+      signedIn: sharedAuthStatus.user.signed_in,
+      email: sharedAuthStatus.user.email,
+    })) {
+      void resumeInterruptedCloudSync();
+      return undefined;
+    }
     let active = true;
     void (async () => {
       editSessionRef.current = null;
@@ -6196,6 +6393,10 @@ export function LevelEditor(): ReactElement {
         }
         if (!documentClientIdentity) throw new Error('This browser could not create the page identity required for safe editing.');
         const ownerEmail = user.email?.trim().toLowerCase() ?? '';
+        // Remember the resolved owner so a later session expiry cannot orphan this document's
+        // browser recovery address, and clear any interruption this load has just resolved.
+        documentOwnerEmailRef.current = ownerEmail;
+        signedOutInterruptionRef.current = null;
         const scopedDraftIdentity: ScopedLevelEditorDraftIdentity = {
           documentId: doc.document_id,
           ownerEmail,
@@ -6583,6 +6784,31 @@ export function LevelEditor(): ReactElement {
           seed: true,
         });
 
+        // Every branch above that decides NOT to adopt an unsent local candidate archives it and
+        // then went no further, which left real work addressable only from storage. Surface the
+        // newest one so the owner can put it back, export it, or discard it deliberately.
+        const offeredBranch: LevelEditorLocalFallbackSnapshot | null = unsafeLocalRecovery
+          ?? routeSnapshotRecovery
+          ?? (newestDivergentPreservedRecovery && !restorePreservedBranch
+            ? {
+                source: 'browser' as const,
+                draft: newestDivergentPreservedRecovery.recovery.draft,
+                level: newestDivergentPreservedRecovery.level,
+                cloudRevision: doc.revision,
+                recoveryId: newestDivergentPreservedRecovery.recovery.recoveryId,
+                recoveryCount: Math.max(1, preservedScopedRecoveries.length),
+              }
+            : null);
+        const mountedSignature = levelEditorLevelSignature(shouldRecover ? recoveredLevel : doc.level);
+        const branchAlreadyMounted = Boolean(
+          offeredBranch && levelEditorLevelSignature(offeredBranch.level) === mountedSignature,
+        );
+        setPreservedBranchOffer(shouldOfferPreservedEditorBranch({
+          openedAsWriter,
+          branchDiverged: Boolean(offeredBranch),
+          adoptedIntoEditor: branchAlreadyMounted,
+        }) ? offeredBranch : null);
+
         // A reconnect-only RAM candidate has no route envelope and may not have reached the
         // session-scoped layout writer before canonicalization remounts this component. Hand it
         // across synchronously under the already-claimed document/session identity first. This
@@ -6877,6 +7103,28 @@ export function LevelEditor(): ReactElement {
     setDocumentLoadAttempt((attempt) => attempt + 1);
   };
 
+  /**
+   * Sign in again without risking the edits made since the sign-out. With a browser recovery in
+   * place a same-tab navigation is safe — the returning page restores it. Without one, the live
+   * board is the only copy, so authenticate beside the editor and let the re-probe resume in place.
+   */
+  const signInToResumeCloudSync = (): void => {
+    if (localBackupAvailable === false) {
+      const signInWindow = window.open(signInHref('/editor'), '_blank', 'noopener,noreferrer');
+      if (!signInWindow) {
+        reportStatus(
+          'Sign-in tab was blocked.',
+          'warning',
+          'Allow pop-ups, or use Download browser copy before signing in — this browser has no recovery copy.',
+        );
+        return;
+      }
+      reportStatus('Sign-in opened in another tab.', 'info', 'Keep this editor open; autosave resumes here automatically once you are signed in.');
+      return;
+    }
+    goSignIn();
+  };
+
   const keepRecoveredWorkingCopy = (): void => {
     if (!editorDocument || documentConflictKindRef.current !== 'recovery') return;
     if (!editorSessionCanWrite || !currentEditFence()) {
@@ -6911,17 +7159,69 @@ export function LevelEditor(): ReactElement {
     reportStatus('Recovered work selected.', 'success', 'Autosave is resuming; the saved campaign position is unchanged until you choose Save.');
   };
 
+  /** The scoped identity of this page's recovery, valid even while the sign-in is expired. */
+  const scopedRecoveryIdentity = (): ScopedLevelEditorDraftIdentity | null => {
+    const doc = editorDocumentRef.current;
+    const ownerEmail = activeOwnerEmail();
+    return doc && ownerEmail
+      ? {
+          documentId: doc.document_id,
+          ownerEmail,
+          clientSessionId: editorClientIdentityRef.current?.sessionId,
+        }
+      : null;
+  };
+
+  /**
+   * Put an unadopted browser branch back on the board. Autosave then carries it into the working
+   * copy through the ordinary compare-and-swap, so this never writes over the server behind a
+   * conflict and never publishes anything.
+   */
+  const restorePreservedBranchOffer = (): void => {
+    const offer = preservedBranchOffer;
+    const doc = editorDocumentRef.current;
+    if (!offer || !doc) return;
+    if (!editorSessionCanWrite) {
+      reportStatus('This page is read-only.', 'warning', 'Reload an owner editing page before restoring recovered edits.');
+      return;
+    }
+    applyLevelDocument(offer.level, { editingId: doc.level_id, clean: false });
+    const identity = scopedRecoveryIdentity();
+    if (identity && offer.recoveryId) clearPreservedScopedLevelEditorRecovery(identity, offer.recoveryId);
+    setPreservedBranchOffer(null);
+    if (cloudSaveState !== 'signed-out' && !documentConflictRef.current) {
+      setCloudSaveState('pending');
+      setCloudSaveDetail('Restoring the recovered edits into your cloud working copy…');
+    }
+    reportStatus(
+      'Recovered edits restored.',
+      'success',
+      'They are on the board now and autosave will carry them into your working copy. The saved level is unchanged until you choose Save.',
+    );
+  };
+
+  const discardPreservedBranchOffer = (): void => {
+    const offer = preservedBranchOffer;
+    if (!offer) return;
+    const identity = scopedRecoveryIdentity();
+    if (identity && offer.recoveryId) clearPreservedScopedLevelEditorRecovery(identity, offer.recoveryId);
+    setPreservedBranchOffer(null);
+    reportStatus('Recovered edits discarded.', 'info', 'The board on screen is unchanged; only the unsent browser copy was removed.');
+  };
+
   const downloadBrowserRecovery = (): void => {
     if (!editorDocument) {
       reportStatus('Browser recovery export is unavailable.', 'warning', 'The cloud document identity has not loaded yet.');
       return;
     }
-    const ownerEmail = me?.email?.trim().toLowerCase() ?? '';
+    const ownerEmail = activeOwnerEmail();
+    // A recovery whose page session has been retired is exactly the copy most worth exporting, so
+    // fall back to the offered branch rather than reporting that no recovery exists.
     const draft = readScopedLevelEditorDraft({
       documentId: editorDocument.document_id,
       ownerEmail,
       clientSessionId: editorClientIdentity?.sessionId,
-    });
+    }) ?? preservedBranchOffer?.draft ?? null;
     if (!draft) {
       reportStatus('Browser recovery export is unavailable.', 'warning', 'No valid browser recovery exists for this account and document.');
       return;
@@ -6959,11 +7259,13 @@ export function LevelEditor(): ReactElement {
       reportStatus('This page is read-only.', 'warning', 'Reload an owner editing page to reconnect live sync.');
       return;
     }
-    if (documentConflictRef.current || cloudSaveState === 'error') {
+    if (documentConflictRef.current || cloudSaveState === 'error' || cloudSaveState === 'signed-out') {
       reportStatus(
         'Revision restore is paused.',
         'warning',
-        'Resolve the current persistence interruption first. Download the browser and cloud copies before choosing either side.',
+        cloudSaveState === 'signed-out'
+          ? 'Sign in again first. Download the browser and cloud copies before choosing either side.'
+          : 'Resolve the current persistence interruption first. Download the browser and cloud copies before choosing either side.',
       );
       return;
     }
@@ -7137,6 +7439,14 @@ export function LevelEditor(): ReactElement {
           setCloudSaveState(currentSigRef.current === acknowledgedSignature ? 'saved' : 'pending');
         })
         .catch((error: unknown) => {
+          // A 401 is the account session expiring underneath an intact working copy, not a failed
+          // write. The shared session owner classifies it (ADR-0306); naming it here keeps the shell
+          // honest about being signed out and routes the owner to the one action that fixes it,
+          // instead of a generic "autosave failed" they cannot act on.
+          if (reportAuthSessionFailure(error)) {
+            enterCloudSignOut();
+            return;
+          }
           if (isEditorDocumentEditSessionError(error)) {
             if (error.session) {
               editSessionRef.current = error.session;
@@ -7314,6 +7624,25 @@ export function LevelEditor(): ReactElement {
     return () => window.removeEventListener('focus', retryAfterSignIn);
   }, [editorDocument, editorLoadError, editorReady]);
 
+  // While an open document is paused for sign-in, re-read the authoritative session so signing in
+  // — here or in another tab — resumes autosave without the owner having to reload and hope the
+  // browser recovery is picked back up. The probe also self-heals a spurious 401: if the session
+  // was in fact still valid, the very first read restores it.
+  useEffect(() => {
+    if (cloudSaveState !== 'signed-out') return undefined;
+    const probe = (): void => { void refreshAuthSession(); };
+    const probeWhenVisible = (): void => { if (!document.hidden) probe(); };
+    const timer = window.setInterval(probeWhenVisible, EDITOR_SIGNED_OUT_REPROBE_MS);
+    window.addEventListener('focus', probe);
+    document.addEventListener('visibilitychange', probeWhenVisible);
+    probe();
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', probe);
+      document.removeEventListener('visibilitychange', probeWhenVisible);
+    };
+  }, [cloudSaveState]);
+
   // A route change must not manufacture a 700 ms loss window. Normal autosaves themselves use
   // keepalive, and this departure flush sends the latest unsent snapshot. If an older write is
   // already in flight during an in-app unmount, the latest write is chained after its CAS ack.
@@ -7476,6 +7805,12 @@ export function LevelEditor(): ReactElement {
       if (authReachable === false) {
         reportStatus('Cloud is unavailable.', 'warning', browserRecoverySafetyDetail);
         retryCloudDocument();
+        return;
+      }
+      // An expired sign-in over a mounted document has its own resume path, which protects the
+      // edits made since the expiry instead of treating this as a first sign-in.
+      if (cloudSaveState === 'signed-out') {
+        signInToResumeCloudSync();
         return;
       }
       signInForEditor();
@@ -7773,6 +8108,27 @@ export function LevelEditor(): ReactElement {
     setSelectedArtworkId(id);
     setArtworkBrushDirection(placement.direction);
   };
+  /**
+   * The catch of one dragged rectangle. `additive` (Shift held) folds it into the live selection
+   * so several sweeps can build one group; an empty catch from a plain drag clears the selection,
+   * which is how dragging over blank scene means "nothing".
+   */
+  const selectArtworkMany = (ids: readonly string[], additive: boolean): void => {
+    const present = new Set(boardFloatingArtwork.map((placement) => placement.id));
+    const caught = ids.filter((id) => present.has(id));
+    setSelectedCell(null);
+    setSelectedArtworkIds((selected) => {
+      const merged = additive
+        ? [...selected.filter((id) => present.has(id) && !caught.includes(id)), ...caught]
+        : caught;
+      return merged;
+    });
+  };
+  // A single-object edit keeps whatever else is selected — the author is tuning the primary, not
+  // dropping the group they just swept up.
+  const keepArtworkSelected = (id: string): void => setSelectedArtworkIds(
+    (selected) => selected.includes(id) ? selected : [id],
+  );
   const updateArtwork = (
     id: string,
     update: (placement: FloatingArtworkPlacement) => FloatingArtworkPlacement,
@@ -7784,7 +8140,7 @@ export function LevelEditor(): ReactElement {
     placements[index] = update(placements[index]);
     next.floatingArtwork = placements;
     commitEditorBoard(next, null);
-    setSelectedArtworkId(id);
+    keepArtworkSelected(id);
   };
   const moveArtwork = (id: string, point: { pixelX: number; pixelY: number }): void => {
     const source = (currentEditorBoardRef.current.floatingArtwork ?? []).find((placement) => placement.id === id);
@@ -7792,16 +8148,49 @@ export function LevelEditor(): ReactElement {
     const normalized = normalizeFloatingArtworkPoint(point, source);
     updateArtwork(id, (placement) => ({ ...placement, ...normalized }));
   };
-  const deleteArtwork = (id: string): void => {
+  /**
+   * Dragging one member of a selection drags the whole selection, by the same offset. Anything
+   * else would make a swept-up group unmovable except one piece at a time, which is the reason to
+   * sweep it up in the first place.
+   */
+  const moveArtworkGroup = (id: string, point: { pixelX: number; pixelY: number }): void => {
+    const board = currentEditorBoardRef.current;
+    const source = (board.floatingArtwork ?? []).find((placement) => placement.id === id);
+    if (!source) return;
+    const moving = selectedArtworkIds.includes(id) ? selectedArtworkIds : [id];
+    if (moving.length <= 1) {
+      moveArtwork(id, point);
+      return;
+    }
+    const anchor = normalizeFloatingArtworkPoint(point, source);
+    const dx = anchor.pixelX - source.pixelX;
+    const dy = anchor.pixelY - source.pixelY;
+    if (dx === 0 && dy === 0) return;
+    const next = cloneEditorBoard(board);
+    next.floatingArtwork = (next.floatingArtwork ?? []).map((placement) => moving.includes(placement.id)
+      ? {
+        ...placement,
+        ...normalizeFloatingArtworkPoint(
+          { pixelX: placement.pixelX + dx, pixelY: placement.pixelY + dy },
+          placement,
+        ),
+      }
+      : placement);
+    commitEditorBoard(next, null);
+  };
+  /** The Delete button, the erase slot, and the Delete key all remove the WHOLE selection. */
+  const deleteSelectedArtwork = (): void => {
+    if (!selectedArtworkIds.length) return;
+    const doomed = new Set(selectedArtworkIds);
     const next = cloneEditorBoard(currentEditorBoardRef.current);
-    const placements = (next.floatingArtwork ?? []).filter((placement) => placement.id !== id);
+    const placements = (next.floatingArtwork ?? []).filter((placement) => !doomed.has(placement.id));
     if (placements.length === (next.floatingArtwork ?? []).length) return;
     next.floatingArtwork = placements;
-    if (commitEditorBoard(next, null)) setSelectedArtworkId((selected) => selected === id ? null : selected);
+    if (commitEditorBoard(next, null)) setSelectedArtworkIds([]);
   };
   const changeEditorTool = (nextTool: LevelEditorToolKey): void => {
     if (brushKind === 'artwork' && nextTool === 'erase') {
-      if (selectedArtworkId) deleteArtwork(selectedArtworkId);
+      deleteSelectedArtwork();
       return;
     }
     if (brushKind === 'artwork' && nextTool === 'select') {
@@ -8234,10 +8623,28 @@ export function LevelEditor(): ReactElement {
     }
     nextBoard.cols = nextCols;
     nextBoard.rows = nextRows;
+    // A square with no terrain entry is already open ground to the rules (see canTraverse), but it
+    // is not a square the EDITOR can show or hit-test: the grid and its targets are built from the
+    // terrain map. Seed the squares a grow just created so they exist, are traversable, and can be
+    // given an obstacle later. They inherit their nearest neighbour so a grow reads as more of the
+    // same ground rather than a differently-coloured band.
+    for (let y = 0; y < nextRows; y += 1) {
+      for (let x = 0; x < nextCols; x += 1) {
+        const key = `${x},${y}`;
+        if (nextBoard.cells[key] !== undefined) continue;
+        nextBoard.cells[key] = nearestAuthoredTileId(nextBoard.cells, x, y) ?? leDefaultTile().id;
+      }
+    }
+    if (isPredrawnBoard) nextBoard.predrawnGridDetached = true;
     const shiftedSelection = selectedCell ? { x: selectedCell.x + dx, y: selectedCell.y + dy } : null;
-    commitEditorBoard(nextBoard, shiftedSelection && (shiftedSelection.x < 0 || shiftedSelection.y < 0 || shiftedSelection.x >= nextCols || shiftedSelection.y >= nextRows) ? null : shiftedSelection);
-    if (selectedArtworkId && !(nextBoard.floatingArtwork ?? []).some((placement) => placement.id === selectedArtworkId)) {
-      setSelectedArtworkId(null);
+    commitEditorBoard(
+      nextBoard,
+      shiftedSelection && (shiftedSelection.x < 0 || shiftedSelection.y < 0 || shiftedSelection.x >= nextCols || shiftedSelection.y >= nextRows) ? null : shiftedSelection,
+      { playableWindow: true },
+    );
+    if (selectedArtworkIds.length) {
+      const surviving = new Set((nextBoard.floatingArtwork ?? []).map((placement) => placement.id));
+      setSelectedArtworkIds((selected) => selected.filter((id) => surviving.has(id)));
     }
     if (activeGeneratedRegionId) {
       const activeAfterResize = prunedGeneratedRegions.find((region) => region.id === activeGeneratedRegionId);
@@ -8251,7 +8658,90 @@ export function LevelEditor(): ReactElement {
     }
   };
 
+  /**
+   * Slide the grid one square across an AI plate.
+   *
+   * The legacy move rebases the whole authored scene inside its scenic rectangle, which is the
+   * right answer when the environment IS that scene. Here the environment is a picture pinned in
+   * projected space, so the same intent is served by moving the picture the other way instead:
+   * nothing is rebased, nothing is dropped, no scenic apron has to exist first, and the terrain
+   * under the grid — which is now pure movement rules — keeps the coordinates it always had.
+   */
+  const movePlateUnderGrid = (direction: PlayableGridMoveDirection): void => {
+    if (!editorSessionCanWrite) {
+      reportStatus(
+        'Grid placement is read-only.',
+        'warning',
+        'This review page is read-only.',
+      );
+      return;
+    }
+    const current = currentEditorBoardRef.current;
+    const step = PLAYABLE_GRID_MOVE_PLATE_STEP[direction];
+    const offset = current.predrawnPlateOffset ?? { left: 0, top: 0 };
+    const projected = projectBoardPoint({ x: step.x, y: step.y });
+    const moved = commitEditorBoard(
+      {
+        ...cloneEditorBoard(current),
+        predrawnGridDetached: true,
+        predrawnPlateOffset: {
+          left: offset.left + projected.left,
+          top: offset.top + projected.top,
+        },
+      },
+      undefined,
+      { playableWindow: true },
+    );
+    if (!moved) return;
+    reportStatus(
+      `Moved the grid one square ${direction}.`,
+      'success',
+      'The artwork stays where it is and the grid slides across it. Reset artwork placement returns it.',
+    );
+  };
+
+  /** Whether the owner has moved the artwork away from its own registration. */
+  const platePlacementMoved = Boolean(
+    boardPredrawnPlateOffset
+    && (boardPredrawnPlateOffset.left !== 0 || boardPredrawnPlateOffset.top !== 0),
+  );
+
+  /**
+   * Return the artwork to the placement its own registration gives it (ADR-0057: reset means the
+   * committed baseline, not zeroed-out state — for a plate those are the same thing, because its
+   * baseline placement IS its recorded world bounds).
+   *
+   * The grid stays detached: a resize may also have taken it off the artwork's geometry, and the
+   * two are separate decisions.
+   */
+  const resetPlatePlacement = (): void => {
+    if (!editorSessionCanWrite) {
+      reportStatus(
+        'Artwork placement is read-only.',
+        'warning',
+        'This review page is read-only.',
+      );
+      return;
+    }
+    if (!platePlacementMoved) return;
+    const committed = commitEditorBoard(
+      { ...cloneEditorBoard(currentEditorBoardRef.current), predrawnPlateOffset: undefined },
+      undefined,
+      { playableWindow: true },
+    );
+    if (!committed) return;
+    reportStatus(
+      'Artwork placement reset.',
+      'success',
+      'The picture is back at its own registration. The grid size is unchanged.',
+    );
+  };
+
   const moveGrid = (direction: PlayableGridMoveDirection): void => {
+    if (isPredrawnBoard) {
+      movePlateUnderGrid(direction);
+      return;
+    }
     const result = movePlayableGrid(currentEditorBoardRef.current, direction);
     if (!result) {
       const availability = playableGridMoveAvailability(currentEditorBoardRef.current, direction);
@@ -8543,11 +9033,15 @@ export function LevelEditor(): ReactElement {
     ? 'Saving progress…'
     : cloudSaveState === 'saved'
     ? 'Progress saved'
+    : cloudSaveState === 'signed-out'
+    ? 'Signed out — autosave paused'
     : cloudSaveState === 'conflict'
     ? 'Autosave paused'
     : 'Cloud autosave interrupted';
   const recoveryConflictVisible = false;
-  const persistenceEmergencyVisible = cloudSaveState === 'conflict' || cloudSaveState === 'error';
+  const persistenceEmergencyVisible = cloudSaveState === 'conflict'
+    || cloudSaveState === 'error'
+    || cloudSaveState === 'signed-out';
   const hasDiscardableChanges = Boolean(
     editorSessionCanWrite
     && editorDocumentHasDiscardTarget(editorDocument)
@@ -8606,10 +9100,10 @@ export function LevelEditor(): ReactElement {
     });
   }, [levelArtworkWorkspace, brushKind, clockEnabled, clockIncrementSeconds, clockInitialSeconds, currentEditorBoard, editorDocument?.revision, eventsForSave, eventsOpen, eventsTab, layer, levelNameForSave, objective, playability.ok, routeParams.campaignId, routeParams.returnTo, surviveTurns, targetLevelId, victoryForSave, wallArtBrushId]);
   const canUndoBoard = undoStack.length > 0 && (
-    !isPredrawnBoard || preservesPredrawnBakedArt(currentEditorBoard, undoStack[undoStack.length - 1])
+    !isPredrawnBoard || sharesPredrawnSelection(currentEditorBoard, undoStack[undoStack.length - 1])
   );
   const canRedoBoard = redoStack.length > 0 && (
-    !isPredrawnBoard || preservesPredrawnBakedArt(currentEditorBoard, redoStack[0])
+    !isPredrawnBoard || sharesPredrawnSelection(currentEditorBoard, redoStack[0])
   );
   const actionToolsDisabled = tool === 'region'
     || Boolean(levelArtworkWorkspace)
@@ -8623,6 +9117,25 @@ export function LevelEditor(): ReactElement {
     || (layer === 'placed-art' && brushKind === 'artwork' && tool === 'select' && !artworkSelectionActive)
     ? null
     : tool;
+
+  // Delete removes what is selected in the workspace you are looking at, and nothing else. Each
+  // branch is the same call the layer's own remove button makes, so the key can never delete
+  // something the button would have refused. It never reaches the level document itself — losing
+  // a whole level to a stray keypress is not a trade worth making for a shortcut.
+  const deleteKeyAction = !editorSessionCanWrite || eventsOpen
+    ? null
+    : layer === 'placed-art' && brushKind === 'artwork' && selectedArtworkIds.length
+      ? deleteSelectedArtwork
+      : layer === 'placed-art' && brushKind === 'forest' && selectedForest
+        ? () => removeForest(selectedForest)
+        : layer === 'placed-art' && brushKind === 'town' && selectedTown
+          ? () => removeTown(selectedTown)
+          : layer === 'zone' && activeZone
+            ? removeActiveZoneEntry
+            : layer === 'generate' && activeGeneratedRegion
+              ? () => removeGeneratedRegionUnit(activeGeneratedRegion.id)
+              : null;
+  useDeleteKeyAction(deleteKeyAction);
 
   return (
     // The level editor is a homepage-family surface: it shows the ONE shared HomepageBackdrop
@@ -8696,10 +9209,45 @@ export function LevelEditor(): ReactElement {
             : undefined}
           aria-busy={!editorReady || saving || undefined}
         >
+          <div className="le-persistence-stack">
+          {preservedBranchOffer ? (
+            <section className="le-persistence-emergency" data-testid="le-preserved-branch-offer" role="status">
+              <div>
+                <strong>Unsynced edits found in this browser</strong>
+                <span>
+                  {`Edits from ${new Date(preservedBranchOffer.draft.savedAt).toLocaleString()} never reached the cloud working copy, so the editor opened on the version your account has. Restore puts them back on the board and autosaves them; nothing is published either way.`}
+                </span>
+              </div>
+              <div className="le-persistence-emergency-actions">
+                <ChromeButton unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
+                  data-testid="le-restore-preserved-branch"
+                  disabled={!editorSessionCanWrite || saving}
+                  onClick={restorePreservedBranchOffer}
+                >Restore these edits</ChromeButton>
+                <ChromeButton unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  data-testid="le-download-preserved-branch"
+                  onClick={downloadBrowserRecovery}
+                >Download copy</ChromeButton>
+                <ChromeButton unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  data-testid="le-discard-preserved-branch"
+                  onClick={discardPreservedBranchOffer}
+                >Discard</ChromeButton>
+              </div>
+            </section>
+          ) : null}
           {persistenceEmergencyVisible ? (
             <section className="le-persistence-emergency" data-testid="le-persistence-emergency" role="alert">
               <div>
-                <strong>{recoveryConflictVisible ? 'Recovered work needs your decision' : cloudSaveState === 'error' ? 'Autosave is interrupted' : 'Autosave is paused'}</strong>
+                <strong>{recoveryConflictVisible
+                  ? 'Recovered work needs your decision'
+                  : cloudSaveState === 'signed-out'
+                  ? 'You were signed out — your work is safe here'
+                  : cloudSaveState === 'error'
+                  ? 'Autosave is interrupted'
+                  : 'Autosave is paused'}</strong>
                 <span>{cloudSaveDetail ?? 'Your current editor remains open, but progress is not being written to the cloud.'}</span>
               </div>
               <div className="le-persistence-emergency-actions">
@@ -8709,6 +9257,13 @@ export function LevelEditor(): ReactElement {
                     data-testid="le-keep-recovered-work"
                     onClick={keepRecoveredWorkingCopy}
                   >Keep recovered work</ChromeButton>
+                ) : null}
+                {cloudSaveState === 'signed-out' ? (
+                  <ChromeButton unit="inner-text-button"
+                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'active')}
+                    data-testid="le-sign-in-resume-banner"
+                    onClick={signInToResumeCloudSync}
+                  >Sign in and resume</ChromeButton>
                 ) : null}
                 {cloudSaveState === 'error' ? (
                   <ChromeButton unit="inner-text-button"
@@ -8734,6 +9289,7 @@ export function LevelEditor(): ReactElement {
               </div>
             </section>
           ) : null}
+          </div>
           <ShellViewportSwap
             className="level-editor-viewport-swap"
             primaryClassName="skirmish-board-frame"
@@ -8802,6 +9358,7 @@ export function LevelEditor(): ReactElement {
                     tool={layer === 'level-artwork' ? 'select' : tool}
                     selectedCell={selectedCell}
                     selectedArtworkId={selectedArtworkId}
+                    selectedArtworkIds={selectedArtworkIds}
                     boardZoom={viewZoom}
                     boardPan={viewPan}
                     gridScope={gridScope}
@@ -8817,7 +9374,7 @@ export function LevelEditor(): ReactElement {
                     onPaint={paintCell}
                     onErase={eraseCell}
                     onSelect={selectCell}
-                    onMoveArtwork={moveArtwork}
+                    onMoveArtwork={moveArtworkGroup}
                     onMove={moveObject}
                     canMoveTo={canMoveObjectTo}
                     fences={boardFences}
@@ -9094,10 +9651,12 @@ export function LevelEditor(): ReactElement {
                   <ArtworkSelectionSurface
                     placements={boardFloatingArtwork}
                     selectedArtworkId={selectedArtworkId}
+                    selectedArtworkIds={selectedArtworkIds}
                     origin={{ left: artworkBoardOrigin.originLeft, top: artworkBoardOrigin.originTop }}
                     zoom={viewZoom}
                     pan={viewPan}
                     onSelect={selectArtwork}
+                    onSelectMany={selectArtworkMany}
                   />
                 ) : null}
               </div>
@@ -9412,7 +9971,7 @@ export function LevelEditor(): ReactElement {
                     <ol className="le-revision-history-list">
                       {revisionHistory.map((entry) => {
                         const isCurrentRevision = entry.revision === editorDocument.revision;
-                        const restoreBlocked = saving || !editorSessionCanWrite || isCurrentRevision || documentConflictRef.current || cloudSaveState === 'error';
+                        const restoreBlocked = saving || !editorSessionCanWrite || isCurrentRevision || documentConflictRef.current || cloudSaveState === 'error' || cloudSaveState === 'signed-out';
                         return (
                           <li key={entry.revision} data-testid={`le-revision-${entry.revision}`}>
                             <div>
@@ -9435,6 +9994,8 @@ export function LevelEditor(): ReactElement {
                                   ? 'This is the current cloud working revision.'
                                   : !editorSessionCanWrite
                                   ? 'Live sync must reconnect before restoring history.'
+                                  : cloudSaveState === 'signed-out'
+                                  ? 'Sign in again before restoring history.'
                                   : documentConflictRef.current || cloudSaveState === 'error'
                                   ? 'Resolve the persistence interruption before restoring history.'
                                   : `Restore revision ${entry.revision} as a new working copy revision.`
@@ -9513,7 +10074,7 @@ export function LevelEditor(): ReactElement {
             ) : isWarBattle ? (
               <p className="le-board-note">This level belongs exclusively to a War. Battle order and Loot are managed in the War editor.</p>
             ) : null}
-            <div className={`le-status-current ${cloudSaveState === 'error' || cloudSaveState === 'conflict' ? 'is-blocked' : 'is-ready'}`}>
+            <div className={`le-status-current ${cloudSaveState === 'error' || cloudSaveState === 'conflict' || cloudSaveState === 'signed-out' ? 'is-blocked' : 'is-ready'}`}>
               <strong>{progressStateLabel}</strong>
               <span>{cloudSaveDetail ?? (
                 cloudSaveState === 'saved'
@@ -9530,6 +10091,14 @@ export function LevelEditor(): ReactElement {
             {/* Persistence controls live here with the state that explains them. Test is the
                 always-visible current-board action above; Save/Publish remains independently gated. */}
             <div className="le-board-actions le-status-actions">
+              {cloudSaveState === 'signed-out' ? (
+                <ChromeButton unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  data-testid="le-sign-in-resume"
+                  disabled={saving}
+                  onClick={signInToResumeCloudSync}
+                >Sign in and resume</ChromeButton>
+              ) : null}
               {cloudSaveState === 'error' ? (
                 <ChromeButton unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
@@ -9607,17 +10176,24 @@ export function LevelEditor(): ReactElement {
             {isPredrawnBoard ? (
               <div className="le-predrawn-lock" role="status" data-testid="predrawn-board-lock">
                 <strong>{isPredrawnReviewOnly ? 'Registered pre-drawn review' : 'Pre-drawn board'} · {boardCols}×{boardRows}</strong>
-                <span>The continuous plate owns baked environment pixels. Terrain, Subterrain, paths, props, fences, walls, doodads, lighting, and particles are suppressed; authored ground cover, units, and tactical overlays remain live.</span>
+                <span>The artwork paints the environment, so terrain, Subterrain, paths, props, fences, walls, doodads, lighting, and particles are suppressed. The grid size and its placement over the artwork stay yours to set; ground cover, units, and tactical overlays remain live.</span>
                 {isPredrawnReviewOnly ? <span>The candidate is mounted for this development review only; it is not an accepted runtime media pointer.</span> : null}
               </div>
-            ) : (
+            ) : null}
+            {isPredrawnBoard && isPredrawnReviewOnly ? null : (
               <>
                 <BoardSizePanel cols={boardCols} rows={boardRows} onResize={resizeBoard} />
-                <p className="le-board-note">Choose the side, then add or remove columns and rows there. Shrinking drops content outside the new bounds.</p>
-                <h3>Move playable grid</h3>
+                <p className="le-board-note">{isPredrawnBoard
+                  ? 'Choose the side, then add or remove columns and rows there. The artwork does not move or rescale — the grid grows over it. New squares arrive as open ground and shrinking drops content outside the new bounds.'
+                  : 'Choose the side, then add or remove columns and rows there. Shrinking drops content outside the new bounds.'}</p>
+                <h3>{isPredrawnBoard ? 'Move grid over artwork' : 'Move playable grid'}</h3>
                 <div className="le-grid-nudge" aria-label="Move playable grid one tile">
                   {PLAYABLE_GRID_MOVE_DIRECTIONS.map((direction) => {
-                    const availability = playableGridMoveAvailability(currentEditorBoard, direction);
+                    // Over a plate the grid always has somewhere to go: the picture is pinned in
+                    // projected space and slides under it, so no scenic apron has to exist first.
+                    const availability = isPredrawnBoard
+                      ? { allowed: true, reason: undefined }
+                      : playableGridMoveAvailability(currentEditorBoard, direction);
                     const label = direction[0].toUpperCase();
                     const fullLabel = direction[0].toUpperCase() + direction.slice(1);
                     return (
@@ -9634,6 +10210,24 @@ export function LevelEditor(): ReactElement {
                   })}
                   <span className="le-grid-nudge-centre" aria-hidden="true">Grid</span>
                 </div>
+                {isPredrawnBoard ? (
+                  <>
+                    <p className="le-board-note">Slide the grid one square at a time across the artwork. The picture stays exactly where it is and nothing on the board is moved or dropped.</p>
+                    <div className="le-ctrlrow">
+                      <span className="le-ctrllabel">Artwork placement</span>
+                      <ChromeButton unit="inner-text-button"
+                        className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                        data-testid="le-reset-plate-offset"
+                        disabled={!platePlacementMoved}
+                        title={platePlacementMoved
+                          ? 'Put the artwork back where its own registration places it.'
+                          : 'The artwork already sits at its own registration.'}
+                        onClick={resetPlatePlacement}
+                      >Reset</ChromeButton>
+                    </div>
+                  </>
+                ) : null}
+                {isPredrawnBoard ? null : (<>
                 <p className="le-board-note">Move one tile into existing scenic terrain while keeping the authored scene aligned. Gameplay-only placements pushed outside the grid are removed.</p>
                 <h3>Scenic terrain rectangle</h3>
                 <div className="le-ctrlrow">
@@ -9687,6 +10281,7 @@ export function LevelEditor(): ReactElement {
                   <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</ChromeButton>
                   <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')} onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, path, fence rail, post, wall, and wall artwork from the board.">Clear</ChromeButton>
                 </div>
+                </>)}
               </>
             )}
           </section>
@@ -11037,9 +11632,11 @@ export function LevelEditor(): ReactElement {
             <div className="le-ctrlrow le-artwork-selection-row">
               <span className="le-ctrllabel">Selected</span>
               <span className="le-artwork-current" data-testid="selected-artwork-readout">
-                {selectedArtwork
-                  ? `${selectedArtworkAsset?.label ?? selectedArtwork.sourceArtId} · X ${selectedArtwork.pixelX}, Y ${selectedArtwork.pixelY}`
-                  : 'None'}
+                {selectedArtworkIds.length > 1
+                  ? `${selectedArtworkIds.length} selected · editing ${selectedArtworkAsset?.label ?? selectedArtwork?.sourceArtId}`
+                  : selectedArtwork
+                    ? `${selectedArtworkAsset?.label ?? selectedArtwork.sourceArtId} · X ${selectedArtwork.pixelX}, Y ${selectedArtwork.pixelY}`
+                    : 'None'}
               </span>
               <ChromeButton
                 unit="inner-text-button"
@@ -11605,7 +12202,7 @@ export function LevelEditor(): ReactElement {
               </div>
               <div className="le-seg le-artwork-actions">
                 <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={() => duplicateArtwork(selectedArtworkForDetails.id)}>Duplicate</ChromeButton>
-                <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')} onClick={() => deleteArtwork(selectedArtworkForDetails.id)}>Delete</ChromeButton>
+                <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')} onClick={deleteSelectedArtwork}>{selectedArtworkIds.length > 1 ? `Delete ${selectedArtworkIds.length}` : 'Delete'}</ChromeButton>
               </div>
             </>
           ) : selectedUnitAsset && selectedUnit ? (

@@ -50,6 +50,7 @@ export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
 export const RUN_BATTLE_RETRY_COST_TENTHS = 3 * GOLD_SCALE;
+export const RUN_EN_PASSANT_BOUNTY_TENTHS = 5 * GOLD_SCALE;
 export const RUN_DEPLOYMENT_REROLL_COST_TENTHS = GOLD_SCALE;
 export const RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS = 5 * GOLD_SCALE;
 export const RUN_SECTIO_CARD_OFFER_COUNT = 3;
@@ -2550,6 +2551,23 @@ export function undoRunBattleMove(
     cards: cloneRunBattleUndoCards(checkpoint.cards),
     battleRuntime: cloneRunBattleRuntime(checkpoint.battleRuntime),
   });
+}
+
+/**
+ * One en passant capture the player landed pays a bounty, in gold.
+ *
+ * It is paid the moment the capture commits rather than banked with the Battle's reward,
+ * so the gold measure moves while the fight is still on -- the capture is the whole of the
+ * reason, and a number that only appears two screens later does not read as one. That also
+ * makes the Undo checkpoint the exact reversal: it restores the pre-move balance, so a
+ * taken-back en passant takes its bounty back with it.
+ *
+ * Board law is untouched. The Run pays for what the pieces did; it does not change what
+ * they may do (ADR-0193).
+ */
+export function payRunEnPassantBounty(run: RunDocument): RunDocument {
+  if (run.phase !== 'battle' || !run.battleRuntime) return run;
+  return touch({ ...run, goldTenths: run.goldTenths + RUN_EN_PASSANT_BOUNTY_TENTHS });
 }
 
 export function observeRunUnitDeath(run: RunDocument, unitId: string): {

@@ -15450,26 +15450,133 @@ button.tileset-relationship-cell {
   z-index: 1;
 }
 
+/* A flat 2D grid: ONE opaque line, no offset companion. An offset second colour under the stroke
+   bevels the line and makes it read as a groove carved into the ground; that is a 3D treatment and
+   is not wanted here.
+   Two properties carry it. OPAQUE, because a translucent line picks up whatever it sits on and a
+   square then looks different over grass, dirt, stone, and water. LIGHT, because with no bevel the
+   colour alone has to hold up, and a dark line disappears into shadowed terrain and painted
+   artwork — which is the legibility problem this rule exists to solve.
+   The stroke is non-scaling, so this is a constant screen weight at every zoom. */
 .tileset-board-grid-layer path {
   fill: none;
-  stroke: rgba(0, 0, 0, 0.36);
+  filter: var(--board-grid-bevel, none);
+  stroke: var(--board-grid-stroke, #f2e3bd);
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 1.15;
-  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.14));
+  stroke-width: var(--board-grid-weight, 2.2);
 }
 
-/* Wall-art placement is a geometry-verification surface. Keep its canonical cell grid visually
-   decisive over detailed terrain without making gameplay/editor grids globally heavier. */
+/* Settings → Gameplay → Grid style. Each style is three INHERITED custom properties rather than a
+   competing `... path` rule, so the nearest ancestor carrying the attribute wins by inheritance
+   instead of by specificity or source order. That is what lets the settings picker draw all five
+   at once — five swatch elements, each wearing its own attribute, inside a :root already set to
+   the player's current pick — which a `:root`-anchored rule set cannot express.
+   The fallbacks above are `chalk`, so a board draws correctly with NO attribute present: during
+   boot, before the settings module runs, and in any renderer that never publishes a choice. The
+   creator-surface overrides below still state stroke/weight/filter directly at a higher
+   specificity than the base rule, so they remain decisively on top of every player choice. */
+[data-board-grid-style='chalk'] {
+  --board-grid-bevel: none;
+  --board-grid-stroke: #f2e3bd;
+  --board-grid-weight: 2.2;
+}
+
+[data-board-grid-style='ink'] {
+  --board-grid-bevel: none;
+  --board-grid-stroke: #241a10;
+  --board-grid-weight: 2.6;
+}
+
+[data-board-grid-style='carved'] {
+  --board-grid-bevel: drop-shadow(0 1.5px 0 #f2e3bd);
+  --board-grid-stroke: #241a10;
+  --board-grid-weight: 2.6;
+}
+
+[data-board-grid-style='bold'] {
+  --board-grid-bevel: drop-shadow(0 2px 0 #ffeec9);
+  --board-grid-stroke: #14100c;
+  --board-grid-weight: 3.2;
+}
+
+[data-board-grid-style='hairline'] {
+  --board-grid-bevel: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.14));
+  --board-grid-stroke: rgba(0, 0, 0, 0.36);
+  --board-grid-weight: 1.15;
+}
+
+/* Wall-art placement is a geometry-verification surface, so its canonical cell grid stays a step
+   more decisive than the board grid above rather than matching it. Both creator surfaces below
+   state stroke, weight AND filter in full, so a player's gameplay grid choice cannot leak a bevel
+   or a hairline onto a surface whose whole job is showing exact geometry. */
 .wall-art-board-surface .tileset-board-grid-layer path {
-  stroke: rgba(0, 0, 0, 0.72);
-  stroke-width: 2.5;
-  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.32));
+  stroke: #fff6e0;
+  stroke-width: 3.2;
+  filter: none;
 }
 
+/* Placement previews sit under their own chrome, so they keep the board grid's weight and stay
+   flat and opaque, but step the line back toward the terrain rather than reverting to a hairline. */
 .tileset-placement-board .tileset-board-grid-layer path {
-  stroke: rgba(0, 0, 0, 0.42);
-  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.16));
+  stroke: #cbbb94;
+  stroke-width: 2.2;
+  filter: none;
+}
+
+/* The Grid style swatch is the ONE surface whose whole job is showing the player's line, so it
+   takes the styled variables back off the placement pin above — same specificity, later source
+   order. Without this the picker would draw five identical placement-grey lines and answer no
+   question at all. Every other creator surface keeps the pin. */
+.board-grid-style-swatch-board .tileset-board-grid-layer path {
+  filter: var(--board-grid-bevel, none);
+  stroke: var(--board-grid-stroke, #f2e3bd);
+  stroke-width: var(--board-grid-weight, 2.2);
+}
+
+/* Settings → Gameplay → Grid style picker. Every style is on screen at once — that is the whole
+   point of the surface — so the track floor is the width at which a swatch still reads as a piece
+   of battlefield rather than a texture chip. Below that they wrap to a second line instead of
+   shrinking; five styles at 3-up + 2-up still compare in one glance, five illegible chips do not. */
+.board-grid-style-swatches {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  inline-size: 100%;
+}
+
+.board-grid-style-swatch {
+  gap: 5px;
+  padding: 5px 4px 6px;
+}
+
+/* The selected FRAME is the registered inner-box active chrome (ChromeButton publishes
+   aria-pressed); only the label tone is local, so the lit swatch names itself as well as
+   framing itself. */
+.board-grid-style-swatch.is-selected {
+  color: #eafaff;
+}
+
+.board-grid-style-swatch:not(.is-selected):hover {
+  filter: brightness(1.06);
+}
+
+.board-grid-style-swatch small {
+  font-size: var(--ds-text-xs);
+  line-height: 1;
+  text-align: center;
+}
+
+/* A fixed WINDOW, never a fitted camera: the board inside is held at canonical 1× and overflows
+   this box on every edge, so each swatch shows the grid at exactly the weight a battlefield draws
+   it. Sizing this box is a crop, not a zoom. */
+.board-grid-style-swatch-window {
+  block-size: 84px;
+  display: block;
+  inline-size: 100%;
+  min-inline-size: 0;
+  overflow: hidden;
+  position: relative;
 }
 
 /* Persisted player-camera coverage boundary. Unlike a viewport snapshot, this world-space box is
@@ -15715,6 +15822,24 @@ button.tileset-relationship-cell {
 
 .le-artwork-selection-surface.has-candidate {
   cursor: pointer;
+}
+
+/* Dragging out a rectangle: keep the crosshair and drop the per-instance hover cues, so the only
+   thing moving under the pointer is the box being drawn. Its fill and edge are drawn as SVG paint,
+   the same way the Town and Forest drags above draw theirs — this is authoring feedback, not a
+   surface, so it never asks the chrome kit for a frame. */
+.le-artwork-selection-surface.is-dragging {
+  cursor: crosshair;
+}
+
+.le-artwork-marquee {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 1;
 }
 
 .le-floating-artwork-hover {
@@ -17727,6 +17852,25 @@ button.tileset-relationship-cell {
   line-height: 1.25;
 }
 
+/* A settings choice that IS an appearance shows the appearance. The player-colour row seats the
+   accepted battlefield pawn in each option instead of the colour's name, in the closed control
+   and in the open menu alike, so the two sets are compared as pixels. Both the HouseSelect
+   trigger and its option rows size from their content (min-height, not height), so the taller
+   seat simply grows them; nothing here overrides the shared dropdown chrome. */
+.settings-piece-choice {
+  align-items: center;
+  display: flex;
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+/* Larger than the dense .utility-piece-icon default: this is the only place the sprite is the
+   control's entire content, and the colour is the thing being judged. */
+.settings-piece-choice-icon {
+  height: 44px;
+  width: 44px;
+}
+
 /* --- Trailing-edge "settings + user" cluster ----------------------------------
    The signed-in chrome at the top-right: an icon-only Settings gear + the avatar
    account button, framed identically so the pair reads as one matched unit
@@ -18515,6 +18659,22 @@ button.tileset-relationship-cell {
 
 .settings-row-tall {
   min-height: 80px;
+}
+
+/* A control too wide to sit beside its copy — a picker of five board swatches — takes its own
+   line under the copy instead of squeezing both.
+   The full width is claimed with a WIDTH FLOOR, not `flex-basis: 100%`: below 560px the row flips
+   to `flex-direction: column`, where a 100% basis is a HEIGHT and a wrapping column container
+   answers it by pushing the copy into a second column beside the control. A min-inline-size is
+   the same instruction in row direction and inert in column direction. */
+.settings-row-stacked-control {
+  flex-wrap: wrap;
+}
+
+.settings-row-stacked-control > .settings-row-control {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+  min-inline-size: 100%;
 }
 
 .action-list,
@@ -24345,6 +24505,33 @@ button.tileset-relationship-cell {
   font-size: 10px;
 }
 
+/* Persistence notices stack instead of overlapping: a browser-recovery offer and an interrupted
+   autosave can be true at the same time, and each needs its own actions. */
+.le-persistence-stack {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  left: 50%;
+  max-width: calc(100% - 24px);
+  position: absolute;
+  top: 12px;
+  transform: translateX(-50%);
+  width: max-content;
+  z-index: 100;
+}
+
+.le-persistence-stack:empty {
+  display: none;
+}
+
+.le-persistence-stack .le-persistence-emergency {
+  left: auto;
+  position: static;
+  top: auto;
+  transform: none;
+  width: 100%;
+}
+
 .le-persistence-emergency {
   align-items: center;
   background: rgba(42, 13, 18, 0.97);
@@ -24393,6 +24580,10 @@ button.tileset-relationship-cell {
 }
 
 @media (max-width: 760px) {
+  .le-persistence-stack {
+    width: calc(100% - 24px);
+  }
+
   .le-persistence-emergency {
     align-items: stretch;
     display: grid;

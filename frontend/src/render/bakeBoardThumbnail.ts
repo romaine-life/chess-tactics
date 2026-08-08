@@ -14,6 +14,7 @@ import {
   minimumZoomToCoverBoundsAtCenter,
   predrawnOcclusionDepthMapForSurface,
   predrawnOcclusionMaskOps,
+  predrawnRenderSurface,
   predrawnOcclusionMasksInFront,
   rasterizePredrawnBoardPixels,
   uniqueDrawSrcs,
@@ -157,7 +158,7 @@ export async function loadBoardThumbnailImages(
     ? `/api/background-versions/${encodeURIComponent(versionedSurface.backgroundVersionId)}/content`
     : undefined;
   const occlusionDepthMap = predrawnBackgroundActive
-    ? predrawnOcclusionDepthMapForSurface(board.surface)
+    ? predrawnOcclusionDepthMapForSurface(predrawnRenderSurface(board))
     : undefined;
   const required = new Map<string, 'background' | 'occlusion-depth'>([
     ...(backgroundSrc ? [[backgroundSrc, 'background'] as const] : []),
@@ -200,7 +201,7 @@ async function renderBoardCanvas(board: EditorBoard, scale: number): Promise<{ c
   const framingBounds = boardPreviewFramingBounds(board);
   const predrawnBackgroundActive = isPredrawnBackgroundActive(board);
   const occlusionDepthMap = predrawnBackgroundActive
-    ? predrawnOcclusionDepthMapForSurface(board.surface)
+    ? predrawnOcclusionDepthMapForSurface(predrawnRenderSurface(board))
     : undefined;
   const occlusionMasks = predrawnBackgroundActive
     && board.surface?.kind === 'predrawn'

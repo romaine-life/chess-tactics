@@ -319,6 +319,23 @@ export interface EditorBoard {
   backgroundMode?: BoardBackgroundMode;
   /** Remembered AI artwork selection. It remains present while `backgroundMode` is `legacy`. */
   surface?: PredrawnBoardSurface;
+  /**
+   * The owner has deliberately placed the playable grid over the artwork by hand — resizing it or
+   * sliding it across the plate — so the selection no longer claims to depict this exact terrain.
+   *
+   * The artwork stays the same immutable artifact and every identity, lineage, and completeness
+   * check still applies. Only the environment-geometry comparison is dropped, because the owner
+   * has answered that question themselves. Setting a newly generated artifact clears this again.
+   */
+  predrawnGridDetached?: boolean;
+  /**
+   * Owner-authored placement of the artwork under the playable grid, in projected board pixels.
+   *
+   * The selection's own `worldBounds` stay byte-exact because they are part of the artifact's
+   * identity and every lineage check compares them. This is the separate, Level-side answer to
+   * "where do I want the picture to sit", which is the owner's to move and nobody else's.
+   */
+  predrawnPlateOffset?: { left: number; top: number };
   /** Owner-authored native-1x 16:9 crop for the canonical pre-drawn generation reference. */
   predrawnGenerationFrame?: PredrawnGenerationFrame;
   /** Opaque multi-cell terrain tops that replace the covered 1x1 top sprites. */
@@ -417,6 +434,32 @@ function normalizePredrawnWorldBounds(value: unknown): PredrawnBoardWorldBounds 
     || height > MAX_PREDRAWN_WORLD_COORDINATE
   ) return undefined;
   return { minX, minY, width, height };
+}
+
+/**
+ * The selected surface as it should be DRAWN, with the owner's plate offset folded into its world
+ * bounds.
+ *
+ * Every renderer — editor plate, gameplay, browser and server thumbnails, and the occlusion depth
+ * map — must place the artwork through this so they cannot drift apart. Identity, lineage, and
+ * validity code keeps reading `board.surface` directly, because those compare the artifact's own
+ * exact bounds and must never see the owner's placement.
+ */
+export function predrawnRenderSurface(board: {
+  surface?: PredrawnBoardSurface;
+  predrawnPlateOffset?: { left: number; top: number };
+}): PredrawnBoardSurface | undefined {
+  const { surface, predrawnPlateOffset: offset } = board;
+  if (!surface || !offset || (offset.left === 0 && offset.top === 0)) return surface;
+  if (!isVersionedPredrawnBoardSurface(surface)) return surface;
+  return {
+    ...surface,
+    worldBounds: {
+      ...surface.worldBounds,
+      minX: surface.worldBounds.minX + offset.left,
+      minY: surface.worldBounds.minY + offset.top,
+    },
+  };
 }
 
 /** Validate the persisted half of a pre-drawn surface without resolving its live media. */
@@ -1055,6 +1098,12 @@ export function encodeBoard(b: EditorBoard): string {
     r: b.rows,
     bm: boardBackgroundMode(b),
   };
+  // Only ever encoded when set, so every board that never left the artwork's own geometry keeps
+  // byte-identical code and no existing level gains a field it did not have.
+  if (b.predrawnGridDetached) wire.pgd = 1;
+  if (b.predrawnPlateOffset && (b.predrawnPlateOffset.left !== 0 || b.predrawnPlateOffset.top !== 0)) {
+    wire.ppo = [b.predrawnPlateOffset.left, b.predrawnPlateOffset.top];
+  }
   const surface = normalizePredrawnBoardSurface(b.surface);
   if (surface) {
     wire.pd = isVersionedPredrawnBoardSurface(surface)
@@ -1416,6 +1465,13 @@ export function decodeBoard(code: string): EditorBoard | null {
     );
     return {
       cols, rows, cameraBounds, decorativeApron, backgroundMode, surface, predrawnGenerationFrame,
+      predrawnGridDetached: w.pgd === 1 || w.pgd === true,
+      predrawnPlateOffset: Array.isArray(w.ppo)
+        && w.ppo.length === 2
+        && Number.isFinite(Number(w.ppo[0]))
+        && Number.isFinite(Number(w.ppo[1]))
+        ? { left: Number(w.ppo[0]), top: Number(w.ppo[1]) }
+        : undefined,
       decorativeFootprint: decodedDecorativeFootprint,
       decorativeCells: (w.dt && typeof w.dt === 'object' && !Array.isArray(w.dt) ? w.dt : {}) as Record<string, string>,
       decorativeFeatures: (w.dr && typeof w.dr === 'object' && !Array.isArray(w.dr) ? w.dr : {}) as Record<string, FeatureCell>,

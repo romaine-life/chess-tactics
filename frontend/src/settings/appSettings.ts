@@ -1,4 +1,17 @@
 import { useSyncExternalStore } from 'react';
+import { DEFAULT_PLAYER_PALETTE, isPlayerPalette, type PlayerPalette } from '../core/pieces';
+
+/**
+ * How the board grid is drawn. Every value is a design that was authored and looked at on a real
+ * board; `chalk` is the one the game ships with. See `.tileset-board-grid-layer path` in style.css,
+ * which owns the pixels — this union only names them.
+ */
+export const BOARD_GRID_STYLES = ['chalk', 'ink', 'carved', 'bold', 'hairline'] as const;
+export type BoardGridStyle = typeof BOARD_GRID_STYLES[number];
+
+export function isBoardGridStyle(value: unknown): value is BoardGridStyle {
+  return typeof value === 'string' && (BOARD_GRID_STYLES as readonly string[]).includes(value);
+}
 
 export const APP_SETTINGS_STORAGE_KEY = 'chess-tactics-settings-v1';
 export const APP_SETTINGS_CHANGE_EVENT = 'chess-tactics:settings-change';
@@ -10,7 +23,10 @@ export interface AppSettings {
   effectsVolume: number;
   interfaceSounds: boolean;
   showBoardGrid: boolean;
+  boardGridStyle: BoardGridStyle;
   autoDealDeployment: boolean;
+  /** The color the pieces you command wear. Opponents own every other palette. */
+  playerPalette: PlayerPalette;
 }
 
 export const DEFAULT_APP_SETTINGS: Readonly<AppSettings> = Object.freeze({
@@ -20,7 +36,9 @@ export const DEFAULT_APP_SETTINGS: Readonly<AppSettings> = Object.freeze({
   effectsVolume: 80,
   interfaceSounds: true,
   showBoardGrid: true,
+  boardGridStyle: 'chalk',
   autoDealDeployment: false,
+  playerPalette: DEFAULT_PLAYER_PALETTE,
 });
 
 type SettingsUpdate = Partial<AppSettings> | ((current: AppSettings) => AppSettings);
@@ -49,9 +67,17 @@ export function normalizeAppSettings(value: unknown): AppSettings {
     showBoardGrid: typeof parsed.showBoardGrid === 'boolean'
       ? parsed.showBoardGrid
       : DEFAULT_APP_SETTINGS.showBoardGrid,
+    boardGridStyle: isBoardGridStyle(parsed.boardGridStyle)
+      ? parsed.boardGridStyle
+      : DEFAULT_APP_SETTINGS.boardGridStyle,
     autoDealDeployment: typeof parsed.autoDealDeployment === 'boolean'
       ? parsed.autoDealDeployment
       : DEFAULT_APP_SETTINGS.autoDealDeployment,
+    // A stored palette that is no longer player-selectable (or an opponent color written by an
+    // older build) falls back to the default rather than reserving an opponent's color.
+    playerPalette: isPlayerPalette(parsed.playerPalette)
+      ? parsed.playerPalette
+      : DEFAULT_APP_SETTINGS.playerPalette,
   };
 }
 
