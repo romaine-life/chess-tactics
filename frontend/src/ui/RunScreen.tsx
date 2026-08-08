@@ -46,10 +46,12 @@ import {
   resetSectio,
   RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS,
   RUN_BATTLE_RETRY_COST_TENTHS,
+  RUN_CARD_BY_ID,
   restartBattle,
   runBattleActivityId,
   performExpunctio,
   sectioHasChanges,
+  takeVacantiaCard,
   takeVacantiaLipsanon,
   undoRunBattleMove,
   type RunCardOffer,
@@ -1293,7 +1295,15 @@ export function RunScreen({
   const hydrated = sceneSnapshot.hydrated;
   const replace = useActiveRun((state) => state.replace);
   const [adlectioAnnouncement, setAdlectioAnnouncement] = useState('');
+  const [grantAnnouncement, setGrantAnnouncement] = useState('');
   const { launch: launchCardFlight, element: cardFlightElement } = useRunCardFlights();
+  // The opening grant's admission ends its own phase, so its carry is held past landing and
+  // released by the director once Deployment has settled underneath it. A Sectio purchase
+  // stays on the Sectio and needs no such retention.
+  const {
+    launch: launchGrantCardFlight,
+    element: grantCardFlightElement,
+  } = useRunCardFlights({ handoff: 'scene-settled' });
   // A craft address sets the account's Run to the state it names before the screen reads one,
   // every time it is opened, then lands here without its craft parameters (ADR-0354).
   const craft = useRunCraft(routePath, routeSearch);
@@ -1360,6 +1370,20 @@ export function RunScreen({
     // any number of independent visual flights finish in the continuity layer.
     replace(adlected);
     setAdlectioAnnouncement(`${runCardName(offer)} admitted by Adlectio and added to the Chartulary.`);
+  };
+  // The Run's opening grant is the same admission as Adlectio and reads as one: the taken
+  // card travels into the Chartulary from where it was lying. The Run phase owns that carry
+  // rather than the Bona workspace, because taking the card is what ends the workspace.
+  const takeGrantCard = (coreId: string, source: HTMLButtonElement): void => {
+    const latest = useActiveRun.getState().run;
+    if (!latest || latest.phase !== 'bona-vacantia' || latest.vacantia?.kind !== 'opening') return;
+    const granted = takeVacantiaCard(latest, coreId);
+    if (granted === latest) return;
+    const card = RUN_CARD_BY_ID[coreId];
+    const target = document.querySelector('[data-run-card-flight-target]');
+    if (card) launchGrantCardFlight(card, source, target);
+    replace(granted);
+    if (card) setGrantAnnouncement(`${runCardName(card)} taken and added to the Chartulary.`);
   };
   const selectedUnitId = sceneSnapshot.workspace.view === 'army'
     ? sceneSnapshot.workspace.unitId
@@ -1539,6 +1563,7 @@ export function RunScreen({
                   run={shellRun}
                   replace={replace}
                   launchLipsanon={launchBonaLipsanon}
+                  takeCard={takeGrantCard}
                 />
               )
               : shellRun.phase === 'aftermath' && shellRun.aftermath
@@ -1612,7 +1637,12 @@ export function RunScreen({
   return (
     <RunPresentationSceneSlot className="run-scene-slot" sceneInstance={sceneInstance}>
       {cardFlightElement}
+      {grantCardFlightElement}
       {bonaLipsanonFlightElement}
+      {/* Outside the phase branch, because taking the opening grant replaces the workspace
+          that would otherwise have carried this: a region unmounted in the same commit as
+          its own text is never read. */}
+      <span className="sr-only" role="status" aria-live="polite">{grantAnnouncement}</span>
       {formSurface}
     </RunPresentationSceneSlot>
   );

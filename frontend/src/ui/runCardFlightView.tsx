@@ -1,10 +1,30 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactElement } from 'react';
-import type { RunCardOffer } from '../run/model';
+import type { RunCardDefinition, RunCardOffer } from '../run/model';
 import { RunCard } from './RunCard';
 import { SceneContinuityPortal, useSceneContinuityAvailable } from './shell/SceneContinuity';
 
 /** The shared functional-transfer beat used by a card travelling into the Chartulary. */
 export const RUN_CARD_FLIGHT_MS = 560;
+
+/**
+ * Any card face admission can send. A Sectio purchase carries its offer identity; the Run's
+ * opening grant admits a core card straight from the deck, and both travel the same way.
+ */
+export type RunFlightCard = RunCardDefinition | RunCardOffer;
+
+function flightCardKey(card: RunFlightCard): string {
+  return 'offerId' in card ? card.offerId : card.id;
+}
+
+export interface RunCardFlightOptions {
+  /**
+   * Hold the landed card in the director-owned continuity layer until the director settles
+   * the transition the admission requested. An admission that ends its own phase otherwise
+   * releases into an incoming scene that is mounted but still hidden while it prepares, and
+   * the card disappears for that interval (ADR-0385).
+   */
+  handoff?: 'landing' | 'scene-settled';
+}
 
 export interface RunCardFlightRect {
   left: number;
@@ -48,7 +68,7 @@ export function runCardFlightGeometry(
 
 interface RunCardFlight {
   id: string;
-  offer: RunCardOffer;
+  offer: RunFlightCard;
   geometry: RunCardFlightGeometry;
 }
 
@@ -58,9 +78,16 @@ interface RunCardFlight {
  */
 function RunCardFlightVisual({
   flight,
+  retain,
   onSettled,
 }: {
   flight: RunCardFlight;
+  /**
+   * Let the director decide when this carry is over. A retained flight keeps painting at
+   * its destination after travel ends, and the incoming scene reveals its canonical card
+   * underneath before the carried copy is released.
+   */
+  retain: boolean;
   onSettled: (id: string) => void;
 }): ReactElement {
   const [landed, setLanded] = useState(false);
@@ -70,22 +97,30 @@ function RunCardFlightVisual({
     settledRef.current = true;
     onSettled(flight.id);
   }, [flight.id, onSettled]);
+  // Travel ending is the whole story only for a flight that stays in its own scene. A
+  // retained carry ignores its own landing and waits for the director instead.
+  const settleOnLanding = useCallback(() => {
+    if (!retain) settle();
+  }, [retain, settle]);
 
   useEffect(() => {
     let innerRaf: number | null = null;
     const outerRaf = requestAnimationFrame(() => {
       innerRaf = requestAnimationFrame(() => setLanded(true));
     });
-    const watchdog = setTimeout(settle, RUN_CARD_FLIGHT_MS + 240);
+    const watchdog = setTimeout(settleOnLanding, RUN_CARD_FLIGHT_MS + 240);
     return () => {
       cancelAnimationFrame(outerRaf);
       if (innerRaf !== null) cancelAnimationFrame(innerRaf);
       clearTimeout(watchdog);
     };
-  }, [settle]);
+  }, [settleOnLanding]);
 
   return (
-    <SceneContinuityPortal contribution={{ kind: 'shared-element', id: `card:${flight.id}` }}>
+    <SceneContinuityPortal
+      contribution={{ kind: 'shared-element', id: `card:${flight.id}` }}
+      onSceneSettled={retain ? settle : undefined}
+    >
       <div
         className={`run-card-flight${landed ? ' is-landed' : ''}`}
         data-testid="run-card-flight"
@@ -100,7 +135,7 @@ function RunCardFlightVisual({
           '--run-card-flight-scale': flight.geometry.scale,
         } as CSSProperties}
         onTransitionEnd={(event) => {
-          if (event.target === event.currentTarget && event.propertyName === 'translate') settle();
+          if (event.target === event.currentTarget && event.propertyName === 'translate') settleOnLanding();
         }}
       >
         <RunCard card={flight.offer} mode="reference" />
@@ -114,18 +149,19 @@ function RunCardFlightVisual({
  * Chartulary shortcut. Each launch is independent: presentation from an earlier
  * Adlectio keeps running while later interactions and flights proceed.
  */
-export function useRunCardFlights(): {
-  launch: (offer: RunCardOffer, source: Element | null, target: Element | null) => boolean;
+export function useRunCardFlights(options: RunCardFlightOptions = {}): {
+  launch: (offer: RunFlightCard, source: Element | null, target: Element | null) => boolean;
   element: ReactElement | null;
 } {
   const continuityAvailable = useSceneContinuityAvailable();
+  const retain = options.handoff === 'scene-settled';
   const [flights, setFlights] = useState<RunCardFlight[]>([]);
   const nextFlightSequenceRef = useRef(0);
   const settle = useCallback((id: string): void => {
     setFlights((current) => current.filter((flight) => flight.id !== id));
   }, []);
 
-  const launch = useCallback((offer: RunCardOffer, source: Element | null, target: Element | null): boolean => {
+  const launch = useCallback((offer: RunFlightCard, source: Element | null, target: Element | null): boolean => {
     if (!continuityAvailable) return false;
     const sourceRect = source?.getBoundingClientRect();
     const targetRect = target?.getBoundingClientRect();
@@ -133,7 +169,7 @@ export function useRunCardFlights(): {
     const geometry = runCardFlightGeometry(sourceRect, targetRect);
     if (!geometry) return false;
     nextFlightSequenceRef.current += 1;
-    const id = `${offer.offerId}:${nextFlightSequenceRef.current}`;
+    const id = `${flightCardKey(offer)}:${nextFlightSequenceRef.current}`;
     setFlights((current) => [...current, { id, offer, geometry }]);
     return true;
   }, [continuityAvailable]);
@@ -142,7 +178,7 @@ export function useRunCardFlights(): {
     ? (
       <>
         {flights.map((flight) => (
-          <RunCardFlightVisual key={flight.id} flight={flight} onSettled={settle} />
+          <RunCardFlightVisual key={flight.id} flight={flight} retain={retain} onSettled={settle} />
         ))}
       </>
     )

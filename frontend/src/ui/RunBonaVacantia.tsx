@@ -2,7 +2,6 @@ import { useState, type ReactElement } from 'react';
 import {
   LIPSANON_BY_ID,
   RUN_CARD_BY_ID,
-  takeVacantiaCard,
   takeVacantiaLipsanon,
   type LipsanonId,
   type RunDocument,
@@ -24,10 +23,10 @@ import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
  */
 function RunVacantiaCardGrant({
   run,
-  replace,
+  takeCard,
 }: {
   run: RunDocument;
-  replace: (next: RunDocument) => void;
+  takeCard: (coreId: string, source: HTMLButtonElement) => void;
 }): ReactElement {
   const [taken, setTaken] = useState<string | null>(null);
   // The row is sized from how many cards it actually prints, so an offer whose core
@@ -46,10 +45,14 @@ function RunVacantiaCardGrant({
           layoutId={coreId}
           seatIndex={index}
           disabled={Boolean(taken)}
-          onSelect={() => {
+          flying={taken === coreId}
+          // Local only so the untaken offers dim in the same frame as the press. The
+          // admission itself, and the card's travel into the Chartulary, belong to the
+          // Run phase: this take ends the phase, so the carry outlives this component.
+          onSelect={(source) => {
             if (taken) return;
             setTaken(coreId);
-            replace(takeVacantiaCard(run, coreId));
+            takeCard(coreId, source);
           }}
         />
       ))}
@@ -62,6 +65,7 @@ export function RunBonaVacantia({
   run,
   replace,
   launchLipsanon,
+  takeCard,
 }: {
   run: RunDocument;
   replace: (next: RunDocument) => void;
@@ -70,6 +74,7 @@ export function RunBonaVacantia({
     icon: Element | null,
     to: LipsanonFlightPoint | null,
   ) => boolean;
+  takeCard: (coreId: string, source: HTMLButtonElement) => void;
 }): ReactElement | null {
   const vacantia = run.vacantia;
   const [departed, setDeparted] = useState<LipsanonId | null>(null);
@@ -99,7 +104,7 @@ export function RunBonaVacantia({
         backgroundArtwork: workspaceBackgroundArtwork('run-bona-vacantia'),
       }}
     >
-      {grant ? <RunVacantiaCardGrant run={run} replace={replace} /> : (
+      {grant ? <RunVacantiaCardGrant run={run} takeCard={takeCard} /> : (
       <div className="lipsanon-mat-stage" data-cards="on" data-testid="run-vacantia-mat">
         <div className="lipsanon-mat-layer">
           {mat ? <img className="lipsanon-mat-art" src={mat} alt="" draggable={false} /> : null}
