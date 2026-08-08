@@ -26118,6 +26118,12 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   z-index: 15;
 }
 
+/* Review-only: the Card Outline studio mounts this beside the shipped soft line so the choice
+   between a drawn edge and a mechanical one is made by looking at both. */
+.run-card-formation-outline[data-outline-rendering='crisp'] path {
+  shape-rendering: crispEdges;
+}
+
 .run-card-formation-outline path {
   fill: none;
   stroke: rgba(55, 48, 39, .56);
@@ -26650,4 +26656,77 @@ button.run-card-formation-cell {
   justify-content: center;
   letter-spacing: .04em;
   width: 100%;
+}
+
+/* Studio -> Card Outline. Two live columns of the same cards, so the rasterization choice is made
+   by looking at both on the screen the game runs on rather than at a capture of one machine. */
+.run-card-outline-viewer {
+  display: grid;
+  gap: 12px;
+  min-inline-size: 0;
+}
+
+.run-card-outline-note {
+  margin: 0;
+  max-inline-size: 78ch;
+}
+
+.run-card-outline-widths {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.run-card-outline-columns {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  min-inline-size: 0;
+}
+
+.run-card-outline-column {
+  display: grid;
+  gap: 8px;
+  min-inline-size: 0;
+}
+
+.run-card-outline-column > p {
+  margin: 0;
+}
+
+.run-card-outline-specimens {
+  align-items: start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-inline-size: 0;
+}
+
+.run-card-outline-specimen {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  margin: 0;
+}
+
+/* The face fills its parent, so the parent is what carries the size being compared. */
+.run-card-outline-face {
+  display: block;
+  inline-size: var(--run-card-outline-face-width);
+}
+
+/* Two 5:7 faces that clear the tile's image band without cropping, sized like the sibling card
+   catalogs so the thumbnail reads as the pair being compared. */
+.run-card-outline-catalog-specimen {
+  align-self: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  inline-size: min(100%, 148px);
+}
+
+/* The catalog band is shorter than a 5:7 face at the sibling widths, so this one states its own
+   height rather than letting the pair get cropped at the chin. */
+.run-card-outline-catalog-image {
+  min-height: 150px;
 }

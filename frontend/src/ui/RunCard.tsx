@@ -2,7 +2,7 @@ import type { ReactElement } from 'react';
 import { liveMediaForSlot, resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import { runCardArtSlot, runCardName } from '../run/cardNames';
 import { cardContentsLabel, type RunCardDefinition, type RunCardOffer } from '../run/model';
-import { RunCardFace } from './RunCardFace';
+import { RunCardFace, type RunCardOutlineRendering } from './RunCardFace';
 import { runCardFaceContent, runCardFrameSlot } from './runCardFaceContent';
 import { runCardFrameGeometryForSlot } from './runCardFrameGeometry';
 import { runCardFloatClock } from './runCardLife';
@@ -18,6 +18,7 @@ export function RunCard({
   seatIndex,
   disabled = false,
   flying = false,
+  outlineRendering,
   onSelect,
 }: {
   card: RunCardDefinition | RunCardOffer;
@@ -33,6 +34,8 @@ export function RunCard({
    */
   seatIndex?: number;
   disabled?: boolean;
+  /** Review-only: how the footprint outline rasterizes. Omitted, the card prints as it ships. */
+  outlineRendering?: RunCardOutlineRendering;
   /** This card is currently travelling elsewhere as a carried copy, so its seat prints empty. */
   flying?: boolean;
   onSelect?: (element: HTMLButtonElement) => void;
@@ -54,6 +57,7 @@ export function RunCard({
       frameUrl={liveMediaForSlot(frameSlot).media.immutableUrl}
       artUrl={resolvedLiveMediaUrl(runCardArtSlot(identity))}
       frameGeometry={runCardFrameGeometryForSlot(frameSlot)}
+      outlineRendering={outlineRendering}
       ariaHidden={mode !== 'reference'}
     />
   );
