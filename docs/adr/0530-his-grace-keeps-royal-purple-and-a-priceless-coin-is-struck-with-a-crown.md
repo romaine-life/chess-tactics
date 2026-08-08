@@ -45,13 +45,17 @@ places at once.
 - The mark is one transparent native 64×64 raster in its own typed slot,
   `ui/run/card-prototypes/cost-crown-v1.png`, with the `run-card-cost-crown` runtime component.
   It never redraws the coin, so one raster serves every coin at every size.
-- The mark's seat is a **square** measured against the whole drawn coin — `.75` of it, measured
-  on the real coins at both sizes. The mark's own square raster is what positions it: the
-  transparent margin the art carries *is* the layout, so a wide mark and a tall one both land
-  correctly with no second rule. It is sized against the coin rather than the flat striking face
-  because the face is where a *numeral* must stay — digits are tall and would ride the bevel —
-  while a mark is drawn wide and low and reads better crossing onto the bevel than shrunk to
-  clear it.
+- The mark's seat is a **square** measured against the whole drawn coin. The mark's own square
+  raster is what positions it: the transparent margin the art carries *is* the layout, so a wide
+  mark and a tall one both land correctly with no second rule. It is sized against the coin
+  rather than the flat striking face because the face is where a *numeral* must stay — digits
+  are tall and would ride the bevel — while a mark is drawn wide and low and reads better
+  crossing onto the bevel than shrunk to clear it.
+- **The share it takes is an owner control, not a number in a stylesheet.** `mark.fill` joins
+  the coin's seat in the Git-owned `runCardGoldTierDividerGeometry.json`, tuned by a slider in
+  **Studio → Card Gold Divider** beside the seat's own, with the same Reset-to-baseline, Save
+  runtime defaults and Copy tuning JSON (ADR-0057). One value sizes the mark on the gallery
+  bands and the card face alike, because a coin is a coin wherever it is drawn.
 - The mark is **smoothly resampled, never `image-rendering: pixelated`**. It draws at roughly a
   sixth of its native size, and nearest-neighbour at that ratio is decimation: it drops most of
   the rows and shreds the silhouette into an illegible smear. `pixelated` is correct when pixel
@@ -64,8 +68,13 @@ places at once.
   before. An ornament under review can never take a screen down with it, and the mark stays
   outside the card face's image-readiness protocol for the same reason: it must not be able to
   hold a whole card unpresented.
-- Candidates are reviewed on the real galleries at `?crownCandidate=<versionId>`, the same way
-  the gold-tier divider is reviewed. Acceptance remains the owner's.
+- **Candidates are reviewed in the Studio instrument that already owns the coin.** Card Gold
+  Divider mounts every uploaded mark together on the two coins it is actually struck on — the
+  gallery band and a real His Grace face — as selectable catalog cards. Comparing marks against
+  each other is the whole point, and one address per candidate cannot do it. The galleries keep
+  a `?crownCandidate=<versionId>` address for seeing one in situ, exactly as the divider keeps
+  its own review address, but the instrument is where a mark is chosen. Acceptance stays the
+  owner's.
 
 This changes no card data, price, rarity, deck, Klerosis, persistence schema, or database. No
 migration is required, and no Run in progress is affected.

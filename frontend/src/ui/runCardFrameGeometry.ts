@@ -131,20 +131,6 @@ export const RUN_CARD_TEXT_PLACEMENT: RunCardTextPlacement = Object.freeze({
  */
 export const RUN_CARD_COIN_FACE_CQW = 6.01;
 
-/**
- * The whole drawn coin, rim included — twice the radius the face's clip circle uses. A mark
- * struck on the coin is sized against this rather than against the flat face: the face is where
- * a NUMERAL must stay (digits are tall and would ride the bevel), while a mark is drawn wide and
- * low and reads better crossing onto the bevel than shrunk to clear it.
- */
-export const RUN_CARD_COIN_DIAMETER_CQW = 9.9;
-
-/**
- * The share of the coin a struck mark occupies. Measured on the real coins at both sizes: below
- * this the mark is too small to read at the card's own scale, above it the mark rides the rim.
- */
-export const RUN_CARD_COIN_MARK_FILL = .75;
-
 /** The share of that face the widest numeral of a given length may occupy. */
 export const RUN_CARD_COIN_FACE_FILL = .72;
 
@@ -394,8 +380,6 @@ export function runCardFrameGeometryVariables(
     // The coin's flat striking face, so a mark struck on the coin is sized against the metal it
     // lands on rather than against the cost box that surrounds it.
     ['--run-card-coin-face', `${RUN_CARD_COIN_FACE_CQW}cqw`],
-    // The struck mark's own square, as a share of the whole drawn coin.
-    ['--run-card-coin-mark', `${(RUN_CARD_COIN_DIAMETER_CQW * RUN_CARD_COIN_MARK_FILL).toFixed(4)}cqw`],
   ]);
 }
 

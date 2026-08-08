@@ -20,6 +20,7 @@ export function RunCard({
   flying = false,
   outlineRendering,
   crownUrl,
+  markFill,
   onSelect,
 }: {
   card: RunCardDefinition | RunCardOffer;
@@ -39,6 +40,8 @@ export function RunCard({
   outlineRendering?: RunCardOutlineRendering;
   /** Omitted, the face resolves the installed priceless-coin mark itself. */
   crownUrl?: string | null;
+  /** Omitted, the face uses the saved runtime fill for that mark. */
+  markFill?: number;
   /** This card is currently travelling elsewhere as a carried copy, so its seat prints empty. */
   flying?: boolean;
   onSelect?: (element: HTMLButtonElement) => void;
@@ -62,6 +65,7 @@ export function RunCard({
       frameGeometry={runCardFrameGeometryForSlot(frameSlot)}
       outlineRendering={outlineRendering}
       {...(crownUrl === undefined ? {} : { crownUrl })}
+      {...(markFill === undefined ? {} : { markFill })}
       ariaHidden={mode !== 'reference'}
     />
   );

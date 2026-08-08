@@ -1,6 +1,10 @@
 import { resolvedLiveMediaUrl, type RunCardTier } from '@chess-tactics/board-render';
-import type { ReactElement } from 'react';
-import { runCardCostCrownUrl } from './runCardCostCrown';
+import type { CSSProperties, ReactElement } from 'react';
+import {
+  RUN_CARD_COIN_MARK_FILL,
+  RUN_CARD_COIN_RASTER_INSET,
+  runCardCostCrownUrl,
+} from './runCardCostCrown';
 
 export const RUN_CARD_COST_COIN_SLOT = 'ui/run/card-prototypes/cost-coin-v1.png';
 
@@ -18,18 +22,24 @@ export function RunCardCostCoin({
   className = '',
   sourceUrl = resolvedLiveMediaUrl(RUN_CARD_COST_COIN_SLOT),
   crownUrl = runCardCostCrownUrl(),
+  markFill = RUN_CARD_COIN_MARK_FILL,
 }: {
   value: RunCardTier;
   className?: string;
   sourceUrl?: string;
   /** The mark struck where the numeral would go. Null prints the coin bare. */
   crownUrl?: string | null;
+  /** The mark's share of the drawn coin, in whole percent. Owned by the Studio instrument. */
+  markFill?: number;
 }): ReactElement {
   const struck = value !== 'starter';
   return (
     <span
       className={`run-card-cost-coin ${className}`.trim()}
       aria-label={struck ? `${value} gold` : 'Starter'}
+      style={{
+        '--run-card-cost-coin-mark': `${(markFill / 100) * RUN_CARD_COIN_RASTER_INSET}`,
+      } as CSSProperties}
     >
       <img
         className="run-card-cost-coin-art"

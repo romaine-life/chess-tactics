@@ -20099,10 +20099,10 @@ button.tileset-relationship-cell {
 /* The crown takes the numeral's seat and its share of the coin's striking face, so a
    priceless coin is marked rather than blank (ADR-0530). */
 .run-card-cost-coin-crown {
-  /* .75 of the drawn coin, which is .9375 of this box because the raster carries its own rim
-     margin. Square, and smoothly resampled, for the reasons the card face's own seat states. */
-  block-size: calc(var(--run-card-cost-coin-size) * .703);
-  inline-size: calc(var(--run-card-cost-coin-size) * .703);
+  /* A share of the drawn coin, tuned in Studio > Card Gold Divider and handed down as a ratio
+     against this box. Square, and smoothly resampled, for the reasons the card face's seat states. */
+  block-size: calc(var(--run-card-cost-coin-size) * var(--run-card-cost-coin-mark, .703));
+  inline-size: calc(var(--run-card-cost-coin-size) * var(--run-card-cost-coin-mark, .703));
   object-fit: contain;
   pointer-events: none;
   position: relative;
@@ -23801,6 +23801,32 @@ button.tileset-relationship-cell {
 
 .run-card-gold-tier-divider-studio-row {
   max-inline-size: 100%;
+}
+
+/* Every generated mark on the two coins it is struck on, at print size, so they are compared
+   against each other rather than remembered one address at a time (ADR-0530). */
+.run-card-coin-mark-study {
+  display: grid;
+  gap: 8px;
+}
+
+/* Layout only — the card chrome, selection state and label are the registered Studio catalog
+   card's (ADR-0059). This positions the two real coins inside its media slot. */
+.run-card-coin-mark-study-row {
+  grid-template-columns: repeat(auto-fill, minmax(180px, 220px));
+}
+
+.run-card-coin-mark-option-specimen {
+  display: grid;
+  gap: 8px;
+  inline-size: 100%;
+  justify-items: center;
+  padding: 8px;
+}
+
+.run-card-coin-mark-option-card {
+  display: block;
+  inline-size: 132px;
 }
 
 .run-card-gold-tier-divider-studio-crop {
