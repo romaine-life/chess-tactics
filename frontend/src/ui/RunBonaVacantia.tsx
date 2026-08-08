@@ -9,6 +9,7 @@ import {
 } from '../run/model';
 import { LipsanonIcon } from './Lipsana';
 import { RunCard } from './RunCard';
+import { RunCardRow } from './RunCardRow';
 import { RunSceneViewport } from './RunWorkspace';
 import { Tooltip } from './shared/InfoTip';
 import { installedLipsanonMatUrl, lipsanonFloatClock } from './runLipsanonMat';
@@ -29,31 +30,29 @@ function RunVacantiaCardGrant({
   replace: (next: RunDocument) => void;
 }): ReactElement {
   const [taken, setTaken] = useState<string | null>(null);
-  const offers = run.vacantia?.cardOffers ?? [];
+  // The row is sized from how many cards it actually prints, so an offer whose core
+  // has left the Chartulary shrinks the row rather than reserving a seat for nothing.
+  const offers = (run.vacantia?.cardOffers ?? []).filter((coreId) => Boolean(RUN_CARD_BY_ID[coreId]));
 
   // The Sectio's own card row, not the lipsanon mat: the mat is sized for 64x64 relic
   // icons and collapses around a card face.
   return (
-    <div className="run-card-grid" data-testid="run-vacantia-card-offers">
-      {offers.map((coreId) => {
-        const card = RUN_CARD_BY_ID[coreId];
-        if (!card) return null;
-        return (
-          <RunCard
-            key={coreId}
-            card={card}
-            mode="grant"
-            layoutId={coreId}
-            disabled={Boolean(taken)}
-            onSelect={() => {
-              if (taken) return;
-              setTaken(coreId);
-              replace(takeVacantiaCard(run, coreId));
-            }}
-          />
-        );
-      })}
-    </div>
+    <RunCardRow count={offers.length} testId="run-vacantia-card-offers">
+      {offers.map((coreId) => (
+        <RunCard
+          key={coreId}
+          card={RUN_CARD_BY_ID[coreId]}
+          mode="grant"
+          layoutId={coreId}
+          disabled={Boolean(taken)}
+          onSelect={() => {
+            if (taken) return;
+            setTaken(coreId);
+            replace(takeVacantiaCard(run, coreId));
+          }}
+        />
+      ))}
+    </RunCardRow>
   );
 }
 
