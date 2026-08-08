@@ -952,7 +952,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 70 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 71 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -967,7 +967,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 34 }, (_, index) => index + 37),
+    ...Array.from({ length: 35 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1081,7 +1081,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
     )
   ) {
     throw new Error(
-      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 70: `
+      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 71: `
       + `${JSON.stringify({
         history: history.rows,
         identity_columns: identityColumns.rows,
@@ -3170,6 +3170,77 @@ async function validateOpeningCardGrantMigration70() {
   }
 }
 
+/**
+ * ADR-0523. Rarity becomes a material band, piles carry an exact quota, and the opening market
+ * caps card cost, so the hidden card sequence changed outright and its cursor restarts. A Sectio
+ * already open keeps the row it is showing -- those offers are a transaction the player is
+ * part-way through, and each re-reads its rarity from the live catalog on load. Idempotent, like
+ * its neighbours, and it must not touch a document that is not version 31.
+ */
+async function validateCardRarityBandMigration71() {
+  const { Client } = require('pg');
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('CREATE SCHEMA smoke_card_rarity_band_migration_71');
+    await client.query('SET LOCAL search_path TO smoke_card_rarity_band_migration_71');
+    await client.query(`
+      CREATE TABLE active_runs (
+        owner_email text PRIMARY KEY, body jsonb NOT NULL, revision integer NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+    `);
+    const openSectio = {
+      runSaveVersion: 31,
+      phase: 'sectio',
+      sectioCardCursor: 24,
+      sectio: { afterBattleIndex: 2, cardOffers: [{ id: 'q', offerId: 'battle-2-0-q' }] },
+    };
+    const midRun = { runSaveVersion: 31, phase: 'battle', sectioCardCursor: 9, sectio: null };
+    const alreadyCurrent = { runSaveVersion: 32, phase: 'battle', sectioCardCursor: 17, sectio: null };
+    await client.query(
+      `INSERT INTO active_runs (owner_email, body, revision) VALUES
+        ('sectio@example.com', $1::jsonb, 5),
+        ('battle@example.com', $2::jsonb, 2),
+        ('current@example.com', $3::jsonb, 9)`,
+      [JSON.stringify(openSectio), JSON.stringify(midRun), JSON.stringify(alreadyCurrent)],
+    );
+
+    await client.query(inlineMigrationSql(71));
+    await client.query(inlineMigrationSql(71));
+    const rows = (await client.query(
+      'SELECT owner_email, body, revision FROM active_runs ORDER BY owner_email',
+    )).rows;
+    const byOwner = new Map(rows.map((row) => [row.owner_email, row]));
+    const migratedSectio = byOwner.get('sectio@example.com');
+    const migratedBattle = byOwner.get('battle@example.com');
+    const untouched = byOwner.get('current@example.com');
+    if (
+      migratedSectio?.body?.runSaveVersion !== 32
+      || migratedSectio.body.sectioCardCursor !== 0
+      // The visible row survives: it is a transaction the player is part-way through.
+      || migratedSectio.body.sectio?.cardOffers?.length !== 1
+      || migratedSectio.body.sectio.cardOffers[0].id !== 'q'
+      || Number(migratedSectio.revision) !== 6
+      || migratedBattle?.body?.runSaveVersion !== 32
+      || migratedBattle.body.sectioCardCursor !== 0
+      || Number(migratedBattle.revision) !== 3
+      || untouched?.body?.runSaveVersion !== 32
+      || untouched.body.sectioCardCursor !== 17
+      || Number(untouched.revision) !== 9
+    ) {
+      throw new Error(`Migration 71 did not restart the card sequence safely: ${JSON.stringify(rows)}`);
+    }
+    await client.query('ROLLBACK');
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve validation error */ }
+    throw error;
+  } finally {
+    await client.end();
+  }
+}
+
 async function validateRepairedEditorDocumentDiscardOperation62() {
   const documentId = '00000000-0000-4000-8000-000000000262';
   const levelId = 'migration-operation-level';
@@ -3337,6 +3408,7 @@ async function main() {
   await validateImmutableFormationAndLegacyDrawableRepairMigrations66And67();
   await validatePlayerFormationMigrations68And69();
   await validateOpeningCardGrantMigration70();
+  await validateCardRarityBandMigration71();
   await validateRepairedEditorDocumentDiscardOperation62();
   await resetDb();
 
@@ -6542,6 +6614,66 @@ async function main() {
   const craftedRunAfterRefusals = await get('/api/active-run', { cookie: '__Host-chess-tactics-access=abc' });
   if (craftedRunAfterRefusals.statusCode !== 200 || JSON.parse(craftedRunAfterRefusals.body).run !== null) {
     throw new Error(`A refused craft must write nothing: ${craftedRunAfterRefusals.statusCode} ${craftedRunAfterRefusals.body}`);
+  }
+
+  // Every crafted phase must survive the same save validator a player's own Run is held to
+  // (ADR-0338). Composition is the crafter's business and has its own tests; what has to hold
+  // HERE is that the document a craft produces is one this server will store — the two are
+  // otherwise free to drift, and a validator rule written without a phase in mind stays
+  // invisible until someone reaches that phase. That is not hypothetical: requiring
+  // `battleRuntime` to be null outside a Battle silently rejected every won Battle's aftermath,
+  // which carries the runtime of the Battle it is reporting on.
+  const craftedPhaseWar = () => ({
+    id: 'war-smoke',
+    name: 'Smoke War',
+    description: 'Pinned War snapshot.',
+    battles: [
+      { level: structuredClone(warBattleLevel), loot: false },
+      { level: structuredClone(warBattleLevel), loot: false },
+    ],
+  });
+  // `battle-victory` is the settled board's own Victory surface, so its document is still a
+  // Battle; every other spec lands on the phase it names.
+  const craftedPhases = [
+    { spec: { phase: 'sectio', battle: 2 }, phase: 'sectio' },
+    { spec: { phase: 'deployment', battle: 1 }, phase: 'deployment' },
+    { spec: { phase: 'battle', battle: 1 }, phase: 'battle' },
+    { spec: { phase: 'battle-victory', battle: 1 }, phase: 'battle' },
+    { spec: { phase: 'aftermath', battle: 1, turns: 12, seconds: 240, fallen: 1 }, phase: 'aftermath' },
+    { spec: { phase: 'victory', battle: 2 }, phase: 'victory' },
+  ];
+  let craftedPhaseRevision = JSON.parse(craftedRunAfterRefusals.body).revision;
+  for (const craftedPhase of craftedPhases) {
+    const craftedPhaseRun = {
+      ...boardRender.craftRunDocument(
+        boardRender.runCraftSpecFromJson({ ...craftedPhase.spec, seed: 17 }),
+        craftedPhaseWar(),
+      ),
+      id: `run-crafted-${craftedPhase.spec.phase}`,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    const savedCraftedPhase = await request(
+      'PUT', '/api/active-run',
+      { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+      JSON.stringify({ run: craftedPhaseRun, revision: craftedPhaseRevision }),
+    );
+    const savedCraftedPhaseBody = JSON.parse(savedCraftedPhase.body);
+    if (
+      savedCraftedPhase.statusCode !== 200
+      || savedCraftedPhaseBody.run.phase !== craftedPhase.phase
+      || savedCraftedPhaseBody.revision !== craftedPhaseRevision + 1
+    ) {
+      throw new Error(`A crafted ${craftedPhase.spec.phase} Run must be one this server stores: ${savedCraftedPhase.statusCode} ${savedCraftedPhase.body}`);
+    }
+    craftedPhaseRevision = savedCraftedPhaseBody.revision;
+  }
+  const deletedCraftedPhaseRun = await request(
+    'DELETE', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: craftedPhaseRevision }),
+  );
+  if (deletedCraftedPhaseRun.statusCode !== 200) {
+    throw new Error(`Crafted-phase sweep did not clean up: ${deletedCraftedPhaseRun.statusCode} ${deletedCraftedPhaseRun.body}`);
   }
 
   // --- Run lipsanon statistics: owner-scoped, append-only, retry-idempotent ----

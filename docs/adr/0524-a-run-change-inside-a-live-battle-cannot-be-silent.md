@@ -9,7 +9,7 @@ refines:
   - "[ADR-0089](0089-sfx-runtime-profile-is-db-authoritative.md)"
 ---
 
-# ADR-0523: A Run change inside a live Battle cannot be silent
+# ADR-0524: A Run change inside a live Battle cannot be silent
 
 ## Context
 

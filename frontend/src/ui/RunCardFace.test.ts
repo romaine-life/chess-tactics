@@ -1,8 +1,13 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { TILE_TEMPLATE } from '@chess-tactics/board-render';
 import { RUN_CARD_BY_ID } from '../run/model';
 import { runCardFaceContent } from './runCardFaceContent';
 import {
+  RUN_CARD_FORMATION_EDGE_LINE,
+  RUN_CARD_FORMATION_ISO_TILE,
+  RUN_CARD_FORMATION_TILE_POINTS,
+  RUN_CARD_FORMATION_TILE_VIEW_BOX,
   requiredRunCardImageKinds,
   runCardFormationBoardCells,
   runCardFormationIsoPoint,
@@ -54,13 +59,36 @@ describe('formation-only Run card face', () => {
     expect(source).toContain("`var(--unit-anchor-y-${piece.unit}, -78%)`");
   });
 
-  it('prints the card footprint alone', () => {
+  it('prints the card footprint alone, and lines only the edges that face off it', () => {
     const cells = runCardFormationBoardCells([{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }]);
     expect(cells).toEqual([
-      { x: 0, y: 0, dark: false },
-      { x: 1, y: 0, dark: true },
-      { x: 1, y: 1, dark: false },
+      { x: 0, y: 0, dark: false, edges: ['north', 'south', 'west'] },
+      { x: 1, y: 0, dark: true, edges: ['north', 'east'] },
+      { x: 1, y: 1, dark: false, edges: ['east', 'south', 'west'] },
     ]);
+  });
+
+  /**
+   * A seat shared with another occupied seat carries no line. Every shared edge is named by both
+   * of its seats, so the check is that neither one draws it: one drawn side would print a seam
+   * down the middle of the cluster, which is the grid reading the card is meant to be free of.
+   */
+  it('draws no line between two occupied seats', () => {
+    const opposite = { north: 'south', south: 'north', east: 'west', west: 'east' } as const;
+    const step = { north: [0, -1], south: [0, 1], east: [1, 0], west: [-1, 0] } as const;
+    for (const definition of Object.values(RUN_CARD_BY_ID)) {
+      const cells = runCardFormationBoardCells(runCardFaceContent(definition).formation);
+      const at = new Map(cells.map((cell) => [`${cell.x}:${cell.y}`, cell]));
+      for (const cell of cells) {
+        for (const edge of ['north', 'east', 'south', 'west'] as const) {
+          const [dx, dy] = step[edge];
+          const neighbour = at.get(`${cell.x + dx}:${cell.y + dy}`);
+          if (!neighbour) continue;
+          expect(cell.edges, `${definition.id} lines a shared edge`).not.toContain(edge);
+          expect(neighbour.edges, `${definition.id} lines a shared edge`).not.toContain(opposite[edge]);
+        }
+      }
+    }
   });
 
   it('never prints a board square the card does not occupy', () => {
@@ -90,12 +118,49 @@ describe('formation-only Run card face', () => {
     }
   });
 
-  // Hiding the vacant squares is the whole change. The square itself keeps the exact line and
-  // fill it has always had, so a card the player already knows is not repainted underneath them.
-  it('leaves the printed square line and fill untouched', () => {
+  /**
+   * A seat's diamond spans its whole cell, corner to corner.
+   *
+   * Neighbours step by exactly half a tile in each axis, so only a full-cell diamond tiles without
+   * a gutter — and only a full-cell diamond has the board's own tile proportion. Inset points look
+   * harmless while every seat strokes its own outline over the gap, then print a ragged edge and a
+   * seam the moment the line moves to the footprint's boundary.
+   */
+  it('draws each seat as the whole tile, corner to corner', () => {
+    const [width, height] = [TILE_TEMPLATE.topWidth, TILE_TEMPLATE.topHeight];
+    expect(RUN_CARD_FORMATION_TILE_VIEW_BOX).toBe(`0 0 ${width} ${height}`);
+    expect(RUN_CARD_FORMATION_TILE_POINTS)
+      .toBe(`${width / 2},0 ${width},${height / 2} ${width / 2},${height} 0,${height / 2}`);
+
+    // Each named edge runs between two of those corners, and the four of them close the diamond.
+    const corners = new Set([
+      `${width / 2},0`, `${width},${height / 2}`, `${width / 2},${height}`, `0,${height / 2}`,
+    ]);
+    for (const [edge, [x1, y1, x2, y2]] of Object.entries(RUN_CARD_FORMATION_EDGE_LINE)) {
+      expect(corners.has(`${x1},${y1}`), `${edge} starts off-corner`).toBe(true);
+      expect(corners.has(`${x2},${y2}`), `${edge} ends off-corner`).toBe(true);
+    }
+    // A seat's half-tile step is what makes corner-to-corner tile seamlessly; if the projection
+    // step and the tile size ever disagree, the outline gaps again.
+    const step = runCardFormationIsoPoint(1, 0);
+    expect(step.left).toBeCloseTo(RUN_CARD_FORMATION_ISO_TILE.width / 2);
+    expect(step.top).toBeCloseTo(RUN_CARD_FORMATION_ISO_TILE.height / 2);
+  });
+
+  /**
+   * The line moved off the polygon and onto the outward edges, but it is the SAME line. Its colour
+   * and weight are the ones the card has always printed, so a player who knows these cards sees
+   * the shape wrapped rather than the ink changed.
+   */
+  it('wraps the footprint in the line the square has always carried', () => {
     const styles = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
-    expect(styles).toMatch(/\.run-card-formation-square polygon\s*\{\s*fill:\s*rgba\(212, 196, 161, \.46\);\s*stroke:\s*rgba\(55, 48, 39, \.56\);\s*stroke-width:\s*1\.15;/);
+    expect(styles).toMatch(/\.run-card-formation-square polygon\s*\{\s*fill:\s*rgba\(212, 196, 161, \.46\);\s*\}/);
     expect(styles).toMatch(/\.run-card-formation-square\.is-dark polygon\s*\{\s*fill:\s*rgba\(101, 115, 113, \.34\);/);
+    const outline = /\.run-card-formation-outline\s*\{([^}]*)\}/.exec(styles)?.[1] ?? '';
+    expect(outline).toContain('stroke: rgba(55, 48, 39, .56);');
+    expect(outline).toContain('stroke-width: 1.15;');
+    // The seats must not carry a second line of their own, or the seam comes back.
+    expect(styles).not.toMatch(/\.run-card-formation-square polygon\s*\{[^}]*stroke:/);
     expect(styles).not.toMatch(/\.run-card-formation-square\.is-faded/);
   });
 

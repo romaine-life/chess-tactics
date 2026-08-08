@@ -29,7 +29,7 @@ import {
 import { resolveWallArtFaces, slotSource, wallArtSlotsForFace } from '../core/wallArt';
 import { flatContactClipRects, propZBracket, structureSeatPoint, structureSourceHalfSrc, structureSourceSprite, structureSourceSplitMode } from './structureGeometry';
 import { fenceOverlayZIndex, fencePostZIndex, groundCoverZIndex, objectBaseZIndex, projectedSceneObjectZBracket, wallArtOverlayZIndex, wallOverlayZIndex } from './sceneDepth';
-import { propDef, type PropKind, type StructureSourceRef } from '../core/props';
+import { propDef, resolvePlacedPropId, type PropKind, type StructureSourceRef } from '../core/props';
 import {
   structureArtAsset,
   structureArtDirectionHalfSrc,
@@ -743,9 +743,11 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
   }
 
   for (const [key, placement] of Object.entries(predrawnBackgroundActive ? {} : (board.props ?? {}))) {
-    const def = propDef(placement.propId);
-    if (!def) continue;
     const [ax, ay] = key.split(',').map(Number);
+    // A retired rock draws as its successor, so the editor and the battle agree about what is
+    // standing on the cell without either of them rewriting the saved level.
+    const def = propDef(resolvePlacedPropId(placement.propId, ax, ay));
+    if (!def) continue;
     const { left, top } = structureSeatPoint({ x: ax, y: ay }, def.w, def.h);
     const { back, front } = propZBracket(ax, ay, def.w, def.h);
     const parts = def.spriteParts?.length

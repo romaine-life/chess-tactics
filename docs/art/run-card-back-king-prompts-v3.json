@@ -1,4 +1,7 @@
 {
+  "status": "CLOSED, UNADOPTED — this study produced no selection. All six king candidates below are unadopted rather than rejected: none carries a rejection status because none was ruled out on its merits. Non-runtime review history; do not treat any of them as the current card back.",
+  "decision": "ADR-0420 accepted The Fivefold Gambit (Codex) from run-card-back-prompts-v2.json as the universal Run card back at ui/run/card-back/standard.png. The king was not adopted as a second factor.",
+  "reopenable": "ADR-0420 establishes the current default \"without precluding a later player-selectable card-back system\". If that system is ever built, these six are the standing king-factor candidates and were never judged inferior — they were simply not the one back the game needed. Ask the owner before reviving one.",
   "schema": "run-card-back-prompt-set-v3",
   "studyId": "run-card-back-king-six-way-v3",
   "slot": "review/run-card-back/standard.png",
