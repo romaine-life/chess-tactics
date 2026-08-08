@@ -45,7 +45,9 @@ export interface RunArmyProfileAction {
   isDisabled?: (unit: RunArmyUnit) => boolean;
 }
 
-const PLAYER_PORTRAIT_PALETTE = paletteForSide('player') as PortraitPalette;
+// Read per render, not once at import: the player's color is a setting, and a value frozen into a
+// module constant would keep the old set on every portrait until a reload.
+const playerPortraitPalette = (): PortraitPalette => paletteForSide('player') as PortraitPalette;
 // A unit identifying itself in a chrome list faces the reader, the same choice the run
 // card faces and the shared piece icon make; the board's deployment facing would show a back.
 const TYPE_ORDER: readonly RunArmyPieceType[] = ['king', 'pawn', 'knight', 'bishop', 'rook', 'queen'];
@@ -157,15 +159,16 @@ function RunArmyPortrait({
 }): ReactElement {
   const crops = installedPortraitCrops();
   const piece = unit.type as PortraitPiece;
+  const palette = playerPortraitPalette();
   return (
     <UnitPortrait
       piece={piece}
-      palette={PLAYER_PORTRAIT_PALETTE}
+      palette={palette}
       crop={crops[piece]}
       backdrop={defaultBackgroundSet().portraits[piece]}
       className={className}
       framed={framed}
-      masterUrl={runtimePortraitMasterSrc(piece, PLAYER_PORTRAIT_PALETTE)}
+      masterUrl={runtimePortraitMasterSrc(piece, palette)}
     />
   );
 }

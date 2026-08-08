@@ -70,14 +70,55 @@ export const facingFromDelta = (dx: number, dy: number): UnitFacing | null => {
 export const pieceSpritePath = (type: PlayablePieceType, palette: UnitPalette = DEFAULT_PALETTE, direction: UnitFacing = 'south') =>
   resolvedUnitSpritePath(type, palette, direction);
 
-// Which palette a board side wears. Shared by the board and the HUD portrait.
+/**
+ * The palettes a player may wear. Every other palette is reserved for opponents, so the color on
+ * the pieces you command is never also on the pieces you are fighting.
+ */
+export const PLAYER_PALETTES = ['white', 'navy-blue'] as const;
+export type PlayerPalette = typeof PLAYER_PALETTES[number];
+export const isPlayerPalette = (value: unknown): value is PlayerPalette =>
+  typeof value === 'string' && (PLAYER_PALETTES as readonly string[]).includes(value);
+export const DEFAULT_PLAYER_PALETTE: PlayerPalette = 'white';
+/** Palettes an opponent may wear — the complement of the player's, in catalog order. */
+export const OPPONENT_PALETTES: readonly UnitPalette[] = UNIT_PALETTES.filter((palette) => !isPlayerPalette(palette));
+
+// A player's own color is a preference, not level content: a level authors WHICH faction is the
+// player, and the player chooses what that faction wears. Held as replaceable module state (the
+// same shape as the accepted sprite registry) because the sprite resolvers below are plain
+// functions called from canvas paint paths, not React. `initPlayerPalette` in the frontend
+// keeps it in step with the stored setting.
+let chosenPlayerPalette: PlayerPalette = DEFAULT_PLAYER_PALETTE;
+export function setPlayerPalette(palette: PlayerPalette): void {
+  chosenPlayerPalette = palette;
+}
+export function currentPlayerPalette(): PlayerPalette {
+  return chosenPlayerPalette;
+}
+
+// Which palette a board side wears when nothing else decides. The player entry is the fallback
+// only — `paletteForSide` answers for the player from the preference above.
 export const PALETTE_FOR_SIDE: Record<Side, UnitPalette> = {
-  player: 'navy-blue',
+  player: DEFAULT_PLAYER_PALETTE,
   enemy: 'crimson',
   neutral: 'navy-blue',
 };
-export const paletteForSide = (side: Side, palette?: string | null): UnitPalette =>
-  isUnitPalette(palette) ? palette : PALETTE_FOR_SIDE[side];
+
+/**
+ * Which palette a board side wears on a GAMEPLAY surface — the war-room board, the HUD portraits,
+ * the promotion picker, Run cards. The player's side always wears the chosen player palette, so
+ * the preference reaches authored campaign levels (every level saved through the editor stamps an
+ * explicit palette on its units, which would otherwise win). An opponent keeps its authored
+ * palette unless that collides with the player's choice, in which case it falls back to the enemy
+ * default so the two sides can never render as the same color.
+ *
+ * Authoring surfaces deliberately do not come through here: the Level Editor paints and draws by
+ * faction (`renderPlan.staticUnitSubject`), so an author keeps seeing the colors they placed.
+ */
+export const paletteForSide = (side: Side, palette?: string | null): UnitPalette => {
+  if (side === 'player') return currentPlayerPalette();
+  if (isUnitPalette(palette)) return palette === currentPlayerPalette() ? PALETTE_FOR_SIDE[side] : palette;
+  return PALETTE_FOR_SIDE[side];
+};
 
 // Piece portraits: a dedicated eye-level perspective bust (separate contract from the
 // true-iso board sprite), one per palette. See docs/portrait-contract.md.
