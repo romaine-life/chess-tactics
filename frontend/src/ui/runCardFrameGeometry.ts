@@ -363,15 +363,21 @@ export function runCardFramePaintInsetRatios(
 export function runCardFrameGeometryVariables(
   geometry: RunCardFrameGeometry,
 ): Readonly<Record<string, string>> {
-  return Object.fromEntries(RUN_CARD_FRAME_BOX_NAMES.flatMap((name) => {
-    const box = geometry.boxes[name];
-    return [
-      [`--run-card-${name}-left`, percentage(box.x, geometry.sourceWidth)],
-      [`--run-card-${name}-top`, percentage(box.y, geometry.sourceHeight)],
-      [`--run-card-${name}-width`, percentage(box.width, geometry.sourceWidth)],
-      [`--run-card-${name}-height`, percentage(box.height, geometry.sourceHeight)],
-    ];
-  }));
+  return Object.fromEntries([
+    ...RUN_CARD_FRAME_BOX_NAMES.flatMap((name) => {
+      const box = geometry.boxes[name];
+      return [
+        [`--run-card-${name}-left`, percentage(box.x, geometry.sourceWidth)],
+        [`--run-card-${name}-top`, percentage(box.y, geometry.sourceHeight)],
+        [`--run-card-${name}-width`, percentage(box.width, geometry.sourceWidth)],
+        [`--run-card-${name}-height`, percentage(box.height, geometry.sourceHeight)],
+      ];
+    }),
+    // The contents panel's height again, this time as a card-width length rather than a share of
+    // the card's height. A percentage of a height cannot be arithmetic with the flavour's own size,
+    // and dividing the panel between the diagram and the flavour is exactly that arithmetic.
+    ['--run-card-contents-block', `${((geometry.boxes.contents.height / geometry.sourceWidth) * 100).toFixed(4)}cqw`],
+  ]);
 }
 
 /** A geometry carrying owner-tuned boxes for the same frame, for the Studio instrument. */

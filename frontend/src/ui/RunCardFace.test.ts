@@ -5,11 +5,17 @@ import { RUN_CARD_BY_ID, RUN_CARD_DECK } from '../run/model';
 import { runCardFaceContent } from './runCardFaceContent';
 import {
   RUN_CARD_FORMATION_EDGE_LINE,
+  RUN_CARD_FORMATION_FIGURE,
+  RUN_CARD_FORMATION_FIGURE_DROP,
+  RUN_CARD_FORMATION_FIGURE_REACH,
+  RUN_CARD_FORMATION_FIGURE_RISE,
   RUN_CARD_FORMATION_ISO_TILE,
   RUN_CARD_FORMATION_TILE_POINTS,
   RUN_CARD_FORMATION_TILE_VIEW_BOX,
   requiredRunCardImageKinds,
   runCardFormationBoardCells,
+  runCardFormationInkExtent,
+  runCardFormationMetrics,
   runCardFormationOutlineRings,
   runCardFormationIsoPoint,
   runCardContentCanUpdateWithoutMediaLoad,
@@ -17,6 +23,7 @@ import {
   runCardPresentationSignature,
   type RunCardImageKind,
 } from './RunCardFace';
+import { RUN_CARD_FORMATION_MAX_SCALE_COMMITTED } from './runCardFormationFit';
 
 const card = runCardFaceContent(RUN_CARD_BY_ID['ppk-protected']);
 
@@ -52,8 +59,8 @@ describe('formation-only Run card face', () => {
 
   it('places every figure on its authored isometric board seat', () => {
     const styles = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
-    expect(styles).toMatch(/\.run-card-formation-cell,[\s\S]*?inset-block-start:\s*var\(--run-card-formation-top\)/);
-    expect(styles).toMatch(/\.run-card-formation-cell,[\s\S]*?inset-inline-start:\s*var\(--run-card-formation-left\)/);
+    expect(styles).toMatch(/\.run-card-formation-cell,[\s\S]*?inset-block-start:\s*calc\(var\(--run-card-formation-unit\) \* var\(--run-card-formation-top\)\)/);
+    expect(styles).toMatch(/\.run-card-formation-cell,[\s\S]*?inset-inline-start:\s*calc\(var\(--run-card-formation-unit\) \* var\(--run-card-formation-left\)\)/);
     expect(styles).toMatch(/\.run-card-formation-cell,[\s\S]*?transform:\s*translate\(var\(--run-card-unit-anchor-x\),\s*var\(--run-card-unit-anchor-y\)\)/);
     const source = readFileSync(new URL('./RunCardFace.tsx', import.meta.url), 'utf8');
     expect(source).toContain("`var(--unit-anchor-x-${piece.unit}, -50%)`");
@@ -199,6 +206,136 @@ describe('formation-only Run card face', () => {
     // The seats must not carry a second line of their own, or the seam comes back.
     expect(styles).not.toMatch(/\.run-card-formation-square polygon\s*\{[^}]*stroke:/);
     expect(styles).not.toMatch(/\.run-card-formation-square\.is-faded/);
+  });
+
+  /**
+   * The drawing is measured on the seats that are DRAWN, so it is centred on itself. Measuring the
+   * enclosing columns-by-rows rectangle instead put every footprint that left a cell of it vacant
+   * half a tile off centre — the lone seat to the right of the panel's middle, the four-seat run to
+   * the left of it — because the vacant part is never painted.
+   */
+  it('measures the drawing it prints, so every footprint is centred on itself', () => {
+    for (const definition of Object.values(RUN_CARD_BY_ID)) {
+      const cells = runCardFormationBoardCells(runCardFaceContent(definition).formation);
+      const metrics = runCardFormationMetrics(cells);
+      const centres = cells.map((cell) => runCardFormationIsoPoint(cell.x, cell.y));
+      const left = Math.min(...centres.map((point) => point.left));
+      const right = Math.max(...centres.map((point) => point.left));
+      const top = Math.min(...centres.map((point) => point.top));
+      const bottom = Math.max(...centres.map((point) => point.top));
+      // The seats' own middle sits at the middle of the board box, on both axes.
+      expect((left + right) / 2 - metrics.minLeft, `${definition.id} is off centre across`)
+        .toBeCloseTo((metrics.boardWidth - 1) * RUN_CARD_FORMATION_ISO_TILE.width / 2);
+      expect((top + bottom) / 2 - metrics.minTop, `${definition.id} is off centre down`)
+        .toBeCloseTo(
+          (metrics.boardHeight - RUN_CARD_FORMATION_ISO_TILE.height / RUN_CARD_FORMATION_ISO_TILE.width)
+          * RUN_CARD_FORMATION_ISO_TILE.width / 2,
+        );
+    }
+  });
+
+  /**
+   * The extent the panel fits is the whole drawing, figures included. A figure stands well clear of
+   * the seat it is anchored on, so measuring the seats alone would scale a diagram until its units
+   * were clipped by the panel it was being fitted into.
+   */
+  it('measures the figures standing on the seats, not the seats alone', () => {
+    const lone = runCardFormationMetrics([{ x: 0, y: 0 }]);
+    // One seat, one figure: the drawing is exactly that figure.
+    expect(lone.width).toBeCloseTo(RUN_CARD_FORMATION_FIGURE.width);
+    expect(lone.height).toBeCloseTo(RUN_CARD_FORMATION_FIGURE.height);
+    expect(lone.boardWidth).toBe(1);
+    expect(lone.width).toBeGreaterThan(lone.boardWidth);
+    expect(lone.height).toBeGreaterThan(lone.boardHeight);
+    // The seats sit inside that extent, offset by the room the figures need around them.
+    expect(lone.boardLeft).toBeCloseTo((RUN_CARD_FORMATION_FIGURE.width - 1) / 2);
+    expect(lone.boardTop).toBeGreaterThan(0);
+  });
+
+  /**
+   * Size is measured against a full-scale figure; PLACEMENT is measured against what is inked.
+   * A pawn is drawn at 0.66 and a rook at 0.73, so on a card of short pieces the reserved height
+   * is taller than anything painted in it — centre the reserve and the figures sit low in the
+   * space, which is the columns-by-rows mistake again in the other axis.
+   */
+  it('states the inked edges, so the space is centred on what is drawn in it', () => {
+    const seat = { left: 1, top: 1 };
+    const bare = runCardFormationInkExtent([seat]);
+    // A seat with nothing standing on it reaches half a tile across and half a tile's height down.
+    expect(bare.left).toBe('0.5000');
+    expect(bare.right).toBe('1.5000');
+    expect(bare.top).toBe((1 - RUN_CARD_FORMATION_ISO_TILE.height / RUN_CARD_FORMATION_ISO_TILE.width / 2).toFixed(4));
+
+    // A figure's painted edge is stated against its LIVE scale and its LIVE ink bounds, so both
+    // retuning a piece's size and accepting new art for it re-centre every card that carries it.
+    const standing = runCardFormationInkExtent([{ ...seat, unit: 'pawn' }]);
+    expect(standing.top).toContain('var(--unit-scale-pawn, 1)');
+    expect(standing.top).toContain('var(--unit-ink-top-pawn, 0)');
+    expect(standing.bottom).toContain('var(--unit-ink-bottom-pawn, 1)');
+    expect(standing.left).toContain('var(--unit-ink-left-pawn, 0)');
+    expect(standing.right).toContain('var(--unit-ink-right-pawn, 1)');
+    // Those fallbacks are the whole sprite, so an unmeasured figure reckons exactly as it did
+    // before the bounds existed: its top edge is one full rise above the seat it stands on.
+    const rise = /var\(--unit-ink-[a-z]+-[a-z]+, ([\d.]+)\) \* ([\d.]+) - ([\d.]+)\)/.exec(standing.top);
+    expect(rise && Number(rise[1]) * Number(rise[2]) - Number(rise[3]))
+      .toBeCloseTo(-RUN_CARD_FORMATION_FIGURE_RISE);
+    const drop = /var\(--unit-ink-[a-z]+-[a-z]+, ([\d.]+)\) \* ([\d.]+) - ([\d.]+)\)/.exec(standing.bottom);
+    expect(drop && Number(drop[1]) * Number(drop[2]) - Number(drop[3]))
+      .toBeCloseTo(RUN_CARD_FORMATION_FIGURE_DROP);
+    const reach = /var\(--unit-ink-[a-z]+-[a-z]+, ([\d.]+)\) \* ([\d.]+) - ([\d.]+)\)/.exec(standing.right);
+    expect(reach && Number(reach[1]) * Number(reach[2]) - Number(reach[3]))
+      .toBeCloseTo(RUN_CARD_FORMATION_FIGURE_REACH);
+    // The seat's own edge stays in the reckoning: a figure narrower than its tile does not shrink
+    // the drawing onto itself and leave the board hanging out of the space.
+    expect(standing.left.startsWith('min(0.5000,')).toBe(true);
+    expect(standing.right.startsWith('max(1.5000,')).toBe(true);
+  });
+
+  /** The placement offsets are the gap between the two, so CSS never re-derives either. */
+  it('offsets the drawing by the gap between what it reserved and what it inked', () => {
+    const styles = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+    const rule = /\.run-card-formation \{([^}]*)\}/.exec(styles)?.[1] ?? '';
+    expect(rule).toContain('--run-card-formation-ink-dx');
+    expect(rule).toContain('--run-card-formation-ink-dy');
+    expect(rule).toMatch(/translate:[\s\S]*?var\(--run-card-formation-ink-dx\)/);
+    expect(rule).toMatch(/translate:[\s\S]*?var\(--run-card-formation-ink-dy\)/);
+  });
+
+  /**
+   * A diagram that answered a piece's own scale would print a bigger board for a card granting a
+   * pawn than for the same shape granting a queen. The tile is the board; it is measured at full
+   * figure scale whatever stands on it.
+   */
+  it('sizes the board from the footprint alone, never from which piece stands on it', () => {
+    const pawn = runCardFormationMetrics(
+      runCardFormationBoardCells(runCardFaceContent(RUN_CARD_BY_ID.p).formation),
+    );
+    const queen = runCardFormationMetrics(
+      runCardFormationBoardCells(runCardFaceContent(RUN_CARD_BY_ID.q).formation),
+    );
+    expect(pawn).toEqual(queen);
+  });
+
+  /**
+   * The whole drawing scales by changing one length, so the fit is one division. A rule that still
+   * carried a card-relative length inside the diagram would not scale with it.
+   */
+  it('draws every length as a multiple of the one tile the panel sizes', () => {
+    const styles = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+    const rules = [...styles.matchAll(/(\.run-card-formation(?:-(?:square|outline|cell|unit))?[^{}]*)\{([^}]*)\}/g)];
+    expect(rules.length).toBeGreaterThan(0);
+    for (const [, selector, body] of rules) {
+      if (selector.includes('.run-card-formation-fit')) continue;
+      // The one container measurement allowed inside the drawing is the one that DEFINES the
+      // tile from the room it was given. Any other is a length that would not scale with it.
+      const drawn = body.replace(/--run-card-formation-unit:[^;]*;/, '');
+      expect(drawn, `${selector.trim()} carries a length the diagram cannot scale`)
+        .not.toMatch(/\d(?:\.\d+)?cq[wh]/);
+    }
+    // The cap is stated on the fit box, where a committed tile still means a tile of the CARD.
+    expect(styles).toMatch(/\.run-card-formation-fit\s*\{[^}]*container-type:\s*size/);
+    expect(styles).toMatch(/max-inline-size:[\s\S]*?var\(--run-card-formation-max-scale, 1\.45\)/);
+    expect(RUN_CARD_FORMATION_MAX_SCALE_COMMITTED).toBe(1.45);
   });
 
   it('uses the battlefield projection and the player army facing', () => {

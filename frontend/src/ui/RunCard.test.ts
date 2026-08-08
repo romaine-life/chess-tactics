@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RUN_CARD_BY_ID } from '../run/model';
-import { runCardFormationRows } from './RunCardFace';
+import { RUN_CARD_BY_ID, RUN_CARD_DECK } from '../run/model';
 import { runCardFaceContent, runCardFrameSlot } from './runCardFaceContent';
 import { RUN_CARD_FRAME_SLOT } from './runCardFrameGeometry';
 
@@ -16,8 +15,28 @@ describe('shared Run card', () => {
     ]);
   });
 
-  it('keeps an empty deployment row visible so singleton front and back cards differ', () => {
-    expect(runCardFormationRows([{ y: 0 }])).toBe(2);
-    expect(runCardFormationRows([{ y: 1 }])).toBe(2);
+  /**
+   * The face draws the footprint alone and centres it, which it can only do because the rank a
+   * formation is authored on is NOT card identity: the deck collapses cards by rotation and
+   * translation, so a shape on the front rank and the same shape on the back rank are one card.
+   * The straight run is the proof — it is authored entirely on the back rank and the deck holds
+   * no front-rank twin of it. If that ever stopped being true, a centred diagram would start
+   * printing two different cards identically, and this is the test that would say so.
+   */
+  it('deals one card per formation, whichever rank it is authored on', () => {
+    const identity = new Map<string, string>();
+    for (const card of RUN_CARD_DECK) {
+      const cells = card.formation ?? [];
+      const minX = Math.min(...cells.map((cell) => cell.x));
+      const minY = Math.min(...cells.map((cell) => cell.y));
+      const translated = cells
+        .map((cell, index) => `${cell.x - minX}${cell.y - minY}${card.pieces[index]}`)
+        .sort()
+        .join('-');
+      expect(identity.get(translated), `${card.id} repeats ${identity.get(translated)}`).toBeUndefined();
+      identity.set(translated, card.id);
+    }
+    const straightRun = RUN_CARD_DECK.find((card) => card.id === 'f-01112131-kppp');
+    expect(straightRun?.formation?.every((cell) => cell.y === 1)).toBe(true);
   });
 });

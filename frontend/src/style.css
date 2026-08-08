@@ -25991,22 +25991,104 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   row-gap: var(--run-card-ledger-row-gap, .8cqw);
 }
 
-.run-card-formation {
+/* The size the card has always drawn a tile at, carried INTO the diagram's own size container.
+
+   Registering it is the whole trick. An element is measured against its ANCESTOR container, so
+   `cqw` written here is a share of the CARD; inside the box below it would be a share of the box,
+   and the cap would stop meaning "times the size the card used to print". A registered property is
+   computed where it is declared and inherits as an absolute length, so the cap survives the
+   crossing. */
+@property --run-card-formation-committed-tile {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
+/* The SPACE: whatever the contents panel is not already spending on the card's flavour. It is a
+   size container, so the drawing inside can measure that space and take it — which is what makes
+   a one-seat card print a larger seat than a four-seat card. It is the space itself, not a
+   cap on it; the cap belongs to the drawing, so that this box stays the honest answer to "how
+   much room is there". */
+.run-card-formation-fit {
+  /* Stated, not shrink-to-fit: size containment gives this box no content to measure, so a
+     shrink-to-fit cross size would collapse it to nothing and take the diagram with it. */
   align-self: center;
-  block-size: var(--run-card-formation-height);
-  display: block;
-  flex: 0 0 auto;
-  inline-size: var(--run-card-formation-width);
-  isolation: isolate;
-  margin-block: 8.7cqw .4cqw;
+  container-type: size;
+  flex: 1 1 auto;
+  inline-size: 100%;
+  margin-block-end: var(--run-card-formation-flavour-gap);
+  /* The RESERVE is what stops the same footprint printing at two sizes on two cards: taken
+     literally, "fill the room" makes the board a function of how long the card's prose happens to
+     be, and a one-line flavour would print a visibly bigger board than a two-line one for the
+     identical formation. Two lines is the whole deck's longest, so every card gets the same space.
+
+     A longer flavour than that would still win — the box shrinks with the room rather than
+     overrunning it, which is what stopped the four-seat cards clipping their last line. */
+  max-block-size: calc(
+    var(--run-card-contents-block)
+    - var(--run-card-contents-padding-block-start, 2.2cqw)
+    - var(--run-card-contents-padding-block-end, 2.3cqw)
+    - var(--run-card-formation-flavour-reserve)
+    - var(--run-card-formation-flavour-gap)
+  );
+  min-block-size: 0;
   position: relative;
+  --run-card-formation-flavour-gap: .4cqw;
+  --run-card-formation-flavour-reserve: calc(var(--run-card-flavor-size, 3.15cqw) * 1.2 * 2);
+}
+
+/* Every length below is a multiple of ONE: the tile the diagram is drawn on. Fitting the drawing
+   to its room is therefore a single division, and the seats, the outline and the figures on them
+   keep their proportions to each other at any size. */
+.run-card-formation {
+  /* Fit the INK to the space on its tightest axis, then stop at the cap.
+
+     One box is fitted and the same box is centred. An earlier pass fitted a RESERVE instead --
+     a board plus room for a full-scale figure -- so that a card's board would not resize with the
+     piece standing on it. That reasoning does not survive contact: the board already resizes with
+     the FOOTPRINT, from 1.45x on one seat to 0.91x on four, so holding it still across pieces was
+     defending a consistency the card never had. All it bought was a third box, larger than
+     anything painted, hanging outside the drawing. */
+  --run-card-formation-ink-width: calc(
+    var(--run-card-formation-ink-right) - var(--run-card-formation-ink-left)
+  );
+  --run-card-formation-ink-height: calc(
+    var(--run-card-formation-ink-bottom) - var(--run-card-formation-ink-top)
+  );
+  --run-card-formation-unit: min(
+    calc(100cqw / var(--run-card-formation-ink-width)),
+    calc(100cqh / var(--run-card-formation-ink-height)),
+    calc(var(--run-card-formation-max-scale, 1.45) * var(--run-card-formation-committed-tile))
+  );
+  block-size: calc(var(--run-card-formation-unit) * var(--run-card-formation-natural-height));
+  display: block;
+  inline-size: calc(var(--run-card-formation-unit) * var(--run-card-formation-natural-width));
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  isolation: isolate;
+  position: absolute;
+  /* This element is the drawing's coordinate FRAME, not the drawing: it spans far enough for a
+     full-scale figure on every seat so the seats have somewhere to be placed, and it is never
+     painted or outlined. What is fitted and centred is the ink inside it, so the frame is shifted
+     by the gap between the two. Nothing here is a box the reader can see. */
+  --run-card-formation-ink-dx: calc(
+    var(--run-card-formation-natural-width) / 2
+    - (var(--run-card-formation-ink-left) + var(--run-card-formation-ink-right)) / 2
+  );
+  --run-card-formation-ink-dy: calc(
+    var(--run-card-formation-natural-height) / 2
+    - (var(--run-card-formation-ink-top) + var(--run-card-formation-ink-bottom)) / 2
+  );
+  translate:
+    calc(-50% + var(--run-card-formation-unit) * var(--run-card-formation-ink-dx))
+    calc(-50% + var(--run-card-formation-unit) * var(--run-card-formation-ink-dy));
 }
 
 .run-card-formation-square {
-  block-size: var(--run-card-formation-tile-height);
-  inline-size: var(--run-card-formation-tile-width);
-  inset-block-start: var(--run-card-formation-top);
-  inset-inline-start: var(--run-card-formation-left);
+  block-size: calc(var(--run-card-formation-unit) * var(--run-card-formation-tile-aspect));
+  inline-size: var(--run-card-formation-unit);
+  inset-block-start: calc(var(--run-card-formation-unit) * var(--run-card-formation-top));
+  inset-inline-start: calc(var(--run-card-formation-unit) * var(--run-card-formation-left));
   pointer-events: none;
   position: absolute;
   transform: translate(-50%, -50%);
@@ -26032,10 +26114,11 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
    weight the seats have always carried; drawing it here rather than per seat is what lets the
    corners mitre instead of jogging between four sub-pixel grids. */
 .run-card-formation-outline {
-  block-size: 100%;
+  block-size: calc(var(--run-card-formation-unit) * var(--run-card-formation-board-height));
   display: block;
-  inline-size: 100%;
-  inset: 0;
+  inline-size: calc(var(--run-card-formation-unit) * var(--run-card-formation-board-width));
+  inset-block-start: calc(var(--run-card-formation-unit) * var(--run-card-formation-board-top));
+  inset-inline-start: calc(var(--run-card-formation-unit) * var(--run-card-formation-board-left));
   overflow: visible;
   pointer-events: none;
   position: absolute;
@@ -26076,12 +26159,18 @@ button.run-card-formation-cell {
   align-items: center;
   background: transparent;
   border: 0;
-  block-size: calc(16.08cqw * var(--run-card-unit-scale));
+  block-size: calc(
+    var(--run-card-formation-unit) * var(--run-card-formation-figure-cell-height)
+    * var(--run-card-unit-scale)
+  );
   box-sizing: border-box;
   display: grid;
-  inline-size: calc(13.46cqw * var(--run-card-unit-scale));
-  inset-block-start: var(--run-card-formation-top);
-  inset-inline-start: var(--run-card-formation-left);
+  inline-size: calc(
+    var(--run-card-formation-unit) * var(--run-card-formation-figure-cell-width)
+    * var(--run-card-unit-scale)
+  );
+  inset-block-start: calc(var(--run-card-formation-unit) * var(--run-card-formation-top));
+  inset-inline-start: calc(var(--run-card-formation-unit) * var(--run-card-formation-left));
   justify-items: center;
   min-block-size: 0;
   min-inline-size: 0;
@@ -26097,20 +26186,30 @@ button.run-card-formation-cell {
   color: rgba(51, 44, 35, .32);
   content: '';
   inline-size: 48%;
-  outline: .3cqw dashed currentColor;
+  outline: calc(var(--run-card-formation-unit) * .026) dashed currentColor;
 }
 
 .run-card-formation-cell.is-empty {
-  block-size: var(--run-card-formation-tile-height);
-  inline-size: var(--run-card-formation-tile-width);
+  block-size: calc(var(--run-card-formation-unit) * var(--run-card-formation-tile-aspect));
+  inline-size: var(--run-card-formation-unit);
   transform: translate(-50%, -50%);
 }
 
 .run-card-formation-unit {
-  block-size: calc(17.2cqw * var(--run-card-unit-scale));
-  filter: drop-shadow(0 .45cqw .35cqw rgba(19, 29, 32, .45));
+  block-size: calc(
+    var(--run-card-formation-unit) * var(--run-card-formation-figure-height)
+    * var(--run-card-unit-scale)
+  );
+  /* The figure's own shadow, in tiles, so it stays the same shadow at every diagram size. */
+  filter: drop-shadow(
+    0 calc(var(--run-card-formation-unit) * .039) calc(var(--run-card-formation-unit) * .03)
+    rgba(19, 29, 32, .45)
+  );
   image-rendering: pixelated;
-  inline-size: calc(14.58cqw * var(--run-card-unit-scale));
+  inline-size: calc(
+    var(--run-card-formation-unit) * var(--run-card-formation-figure-width)
+    * var(--run-card-unit-scale)
+  );
   object-fit: contain;
 }
 
@@ -26653,5 +26752,84 @@ button.run-card-formation-cell {
 /* The catalog band is shorter than a 5:7 face at the sibling widths, so this one states its own
    height rather than letting the pair get cropped at the chin. */
 .run-card-outline-catalog-image {
+  min-height: 150px;
+}
+
+/* Studio -> Card Fit. Every footprint the deck deals, under one live cap: the cap is a single
+   number governing all of them, so it can only be judged against all of them at once. */
+.run-card-fit-viewer {
+  display: grid;
+  gap: 12px;
+  min-inline-size: 0;
+}
+
+.run-card-fit-note {
+  margin: 0;
+  max-inline-size: 78ch;
+}
+
+/* The three keylines named in the prose, coloured as they are drawn on the cards. */
+.run-card-fit-key.is-space { color: rgba(88, 224, 255, .95); }
+.run-card-fit-key.is-reserve { color: rgba(216, 248, 255, .6); }
+.run-card-fit-key.is-drawing { color: rgba(255, 176, 64, .95); }
+
+.run-card-fit-grid {
+  align-items: start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  min-inline-size: 0;
+}
+
+/* Review-only: the space, and the drawing fitted and centred in it. Two boxes, and the second
+   touches the first on one axis -- which is the whole rule, drawn. */
+.run-card-fit-grid[data-formation-box='on'] .run-card-formation-fit {
+  outline: 1px dashed rgba(88, 224, 255, .85);
+}
+
+.run-card-fit-grid[data-formation-box='on'] .run-card-formation::before {
+  block-size: calc(var(--run-card-formation-unit) * var(--run-card-formation-ink-height));
+  content: '';
+  inline-size: calc(var(--run-card-formation-unit) * var(--run-card-formation-ink-width));
+  inset-block-start: calc(var(--run-card-formation-unit) * var(--run-card-formation-ink-top));
+  inset-inline-start: calc(var(--run-card-formation-unit) * var(--run-card-formation-ink-left));
+  outline: 1px solid rgba(255, 176, 64, .85);
+  pointer-events: none;
+  position: absolute;
+  z-index: 40;
+}
+
+.run-card-fit-specimen {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  margin: 0;
+}
+
+.run-card-fit-specimen > figcaption {
+  display: grid;
+  font-size: var(--ds-text-xs, 12px);
+  justify-items: center;
+}
+
+.run-card-fit-specimen > figcaption > span {
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
+}
+
+/* The face fills its parent, so the parent is what carries the printed size. */
+.run-card-fit-face {
+  display: block;
+  inline-size: var(--run-card-fit-face-width);
+}
+
+.run-card-fit-catalog-specimen {
+  align-self: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  inline-size: min(100%, 148px);
+}
+
+.run-card-fit-catalog-image {
   min-height: 150px;
 }
