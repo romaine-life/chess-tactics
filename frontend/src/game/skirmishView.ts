@@ -5,7 +5,7 @@
 
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import { appSettingsSnapshot } from '../settings/appSettings';
-import { PLAYER_MAXIMUM_ZOOM, PLAYER_TECHNICAL_MINIMUM_ZOOM } from './boardCameraPolicy';
+import { PLAYER_MAXIMUM_ZOOM, PLAYER_TECHNICAL_MINIMUM_ZOOM, playerMaximumZoom } from './boardCameraPolicy';
 
 const DEFAULT_ZOOM = 0.9;
 const DEFAULT_PAN = { x: 0, y: -12 };
@@ -86,7 +86,7 @@ export function createSkirmishViewStore(): SkirmishViewStore {
     })),
     setMinZoom: (zoom) => set((state) => {
       const minZoom = Math.max(PLAYER_TECHNICAL_MINIMUM_ZOOM, zoom);
-      const maxZoom = Math.max(PLAYER_MAXIMUM_ZOOM, minZoom, state.openingZoom);
+      const maxZoom = playerMaximumZoom(minZoom, state.openingZoom);
       return { minZoom, maxZoom, zoom: Math.min(maxZoom, Math.max(state.zoom, minZoom)) };
     }),
     setPan: (pan) => set({ pan }),
@@ -95,7 +95,7 @@ export function createSkirmishViewStore(): SkirmishViewStore {
       openingPan: camera.pan,
       // Opening composition is geometry, not a suggestion subject to the ordinary control cap.
       // Raising the ceiling first lets the framing hook apply the exact camera on large viewports.
-      maxZoom: Math.max(PLAYER_MAXIMUM_ZOOM, state.minZoom, camera.zoom, state.zoom),
+      maxZoom: playerMaximumZoom(state.minZoom, camera.zoom, state.zoom),
     })),
     clearOverlays: () => set({
       showMoves: false,
