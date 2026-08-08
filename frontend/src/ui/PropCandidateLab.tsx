@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { tileAssets, tileFamilies } from '../art/tileset';
 import { solveSocketBoard } from '../core/tileBoardGenerator';
 import { BoardLabBoard, boardLabCellPosition } from '../render/BoardLabBoard';
-import { StructureSprite } from '../render/BoardStructure';
+import { StructureSprite, seatTransformPercent, structureSeatPoint } from '../render/BoardStructure';
+import { arrivalOffset, structureLandingMs, STRUCTURE_ENTRANCE_MS, STRUCTURE_IMPACT_MS } from '../render/SkirmishBoard';
 import { objectBaseZIndex } from '../render/sceneDepth';
 import { PROP_DEFS, propDef } from '../core/props';
-import { structureArtAsset, structureArtHalfSrc, structureArtImpact } from '../core/structureArt';
+import { structureArtAsset, structureArtHalfSrc, structureArtImpact, structureRasterDimensions } from '../core/structureArt';
 import { pieceSpritePath } from '../core/pieces';
 import { terrainFamiliesForRole } from '../core/tileSockets';
 import { ViewPane } from './shared/ViewPane';
@@ -56,6 +57,11 @@ const PC_CSS = `
 .pc-row img { image-rendering: pixelated; }
 .pc-row-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pc-row-state { color: #8fb0c6; font-size: 11px; }
+.pc-entrance { position: absolute; left: var(--pc-left); top: var(--pc-top);
+  width: var(--pc-frame-w); height: var(--pc-frame-h); background-image: var(--pc-sheet);
+  background-size: var(--pc-sheet-w) var(--pc-frame-h); background-position: var(--pc-offset) 0;
+  background-repeat: no-repeat; image-rendering: pixelated; pointer-events: none;
+  opacity: var(--pc-alpha); transform: translate(var(--pc-shift)); }
 .pc-impact { display: grid; gap: 6px; justify-items: start; }
 .pc-impact-stage { width: var(--pc-frame-w); height: var(--pc-frame-h); background-image: var(--pc-sheet);
   background-size: var(--pc-sheet-w) var(--pc-frame-h); background-position: var(--pc-offset) 0;
@@ -81,6 +87,58 @@ function CandidateSprite({
       srcFor={srcFor}
       splitMode="flat-contact"
       attrsFor={(half) => ({ 'data-prop-candidate': seat.key, 'data-half': half })}
+    />
+  );
+}
+
+/**
+ * The prop's ENTRANCE, replayed on the board: the fall, the landing, and what the impact leaves.
+ * It runs the game's own `arrivalOffset` and impact frame policy against a local clock rather
+ * than a lookalike, so the Studio cannot drift from what a battle actually shows — if the
+ * choreography is retuned, this retunes with it.
+ */
+function EntrancePreview({ artId, cell, timeMs }: {
+  artId: string;
+  cell: { x: number; y: number };
+  timeMs: number | null;
+}): ReactElement | null {
+  const sheet = structureArtImpact(artId);
+  const art = structureArtAsset(artId);
+  if (!art) return null;
+  const sprite = art.sprite;
+  const raster = sheet
+    ? { w: sheet.frameWidth, h: sheet.frameHeight }
+    : structureRasterDimensions(artId);
+  const scale = sprite.scale;
+  const { left, top } = structureSeatPoint(cell, 1, 1);
+  const { x: tx, y: ty } = seatTransformPercent({ w: raster.w, h: raster.h, anchorX: sprite.anchorX, anchorY: sprite.anchorY });
+
+  // A null clock means "not playing" — show the resting frame, exactly as an unplayed prop.
+  const elapsed = timeMs ?? STRUCTURE_ENTRANCE_MS;
+  const plan = { startMs: 0, delayMs: 0 };
+  const fall = arrivalOffset(elapsed, plan);
+  const landedAt = structureLandingMs(plan) ?? 0;
+  const frames = sheet?.frameCount ?? 1;
+  const frame = elapsed < landedAt
+    ? 0
+    : Math.min(frames - 1, Math.floor((elapsed - landedAt) / (STRUCTURE_IMPACT_MS / frames)));
+
+  return (
+    <div
+      className="pc-entrance"
+      style={{
+        '--pc-left': `${left}px`,
+        '--pc-top': `${top}px`,
+        '--pc-frame-w': `${raster.w * scale}px`,
+        '--pc-frame-h': `${raster.h * scale}px`,
+        '--pc-sheet-w': `${raster.w * frames * scale}px`,
+        '--pc-offset': `-${frame * raster.w * scale}px`,
+        '--pc-sheet': `url(${sheet?.src ?? structureArtHalfSrc(artId, 'front')})`,
+        '--pc-shift': `${tx}% calc(${ty}% + ${fall.dy}px)`,
+        '--pc-alpha': `${fall.opacity}`,
+        zIndex: objectBaseZIndex(cell),
+      } as CSSProperties}
+      data-entrance-frame={frame}
     />
   );
 }
@@ -158,6 +216,32 @@ export function PropCandidateLab({ propId, onPropId, header }: {
   const [notice, setNotice] = useState<string | null>(null);
   const [seats, setSeats] = useState<ReadonlyMap<string, PropCandidateSeat>>(new Map());
   const [seatError, setSeatError] = useState<string | null>(null);
+  const [entranceMs, setEntranceMs] = useState<number | null>(null);
+  const [entranceSpeed, setEntranceSpeed] = useState(1);
+  const [entranceCell, setEntranceCell] = useState({ x: 5, y: 4 });
+  const entranceRunRef = useRef<number | null>(null);
+
+  // Drive the entrance off a real clock so the replay has the same duration and the same shape a
+  // battle does; scrubbing simply stops the clock and sets the moment by hand.
+  useEffect(() => {
+    if (entranceRunRef.current === null) return undefined;
+    let raf = 0;
+    const startedAt = performance.now() - (entranceRunRef.current ?? 0) / Math.max(0.05, entranceSpeed);
+    const tick = (now: number): void => {
+      const elapsed = (now - startedAt) * Math.max(0.05, entranceSpeed);
+      if (elapsed >= STRUCTURE_ENTRANCE_MS) {
+        entranceRunRef.current = null;
+        setEntranceMs(STRUCTURE_ENTRANCE_MS);
+        return;
+      }
+      setEntranceMs(elapsed);
+      raf = window.requestAnimationFrame(tick);
+    };
+    raf = window.requestAnimationFrame(tick);
+    return () => window.cancelAnimationFrame(raf);
+  }, [entranceSpeed, entranceMs === null]);
+
+  const playEntrance = (): void => { entranceRunRef.current = 0; setEntranceMs(0); };
 
   const refresh = useCallback(async (): Promise<void> => {
     setState((current) => (current === 'ready' ? current : 'loading'));
@@ -319,6 +403,7 @@ export function PropCandidateLab({ propId, onPropId, header }: {
                 />
               );
             })}
+            <EntrancePreview artId={propDef(activeProp)?.spriteId ?? activeProp} cell={entranceCell} timeMs={entranceMs} />
             {showUnit ? (
               <span className="board-unit-seat is-knight" style={{ left: unitPos.left, top: unitPos.top, zIndex: objectBaseZIndex(unitCell) }}>
                 <img src={pieceSpritePath('knight')} alt="" draggable={false} />
@@ -401,7 +486,39 @@ export function PropCandidateLab({ propId, onPropId, header }: {
               </button>
             </div>
             {notice ? <p className="pc-note">{notice}</p> : null}
-            <h2>Impact</h2>
+            <h2>Entrance</h2>
+            <div className="ps-toggles">
+              <button type="button" className="ps-toggle" onClick={playEntrance}>Play entrance</button>
+              {[1, 0.5, 0.25].map((rate) => (
+                <button
+                  key={rate}
+                  type="button"
+                  className={`ps-toggle ${entranceSpeed === rate ? 'is-on' : ''}`}
+                  onClick={() => setEntranceSpeed(rate)}
+                >{rate === 1 ? '1×' : rate === 0.5 ? '½×' : '¼×'}</button>
+              ))}
+            </div>
+            <label className="tileset-catalog-zoom">
+              <span>Scrub {Math.round(entranceMs ?? STRUCTURE_ENTRANCE_MS)}ms</span>
+              <input
+                type="range" min={0} max={STRUCTURE_ENTRANCE_MS} step={10}
+                value={Math.round(entranceMs ?? STRUCTURE_ENTRANCE_MS)}
+                onChange={(event) => { entranceRunRef.current = null; setEntranceMs(Number(event.target.value)); }}
+              />
+            </label>
+            <div className="ps-toggles">
+              {(['x', 'y'] as const).map((axis) => (
+                <button key={axis} type="button" className="ps-toggle"
+                  onClick={() => setEntranceCell((cell) => ({
+                    ...cell,
+                    [axis]: (cell[axis] + 1) % (axis === 'x' ? COLS : ROWS),
+                  }))}
+                >Move {axis.toUpperCase()} ({entranceCell[axis]})</button>
+              ))}
+            </div>
+            <p className="pc-note">The fall is {STRUCTURE_ENTRANCE_MS - STRUCTURE_IMPACT_MS}ms, the impact {STRUCTURE_IMPACT_MS}ms. Same functions the battle runs.</p>
+
+            <h2>Impact frames</h2>
             <ImpactReview artId={propDef(activeProp)?.spriteId ?? activeProp} />
 
             <p className="pc-note">Slots: {slots.join(' · ')}</p>

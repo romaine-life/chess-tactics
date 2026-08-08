@@ -683,7 +683,7 @@ const STRUCTURE_ARRIVAL_BASE_MS = 130;
 const STRUCTURE_ARRIVAL_STEP_MS = 55;
 // The impact reads as one event, not a performance: it resolves inside the deploy wave rather
 // than trailing behind it, and what it leaves is permanent.
-const STRUCTURE_IMPACT_MS = 320;
+export const STRUCTURE_IMPACT_MS = 320;
 
 /** Which placed props take part in the board-assembly drop. */
 export function structureArrives(structure: BoardStructureIdentity): boolean {
@@ -828,6 +828,8 @@ const ROCK_ANCHOR_X = 0.5;
 const ROCK_ANCHOR_Y = 0.78;
 const SCENE_BOUNDS_PAD = 96;
 const ARRIVAL_ANIM_MS = 620;
+/** The whole entrance, fall through impact — what a review surface has to be able to replay. */
+export const STRUCTURE_ENTRANCE_MS = ARRIVAL_ANIM_MS + STRUCTURE_IMPACT_MS;
 const FORMATION_SLIDE_ANIM_MS = 560;
 const ZERO_BOARD_DELTA: Vec = { x: 0, y: 0 };
 
