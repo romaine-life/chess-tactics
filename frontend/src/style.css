@@ -22901,7 +22901,6 @@ button.tileset-relationship-cell {
   position: absolute;
 }
 
-
 .enchiridion-card-gallery-grid {
   display: grid;
   gap: var(--ds-stack);
