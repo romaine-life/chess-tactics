@@ -109,6 +109,7 @@ import {
 import { RunCard } from './RunCard';
 import { RUN_CARD_BACK_SLOT } from './RunCardBack';
 import { RunCardPile } from './RunCardPile';
+import { RunCardRow } from './RunCardRow';
 import { RunBattlePreview } from './RunBattlePreview';
 import { RunDeploymentCardStack, RunDeploymentDeckDeal } from './RunDeploymentCardStack';
 import { RunArrangementHand } from './RunArrangementHand';
@@ -779,7 +780,7 @@ function SectioCardRow({
   }, [wrap]);
 
   if (!wrap || wrap.kind !== 'band' || cardCount < 1) {
-    return <div className="run-card-grid">{children}</div>;
+    return <RunCardRow count={cardCount}>{children}</RunCardRow>;
   }
   const mount = box.width > 0 && box.height > 0
     ? runSectioWrapLiveMount(wrap, cardCount, box.width, box.height)
