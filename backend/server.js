@@ -5676,6 +5676,39 @@ const MIGRATIONS = [
        WHERE body->'runSaveVersion' = '29'::jsonb;
     `,
   },
+  {
+    version: 70,
+    name: 'opening formation-card grant',
+    // ADR-0516: the Run's opening screen grants a formation card instead of a lipsanon.
+    // Every later Conflict keeps its lipsana and only gains an empty cardOffers list, and a
+    // Run that already left the opening screen keeps the lipsanon it took.
+    //
+    // A document still sitting on the opening screen needs offers this statement cannot
+    // derive: the live triad is a seeded shuffle of the value 4-6 band, which is model logic,
+    // not SQL. It therefore receives one fixed valid triad from that band rather than an
+    // approximation of the shuffle. The affected state is the very first choice of a Run,
+    // before anything has been decided, so a neutral replacement costs the player nothing.
+    sql: `
+      UPDATE active_runs
+         SET body = body
+                    || jsonb_build_object('runSaveVersion', 31)
+                    || CASE
+                         WHEN jsonb_typeof(body->'vacantia') <> 'object'
+                           THEN '{}'::jsonb
+                         WHEN body->'vacantia'->>'kind' = 'opening'
+                           THEN jsonb_build_object('vacantia', body->'vacantia'
+                                || jsonb_build_object(
+                                     'offers', '[]'::jsonb,
+                                     'cardOffers', '["f-01101120-kppp","f-011011-pkp","f-0111-bk"]'::jsonb
+                                   ))
+                         ELSE jsonb_build_object('vacantia', body->'vacantia'
+                                || jsonb_build_object('cardOffers', '[]'::jsonb))
+                       END,
+             revision = revision + 1,
+             updated_at = now()
+       WHERE body->'runSaveVersion' = '30'::jsonb;
+    `,
+  },
 ];
 
 let pool = null;
@@ -6300,7 +6333,10 @@ async function unmigratedActiveRunSaveCounts(client) {
        )::integer AS version_28_count,
        count(*) FILTER (
          WHERE body->'runSaveVersion' = '29'::jsonb
-       )::integer AS version_29_count
+       )::integer AS version_29_count,
+       count(*) FILTER (
+         WHERE body->'runSaveVersion' = '30'::jsonb
+       )::integer AS version_30_count
        FROM active_runs`,
   );
   return Object.freeze({
@@ -6318,6 +6354,7 @@ async function unmigratedActiveRunSaveCounts(client) {
     version_27_count: Number(rows[0]?.version_27_count) || 0,
     version_28_count: Number(rows[0]?.version_28_count) || 0,
     version_29_count: Number(rows[0]?.version_29_count) || 0,
+    version_30_count: Number(rows[0]?.version_30_count) || 0,
   });
 }
 
@@ -6483,7 +6520,8 @@ async function requiredSchemaContractIssues(client) {
       + unmigratedActiveRunSaves.version_26_count
       + unmigratedActiveRunSaves.version_27_count
       + unmigratedActiveRunSaves.version_28_count
-      + unmigratedActiveRunSaves.version_29_count,
+      + unmigratedActiveRunSaves.version_29_count
+      + unmigratedActiveRunSaves.version_30_count,
     unmigrated_active_run_version_16_count: unmigratedActiveRunSaves.version_16_count,
     unmigrated_active_run_version_17_count: unmigratedActiveRunSaves.version_17_count,
     unmigrated_active_run_version_18_count: unmigratedActiveRunSaves.version_18_count,
@@ -6498,6 +6536,7 @@ async function requiredSchemaContractIssues(client) {
     unmigrated_active_run_version_27_count: unmigratedActiveRunSaves.version_27_count,
     unmigrated_active_run_version_28_count: unmigratedActiveRunSaves.version_28_count,
     unmigrated_active_run_version_29_count: unmigratedActiveRunSaves.version_29_count,
+    unmigrated_active_run_version_30_count: unmigratedActiveRunSaves.version_30_count,
     unmigrated_level_format_1_count: unmigratedLevelDocuments,
     unrepaired_saved_editor_baseline_count: unrepairedSavedEditorBaselines,
     primogeniture_non_retired_slot_count: primogenitureRetirement.non_retired_slot_count,
@@ -6743,6 +6782,17 @@ async function repairRequiredSchemaContracts(
     await executeMigration(migration, 'repair player-arranged formation contract');
     completedSteps.push(Object.freeze({
       contract: 'player-arranged formation save version',
+      migration_version: migration.version,
+    }));
+    markInspection(`inspect required contract repairs after migration ${migration.version}`);
+    issues = await requiredSchemaContractIssues(client);
+  }
+  if (issues.unmigrated_active_run_version_30_count > 0) {
+    const migration = MIGRATIONS.find((candidate) => candidate.version === 70);
+    if (!migration) throw new Error('opening formation-card grant repair migration is unavailable');
+    await executeMigration(migration, 'repair opening formation-card grant contract');
+    completedSteps.push(Object.freeze({
+      contract: 'opening formation-card grant save version',
       migration_version: migration.version,
     }));
     markInspection(`inspect required contract repairs after migration ${migration.version}`);

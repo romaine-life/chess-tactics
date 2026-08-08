@@ -1081,7 +1081,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
     )
   ) {
     throw new Error(
-      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 69: `
+      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 70: `
       + `${JSON.stringify({
         history: history.rows,
         identity_columns: identityColumns.rows,
