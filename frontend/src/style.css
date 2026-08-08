@@ -19643,20 +19643,20 @@ button.tileset-relationship-cell {
   padding: 0;
 }
 
-/* The board's own title bar: name and its registered rule inside ONE painted strip. The strip
-   owns the installed OUTER marble and both children sit on it, so the rule has no unpainted row
-   of its own to open up — that gap is what let the fill bleed against the level art. */
-.run-battle-preview-board-titlebar {
+/* ONE title bar, worn by every box on this screen: name and its registered rule inside one
+   painted strip. The strip owns the installed OUTER marble and both children sit on it, so the
+   rule has no unpainted row of its own to open up — that gap is what let the fill bleed. */
+.run-battle-preview-titlebar {
   display: grid;
   grid-template-rows: auto auto;
   position: relative;
 }
 
-.run-battle-preview-board-titlebar > .run-battle-preview-board-titlebar-fill {
+.run-battle-preview-titlebar > .run-battle-preview-titlebar-fill {
   inset: 0;
 }
 
-.run-battle-preview-board-titlebar > :not(.run-battle-preview-board-titlebar-fill) {
+.run-battle-preview-titlebar > :not(.run-battle-preview-titlebar-fill) {
   position: relative;
   z-index: 1;
 }
@@ -19665,19 +19665,22 @@ button.tileset-relationship-cell {
    content box so the authored T caps tee INTO the side rails. This host's rails are the inner
    box's, so the reach is that rail's width — the same declaration `.house-select-menu-options`
    makes. The bleed must not be clipped, or the caps land inside the frame. */
-.run-battle-preview-board-titlebar > .run-battle-preview-board-rule {
+.run-battle-preview-titlebar > .run-battle-preview-titlebar-rule {
   --kit-divider-gap: 0px;
   --kit-divider-reach: var(--le-chrome-inner-rail-w, 7px);
 }
 
-.run-battle-preview-board-head {
+.run-battle-preview-titlebar-head {
   align-items: center;
   display: flex;
   padding: var(--ds-space-1) var(--ds-space-2);
 }
 
-.run-battle-preview-board-head h2 {
-  font-size: var(--ds-text-lg);
+/* The box's own name is the largest thing in it. Section headers govern the rows beneath them,
+   and rows outrank their labels: title > section header > value > label, with no step skipped
+   and none inverted. */
+.run-battle-preview-titlebar-head > h2 {
+  font-size: var(--ds-text-xl);
   margin: 0;
 }
 
@@ -19710,13 +19713,24 @@ button.tileset-relationship-cell {
    are given instead of huddling at the top over dead space. */
 /* Two shared tracks: the label column is ONE width for every labelled row, so BATTLE, RULES and
    TIME start their values on the same line instead of each row justifying to its own label. */
+/* No box padding: the title strip is flush to the frame like the board's. The inset moves to the
+   rows underneath it. */
 .run-battle-preview-info.ce-level-info {
   align-content: start;
   block-size: auto;
   grid-template-columns: auto minmax(0, 1fr);
   overflow: auto;
-  padding: var(--ds-inset);
+  padding: 0 0 var(--ds-inset);
   row-gap: var(--ds-stack);
+}
+
+.run-battle-preview-info > .run-battle-preview-titlebar {
+  grid-column: 1 / -1;
+  margin-block-end: calc(var(--ds-stack) * -1 + var(--ds-inset));
+}
+
+.run-battle-preview-info > section {
+  padding-inline: var(--ds-inset);
 }
 
 .run-battle-preview-info .ce-li-zones-row {
@@ -19732,29 +19746,31 @@ button.tileset-relationship-cell {
   gap: var(--ds-space-2);
 }
 
+/* Row labels are the bottom of the scale. */
 .run-battle-preview-info .ce-li-title {
-  font-size: var(--ds-text-md);
+  font-size: var(--ds-text-sm);
   letter-spacing: .06em;
 }
 
 /* A section header governs the rows under it, so it reads LARGER than they do — the borrowed
-   compact scale had it smaller, which is why it did not read as a header at all. */
+   compact scale had it smaller, which is why it did not read as a header at all. It stays a step
+   under the box's own title, which is the largest thing in the box. */
 .run-battle-preview-info :is(.ce-li-board, .ce-li-forces) > .ce-li-title {
   color: var(--ce-ink);
-  font-size: var(--ds-text-xl);
+  font-size: var(--ds-text-lg);
   letter-spacing: .04em;
 }
 
 .run-battle-preview-info :is(.ce-li-stat span, .ce-li-roster li span, .ce-li-roster-head span) {
-  font-size: var(--ds-text-lg);
+  font-size: var(--ds-text-md);
 }
 
 .run-battle-preview-info :is(.ce-li-stat strong, .ce-li-roster li b, .ce-li-zones) {
-  font-size: var(--ds-text-lg);
+  font-size: var(--ds-text-md);
 }
 
 .run-battle-preview-info .ce-li-roster-head strong {
-  font-size: var(--ds-text-xl);
+  font-size: var(--ds-text-lg);
 }
 
 .run-battle-preview-info .ce-li-rosters {
@@ -19767,7 +19783,7 @@ button.tileset-relationship-cell {
 
 /* "none" is a roster entry, so it reads at the same size as the entries it stands in for. */
 .run-battle-preview-info .ce-li-none {
-  font-size: var(--ds-text-lg);
+  font-size: var(--ds-text-md);
 }
 
 .ce-li-dealt {
@@ -19776,18 +19792,20 @@ button.tileset-relationship-cell {
   margin: var(--ds-space-2) 0 0;
 }
 
+/* Same shape as the readout: the title strip is flush to the frame, the prose is inset. */
 .run-battle-preview-note {
   align-content: start;
   display: grid;
   gap: var(--ds-space-2);
   min-block-size: 0;
   overflow: auto;
-  padding: var(--ds-inset);
+  padding: 0 0 var(--ds-inset);
 }
 
 .run-battle-preview-note p {
   color: var(--skirmish-muted);
   font-size: var(--ds-text-md);
+  padding-inline: var(--ds-inset);
 }
 
 @media (max-width: 900px) {

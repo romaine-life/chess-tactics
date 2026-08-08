@@ -126,7 +126,7 @@ export function LevelInfoCompact({
   showZones = true,
   fillRole,
   className = '',
-  lead = null,
+  titleBar = null,
 }: {
   level: Level;
   /** Zones are authoring detail; a player-facing reconnaissance readout omits them. */
@@ -134,8 +134,8 @@ export function LevelInfoCompact({
   /** Installed role material under the readout; the frame's own role stays inner. */
   fillRole?: ComponentProps<typeof InnerChromeBox>['fillRole'];
   className?: string;
-  /** Rows this readout's consumer owns, above the level's own derived facts. */
-  lead?: ReactElement | null;
+  /** The box's own title strip, seated flush at its top edge above the derived facts. */
+  titleBar?: ReactElement | null;
 }): ReactElement {
   const { cols, rows } = level.board;
   const total = cols * rows;
@@ -155,7 +155,7 @@ export function LevelInfoCompact({
       fillRole={fillRole}
       data-testid="level-info-compact"
     >
-      {lead}
+      {titleBar}
       <section className="ce-li-board">
         <span className="ce-li-title">Board</span>
         <div className="ce-li-stat"><span>Size</span><strong>{cols} × {rows}</strong></div>

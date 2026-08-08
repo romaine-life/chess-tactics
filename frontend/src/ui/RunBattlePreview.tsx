@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { sectioUpcomingBattleIndex, type RunDocument } from '../run/model';
 import { levelToEditorBoard } from '../core/levelBoard';
 import { ChromeDivider, ChromeSurfaceFill, InnerChromeBox } from './shared/ChromeBox';
@@ -6,6 +6,23 @@ import { FramedReadOnlyBoardView } from './shared/BoardViewFraming';
 import { LevelInfoCompact } from './LevelInfoCompact';
 import { RunSceneViewport } from './RunWorkspace';
 import { PaintedSurfaceBoundary } from './shell/PaintedSurfaceBoundary';
+
+/**
+ * The one title bar every box on this screen wears: a marble strip carrying the box's name and
+ * the registered rule beneath it. One implementation so the three boxes cannot drift apart in
+ * weight, treatment, or seam.
+ */
+function PreviewTitleBar({ id, children }: { id?: string; children: ReactNode }): ReactElement {
+  return (
+    <div className="run-battle-preview-titlebar">
+      <ChromeSurfaceFill role="outer" className="run-battle-preview-titlebar-fill" />
+      <header className="run-battle-preview-titlebar-head">
+        <h2 id={id}>{children}</h2>
+      </header>
+      <ChromeDivider role="inner" className="run-battle-preview-titlebar-rule" />
+    </div>
+  );
+}
 
 /**
  * Sectio-only reconnaissance of the next canonical War Level. This is deliberately a read-only
@@ -64,13 +81,7 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
               the same bleeding band as an opaque padding. Bounding the paint to the strip means
               there is no such area: strip, then board, then border. */}
           <InnerChromeBox className="run-battle-preview-board-frame">
-            <div className="run-battle-preview-board-titlebar">
-              <ChromeSurfaceFill role="outer" className="run-battle-preview-board-titlebar-fill" />
-              <header className="run-battle-preview-board-head">
-                <h2 id="run-battle-preview-title">{level.name}</h2>
-              </header>
-              <ChromeDivider role="inner" className="run-battle-preview-board-rule" />
-            </div>
+            <PreviewTitleBar id="run-battle-preview-title">{level.name}</PreviewTitleBar>
             <div className="ce-level-viewer run-battle-preview-board-view">
               <FramedReadOnlyBoardView
                 board={board}
@@ -95,22 +106,17 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
               // OUTER role material, borrowed under an inner frame (ADR-0433 borrowing rule).
               fillRole="outer"
               className="run-battle-preview-info"
-              lead={(
-                <section className="ce-li-zones-row">
-                  <span className="ce-li-title">Battle</span>
-                  <span className="ce-li-zones">
-                    {battleIndex + 1} of {run.war.battles.length} · {run.cards.length} formation
-                    {run.cards.length === 1 ? '' : 's'} deploy with you
-                  </span>
-                </section>
+              titleBar={(
+                <PreviewTitleBar>Battle {battleIndex + 1} of {run.war.battles.length}</PreviewTitleBar>
               )}
             />
             <InnerChromeBox className="run-battle-preview-note" fillRole="outer">
-              <h3>Before deployment</h3>
+              <PreviewTitleBar>Before deployment</PreviewTitleBar>
               <p>
                 Fixed pieces appear on the map. The Forces ledger also counts setup forces whose
                 exact squares are dealt when the Battle begins. Your Run army deploys after you
-                leave the Sectio.
+                leave the Sectio — {run.cards.length} formation
+                {run.cards.length === 1 ? '' : 's'} deploy with you.
               </p>
             </InnerChromeBox>
           </aside>
