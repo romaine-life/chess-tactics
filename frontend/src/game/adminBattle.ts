@@ -1,12 +1,20 @@
 import type { GameEvent, GameState, Move, Piece } from '../core/types';
 
-/** Explicit administrator geometry, kept outside the chess legal-move generator. */
+/**
+ * Explicit administrator geometry, kept outside the chess legal-move generator.
+ *
+ * Either army's unit is movable, whichever side is to move. Setting up a position is the
+ * whole job — a window that only ever opens on the side already to move cannot arrange the
+ * one thing you usually need arranged, which is what the OPPONENT just did. The turn that
+ * results is still ordinary: `applyMove` hands play to the other side of whichever piece
+ * moved, so walking an enemy piece leaves it the player's move, with that walk standing as
+ * `lastMove`.
+ */
 export function adminMoveTargets(game: GameState, pieceId: string): Move[] {
   const piece = game.pieces.find((candidate) => (
     candidate.id === pieceId
     && candidate.alive
     && (candidate.side === 'player' || candidate.side === 'enemy')
-    && candidate.side === game.turn
   ));
   if (!piece) return [];
   const targets: Move[] = [];
