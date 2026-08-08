@@ -25498,6 +25498,15 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   justify-items: start;
 }
 
+/* The switch sits above the cards it changes, so it has to stay short: the
+   offered-back family makes a stacked list tall enough to push the specimens
+   off the bottom of the screen. */
+.run-card-back-candidate-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-1);
+}
+
 .run-card-back-candidate-groups section > header {
   align-items: baseline;
   display: flex;
@@ -25532,12 +25541,14 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
 }
 
 /* Beats the base card-image img rule, which sizes every catalog image to an iso
-   tile. Both cards fit side by side at 100% and grow with the Studio's own zoom
-   like every other viewer; the pane roams once they outgrow it. */
+   tile. Height-led rather than a fixed width: at 100% both cards are whole and
+   on screen at any window this Studio is usable in, and zoom scales from there.
+   A fixed size looked right on one window and ran off the bottom of every
+   shorter one. The 5:7 aspect on .run-card-back gives the width. */
 .tileset-studio-card-image.run-card-back-specimen img.run-card-back {
-  block-size: auto;
+  block-size: calc(clamp(220px, 100vh - 400px, 588px) * var(--run-card-gallery-zoom, 1));
   image-rendering: auto;
-  inline-size: calc(420px * var(--run-card-gallery-zoom, 1));
+  inline-size: auto;
   max-inline-size: none;
   object-fit: cover;
 }
