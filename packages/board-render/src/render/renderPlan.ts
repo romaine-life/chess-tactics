@@ -42,6 +42,7 @@ import type { TileFamilyId } from '../core/tileSockets';
 import {
   boardBackgroundMode,
   isVersionedPredrawnBoardSurface,
+  predrawnRenderSurface,
   type EditorBoard,
   type FloatingArtworkPlacement,
 } from '../ui/boardCode';
@@ -446,7 +447,7 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
   const ops: BoardDrawOp[] = [];
   const visualTerrainCells = boardVisualTerrainCells(board);
   const predrawn = isPredrawnBackgroundActive(board) && board.surface?.kind === 'predrawn'
-    ? board.surface
+    ? predrawnRenderSurface(board)
     : undefined;
   const predrawnBackgroundActive = isPredrawnBackgroundActive(board, options);
   if (predrawn) {

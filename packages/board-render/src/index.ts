@@ -23,7 +23,7 @@ import {
 } from './render/renderPlan';
 import { predrawnOcclusionMaskOps } from './render/predrawnOcclusion';
 import { predrawnOcclusionDepthMapForSurface, type PredrawnOcclusionDepthMap } from './render/predrawnOcclusionDepth';
-import { isVersionedPredrawnBoardSurface } from './ui/boardCode';
+import { isVersionedPredrawnBoardSurface, predrawnRenderSurface } from './ui/boardCode';
 
 export type ServerDrawOp = BoardDrawOp;
 
@@ -67,7 +67,7 @@ export function levelRenderPlan(level: Level): ServerRenderPlan {
       },
     } : {}),
     occlusionDepthMap: predrawnBackgroundActive
-      ? predrawnOcclusionDepthMapForSurface(board.surface)
+      ? predrawnOcclusionDepthMapForSurface(predrawnRenderSurface(board))
       : undefined,
     bounds: boardBounds(board),
     framingBounds: boardPreviewFramingBounds(board),

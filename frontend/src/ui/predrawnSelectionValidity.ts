@@ -76,8 +76,12 @@ export function predrawnSelectionValidity(
   surface: VersionedPredrawnBoardSurface | undefined,
   versions: readonly PredrawnBackgroundVersion[],
   currentGeometry: PredrawnEnvironmentGeometryDigests,
-  currentBoard?: Pick<EditorBoard, 'cells'>,
+  currentBoard?: Pick<EditorBoard, 'cells'> & { predrawnGridDetached?: boolean },
 ): PredrawnSelectionValidity {
+  // The owner has placed this grid over the plate by hand, so "does the raster depict this exact
+  // terrain" is a question they have already answered. Identity, lineage, completeness, and
+  // profile binding are all still proven below; only the geometry comparison is skipped.
+  const gridDetached = currentBoard?.predrawnGridDetached === true;
   if (!surface) return { kind: 'missing' };
   const workflow = predrawnBoardArtifactWorkflow(versions);
   const lineageSurface: VersionedPredrawnBoardSurface = surface.schemaVersion === 3
@@ -103,11 +107,14 @@ export function predrawnSelectionValidity(
       || !currentBoard
       || lineageArtifact.stage === 'generated'
       || profile.backgroundVersionId !== surface.backgroundVersionId
-      || Object.keys(profile.cells).some((key) => !(key in currentBoard.cells))
+      // A calibrated cell that the board no longer has is a broken profile only while the grid
+      // still claims to be the artwork's own. Once the owner has moved or resized it, the cells
+      // that fall away are simply uncalibrated and fall back to the full-cell highlight.
+      || (!gridDetached && Object.keys(profile.cells).some((key) => !(key in currentBoard.cells)))
     ) {
       return { kind: 'unavailable' };
     }
-    if (profile.environmentGeometrySha256 !== currentGeometry.v2) {
+    if (!gridDetached && profile.environmentGeometrySha256 !== currentGeometry.v2) {
       return { kind: 'stale', artifact };
     }
   }
@@ -115,7 +122,7 @@ export function predrawnSelectionValidity(
     artifact.backgroundVersion,
     ...(artifact.occlusionVersion ? [artifact.occlusionVersion] : []),
   ];
-  if (versionsToValidate.some((version) => !predrawnEnvironmentGeometryMatches(
+  if (!gridDetached && versionsToValidate.some((version) => !predrawnEnvironmentGeometryMatches(
     predrawnEnvironmentGeometryFromVersion(version),
     currentGeometry,
   ))) {

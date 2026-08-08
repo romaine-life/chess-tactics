@@ -15450,26 +15450,66 @@ button.tileset-relationship-cell {
   z-index: 1;
 }
 
+/* A flat 2D grid: ONE opaque line, no offset companion. An offset second colour under the stroke
+   bevels the line and makes it read as a groove carved into the ground; that is a 3D treatment and
+   is not wanted here.
+   Two properties carry it. OPAQUE, because a translucent line picks up whatever it sits on and a
+   square then looks different over grass, dirt, stone, and water. LIGHT, because with no bevel the
+   colour alone has to hold up, and a dark line disappears into shadowed terrain and painted
+   artwork — which is the legibility problem this rule exists to solve.
+   The stroke is non-scaling, so this is a constant screen weight at every zoom. */
 .tileset-board-grid-layer path {
   fill: none;
-  stroke: rgba(0, 0, 0, 0.36);
+  stroke: #f2e3bd;
   stroke-linecap: round;
   stroke-linejoin: round;
+  stroke-width: 2.2;
+}
+
+/* Settings → Gameplay → Board grid style. The default above is `chalk` and needs no attribute, so
+   a board draws correctly during boot and in any renderer that never publishes a choice.
+   `:where()` contributes NO specificity, so each variant ties the base rule and wins on source
+   order alone — which keeps the creator-surface overrides below decisively on top of all of them,
+   rather than being silently outranked by whatever the player picked. */
+:where(:root[data-board-grid-style='ink']) .tileset-board-grid-layer path {
+  stroke: #241a10;
+  stroke-width: 2.6;
+}
+
+:where(:root[data-board-grid-style='carved']) .tileset-board-grid-layer path {
+  stroke: #241a10;
+  stroke-width: 2.6;
+  filter: drop-shadow(0 1.5px 0 #f2e3bd);
+}
+
+:where(:root[data-board-grid-style='bold']) .tileset-board-grid-layer path {
+  stroke: #14100c;
+  stroke-width: 3.2;
+  filter: drop-shadow(0 2px 0 #ffeec9);
+}
+
+:where(:root[data-board-grid-style='hairline']) .tileset-board-grid-layer path {
+  stroke: rgba(0, 0, 0, 0.36);
   stroke-width: 1.15;
   filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.14));
 }
 
-/* Wall-art placement is a geometry-verification surface. Keep its canonical cell grid visually
-   decisive over detailed terrain without making gameplay/editor grids globally heavier. */
+/* Wall-art placement is a geometry-verification surface, so its canonical cell grid stays a step
+   more decisive than the board grid above rather than matching it. Both creator surfaces below
+   state stroke, weight AND filter in full, so a player's gameplay grid choice cannot leak a bevel
+   or a hairline onto a surface whose whole job is showing exact geometry. */
 .wall-art-board-surface .tileset-board-grid-layer path {
-  stroke: rgba(0, 0, 0, 0.72);
-  stroke-width: 2.5;
-  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.32));
+  stroke: #fff6e0;
+  stroke-width: 3.2;
+  filter: none;
 }
 
+/* Placement previews sit under their own chrome, so they keep the board grid's weight and stay
+   flat and opaque, but step the line back toward the terrain rather than reverting to a hairline. */
 .tileset-placement-board .tileset-board-grid-layer path {
-  stroke: rgba(0, 0, 0, 0.42);
-  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.16));
+  stroke: #cbbb94;
+  stroke-width: 2.2;
+  filter: none;
 }
 
 /* Persisted player-camera coverage boundary. Unlike a viewport snapshot, this world-space box is

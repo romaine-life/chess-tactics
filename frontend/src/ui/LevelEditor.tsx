@@ -4,7 +4,7 @@
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
-import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, cameraToContainBounds, defaultBoardCameraBounds, defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, MAX_FLOATING_ARTWORK_PIXEL, mergeSharedLevel, normalizeBoardCameraBounds, predrawnEnvironmentGeometryFingerprintInputV2, predrawnVisualFootprintClipStyleForCell, resolvedBoardCameraBounds, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, worldViewportForCamera, type BoardBackgroundMode, type BoardCameraBounds, type BoardCameraSnapMode, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
+import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, cameraToContainBounds, defaultBoardCameraBounds, defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, MAX_FLOATING_ARTWORK_PIXEL, mergeSharedLevel, normalizeBoardCameraBounds, predrawnEnvironmentGeometryFingerprintInputV2, predrawnRenderSurface, predrawnVisualFootprintClipStyleForCell, resolvedBoardCameraBounds, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, worldViewportForCamera, type BoardBackgroundMode, type BoardCameraBounds, type BoardCameraSnapMode, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
 import { boardLabCellPosition, boardLabMetrics, immutableBoardLabTerrainSrc } from '../render/BoardLabBoard';
 import { projectBoardPoint, unprojectBoardPoint, type BoardForest, type BoardForestSection, type BoardForestTree, type BoardTown, type BoardTownSection } from '@chess-tactics/board-render';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
@@ -106,6 +106,7 @@ import { BoardSizePanel, type BoardResizeSide } from './shared/BoardSizePanel';
 import {
   MAX_SCENIC_TERRAIN_EXTENT,
   PLAYABLE_GRID_MOVE_DIRECTIONS,
+  PLAYABLE_GRID_MOVE_PLATE_STEP,
   movePlayableGrid,
   playableGridMoveAvailability,
   type PlayableGridMoveDirection,
@@ -157,7 +158,7 @@ import { PredrawnBackgroundVersionsPanel } from './PredrawnBackgroundVersionsPan
 import { PredrawnSourceArtworkPanel } from './PredrawnSourceArtworkPanel';
 import { PredrawnGenerationFramePicker } from './PredrawnGenerationFramePicker';
 import { predrawnGenerationFrameStatus } from './predrawnGenerationFrameStatus';
-import { isPredrawnLockedLayer, predrawnEditorHrefAfterPicker, preservesPredrawnBakedArt } from './predrawnEditorPolicy';
+import { isPredrawnLockedLayer, predrawnEditorHrefAfterPicker, preservesPredrawnBakedArt, sharesPredrawnSelection } from './predrawnEditorPolicy';
 import { predrawnReferenceHref } from './PredrawnReference';
 import {
   listPredrawnBackgroundVersions,
@@ -1700,6 +1701,34 @@ const leSeedBoard = (): Record<string, string> => {
   for (let y = 0; y < LE_ROWS; y += 1) for (let x = 0; x < LE_COLS; x += 1) cells[`${x},${y}`] = leDefaultTile().id;
   return cells;
 };
+
+/**
+ * The authored terrain closest to (x, y), searched in rings so a square added at any edge inherits
+ * the ground it was added NEXT to. Returns undefined only for a board with no authored terrain at
+ * all, which the caller answers with the catalog default.
+ */
+const nearestAuthoredTileId = (
+  cells: Readonly<Record<string, string>>,
+  x: number,
+  y: number,
+): string | undefined => {
+  const authored = Object.keys(cells);
+  if (!authored.length) return undefined;
+  let best: string | undefined;
+  let bestDistance = Infinity;
+  for (const key of authored) {
+    const [cx, cy] = key.split(',').map(Number);
+    if (!Number.isFinite(cx) || !Number.isFinite(cy)) continue;
+    // Chebyshev distance, tie-broken by key order, so the result is deterministic for a given
+    // board rather than dependent on object-insertion history.
+    const distance = Math.max(Math.abs(cx - x), Math.abs(cy - y));
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      best = cells[key];
+    }
+  }
+  return best;
+};
 const LE_FACTION_LABELS = UNIT_PALETTE_LABELS;
 type FactionDirections = Partial<Record<UnitPalette, Direction>>;
 const DEFAULT_FACTION_DIRECTIONS: Record<UnitPalette, Direction> = {
@@ -2799,6 +2828,12 @@ export function LevelEditor(): ReactElement {
   };
   const [boardCells, setBoardCells] = useState<Record<string, string>>(() => initialBoard?.cells ?? leSeedBoard());
   const [boardSurface, setBoardSurface] = useState<PredrawnBoardSurface | undefined>(() => initialBoard?.surface);
+  const [boardPredrawnGridDetached, setBoardPredrawnGridDetached] = useState<boolean>(
+    () => initialBoard?.predrawnGridDetached === true,
+  );
+  const [boardPredrawnPlateOffset, setBoardPredrawnPlateOffset] = useState<{ left: number; top: number } | undefined>(
+    () => initialBoard?.predrawnPlateOffset,
+  );
   const [boardBackgroundModeState, setBoardBackgroundModeState] = useState<BoardBackgroundMode>(
     () => boardBackgroundMode(initialBoard ?? {}),
   );
@@ -2827,12 +2862,14 @@ export function LevelEditor(): ReactElement {
     [predrawnPreview, predrawnReviewSearch],
   );
   const editorPredrawnPlate = useMemo<PredrawnBoardPlate | undefined>(() => {
+    // Drawn through the shared render seam so the editor plate, gameplay, and both thumbnail
+    // renderers place the owner's artwork identically.
     const activeSurface = boardBackgroundModeState === 'ai'
       && predrawnSelectionValidation.kind === 'valid'
-      ? boardSurface
+      ? predrawnRenderSurface({ surface: boardSurface, predrawnPlateOffset: boardPredrawnPlateOffset })
       : undefined;
     return predrawnBoardPlateForEditorReview(activeSurface, predrawnPreview, predrawnRegistration);
-  }, [boardBackgroundModeState, boardSurface, predrawnPreview, predrawnRegistration, predrawnSelectionValidation.kind]);
+  }, [boardBackgroundModeState, boardPredrawnPlateOffset, boardSurface, predrawnPreview, predrawnRegistration, predrawnSelectionValidation.kind]);
   const isPredrawnBoard = boardBackgroundModeState === 'ai' || editorPredrawnPlate !== undefined;
   const editorRouteError = useMemo(
     () => editorFrameError ?? (editorLoadError
@@ -3715,6 +3752,8 @@ export function LevelEditor(): ReactElement {
     setDecorativeWalls(board.decorativeWalls ?? {});
     setBoardCells(board.cells);
     setBoardSurface(board.surface);
+    setBoardPredrawnGridDetached(board.predrawnGridDetached === true);
+    setBoardPredrawnPlateOffset(board.predrawnPlateOffset);
     setBoardBackgroundModeState(boardBackgroundMode(board));
     setBoardPredrawnGenerationFrame(board.predrawnGenerationFrame);
     setBoardMacroTiles(validMacroTilesForBoard(board));
@@ -3759,8 +3798,8 @@ export function LevelEditor(): ReactElement {
   // The current painted board as a single EditorBoard — the one shape both the transient
   // play-test URL and the level save serialize from, so they can never describe different boards.
   const currentEditorBoard = useMemo<EditorBoard>(
-    () => ({ cols: boardCols, rows: boardRows, cameraBounds: boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, backgroundMode: boardBackgroundModeState, surface: boardSurface, predrawnGenerationFrame: boardPredrawnGenerationFrame, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, floatingArtwork: boardFloatingArtwork, cover: boardCover, coverTypes: boardCoverTypes, coverSeeds: boardCoverSeeds, features: boardFeatures, fences: boardFences, fencePosts: boardFencePosts, walls: boardWalls, wallArt: boardWallArt, subterrain: boardSubterrain, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions, towns: boardTowns, forests: boardForests }),
-    [boardCols, boardRows, boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, boardFactionDirections, boardCells, boardBackgroundModeState, boardSurface, boardPredrawnGenerationFrame, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardFloatingArtwork, boardCover, boardCoverTypes, boardCoverSeeds, boardFeatures, boardFences, boardFencePosts, boardWalls, boardWallArt, boardSubterrain, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions, boardTowns, boardForests],
+    () => ({ cols: boardCols, rows: boardRows, cameraBounds: boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, backgroundMode: boardBackgroundModeState, surface: boardSurface, predrawnGridDetached: boardPredrawnGridDetached, predrawnPlateOffset: boardPredrawnPlateOffset, predrawnGenerationFrame: boardPredrawnGenerationFrame, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, floatingArtwork: boardFloatingArtwork, cover: boardCover, coverTypes: boardCoverTypes, coverSeeds: boardCoverSeeds, features: boardFeatures, fences: boardFences, fencePosts: boardFencePosts, walls: boardWalls, wallArt: boardWallArt, subterrain: boardSubterrain, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions, towns: boardTowns, forests: boardForests }),
+    [boardCols, boardRows, boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, boardFactionDirections, boardCells, boardBackgroundModeState, boardSurface, boardPredrawnGridDetached, boardPredrawnPlateOffset, boardPredrawnGenerationFrame, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardFloatingArtwork, boardCover, boardCoverTypes, boardCoverSeeds, boardFeatures, boardFences, boardFencePosts, boardWalls, boardWallArt, boardSubterrain, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions, boardTowns, boardForests],
   );
   const predrawnVersionCells = useMemo(
     () => Array.from({ length: boardRows }, (_, y) => (
@@ -3856,10 +3895,18 @@ export function LevelEditor(): ReactElement {
       needsBaselineRef.current = true;
     }
   };
-  const commitEditorBoard = (next: EditorBoard, selection?: { x: number; y: number } | null): boolean => {
+  const commitEditorBoard = (
+    next: EditorBoard,
+    selection?: { x: number; y: number } | null,
+    options: { playableWindow?: boolean } = {},
+  ): boolean => {
     const current = currentEditorBoardRef.current;
     const normalized = { ...next, macroTiles: validMacroTilesForBoard(next) };
-    if (isPredrawnBoard && !preservesPredrawnBakedArt(current, normalized)) {
+    // The baked-art guard stops an EDIT from silently contradicting pixels the plate already owns.
+    // Resizing the grid and sliding it across the artwork are not that: they declare themselves,
+    // they change no depicted family on purpose, and rebasing or pruning coordinates is the
+    // mechanical consequence the owner asked for. They pass `playableWindow` and are let through.
+    if (isPredrawnBoard && !options.playableWindow && !preservesPredrawnBakedArt(current, normalized)) {
       return false;
     }
     if (boardSignature(normalized) === boardSignature(current)) return false;
@@ -3946,7 +3993,14 @@ export function LevelEditor(): ReactElement {
       return;
     }
     const current = currentEditorBoardRef.current;
-    const next = { ...cloneEditorBoard(current), surface };
+    // Newly set artwork was generated FROM the geometry on screen, so it arrives bound to it again:
+    // the detachment and the hand placement both belong to the selection they were made against.
+    const next = {
+      ...cloneEditorBoard(current),
+      surface,
+      predrawnGridDetached: false,
+      predrawnPlateOffset: undefined,
+    };
     if (boardSignature(next) === boardSignature(current)) return;
     setPredrawnSelectionValidation({ kind: 'checking' });
     setUndoStack((previous) => [...previous, cloneEditorBoard(current)].slice(-HISTORY_LIMIT));
@@ -4125,7 +4179,7 @@ export function LevelEditor(): ReactElement {
   const undoBoard = (): void => {
     const prev = undoStack[undoStack.length - 1];
     if (!prev) return;
-    if (isPredrawnBoard && !preservesPredrawnBakedArt(currentEditorBoardRef.current, prev)) return;
+    if (isPredrawnBoard && !sharesPredrawnSelection(currentEditorBoardRef.current, prev)) return;
     const departing = cloneEditorBoard(currentEditorBoardRef.current);
     setRedoStack((next) => [departing, ...next].slice(0, HISTORY_LIMIT));
     setUndoStack((next) => next.slice(0, -1));
@@ -4145,7 +4199,7 @@ export function LevelEditor(): ReactElement {
   const redoBoard = (): void => {
     const next = redoStack[0];
     if (!next) return;
-    if (isPredrawnBoard && !preservesPredrawnBakedArt(currentEditorBoardRef.current, next)) return;
+    if (isPredrawnBoard && !sharesPredrawnSelection(currentEditorBoardRef.current, next)) return;
     const departing = cloneEditorBoard(currentEditorBoardRef.current);
     setUndoStack((prev) => [...prev, departing].slice(-HISTORY_LIMIT));
     setRedoStack((prev) => prev.slice(1));
@@ -8311,8 +8365,25 @@ export function LevelEditor(): ReactElement {
     }
     nextBoard.cols = nextCols;
     nextBoard.rows = nextRows;
+    // A square with no terrain entry is already open ground to the rules (see canTraverse), but it
+    // is not a square the EDITOR can show or hit-test: the grid and its targets are built from the
+    // terrain map. Seed the squares a grow just created so they exist, are traversable, and can be
+    // given an obstacle later. They inherit their nearest neighbour so a grow reads as more of the
+    // same ground rather than a differently-coloured band.
+    for (let y = 0; y < nextRows; y += 1) {
+      for (let x = 0; x < nextCols; x += 1) {
+        const key = `${x},${y}`;
+        if (nextBoard.cells[key] !== undefined) continue;
+        nextBoard.cells[key] = nearestAuthoredTileId(nextBoard.cells, x, y) ?? leDefaultTile().id;
+      }
+    }
+    if (isPredrawnBoard) nextBoard.predrawnGridDetached = true;
     const shiftedSelection = selectedCell ? { x: selectedCell.x + dx, y: selectedCell.y + dy } : null;
-    commitEditorBoard(nextBoard, shiftedSelection && (shiftedSelection.x < 0 || shiftedSelection.y < 0 || shiftedSelection.x >= nextCols || shiftedSelection.y >= nextRows) ? null : shiftedSelection);
+    commitEditorBoard(
+      nextBoard,
+      shiftedSelection && (shiftedSelection.x < 0 || shiftedSelection.y < 0 || shiftedSelection.x >= nextCols || shiftedSelection.y >= nextRows) ? null : shiftedSelection,
+      { playableWindow: true },
+    );
     if (selectedArtworkIds.length) {
       const surviving = new Set((nextBoard.floatingArtwork ?? []).map((placement) => placement.id));
       setSelectedArtworkIds((selected) => selected.filter((id) => surviving.has(id)));
@@ -8329,7 +8400,90 @@ export function LevelEditor(): ReactElement {
     }
   };
 
+  /**
+   * Slide the grid one square across an AI plate.
+   *
+   * The legacy move rebases the whole authored scene inside its scenic rectangle, which is the
+   * right answer when the environment IS that scene. Here the environment is a picture pinned in
+   * projected space, so the same intent is served by moving the picture the other way instead:
+   * nothing is rebased, nothing is dropped, no scenic apron has to exist first, and the terrain
+   * under the grid — which is now pure movement rules — keeps the coordinates it always had.
+   */
+  const movePlateUnderGrid = (direction: PlayableGridMoveDirection): void => {
+    if (!editorSessionCanWrite) {
+      reportStatus(
+        'Grid placement is read-only.',
+        'warning',
+        'This review page is read-only.',
+      );
+      return;
+    }
+    const current = currentEditorBoardRef.current;
+    const step = PLAYABLE_GRID_MOVE_PLATE_STEP[direction];
+    const offset = current.predrawnPlateOffset ?? { left: 0, top: 0 };
+    const projected = projectBoardPoint({ x: step.x, y: step.y });
+    const moved = commitEditorBoard(
+      {
+        ...cloneEditorBoard(current),
+        predrawnGridDetached: true,
+        predrawnPlateOffset: {
+          left: offset.left + projected.left,
+          top: offset.top + projected.top,
+        },
+      },
+      undefined,
+      { playableWindow: true },
+    );
+    if (!moved) return;
+    reportStatus(
+      `Moved the grid one square ${direction}.`,
+      'success',
+      'The artwork stays where it is and the grid slides across it. Reset artwork placement returns it.',
+    );
+  };
+
+  /** Whether the owner has moved the artwork away from its own registration. */
+  const platePlacementMoved = Boolean(
+    boardPredrawnPlateOffset
+    && (boardPredrawnPlateOffset.left !== 0 || boardPredrawnPlateOffset.top !== 0),
+  );
+
+  /**
+   * Return the artwork to the placement its own registration gives it (ADR-0057: reset means the
+   * committed baseline, not zeroed-out state — for a plate those are the same thing, because its
+   * baseline placement IS its recorded world bounds).
+   *
+   * The grid stays detached: a resize may also have taken it off the artwork's geometry, and the
+   * two are separate decisions.
+   */
+  const resetPlatePlacement = (): void => {
+    if (!editorSessionCanWrite) {
+      reportStatus(
+        'Artwork placement is read-only.',
+        'warning',
+        'This review page is read-only.',
+      );
+      return;
+    }
+    if (!platePlacementMoved) return;
+    const committed = commitEditorBoard(
+      { ...cloneEditorBoard(currentEditorBoardRef.current), predrawnPlateOffset: undefined },
+      undefined,
+      { playableWindow: true },
+    );
+    if (!committed) return;
+    reportStatus(
+      'Artwork placement reset.',
+      'success',
+      'The picture is back at its own registration. The grid size is unchanged.',
+    );
+  };
+
   const moveGrid = (direction: PlayableGridMoveDirection): void => {
+    if (isPredrawnBoard) {
+      movePlateUnderGrid(direction);
+      return;
+    }
     const result = movePlayableGrid(currentEditorBoardRef.current, direction);
     if (!result) {
       const availability = playableGridMoveAvailability(currentEditorBoardRef.current, direction);
@@ -8684,10 +8838,10 @@ export function LevelEditor(): ReactElement {
     });
   }, [levelArtworkWorkspace, brushKind, clockEnabled, clockIncrementSeconds, clockInitialSeconds, currentEditorBoard, editorDocument?.revision, eventsForSave, eventsOpen, eventsTab, layer, levelNameForSave, objective, playability.ok, routeParams.campaignId, routeParams.returnTo, surviveTurns, targetLevelId, victoryForSave, wallArtBrushId]);
   const canUndoBoard = undoStack.length > 0 && (
-    !isPredrawnBoard || preservesPredrawnBakedArt(currentEditorBoard, undoStack[undoStack.length - 1])
+    !isPredrawnBoard || sharesPredrawnSelection(currentEditorBoard, undoStack[undoStack.length - 1])
   );
   const canRedoBoard = redoStack.length > 0 && (
-    !isPredrawnBoard || preservesPredrawnBakedArt(currentEditorBoard, redoStack[0])
+    !isPredrawnBoard || sharesPredrawnSelection(currentEditorBoard, redoStack[0])
   );
   const actionToolsDisabled = tool === 'region'
     || Boolean(levelArtworkWorkspace)
@@ -9707,17 +9861,24 @@ export function LevelEditor(): ReactElement {
             {isPredrawnBoard ? (
               <div className="le-predrawn-lock" role="status" data-testid="predrawn-board-lock">
                 <strong>{isPredrawnReviewOnly ? 'Registered pre-drawn review' : 'Pre-drawn board'} · {boardCols}×{boardRows}</strong>
-                <span>The continuous plate owns baked environment pixels. Terrain, Subterrain, paths, props, fences, walls, doodads, lighting, and particles are suppressed; authored ground cover, units, and tactical overlays remain live.</span>
+                <span>The artwork paints the environment, so terrain, Subterrain, paths, props, fences, walls, doodads, lighting, and particles are suppressed. The grid size and its placement over the artwork stay yours to set; ground cover, units, and tactical overlays remain live.</span>
                 {isPredrawnReviewOnly ? <span>The candidate is mounted for this development review only; it is not an accepted runtime media pointer.</span> : null}
               </div>
-            ) : (
+            ) : null}
+            {isPredrawnBoard && isPredrawnReviewOnly ? null : (
               <>
                 <BoardSizePanel cols={boardCols} rows={boardRows} onResize={resizeBoard} />
-                <p className="le-board-note">Choose the side, then add or remove columns and rows there. Shrinking drops content outside the new bounds.</p>
-                <h3>Move playable grid</h3>
+                <p className="le-board-note">{isPredrawnBoard
+                  ? 'Choose the side, then add or remove columns and rows there. The artwork does not move or rescale — the grid grows over it. New squares arrive as open ground and shrinking drops content outside the new bounds.'
+                  : 'Choose the side, then add or remove columns and rows there. Shrinking drops content outside the new bounds.'}</p>
+                <h3>{isPredrawnBoard ? 'Move grid over artwork' : 'Move playable grid'}</h3>
                 <div className="le-grid-nudge" aria-label="Move playable grid one tile">
                   {PLAYABLE_GRID_MOVE_DIRECTIONS.map((direction) => {
-                    const availability = playableGridMoveAvailability(currentEditorBoard, direction);
+                    // Over a plate the grid always has somewhere to go: the picture is pinned in
+                    // projected space and slides under it, so no scenic apron has to exist first.
+                    const availability = isPredrawnBoard
+                      ? { allowed: true, reason: undefined }
+                      : playableGridMoveAvailability(currentEditorBoard, direction);
                     const label = direction[0].toUpperCase();
                     const fullLabel = direction[0].toUpperCase() + direction.slice(1);
                     return (
@@ -9734,6 +9895,24 @@ export function LevelEditor(): ReactElement {
                   })}
                   <span className="le-grid-nudge-centre" aria-hidden="true">Grid</span>
                 </div>
+                {isPredrawnBoard ? (
+                  <>
+                    <p className="le-board-note">Slide the grid one square at a time across the artwork. The picture stays exactly where it is and nothing on the board is moved or dropped.</p>
+                    <div className="le-ctrlrow">
+                      <span className="le-ctrllabel">Artwork placement</span>
+                      <ChromeButton unit="inner-text-button"
+                        className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                        data-testid="le-reset-plate-offset"
+                        disabled={!platePlacementMoved}
+                        title={platePlacementMoved
+                          ? 'Put the artwork back where its own registration places it.'
+                          : 'The artwork already sits at its own registration.'}
+                        onClick={resetPlatePlacement}
+                      >Reset</ChromeButton>
+                    </div>
+                  </>
+                ) : null}
+                {isPredrawnBoard ? null : (<>
                 <p className="le-board-note">Move one tile into existing scenic terrain while keeping the authored scene aligned. Gameplay-only placements pushed outside the grid are removed.</p>
                 <h3>Scenic terrain rectangle</h3>
                 <div className="le-ctrlrow">
@@ -9787,6 +9966,7 @@ export function LevelEditor(): ReactElement {
                   <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={randomizeBoardTiles} title="Replace every tile with a generated mix of production terrain.">Randomize</ChromeButton>
                   <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')} onClick={clearBoard} title="Remove every tile, unit, doodad, prop, cover patch, path, fence rail, post, wall, and wall artwork from the board.">Clear</ChromeButton>
                 </div>
+                </>)}
               </>
             )}
           </section>
