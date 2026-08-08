@@ -529,12 +529,6 @@ const ARRIVAL_WAVE_GAP_MS = 240; // the enemy wave answers this long after the p
 const ARRIVAL_STEP_MS = 50; // per-unit stagger within a wave
 const DEPARTURE_STEP_MS = 45;
 const DEPARTURE_ANIM_MS = 760;
-// Play seats an aspect-locked board pane inside this wider workspace column and lets the board art
-// overdraw into the remaining gutters (`.skirmish-screen … overflow: visible`). The camera's cover
-// contract answers to the COLUMN, so a pan can never spend that overdraw and expose the screen
-// backdrop beside the board. Absent (Level Editor, Studio previews), the pane clips its own art and
-// the contract stays on the pane.
-const SKIRMISH_BOARD_COLUMN_SELECTOR = '.skirmish-war-room';
 // Drag-to-move tuning. The threshold keeps a small wobble on a tap from becoming a drag, so
 // click-select → click-move is untouched; the ghost defaults are only a fallback size for when
 // the on-screen sprite can't be measured at pick-up.
@@ -2470,7 +2464,6 @@ export function SkirmishBoard({
         onZoomChange={setZoom}
         onPanChange={setBoardPan}
         coverPolygon={cameraCoverPolygon}
-        coverViewportSelector={SKIRMISH_BOARD_COLUMN_SELECTOR}
         onMinimumZoomChange={setMinZoom}
         onViewportSizeChange={setViewViewportSize}
         onViewInteraction={markViewInteraction}

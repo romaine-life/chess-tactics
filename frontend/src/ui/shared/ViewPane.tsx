@@ -307,84 +307,6 @@ export function minimumZoomToCoverViewport({
   return Math.min(upper, covers(candidate) ? candidate : candidate + 1 / safetyScale);
 }
 
-/**
- * The box the art must keep covered, expressed as a stage-CENTRED size because that is the
- * coordinate system `viewportCorners` uses.
- *
- * A board stage may be aspect-locked and centred inside a wider workspace column while its art
- * layer deliberately overdraws into that column (see `.skirmish-screen … overflow: visible`).
- * Covering only the stage then leaves the overdraw margin as the sole thing hiding the screen
- * backdrop, and the first pan spends it — opening a gutter-width strip of backdrop on the
- * trailing side. Growing the contract to the surrounding column is what closes that strip.
- *
- * Symmetric growth is deliberate: the cover math centres the viewport on the stage, so an
- * off-centre column must be covered by its FARTHER side on both sides.
- */
-export function stageCenteredCoverViewport(
-  stage: { width: number; height: number; left: number; top: number },
-  cover: { left: number; top: number; right: number; bottom: number } | null,
-): ViewPaneViewportSize {
-  const own = { width: stage.width, height: stage.height };
-  if (!cover || own.width <= 0 || own.height <= 0) return own;
-  const centerX = stage.left + stage.width / 2;
-  const centerY = stage.top + stage.height / 2;
-  const halfWidth = Math.max(centerX - cover.left, cover.right - centerX);
-  const halfHeight = Math.max(centerY - cover.top, cover.bottom - centerY);
-  return {
-    width: Math.max(own.width, halfWidth * 2),
-    height: Math.max(own.height, halfHeight * 2),
-  };
-}
-
-function coverViewportOf(stage: HTMLElement, selector: string | undefined): ViewPaneViewportSize {
-  const own = { width: stage.clientWidth, height: stage.clientHeight };
-  const column = selector ? stage.closest<HTMLElement>(selector) : null;
-  if (!column || column === stage) return own;
-  const stageBox = stage.getBoundingClientRect();
-  return stageCenteredCoverViewport(
-    { width: own.width, height: own.height, left: stageBox.left, top: stageBox.top },
-    column.getBoundingClientRect(),
-  );
-}
-
-/**
- * True when the art can honour the wider column contract at this zoom with room left to move.
- *
- * The cover polygon is the level's camera bounds intersected with the accepted art, so a large
- * raster does NOT imply a large polygon — a tightly authored camera box stays tight. Demanding the
- * column unconditionally would then raise the zoom floor and shrink the feasible pan region toward
- * a point, which reads as a board that refuses to zoom out and judders when dragged.
- */
-export function columnContractIsAffordable({
-  viewport,
-  polygon,
-  zoom,
-}: {
-  viewport: ViewPaneViewportSize;
-  polygon: readonly ViewPanePoint[];
-  zoom: number;
-}): boolean {
-  const region = feasiblePanRegion({ viewport, polygon, zoom });
-  return region.length >= 3 && Math.abs(polygonSignedArea(region)) > COVER_EPSILON;
-}
-
-/**
- * The box the PAN contract answers to right now. The column closes the backdrop strip whenever the
- * art is large enough to afford it, and yields to the pane the moment it is not — so this can only
- * ever add coverage, never take away zoom range or freedom of movement.
- */
-function panContractViewport(
-  stage: HTMLElement,
-  selector: string | undefined,
-  polygon: readonly ViewPanePoint[],
-  zoom: number,
-): ViewPaneViewportSize {
-  const pane = { width: stage.clientWidth, height: stage.clientHeight };
-  const column = coverViewportOf(stage, selector);
-  if (column.width <= pane.width && column.height <= pane.height) return pane;
-  return columnContractIsAffordable({ viewport: column, polygon, zoom }) ? column : pane;
-}
-
 export function ViewPane({
   kind,
   ariaLabel,
@@ -395,7 +317,6 @@ export function ViewPane({
   onZoomChange,
   onPanChange,
   coverPolygon,
-  coverViewportSelector,
   onMinimumZoomChange,
   onViewportSizeChange,
   onViewInteraction,
@@ -413,12 +334,6 @@ export function ViewPane({
   onPanChange: (pan: { x: number; y: number }) => void;
   /** Convex content boundary that must continue covering the entire viewport. */
   coverPolygon?: readonly ViewPanePoint[];
-  /**
-   * Ancestor selector for the workspace column this pane's art overdraws into. When given, the
-   * cover contract is satisfied against that column instead of the aspect-locked stage, so a pan
-   * can never spend the overdraw margin and expose the screen backdrop beside the board.
-   */
-  coverViewportSelector?: string;
   /** Reports the viewport-derived floor so external steppers clamp identically to the wheel. */
   onMinimumZoomChange?: (zoom: number) => void;
   /** Reports the live drawable viewport used by projection-aware editor actions. */
@@ -488,7 +403,7 @@ export function ViewPane({
     const stage = stageRef.current;
     if (!stage || !coverPolygon) return;
     const constrained = constrainPanToCoverViewport({
-      viewport: panContractViewport(stage, coverViewportSelector, coverPolygon, zoom),
+      viewport: { width: stage.clientWidth, height: stage.clientHeight },
       polygon: coverPolygon,
       zoom,
       from: pan,
@@ -497,7 +412,7 @@ export function ViewPane({
     if (Math.abs(constrained.x - pan.x) >= 1e-7 || Math.abs(constrained.y - pan.y) >= 1e-7) {
       onPanChange(constrained);
     }
-  }, [coverPolygon, coverViewportSelector, onPanChange, pan, zoom]);
+  }, [coverPolygon, onPanChange, pan, zoom]);
 
   useLayoutEffect(() => {
     onMinimumZoomChange?.(resolvedMinZoom);
@@ -567,7 +482,7 @@ export function ViewPane({
     const stage = stageRef.current;
     onPanChange(stage && coverPolygon
       ? constrainPanToCoverViewport({
-          viewport: panContractViewport(stage, coverViewportSelector, coverPolygon, zoom),
+          viewport: { width: stage.clientWidth, height: stage.clientHeight },
           polygon: coverPolygon,
           zoom,
           from: pan,
@@ -597,7 +512,7 @@ export function ViewPane({
     const stage = stageRef.current;
     if (stage && coverPolygon) {
       onPanChange(constrainPanToCoverViewport({
-        viewport: panContractViewport(stage, coverViewportSelector, coverPolygon, nextZoom),
+        viewport: { width: stage.clientWidth, height: stage.clientHeight },
         polygon: coverPolygon,
         zoom: nextZoom,
         from: pan,
