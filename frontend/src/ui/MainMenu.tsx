@@ -6,8 +6,10 @@ import { PlayMenu } from './PlayMenu';
 import { Lobbies } from './Lobbies';
 import { Enchiridion } from './Enchiridion';
 import {
+  enchiridionCardFiltersFromSearch,
   enchiridionCardFromPath,
-  enchiridionCardHref,
+  enchiridionCardHrefUnderFilters,
+  enchiridionCardsHref,
   enchiridionLipsanonFromPath,
   enchiridionLipsanonHref,
   enchiridionSectionFromPath,
@@ -106,6 +108,7 @@ export function MainMenu({
   // destination just occupies the previously-empty grid track to its right.
   const dest = shellDest(path);
   const enchiridionSection = enchiridionSectionFromPath(path);
+  const enchiridionCardFilters = enchiridionCardFiltersFromSearch(search);
   // Only cold startup builds the shell in ordered rungs. During an ordinary return home,
   // the complete menu must already be composed behind the incoming scene boundary so the
   // director crossfades its background and controls as one painted scene (ADR-0462).
@@ -166,7 +169,9 @@ export function MainMenu({
                         selectedLipsanonId={enchiridionLipsanonFromPath(path)}
                         lipsanonHref={enchiridionLipsanonHref}
                         selectedCardId={enchiridionCardFromPath(path)}
-                        cardHref={enchiridionCardHref}
+                        cardHref={(cardId) => enchiridionCardHrefUnderFilters(cardId, enchiridionCardFilters)}
+                        cardFilters={enchiridionCardFilters}
+                        cardFiltersHref={enchiridionCardsHref}
                         sceneInstanceKey={sceneInstanceKey}
                         framed={false}
                       />

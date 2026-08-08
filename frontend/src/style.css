@@ -20290,6 +20290,12 @@ button.tileset-relationship-cell {
   text-align: end;
 }
 
+/* A roster is counted down a column, not read as a sentence: one name per line, each
+   ending on the same right edge as the number it explains. */
+.run-aftermath-measure-name {
+  display: block;
+}
+
 .run-lipsanon-card {
   min-block-size: 174px;
 }
