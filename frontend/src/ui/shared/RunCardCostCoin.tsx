@@ -1,5 +1,10 @@
 import { resolvedLiveMediaUrl, type RunCardTier } from '@chess-tactics/board-render';
-import type { ReactElement } from 'react';
+import type { CSSProperties, ReactElement } from 'react';
+import {
+  RUN_CARD_COIN_MARK_FILL,
+  RUN_CARD_COIN_RASTER_INSET,
+  runCardCostCrownUrl,
+} from './runCardCostCrown';
 
 export const RUN_CARD_COST_COIN_SLOT = 'ui/run/card-prototypes/cost-coin-v1.png';
 
@@ -7,24 +12,34 @@ export const RUN_CARD_COST_COIN_SLOT = 'ui/run/card-prototypes/cost-coin-v1.png'
  * The exact transparent extraction of the Run card's blank gold coin. The
  * visible label is only the live value; accessibility retains the currency name.
  *
- * A starter tier strikes the coin blank. That is the card face's own rule -- His Grace draws
- * the same coin with no numeral on it (see runCardFaceContent's showsCost) -- so a gallery band
- * of starter cards is marked the same way rather than by a second kind of ornament.
+ * A starter tier strikes the crown instead of a numeral. That is the card face's own rule --
+ * His Grace draws the same coin with the same mark on it (see runCardFaceContent's showsCost)
+ * -- so a gallery band of starter cards is marked the same way rather than by a second kind of
+ * ornament. Until that mark is installed the coin prints blank, exactly as it used to.
  */
 export function RunCardCostCoin({
   value,
   className = '',
   sourceUrl = resolvedLiveMediaUrl(RUN_CARD_COST_COIN_SLOT),
+  crownUrl = runCardCostCrownUrl(),
+  markFill = RUN_CARD_COIN_MARK_FILL,
 }: {
   value: RunCardTier;
   className?: string;
   sourceUrl?: string;
+  /** The mark struck where the numeral would go. Null prints the coin bare. */
+  crownUrl?: string | null;
+  /** The mark's share of the drawn coin, in whole percent. Owned by the Studio instrument. */
+  markFill?: number;
 }): ReactElement {
   const struck = value !== 'starter';
   return (
     <span
       className={`run-card-cost-coin ${className}`.trim()}
       aria-label={struck ? `${value} gold` : 'Starter'}
+      style={{
+        '--run-card-cost-coin-mark': `${(markFill / 100) * RUN_CARD_COIN_RASTER_INSET}`,
+      } as CSSProperties}
     >
       <img
         className="run-card-cost-coin-art"
@@ -34,6 +49,15 @@ export function RunCardCostCoin({
         draggable={false}
       />
       {struck ? <span className="run-card-cost-coin-value" aria-hidden="true">{value}</span> : null}
+      {!struck && crownUrl ? (
+        <img
+          className="run-card-cost-coin-crown"
+          src={crownUrl}
+          alt=""
+          aria-hidden="true"
+          draggable={false}
+        />
+      ) : null}
     </span>
   );
 }

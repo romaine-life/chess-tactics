@@ -1,22 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import {
   createBlankLevel,
+  LEVEL_BATTLE_CARDS_DEALT_DEFAULT,
   LEVEL_BATTLE_CARDS_DEALT_MAX,
   LEVEL_BATTLE_CARDS_DEALT_MIN,
   validateLevel,
   type Level,
+  type War,
 } from '../core/level';
+import { validateWarBattlePlayability } from '../core/playability';
 import { levelEditorLevelSignature } from '../ui/levelEditorSignature';
 import {
   createRun,
   createRunCardOffer,
+  CURRENT_RUN_SAVE_VERSION,
   leaveSectio,
+  migrateRunSaveDocument,
   openSectio,
   performAdlectio,
   prepareDeployment,
   RUN_CARD_BY_ID,
-  RUN_DEPLOYMENT_BASE_DEAL,
   runDeploymentDealCount,
+  snapshotWar,
   type RunDocument,
   type RunWarSnapshot,
 } from './model';
@@ -28,23 +33,18 @@ function battleLevel(id: string, cardsDealt?: number): Level {
   return level;
 }
 
-/** A three-Battle War whose middle Battle authors its own deal, so a single Run reads both the
- * authored count and the progression it falls back to. */
-function war(cardsDealt?: number): RunWarSnapshot {
+/** A three-Battle War whose Battles author different deals, so one Run reads each of them. */
+function war(...counts: readonly number[]): RunWarSnapshot {
   return {
     id: 'deal-war',
     name: 'Deal War',
     description: 'Authored-deal fixture.',
-    battles: [
-      { level: battleLevel('battle-one'), loot: false },
-      { level: battleLevel('battle-two', cardsDealt), loot: false },
-      { level: battleLevel('battle-three'), loot: false },
-    ],
+    battles: counts.map((count, index) => ({ level: battleLevel(`battle-${index}`, count), loot: false })),
   };
 }
 
-function at(run: RunDocument, battleIndex: number, conflictIndex: number): RunDocument {
-  return { ...run, battleIndex, conflictIndex };
+function at(run: RunDocument, battleIndex: number): RunDocument {
+  return { ...run, battleIndex };
 }
 
 /** A Run holding more than His Grace, adlected through the real Sectio so the cards are the ones
@@ -63,41 +63,64 @@ function holding(run: RunDocument, cardIds: readonly string[]): RunDocument {
   return leaveSectio(assembled);
 }
 
-describe('a Level authoring its own Deployment deal', () => {
-  it('falls back to the Run progression when the Battle authors nothing', () => {
-    const run = createRun(war(), 11);
-    expect(runDeploymentDealCount(at(run, 1, 0))).toBe(RUN_DEPLOYMENT_BASE_DEAL);
-    expect(runDeploymentDealCount(at(run, 1, 2))).toBe(RUN_DEPLOYMENT_BASE_DEAL + 2);
-  });
-
-  it('takes the authored count on that Battle, and only that Battle', () => {
-    const run = createRun(war(6), 11);
-    // Deep into a War the progression would deal far more; the authored Battle still deals 6.
-    expect(runDeploymentDealCount(at(run, 1, 0))).toBe(6);
-    expect(runDeploymentDealCount(at(run, 1, 5))).toBe(6);
-    expect(runDeploymentDealCount(at(run, 0, 5))).toBe(RUN_DEPLOYMENT_BASE_DEAL + 5);
-    expect(runDeploymentDealCount(at(run, 2, 5))).toBe(RUN_DEPLOYMENT_BASE_DEAL + 5);
+describe('a Battle deals the count its own Level authors', () => {
+  it('reads each Battle’s own count, with nothing else feeding it', () => {
+    const run = createRun(war(3, 6, 1), 11);
+    expect(runDeploymentDealCount(at(run, 0))).toBe(3);
+    expect(runDeploymentDealCount(at(run, 1))).toBe(6);
+    expect(runDeploymentDealCount(at(run, 2))).toBe(1);
   });
 
   it('holds a stored count to the schema bounds rather than dealing an impossible hand', () => {
-    expect(runDeploymentDealCount(at(createRun(war(0), 11), 1, 0))).toBe(LEVEL_BATTLE_CARDS_DEALT_MIN);
-    expect(runDeploymentDealCount(at(createRun(war(-4), 11), 1, 0))).toBe(LEVEL_BATTLE_CARDS_DEALT_MIN);
-    expect(runDeploymentDealCount(at(createRun(war(99), 11), 1, 0))).toBe(LEVEL_BATTLE_CARDS_DEALT_MAX);
-    expect(runDeploymentDealCount(at(createRun(war(3.7), 11), 1, 0))).toBe(3);
+    expect(runDeploymentDealCount(at(createRun(war(0, 3), 11), 0))).toBe(LEVEL_BATTLE_CARDS_DEALT_MIN);
+    expect(runDeploymentDealCount(at(createRun(war(-4, 3), 11), 0))).toBe(LEVEL_BATTLE_CARDS_DEALT_MIN);
+    expect(runDeploymentDealCount(at(createRun(war(99, 3), 11), 0))).toBe(LEVEL_BATTLE_CARDS_DEALT_MAX);
+    expect(runDeploymentDealCount(at(createRun(war(3.7, 3), 11), 0))).toBe(3);
+  });
+
+  it('refuses a Battle with no authored count instead of inventing one', () => {
+    const unauthored: RunWarSnapshot = {
+      ...war(3, 3),
+      battles: [{ level: battleLevel('battle-0'), loot: false }, { level: battleLevel('battle-1', 3), loot: false }],
+    };
+    const run = createRun(war(3, 3), 11);
+    expect(() => runDeploymentDealCount({ ...run, war: unauthored, battleIndex: 0 }))
+      .toThrow(/does not author how many cards it deals/);
   });
 
   it('deals exactly the authored count, His Grace first', () => {
-    const held = holding(createRun(war(1), 11), ['p', 'pp', 'q']);
+    const held = holding(createRun(war(3, 1), 11), ['p', 'pp', 'q']);
     expect(held.cards.length).toBe(4);
 
-    // The authored Battle sends the King in alone, however much the player is carrying.
-    const narrow = prepareDeployment({ ...at(held, 1, 0), phase: 'deployment', deployment: null });
+    // The Battle authored at 1 sends the King in alone, however much the player is carrying.
+    const narrow = prepareDeployment({ ...at(held, 1), phase: 'deployment', deployment: null });
     expect(narrow.deployment?.dealtCardIds).toEqual(['run-card-his-grace']);
 
-    // The Battle either side of it keeps the progression's wider hand.
-    const wide = prepareDeployment({ ...at(held, 0, 0), phase: 'deployment', deployment: null });
-    expect(wide.deployment?.dealtCardIds.length).toBe(RUN_DEPLOYMENT_BASE_DEAL);
+    const wide = prepareDeployment({ ...at(held, 0), phase: 'deployment', deployment: null });
+    expect(wide.deployment?.dealtCardIds.length).toBe(3);
     expect(wide.deployment?.dealtCardIds[0]).toBe('run-card-his-grace');
+  });
+});
+
+describe('a War is not startable until every Battle authors its deal', () => {
+  const warDoc = (...levelIds: readonly string[]): War => ({
+    formatVersion: 1,
+    id: 'w',
+    name: 'Unfinished War',
+    description: '',
+    battles: levelIds.map((levelId, ordinal) => ({ levelId, ordinal })),
+  });
+
+  it('snapshots a fully authored War', () => {
+    const levels = { a: battleLevel('a', 3), b: battleLevel('b', 5) };
+    expect(snapshotWar(warDoc('a', 'b'), levels).battles.map((b) => b.level.battle?.cardsDealt))
+      .toEqual([3, 5]);
+  });
+
+  it('refuses one whose Battle never got a count, naming the level', () => {
+    const levels = { a: battleLevel('a', 3), b: battleLevel('b') };
+    expect(() => snapshotWar(warDoc('a', 'b'), levels))
+      .toThrow(/Battle level b does not author how many cards it deals/);
   });
 });
 
@@ -113,14 +136,65 @@ describe('the authored deal as stored level content', () => {
     expect(validateLevel(withDeal(0)).ok).toBe(false);
     expect(validateLevel(withDeal(3.5)).ok).toBe(false);
     expect(validateLevel(withDeal('4')).ok).toBe(false);
-    // The Battle block itself stays optional, and Loot alone is still a valid one.
+    // Structurally the field stays optional — a Campaign level is not a Battle and never has one.
     expect(validateLevel(battleLevel('stored')).ok).toBe(true);
-    expect(validateLevel({ ...battleLevel('stored'), battle: { loot: true } }).ok).toBe(true);
+  });
+
+  it('blocks Save on a War Battle that has no count, and only on a War Battle', () => {
+    const missing = validateWarBattlePlayability(battleLevel('stored')).violations;
+    expect(missing.map((violation) => violation.code)).toContain('W4_BATTLE_CARDS_DEALT');
+    expect(missing.find((violation) => violation.code === 'W4_BATTLE_CARDS_DEALT')?.message)
+      .toContain('Deployment deal');
+
+    const authored = validateWarBattlePlayability(battleLevel('stored', 4)).violations;
+    expect(authored.map((violation) => violation.code)).not.toContain('W4_BATTLE_CARDS_DEALT');
+
+    // Out-of-bounds content that reached the workspace by some other route is caught too.
+    expect(validateWarBattlePlayability(withDeal(99)).violations.map((v) => v.code))
+      .toContain('W4_BATTLE_CARDS_DEALT');
   });
 
   it('changes the editor’s dirty signature, so authoring one is a saveable edit', () => {
-    const clean = battleLevel('stored');
-    expect(levelEditorLevelSignature(withDeal(4))).not.toBe(levelEditorLevelSignature(clean));
+    expect(levelEditorLevelSignature(withDeal(4))).not.toBe(levelEditorLevelSignature(battleLevel('stored')));
     expect(levelEditorLevelSignature(withDeal(4))).not.toBe(levelEditorLevelSignature(withDeal(5)));
+  });
+});
+
+describe('save version 33', () => {
+  /** A version-32 document is the current shape with the version wound back and the authored
+   * counts stripped — exactly what a Run saved before the requirement looks like. */
+  function storedAtVersion32(): Record<string, unknown> {
+    const run = createRun(war(3, 3, 3), 11);
+    return {
+      ...JSON.parse(JSON.stringify(run)),
+      runSaveVersion: 32,
+      war: {
+        ...run.war,
+        battles: run.war.battles.map((battle) => ({
+          ...battle,
+          level: { ...battle.level, battle: { loot: battle.loot } },
+        })),
+      },
+    };
+  }
+
+  it('gives every Battle that predates the requirement the authoring default', () => {
+    const migrated = migrateRunSaveDocument(storedAtVersion32());
+    expect(migrated.runSaveVersion).toBe(CURRENT_RUN_SAVE_VERSION);
+    expect(migrated.war.battles.map((battle) => battle.level.battle?.cardsDealt))
+      .toEqual([3, 3, 3].map(() => LEVEL_BATTLE_CARDS_DEALT_DEFAULT));
+    // Loot is Battle content the migration has no business touching.
+    expect(migrated.war.battles.every((battle) => battle.level.battle?.loot === false)).toBe(true);
+    // And the migrated Run can be dealt a hand at every Battle it has left.
+    expect(migrated.war.battles.map((_, index) => runDeploymentDealCount(at(migrated, index))))
+      .toEqual([3, 3, 3]);
+  });
+
+  it('leaves a Battle that already authored a count alone', () => {
+    const stored = storedAtVersion32();
+    const war32 = stored.war as { battles: { level: { battle: Record<string, unknown> } }[] };
+    war32.battles[1].level.battle.cardsDealt = 7;
+    expect(migrateRunSaveDocument(stored).war.battles.map((battle) => battle.level.battle?.cardsDealt))
+      .toEqual([LEVEL_BATTLE_CARDS_DEALT_DEFAULT, 7, LEVEL_BATTLE_CARDS_DEALT_DEFAULT]);
   });
 });

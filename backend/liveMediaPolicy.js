@@ -94,6 +94,10 @@ const RUN_GOLD_TRANSACTION_REVIEW_SLOTS = new Set([
 ]);
 const RUN_CARD_COST_COIN_COMPONENT = 'run-card-cost-coin';
 const RUN_CARD_COST_COIN_SLOT = 'ui/run/card-prototypes/cost-coin-v1.png';
+// What is struck on the coin when no price is. The coin is the socket and its mark is
+// separate media, exactly as the price numeral is separate text (ADR-0530).
+const RUN_CARD_COST_CROWN_COMPONENT = 'run-card-cost-crown';
+const RUN_CARD_COST_CROWN_SLOT = 'ui/run/card-prototypes/cost-crown-v1.png';
 const RUN_CARD_GOLD_TIER_DIVIDER_COMPONENT = 'run-card-gold-tier-divider';
 const RUN_CARD_GOLD_TIER_DIVIDER_SLOT = 'ui/run/card-prototypes/gold-tier-divider-v1.png';
 const RUN_CARD_GOLD_TIER_DIVIDER_PROOF_SCHEMA = 'run-card-gold-tier-divider-enchiridion-proof-v1';
@@ -223,6 +227,10 @@ function runResourceIconSlotId(slot) {
 
 function runCardCostCoinSlot(slot) {
   return String(slot || '') === RUN_CARD_COST_COIN_SLOT;
+}
+
+function runCardCostCrownSlot(slot) {
+  return String(slot || '') === RUN_CARD_COST_CROWN_SLOT;
 }
 
 function runCardGoldTierDividerSlot(slot) {
@@ -757,6 +765,47 @@ function runCardCostCoinMediaIssue(row, projectedRuntime = null) {
   }
   if (runtime.altText !== '') {
     return 'Run card cost coin metadata.runtime.altText must be empty because the live value owns its accessible name';
+  }
+  return null;
+}
+
+/**
+ * The mark struck on a coin that carries no price. It is His Grace's crown: the starter
+ * card is the King's own, and a blank coin said only that a number was missing. The raster
+ * is one transparent 64x64 glyph seated in the coin's flat striking face, so it scales with
+ * the coin at every size the numeral does and never redraws the coin itself (ADR-0530).
+ */
+function runCardCostCrownMediaIssue(row, projectedRuntime = null) {
+  if (!runCardCostCrownSlot(row.slot)) return 'Run card cost crown requires its registered semantic slot';
+  if (row.domain !== 'ui-kit') return 'Run card cost crown requires the ui-kit domain';
+  if (row.role !== 'icon') return 'Run card cost crown requires the icon role';
+  if (row.media_type !== 'image/png') return 'Run card cost crown requires image/png';
+  if (Number(row.width) !== 64 || Number(row.height) !== 64) {
+    return 'Run card cost crown must preserve the native 64x64 transparent raster';
+  }
+
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime)) return 'Run card cost crown requires metadata.runtime';
+  const allowed = new Set([
+    'component', 'variant', 'frameWidth', 'frameHeight', 'frameCount', 'altText', 'nativeRole',
+  ]);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `Run card cost crown runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== RUN_CARD_COST_CROWN_COMPONENT) {
+    return `Run card cost crown metadata.runtime.component must be ${RUN_CARD_COST_CROWN_COMPONENT}`;
+  }
+  if (runtime.variant !== 'crown') return 'Run card cost crown variant must be crown';
+  if (runtime.frameWidth !== 64 || runtime.frameHeight !== 64 || runtime.frameCount !== 1) {
+    return 'Run card cost crown runtime geometry must describe one native 64x64 frame';
+  }
+  if (runtime.nativeRole !== RUN_CARD_COST_CROWN_COMPONENT) {
+    return `Run card cost crown metadata.runtime.nativeRole must be ${RUN_CARD_COST_CROWN_COMPONENT}`;
+  }
+  if (runtime.altText !== '') {
+    return 'Run card cost crown metadata.runtime.altText must be empty because the coin owns its accessible name';
   }
   return null;
 }
@@ -1862,6 +1911,8 @@ module.exports = {
   LIPSANON_ICON_COMPONENT,
   LIPSANON_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
   RUN_CARD_COST_COIN_COMPONENT,
+  RUN_CARD_COST_CROWN_COMPONENT,
+  RUN_CARD_COST_CROWN_SLOT,
   RUN_CARD_GOLD_TIER_DIVIDER_COMPONENT,
   RUN_CARD_GOLD_TIER_DIVIDER_PROOF_RENDERER,
   RUN_CARD_GOLD_TIER_DIVIDER_PROOF_SCHEMA,
@@ -1909,6 +1960,8 @@ module.exports = {
   runLipsanonIconSlotId,
   runCardCostCoinMediaIssue,
   runCardCostCoinSlot,
+  runCardCostCrownMediaIssue,
+  runCardCostCrownSlot,
   runCardGoldTierDividerMediaIssue,
   runCardGoldTierDividerOwnerProofIssue,
   runCardGoldTierDividerSlot,

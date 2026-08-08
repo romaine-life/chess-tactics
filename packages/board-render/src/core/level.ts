@@ -342,6 +342,9 @@ export interface LevelEconomy {
  */
 export const LEVEL_BATTLE_CARDS_DEALT_MIN = 1;
 export const LEVEL_BATTLE_CARDS_DEALT_MAX = 12;
+/** What a Battle is authored with before anyone tunes it. An authoring default, not a runtime
+ * fallback: a Battle with no count is not playable, it is unfinished. */
+export const LEVEL_BATTLE_CARDS_DEALT_DEFAULT = 3;
 
 /** War-specific metadata authored on the Level's Battle tab (ADR-0193). */
 export interface BattleSettings {
@@ -349,9 +352,10 @@ export interface BattleSettings {
   loot?: boolean;
   /**
    * How many cards this Battle's Deployment deals — the board's own answer to how large a force
-   * it can be asked to hold, so a cramped map is never handed one it has no room for. Absent ⇒
-   * the Run's progression (three, plus one per Conflict already cleared), which is what every
-   * Battle authored before this field keeps.
+   * it can be asked to hold. Every War Battle authors one: there is no run-side progression left
+   * to fall back to, so the counts across a War ARE the curve. Optional on the type only because
+   * Campaign and standalone levels are not Battles and are never dealt anything;
+   * `validateWarBattlePlayability` requires it of the levels that are.
    */
   cardsDealt?: number;
 }

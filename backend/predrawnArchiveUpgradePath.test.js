@@ -598,7 +598,7 @@ test('the exact sparse numeric legacy history upgrades through migration 70', ()
   );
   assert.deepEqual(
     plan.pending.map((entry) => entry.version),
-    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71],
+    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72],
     'the bridge must fill the historical gap before applying every post-36 contract',
   );
   assert.throws(
@@ -1228,8 +1228,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*71\s*\}/,
-    'the production upgrade proof must require a complete 1-71 history',
+    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*72\s*\}/,
+    'the production upgrade proof must require a complete 1-72 history',
   );
   assert.match(
     primaryUpgradeProof,
@@ -1243,8 +1243,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /length:\s*35[\s\S]*index\s*\+\s*37/,
-    'the production report must include every post-36 migration through 71',
+    /length:\s*36[\s\S]*index\s*\+\s*37/,
+    'the production report must include every post-36 migration through 72',
   );
   assert.match(
     primaryUpgradeProof,

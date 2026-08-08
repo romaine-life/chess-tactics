@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createBlankLevel } from '../core/level';
+import { LEVEL_BATTLE_CARDS_DEALT_DEFAULT, createBlankLevel } from '../core/level';
 import {
   craftRunDocument,
   craftCoreCardId,
@@ -27,6 +27,7 @@ function craftWar(): RunWarSnapshot {
         )).flat(),
       });
       level.layers.units.push({ x: 4, y: 0, type: 'king', side: 'enemy' });
+      level.battle = { loot: false, cardsDealt: LEVEL_BATTLE_CARDS_DEALT_DEFAULT };
       return { level, loot: false };
     }),
   };
