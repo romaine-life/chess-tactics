@@ -3607,15 +3607,31 @@
       "file": "src/style.css",
       "context": "",
       "selector": ".skirmish-log-card li > span",
-      "surfaceHash": "a4ede4f9e8f0b1ad1c14921ae6f23c59f328da25baa423c6f6fdc438884288de",
+      "surfaceHash": "3e7bc78cd774a279b5db77535f85fdd3916c32261bfe8b24cee3158ae53781e5",
       "occurrence": 1
     },
     {
       "kind": "css",
       "file": "src/style.css",
       "context": "",
-      "selector": ".skirmish-log-card li:nth-child(2n) > span",
-      "surfaceHash": "3def49807cdca33032517b3c3bd9a546b22424edfe5cc5eb8be6e141ce362240",
+      "selector": ".skirmish-log-card li.is-enemy > span",
+      "surfaceHash": "d7b27ab36b72005e4b869369e40897cb9f8e2df0f83384acb80964188895a89e",
+      "occurrence": 1
+    },
+    {
+      "kind": "css",
+      "file": "src/style.css",
+      "context": "",
+      "selector": ".skirmish-log-card li.is-note > span",
+      "surfaceHash": "c2c0a9b5bf42bc2041f341698a617e4e3d65b894a081bf45e7d88b841949d028",
+      "occurrence": 1
+    },
+    {
+      "kind": "css",
+      "file": "src/style.css",
+      "context": "",
+      "selector": ".skirmish-log-card li.is-player > span",
+      "surfaceHash": "e9499a87ee7b7984e5d557e523269ff725437b5d199eba4f47cda81949710ac2",
       "occurrence": 1
     },
     {
