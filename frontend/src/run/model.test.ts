@@ -4,6 +4,9 @@ import {
   CURRENT_RUN_SAVE_VERSION,
   RUN_GENERATED_CARD_COUNT,
   RUN_OFFER_CARD_COUNT,
+  RUN_OPENING_CARD_OFFER_COUNT,
+  RUN_OPENING_CARD_VALUE_MAX,
+  RUN_OPENING_CARD_VALUE_MIN,
   RUN_SECTIO_CARD_PILE_SIZE,
   RUN_CARD_BY_ID,
   RUN_CARD_CATALOG,
@@ -24,6 +27,7 @@ import {
   runCardRarityForRoll,
   sectioCardOffersAtCursor,
   sectioCardPile,
+  takeVacantiaCard,
   takeVacantiaLipsanon,
   type RunDocument,
   type RunWarSnapshot,
@@ -175,18 +179,50 @@ describe('plain Run creation and acquisition', () => {
     );
   });
 
-  it('moves the opening lipsanon choice directly into Battle 1 Deployment', () => {
+  it('opens the Run on a formation-card grant and moves it into Battle 1 Deployment', () => {
     const openingWar = war();
     openingWar.battles[0].loot = true;
     const run = createRun(openingWar, 29);
     expect(run.phase).toBe('bona-vacantia');
-    const chosen = run.vacantia!.offers[0];
-    const taken = takeVacantiaLipsanon(run, chosen);
+    expect(run.vacantia!.kind).toBe('opening');
+    // The opening screen grants a card, not a lipsanon: Battle 1 has to be arrangeable.
+    expect(run.vacantia!.offers).toEqual([]);
+    expect(run.vacantia!.cardOffers).toHaveLength(RUN_OPENING_CARD_OFFER_COUNT);
+    expect(new Set(run.vacantia!.cardOffers).size).toBe(RUN_OPENING_CARD_OFFER_COUNT);
+    for (const coreId of run.vacantia!.cardOffers) {
+      const card = RUN_CARD_BY_ID[coreId];
+      expect(card).toBeDefined();
+      expect(card.value).toBeGreaterThanOrEqual(RUN_OPENING_CARD_VALUE_MIN);
+      expect(card.value).toBeLessThanOrEqual(RUN_OPENING_CARD_VALUE_MAX);
+    }
+
+    const chosen = run.vacantia!.cardOffers[0];
+    const taken = takeVacantiaCard(run, chosen);
     expect(taken.phase).toBe('deployment');
     expect(taken.battleIndex).toBe(0);
     expect(taken.sectio).toBeNull();
-    expect(taken.lipsana).toContain(chosen);
+    expect(taken.vacantia).toBeNull();
+    expect(taken.lipsana).toEqual([]);
+
+    // Admitted exactly as Adlectio would: a held card with one army seat per piece.
+    const held = taken.cards.at(-1)!;
+    expect(held.coreId).toBe(chosen);
+    expect(held.unitSeats).toHaveLength(RUN_CARD_BY_ID[chosen].pieces.length);
+    expect(taken.army.filter((unit) => held.unitSeats.includes(unit.id)).map((unit) => unit.type))
+      .toEqual(RUN_CARD_BY_ID[chosen].pieces);
+    expect(taken.goldTenths).toBe(run.goldTenths);
   });
+
+  it('refuses a grant the opening screen did not offer', () => {
+    const openingWar = war();
+    openingWar.battles[0].loot = true;
+    const run = createRun(openingWar, 29);
+    const unoffered = RUN_CARD_DECK.find((card) => !run.vacantia!.cardOffers.includes(card.id))!;
+
+    expect(takeVacantiaCard(run, unoffered.id)).toBe(run);
+    expect(takeVacantiaCard(run, 'his-grace')).toBe(run);
+  });
+
 
   it('lets Quartermaster’s Ledger consume four hidden-pile positions', () => {
     const base = acquireLipsanon(createRun(war(), 37), 'quartermasters-ledger');

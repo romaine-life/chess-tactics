@@ -17,6 +17,7 @@ import { solveSocketBoard } from '../core/tileBoardGenerator';
 import { BoardLabBoard, boardLabCellPosition } from '../render/BoardLabBoard';
 import { BoardCanvasLayer, boundsForOps } from '../render/BoardCanvasLayer';
 import { loadRasterAlphaMask } from '../render/rasterAlpha';
+import { useDeleteKeyAction } from './shared/deleteKeyAction';
 import {
   buildMirrorLosProofPlan,
   type MirrorLosClassification,
@@ -774,6 +775,8 @@ export function WallArtLab({ artId, onArtId, header, draftSourceId, onDraftSourc
     });
     setSelectedSlotIndex(Math.max(0, activeSlotIndex - 1));
   };
+  // Delete = the selected slot's own remove button.
+  useDeleteKeyAction(activeSlot ? removeSlot : null);
 
   const startSlotDrag = (event: PointerEvent<HTMLButtonElement>, index: number): void => {
     const slot = art.slots[index];

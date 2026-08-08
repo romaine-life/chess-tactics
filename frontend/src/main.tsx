@@ -23,12 +23,16 @@ import { installLoadingResourceObserver, loadingError, loadingMark, loadingMeasu
 import { composeInstalledChromeCss } from './ui/useInstalledChromeCss';
 import { decodeShellChromeArt } from './ui/shell/shellChromeArt';
 import { startAuthSession } from './net/authSession';
+import { initBoardGridStyle } from './settings/boardGridStyle';
 
 installLoadingResourceObserver();
 loadingMark('app', 'entry-module');
 // Authentication is application state, not screen state. Start the sole client
 // session owner once; every account-gated consumer observes or awaits this owner.
 void startAuthSession();
+// The board grid is drawn on battlefields the player reaches without passing through Settings, so
+// the chosen style is published for the whole session rather than by the Settings screen.
+initBoardGridStyle();
 
 class AppCrashBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null };

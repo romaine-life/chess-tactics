@@ -61,7 +61,7 @@ test('already-applied migration 36 remains the immutable drawable-media migratio
   );
 });
 
-test('the exact sparse numeric legacy history upgrades through migration 69', () => {
+test('the exact sparse numeric legacy history upgrades through migration 70', () => {
   const versions = migrationVersions();
   const appliedBeforeUpgrade = new Set(
     versions.filter((version) => version <= 27 || version === 36),
@@ -551,6 +551,17 @@ test('the exact sparse numeric legacy history upgrades through migration 69', ()
     /runSaveVersion'[^]*30[^]*deploymentMode'[^]*arranged[^]*sectioCardCursor'[^]*0[^]*runSaveVersion'[^]*'29'/i,
     'migration 69 must arrange every Run and restart its changed market cursor',
   );
+  const migration70 = inlineMigration(70);
+  assert.equal(
+    migration70.name,
+    'opening formation-card grant',
+    'migration 70 must own the opening formation-card grant boundary',
+  );
+  assert.match(
+    migration70.sql,
+    /runSaveVersion'[^]*31[^]*cardOffers[^]*runSaveVersion'[^]*'30'/i,
+    'migration 70 must advance version-30 Runs and give the opening screen card offers',
+  );
   assert.equal(
     (serverSource.match(/never_saved: savedRevision === 0/g) || []).length,
     2,
@@ -587,7 +598,7 @@ test('the exact sparse numeric legacy history upgrades through migration 69', ()
   );
   assert.deepEqual(
     plan.pending.map((entry) => entry.version),
-    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69],
+    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70],
     'the bridge must fill the historical gap before applying every post-36 contract',
   );
   assert.throws(
@@ -830,6 +841,11 @@ test('required-schema readiness and repair enforce the migrations 37 through 68 
     contractReadiness,
     /unmigrated_active_run_version_29_count[\s\S]*version === 69[\s\S]*repair player-arranged formation contract/,
     'readiness must route version-29 account Runs through migration 69',
+  );
+  assert.match(
+    contractReadiness,
+    /unmigrated_active_run_version_30_count[\s\S]*version === 70[\s\S]*repair opening formation-card grant contract/,
+    'readiness must route version-30 account Runs through migration 70',
   );
   assert.match(
     contractReadiness,
@@ -1212,8 +1228,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*69\s*\}/,
-    'the production upgrade proof must require a complete 1-69 history',
+    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*70\s*\}/,
+    'the production upgrade proof must require a complete 1-70 history',
   );
   assert.match(
     primaryUpgradeProof,
@@ -1227,8 +1243,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /length:\s*33[\s\S]*index\s*\+\s*37/,
-    'the production report must include every post-36 migration through 69',
+    /length:\s*34[\s\S]*index\s*\+\s*37/,
+    'the production report must include every post-36 migration through 70',
   );
   assert.match(
     primaryUpgradeProof,

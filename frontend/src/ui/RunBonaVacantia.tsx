@@ -1,12 +1,61 @@
 import { useState, type ReactElement } from 'react';
-import { LIPSANON_BY_ID, takeVacantiaLipsanon, type LipsanonId, type RunDocument } from '../run/model';
+import {
+  LIPSANON_BY_ID,
+  RUN_CARD_BY_ID,
+  takeVacantiaCard,
+  takeVacantiaLipsanon,
+  type LipsanonId,
+  type RunDocument,
+} from '../run/model';
 import { LipsanonIcon } from './Lipsana';
+import { RunCard } from './RunCard';
 import { RunSceneViewport } from './RunWorkspace';
 import { Tooltip } from './shared/InfoTip';
 import { installedLipsanonMatUrl, lipsanonFloatClock } from './runLipsanonMat';
 import { lipsanonStripLandingPoint } from './runLipsanonFlight';
 import type { LipsanonFlightPoint } from './runLipsanonFlightView';
 import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
+
+/**
+ * The Run's opening grant: three formation cards, one taken, on the same mat the later
+ * Conflicts use for lipsana. Taking one opens Deployment for Battle 1 with a formation to
+ * arrange beside His Grace, which is what makes the opening Battle teach placement at all.
+ */
+function RunVacantiaCardGrant({
+  run,
+  replace,
+}: {
+  run: RunDocument;
+  replace: (next: RunDocument) => void;
+}): ReactElement {
+  const [taken, setTaken] = useState<string | null>(null);
+  const offers = run.vacantia?.cardOffers ?? [];
+
+  // The Sectio's own card row, not the lipsanon mat: the mat is sized for 64x64 relic
+  // icons and collapses around a card face.
+  return (
+    <div className="run-card-grid" data-testid="run-vacantia-card-offers">
+      {offers.map((coreId) => {
+        const card = RUN_CARD_BY_ID[coreId];
+        if (!card) return null;
+        return (
+          <RunCard
+            key={coreId}
+            card={card}
+            mode="grant"
+            layoutId={coreId}
+            disabled={Boolean(taken)}
+            onSelect={() => {
+              if (taken) return;
+              setTaken(coreId);
+              replace(takeVacantiaCard(run, coreId));
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+}
 
 /** Mandatory three-way relic choice at the opening of a Conflict. */
 export function RunBonaVacantia({
@@ -37,6 +86,8 @@ export function RunBonaVacantia({
     }
   }
 
+  const grant = vacantia.kind === 'opening';
+
   return (
     <RunSceneViewport
       scene={{
@@ -44,10 +95,11 @@ export function RunBonaVacantia({
         className: 'run-vacantia-workspace',
         contentClassName: 'run-vacantia-content',
         testId: 'run-bona-vacantia',
-        ariaLabel: 'Lipsanon offers',
+        ariaLabel: grant ? 'Opening card offers' : 'Lipsanon offers',
         backgroundArtwork: workspaceBackgroundArtwork('run-bona-vacantia'),
       }}
     >
+      {grant ? <RunVacantiaCardGrant run={run} replace={replace} /> : (
       <div className="lipsanon-mat-stage" data-cards="on" data-testid="run-vacantia-mat">
         <div className="lipsanon-mat-layer">
           {mat ? <img className="lipsanon-mat-art" src={mat} alt="" draggable={false} /> : null}
@@ -84,6 +136,7 @@ export function RunBonaVacantia({
           </div>
         </div>
       </div>
+      )}
     </RunSceneViewport>
   );
 }

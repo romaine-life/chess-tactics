@@ -21,7 +21,7 @@ export {
 };
 
 /** The schema version of one persisted in-progress Run. Only this exact save shape is read. */
-export const CURRENT_RUN_SAVE_VERSION = 30;
+export const CURRENT_RUN_SAVE_VERSION = 31;
 export type RunSaveVersion = typeof CURRENT_RUN_SAVE_VERSION;
 
 export class UnsupportedRunSaveError extends Error {
@@ -45,6 +45,7 @@ const RUN_SAVE_VERSION_QUEEN_PAWN_FORMATIONS_SOURCE = 26;
 const RUN_SAVE_VERSION_IMMUTABLE_FORMATIONS_SOURCE = 27;
 const RUN_SAVE_VERSION_DEPLOYMENT_MODE_SOURCE = 28;
 const RUN_SAVE_VERSION_PLAYER_FORMATIONS_SOURCE = 29;
+const RUN_SAVE_VERSION_ARRANGED_PILE_SOURCE = 30;
 export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
@@ -344,12 +345,19 @@ export interface RunSectioState {
  * `victoryGoldTenths` is carried through because that later Sectio reports it and the Battle's
  * gold is banked before this screen, not after it.
  */
+/**
+ * The screen that opens a Conflict. A post-battle Conflict offers lipsana; the Run's opening
+ * offers formation cards instead, so the player reaches Battle 1 holding something to arrange.
+ * The two offer lists are exclusive -- `kind` decides which one is populated.
+ */
 export interface RunVacantiaState {
   kind: 'opening' | 'post-battle';
   conflictIndex: number;
   afterBattleIndex: number;
   victoryGoldTenths: number;
   offers: LipsanonId[];
+  /** Core card ids, populated only for `kind: 'opening'`. */
+  cardOffers: string[];
 }
 
 export interface RunSectioEntrySnapshot {
@@ -786,6 +794,26 @@ export function sectioCardPile(seed: number, pileIndex: number): RunCoreCard[] {
   );
 }
 
+/** The value band the Run's opening card grant draws from. Low enough that the grant is a
+ * formation to solve rather than a finished answer, high enough to be more than a lone Pawn. */
+export const RUN_OPENING_CARD_VALUE_MIN = 4;
+export const RUN_OPENING_CARD_VALUE_MAX = 6;
+export const RUN_OPENING_CARD_OFFER_COUNT = 3;
+
+/** Every live offer card the opening grant may present, cheapest identity order. */
+export function openingCardGrantPool(): RunCoreCard[] {
+  return RUN_CARD_DECK.filter((card) => (
+    card.value >= RUN_OPENING_CARD_VALUE_MIN && card.value <= RUN_OPENING_CARD_VALUE_MAX
+  ));
+}
+
+/** The Run's opening card offers: distinct identities drawn from the band, fixed by seed. */
+export function openingCardGrantOffers(seed: number): string[] {
+  return shuffled(openingCardGrantPool(), mixSeed(seed, 'vacantia-opening-cards', 0))
+    .slice(0, RUN_OPENING_CARD_OFFER_COUNT)
+    .map((card) => card.id);
+}
+
 export function sectioCardOffersAtCursor(
   seed: number,
   battleIndex: number,
@@ -911,20 +939,21 @@ export function createRun(
     sectio: null,
     vacantia: null,
   };
-  // A Conflict that ends in loot opens with Bona Vacantia. Taking its lipsanon now leads
-  // straight into Battle 1; a war with no loot Battles begins in Deployment immediately.
+  // A Conflict that ends in loot opens with Bona Vacantia. The Run's opening screen grants a
+  // formation card rather than a lipsanon, so Battle 1 is arranged with something beyond His
+  // Grace and teaches placement instead of demonstrating it with one fixed shape. Taking it
+  // leads straight into Battle 1; a war with no loot Battles begins in Deployment immediately.
   if (conflictOpensWithVacantia(war, 0)) {
-    const reveal = revealLipsana(run, 3, 'vacantia-lipsana', 0);
     return {
       ...run,
       phase: 'bona-vacantia',
-      seenLipsana: reveal.seenLipsana,
       vacantia: {
         kind: 'opening',
         conflictIndex: 0,
         afterBattleIndex: 0,
         victoryGoldTenths: 0,
-        offers: reveal.offers,
+        offers: [],
+        cardOffers: openingCardGrantOffers(seed),
       },
     };
   }
@@ -1194,6 +1223,9 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
   }
   let next = run;
   if (next.vacantia === undefined) next = { ...next, vacantia: null };
+  if (next.vacantia && !Array.isArray(next.vacantia.cardOffers)) {
+    next = { ...next, vacantia: { ...next.vacantia, cardOffers: [] } };
+  }
   // The aftermath report belongs to the Battle it closed, so it is not carried into any
   // later phase. Repair an incomplete current save rather than leaking the report forward.
   if (next.aftermath === undefined || (next.phase !== 'aftermath' && next.aftermath !== null)) {
@@ -2041,10 +2073,36 @@ function migrateRunToDeploymentMode(stored: Record<string, unknown>): Record<str
 function migrateRunToPlayerFormations(stored: Record<string, unknown>): Record<string, unknown> {
   return {
     ...stored,
-    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    runSaveVersion: RUN_SAVE_VERSION_ARRANGED_PILE_SOURCE,
     deploymentMode: 'arranged',
     sectioCardCursor: 0,
     deployment: stored.phase === 'deployment' ? null : stored.deployment,
+  };
+}
+
+/**
+ * Version 31 replaces the Run's opening lipsanon with a formation-card grant. Only a document
+ * still sitting on the opening screen can be affected: it has no card offers, so it is dealt
+ * the ones its own seed would have produced. Every later Bona Vacantia keeps its lipsana, and
+ * a Run that already left the opening screen carries the lipsanon it took -- the grant is not
+ * retroactive, and taking that lipsanon was a real choice that should stand.
+ */
+function migrateRunToOpeningCardGrant(stored: Record<string, unknown>): Record<string, unknown> {
+  const vacantia = stored.vacantia && typeof stored.vacantia === 'object' && !Array.isArray(stored.vacantia)
+    ? stored.vacantia as Record<string, unknown>
+    : null;
+  if (!vacantia) {
+    return { ...stored, runSaveVersion: CURRENT_RUN_SAVE_VERSION };
+  }
+  const opening = vacantia.kind === 'opening';
+  return {
+    ...stored,
+    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    vacantia: {
+      ...vacantia,
+      offers: opening ? [] : vacantia.offers,
+      cardOffers: opening ? openingCardGrantOffers(Number(stored.seed) >>> 0) : [],
+    },
   };
 }
 
@@ -2065,6 +2123,7 @@ function migrateRunToPlayerFormations(stored: Record<string, unknown>): Record<s
  * formation mutation and its two dependent lipsana. Version 29 names automatic or arranged
  * Deployment as an immutable Run rule. Version 30 retires automatic placement, collapses
  * quarter-turn-equivalent offer identities, and deals complete random catalog shuffles.
+ * Version 31 replaces the Run's opening lipsanon with a formation-card grant.
  * Older saves remain unsupported.
  */
 export function migrateRunSaveDocument(value: unknown): RunDocument {
@@ -2136,6 +2195,9 @@ export function migrateRunSaveDocument(value: unknown): RunDocument {
   }
   if (stored.runSaveVersion === RUN_SAVE_VERSION_PLAYER_FORMATIONS_SOURCE) {
     stored = migrateRunToPlayerFormations(stored);
+  }
+  if (stored.runSaveVersion === RUN_SAVE_VERSION_ARRANGED_PILE_SOURCE) {
+    stored = migrateRunToOpeningCardGrant(stored);
   }
   return normalizeRunDocument(stored as unknown as RunDocument);
 }
@@ -2674,6 +2736,7 @@ export function openSectio(run: RunDocument, survivingUnitIds: readonly string[]
         afterBattleIndex: banked.battleIndex,
         victoryGoldTenths,
         offers: reveal.offers,
+        cardOffers: [],
       },
     });
   }
@@ -2869,6 +2932,41 @@ export function takeVacantiaLipsanon(run: RunDocument, lipsanon: LipsanonId): Ru
     ? { ...acquired, phase: 'deployment' as const, vacantia: null, sectio: null }
     : openPostBattleSectio(acquired, vacantia.victoryGoldTenths);
   return touch(opened);
+}
+
+/**
+ * Take the Run's opening formation card. Mandatory and free, exactly as the lipsanon it
+ * replaced was: the grant is what the player carries into Battle 1 beside His Grace, and
+ * taking it is what opens Deployment. It admits the card the same way Adlectio does, so the
+ * units, seats, and card sequence are indistinguishable from a purchased formation.
+ */
+export function takeVacantiaCard(run: RunDocument, coreId: string): RunDocument {
+  if (
+    run.phase !== 'bona-vacantia'
+    || run.vacantia?.kind !== 'opening'
+    || !run.vacantia.cardOffers.includes(coreId)
+  ) return run;
+  // Deck lookup, not runCardDefinition: the grant is an offer card, and the starter
+  // catalog it would also reach carries a King that no admission may add.
+  const definition = RUN_CARD_BY_ID[coreId];
+  if (!definition) return run;
+  const { addedUnits, ...armyUpdate } = addArmyPieces(run, definition.pieces, 'adlectio');
+  const card: RunOwnedCard = {
+    id: `run-card-${run.nextCardSequence}`,
+    coreId,
+    unitSeats: addedUnits.map((unit) => unit.id),
+    acquiredAfterBattleIndex: run.vacantia.afterBattleIndex,
+  };
+  return touch({
+    ...run,
+    ...armyUpdate,
+    army: armyUpdate.army,
+    cards: [...run.cards, card],
+    nextCardSequence: run.nextCardSequence + 1,
+    phase: 'deployment',
+    vacantia: null,
+    sectio: null,
+  });
 }
 
 export function buyPaidLipsanon(run: RunDocument): RunDocument {

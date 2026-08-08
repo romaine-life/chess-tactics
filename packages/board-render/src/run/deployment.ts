@@ -88,13 +88,15 @@ function authoredOccupied(level: Level): Set<string> {
   return occupied;
 }
 
+/** Every authored deployment row, front (lowest y, enemy-facing) to back. The depth is the
+ * level's to choose: a three-row band is what lets a three-wide formation stand up under a
+ * quarter turn, and clamping it here silently discarded the rows a level had authored. */
 function authoredDeploymentLaneRows(level: Level): number[] {
   return [...new Set(level.layers.zones
     .filter((zone) => zone.type === 'player-spawn' || zone.type === 'player-king-spawn')
     .flatMap((zone) => zone.tiles.map(([, y]) => y))
     .filter((y) => y >= 0 && y < level.board.rows))]
-    .sort((left, right) => left - right)
-    .slice(0, 2);
+    .sort((left, right) => left - right);
 }
 
 /** The generated card grammar has two absolute lanes. Lower y is the enemy-facing
@@ -517,8 +519,41 @@ function rotatedFormation(
   return rotated.map((cell) => ({ x: cell.x - minX, y: cell.y - minY }));
 }
 
+/**
+ * The quarter turns a player can actually tell apart. A formation that maps onto itself under
+ * a turn would otherwise offer two buttons that place identical unit types on identical
+ * squares -- most visibly the four-across cards, five of which read the same in both
+ * directions (`pppp`, `bppb`, `kppk`, `pbbp`, `pkkp`). Units of one type are interchangeable,
+ * so the comparison is by type rather than by unit identity.
+ */
+export function distinctCardRotations(
+  run: RunDocument,
+  cardId: string,
+): RunFormationRotation[] {
+  const card = dealtCards(run).find((candidate) => candidate.id === cardId);
+  if (!card) return [];
+  const definition = runCardDefinition(card.coreId);
+  const formation = definition?.formation ?? card.unitSeats.map((_, x) => ({ x, y: 0 }));
+  const types = card.unitSeats.map((unitId) => (
+    run.army.find((candidate) => candidate.id === unitId)?.type ?? ''
+  ));
+  const seen = new Set<string>();
+  return ([0, 1, 2, 3] as const).filter((rotation) => {
+    const signature = rotatedFormation(formation, rotation)
+      .map((cell, index) => `${cell.x},${cell.y}:${types[index]}`)
+      .sort()
+      .join('|');
+    if (seen.has(signature)) return false;
+    seen.add(signature);
+    return true;
+  });
+}
+
 /** Every legal translation for one selected rotation. The anchor is the normalized shape's
- * front-left cell; rotations that exceed the authored two-row band naturally have no options. */
+ * front-left cell. A seat's row is the anchor row plus the rotated offset, in board
+ * coordinates -- not an index into the lane list, which made a formation's depth mean
+ * "how many authored rows exist" and left every quarter turn taller than the band unplaceable.
+ * Legality is the deployment pool's to decide, and it already rejects anything off the band. */
 export function arrangedCardPlacementOptions(
   run: RunDocument,
   level: Level,
@@ -551,16 +586,14 @@ export function arrangedCardPlacementOptions(
     .map(([, cell]) => key(cell)));
   const laneRows = playerDeploymentLaneRows(level);
   const anchorXs = [...new Set(pools.all.map((cell) => cell.x))].sort((a, b) => a - b);
-  return laneRows.flatMap((anchorY, anchorRowIndex) => anchorXs.flatMap((anchorX): RunArrangedPlacementOption[] => {
-    const targets = seats.flatMap(({ unit }, index) => {
+  return laneRows.flatMap((anchorY) => anchorXs.flatMap((anchorX): RunArrangedPlacementOption[] => {
+    const targets = seats.map(({ unit }, index) => {
       const offset = transformed[index];
-      const y = laneRows[anchorRowIndex + offset.y];
-      return y === undefined ? [] : [{ unit, cell: { x: anchorX + offset.x, y } }];
+      return { unit, cell: { x: anchorX + offset.x, y: anchorY + offset.y } };
     });
     const targetKeys = targets.map(({ cell }) => key(cell));
     if (
-      targets.length !== seats.length
-      || new Set(targetKeys).size !== targets.length
+      new Set(targetKeys).size !== targets.length
       || targets.some(({ unit, cell }) => (
         occupied.has(key(cell)) || !eligibleByType.get(unit.type)?.has(key(cell))
       ))

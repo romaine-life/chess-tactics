@@ -8,6 +8,7 @@ import { TILE_TEMPLATE } from '../art/tileTemplate';
 import { PROP_DEFS, propCells, currentSeats, applyPropSeats, type PropDef, type PropKind, type PropSeatEntry, type PropSeatMap, type StructurePart, type StructurePlacement, type StructureSourceRef } from '../core/props';
 import { pieceSpritePath } from '../core/pieces';
 import { ViewPane } from './shared/ViewPane';
+import { useDeleteKeyAction } from './shared/deleteKeyAction';
 import { SliderRow } from './dressing/SliderRow';
 import { saveLiveSeats } from '../net/propSeats';
 import { mapSaveError } from '../campaign/save';
@@ -483,6 +484,10 @@ export function PropSeatLab({ propId, onPropId, header, draft, onDraftChange }: 
       setStatus(`error: ${'action' in r ? 'sign in required' : r.message}`);
     }
   };
+
+  // Delete = the open copy's own "Delete this copy" button. A base prop has no delete button here,
+  // and the key gets none either.
+  useDeleteKeyAction(isCopy ? () => { void deleteCopy(); } : null);
 
   const toggle = (on: boolean, set: (v: boolean) => void, label: string, title?: string) => (
     <button type="button" className={`ps-toggle ${on ? 'is-on' : ''}`} title={title} onClick={() => set(!on)}>{label}</button>

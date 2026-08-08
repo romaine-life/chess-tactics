@@ -280,3 +280,33 @@ test('withoutPredrawnBoardOcclusionMask preserves schema-v3 move-highlight calib
     /does not select the expected background and occlusion mask/,
   );
 });
+
+test('a grown or hand-placed grid never moves or rescales the artwork it sits on', () => {
+  installTestDrawableCatalog();
+  try {
+    const { boardDrawOps, predrawnRenderSurface } = boardRender;
+    const plateOp = (b) => boardDrawOps(b).find((op) => op.z === -100000);
+    const base = { ...board(), backgroundMode: 'ai', surface: versionedSurface };
+
+    // Growing the grid is exactly the case the owner asked for: 5x11 becomes 6x12 and the picture
+    // stays pinned to its own recorded world bounds rather than stretching to the new dimensions.
+    const grown = { ...base, cols: 6, rows: 12, predrawnGridDetached: true };
+    assert.deepEqual(plateOp(grown), plateOp(base));
+    assert.equal(plateOp(base).dx, versionedSurface.worldBounds.minX);
+    assert.equal(plateOp(base).dw, versionedSurface.worldBounds.width);
+
+    // Sliding the grid moves the PICTURE under it by that step, and never its size.
+    const slid = { ...base, predrawnPlateOffset: { left: -64, top: 32 } };
+    assert.equal(plateOp(slid).dx, versionedSurface.worldBounds.minX - 64);
+    assert.equal(plateOp(slid).dy, versionedSurface.worldBounds.minY + 32);
+    assert.equal(plateOp(slid).dw, plateOp(base).dw);
+    assert.equal(plateOp(slid).dh, plateOp(base).dh);
+
+    // The offset is a render-time placement only. The selection keeps the exact bounds every
+    // lineage and identity check compares, so a moved plate is still the same artifact.
+    assert.deepEqual(slid.surface.worldBounds, versionedSurface.worldBounds);
+    assert.deepEqual(predrawnRenderSurface(base).worldBounds, versionedSurface.worldBounds);
+  } finally {
+    resetTestDrawableCatalog();
+  }
+});

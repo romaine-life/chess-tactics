@@ -57,6 +57,7 @@ import {
 } from '../run/model';
 import {
   arrangedCardPlacementOptions,
+  distinctCardRotations,
   arrangedDeploymentCanBegin,
   arrangedDeploymentCards,
   beginArrangedBattle,
@@ -537,9 +538,12 @@ function useRunDeploymentPresentation({
       : [],
     [arrangementRotation, level, prepared, selectedCardId],
   );
+  // A rotation is offered only when it both fits the band and looks different from a turn
+  // already on the rail. Redundant turns are skipped the same way unplaceable ones are, so
+  // the control never presents two buttons that produce the same board.
   const availableArrangementRotations = useMemo(() => new Set<RunFormationRotation>(
     selectedCardId
-      ? ([0, 1, 2, 3] as const).filter((rotation) => (
+      ? distinctCardRotations(prepared, selectedCardId).filter((rotation) => (
           arrangedCardPlacementOptions(prepared, level, selectedCardId, rotation).length > 0
         ))
       : [],
