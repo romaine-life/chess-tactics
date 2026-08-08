@@ -22126,9 +22126,14 @@ button.tileset-relationship-cell {
 /* The dealt stack shares the arranging card's pinned seat, so it carries NO padding, no minimum
    height and no label of its own: every one of those offset the landing from the box the card
    takes over, and the hand jumped the instant the deal finished. */
+/* A POUR, not a dole. The stagger used to be most of a card's flight, so each card had almost
+   landed before the next one left and the deal read as one-at-a-time. Lengthening the flight and
+   cutting the gap between departures puts the whole hand in the air at once: cards leave the deck
+   in a stream and arrive in the same order, still separately legible, without the wait between
+   them. The gap is what makes it a stream; the longer flight is what keeps it unhurried. */
 .run-deployment-card-stack {
-  --deployment-deal-duration: 560ms;
-  --deployment-deal-stagger: 340ms;
+  --deployment-deal-duration: 720ms;
+  --deployment-deal-stagger: 130ms;
   --deployment-discard-duration: 560ms;
   --deployment-discard-stagger: 72ms;
   align-items: start;
