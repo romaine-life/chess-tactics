@@ -10,6 +10,7 @@ import {
   type RunCardRarity,
 } from '../run/model';
 import {
+  RUN_CARD_PRAECIPUUS_FRAME_SLOT,
   RUN_CARD_STANDARD_FRAME_SLOT_BY_RARITY,
 } from './runCardFrameGeometry';
 
@@ -56,8 +57,16 @@ export function isRunCardOffer(card: RunCardDefinition | RunCardOffer): card is 
   return 'offerId' in card;
 }
 
-/** Rarity selects material inside the Standard family; frame type remains independent. */
+/**
+ * Rarity selects material inside the Standard family; frame type remains independent.
+ *
+ * The starter Chartulary's one card takes Praecipuus, the owner-selected royal-purple frame
+ * (ADR-0413, ADR-0414). It is a frame family of exactly one card at one fixed rarity, so it
+ * owes no Common/Uncommon/Rare triplet: nothing can ever ask it for a material it lacks, which
+ * is the substitution ADR-0495 forbids. Every dealt card still resolves inside Standard.
+ */
 export function runCardFrameSlot(card: RunCardDefinition | RunCardOffer): string {
+  if (isRunStarterCard(card)) return RUN_CARD_PRAECIPUUS_FRAME_SLOT;
   return RUN_CARD_STANDARD_FRAME_SLOT_BY_RARITY[card.rarity];
 }
 

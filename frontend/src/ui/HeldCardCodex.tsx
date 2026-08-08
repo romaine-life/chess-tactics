@@ -30,6 +30,7 @@ import {
   runCardTierLabel,
   useRunCardGoldTierDividerSource,
 } from './shared/RunCardGoldTierDivider';
+import { useRunCardCostCrownSource } from './shared/runCardCostCrown';
 import { ChromeButton } from './shared/ChromeButton';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 
@@ -69,6 +70,9 @@ export function HeldCardCodex({
     run.phase === 'deployment' && (run.deployment?.dealtCardIds?.length ?? 0) > 0,
   );
   const goldTierDividerSource = useRunCardGoldTierDividerSource();
+  // His Grace is held in every Run, so the Chartulary is the surface a player meets the
+  // priceless coin's mark on most often. It reads the same mark the Cards gallery does.
+  const { url: crownUrl } = useRunCardCostCrownSource();
   const all = useMemo(() => heldCards(run), [run]);
   const thisCombatAvailable = Boolean(
     run.deployment && (run.phase === 'deployment' || run.phase === 'battle'),
@@ -120,7 +124,7 @@ export function HeldCardCodex({
             {groups.map(([value, cards]) => (
               <section className="enchiridion-card-gallery-group" key={value} aria-label={runCardTierLabel(value)}>
                 <h3 className="enchiridion-card-gallery-heading">
-                  <RunCardGoldTierDivider value={value} source={goldTierDividerSource} />
+                  <RunCardGoldTierDivider value={value} source={goldTierDividerSource} crownUrl={crownUrl} />
                 </h3>
                 <div className="enchiridion-card-gallery-grid">
                   {cards.map((held) => (
@@ -130,7 +134,7 @@ export function HeldCardCodex({
                       data-card-id={held.owned.id}
                       key={held.owned.id}
                     >
-                      <RunCard card={held.core} mode="reference" />
+                      <RunCard card={held.core} mode="reference" crownUrl={crownUrl} />
                     </div>
                   ))}
                 </div>

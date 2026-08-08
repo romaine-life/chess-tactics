@@ -85,6 +85,8 @@ const {
   runLipsanonIconSlotId,
   runCardCostCoinMediaIssue,
   runCardCostCoinSlot,
+  runCardCostCrownMediaIssue,
+  runCardCostCrownSlot,
   runCardGoldTierDividerMediaIssue,
   runCardGoldTierDividerOwnerProofIssue,
   runCardGoldTierDividerSlot,
@@ -19040,6 +19042,9 @@ function mediaDomainProjectionIssue(row) {
   }
   if (runCardCostCoinSlot(row.slot)) {
     return runCardCostCoinMediaIssue(row, runtime.value);
+  }
+  if (runCardCostCrownSlot(row.slot)) {
+    return runCardCostCrownMediaIssue(row, runtime.value);
   }
   if (runCardGoldTierDividerSlot(row.slot)) {
     return runCardGoldTierDividerMediaIssue(row, runtime.value);

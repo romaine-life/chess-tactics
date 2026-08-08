@@ -6,6 +6,10 @@ export interface RunCardGoldTierDividerGeometry {
     x: number;
     y: number;
   };
+  /** The struck mark's share of the drawn coin, in whole percent (ADR-0530). */
+  mark: {
+    fill: number;
+  };
 }
 
 export function saveRunCardGoldTierDividerGeometry(
