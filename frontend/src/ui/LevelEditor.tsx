@@ -3978,6 +3978,27 @@ export function LevelEditor(): ReactElement {
       );
     }
   };
+  /**
+   * Whether the whole camera boundary is currently on screen.
+   *
+   * A boundary larger than the canvas draws entirely outside it, handles and all, which looks
+   * exactly like no boundary at all. The panel says so, and offers the way back.
+   */
+  const cameraBoundaryVisibility = ((): 'unknown' | 'visible' | 'off-screen' => {
+    if (!viewViewportSize) return 'unknown';
+    const seen = worldViewportForCamera({
+      viewport: viewViewportSize,
+      camera: { zoom: viewZoom, pan: viewPan },
+    });
+    const box = resolvedCameraBoundary;
+    return seen.minX <= box.minX
+      && seen.minY <= box.minY
+      && seen.minX + seen.width >= box.minX + box.width
+      && seen.minY + seen.height >= box.minY + box.height
+      ? 'visible'
+      : 'off-screen';
+  })();
+  const showCameraBoundary = (): void => frameCameraBoundary(resolvedCameraBoundary);
   /** Author the limit by SHOWING it: zoom the canvas to the tightest a player should get. */
   const setCameraZoomInFromView = (): void => {
     commitCameraZoomIn(viewZoom);
@@ -10472,6 +10493,26 @@ export function LevelEditor(): ReactElement {
                 <dd>{Math.round(resolvedCameraBoundary.width)} × {Math.round(resolvedCameraBoundary.height)} world px</dd>
               </div>
             </dl>
+            <div className="skirmish-view-row">
+              <ChromeButton
+                unit="inner-text-button"
+                className={chromeUnitClassNames(
+                  'inner-text-button',
+                  'le-seg-btn',
+                  cameraBoundaryVisibility === 'off-screen' && 'active',
+                )}
+                onClick={showCameraBoundary}
+                disabled={!viewViewportSize}
+                title="Move the canvas until the whole boundary and all its handles are on screen."
+              >Show boundary</ChromeButton>
+              <span className="le-board-note" data-testid="le-camera-boundary-visibility">
+                {cameraBoundaryVisibility === 'off-screen'
+                  ? 'Extends past this view — nothing to grab until you show it.'
+                  : cameraBoundaryVisibility === 'visible'
+                    ? 'Fully on screen.'
+                    : 'Measuring the canvas…'}
+              </span>
+            </div>
             {!editorSessionCanWrite ? (
               <p className="le-board-note">Edit is unavailable until this session owns the editor lease.</p>
             ) : cameraBoundaryInteractionMode === 'view' ? (
