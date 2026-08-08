@@ -7,7 +7,7 @@ refines:
   - "[ADR-0519](0519-an-expired-sign-in-pauses-the-level-editor.md)"
 ---
 
-# ADR-0520: An unread artwork version list is not a verdict about the artwork
+# ADR-0521: An unread artwork version list is not a verdict about the artwork
 
 ## Context and Problem Statement
 

@@ -47,7 +47,7 @@ export type PredrawnSelectionValidity =
  * This is never a verdict about the artwork. The level's selection, its published raster and its
  * lineage are all untouched; the only thing missing is the answer. A backend restart or an expired
  * sign-in must therefore leave a state that retries, not a permanent one that hides a plate the
- * level still holds (ADR-0520).
+ * level still holds (ADR-0521).
  */
 export type PredrawnSelectionReadFailure = {
   kind: 'unreachable';
