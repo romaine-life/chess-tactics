@@ -3978,6 +3978,16 @@ export function LevelEditor(): ReactElement {
       );
     }
   };
+  /** Author the limit by SHOWING it: zoom the canvas to the tightest a player should get. */
+  const setCameraZoomInFromView = (): void => {
+    commitCameraZoomIn(viewZoom);
+  };
+  /** And read it back the same way, so a stated limit is always something you can look at. */
+  const showCameraZoomIn = (): void => {
+    if (!authoredCameraZoomIn) return;
+    markBoardViewInteraction();
+    setViewZoom(Math.min(viewMaxZoom, Math.max(viewMinZoom, authoredCameraZoomIn)));
+  };
   const commitCameraBoundary = (bounds: BoardCameraBounds): void => {
     if (!editorSessionCanWrite) {
       reportStatus(
@@ -10470,6 +10480,26 @@ export function LevelEditor(): ReactElement {
             <p className="le-board-note">
               How far a player may zoom in here. Automatic only knows this level’s zoom floor — it
               cannot tell how much detail the artwork actually holds, so state it yourself.
+            </p>
+            <div className="skirmish-view-row">
+              <ChromeButton
+                unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                onClick={setCameraZoomInFromView}
+                disabled={!editorSessionCanWrite}
+                title="Make the canvas as close as a player should ever get, then capture exactly that."
+              >Set from view</ChromeButton>
+              <ChromeButton
+                unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                onClick={showCameraZoomIn}
+                disabled={!authoredCameraZoomIn}
+                title="Move the canvas to the stated limit so you can see what a player would see."
+              >Show limit</ChromeButton>
+            </div>
+            <p className="le-board-note">
+              Zoom the canvas to the closest a player should get, then Set from view. Show limit
+              puts you back on it. The slider is only for nudging afterwards.
             </p>
             <SliderRow
               label={authoredCameraZoomIn ? `Limit · ${authoredCameraZoomIn.toFixed(2)}×` : 'Limit · automatic'}
