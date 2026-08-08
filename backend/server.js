@@ -5536,6 +5536,106 @@ const MIGRATIONS = [
          AND EXISTS (SELECT 1 FROM retired_slots);
     `,
   },
+  {
+    version: 67,
+    name: 'repair legacy unit disposal drawable identities',
+    // Migration 52 renamed the relic media slots and metadata to Lipsana, but
+    // drawable asset ids deliberately remained under their installed
+    // run-relic-* identities. Migration 66 targeted only the newer spelling,
+    // then retired the shared slots, leaving the two production drawables
+    // active against retired media. This append-only final-state repair accepts
+    // either identity generation and re-establishes the complete ADR-0511
+    // retirement graph without changing already-migrated Run documents.
+    sql: `
+      WITH target_assets(id) AS (
+        VALUES
+          ('run-relic-mercenary-boat'::text),
+          ('run-relic-fair-scales'::text),
+          ('run-lipsanon-mercenary-boat'::text),
+          ('run-lipsanon-fair-scales'::text),
+          ('run-gold-transaction-gain'::text)
+      ), removed_media AS (
+        DELETE FROM drawable_asset_media media
+         USING target_assets target
+         WHERE media.asset_id = target.id
+        RETURNING media.asset_id
+      ), retired_assets AS (
+        UPDATE drawable_assets asset
+           SET lifecycle_state = 'retired',
+               row_revision = row_revision + 1,
+               updated_at = now(),
+               updated_by = 'migration-67'
+          FROM target_assets target
+         WHERE asset.id = target.id
+           AND asset.lifecycle_state <> 'retired'
+        RETURNING asset.id
+      )
+      UPDATE drawable_catalog_state
+         SET revision = revision + 1,
+             updated_at = now()
+       WHERE singleton = true
+         AND (EXISTS (SELECT 1 FROM removed_media) OR EXISTS (SELECT 1 FROM retired_assets));
+
+      WITH target_slots(slot) AS (
+        VALUES
+          ('ui/run/lipsana/mercenary-boat.png'::text),
+          ('ui/run/lipsana/fair-scales.png'::text),
+          ('ui/run/resources/gain-gold.png'::text)
+      ), current_slots AS (
+        SELECT slot.slot, slot.active_version_id
+          FROM media_slots slot
+          JOIN target_slots target ON target.slot = slot.slot
+         WHERE slot.lifecycle_state <> 'retired'
+            OR slot.active_version_id IS NOT NULL
+      ), archived_versions AS (
+        UPDATE media_versions version
+           SET status = 'archived',
+               row_revision = row_revision + 1,
+               updated_at = now(),
+               updated_by = 'migration-67'
+          FROM current_slots current
+         WHERE version.id = current.active_version_id
+           AND version.status <> 'archived'
+        RETURNING version.id
+      ), retired_slots AS (
+        UPDATE media_slots slot
+           SET active_version_id = NULL,
+               lifecycle_state = 'retired',
+               retired_at = COALESCE(slot.retired_at, now()),
+               retirement_evidence = jsonb_build_object(
+                 'reason', 'Individual-unit disposal retired by ADR-0511',
+                 'evidence', jsonb_build_object('decision', 'ADR-0511'),
+                 'retiredBy', 'migration-67',
+                 'retiredAt', now(),
+                 'previousVersionId', current.active_version_id
+               ),
+               row_revision = row_revision + 1,
+               updated_at = now(),
+               updated_by = 'migration-67'
+          FROM current_slots current
+         WHERE slot.slot = current.slot
+        RETURNING slot.slot, current.active_version_id
+      ), retirement_events AS (
+        INSERT INTO media_asset_events (
+          slot, source_path, version_id, action, actor_email, details
+        )
+        SELECT retired.slot, NULL, retired.active_version_id,
+               'slot-retired', 'migration-67',
+               jsonb_build_object(
+                 'reason', 'Individual-unit disposal retired by ADR-0511',
+                 'decision', 'ADR-0511',
+                 'previousVersionId', retired.active_version_id
+               )
+          FROM retired_slots retired
+        RETURNING id
+      )
+      UPDATE media_catalog_state
+         SET revision = revision + 1,
+             updated_at = now()
+       WHERE singleton = true
+         AND EXISTS (SELECT 1 FROM retired_slots);
+    `,
+  },
 ];
 
 let pool = null;
@@ -6245,6 +6345,8 @@ async function unitDisposalRetirementContractRows(client) {
          ('ui/run/resources/gain-gold.png'::text)
      ), target_assets(id) AS (
        VALUES
+         ('run-relic-mercenary-boat'::text),
+         ('run-relic-fair-scales'::text),
          ('run-lipsanon-mercenary-boat'::text),
          ('run-lipsanon-fair-scales'::text),
          ('run-gold-transaction-gain'::text)
@@ -6595,7 +6697,7 @@ async function repairRequiredSchemaContracts(
     issues = await requiredSchemaContractIssues(client);
   }
   if (unitDisposalRetirementContractIssuesPresent(issues)) {
-    const migration = MIGRATIONS.find((candidate) => candidate.version === 66);
+    const migration = MIGRATIONS.find((candidate) => candidate.version === 67);
     if (!migration) throw new Error('individual-unit disposal retirement repair migration is unavailable');
     await executeMigration(migration, 'repair individual-unit disposal installed-content retirement');
     completedSteps.push(Object.freeze({

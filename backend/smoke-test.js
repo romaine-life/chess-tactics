@@ -952,7 +952,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 66 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 67 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -967,7 +967,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 30 }, (_, index) => index + 37),
+    ...Array.from({ length: 31 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1081,7 +1081,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
     )
   ) {
     throw new Error(
-      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 66: `
+      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 67: `
       + `${JSON.stringify({
         history: history.rows,
         identity_columns: identityColumns.rows,
@@ -2838,7 +2838,7 @@ async function validateQueenPawnCatalogRunMigration65() {
   }
 }
 
-async function validateImmutableFormationRunMigration66() {
+async function validateImmutableFormationAndLegacyDrawableRepairMigrations66And67() {
   const { Client } = require('pg');
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
@@ -2855,7 +2855,9 @@ async function validateImmutableFormationRunMigration66() {
         id text PRIMARY KEY, lifecycle_state text NOT NULL, row_revision integer NOT NULL,
         updated_at timestamptz NOT NULL DEFAULT now(), updated_by text
       );
-      CREATE TABLE drawable_asset_media (asset_id text NOT NULL, role text NOT NULL DEFAULT 'icon');
+      CREATE TABLE drawable_asset_media (
+        asset_id text NOT NULL, role text NOT NULL DEFAULT 'icon', slot text NOT NULL
+      );
       CREATE TABLE drawable_catalog_state (
         singleton boolean PRIMARY KEY, revision integer NOT NULL, updated_at timestamptz NOT NULL DEFAULT now()
       );
@@ -2921,13 +2923,17 @@ async function validateImmutableFormationRunMigration66() {
       INSERT INTO drawable_catalog_state (singleton, revision) VALUES (true, 1);
       INSERT INTO media_catalog_state (singleton, revision) VALUES (true, 1);
       INSERT INTO drawable_assets (id, lifecycle_state, row_revision) VALUES
+        ('run-relic-mercenary-boat', 'active', 1),
+        ('run-relic-fair-scales', 'active', 1),
         ('run-lipsanon-mercenary-boat', 'active', 1),
         ('run-lipsanon-fair-scales', 'active', 1),
         ('run-gold-transaction-gain', 'active', 1);
-      INSERT INTO drawable_asset_media (asset_id) VALUES
-        ('run-lipsanon-mercenary-boat'),
-        ('run-lipsanon-fair-scales'),
-        ('run-gold-transaction-gain');
+      INSERT INTO drawable_asset_media (asset_id, slot) VALUES
+        ('run-relic-mercenary-boat', 'ui/run/lipsana/mercenary-boat.png'),
+        ('run-relic-fair-scales', 'ui/run/lipsana/fair-scales.png'),
+        ('run-lipsanon-mercenary-boat', 'ui/run/lipsana/mercenary-boat.png'),
+        ('run-lipsanon-fair-scales', 'ui/run/lipsana/fair-scales.png'),
+        ('run-gold-transaction-gain', 'ui/run/resources/gain-gold.png');
       INSERT INTO media_versions (id, status, row_revision) VALUES
         ('boat-version', 'accepted', 1),
         ('scales-version', 'accepted', 1),
@@ -2940,6 +2946,29 @@ async function validateImmutableFormationRunMigration66() {
 
     await client.query(inlineMigrationSql(66));
     await client.query(inlineMigrationSql(66));
+    const brokenLegacyGraph = (await client.query(`
+      SELECT
+        (SELECT count(*)::integer
+           FROM drawable_assets
+          WHERE id IN ('run-relic-mercenary-boat', 'run-relic-fair-scales')
+            AND lifecycle_state = 'active') AS active_legacy_assets,
+        (SELECT count(*)::integer
+           FROM drawable_asset_media
+          WHERE asset_id IN ('run-relic-mercenary-boat', 'run-relic-fair-scales')) AS legacy_bindings,
+        (SELECT count(*)::integer
+           FROM media_slots
+          WHERE slot IN ('ui/run/lipsana/mercenary-boat.png', 'ui/run/lipsana/fair-scales.png')
+            AND lifecycle_state = 'retired') AS retired_legacy_slots
+    `)).rows[0];
+    if (
+      Number(brokenLegacyGraph.active_legacy_assets) !== 2
+      || Number(brokenLegacyGraph.legacy_bindings) !== 2
+      || Number(brokenLegacyGraph.retired_legacy_slots) !== 2
+    ) {
+      throw new Error(`Migration 66 fixture did not reproduce the production legacy-identity gap: ${JSON.stringify(brokenLegacyGraph)}`);
+    }
+    await client.query(inlineMigrationSql(67));
+    await client.query(inlineMigrationSql(67));
 
     const migrated = (await client.query(
       `SELECT body, revision FROM active_runs WHERE owner_email = 'legacy@example.com'`,
@@ -2973,10 +3002,10 @@ async function validateImmutableFormationRunMigration66() {
       || Number(installed.active_slots) !== 0
       || Number(installed.active_versions) !== 0
       || Number(installed.retirement_events) !== 3
-      || Number(installed.drawable_revision) !== 2
+      || Number(installed.drawable_revision) !== 3
       || Number(installed.media_revision) !== 2
     ) {
-      throw new Error(`Migration 66 did not retire individual disposal atomically: ${JSON.stringify({ migrated, installed })}`);
+      throw new Error(`Migrations 66 and 67 did not repair individual disposal atomically: ${JSON.stringify({ migrated, installed })}`);
     }
     await client.query('ROLLBACK');
   } catch (error) {
@@ -3151,7 +3180,7 @@ async function main() {
   await validateGeneratedFormationRunMigration63();
   await validateDerivedSectioPileRunMigration64();
   await validateQueenPawnCatalogRunMigration65();
-  await validateImmutableFormationRunMigration66();
+  await validateImmutableFormationAndLegacyDrawableRepairMigrations66And67();
   await validateRepairedEditorDocumentDiscardOperation62();
   await resetDb();
 

@@ -104,6 +104,10 @@ individual-unit disposal survives; retired Fair Scales and Paid Crossing referen
 from held, seen, offered, and paid lipsanon state; Bona Vacantia offers are refilled from the active
 pool; and the obsolete Battle promotion-cash-out ledger is removed. The same migration retires the
 two lipsanon drawable/media graphs and the unused gain-transaction mark.
+Migration 67 completes that installed-content retirement for live catalogs whose drawable asset
+ids retained the pre-Lipsana `run-relic-*` spelling while migration 52 renamed their media slots.
+It removes both identity generations' bindings and retires either asset generation idempotently;
+schema readiness treats either surviving generation as a repairable contract violation.
 Each account migration advances the Run's CAS revision, while the browser applies the same chain
 to its local document on first load. Saves older than version 16 remain unavailable because their
 retired gameplay state has no declared lossless transform. See

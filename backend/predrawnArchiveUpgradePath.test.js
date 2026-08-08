@@ -61,7 +61,7 @@ test('already-applied migration 36 remains the immutable drawable-media migratio
   );
 });
 
-test('the exact sparse numeric legacy history upgrades through migration 66', () => {
+test('the exact sparse numeric legacy history upgrades through migration 67', () => {
   const versions = migrationVersions();
   const appliedBeforeUpgrade = new Set(
     versions.filter((version) => version <= 27 || version === 36),
@@ -518,6 +518,17 @@ test('the exact sparse numeric legacy history upgrades through migration 66', ()
     /migrate_active_run_v27_to_v28[\s\S]*entrySnapshot[\s\S]*alienatedUnits[\s\S]*fair-scales[\s\S]*mercenary-boat[\s\S]*gain-gold/i,
     'migration 66 must rewind an open Sectio and retire the complete individual-disposal graph',
   );
+  const migration67 = inlineMigration(67);
+  assert.equal(
+    migration67.name,
+    'repair legacy unit disposal drawable identities',
+    'migration 67 must own the production legacy-identity repair',
+  );
+  assert.match(
+    migration67.sql,
+    /run-relic-mercenary-boat[\s\S]*run-relic-fair-scales[\s\S]*DELETE FROM drawable_asset_media[\s\S]*lifecycle_state = 'retired'/i,
+    'migration 67 must retire the actual legacy drawable identities before readiness',
+  );
   assert.equal(
     (serverSource.match(/never_saved: savedRevision === 0/g) || []).length,
     2,
@@ -554,7 +565,7 @@ test('the exact sparse numeric legacy history upgrades through migration 66', ()
   );
   assert.deepEqual(
     plan.pending.map((entry) => entry.version),
-    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66],
+    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67],
     'the bridge must fill the historical gap before applying every post-36 contract',
   );
   assert.throws(
@@ -586,7 +597,7 @@ test('the exact sparse numeric legacy history upgrades through migration 66', ()
   );
 });
 
-test('required-schema readiness and repair enforce the migrations 37 through 66 contracts', () => {
+test('required-schema readiness and repair enforce the migrations 37 through 67 contracts', () => {
   const relations = sourceSection(
     serverSource,
     'const REQUIRED_SCHEMA_RELATIONS = [',
@@ -797,6 +808,11 @@ test('required-schema readiness and repair enforce the migrations 37 through 66 
     contractReadiness,
     /primogenitureRetirementContractIssuesPresent\(issues\)[\s\S]*version === 59[\s\S]*repair complete Primogeniture retirement contract/,
     'readiness must detect and repair a dangling Primogeniture slot or drawable consumer',
+  );
+  assert.match(
+    contractReadiness,
+    /unitDisposalRetirementContractIssuesPresent\(issues\)[\s\S]*version === 67[\s\S]*repair individual-unit disposal installed-content retirement/,
+    'readiness must route either unit-disposal drawable identity generation through migration 67',
   );
   assert.match(
     contractReadiness,
@@ -1164,8 +1180,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*66\s*\}/,
-    'the production upgrade proof must require a complete 1-66 history',
+    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*67\s*\}/,
+    'the production upgrade proof must require a complete 1-67 history',
   );
   assert.match(
     primaryUpgradeProof,
@@ -1179,8 +1195,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /length:\s*30[\s\S]*index\s*\+\s*37/,
-    'the production report must include every post-36 migration through 66',
+    /length:\s*31[\s\S]*index\s*\+\s*37/,
+    'the production report must include every post-36 migration through 67',
   );
   assert.match(
     primaryUpgradeProof,
