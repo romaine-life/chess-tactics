@@ -25626,7 +25626,7 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
    A fixed size looked right on one window and ran off the bottom of every
    shorter one. The 5:7 aspect on .run-card-back gives the width. */
 .tileset-studio-card-image.run-card-back-specimen img.run-card-back {
-  block-size: calc(clamp(220px, 100vh - 400px, 588px) * var(--run-card-gallery-zoom, 1));
+  block-size: calc(clamp(220px, 100vh - 440px, 588px) * var(--run-card-gallery-zoom, 1));
   image-rendering: auto;
   inline-size: auto;
   max-inline-size: none;
