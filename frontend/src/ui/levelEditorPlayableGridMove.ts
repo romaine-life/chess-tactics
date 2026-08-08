@@ -123,6 +123,20 @@ function countEntries(value: object | undefined): number {
   return Object.keys(value ?? {}).length;
 }
 
+/**
+ * The board-coordinate step the ARTWORK takes when the grid moves one square that way.
+ *
+ * Derived from the same plan the legacy rebase uses, so the two paths can never disagree about
+ * which way "north" is.
+ */
+export const PLAYABLE_GRID_MOVE_PLATE_STEP: Record<
+  PlayableGridMoveDirection,
+  { x: number; y: number }
+> = Object.fromEntries(PLAYABLE_GRID_MOVE_DIRECTIONS.map((direction) => [
+  direction,
+  { x: MOVE_PLAN[direction].dx, y: MOVE_PLAN[direction].dy },
+])) as Record<PlayableGridMoveDirection, { x: number; y: number }>;
+
 export function playableGridMoveAvailability(
   board: Pick<EditorBoard, 'decorativeApron'>,
   direction: PlayableGridMoveDirection,

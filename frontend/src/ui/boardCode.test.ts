@@ -643,4 +643,23 @@ describe('boardCode round-trip', () => {
     }));
     expect(decoded?.surface).toBeUndefined();
   });
+
+  it('round-trips a hand-placed grid without changing the code of a board that never moved one', () => {
+    const placed = emptyBoard({
+      predrawnGridDetached: true,
+      predrawnPlateOffset: { left: -96, top: 48 },
+    });
+    const decoded = decodeBoard(encodeBoard(placed));
+    expect(decoded?.predrawnGridDetached).toBe(true);
+    expect(decoded?.predrawnPlateOffset).toEqual({ left: -96, top: 48 });
+
+    // Every existing level keeps byte-identical code: the fields are written only when set, and a
+    // zero offset is the same statement as no offset at all.
+    expect(encodeBoard(emptyBoard({ predrawnPlateOffset: { left: 0, top: 0 } })))
+      .toBe(encodeBoard(emptyBoard()));
+    expect(encodeBoard(emptyBoard({ predrawnGridDetached: false })))
+      .toBe(encodeBoard(emptyBoard()));
+    expect(decodeWire(encodeBoard(emptyBoard())).ppo).toBeUndefined();
+    expect(decodeBoard(encodeBoard(emptyBoard()))?.predrawnGridDetached).toBe(false);
+  });
 });

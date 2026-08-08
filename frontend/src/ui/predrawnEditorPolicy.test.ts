@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { EditorBoard } from './boardCode';
-import { isPredrawnLockedLayer, predrawnEditorHrefAfterPicker, preservesPredrawnBakedArt } from './predrawnEditorPolicy';
+import {
+  isPredrawnLockedLayer,
+  predrawnEditorHrefAfterPicker,
+  preservesPredrawnBakedArt,
+  sharesPredrawnSelection,
+} from './predrawnEditorPolicy';
 
 const board = (): EditorBoard => ({
   cols: 5,
@@ -65,6 +70,24 @@ describe('pre-drawn editor policy', () => {
       units: { '0,0': { unitId: 'rook', direction: 's', faction: 'navy-blue' } },
       zones: { '0,0': 'region' },
     })).toBe(true);
+  });
+
+  it('lets history step across a resize or grid slide while refusing another plate selection', () => {
+    const current = board();
+    // A resize and a hand placement both change the baked-art signature on purpose, and both are
+    // committed as declared playable-window operations. Undo has to be able to walk back over them.
+    expect(sharesPredrawnSelection(current, { ...current, cols: 6, rows: 7 })).toBe(true);
+    expect(sharesPredrawnSelection(current, {
+      ...current,
+      predrawnPlateOffset: { left: 48, top: -24 },
+      predrawnGridDetached: true,
+    })).toBe(true);
+    // A different plate answers to different geometry entirely, so history must not restore it.
+    expect(sharesPredrawnSelection(current, {
+      ...current,
+      surface: { ...current.surface!, slot: 'boards/review/other/plate.png' } as typeof current.surface,
+    })).toBe(false);
+    expect(sharesPredrawnSelection(current, { ...current, surface: undefined })).toBe(false);
   });
 
   it('lands Done on the board editor instead of reopening calibration on refresh', () => {
