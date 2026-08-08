@@ -10,6 +10,7 @@
     "build:board-render": "npm --prefix ../packages/board-render run build",
     "preview": "vite preview --host 0.0.0.0",
     "shot": "node scripts/shot.mjs",
+    "shot:assembly": "node scripts/capture-board-assembly.mjs",
     "predrawn:detect": "node scripts/detect-predrawn-board.mjs",
     "predrawn:build-run": "node scripts/build-predrawn-generation-run.mjs",
     "predrawn:prepare": "node scripts/prepare-predrawn-generation-run.mjs",
