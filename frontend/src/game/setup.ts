@@ -10,7 +10,7 @@ import { tileAssets, tileFamilies } from '../art/tileset';
 import { generateSocketBoard } from '../core/tileBoardGenerator';
 import { gameplayTerrainForFamily } from '../core/tileSockets';
 import { PLAYABLE_PIECE_TYPES, defaultFacingForSide } from '../core/pieces';
-import { propCells, propDef } from '../core/props';
+import { propCells, propDef, resolvePlacedPropId } from '../core/props';
 import { castleRulesForLevel, drawRulesForLevel, promotionRulesForLevel, spawnEventsForLevel, zoneCellsByIds } from '../core/levelEvents';
 import { recordPosition } from '../core/rules';
 
@@ -92,7 +92,9 @@ export function createFromLevel(level: Level, seed: number): GameState {
   const props = level.layers.props ?? [];
   const occupied = new Set(pieces.map((p) => `${p.x},${p.y}`));
   for (const placed of props) {
-    const def = propDef(placed.propId);
+    // A retired rock keeps blocking, as its successor — the placement was authored as an
+    // obstacle and must stay one, whatever art now stands there.
+    const def = propDef(resolvePlacedPropId(placed.propId, placed.x, placed.y));
     if (!def || !def.blocking) continue;
     propCells(placed.x, placed.y, def).forEach((cell, cellIndex) => {
       const key = `${cell.x},${cell.y}`;

@@ -84,10 +84,13 @@ describe('the Chartulary is the reference gallery, not a lookalike (ADR-0371)', 
     expect(heldCardCodex).toContain('testIdPrefix="strategikon-chartulary"');
     expect(heldCardCodex).toContain('cardMatchesFilters(held.core, goldFilter, unitFilter, rarityFilter)');
     expect(heldCardCodex).toContain('rarityFilter={rarityFilter}');
-    expect(heldCardCodex).toContain('cardsByGoldValue(visible, (held) => held.core)');
+    expect(heldCardCodex).toContain('cardsByTier(visible, (held) => held.core)');
     expect(heldCardCodex).toContain('className="enchiridion-card-gallery-layout"');
     expect(heldCardCodex).toContain('className="enchiridion-card-gallery-grid"');
     expect(heldCardCodex).toContain('<RunCardGoldTierDivider value={value}');
+    // The Chartulary always holds His Grace, so it is the surface where a starter band
+    // banded as "2 gold" was most visibly wrong. It bands it exactly as the catalog does.
+    expect(heldCardCodex).toContain('runCardTierLabel(value)');
     expect(heldCardCodex).toContain('<RunCard card={held.core} mode="reference"');
     // A card IS its own record (ADR-0364). The gallery item is the face and nothing else:
     // no annotation box, no unit roster, no second copy of what the Prosopography shows.

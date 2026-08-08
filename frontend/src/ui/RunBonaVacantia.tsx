@@ -38,12 +38,13 @@ function RunVacantiaCardGrant({
   // icons and collapses around a card face.
   return (
     <RunCardRow count={offers.length} testId="run-vacantia-card-offers">
-      {offers.map((coreId) => (
+      {offers.map((coreId, index) => (
         <RunCard
           key={coreId}
           card={RUN_CARD_BY_ID[coreId]}
           mode="grant"
           layoutId={coreId}
+          seatIndex={index}
           disabled={Boolean(taken)}
           onSelect={() => {
             if (taken) return;

@@ -21,7 +21,7 @@ export {
 };
 
 /** The schema version of one persisted in-progress Run. Only this exact save shape is read. */
-export const CURRENT_RUN_SAVE_VERSION = 31;
+export const CURRENT_RUN_SAVE_VERSION = 32;
 export type RunSaveVersion = typeof CURRENT_RUN_SAVE_VERSION;
 
 export class UnsupportedRunSaveError extends Error {
@@ -46,6 +46,7 @@ const RUN_SAVE_VERSION_IMMUTABLE_FORMATIONS_SOURCE = 27;
 const RUN_SAVE_VERSION_DEPLOYMENT_MODE_SOURCE = 28;
 const RUN_SAVE_VERSION_PLAYER_FORMATIONS_SOURCE = 29;
 const RUN_SAVE_VERSION_ARRANGED_PILE_SOURCE = 30;
+const RUN_SAVE_VERSION_OPENING_CARD_GRANT_SOURCE = 31;
 export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
@@ -54,12 +55,38 @@ export const RUN_EN_PASSANT_BOUNTY_TENTHS = 5 * GOLD_SCALE;
 export const RUN_DEPLOYMENT_REROLL_COST_TENTHS = GOLD_SCALE;
 export const RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS = 5 * GOLD_SCALE;
 export const RUN_SECTIO_CARD_OFFER_COUNT = 3;
-export const RUN_SECTIO_CARD_PILE_SIZE = 272;
-export const RUN_SECTIO_CARD_PILE_RARITY_COUNT: Readonly<Record<RunCardRarity, number>> = Object.freeze({
-  common: 135,
-  uncommon: 36,
-  rare: 9,
+export const RUN_SECTIO_CARD_PILE_SIZE = 20;
+
+/** How often each rarity reaches the market. These are quotas, not roll odds: a pile holds
+ * exactly this composition every time, so what a Battle can buy is the same number rather than
+ * one that only converges over a long sample. That exactness is the point -- it is what makes
+ * value gain between Battles something a Level can be authored against. */
+export const RUN_CARD_RARITY_PERCENT: Readonly<Record<RunCardRarity, number>> = Object.freeze({
+  common: 80,
+  uncommon: 15,
+  rare: 5,
 });
+
+/** The uncapped pile's seats, which are `RUN_CARD_RARITY_PERCENT` of `RUN_SECTIO_CARD_PILE_SIZE`.
+ * A cost ceiling that empties a tier re-apportions these; see `sectioPileRarityQuota`. */
+export const RUN_SECTIO_CARD_PILE_RARITY_COUNT: Readonly<Record<RunCardRarity, number>> = Object.freeze({
+  common: 16,
+  uncommon: 3,
+  rare: 1,
+});
+
+/**
+ * The cost ceiling the market opens under, and the number of Battles it survives -- six gold for
+ * the Sectios that follow Battles 1 and 2, then no ceiling at all.
+ *
+ * Gold already bounds how much material a Battle can buy, because a Battle pays half the enemy
+ * force's value and a card costs its value. What broke that relationship was banking: an early
+ * row nobody could afford carried its gold forward, and two Battles later it all landed at once.
+ * The ceiling removes the banking rather than the gain, so army value per Battle settles onto the
+ * reward the Level already authored.
+ */
+export const RUN_SECTIO_EARLY_CARD_MAX_VALUE = 6;
+export const RUN_SECTIO_EARLY_CARD_BATTLE_COUNT = 2;
 export const INSTALLED_ATARAXIA_MAX_TIER = 0;
 export type AtaraxiaTier = 0;
 
@@ -97,6 +124,9 @@ export const ATARAXIA_TIERS: readonly AtaraxiaTier[] = Object.freeze(
 export type AdlectablePieceType = 'pawn' | 'knight' | 'bishop' | 'rook' | 'queen';
 export type RunArmyPieceType = AdlectablePieceType | 'king';
 export type RunCardRarity = 'common' | 'uncommon' | 'rare';
+
+/** Rarity in ascending order, so quota apportionment and reference surfaces agree on the ladder. */
+export const RUN_CARD_RARITIES: readonly RunCardRarity[] = Object.freeze(['common', 'uncommon', 'rare']);
 
 export const PIECE_VALUE: Readonly<Record<RunArmyPieceType, number>> = Object.freeze({
   pawn: 1,
@@ -427,7 +457,7 @@ function initialArmyNumberState(): RunArmyNumberState {
 /** Raw labeled formations before quarter-turn-equivalent cards are collapsed. */
 export const RUN_GENERATED_CARD_COUNT = 720;
 export const RUN_AUTHORED_FORMATION_EXCEPTION_COUNT = 6;
-export const RUN_OFFER_CARD_COUNT = 272;
+export const RUN_OFFER_CARD_COUNT = 269;
 
 const FORMATION_COLUMNS = 4;
 const FORMATION_ROWS = 2;
@@ -474,28 +504,77 @@ function cardCompositionArtId(
   return `${cardFootprintId(formation)}-${cardComposition(pieces)}`;
 }
 
-/** Rarity is desirability data, not a material band. Exact formation may therefore
- * distinguish two cards with the same roster, most visibly for Bishop color parity. */
+/** The value bands rarity reads before footprint adjusts it. Four is the most material a card
+ * can carry and still be the cheap, always-available tier. */
+export const RUN_CARD_COMMON_MAX_VALUE = 4;
+export const RUN_CARD_UNCOMMON_MAX_VALUE = 6;
+
+/** Rotation-canonical footprint, blind to which piece sits in which seat. Card identity already
+ * collapses quarter turns, so the shapes a rarity rule names have to collapse them too. */
+function rotationalFootprintId(formation: readonly RunCardFormationCell[]): string {
+  return ([0, 1, 2, 3] as const)
+    .map((turns) => {
+      const rotated = formation.map((cell) => (
+        turns === 1
+          ? { x: -cell.y, y: cell.x }
+          : turns === 2
+            ? { x: -cell.x, y: -cell.y }
+            : turns === 3
+              ? { x: cell.y, y: -cell.x }
+              : cell
+      ));
+      const minX = Math.min(...rotated.map((cell) => cell.x));
+      const minY = Math.min(...rotated.map((cell) => cell.y));
+      return rotated
+        .map((cell) => ({ x: cell.x - minX, y: cell.y - minY }))
+        .sort((left, right) => left.x - right.x || left.y - right.y)
+        .map((cell) => `${cell.x}${cell.y}`)
+        .join('-');
+    })
+    .sort()[0];
+}
+
+/**
+ * The five four-cell footprints that waste the deployment band, each written here in the form it
+ * takes lying in that band. Every one of them is a bar with the fourth seat pushed off the line,
+ * so the shape cannot be tucked against a neighbour the way a square, a straight run, or a corner
+ * can. Both Z chiralities are separate card identities, and both are listed.
+ */
+const AWKWARD_CARD_FOOTPRINTS: ReadonlySet<string> = new Set(([
+  [[0, 0], [1, 0], [1, 1], [2, 1]], // ##. / .##  Z
+  [[1, 0], [2, 0], [0, 1], [1, 1]], // .## / ##.  S
+  [[0, 0], [1, 0], [2, 0], [1, 1]], // ### / .#.  T
+  [[0, 0], [0, 1], [1, 1], [2, 1]], // #.. / ###  J
+  [[0, 0], [1, 0], [2, 0], [0, 1]], // ### / #..  L
+] as const).map((cells) => rotationalFootprintId(cells.map(([x, y]) => ({ x, y })))));
+
+/**
+ * Rarity is the market's ramp control, and it reads two things.
+ *
+ * Material value sets the band: Common through four, Uncommon at five and six, Rare above that.
+ * Footprint then adjusts it. The five awkward shapes pack badly enough that their material
+ * overstates what they are worth on a board, so each drops one tier -- which is what puts genuinely
+ * high-value cards in the Common pool without letting the Common pool hand out clean material.
+ *
+ * An opposite-colour Bishop pair is the exception, and keeps its band on any footprint. The pair
+ * is the prize; the shape it arrives on does not spoil it.
+ */
 export function runCardRarity(
   pieces: readonly AdlectablePieceType[],
   formation: readonly RunCardFormationCell[],
 ): RunCardRarity {
-  const nonPawns = pieces.filter((piece) => piece !== 'pawn').length;
+  const value = pieces.reduce((total, piece) => total + PIECE_VALUE[piece], 0);
+  const band: RunCardRarity = value <= RUN_CARD_COMMON_MAX_VALUE
+    ? 'common'
+    : value <= RUN_CARD_UNCOMMON_MAX_VALUE ? 'uncommon' : 'rare';
   const bishops = pieces.flatMap((piece, index) => piece === 'bishop' ? [formation[index]] : []);
   const hasOppositeColorBishopPair = bishops.some((left, index) => bishops
     .slice(index + 1)
     .some((right) => (left.x + left.y) % 2 !== (right.x + right.y) % 2));
-  if (
-    pieces.includes('queen')
-    || pieces.filter((piece) => piece === 'rook').length >= 2
-    || nonPawns >= 3
-    || hasOppositeColorBishopPair
-  ) return 'rare';
-  // Two same-color Bishops are the explicit weak-pair exception to the ordinary
-  // two-non-Pawn Uncommon baseline.
-  if (bishops.length >= 2) return 'common';
-  if (pieces.includes('rook') || nonPawns >= 2) return 'uncommon';
-  return 'common';
+  if (hasOppositeColorBishopPair || !AWKWARD_CARD_FOOTPRINTS.has(rotationalFootprintId(formation))) {
+    return band;
+  }
+  return band === 'rare' ? 'uncommon' : 'common';
 }
 
 const formationCard = (
@@ -675,11 +754,29 @@ function legacyRunCards(): RunCoreCard[] {
   return [...cards.values()].sort((a, b) => a.value - b.value || a.id.localeCompare(b.id));
 }
 
+/**
+ * A formation is a CLUSTER: its squares touch orthogonally, and the card face prints that shape as
+ * the thing the card grants. generatedFormationFootprints already refuses anything else, so a
+ * diagonal chain could only reach the market through the named-card injection below — which is
+ * exactly how Country Parish, Outrider Patrol and Crooked Diocese were still being dealt, three
+ * shapes the generator had closed the door on.
+ *
+ * A named card may still sit outside the grammar on MATERIAL — pq-front is the admitted
+ * ten-material roster. Connectivity is the part that is not negotiable, because squares that never
+ * touch cannot read as one shape however they are drawn.
+ *
+ * Dropping them here retires them from the OFFER deck only. legacyRunCards keeps every named id
+ * resolvable, so a Run already holding one still reads its name, art and formation.
+ */
 export function allRunCards(): RunCoreCard[] {
   const generated = generatedFormationFootprints().flatMap(generatedCardsForFootprint);
   const cards = new Map(generated.map((card) => [rotationalFormationId(card), card]));
   // Named cards remain the visual and textual anchor for their rotational class.
-  for (const existing of existingFormationCards()) cards.set(rotationalFormationId(existing), existing);
+  for (const existing of existingFormationCards()) {
+    const formation = existing.formation ?? [];
+    if (formation.length === 0 || !connectedFormation(formation)) continue;
+    cards.set(rotationalFormationId(existing), existing);
+  }
   if (cards.size !== RUN_OFFER_CARD_COUNT) {
     throw new Error(`Built ${cards.size} Run offer cards; expected ${RUN_OFFER_CARD_COUNT}.`);
   }
@@ -726,6 +823,27 @@ export function runCardDefinition(coreId: string): RunCardDefinition | undefined
     ?? RUN_STARTER_CARD_BY_ID[coreId as RunStarterCardId];
 }
 
+/** True for a card the Run begins holding rather than one Sectio can offer. */
+export function isRunStarterCard(card: Pick<RunCardDefinition, 'id'>): boolean {
+  return Boolean(RUN_STARTER_CARD_BY_ID[card.id as RunStarterCardId]);
+}
+
+/**
+ * How a card gallery bands its cards. A starter card is not for sale, so banding it by the
+ * gold it is nominally worth files it beside cards a player could buy for that price and
+ * implies a purchase that cannot happen. It gets its own band, ahead of every priced one.
+ */
+export type RunCardTier = number | 'starter';
+
+/** Starter first, then ascending price. */
+export function runCardTierRank(tier: RunCardTier): number {
+  return tier === 'starter' ? -1 : tier;
+}
+
+export function runCardTierOf(card: Pick<RunCardDefinition, 'id' | 'value'>): RunCardTier {
+  return isRunStarterCard(card) ? 'starter' : card.value;
+}
+
 export function mixSeed(seed: number, label: string, index = 0): number {
   let value = (seed ^ Math.imul(index + 1, 0x9e3779b1)) >>> 0;
   for (let cursor = 0; cursor < label.length; cursor += 1) {
@@ -761,12 +879,6 @@ export function createRunCardOffer(
   };
 }
 
-export const RUN_CARD_RARITY_PERCENT: Readonly<Record<RunCardRarity, number>> = Object.freeze({
-  common: 75,
-  uncommon: 20,
-  rare: 5,
-});
-
 export function runCardRarityForRoll(roll: number): RunCardRarity {
   const normalized = Math.max(0, Math.min(99, Math.floor(roll)));
   if (normalized < RUN_CARD_RARITY_PERCENT.common) return 'common';
@@ -801,13 +913,72 @@ function legacyOpeningSectioOffers(seed: number, offerCount: number): RunCardOff
     .map((offer, slotIndex) => ({ ...offer, offerId: `opening-${slotIndex}-${offer.id}` }));
 }
 
-/** One complete, seed-derived shuffle of the live offer catalog. Rarity remains card metadata
- * but deliberately does not influence this temporary dealing rule. */
-export function sectioCardPile(seed: number, pileIndex: number): RunCoreCard[] {
-  return shuffled(
-    RUN_CARD_DECK,
-    mixSeed(seed, 'sectio-pile:complete-shuffle', Math.max(0, Math.floor(pileIndex))),
-  );
+/**
+ * The market's cost ceiling for the Sectio that follows `battleIndex` -- zero-based, so the Sectio
+ * after Battle 1 asks with zero. The opening market is bounded so early gold converts into cards
+ * rather than banking behind a row nobody can afford; past that the ceiling lifts for good.
+ */
+export function runSectioCardMaxValue(battleIndex: number): number {
+  return battleIndex < RUN_SECTIO_EARLY_CARD_BATTLE_COUNT
+    ? RUN_SECTIO_EARLY_CARD_MAX_VALUE
+    : Number.POSITIVE_INFINITY;
+}
+
+/**
+ * How many pile seats each rarity owns under a cost ceiling. A ceiling that empties a tier hands
+ * that tier's share to the ones still standing -- under six gold there is no Rare card in the
+ * catalog at all, so the opening market is Common and Uncommon apportioned between themselves.
+ * Seats are handed out by largest remainder, so a pile is always exactly its declared size.
+ */
+export function sectioPileRarityQuota(
+  maxValue = Number.POSITIVE_INFINITY,
+): Record<RunCardRarity, number> {
+  const quota: Record<RunCardRarity, number> = { common: 0, uncommon: 0, rare: 0 };
+  const present = RUN_CARD_RARITIES.filter((rarity) => RUN_CARD_DECK
+    .some((card) => card.value <= maxValue && card.rarity === rarity));
+  const declared = present.reduce((total, rarity) => total + RUN_CARD_RARITY_PERCENT[rarity], 0);
+  if (!declared) return quota;
+  const remainders = present.map((rarity) => {
+    const exact = RUN_SECTIO_CARD_PILE_SIZE * RUN_CARD_RARITY_PERCENT[rarity] / declared;
+    quota[rarity] = Math.floor(exact);
+    return { rarity, remainder: exact - Math.floor(exact) };
+  });
+  let seats = RUN_SECTIO_CARD_PILE_SIZE - present.reduce((total, rarity) => total + quota[rarity], 0);
+  for (const { rarity } of [...remainders].sort((left, right) => right.remainder - left.remainder)) {
+    if (seats <= 0) break;
+    quota[rarity] += 1;
+    seats -= 1;
+  }
+  return quota;
+}
+
+/**
+ * One seed-derived pile carrying the exact rarity quota, drawn from the cards a cost ceiling
+ * leaves eligible and then shuffled together so the row order stays a surprise. Each rarity draws
+ * from its own independently seeded shuffle; exhausting a pile builds the next one the same way.
+ */
+export function sectioCardPile(
+  seed: number,
+  pileIndex: number,
+  maxValue = Number.POSITIVE_INFINITY,
+): RunCoreCard[] {
+  const epoch = Math.max(0, Math.floor(pileIndex));
+  const quota = sectioPileRarityQuota(maxValue);
+  const seats = RUN_CARD_RARITIES.flatMap((rarity) => {
+    const pool = RUN_CARD_DECK.filter((card) => card.value <= maxValue && card.rarity === rarity);
+    const drawn: RunCoreCard[] = [];
+    // A tier smaller than its quota repeats identities rather than shrinking the pile; no live
+    // ceiling reaches that, but a pile is defined by its size and must not silently lose seats.
+    for (let pass = 0; pool.length && drawn.length < quota[rarity]; pass += 1) {
+      drawn.push(...shuffled(pool, mixSeed(seed, `sectio-pile:${rarity}:${pass}`, epoch))
+        .slice(0, quota[rarity] - drawn.length));
+    }
+    return drawn;
+  });
+  if (!seats.length) {
+    throw new Error(`Sectio has no card at or below a cost of ${maxValue}.`);
+  }
+  return shuffled(seats, mixSeed(seed, 'sectio-pile:order', epoch));
 }
 
 /** The value band the Run's opening card grant draws from. Low enough that the grant is a
@@ -830,6 +1001,12 @@ export function openingCardGrantOffers(seed: number): string[] {
     .map((card) => card.id);
 }
 
+/**
+ * The row a Sectio reveals. The cursor runs continuously, but the pile it indexes is the one the
+ * Battle's own cost ceiling defines -- so when the ceiling lifts the Run reads a different pile at
+ * the same cursor, and a card passed over while the market was capped can be offered again once it
+ * is not. That is a market, not a draft: what the row guarantees is its own composition.
+ */
 export function sectioCardOffersAtCursor(
   seed: number,
   battleIndex: number,
@@ -837,6 +1014,7 @@ export function sectioCardOffersAtCursor(
   offerCount: number,
 ): RunCardOffer[] {
   const start = Math.max(0, Math.floor(cursor));
+  const maxValue = runSectioCardMaxValue(battleIndex);
   const piles = new Map<number, RunCoreCard[]>();
   return Array.from({ length: offerCount }, (_, slotIndex) => {
     const absoluteIndex = start + slotIndex;
@@ -844,7 +1022,7 @@ export function sectioCardOffersAtCursor(
     const pileCursor = absoluteIndex % RUN_SECTIO_CARD_PILE_SIZE;
     let pile = piles.get(pileIndex);
     if (!pile) {
-      pile = sectioCardPile(seed, pileIndex);
+      pile = sectioCardPile(seed, pileIndex, maxValue);
       piles.set(pileIndex, pile);
     }
     const card = pile[pileCursor];
@@ -2108,17 +2286,35 @@ function migrateRunToOpeningCardGrant(stored: Record<string, unknown>): Record<s
     ? stored.vacantia as Record<string, unknown>
     : null;
   if (!vacantia) {
-    return { ...stored, runSaveVersion: CURRENT_RUN_SAVE_VERSION };
+    return { ...stored, runSaveVersion: RUN_SAVE_VERSION_OPENING_CARD_GRANT_SOURCE };
   }
   const opening = vacantia.kind === 'opening';
   return {
     ...stored,
-    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    runSaveVersion: RUN_SAVE_VERSION_OPENING_CARD_GRANT_SOURCE,
     vacantia: {
       ...vacantia,
       offers: opening ? [] : vacantia.offers,
       cardOffers: opening ? openingCardGrantOffers(Number(stored.seed) >>> 0) : [],
     },
+  };
+}
+
+/**
+ * Version 32 rebuilds the market. Rarity becomes a material band adjusted by footprint, piles
+ * carry an exact rarity quota instead of a flat catalog shuffle, and the Sectios following the
+ * first two Battles cap card cost at six.
+ *
+ * The pile sequence changed outright, so the hidden cursor restarts. A Sectio already open keeps
+ * the row it is showing: those offers are a transaction the player is part-way through, and each
+ * one re-reads its rarity from the live catalog on load, so the row relabels itself without being
+ * redealt. Everything already bought, sold, or expuncted stands.
+ */
+function migrateRunToRarityBands(stored: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...stored,
+    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    sectioCardCursor: 0,
   };
 }
 
@@ -2139,7 +2335,9 @@ function migrateRunToOpeningCardGrant(stored: Record<string, unknown>): Record<s
  * formation mutation and its two dependent lipsana. Version 29 names automatic or arranged
  * Deployment as an immutable Run rule. Version 30 retires automatic placement, collapses
  * quarter-turn-equivalent offer identities, and deals complete random catalog shuffles.
- * Version 31 replaces the Run's opening lipsanon with a formation-card grant.
+ * Version 31 replaces the Run's opening lipsanon with a formation-card grant. Version 32 rebuilds
+ * the card market on material bands adjusted by footprint, exact per-pile rarity quotas, and an
+ * opening cost ceiling, restarting the hidden card sequence.
  * Older saves remain unsupported.
  */
 export function migrateRunSaveDocument(value: unknown): RunDocument {
@@ -2214,6 +2412,9 @@ export function migrateRunSaveDocument(value: unknown): RunDocument {
   }
   if (stored.runSaveVersion === RUN_SAVE_VERSION_ARRANGED_PILE_SOURCE) {
     stored = migrateRunToOpeningCardGrant(stored);
+  }
+  if (stored.runSaveVersion === RUN_SAVE_VERSION_OPENING_CARD_GRANT_SOURCE) {
+    stored = migrateRunToRarityBands(stored);
   }
   return normalizeRunDocument(stored as unknown as RunDocument);
 }

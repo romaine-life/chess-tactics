@@ -173,11 +173,59 @@ export const RUN_CARD_FORMATION_ISO_TILE = Object.freeze({
   height: TILE_TEMPLATE.topHeight * .12,
 });
 
+export type RunCardFormationEdge = 'north' | 'east' | 'south' | 'west';
+
 export type RunCardFormationBoardCell = Readonly<{
   x: number;
   y: number;
   dark: boolean;
+  /** The sides of this seat that face off the footprint. The line is drawn on these only. */
+  edges: readonly RunCardFormationEdge[];
 }>;
+
+const RUN_CARD_FORMATION_EDGE_NAMES: readonly RunCardFormationEdge[] = Object.freeze([
+  'north', 'east', 'south', 'west',
+]);
+
+const RUN_CARD_FORMATION_EDGE_STEP: Readonly<Record<RunCardFormationEdge, Readonly<{ x: number; y: number }>>> =
+  Object.freeze({
+    north: Object.freeze({ x: 0, y: -1 }),
+    east: Object.freeze({ x: 1, y: 0 }),
+    south: Object.freeze({ x: 0, y: 1 }),
+    west: Object.freeze({ x: -1, y: 0 }),
+  });
+
+/**
+ * The seat's diamond, spanning its whole 96x54 cell.
+ *
+ * These are the tile's real corners: TILE_TOP_WIDTH is 96, TILE_TOP_HEIGHT is 54, and neighbouring
+ * seats step by exactly half of each, so a diamond drawn corner to corner tiles edge to edge with
+ * no seam. Insetting it — as this did, by a unit on every side — both narrows the shape off the
+ * board's own tile proportion and leaves a two-unit gutter between neighbours. That gutter was
+ * invisible while every seat stroked its own outline over it, and became a ragged edge the moment
+ * the line moved to the footprint's boundary.
+ */
+const TILE_MID_X = TILE_TEMPLATE.topWidth / 2;
+const TILE_MID_Y = TILE_TEMPLATE.topHeight / 2;
+const TILE_TOP = Object.freeze([TILE_MID_X, 0] as const);
+const TILE_RIGHT = Object.freeze([TILE_TEMPLATE.topWidth, TILE_MID_Y] as const);
+const TILE_BOTTOM = Object.freeze([TILE_MID_X, TILE_TEMPLATE.topHeight] as const);
+const TILE_LEFT = Object.freeze([0, TILE_MID_Y] as const);
+
+export const RUN_CARD_FORMATION_TILE_VIEW_BOX =
+  `0 0 ${TILE_TEMPLATE.topWidth} ${TILE_TEMPLATE.topHeight}`;
+export const RUN_CARD_FORMATION_TILE_POINTS =
+  [TILE_TOP, TILE_RIGHT, TILE_BOTTOM, TILE_LEFT].map(([x, y]) => `${x},${y}`).join(' ');
+
+/** Each edge of that diamond, named for the board neighbour it faces. */
+export const RUN_CARD_FORMATION_EDGE_LINE: Readonly<
+  Record<RunCardFormationEdge, readonly [number, number, number, number]>
+> = Object.freeze({
+  north: [...TILE_TOP, ...TILE_RIGHT],
+  east: [...TILE_RIGHT, ...TILE_BOTTOM],
+  south: [...TILE_BOTTOM, ...TILE_LEFT],
+  west: [...TILE_LEFT, ...TILE_TOP],
+} as Record<RunCardFormationEdge, readonly [number, number, number, number]>);
 
 /** The card uses the same two-axis projection as the battlefield, scaled into card units. */
 export function runCardFormationIsoPoint(x: number, y: number): Readonly<{
@@ -196,7 +244,13 @@ export function runCardFormationIsoPoint(x: number, y: number): Readonly<{
 /**
  * Print the card's own footprint and nothing else. A vacant board square is not part of what the
  * card grants, and drawing the whole enclosing rectangle turned every card into the same grid.
- * The squares themselves are unchanged; only the seats the card occupies are printed.
+ *
+ * The line the seats carry is unchanged — same colour, same weight — but it is drawn only on the
+ * edges that face off the footprint. A line BETWEEN two occupied seats divides them, which is the
+ * grid reading again in miniature: a two-by-two card printed as four squares with a cross through
+ * it rather than as one block. Wrapping the shape instead is what makes the seats read as the
+ * single cluster the card grants. Every dealt formation is orthogonally connected, so this is
+ * always one closed outline.
  */
 export function runCardFormationBoardCells(
   seats: readonly Readonly<{ x: number; y: number }>[],
@@ -205,7 +259,15 @@ export function runCardFormationBoardCells(
   return [...occupied]
     .map((key) => {
       const [x, y] = key.split(':').map(Number);
-      return { x, y, dark: (x + y) % 2 === 1 };
+      return {
+        x,
+        y,
+        dark: (x + y) % 2 === 1,
+        edges: RUN_CARD_FORMATION_EDGE_NAMES.filter((edge) => {
+          const step = RUN_CARD_FORMATION_EDGE_STEP[edge];
+          return !occupied.has(`${x + step.x}:${y + step.y}`);
+        }),
+      };
     })
     .sort((left, right) => (left.x + left.y) - (right.x + right.y) || left.x - right.x);
 }
@@ -280,11 +342,19 @@ function FormationDiagram({
           className={`run-card-formation-square${cell.dark ? ' is-dark' : ''}`}
           data-formation-grid-x={cell.x}
           data-formation-grid-y={cell.y}
+          data-formation-edges={cell.edges.join(' ')}
           key={`grid:${cell.x}:${cell.y}`}
           style={position(cell.x, cell.y)}
         >
-          <svg preserveAspectRatio="none" viewBox="0 0 96 54">
-            <polygon points="48,1 95,27 48,53 1,27" vectorEffect="non-scaling-stroke" />
+          <svg preserveAspectRatio="none" viewBox={RUN_CARD_FORMATION_TILE_VIEW_BOX}>
+            <polygon points={RUN_CARD_FORMATION_TILE_POINTS} vectorEffect="non-scaling-stroke" />
+            {cell.edges.map((edge) => {
+              const [x1, y1, x2, y2] = RUN_CARD_FORMATION_EDGE_LINE[edge];
+              return (
+                <line className="run-card-formation-outline" key={edge}
+                  x1={x1} y1={y1} x2={x2} y2={y2} vectorEffect="non-scaling-stroke" />
+              );
+            })}
           </svg>
         </span>
       ))}
