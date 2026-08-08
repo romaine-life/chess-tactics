@@ -5813,7 +5813,7 @@ async function main() {
       zones: [{
         id: 'run-player-deploy',
         type: 'player-spawn',
-        tiles: [[0, 11], [1, 11], [2, 11]],
+        tiles: [[0, 10], [1, 10], [2, 10], [0, 11], [1, 11], [2, 11]],
       }],
       units: [{ x: 7, y: 0, type: 'king', side: 'enemy' }],
     },
