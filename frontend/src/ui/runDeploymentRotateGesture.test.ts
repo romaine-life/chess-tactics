@@ -34,12 +34,12 @@ describe('Run Deployment secondary-click turn', () => {
   // square the way the rail buttons do would blank the preview until the mouse was jiggled.
   it('turns the formation under the cursor without dropping the aimed square', () => {
     const turn = runScreen.match(
-      /const turnArrangement = useCallback\(\(direction: FormationTurnDirection\) => \{[\s\S]*?\}, \[[^\]]*\]\);/,
+      /const turnArrangement = useCallback\(\(direction: FormationTurnDirection\) => \{[\s\S]*?\n {2}\]\);/,
     )?.[0];
 
     expect(turn).toBeDefined();
-    expect(turn).toContain('nextCardRotation(turnableArrangementRotationList, current)');
-    expect(turn).toContain('previousCardRotation(turnableArrangementRotationList, current)');
+    expect(turn).toContain('nextCardRotation(turnableArrangementRotationList, arrangementRotation)');
+    expect(turn).toContain('previousCardRotation(turnableArrangementRotationList, arrangementRotation)');
     expect(turn).not.toContain('setPointedArrangementCell');
     // Nothing is committed by a turn — placement stays on the primary button.
     expect(turn).not.toContain('placeArrangedDeploymentCard');
@@ -81,9 +81,9 @@ describe('Run Deployment aiming', () => {
   // formation that is not a solid rectangle that corner is a square no unit stands on, so
   // placing His Grace meant clicking the hole in its own L.
   it('takes the pointer on every square, and resolves the seating from it', () => {
-    expect(runScreen).toContain('const placeable = arrangementPlaceableCells.has(cellKey);');
+    expect(runScreen).toContain('const placeable = arrangementPlaceableCells.has(cellKey)');
     expect(runScreen).toContain('const filled = arrangementFootprint.has(cellKey);');
-    expect(runScreen).toContain('onPointerEnter={() => setPointedArrangementCell(cellKey)}');
+    expect(runScreen).toContain('onPointerEnter={() => { setPointedArrangementCell(cellKey); setHeldArrangementAnchor(null); }}');
     // No survivor of the anchor-hunting model.
     expect(runScreen).not.toContain('Place formation from');
     expect(runScreen).not.toContain('hoveredArrangementAnchor');
@@ -100,7 +100,7 @@ describe('Run Deployment aiming', () => {
   // A click must commit the same seating the player was shown, resolved from the same square.
   it('commits the seating that was previewed under the pointer', () => {
     expect(runScreen).toMatch(
-      /const seating = arrangedCardPlacementAtCell\(\s*latest,\s*level,\s*selectedCardId,\s*arrangementRotation,\s*cell,\s*\);/,
+      /const seating = turnedCardPlacement\(\s*latest,\s*level,\s*selectedCardId,\s*arrangementRotation,\s*heldAnchor,\s*cell,\s*\);/,
     );
     expect(runScreen).toContain('if (!seating) return;');
     expect(runScreen).toContain('seating.anchor,');
@@ -119,16 +119,46 @@ describe('Run Deployment aiming', () => {
     expect(click).not.toContain('setPointedArrangementCell');
   });
 
-  // Turning walked the band-wide list, so a turn with no seating over the pointed square blanked
+  // Turning walked the band-wide list, so a turn with no seating anywhere it could hold blanked
   // the formation the player was holding.
-  it('turns through the square\'s own list so the formation cannot vanish', () => {
+  it('turns through the list it can actually hold, so the formation cannot vanish', () => {
     expect(runScreen).toMatch(
-      /const turnableArrangementRotationList = useMemo<readonly RunFormationRotation\[\]>\(\(\) => \{[\s\S]*?const atCell = cardRotationsAtCell\(prepared, level, selectedCardId, pointedCell\);[\s\S]*?return atCell\.length \? atCell : availableArrangementRotationList;/,
+      /const turnableArrangementRotationList = useMemo<readonly RunFormationRotation\[\]>\(\(\) => \{[\s\S]*?const held = turnableCardRotations\(prepared, level, selectedCardId, heldAnchor, pointedCell\);[\s\S]*?return held\.length \? held : availableArrangementRotationList;/,
     );
-    // Off the board there is no square to preserve, so the rail's own list applies.
-    expect(runScreen).toContain('if (!selectedCardId || !pointedCell) return availableArrangementRotationList;');
+    // Off the board there is nothing to preserve, so the rail's own list applies.
+    expect(runScreen).toContain(
+      'if (!selectedCardId || (!pointedCell && !heldAnchor)) return availableArrangementRotationList;',
+    );
     // The RAIL stays band-wide — its buttons must not flicker as the cursor moves.
     expect(runScreen).toMatch(/availableRotations=\{availableArrangementRotations\}/);
+  });
+
+  // Re-seating from the pointed square kept a unit under the cursor but walked the box a square
+  // every quarter turn, so an L that only ever covers two by two swept three by three.
+  it('turns the formation inside the box it stands in, and lets the pointer choose a new one', () => {
+    const turn = runScreen.match(
+      /const turnArrangement = useCallback\(\(direction: FormationTurnDirection\) => \{[\s\S]*?\n {2}\]\);/,
+    )?.[0];
+
+    expect(turn).toBeDefined();
+    expect(turn).toContain('const box = pointedArrangementOption?.anchor ?? null;');
+    expect(turn).toMatch(
+      /const stays = box\s*&& arrangedCardPlacementAtAnchor\(prepared, level, selectedCardId, next, box\) !== null;/,
+    );
+    // The band still decides: an unusable box is dropped rather than shown empty.
+    expect(turn).toContain('setHeldArrangementAnchor(stays ? `${box.x},${box.y}` : null);');
+    // Moving the pointer releases the box — the mouse says where, the turn says which way.
+    expect(runScreen).toContain(
+      'onPointerEnter={() => { setPointedArrangementCell(cellKey); setHeldArrangementAnchor(null); }}',
+    );
+    // The click commits the box on screen, not a fresh guess from the square under it: after a
+    // turn that square may be the corner the formation leaves empty.
+    expect(runScreen).toMatch(
+      /const seating = turnedCardPlacement\(\s*latest,\s*level,\s*selectedCardId,\s*arrangementRotation,\s*heldAnchor,\s*cell,\s*\);/,
+    );
+    expect(runScreen).toContain(
+      '|| (pointedArrangementOption !== null && cellKey === pointedArrangementCell)',
+    );
   });
 
   // With nothing seated the board went dark, so a turn that found no seating left the player
@@ -156,7 +186,12 @@ describe('Run Deployment aiming', () => {
       /const arrangementBandCells = useMemo\(\(\) => new Set\(\s*\(selectedCardId \? openDeploymentBandCells\(prepared, level, selectedCardId\) : \[\]\)[\s\S]*?\), \[level, prepared, selectedCardId\]\);/,
     );
     // The rotation is deliberately absent from its dependencies — that is the whole fix.
-    const memo = runScreen.match(/const arrangementBandCells = useMemo\([\s\S]*?\);\n/)?.[0];
+    // Anchored on the dependency array rather than a line ending: the sources are CRLF, so a
+    // bare `\n` after `;` never matches and the guard would silently read `undefined`.
+    const memo = runScreen.match(
+      /const arrangementBandCells = useMemo\([\s\S]*?\), \[[^\]]*\]\);/,
+    )?.[0];
+    expect(memo).toBeDefined();
     expect(memo).not.toContain('arrangementRotation');
     expect(runScreen).toContain("band ? 'is-band' : ''");
     // The reachable set stays per-turn: it drives the label, tab order, and crosshair.
@@ -181,7 +216,7 @@ describe('Run Deployment aiming', () => {
     expect(styles.indexOf('.run-deployment-board .run-deployment-cell:not(.is-placeable)::after'))
       .toBeGreaterThan(styles.indexOf('.skirmish-board-cell-hit:hover::after {'));
     // The square is still a hit target — pointing at one is how a turn finds a fit.
-    expect(runScreen).toContain('onPointerEnter={() => setPointedArrangementCell(cellKey)}');
+    expect(runScreen).toContain('onPointerEnter={() => { setPointedArrangementCell(cellKey); setHeldArrangementAnchor(null); }}');
   });
 
   // While the formation is the cursor, the pointer hides under it; when no seating resolves the

@@ -95,13 +95,24 @@ the seating; a secondary click turns what is being carried.**
    refusal was about *erase*, and that stands unweakened — `ViewPane`'s `onSecondaryClick` seam is
    documented as non-destructive only, the threshold this introduces may never be put in front of
    a destructive action, and the Level Editor still has no secondary-button meaning at all.
-7. **The turn spins the formation about its grip, on the square being pointed at, and can never
-   make it vanish.** Unlike the rail buttons, which clear the pointed square because the cursor
-   has left the board, the gesture keeps it — so the gesture walks **that square's** turns: the
-   ones with a seating over it. Walking the band-wide list instead stepped onto turns with no
-   seating there, and the formation under the player's hand disappeared. The square's list is
-   computed independently of the current turn, so pointing at a narrow gap and turning finds the
-   way the formation fits. A square that takes only one turn holds still rather than blanking.
+7. **The turn spins the formation INSIDE the box it is standing in, and can never make it
+   vanish.** The pointer says where the formation goes; a turn only says which way it faces once
+   it is there. So a turn holds the box and the shape turns within it — His Grace's L cycles which
+   corner it leaves empty, and the box does not move. Re-seating from the pointed square instead
+   kept a unit under the cursor but walked the box a square every quarter turn, so a formation
+   that only ever covers two squares by two swept three by three across the band.
+
+   A consequence, and the intended one: the pointed square may become the corner the formation
+   leaves empty. The cursor stays inside the box either way, and clicking commits the box on
+   screen rather than re-resolving from the square under it.
+
+   **Moving the pointer releases the box**, and the seating resolves from the new square. The band
+   still has the final say: where it cannot take the formation in the held box, the box is given
+   up and the seating re-resolves from the pointed square, so a turn never leaves the player
+   holding nothing. Turns with no seating either way are not offered at all — walking the
+   band-wide list instead stepped onto them and the formation disappeared. That list is computed
+   independently of the current turn, so pointing at a narrow gap and turning finds the way the
+   formation fits, and a position that takes only one turn holds still rather than blanking.
 8. **The rail stays band-wide.** Its four buttons offer the turns that are distinct under the
    formation's own symmetry and placeable somewhere in this level's band, and they do not change
    as the cursor moves. The square's list is always a subset, so a turn arrived at by clicking is

@@ -2,7 +2,7 @@ import { Children, useCallback, useEffect, useMemo, useRef, useState, type CSSPr
 import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import type { RunBattleTransformSink, RunBattleUndoAdapter } from '../game/store';
 import { defaultFacingForSide } from '../core/pieces';
-import type { GameState, Piece } from '../core/types';
+import type { GameState, Piece, Vec } from '../core/types';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox } from './shared/ChromeBox';
 import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
@@ -58,9 +58,8 @@ import {
 } from '../run/model';
 import {
   arrangedCardPlaceableCells,
-  arrangedCardPlacementAtCell,
+  arrangedCardPlacementAtAnchor,
   arrangedCardPlacementOptions,
-  cardRotationsAtCell,
   distinctCardRotations,
   arrangedDeploymentCanBegin,
   arrangedDeploymentCards,
@@ -76,6 +75,8 @@ import {
   nextCardRotation,
   normalReservistCell,
   previousCardRotation,
+  turnableCardRotations,
+  turnedCardPlacement,
   placeArrangedDeploymentCard,
   resolveForcedDeploymentChoices,
   removeArrangedDeploymentCard,
@@ -540,6 +541,10 @@ function useRunDeploymentPresentation({
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [arrangementRotation, setArrangementRotation] = useState<RunFormationRotation>(0);
   const [pointedArrangementCell, setPointedArrangementCell] = useState<string | null>(null);
+  // The box the formation is being turned in. Set only BY a turn and dropped the moment the
+  // pointer moves, so the mouse always says where the formation goes and a turn only says which
+  // way it faces there.
+  const [heldArrangementAnchor, setHeldArrangementAnchor] = useState<string | null>(null);
   const arrangementCards = useMemo(() => arrangedDeploymentCards(prepared), [prepared]);
   const selectedArrangementCard = arrangementCards.find(({ card }) => card.id === selectedCardId) ?? null;
   // Where deployment is allowed at all. A property of the level and of what is already seated,
@@ -571,27 +576,31 @@ function useRunDeploymentPresentation({
     () => new Set<RunFormationRotation>(availableArrangementRotationList),
     [availableArrangementRotationList],
   );
-  const pointedCell = useMemo(() => {
-    const parts = pointedArrangementCell?.split(',').map(Number);
-    if (!parts || parts.length !== 2 || parts.some((value) => !Number.isFinite(value))) return null;
-    return { x: parts[0], y: parts[1] };
-  }, [pointedArrangementCell]);
-  // The formation is carried on the cursor: the pointed square resolves to a whole seating,
-  // and the player never has to work out where a corner would have to go.
+  const asCell = (encoded: string | null): Vec | null => {
+    const parts = encoded?.split(',').map(Number);
+    return parts && parts.length === 2 && parts.every((value) => Number.isFinite(value))
+      ? { x: parts[0], y: parts[1] }
+      : null;
+  };
+  const pointedCell = useMemo(() => asCell(pointedArrangementCell), [pointedArrangementCell]);
+  const heldAnchor = useMemo(() => asCell(heldArrangementAnchor), [heldArrangementAnchor]);
+  // The formation is carried on the cursor: the pointed square resolves to a whole seating, and
+  // the player never has to work out where a corner would have to go. Once a turn has held a box
+  // the formation stays in it and spins there, until the pointer moves and picks a new one.
   const pointedArrangementOption = useMemo(() => (
-    selectedCardId && pointedCell
-      ? arrangedCardPlacementAtCell(prepared, level, selectedCardId, arrangementRotation, pointedCell)
+    selectedCardId
+      ? turnedCardPlacement(prepared, level, selectedCardId, arrangementRotation, heldAnchor, pointedCell)
       : null
-  ), [arrangementRotation, level, pointedCell, prepared, selectedCardId]);
-  // Turning is done with the cursor on a square, so the turns on offer are the ones that keep
-  // the formation THERE. Walking the band-wide list would step onto a turn with no seating over
-  // the pointed square, and the formation under the player's hand would vanish. Off the board
-  // there is no square to preserve, so the rail's own list applies.
+  ), [arrangementRotation, heldAnchor, level, pointedCell, prepared, selectedCardId]);
+  // The turns on offer are the ones this formation can actually take from where it is being
+  // held — its box first, the pointed square as the fallback. Walking the band-wide list would
+  // step onto a turn with no seating either way, and the formation under the player's hand would
+  // vanish. Off the board there is nothing to preserve, so the rail's own list applies.
   const turnableArrangementRotationList = useMemo<readonly RunFormationRotation[]>(() => {
-    if (!selectedCardId || !pointedCell) return availableArrangementRotationList;
-    const atCell = cardRotationsAtCell(prepared, level, selectedCardId, pointedCell);
-    return atCell.length ? atCell : availableArrangementRotationList;
-  }, [availableArrangementRotationList, level, pointedCell, prepared, selectedCardId]);
+    if (!selectedCardId || (!pointedCell && !heldAnchor)) return availableArrangementRotationList;
+    const held = turnableCardRotations(prepared, level, selectedCardId, heldAnchor, pointedCell);
+    return held.length ? held : availableArrangementRotationList;
+  }, [availableArrangementRotationList, heldAnchor, level, pointedCell, prepared, selectedCardId]);
   const arrangementFootprint = useMemo(() => new Set(
     Object.values(pointedArrangementOption?.placements ?? {}).map((cell) => `${cell.x},${cell.y}`),
   ), [pointedArrangementOption]);
@@ -644,12 +653,14 @@ function useRunDeploymentPresentation({
       ?? null);
     setArrangementRotation(0);
     setPointedArrangementCell(null);
+    setHeldArrangementAnchor(null);
   }, [arrangementCards, selectedCardId, stage]);
 
   useEffect(() => {
     if (availableArrangementRotations.has(arrangementRotation)) return;
     setArrangementRotation(availableArrangementRotations.values().next().value ?? 0);
     setPointedArrangementCell(null);
+    setHeldArrangementAnchor(null);
   }, [arrangementRotation, availableArrangementRotations]);
 
   const beginDeal = useCallback(() => {
@@ -670,17 +681,30 @@ function useRunDeploymentPresentation({
     setSelectedCardId(cardId);
     setArrangementRotation(0);
     setPointedArrangementCell(null);
+    setHeldArrangementAnchor(null);
   }, []);
   // A secondary click, and Q/E, turn the formation carried on the cursor. They deliberately keep
   // the pointed square: the formation spins about its grip seat, on the square being aimed at,
   // rather than vanishing until the mouse is jiggled. All three walk the same list — the turns
   // that keep a seating over that square — so no gesture can turn the formation out of sight.
   const turnArrangement = useCallback((direction: FormationTurnDirection) => {
-    if (departureActive) return;
-    setArrangementRotation((current) => (direction === 'clockwise'
-      ? nextCardRotation(turnableArrangementRotationList, current)
-      : previousCardRotation(turnableArrangementRotationList, current)));
-  }, [departureActive, turnableArrangementRotationList]);
+    if (departureActive || !selectedCardId) return;
+    const next = direction === 'clockwise'
+      ? nextCardRotation(turnableArrangementRotationList, arrangementRotation)
+      : previousCardRotation(turnableArrangementRotationList, arrangementRotation);
+    if (next === arrangementRotation) return;
+    // Hold the box the formation is standing in now, so the turn happens INSIDE it. The band
+    // still decides: where it cannot take the formation there, the anchor is dropped and the
+    // seating re-resolves from the pointed square rather than leaving the player holding nothing.
+    const box = pointedArrangementOption?.anchor ?? null;
+    const stays = box
+      && arrangedCardPlacementAtAnchor(prepared, level, selectedCardId, next, box) !== null;
+    setArrangementRotation(next);
+    setHeldArrangementAnchor(stays ? `${box.x},${box.y}` : null);
+  }, [
+    arrangementRotation, departureActive, level, pointedArrangementOption, prepared,
+    selectedCardId, turnableArrangementRotationList,
+  ]);
   const turnArrangementUnderCursor = useCallback(() => {
     turnArrangement('clockwise');
   }, [turnArrangement]);
@@ -690,6 +714,7 @@ function useRunDeploymentPresentation({
     if (latest?.id === prepared.id && latest.phase === 'deployment') {
       replace(removeArrangedDeploymentCard(latest, selectedCardId));
       setPointedArrangementCell(null);
+      setHeldArrangementAnchor(null);
     }
   }, [departureActive, prepared.id, replace, selectedCardId]);
   // The keys are offered on exactly the terms the rail's turn buttons are, so the two cannot
@@ -733,7 +758,11 @@ function useRunDeploymentPresentation({
       }
       const cellKey = `${cell.x},${cell.y}`;
       const band = arrangementBandCells.has(cellKey);
-      const placeable = arrangementPlaceableCells.has(cellKey);
+      // Clicking here places the formation. That includes the square being pointed at while a
+      // box is held even when the turn has left it the empty corner — the click commits the box
+      // on screen, so the square is a placement action and keeps its marker and crosshair.
+      const placeable = arrangementPlaceableCells.has(cellKey)
+        || (pointedArrangementOption !== null && cellKey === pointedArrangementCell);
       const filled = arrangementFootprint.has(cellKey);
       return (
         <button
@@ -754,16 +783,22 @@ function useRunDeploymentPresentation({
           onPointerDown={(event) => {
             if (event.button === 0) event.stopPropagation();
           }}
-          onPointerEnter={() => setPointedArrangementCell(cellKey)}
+          // Moving the pointer releases whatever box a turn was holding: the mouse says WHERE
+          // the formation goes, and a turn only says which way it faces once it is there.
+          onPointerEnter={() => { setPointedArrangementCell(cellKey); setHeldArrangementAnchor(null); }}
           onPointerLeave={() => setPointedArrangementCell((current) => current === cellKey ? null : current)}
           onClick={() => {
             const latest = useActiveRun.getState().run;
             if (latest?.id !== prepared.id || latest.phase !== 'deployment' || !selectedCardId) return;
-            const seating = arrangedCardPlacementAtCell(
+            // Commit the box on screen, not a fresh guess from the square: after a turn the
+            // formation is standing in a held box, and the pointed square may be the corner it
+            // leaves empty. Re-resolving from the square would place something else.
+            const seating = turnedCardPlacement(
               latest,
               level,
               selectedCardId,
               arrangementRotation,
+              heldAnchor,
               cell,
             );
             if (!seating) return;
@@ -803,7 +838,11 @@ function useRunDeploymentPresentation({
         dealProgress={dealProgress}
         onDealProgress={setDealProgress}
         onSelectCard={selectArrangementCard}
-        onRotation={(rotation) => { setArrangementRotation(rotation); setPointedArrangementCell(null); }}
+        onRotation={(rotation) => {
+          setArrangementRotation(rotation);
+          setPointedArrangementCell(null);
+          setHeldArrangementAnchor(null);
+        }}
         onRemove={removeArrangementCard}
         onBeginBattle={startArrangedBattle}
         onDealComplete={finishDeal}

@@ -755,6 +755,61 @@ export function arrangedCardPlacementAtCell(
   return best?.option ?? null;
 }
 
+/** The seating at an exact anchor, or null when the band cannot take the formation there. */
+export function arrangedCardPlacementAtAnchor(
+  run: RunDocument,
+  level: Level,
+  cardId: string,
+  rotation: RunFormationRotation,
+  anchor: Vec,
+): RunArrangedPlacementOption | null {
+  return arrangedCardPlacementOptions(run, level, cardId, rotation)
+    .find((option) => key(option.anchor) === key(anchor)) ?? null;
+}
+
+/**
+ * Where the formation lands after a turn.
+ *
+ * A turn spins the formation IN PLACE: the box it occupies is held and the shape turns inside it,
+ * so His Grace's L cycles which corner it leaves empty without the box itself walking across the
+ * band. Re-seating from the pointed square instead kept a unit under the cursor but moved the box
+ * every quarter turn, sweeping three squares by three where the formation only ever covers two by
+ * two.
+ *
+ * The band has the final say. Where it cannot take the formation in the held box, the seating is
+ * re-resolved from the square being pointed at, which is what keeps a turn from ever leaving the
+ * player holding nothing.
+ */
+export function turnedCardPlacement(
+  run: RunDocument,
+  level: Level,
+  cardId: string,
+  rotation: RunFormationRotation,
+  heldAnchor: Vec | null,
+  pointedCell: Vec | null,
+): RunArrangedPlacementOption | null {
+  const held = heldAnchor
+    ? arrangedCardPlacementAtAnchor(run, level, cardId, rotation, heldAnchor)
+    : null;
+  if (held) return held;
+  return pointedCell
+    ? arrangedCardPlacementAtCell(run, level, cardId, rotation, pointedCell)
+    : null;
+}
+
+/** The turns a formation held this way can take: box first, pointed square as the fallback. */
+export function turnableCardRotations(
+  run: RunDocument,
+  level: Level,
+  cardId: string,
+  heldAnchor: Vec | null,
+  pointedCell: Vec | null,
+): RunFormationRotation[] {
+  return distinctCardRotations(run, cardId).filter((rotation) => (
+    turnedCardPlacement(run, level, cardId, rotation, heldAnchor, pointedCell) !== null
+  ));
+}
+
 /**
  * The turns that can seat this formation over `cell`, in quarter-turn order.
  *

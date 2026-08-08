@@ -15,6 +15,7 @@ import {
 import {
   arrangedCardGripSeat,
   arrangedCardPlaceableCells,
+  arrangedCardPlacementAtAnchor,
   arrangedCardPlacementAtCell,
   arrangedCardPlacementOptions,
   arrangedCardSeatOffsets,
@@ -31,6 +32,8 @@ import {
   nextCardRotation,
   previousCardRotation,
   placeArrangedDeploymentCard,
+  turnableCardRotations,
+  turnedCardPlacement,
   resolveForcedDeploymentChoices,
   removeArrangedDeploymentCard,
 } from './deployment';
@@ -337,6 +340,64 @@ describe('formation deployment', () => {
     expect(openDeploymentBandCells(seated, level, hisGrace.id)).toHaveLength(before - taken);
     // A formation being MOVED does not read as blocking the squares it currently stands on.
     expect(openDeploymentBandCells(seated, level, line.id)).toHaveLength(before);
+  });
+
+  // A turn spins the formation IN PLACE. Re-seating from the pointed square kept a unit under
+  // the cursor but walked the box a square every quarter turn, so an L that only ever covers two
+  // by two swept three by three across the band.
+  it('turns a formation inside the box it is standing in', () => {
+    const { run, level } = fixture(8, 8, 89);
+    const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+    const hisGrace = arranging.cards.find((card) => card.coreId === 'his-grace')!;
+    const box = arrangedCardPlacementOptions(arranging, level, hisGrace.id, 0)
+      .find(({ anchor }) => anchor.x > 0 && anchor.y > 3)!.anchor;
+
+    const swept = new Set<string>();
+    const holes = new Set<string>();
+    for (const rotation of [0, 1, 2, 3] as const) {
+      const seating = turnedCardPlacement(arranging, level, hisGrace.id, rotation, box, null);
+      expect(seating).not.toBeNull();
+
+      const cells = Object.values(seating!.placements);
+      expect(cells).toHaveLength(3);
+      // Every turn seats it in the SAME two-by-two box.
+      expect(Math.min(...cells.map((cell) => cell.x))).toBe(box.x);
+      expect(Math.min(...cells.map((cell) => cell.y))).toBe(box.y);
+      expect(Math.max(...cells.map((cell) => cell.x))).toBe(box.x + 1);
+      expect(Math.max(...cells.map((cell) => cell.y))).toBe(box.y + 1);
+      cells.forEach((cell) => swept.add(`${cell.x},${cell.y}`));
+
+      // ...leaving a different corner empty each time, which is what a turn looks like here.
+      const filled = new Set(cells.map((cell) => `${cell.x},${cell.y}`));
+      const hole = [box, { x: box.x + 1, y: box.y }, { x: box.x, y: box.y + 1 }, { x: box.x + 1, y: box.y + 1 }]
+        .find((cell) => !filled.has(`${cell.x},${cell.y}`))!;
+      holes.add(`${hole.x},${hole.y}`);
+    }
+
+    // Four turns, four squares swept in total — not the nine the walking box covered.
+    expect(swept.size).toBe(4);
+    expect(holes.size).toBe(4);
+  });
+
+  // The band has the final say: where it cannot take the formation in the held box, the seating
+  // re-resolves from the pointed square rather than leaving the player holding nothing.
+  it('gives the held box up rather than leaving the player holding nothing', () => {
+    const { run, level } = fixture(2, 6, 97, ['ppp']);
+    const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+    const line = arranging.cards.find((card) => card.coreId === 'ppp')!;
+    const flat = arrangedCardPlacementOptions(arranging, level, line.id, 0)[0];
+    const pointed = Object.values(flat.placements)[0];
+
+    // Three wide cannot stand up in a two-row band, so the held box has no seating at that turn.
+    expect(arrangedCardPlacementAtAnchor(arranging, level, line.id, 1, flat.anchor)).toBeNull();
+    // ...and the turn is simply not on offer rather than emptying the player's hand.
+    expect(turnableCardRotations(arranging, level, line.id, flat.anchor, pointed)).toEqual([0]);
+    expect(turnedCardPlacement(arranging, level, line.id, 0, flat.anchor, pointed))
+      .not.toBeNull();
+
+    // With no box held at all it falls straight through to the pointed square.
+    expect(turnedCardPlacement(arranging, level, line.id, 0, null, pointed)).not.toBeNull();
+    expect(turnedCardPlacement(arranging, level, line.id, 0, null, null)).toBeNull();
   });
 
   // Turning happens with the cursor on a square. Walking the band-wide list stepped onto turns
