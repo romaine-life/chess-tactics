@@ -22,6 +22,7 @@ import { LevelPreviewColumn } from './LevelPreviewColumn';
 import { injectStressLevels } from '../campaign/stressFixture';
 import { levelObjectiveLine } from './LevelInfoCompact';
 import { useConfirm } from './shared/ConfirmDialog';
+import { useDeleteKeyAction } from './shared/deleteKeyAction';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarControlContribution } from './shell/TitleBarControls';
 import { HomepageBackdrop } from './HomepageBackdrop';
@@ -1095,6 +1096,15 @@ export function CampaignEditor({
     : isSkirmishProfilesSelected
       ? selectedProfileLevelIndex
       : selectedLevelIndex;
+  // Delete = the selected level row's own Delete button, with the same permission gate that button
+  // uses. It deliberately stops there: a keypress must not be able to delete the campaign the
+  // selection lives in, which is why "Delete campaign" stays a button-only verb.
+  const selectedLevelDeletable = Boolean(levelDoc) && (
+    isUnassignedSelected || isSkirmishProfilesSelected
+      ? (levelDoc && tierOf(levelDoc.id) === 'official' ? officialWorkspaceReady && isAdmin : userWorkspaceReady)
+      : !readOnly
+  );
+  useDeleteKeyAction(levelDoc && selectedLevelDeletable ? () => { void confirmDeleteLevel(levelDoc); } : null);
   const enemyCount = levelDoc?.layers.units.filter((unit) => unit.side === 'enemy').length ?? 0;
   const allyCount = levelDoc?.layers.units.filter((unit) => unit.side === 'player').length ?? 0;
   const selectedLevelTitle = levelDoc

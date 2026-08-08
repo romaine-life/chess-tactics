@@ -80,6 +80,7 @@ import { ViewPane, type ViewPaneViewportSize } from './shared/ViewPane';
 import { useBoardCameraFraming } from './shared/BoardViewFraming';
 import { CameraBoundaryOverlay } from './shared/CameraBoundaryOverlay';
 import { useConfirm } from './shared/ConfirmDialog';
+import { useDeleteKeyAction } from './shared/deleteKeyAction';
 import { TitleBarControlContribution, type TitleBarControlSpec } from './shell/TitleBarControls';
 import { Stepper } from './shared/Stepper';
 import { Toggle } from './shared/Toggle';
@@ -497,6 +498,7 @@ function StudioEditableBoard({
   tool,
   selectedCell,
   selectedArtworkId,
+  selectedArtworkIds,
   boardZoom,
   boardPan,
   gridScope = 'off',
@@ -597,6 +599,8 @@ function StudioEditableBoard({
   tool: 'select' | 'brush' | 'erase' | 'move' | 'region';
   selectedCell: { x: number; y: number } | null;
   selectedArtworkId?: string | null;
+  /** Every selected Scene Art instance. Each one outlines, and the Move tool drags them together. */
+  selectedArtworkIds?: readonly string[];
   boardZoom: number;
   boardPan: { x: number; y: number };
   gridScope?: 'off' | 'playable' | 'whole';
@@ -1222,7 +1226,9 @@ function StudioEditableBoard({
 
   if (artworkEditing) {
     for (const [index, placement] of placedFloatingArtwork.entries()) {
-      const selected = placement.id === selectedArtworkId;
+      const selected = selectedArtworkIds
+        ? selectedArtworkIds.includes(placement.id)
+        : placement.id === selectedArtworkId;
       const canMove = tool === 'move' && selected;
       const interactive = canMove;
       const sourceSprite = structureArtDirectionSprite(placement.sourceArtId, placement.direction);
@@ -1428,9 +1434,19 @@ function StudioEditableBoard({
     units: placedUnits,
     doodads: placedDoodads,
     props: placedProps,
-    floatingArtwork: placedFloatingArtwork.map((placement) => (
-      artworkDrag?.id === placement.id ? { ...placement, ...artworkDrag.point } : placement
-    )),
+    // Live drag preview. Dragging one member of a selection previews the whole selection sliding
+    // by the same offset, so what the author releases is what they watched move.
+    floatingArtwork: placedFloatingArtwork.map((placement) => {
+      if (!artworkDrag) return placement;
+      const dx = artworkDrag.point.pixelX - artworkDrag.origin.pixelX;
+      const dy = artworkDrag.point.pixelY - artworkDrag.origin.pixelY;
+      if (artworkDrag.id === placement.id) return { ...placement, ...artworkDrag.point };
+      const grouped = selectedArtworkIds?.includes(artworkDrag.id)
+        && selectedArtworkIds.includes(placement.id);
+      return grouped
+        ? { ...placement, pixelX: placement.pixelX + dx, pixelY: placement.pixelY + dy }
+        : placement;
+    }),
     cover: placedCover,
     coverTypes: placedCoverTypes,
     features: placedFeatures as EditorBoard['features'],
@@ -1970,6 +1986,7 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
     setSel(Math.max(0, index - 1));
     onChange(value.filter((_, i) => i !== index), removed ? [removed] : undefined);
   };
+  useDeleteKeyAction(event ? () => removeEvent(selected) : null);
 
   return (
     <div className="le-md le-events-other">
@@ -2896,7 +2913,13 @@ export function LevelEditor(): ReactElement {
   const [macroTileBrushId, setMacroTileBrushId] = useState<string | null>(null);
   const [macroTileFootprint, setMacroTileFootprint] = useState(leMacroTileFootprints()[0] ?? '2x2');
   const [selectedCell, setSelectedCell] = useState<{ x: number; y: number } | null>(null);
-  const [selectedArtworkId, setSelectedArtworkId] = useState<string | null>(null);
+  // Scene Art selection is a LIST: one click picks one instance, a dragged rectangle picks every
+  // instance it touches. `selectedArtworkId` stays as the PRIMARY member — the last one picked —
+  // because Details, Facing, X/Y and Scale each edit exactly one object and must not go blank the
+  // moment a second instance joins the selection. Selection-wide verbs (Delete, Move) read the list.
+  const [selectedArtworkIds, setSelectedArtworkIds] = useState<readonly string[]>([]);
+  const selectedArtworkId = selectedArtworkIds.length ? selectedArtworkIds[selectedArtworkIds.length - 1] : null;
+  const setSelectedArtworkId = (id: string | null): void => setSelectedArtworkIds(id === null ? [] : [id]);
   const [artworkSelectionActive, setArtworkSelectionActive] = useState(false);
   // Connected terrain-area selection shared by Generate and raw Tile Fill. "x,y" cell keys.
   const [regionSelection, setRegionSelection] = useState<Set<string>>(() => new Set());
@@ -7773,6 +7796,27 @@ export function LevelEditor(): ReactElement {
     setSelectedArtworkId(id);
     setArtworkBrushDirection(placement.direction);
   };
+  /**
+   * The catch of one dragged rectangle. `additive` (Shift held) folds it into the live selection
+   * so several sweeps can build one group; an empty catch from a plain drag clears the selection,
+   * which is how dragging over blank scene means "nothing".
+   */
+  const selectArtworkMany = (ids: readonly string[], additive: boolean): void => {
+    const present = new Set(boardFloatingArtwork.map((placement) => placement.id));
+    const caught = ids.filter((id) => present.has(id));
+    setSelectedCell(null);
+    setSelectedArtworkIds((selected) => {
+      const merged = additive
+        ? [...selected.filter((id) => present.has(id) && !caught.includes(id)), ...caught]
+        : caught;
+      return merged;
+    });
+  };
+  // A single-object edit keeps whatever else is selected — the author is tuning the primary, not
+  // dropping the group they just swept up.
+  const keepArtworkSelected = (id: string): void => setSelectedArtworkIds(
+    (selected) => selected.includes(id) ? selected : [id],
+  );
   const updateArtwork = (
     id: string,
     update: (placement: FloatingArtworkPlacement) => FloatingArtworkPlacement,
@@ -7784,7 +7828,7 @@ export function LevelEditor(): ReactElement {
     placements[index] = update(placements[index]);
     next.floatingArtwork = placements;
     commitEditorBoard(next, null);
-    setSelectedArtworkId(id);
+    keepArtworkSelected(id);
   };
   const moveArtwork = (id: string, point: { pixelX: number; pixelY: number }): void => {
     const source = (currentEditorBoardRef.current.floatingArtwork ?? []).find((placement) => placement.id === id);
@@ -7792,16 +7836,49 @@ export function LevelEditor(): ReactElement {
     const normalized = normalizeFloatingArtworkPoint(point, source);
     updateArtwork(id, (placement) => ({ ...placement, ...normalized }));
   };
-  const deleteArtwork = (id: string): void => {
+  /**
+   * Dragging one member of a selection drags the whole selection, by the same offset. Anything
+   * else would make a swept-up group unmovable except one piece at a time, which is the reason to
+   * sweep it up in the first place.
+   */
+  const moveArtworkGroup = (id: string, point: { pixelX: number; pixelY: number }): void => {
+    const board = currentEditorBoardRef.current;
+    const source = (board.floatingArtwork ?? []).find((placement) => placement.id === id);
+    if (!source) return;
+    const moving = selectedArtworkIds.includes(id) ? selectedArtworkIds : [id];
+    if (moving.length <= 1) {
+      moveArtwork(id, point);
+      return;
+    }
+    const anchor = normalizeFloatingArtworkPoint(point, source);
+    const dx = anchor.pixelX - source.pixelX;
+    const dy = anchor.pixelY - source.pixelY;
+    if (dx === 0 && dy === 0) return;
+    const next = cloneEditorBoard(board);
+    next.floatingArtwork = (next.floatingArtwork ?? []).map((placement) => moving.includes(placement.id)
+      ? {
+        ...placement,
+        ...normalizeFloatingArtworkPoint(
+          { pixelX: placement.pixelX + dx, pixelY: placement.pixelY + dy },
+          placement,
+        ),
+      }
+      : placement);
+    commitEditorBoard(next, null);
+  };
+  /** The Delete button, the erase slot, and the Delete key all remove the WHOLE selection. */
+  const deleteSelectedArtwork = (): void => {
+    if (!selectedArtworkIds.length) return;
+    const doomed = new Set(selectedArtworkIds);
     const next = cloneEditorBoard(currentEditorBoardRef.current);
-    const placements = (next.floatingArtwork ?? []).filter((placement) => placement.id !== id);
+    const placements = (next.floatingArtwork ?? []).filter((placement) => !doomed.has(placement.id));
     if (placements.length === (next.floatingArtwork ?? []).length) return;
     next.floatingArtwork = placements;
-    if (commitEditorBoard(next, null)) setSelectedArtworkId((selected) => selected === id ? null : selected);
+    if (commitEditorBoard(next, null)) setSelectedArtworkIds([]);
   };
   const changeEditorTool = (nextTool: LevelEditorToolKey): void => {
     if (brushKind === 'artwork' && nextTool === 'erase') {
-      if (selectedArtworkId) deleteArtwork(selectedArtworkId);
+      deleteSelectedArtwork();
       return;
     }
     if (brushKind === 'artwork' && nextTool === 'select') {
@@ -8236,8 +8313,9 @@ export function LevelEditor(): ReactElement {
     nextBoard.rows = nextRows;
     const shiftedSelection = selectedCell ? { x: selectedCell.x + dx, y: selectedCell.y + dy } : null;
     commitEditorBoard(nextBoard, shiftedSelection && (shiftedSelection.x < 0 || shiftedSelection.y < 0 || shiftedSelection.x >= nextCols || shiftedSelection.y >= nextRows) ? null : shiftedSelection);
-    if (selectedArtworkId && !(nextBoard.floatingArtwork ?? []).some((placement) => placement.id === selectedArtworkId)) {
-      setSelectedArtworkId(null);
+    if (selectedArtworkIds.length) {
+      const surviving = new Set((nextBoard.floatingArtwork ?? []).map((placement) => placement.id));
+      setSelectedArtworkIds((selected) => selected.filter((id) => surviving.has(id)));
     }
     if (activeGeneratedRegionId) {
       const activeAfterResize = prunedGeneratedRegions.find((region) => region.id === activeGeneratedRegionId);
@@ -8624,6 +8702,25 @@ export function LevelEditor(): ReactElement {
     ? null
     : tool;
 
+  // Delete removes what is selected in the workspace you are looking at, and nothing else. Each
+  // branch is the same call the layer's own remove button makes, so the key can never delete
+  // something the button would have refused. It never reaches the level document itself — losing
+  // a whole level to a stray keypress is not a trade worth making for a shortcut.
+  const deleteKeyAction = !editorSessionCanWrite || eventsOpen
+    ? null
+    : layer === 'placed-art' && brushKind === 'artwork' && selectedArtworkIds.length
+      ? deleteSelectedArtwork
+      : layer === 'placed-art' && brushKind === 'forest' && selectedForest
+        ? () => removeForest(selectedForest)
+        : layer === 'placed-art' && brushKind === 'town' && selectedTown
+          ? () => removeTown(selectedTown)
+          : layer === 'zone' && activeZone
+            ? removeActiveZoneEntry
+            : layer === 'generate' && activeGeneratedRegion
+              ? () => removeGeneratedRegionUnit(activeGeneratedRegion.id)
+              : null;
+  useDeleteKeyAction(deleteKeyAction);
+
   return (
     // The level editor is a homepage-family surface: it shows the ONE shared HomepageBackdrop
     // (menu scene + synced rain), not the battlefield world. The backdrop is a SIBLING of the
@@ -8802,6 +8899,7 @@ export function LevelEditor(): ReactElement {
                     tool={layer === 'level-artwork' ? 'select' : tool}
                     selectedCell={selectedCell}
                     selectedArtworkId={selectedArtworkId}
+                    selectedArtworkIds={selectedArtworkIds}
                     boardZoom={viewZoom}
                     boardPan={viewPan}
                     gridScope={gridScope}
@@ -8817,7 +8915,7 @@ export function LevelEditor(): ReactElement {
                     onPaint={paintCell}
                     onErase={eraseCell}
                     onSelect={selectCell}
-                    onMoveArtwork={moveArtwork}
+                    onMoveArtwork={moveArtworkGroup}
                     onMove={moveObject}
                     canMoveTo={canMoveObjectTo}
                     fences={boardFences}
@@ -9094,10 +9192,12 @@ export function LevelEditor(): ReactElement {
                   <ArtworkSelectionSurface
                     placements={boardFloatingArtwork}
                     selectedArtworkId={selectedArtworkId}
+                    selectedArtworkIds={selectedArtworkIds}
                     origin={{ left: artworkBoardOrigin.originLeft, top: artworkBoardOrigin.originTop }}
                     zoom={viewZoom}
                     pan={viewPan}
                     onSelect={selectArtwork}
+                    onSelectMany={selectArtworkMany}
                   />
                 ) : null}
               </div>
@@ -11037,9 +11137,11 @@ export function LevelEditor(): ReactElement {
             <div className="le-ctrlrow le-artwork-selection-row">
               <span className="le-ctrllabel">Selected</span>
               <span className="le-artwork-current" data-testid="selected-artwork-readout">
-                {selectedArtwork
-                  ? `${selectedArtworkAsset?.label ?? selectedArtwork.sourceArtId} · X ${selectedArtwork.pixelX}, Y ${selectedArtwork.pixelY}`
-                  : 'None'}
+                {selectedArtworkIds.length > 1
+                  ? `${selectedArtworkIds.length} selected · editing ${selectedArtworkAsset?.label ?? selectedArtwork?.sourceArtId}`
+                  : selectedArtwork
+                    ? `${selectedArtworkAsset?.label ?? selectedArtwork.sourceArtId} · X ${selectedArtwork.pixelX}, Y ${selectedArtwork.pixelY}`
+                    : 'None'}
               </span>
               <ChromeButton
                 unit="inner-text-button"
@@ -11605,7 +11707,7 @@ export function LevelEditor(): ReactElement {
               </div>
               <div className="le-seg le-artwork-actions">
                 <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={() => duplicateArtwork(selectedArtworkForDetails.id)}>Duplicate</ChromeButton>
-                <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')} onClick={() => deleteArtwork(selectedArtworkForDetails.id)}>Delete</ChromeButton>
+                <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'danger')} onClick={deleteSelectedArtwork}>{selectedArtworkIds.length > 1 ? `Delete ${selectedArtworkIds.length}` : 'Delete'}</ChromeButton>
               </div>
             </>
           ) : selectedUnitAsset && selectedUnit ? (

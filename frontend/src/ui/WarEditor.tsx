@@ -15,6 +15,7 @@ import { LevelPreviewColumn } from './LevelPreviewColumn';
 import { KitScroll } from './KitScroll';
 import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
 import { useConfirm } from './shared/ConfirmDialog';
+import { useDeleteKeyAction } from './shared/deleteKeyAction';
 import { useSceneParticipant } from './shell/SceneBoundary';
 import { AtaraxiaSelector } from './AtaraxiaSelector';
 import { ActionList } from './shared/ActionList';
@@ -141,6 +142,10 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
     }))) return;
     useWars.getState().deleteBattle(selectedWar.id, selectedLevel.id);
   };
+
+  // Delete = the selected Battle's own Delete button. It stops at the Battle: a keypress must not
+  // be able to take the War and every other Battle in it, so "Delete War" stays a button-only verb.
+  useDeleteKeyAction(selectedLevel && canEditSelected ? () => { void deleteSelectedBattle(); } : null);
 
   const officialWars = wars.filter((war) => war.origin === 'official');
   const privateWars = wars.filter((war) => war.origin !== 'official');
