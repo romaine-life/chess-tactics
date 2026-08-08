@@ -1,0 +1,7 @@
+{
+  "card": {
+    "maxWidth": 360,
+    "heightFill": 90,
+    "gap": 16
+  }
+}

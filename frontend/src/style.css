@@ -19320,6 +19320,23 @@ button.tileset-relationship-cell {
   gap: var(--ds-inline-tight);
 }
 
+/* The Sectio's cards are the decision, so the card row takes the lane instead of
+   the first 236px of it — the same rule the Bona Vacantia grant already follows.
+   A shopkey section underneath still takes its own natural height; only the card
+   row is elastic. A band wrap frames the row itself and keeps its own flex lane
+   below, so it is excluded here (ADR-0519). */
+.run-sectio-workspace-content:not(:has(.run-sectio-wrap-host)) {
+  align-content: stretch;
+  grid-template-rows: minmax(0, 1fr);
+  min-block-size: 0;
+}
+
+.run-sectio-workspace-content:not(:has(.run-sectio-wrap-host)) > .run-sectio-cards-section {
+  grid-template-rows: minmax(0, 1fr);
+  min-block-size: 0;
+  padding: var(--ds-inset);
+}
+
 .run-battle-preview-content {
   align-content: stretch;
   grid-template-rows: minmax(0, 1fr);
@@ -19450,6 +19467,16 @@ button.tileset-relationship-cell {
   gap: var(--ds-inline);
   grid-template-columns: repeat(auto-fit, minmax(196px, 236px));
   justify-content: center;
+}
+
+/* A live Run card row owns the lane it was given: it measures that lane and writes
+   its own tracks, so the ladder above is only the pre-measurement fallback and the
+   review surfaces' layout. Centred in both axes, because a row that prints shorter
+   than its lane is a row of cards, not a banner (ADR-0519). */
+.run-card-row {
+  align-content: center;
+  block-size: 100%;
+  min-block-size: 0;
 }
 
 .run-card {
@@ -23207,6 +23234,54 @@ button.tileset-relationship-cell {
     grid-column: 1 / -1;
   }
 
+}
+
+/* Card Size instrument (ADR-0519). The stage mounts the real card row inside a box
+   the exact size of the Run's card lane, so a card in here is the same number of
+   pixels as the card that ships. The viewer zoom only scales the finished picture. */
+.run-card-size-catalog-image {
+  min-height: 128px;
+}
+
+.run-card-size-catalog-specimen {
+  align-self: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* Three 5:7 faces that clear the tile's 128px image band without cropping. */
+  inline-size: min(100%, 252px);
+}
+
+.run-card-size-studio {
+  display: grid;
+  min-block-size: 0;
+  overflow: auto;
+  padding: 22px;
+  place-content: start center;
+}
+
+.run-card-size-studio-lane {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.run-card-size-studio-lane figcaption,
+.run-card-size-studio-lane > figcaption {
+  color: #a9bdd2;
+}
+
+.run-card-size-studio-lane-scaler {
+  overflow: hidden;
+}
+
+.run-card-size-studio-lane-box {
+  /* Inset, so the keyline survives the scaler's clip at every zoom. */
+  box-shadow: inset 0 0 0 1px rgba(91, 157, 216, .34);
+  box-sizing: border-box;
+  /* The in-game workspace inset the live rows sit inside. */
+  padding: 8px;
+  transform-origin: left top;
 }
 
 .run-card-gold-tier-divider-catalog-image {

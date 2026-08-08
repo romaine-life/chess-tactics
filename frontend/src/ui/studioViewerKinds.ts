@@ -32,6 +32,7 @@ export const STUDIO_VIEWER_KIND_LABELS = {
   screenart: 'Screen Art',
   lipsanonmat: 'Lipsanon Mat',
   cardlayout: 'Card Layout',
+  cardsize: 'Card Size',
   carddivider: 'Card Gold Divider',
   cardicons: 'Card Icon Fitting',
   cardprompts: 'Card Prompts',
