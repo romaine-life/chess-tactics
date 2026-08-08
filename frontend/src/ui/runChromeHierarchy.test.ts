@@ -399,7 +399,7 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).not.toContain('levelToEditorBoard');
     expect(runScreen).toContain('gameForRunDeployment(prepared, level, layout, true)');
     expect(runScreen).not.toContain('placeAdlectedDeploymentUnit');
-    expect(runScreen).toContain('deployment-placement-ghost');
+    expect(runScreen).toContain('previewPieces: arrangementPreviewPieces');
     expect(runScreen).toContain('advanceAutomaticDeployment(deployment, level)');
     expect(runScreen).toContain('placeRevealedDeploymentUnit(paused, level)');
     expect(runScreen).toContain('data-testid="arrangement-begin-battle"');

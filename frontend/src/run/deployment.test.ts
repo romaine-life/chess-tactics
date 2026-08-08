@@ -110,7 +110,7 @@ describe('formation deployment', () => {
     expect(deploymentInteractionStage(placed)).toBe('settling');
     const [king, leftPawn, rightPawn] = ids.map((id) => cell(placed.deployment!.placements[id]));
     expect(king.y - leftPawn.y).toBe(1);
-    expect(king.x - leftPawn.x).toBe(1);
+    expect(king.x - leftPawn.x).toBe(0);
     expect(rightPawn.x - king.x).toBe(1);
     expect(rightPawn.y).toBe(leftPawn.y);
   });
@@ -123,9 +123,9 @@ describe('formation deployment', () => {
 
     expect(deploymentFormationEntryDelta(level, placements)).toEqual({ x: 8, y: 0 });
     expect(placements.map(({ x, y }) => ({ x: x + 8, y }))).toEqual([
-      { x: 9, y: 4 },
+      { x: 8, y: 4 },
       { x: 8, y: 3 },
-      { x: 10, y: 3 },
+      { x: 9, y: 3 },
     ]);
   });
 
@@ -147,9 +147,9 @@ describe('formation deployment', () => {
       .map((id) => cell(placed.deployment!.placements[id]));
 
     expect({ king, leftPawn, rightPawn }).toEqual({
-      king: { x: 1, y: 4 },
+      king: { x: 0, y: 4 },
       leftPawn: { x: 0, y: 3 },
-      rightPawn: { x: 2, y: 3 },
+      rightPawn: { x: 1, y: 3 },
     });
   });
 
@@ -166,9 +166,9 @@ describe('formation deployment', () => {
       .map((id) => cell(deployed.deployment!.placements[id]))
       .sort((left, right) => left.x - right.x);
     expect(cells).toEqual([
+      { x: 2, y: 3 },
       { x: 3, y: 3 },
       { x: 4, y: 3 },
-      { x: 5, y: 3 },
     ]);
   });
 
@@ -212,7 +212,7 @@ describe('formation deployment', () => {
     const options = arrangedCardPlacementOptions(arranging, level, cardId, 0);
 
     expect(options.length).toBeGreaterThan(0);
-    expect(arrangedCardPlacementOptions(arranging, level, cardId, 1)).toHaveLength(0);
+    expect(arrangedCardPlacementOptions(arranging, level, cardId, 1).length).toBeGreaterThan(0);
     const placed = placeArrangedDeploymentCard(arranging, level, cardId, 0, options.at(-1)!.anchor);
     expect(Object.keys(placed.deployment?.placements ?? {})).toEqual(runCardUnitIds(placed.cards[0]));
     expect(arrangedDeploymentCanBegin(placed)).toBe(true);
@@ -234,6 +234,17 @@ describe('formation deployment', () => {
     const options = arrangedCardPlacementOptions(arranging, level, queen.id, 0);
 
     expect(new Set(options.map(({ anchor }) => anchor.y))).toEqual(new Set([3, 4]));
+  });
+
+  it('fits His Grace in the smallest two-by-two deployment band', () => {
+    const { run, level } = fixture(2, 2, 30, [], 'arranged');
+    const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+    const hisGrace = arranging.cards.find((card) => card.coreId === 'his-grace')!;
+    const options = arrangedCardPlacementOptions(arranging, level, hisGrace.id, 0);
+
+    expect(options).toHaveLength(1);
+    const placed = placeArrangedDeploymentCard(arranging, level, hisGrace.id, 0, options[0].anchor);
+    expect(arrangedDeploymentCanBegin(placed)).toBe(true);
   });
 
   it('begins arranged Battle with deliberately unplaced non-royal cards blocked', () => {

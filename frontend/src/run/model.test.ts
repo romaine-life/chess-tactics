@@ -136,7 +136,7 @@ describe('formation card catalog', () => {
   it('keeps His Grace on one protected three-unit starter card', () => {
     expect(RUN_STARTER_CARD_BY_ID['his-grace']).toMatchObject({
       pieces: ['king', 'pawn', 'pawn'],
-      formation: [{ x: 1, y: 1 }, { x: 0, y: 0 }, { x: 2, y: 0 }],
+      formation: [{ x: 0, y: 1 }, { x: 0, y: 0 }, { x: 1, y: 0 }],
       removable: false,
     });
   });

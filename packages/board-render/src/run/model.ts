@@ -631,7 +631,7 @@ export const RUN_STARTER_CARDS: readonly RunStarterCard[] = Object.freeze([
     id: 'his-grace',
     pieces: ['king', 'pawn', 'pawn'],
     artId: 'his-grace',
-    formation: [{ x: 1, y: 1 }, { x: 0, y: 0 }, { x: 2, y: 0 }],
+    formation: [{ x: 0, y: 1 }, { x: 0, y: 0 }, { x: 1, y: 0 }],
     value: 2,
     rarity: 'common',
     name: 'His Grace',

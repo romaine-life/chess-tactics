@@ -1,7 +1,7 @@
 import { Children, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import type { RunBattleTransformSink, RunBattleUndoAdapter } from '../game/store';
-import { defaultFacingForSide, paletteForSide, pieceSpritePath } from '../core/pieces';
+import { defaultFacingForSide } from '../core/pieces';
 import type { GameState, Piece } from '../core/types';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox } from './shared/ChromeBox';
@@ -132,8 +132,6 @@ import { createRunForm, runActivity, type RunForm } from './RunForm';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
 import type { SkirmishBoardSurfaceState, UnitDepartureRequest } from '../render/SkirmishBoard';
-import { boardLabCellPosition } from '../render/boardProjection';
-import { objectBaseZIndex } from '../render/sceneDepth';
 
 type RunScreenView = RunWorkspaceView;
 
@@ -708,6 +706,26 @@ function useRunDeploymentPresentation({
   const hoveredArrangementOption = hoveredArrangementAnchor
     ? arrangementPlacementOptions.find(({ anchor }) => `${anchor.x},${anchor.y}` === hoveredArrangementAnchor) ?? null
     : null;
+  const arrangementPreviewPieces = useMemo<readonly Piece[]>(() => {
+    if (!hoveredArrangementOption) return [];
+    const facing = defaultFacingForSide('player');
+    return Object.entries(hoveredArrangementOption.placements).flatMap(([unitId, cell]) => {
+      const unit = prepared.army.find((candidate) => candidate.id === unitId);
+      if (!unit) return [];
+      return [{
+        id: `deployment-preview:${unit.id}`,
+        name: unit.name,
+        type: unit.type,
+        side: 'player' as const,
+        ...cell,
+        alive: true,
+        facing,
+        startX: cell.x,
+        startY: cell.y,
+        ...(unit.type === 'pawn' ? { pawnForward: facing } : {}),
+      }];
+    });
+  }, [hoveredArrangementOption, prepared.army]);
   const layout = selectedDeploymentLayout(prepared, options);
   const deploymentGame = useMemo(
     () => gameForRunDeployment(prepared, level, layout, true),
@@ -725,7 +743,8 @@ function useRunDeploymentPresentation({
     game: deploymentGame,
     seed: prepared.deployment?.seed ?? prepared.seed,
     viewKey: runBattleActivityId(prepared.id, prepared.battleIndex),
-  }), [deploymentGame, prepared.battleIndex, prepared.deployment?.seed, prepared.id, prepared.seed]);
+    previewPieces: arrangementPreviewPieces,
+  }), [arrangementPreviewPieces, deploymentGame, prepared.battleIndex, prepared.deployment?.seed, prepared.id, prepared.seed]);
 
   useEffect(() => {
     if (prepared !== run && prepared.phase === 'deployment') replace(prepared);
@@ -972,28 +991,6 @@ function useRunDeploymentPresentation({
           onBeginDeal={beginDeal}
           disabled={departureActive}
         />
-        {prepared.deploymentMode === 'arranged' && hoveredArrangementOption
-          ? Object.entries(hoveredArrangementOption.placements).map(([unitId, cell]) => {
-              const unit = prepared.army.find((candidate) => candidate.id === unitId);
-              if (!unit) return null;
-              const seat = boardLabCellPosition(cell);
-              return (
-                <span
-                  className={`board-unit-seat is-${unit.type} run-deployment-placement-ghost`}
-                  data-testid="deployment-placement-ghost"
-                  style={{ left: seat.left, top: seat.top, zIndex: objectBaseZIndex(cell) }}
-                  aria-hidden="true"
-                  key={unitId}
-                >
-                  <img
-                    src={pieceSpritePath(unit.type, paletteForSide('player'), defaultFacingForSide('player'))}
-                    alt=""
-                    draggable={false}
-                  />
-                </span>
-              );
-            })
-          : null}
       </>
     ),
   };
