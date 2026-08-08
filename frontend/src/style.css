@@ -15450,26 +15450,32 @@ button.tileset-relationship-cell {
   z-index: 1;
 }
 
+/* A hairline vanished into painted artwork and detailed terrain alike. The weight below carries a
+   warm light line UNDER the dark one, so the grid reads as carved into the ground rather than
+   drawn over it, and stays part of the scene instead of becoming a technical overlay. The stroke
+   is non-scaling, so this is a constant screen weight at every zoom. */
 .tileset-board-grid-layer path {
   fill: none;
-  stroke: rgba(0, 0, 0, 0.36);
+  stroke: rgba(20, 14, 10, 0.66);
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 1.15;
-  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.14));
+  stroke-width: 2.6;
+  filter: drop-shadow(0 1.5px 0 rgba(255, 240, 210, 0.42));
 }
 
-/* Wall-art placement is a geometry-verification surface. Keep its canonical cell grid visually
-   decisive over detailed terrain without making gameplay/editor grids globally heavier. */
+/* Wall-art placement is a geometry-verification surface, so its canonical cell grid stays a step
+   more decisive than the board grid above rather than matching it. */
 .wall-art-board-surface .tileset-board-grid-layer path {
-  stroke: rgba(0, 0, 0, 0.72);
-  stroke-width: 2.5;
-  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.32));
+  stroke: rgba(0, 0, 0, 0.82);
+  stroke-width: 3.2;
+  filter: drop-shadow(0 1.5px 0 rgba(255, 255, 255, 0.42));
 }
 
+/* Placement previews sit under their own chrome, so they keep the board grid's weight but step the
+   ink back rather than reverting to the old hairline. */
 .tileset-placement-board .tileset-board-grid-layer path {
-  stroke: rgba(0, 0, 0, 0.42);
-  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.16));
+  stroke: rgba(20, 14, 10, 0.5);
+  filter: drop-shadow(0 1.5px 0 rgba(255, 240, 210, 0.3));
 }
 
 /* Persisted player-camera coverage boundary. Unlike a viewport snapshot, this world-space box is
