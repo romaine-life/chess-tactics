@@ -19383,39 +19383,81 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
+/* ONE row, two columns, both stretched: that is what makes the board box and the intelligence
+   boxes share a top AND a bottom line. Nothing sits above the board to push it down — its name
+   is its own title bar. */
 .run-battle-preview-layout {
   display: grid;
   gap: var(--ds-stack);
-  grid-template-areas:
-    "head intelligence"
-    "board intelligence";
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 34%);
-  grid-template-rows: auto minmax(0, 1fr);
-}
-
-.run-battle-preview-head {
-  align-content: start;
-  display: grid;
-  gap: var(--ds-space-1);
-  grid-area: head;
-}
-
-.run-battle-preview-head p {
-  color: var(--skirmish-muted);
-  font-size: var(--ds-text-sm);
+  grid-template-areas: "board intelligence";
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 34%);
+  grid-template-rows: minmax(0, 1fr);
 }
 
 .run-battle-preview-board-frame {
   display: grid;
+  /* Exactly two rows, no gap: title strip, then the pane takes the whole remainder. Any third
+     track or row gap would expose the frame's own surface as a band across the level art. */
+  gap: 0;
   grid-area: board;
+  grid-template-rows: auto minmax(0, 1fr);
   min-block-size: 0;
   min-inline-size: 0;
-  overflow: hidden;
-  padding: var(--ds-space-2);
+  /* NOT clipped: the title rule's authored T caps bleed onto the side rails by design, and a
+     clip here puts them inside the frame. The pane owns its own clip. */
+  overflow: visible;
+  /* NO padding. The installed inner-box surface paints an opaque `background-color` under every
+     inner box, so any padding here is a flat slab of that material ringing the level art between
+     the border art and the board. The board is the frame's whole content: it must reach the
+     border on all four sides so the surface is never visible. */
+  padding: 0;
 }
 
-.run-battle-preview-board-view,
-.run-battle-preview-board-view > .board-view-pane-seat {
+/* ONE title bar, worn by every box on this screen: name and its registered rule inside one
+   painted strip. The strip owns the installed OUTER marble and both children sit on it, so the
+   rule has no unpainted row of its own to open up — that gap is what let the fill bleed. */
+.run-battle-preview-titlebar {
+  display: grid;
+  grid-template-rows: auto auto;
+  position: relative;
+}
+
+.run-battle-preview-titlebar > .run-battle-preview-titlebar-fill {
+  inset: 0;
+}
+
+.run-battle-preview-titlebar > :not(.run-battle-preview-titlebar-fill) {
+  position: relative;
+  z-index: 1;
+}
+
+/* Divider host contract (see `.kit-divider`): the host states how far the rule bleeds out of its
+   content box so the authored T caps tee INTO the side rails. This host's rails are the inner
+   box's, so the reach is that rail's width — the same declaration `.house-select-menu-options`
+   makes. The bleed must not be clipped, or the caps land inside the frame. */
+.run-battle-preview-titlebar > .run-battle-preview-titlebar-rule {
+  --kit-divider-gap: 0px;
+  --kit-divider-reach: var(--le-chrome-inner-rail-w, 7px);
+}
+
+.run-battle-preview-titlebar-head {
+  align-items: center;
+  display: flex;
+  padding: var(--ds-space-1) var(--ds-space-2);
+}
+
+/* The box's own name is the largest thing in it. Section headers govern the rows beneath them,
+   and rows outrank their labels: title > section header > value > label, with no step skipped
+   and none inverted. */
+.run-battle-preview-titlebar-head > h2 {
+  font-size: var(--ds-text-xl);
+  margin: 0;
+}
+
+/* The pane FILLS the frame it is given: no nested fixed-aspect seat, so no surplus of the frame
+   is left over to be painted as a band across the art (ADR-0201/ADR-0278). */
+.run-battle-preview-board-view {
+  aspect-ratio: auto;
   block-size: 100%;
   min-block-size: 0;
   min-inline-size: 0;
@@ -19425,28 +19467,115 @@ button.tileset-relationship-cell {
   cursor: default;
 }
 
+/* The readout takes the height its facts need; the note below it absorbs the remainder, so the
+   column still bottoms out level with the board without leaving dead space inside the readout. */
 .run-battle-preview-intelligence {
   display: grid;
   gap: var(--ds-inline);
   grid-area: intelligence;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
   min-block-size: 0;
   min-inline-size: 0;
 }
 
-.run-battle-preview-intelligence .ce-level-info {
-  grid-template-columns: minmax(0, 1fr);
+/* The readout was borrowed from a narrow editor tab and kept that tab's compact type. Here it
+   owns a full column, so every level of it steps up and the sections spread into the height they
+   are given instead of huddling at the top over dead space. */
+/* Two shared tracks: the label column is ONE width for every labelled row, so BATTLE, RULES and
+   TIME start their values on the same line instead of each row justifying to its own label. */
+/* No box padding: the title strip is flush to the frame like the board's. The inset moves to the
+   rows underneath it. */
+.run-battle-preview-info.ce-level-info {
+  align-content: start;
+  block-size: auto;
+  grid-template-columns: auto minmax(0, 1fr);
+  overflow: auto;
+  padding: 0 0 var(--ds-inset);
+  row-gap: var(--ds-stack);
 }
 
+.run-battle-preview-info > .run-battle-preview-titlebar {
+  grid-column: 1 / -1;
+  margin-block-end: calc(var(--ds-stack) * -1 + var(--ds-inset));
+}
+
+.run-battle-preview-info > section {
+  padding-inline: var(--ds-inset);
+}
+
+.run-battle-preview-info .ce-li-zones-row {
+  grid-template-columns: subgrid;
+}
+
+.run-battle-preview-info :is(.ce-li-board, .ce-li-forces) {
+  grid-column: 1 / -1;
+}
+
+.run-battle-preview-info .ce-level-info-section,
+.run-battle-preview-info section {
+  gap: var(--ds-space-2);
+}
+
+/* Row labels are the bottom of the scale. */
+.run-battle-preview-info .ce-li-title {
+  font-size: var(--ds-text-sm);
+  letter-spacing: .06em;
+}
+
+/* A section header governs the rows under it, so it reads LARGER than they do — the borrowed
+   compact scale had it smaller, which is why it did not read as a header at all. It stays a step
+   under the box's own title, which is the largest thing in the box. */
+.run-battle-preview-info :is(.ce-li-board, .ce-li-forces) > .ce-li-title {
+  color: var(--ce-ink);
+  font-size: var(--ds-text-lg);
+  letter-spacing: .04em;
+}
+
+.run-battle-preview-info :is(.ce-li-stat span, .ce-li-roster li span, .ce-li-roster-head span) {
+  font-size: var(--ds-text-md);
+}
+
+.run-battle-preview-info :is(.ce-li-stat strong, .ce-li-roster li b, .ce-li-zones) {
+  font-size: var(--ds-text-md);
+}
+
+.run-battle-preview-info .ce-li-roster-head strong {
+  font-size: var(--ds-text-lg);
+}
+
+.run-battle-preview-info .ce-li-rosters {
+  gap: var(--ds-stack);
+}
+
+.run-battle-preview-info .ce-li-roster ul {
+  gap: var(--ds-space-1);
+}
+
+/* "none" is a roster entry, so it reads at the same size as the entries it stands in for. */
+.run-battle-preview-info .ce-li-none {
+  font-size: var(--ds-text-md);
+}
+
+.ce-li-dealt {
+  color: var(--ce-muted);
+  font-size: var(--ds-text-sm);
+  margin: var(--ds-space-2) 0 0;
+}
+
+/* Same shape as the readout: the title strip is flush to the frame, the prose is inset. */
 .run-battle-preview-note {
+  align-content: start;
   display: grid;
   gap: var(--ds-space-2);
-  padding: var(--ds-inset);
+  min-block-size: 0;
+  overflow: auto;
+  padding: 0 0 var(--ds-inset);
 }
 
 .run-battle-preview-note p {
   color: var(--skirmish-muted);
-  font-size: var(--ds-text-sm);
+  font-size: var(--ds-text-md);
+  padding-inline: var(--ds-inset);
 }
 
 @media (max-width: 900px) {
@@ -19465,15 +19594,16 @@ button.tileset-relationship-cell {
   .run-battle-preview-layout {
     align-self: start;
     grid-template-areas:
-      "head"
       "board"
       "intelligence";
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto auto;
+    grid-template-rows: auto auto;
   }
 
-  .run-battle-preview-board-frame {
+  /* Stacked, nothing constrains the board's height, so it takes the canonical shape. */
+  .run-battle-preview-board-view {
     aspect-ratio: var(--board-view-aspect);
+    block-size: auto;
   }
 
   .run-battle-preview-intelligence {

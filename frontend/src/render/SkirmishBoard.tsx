@@ -58,6 +58,7 @@ import {
   boardVisualFeatures,
   boardVisualTerrainCells,
   isPredrawnBackgroundActive,
+  normalizeCameraZoomIn,
   mirrorFacingPlan,
   mirrorSurfacesForPlacements,
   isVersionedPredrawnBoardSurface,
@@ -1752,6 +1753,7 @@ export function SkirmishBoard({
   const cameraResetRevision = useSkirmishView((s) => s.cameraResetRevision);
   const setZoom = useSkirmishView((s) => s.setZoom);
   const setMinZoom = useSkirmishView((s) => s.setMinZoom);
+  const setAuthoredZoomIn = useSkirmishView((s) => s.setAuthoredZoomIn);
   const setBoardPan = useSkirmishView((s) => s.setPan);
   const setOpeningView = useSkirmishView((s) => s.setOpeningView);
   const [viewViewportSize, setViewViewportSize] = useState<ViewPaneViewportSize | null>(null);
@@ -1913,6 +1915,10 @@ export function SkirmishBoard({
     () => predrawnPlate ? predrawnBoardCoverPolygon(predrawnPlate, board.cells) : undefined,
     [board.cells, predrawnPlate],
   );
+  // The level speaks for its own zoom-in limit; absent one, the automatic ceiling stands.
+  useEffect(() => {
+    setAuthoredZoomIn(normalizeCameraZoomIn(exactBoard?.cameraZoomIn) ?? null);
+  }, [exactBoard?.cameraZoomIn, setAuthoredZoomIn]);
   const cameraCoverPolygon = useMemo(
     () => effectiveBoardCameraCoverPolygon(
       exactBoard ?? { cols: game.size.cols, rows: game.size.rows },

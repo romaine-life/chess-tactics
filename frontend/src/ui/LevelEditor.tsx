@@ -4,7 +4,7 @@
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
-import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, cameraToContainBounds, defaultBoardCameraBounds, defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, MAX_FLOATING_ARTWORK_PIXEL, mergeSharedLevel, normalizeBoardCameraBounds, predrawnEnvironmentGeometryFingerprintInputV2, predrawnRenderSurface, predrawnVisualFootprintClipStyleForCell, resolvedBoardCameraBounds, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, worldViewportForCamera, type BoardBackgroundMode, type BoardCameraBounds, type BoardCameraSnapMode, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
+import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, cameraToContainBounds, defaultBoardCameraBounds, defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, MAX_FLOATING_ARTWORK_PIXEL, mergeSharedLevel, MAXIMUM_AUTHORED_CAMERA_ZOOM_IN, normalizeBoardCameraBounds, normalizeCameraZoomIn, predrawnEnvironmentGeometryFingerprintInputV2, predrawnRenderSurface, predrawnVisualFootprintClipStyleForCell, resolvedBoardCameraBounds, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, worldViewportForCamera, type BoardBackgroundMode, type BoardCameraBounds, type BoardCameraSnapMode, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
 import { boardLabCellPosition, boardLabMetrics, immutableBoardLabTerrainSrc } from '../render/BoardLabBoard';
 import { projectBoardPoint, unprojectBoardPoint, type BoardForest, type BoardForestSection, type BoardForestTree, type BoardTown, type BoardTownSection } from '@chess-tactics/board-render';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
@@ -3949,6 +3949,59 @@ export function LevelEditor(): ReactElement {
     applyEditorBoardWithSelectionSafety(normalized);
     if (selection !== undefined) setSelectedCell(selection);
     return true;
+  };
+  const authoredCameraZoomIn = normalizeCameraZoomIn(currentEditorBoard.cameraZoomIn);
+  const commitCameraZoomIn = (zoom: number | undefined): void => {
+    if (!editorSessionCanWrite) {
+      reportStatus(
+        'Camera zoom limit is read-only.',
+        'warning',
+        'Reload an owner editing page to reconnect live sync.',
+      );
+      return;
+    }
+    const current = currentEditorBoardRef.current;
+    const cameraZoomIn = normalizeCameraZoomIn(zoom);
+    if (commitEditorBoard({ ...cloneEditorBoard(current), cameraZoomIn })) {
+      reportStatus(
+        cameraZoomIn ? `Zoom-in limit set to ${cameraZoomIn}×.` : 'Zoom-in limit back to automatic.',
+        'success',
+        cameraZoomIn
+          ? 'Play lets a player zoom in this far on this level and no further.'
+          : 'Play derives the limit from this level’s own zoom floor again.',
+      );
+    }
+  };
+  /**
+   * Whether the whole camera boundary is currently on screen.
+   *
+   * A boundary larger than the canvas draws entirely outside it, handles and all, which looks
+   * exactly like no boundary at all. The panel says so, and offers the way back.
+   */
+  const cameraBoundaryVisibility = ((): 'unknown' | 'visible' | 'off-screen' => {
+    if (!viewViewportSize) return 'unknown';
+    const seen = worldViewportForCamera({
+      viewport: viewViewportSize,
+      camera: { zoom: viewZoom, pan: viewPan },
+    });
+    const box = resolvedCameraBoundary;
+    return seen.minX <= box.minX
+      && seen.minY <= box.minY
+      && seen.minX + seen.width >= box.minX + box.width
+      && seen.minY + seen.height >= box.minY + box.height
+      ? 'visible'
+      : 'off-screen';
+  })();
+  const showCameraBoundary = (): void => frameCameraBoundary(resolvedCameraBoundary);
+  /** Author the limit by SHOWING it: zoom the canvas to the tightest a player should get. */
+  const setCameraZoomInFromView = (): void => {
+    commitCameraZoomIn(viewZoom);
+  };
+  /** And read it back the same way, so a stated limit is always something you can look at. */
+  const showCameraZoomIn = (): void => {
+    if (!authoredCameraZoomIn) return;
+    markBoardViewInteraction();
+    setViewZoom(Math.min(viewMaxZoom, Math.max(viewMinZoom, authoredCameraZoomIn)));
   };
   const commitCameraBoundary = (bounds: BoardCameraBounds): void => {
     if (!editorSessionCanWrite) {
@@ -9384,7 +9437,12 @@ export function LevelEditor(): ReactElement {
               maxZoom={viewMaxZoom}
               onZoomChange={setViewZoom}
               onPanChange={setViewPan}
-              coverPolygon={predrawnCoverPolygon}
+              // No coverage clamp here. Play must never show past the environment art, but the
+              // editor is where that art's extent is DECIDED — against the camera boundary, the
+              // grid placement and the artwork's own edges. Clamping to coverage made all of those
+              // unreachable: on a level whose boundary is larger than its art, every edge and
+              // corner handle of the boundary sits outside the canvas at every zoom the clamp
+              // permits, so the box could be neither seen nor grabbed.
               onMinimumZoomChange={setViewMinZoom}
               onViewportSizeChange={setViewViewportSize}
               onViewInteraction={markBoardViewInteraction}
@@ -10421,6 +10479,26 @@ export function LevelEditor(): ReactElement {
                 <dd>{Math.round(resolvedCameraBoundary.width)} × {Math.round(resolvedCameraBoundary.height)} world px</dd>
               </div>
             </dl>
+            <div className="skirmish-view-row">
+              <ChromeButton
+                unit="inner-text-button"
+                className={chromeUnitClassNames(
+                  'inner-text-button',
+                  'le-seg-btn',
+                  cameraBoundaryVisibility === 'off-screen' && 'active',
+                )}
+                onClick={showCameraBoundary}
+                disabled={!viewViewportSize}
+                title="Move the canvas until the whole boundary and all its handles are on screen."
+              >Show boundary</ChromeButton>
+              <span className="le-board-note" data-testid="le-camera-boundary-visibility">
+                {cameraBoundaryVisibility === 'off-screen'
+                  ? 'Extends past this view — nothing to grab until you show it.'
+                  : cameraBoundaryVisibility === 'visible'
+                    ? 'Fully on screen.'
+                    : 'Measuring the canvas…'}
+              </span>
+            </div>
             {!editorSessionCanWrite ? (
               <p className="le-board-note">Edit is unavailable until this session owns the editor lease.</p>
             ) : cameraBoundaryInteractionMode === 'view' ? (
@@ -10428,6 +10506,44 @@ export function LevelEditor(): ReactElement {
             ) : (
               <p className="le-board-note">Drag anywhere inside the box to move it, or drag an edge or corner handle to resize it. Arrow keys move the focused control by 4 world pixels; hold Shift for 24.</p>
             )}
+          </section>
+          <section className="skirmish-card skirmish-view-card" aria-label="Camera zoom-in limit" data-testid="le-camera-zoom-in">
+            <h2>Zoom in limit</h2>
+            <p className="le-board-note">
+              How far a player may zoom in here. Automatic only knows this level’s zoom floor — it
+              cannot tell how much detail the artwork actually holds, so state it yourself.
+            </p>
+            <div className="skirmish-view-row">
+              <ChromeButton
+                unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                onClick={setCameraZoomInFromView}
+                disabled={!editorSessionCanWrite}
+                title="Make the canvas as close as a player should ever get, then capture exactly that."
+              >Set from view</ChromeButton>
+              <ChromeButton
+                unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                onClick={showCameraZoomIn}
+                disabled={!authoredCameraZoomIn}
+                title="Move the canvas to the stated limit so you can see what a player would see."
+              >Show limit</ChromeButton>
+            </div>
+            <p className="le-board-note">
+              Zoom the canvas to the closest a player should get, then Set from view. Show limit
+              puts you back on it. The slider is only for nudging afterwards.
+            </p>
+            <SliderRow
+              label={authoredCameraZoomIn ? `Limit · ${authoredCameraZoomIn.toFixed(2)}×` : 'Limit · automatic'}
+              value={authoredCameraZoomIn ?? 0}
+              set={(value) => commitCameraZoomIn(value > 0 ? value : undefined)}
+              min={0}
+              max={MAXIMUM_AUTHORED_CAMERA_ZOOM_IN}
+              step={0.05}
+              nudge={0.25}
+              dflt={0}
+            />
+            <p className="le-board-note">Zero is automatic. The level’s zoom floor always wins over a limit set below it.</p>
           </section>
           <section className="skirmish-card skirmish-view-card" aria-label="Set camera boundary from current view">
             <h2>Current view</h2>

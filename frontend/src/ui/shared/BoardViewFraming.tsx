@@ -230,6 +230,8 @@ export function FramedReadOnlyBoardView({
   baseMinZoom = BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM,
   maxZoom = 2,
   emphasisZoom,
+  viewportMode = 'canonical',
+  showGrid = false,
   onTerrainFirstFrame,
   onSceneFirstFrame,
   onFrameError,
@@ -241,6 +243,15 @@ export function FramedReadOnlyBoardView({
   maxZoom?: number;
   /** Optional focused-review enlargement; it never weakens the accepted-art floor. */
   emphasisZoom?: number;
+  /**
+   * `canonical` seats the shared 4:3 preview window (ADR-0192/ADR-0259). `fill` gives the camera
+   * the caller's own frame, for a surface whose visible frame IS the viewport (ADR-0201/ADR-0278)
+   * — measurement, clip, coverage and input then all use that one rectangle, so no surplus of the
+   * frame is left over to be painted as a band across the art.
+   */
+  viewportMode?: 'canonical' | 'fill';
+  /** Draw the playable grid over the board. */
+  showGrid?: boolean;
   onTerrainFirstFrame?: () => void;
   onSceneFirstFrame?: () => void;
   onFrameError?: (error: unknown) => void;
@@ -282,6 +293,7 @@ export function FramedReadOnlyBoardView({
       onMinimumZoomChange={setMinimumZoom}
       onViewportSizeChange={setViewport}
       onViewInteraction={markViewInteraction}
+      boardViewportMode={viewportMode}
     >
       <div className="tileset-view-board-content is-board">
         <StudioReadOnlyBoard
@@ -289,6 +301,7 @@ export function FramedReadOnlyBoardView({
           boardZoom={zoom}
           boardPan={pan}
           ariaLabel={ariaLabel}
+          showGrid={showGrid}
           onTerrainFirstFrame={onTerrainFirstFrame}
           onSceneFirstFrame={onSceneFirstFrame}
           onFrameError={onFrameError}

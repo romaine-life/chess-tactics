@@ -3323,6 +3323,20 @@ export function buyPaidLipsanon(run: RunDocument): RunDocument {
   });
 }
 
+/**
+ * The Battle a Sectio leads INTO. `battleIndex` still names the Battle just fought while the
+ * Sectio is open — `leaveSectio` is what advances it — so any surface that reports the upcoming
+ * Battle from the Sectio must ask here rather than reading `battleIndex` directly. A Sectio only
+ * exists when a Battle follows it (winning the final Battle ends the War instead), so the clamp
+ * guards a repaired document rather than an expected branch.
+ */
+export function sectioUpcomingBattleIndex(run: RunDocument): number {
+  return Math.min(
+    (run.sectio?.afterBattleIndex ?? run.battleIndex) + 1,
+    run.war.battles.length - 1,
+  );
+}
+
 export function leaveSectio(run: RunDocument): RunDocument {
   if (!canLeaveSectio(run) || !run.sectio) return run;
   const endedConflict = run.war.battles[run.sectio.afterBattleIndex]?.loot === true;

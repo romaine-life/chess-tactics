@@ -50,6 +50,19 @@ export function minimumBoardCameraBounds(board: BoardDimensions): BoardCameraBou
   return centeredPlayableBoardFramingBounds(board, BOARD_PREVIEW_MARGIN_RATIO);
 }
 
+/** Widest zoom-in an author may state. Past this a board is a few pixels wide on any screen. */
+export const MAXIMUM_AUTHORED_CAMERA_ZOOM_IN = 16;
+
+/**
+ * Coerce a persisted authored zoom-in limit. Anything unusable — absent, non-finite, zero or
+ * negative — means "no authored limit", which leaves the automatic ceiling in charge.
+ */
+export function normalizeCameraZoomIn(value: unknown): number | undefined {
+  const zoom = Number(value);
+  if (!Number.isFinite(zoom) || zoom <= 0) return undefined;
+  return Math.min(MAXIMUM_AUTHORED_CAMERA_ZOOM_IN, Math.round(zoom * 1000) / 1000);
+}
+
 /**
  * Coerce persisted/custom bounds to finite geometry that still contains the complete opening
  * frame. This keeps Reset and the coverage constraint compatible even after a board resize.

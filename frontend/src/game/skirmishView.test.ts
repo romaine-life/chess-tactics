@@ -29,10 +29,19 @@ describe('skirmish dynamic zoom floor', () => {
 
     viewStore.getState().setMinZoom(1.8);
     expect(viewStore.getState().zoom).toBe(1.8);
-    expect(viewStore.getState().maxZoom).toBe(1.8);
+    // A floor above the absolute cap must still leave the player somewhere to go. This used to
+    // collapse to 1.8 — floor and ceiling identical, so the board could not be zoomed at all.
+    expect(viewStore.getState().maxZoom).toBeCloseTo(2.61, 5);
 
     viewStore.getState().resetView();
     expect(viewStore.getState().zoom).toBe(1.8);
+  });
+
+  it('keeps the ordinary cap for every level whose floor still sits under it', () => {
+    viewStore.getState().setMinZoom(1.44);
+    expect(viewStore.getState().maxZoom).toBe(1.45);
+    viewStore.getState().setMinZoom(0.4);
+    expect(viewStore.getState().maxZoom).toBe(1.45);
   });
 
   it('preserves an accepted-art floor between human-facing control increments', () => {

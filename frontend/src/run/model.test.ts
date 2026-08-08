@@ -39,6 +39,7 @@ import {
   runCardRarity,
   runCardRarityForRoll,
   runSectioCardMaxValue,
+  sectioUpcomingBattleIndex,
   sectioCardOffersAtCursor,
   sectioCardPile,
   sectioPileRarityQuota,
@@ -345,6 +346,22 @@ describe('plain Run creation and acquisition', () => {
     expect(second.sectio!.cardOffers.map((offer) => offer.id)).toEqual(
       sectioCardOffersAtCursor(second.seed, 1, 3, 3).map((offer) => offer.id),
     );
+  });
+
+  it('names the Battle the Sectio leads into, not the one it followed', () => {
+    // battleIndex still points at the Battle just fought while the Sectio is open, so a screen
+    // reading it directly previews the LAST map. leaveSectio is what advances it.
+    const first = firstSectio(43);
+    expect(first.battleIndex).toBe(0);
+    expect(sectioUpcomingBattleIndex(first)).toBe(1);
+    expect(leaveSectio(first).battleIndex).toBe(1);
+
+    const second = openSectio(
+      { ...leaveSectio(first), phase: 'battle' },
+      first.army.map((unit) => unit.id),
+    );
+    expect(second.battleIndex).toBe(1);
+    expect(sectioUpcomingBattleIndex(second)).toBe(2);
   });
 
   it('preserves the authored unit order when a formation is acquired', () => {
