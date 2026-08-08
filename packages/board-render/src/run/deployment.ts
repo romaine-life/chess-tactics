@@ -933,20 +933,18 @@ export function levelWithRunDeployment(run: RunDocument, level: Level, layout: R
   };
 }
 
+/** The battlefield a player arranges against, which is the authored one. A level's enemy force
+ * stands where the level placed it and does not move between Deployment and Battle, so hiding it
+ * only asked the player to choose squares against an empty board. The one enemy Deployment still
+ * withholds is a randomized setup deal, which the frontend adapter drops because its cells are
+ * chosen around whatever squares are already taken and can still shift while cards are placed. */
 export function levelForRunDeployment(
   run: RunDocument,
   level: Level,
   layout: RunDeploymentLayout,
   _includeAutomaticFormation = false,
 ): Level {
-  const projected = levelWithRunDeployment(run, level, layout);
-  return {
-    ...projected,
-    layers: {
-      ...projected.layers,
-      units: projected.layers.units.filter((unit) => unit.side !== 'enemy'),
-    },
-  };
+  return levelWithRunDeployment(run, level, layout);
 }
 
 export function normalReservistCell(

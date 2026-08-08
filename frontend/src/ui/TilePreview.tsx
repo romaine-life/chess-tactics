@@ -383,7 +383,8 @@ const readTilesetStudioRoute = (): TilesetStudioRouteState => {
     selectedSfxReviewId: sfxReview && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sfxReview)
       ? sfxReview
       : undefined,
-    selectedRunCardPromptId: cardPrompt && /^[pkbrq]+$/.test(cardPrompt) ? cardPrompt : undefined,
+    // Roster ids (`ppkb`) and family ids (`00102021-ppkb`) both address a card prompt.
+    selectedRunCardPromptId: cardPrompt && /^(?:[0-9]+-)?[pkbrq]+$/.test(cardPrompt) ? cardPrompt : undefined,
     solverTab: stab === 'run' ? 'run' : stab === 'help' ? 'help' : stab === 'glossary' ? 'glossary' : stab === 'step' ? 'step' : undefined,
     selectedTileSideId: side || undefined,
     selectedFrameName: frame || undefined,
