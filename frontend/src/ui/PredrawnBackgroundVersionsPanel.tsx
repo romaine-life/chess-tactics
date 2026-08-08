@@ -424,7 +424,7 @@ export function PredrawnBackgroundVersionsPanel({
   canonicalBackgroundMode?: BoardBackgroundMode;
   canonicalSurface?: VersionedPredrawnBoardSurface;
   canonicalActionLabel: 'Save' | 'Publish';
-  workingCopySyncState: 'loading' | 'local' | 'pending' | 'saving' | 'saved' | 'error' | 'conflict';
+  workingCopySyncState: 'loading' | 'local' | 'pending' | 'saving' | 'saved' | 'error' | 'conflict' | 'signed-out';
   canWrite: boolean;
   getEditFence: () => EditorDocumentEditFence | null;
   onSetSurface: (surface: VersionedPredrawnBoardSurface) => void;
@@ -881,9 +881,11 @@ export function PredrawnBackgroundVersionsPanel({
       ? 'Wait for the working copy to load before discarding this mask.'
       : workingCopySyncState === 'pending' || workingCopySyncState === 'saving'
         ? 'Wait for cloud autosave to finish before discarding this mask.'
-        : workingCopySyncState === 'error' || workingCopySyncState === 'conflict'
-          ? 'Resolve the cloud autosave interruption before discarding this mask.'
-          : 'Wait for the working copy to sync before discarding this mask.';
+        : workingCopySyncState === 'signed-out'
+          ? 'Sign in again before discarding this mask; cloud autosave is paused.'
+          : workingCopySyncState === 'error' || workingCopySyncState === 'conflict'
+            ? 'Resolve the cloud autosave interruption before discarding this mask.'
+            : 'Wait for the working copy to sync before discarding this mask.';
   const occlusionDiscardDisabledReasonFor = (
     attempt: PredrawnCreationAttemptModel | undefined,
     artifact: PredrawnBoardArtifact | undefined,
@@ -2307,9 +2309,11 @@ export function PredrawnBackgroundVersionsPanel({
     ? 'Cloud working copy synced'
     : workingCopySyncState === 'pending' || workingCopySyncState === 'saving'
       ? 'Cloud autosave pending'
-      : workingCopySyncState === 'error' || workingCopySyncState === 'conflict'
-        ? 'Cloud autosave blocked'
-        : 'This tab only';
+      : workingCopySyncState === 'signed-out'
+        ? 'Signed out · autosave paused'
+        : workingCopySyncState === 'error' || workingCopySyncState === 'conflict'
+          ? 'Cloud autosave blocked'
+          : 'This tab only';
   const moveHighlightEditorPortal = moveHighlightEditorArtifact
     && moveHighlightEditorAttempt?.processing ? (
         <PredrawnMoveHighlightEditor
@@ -2868,9 +2872,11 @@ export function PredrawnBackgroundVersionsPanel({
                       ? 'Set · cloud synced'
                       : workingCopySyncState === 'pending' || workingCopySyncState === 'saving'
                         ? 'Set · autosave pending'
-                        : workingCopySyncState === 'error' || workingCopySyncState === 'conflict'
-                          ? 'Set · autosave blocked'
-                          : 'Set in this tab'
+                        : workingCopySyncState === 'signed-out'
+                          ? 'Set · signed out'
+                          : workingCopySyncState === 'error' || workingCopySyncState === 'conflict'
+                            ? 'Set · autosave blocked'
+                            : 'Set in this tab'
                     : 'Set this board version'}
                 </ChromeButton>
               ) : null}

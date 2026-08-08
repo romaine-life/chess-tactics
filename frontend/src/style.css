@@ -24422,6 +24422,33 @@ button.tileset-relationship-cell {
   font-size: 10px;
 }
 
+/* Persistence notices stack instead of overlapping: a browser-recovery offer and an interrupted
+   autosave can be true at the same time, and each needs its own actions. */
+.le-persistence-stack {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  left: 50%;
+  max-width: calc(100% - 24px);
+  position: absolute;
+  top: 12px;
+  transform: translateX(-50%);
+  width: max-content;
+  z-index: 100;
+}
+
+.le-persistence-stack:empty {
+  display: none;
+}
+
+.le-persistence-stack .le-persistence-emergency {
+  left: auto;
+  position: static;
+  top: auto;
+  transform: none;
+  width: 100%;
+}
+
 .le-persistence-emergency {
   align-items: center;
   background: rgba(42, 13, 18, 0.97);
@@ -24470,6 +24497,10 @@ button.tileset-relationship-cell {
 }
 
 @media (max-width: 760px) {
+  .le-persistence-stack {
+    width: calc(100% - 24px);
+  }
+
   .le-persistence-emergency {
     align-items: stretch;
     display: grid;
