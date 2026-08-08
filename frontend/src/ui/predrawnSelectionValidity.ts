@@ -1,7 +1,9 @@
 import {
+  isVersionedPredrawnBoardSurface,
   normalizePredrawnMoveHighlightProfile,
   predrawnEnvironmentGeometryFingerprintInputV2,
   type EditorBoard,
+  type PredrawnBoardSurface,
   type VersionedPredrawnBoardSurface,
 } from '@chess-tactics/board-render';
 import type { PredrawnBackgroundVersion } from '../net/predrawnBackgroundVersions';
@@ -56,14 +58,49 @@ export type PredrawnSelectionReadFailure = {
   message: string;
 };
 
+/**
+ * An installed board plate: the pre-pipeline selection, a live-media slot plus its own frame size
+ * and hand registration.
+ *
+ * It is a SETTLED state, and a drawable one. There is no version list to ask about, because a plate
+ * has no pipeline lineage — it is complete in the board code that names it, and the renderer resolves
+ * it straight from the media catalog. Treating "not a versioned selection" as `missing` said a level
+ * holding artwork held none, and hid a plate that serves perfectly (ADR-0527).
+ */
+export type PredrawnSelectionPlate = { kind: 'plate' };
+
 /** Every state the editor can hold for its remembered selection, settled or not. */
 export type PredrawnSelectionCheck =
   | PredrawnSelectionValidity
+  | PredrawnSelectionPlate
   | { kind: 'checking' }
   // The check could not be ATTEMPTED — distinct from a read that was attempted and failed, because
   // this one clears when its missing input arrives rather than by asking the server again.
   | { kind: 'error'; message: string }
   | PredrawnSelectionReadFailure;
+
+/**
+ * The state a board's own surface settles into before any server read.
+ *
+ * Every place that re-seeds the check — mount, document load, commit, undo, redo — must ask this
+ * one question, so a plate can never be re-seeded as `missing` by one path that forgot about it.
+ */
+export function predrawnSelectionSeed(
+  surface: PredrawnBoardSurface | undefined,
+): PredrawnSelectionCheck {
+  if (!surface) return { kind: 'missing' };
+  return isVersionedPredrawnBoardSurface(surface) ? { kind: 'checking' } : { kind: 'plate' };
+}
+
+/**
+ * Whether the remembered selection has been proven enough to PAINT.
+ *
+ * Fail-closed still governs versioned artwork: only a `valid` lineage draws. A plate is proven by
+ * being one, so it is the one settled state that needs no list.
+ */
+export function predrawnSelectionIsDrawable(check: PredrawnSelectionCheck): boolean {
+  return check.kind === 'valid' || check.kind === 'plate';
+}
 
 export function predrawnSelectionReadFailure(
   cause: unknown,

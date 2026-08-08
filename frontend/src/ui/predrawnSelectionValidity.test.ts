@@ -4,9 +4,11 @@ import type { PredrawnBackgroundVersion } from '../net/predrawnBackgroundVersion
 import { HttpError } from '../net/http';
 import {
   predrawnEnvironmentGeometryFromVersion,
+  predrawnSelectionIsDrawable,
   predrawnSelectionNeedsRevalidation,
   predrawnSelectionReadFailure,
   predrawnSelectionReadShouldRetry,
+  predrawnSelectionSeed,
   predrawnSelectionValidity,
 } from './predrawnSelectionValidity';
 
@@ -264,5 +266,42 @@ describe('predrawn selection read failures', () => {
     // The check could not be ATTEMPTED. Its missing input arriving re-runs it; asking the server
     // again would not.
     expect(predrawnSelectionReadShouldRetry({ kind: 'error', message: 'no document' })).toBe(false);
+    // A plate has no list to ask about at all.
+    expect(predrawnSelectionReadShouldRetry({ kind: 'plate' })).toBe(false);
+  });
+});
+
+describe('installed board plates', () => {
+  // The bug this exists for: Fortress Gate holds `boards/fortress-gate/plate.png` — a live-media
+  // slot with its own frame size and hand registration, painted before the version pipeline. The
+  // seed treated "not versioned" as "nothing selected", so the plate gate never opened and the
+  // level rendered an empty board with the page backdrop showing through, while the panel said
+  // no artwork was selected at all.
+  const plate = {
+    kind: 'predrawn',
+    slot: 'boards/fortress-gate/plate.png',
+    frameWidth: 1672,
+    frameHeight: 941,
+  } as const;
+
+  it('settles a plate as its own drawable answer instead of a missing selection', () => {
+    expect(predrawnSelectionSeed(plate)).toEqual({ kind: 'plate' });
+    expect(predrawnSelectionIsDrawable(predrawnSelectionSeed(plate))).toBe(true);
+  });
+
+  it('still sends a versioned selection to the server and still reports an absent one', () => {
+    expect(predrawnSelectionSeed(surface())).toEqual({ kind: 'checking' });
+    expect(predrawnSelectionSeed(undefined)).toEqual({ kind: 'missing' });
+  });
+
+  it('paints nothing a versioned selection has not proven', () => {
+    // Fail-closed is untouched for artwork that HAS a lineage: only `valid` draws.
+    expect(predrawnSelectionIsDrawable({ kind: 'checking' })).toBe(false);
+    expect(predrawnSelectionIsDrawable({ kind: 'missing' })).toBe(false);
+    expect(predrawnSelectionIsDrawable({ kind: 'unavailable' })).toBe(false);
+    expect(predrawnSelectionIsDrawable({ kind: 'stale', artifact: {} as never })).toBe(false);
+    expect(predrawnSelectionIsDrawable({ kind: 'error', message: 'no document' })).toBe(false);
+    expect(predrawnSelectionIsDrawable(predrawnSelectionReadFailure(new Error('down'), false))).toBe(false);
+    expect(predrawnSelectionIsDrawable({ kind: 'valid', artifact: {} as never })).toBe(true);
   });
 });
