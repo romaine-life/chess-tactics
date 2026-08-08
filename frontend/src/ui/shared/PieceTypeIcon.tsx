@@ -3,6 +3,7 @@ import {
   paletteForSide,
   pieceSpritePath,
   type PlayablePieceType,
+  type UnitPalette,
 } from '../../core/pieces';
 import { AlphaBoundIcon } from './AlphaBoundIcon';
 
@@ -21,16 +22,24 @@ const CHROME_PIECE_FACING = 'south';
 export function PieceTypeIcon({
   type,
   className = '',
+  palette,
 }: {
   type: PlayablePieceType;
   className?: string;
+  /**
+   * Override the palette. Chrome shows the player their own set by default; a control that offers
+   * a CHOICE of set passes each candidate explicitly, so every option shows the sprite it selects
+   * rather than the one currently in force.
+   */
+  palette?: UnitPalette;
 }): ReactElement {
   return (
     <AlphaBoundIcon
       className={`battlefield-unit-icon utility-piece-icon ${className}`.trim()}
       data-piece-type={type}
+      data-unit-palette={palette ?? paletteForSide('player')}
       data-unit-facing={CHROME_PIECE_FACING}
-      src={pieceSpritePath(type, paletteForSide('player'), CHROME_PIECE_FACING)}
+      src={pieceSpritePath(type, palette ?? paletteForSide('player'), CHROME_PIECE_FACING)}
       draggable={false}
     />
   );
