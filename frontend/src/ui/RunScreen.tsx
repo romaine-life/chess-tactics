@@ -2,6 +2,7 @@ import { Children, useCallback, useEffect, useMemo, useRef, useState, type CSSPr
 import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import type { RunBattleTransformSink, RunBattleUndoAdapter } from '../game/store';
 import { defaultFacingForSide } from '../core/pieces';
+import { gameEnv, royalForkVictim } from '../core/rules';
 import type { GameState, Piece, Vec } from '../core/types';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox } from './shared/ChromeBox';
@@ -41,11 +42,13 @@ import {
   markReservistDeployed,
   observeRunUnitDeath,
   payRunEnPassantBounty,
+  payRunRoyalForkBounty,
   prepareDeployment,
   rerollDeployment,
   resetSectio,
   RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS,
   RUN_BATTLE_RETRY_COST_TENTHS,
+  RUN_ROYAL_FORK_MIN_VICTIM_VALUE,
   RUN_CARD_BY_ID,
   restartBattle,
   runBattleActivityId,
@@ -519,16 +522,21 @@ function ArrangedDeploymentControls({
 
             <div className="skirmish-view-group run-deployment-control">
               <span className="skirmish-eyebrow">Battle</span>
+              {/* The panel's one key that leaves the screen, so it wears its cap like the rest:
+                  Space confirms the arrangement and goes. */}
               <ChromeButton
                 unit="inner-text-button"
                 data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                className={chromeUnitClassNames('inner-text-button', 'app-header-button', canBegin && 'active')}
+                className={chromeUnitClassNames(
+                  'inner-text-button', 'app-header-button', 'run-arrangement-begin', canBegin && 'active',
+                )}
                 style={{ ['--run-leaf-control-index' as string]: 5 } as CSSProperties}
                 data-testid="arrangement-begin-battle"
                 disabled={departing || !canBegin}
                 onClick={onBeginBattle}
               >
-                Begin Battle
+                <kbd className="skirmish-grid-cap">Space</kbd>
+                <span className="skirmish-grid-label">Begin Battle</span>
               </ChromeButton>
               <p className="skirmish-grid-hint">
                 {canBegin
@@ -780,20 +788,25 @@ function useRunDeploymentPresentation({
       setHeldArrangementAnchor(null);
     }
   }, [departureActive, prepared.id, replace, selectedCardId]);
+  // Space is Begin Battle, and it runs the same guard the button's `disabled` runs: His Grace on
+  // the board, on a Run still in Deployment. Reading the LATEST run rather than the render's copy
+  // is what lets the key stay bound for the whole stage — see useFormationKeys on why swallowing
+  // Space matters more here than leaving it to whichever board square last took focus.
+  const startArrangedBattle = useCallback(() => {
+    if (departureActive) return;
+    const latest = useActiveRun.getState().run;
+    if (latest?.id === prepared.id && latest.phase === 'deployment' && arrangedDeploymentCanBegin(latest)) {
+      replace(beginArrangedBattle(latest));
+    }
+  }, [departureActive, prepared.id, replace]);
   // The keys are offered on exactly the terms the rail's turn buttons are, so the two cannot
   // drift apart: a dealt formation admitted and selected, on a screen that is not departing.
   const arranging = stage === 'arrange' && !departureActive;
   useFormationKeys({
     turn: arranging && selectedArrangementCard?.admitted ? turnArrangement : null,
     step: arranging ? stepArrangementCard : null,
+    begin: arranging ? startArrangedBattle : null,
   });
-  const startArrangedBattle = useCallback(() => {
-    if (departureActive) return;
-    const latest = useActiveRun.getState().run;
-    if (latest?.id === prepared.id && latest.phase === 'deployment') {
-      replace(beginArrangedBattle(latest));
-    }
-  }, [departureActive, prepared.id, replace]);
 
   if (run.phase !== 'deployment') return null;
   return {
@@ -1376,6 +1389,24 @@ function RunBattlefieldPanel({
         notices.push(paid.notice);
         changed = true;
       }
+      // The royal fork bounty is the player's alone as well, and it is one piece's work: the
+      // unit that just moved has to strike the enemy King and a Rook or better itself. A
+      // discovered check is two pieces doing that, and pays nothing. Read against the board
+      // as the move committed it — before any Reservist below lands and stands in a ray.
+      const forkEnv = gameEnv(transformed);
+      for (const event of events) {
+        if (event.kind !== 'moved') continue;
+        const mover = transformed.pieces.find((candidate) => candidate.id === event.pieceId);
+        if (mover?.side !== 'player' || !mover.alive) continue;
+        if (!royalForkVictim(mover, transformed.pieces, transformed.size, forkEnv, RUN_ROYAL_FORK_MIN_VICTIM_VALUE)) continue;
+        // Seated on the forking unit's own square: that is what the player just placed, and
+        // where the two lines they are being paid for meet.
+        const paid = payRunRoyalForkBounty(active, { x: mover.x, y: mover.y });
+        if (!paid) continue;
+        active = paid.run;
+        notices.push(paid.notice);
+        changed = true;
+      }
       const observedDeadUnitIds = active.battleRuntime?.observedDeadUnitIds ?? [];
       for (const unit of active.army) {
         const piece = transformed.pieces.find((candidate) => candidate.id === unit.id);
@@ -1848,6 +1879,11 @@ export function RunScreen({
           ) : null,
           hudProps: { enableGlobalShortcuts: false },
           persistentViewportArtwork: persistentSectioScene,
+          // The installed Sectio room is a cover-fitted opaque raster owning the whole viewport
+          // column, so the ordinary world backdrop behind it is never seen — decline it explicitly
+          // rather than letting SkirmishShell's `undefined` opt back in. Phases with no retained
+          // room artwork keep the ordinary backdrop.
+          screenStyle: persistentSectioScene ? null : undefined,
           viewport: {
             className: 'run-phase-workspace',
             primaryClassName: 'run-phase-primary',

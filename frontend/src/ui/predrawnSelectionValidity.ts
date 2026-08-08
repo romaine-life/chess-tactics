@@ -65,7 +65,7 @@ export type PredrawnSelectionReadFailure = {
  * It is a SETTLED state, and a drawable one. There is no version list to ask about, because a plate
  * has no pipeline lineage — it is complete in the board code that names it, and the renderer resolves
  * it straight from the media catalog. Treating "not a versioned selection" as `missing` said a level
- * holding artwork held none, and hid a plate that serves perfectly (ADR-0527).
+ * holding artwork held none, and hid a plate that serves perfectly (ADR-0528).
  */
 export type PredrawnSelectionPlate = { kind: 'plate' };
 

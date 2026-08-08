@@ -861,6 +861,48 @@ export function attacksSquare(piece: Piece, pieces: readonly Piece[], size: Boar
 }
 
 /**
+ * The piece `piece` forks an enemy king with, when it forks one at all.
+ *
+ * A fork is ONE piece striking two things at once, so both prongs are read off the same
+ * piece: an enemy king — which is the check — and an enemy non-king worth at least
+ * `minVictimValue`. A discovered check is deliberately not a fork here; there the king is
+ * attacked by a piece that never moved, and the two attacks are two pieces' work.
+ *
+ * The most valuable qualifying victim is returned, so a strike that catches a queen and a
+ * rook alongside the king reports the queen. `null` when either prong is missing.
+ *
+ * Whether the victim is defended is not asked. A fork is a fork; what it is worth to answer
+ * is the position's business, and reading defenders here would make the same geometry mean
+ * different things on two boards.
+ *
+ * This only reads a board through the same `attacksSquare` geometry check detection uses.
+ * No move generator, adjudication path or position key consults it, so board law is
+ * untouched by anything a caller does with the answer.
+ */
+export function royalForkVictim(
+  piece: Piece,
+  pieces: readonly Piece[],
+  size: BoardSize,
+  env: MoveEnv | undefined,
+  minVictimValue: number,
+): Piece | null {
+  if (!piece || !piece.alive || isObstacle(piece)) return null;
+  let checks = false;
+  let victim: Piece | null = null;
+  for (const target of pieces) {
+    if (!target.alive || !isEnemy(piece, target)) continue;
+    const king = target.type === 'king';
+    // Kings carry a sentinel worth for move ordering, so the value bar is asked of the
+    // other prong only — and only when it could better the victim already found.
+    if (king ? checks : PIECE_VALUE[target.type] < minVictimValue || (victim && PIECE_VALUE[target.type] <= PIECE_VALUE[victim.type])) continue;
+    if (!attacksSquare(piece, pieces, size, env, target.x, target.y)) continue;
+    if (king) checks = true;
+    else victim = target;
+  }
+  return checks ? victim : null;
+}
+
+/**
  * Mark every square `side` threatens into a board-sized bitmap (`y * size.cols + x`),
  * allocation-free. The evaluation's danger map; exported for core/ai.
  */

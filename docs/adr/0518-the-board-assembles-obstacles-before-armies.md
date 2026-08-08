@@ -91,7 +91,13 @@ per-instance.
   many rocks spends longer assembling; the stagger is 55ms, so a heavy board should be re-judged
   by eye rather than assumed.
 - The unreferenced `.skirmish-board-unit` arrival CSS is now doubly stale. Removing it is a
-  separate cleanup and is deliberately not bundled here.
+  separate cleanup and is deliberately not bundled here. **Done in ADR-0527's branch**: the
+  whole family went — the move glide, the arrival drop, the `is-moving`/`is-dragging`/
+  `is-premove-origin` chrome, the unit badge spans, the reduced-motion overrides, and the five
+  keyframes only they used. `.board-unit-seat` stays; it is what the Studio and the labs seat a
+  DOM unit with. A headless capture had been firing during the canvas entrance and writing
+  boards with no pieces on them, and this CSS was the first thing every such investigation
+  found and believed.
 
 ## More Information
 

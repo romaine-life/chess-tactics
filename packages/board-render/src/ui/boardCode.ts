@@ -99,7 +99,7 @@ export type BoardFactionDirections = Partial<Record<UnitPalette, UnitFacing>>;
  *
  * Decoding it is kept anyway, because the document's own older revisions still carry it: restoring
  * one must bring its artwork back rather than a blank board. So anything deciding whether artwork
- * may paint still has to accept it (ADR-0527) — a check that understands only versioned surfaces
+ * may paint still has to accept it (ADR-0528) — a check that understands only versioned surfaces
  * blanks the board of any level holding one.
  */
 export interface LegacyPredrawnBoardSurface {

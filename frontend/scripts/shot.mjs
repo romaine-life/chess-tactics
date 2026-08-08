@@ -23,7 +23,7 @@
 //     [--assert-immediate-local-control]
 //     [--assert-battle-restart-continuity]
 //     [--back-after-click-ms <ms>]
-//     [--full] [--show-scrollbars] [--allow-motion]
+//     [--full] [--show-scrollbars] [--allow-motion] [--allow-arriving-units]
 //
 // Examples:
 //   node scripts/shot.mjs http://127.0.0.1:5199/play/select/skirmish --select '.menu-dest'
@@ -69,6 +69,7 @@ const abortRequestOnce = flag('abort-request-once');
 const abortRequestUntilRetry = flag('abort-request-until-retry');
 const retrySceneError = has('retry-scene-error');
 const allowSceneError = has('allow-scene-error');
+const allowArrivingUnits = has('allow-arriving-units');
 const click = flag('click');
 const clickReady = flag('click-ready');
 const hover = flag('hover');
@@ -90,7 +91,7 @@ const CHROMES = [
   'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
 ];
 const executablePath = CHROMES.find(existsSync);
-if (!url || url.startsWith('--')) { console.error('usage: shot <url> [--select css] [--out path] [--size WxH] [--scale n] [--ready jsExpr] [--timeout ms] [--throttle slow-4g|slow-3g] [--cold|--warm] [--anonymous] [--full] [--allow-motion] [--assert-editor-viewer]'); process.exit(2); }
+if (!url || url.startsWith('--')) { console.error('usage: shot <url> [--select css] [--out path] [--size WxH] [--scale n] [--ready jsExpr] [--timeout ms] [--throttle slow-4g|slow-3g] [--cold|--warm] [--anonymous] [--full] [--allow-motion] [--allow-arriving-units] [--assert-editor-viewer]'); process.exit(2); }
 if (cold && warm) { console.error('--cold and --warm are mutually exclusive'); process.exit(2); }
 if (!executablePath) { console.error('No Chrome/Edge found. Checked:\n' + CHROMES.join('\n')); process.exit(1); }
 mkdirSync(dirname(out), { recursive: true });
@@ -1034,6 +1035,45 @@ try {
       throw error;
     }
   } else await waitForSettledScene.catch(() => {});
+
+  // A settled SCENE is not a composed BOARD. Scene activation is what releases the unit
+  // entrance, so the director reaches `current` at the moment the army starts arriving, not
+  // when it has landed. Terrain, props and chrome are already painted by then, which is why
+  // capturing here produced boards that looked finished and had no pieces on them at all —
+  // the pixels were in the scene canvas, held at the top of their drop.
+  //
+  // The board publishes the exact state: `data-unit-arrivals` is the lifecycle (pending until
+  // activation) and `data-arrival-state` is `none` only when no unit still owns an arrival
+  // plan. Waiting on those is the composition being finished, not a sleep long enough to
+  // usually work. A route with no board has neither attribute and waits for nothing.
+  const boardComposed = `(() => {
+    const board = document.querySelector('[data-arrival-state]');
+    if (!board) return true;
+    if (board.classList.contains('is-board-error')) return true;
+    return board.getAttribute('data-unit-arrivals') !== 'pending'
+      && board.getAttribute('data-arrival-state') === 'none'
+      && !board.classList.contains('is-board-loading');
+  })()`;
+  if (!allowArrivingUnits) {
+    try {
+      await page.waitForFunction(boardComposed, { timeout });
+    } catch (error) {
+      const state = await page.evaluate(() => {
+        const board = document.querySelector('[data-arrival-state]');
+        return board ? {
+          lifecycle: board.getAttribute('data-unit-arrivals'),
+          arrivalState: board.getAttribute('data-arrival-state'),
+          arriving: board.getAttribute('data-arriving-unit-ids'),
+          paintedLayers: board.getAttribute('data-painted-layers'),
+          className: board.className,
+        } : null;
+      }).catch(() => null);
+      console.error(`board units never finished arriving: ${JSON.stringify(state)}`);
+      console.error('capture refused — it would have written a board with no pieces on it.');
+      console.error('pass --allow-arriving-units to capture the entrance deliberately.');
+      throw error;
+    }
+  }
   if (assertMenuAtomic) {
     await page.waitForFunction(
       `(() => {

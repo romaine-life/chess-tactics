@@ -5,7 +5,7 @@ refines:
   - "[ADR-0521](0521-an-unread-artwork-version-list-is-not-a-verdict.md)"
 ---
 
-# ADR-0527: An installed board plate is a selection, not an absence
+# ADR-0528: An installed board plate is a selection, not an absence
 
 ## Context and Problem Statement
 
