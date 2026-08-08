@@ -17,7 +17,7 @@ describe('application settings', () => {
       effectsVolume: 45,
       interfaceSounds: false,
       showBoardGrid: true,
-      boardGridStyle: 'chalk',
+      boardGridStyle: 'ink',
       autoDealDeployment: false,
       playerPalette: 'white',
     });
@@ -42,9 +42,9 @@ describe('application settings', () => {
   it('keeps the board grid on the shipped style unless a known one was chosen', () => {
     // The default is what a player sees before they ever open Settings, and it is the style the
     // game was designed around — an unreadable stored value must not quietly change the game's look.
-    expect(DEFAULT_APP_SETTINGS.boardGridStyle).toBe('chalk');
-    for (const bad of ['neon', '', 'CHALK', 3, null, {}]) {
-      expect(normalizeAppSettings({ boardGridStyle: bad }).boardGridStyle).toBe('chalk');
+    expect(DEFAULT_APP_SETTINGS.boardGridStyle).toBe('ink');
+    for (const bad of ['neon', '', 'INK', 3, null, {}]) {
+      expect(normalizeAppSettings({ boardGridStyle: bad }).boardGridStyle).toBe('ink');
     }
     for (const style of BOARD_GRID_STYLES) {
       expect(normalizeAppSettings({ boardGridStyle: style }).boardGridStyle).toBe(style);

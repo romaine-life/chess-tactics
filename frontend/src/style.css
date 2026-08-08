@@ -15453,18 +15453,19 @@ button.tileset-relationship-cell {
 /* A flat 2D grid: ONE opaque line, no offset companion. An offset second colour under the stroke
    bevels the line and makes it read as a groove carved into the ground; that is a 3D treatment and
    is not wanted here.
-   Two properties carry it. OPAQUE, because a translucent line picks up whatever it sits on and a
-   square then looks different over grass, dirt, stone, and water. LIGHT, because with no bevel the
-   colour alone has to hold up, and a dark line disappears into shadowed terrain and painted
-   artwork — which is the legibility problem this rule exists to solve.
+   OPAQUE, because a translucent line picks up whatever it sits on and a square then looks different
+   over grass, dirt, stone, and water.
+   The fallbacks are `ink`, the shipped style. Keep them in step with DEFAULT_APP_SETTINGS
+   .boardGridStyle: they are what draws with NO attribute present, and a board that boots on one
+   style and settles onto another is the flash this pairing exists to prevent.
    The stroke is non-scaling, so this is a constant screen weight at every zoom. */
 .tileset-board-grid-layer path {
   fill: none;
   filter: var(--board-grid-bevel, none);
-  stroke: var(--board-grid-stroke, #f2e3bd);
+  stroke: var(--board-grid-stroke, #241a10);
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: var(--board-grid-weight, 2.2);
+  stroke-width: var(--board-grid-weight, 2.6);
 }
 
 /* Settings → Gameplay → Grid style. Each style is three INHERITED custom properties rather than a
@@ -15472,7 +15473,7 @@ button.tileset-relationship-cell {
    instead of by specificity or source order. That is what lets the settings picker draw all five
    at once — five swatch elements, each wearing its own attribute, inside a :root already set to
    the player's current pick — which a `:root`-anchored rule set cannot express.
-   The fallbacks above are `chalk`, so a board draws correctly with NO attribute present: during
+   The fallbacks above are `ink`, so a board draws correctly with NO attribute present: during
    boot, before the settings module runs, and in any renderer that never publishes a choice. The
    creator-surface overrides below still state stroke/weight/filter directly at a higher
    specificity than the base rule, so they remain decisively on top of every player choice. */
@@ -15530,8 +15531,8 @@ button.tileset-relationship-cell {
    question at all. Every other creator surface keeps the pin. */
 .board-grid-style-swatch-board .tileset-board-grid-layer path {
   filter: var(--board-grid-bevel, none);
-  stroke: var(--board-grid-stroke, #f2e3bd);
-  stroke-width: var(--board-grid-weight, 2.2);
+  stroke: var(--board-grid-stroke, #241a10);
+  stroke-width: var(--board-grid-weight, 2.6);
 }
 
 /* Settings → Gameplay → Grid style picker. Every style is on screen at once — that is the whole

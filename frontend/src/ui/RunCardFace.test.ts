@@ -74,6 +74,22 @@ describe('formation-only Run card face', () => {
     }
   });
 
+  /**
+   * The Settings board-grid style is a BATTLEFIELD choice. A card is printed matter — its diagram
+   * is drawn at a fixed size in ink that belongs to the card, and it must look the same on every
+   * account whatever grid the player runs. The style ships as three inherited custom properties on
+   * :root, so a card rule that read one would silently join that setting; state the card's own
+   * values literally and this cannot happen by accident.
+   */
+  it('draws its own squares, never the board-grid style setting', () => {
+    const styles = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+    const cardRules = [...styles.matchAll(/(\.run-card-formation[^{}]*)\{([^}]*)\}/g)];
+    expect(cardRules.length).toBeGreaterThan(0);
+    for (const [, selector, body] of cardRules) {
+      expect(`${selector}${body}`).not.toMatch(/--board-grid-|data-board-grid-style/);
+    }
+  });
+
   // Hiding the vacant squares is the whole change. The square itself keeps the exact line and
   // fill it has always had, so a card the player already knows is not repainted underneath them.
   it('leaves the printed square line and fill untouched', () => {
