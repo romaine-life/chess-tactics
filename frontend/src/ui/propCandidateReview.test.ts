@@ -80,11 +80,18 @@ describe('candidate seating', () => {
     return data;
   };
 
-  it('seats the contact at the centre of the lowest painted rows', () => {
-    const seat = seatFromAlpha('k', alpha([[3, 2, 7], [4, 2, 7], [5, 3, 6]]), 8, 8, 6);
+  // A sprite whose bulk leans one way and whose FOOT sits under the other must contact the
+  // ground under its foot. Centring the whole silhouette instead is what leaves a prop looking
+  // shoved off its tile, so the fixture makes the two answers differ: the full silhouette centres
+  // on x=3.5, the bottom rows on x=5.5.
+  it('seats the contact under the lowest painted rows, not under the whole silhouette', () => {
+    const seat = seatFromAlpha('k', alpha([
+      [0, 0, 7], [1, 0, 7], [2, 0, 7], [3, 0, 7],
+      [4, 4, 7], [5, 4, 7], [6, 4, 7], [7, 4, 7],
+    ]), 8, 8, 8);
 
-    expect(seat.anchorY).toBe(5);
-    expect(seat.anchorX).toBe(4);
+    expect(seat.anchorY).toBe(7);
+    expect(seat.anchorX).toBe(6);
   });
 
   it('normalizes the widest row to the installed art width so shape is compared, not size', () => {
