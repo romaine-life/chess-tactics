@@ -217,7 +217,11 @@ for (const required of [
   "document.querySelector<HTMLElement>('[data-run-card-flight-target]')",
   'data-deployment-card-stage={deployment?.stage',
   'data-deployment-stack-card={cardId}',
-  '<RunCardBack mediaUrl={resolvedLiveMediaUrl(RUN_CARD_BACK_SLOT)} />',
+  // The closed card must draw the shared back, and it must be the back the PLAYER chose rather
+  // than a slot literal — otherwise Deployment's stack and Sectio's piles can disagree about what
+  // a face-down card looks like. The hook is the single resolution point (ADR-0521).
+  '<RunCardBack mediaUrl={backMediaUrl} />',
+  'useRunCardBackMediaUrl()',
   '<strong className="run-deployment-card-count"',
   'useSceneEnteredAction(`deployment-deal:',
   '<SceneContinuityPortal contribution={{ kind: \'shared-element\'',

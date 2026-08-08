@@ -20,7 +20,18 @@ describe('application settings', () => {
       boardGridStyle: 'ink',
       autoDealDeployment: false,
       playerPalette: 'white',
+      runCardBack: 'kings-position',
     });
+  });
+
+  it('falls back to the shipped card back when a stored one is no longer offered', () => {
+    // A back that was retired from the offered set, or written by a build that named it something
+    // else, must not survive normalization: its slot has no accepted media, so honouring it would
+    // deal a face-down card with no picture on it.
+    expect(normalizeAppSettings({ runCardBack: 'sovereign-seal' }).runCardBack)
+      .toBe(DEFAULT_APP_SETTINGS.runCardBack);
+    expect(normalizeAppSettings({ runCardBack: 42 }).runCardBack).toBe(DEFAULT_APP_SETTINGS.runCardBack);
+    expect(normalizeAppSettings({ runCardBack: 'arcane-relic' }).runCardBack).toBe('arcane-relic');
   });
 
   it('normalizes invalid settings without changing the installed defaults', () => {

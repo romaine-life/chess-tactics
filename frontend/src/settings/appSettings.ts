@@ -13,6 +13,26 @@ export function isBoardGridStyle(value: unknown): value is BoardGridStyle {
   return typeof value === 'string' && (BOARD_GRID_STYLES as readonly string[]).includes(value);
 }
 
+/**
+ * Which back the Run shows on a face-down card. Every value is a complete opaque 5:7 illustration
+ * that was generated, mounted, and kept; `kings-position` is the one the game ships with. See
+ * `settings/runCardBack.ts`, which owns the live-media slot each one resolves to — this union only
+ * names them.
+ */
+export const RUN_CARD_BACKS = [
+  'kings-position',
+  'fivefold-gambit',
+  'closed-position',
+  'arcane-relic',
+  'crowned-gambit',
+  'register',
+] as const;
+export type RunCardBack = typeof RUN_CARD_BACKS[number];
+
+export function isRunCardBack(value: unknown): value is RunCardBack {
+  return typeof value === 'string' && (RUN_CARD_BACKS as readonly string[]).includes(value);
+}
+
 export const APP_SETTINGS_STORAGE_KEY = 'chess-tactics-settings-v1';
 export const APP_SETTINGS_CHANGE_EVENT = 'chess-tactics:settings-change';
 
@@ -27,6 +47,8 @@ export interface AppSettings {
   autoDealDeployment: boolean;
   /** The color the pieces you command wear. Opponents own every other palette. */
   playerPalette: PlayerPalette;
+  /** The back the Run deals face down. Cosmetic; it conceals every card identity equally. */
+  runCardBack: RunCardBack;
 }
 
 export const DEFAULT_APP_SETTINGS: Readonly<AppSettings> = Object.freeze({
@@ -39,6 +61,7 @@ export const DEFAULT_APP_SETTINGS: Readonly<AppSettings> = Object.freeze({
   boardGridStyle: 'ink',
   autoDealDeployment: false,
   playerPalette: DEFAULT_PLAYER_PALETTE,
+  runCardBack: 'kings-position',
 });
 
 type SettingsUpdate = Partial<AppSettings> | ((current: AppSettings) => AppSettings);
@@ -78,6 +101,11 @@ export function normalizeAppSettings(value: unknown): AppSettings {
     playerPalette: isPlayerPalette(parsed.playerPalette)
       ? parsed.playerPalette
       : DEFAULT_APP_SETTINGS.playerPalette,
+    // A back written by an older build, or one that has since been retired from the offered set,
+    // falls back to the shipped default rather than resolving a slot that no longer has media.
+    runCardBack: isRunCardBack(parsed.runCardBack)
+      ? parsed.runCardBack
+      : DEFAULT_APP_SETTINGS.runCardBack,
   };
 }
 

@@ -22,6 +22,7 @@ import {
   type RunCardVisualRarity,
 } from './runCardRarityFrameLiveMedia';
 import { ChromeButton } from './shared/ChromeButton';
+import { RunCardBackStudy } from './RunCardBackStudy';
 import { StudioCatalogCard } from './studio/StudioCatalogCard';
 
 type RarityStudySpecimen = Readonly<{
@@ -132,8 +133,13 @@ export function RunCardPrototypeViewer({
   header: ReactNode;
   viewerZoom: number;
 }): ReactElement {
-  if (new URLSearchParams(window.location.search).get('rarityStudy') === '1') {
+  const study = new URLSearchParams(window.location.search);
+  if (study.get('rarityStudy') === '1') {
     return <RunCardRarityStudy header={header} viewerZoom={viewerZoom} />;
+  }
+  // The card BACK has no other allowlisted surface to be reviewed on; see RunCardBackStudy.
+  if (study.get('backStudy') === '1') {
+    return <RunCardBackStudy header={header} viewerZoom={viewerZoom} />;
   }
   return (
     <section className="run-card-prototype-workspace" aria-label="Formation card gallery">

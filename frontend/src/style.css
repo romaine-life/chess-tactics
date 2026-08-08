@@ -15603,6 +15603,106 @@ button.tileset-relationship-cell {
   stroke-width: var(--board-grid-weight, 2.6);
 }
 
+/* Settings → Gameplay → Card back picker. Same shape as Grid style above: one large sample plus a
+   dropdown. The card is the whole subject here rather than a crop of one, so unlike the grid
+   preview this box fits the card instead of windowing it — a 5:7 illustration shown whole is what
+   the player is choosing, and cropping it would hide the border and corners the designs differ
+   most in. */
+.run-card-back-picker {
+  display: grid;
+  gap: 8px;
+  inline-size: 100%;
+  justify-items: stretch;
+}
+
+.run-card-back-preview-box {
+  display: block;
+  inline-size: 100%;
+}
+
+.run-card-back-preview {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  padding: 10px;
+}
+
+/* Height-led, because 5:7 is tall: bounding the block size is what keeps the row from growing to
+   the width of the settings column. The card keeps its own aspect ratio from the image. */
+.run-card-back-preview-card {
+  block-size: 210px;
+  inline-size: auto;
+  max-inline-size: 100%;
+}
+
+.run-card-back-select {
+  inline-size: 100%;
+}
+
+.run-card-back-option {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-inline-size: 0;
+}
+
+.run-card-back-chip {
+  block-size: 28px;
+  display: block;
+  flex: 0 0 auto;
+  inline-size: 20px;
+}
+
+.run-card-back-chip img {
+  block-size: 100%;
+  display: block;
+  inline-size: 100%;
+  object-fit: cover;
+}
+
+/* Studio → Card Layout → Card Back study. A comparison surface, so the backs sit on one row at the
+   width they are actually chosen at; the caption lines stack under each rather than running on. */
+.run-card-back-study-grid {
+  align-items: start;
+  display: grid;
+  gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  inline-size: 100%;
+  padding-block: 12px;
+}
+
+.run-card-back-study-specimen {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  margin: 0;
+  text-align: center;
+}
+
+.run-card-back-study-specimen figcaption {
+  display: grid;
+  gap: 4px;
+}
+
+.run-card-back-study-specimen figcaption small {
+  opacity: 0.75;
+}
+
+.run-card-back-study-specimen figcaption small[data-card-back-status] {
+  letter-spacing: 0.08em;
+  opacity: 0.9;
+  text-transform: uppercase;
+}
+
+.run-card-back-study-specimen figcaption small[data-card-back-status='missing'] {
+  color: #ff9a8c;
+}
+
+.run-card-back-study-footnote {
+  max-inline-size: 68ch;
+  opacity: 0.75;
+}
+
 /* Persisted player-camera coverage boundary. Unlike a viewport snapshot, this world-space box is
    stable while zoom and pan vary; Play keeps every possible view inside it. */
 .le-camera-boundary {
