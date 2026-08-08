@@ -306,7 +306,7 @@ Run to that state, and answers with both:
 curl -X POST <url>/api/active-run/craft -H 'content-type: application/json' -d '{
   "phase": "sectio", "battle": 4, "gold": 33.5,
   "army": [{ "type": "rook" }, "knight", "pawn"],
-  "offers": [{ "id": "q" }, { "id": "ppb-protected" }],
+  "offers": [{ "id": "q" }, { "id": "pb-front" }],
   "loot": ["royal-tent"], "lipsana": ["quartermasters-ledger"] }'
 ```
 
@@ -331,7 +331,7 @@ browser and it is minted into its `/run/craft/<id>` address before anything is c
 hand-authored one-off leaves a durable link behind:
 
 ```
-/run?craft=sectio&battle=3&gold=25&army=knight,rook&offers=q,ppb-protected,rr-vertical
+/run?craft=sectio&battle=3&gold=25&army=knight,rook&offers=q,pb-front,rr-vertical
 /run?craft=deployment&battle=2&army=rook,rook,bishop,pawn&gold=12
 /run?craft=battle&battle=4&lipsana=royal-tent
 /run?craft=battle-victory&battle=4&lipsana=royal-tent
@@ -347,8 +347,13 @@ hand-authored one-off leaves a durable link behind:
 - `gold=25` (decimals fine), `army=knight,rook` (the exact non-King army; `add=queen`
   appends instead), `lipsana=<id,id>`.
 - Sectio only: `offers=<card-id>[,<card-id>]`; `loot=<id,id>`; `paid=<id>`. Use exact
-  authored ids such as `p`, `pp`, `ppb-protected`, `bb-diagonal`, and `rr-vertical`.
+  authored ids such as `p`, `pp`, `pb-front`, `kk-horizontal`, and `rr-vertical`.
   Composition shorthand is accepted only when it identifies one formation unambiguously.
+  Craft resolves any authored id, including formations RETIRED from the offer deck
+  (`ppb-protected`, `ppk-protected`, `bb-diagonal` — the diagonal chains, whose squares
+  never touch). That is deliberate: it is how you reproduce a Run that still holds one.
+  Those ids no longer appear in an ordinary draw, so do not use them to demonstrate
+  what the market offers.
 - Aftermath only: `turns=<n>`, `seconds=<n>` and `fallen=<n>` write the Battle report a
   crafted Battle cannot produce on its own — it is placed, not played. `battle=N` is the
   Battle just won; the FINAL Battle has no aftermath (its report is the War victory

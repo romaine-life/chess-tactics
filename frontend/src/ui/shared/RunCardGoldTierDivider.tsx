@@ -1,4 +1,4 @@
-import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
+import { resolvedLiveMediaUrl, type RunCardTier } from '@chess-tactics/board-render';
 import { useEffect, useState, type CSSProperties, type ReactElement } from 'react';
 import {
   fetchAdminLiveMediaCatalog,
@@ -140,19 +140,27 @@ function DividerSlice({ sourceUrl, viewBox }: { sourceUrl: string; viewBox: stri
   );
 }
 
-/** Text-free generated metalwork around the existing live gold-value coin. */
+/** How a band of the card gallery names itself in prose and to a screen reader. */
+export function runCardTierLabel(value: RunCardTier): string {
+  return value === 'starter' ? 'Starter cards' : `${value} gold cards`;
+}
+
+/**
+ * Text-free generated metalwork around the existing live gold-value coin. Every band seats the
+ * same coin; the starter band's is struck blank, because that card carries no price.
+ */
 export function RunCardGoldTierDivider({
   value,
   source,
   coinTuning = RUN_CARD_GOLD_TIER_COIN_DEFAULTS,
 }: {
-  value: number;
+  value: RunCardTier;
   source: RunCardGoldTierDividerSource;
   coinTuning?: RunCardGoldTierCoinTuning;
 }): ReactElement {
   if (source.status === 'error') throw new Error(source.message);
   if (source.status === 'loading') {
-    return <span className="run-card-gold-tier-divider is-loading" aria-label={`${value} gold cards`} />;
+    return <span className="run-card-gold-tier-divider is-loading" aria-label={runCardTierLabel(value)} />;
   }
   const tuningStyle = {
     '--run-card-gold-tier-coin-size': `${coinTuning.size}px`,
