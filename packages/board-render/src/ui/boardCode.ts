@@ -64,6 +64,7 @@ import {
 } from '../render/predrawnMoveHighlight';
 import {
   normalizeBoardCameraBounds,
+  normalizeCameraZoomIn,
   type BoardCameraBounds,
 } from '../render/boardCameraBounds';
 
@@ -296,6 +297,14 @@ export interface EditorBoard {
   rows: number;
   /** Player-camera coverage boundary in board-centred projected world pixels. */
   cameraBounds?: BoardCameraBounds;
+  /**
+   * How far a player may zoom IN on this level. Absent means the automatic ceiling.
+   *
+   * The automatic value can only reason about the level's own zoom floor; it has no knowledge of
+   * how much detail the environment artwork actually holds at this board size. Only the author
+   * knows that, so the author can state it.
+   */
+  cameraZoomIn?: number;
   /** Level-editor/art-handoff presentation only. Extends terrain beyond the tactical bounds;
    * apron cells are never gameplay addresses and never project into Level layers. */
   decorativeApron?: { top: number; right: number; bottom: number; left: number };
@@ -1151,6 +1160,8 @@ export function encodeBoard(b: EditorBoard): string {
     cameraBounds.width,
     cameraBounds.height,
   ];
+  const cameraZoomIn = normalizeCameraZoomIn(b.cameraZoomIn);
+  if (cameraZoomIn !== undefined) wire.czi = cameraZoomIn;
   if (b.decorativeApron && Object.values(b.decorativeApron).some((value) => value > 0)) {
     wire.da = [b.decorativeApron.top, b.decorativeApron.right, b.decorativeApron.bottom, b.decorativeApron.left];
   }
@@ -1464,7 +1475,8 @@ export function decodeBoard(code: string): EditorBoard | null {
       visualTerrainSurfaceKeys(cells, cols, rows, decorativeApron, decodedDecorativeFootprint),
     );
     return {
-      cols, rows, cameraBounds, decorativeApron, backgroundMode, surface, predrawnGenerationFrame,
+      cols, rows, cameraBounds, cameraZoomIn: normalizeCameraZoomIn(w.czi),
+      decorativeApron, backgroundMode, surface, predrawnGenerationFrame,
       predrawnGridDetached: w.pgd === 1 || w.pgd === true,
       predrawnPlateOffset: Array.isArray(w.ppo)
         && w.ppo.length === 2

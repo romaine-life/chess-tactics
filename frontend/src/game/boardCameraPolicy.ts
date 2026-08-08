@@ -23,7 +23,15 @@ export const PLAYER_ZOOM_HEADROOM = PLAYER_MAXIMUM_ZOOM;
  * case the absolute cap cannot express: without this the ceiling collapses onto the floor and the
  * player is left with no zoom travel whatsoever.
  */
-export function playerMaximumZoom(minZoom: number, ...atLeast: number[]): number {
+export function playerMaximumZoom(
+  minZoom: number,
+  authoredZoomIn: number | null | undefined,
+  ...atLeast: number[]
+): number {
+  // An authored limit is the level speaking for itself, and it wins: only the author knows how
+  // much detail this level's environment art actually holds. The floor still overrides it, because
+  // a ceiling under the floor is not a camera.
+  if (authoredZoomIn && authoredZoomIn > 0) return Math.max(authoredZoomIn, minZoom, ...atLeast);
   const headroom = minZoom >= PLAYER_MAXIMUM_ZOOM ? minZoom * PLAYER_ZOOM_HEADROOM : 0;
   return Math.max(PLAYER_MAXIMUM_ZOOM, headroom, minZoom, ...atLeast);
 }

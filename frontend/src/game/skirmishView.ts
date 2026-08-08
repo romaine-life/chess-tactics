@@ -43,6 +43,8 @@ export interface SkirmishViewState {
   minZoom: number;
   /** Human zoom-in cap, raised when camera coverage or opening geometry needs it. */
   maxZoom: number;
+  /** The level's own authored zoom-in limit, when it states one. Null means automatic. */
+  authoredZoomIn: number | null;
   pan: { x: number; y: number };
   openingZoom: number;
   openingPan: { x: number; y: number };
@@ -50,6 +52,8 @@ export interface SkirmishViewState {
   toggle: (key: OverlayKey) => void;
   setZoom: (zoom: number) => void;
   setMinZoom: (zoom: number) => void;
+  /** Adopt the mounted level's authored zoom-in limit (null restores the automatic ceiling). */
+  setAuthoredZoomIn: (zoom: number | null) => void;
   setPan: (pan: { x: number; y: number }) => void;
   setOpeningView: (camera: { zoom: number; pan: { x: number; y: number } }) => void;
   /** Hide every board information layer without changing camera position. */
@@ -74,6 +78,7 @@ export function createSkirmishViewStore(): SkirmishViewStore {
     zoom: DEFAULT_ZOOM,
     minZoom: PLAYER_TECHNICAL_MINIMUM_ZOOM,
     maxZoom: PLAYER_MAXIMUM_ZOOM,
+    authoredZoomIn: null,
     pan: DEFAULT_PAN,
     openingZoom: DEFAULT_ZOOM,
     openingPan: DEFAULT_PAN,
@@ -86,8 +91,13 @@ export function createSkirmishViewStore(): SkirmishViewStore {
     })),
     setMinZoom: (zoom) => set((state) => {
       const minZoom = Math.max(PLAYER_TECHNICAL_MINIMUM_ZOOM, zoom);
-      const maxZoom = playerMaximumZoom(minZoom, state.openingZoom);
+      const maxZoom = playerMaximumZoom(minZoom, state.authoredZoomIn, state.openingZoom);
       return { minZoom, maxZoom, zoom: Math.min(maxZoom, Math.max(state.zoom, minZoom)) };
+    }),
+    setAuthoredZoomIn: (zoom) => set((state) => {
+      const authoredZoomIn = zoom && zoom > 0 ? zoom : null;
+      const maxZoom = playerMaximumZoom(state.minZoom, authoredZoomIn, state.openingZoom);
+      return { authoredZoomIn, maxZoom, zoom: Math.min(maxZoom, Math.max(state.zoom, state.minZoom)) };
     }),
     setPan: (pan) => set({ pan }),
     setOpeningView: (camera) => set((state) => ({
@@ -95,7 +105,7 @@ export function createSkirmishViewStore(): SkirmishViewStore {
       openingPan: camera.pan,
       // Opening composition is geometry, not a suggestion subject to the ordinary control cap.
       // Raising the ceiling first lets the framing hook apply the exact camera on large viewports.
-      maxZoom: playerMaximumZoom(state.minZoom, camera.zoom, state.zoom),
+      maxZoom: playerMaximumZoom(state.minZoom, state.authoredZoomIn, camera.zoom, state.zoom),
     })),
     clearOverlays: () => set({
       showMoves: false,

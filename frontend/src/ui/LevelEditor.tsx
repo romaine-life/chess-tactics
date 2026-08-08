@@ -4,7 +4,7 @@
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
-import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, cameraToContainBounds, defaultBoardCameraBounds, defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, MAX_FLOATING_ARTWORK_PIXEL, mergeSharedLevel, normalizeBoardCameraBounds, predrawnEnvironmentGeometryFingerprintInputV2, predrawnRenderSurface, predrawnVisualFootprintClipStyleForCell, resolvedBoardCameraBounds, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, worldViewportForCamera, type BoardBackgroundMode, type BoardCameraBounds, type BoardCameraSnapMode, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
+import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, cameraToContainBounds, defaultBoardCameraBounds, defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, MAX_FLOATING_ARTWORK_PIXEL, mergeSharedLevel, MAXIMUM_AUTHORED_CAMERA_ZOOM_IN, normalizeBoardCameraBounds, normalizeCameraZoomIn, predrawnEnvironmentGeometryFingerprintInputV2, predrawnRenderSurface, predrawnVisualFootprintClipStyleForCell, resolvedBoardCameraBounds, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, worldViewportForCamera, type BoardBackgroundMode, type BoardCameraBounds, type BoardCameraSnapMode, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
 import { boardLabCellPosition, boardLabMetrics, immutableBoardLabTerrainSrc } from '../render/BoardLabBoard';
 import { projectBoardPoint, unprojectBoardPoint, type BoardForest, type BoardForestSection, type BoardForestTree, type BoardTown, type BoardTownSection } from '@chess-tactics/board-render';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
@@ -3955,6 +3955,28 @@ export function LevelEditor(): ReactElement {
     applyEditorBoardWithSelectionSafety(normalized);
     if (selection !== undefined) setSelectedCell(selection);
     return true;
+  };
+  const authoredCameraZoomIn = normalizeCameraZoomIn(currentEditorBoard.cameraZoomIn);
+  const commitCameraZoomIn = (zoom: number | undefined): void => {
+    if (!editorSessionCanWrite) {
+      reportStatus(
+        'Camera zoom limit is read-only.',
+        'warning',
+        'Reload an owner editing page to reconnect live sync.',
+      );
+      return;
+    }
+    const current = currentEditorBoardRef.current;
+    const cameraZoomIn = normalizeCameraZoomIn(zoom);
+    if (commitEditorBoard({ ...cloneEditorBoard(current), cameraZoomIn })) {
+      reportStatus(
+        cameraZoomIn ? `Zoom-in limit set to ${cameraZoomIn}×.` : 'Zoom-in limit back to automatic.',
+        'success',
+        cameraZoomIn
+          ? 'Play lets a player zoom in this far on this level and no further.'
+          : 'Play derives the limit from this level’s own zoom floor again.',
+      );
+    }
   };
   const commitCameraBoundary = (bounds: BoardCameraBounds): void => {
     if (!editorSessionCanWrite) {
@@ -10442,6 +10464,24 @@ export function LevelEditor(): ReactElement {
             ) : (
               <p className="le-board-note">Drag anywhere inside the box to move it, or drag an edge or corner handle to resize it. Arrow keys move the focused control by 4 world pixels; hold Shift for 24.</p>
             )}
+          </section>
+          <section className="skirmish-card skirmish-view-card" aria-label="Camera zoom-in limit" data-testid="le-camera-zoom-in">
+            <h2>Zoom in limit</h2>
+            <p className="le-board-note">
+              How far a player may zoom in here. Automatic only knows this level’s zoom floor — it
+              cannot tell how much detail the artwork actually holds, so state it yourself.
+            </p>
+            <SliderRow
+              label={authoredCameraZoomIn ? `Limit · ${authoredCameraZoomIn.toFixed(2)}×` : 'Limit · automatic'}
+              value={authoredCameraZoomIn ?? 0}
+              set={(value) => commitCameraZoomIn(value > 0 ? value : undefined)}
+              min={0}
+              max={MAXIMUM_AUTHORED_CAMERA_ZOOM_IN}
+              step={0.05}
+              nudge={0.25}
+              dflt={0}
+            />
+            <p className="le-board-note">Zero is automatic. The level’s zoom floor always wins over a limit set below it.</p>
           </section>
           <section className="skirmish-card skirmish-view-card" aria-label="Set camera boundary from current view">
             <h2>Current view</h2>
