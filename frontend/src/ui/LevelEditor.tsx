@@ -1740,6 +1740,11 @@ const nearestAuthoredTileId = (
   return best;
 };
 const LE_FACTION_LABELS = UNIT_PALETTE_LABELS;
+// A board that has not authored its own sides opens on the classic chess pairing: the player is
+// White, the CPU is Black. Only a NEW board adopts the player half automatically — an existing
+// level that never authored a player faction keeps it unset rather than being claimed on load.
+const DEFAULT_EDITOR_PLAYER_FACTION: UnitPalette = 'white';
+const DEFAULT_EDITOR_CPU_FACTION: UnitPalette = 'black';
 type FactionDirections = Partial<Record<UnitPalette, Direction>>;
 const DEFAULT_FACTION_DIRECTIONS: Record<UnitPalette, Direction> = {
   'navy-blue': 'north',
@@ -1762,12 +1767,12 @@ const sideDefaultFaction = (
   playerFaction: UnitPalette | null,
   units: Record<string, BoardUnitPlacement>,
 ): UnitPalette => {
-  const player = playerFaction ?? 'navy-blue';
+  const player = playerFaction ?? DEFAULT_EDITOR_PLAYER_FACTION;
   if (side === 'player') return player;
   const authoredEnemy = Object.values(units).find((unit) => unit.faction !== player)?.faction;
   if (isUnitPalette(authoredEnemy)) return authoredEnemy;
-  if (playerFaction && playerFaction !== 'crimson') return 'crimson';
-  return UNIT_PALETTES.find((faction) => faction !== player) ?? 'crimson';
+  if (playerFaction && playerFaction !== DEFAULT_EDITOR_CPU_FACTION) return DEFAULT_EDITOR_CPU_FACTION;
+  return UNIT_PALETTES.find((faction) => faction !== player) ?? DEFAULT_EDITOR_CPU_FACTION;
 };
 const promotionEdgeTiles = (cols: number, rows: number, direction: Direction): string[] => {
   const tiles = new Set<string>();
@@ -2952,9 +2957,13 @@ export function LevelEditor(): ReactElement {
   const [decorativeFences, setDecorativeFences] = useState<Record<string, FenceMaterial>>(() => initialBoard?.decorativeFences ?? {});
   const [decorativeFencePosts, setDecorativeFencePosts] = useState<Record<string, FenceMaterial>>(() => initialBoard?.decorativeFencePosts ?? {});
   const [decorativeWalls, setDecorativeWalls] = useState<Record<string, WallMaterial>>(() => initialBoard?.decorativeWalls ?? {});
-  const [playerFaction, setPlayerFaction] = useState<UnitPalette | null>(() =>
-    (initialBoard?.playerFaction && (UNIT_PALETTES as readonly string[]).includes(initialBoard.playerFaction)) ? initialBoard.playerFaction as UnitPalette : null,
-  );
+  const [playerFaction, setPlayerFaction] = useState<UnitPalette | null>(() => {
+    const authored = initialBoard?.playerFaction;
+    if (authored && (UNIT_PALETTES as readonly string[]).includes(authored)) return authored as UnitPalette;
+    // A brand-new board opens already assigned to White. A board that LOADED without a player
+    // faction keeps it unset, so opening an old level never silently claims a side for it.
+    return initialBoard ? null : DEFAULT_EDITOR_PLAYER_FACTION;
+  });
   const [boardFactionDirections, setBoardFactionDirections] = useState<FactionDirections>(() => initialFactionDirections);
   const [tool, setTool] = useState<'select' | 'brush' | 'erase' | 'move' | 'region'>(
     initialLayer === 'placed-art' && initialBrushKind === 'artwork'
@@ -3516,8 +3525,11 @@ export function LevelEditor(): ReactElement {
   const wallArtTool = brushKind === 'wallart';
   const [unitBrushId, setUnitBrushId] = useState<string>(() => studioArm.kind === 'unit' && studioArm.brush ? studioArm.brush : 'pawn');
   const [doodadBrushId, setDoodadBrushId] = useState<string>(() => studioArm.kind === 'doodad' && studioArm.brush ? studioArm.brush : defaultDoodadAsset().id);
-  const [unitBrushDirection, setUnitBrushDirection] = useState<Direction>(() => factionDefaultDirection('navy-blue', initialFactionDirections));
-  const [unitFaction, setUnitFactionState] = useState<UnitPalette>('navy-blue');
+  // The brush opens on the side you are authoring FOR — the board's player faction, or White on
+  // a board that has not named one — so the first pieces painted land on the player's side.
+  const initialUnitFaction = playerFaction ?? DEFAULT_EDITOR_PLAYER_FACTION;
+  const [unitBrushDirection, setUnitBrushDirection] = useState<Direction>(() => factionDefaultDirection(initialUnitFaction, initialFactionDirections));
+  const [unitFaction, setUnitFactionState] = useState<UnitPalette>(initialUnitFaction);
   const [undoStack, setUndoStack] = useState<EditorBoard[]>([]);
   const [redoStack, setRedoStack] = useState<EditorBoard[]>([]);
   // Gameplay zones: an authored list of named region entries. `boardZones` below is the legacy
@@ -4306,6 +4318,29 @@ export function LevelEditor(): ReactElement {
     setUnitFactionState(faction);
     const dir = directionForFaction(faction);
     setUnitBrushDirection(hasDirectionSprite(unitBrushAsset, dir) ? dir : 'south');
+  };
+  // Recolour a whole faction in place: every unit wearing `from` changes to `to`, and the
+  // faction's authored identity travels with it (who the player controls, its default facing,
+  // the paint brush if it was armed with that colour). Only a palette nothing else on the board
+  // wears is offered, so this can never silently MERGE two sides into one.
+  const recolorFaction = (from: UnitPalette, to: UnitPalette): void => {
+    if (from === to) return;
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    for (const [key, unit] of Object.entries(next.units)) {
+      if (unit.faction === from) next.units[key] = { ...unit, faction: to };
+    }
+    const directions = normalizeFactionDirections(next.factionDirections);
+    if (directions[from] !== undefined) {
+      const carried = directions[from];
+      delete directions[from];
+      // An authored facing that happens to equal the new colour's own default stays implicit,
+      // so a recolour cannot introduce a redundant override the editor would have omitted.
+      if (carried !== DEFAULT_FACTION_DIRECTIONS[to]) directions[to] = carried;
+    }
+    next.factionDirections = directions;
+    if (next.playerFaction === from) next.playerFaction = to;
+    commitEditorBoard(next);
+    if (unitFaction === from) setUnitFaction(to);
   };
   const setFactionDefaultDirection = (faction: UnitPalette, direction: Direction): void => {
     const next = cloneEditorBoard(currentEditorBoardRef.current);
@@ -7887,6 +7922,13 @@ export function LevelEditor(): ReactElement {
     () => UNIT_PALETTES.filter((faction) => boardFactionCounts[faction] > 0),
     [boardFactionCounts],
   );
+  // The colours a faction may move to: the ones no unit on the board is wearing. Offering a
+  // colour already in use would fold two factions into one, which is a different act than
+  // recolouring and is not what this control is for.
+  const unassignedFactions = useMemo(
+    () => UNIT_PALETTES.filter((faction) => boardFactionCounts[faction] === 0),
+    [boardFactionCounts],
+  );
   const playerFactionPresent = Boolean(playerFaction && presentFactions.includes(playerFaction));
   const needsPlayerFaction = isCampaignLevel && !playerFactionPresent;
   const levelObjectiveLabel = OBJECTIVE_LABEL[targetLevel?.objective ?? 'capture-all'];
@@ -10433,6 +10475,17 @@ export function LevelEditor(): ReactElement {
                           ariaLabel={`${LE_FACTION_LABELS[faction]} control`}
                           onChange={onFactionControlChange(faction)}
                           options={controlOptions}
+                        />
+                        <PaletteSelect
+                          className="le-faction-color-select"
+                          value={faction}
+                          options={unassignedFactions}
+                          ariaLabel={`${LE_FACTION_LABELS[faction]} colour`}
+                          disabled={!unassignedFactions.length}
+                          title={unassignedFactions.length
+                            ? 'Repaint every unit of this faction in another colour.'
+                            : 'Every colour is already in use by a faction on this board.'}
+                          onChange={(next) => recolorFaction(faction, next)}
                         />
                         <DirectionPopover
                           value={directionForFaction(faction)}
