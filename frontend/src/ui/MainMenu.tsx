@@ -29,8 +29,8 @@ import { MenuDestinationSceneSlot } from './shell/AuthoredSceneSlot';
 
 interface MenuTab { slug: string; label: string; href: string; icon: string }
 
-// The main-menu rail. Play is the one player-facing entry for Skirmish, standalone
-// Levels, and Campaigns (ADR-0074). The database-owned menu-mode inventory supplies
+// The main-menu rail. Play opens the sole player-facing mode, Run, directly; retained
+// development modes no longer consume a nested source column (ADR-0514). The database-owned menu-mode inventory supplies
 // the visible entries, their ordering, routes, labels, and icon assignments.
 const currentMenuTabs = (): MenuTab[] => drawableAssets('menu-mode').map((asset) => {
   const slug = String(asset.behavior.value ?? '');

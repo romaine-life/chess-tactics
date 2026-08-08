@@ -26,11 +26,11 @@ describe('scene manifests', () => {
     });
   });
 
-  it('authors the installed Play root and Continue routes as complete Continue scenes', () => {
+  it('authors the installed Play root as Run while retaining direct Continue scenes', () => {
     expect(sceneManifest('/play/select').instances.map((entry) => entry.definition.id)).toEqual([
       'main-menu',
       'play',
-      'play/continue',
+      'play/run',
     ]);
     expect(sceneManifest('/play/select')).toMatchObject({
       host: 'play-shell',
@@ -40,21 +40,20 @@ describe('scene manifests', () => {
     expect(sceneManifest('/play/select/continue/run').leaf).toMatchObject({
       definition: { id: 'play/continue', slot: 'play-content', view: 'play-continue' },
     });
-    // A malformed selector path canonicalizes through the same complete scene.
+    // A malformed selector path canonicalizes through the same complete Run scene.
     expect(sceneManifest('/play/select/unknown').instances.map((entry) => entry.definition.id)).toEqual([
       'main-menu',
       'play',
-      'play/continue',
+      'play/run',
     ]);
   });
 
-  it('identifies every Continue-presenting address as one committed scene', () => {
-    // PlayMenu canonicalizes these addresses in place (ADR-0260); one shared id keeps
-    // that canonicalization a retarget, never a second exit of the outgoing scene.
+  it('identifies the root with Run and keeps direct Continue on its retained scene', () => {
     const continueId = sceneManifest('/play/select/continue').id;
-    expect(sceneManifest('/play/select').id).toBe(continueId);
+    const runId = sceneManifest('/play/select/run').id;
+    expect(sceneManifest('/play/select').id).toBe(runId);
     expect(sceneManifest('/play/select/continue/skirmish').id).toBe(continueId);
-    expect(sceneManifest('/play/select/unknown').id).toBe(continueId);
+    expect(sceneManifest('/play/select/unknown').id).toBe(runId);
     // Distinct selector scenes keep distinct identities so tab travel still transitions.
     expect(sceneManifest('/play/select/skirmish').id).not.toBe(continueId);
     expect(sceneManifest('/play/select/run').id).not.toBe(sceneManifest('/play/select/run/current').id);

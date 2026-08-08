@@ -5,14 +5,12 @@ and the production web app. The live app has since moved to the shared DOM/9-sli
 kit governed by the current UI ADRs. The concept renders remain explicit visual
 references; they are not the production screen architecture.
 
-Current player navigation is recorded in ADR-0074 and ADR-0294: one main-menu
+Current player navigation is recorded in ADR-0074 and ADR-0514: one main-menu
 **Play** control opens the compatibility selector root `/play/select`, which
-settles into the complete descriptor-free Continue surface. Continue owns fixed
-Campaign/Skirmish/Run/Levels availability rows at `/play/select/continue/*` and
-selects the most recent resumable activity into the detail column. The ordinary
-selector tab addresses remain `/play/select/skirmish`, `/play/select/run`,
-`/play/select/levels`, and `/play/select/campaign/<id>`, while exact `/play?...`
-remains the live board.
+paints Run preparation and canonicalizes to `/play/select/run`. Because Run is the
+only player-facing mode, Play mounts no nested mode rail; Current Run / Start New Run
+and the selected detail shift into the released columns. Campaign, Skirmish, Levels,
+and Continue remain implemented on direct review addresses but have no ordinary entry.
 
 ## Contract
 
@@ -59,8 +57,8 @@ rectangles over the 16:10 artboard.
 
 ## Review URLs
 
-- `/` and `/main-menu` show the live DOM main menu with the four-entry
-  Play / Editor / Lobbies / Settings rail, the accepted title treatment, the
+- `/` and `/main-menu` show the live DOM main menu with the five-entry
+  Play / Editor / Lobbies / Enchiridion / Settings rail, the accepted title treatment, the
   generated no-board scenic background, and the shared account/settings shell.
   The live route does not show a
   daily/news area, bottom dock, fake dock actions, a baked board in the
@@ -72,7 +70,8 @@ rectangles over the 16:10 artboard.
   crop, rather than comparing a candidate bitmap.
 - `/editor` opens the live campaign/content editor.
 - `/editor/level` opens the live level editor.
-- `/play/select/*` opens the shared live Play selector; exact `/play?...` opens a selected board.
+- `/play/select` opens Run preparation; retained `/play/select/*` addresses support direct
+  development review, and exact `/play?...` opens a selected board.
 - `/design/campaigns/render` opens the campaign editor concept render.
 - `/design/level-editor/render` opens the level editor concept render.
 - `/design/skirmish/render` opens the skirmish concept render.
@@ -85,13 +84,14 @@ map. For example, use `/design/main-menu/render/hotspots` or
 
 The main menu, Play selector, editor, level editor, and live board are real DOM
 surfaces backed by the shared kit. The main menu uses the generated no-board scenic
-background behind its four-entry rail. Play reuses that shell and keeps Skirmish and
-Levels pinned above the scrolling Campaign collection. Daily/news and the duplicate
+background behind its five-entry rail. Play reuses that shell for Run preparation
+without a nested source rail, placing Run's action and detail columns directly beside
+the main-menu rail. Dormant mode implementations reserve no menu space. Daily/news and the duplicate
 bottom dock remain removed. There is no separate battlefield preview panel on the
 main-menu route.
 
 Current main menu acceptance state is tracked in
-[main-menu-acceptance.md](main-menu-acceptance.md). In short: the four-entry mode
+[main-menu-acceptance.md](main-menu-acceptance.md). In short: the five-entry mode
 rail, invariant title bar, shared kit, and scenic background are settled; daily/news is removed;
 the battlefield layer is out of scope for this pass; profile/account and the
 desktop composition still need production review.

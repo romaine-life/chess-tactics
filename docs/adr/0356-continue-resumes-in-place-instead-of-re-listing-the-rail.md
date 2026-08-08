@@ -8,6 +8,8 @@ refines:
   - "[ADR-0074](0074-one-play-entry-one-shared-selector.md)"
   - "[ADR-0334](0334-current-run-stays-visible-disabled-without-an-active-run.md)"
 partially_superseded_by: "[ADR-0474](0474-continue-resume-action-is-labeled-continue.md)'s resume-action label"
+campaign_resume_entry_superseded_by: "[ADR-0513](0513-campaign-play-entry-is-dormant.md)"
+ordinary_continue_entry_superseded_by: "[ADR-0514](0514-play-opens-run-without-a-mode-rail.md)"
 ---
 
 # ADR-0356: Continue resumes in place instead of re-listing the rail

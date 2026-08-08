@@ -11,6 +11,7 @@ const profiles = readFileSync(new URL('./skirmishProfiles.ts', import.meta.url),
 const livePlay = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
 const ataraxiaSelector = readFileSync(new URL('./AtaraxiaSelector.tsx', import.meta.url), 'utf8');
 const authoredSceneSlots = readFileSync(new URL('./shell/AuthoredSceneSlot.tsx', import.meta.url), 'utf8');
+const playModeAvailability = readFileSync(new URL('./playModeAvailability.ts', import.meta.url), 'utf8');
 
 describe('unified Play menu contract (ADR-0074)', () => {
   it('has one top-level Play entry and no retired picker destinations', () => {
@@ -23,36 +24,49 @@ describe('unified Play menu contract (ADR-0074)', () => {
       .toContain("['play', 'Play', '/play/select']");
   });
 
-  it('lands the installed Play entry on the complete Continue surface', () => {
+  it('lands the installed Play entry on Run preparation', () => {
     expect(mainMenu).toContain('play: PLAY_SELECTOR_ROOT');
-    // The installed root remains a compatibility address; settled activity
-    // authority canonicalizes it to Continue and its most recent activity.
-    expect(playMenu).toContain("navigateApp(PLAY_CONTINUE_SELECTOR_HREF, { replace: true, scroll: false })");
+    // The installed root remains a compatibility address; settled Run authority
+    // canonicalizes it to the sole player-facing mode.
+    expect(playMenu).toContain("navigateApp(PLAY_RUN_SELECTOR_HREF, { replace: true, scroll: false })");
     expect(playMenu).not.toContain('navigateApp(PLAY_SKIRMISH_SELECTOR_HREF');
-    expect(playMenu).toContain("playHubSelection(path) ?? { mode: 'hub' }");
-    expect(playMenu).toContain('resumeInventory.defaultMode');
-    expect(playMenu).toContain('playContinueSelectorHref(resumeInventory.defaultMode)');
-    expect(playMenu).toContain('const continueLandingSettled =');
-    expect(playMenu).toContain('&& continueLandingSettled');
+    expect(playMenu).toContain("? { mode: 'run', choice: null }");
+    expect(playMenu).toContain('const primaryRunLandingSettled =');
+    expect(playMenu).toContain('&& primaryRunLandingSettled');
     expect(playMenu).not.toContain('play-hub-neutral');
     expect(style).toContain('.play-choice-row:not(.is-selected):not(.is-disabled):hover');
     expect(style).not.toContain('.run-choice-row');
   });
 
-  it('pins descriptor-free Continue, Skirmish, Run, and Levels above Campaigns', () => {
+  it('removes the redundant source rail when Run is the only player-facing mode', () => {
     const fixed = playMenu.indexOf('className="play-source-fixed"');
     const campaigns = playMenu.indexOf('className="play-campaign-region"');
     expect(fixed).toBeGreaterThan(-1);
     expect(campaigns).toBeGreaterThan(fixed);
+    expect(playModeAvailability).toMatch(/campaign:\s*false,[\s\S]*skirmish:\s*false,[\s\S]*run:\s*true,[\s\S]*levels:\s*false,/);
+    expect(playModeAvailability).toContain('export const PLAY_SOURCE_RAIL_ENABLED');
+    expect(playMenu).toContain('{PLAY_SOURCE_RAIL_ENABLED ? <ApparatusRailColumn');
+    expect(playMenu).toContain("' is-source-rail-collapsed'");
+    expect(style).toContain('.play-scene-authority:not(.is-source-rail-collapsed).has-detail-preview .play-action-col');
     expect(playMenu).toContain('<KitScroll className="play-campaign-scroll">');
     expect(playMenu).toContain('testId="play-continue"');
     expect(playMenu).toContain('label="Continue"');
-    expect(playMenu).not.toMatch(/label="Continue"\s+detail=/);
-    expect(playMenu).toContain('index={0}');
-    expect(playMenu).toContain('index={1}');
-    expect(playMenu).toContain('index={2}');
-    expect(playMenu).toContain('index={3}');
-    expect(playMenu).toContain('index={index + 4}');
+    expect(playMenu).toContain('index={playModeRailIndex(\'skirmish\')}');
+    expect(playMenu).toContain('index={playModeRailIndex(\'run\')}');
+    expect(playMenu).toContain('index={playModeRailIndex(\'levels\')}');
+    expect(playMenu).toContain('index={index + CAMPAIGN_RAIL_START_INDEX}');
+  });
+
+  it('keeps dormant Campaign, Skirmish, and Levels implementations and direct routes intact', () => {
+    const route = readFileSync(new URL('./playHubRoute.ts', import.meta.url), 'utf8');
+    expect(playMenu).toContain('function CampaignTab(');
+    expect(playMenu).toContain('<CampaignLevelsPanel');
+    expect(playMenu).toContain('<SkirmishProfilesPanel');
+    expect(playMenu).toContain('<StandaloneLevelsPanel');
+    expect(route).toContain('export function playCampaignSelectorHref');
+    expect(route).toContain("if (path === PLAY_SKIRMISH_SELECTOR_HREF) return { mode: 'skirmish' };");
+    expect(route).toContain("if (path === PLAY_LEVELS_SELECTOR_HREF) return { mode: 'levels' };");
+    expect(route).toContain("return { mode: 'campaign', campaignId: decodeURIComponent(campaignMatch[1]) };");
   });
 
   it('resumes exactly one activity — the most recent — inside Continue’s own column (ADR-0356)', () => {
@@ -83,7 +97,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('<h4>Nothing to continue</h4>');
   });
 
-  it('keeps ordinary Run preparation separate from Continue', () => {
+  it('makes Run preparation the ordinary Play surface while retaining direct Continue', () => {
     expect(playMenu).toContain('data-testid="run-choice-current"');
     expect(playMenu).toMatch(/<ChromeNavButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-choice-current"/);
     expect(playMenu).toContain('to={PLAY_RUN_CURRENT_SELECTOR_HREF}');
@@ -174,10 +188,10 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('Your workspace is unavailable');
   });
 
-  it('renders only from the director-mounted path and returns standalone play to Levels', () => {
-    expect(playMenu).toContain('if (!playHubSelection(path))');
+  it('renders only from the director-mounted path and retains dormant standalone routes', () => {
+    expect(playMenu).toContain('const addressedSelection = playHubSelection(path);');
     expect(playMenu.match(/if \(!isPlaySelectorPath\(path\)\) return/g)).toHaveLength(1);
-    expect(playMenu).toContain('playHubSelection(path) ??');
+    expect(playMenu).toContain('() => playHubSelection(path)');
     expect(playMenu).not.toContain('APP_NAVIGATION_EVENT');
     expect(playMenu).not.toContain('window.location');
     expect(playMenu).not.toContain('setSelection');
@@ -185,8 +199,8 @@ describe('unified Play menu contract (ADR-0074)', () => {
   });
 
   it('keeps level selection stable and delegates its paint wait to the preview', () => {
-    expect(playMenu).toContain('const selection: PlayHubSelection = useMemo(');
-    expect(playMenu).toContain('() => playHubSelection(path) ??');
+    expect(playMenu).toContain('const routeSelection = useMemo(');
+    expect(playMenu).toContain('const selection: PlayHubSelection = !routeSelection');
     expect(playMenu).toContain('[path],');
     expect(playMenu).not.toContain('useEffect(() => setLevelPreviewPainted(false)');
     expect(playMenu).not.toContain('&& (!selectedLevel || levelPreviewPainted)');
@@ -194,7 +208,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('<LevelPreviewColumn');
     expect(playMenu).toContain("hasDetailPreview ? ' has-detail-preview' : ''");
     expect(playMenu).toContain("selectedLevel ? ' has-level-preview' : ''");
-    expect(style).toContain('.play-scene-authority.has-detail-preview .play-action-col');
+    expect(style).toContain('.play-scene-authority:not(.is-source-rail-collapsed).has-detail-preview .play-action-col');
   });
 
   it('serializes replacement of an active Run before entering the Run scene', () => {

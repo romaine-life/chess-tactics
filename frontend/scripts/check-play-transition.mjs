@@ -3,11 +3,11 @@
 //
 // Reproduces the canonicalizing navigation that once double-faded the outgoing menu:
 // from /settings/general, click the Play rail tab; PlayMenu then canonicalizes the
-// /play/select hub root to a Continue address (ADR-0260) while the destination is
+// /play/select hub root to its sole Run address (ADR-0514) while the destination is
 // still preparing. The gate drives that flow twice — once at natural timing and once
-// with campaign hydration delayed so the canonicalization always lands mid-transition
+// with Run hydration delayed so the canonicalization always lands mid-transition
 // — and fails if the director ever exits more than once per navigation, ends anywhere
-// but a committed canonical Continue address, or loses the canonicalization event
+// but the committed canonical Run address, or loses the canonicalization event
 // (the App location subscription must deliver it: an in-flight retarget shows a
 // second scene-navigation-accepted mark; a post-commit refresh shows
 // scene-address-refreshed). It also starts a replacement Run and verifies that the
@@ -36,7 +36,7 @@ const executablePath = CHROMES.find(existsSync);
 if (!executablePath) { console.error('No Chrome/Edge found. Checked:\n' + CHROMES.join('\n')); process.exit(1); }
 
 const TIMEOUT = 30_000;
-const CANONICAL_PREFIX = '/play/select/continue';
+const CANONICAL_PREFIX = '/play/select/run';
 const captureStartRun = process.argv.includes('--capture-start-run');
 const profile = mkdtempSync(join(tmpdir(), 'ct-playnav-'));
 const browser = await puppeteer.launch({
@@ -47,25 +47,25 @@ const browser = await puppeteer.launch({
     '--disable-extensions', '--host-resolver-rules=MAP *.localhost 127.0.0.1', '--hide-scrollbars'],
 });
 
-async function runScenario({ label, delayCampaignsMs }) {
+async function runScenario({ label, delayRunMs }) {
   const page = await browser.newPage();
   try {
     await page.setViewport({ width: 1280, height: 800 });
-    if (delayCampaignsMs) {
+    if (delayRunMs) {
       // Land PlayMenu's canonicalization in its own quiet flush, after run hydration
       // settles, so the replace navigation is always dispatched mid-transition.
       //
-      // Hold the campaign reads INSIDE the page rather than through CDP request interception
+      // Hold the active-Run read INSIDE the page rather than through CDP request interception
       // (page.setRequestInterception). Interception routes every request in the page through this
       // process, and against the Vite dev server it wedges module requests: run-battle-e2e measured
       // 6/6 runs hung with a lazily-imported module graph paused in flight forever, versus 6/6
       // clean runs with interception removed (commit af37db63). A paused request raises no error
-      // event, so nothing times out — this scenario would simply never reach its assertions. Both
-      // campaign reads go through `fetch` (net/campaignWorkspace.ts), so patching `window.fetch`
-      // delays exactly the same requests. The tally lives in sessionStorage so the count survives
+      // event, so nothing times out — this scenario would simply never reach its assertions. The
+      // Run read goes through `fetch` (net/activeRun.ts), so patching `window.fetch`
+      // delays exactly that request. The tally lives in sessionStorage so the count survives
       // every navigation this scenario makes.
       await page.evaluateOnNewDocument((delayMs) => {
-        const KEY = '__ctDelayedCampaignReads';
+        const KEY = '__ctDelayedRunReads';
         const read = () => Number(sessionStorage.getItem(KEY) ?? '0') || 0;
         const bump = () => {
           const next = read() + 1;
@@ -76,13 +76,15 @@ async function runScenario({ label, delayCampaignsMs }) {
         const nativeFetch = window.fetch.bind(window);
         window.fetch = async (input, init) => {
           const href = typeof input === 'string' ? input : (input?.url ?? '');
-          if (href.includes('/api/official-campaigns') || href.includes('/api/campaign-workspace')) {
+          const url = new URL(href, window.location.origin);
+          const method = String(init?.method ?? 'GET').toUpperCase();
+          if (url.pathname === '/api/active-run' && method === 'GET') {
             bump();
             await new Promise((resolve) => { setTimeout(resolve, delayMs); });
           }
           return nativeFetch(input, init);
         };
-      }, delayCampaignsMs);
+      }, delayRunMs);
     }
 
     // The isolated browser has no owner cookies; establish the loopback dev session
@@ -140,7 +142,7 @@ async function runScenario({ label, delayCampaignsMs }) {
       finalPhase: document.querySelector('[data-scene-phase]')?.getAttribute('data-scene-phase') ?? null,
       phases: window.__playNav.phases,
       marks: window.__playNavMarks(),
-      delayedCampaignReads: Number(sessionStorage.getItem('__ctDelayedCampaignReads') ?? '0') || 0,
+      delayedRunReads: Number(sessionStorage.getItem('__ctDelayedRunReads') ?? '0') || 0,
     }));
 
     const phaseRuns = [];
@@ -151,15 +153,15 @@ async function runScenario({ label, delayCampaignsMs }) {
     const exitingCount = phaseRuns.filter((entry) => entry.phase === 'exiting').length;
     const acceptedCount = result.marks.filter((mark) => mark.phase === 'scene-navigation-accepted').length;
     const refreshedCount = result.marks.filter((mark) => mark.phase === 'scene-address-refreshed').length;
-    const canonicalizationDelivered = delayCampaignsMs
+    const canonicalizationDelivered = delayRunMs
       ? acceptedCount >= 2
       : acceptedCount >= 2 || refreshedCount >= 1;
 
     const violations = [];
     // A forced-timing scenario that silently stopped forcing anything is not a passing run — it is
     // the natural-timing scenario wearing its name, and it would report OK while proving nothing.
-    if (delayCampaignsMs && result.delayedCampaignReads === 0) {
-      violations.push('campaign reads were never held, so this scenario never forced a mid-transition canonicalization');
+    if (delayRunMs && result.delayedRunReads === 0) {
+      violations.push('the active-Run read was never held, so this scenario never forced a mid-transition canonicalization');
     }
     if (exitingCount !== 1) violations.push(`expected exactly one exit, saw ${exitingCount}`);
     if (result.finalPhase !== 'current') violations.push(`scene did not settle: ${result.finalPhase}`);
@@ -169,7 +171,7 @@ async function runScenario({ label, delayCampaignsMs }) {
     if (!canonicalizationDelivered) {
       violations.push(`canonicalization navigation was not delivered (accepted=${acceptedCount}, refreshed=${refreshedCount})`);
     }
-    return { label, delayCampaignsMs, violations, exitingCount, acceptedCount, refreshedCount, ...result, phaseSequence: phaseRuns };
+    return { label, delayRunMs, violations, exitingCount, acceptedCount, refreshedCount, ...result, phaseSequence: phaseRuns };
   } finally {
     await page.close();
   }
@@ -280,8 +282,8 @@ async function runStartRunScenario() {
 
 try {
   const scenarios = [
-    await runScenario({ label: 'natural-timing', delayCampaignsMs: 0 }),
-    await runScenario({ label: 'forced-mid-transition-canonicalization', delayCampaignsMs: 600 }),
+    await runScenario({ label: 'natural-timing', delayRunMs: 0 }),
+    await runScenario({ label: 'forced-mid-transition-canonicalization', delayRunMs: 600 }),
     await runStartRunScenario(),
   ];
   let failed = false;

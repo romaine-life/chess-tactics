@@ -33,17 +33,17 @@ export function isPlaySelectorPath(pathname: string): boolean {
 }
 
 /**
- * The resolved SECTION address behind a selector path. The bare hub root, the
- * agnostic Continue address, every Continue choice, and malformed selector paths
- * all present the one committed Continue scene — choice selection is address-only
- * detail state, and PlayMenu canonicalizes those addresses without changing what
- * is on screen (ADR-0260). Scene identity must therefore resolve them to one
- * section so an in-flight canonicalization retargets in place instead of reading
- * as a navigation to a different scene.
+ * The resolved SECTION address behind a selector path. The bare compatibility
+ * root and malformed paths present Run immediately, so canonicalization to the
+ * sole player-facing mode retargets in place. Retained direct Continue and dormant
+ * mode addresses keep their own scene identities (ADR-0514).
  */
 export function playHubSectionPath(pathname: string): string {
   const selection = playHubSelection(pathname);
-  if (!selection || selection.mode === 'hub' || selection.mode === 'continue') {
+  if (!selection || selection.mode === 'hub') {
+    return PLAY_RUN_SELECTOR_HREF;
+  }
+  if (selection.mode === 'continue') {
     return PLAY_CONTINUE_SELECTOR_HREF;
   }
   if (selection.mode === 'skirmish') return PLAY_SKIRMISH_SELECTOR_HREF;
@@ -58,9 +58,9 @@ export function playHubSectionPath(pathname: string): string {
 
 export function playHubSelection(pathname: string): PlayHubSelection | null {
   const path = normalizeRoutePath(pathname);
-  // The installed bare root is a compatibility entry address. Once resume
-  // authority settles, PlayMenu canonicalizes it to Continue and its most recent
-  // available activity without ever launching that activity automatically.
+  // The installed bare root is a compatibility entry address. Once Run authority
+  // settles, PlayMenu canonicalizes it to the sole player-facing mode without
+  // launching the Run itself (ADR-0514).
   if (path === PLAY_SELECTOR_ROOT) return { mode: 'hub' };
   if (path === PLAY_CONTINUE_SELECTOR_HREF) return { mode: 'continue', choice: null };
   const continueMatch = path.match(/^\/play\/select\/continue\/(campaign|skirmish|run|levels)$/);
