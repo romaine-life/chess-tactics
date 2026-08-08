@@ -1,6 +1,6 @@
 // Build the family art prompt manifest: one entry per (footprint, roster) illustration.
 //
-// ADR-0516 keys card art to the family rather than the roster, so the picture can answer the
+// ADR-0520 keys card art to the family rather than the roster, so the picture can answer the
 // arrangement — the same four people hold a corner, a line, and a column differently. The v1
 // manifest already carries a per-roster scene, historical anchor, and eye-concealment
 // treatment; this derives a family entry from that plus a footprint-specific arrangement

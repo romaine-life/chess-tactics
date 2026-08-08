@@ -3152,7 +3152,14 @@ export function LevelEditor(): ReactElement {
   const [boardDoodads, setBoardDoodads] = useState<Record<string, { doodadId: string }>>(initialBoard?.doodads ?? {});
   // Multi-cell props (trees/houses), keyed by ANCHOR cell. Seeded from a loaded board, else empty.
   const [boardProps, setBoardProps] = useState<Record<string, { propId: string }>>(initialBoard?.props ?? {});
-  const [propBrushId, setPropBrushId] = useState<string>(() => defaultPropDef().id);
+  // A prop link is only worth sending if it arrives with that prop in hand. `?brush=` was
+  // honoured for every other placed-art kind and silently ignored for props, so every prop link
+  // landed on the default oak and made the recipient go find the thing it named.
+  const [propBrushId, setPropBrushId] = useState<string>(() => (
+    studioArm.kind === 'prop' && studioArm.brush && propDef(studioArm.brush)
+      ? studioArm.brush
+      : defaultPropDef().id
+  ));
   const [boardFloatingArtwork, setBoardFloatingArtwork] = useState<FloatingArtworkPlacement[]>(initialBoard?.floatingArtwork ?? []);
   const artworkAssets = STRUCTURE_ART_ASSETS.filter((asset) => structureArtHasCompleteTurntable(asset.id));
   const [artworkBrushId, setArtworkBrushId] = useState<string>(() => (

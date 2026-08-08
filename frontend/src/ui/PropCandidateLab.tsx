@@ -390,6 +390,17 @@ export function PropCandidateLab({ propId, onPropId, header }: {
 
   const versionsFor = (group: PropCandidateGroup): AdminLiveMediaVersion[] => group.versions;
 
+  /**
+   * Approving a staged sheet INSTALLS it. Splitting one intent across two presses meant a press
+   * that looked like the whole act was only half of it, and left art staged that the owner
+   * believed was live. The catalog still records the two steps — review, then accept — because it
+   * demands owner proof before it will activate anything; that is its business, not the owner's.
+   */
+  const approveAndInstall = async (): Promise<void> => {
+    await handleReview();
+    if (selected) await handleAccept();
+  };
+
   const handleReview = async (): Promise<void> => {
     if (!selected || !proofMounted || !notes.trim()) return;
     setBusy('reviewing');
@@ -554,11 +565,8 @@ export function PropCandidateLab({ propId, onPropId, header }: {
             </p>
 
             <div className="ps-toggles">
-              <button type="button" className="ps-toggle" disabled={!selected || !proofMounted || !notes.trim() || busy !== null} onClick={() => void handleReview()}>
-                {busy === 'reviewing' ? 'Approving…' : 'Approve on this board'}
-              </button>
-              <button type="button" className="ps-toggle" disabled={!selected || !selected.reviewed || busy !== null} onClick={() => void handleAccept()}>
-                {busy === 'accepting' ? 'Installing…' : 'Install'}
+              <button type="button" className="ps-toggle" disabled={!selected || !proofMounted || !notes.trim() || busy !== null} onClick={() => void approveAndInstall()}>
+                {busy ? 'Installing…' : 'Use this sheet'}
               </button>
             </div>
             {notice ? <p className="pc-note">{notice}</p> : null}
@@ -571,14 +579,14 @@ export function PropCandidateLab({ propId, onPropId, header }: {
                   className={`ps-toggle ${activeVerdict === verdict ? 'is-on' : ''}`}
                   disabled={!activeSheetSha}
                   onClick={() => setVerdict(verdict)}
-                >{verdict === 'approved' ? 'Approve' : 'Reject'}</button>
+                >{verdict === 'approved' ? 'Keep' : 'Cut'}</button>
               ))}
               <button type="button" className="ps-toggle" onClick={() => void copyVerdicts()}>
                 {copied ? 'Copied' : 'Copy list'}
               </button>
             </div>
             <p className="pc-note">
-              {verdictSummary.approved.length} approved · {verdictSummary.rejected.length} rejected
+              {verdictSummary.approved.length} kept · {verdictSummary.rejected.length} cut
               · {verdictSummary.undecided.length} left. Press the same button again to un-judge.
             </p>
             <textarea className="pc-verdicts" readOnly value={verdictText} rows={8} aria-label="Approved artwork list" />

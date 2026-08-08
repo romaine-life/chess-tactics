@@ -33,10 +33,26 @@ describe('Run card names', () => {
     }
   });
 
-  it('reuses the authored scene names while generated formation ids remain distinct', () => {
+  it('gives every card its own banner name, shared with no other card', () => {
     const names = Object.values(RUN_CARD_NAME_BY_ID);
-    expect(new Set(names).size).toBeLessThan(names.length);
+    expect(new Set(names).size).toBe(names.length);
     expect(new Set(RUN_CARD_DECK.map((card) => card.id)).size).toBe(RUN_CARD_DECK.length);
+    // A card sharing another's illustration still reads as itself: same picture, own title.
+    const byArtSlot = new Map<string, string[]>();
+    for (const card of RUN_CARD_DECK) {
+      const slot = runCardArtSlot(card);
+      byArtSlot.set(slot, [...(byArtSlot.get(slot) ?? []), runCardName(card)]);
+    }
+    const shared = [...byArtSlot.values()].filter((siblings) => siblings.length > 1);
+    expect(shared.length).toBeGreaterThan(0);
+    for (const siblings of shared) expect(new Set(siblings).size).toBe(siblings.length);
+  });
+
+  it('addresses every card by its own name, with no id-disambiguated address left over', () => {
+    for (const card of RUN_CARD_DECK) {
+      expect(runCardSlug(card.id), `address for ${card.id} still carries its raw id`)
+        .not.toMatch(new RegExp(`-${card.id}$`));
+    }
   });
 
   it('names the lone queen Regal Serenity', () => {
@@ -83,6 +99,10 @@ describe('Run card names', () => {
       expect(runCardFlavor(card)).not.toBe('No account survives.');
       expect(RUN_CARD_ID_BY_SLUG[runCardSlug(id)]).toBe(id);
     }
+    // Flavor is per card, like the name it sits under: two cards sharing an illustration
+    // still read as two records, never one printed twice.
+    const flavors = Object.values(RUN_CARD_FLAVOR_BY_ID);
+    expect(new Set(flavors).size).toBe(flavors.length);
   });
 
   it('uses authored formation identity when present and composition only as a legacy fallback', () => {
