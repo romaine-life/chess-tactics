@@ -263,7 +263,8 @@ describe('Run chrome hierarchy', () => {
     expect(runCard).toContain("data-ui-sfx={grant ? 'card' : 'gold'}");
     expect(runScreen).toContain('useRunCardFlights()');
     expect(runScreen).toContain("document.querySelector('[data-run-card-flight-target]')");
-    expect(runScreen).toContain('sectio.cardOffers.map((offer) => {');
+    // The index is the seat's own drift/light clock (runCardLife.ts), not offer state.
+    expect(runScreen).toContain('sectio.cardOffers.map((offer, index) => {');
     expect(runScreen).toContain('sectio.adlectedCardOfferIds.includes(offer.offerId)');
     expect(runScreen).toContain('<RunCardPile');
     expect(runCardPile).toContain('<RunCardBack');
