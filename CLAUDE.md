@@ -278,6 +278,18 @@ and don't tell the user screenshots are impossible. Use the helper below.
    completely unselectable. The gate asserts a fresh first click still selects,
    alongside the second-click cancel; no unit test reproduces that ordering.
 
+   Board-earned bounty changes additionally run the royal fork gate, which plays a
+   real fork with real clicks and reads the gold, the log line and the seated marker:
+   ```
+   npm run verify:royal-fork -- '<royal-fork-craft-url>'
+   ```
+   The craft link must already offer a fork in one — the gate refuses to manoeuvre
+   toward one, because a run that plays several plies is at the mercy of the enemy's
+   reply and ends in a timeout with no verdict. Battle 3 with `army=queen` and
+   `seed=1` deals one: the Queen's first move checks the enemy King and hits their
+   Queen (ADR-0527). The gate takes whichever fork the position offers rather than
+   naming a piece or a square.
+
 This works on ANY live route by selector — no per-target fixture, so there's no "new
 screen ⇒ flail" cliff. `frontend/scripts/shot.mjs` is the implementation.
 

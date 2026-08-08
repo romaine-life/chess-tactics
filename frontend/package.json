@@ -42,7 +42,8 @@
     "verify:strategikon": "node scripts/check-strategikon-transition.mjs",
     "verify:run-scenes": "node scripts/check-run-scene-transitions.mjs",
     "verify:grant-carry": "node scripts/check-run-grant-carry.mjs",
-    "verify:board-selection": "node scripts/verify-board-selection.mjs"
+    "verify:board-selection": "node scripts/verify-board-selection.mjs",
+    "verify:royal-fork": "node scripts/verify-royal-fork-bounty.mjs"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",

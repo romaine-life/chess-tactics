@@ -2,6 +2,7 @@ import { Children, useCallback, useEffect, useMemo, useRef, useState, type CSSPr
 import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import type { RunBattleTransformSink, RunBattleUndoAdapter } from '../game/store';
 import { defaultFacingForSide } from '../core/pieces';
+import { gameEnv, royalForkVictim } from '../core/rules';
 import type { GameState, Piece, Vec } from '../core/types';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox } from './shared/ChromeBox';
@@ -41,11 +42,13 @@ import {
   markReservistDeployed,
   observeRunUnitDeath,
   payRunEnPassantBounty,
+  payRunRoyalForkBounty,
   prepareDeployment,
   rerollDeployment,
   resetSectio,
   RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS,
   RUN_BATTLE_RETRY_COST_TENTHS,
+  RUN_ROYAL_FORK_MIN_VICTIM_VALUE,
   RUN_CARD_BY_ID,
   restartBattle,
   runBattleActivityId,
@@ -1371,6 +1374,24 @@ function RunBattlefieldPanel({
         // The bounty is seated on the square the capturing pawn now stands on, not the victim's
         // vacated one — that is where the player is looking, and where the unit that earned it is.
         const paid = payRunEnPassantBounty(active, { x: capturer.x, y: capturer.y });
+        if (!paid) continue;
+        active = paid.run;
+        notices.push(paid.notice);
+        changed = true;
+      }
+      // The royal fork bounty is the player's alone as well, and it is one piece's work: the
+      // unit that just moved has to strike the enemy King and a Rook or better itself. A
+      // discovered check is two pieces doing that, and pays nothing. Read against the board
+      // as the move committed it — before any Reservist below lands and stands in a ray.
+      const forkEnv = gameEnv(transformed);
+      for (const event of events) {
+        if (event.kind !== 'moved') continue;
+        const mover = transformed.pieces.find((candidate) => candidate.id === event.pieceId);
+        if (mover?.side !== 'player' || !mover.alive) continue;
+        if (!royalForkVictim(mover, transformed.pieces, transformed.size, forkEnv, RUN_ROYAL_FORK_MIN_VICTIM_VALUE)) continue;
+        // Seated on the forking unit's own square: that is what the player just placed, and
+        // where the two lines they are being paid for meet.
+        const paid = payRunRoyalForkBounty(active, { x: mover.x, y: mover.y });
         if (!paid) continue;
         active = paid.run;
         notices.push(paid.notice);
