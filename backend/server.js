@@ -18747,7 +18747,7 @@ function runCardArtOwnerProofIssue(runCardArt, proof, surfaceUrl) {
       const url = new URL(surfaceUrl);
       if (
         url.pathname !== '/studio' || url.searchParams.get('cat') !== 'cardprompts'
-        || url.searchParams.get('family') !== runCardArt.cardId
+        || url.searchParams.get('cardPrompt') !== runCardArt.cardId
       ) return 'Family card art review URL must identify its Card Prompts family';
     } catch {
       return 'Family card art review URL is invalid';
