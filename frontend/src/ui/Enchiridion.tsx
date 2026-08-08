@@ -41,9 +41,17 @@ import {
 } from '../run/lipsanonStatistics';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import {
+  CARD_GOLD_FILTER_VALUES,
+  CARD_RARITY_FILTER_VALUES,
+  CARD_UNIT_FILTER_VALUES,
+  ENCHIRIDION_CARD_FILTERS_ALL,
   ENCHIRIDION_SECTIONS,
   ENCHIRIDION_SECTION_LABEL,
   enchiridionSectionHref,
+  type CardGoldFilter,
+  type CardRarityFilter,
+  type CardUnitFilter,
+  type EnchiridionCardFilters,
   type EnchiridionSection,
 } from './enchiridionRoute';
 import { installedUiMedia } from './installedUiMedia';
@@ -52,6 +60,7 @@ import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab
 import { ataraxiaNumeralArtUrl } from './ataraxiaNumeral';
 import { InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
+import { navigateApp } from './navigation';
 import { NavButton } from './shared/NavButton';
 import { ChromeButton } from './shared/ChromeButton';
 import { PieceTypeIcon } from './shared/PieceTypeIcon';
@@ -497,24 +506,27 @@ export function LipsanaCodex({
   );
 }
 
-export type CardGoldFilter = 'all' | '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9';
-export type CardUnitFilter = 'all' | RunArmyPieceType;
-export type CardRarityFilter = 'all' | RunCardRarity;
+// The filter vocabulary is the address vocabulary; these controls only present it. Options are
+// built from the same value lists the route module validates a query against, so a filter the
+// gallery can show and a filter an address can carry cannot drift apart.
+export type {
+  CardGoldFilter,
+  CardRarityFilter,
+  CardUnitFilter,
+  EnchiridionCardFilters,
+} from './enchiridionRoute';
 
 const CARD_GOLD_FILTER_OPTIONS: readonly HouseSelectOption<CardGoldFilter>[] = Object.freeze([
   { value: 'all', label: 'All' },
-  ...Array.from({ length: 10 }, (_, index) => {
-    const value = String(index) as Exclude<CardGoldFilter, 'all'>;
-    return {
-      value,
-      label: <RunCardCostCoin value={Number(value)} className="enchiridion-card-filter-gold-amount" />,
-    };
-  }),
+  ...CARD_GOLD_FILTER_VALUES.map((value) => ({
+    value: value as Exclude<CardGoldFilter, 'all'>,
+    label: <RunCardCostCoin value={Number(value)} className="enchiridion-card-filter-gold-amount" />,
+  })),
 ]);
 
 const CARD_UNIT_FILTER_OPTIONS: readonly HouseSelectOption<CardUnitFilter>[] = Object.freeze([
   { value: 'all', label: 'Any unit' },
-  ...(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'] as const).map((value) => ({
+  ...CARD_UNIT_FILTER_VALUES.map((value) => ({
     value,
     label: (
       <span className="enchiridion-card-filter-unit-label">
@@ -527,9 +539,10 @@ const CARD_UNIT_FILTER_OPTIONS: readonly HouseSelectOption<CardUnitFilter>[] = O
 
 const CARD_RARITY_FILTER_OPTIONS: readonly HouseSelectOption<CardRarityFilter>[] = Object.freeze([
   { value: 'all', label: 'All rarities' },
-  { value: 'common', label: 'Common' },
-  { value: 'uncommon', label: 'Uncommon' },
-  { value: 'rare', label: 'Rare' },
+  ...CARD_RARITY_FILTER_VALUES.map((value) => ({
+    value,
+    label: `${value[0].toUpperCase()}${value.slice(1)}`,
+  })),
 ]);
 
 export function cardMatchesFilters(
@@ -642,19 +655,32 @@ export function CardCodex({
   framed = true,
   selectedCardId = null,
   cardHref,
+  filters = null,
+  filtersHref,
 }: {
   framed?: boolean;
   /** The route-addressed gallery face; read only when cardHref makes focus navigational. */
   selectedCardId?: string | null;
   /** When present, focusing a card navigates to this address instead of setting local state. */
   cardHref?: (cardId: string) => string;
+  /** The route-addressed filters; read only when filtersHref makes filtering navigational. */
+  filters?: EnchiridionCardFilters | null;
+  /** When present, changing a filter navigates to this address instead of setting local state. */
+  filtersHref?: (filters: EnchiridionCardFilters) => string;
 }): ReactElement {
   const [localSelectedId, setLocalSelectedId] = useState<string | null>(null);
-  const [goldFilter, setGoldFilter] = useState<CardGoldFilter>('all');
-  const [unitFilter, setUnitFilter] = useState<CardUnitFilter>('all');
+  const [localFilters, setLocalFilters] = useState<EnchiridionCardFilters>(ENCHIRIDION_CARD_FILTERS_ALL);
   const goldTierDividerSource = useRunCardGoldTierDividerSource();
-  const [rarityFilter, setRarityFilter] = useState<CardRarityFilter>('all');
   const focusedCardId = cardHref ? selectedCardId : localSelectedId;
+  // Routed hosts derive the filters from the address every render, the same way focus is derived
+  // from it; an absent or unreadable query is no filter at all and never rewrites the URL.
+  const { gold: goldFilter, unit: unitFilter, rarity: rarityFilter } = filtersHref
+    ? (filters ?? ENCHIRIDION_CARD_FILTERS_ALL)
+    : localFilters;
+  const changeFilters = (next: EnchiridionCardFilters): void => {
+    if (filtersHref) navigateApp(filtersHref(next));
+    else setLocalFilters(next);
+  };
   const galleryRef = useRef<HTMLDivElement | null>(null);
   const visibleCards = useMemo(
     () => RUN_CARD_CATALOG.filter((card) => cardMatchesFilters(card, goldFilter, unitFilter, rarityFilter)),
@@ -681,9 +707,9 @@ export function CardCodex({
           goldFilter={goldFilter}
           unitFilter={unitFilter}
           rarityFilter={rarityFilter}
-          onGoldFilterChange={setGoldFilter}
-          onUnitFilterChange={setUnitFilter}
-          onRarityFilterChange={setRarityFilter}
+          onGoldFilterChange={(gold) => changeFilters({ gold, unit: unitFilter, rarity: rarityFilter })}
+          onUnitFilterChange={(unit) => changeFilters({ gold: goldFilter, unit, rarity: rarityFilter })}
+          onRarityFilterChange={(rarity) => changeFilters({ gold: goldFilter, unit: unitFilter, rarity })}
           count={visibleCards.length}
           testIdPrefix="enchiridion-card"
         />
@@ -825,6 +851,8 @@ export function EnchiridionReference({
   lipsanonHref,
   selectedCardId,
   cardHref,
+  cardFilters,
+  cardFiltersHref,
 }: {
   section: EnchiridionSection;
   framed: boolean;
@@ -832,9 +860,21 @@ export function EnchiridionReference({
   lipsanonHref?: (lipsanonId: LipsanonId) => string;
   selectedCardId: string | null;
   cardHref?: (cardId: string) => string;
+  cardFilters?: EnchiridionCardFilters | null;
+  cardFiltersHref?: (filters: EnchiridionCardFilters) => string;
 }): ReactElement {
   if (section === 'terrain') return <TerrainSection framed={framed} />;
-  if (section === 'cards') return <CardCodex framed={framed} selectedCardId={selectedCardId} cardHref={cardHref} />;
+  if (section === 'cards') {
+    return (
+      <CardCodex
+        framed={framed}
+        selectedCardId={selectedCardId}
+        cardHref={cardHref}
+        filters={cardFilters}
+        filtersHref={cardFiltersHref}
+      />
+    );
+  }
   if (section === 'lipsana') return <LipsanaCodex framed={framed} selectedLipsanonId={selectedLipsanonId} lipsanonHref={lipsanonHref} />;
   if (section === 'ataraxia') return <AtaraxiaSection framed={framed} />;
   return <UnitsSection framed={framed} />;
@@ -847,6 +887,8 @@ export function Enchiridion({
   lipsanonHref,
   selectedCardId = null,
   cardHref,
+  cardFilters = null,
+  cardFiltersHref,
   showSectionRail = true,
   sceneInstanceKey = `enchiridion/${section ?? 'root'}`,
   framed = true,
@@ -861,6 +903,10 @@ export function Enchiridion({
   selectedCardId?: string | null;
   /** When present, card focus in the cards section navigates to this address. */
   cardHref?: (cardId: string) => string;
+  /** The route-addressed card filters; see CardCodex. */
+  cardFilters?: EnchiridionCardFilters | null;
+  /** When present, changing a card filter navigates to this address. */
+  cardFiltersHref?: (filters: EnchiridionCardFilters) => string;
   showSectionRail?: boolean;
   sceneInstanceKey?: string;
   framed?: boolean;
@@ -880,6 +926,8 @@ export function Enchiridion({
             lipsanonHref={lipsanonHref}
             selectedCardId={selectedCardId}
             cardHref={cardHref}
+            cardFilters={cardFilters}
+            cardFiltersHref={cardFiltersHref}
           />
         </EnchiridionContentSceneSlot>
       ) : null}
