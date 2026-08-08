@@ -14,6 +14,7 @@ const { createByteReadBudget } = require(path.join(bakedBackendDir, 'liveMediaRe
 const { createRenderCriticalSection } = require(path.join(bakedBackendDir, 'renderCriticalSection'));
 const { createAsyncWorkLimiter } = require(path.join(bakedBackendDir, 'asyncWorkLimiter'));
 const { saveRunCardGoldTierDividerGeometry } = require(path.join(bakedBackendDir, 'runCardGoldTierDividerGeometry'));
+const { saveRunCardRowSizing } = require(path.join(bakedBackendDir, 'runCardRowSizing'));
 const { THUMBNAIL_DEPENDENCY_SCHEMA_VERSION, thumbnailContentVersionForPlan } = require(path.join(bakedBackendDir, 'thumbnailVersion'));
 const { createRevisionMemo } = require(path.join(bakedBackendDir, 'revisionMemo'));
 const { backgroundStoreSchemaViolation } = require(path.join(bakedBackendDir, 'backgroundStoreError'));
@@ -5711,6 +5712,29 @@ const MIGRATIONS = [
        WHERE body->'runSaveVersion' = '30'::jsonb;
     `,
   },
+  {
+    version: 71,
+    name: 'card rarity bands and the opening cost ceiling',
+    // ADR-0523: rarity becomes a material band adjusted by footprint, a pile carries an exact
+    // rarity quota instead of a flat catalog shuffle, and the Sectios after the first two
+    // Battles cap card cost at six. The pile sequence changed outright, so the hidden cursor
+    // restarts at zero.
+    //
+    // A Sectio already open keeps the row it is showing rather than being redealt: those offers
+    // are a transaction the player is part-way through, and each offer re-reads its rarity from
+    // the live catalog when the document loads, so the row relabels itself without this
+    // statement touching it. Everything already bought, sold, or expuncted stands.
+    sql: `
+      UPDATE active_runs
+         SET body = body || jsonb_build_object(
+               'runSaveVersion', 32,
+               'sectioCardCursor', 0
+             ),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE body->'runSaveVersion' = '31'::jsonb;
+    `,
+  },
 ];
 
 let pool = null;
@@ -7842,6 +7866,32 @@ app.get('/api/__devctl/health', (_req, res, next) => {
     port: Number(port),
     pid: process.pid,
   });
+});
+
+// ADR-0522: the Card Size instrument writes deterministic Git-owned layout numbers for the
+// Run's card rows, never live-media bytes or database state. Same shape as the divider
+// route below: named dev harness only, no client-supplied path, admin-gated.
+app.put('/api/studio/run-card-row-sizing/defaults', async (req, res) => {
+  if (process.env.DEVCTL_MANAGED !== '1' || !isLoopbackRequest(req)) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  try {
+    const sizing = await saveRunCardRowSizing({
+      repoDir: process.env.DEVCTL_REPO_DIR,
+      value: req.body,
+    });
+    res.setHeader('Cache-Control', 'no-store');
+    res.status(200).json(sizing);
+  } catch (error) {
+    console.error('run card row sizing save failed:', error);
+    res.status(error.statusCode || 500).json({
+      error: error.statusCode === 400 ? 'invalid_sizing' : 'sizing_save_failed',
+      details: error.message,
+    });
+  }
 });
 
 // ADR-0507: the divider fitting instrument writes deterministic Git-owned geometry, never
@@ -18311,6 +18361,16 @@ const RUN_STARTER_CARD_ART_BY_ID = Object.freeze({
   'his-grace': Object.freeze({ title: 'His Grace', pieces: Object.freeze(['king']), value: 0 }),
   'front-lines': Object.freeze({ title: 'Front Lines', pieces: Object.freeze(['pawn', 'pawn']), value: 2 }),
 });
+// ADR-0516/0517: art is keyed to (footprint, roster), so the identity set is derived from the
+// live deck rather than restated. A frozen list is what made the roster-keyed set impossible to
+// extend without editing the server. Falls back to empty when the shared package is absent,
+// which fails the projection closed rather than admitting an unknown id.
+const RUN_CARD_ART_FAMILY_IDS = Object.freeze([...new Set(
+  (Array.isArray(serverRender?.RUN_CARD_DECK) ? serverRender.RUN_CARD_DECK : [])
+    .map((card) => card?.artId)
+    .filter((artId) => typeof artId === 'string' && artId),
+)].sort());
+const RUN_CARD_ART_GENERATION_MODELS = Object.freeze(['pixellab-pixflux', 'codex-image-gen']);
 const RUN_CARD_ART_PIECE_VALUE = Object.freeze({ pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9 });
 const RUN_CARD_ART_PIECE_INITIAL = Object.freeze({ pawn: 'p', knight: 'k', bishop: 'b', rook: 'r', queen: 'q' });
 const RUN_CARD_ART_PIECE_ORDER = Object.freeze(['pawn', 'knight', 'bishop', 'rook', 'queen']);
@@ -18542,6 +18602,86 @@ function runStarterCardArtProjection(row, cardId, metadata, slotMetadata, proven
   };
 }
 
+/**
+ * Family-keyed Units-card art (ADR-0520). Same evidence bar as the roster set — exact prompt,
+ * its SHA-256, the scene and unit direction, and a job identifier that ties the bytes to the
+ * run that made them — but the identity is the family id and the generator may be either of
+ * the two the owner uses. A PixelLab version still carries its job id; a Codex version carries
+ * the rollout thread whose log holds the image_generation marker, which is what proves an
+ * image model produced it rather than a code drawer.
+ */
+function runCardArtFamilyProjection(row, metadata, provenance) {
+  // No slot-metadata identity mirror. v2 required the slot to restate cardType and cardId,
+  // which the slot path already encodes and the version metadata already carries; the only
+  // slot-owned fact that matters is the acceptance contract, checked below.
+  if (provenance.schema !== 'run-card-art-prompt-v3') {
+    return { claimed: true, issue: 'Units-card art requires exact v3 prompt provenance', value: null };
+  }
+  const cardId = runtimeSemanticText(metadata.cardId, 64);
+  const cardTitle = runtimeSemanticText(metadata.cardTitle, 160);
+  const historicalAnchor = runtimeSemanticText(metadata.historicalAnchor, 160);
+  const prompt = runtimeSemanticText(provenance.prompt, 8_000);
+  const promptSha256 = mediaSha(provenance.promptSha256);
+  const unitIdentity = runtimeSemanticText(provenance.unitIdentity, 2_000);
+  const sceneDirection = runtimeSemanticText(provenance.sceneDirection, 4_000);
+  if (!cardId || !RUN_CARD_ART_FAMILY_IDS.includes(cardId)) {
+    return { claimed: true, issue: 'Units-card art identity is not a live card-art family', value: null };
+  }
+  if (!cardTitle || !historicalAnchor || !prompt || !promptSha256 || !unitIdentity || !sceneDirection) {
+    return { claimed: true, issue: 'Units-card art provenance is incomplete', value: null };
+  }
+  if (crypto.createHash('sha256').update(prompt, 'utf8').digest('hex') !== promptSha256) {
+    return { claimed: true, issue: 'Units-card art prompt SHA-256 does not match its exact prompt', value: null };
+  }
+  const generationModel = runtimeSemanticText(provenance.generationModel, 64);
+  if (
+    !RUN_CARD_ART_GENERATION_MODELS.includes(generationModel)
+    || metadata.generationModel !== generationModel
+  ) return { claimed: true, issue: 'Units-card art generation model is unsupported', value: null };
+  const pixelLabJobId = mediaVersionId(provenance.pixelLabJobId);
+  const codexThreadId = runtimeSemanticText(provenance.codexThreadId, 64);
+  if (generationModel === 'pixellab-pixflux' && !pixelLabJobId) {
+    return { claimed: true, issue: 'PixelLab card art requires its job id', value: null };
+  }
+  if (generationModel === 'codex-image-gen' && !codexThreadId) {
+    return { claimed: true, issue: 'Codex card art requires its rollout thread id', value: null };
+  }
+  if (
+    metadata.cardType !== 'Units'
+    || metadata.nativeWidth !== 400 || metadata.nativeHeight !== 280
+  ) return { claimed: true, issue: 'Units-card art identity or generation metadata is inconsistent', value: null };
+  if (
+    !Array.isArray(metadata.pieces) || metadata.pieces.length < 1
+    || metadata.pieces.some((piece) => !RUN_CARD_ART_PIECE_ORDER.includes(piece))
+  ) return { claimed: true, issue: 'Units-card art pieces are missing or invalid', value: null };
+  const roster = [...metadata.pieces]
+    .sort((left, right) => RUN_CARD_ART_PIECE_ORDER.indexOf(left) - RUN_CARD_ART_PIECE_ORDER.indexOf(right))
+    .map((piece) => RUN_CARD_ART_PIECE_INITIAL[piece])
+    .join('');
+  const baseCost = metadata.pieces.reduce((sum, piece) => sum + RUN_CARD_ART_PIECE_VALUE[piece], 0);
+  // A family id is `<footprint>-<roster>`, so the roster half must agree with the pieces.
+  if (!cardId.endsWith(`-${roster}`) || metadata.baseCost !== baseCost || baseCost < 1 || baseCost > 10) {
+    return { claimed: true, issue: 'Units-card art composition does not match its family identity', value: null };
+  }
+  if (row.slot !== `ui/run/card-art/${cardId}/illustration.png`) {
+    return { claimed: true, issue: 'Units-card art slot does not match its family identity', value: null };
+  }
+  if (mediaAcceptanceContract(row).mode !== 'standalone') {
+    return { claimed: true, issue: 'Family card art is promoted per family, not as an acceptance group', value: null };
+  }
+  return {
+    claimed: true,
+    issue: null,
+    value: {
+      kind: 'family',
+      cardId,
+      versionId: String(row.id),
+      slot: row.slot,
+      sha256: row.blob_sha256,
+    },
+  };
+}
+
 function runCardArtProjection(row) {
   const claimed = row.domain === 'run-card-art'
     || (typeof row.slot === 'string' && row.slot.startsWith('ui/run/card-art/'));
@@ -18561,6 +18701,12 @@ function runCardArtProjection(row) {
     ? runStarterCardArtProjection(row, starterId, metadata, slotMetadata, provenance)
     : null;
   if (starter) return starter;
+  // ADR-0520: family-keyed art. One illustration per (footprint, roster), either generator,
+  // promoted per family rather than as one atomic set — a family is a whole illustration on
+  // its own, so holding 94 hostage to each other buys nothing the roster set needed.
+  if (metadata.schema === 'run-card-art-plan-v3') {
+    return runCardArtFamilyProjection(row, metadata, provenance);
+  }
   if (metadata.schema !== 'run-card-art-plan-v2') {
     return { claimed: true, issue: 'Units-card art requires typed v2 plan metadata', value: null };
   }
@@ -18632,6 +18778,31 @@ function runCardArtOwnerProofIssue(runCardArt, proof, surfaceUrl) {
       ) return 'Starter-card art review URL must identify its Card Layout starter card';
     } catch {
       return 'Starter-card art review URL is invalid';
+    }
+    return null;
+  }
+  // ADR-0520: a family illustration is complete on its own, so its proof mounts that one
+  // family's exact native raster on the Studio Card Prompts surface rather than all 94. The
+  // evidence bar is unchanged — the reviewed bytes must be the candidate's, at canonical 1x.
+  if (runCardArt.kind === 'family') {
+    if (
+      proof.schema !== 'live-media-owner-proof-v1' || proof.canonicalScale !== 1
+      || proof.surfaceKind !== 'Studio Card Prompts family illustration'
+      || proof.renderer !== 'RunCardPromptCatalog/RunCardArtCandidateGrid'
+      || proof.slot !== runCardArt.slot
+      || mediaSha(proof.contentSha256) !== runCardArt.sha256
+      || !isObjectRecord(proof.decodedNativeRaster)
+      || proof.decodedNativeRaster.width !== 400 || proof.decodedNativeRaster.height !== 280
+      || proof.decodedNativeRaster.scale !== 1
+    ) return 'Family card art review requires its exact Studio Card Prompts proof at canonical 1x';
+    try {
+      const url = new URL(surfaceUrl);
+      if (
+        url.pathname !== '/studio' || url.searchParams.get('cat') !== 'cardprompts'
+        || url.searchParams.get('cardPrompt') !== runCardArt.cardId
+      ) return 'Family card art review URL must identify its Card Prompts family';
+    } catch {
+      return 'Family card art review URL is invalid';
     }
     return null;
   }
@@ -23169,9 +23340,12 @@ function validateFormationRunBody(run) {
     if (typeof sectio.paidLipsanonBought !== 'boolean') return 'run.sectio.paidLipsanonBought is invalid';
   } else if (run.sectio !== null) return 'run.sectio is invalid outside Sectio';
 
-  if (run.phase === 'battle') {
+  // The aftermath report is the Battle just fought, still being read: closeBattle carries its
+  // runtime across and only leaving for the Sectio retires it (ADR-0377, ADR-0452). Requiring
+  // the runtime to be null there rejected the saved report of every won Battle.
+  if (run.phase === 'battle' || run.phase === 'aftermath') {
     if (!isObjectRecord(run.battleRuntime) || run.battleRuntime.battleIndex !== run.battleIndex) {
-      return 'run.battleRuntime is invalid during Battle';
+      return `run.battleRuntime is invalid during ${run.phase === 'battle' ? 'Battle' : 'Aftermath'}`;
     }
   } else if (run.battleRuntime !== null) return 'run.battleRuntime is invalid outside Battle';
   return null;

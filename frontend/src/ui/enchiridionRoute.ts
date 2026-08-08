@@ -12,6 +12,8 @@ import {
   RUN_LIPSANA,
   runCardDefinition,
   type LipsanonId,
+  type RunArmyPieceType,
+  type RunCardRarity,
 } from '../run/model';
 
 export const ENCHIRIDION_SECTIONS = ['units', 'terrain', 'cards', 'lipsana', 'ataraxia'] as const;
@@ -79,4 +81,89 @@ export function enchiridionCardFromPath(path: string): string | null {
   if (!slug || !Object.hasOwn(RUN_CARD_ID_BY_SLUG, slug)) return null;
   const id = RUN_CARD_ID_BY_SLUG[slug];
   return runCardDefinition(id) ? id : null;
+}
+
+// The cards gallery's filters are part of its address, not hidden component state: a filtered
+// view is a thing worth linking someone to, the same way one card face is. The vocabulary lives
+// here rather than in the gallery because the address is what validates it -- a query carries
+// whatever a reader typed, so every value is checked against these lists before it is believed.
+
+export const CARD_GOLD_FILTER_VALUES = Object.freeze(
+  Array.from({ length: 10 }, (_, index) => String(index)),
+) as readonly string[];
+export const CARD_UNIT_FILTER_VALUES = Object.freeze(
+  ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'],
+) as readonly RunArmyPieceType[];
+export const CARD_RARITY_FILTER_VALUES = Object.freeze(
+  ['common', 'uncommon', 'rare'],
+) as readonly RunCardRarity[];
+
+export type CardGoldFilter = 'all' | '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9';
+export type CardUnitFilter = 'all' | RunArmyPieceType;
+export type CardRarityFilter = 'all' | RunCardRarity;
+
+export interface EnchiridionCardFilters {
+  gold: CardGoldFilter;
+  unit: CardUnitFilter;
+  rarity: CardRarityFilter;
+}
+
+/** No filter applied — what a bare /enchiridion/cards means, and what every parse falls back to. */
+export const ENCHIRIDION_CARD_FILTERS_ALL: Readonly<EnchiridionCardFilters> = Object.freeze({
+  gold: 'all',
+  unit: 'all',
+  rarity: 'all',
+});
+
+export function enchiridionCardFiltersAreAll(filters: EnchiridionCardFilters): boolean {
+  return filters.gold === 'all' && filters.unit === 'all' && filters.rarity === 'all';
+}
+
+function readFilter<T extends string>(
+  params: URLSearchParams,
+  key: string,
+  allowed: readonly string[],
+): T | 'all' {
+  const raw = params.get(key);
+  return raw !== null && allowed.includes(raw) ? (raw as T) : 'all';
+}
+
+/**
+ * The filters addressed by a /enchiridion/cards query. An absent, empty, repeated or unknown
+ * value reads as 'all' rather than throwing or erasing the address: a hand-typed
+ * `?gold=99` shows the whole catalog, which is the honest answer to "no such band".
+ */
+export function enchiridionCardFiltersFromSearch(search: string): EnchiridionCardFilters {
+  const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search);
+  return {
+    gold: readFilter<CardGoldFilter>(params, 'gold', CARD_GOLD_FILTER_VALUES),
+    unit: readFilter<CardUnitFilter>(params, 'unit', CARD_UNIT_FILTER_VALUES),
+    rarity: readFilter<CardRarityFilter>(params, 'rarity', CARD_RARITY_FILTER_VALUES),
+  };
+}
+
+/** The query for a set of filters; 'all' is omitted so no-filters is the bare address. */
+function enchiridionCardFilterQuery(filters: EnchiridionCardFilters): string {
+  const params = new URLSearchParams();
+  if (filters.gold !== 'all') params.set('gold', filters.gold);
+  if (filters.unit !== 'all') params.set('unit', filters.unit);
+  if (filters.rarity !== 'all') params.set('rarity', filters.rarity);
+  const query = params.toString();
+  return query ? `?${query}` : '';
+}
+
+/**
+ * The address of the gallery under a set of filters. Changing a filter lands here rather than on
+ * a card address: the path would otherwise keep naming a face the new filters have hidden.
+ */
+export function enchiridionCardsHref(filters: EnchiridionCardFilters): string {
+  return `${enchiridionSectionHref('cards')}${enchiridionCardFilterQuery(filters)}`;
+}
+
+/** The address of one card face, keeping the filters the reader was browsing under. */
+export function enchiridionCardHrefUnderFilters(
+  cardId: string,
+  filters: EnchiridionCardFilters,
+): string {
+  return `${enchiridionCardHref(cardId)}${enchiridionCardFilterQuery(filters)}`;
 }

@@ -14,4 +14,17 @@ describe('Run card cost coin', () => {
     expect(markup).toContain('>3</span>');
     expect(markup).not.toContain('>gold<');
   });
+
+  it('strikes the starter coin blank, drawing the same coin with no numeral', () => {
+    const struck = renderToStaticMarkup(<RunCardCostCoin value={2} sourceUrl="/coin.png" />);
+    const blank = renderToStaticMarkup(<RunCardCostCoin value="starter" sourceUrl="/coin.png" />);
+    // Same coin art, so the band is marked by the ornament every other band uses.
+    expect(blank).toContain('src="/coin.png"');
+    expect(blank).toContain('class="run-card-cost-coin-art"');
+    // No numeral, and in particular not the 2 gold His Grace is nominally worth.
+    expect(blank).not.toContain('run-card-cost-coin-value');
+    expect(struck).toContain('>2</span>');
+    expect(blank).not.toContain('>2</span>');
+    expect(blank).toContain('aria-label="Starter"');
+  });
 });

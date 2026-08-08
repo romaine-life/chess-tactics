@@ -8,7 +8,7 @@ partially-supersedes:
   - "[ADR-0515](0515-player-arranges-rotation-canonical-cards-from-a-complete-shuffle.md)"
 ---
 
-# ADR-0520: A formation is carried on the cursor
+# ADR-0524: A formation is carried on the cursor
 
 ## Context and Problem Statement
 

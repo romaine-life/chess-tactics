@@ -5,6 +5,7 @@ import { cardContentsLabel, type RunCardDefinition, type RunCardOffer } from '..
 import { RunCardFace } from './RunCardFace';
 import { runCardFaceContent, runCardFrameSlot } from './runCardFaceContent';
 import { runCardFrameGeometryForSlot } from './runCardFrameGeometry';
+import { runCardFloatClock } from './runCardLife';
 
 // One trading-card face shared by live play and reference surfaces. Runtime hosts add only
 // interaction around the projected face; formations, names, art, value, and flavor stay canonical.
@@ -14,7 +15,9 @@ export function RunCard({
   mode,
   emptyPieceIndices = [],
   layoutId,
+  seatIndex,
   disabled = false,
+  flying = false,
   onSelect,
 }: {
   card: RunCardDefinition | RunCardOffer;
@@ -23,7 +26,15 @@ export function RunCard({
   mode: 'sectio' | 'reference' | 'grant';
   emptyPieceIndices?: readonly number[];
   layoutId?: string;
+  /**
+   * The card's place in the row it is offered from, which makes it drift and glow on its own
+   * clock. Set it only where this offer IS the physical object on the table: a Sectio offer is
+   * the face of a pile, so the pile carries the life and the face inside it does not.
+   */
+  seatIndex?: number;
   disabled?: boolean;
+  /** This card is currently travelling elsewhere as a carried copy, so its seat prints empty. */
+  flying?: boolean;
   onSelect?: (element: HTMLButtonElement) => void;
 }): ReactElement {
   const identity = identityCard ?? card;
@@ -54,8 +65,14 @@ export function RunCard({
     );
   }
   const grant = mode === 'grant';
+  const alive = typeof seatIndex === 'number';
   return (
-    <span className="run-card-offer" data-run-sectio-offer-id={layoutId}>
+    <span
+      className={`run-card-offer${alive ? ' run-card-alive' : ''}`}
+      data-run-sectio-offer-id={layoutId}
+      data-flying={flying ? '' : undefined}
+      style={alive ? runCardFloatClock(seatIndex) : undefined}
+    >
       <button
         type="button"
         data-ui-sfx={grant ? 'card' : 'gold'}

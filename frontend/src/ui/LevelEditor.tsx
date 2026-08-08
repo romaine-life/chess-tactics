@@ -170,8 +170,10 @@ import {
 } from '../render/predrawnBackgroundProcessing';
 import {
   predrawnSelectionNeedsRevalidation,
+  predrawnSelectionReadFailure,
+  predrawnSelectionReadShouldRetry,
   predrawnSelectionValidity as resolvePredrawnSelectionValidity,
-  type PredrawnSelectionValidity,
+  type PredrawnSelectionCheck,
 } from './predrawnSelectionValidity';
 import { removeZoneEntriesReferencedOnlyByRemovedEvents } from './eventZoneCleanup';
 import { LevelDeploymentEditor, type DeploymentZoneOption } from './LevelDeploymentEditor';
@@ -2602,10 +2604,7 @@ const formatDifficulty = (difficulty: string | undefined): string => {
 };
 type StatusTone = 'info' | 'success' | 'warning' | 'error';
 type StatusLogEntry = { id: number; tone: StatusTone; message: string; detail?: string; at: string };
-type LevelEditorPredrawnSelectionValidity =
-  | PredrawnSelectionValidity
-  | { kind: 'checking' }
-  | { kind: 'error'; message: string };
+type LevelEditorPredrawnSelectionValidity = PredrawnSelectionCheck;
 const STATUS_LOG_LIMIT = 24;
 const EDITOR_SIGN_IN_RECOVERY_INTENT_KEY = 'ct:level-editor-sign-in-recovery:v1';
 const EDITOR_HYDRATION_WAIT_MS = 5_000;
@@ -2852,6 +2851,12 @@ export function LevelEditor(): ReactElement {
       ? { kind: 'checking' }
       : { kind: 'missing' },
   );
+  // Bumped to ask the server again after a read that failed for a reason that can pass. Nothing
+  // else re-runs the check: its other inputs are the board's own geometry and identity, which a
+  // lost backend or an expired cookie does not touch.
+  const [predrawnValidationAttempt, setPredrawnValidationAttempt] = useState(0);
+  /** Held so one failure episode reports one 401 to the shared session owner, however often it retries. */
+  const predrawnUnauthorizedReportedRef = useRef(false);
   const [boardPredrawnGenerationFrame, setBoardPredrawnGenerationFrame] = useState<PredrawnGenerationFrame | undefined>(
     () => initialBoard?.predrawnGenerationFrame,
   );
@@ -3147,7 +3152,14 @@ export function LevelEditor(): ReactElement {
   const [boardDoodads, setBoardDoodads] = useState<Record<string, { doodadId: string }>>(initialBoard?.doodads ?? {});
   // Multi-cell props (trees/houses), keyed by ANCHOR cell. Seeded from a loaded board, else empty.
   const [boardProps, setBoardProps] = useState<Record<string, { propId: string }>>(initialBoard?.props ?? {});
-  const [propBrushId, setPropBrushId] = useState<string>(() => defaultPropDef().id);
+  // A prop link is only worth sending if it arrives with that prop in hand. `?brush=` was
+  // honoured for every other placed-art kind and silently ignored for props, so every prop link
+  // landed on the default oak and made the recipient go find the thing it named.
+  const [propBrushId, setPropBrushId] = useState<string>(() => (
+    studioArm.kind === 'prop' && studioArm.brush && propDef(studioArm.brush)
+      ? studioArm.brush
+      : defaultPropDef().id
+  ));
   const [boardFloatingArtwork, setBoardFloatingArtwork] = useState<FloatingArtworkPlacement[]>(initialBoard?.floatingArtwork ?? []);
   const artworkAssets = STRUCTURE_ART_ASSETS.filter((asset) => structureArtHasCompleteTurntable(asset.id));
   const [artworkBrushId, setArtworkBrushId] = useState<string>(() => (
@@ -3855,16 +3867,26 @@ export function LevelEditor(): ReactElement {
       ));
     }).catch((cause) => {
       if (cancelled) return;
-      setPredrawnSelectionValidation({
-        kind: 'error',
-        message: cause instanceof Error ? cause.message : 'The immutable artwork selection could not be checked.',
-      });
+      // A 401 here is the shared sign-in expiring under an open document, not a bad selection.
+      // Hand it to ADR-0306's authoritative owner so the whole shell — including ADR-0519's pause
+      // — agrees about what happened, instead of this one screen inventing its own verdict.
+      //
+      // Only until the owner has once AGREED this is a 401, though. ADR-0519's probe answers a 401
+      // it disagrees with by restoring the session, which this screen reads as "signed back in" and
+      // retries; reporting the identical 401 again would flip identity straight back and spin the
+      // two against each other. A failure it has not yet called a 401 is always reported, so a
+      // transport error that later becomes a real 401 still reaches the owner. The latch clears as
+      // soon as the check settles into anything but an unread list.
+      const signedOut = predrawnUnauthorizedReportedRef.current || reportAuthSessionFailure(cause);
+      predrawnUnauthorizedReportedRef.current = signedOut;
+      setPredrawnSelectionValidation(predrawnSelectionReadFailure(cause, signedOut));
     });
     return () => { cancelled = true; };
   }, [
     currentEnvironmentGeometryFingerprintV2,
     currentPredrawnSurfaceKey,
     editorDocument?.document_id,
+    predrawnValidationAttempt,
   ]);
   const currentEditorBoardRef = useRef(currentEditorBoard);
   useEffect(() => { currentEditorBoardRef.current = currentEditorBoard; }, [currentEditorBoard]);
@@ -4040,7 +4062,9 @@ export function LevelEditor(): ReactElement {
         ? 'The remembered artwork belongs to an earlier terrain or scenery layout. Set matching artwork from a new attempt before activating AI mode.'
         : predrawnSelectionValidation.kind === 'checking'
           ? 'Wait for the remembered artwork selection to finish validating.'
-          : 'Open the Board Art Pipeline and Set a complete artwork version for this level first.';
+          : predrawnSelectionValidation.kind === 'unreachable'
+            ? 'The remembered artwork could not be read, so it cannot be activated yet. This retries on its own; sign in again if your session expired.'
+            : 'Open the Board Art Pipeline and Set a complete artwork version for this level first.';
       reportStatus(
         'AI artwork is unavailable.',
         'warning',
@@ -7643,6 +7667,63 @@ export function LevelEditor(): ReactElement {
     };
   }, [cloudSaveState]);
 
+  // The artwork check is account-gated, so it dies with the session AND with the backend — and it
+  // is the only thing standing between a level's remembered plate and the board. Left latched it
+  // hides artwork the level still holds, on every layer, with terrain suppressed and nothing said:
+  // a few seconds of backend restart used to blank a pre-drawn board until the page was reloaded.
+  // Retry it on the same signals ADR-0519 re-probes identity on, so the plate comes back by itself.
+  const predrawnSelectionCheckRef = useRef(predrawnSelectionValidation);
+  predrawnSelectionCheckRef.current = predrawnSelectionValidation;
+  const predrawnReadFailureAnnouncedRef = useRef(false);
+  // Every retry passes back through `checking`, so the FAILURE EPISODE is the unit here, not the
+  // instantaneous state. Keying the listeners on the state itself tore them down for the length of
+  // each attempt, and a recovery signal landing in that window fell on the floor — which is the
+  // same "it never came back" this whole effect exists to prevent. This latch is only ever read to
+  // hold the episode open across its own retries; nothing renders from it.
+  const predrawnReadFailurePending = predrawnSelectionReadShouldRetry(predrawnSelectionValidation)
+    || (predrawnSelectionValidation.kind === 'checking' && predrawnReadFailureAnnouncedRef.current);
+  useEffect(() => {
+    if (!predrawnReadFailurePending) {
+      predrawnReadFailureAnnouncedRef.current = false;
+      predrawnUnauthorizedReportedRef.current = false;
+      return undefined;
+    }
+    if (!predrawnReadFailureAnnouncedRef.current) {
+      predrawnReadFailureAnnouncedRef.current = true;
+      const check = predrawnSelectionCheckRef.current;
+      // Level Artwork is one panel out of eighteen, and this state is reported nowhere else. An
+      // unannounced blank board is exactly how this was last mistaken for lost artwork.
+      reportStatusRef.current(
+        'AI artwork hidden — its version list could not be read.',
+        'warning',
+        check.kind === 'unreachable' && check.signedOut
+          ? 'Your sign-in expired. The level still holds this artwork; it reappears once you sign in again.'
+          : 'The level still holds this artwork. It reappears as soon as the check succeeds, and this retries on its own.',
+      );
+    }
+    const retry = (): void => setPredrawnValidationAttempt((attempt) => attempt + 1);
+    const retryWhenVisible = (): void => { if (!document.hidden) retry(); };
+    const timer = window.setInterval(retryWhenVisible, EDITOR_SIGNED_OUT_REPROBE_MS);
+    window.addEventListener('online', retry);
+    window.addEventListener('focus', retry);
+    document.addEventListener('visibilitychange', retryWhenVisible);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('online', retry);
+      window.removeEventListener('focus', retry);
+      document.removeEventListener('visibilitychange', retryWhenVisible);
+    };
+  }, [predrawnReadFailurePending]);
+
+  // A sign-in noticed here or in another tab repaints the artwork without waiting for the tick
+  // above. Keyed on the session snapshot ALONE and reading the check through a ref: depending on
+  // the check's own state would re-fire on every retry this causes, which is an unbounded loop.
+  useEffect(() => {
+    if (!sharedAuthStatus?.reachable || !sharedAuthStatus.user.signed_in) return;
+    if (!predrawnSelectionReadShouldRetry(predrawnSelectionCheckRef.current)) return;
+    setPredrawnValidationAttempt((attempt) => attempt + 1);
+  }, [sharedAuthStatus]);
+
   // A route change must not manufacture a 700 ms loss window. Normal autosaves themselves use
   // keepalive, and this departure flush sends the latest unsent snapshot. If an older write is
   // already in flight during an in-app unmount, the latest write is chained after its CAS ack.
@@ -10589,7 +10670,9 @@ export function LevelEditor(): ReactElement {
                       ? 'This artwork belongs to an earlier terrain or scenery layout. Set matching artwork from a new attempt.'
                       : predrawnSelectionValidation.kind === 'checking'
                         ? 'The remembered AI artwork is still being checked.'
-                        : 'Set a complete artwork version in the Board Art Pipeline first.'}
+                        : predrawnSelectionValidation.kind === 'unreachable'
+                          ? 'The remembered AI artwork could not be read. It is still this level’s artwork; this retries on its own.'
+                          : 'Set a complete artwork version in the Board Art Pipeline first.'}
                 onClick={() => setLevelBackgroundMode('ai')}
               >AI artwork</ChromeButton>
             </div>
@@ -10602,7 +10685,11 @@ export function LevelEditor(): ReactElement {
                 {boardBackgroundModeState === 'ai'
                   ? predrawnSelectionValidation.kind === 'valid'
                     ? 'AI artwork is active'
-                    : 'AI artwork is unavailable'
+                    // "Unavailable" would be a verdict about the artwork. Nothing is wrong with it;
+                    // the check simply could not be made, and it is still the level's selection.
+                    : predrawnSelectionValidation.kind === 'unreachable'
+                      ? 'AI artwork could not be checked'
+                      : 'AI artwork is unavailable'
                   : 'Legacy tileset is active'}
               </strong>
               <span>
@@ -10614,9 +10701,13 @@ export function LevelEditor(): ReactElement {
                     ? 'The remembered AI version belongs to an earlier terrain or scenery layout and cannot be activated.'
                     : predrawnSelectionValidation.kind === 'checking'
                       ? 'Checking the remembered AI version and its environment geometry…'
-                      : predrawnSelectionValidation.kind === 'error'
-                        ? `The remembered AI version could not be validated. ${predrawnSelectionValidation.message}`
-                        : predrawnSelectionValidation.kind === 'unavailable'
+                      : predrawnSelectionValidation.kind === 'unreachable'
+                        ? predrawnSelectionValidation.signedOut
+                          ? `Your sign-in expired, so the remembered AI version could not be read. It is still this level’s artwork and returns once you sign in again. ${predrawnSelectionValidation.message}`
+                          : `The remembered AI version could not be read, so it is hidden until the check succeeds. Nothing about the selection changed, and this retries automatically. ${predrawnSelectionValidation.message}`
+                        : predrawnSelectionValidation.kind === 'error'
+                          ? `The remembered AI version could not be validated. ${predrawnSelectionValidation.message}`
+                          : predrawnSelectionValidation.kind === 'unavailable'
                           ? 'The remembered AI selection is missing, incomplete, archived, or no longer matches its immutable version.'
                           : 'No AI artwork version is selected yet.'}
               </span>
@@ -10630,7 +10721,9 @@ export function LevelEditor(): ReactElement {
                       ? 'Stale'
                       : predrawnSelectionValidation.kind === 'checking'
                         ? 'Checking'
-                        : 'Unavailable'}
+                        : predrawnSelectionValidation.kind === 'unreachable'
+                          ? 'Unread — retrying'
+                          : 'Unavailable'}
                 </small>
               ) : null}
             </div>

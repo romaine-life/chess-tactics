@@ -28,7 +28,9 @@ import {
   arrangedDeploymentCards,
   openDeploymentBandCells,
   cardRotationsAtCell,
+  deploymentOptions,
   distinctCardRotations,
+  gameForRunDeployment,
   nextArrangedCardToPlace,
   nextCardRotation,
   previousCardRotation,
@@ -38,6 +40,7 @@ import {
   turnedCardPlacement,
   resolveForcedDeploymentChoices,
   removeArrangedDeploymentCard,
+  selectedDeploymentLayout,
 } from './deployment';
 
 function fixture(
@@ -581,5 +584,29 @@ describe('formation deployment', () => {
     expect(battle.phase).toBe('battle');
     expect(battle.battleRuntime?.initiallyDeployedUnitIds).toEqual(runCardUnitIds(hisGrace));
     expect(battle.deployment?.blockedUnitIds).toEqual(expect.arrayContaining(runCardUnitIds(other)));
+  });
+
+  it('arranges against the authored enemy force, without revealing a randomized deal', () => {
+    const { run, level } = fixture(8, 8, 33);
+    level.layers.zones = [...level.layers.zones, {
+      id: 'enemy',
+      type: 'enemy-spawn',
+      tiles: [[0, 1], [1, 1]],
+    }];
+    level.events = [{
+      id: 'setup-enemy-deployment',
+      trigger: { kind: 'setup' },
+      do: [{ kind: 'spawn', side: 'enemy', roster: { rook: 1 }, zoneIds: ['enemy'] }],
+    }];
+    const options = deploymentOptions(run, level);
+    const board = gameForRunDeployment(run, level, selectedDeploymentLayout(run, options), true);
+    const enemies = board.pieces.filter((piece) => piece.side === 'enemy');
+
+    // The level's own enemy king stands where the level put it and stays there into Battle,
+    // so the player arranges against a position rather than an empty board.
+    expect(enemies.map((piece) => `${piece.type}@${piece.x},${piece.y}`)).toEqual(['king@1,0']);
+    // A setup deal fills its zone around the squares already taken, so what it would show now
+    // is not necessarily what Battle deals once every card has claimed its cells.
+    expect(board.pieces.some((piece) => piece.id.startsWith('spawn-'))).toBe(false);
   });
 });

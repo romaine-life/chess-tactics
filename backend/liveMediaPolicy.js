@@ -373,7 +373,9 @@ function ataraxiaNumeralOwnerProofIssue(row, proof, surfaceUrl = null) {
 // its ground contact. That is the completeness this validator exists to state, and its absence is
 // why the prop domain was refused acceptance outright and every prop in the game arrived over the
 // legacy bridge instead.
-const PROP_ART_SLOT = /^props\/([a-z][a-z0-9-]*)\/(back|front)\.png$/;
+// `impact` is a one-shot sprite sheet: the prop's resting frame followed by what happens to it
+// when it lands, ending on the appearance it keeps. It is a strip, so it is wider than a half.
+const PROP_ART_SLOT = /^props\/([a-z][a-z0-9-]*)\/(back|front|impact)\.png$/;
 
 /** The prop and depth half a slot names, or null when the slot is not prop artwork. */
 function propArtSlot(slot) {
@@ -400,7 +402,26 @@ function propArtMediaIssue(row, projectedRuntime = null) {
   // A prop frame is a sprite, not a scene. The upper bound is the largest installed prop frame
   // (the 192x300 oak) with room above it; anything larger is a source render that has not been
   // cropped to a placeable frame.
-  if (width > 512 || height > 512) return 'prop artwork frames are bounded at 512x512';
+  if (height > 512) return 'prop artwork frames are bounded at 512px tall';
+  if (contract.half === 'impact') {
+    // A strip is as wide as its frames; its frame is still bounded, and it must divide evenly or
+    // the renderer cannot cut a frame from it.
+    const metadata = mediaVersionMetadata(row);
+    const runtimeMeta = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+    const frameCount = Number(runtimeMeta?.frameCount);
+    const frameWidth = Number(runtimeMeta?.frameWidth);
+    if (!Number.isInteger(frameCount) || frameCount < 2 || frameCount > 32) {
+      return 'prop impact sheets require metadata.runtime.frameCount between 2 and 32';
+    }
+    if (!Number.isInteger(frameWidth) || frameWidth < 8 || frameWidth > 512) {
+      return 'prop impact sheets require a metadata.runtime.frameWidth between 8 and 512';
+    }
+    if (frameWidth * frameCount !== width) {
+      return 'prop impact sheet width must equal frameWidth times frameCount';
+    }
+    return null;
+  }
+  if (width > 512) return 'prop artwork frames are bounded at 512px wide';
   const metadata = mediaVersionMetadata(row);
   const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
   if (runtime && Object.keys(runtime).length) {
@@ -1616,6 +1637,9 @@ function predrawnBoardOwnerProofIssue(row, proof, surfaceUrl = null) {
   return null;
 }
 
+const RUN_CARD_FAMILY_RESAMPLED_EXCEPTION_SCHEMA = 'run-card-family-resampled-v1';
+const RUN_CARD_FAMILY_RESAMPLE_TRANSFORM = 'lanczos3-cover-fit-400x280';
+
 function nativeMediaEvidenceIssue(row) {
   const isRaster = String(row.media_type || '').startsWith('image/') && row.media_type !== 'image/svg+xml';
   if (!isRaster) return null;
@@ -1735,6 +1759,39 @@ function nativeMediaEvidenceIssue(row) {
       || Number(evidence.sourcePaintedHeight) !== expected.sourcePaintedHeight
       || evidence.transform !== RUN_CARD_FRAME_NORMALISED_EXCEPTION_TRANSFORM
     ) return 'ADR-0360 normalised card-frame evidence is missing its painted box or exact transform';
+    return null;
+  }
+  // ADR-0520: family card art may come from Codex, which renders far above the 400x280 card
+  // window and is downsampled to it. That IS spatial resampling, so it is recorded as such
+  // rather than claimed native — the evidence names the source raster it came down from and
+  // the exact transform, the same shape the ADR-0332 and ADR-0360 exceptions use.
+  if (evidence.schema === RUN_CARD_FAMILY_RESAMPLED_EXCEPTION_SCHEMA) {
+    if (!/^ui\/run\/card-art\/[0-9]+-[pkbrq]+\/illustration\.png$/.test(String(row.slot || ''))) {
+      return 'ADR-0520 resampled card-art evidence is restricted to family card-art slots';
+    }
+    if (
+      // The batch was promoted while this decision was numbered 0517; main had taken that
+      // number, so the ADR is 0520. Accepted rows cannot be patched, so both names are
+      // honoured and the stored ones stay truthful about when they were written.
+      !['ADR-0520', 'ADR-0517'].includes(evidence.decision)
+      || evidence.status !== 'owner-approved-production-exception'
+      || evidence.native1x !== false
+      || evidence.spatialResampling !== true
+      || evidence.generationModel !== 'codex-image-gen'
+    ) return 'ADR-0520 resampled card-art evidence is incomplete';
+    if (
+      Number(row.width) !== 400 || Number(row.height) !== 280
+      || Number(evidence.outputWidth) !== 400 || Number(evidence.outputHeight) !== 280
+    ) return 'ADR-0520 resampled card-art evidence has invalid output dimensions';
+    if (
+      !Number.isFinite(Number(evidence.sourceWidth)) || Number(evidence.sourceWidth) <= 400
+      || !Number.isFinite(Number(evidence.sourceHeight)) || Number(evidence.sourceHeight) <= 280
+    ) return 'ADR-0520 resampled card-art evidence must name a larger source raster';
+    if (
+      !normalizedSha(evidence.outputSha256)
+      || normalizedSha(evidence.outputSha256) !== normalizedSha(row.blob_sha256)
+      || evidence.transform !== RUN_CARD_FAMILY_RESAMPLE_TRANSFORM
+    ) return 'ADR-0520 resampled card-art evidence must authorize these bytes and its exact transform';
     return null;
   }
   if (evidence.native1x !== true) return 'nativeEvidence.native1x must be true';
