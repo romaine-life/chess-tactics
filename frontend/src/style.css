@@ -25373,12 +25373,16 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   user-select: none;
 }
 
+/* The acceptance proof asserts the review covered the decoded native raster at
+   exact scale, so the specimens print at their stored 1060x1484 pixels and this
+   pane scrolls. Scaling them to fit would make that claim false. */
 .run-card-back-study {
   align-items: start;
   display: flex;
   gap: var(--ds-space-6);
-  justify-content: center;
+  justify-content: safe center;
   max-inline-size: 100%;
+  overflow-x: auto;
 }
 
 .run-card-prototype-stage.is-card-back {
@@ -25438,12 +25442,31 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   font-size: 12px;
 }
 
+/* Native size, never fitted: the acceptance proof asserts this review covered
+   the decoded 1060x1484 raster at exact scale, so a specimen the flex row was
+   allowed to shrink would make that claim false. */
 .run-card-back-study > figure {
   align-items: center;
   display: grid;
+  flex: 0 0 auto;
   gap: var(--ds-space-2);
   justify-items: center;
   margin: 0;
+}
+
+/* What is being judged is the card's edge, and a near-black card on a near-black
+   page has none to see. Each specimen sits on the registered Studio card-image
+   surface, whose checkerboard is already the alpha field this review needs; the
+   two rules below only size it, and paint nothing of their own. */
+.tileset-studio-card-image.run-card-back-specimen {
+  min-block-size: 0;
+}
+
+.tileset-studio-card-image.run-card-back-specimen img.run-card-back {
+  block-size: 1484px;
+  inline-size: 1060px;
+  max-inline-size: none;
+  object-fit: none;
 }
 
 .run-card-back-study figcaption {
