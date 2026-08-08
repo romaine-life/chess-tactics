@@ -59,7 +59,11 @@ Chosen: **the formation is carried on the cursor. The player points at a square 
 the seating; a secondary click turns what is being carried.**
 
 1. **Every square on the battlefield takes the pointer**, not only the squares a corner could sit
-   on. Sweeping the formation across the board is the gesture.
+   on. Sweeping the formation across the board is the gesture. A square outside the formation's
+   reach carries a hit target *only* to locate the pointer — it is not an action, so it takes none
+   of the shared board's square-local paint. Otherwise the generic hover ring rides the cursor
+   across ground nothing can be placed on, lighting a tile on the far side of the board as though
+   it were a target.
 2. **The pointed square resolves to a whole seating that COVERS it.** Only seatings that cover the
    pointed square are candidates, so the formation is always under the hand and never slides off
    to somewhere else on the band. A square no seating can cover resolves to nothing rather than to

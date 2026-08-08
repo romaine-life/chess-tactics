@@ -21426,6 +21426,16 @@ button.tileset-relationship-cell {
   opacity: .26;
 }
 
+/* Squares outside the formation's reach carry a hit target only so the pointer can be located
+   over them — pointing at one is how a turn finds a fit that the current turn has not got. They
+   are not actions, so they take none of the shared board's square-local paint. Without this the
+   generic hover ring rides the cursor across ground nothing can be placed on, lighting a tile on
+   the far side of the board as if it were a target. Board-scoped to outrank `:hover`. */
+.run-deployment-board .run-deployment-cell:not(.is-placeable)::before,
+.run-deployment-board .run-deployment-cell:not(.is-placeable)::after {
+  opacity: 0;
+}
+
 /* The formation under the pointer IS the cursor while a seating resolves. */
 .run-deployment-board.is-carrying-formation .run-deployment-cell {
   cursor: none;

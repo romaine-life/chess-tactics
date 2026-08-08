@@ -129,6 +129,26 @@ describe('Run Deployment aiming', () => {
     expect(Number(band[1])).toBeLessThan(1);
   });
 
+  // Aim-anywhere needs a hit target on every square, and that opted every square into the shared
+  // board's generic hover ring — so a lit tile rode the cursor across ground nothing can be
+  // placed on, on the far side of the board from the band.
+  it('keeps square-local paint off squares outside the formation\'s reach', () => {
+    const styles = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+    const suppression = styles.match(
+      /\.run-deployment-board \.run-deployment-cell:not\(\.is-placeable\)::before,\s*\.run-deployment-board \.run-deployment-cell:not\(\.is-placeable\)::after \{\s*opacity: 0;\s*\}/,
+    );
+
+    expect(suppression).toBeTruthy();
+    // It must outrank the shared `:hover` rule, which is why it is scoped to the board. A
+    // bare `.run-deployment-cell:not(.is-placeable)::after` ties on specificity and would be
+    // decided by source order alone.
+    expect(styles).toContain('.skirmish-board-cell-hit:hover::after {');
+    expect(styles.indexOf('.run-deployment-board .run-deployment-cell:not(.is-placeable)::after'))
+      .toBeGreaterThan(styles.indexOf('.skirmish-board-cell-hit:hover::after {'));
+    // The square is still a hit target — pointing at one is how a turn finds a fit.
+    expect(runScreen).toContain('onPointerEnter={() => setPointedArrangementCell(cellKey)}');
+  });
+
   // While the formation is the cursor, the pointer hides under it; when no seating resolves the
   // pointer comes back, so the player is never left with neither.
   it('hides the pointer only while a seating is resolved', () => {
