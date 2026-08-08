@@ -10,7 +10,9 @@ export type GenerationFrameCloudState =
   | 'saving'
   | 'saved'
   | 'error'
-  | 'conflict';
+  | 'conflict'
+  /** An expired sign-in under an intact working copy; writes resume when the owner signs back in. */
+  | 'signed-out';
 
 export type PredrawnGenerationFrameStatusKind =
   | 'missing'
@@ -79,6 +81,14 @@ export function predrawnGenerationFrameStatus({
   }
 
   const inCloudWorkingCopy = samePredrawnGenerationFrame(current, cloudFrame);
+  if (inCloudWorkingCopy && cloudState === 'signed-out') {
+    return {
+      kind: 'blocked',
+      title: `Working-copy frame saved · ${readout}`,
+      detail: `This frame is durable, but your sign-in expired. Sign in again before you ${promotionVerb}.`,
+      tone: 'blocked',
+    };
+  }
   if (inCloudWorkingCopy && (cloudState === 'error' || cloudState === 'conflict')) {
     return {
       kind: 'blocked',
@@ -96,6 +106,14 @@ export function predrawnGenerationFrameStatus({
     };
   }
 
+  if (cloudState === 'signed-out') {
+    return {
+      kind: 'blocked',
+      title: `Frame only in this editor · ${readout}`,
+      detail: `Your sign-in expired. Keep this editor open and sign in again before you ${promotionVerb}; this crop is preserved here.`,
+      tone: 'blocked',
+    };
+  }
   if (cloudState === 'error' || cloudState === 'conflict') {
     return {
       kind: 'blocked',

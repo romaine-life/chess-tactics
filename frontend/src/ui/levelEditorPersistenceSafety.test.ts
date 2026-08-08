@@ -89,4 +89,69 @@ describe('level editor persistence safety UI', () => {
     expect(boardUpdate).toBeGreaterThan(signatureUpdate);
     expect(revisionUpdate).toBeGreaterThan(boardUpdate);
   });
+
+  it('reports an autosave 401 as a sign-out instead of a generic write failure', () => {
+    const autosaveStart = source.indexOf('const request = autosaveEditorDocument(');
+    const autosaveEnd = source.indexOf('autosavePromiseRef.current = request;', autosaveStart);
+    const autosave = source.slice(autosaveStart, autosaveEnd);
+    const signOut = autosave.indexOf('if (reportAuthSessionFailure(error)) {');
+    const genericError = autosave.indexOf("setCloudSaveState('error')");
+
+    expect(signOut).toBeGreaterThan(-1);
+    expect(autosave.indexOf('enterCloudSignOut()')).toBeGreaterThan(signOut);
+    // The sign-out branch has to be reached before anything can latch the generic error state,
+    // which is what previously stopped autosave for the rest of the session.
+    expect(genericError).toBeGreaterThan(signOut);
+  });
+
+  it('keeps an open working copy mounted and buffering when its sign-in expires', () => {
+    const resolveStart = source.indexOf('if (!sharedAuthStatus) return undefined;');
+    const teardown = source.indexOf('setEditAuthorityState(\'checking\');', resolveStart);
+    const guard = source.slice(resolveStart, teardown);
+
+    // Pausing must be decided BEFORE document resolution tears the session down, otherwise the
+    // signed-out branch blocks the board and every edit since the expiry is stranded in RAM.
+    expect(guard).toContain('isInterruptedByCloudSignOut({');
+    expect(guard).toContain('documentOpen: Boolean(editorDocumentRef.current)');
+    expect(guard).toContain('enterCloudSignOut();');
+    expect(guard).toContain('shouldResumeInterruptedCloudSync({');
+    expect(guard).toContain('void resumeInterruptedCloudSync();');
+  });
+
+  it('addresses the browser recovery by the document owner, not the live session', () => {
+    expect(source).toContain('documentOwnerEmailRef.current = ownerEmail;');
+    expect(source).toContain('? activeOwnerEmail() || undefined');
+    expect(source).toMatch(/const activeOwnerEmail = \(\): string => \(\s*me\?\.email\?\.trim\(\)\.toLowerCase\(\) \|\| documentOwnerEmailRef\.current \|\| ''/);
+  });
+
+  it('resumes the mounted document without repainting it from the server body', () => {
+    const resumeStart = source.indexOf('const resumeInterruptedCloudSync =');
+    const resumeEnd = source.indexOf('const mountAcknowledgedWorkingCopy =', resumeStart);
+    const resume = source.slice(resumeStart, resumeEnd);
+
+    expect(resume).toContain('openEditorDocumentEditSession(');
+    expect(resume).toContain('lastCloudSyncedSigRef.current = normalizedLevelEditorSignature(server.level)');
+    expect(resume).toContain("setCloudSaveState(server.baseline_conflict ? 'conflict' : 'pending')");
+    // applyLevelDocument here would paint the pre-sign-out body over the live editor.
+    expect(resume).not.toContain('applyLevelDocument');
+  });
+
+  it('offers an unadopted browser branch instead of leaving it addressable only from storage', () => {
+    expect(source).toContain('data-testid="le-preserved-branch-offer"');
+    expect(source).toContain('data-testid="le-restore-preserved-branch"');
+    expect(source).toContain('data-testid="le-discard-preserved-branch"');
+    expect(source).toContain('shouldOfferPreservedEditorBranch({');
+    expect(source).toContain('const restorePreservedBranchOffer = (): void => {');
+    // The export must fall back to the offered branch; a retired page session owns no scoped draft.
+    expect(source).toContain('}) ?? preservedBranchOffer?.draft ?? null;');
+  });
+
+  it('gives the signed-out pause its own recoverable action and state', () => {
+    expect(source).toContain('data-testid="le-sign-in-resume-banner"');
+    expect(source).toContain('data-testid="le-sign-in-resume"');
+    expect(source).toContain("cloudSaveState === 'signed-out'");
+    expect(source).toContain('const signInToResumeCloudSync = (): void => {');
+    // With no browser recovery the live board is the only copy, so sign-in must not navigate away.
+    expect(source).toContain('if (localBackupAvailable === false) {');
+  });
 });
