@@ -40,6 +40,7 @@ import {
   leaveSectio,
   markReservistDeployed,
   observeRunUnitDeath,
+  payRunEnPassantBounty,
   prepareDeployment,
   rerollDeployment,
   resetSectio,
@@ -1130,12 +1131,23 @@ function RunBattlefieldPanel({
   const battleCanRestart = !onReviewRewards && canRestartBattle(retryRun);
   const battleCanReroll = !onReviewRewards && !unitDeparture && canRerollDeployment(retryRun);
 
-  const transformCommittedBoard = useCallback<RunBattleTransformSink>((game, _events) => {
+  const transformCommittedBoard = useCallback<RunBattleTransformSink>((game, events) => {
       let active = useActiveRun.getState().run;
       if (!active || active.phase !== 'battle' || active.id !== run.id || !active.battleRuntime) return game;
-      const observedDeadUnitIds = active.battleRuntime.observedDeadUnitIds;
       let transformed: GameState = game;
       let changed = false;
+      // The en passant bounty is the PLAYER's alone: the same capture is available to the
+      // enemy and pays it nothing. The capturer is read off the committed board rather than
+      // the Run roster, so a Reservist or a promoted pawn earns it like any other unit.
+      for (const event of events) {
+        if (event.kind !== 'captured' || !event.enPassant) continue;
+        if (transformed.pieces.find((candidate) => candidate.id === event.by)?.side !== 'player') continue;
+        const paid = payRunEnPassantBounty(active);
+        if (paid === active) continue;
+        active = paid;
+        changed = true;
+      }
+      const observedDeadUnitIds = active.battleRuntime?.observedDeadUnitIds ?? [];
       for (const unit of active.army) {
         const piece = transformed.pieces.find((candidate) => candidate.id === unit.id);
         if (!piece || piece.alive || observedDeadUnitIds.includes(unit.id)) continue;
