@@ -5870,12 +5870,11 @@ body.loading-bootstrap .app-startup-status {
   animation: skirmish-gold-notice-rise 1400ms ease-out forwards !important;
   color: #ffd27b;
   display: flex;
-  font-family: var(--ds-font-display);
-  font-size: var(--ds-text-xl);
-  font-weight: 700;
+  /* The display face is a pixel face, and those are 400-only (ADR-0016) — a synthetic bold
+     on it is smeared, not heavier. Contrast comes from the shadow below, not from weight. */
+  font: var(--ds-weight-regular) var(--ds-text-xl)/1 var(--ds-font-display);
   gap: var(--ds-space-1);
   left: 0;
-  line-height: 1;
   position: absolute;
   /* The board underneath is arbitrary art, so the number carries its own contrast rather
      than assuming a readable tile behind it. */
@@ -19781,7 +19780,7 @@ button.tileset-relationship-cell {
 .run-gold-amount {
   align-items: center;
   display: inline-flex;
-  font: var(--ds-weight-bold) var(--ds-text-lg)/1 var(--ds-font-display);
+  font: var(--ds-weight-regular) var(--ds-text-lg)/1 var(--ds-font-display);
   gap: var(--ds-space-1);
   white-space: nowrap;
 }
@@ -19811,7 +19810,7 @@ button.tileset-relationship-cell {
 .run-gold-transaction-amount {
   align-items: center;
   display: inline-flex;
-  font: var(--ds-weight-bold) var(--ds-text-lg)/1 var(--ds-font-display);
+  font: var(--ds-weight-regular) var(--ds-text-lg)/1 var(--ds-font-display);
   gap: var(--ds-space-1);
   min-block-size: 64px;
   min-inline-size: calc(64px + var(--ds-space-1) + 4ch);
