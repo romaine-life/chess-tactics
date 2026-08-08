@@ -31,6 +31,7 @@ import {
 import { objectBaseZIndex } from './sceneDepth';
 import { ViewPane, minimumZoomToCoverViewport, type ViewPaneViewportSize } from '../ui/shared/ViewPane';
 import { PawnPromotionPicker } from '../ui/PawnPromotionPicker';
+import { BattleGoldNoticeMarker } from '../ui/BattleGoldNotice';
 import { useBoardCameraFraming } from '../ui/shared/BoardViewFraming';
 import { useBoardFrameReveal } from './boardArtReady';
 import { loadingMark } from '../diagnostics/loadingTimeline';
@@ -1970,6 +1971,8 @@ export function SkirmishBoard({
     ? livePieces.find((piece) => piece.id === choosingPromotion.pieceId && piece.alive) ?? null
     : null;
   const promotionPickerSeat = promotingPiece ? boardLabCellPosition(promotingPiece) : null;
+  const goldNotices = useSkirmish((s) => s.goldNotices);
+  const retireGoldNotice = useSkirmish((s) => s.retireGoldNotice);
   const sceneUrls = useMemo(
     () => sceneArtUrls(sceneBoard, seed, ambientSceneCover, predrawnBackgroundActive),
     [ambientSceneCover, predrawnBackgroundActive, sceneBoard, seed],
@@ -2565,6 +2568,19 @@ export function SkirmishBoard({
           }}
         >
           {!surfaceState ? <PremoveArrowLayer arrows={premoveChain} /> : null}
+          {/* Gold the Run just paid, rising off the square that earned it. Board space, so it
+              stays over that square through pan and zoom. */}
+          {!surfaceState
+            ? goldNotices.map((notice) => (
+                <BattleGoldNoticeMarker
+                  key={notice.id}
+                  notice={notice}
+                  boardSeat={boardLabCellPosition(notice.at)}
+                  boardZoom={boardZoom}
+                  onRetire={retireGoldNotice}
+                />
+              ))
+            : null}
           {choosingPromotion && promotingPiece && promotionPickerSeat ? (
             <PawnPromotionPicker
               piece={promotingPiece}

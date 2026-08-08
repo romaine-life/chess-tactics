@@ -469,20 +469,32 @@ describe('en passant bounty', () => {
   it('pays five gold the moment the capture lands, and pays again for a second one', () => {
     const battle = inBattle(createRun(war(), 11));
 
-    const once = payRunEnPassantBounty(battle);
-    expect(once.goldTenths).toBe(battle.goldTenths + RUN_EN_PASSANT_BOUNTY_TENTHS);
+    const once = payRunEnPassantBounty(battle, { x: 3, y: 4 })!;
+    expect(once.run.goldTenths).toBe(battle.goldTenths + RUN_EN_PASSANT_BOUNTY_TENTHS);
     expect(RUN_EN_PASSANT_BOUNTY_TENTHS).toBe(50);
 
-    const twice = payRunEnPassantBounty(once);
-    expect(twice.goldTenths).toBe(battle.goldTenths + 2 * RUN_EN_PASSANT_BOUNTY_TENTHS);
+    const twice = payRunEnPassantBounty(once.run, { x: 3, y: 4 })!;
+    expect(twice.run.goldTenths).toBe(battle.goldTenths + 2 * RUN_EN_PASSANT_BOUNTY_TENTHS);
+  });
+
+  it('hands back the notice that accounts for the payment, welded to the paid document', () => {
+    // The bounty and the report of the bounty are one return value on purpose: there is no
+    // call that produces the gold and leaves the player with nothing to see or read.
+    const battle = inBattle(createRun(war(), 21));
+    const paid = payRunEnPassantBounty(battle, { x: 5, y: 2 })!;
+
+    expect(paid.notice.goldTenths).toBe(RUN_EN_PASSANT_BOUNTY_TENTHS);
+    expect(paid.notice.at).toEqual({ x: 5, y: 2 });
+    expect(paid.notice.log).toContain('En passant');
+    expect(paid.notice.log).toContain('5');
   });
 
   it('pays nothing outside a Battle, and nothing without a battle runtime', () => {
     const sectio = firstSectio(12);
-    expect(payRunEnPassantBounty(sectio)).toBe(sectio);
+    expect(payRunEnPassantBounty(sectio, { x: 0, y: 0 })).toBeNull();
 
     const noRuntime: RunDocument = { ...sectio, phase: 'battle', battleRuntime: null };
-    expect(payRunEnPassantBounty(noRuntime)).toBe(noRuntime);
+    expect(payRunEnPassantBounty(noRuntime, { x: 0, y: 0 })).toBeNull();
   });
 
   it('is taken back with the move that earned it', () => {
@@ -490,10 +502,10 @@ describe('en passant bounty', () => {
     // bounty the move paid -- an en passant cannot be taken twice by taking it back.
     const battle = inBattle(createRun(war(), 13));
     const checkpoint = captureRunBattleUndo(battle);
-    const paid = payRunEnPassantBounty(battle);
-    expect(paid.goldTenths).toBeGreaterThan(battle.goldTenths);
+    const paid = payRunEnPassantBounty(battle, { x: 1, y: 1 })!;
+    expect(paid.run.goldTenths).toBeGreaterThan(battle.goldTenths);
 
-    const undone = undoRunBattleMove(paid, checkpoint);
+    const undone = undoRunBattleMove(paid.run, checkpoint);
     expect(undone.goldTenths).toBe(battle.goldTenths - RUN_BATTLE_UNDO_COST_TENTHS);
   });
 });

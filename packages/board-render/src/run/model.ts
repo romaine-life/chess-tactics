@@ -1,6 +1,6 @@
 import { validateLevel, type Level, type War } from '../core/level';
 import { migrateLevelDocument } from '../core/levelMigration';
-import type { PieceType } from '../core/types';
+import type { PieceType, Vec } from '../core/types';
 import {
   LIPSANON_BY_ID,
   RUN_LIPSANA,
@@ -2554,6 +2554,35 @@ export function undoRunBattleMove(
 }
 
 /**
+ * One thing the Run did to a live Battle, said in the words the Battle will use.
+ *
+ * The Run reaches into a running Battle to pay bounties and land Reservists -- changes the
+ * board store makes no decision about and therefore cannot narrate on the Run's behalf. So
+ * every such change hands one of these back, and it is not optional: the functions below
+ * return the notice welded to the document they produce, and the transform that carries
+ * them out can only return them together (see `RunBattleTransformResult` in the store).
+ * A Run change the player is never told about is not a quieter feature, it is a missing
+ * one -- so there is deliberately no way to make the change and drop the telling.
+ *
+ * `at` is the board cell it happened over, so the Battle can seat a notice there as well as
+ * write the line. `goldTenths` is present exactly when the Run's economy moved.
+ */
+export interface RunBattleNotice {
+  /** The Battle log line, already in log voice. */
+  readonly log: string;
+  /** Where on the board it happened. */
+  readonly at: Vec;
+  /** The signed gold delta in tenths, when this notice moved the economy. */
+  readonly goldTenths?: number;
+}
+
+/** A Run document and the notice that accounts for how it got that way. */
+export interface RunBattleChange {
+  readonly run: RunDocument;
+  readonly notice: RunBattleNotice;
+}
+
+/**
  * One en passant capture the player landed pays a bounty, in gold.
  *
  * It is paid the moment the capture commits rather than banked with the Battle's reward,
@@ -2564,10 +2593,21 @@ export function undoRunBattleMove(
  *
  * Board law is untouched. The Run pays for what the pieces did; it does not change what
  * they may do (ADR-0193).
+ *
+ * `null` when this Run has no live Battle to be paid from. Otherwise the paid document
+ * arrives with its notice attached, because the five gold and the report of the five gold
+ * are the same event.
  */
-export function payRunEnPassantBounty(run: RunDocument): RunDocument {
-  if (run.phase !== 'battle' || !run.battleRuntime) return run;
-  return touch({ ...run, goldTenths: run.goldTenths + RUN_EN_PASSANT_BOUNTY_TENTHS });
+export function payRunEnPassantBounty(run: RunDocument, at: Vec): RunBattleChange | null {
+  if (run.phase !== 'battle' || !run.battleRuntime) return null;
+  return {
+    run: touch({ ...run, goldTenths: run.goldTenths + RUN_EN_PASSANT_BOUNTY_TENTHS }),
+    notice: {
+      log: `En passant — ${formatGold(RUN_EN_PASSANT_BOUNTY_TENTHS)} gold claimed.`,
+      at: { x: at.x, y: at.y },
+      goldTenths: RUN_EN_PASSANT_BOUNTY_TENTHS,
+    },
+  };
 }
 
 export function observeRunUnitDeath(run: RunDocument, unitId: string): {
@@ -2607,16 +2647,30 @@ export function observeRunUnitDeath(run: RunDocument, unitId: string): {
   return { run: touch({ ...run, battleRuntime: nextRuntime }), reservistUnitId };
 }
 
-export function markReservistDeployed(run: RunDocument, unitId: string): RunDocument {
-  if (!run.battleRuntime || !run.battleRuntime.reservistPoolUnitIds.includes(unitId)) return run;
-  return touch({
-    ...run,
-    battleRuntime: {
-      ...run.battleRuntime,
-      reservistPoolUnitIds: run.battleRuntime.reservistPoolUnitIds.filter((id) => id !== unitId),
-      deployedReservistUnitIds: [...run.battleRuntime.deployedReservistUnitIds, unitId],
+/**
+ * A Reservist takes the field mid-Battle. Like the bounty, this is the Run adding something
+ * to a board the player is watching, so it hands back the line that says so -- an extra unit
+ * appearing out of an unannounced turn is exactly the kind of thing the log exists for.
+ *
+ * `null` when this unit is not a Reservist awaiting deployment.
+ */
+export function markReservistDeployed(run: RunDocument, unitId: string, at: Vec): RunBattleChange | null {
+  if (!run.battleRuntime || !run.battleRuntime.reservistPoolUnitIds.includes(unitId)) return null;
+  const unit = run.army.find((candidate) => candidate.id === unitId);
+  return {
+    run: touch({
+      ...run,
+      battleRuntime: {
+        ...run.battleRuntime,
+        reservistPoolUnitIds: run.battleRuntime.reservistPoolUnitIds.filter((id) => id !== unitId),
+        deployedReservistUnitIds: [...run.battleRuntime.deployedReservistUnitIds, unitId],
+      },
+    }),
+    notice: {
+      log: `${unit ? `${unit.name} answers` : 'A Reservist answers'} the call and takes the field.`,
+      at: { x: at.x, y: at.y },
     },
-  });
+  };
 }
 
 /**
