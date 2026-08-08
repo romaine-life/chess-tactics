@@ -274,6 +274,19 @@ describe('Run chrome hierarchy', () => {
     expect(runCard).not.toContain('run-card-purchased-indicator');
   });
 
+  it('transfers the opening grant into the Chartulary on the same beat, carried past its phase', () => {
+    // The Run's first card is admitted exactly as Adlectio admits one, so it gets the same
+    // travel. It differs only in outliving its own screen: the take ends Bona Vacantia, so
+    // the carry is retained until the director settles Deployment underneath it (ADR-0385).
+    expect(runScreen).toContain("useRunCardFlights({ handoff: 'scene-settled' })");
+    expect(runScreen).toContain('launchGrantCardFlight(card, source, target)');
+    expect(runScreen).toContain('takeVacantiaCard(latest, coreId)');
+    expect(runScreen).toContain('taken and added to the Chartulary.');
+    expect(runCardFlight).toContain("handoff?: 'landing' | 'scene-settled'");
+    expect(runCardFlight).toContain('onSceneSettled={retain ? settle : undefined}');
+    expect(runCardFlight).toContain('if (!retain) settle();');
+  });
+
   it('fills shell-owned Run destinations while Deployment uses the battlefield', () => {
     const playerRunSources = `${runScreen}\n${runArmyWorkspace}\n${runExpunctioWorkspace}\n${runBattlePreview}\n${runDeploymentCardStack}\n${runLipsana}`;
     const runWorkspaceRule = styleCss.match(/\.run-workspace\s*\{([^}]*)\}/)?.[1] ?? '';

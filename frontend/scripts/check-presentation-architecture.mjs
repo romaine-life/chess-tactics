@@ -268,17 +268,26 @@ for (const required of [
   '<RunSceneViewport',
   "view: 'bona-mat'",
   'launchLipsanon(lipsanonId, icon, destination)',
+  // The opening grant admits a card exactly as Adlectio does, so it hands the take to the
+  // phase rather than committing it here. Committing locally is what left the Run's first
+  // card with no transfer at all while every Sectio purchase had one.
+  'takeCard(coreId, source)',
 ]) {
   if (!bona.includes(required)) fail(bonaPath, `missing authored Bona scene contribution: ${required}`);
 }
-if (bona.includes('useLipsanonFlight(')) {
-  fail(bonaPath, 'Bona selection may receive the phase-owned launch capability but may not own the carried flight');
+for (const forbidden of ['useLipsanonFlight(', 'useRunCardFlights(', 'takeVacantiaCard(']) {
+  if (bona.includes(forbidden)) {
+    fail(bonaPath, `Bona selection may receive the phase-owned launch capability but may not own the carried flight or its admission: ${forbidden}`);
+  }
 }
 for (const required of [
   'useLipsanonFlight((lipsanonId)',
   "{ handoff: 'scene-settled' }",
   'launchLipsanon={launchBonaLipsanon}',
   '{bonaLipsanonFlightElement}',
+  'takeCard={takeGrantCard}',
+  'launchGrantCardFlight(card, source, target)',
+  '{grantCardFlightElement}',
 ]) {
   if (!runScreen.includes(required)) fail(runScreenPath, `missing Run phase-owned Bona continuity invariant: ${required}`);
 }

@@ -19603,6 +19603,16 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
+/* The card that LEFT is gone from its row: the travelling copy is the only one of it that
+   should be on screen. Instant and not a fade, because the copy launches at this exact rect
+   and any overlap at all reads as two of the same card. A Sectio purchase drops its face
+   outright and reveals the pile back, so only a grant — which keeps its row until the scene
+   goes — needs the seat held open. */
+.run-card-offer[data-flying] {
+  opacity: 0;
+  transition: none;
+}
+
 /* Every Sectio offer is the face of a physical pile. The accepted universal
    back occupies the exact same seat beneath it, so Adlectio reveals that back
    without moving the remaining piles or suggesting a replacement offer. */

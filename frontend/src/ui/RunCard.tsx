@@ -17,6 +17,7 @@ export function RunCard({
   layoutId,
   seatIndex,
   disabled = false,
+  flying = false,
   onSelect,
 }: {
   card: RunCardDefinition | RunCardOffer;
@@ -32,6 +33,8 @@ export function RunCard({
    */
   seatIndex?: number;
   disabled?: boolean;
+  /** This card is currently travelling elsewhere as a carried copy, so its seat prints empty. */
+  flying?: boolean;
   onSelect?: (element: HTMLButtonElement) => void;
 }): ReactElement {
   const identity = identityCard ?? card;
@@ -67,6 +70,7 @@ export function RunCard({
     <span
       className={`run-card-offer${alive ? ' run-card-alive' : ''}`}
       data-run-sectio-offer-id={layoutId}
+      data-flying={flying ? '' : undefined}
       style={alive ? runCardFloatClock(seatIndex) : undefined}
     >
       <button
