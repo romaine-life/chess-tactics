@@ -5711,6 +5711,29 @@ const MIGRATIONS = [
        WHERE body->'runSaveVersion' = '30'::jsonb;
     `,
   },
+  {
+    version: 71,
+    name: 'card rarity bands and the opening cost ceiling',
+    // ADR-0523: rarity becomes a material band adjusted by footprint, a pile carries an exact
+    // rarity quota instead of a flat catalog shuffle, and the Sectios after the first two
+    // Battles cap card cost at six. The pile sequence changed outright, so the hidden cursor
+    // restarts at zero.
+    //
+    // A Sectio already open keeps the row it is showing rather than being redealt: those offers
+    // are a transaction the player is part-way through, and each offer re-reads its rarity from
+    // the live catalog when the document loads, so the row relabels itself without this
+    // statement touching it. Everything already bought, sold, or expuncted stands.
+    sql: `
+      UPDATE active_runs
+         SET body = body || jsonb_build_object(
+               'runSaveVersion', 32,
+               'sectioCardCursor', 0
+             ),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE body->'runSaveVersion' = '31'::jsonb;
+    `,
+  },
 ];
 
 let pool = null;

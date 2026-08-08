@@ -10,9 +10,11 @@ import {
   RUN_BATTLE_UNDO_COST_TENTHS,
   RUN_EN_PASSANT_BOUNTY_TENTHS,
   RUN_SECTIO_CARD_PILE_SIZE,
+  RUN_SECTIO_EARLY_CARD_MAX_VALUE,
   RUN_CARD_BY_ID,
   RUN_CARD_CATALOG,
   RUN_CARD_DECK,
+  RUN_CARD_RARITIES,
   RUN_LIPSANA,
   RUN_STARTER_CARD_BY_ID,
   RUN_STARTING_GOLD_TENTHS,
@@ -29,9 +31,12 @@ import {
   resetSectio,
   undoRunBattleMove,
   runCardUnitIds,
+  runCardRarity,
   runCardRarityForRoll,
+  runSectioCardMaxValue,
   sectioCardOffersAtCursor,
   sectioCardPile,
+  sectioPileRarityQuota,
   takeVacantiaCard,
   takeVacantiaLipsanon,
   type RunDocument,
@@ -104,21 +109,43 @@ describe('formation card catalog', () => {
     ]);
   });
 
-  it('uses rarity as desirability rather than material value', () => {
+  it('bands rarity by material value', () => {
     expect(RUN_CARD_BY_ID.p.rarity).toBe('common');
     expect(RUN_CARD_BY_ID.r.rarity).toBe('uncommon');
     expect(RUN_CARD_BY_ID.q.rarity).toBe('rare');
     expect(RUN_CARD_BY_ID['rr-vertical'].rarity).toBe('rare');
-    expect(RUN_CARD_BY_ID['bb-diagonal'].rarity).toBe('common');
-    expect(RUN_CARD_BY_ID['bb-vertical'].rarity).toBe('rare');
+    expect(RUN_CARD_BY_ID['bb-diagonal'].rarity).toBe('uncommon');
+    expect(RUN_CARD_BY_ID['bb-vertical'].rarity).toBe('uncommon');
     expect(runCardRarityForRoll(0)).toBe('common');
-    expect(runCardRarityForRoll(74)).toBe('common');
-    expect(runCardRarityForRoll(75)).toBe('uncommon');
+    expect(runCardRarityForRoll(79)).toBe('common');
+    expect(runCardRarityForRoll(80)).toBe('uncommon');
     expect(runCardRarityForRoll(94)).toBe('uncommon');
     expect(runCardRarityForRoll(95)).toBe('rare');
   });
 
-  it('makes every opposite-color Bishop pair rare', () => {
+  it('drops the five awkward footprints one tier', () => {
+    const z = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 1 }];
+    const t = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 1, y: 1 }];
+    const j = [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }];
+    const line = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 3, y: 0 }];
+    const square = [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }];
+    const threePawns = ['pawn', 'pawn', 'pawn'] as const;
+    // Rare material on a shape that wastes the band comes down to Uncommon.
+    expect(runCardRarity(['rook', ...threePawns], z)).toBe('uncommon');
+    expect(runCardRarity(['rook', ...threePawns], j)).toBe('uncommon');
+    // Uncommon material takes the same step, which is what puts value-6 cards in the Common pool.
+    expect(runCardRarity(['knight', ...threePawns], t)).toBe('common');
+    // A straight run and a square pack cleanly, so both keep their band at the same material.
+    expect(runCardRarity(['rook', ...threePawns], line)).toBe('rare');
+    expect(runCardRarity(['knight', ...threePawns], square)).toBe('uncommon');
+    // The drop reads the shape after rotation, exactly as card identity does.
+    expect(runCardRarity(['rook', ...threePawns], z.map(({ x, y }) => ({ x: -y, y: x }))))
+      .toBe('uncommon');
+    // An opposite-color Bishop pair is the prize, and the awkward shape does not spoil it.
+    expect(runCardRarity(['bishop', 'bishop', 'pawn', 'pawn'], z)).toBe('rare');
+  });
+
+  it('keeps an opposite-color Bishop pair in its band on any footprint', () => {
     const paired = RUN_CARD_DECK.filter((card) => card.pieces.filter((piece) => piece === 'bishop').length >= 2);
     const opposite = paired.filter((card) => {
       const bishops = card.pieces.flatMap((piece, index) => piece === 'bishop' ? [card.formation![index]] : []);
@@ -126,14 +153,18 @@ describe('formation card catalog', () => {
         .some((right) => (left.x + left.y) % 2 !== (right.x + right.y) % 2));
     });
     expect(opposite.length).toBeGreaterThan(0);
-    expect(opposite.every((card) => card.rarity === 'rare')).toBe(true);
+    expect(opposite.every((card) => card.rarity === (card.value > 6 ? 'rare' : 'uncommon'))).toBe(true);
   });
 
-  it('keeps master-catalog rarity counts separate from the pile appearance quota', () => {
-    expect(Object.fromEntries(['common', 'uncommon', 'rare'].map((rarity) => [
+  it('holds the catalog to a Common tier that cannot hand out clean material', () => {
+    expect(Object.fromEntries(RUN_CARD_RARITIES.map((rarity) => [
       rarity,
       RUN_CARD_DECK.filter((card) => card.rarity === rarity).length,
-    ]))).toEqual({ common: 79, uncommon: 151, rare: 42 });
+    ]))).toEqual({ common: 47, uncommon: 123, rare: 102 });
+    // Every Common above the value band is there because its footprint wastes the band.
+    const richCommons = RUN_CARD_DECK.filter((card) => card.rarity === 'common' && card.value > 4);
+    expect(richCommons).toHaveLength(32);
+    expect(richCommons.every((card) => card.value === 6 && card.formation!.length === 4)).toBe(true);
   });
 
   it('keeps His Grace on one protected three-unit starter card', () => {
@@ -271,11 +302,29 @@ describe('plain Run creation and acquisition', () => {
 });
 
 describe('derived Sectio card pile', () => {
-  it('contains every live offer identity exactly once', () => {
-    const pile = sectioCardPile(101, 0);
-    expect(pile).toHaveLength(RUN_SECTIO_CARD_PILE_SIZE);
-    expect(new Set(pile.map((card) => card.id)).size).toBe(RUN_CARD_DECK.length);
-    expect(new Set(pile.map((card) => card.id))).toEqual(new Set(RUN_CARD_DECK.map((card) => card.id)));
+  const composition = (pile: readonly { rarity: string }[]) => Object.fromEntries(
+    RUN_CARD_RARITIES.map((rarity) => [rarity, pile.filter((card) => card.rarity === rarity).length]),
+  );
+
+  it('carries the declared rarity quota exactly, not on average', () => {
+    for (const seed of [101, 211, 907]) {
+      const pile = sectioCardPile(seed, 0);
+      expect(pile).toHaveLength(RUN_SECTIO_CARD_PILE_SIZE);
+      expect(composition(pile)).toEqual({ common: 16, uncommon: 3, rare: 1 });
+      expect(new Set(pile.map((card) => card.id)).size).toBe(RUN_SECTIO_CARD_PILE_SIZE);
+    }
+  });
+
+  it('re-apportions a tier the cost ceiling empties', () => {
+    expect(sectioPileRarityQuota()).toEqual({ common: 16, uncommon: 3, rare: 1 });
+    // No card in the catalog costs seven or less and is Rare, so Rare's share is handed on.
+    expect(sectioPileRarityQuota(RUN_SECTIO_EARLY_CARD_MAX_VALUE)).toEqual({
+      common: 17, uncommon: 3, rare: 0,
+    });
+    const capped = sectioCardPile(101, 0, RUN_SECTIO_EARLY_CARD_MAX_VALUE);
+    expect(capped).toHaveLength(RUN_SECTIO_CARD_PILE_SIZE);
+    expect(capped.every((card) => card.value <= RUN_SECTIO_EARLY_CARD_MAX_VALUE)).toBe(true);
+    expect(composition(capped)).toEqual({ common: 17, uncommon: 3, rare: 0 });
   });
 
   it('is deterministic and independently shuffles each exhausted pile', () => {
@@ -283,7 +332,19 @@ describe('derived Sectio card pile', () => {
     const second = sectioCardPile(211, 1);
     expect(sectioCardPile(211, 0).map((card) => card.id)).toEqual(first.map((card) => card.id));
     expect(second.map((card) => card.id)).not.toEqual(first.map((card) => card.id));
-    expect(new Set(second.map((card) => card.id))).toEqual(new Set(first.map((card) => card.id)));
+    expect(composition(second)).toEqual(composition(first));
+  });
+
+  it('caps card cost for the first two Battles and then lifts it for good', () => {
+    expect(runSectioCardMaxValue(0)).toBe(RUN_SECTIO_EARLY_CARD_MAX_VALUE);
+    expect(runSectioCardMaxValue(1)).toBe(RUN_SECTIO_EARLY_CARD_MAX_VALUE);
+    expect(runSectioCardMaxValue(2)).toBe(Number.POSITIVE_INFINITY);
+    expect(sectioCardOffersAtCursor(53, 0, 0, 3)
+      .every((offer) => offer.cost <= RUN_SECTIO_EARLY_CARD_MAX_VALUE)).toBe(true);
+    expect(sectioCardOffersAtCursor(53, 1, 3, 3)
+      .every((offer) => offer.cost <= RUN_SECTIO_EARLY_CARD_MAX_VALUE)).toBe(true);
+    // The ceiling never removes the market: a capped row still fills every seat.
+    expect(sectioCardOffersAtCursor(53, 1, 3, 4)).toHaveLength(4);
   });
 });
 
