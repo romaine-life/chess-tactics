@@ -6,6 +6,8 @@ const viewPane = readFileSync(new URL('./shared/ViewPane.tsx', import.meta.url),
 const skirmishBoard = readFileSync(new URL('../render/SkirmishBoard.tsx', import.meta.url), 'utf8');
 const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
 const runScreen = readFileSync(new URL('./RunScreen.tsx', import.meta.url), 'utf8');
+const formationKeys = readFileSync(new URL('./formationKeys.ts', import.meta.url), 'utf8');
+const appStyles = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 
 describe('Run Deployment secondary-click turn', () => {
   // ADR-0128 kept the secondary DRAG pan-only because the board is wall-to-wall hit targets.
@@ -68,7 +70,7 @@ describe('Run Deployment secondary-click turn', () => {
       "import { useFormationKeys, type FormationTurnDirection } from './formationKeys';",
     );
     expect(runScreen).toMatch(
-      /useFormationKeys\(\{\s*turn: arranging && selectedArrangementCard\?\.admitted \? turnArrangement : null,\s*step: arranging \? stepArrangementCard : null,\s*\}\);/,
+      /useFormationKeys\(\{\s*turn: arranging && selectedArrangementCard\?\.admitted \? turnArrangement : null,\s*step: arranging \? stepArrangementCard : null,\s*begin: arranging \? startArrangedBattle : null,\s*\}\);/,
     );
     // Turning needs a formation in hand; stepping is how one is CHOSEN, so it stays available
     // even while the selection is settling.
@@ -76,6 +78,42 @@ describe('Run Deployment secondary-click turn', () => {
     // Both turn directions walk the same list the click does, so no key can turn the formation
     // out of sight either.
     expect(runScreen).not.toMatch(/useFormationKeys\([^)]*availableArrangementRotationList/);
+  });
+
+  // Space is the key a player presses without looking, so it is the one that leaves the screen.
+  // It is bound for the WHOLE arranging stage rather than only while Begin Battle is pressable:
+  // Space natively activates the focused control, and after a placement that is the board square
+  // just clicked, which would seat or take back a formation nobody aimed at.
+  it('confirms the arrangement on Space through the same action the button runs', () => {
+    const begin = runScreen.match(
+      /const startArrangedBattle = useCallback\(\(\) => \{[\s\S]*?\n {2}\}, \[[^\]]*\]\);/,
+    )?.[0];
+
+    expect(begin).toBeDefined();
+    // The key honours the guard the button's `disabled` honours, read off the LATEST run.
+    expect(begin).toContain('arrangedDeploymentCanBegin(latest)');
+    expect(begin).toContain('replace(beginArrangedBattle(latest));');
+    expect(begin).toContain('if (departureActive) return;');
+    // One action for the key and the button — never a second path into Battle.
+    expect(runScreen).toContain('onBeginBattle={startArrangedBattle}');
+    expect((runScreen.match(/beginArrangedBattle\(/g) ?? [])).toHaveLength(1);
+    // The listener claims Space so nothing underneath answers it.
+    expect(formationKeys).toContain("case ' ': case 'spacebar': return { kind: 'begin' };");
+    expect(formationKeys).toMatch(/if \(action\.kind === 'begin' && !begin\) return;\s*if \(deleteKeyIsClaimedByPage/);
+    expect(formationKeys).toContain('event.preventDefault();');
+  });
+
+  // The keyboard is discovered from the control, so the primary action wears its key too — and
+  // keeps the button's own text size while doing it.
+  it('wears the Space cap on Begin Battle without shrinking it', () => {
+    expect(runScreen).toMatch(
+      /data-testid="arrangement-begin-battle"[\s\S]*?<kbd className="skirmish-grid-cap">Space<\/kbd>\s*<span className="skirmish-grid-label">Begin Battle<\/span>/,
+    );
+    expect(runScreen).toContain("'run-arrangement-begin'");
+    expect(appStyles).toMatch(/\.run-arrangement-begin,\s*\.run-arrangement-step,/);
+    expect(appStyles).toMatch(
+      /\.run-arrangement-begin \.skirmish-grid-label \{\s*font-size: inherit;/,
+    );
   });
 });
 

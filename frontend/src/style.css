@@ -21897,6 +21897,7 @@ button.tileset-relationship-cell {
 
 /* Controls that wear the key that does the same thing, in the shared shortcut cap the in-match
    grid uses: the cap, then what it does. */
+.run-arrangement-begin,
 .run-arrangement-step,
 .run-arrangement-turn {
   align-items: center;
@@ -21905,6 +21906,12 @@ button.tileset-relationship-cell {
   justify-content: center;
   min-inline-size: 0;
   padding-inline: var(--ds-space-1);
+}
+
+/* Begin Battle is the panel's primary action and keeps the button's own text size — wearing a cap
+   must not demote it to the size of a stepper's label. */
+.run-arrangement-begin .skirmish-grid-label {
+  font-size: inherit;
 }
 
 .run-arrangement-hand-card > .run-card-action {

@@ -175,6 +175,20 @@ export function shouldLoadSkirmishWorldBackground(
   return boardSettled && !predrawnBackgroundActive;
 }
 
+/**
+ * Compose the screen classes rather than letting a Run phase's class replace the pre-drawn
+ * ownership rule. Deployment and Sectio show the same complete plate a Battle does, so they
+ * must drop the ordinary battlefield backdrop layer for the same reason (ADR-0158).
+ */
+export function skirmishScreenClassName(
+  phaseClassName: string | undefined,
+  predrawnBackgroundActive: boolean,
+): string {
+  return [phaseClassName, predrawnBackgroundActive ? 'is-predrawn-board' : '']
+    .filter(Boolean)
+    .join(' ');
+}
+
 /** Active Restart waits until turn one is complete; a terminal result must retain its way out. */
 export function canRetryRunBattle(
   canAffordRetry: boolean,
@@ -417,9 +431,13 @@ function SkirmishSession(props: SkirmishProps = {}) {
     setBoardSettled(true);
     setStagedBattlePresentationKey(battlePresentationKey);
   }, [battlePresentationKey, newSkirmish, runBattle, runDeployment, stagedBattlePresentationKey]);
+  // A non-Battle Run phase projects its OWN passive position through the board compositor, so the
+  // plate actually on screen is that position's — the store still holds the staged Battle. Reading
+  // the store here is what kept Deployment from recognising a pre-drawn board as its own.
+  const screenBoardCode = runDeployment?.surfaceState.game.boardCode ?? game.boardCode;
   const screenBoard = useMemo(
-    () => game.boardCode ? decodeBoard(game.boardCode) : null,
-    [game.boardCode],
+    () => screenBoardCode ? decodeBoard(screenBoardCode) : null,
+    [screenBoardCode],
   );
   const screenPredrawnBackgroundActive = Boolean(
     screenBoard
@@ -1271,6 +1289,16 @@ function SkirmishSession(props: SkirmishProps = {}) {
         '--skirmish-world-bg': `url("${defaultBackgroundSet().world}")`,
       } as CSSProperties
     : undefined;
+  // A Run phase contributes its own screen class; it does NOT get to replace the pre-drawn
+  // ownership rule. Composing both is what keeps Deployment and Sectio from painting the
+  // ordinary world backdrop behind a plate that already owns every environment pixel.
+  const screenClassName = skirmishScreenClassName(
+    runDeployment?.screenClassName,
+    screenPredrawnBackgroundActive,
+  );
+  // `undefined` is SkirmishShell's opt-IN to the default world raster, so every construction
+  // path must resolve the decision above to an explicit style or an explicit `null`.
+  const resolvedScreenStyle = screenStyle ?? null;
   const battleHudProps: SkirmishHudProps = {
     canStartNewSkirmish: Boolean(activeLevel) && !isCampaignPlay && !isRunPlay,
     canResign: !isRunPlay,
@@ -1554,7 +1582,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
     return runForm.add(runActivity({
       id: runBattle.activityId,
       testId: runDeployment ? 'run-deployment' : 'skirmish',
-      className: runDeployment?.screenClassName ?? (screenPredrawnBackgroundActive ? 'is-predrawn-board' : ''),
+      className: screenClassName,
       controlsContent: runDeployment?.controlsContent,
       hudProps: runDeployment ? { enableGlobalShortcuts: false } : battleHudProps,
       beforeViewport: titleBarContributions,
@@ -1585,7 +1613,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
           ) : null}
         </>
       ),
-      screenStyle: runDeployment ? undefined : screenStyle ?? null,
+      screenStyle: resolvedScreenStyle,
       registerSceneSurface: true,
       surfaceSignature: runBattle.activityId,
       readyToCompose: playableSurfaceReady,
@@ -1595,13 +1623,13 @@ function SkirmishSession(props: SkirmishProps = {}) {
   return (
     <SkirmishShell
       testId={runDeployment ? 'run-deployment' : 'skirmish'}
-      className={runDeployment?.screenClassName ?? (screenPredrawnBackgroundActive ? 'is-predrawn-board' : '')}
+      className={screenClassName}
       shellWorkspaceCoversLipsana={strategikonOpen}
       titleBarContent={titleBarContent}
       lipsanonIds={[]}
       controlsContent={runDeployment?.controlsContent}
       hudProps={runDeployment ? { enableGlobalShortcuts: false } : undefined}
-      screenStyle={runDeployment ? undefined : screenStyle ?? null}
+      screenStyle={resolvedScreenStyle}
       registerSceneSurface={Boolean(runBattle)}
       surfaceSignature={runBattle?.activityId}
       readyToCompose={playableSurfaceReady}

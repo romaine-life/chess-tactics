@@ -522,16 +522,21 @@ function ArrangedDeploymentControls({
 
             <div className="skirmish-view-group run-deployment-control">
               <span className="skirmish-eyebrow">Battle</span>
+              {/* The panel's one key that leaves the screen, so it wears its cap like the rest:
+                  Space confirms the arrangement and goes. */}
               <ChromeButton
                 unit="inner-text-button"
                 data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                className={chromeUnitClassNames('inner-text-button', 'app-header-button', canBegin && 'active')}
+                className={chromeUnitClassNames(
+                  'inner-text-button', 'app-header-button', 'run-arrangement-begin', canBegin && 'active',
+                )}
                 style={{ ['--run-leaf-control-index' as string]: 5 } as CSSProperties}
                 data-testid="arrangement-begin-battle"
                 disabled={departing || !canBegin}
                 onClick={onBeginBattle}
               >
-                Begin Battle
+                <kbd className="skirmish-grid-cap">Space</kbd>
+                <span className="skirmish-grid-label">Begin Battle</span>
               </ChromeButton>
               <p className="skirmish-grid-hint">
                 {canBegin
@@ -783,20 +788,25 @@ function useRunDeploymentPresentation({
       setHeldArrangementAnchor(null);
     }
   }, [departureActive, prepared.id, replace, selectedCardId]);
+  // Space is Begin Battle, and it runs the same guard the button's `disabled` runs: His Grace on
+  // the board, on a Run still in Deployment. Reading the LATEST run rather than the render's copy
+  // is what lets the key stay bound for the whole stage — see useFormationKeys on why swallowing
+  // Space matters more here than leaving it to whichever board square last took focus.
+  const startArrangedBattle = useCallback(() => {
+    if (departureActive) return;
+    const latest = useActiveRun.getState().run;
+    if (latest?.id === prepared.id && latest.phase === 'deployment' && arrangedDeploymentCanBegin(latest)) {
+      replace(beginArrangedBattle(latest));
+    }
+  }, [departureActive, prepared.id, replace]);
   // The keys are offered on exactly the terms the rail's turn buttons are, so the two cannot
   // drift apart: a dealt formation admitted and selected, on a screen that is not departing.
   const arranging = stage === 'arrange' && !departureActive;
   useFormationKeys({
     turn: arranging && selectedArrangementCard?.admitted ? turnArrangement : null,
     step: arranging ? stepArrangementCard : null,
+    begin: arranging ? startArrangedBattle : null,
   });
-  const startArrangedBattle = useCallback(() => {
-    if (departureActive) return;
-    const latest = useActiveRun.getState().run;
-    if (latest?.id === prepared.id && latest.phase === 'deployment') {
-      replace(beginArrangedBattle(latest));
-    }
-  }, [departureActive, prepared.id, replace]);
 
   if (run.phase !== 'deployment') return null;
   return {
@@ -1869,6 +1879,11 @@ export function RunScreen({
           ) : null,
           hudProps: { enableGlobalShortcuts: false },
           persistentViewportArtwork: persistentSectioScene,
+          // The installed Sectio room is a cover-fitted opaque raster owning the whole viewport
+          // column, so the ordinary world backdrop behind it is never seen — decline it explicitly
+          // rather than letting SkirmishShell's `undefined` opt back in. Phases with no retained
+          // room artwork keep the ordinary backdrop.
+          screenStyle: persistentSectioScene ? null : undefined,
           viewport: {
             className: 'run-phase-workspace',
             primaryClassName: 'run-phase-primary',
