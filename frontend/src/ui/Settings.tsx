@@ -18,11 +18,15 @@ import { ChromeNavButton } from './shared/ChromeButton';
 import { ApparatusRailColumn } from './shared/ApparatusRailTab';
 import { SettingsContentSceneSlot } from './shell/AuthoredSceneSlot';
 import {
+  BOARD_GRID_STYLES,
   DEFAULT_APP_SETTINGS,
   updateAppSettings,
   useAppSettings,
   type AppSettings,
+  type BoardGridStyle,
 } from '../settings/appSettings';
+import { BOARD_GRID_STYLE_LABELS } from '../settings/boardGridStyle';
+import { HouseSelect } from './shared/HouseSelect';
 
 const MUTE_KEY = 'chess-tactics-bgm-muted-v1';
 const MUTE_CHANGE_EVENT = 'chess-tactics:bgm-muted-change';
@@ -572,6 +576,26 @@ export function Settings({
           checked={settings.showBoardGrid}
           label="Show the board grid when a battlefield loads"
           onChange={(value) => updateSetting('showBoardGrid', value)}
+        />
+      </SettingsRow>
+      <SettingsRow
+        title="Grid style"
+        description={
+          settings.showBoardGrid
+            ? BOARD_GRID_STYLE_LABELS[settings.boardGridStyle].detail
+            : 'Turn the board grid on to see this.'
+        }
+      >
+        <HouseSelect<BoardGridStyle>
+          value={settings.boardGridStyle}
+          options={BOARD_GRID_STYLES.map((style) => ({
+            value: style,
+            label: BOARD_GRID_STYLE_LABELS[style].label,
+          }))}
+          ariaLabel="Board grid style"
+          disabled={!settings.showBoardGrid}
+          testId="settings-board-grid-style"
+          onChange={(style) => updateSetting('boardGridStyle', style)}
         />
       </SettingsRow>
       <SettingsRow

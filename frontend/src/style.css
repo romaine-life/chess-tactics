@@ -15466,17 +15466,50 @@ button.tileset-relationship-cell {
   stroke-width: 2.2;
 }
 
+/* Settings → Gameplay → Board grid style. The default above is `chalk` and needs no attribute, so
+   a board draws correctly during boot and in any renderer that never publishes a choice.
+   `:where()` contributes NO specificity, so each variant ties the base rule and wins on source
+   order alone — which keeps the creator-surface overrides below decisively on top of all of them,
+   rather than being silently outranked by whatever the player picked. */
+:where(:root[data-board-grid-style='ink']) .tileset-board-grid-layer path {
+  stroke: #241a10;
+  stroke-width: 2.6;
+}
+
+:where(:root[data-board-grid-style='carved']) .tileset-board-grid-layer path {
+  stroke: #241a10;
+  stroke-width: 2.6;
+  filter: drop-shadow(0 1.5px 0 #f2e3bd);
+}
+
+:where(:root[data-board-grid-style='bold']) .tileset-board-grid-layer path {
+  stroke: #14100c;
+  stroke-width: 3.2;
+  filter: drop-shadow(0 2px 0 #ffeec9);
+}
+
+:where(:root[data-board-grid-style='hairline']) .tileset-board-grid-layer path {
+  stroke: rgba(0, 0, 0, 0.36);
+  stroke-width: 1.15;
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.14));
+}
+
 /* Wall-art placement is a geometry-verification surface, so its canonical cell grid stays a step
-   more decisive than the board grid above rather than matching it. */
+   more decisive than the board grid above rather than matching it. Both creator surfaces below
+   state stroke, weight AND filter in full, so a player's gameplay grid choice cannot leak a bevel
+   or a hairline onto a surface whose whole job is showing exact geometry. */
 .wall-art-board-surface .tileset-board-grid-layer path {
   stroke: #fff6e0;
   stroke-width: 3.2;
+  filter: none;
 }
 
 /* Placement previews sit under their own chrome, so they keep the board grid's weight and stay
    flat and opaque, but step the line back toward the terrain rather than reverting to a hairline. */
 .tileset-placement-board .tileset-board-grid-layer path {
   stroke: #cbbb94;
+  stroke-width: 2.2;
+  filter: none;
 }
 
 /* Persisted player-camera coverage boundary. Unlike a viewport snapshot, this world-space box is
