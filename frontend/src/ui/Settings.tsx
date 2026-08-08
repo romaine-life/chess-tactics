@@ -18,16 +18,15 @@ import { ChromeNavButton } from './shared/ChromeButton';
 import { ApparatusRailColumn } from './shared/ApparatusRailTab';
 import { SettingsContentSceneSlot } from './shell/AuthoredSceneSlot';
 import {
-  BOARD_GRID_STYLES,
   DEFAULT_APP_SETTINGS,
   updateAppSettings,
   useAppSettings,
   type AppSettings,
-  type BoardGridStyle,
 } from '../settings/appSettings';
 import { BOARD_GRID_STYLE_LABELS } from '../settings/boardGridStyle';
 import { PLAYER_PALETTE_LABELS } from '../settings/playerPalette';
 import { PLAYER_PALETTES, type PlayerPalette } from '../core/pieces';
+import { BoardGridStylePicker } from './shared/BoardGridStylePicker';
 import { HouseSelect } from './shared/HouseSelect';
 import { PieceTypeIcon } from './shared/PieceTypeIcon';
 
@@ -602,15 +601,11 @@ export function Settings({
       <SettingsRow
         title="Grid style"
         description={BOARD_GRID_STYLE_LABELS[settings.boardGridStyle].detail}
+        className="settings-row-stacked-control"
+        tall
       >
-        <HouseSelect<BoardGridStyle>
+        <BoardGridStylePicker
           value={settings.boardGridStyle}
-          options={BOARD_GRID_STYLES.map((style) => ({
-            value: style,
-            label: BOARD_GRID_STYLE_LABELS[style].label,
-          }))}
-          ariaLabel="Board grid style"
-          testId="settings-board-grid-style"
           onChange={(style) => updateSetting('boardGridStyle', style)}
         />
       </SettingsRow>

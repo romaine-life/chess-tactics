@@ -66,4 +66,46 @@ describe('auth session owner', () => {
       status: { user: { signed_in: false }, reachable: true },
     });
   });
+
+  it('re-reads an expired session so a later sign-in is observed without a reload', async () => {
+    const anonymous: AuthStatus = { user: { signed_in: false }, reachable: true };
+    const readStatus = vi.fn()
+      .mockResolvedValueOnce(anonymous)
+      .mockResolvedValueOnce(authenticated);
+    const controller = createAuthSessionController(readStatus, 0);
+
+    await controller.start();
+    expect(controller.getSnapshot().phase).toBe('anonymous');
+
+    // `start` settles and stops, so only an explicit re-read can notice the restored session.
+    await expect(controller.refresh()).resolves.toEqual(authenticated);
+    expect(controller.getSnapshot().phase).toBe('authenticated');
+  });
+
+  it('shares one in-flight re-read between concurrent callers', async () => {
+    const readStatus = vi.fn().mockResolvedValue(authenticated);
+    const controller = createAuthSessionController(readStatus, 0);
+    await controller.start();
+    readStatus.mockClear();
+
+    const first = controller.refresh();
+    const second = controller.refresh();
+
+    expect(first).toBe(second);
+    await Promise.all([first, second]);
+    expect(readStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the last authoritative snapshot when a re-read cannot reach the backend', async () => {
+    const readStatus = vi.fn()
+      .mockResolvedValueOnce(authenticated)
+      .mockResolvedValueOnce(unavailable);
+    const controller = createAuthSessionController(readStatus, 0);
+    await controller.start();
+
+    // A transport blip during a background re-read is not a sign-out and must not
+    // knock a signed-in shell into `unavailable`.
+    await expect(controller.refresh()).resolves.toEqual(authenticated);
+    expect(controller.getSnapshot()).toEqual({ phase: 'authenticated', status: authenticated });
+  });
 });

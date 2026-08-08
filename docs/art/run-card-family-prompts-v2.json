@@ -1,0 +1,1827 @@
+{
+  "schemaVersion": 2,
+  "cardType": "Units",
+  "slotPrefix": "ui/run/card-art",
+  "sharedDirection": {
+    "subject": "These are the real people a chess set stands for, drawn as themselves. Never draw chess pieces, a chessboard, or any abstracted game token. They are a small unit in the field in wartime: soldiers who read as individuals, kitted and armed for the war they are in.",
+    "format": "Landscape illustration for an indie tactics game card, composed for roughly a 1.43:1 crop. Keep the figures inside a generous crop-safe centre. Do not draw the card frame or any interface.",
+    "world": "Indie game art: hand-made pixel art with character, grounded historical material, restrained natural colour. The named historical anchor sets the place and period.",
+    "exclusions": "No text, numbers, icons, card border, chessboard, chess pieces, readable banner, magical effect, glowing rune, gore, or modern signage."
+  },
+  "derivedFrom": "run-card-prompts-v1.json",
+  "families": [
+    {
+      "artId": "00-b",
+      "slot": "ui/run/card-art/00-b/illustration.png",
+      "roster": "b",
+      "pieces": [
+        "bishop"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "b",
+      "title": "Wandering Preacher",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "One itinerant cleric rests beside a road leaving a pale ruined sanctuary district, carrying a covered scroll bundle, an oil lamp, and no visible insignia. A teaching bench has been improvised beside an empty threshold. The sacred center is gone; instruction has become portable.",
+      "roles": "a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "a single figure alone in the frame, the surrounding space left empty and legible.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "00-k",
+      "slot": "ui/run/card-art/00-k/illustration.png",
+      "roster": "k",
+      "pieces": [
+        "knight"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "k",
+      "title": "Errant Rider",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "One mounted courier has stopped at a wet farm junction beside an empty cart track and a low platform stacked with covered crates. The horse is tired rather than dramatic. The rider holds an unreadable folded dispatch and appears uncertain which practical route continues onward.",
+      "roles": "a mounted man-at-arms, armoured and in the saddle, the horse under real control",
+      "arrangement": "a single figure alone in the frame, the surrounding space left empty and legible.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "00-p",
+      "slot": "ui/run/card-art/00-p/illustration.png",
+      "roster": "p",
+      "pieces": [
+        "pawn"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "p",
+      "title": "The Volunteer",
+      "historicalAnchor": "year-without-a-summer-1816",
+      "sceneDirection": "One field hand stands at a muddy road after leaving frost-burned summer crops. A hoe remains against an improvised cloth-covered seed bed; the figure now carries an ordinary levy spear and a small travel bundle. The choice has already been made, but there is no departure spectacle and no audience.",
+      "roles": "a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen",
+      "arrangement": "a single figure alone in the frame, the surrounding space left empty and legible.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "00-q",
+      "slot": "ui/run/card-art/00-q/illustration.png",
+      "roster": "q",
+      "pieces": [
+        "queen"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "q",
+      "title": "Regal Serenity",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "One queen-like administrator sits in a quiet domestic courtyard prepared for gathering after public ritual has moved elsewhere. Folded cloth, water vessels, a sealed record bundle, herbs, and an empty second chair surround her. Authority appears as arrangement and patience, not command.",
+      "roles": "a woman in command, regal and openly powerful, the figure the others defer to",
+      "arrangement": "a single figure alone in the frame, the surrounding space left empty and legible.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "00-r",
+      "slot": "ui/run/card-art/00-r/illustration.png",
+      "roster": "r",
+      "pieces": [
+        "rook"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "r",
+      "title": "The Watchtower",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "One watchkeeper occupies a scarred pale-stone tower above an abandoned road checkpoint. No army is visible. Sealed bundles, a water jar, and repair mortar below suggest that observation has become another form of administration after conquest.",
+      "roles": "a fortification man, holding or working a wall, gate, or emplacement he is plainly responsible for",
+      "arrangement": "a single figure alone in the frame, the surrounding space left empty and legible.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "0001-bb",
+      "slot": "ui/run/card-art/0001-bb/illustration.png",
+      "roster": "bb",
+      "pieces": [
+        "bishop",
+        "bishop"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "bb-vertical",
+      "title": "Matins and Vespers",
+      "historicalAnchor": "dissolution-of-the-monasteries",
+      "sceneDirection": "Two clerics occupy opposite ends of a stripped chapel, one extinguishing a morning lamp while the other lights an evening candle. Between them stand a covered table, soot marks, weeds, and an opening where a gate once hung. The institution is absent but the hours remain.",
+      "roles": "2 of them a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "all 2 in single file, one directly behind another, receding away from the viewer down a narrow way — the ones behind partly hidden by the ones in front.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "0001-pb",
+      "slot": "ui/run/card-art/0001-pb/illustration.png",
+      "roster": "pb",
+      "pieces": [
+        "pawn",
+        "bishop"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "pb-front",
+      "title": "Pilgrim's Escort",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "One porter and one cleric travel away from an ash-darkened empty threshold with a water jar, covered teaching bundle, and small pack animal. They are not arriving anywhere important. The road and the objects have inherited functions the ruined sanctuary can no longer perform.",
+      "roles": "a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "all 2 in single file, one directly behind another, receding away from the viewer down a narrow way — the ones behind partly hidden by the ones in front.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "0001-pk",
+      "slot": "ui/run/card-art/0001-pk/illustration.png",
+      "roster": "pk",
+      "pieces": [
+        "pawn",
+        "knight"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "pk-front",
+      "title": "Squire's Errand",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "One young stable attendant hands a sealed but unreadable packet to one mounted retainer beside a pale farm building. Buckets, folded blankets, and a waiting handcart imply a larger system outside the frame. The errand is administrative, urgent only in the way ordinary care can be urgent.",
+      "roles": "a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a mounted man-at-arms, armoured and in the saddle, the horse under real control",
+      "arrangement": "all 2 in single file, one directly behind another, receding away from the viewer down a narrow way — the ones behind partly hidden by the ones in front.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "0001-pq",
+      "slot": "ui/run/card-art/0001-pq/illustration.png",
+      "roster": "pq",
+      "pieces": [
+        "pawn",
+        "queen"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "pq-front",
+      "title": "The Last Attendant",
+      "historicalAnchor": "dissolution-of-the-monasteries",
+      "sceneDirection": "A woman of rank holds her ground in an emptied hall while the one soldier still with her keeps the door. Her authority outlasts the building it belonged to.",
+      "roles": "a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a woman in command, regal and openly powerful, the figure the others defer to",
+      "arrangement": "all 2 in single file, one directly behind another, receding away from the viewer down a narrow way — the ones behind partly hidden by the ones in front.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "0001-pr",
+      "slot": "ui/run/card-art/0001-pr/illustration.png",
+      "roster": "pr",
+      "pieces": [
+        "pawn",
+        "rook"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "pr-front",
+      "title": "Gatekeeper's Watch",
+      "historicalAnchor": "dissolution-of-the-monasteries",
+      "sceneDirection": "One laborer and one gatekeeper stand at an abbey gate whose doors have been removed. A practical fence now crosses the broken arch, and reused stone waits in a cart. Watching and rebuilding have become indistinguishable duties.",
+      "roles": "a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a fortification man, holding or working a wall, gate, or emplacement he is plainly responsible for",
+      "arrangement": "all 2 in single file, one directly behind another, receding away from the viewer down a narrow way — the ones behind partly hidden by the ones in front.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "0001-rr",
+      "slot": "ui/run/card-art/0001-rr/illustration.png",
+      "roster": "rr",
+      "pieces": [
+        "rook",
+        "rook"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "rr-vertical",
+      "title": "Twin Bastions",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Two wardens hold a pair of squat emplacements dug into the bank, checking fresh timber against old. Maintenance on something already holding, not construction.",
+      "roles": "2 of them a fortification man, holding or working a wall, gate, or emplacement he is plainly responsible for",
+      "arrangement": "all 2 in single file, one directly behind another, receding away from the viewer down a narrow way — the ones behind partly hidden by the ones in front.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "0010-kk",
+      "slot": "ui/run/card-art/0010-kk/illustration.png",
+      "roster": "kk",
+      "pieces": [
+        "knight",
+        "knight"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "kk-horizontal",
+      "title": "Thundering Lances",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Two mounted couriers have halted rather than charged on a plank-repaired farm road after heavy rain. Their grounded lances serve as route poles beside a covered cart rut and washed-out ditch. Distant canvas roofs imply unseen traffic behind the line.",
+      "roles": "2 of them a mounted man-at-arms, armoured and in the saddle, the horse under real control",
+      "arrangement": "all 2 strung out abreast in one straight rank across the frame, evenly spaced, nobody standing behind anybody — an exposed line with open ground in front of it.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "0010-pp",
+      "slot": "ui/run/card-art/0010-pp/illustration.png",
+      "roster": "pp",
+      "pieces": [
+        "pawn",
+        "pawn"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "pp",
+      "title": "Two Good Boots",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Two ordinary laborers pause ankle-deep on a rain-cut farm road, one carrying folded linen and the other two water buckets. Their boots are conspicuously sound while the road, cart ruts, and washed-out verge are not. Pale farm walls and a distant line of blank grave markers remain peripheral residue.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen",
+      "arrangement": "all 2 strung out abreast in one straight rank across the frame, evenly spaced, nobody standing behind anybody — an exposed line with open ground in front of it.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "00100111-ppbb",
+      "slot": "ui/run/card-art/00100111-ppbb/illustration.png",
+      "roster": "ppbb",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "bishop",
+        "bishop"
+      ],
+      "cardCount": 2,
+      "representativeCardId": "f-00011011-bbpp",
+      "title": "Traveling Chapel",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Two attendants and two clerics arrange a mobile care station inside a covered farm wagon: lamp, basin, linen, flowers, and a plain folding table. No icon or inscription identifies it. Ritual and treatment have become portable because the larger structure is elsewhere or gone.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; 2 of them a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "packed tight into a square block, four bodies filling one small footprint, shoulders nearly touching, gear stacked between them.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "00100111-ppkb",
+      "slot": "ui/run/card-art/00100111-ppkb/illustration.png",
+      "roster": "ppkb",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "knight",
+        "bishop"
+      ],
+      "cardCount": 3,
+      "representativeCardId": "f-00011011-bkpp",
+      "title": "Wayfarers' Compact",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "Two porters, one mounted traveler, and one cleric divide water, feed, lamp oil, and covered papers at a road station beyond a ruined city edge. Their compact is visible only through measured shares and packed objects. No oath or destination is shown.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a mounted man-at-arms, armoured and in the saddle, the horse under real control; a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "packed tight into a square block, four bodies filling one small footprint, shoulders nearly touching, gear stacked between them.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "00100111-ppkk",
+      "slot": "ui/run/card-art/00100111-ppkk/illustration.png",
+      "roster": "ppkk",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "knight",
+        "knight"
+      ],
+      "cardCount": 2,
+      "representativeCardId": "f-00011011-kkpp",
+      "title": "Escort of Lances",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Two handlers and two mounted escorts stand beside a tarpaulin-covered wagon at a rail-side farm crossing. Their grounded lances prop a damaged awning rather than threaten anyone. Wet grass, white cloth, and crate stacks imply the unseen work continuing beyond the frame.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; 2 of them a mounted man-at-arms, armoured and in the saddle, the horse under real control",
+      "arrangement": "packed tight into a square block, four bodies filling one small footprint, shoulders nearly touching, gear stacked between them.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "00100111-pppb",
+      "slot": "ui/run/card-art/00100111-pppb/illustration.png",
+      "roster": "pppb",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "bishop"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "f-00011011-bppp",
+      "title": "Shepherd's Flock",
+      "historicalAnchor": "year-without-a-summer-1816",
+      "sceneDirection": "Three shepherds and one cleric coax thin sheep into a barn during wrong-season cold. Frost lies among summer flowers; feed sacks are visibly scarce. The cleric holds a plain tally board without readable marks and works as another pair of hands.",
+      "roles": "3 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "packed tight into a square block, four bodies filling one small footprint, shoulders nearly touching, gear stacked between them.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "00100111-pppk",
+      "slot": "ui/run/card-art/00100111-pppk/illustration.png",
+      "roster": "pppk",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "knight"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "f-00011011-kppp",
+      "title": "Banneret's Retinue",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Three handlers and one mounted banneret organize blankets, water cans, and a covered handcart in a wet farmyard. A furled, unreadable banner is treated as stored equipment rather than identity. The retinue's labor matters more than its rank.",
+      "roles": "3 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a mounted man-at-arms, armoured and in the saddle, the horse under real control",
+      "arrangement": "packed tight into a square block, four bodies filling one small footprint, shoulders nearly touching, gear stacked between them.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "00100111-pppp",
+      "slot": "ui/run/card-art/00100111-pppp/illustration.png",
+      "roster": "pppp",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "pawn"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "f-00011011-pppp",
+      "title": "Ragged Column",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "Four common travelers follow a broken pale-stone road beyond an abandoned checkpoint, carrying jars, bedding, tools, and one small lamp. Their clothing is worn but not theatrical. The column is simply the shape ordinary survival takes after a center has failed.",
+      "roles": "4 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen",
+      "arrangement": "packed tight into a square block, four bodies filling one small footprint, shoulders nearly touching, gear stacked between them.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "00100111-pppr",
+      "slot": "ui/run/card-art/00100111-pppr/illustration.png",
+      "roster": "pppr",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "rook"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "f-00011011-rppp",
+      "title": "Rampart Detail",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "Three laborers and one fortified keeper repair an ash-stained city rampart with reused blocks, mortar, and a rope hoist. An abandoned road arch and sealed storage jars sit below. The detail preserves infrastructure whose original promise is no longer available.",
+      "roles": "3 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a fortification man, holding or working a wall, gate, or emplacement he is plainly responsible for",
+      "arrangement": "packed tight into a square block, four bodies filling one small footprint, shoulders nearly touching, gear stacked between them.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "00101121-ppbb",
+      "slot": "ui/run/card-art/00101121-ppbb/illustration.png",
+      "roster": "ppbb",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "bishop",
+        "bishop"
+      ],
+      "cardCount": 4,
+      "representativeCardId": "f-00101121-bbpp",
+      "title": "Traveling Chapel",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Two attendants and two clerics arrange a mobile care station inside a covered farm wagon: lamp, basin, linen, flowers, and a plain folding table. No icon or inscription identifies it. Ritual and treatment have become portable because the larger structure is elsewhere or gone.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; 2 of them a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "clustered around a corner rather than a rank — 2 forward and 2 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "00101121-ppkb",
+      "slot": "ui/run/card-art/00101121-ppkb/illustration.png",
+      "roster": "ppkb",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "knight",
+        "bishop"
+      ],
+      "cardCount": 6,
+      "representativeCardId": "f-00101121-bkpp",
+      "title": "Wayfarers' Compact",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "Two porters, one mounted traveler, and one cleric divide water, feed, lamp oil, and covered papers at a road station beyond a ruined city edge. Their compact is visible only through measured shares and packed objects. No oath or destination is shown.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a mounted man-at-arms, armoured and in the saddle, the horse under real control; a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "clustered around a corner rather than a rank — 2 forward and 2 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "00101121-ppkk",
+      "slot": "ui/run/card-art/00101121-ppkk/illustration.png",
+      "roster": "ppkk",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "knight",
+        "knight"
+      ],
+      "cardCount": 4,
+      "representativeCardId": "f-00101121-kkpp",
+      "title": "Escort of Lances",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Two handlers and two mounted escorts stand beside a tarpaulin-covered wagon at a rail-side farm crossing. Their grounded lances prop a damaged awning rather than threaten anyone. Wet grass, white cloth, and crate stacks imply the unseen work continuing beyond the frame.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; 2 of them a mounted man-at-arms, armoured and in the saddle, the horse under real control",
+      "arrangement": "clustered around a corner rather than a rank — 2 forward and 2 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "00101121-pppb",
+      "slot": "ui/run/card-art/00101121-pppb/illustration.png",
+      "roster": "pppb",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "bishop"
+      ],
+      "cardCount": 2,
+      "representativeCardId": "f-00101121-bppp",
+      "title": "Shepherd's Flock",
+      "historicalAnchor": "year-without-a-summer-1816",
+      "sceneDirection": "Three shepherds and one cleric coax thin sheep into a barn during wrong-season cold. Frost lies among summer flowers; feed sacks are visibly scarce. The cleric holds a plain tally board without readable marks and works as another pair of hands.",
+      "roles": "3 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "clustered around a corner rather than a rank — 2 forward and 2 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "00101121-pppk",
+      "slot": "ui/run/card-art/00101121-pppk/illustration.png",
+      "roster": "pppk",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "knight"
+      ],
+      "cardCount": 2,
+      "representativeCardId": "f-00101121-kppp",
+      "title": "Banneret's Retinue",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Three handlers and one mounted banneret organize blankets, water cans, and a covered handcart in a wet farmyard. A furled, unreadable banner is treated as stored equipment rather than identity. The retinue's labor matters more than its rank.",
+      "roles": "3 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a mounted man-at-arms, armoured and in the saddle, the horse under real control",
+      "arrangement": "clustered around a corner rather than a rank — 2 forward and 2 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "00101121-pppp",
+      "slot": "ui/run/card-art/00101121-pppp/illustration.png",
+      "roster": "pppp",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "pawn"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "f-00101121-pppp",
+      "title": "Ragged Column",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "Four common travelers follow a broken pale-stone road beyond an abandoned checkpoint, carrying jars, bedding, tools, and one small lamp. Their clothing is worn but not theatrical. The column is simply the shape ordinary survival takes after a center has failed.",
+      "roles": "4 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen",
+      "arrangement": "clustered around a corner rather than a rank — 2 forward and 2 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "00101121-pppr",
+      "slot": "ui/run/card-art/00101121-pppr/illustration.png",
+      "roster": "pppr",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "rook"
+      ],
+      "cardCount": 2,
+      "representativeCardId": "f-00101121-prpp",
+      "title": "Rampart Detail",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "Three laborers and one fortified keeper repair an ash-stained city rampart with reused blocks, mortar, and a rope hoist. An abandoned road arch and sealed storage jars sit below. The detail preserves infrastructure whose original promise is no longer available.",
+      "roles": "3 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a fortification man, holding or working a wall, gate, or emplacement he is plainly responsible for",
+      "arrangement": "clustered around a corner rather than a rank — 2 forward and 2 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "001020-ppp",
+      "slot": "ui/run/card-art/001020-ppp/illustration.png",
+      "roster": "ppp",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "ppp",
+      "title": "Farmhand Levy",
+      "historicalAnchor": "year-without-a-summer-1816",
+      "sceneDirection": "Three farm workers finish tying cloth over frost-damaged summer rows before collecting plain levy poles from a barn wall. Flowers and white frost occupy the same field. Their work and muster are treated as adjacent obligations, not as the beginning of an adventure.",
+      "roles": "3 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen",
+      "arrangement": "all 3 strung out abreast in one straight rank across the frame, evenly spaced, nobody standing behind anybody — an exposed line with open ground in front of it.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "00102021-ppbb",
+      "slot": "ui/run/card-art/00102021-ppbb/illustration.png",
+      "roster": "ppbb",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "bishop",
+        "bishop"
+      ],
+      "cardCount": 6,
+      "representativeCardId": "f-00102021-bbpp",
+      "title": "Traveling Chapel",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Two attendants and two clerics arrange a mobile care station inside a covered farm wagon: lamp, basin, linen, flowers, and a plain folding table. No icon or inscription identifies it. Ritual and treatment have become portable because the larger structure is elsewhere or gone.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; 2 of them a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "clustered around a corner rather than a rank — 3 forward and 1 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "00102021-ppkb",
+      "slot": "ui/run/card-art/00102021-ppkb/illustration.png",
+      "roster": "ppkb",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "knight",
+        "bishop"
+      ],
+      "cardCount": 12,
+      "representativeCardId": "f-00102021-bkpp",
+      "title": "Wayfarers' Compact",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "Two porters, one mounted traveler, and one cleric divide water, feed, lamp oil, and covered papers at a road station beyond a ruined city edge. Their compact is visible only through measured shares and packed objects. No oath or destination is shown.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a mounted man-at-arms, armoured and in the saddle, the horse under real control; a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "clustered around a corner rather than a rank — 3 forward and 1 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "00102021-ppkk",
+      "slot": "ui/run/card-art/00102021-ppkk/illustration.png",
+      "roster": "ppkk",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "knight",
+        "knight"
+      ],
+      "cardCount": 6,
+      "representativeCardId": "f-00102021-kkpp",
+      "title": "Escort of Lances",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Two handlers and two mounted escorts stand beside a tarpaulin-covered wagon at a rail-side farm crossing. Their grounded lances prop a damaged awning rather than threaten anyone. Wet grass, white cloth, and crate stacks imply the unseen work continuing beyond the frame.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; 2 of them a mounted man-at-arms, armoured and in the saddle, the horse under real control",
+      "arrangement": "clustered around a corner rather than a rank — 3 forward and 1 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "00102021-pppb",
+      "slot": "ui/run/card-art/00102021-pppb/illustration.png",
+      "roster": "pppb",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "bishop"
+      ],
+      "cardCount": 4,
+      "representativeCardId": "f-00102021-bppp",
+      "title": "Shepherd's Flock",
+      "historicalAnchor": "year-without-a-summer-1816",
+      "sceneDirection": "Three shepherds and one cleric coax thin sheep into a barn during wrong-season cold. Frost lies among summer flowers; feed sacks are visibly scarce. The cleric holds a plain tally board without readable marks and works as another pair of hands.",
+      "roles": "3 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "clustered around a corner rather than a rank — 3 forward and 1 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "00102021-pppk",
+      "slot": "ui/run/card-art/00102021-pppk/illustration.png",
+      "roster": "pppk",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "knight"
+      ],
+      "cardCount": 4,
+      "representativeCardId": "f-00102021-kppp",
+      "title": "Banneret's Retinue",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Three handlers and one mounted banneret organize blankets, water cans, and a covered handcart in a wet farmyard. A furled, unreadable banner is treated as stored equipment rather than identity. The retinue's labor matters more than its rank.",
+      "roles": "3 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a mounted man-at-arms, armoured and in the saddle, the horse under real control",
+      "arrangement": "clustered around a corner rather than a rank — 3 forward and 1 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "00102021-pppp",
+      "slot": "ui/run/card-art/00102021-pppp/illustration.png",
+      "roster": "pppp",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "pawn"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "f-00102021-pppp",
+      "title": "Ragged Column",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "Four common travelers follow a broken pale-stone road beyond an abandoned checkpoint, carrying jars, bedding, tools, and one small lamp. Their clothing is worn but not theatrical. The column is simply the shape ordinary survival takes after a center has failed.",
+      "roles": "4 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen",
+      "arrangement": "clustered around a corner rather than a rank — 3 forward and 1 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "00102021-pppr",
+      "slot": "ui/run/card-art/00102021-pppr/illustration.png",
+      "roster": "pppr",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "rook"
+      ],
+      "cardCount": 4,
+      "representativeCardId": "f-00102021-pppr",
+      "title": "Rampart Detail",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "Three laborers and one fortified keeper repair an ash-stained city rampart with reused blocks, mortar, and a rope hoist. An abandoned road arch and sealed storage jars sit below. The detail preserves infrastructure whose original promise is no longer available.",
+      "roles": "3 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a fortification man, holding or working a wall, gate, or emplacement he is plainly responsible for",
+      "arrangement": "clustered around a corner rather than a rank — 3 forward and 1 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "0011-bb",
+      "slot": "ui/run/card-art/0011-bb/illustration.png",
+      "roster": "bb",
+      "pieces": [
+        "bishop",
+        "bishop"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "bb-diagonal",
+      "title": "Matins and Vespers",
+      "historicalAnchor": "dissolution-of-the-monasteries",
+      "sceneDirection": "Two clerics occupy opposite ends of a stripped chapel, one extinguishing a morning lamp while the other lights an evening candle. Between them stand a covered table, soot marks, weeds, and an opening where a gate once hung. The institution is absent but the hours remain.",
+      "roles": "2 of them a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "two figures set apart on a diagonal, at different depths, neither directly beside nor directly behind the other.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "002011-ppb",
+      "slot": "ui/run/card-art/002011-ppb/illustration.png",
+      "roster": "ppb",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "bishop"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "ppb-protected",
+      "title": "Country Parish",
+      "historicalAnchor": "dissolution-of-the-monasteries",
+      "sceneDirection": "Two villagers and one cleric repair a low field wall using stone taken from an emptied religious house. A basket of grave flowers, plain cloth, and candle soot survive near the threshold. The parish continues through maintenance rather than ceremony.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "clustered around a corner rather than a rank — 2 forward and 1 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "002011-ppk",
+      "slot": "ui/run/card-art/002011-ppk/illustration.png",
+      "roster": "ppk",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "knight"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "ppk-protected",
+      "title": "Outrider Patrol",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Two road laborers and one mounted outrider inspect a flooded farm lane beside poplars, hedge gaps, and a broken wheel. The patrol looks for passable ground, not enemies. A canvas hut and folded white linen are visible far behind the field boundary.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a mounted man-at-arms, armoured and in the saddle, the horse under real control",
+      "arrangement": "clustered around a corner rather than a rank — 2 forward and 1 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "0111-br",
+      "slot": "ui/run/card-art/0111-br/illustration.png",
+      "roster": "br",
+      "pieces": [
+        "bishop",
+        "rook"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "f-0111-rb",
+      "title": "Cloister and Keep",
+      "historicalAnchor": "dissolution-of-the-monasteries",
+      "sceneDirection": "One cleric and one fortified keeper stand where an empty cloister walk meets a heavy reused gatehouse. Herb beds continue beside quarried stone and a practical fence. Neither sacred nor defensive ownership fully explains the place anymore.",
+      "roles": "a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms; a fortification man, holding or working a wall, gate, or emplacement he is plainly responsible for",
+      "arrangement": "all 2 strung out abreast in one straight rank across the frame, evenly spaced, nobody standing behind anybody — an exposed line with open ground in front of it.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "0111-kb",
+      "slot": "ui/run/card-art/0111-kb/illustration.png",
+      "roster": "kb",
+      "pieces": [
+        "knight",
+        "bishop"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "f-0111-bk",
+      "title": "Sword and Censer",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "One mounted retainer and one cleric wait beside a disused imperial checkpoint. A sheathed sword, an unlit censer, covered scrolls, and a road marker share the same practical table. Neither figure performs authority; the objects merely remember it.",
+      "roles": "a mounted man-at-arms, armoured and in the saddle, the horse under real control; a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "all 2 strung out abreast in one straight rank across the frame, evenly spaced, nobody standing behind anybody — an exposed line with open ground in front of it.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "0111-kr",
+      "slot": "ui/run/card-art/0111-kr/illustration.png",
+      "roster": "kr",
+      "pieces": [
+        "knight",
+        "rook"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "f-0111-rk",
+      "title": "Castellan's Sally",
+      "historicalAnchor": "dissolution-of-the-monasteries",
+      "sceneDirection": "One mounted retainer and one gatekeeper step out from a former abbey gatehouse at first light to inspect a broken boundary fence. The horse is walking; the weapon remains sheathed. The supposed sally is routine property maintenance through displaced stone.",
+      "roles": "a mounted man-at-arms, armoured and in the saddle, the horse under real control; a fortification man, holding or working a wall, gate, or emplacement he is plainly responsible for",
+      "arrangement": "all 2 strung out abreast in one straight rank across the frame, evenly spaced, nobody standing behind anybody — an exposed line with open ground in front of it.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "011121-bbb",
+      "slot": "ui/run/card-art/011121-bbb/illustration.png",
+      "roster": "bbb",
+      "pieces": [
+        "bishop",
+        "bishop",
+        "bishop"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "f-011121-bbb",
+      "title": "Ecumenical Council",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "Three clerics confer around a modest table in a borrowed domestic room after a sacred center has vanished. Covered scroll bundles, an oil lamp, storage jars, and an empty fourth chair replace monumental ceremony. The council is important only because it can fit anywhere.",
+      "roles": "3 of them a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "all 3 strung out abreast in one straight rank across the frame, evenly spaced, nobody standing behind anybody — an exposed line with open ground in front of it.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "011121-kbb",
+      "slot": "ui/run/card-art/011121-kbb/illustration.png",
+      "roster": "kbb",
+      "pieces": [
+        "knight",
+        "bishop",
+        "bishop"
+      ],
+      "cardCount": 2,
+      "representativeCardId": "f-011121-bbk",
+      "title": "Blessed Charger",
+      "historicalAnchor": "dissolution-of-the-monasteries",
+      "sceneDirection": "One mounted retainer and two clerics tend a horse at the stable approach of an emptied monastery. A mounting block, hitching post, herb basket, and stripped stone niche survive without ceremony. The blessing is expressed through grooming, water, and careful tack.",
+      "roles": "a mounted man-at-arms, armoured and in the saddle, the horse under real control; 2 of them a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "all 3 strung out abreast in one straight rank across the frame, evenly spaced, nobody standing behind anybody — an exposed line with open ground in front of it.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "011121-kkb",
+      "slot": "ui/run/card-art/011121-kkb/illustration.png",
+      "roster": "kkb",
+      "pieces": [
+        "knight",
+        "knight",
+        "bishop"
+      ],
+      "cardCount": 2,
+      "representativeCardId": "f-011121-bkk",
+      "title": "Chaplain of the Charge",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Two mounted messengers and one cleric pause outside a canvas care tent beside basins, folded cloth, and an empty covered stretcher. Their horses stand quietly. The charge exists only as traffic passing through an ordinary system of tending and records.",
+      "roles": "2 of them a mounted man-at-arms, armoured and in the saddle, the horse under real control; a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "all 3 strung out abreast in one straight rank across the frame, evenly spaced, nobody standing behind anybody — an exposed line with open ground in front of it.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "011121-kkk",
+      "slot": "ui/run/card-art/011121-kkk/illustration.png",
+      "roster": "kkk",
+      "pieces": [
+        "knight",
+        "knight",
+        "knight"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "f-011121-kkk",
+      "title": "Full Gallop",
+      "historicalAnchor": "year-without-a-summer-1816",
+      "sceneDirection": "Three mounted travelers have been forced to halt at a flooded summer crossing beneath a grey-yellow sky. One tests the water, one steadies a feed sack, and one studies the road ahead. The title describes the speed they expected, not the motion the image grants them.",
+      "roles": "3 of them a mounted man-at-arms, armoured and in the saddle, the horse under real control",
+      "arrangement": "all 3 strung out abreast in one straight rank across the frame, evenly spaced, nobody standing behind anybody — an exposed line with open ground in front of it.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "011121-pbb",
+      "slot": "ui/run/card-art/011121-pbb/illustration.png",
+      "roster": "pbb",
+      "pieces": [
+        "pawn",
+        "bishop",
+        "bishop"
+      ],
+      "cardCount": 2,
+      "representativeCardId": "f-011121-bbp",
+      "title": "Synod on the Road",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "One porter and two clerics hold a small council at a roadside teaching bench beyond an empty sacred courtyard. Covered scrolls, a water basin, and travel jars replace monumental ritual. The meeting looks provisional enough to dissolve when the lamp is packed.",
+      "roles": "a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; 2 of them a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "all 3 strung out abreast in one straight rank across the frame, evenly spaced, nobody standing behind anybody — an exposed line with open ground in front of it.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "011121-pbr",
+      "slot": "ui/run/card-art/011121-pbr/illustration.png",
+      "roster": "pbr",
+      "pieces": [
+        "pawn",
+        "bishop",
+        "rook"
+      ],
+      "cardCount": 3,
+      "representativeCardId": "f-011121-brp",
+      "title": "Church and Castle",
+      "historicalAnchor": "dissolution-of-the-monasteries",
+      "sceneDirection": "One laborer, one cleric, and one fortified keeper occupy a place where a stripped chapel wall has been incorporated into a working castle boundary. Flowers grow beside mortar tubs and a covered ledger. Sacred and military stone have become the same practical material.",
+      "roles": "a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms; a fortification man, holding or working a wall, gate, or emplacement he is plainly responsible for",
+      "arrangement": "all 3 strung out abreast in one straight rank across the frame, evenly spaced, nobody standing behind anybody — an exposed line with open ground in front of it.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "011121-pkb",
+      "slot": "ui/run/card-art/011121-pkb/illustration.png",
+      "roster": "pkb",
+      "pieces": [
+        "pawn",
+        "knight",
+        "bishop"
+      ],
+      "cardCount": 3,
+      "representativeCardId": "f-011121-bkp",
+      "title": "Little Crusade",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "One foot attendant, one mounted retainer, and one cleric rest beside the cold remains of an abandoned camp near a repaired city wall. Their banner is blank and furled; the fire is ash. The title's grand claim is undercut by the smallness of the actual company.",
+      "roles": "a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a mounted man-at-arms, armoured and in the saddle, the horse under real control; a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "all 3 strung out abreast in one straight rank across the frame, evenly spaced, nobody standing behind anybody — an exposed line with open ground in front of it.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "011121-pkk",
+      "slot": "ui/run/card-art/011121-pkk/illustration.png",
+      "roster": "pkk",
+      "pieces": [
+        "pawn",
+        "knight",
+        "knight"
+      ],
+      "cardCount": 2,
+      "representativeCardId": "f-011121-kkp",
+      "title": "Vanguard Escort",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "One foot guide and two mounted escorts wait beside a covered wagon on a muddy farm approach. The load is never revealed. White linen, a water pail, and cart tracks make protection feel logistical rather than martial.",
+      "roles": "a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; 2 of them a mounted man-at-arms, armoured and in the saddle, the horse under real control",
+      "arrangement": "all 3 strung out abreast in one straight rank across the frame, evenly spaced, nobody standing behind anybody — an exposed line with open ground in front of it.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "011121-pkr",
+      "slot": "ui/run/card-art/011121-pkr/illustration.png",
+      "roster": "pkr",
+      "pieces": [
+        "pawn",
+        "knight",
+        "rook"
+      ],
+      "cardCount": 3,
+      "representativeCardId": "f-011121-krp",
+      "title": "Sortie at Dawn",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "One laborer opens a farm gate for one mounted retainer while one fortified keeper checks the repaired road beyond. Crates, a water cart, and rain-bright ruts suggest logistics behind an unseen front. The sortie is a quiet departure before the yard wakes.",
+      "roles": "a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a mounted man-at-arms, armoured and in the saddle, the horse under real control; a fortification man, holding or working a wall, gate, or emplacement he is plainly responsible for",
+      "arrangement": "all 3 strung out abreast in one straight rank across the frame, evenly spaced, nobody standing behind anybody — an exposed line with open ground in front of it.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "011121-ppb",
+      "slot": "ui/run/card-art/011121-ppb/illustration.png",
+      "roster": "ppb",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "bishop"
+      ],
+      "cardCount": 2,
+      "representativeCardId": "f-011121-bpp",
+      "title": "Country Parish",
+      "historicalAnchor": "dissolution-of-the-monasteries",
+      "sceneDirection": "Two villagers and one cleric repair a low field wall using stone taken from an emptied religious house. A basket of grave flowers, plain cloth, and candle soot survive near the threshold. The parish continues through maintenance rather than ceremony.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "all 3 strung out abreast in one straight rank across the frame, evenly spaced, nobody standing behind anybody — an exposed line with open ground in front of it.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "011121-ppk",
+      "slot": "ui/run/card-art/011121-ppk/illustration.png",
+      "roster": "ppk",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "knight"
+      ],
+      "cardCount": 2,
+      "representativeCardId": "f-011121-kpp",
+      "title": "Outrider Patrol",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Two road laborers and one mounted outrider inspect a flooded farm lane beside poplars, hedge gaps, and a broken wheel. The patrol looks for passable ground, not enemies. A canvas hut and folded white linen are visible far behind the field boundary.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a mounted man-at-arms, armoured and in the saddle, the horse under real control",
+      "arrangement": "all 3 strung out abreast in one straight rank across the frame, evenly spaced, nobody standing behind anybody — an exposed line with open ground in front of it.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "011121-ppr",
+      "slot": "ui/run/card-art/011121-ppr/illustration.png",
+      "roster": "ppr",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "rook"
+      ],
+      "cardCount": 2,
+      "representativeCardId": "f-011121-prp",
+      "title": "Border Garrison",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "Two laborers and one watchkeeper maintain an abandoned imperial checkpoint at the edge of cultivated land. They reset road stones, fill a water jar, and seal plain bundles. The border survives as upkeep long after the procession of power has left.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a fortification man, holding or working a wall, gate, or emplacement he is plainly responsible for",
+      "arrangement": "all 3 strung out abreast in one straight rank across the frame, evenly spaced, nobody standing behind anybody — an exposed line with open ground in front of it.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "01112131-ppbb",
+      "slot": "ui/run/card-art/01112131-ppbb/illustration.png",
+      "roster": "ppbb",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "bishop",
+        "bishop"
+      ],
+      "cardCount": 4,
+      "representativeCardId": "f-01112131-bbpp",
+      "title": "Traveling Chapel",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Two attendants and two clerics arrange a mobile care station inside a covered farm wagon: lamp, basin, linen, flowers, and a plain folding table. No icon or inscription identifies it. Ritual and treatment have become portable because the larger structure is elsewhere or gone.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; 2 of them a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "all 4 strung out abreast in one straight rank across the frame, evenly spaced, nobody standing behind anybody — an exposed line with open ground in front of it.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "01112131-ppkb",
+      "slot": "ui/run/card-art/01112131-ppkb/illustration.png",
+      "roster": "ppkb",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "knight",
+        "bishop"
+      ],
+      "cardCount": 6,
+      "representativeCardId": "f-01112131-bkpp",
+      "title": "Wayfarers' Compact",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "Two porters, one mounted traveler, and one cleric divide water, feed, lamp oil, and covered papers at a road station beyond a ruined city edge. Their compact is visible only through measured shares and packed objects. No oath or destination is shown.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a mounted man-at-arms, armoured and in the saddle, the horse under real control; a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "all 4 strung out abreast in one straight rank across the frame, evenly spaced, nobody standing behind anybody — an exposed line with open ground in front of it.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "01112131-ppkk",
+      "slot": "ui/run/card-art/01112131-ppkk/illustration.png",
+      "roster": "ppkk",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "knight",
+        "knight"
+      ],
+      "cardCount": 4,
+      "representativeCardId": "f-01112131-kkpp",
+      "title": "Escort of Lances",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Two handlers and two mounted escorts stand beside a tarpaulin-covered wagon at a rail-side farm crossing. Their grounded lances prop a damaged awning rather than threaten anyone. Wet grass, white cloth, and crate stacks imply the unseen work continuing beyond the frame.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; 2 of them a mounted man-at-arms, armoured and in the saddle, the horse under real control",
+      "arrangement": "all 4 strung out abreast in one straight rank across the frame, evenly spaced, nobody standing behind anybody — an exposed line with open ground in front of it.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "01112131-pppb",
+      "slot": "ui/run/card-art/01112131-pppb/illustration.png",
+      "roster": "pppb",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "bishop"
+      ],
+      "cardCount": 2,
+      "representativeCardId": "f-01112131-bppp",
+      "title": "Shepherd's Flock",
+      "historicalAnchor": "year-without-a-summer-1816",
+      "sceneDirection": "Three shepherds and one cleric coax thin sheep into a barn during wrong-season cold. Frost lies among summer flowers; feed sacks are visibly scarce. The cleric holds a plain tally board without readable marks and works as another pair of hands.",
+      "roles": "3 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "all 4 strung out abreast in one straight rank across the frame, evenly spaced, nobody standing behind anybody — an exposed line with open ground in front of it.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "01112131-pppk",
+      "slot": "ui/run/card-art/01112131-pppk/illustration.png",
+      "roster": "pppk",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "knight"
+      ],
+      "cardCount": 2,
+      "representativeCardId": "f-01112131-kppp",
+      "title": "Banneret's Retinue",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Three handlers and one mounted banneret organize blankets, water cans, and a covered handcart in a wet farmyard. A furled, unreadable banner is treated as stored equipment rather than identity. The retinue's labor matters more than its rank.",
+      "roles": "3 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a mounted man-at-arms, armoured and in the saddle, the horse under real control",
+      "arrangement": "all 4 strung out abreast in one straight rank across the frame, evenly spaced, nobody standing behind anybody — an exposed line with open ground in front of it.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "01112131-pppp",
+      "slot": "ui/run/card-art/01112131-pppp/illustration.png",
+      "roster": "pppp",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "pawn"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "f-01112131-pppp",
+      "title": "Ragged Column",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "Four common travelers follow a broken pale-stone road beyond an abandoned checkpoint, carrying jars, bedding, tools, and one small lamp. Their clothing is worn but not theatrical. The column is simply the shape ordinary survival takes after a center has failed.",
+      "roles": "4 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen",
+      "arrangement": "all 4 strung out abreast in one straight rank across the frame, evenly spaced, nobody standing behind anybody — an exposed line with open ground in front of it.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "01112131-pppr",
+      "slot": "ui/run/card-art/01112131-pppr/illustration.png",
+      "roster": "pppr",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "rook"
+      ],
+      "cardCount": 2,
+      "representativeCardId": "f-01112131-prpp",
+      "title": "Rampart Detail",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "Three laborers and one fortified keeper repair an ash-stained city rampart with reused blocks, mortar, and a rope hoist. An abandoned road arch and sealed storage jars sit below. The detail preserves infrastructure whose original promise is no longer available.",
+      "roles": "3 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a fortification man, holding or working a wall, gate, or emplacement he is plainly responsible for",
+      "arrangement": "all 4 strung out abreast in one straight rank across the frame, evenly spaced, nobody standing behind anybody — an exposed line with open ground in front of it.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "100111-bbb",
+      "slot": "ui/run/card-art/100111-bbb/illustration.png",
+      "roster": "bbb",
+      "pieces": [
+        "bishop",
+        "bishop",
+        "bishop"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "f-011011-bbb",
+      "title": "Ecumenical Council",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "Three clerics confer around a modest table in a borrowed domestic room after a sacred center has vanished. Covered scroll bundles, an oil lamp, storage jars, and an empty fourth chair replace monumental ceremony. The council is important only because it can fit anywhere.",
+      "roles": "3 of them a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "clustered around a corner rather than a rank — 1 forward and 2 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "100111-kbb",
+      "slot": "ui/run/card-art/100111-kbb/illustration.png",
+      "roster": "kbb",
+      "pieces": [
+        "knight",
+        "bishop",
+        "bishop"
+      ],
+      "cardCount": 3,
+      "representativeCardId": "f-011011-bbk",
+      "title": "Blessed Charger",
+      "historicalAnchor": "dissolution-of-the-monasteries",
+      "sceneDirection": "One mounted retainer and two clerics tend a horse at the stable approach of an emptied monastery. A mounting block, hitching post, herb basket, and stripped stone niche survive without ceremony. The blessing is expressed through grooming, water, and careful tack.",
+      "roles": "a mounted man-at-arms, armoured and in the saddle, the horse under real control; 2 of them a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "clustered around a corner rather than a rank — 1 forward and 2 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "100111-kkb",
+      "slot": "ui/run/card-art/100111-kkb/illustration.png",
+      "roster": "kkb",
+      "pieces": [
+        "knight",
+        "knight",
+        "bishop"
+      ],
+      "cardCount": 3,
+      "representativeCardId": "f-011011-bkk",
+      "title": "Chaplain of the Charge",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Two mounted messengers and one cleric pause outside a canvas care tent beside basins, folded cloth, and an empty covered stretcher. Their horses stand quietly. The charge exists only as traffic passing through an ordinary system of tending and records.",
+      "roles": "2 of them a mounted man-at-arms, armoured and in the saddle, the horse under real control; a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "clustered around a corner rather than a rank — 1 forward and 2 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "100111-kkk",
+      "slot": "ui/run/card-art/100111-kkk/illustration.png",
+      "roster": "kkk",
+      "pieces": [
+        "knight",
+        "knight",
+        "knight"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "f-011011-kkk",
+      "title": "Full Gallop",
+      "historicalAnchor": "year-without-a-summer-1816",
+      "sceneDirection": "Three mounted travelers have been forced to halt at a flooded summer crossing beneath a grey-yellow sky. One tests the water, one steadies a feed sack, and one studies the road ahead. The title describes the speed they expected, not the motion the image grants them.",
+      "roles": "3 of them a mounted man-at-arms, armoured and in the saddle, the horse under real control",
+      "arrangement": "clustered around a corner rather than a rank — 1 forward and 2 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "100111-pbb",
+      "slot": "ui/run/card-art/100111-pbb/illustration.png",
+      "roster": "pbb",
+      "pieces": [
+        "pawn",
+        "bishop",
+        "bishop"
+      ],
+      "cardCount": 3,
+      "representativeCardId": "f-011011-bbp",
+      "title": "Synod on the Road",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "One porter and two clerics hold a small council at a roadside teaching bench beyond an empty sacred courtyard. Covered scrolls, a water basin, and travel jars replace monumental ritual. The meeting looks provisional enough to dissolve when the lamp is packed.",
+      "roles": "a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; 2 of them a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "clustered around a corner rather than a rank — 1 forward and 2 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "100111-pbr",
+      "slot": "ui/run/card-art/100111-pbr/illustration.png",
+      "roster": "pbr",
+      "pieces": [
+        "pawn",
+        "bishop",
+        "rook"
+      ],
+      "cardCount": 6,
+      "representativeCardId": "f-011011-bpr",
+      "title": "Church and Castle",
+      "historicalAnchor": "dissolution-of-the-monasteries",
+      "sceneDirection": "One laborer, one cleric, and one fortified keeper occupy a place where a stripped chapel wall has been incorporated into a working castle boundary. Flowers grow beside mortar tubs and a covered ledger. Sacred and military stone have become the same practical material.",
+      "roles": "a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms; a fortification man, holding or working a wall, gate, or emplacement he is plainly responsible for",
+      "arrangement": "clustered around a corner rather than a rank — 1 forward and 2 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "100111-pkb",
+      "slot": "ui/run/card-art/100111-pkb/illustration.png",
+      "roster": "pkb",
+      "pieces": [
+        "pawn",
+        "knight",
+        "bishop"
+      ],
+      "cardCount": 6,
+      "representativeCardId": "f-011011-bkp",
+      "title": "Little Crusade",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "One foot attendant, one mounted retainer, and one cleric rest beside the cold remains of an abandoned camp near a repaired city wall. Their banner is blank and furled; the fire is ash. The title's grand claim is undercut by the smallness of the actual company.",
+      "roles": "a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a mounted man-at-arms, armoured and in the saddle, the horse under real control; a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "clustered around a corner rather than a rank — 1 forward and 2 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "100111-pkk",
+      "slot": "ui/run/card-art/100111-pkk/illustration.png",
+      "roster": "pkk",
+      "pieces": [
+        "pawn",
+        "knight",
+        "knight"
+      ],
+      "cardCount": 3,
+      "representativeCardId": "f-011011-kkp",
+      "title": "Vanguard Escort",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "One foot guide and two mounted escorts wait beside a covered wagon on a muddy farm approach. The load is never revealed. White linen, a water pail, and cart tracks make protection feel logistical rather than martial.",
+      "roles": "a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; 2 of them a mounted man-at-arms, armoured and in the saddle, the horse under real control",
+      "arrangement": "clustered around a corner rather than a rank — 1 forward and 2 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "100111-pkr",
+      "slot": "ui/run/card-art/100111-pkr/illustration.png",
+      "roster": "pkr",
+      "pieces": [
+        "pawn",
+        "knight",
+        "rook"
+      ],
+      "cardCount": 6,
+      "representativeCardId": "f-011011-kpr",
+      "title": "Sortie at Dawn",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "One laborer opens a farm gate for one mounted retainer while one fortified keeper checks the repaired road beyond. Crates, a water cart, and rain-bright ruts suggest logistics behind an unseen front. The sortie is a quiet departure before the yard wakes.",
+      "roles": "a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a mounted man-at-arms, armoured and in the saddle, the horse under real control; a fortification man, holding or working a wall, gate, or emplacement he is plainly responsible for",
+      "arrangement": "clustered around a corner rather than a rank — 1 forward and 2 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "100111-ppb",
+      "slot": "ui/run/card-art/100111-ppb/illustration.png",
+      "roster": "ppb",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "bishop"
+      ],
+      "cardCount": 3,
+      "representativeCardId": "f-011011-bpp",
+      "title": "Country Parish",
+      "historicalAnchor": "dissolution-of-the-monasteries",
+      "sceneDirection": "Two villagers and one cleric repair a low field wall using stone taken from an emptied religious house. A basket of grave flowers, plain cloth, and candle soot survive near the threshold. The parish continues through maintenance rather than ceremony.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "clustered around a corner rather than a rank — 1 forward and 2 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "100111-ppk",
+      "slot": "ui/run/card-art/100111-ppk/illustration.png",
+      "roster": "ppk",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "knight"
+      ],
+      "cardCount": 3,
+      "representativeCardId": "f-011011-kpp",
+      "title": "Outrider Patrol",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Two road laborers and one mounted outrider inspect a flooded farm lane beside poplars, hedge gaps, and a broken wheel. The patrol looks for passable ground, not enemies. A canvas hut and folded white linen are visible far behind the field boundary.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a mounted man-at-arms, armoured and in the saddle, the horse under real control",
+      "arrangement": "clustered around a corner rather than a rank — 1 forward and 2 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "100111-ppp",
+      "slot": "ui/run/card-art/100111-ppp/illustration.png",
+      "roster": "ppp",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "f-011011-ppp",
+      "title": "Farmhand Levy",
+      "historicalAnchor": "year-without-a-summer-1816",
+      "sceneDirection": "Three farm workers finish tying cloth over frost-damaged summer rows before collecting plain levy poles from a barn wall. Flowers and white frost occupy the same field. Their work and muster are treated as adjacent obligations, not as the beginning of an adventure.",
+      "roles": "3 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen",
+      "arrangement": "clustered around a corner rather than a rank — 1 forward and 2 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "100111-ppr",
+      "slot": "ui/run/card-art/100111-ppr/illustration.png",
+      "roster": "ppr",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "rook"
+      ],
+      "cardCount": 3,
+      "representativeCardId": "f-011011-ppr",
+      "title": "Border Garrison",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "Two laborers and one watchkeeper maintain an abandoned imperial checkpoint at the edge of cultivated land. They reset road stones, fill a water jar, and seal plain bundles. The border survives as upkeep long after the procession of power has left.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a fortification man, holding or working a wall, gate, or emplacement he is plainly responsible for",
+      "arrangement": "clustered around a corner rather than a rank — 1 forward and 2 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "10011121-ppbb",
+      "slot": "ui/run/card-art/10011121-ppbb/illustration.png",
+      "roster": "ppbb",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "bishop",
+        "bishop"
+      ],
+      "cardCount": 6,
+      "representativeCardId": "f-01101121-bbpp",
+      "title": "Traveling Chapel",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Two attendants and two clerics arrange a mobile care station inside a covered farm wagon: lamp, basin, linen, flowers, and a plain folding table. No icon or inscription identifies it. Ritual and treatment have become portable because the larger structure is elsewhere or gone.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; 2 of them a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "clustered around a corner rather than a rank — 1 forward and 3 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "10011121-ppkb",
+      "slot": "ui/run/card-art/10011121-ppkb/illustration.png",
+      "roster": "ppkb",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "knight",
+        "bishop"
+      ],
+      "cardCount": 12,
+      "representativeCardId": "f-01101121-bkpp",
+      "title": "Wayfarers' Compact",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "Two porters, one mounted traveler, and one cleric divide water, feed, lamp oil, and covered papers at a road station beyond a ruined city edge. Their compact is visible only through measured shares and packed objects. No oath or destination is shown.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a mounted man-at-arms, armoured and in the saddle, the horse under real control; a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "clustered around a corner rather than a rank — 1 forward and 3 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "10011121-ppkk",
+      "slot": "ui/run/card-art/10011121-ppkk/illustration.png",
+      "roster": "ppkk",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "knight",
+        "knight"
+      ],
+      "cardCount": 6,
+      "representativeCardId": "f-01101121-kkpp",
+      "title": "Escort of Lances",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Two handlers and two mounted escorts stand beside a tarpaulin-covered wagon at a rail-side farm crossing. Their grounded lances prop a damaged awning rather than threaten anyone. Wet grass, white cloth, and crate stacks imply the unseen work continuing beyond the frame.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; 2 of them a mounted man-at-arms, armoured and in the saddle, the horse under real control",
+      "arrangement": "clustered around a corner rather than a rank — 1 forward and 3 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "10011121-pppb",
+      "slot": "ui/run/card-art/10011121-pppb/illustration.png",
+      "roster": "pppb",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "bishop"
+      ],
+      "cardCount": 4,
+      "representativeCardId": "f-01101121-bppp",
+      "title": "Shepherd's Flock",
+      "historicalAnchor": "year-without-a-summer-1816",
+      "sceneDirection": "Three shepherds and one cleric coax thin sheep into a barn during wrong-season cold. Frost lies among summer flowers; feed sacks are visibly scarce. The cleric holds a plain tally board without readable marks and works as another pair of hands.",
+      "roles": "3 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "clustered around a corner rather than a rank — 1 forward and 3 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "10011121-pppk",
+      "slot": "ui/run/card-art/10011121-pppk/illustration.png",
+      "roster": "pppk",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "knight"
+      ],
+      "cardCount": 4,
+      "representativeCardId": "f-01101121-kppp",
+      "title": "Banneret's Retinue",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Three handlers and one mounted banneret organize blankets, water cans, and a covered handcart in a wet farmyard. A furled, unreadable banner is treated as stored equipment rather than identity. The retinue's labor matters more than its rank.",
+      "roles": "3 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a mounted man-at-arms, armoured and in the saddle, the horse under real control",
+      "arrangement": "clustered around a corner rather than a rank — 1 forward and 3 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "10011121-pppp",
+      "slot": "ui/run/card-art/10011121-pppp/illustration.png",
+      "roster": "pppp",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "pawn"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "f-01101121-pppp",
+      "title": "Ragged Column",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "Four common travelers follow a broken pale-stone road beyond an abandoned checkpoint, carrying jars, bedding, tools, and one small lamp. Their clothing is worn but not theatrical. The column is simply the shape ordinary survival takes after a center has failed.",
+      "roles": "4 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen",
+      "arrangement": "clustered around a corner rather than a rank — 1 forward and 3 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "10011121-pppr",
+      "slot": "ui/run/card-art/10011121-pppr/illustration.png",
+      "roster": "pppr",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "rook"
+      ],
+      "cardCount": 4,
+      "representativeCardId": "f-01101121-pppr",
+      "title": "Rampart Detail",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "Three laborers and one fortified keeper repair an ash-stained city rampart with reused blocks, mortar, and a rope hoist. An abandoned road arch and sealed storage jars sit below. The detail preserves infrastructure whose original promise is no longer available.",
+      "roles": "3 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a fortification man, holding or working a wall, gate, or emplacement he is plainly responsible for",
+      "arrangement": "clustered around a corner rather than a rank — 1 forward and 3 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "10200111-ppbb",
+      "slot": "ui/run/card-art/10200111-ppbb/illustration.png",
+      "roster": "ppbb",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "bishop",
+        "bishop"
+      ],
+      "cardCount": 4,
+      "representativeCardId": "f-01101120-bbpp",
+      "title": "Traveling Chapel",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Two attendants and two clerics arrange a mobile care station inside a covered farm wagon: lamp, basin, linen, flowers, and a plain folding table. No icon or inscription identifies it. Ritual and treatment have become portable because the larger structure is elsewhere or gone.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; 2 of them a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "clustered around a corner rather than a rank — 2 forward and 2 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "10200111-ppkb",
+      "slot": "ui/run/card-art/10200111-ppkb/illustration.png",
+      "roster": "ppkb",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "knight",
+        "bishop"
+      ],
+      "cardCount": 6,
+      "representativeCardId": "f-01101120-bkpp",
+      "title": "Wayfarers' Compact",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "Two porters, one mounted traveler, and one cleric divide water, feed, lamp oil, and covered papers at a road station beyond a ruined city edge. Their compact is visible only through measured shares and packed objects. No oath or destination is shown.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a mounted man-at-arms, armoured and in the saddle, the horse under real control; a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "clustered around a corner rather than a rank — 2 forward and 2 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "10200111-ppkk",
+      "slot": "ui/run/card-art/10200111-ppkk/illustration.png",
+      "roster": "ppkk",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "knight",
+        "knight"
+      ],
+      "cardCount": 4,
+      "representativeCardId": "f-01101120-kkpp",
+      "title": "Escort of Lances",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Two handlers and two mounted escorts stand beside a tarpaulin-covered wagon at a rail-side farm crossing. Their grounded lances prop a damaged awning rather than threaten anyone. Wet grass, white cloth, and crate stacks imply the unseen work continuing beyond the frame.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; 2 of them a mounted man-at-arms, armoured and in the saddle, the horse under real control",
+      "arrangement": "clustered around a corner rather than a rank — 2 forward and 2 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "10200111-pppb",
+      "slot": "ui/run/card-art/10200111-pppb/illustration.png",
+      "roster": "pppb",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "bishop"
+      ],
+      "cardCount": 2,
+      "representativeCardId": "f-01101120-bppp",
+      "title": "Shepherd's Flock",
+      "historicalAnchor": "year-without-a-summer-1816",
+      "sceneDirection": "Three shepherds and one cleric coax thin sheep into a barn during wrong-season cold. Frost lies among summer flowers; feed sacks are visibly scarce. The cleric holds a plain tally board without readable marks and works as another pair of hands.",
+      "roles": "3 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "clustered around a corner rather than a rank — 2 forward and 2 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "10200111-pppk",
+      "slot": "ui/run/card-art/10200111-pppk/illustration.png",
+      "roster": "pppk",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "knight"
+      ],
+      "cardCount": 2,
+      "representativeCardId": "f-01101120-kppp",
+      "title": "Banneret's Retinue",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Three handlers and one mounted banneret organize blankets, water cans, and a covered handcart in a wet farmyard. A furled, unreadable banner is treated as stored equipment rather than identity. The retinue's labor matters more than its rank.",
+      "roles": "3 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a mounted man-at-arms, armoured and in the saddle, the horse under real control",
+      "arrangement": "clustered around a corner rather than a rank — 2 forward and 2 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "10200111-pppp",
+      "slot": "ui/run/card-art/10200111-pppp/illustration.png",
+      "roster": "pppp",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "pawn"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "f-01101120-pppp",
+      "title": "Ragged Column",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "Four common travelers follow a broken pale-stone road beyond an abandoned checkpoint, carrying jars, bedding, tools, and one small lamp. Their clothing is worn but not theatrical. The column is simply the shape ordinary survival takes after a center has failed.",
+      "roles": "4 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen",
+      "arrangement": "clustered around a corner rather than a rank — 2 forward and 2 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "10200111-pppr",
+      "slot": "ui/run/card-art/10200111-pppr/illustration.png",
+      "roster": "pppr",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "rook"
+      ],
+      "cardCount": 2,
+      "representativeCardId": "f-01101120-prpp",
+      "title": "Rampart Detail",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "Three laborers and one fortified keeper repair an ash-stained city rampart with reused blocks, mortar, and a rope hoist. An abandoned road arch and sealed storage jars sit below. The detail preserves infrastructure whose original promise is no longer available.",
+      "roles": "3 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a fortification man, holding or working a wall, gate, or emplacement he is plainly responsible for",
+      "arrangement": "clustered around a corner rather than a rank — 2 forward and 2 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "20011121-ppbb",
+      "slot": "ui/run/card-art/20011121-ppbb/illustration.png",
+      "roster": "ppbb",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "bishop",
+        "bishop"
+      ],
+      "cardCount": 6,
+      "representativeCardId": "f-01112021-bbpp",
+      "title": "Traveling Chapel",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Two attendants and two clerics arrange a mobile care station inside a covered farm wagon: lamp, basin, linen, flowers, and a plain folding table. No icon or inscription identifies it. Ritual and treatment have become portable because the larger structure is elsewhere or gone.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; 2 of them a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "clustered around a corner rather than a rank — 1 forward and 3 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "20011121-ppkb",
+      "slot": "ui/run/card-art/20011121-ppkb/illustration.png",
+      "roster": "ppkb",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "knight",
+        "bishop"
+      ],
+      "cardCount": 12,
+      "representativeCardId": "f-01112021-bkpp",
+      "title": "Wayfarers' Compact",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "Two porters, one mounted traveler, and one cleric divide water, feed, lamp oil, and covered papers at a road station beyond a ruined city edge. Their compact is visible only through measured shares and packed objects. No oath or destination is shown.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a mounted man-at-arms, armoured and in the saddle, the horse under real control; a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "clustered around a corner rather than a rank — 1 forward and 3 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "20011121-ppkk",
+      "slot": "ui/run/card-art/20011121-ppkk/illustration.png",
+      "roster": "ppkk",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "knight",
+        "knight"
+      ],
+      "cardCount": 6,
+      "representativeCardId": "f-01112021-kkpp",
+      "title": "Escort of Lances",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Two handlers and two mounted escorts stand beside a tarpaulin-covered wagon at a rail-side farm crossing. Their grounded lances prop a damaged awning rather than threaten anyone. Wet grass, white cloth, and crate stacks imply the unseen work continuing beyond the frame.",
+      "roles": "2 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; 2 of them a mounted man-at-arms, armoured and in the saddle, the horse under real control",
+      "arrangement": "clustered around a corner rather than a rank — 1 forward and 3 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "20011121-pppb",
+      "slot": "ui/run/card-art/20011121-pppb/illustration.png",
+      "roster": "pppb",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "bishop"
+      ],
+      "cardCount": 4,
+      "representativeCardId": "f-01112021-bppp",
+      "title": "Shepherd's Flock",
+      "historicalAnchor": "year-without-a-summer-1816",
+      "sceneDirection": "Three shepherds and one cleric coax thin sheep into a barn during wrong-season cold. Frost lies among summer flowers; feed sacks are visibly scarce. The cleric holds a plain tally board without readable marks and works as another pair of hands.",
+      "roles": "3 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a company cleric — the one figure here who is not a fighter, marked by vestment and office rather than arms",
+      "arrangement": "clustered around a corner rather than a rank — 1 forward and 3 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "20011121-pppk",
+      "slot": "ui/run/card-art/20011121-pppk/illustration.png",
+      "roster": "pppk",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "knight"
+      ],
+      "cardCount": 4,
+      "representativeCardId": "f-01112021-kppp",
+      "title": "Banneret's Retinue",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "Three handlers and one mounted banneret organize blankets, water cans, and a covered handcart in a wet farmyard. A furled, unreadable banner is treated as stored equipment rather than identity. The retinue's labor matters more than its rank.",
+      "roles": "3 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a mounted man-at-arms, armoured and in the saddle, the horse under real control",
+      "arrangement": "clustered around a corner rather than a rank — 1 forward and 3 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    },
+    {
+      "artId": "20011121-pppp",
+      "slot": "ui/run/card-art/20011121-pppp/illustration.png",
+      "roster": "pppp",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "pawn"
+      ],
+      "cardCount": 1,
+      "representativeCardId": "f-01112021-pppp",
+      "title": "Ragged Column",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "Four common travelers follow a broken pale-stone road beyond an abandoned checkpoint, carrying jars, bedding, tools, and one small lamp. Their clothing is worn but not theatrical. The column is simply the shape ordinary survival takes after a center has failed.",
+      "roles": "4 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen",
+      "arrangement": "clustered around a corner rather than a rank — 1 forward and 3 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "pixellab"
+    },
+    {
+      "artId": "20011121-pppr",
+      "slot": "ui/run/card-art/20011121-pppr/illustration.png",
+      "roster": "pppr",
+      "pieces": [
+        "pawn",
+        "pawn",
+        "pawn",
+        "rook"
+      ],
+      "cardCount": 4,
+      "representativeCardId": "f-01112021-pppr",
+      "title": "Rampart Detail",
+      "historicalAnchor": "jerusalem-second-temple-70-ce",
+      "sceneDirection": "Three laborers and one fortified keeper repair an ash-stained city rampart with reused blocks, mortar, and a rope hoist. An abandoned road arch and sealed storage jars sit below. The detail preserves infrastructure whose original promise is no longer available.",
+      "roles": "3 of them a levied foot soldier in the line, spear or billhook in hand, worn kit that was issued not chosen; a fortification man, holding or working a wall, gate, or emplacement he is plainly responsible for",
+      "arrangement": "clustered around a corner rather than a rank — 1 forward and 3 set back behind them, bodies overlapping at the turn, gear stacked in the angle.",
+      "rosterPromptFound": true,
+      "generator": "codex"
+    }
+  ]
+}
