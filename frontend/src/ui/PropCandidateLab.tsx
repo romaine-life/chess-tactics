@@ -19,6 +19,16 @@ import {
   type AdminLiveMediaVersion,
 } from '../net/liveMediaAdmin';
 import {
+  formatVerdicts,
+  readVerdicts,
+  summarizeVerdicts,
+  toggleVerdict,
+  verdictKey,
+  writeVerdicts,
+  type ArtVerdict,
+  type VerdictMap,
+} from './animatedArtVerdicts';
+import {
   candidateSeat,
   propCandidateGroups,
   propCandidateSlots,
@@ -66,6 +76,8 @@ const PC_CSS = `
   background-size: var(--pc-sheet-w) var(--pc-frame-h); background-position: var(--pc-offset) 0;
   background-repeat: no-repeat; image-rendering: pixelated; pointer-events: none;
   opacity: var(--pc-alpha); transform: translate(var(--pc-shift-x), var(--pc-shift-y)); }
+.pc-verdicts { background: rgba(8,14,20,.75); border: 1px solid rgba(96,140,170,.35); border-radius: 4px;
+  color: #cfe2f0; font: 12px/1.45 ui-monospace, monospace; padding: 6px; resize: vertical; width: 100%; }
 .pc-impact { display: grid; gap: 6px; justify-items: start; }
 .pc-impact-stage { width: var(--pc-frame-w); height: var(--pc-frame-h); background-image: var(--pc-sheet);
   background-size: var(--pc-sheet-w) var(--pc-frame-h); background-position: var(--pc-offset) 0;
@@ -228,6 +240,10 @@ export function PropCandidateLab({ propId, onPropId, header }: {
   // the same at rest as it is at the end of a run, so a second press changes no dependency and
   // never restarts the loop. A token that only ever increments is what makes replay replay.
   const [entranceRun, setEntranceRun] = useState(0);
+  const [verdicts, setVerdicts] = useState<VerdictMap>({});
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => { setVerdicts(readVerdicts(window.localStorage)); }, []);
 
   useEffect(() => {
     if (entranceRun === 0) return undefined;
@@ -271,6 +287,35 @@ export function PropCandidateLab({ propId, onPropId, header }: {
     [],
   );
   const reviewableProps = animatedProps;
+  // A verdict is about the bytes on screen, so every prop is paired with the sheet it is
+  // currently showing. New art for a prop therefore arrives unjudged.
+  const animatedSheets = useMemo(
+    () => reviewableProps.flatMap((id) => {
+      const sheet = structureArtImpact(propDef(id)?.spriteId ?? id);
+      return sheet ? [{ propId: id, sha256: sheet.src.split('/').pop() ?? sheet.src }] : [];
+    }),
+    [reviewableProps],
+  );
+  const activeSheetSha = animatedSheets.find((entry) => entry.propId === propId)?.sha256 ?? '';
+  const activeVerdict = verdicts[verdictKey(propId, activeSheetSha)]?.verdict;
+  const verdictSummary = useMemo(() => summarizeVerdicts(verdicts, animatedSheets), [animatedSheets, verdicts]);
+  const verdictText = useMemo(
+    () => formatVerdicts(verdictSummary, verdicts, 'Animated prop artwork'),
+    [verdictSummary, verdicts],
+  );
+  const setVerdict = useCallback((verdict: ArtVerdict): void => {
+    if (!activeSheetSha) return;
+    setVerdicts((current) => {
+      const next = toggleVerdict(current, propId, activeSheetSha, verdict, new Date().toISOString());
+      writeVerdicts(window.localStorage, next);
+      return next;
+    });
+    setCopied(false);
+  }, [activeSheetSha, propId]);
+  const copyVerdicts = useCallback(async (): Promise<void> => {
+    try { await navigator.clipboard.writeText(verdictText); setCopied(true); } catch { setCopied(false); }
+  }, [verdictText]);
+
   const propIndex = Math.max(0, reviewableProps.indexOf(reviewableProps.includes(propId) ? propId : reviewableProps[0] ?? propId));
   const stepProp = useCallback((delta: number): void => {
     if (!reviewableProps.length) return;
@@ -517,6 +562,27 @@ export function PropCandidateLab({ propId, onPropId, header }: {
               </button>
             </div>
             {notice ? <p className="pc-note">{notice}</p> : null}
+            <h2>Verdict</h2>
+            <div className="ps-toggles">
+              {(['approved', 'rejected'] as const).map((verdict) => (
+                <button
+                  key={verdict}
+                  type="button"
+                  className={`ps-toggle ${activeVerdict === verdict ? 'is-on' : ''}`}
+                  disabled={!activeSheetSha}
+                  onClick={() => setVerdict(verdict)}
+                >{verdict === 'approved' ? 'Approve' : 'Reject'}</button>
+              ))}
+              <button type="button" className="ps-toggle" onClick={() => void copyVerdicts()}>
+                {copied ? 'Copied' : 'Copy list'}
+              </button>
+            </div>
+            <p className="pc-note">
+              {verdictSummary.approved.length} approved · {verdictSummary.rejected.length} rejected
+              · {verdictSummary.undecided.length} left. Press the same button again to un-judge.
+            </p>
+            <textarea className="pc-verdicts" readOnly value={verdictText} rows={8} aria-label="Approved artwork list" />
+
             <h2>Entrance</h2>
             <div className="ps-toggles">
               <button type="button" className="ps-toggle" onClick={playEntrance}>Play entrance</button>
