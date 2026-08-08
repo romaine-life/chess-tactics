@@ -438,11 +438,11 @@ describe('pieceOp', () => {
 
 describe('skirmishTileClickIntent', () => {
   it('clears the current selection when the player clicks an unrelated board tile', () => {
-    expect(skirmishTileClickIntent(4, 3, [{ x: 2, y: 2 }], undefined, 'player')).toEqual({
+    expect(skirmishTileClickIntent(4, 3, [{ x: 2, y: 2 }], undefined, 'player', null)).toEqual({
       kind: 'clear-selection',
     });
 
-    expect(skirmishTileClickIntent(4, 3, [{ x: 2, y: 2 }], { id: 'rock-1', side: 'neutral' }, 'player')).toEqual({
+    expect(skirmishTileClickIntent(4, 3, [{ x: 2, y: 2 }], { id: 'rock-1', side: 'neutral' }, 'player', null)).toEqual({
       kind: 'clear-selection',
     });
   });
@@ -451,14 +451,33 @@ describe('skirmishTileClickIntent', () => {
     ['player', 'enemy'],
     ['enemy', 'player'],
   ] as const)('keeps moves, own-side selection, and opponent focus ahead of cancellation for the %s seat', (localSide, opponent) => {
-    expect(skirmishTileClickIntent(2, 2, [{ x: 2, y: 2 }], { id: 'opponent-1', side: opponent }, localSide)).toEqual({ kind: 'move' });
-    expect(skirmishTileClickIntent(1, 1, [], { id: 'own-2', side: localSide }, localSide)).toEqual({
+    expect(skirmishTileClickIntent(2, 2, [{ x: 2, y: 2 }], { id: 'opponent-1', side: opponent }, localSide, null)).toEqual({ kind: 'move' });
+    expect(skirmishTileClickIntent(1, 1, [], { id: 'own-2', side: localSide }, localSide, null)).toEqual({
       kind: 'select',
       pieceId: 'own-2',
     });
-    expect(skirmishTileClickIntent(6, 6, [], { id: 'opponent-1', side: opponent }, localSide)).toEqual({
+    expect(skirmishTileClickIntent(6, 6, [], { id: 'opponent-1', side: opponent }, localSide, null)).toEqual({
       kind: 'focus',
       pieceId: 'opponent-1',
+    });
+  });
+
+  it.each([
+    ['player', 'enemy'],
+    ['enemy', 'player'],
+  ] as const)('puts the selected unit down when the %s seat clicks it a second time', (localSide, opponent) => {
+    expect(skirmishTileClickIntent(1, 1, [{ x: 3, y: 1 }], { id: 'own-2', side: localSide }, localSide, 'own-2')).toEqual({
+      kind: 'clear-selection',
+    });
+    // A different friendly unit is still a straight hand-off, not a deselect.
+    expect(skirmishTileClickIntent(1, 1, [], { id: 'own-3', side: localSide }, localSide, 'own-2')).toEqual({
+      kind: 'select',
+      pieceId: 'own-3',
+    });
+    // Cancelling never outranks a legal destination, so a capture on the selected unit's own
+    // square (it cannot be one) or any queued target still commits the move.
+    expect(skirmishTileClickIntent(2, 2, [{ x: 2, y: 2 }], { id: 'opponent-1', side: opponent }, localSide, 'own-2')).toEqual({
+      kind: 'move',
     });
   });
 });
