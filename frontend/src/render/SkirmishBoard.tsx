@@ -70,6 +70,7 @@ import {
   unprojectBoardPoint,
   type BakeBounds,
   type BoardDrawOp,
+  type BoardStructureIdentity,
   type MirrorReflectionSubject,
   type PredrawnOcclusionDepthMap,
   type TerrainSideMaterials,
@@ -672,6 +673,58 @@ export function computeArrivalDelays(
   return delays;
 }
 
+// Board assembly: the placed OBSTACLES land before the armies do. ADR-0045 gave the units a
+// staggered drop and left every prop as scenery that was simply already there; a board whose
+// rocks arrive the same way reads as being ASSEMBLED — ground, then the shape of the position,
+// then the pieces that have to solve it. Rocks are the obstacle that defines a position, so they
+// take part; trees and houses stay dressing (widen `structureArrives` to change that). The whole
+// set lands inside the reveal beat, before ARRIVAL_BASE_MS frees the first unit.
+const STRUCTURE_ARRIVAL_BASE_MS = 130;
+const STRUCTURE_ARRIVAL_STEP_MS = 55;
+
+/** Which placed props take part in the board-assembly drop. */
+export function structureArrives(structure: BoardStructureIdentity): boolean {
+  return structure.kind === 'rock';
+}
+
+/**
+ * Depth-ordered entrance for a board's obstacles: the far corner lands first and the wave runs
+ * toward the player, matching the isometric depth order the same ops are painted in — so the
+ * position lays itself down rather than flickering in at random.
+ */
+export function computeStructureArrivalDelays(
+  structures: readonly BoardStructureIdentity[],
+  baseDelayMs = STRUCTURE_ARRIVAL_BASE_MS,
+): Map<string, number> {
+  const delays = new Map<string, number>();
+  [...structures]
+    .sort((a, b) => (a.x + a.y) - (b.x + b.y) || a.x - b.x)
+    .forEach((structure, index) => delays.set(structure.key, baseDelayMs + index * STRUCTURE_ARRIVAL_STEP_MS));
+  return delays;
+}
+
+/** The arriving props of a board, one entry per placed anchor (a prop draws several ops). */
+export function arrivingStructures(ops: readonly BoardDrawOp[]): Map<string, BoardStructureIdentity> {
+  const structures = new Map<string, BoardStructureIdentity>();
+  for (const op of ops) {
+    if (op.structure && structureArrives(op.structure)) structures.set(op.structure.key, op.structure);
+  }
+  return structures;
+}
+
+/** Apply a prop's entrance to one of its draw ops. Every op of the same anchor takes the SAME
+ * offset, so a flat-contact prop's two depth halves cannot shear apart mid-fall. */
+export function structureArrivalOp(
+  op: BoardDrawOp,
+  plan: UnitArrivalPlan | undefined,
+  timeMs: number,
+): BoardDrawOp {
+  if (!plan) return op;
+  const arrival = arrivalOffset(timeMs, plan);
+  if (arrival.dy === 0 && arrival.opacity >= 1) return op;
+  return { ...op, dy: op.dy + arrival.dy, opacity: (op.opacity ?? 1) * arrival.opacity };
+}
+
 /** Return only units which have newly joined the visible position. A retained battlefield uses
  * this identity boundary to animate arrivals without replaying the units already standing there. */
 export function newlyVisibleArrivalPieces(
@@ -977,6 +1030,9 @@ function SkirmishSceneLayer({
   const visibleUnitIdsRef = useRef<Set<string>>(new Set());
   const arrivalPlansRef = useRef<Map<string, UnitArrivalPlan>>(new Map());
   const departurePlansRef = useRef<Map<string, UnitDeparturePlan>>(new Map());
+  const visibleStructureKeysRef = useRef<Set<string>>(new Set());
+  const structureArrivalPlansRef = useRef<Map<string, UnitArrivalPlan>>(new Map());
+  const structureLifecycleStartedRef = useRef(false);
   const arrivalLifecycleStartedRef = useRef(false);
   const reportedArrivalIdsRef = useRef('');
   const reportedDepartureIdsRef = useRef('');
@@ -1197,6 +1253,36 @@ function SkirmishSceneLayer({
       }
     }
     reportArrivingUnits();
+
+    // The board's obstacles follow the same admission → staging → activation path as the units,
+    // keyed by their anchor cell instead of a piece id. A prop that was already standing when
+    // this battlefield was retained is not re-dropped, and a settled review owns no prop plans
+    // at all, for the same reason its units own none.
+    const nextStructures = arrivingStructures(staticOps);
+    for (const key of visibleStructureKeysRef.current) {
+      if (!nextStructures.has(key)) visibleStructureKeysRef.current.delete(key);
+    }
+    for (const key of structureArrivalPlansRef.current.keys()) {
+      if (!nextStructures.has(key)) structureArrivalPlansRef.current.delete(key);
+    }
+    const structureAdditions = [...nextStructures.values()]
+      .filter((structure) => !visibleStructureKeysRef.current.has(structure.key));
+    const structureDelays = computeStructureArrivalDelays(
+      structureAdditions,
+      structureLifecycleStartedRef.current ? 0 : STRUCTURE_ARRIVAL_BASE_MS,
+    );
+    for (const key of nextStructures.keys()) visibleStructureKeysRef.current.add(key);
+    structureLifecycleStartedRef.current = true;
+    if (unitArrivals === 'settled') structureArrivalPlansRef.current.clear();
+    for (const structure of structureAdditions) {
+      const plan = unitArrivalPlan(unitArrivals, now, structureDelays.get(structure.key) ?? 0);
+      if (plan) structureArrivalPlansRef.current.set(structure.key, plan);
+    }
+    if (unitArrivals === 'active') {
+      for (const [key, plan] of structureArrivalPlansRef.current) {
+        if (plan.startMs == null) structureArrivalPlansRef.current.set(key, { ...plan, startMs: now });
+      }
+    }
     for (const piece of livePieces) {
       const target = boardLabCellPosition(piece);
       const existing = motionRef.current.get(piece.id);
@@ -1264,7 +1350,11 @@ function SkirmishSceneLayer({
       if (!canvas || !ctx || state.requiredSources.some((src) => !imagesRef.current.has(src))) return;
 
       try {
-        const ops: BoardDrawOp[] = [...state.staticOps];
+        const ops: BoardDrawOp[] = state.staticOps.map((op) => structureArrivalOp(
+          op,
+          op.structure ? structureArrivalPlansRef.current.get(op.structure.key) : undefined,
+          timeMs,
+        ));
         const physicalPieceOps: BoardDrawOp[] = [];
         const reflectionSubjects: MirrorReflectionSubject[] = [];
         for (const piece of state.livePieces) {
@@ -1382,6 +1472,14 @@ function SkirmishSceneLayer({
           arrivalPlansRef.current.delete(pieceId);
         }
       }
+      let hasActiveStructureArrivals = false;
+      for (const [key, plan] of structureArrivalPlansRef.current) {
+        // Staged but unreleased props drive no frames of their own, exactly like staged units:
+        // releasing them is a state change, and that schedules the next frame itself.
+        if (plan.startMs == null) continue;
+        if (timeMs < plan.startMs + plan.delayMs + ARRIVAL_ANIM_MS) hasActiveStructureArrivals = true;
+        else structureArrivalPlansRef.current.delete(key);
+      }
       let hasActiveDepartures = false;
       for (const plan of departurePlansRef.current.values()) {
         if (unitDeparturePose(timeMs, plan).active) {
@@ -1399,7 +1497,13 @@ function SkirmishSceneLayer({
         state.onUnitDepartureComplete(departureRequest.id);
       }
       reportArrivingUnits();
-      if (state.hasAnimatedGroundCover || hasActiveArrivals || hasActiveMotion || hasActiveDepartures) requestSceneFrame();
+      if (
+        state.hasAnimatedGroundCover
+        || hasActiveArrivals
+        || hasActiveStructureArrivals
+        || hasActiveMotion
+        || hasActiveDepartures
+      ) requestSceneFrame();
     };
   }, [reportArrivingUnits, requestSceneFrame]);
 
