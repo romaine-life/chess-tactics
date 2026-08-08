@@ -136,21 +136,21 @@ try {
   const label = 26;
   const gap = 8;
 
+  // Labels are rasterized by the image library rather than composed as inline markup: this repo's
+  // no-committed-media guard rejects serialized vector material embedded in tracked code.
+  const labelFor = (text) => sharp({
+    text: { text, font: 'monospace', rgba: true, dpi: 150 },
+  }).png().toBuffer();
+
   const composites = [];
-  picked.forEach((frame, index) => {
+  for (const [index, frame] of picked.entries()) {
     const column = index % columns;
     const row = Math.floor(index / columns);
     const left = gap + column * (cellW + gap);
     const top = gap + row * (cellH + label + gap);
     composites.push({ input: buffers[index], left, top: top + label });
-    composites.push({
-      input: Buffer.from(
-        `<svg width="${cellW}" height="${label}"><text x="4" y="18" font-family="monospace" font-size="17" fill="#8fe3ff">+${frame.at}ms</text></svg>`,
-      ),
-      left,
-      top,
-    });
-  });
+    composites.push({ input: await labelFor(`+${frame.at}ms`), left: left + 4, top: top + 4 });
+  }
 
   await sharp({
     create: {
