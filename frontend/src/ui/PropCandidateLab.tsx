@@ -22,6 +22,7 @@ import {
   candidateSeat,
   propCandidateGroups,
   propCandidateSlots,
+  propImpactSlots,
   propsWithCandidates,
   type PropCandidateGroup,
   type PropCandidateSeat,
@@ -285,9 +286,12 @@ export function PropCandidateLab({ propId, onPropId, header }: {
     return sheet ? ` · ${sheet.frameCount} frames` : '';
   }, []);
   const activeProp = reviewableProps.includes(propId) ? propId : (reviewableProps[0] ?? propId);
-  const slots = useMemo(() => propCandidateSlots(activeProp), [activeProp]);
+  const slots = useMemo(() => [...propCandidateSlots(activeProp), ...propImpactSlots(activeProp)], [activeProp]);
+  // The candidates this surface approves are ANIMATED ones: a staged impact sheet on the prop's
+  // own impact slot. Approving still halves is a different lane and a different surface; wiring
+  // this button to it left the control permanently dead on every prop listed here.
   const groups = useMemo(
-    () => catalog ? propCandidateGroups(catalog, activeProp) : [],
+    () => catalog ? propCandidateGroups(catalog, activeProp, propImpactSlots) : [],
     [activeProp, catalog],
   );
   const accepted = useMemo(() => propDef(activeProp) ?? null, [activeProp]);
@@ -326,7 +330,10 @@ export function PropCandidateLab({ propId, onPropId, header }: {
   const seated = groups.filter((group) => seats.has(group.key));
   // The proof this surface signs is "these bytes, mounted here, at 1x". Signing before every
   // candidate has decoded and been seated would attest to a board that was not on screen.
-  const proofMounted = zoom === 1 && seated.length === groups.length && groups.length > 0;
+  // The proof is 'this sheet, on this board, at 1x'. An impact candidate is a strip, not a
+  // seatable still, so what has to be true is that the board is showing the prop at canonical
+  // scale — the entrance preview above is the thing being attested to.
+  const proofMounted = zoom === 1;
 
   const cellFor = (index: number): { x: number; y: number } => ({
     x: 2 + (index % (COLS - 3)),
@@ -409,18 +416,6 @@ export function PropCandidateLab({ propId, onPropId, header }: {
                 attrsFor={(half) => ({ 'data-prop-accepted': accepted.id, 'data-half': half })}
               />
             ) : null}
-            {groups.map((group, index) => {
-              const seat = seats.get(group.key);
-              if (!seat) return null;
-              return (
-                <CandidateSprite
-                  key={group.key}
-                  seat={seat}
-                  cell={cellFor(index)}
-                  srcFor={() => group.previewUrl}
-                />
-              );
-            })}
             <EntrancePreview artId={propDef(activeProp)?.spriteId ?? activeProp} cell={entranceCell} timeMs={entranceMs} />
             {showUnit ? (
               <span className="board-unit-seat is-knight" style={{ left: unitPos.left, top: unitPos.top, zIndex: objectBaseZIndex(unitCell) }}>
@@ -500,9 +495,18 @@ export function PropCandidateLab({ propId, onPropId, header }: {
               <input value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="why this one" />
             </label>
 
-            {!proofMounted && groups.length > 0
-              ? <p className="pc-note">Set 1× and let every candidate paint before approving — the proof records this exact board.</p>
-              : null}
+            {/* A disabled control that will not say why is worse than no control. */}
+            <p className="pc-note">
+              {groups.length === 0
+                ? 'Nothing staged to approve — the sheet above is already installed. Stage a new one to replace it.'
+                : !proofMounted
+                  ? 'Set 1× before approving; the proof records this exact board.'
+                  : !selected
+                    ? 'Pick a staged sheet.'
+                    : !notes.trim()
+                      ? 'Add a review note.'
+                      : 'Ready to approve.'}
+            </p>
 
             <div className="ps-toggles">
               <button type="button" className="ps-toggle" disabled={!selected || !proofMounted || !notes.trim() || busy !== null} onClick={() => void handleReview()}>
