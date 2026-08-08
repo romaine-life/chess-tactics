@@ -190,6 +190,13 @@ export const RUN_CARD_FORMATION_FIGURE = Object.freeze({
   anchorY: .78,
 });
 
+/** How far a figure at full scale reaches from the seat centre it stands on, in tiles. */
+export const RUN_CARD_FORMATION_FIGURE_RISE = RUN_CARD_FORMATION_FIGURE.anchorY * RUN_CARD_FORMATION_FIGURE.cellHeight
+  + (RUN_CARD_FORMATION_FIGURE.height - RUN_CARD_FORMATION_FIGURE.cellHeight) / 2;
+export const RUN_CARD_FORMATION_FIGURE_DROP = (1 - RUN_CARD_FORMATION_FIGURE.anchorY) * RUN_CARD_FORMATION_FIGURE.cellHeight
+  + (RUN_CARD_FORMATION_FIGURE.height - RUN_CARD_FORMATION_FIGURE.cellHeight) / 2;
+export const RUN_CARD_FORMATION_FIGURE_REACH = RUN_CARD_FORMATION_FIGURE.width / 2;
+
 export type RunCardFormationEdge = 'north' | 'east' | 'south' | 'west';
 
 export type RunCardFormationBoardCell = Readonly<{
@@ -333,11 +340,9 @@ export function runCardFormationMetrics(
   // How far a figure reaches past the seats it stands on. Measured at full unit scale rather than
   // at each piece's own: the tile is the board, and a card's board must not change size according
   // to which piece happens to be standing on it.
-  const figure = RUN_CARD_FORMATION_FIGURE;
-  const centred = (figure.height - figure.cellHeight) / 2;
-  const overhangTop = figure.anchorY * figure.cellHeight + centred - RUN_CARD_FORMATION_TILE_ASPECT / 2;
-  const overhangBottom = (1 - figure.anchorY) * figure.cellHeight + centred - RUN_CARD_FORMATION_TILE_ASPECT / 2;
-  const overhangSide = (figure.width - 1) / 2;
+  const overhangTop = RUN_CARD_FORMATION_FIGURE_RISE - RUN_CARD_FORMATION_TILE_ASPECT / 2;
+  const overhangBottom = RUN_CARD_FORMATION_FIGURE_DROP - RUN_CARD_FORMATION_TILE_ASPECT / 2;
+  const overhangSide = RUN_CARD_FORMATION_FIGURE_REACH - .5;
   return {
     width: boardWidth + Math.max(0, overhangSide) * 2,
     height: boardHeight + Math.max(0, overhangTop) + Math.max(0, overhangBottom),
@@ -347,6 +352,65 @@ export function runCardFormationMetrics(
     boardHeight,
     minLeft,
     minTop,
+  };
+}
+
+export type RunCardFormationInkExtent = Readonly<{
+  left: string;
+  right: string;
+  top: string;
+  bottom: string;
+}>;
+
+/**
+ * The edges of what is actually INKED, as CSS expressions in the drawing's own tile units.
+ *
+ * The drawing is sized against a full-scale figure so that a card's board does not change size
+ * with the piece standing on it — but a pawn is drawn at 0.66 and a rook at 0.73, so on a card of
+ * short pieces a good part of that reserved height is never painted. Centring the reserved box
+ * would leave the pawns sitting low in it, which is the same mistake the columns-by-rows rectangle
+ * made across: centring a box on space nothing is drawn in.
+ *
+ * A piece's scale is a live setting rather than a build-time number (unitSizeTuning writes
+ * --unit-scale-<piece> onto the root), so these come out as `min()` / `max()` over per-piece terms
+ * and CSS resolves them against whatever the scales currently are. Retuning a piece's size still
+ * re-centres every card that carries it, with no subscription on this face.
+ */
+export function runCardFormationInkExtent(
+  seats: readonly Readonly<{ left: number; top: number; unit?: string }>[],
+): RunCardFormationInkExtent {
+  const half = RUN_CARD_FORMATION_TILE_ASPECT / 2;
+  const number = (value: number): string => value.toFixed(4);
+  const figures = seats.filter((seat) => seat.unit);
+  const reach = (seat: Readonly<{ unit?: string }>, distance: number, sign: 1 | -1): string => (
+    `calc(${sign < 0 ? '-1 * ' : ''}${number(distance)} * var(--unit-scale-${seat.unit}, 1))`
+  );
+  const edge = (
+    pick: 'min' | 'max',
+    seatEdge: number,
+    term: (seat: Readonly<{ left: number; top: number; unit?: string }>) => string,
+  ): string => (
+    figures.length ? `${pick}(${number(seatEdge)}, ${figures.map(term).join(', ')})` : number(seatEdge)
+  );
+  const seatEdges = {
+    left: Math.min(...seats.map((seat) => seat.left)) - .5,
+    right: Math.max(...seats.map((seat) => seat.left)) + .5,
+    top: Math.min(...seats.map((seat) => seat.top)) - half,
+    bottom: Math.max(...seats.map((seat) => seat.top)) + half,
+  };
+  return {
+    left: edge('min', seatEdges.left, (seat) => (
+      `calc(${number(seat.left)} + ${reach(seat, RUN_CARD_FORMATION_FIGURE_REACH, -1)})`
+    )),
+    right: edge('max', seatEdges.right, (seat) => (
+      `calc(${number(seat.left)} + ${reach(seat, RUN_CARD_FORMATION_FIGURE_REACH, 1)})`
+    )),
+    top: edge('min', seatEdges.top, (seat) => (
+      `calc(${number(seat.top)} + ${reach(seat, RUN_CARD_FORMATION_FIGURE_RISE, -1)})`
+    )),
+    bottom: edge('max', seatEdges.bottom, (seat) => (
+      `calc(${number(seat.top)} + ${reach(seat, RUN_CARD_FORMATION_FIGURE_DROP, 1)})`
+    )),
   };
 }
 
@@ -456,15 +520,29 @@ function FormationDiagram({
   // Every coordinate below is a count of TILES, not a card length. The tile's own length is what
   // the panel sizes (see .run-card-formation-fit), so the same numbers draw the same diagram at
   // whatever size the card has room for.
-  const position = (x: number, y: number): CSSProperties => {
+  const seat = (x: number, y: number): Readonly<{ left: number; top: number; depth: number }> => {
     const point = runCardFormationIsoPoint(x, y);
     return {
-      '--run-card-formation-left': metrics.boardLeft + (point.left - metrics.minLeft) / tile + .5,
-      '--run-card-formation-top':
-        metrics.boardTop + (point.top - metrics.minTop) / tile + RUN_CARD_FORMATION_TILE_ASPECT / 2,
-      '--run-card-formation-depth': point.depth,
+      left: metrics.boardLeft + (point.left - metrics.minLeft) / tile + .5,
+      top: metrics.boardTop + (point.top - metrics.minTop) / tile + RUN_CARD_FORMATION_TILE_ASPECT / 2,
+      depth: point.depth,
+    };
+  };
+  const position = (x: number, y: number): CSSProperties => {
+    const placed = seat(x, y);
+    return {
+      '--run-card-formation-left': placed.left,
+      '--run-card-formation-top': placed.top,
+      '--run-card-formation-depth': placed.depth,
     } as CSSProperties;
   };
+  // What is inked, against what was reserved: the drawing is placed so the INK lands in the middle
+  // of the space, not the reserve. A vacant seat marks its own tile and carries no figure.
+  const ink = runCardFormationInkExtent(boardCells.map((cell) => {
+    const placed = seat(cell.x, cell.y);
+    const standing = pieces.find((piece) => !piece.empty && piece.x === cell.x && piece.y === cell.y);
+    return { left: placed.left, top: placed.top, unit: standing?.unit };
+  }));
   return (
     <span
       className="run-card-formation-fit"
@@ -489,6 +567,10 @@ function FormationDiagram({
           '--run-card-formation-figure-cell-height': RUN_CARD_FORMATION_FIGURE.cellHeight,
           '--run-card-formation-figure-width': RUN_CARD_FORMATION_FIGURE.width,
           '--run-card-formation-figure-height': RUN_CARD_FORMATION_FIGURE.height,
+          '--run-card-formation-ink-left': ink.left,
+          '--run-card-formation-ink-right': ink.right,
+          '--run-card-formation-ink-top': ink.top,
+          '--run-card-formation-ink-bottom': ink.bottom,
         } as CSSProperties}
         aria-label="Authored deployment formation"
       >

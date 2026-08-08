@@ -6,11 +6,15 @@ import { runCardFaceContent } from './runCardFaceContent';
 import {
   RUN_CARD_FORMATION_EDGE_LINE,
   RUN_CARD_FORMATION_FIGURE,
+  RUN_CARD_FORMATION_FIGURE_DROP,
+  RUN_CARD_FORMATION_FIGURE_REACH,
+  RUN_CARD_FORMATION_FIGURE_RISE,
   RUN_CARD_FORMATION_ISO_TILE,
   RUN_CARD_FORMATION_TILE_POINTS,
   RUN_CARD_FORMATION_TILE_VIEW_BOX,
   requiredRunCardImageKinds,
   runCardFormationBoardCells,
+  runCardFormationInkExtent,
   runCardFormationMetrics,
   runCardFormationOutlineRings,
   runCardFormationIsoPoint,
@@ -246,6 +250,42 @@ describe('formation-only Run card face', () => {
     // The seats sit inside that extent, offset by the room the figures need around them.
     expect(lone.boardLeft).toBeCloseTo((RUN_CARD_FORMATION_FIGURE.width - 1) / 2);
     expect(lone.boardTop).toBeGreaterThan(0);
+  });
+
+  /**
+   * Size is measured against a full-scale figure; PLACEMENT is measured against what is inked.
+   * A pawn is drawn at 0.66 and a rook at 0.73, so on a card of short pieces the reserved height
+   * is taller than anything painted in it — centre the reserve and the figures sit low in the
+   * space, which is the columns-by-rows mistake again in the other axis.
+   */
+  it('states the inked edges, so the space is centred on what is drawn in it', () => {
+    const seat = { left: 1, top: 1 };
+    const bare = runCardFormationInkExtent([seat]);
+    // A seat with nothing standing on it reaches half a tile across and half a tile's height down.
+    expect(bare.left).toBe('0.5000');
+    expect(bare.right).toBe('1.5000');
+    expect(bare.top).toBe((1 - RUN_CARD_FORMATION_ISO_TILE.height / RUN_CARD_FORMATION_ISO_TILE.width / 2).toFixed(4));
+
+    // A figure's reach is stated against its LIVE scale, so retuning a piece re-centres its cards.
+    const standing = runCardFormationInkExtent([{ ...seat, unit: 'pawn' }]);
+    expect(standing.top).toContain('var(--unit-scale-pawn, 1)');
+    expect(standing.top).toContain(RUN_CARD_FORMATION_FIGURE_RISE.toFixed(4));
+    expect(standing.bottom).toContain(RUN_CARD_FORMATION_FIGURE_DROP.toFixed(4));
+    expect(standing.left).toContain(RUN_CARD_FORMATION_FIGURE_REACH.toFixed(4));
+    // The seat's own edge stays in the reckoning: a figure narrower than its tile does not shrink
+    // the drawing onto itself and leave the board hanging out of the space.
+    expect(standing.left.startsWith('min(0.5000,')).toBe(true);
+    expect(standing.right.startsWith('max(1.5000,')).toBe(true);
+  });
+
+  /** The placement offsets are the gap between the two, so CSS never re-derives either. */
+  it('offsets the drawing by the gap between what it reserved and what it inked', () => {
+    const styles = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+    const rule = /\.run-card-formation \{([^}]*)\}/.exec(styles)?.[1] ?? '';
+    expect(rule).toContain('--run-card-formation-ink-dx');
+    expect(rule).toContain('--run-card-formation-ink-dy');
+    expect(rule).toMatch(/translate:[\s\S]*?var\(--run-card-formation-ink-dx\)/);
+    expect(rule).toMatch(/translate:[\s\S]*?var\(--run-card-formation-ink-dy\)/);
   });
 
   /**

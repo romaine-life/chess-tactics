@@ -129,6 +129,7 @@ export function RunCardFitViewer({
 }): ReactElement {
   const gridRef = useRef<HTMLDivElement | null>(null);
   const [fit, setFit] = useState<RunCardFormationFitTuning>(readDraft);
+  const [showBox, setShowBox] = useState(true);
   const [printed, setPrinted] = useState<Readonly<Record<string, number>>>({});
   const [status, setStatus] = useState(
     'Every dealt footprint, at the size the Run prints a card. The cap is the only number in the fit.',
@@ -175,14 +176,18 @@ export function RunCardFitViewer({
     <>
       <section className="run-card-fit-viewer" data-testid="run-card-fit-viewer">
         <p className="run-card-fit-note">
-          A card&apos;s diagram is drawn to the room its contents panel leaves — the panel&apos;s
-          width, and the height left after two lines of flavour — so a one-seat card prints a
-          larger seat than a four-seat card. The panel is short rather than narrow, so at the size
-          the Run deals a card that height is what binds every shape below, and the cap is the rail
-          that would catch them if it did not. Pull it down to hold the small footprints back.
+          The space is the contents panel less its padding and two lines of flavour — the whole
+          deck&apos;s longest — so it is the same space on every card, whatever that card&apos;s
+          prose runs to. It is drawn <span className="run-card-fit-key is-space">dashed</span>;
+          the drawing fitted into it is drawn <span className="run-card-fit-key is-drawing">solid</span>.
+          Every footprint is scaled until it touches that space on its tightest axis and centred in
+          it — one seat or four, no special case. The panel is short rather than narrow, so at the
+          dealt size the height is what binds, and the cap is the rail that would catch a small
+          footprint if it did not.
         </p>
         <div
           className="run-card-fit-grid"
+          data-formation-box={showBox ? 'on' : 'off'}
           ref={gridRef}
           style={{
             ...runCardFormationFitStyle(fit),
@@ -249,6 +254,15 @@ export function RunCardFitViewer({
               the cards the cap is actually deciding; at the dealt size that is normally none,
               because the panel&apos;s height runs out first.
             </p>
+            <button
+              type="button"
+              className="tileset-view-action"
+              data-testid="run-card-fit-show-box"
+              aria-pressed={showBox}
+              onClick={() => setShowBox((current) => !current)}
+            >
+              {showBox ? 'Hide the space' : 'Show the space'}
+            </button>
             <button
               type="button"
               className="tileset-view-action"

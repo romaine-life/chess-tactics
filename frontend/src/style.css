@@ -26161,13 +26161,24 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   row-gap: var(--run-card-ledger-row-gap, .8cqw);
 }
 
-/* The room the diagram is given: whatever the contents panel is not already spending on the
-   card's flavour. It is a size container, so the drawing inside can measure that room and take
-   it — which is what makes a one-seat card print a larger seat than a four-seat card.
+/* The size the card has always drawn a tile at, carried INTO the diagram's own size container.
 
-   The cap lives on this box rather than on the drawing, because an element is sized against its
-   own ANCESTOR container: 1 committed tile still means 1 committed tile of the CARD here, while
-   inside the box it would mean a share of the box. Capping both axes caps the scale. */
+   Registering it is the whole trick. An element is measured against its ANCESTOR container, so
+   `cqw` written here is a share of the CARD; inside the box below it would be a share of the box,
+   and the cap would stop meaning "times the size the card used to print". A registered property is
+   computed where it is declared and inherits as an absolute length, so the cap survives the
+   crossing. */
+@property --run-card-formation-committed-tile {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
+/* The SPACE: whatever the contents panel is not already spending on the card's flavour. It is a
+   size container, so the drawing inside can measure that space and take it — which is what makes
+   a one-seat card print a larger seat than a four-seat card. It is the space itself, not a
+   cap on it; the cap belongs to the drawing, so that this box stays the honest answer to "how
+   much room is there". */
 .run-card-formation-fit {
   /* Stated, not shrink-to-fit: size containment gives this box no content to measure, so a
      shrink-to-fit cross size would collapse it to nothing and take the diagram with it. */
@@ -26176,32 +26187,19 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   flex: 1 1 auto;
   inline-size: 100%;
   margin-block-end: var(--run-card-formation-flavour-gap);
-  /* Two limits, and the drawing takes the smaller.
+  /* The RESERVE is what stops the same footprint printing at two sizes on two cards: taken
+     literally, "fill the room" makes the board a function of how long the card's prose happens to
+     be, and a one-line flavour would print a visibly bigger board than a two-line one for the
+     identical formation. Two lines is the whole deck's longest, so every card gets the same space.
 
-     The CAP is what stops a lone seat from filling the panel. The RESERVE is what stops the same
-     footprint printing at two sizes on two cards: taken literally, "fill the room" makes the board
-     a function of how long the card's prose happens to be, and a one-line flavour would print a
-     visibly bigger board than a two-line one for the identical formation. The diagram is given the
-     room a TWO-LINE flavour leaves, whatever this card's flavour turns out to be.
-
-     A longer flavour than that still wins — the box shrinks with the room rather than overrunning
-     it, which is what stopped the four-seat cards clipping their last line. */
-  max-block-size: min(
-    calc(
-      var(--run-card-formation-natural-height) * var(--run-card-formation-max-scale, 1.45)
-      * var(--run-card-formation-committed-tile)
-    ),
-    calc(
-      var(--run-card-contents-block)
-      - var(--run-card-contents-padding-block-start, 2.2cqw)
-      - var(--run-card-contents-padding-block-end, 2.3cqw)
-      - var(--run-card-formation-flavour-reserve)
-      - var(--run-card-formation-flavour-gap)
-    )
-  );
-  max-inline-size: calc(
-    var(--run-card-formation-natural-width) * var(--run-card-formation-max-scale, 1.45)
-    * var(--run-card-formation-committed-tile)
+     A longer flavour than that would still win — the box shrinks with the room rather than
+     overrunning it, which is what stopped the four-seat cards clipping their last line. */
+  max-block-size: calc(
+    var(--run-card-contents-block)
+    - var(--run-card-contents-padding-block-start, 2.2cqw)
+    - var(--run-card-contents-padding-block-end, 2.3cqw)
+    - var(--run-card-formation-flavour-reserve)
+    - var(--run-card-formation-flavour-gap)
   );
   min-block-size: 0;
   position: relative;
@@ -26213,9 +26211,13 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
    to its room is therefore a single division, and the seats, the outline and the figures on them
    keep their proportions to each other at any size. */
 .run-card-formation {
+  /* Fit the space on its tightest axis, then stop at the cap. A one-seat card has room to print
+     its seat several times over, and a diagram that took all of it would stop reading as the same
+     board as the four-seat card beside it. */
   --run-card-formation-unit: min(
     calc(100cqw / var(--run-card-formation-natural-width)),
-    calc(100cqh / var(--run-card-formation-natural-height))
+    calc(100cqh / var(--run-card-formation-natural-height)),
+    calc(var(--run-card-formation-max-scale, 1.45) * var(--run-card-formation-committed-tile))
   );
   block-size: calc(var(--run-card-formation-unit) * var(--run-card-formation-natural-height));
   display: block;
@@ -26224,7 +26226,21 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   inset-inline-start: 50%;
   isolation: isolate;
   position: absolute;
-  translate: -50% -50%;
+  /* Centre the INK, not the reserve. The drawing is sized against a full-scale figure so a card's
+     board keeps its size whatever stands on it, but a pawn is drawn at 0.66 -- so on a card of
+     short pieces the reserved box is taller than anything painted in it, and centring the box
+     would leave the figures sitting low. These offsets are the gap between the two. */
+  --run-card-formation-ink-dx: calc(
+    var(--run-card-formation-natural-width) / 2
+    - (var(--run-card-formation-ink-left) + var(--run-card-formation-ink-right)) / 2
+  );
+  --run-card-formation-ink-dy: calc(
+    var(--run-card-formation-natural-height) / 2
+    - (var(--run-card-formation-ink-top) + var(--run-card-formation-ink-bottom)) / 2
+  );
+  translate:
+    calc(-50% + var(--run-card-formation-unit) * var(--run-card-formation-ink-dx))
+    calc(-50% + var(--run-card-formation-unit) * var(--run-card-formation-ink-dy));
 }
 
 .run-card-formation-square {
@@ -26911,12 +26927,27 @@ button.run-card-formation-cell {
   max-inline-size: 78ch;
 }
 
+/* The two keylines named in the prose, coloured as they are drawn on the cards. */
+.run-card-fit-key.is-space { color: rgba(88, 224, 255, .95); }
+.run-card-fit-key.is-drawing { color: rgba(255, 176, 64, .95); }
+
 .run-card-fit-grid {
   align-items: start;
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
   min-inline-size: 0;
+}
+
+/* Review-only: draw the space the diagram is fitted into. The rule is one sentence -- the panel
+   minus its padding minus two lines of flavour, with the drawing scaled to touch it and centred
+   in it -- and a sentence is a poor way to check a box. This is how the box gets looked at. */
+.run-card-fit-grid[data-formation-box='on'] .run-card-formation-fit {
+  outline: 1px dashed rgba(88, 224, 255, .85);
+}
+
+.run-card-fit-grid[data-formation-box='on'] .run-card-formation {
+  outline: 1px solid rgba(255, 176, 64, .8);
 }
 
 .run-card-fit-specimen {
