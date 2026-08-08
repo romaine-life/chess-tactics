@@ -628,12 +628,10 @@ export function CampaignEditor({
   };
 
   const selectFirstEditable = () => {
-    // Land on the first private campaign by default so a fresh load opens on editable
-    // content. Officials are now editable in place (for admins) or read-only with a
-    // padlock (everyone else) — selection no longer steers around them.
-    const state = useCampaigns.getState();
-    const first = state.campaigns.find((c) => c.origin !== 'official') ?? state.campaigns[0];
-    if (first) state.selectCampaign(first.id);
+    // A bare /editor no longer auto-opens a campaign. The rail lists only the campaign the
+    // address names, so auto-selecting one would paint content behind a row that isn't
+    // there — and put back the very button the rail stopped advertising.
+    useCampaigns.setState({ selectedCampaignId: null, selectedLevelId: null });
   };
 
   useEffect(() => {
@@ -945,9 +943,17 @@ export function CampaignEditor({
   // retrying hydration later must never merge over interim edits made against partial data.
   const selectedTierReady = campIsOfficial ? officialWorkspaceReady : userWorkspaceReady;
   const readOnly = !selectedTierReady || (campIsOfficial && !isAdmin);
-  const officialCampaigns = campaigns.filter((c) => c.origin === 'official');
-  const userCampaigns = campaigns.filter((c) => c.origin !== 'official');
-  const ownCount = userCampaigns.length;
+  // The Editor rail does not advertise campaigns. Runs replaced them as how the game is
+  // played (ADR-0529), so a standing campaign row is a button nobody presses. This hides
+  // rows and nothing else: the campaigns, their levels, `?campaign=<id>` and + New Campaign
+  // all still work, and the campaign the address actually names stays listed so those paths
+  // land somewhere visible. It is a display rule, not a retirement — no content is deleted
+  // and restoring the rows is one filter.
+  const railCampaigns = campaigns.filter((campaign) => campaign.id === routeCampaignId);
+  const officialCampaigns = railCampaigns.filter((c) => c.origin === 'official');
+  const userCampaigns = railCampaigns.filter((c) => c.origin !== 'official');
+  // The quota counts every private campaign in the workspace, listed or not.
+  const ownCount = campaigns.filter((c) => c.origin !== 'official').length;
   const orderedLevels = camp ? camp.levels.slice().sort((a, b) => a.ordinal - b.ordinal) : [];
   const selectedLevelBelongsToVisibleCollection = selectedLevelId ? (
     isUnassignedSelected
@@ -1064,7 +1070,6 @@ export function CampaignEditor({
       >
             <KitScroll className="ce-rail-scroll">
               <div className="ce-rail-list">
-                {campaigns.length === 0 ? <p className="ce-empty">No campaigns yet.</p> : null}
                 {officialCampaigns.length > 0 ? (
                   <>
                     <p className="campaign-rail-group">Official campaigns</p>
@@ -1115,13 +1120,13 @@ export function CampaignEditor({
                   title="Wars"
                   itemName="War"
                   count={wars.length}
-                  index={campaigns.length}
+                  index={railCampaigns.length}
                   active={isWarsSelected}
                   onSelect={selectWarsCollection}
                 />
                 <UnassignedRailTab
                   count={unassignedLevels.length}
-                  index={campaigns.length + 1}
+                  index={railCampaigns.length + 1}
                   active={isUnassignedSelected}
                   hasUnsavedDrafts={recentDrafts.length > 0}
                   onSelect={selectUnassignedCollection}
@@ -1326,7 +1331,10 @@ export function CampaignEditor({
                     </>
                   ) : (
                     <SettingsSection title="Editor">
-                      <SettingsRow title="No campaign selected" description="Select a campaign in the rail, or create one with + New Campaign." />
+                      <SettingsRow
+                        title="No campaign selected"
+                        description="Levels live under Unassigned levels and Wars. Create a campaign with + New Campaign, or open an existing one by its address."
+                      />
                     </SettingsSection>
                   )}
                 </div>

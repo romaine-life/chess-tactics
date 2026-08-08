@@ -48,8 +48,15 @@ ADR-0514, and its content was one level.
 - **Campaign levels are unassigned.** Both official campaigns were published
   with empty level lists, so all 30 of their levels now live in Unassigned
   levels. No level document was deleted and the War's Battles are untouched.
-  The two campaign shells remain as empty containers; the Campaigns collection
-  is not itself retired by this decision.
+- **The rail does not advertise campaigns.** A standing campaign row is a button
+  nobody presses now that Runs are how the game is played, so the Editor rail
+  lists only the campaign the address names — a just-created one, or a direct
+  `?campaign=<id>` link — and a bare `/editor` auto-opens none. This is a
+  display rule, not a retirement: the campaign editor, its verbs, `+ New
+  Campaign`, the private quota over every campaign in the workspace, and the
+  `/play/select/campaign/<id>` route all remain, and restoring the rows is one
+  filter. It is deliberately independent of whether a campaign holds levels, so
+  a workspace that regains campaign content does not regain the buttons.
 - **Skirmish profiles are retired.** The `skirmish-profile-` level class, the
   Editor's Skirmish profiles collection, the Play Skirmish panel, the
   `/play/select/skirmish` address, and the `skirmish` mode entry are all gone.
@@ -64,8 +71,11 @@ ADR-0514, and its content was one level.
 
 - The War library is judged on the same row the Campaign library is, and a
   change to that row reaches both.
-- The Editor rail carries three workspace collections instead of four, and both
-  campaigns read `0 levels` while Unassigned levels holds 34.
+- The Editor rail is Wars and Unassigned levels — two rows, no campaign rows and
+  no Skirmish profiles — with all 35 levels under Unassigned.
+- A campaign is now reached only by its address. An editor tab opened before the
+  emptying publish still holds the old campaigns in memory, and publishing from
+  it writes them back; reload such a tab rather than saving from it.
 - `verify:unit-arrival` can no longer reach a board by clicking a level row in
   Crown of Valoria, because that campaign lists none. Its documented campaign
   invocation moves to the Run continue path. `/play?campaignId=…&levelId=…`

@@ -47,6 +47,27 @@ describe('Campaign and War Editor libraries', () => {
     expect(war).not.toContain("icon: '↓'");
   });
 
+  it('does not advertise campaigns in the rail, and does not retire them either', () => {
+    const campaign = read('./CampaignEditor.tsx');
+    // Runs replaced campaigns as how the game is played (ADR-0529), so a standing campaign
+    // row is a button nobody presses. The rail lists only the campaign the ADDRESS names,
+    // which keeps + New Campaign and a direct ?campaign= link landing somewhere visible.
+    expect(campaign).toContain('const railCampaigns = campaigns.filter((campaign) => campaign.id === routeCampaignId);');
+    expect(campaign).toContain('const officialCampaigns = railCampaigns.filter');
+    expect(campaign).toContain('const userCampaigns = railCampaigns.filter');
+    // A bare /editor must not auto-open a campaign — that would put the row back.
+    expect(campaign).toContain('useCampaigns.setState({ selectedCampaignId: null, selectedLevelId: null });');
+    expect(campaign).not.toContain("state.campaigns.find((c) => c.origin !== 'official') ?? state.campaigns[0]");
+    // This is a display rule, not a retirement: the campaign editor, its verbs, and the
+    // private quota over every campaign in the workspace all remain.
+    expect(campaign).toContain("const ownCount = campaigns.filter((c) => c.origin !== 'official').length;");
+    expect(campaign).toContain('data-testid="new-campaign"');
+    expect(campaign).toContain('<SettingsSection title="Campaign Actions">');
+    // Stone continuity counts the rows actually drawn.
+    expect(campaign).toContain('index={railCampaigns.length}');
+    expect(campaign).toContain('index={railCampaigns.length + 1}');
+  });
+
   it('selects one default War and participates as content beneath the Editor scene', () => {
     const war = read('./WarEditor.tsx');
     expect(war).toContain("useSceneParticipant('war-editor-content', loaded ? 'painted' : 'loading')");
