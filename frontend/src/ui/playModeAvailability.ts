@@ -4,17 +4,15 @@
  * one Git-owned registry lets a later product decision restore an entry without
  * reconstructing retired gameplay or navigation code.
  */
-export type PlayerFacingPlayMode = 'campaign' | 'skirmish' | 'run' | 'levels';
+export type PlayerFacingPlayMode = 'campaign' | 'run' | 'levels';
 
 export const PLAY_MODE_ENTRY_ENABLED: Readonly<Record<PlayerFacingPlayMode, boolean>> = Object.freeze({
   campaign: false,
-  skirmish: false,
   run: true,
   levels: false,
 });
 
 const FIXED_PLAY_MODE_ORDER: readonly Exclude<PlayerFacingPlayMode, 'campaign'>[] = Object.freeze([
-  'skirmish',
   'run',
   'levels',
 ]);
@@ -38,7 +36,6 @@ export function playModeRailIndex(mode: Exclude<PlayerFacingPlayMode, 'campaign'
 export function enabledPlayModeNames(): string {
   const labels: Record<PlayerFacingPlayMode, string> = {
     campaign: 'Campaign',
-    skirmish: 'Skirmish',
     run: 'Run',
     levels: 'Levels',
   };

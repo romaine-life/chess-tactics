@@ -82,7 +82,7 @@ import { runtimePortraitMasterSrc } from './portraitCandidates';
 import { preloadImages } from '../art/preload';
 import { nextLevelRef, orderedLevels, recordLevelWin } from '../campaign/progress';
 import { navigateApp, readValidatedReturnTo } from './navigation';
-import { PLAY_RUN_NEW_SELECTOR_HREF, PLAY_SKIRMISH_SELECTOR_HREF, playCampaignSelectorHref } from './playHubRoute';
+import { PLAY_LEVELS_SELECTOR_HREF, PLAY_RUN_NEW_SELECTOR_HREF, playCampaignSelectorHref } from './playHubRoute';
 import { PredrawnCornerPicker } from './PredrawnCornerPicker';
 import {
   predrawnBoardPreviewRegistration,
@@ -616,11 +616,11 @@ function SkirmishSession(props: SkirmishProps = {}) {
   // reaches here — the stud is hidden there, since a local reset would desync the board.
   const retrySkirmish = () => {
     if (activeLevel) { replayLevel(); return; }
-    navigateApp(PLAY_SKIRMISH_SELECTOR_HREF);
+    navigateApp(PLAY_LEVELS_SELECTOR_HREF);
   };
   const startNewScenario = () => {
     if (activeLevel) { replayLevel(); return; }
-    navigateApp(PLAY_SKIRMISH_SELECTOR_HREF);
+    navigateApp(PLAY_LEVELS_SELECTOR_HREF);
   };
   // Show the Retry stud only once a single-player board is up (no netplay, no dead map link).
   const showRetryStud = boardSettled && !mapError && !routeLobby && !net;
@@ -693,7 +693,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
     // Bare /play and the retired ?random=1 path return to the selector instead of
     // synthesizing an item-less procedural match (ADR-0070/0074).
     if (!routeLevelId && !routeBoard && !routeMap && !runBattleLevel) {
-      navigateApp(PLAY_SKIRMISH_SELECTOR_HREF, { replace: true, scroll: false });
+      navigateApp(PLAY_LEVELS_SELECTOR_HREF, { replace: true, scroll: false });
       return undefined;
     }
     // A manual refresh or the "new version available" reload (net/appUpdate) rebuilds
@@ -811,7 +811,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
       return;
     }
     if (!routeLevelId) {
-      navigateApp(PLAY_SKIRMISH_SELECTOR_HREF, { replace: true, scroll: false });
+      navigateApp(PLAY_LEVELS_SELECTOR_HREF, { replace: true, scroll: false });
       return undefined;
     }
     const requestedLevelId = routeLevelId;
@@ -1525,7 +1525,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
       {mapError ? (
         <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate" role="alert" style={{ gap: 10 }}>
           <strong>{mapError}</strong>
-          <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} to={returnHref ?? PLAY_SKIRMISH_SELECTOR_HREF}>
+          <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} to={returnHref ?? PLAY_LEVELS_SELECTOR_HREF}>
             {returnIsEditor ? 'Back to editor' : returnIsDeploymentLab ? returnLabel : 'Back to Play'}
           </ChromeNavButton>
         </InnerChromeBox>

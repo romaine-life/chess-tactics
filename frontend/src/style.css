@@ -19232,66 +19232,13 @@ button.tileset-relationship-cell {
 }
 
 /* ===== War authoring =====
-   Wars reuse the canonical Editor shell and settings primitives. These rules describe only
-   the ordered-Battle affordance and its textarea; perceived surfaces stay kit-backed. */
+   Wars reuse the canonical Editor shell and settings primitives. Ordered Battles draw the
+   shared .ce-editor-level-row, so only the War's own textarea needs a rule here; perceived
+   surfaces stay kit-backed. */
 .war-description-input {
   block-size: 92px;
   min-block-size: 72px;
   resize: vertical;
-}
-
-.war-battle-list {
-  display: grid;
-  gap: 8px;
-}
-
-.war-battle-row {
-  align-items: center;
-  cursor: pointer;
-  display: grid;
-  gap: 8px;
-  grid-template-areas: "leading copy actions";
-  grid-template-columns: 34px minmax(0, 1fr) auto;
-  min-block-size: 68px;
-  padding: 9px 12px;
-}
-
-.war-battle-copy {
-  align-content: center;
-  display: grid;
-  gap: 3px;
-  grid-area: copy;
-  min-inline-size: 0;
-}
-
-.war-battle-copy h4,
-.war-battle-copy small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.war-battle-copy h4 {
-  font-size: var(--ds-text-md);
-}
-
-.war-battle-copy small {
-  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .62));
-}
-
-.war-battle-number {
-  align-items: center;
-  display: inline-flex;
-  font-family: var(--ds-font-display);
-  font-size: var(--ds-text-lg);
-  grid-area: leading;
-  justify-content: center;
-}
-
-.war-battle-actions {
-  display: flex;
-  gap: 4px;
-  grid-area: actions;
 }
 
 /* ===== Run =====

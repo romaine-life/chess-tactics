@@ -38,7 +38,6 @@ export type SceneViewId =
   | 'main-menu'
   | 'play'
   | 'play-continue'
-  | 'play-skirmish'
   | 'play-run'
   | 'play-run-current'
   | 'play-run-new'
@@ -51,7 +50,6 @@ export type SceneViewId =
   | 'campaign-editor'
   | 'editor-campaign'
   | 'editor-wars'
-  | 'editor-skirmish-profiles'
   | 'editor-unassigned'
   | 'level-editor'
   | 'settings'
@@ -158,7 +156,6 @@ export const SCENE_DEFINITIONS = Object.freeze({
   mainMenu: defineScene({ id: 'main-menu', parent: null, slot: 'root', view: 'main-menu' }),
   play: defineScene({ id: 'play', parent: 'main-menu', slot: 'menu-destination', view: 'play' }),
   playContinue: defineScene({ id: 'play/continue', parent: 'play', slot: 'play-content', view: 'play-continue' }),
-  playSkirmish: defineScene({ id: 'play/skirmish', parent: 'play', slot: 'play-content', view: 'play-skirmish' }),
   playRun: defineScene({ id: 'play/run', parent: 'play', slot: 'play-content', view: 'play-run' }),
   playRunCurrent: defineScene({ id: 'play/run/current', parent: 'play/run', slot: 'run-detail-content', view: 'play-run-current' }),
   playRunNew: defineScene({ id: 'play/run/new', parent: 'play/run', slot: 'run-detail-content', view: 'play-run-new' }),
@@ -171,7 +168,6 @@ export const SCENE_DEFINITIONS = Object.freeze({
   campaignEditor: defineScene({ id: 'campaign-editor', parent: 'main-menu', slot: 'menu-destination', view: 'campaign-editor' }),
   editorCampaign: defineScene({ id: 'campaign-editor/campaign', parent: 'campaign-editor', slot: 'editor-content', view: 'editor-campaign' }),
   editorWars: defineScene({ id: 'campaign-editor/wars', parent: 'campaign-editor', slot: 'editor-content', view: 'editor-wars' }),
-  editorSkirmishProfiles: defineScene({ id: 'campaign-editor/skirmish-profiles', parent: 'campaign-editor', slot: 'editor-content', view: 'editor-skirmish-profiles' }),
   editorUnassigned: defineScene({ id: 'campaign-editor/unassigned', parent: 'campaign-editor', slot: 'editor-content', view: 'editor-unassigned' }),
   levelEditor: defineScene({ id: 'level-editor', parent: null, slot: 'root', view: 'level-editor' }),
   settings: defineScene({ id: 'settings', parent: 'main-menu', slot: 'menu-destination', view: 'settings' }),

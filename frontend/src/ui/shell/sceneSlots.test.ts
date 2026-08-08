@@ -5,7 +5,7 @@ import { sceneSlots } from './sceneSlots';
 describe('authored scene slots', () => {
   it('keeps committed and pending instances separate for inspection and reveal authority', () => {
     const slots = sceneSlots(
-      sceneManifest('/play/select/skirmish'),
+      sceneManifest('/play/select/run'),
       sceneManifest('/play/select/levels'),
     );
     expect(slots).toEqual(expect.arrayContaining([
@@ -16,7 +16,7 @@ describe('authored scene slots', () => {
       }),
       expect.objectContaining({
         id: 'play-content',
-        committed: expect.objectContaining({ key: 'play/skirmish' }),
+        committed: expect.objectContaining({ key: 'play/run' }),
         pending: expect.objectContaining({ key: 'play/levels' }),
       }),
     ]));

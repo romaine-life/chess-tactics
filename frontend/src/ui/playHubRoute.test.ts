@@ -6,7 +6,6 @@ import {
   PLAY_RUN_NEW_SELECTOR_HREF,
   PLAY_RUN_SELECTOR_HREF,
   PLAY_SELECTOR_ROOT,
-  PLAY_SKIRMISH_SELECTOR_HREF,
   isPlaySelectorPath,
   playCampaignSelectorHref,
   playContinueSelectorHref,
@@ -18,18 +17,17 @@ describe('Play selector routes', () => {
   it('keeps the selector separate from the live /play board route', () => {
     expect(isPlaySelectorPath('/play')).toBe(false);
     expect(isPlaySelectorPath(PLAY_SELECTOR_ROOT)).toBe(true);
-    expect(isPlaySelectorPath(PLAY_SKIRMISH_SELECTOR_HREF)).toBe(true);
+    expect(isPlaySelectorPath(PLAY_LEVELS_SELECTOR_HREF)).toBe(true);
   });
 
   it('keeps Run and the dormant modes on stable direct addresses', () => {
-    expect(playHubSelection(PLAY_SKIRMISH_SELECTOR_HREF)).toEqual({ mode: 'skirmish' });
     expect(playHubSelection(PLAY_RUN_SELECTOR_HREF)).toEqual({ mode: 'run', choice: null });
     expect(playHubSelection(PLAY_LEVELS_SELECTOR_HREF)).toEqual({ mode: 'levels' });
   });
 
   it('addresses the agnostic Continue surface and each resumable mode', () => {
     expect(playHubSelection(PLAY_CONTINUE_SELECTOR_HREF)).toEqual({ mode: 'continue', choice: null });
-    for (const choice of ['campaign', 'skirmish', 'run', 'levels'] as const) {
+    for (const choice of ['campaign', 'run', 'levels'] as const) {
       const href = playContinueSelectorHref(choice);
       expect(href).toBe(`/play/select/continue/${choice}`);
       expect(playHubSelection(href)).toEqual({ mode: 'continue', choice });
@@ -55,14 +53,13 @@ describe('Play selector routes', () => {
   it('resolves the installed root and malformed paths to Run while retaining Continue directly', () => {
     expect(playHubSectionPath(PLAY_SELECTOR_ROOT)).toBe(PLAY_RUN_SELECTOR_HREF);
     expect(playHubSectionPath(PLAY_CONTINUE_SELECTOR_HREF)).toBe(PLAY_CONTINUE_SELECTOR_HREF);
-    for (const choice of ['campaign', 'skirmish', 'run', 'levels'] as const) {
+    for (const choice of ['campaign', 'run', 'levels'] as const) {
       expect(playHubSectionPath(playContinueSelectorHref(choice))).toBe(PLAY_CONTINUE_SELECTOR_HREF);
     }
     expect(playHubSectionPath('/play/select/unknown')).toBe(PLAY_RUN_SELECTOR_HREF);
   });
 
   it('keeps every distinct selector scene on its own section address', () => {
-    expect(playHubSectionPath(PLAY_SKIRMISH_SELECTOR_HREF)).toBe(PLAY_SKIRMISH_SELECTOR_HREF);
     expect(playHubSectionPath(PLAY_RUN_SELECTOR_HREF)).toBe(PLAY_RUN_SELECTOR_HREF);
     expect(playHubSectionPath(PLAY_RUN_CURRENT_SELECTOR_HREF)).toBe(PLAY_RUN_CURRENT_SELECTOR_HREF);
     expect(playHubSectionPath(PLAY_RUN_NEW_SELECTOR_HREF)).toBe(PLAY_RUN_NEW_SELECTOR_HREF);
@@ -73,6 +70,9 @@ describe('Play selector routes', () => {
 
   it('rejects selector states that the Play rail cannot produce', () => {
     expect(playHubSelection('/play/select/unknown')).toBeNull();
+    // The retired Skirmish selector is no longer a selector state (ADR-0529).
+    expect(playHubSelection('/play/select/skirmish')).toBeNull();
+    expect(playHubSelection('/play/select/continue/skirmish')).toBeNull();
     expect(playHubSelection('/play/select/campaign/id/extra')).toBeNull();
     expect(playHubSelection('/play/select/campaign/%')).toBeNull();
   });

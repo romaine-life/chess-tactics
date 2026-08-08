@@ -55,7 +55,7 @@ const ROUTES = [
   '/settings', '/settings/general', '/settings/audio/tracks', '/settings/admin',
   '/enchiridion', '/enchiridion/units', '/enchiridion/cards',
   '/editor', '/editor/wars', '/editor/level',
-  '/play/select/skirmish', '/play/select/levels', '/play/select/campaign', '/play', '/play/strategikon',
+  '/play/select/run', '/play/select/levels', '/play/select/campaign', '/play', '/play/strategikon',
   '/studio', '/unit-studio', '/prop-lab',
   '/portrait-editor', '/predrawn-reference',
   '/run', '/run/strategikon',

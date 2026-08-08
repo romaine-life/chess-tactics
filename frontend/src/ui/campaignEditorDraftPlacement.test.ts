@@ -7,7 +7,7 @@ const source = readFileSync(new URL('./CampaignEditor.tsx', import.meta.url), 'u
 
 describe('Campaign Editor draft placement', () => {
   it('mounts Continue editing only inside the Unassigned Levels collection', () => {
-    const unassignedBranch = source.indexOf(') : isUnassignedSelected ? (');
+    const unassignedBranch = source.indexOf('{isUnassignedSelected ? (');
     const continueSection = source.indexOf('<SettingsSection title="Continue editing">');
     const unassignedSection = source.indexOf('<SettingsSection title="Unassigned Levels">');
     const campaignBranch = source.indexOf(') : camp ? (');

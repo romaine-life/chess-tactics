@@ -23,7 +23,6 @@ import {
   PLAY_RUN_NEW_SELECTOR_HREF,
   PLAY_RUN_SELECTOR_HREF,
   PLAY_SELECTOR_ROOT,
-  PLAY_SKIRMISH_SELECTOR_HREF,
   isPlaySelectorPath,
   playCampaignSelectorHref,
   playContinueSelectorHref,
@@ -32,7 +31,6 @@ import {
   type PlayHubSelection,
 } from './playHubRoute';
 import { playSkirmishLevelHref, skirmishMapLevels } from './skirmishMaps';
-import { skirmishProfileLevels } from './skirmishProfiles';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { installedUiMedia } from './installedUiMedia';
 import { PaintedSurfaceBoundary } from './shell/PaintedSurfaceBoundary';
@@ -477,51 +475,6 @@ function ThumbnailSurface({ levels, children }: { levels: readonly Level[]; chil
   );
 }
 
-function SkirmishProfilesPanel({
-  levels,
-  loading,
-  officialAvailable,
-  userWorkspaceAvailable,
-}: {
-  levels: Level[];
-  loading: boolean;
-  officialAvailable: boolean;
-  userWorkspaceAvailable: boolean;
-}): ReactElement {
-  return (
-    <ActionColumn>
-      <ThumbnailSurface levels={levels}><div className="settings-panel-content">
-        <SettingsSection title="Skirmish">
-          {!loading && !officialAvailable ? <SettingsRow role="status" title="Official content unavailable" description="Skirmishes could not be loaded. Reopen Play to retry." /> : null}
-          {!loading && !userWorkspaceAvailable ? <SettingsRow role="status" title="Your workspace is unavailable" description="Your skirmish profiles could not be loaded. Reopen Play to retry." /> : null}
-          {loading ? <SettingsRow title="Loading skirmishes…" /> : null}
-          {!loading && officialAvailable && userWorkspaceAvailable && levels.length === 0
-            ? <SettingsRow title="No skirmish profiles available" description="Skirmishes appear here when they are authored in the shared content system." />
-            : null}
-          <ActionList
-            className="play-level-list"
-            items={levels.map((level) => ({
-              id: level.id,
-              title: level.name,
-              description: <p>{levelObjectiveLine(level)} · {levelForceSummary(level)} · {level.board.cols}x{level.board.rows}</p>,
-              leading: <GatedLevelThumbnail level={level} width={72} alt="" />,
-              actions: [{
-                id: 'play',
-                label: `Play ${level.name}`,
-                text: 'Play',
-                presentation: 'text',
-                className: 'app-header-button',
-                tone: 'primary',
-                href: playSkirmishLevelHref(level.id),
-              }],
-            }))}
-          />
-        </SettingsSection>
-      </div></ThumbnailSurface>
-    </ActionColumn>
-  );
-}
-
 function StandaloneLevelsPanel({
   levels,
   loading,
@@ -781,7 +734,6 @@ export function PlayMenu({
     setSelectedLevelId(null);
   }, [selection]);
 
-  const profileLevels = useMemo(() => skirmishProfileLevels(levels), [levels]);
   const standaloneLevels = useMemo(() => skirmishMapLevels(campaigns, levels), [campaigns, levels]);
   const officialCampaigns = campaigns.filter((campaign) => campaign.origin === 'official');
   const myCampaigns = campaigns.filter((campaign) => campaign.origin !== 'official');
@@ -811,7 +763,6 @@ export function PlayMenu({
     selection.mode,
     selection.mode === 'campaign' ? selection.campaignId : '',
     selectedContinueChoice ?? '',
-    ...profileLevels.map((level) => level.id),
     ...standaloneLevels.map((level) => level.id),
     ...activeRefs.map((ref) => ref.levelId),
   ].join(':');
@@ -848,13 +799,6 @@ export function PlayMenu({
             index={0}
             testId="play-continue"
           />
-          {PLAY_MODE_ENTRY_ENABLED.skirmish ? <PlayRailTab
-            label="Skirmish"
-            href={PLAY_SKIRMISH_SELECTOR_HREF}
-            icon="solo-skirmish"
-            active={selection.mode === 'skirmish'}
-            index={playModeRailIndex('skirmish')}
-          /> : null}
           {PLAY_MODE_ENTRY_ENABLED.run ? <PlayRailTab
             label="Run"
             href={PLAY_RUN_SELECTOR_HREF}
@@ -934,14 +878,6 @@ export function PlayMenu({
       >
       {selection.mode === 'continue' ? (
         <ContinuePanel inventory={resumeInventory} />
-      ) : null}
-      {selection.mode === 'skirmish' ? (
-        <SkirmishProfilesPanel
-          levels={profileLevels}
-          loading={loading}
-          officialAvailable={officialAvailable}
-          userWorkspaceAvailable={userWorkspaceAvailable}
-        />
       ) : null}
       {selection.mode === 'levels' ? (
         <StandaloneLevelsPanel

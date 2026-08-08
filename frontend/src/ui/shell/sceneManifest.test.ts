@@ -52,10 +52,10 @@ describe('scene manifests', () => {
     const continueId = sceneManifest('/play/select/continue').id;
     const runId = sceneManifest('/play/select/run').id;
     expect(sceneManifest('/play/select').id).toBe(runId);
-    expect(sceneManifest('/play/select/continue/skirmish').id).toBe(continueId);
+    expect(sceneManifest('/play/select/continue/levels').id).toBe(continueId);
     expect(sceneManifest('/play/select/unknown').id).toBe(runId);
     // Distinct selector scenes keep distinct identities so tab travel still transitions.
-    expect(sceneManifest('/play/select/skirmish').id).not.toBe(continueId);
+    expect(sceneManifest('/play/select/levels').id).not.toBe(continueId);
     expect(sceneManifest('/play/select/run').id).not.toBe(sceneManifest('/play/select/run/current').id);
     expect(sceneManifest('/play/select/campaign/a').id).not.toBe(sceneManifest('/play/select/campaign/b').id);
   });
@@ -109,8 +109,8 @@ describe('scene manifests', () => {
       ['/run', '?view=expunctio', { run: { hydrated: true, document: run } }],
       ['/run', '?view=battle-preview', { run: { hydrated: true, document: run } }],
       ['/play/select'], ['/play/select/continue'], ['/play/select/continue/campaign'],
-      ['/play/select/continue/skirmish'], ['/play/select/continue/run'], ['/play/select/continue/levels'],
-      ['/play/select/unknown'], ['/play/select/skirmish'], ['/play/select/levels'],
+      ['/play/select/continue/run'], ['/play/select/continue/levels'],
+      ['/play/select/unknown'], ['/play/select/levels'],
       ['/play/select/run'], ['/play/select/run/current'], ['/play/select/run/new'],
       ['/play/select/campaign/a'], ['/play/select/campaign/b'],
       ['/settings'], ['/settings/general'], ['/settings/unknown'], ['/settings/audio'],
@@ -122,7 +122,7 @@ describe('scene manifests', () => {
       ['/lobbies'], ['/lobbies/room-1'],
       ['/editor'], ['/campaigns'], ['/campaigns-next'], ['/editor/wars'],
       ['/editor', '?campaign=camp-a'], ['/editor', '?campaign=camp-b'],
-      ['/editor', '?collection=skirmish-profiles'], ['/editor', '?collection=unassigned'],
+      ['/editor', '?collection=unassigned'],
       ['/editor/level'], ['/editor/level', '?document=doc-1'], ['/edit'], ['/level-editor'],
       ['/studio'], ['/studio', '?lipsanonReview=1'], ['/studio/drawables'], ['/unit-studio'],
       ['/prop-lab'], ['/surface-lab'],
@@ -144,15 +144,15 @@ describe('scene manifests', () => {
 
   it('derives retained regions from authored ancestry', () => {
     expect(deepestSharedSceneRegion(
-      sceneManifest('/play/select/skirmish'),
+      sceneManifest('/play/select/run'),
       sceneManifest('/play/select/levels'),
     )).toBe('play-shell');
     expect(deepestSharedSceneRegion(
-      sceneManifest('/play/select/skirmish'),
+      sceneManifest('/play/select/levels'),
       sceneManifest('/settings/general'),
     )).toBe('menu-shell');
     expect(deepestSharedSceneRegion(
-      sceneManifest('/play/select/skirmish'),
+      sceneManifest('/play/select/levels'),
       sceneManifest('/play'),
     )).toBeNull();
     expect(deepestSharedSceneRegion(
@@ -192,7 +192,7 @@ describe('scene manifests', () => {
     expect(sceneLayerKey(current)).toBe('play/run');
     expect(sceneLayerKey(next)).toBe('play/run');
     // Everything outside a nested detail slot keeps its leaf identity.
-    expect(sceneLayerKey(sceneManifest('/play/select/skirmish'))).toBe('play/skirmish');
+    expect(sceneLayerKey(sceneManifest('/play/select/levels'))).toBe('play/levels');
     expect(sceneLayerKey(sceneManifest('/play/select/campaign/crown-of-valoria')))
       .toBe('play/campaign:campaignId=crown-of-valoria');
     expect(sceneLayerKey(sceneManifest('/settings/audio'))).toBe('settings/audio');
@@ -216,7 +216,6 @@ describe('scene manifests', () => {
   it('authors every Editor collection and campaign as transition-only editor content', () => {
     const campaign = sceneManifest('/editor', '?campaign=crown-of-valoria');
     const wars = sceneManifest('/editor/wars');
-    const profiles = sceneManifest('/editor', '?collection=skirmish-profiles');
     const unassigned = sceneManifest('/editor', '?collection=unassigned');
 
     expect(campaign.instances.map((entry) => entry.definition.id)).toEqual([
@@ -230,12 +229,14 @@ describe('scene manifests', () => {
       definition: { slot: 'editor-content', view: 'editor-campaign' },
     });
     expect(wars.leaf.definition.id).toBe('campaign-editor/wars');
-    expect(profiles.leaf.definition.id).toBe('campaign-editor/skirmish-profiles');
     expect(unassigned.leaf.definition.id).toBe('campaign-editor/unassigned');
     expect(wars.waitPresentation).toBe('transition-only');
-    expect(deepestSharedSceneRegion(wars, profiles)).toBe('editor-shell');
-    expect(deepestSharedSceneRegion(profiles, campaign)).toBe('editor-shell');
-    expect(new Set([campaign.id, wars.id, profiles.id, unassigned.id]).size).toBe(4);
+    expect(deepestSharedSceneRegion(wars, unassigned)).toBe('editor-shell');
+    expect(deepestSharedSceneRegion(unassigned, campaign)).toBe('editor-shell');
+    expect(new Set([campaign.id, wars.id, unassigned.id]).size).toBe(3);
+    // The retired Skirmish profiles collection resolves onto Campaigns, not its own scene.
+    expect(sceneManifest('/editor', '?collection=skirmish-profiles').leaf.definition.id)
+      .toBe('campaign-editor/campaign');
   });
 
   it('recognizes removing a retained host child as an empty-slot destination', () => {
@@ -254,7 +255,7 @@ describe('scene manifests', () => {
   });
 
   it('treats a destination as a complete visual scene', () => {
-    expect(sceneManifest('/play/select/skirmish')).toMatchObject({
+    expect(sceneManifest('/play/select/levels')).toMatchObject({
       host: 'play-shell',
       background: 'homepage',
       paintOwner: 'play-selector',
@@ -501,7 +502,7 @@ describe('scene manifests', () => {
     // naming them here is how six declared ids decayed into comments (ADR-0369).
     const routes = [
       '/', '/unknown', '/settings/general', '/settings/audio/tracks', '/enchiridion', '/enchiridion/units',
-      '/play/select/skirmish', '/play', '/play/strategikon', '/editor', '/editor/level', '/studio', '/lobbies',
+      '/play/select/levels', '/play', '/play/strategikon', '/editor', '/editor/level', '/studio', '/lobbies',
       '/party', '/portrait-editor', '/predrawn-reference', '/run', '/run/strategikon',
     ];
     for (const route of routes) {
