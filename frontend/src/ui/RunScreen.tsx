@@ -993,7 +993,9 @@ function AftermathPanel({
           <AftermathMeasure
             label="Recovered from wounds"
             detail={aftermath.fallenUnits.length
-              ? aftermath.fallenUnits.map((unit) => unit.name).join(' · ')
+              ? aftermath.fallenUnits.map((unit) => (
+                <span className="run-aftermath-measure-name" key={unit.id}>{unit.name}</span>
+              ))
               : 'The whole force came through unhurt.'}
           >
             {aftermath.fallenUnits.length}
