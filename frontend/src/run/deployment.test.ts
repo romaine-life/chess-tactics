@@ -13,7 +13,11 @@ import {
   type RunWarSnapshot,
 } from './model';
 import {
+  arrangedCardGripSeat,
+  arrangedCardPlaceableCells,
+  arrangedCardPlacementAtCell,
   arrangedCardPlacementOptions,
+  arrangedCardSeatOffsets,
   arrangedDeploymentCanBegin,
   beginArrangedBattle,
   beginDeploymentDeal,
@@ -157,6 +161,68 @@ describe('formation deployment', () => {
     expect(rotationsFor('f-01112131-kppp')).toEqual([0, 1, 2, 3]);
     // A lone unit is the same shape whichever way it is turned.
     expect(rotationsFor('q')).toEqual([0]);
+  });
+
+  // His Grace's L has no unit on one corner of its 2x2 box, and that corner is exactly the
+  // bounding-box anchor. Carrying the formation by the anchor therefore meant aiming at an
+  // EMPTY square to place it, and every quarter turn moved the hole to a different corner.
+  it('carries a formation by a seat a unit stands on, never by the hole in its bounding box', () => {
+    const { run, level } = fixture(8, 8, 47);
+    const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+    const hisGrace = arranging.cards.find((card) => card.coreId === 'his-grace')!;
+
+    for (const rotation of [0, 1, 2, 3] as const) {
+      const seats = arrangedCardSeatOffsets(arranging, hisGrace.id, rotation);
+      const grip = arrangedCardGripSeat(arranging, hisGrace.id, rotation)!;
+
+      expect(seats).toHaveLength(3);
+      // The grip is one of the formation's own seats, so a unit always stands on it.
+      expect(seats.some(({ unitId }) => unitId === grip.unitId)).toBe(true);
+      // The 2x2 box's corner at (0,0) is the hole for exactly one of the four turns; whichever
+      // turn that is, the grip is never a square the formation leaves empty.
+      expect(seats.some(({ offset }) => offset.x === grip.offset.x && offset.y === grip.offset.y))
+        .toBe(true);
+      // It is the elbow — the seat adjacent to both others, at the shape's centre of mass.
+      const neighbours = seats.filter(({ offset }) => (
+        Math.abs(offset.x - grip.offset.x) + Math.abs(offset.y - grip.offset.y) === 1
+      ));
+      expect(neighbours).toHaveLength(2);
+    }
+  });
+
+  // The player aims at a square and the game finds the seating. Pointing must never be answered
+  // with a formation that sits somewhere else on the band.
+  it('seats the formation so it always covers the square being pointed at', () => {
+    const { run, level } = fixture(8, 8, 53);
+    const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+    const hisGrace = arranging.cards.find((card) => card.coreId === 'his-grace')!;
+    const pointable = arrangedCardPlaceableCells(arranging, level, hisGrace.id, 0);
+
+    expect(pointable.length).toBeGreaterThan(0);
+    for (const cell of pointable) {
+      const seating = arrangedCardPlacementAtCell(arranging, level, hisGrace.id, 0, cell);
+      expect(seating).not.toBeNull();
+      expect(Object.values(seating!.placements))
+        .toContainEqual({ x: cell.x, y: cell.y });
+    }
+  });
+
+  // Pointing at a square the formation can cover is the whole affordance, so the pointable set
+  // is the union of every legal seating's footprint — strictly larger than the anchor set.
+  it('lets the player point at any square the formation could cover, not just legal anchors', () => {
+    const { run, level } = fixture(8, 8, 59, ['ppp']);
+    const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+    const line = arranging.cards.find((card) => card.coreId === 'ppp')!;
+    const anchors = arrangedCardPlacementOptions(arranging, level, line.id, 0);
+    const pointable = arrangedCardPlaceableCells(arranging, level, line.id, 0);
+
+    expect(pointable.length).toBeGreaterThan(anchors.length);
+    // Every anchor remains pointable; the new squares are the rest of each footprint.
+    for (const { anchor } of anchors) {
+      expect(pointable).toContainEqual({ x: anchor.x, y: anchor.y });
+    }
+    // A square nothing could ever cover resolves to no seating rather than a nearby guess.
+    expect(arrangedCardPlacementAtCell(arranging, level, line.id, 0, { x: 0, y: 0 })).toBeNull();
   });
 
   // Repeated turning walks the same turns the rail offers and nothing else, so the gesture can

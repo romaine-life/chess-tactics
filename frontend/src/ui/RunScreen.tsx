@@ -57,6 +57,8 @@ import {
   type LipsanonId,
 } from '../run/model';
 import {
+  arrangedCardPlaceableCells,
+  arrangedCardPlacementAtCell,
   arrangedCardPlacementOptions,
   distinctCardRotations,
   arrangedDeploymentCanBegin,
@@ -461,11 +463,9 @@ function ArrangedDeploymentControls({
                 </div>
                 <p className="skirmish-grid-hint">
                   {selected.placed
-                    ? 'Choose another square to move this formation, or remove it.'
-                    : 'Choose a highlighted square on the battlefield.'}
-                  {availableRotations.size > 1
-                    ? ' Right-click the battlefield to turn it without leaving the square.'
-                    : ''}
+                    ? 'Point somewhere else on the battlefield to move this formation, or remove it.'
+                    : 'Point at the battlefield and click to place this formation.'}
+                  {availableRotations.size > 1 ? ' Right-click to turn it.' : ''}
                 </p>
                 {selected.placed ? (
                   <ChromeButton
@@ -534,15 +534,16 @@ function useRunDeploymentPresentation({
   const [dealProgress, setDealProgress] = useState(0);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [arrangementRotation, setArrangementRotation] = useState<RunFormationRotation>(0);
-  const [hoveredArrangementAnchor, setHoveredArrangementAnchor] = useState<string | null>(null);
+  const [pointedArrangementCell, setPointedArrangementCell] = useState<string | null>(null);
   const arrangementCards = useMemo(() => arrangedDeploymentCards(prepared), [prepared]);
   const selectedArrangementCard = arrangementCards.find(({ card }) => card.id === selectedCardId) ?? null;
-  const arrangementPlacementOptions = useMemo(
-    () => selectedCardId
-      ? arrangedCardPlacementOptions(prepared, level, selectedCardId, arrangementRotation)
-      : [],
-    [arrangementRotation, level, prepared, selectedCardId],
-  );
+  // The squares the player may point at — every square the formation could COVER, not the
+  // squares its bounding-box corner could sit on. Aiming at a unit is the whole gesture.
+  const arrangementPlaceableCells = useMemo(() => new Set(
+    (selectedCardId
+      ? arrangedCardPlaceableCells(prepared, level, selectedCardId, arrangementRotation)
+      : []).map((cell) => `${cell.x},${cell.y}`),
+  ), [arrangementRotation, level, prepared, selectedCardId]);
   // A rotation is offered only when it both fits the band and looks different from a turn
   // already on the rail. Redundant turns are skipped the same way unplaceable ones are, so
   // the control never presents two buttons that produce the same board. The rail and the
@@ -558,13 +559,28 @@ function useRunDeploymentPresentation({
     () => new Set<RunFormationRotation>(availableArrangementRotationList),
     [availableArrangementRotationList],
   );
-  const hoveredArrangementOption = hoveredArrangementAnchor
-    ? arrangementPlacementOptions.find(({ anchor }) => `${anchor.x},${anchor.y}` === hoveredArrangementAnchor) ?? null
-    : null;
+  // The formation is carried on the cursor: the pointed square resolves to a whole seating,
+  // and the player never has to work out where a corner would have to go.
+  const pointedArrangementOption = useMemo(() => {
+    const cell = pointedArrangementCell?.split(',').map(Number);
+    if (!selectedCardId || !cell || cell.length !== 2 || cell.some((value) => !Number.isFinite(value))) {
+      return null;
+    }
+    return arrangedCardPlacementAtCell(
+      prepared,
+      level,
+      selectedCardId,
+      arrangementRotation,
+      { x: cell[0], y: cell[1] },
+    );
+  }, [arrangementRotation, level, pointedArrangementCell, prepared, selectedCardId]);
+  const arrangementFootprint = useMemo(() => new Set(
+    Object.values(pointedArrangementOption?.placements ?? {}).map((cell) => `${cell.x},${cell.y}`),
+  ), [pointedArrangementOption]);
   const arrangementPreviewPieces = useMemo<readonly Piece[]>(() => {
-    if (!hoveredArrangementOption) return [];
+    if (!pointedArrangementOption) return [];
     const facing = defaultFacingForSide('player');
-    return Object.entries(hoveredArrangementOption.placements).flatMap(([unitId, cell]) => {
+    return Object.entries(pointedArrangementOption.placements).flatMap(([unitId, cell]) => {
       const unit = prepared.army.find((candidate) => candidate.id === unitId);
       if (!unit) return [];
       return [{
@@ -580,7 +596,7 @@ function useRunDeploymentPresentation({
         ...(unit.type === 'pawn' ? { pawnForward: facing } : {}),
       }];
     });
-  }, [hoveredArrangementOption, prepared.army]);
+  }, [pointedArrangementOption, prepared.army]);
   const layout = selectedDeploymentLayout(prepared, options);
   const deploymentGame = useMemo(
     () => gameForRunDeployment(prepared, level, layout, true),
@@ -609,13 +625,13 @@ function useRunDeploymentPresentation({
       ?? arrangementCards.find(({ admitted }) => admitted)?.card.id
       ?? null);
     setArrangementRotation(0);
-    setHoveredArrangementAnchor(null);
+    setPointedArrangementCell(null);
   }, [arrangementCards, selectedCardId, stage]);
 
   useEffect(() => {
     if (availableArrangementRotations.has(arrangementRotation)) return;
     setArrangementRotation(availableArrangementRotations.values().next().value ?? 0);
-    setHoveredArrangementAnchor(null);
+    setPointedArrangementCell(null);
   }, [arrangementRotation, availableArrangementRotations]);
 
   const beginDeal = useCallback(() => {
@@ -635,12 +651,11 @@ function useRunDeploymentPresentation({
   const selectArrangementCard = useCallback((cardId: string) => {
     setSelectedCardId(cardId);
     setArrangementRotation(0);
-    setHoveredArrangementAnchor(null);
+    setPointedArrangementCell(null);
   }, []);
-  // A secondary click on the battlefield turns the formation waiting under the cursor. It
-  // deliberately keeps the hovered anchor: the preview spins in place on the square being
-  // aimed at rather than vanishing until the mouse is jiggled. A turn that leaves that
-  // square illegal simply shows nothing until the player moves or turns back.
+  // A secondary click on the battlefield turns the formation carried on the cursor. It
+  // deliberately keeps the pointed square: the formation spins about its grip seat, on the
+  // square being aimed at, rather than vanishing until the mouse is jiggled.
   const turnArrangementUnderCursor = useCallback(() => {
     if (departureActive) return;
     setArrangementRotation((current) => nextCardRotation(availableArrangementRotationList, current));
@@ -650,7 +665,7 @@ function useRunDeploymentPresentation({
     const latest = useActiveRun.getState().run;
     if (latest?.id === prepared.id && latest.phase === 'deployment') {
       replace(removeArrangedDeploymentCard(latest, selectedCardId));
-      setHoveredArrangementAnchor(null);
+      setPointedArrangementCell(null);
     }
   }, [departureActive, prepared.id, replace, selectedCardId]);
   const startArrangedBattle = useCallback(() => {
@@ -665,7 +680,12 @@ function useRunDeploymentPresentation({
   return {
     surfaceState: deploymentSurfaceState,
     screenClassName: 'run-deployment-screen',
-    boardClassName: 'run-deployment-board',
+    // While a seating is resolved the formation itself is the cursor, so the pointer is hidden
+    // under it. When nothing resolves the pointer comes back, so the player is never left with
+    // no cursor and no formation.
+    boardClassName: pointedArrangementOption
+      ? 'run-deployment-board is-carrying-formation'
+      : 'run-deployment-board',
     boardAriaLabel: `${level.name} deployment battlefield`,
     unitArrivalTrack: 'drop',
     unitArrivalStartDelta: { x: 0, y: 0 },
@@ -673,38 +693,58 @@ function useRunDeploymentPresentation({
     onBoardSecondaryClick: stage === 'arrange' && selectedArrangementCard?.admitted
       ? turnArrangementUnderCursor
       : undefined,
+    // Every square takes the pointer, not just the ones a corner could sit on. The player
+    // sweeps the formation across the board and the seating resolves under it; the squares it
+    // would fill light up, so what is highlighted is what will be occupied.
     renderCellOverlay: ({ cell, visualFootprintStyle }) => {
       if (stage !== 'arrange' || !selectedArrangementCard?.admitted) {
         return null;
       }
       const cellKey = `${cell.x},${cell.y}`;
-      const placement = arrangementPlacementOptions.find(({ anchor }) => `${anchor.x},${anchor.y}` === cellKey);
-      if (!placement) return null;
+      const placeable = arrangementPlaceableCells.has(cellKey);
+      const filled = arrangementFootprint.has(cellKey);
       return (
         <button
           type="button"
-          className="skirmish-board-cell-hit run-deployment-cell is-move"
-          aria-label={`Place formation from ${cell.x}, ${cell.y}`}
+          className={[
+            'skirmish-board-cell-hit',
+            'run-deployment-cell',
+            placeable ? 'is-placeable' : '',
+            filled ? 'is-move' : '',
+          ].filter(Boolean).join(' ')}
+          aria-label={placeable
+            ? `Place formation covering ${cell.x}, ${cell.y}`
+            : `Tile ${cell.x}, ${cell.y}`}
+          aria-hidden={placeable ? undefined : true}
+          tabIndex={placeable ? undefined : -1}
           style={visualFootprintStyle}
           onPointerDown={(event) => {
             if (event.button === 0) event.stopPropagation();
           }}
-          onPointerEnter={() => setHoveredArrangementAnchor(cellKey)}
-          onPointerLeave={() => setHoveredArrangementAnchor((current) => current === cellKey ? null : current)}
+          onPointerEnter={() => setPointedArrangementCell(cellKey)}
+          onPointerLeave={() => setPointedArrangementCell((current) => current === cellKey ? null : current)}
           onClick={() => {
             const latest = useActiveRun.getState().run;
             if (latest?.id !== prepared.id || latest.phase !== 'deployment' || !selectedCardId) return;
+            const seating = arrangedCardPlacementAtCell(
+              latest,
+              level,
+              selectedCardId,
+              arrangementRotation,
+              cell,
+            );
+            if (!seating) return;
             replace(placeArrangedDeploymentCard(
               latest,
               level,
               selectedCardId,
               arrangementRotation,
-              placement.anchor,
+              seating.anchor,
             ));
-            setHoveredArrangementAnchor(null);
+            setPointedArrangementCell(null);
           }}
         >
-          <PredrawnMoveHighlightPaint />
+          {filled ? <PredrawnMoveHighlightPaint /> : null}
         </button>
       );
     },
@@ -718,7 +758,7 @@ function useRunDeploymentPresentation({
         dealProgress={dealProgress}
         onDealProgress={setDealProgress}
         onSelectCard={selectArrangementCard}
-        onRotation={(rotation) => { setArrangementRotation(rotation); setHoveredArrangementAnchor(null); }}
+        onRotation={(rotation) => { setArrangementRotation(rotation); setPointedArrangementCell(null); }}
         onRemove={removeArrangementCard}
         onBeginBattle={startArrangedBattle}
         onDealComplete={finishDeal}

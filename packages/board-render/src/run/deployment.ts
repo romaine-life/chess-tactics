@@ -620,6 +620,117 @@ export function arrangedCardPlacementOptions(
   }));
 }
 
+/**
+ * The seat a formation hangs from when it is carried on the cursor.
+ *
+ * NOT the anchor. The anchor is the corner of the shape's bounding box, which for any formation
+ * that is not a solid rectangle is a square no unit stands on -- His Grace's L would be carried
+ * by its missing corner, so aiming at the unit you meant to place put the formation one square
+ * off, and every quarter turn moved the hole to a different corner.
+ *
+ * The grip is the seat nearest the shape's own centre of mass, so the formation balances under
+ * the cursor and a turn spins it about a unit the player can see. Ties break toward the front
+ * of the board and then toward the left, so one shape always yields one grip.
+ */
+export function arrangedCardGripSeat(
+  run: RunDocument,
+  cardId: string,
+  rotation: RunFormationRotation,
+): { unitId: string; offset: Vec } | null {
+  const seats = arrangedCardSeatOffsets(run, cardId, rotation);
+  if (!seats.length) return null;
+  const centre = {
+    x: seats.reduce((total, { offset }) => total + offset.x, 0) / seats.length,
+    y: seats.reduce((total, { offset }) => total + offset.y, 0) / seats.length,
+  };
+  const distance = ({ offset }: { offset: Vec }): number => (
+    (offset.x - centre.x) ** 2 + (offset.y - centre.y) ** 2
+  );
+  return seats.reduce((best, seat) => {
+    const gap = distance(seat) - distance(best);
+    if (gap < -1e-9) return seat;
+    if (gap > 1e-9) return best;
+    if (seat.offset.y !== best.offset.y) return seat.offset.y > best.offset.y ? seat : best;
+    return seat.offset.x < best.offset.x ? seat : best;
+  });
+}
+
+/** The rotated seat offsets in card order, or none when the card cannot be arranged. */
+export function arrangedCardSeatOffsets(
+  run: RunDocument,
+  cardId: string,
+  rotation: RunFormationRotation,
+): { unitId: string; offset: Vec }[] {
+  if (run.phase !== 'deployment' || run.deployment?.stage !== 'arranging') return [];
+  const card = dealtCards(run).find((candidate) => candidate.id === cardId);
+  if (!card) return [];
+  const definition = runCardDefinition(card.coreId);
+  const admitted = new Set(run.deployment.deployingUnitIds);
+  const formation = definition?.formation ?? card.unitSeats.map((_, x) => ({ x, y: 0 }));
+  const seats = formation.flatMap((offset, index) => {
+    const unitId = card.unitSeats[index];
+    return unitId && admitted.has(unitId) ? [{ unitId, offset }] : [];
+  });
+  if (!seats.length || seats.length !== runCardUnitIds(card).length) return [];
+  const transformed = rotatedFormation(seats.map(({ offset }) => offset), rotation);
+  return seats.map(({ unitId }, index) => ({ unitId, offset: transformed[index] }));
+}
+
+/**
+ * Where the formation lands when the player is pointing at `cell`.
+ *
+ * The player aims at a square and the game finds the seating, rather than the player hunting for
+ * the one square that happens to be a legal anchor. Every seating that COVERS the pointed square
+ * is a candidate, so the formation is always under the hand -- it never slides off to somewhere
+ * else on the band.
+ *
+ * The grip seat is preferred, and when the band cannot take that seating the formation shifts to
+ * the legal candidate whose covering seat is nearest the grip. That keeps the shift to the
+ * smallest one that works instead of jumping across the shape.
+ */
+export function arrangedCardPlacementAtCell(
+  run: RunDocument,
+  level: Level,
+  cardId: string,
+  rotation: RunFormationRotation,
+  cell: Vec,
+): RunArrangedPlacementOption | null {
+  const grip = arrangedCardGripSeat(run, cardId, rotation);
+  if (!grip) return null;
+  const seatOffsets = new Map(
+    arrangedCardSeatOffsets(run, cardId, rotation).map(({ unitId, offset }) => [unitId, offset]),
+  );
+  const pointed = key(cell);
+  let best: { option: RunArrangedPlacementOption; shift: number } | null = null;
+  for (const option of arrangedCardPlacementOptions(run, level, cardId, rotation)) {
+    const covering = Object.entries(option.placements)
+      .find(([, seat]) => key(seat) === pointed)?.[0];
+    if (!covering) continue;
+    const offset = seatOffsets.get(covering);
+    if (!offset) continue;
+    const shift = (offset.x - grip.offset.x) ** 2 + (offset.y - grip.offset.y) ** 2;
+    if (!best || shift < best.shift) best = { option, shift };
+  }
+  return best?.option ?? null;
+}
+
+/** Every square the player may point at to place this formation, in board order. */
+export function arrangedCardPlaceableCells(
+  run: RunDocument,
+  level: Level,
+  cardId: string,
+  rotation: RunFormationRotation,
+): Vec[] {
+  const seen = new Set<string>();
+  return arrangedCardPlacementOptions(run, level, cardId, rotation)
+    .flatMap((option) => Object.values(option.placements))
+    .flatMap((cell) => {
+      if (seen.has(key(cell))) return [];
+      seen.add(key(cell));
+      return [cell];
+    });
+}
+
 export function placeArrangedDeploymentCard(
   run: RunDocument,
   level: Level,

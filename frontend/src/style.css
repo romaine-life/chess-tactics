@@ -21410,7 +21410,18 @@ button.tileset-relationship-cell {
 }
 
 .run-deployment-cell {
+  cursor: default;
+}
+
+/* A square the carried formation could cover. Aiming is the gesture, so every one of them
+   takes the pointer — not only the squares a bounding-box corner could sit on. */
+.run-deployment-cell.is-placeable {
   cursor: crosshair;
+}
+
+/* The formation under the pointer IS the cursor while a seating resolves. */
+.run-deployment-board.is-carrying-formation .run-deployment-cell {
+  cursor: none;
 }
 
 .run-deployment-cell.is-deployment-blocked {
