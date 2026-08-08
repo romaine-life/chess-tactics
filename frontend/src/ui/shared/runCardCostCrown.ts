@@ -97,6 +97,9 @@ export function runCardCostCrownCandidates(
   return versions
     .filter((version) => (
       version.slot === RUN_CARD_COST_CROWN_SLOT
+      // An archived version is a withdrawn one. Offering it would put marks back in front of
+      // the owner that were already refused, or that could never be installed.
+      && (version.status === 'candidate' || version.status === 'accepted')
       && version.media?.mediaType === 'image/png'
       && version.media?.width === RUN_CARD_COST_CROWN_NATIVE.width
       && version.media?.height === RUN_CARD_COST_CROWN_NATIVE.height
