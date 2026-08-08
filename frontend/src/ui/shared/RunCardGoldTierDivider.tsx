@@ -153,10 +153,13 @@ export function RunCardGoldTierDivider({
   value,
   source,
   coinTuning = RUN_CARD_GOLD_TIER_COIN_DEFAULTS,
+  crownUrl,
 }: {
   value: RunCardTier;
   source: RunCardGoldTierDividerSource;
   coinTuning?: RunCardGoldTierCoinTuning;
+  /** Omitted, the seated coin resolves the installed mark itself. */
+  crownUrl?: string | null;
 }): ReactElement {
   if (source.status === 'error') throw new Error(source.message);
   if (source.status === 'loading') {
@@ -181,7 +184,7 @@ export function RunCardGoldTierDivider({
         <DividerSlice sourceUrl={source.url} viewBox="132 138 500 107" />
         <DividerSlice sourceUrl={source.url} viewBox="632 138 56 107" />
       </span>
-      <RunCardCostCoin value={value} className="enchiridion-card-group-gold" />
+      <RunCardCostCoin value={value} className="enchiridion-card-group-gold" {...(crownUrl === undefined ? {} : { crownUrl })} />
     </span>
   );
 }

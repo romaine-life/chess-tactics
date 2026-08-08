@@ -20096,6 +20096,22 @@ button.tileset-relationship-cell {
   position: absolute;
 }
 
+/* The crown takes the numeral's seat and its share of the coin's striking face, so a
+   priceless coin is marked rather than blank (ADR-0530). */
+.run-card-cost-coin-crown {
+  /* The coin's flat face is .608 of the drawn coin; height is capped so a near-square mark
+     shrinks rather than climbing over the rim. Same rule as the card face's own seat. */
+  block-size: calc(var(--run-card-cost-coin-size) * .38);
+  image-rendering: pixelated;
+  inline-size: calc(var(--run-card-cost-coin-size) * .6);
+  object-fit: contain;
+  pointer-events: none;
+  position: relative;
+  /* Match the card face's measured ink-centre correction (ADR-0359). */
+  transform: translateY(.0667em);
+  z-index: 1;
+}
+
 .run-card-cost-coin-value {
   color: #17191b;
   font-family: var(--ds-font-display);
@@ -25901,6 +25917,26 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   font-size: calc(var(--run-card-cost-size, 6.2cqw) * .76);
   letter-spacing: -.35cqw;
   padding-inline-end: .35cqw;
+}
+
+/* A priceless card is struck with its mark in the numeral's own box, sized against the coin's
+   flat face rather than the box, so it clears the rim exactly as a reading does (ADR-0530).
+   It sits above the coin raster and below the frame boxes overlay. */
+.run-card-prototype-cost-crown {
+  /* Sized against the coin's flat face, not the cost box, and capped on height rather than
+     fitted to a square: a mark drawn wide takes the whole face and still clears the rim, while
+     a mark drawn nearly square is held back by the height instead of growing into the rim.
+     One rule that holds for whichever mark is struck. */
+  block-size: calc(var(--run-card-coin-face, 6.01cqw) * .62);
+  image-rendering: pixelated;
+  inline-size: var(--run-card-coin-face, 6.01cqw);
+  inset-block-start: calc(var(--run-card-cost-top, 5.1%) + var(--run-card-cost-height, 7.2%) / 2);
+  inset-inline-start: calc(var(--run-card-cost-left, 82.4%) + var(--run-card-cost-width, 11.1%) / 2);
+  object-fit: contain;
+  pointer-events: none;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 3;
 }
 
 .run-card-prototype-type {

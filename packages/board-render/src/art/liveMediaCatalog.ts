@@ -151,6 +151,15 @@ export function liveMediaForSlot(slot: string): LiveMediaSlot {
   return entry;
 }
 
+/**
+ * The same lookup for an ornament the surface is complete without. An absent slot answers
+ * null rather than failing the render: a mark still being reviewed must not take its host
+ * screen down with it, and the host draws what it drew before the mark existed.
+ */
+export function optionalLiveMediaForSlot(slot: string): LiveMediaSlot | null {
+  return liveMediaCatalog ? liveMediaBySlot.get(slot) ?? null : null;
+}
+
 /** Return active slots beneath a semantic prefix from the hydrated backend snapshot. */
 export function liveMediaSlotsWithPrefix(prefix: string): LiveMediaSlot[] {
   if (!liveMediaCatalog) throw catalogFailure('catalog is not hydrated');

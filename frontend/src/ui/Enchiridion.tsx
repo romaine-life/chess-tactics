@@ -70,6 +70,7 @@ import {
   runCardTierLabel,
   useRunCardGoldTierDividerSource,
 } from './shared/RunCardGoldTierDivider';
+import { useRunCardCostCrownSource } from './shared/runCardCostCrown';
 import { RUN_PROGRESS_MEDIA_ROLE } from './shared/RunProgressIcon';
 import { KitScroll } from './KitScroll';
 import { EnchiridionContentSceneSlot } from './shell/AuthoredSceneSlot';
@@ -671,6 +672,9 @@ export function CardCodex({
   const [localSelectedId, setLocalSelectedId] = useState<string | null>(null);
   const [localFilters, setLocalFilters] = useState<EnchiridionCardFilters>(ENCHIRIDION_CARD_FILTERS_ALL);
   const goldTierDividerSource = useRunCardGoldTierDividerSource();
+  // The band coin and every card face read one mark, so a candidate under review is judged on
+  // both seats at once rather than on a card that disagrees with the band above it.
+  const { url: crownUrl } = useRunCardCostCrownSource();
   const focusedCardId = cardHref ? selectedCardId : localSelectedId;
   // Routed hosts derive the filters from the address every render, the same way focus is derived
   // from it; an absent or unreadable query is no filter at all and never rewrites the URL.
@@ -723,7 +727,7 @@ export function CardCodex({
             {groups.map(([value, cards]) => (
               <section className="enchiridion-card-gallery-group" key={value} aria-label={runCardTierLabel(value)}>
                 <h3 className="enchiridion-card-gallery-heading">
-                  <RunCardGoldTierDivider value={value} source={goldTierDividerSource} />
+                  <RunCardGoldTierDivider value={value} source={goldTierDividerSource} crownUrl={crownUrl} />
                 </h3>
                 <div className="enchiridion-card-gallery-grid">
                   {cards.map((card) => {
@@ -739,7 +743,7 @@ export function CardCodex({
                           aria-pressed={focused}
                           aria-current={focused ? 'true' : undefined}
                         >
-                          <RunCard card={card} mode="reference" />
+                          <RunCard card={card} mode="reference" crownUrl={crownUrl} />
                         </ReferenceTrigger>
                       </div>
                     );

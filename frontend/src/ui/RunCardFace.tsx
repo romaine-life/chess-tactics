@@ -21,6 +21,8 @@ import {
   type RunCardFrameGeometry,
 } from './runCardFrameGeometry';
 
+import { runCardCostCrownUrl } from './shared/runCardCostCrown';
+
 export { RUN_CARD_FRAME_SLOT } from './runCardFrameGeometry';
 export const RUN_CARD_COST_COIN_SOURCE_SLOT = 'ui/run/card-prototypes/cost-coin-source-v1.png';
 export const RUN_CARD_REFERENCE_WIDTH = 360;
@@ -116,10 +118,12 @@ export function runCardPresentationSignature(
   artUrl: string,
   frameGeometry: RunCardFrameGeometry = RUN_CARD_STANDARD_FRAME_GEOMETRY,
   coinSourceUrl = RUN_CARD_COST_COIN_SOURCE_SLOT,
+  crownUrl: string | null = null,
 ): string {
   return JSON.stringify([
     frameUrl,
     coinSourceUrl,
+    crownUrl,
     artUrl,
     frameGeometry.id,
     frameGeometry.frameSha256s,
@@ -663,6 +667,7 @@ type RunCardPresentation = Readonly<{
   coinSourceUrl: string;
   artUrl: string;
   frameGeometry: RunCardFrameGeometry;
+  crownUrl: string | null;
 }>;
 
 function runCardPresentationCanUpdateInPlace(
@@ -672,6 +677,7 @@ function runCardPresentationCanUpdateInPlace(
   return requested.frameUrl === current.frameUrl
     && requested.coinSourceUrl === current.coinSourceUrl
     && requested.artUrl === current.artUrl
+    && requested.crownUrl === current.crownUrl
     && requested.frameGeometry.id === current.frameGeometry.id
     && JSON.stringify(requested.frameGeometry.frameSha256s) === JSON.stringify(current.frameGeometry.frameSha256s)
     && runCardContentCanUpdateWithoutMediaLoad(current.card, requested.card);
@@ -713,7 +719,7 @@ function RunCardFaceLayer({
   onImageLoad: (signature: string, pending: boolean, kind: RunCardImageKind) => void;
   onImageError: (signature: string, pending: boolean, kind: RunCardImageKind) => void;
 }): ReactElement {
-  const { signature, card, frameUrl, coinSourceUrl, artUrl, frameGeometry } = presentation;
+  const { signature, card, frameUrl, coinSourceUrl, artUrl, frameGeometry, crownUrl } = presentation;
   const ready = (kind: RunCardImageKind): void => onImageLoad(signature, pending, kind);
   const error = (kind: RunCardImageKind): void => onImageError(signature, pending, kind);
   return (
@@ -750,6 +756,12 @@ function RunCardFaceLayer({
           {card.cost}
         </strong>
       ) : null}
+      {/* The mark a priceless card is struck with, in the numeral's own seat (ADR-0530). It is
+          deliberately outside the readiness protocol above: an ornament that has not been
+          promoted yet must not be able to hold a whole card face unpresented. */}
+      {!card.showsCost && crownUrl ? (
+        <img className="run-card-prototype-cost-crown" src={crownUrl} alt="" aria-hidden="true" draggable={false} />
+      ) : null}
       <span className="run-card-prototype-type"><span className="run-card-prototype-type-label">{card.typeLine}</span></span>
       <span className="run-card-prototype-contents is-ledger-1-rows">
         <FormationDiagram pieces={card.formation} pending={pending} outlineRendering={outlineRendering} onReady={ready} onError={error} />
@@ -774,6 +786,7 @@ export function RunCardFace({
   frameUrl,
   artUrl,
   coinSourceUrl = resolvedLiveMediaUrl(RUN_CARD_COST_COIN_SOURCE_SLOT),
+  crownUrl = runCardCostCrownUrl(),
   width = '100%',
   tuning = RUN_CARD_APPROVED_TUNING,
   contentsTuning = RUN_CARD_DEFAULT_CONTENTS_TUNING,
@@ -789,6 +802,8 @@ export function RunCardFace({
   frameUrl: string;
   artUrl: string;
   coinSourceUrl?: string;
+  /** The mark struck where a price would be. Null prints the coin bare, as before. */
+  crownUrl?: string | null;
   width?: string;
   tuning?: RunCardFaceTuning;
   contentsTuning?: RunCardContentsTuning;
@@ -801,7 +816,7 @@ export function RunCardFace({
   onImageError?: (kind: RunCardImageKind) => void;
   ariaHidden?: boolean;
 }): ReactElement {
-  const requestedSignature = runCardPresentationSignature(card, frameUrl, artUrl, frameGeometry, coinSourceUrl);
+  const requestedSignature = runCardPresentationSignature(card, frameUrl, artUrl, frameGeometry, coinSourceUrl, crownUrl);
   const requested = useMemo<RunCardPresentation>(() => ({
     signature: requestedSignature,
     card,
@@ -809,6 +824,7 @@ export function RunCardFace({
     coinSourceUrl,
     artUrl,
     frameGeometry,
+    crownUrl,
   // The signature is a complete serialization of the visual presentation. Keeping
   // this object stable prevents equivalent parent renders from restarting the
   // media-settling transition.
