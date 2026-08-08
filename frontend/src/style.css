@@ -25905,12 +25905,21 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
 
 .run-card-formation-square polygon {
   fill: rgba(212, 196, 161, .46);
-  stroke: rgba(55, 48, 39, .56);
-  stroke-width: 1.15;
 }
 
 .run-card-formation-square.is-dark polygon {
   fill: rgba(101, 115, 113, .34);
+}
+
+/* The seats' own line, moved off the polygon so it draws only where the footprint meets empty
+   space — the exact colour and weight it has always carried. On the polygon it also ran between
+   two occupied seats, which divides the cluster instead of wrapping it. Square caps close the
+   corner where two edges of the outline meet. */
+.run-card-formation-outline {
+  fill: none;
+  stroke: rgba(55, 48, 39, .56);
+  stroke-linecap: square;
+  stroke-width: 1.15;
 }
 
 .run-card-formation-tooltip {
