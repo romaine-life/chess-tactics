@@ -439,7 +439,7 @@ function ArrangedDeploymentControls({
         {/* The card is the subject of the whole panel, so it is PINNED above the rail and only
             the controls beneath it move. ADR-0030: the panel itself never scrolls — the house
             rail is a drawn element that is always present, so nothing here may fall back to the
-            browser's own bar. Abandon Run stays outside it too, rather than scrolling away. */}
+            browser's own bar. */}
         {stage === 'arrange' ? (
           <RunArrangementCard run={run} cards={cards} selectedCardId={selectedCardId} />
         ) : null}
@@ -537,8 +537,10 @@ function ArrangedDeploymentControls({
             </div>
           </>
         ) : null}
-        </KitScroll>
 
+        {/* Abandon Run scrolls with everything else. Pinning it took height from the controls
+            the player is actually using, and it is not worth more than them — it is the one
+            action here nobody is reaching for in a hurry. */}
         <div className="skirmish-view-group run-meta-abandon">
           <span className="skirmish-eyebrow">Run</span>
           <ChromeButton
@@ -553,6 +555,7 @@ function ArrangedDeploymentControls({
             {abandoning ? 'Abandoning…' : 'Abandon Run'}
           </ChromeButton>
         </div>
+        </KitScroll>
       </section>
     </>
   );

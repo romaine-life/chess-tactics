@@ -113,6 +113,11 @@ describe('Run Deployment hand', () => {
   // on screen answered "have I put everyone down?".
   it('says how much of the hand is on the board, and marks it done', () => {
     expect(hand).toContain('data-testid="arrangement-progress"');
+    // It took over the row that used to read Place/Placed for the card on screen — which said
+    // nothing the board and an enabled Remove formation were not already saying.
+    expect(hand).not.toContain('run-arrangement-card-state');
+    expect(hand).not.toContain("'Placed' : 'Place'");
+    expect(styles).not.toContain('.run-arrangement-card-state');
     expect(hand).toContain("data-complete={complete ? 'true' : 'false'}");
     expect(hand).toContain("{complete ? '✓' : '·'}");
     expect(hand).toContain('`All ${admitted.length} on the board`');
@@ -234,8 +239,13 @@ describe('Run Deployment hand', () => {
     expect(styles).toMatch(
       /\.run-meta-controls\.run-arrangement-controls \{[\s\S]*?overflow-y: hidden;[\s\S]*?\}/,
     );
-    // Abandon Run stays outside the rail, pinned, rather than scrolling out of reach.
-    expect(runScreen).toMatch(/<\/KitScroll>\s*<div className="skirmish-view-group run-meta-abandon">/);
+    // The CARD is what is pinned above the rail; everything else scrolls, Abandon Run included.
+    // Pinning that took height from the controls the player is actually using, and it is not
+    // worth more than them.
+    expect(runScreen).toMatch(
+      /<div className="skirmish-view-group run-meta-abandon">[\s\S]*?<\/div>\s*<\/KitScroll>/,
+    );
+    expect(runScreen).not.toMatch(/<\/KitScroll>\s*<div className="skirmish-view-group run-meta-abandon">/);
   });
 
   // A formation already on the board is still the player's to move.

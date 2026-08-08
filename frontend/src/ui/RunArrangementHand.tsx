@@ -39,20 +39,17 @@ export function RunArrangementCard({
       <span className="skirmish-eyebrow">Dealt formations</span>
       <div className="run-arrangement-hand-card" data-testid="arrangement-hand-card">
         {definition && current ? (
-          <>
-            <RunCard card={definition} identityCard={definition} mode="reference" />
-            <span className="run-arrangement-card-state">
-              {current.placed ? 'Placed' : 'Place'}
-            </span>
-          </>
+          <RunCard card={definition} identityCard={definition} mode="reference" />
         ) : (
           <p className="skirmish-grid-hint">No formation is available to place this Battle.</p>
         )}
       </div>
-      {/* Begin Battle asks only for His Grace, and the hand shows one card at a time, so nothing
-          else on screen answers "have I put everyone down?". It is pinned with the card and
-          always present — a line that appeared only on completion would re-lay the panel at the
-          exact moment the player is reading it. */}
+      {/* The one line under the card. It used to read Place/Placed for the card on screen, which
+          said nothing the board and an enabled Remove formation were not already saying. This
+          row answers the question nothing else did: Begin Battle asks only for His Grace and the
+          hand shows one card at a time, so "have I put everyone down?" had no answer. It is
+          pinned with the card and always present — a line that appeared only on completion would
+          re-lay the panel at the exact moment the player is reading it. */}
       <p
         className={`run-arrangement-progress${complete ? ' is-complete' : ''}`}
         data-testid="arrangement-progress"

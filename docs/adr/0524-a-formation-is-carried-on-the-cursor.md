@@ -154,8 +154,9 @@ the seating; a secondary click turns what is being carried.**
    still widens to the full Chartulary — so the register answers what the one-card hand cannot
    show at once.
 13. **The Controls scroll on the house rail** (`KitScroll`, ADR-0030), never the browser's own
-   bar. The panel itself does not scroll; Abandon Run stays outside the rail, pinned, rather than
-   scrolling out of reach.
+   bar. The panel itself does not scroll. **Only the card is pinned above the rail** — everything
+   else rides it, Abandon Run included: pinning that took height from the controls the player is
+   actually using, and it is not worth more than them.
 14. **Placing hands the next formation to the cursor.** Seating a formation finishes with it, so
    the hand advances to the next admitted card still to be placed, resuming after the one just
    seated and wrapping — placing out of order walks the rest of the hand rather than jumping back

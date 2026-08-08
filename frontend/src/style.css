@@ -21934,14 +21934,6 @@ button.tileset-relationship-cell {
   pointer-events: none;
 }
 
-.run-arrangement-card-state {
-  color: var(--skirmish-muted);
-  font-size: var(--ds-text-2xs);
-  font-weight: 700;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-}
-
 /* Two turns, not four absolute angles: the formation on the board already shows which way it
    faces, so the control is the verb. */
 .run-arrangement-rotations {
