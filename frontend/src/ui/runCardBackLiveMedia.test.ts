@@ -6,7 +6,9 @@ import {
   RUN_CARD_BACK_PROOF_SCHEMA,
   runCardBackAcceptanceItem,
   runCardBackCandidateGroups,
+  runCardBackDefaultSelection,
   runCardBackPublished,
+  runCardBackReviewAddress,
   runCardBackReviewHref,
   runCardBackReviewProof,
   runCardBackSelection,
@@ -83,10 +85,32 @@ describe('run card-back live media review', () => {
     expect(runCardBackReviewHref('not-a-sha')).not.toContain('backCandidate');
   });
 
-  it('shows the published back when no candidate is requested', () => {
+  it('opens on the waiting candidate, not on the card already published', () => {
+    // Landing on the published back alone shows the reviewer the card they
+    // already have with nothing to judge it against.
     const selected = runCardBackSelection(catalog, new URLSearchParams());
-    expect(selected?.version.id).toBe('v-published');
+    expect(selected?.version.id).toBe('v-candidate');
+    expect(runCardBackDefaultSelection(catalog)?.version.id).toBe('v-candidate');
     expect(runCardBackPublished(catalog)?.version.id).toBe('v-published');
+  });
+
+  it('falls back to the published back when nothing is waiting', () => {
+    const settled: AdminLiveMediaCatalog = { ...catalog, versions: [version({})] };
+    expect(runCardBackDefaultSelection(settled)?.version.id).toBe('v-published');
+    expect(runCardBackSelection(settled, new URLSearchParams())?.version.id).toBe('v-published');
+  });
+
+  it('keeps the surrounding Studio route while naming the reviewed bytes', () => {
+    // Arriving from the catalog carries Studio state the address must not drop,
+    // but the acceptance gate still has to find the candidate in the URL.
+    const address = runCardBackReviewAddress(SHA_CANDIDATE, '?cat=cardlayout&seed=4217');
+    const url = new URL(address, 'https://example.test');
+    expect(url.searchParams.get('cat')).toBe('cardlayout');
+    expect(url.searchParams.get('seed')).toBe('4217');
+    expect(url.searchParams.get('mode')).toBe('viewer');
+    expect(url.searchParams.get('vk')).toBe('cardlayout');
+    expect(url.searchParams.get('cardSide')).toBe('back');
+    expect(url.searchParams.get('backCandidate')).toBe(SHA_CANDIDATE);
   });
 
   it('selects the requested candidate by its exact bytes', () => {
