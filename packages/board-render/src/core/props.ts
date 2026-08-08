@@ -363,6 +363,35 @@ export function propDef(id: string): PropDef | undefined {
   return PROP_DEFS.find((def) => def.id === id);
 }
 
+/**
+ * Prop art that has stopped being a playable obstacle and become Placed Art. A level authored
+ * before that change still names it, and those placements were BLOCKERS — leaving them to
+ * resolve as scenery would quietly open every path they were shaping.
+ */
+export const RETIRED_ROCK_PROP_IDS: readonly string[] = ['rock', 'fieldstone'];
+
+/**
+ * Which prop a saved placement actually draws and blocks with. A retired rock is replaced by one
+ * of its successors, chosen from the anchor cell so the choice is STABLE: the same level looks the
+ * same on every load, and nothing is rewritten in storage — the substitution lives entirely at
+ * read time and disappears if this function does.
+ *
+ * Deliberately not random per load. A board whose rocks reshuffle each time it opens is a board
+ * nobody can author against.
+ */
+export function resolvePlacedPropId(propId: string, x: number, y: number): string {
+  if (!RETIRED_ROCK_PROP_IDS.includes(propId)) return propId;
+  const successors = PROP_DEFS
+    .filter((def) => def.kind === 'rock' && !RETIRED_ROCK_PROP_IDS.includes(def.id))
+    .map((def) => def.id)
+    .sort();
+  if (!successors.length) return propId;
+  // FNV-1a over the placement's identity: same cell, same rock, forever.
+  let hash = 2166136261;
+  for (const character of `${propId}:${x},${y}`) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619) >>> 0;
+  return successors[hash % successors.length];
+}
+
 /** The explicit default selected by the database-owned prop document. */
 export function defaultPropDef(): PropDef {
   const seats = currentSeats();
