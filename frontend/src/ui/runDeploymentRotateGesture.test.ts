@@ -58,7 +58,7 @@ describe('Run Deployment secondary-click turn', () => {
     // The rail and the gesture walk one ordered list, so a clicked turn is always a pressable one.
     expect(runScreen).toContain('const availableArrangementRotationList = useMemo<readonly RunFormationRotation[]>');
     expect(runScreen).toContain('new Set<RunFormationRotation>(availableArrangementRotationList),');
-    expect(runScreen).toContain("? ' Right-click, or Q and E, to turn it.' : ''");
+    expect(runScreen).toContain("? ' Right-click turns it too.' : ''");
   });
 
   // The pointer gesture turns one way only, so overshooting a quarter turn meant three more
@@ -84,18 +84,55 @@ describe('Run Deployment hand', () => {
   const styles = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 
   // A formation card is read by its SHAPE, so laying the whole hand out at once squeezed away
-  // the only information on it.
-  it('shows one card at full size between two steppers', () => {
+  // the only information on it — and steppers either side took width the card needed.
+  it('gives the card the whole panel width and seats its steppers under it', () => {
     expect(hand).toContain('data-testid="arrangement-hand-card"');
     expect(hand).toContain('aria-label="Previous formation"');
     expect(hand).toContain('aria-label="Next formation"');
     expect(hand).toContain('onClick={() => onStep(-1)}');
     expect(hand).toContain('onClick={() => onStep(1)}');
-    // No survivor of the grid that squeezed them.
+    // The steppers are a row of their own BELOW the card, not columns flanking it.
+    expect(hand).toMatch(
+      /<div className="run-arrangement-hand-card"[\s\S]*?<\/div>\s*<div className="run-arrangement-steppers"/,
+    );
+    expect(styles).toContain('.run-arrangement-steppers {');
+    // No survivor of the grid that squeezed them, nor of the strip that flanked the card.
     expect(hand).not.toContain('run-arrangement-hand-cards');
+    expect(hand).not.toContain('run-arrangement-hand-strip');
     expect(hand).not.toContain('cards.map(');
     expect(styles).not.toContain('.run-arrangement-hand-cards');
-    expect(styles).toContain('.run-arrangement-hand-strip {');
+    expect(styles).not.toContain('.run-arrangement-hand-strip');
+  });
+
+  // Every control that has a key wears it, in the cap the in-match shortcut grid already uses,
+  // so the keyboard is discovered from the control rather than from a hint.
+  it('wears the shortcut key on the control that shares it', () => {
+    for (const [key, label] of [['W', 'Back'], ['S', 'Next']]) {
+      expect(hand).toContain(`<kbd className="skirmish-grid-cap">${key}</kbd>`);
+      expect(hand).toContain(`<span className="skirmish-grid-label">${label}</span>`);
+    }
+    for (const [key, label] of [['Q', 'Left'], ['E', 'Right']]) {
+      expect(runScreen).toContain(`<kbd className="skirmish-grid-cap">${key}</kbd>`);
+      expect(runScreen).toContain(`<span className="skirmish-grid-label">${label}</span>`);
+    }
+  });
+
+  // Four absolute angles became two turns: the formation on the board already shows which way it
+  // faces, so the control is the VERB — and it is the same verb the keys and the click run.
+  it('turns from the rail through the one turn verb rather than setting an angle', () => {
+    expect(runScreen).toContain("onClick={() => onTurn('counter-clockwise')}");
+    expect(runScreen).toContain("onClick={() => onTurn('clockwise')}");
+    expect(runScreen).toContain('onTurn: (direction: FormationTurnDirection) => void;');
+    expect(runScreen).toContain('onTurn={turnArrangement}');
+    // No absolute-angle rail left anywhere.
+    expect(runScreen).not.toContain('{value * 90}°');
+    // `onRotation` as a prop or handler — not the substring inside `RunFormationRotation`.
+    expect(runScreen).not.toMatch(/\bonRotation[=:]/);
+    expect(styles).toMatch(
+      /\.run-arrangement-rotations \{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/,
+    );
+    // The rail stays band-wide, so its buttons do not flicker as the cursor moves.
+    expect(runScreen).toContain('disabled={departing || availableRotations.size < 2}');
   });
 
   it('steps the hand from the arrows and the keys through one path', () => {

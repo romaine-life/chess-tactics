@@ -21480,25 +21480,41 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
-/* One card at full size between two steppers. A formation card is read by its SHAPE, so a
-   hand laid out at once squeezed away the only information on it. */
-.run-arrangement-hand-strip {
-  align-items: center;
-  display: grid;
-  gap: var(--ds-space-1);
-  grid-template-columns: auto minmax(0, 1fr) auto;
-}
-
-.run-arrangement-step {
-  min-inline-size: 0;
-  padding-inline: var(--ds-space-1);
-}
-
+/* The card takes the panel's whole width. A formation card is read by its SHAPE, so a hand laid
+   out at once squeezed away the only information on it — and steppers either side took width
+   the card needed, so they sit under it instead. */
 .run-arrangement-hand-card {
   display: grid;
   gap: var(--ds-space-1);
   justify-items: center;
   min-inline-size: 0;
+}
+
+.run-arrangement-steppers {
+  align-items: center;
+  display: grid;
+  gap: var(--ds-space-1);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+
+.run-arrangement-hand-position {
+  color: var(--skirmish-muted);
+  font-size: var(--ds-text-xs);
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-align: center;
+}
+
+/* Controls that wear the key that does the same thing, in the shared shortcut cap the in-match
+   grid uses: the cap, then what it does. */
+.run-arrangement-step,
+.run-arrangement-turn {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-space-1);
+  justify-content: center;
+  min-inline-size: 0;
+  padding-inline: var(--ds-space-1);
 }
 
 .run-arrangement-hand-card > .run-card-action {
@@ -21514,15 +21530,12 @@ button.tileset-relationship-cell {
   text-transform: uppercase;
 }
 
+/* Two turns, not four absolute angles: the formation on the board already shows which way it
+   faces, so the control is the verb. */
 .run-arrangement-rotations {
   display: grid;
   gap: var(--ds-space-1);
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.run-arrangement-rotations > button {
-  min-inline-size: 0;
-  padding-inline: var(--ds-space-1);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .run-deployment-deal-overlay {

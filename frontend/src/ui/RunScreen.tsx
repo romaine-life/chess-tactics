@@ -397,12 +397,11 @@ function ArrangedDeploymentControls({
   run,
   stage,
   selectedCardId,
-  rotation,
   availableRotations,
   dealProgress,
   onDealProgress,
   onStepCard,
-  onRotation,
+  onTurn,
   onRemove,
   onBeginBattle,
   onDealComplete,
@@ -411,12 +410,11 @@ function ArrangedDeploymentControls({
   run: RunDocument;
   stage: RunDeploymentInteractionStage;
   selectedCardId: string | null;
-  rotation: RunFormationRotation;
   availableRotations: ReadonlySet<RunFormationRotation>;
   dealProgress: number;
   onDealProgress: (count: number) => void;
   onStepCard: (step: 1 | -1) => void;
-  onRotation: (rotation: RunFormationRotation) => void;
+  onTurn: (direction: FormationTurnDirection) => void;
   onRemove: () => void;
   onBeginBattle: () => void;
   onDealComplete: () => void;
@@ -461,25 +459,36 @@ function ArrangedDeploymentControls({
             {selected?.admitted ? (
               <div className="skirmish-view-group run-deployment-control" data-testid="arrangement-rotation-control">
                 <span className="skirmish-eyebrow">Rotation</span>
-                <div className="run-arrangement-rotations" role="group" aria-label="Formation rotation">
-                  {([0, 1, 2, 3] as const).map((value) => (
-                    <ChromeButton
-                      unit="inner-text-button"
-                      className={chromeUnitClassNames('inner-text-button', 'app-header-button', rotation === value && 'active')}
-                      aria-pressed={rotation === value}
-                      disabled={departing || !availableRotations.has(value)}
-                      onClick={() => onRotation(value)}
-                      key={value}
-                    >
-                      {value * 90}°
-                    </ChromeButton>
-                  ))}
+                {/* Two turns, not four absolute angles. The formation on the board already shows
+                    which way it faces, so the control is the VERB — and it is the same verb the
+                    keys and the secondary click run, wearing the keys that run it. */}
+                <div className="run-arrangement-rotations" role="group" aria-label="Turn the formation">
+                  <ChromeButton
+                    unit="inner-text-button"
+                    className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'run-arrangement-turn')}
+                    disabled={departing || availableRotations.size < 2}
+                    onClick={() => onTurn('counter-clockwise')}
+                    aria-label="Turn the formation left"
+                  >
+                    <kbd className="skirmish-grid-cap">Q</kbd>
+                    <span className="skirmish-grid-label">Left</span>
+                  </ChromeButton>
+                  <ChromeButton
+                    unit="inner-text-button"
+                    className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'run-arrangement-turn')}
+                    disabled={departing || availableRotations.size < 2}
+                    onClick={() => onTurn('clockwise')}
+                    aria-label="Turn the formation right"
+                  >
+                    <kbd className="skirmish-grid-cap">E</kbd>
+                    <span className="skirmish-grid-label">Right</span>
+                  </ChromeButton>
                 </div>
                 <p className="skirmish-grid-hint">
                   {selected.placed
                     ? 'Point somewhere else on the battlefield to move this formation, or remove it.'
                     : 'Point at the battlefield and click to place this formation.'}
-                  {availableRotations.size > 1 ? ' Right-click, or Q and E, to turn it.' : ''}
+                  {availableRotations.size > 1 ? ' Right-click turns it too.' : ''}
                 </p>
                 {selected.placed ? (
                   <ChromeButton
@@ -878,15 +887,11 @@ function useRunDeploymentPresentation({
         run={prepared}
         stage={stage}
         selectedCardId={selectedCardId}
-        rotation={arrangementRotation}
         availableRotations={availableArrangementRotations}
         dealProgress={dealProgress}
         onDealProgress={setDealProgress}
         onStepCard={stepArrangementCard}
-        onRotation={(rotation) => {
-          setArrangementRotation(rotation);
-          setHeldArrangementAnchor(null);
-        }}
+        onTurn={turnArrangement}
         onRemove={removeArrangementCard}
         onBeginBattle={startArrangedBattle}
         onDealComplete={finishDeal}

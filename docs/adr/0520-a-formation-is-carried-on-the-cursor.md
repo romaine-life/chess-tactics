@@ -131,11 +131,16 @@ the seating; a secondary click turns what is being carried.**
    action, so they carry the pointer, the target ring, and a grip cursor, and say so. Clicking one
    selects that card again rather than reading as an attempt to drop the held formation on top of
    it — repositioning otherwise meant finding the card in the hand and removing it first.
-10. **The hand shows one card at a time.** A formation card is read by its SHAPE, so laying the
-   whole hand out at once squeezed away the only information on it. One card at full size sits
-   between a previous and a next stepper, and **W and S** step it — the same single path the
-   arrows take, wrapping, over the admitted cards only. A reserve cannot be placed this Battle, so
-   it is not stepped onto.
+10. **The hand shows one card at a time, and every control wears its key.** A formation card is
+   read by its SHAPE, so laying the whole hand out at once squeezed away the only information on
+   it. The card takes the panel's whole width and its steppers sit UNDER it rather than either
+   side, which is what buys that width. Turning is **two buttons, not four absolute angles**: the
+   formation on the board already shows which way it faces, so the control is the verb, and it is
+   the same verb the keys and the secondary click run. Each of the four — Back, Next, Left,
+   Right — carries the key that does the same thing (**W/S** and **Q/E**) in the shared shortcut
+   cap the in-match grid already uses, so the keyboard is discovered from the control rather than
+   from a hint. Stepping wraps over the admitted cards only; a reserve cannot be placed this
+   Battle, so it is not stepped onto.
 11. **The whole dealt hand is read in the Chartulary**, reserves included. Opened while arranging
    it comes up already narrowed to this Battle's dealt cards — the setting exists either way, and
    still widens to the full Chartulary — so the register answers what the one-card hand cannot
