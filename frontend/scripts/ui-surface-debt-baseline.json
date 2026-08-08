@@ -3430,38 +3430,6 @@
       "kind": "css",
       "file": "src/style.css",
       "context": "",
-      "selector": ".skirmish-board-unit span",
-      "surfaceHash": "c3e64fe59997cba863aefd7c55a3a06d5d85aac1b14c9d37d15f1d7f34dfc0ec",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
-      "selector": ".skirmish-board-unit.is-enemy span",
-      "surfaceHash": "509f179b8c605c60540d79e72150fbf92113e0fa2aff766390c6cc035887df12",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
-      "selector": ".skirmish-board-unit.is-neutral span",
-      "surfaceHash": "56f88f1097fd11d92ed8c65ec7fc0ba2eca3fe287b443ef6e5198d24b8710f4c",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
-      "selector": ".skirmish-board-unit.is-player span",
-      "surfaceHash": "ae31077d244050c17818991bf6ed918292aecb36e432b3264f58afd9216f209b",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
       "selector": ".skirmish-charge-track span.active",
       "surfaceHash": "52c5fe6ae4a472933cd02ff00362ca2934a5d40bafb0802841eac6025216db3f",
       "occurrence": 1

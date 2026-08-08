@@ -52,6 +52,7 @@ export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
 export const RUN_BATTLE_RETRY_COST_TENTHS = 3 * GOLD_SCALE;
 export const RUN_EN_PASSANT_BOUNTY_TENTHS = 5 * GOLD_SCALE;
+export const RUN_ROYAL_FORK_BOUNTY_TENTHS = GOLD_SCALE;
 export const RUN_DEPLOYMENT_REROLL_COST_TENTHS = GOLD_SCALE;
 export const RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS = 5 * GOLD_SCALE;
 export const RUN_SECTIO_CARD_OFFER_COUNT = 3;
@@ -136,6 +137,15 @@ export const PIECE_VALUE: Readonly<Record<RunArmyPieceType, number>> = Object.fr
   queen: 9,
   king: 0,
 });
+
+/**
+ * How much the second prong of a royal fork must be worth for the Run to pay for it.
+ *
+ * Derived from the Rook rather than written as a bare 5, so the bar stays "a Rook or
+ * better" if the scale above is ever re-weighted instead of quietly becoming some other
+ * piece's worth.
+ */
+export const RUN_ROYAL_FORK_MIN_VICTIM_VALUE = PIECE_VALUE.rook;
 
 export const PIECE_LABEL: Readonly<Record<RunArmyPieceType, string>> = Object.freeze({
   pawn: 'Pawn',
@@ -2807,6 +2817,39 @@ export function payRunEnPassantBounty(run: RunDocument, at: Vec): RunBattleChang
       log: `En passant — ${formatGold(RUN_EN_PASSANT_BOUNTY_TENTHS)} gold claimed.`,
       at: { x: at.x, y: at.y },
       goldTenths: RUN_EN_PASSANT_BOUNTY_TENTHS,
+    },
+  };
+}
+
+/**
+ * One royal fork the player landed pays a bounty, in gold.
+ *
+ * Paid the moment the forking move commits, for the same reason the en passant bounty is:
+ * the move is the whole of the reason, and gold that only appears two screens later does
+ * not read as one. The Undo checkpoint is captured before the move, so a taken-back fork
+ * takes its bounty back with it.
+ *
+ * It is per fork, not per Battle: two of them in one Battle pay two gold. A fork cannot
+ * simply sit and pay every turn -- the check has to be answered, and only the move that
+ * lands the strike is examined -- but a position that lets the same fork be re-established
+ * after each escape does pay each time. That farm is left open at one gold, where at five
+ * it would not be.
+ *
+ * Board law is untouched. The Run pays for what the pieces did; it does not change what
+ * they may do (ADR-0193).
+ *
+ * `null` when this Run has no live Battle to be paid from. Otherwise the paid document
+ * arrives with its notice attached, because the gold and the report of the gold are the
+ * same event (ADR-0525).
+ */
+export function payRunRoyalForkBounty(run: RunDocument, at: Vec): RunBattleChange | null {
+  if (run.phase !== 'battle' || !run.battleRuntime) return null;
+  return {
+    run: touch({ ...run, goldTenths: run.goldTenths + RUN_ROYAL_FORK_BOUNTY_TENTHS }),
+    notice: {
+      log: `Royal fork — ${formatGold(RUN_ROYAL_FORK_BOUNTY_TENTHS)} gold claimed.`,
+      at: { x: at.x, y: at.y },
+      goldTenths: RUN_ROYAL_FORK_BOUNTY_TENTHS,
     },
   };
 }

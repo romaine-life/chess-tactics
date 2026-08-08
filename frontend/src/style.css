@@ -4953,26 +4953,6 @@ body.loading-bootstrap .app-startup-status {
   opacity: 1;
 }
 
-/* Premove ghosts — the planned move made visible. The BEFORE ghost is the real piece dimmed in
-   place (it has a premove queued); the AFTER ghost is a translucent copy sitting on the planned
-   square (the arrow's far end). Both are pointer-events:none (via .board-unit-seat) so the cell-hit
-   buttons under them own the clicks: the before square cancels the chain, the after square extends it. */
-.skirmish-board-unit.is-premove-origin {
-  opacity: .4;
-}
-
-.board-unit-seat.is-premove-ghost {
-  opacity: .55;
-}
-
-.board-unit-seat.is-premove-ghost img {
-  filter: drop-shadow(0 1px 5px rgba(96, 132, 240, .65));
-  /* Shrink toward the feet when a tile is split between multiple planned units, so they sit side
-     by side on the tile instead of overlapping (--ghost-scale is 1 for a lone ghost). */
-  transform: scale(var(--ghost-scale, 1));
-  transform-origin: center bottom;
-}
-
 /* The queued-chain arrows (placeholder art). Coordinates are board-space, so the stroke
    scales with the board zoom transform. */
 .premove-arrow {
@@ -5052,10 +5032,12 @@ body.loading-bootstrap .app-startup-status {
     0 0 16px rgba(90, 255, 190, .7);
 }
 
-/* THE single source of truth for seating a unit sprite on a tile — shared by the game
-   board (.skirmish-board-unit) and the Studio editor so a unit sits identically in both.
-   Each board adds only its own chrome (move animation, or selection/hit) around this;
-   the seat geometry lives nowhere else. Do not re-derive it per board. */
+/* THE single source of truth for seating a unit sprite on a tile in the DOM — the Studio
+   editor and the labs. A live battlefield does NOT seat units here: it draws them into the
+   scene canvas (render/SkirmishBoard: SkirmishSceneLayer), where the move glide and the
+   arrival drop are per-frame offsets rather than CSS animations. The DOM rules that used to
+   do that (.skirmish-board-unit and its five keyframes) outlived the last component that
+   emitted the class, and read for a long time as if a battlefield still animated in CSS. */
 .board-unit-seat {
   position: absolute;
   width: calc(72px * var(--unit-scale));
@@ -5096,34 +5078,6 @@ body.loading-bootstrap .app-startup-status {
   width: calc(52px * var(--unit-scale));
 }
 
-/* Game-only chrome layered on .board-unit-seat: the move glide. One knob for the whole
-   move (travel + hop); the enemy override below makes its reply weightier. */
-.skirmish-board-unit {
-  --move-duration: 360ms;
-  transition:
-    left var(--move-duration) cubic-bezier(.22, .61, .36, 1),
-    top var(--move-duration) cubic-bezier(.22, .61, .36, 1);
-  will-change: left, top;
-}
-
-/* The enemy answers with weight: a slower glide than the player's move. */
-.skirmish-board-unit.is-enemy {
-  --move-duration: 460ms;
-}
-
-.skirmish-board-unit.is-moving {
-  filter: drop-shadow(0 12px 11px rgba(0, 0, 0, .38));
-  z-index: 30000 !important;
-}
-
-/* Drag-to-move: the piece being carried fades in its home seat (a faint "lifted from here"
-   trace, like lichess/chess.com) while the cursor-following ghost is what you actually drag.
-   No transition so it doesn't glide while held; its hop is also suppressed on landing (JS). */
-.skirmish-board-unit.is-dragging {
-  opacity: .3;
-  transition: none;
-}
-
 /* The carried piece, in screen space (position: fixed), portaled to <body>. Its left/top track
    the pointer; the transform lifts it so it reads as held above the fingertip/cursor. Sized in
    JS to the piece's on-screen sprite. pointer-events:none keeps drop hit-testing on the cells. */
@@ -5141,137 +5095,6 @@ body.loading-bootstrap .app-startup-status {
 .skirmish-board-lab.is-dragging,
 .skirmish-board-lab.is-dragging .skirmish-board-cell-hit {
   cursor: grabbing;
-}
-
-/* A move is a small sequence, not a teleport: anticipation lift → arc through the
-   air → overshoot → settle. The container owns the travel (left/top); the sprite
-   owns the vertical hop spanning the same duration, so the two compose into an arc. */
-.skirmish-board-unit.is-moving img {
-  animation: unit-move-hop var(--move-duration) cubic-bezier(.4, 0, .2, 1);
-}
-
-.skirmish-board-unit.is-enemy.is-moving img {
-  animation: unit-move-hop-heavy var(--move-duration) cubic-bezier(.4, 0, .2, 1);
-}
-
-@keyframes unit-move-hop {
-  0% { transform: translateY(0) scale(1); }
-  14% { transform: translateY(-3px) scale(1.06); }  /* anticipation: brief wind-up */
-  48% { transform: translateY(-16px) scale(1.04); } /* apex of the arc */
-  80% { transform: translateY(2px) scale(.98); }    /* land + overshoot */
-  100% { transform: translateY(0) scale(1); }       /* settle */
-}
-
-@keyframes unit-move-hop-heavy {
-  0% { transform: translateY(0) scale(1); }
-  16% { transform: translateY(-2px) scale(1.07); }  /* bigger wind-up */
-  50% { transform: translateY(-12px) scale(1.03); } /* lower arc reads heavier */
-  78% { transform: translateY(4px) scale(.96); }    /* heavier landing */
-  90% { transform: translateY(-1px) scale(1.01); }  /* small bounce-back */
-  100% { transform: translateY(0) scale(1); }       /* settle */
-}
-
-/* Deploy arrival (render/SkirmishBoard). On board start each unit MATERIALIZES a short
-   distance above its own square and FALLS into the seat with an ease-out settle + a tiny
-   rebound — "setting the pieces on the board." Staggered per unit via --arrival-delay
-   (player wave, then the enemy answers; see computeArrivalDelays). `both` fill holds the
-   unit hidden at the 0% frame until its delay elapses, so it waits its turn instead of
-   flashing then dropping. Same motion family as the move-hop (ADR-0043); the per-tile
-   landing effect + sound cue hook in at the settle. */
-/* The deploy drop plays by DEFAULT, even under OS prefers-reduced-motion: this machine (and
-   many players' — Windows "Animation effects" off) reports reduce FALSELY, and gating on it
-   would hide the deploy from the very people it's for. Hence !important, to clear the global
-   `* { animation: none }` OS-reduce reset (style.css ~6036). Reduced motion is instead an
-   EXPLICIT in-game choice: `:root.reduce-motion` swaps the fall for a calm staggered fade
-   (below). A Settings toggle that sets that class is the remaining follow-up (see ADR). This
-   mirrors the repo's existing "a pure fade isn't gated on the OS query" precedent. */
-.skirmish-board-unit.is-arriving img {
-  animation: unit-arrival var(--arrival-anim, 620ms) linear var(--arrival-delay, 0ms) both !important;
-  transform-origin: center bottom; /* the impact squash compresses onto the feet, not the center */
-}
-:root.reduce-motion .skirmish-board-unit.is-arriving img {
-  animation: unit-arrival-soft 280ms ease var(--arrival-delay, 0ms) both !important;
-}
-
-/* The unit SPAWNS high above its square and hangs there MOTIONLESS, then drops under gravity
-   (ease-in builds speed over enough height to feel weighty) and hits the ground with a THUD:
-   a quick impact squash that recovers, no pre-jiggle and no upward bounce. Per-unit
-   --arrival-delay staggers the whole spawn→drop into a wave. The impact is ~85% of the
-   duration (≈ --arrival-delay + 525ms) — the hook point for the landing sound cue + the
-   per-tile dust/splash effect (wired later). */
-@keyframes unit-arrival {
-  0%   { opacity: 0; transform: translateY(-60px); animation-timing-function: ease-out; }     /* spawn high above, fading in */
-  26%  { opacity: 1; transform: translateY(-60px); animation-timing-function: linear; }        /* materialized, hanging still */
-  46%  { opacity: 1; transform: translateY(-60px); animation-timing-function: cubic-bezier(.55, 0, .9, .2); } /* release: fall, building speed */
-  82%  { transform: translateY(0) scaleX(1) scaleY(1); animation-timing-function: cubic-bezier(.3, 0, .2, 1); } /* contact */
-  88%  { transform: translateY(0) scaleX(1.16) scaleY(.82); animation-timing-function: ease-out; } /* THUD: impact squash */
-  100% { transform: translateY(0) scaleX(1) scaleY(1); }                                        /* recover */
-}
-
-.skirmish-board-unit img {
-  position: relative;
-  z-index: 1;
-}
-
-.skirmish-board-unit span {
-  align-items: center;
-  background: rgba(8, 13, 18, .82);
-  border: 2px solid rgba(240, 236, 216, .85);
-  border-radius: 999px;
-  color: #fff7df;
-  display: grid;
-  font: 800 22px/1 var(--ds-font-sans, system-ui, sans-serif);
-  height: 42px;
-  justify-items: center;
-  position: relative;
-  z-index: 1;
-  width: 42px;
-}
-
-.skirmish-board-unit.is-player span {
-  background: #1c66c7;
-}
-
-.skirmish-board-unit.is-enemy span {
-  background: #b83d33;
-}
-
-.skirmish-board-unit.is-neutral span {
-  background: #606872;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  /* Movement is functional feedback (where did the piece go?), not decoration,
-     so keep a brief slide instead of teleporting — but drop the airborne hop and
-     the decorative lift shadow that motion-sensitive players don't want. The turn
-     staging (your move → beat → enemy reply) still applies; that's pacing, not
-     motion. */
-  /* Keep the same deliberate travel timing the game is tuned around (a slower
-     slide is gentler, not more motion), but swap the airborne arc + scale bounce
-     for a small calm lift. !important exempts this one functional cue from the
-     global `* { animation: none }` reduced-motion reset further down this file. */
-  .skirmish-board-unit.is-moving {
-    filter: none;
-  }
-
-  .skirmish-board-unit.is-moving img,
-  .skirmish-board-unit.is-enemy.is-moving img {
-    animation: unit-move-hop-soft var(--move-duration) ease-in-out !important;
-  }
-  /* NOTE: the deploy arrival is deliberately NOT swapped here on the OS query — it keys off
-     the explicit `:root.reduce-motion` class instead (see the .is-arriving rules above), so
-     a falsely-reported OS reduce never hides the drop from the maintainer/most players. */
-}
-
-@keyframes unit-move-hop-soft {
-  0% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
-  100% { transform: translateY(0); }
-}
-
-@keyframes unit-arrival-soft {
-  0% { opacity: 0; }
-  100% { opacity: 1; }
 }
 
 .skirmish-left-panel {
@@ -26298,22 +26121,104 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   row-gap: var(--run-card-ledger-row-gap, .8cqw);
 }
 
-.run-card-formation {
+/* The size the card has always drawn a tile at, carried INTO the diagram's own size container.
+
+   Registering it is the whole trick. An element is measured against its ANCESTOR container, so
+   `cqw` written here is a share of the CARD; inside the box below it would be a share of the box,
+   and the cap would stop meaning "times the size the card used to print". A registered property is
+   computed where it is declared and inherits as an absolute length, so the cap survives the
+   crossing. */
+@property --run-card-formation-committed-tile {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 0px;
+}
+
+/* The SPACE: whatever the contents panel is not already spending on the card's flavour. It is a
+   size container, so the drawing inside can measure that space and take it — which is what makes
+   a one-seat card print a larger seat than a four-seat card. It is the space itself, not a
+   cap on it; the cap belongs to the drawing, so that this box stays the honest answer to "how
+   much room is there". */
+.run-card-formation-fit {
+  /* Stated, not shrink-to-fit: size containment gives this box no content to measure, so a
+     shrink-to-fit cross size would collapse it to nothing and take the diagram with it. */
   align-self: center;
-  block-size: var(--run-card-formation-height);
-  display: block;
-  flex: 0 0 auto;
-  inline-size: var(--run-card-formation-width);
-  isolation: isolate;
-  margin-block: 8.7cqw .4cqw;
+  container-type: size;
+  flex: 1 1 auto;
+  inline-size: 100%;
+  margin-block-end: var(--run-card-formation-flavour-gap);
+  /* The RESERVE is what stops the same footprint printing at two sizes on two cards: taken
+     literally, "fill the room" makes the board a function of how long the card's prose happens to
+     be, and a one-line flavour would print a visibly bigger board than a two-line one for the
+     identical formation. Two lines is the whole deck's longest, so every card gets the same space.
+
+     A longer flavour than that would still win — the box shrinks with the room rather than
+     overrunning it, which is what stopped the four-seat cards clipping their last line. */
+  max-block-size: calc(
+    var(--run-card-contents-block)
+    - var(--run-card-contents-padding-block-start, 2.2cqw)
+    - var(--run-card-contents-padding-block-end, 2.3cqw)
+    - var(--run-card-formation-flavour-reserve)
+    - var(--run-card-formation-flavour-gap)
+  );
+  min-block-size: 0;
   position: relative;
+  --run-card-formation-flavour-gap: .4cqw;
+  --run-card-formation-flavour-reserve: calc(var(--run-card-flavor-size, 3.15cqw) * 1.2 * 2);
+}
+
+/* Every length below is a multiple of ONE: the tile the diagram is drawn on. Fitting the drawing
+   to its room is therefore a single division, and the seats, the outline and the figures on them
+   keep their proportions to each other at any size. */
+.run-card-formation {
+  /* Fit the INK to the space on its tightest axis, then stop at the cap.
+
+     One box is fitted and the same box is centred. An earlier pass fitted a RESERVE instead --
+     a board plus room for a full-scale figure -- so that a card's board would not resize with the
+     piece standing on it. That reasoning does not survive contact: the board already resizes with
+     the FOOTPRINT, from 1.45x on one seat to 0.91x on four, so holding it still across pieces was
+     defending a consistency the card never had. All it bought was a third box, larger than
+     anything painted, hanging outside the drawing. */
+  --run-card-formation-ink-width: calc(
+    var(--run-card-formation-ink-right) - var(--run-card-formation-ink-left)
+  );
+  --run-card-formation-ink-height: calc(
+    var(--run-card-formation-ink-bottom) - var(--run-card-formation-ink-top)
+  );
+  --run-card-formation-unit: min(
+    calc(100cqw / var(--run-card-formation-ink-width)),
+    calc(100cqh / var(--run-card-formation-ink-height)),
+    calc(var(--run-card-formation-max-scale, 1.45) * var(--run-card-formation-committed-tile))
+  );
+  block-size: calc(var(--run-card-formation-unit) * var(--run-card-formation-natural-height));
+  display: block;
+  inline-size: calc(var(--run-card-formation-unit) * var(--run-card-formation-natural-width));
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  isolation: isolate;
+  position: absolute;
+  /* This element is the drawing's coordinate FRAME, not the drawing: it spans far enough for a
+     full-scale figure on every seat so the seats have somewhere to be placed, and it is never
+     painted or outlined. What is fitted and centred is the ink inside it, so the frame is shifted
+     by the gap between the two. Nothing here is a box the reader can see. */
+  --run-card-formation-ink-dx: calc(
+    var(--run-card-formation-natural-width) / 2
+    - (var(--run-card-formation-ink-left) + var(--run-card-formation-ink-right)) / 2
+  );
+  --run-card-formation-ink-dy: calc(
+    var(--run-card-formation-natural-height) / 2
+    - (var(--run-card-formation-ink-top) + var(--run-card-formation-ink-bottom)) / 2
+  );
+  translate:
+    calc(-50% + var(--run-card-formation-unit) * var(--run-card-formation-ink-dx))
+    calc(-50% + var(--run-card-formation-unit) * var(--run-card-formation-ink-dy));
 }
 
 .run-card-formation-square {
-  block-size: var(--run-card-formation-tile-height);
-  inline-size: var(--run-card-formation-tile-width);
-  inset-block-start: var(--run-card-formation-top);
-  inset-inline-start: var(--run-card-formation-left);
+  block-size: calc(var(--run-card-formation-unit) * var(--run-card-formation-tile-aspect));
+  inline-size: var(--run-card-formation-unit);
+  inset-block-start: calc(var(--run-card-formation-unit) * var(--run-card-formation-top));
+  inset-inline-start: calc(var(--run-card-formation-unit) * var(--run-card-formation-left));
   pointer-events: none;
   position: absolute;
   transform: translate(-50%, -50%);
@@ -26339,10 +26244,11 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
    weight the seats have always carried; drawing it here rather than per seat is what lets the
    corners mitre instead of jogging between four sub-pixel grids. */
 .run-card-formation-outline {
-  block-size: 100%;
+  block-size: calc(var(--run-card-formation-unit) * var(--run-card-formation-board-height));
   display: block;
-  inline-size: 100%;
-  inset: 0;
+  inline-size: calc(var(--run-card-formation-unit) * var(--run-card-formation-board-width));
+  inset-block-start: calc(var(--run-card-formation-unit) * var(--run-card-formation-board-top));
+  inset-inline-start: calc(var(--run-card-formation-unit) * var(--run-card-formation-board-left));
   overflow: visible;
   pointer-events: none;
   position: absolute;
@@ -26383,12 +26289,18 @@ button.run-card-formation-cell {
   align-items: center;
   background: transparent;
   border: 0;
-  block-size: calc(16.08cqw * var(--run-card-unit-scale));
+  block-size: calc(
+    var(--run-card-formation-unit) * var(--run-card-formation-figure-cell-height)
+    * var(--run-card-unit-scale)
+  );
   box-sizing: border-box;
   display: grid;
-  inline-size: calc(13.46cqw * var(--run-card-unit-scale));
-  inset-block-start: var(--run-card-formation-top);
-  inset-inline-start: var(--run-card-formation-left);
+  inline-size: calc(
+    var(--run-card-formation-unit) * var(--run-card-formation-figure-cell-width)
+    * var(--run-card-unit-scale)
+  );
+  inset-block-start: calc(var(--run-card-formation-unit) * var(--run-card-formation-top));
+  inset-inline-start: calc(var(--run-card-formation-unit) * var(--run-card-formation-left));
   justify-items: center;
   min-block-size: 0;
   min-inline-size: 0;
@@ -26404,20 +26316,30 @@ button.run-card-formation-cell {
   color: rgba(51, 44, 35, .32);
   content: '';
   inline-size: 48%;
-  outline: .3cqw dashed currentColor;
+  outline: calc(var(--run-card-formation-unit) * .026) dashed currentColor;
 }
 
 .run-card-formation-cell.is-empty {
-  block-size: var(--run-card-formation-tile-height);
-  inline-size: var(--run-card-formation-tile-width);
+  block-size: calc(var(--run-card-formation-unit) * var(--run-card-formation-tile-aspect));
+  inline-size: var(--run-card-formation-unit);
   transform: translate(-50%, -50%);
 }
 
 .run-card-formation-unit {
-  block-size: calc(17.2cqw * var(--run-card-unit-scale));
-  filter: drop-shadow(0 .45cqw .35cqw rgba(19, 29, 32, .45));
+  block-size: calc(
+    var(--run-card-formation-unit) * var(--run-card-formation-figure-height)
+    * var(--run-card-unit-scale)
+  );
+  /* The figure's own shadow, in tiles, so it stays the same shadow at every diagram size. */
+  filter: drop-shadow(
+    0 calc(var(--run-card-formation-unit) * .039) calc(var(--run-card-formation-unit) * .03)
+    rgba(19, 29, 32, .45)
+  );
   image-rendering: pixelated;
-  inline-size: calc(14.58cqw * var(--run-card-unit-scale));
+  inline-size: calc(
+    var(--run-card-formation-unit) * var(--run-card-formation-figure-width)
+    * var(--run-card-unit-scale)
+  );
   object-fit: contain;
 }
 
@@ -26960,5 +26882,84 @@ button.run-card-formation-cell {
 /* The catalog band is shorter than a 5:7 face at the sibling widths, so this one states its own
    height rather than letting the pair get cropped at the chin. */
 .run-card-outline-catalog-image {
+  min-height: 150px;
+}
+
+/* Studio -> Card Fit. Every footprint the deck deals, under one live cap: the cap is a single
+   number governing all of them, so it can only be judged against all of them at once. */
+.run-card-fit-viewer {
+  display: grid;
+  gap: 12px;
+  min-inline-size: 0;
+}
+
+.run-card-fit-note {
+  margin: 0;
+  max-inline-size: 78ch;
+}
+
+/* The three keylines named in the prose, coloured as they are drawn on the cards. */
+.run-card-fit-key.is-space { color: rgba(88, 224, 255, .95); }
+.run-card-fit-key.is-reserve { color: rgba(216, 248, 255, .6); }
+.run-card-fit-key.is-drawing { color: rgba(255, 176, 64, .95); }
+
+.run-card-fit-grid {
+  align-items: start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  min-inline-size: 0;
+}
+
+/* Review-only: the space, and the drawing fitted and centred in it. Two boxes, and the second
+   touches the first on one axis -- which is the whole rule, drawn. */
+.run-card-fit-grid[data-formation-box='on'] .run-card-formation-fit {
+  outline: 1px dashed rgba(88, 224, 255, .85);
+}
+
+.run-card-fit-grid[data-formation-box='on'] .run-card-formation::before {
+  block-size: calc(var(--run-card-formation-unit) * var(--run-card-formation-ink-height));
+  content: '';
+  inline-size: calc(var(--run-card-formation-unit) * var(--run-card-formation-ink-width));
+  inset-block-start: calc(var(--run-card-formation-unit) * var(--run-card-formation-ink-top));
+  inset-inline-start: calc(var(--run-card-formation-unit) * var(--run-card-formation-ink-left));
+  outline: 1px solid rgba(255, 176, 64, .85);
+  pointer-events: none;
+  position: absolute;
+  z-index: 40;
+}
+
+.run-card-fit-specimen {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  margin: 0;
+}
+
+.run-card-fit-specimen > figcaption {
+  display: grid;
+  font-size: var(--ds-text-xs, 12px);
+  justify-items: center;
+}
+
+.run-card-fit-specimen > figcaption > span {
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
+}
+
+/* The face fills its parent, so the parent is what carries the printed size. */
+.run-card-fit-face {
+  display: block;
+  inline-size: var(--run-card-fit-face-width);
+}
+
+.run-card-fit-catalog-specimen {
+  align-self: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  inline-size: min(100%, 148px);
+}
+
+.run-card-fit-catalog-image {
   min-height: 150px;
 }

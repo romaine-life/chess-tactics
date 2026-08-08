@@ -35,6 +35,7 @@ export const STUDIO_VIEWER_KIND_LABELS = {
   cardsize: 'Card Size',
   carddivider: 'Card Gold Divider',
   cardicons: 'Card Icon Fitting',
+  cardfit: 'Card Fit',
   cardoutline: 'Card Outline',
   cardprompts: 'Card Prompts',
   loading: 'Loading Lab',

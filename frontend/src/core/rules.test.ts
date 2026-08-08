@@ -11,6 +11,7 @@ import {
   legalMoves,
   positionKey,
   recordPosition,
+  royalForkVictim,
   ruleDraw,
   sideInCheck,
   type MoveEnv,
@@ -298,6 +299,62 @@ describe('threats', () => {
     const t = enemyThreats([ep, P('player', 'queen', 0, 0)], SIZE);
     expect(has(t, 3, 3)).toBe(true);
     expect(has(t, 5, 3)).toBe(true);
+  });
+});
+
+describe('royal fork', () => {
+  // A knight on (4,6) strikes (5,4), (3,4), (6,5), (6,7), (2,5), (2,7), (5,8) and (3,8).
+  const forker = () => P('player', 'knight', 4, 6);
+
+  it('reports the Rook a knight catches alongside the enemy King', () => {
+    const knight = forker();
+    const king = P('enemy', 'king', 5, 4);
+    const rook = P('enemy', 'rook', 3, 4);
+    expect(royalForkVictim(knight, [knight, king, rook], SIZE, undefined, 5)).toBe(rook);
+  });
+
+  it('reports the best victim when the same strike catches several', () => {
+    const knight = forker();
+    const king = P('enemy', 'king', 5, 4);
+    const rook = P('enemy', 'rook', 3, 4);
+    const queen = P('enemy', 'queen', 6, 5);
+    expect(royalForkVictim(knight, [knight, king, rook, queen], SIZE, undefined, 5)).toBe(queen);
+  });
+
+  it('ignores a victim under the bar, and a friendly piece on the same square set', () => {
+    const knight = forker();
+    const king = P('enemy', 'king', 5, 4);
+    const bishop = P('enemy', 'bishop', 3, 4);
+    const ownRook = P('player', 'rook', 6, 5);
+    expect(royalForkVictim(knight, [knight, king, bishop, ownRook], SIZE, undefined, 5)).toBeNull();
+  });
+
+  it('needs the King prong: two heavy pieces on their own are not one', () => {
+    const knight = forker();
+    const rook = P('enemy', 'rook', 3, 4);
+    const queen = P('enemy', 'queen', 5, 4);
+    expect(royalForkVictim(knight, [knight, rook, queen], SIZE, undefined, 5)).toBeNull();
+  });
+
+  it('is one piece’s work: a discovered check is not a fork', () => {
+    // The bishop strikes the Rook and nothing else; the check comes from the Rook behind it.
+    const bishop = P('player', 'bishop', 2, 4);
+    const rook = P('player', 'rook', 5, 0);
+    const king = P('enemy', 'king', 5, 2);
+    const victim = P('enemy', 'rook', 5, 7);
+    const pieces = [bishop, rook, king, victim];
+    expect(sideInCheck({ size: SIZE, pieces, turn: 'enemy', winner: null }, 'enemy')).toBe(true);
+    expect(royalForkVictim(bishop, pieces, SIZE, undefined, 5)).toBeNull();
+  });
+
+  it('reads the board the pieces actually stand on: a fenced prong is no prong', () => {
+    const rook = P('player', 'rook', 4, 4);
+    const king = P('enemy', 'king', 4, 1);
+    const victim = P('enemy', 'rook', 7, 4);
+    const pieces = [rook, king, victim];
+    expect(royalForkVictim(rook, pieces, SIZE, undefined, 5)).toBe(victim);
+    const env: MoveEnv = { fences: new Set([roadEdgeKey(4, 4, 5, 4)]) }; // closes the east prong
+    expect(royalForkVictim(rook, pieces, SIZE, env, 5)).toBeNull();
   });
 });
 

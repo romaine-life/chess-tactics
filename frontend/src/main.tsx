@@ -16,6 +16,7 @@ import { loadLiveMediaCatalog } from './net/liveMedia';
 import { loadDrawableCatalog } from './net/drawableCatalog';
 import { loadLiveSfxProfile } from './net/sfxProfile';
 import { initUnitSizeTuning } from './ui/unitSizeTuning';
+import { publishUnitInkBounds } from './ui/unitInkBounds';
 import { assertInstalledChromeSlots } from './ui/chromeCandidateSources';
 import { installNineSliceCssVariables, installUiFonts, installUiMediaCssVariables, installedUiMedia } from './ui/installedUiMedia';
 import { applyGroundCoverCatalog, applyWallArtCatalog, applyWallDecorCatalog, assertInstalledPresentationCatalog } from '@chess-tactics/board-render';
@@ -164,6 +165,10 @@ if (root) {
       await loadLiveSfxProfile().catch(() => false);
       assertInstalledChromeSlots();
       initUnitSizeTuning();
+      // Awaited: a card FITS its diagram to these bounds, so publishing them after a face had
+      // composed would resize that diagram under the player. Each figure falls back to its whole
+      // sprite on its own timeout, so a missing one costs a smaller drawing, never the screen.
+      await publishUnitInkBounds();
       const { App } = await import('./ui/App');
       reactRoot.render(<AppCrashBoundary><App /></AppCrashBoundary>);
       requestAnimationFrame(() => loadingMeasure('app', 'first-app-frame', startupAt));

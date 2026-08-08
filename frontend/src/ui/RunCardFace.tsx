@@ -163,15 +163,39 @@ function grantsLabel(grants: readonly RunCardGrant[]): string {
   return visible.length ? visible.join(', ') : 'no units';
 }
 
-export function runCardFormationRows(pieces: readonly Pick<RunCardFormationPiece, 'y'>[]): number {
-  return Math.max(2, ...pieces.map((piece) => piece.y + 1));
-}
-
 export const RUN_CARD_FORMATION_ISO_TILE = Object.freeze({
   scale: .12,
   width: TILE_TEMPLATE.topWidth * .12,
   height: TILE_TEMPLATE.topHeight * .12,
 });
+
+/** One seat's block extent as a share of its inline extent — the board's own tile proportion. */
+const RUN_CARD_FORMATION_TILE_ASPECT =
+  RUN_CARD_FORMATION_ISO_TILE.height / RUN_CARD_FORMATION_ISO_TILE.width;
+
+/**
+ * The figure that stands on a seat, stated against the seat it stands on.
+ *
+ * These are the committed sizes the card has always drawn — a 13.46 x 16.08 anchor box carrying a
+ * 14.58 x 17.2 figure, pulled 78% of the box up off the seat centre so the feet land on it —
+ * divided by the tile they sit on. Expressed that way they survive the diagram being drawn at any
+ * size: the whole drawing scales by changing ONE length, and the figures keep their proportion to
+ * the board under them.
+ */
+export const RUN_CARD_FORMATION_FIGURE = Object.freeze({
+  cellWidth: 13.46 / RUN_CARD_FORMATION_ISO_TILE.width,
+  cellHeight: 16.08 / RUN_CARD_FORMATION_ISO_TILE.width,
+  width: 14.58 / RUN_CARD_FORMATION_ISO_TILE.width,
+  height: 17.2 / RUN_CARD_FORMATION_ISO_TILE.width,
+  anchorY: .78,
+});
+
+/** How far a figure at full scale reaches from the seat centre it stands on, in tiles. */
+export const RUN_CARD_FORMATION_FIGURE_RISE = RUN_CARD_FORMATION_FIGURE.anchorY * RUN_CARD_FORMATION_FIGURE.cellHeight
+  + (RUN_CARD_FORMATION_FIGURE.height - RUN_CARD_FORMATION_FIGURE.cellHeight) / 2;
+export const RUN_CARD_FORMATION_FIGURE_DROP = (1 - RUN_CARD_FORMATION_FIGURE.anchorY) * RUN_CARD_FORMATION_FIGURE.cellHeight
+  + (RUN_CARD_FORMATION_FIGURE.height - RUN_CARD_FORMATION_FIGURE.cellHeight) / 2;
+export const RUN_CARD_FORMATION_FIGURE_REACH = RUN_CARD_FORMATION_FIGURE.width / 2;
 
 export type RunCardFormationEdge = 'north' | 'east' | 'south' | 'west';
 
@@ -272,27 +296,137 @@ export function runCardFormationBoardCells(
     .sort((left, right) => (left.x + left.y) - (right.x + right.y) || left.x - right.x);
 }
 
-function runCardFormationBoardMetrics(columns: number, rows: number): Readonly<{
+export type RunCardFormationMetrics = Readonly<{
+  /** The whole drawing, figures included, in tiles. This is what gets centred and scaled. */
   width: number;
   height: number;
+  /** Where the seats' own box sits inside that drawing, in tiles. */
+  boardLeft: number;
+  boardTop: number;
+  boardWidth: number;
+  boardHeight: number;
+  /** The footprint's origin in the projection's own units, for the outline path. */
   minLeft: number;
   minTop: number;
-}> {
-  const corners = [
-    runCardFormationIsoPoint(0, 0),
-    runCardFormationIsoPoint(columns - 1, 0),
-    runCardFormationIsoPoint(0, rows - 1),
-    runCardFormationIsoPoint(columns - 1, rows - 1),
-  ];
-  const minLeft = Math.min(...corners.map((point) => point.left));
-  const maxLeft = Math.max(...corners.map((point) => point.left));
-  const minTop = Math.min(...corners.map((point) => point.top));
-  const maxTop = Math.max(...corners.map((point) => point.top));
+}>;
+
+/**
+ * Measure the drawing the card actually prints — the occupied seats and the figures on them.
+ *
+ * This used to measure the enclosing COLUMNS x ROWS rectangle instead, on the reasoning that a
+ * band spanning both deployment ranks kept a front-rank singleton distinguishable from a back-rank
+ * one. Two things make that a cost with nothing bought. The empty part of the rectangle is not
+ * drawn, so the only thing a reader sees is the drawn shape sitting off to one side of a centred
+ * box — every footprint that left a cell of its rectangle vacant printed half a tile off centre.
+ * And the offer deck collapses cards by rotation and translation (rotationalFormationId), so the
+ * front-rank and back-rank singletons it was preserving are ONE card: the deck deals a straight
+ * run authored entirely on the back rank and has no front-rank twin of it. Rank is not card
+ * identity, and the player rotates the formation at Deployment anyway.
+ *
+ * Measuring the footprint centres every card on what it draws.
+ */
+export function runCardFormationMetrics(
+  cells: readonly Readonly<{ x: number; y: number }>[],
+): RunCardFormationMetrics {
+  const points = (cells.length ? cells : [{ x: 0, y: 0 }])
+    .map((cell) => runCardFormationIsoPoint(cell.x, cell.y));
+  const minLeft = Math.min(...points.map((point) => point.left));
+  const maxLeft = Math.max(...points.map((point) => point.left));
+  const minTop = Math.min(...points.map((point) => point.top));
+  const maxTop = Math.max(...points.map((point) => point.top));
+  const tile = RUN_CARD_FORMATION_ISO_TILE.width;
+  const boardWidth = (maxLeft - minLeft) / tile + 1;
+  const boardHeight = (maxTop - minTop) / tile + RUN_CARD_FORMATION_TILE_ASPECT;
+  // How far a figure reaches past the seats it stands on. Measured at full unit scale rather than
+  // at each piece's own: the tile is the board, and a card's board must not change size according
+  // to which piece happens to be standing on it.
+  const overhangTop = RUN_CARD_FORMATION_FIGURE_RISE - RUN_CARD_FORMATION_TILE_ASPECT / 2;
+  const overhangBottom = RUN_CARD_FORMATION_FIGURE_DROP - RUN_CARD_FORMATION_TILE_ASPECT / 2;
+  const overhangSide = RUN_CARD_FORMATION_FIGURE_REACH - .5;
   return {
-    width: maxLeft - minLeft + RUN_CARD_FORMATION_ISO_TILE.width,
-    height: maxTop - minTop + RUN_CARD_FORMATION_ISO_TILE.height,
+    width: boardWidth + Math.max(0, overhangSide) * 2,
+    height: boardHeight + Math.max(0, overhangTop) + Math.max(0, overhangBottom),
+    boardLeft: Math.max(0, overhangSide),
+    boardTop: Math.max(0, overhangTop),
+    boardWidth,
+    boardHeight,
     minLeft,
     minTop,
+  };
+}
+
+export type RunCardFormationInkExtent = Readonly<{
+  left: string;
+  right: string;
+  top: string;
+  bottom: string;
+}>;
+
+/**
+ * The edges of what is actually INKED, as CSS expressions in the drawing's own tile units.
+ *
+ * The drawing is sized against a full-scale figure so that a card's board does not change size
+ * with the piece standing on it — but a pawn is drawn at 0.66 and a rook at 0.73, and every figure
+ * is authored on a canvas taller than itself, so on a card of short pieces a good part of that
+ * reserved height is never painted. Centring the reserved box would leave the pawns sitting low in
+ * it, which is the same mistake the columns-by-rows rectangle made across: centring a box on space
+ * nothing is drawn in.
+ *
+ * Both corrections come from live settings rather than build-time numbers — unitSizeTuning writes
+ * --unit-scale-<piece> and unitInkBounds writes --unit-ink-<edge>-<piece> onto the root — so these
+ * come out as `min()` / `max()` over per-piece terms and CSS resolves them against whatever is
+ * currently published. Retuning a piece's size, or accepting new art for it, re-centres every card
+ * that carries it with no subscription on this face. Both fall back to the whole sprite box.
+ */
+export function runCardFormationInkExtent(
+  seats: readonly Readonly<{ left: number; top: number; unit?: string }>[],
+): RunCardFormationInkExtent {
+  const half = RUN_CARD_FORMATION_TILE_ASPECT / 2;
+  const number = (value: number): string => value.toFixed(4);
+  const figures = seats.filter((seat) => seat.unit);
+  /**
+   * One figure's painted edge, measured from the seat it stands on. `share` is where that edge
+   * falls inside the sprite (0 is the sprite's own top or left edge, 1 the far one); `span` is the
+   * sprite's extent in tiles, and `origin` the distance from the seat centre to its near edge.
+   */
+  const painted = (
+    seat: Readonly<{ unit?: string }>,
+    edge: 'top' | 'bottom' | 'left' | 'right',
+    fallback: 0 | 1,
+    span: number,
+    origin: number,
+  ): string => (
+    `calc(var(--unit-scale-${seat.unit}, 1)`
+    + ` * (var(--unit-ink-${edge}-${seat.unit}, ${fallback}) * ${number(span)} - ${number(origin)}))`
+  );
+  const edge = (
+    pick: 'min' | 'max',
+    seatEdge: number,
+    term: (seat: Readonly<{ left: number; top: number; unit?: string }>) => string,
+  ): string => (
+    figures.length ? `${pick}(${number(seatEdge)}, ${figures.map(term).join(', ')})` : number(seatEdge)
+  );
+  const seatEdges = {
+    left: Math.min(...seats.map((seat) => seat.left)) - .5,
+    right: Math.max(...seats.map((seat) => seat.left)) + .5,
+    top: Math.min(...seats.map((seat) => seat.top)) - half,
+    bottom: Math.max(...seats.map((seat) => seat.top)) + half,
+  };
+  const across = RUN_CARD_FORMATION_FIGURE.width;
+  const down = RUN_CARD_FORMATION_FIGURE.height;
+  return {
+    left: edge('min', seatEdges.left, (seat) => (
+      `calc(${number(seat.left)} + ${painted(seat, 'left', 0, across, RUN_CARD_FORMATION_FIGURE_REACH)})`
+    )),
+    right: edge('max', seatEdges.right, (seat) => (
+      `calc(${number(seat.left)} + ${painted(seat, 'right', 1, across, RUN_CARD_FORMATION_FIGURE_REACH)})`
+    )),
+    top: edge('min', seatEdges.top, (seat) => (
+      `calc(${number(seat.top)} + ${painted(seat, 'top', 0, down, RUN_CARD_FORMATION_FIGURE_RISE)})`
+    )),
+    bottom: edge('max', seatEdges.bottom, (seat) => (
+      `calc(${number(seat.top)} + ${painted(seat, 'bottom', 1, down, RUN_CARD_FORMATION_FIGURE_RISE)})`
+    )),
   };
 }
 
@@ -396,96 +530,128 @@ function FormationDiagram({
   onReady: (kind: RunCardImageKind) => void;
   onError: (kind: RunCardImageKind) => void;
 }): ReactElement {
-  const columns = Math.max(1, ...pieces.map((piece) => piece.x + 1));
-  // The formation's empty front/back row is rules information. Cropping a singleton
-  // to its occupied cell made "Queen in front" and "Queen in back" print identically.
-  const rows = runCardFormationRows(pieces);
   const boardCells = runCardFormationBoardCells(pieces);
-  // The box still spans the whole two-rank band even though only the footprint is drawn, so a
-  // front-rank singleton and a back-rank singleton keep the different seats they are placed on.
-  const metrics = runCardFormationBoardMetrics(columns, rows);
-  const position = (x: number, y: number): CSSProperties => {
+  const metrics = runCardFormationMetrics(boardCells);
+  const tile = RUN_CARD_FORMATION_ISO_TILE.width;
+  // Every coordinate below is a count of TILES, not a card length. The tile's own length is what
+  // the panel sizes (see .run-card-formation-fit), so the same numbers draw the same diagram at
+  // whatever size the card has room for.
+  const seat = (x: number, y: number): Readonly<{ left: number; top: number; depth: number }> => {
     const point = runCardFormationIsoPoint(x, y);
     return {
-      '--run-card-formation-left': `${point.left - metrics.minLeft + RUN_CARD_FORMATION_ISO_TILE.width / 2}cqw`,
-      '--run-card-formation-top': `${point.top - metrics.minTop + RUN_CARD_FORMATION_ISO_TILE.height / 2}cqw`,
-      '--run-card-formation-depth': point.depth,
+      left: metrics.boardLeft + (point.left - metrics.minLeft) / tile + .5,
+      top: metrics.boardTop + (point.top - metrics.minTop) / tile + RUN_CARD_FORMATION_TILE_ASPECT / 2,
+      depth: point.depth,
+    };
+  };
+  const position = (x: number, y: number): CSSProperties => {
+    const placed = seat(x, y);
+    return {
+      '--run-card-formation-left': placed.left,
+      '--run-card-formation-top': placed.top,
+      '--run-card-formation-depth': placed.depth,
     } as CSSProperties;
   };
+  // What is inked, against what was reserved: the drawing is placed so the INK lands in the middle
+  // of the space, not the reserve. A vacant seat marks its own tile and carries no figure.
+  const ink = runCardFormationInkExtent(boardCells.map((cell) => {
+    const placed = seat(cell.x, cell.y);
+    const standing = pieces.find((piece) => !piece.empty && piece.x === cell.x && piece.y === cell.y);
+    return { left: placed.left, top: placed.top, unit: standing?.unit };
+  }));
   return (
     <span
-      className="run-card-formation"
-      data-formation-columns={columns}
-      data-formation-rows={rows}
+      className="run-card-formation-fit"
       style={{
-        '--run-card-formation-width': `${metrics.width}cqw`,
-        '--run-card-formation-height': `${metrics.height}cqw`,
-        '--run-card-formation-tile-width': `${RUN_CARD_FORMATION_ISO_TILE.width}cqw`,
-        '--run-card-formation-tile-height': `${RUN_CARD_FORMATION_ISO_TILE.height}cqw`,
+        '--run-card-formation-natural-width': metrics.width,
+        '--run-card-formation-natural-height': metrics.height,
+        // Stated here, outside the diagram's own size container, so the cap keeps meaning
+        // "times the size the card used to print" rather than a share of this box.
+        '--run-card-formation-committed-tile': `${tile}cqw`,
       } as CSSProperties}
-      aria-label="Authored deployment formation"
     >
-      {boardCells.map((cell) => (
-        <span
-          aria-hidden="true"
-          className={`run-card-formation-square${cell.dark ? ' is-dark' : ''}`}
-          data-formation-grid-x={cell.x}
-          data-formation-grid-y={cell.y}
-          data-formation-edges={cell.edges.join(' ')}
-          key={`grid:${cell.x}:${cell.y}`}
-          style={position(cell.x, cell.y)}
-        >
-          <svg preserveAspectRatio="none" viewBox={RUN_CARD_FORMATION_TILE_VIEW_BOX}>
-            <polygon points={RUN_CARD_FORMATION_TILE_POINTS} />
-          </svg>
-        </span>
-      ))}
-      {/* One path over all the seats, so every corner is a join the rasterizer draws rather than
-          two segments from two coordinate systems asked to land on the same pixel. */}
-      <svg
-        className="run-card-formation-outline"
-        data-outline-rendering={outlineRendering}
-        viewBox={`0 0 ${metrics.width} ${metrics.height}`}
-        preserveAspectRatio="none"
-        aria-hidden="true"
+      <span
+        className="run-card-formation"
+        data-formation-cells={boardCells.length}
+        style={{
+          '--run-card-formation-board-left': metrics.boardLeft,
+          '--run-card-formation-board-top': metrics.boardTop,
+          '--run-card-formation-board-width': metrics.boardWidth,
+          '--run-card-formation-board-height': metrics.boardHeight,
+          '--run-card-formation-tile-aspect': RUN_CARD_FORMATION_TILE_ASPECT,
+          '--run-card-formation-figure-cell-width': RUN_CARD_FORMATION_FIGURE.cellWidth,
+          '--run-card-formation-figure-cell-height': RUN_CARD_FORMATION_FIGURE.cellHeight,
+          '--run-card-formation-figure-width': RUN_CARD_FORMATION_FIGURE.width,
+          '--run-card-formation-figure-height': RUN_CARD_FORMATION_FIGURE.height,
+          '--run-card-formation-ink-left': ink.left,
+          '--run-card-formation-ink-right': ink.right,
+          '--run-card-formation-ink-top': ink.top,
+          '--run-card-formation-ink-bottom': ink.bottom,
+        } as CSSProperties}
+        aria-label="Authored deployment formation"
       >
-        {runCardFormationOutlineRings(boardCells, metrics).map((ring) => (
-          <path d={runCardFormationOutlinePath(ring)} key={runCardFormationOutlinePath(ring)}
-            vectorEffect="non-scaling-stroke" />
-        ))}
-      </svg>
-      {pieces.map((piece) => {
-        const kind = runCardUnitImageKind(piece.pieceIndex, piece.unit, piece.occurrenceIndex);
-        const palette = playerCardPalette();
-        const sprite = piece.empty ? null : (
-          <img
-            className="run-card-formation-unit"
-            data-unit-facing={PLAYER_CARD_FACING}
-            data-unit-palette={palette}
-            src={pieceSpritePath(piece.unit, palette, PLAYER_CARD_FACING)}
-            alt=""
-            draggable={false}
-            onLoad={() => onReady(kind)}
-            onError={() => onError(kind)}
-          />
-        );
-        return (
+        {boardCells.map((cell) => (
           <span
-            className={`run-card-formation-cell${piece.empty ? ' is-empty' : ''}`}
-            data-piece-index={piece.pieceIndex}
-            data-formation-row={piece.y === 0 ? 'front' : 'back'}
-            key={piece.pieceIndex}
-            style={{
-              ...position(piece.x, piece.y),
-              '--run-card-unit-scale': `var(--unit-scale-${piece.unit}, 1)`,
-              '--run-card-unit-anchor-x': `var(--unit-anchor-x-${piece.unit}, -50%)`,
-              '--run-card-unit-anchor-y': `var(--unit-anchor-y-${piece.unit}, -78%)`,
-            } as CSSProperties}
+            aria-hidden="true"
+            className={`run-card-formation-square${cell.dark ? ' is-dark' : ''}`}
+            data-formation-grid-x={cell.x}
+            data-formation-grid-y={cell.y}
+            data-formation-edges={cell.edges.join(' ')}
+            key={`grid:${cell.x}:${cell.y}`}
+            style={position(cell.x, cell.y)}
           >
-            {sprite}
+            <svg preserveAspectRatio="none" viewBox={RUN_CARD_FORMATION_TILE_VIEW_BOX}>
+              <polygon points={RUN_CARD_FORMATION_TILE_POINTS} />
+            </svg>
           </span>
-        );
-      })}
+        ))}
+        {/* One path over all the seats, so every corner is a join the rasterizer draws rather than
+            two segments from two coordinate systems asked to land on the same pixel. */}
+        <svg
+          className="run-card-formation-outline"
+          data-outline-rendering={outlineRendering}
+          viewBox={`0 0 ${metrics.boardWidth * tile} ${metrics.boardHeight * tile}`}
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          {runCardFormationOutlineRings(boardCells, metrics).map((ring) => (
+            <path d={runCardFormationOutlinePath(ring)} key={runCardFormationOutlinePath(ring)}
+              vectorEffect="non-scaling-stroke" />
+          ))}
+        </svg>
+        {pieces.map((piece) => {
+          const kind = runCardUnitImageKind(piece.pieceIndex, piece.unit, piece.occurrenceIndex);
+          const palette = playerCardPalette();
+          const sprite = piece.empty ? null : (
+            <img
+              className="run-card-formation-unit"
+              data-unit-facing={PLAYER_CARD_FACING}
+              data-unit-palette={palette}
+              src={pieceSpritePath(piece.unit, palette, PLAYER_CARD_FACING)}
+              alt=""
+              draggable={false}
+              onLoad={() => onReady(kind)}
+              onError={() => onError(kind)}
+            />
+          );
+          return (
+            <span
+              className={`run-card-formation-cell${piece.empty ? ' is-empty' : ''}`}
+              data-piece-index={piece.pieceIndex}
+              data-formation-row={piece.y === 0 ? 'front' : 'back'}
+              key={piece.pieceIndex}
+              style={{
+                ...position(piece.x, piece.y),
+                '--run-card-unit-scale': `var(--unit-scale-${piece.unit}, 1)`,
+                '--run-card-unit-anchor-x': `var(--unit-anchor-x-${piece.unit}, -50%)`,
+                '--run-card-unit-anchor-y': `var(--unit-anchor-y-${piece.unit}, -78%)`,
+              } as CSSProperties}
+            >
+              {sprite}
+            </span>
+          );
+        })}
+      </span>
     </span>
   );
 }

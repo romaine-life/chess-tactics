@@ -209,6 +209,26 @@ describe('single-command pre-drawn preparation', () => {
     expect(animationFreeze).toBeGreaterThan(sceneSettlementAwait);
   });
 
+  it('waits for a board army to finish arriving, and refuses the capture when it never does', () => {
+    // A settled scene is not a composed board: activation RELEASES the unit entrance, so the
+    // director reaches `current` with the pieces still in the air. Capturing there wrote
+    // finished-looking boards with nothing standing on them.
+    const sceneSettlementAwait = shotSource.indexOf('else await waitForSettledScene.catch(() => {});');
+    const boardComposition = shotSource.indexOf('const boardComposed = ');
+    const compositionAwait = shotSource.indexOf('await page.waitForFunction(boardComposed, { timeout });');
+    const animationFreeze = shotSource.indexOf('await page.addStyleTag({ content:');
+
+    expect(boardComposition).toBeGreaterThan(sceneSettlementAwait);
+    expect(compositionAwait).toBeGreaterThan(boardComposition);
+    expect(animationFreeze).toBeGreaterThan(compositionAwait);
+    // Read off the board's own published lifecycle, not a sleep long enough to usually work.
+    expect(shotSource).toContain("data-unit-arrivals");
+    expect(shotSource).toContain("data-arrival-state");
+    // Fatal: a swallowed wait is exactly the silent unit-less capture this replaced.
+    expect(shotSource).not.toMatch(/waitForFunction\(boardComposed[^\n]*\.catch/);
+    expect(shotSource).toContain('capture refused');
+  });
+
   it('releases the observation-only Level Editor session after a headless capture', () => {
     const screenshot = shotSource.indexOf('await el.screenshot({ path: out });');
     const editorRelease = shotSource.indexOf(
