@@ -952,7 +952,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 68 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 69 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -967,7 +967,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 32 }, (_, index) => index + 37),
+    ...Array.from({ length: 33 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1081,7 +1081,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
     )
   ) {
     throw new Error(
-      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 68: `
+      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 69: `
       + `${JSON.stringify({
         history: history.rows,
         identity_columns: identityColumns.rows,
@@ -3016,14 +3016,14 @@ async function validateImmutableFormationAndLegacyDrawableRepairMigrations66And6
   }
 }
 
-async function validateRunDeploymentModeMigration68() {
+async function validatePlayerFormationMigrations68And69() {
   const { Client } = require('pg');
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
   try {
     await client.query('BEGIN');
-    await client.query('CREATE SCHEMA smoke_run_deployment_mode_migration_68');
-    await client.query('SET LOCAL search_path TO smoke_run_deployment_mode_migration_68');
+    await client.query('CREATE SCHEMA smoke_player_formation_migrations_68_69');
+    await client.query('SET LOCAL search_path TO smoke_player_formation_migrations_68_69');
     await client.query(`
       CREATE TABLE active_runs (
         owner_email text PRIMARY KEY, body jsonb NOT NULL, revision integer NOT NULL,
@@ -3032,13 +3032,14 @@ async function validateRunDeploymentModeMigration68() {
     `);
     const legacy = {
       runSaveVersion: 28,
-      phase: 'battle',
+      phase: 'deployment',
       goldTenths: 40,
       deployment: { stage: 'complete', placements: { king: '2,3' } },
     };
     const current = {
       ...legacy,
       runSaveVersion: 29,
+      phase: 'battle',
       deploymentMode: 'arranged',
     };
     await client.query(
@@ -3050,6 +3051,8 @@ async function validateRunDeploymentModeMigration68() {
 
     await client.query(inlineMigrationSql(68));
     await client.query(inlineMigrationSql(68));
+    await client.query(inlineMigrationSql(69));
+    await client.query(inlineMigrationSql(69));
     const rows = (await client.query(
       'SELECT owner_email, body, revision FROM active_runs ORDER BY owner_email',
     )).rows;
@@ -3057,15 +3060,18 @@ async function validateRunDeploymentModeMigration68() {
     const migrated = byOwner.get('legacy@example.com');
     const untouched = byOwner.get('current@example.com');
     if (
-      migrated?.body?.runSaveVersion !== 29
-      || migrated.body.deploymentMode !== 'automatic'
-      || migrated.body.phase !== 'battle'
-      || migrated.body.deployment?.placements?.king !== '2,3'
-      || Number(migrated.revision) !== 5
+      migrated?.body?.runSaveVersion !== 30
+      || migrated.body.deploymentMode !== 'arranged'
+      || migrated.body.phase !== 'deployment'
+      || migrated.body.deployment !== null
+      || migrated.body.sectioCardCursor !== 0
+      || Number(migrated.revision) !== 6
+      || untouched?.body?.runSaveVersion !== 30
       || untouched?.body?.deploymentMode !== 'arranged'
-      || Number(untouched?.revision) !== 9
+      || untouched.body.deployment?.placements?.king !== '2,3'
+      || Number(untouched?.revision) !== 10
     ) {
-      throw new Error(`Migration 68 did not name automatic Deployment losslessly: ${JSON.stringify(rows)}`);
+      throw new Error(`Migrations 68 and 69 did not install player arrangement safely: ${JSON.stringify(rows)}`);
     }
     await client.query('ROLLBACK');
   } catch (error) {
@@ -3241,7 +3247,7 @@ async function main() {
   await validateDerivedSectioPileRunMigration64();
   await validateQueenPawnCatalogRunMigration65();
   await validateImmutableFormationAndLegacyDrawableRepairMigrations66And67();
-  await validateRunDeploymentModeMigration68();
+  await validatePlayerFormationMigrations68And69();
   await validateRepairedEditorDocumentDiscardOperation62();
   await resetDb();
 
@@ -5807,7 +5813,7 @@ async function main() {
       zones: [{
         id: 'run-player-deploy',
         type: 'player-spawn',
-        tiles: [[0, 11], [1, 11], [2, 11]],
+        tiles: [[0, 10], [1, 10], [2, 10], [0, 11], [1, 11], [2, 11]],
       }],
       units: [{ x: 7, y: 0, type: 'king', side: 'enemy' }],
     },

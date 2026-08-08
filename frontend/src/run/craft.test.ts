@@ -19,6 +19,13 @@ function craftWar(): RunWarSnapshot {
     description: 'A Battle-first craft fixture.',
     battles: Array.from({ length: 3 }, (_, index) => {
       const level = createBlankLevel(`craft-battle-${index}`, `Battle ${index + 1}`, 8, 8);
+      level.layers.zones.push({
+        id: `player-spawn-${index}`,
+        type: 'player-spawn',
+        tiles: Array.from({ length: 2 }, (_, row) => (
+          Array.from({ length: 8 }, (__, x) => [x, 6 + row] as [number, number])
+        )).flat(),
+      });
       level.layers.units.push({ x: 4, y: 0, type: 'king', side: 'enemy' });
       return { level, loot: false };
     }),

@@ -21,7 +21,7 @@ export {
 };
 
 /** The schema version of one persisted in-progress Run. Only this exact save shape is read. */
-export const CURRENT_RUN_SAVE_VERSION = 29;
+export const CURRENT_RUN_SAVE_VERSION = 30;
 export type RunSaveVersion = typeof CURRENT_RUN_SAVE_VERSION;
 
 export class UnsupportedRunSaveError extends Error {
@@ -44,6 +44,7 @@ const RUN_SAVE_VERSION_SECTIO_PILE_SOURCE = 25;
 const RUN_SAVE_VERSION_QUEEN_PAWN_FORMATIONS_SOURCE = 26;
 const RUN_SAVE_VERSION_IMMUTABLE_FORMATIONS_SOURCE = 27;
 const RUN_SAVE_VERSION_DEPLOYMENT_MODE_SOURCE = 28;
+const RUN_SAVE_VERSION_PLAYER_FORMATIONS_SOURCE = 29;
 export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
@@ -51,7 +52,7 @@ export const RUN_BATTLE_RETRY_COST_TENTHS = 3 * GOLD_SCALE;
 export const RUN_DEPLOYMENT_REROLL_COST_TENTHS = GOLD_SCALE;
 export const RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS = 5 * GOLD_SCALE;
 export const RUN_SECTIO_CARD_OFFER_COUNT = 3;
-export const RUN_SECTIO_CARD_PILE_SIZE = 180;
+export const RUN_SECTIO_CARD_PILE_SIZE = 272;
 export const RUN_SECTIO_CARD_PILE_RARITY_COUNT: Readonly<Record<RunCardRarity, number>> = Object.freeze({
   common: 135,
   uncommon: 36,
@@ -414,9 +415,10 @@ function initialArmyNumberState(): RunArmyNumberState {
   };
 }
 
+/** Raw labeled formations before quarter-turn-equivalent cards are collapsed. */
 export const RUN_GENERATED_CARD_COUNT = 720;
 export const RUN_AUTHORED_FORMATION_EXCEPTION_COUNT = 6;
-export const RUN_OFFER_CARD_COUNT = RUN_GENERATED_CARD_COUNT + RUN_AUTHORED_FORMATION_EXCEPTION_COUNT;
+export const RUN_OFFER_CARD_COUNT = 272;
 
 const FORMATION_COLUMNS = 4;
 const FORMATION_ROWS = 2;
@@ -574,6 +576,37 @@ function semanticFormationId(card: Pick<RunCoreCard, 'pieces' | 'formation'>): s
     .join('-');
 }
 
+function rotatedNormalizedFormation(
+  card: Pick<RunCoreCard, 'pieces' | 'formation'>,
+  turns: 0 | 1 | 2 | 3,
+): Array<{ cell: RunCardFormationCell; piece: AdlectablePieceType }> {
+  const rotated = (card.formation ?? []).map((cell, index) => {
+    const transformed = turns === 1
+      ? { x: -cell.y, y: cell.x }
+      : turns === 2
+        ? { x: -cell.x, y: -cell.y }
+        : turns === 3
+          ? { x: cell.y, y: -cell.x }
+          : cell;
+    return { cell: transformed, piece: card.pieces[index] };
+  });
+  const minX = Math.min(...rotated.map(({ cell }) => cell.x));
+  const minY = Math.min(...rotated.map(({ cell }) => cell.y));
+  return rotated
+    .map(({ cell, piece }) => ({ cell: { x: cell.x - minX, y: cell.y - minY }, piece }))
+    .sort((left, right) => left.cell.x - right.cell.x || left.cell.y - right.cell.y);
+}
+
+/** Player rotation makes translated quarter-turns one purchasable card identity. Reflection
+ * remains meaningful: the player can rotate a formation, but cannot turn it over. */
+function rotationalFormationId(card: Pick<RunCoreCard, 'pieces' | 'formation'>): string {
+  return ([0, 1, 2, 3] as const)
+    .map((turns) => rotatedNormalizedFormation(card, turns)
+      .map(({ cell, piece }) => `${cell.x}${cell.y}${CARD_INITIAL_BY_PIECE.get(piece)}`)
+      .join('-'))
+    .sort()[0];
+}
+
 /** Existing named formations replace an equivalent generated identity when one exists;
  * six shapes outside the connected roster grammar remain explicit additions. */
 function existingFormationCards(): RunCoreCard[] {
@@ -608,22 +641,33 @@ function existingFormationCards(): RunCoreCard[] {
   ];
 }
 
-export function allRunCards(): RunCoreCard[] {
+function legacyRunCards(): RunCoreCard[] {
   const generated = generatedFormationFootprints().flatMap(generatedCardsForFootprint);
   if (generated.length !== RUN_GENERATED_CARD_COUNT) {
     throw new Error(`Generated ${generated.length} formation cards; expected ${RUN_GENERATED_CARD_COUNT}.`);
   }
   const cards = new Map(generated.map((card) => [semanticFormationId(card), card]));
   for (const existing of existingFormationCards()) cards.set(semanticFormationId(existing), existing);
+  return [...cards.values()].sort((a, b) => a.value - b.value || a.id.localeCompare(b.id));
+}
+
+export function allRunCards(): RunCoreCard[] {
+  const generated = generatedFormationFootprints().flatMap(generatedCardsForFootprint);
+  const cards = new Map(generated.map((card) => [rotationalFormationId(card), card]));
+  // Named cards remain the visual and textual anchor for their rotational class.
+  for (const existing of existingFormationCards()) cards.set(rotationalFormationId(existing), existing);
   if (cards.size !== RUN_OFFER_CARD_COUNT) {
     throw new Error(`Built ${cards.size} Run offer cards; expected ${RUN_OFFER_CARD_COUNT}.`);
   }
   return [...cards.values()].sort((a, b) => a.value - b.value || a.id.localeCompare(b.id));
 }
 
+const LEGACY_RUN_CARD_DECK: readonly RunCoreCard[] = Object.freeze(legacyRunCards());
 export const RUN_CARD_DECK: readonly RunCoreCard[] = Object.freeze(allRunCards());
 export const RUN_CARD_BY_ID: Readonly<Record<string, RunCoreCard>> = Object.freeze(
-  Object.fromEntries(RUN_CARD_DECK.map((card) => [card.id, card])),
+  // Old held cards remain readable after the offer catalog collapses rotational duplicates.
+  // Only RUN_CARD_DECK is dealt, so these aliases cannot re-enter the market.
+  Object.fromEntries(LEGACY_RUN_CARD_DECK.map((card) => [card.id, card])),
 );
 
 export const RUN_STARTER_CARDS: readonly RunStarterCard[] = Object.freeze([
@@ -631,7 +675,7 @@ export const RUN_STARTER_CARDS: readonly RunStarterCard[] = Object.freeze([
     id: 'his-grace',
     pieces: ['king', 'pawn', 'pawn'],
     artId: 'his-grace',
-    formation: [{ x: 1, y: 1 }, { x: 0, y: 0 }, { x: 2, y: 0 }],
+    formation: [{ x: 0, y: 1 }, { x: 0, y: 0 }, { x: 1, y: 0 }],
     value: 2,
     rarity: 'common',
     name: 'His Grace',
@@ -733,62 +777,13 @@ function legacyOpeningSectioOffers(seed: number, offerCount: number): RunCardOff
     .map((offer, slotIndex) => ({ ...offer, offerId: `opening-${slotIndex}-${offer.id}` }));
 }
 
-const RUN_CARD_RARITIES: readonly RunCardRarity[] = ['common', 'uncommon', 'rare'];
-
-function rarityCardsForPile(
-  seed: number,
-  rarity: RunCardRarity,
-  pileIndex: number,
-): RunCoreCard[] {
-  const tier = RUN_CARD_DECK.filter((card) => card.rarity === rarity);
-  const quota = RUN_SECTIO_CARD_PILE_RARITY_COUNT[rarity];
-  const result: RunCoreCard[] = [];
-  let streamCursor = pileIndex * quota;
-  while (result.length < quota) {
-    const epochIndex = Math.floor(streamCursor / tier.length);
-    const epochCursor = streamCursor % tier.length;
-    const epoch = shuffled(tier, mixSeed(seed, `sectio-pile:${rarity}:epoch`, epochIndex));
-    const take = Math.min(quota - result.length, tier.length - epochCursor);
-    result.push(...epoch.slice(epochCursor, epochCursor + take));
-    streamCursor += take;
-  }
-  return result;
-}
-
-/** Keep every possible three- or four-card Sectio row identity-distinct, including the seam
- * between piles. Epoch rollover can otherwise repeat one card after a rarity's unseen queue
- * has been exhausted. */
-function separateNearbyCardDuplicates(
-  cards: readonly RunCoreCard[],
-  previousTail: readonly RunCoreCard[],
-): RunCoreCard[] {
-  for (let offset = 0; offset < cards.length; offset += 1) {
-    const remaining = [...cards.slice(offset), ...cards.slice(0, offset)];
-    const result: RunCoreCard[] = [];
-    while (remaining.length) {
-      const recentIds = new Set([...previousTail, ...result].slice(-3).map((card) => card.id));
-      const candidateIndex = remaining.findIndex((card) => !recentIds.has(card.id));
-      if (candidateIndex < 0) break;
-      result.push(remaining.splice(candidateIndex, 1)[0]);
-    }
-    if (!remaining.length) return result;
-  }
-  throw new Error('Sectio pile cannot separate duplicate card identities.');
-}
-
-/** One exact 75/20/5 hidden pile. Each rarity consumes a continuous seed-derived queue, so
- * the next pile takes every still-unseen card in that rarity before its queue is reshuffled. */
+/** One complete, seed-derived shuffle of the live offer catalog. Rarity remains card metadata
+ * but deliberately does not influence this temporary dealing rule. */
 export function sectioCardPile(seed: number, pileIndex: number): RunCoreCard[] {
-  const target = Math.max(0, Math.floor(pileIndex));
-  let previousTail: RunCoreCard[] = [];
-  let result: RunCoreCard[] = [];
-  for (let index = 0; index <= target; index += 1) {
-    const selected = RUN_CARD_RARITIES.flatMap((rarity) => rarityCardsForPile(seed, rarity, index));
-    const mixed = shuffled(selected, mixSeed(seed, 'sectio-pile:mix', index));
-    result = separateNearbyCardDuplicates(mixed, previousTail);
-    previousTail = result.slice(-3);
-  }
-  return result;
+  return shuffled(
+    RUN_CARD_DECK,
+    mixSeed(seed, 'sectio-pile:complete-shuffle', Math.max(0, Math.floor(pileIndex))),
+  );
 }
 
 export function sectioCardOffersAtCursor(
@@ -876,10 +871,7 @@ export function createRun(
   war: RunWarSnapshot,
   seed: number,
   ataraxiaTierOrNow: AtaraxiaTier | string = 0,
-  nowOrOptions: string | Readonly<{
-    now?: string;
-    deploymentMode?: RunDeploymentMode;
-  }> = new Date().toISOString(),
+  nowOrOptions: string | Readonly<{ now?: string }> = new Date().toISOString(),
 ): RunDocument {
   const ataraxiaTier: AtaraxiaTier = 0;
   const options = typeof nowOrOptions === 'string' ? null : nowOrOptions;
@@ -888,13 +880,12 @@ export function createRun(
     : typeof nowOrOptions === 'string'
       ? nowOrOptions
       : options?.now ?? new Date().toISOString();
-  const deploymentMode = options?.deploymentMode ?? 'automatic';
   const run: RunDocument = {
     runSaveVersion: CURRENT_RUN_SAVE_VERSION,
     id: freshRunId(),
     seed: seed >>> 0,
     ataraxiaTier,
-    deploymentMode,
+    deploymentMode: 'arranged',
     updatedAt: createdAt,
     war,
     phase: 'deployment',
@@ -1147,8 +1138,8 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
   if (raw.runSaveVersion !== CURRENT_RUN_SAVE_VERSION || 'formatVersion' in raw) {
     throw new UnsupportedRunSaveError();
   }
-  if (raw.deploymentMode !== 'automatic' && raw.deploymentMode !== 'arranged') {
-    throw new UnsupportedRunSaveError('This Run contains an invalid Deployment mode.');
+  if (raw.deploymentMode !== 'arranged') {
+    throw new UnsupportedRunSaveError('This Run contains a retired Deployment mode.');
   }
   if (
     !raw.war
@@ -2039,8 +2030,21 @@ function migrateRunToImmutableFormations(stored: Record<string, unknown>): Recor
 function migrateRunToDeploymentMode(stored: Record<string, unknown>): Record<string, unknown> {
   return {
     ...stored,
-    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    runSaveVersion: RUN_SAVE_VERSION_PLAYER_FORMATIONS_SOURCE,
     deploymentMode: 'automatic',
+  };
+}
+
+/** Version 30 makes direct formation arrangement the only Deployment rule and replaces the
+ * rarity-quota pile with complete shuffled catalog epochs. An in-progress Deployment returns
+ * to its deal boundary; a Battle already underway keeps its exact committed board. */
+function migrateRunToPlayerFormations(stored: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...stored,
+    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    deploymentMode: 'arranged',
+    sectioCardCursor: 0,
+    deployment: stored.phase === 'deployment' ? null : stored.deployment,
   };
 }
 
@@ -2059,7 +2063,9 @@ function migrateRunToDeploymentMode(stored: Record<string, unknown>): Record<str
  * Sectio and begins a seed-derived card pile. Version 26 then restarts that hidden sequence,
  * and Version 27 expands the Queen + Pawn formation catalog. Version 28 retires individual
  * formation mutation and its two dependent lipsana. Version 29 names automatic or arranged
- * Deployment as an immutable Run rule. Older saves remain unsupported.
+ * Deployment as an immutable Run rule. Version 30 retires automatic placement, collapses
+ * quarter-turn-equivalent offer identities, and deals complete random catalog shuffles.
+ * Older saves remain unsupported.
  */
 export function migrateRunSaveDocument(value: unknown): RunDocument {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -2127,6 +2133,9 @@ export function migrateRunSaveDocument(value: unknown): RunDocument {
   }
   if (stored.runSaveVersion === RUN_SAVE_VERSION_DEPLOYMENT_MODE_SOURCE) {
     stored = migrateRunToDeploymentMode(stored);
+  }
+  if (stored.runSaveVersion === RUN_SAVE_VERSION_PLAYER_FORMATIONS_SOURCE) {
+    stored = migrateRunToPlayerFormations(stored);
   }
   return normalizeRunDocument(stored as unknown as RunDocument);
 }
@@ -2249,9 +2258,7 @@ export function prepareDeployment(run: RunDocument): RunDocument {
 }
 
 export function deploymentRerollCostTenths(run: RunDocument): number | null {
-  if (run.phase === 'deployment') {
-    return run.deploymentMode === 'arranged' ? null : RUN_DEPLOYMENT_REROLL_COST_TENTHS;
-  }
+  if (run.phase === 'deployment') return null;
   if (run.phase === 'battle') return RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS;
   return null;
 }
@@ -2274,7 +2281,7 @@ export function rerollDeployment(run: RunDocument): RunDocument {
   const mixedSeed = mixSeed(run.deployment.seed, 'deployment-reroll');
   const nextSeed = mixedSeed === run.deployment.seed ? (mixedSeed + 1) >>> 0 : mixedSeed;
   const fresh = freshDeploymentState(run, nextSeed, run.deployment.dealtCardIds);
-  const deployment = run.deploymentMode === 'arranged' && run.phase === 'battle'
+  const deployment = run.phase === 'battle'
     ? {
         ...fresh,
         revealedCardIds: [...fresh.dealtCardIds],

@@ -5653,6 +5653,29 @@ const MIGRATIONS = [
        WHERE body->'runSaveVersion' = '28'::jsonb;
     `,
   },
+  {
+    version: 69,
+    name: 'player-arranged formations and complete card shuffle',
+    // ADR-0515: direct arrangement is now the sole Deployment contract. Reset an
+    // in-progress Deployment to its deal boundary and restart the hidden market cursor
+    // because the live catalog and pile construction both changed.
+    sql: `
+      UPDATE active_runs
+         SET body = body
+                    || jsonb_build_object(
+                         'runSaveVersion', 30,
+                         'deploymentMode', 'arranged',
+                         'sectioCardCursor', 0
+                       )
+                    || CASE WHEN body->>'phase' = 'deployment'
+                         THEN jsonb_build_object('deployment', NULL)
+                         ELSE '{}'::jsonb
+                       END,
+             revision = revision + 1,
+             updated_at = now()
+       WHERE body->'runSaveVersion' = '29'::jsonb;
+    `,
+  },
 ];
 
 let pool = null;
@@ -6274,7 +6297,10 @@ async function unmigratedActiveRunSaveCounts(client) {
        )::integer AS version_27_count,
        count(*) FILTER (
          WHERE body->'runSaveVersion' = '28'::jsonb
-       )::integer AS version_28_count
+       )::integer AS version_28_count,
+       count(*) FILTER (
+         WHERE body->'runSaveVersion' = '29'::jsonb
+       )::integer AS version_29_count
        FROM active_runs`,
   );
   return Object.freeze({
@@ -6291,6 +6317,7 @@ async function unmigratedActiveRunSaveCounts(client) {
     version_26_count: Number(rows[0]?.version_26_count) || 0,
     version_27_count: Number(rows[0]?.version_27_count) || 0,
     version_28_count: Number(rows[0]?.version_28_count) || 0,
+    version_29_count: Number(rows[0]?.version_29_count) || 0,
   });
 }
 
@@ -6455,7 +6482,8 @@ async function requiredSchemaContractIssues(client) {
       + unmigratedActiveRunSaves.version_25_count
       + unmigratedActiveRunSaves.version_26_count
       + unmigratedActiveRunSaves.version_27_count
-      + unmigratedActiveRunSaves.version_28_count,
+      + unmigratedActiveRunSaves.version_28_count
+      + unmigratedActiveRunSaves.version_29_count,
     unmigrated_active_run_version_16_count: unmigratedActiveRunSaves.version_16_count,
     unmigrated_active_run_version_17_count: unmigratedActiveRunSaves.version_17_count,
     unmigrated_active_run_version_18_count: unmigratedActiveRunSaves.version_18_count,
@@ -6469,6 +6497,7 @@ async function requiredSchemaContractIssues(client) {
     unmigrated_active_run_version_26_count: unmigratedActiveRunSaves.version_26_count,
     unmigrated_active_run_version_27_count: unmigratedActiveRunSaves.version_27_count,
     unmigrated_active_run_version_28_count: unmigratedActiveRunSaves.version_28_count,
+    unmigrated_active_run_version_29_count: unmigratedActiveRunSaves.version_29_count,
     unmigrated_level_format_1_count: unmigratedLevelDocuments,
     unrepaired_saved_editor_baseline_count: unrepairedSavedEditorBaselines,
     primogeniture_non_retired_slot_count: primogenitureRetirement.non_retired_slot_count,
@@ -6703,6 +6732,17 @@ async function repairRequiredSchemaContracts(
     await executeMigration(migration, 'repair explicit Run deployment mode contract');
     completedSteps.push(Object.freeze({
       contract: 'explicit Run deployment mode save version',
+      migration_version: migration.version,
+    }));
+    markInspection(`inspect required contract repairs after migration ${migration.version}`);
+    issues = await requiredSchemaContractIssues(client);
+  }
+  if (issues.unmigrated_active_run_version_29_count > 0) {
+    const migration = MIGRATIONS.find((candidate) => candidate.version === 69);
+    if (!migration) throw new Error('player-arranged formation repair migration is unavailable');
+    await executeMigration(migration, 'repair player-arranged formation contract');
+    completedSteps.push(Object.freeze({
+      contract: 'player-arranged formation save version',
       migration_version: migration.version,
     }));
     markInspection(`inspect required contract repairs after migration ${migration.version}`);
@@ -22839,7 +22879,7 @@ function validateFormationRunBody(run) {
   if (typeof run.id !== 'string' || !run.id || run.id.length > 160) return 'run.id is invalid';
   if (!isFiniteInteger(run.seed) || run.seed < 0 || run.seed > 0xffffffff) return 'run.seed is invalid';
   if (run.ataraxiaTier !== 0) return 'run.ataraxiaTier is invalid';
-  if (run.deploymentMode !== 'automatic' && run.deploymentMode !== 'arranged') {
+  if (run.deploymentMode !== 'arranged') {
     return 'run.deploymentMode is invalid';
   }
   if (typeof run.updatedAt !== 'string' || !run.updatedAt) return 'run.updatedAt is required';

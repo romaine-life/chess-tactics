@@ -931,6 +931,7 @@ function SkirmishSceneLayer({
   seed,
   ambientCover,
   livePieces,
+  previewPieces,
   unitArrivals,
   unitArrivalTrack,
   unitArrivalStartDelta,
@@ -952,6 +953,7 @@ function SkirmishSceneLayer({
   seed: number;
   ambientCover: boolean;
   livePieces: readonly Piece[];
+  previewPieces: readonly Piece[];
   unitArrivals: UnitArrivalLifecycle;
   unitArrivalTrack: UnitArrivalTrack;
   unitArrivalStartDelta: Vec;
@@ -1020,9 +1022,10 @@ function SkirmishSceneLayer({
     ...occlusionMasks.map((op) => op.src),
     ...(occlusionDepthMap ? [occlusionDepthMap.src] : []),
     ...livePieces.map(pieceImageSrc).filter((src): src is string => !!src),
+    ...previewPieces.map(pieceImageSrc).filter((src): src is string => !!src),
     ...afterGhosts.flatMap((group) => group.pieces.map(pieceImageSrc)).filter((src): src is string => !!src),
     ...livePieces.flatMap((piece) => mirrorSpriteSourcesForPiece(piece, mirrorFaces)),
-  ])].sort(), [afterGhosts, livePieces, mirrorFaces, occlusionDepthMap, occlusionMasks, staticOps]);
+  ])].sort(), [afterGhosts, livePieces, mirrorFaces, occlusionDepthMap, occlusionMasks, previewPieces, staticOps]);
   const requiredSourceKey = requiredSources.join('|');
   const warmSources = useMemo(
     () => [...new Set(livePieces.flatMap(pieceRuntimeSpriteSources))].sort(),
@@ -1038,6 +1041,7 @@ function SkirmishSceneLayer({
     mirrorSurfaces,
     bounds,
     livePieces,
+    previewPieces,
     draggingId,
     premovedIds,
     afterGhosts,
@@ -1083,6 +1087,7 @@ function SkirmishSceneLayer({
       mirrorSurfaces,
       bounds,
       livePieces,
+      previewPieces,
       draggingId,
       premovedIds,
       afterGhosts,
@@ -1239,6 +1244,7 @@ function SkirmishSceneLayer({
     reportArrivingUnits,
     onFrameError,
     premovedIds,
+    previewPieces,
     requestSceneFrame,
     requiredSourceKey,
     reportDepartingUnits,
@@ -1300,6 +1306,10 @@ function SkirmishSceneLayer({
         }
         ops.push(...reflectedOpsForSubjects(state.mirrorSurfaces, reflectionSubjects));
         ops.push(...physicalPieceOps);
+        for (const piece of state.previewPieces) {
+          const op = pieceOp(piece, boardLabCellPosition(piece), { opacity: 0.62 });
+          if (op) ops.push(op);
+        }
         for (const group of state.afterGhosts) {
           group.pieces.forEach((piece, i) => {
             const off = (GHOST_SLOTS[group.pieces.length] ?? GHOST_SLOTS[1])[i] ?? { dx: 0, dy: 0 };
@@ -1444,12 +1454,15 @@ function SkirmishSceneLayer({
 }
 
 const EMPTY_PREMOVES: readonly PremoveStep[] = [];
+const EMPTY_PREVIEW_PIECES: readonly Piece[] = [];
 export interface SkirmishBoardSurfaceState {
   /** A passive position projected through the live Battle compositor without starting a match. */
   game: GameState;
   seed: number;
   /** Stable camera identity for the owning non-Battle phase. */
   viewKey: string;
+  /** Translucent board-space units previewed through the same projection as live pieces. */
+  previewPieces?: readonly Piece[];
 }
 
 export interface SkirmishBoardCellOverlayContext {
@@ -1561,6 +1574,7 @@ export function SkirmishBoard({
   const choosePromotion = useSkirmish((s) => s.choosePromotion);
   const storedSeed = useSkirmish((s) => s.seed);
   const game = surfaceState?.game ?? storedGame;
+  const previewPieces = surfaceState?.previewPieces ?? EMPTY_PREVIEW_PIECES;
   const env = useMemo(
     () => surfaceState ? { ...gameEnv(game), lastMove: game.lastMove } : storedEnv,
     [game, storedEnv, surfaceState],
@@ -2294,6 +2308,7 @@ export function SkirmishBoard({
               seed={seed}
               ambientCover={ambientSceneCover}
               livePieces={livePieces}
+              previewPieces={previewPieces}
               unitArrivals={arrivalLifecycle}
               unitArrivalTrack={unitArrivalTrack}
               unitArrivalStartDelta={unitArrivalStartDelta}

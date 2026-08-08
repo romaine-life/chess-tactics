@@ -36,13 +36,13 @@ describe('Run card names', () => {
     expect(runCardArtSlot({ pieces: ['queen'] })).toBe('ui/run/card-art/q/illustration.png');
   });
 
-  it('gives all six Queen and Pawn formations one shared prototype identity', () => {
+  it('gives the rotational Queen and Pawn identity one shared prototype identity', () => {
     const queenPawnCards = RUN_CARD_DECK.filter((card) => (
       card.pieces.length === 2
       && card.pieces.includes('queen')
       && card.pieces.includes('pawn')
     ));
-    expect(queenPawnCards).toHaveLength(6);
+    expect(queenPawnCards).toHaveLength(1);
     expect(queenPawnCards.every((card) => runCardName(card) === 'The Last Attendant')).toBe(true);
     expect(queenPawnCards.every((card) => (
       runCardArtSlot(card) === 'ui/run/card-art/q/illustration.png'

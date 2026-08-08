@@ -1026,7 +1026,7 @@ if (!/export function SkirmishShell[\s\S]*?<SkirmishHud \{\.\.\.hudProps\} contr
   failures.push('Battle must render through one instance-owned Skirmish session and the one SkirmishShell that owns SkirmishHud');
 }
 const runMetaControlsStart = runScreen.indexOf('function RunMetaControls');
-const runMetaControlsEnd = runScreen.indexOf('\nfunction DeploymentControls', runMetaControlsStart);
+const runMetaControlsEnd = runScreen.indexOf('\nfunction ArrangedDeploymentControls', runMetaControlsStart);
 const runMetaControls = runMetaControlsStart >= 0
   ? runScreen.slice(runMetaControlsStart, runMetaControlsEnd >= 0 ? runMetaControlsEnd : undefined)
   : '';
@@ -1066,7 +1066,7 @@ const runBattlefieldSources = `${runScreen}\n${skirmish}`;
 if (!/testId=\{runDeployment \? 'run-deployment' : 'skirmish'\}/.test(skirmish)
   || !/className="skirmish-war-room"/.test(skirmish)
   || !/primaryClassName="skirmish-field"/.test(skirmish)
-  || !/className="run-meta-controls run-deployment-controls"/.test(runScreen)
+  || !/className="run-meta-controls run-deployment-controls run-arrangement-controls"/.test(runScreen)
   || !/renderCellOverlay:/.test(runScreen)
   || !/surfaceState=\{presentedDeploymentSurface\}/.test(skirmish)
   || /run-deployment-workspace|<LevelPreviewColumn|Choose square…/.test(runBattlefieldSources)) {

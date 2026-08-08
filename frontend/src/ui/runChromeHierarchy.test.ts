@@ -45,7 +45,7 @@ const sceneContinuity = readFileSync(new URL('./shell/SceneContinuity.tsx', impo
 describe('Run chrome hierarchy', () => {
   it('admits every Run phase through the form-owned shell and HUD', () => {
     const metaControls = runScreen.match(
-      /function RunMetaControls\b[\s\S]*?\r?\n}\r?\n\r?\nfunction DeploymentControls/,
+      /function RunMetaControls\b[\s\S]*?\r?\n}\r?\n\r?\nfunction ArrangedDeploymentControls/,
     )?.[0] ?? '';
 
     expect(runForm).toContain('export function createRunForm');
@@ -133,7 +133,7 @@ describe('Run chrome hierarchy', () => {
     expect(skirmishBoard).toContain("if (unitArrivals === 'settled') arrivalPlansRef.current.clear()");
     expect(skirmish).toContain('onArrivingUnitIdsChange={reportArrivingUnitIds}');
     expect(skirmishBoard).toContain('newlyVisibleArrivalPieces(visibleUnitIdsRef.current, livePieces)');
-    expect(runScreen).toContain('onArrivingUnitIdsChange: reportArrivals');
+    expect(runScreen).toContain('placeArrangedDeploymentCard(');
     expect(runScreen).not.toContain('pendingPlacementArrivalUnitIdRef');
     expect(runScreen).not.toContain('RunWorkspaceStages');
     expect(runScreen).not.toContain('window.history');
@@ -352,7 +352,7 @@ describe('Run chrome hierarchy', () => {
     expect(skirmish).toContain("testId: runDeployment ? 'run-deployment' : 'skirmish'");
     expect(skirmish).toContain("className: 'skirmish-war-room'");
     expect(skirmish).toContain("primaryClassName: 'skirmish-field'");
-    expect(runScreen).toContain('className="run-meta-controls run-deployment-controls"');
+    expect(runScreen).toContain('className="run-meta-controls run-deployment-controls run-arrangement-controls"');
     expect(skirmish).toContain('<SkirmishBoard');
     expect(skirmish).toContain('surfaceState={presentedDeploymentSurface}');
     expect(skirmish).not.toContain('cameraActive=');
@@ -382,16 +382,11 @@ describe('Run chrome hierarchy', () => {
     expect(styleCss).toMatch(/\.run-deployment-stack-card\.is-active\.is-revealed > \.run-deployment-stack-side\.is-front\s*\{[\s\S]*?transform:\s*rotateY\(0deg\)/);
     expect(styleCss).not.toMatch(/\.run-deployment-stack-card\.is-active\.is-revealed\s*\{[\s\S]*?transform:\s*rotateY/);
     expect(styleCss).not.toContain('@keyframes run-deployment-card-discard');
-    expect(runScreen).toContain('Full deploy');
-    expect(runScreen).toContain('data-testid="deployment-next"');
-    expect(runScreen).toContain("onSetTransport('playing')");
-    expect(runScreen).toContain("onSetTransport('paused')");
-    expect(runScreen).toContain("latest.deployment?.stage === 'awaiting-deal'");
-    expect(runScreen).toContain('beginDeploymentDeal(latest, transport)');
-    expect(runScreen).toContain("stage === 'await-deal' || stage === 'reveal-card' || stage === 'place'");
+    expect(runScreen).not.toContain('Full deploy');
+    expect(runScreen).not.toContain('data-testid="deployment-next"');
+    expect(runScreen).toContain('beginDeploymentDeal(latest)');
     expect(runScreen).not.toContain('Place {activeUnit.type');
-    expect(runScreen).toContain("setDeploymentTransport(latest, transport)");
-    expect(runScreen).toContain("placeRevealedDeploymentUnit(paused, level)");
+    expect(runScreen).not.toContain("setDeploymentTransport(latest, transport)");
     expect(runScreen).not.toContain('View Formation {index + 1}');
     expect(runScreen).not.toContain('Deploy this formation');
     expect(runScreen).toContain('renderCellOverlay: ({ cell, visualFootprintStyle }) =>');
@@ -399,9 +394,8 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).not.toContain('levelToEditorBoard');
     expect(runScreen).toContain('gameForRunDeployment(prepared, level, layout, true)');
     expect(runScreen).not.toContain('placeAdlectedDeploymentUnit');
-    expect(runScreen).toContain('deployment-placement-ghost');
-    expect(runScreen).toContain('advanceAutomaticDeployment(deployment, level)');
-    expect(runScreen).toContain('placeRevealedDeploymentUnit(paused, level)');
+    expect(runScreen).toContain('previewPieces: arrangementPreviewPieces');
+    expect(runScreen).not.toContain('advanceAutomaticDeployment(deployment, level)');
     expect(runScreen).toContain('data-testid="arrangement-begin-battle"');
     expect(runScreen).toContain('onBeginBattle={startArrangedBattle}');
     // The phase is the title bar's first clickable ROUTE segment (Run › Sectio),
@@ -443,7 +437,7 @@ describe('Run chrome hierarchy', () => {
 
   it('reserves structural teal for containers and paints Run leaf chrome with data-phased oak', () => {
     const metaControls = runScreen.match(
-      /function RunMetaControls\b[\s\S]*?\r?\n}\r?\n\r?\nfunction DeploymentControls/,
+      /function RunMetaControls\b[\s\S]*?\r?\n}\r?\n\r?\nfunction ArrangedDeploymentControls/,
     )?.[0] ?? '';
 
     expect(chromeSurfacePolicy).toContain("export const CHROME_LEAF_FILL_SURFACE = 'hybrid-wood-oak'");

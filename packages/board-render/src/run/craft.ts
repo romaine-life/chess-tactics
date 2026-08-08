@@ -115,7 +115,7 @@ export interface RunCraftSpec {
   warId: string | null;
   seed: number;
   ataraxiaTier: AtaraxiaTier;
-  /** Omitted specs retain the historical automatic deployment behavior. */
+  /** Retained in the craft shape as the single explicit placement contract. */
   deploymentMode?: RunDeploymentMode;
   goldTenths: number | null;
   army: RunCraftUnit[] | null;
@@ -226,9 +226,8 @@ function integer(raw: string, label: string, min: number, max: number): number {
 }
 
 function deploymentMode(raw: unknown): RunDeploymentMode {
-  if (raw === undefined || raw === null || raw === '') return 'automatic';
-  if (raw === 'automatic' || raw === 'arranged') return raw;
-  throw new RunCraftError(`craft deployment: "${String(raw)}" must be automatic or arranged.`);
+  if (raw === undefined || raw === null || raw === '' || raw === 'arranged') return 'arranged';
+  throw new RunCraftError(`craft deployment: "${String(raw)}" is retired; formations are player-arranged.`);
 }
 
 /** Read a craft spec out of a Run address. Returns null when the address asks for no crafting. */
@@ -530,7 +529,14 @@ function autoDeploy(run: RunDocument): { run: RunDocument; layout: RunDeployment
   prepared = completeDeploymentDeal(prepared, level);
   if (prepared.deploymentMode === 'arranged') {
     const rotations: RunFormationRotation[] = [0, 1, 2, 3];
-    for (const summary of arrangedDeploymentCards(prepared)) {
+    const primaryKingId = prepared.army.find((unit) => unit.type === 'king')?.id;
+    const summaries = arrangedDeploymentCards(prepared).sort((left, right) => (
+      Number(right.card.unitSeats.includes(primaryKingId ?? ''))
+      - Number(left.card.unitSeats.includes(primaryKingId ?? ''))
+    ));
+    // Craft links are diagnostic conveniences rather than a second player-facing deployment mode.
+    // Seat the required king first so a greedy preview cannot strand it behind optional formations.
+    for (const summary of summaries) {
       if (!summary.admitted) continue;
       const option = rotations.flatMap((rotation) => (
         arrangedCardPlacementOptions(prepared, level, summary.card.id, rotation)
@@ -867,9 +873,7 @@ export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDo
   if (spec.phase !== 'victory' && targetIndex >= battles) {
     throw new RunCraftError(`craft battle: ${war.name} has ${battles} Battle${battles === 1 ? '' : 's'}.`);
   }
-  const opening = createRun(war, spec.seed, spec.ataraxiaTier, {
-    deploymentMode: spec.deploymentMode ?? 'automatic',
-  });
+  const opening = createRun(war, spec.seed, spec.ataraxiaTier);
 
   // The Run's own first state. Bona Vacantia sits directly in front of Battle 1.
   if (spec.phase === 'bona-vacantia' && targetIndex === 0) {

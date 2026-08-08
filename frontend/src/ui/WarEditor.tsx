@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { useAuthSession } from '../net/authSession';
-import { createRun, snapshotWar, type AtaraxiaTier, type RunDeploymentMode } from '../run/model';
+import { createRun, snapshotWar, type AtaraxiaTier } from '../run/model';
 import {
   RUN_PROGRESSION_EVENT,
   highestUnlockedAtaraxiaTier,
@@ -17,7 +17,6 @@ import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsC
 import { useConfirm } from './shared/ConfirmDialog';
 import { useSceneParticipant } from './shell/SceneBoundary';
 import { AtaraxiaSelector } from './AtaraxiaSelector';
-import { RunDeploymentModeSelector } from './RunDeploymentModeSelector';
 import { ActionList } from './shared/ActionList';
 
 function seedForNewRun(): number {
@@ -40,7 +39,6 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
   const [status, setStatus] = useState('');
   const [progression, setProgression] = useState(readRunProgression);
   const [ataraxiaTier, setAtaraxiaTier] = useState<AtaraxiaTier>(0);
-  const [deploymentMode, setDeploymentMode] = useState<RunDeploymentMode>('arranged');
   const { ask, dialog } = useConfirm();
   const highestUnlockedTier = highestUnlockedAtaraxiaTier(progression);
 
@@ -112,7 +110,6 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
         snapshotWar(selectedWar, levels),
         seedForNewRun(),
         ataraxiaTier,
-        { deploymentMode },
       ));
       navigateApp('/run');
     } catch (error) {
@@ -228,10 +225,6 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
                       value={ataraxiaTier}
                       highestUnlockedTier={highestUnlockedTier}
                       onChange={setAtaraxiaTier}
-                    />
-                    <RunDeploymentModeSelector
-                      value={deploymentMode}
-                      onChange={setDeploymentMode}
                     />
                     <SettingsRow
                       title="Play this War"

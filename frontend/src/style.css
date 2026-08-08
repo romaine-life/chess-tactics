@@ -21328,13 +21328,6 @@ button.tileset-relationship-cell {
   cursor: not-allowed;
 }
 
-.run-deployment-placement-ghost {
-  filter: drop-shadow(0 2px 8px rgba(71, 222, 255, .8));
-  opacity: .68;
-  pointer-events: none;
-  z-index: 8;
-}
-
 .run-arrangement-controls {
   align-content: start;
   overflow-y: auto;
