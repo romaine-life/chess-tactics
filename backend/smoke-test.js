@@ -6053,7 +6053,9 @@ async function main() {
     id: 'war-smoke-battle',
     name: 'Smoke War Battle',
     objective: 'rival-kings',
-    battle: { loot: true },
+    // Every War Battle authors how many cards its Deployment deals; a Run cannot be crafted on
+    // one that does not.
+    battle: { loot: true, cardsDealt: 3 },
     layers: {
       ...workspaceLevel.layers,
       zones: [{
