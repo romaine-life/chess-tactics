@@ -8,6 +8,7 @@ import { testLiveUnitCatalog } from '../test/liveUnitCatalog';
 import { applyLiveUnitCatalog, resetLiveUnitCatalog } from '../ui/unitCatalog';
 import type { BoardDrawOp, PredrawnOcclusionDepthMap } from '@chess-tactics/board-render';
 import {
+  ARRIVAL_CONTACT_PROGRESS,
   arrivalOffset,
   arrivingStructures,
   buildSkirmishBoard,
@@ -16,6 +17,7 @@ import {
   computeStructureArrivalDelays,
   newlyVisibleArrivalPieces,
   structureArrivalOp,
+  structureLandingMs,
   structureArrives,
   pieceRuntimeSpriteSources,
   pieceOp,
@@ -169,6 +171,23 @@ describe('board-assembly structure arrivals', () => {
 
     expect(back.dy - 20).toBe(front.dy - 44);
     expect(back.dy).toBeLessThan(20);
+  });
+
+  // The impact has to land ON contact. The fall curve touches down before its duration ends —
+  // the remainder is the settle — so timing the crack off the full duration leaves the rock
+  // sitting on the ground before it reacts.
+  it('puts the landing at the moment the fall reaches the ground, not at the end of its duration', () => {
+    const plan = { startMs: 1_000, delayMs: 0 };
+    const landing = structureLandingMs(plan)!;
+
+    expect(landing).toBeCloseTo(1_000 + 620 * ARRIVAL_CONTACT_PROGRESS, 5);
+    // Seated exactly at contact, and still falling a frame earlier.
+    expect(arrivalOffset(landing, plan).dy).toBe(0);
+    expect(arrivalOffset(landing - 16, plan).dy).toBeLessThan(0);
+  });
+
+  it('has no landing for an entrance that has not been released', () => {
+    expect(structureLandingMs({ startMs: null, delayMs: 0 })).toBeNull();
   });
 
   it('holds a staged prop off the board and seats an unplanned one untouched', () => {

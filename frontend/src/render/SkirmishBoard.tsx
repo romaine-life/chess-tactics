@@ -728,9 +728,17 @@ export function structureArrivalOp(
   return { ...op, dy: op.dy + arrival.dy, opacity: (op.opacity ?? 1) * arrival.opacity };
 }
 
-/** The moment a prop's fall ends — where the impact belongs. */
+/**
+ * The moment a prop's fall reaches the ground — where the impact belongs. This is NOT the end of
+ * the arrival duration: the fall curve touches down at ARRIVAL_CONTACT_PROGRESS and spends its
+ * remaining time on the settle ADR-0045 describes. Timing an impact off the full duration leaves
+ * the prop sitting on the ground for the difference before it reacts, which reads as a crack that
+ * arrives late rather than as an impact at all.
+ */
 export function structureLandingMs(plan: UnitArrivalPlan): number | null {
-  return plan.startMs == null ? null : plan.startMs + plan.delayMs + ARRIVAL_ANIM_MS;
+  return plan.startMs == null
+    ? null
+    : plan.startMs + plan.delayMs + ARRIVAL_ANIM_MS * ARRIVAL_CONTACT_PROGRESS;
 }
 
 /**
@@ -828,6 +836,9 @@ const ROCK_ANCHOR_X = 0.5;
 const ROCK_ANCHOR_Y = 0.78;
 const SCENE_BOUNDS_PAD = 96;
 const ARRIVAL_ANIM_MS = 620;
+/** Where in the fall the sprite reaches the ground. The remainder of the duration is the settle,
+ *  so anything that happens ON CONTACT — an impact, a sound, dust — keys off this, not the end. */
+export const ARRIVAL_CONTACT_PROGRESS = 0.82;
 /** The whole entrance, fall through impact — what a review surface has to be able to replay. */
 export const STRUCTURE_ENTRANCE_MS = ARRIVAL_ANIM_MS + STRUCTURE_IMPACT_MS;
 const FORMATION_SLIDE_ANIM_MS = 560;
@@ -916,7 +927,7 @@ export function arrivalOffset(
     const progress = clamp01(elapsed / ARRIVAL_ANIM_MS);
     if (progress < 0.26) return { dy: -60, opacity: progress / 0.26 };
     if (progress < 0.46) return { dy: -60, opacity: 1 };
-    if (progress < 0.82) {
+    if (progress < ARRIVAL_CONTACT_PROGRESS) {
       const fall = easeInQuad((progress - 0.46) / 0.36);
       return { dy: lerp(-60, 0, fall), opacity: 1 };
     }
