@@ -6544,6 +6544,66 @@ async function main() {
     throw new Error(`A refused craft must write nothing: ${craftedRunAfterRefusals.statusCode} ${craftedRunAfterRefusals.body}`);
   }
 
+  // Every crafted phase must survive the same save validator a player's own Run is held to
+  // (ADR-0338). Composition is the crafter's business and has its own tests; what has to hold
+  // HERE is that the document a craft produces is one this server will store — the two are
+  // otherwise free to drift, and a validator rule written without a phase in mind stays
+  // invisible until someone reaches that phase. That is not hypothetical: requiring
+  // `battleRuntime` to be null outside a Battle silently rejected every won Battle's aftermath,
+  // which carries the runtime of the Battle it is reporting on.
+  const craftedPhaseWar = () => ({
+    id: 'war-smoke',
+    name: 'Smoke War',
+    description: 'Pinned War snapshot.',
+    battles: [
+      { level: structuredClone(warBattleLevel), loot: false },
+      { level: structuredClone(warBattleLevel), loot: false },
+    ],
+  });
+  // `battle-victory` is the settled board's own Victory surface, so its document is still a
+  // Battle; every other spec lands on the phase it names.
+  const craftedPhases = [
+    { spec: { phase: 'sectio', battle: 2 }, phase: 'sectio' },
+    { spec: { phase: 'deployment', battle: 1 }, phase: 'deployment' },
+    { spec: { phase: 'battle', battle: 1 }, phase: 'battle' },
+    { spec: { phase: 'battle-victory', battle: 1 }, phase: 'battle' },
+    { spec: { phase: 'aftermath', battle: 1, turns: 12, seconds: 240, fallen: 1 }, phase: 'aftermath' },
+    { spec: { phase: 'victory', battle: 2 }, phase: 'victory' },
+  ];
+  let craftedPhaseRevision = JSON.parse(craftedRunAfterRefusals.body).revision;
+  for (const craftedPhase of craftedPhases) {
+    const craftedPhaseRun = {
+      ...boardRender.craftRunDocument(
+        boardRender.runCraftSpecFromJson({ ...craftedPhase.spec, seed: 17 }),
+        craftedPhaseWar(),
+      ),
+      id: `run-crafted-${craftedPhase.spec.phase}`,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    const savedCraftedPhase = await request(
+      'PUT', '/api/active-run',
+      { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+      JSON.stringify({ run: craftedPhaseRun, revision: craftedPhaseRevision }),
+    );
+    const savedCraftedPhaseBody = JSON.parse(savedCraftedPhase.body);
+    if (
+      savedCraftedPhase.statusCode !== 200
+      || savedCraftedPhaseBody.run.phase !== craftedPhase.phase
+      || savedCraftedPhaseBody.revision !== craftedPhaseRevision + 1
+    ) {
+      throw new Error(`A crafted ${craftedPhase.spec.phase} Run must be one this server stores: ${savedCraftedPhase.statusCode} ${savedCraftedPhase.body}`);
+    }
+    craftedPhaseRevision = savedCraftedPhaseBody.revision;
+  }
+  const deletedCraftedPhaseRun = await request(
+    'DELETE', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({ revision: craftedPhaseRevision }),
+  );
+  if (deletedCraftedPhaseRun.statusCode !== 200) {
+    throw new Error(`Crafted-phase sweep did not clean up: ${deletedCraftedPhaseRun.statusCode} ${deletedCraftedPhaseRun.body}`);
+  }
+
   // --- Run lipsanon statistics: owner-scoped, append-only, retry-idempotent ----
   const anonymousLipsanonStatistics = await get('/api/run-lipsanon-statistics');
   if (anonymousLipsanonStatistics.statusCode !== 401) {
