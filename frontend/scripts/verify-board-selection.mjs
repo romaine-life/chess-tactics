@@ -37,7 +37,9 @@ const CHROMES = [
 const executablePath = CHROMES.find(existsSync);
 if (!executablePath) { console.error('No Chrome/Edge found. Checked:\n' + CHROMES.join('\n')); process.exit(1); }
 
-const TIMEOUT = 60_000;
+// A freshly started dev server compiles the whole module graph on the first battle load, which
+// overruns a 60s wait and reads as a broken board. Wait long enough for a cold one.
+const TIMEOUT = 150_000;
 const profile = mkdtempSync(join(tmpdir(), 'ct-boardsel-'));
 const browser = await puppeteer.launch({
   executablePath,
