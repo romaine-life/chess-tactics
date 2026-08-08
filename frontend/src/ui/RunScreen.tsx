@@ -549,6 +549,10 @@ function useRunDeploymentPresentation({
   const [dealProgress, setDealProgress] = useState(0);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [arrangementRotation, setArrangementRotation] = useState<RunFormationRotation>(0);
+  // Where the mouse is. ONLY the pointer may clear it — pointerenter does not fire again for a
+  // pointer that never moved, so any other reset leaves the formation invisible until the player
+  // jiggles the mouse onto a different square. Changing card, turn, or placement all keep it, so
+  // whatever is now in hand appears under the cursor at once.
   const [pointedArrangementCell, setPointedArrangementCell] = useState<string | null>(null);
   // The box the formation is being turned in. Set only BY a turn and dropped the moment the
   // pointer moves, so the mouse always says where the formation goes and a turn only says which
@@ -674,14 +678,12 @@ function useRunDeploymentPresentation({
       ?? arrangementCards.find(({ admitted }) => admitted)?.card.id
       ?? null);
     setArrangementRotation(0);
-    setPointedArrangementCell(null);
     setHeldArrangementAnchor(null);
   }, [arrangementCards, selectedCardId, stage]);
 
   useEffect(() => {
     if (availableArrangementRotations.has(arrangementRotation)) return;
     setArrangementRotation(availableArrangementRotations.values().next().value ?? 0);
-    setPointedArrangementCell(null);
     setHeldArrangementAnchor(null);
   }, [arrangementRotation, availableArrangementRotations]);
 
@@ -707,13 +709,11 @@ function useRunDeploymentPresentation({
     if (!next || next === selectedCardId) return;
     setSelectedCardId(next);
     setArrangementRotation(0);
-    setPointedArrangementCell(null);
     setHeldArrangementAnchor(null);
   }, [arrangementCards, departureActive, selectedCardId]);
   const selectArrangementCard = useCallback((cardId: string) => {
     setSelectedCardId(cardId);
     setArrangementRotation(0);
-    setPointedArrangementCell(null);
     setHeldArrangementAnchor(null);
   }, []);
   // A secondary click, and Q/E, turn the formation carried on the cursor. They deliberately keep
@@ -746,7 +746,6 @@ function useRunDeploymentPresentation({
     const latest = useActiveRun.getState().run;
     if (latest?.id === prepared.id && latest.phase === 'deployment') {
       replace(removeArrangedDeploymentCard(latest, selectedCardId));
-      setPointedArrangementCell(null);
       setHeldArrangementAnchor(null);
     }
   }, [departureActive, prepared.id, replace, selectedCardId]);
@@ -886,7 +885,6 @@ function useRunDeploymentPresentation({
         onStepCard={stepArrangementCard}
         onRotation={(rotation) => {
           setArrangementRotation(rotation);
-          setPointedArrangementCell(null);
           setHeldArrangementAnchor(null);
         }}
         onRemove={removeArrangementCard}

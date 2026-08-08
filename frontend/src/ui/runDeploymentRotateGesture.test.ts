@@ -106,6 +106,34 @@ describe('Run Deployment hand', () => {
     expect(runScreen).toContain('onStep={onStepCard}');
   });
 
+  // `pointerenter` does not fire again for a pointer that never moved, so anything that clears
+  // the pointed square leaves the new card invisible until the mouse is nudged to a different
+  // square. Only the pointer leaving may clear it.
+  it('leaves the pointed square to the pointer alone', () => {
+    const writes = runScreen.match(/setPointedArrangementCell\([^)]*\)/g) ?? [];
+
+    // Exactly two calls: the pointer entering a square, and the pointer leaving it.
+    expect(writes).toHaveLength(2);
+    expect(runScreen).toContain(
+      'onPointerEnter={() => { setPointedArrangementCell(cellKey); setHeldArrangementAnchor(null); }}',
+    );
+    expect(runScreen).toContain(
+      'onPointerLeave={() => setPointedArrangementCell((current) => current === cellKey ? null : current)}',
+    );
+    // Changing card, turn, or placement keeps it — each of those still drops the held BOX,
+    // which is what makes the new card resolve from the square the cursor is already on.
+    for (const owner of [
+      /const stepArrangementCard = useCallback\([\s\S]*?\n {2}\}, \[[^\]]*\]\);/,
+      /const selectArrangementCard = useCallback\([\s\S]*?\n {2}\}, \[[^\]]*\]\);/,
+      /const removeArrangementCard = useCallback\([\s\S]*?\n {2}\}, \[[^\]]*\]\);/,
+    ]) {
+      const body = runScreen.match(owner)?.[0];
+      expect(body).toBeDefined();
+      expect(body).not.toContain('setPointedArrangementCell');
+      expect(body).toContain('setHeldArrangementAnchor(null);');
+    }
+  });
+
   // ADR-0030: the drawn rail is the one scrollbar. The panel must not also scroll, or the
   // browser paints its own bar beside it.
   it('scrolls the controls on the house rail, never the browser bar', () => {
