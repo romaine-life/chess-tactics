@@ -21,6 +21,7 @@ import {
   arrangedCardPlacementOptions,
   arrangedCardSeatOffsets,
   arrangedDeploymentCanBegin,
+  arrangedDeploymentProgress,
   beginArrangedBattle,
   beginDeploymentDeal,
   completeDeploymentDeal,
@@ -345,6 +346,58 @@ describe('formation deployment', () => {
     expect(openDeploymentBandCells(seated, level, hisGrace.id)).toHaveLength(before - taken);
     // A formation being MOVED does not read as blocking the squares it currently stands on.
     expect(openDeploymentBandCells(seated, level, line.id)).toHaveLength(before);
+  });
+
+  // Begin Battle asks only for His Grace, and the hand shows one card at a time, so nothing else
+  // answers "have I put everyone down?".
+  it('reports how much of the dealt hand is on the board', () => {
+    const { run, level } = fixture(8, 8, 107, ['ppp', 'q']);
+    const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+    const admitted = arrangedDeploymentCards(arranging).filter(({ admitted: ok }) => ok);
+
+    expect(admitted.length).toBeGreaterThan(1);
+    expect(arrangedDeploymentProgress(arranging))
+      .toEqual({ placed: 0, total: admitted.length, complete: false });
+
+    let placed = arranging;
+    admitted.forEach(({ card }, index) => {
+      const options = arrangedCardPlacementOptions(placed, level, card.id, 0);
+      if (!options.length) return;
+      placed = placeArrangedDeploymentCard(placed, level, card.id, 0, options[0].anchor);
+      const progress = arrangedDeploymentProgress(placed);
+      expect(progress.placed).toBe(index + 1);
+      expect(progress.total).toBe(admitted.length);
+      expect(progress.complete).toBe(index + 1 === admitted.length);
+    });
+
+    expect(arrangedDeploymentProgress(placed).complete).toBe(true);
+    // Begin Battle is a weaker claim: His Grace alone satisfies it, so it cannot stand in for this.
+    const hisGrace = arranging.cards.find((card) => card.coreId === 'his-grace')!;
+    const kingOnly = placeArrangedDeploymentCard(
+      arranging,
+      level,
+      hisGrace.id,
+      0,
+      arrangedCardPlacementOptions(arranging, level, hisGrace.id, 0)[0].anchor,
+    );
+    expect(arrangedDeploymentCanBegin(kingOnly)).toBe(true);
+    expect(arrangedDeploymentProgress(kingOnly).complete).toBe(false);
+
+    // Taking one back off the board reopens it.
+    const removed = removeArrangedDeploymentCard(placed, admitted[0].card.id);
+    expect(arrangedDeploymentProgress(removed).complete).toBe(false);
+  });
+
+  // Reserves cannot be placed this Battle, so counting them would make a complete arrangement
+  // read as unfinished forever.
+  it('counts only the formations this Battle admitted', () => {
+    const { run, level } = fixture(8, 8, 109, ['ppp', 'q', 'pp']);
+    const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+    const summaries = arrangedDeploymentCards(arranging);
+    const progress = arrangedDeploymentProgress(arranging);
+
+    expect(progress.total).toBe(summaries.filter(({ admitted }) => admitted).length);
+    expect(progress.total).toBeLessThanOrEqual(summaries.length);
   });
 
   // A formation already on the board is still the player's to move. Without this, repositioning

@@ -142,14 +142,21 @@ the seating; a secondary click turns what is being carried.**
    cap the in-match grid already uses, so the keyboard is discovered from the control rather than
    from a hint. Stepping wraps over the admitted cards only; a reserve cannot be placed this
    Battle, so it is not stepped onto.
-11. **The whole dealt hand is read in the Chartulary**, reserves included. Opened while arranging
+11. **The panel says how much of the hand is on the board.** Begin Battle asks only for His
+   Grace, and the hand shows one card at a time, so nothing else answered "have I put everyone
+   down?". A line pinned with the card counts the admitted hand — reserves cannot be placed this
+   Battle, so counting them would make a complete arrangement read as unfinished — and turns to a
+   green check when the last one is seated. It is always present and changes state rather than
+   appearing, because a line that arrived on completion would re-lay the panel at the moment the
+   player is reading it.
+12. **The whole dealt hand is read in the Chartulary**, reserves included. Opened while arranging
    it comes up already narrowed to this Battle's dealt cards — the setting exists either way, and
    still widens to the full Chartulary — so the register answers what the one-card hand cannot
    show at once.
-12. **The Controls scroll on the house rail** (`KitScroll`, ADR-0030), never the browser's own
+13. **The Controls scroll on the house rail** (`KitScroll`, ADR-0030), never the browser's own
    bar. The panel itself does not scroll; Abandon Run stays outside the rail, pinned, rather than
    scrolling out of reach.
-13. **Placing hands the next formation to the cursor.** Seating a formation finishes with it, so
+14. **Placing hands the next formation to the cursor.** Seating a formation finishes with it, so
    the hand advances to the next admitted card still to be placed, resuming after the one just
    seated and wrapping — placing out of order walks the rest of the hand rather than jumping back
    to the front. The pointed square is deliberately kept, so the next formation appears under the

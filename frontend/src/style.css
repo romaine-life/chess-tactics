@@ -21878,6 +21878,30 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
+/* Whether the whole dealt hand is down. Always present so completion does not re-lay the panel
+   at the moment the player is reading it; it changes state rather than appearing. */
+.run-arrangement-progress {
+  align-items: center;
+  color: var(--skirmish-muted);
+  display: flex;
+  font-size: var(--ds-text-xs);
+  font-weight: 700;
+  gap: var(--ds-space-1);
+  justify-content: center;
+  letter-spacing: .04em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.run-arrangement-progress.is-complete {
+  color: var(--good);
+}
+
+.run-arrangement-progress-mark {
+  font-size: var(--ds-text-sm);
+  line-height: 1;
+}
+
 .run-arrangement-steppers {
   align-items: center;
   display: grid;

@@ -32,6 +32,8 @@ export function RunArrangementCard({
   const admitted = admittedCards(cards);
   const current = admitted.find(({ card }) => card.id === selectedCardId) ?? null;
   const definition = current ? runCardDefinition(current.card.coreId) : null;
+  const placed = admitted.filter(({ placed: seated }) => seated).length;
+  const complete = admitted.length > 0 && placed === admitted.length;
   return (
     <section className="run-arrangement-hand" aria-label="Dealt formation cards">
       <span className="skirmish-eyebrow">Dealt formations</span>
@@ -47,6 +49,21 @@ export function RunArrangementCard({
           <p className="skirmish-grid-hint">No formation is available to place this Battle.</p>
         )}
       </div>
+      {/* Begin Battle asks only for His Grace, and the hand shows one card at a time, so nothing
+          else on screen answers "have I put everyone down?". It is pinned with the card and
+          always present — a line that appeared only on completion would re-lay the panel at the
+          exact moment the player is reading it. */}
+      <p
+        className={`run-arrangement-progress${complete ? ' is-complete' : ''}`}
+        data-testid="arrangement-progress"
+        data-complete={complete ? 'true' : 'false'}
+        aria-live="polite"
+      >
+        <span className="run-arrangement-progress-mark" aria-hidden="true">{complete ? '✓' : '·'}</span>
+        {complete
+          ? `All ${admitted.length} on the board`
+          : `${placed} of ${admitted.length} on the board`}
+      </p>
     </section>
   );
 }

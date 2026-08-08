@@ -962,6 +962,24 @@ export function arrangedDeploymentCanBegin(run: RunDocument): boolean {
   return Boolean(king && run.deployment.placements[king.id]);
 }
 
+/**
+ * How much of the dealt hand is on the board.
+ *
+ * Begin Battle asks only for His Grace, so it says nothing about the rest of the hand — and the
+ * hand shows one card at a time, so nothing else on screen answers "have I put everyone down?"
+ * either. Reserves are excluded: they cannot be placed this Battle, so counting them would make
+ * a complete arrangement read as unfinished.
+ */
+export function arrangedDeploymentProgress(run: RunDocument): {
+  placed: number;
+  total: number;
+  complete: boolean;
+} {
+  const admitted = arrangedDeploymentCards(run).filter((summary) => summary.admitted);
+  const placed = admitted.filter((summary) => summary.placed).length;
+  return { placed, total: admitted.length, complete: admitted.length > 0 && placed === admitted.length };
+}
+
 export function beginArrangedBattle(run: RunDocument): RunDocument {
   if (!arrangedDeploymentCanBegin(run) || !run.deployment) return run;
   const deployedUnitIds = Object.keys(run.deployment.placements);

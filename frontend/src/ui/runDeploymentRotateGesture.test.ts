@@ -109,6 +109,25 @@ describe('Run Deployment hand', () => {
     expect(styles).not.toContain('.run-arrangement-hand-strip');
   });
 
+  // Begin Battle asks only for His Grace, and the hand shows one card at a time, so nothing else
+  // on screen answered "have I put everyone down?".
+  it('says how much of the hand is on the board, and marks it done', () => {
+    expect(hand).toContain('data-testid="arrangement-progress"');
+    expect(hand).toContain("data-complete={complete ? 'true' : 'false'}");
+    expect(hand).toContain("{complete ? '✓' : '·'}");
+    expect(hand).toContain('`All ${admitted.length} on the board`');
+    expect(hand).toContain('`${placed} of ${admitted.length} on the board`');
+    // Reserves cannot be placed this Battle, so completion counts only the admitted hand.
+    expect(hand).toMatch(/const placed = admitted\.filter\(\(\{ placed: seated \}\) => seated\)\.length;/);
+    expect(hand).toContain('const complete = admitted.length > 0 && placed === admitted.length;');
+    // It is pinned with the card, and always present — appearing only on completion would
+    // re-lay the panel at the moment the player is reading it.
+    expect(hand).toMatch(
+      /<\/div>\s*\{\/\*[\s\S]*?\*\/\}\s*<p\s*className=\{`run-arrangement-progress\$\{complete \? ' is-complete' : ''\}`\}/,
+    );
+    expect(styles).toMatch(/\.run-arrangement-progress\.is-complete \{\s*color: var\(--good\);\s*\}/);
+  });
+
   // A control that appears and disappears re-lays the panel under the player's hand.
   it('keeps Remove formation on screen, greyed until there is one to remove', () => {
     expect(runScreen).toContain('data-testid="arrangement-remove-formation"');
