@@ -163,6 +163,12 @@ describe('plain Run creation and acquisition', () => {
     expect(run.phase).toBe('deployment');
     expect(run.sectio).toBeNull();
     expect(run.sectioCardCursor).toBe(0);
+    expect(run.deploymentMode).toBe('automatic');
+  });
+
+  it('persists the deployment rule selected at Run creation', () => {
+    const run = createRun(war(), 19, 0, { deploymentMode: 'arranged' });
+    expect(run.deploymentMode).toBe('arranged');
   });
 
   it('deals the first three hidden-pile cards only after Battle 1', () => {
@@ -423,5 +429,14 @@ describe('ability retirement migration', () => {
       expunctedCard: null,
     });
     expect(migrated.sectio).not.toHaveProperty('alienatedUnits');
+  });
+
+  it('names automatic deployment when migrating a version-28 Run', () => {
+    const current = createRun(war(), 89, 0, { deploymentMode: 'arranged' });
+    const { deploymentMode: _missingMode, ...legacy } = current;
+    const migrated = migrateRunSaveDocument({ ...legacy, runSaveVersion: 28 });
+
+    expect(migrated.runSaveVersion).toBe(CURRENT_RUN_SAVE_VERSION);
+    expect(migrated.deploymentMode).toBe('automatic');
   });
 });

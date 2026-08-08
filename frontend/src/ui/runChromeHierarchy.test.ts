@@ -394,16 +394,16 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain("placeRevealedDeploymentUnit(paused, level)");
     expect(runScreen).not.toContain('View Formation {index + 1}');
     expect(runScreen).not.toContain('Deploy this formation');
-    expect(runScreen).toContain('renderCellOverlay: () => null');
+    expect(runScreen).toContain('renderCellOverlay: ({ cell, visualFootprintStyle }) =>');
     expect(runScreen).not.toContain('FramedReadOnlyBoardView');
     expect(runScreen).not.toContain('levelToEditorBoard');
     expect(runScreen).toContain('gameForRunDeployment(prepared, level, layout, true)');
     expect(runScreen).not.toContain('placeAdlectedDeploymentUnit');
-    expect(runScreen).not.toContain('deployment-placement-ghost');
+    expect(runScreen).toContain('deployment-placement-ghost');
     expect(runScreen).toContain('advanceAutomaticDeployment(deployment, level)');
     expect(runScreen).toContain('placeRevealedDeploymentUnit(paused, level)');
-    expect(runScreen).not.toContain('data-testid="begin-run-battle"');
-    expect(runScreen).not.toContain('onBeginBattle');
+    expect(runScreen).toContain('data-testid="arrangement-begin-battle"');
+    expect(runScreen).toContain('onBeginBattle={startArrangedBattle}');
     // The phase is the title bar's first clickable ROUTE segment (Run › Sectio),
     // and an open Strategikon appends its exact canonical section/reference links.
     expect(runScreen).toContain('<TitleRoute segments={runTitleBarRouteSegments(run, path, search, view)} />');

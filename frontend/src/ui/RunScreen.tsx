@@ -59,6 +59,10 @@ import {
 import {
   advanceAutomaticDeployment,
   advanceDeploymentTransport,
+  arrangedCardPlacementOptions,
+  arrangedDeploymentCanBegin,
+  arrangedDeploymentCards,
+  beginArrangedBattle,
   beginDeploymentDeal,
   completeDeploymentDeal,
   currentDeploymentUnit,
@@ -71,12 +75,15 @@ import {
   gameForRunDeployment,
   levelWithRunDeployment,
   normalReservistCell,
+  placeArrangedDeploymentCard,
   placeRevealedDeploymentUnit,
   revealActiveDeploymentCard,
   resolveForcedDeploymentChoices,
+  removeArrangedDeploymentCard,
   selectedDeploymentLayout,
   setDeploymentTransport,
   type RunDeploymentInteractionStage,
+  type RunFormationRotation,
 } from '../run/deployment';
 import { useActiveRun } from '../run/store';
 import {
@@ -113,6 +120,7 @@ import { RUN_CARD_BACK_SLOT } from './RunCardBack';
 import { RunCardPile } from './RunCardPile';
 import { RunBattlePreview } from './RunBattlePreview';
 import { RunDeploymentCardStack, RunDeploymentDeckDeal } from './RunDeploymentCardStack';
+import { RunArrangementHand } from './RunArrangementHand';
 import { RunDeploymentRerollButton } from './RunDeploymentRerollButton';
 import { RunExpunctioWorkspace } from './RunExpunctioWorkspace';
 import { runCardName } from '../run/cardNames';
@@ -122,7 +130,10 @@ import {
 import { isStrategikonPath, strategikonRouteCrumbs } from './strategikonRoute';
 import { createRunForm, runActivity, type RunForm } from './RunForm';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
+import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
 import type { SkirmishBoardSurfaceState, UnitDepartureRequest } from '../render/SkirmishBoard';
+import { boardLabCellPosition } from '../render/boardProjection';
+import { objectBaseZIndex } from '../render/sceneDepth';
 
 type RunScreenView = RunWorkspaceView;
 
@@ -524,6 +535,138 @@ function DeploymentControls({
   );
 }
 
+function ArrangedDeploymentControls({
+  run,
+  stage,
+  selectedCardId,
+  rotation,
+  availableRotations,
+  dealProgress,
+  onDealProgress,
+  onSelectCard,
+  onRotation,
+  onRemove,
+  onBeginBattle,
+  onDealComplete,
+  departing,
+}: {
+  run: RunDocument;
+  stage: RunDeploymentInteractionStage;
+  selectedCardId: string | null;
+  rotation: RunFormationRotation;
+  availableRotations: ReadonlySet<RunFormationRotation>;
+  dealProgress: number;
+  onDealProgress: (count: number) => void;
+  onSelectCard: (cardId: string) => void;
+  onRotation: (rotation: RunFormationRotation) => void;
+  onRemove: () => void;
+  onBeginBattle: () => void;
+  onDealComplete: () => void;
+  departing: boolean;
+}): ReactElement {
+  const { abandonDialog, abandoning, requestAbandon } = useRunAbandon(run);
+  const cards = arrangedDeploymentCards(run);
+  const selected = cards.find(({ card }) => card.id === selectedCardId) ?? null;
+  const canBegin = arrangedDeploymentCanBegin(run);
+  return (
+    <>
+      {abandonDialog}
+      <section
+        className="run-meta-controls run-deployment-controls run-arrangement-controls"
+        aria-label="Formation arrangement controls"
+        aria-busy={departing || undefined}
+        inert={departing || undefined}
+      >
+        {stage === 'await-deal' || stage === 'dealing' ? (
+          <RunDeploymentCardStack
+            run={run}
+            dealProgress={dealProgress}
+            onDealProgress={onDealProgress}
+            onDealComplete={onDealComplete}
+            onRevealComplete={() => undefined}
+            onDiscardComplete={() => undefined}
+          />
+        ) : null}
+
+        {stage === 'arrange' ? (
+          <>
+            <RunArrangementHand
+              run={run}
+              cards={cards}
+              selectedCardId={selectedCardId}
+              onSelect={onSelectCard}
+            />
+            {selected?.admitted ? (
+              <div className="skirmish-view-group run-deployment-control" data-testid="arrangement-rotation-control">
+                <span className="skirmish-eyebrow">Rotation</span>
+                <div className="run-arrangement-rotations" role="group" aria-label="Formation rotation">
+                  {([0, 1, 2, 3] as const).map((value) => (
+                    <ChromeButton
+                      unit="inner-text-button"
+                      className={chromeUnitClassNames('inner-text-button', 'app-header-button', rotation === value && 'active')}
+                      aria-pressed={rotation === value}
+                      disabled={departing || !availableRotations.has(value)}
+                      onClick={() => onRotation(value)}
+                      key={value}
+                    >
+                      {value * 90}°
+                    </ChromeButton>
+                  ))}
+                </div>
+                <p className="skirmish-grid-hint">
+                  {selected.placed
+                    ? 'Choose another square to move this formation, or remove it.'
+                    : 'Choose a highlighted square on the battlefield.'}
+                </p>
+                {selected.placed ? (
+                  <ChromeButton
+                    unit="inner-text-button"
+                    className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+                    onClick={onRemove}
+                  >
+                    Remove formation
+                  </ChromeButton>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="skirmish-view-group run-deployment-control">
+              <span className="skirmish-eyebrow">Battle</span>
+              <ChromeButton
+                unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'app-header-button', canBegin && 'active')}
+                data-testid="arrangement-begin-battle"
+                disabled={departing || !canBegin}
+                onClick={onBeginBattle}
+              >
+                Begin Battle
+              </ChromeButton>
+              <p className="skirmish-grid-hint">
+                {canBegin
+                  ? 'Any formation left off the board sits out this Battle.'
+                  : 'Place His Grace before beginning Battle.'}
+              </p>
+            </div>
+          </>
+        ) : null}
+
+        <div className="skirmish-view-group run-meta-abandon">
+          <span className="skirmish-eyebrow">Run</span>
+          <ChromeButton
+            unit="inner-text-button"
+            className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'danger')}
+            data-testid="abandon-run"
+            disabled={abandoning || departing}
+            onClick={() => { void requestAbandon(); }}
+          >
+            {abandoning ? 'Abandoning…' : 'Abandon Run'}
+          </ChromeButton>
+        </div>
+      </section>
+    </>
+  );
+}
+
 function useRunDeploymentPresentation({
   run,
   departureActive,
@@ -543,19 +686,41 @@ function useRunDeploymentPresentation({
   const stage = deploymentInteractionStage(prepared, options);
   const activeUnit = currentDeploymentUnit(prepared);
   const [dealProgress, setDealProgress] = useState(0);
+  const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
+  const [arrangementRotation, setArrangementRotation] = useState<RunFormationRotation>(0);
+  const [hoveredArrangementAnchor, setHoveredArrangementAnchor] = useState<string | null>(null);
   const advanceOneAfterRevealRef = useRef(false);
+  const arrangementCards = useMemo(() => arrangedDeploymentCards(prepared), [prepared]);
+  const selectedArrangementCard = arrangementCards.find(({ card }) => card.id === selectedCardId) ?? null;
+  const arrangementPlacementOptions = useMemo(
+    () => selectedCardId
+      ? arrangedCardPlacementOptions(prepared, level, selectedCardId, arrangementRotation)
+      : [],
+    [arrangementRotation, level, prepared, selectedCardId],
+  );
+  const availableArrangementRotations = useMemo(() => new Set<RunFormationRotation>(
+    selectedCardId
+      ? ([0, 1, 2, 3] as const).filter((rotation) => (
+          arrangedCardPlacementOptions(prepared, level, selectedCardId, rotation).length > 0
+        ))
+      : [],
+  ), [level, prepared, selectedCardId]);
+  const hoveredArrangementOption = hoveredArrangementAnchor
+    ? arrangementPlacementOptions.find(({ anchor }) => `${anchor.x},${anchor.y}` === hoveredArrangementAnchor) ?? null
+    : null;
   const layout = selectedDeploymentLayout(prepared, options);
   const deploymentGame = useMemo(
     () => gameForRunDeployment(prepared, level, layout, true),
     [layout, level, prepared],
   );
   const unitArrivalStartDelta = useMemo(() => {
+    if (prepared.deploymentMode === 'arranged') return { x: 0, y: 0 };
     const settlingUnitIds = new Set(prepared.deployment?.settlingUnitIds ?? []);
     return deploymentFormationEntryDelta(
       level,
       deploymentGame.pieces.filter((piece) => settlingUnitIds.has(piece.id)),
     );
-  }, [deploymentGame.pieces, level, prepared.deployment?.settlingUnitIds]);
+  }, [deploymentGame.pieces, level, prepared.deployment?.settlingUnitIds, prepared.deploymentMode]);
   const deploymentSurfaceState = useMemo<SkirmishBoardSurfaceState>(() => ({
     game: deploymentGame,
     seed: prepared.deployment?.seed ?? prepared.seed,
@@ -571,8 +736,26 @@ function useRunDeploymentPresentation({
   }, [prepared.deployment?.battleIndex, prepared.deployment?.stage]);
 
   useEffect(() => {
+    if (stage !== 'arrange') return;
+    const current = arrangementCards.find(({ card, admitted }) => card.id === selectedCardId && admitted);
+    if (current) return;
+    setSelectedCardId(arrangementCards.find(({ admitted, placed }) => admitted && !placed)?.card.id
+      ?? arrangementCards.find(({ admitted }) => admitted)?.card.id
+      ?? null);
+    setArrangementRotation(0);
+    setHoveredArrangementAnchor(null);
+  }, [arrangementCards, selectedCardId, stage]);
+
+  useEffect(() => {
+    if (availableArrangementRotations.has(arrangementRotation)) return;
+    setArrangementRotation(availableArrangementRotations.values().next().value ?? 0);
+    setHoveredArrangementAnchor(null);
+  }, [arrangementRotation, availableArrangementRotations]);
+
+  useEffect(() => {
     if (departureActive) return;
     if (prepared.phase !== 'deployment') return;
+    if (prepared.deploymentMode === 'arranged') return;
     if (prepared.deployment?.stage === 'card') {
       if (prepared.deployment.transport === 'full-deploy') {
         replace(advanceDeploymentTransport(prepared, level));
@@ -602,7 +785,9 @@ function useRunDeploymentPresentation({
     const latest = useActiveRun.getState().run;
     if (latest?.id === prepared.id && latest.phase === 'deployment') {
       const completed = completeDeploymentDeal(latest, level);
-      if (advanceOneAfterRevealRef.current) {
+      if (completed.deploymentMode === 'arranged') {
+        replace(completed);
+      } else if (advanceOneAfterRevealRef.current) {
         replace(revealActiveDeploymentCard(completed));
       } else if (completed.deployment?.transport === 'full-deploy') {
         replace(advanceDeploymentTransport(completed, level));
@@ -682,6 +867,26 @@ function useRunDeploymentPresentation({
   const reroll = useCallback(() => {
     requestReroll();
   }, [requestReroll]);
+  const selectArrangementCard = useCallback((cardId: string) => {
+    setSelectedCardId(cardId);
+    setArrangementRotation(0);
+    setHoveredArrangementAnchor(null);
+  }, []);
+  const removeArrangementCard = useCallback(() => {
+    if (!selectedCardId || departureActive) return;
+    const latest = useActiveRun.getState().run;
+    if (latest?.id === prepared.id && latest.phase === 'deployment') {
+      replace(removeArrangedDeploymentCard(latest, selectedCardId));
+      setHoveredArrangementAnchor(null);
+    }
+  }, [departureActive, prepared.id, replace, selectedCardId]);
+  const startArrangedBattle = useCallback(() => {
+    if (departureActive) return;
+    const latest = useActiveRun.getState().run;
+    if (latest?.id === prepared.id && latest.phase === 'deployment') {
+      replace(beginArrangedBattle(latest));
+    }
+  }, [departureActive, prepared.id, replace]);
 
   if (run.phase !== 'deployment') return null;
   return {
@@ -689,33 +894,107 @@ function useRunDeploymentPresentation({
     screenClassName: 'run-deployment-screen',
     boardClassName: 'run-deployment-board',
     boardAriaLabel: `${level.name} deployment battlefield`,
-    unitArrivalTrack: 'slide-from-right',
+    unitArrivalTrack: prepared.deploymentMode === 'arranged' ? 'drop' : 'slide-from-right',
     unitArrivalStartDelta,
     onArrivingUnitIdsChange: reportArrivals,
-    renderCellOverlay: () => null,
-    controlsContent: (
-      <DeploymentControls
+    renderCellOverlay: ({ cell, visualFootprintStyle }) => {
+      if (prepared.deploymentMode !== 'arranged' || stage !== 'arrange' || !selectedArrangementCard?.admitted) {
+        return null;
+      }
+      const cellKey = `${cell.x},${cell.y}`;
+      const placement = arrangementPlacementOptions.find(({ anchor }) => `${anchor.x},${anchor.y}` === cellKey);
+      if (!placement) return null;
+      return (
+        <button
+          type="button"
+          className="skirmish-board-cell-hit run-deployment-cell is-move"
+          aria-label={`Place formation from ${cell.x}, ${cell.y}`}
+          style={visualFootprintStyle}
+          onPointerDown={(event) => {
+            if (event.button === 0) event.stopPropagation();
+          }}
+          onPointerEnter={() => setHoveredArrangementAnchor(cellKey)}
+          onPointerLeave={() => setHoveredArrangementAnchor((current) => current === cellKey ? null : current)}
+          onClick={() => {
+            const latest = useActiveRun.getState().run;
+            if (latest?.id !== prepared.id || latest.phase !== 'deployment' || !selectedCardId) return;
+            replace(placeArrangedDeploymentCard(
+              latest,
+              level,
+              selectedCardId,
+              arrangementRotation,
+              placement.anchor,
+            ));
+            setHoveredArrangementAnchor(null);
+          }}
+        >
+          <PredrawnMoveHighlightPaint />
+        </button>
+      );
+    },
+    controlsContent: prepared.deploymentMode === 'arranged' ? (
+      <ArrangedDeploymentControls
         run={prepared}
         stage={stage}
-        activeUnit={activeUnit}
+        selectedCardId={selectedCardId}
+        rotation={arrangementRotation}
+        availableRotations={availableArrangementRotations}
         dealProgress={dealProgress}
         onDealProgress={setDealProgress}
-        onSetTransport={setTransport}
-        onNext={advanceOne}
+        onSelectCard={selectArrangementCard}
+        onRotation={(rotation) => { setArrangementRotation(rotation); setHoveredArrangementAnchor(null); }}
+        onRemove={removeArrangementCard}
+        onBeginBattle={startArrangedBattle}
         onDealComplete={finishDeal}
-        onRevealComplete={finishReveal}
-        onDiscardComplete={finishDiscard}
-        onReroll={reroll}
         departing={departureActive}
       />
+    ) : (
+      <DeploymentControls
+          run={prepared}
+          stage={stage}
+          activeUnit={activeUnit}
+          dealProgress={dealProgress}
+          onDealProgress={setDealProgress}
+          onSetTransport={setTransport}
+          onNext={advanceOne}
+          onDealComplete={finishDeal}
+          onRevealComplete={finishReveal}
+          onDiscardComplete={finishDiscard}
+          onReroll={reroll}
+          departing={departureActive}
+        />
     ),
     boardOverlay: (
-      <RunDeploymentDeckDeal
-        run={prepared}
-        dealtCount={dealProgress}
-        onBeginDeal={beginDeal}
-        disabled={departureActive}
-      />
+      <>
+        <RunDeploymentDeckDeal
+          run={prepared}
+          dealtCount={dealProgress}
+          onBeginDeal={beginDeal}
+          disabled={departureActive}
+        />
+        {prepared.deploymentMode === 'arranged' && hoveredArrangementOption
+          ? Object.entries(hoveredArrangementOption.placements).map(([unitId, cell]) => {
+              const unit = prepared.army.find((candidate) => candidate.id === unitId);
+              if (!unit) return null;
+              const seat = boardLabCellPosition(cell);
+              return (
+                <span
+                  className={`board-unit-seat is-${unit.type} run-deployment-placement-ghost`}
+                  data-testid="deployment-placement-ghost"
+                  style={{ left: seat.left, top: seat.top, zIndex: objectBaseZIndex(cell) }}
+                  aria-hidden="true"
+                  key={unitId}
+                >
+                  <img
+                    src={pieceSpritePath(unit.type, paletteForSide('player'), defaultFacingForSide('player'))}
+                    alt=""
+                    draggable={false}
+                  />
+                </span>
+              );
+            })
+          : null}
+      </>
     ),
   };
 }

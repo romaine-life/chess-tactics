@@ -10,9 +10,13 @@ import {
   RUN_CARD_BY_ID,
   runCardUnitIds,
   type RunDocument,
+  type RunDeploymentMode,
   type RunWarSnapshot,
 } from './model';
 import {
+  arrangedCardPlacementOptions,
+  arrangedDeploymentCanBegin,
+  beginArrangedBattle,
   beginDeploymentDeal,
   completeDeploymentDeal,
   deploymentFormationEntryDelta,
@@ -20,9 +24,11 @@ import {
   finishDeploymentCardDiscard,
   finishDeploymentCardReveal,
   finishDeploymentUnitSettlement,
+  placeArrangedDeploymentCard,
   placeRevealedDeploymentUnit,
   revealActiveDeploymentCard,
   resolveForcedDeploymentChoices,
+  removeArrangedDeploymentCard,
 } from './deployment';
 
 function fixture(
@@ -30,6 +36,7 @@ function fixture(
   columns = 8,
   seed = 17,
   cardIds: readonly string[] = [],
+  deploymentMode: RunDeploymentMode = 'automatic',
 ): { run: RunDocument; level: ReturnType<typeof createBlankLevel> } {
   const level = createBlankLevel('formation-level', 'Formation Level', columns, rows + 3);
   level.layers.zones = [{
@@ -46,7 +53,7 @@ function fixture(
     description: 'Deployment fixture.',
     battles: [{ level, loot: false }, { level: structuredClone(level), loot: false }],
   };
-  let assembled = createRun(war, seed);
+  let assembled = createRun(war, seed, 0, { deploymentMode });
   if (cardIds.length) {
     assembled = openSectio(
       { ...assembled, phase: 'battle' },
@@ -187,5 +194,59 @@ describe('formation deployment', () => {
     const placed = placeRevealedDeploymentUnit(revealFirstCard(run, level), level);
     expect(Object.keys(placed.deployment?.placements ?? {})).toHaveLength(2);
     expect(placed.deployment?.unavailableUnitIds).toHaveLength(1);
+  });
+
+  it('reveals the complete dealt hand at the arranged boundary', () => {
+    const { run, level } = fixture(8, 8, 17, ['ppp'], 'arranged');
+    const dealt = completeDeploymentDeal(beginDeploymentDeal(run), level);
+
+    expect(deploymentInteractionStage(dealt)).toBe('arrange');
+    expect(dealt.deployment?.revealedCardIds).toEqual(dealt.deployment?.dealtCardIds);
+    expect(dealt.deployment?.transport).toBe('paused');
+  });
+
+  it('places, rotates, removes, and replaces a complete arranged formation', () => {
+    const { run, level } = fixture(8, 8, 23, [], 'arranged');
+    const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+    const cardId = arranging.cards[0].id;
+    const options = arrangedCardPlacementOptions(arranging, level, cardId, 0);
+
+    expect(options.length).toBeGreaterThan(0);
+    expect(arrangedCardPlacementOptions(arranging, level, cardId, 1)).toHaveLength(0);
+    const placed = placeArrangedDeploymentCard(arranging, level, cardId, 0, options.at(-1)!.anchor);
+    expect(Object.keys(placed.deployment?.placements ?? {})).toEqual(runCardUnitIds(placed.cards[0]));
+    expect(arrangedDeploymentCanBegin(placed)).toBe(true);
+
+    const removed = removeArrangedDeploymentCard(placed, cardId);
+    expect(removed.deployment?.placements).toEqual({});
+    expect(arrangedDeploymentCanBegin(removed)).toBe(false);
+
+    const rotated = arrangedCardPlacementOptions(removed, level, cardId, 2);
+    expect(rotated.length).toBeGreaterThan(0);
+    const replaced = placeArrangedDeploymentCard(removed, level, cardId, 2, rotated[0].anchor);
+    expect(arrangedDeploymentCanBegin(replaced)).toBe(true);
+  });
+
+  it('lets a one-row formation occupy either row of the deployment band', () => {
+    const { run, level } = fixture(8, 8, 29, ['q'], 'arranged');
+    const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+    const queen = arranging.cards.find((card) => card.coreId === 'q')!;
+    const options = arrangedCardPlacementOptions(arranging, level, queen.id, 0);
+
+    expect(new Set(options.map(({ anchor }) => anchor.y))).toEqual(new Set([3, 4]));
+  });
+
+  it('begins arranged Battle with deliberately unplaced non-royal cards blocked', () => {
+    const { run, level } = fixture(8, 8, 31, ['ppp'], 'arranged');
+    const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+    const hisGrace = arranging.cards.find((card) => card.coreId === 'his-grace')!;
+    const target = arrangedCardPlacementOptions(arranging, level, hisGrace.id, 0)[0];
+    const placed = placeArrangedDeploymentCard(arranging, level, hisGrace.id, 0, target.anchor);
+    const battle = beginArrangedBattle(placed);
+    const other = battle.cards.find((card) => card.coreId === 'ppp')!;
+
+    expect(battle.phase).toBe('battle');
+    expect(battle.battleRuntime?.initiallyDeployedUnitIds).toEqual(runCardUnitIds(hisGrace));
+    expect(battle.deployment?.blockedUnitIds).toEqual(expect.arrayContaining(runCardUnitIds(other)));
   });
 });

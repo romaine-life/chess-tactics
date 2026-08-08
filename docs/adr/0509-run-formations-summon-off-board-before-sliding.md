@@ -5,6 +5,8 @@ deciders: owner (Nelson) + Codex
 refines:
   - "[ADR-0045](0045-units-deploy-with-a-staggered-drop-in.md)'s unit summon choreography"
   - "[ADR-0493](0493-generated-run-formations-fall-sideways-and-own-rarity.md)'s visible sideways Run arrival"
+partially_superseded_by:
+  - "[ADR-0512](0512-run-creation-selects-automatic-or-arranged-formations.md)'s direct placement choreography in Arrange mode"
 ---
 
 # ADR-0509: Run formations summon off-board before sliding

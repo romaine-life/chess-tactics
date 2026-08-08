@@ -128,26 +128,30 @@ these.
   face-down Chartulary in the center. Deal order is seeded per combat, with His
   Grace first and up to three cards in the first Conflict; later Conflicts add one
   card. The undrawn remainder returns to the persistent Chartulary mark.
-- When a card is played, all of its remaining units deploy as one atomic authored
-  formation. Its front and back rows enter the two-row Deployment band from the right
-  and advance left until the next translation would collide. Deployment persists the
-  complete hidden destination plan before the visible arrival. Each unit first summons
-  onto its off-board formation seat; once the final unit lands, the complete rigid shape
-  begins its sideways slide.
-  Revealing a card and committing its formation are distinct animation boundaries,
-  but there is no per-unit placement choice.
+- Run preparation selects **Arrange formations** or **Automatic formations** and persists
+  that rule for the complete Run. Automatic mode plays each card as one atomic authored
+  formation: its front and back rows enter the two-row Deployment band from the right and
+  advance left until the next translation would collide. Deployment persists the complete
+  hidden destination plan before the visible arrival. Each unit first summons onto its
+  off-board formation seat; once the final unit lands, the complete rigid shape begins its
+  sideways slide.
+- Arrange mode turns the dealt cards face up together. The player may select them in any
+  order, quarter-turn a complete formation, place it anywhere it legally fits in the same
+  two-row band, and remove or replace it before Battle. His Grace's King must be placed;
+  any other admitted card left out sits out that Battle. The deck and deal remain random,
+  while fitting the shapes into a position is deliberate.
 - The card face prints that formation on a miniature crop of the player-side
   isometric battlefield, using the same projected axes and north-facing unit art as
   combat. Its complete two-row footprint is solid while one ring of neighboring
   diamonds fades away; empty front or back seats remain visible rules information.
-- If no legal translation fits the whole shape, Deployment makes a deterministic
+- In Automatic mode, if no legal translation fits the whole shape, Deployment makes a deterministic
   seeded best effort by placing individual units on legal squares. Board capacity
   may cut off units only after those whole-shape and fallback attempts. Blocked
   units remain recorded for Reservist mechanics. This recovery rule is provisional
   and favors completing a Run over adding a new placement dialogue.
-- Deal, reveal, card cursor, transport, complete formation plans, committed
+- Deployment mode, Deal, reveal, card cursor, transport, complete formation plans, committed
   placements, settling units, capacity result, discards, and blocked units persist
-  across reload and Battle retry. **Next** advances one card boundary, **Play**
+  across reload and Battle retry. In Automatic mode, **Next** advances one card boundary, **Play**
   advances the sequence, **Full deploy** commits the remaining formations, and
   **Pause** stops after the current atomic card arrival settles (ADR-0346,
   ADR-0419, ADR-0422, ADR-0435, ADR-0492, ADR-0493).
