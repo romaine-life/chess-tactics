@@ -529,7 +529,14 @@ function autoDeploy(run: RunDocument): { run: RunDocument; layout: RunDeployment
   prepared = completeDeploymentDeal(prepared, level);
   if (prepared.deploymentMode === 'arranged') {
     const rotations: RunFormationRotation[] = [0, 1, 2, 3];
-    for (const summary of arrangedDeploymentCards(prepared)) {
+    const primaryKingId = prepared.army.find((unit) => unit.type === 'king')?.id;
+    const summaries = arrangedDeploymentCards(prepared).sort((left, right) => (
+      Number(right.card.unitSeats.includes(primaryKingId ?? ''))
+      - Number(left.card.unitSeats.includes(primaryKingId ?? ''))
+    ));
+    // Craft links are diagnostic conveniences rather than a second player-facing deployment mode.
+    // Seat the required king first so a greedy preview cannot strand it behind optional formations.
+    for (const summary of summaries) {
       if (!summary.admitted) continue;
       const option = rotations.flatMap((rotation) => (
         arrangedCardPlacementOptions(prepared, level, summary.card.id, rotation)
