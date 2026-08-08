@@ -174,6 +174,49 @@ describe('skirmish store', () => {
     expect(state.game.pieces.find((candidate) => candidate.id === 'enemy-pawn')?.alive).toBe(false);
   });
 
+  // The reason to reach for Free Move is usually to arrange what the OPPONENT did, so it
+  // moves either army — and the turn that results is ordinary: play passes to the other side
+  // of whichever piece moved, leaving the walked enemy piece standing as `lastMove`. That is
+  // what opens an en passant to set up, and it is why the turn must come back.
+  it('walks an enemy piece on the player turn, and hands the move straight back', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null });
+    useSkirmish.setState({
+      game: {
+        size: { cols: 4, rows: 4 },
+        pieces: [
+          piece('player-pawn', 'player', 'pawn', 1, 2),
+          piece('enemy-pawn', 'enemy', 'pawn', 2, 0),
+          piece('player-king', 'player', 'king', 0, 3),
+          piece('enemy-king', 'enemy', 'king', 3, 0),
+        ],
+        turn: 'player',
+        winner: null,
+      },
+      env: { terrain: undefined, lastMove: undefined },
+      objective: 'capture-all',
+      objectiveCtx: {},
+      victoryOverride: null,
+      selectedId: null,
+      focusedId: null,
+    });
+
+    expect(useSkirmish.getState().armAdminMode('free-move')).toBe(true);
+    // Selecting the enemy piece is the part that used to be impossible: selection was pinned
+    // to whichever side was to move, which on the player's turn is never the opponent.
+    useSkirmish.getState().select('enemy-pawn');
+    expect(useSkirmish.getState().selectedId).toBe('enemy-pawn');
+    expect(useSkirmish.getState().movesForSelected()).toContainEqual({ x: 2, y: 2 });
+
+    useSkirmish.getState().tryMoveTo(2, 2);
+
+    const state = useSkirmish.getState();
+    expect(state.game.pieces.find((candidate) => candidate.id === 'enemy-pawn')).toMatchObject({ x: 2, y: 2 });
+    expect(state.game.turn).toBe('player');
+    expect(state.game.lastMove).toMatchObject({ pieceId: 'enemy-pawn', side: 'enemy', to: { x: 2, y: 2 } });
+    expect(state.log[0]).toBe("Admin Free Move — the enemy's Pawn to 2,2.");
+    expect(state.adminMode).toBeNull();
+  });
+
   it('kills any selected unit through the normal Run death transform hook', () => {
     const transform = vi.fn((game: GameState) => ({ game, notices: [] }));
     useSkirmish.getState().setRunBattleTransformSink(transform);

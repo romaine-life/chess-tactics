@@ -158,7 +158,7 @@ export function AdminControls({
             <InnerChromeBox className="skirmish-admin-action">
               <div>
                 <strong>Free Move</strong>
-                <small>Make one unrestricted move, then return to normal play.</small>
+                <small>Move one unit of either army anywhere, then return to normal play.</small>
               </div>
               <SettingsButton
                 tone="primary"
@@ -268,7 +268,7 @@ export function AdminControls({
     <>
       <SettingsSection title="Battle">
         <SettingsRow title="Battle status" description={battleDescription} value={<span>{battleUnavailable ? 'Unavailable' : 'Ready'}</span>} />
-        <SettingsRow title="Free Move" description="Return to the board and make one unrestricted move. Friendly and neutral occupied squares remain blocked.">
+        <SettingsRow title="Free Move" description="Return to the board and move one unit of either army anywhere. Its own side's and neutral occupied squares remain blocked.">
           <SettingsButton
             tone="primary"
             disabled={battleUnavailable || busy !== null}

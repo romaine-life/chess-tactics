@@ -515,6 +515,19 @@ export interface SkirmishState {
 
 export type MoveGestureInputMode = 'move' | 'premove' | null;
 
+/**
+ * The sides this client may pick a unit up from right now.
+ *
+ * In play that is the one army you command. An armed admin Free Move commands both, because
+ * the reason to reach for it is almost always to put the OPPONENT somewhere — a pawn onto the
+ * square that opens an en passant, a piece into the shape a bug needs. Selection, the drag
+ * pickup, and the board's click intent all read this, so there is one answer to "whose piece
+ * is this" rather than four that can drift apart.
+ */
+export function commandedSides(adminMode: AdminBattleMode | null, localSide: PlayingSide): readonly Side[] {
+  return adminMode === 'free-move' ? ['player', 'enemy'] : [localSide];
+}
+
 /** Resolve one continuous drag against the current input boundary. Only a gesture that
  *  actually began during premove input may remain a premove; once that boundary closes,
  *  the same gesture becomes a freshly validated live move. */
@@ -1736,11 +1749,10 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
   select: (id) => {
     if (id === null) { set({ selectedId: null, focusedId: null }); return; }
     const s = get();
-    const side = s.adminMode === 'free-move' && (s.game.turn === 'player' || s.game.turn === 'enemy')
-      ? s.game.turn
-      : s.net ? s.net.localSide : 'player';
     const p = s.game.pieces.find((q) => q.id === id && q.alive);
-    if (p && p.side === side) set({ selectedId: id, focusedId: id });
+    if (p && commandedSides(s.adminMode, s.net ? s.net.localSide : 'player').includes(p.side)) {
+      set({ selectedId: id, focusedId: id });
+    }
   },
 
   focus: (id) => {
@@ -1771,7 +1783,10 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       const move = adminMoveTargets(s.game, p?.id ?? '').find((candidate) => candidate.x === x && candidate.y === y);
       if (!p || !move) return;
       const result = applyMove(s.game, p.id, move);
-      commitAdminPosition(result.state, result.events, 'Admin Free Move committed.');
+      // Name whose piece moved. A Free Move may now walk the OPPONENT, and a board that
+      // rearranged itself on your own turn is exactly the thing the log has to account for.
+      const mover = `${p.side === 'player' ? 'your' : "the enemy's"} ${PIECE_LABEL[p.type] ?? p.type}`;
+      commitAdminPosition(result.state, result.events, `Admin Free Move — ${mover} to ${x},${y}.`);
       return;
     }
     if (s.game.turn !== side || s.game.winner) return;

@@ -10,7 +10,7 @@ import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, UNIT_FACINGS, defaultFac
 import { defaultTerrainFamily, familyForGameplayTerrain, familyIdForAsset, tileSocketsForAsset, type TileFamilyId } from '../core/tileSockets';
 import { usePlayerPalette } from '../settings/playerPalette';
 import { useSkirmish } from '../game/SkirmishStoreContext';
-import { moveGestureInputMode } from '../game/store';
+import { commandedSides, moveGestureInputMode } from '../game/store';
 import { adminMoveTargets } from '../game/adminBattle';
 import { useSkirmishView } from '../game/SkirmishViewStoreContext';
 import { PLAYER_TECHNICAL_MINIMUM_ZOOM } from '../game/boardCameraPolicy';
@@ -184,10 +184,11 @@ export function skirmishTileClickIntent(
   y: number,
   selectedMoves: readonly Pick<Move, 'x' | 'y'>[],
   occupant: Pick<Piece, 'id' | 'side'> | undefined,
-  localSide: Side,
+  /** The sides this click may pick up — one in play, both under an armed Free Move. */
+  commanded: readonly Side[],
 ): SkirmishTileClickIntent {
   if (selectedMoves.some((move) => move.x === x && move.y === y)) return { kind: 'move' };
-  if (occupant?.side === localSide) return { kind: 'select', pieceId: occupant.id };
+  if (occupant && commanded.includes(occupant.side)) return { kind: 'select', pieceId: occupant.id };
   if (occupant && occupant.side !== 'neutral') return { kind: 'focus', pieceId: occupant.id };
   return { kind: 'clear-selection' };
 }
@@ -2232,10 +2233,7 @@ export function SkirmishBoard({
       return;
     }
     const here = game.pieces.find((piece) => piece.alive && piece.x === x && piece.y === y);
-    const selectingSide = adminMode === 'free-move' && (game.turn === 'player' || game.turn === 'enemy')
-      ? game.turn
-      : localSide;
-    const intent = skirmishTileClickIntent(x, y, selectedMoves, here, selectingSide);
+    const intent = skirmishTileClickIntent(x, y, selectedMoves, here, commandedSides(adminMode, localSide));
     switch (intent.kind) {
       case 'move':
         tryMoveTo(x, y);
@@ -2305,13 +2303,10 @@ export function SkirmishBoard({
       ? (game.turn === 'player' || game.turn === 'enemy')
       : game.turn === localSide && !premoveMode && !netMovePending;
     if (!canMove && !premoveMode) return;
+    const dragCommanded = commandedSides(adminMode, localSide);
     const piece = premoveMode
       ? premoveDraggablePieceAt(cx, cy)
-      : livePieces.find((p) => (
-          p.x === cx
-          && p.y === cy
-          && p.side === (adminMode === 'free-move' ? game.turn : localSide)
-        ));
+      : livePieces.find((p) => p.x === cx && p.y === cy && dragCommanded.includes(p.side));
     if (!piece) return;
     // Pick it up: select (so the ring shows) and arm a potential drag. It only becomes a real
     // drag once the pointer crosses the threshold, so a plain tap still falls through to the
