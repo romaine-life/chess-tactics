@@ -15539,45 +15539,63 @@ button.tileset-relationship-cell {
    point of the surface — so the track floor is the width at which a swatch still reads as a piece
    of battlefield rather than a texture chip. Below that they wrap to a second line instead of
    shrinking; five styles at 3-up + 2-up still compare in one glance, five illegible chips do not. */
-.board-grid-style-swatches {
+.board-grid-style-picker {
   display: grid;
-  gap: 6px;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
   inline-size: 100%;
-}
-
-.board-grid-style-swatch {
-  gap: 5px;
-  padding: 5px 4px 6px;
-}
-
-/* The selected FRAME is the registered inner-box active chrome (ChromeButton publishes
-   aria-pressed); only the label tone is local, so the lit swatch names itself as well as
-   framing itself. */
-.board-grid-style-swatch.is-selected {
-  color: #eafaff;
-}
-
-.board-grid-style-swatch:not(.is-selected):hover {
-  filter: brightness(1.06);
-}
-
-.board-grid-style-swatch small {
-  font-size: var(--ds-text-xs);
-  line-height: 1;
-  text-align: center;
+  justify-items: stretch;
 }
 
 /* A fixed WINDOW, never a fitted camera: the board inside is held at canonical 1× and overflows
-   this box on every edge, so each swatch shows the grid at exactly the weight a battlefield draws
-   it. Sizing this box is a crop, not a zoom. */
-.board-grid-style-swatch-window {
-  block-size: 84px;
+   this box on every edge, so the preview shows the grid at exactly the weight a battlefield draws
+   it. Sizing this box is a crop, not a zoom — which is why it can be made as large as the row
+   allows without misreporting the line the player is choosing. */
+.board-grid-style-preview {
+  block-size: 190px;
   display: block;
   inline-size: 100%;
   min-inline-size: 0;
   overflow: hidden;
   position: relative;
+}
+
+.board-grid-style-select {
+  inline-size: 100%;
+}
+
+.board-grid-style-option {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-inline-size: 0;
+}
+
+.board-grid-style-chip {
+  block-size: 14px;
+  display: block;
+  flex: 0 0 auto;
+  inline-size: 44px;
+}
+
+/* Ground for the sample line, in the swatch board's own grass family so that both a near-white and
+   a near-black line read on it. This is the sample's artwork, not a chrome surface. */
+.board-grid-style-chip-ground {
+  fill: #6f7a4c;
+}
+
+.board-grid-style-chip svg {
+  block-size: 100%;
+  display: block;
+  inline-size: 100%;
+  overflow: visible;
+}
+
+.board-grid-style-chip line {
+  fill: none;
+  filter: var(--board-grid-bevel, none);
+  stroke: var(--board-grid-stroke, #241a10);
+  stroke-linecap: round;
+  stroke-width: var(--board-grid-weight, 2.6);
 }
 
 /* Persisted player-camera coverage boundary. Unlike a viewport snapshot, this world-space box is

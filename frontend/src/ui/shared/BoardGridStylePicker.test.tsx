@@ -6,7 +6,7 @@ import { runtimePredrawnBoardPlate } from '../../render/PredrawnBoardLayer';
 import { testDrawableCatalog } from '../../test/drawableCatalog';
 import { BOARD_GRID_STYLES } from '../../settings/appSettings';
 import { BOARD_GRID_STYLE_LABELS } from '../../settings/boardGridStyle';
-import { BoardGridStylePicker } from './BoardGridStylePicker';
+import { BoardGridStylePicker, boardGridStyleOptions } from './BoardGridStylePicker';
 import { boardGridStyleSwatchBoard } from './boardGridStyleSwatchBoard';
 
 const styleSheet = readFileSync(new URL('../../style.css', import.meta.url), 'utf8');
@@ -16,27 +16,41 @@ describe('board grid style picker', () => {
     applyDrawableCatalog(testDrawableCatalog());
   });
 
-  it('draws every style at once, each scoped to its own swatch', () => {
+  it('draws the chosen style on ONE board, and names it in the closed control', () => {
     const markup = renderToStaticMarkup(<BoardGridStylePicker value="carved" onChange={() => {}} />);
 
-    // The picker exists so the player never has to leave Settings to see a style, so a style the
-    // list knows about but does not draw is the whole defect coming back.
-    for (const style of BOARD_GRID_STYLES) {
-      expect(markup).toContain(`data-board-grid-style="${style}"`);
-      expect(markup).toContain(BOARD_GRID_STYLE_LABELS[style].label);
-    }
-    expect(markup.match(/data-chrome-unit="inner-asset-swatch"/g)).toHaveLength(BOARD_GRID_STYLES.length);
-    expect(markup.match(/tileset-board-grid-layer/g)).toHaveLength(BOARD_GRID_STYLES.length);
-    // Exactly one swatch is lit, and it is the stored choice.
-    expect(markup.match(/aria-pressed="true"/g)).toHaveLength(1);
+    // One picture, at a size the line is legible. Five boards sharing the row could not show a
+    // one-to-three-pixel difference, which is the defect this surface exists to fix.
+    expect(markup.match(/tileset-board-grid-layer/g)).toHaveLength(1);
+    expect(markup).toContain('data-board-grid-style="carved"');
     expect(markup).toContain('aria-label="Carved grid over board terrain"');
+
+    // Which style is picked was a frame tone the eye had to hunt for. The closed dropdown says it.
+    expect(markup).toContain(BOARD_GRID_STYLE_LABELS.carved.label);
   });
 
-  it('holds every swatch at canonical 1x rather than fitting a camera to the box', () => {
+  it('offers every style, each chip drawn from that style own variables', () => {
+    // A style the list knows about but never offers is the choice going missing; a chip painted
+    // with a hardcoded colour is the list drifting from what the battlefield actually draws.
+    const options = boardGridStyleOptions();
+    expect(options.map((option) => option.value)).toEqual([...BOARD_GRID_STYLES]);
+    for (const option of options) {
+      const row = renderToStaticMarkup(<>{option.label}</>);
+      expect(row).toContain(`data-board-grid-style="${option.value}"`);
+      expect(row).toContain(BOARD_GRID_STYLE_LABELS[option.value].label);
+      expect(option.title).toBe(BOARD_GRID_STYLE_LABELS[option.value].detail);
+    }
+    const chipRule = styleSheet.match(/\.board-grid-style-chip line \{[^}]*\}/)?.[0] ?? '';
+    expect(chipRule).toContain('var(--board-grid-stroke');
+    expect(chipRule).toContain('var(--board-grid-weight');
+    expect(chipRule).toContain('var(--board-grid-bevel');
+  });
+
+  it('holds the preview at canonical 1x rather than fitting a camera to the box', () => {
     // A fitted camera scales the board with a CSS transform, which thins the rendered stroke and
-    // silently misreports the very weights the player is comparing.
+    // silently misreports the very weight the player is choosing.
     const markup = renderToStaticMarkup(<BoardGridStylePicker value="chalk" onChange={() => {}} />);
-    expect(markup.match(/--board-zoom:1/g)).toHaveLength(BOARD_GRID_STYLES.length);
+    expect(markup.match(/--board-zoom:1/g)).toHaveLength(1);
     expect(markup).not.toContain('--board-zoom:0');
   });
 
@@ -54,20 +68,25 @@ describe('board grid style picker', () => {
     expect(runtimePredrawnBoardPlate(board.surface!).src).toMatch(/^\/api\/background-versions\/[^/]+\/content$/);
   });
 
-  it('walks the swatch window off the board centre', () => {
+  it('walks the preview window off the board centre', () => {
     // A Battle board keeps its playable squares on clear painted ground, so the board's own centre
     // is the least informative crop there is: flat meadow, where every style looks acceptable.
     const markup = renderToStaticMarkup(<BoardGridStylePicker value="chalk" onChange={() => {}} />);
     const pans = [...markup.matchAll(/--board-pan-x:(-?[\d.]+)px;--board-pan-y:(-?[\d.]+)px/g)];
-    expect(pans).toHaveLength(BOARD_GRID_STYLES.length);
-    // Every swatch shares one crop, or the comparison varies the ground as well as the line.
-    expect(new Set(pans.map((pan) => `${pan[1]},${pan[2]}`)).size).toBe(1);
+    expect(pans).toHaveLength(1);
+    // The crop must not move with the style, or switching styles changes the ground as well as
+    // the line and the player cannot tell which one they just judged.
+    for (const style of BOARD_GRID_STYLES) {
+      const other = renderToStaticMarkup(<BoardGridStylePicker value={style} onChange={() => {}} />);
+      const otherPan = /--board-pan-x:(-?[\d.]+)px;--board-pan-y:(-?[\d.]+)px/.exec(other);
+      expect(`${otherPan?.[1]},${otherPan?.[2]}`).toBe(`${pans[0][1]},${pans[0][2]}`);
+    }
     expect(Number(pans[0][1]) === 0 && Number(pans[0][2]) === 0).toBe(false);
   });
 
-  it('gives every style inheritable variables so swatches can differ from the root choice', () => {
-    // `:root`-anchored rules cannot express five styles on one page: the attribute has to be able
-    // to ride a swatch, and the nearest one has to win.
+  it('gives every style inheritable variables so the preview can differ from the root choice', () => {
+    // `:root`-anchored rules cannot express a preview that disagrees with the app around it: the
+    // attribute has to be able to ride the preview, and the nearest one has to win.
     for (const style of BOARD_GRID_STYLES) {
       const block = styleSheet.match(
         new RegExp(`\\[data-board-grid-style='${style}'\\]\\s*\\{[^}]*\\}`),
