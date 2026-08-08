@@ -1,7 +1,7 @@
 import sizing from './runCardRowSizing.json';
 
 /**
- * How large the Run prints a card row (ADR-0521).
+ * How large the Run prints a card row (ADR-0522).
  *
  * The Bona Vacantia grant and the Sectio are card screens: the cards are the
  * decision, so the row starts from the largest 5:7 face that fits its own lane

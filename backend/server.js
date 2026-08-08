@@ -7845,7 +7845,7 @@ app.get('/api/__devctl/health', (_req, res, next) => {
   });
 });
 
-// ADR-0521: the Card Size instrument writes deterministic Git-owned layout numbers for the
+// ADR-0522: the Card Size instrument writes deterministic Git-owned layout numbers for the
 // Run's card rows, never live-media bytes or database state. Same shape as the divider
 // route below: named dev harness only, no client-supplied path, admin-gated.
 app.put('/api/studio/run-card-row-sizing/defaults', async (req, res) => {

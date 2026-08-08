@@ -8,7 +8,7 @@ refines:
   - "[ADR-0029](0029-catalog-category-requirements.md)"
 ---
 
-# ADR-0521: Run card rows are sized from their lane, not from a fixed track
+# ADR-0522: Run card rows are sized from their lane, not from a fixed track
 
 ## Context
 
