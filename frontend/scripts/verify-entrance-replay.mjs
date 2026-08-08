@@ -81,7 +81,29 @@ try {
     if (restless > 1) throw new Error(`run ${run} never settled (${restless.toFixed(1)}px of drift at the end)`);
   }
 
+  // Walking the catalog with the stepper has to keep working — a viewer that only replays the
+  // prop it opened on cannot review a batch, which is the job.
+  const walked = [];
+  for (let step = 0; step < 3; step += 1) {
+    const before = await page.evaluate(() => document.querySelector('.pc-entrance')?.style.getPropertyValue('--pc-sheet') ?? '');
+    await page.evaluate(() => {
+      const next = [...document.querySelectorAll('button')].find((node) => node.getAttribute('aria-label') === 'Next prop');
+      if (!next) throw new Error('no Next prop button');
+      next.click();
+    });
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const after = await page.evaluate(() => document.querySelector('.pc-entrance')?.style.getPropertyValue('--pc-sheet') ?? '');
+    if (!after) throw new Error(`stepping to prop ${step + 1} left nothing on the board`);
+    await press();
+    const samples = await record(1400);
+    const tops = samples.map((sample) => sample.top);
+    const travel = Math.max(...tops) - Math.min(...tops);
+    if (travel < MIN_TRAVEL_PX) throw new Error(`stepped prop ${step + 1} did not play (${travel.toFixed(1)}px)`);
+    walked.push(`${before === after ? 'same art' : 'new art'} +${Math.round(travel)}px`);
+  }
+
   console.log(`entrance replay OK: ${runs.map((r) => `run ${r.run} travelled ${r.travel}px over ${r.samples} frames and settled`).join('; ')}`);
+  console.log(`stepper OK: ${walked.join(' | ')}`);
 } catch (error) {
   fail(error instanceof Error ? error.message : String(error));
   process.exitCode = 1;

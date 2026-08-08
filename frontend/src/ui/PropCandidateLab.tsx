@@ -266,6 +266,14 @@ export function PropCandidateLab({ propId, onPropId, header }: {
     () => [...new Set([...staged, ...PROP_DEFS.map((def) => def.id)])].sort(),
     [staged],
   );
+  const propIndex = Math.max(0, reviewableProps.indexOf(reviewableProps.includes(propId) ? propId : reviewableProps[0] ?? propId));
+  const stepProp = useCallback((delta: number): void => {
+    if (!reviewableProps.length) return;
+    const next = (propIndex + delta + reviewableProps.length) % reviewableProps.length;
+    onPropId(reviewableProps[next]);
+    setSelectedKey('');
+    setNotice(null);
+  }, [onPropId, propIndex, reviewableProps]);
   const propBadge = useCallback((id: string): string => {
     const marks = [
       staged.has(id) ? 'candidates' : '',
@@ -428,6 +436,15 @@ export function PropCandidateLab({ propId, onPropId, header }: {
             {state === 'unauthorized' ? <p className="pc-note">Sign in as an owner to review candidates.</p> : null}
             {state === 'error' ? <p className="pc-note pc-note--bad">{error}</p> : null}
 
+            {/* Walking the catalog is how a batch gets judged — picking each id out of a
+                dropdown turns "compare seventeen rocks" into seventeen menu hunts. */}
+            <div className="ps-toggles">
+              <button type="button" className="ps-toggle" aria-label="Previous prop"
+                onClick={() => stepProp(-1)}>◀</button>
+              <span className="pc-note">{propIndex + 1} / {reviewableProps.length}</span>
+              <button type="button" className="ps-toggle" aria-label="Next prop"
+                onClick={() => stepProp(1)}>▶</button>
+            </div>
             <label className="tileset-catalog-zoom">
               <span>Prop</span>
               <select value={activeProp} onChange={(event) => { onPropId(event.target.value); setSelectedKey(''); }}>
