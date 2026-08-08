@@ -146,9 +146,8 @@ export function runCardTierLabel(value: RunCardTier): string {
 }
 
 /**
- * Text-free generated metalwork around the existing live gold-value coin. The starter band
- * carries a word in the coin's seat instead: the card is not for sale, so a price there would
- * be the one thing the ornament must not say.
+ * Text-free generated metalwork around the existing live gold-value coin. Every band seats the
+ * same coin; the starter band's is struck blank, because that card carries no price.
  */
 export function RunCardGoldTierDivider({
   value,
@@ -168,23 +167,6 @@ export function RunCardGoldTierDivider({
     '--run-card-gold-tier-coin-x': `${coinTuning.x}px`,
     '--run-card-gold-tier-coin-y': `${coinTuning.y}px`,
   } as CSSProperties;
-  // The left cap is a socket cut for a coin. The starter band has no price to seat there, so it
-  // drops the socket, leads with the word, and starts the same rail after it.
-  if (value === 'starter') {
-    return (
-      <span
-        className="run-card-gold-tier-divider is-starter"
-        data-gold-tier-divider-ready="true"
-        style={tuningStyle}
-      >
-        <span className="run-card-gold-tier-divider-label">Starter</span>
-        <span className="run-card-gold-tier-divider-art" aria-hidden="true">
-          <DividerSlice sourceUrl={source.url} viewBox="132 138 500 107" />
-          <DividerSlice sourceUrl={source.url} viewBox="632 138 56 107" />
-        </span>
-      </span>
-    );
-  }
   return (
     <span
       className="run-card-gold-tier-divider"
