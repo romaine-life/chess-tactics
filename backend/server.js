@@ -108,6 +108,8 @@ const {
   strategikonBackgroundMediaIssue,
   strategikonBackgroundOwnerProofIssue,
   strategikonBackgroundSlot,
+  propArtMediaIssue,
+  propArtSlot,
   wallMaterialMediaIssue,
   wallMaterialOwnerProofIssue,
   wallMaterialSlot,
@@ -18892,6 +18894,9 @@ function mediaDomainProjectionIssue(row) {
   // tile projection, so they resolve before the board-tile rules below.
   if (wallMaterialSlot(row.slot)) {
     return wallMaterialMediaIssue(row, runtime.value);
+  }
+  if (propArtSlot(row.slot)) {
+    return propArtMediaIssue(row, runtime.value);
   }
   if (workspaceBackgroundSlotId(row.slot)) {
     return workspaceBackgroundMediaIssue(row, runtime.value);

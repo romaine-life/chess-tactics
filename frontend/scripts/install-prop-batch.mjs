@@ -104,7 +104,7 @@ for (const item of plan) {
       mediaType: 'image/png',
       // Replay is keyed on the ORIGINAL request, so a corrected payload needs a new key —
       // otherwise an earlier attempt's evidence is what gets replayed and re-rejected.
-      idempotencyKey: `${prefix}-install-v3-${item.id}-${half}`,
+      idempotencyKey: `${prefix}-install-v4-${item.id}-${half}`,
     });
     const sha = uploaded.media.sha256;
     await json(`${apiBase}/api/admin/media-versions/${uploaded.id}/review`, {
