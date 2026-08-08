@@ -23236,9 +23236,9 @@ button.tileset-relationship-cell {
 
 }
 
-/* Card Size instrument (ADR-0519). The stage mounts the real card row inside a box
-   the exact size of the Run's card lane, so a card in here is the same number of
-   pixels as the card that ships. The viewer zoom only scales the finished picture. */
+/* Card Size instrument (ADR-0519). The stage is the shared window-scaled dressing-room
+   preview: the panel iframes the REAL Run route at live window size, so the lane being
+   tuned is the lane that ships. Only the catalog tile is bespoke. */
 .run-card-size-catalog-image {
   min-height: 128px;
 }
@@ -23250,38 +23250,6 @@ button.tileset-relationship-cell {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   /* Three 5:7 faces that clear the tile's 128px image band without cropping. */
   inline-size: min(100%, 252px);
-}
-
-.run-card-size-studio {
-  display: grid;
-  min-block-size: 0;
-  overflow: auto;
-  padding: 22px;
-  place-content: start center;
-}
-
-.run-card-size-studio-lane {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-}
-
-.run-card-size-studio-lane figcaption,
-.run-card-size-studio-lane > figcaption {
-  color: #a9bdd2;
-}
-
-.run-card-size-studio-lane-scaler {
-  overflow: hidden;
-}
-
-.run-card-size-studio-lane-box {
-  /* Inset, so the keyline survives the scaler's clip at every zoom. */
-  box-shadow: inset 0 0 0 1px rgba(91, 157, 216, .34);
-  box-sizing: border-box;
-  /* The in-game workspace inset the live rows sit inside. */
-  padding: 8px;
-  transform-origin: left top;
 }
 
 .run-card-gold-tier-divider-catalog-image {

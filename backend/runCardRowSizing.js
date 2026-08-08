@@ -10,8 +10,8 @@ const RUN_CARD_ROW_SIZING_RELATIVE_PATH = path.join(
 
 // Mirrors RUN_CARD_ROW_SIZING_LIMITS in frontend/src/ui/runCardRowSizing.ts.
 const RUN_CARD_ROW_SIZING_LIMITS = Object.freeze({
-  maxWidth: Object.freeze({ min: 180, max: 560 }),
-  heightFill: Object.freeze({ min: 40, max: 100 }),
+  size: Object.freeze({ min: 40, max: 100 }),
+  maxWidth: Object.freeze({ min: 200, max: 800 }),
   gap: Object.freeze({ min: 0, max: 64 }),
 });
 
@@ -39,8 +39,8 @@ function normalizeRunCardRowSizing(value) {
   }
   return {
     card: {
+      size: boundedInteger(card.size, 'size'),
       maxWidth: boundedInteger(card.maxWidth, 'maxWidth'),
-      heightFill: boundedInteger(card.heightFill, 'heightFill'),
       gap: boundedInteger(card.gap, 'gap'),
     },
   };

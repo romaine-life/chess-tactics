@@ -11,18 +11,18 @@ const {
 
 test('normalizes only bounded integer card sizing', () => {
   assert.deepEqual(normalizeRunCardRowSizing({
-    card: { maxWidth: 360, heightFill: 90, gap: 16 },
-  }), { card: { maxWidth: 360, heightFill: 90, gap: 16 } });
+    card: { size: 100, maxWidth: 560, gap: 16 },
+  }), { card: { size: 100, maxWidth: 560, gap: 16 } });
   assert.throws(
-    () => normalizeRunCardRowSizing({ card: { maxWidth: 561, heightFill: 90, gap: 16 } }),
-    /card\.maxWidth must be an integer from 180 through 560/,
+    () => normalizeRunCardRowSizing({ card: { size: 100, maxWidth: 801, gap: 16 } }),
+    /card\.maxWidth must be an integer from 200 through 800/,
   );
   assert.throws(
-    () => normalizeRunCardRowSizing({ card: { maxWidth: 360, heightFill: 30, gap: 16 } }),
-    /card\.heightFill must be an integer from 40 through 100/,
+    () => normalizeRunCardRowSizing({ card: { size: 30, maxWidth: 560, gap: 16 } }),
+    /card\.size must be an integer from 40 through 100/,
   );
   assert.throws(
-    () => normalizeRunCardRowSizing({ card: { maxWidth: 360, heightFill: 90, gap: 16.5 } }),
+    () => normalizeRunCardRowSizing({ card: { size: 100, maxWidth: 560, gap: 16.5 } }),
     /card\.gap must be an integer/,
   );
   assert.throws(() => normalizeRunCardRowSizing({}), /sizing\.card must be an object/);
@@ -37,10 +37,10 @@ test('atomically saves only the fixed checkout-owned sizing file', async (t) => 
 
   const saved = await saveRunCardRowSizing({
     repoDir,
-    value: { card: { maxWidth: 420, heightFill: 85, gap: 20 } },
+    value: { card: { size: 85, maxWidth: 420, gap: 20 } },
   });
 
-  assert.deepEqual(saved, { card: { maxWidth: 420, heightFill: 85, gap: 20 } });
+  assert.deepEqual(saved, { card: { size: 85, maxWidth: 420, gap: 20 } });
   assert.deepEqual(JSON.parse(fs.readFileSync(target, 'utf8')), saved);
   assert.deepEqual(fs.readdirSync(path.dirname(target)), ['runCardRowSizing.json']);
 });

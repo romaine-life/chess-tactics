@@ -1,41 +1,31 @@
-import { useCallback, useEffect, useState, type ReactElement, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { saveRunCardRowSizing } from '../net/runCardRowSizing';
 import { RUN_CARD_CATALOG } from '../run/model';
 import { RunCard } from './RunCard';
-import { RunCardRow } from './RunCardRow';
 import {
-  RUN_CARD_ASPECT_HEIGHT,
-  RUN_CARD_ASPECT_WIDTH,
   RUN_CARD_ROW_SIZING_DEFAULTS,
   RUN_CARD_ROW_SIZING_LIMITS,
   runCardRowCardHeight,
-  runCardRowCardWidth,
+  runCardRowSizingCss,
+  sameRunCardRowSizing,
   type RunCardRowSizing,
 } from './runCardRowSizing';
 import { SliderRow } from './dressing/SliderRow';
+import { useInjectedStyle } from './dressing/useInjectedStyle';
+import { useWindowScaledPreview } from './useWindowScaledPreview';
 import { StudioCatalogCard } from './studio/StudioCatalogCard';
 
 const DRAFT_KEY = 'studio.runCardRowSizing.draft.v1';
 
 /**
- * The Run's real card lane, measured off the live Bona Vacantia workspace body at
- * each window the app is verified at. The instrument prints these boxes at 1:1 so
- * a card in here is the same number of pixels as a card on the screen it ships to.
+ * The two screens this tuning is for, each addressed by the craft spec that puts
+ * a Run on it. Opening one crafts the account's active Run onto that state — the
+ * owner's Run is disposable test state and this is a development instrument.
  */
-const LANES: readonly Readonly<{ id: string; label: string; width: number; height: number }>[] = Object.freeze([
-  { id: 'wide', label: '1440 × 900 window', width: 1082, height: 792 },
-  { id: 'medium', label: '1280 × 800 window', width: 961, height: 692 },
-  { id: 'narrow', label: '740 × 430 window', width: 506, height: 322 },
+const SCREENS: readonly Readonly<{ id: string; label: string; route: string; cards: number }>[] = Object.freeze([
+  { id: 'vacantia', label: 'Bona Vacantia · opening grant', route: '/run?craft=bona-vacantia&battle=1', cards: 3 },
+  { id: 'sectio', label: 'Sectio · card offers', route: '/run?craft=sectio&battle=3&gold=25', cards: 3 },
 ]);
-
-/** Bona Vacantia and the ordinary Sectio deal three; a Quartermaster Sectio deals four. */
-const COUNTS: readonly number[] = Object.freeze([3, 4]);
-
-function sameSizing(left: RunCardRowSizing, right: RunCardRowSizing): boolean {
-  return left.maxWidth === right.maxWidth
-    && left.heightFill === right.heightFill
-    && left.gap === right.gap;
-}
 
 function withinLimits(value: Partial<RunCardRowSizing> | null): value is RunCardRowSizing {
   if (!value) return false;
@@ -50,63 +40,18 @@ function readDraft(): RunCardRowSizing {
   if (typeof window === 'undefined') return { ...RUN_CARD_ROW_SIZING_DEFAULTS };
   try {
     const value = JSON.parse(window.localStorage.getItem(DRAFT_KEY) ?? 'null') as Partial<RunCardRowSizing> | null;
-    if (withinLimits(value)) return { maxWidth: value.maxWidth, heightFill: value.heightFill, gap: value.gap };
+    if (withinLimits(value)) return { size: value.size, maxWidth: value.maxWidth, gap: value.gap };
   } catch {
     // A malformed old draft is disposable; the Git-owned baseline remains authoritative.
   }
   return { ...RUN_CARD_ROW_SIZING_DEFAULTS };
 }
 
-/**
- * The in-game workspace inset the live card rows sit inside, on both sides of an
- * axis. The Studio's own density is the comfortable one, so this is written out
- * rather than read from `--ds-inset`.
- */
-const LANE_INSET = 16;
-
-/**
- * The row the live screens print, mounted inside one exact Run card lane.
- *
- * The lane box is always built at 1:1 so the row measures the real number of
- * pixels it gets in the Run; the viewer's zoom only scales the finished picture.
- */
-function LanePreview({
-  lane,
-  count,
-  sizing,
-  zoom,
-}: {
-  lane: typeof LANES[number];
-  count: number;
-  sizing: RunCardRowSizing;
-  zoom: number;
-}): ReactElement {
-  const cards = RUN_CARD_CATALOG.slice(0, count);
-  return (
-    <figure className="run-card-size-studio-lane" data-testid={`run-card-size-lane-${lane.id}`}>
-      <figcaption>{lane.label} · card lane {lane.width} × {lane.height}px</figcaption>
-      <div
-        className="run-card-size-studio-lane-scaler"
-        style={{
-          blockSize: `${Math.round(lane.height * zoom)}px`,
-          inlineSize: `${Math.round(lane.width * zoom)}px`,
-        }}
-      >
-        <div
-          className="run-card-size-studio-lane-box"
-          style={{
-            blockSize: `${lane.height}px`,
-            inlineSize: `${lane.width}px`,
-            scale: `${zoom}`,
-          }}
-        >
-          <RunCardRow count={cards.length} sizing={sizing}>
-            {cards.map((card) => <RunCard key={card.id} card={card} mode="reference" />)}
-          </RunCardRow>
-        </div>
-      </div>
-    </figure>
-  );
+/** What the previewed row is actually printing, read back out of the live screen. */
+interface PrintedRow {
+  cardWidth: number;
+  cardHeight: number;
+  boundBy: string;
 }
 
 export function RunCardSizeCatalog({ onOpen }: { onOpen: () => void }): ReactElement {
@@ -118,7 +63,7 @@ export function RunCardSizeCatalog({ onOpen }: { onOpen: () => void }): ReactEle
     >
       <StudioCatalogCard
         title="Card Size"
-        badge={`${RUN_CARD_ROW_SIZING_DEFAULTS.maxWidth}px maximum`}
+        badge="Live Run screens"
         selected
         onSelect={onOpen}
         onOpen={onOpen}
@@ -144,17 +89,49 @@ export function RunCardSizeViewer({
   header: ReactNode;
   viewerZoom: number;
 }): ReactElement {
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  // Full-size, scrollable preview scaled by the Viewer's zoom: the iframe carries the live
+  // window's size, so the Run's lane — and therefore the card fit being tuned — resolves at
+  // shipped proportions instead of a panel-sized re-centre. See useWindowScaledPreview.
+  const { canvasStyle, frameStyle } = useWindowScaledPreview(viewerZoom);
   const [baseline, setBaseline] = useState<RunCardRowSizing>({ ...RUN_CARD_ROW_SIZING_DEFAULTS });
   const [sizing, setSizing] = useState<RunCardRowSizing>(readDraft);
-  const [laneId, setLaneId] = useState(LANES[0].id);
-  const [count, setCount] = useState(COUNTS[0]);
+  const [screenId, setScreenId] = useState(SCREENS[0].id);
+  const [printed, setPrinted] = useState<PrintedRow | null>(null);
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState('Reset uses the Git-owned sizing the Bona Vacantia and Sectio currently print.');
-  const lane = LANES.find((candidate) => candidate.id === laneId) ?? LANES[0];
+  const [status, setStatus] = useState('Controls drive the live Run screen beside them. Reset returns to the sizing it ships with.');
+  const screen = SCREENS.find((candidate) => candidate.id === screenId) ?? SCREENS[0];
 
   useEffect(() => {
     window.localStorage.setItem(DRAFT_KEY, JSON.stringify(sizing));
   }, [sizing]);
+
+  // The audition channel: the real screen inside the iframe reads these properties,
+  // so every slider moves the cards on the screen they ship to.
+  useInjectedStyle(iframeRef, 'run-card-size-tuning', runCardRowSizingCss(sizing));
+
+  // Read the printed row back out of the live screen rather than recomputing it here:
+  // the number shown is the number the screen drew.
+  useEffect(() => {
+    const read = (): void => {
+      try {
+        const row = iframeRef.current?.contentDocument?.querySelector('.run-card-row');
+        const width = Number(row?.getAttribute('data-run-card-width') ?? Number.NaN);
+        setPrinted(Number.isFinite(width) && width > 0
+          ? {
+            cardWidth: width,
+            cardHeight: Number(row?.getAttribute('data-run-card-height') ?? runCardRowCardHeight(width)),
+            boundBy: row?.getAttribute('data-run-card-bound-by') ?? '',
+          }
+          : null);
+      } catch {
+        // Same-origin access blips while the previewed route navigates; the next tick retries.
+      }
+    };
+    read();
+    const timer = window.setInterval(read, 250);
+    return () => window.clearInterval(timer);
+  }, [screenId]);
 
   const update = useCallback((patch: Partial<RunCardRowSizing>): void => {
     setSizing((current) => ({ ...current, ...patch }));
@@ -188,45 +165,50 @@ export function RunCardSizeViewer({
     setStatus('Copied the current sizing JSON.');
   };
 
-  const box = { width: lane.width - LANE_INSET, height: lane.height - LANE_INSET };
-  const cardWidth = runCardRowCardWidth({ count, box, sizing });
-  const widthFit = (box.width - (count - 1) * sizing.gap) / count;
-  const heightFit = (box.height * (sizing.heightFill / 100) * RUN_CARD_ASPECT_WIDTH) / RUN_CARD_ASPECT_HEIGHT;
-  const boundBy = sizing.maxWidth <= Math.min(widthFit, heightFit)
-    ? 'the tuned maximum'
-    : heightFit <= widthFit ? 'the lane height' : 'the lane width';
-
   return (
     <>
-      <section
-        className="tileset-studio-main run-card-size-studio"
-        aria-label="Card size stage"
-        data-testid="run-card-size-studio"
-      >
-        <LanePreview lane={lane} count={count} sizing={sizing} zoom={viewerZoom} />
+      <section className="surface-dressing-main is-window-zoom run-card-size-studio" aria-label="Live Run card screen preview">
+        <div className="surface-dressing-canvas" style={canvasStyle}>
+          <iframe
+            ref={iframeRef}
+            className="surface-dressing-frame"
+            data-testid="run-card-size-preview"
+            key={screen.id}
+            src={screen.route}
+            title={`Live ${screen.label} preview`}
+            style={frameStyle}
+          />
+        </div>
       </section>
       <aside className="tileset-view-controls" aria-label="Card size controls">
         <section className="tileset-inspector-section">
           <h2>Controls</h2>
           {header}
           <div className="tileset-control-stack">
-            <div data-testid="run-card-size-max-width-control">
+            <label className="tileset-category-select">
+              <span>Screen</span>
+              <select
+                value={screen.id}
+                onChange={(event) => setScreenId(event.target.value)}
+                aria-label="Screen"
+                data-testid="run-card-size-screen"
+              >
+                {SCREENS.map((candidate) => (
+                  <option key={candidate.id} value={candidate.id}>{candidate.label}</option>
+                ))}
+              </select>
+            </label>
+            <p className="tileset-catalog-note">
+              The panel is the <strong>real</strong> screen at live window size — opening it crafts a Run onto that
+              state. Every control drives it; defaults are what ships.
+            </p>
+            <div data-testid="run-card-size-size-control">
               <SliderRow
-                label={<>Largest card · {sizing.maxWidth}px wide</>}
-                value={sizing.maxWidth}
-                set={(maxWidth) => update({ maxWidth })}
-                {...RUN_CARD_ROW_SIZING_LIMITS.maxWidth}
-                nudge={4}
-                dflt={baseline.maxWidth}
-              />
-            </div>
-            <div data-testid="run-card-size-height-fill-control">
-              <SliderRow
-                label={<>Screen height used · {sizing.heightFill}%</>}
-                value={sizing.heightFill}
-                set={(heightFill) => update({ heightFill })}
-                {...RUN_CARD_ROW_SIZING_LIMITS.heightFill}
-                dflt={baseline.heightFill}
+                label={<>Card size · {sizing.size}% of the room</>}
+                value={sizing.size}
+                set={(size) => update({ size })}
+                {...RUN_CARD_ROW_SIZING_LIMITS.size}
+                dflt={baseline.size}
               />
             </div>
             <div data-testid="run-card-size-gap-control">
@@ -239,41 +221,38 @@ export function RunCardSizeViewer({
                 dflt={baseline.gap}
               />
             </div>
-            <label className="tileset-category-select">
-              <span>Window</span>
-              <select value={lane.id} onChange={(event) => setLaneId(event.target.value)} aria-label="Window">
-                {LANES.map((candidate) => (
-                  <option key={candidate.id} value={candidate.id}>{candidate.label}</option>
-                ))}
-              </select>
-            </label>
-            <label className="tileset-category-select">
-              <span>Cards dealt</span>
-              <select value={count} onChange={(event) => setCount(Number(event.target.value))} aria-label="Cards dealt">
-                {COUNTS.map((candidate) => (
-                  <option key={candidate} value={candidate}>
-                    {candidate === 3 ? '3 · Bona Vacantia and Sectio' : '4 · Quartermaster Sectio'}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div data-testid="run-card-size-max-width-control">
+              <SliderRow
+                label={<>Ceiling · never wider than {sizing.maxWidth}px</>}
+                value={sizing.maxWidth}
+                set={(maxWidth) => update({ maxWidth })}
+                {...RUN_CARD_ROW_SIZING_LIMITS.maxWidth}
+                nudge={10}
+                dflt={baseline.maxWidth}
+              />
+            </div>
             <button
               type="button"
               className="tileset-view-action"
               data-testid="run-card-size-save"
-              disabled={busy || sameSizing(sizing, baseline)}
+              disabled={busy || sameRunCardRowSizing(sizing, baseline)}
               onClick={() => { void save(); }}
             >
               {busy ? 'Saving…' : 'Save runtime defaults'}
             </button>
-            <button type="button" className="tileset-view-action" disabled={sameSizing(sizing, baseline)} onClick={resetAll}>Reset all</button>
+            <button type="button" className="tileset-view-action" disabled={sameRunCardRowSizing(sizing, baseline)} onClick={resetAll}>Reset all</button>
             <button type="button" className="tileset-view-action" onClick={() => { void copy(); }}>Copy sizing JSON</button>
           </div>
-          <dl>
-            <div><dt>Card</dt><dd>{cardWidth}px × {runCardRowCardHeight(cardWidth)}px</dd></div>
-            <div><dt>Row</dt><dd>{count * cardWidth + (count - 1) * sizing.gap}px wide</dd></div>
-            <div><dt>Lane</dt><dd>{lane.width}px × {lane.height}px</dd></div>
-            <div><dt>Bound by</dt><dd>{boundBy}</dd></div>
+          <dl data-testid="run-card-size-readout">
+            <div>
+              <dt>Printing</dt>
+              <dd>{printed ? `${printed.cardWidth}px × ${printed.cardHeight}px` : 'reading the screen…'}</dd>
+            </div>
+            <div>
+              <dt>Row</dt>
+              <dd>{printed ? `${screen.cards * printed.cardWidth + (screen.cards - 1) * sizing.gap}px wide` : '—'}</dd>
+            </div>
+            <div><dt>Bound by</dt><dd>{printed?.boundBy || '—'}</dd></div>
           </dl>
           <p role="status">{status}</p>
         </section>
