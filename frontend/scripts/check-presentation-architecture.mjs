@@ -219,7 +219,7 @@ for (const required of [
   'data-deployment-stack-card={cardId}',
   // The closed card must draw the shared back, and it must be the back the PLAYER chose rather
   // than a slot literal — otherwise Deployment's stack and Sectio's piles can disagree about what
-  // a face-down card looks like. The hook is the single resolution point (ADR-0521).
+  // a face-down card looks like. The hook is the single resolution point (ADR-0524).
   '<RunCardBack mediaUrl={backMediaUrl} />',
   'useRunCardBackMediaUrl()',
   '<strong className="run-deployment-card-count"',

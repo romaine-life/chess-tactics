@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Install the player-selectable Run card backs (ADR-0521).
+// Install the player-selectable Run card backs (ADR-0524).
 //
 // Every back the picker offers already exists as an accepted-quality candidate under the single
 // review slot `review/run-card-back/standard.png`, where the whole card-back study was mounted on
@@ -42,7 +42,7 @@ const BACKS = [
 /** The shipped default. The legacy universal slot is kept on these same bytes; see below. */
 const DEFAULT_BACK = 'kings-position';
 /** Where the candidates this installs are looked at and published from. */
-const REVIEW_SURFACE_PATH = '/studio?mode=viewer&vk=cardlayout&backStudy=1';
+const REVIEW_SURFACE_PATH = '/studio?mode=viewer&vk=cardlayout&cardSide=back';
 
 async function api(path, init = {}) {
   const response = await fetch(`${baseUrl}${path}`, init);
@@ -70,7 +70,7 @@ function versionPayload(back, source, slot) {
       aspectRatio: '5:7',
       nativeWidth: 1060,
       nativeHeight: 1484,
-      // The player-facing identity. `selectable` is what separates this from the pre-ADR-0521
+      // The player-facing identity. `selectable` is what separates this from the pre-ADR-0524
       // world, where one accepted back was the only one a Run could deal.
       selectable: true,
       settingValue: back.id,
@@ -86,7 +86,7 @@ function versionPayload(back, source, slot) {
     },
     provenance: {
       schema: 'run-card-back-runtime-provenance-v1',
-      decision: 'ADR-0521',
+      decision: 'ADR-0524',
       generator: 'Codex built-in image generation',
       transform: 'none; byte-identical native source',
       reviewSlot: REVIEW_SLOT,

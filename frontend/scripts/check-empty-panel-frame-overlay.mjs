@@ -1075,7 +1075,7 @@ if (!/testId=\{runDeployment \? 'run-deployment' : 'skirmish'\}/.test(skirmish)
 if (!/<RunDeploymentCardStack/.test(runScreen)
   || !/data-deployment-card-stage=\{deployment\?\.stage/.test(runDeploymentCardStack)
   || !/data-deployment-stack-card=\{cardId\}/.test(runDeploymentCardStack)
-  // The closed stack draws the shared back through the player's chosen-back hook (ADR-0521), not a
+  // The closed stack draws the shared back through the player's chosen-back hook (ADR-0524), not a
   // slot literal, so Deployment and Sectio cannot disagree about a face-down card.
   || !/<RunCardBack mediaUrl=\{backMediaUrl\}/.test(runDeploymentCardStack)
   || !/useRunCardBackMediaUrl\(\)/.test(runDeploymentCardStack)

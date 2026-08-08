@@ -15660,48 +15660,6 @@ button.tileset-relationship-cell {
   object-fit: cover;
 }
 
-/* Studio → Card Layout → Card Back study. A comparison surface, so the backs sit on one row at the
-   width they are actually chosen at; the caption lines stack under each rather than running on. */
-.run-card-back-study-grid {
-  align-items: start;
-  display: grid;
-  gap: 20px;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  inline-size: 100%;
-  padding-block: 12px;
-}
-
-.run-card-back-study-specimen {
-  display: grid;
-  gap: 8px;
-  justify-items: center;
-  margin: 0;
-  text-align: center;
-}
-
-.run-card-back-study-specimen figcaption {
-  display: grid;
-  gap: 4px;
-}
-
-.run-card-back-study-specimen figcaption small {
-  opacity: 0.75;
-}
-
-.run-card-back-study-specimen figcaption small[data-card-back-status] {
-  letter-spacing: 0.08em;
-  opacity: 0.9;
-  text-transform: uppercase;
-}
-
-.run-card-back-study-specimen figcaption small[data-card-back-status='missing'] {
-  color: #ff9a8c;
-}
-
-.run-card-back-study-footnote {
-  max-inline-size: 68ch;
-  opacity: 0.75;
-}
 
 /* Persisted player-camera coverage boundary. Unlike a viewport snapshot, this world-space box is
    stable while zoom and pan vary; Play keeps every possible view inside it. */
