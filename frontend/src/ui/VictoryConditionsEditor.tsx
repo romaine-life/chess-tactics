@@ -6,6 +6,7 @@ import { HouseSelect } from './shared/HouseSelect';
 import { DEFAULT_SURVIVE_TURNS } from '../core/objectives';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { ChromeButton } from './shared/ChromeButton';
+import { useDeleteKeyAction } from './shared/deleteKeyAction';
 
 // The Level Editor's "Victory events" editor (ADR-0064) — a MASTER-DETAIL surface inside the
 // Events workspace: a scrollable list of NAMED rules on the left, the selected rule's `IF <conditions>
@@ -122,6 +123,8 @@ export function VictoryConditionsEditor({ value, factions, onChange, templates }
     onChange([...value, fresh]);
   };
   const removeRule = (i: number): void => { setSel(Math.max(0, i - 1)); onChange(value.filter((_, j) => j !== i)); };
+  // Delete = the selected event's own Remove event button, never a condition inside it.
+  useDeleteKeyAction(rule ? () => removeRule(selected) : null);
 
   // detail edits (operate on the selected rule)
   const addCond = (c: VictoryCondition): void => {

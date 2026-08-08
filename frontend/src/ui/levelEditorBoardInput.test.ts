@@ -92,7 +92,38 @@ describe('Level Editor board pointer contract', () => {
     expect(eraseButton).toContain('aria-label={eraseLabel}');
     expect(levelEditor).toContain("eraseLabel={layer === 'placed-art' && brushKind === 'artwork' ? 'Delete selected scene art' : 'Erase'}");
     expect(levelEditor).toContain("if (brushKind === 'artwork' && nextTool === 'erase')");
-    expect(levelEditor).toContain('if (selectedArtworkId) deleteArtwork(selectedArtworkId);');
+    // The erase slot, the Details Delete button, and the Delete key all remove the WHOLE selection.
+    expect(levelEditor).toContain('deleteSelectedArtwork();');
+    expect(levelEditor).toContain('onClick={deleteSelectedArtwork}');
+  });
+
+  it('selects Scene Art by dragged rectangle as well as by click, and deletes the whole catch', () => {
+    expect(artworkSelectionSurface).toContain('floatingArtworkIdsWithinRect');
+    expect(artworkSelectionSurface).toContain('MARQUEE_THRESHOLD_PX');
+    expect(artworkSelectionSurface).toContain('onPointerDown={beginGesture}');
+    expect(artworkSelectionSurface).toContain('onPointerUp={endGesture}');
+    expect(artworkSelectionSurface).toContain('data-testid="artwork-marquee"');
+    // A drag under the threshold must still be the click-to-pick (and click-again-to-cycle) gesture.
+    expect(artworkSelectionSurface).toContain('pickAt(localX, localY, candidates, candidateIds)');
+    // The gesture is authoritative in a ref: a fast drag delivers moves and release in one task,
+    // and reading render state there would drop the sweep.
+    expect(artworkSelectionSurface).toContain('const drag = marqueeRef.current;');
+    expect(artworkSelectionSurface).toContain('const held = marqueeRef.current;');
+    expect(styles).toContain('.le-artwork-marquee');
+
+    expect(levelEditor).toContain('const [selectedArtworkIds, setSelectedArtworkIds] = useState<readonly string[]>([]);');
+    expect(levelEditor).toContain('onSelectMany={selectArtworkMany}');
+    expect(levelEditor).toContain('selectedArtworkIds={selectedArtworkIds}');
+    // Dragging one member of a selection drags them all.
+    expect(levelEditor).toContain('onMoveArtwork={moveArtworkGroup}');
+    expect(editableBoard).toContain('const selected = selectedArtworkIds');
+  });
+
+  it('binds the Delete key to the layer action it already ships a button for', () => {
+    expect(levelEditor).toContain("import { useDeleteKeyAction } from './shared/deleteKeyAction';");
+    expect(levelEditor).toContain('useDeleteKeyAction(deleteKeyAction);');
+    // Never the level document itself — a stray keypress must not cost a whole level.
+    expect(levelEditor).not.toMatch(/useDeleteKeyAction\([^)]*deleteLevel/);
   });
 
   it('reports the live shared viewport size for projection-aware editor actions', () => {
