@@ -12,7 +12,7 @@ function version(overrides: Partial<AdminLiveMediaVersion> = {}): AdminLiveMedia
     status: 'candidate',
     label: 'Cost crown',
     rowRevision: 1,
-    media: { sha256: 'a'.repeat(64), mediaType: 'image/png', width: 64, height: 64, url: '/u', immutableUrl: '/i' },
+    media: { sha256: 'a'.repeat(64), mediaType: 'image/png', width: 64, height: 64, byteLength: 750, url: '/u', immutableUrl: '/i' },
     ...overrides,
   } as AdminLiveMediaVersion;
 }
@@ -26,7 +26,7 @@ describe('the priceless coin mark candidates', () => {
       version({ id: 'withdrawn', status: 'archived' as AdminLiveMediaVersion['status'] }),
       // Another slot's media, and a raster that is not the mark's native size.
       version({ id: 'other-slot', slot: 'ui/run/card-prototypes/cost-coin-v1.png' }),
-      version({ id: 'wrong-size', media: { sha256: 'b'.repeat(64), mediaType: 'image/png', width: 112, height: 112, url: '/u', immutableUrl: '/i' } }),
+      version({ id: 'wrong-size', media: { sha256: 'b'.repeat(64), mediaType: 'image/png', width: 112, height: 112, byteLength: 3574, url: '/u', immutableUrl: '/i' } }),
     ], 'installed');
 
     expect(offered.map((candidate) => candidate.versionId)).toEqual(['installed', 'waiting']);
