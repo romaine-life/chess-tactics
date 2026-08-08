@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from 'react';
+import { DEFAULT_PLAYER_PALETTE, isPlayerPalette, type PlayerPalette } from '../core/pieces';
 
 /**
  * How the board grid is drawn. Every value is a design that was authored and looked at on a real
@@ -24,6 +25,8 @@ export interface AppSettings {
   showBoardGrid: boolean;
   boardGridStyle: BoardGridStyle;
   autoDealDeployment: boolean;
+  /** The color the pieces you command wear. Opponents own every other palette. */
+  playerPalette: PlayerPalette;
 }
 
 export const DEFAULT_APP_SETTINGS: Readonly<AppSettings> = Object.freeze({
@@ -35,6 +38,7 @@ export const DEFAULT_APP_SETTINGS: Readonly<AppSettings> = Object.freeze({
   showBoardGrid: true,
   boardGridStyle: 'chalk',
   autoDealDeployment: false,
+  playerPalette: DEFAULT_PLAYER_PALETTE,
 });
 
 type SettingsUpdate = Partial<AppSettings> | ((current: AppSettings) => AppSettings);
@@ -69,6 +73,11 @@ export function normalizeAppSettings(value: unknown): AppSettings {
     autoDealDeployment: typeof parsed.autoDealDeployment === 'boolean'
       ? parsed.autoDealDeployment
       : DEFAULT_APP_SETTINGS.autoDealDeployment,
+    // A stored palette that is no longer player-selectable (or an opponent color written by an
+    // older build) falls back to the default rather than reserving an opponent's color.
+    playerPalette: isPlayerPalette(parsed.playerPalette)
+      ? parsed.playerPalette
+      : DEFAULT_APP_SETTINGS.playerPalette,
   };
 }
 

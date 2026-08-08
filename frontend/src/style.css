@@ -17852,6 +17852,25 @@ button.tileset-relationship-cell {
   line-height: 1.25;
 }
 
+/* A settings choice that IS an appearance shows the appearance. The player-colour row seats the
+   accepted battlefield pawn in each option instead of the colour's name, in the closed control
+   and in the open menu alike, so the two sets are compared as pixels. Both the HouseSelect
+   trigger and its option rows size from their content (min-height, not height), so the taller
+   seat simply grows them; nothing here overrides the shared dropdown chrome. */
+.settings-piece-choice {
+  align-items: center;
+  display: flex;
+  justify-content: flex-start;
+  min-width: 0;
+}
+
+/* Larger than the dense .utility-piece-icon default: this is the only place the sprite is the
+   control's entire content, and the colour is the thing being judged. */
+.settings-piece-choice-icon {
+  height: 44px;
+  width: 44px;
+}
+
 /* --- Trailing-edge "settings + user" cluster ----------------------------------
    The signed-in chrome at the top-right: an icon-only Settings gear + the avatar
    account button, framed identically so the pair reads as one matched unit
@@ -24486,6 +24505,33 @@ button.tileset-relationship-cell {
   font-size: 10px;
 }
 
+/* Persistence notices stack instead of overlapping: a browser-recovery offer and an interrupted
+   autosave can be true at the same time, and each needs its own actions. */
+.le-persistence-stack {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  left: 50%;
+  max-width: calc(100% - 24px);
+  position: absolute;
+  top: 12px;
+  transform: translateX(-50%);
+  width: max-content;
+  z-index: 100;
+}
+
+.le-persistence-stack:empty {
+  display: none;
+}
+
+.le-persistence-stack .le-persistence-emergency {
+  left: auto;
+  position: static;
+  top: auto;
+  transform: none;
+  width: 100%;
+}
+
 .le-persistence-emergency {
   align-items: center;
   background: rgba(42, 13, 18, 0.97);
@@ -24534,6 +24580,10 @@ button.tileset-relationship-cell {
 }
 
 @media (max-width: 760px) {
+  .le-persistence-stack {
+    width: calc(100% - 24px);
+  }
+
   .le-persistence-emergency {
     align-items: stretch;
     display: grid;

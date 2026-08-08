@@ -108,6 +108,50 @@ export function provisionalEditorRecoveryIsRedundant(input: {
 }
 
 /**
+ * A 401 under an already-open working copy is an expired sign-in, not a document problem. The
+ * mounted board, its page identity and its browser recovery all remain valid, so the editor pauses
+ * cloud writes instead of tearing itself down — otherwise every edit made after the expiry exists
+ * only in RAM and dies with the sign-in navigation.
+ */
+export function isInterruptedByCloudSignOut(input: {
+  documentOpen: boolean;
+  reachable: boolean;
+  signedIn: boolean;
+}): boolean {
+  return input.documentOpen && input.reachable && !input.signedIn;
+}
+
+/**
+ * Resume an interrupted document only for the SAME account. A different owner signing in must
+ * re-resolve from scratch: adopting the mounted document and its browser buffer would hand one
+ * owner's unsent work to another. An interrupted owner email is required, so a page that never
+ * recorded one cannot resume by default.
+ */
+export function shouldResumeInterruptedCloudSync(input: {
+  interruptedOwnerEmail: string | null | undefined;
+  reachable: boolean;
+  signedIn: boolean;
+  email: string | null | undefined;
+}): boolean {
+  const interrupted = input.interruptedOwnerEmail?.trim().toLowerCase() ?? '';
+  const current = input.email?.trim().toLowerCase() ?? '';
+  return Boolean(interrupted) && input.reachable && input.signedIn && interrupted === current;
+}
+
+/**
+ * A divergent browser branch that mount could not adopt is unsent work, and the gates that block
+ * adoption — a dirty document, a retired page session — are exactly the cases where the owner has
+ * to choose. Leaving it addressable only from storage reads as data loss, so it is offered.
+ */
+export function shouldOfferPreservedEditorBranch(input: {
+  openedAsWriter: boolean;
+  branchDiverged: boolean;
+  adoptedIntoEditor: boolean;
+}): boolean {
+  return input.openedAsWriter && input.branchDiverged && !input.adoptedIntoEditor;
+}
+
+/**
  * Adopt an unsent branch as this page's local changes instead of opening the document body over
  * it. Offline editing — and a sign-in that re-homes the page into a fresh session, so the draft
  * arrives as another session's preserved recovery rather than this page's claimed draft — both

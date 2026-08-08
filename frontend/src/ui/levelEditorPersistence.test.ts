@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   editorDocumentWorkspaceForLevelId,
+  isInterruptedByCloudSignOut,
   levelEditorHrefForDocument,
   preservedEditorRecoveryIsRedundant,
   provisionalEditorRecoveryIsRedundant,
   shouldAdoptPreservedEditorBranch,
+  shouldOfferPreservedEditorBranch,
+  shouldResumeInterruptedCloudSync,
   shouldRestoreLocalEditorRecovery,
 } from './levelEditorPersistence';
 
@@ -291,6 +294,90 @@ describe('adopting an unsent editor branch after sign-in', () => {
   it('never adopts without write authority', () => {
     expect(shouldAdoptPreservedEditorBranch({
       ...signedInOnCleanDocument,
+      openedAsWriter: false,
+    })).toBe(false);
+  });
+});
+
+describe('an expired sign-in under an open working copy', () => {
+  const openAndSignedOut = { documentOpen: true, reachable: true, signedIn: false };
+
+  it('is an interruption to pause through, not a document to reopen', () => {
+    expect(isInterruptedByCloudSignOut(openAndSignedOut)).toBe(true);
+  });
+
+  it('is not claimed before a document exists, so a first sign-in still resolves normally', () => {
+    expect(isInterruptedByCloudSignOut({ ...openAndSignedOut, documentOpen: false })).toBe(false);
+  });
+
+  it('is not claimed for an unreachable backend, which is not a sign-out', () => {
+    expect(isInterruptedByCloudSignOut({ ...openAndSignedOut, reachable: false })).toBe(false);
+  });
+
+  it('is not claimed while the session is live', () => {
+    expect(isInterruptedByCloudSignOut({ ...openAndSignedOut, signedIn: true })).toBe(false);
+  });
+});
+
+describe('resuming an interrupted working copy', () => {
+  const resumedByTheSameOwner = {
+    interruptedOwnerEmail: 'owner@example.com',
+    reachable: true,
+    signedIn: true,
+    email: 'owner@example.com',
+  };
+
+  it('resumes for the same account, ignoring case and surrounding space', () => {
+    expect(shouldResumeInterruptedCloudSync(resumedByTheSameOwner)).toBe(true);
+    expect(shouldResumeInterruptedCloudSync({
+      ...resumedByTheSameOwner,
+      email: '  Owner@Example.com ',
+    })).toBe(true);
+  });
+
+  it('refuses a different account, which must resolve its own document instead', () => {
+    expect(shouldResumeInterruptedCloudSync({
+      ...resumedByTheSameOwner,
+      email: 'someone-else@example.com',
+    })).toBe(false);
+  });
+
+  it('refuses without a recorded interruption or a live authoritative session', () => {
+    expect(shouldResumeInterruptedCloudSync({ ...resumedByTheSameOwner, interruptedOwnerEmail: null })).toBe(false);
+    expect(shouldResumeInterruptedCloudSync({ ...resumedByTheSameOwner, interruptedOwnerEmail: '  ' })).toBe(false);
+    expect(shouldResumeInterruptedCloudSync({ ...resumedByTheSameOwner, signedIn: false })).toBe(false);
+    expect(shouldResumeInterruptedCloudSync({ ...resumedByTheSameOwner, reachable: false })).toBe(false);
+  });
+});
+
+describe('offering a preserved editor branch', () => {
+  const unadoptedDivergentBranch = {
+    openedAsWriter: true,
+    branchDiverged: true,
+    adoptedIntoEditor: false,
+  };
+
+  it('offers unsent work that mount declined to adopt', () => {
+    expect(shouldOfferPreservedEditorBranch(unadoptedDivergentBranch)).toBe(true);
+  });
+
+  it('stays silent once the branch is already what the editor mounted', () => {
+    expect(shouldOfferPreservedEditorBranch({
+      ...unadoptedDivergentBranch,
+      adoptedIntoEditor: true,
+    })).toBe(false);
+  });
+
+  it('stays silent when there is no divergent branch to recover', () => {
+    expect(shouldOfferPreservedEditorBranch({
+      ...unadoptedDivergentBranch,
+      branchDiverged: false,
+    })).toBe(false);
+  });
+
+  it('does not offer a restore a read-only page could not perform', () => {
+    expect(shouldOfferPreservedEditorBranch({
+      ...unadoptedDivergentBranch,
       openedAsWriter: false,
     })).toBe(false);
   });

@@ -5,6 +5,7 @@ import { useSkirmishView, useSkirmishViewStoreApi } from '../game/SkirmishViewSt
 import type { SkirmishViewStore } from '../game/skirmishView';
 import { livingPieces } from '../core/rules';
 import { PIECE_LABEL, PIECE_MARK, isPlayablePieceType, paletteForSide, pieceSpritePath } from '../core/pieces';
+import { usePlayerPalette } from '../settings/playerPalette';
 import type { Piece, PieceType, Side } from '../core/types';
 import { promotionArrivalPieces } from '../game/promotionPresentation';
 import type { TimeControl } from '../core/level';
@@ -260,6 +261,9 @@ export function SkirmishHud({
   const testMode = useSkirmish((s) => s.testMode);
   const testMinCpuDelayMs = useSkirmish((s) => s.testMinCpuDelayMs);
   const setTestMinCpuDelay = useSkirmish((s) => s.setTestMinCpuDelay);
+  // The roster sprites and portraits below resolve through `paletteForSide`, which reads the chosen
+  // player color from module state. Subscribing here is what repaints them when it changes.
+  usePlayerPalette();
 
   // Resign is irreversible and hands the opponent the win — gate it behind a confirm
   // (the kit-framed one, not window.confirm, so it stays in-world). Netplay relays it

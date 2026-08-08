@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TILE_STEP_Y } from '../art/projectionContract';
+import { DEFAULT_PLAYER_PALETTE, setPlayerPalette } from '../core/pieces';
 import { gameplayTerrainForFamily } from '../core/tileSockets';
 import type { RunArmyUnit } from '../run/model';
 import {
@@ -40,8 +41,17 @@ describe('Run unit inspection scene', () => {
     expect(second).toEqual(first);
     expect(first.board.cells).toEqual({ '0,0': first.tileId });
     expect(first.board.units).toEqual({
-      '0,0': { unitId: 'pawn', direction: 'south', faction: 'navy-blue' },
+      '0,0': { unitId: 'pawn', direction: 'south', faction: 'white' },
     });
+
+    // A profile shows the player their own unit, so it wears whatever colour they chose rather
+    // than a colour pinned into this scene.
+    setPlayerPalette('navy-blue');
+    try {
+      expect(runUnitInspectionPlan(unit(41)).board.units['0,0'].faction).toBe('navy-blue');
+    } finally {
+      setPlayerPalette(DEFAULT_PLAYER_PALETTE);
+    }
     expect(['water', 'cliff', 'void']).not.toContain(
       gameplayTerrainForFamily(familyForTile(first.tileId)),
     );

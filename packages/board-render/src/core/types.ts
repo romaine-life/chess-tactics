@@ -244,6 +244,9 @@ export interface GameState {
 
 export type GameEvent =
   | { kind: 'moved'; pieceId: string; from: Vec; to: Vec }
-  | { kind: 'captured'; pieceId: string; by: string }
+  /** `enPassant` marks the one capture whose victim never stood on the destination
+   *  square. Board law is unchanged by it -- the flag only lets a surrounding layer
+   *  (a Run's bounty, the log line) recognize the capture it just watched. */
+  | { kind: 'captured'; pieceId: string; by: string; enPassant?: true }
   | { kind: 'promoted'; pieceId: string; to: PieceType }
   | { kind: 'castled'; kingId: string; rookId: string };

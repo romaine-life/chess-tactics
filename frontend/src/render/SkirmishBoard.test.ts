@@ -6,13 +6,17 @@ import { tileFamilies } from '../art/tileset';
 import { createSkirmish } from '../game/setup';
 import { testLiveUnitCatalog } from '../test/liveUnitCatalog';
 import { applyLiveUnitCatalog, resetLiveUnitCatalog } from '../ui/unitCatalog';
-import type { PredrawnOcclusionDepthMap } from '@chess-tactics/board-render';
+import type { BoardDrawOp, PredrawnOcclusionDepthMap } from '@chess-tactics/board-render';
 import {
   arrivalOffset,
+  arrivingStructures,
   buildSkirmishBoard,
   commitSkirmishSceneFirstFrame,
   computeArrivalDelays,
+  computeStructureArrivalDelays,
   newlyVisibleArrivalPieces,
+  structureArrivalOp,
+  structureArrives,
   pieceRuntimeSpriteSources,
   pieceOp,
   sceneBoardForSkirmish,
@@ -106,6 +110,78 @@ describe('retained-board unit arrivals', () => {
     expect(sliding.dy).toBeLessThan(135);
     expect(sliding.opacity).toBe(1);
     expect(arrivalOffset(2_280, early, 'slide-from-right')).toEqual({ dx: 0, dy: 0, opacity: 1 });
+  });
+});
+
+describe('board-assembly structure arrivals', () => {
+  const structureOp = (
+    key: string,
+    kind: 'rock' | 'tree' | 'house',
+    x: number,
+    y: number,
+    half: 'back' | 'front',
+  ): BoardDrawOp => ({
+    layer: 'scene',
+    src: `${key}-${half}`,
+    dx: 10,
+    dy: half === 'back' ? 20 : 44,
+    dw: 40,
+    dh: 45,
+    z: half === 'back' ? 1 : 2,
+    structure: { key, kind, x, y },
+  });
+
+  it('admits rocks to the assembly and leaves other props as standing scenery', () => {
+    expect(structureArrives({ key: '1,1', kind: 'rock', x: 1, y: 1 })).toBe(true);
+    expect(structureArrives({ key: '2,2', kind: 'tree', x: 2, y: 2 })).toBe(false);
+    expect(structureArrives({ key: '3,3', kind: 'house', x: 3, y: 3 })).toBe(false);
+  });
+
+  // A prop draws several ops (two depth halves per authored part). The choreography is keyed by
+  // anchor, so a five-op prop still gets exactly one entrance rather than five staggered ones.
+  it('collapses a prop\'s several draw ops into one arriving anchor', () => {
+    const ops = [
+      structureOp('4,2', 'rock', 4, 2, 'back'),
+      structureOp('4,2', 'rock', 4, 2, 'front'),
+      structureOp('1,1', 'tree', 1, 1, 'back'),
+      { src: 'terrain', dx: 0, dy: 0, dw: 1, dh: 1, z: 0 } satisfies BoardDrawOp,
+    ];
+
+    expect([...arrivingStructures(ops).keys()]).toEqual(['4,2']);
+  });
+
+  it('lands the far corner first so the position lays itself down toward the player', () => {
+    const delays = computeStructureArrivalDelays([
+      { key: '5,4', kind: 'rock', x: 5, y: 4 },
+      { key: '0,1', kind: 'rock', x: 0, y: 1 },
+      { key: '2,2', kind: 'rock', x: 2, y: 2 },
+    ], 0);
+
+    expect([...delays]).toEqual([['0,1', 0], ['2,2', 55], ['5,4', 110]]);
+  });
+
+  // Both halves of a flat-contact prop must take the SAME offset, or the clipped top and bottom
+  // of one rock separate in mid-air.
+  it('moves every op of one prop by the same offset', () => {
+    const plan = { startMs: 1_000, delayMs: 0 };
+    const back = structureArrivalOp(structureOp('4,2', 'rock', 4, 2, 'back'), plan, 1_100);
+    const front = structureArrivalOp(structureOp('4,2', 'rock', 4, 2, 'front'), plan, 1_100);
+
+    expect(back.dy - 20).toBe(front.dy - 44);
+    expect(back.dy).toBeLessThan(20);
+  });
+
+  it('holds a staged prop off the board and seats an unplanned one untouched', () => {
+    const op = structureOp('4,2', 'rock', 4, 2, 'front');
+
+    expect(structureArrivalOp(op, { startMs: null, delayMs: 0 }, 1_000)).toMatchObject({ dy: -16, opacity: 0 });
+    expect(structureArrivalOp(op, undefined, 1_000)).toBe(op);
+  });
+
+  it('returns the op unchanged once its entrance has finished', () => {
+    const op = structureOp('4,2', 'rock', 4, 2, 'front');
+
+    expect(structureArrivalOp(op, { startMs: 1_000, delayMs: 0 }, 3_000)).toBe(op);
   });
 });
 

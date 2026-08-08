@@ -999,7 +999,7 @@ export function applyMove(state: GameState, pieceId: string, move: Move, options
       target.alive = false;
       tookPiece = true;
       if (tracksStats) piece.enemiesKilled = (piece.enemiesKilled ?? 0) + 1;
-      events.push({ kind: 'captured', pieceId: target.id, by: piece.id });
+      events.push({ kind: 'captured', pieceId: target.id, by: piece.id, ...(move.enPassant ? { enPassant: true } : {}) });
     }
   }
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { PLAYER_PALETTES } from '../core/pieces';
 import { BOARD_GRID_STYLES, DEFAULT_APP_SETTINGS, normalizeAppSettings } from './appSettings';
 
 describe('application settings', () => {
@@ -18,6 +19,7 @@ describe('application settings', () => {
       showBoardGrid: true,
       boardGridStyle: 'chalk',
       autoDealDeployment: false,
+      playerPalette: 'white',
     });
   });
 
@@ -46,6 +48,18 @@ describe('application settings', () => {
     }
     for (const style of BOARD_GRID_STYLES) {
       expect(normalizeAppSettings({ boardGridStyle: style }).boardGridStyle).toBe(style);
+    }
+  });
+
+  it('dresses the player in white unless they chose the other player palette', () => {
+    expect(DEFAULT_APP_SETTINGS.playerPalette).toBe('white');
+    for (const palette of PLAYER_PALETTES) {
+      expect(normalizeAppSettings({ playerPalette: palette }).playerPalette).toBe(palette);
+    }
+    // An opponent color is not a choice a player may store, however it got into the blob — a
+    // stored 'crimson' would put the player's own set into a color reserved for the enemy.
+    for (const reserved of ['crimson', 'golden', 'emerald', 'black', 'White', '', 7, null, {}]) {
+      expect(normalizeAppSettings({ playerPalette: reserved }).playerPalette).toBe('white');
     }
   });
 });

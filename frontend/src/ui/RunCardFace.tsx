@@ -8,7 +8,7 @@ import {
   type ReactElement,
 } from 'react';
 import { projectBoardPoint, resolvedLiveMediaUrl, TILE_TEMPLATE } from '@chess-tactics/board-render';
-import { defaultFacingForSide, paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
+import { defaultFacingForSide, paletteForSide, pieceSpritePath, type PlayablePieceType, type UnitPalette } from '../core/pieces';
 import type { RunCardFaceContent, RunCardFormationPiece, RunCardGrant } from './runCardFaceContent';
 import {
   RUN_CARD_FRAME_BOX_NAMES,
@@ -25,7 +25,9 @@ export { RUN_CARD_FRAME_SLOT } from './runCardFrameGeometry';
 export const RUN_CARD_COST_COIN_SOURCE_SLOT = 'ui/run/card-prototypes/cost-coin-source-v1.png';
 export const RUN_CARD_REFERENCE_WIDTH = 360;
 
-const PLAYER_CARD_PALETTE = paletteForSide('player');
+// Read per render, not once at import: the player's color is a setting, and a value frozen into a
+// module constant would keep the old set on every card until a reload.
+const playerCardPalette = (): UnitPalette => paletteForSide('player');
 const PLAYER_CARD_FACING = defaultFacingForSide('player');
 
 export type RunCardImageKind =
@@ -303,12 +305,13 @@ function FormationDiagram({
       ))}
       {pieces.map((piece) => {
         const kind = runCardUnitImageKind(piece.pieceIndex, piece.unit, piece.occurrenceIndex);
+        const palette = playerCardPalette();
         const sprite = piece.empty ? null : (
           <img
             className="run-card-formation-unit"
             data-unit-facing={PLAYER_CARD_FACING}
-            data-unit-palette={PLAYER_CARD_PALETTE}
-            src={pieceSpritePath(piece.unit, PLAYER_CARD_PALETTE, PLAYER_CARD_FACING)}
+            data-unit-palette={palette}
+            src={pieceSpritePath(piece.unit, palette, PLAYER_CARD_FACING)}
             alt=""
             draggable={false}
             onLoad={() => onReady(kind)}

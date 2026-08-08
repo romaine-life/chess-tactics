@@ -295,8 +295,23 @@ function RunPanel({
                     <p>This browser has {presentation.adoptionConflict.browserRun.war.name}; your account has {presentation.adoptionConflict.accountRun.war.name}. Choose which one the account keeps.</p>
                   </div>
                   <div className="run-inline-actions">
-                    <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} onClick={keepAccountRun}>Keep account Run</ChromeButton>
-                    <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} disabled={presentation.syncing} onClick={() => { void adoptBrowserRun(); }}>Adopt browser Run</ChromeButton>
+                    <ChromeButton unit="inner-text-button"
+                      className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+                      data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                      data-testid="run-keep-account"
+                      onClick={keepAccountRun}
+                    >
+                      Keep account Run
+                    </ChromeButton>
+                    <ChromeButton unit="inner-text-button"
+                      className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+                      data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                      data-testid="run-adopt-browser"
+                      disabled={presentation.syncing}
+                      onClick={() => { void adoptBrowserRun(); }}
+                    >
+                      Adopt browser Run
+                    </ChromeButton>
                   </div>
                 </div>
               ) : null}
@@ -376,7 +391,7 @@ function RunPanel({
               </InnerChromeBox>
             </div>
             <div className="ce-preview-actions is-single">
-              <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} to="/run"><span>Play</span></ChromeNavButton>
+              <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE} to="/run"><span>Play</span></ChromeNavButton>
             </div>
           </aside>
         ) : null}
