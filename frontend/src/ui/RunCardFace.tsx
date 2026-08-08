@@ -296,6 +296,13 @@ function runCardFormationBoardMetrics(columns: number, rows: number): Readonly<{
   };
 }
 
+/**
+ * How the footprint's outline is rasterized. `soft` is what the game prints; `crisp` turns
+ * antialiasing off so every pixel is fully on or fully off. Review-only, like the frame boxes:
+ * the Card Outline studio mounts both so the choice is made by looking rather than by describing.
+ */
+export type RunCardOutlineRendering = 'soft' | 'crisp';
+
 export type RunCardFormationOutlinePoint = Readonly<{ x: number; y: number }>;
 
 /**
@@ -379,11 +386,13 @@ export function runCardFormationOutlinePath(ring: readonly RunCardFormationOutli
 function FormationDiagram({
   pieces,
   pending,
+  outlineRendering,
   onReady,
   onError,
 }: {
   pieces: readonly RunCardFormationPiece[];
   pending: boolean;
+  outlineRendering: RunCardOutlineRendering;
   onReady: (kind: RunCardImageKind) => void;
   onError: (kind: RunCardImageKind) => void;
 }): ReactElement {
@@ -435,6 +444,7 @@ function FormationDiagram({
           two segments from two coordinate systems asked to land on the same pixel. */}
       <svg
         className="run-card-formation-outline"
+        data-outline-rendering={outlineRendering}
         viewBox={`0 0 ${metrics.width} ${metrics.height}`}
         preserveAspectRatio="none"
         aria-hidden="true"
@@ -523,6 +533,7 @@ function RunCardFaceLayer({
   faceTuning,
   frameBoxStyle,
   selectedFrameBox,
+  outlineRendering,
   onImageLoad,
   onImageError,
 }: {
@@ -532,6 +543,7 @@ function RunCardFaceLayer({
   faceTuning: RunCardFaceTuning;
   frameBoxStyle: RunCardFrameBoxStyle;
   selectedFrameBox: RunCardFrameBoxName | null;
+  outlineRendering: RunCardOutlineRendering;
   onImageLoad: (signature: string, pending: boolean, kind: RunCardImageKind) => void;
   onImageError: (signature: string, pending: boolean, kind: RunCardImageKind) => void;
 }): ReactElement {
@@ -574,7 +586,7 @@ function RunCardFaceLayer({
       ) : null}
       <span className="run-card-prototype-type"><span className="run-card-prototype-type-label">{card.typeLine}</span></span>
       <span className="run-card-prototype-contents is-ledger-1-rows">
-        <FormationDiagram pieces={card.formation} pending={pending} onReady={ready} onError={error} />
+        <FormationDiagram pieces={card.formation} pending={pending} outlineRendering={outlineRendering} onReady={ready} onError={error} />
         <span className="run-card-prototype-flavor">{card.flavor}</span>
       </span>
       {frameBoxStyle !== 'off' ? (
@@ -602,6 +614,7 @@ export function RunCardFace({
   frameGeometry = RUN_CARD_STANDARD_FRAME_GEOMETRY,
   frameBoxStyle = 'off',
   selectedFrameBox = null,
+  outlineRendering = 'soft',
   onImageLoad = () => undefined,
   onImageError = () => undefined,
   ariaHidden = false,
@@ -616,6 +629,8 @@ export function RunCardFace({
   frameGeometry?: RunCardFrameGeometry;
   frameBoxStyle?: RunCardFrameBoxStyle;
   selectedFrameBox?: RunCardFrameBoxName | null;
+  /** Review-only: how the footprint outline rasterizes. The game prints `soft`. */
+  outlineRendering?: RunCardOutlineRendering;
   onImageLoad?: (kind: RunCardImageKind) => void;
   onImageError?: (kind: RunCardImageKind) => void;
   ariaHidden?: boolean;
@@ -697,6 +712,7 @@ export function RunCardFace({
         <RunCardFaceLayer key={`${layer.presentation.signature}:${layer.pending ? 'pending' : 'shown'}`}
           presentation={layer.presentation} pending={layer.pending} contentsTuning={contentsTuning}
           faceTuning={tuning} frameBoxStyle={frameBoxStyle} selectedFrameBox={selectedFrameBox}
+          outlineRendering={outlineRendering}
           onImageLoad={settle}
           onImageError={(signature, isPending, kind) => {
             onImageError(kind);
