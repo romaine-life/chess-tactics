@@ -1342,10 +1342,21 @@ const cardBackProof = (row, overrides = {}) => ({
 });
 
 test('Run card backs have one closed native 5:7 runtime projection', () => {
-  assert.equal(runCardBackSlot(RUN_CARD_BACK_SLOT), true);
-  assert.equal(runCardBackSlot('review/run-card-back/standard.png'), false);
+  // The slot names a member of the card-back family and yields its id (ADR-0524); the review slot
+  // and any non-conforming path are not members.
+  assert.equal(runCardBackSlot(RUN_CARD_BACK_SLOT), 'standard');
+  assert.equal(runCardBackSlot('ui/run/card-back/kings-position.png'), 'kings-position');
+  assert.equal(runCardBackSlot('review/run-card-back/standard.png'), null);
+  assert.equal(runCardBackSlot('ui/run/card-back/Nested/deep.png'), null);
   assert.equal(runCardBackMediaIssue(cardBackRow()), null);
-  assert.match(runCardBackMediaIssue(cardBackRow({ slot: 'ui/run/card-back/other.png' })), /registered universal/);
+  // A family member is valid only when its runtime variant names its own slot, so a version can
+  // never be accepted onto a back it does not claim to be.
+  assert.equal(runCardBackMediaIssue(cardBackRow({
+    slot: 'ui/run/card-back/kings-position.png',
+    metadata: { runtime: { ...cardBackRow().metadata.runtime, variant: 'kings-position' } },
+  })), null);
+  assert.match(runCardBackMediaIssue(cardBackRow({ slot: 'ui/run/card-back/kings-position.png' })), /variant must match/);
+  assert.match(runCardBackMediaIssue(cardBackRow({ slot: 'ui/run/other/thing.png' })), /registered card-back/);
   assert.match(runCardBackMediaIssue(cardBackRow({ domain: 'review-media' })), /ui-kit domain/);
   assert.match(runCardBackMediaIssue(cardBackRow({ width: 948, height: 1659 })), /1060x1484/);
   assert.match(runCardBackMediaIssue(cardBackRow({
