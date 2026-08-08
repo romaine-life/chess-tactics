@@ -19642,22 +19642,35 @@ button.tileset-relationship-cell {
   padding: 0;
 }
 
-/* The board's own title bar, seated ON the frame with no gap between it and the pane below. Its
-   installed OUTER marble is bounded to this strip, so no painted area survives past it. */
+/* The board's own title bar: name and its registered rule inside ONE painted strip. The strip
+   owns the installed OUTER marble and both children sit on it, so the rule has no unpainted row
+   of its own to open up — that gap is what let the fill bleed against the level art. */
+.run-battle-preview-board-titlebar {
+  display: grid;
+  grid-template-rows: auto auto;
+  /* The rule's negative inline reach is clipped to the strip, so it spans exactly the frame. */
+  overflow: hidden;
+  position: relative;
+}
+
+.run-battle-preview-board-titlebar > .run-battle-preview-board-titlebar-fill {
+  inset: 0;
+}
+
+.run-battle-preview-board-titlebar > :not(.run-battle-preview-board-titlebar-fill) {
+  position: relative;
+  z-index: 1;
+}
+
+/* Flush against the board: any block margin here would be marble below the rule. */
+.run-battle-preview-board-rule {
+  margin-block: 0;
+}
+
 .run-battle-preview-board-head {
   align-items: center;
   display: flex;
   padding: var(--ds-space-1) var(--ds-space-2);
-  position: relative;
-}
-
-.run-battle-preview-board-head > .run-battle-preview-board-head-fill {
-  inset: 0;
-}
-
-.run-battle-preview-board-head > h2 {
-  position: relative;
-  z-index: 1;
 }
 
 .run-battle-preview-board-head h2 {

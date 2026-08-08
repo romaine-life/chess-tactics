@@ -504,9 +504,14 @@ describe('Run chrome hierarchy', () => {
     // The board box carries its own title bar; nothing floats above it with a gap, and the
     // Battle position is a fact in the ledger rather than a second header.
     expect(runBattlePreview).toContain('className="run-battle-preview-board-head"');
-    // The marble is bounded to the title strip. A frame-wide fill shows through anywhere the
-    // board does not cover, which is the same bleeding band as an opaque padding.
-    expect(runBattlePreview).toContain('<ChromeSurfaceFill role="outer" className="run-battle-preview-board-head-fill" />');
+    // The marble is bounded to the title strip, and the registered rule lives INSIDE that strip.
+    // A frame-wide fill, or a rule in a row of its own, shows through anywhere the board does not
+    // cover — the same bleeding band as an opaque padding.
+    expect(runBattlePreview).toContain('<ChromeSurfaceFill role="outer" className="run-battle-preview-board-titlebar-fill" />');
+    expect(runBattlePreview).toMatch(
+      /<div className="run-battle-preview-board-titlebar">[\s\S]*?<ChromeDivider role="inner" className="run-battle-preview-board-rule" \/>[\s\S]*?<\/div>/,
+    );
+    expect(styleCss).toMatch(/\.run-battle-preview-board-rule\s*\{[^}]*margin-block:\s*0;/);
     expect(runBattlePreview).not.toMatch(/run-battle-preview-board-frame"\s+fillRole/);
     expect(styleCss).toMatch(/\.run-battle-preview-board-frame\s*\{[^}]*gap:\s*0;/);
     expect(styleCss).toMatch(/\.run-battle-preview-board-frame\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\);/);

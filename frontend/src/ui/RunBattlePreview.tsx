@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { sectioUpcomingBattleIndex, type RunDocument } from '../run/model';
 import { levelToEditorBoard } from '../core/levelBoard';
-import { ChromeSurfaceFill, InnerChromeBox } from './shared/ChromeBox';
+import { ChromeDivider, ChromeSurfaceFill, InnerChromeBox } from './shared/ChromeBox';
 import { FramedReadOnlyBoardView } from './shared/BoardViewFraming';
 import { LevelInfoCompact } from './LevelInfoCompact';
 import { RunSceneViewport } from './RunWorkspace';
@@ -64,10 +64,13 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
               the same bleeding band as an opaque padding. Bounding the paint to the strip means
               there is no such area: strip, then board, then border. */}
           <InnerChromeBox className="run-battle-preview-board-frame">
-            <header className="run-battle-preview-board-head">
-              <ChromeSurfaceFill role="outer" className="run-battle-preview-board-head-fill" />
-              <h2 id="run-battle-preview-title">{level.name}</h2>
-            </header>
+            <div className="run-battle-preview-board-titlebar">
+              <ChromeSurfaceFill role="outer" className="run-battle-preview-board-titlebar-fill" />
+              <header className="run-battle-preview-board-head">
+                <h2 id="run-battle-preview-title">{level.name}</h2>
+              </header>
+              <ChromeDivider role="inner" className="run-battle-preview-board-rule" />
+            </div>
             <div className="ce-level-viewer run-battle-preview-board-view">
               <FramedReadOnlyBoardView
                 board={board}
