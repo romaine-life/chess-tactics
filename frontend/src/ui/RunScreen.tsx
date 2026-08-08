@@ -75,6 +75,7 @@ import {
   nextArrangedCardToPlace,
   nextCardRotation,
   normalReservistCell,
+  previousCardRotation,
   placeArrangedDeploymentCard,
   resolveForcedDeploymentChoices,
   removeArrangedDeploymentCard,
@@ -128,6 +129,7 @@ import { isStrategikonPath, strategikonRouteCrumbs } from './strategikonRoute';
 import { createRunForm, runActivity, type RunForm } from './RunForm';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
+import { useFormationTurnKeys, type FormationTurnDirection } from './formationTurnKeys';
 import type { SkirmishBoardSurfaceState, UnitDepartureRequest } from '../render/SkirmishBoard';
 
 type RunScreenView = RunWorkspaceView;
@@ -468,7 +470,7 @@ function ArrangedDeploymentControls({
                   {selected.placed
                     ? 'Point somewhere else on the battlefield to move this formation, or remove it.'
                     : 'Point at the battlefield and click to place this formation.'}
-                  {availableRotations.size > 1 ? ' Right-click to turn it.' : ''}
+                  {availableRotations.size > 1 ? ' Right-click, or Q and E, to turn it.' : ''}
                 </p>
                 {selected.placed ? (
                   <ChromeButton
@@ -669,13 +671,19 @@ function useRunDeploymentPresentation({
     setArrangementRotation(0);
     setPointedArrangementCell(null);
   }, []);
-  // A secondary click on the battlefield turns the formation carried on the cursor. It
-  // deliberately keeps the pointed square: the formation spins about its grip seat, on the
-  // square being aimed at, rather than vanishing until the mouse is jiggled.
-  const turnArrangementUnderCursor = useCallback(() => {
+  // A secondary click, and Q/E, turn the formation carried on the cursor. They deliberately keep
+  // the pointed square: the formation spins about its grip seat, on the square being aimed at,
+  // rather than vanishing until the mouse is jiggled. All three walk the same list — the turns
+  // that keep a seating over that square — so no gesture can turn the formation out of sight.
+  const turnArrangement = useCallback((direction: FormationTurnDirection) => {
     if (departureActive) return;
-    setArrangementRotation((current) => nextCardRotation(turnableArrangementRotationList, current));
+    setArrangementRotation((current) => (direction === 'clockwise'
+      ? nextCardRotation(turnableArrangementRotationList, current)
+      : previousCardRotation(turnableArrangementRotationList, current)));
   }, [departureActive, turnableArrangementRotationList]);
+  const turnArrangementUnderCursor = useCallback(() => {
+    turnArrangement('clockwise');
+  }, [turnArrangement]);
   const removeArrangementCard = useCallback(() => {
     if (!selectedCardId || departureActive) return;
     const latest = useActiveRun.getState().run;
@@ -684,6 +692,13 @@ function useRunDeploymentPresentation({
       setPointedArrangementCell(null);
     }
   }, [departureActive, prepared.id, replace, selectedCardId]);
+  // The keys are offered on exactly the terms the rail's turn buttons are, so the two cannot
+  // drift apart: a dealt formation admitted and selected, on a screen that is not departing.
+  useFormationTurnKeys(
+    stage === 'arrange' && selectedArrangementCard?.admitted && !departureActive
+      ? turnArrangement
+      : null,
+  );
   const startArrangedBattle = useCallback(() => {
     if (departureActive) return;
     const latest = useActiveRun.getState().run;

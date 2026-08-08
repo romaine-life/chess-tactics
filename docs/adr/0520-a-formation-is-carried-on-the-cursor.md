@@ -107,6 +107,15 @@ the seating; a secondary click turns what is being carried.**
    as the cursor moves. The square's list is always a subset, so a turn arrived at by clicking is
    always one the player could have pressed. Off the board there is no square to preserve and the
    rail's list applies. Both cycles wrap.
+9. **Q and E turn it too, in opposite directions.** The pointer gesture turns one way only, and a
+   quarter turn is easy to overshoot — undoing one press by making three more is not a control. E
+   is clockwise and Q counter-clockwise, matching the pair every other game binds to this job.
+   They walk the same square's list the click does, on the same terms the rail's buttons are
+   offered, so no gesture can turn the formation out of sight and none can reach a turn the
+   others cannot. They match the character the key produces rather than its physical position, so
+   the keys that turn are the ones printed Q and E on the player's own keyboard, which is what the
+   on-screen hint names. Auto-repeat is refused: one press is one quarter turn. A field or an open
+   dialog owns a bare letter first.
 9. **Placing hands the next formation to the cursor.** Seating a formation finishes with it, so
    the hand advances to the next admitted card still to be placed, resuming after the one just
    seated and wrapping — placing out of order walks the rest of the hand rather than jumping back

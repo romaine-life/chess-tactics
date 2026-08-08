@@ -34,16 +34,21 @@ describe('Run Deployment secondary-click turn', () => {
   // square the way the rail buttons do would blank the preview until the mouse was jiggled.
   it('turns the formation under the cursor without dropping the aimed square', () => {
     const turn = runScreen.match(
-      /const turnArrangementUnderCursor = useCallback\(\(\) => \{[\s\S]*?\}, \[[^\]]*\]\);/,
+      /const turnArrangement = useCallback\(\(direction: FormationTurnDirection\) => \{[\s\S]*?\}, \[[^\]]*\]\);/,
     )?.[0];
 
     expect(turn).toBeDefined();
     expect(turn).toContain('nextCardRotation(turnableArrangementRotationList, current)');
+    expect(turn).toContain('previousCardRotation(turnableArrangementRotationList, current)');
     expect(turn).not.toContain('setPointedArrangementCell');
-    // Nothing is committed by the gesture — placement stays on the primary button.
+    // Nothing is committed by a turn — placement stays on the primary button.
     expect(turn).not.toContain('placeArrangedDeploymentCard');
     expect(turn).not.toContain('removeArrangedDeploymentCard');
     expect(turn).not.toContain('replace(');
+    // The secondary click is one direction of the same verb, never a second implementation.
+    expect(runScreen).toMatch(
+      /const turnArrangementUnderCursor = useCallback\(\(\) => \{\s*turnArrangement\('clockwise'\);\s*\}, \[turnArrangement\]\);/,
+    );
   });
 
   it('offers the gesture only while a dealt formation is waiting to be placed', () => {
@@ -53,7 +58,21 @@ describe('Run Deployment secondary-click turn', () => {
     // The rail and the gesture walk one ordered list, so a clicked turn is always a pressable one.
     expect(runScreen).toContain('const availableArrangementRotationList = useMemo<readonly RunFormationRotation[]>');
     expect(runScreen).toContain('new Set<RunFormationRotation>(availableArrangementRotationList),');
-    expect(runScreen).toContain("? ' Right-click to turn it.' : ''");
+    expect(runScreen).toContain("? ' Right-click, or Q and E, to turn it.' : ''");
+  });
+
+  // The pointer gesture turns one way only, so overshooting a quarter turn meant three more
+  // presses to get back. Q and E supply both directions of the same verb.
+  it('binds Q and E to the same turn, on the same terms as the rail buttons', () => {
+    expect(runScreen).toContain(
+      "import { useFormationTurnKeys, type FormationTurnDirection } from './formationTurnKeys';",
+    );
+    expect(runScreen).toMatch(
+      /useFormationTurnKeys\(\s*stage === 'arrange' && selectedArrangementCard\?\.admitted && !departureActive\s*\? turnArrangement\s*: null,\s*\);/,
+    );
+    // Both directions walk the SAME cell-aware list the click does, so no key can turn the
+    // formation out of sight either.
+    expect(runScreen).not.toMatch(/useFormationTurnKeys\([^)]*availableArrangementRotationList/);
   });
 });
 

@@ -29,6 +29,7 @@ import {
   distinctCardRotations,
   nextArrangedCardToPlace,
   nextCardRotation,
+  previousCardRotation,
   placeArrangedDeploymentCard,
   resolveForcedDeploymentChoices,
   removeArrangedDeploymentCard,
@@ -401,6 +402,27 @@ describe('formation deployment', () => {
 
     // A turn that has fallen out of the offered list restarts the cycle instead of sticking.
     expect(nextCardRotation([0, 2], 1)).toBe(0);
+  });
+
+  // A quarter turn is easy to overshoot, so one press back must undo one press forward rather
+  // than going three quarters of the way round.
+  it('steps back round the same cycle', () => {
+    expect(previousCardRotation([0, 1, 2, 3], 1)).toBe(0);
+    expect(previousCardRotation([0, 1, 2, 3], 0)).toBe(3);
+    expect(previousCardRotation([0, 1], 0)).toBe(1);
+
+    // Forward then back returns to where it started, on every list shape.
+    for (const available of [[0, 1, 2, 3], [0, 1], [0, 2], [0]] as const) {
+      for (const from of available) {
+        expect(previousCardRotation(available, nextCardRotation(available, from))).toBe(from);
+        expect(nextCardRotation(available, previousCardRotation(available, from))).toBe(from);
+      }
+    }
+
+    // The same degenerate cases the forward step holds still on.
+    expect(previousCardRotation([0], 0)).toBe(0);
+    expect(previousCardRotation([], 2)).toBe(2);
+    expect(previousCardRotation([0, 2], 1)).toBe(2);
   });
 
   // The gesture and the rail must agree on the list, so a turn arrived at by clicking is one

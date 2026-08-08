@@ -586,6 +586,24 @@ export function nextCardRotation(
   return available[(available.indexOf(current) + 1) % available.length];
 }
 
+/**
+ * The turn one step back round the same cycle.
+ *
+ * A quarter turn is easy to overshoot, so turning has to be reversible by the same gesture in the
+ * other direction rather than by going three quarters of the way round. Rotation indices increase
+ * clockwise, so this is the counter-clockwise step.
+ */
+export function previousCardRotation(
+  available: readonly RunFormationRotation[],
+  current: RunFormationRotation,
+): RunFormationRotation {
+  if (!available.length) return current;
+  const index = available.indexOf(current);
+  return index < 0
+    ? available[available.length - 1]
+    : available[(index - 1 + available.length) % available.length];
+}
+
 /** Every legal translation for one selected rotation. The anchor is the normalized shape's
  * front-left cell. A seat's row is the anchor row plus the rotated offset, in board
  * coordinates -- not an index into the lane list, which made a formation's depth mean
