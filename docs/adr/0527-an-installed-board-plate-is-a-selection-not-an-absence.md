@@ -63,12 +63,16 @@ plate is a settled, drawable one.** It gets its own kind, `plate`, beside the ve
 
 ## Consequences
 
-- **This decides how a plate RENDERS, not whether plates survive.** Exactly one level is still placed
-  this way — Fortress Gate, off-square by a few percent — and it remains un-migrated. Migrating it
-  would mean running it through the warp stage and accepting different pixels than were placed by
-  hand; that trade is an open decision about the artwork, and this ADR does not make it. What it
-  settles is that an un-migrated level draws its artwork in the meantime instead of showing an empty
-  board, so the question can be answered on its merits rather than under a broken editor.
+- **Fortress Gate was then migrated, and no level holds a plate any more.** It was the last one. The
+  conversion did not re-place the artwork by eye: the same four-point projective map was solved from
+  its stored corners (reproducing them to 1e-13 px), inverted, and resampled onto the level's saved
+  16:9 viewing pane at 2048×1152, so the painting kept its position while becoming an ordinary
+  `schemaVersion: 2` surface. The pane was sized from the painting's own world extent so nothing was
+  cropped. Published to canonical: 4 official levels versioned, 0 plates.
+- **Decoding a plate is kept regardless.** The document's older revisions still carry one, and
+  restoring an earlier revision has to bring its artwork back rather than a blank board. That is why
+  the rule above outlives the data it was written for: any check deciding whether artwork may paint
+  must accept a plate, or a restored revision blanks.
 - Anything new that keys off the selection check must ask `predrawnSelectionIsDrawable` rather than
   compare against `valid`, exactly as ADR-0521 requires `unreachable` to be handled explicitly.
 - Verified against the real document that showed the defect (`legacy-egkfkpjvhfph`, Fortress Gate,
