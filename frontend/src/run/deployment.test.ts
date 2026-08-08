@@ -19,6 +19,7 @@ import {
   beginDeploymentDeal,
   completeDeploymentDeal,
   deploymentInteractionStage,
+  distinctCardRotations,
   placeArrangedDeploymentCard,
   resolveForcedDeploymentChoices,
   removeArrangedDeploymentCard,
@@ -137,6 +138,24 @@ describe('formation deployment', () => {
     expect(standing(2)).toEqual([]);
     expect(new Set(standing(3))).toEqual(new Set([3]));
     expect(standing(3)).toHaveLength(6);
+  });
+
+  // A symmetric formation maps onto itself under a turn, so offering both would give the
+  // player two buttons that place the same unit types on the same squares.
+  it('offers only the quarter turns that produce a different board', () => {
+    const rotationsFor = (cardId: string): number[] => {
+      const { run, level } = fixture(8, 8, 41, [cardId]);
+      const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+      const card = arranging.cards.find((candidate) => candidate.coreId === cardId)!;
+      return distinctCardRotations(arranging, card.id);
+    };
+
+    // Four Pawns across read the same in both directions.
+    expect(rotationsFor('f-01112131-pppp')).toEqual([0, 1]);
+    // The same line with one Knight off-center does not.
+    expect(rotationsFor('f-01112131-kppp')).toEqual([0, 1, 2, 3]);
+    // A lone unit is the same shape whichever way it is turned.
+    expect(rotationsFor('q')).toEqual([0]);
   });
 
   it('fits His Grace in the smallest two-by-two deployment band', () => {

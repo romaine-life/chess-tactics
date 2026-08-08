@@ -519,6 +519,36 @@ function rotatedFormation(
   return rotated.map((cell) => ({ x: cell.x - minX, y: cell.y - minY }));
 }
 
+/**
+ * The quarter turns a player can actually tell apart. A formation that maps onto itself under
+ * a turn would otherwise offer two buttons that place identical unit types on identical
+ * squares -- most visibly the four-across cards, five of which read the same in both
+ * directions (`pppp`, `bppb`, `kppk`, `pbbp`, `pkkp`). Units of one type are interchangeable,
+ * so the comparison is by type rather than by unit identity.
+ */
+export function distinctCardRotations(
+  run: RunDocument,
+  cardId: string,
+): RunFormationRotation[] {
+  const card = dealtCards(run).find((candidate) => candidate.id === cardId);
+  if (!card) return [];
+  const definition = runCardDefinition(card.coreId);
+  const formation = definition?.formation ?? card.unitSeats.map((_, x) => ({ x, y: 0 }));
+  const types = card.unitSeats.map((unitId) => (
+    run.army.find((candidate) => candidate.id === unitId)?.type ?? ''
+  ));
+  const seen = new Set<string>();
+  return ([0, 1, 2, 3] as const).filter((rotation) => {
+    const signature = rotatedFormation(formation, rotation)
+      .map((cell, index) => `${cell.x},${cell.y}:${types[index]}`)
+      .sort()
+      .join('|');
+    if (seen.has(signature)) return false;
+    seen.add(signature);
+    return true;
+  });
+}
+
 /** Every legal translation for one selected rotation. The anchor is the normalized shape's
  * front-left cell. A seat's row is the anchor row plus the rotated offset, in board
  * coordinates -- not an index into the lane list, which made a formation's depth mean
