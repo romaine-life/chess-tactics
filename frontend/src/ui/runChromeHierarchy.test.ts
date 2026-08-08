@@ -511,7 +511,16 @@ describe('Run chrome hierarchy', () => {
     expect(runBattlePreview).toMatch(
       /<div className="run-battle-preview-board-titlebar">[\s\S]*?<ChromeDivider role="inner" className="run-battle-preview-board-rule" \/>[\s\S]*?<\/div>/,
     );
-    expect(styleCss).toMatch(/\.run-battle-preview-board-rule\s*\{[^}]*margin-block:\s*0;/);
+    // The rule's host states its own reach so the authored T caps tee INTO the frame's side
+    // rails, and the bleed is not clipped. Hand-zeroing margins instead puts the caps inside.
+    expect(styleCss).toMatch(
+      /\.run-battle-preview-board-titlebar > \.run-battle-preview-board-rule\s*\{[^}]*--kit-divider-reach: var\(--le-chrome-inner-rail-w/,
+    );
+    expect(styleCss).toMatch(
+      /\.run-battle-preview-board-titlebar > \.run-battle-preview-board-rule\s*\{[^}]*--kit-divider-gap: 0px;/,
+    );
+    expect(styleCss).not.toMatch(/\.run-battle-preview-board-titlebar\s*\{[^}]*overflow:\s*hidden/);
+    expect(styleCss).not.toMatch(/\.run-battle-preview-board-frame\s*\{[^}]*overflow:\s*hidden/);
     expect(runBattlePreview).not.toMatch(/run-battle-preview-board-frame"\s+fillRole/);
     expect(styleCss).toMatch(/\.run-battle-preview-board-frame\s*\{[^}]*gap:\s*0;/);
     expect(styleCss).toMatch(/\.run-battle-preview-board-frame\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\);/);

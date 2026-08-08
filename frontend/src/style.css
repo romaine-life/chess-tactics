@@ -19626,7 +19626,6 @@ button.tileset-relationship-cell {
 
 .run-battle-preview-board-frame {
   display: grid;
-  grid-area: board;
   /* Exactly two rows, no gap: title strip, then the pane takes the whole remainder. Any third
      track or row gap would expose the frame's own surface as a band across the level art. */
   gap: 0;
@@ -19634,7 +19633,9 @@ button.tileset-relationship-cell {
   grid-template-rows: auto minmax(0, 1fr);
   min-block-size: 0;
   min-inline-size: 0;
-  overflow: hidden;
+  /* NOT clipped: the title rule's authored T caps bleed onto the side rails by design, and a
+     clip here puts them inside the frame. The pane owns its own clip. */
+  overflow: visible;
   /* NO padding. The installed inner-box surface paints an opaque `background-color` under every
      inner box, so any padding here is a flat slab of that material ringing the level art between
      the border art and the board. The board is the frame's whole content: it must reach the
@@ -19648,8 +19649,6 @@ button.tileset-relationship-cell {
 .run-battle-preview-board-titlebar {
   display: grid;
   grid-template-rows: auto auto;
-  /* The rule's negative inline reach is clipped to the strip, so it spans exactly the frame. */
-  overflow: hidden;
   position: relative;
 }
 
@@ -19662,9 +19661,13 @@ button.tileset-relationship-cell {
   z-index: 1;
 }
 
-/* Flush against the board: any block margin here would be marble below the rule. */
-.run-battle-preview-board-rule {
-  margin-block: 0;
+/* Divider host contract (see `.kit-divider`): the host states how far the rule bleeds out of its
+   content box so the authored T caps tee INTO the side rails. This host's rails are the inner
+   box's, so the reach is that rail's width — the same declaration `.house-select-menu-options`
+   makes. The bleed must not be clipped, or the caps land inside the frame. */
+.run-battle-preview-board-titlebar > .run-battle-preview-board-rule {
+  --kit-divider-gap: 0px;
+  --kit-divider-reach: var(--le-chrome-inner-rail-w, 7px);
 }
 
 .run-battle-preview-board-head {
