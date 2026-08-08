@@ -22134,6 +22134,11 @@ button.tileset-relationship-cell {
 .run-deployment-card-stack {
   --deployment-deal-duration: 720ms;
   --deployment-deal-stagger: 130ms;
+  /* The hand is laid out, READ, and only then gathered. The beat is the whole reason the spread
+     exists: without it the cards would arrive and leave in one motion nobody could follow. */
+  --deployment-spread-beat: 620ms;
+  --deployment-gather-duration: 520ms;
+  --deployment-gather-stagger: 64ms;
   --deployment-discard-duration: 560ms;
   --deployment-discard-stagger: 72ms;
   align-items: start;
@@ -22162,6 +22167,33 @@ button.tileset-relationship-cell {
   opacity: 0;
 }
 
+/* The table the drawn hand is laid out on, in the middle of the board. It holds SEATS only —
+   the drawn cards are the flight elements coming to rest on them — so it paints nothing and
+   takes no pointer. Sized as a lane for the shared card row to fit the hand into, so a Battle
+   that draws six lays them out at the size six will fit rather than overflowing the board. */
+.run-deployment-spread {
+  block-size: clamp(180px, 34vh, 320px);
+  inline-size: min(84%, 980px);
+  /* Taken OUT of the column so its arrival cannot move the deck the cards are leaving. It lays
+     out across the middle of the board, over where the deck stands — by the time the hand
+     arrives the deck has already been swept back to the Chartulary. */
+  position: absolute;
+  pointer-events: none;
+}
+
+/* Hidden, not unmounted: the deck's position is the flight's source rect, and it must be the
+   same box after the press as the player saw before it. */
+.run-deployment-deal-actions.is-spent {
+  visibility: hidden;
+}
+
+/* The row writes the track WIDTH; the seat takes the card's own proportion from it. `100%` of an
+   auto-height track is zero, which scaled every card in flight down to nothing. */
+.run-deployment-spread-seat {
+  aspect-ratio: 5 / 7;
+  inline-size: 100%;
+}
+
 .run-deployment-deal-flight {
   opacity: 0;
   position: fixed;
@@ -22169,7 +22201,7 @@ button.tileset-relationship-cell {
   will-change: opacity, transform;
 }
 
-.run-deployment-deal-flight > .run-card-back {
+.run-deployment-deal-flight > :is(.run-card-back, .run-card-action) {
   block-size: 100%;
   display: block;
   inline-size: 100%;
