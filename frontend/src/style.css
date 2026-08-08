@@ -15450,32 +15450,34 @@ button.tileset-relationship-cell {
   z-index: 1;
 }
 
-/* A hairline vanished into painted artwork and detailed terrain alike. The weight below carries a
-   warm light line UNDER the dark one, so the grid reads as carved into the ground rather than
-   drawn over it, and stays part of the scene instead of becoming a technical overlay. The stroke
-   is non-scaling, so this is a constant screen weight at every zoom. */
+/* A hairline vanished into painted artwork and detailed terrain alike, and a translucent line
+   picked up whatever it sat on instead of holding one colour. Both lines here are OPAQUE: solid
+   dark ink with a solid warm bevel offset directly beneath it, at zero blur, so the grid reads as
+   a groove pressed into the ground rather than a wash laid over it. Keep them opaque — the whole
+   point is that a square looks the same over grass, dirt, stone, and water.
+   The stroke is non-scaling, so this is a constant screen weight at every zoom. */
 .tileset-board-grid-layer path {
   fill: none;
-  stroke: rgba(20, 14, 10, 0.66);
+  stroke: #241a10;
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 2.6;
-  filter: drop-shadow(0 1.5px 0 rgba(255, 240, 210, 0.42));
+  filter: drop-shadow(0 1.5px 0 #f2e3bd);
 }
 
 /* Wall-art placement is a geometry-verification surface, so its canonical cell grid stays a step
    more decisive than the board grid above rather than matching it. */
 .wall-art-board-surface .tileset-board-grid-layer path {
-  stroke: rgba(0, 0, 0, 0.82);
+  stroke: #14100c;
   stroke-width: 3.2;
-  filter: drop-shadow(0 1.5px 0 rgba(255, 255, 255, 0.42));
+  filter: drop-shadow(0 2px 0 #ffeec9);
 }
 
-/* Placement previews sit under their own chrome, so they keep the board grid's weight but step the
-   ink back rather than reverting to the old hairline. */
+/* Placement previews sit under their own chrome, so they keep the board grid's weight and stay
+   opaque, but soften both inks a step rather than reverting to the old hairline. */
 .tileset-placement-board .tileset-board-grid-layer path {
-  stroke: rgba(20, 14, 10, 0.5);
-  filter: drop-shadow(0 1.5px 0 rgba(255, 240, 210, 0.3));
+  stroke: #3a2c1c;
+  filter: drop-shadow(0 1.5px 0 #d9cba8);
 }
 
 /* Persisted player-camera coverage boundary. Unlike a viewport snapshot, this world-space box is
