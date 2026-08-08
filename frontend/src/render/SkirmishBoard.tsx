@@ -8,6 +8,7 @@ import type { GameState, Move, Piece, Side, TerrainType, UnitFacing, Vec } from 
 import { attackedSquares, blockedCandidateSquares, enemyThreats, gameEnv, legalMoves, livingPieces } from '../core/rules';
 import { PIECE_LABEL, PIECE_MARK, PLAYABLE_PIECE_TYPES, UNIT_FACINGS, defaultFacingForSide, paletteForSide, pieceSpritePath, type PlayablePieceType } from '../core/pieces';
 import { defaultTerrainFamily, familyForGameplayTerrain, familyIdForAsset, tileSocketsForAsset, type TileFamilyId } from '../core/tileSockets';
+import { usePlayerPalette } from '../settings/playerPalette';
 import { useSkirmish } from '../game/SkirmishStoreContext';
 import { moveGestureInputMode } from '../game/store';
 import { adminMoveTargets } from '../game/adminBattle';
@@ -1730,6 +1731,9 @@ export function SkirmishBoard({
   const showPlayerMoves = surfaceState ? false : storedShowPlayerMoves;
   const showPromotionZones = surfaceState ? false : storedShowPromotionZones;
   const showGrid = useSkirmishView((s) => s.showGrid);
+  // The sprite resolvers above read the chosen player color from module state, which React cannot
+  // see. Subscribing here is what repaints the board when the setting changes under a live battle.
+  usePlayerPalette();
   const boardZoom = useSkirmishView((s) => s.zoom);
   const boardMinZoom = useSkirmishView((s) => s.minZoom);
   const boardMaxZoom = useSkirmishView((s) => s.maxZoom);

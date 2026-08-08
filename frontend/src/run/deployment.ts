@@ -24,6 +24,10 @@ export function gameForRunDeployment(
   const game = createFromLevel(levelForRunDeployment(run, level, layout, includeAutomaticFormation), seed);
   return {
     ...game,
-    pieces: game.pieces.filter((piece) => piece.side !== 'enemy' && !piece.id.startsWith('spawn-')),
+    // Authored units — the level's enemy force included — are painted, because they are the
+    // position the player is arranging against. A setup-spawn deal is withheld: it fills its
+    // zone around the squares already taken, so the force it would show now is not necessarily
+    // the force Battle deals once every card has claimed its cells.
+    pieces: game.pieces.filter((piece) => !piece.id.startsWith('spawn-')),
   };
 }

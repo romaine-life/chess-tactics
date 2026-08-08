@@ -24,6 +24,7 @@ import { composeInstalledChromeCss } from './ui/useInstalledChromeCss';
 import { decodeShellChromeArt } from './ui/shell/shellChromeArt';
 import { startAuthSession } from './net/authSession';
 import { initBoardGridStyle } from './settings/boardGridStyle';
+import { initPlayerPalette } from './settings/playerPalette';
 
 installLoadingResourceObserver();
 loadingMark('app', 'entry-module');
@@ -33,6 +34,9 @@ void startAuthSession();
 // The board grid is drawn on battlefields the player reaches without passing through Settings, so
 // the chosen style is published for the whole session rather than by the Settings screen.
 initBoardGridStyle();
+// Likewise the color the player's own pieces wear: published for the whole session before any
+// board can paint, so a battle entered straight from a cold load is already in the chosen set.
+initPlayerPalette();
 
 class AppCrashBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null as Error | null };

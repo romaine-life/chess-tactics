@@ -44,8 +44,9 @@ describe('Run card names', () => {
     ));
     expect(queenPawnCards).toHaveLength(1);
     expect(queenPawnCards.every((card) => runCardName(card) === 'The Last Attendant')).toBe(true);
+    // One illustration per (footprint, roster): Queen behind a Pawn is its own scene.
     expect(queenPawnCards.every((card) => (
-      runCardArtSlot(card) === 'ui/run/card-art/q/illustration.png'
+      runCardArtSlot(card) === 'ui/run/card-art/0001-pq/illustration.png'
     ))).toBe(true);
   });
 

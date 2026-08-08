@@ -1637,6 +1637,9 @@ function predrawnBoardOwnerProofIssue(row, proof, surfaceUrl = null) {
   return null;
 }
 
+const RUN_CARD_FAMILY_RESAMPLED_EXCEPTION_SCHEMA = 'run-card-family-resampled-v1';
+const RUN_CARD_FAMILY_RESAMPLE_TRANSFORM = 'lanczos3-cover-fit-400x280';
+
 function nativeMediaEvidenceIssue(row) {
   const isRaster = String(row.media_type || '').startsWith('image/') && row.media_type !== 'image/svg+xml';
   if (!isRaster) return null;
@@ -1756,6 +1759,39 @@ function nativeMediaEvidenceIssue(row) {
       || Number(evidence.sourcePaintedHeight) !== expected.sourcePaintedHeight
       || evidence.transform !== RUN_CARD_FRAME_NORMALISED_EXCEPTION_TRANSFORM
     ) return 'ADR-0360 normalised card-frame evidence is missing its painted box or exact transform';
+    return null;
+  }
+  // ADR-0520: family card art may come from Codex, which renders far above the 400x280 card
+  // window and is downsampled to it. That IS spatial resampling, so it is recorded as such
+  // rather than claimed native — the evidence names the source raster it came down from and
+  // the exact transform, the same shape the ADR-0332 and ADR-0360 exceptions use.
+  if (evidence.schema === RUN_CARD_FAMILY_RESAMPLED_EXCEPTION_SCHEMA) {
+    if (!/^ui\/run\/card-art\/[0-9]+-[pkbrq]+\/illustration\.png$/.test(String(row.slot || ''))) {
+      return 'ADR-0520 resampled card-art evidence is restricted to family card-art slots';
+    }
+    if (
+      // The batch was promoted while this decision was numbered 0517; main had taken that
+      // number, so the ADR is 0520. Accepted rows cannot be patched, so both names are
+      // honoured and the stored ones stay truthful about when they were written.
+      !['ADR-0520', 'ADR-0517'].includes(evidence.decision)
+      || evidence.status !== 'owner-approved-production-exception'
+      || evidence.native1x !== false
+      || evidence.spatialResampling !== true
+      || evidence.generationModel !== 'codex-image-gen'
+    ) return 'ADR-0520 resampled card-art evidence is incomplete';
+    if (
+      Number(row.width) !== 400 || Number(row.height) !== 280
+      || Number(evidence.outputWidth) !== 400 || Number(evidence.outputHeight) !== 280
+    ) return 'ADR-0520 resampled card-art evidence has invalid output dimensions';
+    if (
+      !Number.isFinite(Number(evidence.sourceWidth)) || Number(evidence.sourceWidth) <= 400
+      || !Number.isFinite(Number(evidence.sourceHeight)) || Number(evidence.sourceHeight) <= 280
+    ) return 'ADR-0520 resampled card-art evidence must name a larger source raster';
+    if (
+      !normalizedSha(evidence.outputSha256)
+      || normalizedSha(evidence.outputSha256) !== normalizedSha(row.blob_sha256)
+      || evidence.transform !== RUN_CARD_FAMILY_RESAMPLE_TRANSFORM
+    ) return 'ADR-0520 resampled card-art evidence must authorize these bytes and its exact transform';
     return null;
   }
   if (evidence.native1x !== true) return 'nativeEvidence.native1x must be true';

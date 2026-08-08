@@ -89,4 +89,100 @@ describe('level editor persistence safety UI', () => {
     expect(boardUpdate).toBeGreaterThan(signatureUpdate);
     expect(revisionUpdate).toBeGreaterThan(boardUpdate);
   });
+
+  it('reports an autosave 401 as a sign-out instead of a generic write failure', () => {
+    const autosaveStart = source.indexOf('const request = autosaveEditorDocument(');
+    const autosaveEnd = source.indexOf('autosavePromiseRef.current = request;', autosaveStart);
+    const autosave = source.slice(autosaveStart, autosaveEnd);
+    const signOut = autosave.indexOf('if (reportAuthSessionFailure(error)) {');
+    const genericError = autosave.indexOf("setCloudSaveState('error')");
+
+    expect(signOut).toBeGreaterThan(-1);
+    expect(autosave.indexOf('enterCloudSignOut()')).toBeGreaterThan(signOut);
+    // The sign-out branch has to be reached before anything can latch the generic error state,
+    // which is what previously stopped autosave for the rest of the session.
+    expect(genericError).toBeGreaterThan(signOut);
+  });
+
+  it('keeps an open working copy mounted and buffering when its sign-in expires', () => {
+    const resolveStart = source.indexOf('if (!sharedAuthStatus) return undefined;');
+    const teardown = source.indexOf('setEditAuthorityState(\'checking\');', resolveStart);
+    const guard = source.slice(resolveStart, teardown);
+
+    // Pausing must be decided BEFORE document resolution tears the session down, otherwise the
+    // signed-out branch blocks the board and every edit since the expiry is stranded in RAM.
+    expect(guard).toContain('isInterruptedByCloudSignOut({');
+    expect(guard).toContain('documentOpen: Boolean(editorDocumentRef.current)');
+    expect(guard).toContain('enterCloudSignOut();');
+    expect(guard).toContain('shouldResumeInterruptedCloudSync({');
+    expect(guard).toContain('void resumeInterruptedCloudSync();');
+  });
+
+  it('addresses the browser recovery by the document owner, not the live session', () => {
+    expect(source).toContain('documentOwnerEmailRef.current = ownerEmail;');
+    expect(source).toContain('? activeOwnerEmail() || undefined');
+    expect(source).toMatch(/const activeOwnerEmail = \(\): string => \(\s*me\?\.email\?\.trim\(\)\.toLowerCase\(\) \|\| documentOwnerEmailRef\.current \|\| ''/);
+  });
+
+  it('resumes the mounted document without repainting it from the server body', () => {
+    const resumeStart = source.indexOf('const resumeInterruptedCloudSync =');
+    const resumeEnd = source.indexOf('const mountAcknowledgedWorkingCopy =', resumeStart);
+    const resume = source.slice(resumeStart, resumeEnd);
+
+    expect(resume).toContain('openEditorDocumentEditSession(');
+    expect(resume).toContain('lastCloudSyncedSigRef.current = normalizedLevelEditorSignature(server.level)');
+    expect(resume).toContain("setCloudSaveState(server.baseline_conflict ? 'conflict' : 'pending')");
+    // applyLevelDocument here would paint the pre-sign-out body over the live editor.
+    expect(resume).not.toContain('applyLevelDocument');
+  });
+
+  it('offers an unadopted browser branch instead of leaving it addressable only from storage', () => {
+    expect(source).toContain('data-testid="le-preserved-branch-offer"');
+    expect(source).toContain('data-testid="le-restore-preserved-branch"');
+    expect(source).toContain('data-testid="le-discard-preserved-branch"');
+    expect(source).toContain('shouldOfferPreservedEditorBranch({');
+    expect(source).toContain('const restorePreservedBranchOffer = (): void => {');
+    // The export must fall back to the offered branch; a retired page session owns no scoped draft.
+    expect(source).toContain('}) ?? preservedBranchOffer?.draft ?? null;');
+  });
+
+  it('gives the signed-out pause its own recoverable action and state', () => {
+    expect(source).toContain('data-testid="le-sign-in-resume-banner"');
+    expect(source).toContain('data-testid="le-sign-in-resume"');
+    expect(source).toContain("cloudSaveState === 'signed-out'");
+    expect(source).toContain('const signInToResumeCloudSync = (): void => {');
+    // With no browser recovery the live board is the only copy, so sign-in must not navigate away.
+    expect(source).toContain('if (localBackupAvailable === false) {');
+  });
+
+  it('lets an unread artwork version list recover instead of hiding the plate for the page', () => {
+    // The whole defect was a one-shot check: a 401 or a restarted backend blanked a pre-drawn
+    // board with terrain suppressed, and nothing ever asked again.
+    const check = source.indexOf('listPredrawnBackgroundVersions(editorDocument.document_id)');
+    expect(check).toBeGreaterThan(0);
+    const effect = source.slice(check, source.indexOf('const currentEditorBoardRef', check));
+    expect(effect).toContain('predrawnSelectionReadFailure(cause, signedOut)');
+    // ADR-0306 owns the 401 verdict, and it is reported once per episode: re-reporting on every
+    // retry flips identity back and forth against ADR-0519's probe, which restores a session it
+    // disagrees with. Classifying the status code locally is the guard's own violation.
+    expect(effect).toContain('const signedOut = predrawnUnauthorizedReportedRef.current || reportAuthSessionFailure(cause);');
+    expect(effect).not.toContain('isUnauthorized');
+    expect(source).toContain('predrawnUnauthorizedReportedRef.current = false;');
+    // Without this dep nothing re-runs the check: its other inputs are the board's own geometry
+    // and identity, which neither a lost backend nor an expired cookie touches.
+    expect(effect).toContain('predrawnValidationAttempt,');
+
+    // The listeners key on the failure EPISODE, not the instantaneous state: keying them on the
+    // state tears them down for the length of each attempt, and a signal landing in that window
+    // is lost — the same "it never came back" this exists to prevent.
+    expect(source).toContain('const predrawnReadFailurePending = predrawnSelectionReadShouldRetry(predrawnSelectionValidation)');
+    expect(source).toContain('  }, [predrawnReadFailurePending]);');
+    expect(source).toContain("window.addEventListener('online', retry)");
+    expect(source).toContain('setPredrawnValidationAttempt((attempt) => attempt + 1)');
+    // Keying the sign-in retry on the check's own state would re-fire on every retry it causes.
+    expect(source).toContain('predrawnSelectionReadShouldRetry(predrawnSelectionCheckRef.current)');
+    expect(source).toContain('  }, [sharedAuthStatus]);');
+    // "Unavailable" is a verdict about the artwork; an unread list is not one.
+    expect(source).toContain("'AI artwork could not be checked'");
+  });
 });

@@ -386,6 +386,18 @@ describe('applyMove', () => {
     expect(res.state.pieces.find((p) => p.id === pawn.id)).toMatchObject({ x: 3, y: 2 });
     expect(res.state.pieces.find((p) => p.id === target.id)?.alive).toBe(false);
   });
+  it('marks the capture event en passant, and marks an ordinary capture nothing', () => {
+    // Surrounding layers (the Run's bounty, the log line) recognize the capture from the
+    // event alone; the victim's square is gone from the committed board by then.
+    const pawn = P('player', 'pawn', 4, 3);
+    const target = P('enemy', 'pawn', 3, 3);
+    const state = { size: SIZE, pieces: [pawn, target, P('enemy', 'king', 7, 0)], turn: 'player' as const, winner: null };
+    const passing = applyMove(state, pawn.id, { x: 3, y: 2, capture: target.id, enPassant: true });
+    expect(passing.events).toContainEqual({ kind: 'captured', pieceId: target.id, by: pawn.id, enPassant: true });
+
+    const ordinary = applyMove(state, pawn.id, { x: 3, y: 3, capture: target.id });
+    expect(ordinary.events).toContainEqual({ kind: 'captured', pieceId: target.id, by: pawn.id });
+  });
   it('leaves outcome adjudication to the level rules when one side is wiped out', () => {
     const queen = P('player', 'queen', 4, 6);
     const lastFoe = P('enemy', 'pawn', 4, 5);

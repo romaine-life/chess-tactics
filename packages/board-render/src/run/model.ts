@@ -50,6 +50,7 @@ export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
 export const RUN_BATTLE_RETRY_COST_TENTHS = 3 * GOLD_SCALE;
+export const RUN_EN_PASSANT_BOUNTY_TENTHS = 5 * GOLD_SCALE;
 export const RUN_DEPLOYMENT_REROLL_COST_TENTHS = GOLD_SCALE;
 export const RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS = 5 * GOLD_SCALE;
 export const RUN_SECTIO_CARD_OFFER_COUNT = 3;
@@ -445,15 +446,32 @@ const ADLECTABLE_CARD_PIECES: readonly Readonly<{
 const CARD_INITIAL_BY_PIECE = new Map(ADLECTABLE_CARD_PIECES.map(({ type, initial }) => [type, initial]));
 const CARD_PIECE_ORDER = new Map(ADLECTABLE_CARD_PIECES.map(({ type }, index) => [type, index]));
 
-function cardCompositionArtId(pieces: readonly AdlectablePieceType[]): string {
-  const composition = [...pieces]
+function cardComposition(pieces: readonly AdlectablePieceType[]): string {
+  return [...pieces]
     .sort((left, right) => (CARD_PIECE_ORDER.get(left) ?? 0) - (CARD_PIECE_ORDER.get(right) ?? 0))
     .map((piece) => CARD_INITIAL_BY_PIECE.get(piece))
     .join('');
-  // Queen + Pawn is the one ten-material roster admitted by the formation grammar.
-  // It temporarily shares the accepted Queen illustration until dedicated composition
-  // artwork is selected; exact formation remains authoritative on the card face.
-  return composition === 'pq' ? 'q' : composition;
+}
+
+/** The footprint an illustration is drawn for, cells in reading order. */
+function cardFootprintId(formation: readonly RunCardFormationCell[]): string {
+  return [...formation]
+    .sort((left, right) => left.y - right.y || left.x - right.x)
+    .map((cell) => `${cell.x}${cell.y}`)
+    .join('');
+}
+
+/**
+ * One illustration per (footprint, roster). Cards that share both differ only in which seat
+ * each piece occupies, which the card face already draws on its own board -- so they share a
+ * scene. Splitting art by footprint as well as roster is what lets the picture answer the
+ * arrangement: the same four people hold a corner, a line, and a column differently.
+ */
+function cardCompositionArtId(
+  pieces: readonly AdlectablePieceType[],
+  formation: readonly RunCardFormationCell[],
+): string {
+  return `${cardFootprintId(formation)}-${cardComposition(pieces)}`;
 }
 
 /** Rarity is desirability data, not a material band. Exact formation may therefore
@@ -482,7 +500,6 @@ export function runCardRarity(
 
 const formationCard = (
   id: string,
-  artId: string,
   pieces: readonly AdlectablePieceType[],
   formation: readonly RunCardFormationCell[],
 ): RunCoreCard => {
@@ -494,9 +511,9 @@ const formationCard = (
   }
   return Object.freeze({
     id,
-    artId,
     pieces: [...pieces],
     formation: formation.map((cell) => ({ ...cell })),
+    artId: cardCompositionArtId(pieces, formation),
     value: pieces.reduce((total, piece) => total + PIECE_VALUE[piece], 0),
     rarity: runCardRarity(pieces, formation),
   });
@@ -553,7 +570,6 @@ function generatedCardsForFootprint(formation: readonly RunCardFormationCell[]):
       const pieceId = pieces.map((piece) => CARD_INITIAL_BY_PIECE.get(piece)).join('');
       cards.push(formationCard(
         `f-${footprintId}-${pieceId}`,
-        cardCompositionArtId(pieces),
         pieces,
         formation,
       ));
@@ -619,33 +635,33 @@ function rotationalFormationId(card: Pick<RunCoreCard, 'pieces' | 'formation'>):
  * six shapes outside the connected roster grammar remain explicit additions. */
 function existingFormationCards(): RunCoreCard[] {
   return [
-    formationCard('p', 'p', ['pawn'], [{ x: 0, y: 0 }]),
-    formationCard('pp', 'pp', ['pawn', 'pawn'], [{ x: 0, y: 0 }, { x: 1, y: 0 }]),
-    formationCard('ppp', 'ppp', ['pawn', 'pawn', 'pawn'], [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }]),
-    formationCard('k', 'k', ['knight'], [{ x: 0, y: 0 }]),
-    formationCard('b', 'b', ['bishop'], [{ x: 0, y: 0 }]),
-    formationCard('pk-front', 'pk', ['knight', 'pawn'], [{ x: 0, y: 1 }, { x: 0, y: 0 }]),
-    formationCard('pb-front', 'pb', ['bishop', 'pawn'], [{ x: 0, y: 1 }, { x: 0, y: 0 }]),
-    formationCard('ppk-reversed', 'ppk', ['knight', 'pawn', 'pawn'], [
+    formationCard('p', ['pawn'], [{ x: 0, y: 0 }]),
+    formationCard('pp', ['pawn', 'pawn'], [{ x: 0, y: 0 }, { x: 1, y: 0 }]),
+    formationCard('ppp', ['pawn', 'pawn', 'pawn'], [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }]),
+    formationCard('k', ['knight'], [{ x: 0, y: 0 }]),
+    formationCard('b', ['bishop'], [{ x: 0, y: 0 }]),
+    formationCard('pk-front', ['knight', 'pawn'], [{ x: 0, y: 1 }, { x: 0, y: 0 }]),
+    formationCard('pb-front', ['bishop', 'pawn'], [{ x: 0, y: 1 }, { x: 0, y: 0 }]),
+    formationCard('ppk-reversed', ['knight', 'pawn', 'pawn'], [
       { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 2, y: 1 },
     ]),
-    formationCard('ppb-reversed', 'ppb', ['bishop', 'pawn', 'pawn'], [
+    formationCard('ppb-reversed', ['bishop', 'pawn', 'pawn'], [
       { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 2, y: 1 },
     ]),
-    formationCard('bb-diagonal', 'bb', ['bishop', 'bishop'], [{ x: 0, y: 0 }, { x: 1, y: 1 }]),
-    formationCard('r', 'r', ['rook'], [{ x: 0, y: 0 }]),
-    formationCard('pr-front', 'pr', ['rook', 'pawn'], [{ x: 0, y: 1 }, { x: 0, y: 0 }]),
-    formationCard('kk-horizontal', 'kk', ['knight', 'knight'], [{ x: 0, y: 0 }, { x: 1, y: 0 }]),
-    formationCard('ppk-protected', 'ppk', ['knight', 'pawn', 'pawn'], [
+    formationCard('bb-diagonal', ['bishop', 'bishop'], [{ x: 0, y: 0 }, { x: 1, y: 1 }]),
+    formationCard('r', ['rook'], [{ x: 0, y: 0 }]),
+    formationCard('pr-front', ['rook', 'pawn'], [{ x: 0, y: 1 }, { x: 0, y: 0 }]),
+    formationCard('kk-horizontal', ['knight', 'knight'], [{ x: 0, y: 0 }, { x: 1, y: 0 }]),
+    formationCard('ppk-protected', ['knight', 'pawn', 'pawn'], [
       { x: 1, y: 1 }, { x: 0, y: 0 }, { x: 2, y: 0 },
     ]),
-    formationCard('ppb-protected', 'ppb', ['bishop', 'pawn', 'pawn'], [
+    formationCard('ppb-protected', ['bishop', 'pawn', 'pawn'], [
       { x: 1, y: 1 }, { x: 0, y: 0 }, { x: 2, y: 0 },
     ]),
-    formationCard('q', 'q', ['queen'], [{ x: 0, y: 0 }]),
-    formationCard('pq-front', 'q', ['queen', 'pawn'], [{ x: 0, y: 1 }, { x: 0, y: 0 }]),
-    formationCard('bb-vertical', 'bb', ['bishop', 'bishop'], [{ x: 0, y: 0 }, { x: 0, y: 1 }]),
-    formationCard('rr-vertical', 'r', ['rook', 'rook'], [{ x: 0, y: 0 }, { x: 0, y: 1 }]),
+    formationCard('q', ['queen'], [{ x: 0, y: 0 }]),
+    formationCard('pq-front', ['queen', 'pawn'], [{ x: 0, y: 1 }, { x: 0, y: 0 }]),
+    formationCard('bb-vertical', ['bishop', 'bishop'], [{ x: 0, y: 0 }, { x: 0, y: 1 }]),
+    formationCard('rr-vertical', ['rook', 'rook'], [{ x: 0, y: 0 }, { x: 0, y: 1 }]),
   ];
 }
 
@@ -2535,6 +2551,23 @@ export function undoRunBattleMove(
     cards: cloneRunBattleUndoCards(checkpoint.cards),
     battleRuntime: cloneRunBattleRuntime(checkpoint.battleRuntime),
   });
+}
+
+/**
+ * One en passant capture the player landed pays a bounty, in gold.
+ *
+ * It is paid the moment the capture commits rather than banked with the Battle's reward,
+ * so the gold measure moves while the fight is still on -- the capture is the whole of the
+ * reason, and a number that only appears two screens later does not read as one. That also
+ * makes the Undo checkpoint the exact reversal: it restores the pre-move balance, so a
+ * taken-back en passant takes its bounty back with it.
+ *
+ * Board law is untouched. The Run pays for what the pieces did; it does not change what
+ * they may do (ADR-0193).
+ */
+export function payRunEnPassantBounty(run: RunDocument): RunDocument {
+  if (run.phase !== 'battle' || !run.battleRuntime) return run;
+  return touch({ ...run, goldTenths: run.goldTenths + RUN_EN_PASSANT_BOUNTY_TENTHS });
 }
 
 export function observeRunUnitDeath(run: RunDocument, unitId: string): {

@@ -105,6 +105,10 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain("'settings-row play-choice-row'");
     expect(playMenu).toContain('data-testid="run-detail-current"');
     expect(playMenu).toContain('to="/run"><span>Play</span></ChromeNavButton>');
+    // Every leaf control on the Run surface carries the oak leaf material (ADR-0433).
+    // The Current Run detail's Play sits where Start Run sits on the sibling tab; a bare
+    // one there frames the live vista instead of a button.
+    expect(playMenu).toMatch(/<ChromeNavButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*to="\/run">/);
     expect(playMenu).not.toContain('run-current-summary');
     expect(playMenu).not.toContain('>Continue Run<');
     // The Current Run row is an availability surface, not an existence surface: with
@@ -119,6 +123,10 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('data-testid="run-adoption-conflict"');
     expect(playMenu).not.toContain('<InnerChromeBox className="play-level-card" role="alert">');
     expect(style).toContain('.run-adoption-conflict {');
+    // Unboxed does not mean unmaterialed: the two decision buttons are leaf controls over
+    // the live vista, so they carry the same oak as every other Run leaf (ADR-0433).
+    expect(playMenu).toMatch(/<ChromeButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-keep-account"/);
+    expect(playMenu).toMatch(/<ChromeButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-adopt-browser"/);
   });
 
   it('keeps new-Run setup in the right detail column with one scrollable Ataraxia dropdown', () => {

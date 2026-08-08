@@ -7,6 +7,8 @@ import {
   RUN_OPENING_CARD_OFFER_COUNT,
   RUN_OPENING_CARD_VALUE_MAX,
   RUN_OPENING_CARD_VALUE_MIN,
+  RUN_BATTLE_UNDO_COST_TENTHS,
+  RUN_EN_PASSANT_BOUNTY_TENTHS,
   RUN_SECTIO_CARD_PILE_SIZE,
   RUN_CARD_BY_ID,
   RUN_CARD_CATALOG,
@@ -15,14 +17,17 @@ import {
   RUN_STARTER_CARD_BY_ID,
   RUN_STARTING_GOLD_TENTHS,
   acquireLipsanon,
+  captureRunBattleUndo,
   createRun,
   createRunCardOffer,
   leaveSectio,
   migrateRunSaveDocument,
   normalizeRunDocument,
   openSectio,
+  payRunEnPassantBounty,
   performAdlectio,
   resetSectio,
+  undoRunBattleMove,
   runCardUnitIds,
   runCardRarityForRoll,
   sectioCardOffersAtCursor,
@@ -78,7 +83,9 @@ describe('formation card catalog', () => {
       .sort();
     expect(signatures).toEqual(['pawn@0,0|queen@0,1']);
     expect(queenPawnCards.every((card) => card.rarity === 'rare')).toBe(true);
-    expect(queenPawnCards.every((card) => card.artId === 'q')).toBe(true);
+    // Art is keyed to (footprint, roster), so Queen and Pawn owns its own illustration
+    // rather than borrowing the lone Queen's.
+    expect(queenPawnCards.every((card) => card.artId === '0001-pq')).toBe(true);
   });
 
   it('gives every card one coordinate per unit and keeps coordinates unique', () => {
@@ -439,5 +446,54 @@ describe('ability retirement migration', () => {
 
     expect(migrated.runSaveVersion).toBe(CURRENT_RUN_SAVE_VERSION);
     expect(migrated.deploymentMode).toBe('arranged');
+  });
+});
+
+describe('en passant bounty', () => {
+  function inBattle(run: RunDocument): RunDocument {
+    return {
+      ...run,
+      phase: 'battle',
+      battleRuntime: {
+        battleIndex: run.battleIndex,
+        initiallyDeployedUnitIds: run.army.map((unit) => unit.id),
+        reserveUnitIds: [],
+        reservistPoolUnitIds: [],
+        deployedReservistUnitIds: [],
+        observedDeadUnitIds: [],
+        reinforcementSequence: 0,
+      },
+    };
+  }
+
+  it('pays five gold the moment the capture lands, and pays again for a second one', () => {
+    const battle = inBattle(createRun(war(), 11));
+
+    const once = payRunEnPassantBounty(battle);
+    expect(once.goldTenths).toBe(battle.goldTenths + RUN_EN_PASSANT_BOUNTY_TENTHS);
+    expect(RUN_EN_PASSANT_BOUNTY_TENTHS).toBe(50);
+
+    const twice = payRunEnPassantBounty(once);
+    expect(twice.goldTenths).toBe(battle.goldTenths + 2 * RUN_EN_PASSANT_BOUNTY_TENTHS);
+  });
+
+  it('pays nothing outside a Battle, and nothing without a battle runtime', () => {
+    const sectio = firstSectio(12);
+    expect(payRunEnPassantBounty(sectio)).toBe(sectio);
+
+    const noRuntime: RunDocument = { ...sectio, phase: 'battle', battleRuntime: null };
+    expect(payRunEnPassantBounty(noRuntime)).toBe(noRuntime);
+  });
+
+  it('is taken back with the move that earned it', () => {
+    // The Undo checkpoint is captured BEFORE the move commits, so restoring it removes the
+    // bounty the move paid -- an en passant cannot be taken twice by taking it back.
+    const battle = inBattle(createRun(war(), 13));
+    const checkpoint = captureRunBattleUndo(battle);
+    const paid = payRunEnPassantBounty(battle);
+    expect(paid.goldTenths).toBeGreaterThan(battle.goldTenths);
+
+    const undone = undoRunBattleMove(paid, checkpoint);
+    expect(undone.goldTenths).toBe(battle.goldTenths - RUN_BATTLE_UNDO_COST_TENTHS);
   });
 });
