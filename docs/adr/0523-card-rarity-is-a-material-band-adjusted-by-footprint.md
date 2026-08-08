@@ -68,6 +68,22 @@ own composition, not membership across a change of ceiling. This is a market, no
 Rarity stays derived rather than persisted: a stored offer re-reads it from the live catalog on
 load.
 
+**A banner name means one illustration and one frame.** Names were keyed to roster alone, which
+gave 272 cards 36 names: a Sectio row repeated a banner 43.6% of the time, and 20 of those names
+spanned more than one illustration — the same title over two different pictures, which reads as a
+rendering fault rather than a naming scheme. Names are now keyed to the art id, the same
+`(footprint, roster)` key ADR-0520 keys an illustration to, split further on the five awkward
+footprints where a Bishop pair's seat colours put one illustration in two frames. That is 99 names.
+A roster keeps its title on the shape that reads as its plain form and the other footprints qualify
+it — Close for the square, Broken and Crooked for the two Z chiralities, Bent and Hooked for J and
+L, Crossroads for the T — so the family stays legible while the card in hand is named exactly.
+
+Cards may still share a name, but only when they share both footprint and roster and so differ
+solely in which piece sits in which seat — the distinction the card's own formation diagram draws,
+and the same argument ADR-0520 makes for sharing an illustration. **A dealt row never shows one
+banner twice**: a pile seats each banner once, and a row that straddles two piles reads past a
+repeat, spending the skipped position rather than printing the same card twice over.
+
 RunSaveVersion advances to 32. Browser migration and append-only database migration 71 restart the
 hidden cursor at zero because the pile sequence changed outright. A Sectio already open keeps the
 row it is showing — those offers are a transaction the player is part-way through — and relabels
@@ -88,6 +104,11 @@ its own rarity on load. Everything already bought, sold, or expuncted stands.
   94 illustrations are long-tail content across many Runs by design, not within one.
 - Awkward geometry becomes the price of cheap material. A player who wants a value-8 card early can
   have one, and it will be a shape they have to solve.
+- The market stops looking like it is repeating itself. Naming by illustration means a shape the
+  player recognizes has a title of its own, and the row-level guarantee removes the case that read
+  as a bug: the same banner, twice, at two different rarities.
+- Flavor text is still keyed to roster, so sibling footprints share a line. That is far less visible
+  than a repeated banner and is left for a later authoring pass.
 - In-progress Runs restart their hidden card sequence. The owner's active Run is disposable test
   state; other accounts keep every completed transaction.
 

@@ -9,7 +9,16 @@ import {
   runCardName,
   runCardSlug,
 } from './cardNames';
-import { RUN_CARD_CATALOG, RUN_CARD_DECK, cardContentsLabel, type RunCoreCard } from './model';
+import {
+  RUN_CARD_CATALOG,
+  RUN_CARD_DECK,
+  RUN_SECTIO_CARD_PILE_SIZE,
+  cardContentsLabel,
+  runCardBannerKey,
+  sectioCardOffersAtCursor,
+  sectioCardPile,
+  type RunCoreCard,
+} from './model';
 
 describe('Run card names', () => {
   it('authors one name for every card in the generated deck', () => {
@@ -25,10 +34,54 @@ describe('Run card names', () => {
     }
   });
 
-  it('reuses the authored scene names while generated formation ids remain distinct', () => {
-    const names = Object.values(RUN_CARD_NAME_BY_ID);
-    expect(new Set(names).size).toBeLessThan(names.length);
+  it('makes one banner name mean one illustration and one frame', () => {
+    const byName = new Map<string, RunCoreCard[]>();
+    for (const card of RUN_CARD_DECK) {
+      const name = RUN_CARD_NAME_BY_ID[card.id];
+      byName.set(name, [...(byName.get(name) ?? []), card]);
+    }
+    for (const [name, cards] of byName) {
+      expect(new Set(cards.map((card) => card.artId)).size, `${name} spans two illustrations`).toBe(1);
+      expect(new Set(cards.map((card) => card.rarity)).size, `${name} spans two rarities`).toBe(1);
+    }
+    // Cards may still share a name, but only when they share a footprint and a roster and so
+    // differ solely in which piece sits in which seat -- what the formation diagram draws.
+    expect(byName.size).toBe(99);
     expect(new Set(RUN_CARD_DECK.map((card) => card.id)).size).toBe(RUN_CARD_DECK.length);
+  });
+
+  it('seats each banner once per pile', () => {
+    for (const seed of [7, 88, 501]) {
+      for (const maxValue of [6, Number.POSITIVE_INFINITY]) {
+        for (const pileIndex of [0, 1, 2]) {
+          const pile = sectioCardPile(seed, pileIndex, maxValue);
+          expect(new Set(pile.map(runCardBannerKey)).size).toBe(RUN_SECTIO_CARD_PILE_SIZE);
+        }
+      }
+    }
+  });
+
+  it('never repeats a banner name inside one dealt Sectio row', () => {
+    let rows = 0;
+    let straddled = 0;
+    const collisions: string[] = [];
+    // Sweep every cursor across several pile boundaries, at both offer counts, because a row that
+    // straddles two piles is the only place two piles could ever agree on a banner.
+    for (const offerCount of [3, 4]) {
+      for (let seed = 1; seed <= 60; seed += 1) {
+        for (let cursor = 0; cursor <= RUN_SECTIO_CARD_PILE_SIZE * 2 + 5; cursor += 1) {
+          const row = sectioCardOffersAtCursor(seed, Math.floor(cursor / offerCount), cursor, offerCount);
+          rows += 1;
+          if (Math.floor(cursor / RUN_SECTIO_CARD_PILE_SIZE)
+            !== Math.floor((cursor + offerCount - 1) / RUN_SECTIO_CARD_PILE_SIZE)) straddled += 1;
+          expect(row).toHaveLength(offerCount);
+          const names = row.map((offer) => runCardName(offer));
+          if (new Set(names).size < names.length) collisions.push(`seed ${seed} cursor ${cursor}: ${names.join(', ')}`);
+        }
+      }
+    }
+    expect(straddled, 'the sweep must actually cross pile boundaries').toBeGreaterThan(0);
+    expect(collisions, `${collisions.length} of ${rows} dealt rows repeat a banner name`).toEqual([]);
   });
 
   it('names the lone queen Regal Serenity', () => {
