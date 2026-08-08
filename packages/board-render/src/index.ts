@@ -203,7 +203,6 @@ export {
   lipsanonImmediateGoldTenths,
   performAdlectio,
   performExpunctio,
-  runCardBannerKey,
   runSectioCardMaxValue,
   runSectioCardOfferCount,
   sectioCardOffersAtCursor,

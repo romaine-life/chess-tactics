@@ -153,8 +153,6 @@ that ceiling empties the Rare tier, whose share is re-apportioned to the tiers s
 ceiling then lifts for good. Rarity itself is derived card metadata, not a persisted field: it is a
 material band adjusted by footprint, so a stored offer relabels itself from the live catalog on
 load. A card passed over while the market was capped may be offered again once it is not.
-A pile seats each banner name once, and a row straddling two piles reads past a repeat, so a dealt
-row never shows one banner twice.
 A normal Sectio consumes three positions and Quartermaster's Ledger consumes four. Reset Sectio
 retains the same visible offers and cursor rather than redrawing. Army, whole-card Expunctio,
 Adlectio, Reset Sectio, and Continue reuse the post-Battle model. Expunctio may remove one held card and its remaining units

@@ -40,150 +40,93 @@ export function canonicalCardId(card: NameableRunCard): string {
   return compositionCardId(card.pieces);
 }
 
-/**
- * One banner name per illustration, in the same historical-medieval register as the lipsanon
- * names. The key is the art id — `<footprint>-<roster>` — which is exactly what ADR-0520 keys an
- * illustration to, so **a name always means one picture**. Naming by roster alone, as this map
- * used to, gave 272 cards only 36 names: a single Sectio row repeated a banner 43.6% of the time,
- * and 20 of those names spanned more than one illustration, which reads as a rendering fault.
- *
- * A roster keeps its title on the shape that reads as its plain form, and the other footprints
- * qualify it, so the family stays legible while the card in hand is named exactly. The shape words
- * are fixed: Close for the square, Broken and Crooked for the two Z chiralities, Bent and Hooked
- * for J and L, Crossroads for the T.
- *
- * Cards still sharing a name share both footprint and roster, differing only in which piece sits
- * in which seat — the distinction the card's own formation diagram draws (ADR-0520).
- */
-const RUN_CARD_NAME_BY_ART: Readonly<Record<string, string>> = Object.freeze({
-  // One and two seats: each is its own scene already.
-  '00-p': 'The Volunteer',
-  '00-b': 'Wandering Preacher',
-  '00-k': 'Errant Rider',
-  '00-r': 'The Watchtower',
-  '00-q': 'Regal Serenity',
-  '0010-pp': 'Two Good Boots',
-  '0001-pb': "Pilgrim's Shelter",
-  '0001-pk': "Squire's Shelter",
-  '0001-bb': 'Matins and Vespers',
-  '0011-bb': 'Crooked Diocese',
-  '0001-pr': "Gatekeeper's Charge",
-  '0010-kk': 'Thundering Lances',
-  '0111-kb': 'Sword and Censer',
-  '0111-br': 'Cloister and Keep',
-  '0111-kr': "Castellan's Sally",
-  '0001-pq': 'The Last Attendant',
-  '0001-rr': 'The Twin Keeps',
-
-  // Three seats: a rank, a corner, and the covered triangle.
-  '001020-ppp': 'Farmhand Levy',
-  '100111-ppp': 'Levy at the Corner',
-  '002011-ppb': 'Country Parish',
-  '011121-ppb': 'Parish in Line',
-  '100111-ppb': 'Parish at the Corner',
-  '002011-ppk': 'Outrider Patrol',
-  '011121-ppk': 'Patrol in Line',
-  '100111-ppk': 'Patrol at the Corner',
-  '011121-pbb': 'Synod on the Road',
-  '100111-pbb': 'Synod at the Corner',
-  '011121-pkb': 'Little Crusade',
-  '100111-pkb': 'Crusade at the Corner',
-  '011121-pkk': 'Vanguard Escort',
-  '100111-pkk': 'Vanguard at the Corner',
-  '011121-ppr': 'Border Garrison',
-  '100111-ppr': 'Garrison at the Corner',
-  '011121-bbb': 'Ecumenical Council',
-  '100111-bbb': 'Council at the Corner',
-  '011121-kbb': 'Blessed Charger',
-  '100111-kbb': 'Blessing at the Corner',
-  '011121-kkb': 'Chaplain of the Charge',
-  '100111-kkb': 'Chaplain at the Corner',
-  '011121-kkk': 'Full Gallop',
-  '100111-kkk': 'Gallop at the Corner',
-  '011121-pbr': 'Church and Castle',
-  '100111-pbr': 'Church at the Corner',
-  '011121-pkr': 'Sortie at Dawn',
-  '100111-pkr': 'Sortie at the Corner',
-
-  // Four seats: seven footprints per roster, the base title on the straight column.
-  '01112131-pppp': 'Ragged Column',
-  '00100111-pppp': 'Close Muster',
-  '00101121-pppp': 'Broken Muster',
-  '10200111-pppp': 'Crooked Muster',
-  '00102021-pppp': 'Bent Muster',
-  '20011121-pppp': 'Hooked Muster',
-  '10011121-pppp': 'Crossroads Muster',
-
-  '01112131-pppb': "Shepherd's Flock",
-  '00100111-pppb': 'Close Flock',
-  '00101121-pppb': 'Broken Flock',
-  '10200111-pppb': 'Crooked Flock',
-  '00102021-pppb': 'Bent Flock',
-  '20011121-pppb': 'Hooked Flock',
-  '10011121-pppb': 'Crossroads Flock',
-
-  '01112131-pppk': "Banneret's Retinue",
-  '00100111-pppk': 'Close Retinue',
-  '00101121-pppk': 'Broken Retinue',
-  '10200111-pppk': 'Crooked Retinue',
-  '00102021-pppk': 'Bent Retinue',
-  '20011121-pppk': 'Hooked Retinue',
-  '10011121-pppk': 'Crossroads Retinue',
-
-  '01112131-ppbb': 'Traveling Chapel',
-  '00100111-ppbb': 'Close Chapel',
-  '00101121-ppbb': 'Broken Chapel',
-  '10200111-ppbb': 'Crooked Chapel',
-  '00102021-ppbb': 'Bent Chapel',
-  '20011121-ppbb': 'Hooked Chapel',
-  '10011121-ppbb': 'Crossroads Chapel',
-
-  '01112131-ppkb': "Wayfarers' Compact",
-  '00100111-ppkb': 'Close Compact',
-  '00101121-ppkb': 'Broken Compact',
-  '10200111-ppkb': 'Crooked Compact',
-  '00102021-ppkb': 'Bent Compact',
-  '20011121-ppkb': 'Hooked Compact',
-  '10011121-ppkb': 'Crossroads Compact',
-
-  '01112131-ppkk': 'Escort of Lances',
-  '00100111-ppkk': 'Close Escort',
-  '00101121-ppkk': 'Broken Escort',
-  '10200111-ppkk': 'Crooked Escort',
-  '00102021-ppkk': 'Bent Escort',
-  '20011121-ppkk': 'Hooked Escort',
-  '10011121-ppkk': 'Crossroads Escort',
-
-  '01112131-pppr': 'Rampart Detail',
-  '00100111-pppr': 'Close Rampart',
-  '00101121-pppr': 'Broken Rampart',
-  '10200111-pppr': 'Crooked Rampart',
-  '00102021-pppr': 'Bent Rampart',
-  '20011121-pppr': 'Hooked Rampart',
-  '10011121-pppr': 'Crossroads Rampart',
+// Every card in the generated deck carries an authored banner name, in the same
+// historical-medieval register as the lipsanon names. The id scheme is the card's
+// piece initials in Adlectio order (p/k/b/r/q — k is the Knight), so 'ppb' is two Pawns
+// and a Bishop. A card outside the deck (e.g. an art-review fixture) falls back to its
+// prose label.
+const ALL_RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.freeze({
+  // 1 gold
+  p: 'The Volunteer',
+  // 2 gold
+  pp: 'Two Good Boots',
+  // 3 gold
+  b: 'Wandering Preacher',
+  k: 'Errant Rider',
+  ppp: 'Farmhand Levy',
+  // 4 gold
+  pb: "Pilgrim's Escort",
+  pk: "Squire's Errand",
+  pppp: 'Ragged Column',
+  // 5 gold
+  ppb: 'Country Parish',
+  ppk: 'Outrider Patrol',
+  ppppp: 'Village Muster',
+  r: 'The Watchtower',
+  // 6 gold
+  bb: 'Matins and Vespers',
+  kb: 'Sword and Censer',
+  kk: 'Thundering Lances',
+  pppb: "Shepherd's Flock",
+  pppk: "Banneret's Retinue",
+  pppppp: 'The Long March',
+  pr: "Gatekeeper's Watch",
+  // 7 gold
+  pbb: 'Synod on the Road',
+  pkb: 'Little Crusade',
+  pkk: 'Vanguard Escort',
+  ppppb: 'Harvest Blessing',
+  ppppk: 'Country Cavalcade',
+  ppppppp: 'Seven Stout Hearts',
+  ppr: 'Border Garrison',
+  // 8 gold
+  br: 'Cloister and Keep',
+  kr: "Castellan's Sally",
+  ppbb: 'Traveling Chapel',
+  ppkb: "Wayfarers' Compact",
+  ppkk: 'Escort of Lances',
+  pppppb: 'Tithe Procession',
+  pppppk: "Field Marshal's Levy",
+  pppppppp: 'The Full Furrow',
+  pppr: 'Rampart Detail',
+  // 9 gold
+  bbb: 'Ecumenical Council',
+  kbb: 'Blessed Charger',
+  kkb: 'Chaplain of the Charge',
+  kkk: 'Full Gallop',
+  pbr: 'Church and Castle',
+  pkr: 'Sortie at Dawn',
+  pppbb: 'Feast Day Procession',
+  pppkb: 'Parish Militia',
+  pppkk: "Raiders' Return",
+  ppppppb: 'Sunday Congregation',
+  ppppppk: 'The Long Patrol',
+  ppppppppp: 'Nine Ranks Deep',
+  ppppr: 'Garrison Relief',
+  q: 'Regal Serenity',
+  pq: 'The Last Attendant',
+  'pk-front': "Squire's Shelter",
+  'pb-front': "Pilgrim's Shelter",
+  'ppk-reversed': 'The Late Escort',
+  'ppb-reversed': 'The Uncovered Office',
+  'bb-diagonal': 'Crooked Diocese',
+  'pr-front': "Gatekeeper's Charge",
+  'kk-horizontal': 'Thundering Lances',
+  'ppk-protected': 'Outrider Patrol',
+  'ppb-protected': 'Country Parish',
+  'pq-front': 'The Last Attendant',
+  'bb-vertical': 'Matins and Vespers',
+  'rr-vertical': 'The Twin Keeps',
 });
 
-/**
- * The one place an illustration is not enough to name a card. On the five awkward footprints a
- * Bishop pair's seat colours decide rarity (ADR-0523), so the same picture carries two frames.
- * The opposite-colour pair -- the prize the rarity rule protects -- takes the two-offices title
- * that ADR-0493's Matins and Vespers established; the same-colour pair keeps the family name.
- */
-const RUN_CARD_NAME_BY_ART_AND_RARITY: Readonly<Record<string, string>> = Object.freeze({
-  '00101121-ppbb|rare': 'Broken Matins and Vespers',
-  '10200111-ppbb|rare': 'Crooked Matins and Vespers',
-  '00102021-ppbb|rare': 'Bent Matins and Vespers',
-  '20011121-ppbb|rare': 'Hooked Matins and Vespers',
-  '10011121-ppbb|rare': 'Crossroads Matins and Vespers',
-});
-
-/** Every deck card's banner name, resolved once. A card outside the deck (an art-review fixture,
- * say) has no illustration to name and falls back to its prose label. */
+/** Generated formations intentionally borrow their composition's existing title during the
+ * playable prototype. Exact ids and diagrams remain distinct even when prose repeats. */
 export const RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.freeze(
   Object.fromEntries(RUN_CARD_DECK.map((card) => [
     card.id,
-    RUN_CARD_NAME_BY_ART_AND_RARITY[`${card.artId}|${card.rarity}`]
-      ?? RUN_CARD_NAME_BY_ART[card.artId ?? '']
+    ALL_RUN_CARD_NAME_BY_ID[card.id]
+      ?? ALL_RUN_CARD_NAME_BY_ID[compositionCardId(card.pieces)]
+      ?? ALL_RUN_CARD_NAME_BY_ID[card.artId ?? '']
       ?? cardContentsLabel(card),
   ])),
 );
@@ -307,9 +250,7 @@ const RUN_CARD_SLUG_BY_ID: Readonly<Record<string, string>> = Object.freeze((() 
     byBase.set(base, [...(byBase.get(base) ?? []), card.id]);
   }
   return Object.fromEntries([...byBase.entries()].flatMap(([base, ids]) => {
-    // A named authored card anchors its rotational class (ADR-0515), so it keeps the plain
-    // address when it shares a banner with generated siblings.
-    const primary = ids.find((id) => !id.startsWith('f-')) ?? ids[0];
+    const primary = ids.find((id) => ALL_RUN_CARD_NAME_BY_ID[id]) ?? ids[0];
     return ids.map((id) => [id, id === primary ? base : `${base}-${id}`]);
   }));
 })());

@@ -914,24 +914,9 @@ export function sectioPileRarityQuota(
 }
 
 /**
- * What the player reads as "the same card". Two cards share a banner name exactly when they share
- * an illustration and a frame, because the name is keyed to `(artId, rarity)` -- see the naming
- * map in `run/cardNames`. The pile deals distinct banners so a row cannot look like it repeated
- * itself, and it can decide that here, without the model reaching for presentation prose.
- */
-export function runCardBannerKey(card: Pick<RunCoreCard, 'artId' | 'rarity'>): string {
-  return `${card.artId ?? ''}|${card.rarity}`;
-}
-
-/**
  * One seed-derived pile carrying the exact rarity quota, drawn from the cards a cost ceiling
  * leaves eligible and then shuffled together so the row order stays a surprise. Each rarity draws
  * from its own independently seeded shuffle; exhausting a pile builds the next one the same way.
- *
- * A pile never seats one banner twice, so no three or four consecutive positions can show the same
- * card twice over. Every live ceiling leaves each tier far more banners than its quota; a tier that
- * somehow could not fill its seats with distinct banners repeats rather than shrink the pile,
- * because a pile is defined by its size.
  */
 export function sectioCardPile(
   seed: number,
@@ -943,16 +928,11 @@ export function sectioCardPile(
   const seats = RUN_CARD_RARITIES.flatMap((rarity) => {
     const pool = RUN_CARD_DECK.filter((card) => card.value <= maxValue && card.rarity === rarity);
     const drawn: RunCoreCard[] = [];
-    const banners = new Set<string>();
+    // A tier smaller than its quota repeats identities rather than shrinking the pile; no live
+    // ceiling reaches that, but a pile is defined by its size and must not silently lose seats.
     for (let pass = 0; pool.length && drawn.length < quota[rarity]; pass += 1) {
-      // Later passes relax distinctness, so an undersupplied tier still fills its seats.
-      const distinct = pass === 0;
-      for (const card of shuffled(pool, mixSeed(seed, `sectio-pile:${rarity}:${pass}`, epoch))) {
-        if (drawn.length >= quota[rarity]) break;
-        if (distinct && banners.has(runCardBannerKey(card))) continue;
-        banners.add(runCardBannerKey(card));
-        drawn.push(card);
-      }
+      drawn.push(...shuffled(pool, mixSeed(seed, `sectio-pile:${rarity}:${pass}`, epoch))
+        .slice(0, quota[rarity] - drawn.length));
     }
     return drawn;
   });
@@ -997,7 +977,8 @@ export function sectioCardOffersAtCursor(
   const start = Math.max(0, Math.floor(cursor));
   const maxValue = runSectioCardMaxValue(battleIndex);
   const piles = new Map<number, RunCoreCard[]>();
-  const cardAt = (absoluteIndex: number): RunCoreCard => {
+  return Array.from({ length: offerCount }, (_, slotIndex) => {
+    const absoluteIndex = start + slotIndex;
     const pileIndex = Math.floor(absoluteIndex / RUN_SECTIO_CARD_PILE_SIZE);
     const pileCursor = absoluteIndex % RUN_SECTIO_CARD_PILE_SIZE;
     let pile = piles.get(pileIndex);
@@ -1007,27 +988,8 @@ export function sectioCardOffersAtCursor(
     }
     const card = pile[pileCursor];
     if (!card) throw new Error(`Sectio pile has no card at cursor ${absoluteIndex}.`);
-    return card;
-  };
-  // A pile never seats one banner twice, so the only way a row can show the same card twice over
-  // is by straddling two piles. Reading past a repeat costs the skipped position -- the cursor
-  // still advances by the offer count -- which a market can afford and a repeated banner cannot.
-  const offers: RunCardOffer[] = [];
-  const banners = new Set<string>();
-  for (
-    let absoluteIndex = start;
-    offers.length < offerCount && absoluteIndex < start + offerCount + RUN_SECTIO_CARD_PILE_SIZE;
-    absoluteIndex += 1
-  ) {
-    const card = cardAt(absoluteIndex);
-    if (banners.has(runCardBannerKey(card))) continue;
-    banners.add(runCardBannerKey(card));
-    offers.push(createRunCardOffer({ seed }, card, battleIndex, absoluteIndex));
-  }
-  if (offers.length < offerCount) {
-    throw new Error(`Sectio could not fill ${offerCount} distinct offers from cursor ${start}.`);
-  }
-  return offers;
+    return createRunCardOffer({ seed }, card, battleIndex, absoluteIndex);
+  });
 }
 
 function freshRunId(): string {
