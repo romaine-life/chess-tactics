@@ -27,11 +27,14 @@ import {
   type PropCandidateSeat,
 } from './propCandidateReview';
 
-// The prop half of the acceptance story. /surface-lab already lets terrain candidates be judged
-// on the real board and installed from there; props had no equivalent, so generated prop art
-// could only ever be looked at on a contact sheet — and the accept path refuses art that carries
-// no live-surface proof. This is that surface: every staged candidate for one prop, mounted on
-// the real board renderer at canonical 1x over real terrain, beside the art it would replace.
+// Animated prop artwork, judged and installed. /surface-lab does this for terrain and
+// WallCandidateReview for walls; props had no equivalent, so generated prop art could only ever
+// be looked at on a contact sheet — and the accept path refuses art carrying no live-surface
+// proof. This surface mounts a prop on the real board renderer at canonical 1x and replays its
+// whole entrance, because an impact plays ONCE in a battle and cannot be watched twice there.
+//
+// It lists the props that HAVE animated artwork. The whole catalog would bury them among props
+// with nothing to judge; one prop would make it useless for a batch.
 //
 // Nothing here installs anything on its own. Review records the owner's approval against the
 // exact reviewed bytes plus this page's URL; Accept then swaps the slot pointers. A candidate
@@ -257,15 +260,16 @@ export function PropCandidateLab({ propId, onPropId, header }: {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  // EVERY prop is selectable. Staged candidates and impact sheets are things a prop may have, not
-  // conditions for being worth looking at — the entrance is worth watching for a prop with
-  // neither, and filtering them out made most of the catalog unreachable from the one surface
-  // that can replay it.
+  // This surface reviews ANIMATED artwork, so it lists the props that have some. Listing the
+  // whole catalog buried the animated set among trees and houses with nothing to judge, and made
+  // the stepper walk mostly-empty entries; listing only one prop made it useless for a batch.
+  // The set is "props carrying an impact sheet", which is exactly what there is to approve.
   const staged = useMemo(() => new Set(catalog ? propsWithCandidates(catalog) : []), [catalog]);
-  const reviewableProps = useMemo(
-    () => [...new Set([...staged, ...PROP_DEFS.map((def) => def.id)])].sort(),
-    [staged],
+  const animatedProps = useMemo(
+    () => PROP_DEFS.filter((def) => structureArtImpact(def.spriteId)).map((def) => def.id).sort(),
+    [],
   );
+  const reviewableProps = animatedProps;
   const propIndex = Math.max(0, reviewableProps.indexOf(reviewableProps.includes(propId) ? propId : reviewableProps[0] ?? propId));
   const stepProp = useCallback((delta: number): void => {
     if (!reviewableProps.length) return;
@@ -274,13 +278,12 @@ export function PropCandidateLab({ propId, onPropId, header }: {
     setSelectedKey('');
     setNotice(null);
   }, [onPropId, propIndex, reviewableProps]);
+  // Say what animation the prop carries, not whether stale still-art versions happen to linger on
+  // its slots — this list is about animated artwork, so that is what the label reports.
   const propBadge = useCallback((id: string): string => {
-    const marks = [
-      staged.has(id) ? 'candidates' : '',
-      structureArtImpact(propDef(id)?.spriteId ?? id) ? 'impact' : '',
-    ].filter(Boolean);
-    return marks.length ? ` · ${marks.join(' + ')}` : '';
-  }, [staged]);
+    const sheet = structureArtImpact(propDef(id)?.spriteId ?? id);
+    return sheet ? ` · ${sheet.frameCount} frames` : '';
+  }, []);
   const activeProp = reviewableProps.includes(propId) ? propId : (reviewableProps[0] ?? propId);
   const slots = useMemo(() => propCandidateSlots(activeProp), [activeProp]);
   const groups = useMemo(
