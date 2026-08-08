@@ -88,7 +88,19 @@ export interface EditorZoneEntry {
 
 export type BoardFactionDirections = Partial<Record<UnitPalette, UnitFacing>>;
 
-/** Retired runtime-registration declaration retained only until installed plates are migrated. */
+/**
+ * A board painting placed by hand: four corners dragged onto the board's own corners, which the
+ * renderer honours as an exact projective registration.
+ *
+ * This is NOT a staging post on the way to the versioned pipeline, and nothing here is waiting to
+ * be migrated. The two placements are different models — corners can sit slightly crooked, and a
+ * versioned surface fits its raster to a rectangle that cannot. Converting one would mean redrawing
+ * the artwork straight, so a level placed this way keeps its own registration for good.
+ *
+ * It is a first-class saved selection. Every renderer draws it, and anything that decides whether
+ * artwork may paint must accept it (ADR-0527) — a check that understands only versioned surfaces
+ * blanks the board of a level whose artwork is installed, published and serving.
+ */
 export interface LegacyPredrawnBoardSurface {
   kind: 'predrawn';
   slot: string;
