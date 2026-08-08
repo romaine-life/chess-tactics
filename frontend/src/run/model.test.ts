@@ -78,7 +78,9 @@ describe('formation card catalog', () => {
       .sort();
     expect(signatures).toEqual(['pawn@0,0|queen@0,1']);
     expect(queenPawnCards.every((card) => card.rarity === 'rare')).toBe(true);
-    expect(queenPawnCards.every((card) => card.artId === 'q')).toBe(true);
+    // Art is keyed to (footprint, roster), so Queen and Pawn owns its own illustration
+    // rather than borrowing the lone Queen's.
+    expect(queenPawnCards.every((card) => card.artId === '0001-pq')).toBe(true);
   });
 
   it('gives every card one coordinate per unit and keeps coordinates unique', () => {
