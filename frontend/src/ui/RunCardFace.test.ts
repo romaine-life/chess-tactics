@@ -54,20 +54,33 @@ describe('formation-only Run card face', () => {
     expect(source).toContain("`var(--unit-anchor-y-${piece.unit}, -78%)`");
   });
 
-  it('prints a complete isometric board footprint with fading neighboring tiles', () => {
-    const cells = runCardFormationBoardCells(3, 2);
-    expect(cells.filter((cell) => !cell.faded)).toEqual([
-      { x: 0, y: 0, dark: false, faded: false },
-      { x: 1, y: 0, dark: true, faded: false },
-      { x: 2, y: 0, dark: false, faded: false },
-      { x: 0, y: 1, dark: true, faded: false },
-      { x: 1, y: 1, dark: false, faded: false },
-      { x: 2, y: 1, dark: true, faded: false },
+  it('prints the card footprint alone, with the cluster silhouette on its outward edges', () => {
+    const cells = runCardFormationBoardCells([{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }]);
+    expect(cells).toEqual([
+      { x: 0, y: 0, dark: false, edges: ['north', 'south', 'west'] },
+      { x: 1, y: 0, dark: true, edges: ['north', 'east'] },
+      { x: 1, y: 1, dark: false, edges: ['east', 'south', 'west'] },
     ]);
-    expect(cells.filter((cell) => cell.faded)).toHaveLength(10);
+  });
+
+  it('never prints a board square the card does not occupy', () => {
+    for (const definition of Object.values(RUN_CARD_BY_ID)) {
+      const seats = runCardFaceContent(definition).formation;
+      const cells = runCardFormationBoardCells(seats);
+      expect(cells).toHaveLength(new Set(seats.map((seat) => `${seat.x}:${seat.y}`)).size);
+      for (const cell of cells) {
+        expect(seats.some((seat) => seat.x === cell.x && seat.y === cell.y)).toBe(true);
+      }
+    }
+  });
+
+  it('draws the outward edges heavy and the shared seams faint', () => {
     const styles = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
-    expect(styles).toMatch(/\.run-card-formation-square polygon[\s\S]*?stroke:/);
-    expect(styles).toMatch(/\.run-card-formation-square\.is-faded[\s\S]*?opacity:\s*\.14/);
+    const seam = /\.run-card-formation-square polygon\s*\{[\s\S]*?stroke-width:\s*([\d.]+)/.exec(styles);
+    const silhouette = /\.run-card-formation-silhouette\s*\{[\s\S]*?stroke-width:\s*([\d.]+)/.exec(styles);
+    expect(Number(seam?.[1])).toBeGreaterThan(0);
+    expect(Number(silhouette?.[1])).toBeGreaterThan(Number(seam?.[1]));
+    expect(styles).not.toMatch(/\.run-card-formation-square\.is-faded/);
   });
 
   it('uses the battlefield projection and the player army facing', () => {
