@@ -1,4 +1,27 @@
 {
+  "status": "SUPERSEDED — DO NOT WRITE PROMPTS OR GENERATE ART FROM THIS FILE. It is the historical record of the illustrations that shipped, kept exactly as accepted (ADR-0520), and three of its rules were retired after it shipped. Anything below that contradicts the live direction is a record of what was tried, not an instruction. Live art direction: run-card-family-prompts-v2.json.",
+  "supersededBy": "run-card-family-prompts-v2.json",
+  "retired": [
+    {
+      "rule": "Forced eye concealment",
+      "where": "sharedDirection.faces, and \"eyeConcealment\" on all 49 cards",
+      "retiredBy": "ADR-0282",
+      "note": "Faces and eyes may appear naturally. The requirement to conceal, omit, shadow, cover, or turn away every eye line is retired and must not be replaced with another concealment device — the repeated devices read as conspicuous rather than mysterious."
+    },
+    {
+      "rule": "War only as aftermath",
+      "where": "sharedDirection.world",
+      "retiredBy": "ADR-0520",
+      "note": "\"War appears only through aftermath, logistics, repair, absence, or fortification\" forbade the subject these cards are about, and produced 94 pictures of people doing chores. v2 states its own: a small unit in the field in wartime, kitted and armed for the war they are in."
+    },
+    {
+      "rule": "The WWI historical anchor",
+      "where": "historicalAnchor \"lijssenthoek-remy-farm-wwi\", on 14 of the 49 cards",
+      "retiredBy": "ADR-0520",
+      "note": "Medieval titles were sitting on a 1914 farm and the generators read it straight to 20th-century infantry. v2 maps this anchor to siege-of-orleans-1429. The other three anchors here are still live."
+    }
+  ],
+  "whyThisFileRemains": "It is structural input, not art direction. frontend/scripts/build-run-card-family-prompts.mjs derives the v2 family manifest from these 49 card records and applies the retirements above; frontend/scripts/install-run-card-art-prompts.mjs --dry-run validates the 49 core card identities against it. Deleting it breaks both. Edit v2's direction in that build script, never here.",
   "schemaVersion": 1,
   "cardType": "Units",
   "slotPrefix": "ui/run/card-art",

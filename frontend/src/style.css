@@ -19603,6 +19603,16 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
+/* The card that LEFT is gone from its row: the travelling copy is the only one of it that
+   should be on screen. Instant and not a fade, because the copy launches at this exact rect
+   and any overlap at all reads as two of the same card. A Sectio purchase drops its face
+   outright and reveals the pile back, so only a grant — which keeps its row until the scene
+   goes — needs the seat held open. */
+.run-card-offer[data-flying] {
+  opacity: 0;
+  transition: none;
+}
+
 /* Every Sectio offer is the face of a physical pile. The accepted universal
    back occupies the exact same seat beneath it, so Adlectio reveals that back
    without moving the remaining piles or suggesting a replacement offer. */
@@ -19618,6 +19628,17 @@ button.tileset-relationship-cell {
 
 .run-card-pile-back {
   pointer-events: none;
+}
+
+/* A covered pile conceals its back completely. The back is generated on a flat
+   near-black backdrop it still paints, so its opaque canvas runs to all four
+   corners while every face frame is die-cut to the shared painted card box
+   (paintBounds 26,42 1009x1402 of 1060x1484). Left visible, that backdrop reads
+   as a black edge around the offer. Concealing rather than unmounting keeps the
+   seat and the decoded pixels, so Adlectio reveals the back without a reflow or
+   a flash. */
+.run-card-pile.is-covered > .run-card-pile-back {
+  visibility: hidden;
 }
 
 .run-card-pile-back > .run-card-back {
@@ -19687,6 +19708,227 @@ button.tileset-relationship-cell {
 .run-card-flight.is-landed {
   scale: var(--run-card-flight-scale);
   translate: var(--run-card-flight-x) var(--run-card-flight-y);
+}
+
+/* ===== The offered cards are alive on the table =====
+   The Bona Vacantia grant and the Sectio are screens whose whole content is a few cards waiting
+   to be chosen, and a card that holds perfectly still reads as a thumbnail rather than as goods
+   worth taking. The lipsana on the Conflict mat answered this already -- they breathe and give
+   off a little light -- so the cards take the SAME treatment rather than a second vocabulary
+   for it. Motion and light only: nothing here paints a surface or touches the printed face.
+
+   Two things change with the size of the object, and both are deliberate:
+
+   The DRIFT is slower and shallower in proportion. A 64px relic rising 5px lifts 8% of itself;
+   a card doing that would flap. The card rises a similar number of PIXELS over a longer cycle.
+
+   The LIGHT is cast by the card's OWN silhouette, exactly as the lipsanon's is: one animated
+   `filter` chain of drop-shadows on the card, so the light follows whatever the frame art
+   actually paints instead of assuming the box it was laid out in. A box-shadow would be the
+   easier write and the wrong one -- it rings the layout rectangle, and it is surface paint under
+   the ADR-0032/0059 contract, which this is not. Nothing here paints a surface or touches the
+   printed face. */
+
+/* Registered so the amplitude itself can be TRANSITIONED. That is what lets a hovered card
+   settle: the drift keeps running on its own clock while its rise eases to zero, so the card
+   comes to rest at exactly translate 0 -- its seat on the table -- from wherever in the cycle
+   the pointer caught it. Freezing the animation instead would stop it at a different resting
+   height every time. The initial value is the committed rise. */
+@property --run-card-float-rise {
+  syntax: '<length>';
+  inherits: true;
+  initial-value: 8px;
+}
+
+/* The emanation's PULSE DEPTH, on the same principle. A hovered card has to stop moving, and a
+   light whose blur radius breathes in and out is moving -- the lit edge visibly grows and shrinks
+   even though the card is perfectly still. Easing the depth to zero collapses the pulse onto its
+   bright end, so the hovered card holds one steady light instead of going dark or continuing to
+   breathe. Committed value mirrors RUN_CARD_GLOW_COMMITTED_PULSE in runCardLife.ts. */
+@property --run-card-glow-pulse {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
+}
+
+/* The hover EMPHASES, each a 0..1 strength so they compose instead of competing. Registered so
+   they transition, and 0 by default so every one of them is a no-op until it is switched on --
+   the drop-shadows they drive collapse to zero radius at zero alpha, which costs nothing and
+   cannot fight the ones that are on. Both are tuned live in the Studio's Card Size instrument.
+
+   FLARE -- the emanation opens up past the steady level a settled card already holds.
+   LIFT  -- a contact shadow appears beneath, so the raise reads as picked up off the table. */
+@property --run-card-flare {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --run-card-lift {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+/* One ramp of stops expressed as fractions of --run-card-float-rise, with the TIMING FUNCTION
+   deciding its character: interpolate between the stops and it is a smooth drift; hold each one
+   with steps(1, end) and it is a pixel-art bob that never lands off-pixel. Every stop is
+   round()ed to a whole pixel so the stepped reading stays integer-exact at any amplitude. */
+@keyframes run-card-float {
+  0%    { translate: 0 0; }
+  8.4%  { translate: 0 round(calc(var(--run-card-float-rise, 8px) * -0.2), 1px); }
+  16.7% { translate: 0 round(calc(var(--run-card-float-rise, 8px) * -0.4), 1px); }
+  25%   { translate: 0 round(calc(var(--run-card-float-rise, 8px) * -0.6), 1px); }
+  33.4% { translate: 0 round(calc(var(--run-card-float-rise, 8px) * -0.8), 1px); }
+  41.7% { translate: 0 round(calc(var(--run-card-float-rise, 8px) * -1), 1px); }
+  58.4% { translate: 0 round(calc(var(--run-card-float-rise, 8px) * -1), 1px); }
+  66.7% { translate: 0 round(calc(var(--run-card-float-rise, 8px) * -0.8), 1px); }
+  75%   { translate: 0 round(calc(var(--run-card-float-rise, 8px) * -0.6), 1px); }
+  83.4% { translate: 0 round(calc(var(--run-card-float-rise, 8px) * -0.4), 1px); }
+  91.7% { translate: 0 round(calc(var(--run-card-float-rise, 8px) * -0.2), 1px); }
+  100%  { translate: 0 0; }
+}
+
+/* The emanation is light rather than pixels, so it moves continuously even when the drift is
+   stepped. The BRIGHT end is the fixed one and the trough is written as the bright end minus a
+   depth scaled by --run-card-glow-pulse, so collapsing the pulse to 0 leaves both keyframes equal
+   at full brightness. That is what a settled card holds.
+
+   Every frame repeats the WHOLE chain because an animated `filter` replaces the entire
+   declaration: the flare and lift stops have to be present in both, at whatever strength they
+   are switched on to, or hovering would drop them the moment the animation resumed. At strength
+   0 a drop-shadow has no radius and no alpha, so an emphasis that is off is free.
+
+   Two stops carry the steady light and they do different jobs: the tight one is a LIT EDGE --
+   without it the card is a rectangle sitting in a warm cloud rather than an object catching
+   light -- and the wide one is the spill onto the table around it. Same RGB at both ends,
+   deliberately: radius and opacity carry the whole pulse, and letting the hue drift too would
+   mean the two frames never become equal at pulse 0. */
+@keyframes run-card-emanate {
+  0%, 100% {
+    filter:
+      drop-shadow(
+        0 0 calc((5px - 2.5px * var(--run-card-glow-pulse, 1)) * var(--run-card-glow, 1))
+        rgb(255 236 196 / calc((0.72 - 0.34 * var(--run-card-glow-pulse, 1)) * var(--run-card-glow, 1))))
+      drop-shadow(
+        0 0 calc((30px - 14px * var(--run-card-glow-pulse, 1)) * var(--run-card-glow, 1))
+        rgb(255 176 82 / calc((0.46 - 0.22 * var(--run-card-glow-pulse, 1)) * var(--run-card-glow, 1))))
+      drop-shadow(
+        0 0 calc(22px * var(--run-card-flare, 0))
+        rgb(255 240 206 / calc(0.85 * var(--run-card-flare, 0))))
+      drop-shadow(
+        0 calc(10px * var(--run-card-lift, 0)) calc(12px * var(--run-card-lift, 0))
+        rgb(6 4 3 / calc(0.6 * var(--run-card-lift, 0))));
+  }
+  50% {
+    filter:
+      drop-shadow(0 0 calc(5px * var(--run-card-glow, 1)) rgb(255 236 196 / calc(0.72 * var(--run-card-glow, 1))))
+      drop-shadow(0 0 calc(30px * var(--run-card-glow, 1)) rgb(255 176 82 / calc(0.46 * var(--run-card-glow, 1))))
+      drop-shadow(
+        0 0 calc(22px * var(--run-card-flare, 0))
+        rgb(255 240 206 / calc(0.85 * var(--run-card-flare, 0))))
+      drop-shadow(
+        0 calc(10px * var(--run-card-lift, 0)) calc(12px * var(--run-card-lift, 0))
+        rgb(6 4 3 / calc(0.6 * var(--run-card-lift, 0))));
+  }
+}
+
+/* Owned by the SEAT -- the pile in the Sectio, the offer in the Bona Vacantia grant -- because
+   the seat is the physical object on the table. Each seat carries its own delay and spread so
+   the row never drifts as one strip; runCardLife.ts sets them per index.
+
+   !important clears the global `* { animation: none }` OS-reduce reset: Windows "animation
+   effects off" reports prefers-reduced-motion falsely (deploy-drop/ADR-0048 precedent), and
+   this is the life of the screen. The EXPLICIT in-game choice still stills it, below. */
+.run-card-alive {
+  animation:
+    run-card-float
+    calc(var(--run-card-float-period, 4.6s) * var(--run-card-float-spread, 1))
+    var(--run-card-float-timing, linear)
+    var(--run-card-float-delay, 0s)
+    infinite !important;
+  transition: --run-card-float-rise 240ms cubic-bezier(0.3, 0.7, 0.3, 1);
+  /* Promoted deliberately: a composited layer is rasterized once and MOVED by the compositor,
+     so whole-pixel drift never resamples this pixel art. */
+  will-change: translate;
+}
+
+/* The emanation, on the card itself so the light is thrown by the face's own silhouette.
+   Declared HERE, on the element the filter belongs to: the hover sets the pulse and the emphases
+   on the seat above, which jumps, and the card sees the inherited change and eases it -- so the
+   light comes up to its steady level over the same beat the card takes to settle.
+
+   The raise is a whole-pixel translate on the card, NOT a scale. The printed width is whatever
+   the lane allowed, so any scale multiplier lands on a fractional pixel and the frame's edges
+   crawl as the face is re-rasterized -- movement the computed style cannot show you.
+   Translating the card moves it without resampling a single pixel of it. */
+.run-card-alive .run-card-action {
+  animation:
+    run-card-emanate
+    calc(var(--run-card-float-period, 4.6s) * var(--run-card-float-spread, 1) * 1.35)
+    ease-in-out
+    var(--run-card-float-delay, 0s)
+    infinite !important;
+  transition:
+    --run-card-flare 220ms ease,
+    --run-card-glow-pulse 240ms cubic-bezier(0.3, 0.7, 0.3, 1),
+    --run-card-lift 220ms ease,
+    translate 200ms cubic-bezier(0.2, 0.75, 0.3, 1);
+}
+
+/* The two cases that hold ONE steady light rather than a breathing one, at the emanation's
+   bright end -- the same value the 50% keyframe above resolves to.
+
+   A card in transit into the Chartulary is already in motion, and a second rhythm laid over the
+   flight reads as noise. A card under the explicit in-game reduced-motion choice has stopped
+   drifting, and light was never the movement: taking it away as well would leave the screen
+   darker for no reason the choice asked for. */
+.run-card-flight .run-card-action,
+:root.reduce-motion .run-card-alive .run-card-action {
+  animation: none !important;
+  filter:
+    drop-shadow(0 0 calc(5px * var(--run-card-glow, 1)) rgb(255 236 196 / calc(0.72 * var(--run-card-glow, 1))))
+    drop-shadow(0 0 calc(30px * var(--run-card-glow, 1)) rgb(255 176 82 / calc(0.46 * var(--run-card-glow, 1))));
+}
+
+/* A hovered card is PICKED UP: it stops drifting, rises off the table, throws a contact shadow
+   under itself, and its light opens up. Settling alone does not read -- the other cards are
+   somewhere in their own drift and one of them is always near the top of it.
+
+   Keyed off the seat rather than the button so keyboard focus reads the same as the pointer, and
+   off `:enabled` so an offer that cannot be bought yet does not answer at all -- it keeps the
+   amplitude it inherits and goes on drifting, which is what says "not for you yet". */
+.run-card-alive:has(.run-card-action:enabled:hover),
+.run-card-alive:focus-within {
+  --run-card-flare: var(--run-card-hover-flare, 1);
+  --run-card-float-rise: 0px;
+  --run-card-glow-pulse: 0;
+  --run-card-lift: var(--run-card-hover-lift, 1);
+}
+
+/* Settled means STOPPED, not zero-amplitude. An animation with its amplitude collapsed is still
+   a running animation: the element stays live on the compositor and is re-rasterized every
+   frame, which a pixelated face shows as a crawl along its edges. Pausing ends that. The settle
+   survives the pause because a paused animation still re-resolves the var() in its keyframes --
+   verified in Chrome -- so the rise, the pulse and the emphases go on easing underneath it and
+   the card still comes to rest on its seat rather than freezing where the pointer caught it.
+   !important because the `animation` SHORTHAND above carries play-state and would outrank it. */
+.run-card-alive:has(.run-card-action:enabled:hover),
+.run-card-alive:focus-within,
+.run-card-alive:has(.run-card-action:enabled:hover) .run-card-action,
+.run-card-alive:focus-within .run-card-action {
+  animation-play-state: paused !important;
+}
+
+.run-card-alive:has(.run-card-action:enabled:hover) .run-card-action,
+.run-card-alive:focus-within .run-card-action {
+  translate: 0 calc(-1 * var(--run-card-hover-raise, 7px));
+}
+
+/* The explicit in-game reduced-motion choice stills the drift; the steady-light rule above keeps
+   the cards lit where they sit. */
+:root.reduce-motion .run-card-alive {
+  animation: none !important;
 }
 
 .run-paid-lipsanon-price,
@@ -20056,6 +20298,12 @@ button.tileset-relationship-cell {
   font: var(--ds-weight-regular) var(--ds-text-xs)/1.4 var(--ds-font-display);
   grid-column: 1 / -1;
   text-align: end;
+}
+
+/* A roster is counted down a column, not read as a sentence: one name per line, each
+   ending on the same right edge as the number it explains. */
+.run-aftermath-measure-name {
+  display: block;
 }
 
 .run-lipsanon-card {
@@ -25135,12 +25383,16 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   user-select: none;
 }
 
+/* The acceptance proof asserts the review covered the decoded native raster at
+   exact scale, so the specimens print at their stored 1060x1484 pixels and this
+   pane scrolls. Scaling them to fit would make that claim false. */
 .run-card-back-study {
   align-items: start;
   display: flex;
   gap: var(--ds-space-6);
-  justify-content: center;
+  justify-content: safe center;
   max-inline-size: 100%;
+  overflow-x: auto;
 }
 
 .run-card-prototype-stage.is-card-back {
@@ -25200,12 +25452,31 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   font-size: 12px;
 }
 
+/* Native size, never fitted: the acceptance proof asserts this review covered
+   the decoded 1060x1484 raster at exact scale, so a specimen the flex row was
+   allowed to shrink would make that claim false. */
 .run-card-back-study > figure {
   align-items: center;
   display: grid;
+  flex: 0 0 auto;
   gap: var(--ds-space-2);
   justify-items: center;
   margin: 0;
+}
+
+/* What is being judged is the card's edge, and a near-black card on a near-black
+   page has none to see. Each specimen sits on the registered Studio card-image
+   surface, whose checkerboard is already the alpha field this review needs; the
+   two rules below only size it, and paint nothing of their own. */
+.tileset-studio-card-image.run-card-back-specimen {
+  min-block-size: 0;
+}
+
+.tileset-studio-card-image.run-card-back-specimen img.run-card-back {
+  block-size: 1484px;
+  inline-size: 1060px;
+  max-inline-size: none;
+  object-fit: none;
 }
 
 .run-card-back-study figcaption {
@@ -25673,12 +25944,21 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
 
 .run-card-formation-square polygon {
   fill: rgba(212, 196, 161, .46);
-  stroke: rgba(55, 48, 39, .56);
-  stroke-width: 1.15;
 }
 
 .run-card-formation-square.is-dark polygon {
   fill: rgba(101, 115, 113, .34);
+}
+
+/* The seats' own line, moved off the polygon so it draws only where the footprint meets empty
+   space — the exact colour and weight it has always carried. On the polygon it also ran between
+   two occupied seats, which divides the cluster instead of wrapping it. Square caps close the
+   corner where two edges of the outline meet. */
+.run-card-formation-outline {
+  fill: none;
+  stroke: rgba(55, 48, 39, .56);
+  stroke-linecap: square;
+  stroke-width: 1.15;
 }
 
 .run-card-formation-tooltip {

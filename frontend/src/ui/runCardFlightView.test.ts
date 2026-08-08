@@ -40,14 +40,15 @@ describe('Run card Adlectio transfer', () => {
     expect(css).toContain(`--ds-duration-transfer: ${RUN_CARD_FLIGHT_MS}ms;`);
     expect(css).toMatch(/\.run-card-flight\.is-landed\s*\{[\s\S]*?scale:\s*var\(--run-card-flight-scale\);[\s\S]*?translate:\s*var\(--run-card-flight-x\) var\(--run-card-flight-y\);/);
     expect(source).toContain('<RunCard card={flight.offer} mode="reference" />');
-    expect(source).toContain("<SceneContinuityPortal contribution={{ kind: 'shared-element', id: `card:${flight.id}` }}>");
+    expect(source).toContain("contribution={{ kind: 'shared-element', id: `card:${flight.id}` }}");
     expect(source).toContain('setFlights((current) => [...current, { id, offer, geometry }]);');
     expect(source).toContain('flights.map((flight) => (');
     expect(source).not.toContain('run-card-flight-shield');
     expect(source).not.toContain('createPortal');
     expect(source).toContain("event.propertyName === 'translate'");
     expect(screen).toContain('<RunCardPile');
-    expect(screen).toContain('sectio.cardOffers.map((offer) => {');
+    // The index is the seat's own drift/light clock (runCardLife.ts), not offer state.
+    expect(screen).toContain('sectio.cardOffers.map((offer, index) => {');
     expect(screen).toContain('sectio.adlectedCardOfferIds.includes(offer.offerId)');
     expect(screen).not.toContain('runCardReflowOffset');
     expect(screen).not.toContain('is-reflowing');

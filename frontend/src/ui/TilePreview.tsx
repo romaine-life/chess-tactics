@@ -80,7 +80,7 @@ import {
 } from './fenceArtReview';
 import { currentDoodadAssets, defaultDoodadAsset, DOODAD_ASSETS, type DoodadAsset } from './doodadCatalog';
 import { structureSourceHalfSrc } from '../render/BoardStructure';
-import { navigateApp, subscribeAppLocation } from './navigation';
+import { navigateApp, replaceAppHistoryState, subscribeAppLocation } from './navigation';
 import { isViewerKind, type ViewerKind } from './studioViewerKinds';
 import { listEditorDocuments } from '../net/editorDocuments';
 import { fetchAdminLiveMediaCatalog, type AdminLiveMediaCatalog } from '../net/liveMediaAdmin';
@@ -439,7 +439,7 @@ function preserveChromeLabRouteParams(params: URLSearchParams, route: TilesetStu
 function preserveCardLayoutRouteParams(params: URLSearchParams, route: TilesetStudioRouteState): void {
   if (route.viewerKind !== 'cardlayout') return;
   const current = new URLSearchParams(window.location.search);
-  (['frameCandidate', 'coinCandidate', 'artCandidate', 'propertyCandidate', 'unitStateCandidate', 'cardVariant', 'contentsStudy', 'tacticalSpecimen', 'concinnousTarget', 'starterCard', 'rarityStudy', 'uncommonCandidate', 'rareCandidate'] as const).forEach((key) => {
+  (['frameCandidate', 'coinCandidate', 'artCandidate', 'propertyCandidate', 'unitStateCandidate', 'cardVariant', 'contentsStudy', 'tacticalSpecimen', 'concinnousTarget', 'starterCard', 'rarityStudy', 'uncommonCandidate', 'rareCandidate', 'cardSide', 'backCandidate'] as const).forEach((key) => {
     const value = current.get(key);
     if (value) params.set(key, value);
   });
@@ -1034,6 +1034,14 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const openViewer = (kind: ViewerKind): void => {
     setViewerKind(kind);
     setStudioMode('viewer');
+  };
+  // The card-back review is addressed by a Card Layout parameter, so arm it in
+  // the URL first and let the route's own preservation carry it through.
+  const openCardBackReview = (): void => {
+    const params = new URLSearchParams(window.location.search);
+    params.set('cardSide', 'back');
+    replaceAppHistoryState(null, `${window.location.pathname}?${params.toString()}`);
+    openViewer('cardlayout');
   };
   const openStructureDraft = (next: StructureEditorDraft): void => {
     setStructureDraft(next);
@@ -2050,11 +2058,14 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     },
     {
       id: 'cardlayout', label: 'Card Layout', hint: 'Tune the complete Run card face with exact live frame and artwork candidates.',
-      main: <RunCardPrototypeCatalog onOpen={() => openViewer('cardlayout')} />,
+      main: <RunCardPrototypeCatalog
+        onOpen={() => openViewer('cardlayout')}
+        onOpenCardBack={() => { openCardBackReview(); }}
+      />,
       controls: <button type="button" className="tileset-view-action" onClick={() => openViewer('cardlayout')}>Open Card Layout</button>,
     },
     {
-      id: 'cardsize', label: 'Card Size', hint: 'Tune how large the Bona Vacantia grant and the Sectio print their card rows.',
+      id: 'cardsize', label: 'Card Size', hint: 'Tune how large the Bona Vacantia grant and the Sectio print their card rows, and the drift and light those cards carry.',
       main: <RunCardSizeCatalog onOpen={() => openViewer('cardsize')} />,
       controls: <button type="button" className="tileset-view-action" data-testid="open-run-card-size" onClick={() => openViewer('cardsize')}>Open Card Size</button>,
     },

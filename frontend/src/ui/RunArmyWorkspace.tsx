@@ -131,7 +131,8 @@ function unitSourceLabel(unit: RunArmyUnit): string {
 
 function unitRunStatus(run: RunDocument, unit: RunArmyUnit): string {
   if (run.phase === 'battle') {
-    if (run.battleRuntime?.observedDeadUnitIds.includes(unit.id)) return 'Fallen this Battle';
+    // Out of this fight, not out of the Run -- the unit recovers before the next Battle.
+    if (run.battleRuntime?.observedDeadUnitIds.includes(unit.id)) return 'Wounded this Battle';
     if (run.battleRuntime?.deployedReservistUnitIds.includes(unit.id)) return 'Deployed Reservist';
     if (run.battleRuntime?.reservistPoolUnitIds.includes(unit.id)) return 'Reservist pool';
     if (run.battleRuntime?.reserveUnitIds.includes(unit.id)) return 'Reserve';
