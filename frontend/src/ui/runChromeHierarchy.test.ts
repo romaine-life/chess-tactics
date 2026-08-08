@@ -263,7 +263,8 @@ describe('Run chrome hierarchy', () => {
     expect(runCard).toContain("data-ui-sfx={grant ? 'card' : 'gold'}");
     expect(runScreen).toContain('useRunCardFlights()');
     expect(runScreen).toContain("document.querySelector('[data-run-card-flight-target]')");
-    expect(runScreen).toContain('sectio.cardOffers.map((offer) => {');
+    // The index is the seat's own drift/light clock (runCardLife.ts), not offer state.
+    expect(runScreen).toContain('sectio.cardOffers.map((offer, index) => {');
     expect(runScreen).toContain('sectio.adlectedCardOfferIds.includes(offer.offerId)');
     expect(runScreen).toContain('<RunCardPile');
     expect(runCardPile).toContain('<RunCardBack');
@@ -549,6 +550,9 @@ describe('Run chrome hierarchy', () => {
     expect(styleCss).toMatch(/\.run-card-action\s*\{[\s\S]*?aspect-ratio:\s*5 \/ 7;/);
     expect(styleCss).toMatch(/\.run-card-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,[\s\S]*?justify-content:\s*center;/);
     expect(styleCss).toMatch(/\.run-card-pile > :is\(\.run-card-pile-back, \.run-card-offer\)\s*\{[\s\S]*?grid-column:\s*1;[\s\S]*?grid-row:\s*1;/);
+    // A covered pile paints no part of the card it conceals: the back's opaque
+    // generated backdrop otherwise reads as a black edge around every offer.
+    expect(styleCss).toMatch(/\.run-card-pile\.is-covered > \.run-card-pile-back\s*\{[\s\S]*?visibility:\s*hidden;/);
     // Cold route entry still holds the veil for any nested painted surface: the
     // shell's painted-surface boundary waits for loading surfaces before painting.
     expect(paintedSurfaceBoundary).toContain(".querySelector('.painted-surface.is-loading')");

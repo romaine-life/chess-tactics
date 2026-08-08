@@ -23317,9 +23317,12 @@ function validateFormationRunBody(run) {
     if (typeof sectio.paidLipsanonBought !== 'boolean') return 'run.sectio.paidLipsanonBought is invalid';
   } else if (run.sectio !== null) return 'run.sectio is invalid outside Sectio';
 
-  if (run.phase === 'battle') {
+  // The aftermath report is the Battle just fought, still being read: closeBattle carries its
+  // runtime across and only leaving for the Sectio retires it (ADR-0377, ADR-0452). Requiring
+  // the runtime to be null there rejected the saved report of every won Battle.
+  if (run.phase === 'battle' || run.phase === 'aftermath') {
     if (!isObjectRecord(run.battleRuntime) || run.battleRuntime.battleIndex !== run.battleIndex) {
-      return 'run.battleRuntime is invalid during Battle';
+      return `run.battleRuntime is invalid during ${run.phase === 'battle' ? 'Battle' : 'Aftermath'}`;
     }
   } else if (run.battleRuntime !== null) return 'run.battleRuntime is invalid outside Battle';
   return null;

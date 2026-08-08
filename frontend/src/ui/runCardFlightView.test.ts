@@ -47,7 +47,8 @@ describe('Run card Adlectio transfer', () => {
     expect(source).not.toContain('createPortal');
     expect(source).toContain("event.propertyName === 'translate'");
     expect(screen).toContain('<RunCardPile');
-    expect(screen).toContain('sectio.cardOffers.map((offer) => {');
+    // The index is the seat's own drift/light clock (runCardLife.ts), not offer state.
+    expect(screen).toContain('sectio.cardOffers.map((offer, index) => {');
     expect(screen).toContain('sectio.adlectedCardOfferIds.includes(offer.offerId)');
     expect(screen).not.toContain('runCardReflowOffset');
     expect(screen).not.toContain('is-reflowing');
