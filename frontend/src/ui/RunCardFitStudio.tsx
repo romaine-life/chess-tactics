@@ -74,6 +74,9 @@ function footprintSpecimens(): readonly FootprintSpecimen[] {
 
 const SPECIMENS = footprintSpecimens();
 
+/** The same ladder, once more with a seat spent — the vacant mark is drawn at the fitted size too. */
+const SPENT_SPECIMEN = SPECIMENS.find((specimen) => specimen.cells === 3) ?? null;
+
 function readDraft(): RunCardFormationFitTuning {
   if (typeof window === 'undefined') return { ...RUN_CARD_FORMATION_FIT_COMMITTED };
   try {
@@ -201,6 +204,23 @@ export function RunCardFitViewer({
               </figcaption>
             </figure>
           ))}
+          {/* A card whose unit has been spent keeps its whole footprint and marks the seat vacant.
+              The mark is part of the drawing, so it has to be judged at the fitted size too. */}
+          {SPENT_SPECIMEN ? (
+            <figure className="run-card-fit-specimen" data-footprint-shape={`${SPENT_SPECIMEN.shape} spent`}>
+              <span className="run-card-fit-face">
+                <RunCard card={SPENT_SPECIMEN.card} mode="reference" emptyPieceIndices={[0]} />
+              </span>
+              <figcaption>
+                <strong>{SPENT_SPECIMEN.cells} seats, one spent</strong>
+                <span>
+                  {printed[`${SPENT_SPECIMEN.shape} spent`]
+                    ? `${printed[`${SPENT_SPECIMEN.shape} spent`].toFixed(2)}× the committed size`
+                    : 'measuring…'}
+                </span>
+              </figcaption>
+            </figure>
+          ) : null}
         </div>
       </section>
       <aside className="tileset-view-controls" aria-label="Card fit controls">
