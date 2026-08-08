@@ -257,14 +257,22 @@ export function PropCandidateLab({ propId, onPropId, header }: {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  // Reviewable means "has something here to look at": staged still art, an installed impact
-  // sheet, or both. A prop whose crack is live but whose art was settled long ago still needs to
-  // be reachable, or the sheet can only ever be watched by reloading a battle.
-  const reviewableProps = useMemo(() => {
-    const ids = new Set(catalog ? propsWithCandidates(catalog) : []);
-    for (const def of PROP_DEFS) if (structureArtImpact(def.spriteId)) ids.add(def.id);
-    return [...ids].sort();
-  }, [catalog]);
+  // EVERY prop is selectable. Staged candidates and impact sheets are things a prop may have, not
+  // conditions for being worth looking at — the entrance is worth watching for a prop with
+  // neither, and filtering them out made most of the catalog unreachable from the one surface
+  // that can replay it.
+  const staged = useMemo(() => new Set(catalog ? propsWithCandidates(catalog) : []), [catalog]);
+  const reviewableProps = useMemo(
+    () => [...new Set([...staged, ...PROP_DEFS.map((def) => def.id)])].sort(),
+    [staged],
+  );
+  const propBadge = useCallback((id: string): string => {
+    const marks = [
+      staged.has(id) ? 'candidates' : '',
+      structureArtImpact(propDef(id)?.spriteId ?? id) ? 'impact' : '',
+    ].filter(Boolean);
+    return marks.length ? ` · ${marks.join(' + ')}` : '';
+  }, [staged]);
   const activeProp = reviewableProps.includes(propId) ? propId : (reviewableProps[0] ?? propId);
   const slots = useMemo(() => propCandidateSlots(activeProp), [activeProp]);
   const groups = useMemo(
@@ -423,8 +431,8 @@ export function PropCandidateLab({ propId, onPropId, header }: {
             <label className="tileset-catalog-zoom">
               <span>Prop</span>
               <select value={activeProp} onChange={(event) => { onPropId(event.target.value); setSelectedKey(''); }}>
-                {(reviewableProps.length ? reviewableProps : PROP_DEFS.map((entry) => entry.id)).map((id) => (
-                  <option key={id} value={id}>{structureArtAsset(id)?.label ?? id}</option>
+                {reviewableProps.map((id) => (
+                  <option key={id} value={id}>{(structureArtAsset(id)?.label ?? propDef(id)?.label ?? id) + propBadge(id)}</option>
                 ))}
               </select>
             </label>
