@@ -20141,6 +20141,18 @@ button.tileset-relationship-cell {
   min-block-size: 0;
 }
 
+/* The Run's opening grant is a card row rather than the relic mat, so it takes the whole
+   content lane and centers in it. Without this the content's justify-items:start leaves the
+   grid at one card's width and the row stacks into a clipped column. */
+.run-vacantia-content > .run-card-grid {
+  align-content: center;
+  block-size: 100%;
+  inline-size: 100%;
+  justify-self: stretch;
+  min-block-size: 0;
+  padding: var(--ds-inset);
+}
+
 /* A targeted lipsanon replaces the mat with the same ledger/profile instrument used by
    Martial Prosopography. The normal tab rail is absent, so its established column becomes
    the decision brief instead of leaving the chooser without context. */

@@ -22040,6 +22040,7 @@ const ACTIVE_RUN_VACANTIA_FIELDS = new Set([
   'afterBattleIndex',
   'victoryGoldTenths',
   'offers',
+  'cardOffers',
 ]);
 const ACTIVE_RUN_AFTERMATH_FIELDS = new Set([
   'battleIndex',
@@ -22071,6 +22072,10 @@ const ACTIVE_RUN_DEPLOYMENT_FIELDS = new Set([
 const ACTIVE_RUN_SAVE_VERSION = serverRender?.CURRENT_RUN_SAVE_VERSION;
 const ACTIVE_RUN_CARD_BY_ID = serverRender?.RUN_CARD_BY_ID ?? {};
 const ACTIVE_RUN_STARTER_CARD_BY_ID = serverRender?.RUN_STARTER_CARD_BY_ID ?? {};
+// Read from the model rather than restated here, so the opening grant's band cannot drift
+// between the client that mints the offers and the server that verifies them.
+const RUN_OPENING_CARD_VALUE_MIN = serverRender?.RUN_OPENING_CARD_VALUE_MIN ?? 4;
+const RUN_OPENING_CARD_VALUE_MAX = serverRender?.RUN_OPENING_CARD_VALUE_MAX ?? 6;
 const RUN_LIPSANA = Array.isArray(serverRender?.RUN_LIPSANA) ? serverRender.RUN_LIPSANA : [];
 const LIPSANON_BY_ID = serverRender?.LIPSANON_BY_ID ?? {};
 const RUN_LIPSANON_IDS = new Set(RUN_LIPSANA.map((lipsanon) => lipsanon.id));
@@ -22481,14 +22486,35 @@ function validateActiveRunBody(run) {
       if (!isFiniteInteger(vacantia.conflictIndex) || vacantia.conflictIndex < 0) return 'run.vacantia.conflictIndex is invalid';
       if (!isFiniteInteger(vacantia.afterBattleIndex) || vacantia.afterBattleIndex < 0) return 'run.vacantia.afterBattleIndex is invalid';
       if (!isFiniteInteger(vacantia.victoryGoldTenths) || vacantia.victoryGoldTenths < 0) return 'run.vacantia.victoryGoldTenths is invalid';
-      if (!Array.isArray(vacantia.offers) || vacantia.offers.length < 1 || vacantia.offers.length > 3) {
-        return 'run.vacantia.offers is invalid';
-      }
-      if (new Set(vacantia.offers).size !== vacantia.offers.length) return 'run.vacantia.offers repeats a lipsanon';
-      for (const lipsanon of vacantia.offers) {
-        if (!RUN_LIPSANON_IDS.has(lipsanon)) return 'run.vacantia.offers is invalid';
-        // An offer the player already holds could never have been revealed.
-        if (Array.isArray(run.lipsana) && run.lipsana.includes(lipsanon)) return 'run.vacantia offers a held lipsanon';
+      // The Run's opening grants a formation card; every later Conflict grants a lipsanon.
+      // The two offer lists are exclusive, so each kind must leave the other one empty.
+      const opening = vacantia.kind === 'opening';
+      const cardOffers = vacantia.cardOffers ?? [];
+      if (!Array.isArray(cardOffers)) return 'run.vacantia.cardOffers is invalid';
+      if (opening) {
+        if (Array.isArray(vacantia.offers) && vacantia.offers.length) {
+          return 'run.vacantia opening offers a lipsanon';
+        }
+        if (cardOffers.length < 1 || cardOffers.length > 3) return 'run.vacantia.cardOffers is invalid';
+        if (new Set(cardOffers).size !== cardOffers.length) return 'run.vacantia.cardOffers repeats a card';
+        for (const coreId of cardOffers) {
+          const card = typeof coreId === 'string' ? ACTIVE_RUN_CARD_BY_ID[coreId] : null;
+          if (!card) return 'run.vacantia.cardOffers is invalid';
+          if (card.value < RUN_OPENING_CARD_VALUE_MIN || card.value > RUN_OPENING_CARD_VALUE_MAX) {
+            return 'run.vacantia.cardOffers is outside the opening grant band';
+          }
+        }
+      } else {
+        if (cardOffers.length) return 'run.vacantia offers a card outside the opening';
+        if (!Array.isArray(vacantia.offers) || vacantia.offers.length < 1 || vacantia.offers.length > 3) {
+          return 'run.vacantia.offers is invalid';
+        }
+        if (new Set(vacantia.offers).size !== vacantia.offers.length) return 'run.vacantia.offers repeats a lipsanon';
+        for (const lipsanon of vacantia.offers) {
+          if (!RUN_LIPSANON_IDS.has(lipsanon)) return 'run.vacantia.offers is invalid';
+          // An offer the player already holds could never have been revealed.
+          if (Array.isArray(run.lipsana) && run.lipsana.includes(lipsanon)) return 'run.vacantia offers a held lipsanon';
+        }
       }
     } else if (run.vacantia !== null && run.vacantia !== undefined) {
       return 'run.vacantia is invalid outside the bona-vacantia phase';
@@ -23047,10 +23073,16 @@ function validateFormationRunBody(run) {
   } else if (run.aftermath !== null) return 'run.aftermath is invalid outside Aftermath';
 
   if (run.phase === 'bona-vacantia') {
-    if (!isObjectRecord(run.vacantia) || !Array.isArray(run.vacantia.offers)
-      || run.vacantia.offers.length < 1 || run.vacantia.offers.length > 3
-      || new Set(run.vacantia.offers).size !== run.vacantia.offers.length
-      || run.vacantia.offers.some((id) => !RUN_LIPSANON_IDS.has(id))) return 'run.vacantia is invalid';
+    if (!isObjectRecord(run.vacantia)) return 'run.vacantia is invalid';
+    // The Run's opening grants a formation card; every later Conflict grants a lipsanon.
+    const openingGrant = run.vacantia.kind === 'opening';
+    const grantOffers = openingGrant ? run.vacantia.cardOffers : run.vacantia.offers;
+    if (!Array.isArray(grantOffers) || grantOffers.length < 1 || grantOffers.length > 3
+      || new Set(grantOffers).size !== grantOffers.length) return 'run.vacantia is invalid';
+    const known = openingGrant
+      ? (id) => Boolean(ACTIVE_RUN_CARD_BY_ID[id])
+      : (id) => RUN_LIPSANON_IDS.has(id);
+    if (grantOffers.some((id) => !known(id))) return 'run.vacantia is invalid';
   } else if (run.vacantia !== null) return 'run.vacantia is invalid outside Bona Vacantia';
 
   if (run.phase === 'sectio') {

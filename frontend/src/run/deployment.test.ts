@@ -112,13 +112,31 @@ describe('formation deployment', () => {
     expect(arrangedDeploymentCanBegin(replaced)).toBe(true);
   });
 
-  it('lets a one-row formation occupy either row of the deployment band', () => {
+  it('lets a one-row formation occupy every row the level authored, not the first two', () => {
     const { run, level } = fixture(8, 8, 29, ['q']);
     const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
     const queen = arranging.cards.find((card) => card.coreId === 'q')!;
     const options = arrangedCardPlacementOptions(arranging, level, queen.id, 0);
 
-    expect(new Set(options.map(({ anchor }) => anchor.y))).toEqual(new Set([3, 4]));
+    expect(new Set(options.map(({ anchor }) => anchor.y)))
+      .toEqual(new Set([3, 4, 5, 6, 7, 8, 9, 10]));
+  });
+
+  // A quarter turn trades a formation's width for depth, so the band's depth is what
+  // decides whether it can stand up. Depth is the level's to author; it must not be
+  // clamped to the two rows the generated card grammar happens to be tall.
+  it('stands a three-wide formation up only where the band is deep enough', () => {
+    const standing = (bandRows: number): number[] => {
+      const { run, level } = fixture(bandRows, 6, 37, ['ppp']);
+      const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+      const line = arranging.cards.find((card) => card.coreId === 'ppp')!;
+      return arrangedCardPlacementOptions(arranging, level, line.id, 1)
+        .map(({ anchor }) => anchor.y);
+    };
+
+    expect(standing(2)).toEqual([]);
+    expect(new Set(standing(3))).toEqual(new Set([3]));
+    expect(standing(3)).toHaveLength(6);
   });
 
   it('fits His Grace in the smallest two-by-two deployment band', () => {
