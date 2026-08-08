@@ -23,7 +23,6 @@ import {
 } from './runCardRarityFrameLiveMedia';
 import { RunCardBack } from './RunCardBack';
 import {
-  RUN_CARD_BACK_NATIVE_WIDTH,
   runCardBackAcceptanceItem,
   runCardBackCandidateGroups,
   runCardBackPublished,
@@ -151,7 +150,7 @@ function RunCardBackSpecimen({
         // The registered Studio card-image surface supplies the alpha field, so
         // the card's own silhouette is what the reviewer is looking at.
         <span className="tileset-studio-card-image run-card-back-specimen">
-          <RunCardBack mediaUrl={mediaUrl} width={`${RUN_CARD_BACK_NATIVE_WIDTH}px`} />
+          <RunCardBack mediaUrl={mediaUrl} />
         </span>
       ) : <p className="run-card-rarity-study-footnote">Nothing published for this slot</p>}
     </figure>
@@ -162,11 +161,11 @@ function RunCardBackSpecimen({
  * The owner's review surface for the universal face-down card.
  *
  * The backend refuses a card-back acceptance whose proof does not name this
- * exact address, and the proof asserts the review covered the decoded native
- * raster at exact scale — so both cards print at their true 1060x1484 pixels
- * and the pane scrolls rather than scaling them to fit.
+ * exact address, so this surface and that proof are built from one module. The
+ * comparison itself is the point: the published back beside the candidate, both
+ * on the alpha field, so the difference in silhouette is what the eye lands on.
  */
-function RunCardBackStudy({ header }: { header: ReactNode }): ReactElement {
+function RunCardBackStudy({ header, viewerZoom }: { header: ReactNode; viewerZoom: number }): ReactElement {
   const [catalog, setCatalog] = useState<AdminLiveMediaCatalog | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
@@ -226,13 +225,16 @@ function RunCardBackStudy({ header }: { header: ReactNode }): ReactElement {
         <span>Universal card back · exact live-media review</span>
         <h2>The card every face-down Run card shows</h2>
         <p>
-          Both cards print at their stored 1060&times;1484 pixels, so this pane scrolls instead of
-          scaling them. Judge the silhouette as much as the art: the back is the same physical card
-          as a face, so anything it paints outside the card box shows as an edge wherever it sits
-          beneath or flips into one.
+          Judge the silhouette as much as the art. The back is the same physical card as a face, so
+          anything it paints outside the card box shows as an edge wherever it sits beneath one or
+          flips into one &mdash; the checkerboard behind each card is where its real edge is. Zoom
+          scales both together.
         </p>
       </header>
-      <div className="run-card-back-study">
+      <div
+        className="run-card-back-study"
+        style={{ '--run-card-gallery-zoom': viewerZoom } as CSSProperties}
+      >
         <RunCardBackSpecimen caption="Published" selection={published} />
         {selection && selection.version.id !== published?.version.id ? (
           <RunCardBackSpecimen
@@ -283,7 +285,7 @@ export function RunCardPrototypeViewer({
 }): ReactElement {
   const studioSearch = new URLSearchParams(window.location.search);
   if (studioSearch.get('cardSide') === 'back') {
-    return <RunCardBackStudy header={header} />;
+    return <RunCardBackStudy header={header} viewerZoom={viewerZoom} />;
   }
   if (studioSearch.get('rarityStudy') === '1') {
     return <RunCardRarityStudy header={header} viewerZoom={viewerZoom} />;

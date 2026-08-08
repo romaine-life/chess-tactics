@@ -25437,6 +25437,7 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
 .run-card-back-candidate-groups > section {
   display: grid;
   gap: var(--ds-space-1);
+  justify-items: start;
 }
 
 .run-card-back-candidate-groups section > header {
@@ -25472,11 +25473,15 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   min-block-size: 0;
 }
 
+/* Beats the base card-image img rule, which sizes every catalog image to an iso
+   tile. Both cards fit side by side at 100% and grow with the Studio's own zoom
+   like every other viewer; the pane roams once they outgrow it. */
 .tileset-studio-card-image.run-card-back-specimen img.run-card-back {
-  block-size: 1484px;
-  inline-size: 1060px;
+  block-size: auto;
+  image-rendering: auto;
+  inline-size: calc(420px * var(--run-card-gallery-zoom, 1));
   max-inline-size: none;
-  object-fit: none;
+  object-fit: cover;
 }
 
 .run-card-back-study figcaption {

@@ -128,8 +128,10 @@ export function runCardBackReviewProof(input: {
     schema: RUN_CARD_BACK_PROOF_SCHEMA,
     renderer: RUN_CARD_BACK_PROOF_RENDERER,
     surfaceUrl,
-    // The surface prints both cards at their decoded native raster, so the
-    // reviewed pixels are the stored pixels rather than a scaled preview.
+    // These describe the reviewed ASSET, not how large it was drawn: the stored
+    // bytes are the canonical 1x raster with no resampling applied to produce
+    // them. The sibling rarity-frame proof asserts the same values while drawing
+    // its specimens at 210px.
     canonicalScale: 1,
     assetLocalScale: 1,
     spatialResampling: false,
