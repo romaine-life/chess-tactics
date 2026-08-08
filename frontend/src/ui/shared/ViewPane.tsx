@@ -307,6 +307,46 @@ export function minimumZoomToCoverViewport({
   return Math.min(upper, covers(candidate) ? candidate : candidate + 1 / safetyScale);
 }
 
+/**
+ * The box the art must keep covered, expressed as a stage-CENTRED size because that is the
+ * coordinate system `viewportCorners` uses.
+ *
+ * A board stage may be aspect-locked and centred inside a wider workspace column while its art
+ * layer deliberately overdraws into that column (see `.skirmish-screen … overflow: visible`).
+ * Covering only the stage then leaves the overdraw margin as the sole thing hiding the screen
+ * backdrop, and the first pan spends it — opening a gutter-width strip of backdrop on the
+ * trailing side. Growing the contract to the surrounding column is what closes that strip.
+ *
+ * Symmetric growth is deliberate: the cover math centres the viewport on the stage, so an
+ * off-centre column must be covered by its FARTHER side on both sides.
+ */
+export function stageCenteredCoverViewport(
+  stage: { width: number; height: number; left: number; top: number },
+  cover: { left: number; top: number; right: number; bottom: number } | null,
+): ViewPaneViewportSize {
+  const own = { width: stage.width, height: stage.height };
+  if (!cover || own.width <= 0 || own.height <= 0) return own;
+  const centerX = stage.left + stage.width / 2;
+  const centerY = stage.top + stage.height / 2;
+  const halfWidth = Math.max(centerX - cover.left, cover.right - centerX);
+  const halfHeight = Math.max(centerY - cover.top, cover.bottom - centerY);
+  return {
+    width: Math.max(own.width, halfWidth * 2),
+    height: Math.max(own.height, halfHeight * 2),
+  };
+}
+
+function coverViewportOf(stage: HTMLElement, selector: string | undefined): ViewPaneViewportSize {
+  const own = { width: stage.clientWidth, height: stage.clientHeight };
+  const column = selector ? stage.closest<HTMLElement>(selector) : null;
+  if (!column || column === stage) return own;
+  const stageBox = stage.getBoundingClientRect();
+  return stageCenteredCoverViewport(
+    { width: own.width, height: own.height, left: stageBox.left, top: stageBox.top },
+    column.getBoundingClientRect(),
+  );
+}
+
 export function ViewPane({
   kind,
   ariaLabel,
@@ -317,8 +357,10 @@ export function ViewPane({
   onZoomChange,
   onPanChange,
   coverPolygon,
+  coverViewportSelector,
   onMinimumZoomChange,
   onViewportSizeChange,
+  onCoverViewportChange,
   onViewInteraction,
   onAssetClick,
   boardViewportMode = 'canonical',
@@ -334,10 +376,18 @@ export function ViewPane({
   onPanChange: (pan: { x: number; y: number }) => void;
   /** Convex content boundary that must continue covering the entire viewport. */
   coverPolygon?: readonly ViewPanePoint[];
+  /**
+   * Ancestor selector for the workspace column this pane's art overdraws into. When given, the
+   * cover contract is satisfied against that column instead of the aspect-locked stage, so a pan
+   * can never spend the overdraw margin and expose the screen backdrop beside the board.
+   */
+  coverViewportSelector?: string;
   /** Reports the viewport-derived floor so external steppers clamp identically to the wheel. */
   onMinimumZoomChange?: (zoom: number) => void;
   /** Reports the live drawable viewport used by projection-aware editor actions. */
   onViewportSizeChange?: (size: ViewPaneViewportSize) => void;
+  /** Reports the covered column, so an external opening fit derives the same zoom floor. */
+  onCoverViewportChange?: (size: ViewPaneViewportSize) => void;
   /** Reports intentional user camera movement; automatic floor/reclamp updates do not call it. */
   onViewInteraction?: () => void;
   onAssetClick?: (assetId: string) => void;
@@ -360,6 +410,7 @@ export function ViewPane({
   } | null>(null);
   const automaticFloorZoomRef = useRef<number | null>(null);
   const lastViewportSizeRef = useRef<ViewPaneViewportSize | null>(null);
+  const lastCoverViewportRef = useRef<ViewPaneViewportSize | null>(null);
   const didDragRef = useRef(false);
   const [resolvedMinZoom, setResolvedMinZoom] = useState(minZoom);
   const resolvedMaxZoom = Math.max(maxZoom, resolvedMinZoom);
@@ -368,6 +419,8 @@ export function ViewPane({
     const stage = stageRef.current;
     if (!stage) return undefined;
     const updateMinimum = (): void => {
+      // The reported drawable viewport stays the stage: projection-aware editor actions and the
+      // opening composition measure the pane itself, not the column it may overdraw into.
       const viewport = { width: stage.clientWidth, height: stage.clientHeight };
       const previousViewport = lastViewportSizeRef.current;
       if (
@@ -378,9 +431,19 @@ export function ViewPane({
         lastViewportSizeRef.current = viewport;
         onViewportSizeChange?.(viewport);
       }
+      const coverViewport = coverViewportOf(stage, coverViewportSelector);
+      const previousCover = lastCoverViewportRef.current;
+      if (
+        !previousCover
+        || previousCover.width !== coverViewport.width
+        || previousCover.height !== coverViewport.height
+      ) {
+        lastCoverViewportRef.current = coverViewport;
+        onCoverViewportChange?.(coverViewport);
+      }
       const next = coverPolygon
         ? minimumZoomToCoverViewport({
-            viewport,
+            viewport: coverViewport,
             polygon: coverPolygon,
             minZoom,
             maxZoom: Math.max(maxZoom, COVER_SEARCH_MAX_ZOOM),
@@ -391,14 +454,20 @@ export function ViewPane({
     updateMinimum();
     const observer = new ResizeObserver(updateMinimum);
     observer.observe(stage);
+    // The covered column resizes independently of the aspect-locked stage (a HUD width change
+    // moves it without touching the pane), so the floor must track that box too.
+    const column = coverViewportSelector
+      ? stage.closest<HTMLElement>(coverViewportSelector)
+      : null;
+    if (column && column !== stage) observer.observe(column);
     return () => observer.disconnect();
-  }, [coverPolygon, maxZoom, minZoom, onViewportSizeChange]);
+  }, [coverPolygon, coverViewportSelector, maxZoom, minZoom, onCoverViewportChange, onViewportSizeChange]);
 
   useLayoutEffect(() => {
     const stage = stageRef.current;
     if (!stage || !coverPolygon) return;
     const constrained = constrainPanToCoverViewport({
-      viewport: { width: stage.clientWidth, height: stage.clientHeight },
+      viewport: coverViewportOf(stage, coverViewportSelector),
       polygon: coverPolygon,
       zoom,
       from: pan,
@@ -407,7 +476,7 @@ export function ViewPane({
     if (Math.abs(constrained.x - pan.x) >= 1e-7 || Math.abs(constrained.y - pan.y) >= 1e-7) {
       onPanChange(constrained);
     }
-  }, [coverPolygon, onPanChange, pan, zoom]);
+  }, [coverPolygon, coverViewportSelector, onPanChange, pan, zoom]);
 
   useLayoutEffect(() => {
     onMinimumZoomChange?.(resolvedMinZoom);
@@ -477,7 +546,7 @@ export function ViewPane({
     const stage = stageRef.current;
     onPanChange(stage && coverPolygon
       ? constrainPanToCoverViewport({
-          viewport: { width: stage.clientWidth, height: stage.clientHeight },
+          viewport: coverViewportOf(stage, coverViewportSelector),
           polygon: coverPolygon,
           zoom,
           from: pan,
@@ -507,7 +576,7 @@ export function ViewPane({
     const stage = stageRef.current;
     if (stage && coverPolygon) {
       onPanChange(constrainPanToCoverViewport({
-        viewport: { width: stage.clientWidth, height: stage.clientHeight },
+        viewport: coverViewportOf(stage, coverViewportSelector),
         polygon: coverPolygon,
         zoom: nextZoom,
         from: pan,

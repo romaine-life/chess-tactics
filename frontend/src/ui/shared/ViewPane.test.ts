@@ -3,6 +3,7 @@ import {
   clientDeltaToLocal,
   constrainPanToCoverViewport,
   minimumZoomToCoverViewport,
+  stageCenteredCoverViewport,
   zoomAfterMinimumChange,
 } from './ViewPane';
 
@@ -134,5 +135,59 @@ describe('ViewPane viewport-cover zoom floor', () => {
       minimum: 0.84,
       automaticFloorZoom: 2.6,
     })).toEqual({ zoom: 3, automaticFloorZoom: null });
+  });
+});
+
+describe('ViewPane covered column', () => {
+  // Play's measured layout at 1920x1080: an aspect-locked pane seated inside a wider column that
+  // the board art overdraws into. Covering only the pane is what let a pan open a gutter-width
+  // strip of screen backdrop beside the board.
+  const pane = { width: 1322, height: 992, left: 113, top: 88 };
+
+  it('grows the contract to the column the art overdraws into', () => {
+    expect(stageCenteredCoverViewport(pane, { left: 0, top: 88, right: 1560, bottom: 1080 }))
+      .toEqual({ width: 1572, height: 992 });
+  });
+
+  it('covers an off-centre column by its farther side', () => {
+    // Pane centre is 774; the column reaches 786 to the right and 774 to the left, so the
+    // stage-centred box must be twice the FARTHER half or the near side stays exposed.
+    const covered = stageCenteredCoverViewport(pane, { left: 0, top: 88, right: 1560, bottom: 1080 });
+    expect(covered.width / 2).toBeGreaterThanOrEqual(1560 - (pane.left + pane.width / 2));
+    expect(covered.width / 2).toBeGreaterThanOrEqual(pane.left + pane.width / 2);
+  });
+
+  it('leaves a pane that clips its own art exactly as measured', () => {
+    expect(stageCenteredCoverViewport(pane, null)).toEqual({ width: 1322, height: 992 });
+  });
+
+  it('never shrinks below the pane when the column is inside it', () => {
+    expect(stageCenteredCoverViewport(pane, { left: 400, top: 300, right: 900, bottom: 700 }))
+      .toEqual({ width: 1322, height: 992 });
+  });
+
+  it('closes the strip a pan used to open', () => {
+    // The measured plate: 1822 wide at the live zoom, so it overdraws the 1322 pane by 250 each
+    // side. Panning left used to stop only when its right edge reached the PANE's right edge.
+    const plate = [
+      { x: -911, y: -512 },
+      { x: 911, y: -512 },
+      { x: 911, y: 512 },
+      { x: -911, y: 512 },
+    ];
+    const paneOnly = { width: 1322, height: 992 };
+    const column = stageCenteredCoverViewport(pane, { left: 0, top: 88, right: 1560, bottom: 1080 });
+    const drag = { x: -960, y: 0 };
+    const loose = constrainPanToCoverViewport({
+      viewport: paneOnly, polygon: plate, zoom: 1, from: { x: 0, y: 0 }, to: drag,
+    });
+    const tight = constrainPanToCoverViewport({
+      viewport: column, polygon: plate, zoom: 1, from: { x: 0, y: 0 }, to: drag,
+    });
+    expect(loose.x).toBeCloseTo(-250, 3);
+    expect(tight.x).toBeCloseTo(-125, 3);
+    // At the loose limit the plate's right edge sits 125px inside the column: the exposed strip.
+    expect(911 + loose.x).toBeLessThan(column.width / 2);
+    expect(911 + tight.x).toBeCloseTo(column.width / 2, 3);
   });
 });
