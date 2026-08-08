@@ -14,6 +14,7 @@ const { createByteReadBudget } = require(path.join(bakedBackendDir, 'liveMediaRe
 const { createRenderCriticalSection } = require(path.join(bakedBackendDir, 'renderCriticalSection'));
 const { createAsyncWorkLimiter } = require(path.join(bakedBackendDir, 'asyncWorkLimiter'));
 const { saveRunCardGoldTierDividerGeometry } = require(path.join(bakedBackendDir, 'runCardGoldTierDividerGeometry'));
+const { saveRunCardRowSizing } = require(path.join(bakedBackendDir, 'runCardRowSizing'));
 const { THUMBNAIL_DEPENDENCY_SCHEMA_VERSION, thumbnailContentVersionForPlan } = require(path.join(bakedBackendDir, 'thumbnailVersion'));
 const { createRevisionMemo } = require(path.join(bakedBackendDir, 'revisionMemo'));
 const { backgroundStoreSchemaViolation } = require(path.join(bakedBackendDir, 'backgroundStoreError'));
@@ -7865,6 +7866,32 @@ app.get('/api/__devctl/health', (_req, res, next) => {
     port: Number(port),
     pid: process.pid,
   });
+});
+
+// ADR-0522: the Card Size instrument writes deterministic Git-owned layout numbers for the
+// Run's card rows, never live-media bytes or database state. Same shape as the divider
+// route below: named dev harness only, no client-supplied path, admin-gated.
+app.put('/api/studio/run-card-row-sizing/defaults', async (req, res) => {
+  if (process.env.DEVCTL_MANAGED !== '1' || !isLoopbackRequest(req)) {
+    res.status(404).json({ error: 'not_found' });
+    return;
+  }
+  const user = await requireAdmin(req, res);
+  if (!user) return;
+  try {
+    const sizing = await saveRunCardRowSizing({
+      repoDir: process.env.DEVCTL_REPO_DIR,
+      value: req.body,
+    });
+    res.setHeader('Cache-Control', 'no-store');
+    res.status(200).json(sizing);
+  } catch (error) {
+    console.error('run card row sizing save failed:', error);
+    res.status(error.statusCode || 500).json({
+      error: error.statusCode === 400 ? 'invalid_sizing' : 'sizing_save_failed',
+      details: error.message,
+    });
+  }
 });
 
 // ADR-0507: the divider fitting instrument writes deterministic Git-owned geometry, never

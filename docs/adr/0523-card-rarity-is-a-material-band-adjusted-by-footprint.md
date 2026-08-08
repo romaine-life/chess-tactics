@@ -18,9 +18,9 @@ material and a card costs its value, so army growth per Battle should already eq
 Level sets — but it did not, for two reasons.
 
 The first is the catalog's shape. Four-unit rosters are where the combinations explode, so of the
-272 live offer identities **257 cost more than four**, 142 of them cost exactly eight, and only 15
+269 live offer identities **254 cost more than four**, 142 of them cost exactly eight, and only 15
 cost four or less. ADR-0515 deals a flat shuffle of that catalog, which puts the average offer at
-7.33 gold. An early row is therefore a row nobody can afford; its gold banks, and two Battles later
+7.36 gold. An early row is therefore a row nobody can afford; its gold banks, and two Battles later
 it lands at once. The lumpiness was banking, not the reward.
 
 The second is that the previous rarity rule read roster composition — any Queen, any two Rooks,
@@ -41,7 +41,7 @@ a square, a straight run, or a corner can, and its material overstates what it i
 An opposite-colour Bishop pair keeps its band on any footprint — the pair is the prize and the
 shape it arrives on does not spoil it.
 
-That yields **47 Common, 123 Uncommon, 102 Rare**. Every Common above the value band is one of the
+That yields **47 Common, 120 Uncommon, 102 Rare**. Every Common above the value band is one of the
 32 awkward value-6 cards, so the Common tier can be rich without handing out clean material.
 
 **Rates are quotas, not rolls.** A pile is 20 cards holding exactly 16 Common, 3 Uncommon, and 1
@@ -85,7 +85,7 @@ its own rarity on load. Everything already bought, sold, or expuncted stands.
 - The Common tier is 47 identities rather than 15, so the opening market does not repeat itself,
   and it averages 5.17 rather than 3.40 without ever offering cleanly-packed material.
 - Rare is 102 identities behind a 5% quota, so a single Run meets roughly one. The catalog and its
-  94 illustrations are long-tail content across many Runs by design, not within one.
+  91 illustrations are long-tail content across many Runs by design, not within one.
 - Awkward geometry becomes the price of cheap material. A player who wants a value-8 card early can
   have one, and it will be a shape they have to solve.
 - In-progress Runs restart their hidden card sequence. The owner's active Run is disposable test

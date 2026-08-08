@@ -14,10 +14,13 @@ import {
   RUN_CARD_CATALOG,
   RUN_LIPSANA,
   cardContentsLabel,
+  runCardTierOf,
+  runCardTierRank,
   type AtaraxiaTier,
   type RunArmyPieceType,
   type RunCardDefinition,
   type RunCardRarity,
+  type RunCardTier,
   type LipsanonId,
 } from '../run/model';
 import {
@@ -55,6 +58,7 @@ import { PieceTypeIcon } from './shared/PieceTypeIcon';
 import { RunCardCostCoin } from './shared/RunCardCostCoin';
 import {
   RunCardGoldTierDivider,
+  runCardTierLabel,
   useRunCardGoldTierDividerSource,
 } from './shared/RunCardGoldTierDivider';
 import { RUN_PROGRESS_MEDIA_ROLE } from './shared/RunProgressIcon';
@@ -612,17 +616,22 @@ export function CardGalleryFilters({
   );
 }
 
-/** Cards grouped by gold value, ascending — the gallery's one authored ordering. */
-export function cardsByGoldValue<T>(
+/**
+ * Bands a gallery for display. Starter cards band on their own ahead of the priced ones:
+ * His Grace is worth 2 gold on paper but can never be bought, so filing it under "2 gold"
+ * sat it among cards a player could actually pay that for (ADR-0414).
+ */
+export function cardsByTier<T>(
   entries: readonly T[],
   coreOf: (entry: T) => RunCardDefinition,
-): Array<[number, T[]]> {
-  const byValue = new Map<number, T[]>();
+): Array<[RunCardTier, T[]]> {
+  const byTier = new Map<RunCardTier, T[]>();
   for (const entry of entries) {
-    const value = coreOf(entry).value;
-    byValue.set(value, [...(byValue.get(value) ?? []), entry]);
+    const tier = runCardTierOf(coreOf(entry));
+    byTier.set(tier, [...(byTier.get(tier) ?? []), entry]);
   }
-  return [...byValue.entries()].sort((left, right) => left[0] - right[0]);
+  return [...byTier.entries()]
+    .sort((left, right) => runCardTierRank(left[0]) - runCardTierRank(right[0]));
 }
 
 // Cards is the terminal third-column browser: the two rail predecessors retain
@@ -651,7 +660,7 @@ export function CardCodex({
     () => RUN_CARD_CATALOG.filter((card) => cardMatchesFilters(card, goldFilter, unitFilter, rarityFilter)),
     [goldFilter, rarityFilter, unitFilter],
   );
-  const groups = useMemo(() => cardsByGoldValue(visibleCards, (card) => card), [visibleCards]);
+  const groups = useMemo(() => cardsByTier(visibleCards, (card) => card), [visibleCards]);
   useEffect(() => {
     if (!focusedCardId) return;
     const card = galleryRef.current?.querySelector<HTMLElement>(`[data-card-id="${focusedCardId}"]`);
@@ -683,10 +692,10 @@ export function CardCodex({
             ref={galleryRef}
             className="enchiridion-card-gallery-browser"
             role="list"
-            aria-label="Filtered card catalog by gold value"
+            aria-label="Filtered card catalog by tier"
           >
             {groups.map(([value, cards]) => (
-              <section className="enchiridion-card-gallery-group" key={value} aria-label={`${value} gold cards`}>
+              <section className="enchiridion-card-gallery-group" key={value} aria-label={runCardTierLabel(value)}>
                 <h3 className="enchiridion-card-gallery-heading">
                   <RunCardGoldTierDivider value={value} source={goldTierDividerSource} />
                 </h3>

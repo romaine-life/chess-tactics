@@ -2,7 +2,29 @@ import { describe, expect, it } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { RUN_CARD_CATALOG, RUN_OFFER_CARD_COUNT } from '../run/model';
-import { CardGalleryFilters, cardMatchesFilters } from './Enchiridion';
+import { CardGalleryFilters, cardMatchesFilters, cardsByTier } from './Enchiridion';
+import { runCardTierLabel } from './shared/RunCardGoldTierDivider';
+
+describe('Enchiridion card bands', () => {
+  it('bands the starter card on its own, ahead of every priced band', () => {
+    const bands = cardsByTier(RUN_CARD_CATALOG, (card) => card);
+    const [firstTier, firstCards] = bands[0];
+    expect(firstTier).toBe('starter');
+    expect(firstCards.map((card) => card.id)).toEqual(['his-grace']);
+    expect(runCardTierLabel(firstTier)).toBe('Starter cards');
+    // His Grace is worth 2 gold, and that band must no longer contain it.
+    const twoGold = bands.find(([tier]) => tier === 2);
+    expect(twoGold?.[1].some((card) => card.id === 'his-grace')).toBe(false);
+    expect(runCardTierLabel(2)).toBe('2 gold cards');
+    // Every remaining band is a price, ascending, and holds only cards worth it.
+    const priced = bands.slice(1).map(([tier]) => tier);
+    expect(priced).toEqual([...priced].sort((left, right) => Number(left) - Number(right)));
+    for (const [tier, cards] of bands.slice(1)) {
+      expect(cards.every((card) => card.value === tier)).toBe(true);
+    }
+    expect(bands.flatMap(([, cards]) => cards)).toHaveLength(RUN_OFFER_CARD_COUNT + 1);
+  });
+});
 
 describe('Enchiridion card filters', () => {
   it('shows the combined starter and complete formation deck when both filters are All', () => {

@@ -29,6 +29,7 @@ import {
   payRunEnPassantBounty,
   performAdlectio,
   resetSectio,
+  runCardDefinition,
   undoRunBattleMove,
   runCardUnitIds,
   runCardRarity,
@@ -67,12 +68,47 @@ function firstSectio(seed: number): RunDocument {
 }
 
 describe('formation card catalog', () => {
-  it('contains the complete generated core, six authored exceptions, and the starter', () => {
+  it('contains the complete generated core, the connected authored exceptions, and the starter', () => {
     expect(RUN_GENERATED_CARD_COUNT).toBe(720);
     expect(RUN_CARD_DECK).toHaveLength(RUN_OFFER_CARD_COUNT);
-    expect(RUN_OFFER_CARD_COUNT).toBe(272);
+    expect(RUN_OFFER_CARD_COUNT).toBe(269);
     expect(RUN_CARD_DECK.every((card) => card.pieces.length >= 1 && card.pieces.length <= 4)).toBe(true);
-    expect(RUN_CARD_CATALOG).toHaveLength(273);
+    expect(RUN_CARD_CATALOG).toHaveLength(270);
+  });
+
+  /**
+   * A formation is a cluster of squares that touch. The generator enforces it, but named cards were
+   * injected over the generated map without the check, which put three diagonal chains back into
+   * the market the generator had already refused. The card face prints the footprint as the shape
+   * the card grants, and squares that never touch cannot read as one shape however they are drawn.
+   */
+  it('deals no formation whose squares fail to touch', () => {
+    const touching = (cells: readonly { x: number; y: number }[]): boolean => {
+      const available = new Set(cells.map((cell) => `${cell.x},${cell.y}`));
+      const seen = new Set<string>();
+      const pending = [cells[0]];
+      while (pending.length) {
+        const cell = pending.pop()!;
+        const key = `${cell.x},${cell.y}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        for (const near of [
+          { x: cell.x - 1, y: cell.y }, { x: cell.x + 1, y: cell.y },
+          { x: cell.x, y: cell.y - 1 }, { x: cell.x, y: cell.y + 1 },
+        ]) if (available.has(`${near.x},${near.y}`)) pending.push(near);
+      }
+      return seen.size === cells.length;
+    };
+    const scattered = RUN_CARD_DECK.filter((card) => card.formation && !touching(card.formation));
+    expect(scattered.map((card) => card.id)).toEqual([]);
+  });
+
+  /** Retired from the market, still readable: a Run already holding one keeps its whole face. */
+  it('keeps the retired diagonal cards resolvable for Runs that hold them', () => {
+    for (const id of ['ppb-protected', 'ppk-protected', 'bb-diagonal', 'ppb-reversed', 'ppk-reversed']) {
+      expect(runCardDefinition(id), `${id} became unresolvable`).toBeTruthy();
+      expect(RUN_CARD_DECK.some((card) => card.id === id), `${id} is still dealt`).toBe(false);
+    }
   });
 
   it('collapses quarter-turn-equivalent Queen and Pawn arrangements', () => {
@@ -160,7 +196,7 @@ describe('formation card catalog', () => {
     expect(Object.fromEntries(RUN_CARD_RARITIES.map((rarity) => [
       rarity,
       RUN_CARD_DECK.filter((card) => card.rarity === rarity).length,
-    ]))).toEqual({ common: 47, uncommon: 123, rare: 102 });
+    ]))).toEqual({ common: 47, uncommon: 120, rare: 102 });
     // Every Common above the value band is there because its footprint wastes the band.
     const richCommons = RUN_CARD_DECK.filter((card) => card.rarity === 'common' && card.value > 4);
     expect(richCommons).toHaveLength(32);
