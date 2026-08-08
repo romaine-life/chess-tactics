@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { tileAssets, tileFamilies } from '../art/tileset';
 import { solveSocketBoard } from '../core/tileBoardGenerator';
 import { BoardLabBoard, boardLabCellPosition } from '../render/BoardLabBoard';
 import { StructureSprite } from '../render/BoardStructure';
 import { objectBaseZIndex } from '../render/sceneDepth';
 import { PROP_DEFS, propDef } from '../core/props';
-import { structureArtAsset, structureArtHalfSrc } from '../core/structureArt';
+import { structureArtAsset, structureArtHalfSrc, structureArtImpact } from '../core/structureArt';
 import { pieceSpritePath } from '../core/pieces';
 import { terrainFamiliesForRole } from '../core/tileSockets';
 import { ViewPane } from './shared/ViewPane';
@@ -56,6 +56,11 @@ const PC_CSS = `
 .pc-row img { image-rendering: pixelated; }
 .pc-row-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pc-row-state { color: #8fb0c6; font-size: 11px; }
+.pc-impact { display: grid; gap: 6px; justify-items: start; }
+.pc-impact-stage { width: var(--pc-frame-w); height: var(--pc-frame-h); background-image: var(--pc-sheet);
+  background-size: var(--pc-sheet-w) var(--pc-frame-h); background-position: var(--pc-offset) 0;
+  background-repeat: no-repeat; background-color: #3f6d2f; border: 1px solid rgba(96,140,170,.35);
+  border-radius: 4px; image-rendering: pixelated; }
 `;
 
 function CandidateSprite({
@@ -77,6 +82,60 @@ function CandidateSprite({
       splitMode="flat-contact"
       attrsFor={(half) => ({ 'data-prop-candidate': seat.key, 'data-half': half })}
     />
+  );
+}
+
+/**
+ * The impact sheet, under the hand. On the board this plays once and holds forever, which is
+ * right for the game and useless for judging art — you cannot see it twice without reloading the
+ * board. Here it loops, steps, and replays on demand at a readable size, which is the whole
+ * reason a Studio surface exists.
+ */
+function ImpactReview({ artId }: { artId: string }): ReactElement | null {
+  const sheet = useMemo(() => structureArtImpact(artId), [artId]);
+  const [frame, setFrame] = useState(0);
+  const [playing, setPlaying] = useState(true);
+  const [zoom, setZoom] = useState(4);
+  const frames = sheet?.frameCount ?? 0;
+
+  useEffect(() => {
+    if (!playing || frames < 2) return undefined;
+    const timer = window.setInterval(() => setFrame((current) => (current + 1) % frames), 110);
+    return () => window.clearInterval(timer);
+  }, [frames, playing]);
+
+  useEffect(() => { setFrame(0); setPlaying(true); }, [artId]);
+
+  if (!sheet) return <p className="pc-note">No impact sheet installed for this prop — it lands and looks the same.</p>;
+  const step = (delta: number): void => { setPlaying(false); setFrame((current) => (current + delta + frames) % frames); };
+  return (
+    <div className="pc-impact">
+      {/* Geometry travels as custom properties; every painted property lives in the stylesheet,
+          so this stays a registered surface rather than inline chrome. */}
+      <div
+        className="pc-impact-stage"
+        style={{
+          '--pc-frame-w': `${sheet.frameWidth * zoom}px`,
+          '--pc-frame-h': `${sheet.frameHeight * zoom}px`,
+          '--pc-sheet-w': `${sheet.frameWidth * sheet.frameCount * zoom}px`,
+          '--pc-offset': `-${frame * sheet.frameWidth * zoom}px`,
+          '--pc-sheet': `url(${sheet.src})`,
+        } as CSSProperties}
+      />
+      <div className="ps-toggles">
+        <button type="button" className="ps-toggle" onClick={() => { setFrame(0); setPlaying(true); }}>Play again</button>
+        <button type="button" className={`ps-toggle ${playing ? 'is-on' : ''}`} onClick={() => setPlaying((on) => !on)}>
+          {playing ? 'Pause' : 'Loop'}
+        </button>
+        <button type="button" className="ps-toggle" onClick={() => step(-1)}>◀</button>
+        <button type="button" className="ps-toggle" onClick={() => step(1)}>▶</button>
+      </div>
+      <label className="tileset-catalog-zoom">
+        <span>Zoom {zoom}×</span>
+        <input type="range" min={1} max={10} step={1} value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
+      </label>
+      <p className="pc-note">Frame {frame + 1} of {frames} · {sheet.frameWidth}×{sheet.frameHeight} · frame 1 is the resting rock, the last is what it keeps.</p>
+    </div>
   );
 }
 
@@ -115,7 +174,14 @@ export function PropCandidateLab({ propId, onPropId, header }: {
 
   useEffect(() => { void refresh(); }, [refresh]);
 
-  const reviewableProps = useMemo(() => catalog ? propsWithCandidates(catalog) : [], [catalog]);
+  // Reviewable means "has something here to look at": staged still art, an installed impact
+  // sheet, or both. A prop whose crack is live but whose art was settled long ago still needs to
+  // be reachable, or the sheet can only ever be watched by reloading a battle.
+  const reviewableProps = useMemo(() => {
+    const ids = new Set(catalog ? propsWithCandidates(catalog) : []);
+    for (const def of PROP_DEFS) if (structureArtImpact(def.spriteId)) ids.add(def.id);
+    return [...ids].sort();
+  }, [catalog]);
   const activeProp = reviewableProps.includes(propId) ? propId : (reviewableProps[0] ?? propId);
   const slots = useMemo(() => propCandidateSlots(activeProp), [activeProp]);
   const groups = useMemo(
@@ -335,6 +401,9 @@ export function PropCandidateLab({ propId, onPropId, header }: {
               </button>
             </div>
             {notice ? <p className="pc-note">{notice}</p> : null}
+            <h2>Impact</h2>
+            <ImpactReview artId={propDef(activeProp)?.spriteId ?? activeProp} />
+
             <p className="pc-note">Slots: {slots.join(' · ')}</p>
           </div>
         </section>
