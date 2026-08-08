@@ -14,7 +14,14 @@ import { useWars } from '../war/store';
 import { navigateApp } from './navigation';
 import { LevelPreviewColumn } from './LevelPreviewColumn';
 import { KitScroll } from './KitScroll';
-import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
+import { SettingsSection } from './shared/SettingsControls';
+// The Editor column's boxes are marble and its triggers are oak; both come from these
+// (see shared/EditorColumnControls), never from a raw SettingsRow/SettingsButton here.
+import {
+  EDITOR_COLUMN_CONTROL_FILL_SURFACE,
+  EditorButton,
+  EditorRow,
+} from './shared/EditorColumnControls';
 import { useConfirm } from './shared/ConfirmDialog';
 import { useDeleteKeyAction } from './shared/deleteKeyAction';
 import { useSceneParticipant } from './shell/SceneBoundary';
@@ -177,39 +184,39 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
               {status ? <p className="ce-status" role="status">{status}</p> : null}
               <SettingsSection title="Wars">
                 {!orderedWars.length && loaded ? (
-                  <SettingsRow title="No Wars yet" description="Create a War to begin building its ordered Battles." />
+                  <EditorRow title="No Wars yet" description="Create a War to begin building its ordered Battles." />
                 ) : null}
                 {orderedWars.map((war) => {
                   const selected = war.id === selectedWarId;
                   return (
-                    <SettingsRow
+                    <EditorRow
                       key={war.id}
                       eyebrow={war.origin === 'official' ? 'Official' : 'Private'}
                       title={war.name}
                       description={`${war.battles.length} ${war.battles.length === 1 ? 'Battle' : 'Battles'}`}
                       value={war.eligibleForRun ? <span>RUN</span> : undefined}
                     >
-                      <SettingsButton
+                      <EditorButton
                         tone={selected ? 'primary' : 'neutral'}
                         disabled={selected}
                         onClick={() => useWars.getState().selectWar(war.id)}
-                      >{selected ? 'Selected' : 'Select'}</SettingsButton>
-                    </SettingsRow>
+                      >{selected ? 'Selected' : 'Select'}</EditorButton>
+                    </EditorRow>
                   );
                 })}
-                <SettingsRow title="New War" description="Create another private War in this workspace.">
-                  <SettingsButton disabled={!userReady} onClick={() => useWars.getState().newWar(false)}>+ New War</SettingsButton>
-                </SettingsRow>
+                <EditorRow title="New War" description="Create another private War in this workspace.">
+                  <EditorButton disabled={!userReady} onClick={() => useWars.getState().newWar(false)}>+ New War</EditorButton>
+                </EditorRow>
                 {isAdmin ? (
-                  <SettingsRow title="New official War" description="Create a War for the published Run pool.">
-                    <SettingsButton disabled={!officialReady} onClick={() => useWars.getState().newWar(true)}>+ New Official War</SettingsButton>
-                  </SettingsRow>
+                  <EditorRow title="New official War" description="Create a War for the published Run pool.">
+                    <EditorButton disabled={!officialReady} onClick={() => useWars.getState().newWar(true)}>+ New Official War</EditorButton>
+                  </EditorRow>
                 ) : null}
               </SettingsSection>
               {selectedWar ? (
                 <>
                   <SettingsSection title="War">
-                    <SettingsRow title="Name" description="Shown when the War is selected for a Run.">
+                    <EditorRow title="Name" description="Shown when the War is selected for a Run.">
                       <input
                         className="ce-name-input"
                         value={selectedWar.name}
@@ -217,8 +224,8 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
                         aria-label="War name"
                         onChange={(event) => useWars.getState().renameWar(selectedWar.id, event.target.value)}
                       />
-                    </SettingsRow>
-                    <SettingsRow title="Description" description="The premise players see before choosing their opening hand." tall>
+                    </EditorRow>
+                    <EditorRow title="Description" description="The premise players see before choosing their opening hand." tall>
                       <textarea
                         className="ce-name-input war-description-input"
                         value={selectedWar.description}
@@ -226,9 +233,9 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
                         aria-label="War description"
                         onChange={(event) => useWars.getState().setWarDescription(selectedWar.id, event.target.value)}
                       />
-                    </SettingsRow>
+                    </EditorRow>
                     {selectedWar.origin === 'official' ? (
-                      <SettingsRow
+                      <EditorRow
                         title="Eligible for Run"
                         description="Includes this published War in the equal-odds main Run pool."
                         value={<span>{selectedWar.eligibleForRun ? 'Included' : 'Excluded'}</span>}
@@ -240,21 +247,22 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
                           aria-label="Eligible for Run"
                           onChange={(event) => useWars.getState().setWarEligible(selectedWar.id, event.target.checked)}
                         />
-                      </SettingsRow>
+                      </EditorRow>
                     ) : null}
                     <AtaraxiaSelector
                       value={ataraxiaTier}
                       highestUnlockedTier={highestUnlockedTier}
                       onChange={setAtaraxiaTier}
+                      fillSurface={EDITOR_COLUMN_CONTROL_FILL_SURFACE}
                     />
-                    <SettingsRow
+                    <EditorRow
                       title="Play this War"
                       description="Private Wars can be started directly here; only eligible official Wars enter the main pool."
                     >
-                      <SettingsButton disabled={!orderedBattles.length} onClick={() => void startSelectedWar()}>
+                      <EditorButton disabled={!orderedBattles.length} onClick={() => void startSelectedWar()}>
                         Start Run
-                      </SettingsButton>
-                    </SettingsRow>
+                      </EditorButton>
+                    </EditorRow>
                   </SettingsSection>
 
                   <SettingsSection title="Battles">
@@ -295,14 +303,14 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
                     </div>
                     {canEditSelected ? (
                       <div className="ce-section-action">
-                        <SettingsButton onClick={() => useWars.getState().addBattle(selectedWar.id)}>+ Add Battle</SettingsButton>
+                        <EditorButton onClick={() => useWars.getState().addBattle(selectedWar.id)}>+ Add Battle</EditorButton>
                       </div>
                     ) : null}
                   </SettingsSection>
 
                   {selectedLevel && selectedBattle ? (
                     <SettingsSection title="Battle">
-                      <SettingsRow
+                      <EditorRow
                         title="Loot"
                         description={isFinalBattle
                           ? 'The final Battle ends the War, so there is no following Sectio or lipsanon offer.'
@@ -316,27 +324,27 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
                           aria-label="Battle grants Loot"
                           onChange={(event) => useWars.getState().setBattleLoot(selectedLevel.id, event.target.checked)}
                         />
-                      </SettingsRow>
-                      <SettingsRow
+                      </EditorRow>
+                      <EditorRow
                         title="Battle position"
                         description={isFinalBattle ? 'The last ordered Battle is automatically the War end.' : 'Every non-final victory eventually opens the next Sectio.'}
                         value={<span>{selectedBattleIndex + 1} of {orderedBattles.length}</span>}
                       />
-                      <SettingsRow title="Delete Battle" description="Removes this Battle level from the War workspace.">
-                        <SettingsButton tone="danger" disabled={!canEditSelected} onClick={() => void confirmDeleteBattle(selectedLevel)}>Delete</SettingsButton>
-                      </SettingsRow>
+                      <EditorRow title="Delete Battle" description="Removes this Battle level from the War workspace.">
+                        <EditorButton tone="danger" disabled={!canEditSelected} onClick={() => void confirmDeleteBattle(selectedLevel)}>Delete</EditorButton>
+                      </EditorRow>
                     </SettingsSection>
                   ) : null}
 
                   <SettingsSection title="War Actions">
-                    <SettingsRow title="Delete War" description="Removes the War and its exclusive Battle levels on the next Save or Publish.">
-                      <SettingsButton tone="danger" disabled={!canEditSelected} onClick={() => void deleteSelectedWar()}>Delete War</SettingsButton>
-                    </SettingsRow>
+                    <EditorRow title="Delete War" description="Removes the War and its exclusive Battle levels on the next Save or Publish.">
+                      <EditorButton tone="danger" disabled={!canEditSelected} onClick={() => void deleteSelectedWar()}>Delete War</EditorButton>
+                    </EditorRow>
                   </SettingsSection>
                 </>
               ) : (
                 <SettingsSection title="War Editor">
-                  <SettingsRow title="No War selected" description="Select or create a War above." />
+                  <EditorRow title="No War selected" description="Select or create a War above." />
                 </SettingsSection>
               )}
             </div>

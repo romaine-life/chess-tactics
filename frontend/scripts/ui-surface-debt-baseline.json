@@ -534,14 +534,6 @@
       "kind": "css",
       "file": "src/style.css",
       "context": "",
-      "selector": ".ce-editor-level-row .settings-row-thumb",
-      "surfaceHash": "39704d540efd806440d672e63a9bd7d969093395df4492c0d475aff01489a6b4",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
       "selector": ".ce-editor-level-row.is-selected",
       "surfaceHash": "a66e6d9166c7087da1814672cb191c430f6f1e17046a5b1d8e8fa4537c4d9f56",
       "occurrence": 1

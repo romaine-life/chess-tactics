@@ -222,7 +222,7 @@ export function InnerChromeBox({
   children,
   ...props
 }: HTMLAttributes<HTMLElement> & {
-  as?: 'div' | 'span';
+  as?: 'div' | 'span' | 'section';
   /** Optional installed fill beneath the inner frame. The frame role stays
    * inner; only the surface material is borrowed from the named role/surface. */
   fillRole?: ChromeRole;

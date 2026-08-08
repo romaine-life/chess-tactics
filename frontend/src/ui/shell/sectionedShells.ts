@@ -8,6 +8,7 @@ import {
   type SceneSlotId,
 } from './sceneGraph';
 import { normalizeRoutePath } from '../navigation';
+import { editorCampaignIdFromSearch, editorCollectionFromLocation } from '../campaignEditorRoute';
 import { enchiridionSectionFromPath, enchiridionSectionPath } from '../enchiridionRoute';
 import { isPlaySelectorPath, playHubSectionPath, playHubSelection } from '../playHubRoute';
 import { isStrategikonPath, strategikonAddress, strategikonSectionPath } from '../strategikonRoute';
@@ -255,11 +256,13 @@ const enchiridionShell: SectionedShell = {
 // ---------------------------------------------------------------------------
 
 function campaignEditorSection(path: string, search: string): SectionedShellResolution {
-  if (normalizeRoutePath(path) === '/editor/wars') return { sectionId: 'wars' };
-  const params = new URLSearchParams(search);
-  const collection = params.get('collection');
+  // One grammar, read from the Editor's route module: the section identity and the panel the
+  // Editor renders must resolve the same address the same way, or a bare /editor names the
+  // campaign scene while showing Wars.
+  const collection = editorCollectionFromLocation(normalizeRoutePath(path), search);
+  if (collection === 'wars') return { sectionId: 'wars' };
   if (collection === 'unassigned') return { sectionId: 'unassigned' };
-  const campaignId = params.get('campaign')?.trim();
+  const campaignId = editorCampaignIdFromSearch(search);
   return campaignId ? { sectionId: 'campaign', params: { campaignId } } : { sectionId: 'campaign' };
 }
 

@@ -19098,18 +19098,37 @@ button.tileset-relationship-cell {
   min-height: 0;
 }
 
-/* A selectable level row (a role=button div over the shared .settings-row). */
-.ce-editor-level-row {
+/* A selectable level row (a role=button div over the shared .settings-row).
+
+   ONE framed box split into panes by the kit's registered divider — board preview | copy |
+   verbs — the treatment the Run's Battle preview wears. The preview used to be a SECOND inner
+   frame nested inside this one, and it did not fit: its own rails made the leading content
+   taller than this box's content area, so the grid track overflowed downward and every control
+   in the row sat ~15px above centre. Baking the preview into this box's geometry is what makes
+   the row centre correctly, so the two are one change, not two. */
+/* Two classes, so the narrow-width `.settings-row` rules that stack a settings row's copy over
+   its control cannot reassign this row's four panes. It does not stack: it is a fixed-height
+   card whose preview and verbs keep their places at every width. */
+.settings-row.ce-editor-level-row {
+  /* The content height (86px box less the 7px inner rail each side) at the board's 4:3 window.
+     Its twin is LEVEL_ROW_PREVIEW_WIDTH in shared/EditorLevelRow.tsx, which is what the
+     thumbnail is actually sized by; this track keeps the compartment from being squeezed
+     narrower than the board it holds when the column is tight. */
+  --ce-level-row-preview-inline: 96px;
   align-items: center;
   block-size: 86px;
   cursor: pointer;
   display: grid;
-  gap: 10px;
-  grid-template-areas: "thumb copy actions";
-  grid-template-columns: 78px minmax(0, 1fr) auto;
+  gap: 0;
+  grid-template-areas: "thumb rule copy actions";
+  grid-template-columns: var(--ce-level-row-preview-inline) auto minmax(0, 1fr) auto;
   min-block-size: 86px;
-  overflow: hidden;
-  padding: 12px 18px;
+  /* NOT clipped: the divider's authored T caps bleed onto this frame's side rails by design
+     (see `.kit-divider`), and a clip here would put them inside the frame. */
+  overflow: visible;
+  /* NO padding. The preview is a compartment of this box and reaches the frame on three sides;
+     the copy and the verbs carry their own inset instead. */
+  padding: 0;
 }
 
 /* Draft cards keep navigation and management controls as sibling buttons. This transparent
@@ -19122,7 +19141,8 @@ button.tileset-relationship-cell {
   background: transparent;
   border: 0;
   cursor: pointer;
-  grid-column: 1 / 3;
+  /* Preview, rule and copy — everything up to the verbs, which stay their own buttons. */
+  grid-column: 1 / 4;
   grid-row: 1;
   inline-size: 100%;
   min-block-size: 0;
@@ -19135,22 +19155,49 @@ button.tileset-relationship-cell {
   outline-offset: -2px;
 }
 
-.ce-editor-level-row.is-read-only {
-  grid-template-areas: "thumb copy";
-  grid-template-columns: 76px minmax(0, 1fr);
+.settings-row.ce-editor-level-row.is-read-only {
+  grid-template-areas: "thumb rule copy";
+  grid-template-columns: var(--ce-level-row-preview-inline) auto minmax(0, 1fr);
 }
 
-.ce-editor-level-row .settings-row-thumb {
-  --level-thumb-shell-width: 76px;
-  border-width: 5px;
-  border-image-width: 5px;
+/* The preview pane. LevelThumbnail owns the board's 4:3 window and is handed the width that
+   fills this box's content height (LEVEL_ROW_PREVIEW_WIDTH), so the compartment is exactly the
+   shape of the board it shows and reaches the frame on three sides. */
+.ce-editor-level-thumb {
+  align-self: stretch;
+  display: block;
   grid-area: thumb;
+  /* The clip would otherwise let this pane's automatic minimum size fall to zero, and a tight
+     column would squeeze the board out of its own compartment. */
+  min-inline-size: var(--ce-level-row-preview-inline);
+  overflow: hidden;
 }
 
+.ce-editor-level-thumb .settings-row-thumb-empty {
+  aspect-ratio: var(--board-view-aspect);
+  block-size: 100%;
+  display: block;
+}
+
+/* Divider host contract (see `.kit-divider`): the reach is supplied by the registered inner
+   role; the host only says the rule sits flush between its two panes. */
+.ce-editor-level-row > .action-list-leading-rule {
+  --kit-divider-gap: 0px;
+  grid-area: rule;
+}
+
+.ce-editor-level-row.is-disabled .ce-editor-level-thumb {
+  opacity: .5;
+}
+
+/* The box no longer pads itself (the preview reaches its frame), so the two text-bearing panes
+   carry the inset the row used to. */
 .ce-editor-level-copy {
   align-content: center;
   gap: 4px;
   grid-area: copy;
+  padding-block: 12px;
+  padding-inline: 14px;
 }
 
 .ce-editor-level-heading {
@@ -19180,9 +19227,15 @@ button.tileset-relationship-cell {
 }
 
 .ce-editor-level-row .ce-row-actions {
+  align-items: center;
   gap: 4px;
   grid-area: actions;
   justify-content: end;
+  /* The narrow-width rule for the legacy .ce-level-row layout stacks its verbs under the copy
+     and adds a top margin. This row does not stack, so that margin only pushes the verbs off
+     the row's centre line. */
+  margin-block: 0;
+  padding-inline-end: 14px;
   z-index: 2;
 }
 
