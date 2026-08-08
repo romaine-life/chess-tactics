@@ -331,8 +331,8 @@ import {
   type EditorDocumentEditSessionResult,
 } from '../net/editorDocuments';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
-import { LEVEL_BATTLE_CARDS_DEALT_MAX, LEVEL_BATTLE_CARDS_DEALT_MIN, OBJECTIVE_TYPES, ZONE_COLORS, zoneEntriesOnLevel, type CastleEventAction, type ChessDrawsEventAction, type ConditionSide, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
-import { RUN_DEPLOYMENT_BASE_DEAL } from '../run/model';
+import { LEVEL_BATTLE_CARDS_DEALT_DEFAULT, LEVEL_BATTLE_CARDS_DEALT_MAX, LEVEL_BATTLE_CARDS_DEALT_MIN, OBJECTIVE_TYPES, ZONE_COLORS, zoneEntriesOnLevel, type CastleEventAction, type ChessDrawsEventAction, type ConditionSide, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
+
 import { computeCastleTemplatePairs, type CastleTemplateUnit } from './castlingTemplate';
 import { MODE_NAME, DEFAULT_SURVIVE_TURNS, victoryRulesForObjective, kingSideOf } from '../core/objectives';
 import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, DEFAULT_TIME_CONTROL, formatClockSeconds, parseClockSeconds, stepLadder } from '../core/clock';
@@ -3578,9 +3578,9 @@ export function LevelEditor(): ReactElement {
   // The Deployment deal this War Battle authors — how many cards the player is dealt to field an
   // army on THIS board. Off by default: the level then defers to the Run's own progression. Seeded
   // like the clock, a restored draft ahead of the campaign level.
-  const initialCardsDealt = localDraft?.cardsDealt ?? initialCampaignLevel?.battle?.cardsDealt;
-  const [battleDealEnabled, setBattleDealEnabledState] = useState<boolean>(initialCardsDealt !== undefined);
-  const [battleCardsDealt, setBattleCardsDealtState] = useState<number>(initialCardsDealt ?? RUN_DEPLOYMENT_BASE_DEAL);
+  const [battleCardsDealt, setBattleCardsDealtState] = useState<number>(
+    localDraft?.cardsDealt ?? initialCampaignLevel?.battle?.cardsDealt ?? LEVEL_BATTLE_CARDS_DEALT_DEFAULT,
+  );
   // Victory conditions (ADR-0064): `victory` is the working win/lose lists — always the truth for
   // this level's outcome, edited in the RULES panel. Seeded from the objective preset for a level
   // that never customized them; a level stores `victory` only when the lists diverge from that
@@ -3636,7 +3636,6 @@ export function LevelEditor(): ReactElement {
   const setClockInitialSeconds = authorRulesField('clock', setClockInitialSecondsState);
   const setClockIncrementSeconds = authorRulesField('clock', setClockIncrementSecondsState);
   const setTemplateChoice = authorRulesField('templateChoice', setTemplateChoiceState);
-  const setBattleDealEnabled = authorRulesField('battleDeal', setBattleDealEnabledState);
   const setBattleCardsDealt = authorRulesField('battleDeal', setBattleCardsDealtState);
   const [quietDraftRestore] = useState(() => consumeNewBuildReloadIntent());
   const [statusLog, setStatusLog] = useState<StatusLogEntry[]>([]);
@@ -3773,8 +3772,7 @@ export function LevelEditor(): ReactElement {
       setClockIncrementSecondsState(seed.clock.incrementSeconds);
     }
     if (guarded.apply.battleDeal) {
-      setBattleDealEnabledState(seed.battleDeal.enabled);
-      setBattleCardsDealtState(seed.battleDeal.count);
+      setBattleCardsDealtState(seed.battleDeal);
     }
     if (guarded.apply.victory) setVictoryState(seed.victory);
     if (guarded.apply.events) setEventsState(seed.events);
@@ -5683,9 +5681,12 @@ export function LevelEditor(): ReactElement {
   const candidateMetadataSource = editorDocument?.level ?? initialTargetLevel;
   // The Battle block a Save writes: the document's own (the War editor's Loot flag, which this
   // editor only carries through) with this panel's authored Deployment deal folded in.
+  // A War Battle always authors its Deployment deal; nothing else is ever dealt cards, so nothing
+  // else may pick the field up merely by being opened here.
+  const isWarBattle = Boolean(routeParams.warId);
   const battleForSave = useMemo(
-    () => battleSettingsForSave(candidateMetadataSource?.battle, { enabled: battleDealEnabled, count: battleCardsDealt }),
-    [candidateMetadataSource, battleDealEnabled, battleCardsDealt],
+    () => battleSettingsForSave(candidateMetadataSource?.battle, isWarBattle ? battleCardsDealt : null),
+    [candidateMetadataSource, isWarBattle, battleCardsDealt],
   );
   const candidateLevel = useMemo(
     () => editorBoardToLevel(currentEditorBoard, {
@@ -5703,7 +5704,6 @@ export function LevelEditor(): ReactElement {
   );
   // Live playability (ADR-0050): the plain-language violation list the panel shows, and the gate on
   // Save. Recomputed from the candidate Level so it always matches what would persist. Pure.
-  const isWarBattle = Boolean(routeParams.warId);
   const playability = useMemo(
     () => isWarBattle ? validateWarBattlePlayability(candidateLevel) : validatePlayability(candidateLevel),
     [candidateLevel, isWarBattle],
@@ -10726,42 +10726,31 @@ export function LevelEditor(): ReactElement {
           </section>
 
           {/* Only a War Battle is ever dealt cards — a Campaign or standalone level is entered
-              with its authored army, so the control would be inert there. */}
+              with its authored army, so the control would be inert there. Every Battle carries a
+              count: there is no off, and Save is blocked until this level has one. */}
           {isWarBattle ? (
             <section className="skirmish-card">
               <h2>Deployment deal</h2>
               <div className="le-ctrlrow">
-                <span className="le-ctrllabel">Set the card count</span>
-                <Toggle
-                  checked={battleDealEnabled}
-                  label="Toggle this Battle’s own deal size"
-                  onChange={setBattleDealEnabled}
+                <span className="le-ctrllabel">Cards dealt</span>
+                <Stepper
+                  suffix=""
+                  decreaseLabel="Deal fewer cards on this Battle"
+                  increaseLabel="Deal more cards on this Battle"
+                  onDecrease={() => setBattleCardsDealt((v) => clampCardsDealt(v - 1))}
+                  onIncrease={() => setBattleCardsDealt((v) => clampCardsDealt(v + 1))}
+                  edit={{
+                    value: battleCardsDealt,
+                    min: LEVEL_BATTLE_CARDS_DEALT_MIN,
+                    format: (v) => String(v),
+                    parse: parseCardsDealt,
+                    onCommit: (v) => setBattleCardsDealt(clampCardsDealt(v)),
+                    ariaLabel: 'Cards dealt at Deployment',
+                  }}
                 />
               </div>
-              {battleDealEnabled ? (
-                <div className="le-ctrlrow">
-                  <span className="le-ctrllabel">Cards dealt</span>
-                  <Stepper
-                    suffix=""
-                    decreaseLabel="Deal fewer cards on this Battle"
-                    increaseLabel="Deal more cards on this Battle"
-                    onDecrease={() => setBattleCardsDealt((v) => clampCardsDealt(v - 1))}
-                    onIncrease={() => setBattleCardsDealt((v) => clampCardsDealt(v + 1))}
-                    edit={{
-                      value: battleCardsDealt,
-                      min: LEVEL_BATTLE_CARDS_DEALT_MIN,
-                      format: (v) => String(v),
-                      parse: parseCardsDealt,
-                      onCommit: (v) => setBattleCardsDealt(clampCardsDealt(v)),
-                      ariaLabel: 'Cards dealt at Deployment',
-                    }}
-                  />
-                </div>
-              ) : null}
               <p className="le-board-note">
-                {battleDealEnabled
-                  ? `This Battle always deals ${battleCardsDealt} card${battleCardsDealt === 1 ? '' : 's'} from the player’s collection, and they field only the units those cards carry. His Grace is always the first one dealt, so a deal of 1 sends the King in alone. Up to ${LEVEL_BATTLE_CARDS_DEALT_MAX}.`
-                  : `Off — this Battle deals whatever the run has grown to: ${RUN_DEPLOYMENT_BASE_DEAL} cards, plus one more for every Conflict already cleared. Turn this on to pin the deal to what this board has room for.`}
+                {`This Battle deals ${battleCardsDealt} card${battleCardsDealt === 1 ? '' : 's'} from the player’s collection, and they field only the units those cards carry. His Grace is always the first one dealt, so a deal of 1 sends the King in alone. Nothing else decides this — the counts across a War are the whole curve. From ${LEVEL_BATTLE_CARDS_DEALT_MIN} to ${LEVEL_BATTLE_CARDS_DEALT_MAX}.`}
               </p>
             </section>
           ) : null}

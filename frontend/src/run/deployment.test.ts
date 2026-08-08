@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createBlankLevel } from '../core/level';
+import { LEVEL_BATTLE_CARDS_DEALT_DEFAULT, createBlankLevel } from '../core/level';
 import {
   createRun,
   createRunCardOffer,
@@ -59,6 +59,7 @@ function fixture(
     )).flat(),
   }];
   level.layers.units.push({ x: Math.min(columns - 1, 1), y: 0, type: 'king', side: 'enemy' });
+  level.battle = { loot: false, cardsDealt: LEVEL_BATTLE_CARDS_DEALT_DEFAULT };
   const war: RunWarSnapshot = {
     id: 'formation-war',
     name: 'Formation War',
