@@ -14,6 +14,7 @@ const settingsControls = readFileSync(new URL('./shared/SettingsControls.tsx', i
 const apparatusRailTab = readFileSync(new URL('./shared/ApparatusRailTab.tsx', import.meta.url), 'utf8');
 const chromeSurfacePolicy = readFileSync(new URL('./shared/chromeSurfacePolicy.ts', import.meta.url), 'utf8');
 const actionList = readFileSync(new URL('./shared/ActionList.tsx', import.meta.url), 'utf8');
+const chromeBox = readFileSync(new URL('./shared/ChromeBox.tsx', import.meta.url), 'utf8');
 
 function expectTaggedLegacyControls(source: string, legacyClass: string, helper = 'chromeUnitClassNames('): void {
   const tags = source.match(new RegExp(`<(?:button|NavButton|ChromeButton|ChromeNavButton|div)\\b[\\s\\S]*?${legacyClass}[\\s\\S]*?>`, 'g')) ?? [];
@@ -78,7 +79,10 @@ describe('Main Menu chrome hierarchy', () => {
   });
 
   it('registers selectable levels and settings option rows as inner boxes', () => {
-    expect(settingsControls).toMatch(/function SettingsRow[\s\S]*?data-chrome-unit="inner-box"[\s\S]*?chromeUnitClassNames\('inner-box', 'settings-row'/);
+    // SettingsRow no longer hand-tags the unit. It composes the shared InnerChromeBox, which is
+    // what registers `inner-box` and carries the borrowed-fill plumbing the Editor column uses.
+    expect(settingsControls).toMatch(/function SettingsRow[\s\S]*?<InnerChromeBox[\s\S]*?settings-row/);
+    expect(chromeBox).toContain('data-chrome-unit="inner-box"');
     expect(playMenu.match(/<ActionList\b/g)).toHaveLength(2);
     expect(playMenu).toContain('className: `campaign-level-row ${!unlocked ? \'is-disabled\' : \'\'}`.trim()');
     expect(editorLevelRow).toContain('<ActionListRow item={{');

@@ -27,8 +27,17 @@ import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { useSceneParticipant } from './shell/SceneBoundary';
 import { ThumbnailSurface } from './shell/ThumbnailSurface';
 import { KitScroll } from './KitScroll';
-import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
+import { SettingsSection } from './shared/SettingsControls';
+// Every row and control on this screen comes from the Editor's chrome policy: marble boxes,
+// oak triggers — the rail's pinned footer verbs included, so they match the oak rail tabs
+// directly above them instead of reading as the one unpainted cluster on the screen.
+import {
+  EDITOR_COLUMN_CONTROL_FILL_SURFACE,
+  EditorButton,
+  EditorRow,
+} from './shared/EditorColumnControls';
 import { ApparatusRailColumn } from './shared/ApparatusRailTab';
+import { HouseSelect } from './shared/HouseSelect';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { LEVEL_NAME_MAX, normalizeLevelName } from './shared/levelNamePolicy';
 import {
@@ -56,10 +65,29 @@ import { levelEditorLevelSignature } from './levelEditorSignature';
 import { levelEditorClientLabel } from './levelEditorSessionPresentation';
 import { EditorCollectionRailTab } from './shared/EditorCollectionRailTab';
 import { EditorLevelRow, EditorRowIcon } from './shared/EditorLevelRow';
+import {
+  campaignCollectionHref,
+  editorCampaignHref,
+  editorCampaignIdFromSearch,
+  editorCollectionFromLocation,
+  type CampaignCollection,
+} from './campaignEditorRoute';
 import { WarEditor } from './WarEditor';
 import { navigateApp } from './navigation';
 import { ChromeButton, ChromeNavButton, IconButton } from './shared/ChromeButton';
 import { EditorContentSceneSlot } from './shell/AuthoredSceneSlot';
+
+// The address grammar lives in its own route module (the shell registry reads it too, and must
+// not pull this screen into the shell bundle). Re-exported here so the Editor stays the one
+// import for its own vocabulary.
+export {
+  campaignCollectionFromSearch,
+  campaignCollectionHref,
+  editorCampaignHref,
+  editorCampaignIdFromSearch,
+  editorCollectionFromLocation,
+  type CampaignCollection,
+} from './campaignEditorRoute';
 
 // The carved rail-tab icon, shared with the play-side Campaign section (PlayMenu.tsx) so a
 // campaign looks identical whether you're picking one to play or one to edit.
@@ -88,52 +116,6 @@ async function withRecentDraftEditingAuthority<T>(
   } finally {
     await closeEditorDocumentEditSession(document.document_id, opened.session.session_id, identity.sessionKey).catch(() => undefined);
   }
-}
-
-export type CampaignCollection = 'campaign' | 'wars' | 'unassigned';
-
-export function campaignCollectionFromSearch(search: string): CampaignCollection {
-  // A retired collection value resolves to Campaigns rather than 404ing, so an old
-  // bookmark of a withdrawn collection tab still lands somewhere real (ADR-0529).
-  return new URLSearchParams(search).get('collection') === 'unassigned' ? 'unassigned' : 'campaign';
-}
-
-export function campaignCollectionHref(href: string, collection: CampaignCollection): string {
-  const url = new URL(href, 'http://localhost');
-  if (collection === 'wars') {
-    url.pathname = '/editor/wars';
-    url.searchParams.delete('collection');
-    url.searchParams.delete('campaign');
-  } else {
-    if (url.pathname.replace(/\/+$/, '') === '/editor/wars') url.pathname = '/editor';
-    if (collection === 'campaign') {
-      url.searchParams.delete('collection');
-    } else {
-      url.searchParams.set('collection', collection);
-      url.searchParams.delete('campaign');
-    }
-  }
-  const query = url.searchParams.toString();
-  return `${url.pathname}${query ? `?${query}` : ''}${url.hash}`;
-}
-
-export function editorCampaignIdFromSearch(search: string): string | null {
-  return new URLSearchParams(search).get('campaign')?.trim() || null;
-}
-
-export function editorCampaignHref(href: string, campaignId: string): string {
-  const url = new URL(href, 'http://localhost');
-  url.pathname = '/editor';
-  url.searchParams.delete('collection');
-  url.searchParams.set('campaign', campaignId);
-  const query = url.searchParams.toString();
-  return `${url.pathname}${query ? `?${query}` : ''}${url.hash}`;
-}
-
-export function editorCollectionFromLocation(pathname: string, search: string): CampaignCollection {
-  return pathname.replace(/\/+$/, '') === '/editor/wars'
-    ? 'wars'
-    : campaignCollectionFromSearch(search);
 }
 
 function workspaceSignature(ws: { campaigns: Campaign[]; levels: Record<string, Level> }): string {
@@ -491,7 +473,7 @@ export function RecentDraftLevelRow({
           readOnly={busy}
           onChange={(event) => setRenameDraft(event.target.value)}
         />
-        <IconButton
+        <IconButton data-chrome-fill-surface={EDITOR_COLUMN_CONTROL_FILL_SURFACE}
           className="ce-draft-rename-button"
           aria-label={`Save name for ${name}`}
           title="Save name"
@@ -500,7 +482,7 @@ export function RecentDraftLevelRow({
             void commitRename();
           }}
         ><EditorRowIcon icon="save" /></IconButton>
-        <IconButton
+        <IconButton data-chrome-fill-surface={EDITOR_COLUMN_CONTROL_FILL_SURFACE}
           className="ce-draft-rename-button ce-draft-cancel-button"
           aria-label={`Cancel renaming ${name}`}
           title="Cancel"
@@ -530,7 +512,7 @@ export function RecentDraftLevelRow({
       heading={renameHeading}
       actions={(
         <>
-          <IconButton
+          <IconButton data-chrome-fill-surface={EDITOR_COLUMN_CONTROL_FILL_SURFACE}
             buttonRef={renameButtonRef}
             aria-label={`Rename ${name}`}
             title="Rename"
@@ -544,7 +526,7 @@ export function RecentDraftLevelRow({
               setActionError('');
             }}
           ><EditorRowIcon icon="pencil" /></IconButton>
-          <IconButton
+          <IconButton data-chrome-fill-surface={EDITOR_COLUMN_CONTROL_FILL_SURFACE}
             tone="danger"
             aria-label={document.never_saved ? `Delete unsaved ${name}` : `Discard changes to ${name}`}
             title={document.never_saved ? 'Delete unsaved level' : 'Discard changes'}
@@ -1137,11 +1119,11 @@ export function CampaignEditor({
                 collection scope): New Level · New Campaign · Import · Save · Publish · Sign-in ·
                 status. Starting a standalone level never requires a hydrated user workspace. */}
             <div className="ce-rail-actions">
-              <SettingsButton
+              <EditorButton
                 data-testid="new-level-shortcut"
                 href={`/editor/level?returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_UNASSIGNED_RETURN_TO)}`}
-              >+ New Level</SettingsButton>
-              <SettingsButton
+              >+ New Level</EditorButton>
+              <EditorButton
                 data-testid="new-campaign"
                 disabled={!userWorkspaceReady}
                 onClick={() => {
@@ -1154,9 +1136,9 @@ export function CampaignEditor({
                   }
                   if (createdCampaignId) navigateApp(editorCampaignHref('/editor', createdCampaignId));
                 }}
-              >+ New Campaign</SettingsButton>
-              <SettingsButton disabled={!userWorkspaceReady} onClick={() => importInputRef.current?.click()}>Import</SettingsButton>
-              <SettingsButton
+              >+ New Campaign</EditorButton>
+              <EditorButton disabled={!userWorkspaceReady} onClick={() => importInputRef.current?.click()}>Import</EditorButton>
+              <EditorButton
                 tone="primary"
                 data-testid="save-workspace"
                 disabled={!userWorkspaceReady || !userDirty || userSaveConflict}
@@ -1166,9 +1148,9 @@ export function CampaignEditor({
                   ? 'Your workspace must finish loading before it can be saved.'
                   : undefined}
                 onClick={() => void saveUserNow()}
-              >Save</SettingsButton>
+              >Save</EditorButton>
               {isAdmin && officialDirty ? (
-                <SettingsButton
+                <EditorButton
                   tone="primary"
                   data-testid="publish-officials"
                   disabled={!officialWorkspaceReady || officialSaveConflict}
@@ -1178,10 +1160,10 @@ export function CampaignEditor({
                     ? 'Official campaigns must finish loading before publishing.'
                     : undefined}
                   onClick={() => void publishOfficialNow()}
-                >Publish to all players</SettingsButton>
+                >Publish to all players</EditorButton>
               ) : null}
               {me && !me.signed_in ? (
-                <SettingsButton data-testid="campaign-sign-in" onClick={() => goSignIn()}>Sign in to save</SettingsButton>
+                <EditorButton data-testid="campaign-sign-in" onClick={() => goSignIn()}>Sign in to save</EditorButton>
               ) : null}
               {status ? <p className="ce-status" data-testid="workspace-status">{status}</p> : null}
               <input
@@ -1256,13 +1238,13 @@ export function CampaignEditor({
                     <>
                       <SettingsSection title="Campaign">
                         {campIsOfficial ? (
-                          <SettingsRow
+                          <EditorRow
                             title="Official campaign"
                             description={readOnly ? 'Read-only — published content. Sign in as an admin to edit.' : 'Editing the official, published campaign.'}
                             value={<span className="ce-official-badge">OFFICIAL</span>}
                           />
                         ) : null}
-                        <SettingsRow title="Name" description="Shown to players in the campaign list.">
+                        <EditorRow title="Name" description="Shown to players in the campaign list.">
                           <input
                             className="ce-name-input"
                             data-testid="campaign-name"
@@ -1271,10 +1253,10 @@ export function CampaignEditor({
                             aria-label="Campaign name"
                             onChange={(e) => useCampaigns.getState().renameCampaign(camp.id, e.target.value)}
                           />
-                        </SettingsRow>
-                        <SettingsRow title="Chapters" value={<span>{camp.chapters}</span>} />
-                        <SettingsRow title="Levels" value={<span>{camp.levels.length}</span>} />
-                        <SettingsRow title="Difficulty" value={<span>{camp.difficulty}</span>} />
+                        </EditorRow>
+                        <EditorRow title="Chapters" value={<span>{camp.chapters}</span>} />
+                        <EditorRow title="Levels" value={<span>{camp.levels.length}</span>} />
+                        <EditorRow title="Difficulty" value={<span>{camp.difficulty}</span>} />
                       </SettingsSection>
 
                       <SettingsSection title="Levels">
@@ -1301,14 +1283,14 @@ export function CampaignEditor({
                         </div>
                         {readOnly ? null : (
                           <div className="ce-section-action">
-                            <SettingsButton data-testid="add-level" onClick={() => useCampaigns.getState().addLevel()}>+ Add Level</SettingsButton>
+                            <EditorButton data-testid="add-level" onClick={() => useCampaigns.getState().addLevel()}>+ Add Level</EditorButton>
                           </div>
                         )}
                       </SettingsSection>
 
                       <SettingsSection title="Campaign Actions">
-                        <SettingsRow title="Duplicate" description="Copy this campaign and its levels into a new private campaign.">
-                          <SettingsButton
+                        <EditorRow title="Duplicate" description="Copy this campaign and its levels into a new private campaign.">
+                          <EditorButton
                             disabled={camp.origin === 'official' || readOnly}
                             onClick={() => {
                               const previousCampaignId = useCampaigns.getState().selectedCampaignId;
@@ -1319,19 +1301,19 @@ export function CampaignEditor({
                               }
                               if (duplicatedCampaignId) navigateApp(editorCampaignHref('/editor', duplicatedCampaignId));
                             }}
-                          >Duplicate</SettingsButton>
-                        </SettingsRow>
-                        <SettingsRow title="Export" description="Download the workspace (your campaigns + levels) as JSON.">
-                          <SettingsButton disabled={!userWorkspaceReady || !campaigns.length} onClick={exportWorkspace}>Export</SettingsButton>
-                        </SettingsRow>
-                        <SettingsRow title="Delete campaign" description="Remove this campaign from the workspace on the next save.">
-                          <SettingsButton tone="danger" disabled={readOnly} onClick={() => confirmDeleteCampaign(camp)}>Delete</SettingsButton>
-                        </SettingsRow>
+                          >Duplicate</EditorButton>
+                        </EditorRow>
+                        <EditorRow title="Export" description="Download the workspace (your campaigns + levels) as JSON.">
+                          <EditorButton disabled={!userWorkspaceReady || !campaigns.length} onClick={exportWorkspace}>Export</EditorButton>
+                        </EditorRow>
+                        <EditorRow title="Delete campaign" description="Remove this campaign from the workspace on the next save.">
+                          <EditorButton tone="danger" disabled={readOnly} onClick={() => confirmDeleteCampaign(camp)}>Delete</EditorButton>
+                        </EditorRow>
                       </SettingsSection>
                     </>
                   ) : (
                     <SettingsSection title="Editor">
-                      <SettingsRow
+                      <EditorRow
                         title="No campaign selected"
                         description="Levels live under Unassigned levels and Wars. Create a campaign with + New Campaign, or open an existing one by its address."
                       />
@@ -1355,26 +1337,32 @@ export function CampaignEditor({
               embedded={embedded}
               actions={(levelRef || isMetaCollectionSelected) ? (
                 <div className={`ce-preview-actions ${isUnassignedSelected ? 'has-assign' : ''}`.trim()}>
-                  <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} to={editHref}><span>Edit Board</span></ChromeNavButton>
-                  <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button ce-link-button-ghost')} to={playHref}><span>Test Play</span></ChromeNavButton>
+                  <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} data-chrome-fill-surface={EDITOR_COLUMN_CONTROL_FILL_SURFACE} to={editHref}><span>Edit Board</span></ChromeNavButton>
+                  <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button ce-link-button-ghost')} data-chrome-fill-surface={EDITOR_COLUMN_CONTROL_FILL_SURFACE} to={playHref}><span>Test Play</span></ChromeNavButton>
+                  {/* The house dropdown, not a native select: the registered control the
+                      Enchiridion's filters and the Ataraxia picker use, wearing the same oak
+                      as the verbs beside it. A native select cannot take the installed fill —
+                      its kit frame paints its own interior — and its menu is drawn by the OS. */}
                   {isUnassignedSelected ? (
-                    <label className="ce-assign-field">
-                      <span className="sr-only">Assign to campaign</span>
-                      <select
+                    <div className="ce-assign-field">
+                      <HouseSelect
                         value=""
+                        options={[
+                          {
+                            value: '',
+                            label: editableCampaignsForLevel.length === 0 ? 'No eligible campaigns' : 'Assign to campaign',
+                            disabled: true,
+                          },
+                          ...editableCampaignsForLevel.map((campaign) => ({ value: campaign.id, label: campaign.name })),
+                        ]}
+                        onChange={(campaignId) => { if (campaignId) assignSelectedUnassignedLevel(campaignId); }}
+                        ariaLabel="Assign to campaign"
                         disabled={editableCampaignsForLevel.length === 0}
                         title={editableCampaignsForLevel.length === 0 ? 'No editable campaign matches this level tier' : 'Assign selected level to campaign'}
-                        onChange={(event) => {
-                          const campaignId = event.currentTarget.value;
-                          if (campaignId) assignSelectedUnassignedLevel(campaignId);
-                        }}
-                      >
-                        <option value="">{editableCampaignsForLevel.length === 0 ? 'No eligible campaigns' : 'Assign to campaign'}</option>
-                        {editableCampaignsForLevel.map((campaign) => (
-                          <option key={campaign.id} value={campaign.id}>{campaign.name}</option>
-                        ))}
-                      </select>
-                    </label>
+                        testId="assign-to-campaign"
+                        fillSurface={EDITOR_COLUMN_CONTROL_FILL_SURFACE}
+                      />
+                    </div>
                   ) : null}
                 </div>
               ) : null}
