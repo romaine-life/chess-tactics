@@ -478,22 +478,6 @@
       "kind": "css",
       "file": "src/style.css",
       "context": "",
-      "selector": ".ce-assign-field option",
-      "surfaceHash": "e8ea813411619e3ce5facdd94302ef41841e0500e38fa7969015d74612bdc0ca",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
-      "selector": ".ce-assign-field select",
-      "surfaceHash": "f1a7d0907541028ad7a7839f181cb2643417524447a1fa6d52ae56a3cc62687a",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
       "selector": ".ce-campaign-row-meta",
       "surfaceHash": "99bf0d9b5168ec64f9e34a462ea83fd08868ddb26b9ed70edb205d90bcc7eb3f",
       "occurrence": 1
@@ -528,14 +512,6 @@
       "context": "",
       "selector": ".ce-editor-level-row .ce-icon-button",
       "surfaceHash": "cad12da093fc25b6e55eeeef55013abfa0b572b9336534098e869adc77ad59ea",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
-      "selector": ".ce-editor-level-row .settings-row-thumb",
-      "surfaceHash": "39704d540efd806440d672e63a9bd7d969093395df4492c0d475aff01489a6b4",
       "occurrence": 1
     },
     {

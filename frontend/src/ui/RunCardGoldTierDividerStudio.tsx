@@ -8,12 +8,30 @@ import {
   useRunCardGoldTierDividerSource,
   type RunCardGoldTierCoinTuning,
 } from './shared/RunCardGoldTierDivider';
+import {
+  RUN_CARD_COIN_MARK_FILL,
+  RUN_CARD_COIN_MARK_LIMITS,
+  useRunCardCostCrownCandidates,
+} from './shared/runCardCostCrown';
+import { RunCard } from './RunCard';
+import { RUN_STARTER_CARD_BY_ID } from '../run/model';
 import { StudioCatalogCard } from './studio/StudioCatalogCard';
 
 const DRAFT_KEY = 'studio.runCardGoldTierDivider.coinDraft.v1';
+const MARK_DRAFT_KEY = 'studio.runCardGoldTierDivider.markDraft.v1';
 
 function sameTuning(left: RunCardGoldTierCoinTuning, right: RunCardGoldTierCoinTuning): boolean {
   return left.size === right.size && left.x === right.x && left.y === right.y;
+}
+
+function readMarkDraft(): number {
+  if (typeof window === 'undefined') return RUN_CARD_COIN_MARK_FILL;
+  const value = Number(window.localStorage.getItem(MARK_DRAFT_KEY));
+  return Number.isInteger(value)
+    && value >= RUN_CARD_COIN_MARK_LIMITS.fill.min
+    && value <= RUN_CARD_COIN_MARK_LIMITS.fill.max
+    ? value
+    : RUN_CARD_COIN_MARK_FILL;
 }
 
 function readDraft(): RunCardGoldTierCoinTuning {
@@ -73,22 +91,41 @@ export function RunCardGoldTierDividerViewer({
   viewerZoom: number;
 }): ReactElement {
   const source = useRunCardGoldTierDividerSource();
+  const marks = useRunCardCostCrownCandidates();
   const [baseline, setBaseline] = useState<RunCardGoldTierCoinTuning>({ ...RUN_CARD_GOLD_TIER_COIN_DEFAULTS });
   const [tuning, setTuning] = useState<RunCardGoldTierCoinTuning>(readDraft);
+  const [markBaseline, setMarkBaseline] = useState(RUN_CARD_COIN_MARK_FILL);
+  const [markFill, setMarkFill] = useState(readMarkDraft);
+  const [markVersionId, setMarkVersionId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('Reset uses the Git-owned geometry currently rendered by Cards and Chartulary.');
+
+  // Nothing is selected until the catalog answers, so the instrument opens on whatever the
+  // runtime actually installed rather than on an arbitrary candidate.
+  const selectedMark = marks.candidates.find((candidate) => candidate.versionId === markVersionId)
+    ?? marks.candidates.find((candidate) => candidate.installed)
+    ?? marks.candidates[0]
+    ?? null;
+  const markUrl = selectedMark?.url ?? null;
 
   useEffect(() => {
     window.localStorage.setItem(DRAFT_KEY, JSON.stringify(tuning));
   }, [tuning]);
+
+  useEffect(() => {
+    window.localStorage.setItem(MARK_DRAFT_KEY, String(markFill));
+  }, [markFill]);
 
   const update = useCallback((patch: Partial<RunCardGoldTierCoinTuning>): void => {
     setTuning((current) => ({ ...current, ...patch }));
     setStatus('Draft changed. Save defaults to hand these exact pixels to the runtime.');
   }, []);
 
+  const dirty = !sameTuning(tuning, baseline) || markFill !== markBaseline;
+
   const resetAll = (): void => {
     setTuning({ ...baseline });
+    setMarkFill(markBaseline);
     setStatus('Draft reset to the runtime defaults.');
   };
 
@@ -97,10 +134,12 @@ export function RunCardGoldTierDividerViewer({
     setBusy(true);
     setStatus('Saving runtime defaults…');
     try {
-      const saved = await saveRunCardGoldTierDividerGeometry({ coin: tuning });
+      const saved = await saveRunCardGoldTierDividerGeometry({ coin: tuning, mark: { fill: markFill } });
       const next = { ...saved.coin };
       setBaseline(next);
       setTuning(next);
+      setMarkBaseline(saved.mark.fill);
+      setMarkFill(saved.mark.fill);
       setStatus('Saved. Cards and Chartulary now use these defaults; Vite will refresh the imported geometry.');
     } catch (reason) {
       setStatus(reason instanceof Error ? `Save failed: ${reason.message}` : 'Save failed.');
@@ -110,7 +149,7 @@ export function RunCardGoldTierDividerViewer({
   };
 
   const copy = async (): Promise<void> => {
-    await navigator.clipboard.writeText(JSON.stringify({ coin: tuning }, null, 2));
+    await navigator.clipboard.writeText(JSON.stringify({ coin: tuning, mark: { fill: markFill } }, null, 2));
     setStatus('Copied the current geometry JSON.');
   };
 
@@ -141,6 +180,50 @@ export function RunCardGoldTierDividerViewer({
               <div className="run-card-gold-tier-divider-studio-crop-content">
                 <RunCardGoldTierDivider value={1} source={source} coinTuning={tuning} />
               </div>
+            </div>
+          </figure>
+          {/* Every generated mark on the two coins it is actually struck on, at the sizes they
+              print at. Judging one candidate per address made the coins impossible to compare
+              and made the fill a number tuned outside the owner's hands (ADR-0530). */}
+          <figure className="run-card-coin-mark-study" data-testid="run-card-coin-mark-study">
+            <figcaption>
+              Struck mark · {marks.status === 'loading' ? 'reading candidates…' : `${marks.candidates.length} candidate${marks.candidates.length === 1 ? '' : 's'}`}
+              {marks.message ? ` · ${marks.message}` : ''}
+            </figcaption>
+            <div className="tileset-studio-grid pages-grid run-card-coin-mark-study-row">
+              {marks.candidates.map((candidate) => (
+                <StudioCatalogCard
+                  key={candidate.versionId}
+                  title={candidate.label}
+                  badge={candidate.installed ? 'Installed' : 'Candidate'}
+                  selected={candidate.versionId === selectedMark?.versionId}
+                  onSelect={() => setMarkVersionId(candidate.versionId)}
+                  titleText={`Strike ${candidate.label} on the coin`}
+                  // The card's thumbnail slot sizes every img to an iso tile, which is right for
+                  // a tile and wrong for live components. These specimens are real coins, so they
+                  // take the text slot and keep their own layout.
+                  showImage={false}
+                  textExtra={(
+                    <span className="run-card-coin-mark-option-specimen" data-testid="run-card-coin-mark-option">
+                      <RunCardGoldTierDivider
+                        value="starter"
+                        source={source}
+                        coinTuning={tuning}
+                        crownUrl={candidate.url}
+                        markFill={markFill}
+                      />
+                      <span className="run-card-coin-mark-option-card">
+                        <RunCard
+                          card={RUN_STARTER_CARD_BY_ID['his-grace']}
+                          mode="reference"
+                          crownUrl={candidate.url}
+                          markFill={markFill}
+                        />
+                      </span>
+                    </span>
+                  )}
+                />
+              ))}
             </div>
           </figure>
         </div>
@@ -177,23 +260,40 @@ export function RunCardGoldTierDividerViewer({
                 dflt={baseline.y}
               />
             </div>
+            <div data-testid="run-card-coin-mark-fill-control">
+              <SliderRow
+                label={<>Struck mark · {markFill}% of coin</>}
+                value={markFill}
+                set={(fill) => {
+                  setMarkFill(fill);
+                  setStatus('Draft changed. Save defaults to hand these exact pixels to the runtime.');
+                }}
+                {...RUN_CARD_COIN_MARK_LIMITS.fill}
+                dflt={markBaseline}
+              />
+            </div>
             <button
               type="button"
               className="tileset-view-action"
               data-testid="run-card-gold-tier-divider-save"
-              disabled={busy || sameTuning(tuning, baseline)}
+              disabled={busy || !dirty}
               onClick={() => { void save(); }}
             >
               {busy ? 'Saving…' : 'Save runtime defaults'}
             </button>
-            <button type="button" className="tileset-view-action" disabled={sameTuning(tuning, baseline)} onClick={resetAll}>Reset all</button>
+            <button type="button" className="tileset-view-action" disabled={!dirty} onClick={resetAll}>Reset all</button>
             <button type="button" className="tileset-view-action" onClick={() => { void copy(); }}>Copy tuning JSON</button>
           </div>
           <dl>
             <div><dt>Size</dt><dd>{tuning.size}px</dd></div>
             <div><dt>X</dt><dd>{tuning.x}px from divider left</dd></div>
             <div><dt>Y</dt><dd>{tuning.y}px from divider top</dd></div>
+            <div><dt>Mark</dt><dd>{markFill}% of the drawn coin</dd></div>
+            <div><dt>Showing</dt><dd>{selectedMark ? `${selectedMark.label}${selectedMark.installed ? ' (installed)' : ' (candidate)'}` : 'no mark uploaded'}</dd></div>
           </dl>
+          {markUrl && !selectedMark?.installed ? (
+            <p>This mark is a candidate. Accept it in Live Media to install it.</p>
+          ) : null}
           <p role="status">{status}</p>
         </section>
       </aside>

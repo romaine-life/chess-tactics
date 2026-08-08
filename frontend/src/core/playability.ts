@@ -6,7 +6,7 @@
 // whole-workspace PUT carries legacy levels; one broken level must not brick the rest),
 // so this module is the single owner of the P1–P5 rule set. Pure + deterministic.
 
-import type { Level, Roster } from './level';
+import { LEVEL_BATTLE_CARDS_DEALT_MAX, LEVEL_BATTLE_CARDS_DEALT_MIN, type Level, type Roster } from './level';
 import type { PieceType } from './types';
 import { PLAYABLE_PIECE_TYPES, isPlayablePieceType } from './pieces';
 import { MODE_NAME, ruleOutcome } from './objectives';
@@ -325,6 +325,17 @@ export function validateWarBattlePlayability(level: Level): PlayabilityResult {
     ordinary.push({
       code: 'W2_DEPLOYMENT_ZONES_OVERLAP',
       message: `Run army and enemy deployment zones overlap on ${deploymentOverlap} tile${deploymentOverlap === 1 ? '' : 's'} — they must not share tiles.`,
+    });
+  }
+  // Nothing decides the deal but this level, so a Battle without one cannot be dealt a hand at
+  // all. It is unfinished rather than untuned, and saving it would put a War one Battle away
+  // from being unable to start a Run.
+  const cardsDealt = level.battle?.cardsDealt;
+  if (typeof cardsDealt !== 'number' || !Number.isInteger(cardsDealt)
+    || cardsDealt < LEVEL_BATTLE_CARDS_DEALT_MIN || cardsDealt > LEVEL_BATTLE_CARDS_DEALT_MAX) {
+    ordinary.push({
+      code: 'W4_BATTLE_CARDS_DEALT',
+      message: `Run Battle needs its Deployment deal set, from ${LEVEL_BATTLE_CARDS_DEALT_MIN} to ${LEVEL_BATTLE_CARDS_DEALT_MAX} cards.`,
     });
   }
   return { ok: ordinary.length === 0, violations: ordinary };

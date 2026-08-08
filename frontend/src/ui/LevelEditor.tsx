@@ -331,14 +331,15 @@ import {
   type EditorDocumentEditSessionResult,
 } from '../net/editorDocuments';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
-import { OBJECTIVE_TYPES, ZONE_COLORS, zoneEntriesOnLevel, type CastleEventAction, type ChessDrawsEventAction, type ConditionSide, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
+import { LEVEL_BATTLE_CARDS_DEALT_DEFAULT, LEVEL_BATTLE_CARDS_DEALT_MAX, LEVEL_BATTLE_CARDS_DEALT_MIN, OBJECTIVE_TYPES, ZONE_COLORS, zoneEntriesOnLevel, type CastleEventAction, type ChessDrawsEventAction, type ConditionSide, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
+
 import { computeCastleTemplatePairs, type CastleTemplateUnit } from './castlingTemplate';
 import { MODE_NAME, DEFAULT_SURVIVE_TURNS, victoryRulesForObjective, kingSideOf } from '../core/objectives';
 import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, DEFAULT_TIME_CONTROL, formatClockSeconds, parseClockSeconds, stepLadder } from '../core/clock';
 import { validatePlayability, validateWarBattlePlayability } from '../core/playability';
 import { PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import { effectiveLevelEvents, normalizeLevelEvents } from '../core/levelEvents';
-import { guardRulesSeed, levelRulesSeed, seededBaselineLevel, type AuthoredRulesField, type LevelRulesSeed } from './levelEditorRulesSeed';
+import { battleSettingsForSave, guardRulesSeed, levelRulesSeed, seededBaselineLevel, type AuthoredRulesField, type LevelRulesSeed } from './levelEditorRulesSeed';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 
 type BoardUnitPlacement = {
@@ -350,6 +351,17 @@ type BoardUnitPlacement = {
 type MoveSubject =
   | { kind: 'unit'; x: number; y: number }
   | { kind: 'prop'; x: number; y: number; propId: string };
+
+// The authored Deployment deal is a whole card count inside the schema's bounds — the stepper's
+// keys and its typed field both land here, so neither can write a level the validator rejects.
+const clampCardsDealt = (value: number): number => Math.min(
+  LEVEL_BATTLE_CARDS_DEALT_MAX,
+  Math.max(LEVEL_BATTLE_CARDS_DEALT_MIN, Math.round(value)),
+);
+const parseCardsDealt = (raw: string): number | null => {
+  const parsed = Number.parseInt(raw.trim(), 10);
+  return Number.isFinite(parsed) ? parsed : null;
+};
 
 type FencePaintTarget = 'rail' | 'post';
 type FenceVertexCorner = 'back' | 'right' | 'front' | 'left';
@@ -3575,6 +3587,12 @@ export function LevelEditor(): ReactElement {
   );
   const [clockInitialSeconds, setClockInitialSecondsState] = useState<number>(initialTimeControl?.initialSeconds ?? DEFAULT_TIME_CONTROL.initialSeconds);
   const [clockIncrementSeconds, setClockIncrementSecondsState] = useState<number>(initialTimeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds);
+  // The Deployment deal this War Battle authors — how many cards the player is dealt to field an
+  // army on THIS board. Off by default: the level then defers to the Run's own progression. Seeded
+  // like the clock, a restored draft ahead of the campaign level.
+  const [battleCardsDealt, setBattleCardsDealtState] = useState<number>(
+    localDraft?.cardsDealt ?? initialCampaignLevel?.battle?.cardsDealt ?? LEVEL_BATTLE_CARDS_DEALT_DEFAULT,
+  );
   // Victory conditions (ADR-0064): `victory` is the working win/lose lists — always the truth for
   // this level's outcome, edited in the RULES panel. Seeded from the objective preset for a level
   // that never customized them; a level stores `victory` only when the lists diverge from that
@@ -3630,6 +3648,7 @@ export function LevelEditor(): ReactElement {
   const setClockInitialSeconds = authorRulesField('clock', setClockInitialSecondsState);
   const setClockIncrementSeconds = authorRulesField('clock', setClockIncrementSecondsState);
   const setTemplateChoice = authorRulesField('templateChoice', setTemplateChoiceState);
+  const setBattleCardsDealt = authorRulesField('battleDeal', setBattleCardsDealtState);
   const [quietDraftRestore] = useState(() => consumeNewBuildReloadIntent());
   const [statusLog, setStatusLog] = useState<StatusLogEntry[]>([]);
   const statusLogSeq = useRef(0);
@@ -3763,6 +3782,9 @@ export function LevelEditor(): ReactElement {
       setClockEnabledState(seed.clock.enabled);
       setClockInitialSecondsState(seed.clock.initialSeconds);
       setClockIncrementSecondsState(seed.clock.incrementSeconds);
+    }
+    if (guarded.apply.battleDeal) {
+      setBattleCardsDealtState(seed.battleDeal);
     }
     if (guarded.apply.victory) setVictoryState(seed.victory);
     if (guarded.apply.events) setEventsState(seed.events);
@@ -5692,6 +5714,15 @@ export function LevelEditor(): ReactElement {
   // + mode meta. Both the playability gate and the Save serialize from THIS, so what the violation
   // list judges is precisely what would be written.
   const candidateMetadataSource = editorDocument?.level ?? initialTargetLevel;
+  // The Battle block a Save writes: the document's own (the War editor's Loot flag, which this
+  // editor only carries through) with this panel's authored Deployment deal folded in.
+  // A War Battle always authors its Deployment deal; nothing else is ever dealt cards, so nothing
+  // else may pick the field up merely by being opened here.
+  const isWarBattle = Boolean(routeParams.warId);
+  const battleForSave = useMemo(
+    () => battleSettingsForSave(candidateMetadataSource?.battle, isWarBattle ? battleCardsDealt : null),
+    [candidateMetadataSource, isWarBattle, battleCardsDealt],
+  );
   const candidateLevel = useMemo(
     () => editorBoardToLevel(currentEditorBoard, {
       id: editingId ?? 'draft',
@@ -5701,14 +5732,13 @@ export function LevelEditor(): ReactElement {
       difficulty: candidateMetadataSource?.difficulty,
       economy: candidateMetadataSource?.economy,
       theme: candidateMetadataSource?.theme,
-      battle: candidateMetadataSource?.battle,
+      battle: battleForSave,
       previousTerrain: candidateMetadataSource?.layers.terrain,
     }),
-    [candidateMetadataSource, currentEditorBoard, editingId, levelNameForSave, modeMeta],
+    [candidateMetadataSource, battleForSave, currentEditorBoard, editingId, levelNameForSave, modeMeta],
   );
   // Live playability (ADR-0050): the plain-language violation list the panel shows, and the gate on
   // Save. Recomputed from the candidate Level so it always matches what would persist. Pure.
-  const isWarBattle = Boolean(routeParams.warId);
   const playability = useMemo(
     () => isWarBattle ? validateWarBattlePlayability(candidateLevel) : validatePlayability(candidateLevel),
     [candidateLevel, isWarBattle],
@@ -6092,6 +6122,7 @@ export function LevelEditor(): ReactElement {
       objective,
       surviveTurns,
       timeControl: clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined,
+      cardsDealt: battleForSave?.cardsDealt,
       victory: victoryForSave,
       events: eventsForSave,
     };
@@ -10746,6 +10777,36 @@ export function LevelEditor(): ReactElement {
             <p className="le-board-note">How this level is won, lost, deployed, and promoted. {victory.length} victory event{victory.length === 1 ? '' : 's'} and {otherEvents.length} other event{otherEvents.length === 1 ? '' : 's'} set.</p>
             <ChromeButton unit="inner-text-button" ref={eventsOpenButtonRef} className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-events-open')} disabled={eventsOpen} onClick={() => openEventsEditor(isWarBattle ? 'deployment' : 'victory')}>Open rules editor</ChromeButton>
           </section>
+
+          {/* Only a War Battle is ever dealt cards — a Campaign or standalone level is entered
+              with its authored army, so the control would be inert there. Every Battle carries a
+              count: there is no off, and Save is blocked until this level has one. */}
+          {isWarBattle ? (
+            <section className="skirmish-card">
+              <h2>Deployment deal</h2>
+              <div className="le-ctrlrow">
+                <span className="le-ctrllabel">Cards dealt</span>
+                <Stepper
+                  suffix=""
+                  decreaseLabel="Deal fewer cards on this Battle"
+                  increaseLabel="Deal more cards on this Battle"
+                  onDecrease={() => setBattleCardsDealt((v) => clampCardsDealt(v - 1))}
+                  onIncrease={() => setBattleCardsDealt((v) => clampCardsDealt(v + 1))}
+                  edit={{
+                    value: battleCardsDealt,
+                    min: LEVEL_BATTLE_CARDS_DEALT_MIN,
+                    format: (v) => String(v),
+                    parse: parseCardsDealt,
+                    onCommit: (v) => setBattleCardsDealt(clampCardsDealt(v)),
+                    ariaLabel: 'Cards dealt at Deployment',
+                  }}
+                />
+              </div>
+              <p className="le-board-note">
+                {`This Battle deals ${battleCardsDealt} card${battleCardsDealt === 1 ? '' : 's'} from the player’s collection, and they field only the units those cards carry. His Grace is always the first one dealt, so a deal of 1 sends the King in alone. Nothing else decides this — the counts across a War are the whole curve. From ${LEVEL_BATTLE_CARDS_DEALT_MIN} to ${LEVEL_BATTLE_CARDS_DEALT_MAX}.`}
+              </p>
+            </section>
+          ) : null}
 
           <section className="skirmish-card">
             <h2>Battle clock</h2>

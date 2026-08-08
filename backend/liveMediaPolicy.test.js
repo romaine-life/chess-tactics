@@ -23,6 +23,8 @@ const {
   LIPSANON_ICON_COMPONENT,
   LIPSANON_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
   RUN_CARD_COST_COIN_COMPONENT,
+  RUN_CARD_COST_CROWN_COMPONENT,
+  RUN_CARD_COST_CROWN_SLOT,
   RUN_CARD_GOLD_TIER_DIVIDER_COMPONENT,
   RUN_CARD_GOLD_TIER_DIVIDER_PROOF_RENDERER,
   RUN_CARD_GOLD_TIER_DIVIDER_PROOF_SCHEMA,
@@ -65,6 +67,8 @@ const {
   runLipsanonIconSlotId,
   runCardCostCoinMediaIssue,
   runCardCostCoinSlot,
+  runCardCostCrownMediaIssue,
+  runCardCostCrownSlot,
   runCardGoldTierDividerMediaIssue,
   runCardGoldTierDividerOwnerProofIssue,
   runCardGoldTierDividerSlot,
@@ -484,6 +488,48 @@ test('Run card cost coin projection binds the transparent native coin to its one
   })), /variant must be gold/);
   assert.match(runCardCostCoinMediaIssue(runCardCostCoin({
     metadata: { runtime: { ...row.metadata.runtime, altText: 'Gold coin' } },
+  })), /altText must be empty/);
+});
+
+function runCardCostCrown(overrides = {}) {
+  return {
+    slot: RUN_CARD_COST_CROWN_SLOT,
+    domain: 'ui-kit',
+    role: 'icon',
+    media_type: 'image/png',
+    width: 64,
+    height: 64,
+    metadata: {
+      runtime: {
+        component: RUN_CARD_COST_CROWN_COMPONENT,
+        variant: 'crown',
+        frameWidth: 64,
+        frameHeight: 64,
+        frameCount: 1,
+        nativeRole: RUN_CARD_COST_CROWN_COMPONENT,
+        altText: '',
+      },
+    },
+    ...overrides,
+  };
+}
+
+test('Run card cost crown binds the priceless-coin mark to its own slot and native size', () => {
+  const row = runCardCostCrown();
+  assert.equal(runCardCostCrownSlot(row.slot), true);
+  assert.equal(runCardCostCrownMediaIssue(row), null);
+  // The mark is its own semantic media, not a second coin: the coin's own slot and 112px
+  // geometry must not admit it, and it must not admit the coin's.
+  assert.equal(runCardCostCrownSlot('ui/run/card-prototypes/cost-coin-v1.png'), false);
+  assert.equal(runCardCostCoinSlot(RUN_CARD_COST_CROWN_SLOT), false);
+  assert.match(runCardCostCrownMediaIssue(runCardCostCrown({ width: 112, height: 112 })), /native 64x64/);
+  assert.match(runCardCostCrownMediaIssue(runCardCostCrown({ domain: 'review-media' })), /ui-kit domain/);
+  assert.match(runCardCostCrownMediaIssue(runCardCostCrown({ role: 'media' })), /icon role/);
+  assert.match(runCardCostCrownMediaIssue(runCardCostCrown({
+    metadata: { runtime: { ...row.metadata.runtime, variant: 'gold' } },
+  })), /variant must be crown/);
+  assert.match(runCardCostCrownMediaIssue(runCardCostCrown({
+    metadata: { runtime: { ...row.metadata.runtime, altText: 'Crown' } },
   })), /altText must be empty/);
 });
 

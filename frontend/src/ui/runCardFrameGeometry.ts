@@ -377,6 +377,9 @@ export function runCardFrameGeometryVariables(
     // the card's height. A percentage of a height cannot be arithmetic with the flavour's own size,
     // and dividing the panel between the diagram and the flavour is exactly that arithmetic.
     ['--run-card-contents-block', `${((geometry.boxes.contents.height / geometry.sourceWidth) * 100).toFixed(4)}cqw`],
+    // The coin's flat striking face, so a mark struck on the coin is sized against the metal it
+    // lands on rather than against the cost box that surrounds it.
+    ['--run-card-coin-face', `${RUN_CARD_COIN_FACE_CQW}cqw`],
   ]);
 }
 
