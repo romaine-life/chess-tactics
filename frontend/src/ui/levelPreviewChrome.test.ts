@@ -10,7 +10,9 @@ const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 describe('campaign level preview chrome', () => {
   it('uses the registered inner-box primitive for both preview boxes', () => {
     expect(preview).toContain('<InnerChromeBox className="ce-preview-frame">');
-    expect(info).toContain('<InnerChromeBox className="ce-level-info"');
+    // The consumer may compose an extra class onto the readout, but the registered inner-box
+    // primitive and the `ce-level-info` role class are not negotiable.
+    expect(info).toMatch(/<InnerChromeBox\s+className=\{`ce-level-info \$\{className\}`\.trim\(\)\}/);
   });
 
   it('does not restore either deprecated local preview frame', () => {
