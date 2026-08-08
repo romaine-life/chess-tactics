@@ -12,9 +12,7 @@
     {
       "id": "p",
       "title": "The Volunteer",
-      "pieces": [
-        "pawn"
-      ],
+      "pieces": ["pawn"],
       "historicalAnchor": "year-without-a-summer-1816",
       "eyeConcealment": "A worn felt hat casts an unbroken summer-noon shadow across the eye line while the lower face remains visible.",
       "sceneDirection": "One field hand stands at a muddy road after leaving frost-burned summer crops. A hoe remains against an improvised cloth-covered seed bed; the figure now carries an ordinary levy spear and a small travel bundle. The choice has already been made, but there is no departure spectacle and no audience.",
@@ -23,11 +21,8 @@
     {
       "id": "pp",
       "title": "Two Good Boots",
-      "pieces": [
-        "pawn",
-        "pawn"
-      ],
-      "historicalAnchor": "siege-of-orleans-1429",
+      "pieces": ["pawn", "pawn"],
+      "historicalAnchor": "lijssenthoek-remy-farm-wwi",
       "eyeConcealment": "Low work caps, wet hair, and rain shadow hide both eye regions without hiding either face.",
       "sceneDirection": "Two ordinary laborers pause ankle-deep on a rain-cut farm road, one carrying folded linen and the other two water buckets. Their boots are conspicuously sound while the road, cart ruts, and washed-out verge are not. Pale farm walls and a distant line of blank grave markers remain peripheral residue.",
       "generationDisposition": "pending"
@@ -35,9 +30,7 @@
     {
       "id": "b",
       "title": "Wandering Preacher",
-      "pieces": [
-        "bishop"
-      ],
+      "pieces": ["bishop"],
       "historicalAnchor": "jerusalem-second-temple-70-ce",
       "eyeConcealment": "A deep travel hood and the hard shadow of a ruined lintel erase the eyes while lamplight reaches the nose and mouth.",
       "sceneDirection": "One itinerant cleric rests beside a road leaving a pale ruined sanctuary district, carrying a covered scroll bundle, an oil lamp, and no visible insignia. A teaching bench has been improvised beside an empty threshold. The sacred center is gone; instruction has become portable.",
@@ -46,10 +39,8 @@
     {
       "id": "k",
       "title": "Errant Rider",
-      "pieces": [
-        "knight"
-      ],
-      "historicalAnchor": "siege-of-orleans-1429",
+      "pieces": ["knight"],
+      "historicalAnchor": "lijssenthoek-remy-farm-wwi",
       "eyeConcealment": "The rider's helmet brow and the horse's windblown mane cross the eye line; the face remains three-quarter and otherwise visible.",
       "sceneDirection": "One mounted courier has stopped at a wet farm junction beside an empty cart track and a low platform stacked with covered crates. The horse is tired rather than dramatic. The rider holds an unreadable folded dispatch and appears uncertain which practical route continues onward.",
       "generationDisposition": "pending"
@@ -57,11 +48,7 @@
     {
       "id": "ppp",
       "title": "Farmhand Levy",
-      "pieces": [
-        "pawn",
-        "pawn",
-        "pawn"
-      ],
+      "pieces": ["pawn", "pawn", "pawn"],
       "historicalAnchor": "year-without-a-summer-1816",
       "eyeConcealment": "Three different straw hats cast broad shadows over three front or three-quarter faces; no figure relies on a rear view.",
       "sceneDirection": "Three farm workers finish tying cloth over frost-damaged summer rows before collecting plain levy poles from a barn wall. Flowers and white frost occupy the same field. Their work and muster are treated as adjacent obligations, not as the beginning of an adventure.",
@@ -70,10 +57,7 @@
     {
       "id": "pb",
       "title": "Pilgrim's Escort",
-      "pieces": [
-        "pawn",
-        "bishop"
-      ],
+      "pieces": ["pawn", "bishop"],
       "historicalAnchor": "jerusalem-second-temple-70-ce",
       "eyeConcealment": "The porter squints beneath a wrapped headcloth lost in road glare; the cleric's cowl keeps the eyes in soft shadow.",
       "sceneDirection": "One porter and one cleric travel away from an ash-darkened empty threshold with a water jar, covered teaching bundle, and small pack animal. They are not arriving anywhere important. The road and the objects have inherited functions the ruined sanctuary can no longer perform.",
@@ -82,11 +66,8 @@
     {
       "id": "pk",
       "title": "Squire's Errand",
-      "pieces": [
-        "pawn",
-        "knight"
-      ],
-      "historicalAnchor": "siege-of-orleans-1429",
+      "pieces": ["pawn", "knight"],
+      "historicalAnchor": "lijssenthoek-remy-farm-wwi",
       "eyeConcealment": "A stable eave shades the foot attendant's eyes; the mounted retainer's shallow helmet shades theirs from the opposite angle.",
       "sceneDirection": "One young stable attendant hands a sealed but unreadable packet to one mounted retainer beside a pale farm building. Buckets, folded blankets, and a waiting handcart imply a larger system outside the frame. The errand is administrative, urgent only in the way ordinary care can be urgent.",
       "generationDisposition": "pending"
@@ -94,12 +75,7 @@
     {
       "id": "pppp",
       "title": "Ragged Column",
-      "pieces": [
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn"
-      ],
+      "pieces": ["pawn", "pawn", "pawn", "pawn"],
       "historicalAnchor": "jerusalem-second-temple-70-ce",
       "eyeConcealment": "Dust, wrapped hair, lowered brows, and the shadow from carried bundles obscure four differently oriented eye lines.",
       "sceneDirection": "Four common travelers follow a broken pale-stone road beyond an abandoned checkpoint, carrying jars, bedding, tools, and one small lamp. Their clothing is worn but not theatrical. The column is simply the shape ordinary survival takes after a center has failed.",
@@ -108,11 +84,7 @@
     {
       "id": "ppb",
       "title": "Country Parish",
-      "pieces": [
-        "pawn",
-        "pawn",
-        "bishop"
-      ],
+      "pieces": ["pawn", "pawn", "bishop"],
       "historicalAnchor": "dissolution-of-the-monasteries",
       "eyeConcealment": "Two workers stand beneath hat brims while the cleric's eyes disappear in the narrow shade of a stripped chapel arch.",
       "sceneDirection": "Two villagers and one cleric repair a low field wall using stone taken from an emptied religious house. A basket of grave flowers, plain cloth, and candle soot survive near the threshold. The parish continues through maintenance rather than ceremony.",
@@ -121,12 +93,8 @@
     {
       "id": "ppk",
       "title": "Outrider Patrol",
-      "pieces": [
-        "pawn",
-        "pawn",
-        "knight"
-      ],
-      "historicalAnchor": "siege-of-orleans-1429",
+      "pieces": ["pawn", "pawn", "knight"],
+      "historicalAnchor": "lijssenthoek-remy-farm-wwi",
       "eyeConcealment": "Rain-dark caps hide the two walkers' eyes; the rider's face is side-lit below a helmet brim but the eye band remains dark.",
       "sceneDirection": "Two road laborers and one mounted outrider inspect a flooded farm lane beside poplars, hedge gaps, and a broken wheel. The patrol looks for passable ground, not enemies. A canvas hut and folded white linen are visible far behind the field boundary.",
       "generationDisposition": "pending"
@@ -134,13 +102,7 @@
     {
       "id": "ppppp",
       "title": "Village Muster",
-      "pieces": [
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn"
-      ],
+      "pieces": ["pawn", "pawn", "pawn", "pawn", "pawn"],
       "historicalAnchor": "year-without-a-summer-1816",
       "eyeConcealment": "Five varied caps, shawls, and hat brims interrupt the eye line while leaving a mixture of frontal and profile faces.",
       "sceneDirection": "Five villagers gather beneath a barn eave between half-dried hay, thin grain sacks, covered seedlings, and summer smoke from a stove. They carry ordinary poles, rope, and tools rather than matching weapons. The muster could be for weather, road repair, or war; the image declines to decide.",
@@ -149,9 +111,7 @@
     {
       "id": "r",
       "title": "The Watchtower",
-      "pieces": [
-        "rook"
-      ],
+      "pieces": ["rook"],
       "historicalAnchor": "jerusalem-second-temple-70-ce",
       "eyeConcealment": "The lone watchkeeper is seen frontally inside a bright slit window, but the heavy stone reveal casts the entire brow into darkness.",
       "sceneDirection": "One watchkeeper occupies a scarred pale-stone tower above an abandoned road checkpoint. No army is visible. Sealed bundles, a water jar, and repair mortar below suggest that observation has become another form of administration after conquest.",
@@ -160,10 +120,7 @@
     {
       "id": "bb",
       "title": "Matins and Vespers",
-      "pieces": [
-        "bishop",
-        "bishop"
-      ],
+      "pieces": ["bishop", "bishop"],
       "historicalAnchor": "dissolution-of-the-monasteries",
       "eyeConcealment": "Opposing window light leaves both hooded eye regions unreadable while revealing the lower faces at different times of day.",
       "sceneDirection": "Two clerics occupy opposite ends of a stripped chapel, one extinguishing a morning lamp while the other lights an evening candle. Between them stand a covered table, soot marks, weeds, and an opening where a gate once hung. The institution is absent but the hours remain.",
@@ -172,10 +129,7 @@
     {
       "id": "kb",
       "title": "Sword and Censer",
-      "pieces": [
-        "knight",
-        "bishop"
-      ],
+      "pieces": ["knight", "bishop"],
       "historicalAnchor": "jerusalem-second-temple-70-ce",
       "eyeConcealment": "A nasal helmet divides the rider's shadowed eye band; incense haze and a cowl soften the cleric's eye region without hiding the face.",
       "sceneDirection": "One mounted retainer and one cleric wait beside a disused imperial checkpoint. A sheathed sword, an unlit censer, covered scrolls, and a road marker share the same practical table. Neither figure performs authority; the objects merely remember it.",
@@ -184,11 +138,8 @@
     {
       "id": "kk",
       "title": "Thundering Lances",
-      "pieces": [
-        "knight",
-        "knight"
-      ],
-      "historicalAnchor": "siege-of-orleans-1429",
+      "pieces": ["knight", "knight"],
+      "historicalAnchor": "lijssenthoek-remy-farm-wwi",
       "eyeConcealment": "Both riders face three-quarter beneath rain-beaded helmet brims; the eyes disappear against the dark road sky.",
       "sceneDirection": "Two mounted couriers have halted rather than charged on a plank-repaired farm road after heavy rain. Their grounded lances serve as route poles beside a covered cart rut and washed-out ditch. Distant canvas roofs imply unseen traffic behind the line.",
       "generationDisposition": "pending"
@@ -196,12 +147,7 @@
     {
       "id": "pppb",
       "title": "Shepherd's Flock",
-      "pieces": [
-        "pawn",
-        "pawn",
-        "pawn",
-        "bishop"
-      ],
+      "pieces": ["pawn", "pawn", "pawn", "bishop"],
       "historicalAnchor": "year-without-a-summer-1816",
       "eyeConcealment": "Cold-weather caps and wool hoods hide four eye bands; side light keeps cheeks and mouths human and visible.",
       "sceneDirection": "Three shepherds and one cleric coax thin sheep into a barn during wrong-season cold. Frost lies among summer flowers; feed sacks are visibly scarce. The cleric holds a plain tally board without readable marks and works as another pair of hands.",
@@ -210,13 +156,8 @@
     {
       "id": "pppk",
       "title": "Banneret's Retinue",
-      "pieces": [
-        "pawn",
-        "pawn",
-        "pawn",
-        "knight"
-      ],
-      "historicalAnchor": "siege-of-orleans-1429",
+      "pieces": ["pawn", "pawn", "pawn", "knight"],
+      "historicalAnchor": "lijssenthoek-remy-farm-wwi",
       "eyeConcealment": "Three work caps, one shallow helm, and the diagonal shadow of a furled blank banner conceal the four eye lines.",
       "sceneDirection": "Three handlers and one mounted banneret organize blankets, water cans, and a covered handcart in a wet farmyard. A furled, unreadable banner is treated as stored equipment rather than identity. The retinue's labor matters more than its rank.",
       "generationDisposition": "pending"
@@ -224,14 +165,7 @@
     {
       "id": "pppppp",
       "title": "The Long March",
-      "pieces": [
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn"
-      ],
+      "pieces": ["pawn", "pawn", "pawn", "pawn", "pawn", "pawn"],
       "historicalAnchor": "jerusalem-second-temple-70-ce",
       "eyeConcealment": "Travel wraps, dust, hair, and low sun conceal six eye regions across a deliberate mix of frontal, profile, and rear-quarter poses.",
       "sceneDirection": "Six displaced common travelers extend along an old road from a ruined sanctuary district, carrying domestic vessels, tools, bedding, and teaching bundles. The group is weary but not staged as suffering. The road continues past the frame without destination.",
@@ -240,10 +174,7 @@
     {
       "id": "pr",
       "title": "Gatekeeper's Watch",
-      "pieces": [
-        "pawn",
-        "rook"
-      ],
+      "pieces": ["pawn", "rook"],
       "historicalAnchor": "dissolution-of-the-monasteries",
       "eyeConcealment": "The laborer's hat brim and the gatekeeper's deep portcullis shadow conceal both eye lines while both figures face into the scene.",
       "sceneDirection": "One laborer and one gatekeeper stand at an abbey gate whose doors have been removed. A practical fence now crosses the broken arch, and reused stone waits in a cart. Watching and rebuilding have become indistinguishable duties.",
@@ -252,11 +183,7 @@
     {
       "id": "pbb",
       "title": "Synod on the Road",
-      "pieces": [
-        "pawn",
-        "bishop",
-        "bishop"
-      ],
+      "pieces": ["pawn", "bishop", "bishop"],
       "historicalAnchor": "jerusalem-second-temple-70-ce",
       "eyeConcealment": "The porter's wrapped brow and two clerical cowls keep all eyes absent while a low oil lamp illuminates hands and lower faces.",
       "sceneDirection": "One porter and two clerics hold a small council at a roadside teaching bench beyond an empty sacred courtyard. Covered scrolls, a water basin, and travel jars replace monumental ritual. The meeting looks provisional enough to dissolve when the lamp is packed.",
@@ -265,11 +192,7 @@
     {
       "id": "pkb",
       "title": "Little Crusade",
-      "pieces": [
-        "pawn",
-        "knight",
-        "bishop"
-      ],
+      "pieces": ["pawn", "knight", "bishop"],
       "historicalAnchor": "jerusalem-second-temple-70-ce",
       "eyeConcealment": "A broad cap, lowered helmet brow, and rough cowl make three visible faces eyeless without turning them from the viewer.",
       "sceneDirection": "One foot attendant, one mounted retainer, and one cleric rest beside the cold remains of an abandoned camp near a repaired city wall. Their banner is blank and furled; the fire is ash. The title's grand claim is undercut by the smallness of the actual company.",
@@ -278,12 +201,8 @@
     {
       "id": "pkk",
       "title": "Vanguard Escort",
-      "pieces": [
-        "pawn",
-        "knight",
-        "knight"
-      ],
-      "historicalAnchor": "siege-of-orleans-1429",
+      "pieces": ["pawn", "knight", "knight"],
+      "historicalAnchor": "lijssenthoek-remy-farm-wwi",
       "eyeConcealment": "The walking guide's rain hood and two riders' helmet brims conceal their eyes under the shadow of a covered wagon canopy.",
       "sceneDirection": "One foot guide and two mounted escorts wait beside a covered wagon on a muddy farm approach. The load is never revealed. White linen, a water pail, and cart tracks make protection feel logistical rather than martial.",
       "generationDisposition": "pending"
@@ -291,13 +210,7 @@
     {
       "id": "ppppb",
       "title": "Harvest Blessing",
-      "pieces": [
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "bishop"
-      ],
+      "pieces": ["pawn", "pawn", "pawn", "pawn", "bishop"],
       "historicalAnchor": "year-without-a-summer-1816",
       "eyeConcealment": "Four field hats and one clerical hood create a varied rhythm of shadowed eye bands around a pale central table.",
       "sceneDirection": "Four workers and one cleric sort frost-damaged grain beneath weak summer light. Thin sheaves, covered baskets, and a bowl of seed occupy a plain table. The blessing is indistinguishable from counting what can still be planted.",
@@ -306,13 +219,7 @@
     {
       "id": "ppppk",
       "title": "Country Cavalcade",
-      "pieces": [
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "knight"
-      ],
+      "pieces": ["pawn", "pawn", "pawn", "pawn", "knight"],
       "historicalAnchor": "year-without-a-summer-1816",
       "eyeConcealment": "Four workers use hats, shawls, and windblown hair; the rider's eyes vanish beneath a wet helmet rim.",
       "sceneDirection": "Four field workers and one mounted retainer move feed sacks, a handcart, and a reluctant horse along a cold summer road. Frosted blossoms and chimney smoke make the season quietly wrong. The cavalcade is a supply problem, not a parade.",
@@ -321,15 +228,7 @@
     {
       "id": "ppppppp",
       "title": "Seven Stout Hearts",
-      "pieces": [
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn"
-      ],
+      "pieces": ["pawn", "pawn", "pawn", "pawn", "pawn", "pawn", "pawn"],
       "historicalAnchor": "year-without-a-summer-1816",
       "eyeConcealment": "Seven distinct work coverings obscure the eye line—caps, brims, shawls, hair, and eave shadow—without arranging a row of backs.",
       "sceneDirection": "Seven villagers brace and repair a storm-struck barn around livestock kept indoors during summer cold. Their poses are practical and interdependent. A strip of bright flowers beyond the doorway makes the wrong weather more visible rather than more sentimental.",
@@ -338,11 +237,7 @@
     {
       "id": "ppr",
       "title": "Border Garrison",
-      "pieces": [
-        "pawn",
-        "pawn",
-        "rook"
-      ],
+      "pieces": ["pawn", "pawn", "rook"],
       "historicalAnchor": "jerusalem-second-temple-70-ce",
       "eyeConcealment": "Two road workers wear wrapped headcloths; the watchkeeper stands beneath a crenellation shadow that cuts across the eyes.",
       "sceneDirection": "Two laborers and one watchkeeper maintain an abandoned imperial checkpoint at the edge of cultivated land. They reset road stones, fill a water jar, and seal plain bundles. The border survives as upkeep long after the procession of power has left.",
@@ -351,10 +246,7 @@
     {
       "id": "br",
       "title": "Cloister and Keep",
-      "pieces": [
-        "bishop",
-        "rook"
-      ],
+      "pieces": ["bishop", "rook"],
       "historicalAnchor": "dissolution-of-the-monasteries",
       "eyeConcealment": "The cleric's cowl and the keeper's parapet shadow erase both eye regions while the two faces remain in opposing profile.",
       "sceneDirection": "One cleric and one fortified keeper stand where an empty cloister walk meets a heavy reused gatehouse. Herb beds continue beside quarried stone and a practical fence. Neither sacred nor defensive ownership fully explains the place anymore.",
@@ -363,10 +255,7 @@
     {
       "id": "kr",
       "title": "Castellan's Sally",
-      "pieces": [
-        "knight",
-        "rook"
-      ],
+      "pieces": ["knight", "rook"],
       "historicalAnchor": "dissolution-of-the-monasteries",
       "eyeConcealment": "A riding helmet and the gatehouse's overhanging beam hold both visible eye lines in dense architectural shadow.",
       "sceneDirection": "One mounted retainer and one gatekeeper step out from a former abbey gatehouse at first light to inspect a broken boundary fence. The horse is walking; the weapon remains sheathed. The supposed sally is routine property maintenance through displaced stone.",
@@ -375,13 +264,8 @@
     {
       "id": "ppbb",
       "title": "Traveling Chapel",
-      "pieces": [
-        "pawn",
-        "pawn",
-        "bishop",
-        "bishop"
-      ],
-      "historicalAnchor": "siege-of-orleans-1429",
+      "pieces": ["pawn", "pawn", "bishop", "bishop"],
+      "historicalAnchor": "lijssenthoek-remy-farm-wwi",
       "eyeConcealment": "A wagon canopy, two work caps, and two soft cowls conceal four eye lines while hands and faces remain readable as human forms.",
       "sceneDirection": "Two attendants and two clerics arrange a mobile care station inside a covered farm wagon: lamp, basin, linen, flowers, and a plain folding table. No icon or inscription identifies it. Ritual and treatment have become portable because the larger structure is elsewhere or gone.",
       "generationDisposition": "pending"
@@ -389,12 +273,7 @@
     {
       "id": "ppkb",
       "title": "Wayfarers' Compact",
-      "pieces": [
-        "pawn",
-        "pawn",
-        "knight",
-        "bishop"
-      ],
+      "pieces": ["pawn", "pawn", "knight", "bishop"],
       "historicalAnchor": "jerusalem-second-temple-70-ce",
       "eyeConcealment": "Two wrapped brows, one helmet brim, and one hood create four distinct eye shadows around the same roadside table.",
       "sceneDirection": "Two porters, one mounted traveler, and one cleric divide water, feed, lamp oil, and covered papers at a road station beyond a ruined city edge. Their compact is visible only through measured shares and packed objects. No oath or destination is shown.",
@@ -403,13 +282,8 @@
     {
       "id": "ppkk",
       "title": "Escort of Lances",
-      "pieces": [
-        "pawn",
-        "pawn",
-        "knight",
-        "knight"
-      ],
-      "historicalAnchor": "siege-of-orleans-1429",
+      "pieces": ["pawn", "pawn", "knight", "knight"],
+      "historicalAnchor": "lijssenthoek-remy-farm-wwi",
       "eyeConcealment": "Two rain caps and two low helmet brims hide all eyes beneath the broad shadow of a tarpaulin-covered load.",
       "sceneDirection": "Two handlers and two mounted escorts stand beside a tarpaulin-covered wagon at a rail-side farm crossing. Their grounded lances prop a damaged awning rather than threaten anyone. Wet grass, white cloth, and crate stacks imply the unseen work continuing beyond the frame.",
       "generationDisposition": "pending"
@@ -417,14 +291,7 @@
     {
       "id": "pppppb",
       "title": "Tithe Procession",
-      "pieces": [
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "bishop"
-      ],
+      "pieces": ["pawn", "pawn", "pawn", "pawn", "pawn", "bishop"],
       "historicalAnchor": "dissolution-of-the-monasteries",
       "eyeConcealment": "Basket rims, cloth hoods, broad hats, and the chapel doorway's shadow interrupt six eye lines without obscuring every face.",
       "sceneDirection": "Five villagers and one cleric carry baskets, plain cloth, tools, and grain past a stripped abbey wall. The goods may be arriving, leaving, or being inventoried. A broken arch and cultivated garden quietly outlast the institution that once named the movement.",
@@ -433,15 +300,8 @@
     {
       "id": "pppppk",
       "title": "Field Marshal's Levy",
-      "pieces": [
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "knight"
-      ],
-      "historicalAnchor": "siege-of-orleans-1429",
+      "pieces": ["pawn", "pawn", "pawn", "pawn", "pawn", "knight"],
+      "historicalAnchor": "lijssenthoek-remy-farm-wwi",
       "eyeConcealment": "Five caps and scarves sit below a barn eave; the mounted organizer's helmet brow remains dark against the overcast sky.",
       "sceneDirection": "Five laborers and one mounted organizer arrange carts, shovels, water cans, and folded canvas in a rain-washed supply yard. No ranks are saluting and no battle is visible. The marshal's authority consists of knowing which practical load moves first.",
       "generationDisposition": "pending"
@@ -449,16 +309,7 @@
     {
       "id": "pppppppp",
       "title": "The Full Furrow",
-      "pieces": [
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn"
-      ],
+      "pieces": ["pawn", "pawn", "pawn", "pawn", "pawn", "pawn", "pawn", "pawn"],
       "historicalAnchor": "year-without-a-summer-1816",
       "eyeConcealment": "Eight figures face varied directions beneath hats and cold-weather wraps; pale fog removes eye detail from the more distant faces.",
       "sceneDirection": "Eight workers stretch across one complete furrow, covering seedlings, draining cold water, and salvaging frost-damaged plants beneath a dim summer sun. The labor forms a strong horizontal rhythm without becoming a military rank. A green valley remains beautiful around the failed season.",
@@ -467,12 +318,7 @@
     {
       "id": "pppr",
       "title": "Rampart Detail",
-      "pieces": [
-        "pawn",
-        "pawn",
-        "pawn",
-        "rook"
-      ],
+      "pieces": ["pawn", "pawn", "pawn", "rook"],
       "historicalAnchor": "jerusalem-second-temple-70-ce",
       "eyeConcealment": "Dusty work hats hide three eye lines; the keeper's eyes disappear beneath the repeating shadow of the wall merlons.",
       "sceneDirection": "Three laborers and one fortified keeper repair an ash-stained city rampart with reused blocks, mortar, and a rope hoist. An abandoned road arch and sealed storage jars sit below. The detail preserves infrastructure whose original promise is no longer available.",
@@ -481,11 +327,7 @@
     {
       "id": "bbb",
       "title": "Ecumenical Council",
-      "pieces": [
-        "bishop",
-        "bishop",
-        "bishop"
-      ],
+      "pieces": ["bishop", "bishop", "bishop"],
       "historicalAnchor": "jerusalem-second-temple-70-ce",
       "eyeConcealment": "Three differently cut cowls and one low hanging lamp keep the council's eye regions dark while their hands and lower faces remain distinct.",
       "sceneDirection": "Three clerics confer around a modest table in a borrowed domestic room after a sacred center has vanished. Covered scroll bundles, an oil lamp, storage jars, and an empty fourth chair replace monumental ceremony. The council is important only because it can fit anywhere.",
@@ -494,11 +336,7 @@
     {
       "id": "kbb",
       "title": "Blessed Charger",
-      "pieces": [
-        "knight",
-        "bishop",
-        "bishop"
-      ],
+      "pieces": ["knight", "bishop", "bishop"],
       "historicalAnchor": "dissolution-of-the-monasteries",
       "eyeConcealment": "The rider's eyes lie beneath a lowered helmet plate; two clerics' cowl shadows are deepened by the old stable roof.",
       "sceneDirection": "One mounted retainer and two clerics tend a horse at the stable approach of an emptied monastery. A mounting block, hitching post, herb basket, and stripped stone niche survive without ceremony. The blessing is expressed through grooming, water, and careful tack.",
@@ -507,12 +345,8 @@
     {
       "id": "kkb",
       "title": "Chaplain of the Charge",
-      "pieces": [
-        "knight",
-        "knight",
-        "bishop"
-      ],
-      "historicalAnchor": "siege-of-orleans-1429",
+      "pieces": ["knight", "knight", "bishop"],
+      "historicalAnchor": "lijssenthoek-remy-farm-wwi",
       "eyeConcealment": "Two helmet brims and one hood vanish into tent shadow; lamplight reaches the three lower faces from below without revealing eyes.",
       "sceneDirection": "Two mounted messengers and one cleric pause outside a canvas care tent beside basins, folded cloth, and an empty covered stretcher. Their horses stand quietly. The charge exists only as traffic passing through an ordinary system of tending and records.",
       "generationDisposition": "pending"
@@ -520,11 +354,7 @@
     {
       "id": "kkk",
       "title": "Full Gallop",
-      "pieces": [
-        "knight",
-        "knight",
-        "knight"
-      ],
+      "pieces": ["knight", "knight", "knight"],
       "historicalAnchor": "year-without-a-summer-1816",
       "eyeConcealment": "Wind-whipped cloaks, wet helmet brims, and cold mist cover three eye lines while the riders remain visible in profile and three-quarter view.",
       "sceneDirection": "Three mounted travelers have been forced to halt at a flooded summer crossing beneath a grey-yellow sky. One tests the water, one steadies a feed sack, and one studies the road ahead. The title describes the speed they expected, not the motion the image grants them.",
@@ -533,11 +363,7 @@
     {
       "id": "pbr",
       "title": "Church and Castle",
-      "pieces": [
-        "pawn",
-        "bishop",
-        "rook"
-      ],
+      "pieces": ["pawn", "bishop", "rook"],
       "historicalAnchor": "dissolution-of-the-monasteries",
       "eyeConcealment": "A broad work hat, narrow cowl, and gatehouse crossbeam create three aligned but differently textured eye shadows.",
       "sceneDirection": "One laborer, one cleric, and one fortified keeper occupy a place where a stripped chapel wall has been incorporated into a working castle boundary. Flowers grow beside mortar tubs and a covered ledger. Sacred and military stone have become the same practical material.",
@@ -546,12 +372,8 @@
     {
       "id": "pkr",
       "title": "Sortie at Dawn",
-      "pieces": [
-        "pawn",
-        "knight",
-        "rook"
-      ],
-      "historicalAnchor": "siege-of-orleans-1429",
+      "pieces": ["pawn", "knight", "rook"],
+      "historicalAnchor": "lijssenthoek-remy-farm-wwi",
       "eyeConcealment": "Dawn backlight leaves the gate laborer's cap, the rider's helmet, and the keeper's brow as dark eye bands while all three faces remain oriented toward the work.",
       "sceneDirection": "One laborer opens a farm gate for one mounted retainer while one fortified keeper checks the repaired road beyond. Crates, a water cart, and rain-bright ruts suggest logistics behind an unseen front. The sortie is a quiet departure before the yard wakes.",
       "generationDisposition": "pending"
@@ -559,13 +381,7 @@
     {
       "id": "pppbb",
       "title": "Feast Day Procession",
-      "pieces": [
-        "pawn",
-        "pawn",
-        "pawn",
-        "bishop",
-        "bishop"
-      ],
+      "pieces": ["pawn", "pawn", "pawn", "bishop", "bishop"],
       "historicalAnchor": "jerusalem-second-temple-70-ce",
       "eyeConcealment": "A simple cloth canopy, travel veils, and two clerical cowls hide five eye lines while preserving a procession of visible faces and hands.",
       "sceneDirection": "Three common carriers and two clerics move ordinary vessels, bread, lamps, and covered teaching bundles past an empty ruined sanctuary court. No crowd waits and no feast is shown. The procession preserves a pattern after its former destination has ceased to function.",
@@ -574,13 +390,7 @@
     {
       "id": "pppkb",
       "title": "Parish Militia",
-      "pieces": [
-        "pawn",
-        "pawn",
-        "pawn",
-        "knight",
-        "bishop"
-      ],
+      "pieces": ["pawn", "pawn", "pawn", "knight", "bishop"],
       "historicalAnchor": "dissolution-of-the-monasteries",
       "eyeConcealment": "Existing accepted composition: distant scale, dusk, hats, hoods, and ambient shadow keep every face unreadable.",
       "sceneDirection": "Existing human vignette: three foot levies, one mounted retainer, and one cleric gather at a ruined chapel or stable at dusk. This record describes already-generated artwork and is not a request for another pass.",
@@ -591,14 +401,8 @@
     {
       "id": "pppkk",
       "title": "Raiders' Return",
-      "pieces": [
-        "pawn",
-        "pawn",
-        "pawn",
-        "knight",
-        "knight"
-      ],
-      "historicalAnchor": "siege-of-orleans-1429",
+      "pieces": ["pawn", "pawn", "pawn", "knight", "knight"],
+      "historicalAnchor": "lijssenthoek-remy-farm-wwi",
       "eyeConcealment": "Three rain-dark caps, two lowered helmet brows, and loose wet hair break five eye lines across a loosely grouped frontal composition.",
       "sceneDirection": "Three foot attendants and two mounted retainers return through a farmyard after rain with empty sacks, damaged tack, and one riderless pack horse. No spoils or enemy are visible. Their return reads as depleted logistics rather than victory or defeat.",
       "generationDisposition": "pending"
@@ -606,15 +410,7 @@
     {
       "id": "ppppppb",
       "title": "Sunday Congregation",
-      "pieces": [
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "bishop"
-      ],
+      "pieces": ["pawn", "pawn", "pawn", "pawn", "pawn", "pawn", "bishop"],
       "historicalAnchor": "dissolution-of-the-monasteries",
       "eyeConcealment": "Six hats and shawls plus one cowl conceal seven eye regions beneath the shadow of a roofless chapel opening.",
       "sceneDirection": "Six villagers and one cleric gather beside rather than inside a stripped chapel. They bring bread, flowers, baskets, tools, and a bench repaired with reused timber. The congregation survives as people occupying the edge of an absent institution.",
@@ -623,16 +419,8 @@
     {
       "id": "ppppppk",
       "title": "The Long Patrol",
-      "pieces": [
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "knight"
-      ],
-      "historicalAnchor": "siege-of-orleans-1429",
+      "pieces": ["pawn", "pawn", "pawn", "pawn", "pawn", "pawn", "knight"],
+      "historicalAnchor": "lijssenthoek-remy-farm-wwi",
       "eyeConcealment": "Six walkers use caps, scarves, and distance; the mounted leader's helmet brim hides the final eye line without turning the formation away.",
       "sceneDirection": "Six road workers and one mounted outrider extend along a wet rural route between poplars, farm walls, and a distant rail siding. They inspect culverts, cart tracks, and hedge openings. The patrol's length is visible, but its purpose remains stubbornly mundane.",
       "generationDisposition": "pending"
@@ -640,17 +428,7 @@
     {
       "id": "ppppppppp",
       "title": "Nine Ranks Deep",
-      "pieces": [
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn"
-      ],
+      "pieces": ["pawn", "pawn", "pawn", "pawn", "pawn", "pawn", "pawn", "pawn", "pawn"],
       "historicalAnchor": "year-without-a-summer-1816",
       "eyeConcealment": "Nine varied hats, shawls, hair shapes, scaffold shadows, and atmospheric distance keep every eye unreadable without presenting nine turned backs.",
       "sceneDirection": "Nine common workers form three staggered depths while repairing a long drainage embankment through frost-damaged summer fields. The ranks arise from space and shared labor, not drill. Covered crops, thin hay, and a pale sun reveal the environmental pressure slowly.",
@@ -659,13 +437,7 @@
     {
       "id": "ppppr",
       "title": "Garrison Relief",
-      "pieces": [
-        "pawn",
-        "pawn",
-        "pawn",
-        "pawn",
-        "rook"
-      ],
+      "pieces": ["pawn", "pawn", "pawn", "pawn", "rook"],
       "historicalAnchor": "jerusalem-second-temple-70-ce",
       "eyeConcealment": "Four carriers pass beneath dusty brims and wraps; the fortified keeper's eye line falls under the shadow of a repaired arch.",
       "sceneDirection": "Four common carriers deliver water, mortar, oil, and sealed provisions to one watchkeeper at an old city wall. The road marker is damaged and the gate stands open. Relief means the continuation of a post whose original empire has become residue.",
@@ -674,36 +446,10 @@
     {
       "id": "q",
       "title": "Regal Serenity",
-      "pieces": [
-        "queen"
-      ],
+      "pieces": ["queen"],
       "historicalAnchor": "jerusalem-second-temple-70-ce",
       "eyeConcealment": "A narrow dark veil falls precisely across the seated ruler's eye line while the rest of the calm frontal face remains visible.",
       "sceneDirection": "One queen-like administrator sits in a quiet domestic courtyard prepared for gathering after public ritual has moved elsewhere. Folded cloth, water vessels, a sealed record bundle, herbs, and an empty second chair surround her. Authority appears as arrangement and patience, not command.",
-      "generationDisposition": "pending"
-    },
-    {
-      "id": "pq",
-      "title": "The Last Attendant",
-      "pieces": [
-        "pawn",
-        "queen"
-      ],
-      "historicalAnchor": "dissolution-of-the-monasteries",
-      "eyeConcealment": "A tall widow's veil and, below her, one bowed head under a work kerchief; both faces are three-quarter and both sets of eyes fall entirely inside cast shadow.",
-      "sceneDirection": "A woman of rank waits in the emptied hall of a house whose fittings have already been carted off, while one remaining servant packs the last of the plate into straw. Her authority survives the building it belonged to. No successor, buyer, or officer appears.",
-      "generationDisposition": "pending"
-    },
-    {
-      "id": "rr",
-      "title": "Twin Bastions",
-      "pieces": [
-        "rook",
-        "rook"
-      ],
-      "historicalAnchor": "siege-of-orleans-1429",
-      "eyeConcealment": "Two deep helmet brims, worn low, put both faces in full shadow from the brow down to the cheekbone; heads are turned three-quarter toward each other, not away.",
-      "sceneDirection": "Two engineers stand at the base of a pair of squat revetted emplacements dug into a farm bank, checking the fit of fresh timber against old. The work is maintenance on something already holding, not construction of something new. No gun, no crew, no firing.",
       "generationDisposition": "pending"
     }
   ]

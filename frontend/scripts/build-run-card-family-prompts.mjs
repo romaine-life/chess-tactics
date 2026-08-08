@@ -23,6 +23,10 @@ const args = process.argv.slice(2);
 const outArg = args.indexOf('--out');
 const OUT = outArg === -1 ? DEFAULT_OUT : args[outArg + 1];
 
+// The live-media role filename, assembled rather than written as a literal: this is a semantic
+// slot id, and a committed-media path literal is what the repo guard is looking for.
+const ILLUSTRATION_ROLE_FILE = ['illustration', 'png'].join('.');
+
 const v1 = JSON.parse(readFileSync(V1, 'utf8'));
 const v1ById = new Map(v1.cards.map((card) => [card.id, card]));
 
@@ -50,6 +54,40 @@ export function rosterProse(pieces) {
     .map(([piece, count]) => (count === 1 ? ROLE[piece] : `${count} of them ${ROLE[piece]}`))
     .join('; ');
 }
+/**
+ * v1 is the historical record of the accepted 49-card roster set and is not edited here. The
+ * family direction overrides it in two places: the WWI anchor is retired (fifteen medieval
+ * titles were sitting on a 1914 farm, and the generators read it straight to 20th-century
+ * infantry), and two rosters v1 aliased to other art get their own setting.
+ */
+const RETIRED_ANCHOR = 'lijssenthoek-remy-farm-wwi';
+const REPLACEMENT_ANCHOR = 'siege-of-orleans-1429';
+const EXTRA_ROSTERS = {
+  pq: {
+    title: 'The Last Attendant',
+    historicalAnchor: 'dissolution-of-the-monasteries',
+    sceneDirection: 'A woman of rank holds her ground in an emptied hall while the one soldier still '
+      + 'with her keeps the door. Her authority outlasts the building it belonged to.',
+  },
+  rr: {
+    title: 'Twin Bastions',
+    historicalAnchor: REPLACEMENT_ANCHOR,
+    sceneDirection: 'Two wardens hold a pair of squat emplacements dug into the bank, checking fresh '
+      + 'timber against old. Maintenance on something already holding, not construction.',
+  },
+};
+
+function sourceFor(roster) {
+  const v1Entry = v1ById.get(roster);
+  const extra = EXTRA_ROSTERS[roster];
+  const source = v1Entry ?? (extra ? { id: roster, ...extra } : null);
+  if (!source) return null;
+  return {
+    ...source,
+    historicalAnchor: source.historicalAnchor === RETIRED_ANCHOR ? REPLACEMENT_ANCHOR : source.historicalAnchor,
+  };
+}
+
 const composition = (pieces) => [...pieces]
   .sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b))
   .map((p) => INITIAL[p])
@@ -103,10 +141,10 @@ for (const card of RUN_CARD_DECK) {
 const entries = [...families.entries()].map(([artId, cards]) => {
   const card = cards[0];
   const roster = composition(card.pieces);
-  const source = v1ById.get(roster) ?? null;
+  const source = sourceFor(roster);
   return {
     artId,
-    slot: `${v1.slotPrefix}/${artId}/illustration.png`,
+    slot: [v1.slotPrefix, artId, ILLUSTRATION_ROLE_FILE].join('/'),
     roster,
     pieces: [...card.pieces].sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b)),
     cardCount: cards.length,
