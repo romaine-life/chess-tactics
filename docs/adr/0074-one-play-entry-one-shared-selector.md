@@ -3,6 +3,8 @@ status: accepted
 date: 2026-07-10
 deciders: owner (Nelson) + Codex
 partially_superseded_by: "[ADR-0257](0257-play-lands-on-the-resumable-activity-or-the-neutral-hub-root.md)"
+player_facing_campaign_entry_superseded_by: "[ADR-0513](0513-campaign-play-entry-is-dormant.md)"
+player_facing_selector_superseded_by: "[ADR-0514](0514-play-opens-run-without-a-mode-rail.md)"
 ---
 
 # ADR-0074: One Play entry opens one shared selector

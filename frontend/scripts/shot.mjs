@@ -270,14 +270,14 @@ try {
         editorSeen: false,
       };
       window.__ctMenuHostRail = null;
-      window.__ctPlayHostRail = null;
+      window.__ctPlayHost = null;
       const sample = () => {
         const director = document.querySelector('.scene-director');
         const boundary = document.querySelector('.scene-boundary');
         const rail = document.querySelector('[aria-label="Game modes"]');
-        const playRail = document.querySelector('.play-source-rail[aria-label="Play"]');
+        const playHost = document.querySelector('.play-scene-authority');
         if (rail && !window.__ctMenuHostRail) window.__ctMenuHostRail = rail;
-        if (playRail && !window.__ctPlayHostRail) window.__ctPlayHostRail = playRail;
+        if (playHost && !window.__ctPlayHost) window.__ctPlayHost = playHost;
         if (director?.classList.contains('is-host-preserving')) {
           window.__ctMenuHostContinuity.seen = true;
           const title = document.querySelector('.app-shell-titlebar');
@@ -349,11 +349,11 @@ try {
           && boundary?.getAttribute('data-transition-region') === 'play-shell'
         ) {
           window.__ctMenuHostContinuity.playSeen = true;
-          const playRailOpacity = playRail ? Number.parseFloat(getComputedStyle(playRail).opacity) : 0;
-          const playRailInteractive = Boolean(
-            playRail
-            && !playRail.closest('[inert]')
-            && getComputedStyle(playRail).pointerEvents !== 'none'
+          const playHostOpacity = playHost ? Number.parseFloat(getComputedStyle(playHost).opacity) : 0;
+          const playHostInteractive = Boolean(
+            playHost
+            && !playHost.closest('[inert]')
+            && getComputedStyle(playHost).pointerEvents !== 'none'
           );
           const phase = director.getAttribute('data-scene-phase');
           const committed = director.getAttribute('data-scene-committed');
@@ -369,20 +369,20 @@ try {
             && contentOpacity > 0.001
           );
           if (
-            !playRail
-            || playRail !== window.__ctPlayHostRail
-            || !playRail.isConnected
-            || playRailOpacity < 0.99
-            || !playRailInteractive
+            !playHost
+            || playHost !== window.__ctPlayHost
+            || !playHost.isConnected
+            || playHostOpacity < 0.99
+            || !playHostInteractive
             || contentVisibilityViolation
           ) {
             window.__ctMenuHostContinuity.playViolations.push({
               phase,
-              playRail: Boolean(playRail),
-              samePlayRail: playRail === window.__ctPlayHostRail,
-              connected: Boolean(playRail?.isConnected),
-              playRailOpacity,
-              playRailInteractive,
+              playHost: Boolean(playHost),
+              samePlayHost: playHost === window.__ctPlayHost,
+              connected: Boolean(playHost?.isConnected),
+              playHostOpacity,
+              playHostInteractive,
               committed,
               pending,
               mounted,

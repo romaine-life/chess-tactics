@@ -18091,11 +18091,11 @@ button.tileset-relationship-cell {
   overflow: hidden;
 }
 
-/* Unified Play selector (ADR-0074). Column 2 is one owner: Skirmish and Levels stay
-   pinned at the top while the unbounded Campaign collection scrolls below through the
-   canonical drawn-scroll primitive (ADR-0030). This only defines flow inside the shared
-   tab column; placement still comes exclusively from .settings-shell/.menu-dest-cols
-   (ADR-0062), with no Play-specific offset. */
+/* Unified Play selector (ADR-0074). Column 2 is one owner: the fixed mode entries stay
+   pinned at the top while the unbounded Campaign collection, when enabled, scrolls below
+   through the canonical drawn-scroll primitive (ADR-0030). This only defines flow inside
+   the shared tab column; placement still comes exclusively from
+   .settings-shell/.menu-dest-cols (ADR-0062), with no Play-specific offset. */
 .play-source-rail {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -18155,7 +18155,7 @@ button.tileset-relationship-cell {
    original width instead of drawing the preview beyond the right edge. The compact list
    delegates the actual launch verb to the preview's Play control. */
 @media (max-width: 1516px) {
-  .play-scene-authority.has-detail-preview .play-action-col {
+  .play-scene-authority:not(.is-source-rail-collapsed).has-detail-preview .play-action-col {
     inline-size: calc(var(--col-action-w) - var(--col-preview-w));
   }
 
