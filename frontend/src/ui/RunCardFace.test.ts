@@ -266,12 +266,25 @@ describe('formation-only Run card face', () => {
     expect(bare.right).toBe('1.5000');
     expect(bare.top).toBe((1 - RUN_CARD_FORMATION_ISO_TILE.height / RUN_CARD_FORMATION_ISO_TILE.width / 2).toFixed(4));
 
-    // A figure's reach is stated against its LIVE scale, so retuning a piece re-centres its cards.
+    // A figure's painted edge is stated against its LIVE scale and its LIVE ink bounds, so both
+    // retuning a piece's size and accepting new art for it re-centre every card that carries it.
     const standing = runCardFormationInkExtent([{ ...seat, unit: 'pawn' }]);
     expect(standing.top).toContain('var(--unit-scale-pawn, 1)');
-    expect(standing.top).toContain(RUN_CARD_FORMATION_FIGURE_RISE.toFixed(4));
-    expect(standing.bottom).toContain(RUN_CARD_FORMATION_FIGURE_DROP.toFixed(4));
-    expect(standing.left).toContain(RUN_CARD_FORMATION_FIGURE_REACH.toFixed(4));
+    expect(standing.top).toContain('var(--unit-ink-top-pawn, 0)');
+    expect(standing.bottom).toContain('var(--unit-ink-bottom-pawn, 1)');
+    expect(standing.left).toContain('var(--unit-ink-left-pawn, 0)');
+    expect(standing.right).toContain('var(--unit-ink-right-pawn, 1)');
+    // Those fallbacks are the whole sprite, so an unmeasured figure reckons exactly as it did
+    // before the bounds existed: its top edge is one full rise above the seat it stands on.
+    const rise = /var\(--unit-ink-[a-z]+-[a-z]+, ([\d.]+)\) \* ([\d.]+) - ([\d.]+)\)/.exec(standing.top);
+    expect(rise && Number(rise[1]) * Number(rise[2]) - Number(rise[3]))
+      .toBeCloseTo(-RUN_CARD_FORMATION_FIGURE_RISE);
+    const drop = /var\(--unit-ink-[a-z]+-[a-z]+, ([\d.]+)\) \* ([\d.]+) - ([\d.]+)\)/.exec(standing.bottom);
+    expect(drop && Number(drop[1]) * Number(drop[2]) - Number(drop[3]))
+      .toBeCloseTo(RUN_CARD_FORMATION_FIGURE_DROP);
+    const reach = /var\(--unit-ink-[a-z]+-[a-z]+, ([\d.]+)\) \* ([\d.]+) - ([\d.]+)\)/.exec(standing.right);
+    expect(reach && Number(reach[1]) * Number(reach[2]) - Number(reach[3]))
+      .toBeCloseTo(RUN_CARD_FORMATION_FIGURE_REACH);
     // The seat's own edge stays in the reckoning: a figure narrower than its tile does not shrink
     // the drawing onto itself and leave the board hanging out of the space.
     expect(standing.left.startsWith('min(0.5000,')).toBe(true);

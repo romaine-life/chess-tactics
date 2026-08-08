@@ -26927,8 +26927,9 @@ button.run-card-formation-cell {
   max-inline-size: 78ch;
 }
 
-/* The two keylines named in the prose, coloured as they are drawn on the cards. */
+/* The three keylines named in the prose, coloured as they are drawn on the cards. */
 .run-card-fit-key.is-space { color: rgba(88, 224, 255, .95); }
+.run-card-fit-key.is-reserve { color: rgba(216, 248, 255, .6); }
 .run-card-fit-key.is-drawing { color: rgba(255, 176, 64, .95); }
 
 .run-card-fit-grid {
@@ -26939,15 +26940,38 @@ button.run-card-formation-cell {
   min-inline-size: 0;
 }
 
-/* Review-only: draw the space the diagram is fitted into. The rule is one sentence -- the panel
-   minus its padding minus two lines of flavour, with the drawing scaled to touch it and centred
-   in it -- and a sentence is a poor way to check a box. This is how the box gets looked at. */
+/* Review-only: draw the space, and the ink centred in it.
+
+   Two boxes are in play and only one of them is what "centred" is about. The RESERVE is what gets
+   fitted -- it is sized for a full-scale figure so a card's board keeps its size whatever piece
+   stands on it -- and the INK is what gets centred. On a card of short pieces the reserve is
+   taller than anything painted in it, so it deliberately hangs out of the top of the space. Draw
+   only the reserve, as this first did, and the picture contradicts the rule. */
 .run-card-fit-grid[data-formation-box='on'] .run-card-formation-fit {
   outline: 1px dashed rgba(88, 224, 255, .85);
 }
 
+.run-card-fit-grid[data-formation-box='on'] .run-card-formation::before {
+  block-size: calc(
+    var(--run-card-formation-unit)
+    * (var(--run-card-formation-ink-bottom) - var(--run-card-formation-ink-top))
+  );
+  content: '';
+  inline-size: calc(
+    var(--run-card-formation-unit)
+    * (var(--run-card-formation-ink-right) - var(--run-card-formation-ink-left))
+  );
+  inset-block-start: calc(var(--run-card-formation-unit) * var(--run-card-formation-ink-top));
+  inset-inline-start: calc(var(--run-card-formation-unit) * var(--run-card-formation-ink-left));
+  outline: 1px solid rgba(255, 176, 64, .85);
+  pointer-events: none;
+  position: absolute;
+  z-index: 40;
+}
+
+/* The reserve, so the relationship between the two is visible rather than asserted. */
 .run-card-fit-grid[data-formation-box='on'] .run-card-formation {
-  outline: 1px solid rgba(255, 176, 64, .8);
+  outline: 1px dotted rgba(216, 248, 255, .3);
 }
 
 .run-card-fit-specimen {

@@ -366,15 +366,17 @@ export type RunCardFormationInkExtent = Readonly<{
  * The edges of what is actually INKED, as CSS expressions in the drawing's own tile units.
  *
  * The drawing is sized against a full-scale figure so that a card's board does not change size
- * with the piece standing on it — but a pawn is drawn at 0.66 and a rook at 0.73, so on a card of
- * short pieces a good part of that reserved height is never painted. Centring the reserved box
- * would leave the pawns sitting low in it, which is the same mistake the columns-by-rows rectangle
- * made across: centring a box on space nothing is drawn in.
+ * with the piece standing on it — but a pawn is drawn at 0.66 and a rook at 0.73, and every figure
+ * is authored on a canvas taller than itself, so on a card of short pieces a good part of that
+ * reserved height is never painted. Centring the reserved box would leave the pawns sitting low in
+ * it, which is the same mistake the columns-by-rows rectangle made across: centring a box on space
+ * nothing is drawn in.
  *
- * A piece's scale is a live setting rather than a build-time number (unitSizeTuning writes
- * --unit-scale-<piece> onto the root), so these come out as `min()` / `max()` over per-piece terms
- * and CSS resolves them against whatever the scales currently are. Retuning a piece's size still
- * re-centres every card that carries it, with no subscription on this face.
+ * Both corrections come from live settings rather than build-time numbers — unitSizeTuning writes
+ * --unit-scale-<piece> and unitInkBounds writes --unit-ink-<edge>-<piece> onto the root — so these
+ * come out as `min()` / `max()` over per-piece terms and CSS resolves them against whatever is
+ * currently published. Retuning a piece's size, or accepting new art for it, re-centres every card
+ * that carries it with no subscription on this face. Both fall back to the whole sprite box.
  */
 export function runCardFormationInkExtent(
   seats: readonly Readonly<{ left: number; top: number; unit?: string }>[],
@@ -382,8 +384,20 @@ export function runCardFormationInkExtent(
   const half = RUN_CARD_FORMATION_TILE_ASPECT / 2;
   const number = (value: number): string => value.toFixed(4);
   const figures = seats.filter((seat) => seat.unit);
-  const reach = (seat: Readonly<{ unit?: string }>, distance: number, sign: 1 | -1): string => (
-    `calc(${sign < 0 ? '-1 * ' : ''}${number(distance)} * var(--unit-scale-${seat.unit}, 1))`
+  /**
+   * One figure's painted edge, measured from the seat it stands on. `share` is where that edge
+   * falls inside the sprite (0 is the sprite's own top or left edge, 1 the far one); `span` is the
+   * sprite's extent in tiles, and `origin` the distance from the seat centre to its near edge.
+   */
+  const painted = (
+    seat: Readonly<{ unit?: string }>,
+    edge: 'top' | 'bottom' | 'left' | 'right',
+    fallback: 0 | 1,
+    span: number,
+    origin: number,
+  ): string => (
+    `calc(var(--unit-scale-${seat.unit}, 1)`
+    + ` * (var(--unit-ink-${edge}-${seat.unit}, ${fallback}) * ${number(span)} - ${number(origin)}))`
   );
   const edge = (
     pick: 'min' | 'max',
@@ -398,18 +412,20 @@ export function runCardFormationInkExtent(
     top: Math.min(...seats.map((seat) => seat.top)) - half,
     bottom: Math.max(...seats.map((seat) => seat.top)) + half,
   };
+  const across = RUN_CARD_FORMATION_FIGURE.width;
+  const down = RUN_CARD_FORMATION_FIGURE.height;
   return {
     left: edge('min', seatEdges.left, (seat) => (
-      `calc(${number(seat.left)} + ${reach(seat, RUN_CARD_FORMATION_FIGURE_REACH, -1)})`
+      `calc(${number(seat.left)} + ${painted(seat, 'left', 0, across, RUN_CARD_FORMATION_FIGURE_REACH)})`
     )),
     right: edge('max', seatEdges.right, (seat) => (
-      `calc(${number(seat.left)} + ${reach(seat, RUN_CARD_FORMATION_FIGURE_REACH, 1)})`
+      `calc(${number(seat.left)} + ${painted(seat, 'right', 1, across, RUN_CARD_FORMATION_FIGURE_REACH)})`
     )),
     top: edge('min', seatEdges.top, (seat) => (
-      `calc(${number(seat.top)} + ${reach(seat, RUN_CARD_FORMATION_FIGURE_RISE, -1)})`
+      `calc(${number(seat.top)} + ${painted(seat, 'top', 0, down, RUN_CARD_FORMATION_FIGURE_RISE)})`
     )),
     bottom: edge('max', seatEdges.bottom, (seat) => (
-      `calc(${number(seat.top)} + ${reach(seat, RUN_CARD_FORMATION_FIGURE_DROP, 1)})`
+      `calc(${number(seat.top)} + ${painted(seat, 'bottom', 1, down, RUN_CARD_FORMATION_FIGURE_RISE)})`
     )),
   };
 }

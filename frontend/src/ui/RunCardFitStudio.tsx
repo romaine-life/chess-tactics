@@ -176,14 +176,22 @@ export function RunCardFitViewer({
     <>
       <section className="run-card-fit-viewer" data-testid="run-card-fit-viewer">
         <p className="run-card-fit-note">
-          The space is the contents panel less its padding and two lines of flavour — the whole
-          deck&apos;s longest — so it is the same space on every card, whatever that card&apos;s
-          prose runs to. It is drawn <span className="run-card-fit-key is-space">dashed</span>;
-          the drawing fitted into it is drawn <span className="run-card-fit-key is-drawing">solid</span>.
-          Every footprint is scaled until it touches that space on its tightest axis and centred in
-          it — one seat or four, no special case. The panel is short rather than narrow, so at the
-          dealt size the height is what binds, and the cap is the rail that would catch a small
-          footprint if it did not.
+          <strong className="run-card-fit-key is-space">The space, dashed.</strong> The contents
+          panel less its padding and two lines of flavour — the whole deck&apos;s longest — so it is
+          the same space on every card whatever that card&apos;s prose runs to.{' '}
+          <strong className="run-card-fit-key is-reserve">The reserve, dotted.</strong> What gets
+          fitted to the space: a board plus room for a FULL-SCALE figure, which is what keeps a
+          card&apos;s board the same size whether a queen or a pawn stands on it.{' '}
+          <strong className="run-card-fit-key is-drawing">The ink, solid.</strong> What is actually
+          painted, and what gets centred — one seat or four, no special case.
+        </p>
+        <p className="run-card-fit-note">
+          A pawn draws at 0.66 of a queen and every figure is authored on a canvas taller than
+          itself, so on a card of short pieces the reserve is taller than anything painted in it and
+          hangs out of the top of the space. That is the cost of a board that does not resize with
+          its piece; nothing painted leaves. The panel is short rather than narrow, so at the dealt
+          size its height is what binds every shape, and the cap is the rail that would catch a
+          small footprint if it did not.
         </p>
         <div
           className="run-card-fit-grid"

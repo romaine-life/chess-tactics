@@ -16,6 +16,7 @@ import { loadLiveMediaCatalog } from './net/liveMedia';
 import { loadDrawableCatalog } from './net/drawableCatalog';
 import { loadLiveSfxProfile } from './net/sfxProfile';
 import { initUnitSizeTuning } from './ui/unitSizeTuning';
+import { publishUnitInkBounds } from './ui/unitInkBounds';
 import { assertInstalledChromeSlots } from './ui/chromeCandidateSources';
 import { installNineSliceCssVariables, installUiFonts, installUiMediaCssVariables, installedUiMedia } from './ui/installedUiMedia';
 import { applyGroundCoverCatalog, applyWallArtCatalog, applyWallDecorCatalog, assertInstalledPresentationCatalog } from '@chess-tactics/board-render';
@@ -164,6 +165,9 @@ if (root) {
       await loadLiveSfxProfile().catch(() => false);
       assertInstalledChromeSlots();
       initUnitSizeTuning();
+      // Not awaited: nothing on the first screen centres on a figure, and every consumer falls
+      // back to the whole sprite until these land. Startup does not wait on reading pixels.
+      void publishUnitInkBounds();
       const { App } = await import('./ui/App');
       reactRoot.render(<AppCrashBoundary><App /></AppCrashBoundary>);
       requestAnimationFrame(() => loadingMeasure('app', 'first-app-frame', startupAt));
