@@ -137,6 +137,7 @@ import {
   useRunCardFlights,
 } from './runCardFlightView';
 import { isStrategikonPath, strategikonRouteCrumbs } from './strategikonRoute';
+import { presentedRunAddress } from './runRoute';
 import { createRunForm, runActivity, type RunForm } from './RunForm';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 import { KitScroll } from './KitScroll';
@@ -1540,8 +1541,8 @@ function RunBattlefieldPanel({
 
 export function RunScreen({
   sceneSnapshot,
-  routePath = window.location.pathname,
-  routeSearch = window.location.search,
+  routePath: address = window.location.pathname,
+  routeSearch: addressSearch = window.location.search,
 }: {
   sceneSnapshot: RunSceneSnapshot;
   routePath?: string;
@@ -1561,8 +1562,11 @@ export function RunScreen({
     element: grantCardFlightElement,
   } = useRunCardFlights({ handoff: 'scene-settled' });
   // A craft address sets the account's Run to the state it names before the screen reads one,
-  // every time it is opened, then lands here without its craft parameters (ADR-0354).
-  const craft = useRunCraft(routePath, routeSearch);
+  // every time it is opened (ADR-0354). The link stays in the address bar so it can be pressed
+  // again, and the screen presents the Run address it names instead (ADR-0531) — so everything
+  // below reads `routePath`/`routeSearch` and never the craft link itself.
+  const craft = useRunCraft(address, addressSearch);
+  const { path: routePath, search: routeSearch } = presentedRunAddress(address, addressSearch);
   const filterScope = run?.phase === 'sectio'
     ? `${run.id}:sectio:${run.sectio?.afterBattleIndex ?? run.battleIndex}`
     : run
@@ -1576,10 +1580,13 @@ export function RunScreen({
   // Deployment, Sectio, and Victory all open it from the same Controls title mark. Only an
   // absent Run has nothing to reference, so that is the sole address the screen repairs.
   useEffect(() => {
+    // A craft still running, or refused, owns the screen: repairing the address out from under
+    // it would throw away the link before it has landed, and its refusal with it.
+    if (craft.crafting || craft.error) return;
     if (hydrated && isStrategikonPath(routePath) && !run) {
       navigateApp(`/run${routeSearch}`, { replace: true, scroll: false });
     }
-  }, [hydrated, routePath, routeSearch, run]);
+  }, [craft.crafting, craft.error, hydrated, routePath, routeSearch, run]);
 
   // The pre-hydration document may exist from browser storage, but the screen treats
   // the Run as absent until hydrate() has arbitrated browser and account copies.
@@ -1610,9 +1617,12 @@ export function RunScreen({
       : shellRun
   ), [reviewingWonBattle, shellRun]);
   useEffect(() => {
+    // Same as the address repair above: a craft in flight has not yet produced the Run this
+    // judges, and a refused one has nothing to judge at all.
+    if (craft.crafting || craft.error) return;
     if (!hydrated || rawView !== 'battle-review' || battleReviewAvailable) return;
     navigateApp(runWorkspaceHref(`/run${routeSearch}`, 'primary'), { replace: true, scroll: false });
-  }, [battleReviewAvailable, hydrated, rawView, routeSearch]);
+  }, [battleReviewAvailable, craft.crafting, craft.error, hydrated, rawView, routeSearch]);
   const strategikonOpen = sceneSnapshot.workspace.view === 'strategikon';
   const beginAdlectio = (offer: RunCardOffer, source: HTMLButtonElement): void => {
     const latest = useActiveRun.getState().run;
@@ -1649,15 +1659,18 @@ export function RunScreen({
     : { ...DEFAULT_RUN_ARMY_FILTERS };
   // Army, Lipsana, and Expunctio are workspaces of the Run screen itself, so they always
   // address the Run root. Dropping any open Strategikon address keeps these Controls
-  // live instead of navigating to a path the reference workspace still covers.
+  // live instead of navigating to a path the reference workspace still covers, and taking the
+  // PRESENTED search leaves a craft link's `to=` behind with the link (ADR-0531).
   const navigateRunView = (nextView: RunScreenView): void => {
     const current = new URL(window.location.href);
+    current.search = presentedRunAddress(current.pathname, current.search).search;
     current.pathname = '/run';
     const nextHref = runWorkspaceHref(current.toString(), nextView);
     navigateApp(nextHref, { replace: true, scroll: false });
   };
   const navigateArmyUnit = (unitId: string | null): void => {
     const current = new URL(window.location.href);
+    current.search = presentedRunAddress(current.pathname, current.search).search;
     current.pathname = '/run';
     navigateApp(runArmyUnitHref(current.toString(), unitId), { replace: true, scroll: false });
   };
