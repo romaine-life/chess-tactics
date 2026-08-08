@@ -8,16 +8,18 @@ const editorSource = readFileSync(new URL('./LevelEditor.tsx', import.meta.url),
 const campaignEditorSource = readFileSync(new URL('./CampaignEditor.tsx', import.meta.url), 'utf8');
 
 describe('new-level shortcut and campaign assignment controls', () => {
-  it('pins one New Level shortcut above New Campaign in the Editor rail', () => {
+  it('pins one New Level shortcut at the head of the Editor rail, and offers no campaign to create', () => {
     expect(menuSource).toContain("drawableAssets('menu-mode')");
     expect(menuSource).not.toContain('MENU_HIDDEN_SLUGS');
     expect(menuSource).not.toContain("'level-editor': '/editor/level?returnTo=%2F'");
     expect(menuSource).not.toContain("'level-editor': 'New Level'");
 
     const newLevelIndex = campaignEditorSource.indexOf('data-testid="new-level-shortcut"');
-    const newCampaignIndex = campaignEditorSource.indexOf('data-testid="new-campaign"');
     expect(newLevelIndex).toBeGreaterThan(-1);
-    expect(newCampaignIndex).toBeGreaterThan(newLevelIndex);
+    // Runs replaced campaigns as how the game is played (ADR-0529) and the rail lists only the
+    // campaign the address names, so a create verb minted a row the rail then refused to show.
+    expect(campaignEditorSource).not.toContain('data-testid="new-campaign"');
+    expect(campaignEditorSource).not.toContain('New Campaign');
     expect(campaignEditorSource.match(/>\+ New Level<\/EditorButton>/g)).toHaveLength(1);
     expect(campaignEditorSource).toContain(
       'href={`/editor/level?returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_UNASSIGNED_RETURN_TO)}`}',
