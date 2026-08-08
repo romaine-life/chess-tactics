@@ -1,7 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { applyDrawableCatalog } from '@chess-tactics/board-render';
+import { applyDrawableCatalog, isPredrawnBackgroundActive } from '@chess-tactics/board-render';
+import { runtimePredrawnBoardPlate } from '../../render/PredrawnBoardLayer';
 import { testDrawableCatalog } from '../../test/drawableCatalog';
 import { BOARD_GRID_STYLES } from '../../settings/appSettings';
 import { BOARD_GRID_STYLE_LABELS } from '../../settings/boardGridStyle';
@@ -39,19 +40,29 @@ describe('board grid style picker', () => {
     expect(markup).not.toContain('--board-zoom:0');
   });
 
-  it('draws the styles over ground with something for a line to cross', () => {
-    // These styles differ in how a line holds up against what it crosses. Over one flat terrain
-    // they all look equally fine, which answers nothing — so the swatch ground must keep the
-    // range the shipped descriptions claim, and must overflow the fixed swatch window from every
-    // edge rather than showing its own corner.
+  it('draws the styles over a painted Battle board, not composed terrain tiles', () => {
+    // Runs are what get played, and a Run board is one PAINTED plate with the grid drawn on the
+    // picture. That is the case the shipped `chalk` rule exists for — "a dark line disappears into
+    // shadowed terrain and painted artwork". A swatch standing on tile terrain would let a style
+    // look fine here and vanish in the game.
     const board = boardGridStyleSwatchBoard();
-    const families = new Set(Object.values(board.cells).map((tile) => tile.split('-surf-')[0]));
-    expect(families.size).toBeGreaterThan(1);
-    expect(families).toContain('grass');
-    expect(families).toContain('water');
-    expect(Object.values(board.features ?? {}).some((feature) => feature.kind === 'road')).toBe(true);
-    expect(Object.keys(board.cover ?? {}).length).toBeGreaterThan(0);
-    expect(Math.min(board.cols, board.rows)).toBeGreaterThanOrEqual(6);
+    expect(board.backgroundMode).toBe('ai');
+    expect(isPredrawnBackgroundActive(board)).toBe(true);
+    expect(board.surface).toBeTruthy();
+    // The plate is live: it resolves through the ordinary runtime path to the same pixels the
+    // Battle draws, rather than a packaged copy of the artwork.
+    expect(runtimePredrawnBoardPlate(board.surface!).src).toMatch(/^\/api\/background-versions\/[^/]+\/content$/);
+  });
+
+  it('walks the swatch window off the board centre', () => {
+    // A Battle board keeps its playable squares on clear painted ground, so the board's own centre
+    // is the least informative crop there is: flat meadow, where every style looks acceptable.
+    const markup = renderToStaticMarkup(<BoardGridStylePicker value="chalk" onChange={() => {}} />);
+    const pans = [...markup.matchAll(/--board-pan-x:(-?[\d.]+)px;--board-pan-y:(-?[\d.]+)px/g)];
+    expect(pans).toHaveLength(BOARD_GRID_STYLES.length);
+    // Every swatch shares one crop, or the comparison varies the ground as well as the line.
+    expect(new Set(pans.map((pan) => `${pan[1]},${pan[2]}`)).size).toBe(1);
+    expect(Number(pans[0][1]) === 0 && Number(pans[0][2]) === 0).toBe(false);
   });
 
   it('gives every style inheritable variables so swatches can differ from the root choice', () => {

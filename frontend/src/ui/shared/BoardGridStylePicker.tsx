@@ -23,8 +23,17 @@ import { boardGridStyleSwatchBoard } from './boardGridStyleSwatchBoard';
 //  - One shared board. Varying the ground under each line would confound the comparison with the
 //    thing these styles actually differ in — how a line holds up against what it crosses.
 //
-// The ground itself is a real battle board rather than a procedural grass field; see
+// The ground itself is a real Battle board rather than a procedural grass field; see
 // boardGridStyleSwatchBoard.
+
+/**
+ * Where on that board the window sits, in screen pixels at 1x. A Battle board keeps its playable
+ * squares on clear painted ground, so the board's own centre is the least informative crop there
+ * is — flat meadow, where every style looks acceptable. This walks the window out to the corner
+ * where the grid runs under the treeline and the windmill's shadow, which is the case the shipped
+ * `chalk` rule exists for: a dark line disappearing into painted artwork.
+ */
+const SWATCH_VIEW_PAN = { x: -165, y: 46 };
 
 export function BoardGridStylePicker({
   value,
@@ -54,6 +63,7 @@ export function BoardGridStylePicker({
               <span className="board-grid-style-swatch-window" data-board-grid-style={style}>
                 <StudioReadOnlyBoard
                   board={board}
+                  boardPan={SWATCH_VIEW_PAN}
                   className="board-grid-style-swatch-board"
                   ariaLabel={`${label} grid over board terrain`}
                   showGrid
