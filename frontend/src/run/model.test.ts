@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createBlankLevel } from '../core/level';
 import {
   CURRENT_RUN_SAVE_VERSION,
+  PIECE_VALUE,
   RUN_GENERATED_CARD_COUNT,
   RUN_OFFER_CARD_COUNT,
   RUN_OPENING_CARD_OFFER_COUNT,
@@ -9,6 +10,8 @@ import {
   RUN_OPENING_CARD_VALUE_MIN,
   RUN_BATTLE_UNDO_COST_TENTHS,
   RUN_EN_PASSANT_BOUNTY_TENTHS,
+  RUN_ROYAL_FORK_BOUNTY_TENTHS,
+  RUN_ROYAL_FORK_MIN_VICTIM_VALUE,
   RUN_SECTIO_CARD_PILE_SIZE,
   RUN_SECTIO_EARLY_CARD_MAX_VALUE,
   RUN_CARD_BY_ID,
@@ -27,6 +30,7 @@ import {
   normalizeRunDocument,
   openSectio,
   payRunEnPassantBounty,
+  payRunRoyalForkBounty,
   performAdlectio,
   resetSectio,
   runCardDefinition,
@@ -65,6 +69,23 @@ function firstSectio(seed: number): RunDocument {
     { ...run, phase: 'battle' },
     run.army.map((unit) => unit.id),
   );
+}
+
+/** A Run with a live Battle to be paid from — what every board-earned bounty needs. */
+function inBattle(run: RunDocument): RunDocument {
+  return {
+    ...run,
+    phase: 'battle',
+    battleRuntime: {
+      battleIndex: run.battleIndex,
+      initiallyDeployedUnitIds: run.army.map((unit) => unit.id),
+      reserveUnitIds: [],
+      reservistPoolUnitIds: [],
+      deployedReservistUnitIds: [],
+      observedDeadUnitIds: [],
+      reinforcementSequence: 0,
+    },
+  };
 }
 
 describe('formation card catalog', () => {
@@ -547,22 +568,6 @@ describe('ability retirement migration', () => {
 });
 
 describe('en passant bounty', () => {
-  function inBattle(run: RunDocument): RunDocument {
-    return {
-      ...run,
-      phase: 'battle',
-      battleRuntime: {
-        battleIndex: run.battleIndex,
-        initiallyDeployedUnitIds: run.army.map((unit) => unit.id),
-        reserveUnitIds: [],
-        reservistPoolUnitIds: [],
-        deployedReservistUnitIds: [],
-        observedDeadUnitIds: [],
-        reinforcementSequence: 0,
-      },
-    };
-  }
-
   it('pays five gold the moment the capture lands, and pays again for a second one', () => {
     const battle = inBattle(createRun(war(), 11));
 
@@ -604,5 +609,54 @@ describe('en passant bounty', () => {
 
     const undone = undoRunBattleMove(paid.run, checkpoint);
     expect(undone.goldTenths).toBe(battle.goldTenths - RUN_BATTLE_UNDO_COST_TENTHS);
+  });
+});
+
+describe('royal fork bounty', () => {
+  it('pays one gold per fork, and pays again for the next one', () => {
+    const battle = inBattle(createRun(war(), 41));
+
+    const once = payRunRoyalForkBounty(battle, { x: 4, y: 6 })!;
+    expect(once.run.goldTenths).toBe(battle.goldTenths + RUN_ROYAL_FORK_BOUNTY_TENTHS);
+    expect(RUN_ROYAL_FORK_BOUNTY_TENTHS).toBe(10);
+
+    const twice = payRunRoyalForkBounty(once.run, { x: 2, y: 5 })!;
+    expect(twice.run.goldTenths).toBe(battle.goldTenths + 2 * RUN_ROYAL_FORK_BOUNTY_TENTHS);
+  });
+
+  it('hands back the notice that accounts for the payment, welded to the paid document', () => {
+    const battle = inBattle(createRun(war(), 42));
+    const paid = payRunRoyalForkBounty(battle, { x: 3, y: 7 })!;
+
+    expect(paid.notice.goldTenths).toBe(RUN_ROYAL_FORK_BOUNTY_TENTHS);
+    expect(paid.notice.at).toEqual({ x: 3, y: 7 });
+    expect(paid.notice.log).toContain('Royal fork');
+    expect(paid.notice.log).toContain('1');
+  });
+
+  it('pays nothing outside a Battle, and nothing without a battle runtime', () => {
+    const sectio = firstSectio(43);
+    expect(payRunRoyalForkBounty(sectio, { x: 0, y: 0 })).toBeNull();
+
+    const noRuntime: RunDocument = { ...sectio, phase: 'battle', battleRuntime: null };
+    expect(payRunRoyalForkBounty(noRuntime, { x: 0, y: 0 })).toBeNull();
+  });
+
+  it('is taken back with the move that earned it', () => {
+    const battle = inBattle(createRun(war(), 44));
+    const checkpoint = captureRunBattleUndo(battle);
+    const paid = payRunRoyalForkBounty(battle, { x: 1, y: 1 })!;
+    expect(paid.run.goldTenths).toBeGreaterThan(battle.goldTenths);
+
+    const undone = undoRunBattleMove(paid.run, checkpoint);
+    expect(undone.goldTenths).toBe(battle.goldTenths - RUN_BATTLE_UNDO_COST_TENTHS);
+  });
+
+  it('asks for a Rook or better, reading the bar off the piece scale itself', () => {
+    // A bare 5 would silently become some other piece's worth if the scale were re-weighted.
+    expect(RUN_ROYAL_FORK_MIN_VICTIM_VALUE).toBe(PIECE_VALUE.rook);
+    expect(PIECE_VALUE.queen).toBeGreaterThanOrEqual(RUN_ROYAL_FORK_MIN_VICTIM_VALUE);
+    expect(PIECE_VALUE.bishop).toBeLessThan(RUN_ROYAL_FORK_MIN_VICTIM_VALUE);
+    expect(PIECE_VALUE.knight).toBeLessThan(RUN_ROYAL_FORK_MIN_VICTIM_VALUE);
   });
 });

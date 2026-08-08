@@ -4953,26 +4953,6 @@ body.loading-bootstrap .app-startup-status {
   opacity: 1;
 }
 
-/* Premove ghosts — the planned move made visible. The BEFORE ghost is the real piece dimmed in
-   place (it has a premove queued); the AFTER ghost is a translucent copy sitting on the planned
-   square (the arrow's far end). Both are pointer-events:none (via .board-unit-seat) so the cell-hit
-   buttons under them own the clicks: the before square cancels the chain, the after square extends it. */
-.skirmish-board-unit.is-premove-origin {
-  opacity: .4;
-}
-
-.board-unit-seat.is-premove-ghost {
-  opacity: .55;
-}
-
-.board-unit-seat.is-premove-ghost img {
-  filter: drop-shadow(0 1px 5px rgba(96, 132, 240, .65));
-  /* Shrink toward the feet when a tile is split between multiple planned units, so they sit side
-     by side on the tile instead of overlapping (--ghost-scale is 1 for a lone ghost). */
-  transform: scale(var(--ghost-scale, 1));
-  transform-origin: center bottom;
-}
-
 /* The queued-chain arrows (placeholder art). Coordinates are board-space, so the stroke
    scales with the board zoom transform. */
 .premove-arrow {
@@ -5052,10 +5032,12 @@ body.loading-bootstrap .app-startup-status {
     0 0 16px rgba(90, 255, 190, .7);
 }
 
-/* THE single source of truth for seating a unit sprite on a tile — shared by the game
-   board (.skirmish-board-unit) and the Studio editor so a unit sits identically in both.
-   Each board adds only its own chrome (move animation, or selection/hit) around this;
-   the seat geometry lives nowhere else. Do not re-derive it per board. */
+/* THE single source of truth for seating a unit sprite on a tile in the DOM — the Studio
+   editor and the labs. A live battlefield does NOT seat units here: it draws them into the
+   scene canvas (render/SkirmishBoard: SkirmishSceneLayer), where the move glide and the
+   arrival drop are per-frame offsets rather than CSS animations. The DOM rules that used to
+   do that (.skirmish-board-unit and its five keyframes) outlived the last component that
+   emitted the class, and read for a long time as if a battlefield still animated in CSS. */
 .board-unit-seat {
   position: absolute;
   width: calc(72px * var(--unit-scale));
@@ -5096,34 +5078,6 @@ body.loading-bootstrap .app-startup-status {
   width: calc(52px * var(--unit-scale));
 }
 
-/* Game-only chrome layered on .board-unit-seat: the move glide. One knob for the whole
-   move (travel + hop); the enemy override below makes its reply weightier. */
-.skirmish-board-unit {
-  --move-duration: 360ms;
-  transition:
-    left var(--move-duration) cubic-bezier(.22, .61, .36, 1),
-    top var(--move-duration) cubic-bezier(.22, .61, .36, 1);
-  will-change: left, top;
-}
-
-/* The enemy answers with weight: a slower glide than the player's move. */
-.skirmish-board-unit.is-enemy {
-  --move-duration: 460ms;
-}
-
-.skirmish-board-unit.is-moving {
-  filter: drop-shadow(0 12px 11px rgba(0, 0, 0, .38));
-  z-index: 30000 !important;
-}
-
-/* Drag-to-move: the piece being carried fades in its home seat (a faint "lifted from here"
-   trace, like lichess/chess.com) while the cursor-following ghost is what you actually drag.
-   No transition so it doesn't glide while held; its hop is also suppressed on landing (JS). */
-.skirmish-board-unit.is-dragging {
-  opacity: .3;
-  transition: none;
-}
-
 /* The carried piece, in screen space (position: fixed), portaled to <body>. Its left/top track
    the pointer; the transform lifts it so it reads as held above the fingertip/cursor. Sized in
    JS to the piece's on-screen sprite. pointer-events:none keeps drop hit-testing on the cells. */
@@ -5141,137 +5095,6 @@ body.loading-bootstrap .app-startup-status {
 .skirmish-board-lab.is-dragging,
 .skirmish-board-lab.is-dragging .skirmish-board-cell-hit {
   cursor: grabbing;
-}
-
-/* A move is a small sequence, not a teleport: anticipation lift → arc through the
-   air → overshoot → settle. The container owns the travel (left/top); the sprite
-   owns the vertical hop spanning the same duration, so the two compose into an arc. */
-.skirmish-board-unit.is-moving img {
-  animation: unit-move-hop var(--move-duration) cubic-bezier(.4, 0, .2, 1);
-}
-
-.skirmish-board-unit.is-enemy.is-moving img {
-  animation: unit-move-hop-heavy var(--move-duration) cubic-bezier(.4, 0, .2, 1);
-}
-
-@keyframes unit-move-hop {
-  0% { transform: translateY(0) scale(1); }
-  14% { transform: translateY(-3px) scale(1.06); }  /* anticipation: brief wind-up */
-  48% { transform: translateY(-16px) scale(1.04); } /* apex of the arc */
-  80% { transform: translateY(2px) scale(.98); }    /* land + overshoot */
-  100% { transform: translateY(0) scale(1); }       /* settle */
-}
-
-@keyframes unit-move-hop-heavy {
-  0% { transform: translateY(0) scale(1); }
-  16% { transform: translateY(-2px) scale(1.07); }  /* bigger wind-up */
-  50% { transform: translateY(-12px) scale(1.03); } /* lower arc reads heavier */
-  78% { transform: translateY(4px) scale(.96); }    /* heavier landing */
-  90% { transform: translateY(-1px) scale(1.01); }  /* small bounce-back */
-  100% { transform: translateY(0) scale(1); }       /* settle */
-}
-
-/* Deploy arrival (render/SkirmishBoard). On board start each unit MATERIALIZES a short
-   distance above its own square and FALLS into the seat with an ease-out settle + a tiny
-   rebound — "setting the pieces on the board." Staggered per unit via --arrival-delay
-   (player wave, then the enemy answers; see computeArrivalDelays). `both` fill holds the
-   unit hidden at the 0% frame until its delay elapses, so it waits its turn instead of
-   flashing then dropping. Same motion family as the move-hop (ADR-0043); the per-tile
-   landing effect + sound cue hook in at the settle. */
-/* The deploy drop plays by DEFAULT, even under OS prefers-reduced-motion: this machine (and
-   many players' — Windows "Animation effects" off) reports reduce FALSELY, and gating on it
-   would hide the deploy from the very people it's for. Hence !important, to clear the global
-   `* { animation: none }` OS-reduce reset (style.css ~6036). Reduced motion is instead an
-   EXPLICIT in-game choice: `:root.reduce-motion` swaps the fall for a calm staggered fade
-   (below). A Settings toggle that sets that class is the remaining follow-up (see ADR). This
-   mirrors the repo's existing "a pure fade isn't gated on the OS query" precedent. */
-.skirmish-board-unit.is-arriving img {
-  animation: unit-arrival var(--arrival-anim, 620ms) linear var(--arrival-delay, 0ms) both !important;
-  transform-origin: center bottom; /* the impact squash compresses onto the feet, not the center */
-}
-:root.reduce-motion .skirmish-board-unit.is-arriving img {
-  animation: unit-arrival-soft 280ms ease var(--arrival-delay, 0ms) both !important;
-}
-
-/* The unit SPAWNS high above its square and hangs there MOTIONLESS, then drops under gravity
-   (ease-in builds speed over enough height to feel weighty) and hits the ground with a THUD:
-   a quick impact squash that recovers, no pre-jiggle and no upward bounce. Per-unit
-   --arrival-delay staggers the whole spawn→drop into a wave. The impact is ~85% of the
-   duration (≈ --arrival-delay + 525ms) — the hook point for the landing sound cue + the
-   per-tile dust/splash effect (wired later). */
-@keyframes unit-arrival {
-  0%   { opacity: 0; transform: translateY(-60px); animation-timing-function: ease-out; }     /* spawn high above, fading in */
-  26%  { opacity: 1; transform: translateY(-60px); animation-timing-function: linear; }        /* materialized, hanging still */
-  46%  { opacity: 1; transform: translateY(-60px); animation-timing-function: cubic-bezier(.55, 0, .9, .2); } /* release: fall, building speed */
-  82%  { transform: translateY(0) scaleX(1) scaleY(1); animation-timing-function: cubic-bezier(.3, 0, .2, 1); } /* contact */
-  88%  { transform: translateY(0) scaleX(1.16) scaleY(.82); animation-timing-function: ease-out; } /* THUD: impact squash */
-  100% { transform: translateY(0) scaleX(1) scaleY(1); }                                        /* recover */
-}
-
-.skirmish-board-unit img {
-  position: relative;
-  z-index: 1;
-}
-
-.skirmish-board-unit span {
-  align-items: center;
-  background: rgba(8, 13, 18, .82);
-  border: 2px solid rgba(240, 236, 216, .85);
-  border-radius: 999px;
-  color: #fff7df;
-  display: grid;
-  font: 800 22px/1 var(--ds-font-sans, system-ui, sans-serif);
-  height: 42px;
-  justify-items: center;
-  position: relative;
-  z-index: 1;
-  width: 42px;
-}
-
-.skirmish-board-unit.is-player span {
-  background: #1c66c7;
-}
-
-.skirmish-board-unit.is-enemy span {
-  background: #b83d33;
-}
-
-.skirmish-board-unit.is-neutral span {
-  background: #606872;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  /* Movement is functional feedback (where did the piece go?), not decoration,
-     so keep a brief slide instead of teleporting — but drop the airborne hop and
-     the decorative lift shadow that motion-sensitive players don't want. The turn
-     staging (your move → beat → enemy reply) still applies; that's pacing, not
-     motion. */
-  /* Keep the same deliberate travel timing the game is tuned around (a slower
-     slide is gentler, not more motion), but swap the airborne arc + scale bounce
-     for a small calm lift. !important exempts this one functional cue from the
-     global `* { animation: none }` reduced-motion reset further down this file. */
-  .skirmish-board-unit.is-moving {
-    filter: none;
-  }
-
-  .skirmish-board-unit.is-moving img,
-  .skirmish-board-unit.is-enemy.is-moving img {
-    animation: unit-move-hop-soft var(--move-duration) ease-in-out !important;
-  }
-  /* NOTE: the deploy arrival is deliberately NOT swapped here on the OS query — it keys off
-     the explicit `:root.reduce-motion` class instead (see the .is-arriving rules above), so
-     a falsely-reported OS reduce never hides the drop from the maintainer/most players. */
-}
-
-@keyframes unit-move-hop-soft {
-  0% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
-  100% { transform: translateY(0); }
-}
-
-@keyframes unit-arrival-soft {
-  0% { opacity: 0; }
-  100% { opacity: 1; }
 }
 
 .skirmish-left-panel {
