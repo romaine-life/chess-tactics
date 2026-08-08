@@ -498,6 +498,22 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('<RunBattlePreview run={run} />');
     expect(runBattlePreview).toContain('<LevelInfoCompact level={level} />');
     expect(runBattlePreview).toContain('levelToEditorBoard(level)');
+    // The Sectio's own battleIndex is the Battle just fought; reconnaissance is of the next one.
+    expect(runBattlePreview).toContain('const battleIndex = sectioUpcomingBattleIndex(run);');
+    expect(runBattlePreview).not.toMatch(/battles\[run\.battleIndex\]/);
+    // The frame HUGS the canonical 4:3 drawable window, so no opaque band is painted across the
+    // level art and the pane still matches the Deployment/Play composition it previews.
+    expect(runBattlePreview).toContain('<div className="run-battle-preview-board-seat">');
+    expect(styleCss).toMatch(/\.run-battle-preview-board-seat\s*\{[\s\S]*?container-type:\s*size;/);
+    expect(styleCss).toMatch(
+      /\.run-battle-preview-board-frame\s*\{[\s\S]*?block-size:\s*auto;/,
+    );
+    expect(styleCss).toMatch(
+      /@supports \(inline-size: 1cqb\)\s*\{\s*\.run-battle-preview-board-frame\s*\{[\s\S]*?max-inline-size:[\s\S]*?100cqb/,
+    );
+    expect(styleCss).not.toMatch(
+      /\.run-battle-preview-board-view > \.board-view-pane-seat\s*\{[^}]*block-size:\s*100%/,
+    );
     expect(runBattlePreview).toContain('Drag to pan · scroll to zoom');
     expect(runBattlePreview).toContain('setup forces whose');
     expect(runBattlePreview).not.toContain('<OuterChromeBox');

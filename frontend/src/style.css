@@ -19635,18 +19635,52 @@ button.tileset-relationship-cell {
   font-size: var(--ds-text-sm);
 }
 
-.run-battle-preview-board-frame {
+/* The board area is the measuring container: the frame inside it takes the largest box whose
+   INTERIOR is the canonical 4:3 drawable window (ADR-0192/ADR-0259), exactly as Play's
+   `.skirmish-board-frame` does. A frame stretched to the area instead seats a centred 4:3 pane
+   inside itself, and the surplus becomes an opaque band painted across the level art. */
+.run-battle-preview-board-seat {
+  container-type: size;
   display: grid;
   grid-area: board;
+  /* Explicit filling tracks, not auto ones: a size container's contents cannot size its tracks,
+     so an auto track plus a percentage-width child resolves to zero. */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.run-battle-preview-board-frame {
+  align-self: center;
+  justify-self: center;
+  /* Both sides of the registered inner-box border plus this frame's own padding: the pixels
+     between the measured area and the 4:3 interior the aspect is solved for. */
+  --run-battle-preview-frame-inset:
+    calc(2 * (var(--le-chrome-inner-rail-w, 7px) + var(--ds-space-2)));
+  block-size: auto;
+  display: grid;
+  inline-size: 100%;
   min-block-size: 0;
   min-inline-size: 0;
   overflow: hidden;
   padding: var(--ds-space-2);
 }
 
+@supports (inline-size: 1cqb) {
+  .run-battle-preview-board-frame {
+    max-inline-size: calc(
+      (100cqb - var(--run-battle-preview-frame-inset))
+        * var(--board-view-aspect-width) / var(--board-view-aspect-height)
+      + var(--run-battle-preview-frame-inset)
+    );
+  }
+}
+
+/* No block-size override: the canonical `.ce-level-viewer` 4:3 governs, so the frame's height
+   is derived from its width and the seated pane fills the interior exactly. */
 .run-battle-preview-board-view,
 .run-battle-preview-board-view > .board-view-pane-seat {
-  block-size: 100%;
   min-block-size: 0;
   min-inline-size: 0;
 }
@@ -19702,8 +19736,14 @@ button.tileset-relationship-cell {
     grid-template-rows: auto auto auto;
   }
 
+  /* Stacked, the board row is content-height, so there is no definite block size to solve the
+     4:3 against — the frame simply takes the column width and the viewer derives its height. */
+  .run-battle-preview-board-seat {
+    container-type: inline-size;
+  }
+
   .run-battle-preview-board-frame {
-    aspect-ratio: var(--board-view-aspect);
+    max-inline-size: none;
   }
 
   .run-battle-preview-intelligence {
