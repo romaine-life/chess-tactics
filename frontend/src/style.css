@@ -19654,17 +19654,20 @@ button.tileset-relationship-cell {
 .run-battle-preview-board-frame {
   align-self: center;
   justify-self: center;
-  /* Both sides of the registered inner-box border plus this frame's own padding: the pixels
-     between the measured area and the 4:3 interior the aspect is solved for. */
-  --run-battle-preview-frame-inset:
-    calc(2 * (var(--le-chrome-inner-rail-w, 7px) + var(--ds-space-2)));
+  /* Both sides of the registered inner-box border: the pixels between the measured area and the
+     4:3 interior the aspect is solved for. */
+  --run-battle-preview-frame-inset: calc(2 * var(--le-chrome-inner-rail-w, 7px));
   block-size: auto;
   display: grid;
   inline-size: 100%;
   min-block-size: 0;
   min-inline-size: 0;
   overflow: hidden;
-  padding: var(--ds-space-2);
+  /* NO padding. The installed inner-box surface paints an opaque `background-color` under every
+     inner box, so any padding here is a flat slab of that material ringing the level art between
+     the border art and the board. The board is the frame's whole content: it must reach the
+     border on all four sides so the surface is never visible. */
+  padding: 0;
 }
 
 @supports (inline-size: 1cqb) {

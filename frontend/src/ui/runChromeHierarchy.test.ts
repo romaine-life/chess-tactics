@@ -508,6 +508,12 @@ describe('Run chrome hierarchy', () => {
     expect(styleCss).toMatch(
       /\.run-battle-preview-board-frame\s*\{[\s\S]*?block-size:\s*auto;/,
     );
+    // The installed inner-box surface paints an opaque background under every inner box, so any
+    // padding here rings the level art with a flat slab of that material.
+    expect(styleCss).toMatch(/\.run-battle-preview-board-frame\s*\{[^}]*padding:\s*0;/);
+    expect(styleCss).not.toMatch(
+      /\.run-battle-preview-board-frame\s*\{[^}]*padding:\s*var\(--ds-space/,
+    );
     expect(styleCss).toMatch(
       /@supports \(inline-size: 1cqb\)\s*\{\s*\.run-battle-preview-board-frame\s*\{[\s\S]*?max-inline-size:[\s\S]*?100cqb/,
     );
