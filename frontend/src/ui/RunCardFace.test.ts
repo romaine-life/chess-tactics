@@ -54,20 +54,49 @@ describe('formation-only Run card face', () => {
     expect(source).toContain("`var(--unit-anchor-y-${piece.unit}, -78%)`");
   });
 
-  it('prints a complete isometric board footprint with fading neighboring tiles', () => {
-    const cells = runCardFormationBoardCells(3, 2);
-    expect(cells.filter((cell) => !cell.faded)).toEqual([
-      { x: 0, y: 0, dark: false, faded: false },
-      { x: 1, y: 0, dark: true, faded: false },
-      { x: 2, y: 0, dark: false, faded: false },
-      { x: 0, y: 1, dark: true, faded: false },
-      { x: 1, y: 1, dark: false, faded: false },
-      { x: 2, y: 1, dark: true, faded: false },
+  it('prints the card footprint alone', () => {
+    const cells = runCardFormationBoardCells([{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }]);
+    expect(cells).toEqual([
+      { x: 0, y: 0, dark: false },
+      { x: 1, y: 0, dark: true },
+      { x: 1, y: 1, dark: false },
     ]);
-    expect(cells.filter((cell) => cell.faded)).toHaveLength(10);
+  });
+
+  it('never prints a board square the card does not occupy', () => {
+    for (const definition of Object.values(RUN_CARD_BY_ID)) {
+      const seats = runCardFaceContent(definition).formation;
+      const cells = runCardFormationBoardCells(seats);
+      expect(cells).toHaveLength(new Set(seats.map((seat) => `${seat.x}:${seat.y}`)).size);
+      for (const cell of cells) {
+        expect(seats.some((seat) => seat.x === cell.x && seat.y === cell.y)).toBe(true);
+      }
+    }
+  });
+
+  /**
+   * The Settings board-grid style is a BATTLEFIELD choice. A card is printed matter — its diagram
+   * is drawn at a fixed size in ink that belongs to the card, and it must look the same on every
+   * account whatever grid the player runs. The style ships as three inherited custom properties on
+   * :root, so a card rule that read one would silently join that setting; state the card's own
+   * values literally and this cannot happen by accident.
+   */
+  it('draws its own squares, never the board-grid style setting', () => {
     const styles = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
-    expect(styles).toMatch(/\.run-card-formation-square polygon[\s\S]*?stroke:/);
-    expect(styles).toMatch(/\.run-card-formation-square\.is-faded[\s\S]*?opacity:\s*\.14/);
+    const cardRules = [...styles.matchAll(/(\.run-card-formation[^{}]*)\{([^}]*)\}/g)];
+    expect(cardRules.length).toBeGreaterThan(0);
+    for (const [, selector, body] of cardRules) {
+      expect(`${selector}${body}`).not.toMatch(/--board-grid-|data-board-grid-style/);
+    }
+  });
+
+  // Hiding the vacant squares is the whole change. The square itself keeps the exact line and
+  // fill it has always had, so a card the player already knows is not repainted underneath them.
+  it('leaves the printed square line and fill untouched', () => {
+    const styles = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+    expect(styles).toMatch(/\.run-card-formation-square polygon\s*\{\s*fill:\s*rgba\(212, 196, 161, \.46\);\s*stroke:\s*rgba\(55, 48, 39, \.56\);\s*stroke-width:\s*1\.15;/);
+    expect(styles).toMatch(/\.run-card-formation-square\.is-dark polygon\s*\{\s*fill:\s*rgba\(101, 115, 113, \.34\);/);
+    expect(styles).not.toMatch(/\.run-card-formation-square\.is-faded/);
   });
 
   it('uses the battlefield projection and the player army facing', () => {

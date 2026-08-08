@@ -3,7 +3,7 @@ import { DEFAULT_PLAYER_PALETTE, isPlayerPalette, type PlayerPalette } from '../
 
 /**
  * How the board grid is drawn. Every value is a design that was authored and looked at on a real
- * board; `chalk` is the one the game ships with. See `.tileset-board-grid-layer path` in style.css,
+ * board; `ink` is the one the game ships with. See `.tileset-board-grid-layer path` in style.css,
  * which owns the pixels — this union only names them.
  */
 export const BOARD_GRID_STYLES = ['chalk', 'ink', 'carved', 'bold', 'hairline'] as const;
@@ -36,7 +36,7 @@ export const DEFAULT_APP_SETTINGS: Readonly<AppSettings> = Object.freeze({
   effectsVolume: 80,
   interfaceSounds: true,
   showBoardGrid: true,
-  boardGridStyle: 'chalk',
+  boardGridStyle: 'ink',
   autoDealDeployment: false,
   playerPalette: DEFAULT_PLAYER_PALETTE,
 });
