@@ -925,12 +925,13 @@ export function CampaignEditor({
   // retrying hydration later must never merge over interim edits made against partial data.
   const selectedTierReady = campIsOfficial ? officialWorkspaceReady : userWorkspaceReady;
   const readOnly = !selectedTierReady || (campIsOfficial && !isAdmin);
-  // The Editor rail does not advertise campaigns. Runs replaced them as how the game is
-  // played (ADR-0529), so a standing campaign row is a button nobody presses. This hides
-  // rows and nothing else: the campaigns, their levels, `?campaign=<id>` and + New Campaign
-  // all still work, and the campaign the address actually names stays listed so those paths
-  // land somewhere visible. It is a display rule, not a retirement — no content is deleted
-  // and restoring the rows is one filter.
+  // The Editor rail neither advertises campaigns nor offers to create one. Runs replaced them
+  // as how the game is played (ADR-0529), so a standing campaign row is a button nobody
+  // presses, and a create verb only minted rows the rail would then refuse to list — a door
+  // into a panel nothing links to. Existing campaigns are untouched: their levels,
+  // `?campaign=<id>`, Duplicate, Import and the private quota all still work, and the campaign
+  // the address actually names stays listed so those paths land somewhere visible. No content
+  // is deleted, and restoring the rows is one filter.
   const railCampaigns = campaigns.filter((campaign) => campaign.id === routeCampaignId);
   const officialCampaigns = railCampaigns.filter((c) => c.origin === 'official');
   const userCampaigns = railCampaigns.filter((c) => c.origin !== 'official');
@@ -1116,27 +1117,13 @@ export function CampaignEditor({
               </div>
             </KitScroll>
             {/* Pinned rail footer — creation first, then workspace verbs (whole-workspace /
-                collection scope): New Level · New Campaign · Import · Save · Publish · Sign-in ·
-                status. Starting a standalone level never requires a hydrated user workspace. */}
+                collection scope): New Level · Import · Save · Publish · Sign-in · status.
+                Starting a standalone level never requires a hydrated user workspace. */}
             <div className="ce-rail-actions">
               <EditorButton
                 data-testid="new-level-shortcut"
                 href={`/editor/level?returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_UNASSIGNED_RETURN_TO)}`}
               >+ New Level</EditorButton>
-              <EditorButton
-                data-testid="new-campaign"
-                disabled={!userWorkspaceReady}
-                onClick={() => {
-                  if (!userWorkspaceReady) return;
-                  const previousCampaignId = useCampaigns.getState().selectedCampaignId;
-                  useCampaigns.getState().newCampaign();
-                  const createdCampaignId = useCampaigns.getState().selectedCampaignId;
-                  if (previousCampaignId && createdCampaignId !== previousCampaignId) {
-                    useCampaigns.getState().selectCampaign(previousCampaignId);
-                  }
-                  if (createdCampaignId) navigateApp(editorCampaignHref('/editor', createdCampaignId));
-                }}
-              >+ New Campaign</EditorButton>
               <EditorButton disabled={!userWorkspaceReady} onClick={() => importInputRef.current?.click()}>Import</EditorButton>
               <EditorButton
                 tone="primary"
@@ -1315,7 +1302,7 @@ export function CampaignEditor({
                     <SettingsSection title="Editor">
                       <EditorRow
                         title="No campaign selected"
-                        description="Levels live under Unassigned levels and Wars. Create a campaign with + New Campaign, or open an existing one by its address."
+                        description="Levels live under Unassigned levels and Wars. Open an existing campaign by its address, or Import a workspace that carries one."
                       />
                     </SettingsSection>
                   )}
