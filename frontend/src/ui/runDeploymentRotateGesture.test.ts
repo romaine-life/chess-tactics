@@ -91,17 +91,51 @@ describe('Run Deployment hand', () => {
     expect(hand).toContain('aria-label="Next formation"');
     expect(hand).toContain('onClick={() => onStep(-1)}');
     expect(hand).toContain('onClick={() => onStep(1)}');
-    // The steppers are a row of their own BELOW the card, not columns flanking it.
-    expect(hand).toMatch(
-      /<div className="run-arrangement-hand-card"[\s\S]*?<\/div>\s*<div className="run-arrangement-steppers"/,
-    );
+    // The steppers are a row of their own BELOW the card, not columns flanking it — and a
+    // component of their own, because the card is PINNED and only they scroll.
+    expect(hand).toContain('export function RunArrangementCard(');
+    expect(hand).toContain('export function RunArrangementSteppers(');
     expect(styles).toContain('.run-arrangement-steppers {');
+    expect(runScreen).toMatch(
+      /<RunArrangementCard run=\{run\} cards=\{cards\} selectedCardId=\{selectedCardId\} \/>\s*\) : null\}\s*<KitScroll className="run-arrangement-scroll">/,
+    );
+    // ...and the steppers are inside that rail, so they move while the card holds still.
+    expect(runScreen).toMatch(/<KitScroll className="run-arrangement-scroll">[\s\S]*?<RunArrangementSteppers/);
     // No survivor of the grid that squeezed them, nor of the strip that flanked the card.
     expect(hand).not.toContain('run-arrangement-hand-cards');
     expect(hand).not.toContain('run-arrangement-hand-strip');
     expect(hand).not.toContain('cards.map(');
     expect(styles).not.toContain('.run-arrangement-hand-cards');
     expect(styles).not.toContain('.run-arrangement-hand-strip');
+  });
+
+  // A control that appears and disappears re-lays the panel under the player's hand.
+  it('keeps Remove formation on screen, greyed until there is one to remove', () => {
+    expect(runScreen).toContain('data-testid="arrangement-remove-formation"');
+    expect(runScreen).toContain('disabled={departing || !selected.placed}');
+    // It is never conditionally rendered.
+    expect(runScreen).not.toMatch(/\{selected\.placed \? \(\s*<ChromeButton/);
+  });
+
+  // The Run's leaf controls carry the installed oak fill, offset per control so neighbours do
+  // not repeat one another's grain.
+  it('gives every control on the panel the installed wooden fill', () => {
+    expect(hand).toContain("import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';");
+    // Both steppers, both turns, Remove, Begin Battle and Abandon — nothing bare.
+    expect((hand.match(/data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}/g) ?? [])).toHaveLength(2);
+    const panel = runScreen.match(
+      /className="run-meta-controls run-deployment-controls run-arrangement-controls"[\s\S]*?\n {6}<\/section>/,
+    )?.[0];
+    expect(panel).toBeDefined();
+    const buttons = panel.match(/<ChromeButton\b/g) ?? [];
+    const filled = panel.match(/data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}/g) ?? [];
+    expect(buttons.length).toBeGreaterThan(0);
+    expect(filled).toHaveLength(buttons.length);
+    // Each carries its own index into the surface, so no two neighbours sample the same grain.
+    const indices = [...panel.matchAll(/'--run-leaf-control-index' as string\]: (\d+)/g)]
+      .map(([, value]) => Number(value));
+    expect(indices).toHaveLength(buttons.length);
+    expect(new Set(indices).size).toBe(indices.length);
   });
 
   // Every control that has a key wears it, in the cap the in-match shortcut grid already uses,

@@ -1,36 +1,36 @@
-import type { ReactElement } from 'react';
+import type { CSSProperties, ReactElement } from 'react';
 import { runCardDefinition, type RunDocument } from '../run/model';
 import type { RunArrangedCardSummary } from '../run/deployment';
 import { RunCard } from './RunCard';
 import { ChromeButton } from './shared/ChromeButton';
+import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
+
+function admittedCards(cards: readonly RunArrangedCardSummary[]): RunArrangedCardSummary[] {
+  return cards.filter(({ admitted }) => admitted);
+}
 
 /**
  * The dealt hand, one card at a time.
  *
- * Laying the whole hand out at once squeezed every card down to a thumbnail, and a formation
- * card is read by its shape — the thing being made too small was the only information on it.
- * The card takes the panel's whole width and its steppers sit UNDER it rather than either side,
- * which is what buys that width. The whole dealt hand, reserves included, is read in the
- * Chartulary.
+ * Laying the whole hand out at once squeezed every card down to a thumbnail, and a formation card
+ * is read by its shape — the thing being made too small was the only information on it. The card
+ * takes the panel's whole width and its steppers sit UNDER it rather than either side, which is
+ * what buys that width.
  *
- * Each stepper wears the key that does the same thing, in the shared shortcut cap the in-match
- * grid uses, so the keyboard is discovered from the control rather than from a hint.
+ * The card is PINNED: it is the subject of the whole panel, so it stays put while the controls
+ * beneath it scroll. That is why it is a component of its own rather than the head of the strip.
  */
-export function RunArrangementHand({
+export function RunArrangementCard({
   cards,
   selectedCardId,
-  onStep,
 }: {
   run: RunDocument;
   cards: readonly RunArrangedCardSummary[];
   selectedCardId: string | null;
-  onStep: (step: 1 | -1) => void;
 }): ReactElement {
-  const admitted = cards.filter(({ admitted: allowed }) => allowed);
-  const reserves = cards.length - admitted.length;
-  const index = admitted.findIndex(({ card }) => card.id === selectedCardId);
-  const current = index >= 0 ? admitted[index] : null;
+  const admitted = admittedCards(cards);
+  const current = admitted.find(({ card }) => card.id === selectedCardId) ?? null;
   const definition = current ? runCardDefinition(current.card.coreId) : null;
   return (
     <section className="run-arrangement-hand" aria-label="Dealt formation cards">
@@ -47,10 +47,37 @@ export function RunArrangementHand({
           <p className="skirmish-grid-hint">No formation is available to place this Battle.</p>
         )}
       </div>
+    </section>
+  );
+}
+
+/**
+ * Choosing which dealt formation is in hand.
+ *
+ * Each stepper wears the key that does the same thing, in the shared shortcut cap the in-match
+ * grid uses, so the keyboard is discovered from the control rather than from a hint. The whole
+ * dealt hand, reserves included, is read in the Chartulary.
+ */
+export function RunArrangementSteppers({
+  cards,
+  selectedCardId,
+  onStep,
+}: {
+  cards: readonly RunArrangedCardSummary[];
+  selectedCardId: string | null;
+  onStep: (step: 1 | -1) => void;
+}): ReactElement {
+  const admitted = admittedCards(cards);
+  const reserves = cards.length - admitted.length;
+  const index = admitted.findIndex(({ card }) => card.id === selectedCardId);
+  return (
+    <div className="skirmish-view-group run-deployment-control">
       <div className="run-arrangement-steppers" role="group" aria-label="Choose a formation">
         <ChromeButton
           unit="inner-text-button"
+          data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
           className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'run-arrangement-step')}
+          style={{ ['--run-leaf-control-index' as string]: 0 } as CSSProperties}
           disabled={admitted.length < 2}
           onClick={() => onStep(-1)}
           aria-label="Previous formation"
@@ -63,7 +90,9 @@ export function RunArrangementHand({
         </span>
         <ChromeButton
           unit="inner-text-button"
+          data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
           className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'run-arrangement-step')}
+          style={{ ['--run-leaf-control-index' as string]: 1 } as CSSProperties}
           disabled={admitted.length < 2}
           onClick={() => onStep(1)}
           aria-label="Next formation"
@@ -78,6 +107,6 @@ export function RunArrangementHand({
           Chartulary.
         </p>
       ) : null}
-    </section>
+    </div>
   );
 }

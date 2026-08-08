@@ -21425,7 +21425,7 @@ button.tileset-relationship-cell {
    Keyed to the BAND, not to the carried formation's current turn: the band answers "where may I
    deploy", which does not change when the player turns the piece. */
 .run-deployment-cell.is-band > .predrawn-cyan-move-highlight-paint {
-  opacity: .26;
+  opacity: .6;
 }
 
 /* A formation already on the board is still the player's to move, so its squares read as
@@ -21478,6 +21478,12 @@ button.tileset-relationship-cell {
   display: grid;
   gap: var(--ds-inline-tight);
   min-inline-size: 0;
+}
+
+/* The card is the subject of the panel, so it is pinned above the scroll rail and holds its
+   size while the controls beneath it move. */
+.run-arrangement-hand {
+  flex: 0 0 auto;
 }
 
 /* The card takes the panel's whole width. A formation card is read by its SHAPE, so a hand laid

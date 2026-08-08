@@ -122,7 +122,7 @@ import { RUN_CARD_BACK_SLOT } from './RunCardBack';
 import { RunCardPile } from './RunCardPile';
 import { RunBattlePreview } from './RunBattlePreview';
 import { RunDeploymentCardStack, RunDeploymentDeckDeal } from './RunDeploymentCardStack';
-import { RunArrangementHand } from './RunArrangementHand';
+import { RunArrangementCard, RunArrangementSteppers } from './RunArrangementHand';
 import { RunDeploymentRerollButton } from './RunDeploymentRerollButton';
 import { RunExpunctioWorkspace } from './RunExpunctioWorkspace';
 import { runCardName } from '../run/cardNames';
@@ -433,9 +433,13 @@ function ArrangedDeploymentControls({
         aria-busy={departing || undefined}
         inert={departing || undefined}
       >
-        {/* ADR-0030: the panel itself never scrolls. The house rail is a drawn element that
-            is always present, so nothing here may fall back to the browser's own bar. Abandon
-            Run stays outside it, pinned, rather than scrolling out of reach. */}
+        {/* The card is the subject of the whole panel, so it is PINNED above the rail and only
+            the controls beneath it move. ADR-0030: the panel itself never scrolls — the house
+            rail is a drawn element that is always present, so nothing here may fall back to the
+            browser's own bar. Abandon Run stays outside it too, rather than scrolling away. */}
+        {stage === 'arrange' ? (
+          <RunArrangementCard run={run} cards={cards} selectedCardId={selectedCardId} />
+        ) : null}
         <KitScroll className="run-arrangement-scroll">
         {stage === 'await-deal' || stage === 'dealing' ? (
           <RunDeploymentCardStack
@@ -450,8 +454,7 @@ function ArrangedDeploymentControls({
 
         {stage === 'arrange' ? (
           <>
-            <RunArrangementHand
-              run={run}
+            <RunArrangementSteppers
               cards={cards}
               selectedCardId={selectedCardId}
               onStep={onStepCard}
@@ -465,7 +468,9 @@ function ArrangedDeploymentControls({
                 <div className="run-arrangement-rotations" role="group" aria-label="Turn the formation">
                   <ChromeButton
                     unit="inner-text-button"
+                    data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                     className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'run-arrangement-turn')}
+                    style={{ ['--run-leaf-control-index' as string]: 2 } as CSSProperties}
                     disabled={departing || availableRotations.size < 2}
                     onClick={() => onTurn('counter-clockwise')}
                     aria-label="Turn the formation left"
@@ -475,7 +480,9 @@ function ArrangedDeploymentControls({
                   </ChromeButton>
                   <ChromeButton
                     unit="inner-text-button"
+                    data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                     className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'run-arrangement-turn')}
+                    style={{ ['--run-leaf-control-index' as string]: 3 } as CSSProperties}
                     disabled={departing || availableRotations.size < 2}
                     onClick={() => onTurn('clockwise')}
                     aria-label="Turn the formation right"
@@ -490,15 +497,19 @@ function ArrangedDeploymentControls({
                     : 'Point at the battlefield and click to place this formation.'}
                   {availableRotations.size > 1 ? ' Right-click turns it too.' : ''}
                 </p>
-                {selected.placed ? (
-                  <ChromeButton
-                    unit="inner-text-button"
-                    className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
-                    onClick={onRemove}
-                  >
-                    Remove formation
-                  </ChromeButton>
-                ) : null}
+                {/* Always here, greyed until there is something to remove: a control that
+                    appears and disappears re-lays the panel under the player's hand. */}
+                <ChromeButton
+                  unit="inner-text-button"
+                  data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                  className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+                  style={{ ['--run-leaf-control-index' as string]: 4 } as CSSProperties}
+                  data-testid="arrangement-remove-formation"
+                  disabled={departing || !selected.placed}
+                  onClick={onRemove}
+                >
+                  Remove formation
+                </ChromeButton>
               </div>
             ) : null}
 
@@ -506,7 +517,9 @@ function ArrangedDeploymentControls({
               <span className="skirmish-eyebrow">Battle</span>
               <ChromeButton
                 unit="inner-text-button"
+                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button', canBegin && 'active')}
+                style={{ ['--run-leaf-control-index' as string]: 5 } as CSSProperties}
                 data-testid="arrangement-begin-battle"
                 disabled={departing || !canBegin}
                 onClick={onBeginBattle}
@@ -527,7 +540,9 @@ function ArrangedDeploymentControls({
           <span className="skirmish-eyebrow">Run</span>
           <ChromeButton
             unit="inner-text-button"
+            data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
             className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'danger')}
+            style={{ ['--run-leaf-control-index' as string]: 6 } as CSSProperties}
             data-testid="abandon-run"
             disabled={abandoning || departing}
             onClick={() => { void requestAbandon(); }}
