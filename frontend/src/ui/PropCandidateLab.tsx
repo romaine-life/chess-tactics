@@ -98,6 +98,7 @@ export function PropCandidateLab({ propId, onPropId, header }: {
   const [busy, setBusy] = useState<'reviewing' | 'accepting' | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [seats, setSeats] = useState<ReadonlyMap<string, PropCandidateSeat>>(new Map());
+  const [seatError, setSeatError] = useState<string | null>(null);
 
   const refresh = useCallback(async (): Promise<void> => {
     setState((current) => (current === 'ready' ? current : 'loading'));
@@ -129,8 +130,14 @@ export function PropCandidateLab({ propId, onPropId, header }: {
     let cancelled = false;
     const target = accepted ? accepted.sprite.w * accepted.sprite.scale : 40;
     void Promise.all(groups.map(async (group) => [group.key, await candidateSeat(group, target)] as const))
-      .then((entries) => { if (!cancelled) setSeats(new Map(entries)); })
-      .catch(() => { if (!cancelled) setSeats(new Map()); });
+      .then((entries) => { if (!cancelled) { setSeats(new Map(entries)); setSeatError(null); } })
+      .catch((cause: unknown) => {
+        // A measurement failure means nothing can be mounted, which would otherwise read as
+        // "no candidates" — say so instead of showing an empty board.
+        if (cancelled) return;
+        setSeats(new Map());
+        setSeatError(cause instanceof Error ? cause.message : String(cause));
+      });
     return () => { cancelled = true; };
   }, [accepted, groups]);
 
@@ -285,10 +292,12 @@ export function PropCandidateLab({ propId, onPropId, header }: {
               <button type="button" className={`ps-toggle ${zoom === 1 ? 'is-on' : ''}`} onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>1× · fit proof</button>
             </div>
 
-            <p className="pc-note">
-              {groups.length === 0
-                ? `No staged candidates for ${activeProp}.`
-                : `${groups.length} candidate${groups.length === 1 ? '' : 's'} on the board. Far left is the installed art.`}
+            <p className={`pc-note ${seatError ? 'pc-note--bad' : ''}`}>
+              {seatError
+                ? `Could not measure candidates: ${seatError}`
+                : groups.length === 0
+                  ? `No staged candidates for ${activeProp}.`
+                  : `${seated.length}/${groups.length} candidate${groups.length === 1 ? '' : 's'} on the board. Far left is the installed art.`}
             </p>
 
             <div className="pc-list" role="listbox" aria-label="Staged candidates">
