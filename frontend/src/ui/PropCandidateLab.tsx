@@ -61,7 +61,7 @@ const PC_CSS = `
   width: var(--pc-frame-w); height: var(--pc-frame-h); background-image: var(--pc-sheet);
   background-size: var(--pc-sheet-w) var(--pc-frame-h); background-position: var(--pc-offset) 0;
   background-repeat: no-repeat; image-rendering: pixelated; pointer-events: none;
-  opacity: var(--pc-alpha); transform: translate(var(--pc-shift)); }
+  opacity: var(--pc-alpha); transform: translate(var(--pc-shift-x), var(--pc-shift-y)); }
 .pc-impact { display: grid; gap: 6px; justify-items: start; }
 .pc-impact-stage { width: var(--pc-frame-w); height: var(--pc-frame-h); background-image: var(--pc-sheet);
   background-size: var(--pc-sheet-w) var(--pc-frame-h); background-position: var(--pc-offset) 0;
@@ -134,7 +134,8 @@ function EntrancePreview({ artId, cell, timeMs }: {
         '--pc-sheet-w': `${raster.w * frames * scale}px`,
         '--pc-offset': `-${frame * raster.w * scale}px`,
         '--pc-sheet': `url(${sheet?.src ?? structureArtHalfSrc(artId, 'front')})`,
-        '--pc-shift': `${tx}% calc(${ty}% + ${fall.dy}px)`,
+        '--pc-shift-x': `${tx}%`,
+        '--pc-shift-y': `calc(${ty}% + ${fall.dy}px)`,
         '--pc-alpha': `${fall.opacity}`,
         zIndex: objectBaseZIndex(cell),
       } as CSSProperties}
@@ -219,29 +220,27 @@ export function PropCandidateLab({ propId, onPropId, header }: {
   const [entranceMs, setEntranceMs] = useState<number | null>(null);
   const [entranceSpeed, setEntranceSpeed] = useState(1);
   const [entranceCell, setEntranceCell] = useState({ x: 5, y: 4 });
-  const entranceRunRef = useRef<number | null>(null);
+  // Each press is its own run. Keying the clock on the CURRENT time cannot work — the value is
+  // the same at rest as it is at the end of a run, so a second press changes no dependency and
+  // never restarts the loop. A token that only ever increments is what makes replay replay.
+  const [entranceRun, setEntranceRun] = useState(0);
 
-  // Drive the entrance off a real clock so the replay has the same duration and the same shape a
-  // battle does; scrubbing simply stops the clock and sets the moment by hand.
   useEffect(() => {
-    if (entranceRunRef.current === null) return undefined;
+    if (entranceRun === 0) return undefined;
     let raf = 0;
-    const startedAt = performance.now() - (entranceRunRef.current ?? 0) / Math.max(0.05, entranceSpeed);
+    const rate = Math.max(0.05, entranceSpeed);
+    const startedAt = performance.now();
     const tick = (now: number): void => {
-      const elapsed = (now - startedAt) * Math.max(0.05, entranceSpeed);
-      if (elapsed >= STRUCTURE_ENTRANCE_MS) {
-        entranceRunRef.current = null;
-        setEntranceMs(STRUCTURE_ENTRANCE_MS);
-        return;
-      }
+      const elapsed = (now - startedAt) * rate;
+      if (elapsed >= STRUCTURE_ENTRANCE_MS) { setEntranceMs(STRUCTURE_ENTRANCE_MS); return; }
       setEntranceMs(elapsed);
       raf = window.requestAnimationFrame(tick);
     };
     raf = window.requestAnimationFrame(tick);
     return () => window.cancelAnimationFrame(raf);
-  }, [entranceSpeed, entranceMs === null]);
+  }, [entranceRun, entranceSpeed]);
 
-  const playEntrance = (): void => { entranceRunRef.current = 0; setEntranceMs(0); };
+  const playEntrance = (): void => { setEntranceMs(0); setEntranceRun((run) => run + 1); };
 
   const refresh = useCallback(async (): Promise<void> => {
     setState((current) => (current === 'ready' ? current : 'loading'));
@@ -503,7 +502,7 @@ export function PropCandidateLab({ propId, onPropId, header }: {
               <input
                 type="range" min={0} max={STRUCTURE_ENTRANCE_MS} step={10}
                 value={Math.round(entranceMs ?? STRUCTURE_ENTRANCE_MS)}
-                onChange={(event) => { entranceRunRef.current = null; setEntranceMs(Number(event.target.value)); }}
+                onChange={(event) => { setEntranceRun(0); setEntranceMs(Number(event.target.value)); }}
               />
             </label>
             <div className="ps-toggles">
