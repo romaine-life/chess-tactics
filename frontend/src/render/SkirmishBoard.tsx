@@ -1750,7 +1750,6 @@ export function SkirmishBoard({
   const setBoardPan = useSkirmishView((s) => s.setPan);
   const setOpeningView = useSkirmishView((s) => s.setOpeningView);
   const [viewViewportSize, setViewViewportSize] = useState<ViewPaneViewportSize | null>(null);
-  const [coverViewportSize, setCoverViewportSize] = useState<ViewPaneViewportSize | null>(null);
   const storedGame = useSkirmish((s) => s.game);
   const storedLevelId = useSkirmish((s) => s.levelId);
   const storedActivityId = useSkirmish((s) => s.activityId);
@@ -1912,19 +1911,14 @@ export function SkirmishBoard({
   const boardViewKey = surfaceState?.viewKey
     ?? storedActivityId
     ?? `${storedLevelId ?? 'free'}:${storedBoardViewEpoch}`;
-  // The opening fit must clear the same floor the live pane enforces, and that floor answers to
-  // the workspace column the board art overdraws into — not the aspect-locked pane inside it.
-  const preparedMinimumZoom = useMemo(() => {
-    const viewport = coverViewportSize ?? viewViewportSize;
-    return viewport
-      ? minimumZoomToCoverViewport({
-          viewport,
-          polygon: cameraCoverPolygon,
-          minZoom: PLAYER_TECHNICAL_MINIMUM_ZOOM,
-          maxZoom: 16,
-        })
-      : boardMinZoom;
-  }, [boardMinZoom, cameraCoverPolygon, coverViewportSize, viewViewportSize]);
+  const preparedMinimumZoom = useMemo(() => viewViewportSize
+    ? minimumZoomToCoverViewport({
+        viewport: viewViewportSize,
+        polygon: cameraCoverPolygon,
+        minZoom: PLAYER_TECHNICAL_MINIMUM_ZOOM,
+        maxZoom: 16,
+      })
+    : boardMinZoom, [boardMinZoom, cameraCoverPolygon, viewViewportSize]);
   const { markViewInteraction, cameraReady } = useBoardCameraFraming({
     board: { cols: game.size.cols, rows: game.size.rows },
     viewKey: boardViewKey,
@@ -2479,7 +2473,6 @@ export function SkirmishBoard({
         coverViewportSelector={SKIRMISH_BOARD_COLUMN_SELECTOR}
         onMinimumZoomChange={setMinZoom}
         onViewportSizeChange={setViewViewportSize}
-        onCoverViewportChange={setCoverViewportSize}
         onViewInteraction={markViewInteraction}
       >
         <BoardLabBoard

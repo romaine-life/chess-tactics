@@ -347,6 +347,44 @@ function coverViewportOf(stage: HTMLElement, selector: string | undefined): View
   );
 }
 
+/**
+ * True when the art can honour the wider column contract at this zoom with room left to move.
+ *
+ * The cover polygon is the level's camera bounds intersected with the accepted art, so a large
+ * raster does NOT imply a large polygon — a tightly authored camera box stays tight. Demanding the
+ * column unconditionally would then raise the zoom floor and shrink the feasible pan region toward
+ * a point, which reads as a board that refuses to zoom out and judders when dragged.
+ */
+export function columnContractIsAffordable({
+  viewport,
+  polygon,
+  zoom,
+}: {
+  viewport: ViewPaneViewportSize;
+  polygon: readonly ViewPanePoint[];
+  zoom: number;
+}): boolean {
+  const region = feasiblePanRegion({ viewport, polygon, zoom });
+  return region.length >= 3 && Math.abs(polygonSignedArea(region)) > COVER_EPSILON;
+}
+
+/**
+ * The box the PAN contract answers to right now. The column closes the backdrop strip whenever the
+ * art is large enough to afford it, and yields to the pane the moment it is not — so this can only
+ * ever add coverage, never take away zoom range or freedom of movement.
+ */
+function panContractViewport(
+  stage: HTMLElement,
+  selector: string | undefined,
+  polygon: readonly ViewPanePoint[],
+  zoom: number,
+): ViewPaneViewportSize {
+  const pane = { width: stage.clientWidth, height: stage.clientHeight };
+  const column = coverViewportOf(stage, selector);
+  if (column.width <= pane.width && column.height <= pane.height) return pane;
+  return columnContractIsAffordable({ viewport: column, polygon, zoom }) ? column : pane;
+}
+
 export function ViewPane({
   kind,
   ariaLabel,
@@ -360,7 +398,6 @@ export function ViewPane({
   coverViewportSelector,
   onMinimumZoomChange,
   onViewportSizeChange,
-  onCoverViewportChange,
   onViewInteraction,
   onAssetClick,
   boardViewportMode = 'canonical',
@@ -386,8 +423,6 @@ export function ViewPane({
   onMinimumZoomChange?: (zoom: number) => void;
   /** Reports the live drawable viewport used by projection-aware editor actions. */
   onViewportSizeChange?: (size: ViewPaneViewportSize) => void;
-  /** Reports the covered column, so an external opening fit derives the same zoom floor. */
-  onCoverViewportChange?: (size: ViewPaneViewportSize) => void;
   /** Reports intentional user camera movement; automatic floor/reclamp updates do not call it. */
   onViewInteraction?: () => void;
   onAssetClick?: (assetId: string) => void;
@@ -410,7 +445,6 @@ export function ViewPane({
   } | null>(null);
   const automaticFloorZoomRef = useRef<number | null>(null);
   const lastViewportSizeRef = useRef<ViewPaneViewportSize | null>(null);
-  const lastCoverViewportRef = useRef<ViewPaneViewportSize | null>(null);
   const didDragRef = useRef(false);
   const [resolvedMinZoom, setResolvedMinZoom] = useState(minZoom);
   const resolvedMaxZoom = Math.max(maxZoom, resolvedMinZoom);
@@ -431,19 +465,12 @@ export function ViewPane({
         lastViewportSizeRef.current = viewport;
         onViewportSizeChange?.(viewport);
       }
-      const coverViewport = coverViewportOf(stage, coverViewportSelector);
-      const previousCover = lastCoverViewportRef.current;
-      if (
-        !previousCover
-        || previousCover.width !== coverViewport.width
-        || previousCover.height !== coverViewport.height
-      ) {
-        lastCoverViewportRef.current = coverViewport;
-        onCoverViewportChange?.(coverViewport);
-      }
+      // The zoom FLOOR stays on the pane. Deriving it from the column would price the wider
+      // contract into how far out a level can be seen, and a tightly authored camera box would
+      // simply lose zoom range — the column is an opportunistic upgrade, never a toll.
       const next = coverPolygon
         ? minimumZoomToCoverViewport({
-            viewport: coverViewport,
+            viewport,
             polygon: coverPolygon,
             minZoom,
             maxZoom: Math.max(maxZoom, COVER_SEARCH_MAX_ZOOM),
@@ -454,20 +481,14 @@ export function ViewPane({
     updateMinimum();
     const observer = new ResizeObserver(updateMinimum);
     observer.observe(stage);
-    // The covered column resizes independently of the aspect-locked stage (a HUD width change
-    // moves it without touching the pane), so the floor must track that box too.
-    const column = coverViewportSelector
-      ? stage.closest<HTMLElement>(coverViewportSelector)
-      : null;
-    if (column && column !== stage) observer.observe(column);
     return () => observer.disconnect();
-  }, [coverPolygon, coverViewportSelector, maxZoom, minZoom, onCoverViewportChange, onViewportSizeChange]);
+  }, [coverPolygon, maxZoom, minZoom, onViewportSizeChange]);
 
   useLayoutEffect(() => {
     const stage = stageRef.current;
     if (!stage || !coverPolygon) return;
     const constrained = constrainPanToCoverViewport({
-      viewport: coverViewportOf(stage, coverViewportSelector),
+      viewport: panContractViewport(stage, coverViewportSelector, coverPolygon, zoom),
       polygon: coverPolygon,
       zoom,
       from: pan,
@@ -546,7 +567,7 @@ export function ViewPane({
     const stage = stageRef.current;
     onPanChange(stage && coverPolygon
       ? constrainPanToCoverViewport({
-          viewport: coverViewportOf(stage, coverViewportSelector),
+          viewport: panContractViewport(stage, coverViewportSelector, coverPolygon, zoom),
           polygon: coverPolygon,
           zoom,
           from: pan,
@@ -576,7 +597,7 @@ export function ViewPane({
     const stage = stageRef.current;
     if (stage && coverPolygon) {
       onPanChange(constrainPanToCoverViewport({
-        viewport: coverViewportOf(stage, coverViewportSelector),
+        viewport: panContractViewport(stage, coverViewportSelector, coverPolygon, nextZoom),
         polygon: coverPolygon,
         zoom: nextZoom,
         from: pan,

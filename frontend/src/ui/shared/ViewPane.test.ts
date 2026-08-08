@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   clientDeltaToLocal,
+  columnContractIsAffordable,
   constrainPanToCoverViewport,
   minimumZoomToCoverViewport,
   stageCenteredCoverViewport,
@@ -164,6 +165,47 @@ describe('ViewPane covered column', () => {
   it('never shrinks below the pane when the column is inside it', () => {
     expect(stageCenteredCoverViewport(pane, { left: 400, top: 300, right: 900, bottom: 700 }))
       .toEqual({ width: 1322, height: 992 });
+  });
+
+  it('declines the column when the art cannot afford it', () => {
+    // The cover polygon is the camera bounds INTERSECTED with the art, so a big raster does not
+    // imply a big polygon. A camera box that only just covers the pane must keep the pane
+    // contract — taking the column here is what cost zoom range and froze panning.
+    const tightCamera = [
+      { x: -661, y: -496 },
+      { x: 661, y: -496 },
+      { x: 661, y: 496 },
+      { x: -661, y: 496 },
+    ];
+    const column = { width: 1572, height: 992 };
+    expect(columnContractIsAffordable({ viewport: column, polygon: tightCamera, zoom: 1 })).toBe(false);
+    // The same board with art to spare can afford it.
+    const roomyPlate = [
+      { x: -911, y: -512 },
+      { x: 911, y: -512 },
+      { x: 911, y: 512 },
+      { x: -911, y: 512 },
+    ];
+    expect(columnContractIsAffordable({ viewport: column, polygon: roomyPlate, zoom: 1 })).toBe(true);
+  });
+
+  it('leaves the zoom floor entirely to the pane', () => {
+    // Regression: pricing the column into the floor took zoom-out range away from every level
+    // whose camera box is authored tight.
+    const tightCamera = [
+      { x: -661, y: -496 },
+      { x: 661, y: -496 },
+      { x: 661, y: 496 },
+      { x: -661, y: 496 },
+    ];
+    const paneFloor = minimumZoomToCoverViewport({
+      viewport: { width: 1322, height: 992 }, polygon: tightCamera, minZoom: 0.1, maxZoom: 16,
+    });
+    const columnFloor = minimumZoomToCoverViewport({
+      viewport: { width: 1572, height: 992 }, polygon: tightCamera, minZoom: 0.1, maxZoom: 16,
+    });
+    expect(columnFloor).toBeGreaterThan(paneFloor);
+    expect(paneFloor).toBeCloseTo(1, 3);
   });
 
   it('closes the strip a pan used to open', () => {
