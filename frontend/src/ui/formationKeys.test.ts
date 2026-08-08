@@ -31,8 +31,17 @@ describe('Formation arranging keys', () => {
     expect(formationTurnKeyDirection(press({ key: 's' }))).toBeNull();
   });
 
+  // The arrangement is confirmed from the thumb, and both spellings are the one key: older
+  // engines name it Spacebar.
+  it('begins the Battle on Space', () => {
+    expect(formationKeyAction(press({ key: ' ' }))).toEqual({ kind: 'begin' });
+    expect(formationKeyAction(press({ key: 'Spacebar' }))).toEqual({ kind: 'begin' });
+    // Confirming is neither turning nor stepping, so the turn reader must not claim it.
+    expect(formationTurnKeyDirection(press({ key: ' ' }))).toBeNull();
+  });
+
   it('leaves every other key alone', () => {
-    for (const key of ['r', 'a', 'd', ' ', 'Enter', 'Escape', 'ArrowLeft', 'Tab']) {
+    for (const key of ['r', 'a', 'd', 'Enter', 'Escape', 'ArrowLeft', 'Tab']) {
       expect(formationKeyAction(press({ key }))).toBeNull();
     }
   });
@@ -40,17 +49,17 @@ describe('Formation arranging keys', () => {
   // Modifier chords belong to other verbs — Ctrl+E is the browser's, not the board's, and
   // Ctrl+W would close the tab.
   it('declines modifier chords', () => {
-    for (const key of ['e', 'q', 'w', 's']) {
+    for (const key of ['e', 'q', 'w', 's', ' ']) {
       expect(formationKeyAction(press({ key, ctrlKey: true }))).toBeNull();
       expect(formationKeyAction(press({ key, metaKey: true }))).toBeNull();
       expect(formationKeyAction(press({ key, altKey: true }))).toBeNull();
     }
   });
 
-  // One press is one quarter turn, or one card. A held key must not run at the operating
-  // system's repeat rate.
+  // One press is one quarter turn, or one card, or one Battle. A held key must not run at the
+  // operating system's repeat rate.
   it('refuses auto-repeat', () => {
-    for (const key of ['e', 'q', 'w', 's']) {
+    for (const key of ['e', 'q', 'w', 's', ' ']) {
       expect(formationKeyAction(press({ key, repeat: true }))).toBeNull();
     }
   });
