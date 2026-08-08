@@ -2,6 +2,7 @@ import { useMemo, type ReactElement } from 'react';
 import { StudioReadOnlyBoard } from '../../render/StudioReadOnlyBoard';
 import { BOARD_GRID_STYLES, type BoardGridStyle } from '../../settings/appSettings';
 import { BOARD_GRID_STYLE_LABELS } from '../../settings/boardGridStyle';
+import { InnerChromeBox } from './ChromeBox';
 import { HouseSelect, type HouseSelectOption } from './HouseSelect';
 import { boardGridStyleSwatchBoard } from './boardGridStyleSwatchBoard';
 
@@ -72,18 +73,22 @@ export function BoardGridStylePicker({
 
   return (
     <div className="board-grid-style-picker">
-      {/* The attribute rides the preview, not :root, so the picture shows the style being
-          considered without the rest of the app switching under the player mid-decision. */}
-      <span className="board-grid-style-preview" data-board-grid-style={value}>
-        <StudioReadOnlyBoard
-          board={board}
-          boardPan={SWATCH_VIEW_PAN}
-          className="board-grid-style-swatch-board"
-          ariaLabel={`${BOARD_GRID_STYLE_LABELS[value].label} grid over board terrain`}
-          showGrid
-          still
-        />
-      </span>
+      {/* The registered inner frame, so the picture is a framed sample on this panel rather than a
+          bare rectangle of battlefield bleeding into the settings surface. */}
+      <InnerChromeBox as="span" className="board-grid-style-preview-box">
+        {/* The attribute rides the preview, not :root, so the picture shows the style being
+            considered without the rest of the app switching under the player mid-decision. */}
+        <span className="board-grid-style-preview" data-board-grid-style={value}>
+          <StudioReadOnlyBoard
+            board={board}
+            boardPan={SWATCH_VIEW_PAN}
+            className="board-grid-style-swatch-board"
+            ariaLabel={`${BOARD_GRID_STYLE_LABELS[value].label} grid over board terrain`}
+            showGrid
+            still
+          />
+        </span>
+      </InnerChromeBox>
       <HouseSelect
         className="board-grid-style-select"
         ariaLabel="Board grid style"

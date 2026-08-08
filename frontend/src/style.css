@@ -15546,6 +15546,11 @@ button.tileset-relationship-cell {
   justify-items: stretch;
 }
 
+.board-grid-style-preview-box {
+  display: block;
+  inline-size: 100%;
+}
+
 /* A fixed WINDOW, never a fitted camera: the board inside is held at canonical 1× and overflows
    this box on every edge, so the preview shows the grid at exactly the weight a battlefield draws
    it. Sizing this box is a crop, not a zoom — which is why it can be made as large as the row
