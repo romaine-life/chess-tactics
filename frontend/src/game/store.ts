@@ -183,7 +183,7 @@ function playLandingTerrain(env: MoveEnv, x: number, y: number, gain?: number): 
 
 function describeEvent(ev: GameEvent): string | null {
   switch (ev.kind) {
-    case 'captured': return 'A piece falls.';
+    case 'captured': return ev.enPassant ? 'A pawn is taken in passing.' : 'A piece falls.';
     case 'promoted': return `A pawn ascends to a ${PIECE_LABEL[ev.to] ?? ev.to}.`;
     case 'castled': return 'Castled — the King and Rook regroup.';
     default: return null;
