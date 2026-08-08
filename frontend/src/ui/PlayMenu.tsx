@@ -60,6 +60,13 @@ import { ActionList } from './shared/ActionList';
 import { SettingsRow, SettingsSection } from './shared/SettingsControls';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
+import {
+  CAMPAIGN_RAIL_START_INDEX,
+  PLAY_MODE_ENTRY_ENABLED,
+  PLAY_SOURCE_RAIL_ENABLED,
+  enabledPlayModeNames,
+  playModeRailIndex,
+} from './playModeAvailability';
 
 type PlayIcon = 'solo-skirmish' | 'campaign-editor' | 'level-editor' | 'lobbies';
 
@@ -129,9 +136,8 @@ function ActionColumn({ children }: { children: ReactElement }): ReactElement {
 }
 
 function ContinuePanel({ inventory }: { inventory: ContinueInventory }): ReactElement {
-  // Continue shows the one most recent unfinished activity and nothing else (ADR-0356):
-  // no list, no second offer, no choice. Every mode keeps its ordinary rail destination
-  // one column left, and re-entering an activity there resumes its saved board.
+  // Retained direct Continue shows the one most recent enabled activity and nothing
+  // else. It is no longer an ordinary Play entry while Run is the sole mode (ADR-0514).
   const selected = inventory.activities[0] ?? null;
   return (
     <ActionColumn>
@@ -157,7 +163,9 @@ function ContinuePanel({ inventory }: { inventory: ContinueInventory }): ReactEl
               <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status" data-testid="continue-empty">
                 <div className="settings-row-copy">
                   <h4>Nothing to continue</h4>
-                  <p>Choose Campaign, Skirmish, Run, or Levels to start something.</p>
+                  <p>
+                    Choose {enabledPlayModeNames()} to start something.
+                  </p>
                 </div>
               </section>
             </div>
@@ -650,10 +658,16 @@ export function PlayMenu({
   // Route selection is scene state, not an object to recreate on every render. A fresh
   // object here used to retrigger the reset effect after setSelectedLevelId(), clearing
   // the level immediately and briefly invalidating the complete Play surface.
-  const selection: PlayHubSelection = useMemo(
-    () => playHubSelection(path) ?? { mode: 'hub' },
+  const routeSelection = useMemo(
+    () => playHubSelection(path),
     [path],
   );
+  // The installed compatibility root paints the sole player-facing mode immediately;
+  // its address canonicalizes after Run authority settles without flashing the retained
+  // Continue implementation first (ADR-0514).
+  const selection: PlayHubSelection = !routeSelection || routeSelection.mode === 'hub'
+    ? { mode: 'run', choice: null }
+    : routeSelection;
   const [progress, setProgress] = useState<CampaignProgress>(readProgress);
   const [selectedLevelId, setSelectedLevelId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -717,8 +731,9 @@ export function PlayMenu({
 
   useEffect(() => {
     if (!isPlaySelectorPath(path)) return;
-    if (!playHubSelection(path)) {
-      navigateApp(PLAY_CONTINUE_SELECTOR_HREF, { replace: true, scroll: false });
+    const addressedSelection = playHubSelection(path);
+    if (!addressedSelection) {
+      navigateApp(PLAY_RUN_SELECTOR_HREF, { replace: true, scroll: false });
       return;
     }
     if (
@@ -728,7 +743,7 @@ export function PlayMenu({
       && selection.mode === 'campaign'
       && !campaigns.some((campaign) => campaign.id === selection.campaignId)
     ) {
-      navigateApp(PLAY_CONTINUE_SELECTOR_HREF, { replace: true, scroll: false });
+      navigateApp(PLAY_RUN_SELECTOR_HREF, { replace: true, scroll: false });
       return;
     }
     if (
@@ -740,7 +755,11 @@ export function PlayMenu({
       navigateApp(PLAY_RUN_SELECTOR_HREF, { replace: true, scroll: false });
       return;
     }
-    if (!loading && runHydrated && (selection.mode === 'hub' || selection.mode === 'continue')) {
+    if (runHydrated && addressedSelection.mode === 'hub') {
+      if (path !== PLAY_RUN_SELECTOR_HREF) navigateApp(PLAY_RUN_SELECTOR_HREF, { replace: true, scroll: false });
+      return;
+    }
+    if (!loading && runHydrated && addressedSelection.mode === 'continue') {
       // Continue names exactly one activity — the most recent one — so any other Continue
       // address is stale by construction and canonicalizes onto it (ADR-0356).
       const canonicalHref = resumeInventory.defaultMode
@@ -774,9 +793,7 @@ export function PlayMenu({
   const selectedRunChoice: RunChoice = selection.mode === 'run' ? selection.choice : null;
   const selectedContinueChoice: PlayContinueChoice | null = selection.mode === 'continue'
     ? selection.choice ?? resumeInventory.defaultMode
-    : selection.mode === 'hub'
-      ? resumeInventory.defaultMode
-      : null;
+    : null;
   const hasRunDetail = selection.mode === 'run'
     && (selectedRunChoice === 'new' || (selectedRunChoice === 'current' && Boolean(activeRun)));
   // Continue mounts no preview column: its resume card IS the action column (ADR-0356),
@@ -796,54 +813,57 @@ export function PlayMenu({
   // Run and Continue mount no thumbnail surface, so a stale thumbnail
   // failure from a previously selected list must not condemn them.
   const surfaceError = loadError
-    ?? (selection.mode === 'run' || selection.mode === 'continue' || selection.mode === 'hub' ? null : thumbnailSurface.error);
-  // The installed root and bare Continue address resolve only after both match
-  // content and the account Run settle. Their first composed frame is therefore
-  // already the complete Continue surface with its default activity selected.
-  const continueLandingSettled = selection.mode !== 'hub' && selection.mode !== 'continue' || runHydrated;
+    ?? (selection.mode === 'run' || selection.mode === 'continue' ? null : thumbnailSurface.error);
+  // Compatibility landings resolve only after Run authority settles, so the first
+  // painted frame is already the complete Run-preparation surface (ADR-0514).
+  const primaryRunLandingSettled = routeSelection?.mode !== 'hub' || runHydrated;
+  const continueLandingSettled = selection.mode !== 'continue' || runHydrated;
 
   return (
     <ThumbnailSurfaceReportContext.Provider value={reportThumbnailSurface}>
       <div
-        className={`play-scene-authority${hasDetailPreview ? ' has-detail-preview' : ''}${selectedLevel ? ' has-level-preview' : ''}`}
+        className={`play-scene-authority${PLAY_SOURCE_RAIL_ENABLED ? '' : ' is-source-rail-collapsed'}${hasDetailPreview ? ' has-detail-preview' : ''}${selectedLevel ? ' has-level-preview' : ''}`}
         data-official-authority={loading ? 'loading' : officialAvailable ? 'ready' : 'error'}
         data-user-authority={loading ? 'loading' : userWorkspaceAvailable ? 'ready' : 'error'}
         data-thumbnail-authority={thumbnailSurface.error ? 'error' : thumbnailSurface.complete ? 'ready' : 'loading'}
       >
-      <ApparatusRailColumn className="menu-dest-col menu-dest-tabs play-source-rail" aria-label="Play">
+      {PLAY_SOURCE_RAIL_ENABLED ? <ApparatusRailColumn
+        className="menu-dest-col menu-dest-tabs play-source-rail"
+        aria-label="Play"
+      >
         <div className="play-source-fixed">
           <ApparatusRailTab
             label="Continue"
             to={PLAY_CONTINUE_SELECTOR_HREF}
             iconSrc={carvedIcon('campaign-editor')}
-            active={selection.mode === 'continue' || selection.mode === 'hub'}
+            active={selection.mode === 'continue'}
             index={0}
             testId="play-continue"
           />
-          <PlayRailTab
+          {PLAY_MODE_ENTRY_ENABLED.skirmish ? <PlayRailTab
             label="Skirmish"
             href={PLAY_SKIRMISH_SELECTOR_HREF}
             icon="solo-skirmish"
             active={selection.mode === 'skirmish'}
-            index={1}
-          />
-          <PlayRailTab
+            index={playModeRailIndex('skirmish')}
+          /> : null}
+          {PLAY_MODE_ENTRY_ENABLED.run ? <PlayRailTab
             label="Run"
             href={PLAY_RUN_SELECTOR_HREF}
             icon="campaign-editor"
             active={selection.mode === 'run'}
-            index={2}
-          />
-          <PlayRailTab
+            index={playModeRailIndex('run')}
+          /> : null}
+          {PLAY_MODE_ENTRY_ENABLED.levels ? <PlayRailTab
             label="Levels"
             href={PLAY_LEVELS_SELECTOR_HREF}
             icon="level-editor"
             active={selection.mode === 'levels'}
-            index={3}
-          />
+            index={playModeRailIndex('levels')}
+          /> : null}
         </div>
 
-        <section className="play-campaign-region" aria-labelledby="play-campaign-heading">
+        {PLAY_MODE_ENTRY_ENABLED.campaign ? <section className="play-campaign-region" aria-labelledby="play-campaign-heading">
           <p className="campaign-rail-group play-campaign-heading" id="play-campaign-heading">Campaign</p>
           <KitScroll className="play-campaign-scroll">
             <div className="play-campaign-list">
@@ -858,7 +878,7 @@ export function PlayMenu({
                       key={campaign.id}
                       campaign={campaign}
                       active={selection.mode === 'campaign' && selection.campaignId === campaign.id}
-                      index={index + 4}
+                      index={index + CAMPAIGN_RAIL_START_INDEX}
                     />
                   ))}
                 </>
@@ -871,15 +891,15 @@ export function PlayMenu({
                       key={campaign.id}
                       campaign={campaign}
                       active={selection.mode === 'campaign' && selection.campaignId === campaign.id}
-                      index={officialCampaigns.length + index + 4}
+                      index={officialCampaigns.length + index + CAMPAIGN_RAIL_START_INDEX}
                     />
                   ))}
                 </>
               ) : null}
             </div>
           </KitScroll>
-        </section>
-      </ApparatusRailColumn>
+        </section> : null}
+      </ApparatusRailColumn> : null}
 
       <PaintedSurfaceBoundary
         surface="play-selector"
@@ -887,8 +907,9 @@ export function PlayMenu({
         readyToCompose={
           !loading
           && !surfaceError
+          && primaryRunLandingSettled
           && continueLandingSettled
-          && (selection.mode === 'run' || selection.mode === 'continue' || selection.mode === 'hub' || thumbnailSurface.complete)
+          && (selection.mode === 'run' || selection.mode === 'continue' || thumbnailSurface.complete)
         }
         error={surfaceError}
         loadingLabel="Preparing Play…"
@@ -903,7 +924,7 @@ export function PlayMenu({
         className="play-destination-content"
         sceneInstance={sceneInstanceKey}
       >
-      {selection.mode === 'hub' || selection.mode === 'continue' ? (
+      {selection.mode === 'continue' ? (
         <ContinuePanel inventory={resumeInventory} />
       ) : null}
       {selection.mode === 'skirmish' ? (

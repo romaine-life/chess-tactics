@@ -293,12 +293,16 @@ terrain, fluid kings. The drift is gradual by design (pillars §3).
 
 Near-term scope:
 
-- **Campaign** — a curated sequence of 5–10 boards, growing over time.
+- **Campaign** — a curated sequence of 5–10 boards, growing over time. Its implementation
+  and direct routes remain, but its player-facing Play and Continue entries are dormant
+  under ADR-0514.
 - **Run** — a seeded persistent army moves through a separately authored War; Battles
   retain normal chess behavior while deployment, economy, information, objectives, and
-  rewards create run variety (ADR-0193).
+  rewards create run variety (ADR-0193). It is currently the sole player-facing mode:
+  Play opens its preparation directly without a mode-selector column (ADR-0514).
 - **Solo Skirmish** — a quick one-off board vs. the AI: **mostly fixed boards, with
-  a random-setup option.** Cheap to include, so it is in.
+  a random-setup option.** Its implementation and direct routes remain, but its ordinary
+  Play and Continue entries are dormant under ADR-0514.
 - **Level Editor + sharing** — first-class (§9).
 - **PvP** — human-vs-human on a board, supported.
 

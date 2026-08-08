@@ -334,10 +334,9 @@ const playShell: SectionedShell = {
     section('levels', SCENE_DEFINITIONS.playLevels),
     section('campaign', SCENE_DEFINITIONS.playCampaign),
   ],
-  // The identity is the RESOLVED section address: the hub root, the agnostic
-  // Continue address, its choices, and malformed selector paths all present one
-  // committed Continue scene, so PlayMenu's ADR-0260 canonicalization retargets the
-  // in-flight preparation in place instead of exiting the scene again.
+  // The identity is the RESOLVED section address. The installed root and malformed
+  // selector paths paint the sole player-facing Run mode immediately; retained direct
+  // Continue and dormant-mode routes keep their own development identities (ADR-0514).
   sectionPath: (path) => playHubSectionPath(path),
   resolve: (path) => {
     const selection = playHubSelection(path);
@@ -347,7 +346,8 @@ const playShell: SectionedShell = {
       return { sectionId: 'campaign', params: { campaignId: selection.campaignId } };
     }
     if (selection?.mode === 'skirmish') return { sectionId: 'skirmish' };
-    return { sectionId: 'continue' };
+    if (selection?.mode === 'continue') return { sectionId: 'continue' };
+    return { sectionId: 'run' };
   },
 };
 

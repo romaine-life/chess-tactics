@@ -65,17 +65,17 @@ describe('scene director', () => {
     expect(state.phase).toBe('loading');
     const firstGeneration = state.generation;
 
-    // PlayMenu resolves resume authority and canonicalizes the hub root to the
-    // most recent Continue choice (ADR-0260) while the destination still prepares.
+    // PlayMenu canonicalizes the hub root to the sole player-facing Run mode
+    // (ADR-0514) while the destination still prepares.
     state = reduceScene(state, {
       type: 'navigate',
-      destination: sceneManifest('/play/select/continue/skirmish'),
-      href: '/play/select/continue/skirmish',
+      destination: sceneManifest('/play/select/run'),
+      href: '/play/select/run',
     });
     expect(state).toMatchObject({
       phase: 'loading',
       current: { id: 'settings:/settings/general' },
-      destinationHref: '/play/select/continue/skirmish',
+      destinationHref: '/play/select/run',
       generation: firstGeneration + 1,
     });
 
@@ -83,7 +83,7 @@ describe('scene director', () => {
     state = reduceScene(state, { type: 'entrance-finished', generation: state.generation });
     expect(state).toMatchObject({
       phase: 'current',
-      current: { pathname: '/play/select/continue/skirmish' },
+      current: { pathname: '/play/select/run' },
       destination: null,
     });
   });

@@ -4,6 +4,7 @@ import { ATARAXIA_BY_TIER, formatGold, runBattleActivityId, type RunDocument } f
 import { playContinueSelectorHref, type PlayContinueChoice } from './playHubRoute';
 import { playSkirmishLevelHref } from './skirmishMaps';
 import { isSkirmishProfileLevel } from './skirmishProfiles';
+import { playModeEntryEnabled } from './playModeAvailability';
 
 export interface ContinueActivity {
   mode: PlayContinueChoice;
@@ -56,7 +57,7 @@ export function continueInventory(
   const matchTime = parsedTime(match?.savedAt);
   const activities = new Map<PlayContinueChoice, ContinueActivity>();
 
-  if (run) {
+  if (run && playModeEntryEnabled('run')) {
     const phase = runPhase(run);
     activities.set('run', {
       mode: 'run',
@@ -77,7 +78,7 @@ export function continueInventory(
   if (match?.levelId && !matchBelongsToRun) {
     const level = levels[match.levelId];
     const campaign = campaigns.find((candidate) => candidate.levels.some((ref) => ref.levelId === match.levelId));
-    if (level && campaign) {
+    if (level && campaign && playModeEntryEnabled('campaign')) {
       activities.set('campaign', {
         mode: 'campaign',
         summary: `${campaign.name} · ${level.name}`,
@@ -89,24 +90,26 @@ export function continueInventory(
           { label: 'Battle', value: level.name },
         ],
       });
-    } else if (level) {
+    } else if (level && !campaign) {
       const mode: PlayContinueChoice = isSkirmishProfileLevel(level) ? 'skirmish' : 'levels';
-      activities.set(mode, {
-        mode,
-        summary: level.name,
-        title: level.name,
-        playHref: playSkirmishLevelHref(match.levelId, playContinueSelectorHref(mode)),
-        updatedAt: matchTime,
-        facts: [
-          { label: 'Mode', value: mode === 'skirmish' ? 'Skirmish' : 'Levels' },
-          { label: 'Battle', value: 'In progress' },
-        ],
-      });
+      if (playModeEntryEnabled(mode)) {
+        activities.set(mode, {
+          mode,
+          summary: level.name,
+          title: level.name,
+          playHref: playSkirmishLevelHref(match.levelId, playContinueSelectorHref(mode)),
+          updatedAt: matchTime,
+          facts: [
+            { label: 'Mode', value: mode === 'skirmish' ? 'Skirmish' : 'Levels' },
+            { label: 'Battle', value: 'In progress' },
+          ],
+        });
+      }
     }
   }
 
-  // Recency is the whole order: Continue resumes the last thing the player touched, and
-  // any other unfinished activity is left to its own rail destination.
+  // Recency orders enabled candidates only. Dormant modes keep their saved state but
+  // do not re-enter ordinary navigation through the retained Continue surface (ADR-0514).
   const ordered = [...activities.values()].sort((left, right) => right.updatedAt - left.updatedAt);
   return { activities: ordered, defaultMode: ordered[0]?.mode ?? null };
 }
