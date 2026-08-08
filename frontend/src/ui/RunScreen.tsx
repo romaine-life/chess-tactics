@@ -54,6 +54,7 @@ import {
   takeVacantiaCard,
   takeVacantiaLipsanon,
   undoRunBattleMove,
+  type RunBattleNotice,
   type RunCardOffer,
   type RunDocument,
   type LipsanonId,
@@ -1142,7 +1143,11 @@ function RunBattlefieldPanel({
 
   const transformCommittedBoard = useCallback<RunBattleTransformSink>((game, events) => {
       let active = useActiveRun.getState().run;
-      if (!active || active.phase !== 'battle' || active.id !== run.id || !active.battleRuntime) return game;
+      // Every change below reports itself here. The Battle log, the gold rising off the board,
+      // and the coin all come from this one list, so there is no arrangement of this function
+      // that moves the Run's gold without the player being told.
+      const notices: RunBattleNotice[] = [];
+      if (!active || active.phase !== 'battle' || active.id !== run.id || !active.battleRuntime) return { game, notices };
       let transformed: GameState = game;
       let changed = false;
       // The en passant bounty is the PLAYER's alone: the same capture is available to the
@@ -1150,10 +1155,14 @@ function RunBattlefieldPanel({
       // the Run roster, so a Reservist or a promoted pawn earns it like any other unit.
       for (const event of events) {
         if (event.kind !== 'captured' || !event.enPassant) continue;
-        if (transformed.pieces.find((candidate) => candidate.id === event.by)?.side !== 'player') continue;
-        const paid = payRunEnPassantBounty(active);
-        if (paid === active) continue;
-        active = paid;
+        const capturer = transformed.pieces.find((candidate) => candidate.id === event.by);
+        if (capturer?.side !== 'player') continue;
+        // The bounty is seated on the square the capturing pawn now stands on, not the victim's
+        // vacated one — that is where the player is looking, and where the unit that earned it is.
+        const paid = payRunEnPassantBounty(active, { x: capturer.x, y: capturer.y });
+        if (!paid) continue;
+        active = paid.run;
+        notices.push(paid.notice);
         changed = true;
       }
       const observedDeadUnitIds = active.battleRuntime?.observedDeadUnitIds ?? [];
@@ -1188,12 +1197,17 @@ function RunBattlefieldPanel({
           startY: cell.y,
           ...(reservist.type === 'pawn' ? { pawnForward: facing } : {}),
         };
+        // Record and narrate the arrival BEFORE the unit is on the board, so a Reservist that
+        // the Run could not account for never appears unannounced either.
+        const deployed = markReservistDeployed(active, reservist.id, cell);
+        if (!deployed) continue;
+        active = deployed.run;
+        notices.push(deployed.notice);
         transformed = { ...transformed, pieces: [...transformed.pieces, spawned] };
-        active = markReservistDeployed(active, reservist.id);
         changed = true;
       }
       if (changed) useActiveRun.getState().replace(active);
-      return transformed;
+      return { game: transformed, notices };
   }, [baseLevel, run.id]);
 
   const presentation = useMemo<RunBattlePresentation>(() => ({
