@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { EditorBoard, VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
 import type { PredrawnBackgroundVersion } from '../net/predrawnBackgroundVersions';
+import { HttpError } from '../net/http';
 import {
   predrawnEnvironmentGeometryFromVersion,
   predrawnSelectionNeedsRevalidation,
+  predrawnSelectionReadFailure,
+  predrawnSelectionReadShouldRetry,
   predrawnSelectionValidity,
 } from './predrawnSelectionValidity';
 
@@ -221,5 +224,45 @@ describe('pre-drawn Level selection validity', () => {
       v1: GEOMETRY,
       v2: GEOMETRY,
     }, { cells: { '0,0': 'grass' } }).kind).toBe('unavailable');
+  });
+});
+
+describe('predrawn selection read failures', () => {
+  it('separates an expired sign-in from any other unread list', () => {
+    // ADR-0306 owns identity, so the caller reports the 401 there and passes the verdict in. This
+    // only has to keep the two apart, because they earn different words and different actions.
+    const expired = predrawnSelectionReadFailure(
+      new HttpError('list-predrawn-background-versions', 401, 'unauthorized'),
+      true,
+    );
+    expect(expired.kind).toBe('unreachable');
+    expect(expired.signedOut).toBe(true);
+
+    const restarted = predrawnSelectionReadFailure(new TypeError('Failed to fetch'), false);
+    expect(restarted.kind).toBe('unreachable');
+    expect(restarted.signedOut).toBe(false);
+    expect(restarted.message).toContain('Failed to fetch');
+
+    // A thrown non-Error still has to produce a usable sentence rather than "[object Object]".
+    expect(predrawnSelectionReadFailure({ nope: true }, false).message)
+      .toBe('The immutable artwork selection could not be checked.');
+  });
+
+  it('retries only the answer that was never received', () => {
+    // The bug this exists for: one unread list hid a level's artwork for the life of the page.
+    expect(predrawnSelectionReadShouldRetry(predrawnSelectionReadFailure(new Error('down'), false))).toBe(true);
+    expect(predrawnSelectionReadShouldRetry(predrawnSelectionReadFailure(new Error('401'), true))).toBe(true);
+
+    // Settled answers about the artwork itself must NOT spin: the server would keep saying the
+    // same thing, and the owner has real work to do about it.
+    const artifact = { kind: 'valid' as const, artifact: {} as never };
+    expect(predrawnSelectionReadShouldRetry(artifact)).toBe(false);
+    expect(predrawnSelectionReadShouldRetry({ kind: 'stale', artifact: {} as never })).toBe(false);
+    expect(predrawnSelectionReadShouldRetry({ kind: 'unavailable' })).toBe(false);
+    expect(predrawnSelectionReadShouldRetry({ kind: 'missing' })).toBe(false);
+    expect(predrawnSelectionReadShouldRetry({ kind: 'checking' })).toBe(false);
+    // The check could not be ATTEMPTED. Its missing input arriving re-runs it; asking the server
+    // again would not.
+    expect(predrawnSelectionReadShouldRetry({ kind: 'error', message: 'no document' })).toBe(false);
   });
 });
