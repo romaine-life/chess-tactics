@@ -166,6 +166,8 @@ try {
       bounty: model.RUN_ROYAL_FORK_BOUNTY_TENTHS,
       notices: live.goldNotices.map((n) => ({ at: n.at, goldTenths: n.goldTenths })),
       log: live.log.map((entry) => entry.text ?? entry.note ?? JSON.stringify(entry)).filter((line) => /fork/i.test(line)),
+      // The move in the game's own notation, so a passing run names the move that earned it.
+      tail: live.log.slice(-4).map((entry) => entry.text ?? entry.note ?? JSON.stringify(entry)),
     };
   `);
   const delta = paid.gold - plan.gold;
@@ -183,7 +185,7 @@ try {
   await (board ?? page).screenshot({ path: shotPath });
 
   console.log(`gold ${plan.gold / 10} → ${paid.gold / 10} (+${paid.bounty / 10})`);
-  console.log(`log: ${paid.log[paid.log.length - 1]}`);
+  console.log(`log: ${paid.tail.join(' | ')}`);
   console.log(`marker seated at ${seated.at.x},${seated.at.y}`);
   console.log(`PASS — royal fork bounty paid on the live board (${shotPath})`);
   await done(0);
