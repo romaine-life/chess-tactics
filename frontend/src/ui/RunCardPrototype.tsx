@@ -249,21 +249,26 @@ function RunCardBackStudy({ header, viewerZoom }: { header: ReactNode; viewerZoo
         {groups.map((group) => (
           <section key={group.key}>
             <header><strong>{group.label}</strong><span>{group.note}</span></header>
-            {group.versions.map((version) => {
-              const sha256 = version.media?.sha256 ?? '';
-              const shown = sha256 === selectedSha;
-              return (
-                <ChromeButton
-                  key={version.id}
-                  unit="inner-text-button"
-                  aria-pressed={shown}
-                  disabled={busy}
-                  onClick={() => select(sha256)}
-                >
-                  {shown ? '● ' : '○ '}{version.label} · {sha256.slice(0, 12)}
-                </ChromeButton>
-              );
-            })}
+            {/* One wrapping row, not a column. The offered-back family (ADR-0524)
+                makes this list long enough that a stack pushes the cards it
+                switches off the bottom of the screen. */}
+            <div className="run-card-back-candidate-list">
+              {group.versions.map((version) => {
+                const sha256 = version.media?.sha256 ?? '';
+                const shown = sha256 === selectedSha;
+                return (
+                  <ChromeButton
+                    key={version.id}
+                    unit="inner-text-button"
+                    aria-pressed={shown}
+                    disabled={busy}
+                    onClick={() => select(sha256)}
+                  >
+                    {shown ? '● ' : '○ '}{version.label.replace(/\s*—\s*Codex\b.*$/, '')} · {sha256.slice(0, 8)}
+                  </ChromeButton>
+                );
+              })}
+            </div>
           </section>
         ))}
       </div>
