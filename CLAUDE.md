@@ -329,7 +329,7 @@ Run to that state, and answers with both:
 curl -X POST <url>/api/active-run/craft -H 'content-type: application/json' -d '{
   "phase": "sectio", "battle": 4, "gold": 33.5,
   "army": [{ "type": "rook" }, "knight", "pawn"],
-  "offers": [{ "id": "q" }, { "id": "pb-front" }],
+  "offers": [{ "id": "q" }, { "id": "pb-front" }, { "id": "p" }, { "id": "pp" }],
   "loot": ["royal-tent"], "lipsana": ["quartermasters-ledger"] }'
 ```
 
@@ -369,7 +369,11 @@ hand-authored one-off leaves a durable link behind:
   pins its offers, army and 8 gold).
 - `gold=25` (decimals fine), `army=knight,rook` (the exact non-King army; `add=queen`
   appends instead), `lipsana=<id,id>`.
-- Sectio only: `offers=<card-id>[,<card-id>]`; `loot=<id,id>`; `paid=<id>`. Use exact
+- Sectio only: `offers=<card-id>[,<card-id>]` — and the list must be exactly as long as the
+  Sectio deals, which is three, or FOUR while the Quartermaster's Ledger is held. A Run crafted
+  deep enough into a War may be holding it already, so a spec that worked at Battle 2 can be
+  refused at Battle 4 with `run.sectio.cardOffers has an invalid count`; add the fourth offer.
+  Also `loot=<id,id>`; `paid=<id>`. Use exact
   authored ids such as `p`, `pp`, `pb-front`, `kk-horizontal`, and `rr-vertical`.
   Composition shorthand is accepted only when it identifies one formation unambiguously.
   Craft resolves any authored id, including formations RETIRED from the offer deck

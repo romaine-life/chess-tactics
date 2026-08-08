@@ -2898,7 +2898,15 @@ function immediateLipsanon(run: RunDocument, lipsanon: LipsanonId): RunDocument 
 export function acquireLipsanon(run: RunDocument, lipsanon: LipsanonId): RunDocument {
   if (run.lipsana.includes(lipsanon)) return run;
   if (!CURRENT_LIPSANON_IDS.has(lipsanon)) return run;
-  return touch(immediateLipsanon({ ...run, lipsana: [...run.lipsana, lipsanon] }, lipsanon));
+  // Holding one implies having seen it. The document invariant is that lipsana is a subset of
+  // seenLipsana, and the offer pool draws on seenLipsana to avoid repeating itself — so a
+  // lipsanon granted without passing through the offer that would have shown it still must not
+  // come back around as a fresh offer. Along the ordinary path it is already seen and this is a
+  // no-op; it is the granting callers that were leaving the document inconsistent.
+  const seenLipsana = run.seenLipsana.includes(lipsanon)
+    ? run.seenLipsana
+    : [...run.seenLipsana, lipsanon];
+  return touch(immediateLipsanon({ ...run, lipsana: [...run.lipsana, lipsanon], seenLipsana }, lipsanon));
 }
 
 /** Administrator-only caller helper. Authorization belongs to the server endpoint;

@@ -760,13 +760,54 @@ function craftUnits(pieces: readonly AdlectablePieceType[]): RunCraftUnit[] {
   return pieces.map((type) => ({ type }));
 }
 
+/** The one-seat card that supplies a single unit of each adlectable type. */
+const CRAFT_SUPPLYING_CARD_BY_TYPE: Readonly<Record<AdlectablePieceType, string>> = Object.freeze({
+  pawn: 'p',
+  knight: 'k',
+  bishop: 'b',
+  rook: 'r',
+  queen: 'q',
+});
+
+/**
+ * Add units, AND the cards that seat them.
+ *
+ * The Chartulary is the roster: every army unit sits in a seat of a held card, and the server
+ * refuses a document where one does not. `addArmyPieces` only appends units, because its caller in
+ * Adlectio mints the card that seats them — craft names units rather than cards, so it has to mint
+ * that card itself. Skipping it produced a document the validator rejected outright, which made
+ * `army` and `add` unusable in every craft spec that carried them.
+ *
+ * One single-seat card per unit is the honest shape. The spec asked for units, and this is the
+ * smallest Chartulary that legitimately supplies exactly those units and no others.
+ */
 function addPieces(run: RunDocument, units: readonly RunCraftUnit[]): RunDocument {
-  const { addedUnits: _addedUnits, ...update } = addArmyPieces(
+  const { addedUnits, ...update } = addArmyPieces(
     run,
     units.map((unit) => unit.type),
     'adlectio',
   );
-  return { ...run, ...update };
+  // Cards record the Battle they were acquired after, and the validator holds that inside the War.
+  const acquiredAfterBattleIndex = Math.max(0, Math.min(run.battleIndex, run.war.battles.length - 1));
+  let sequence = run.nextCardSequence;
+  // addArmyPieces adds one unit per piece it is given, in order, so the crafted type is the one
+  // at the same index — and that type is adlectable, which the added unit's wider type is not.
+  const supplied = addedUnits.map((unit, index) => {
+    const card = {
+      id: `run-card-${sequence}`,
+      coreId: CRAFT_SUPPLYING_CARD_BY_TYPE[units[index].type],
+      unitSeats: [unit.id],
+      acquiredAfterBattleIndex,
+    };
+    sequence += 1;
+    return card;
+  });
+  return {
+    ...run,
+    ...update,
+    cards: [...run.cards, ...supplied],
+    nextCardSequence: sequence,
+  };
 }
 
 /** Cards are the Run's Adlectio history; a crafted army rewrites the roster, so cards keep only the
