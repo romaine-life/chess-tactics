@@ -389,6 +389,8 @@ export function ViewPane({
     const stage = stageRef.current;
     if (!stage) return undefined;
     const updateMinimum = (): void => {
+      // The reported drawable viewport stays the stage: projection-aware editor actions and the
+      // opening composition measure the pane itself, not the column it may overdraw into.
       const viewport = { width: stage.clientWidth, height: stage.clientHeight };
       const previousViewport = lastViewportSizeRef.current;
       if (
@@ -399,6 +401,9 @@ export function ViewPane({
         lastViewportSizeRef.current = viewport;
         onViewportSizeChange?.(viewport);
       }
+      // The zoom FLOOR stays on the pane. Deriving it from the column would price the wider
+      // contract into how far out a level can be seen, and a tightly authored camera box would
+      // simply lose zoom range — the column is an opportunistic upgrade, never a toll.
       const next = coverPolygon
         ? minimumZoomToCoverViewport({
             viewport,

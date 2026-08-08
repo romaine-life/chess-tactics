@@ -1858,6 +1858,11 @@ export function RunScreen({
           ) : null,
           hudProps: { enableGlobalShortcuts: false },
           persistentViewportArtwork: persistentSectioScene,
+          // The installed Sectio room is a cover-fitted opaque raster owning the whole viewport
+          // column, so the ordinary world backdrop behind it is never seen — decline it explicitly
+          // rather than letting SkirmishShell's `undefined` opt back in. Phases with no retained
+          // room artwork keep the ordinary backdrop.
+          screenStyle: persistentSectioScene ? null : undefined,
           viewport: {
             className: 'run-phase-workspace',
             primaryClassName: 'run-phase-primary',
