@@ -26211,12 +26211,23 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
    to its room is therefore a single division, and the seats, the outline and the figures on them
    keep their proportions to each other at any size. */
 .run-card-formation {
-  /* Fit the space on its tightest axis, then stop at the cap. A one-seat card has room to print
-     its seat several times over, and a diagram that took all of it would stop reading as the same
-     board as the four-seat card beside it. */
+  /* Fit the INK to the space on its tightest axis, then stop at the cap.
+
+     One box is fitted and the same box is centred. An earlier pass fitted a RESERVE instead --
+     a board plus room for a full-scale figure -- so that a card's board would not resize with the
+     piece standing on it. That reasoning does not survive contact: the board already resizes with
+     the FOOTPRINT, from 1.45x on one seat to 0.91x on four, so holding it still across pieces was
+     defending a consistency the card never had. All it bought was a third box, larger than
+     anything painted, hanging outside the drawing. */
+  --run-card-formation-ink-width: calc(
+    var(--run-card-formation-ink-right) - var(--run-card-formation-ink-left)
+  );
+  --run-card-formation-ink-height: calc(
+    var(--run-card-formation-ink-bottom) - var(--run-card-formation-ink-top)
+  );
   --run-card-formation-unit: min(
-    calc(100cqw / var(--run-card-formation-natural-width)),
-    calc(100cqh / var(--run-card-formation-natural-height)),
+    calc(100cqw / var(--run-card-formation-ink-width)),
+    calc(100cqh / var(--run-card-formation-ink-height)),
     calc(var(--run-card-formation-max-scale, 1.45) * var(--run-card-formation-committed-tile))
   );
   block-size: calc(var(--run-card-formation-unit) * var(--run-card-formation-natural-height));
@@ -26226,10 +26237,10 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   inset-inline-start: 50%;
   isolation: isolate;
   position: absolute;
-  /* Centre the INK, not the reserve. The drawing is sized against a full-scale figure so a card's
-     board keeps its size whatever stands on it, but a pawn is drawn at 0.66 -- so on a card of
-     short pieces the reserved box is taller than anything painted in it, and centring the box
-     would leave the figures sitting low. These offsets are the gap between the two. */
+  /* This element is the drawing's coordinate FRAME, not the drawing: it spans far enough for a
+     full-scale figure on every seat so the seats have somewhere to be placed, and it is never
+     painted or outlined. What is fitted and centred is the ink inside it, so the frame is shifted
+     by the gap between the two. Nothing here is a box the reader can see. */
   --run-card-formation-ink-dx: calc(
     var(--run-card-formation-natural-width) / 2
     - (var(--run-card-formation-ink-left) + var(--run-card-formation-ink-right)) / 2
@@ -26940,38 +26951,22 @@ button.run-card-formation-cell {
   min-inline-size: 0;
 }
 
-/* Review-only: draw the space, and the ink centred in it.
-
-   Two boxes are in play and only one of them is what "centred" is about. The RESERVE is what gets
-   fitted -- it is sized for a full-scale figure so a card's board keeps its size whatever piece
-   stands on it -- and the INK is what gets centred. On a card of short pieces the reserve is
-   taller than anything painted in it, so it deliberately hangs out of the top of the space. Draw
-   only the reserve, as this first did, and the picture contradicts the rule. */
+/* Review-only: the space, and the drawing fitted and centred in it. Two boxes, and the second
+   touches the first on one axis -- which is the whole rule, drawn. */
 .run-card-fit-grid[data-formation-box='on'] .run-card-formation-fit {
   outline: 1px dashed rgba(88, 224, 255, .85);
 }
 
 .run-card-fit-grid[data-formation-box='on'] .run-card-formation::before {
-  block-size: calc(
-    var(--run-card-formation-unit)
-    * (var(--run-card-formation-ink-bottom) - var(--run-card-formation-ink-top))
-  );
+  block-size: calc(var(--run-card-formation-unit) * var(--run-card-formation-ink-height));
   content: '';
-  inline-size: calc(
-    var(--run-card-formation-unit)
-    * (var(--run-card-formation-ink-right) - var(--run-card-formation-ink-left))
-  );
+  inline-size: calc(var(--run-card-formation-unit) * var(--run-card-formation-ink-width));
   inset-block-start: calc(var(--run-card-formation-unit) * var(--run-card-formation-ink-top));
   inset-inline-start: calc(var(--run-card-formation-unit) * var(--run-card-formation-ink-left));
   outline: 1px solid rgba(255, 176, 64, .85);
   pointer-events: none;
   position: absolute;
   z-index: 40;
-}
-
-/* The reserve, so the relationship between the two is visible rather than asserted. */
-.run-card-fit-grid[data-formation-box='on'] .run-card-formation {
-  outline: 1px dotted rgba(216, 248, 255, .3);
 }
 
 .run-card-fit-specimen {

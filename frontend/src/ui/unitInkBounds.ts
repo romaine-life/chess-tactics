@@ -50,6 +50,19 @@ export function unitInkBoundsFromAlpha(
   });
 }
 
+/**
+ * A figure whose pixels never arrive falls back to its whole sprite rather than holding startup
+ * open. Nothing here is worth a blank screen.
+ */
+const MEASURE_TIMEOUT_MS = 4_000;
+
+function withinTimeout<T>(work: Promise<T>, fallback: T): Promise<T> {
+  return Promise.race([
+    work,
+    new Promise<T>((resolve) => { setTimeout(() => resolve(fallback), MEASURE_TIMEOUT_MS); }),
+  ]);
+}
+
 async function measureSprite(src: string): Promise<UnitInkBounds> {
   try {
     const image = new Image();
@@ -84,13 +97,20 @@ export function unitInkBoundsStyle(piece: string, bounds: UnitInkBounds): Readon
  * Measure the player's own figures and publish them. The card draws the player set at one facing,
  * so that is what is measured; nothing else reads these yet, and measuring every palette and
  * heading would be six times the work for pixels no surface centres on.
+ *
+ * Await this before the first card can be drawn. The card fits its diagram to these bounds, so a
+ * publish that landed after a face had already composed would resize that diagram under the
+ * player — a jump, where a slightly-too-small first frame is merely a smaller drawing.
  */
 export async function publishUnitInkBounds(): Promise<void> {
   if (typeof document === 'undefined') return;
   const palette = paletteForSide('player');
   const facing = defaultFacingForSide('player');
   await Promise.all(UNIT_SIZE_PIECES.map(async (piece) => {
-    const bounds = await measureSprite(pieceSpritePath(piece, palette, facing));
+    const bounds = await withinTimeout(
+      measureSprite(pieceSpritePath(piece, palette, facing)),
+      UNIT_INK_WHOLE_SPRITE,
+    );
     for (const [property, value] of Object.entries(unitInkBoundsStyle(piece, bounds))) {
       document.documentElement.style.setProperty(property, value);
     }

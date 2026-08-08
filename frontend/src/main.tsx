@@ -165,9 +165,10 @@ if (root) {
       await loadLiveSfxProfile().catch(() => false);
       assertInstalledChromeSlots();
       initUnitSizeTuning();
-      // Not awaited: nothing on the first screen centres on a figure, and every consumer falls
-      // back to the whole sprite until these land. Startup does not wait on reading pixels.
-      void publishUnitInkBounds();
+      // Awaited: a card FITS its diagram to these bounds, so publishing them after a face had
+      // composed would resize that diagram under the player. Each figure falls back to its whole
+      // sprite on its own timeout, so a missing one costs a smaller drawing, never the screen.
+      await publishUnitInkBounds();
       const { App } = await import('./ui/App');
       reactRoot.render(<AppCrashBoundary><App /></AppCrashBoundary>);
       requestAnimationFrame(() => loadingMeasure('app', 'first-app-frame', startupAt));

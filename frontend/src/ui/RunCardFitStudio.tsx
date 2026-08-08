@@ -179,19 +179,15 @@ export function RunCardFitViewer({
           <strong className="run-card-fit-key is-space">The space, dashed.</strong> The contents
           panel less its padding and two lines of flavour — the whole deck&apos;s longest — so it is
           the same space on every card whatever that card&apos;s prose runs to.{' '}
-          <strong className="run-card-fit-key is-reserve">The reserve, dotted.</strong> What gets
-          fitted to the space: a board plus room for a FULL-SCALE figure, which is what keeps a
-          card&apos;s board the same size whether a queen or a pawn stands on it.{' '}
-          <strong className="run-card-fit-key is-drawing">The ink, solid.</strong> What is actually
-          painted, and what gets centred — one seat or four, no special case.
+          <strong className="run-card-fit-key is-drawing">The drawing, solid.</strong> The pixels
+          actually painted, measured off the figures being served rather than off the canvases they
+          are authored on. It is scaled until it touches the space on its tightest axis, then
+          centred in it — one seat or four, no special case.
         </p>
         <p className="run-card-fit-note">
-          A pawn draws at 0.66 of a queen and every figure is authored on a canvas taller than
-          itself, so on a card of short pieces the reserve is taller than anything painted in it and
-          hangs out of the top of the space. That is the cost of a board that does not resize with
-          its piece; nothing painted leaves. The panel is short rather than narrow, so at the dealt
-          size its height is what binds every shape, and the cap is the rail that would catch a
-          small footprint if it did not.
+          Nothing else is fitted or centred. The panel is short rather than narrow, so a wide
+          footprint runs out of height long before it runs out of width, and a compact one reaches
+          the cap instead — which is the number below, and the only judgement left in the fit.
         </p>
         <div
           className="run-card-fit-grid"
