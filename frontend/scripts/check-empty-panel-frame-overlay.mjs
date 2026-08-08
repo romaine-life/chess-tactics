@@ -1075,7 +1075,10 @@ if (!/testId=\{runDeployment \? 'run-deployment' : 'skirmish'\}/.test(skirmish)
 if (!/<RunDeploymentCardStack/.test(runScreen)
   || !/data-deployment-card-stage=\{deployment\?\.stage/.test(runDeploymentCardStack)
   || !/data-deployment-stack-card=\{cardId\}/.test(runDeploymentCardStack)
-  || !/<RunCardBack mediaUrl=\{resolvedLiveMediaUrl\(RUN_CARD_BACK_SLOT\)\}/.test(runDeploymentCardStack)
+  // The closed stack draws the shared back through the player's chosen-back hook (ADR-0524), not a
+  // slot literal, so Deployment and Sectio cannot disagree about a face-down card.
+  || !/<RunCardBack mediaUrl=\{backMediaUrl\}/.test(runDeploymentCardStack)
+  || !/useRunCardBackMediaUrl\(\)/.test(runDeploymentCardStack)
   || /RunSceneViewport|data-klerosis|Confirm/.test(runDeploymentCardStack)
   || /KlerosisOverlay|RunKlerosisWorkspace/.test(runScreen)) {
   failures.push('Deployment must own one hidden Controls card stack on the canonical battlefield without a separate confirmation workspace');

@@ -24,8 +24,8 @@ describe('skirmish presentation instances', () => {
   it('isolates game state and session sinks between mounted Battles', () => {
     const first = createSkirmishStore();
     const second = createSkirmishStore();
-    const firstTransform = vi.fn((game: GameState) => game);
-    const secondTransform = vi.fn((game: GameState) => game);
+    const firstTransform = vi.fn((game: GameState) => ({ game, notices: [] }));
+    const secondTransform = vi.fn((game: GameState) => ({ game, notices: [] }));
 
     first.getState().newSkirmish({ seed: 11 });
     first.getState().setRunBattleTransformSink(firstTransform);
@@ -174,8 +174,51 @@ describe('skirmish store', () => {
     expect(state.game.pieces.find((candidate) => candidate.id === 'enemy-pawn')?.alive).toBe(false);
   });
 
+  // The reason to reach for Free Move is usually to arrange what the OPPONENT did, so it
+  // moves either army — and the turn that results is ordinary: play passes to the other side
+  // of whichever piece moved, leaving the walked enemy piece standing as `lastMove`. That is
+  // what opens an en passant to set up, and it is why the turn must come back.
+  it('walks an enemy piece on the player turn, and hands the move straight back', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null });
+    useSkirmish.setState({
+      game: {
+        size: { cols: 4, rows: 4 },
+        pieces: [
+          piece('player-pawn', 'player', 'pawn', 1, 2),
+          piece('enemy-pawn', 'enemy', 'pawn', 2, 0),
+          piece('player-king', 'player', 'king', 0, 3),
+          piece('enemy-king', 'enemy', 'king', 3, 0),
+        ],
+        turn: 'player',
+        winner: null,
+      },
+      env: { terrain: undefined, lastMove: undefined },
+      objective: 'capture-all',
+      objectiveCtx: {},
+      victoryOverride: null,
+      selectedId: null,
+      focusedId: null,
+    });
+
+    expect(useSkirmish.getState().armAdminMode('free-move')).toBe(true);
+    // Selecting the enemy piece is the part that used to be impossible: selection was pinned
+    // to whichever side was to move, which on the player's turn is never the opponent.
+    useSkirmish.getState().select('enemy-pawn');
+    expect(useSkirmish.getState().selectedId).toBe('enemy-pawn');
+    expect(useSkirmish.getState().movesForSelected()).toContainEqual({ x: 2, y: 2 });
+
+    useSkirmish.getState().tryMoveTo(2, 2);
+
+    const state = useSkirmish.getState();
+    expect(state.game.pieces.find((candidate) => candidate.id === 'enemy-pawn')).toMatchObject({ x: 2, y: 2 });
+    expect(state.game.turn).toBe('player');
+    expect(state.game.lastMove).toMatchObject({ pieceId: 'enemy-pawn', side: 'enemy', to: { x: 2, y: 2 } });
+    expect(state.log[0]).toBe("Admin Free Move — the enemy's Pawn to 2,2.");
+    expect(state.adminMode).toBeNull();
+  });
+
   it('kills any selected unit through the normal Run death transform hook', () => {
-    const transform = vi.fn((game: GameState) => game);
+    const transform = vi.fn((game: GameState) => ({ game, notices: [] }));
     useSkirmish.getState().setRunBattleTransformSink(transform);
     useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null });
     const target = useSkirmish.getState().game.pieces.find((candidate) => candidate.side === 'player')!;
@@ -189,6 +232,59 @@ describe('skirmish store', () => {
     );
     expect(useSkirmish.getState().game.pieces.find((candidate) => candidate.id === target.id)?.alive).toBe(false);
     expect(useSkirmish.getState().adminMode).toBeNull();
+  });
+
+  // The Run reaches into a live Battle to pay bounties and land Reservists, and the store
+  // cannot see a Run document to notice on its own. So the transform's notices are not an
+  // optional courtesy: every path that commits its board commits its words in the same set.
+  // These pin all three -- a Run change the player is never told about is the bug.
+  it('writes the Run transform notices into the log on a committed player move', () => {
+    useSkirmish.getState().setRunBattleTransformSink((game) => ({
+      game,
+      notices: [{ log: 'En passant — 5 gold claimed.', at: { x: 2, y: 3 }, goldTenths: 50 }],
+    }));
+    useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null });
+    const moves = useSkirmish.getState().movesForSelected();
+    useSkirmish.getState().tryMoveTo(moves[0].x, moves[0].y);
+
+    expect(useSkirmish.getState().log).toContain('En passant — 5 gold claimed.');
+    expect(useSkirmish.getState().goldNotices).toMatchObject([{ at: { x: 2, y: 3 }, goldTenths: 50 }]);
+  });
+
+  it('writes them on the enemy reply too, and seats one marker per gold notice', () => {
+    useSkirmish.getState().setRunBattleTransformSink((game, events) => ({
+      game,
+      notices: events.length
+        ? [{ log: 'Roland answers the call and takes the field.', at: { x: 1, y: 1 } }]
+        : [],
+    }));
+    useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null });
+    const moves = useSkirmish.getState().movesForSelected();
+    useSkirmish.getState().tryMoveTo(moves[0].x, moves[0].y);
+    vi.runAllTimers();
+
+    expect(useSkirmish.getState().log).toContain('Roland answers the call and takes the field.');
+    // A notice that moved no gold gets its log line and no board marker -- the arriving unit
+    // is already the thing you can see.
+    expect(useSkirmish.getState().goldNotices).toEqual([]);
+  });
+
+  it('writes them on an admin intervention, and retires a marker once it has risen', () => {
+    useSkirmish.getState().setRunBattleTransformSink((game) => ({
+      game,
+      notices: [{ log: 'En passant — 5 gold claimed.', at: { x: 0, y: 0 }, goldTenths: 50 }],
+    }));
+    useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null });
+    const target = useSkirmish.getState().game.pieces.find((candidate) => candidate.side === 'player')!;
+    useSkirmish.getState().armAdminMode('kill-unit');
+    useSkirmish.getState().adminKillUnit(target.id);
+
+    expect(useSkirmish.getState().log).toContain('En passant — 5 gold claimed.');
+    const [marker] = useSkirmish.getState().goldNotices;
+    expect(marker).toBeDefined();
+
+    useSkirmish.getState().retireGoldNotice(marker.id);
+    expect(useSkirmish.getState().goldNotices).toEqual([]);
   });
 
   it('awards a live local Battle but refuses client-only multiplayer intervention', () => {

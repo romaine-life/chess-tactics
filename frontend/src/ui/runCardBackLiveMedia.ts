@@ -5,6 +5,7 @@ import type {
   AdminLiveMediaVersion,
 } from '../net/liveMediaAdmin';
 import { RUN_CARD_BACK_SLOT } from './RunCardBack';
+import { RUN_CARD_BACK_SLOT_PREFIX } from '../settings/runCardBack';
 
 /**
  * The Card Layout review surface for the universal face-down card.
@@ -34,8 +35,16 @@ export function runCardBackRequestedSha(search: URLSearchParams): string | null 
   return value && SHA256.test(value) ? value : null;
 }
 
-export function runCardBackSlotRow(catalog: AdminLiveMediaCatalog): AdminLiveMediaSlot | null {
-  return catalog.slots.find((candidate) => candidate.slot === RUN_CARD_BACK_SLOT) ?? null;
+/** Every slot this surface can review: the universal fallback and each offered back (ADR-0524). */
+function isCardBackSlot(slot: string): boolean {
+  return slot === RUN_CARD_BACK_SLOT || slot.startsWith(RUN_CARD_BACK_SLOT_PREFIX);
+}
+
+export function runCardBackSlotRow(
+  catalog: AdminLiveMediaCatalog,
+  slot: string = RUN_CARD_BACK_SLOT,
+): AdminLiveMediaSlot | null {
+  return catalog.slots.find((candidate) => candidate.slot === slot) ?? null;
 }
 
 /** The bytes the game is serving right now. */
@@ -52,24 +61,52 @@ export function runCardBackPublished(catalog: AdminLiveMediaCatalog): RunCardBac
 }
 
 /**
- * The card under review: the requested candidate when the address names one,
- * otherwise the published back so the surface always has something to show.
+ * What the surface opens on when the address names nothing: the newest candidate
+ * if one is waiting, otherwise the published back. Landing on the published card
+ * alone would show the reviewer the card they already have and nothing to judge
+ * it against, which is the entire reason this screen exists.
+ */
+export function runCardBackDefaultSelection(
+  catalog: AdminLiveMediaCatalog,
+): RunCardBackSelection | null {
+  // Family-wide, like the candidate list: a candidate for an offered back is as
+  // reviewable as one for the universal fallback, so the slot is read off the
+  // version that matched rather than assumed (ADR-0524).
+  const newestCandidate = catalog.versions
+    .filter((row) => typeof row.slot === 'string' && isCardBackSlot(row.slot)
+      && row.status === 'candidate' && Boolean(row.media))
+    .slice()
+    .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))[0] ?? null;
+  const slot = newestCandidate?.slot ? runCardBackSlotRow(catalog, newestCandidate.slot) : null;
+  return newestCandidate && slot
+    ? { version: newestCandidate, slot }
+    : runCardBackPublished(catalog);
+}
+
+/**
+ * The card under review: the one the address names, or the default above. The
+ * component canonicalizes the address onto whatever this returns, because the
+ * acceptance gate reads the reviewed bytes out of the URL — a surface showing a
+ * candidate the address does not name cannot have its approval accepted.
  */
 export function runCardBackSelection(
   catalog: AdminLiveMediaCatalog,
   search: URLSearchParams,
 ): RunCardBackSelection | null {
-  const slot = runCardBackSlotRow(catalog);
-  if (!slot) return null;
   const requestedSha = runCardBackRequestedSha(search);
-  if (!requestedSha) return runCardBackPublished(catalog);
+  if (!requestedSha) return runCardBackDefaultSelection(catalog);
+  // Searched across the whole family, then the slot is read off the version that matched. The
+  // address already names exact bytes, and those bytes belong to exactly one row — so a candidate
+  // for any offered back is reviewable at the same address shape, with no extra parameter.
   const version = catalog.versions.find((candidate) => (
-    candidate.slot === RUN_CARD_BACK_SLOT
+    typeof candidate.slot === 'string' && isCardBackSlot(candidate.slot)
     && candidate.media?.sha256 === requestedSha
-    && (candidate.status === 'candidate'
-      || (candidate.status === 'accepted' && candidate.id === slot.activeVersionId))
+    && (candidate.status === 'candidate' || candidate.status === 'accepted')
   )) ?? null;
-  return version ? { version, slot } : null;
+  const slot = version?.slot ? runCardBackSlotRow(catalog, version.slot) : null;
+  if (!version || !slot) return null;
+  if (version.status === 'accepted' && version.id !== slot.activeVersionId) return null;
+  return { version, slot };
 }
 
 export type RunCardBackCandidateGroup = Readonly<{
@@ -86,14 +123,16 @@ export type RunCardBackCandidateGroup = Readonly<{
 export function runCardBackCandidateGroups(
   catalog: AdminLiveMediaCatalog,
 ): readonly RunCardBackCandidateGroup[] {
-  const slot = runCardBackSlotRow(catalog);
+  const activeBySlot = new Map(catalog.slots.map((row) => [row.slot, row.activeVersionId]));
   const rows = catalog.versions
-    .filter((candidate) => candidate.slot === RUN_CARD_BACK_SLOT && Boolean(candidate.media))
+    .filter((candidate) => typeof candidate.slot === 'string'
+      && isCardBackSlot(candidate.slot) && Boolean(candidate.media))
     .slice()
     .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt));
   const groups: RunCardBackCandidateGroup[] = [];
   const candidates = rows.filter((row) => row.status === 'candidate');
-  const published = rows.filter((row) => row.status === 'accepted' && row.id === slot?.activeVersionId);
+  const published = rows.filter((row) => row.status === 'accepted'
+    && row.id === activeBySlot.get(row.slot as string));
   if (candidates.length) {
     groups.push({
       key: 'candidate',
@@ -115,6 +154,20 @@ export function runCardBackCandidateGroups(
 export function runCardBackReviewHref(sha256?: string | null): string {
   const search = new URLSearchParams({ mode: 'viewer', vk: 'cardlayout', cardSide: 'back' });
   if (sha256 && SHA256.test(sha256)) search.set('backCandidate', sha256);
+  return `/studio?${search.toString()}`;
+}
+
+/**
+ * The same address, but keeping whatever Studio state the page already carries.
+ * Used in-page so arriving from the catalog does not throw away the surrounding
+ * Studio route while still naming the reviewed bytes.
+ */
+export function runCardBackReviewAddress(sha256: string, currentSearch: string): string {
+  const search = new URLSearchParams(currentSearch);
+  search.set('mode', 'viewer');
+  search.set('vk', 'cardlayout');
+  search.set('cardSide', 'back');
+  search.set('backCandidate', sha256);
   return `/studio?${search.toString()}`;
 }
 

@@ -5848,6 +5848,86 @@ body.loading-bootstrap .app-startup-status {
   --chrome-surface-position-y: calc(var(--promotion-leaf-index, 0) * -1 * var(--promotion-leaf-surface-pitch));
 }
 
+/* Gold the Run paid for something that happened ON the board reads off that square, not off a
+   panel. Same zero-size board-space anchor as the promotion picker, so it inherits pan/zoom
+   while the marker's inline inverse scale keeps the number one screen size. It rises out of
+   the unit and fades; nothing about it is interactive, and it retires itself. */
+.skirmish-gold-notice-anchor {
+  height: 0;
+  pointer-events: none;
+  position: absolute;
+  width: 0;
+  z-index: 39000;
+}
+
+/* The rise plays by DEFAULT, even under OS prefers-reduced-motion: this machine (and many
+   players' — Windows "Animation effects" off) reports reduce FALSELY, and the rise IS the
+   feedback, so gating it on that query would silently delete the whole cue. Hence !important,
+   clearing the global `* { animation: none }` OS-reduce reset further down this file. The
+   EXPLICIT in-game choice (:root.reduce-motion) keeps the number and drops the travel. */
+.skirmish-gold-notice {
+  align-items: center;
+  animation: skirmish-gold-notice-rise 1400ms ease-out forwards !important;
+  color: #ffd27b;
+  display: flex;
+  /* The display face is a pixel face, and those are 400-only (ADR-0016) — a synthetic bold
+     on it is smeared, not heavier. Contrast comes from the shadow below, not from weight. */
+  font: var(--ds-weight-regular) var(--ds-text-xl)/1 var(--ds-font-display);
+  gap: var(--ds-space-1);
+  left: 0;
+  position: absolute;
+  /* The board underneath is arbitrary art, so the number carries its own contrast rather
+     than assuming a readable tile behind it. */
+  text-shadow: 0 2px 0 #02070b, 0 0 10px rgba(2, 7, 11, .6);
+  transform-origin: bottom center;
+  translate: -50% 0;
+  white-space: nowrap;
+}
+
+.skirmish-gold-notice.is-loss {
+  color: #ffad9d;
+}
+
+/* Explicitly reduced motion still gets told what it earned — it just holds still and fades. */
+:root.reduce-motion .skirmish-gold-notice {
+  animation: skirmish-gold-notice-hold 1400ms ease-out forwards !important;
+}
+
+.skirmish-gold-notice .run-gold-icon {
+  block-size: 34px;
+  inline-size: 34px;
+}
+
+/* Rise and fade. `translate` carries the motion so the inline `transform` scale (the inverse
+   zoom) is never overwritten by the animation. */
+@keyframes skirmish-gold-notice-rise {
+  0% {
+    opacity: 0;
+    translate: -50% 14px;
+  }
+
+  14% {
+    opacity: 1;
+    translate: -50% 0;
+  }
+
+  70% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    translate: -50% -58px;
+  }
+}
+
+@keyframes skirmish-gold-notice-hold {
+  0% { opacity: 0; }
+  14% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 .skirmish-promotion-picker-heading {
   display: grid;
   gap: 2px;
@@ -15603,6 +15683,64 @@ button.tileset-relationship-cell {
   stroke-width: var(--board-grid-weight, 2.6);
 }
 
+/* Settings → Gameplay → Card back picker. Same shape as Grid style above: one large sample plus a
+   dropdown. The card is the whole subject here rather than a crop of one, so unlike the grid
+   preview this box fits the card instead of windowing it — a 5:7 illustration shown whole is what
+   the player is choosing, and cropping it would hide the border and corners the designs differ
+   most in. */
+.run-card-back-picker {
+  display: grid;
+  gap: 8px;
+  inline-size: 100%;
+  justify-items: stretch;
+}
+
+.run-card-back-preview-box {
+  display: block;
+  inline-size: 100%;
+}
+
+.run-card-back-preview {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  padding: 10px;
+}
+
+/* Height-led, because 5:7 is tall: bounding the block size is what keeps the row from growing to
+   the width of the settings column. The card keeps its own aspect ratio from the image. */
+.run-card-back-preview-card {
+  block-size: 210px;
+  inline-size: auto;
+  max-inline-size: 100%;
+}
+
+.run-card-back-select {
+  inline-size: 100%;
+}
+
+.run-card-back-option {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-inline-size: 0;
+}
+
+.run-card-back-chip {
+  block-size: 28px;
+  display: block;
+  flex: 0 0 auto;
+  inline-size: 20px;
+}
+
+.run-card-back-chip img {
+  block-size: 100%;
+  display: block;
+  inline-size: 100%;
+  object-fit: cover;
+}
+
+
 /* Persisted player-camera coverage boundary. Unlike a viewport snapshot, this world-space box is
    stable while zoom and pan vary; Play keeps every possible view inside it. */
 .le-camera-boundary {
@@ -19942,7 +20080,7 @@ button.tileset-relationship-cell {
 .run-gold-amount {
   align-items: center;
   display: inline-flex;
-  font: var(--ds-weight-bold) var(--ds-text-lg)/1 var(--ds-font-display);
+  font: var(--ds-weight-regular) var(--ds-text-lg)/1 var(--ds-font-display);
   gap: var(--ds-space-1);
   white-space: nowrap;
 }
@@ -19972,7 +20110,7 @@ button.tileset-relationship-cell {
 .run-gold-transaction-amount {
   align-items: center;
   display: inline-flex;
-  font: var(--ds-weight-bold) var(--ds-text-lg)/1 var(--ds-font-display);
+  font: var(--ds-weight-regular) var(--ds-text-lg)/1 var(--ds-font-display);
   gap: var(--ds-space-1);
   min-block-size: 64px;
   min-inline-size: calc(64px + var(--ds-space-1) + 4ch);
@@ -25517,6 +25655,15 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   justify-items: start;
 }
 
+/* The switch sits above the cards it changes, so it has to stay short: the
+   offered-back family makes a stacked list tall enough to push the specimens
+   off the bottom of the screen. */
+.run-card-back-candidate-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-1);
+}
+
 .run-card-back-candidate-groups section > header {
   align-items: baseline;
   display: flex;
@@ -25551,12 +25698,14 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
 }
 
 /* Beats the base card-image img rule, which sizes every catalog image to an iso
-   tile. Both cards fit side by side at 100% and grow with the Studio's own zoom
-   like every other viewer; the pane roams once they outgrow it. */
+   tile. Height-led rather than a fixed width: at 100% both cards are whole and
+   on screen at any window this Studio is usable in, and zoom scales from there.
+   A fixed size looked right on one window and ran off the bottom of every
+   shorter one. The 5:7 aspect on .run-card-back gives the width. */
 .tileset-studio-card-image.run-card-back-specimen img.run-card-back {
-  block-size: auto;
+  block-size: calc(clamp(220px, 100vh - 400px, 588px) * var(--run-card-gallery-zoom, 1));
   image-rendering: auto;
-  inline-size: calc(420px * var(--run-card-gallery-zoom, 1));
+  inline-size: auto;
   max-inline-size: none;
   object-fit: cover;
 }
@@ -26032,14 +26181,24 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   fill: rgba(101, 115, 113, .34);
 }
 
-/* The seats' own line, moved off the polygon so it draws only where the footprint meets empty
-   space — the exact colour and weight it has always carried. On the polygon it also ran between
-   two occupied seats, which divides the cluster instead of wrapping it. Square caps close the
-   corner where two edges of the outline meet. */
+/* The footprint's boundary, as one path over the whole diagram. The line is the exact colour and
+   weight the seats have always carried; drawing it here rather than per seat is what lets the
+   corners mitre instead of jogging between four sub-pixel grids. */
 .run-card-formation-outline {
+  block-size: 100%;
+  display: block;
+  inline-size: 100%;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  position: absolute;
+  z-index: 15;
+}
+
+.run-card-formation-outline path {
   fill: none;
   stroke: rgba(55, 48, 39, .56);
-  stroke-linecap: square;
+  stroke-linejoin: miter;
   stroke-width: 1.15;
 }
 

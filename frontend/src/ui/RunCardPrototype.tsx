@@ -26,7 +26,8 @@ import {
   runCardBackAcceptanceItem,
   runCardBackCandidateGroups,
   runCardBackPublished,
-  runCardBackReviewHref,
+  runCardBackRequestedSha,
+  runCardBackReviewAddress,
   runCardBackReviewProof,
   runCardBackSelection,
   type RunCardBackSelection,
@@ -187,12 +188,22 @@ function RunCardBackStudy({ header, viewerZoom }: { header: ReactNode; viewerZoo
   const groups = catalog ? runCardBackCandidateGroups(catalog) : [];
   const reviewing = selection && selection.version.status === 'candidate' ? selection : null;
 
-  // Selecting a candidate moves the address to the one the acceptance gate
-  // names, so the proof records the surface actually on screen.
-  const select = (sha256: string): void => {
-    replaceAppHistoryState(null, runCardBackReviewHref(sha256));
+  // Selecting a card moves the address onto it, so the proof records the surface
+  // actually on screen.
+  const select = useCallback((sha256: string): void => {
+    replaceAppHistoryState(null, runCardBackReviewAddress(sha256, window.location.search));
     setAddressSha(sha256);
-  };
+  }, []);
+
+  // Arriving without a named card (from the catalog entry, or a bare address)
+  // still has to end up on one: the acceptance gate reads the reviewed bytes out
+  // of the URL, so a surface showing a card the address does not name could be
+  // approved and then refused.
+  const selectedSha = selection?.version.media?.sha256 ?? '';
+  useEffect(() => {
+    if (!selectedSha || runCardBackRequestedSha(new URLSearchParams(window.location.search))) return;
+    select(selectedSha);
+  }, [select, selectedSha]);
 
   const publish = async (): Promise<void> => {
     if (!reviewing || busy) return;
@@ -231,37 +242,51 @@ function RunCardBackStudy({ header, viewerZoom }: { header: ReactNode; viewerZoo
           scales both together.
         </p>
       </header>
-      <div
-        className="run-card-back-study"
-        style={{ '--run-card-gallery-zoom': viewerZoom } as CSSProperties}
-      >
-        <RunCardBackSpecimen caption="Published" selection={published} />
-        {selection && selection.version.id !== published?.version.id ? (
-          <RunCardBackSpecimen
-            caption={reviewing ? 'Candidate' : 'Selected'}
-            selection={selection}
-          />
-        ) : null}
-      </div>
+      {/* Above the cards, not below them: this is what swaps the right-hand
+          specimen, and a reviewer should not have to scroll past the thing it
+          changes to discover it exists. */}
       <div className="run-card-back-candidate-groups">
         {groups.map((group) => (
           <section key={group.key}>
             <header><strong>{group.label}</strong><span>{group.note}</span></header>
-            {group.versions.map((version) => {
-              const sha256 = version.media?.sha256 ?? '';
-              return (
-                <ChromeButton
-                  key={version.id}
-                  unit="inner-text-button"
-                  disabled={busy || sha256 === addressSha}
-                  onClick={() => select(sha256)}
-                >
-                  {version.label} · {sha256.slice(0, 12)}
-                </ChromeButton>
-              );
-            })}
+            {/* One wrapping row, not a column. The offered-back family (ADR-0524)
+                makes this list long enough that a stack pushes the cards it
+                switches off the bottom of the screen. */}
+            <div className="run-card-back-candidate-list">
+              {group.versions.map((version) => {
+                const sha256 = version.media?.sha256 ?? '';
+                const shown = sha256 === selectedSha;
+                return (
+                  <ChromeButton
+                    key={version.id}
+                    unit="inner-text-button"
+                    aria-pressed={shown}
+                    disabled={busy}
+                    onClick={() => select(sha256)}
+                  >
+                    {shown ? '● ' : '○ '}{version.label.replace(/\s*—\s*Codex\b.*$/, '')} · {sha256.slice(0, 8)}
+                  </ChromeButton>
+                );
+              })}
+            </div>
           </section>
         ))}
+      </div>
+      <div
+        className="run-card-back-study"
+        style={{ '--run-card-gallery-zoom': viewerZoom } as CSSProperties}
+      >
+        <RunCardBackSpecimen caption="Published · serving now" selection={published} />
+        {selection && selection.version.id !== published?.version.id ? (
+          <RunCardBackSpecimen
+            caption={reviewing ? 'Candidate · awaiting your approval' : 'Selected'}
+            selection={selection}
+          />
+        ) : (
+          <p className="run-card-rarity-study-footnote">
+            No candidate is waiting; the published back is the only card for this slot.
+          </p>
+        )}
       </div>
       {reviewing ? (
         <ChromeButton unit="inner-text-button" disabled={busy} onClick={() => { void publish(); }}>
