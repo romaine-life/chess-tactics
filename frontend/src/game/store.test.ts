@@ -271,7 +271,7 @@ describe('skirmish store', () => {
     expect(useSkirmish.getState().game).toBe(before.game);
     expect(useSkirmish.getState().selectedId).toBe(before.selectedId);
     expect(useSkirmish.getState().undoCheckpoint).toBeNull();
-    expect(useSkirmish.getState().log[0]).toBe('Move undone — 1 gold paid.');
+    expect(useSkirmish.getState().log[0].text).toBe('Move undone — 1 gold paid.');
 
     vi.runAllTimers();
     expect(useSkirmish.getState().game).toBe(before.game);
@@ -399,7 +399,7 @@ describe('skirmish store', () => {
     useSkirmish.getState().newSkirmish({ seed: 5, level });
     const s = useSkirmish.getState();
     expect(s.objectiveCtx.kingSide).toBe('player');
-    expect(s.log[0]).toContain('Protect your King');
+    expect(s.log[0].text).toContain('Protect your King');
   });
 });
 
@@ -504,7 +504,7 @@ describe('skirmish store: capture-king objective', () => {
     expect(game.winner).toBe('player');
     expect(game.turn).toBe('done');
     expect(game.pieces.find((p) => p.id === 'ep')?.alive).toBe(true); // lesser enemy still on the board
-    expect(log[0]).toBe('Victory — The opposing King was captured.');
+    expect(log[0].text).toBe('Victory — The opposing King was captured.');
   });
 
   it('does not win when a non-royal enemy is captured — the game continues', () => {
@@ -517,6 +517,75 @@ describe('skirmish store: capture-king objective', () => {
     const { game } = useSkirmish.getState();
     expect(game.winner).toBeNull();
     expect(game.turn).toBe('enemy'); // handed to the enemy, not resolved
+  });
+});
+
+describe('skirmish store: the Event Log records moves in chess notation', () => {
+  /** Load a hand-built board with an empty log so ply numbering starts from scratch. */
+  function loadBoard(pieces: Piece[], selectedId: string): void {
+    useSkirmish.setState({
+      game: { size: { cols: 8, rows: 8 }, pieces, turn: 'player', winner: null },
+      env: { terrain: undefined, lastMove: undefined },
+      objective: 'capture-king',
+      objectiveCtx: { kingSide: 'enemy' },
+      selectedId,
+      focusedId: selectedId,
+      log: [],
+    });
+  }
+
+  it('notates a capture as the move it was, with its mover and half-move index', () => {
+    // Rook a1 takes the pawn on a5. Files run a.. from x=0 and ranks count from the
+    // player's home edge, so y=7 is rank 1 (see game/sanNotation).
+    loadBoard(
+      [piece('pr', 'player', 'rook', 0, 7), piece('pk', 'player', 'king', 4, 7),
+        piece('ek', 'enemy', 'king', 7, 0), piece('ep', 'enemy', 'pawn', 0, 3)],
+      'pr',
+    );
+    useSkirmish.getState().tryMoveTo(0, 3);
+
+    expect(useSkirmish.getState().log[0]).toEqual({ text: 'Rxa5', side: 'player', ply: 0 });
+  });
+
+  it('carries the check mark into the log beside the warning line', () => {
+    loadBoard(
+      [piece('pr', 'player', 'rook', 4, 7), piece('pk', 'player', 'king', 7, 7),
+        piece('ek', 'enemy', 'king', 0, 0)],
+      'pr',
+    );
+    useSkirmish.getState().tryMoveTo(0, 7); // rook swings onto the King's file
+
+    const { log } = useSkirmish.getState();
+    expect(log[1]).toEqual({ text: 'Ra1+', side: 'player', ply: 0 });
+    // Prose lines carry neither a side nor a ply, so they never number the score sheet.
+    expect(log[0]).toEqual({ text: 'Check!' });
+  });
+
+  it('numbers consecutive half-moves across both sides, opponent replies included', () => {
+    playFirstMove(5);
+
+    const moves = useSkirmish.getState().log.filter((entry) => entry.ply !== undefined).reverse();
+    expect(moves.length).toBeGreaterThanOrEqual(2);
+    expect(moves.map((entry) => entry.ply)).toEqual(moves.map((_, i) => i));
+    expect(moves[0].side).toBe('player');
+    expect(moves[1].side).toBe('enemy');
+    // A notation token, never a sentence: piece letter, optional disambiguation and
+    // capture mark, destination square, optional promotion, optional check mark.
+    expect(moves[1].text).toMatch(/^(O-O(-O)?|[KQRBN]?(?:[a-h]?\d*)?x?[a-h]\d+(?:=[QRBN])?)[+#]?$/);
+  });
+
+  it('keeps counting through a resumed match rather than restarting the score sheet', () => {
+    loadBoard(
+      [piece('pr', 'player', 'rook', 0, 7), piece('pk', 'player', 'king', 4, 7),
+        piece('ek', 'enemy', 'king', 7, 0)],
+      'pr',
+    );
+    // Stand in for a match resumed from disk mid-game: the restored log is all the store
+    // has, and the next move must continue its numbering rather than reset to move 1.
+    useSkirmish.setState({ log: [{ text: 'Qd8', side: 'enemy', ply: 7 }, { text: 'Nf3', side: 'player', ply: 6 }] });
+    useSkirmish.getState().tryMoveTo(0, 3);
+
+    expect(useSkirmish.getState().log[0]).toMatchObject({ side: 'player', ply: 8 });
   });
 });
 
@@ -534,7 +603,7 @@ describe('skirmish store: rival-kings + direction-aware capture-king copy', () =
     useSkirmish.getState().tryMoveTo(0, 5); // rook takes the rival King
     const s = useSkirmish.getState();
     expect(s.game.winner).toBe('player');
-    expect(s.log[0]).toBe('Victory — The opposing King was captured.');
+    expect(s.log[0].text).toBe('Victory — The opposing King was captured.');
   });
 
   it('capture-king with kingSide=player: losing the King reads as the King falling, not a wipe', () => {
@@ -550,7 +619,7 @@ describe('skirmish store: rival-kings + direction-aware capture-king copy', () =
     useSkirmish.getState().tryMoveTo(0, 5); // any legal pawn step
     const s = useSkirmish.getState();
     expect(s.game.winner).toBe('enemy');
-    expect(s.log[0]).toBe('Defeat — Your King was captured.');
+    expect(s.log[0].text).toBe('Defeat — Your King was captured.');
   });
 });
 
@@ -579,7 +648,7 @@ describe('skirmish store: authored victory names the fired rule (ADR-0064)', () 
     useSkirmish.getState().tryMoveTo(0, 5); // rook takes the enemy King (the pawn survives)
     const s = useSkirmish.getState();
     expect(s.game.winner).toBe('player');
-    expect(s.log[0]).toBe('Victory — Storm the keep.');
+    expect(s.log[0].text).toBe('Victory — Storm the keep.');
     expect(s.resultDetail).toBe('Storm the keep');
   });
 });
@@ -785,7 +854,7 @@ describe('skirmish store: battle clock', () => {
     expect(s.game.winner).toBe('enemy');
     expect(s.game.turn).toBe('done');
     expect(s.clock).toEqual({ remainingMs: 0, running: false, incrementMs: 0 });
-    expect(s.log[0]).toMatch(/clock ran out/i);
+    expect(s.log[0].text).toMatch(/clock ran out/i);
     // Input is locked exactly like any other decided game.
     expect(useSkirmish.getState().movesForSelected()).toEqual([]);
   });
@@ -805,7 +874,7 @@ describe('skirmish store: battle clock', () => {
     // Let the reply and landing beat finish, then let the restored player clock flag.
     vi.advanceTimersByTime(3_500);
     expect(useSkirmish.getState().game.winner).toBe('enemy');
-    expect(useSkirmish.getState().log[0]).toMatch(/clock ran out/i);
+    expect(useSkirmish.getState().log[0].text).toMatch(/clock ran out/i);
     expect(useSkirmish.getState().canUndoLastPlayerMove()).toBe(true);
 
     expect(useSkirmish.getState().undoLastPlayerMove()).toBe(true);
@@ -844,7 +913,7 @@ describe('checkmate ends the game the instant it is delivered', () => {
     expect(s.game.winner).toBe('player'); // Victory, resolved on the mating move itself
     expect(s.game.turn).toBe('done');
     expect(s.game.pieces.find((p) => p.id === 'ek')?.alive).toBe(true); // King never had to be captured
-    expect(s.log[0]).toMatch(/checkmate/i);
+    expect(s.log[0].text).toMatch(/checkmate/i);
 
     // No enemy reply is pending — the game is already over.
     vi.runAllTimers();
@@ -1278,7 +1347,7 @@ describe('skirmish store: multiplayer session parity', () => {
 
     const state = useSkirmish.getState();
     expect(state.game).toMatchObject({ winner: 'player', turn: 'done' });
-    expect(state.log[0]).toBe(copy);
+    expect(state.log[0].text).toBe(copy);
     expect(state.resultDetail).toBe(detail);
     expect(state.net?.terminalResult).toEqual({ expectedMoveCount: 0, winner: 'player', reason: 'victory-rule' });
   });
@@ -1423,7 +1492,7 @@ describe('skirmish store: multiplayer session parity', () => {
     expect(sent).not.toHaveBeenCalled();
     expect(useSkirmish.getState().net?.pendingMove).toBeNull();
     expect(useSkirmish.getState().game).toBe(before.game);
-    expect(useSkirmish.getState().log[0]).toContain('browser storage is unavailable');
+    expect(useSkirmish.getState().log[0].text).toContain('browser storage is unavailable');
   });
 
   it('lands an enemy-seat promotion premove before relaying the chosen promotion', () => {
@@ -1499,7 +1568,7 @@ describe('skirmish store: multiplayer session parity', () => {
     const state = useSkirmish.getState();
     expect(state.game).toMatchObject({ winner: 'player', turn: 'done' });
     expect(state.net?.terminalResult).toEqual({ expectedMoveCount: 1, winner: 'player', reason: 'victory-rule' });
-    expect(state.log[0]).toBe('Defeat — Your King was captured.');
+    expect(state.log[0].text).toBe('Defeat — Your King was captured.');
   });
 
   it('invalidates and clears all lobby-owned local state when its route is left', () => {
@@ -1547,7 +1616,7 @@ describe('local resign', () => {
     expect(s.selectedId).toBeNull();
     expect(s.focusedId).toBeNull();
     expect(s.clock?.running).toBe(false);
-    expect(s.log[0]).toMatch(/you resigned/i);
+    expect(s.log[0].text).toMatch(/you resigned/i);
   });
 
   it('does not decide a netplay match locally', () => {
@@ -1596,7 +1665,7 @@ describe('netplay resign', () => {
     expect(s.game.winner).toBe('player');
     expect(s.game.turn).toBe('done');
     expect(s.selectedId).toBeNull();
-    expect(s.log[0]).toMatch(/opponent resigned/i);
+    expect(s.log[0].text).toMatch(/opponent resigned/i);
     // A redelivered result frame must not overwrite the decided game.
     useSkirmish.getState().concludeNet('enemy', 'resign');
     expect(useSkirmish.getState().game.winner).toBe('player');
@@ -1608,7 +1677,7 @@ describe('netplay resign', () => {
     useSkirmish.getState().concludeNet('player', 'resign');
     const s = useSkirmish.getState();
     expect(s.game.winner).toBe('player');
-    expect(s.log[0]).toMatch(/you resigned/i);
+    expect(s.log[0].text).toMatch(/you resigned/i);
   });
 
   it('lets the first authoritative resignation resolve a different local disputed verdict', () => {
@@ -1626,6 +1695,6 @@ describe('netplay resign', () => {
     expect(resolved.game.winner).toBe('player');
     expect(resolved.net?.terminalResult).toBeNull();
     expect(resolved.net?.authoritativeResult).toEqual({ winner: 'player', reason: 'resign' });
-    expect(resolved.log[0]).toMatch(/opponent resigned/i);
+    expect(resolved.log[0].text).toMatch(/opponent resigned/i);
   });
 });

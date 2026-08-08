@@ -23,6 +23,7 @@ import { loadShippedAiWeights } from '../net/aiWeights';
 import { PIECE_LABEL } from '../core/pieces';
 import { clearPersistedNetIntent, loadPersistedNetIntent, persistNetIntent } from './netIntentPersistence';
 import { adminMoveTargets, killUnitForAdmin } from './adminBattle';
+import { sanForMove } from './sanNotation';
 import type { RunBattleUndoCheckpoint } from '../run/model';
 import { PROMOTION_CHOICE_REVEAL_MS } from './promotionPresentation';
 
@@ -129,7 +130,7 @@ export interface RunBattleUndoAdapter {
 export interface PlayerMoveUndoCheckpoint {
   game: GameState;
   tick: number;
-  log: string[];
+  log: LogEntry[];
   resultDetail: string | null;
   turnsElapsed: number;
   selectedId: string | null;
@@ -181,13 +182,53 @@ function playLandingTerrain(env: MoveEnv, x: number, y: number, gain?: number): 
   playTerrain(cell.terrain, opts);
 }
 
-function describeEvent(ev: GameEvent): string | null {
-  switch (ev.kind) {
-    case 'captured': return ev.enPassant ? 'A pawn is taken in passing.' : 'A piece falls.';
-    case 'promoted': return `A pawn ascends to a ${PIECE_LABEL[ev.to] ?? ev.to}.`;
-    case 'castled': return 'Castled — the King and Rook regroup.';
-    default: return null;
-  }
+/**
+ * One Event Log row. A played move carries its chess notation as the line itself, plus
+ * the side that played it and its half-move index, so the log reads as a score sheet
+ * rather than a list of things that vaguely happened — `Nxe5+` says capture, mover,
+ * square, and check at once, where "A piece falls." said none of them. Every other line
+ * (the opening briefing, an adjudication, a resignation, an admin action) is prose and
+ * carries neither field.
+ */
+export interface LogEntry {
+  /** The line as shown: a chess-notation token for a move, prose otherwise. */
+  text: string;
+  /** The side that played this move. Move entries only. */
+  side?: Side;
+  /** 0-based half-move index, which numbers the score sheet. Move entries only. */
+  ply?: number;
+}
+
+/** Plain prose — a line that is not a move. */
+export const logNote = (text: string): LogEntry => ({ text });
+
+/**
+ * How many Event Log rows are kept. Every move now writes one, so this is also how far
+ * back the score sheet reads: 24 rows is roughly a dozen full moves.
+ */
+const LOG_LIMIT = 24;
+
+/** Prepend `entries` (oldest first) onto the newest-first running log. */
+function extendLog(log: readonly LogEntry[], entries: readonly LogEntry[]): LogEntry[] {
+  return [...[...entries].reverse(), ...log].slice(0, LOG_LIMIT);
+}
+
+/**
+ * The half-move index the next played move takes. Read off the most recent move entry
+ * instead of a separate counter, so numbering rewinds with an undo that restores the
+ * log, and a resumed match keeps counting where it left off — with nothing extra to
+ * persist or keep in step.
+ */
+function nextPly(log: readonly LogEntry[]): number {
+  const latestMove = log.find((entry) => entry.ply !== undefined);
+  return latestMove?.ply === undefined ? 0 : latestMove.ply + 1;
+}
+
+/** Log rows for consecutive half-moves notated from `startPly`, in the order played. */
+function moveEntries(notation: readonly string[], side: Side, startPly: number): LogEntry[] {
+  return notation
+    .map((text, i) => ({ text, side, ply: startPly + i }))
+    .filter((entry) => entry.text !== '');
 }
 
 /** Log copy for a draw forced by the chess draw rules (ADR-0072), same on every surface. */
@@ -322,7 +363,9 @@ export interface SkirmishState {
   focusedId: string | null;
   seed: number;
   tick: number;
-  log: string[];
+  /** The Event Log, newest first: one chess-notation row per played move, interleaved
+   *  with the prose lines the match itself writes (briefing, check, adjudication). */
+  log: LogEntry[];
   /** Win condition for this game. A free skirmish defaults to capture-king. */
   objective: ObjectiveType;
   /** Static objective context for the current game — the survive clock target, the
@@ -644,7 +687,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       premoveInputOpen: false,
       testMode: false,
       testMinCpuDelayMs: 0,
-      log: ['Defeat — your clock ran out.', ...cur.log].slice(0, 12),
+      log: extendLog(cur.log, [logNote('Defeat — your clock ran out.')]),
     });
     persistMatch(get()); // game decided → drops the saved copy
   };
@@ -762,7 +805,9 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
           // legitimately change while the worker thinks, so read the latest live slice here.
           const live = get();
           if (live.sessionEpoch !== epoch || live.game !== cur.game || live.net) return;
-          const msgs = enemyRes.events.map(describeEvent).filter((m): m is string => m !== null);
+          // One notated row per half-move of the reply, in the order the opponent played
+          // them — a reply that resolves several moves reads as several score-sheet lines.
+          const msgs = moveEntries(enemyRes.notation, 'enemy', nextPly(live.log));
           const transformedEnemyGame = runBattleTransformSink
             ? runBattleTransformSink(enemyRes.game, enemyRes.events)
             : enemyRes.game;
@@ -780,8 +825,8 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
           const game = settled.state;
           const resultDetail = adjudicationResultDetail(settled.adjudication, 'player', !!cur.victoryOverride);
           if (settled.adjudication) {
-            msgs.push(adjudicationCopy(settled.adjudication, 'player', !!cur.victoryOverride));
-          } else if (sideInCheck(game, 'player', afterEnv)) msgs.push('Your King is in check!');
+            msgs.push(logNote(adjudicationCopy(settled.adjudication, 'player', !!cur.victoryOverride)));
+          } else if (sideInCheck(game, 'player', afterEnv)) msgs.push(logNote('Your King is in check!'));
           // Turn returns to the player with no implicit selection. A unit explicitly selected
           // while the enemy reply was in flight is preserved if it survived; a capture clears it
           // instead of arbitrarily selecting the first remaining unit.
@@ -795,7 +840,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
             resultDetail,
             selectedId: keep,
             focusedId: keep,
-            log: [...msgs.reverse(), ...live.log].slice(0, 12),
+            log: extendLog(live.log, msgs),
             premoveInputOpen: openPremoveInput,
           });
           // Footsteps for the enemy half-turn: one per piece that moved, spread out so a
@@ -865,7 +910,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     });
     if (!persisted) {
       console.error('[netplay] move blocked because no reload-durable intent journal is available');
-      set({ log: ['Move not sent — browser storage is unavailable, so safe multiplayer retry is disabled.', ...s.log].slice(0, 12) });
+      set({ log: extendLog(s.log, [logNote('Move not sent — browser storage is unavailable, so safe multiplayer retry is disabled.')]) });
       return false;
     }
     set({
@@ -941,7 +986,6 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     if (!landingAlreadyPresented && playerRes.events.some((e) => e.kind === 'moved')) {
       playLandingSfx(s.env, mv.castle?.kingTo.x ?? mv.x, mv.castle?.kingTo.y ?? mv.y, LANDING_SFX_DELAY);
     }
-    const msgs = playerRes.events.map(describeEvent).filter((m): m is string => m !== null);
     const ctx = { ...(s.objectiveCtx ?? {}), turnsElapsed: s.turnsElapsed ?? 0 };
     const settled = settleCommittedPosition(committed, {
       victoryRules: s.victoryOverride ?? victoryRulesForObjective(s.objective, ctx),
@@ -950,11 +994,20 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       env: enemyEnv,
     });
     const game = settled.state;
+    // Notate the move against the position it was played from and the one it produced,
+    // so the log records what was played, not just that something happened.
+    const san = sanForMove(s.game, game, {
+      pieceId: piece.id,
+      side: piece.side,
+      from: { x: piece.x, y: piece.y },
+      move: mv,
+    });
+    const msgs = moveEntries([san], piece.side, nextPly(s.log));
     const resultDetail = adjudicationResultDetail(settled.adjudication, 'player', !!s.victoryOverride);
     if (settled.adjudication) {
-      msgs.push(adjudicationCopy(settled.adjudication, 'player', !!s.victoryOverride));
+      msgs.push(logNote(adjudicationCopy(settled.adjudication, 'player', !!s.victoryOverride)));
     } else if (game.turn === 'enemy' && sideInCheck(game, 'enemy', enemyEnv)) {
-      msgs.push('Check!');
+      msgs.push(logNote('Check!'));
     }
     const interaction = interactionAfterCommittedMove(
       game,
@@ -971,7 +1024,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       premoveInputOpen: false,
       undoCheckpoint,
       ...interaction,
-      log: [...msgs.reverse(), ...s.log].slice(0, 12),
+      log: extendLog(s.log, msgs),
     });
     if (game.turn === 'enemy' && !game.winner) scheduleEnemyReply();
     persistMatch(get());
@@ -1038,7 +1091,6 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     const postEnv = envFor(res.state);
     const committed = recordPosition(res.state, postEnv);
     const moved = res.events.some((event) => event.kind === 'moved');
-    const msgs = res.events.map(describeEvent).filter((m): m is string => m !== null);
     // A full enemy turn completing (enemy→player) advances the survive-clock round count.
     const turnsElapsed = (s.turnsElapsed ?? 0) + (prevTurn === 'enemy' && committed.turn === 'player' ? 1 : 0);
     const ctx = { ...(s.objectiveCtx ?? {}), turnsElapsed };
@@ -1049,11 +1101,20 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       env: postEnv,
     });
     const game = settled.state;
+    // Both seats notate the same relayed move from the same pair of positions, so the two
+    // clients' score sheets stay identical alongside their boards.
+    const san = sanForMove(s.game, game, {
+      pieceId: piece.id,
+      side: piece.side,
+      from: { x: piece.x, y: piece.y },
+      move: mv,
+    });
+    const msgs = moveEntries([san], piece.side, nextPly(s.log));
     const resultDetail = adjudicationResultDetail(settled.adjudication, localSide, !!s.victoryOverride);
     if (settled.adjudication) {
-      msgs.push(adjudicationCopy(settled.adjudication, localSide, !!s.victoryOverride));
+      msgs.push(logNote(adjudicationCopy(settled.adjudication, localSide, !!s.victoryOverride)));
     } else if (game.turn === 'player' || game.turn === 'enemy') {
-      if (sideInCheck(game, game.turn, postEnv)) msgs.push(game.turn === localSide ? 'Your King is in check!' : 'Check delivered.');
+      if (sideInCheck(game, game.turn, postEnv)) msgs.push(logNote(game.turn === localSide ? 'Your King is in check!' : 'Check delivered.'));
     }
 
     const interaction = interactionAfterCommittedMove(
@@ -1085,7 +1146,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       pendingPromotion: null,
       premoves: game.winner ? [] : s.premoves,
       premoveInputOpen: returnedToLocal,
-      log: [...msgs.reverse(), ...s.log].slice(0, 12),
+      log: extendLog(s.log, msgs),
       net: {
         ...s.net,
         moveCount: s.net.moveCount + 1,
@@ -1134,9 +1195,10 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       env: afterEnv,
     });
     const game = settled.state;
-    const messages = [logLine];
+    // An admin position change is not a played move, so it never notates — it is prose.
+    const messages = [logNote(logLine)];
     if (settled.adjudication) {
-      messages.push(adjudicationCopy(settled.adjudication, 'player', !!s.victoryOverride));
+      messages.push(logNote(adjudicationCopy(settled.adjudication, 'player', !!s.victoryOverride)));
     }
     set({
       game,
@@ -1152,7 +1214,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       premoveInputOpen: false,
       sessionEpoch: epoch,
       clock: s.clock ? { ...s.clock, running: false } : null,
-      log: [...messages.reverse(), ...s.log].slice(0, 12),
+      log: extendLog(s.log, messages),
     });
     if (!game.winner) startBattleElapsed();
     if (!game.winner && game.turn === 'enemy') scheduleEnemyReply();
@@ -1168,7 +1230,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
   focusedId: null,
   seed: 1,
   tick: 0,
-  log: [`Skirmish begins — ${objectiveSummary('capture-king')}.`],
+  log: [logNote(`Skirmish begins — ${objectiveSummary('capture-king')}.`)],
   objective: 'capture-king',
   objectiveCtx: {},
   victoryOverride: null,
@@ -1221,8 +1283,8 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       : `Skirmish begins — ${objectiveSummary(objective, objectiveCtx.kingSide)}.`;
     const selectedId = game.winner ? null : firstPlayerId(game);
     const log = initial.adjudication
-      ? [adjudicationCopy(initial.adjudication, 'player', !!victoryOverride), intro]
-      : [intro];
+      ? [logNote(adjudicationCopy(initial.adjudication, 'player', !!victoryOverride)), logNote(intro)]
+      : [logNote(intro)];
     // Arm the battle clock. An explicit opts.timeControl wins (the HUD's clock control /
     // "New skirmish" — a TimeControl times the game, null plays it untimed). Otherwise a
     // level uses its authored control (undefined ⇒ untimed), and a FREE skirmish (no
@@ -1319,8 +1381,8 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     const youCommand = localSide === 'player' ? 'the vanguard' : 'the challenger';
     const intro = `Multiplayer skirmish — ${objectiveBriefingForSide(victoryRules, localSide).summary}. You command ${youCommand}.`;
     const log = initial.adjudication
-      ? [adjudicationCopy(initial.adjudication, localSide, !!victoryOverride), intro]
-      : [intro];
+      ? [logNote(adjudicationCopy(initial.adjudication, localSide, !!victoryOverride)), logNote(intro)]
+      : [logNote(intro)];
     const durableIntent = loadPersistedNetIntent(lobbyId, localSide);
     if (initial.adjudication && durableIntent) clearPersistedNetIntent(lobbyId, durableIntent.intentId);
     const restoredPending: PendingNetMove | null = !initial.adjudication && durableIntent
@@ -1479,7 +1541,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       clock: s.clock ? { ...s.clock, running: false } : null,
       testMode: false,
       testMinCpuDelayMs: 0,
-      log: ['Defeat — you resigned.', ...s.log].slice(0, 12),
+      log: extendLog(s.log, [logNote('Defeat — you resigned.')]),
     });
     persistMatch(get()); // game decided → drops the saved copy
   },
@@ -1516,7 +1578,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
         terminalResult: reason === 'resign' ? null : s.net.terminalResult,
         authoritativeResult: { winner, reason },
       },
-      log: [copy, ...s.log].slice(0, 12),
+      log: extendLog(s.log, [logNote(copy)]),
     });
   },
 
@@ -1574,7 +1636,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       game: checkpoint.game,
       env: envFor(checkpoint.game),
       tick: checkpoint.tick,
-      log: ['Move undone — 1 gold paid.', ...checkpoint.log].slice(0, 12),
+      log: extendLog(checkpoint.log, [logNote('Move undone — 1 gold paid.')]),
       resultDetail: checkpoint.resultDetail,
       turnsElapsed: checkpoint.turnsElapsed,
       selectedId: checkpoint.selectedId,
@@ -1606,7 +1668,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     const game = settled.state;
     const selectedId = game.winner ? null : firstPlayerId(game);
     const log = settled.adjudication
-      ? [adjudicationCopy(settled.adjudication, 'player', !!victoryOverride), ...match.log].slice(0, 12)
+      ? extendLog(match.log, [logNote(adjudicationCopy(settled.adjudication, 'player', !!victoryOverride))])
       : match.log;
     set({
       game,
@@ -1784,7 +1846,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       undoCheckpoint: null,
       sessionEpoch: epoch,
       clock: s.clock ? { ...s.clock, running: false } : null,
-      log: ['Admin awarded victory to the player.', ...s.log].slice(0, 12),
+      log: extendLog(s.log, [logNote('Admin awarded victory to the player.')]),
     });
     persistMatch(get());
     return true;

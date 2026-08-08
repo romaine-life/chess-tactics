@@ -1,6 +1,6 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { useSkirmish, useSkirmishStoreApi } from '../game/SkirmishStoreContext';
-import { defaultSkirmishStore, type SkirmishStore } from '../game/store';
+import { defaultSkirmishStore, type LogEntry, type SkirmishStore } from '../game/store';
 import { useSkirmishView, useSkirmishViewStoreApi } from '../game/SkirmishViewStoreContext';
 import type { SkirmishViewStore } from '../game/skirmishView';
 import { livingPieces } from '../core/rules';
@@ -140,6 +140,17 @@ function parseDelaySeconds(raw: string): number | null {
   return Number.isFinite(seconds) && seconds >= 0 ? seconds * 1000 : null;
 }
 
+/**
+ * The score sheet's move number for one Event Log row: `12.` for the half-move that
+ * opens a full move and `12…` for the reply, which is how a score sheet says whose move
+ * it was without a second column. Rows that are not moves (the briefing, an
+ * adjudication) carry no number and leave the column empty.
+ */
+export function moveNumberLabel(entry: LogEntry): string {
+  if (entry.ply === undefined) return '';
+  return `${Math.floor(entry.ply / 2) + 1}${entry.ply % 2 === 0 ? '.' : '…'}`;
+}
+
 function UnitBadge({ piece, large = false }: { piece: Piece | null; large?: boolean }) {
   const side = piece?.side ?? 'neutral';
   const label = piece ? MARK[piece.type] : '?';
@@ -166,6 +177,15 @@ export function skirmishUnitOwnerLabel(side: Side, localSide: PlayingSide): stri
 
 export function skirmishRosterAction(side: Side, localSide: PlayingSide): 'select' | 'focus' {
   return clientSideRelation(side, localSide) === 'self' ? 'select' : 'focus';
+}
+
+/**
+ * The HUD section a `?hud=` link asks for. Admin is deliberately not addressable — it
+ * appears only for an authenticated admin and the panel already routes away from it.
+ * An unknown or absent value opens the default Unit card.
+ */
+export function hudTabFromRoute(value: string | null | undefined): HudTab {
+  return HUD_TABS.some((t) => t.id === value) ? value as HudTab : 'unit';
 }
 
 export type SkirmishHudProps = {
@@ -214,6 +234,9 @@ export type SkirmishHudProps = {
   /** Switches the Run's primary Battle and self-inspection workspaces without unmounting Battle. */
   /** Between-Battle phases replace only the existing panel's contents. */
   controlsContent?: ReactNode;
+  /** Which HUD section the panel opens on, so a link can land on the one being reviewed
+   *  (the score sheet in the Event Log, say) instead of the default Unit card. */
+  initialTab?: HudTab;
 };
 
 export function SkirmishHud({
@@ -244,6 +267,7 @@ export function SkirmishHud({
   strategikonPath = null,
   strategikonSearch = '',
   controlsContent,
+  initialTab = 'unit',
 }: SkirmishHudProps = {}) {
   const skirmishStore = useSkirmishStoreApi();
   const skirmishViewStore = useSkirmishViewStoreApi();
@@ -270,7 +294,7 @@ export function SkirmishHud({
   // to the server; solo/test boards end locally as a defeat.
   const { ask, dialog } = useConfirm();
 
-  const [tab, setTab] = useState<HudTab>('unit');
+  const [tab, setTab] = useState<HudTab>(initialTab);
   const authStatus = useAuthSession((session) => session.status);
   const adminAuth = {
     ready: authStatus?.reachable === true,
@@ -328,7 +352,7 @@ export function SkirmishHud({
   const rosterRows = clientSideOrder(localSide).map((side) => ({ side, pieces: livingPieces(presentedPieces, side) }));
   const selected = presentedPieces.find((piece) => piece.id === selectedId && piece.alive) ?? null;
   const focused = presentedPieces.find((piece) => piece.id === focusedId && piece.alive) ?? selected;
-  const logLines = log.length ? log.slice(0, 16) : ['Skirmish begins.'];
+  const logLines: LogEntry[] = log.length ? log : [{ text: 'Skirmish begins.' }];
   const focusedPortraitBackdrop = focused && isPlayablePieceType(focused.type) ? defaultBackgroundSet().portraits[focused.type] : null;
   const turnLabel = clientTurnLabel(game, localSide, !!net?.pendingMove);
   const strategikonNavigation = strategikonPath
@@ -474,11 +498,11 @@ export function SkirmishHud({
           <section className="skirmish-card skirmish-log-card" aria-label="Event log">
             <h2>Event Log</h2>
             <ul>
-              {logLines.map((line, i) => (
-                <li key={`${line}-${i}`}>
+              {logLines.map((entry, i) => (
+                <li key={`${entry.text}-${entry.ply ?? 'note'}-${i}`} className={entry.side ? `is-move is-${entry.side}` : 'is-note'}>
                   <span aria-hidden="true" />
-                  <strong>T{Math.max(1, logLines.length - i)}</strong>
-                  <em>{line}</em>
+                  <strong>{moveNumberLabel(entry)}</strong>
+                  <em>{entry.text}</em>
                 </li>
               ))}
             </ul>

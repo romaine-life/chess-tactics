@@ -47,7 +47,7 @@ function fakeState(overrides: {
     turnsElapsed: 1,
     objective: 'capture-king',
     objectiveCtx: { kingSide: 'enemy' },
-    log: ['Skirmish begins.'],
+    log: [{ text: 'Skirmish begins.' }],
     clock: null,
     battleElapsed: { elapsedMs: 4_000, startedAtMs: null },
     game: {
@@ -187,7 +187,7 @@ describe('match persistence', () => {
     expect(store.getItem(KEY)).toBeNull(); // stale copy removed
   });
 
-  it('migrates a version-1 match to a banked elapsed clock and writes only version 2', () => {
+  it('migrates a version-1 match to a banked elapsed clock and writes it forward', () => {
     persistMatch(fakeState());
     const old = JSON.parse(store.getItem(KEY)!) as Record<string, unknown>;
     old.version = 1;
@@ -195,8 +195,24 @@ describe('match persistence', () => {
     store.setItem(KEY, JSON.stringify(old));
 
     expect(loadMatch()?.battleElapsed).toEqual({ elapsedMs: 0, startedAtMs: null });
-    expect(JSON.parse(store.getItem(KEY)!).version).toBe(2);
+    expect(JSON.parse(store.getItem(KEY)!).version).toBe(3);
     expect(JSON.parse(store.getItem(KEY)!).battleElapsed).toEqual({ elapsedMs: 0, startedAtMs: null });
+  });
+
+  it('resumes a version-2 match by reading its bare-string Event Log as prose rows', () => {
+    persistMatch(fakeState());
+    const old = JSON.parse(store.getItem(KEY)!) as Record<string, unknown>;
+    old.version = 2;
+    old.log = ['Check!', 'Skirmish begins.'];
+    old.undoCheckpoint = { log: ['Skirmish begins.'] };
+    store.setItem(KEY, JSON.stringify(old));
+
+    const resumed = loadMatch();
+    // A string carried no notation and no ply, so it resumes as exactly what it was:
+    // a prose row. Numbering restarts at the first move played after the resume.
+    expect(resumed?.log).toEqual([{ text: 'Check!' }, { text: 'Skirmish begins.' }]);
+    expect(resumed?.undoCheckpoint?.log).toEqual([{ text: 'Skirmish begins.' }]);
+    expect(JSON.parse(store.getItem(KEY)!).version).toBe(3);
   });
 
   it('banks a running elapsed anchor when it persists', () => {

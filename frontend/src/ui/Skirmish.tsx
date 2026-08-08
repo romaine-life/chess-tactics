@@ -17,7 +17,7 @@ import {
   type UnitArrivalTrack,
   type UnitDepartureRequest,
 } from '../render/SkirmishBoard';
-import { SkirmishHud, type SkirmishHudProps } from './SkirmishHud';
+import { SkirmishHud, hudTabFromRoute, type SkirmishHudProps } from './SkirmishHud';
 import { SceneSurfaceReadiness } from './shell/PaintedSurfaceBoundary';
 import { useSceneActivation, useSceneReveal } from './shell/SceneBoundary';
 import { useSceneOpacityEntrance } from './shell/SceneActivity';
@@ -1295,6 +1295,9 @@ function SkirmishSession(props: SkirmishProps = {}) {
     canRerollDeployment: !unitDeparture && (runBattle?.canRerollDeployment ?? false),
     deploymentRerollCostTenths: runBattle?.deploymentRerollCostTenths,
     deploymentRerollDeparting: Boolean(unitDeparture),
+    // `?hud=log` (or roster/view/controls) opens the panel on that section, so a link can
+    // land inside the part of the HUD being reviewed rather than one click short of it.
+    initialTab: hudTabFromRoute(routeParams.get('hud')),
   };
   const battleHud = boardSettled && !boardSurfaceError ? (
     <SkirmishHud

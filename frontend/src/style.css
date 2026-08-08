@@ -9092,6 +9092,10 @@ body.loading-bootstrap .app-startup-status {
 
 .skirmish-log-card { min-height: 108px; }
 
+/* A log row is [side rail][move number][notation]. The rail marks WHOSE move the row
+   is, so it follows the mover — not the row's position in the list, which stops
+   alternating the moment a non-move line (a check, an adjudication) lands between two
+   moves. A row that is not a move carries no side and wears the quiet rail. */
 .skirmish-log-card li {
   align-items: start;
   display: grid;
@@ -9100,7 +9104,6 @@ body.loading-bootstrap .app-startup-status {
 }
 
 .skirmish-log-card li > span {
-  background: var(--skirmish-blue);
   box-shadow: 0 0 8px rgba(28, 127, 240, .4);
   display: block;
   height: 16px;
@@ -9108,8 +9111,16 @@ body.loading-bootstrap .app-startup-status {
   width: 3px;
 }
 
-.skirmish-log-card li:nth-child(2n) > span {
+.skirmish-log-card li.is-player > span { background: var(--skirmish-blue); }
+
+.skirmish-log-card li.is-enemy > span {
   background: var(--skirmish-red);
+  box-shadow: 0 0 8px rgba(240, 100, 62, .4);
+}
+
+.skirmish-log-card li.is-note > span {
+  background: #2c4a5a;
+  box-shadow: none;
 }
 
 .skirmish-log-card li strong {
@@ -9118,12 +9129,18 @@ body.loading-bootstrap .app-startup-status {
   font-size: 1.08rem;
   font-weight: 400;
   line-height: 1;
+  text-align: right;
 }
 
 .skirmish-log-card li em {
   color: var(--skirmish-muted);
   font-style: normal;
   min-width: 0;
+}
+
+.skirmish-log-card li.is-move em {
+  color: #f3ead8;
+  letter-spacing: .02em;
 }
 
 .skirmish-icon {
