@@ -1,6 +1,7 @@
 import {
   RUN_STARTER_CARD_BY_ID,
   RUN_STARTER_CARDS,
+  RUN_CARD_BY_ID,
   RUN_CARD_CATALOG,
   RUN_CARD_DECK,
   runCardDefinition,
@@ -360,9 +361,29 @@ const ALL_RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.freeze(
   'rr-vertical': 'The Twin Keeps',
 });
 
+/**
+ * Every card that can be HELD, which is more than the deck deals.
+ *
+ * A formation retired from the offer deck stays in Runs that already hold one — `allRunCards`
+ * retires the diagonal formations, and `legacyRunCards` deliberately keeps them resolvable. Keying
+ * the banner off the dealt deck alone would drop a retired card's authored name and address the
+ * moment it stopped being offered, so a held card would degrade to a prose contents label and its
+ * `/enchiridion/cards/<name>` address would break. Authored ids are added back here.
+ */
+function nameableRunCards(): typeof RUN_CARD_DECK[number][] {
+  const cards = new Map(RUN_CARD_DECK.map((card) => [card.id, card]));
+  for (const id of Object.keys(ALL_RUN_CARD_NAME_BY_ID)) {
+    // Composition keys such as `pb` name a family and resolve to no card; only real ids are added.
+    // RUN_CARD_BY_ID is the core deck only, so a starter can never arrive through this door.
+    const core = RUN_CARD_BY_ID[id];
+    if (core && !cards.has(id)) cards.set(id, core);
+  }
+  return [...cards.values()];
+}
+
 /** One authored banner name per card; no two cards in the deck share a title. */
 export const RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.freeze(
-  Object.fromEntries(RUN_CARD_DECK.map((card) => [
+  Object.fromEntries(nameableRunCards().map((card) => [
     card.id,
     ALL_RUN_CARD_NAME_BY_ID[card.id] ?? cardContentsLabel(card),
   ])),
@@ -677,7 +698,9 @@ const ALL_RUN_CARD_FLAVOR_BY_ID: Readonly<Record<string, string>> = Object.freez
 
 /** One authored fragment per card, matched to that card's own banner name. */
 export const RUN_CARD_FLAVOR_BY_ID: Readonly<Record<string, string>> = Object.freeze(
-  Object.fromEntries(RUN_CARD_DECK.map((card) => [
+  // Keyed like the banner: a retired formation a Run still holds keeps its authored fragment
+  // rather than falling back to 'No account survives.' See nameableRunCards.
+  Object.fromEntries(nameableRunCards().map((card) => [
     card.id,
     ALL_RUN_CARD_FLAVOR_BY_ID[card.id] ?? 'No account survives.',
   ])),
@@ -718,7 +741,9 @@ const slugify = (name: string): string => name
 /** The address form of a card id: its banner name, hyphenated. Unnamed ids address as themselves. */
 const RUN_CARD_SLUG_BY_ID: Readonly<Record<string, string>> = Object.freeze((() => {
   const byBase = new Map<string, string[]>();
-  for (const card of RUN_CARD_CATALOG) {
+  // Retired-but-holdable cards address here too, or a card a Run still holds loses its address.
+  const addressable = new Map([...RUN_CARD_CATALOG, ...nameableRunCards()].map((card) => [card.id, card]));
+  for (const card of addressable.values()) {
     const base = slugify(runCardName(card));
     byBase.set(base, [...(byBase.get(base) ?? []), card.id]);
   }

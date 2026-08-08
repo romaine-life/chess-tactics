@@ -9,7 +9,7 @@ import {
   runCardName,
   runCardSlug,
 } from './cardNames';
-import { RUN_CARD_CATALOG, RUN_CARD_DECK, cardContentsLabel, type RunCoreCard } from './model';
+import { RUN_CARD_CATALOG, RUN_CARD_DECK, cardContentsLabel, runCardDefinition, type RunCoreCard } from './model';
 
 describe('Run card names', () => {
   it('authors one name for every card in the generated deck', () => {
@@ -18,10 +18,18 @@ describe('Run card names', () => {
     }
   });
 
-  it('authors no orphan names outside the deck', () => {
-    const deckIds = new Set(RUN_CARD_DECK.map((card) => card.id));
+  /**
+   * A name must belong to a card that exists — but "exists" is wider than "is dealt". A formation
+   * retired from the offer deck stays in Runs that already hold one and keeps its banner, so the
+   * guard here is resolvability, and the separate direction (every dealt card is named) is what
+   * catches a card shipping with no name at all.
+   */
+  it('authors no orphan names, and leaves no dealt card unnamed', () => {
     for (const id of Object.keys(RUN_CARD_NAME_BY_ID)) {
-      expect(deckIds.has(id), `authored name for unknown card id ${id}`).toBe(true);
+      expect(runCardDefinition(id), `authored name for unknown card id ${id}`).toBeTruthy();
+    }
+    for (const card of RUN_CARD_DECK) {
+      expect(RUN_CARD_NAME_BY_ID[card.id], `dealt card ${card.id} has no name`).toBeTruthy();
     }
   });
 
@@ -72,13 +80,24 @@ describe('Run card names', () => {
   });
 
   it('authors one nonempty flavor fragment for every core card and no orphan flavor', () => {
-    const deckIds = new Set(RUN_CARD_DECK.map((card) => card.id));
     for (const card of RUN_CARD_DECK) {
       expect(RUN_CARD_FLAVOR_BY_ID[card.id], `deck card ${card.id} has no authored flavor`).toBeTruthy();
       expect(runCardFlavor(card)).toBe(RUN_CARD_FLAVOR_BY_ID[card.id]);
     }
+    // Resolvable, not dealt: a retired formation keeps its fragment for Runs that still hold it.
     for (const id of Object.keys(RUN_CARD_FLAVOR_BY_ID)) {
-      expect(deckIds.has(id), `authored flavor for unknown card id ${id}`).toBe(true);
+      expect(runCardDefinition(id), `authored flavor for unknown card id ${id}`).toBeTruthy();
+    }
+  });
+
+  /** A retired formation keeps its whole printed face — banner, fragment, and address. */
+  it('keeps the full face of a formation retired from the offer deck', () => {
+    for (const id of ['ppb-protected', 'ppk-protected', 'bb-diagonal']) {
+      const card = runCardDefinition(id)!;
+      expect(RUN_CARD_DECK.some((dealt) => dealt.id === id), `${id} is still dealt`).toBe(false);
+      expect(runCardName(card)).not.toBe(cardContentsLabel(card));
+      expect(runCardFlavor(card)).not.toBe('No account survives.');
+      expect(RUN_CARD_ID_BY_SLUG[runCardSlug(id)]).toBe(id);
     }
     // Flavor is per card, like the name it sits under: two cards sharing an illustration
     // still read as two records, never one printed twice.
