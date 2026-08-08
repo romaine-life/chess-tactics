@@ -110,7 +110,7 @@ import {
   type RunArmyFilters,
 } from './RunArmyWorkspace';
 import { RunCard } from './RunCard';
-import { RUN_CARD_BACK_SLOT } from './RunCardBack';
+import { useRunCardBackMediaUrl } from './RunCardBack';
 import { RunCardPile } from './RunCardPile';
 import { RunCardRow } from './RunCardRow';
 import { RunBattlePreview } from './RunBattlePreview';
@@ -835,7 +835,7 @@ function SectioPanel({
   const replace = useActiveRun((state) => state.replace);
   const sectio = run.sectio!;
   const availableOffers = sectio.cardOffers.filter((offer) => !sectio.adlectedCardOfferIds.includes(offer.offerId));
-  const cardBackMediaUrl = resolvedLiveMediaUrl(RUN_CARD_BACK_SLOT);
+  const cardBackMediaUrl = useRunCardBackMediaUrl();
   return (
     <>
       {view === 'expunctio'
