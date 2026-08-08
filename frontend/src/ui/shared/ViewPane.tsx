@@ -262,6 +262,18 @@ export function constrainPanToCoverViewport({
 }
 
 /**
+ * How far a press may travel and still count as a click rather than a pan. The board camera is
+ * loose enough that a plain click delivers a pixel or two of movement, so the threshold has to
+ * absorb hand tremor without swallowing a deliberate short drag.
+ */
+export const VIEW_PANE_PAN_THRESHOLD_PX = 4;
+
+/** Whether a press has travelled far enough to be navigation rather than a click. */
+export function exceedsViewPanePanThreshold(deltaX: number, deltaY: number): boolean {
+  return Math.abs(deltaX) > VIEW_PANE_PAN_THRESHOLD_PX || Math.abs(deltaY) > VIEW_PANE_PAN_THRESHOLD_PX;
+}
+
+/**
  * Smallest safety-precision zoom at which the viewport can fit anywhere inside the accepted art.
  * This is deliberately finer than the human-facing wheel/stepper increment: rounding a small
  * preview to that control precision can collapse a valid zoom-out range. The polygon uses the
@@ -321,6 +333,7 @@ export function ViewPane({
   onViewportSizeChange,
   onViewInteraction,
   onAssetClick,
+  onSecondaryClick,
   boardViewportMode = 'canonical',
   children,
 }: {
@@ -341,6 +354,13 @@ export function ViewPane({
   /** Reports intentional user camera movement; automatic floor/reclamp updates do not call it. */
   onViewInteraction?: () => void;
   onAssetClick?: (assetId: string) => void;
+  /**
+   * A secondary press that released without panning. The drag stays pan-only (ADR-0128); a
+   * press that never moved carried no navigation, so a viewport owner may claim it for a
+   * NON-DESTRUCTIVE mode change. Never bind content mutation here — the threshold that tells
+   * this apart from a pan is exactly what ADR-0128 refused to put in front of an erase.
+   */
+  onSecondaryClick?: () => void;
   /** Play fills its live board allocation; fixed previews retain the canonical aspect. */
   boardViewportMode?: 'canonical' | 'fill';
   children: ReactNode;
@@ -357,6 +377,7 @@ export function ViewPane({
     renderedWidth: number;
     renderedHeight: number;
     assetId?: string;
+    secondary: boolean;
   } | null>(null);
   const automaticFloorZoomRef = useRef<number | null>(null);
   const lastViewportSizeRef = useRef<ViewPaneViewportSize | null>(null);
@@ -437,6 +458,7 @@ export function ViewPane({
       renderedWidth: rendered?.width ?? 0,
       renderedHeight: rendered?.height ?? 0,
       assetId: tileElement?.dataset.assetId,
+      secondary: event.button === 2,
     };
     didDragRef.current = false;
   };
@@ -458,7 +480,7 @@ export function ViewPane({
   const movePan = (event: PointerEvent<HTMLElement>) => {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    if (Math.abs(event.clientX - drag.startX) > 4 || Math.abs(event.clientY - drag.startY) > 4) {
+    if (exceedsViewPanePanThreshold(event.clientX - drag.startX, event.clientY - drag.startY)) {
       if (!didDragRef.current) onViewInteraction?.();
       didDragRef.current = true;
     }
@@ -491,6 +513,9 @@ export function ViewPane({
     if (!drag || drag.pointerId !== event.pointerId) return;
     dragRef.current = null;
     event.currentTarget.releasePointerCapture(event.pointerId);
+    if (!didDragRef.current && drag.secondary) {
+      onSecondaryClick?.();
+    }
     if (!didDragRef.current && drag.assetId) {
       onAssetClick?.(drag.assetId);
     }

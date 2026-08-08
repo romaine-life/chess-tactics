@@ -68,6 +68,7 @@ import {
   deploymentOptions,
   gameForRunDeployment,
   levelWithRunDeployment,
+  nextCardRotation,
   normalReservistCell,
   placeArrangedDeploymentCard,
   resolveForcedDeploymentChoices,
@@ -462,6 +463,9 @@ function ArrangedDeploymentControls({
                   {selected.placed
                     ? 'Choose another square to move this formation, or remove it.'
                     : 'Choose a highlighted square on the battlefield.'}
+                  {availableRotations.size > 1
+                    ? ' Right-click the battlefield to turn it without leaving the square.'
+                    : ''}
                 </p>
                 {selected.placed ? (
                   <ChromeButton
@@ -541,14 +545,19 @@ function useRunDeploymentPresentation({
   );
   // A rotation is offered only when it both fits the band and looks different from a turn
   // already on the rail. Redundant turns are skipped the same way unplaceable ones are, so
-  // the control never presents two buttons that produce the same board.
-  const availableArrangementRotations = useMemo(() => new Set<RunFormationRotation>(
+  // the control never presents two buttons that produce the same board. The rail and the
+  // secondary-click cycle read this one ordered list, so both walk the same turns.
+  const availableArrangementRotationList = useMemo<readonly RunFormationRotation[]>(() => (
     selectedCardId
       ? distinctCardRotations(prepared, selectedCardId).filter((rotation) => (
           arrangedCardPlacementOptions(prepared, level, selectedCardId, rotation).length > 0
         ))
-      : [],
+      : []
   ), [level, prepared, selectedCardId]);
+  const availableArrangementRotations = useMemo(
+    () => new Set<RunFormationRotation>(availableArrangementRotationList),
+    [availableArrangementRotationList],
+  );
   const hoveredArrangementOption = hoveredArrangementAnchor
     ? arrangementPlacementOptions.find(({ anchor }) => `${anchor.x},${anchor.y}` === hoveredArrangementAnchor) ?? null
     : null;
@@ -628,6 +637,14 @@ function useRunDeploymentPresentation({
     setArrangementRotation(0);
     setHoveredArrangementAnchor(null);
   }, []);
+  // A secondary click on the battlefield turns the formation waiting under the cursor. It
+  // deliberately keeps the hovered anchor: the preview spins in place on the square being
+  // aimed at rather than vanishing until the mouse is jiggled. A turn that leaves that
+  // square illegal simply shows nothing until the player moves or turns back.
+  const turnArrangementUnderCursor = useCallback(() => {
+    if (departureActive) return;
+    setArrangementRotation((current) => nextCardRotation(availableArrangementRotationList, current));
+  }, [availableArrangementRotationList, departureActive]);
   const removeArrangementCard = useCallback(() => {
     if (!selectedCardId || departureActive) return;
     const latest = useActiveRun.getState().run;
@@ -653,6 +670,9 @@ function useRunDeploymentPresentation({
     unitArrivalTrack: 'drop',
     unitArrivalStartDelta: { x: 0, y: 0 },
     onArrivingUnitIdsChange: () => undefined,
+    onBoardSecondaryClick: stage === 'arrange' && selectedArrangementCard?.admitted
+      ? turnArrangementUnderCursor
+      : undefined,
     renderCellOverlay: ({ cell, visualFootprintStyle }) => {
       if (stage !== 'arrange' || !selectedArrangementCard?.admitted) {
         return null;

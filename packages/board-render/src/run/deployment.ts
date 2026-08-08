@@ -549,6 +549,20 @@ export function distinctCardRotations(
   });
 }
 
+/**
+ * The turn a repeated rotate gesture lands on next. Cycling walks only the turns the player is
+ * already offered, so the gesture can never select a rotation the rail refuses, and a formation
+ * with a single distinct turn simply holds still. A current turn that has fallen out of the
+ * offered list restarts the cycle at its first entry.
+ */
+export function nextCardRotation(
+  available: readonly RunFormationRotation[],
+  current: RunFormationRotation,
+): RunFormationRotation {
+  if (!available.length) return current;
+  return available[(available.indexOf(current) + 1) % available.length];
+}
+
 /** Every legal translation for one selected rotation. The anchor is the normalized shape's
  * front-left cell. A seat's row is the anchor row plus the rotated offset, in board
  * coordinates -- not an index into the lane list, which made a formation's depth mean

@@ -20,6 +20,7 @@ import {
   completeDeploymentDeal,
   deploymentInteractionStage,
   distinctCardRotations,
+  nextCardRotation,
   placeArrangedDeploymentCard,
   resolveForcedDeploymentChoices,
   removeArrangedDeploymentCard,
@@ -156,6 +157,39 @@ describe('formation deployment', () => {
     expect(rotationsFor('f-01112131-kppp')).toEqual([0, 1, 2, 3]);
     // A lone unit is the same shape whichever way it is turned.
     expect(rotationsFor('q')).toEqual([0]);
+  });
+
+  // Repeated turning walks the same turns the rail offers and nothing else, so the gesture can
+  // never land on a rotation the player has no button for.
+  it('cycles a repeated turn through the offered quarter turns and wraps', () => {
+    expect(nextCardRotation([0, 1, 2, 3], 0)).toBe(1);
+    expect(nextCardRotation([0, 1, 2, 3], 3)).toBe(0);
+
+    // A four-across formation reads the same in both directions, so its cycle is two long.
+    expect(nextCardRotation([0, 1], 0)).toBe(1);
+    expect(nextCardRotation([0, 1], 1)).toBe(0);
+
+    // A shape the band can only stand up one way holds still rather than flickering.
+    expect(nextCardRotation([0], 0)).toBe(0);
+    expect(nextCardRotation([], 2)).toBe(2);
+
+    // A turn that has fallen out of the offered list restarts the cycle instead of sticking.
+    expect(nextCardRotation([0, 2], 1)).toBe(0);
+  });
+
+  // The gesture and the rail must agree on the list, so a turn arrived at by clicking is one
+  // the player could equally have pressed.
+  it('cycles only through turns the band can actually accept', () => {
+    const { run, level } = fixture(2, 6, 43, ['ppp']);
+    const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+    const line = arranging.cards.find((card) => card.coreId === 'ppp')!;
+    const offered = distinctCardRotations(arranging, line.id).filter((rotation) => (
+      arrangedCardPlacementOptions(arranging, level, line.id, rotation).length > 0
+    ));
+
+    // Three wide cannot stand up in a two-row band, so the standing turn is not on offer.
+    expect(offered).toEqual([0]);
+    expect(nextCardRotation(offered, 0)).toBe(0);
   });
 
   it('fits His Grace in the smallest two-by-two deployment band', () => {
