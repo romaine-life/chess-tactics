@@ -6,6 +6,7 @@ import { testDrawableCatalog } from '../../test/drawableCatalog';
 import { BOARD_GRID_STYLES } from '../../settings/appSettings';
 import { BOARD_GRID_STYLE_LABELS } from '../../settings/boardGridStyle';
 import { BoardGridStylePicker } from './BoardGridStylePicker';
+import { boardGridStyleSwatchBoard } from './boardGridStyleSwatchBoard';
 
 const styleSheet = readFileSync(new URL('../../style.css', import.meta.url), 'utf8');
 
@@ -36,6 +37,21 @@ describe('board grid style picker', () => {
     const markup = renderToStaticMarkup(<BoardGridStylePicker value="chalk" onChange={() => {}} />);
     expect(markup.match(/--board-zoom:1/g)).toHaveLength(BOARD_GRID_STYLES.length);
     expect(markup).not.toContain('--board-zoom:0');
+  });
+
+  it('draws the styles over ground with something for a line to cross', () => {
+    // These styles differ in how a line holds up against what it crosses. Over one flat terrain
+    // they all look equally fine, which answers nothing — so the swatch ground must keep the
+    // range the shipped descriptions claim, and must overflow the fixed swatch window from every
+    // edge rather than showing its own corner.
+    const board = boardGridStyleSwatchBoard();
+    const families = new Set(Object.values(board.cells).map((tile) => tile.split('-surf-')[0]));
+    expect(families.size).toBeGreaterThan(1);
+    expect(families).toContain('grass');
+    expect(families).toContain('water');
+    expect(Object.values(board.features ?? {}).some((feature) => feature.kind === 'road')).toBe(true);
+    expect(Object.keys(board.cover ?? {}).length).toBeGreaterThan(0);
+    expect(Math.min(board.cols, board.rows)).toBeGreaterThanOrEqual(6);
   });
 
   it('gives every style inheritable variables so swatches can differ from the root choice', () => {

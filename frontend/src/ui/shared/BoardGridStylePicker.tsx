@@ -1,11 +1,9 @@
 import { useMemo, type ReactElement } from 'react';
-import { createBlankLevel } from '../../core/level';
-import { levelToEditorBoard } from '../../core/levelBoard';
 import { StudioReadOnlyBoard } from '../../render/StudioReadOnlyBoard';
 import { BOARD_GRID_STYLES, type BoardGridStyle } from '../../settings/appSettings';
 import { BOARD_GRID_STYLE_LABELS } from '../../settings/boardGridStyle';
-import { generateTerrainDressing } from '../generatedReferenceBoard';
 import { AssetSwatchList } from './AssetSwatchList';
+import { boardGridStyleSwatchBoard } from './boardGridStyleSwatchBoard';
 
 // Settings → Gameplay → Grid style, as five real boards instead of five words.
 //
@@ -22,11 +20,11 @@ import { AssetSwatchList } from './AssetSwatchList';
 //    contained "fit the board to the swatch" camera would therefore quietly thin every line and
 //    misreport the weights the player is comparing. The swatch is a fixed window onto a board held
 //    at 1×; the board is sized to overflow it from every edge so no swatch shows a board corner.
-//  - One shared dressing. A per-swatch seed would vary the terrain under each line, and terrain
-//    contrast is exactly what these styles differ in — the comparison has to hold it fixed.
-const SWATCH_BOARD_COLS = 4;
-const SWATCH_BOARD_ROWS = 4;
-const SWATCH_BOARD_SEED = 0x6c1d51;
+//  - One shared board. Varying the ground under each line would confound the comparison with the
+//    thing these styles actually differ in — how a line holds up against what it crosses.
+//
+// The ground itself is a real battle board rather than a procedural grass field; see
+// boardGridStyleSwatchBoard.
 
 export function BoardGridStylePicker({
   value,
@@ -35,22 +33,7 @@ export function BoardGridStylePicker({
   value: BoardGridStyle;
   onChange: (style: BoardGridStyle) => void;
 }): ReactElement {
-  const board = useMemo(() => {
-    const level = createBlankLevel(
-      'settings-grid-style',
-      'Grid style',
-      SWATCH_BOARD_COLS,
-      SWATCH_BOARD_ROWS,
-    );
-    return {
-      ...levelToEditorBoard(level),
-      ...generateTerrainDressing({
-        cols: SWATCH_BOARD_COLS,
-        rows: SWATCH_BOARD_ROWS,
-        seed: SWATCH_BOARD_SEED,
-      }),
-    };
-  }, []);
+  const board = useMemo(() => boardGridStyleSwatchBoard(), []);
 
   return (
     <AssetSwatchList
