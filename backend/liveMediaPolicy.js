@@ -368,6 +368,51 @@ function ataraxiaNumeralOwnerProofIssue(row, proof, surfaceUrl = null) {
  * The wall material and face a `tiles/feature/wall-<material>-<mask|thumb>.png` slot names, or
  * null. `mask` is the N(1)/W(8) face bitmask the frame paints; `thumb` is its picker card.
  */
+// Board prop artwork. A prop is one drawing shown through two depth-half slots so a unit can
+// stand between its front and back; the halves are not two pictures, they are one picture cut at
+// its ground contact. That is the completeness this validator exists to state, and its absence is
+// why the prop domain was refused acceptance outright and every prop in the game arrived over the
+// legacy bridge instead.
+const PROP_ART_SLOT = /^props\/([a-z][a-z0-9-]*)\/(back|front)\.png$/;
+
+/** The prop and depth half a slot names, or null when the slot is not prop artwork. */
+function propArtSlot(slot) {
+  const match = PROP_ART_SLOT.exec(String(slot || ''));
+  return match ? { propId: match[1], half: match[2] } : null;
+}
+
+/**
+ * Prop artwork is complete when it is a native raster of a plausible sprite frame that both
+ * depth halves can be cut from. The seat document addresses the contact point as a pixel INSIDE
+ * this frame, so a frame outside these bounds cannot be seated by any anchor a human would author.
+ */
+function propArtMediaIssue(row, projectedRuntime = null) {
+  const contract = propArtSlot(row.slot);
+  if (!contract) return 'prop artwork requires a props/<id>/<half>.png slot';
+  if (row.domain !== 'prop') return 'prop artwork requires the prop domain';
+  if (row.role !== 'media') return 'prop artwork requires the media role';
+  if (row.media_type !== 'image/png') return 'prop artwork requires image/png';
+  const width = Number(row.width);
+  const height = Number(row.height);
+  if (!Number.isInteger(width) || !Number.isInteger(height) || width < 8 || height < 8) {
+    return 'prop artwork requires a raster at least 8x8';
+  }
+  // A prop frame is a sprite, not a scene. The upper bound is the largest installed prop frame
+  // (the 192x300 oak) with room above it; anything larger is a source render that has not been
+  // cropped to a placeable frame.
+  if (width > 512 || height > 512) return 'prop artwork frames are bounded at 512x512';
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (runtime && Object.keys(runtime).length) {
+    const allowed = new Set(['component', 'variant', 'frameWidth', 'frameHeight', 'frameCount', 'altText', 'nativeRole']);
+    const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+    if (unsupported.length) {
+      return `prop artwork runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+    }
+  }
+  return null;
+}
+
 function wallMaterialSlot(slot) {
   const raw = String(slot || '');
   const frame = WALL_MATERIAL_FRAME_SLOT.exec(raw);
@@ -1818,6 +1863,8 @@ module.exports = {
   strategikonBackgroundMediaIssue,
   strategikonBackgroundOwnerProofIssue,
   strategikonBackgroundSlot,
+  propArtMediaIssue,
+  propArtSlot,
   wallMaterialMediaIssue,
   wallMaterialOwnerProofIssue,
   wallMaterialSlot,
