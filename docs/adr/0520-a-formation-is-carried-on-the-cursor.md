@@ -69,9 +69,11 @@ the seating; a secondary click turns what is being carried.**
    that is the elbow. When the band cannot take the grip seating, the formation shifts to the
    legal candidate whose covering seat is nearest the grip, so the shift is the smallest one that
    works instead of a jump across the shape.
-4. **The highlight is the footprint.** The squares that light up are the squares the units will
-   occupy, under the ghosts standing on them — not an anchor square, and not a static field of
-   legal corners.
+4. **The highlight is the footprint, over a band that never goes dark.** One paint at two
+   strengths: quiet across every square the formation could take, full across the squares this
+   seating fills, under the ghosts standing on them. The band is painted whenever a formation is
+   in hand, so a moment with no seating resolved still shows where the player may deploy rather
+   than bare ground. It is not a static field of legal corners.
 5. **The formation is the cursor.** While a seating is resolved the pointer is hidden beneath it.
    When nothing resolves the pointer returns, so the player is never left with neither a cursor
    nor a formation.
@@ -81,13 +83,18 @@ the seating; a secondary click turns what is being carried.**
    refusal was about *erase*, and that stands unweakened — `ViewPane`'s `onSecondaryClick` seam is
    documented as non-destructive only, the threshold this introduces may never be put in front of
    a destructive action, and the Level Editor still has no secondary-button meaning at all.
-7. **The turn spins the formation about its grip, on the square being pointed at.** Unlike the
-   rail buttons, which clear the pointed square because the cursor has left the board, the gesture
-   keeps it.
-8. **The gesture and the rail walk one list** — the turns that are distinct under the formation's
-   own symmetry and placeable somewhere in this level's band. A clicked turn is therefore always
-   one the player could have pressed; a formation with one distinct turn holds still; the cycle
-   wraps.
+7. **The turn spins the formation about its grip, on the square being pointed at, and can never
+   make it vanish.** Unlike the rail buttons, which clear the pointed square because the cursor
+   has left the board, the gesture keeps it — so the gesture walks **that square's** turns: the
+   ones with a seating over it. Walking the band-wide list instead stepped onto turns with no
+   seating there, and the formation under the player's hand disappeared. The square's list is
+   computed independently of the current turn, so pointing at a narrow gap and turning finds the
+   way the formation fits. A square that takes only one turn holds still rather than blanking.
+8. **The rail stays band-wide.** Its four buttons offer the turns that are distinct under the
+   formation's own symmetry and placeable somewhere in this level's band, and they do not change
+   as the cursor moves. The square's list is always a subset, so a turn arrived at by clicking is
+   always one the player could have pressed. Off the board there is no square to preserve and the
+   rail's list applies. Both cycles wrap.
 9. **Placing hands the next formation to the cursor.** Seating a formation finishes with it, so
    the hand advances to the next admitted card still to be placed, resuming after the one just
    seated and wrapping — placing out of order walks the rest of the hand rather than jumping back

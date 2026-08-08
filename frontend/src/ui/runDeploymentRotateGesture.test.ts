@@ -38,7 +38,7 @@ describe('Run Deployment secondary-click turn', () => {
     )?.[0];
 
     expect(turn).toBeDefined();
-    expect(turn).toContain('nextCardRotation(availableArrangementRotationList, current)');
+    expect(turn).toContain('nextCardRotation(turnableArrangementRotationList, current)');
     expect(turn).not.toContain('setPointedArrangementCell');
     // Nothing is committed by the gesture — placement stays on the primary button.
     expect(turn).not.toContain('placeArrangedDeploymentCard');
@@ -73,7 +73,6 @@ describe('Run Deployment aiming', () => {
 
   it('lights the squares the formation will occupy rather than an anchor square', () => {
     expect(runScreen).toContain("filled ? 'is-move' : ''");
-    expect(runScreen).toContain('{filled ? <PredrawnMoveHighlightPaint /> : null}');
     expect(runScreen).toMatch(
       /const arrangementFootprint = useMemo\(\(\) => new Set\(\s*Object\.values\(pointedArrangementOption\?\.placements \?\? \{\}\)/,
     );
@@ -99,6 +98,35 @@ describe('Run Deployment aiming', () => {
     const click = runScreen.match(/const placed = placeArrangedDeploymentCard\([\s\S]*?\n {10}\}\}/)?.[0];
     expect(click).toBeDefined();
     expect(click).not.toContain('setPointedArrangementCell');
+  });
+
+  // Turning walked the band-wide list, so a turn with no seating over the pointed square blanked
+  // the formation the player was holding.
+  it('turns through the square\'s own list so the formation cannot vanish', () => {
+    expect(runScreen).toMatch(
+      /const turnableArrangementRotationList = useMemo<readonly RunFormationRotation\[\]>\(\(\) => \{[\s\S]*?const atCell = cardRotationsAtCell\(prepared, level, selectedCardId, pointedCell\);[\s\S]*?return atCell\.length \? atCell : availableArrangementRotationList;/,
+    );
+    // Off the board there is no square to preserve, so the rail's own list applies.
+    expect(runScreen).toContain('if (!selectedCardId || !pointedCell) return availableArrangementRotationList;');
+    // The RAIL stays band-wide — its buttons must not flicker as the cursor moves.
+    expect(runScreen).toMatch(/availableRotations=\{availableArrangementRotations\}/);
+  });
+
+  // With nothing seated the board went dark, so a turn that found no seating left the player
+  // looking at bare ground with no sign of where they could deploy.
+  it('keeps the deployable band painted whether or not a seating resolves', () => {
+    const styles = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+
+    // One paint, two strengths — the band under the seating, never a second treatment.
+    expect(runScreen).toContain('<PredrawnMoveHighlightPaint />');
+    expect(runScreen).not.toContain('{filled ? <PredrawnMoveHighlightPaint /> : null}');
+    expect(styles).toContain('.run-deployment-cell.is-placeable > .predrawn-cyan-move-highlight-paint {');
+    const band = styles.match(
+      /\.run-deployment-cell\.is-placeable > \.predrawn-cyan-move-highlight-paint \{\s*opacity: ([\d.]+);/,
+    );
+    expect(band).toBeTruthy();
+    expect(Number(band[1])).toBeGreaterThan(0);
+    expect(Number(band[1])).toBeLessThan(1);
   });
 
   // While the formation is the cursor, the pointer hides under it; when no seating resolves the

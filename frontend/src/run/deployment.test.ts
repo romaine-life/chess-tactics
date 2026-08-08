@@ -24,6 +24,7 @@ import {
   completeDeploymentDeal,
   deploymentInteractionStage,
   arrangedDeploymentCards,
+  cardRotationsAtCell,
   distinctCardRotations,
   nextArrangedCardToPlace,
   nextCardRotation,
@@ -283,6 +284,53 @@ describe('formation deployment', () => {
     }
     // A square nothing could ever cover resolves to no seating rather than a nearby guess.
     expect(arrangedCardPlacementAtCell(arranging, level, line.id, 0, { x: 0, y: 0 })).toBeNull();
+  });
+
+  // Turning happens with the cursor on a square. Walking the band-wide list stepped onto turns
+  // with no seating over that square, and the formation under the player's hand disappeared.
+  it('offers, at a square, only the turns that keep the formation on it', () => {
+    const { run, level } = fixture(8, 8, 71);
+    const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+    const hisGrace = arranging.cards.find((card) => card.coreId === 'his-grace')!;
+    const bandWide = distinctCardRotations(arranging, hisGrace.id).filter((rotation) => (
+      arrangedCardPlacementOptions(arranging, level, hisGrace.id, rotation).length > 0
+    ));
+
+    expect(bandWide.length).toBe(4);
+    for (const cell of arrangedCardPlaceableCells(arranging, level, hisGrace.id, 0)) {
+      const here = cardRotationsAtCell(arranging, level, hisGrace.id, cell);
+
+      // Every offered turn genuinely seats the formation over the square being pointed at, so
+      // cycling can never blank it.
+      expect(here.length).toBeGreaterThan(0);
+      for (const rotation of here) {
+        const seating = arrangedCardPlacementAtCell(arranging, level, hisGrace.id, rotation, cell);
+        expect(Object.values(seating!.placements)).toContainEqual({ x: cell.x, y: cell.y });
+      }
+      // And the square's turns are a subset of the band's — never a turn the rail refuses.
+      expect(here.every((rotation) => bandWide.includes(rotation))).toBe(true);
+      // Walking from any offered turn stays offered.
+      for (const rotation of here) {
+        expect(here).toContain(nextCardRotation(here, rotation));
+      }
+    }
+  });
+
+  // A band corner takes fewer turns than the middle of the band; that is exactly the position
+  // where cycling the band-wide list used to blank the formation.
+  it('narrows the offered turns at a square the band can barely seat', () => {
+    const { run, level } = fixture(2, 6, 73, ['ppp']);
+    const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+    const line = arranging.cards.find((card) => card.coreId === 'ppp')!;
+    const cells = arrangedCardPlaceableCells(arranging, level, line.id, 0);
+
+    // Three wide cannot stand up in a two-row band, so every square offers the flat turn only —
+    // and a right-click there now holds still rather than blanking the formation.
+    expect(cells.length).toBeGreaterThan(0);
+    for (const cell of cells) {
+      expect(cardRotationsAtCell(arranging, level, line.id, cell)).toEqual([0]);
+      expect(nextCardRotation(cardRotationsAtCell(arranging, level, line.id, cell), 0)).toBe(0);
+    }
   });
 
   // Repeated turning walks the same turns the rail offers and nothing else, so the gesture can

@@ -21419,6 +21419,13 @@ button.tileset-relationship-cell {
   cursor: crosshair;
 }
 
+/* The deployable band, held at a fraction of the move paint so it reads UNDER the seating it
+   surrounds. It is on whenever a formation is in hand, so the board never goes blank between
+   one square and the next — the same paint at full strength marks where this seating lands. */
+.run-deployment-cell.is-placeable > .predrawn-cyan-move-highlight-paint {
+  opacity: .26;
+}
+
 /* The formation under the pointer IS the cursor while a seating resolves. */
 .run-deployment-board.is-carrying-formation .run-deployment-cell {
   cursor: none;

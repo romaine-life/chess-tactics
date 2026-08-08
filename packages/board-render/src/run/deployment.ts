@@ -737,6 +737,27 @@ export function arrangedCardPlacementAtCell(
   return best?.option ?? null;
 }
 
+/**
+ * The turns that can seat this formation over `cell`, in quarter-turn order.
+ *
+ * Turning is done with the cursor on a square, so the turns on offer are the ones that keep the
+ * formation THERE. Cycling the band-wide list instead would step onto a turn with no seating over
+ * the pointed square, and the formation under the player's hand would simply disappear.
+ *
+ * This is computed independently of the current turn, so a square that only one turn can reach is
+ * reachable by turning onto it — pointing at a narrow gap and turning finds the way it fits.
+ */
+export function cardRotationsAtCell(
+  run: RunDocument,
+  level: Level,
+  cardId: string,
+  cell: Vec,
+): RunFormationRotation[] {
+  return distinctCardRotations(run, cardId).filter((rotation) => (
+    arrangedCardPlacementAtCell(run, level, cardId, rotation, cell) !== null
+  ));
+}
+
 /** Every square the player may point at to place this formation, in board order. */
 export function arrangedCardPlaceableCells(
   run: RunDocument,

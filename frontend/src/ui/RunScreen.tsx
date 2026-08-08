@@ -60,6 +60,7 @@ import {
   arrangedCardPlaceableCells,
   arrangedCardPlacementAtCell,
   arrangedCardPlacementOptions,
+  cardRotationsAtCell,
   distinctCardRotations,
   arrangedDeploymentCanBegin,
   arrangedDeploymentCards,
@@ -560,21 +561,27 @@ function useRunDeploymentPresentation({
     () => new Set<RunFormationRotation>(availableArrangementRotationList),
     [availableArrangementRotationList],
   );
+  const pointedCell = useMemo(() => {
+    const parts = pointedArrangementCell?.split(',').map(Number);
+    if (!parts || parts.length !== 2 || parts.some((value) => !Number.isFinite(value))) return null;
+    return { x: parts[0], y: parts[1] };
+  }, [pointedArrangementCell]);
   // The formation is carried on the cursor: the pointed square resolves to a whole seating,
   // and the player never has to work out where a corner would have to go.
-  const pointedArrangementOption = useMemo(() => {
-    const cell = pointedArrangementCell?.split(',').map(Number);
-    if (!selectedCardId || !cell || cell.length !== 2 || cell.some((value) => !Number.isFinite(value))) {
-      return null;
-    }
-    return arrangedCardPlacementAtCell(
-      prepared,
-      level,
-      selectedCardId,
-      arrangementRotation,
-      { x: cell[0], y: cell[1] },
-    );
-  }, [arrangementRotation, level, pointedArrangementCell, prepared, selectedCardId]);
+  const pointedArrangementOption = useMemo(() => (
+    selectedCardId && pointedCell
+      ? arrangedCardPlacementAtCell(prepared, level, selectedCardId, arrangementRotation, pointedCell)
+      : null
+  ), [arrangementRotation, level, pointedCell, prepared, selectedCardId]);
+  // Turning is done with the cursor on a square, so the turns on offer are the ones that keep
+  // the formation THERE. Walking the band-wide list would step onto a turn with no seating over
+  // the pointed square, and the formation under the player's hand would vanish. Off the board
+  // there is no square to preserve, so the rail's own list applies.
+  const turnableArrangementRotationList = useMemo<readonly RunFormationRotation[]>(() => {
+    if (!selectedCardId || !pointedCell) return availableArrangementRotationList;
+    const atCell = cardRotationsAtCell(prepared, level, selectedCardId, pointedCell);
+    return atCell.length ? atCell : availableArrangementRotationList;
+  }, [availableArrangementRotationList, level, pointedCell, prepared, selectedCardId]);
   const arrangementFootprint = useMemo(() => new Set(
     Object.values(pointedArrangementOption?.placements ?? {}).map((cell) => `${cell.x},${cell.y}`),
   ), [pointedArrangementOption]);
@@ -659,8 +666,8 @@ function useRunDeploymentPresentation({
   // square being aimed at, rather than vanishing until the mouse is jiggled.
   const turnArrangementUnderCursor = useCallback(() => {
     if (departureActive) return;
-    setArrangementRotation((current) => nextCardRotation(availableArrangementRotationList, current));
-  }, [availableArrangementRotationList, departureActive]);
+    setArrangementRotation((current) => nextCardRotation(turnableArrangementRotationList, current));
+  }, [departureActive, turnableArrangementRotationList]);
   const removeArrangementCard = useCallback(() => {
     if (!selectedCardId || departureActive) return;
     const latest = useActiveRun.getState().run;
@@ -754,7 +761,10 @@ function useRunDeploymentPresentation({
             }
           }}
         >
-          {filled ? <PredrawnMoveHighlightPaint /> : null}
+          {/* One paint at two strengths: quiet across the squares the formation could take,
+              full across the squares this seating fills. The band never goes dark, so a turn
+              that finds no seating still leaves the player looking at where they may deploy. */}
+          <PredrawnMoveHighlightPaint />
         </button>
       );
     },
