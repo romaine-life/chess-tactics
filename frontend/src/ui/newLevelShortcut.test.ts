@@ -18,7 +18,7 @@ describe('new-level shortcut and campaign assignment controls', () => {
     const newCampaignIndex = campaignEditorSource.indexOf('data-testid="new-campaign"');
     expect(newLevelIndex).toBeGreaterThan(-1);
     expect(newCampaignIndex).toBeGreaterThan(newLevelIndex);
-    expect(campaignEditorSource.match(/>\+ New Level<\/SettingsButton>/g)).toHaveLength(1);
+    expect(campaignEditorSource.match(/>\+ New Level<\/EditorButton>/g)).toHaveLength(1);
     expect(campaignEditorSource).toContain(
       'href={`/editor/level?returnTo=${encodeURIComponent(CAMPAIGN_EDITOR_UNASSIGNED_RETURN_TO)}`}',
     );

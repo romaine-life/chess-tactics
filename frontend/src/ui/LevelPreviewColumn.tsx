@@ -75,7 +75,12 @@ export function LevelPreviewColumn({
             </div>
           </InnerChromeBox>
         ) : null}
-        <LevelInfoCompact level={level} />
+        {/* The facts box is a structural box, so it wears the installed marble borrowed from
+            the outer role (ADR-0433) — the same material the Editor's rows and the Run's
+            Battle-preview boxes are painted with. The board frame above deliberately does NOT:
+            the level art floats on the night sky there (ADR-0032/0067), and painting a surface
+            behind it would put a slab of stone around the board. */}
+        <LevelInfoCompact level={level} fillRole="outer" />
         {actions}
       </aside>
     </PaintedSurfaceBoundary>

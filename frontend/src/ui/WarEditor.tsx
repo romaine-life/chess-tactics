@@ -359,8 +359,8 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
           embedded={embedded}
           actions={(
             <div className="ce-preview-actions">
-              <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} to={editBattleBoardHref(selectedWar.id, selectedLevel.id)}><span>Edit Board</span></ChromeNavButton>
-              <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button ce-link-button-ghost')} to={`/play?levelId=${encodeURIComponent(selectedLevel.id)}&mode=test&returnTo=${encodeURIComponent(WAR_EDITOR_RETURN_TO)}`}><span>Test Play</span></ChromeNavButton>
+              <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button')} data-chrome-fill-surface={EDITOR_COLUMN_CONTROL_FILL_SURFACE} to={editBattleBoardHref(selectedWar.id, selectedLevel.id)}><span>Edit Board</span></ChromeNavButton>
+              <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'ce-link-button ce-link-button-ghost')} data-chrome-fill-surface={EDITOR_COLUMN_CONTROL_FILL_SURFACE} to={`/play?levelId=${encodeURIComponent(selectedLevel.id)}&mode=test&returnTo=${encodeURIComponent(WAR_EDITOR_RETURN_TO)}`}><span>Test Play</span></ChromeNavButton>
             </div>
           )}
         />

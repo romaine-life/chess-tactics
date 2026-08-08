@@ -10559,44 +10559,12 @@ body { font-size: 17px; }
   grid-column: 1 / -1;
 }
 
+/* This field held a native <select> with its own kit frame, an OS-drawn menu, and a
+   hand-painted option list. It is the house dropdown now, which brings its own registered
+   frame, chevron, menu and fill — so the field states nothing but where it sits. */
 .ce-assign-field {
   display: grid;
   min-width: 0;
-}
-
-.ce-assign-field select {
-  appearance: none;
-  background: transparent;
-  border: 12px solid transparent;
-  border-image: var(--media-ui-kit-field-select-png) 18 fill / 12px stretch;
-  box-sizing: border-box;
-  color: var(--ce-ink);
-  cursor: pointer;
-  font-family: var(--ds-font-display);
-  font-size: var(--ds-text-xs);
-  image-rendering: pixelated;
-  min-height: 40px;
-  min-width: 0;
-  outline: none;
-  padding: 0 12px;
-  text-transform: uppercase;
-  width: 100%;
-}
-
-.ce-assign-field select:disabled {
-  cursor: default;
-  filter: grayscale(.7) brightness(.7);
-  opacity: .58;
-}
-
-.ce-assign-field select:focus-visible {
-  outline: 2px solid rgba(101, 184, 255, .72);
-  outline-offset: 2px;
-}
-
-.ce-assign-field option {
-  background: #061019;
-  color: var(--ce-ink);
 }
 
 .ce-link-button-ghost {
