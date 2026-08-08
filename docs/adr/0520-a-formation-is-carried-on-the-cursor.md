@@ -113,11 +113,12 @@ the seating; a secondary click turns what is being carried.**
    band-wide list instead stepped onto them and the formation disappeared. That list is computed
    independently of the current turn, so pointing at a narrow gap and turning finds the way the
    formation fits, and a position that takes only one turn holds still rather than blanking.
-8. **The rail stays band-wide.** Its four buttons offer the turns that are distinct under the
-   formation's own symmetry and placeable somewhere in this level's band, and they do not change
-   as the cursor moves. The square's list is always a subset, so a turn arrived at by clicking is
-   always one the player could have pressed. Off the board there is no square to preserve and the
-   rail's list applies. Both cycles wrap.
+8. **What is offered at all stays band-wide.** A turn is on offer when it is distinct under the
+   formation's own symmetry and placeable somewhere in this level's band, and that does not change
+   as the cursor moves — it decides whether the two turn buttons are live, so they cannot flicker
+   under a moving pointer. The pointed square's own list is always a subset of it, so a turn
+   arrived at by pressing or clicking is always one the player could have reached any other way.
+   Off the board there is no square to preserve and the band-wide list applies. Both cycles wrap.
 9. **Q and E turn it too, in opposite directions.** The pointer gesture turns one way only, and a
    quarter turn is easy to overshoot — undoing one press by making three more is not a control. E
    is clockwise and Q counter-clockwise, matching the pair every other game binds to this job.
