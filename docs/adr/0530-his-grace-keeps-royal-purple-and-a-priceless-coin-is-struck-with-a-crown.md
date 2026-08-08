@@ -45,10 +45,19 @@ places at once.
 - The mark is one transparent native 64×64 raster in its own typed slot,
   `ui/run/card-prototypes/cost-crown-v1.png`, with the `run-card-cost-crown` runtime component.
   It never redraws the coin, so one raster serves every coin at every size.
-- The mark is sized against the coin's **flat striking face** rather than the cost box, and
-  **capped on height**: a mark drawn wide takes the whole face, and a mark drawn nearly square
-  is held back by the height instead of climbing over the rim. One rule holds for whichever
-  mark is struck.
+- The mark's seat is a **square** measured against the whole drawn coin — `.75` of it, measured
+  on the real coins at both sizes. The mark's own square raster is what positions it: the
+  transparent margin the art carries *is* the layout, so a wide mark and a tall one both land
+  correctly with no second rule. It is sized against the coin rather than the flat striking face
+  because the face is where a *numeral* must stay — digits are tall and would ride the bevel —
+  while a mark is drawn wide and low and reads better crossing onto the bevel than shrunk to
+  clear it.
+- The mark is **smoothly resampled, never `image-rendering: pixelated`**. It draws at roughly a
+  sixth of its native size, and nearest-neighbour at that ratio is decimation: it drops most of
+  the rows and shreds the silhouette into an illegible smear. `pixelated` is correct when pixel
+  art is magnified and actively wrong when it is reduced this far. Two things had to be true
+  together for the mark to read at all — its own canvas padding must not eat the seat, and the
+  reduction must average rather than drop.
 - Every surface that seats the coin reads one mark — the card face, both gallery band dividers,
   and the gold filter chips — so a starter band and the card beneath it cannot disagree.
 - Resolution is **optional**. Until a mark is accepted, the coin prints exactly as it did
