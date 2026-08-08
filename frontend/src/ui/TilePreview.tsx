@@ -2297,7 +2297,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
                             : viewerKind === 'cardsize'
                               ? <RunCardSizeViewer header={studioViewerHeader} viewerZoom={viewerZoom} />
                             : viewerKind === 'cardoutline'
-                              ? <RunCardOutlineViewer header={studioViewerHeader} />
+                              ? <RunCardOutlineViewer header={studioViewerHeader} viewerZoom={viewerZoom} />
                             : viewerKind === 'carddivider'
                               ? <RunCardGoldTierDividerViewer header={studioViewerHeader} viewerZoom={viewerZoom} />
                               : <AssetLab library={studioMedia.assets} name={selectedAssetName} header={studioViewerHeader} onEditFrame={(id) => { setSelectedFrameName(id); openViewer('nineslice'); }} onOpenDivider={(id) => { setSelectedDividerName(id); openViewer('divider'); }} />
