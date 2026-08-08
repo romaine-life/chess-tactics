@@ -34,6 +34,7 @@ import {
   removeUnitFromArmyAndCards,
   setDeploymentChoices,
   snapshotWar,
+  takeVacantiaCard,
   takeVacantiaLipsanon,
   type AtaraxiaTier,
   type AdlectablePieceType,
@@ -647,12 +648,20 @@ function craftAftermath(run: RunDocument, spec: RunCraftSpec): RunDocument {
 }
 
 /**
- * Get past a Conflict's lipsanon screen by taking the first offer that will be accepted.
- * Fast-forwarding has to make the same mandatory choice a player would; taking a lipsanon is
- * also advances the Run, so this is how the crafter reaches any later state.
+ * Get past a Conflict's opening screen by taking the first offer that will be accepted.
+ * Fast-forwarding has to make the same mandatory choice a player would, and taking the offer
+ * is also what advances the Run, so this is how the crafter reaches any later state. The Run's
+ * opening grants a formation card; every later Conflict grants a lipsanon.
  */
 function takeVacantiaAuto(run: RunDocument): RunDocument {
   if (run.phase !== 'bona-vacantia' || !run.vacantia) return run;
+  if (run.vacantia.kind === 'opening') {
+    for (const coreId of run.vacantia.cardOffers) {
+      const taken = takeVacantiaCard(run, coreId);
+      if (taken !== run) return taken;
+    }
+    throw new RunCraftError('craft: the Run opened with no card grant that could be taken.');
+  }
   for (const lipsanon of run.vacantia.offers) {
     const taken = takeVacantiaLipsanon(run, lipsanon);
     if (taken !== run) return taken;
@@ -842,6 +851,9 @@ function applySectioOffers(run: RunDocument, spec: RunCraftSpec): RunDocument {
 function applyVacantiaOffers(run: RunDocument, spec: RunCraftSpec): RunDocument {
   const vacantia = run.vacantia;
   if (!vacantia || !spec.loot) return run;
+  if (vacantia.kind === 'opening') {
+    throw new RunCraftError('craft loot: the Run opens with a formation-card grant, not lipsana.');
+  }
   const held = new Set(run.lipsana);
   for (const lipsanon of spec.loot) {
     if (held.has(lipsanon)) throw new RunCraftError(`craft: "${lipsanon}" is already held, so it cannot also be offered.`);
@@ -878,7 +890,7 @@ export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDo
   // The Run's own first state. Bona Vacantia sits directly in front of Battle 1.
   if (spec.phase === 'bona-vacantia' && targetIndex === 0) {
     if (opening.phase !== 'bona-vacantia') {
-      throw new RunCraftError(`craft: ${war.name} has no loot Battle, so no Conflict opens with a lipsanon.`);
+      throw new RunCraftError(`craft: ${war.name} has no loot Battle, so no Conflict opens with a grant.`);
     }
     if (spec.cards?.length) {
       throw new RunCraftError('craft cards: cards cannot be held before the Sectio after Battle 1.');

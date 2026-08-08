@@ -193,6 +193,9 @@ export * from './run/craft';
 export {
   CURRENT_RUN_SAVE_VERSION,
   RUN_CARD_BY_ID,
+  RUN_OPENING_CARD_OFFER_COUNT,
+  RUN_OPENING_CARD_VALUE_MAX,
+  RUN_OPENING_CARD_VALUE_MIN,
   RUN_STARTER_CARD_BY_ID,
   RUN_LIPSANON_IMMEDIATE_GOLD,
   cardExpunctioPriceTenths,
@@ -203,6 +206,7 @@ export {
   sectioCardOffersAtCursor,
   sectioCardPile,
   snapshotWar,
+  takeVacantiaCard,
   type RunDocument,
   type RunSaveVersion,
   type RunVacantiaState,
