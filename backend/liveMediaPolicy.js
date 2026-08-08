@@ -45,6 +45,7 @@ const RUN_CARD_FRAME_NORMALISED_EXCEPTION_BY_SLOT = Object.freeze({
 const RUN_STARTER_SELECTED_DERIVATIVE_EXCEPTION_SCHEMA =
   'run-starter-selected-derivative-production-exception-v1';
 const RUN_CARD_BACK_SLOT = 'ui/run/card-back/standard.png';
+const RUN_CARD_BACK_SLOT_PATTERN = /^ui\/run\/card-back\/([a-z0-9]+(?:-[a-z0-9]+)*)\.png$/;
 const RUN_CARD_BACK_COMPONENT = 'run-card-back';
 const RUN_CARD_BACK_PROOF_SCHEMA = 'run-card-back-card-layout-proof-v1';
 const RUN_CARD_BACK_PROOF_RENDERER = 'RunCardBack/CardLayout';
@@ -228,8 +229,16 @@ function runCardGoldTierDividerSlot(slot) {
   return String(slot || '') === RUN_CARD_GOLD_TIER_DIVIDER_SLOT;
 }
 
+/**
+ * The back id a card-back slot names, or null.
+ *
+ * The card back is a family rather than one image (ADR-0524): the player picks which back their
+ * Run deals, and each offered design owns its own slot so retiring one never re-points another's
+ * pixels. `standard.png` stays a member and is the availability-critical fallback.
+ */
 function runCardBackSlot(slot) {
-  return String(slot || '') === RUN_CARD_BACK_SLOT;
+  const match = RUN_CARD_BACK_SLOT_PATTERN.exec(String(slot || ''));
+  return match ? match[1] : null;
 }
 
 function runSectioWrapSlotId(slot) {
@@ -850,7 +859,8 @@ function runCardGoldTierDividerOwnerProofIssue(row, proof, surfaceUrl = null) {
  * accepted backs without allowing arbitrary ui-kit media into this role.
  */
 function runCardBackMediaIssue(row, projectedRuntime = null) {
-  if (!runCardBackSlot(row.slot)) return 'Run card backs require the registered universal semantic slot';
+  const backId = runCardBackSlot(row.slot);
+  if (!backId) return 'Run card backs require a registered card-back semantic slot';
   if (row.domain !== 'ui-kit') return 'Run card backs require the ui-kit domain';
   if (row.role !== 'card-back') return 'Run card backs require the card-back role';
   if (row.media_type !== 'image/png') return 'Run card backs require image/png';
@@ -871,7 +881,9 @@ function runCardBackMediaIssue(row, projectedRuntime = null) {
   if (runtime.component !== RUN_CARD_BACK_COMPONENT) {
     return `Run card-back metadata.runtime.component must be ${RUN_CARD_BACK_COMPONENT}`;
   }
-  if (runtime.variant !== 'standard') return 'Run card-back variant must be standard';
+  // Same rule the other slot families use: the variant names its own slot, so a version can never
+  // be accepted onto a back it does not claim to be.
+  if (runtime.variant !== backId) return 'Run card-back variant must match its semantic slot id';
   if (runtime.frameWidth !== 1060 || runtime.frameHeight !== 1484 || runtime.frameCount !== 1) {
     return 'Run card-back runtime geometry must describe one native 1060x1484 frame';
   }
@@ -885,7 +897,7 @@ function runCardBackMediaIssue(row, projectedRuntime = null) {
 }
 
 function runCardBackOwnerProofIssue(row, proof, surfaceUrl = null) {
-  if (!runCardBackSlot(row.slot)) return 'Run card-back proof requires the universal semantic slot';
+  if (!runCardBackSlot(row.slot)) return 'Run card-back proof requires a registered card-back semantic slot';
   if (!isObjectRecord(proof) || proof.schema !== RUN_CARD_BACK_PROOF_SCHEMA) {
     return `Run card-back review requires ${RUN_CARD_BACK_PROOF_SCHEMA}`;
   }

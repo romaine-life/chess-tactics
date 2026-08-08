@@ -24,9 +24,11 @@ import {
   type AppSettings,
 } from '../settings/appSettings';
 import { BOARD_GRID_STYLE_LABELS } from '../settings/boardGridStyle';
+import { RUN_CARD_BACK_LABELS } from '../settings/runCardBack';
 import { PLAYER_PALETTE_LABELS } from '../settings/playerPalette';
 import { PLAYER_PALETTES, type PlayerPalette } from '../core/pieces';
 import { BoardGridStylePicker } from './shared/BoardGridStylePicker';
+import { RunCardBackPicker } from './shared/RunCardBackPicker';
 import { HouseSelect } from './shared/HouseSelect';
 import { PieceTypeIcon } from './shared/PieceTypeIcon';
 
@@ -607,6 +609,21 @@ export function Settings({
         <BoardGridStylePicker
           value={settings.boardGridStyle}
           onChange={(style) => updateSetting('boardGridStyle', style)}
+        />
+      </SettingsRow>
+      {/* The back is on every face-down card in the Run — the Deployment stack and the pile under
+          every Sectio offer — so it is the most-seen single picture in the mode. It changes nothing
+          about play, which is why it sits here as a look rather than anywhere near the rules, and
+          why it is chosen by sight like the two rows above it. */}
+      <SettingsRow
+        title="Card back"
+        description={RUN_CARD_BACK_LABELS[settings.runCardBack].detail}
+        className="settings-row-stacked-control"
+        tall
+      >
+        <RunCardBackPicker
+          value={settings.runCardBack}
+          onChange={(back) => updateSetting('runCardBack', back)}
         />
       </SettingsRow>
       <SettingsRow

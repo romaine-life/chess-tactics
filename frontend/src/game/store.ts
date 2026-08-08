@@ -4,7 +4,7 @@
 
 import { useStore, type StateCreator } from 'zustand';
 import { createStore } from 'zustand/vanilla';
-import { PROMOTION_PIECE_TYPES, type GameEvent, type GameState, type Move, type Piece, type PromotionPieceType, type Side, type Winner } from '../core/types';
+import { PROMOTION_PIECE_TYPES, type GameEvent, type GameState, type Move, type Piece, type PromotionPieceType, type Side, type Vec, type Winner } from '../core/types';
 import { applyMove, gameEnv, legalMoves, promotionRuleForMove, recordPosition, sideInCheck, type MoveEnv, type RuleDrawKind } from '../core/rules';
 import { settleCommittedPosition, type Adjudication } from '../core/adjudication';
 import { adoptedWeightsFor } from './adoptedWeights';
@@ -16,7 +16,7 @@ import { kingSideOf, objectiveContextForLevel, objectiveSummary, victoryRulesFor
 import type { Level, ObjectiveType, TimeControl, VictoryRules } from '../core/level';
 import { DEFAULT_TIME_CONTROL, readElapsedClockMs, type ElapsedClockState } from '../core/clock';
 import { terrainAt } from '../core/terrain';
-import { playArrival, playTerrain } from '../sfx';
+import { playArrival, playInterface, playTerrain } from '../sfx';
 import { createSkirmish, type SkirmishOptions } from './setup';
 import { persistMatch, type PersistedMatch } from './matchPersistence';
 import { loadShippedAiWeights } from '../net/aiWeights';
@@ -24,7 +24,7 @@ import { PIECE_LABEL } from '../core/pieces';
 import { clearPersistedNetIntent, loadPersistedNetIntent, persistNetIntent } from './netIntentPersistence';
 import { adminMoveTargets, killUnitForAdmin } from './adminBattle';
 import { sanForMove } from './sanNotation';
-import type { RunBattleUndoCheckpoint } from '../run/model';
+import type { RunBattleNotice, RunBattleUndoCheckpoint } from '../run/model';
 import { PROMOTION_CHOICE_REVEAL_MS } from './promotionPresentation';
 
 // Seed the shipped-AI-weights cache once so the live enemy AI picks up any weights an
@@ -113,11 +113,50 @@ function createNetIntentId(): string {
 export type NetResignSink = () => void;
 
 /**
- * Run Battles may add an ordinarily behaving Reservist after a capture. The hook
- * transforms only the committed board between move mechanics and adjudication; it is
- * never consulted by legal move generation, so lipsana cannot change piece behavior.
+ * What the Run did to the committed board, and what the Battle is to say about it.
+ *
+ * The transform is the one place a surrounding Run may reach into a live Battle — it pays
+ * en passant bounties and lands Reservists — and the board store has no view of a Run
+ * document, so it cannot detect those changes itself. That is exactly why they do not
+ * travel alone: the transform's ONLY return channel carries the notices with the board, and
+ * every caller below folds `notices` into the Battle log in the same `set` that commits
+ * `game`. There is no way to come back from the transform having changed the Run and said
+ * nothing; a silent Run change is not a possible state, not merely a discouraged one.
  */
-export type RunBattleTransformSink = (game: GameState, events: readonly GameEvent[]) => GameState;
+export interface RunBattleTransformResult {
+  game: GameState;
+  notices: readonly RunBattleNotice[];
+}
+
+/**
+ * Run Battles may add an ordinarily behaving Reservist after a capture, and pay a bounty for
+ * an en passant. The hook transforms only the committed board between move mechanics and
+ * adjudication; it is never consulted by legal move generation, so lipsana cannot change
+ * piece behavior.
+ */
+export type RunBattleTransformSink = (game: GameState, events: readonly GameEvent[]) => RunBattleTransformResult;
+
+/** One board-seated gold marker: what a Run notice's economy delta looks like on the board. */
+export interface BattleGoldNotice {
+  id: string;
+  at: Vec;
+  goldTenths: number;
+}
+
+let battleGoldNoticeSequence = 0;
+
+/**
+ * Turn the notices from one committed transition into their board markers. Only the notices
+ * that moved gold get one — the amount is the whole content of the marker, and a notice
+ * without an amount (a Reservist arriving) is already shown by the board change itself.
+ */
+export function battleGoldNoticesFrom(notices: readonly RunBattleNotice[]): BattleGoldNotice[] {
+  return notices.flatMap((notice) => {
+    if (notice.goldTenths === undefined || notice.goldTenths === 0) return [];
+    battleGoldNoticeSequence += 1;
+    return [{ id: `gold-notice-${battleGoldNoticeSequence}`, at: notice.at, goldTenths: notice.goldTenths }];
+  });
+}
 
 /** Run economy/runtime ownership paired with the board store's move checkpoint. */
 export interface RunBattleUndoAdapter {
@@ -157,6 +196,10 @@ const PREMOVE_FIRE_DELAY = 620;
 // footsteps read as a sequence rather than one muddy stack; spawned units deploy as
 // a soft staggered roll-call.
 const LANDING_SFX_DELAY = 150;
+// The bounty is a consequence of the capture, so its coin lands after the footstep rather
+// than under it — far enough back to read as a second beat, close enough to still belong
+// to the same move.
+const GOLD_NOTICE_SFX_DELAY = 430;
 const ENEMY_LANDING_STAGGER = 130;
 const SPAWN_SFX_BASE_DELAY = 220;
 const SPAWN_SFX_STAGGER = 70;
@@ -366,6 +409,9 @@ export interface SkirmishState {
   /** The Event Log, newest first: one chess-notation row per played move, interleaved
    *  with the prose lines the match itself writes (briefing, check, adjudication). */
   log: LogEntry[];
+  /** Gold the Run just moved, still rising off the cells it happened on. Presentation-only
+   *  and never persisted: the balance itself lives in the Run document. */
+  goldNotices: readonly BattleGoldNotice[];
   /** Win condition for this game. A free skirmish defaults to capture-king. */
   objective: ObjectiveType;
   /** Static objective context for the current game — the survive clock target, the
@@ -500,6 +546,8 @@ export interface SkirmishState {
   setTestMode: (on: boolean) => void;
   /** Set the test-board CPU-delay floor (ms); no-op outside test mode. */
   setTestMinCpuDelay: (ms: number) => void;
+  /** Drop one board-seated gold marker once its rise has played out. */
+  retireGoldNotice: (id: string) => void;
   /** Install this battle instance's Run-only committed-board transform. */
   setRunBattleTransformSink: (sink: RunBattleTransformSink | null) => void;
   /** Install the matching Run economy/runtime checkpoint owner. */
@@ -509,6 +557,19 @@ export interface SkirmishState {
 }
 
 export type MoveGestureInputMode = 'move' | 'premove' | null;
+
+/**
+ * The sides this client may pick a unit up from right now.
+ *
+ * In play that is the one army you command. An armed admin Free Move commands both, because
+ * the reason to reach for it is almost always to put the OPPONENT somewhere — a pawn onto the
+ * square that opens an en passant, a piece into the shape a bug needs. Selection, the drag
+ * pickup, and the board's click intent all read this, so there is one answer to "whose piece
+ * is this" rather than four that can drift apart.
+ */
+export function commandedSides(adminMode: AdminBattleMode | null, localSide: PlayingSide): readonly Side[] {
+  return adminMode === 'free-move' ? ['player', 'enemy'] : [localSide];
+}
 
 /** Resolve one continuous drag against the current input boundary. Only a gesture that
  *  actually began during premove input may remain a premove; once that boundary closes,
@@ -636,6 +697,17 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
   const playLandingSfx = (env: MoveEnv, x: number, y: number, delayMs: number, gain?: number): void => {
     if (delayMs > 0) scheduleSessionEffect(() => playLandingTerrain(env, x, y, gain), delayMs);
     else playLandingTerrain(env, x, y, gain);
+  };
+
+  /**
+   * Sound the Run's gold. One voice for the whole transition however many notices it carried,
+   * so a doubled payout is a louder event rather than two overlapping coins. It waits out the
+   * footstep so the order the player hears is the order it happened: the piece lands, THEN it
+   * pays. The recording behind the 'gold' cue is the owner's, editable in the SFX Studio.
+   */
+  const soundGoldNotices = (notices: readonly BattleGoldNotice[]): void => {
+    if (!notices.length) return;
+    scheduleSessionEffect(() => playInterface({ cue: 'gold' }), GOLD_NOTICE_SFX_DELAY);
   };
 
   /**
@@ -808,9 +880,11 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
           // One notated row per half-move of the reply, in the order the opponent played
           // them — a reply that resolves several moves reads as several score-sheet lines.
           const msgs = moveEntries(enemyRes.notation, 'enemy', nextPly(live.log));
-          const transformedEnemyGame = runBattleTransformSink
-            ? runBattleTransformSink(enemyRes.game, enemyRes.events)
-            : enemyRes.game;
+          const runTransform = runBattleTransformSink?.(enemyRes.game, enemyRes.events) ?? null;
+          const transformedEnemyGame = runTransform?.game ?? enemyRes.game;
+          // Whatever the Run just did to this board says so here, in the same commit.
+          for (const notice of runTransform?.notices ?? []) msgs.push(logNote(notice.log));
+          const goldNotices = battleGoldNoticesFrom(runTransform?.notices ?? []);
           const afterEnv = envFor(transformedEnemyGame);
           // A full player→enemy round just elapsed: advance the survive clock, then re-check the
           // objective — survive reached, or a player wipe = defeat.
@@ -841,6 +915,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
             selectedId: keep,
             focusedId: keep,
             log: extendLog(live.log, msgs),
+            goldNotices: [...live.goldNotices, ...goldNotices],
             premoveInputOpen: openPremoveInput,
           });
           // Footsteps for the enemy half-turn: one per piece that moved, spread out so a
@@ -849,6 +924,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
           enemyRes.events
             .filter((e): e is Extract<GameEvent, { kind: 'moved' }> => e.kind === 'moved')
             .forEach((e, i) => playLandingSfx(cur.env, e.to.x, e.to.y, LANDING_SFX_DELAY + i * ENEMY_LANDING_STAGGER));
+          soundGoldNotices(goldNotices);
           // The rules board is back with the player, but input still belongs to premove
           // generation for the enemy landing beat. The clock resumes only when that beat closes
           // without an auto-fired premove.
@@ -974,9 +1050,9 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     const undoCheckpoint = capturePlayerMoveUndo();
     pauseClockWithIncrement();
     const playerRes = applyMove(s.game, piece.id, mv, { promotion });
-    const transformed = runBattleTransformSink
-      ? runBattleTransformSink(playerRes.state, playerRes.events)
-      : playerRes.state;
+    const runTransform = runBattleTransformSink?.(playerRes.state, playerRes.events) ?? null;
+    const transformed = runTransform?.game ?? playerRes.state;
+    const goldNotices = battleGoldNoticesFrom(runTransform?.notices ?? []);
     // The settled position joins the threefold table BEFORE the terminal checks read it
     // (a no-op unless this game enforces threefold). enemyEnv matches the post-move state.
     const enemyEnv = envFor(transformed);
@@ -1003,6 +1079,8 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       move: mv,
     });
     const msgs = moveEntries([san], piece.side, nextPly(s.log));
+    // Whatever the Run just did to this board says so here, in the same commit.
+    for (const notice of runTransform?.notices ?? []) msgs.push(logNote(notice.log));
     const resultDetail = adjudicationResultDetail(settled.adjudication, 'player', !!s.victoryOverride);
     if (settled.adjudication) {
       msgs.push(logNote(adjudicationCopy(settled.adjudication, 'player', !!s.victoryOverride)));
@@ -1025,7 +1103,9 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       undoCheckpoint,
       ...interaction,
       log: extendLog(s.log, msgs),
+      goldNotices: [...s.goldNotices, ...goldNotices],
     });
+    soundGoldNotices(goldNotices);
     if (game.turn === 'enemy' && !game.winner) scheduleEnemyReply();
     persistMatch(get());
   };
@@ -1180,9 +1260,9 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     const s = get();
     if (!s.started || s.net || s.game.winner) return false;
     const epoch = beginSession();
-    const transformed = runBattleTransformSink
-      ? runBattleTransformSink(rawGame, events)
-      : rawGame;
+    const runTransform = runBattleTransformSink?.(rawGame, events) ?? null;
+    const transformed = runTransform?.game ?? rawGame;
+    const goldNotices = battleGoldNoticesFrom(runTransform?.notices ?? []);
     const afterEnv = envFor(transformed);
     const committed = recordPosition(transformed, afterEnv);
     const completedEnemyTurn = s.game.turn === 'enemy' && committed.turn === 'player';
@@ -1197,6 +1277,8 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     const game = settled.state;
     // An admin position change is not a played move, so it never notates — it is prose.
     const messages = [logNote(logLine)];
+    // Whatever the Run just did to this board says so here, in the same commit.
+    for (const notice of runTransform?.notices ?? []) messages.push(logNote(notice.log));
     if (settled.adjudication) {
       messages.push(logNote(adjudicationCopy(settled.adjudication, 'player', !!s.victoryOverride)));
     }
@@ -1215,7 +1297,9 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       sessionEpoch: epoch,
       clock: s.clock ? { ...s.clock, running: false } : null,
       log: extendLog(s.log, messages),
+      goldNotices: [...s.goldNotices, ...goldNotices],
     });
+    soundGoldNotices(goldNotices);
     if (!game.winner) startBattleElapsed();
     if (!game.winner && game.turn === 'enemy') scheduleEnemyReply();
     else if (!game.winner && game.turn === 'player') startClock();
@@ -1231,6 +1315,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
   seed: 1,
   tick: 0,
   log: [logNote(`Skirmish begins — ${objectiveSummary('capture-king')}.`)],
+  goldNotices: [],
   objective: 'capture-king',
   objectiveCtx: {},
   victoryOverride: null,
@@ -1312,6 +1397,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       selectedId,
       focusedId: selectedId,
       log,
+      goldNotices: [],
       objective,
       started: true,
       levelId: opts.level?.id ?? null,
@@ -1637,6 +1723,8 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       env: envFor(checkpoint.game),
       tick: checkpoint.tick,
       log: extendLog(checkpoint.log, [logNote('Move undone — 1 gold paid.')]),
+      // The undone move's gold went back with it, so its markers stop rising too.
+      goldNotices: [],
       resultDetail: checkpoint.resultDetail,
       turnsElapsed: checkpoint.turnsElapsed,
       selectedId: checkpoint.selectedId,
@@ -1723,11 +1811,10 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
   select: (id) => {
     if (id === null) { set({ selectedId: null, focusedId: null }); return; }
     const s = get();
-    const side = s.adminMode === 'free-move' && (s.game.turn === 'player' || s.game.turn === 'enemy')
-      ? s.game.turn
-      : s.net ? s.net.localSide : 'player';
     const p = s.game.pieces.find((q) => q.id === id && q.alive);
-    if (p && p.side === side) set({ selectedId: id, focusedId: id });
+    if (p && commandedSides(s.adminMode, s.net ? s.net.localSide : 'player').includes(p.side)) {
+      set({ selectedId: id, focusedId: id });
+    }
   },
 
   focus: (id) => {
@@ -1758,7 +1845,10 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       const move = adminMoveTargets(s.game, p?.id ?? '').find((candidate) => candidate.x === x && candidate.y === y);
       if (!p || !move) return;
       const result = applyMove(s.game, p.id, move);
-      commitAdminPosition(result.state, result.events, 'Admin Free Move committed.');
+      // Name whose piece moved. A Free Move may now walk the OPPONENT, and a board that
+      // rearranged itself on your own turn is exactly the thing the log has to account for.
+      const mover = `${p.side === 'player' ? 'your' : "the enemy's"} ${PIECE_LABEL[p.type] ?? p.type}`;
+      commitAdminPosition(result.state, result.events, `Admin Free Move — ${mover} to ${x},${y}.`);
       return;
     }
     if (s.game.turn !== side || s.game.winner) return;
@@ -1911,6 +2001,11 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     // Generous ceiling (10 min) so a tester can set whatever floor they like, while an absurd
     // typo still can't hang the turn forever.
     set({ testMinCpuDelayMs: Math.max(0, Math.min(600_000, Math.round(ms))) });
+  },
+  retireGoldNotice: (id) => {
+    const s = get();
+    if (!s.goldNotices.some((notice) => notice.id === id)) return;
+    set({ goldNotices: s.goldNotices.filter((notice) => notice.id !== id) });
   },
   setRunBattleTransformSink: (sink) => {
     runBattleTransformSink = sink;

@@ -5848,6 +5848,86 @@ body.loading-bootstrap .app-startup-status {
   --chrome-surface-position-y: calc(var(--promotion-leaf-index, 0) * -1 * var(--promotion-leaf-surface-pitch));
 }
 
+/* Gold the Run paid for something that happened ON the board reads off that square, not off a
+   panel. Same zero-size board-space anchor as the promotion picker, so it inherits pan/zoom
+   while the marker's inline inverse scale keeps the number one screen size. It rises out of
+   the unit and fades; nothing about it is interactive, and it retires itself. */
+.skirmish-gold-notice-anchor {
+  height: 0;
+  pointer-events: none;
+  position: absolute;
+  width: 0;
+  z-index: 39000;
+}
+
+/* The rise plays by DEFAULT, even under OS prefers-reduced-motion: this machine (and many
+   players' — Windows "Animation effects" off) reports reduce FALSELY, and the rise IS the
+   feedback, so gating it on that query would silently delete the whole cue. Hence !important,
+   clearing the global `* { animation: none }` OS-reduce reset further down this file. The
+   EXPLICIT in-game choice (:root.reduce-motion) keeps the number and drops the travel. */
+.skirmish-gold-notice {
+  align-items: center;
+  animation: skirmish-gold-notice-rise 1400ms ease-out forwards !important;
+  color: #ffd27b;
+  display: flex;
+  /* The display face is a pixel face, and those are 400-only (ADR-0016) — a synthetic bold
+     on it is smeared, not heavier. Contrast comes from the shadow below, not from weight. */
+  font: var(--ds-weight-regular) var(--ds-text-xl)/1 var(--ds-font-display);
+  gap: var(--ds-space-1);
+  left: 0;
+  position: absolute;
+  /* The board underneath is arbitrary art, so the number carries its own contrast rather
+     than assuming a readable tile behind it. */
+  text-shadow: 0 2px 0 #02070b, 0 0 10px rgba(2, 7, 11, .6);
+  transform-origin: bottom center;
+  translate: -50% 0;
+  white-space: nowrap;
+}
+
+.skirmish-gold-notice.is-loss {
+  color: #ffad9d;
+}
+
+/* Explicitly reduced motion still gets told what it earned — it just holds still and fades. */
+:root.reduce-motion .skirmish-gold-notice {
+  animation: skirmish-gold-notice-hold 1400ms ease-out forwards !important;
+}
+
+.skirmish-gold-notice .run-gold-icon {
+  block-size: 34px;
+  inline-size: 34px;
+}
+
+/* Rise and fade. `translate` carries the motion so the inline `transform` scale (the inverse
+   zoom) is never overwritten by the animation. */
+@keyframes skirmish-gold-notice-rise {
+  0% {
+    opacity: 0;
+    translate: -50% 14px;
+  }
+
+  14% {
+    opacity: 1;
+    translate: -50% 0;
+  }
+
+  70% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    translate: -50% -58px;
+  }
+}
+
+@keyframes skirmish-gold-notice-hold {
+  0% { opacity: 0; }
+  14% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 .skirmish-promotion-picker-heading {
   display: grid;
   gap: 2px;
@@ -15620,6 +15700,64 @@ button.tileset-relationship-cell {
   stroke-width: var(--board-grid-weight, 2.6);
 }
 
+/* Settings → Gameplay → Card back picker. Same shape as Grid style above: one large sample plus a
+   dropdown. The card is the whole subject here rather than a crop of one, so unlike the grid
+   preview this box fits the card instead of windowing it — a 5:7 illustration shown whole is what
+   the player is choosing, and cropping it would hide the border and corners the designs differ
+   most in. */
+.run-card-back-picker {
+  display: grid;
+  gap: 8px;
+  inline-size: 100%;
+  justify-items: stretch;
+}
+
+.run-card-back-preview-box {
+  display: block;
+  inline-size: 100%;
+}
+
+.run-card-back-preview {
+  align-items: center;
+  display: flex;
+  justify-content: center;
+  padding: 10px;
+}
+
+/* Height-led, because 5:7 is tall: bounding the block size is what keeps the row from growing to
+   the width of the settings column. The card keeps its own aspect ratio from the image. */
+.run-card-back-preview-card {
+  block-size: 210px;
+  inline-size: auto;
+  max-inline-size: 100%;
+}
+
+.run-card-back-select {
+  inline-size: 100%;
+}
+
+.run-card-back-option {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-inline-size: 0;
+}
+
+.run-card-back-chip {
+  block-size: 28px;
+  display: block;
+  flex: 0 0 auto;
+  inline-size: 20px;
+}
+
+.run-card-back-chip img {
+  block-size: 100%;
+  display: block;
+  inline-size: 100%;
+  object-fit: cover;
+}
+
+
 /* Persisted player-camera coverage boundary. Unlike a viewport snapshot, this world-space box is
    stable while zoom and pan vary; Play keeps every possible view inside it. */
 .le-camera-boundary {
@@ -19959,7 +20097,7 @@ button.tileset-relationship-cell {
 .run-gold-amount {
   align-items: center;
   display: inline-flex;
-  font: var(--ds-weight-bold) var(--ds-text-lg)/1 var(--ds-font-display);
+  font: var(--ds-weight-regular) var(--ds-text-lg)/1 var(--ds-font-display);
   gap: var(--ds-space-1);
   white-space: nowrap;
 }
@@ -19989,7 +20127,7 @@ button.tileset-relationship-cell {
 .run-gold-transaction-amount {
   align-items: center;
   display: inline-flex;
-  font: var(--ds-weight-bold) var(--ds-text-lg)/1 var(--ds-font-display);
+  font: var(--ds-weight-regular) var(--ds-text-lg)/1 var(--ds-font-display);
   gap: var(--ds-space-1);
   min-block-size: 64px;
   min-inline-size: calc(64px + var(--ds-space-1) + 4ch);
@@ -21809,16 +21947,68 @@ button.tileset-relationship-cell {
 }
 
 .run-deployment-cell {
+  cursor: default;
+}
+
+/* A square the carried formation could cover. Aiming is the gesture, so every one of them
+   takes the pointer — not only the squares a bounding-box corner could sit on. */
+.run-deployment-cell.is-placeable {
   cursor: crosshair;
+}
+
+/* The deployable band, held at a fraction of the move paint so it reads UNDER the seating it
+   surrounds. It is on whenever a formation is in hand, so the board never goes blank between
+   one square and the next — the same paint at full strength marks where this seating lands.
+   Keyed to the BAND, not to the carried formation's current turn: the band answers "where may I
+   deploy", which does not change when the player turns the piece. */
+.run-deployment-cell.is-band > .predrawn-cyan-move-highlight-paint {
+  opacity: .6;
+}
+
+/* A formation already on the board is still the player's to move, so its squares read as
+   pickable rather than as inert ground. */
+.run-deployment-cell.is-seated-formation {
+  cursor: grab;
+}
+
+/* Squares outside the formation's reach carry a hit target only so the pointer can be located
+   over them — pointing at one is how a turn finds a fit that the current turn has not got. They
+   are not actions, so they take none of the shared board's square-local paint. Without this the
+   generic hover ring rides the cursor across ground nothing can be placed on, lighting a tile on
+   the far side of the board as if it were a target. Board-scoped to outrank `:hover`. */
+.run-deployment-board .run-deployment-cell:not(.is-placeable):not(.is-seated-formation)::before,
+.run-deployment-board .run-deployment-cell:not(.is-placeable):not(.is-seated-formation)::after {
+  opacity: 0;
+}
+
+/* The formation under the pointer IS the cursor while a seating resolves. */
+.run-deployment-board.is-carrying-formation .run-deployment-cell {
+  cursor: none;
 }
 
 .run-deployment-cell.is-deployment-blocked {
   cursor: not-allowed;
 }
 
-.run-arrangement-controls {
+/* The panel does not scroll; its KitScroll rail does (ADR-0030). Both class names are named so
+   this outranks `.run-meta-controls { overflow-y: auto }` whatever the source order — matched on
+   one class it loses to the later rule and the browser's own bar returns beside the drawn one. */
+.run-meta-controls.run-arrangement-controls {
   align-content: start;
-  overflow-y: auto;
+  overflow-y: hidden;
+}
+
+.run-arrangement-scroll {
+  flex: 1 1 auto;
+  min-block-size: 0;
+}
+
+/* The scrolled body keeps the panel's own stacking, so groups sit apart exactly as they did
+   when the section itself was the scroll pane. */
+.run-arrangement-scroll > .kit-scroll-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-stack);
 }
 
 .run-arrangement-hand {
@@ -21827,59 +22017,84 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
-.run-arrangement-hand-cards {
-  display: grid;
-  gap: var(--ds-space-2);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+/* The card is the subject of the panel, so it is pinned above the scroll rail and holds its
+   size while the controls beneath it move. */
+.run-arrangement-hand {
+  flex: 0 0 auto;
 }
 
-.run-arrangement-card {
-  appearance: none;
-  color: inherit;
-  cursor: pointer;
+/* The card takes the panel's whole width. A formation card is read by its SHAPE, so a hand laid
+   out at once squeezed away the only information on it — and steppers either side took width
+   the card needed, so they sit under it instead. */
+.run-arrangement-hand-card {
   display: grid;
   gap: var(--ds-space-1);
+  justify-items: center;
   min-inline-size: 0;
-  padding: var(--ds-space-1);
 }
 
-.run-arrangement-card > .run-card-action {
+/* Whether the whole dealt hand is down. Always present so completion does not re-lay the panel
+   at the moment the player is reading it; it changes state rather than appearing. */
+.run-arrangement-progress {
+  align-items: center;
+  color: var(--skirmish-muted);
+  display: flex;
+  font-size: var(--ds-text-xs);
+  font-weight: 700;
+  gap: var(--ds-space-1);
+  justify-content: center;
+  letter-spacing: .04em;
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.run-arrangement-progress.is-complete {
+  color: var(--good);
+}
+
+.run-arrangement-progress-mark {
+  font-size: var(--ds-text-sm);
+  line-height: 1;
+}
+
+.run-arrangement-steppers {
+  align-items: center;
+  display: grid;
+  gap: var(--ds-space-1);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+
+.run-arrangement-hand-position {
+  color: var(--skirmish-muted);
+  font-size: var(--ds-text-xs);
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-align: center;
+}
+
+/* Controls that wear the key that does the same thing, in the shared shortcut cap the in-match
+   grid uses: the cap, then what it does. */
+.run-arrangement-step,
+.run-arrangement-turn {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-space-1);
+  justify-content: center;
+  min-inline-size: 0;
+  padding-inline: var(--ds-space-1);
+}
+
+.run-arrangement-hand-card > .run-card-action {
   inline-size: 100%;
   pointer-events: none;
 }
 
-.run-arrangement-card:hover,
-.run-arrangement-card.is-selected {
-  filter: brightness(1.12);
-}
-
-.run-arrangement-card.is-placed:not(.is-selected) .run-arrangement-card-state {
-  color: var(--good);
-}
-
-.run-arrangement-card.is-reserve {
-  cursor: not-allowed;
-  filter: saturate(.45);
-  opacity: .52;
-}
-
-.run-arrangement-card-state {
-  color: var(--skirmish-muted);
-  font-size: var(--ds-text-2xs);
-  font-weight: 700;
-  letter-spacing: .06em;
-  text-transform: uppercase;
-}
-
+/* Two turns, not four absolute angles: the formation on the board already shows which way it
+   faces, so the control is the verb. */
 .run-arrangement-rotations {
   display: grid;
   gap: var(--ds-space-1);
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-
-.run-arrangement-rotations > button {
-  min-inline-size: 0;
-  padding-inline: var(--ds-space-1);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .run-deployment-deal-overlay {
@@ -25457,6 +25672,15 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   justify-items: start;
 }
 
+/* The switch sits above the cards it changes, so it has to stay short: the
+   offered-back family makes a stacked list tall enough to push the specimens
+   off the bottom of the screen. */
+.run-card-back-candidate-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-1);
+}
+
 .run-card-back-candidate-groups section > header {
   align-items: baseline;
   display: flex;
@@ -25491,12 +25715,14 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
 }
 
 /* Beats the base card-image img rule, which sizes every catalog image to an iso
-   tile. Both cards fit side by side at 100% and grow with the Studio's own zoom
-   like every other viewer; the pane roams once they outgrow it. */
+   tile. Height-led rather than a fixed width: at 100% both cards are whole and
+   on screen at any window this Studio is usable in, and zoom scales from there.
+   A fixed size looked right on one window and ran off the bottom of every
+   shorter one. The 5:7 aspect on .run-card-back gives the width. */
 .tileset-studio-card-image.run-card-back-specimen img.run-card-back {
-  block-size: auto;
+  block-size: calc(clamp(220px, 100vh - 400px, 588px) * var(--run-card-gallery-zoom, 1));
   image-rendering: auto;
-  inline-size: calc(420px * var(--run-card-gallery-zoom, 1));
+  inline-size: auto;
   max-inline-size: none;
   object-fit: cover;
 }
@@ -25972,14 +26198,30 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   fill: rgba(101, 115, 113, .34);
 }
 
-/* The seats' own line, moved off the polygon so it draws only where the footprint meets empty
-   space — the exact colour and weight it has always carried. On the polygon it also ran between
-   two occupied seats, which divides the cluster instead of wrapping it. Square caps close the
-   corner where two edges of the outline meet. */
+/* The footprint's boundary, as one path over the whole diagram. The line is the exact colour and
+   weight the seats have always carried; drawing it here rather than per seat is what lets the
+   corners mitre instead of jogging between four sub-pixel grids. */
 .run-card-formation-outline {
+  block-size: 100%;
+  display: block;
+  inline-size: 100%;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  position: absolute;
+  z-index: 15;
+}
+
+/* Review-only: the Card Outline studio mounts this beside the shipped soft line so the choice
+   between a drawn edge and a mechanical one is made by looking at both. */
+.run-card-formation-outline[data-outline-rendering='crisp'] path {
+  shape-rendering: crispEdges;
+}
+
+.run-card-formation-outline path {
   fill: none;
   stroke: rgba(55, 48, 39, .56);
-  stroke-linecap: square;
+  stroke-linejoin: miter;
   stroke-width: 1.15;
 }
 
@@ -26508,4 +26750,77 @@ button.run-card-formation-cell {
   justify-content: center;
   letter-spacing: .04em;
   width: 100%;
+}
+
+/* Studio -> Card Outline. Two live columns of the same cards, so the rasterization choice is made
+   by looking at both on the screen the game runs on rather than at a capture of one machine. */
+.run-card-outline-viewer {
+  display: grid;
+  gap: 12px;
+  min-inline-size: 0;
+}
+
+.run-card-outline-note {
+  margin: 0;
+  max-inline-size: 78ch;
+}
+
+.run-card-outline-widths {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.run-card-outline-columns {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  min-inline-size: 0;
+}
+
+.run-card-outline-column {
+  display: grid;
+  gap: 8px;
+  min-inline-size: 0;
+}
+
+.run-card-outline-column > p {
+  margin: 0;
+}
+
+.run-card-outline-specimens {
+  align-items: start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-inline-size: 0;
+}
+
+.run-card-outline-specimen {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  margin: 0;
+}
+
+/* The face fills its parent, so the parent is what carries the size being compared. */
+.run-card-outline-face {
+  display: block;
+  inline-size: var(--run-card-outline-face-width);
+}
+
+/* Two 5:7 faces that clear the tile's image band without cropping, sized like the sibling card
+   catalogs so the thumbnail reads as the pair being compared. */
+.run-card-outline-catalog-specimen {
+  align-self: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  inline-size: min(100%, 148px);
+}
+
+/* The catalog band is shorter than a 5:7 face at the sibling widths, so this one states its own
+   height rather than letting the pair get cropped at the chin. */
+.run-card-outline-catalog-image {
+  min-height: 150px;
 }

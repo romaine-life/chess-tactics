@@ -137,6 +137,8 @@ export interface RunDeploymentPresentation {
   controlsContent: ReactNode;
   renderCellOverlay: (context: SkirmishBoardCellOverlayContext) => ReactNode;
   boardOverlay: ReactNode;
+  /** A secondary click anywhere on the battlefield that never became a pan. */
+  onBoardSecondaryClick?: () => void;
   screenClassName?: string;
   boardClassName?: string;
   boardAriaLabel: string;
@@ -1509,6 +1511,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
             surfaceState={presentedDeploymentSurface}
             renderCellOverlay={runDeployment?.renderCellOverlay}
             boardOverlay={runDeployment?.boardOverlay}
+            onSecondaryClick={runDeployment?.onBoardSecondaryClick}
             className={runDeployment?.boardClassName}
             ariaLabel={runDeployment?.boardAriaLabel}
             onSurfaceReady={setBoardSurfaceReady}

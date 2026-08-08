@@ -296,14 +296,103 @@ function runCardFormationBoardMetrics(columns: number, rows: number): Readonly<{
   };
 }
 
+/**
+ * How the footprint's outline is rasterized. `soft` is what the game prints; `crisp` turns
+ * antialiasing off so every pixel is fully on or fully off. Review-only, like the frame boxes:
+ * the Card Outline studio mounts both so the choice is made by looking rather than by describing.
+ */
+export type RunCardOutlineRendering = 'soft' | 'crisp';
+
+export type RunCardFormationOutlinePoint = Readonly<{ x: number; y: number }>;
+
+/**
+ * Trace the footprint's boundary as closed rings, in the diagram's own coordinate space.
+ *
+ * The outline used to be eight separate line segments living inside four separate per-seat SVGs.
+ * Each of those rasterizes on its own sub-pixel grid, so segments that meet in geometry do not
+ * meet in pixels: the corners jog, and each edge antialiases to a different apparent weight. At a
+ * ninety-by-fifty-pixel diagram that reads as a stepped, broken line.
+ *
+ * One path in one coordinate space removes the problem at the source — the corners are joins the
+ * rasterizer can see rather than a coincidence it has to reproduce, and mitred joints close them.
+ *
+ * Seat edges are emitted clockwise around their own diamond, which makes them clockwise around the
+ * whole shape, so following each end to the edge that starts there walks the boundary. A footprint
+ * is a connected polyomino with no holes, so that is normally one ring; the loop still drains any
+ * remainder rather than assuming it.
+ */
+export function runCardFormationOutlineRings(
+  cells: readonly RunCardFormationBoardCell[],
+  origin: Readonly<{ minLeft: number; minTop: number }>,
+): RunCardFormationOutlinePoint[][] {
+  const halfWidth = RUN_CARD_FORMATION_ISO_TILE.width / 2;
+  const halfHeight = RUN_CARD_FORMATION_ISO_TILE.height / 2;
+  const corners = (x: number, y: number): Record<'top' | 'right' | 'bottom' | 'left', RunCardFormationOutlinePoint> => {
+    const point = runCardFormationIsoPoint(x, y);
+    const centreX = point.left - origin.minLeft + halfWidth;
+    const centreY = point.top - origin.minTop + halfHeight;
+    return {
+      top: { x: centreX, y: centreY - halfHeight },
+      right: { x: centreX + halfWidth, y: centreY },
+      bottom: { x: centreX, y: centreY + halfHeight },
+      left: { x: centreX - halfWidth, y: centreY },
+    };
+  };
+  const ENDS = {
+    north: ['top', 'right'],
+    east: ['right', 'bottom'],
+    south: ['bottom', 'left'],
+    west: ['left', 'top'],
+  } as const;
+  // Neighbouring seats share corners exactly, but only after the same float arithmetic; quantise
+  // so a shared corner is one vertex rather than two that merely round to the same pixel.
+  const key = (point: RunCardFormationOutlinePoint): string => `${point.x.toFixed(4)}:${point.y.toFixed(4)}`;
+  const fromVertex = new Map<string, { to: RunCardFormationOutlinePoint; used: boolean }[]>();
+  for (const cell of cells) {
+    const corner = corners(cell.x, cell.y);
+    for (const edge of cell.edges) {
+      const [start, end] = ENDS[edge];
+      const outgoing = fromVertex.get(key(corner[start])) ?? [];
+      outgoing.push({ to: corner[end], used: false });
+      fromVertex.set(key(corner[start]), outgoing);
+    }
+  }
+  const rings: RunCardFormationOutlinePoint[][] = [];
+  for (const [startKey, outgoing] of fromVertex) {
+    for (const first of outgoing) {
+      if (first.used) continue;
+      first.used = true;
+      const ring: RunCardFormationOutlinePoint[] = [first.to];
+      let cursor = first.to;
+      while (key(cursor) !== startKey) {
+        const next = (fromVertex.get(key(cursor)) ?? []).find((edge) => !edge.used);
+        if (!next) break;
+        next.used = true;
+        ring.push(next.to);
+        cursor = next.to;
+      }
+      rings.push(ring);
+    }
+  }
+  return rings;
+}
+
+export function runCardFormationOutlinePath(ring: readonly RunCardFormationOutlinePoint[]): string {
+  return `${ring.map((point, index) => (
+    `${index === 0 ? 'M' : 'L'}${point.x.toFixed(3)},${point.y.toFixed(3)}`
+  )).join('')}Z`;
+}
+
 function FormationDiagram({
   pieces,
   pending,
+  outlineRendering,
   onReady,
   onError,
 }: {
   pieces: readonly RunCardFormationPiece[];
   pending: boolean;
+  outlineRendering: RunCardOutlineRendering;
   onReady: (kind: RunCardImageKind) => void;
   onError: (kind: RunCardImageKind) => void;
 }): ReactElement {
@@ -347,17 +436,24 @@ function FormationDiagram({
           style={position(cell.x, cell.y)}
         >
           <svg preserveAspectRatio="none" viewBox={RUN_CARD_FORMATION_TILE_VIEW_BOX}>
-            <polygon points={RUN_CARD_FORMATION_TILE_POINTS} vectorEffect="non-scaling-stroke" />
-            {cell.edges.map((edge) => {
-              const [x1, y1, x2, y2] = RUN_CARD_FORMATION_EDGE_LINE[edge];
-              return (
-                <line className="run-card-formation-outline" key={edge}
-                  x1={x1} y1={y1} x2={x2} y2={y2} vectorEffect="non-scaling-stroke" />
-              );
-            })}
+            <polygon points={RUN_CARD_FORMATION_TILE_POINTS} />
           </svg>
         </span>
       ))}
+      {/* One path over all the seats, so every corner is a join the rasterizer draws rather than
+          two segments from two coordinate systems asked to land on the same pixel. */}
+      <svg
+        className="run-card-formation-outline"
+        data-outline-rendering={outlineRendering}
+        viewBox={`0 0 ${metrics.width} ${metrics.height}`}
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        {runCardFormationOutlineRings(boardCells, metrics).map((ring) => (
+          <path d={runCardFormationOutlinePath(ring)} key={runCardFormationOutlinePath(ring)}
+            vectorEffect="non-scaling-stroke" />
+        ))}
+      </svg>
       {pieces.map((piece) => {
         const kind = runCardUnitImageKind(piece.pieceIndex, piece.unit, piece.occurrenceIndex);
         const palette = playerCardPalette();
@@ -437,6 +533,7 @@ function RunCardFaceLayer({
   faceTuning,
   frameBoxStyle,
   selectedFrameBox,
+  outlineRendering,
   onImageLoad,
   onImageError,
 }: {
@@ -446,6 +543,7 @@ function RunCardFaceLayer({
   faceTuning: RunCardFaceTuning;
   frameBoxStyle: RunCardFrameBoxStyle;
   selectedFrameBox: RunCardFrameBoxName | null;
+  outlineRendering: RunCardOutlineRendering;
   onImageLoad: (signature: string, pending: boolean, kind: RunCardImageKind) => void;
   onImageError: (signature: string, pending: boolean, kind: RunCardImageKind) => void;
 }): ReactElement {
@@ -488,7 +586,7 @@ function RunCardFaceLayer({
       ) : null}
       <span className="run-card-prototype-type"><span className="run-card-prototype-type-label">{card.typeLine}</span></span>
       <span className="run-card-prototype-contents is-ledger-1-rows">
-        <FormationDiagram pieces={card.formation} pending={pending} onReady={ready} onError={error} />
+        <FormationDiagram pieces={card.formation} pending={pending} outlineRendering={outlineRendering} onReady={ready} onError={error} />
         <span className="run-card-prototype-flavor">{card.flavor}</span>
       </span>
       {frameBoxStyle !== 'off' ? (
@@ -516,6 +614,7 @@ export function RunCardFace({
   frameGeometry = RUN_CARD_STANDARD_FRAME_GEOMETRY,
   frameBoxStyle = 'off',
   selectedFrameBox = null,
+  outlineRendering = 'soft',
   onImageLoad = () => undefined,
   onImageError = () => undefined,
   ariaHidden = false,
@@ -530,6 +629,8 @@ export function RunCardFace({
   frameGeometry?: RunCardFrameGeometry;
   frameBoxStyle?: RunCardFrameBoxStyle;
   selectedFrameBox?: RunCardFrameBoxName | null;
+  /** Review-only: how the footprint outline rasterizes. The game prints `soft`. */
+  outlineRendering?: RunCardOutlineRendering;
   onImageLoad?: (kind: RunCardImageKind) => void;
   onImageError?: (kind: RunCardImageKind) => void;
   ariaHidden?: boolean;
@@ -611,6 +712,7 @@ export function RunCardFace({
         <RunCardFaceLayer key={`${layer.presentation.signature}:${layer.pending ? 'pending' : 'shown'}`}
           presentation={layer.presentation} pending={layer.pending} contentsTuning={contentsTuning}
           faceTuning={tuning} frameBoxStyle={frameBoxStyle} selectedFrameBox={selectedFrameBox}
+          outlineRendering={outlineRendering}
           onImageLoad={settle}
           onImageError={(signature, isPending, kind) => {
             onImageError(kind);

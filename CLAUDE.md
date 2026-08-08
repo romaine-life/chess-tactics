@@ -266,6 +266,18 @@ and don't tell the user screenshots are impossible. Use the helper below.
    Terminal mode instead requires settled units and Victory to be fully composed
    before the scene becomes current, with no independent child opacity entrance.
 
+   Board click-input changes additionally run the live selection gate, which drives
+   real press→click sequences and reads the painted ring and move highlights:
+   ```
+   npm run verify:board-selection -- '<vite-url>/play?campaignId=off-c-crown-valoria&levelId=off-l-hold-bridge'
+   ```
+   A cell's pointerdown SELECTS the piece under it (so the ring shows during a drag
+   pickup), so the click that follows always observes a selected piece. Any click
+   handler that judges "was this already selected?" against the live store therefore
+   fires on the FIRST tap — click-to-deselect implemented that way makes the board
+   completely unselectable. The gate asserts a fresh first click still selects,
+   alongside the second-click cancel; no unit test reproduces that ordering.
+
 This works on ANY live route by selector — no per-target fixture, so there's no "new
 screen ⇒ flail" cliff. `frontend/scripts/shot.mjs` is the implementation.
 

@@ -61,7 +61,13 @@ export function HeldCardCodex({
   const [goldFilter, setGoldFilter] = useState<CardGoldFilter>('all');
   const [unitFilter, setUnitFilter] = useState<CardUnitFilter>('all');
   const [rarityFilter, setRarityFilter] = useState<CardRarityFilter>('all');
-  const [thisCombatOnly, setThisCombatOnly] = useState(false);
+  // Opened while arranging, the Chartulary IS the view of this Battle's dealt hand — the
+  // arranging panel shows one card at a time, so this is where the whole hand, reserves
+  // included, is read. It opens narrowed to that hand; the toggle still widens it to the
+  // full Chartulary, and outside Deployment it opens wide as before.
+  const [thisCombatOnly, setThisCombatOnly] = useState(
+    run.phase === 'deployment' && (run.deployment?.dealtCardIds?.length ?? 0) > 0,
+  );
   const goldTierDividerSource = useRunCardGoldTierDividerSource();
   const all = useMemo(() => heldCards(run), [run]);
   const thisCombatAvailable = Boolean(

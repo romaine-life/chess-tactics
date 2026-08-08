@@ -246,6 +246,49 @@ export function arrangedDeploymentCards(run: RunDocument): RunArrangedCardSummar
   });
 }
 
+/**
+ * The card the hand should move to once `placedCardId` has been seated.
+ *
+ * Placing a formation finishes with it, so the hand advances rather than leaving the player
+ * holding something already on the board. Search resumes AFTER the card just placed and wraps,
+ * so placing out of order still walks the rest of the hand instead of jumping back to the front.
+ * Returns null when nothing is left to place — the just-placed card stays selected then, so it
+ * can still be moved or removed.
+ */
+export function nextArrangedCardToPlace(
+  run: RunDocument,
+  placedCardId: string,
+): string | null {
+  const cards = arrangedDeploymentCards(run);
+  const from = cards.findIndex(({ card }) => card.id === placedCardId);
+  if (from < 0) return null;
+  for (let step = 1; step <= cards.length; step += 1) {
+    const candidate = cards[(from + step) % cards.length];
+    if (candidate.admitted && !candidate.placed) return candidate.card.id;
+  }
+  return null;
+}
+
+/**
+ * The dealt card one step away in the hand, wrapping.
+ *
+ * The hand shows one card at a time, so stepping is how the player reaches the rest of it —
+ * from the arrows and from the keys, which must agree. Only admitted cards are stepped to:
+ * a reserve cannot be placed this Battle, and the selection would bounce straight off it. The
+ * whole dealt hand, reserves included, is read in the Chartulary.
+ */
+export function steppedArrangedCard(
+  cards: readonly RunArrangedCardSummary[],
+  currentId: string | null,
+  step: 1 | -1,
+): string | null {
+  const admitted = cards.filter((summary) => summary.admitted);
+  if (!admitted.length) return null;
+  const from = admitted.findIndex(({ card }) => card.id === currentId);
+  if (from < 0) return admitted[step > 0 ? 0 : admitted.length - 1].card.id;
+  return admitted[(from + step + admitted.length) % admitted.length].card.id;
+}
+
 export function activeDeploymentCard(run: RunDocument): RunOwnedCard | null {
   return dealtCards(run)[run.deployment?.activeCardIndex ?? -1] ?? null;
 }
@@ -549,6 +592,38 @@ export function distinctCardRotations(
   });
 }
 
+/**
+ * The turn a repeated rotate gesture lands on next. Cycling walks only the turns the player is
+ * already offered, so the gesture can never select a rotation the rail refuses, and a formation
+ * with a single distinct turn simply holds still. A current turn that has fallen out of the
+ * offered list restarts the cycle at its first entry.
+ */
+export function nextCardRotation(
+  available: readonly RunFormationRotation[],
+  current: RunFormationRotation,
+): RunFormationRotation {
+  if (!available.length) return current;
+  return available[(available.indexOf(current) + 1) % available.length];
+}
+
+/**
+ * The turn one step back round the same cycle.
+ *
+ * A quarter turn is easy to overshoot, so turning has to be reversible by the same gesture in the
+ * other direction rather than by going three quarters of the way round. Rotation indices increase
+ * clockwise, so this is the counter-clockwise step.
+ */
+export function previousCardRotation(
+  available: readonly RunFormationRotation[],
+  current: RunFormationRotation,
+): RunFormationRotation {
+  if (!available.length) return current;
+  const index = available.indexOf(current);
+  return index < 0
+    ? available[available.length - 1]
+    : available[(index - 1 + available.length) % available.length];
+}
+
 /** Every legal translation for one selected rotation. The anchor is the normalized shape's
  * front-left cell. A seat's row is the anchor row plus the rotated offset, in board
  * coordinates -- not an index into the lane list, which made a formation's depth mean
@@ -606,6 +681,237 @@ export function arrangedCardPlacementOptions(
   }));
 }
 
+/**
+ * The seat a formation hangs from when it is carried on the cursor.
+ *
+ * NOT the anchor. The anchor is the corner of the shape's bounding box, which for any formation
+ * that is not a solid rectangle is a square no unit stands on -- His Grace's L would be carried
+ * by its missing corner, so aiming at the unit you meant to place put the formation one square
+ * off, and every quarter turn moved the hole to a different corner.
+ *
+ * The grip is the seat nearest the shape's own centre of mass, so the formation balances under
+ * the cursor and a turn spins it about a unit the player can see. Ties break toward the front
+ * of the board and then toward the left, so one shape always yields one grip.
+ */
+export function arrangedCardGripSeat(
+  run: RunDocument,
+  cardId: string,
+  rotation: RunFormationRotation,
+): { unitId: string; offset: Vec } | null {
+  const seats = arrangedCardSeatOffsets(run, cardId, rotation);
+  if (!seats.length) return null;
+  const centre = {
+    x: seats.reduce((total, { offset }) => total + offset.x, 0) / seats.length,
+    y: seats.reduce((total, { offset }) => total + offset.y, 0) / seats.length,
+  };
+  const distance = ({ offset }: { offset: Vec }): number => (
+    (offset.x - centre.x) ** 2 + (offset.y - centre.y) ** 2
+  );
+  return seats.reduce((best, seat) => {
+    const gap = distance(seat) - distance(best);
+    if (gap < -1e-9) return seat;
+    if (gap > 1e-9) return best;
+    if (seat.offset.y !== best.offset.y) return seat.offset.y > best.offset.y ? seat : best;
+    return seat.offset.x < best.offset.x ? seat : best;
+  });
+}
+
+/** The rotated seat offsets in card order, or none when the card cannot be arranged. */
+export function arrangedCardSeatOffsets(
+  run: RunDocument,
+  cardId: string,
+  rotation: RunFormationRotation,
+): { unitId: string; offset: Vec }[] {
+  if (run.phase !== 'deployment' || run.deployment?.stage !== 'arranging') return [];
+  const card = dealtCards(run).find((candidate) => candidate.id === cardId);
+  if (!card) return [];
+  const definition = runCardDefinition(card.coreId);
+  const admitted = new Set(run.deployment.deployingUnitIds);
+  const formation = definition?.formation ?? card.unitSeats.map((_, x) => ({ x, y: 0 }));
+  const seats = formation.flatMap((offset, index) => {
+    const unitId = card.unitSeats[index];
+    return unitId && admitted.has(unitId) ? [{ unitId, offset }] : [];
+  });
+  if (!seats.length || seats.length !== runCardUnitIds(card).length) return [];
+  const transformed = rotatedFormation(seats.map(({ offset }) => offset), rotation);
+  return seats.map(({ unitId }, index) => ({ unitId, offset: transformed[index] }));
+}
+
+/**
+ * Where the formation lands when the player is pointing at `cell`.
+ *
+ * The player aims at a square and the game finds the seating, rather than the player hunting for
+ * the one square that happens to be a legal anchor. Every seating that COVERS the pointed square
+ * is a candidate, so the formation is always under the hand -- it never slides off to somewhere
+ * else on the band.
+ *
+ * The grip seat is preferred, and when the band cannot take that seating the formation shifts to
+ * the legal candidate whose covering seat is nearest the grip. That keeps the shift to the
+ * smallest one that works instead of jumping across the shape.
+ */
+export function arrangedCardPlacementAtCell(
+  run: RunDocument,
+  level: Level,
+  cardId: string,
+  rotation: RunFormationRotation,
+  cell: Vec,
+): RunArrangedPlacementOption | null {
+  const grip = arrangedCardGripSeat(run, cardId, rotation);
+  if (!grip) return null;
+  const seatOffsets = new Map(
+    arrangedCardSeatOffsets(run, cardId, rotation).map(({ unitId, offset }) => [unitId, offset]),
+  );
+  const pointed = key(cell);
+  let best: { option: RunArrangedPlacementOption; shift: number } | null = null;
+  for (const option of arrangedCardPlacementOptions(run, level, cardId, rotation)) {
+    const covering = Object.entries(option.placements)
+      .find(([, seat]) => key(seat) === pointed)?.[0];
+    if (!covering) continue;
+    const offset = seatOffsets.get(covering);
+    if (!offset) continue;
+    const shift = (offset.x - grip.offset.x) ** 2 + (offset.y - grip.offset.y) ** 2;
+    if (!best || shift < best.shift) best = { option, shift };
+  }
+  return best?.option ?? null;
+}
+
+/**
+ * The dealt card whose units are standing on `cell`, if any.
+ *
+ * A formation already on the board is still the player's to move: clicking it takes it back into
+ * the hand rather than being read as an attempt to place whatever is currently held there.
+ */
+export function arrangedCardAtCell(run: RunDocument, cell: Vec): string | null {
+  if (run.phase !== 'deployment' || run.deployment?.stage !== 'arranging') return null;
+  const placements = decodedPlacements(run);
+  const standing = Object.entries(placements)
+    .find(([, seat]) => key(seat) === key(cell))?.[0];
+  if (!standing) return null;
+  return dealtCards(run).find((card) => runCardUnitIds(card).includes(standing))?.id ?? null;
+}
+
+/** The seating at an exact anchor, or null when the band cannot take the formation there. */
+export function arrangedCardPlacementAtAnchor(
+  run: RunDocument,
+  level: Level,
+  cardId: string,
+  rotation: RunFormationRotation,
+  anchor: Vec,
+): RunArrangedPlacementOption | null {
+  return arrangedCardPlacementOptions(run, level, cardId, rotation)
+    .find((option) => key(option.anchor) === key(anchor)) ?? null;
+}
+
+/**
+ * Where the formation lands after a turn.
+ *
+ * A turn spins the formation IN PLACE: the box it occupies is held and the shape turns inside it,
+ * so His Grace's L cycles which corner it leaves empty without the box itself walking across the
+ * band. Re-seating from the pointed square instead kept a unit under the cursor but moved the box
+ * every quarter turn, sweeping three squares by three where the formation only ever covers two by
+ * two.
+ *
+ * The band has the final say. Where it cannot take the formation in the held box, the seating is
+ * re-resolved from the square being pointed at, which is what keeps a turn from ever leaving the
+ * player holding nothing.
+ */
+export function turnedCardPlacement(
+  run: RunDocument,
+  level: Level,
+  cardId: string,
+  rotation: RunFormationRotation,
+  heldAnchor: Vec | null,
+  pointedCell: Vec | null,
+): RunArrangedPlacementOption | null {
+  const held = heldAnchor
+    ? arrangedCardPlacementAtAnchor(run, level, cardId, rotation, heldAnchor)
+    : null;
+  if (held) return held;
+  return pointedCell
+    ? arrangedCardPlacementAtCell(run, level, cardId, rotation, pointedCell)
+    : null;
+}
+
+/** The turns a formation held this way can take: box first, pointed square as the fallback. */
+export function turnableCardRotations(
+  run: RunDocument,
+  level: Level,
+  cardId: string,
+  heldAnchor: Vec | null,
+  pointedCell: Vec | null,
+): RunFormationRotation[] {
+  return distinctCardRotations(run, cardId).filter((rotation) => (
+    turnedCardPlacement(run, level, cardId, rotation, heldAnchor, pointedCell) !== null
+  ));
+}
+
+/**
+ * The turns that can seat this formation over `cell`, in quarter-turn order.
+ *
+ * Turning is done with the cursor on a square, so the turns on offer are the ones that keep the
+ * formation THERE. Cycling the band-wide list instead would step onto a turn with no seating over
+ * the pointed square, and the formation under the player's hand would simply disappear.
+ *
+ * This is computed independently of the current turn, so a square that only one turn can reach is
+ * reachable by turning onto it — pointing at a narrow gap and turning finds the way it fits.
+ */
+export function cardRotationsAtCell(
+  run: RunDocument,
+  level: Level,
+  cardId: string,
+  cell: Vec,
+): RunFormationRotation[] {
+  return distinctCardRotations(run, cardId).filter((rotation) => (
+    arrangedCardPlacementAtCell(run, level, cardId, rotation, cell) !== null
+  ));
+}
+
+/**
+ * The squares the player may deploy onto at all: the level's band, less what other formations
+ * have already taken.
+ *
+ * This answers "where may I deploy?", which is a question about the LEVEL and about what is
+ * already seated — not about the card in hand or which way it happens to be turned. Deriving the
+ * band from the carried formation's current turn instead made squares at one end blink out as the
+ * player turned a formation at the other end, six columns away: a tile reacting across the board
+ * to something with nothing to do with it.
+ *
+ * The selected card's own seats stay open, so a formation already on the board does not read as
+ * blocking the squares it is standing on while it is being moved.
+ */
+export function openDeploymentBandCells(
+  run: RunDocument,
+  level: Level,
+  exceptCardId?: string,
+): Vec[] {
+  if (run.phase !== 'deployment' || run.deployment?.stage !== 'arranging') return [];
+  const card = exceptCardId
+    ? dealtCards(run).find((candidate) => candidate.id === exceptCardId)
+    : undefined;
+  const own = new Set(card ? runCardUnitIds(card) : []);
+  const occupied = new Set(Object.entries(decodedPlacements(run))
+    .filter(([unitId]) => !own.has(unitId))
+    .map(([, cell]) => key(cell)));
+  return playerDeploymentPools(level).all.filter((cell) => !occupied.has(key(cell)));
+}
+
+/** Every square the player may point at to place this formation, in board order. */
+export function arrangedCardPlaceableCells(
+  run: RunDocument,
+  level: Level,
+  cardId: string,
+  rotation: RunFormationRotation,
+): Vec[] {
+  const seen = new Set<string>();
+  return arrangedCardPlacementOptions(run, level, cardId, rotation)
+    .flatMap((option) => Object.values(option.placements))
+    .flatMap((cell) => {
+      if (seen.has(key(cell))) return [];
+      seen.add(key(cell));
+      return [cell];
+    });
+}
+
 export function placeArrangedDeploymentCard(
   run: RunDocument,
   level: Level,
@@ -654,6 +960,24 @@ export function arrangedDeploymentCanBegin(run: RunDocument): boolean {
   ) return false;
   const king = run.army.find((unit) => unit.type === 'king');
   return Boolean(king && run.deployment.placements[king.id]);
+}
+
+/**
+ * How much of the dealt hand is on the board.
+ *
+ * Begin Battle asks only for His Grace, so it says nothing about the rest of the hand — and the
+ * hand shows one card at a time, so nothing else on screen answers "have I put everyone down?"
+ * either. Reserves are excluded: they cannot be placed this Battle, so counting them would make
+ * a complete arrangement read as unfinished.
+ */
+export function arrangedDeploymentProgress(run: RunDocument): {
+  placed: number;
+  total: number;
+  complete: boolean;
+} {
+  const admitted = arrangedDeploymentCards(run).filter((summary) => summary.admitted);
+  const placed = admitted.filter((summary) => summary.placed).length;
+  return { placed, total: admitted.length, complete: admitted.length > 0 && placed === admitted.length };
 }
 
 export function beginArrangedBattle(run: RunDocument): RunDocument {

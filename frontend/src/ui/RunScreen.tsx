@@ -2,7 +2,7 @@ import { Children, useCallback, useEffect, useMemo, useRef, useState, type CSSPr
 import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import type { RunBattleTransformSink, RunBattleUndoAdapter } from '../game/store';
 import { defaultFacingForSide } from '../core/pieces';
-import type { GameState, Piece } from '../core/types';
+import type { GameState, Piece, Vec } from '../core/types';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox } from './shared/ChromeBox';
 import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
@@ -49,16 +49,21 @@ import {
   RUN_CARD_BY_ID,
   restartBattle,
   runBattleActivityId,
+  runCardUnitIds,
   performExpunctio,
   sectioHasChanges,
   takeVacantiaCard,
   takeVacantiaLipsanon,
   undoRunBattleMove,
+  type RunBattleNotice,
   type RunCardOffer,
   type RunDocument,
   type LipsanonId,
 } from '../run/model';
 import {
+  arrangedCardAtCell,
+  arrangedCardPlaceableCells,
+  arrangedCardPlacementAtAnchor,
   arrangedCardPlacementOptions,
   distinctCardRotations,
   arrangedDeploymentCanBegin,
@@ -70,7 +75,14 @@ import {
   deploymentOptions,
   gameForRunDeployment,
   levelWithRunDeployment,
+  openDeploymentBandCells,
+  nextArrangedCardToPlace,
+  nextCardRotation,
   normalReservistCell,
+  previousCardRotation,
+  steppedArrangedCard,
+  turnableCardRotations,
+  turnedCardPlacement,
   placeArrangedDeploymentCard,
   resolveForcedDeploymentChoices,
   removeArrangedDeploymentCard,
@@ -109,12 +121,12 @@ import {
   type RunArmyFilters,
 } from './RunArmyWorkspace';
 import { RunCard } from './RunCard';
-import { RUN_CARD_BACK_SLOT } from './RunCardBack';
+import { useRunCardBackMediaUrl } from './RunCardBack';
 import { RunCardPile } from './RunCardPile';
 import { RunCardRow } from './RunCardRow';
 import { RunBattlePreview } from './RunBattlePreview';
 import { RunDeploymentCardStack, RunDeploymentDeckDeal } from './RunDeploymentCardStack';
-import { RunArrangementHand } from './RunArrangementHand';
+import { RunArrangementCard, RunArrangementSteppers } from './RunArrangementHand';
 import { RunDeploymentRerollButton } from './RunDeploymentRerollButton';
 import { RunExpunctioWorkspace } from './RunExpunctioWorkspace';
 import { runCardName } from '../run/cardNames';
@@ -124,7 +136,9 @@ import {
 import { isStrategikonPath, strategikonRouteCrumbs } from './strategikonRoute';
 import { createRunForm, runActivity, type RunForm } from './RunForm';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
+import { KitScroll } from './KitScroll';
 import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
+import { useFormationKeys, type FormationTurnDirection } from './formationKeys';
 import type { SkirmishBoardSurfaceState, UnitDepartureRequest } from '../render/SkirmishBoard';
 
 type RunScreenView = RunWorkspaceView;
@@ -387,12 +401,11 @@ function ArrangedDeploymentControls({
   run,
   stage,
   selectedCardId,
-  rotation,
   availableRotations,
   dealProgress,
   onDealProgress,
-  onSelectCard,
-  onRotation,
+  onStepCard,
+  onTurn,
   onRemove,
   onBeginBattle,
   onDealComplete,
@@ -401,12 +414,11 @@ function ArrangedDeploymentControls({
   run: RunDocument;
   stage: RunDeploymentInteractionStage;
   selectedCardId: string | null;
-  rotation: RunFormationRotation;
   availableRotations: ReadonlySet<RunFormationRotation>;
   dealProgress: number;
   onDealProgress: (count: number) => void;
-  onSelectCard: (cardId: string) => void;
-  onRotation: (rotation: RunFormationRotation) => void;
+  onStepCard: (step: 1 | -1) => void;
+  onTurn: (direction: FormationTurnDirection) => void;
   onRemove: () => void;
   onBeginBattle: () => void;
   onDealComplete: () => void;
@@ -425,6 +437,14 @@ function ArrangedDeploymentControls({
         aria-busy={departing || undefined}
         inert={departing || undefined}
       >
+        {/* The card is the subject of the whole panel, so it is PINNED above the rail and only
+            the controls beneath it move. ADR-0030: the panel itself never scrolls — the house
+            rail is a drawn element that is always present, so nothing here may fall back to the
+            browser's own bar. */}
+        {stage === 'arrange' ? (
+          <RunArrangementCard run={run} cards={cards} selectedCardId={selectedCardId} />
+        ) : null}
+        <KitScroll className="run-arrangement-scroll">
         {stage === 'await-deal' || stage === 'dealing' ? (
           <RunDeploymentCardStack
             run={run}
@@ -438,43 +458,62 @@ function ArrangedDeploymentControls({
 
         {stage === 'arrange' ? (
           <>
-            <RunArrangementHand
-              run={run}
+            <RunArrangementSteppers
               cards={cards}
               selectedCardId={selectedCardId}
-              onSelect={onSelectCard}
+              onStep={onStepCard}
             />
             {selected?.admitted ? (
               <div className="skirmish-view-group run-deployment-control" data-testid="arrangement-rotation-control">
                 <span className="skirmish-eyebrow">Rotation</span>
-                <div className="run-arrangement-rotations" role="group" aria-label="Formation rotation">
-                  {([0, 1, 2, 3] as const).map((value) => (
-                    <ChromeButton
-                      unit="inner-text-button"
-                      className={chromeUnitClassNames('inner-text-button', 'app-header-button', rotation === value && 'active')}
-                      aria-pressed={rotation === value}
-                      disabled={departing || !availableRotations.has(value)}
-                      onClick={() => onRotation(value)}
-                      key={value}
-                    >
-                      {value * 90}°
-                    </ChromeButton>
-                  ))}
+                {/* Two turns, not four absolute angles. The formation on the board already shows
+                    which way it faces, so the control is the VERB — and it is the same verb the
+                    keys and the secondary click run, wearing the keys that run it. */}
+                <div className="run-arrangement-rotations" role="group" aria-label="Turn the formation">
+                  <ChromeButton
+                    unit="inner-text-button"
+                    data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                    className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'run-arrangement-turn')}
+                    style={{ ['--run-leaf-control-index' as string]: 2 } as CSSProperties}
+                    disabled={departing || availableRotations.size < 2}
+                    onClick={() => onTurn('counter-clockwise')}
+                    aria-label="Turn the formation left"
+                  >
+                    <kbd className="skirmish-grid-cap">Q</kbd>
+                    <span className="skirmish-grid-label">Left</span>
+                  </ChromeButton>
+                  <ChromeButton
+                    unit="inner-text-button"
+                    data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                    className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'run-arrangement-turn')}
+                    style={{ ['--run-leaf-control-index' as string]: 3 } as CSSProperties}
+                    disabled={departing || availableRotations.size < 2}
+                    onClick={() => onTurn('clockwise')}
+                    aria-label="Turn the formation right"
+                  >
+                    <kbd className="skirmish-grid-cap">E</kbd>
+                    <span className="skirmish-grid-label">Right</span>
+                  </ChromeButton>
                 </div>
                 <p className="skirmish-grid-hint">
                   {selected.placed
-                    ? 'Choose another square to move this formation, or remove it.'
-                    : 'Choose a highlighted square on the battlefield.'}
+                    ? 'Point somewhere else on the battlefield to move this formation, or remove it.'
+                    : 'Point at the battlefield and click to place this formation.'}
+                  {availableRotations.size > 1 ? ' Right-click turns it too.' : ''}
                 </p>
-                {selected.placed ? (
-                  <ChromeButton
-                    unit="inner-text-button"
-                    className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
-                    onClick={onRemove}
-                  >
-                    Remove formation
-                  </ChromeButton>
-                ) : null}
+                {/* Always here, greyed until there is something to remove: a control that
+                    appears and disappears re-lays the panel under the player's hand. */}
+                <ChromeButton
+                  unit="inner-text-button"
+                  data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                  className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+                  style={{ ['--run-leaf-control-index' as string]: 4 } as CSSProperties}
+                  data-testid="arrangement-remove-formation"
+                  disabled={departing || !selected.placed}
+                  onClick={onRemove}
+                >
+                  Remove formation
+                </ChromeButton>
               </div>
             ) : null}
 
@@ -482,7 +521,9 @@ function ArrangedDeploymentControls({
               <span className="skirmish-eyebrow">Battle</span>
               <ChromeButton
                 unit="inner-text-button"
+                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button', canBegin && 'active')}
+                style={{ ['--run-leaf-control-index' as string]: 5 } as CSSProperties}
                 data-testid="arrangement-begin-battle"
                 disabled={departing || !canBegin}
                 onClick={onBeginBattle}
@@ -498,11 +539,16 @@ function ArrangedDeploymentControls({
           </>
         ) : null}
 
+        {/* Abandon Run scrolls with everything else. Pinning it took height from the controls
+            the player is actually using, and it is not worth more than them — it is the one
+            action here nobody is reaching for in a hurry. */}
         <div className="skirmish-view-group run-meta-abandon">
           <span className="skirmish-eyebrow">Run</span>
           <ChromeButton
             unit="inner-text-button"
+            data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
             className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'danger')}
+            style={{ ['--run-leaf-control-index' as string]: 6 } as CSSProperties}
             data-testid="abandon-run"
             disabled={abandoning || departing}
             onClick={() => { void requestAbandon(); }}
@@ -510,6 +556,7 @@ function ArrangedDeploymentControls({
             {abandoning ? 'Abandoning…' : 'Abandon Run'}
           </ChromeButton>
         </div>
+        </KitScroll>
       </section>
     </>
   );
@@ -533,32 +580,91 @@ function useRunDeploymentPresentation({
   const [dealProgress, setDealProgress] = useState(0);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [arrangementRotation, setArrangementRotation] = useState<RunFormationRotation>(0);
-  const [hoveredArrangementAnchor, setHoveredArrangementAnchor] = useState<string | null>(null);
+  // Where the mouse is. ONLY the pointer may clear it — pointerenter does not fire again for a
+  // pointer that never moved, so any other reset leaves the formation invisible until the player
+  // jiggles the mouse onto a different square. Changing card, turn, or placement all keep it, so
+  // whatever is now in hand appears under the cursor at once.
+  const [pointedArrangementCell, setPointedArrangementCell] = useState<string | null>(null);
+  // The box the formation is being turned in. Set only BY a turn and dropped the moment the
+  // pointer moves, so the mouse always says where the formation goes and a turn only says which
+  // way it faces there.
+  const [heldArrangementAnchor, setHeldArrangementAnchor] = useState<string | null>(null);
   const arrangementCards = useMemo(() => arrangedDeploymentCards(prepared), [prepared]);
   const selectedArrangementCard = arrangementCards.find(({ card }) => card.id === selectedCardId) ?? null;
-  const arrangementPlacementOptions = useMemo(
-    () => selectedCardId
-      ? arrangedCardPlacementOptions(prepared, level, selectedCardId, arrangementRotation)
-      : [],
-    [arrangementRotation, level, prepared, selectedCardId],
-  );
+  // Where deployment is allowed at all. A property of the level and of what is already seated,
+  // so it holds still while the carried formation is turned — turning a formation in one corner
+  // must not put out a square at the other end of the band.
+  const arrangementBandCells = useMemo(() => new Set(
+    (selectedCardId ? openDeploymentBandCells(prepared, level, selectedCardId) : [])
+      .map((cell) => `${cell.x},${cell.y}`),
+  ), [level, prepared, selectedCardId]);
+  // Squares held by a formation ALREADY on the board, other than the one in hand. Clicking one
+  // takes that formation back rather than trying to drop the held one on top of it.
+  const arrangementPlacedCells = useMemo(() => {
+    const seats = new Map<string, string>();
+    for (const { card, placed } of arrangementCards) {
+      if (!placed || card.id === selectedCardId) continue;
+      for (const unitId of runCardUnitIds(card)) {
+        const seat = prepared.deployment?.placements?.[unitId];
+        if (seat) seats.set(seat, card.id);
+      }
+    }
+    return seats;
+  }, [arrangementCards, prepared.deployment?.placements, selectedCardId]);
+  // The squares the player may point at — every square the formation could COVER at this turn,
+  // not the squares its bounding-box corner could sit on. Aiming at a unit is the whole gesture.
+  const arrangementPlaceableCells = useMemo(() => new Set(
+    (selectedCardId
+      ? arrangedCardPlaceableCells(prepared, level, selectedCardId, arrangementRotation)
+      : []).map((cell) => `${cell.x},${cell.y}`),
+  ), [arrangementRotation, level, prepared, selectedCardId]);
   // A rotation is offered only when it both fits the band and looks different from a turn
   // already on the rail. Redundant turns are skipped the same way unplaceable ones are, so
-  // the control never presents two buttons that produce the same board.
-  const availableArrangementRotations = useMemo(() => new Set<RunFormationRotation>(
+  // the control never presents two buttons that produce the same board. The rail and the
+  // secondary-click cycle read this one ordered list, so both walk the same turns.
+  const availableArrangementRotationList = useMemo<readonly RunFormationRotation[]>(() => (
     selectedCardId
       ? distinctCardRotations(prepared, selectedCardId).filter((rotation) => (
           arrangedCardPlacementOptions(prepared, level, selectedCardId, rotation).length > 0
         ))
-      : [],
+      : []
   ), [level, prepared, selectedCardId]);
-  const hoveredArrangementOption = hoveredArrangementAnchor
-    ? arrangementPlacementOptions.find(({ anchor }) => `${anchor.x},${anchor.y}` === hoveredArrangementAnchor) ?? null
-    : null;
+  const availableArrangementRotations = useMemo(
+    () => new Set<RunFormationRotation>(availableArrangementRotationList),
+    [availableArrangementRotationList],
+  );
+  const asCell = (encoded: string | null): Vec | null => {
+    const parts = encoded?.split(',').map(Number);
+    return parts && parts.length === 2 && parts.every((value) => Number.isFinite(value))
+      ? { x: parts[0], y: parts[1] }
+      : null;
+  };
+  const pointedCell = useMemo(() => asCell(pointedArrangementCell), [pointedArrangementCell]);
+  const heldAnchor = useMemo(() => asCell(heldArrangementAnchor), [heldArrangementAnchor]);
+  // The formation is carried on the cursor: the pointed square resolves to a whole seating, and
+  // the player never has to work out where a corner would have to go. Once a turn has held a box
+  // the formation stays in it and spins there, until the pointer moves and picks a new one.
+  const pointedArrangementOption = useMemo(() => (
+    selectedCardId
+      ? turnedCardPlacement(prepared, level, selectedCardId, arrangementRotation, heldAnchor, pointedCell)
+      : null
+  ), [arrangementRotation, heldAnchor, level, pointedCell, prepared, selectedCardId]);
+  // The turns on offer are the ones this formation can actually take from where it is being
+  // held — its box first, the pointed square as the fallback. Walking the band-wide list would
+  // step onto a turn with no seating either way, and the formation under the player's hand would
+  // vanish. Off the board there is nothing to preserve, so the rail's own list applies.
+  const turnableArrangementRotationList = useMemo<readonly RunFormationRotation[]>(() => {
+    if (!selectedCardId || (!pointedCell && !heldAnchor)) return availableArrangementRotationList;
+    const held = turnableCardRotations(prepared, level, selectedCardId, heldAnchor, pointedCell);
+    return held.length ? held : availableArrangementRotationList;
+  }, [availableArrangementRotationList, heldAnchor, level, pointedCell, prepared, selectedCardId]);
+  const arrangementFootprint = useMemo(() => new Set(
+    Object.values(pointedArrangementOption?.placements ?? {}).map((cell) => `${cell.x},${cell.y}`),
+  ), [pointedArrangementOption]);
   const arrangementPreviewPieces = useMemo<readonly Piece[]>(() => {
-    if (!hoveredArrangementOption) return [];
+    if (!pointedArrangementOption) return [];
     const facing = defaultFacingForSide('player');
-    return Object.entries(hoveredArrangementOption.placements).flatMap(([unitId, cell]) => {
+    return Object.entries(pointedArrangementOption.placements).flatMap(([unitId, cell]) => {
       const unit = prepared.army.find((candidate) => candidate.id === unitId);
       if (!unit) return [];
       return [{
@@ -574,7 +680,7 @@ function useRunDeploymentPresentation({
         ...(unit.type === 'pawn' ? { pawnForward: facing } : {}),
       }];
     });
-  }, [hoveredArrangementOption, prepared.army]);
+  }, [pointedArrangementOption, prepared.army]);
   const layout = selectedDeploymentLayout(prepared, options);
   const deploymentGame = useMemo(
     () => gameForRunDeployment(prepared, level, layout, true),
@@ -603,13 +709,13 @@ function useRunDeploymentPresentation({
       ?? arrangementCards.find(({ admitted }) => admitted)?.card.id
       ?? null);
     setArrangementRotation(0);
-    setHoveredArrangementAnchor(null);
+    setHeldArrangementAnchor(null);
   }, [arrangementCards, selectedCardId, stage]);
 
   useEffect(() => {
     if (availableArrangementRotations.has(arrangementRotation)) return;
     setArrangementRotation(availableArrangementRotations.values().next().value ?? 0);
-    setHoveredArrangementAnchor(null);
+    setHeldArrangementAnchor(null);
   }, [arrangementRotation, availableArrangementRotations]);
 
   const beginDeal = useCallback(() => {
@@ -626,19 +732,61 @@ function useRunDeploymentPresentation({
       replace(completeDeploymentDeal(latest, level));
     }
   }, [departureActive, level, prepared.id, replace]);
+  // The hand shows one card at a time, so the arrows and the W/S keys are the only way through
+  // it. Both run this, so they cannot disagree about what "the next card" is.
+  const stepArrangementCard = useCallback((step: 1 | -1) => {
+    if (departureActive) return;
+    const next = steppedArrangedCard(arrangementCards, selectedCardId, step);
+    if (!next || next === selectedCardId) return;
+    setSelectedCardId(next);
+    setArrangementRotation(0);
+    setHeldArrangementAnchor(null);
+  }, [arrangementCards, departureActive, selectedCardId]);
   const selectArrangementCard = useCallback((cardId: string) => {
     setSelectedCardId(cardId);
     setArrangementRotation(0);
-    setHoveredArrangementAnchor(null);
+    setHeldArrangementAnchor(null);
   }, []);
+  // A secondary click, and Q/E, turn the formation carried on the cursor. They deliberately keep
+  // the pointed square: the formation spins about its grip seat, on the square being aimed at,
+  // rather than vanishing until the mouse is jiggled. All three walk the same list — the turns
+  // that keep a seating over that square — so no gesture can turn the formation out of sight.
+  const turnArrangement = useCallback((direction: FormationTurnDirection) => {
+    if (departureActive || !selectedCardId) return;
+    const next = direction === 'clockwise'
+      ? nextCardRotation(turnableArrangementRotationList, arrangementRotation)
+      : previousCardRotation(turnableArrangementRotationList, arrangementRotation);
+    if (next === arrangementRotation) return;
+    // Hold the box the formation is standing in now, so the turn happens INSIDE it. The band
+    // still decides: where it cannot take the formation there, the anchor is dropped and the
+    // seating re-resolves from the pointed square rather than leaving the player holding nothing.
+    const box = pointedArrangementOption?.anchor ?? null;
+    const stays = box
+      && arrangedCardPlacementAtAnchor(prepared, level, selectedCardId, next, box) !== null;
+    setArrangementRotation(next);
+    setHeldArrangementAnchor(stays ? `${box.x},${box.y}` : null);
+  }, [
+    arrangementRotation, departureActive, level, pointedArrangementOption, prepared,
+    selectedCardId, turnableArrangementRotationList,
+  ]);
+  const turnArrangementUnderCursor = useCallback(() => {
+    turnArrangement('clockwise');
+  }, [turnArrangement]);
   const removeArrangementCard = useCallback(() => {
     if (!selectedCardId || departureActive) return;
     const latest = useActiveRun.getState().run;
     if (latest?.id === prepared.id && latest.phase === 'deployment') {
       replace(removeArrangedDeploymentCard(latest, selectedCardId));
-      setHoveredArrangementAnchor(null);
+      setHeldArrangementAnchor(null);
     }
   }, [departureActive, prepared.id, replace, selectedCardId]);
+  // The keys are offered on exactly the terms the rail's turn buttons are, so the two cannot
+  // drift apart: a dealt formation admitted and selected, on a screen that is not departing.
+  const arranging = stage === 'arrange' && !departureActive;
+  useFormationKeys({
+    turn: arranging && selectedArrangementCard?.admitted ? turnArrangement : null,
+    step: arranging ? stepArrangementCard : null,
+  });
   const startArrangedBattle = useCallback(() => {
     if (departureActive) return;
     const latest = useActiveRun.getState().run;
@@ -651,42 +799,107 @@ function useRunDeploymentPresentation({
   return {
     surfaceState: deploymentSurfaceState,
     screenClassName: 'run-deployment-screen',
-    boardClassName: 'run-deployment-board',
+    // While a seating is resolved the formation itself is the cursor, so the pointer is hidden
+    // under it. When nothing resolves the pointer comes back, so the player is never left with
+    // no cursor and no formation.
+    boardClassName: pointedArrangementOption
+      ? 'run-deployment-board is-carrying-formation'
+      : 'run-deployment-board',
     boardAriaLabel: `${level.name} deployment battlefield`,
     unitArrivalTrack: 'drop',
     unitArrivalStartDelta: { x: 0, y: 0 },
     onArrivingUnitIdsChange: () => undefined,
+    onBoardSecondaryClick: stage === 'arrange' && selectedArrangementCard?.admitted
+      ? turnArrangementUnderCursor
+      : undefined,
+    // Every square takes the pointer, not just the ones a corner could sit on. The player
+    // sweeps the formation across the board and the seating resolves under it; the squares it
+    // would fill light up, so what is highlighted is what will be occupied.
     renderCellOverlay: ({ cell, visualFootprintStyle }) => {
       if (stage !== 'arrange' || !selectedArrangementCard?.admitted) {
         return null;
       }
       const cellKey = `${cell.x},${cell.y}`;
-      const placement = arrangementPlacementOptions.find(({ anchor }) => `${anchor.x},${anchor.y}` === cellKey);
-      if (!placement) return null;
+      const band = arrangementBandCells.has(cellKey);
+      // Clicking here places the formation. That includes the square being pointed at while a
+      // box is held even when the turn has left it the empty corner — the click commits the box
+      // on screen, so the square is a placement action and keeps its marker and crosshair.
+      const placeable = arrangementPlaceableCells.has(cellKey)
+        || (pointedArrangementOption !== null && cellKey === pointedArrangementCell);
+      const filled = arrangementFootprint.has(cellKey);
+      const standing = arrangementPlacedCells.get(cellKey) ?? null;
+      const actionable = placeable || Boolean(standing);
       return (
         <button
           type="button"
-          className="skirmish-board-cell-hit run-deployment-cell is-move"
-          aria-label={`Place formation from ${cell.x}, ${cell.y}`}
+          className={[
+            'skirmish-board-cell-hit',
+            'run-deployment-cell',
+            band ? 'is-band' : '',
+            placeable ? 'is-placeable' : '',
+            standing ? 'is-seated-formation' : '',
+            filled ? 'is-move' : '',
+          ].filter(Boolean).join(' ')}
+          aria-label={standing
+            ? `Take back the formation at ${cell.x}, ${cell.y}`
+            : placeable
+              ? `Place formation covering ${cell.x}, ${cell.y}`
+              : `Tile ${cell.x}, ${cell.y}`}
+          aria-hidden={actionable ? undefined : true}
+          tabIndex={actionable ? undefined : -1}
           style={visualFootprintStyle}
           onPointerDown={(event) => {
             if (event.button === 0) event.stopPropagation();
           }}
-          onPointerEnter={() => setHoveredArrangementAnchor(cellKey)}
-          onPointerLeave={() => setHoveredArrangementAnchor((current) => current === cellKey ? null : current)}
+          // Moving the pointer releases whatever box a turn was holding: the mouse says WHERE
+          // the formation goes, and a turn only says which way it faces once it is there.
+          onPointerEnter={() => { setPointedArrangementCell(cellKey); setHeldArrangementAnchor(null); }}
+          onPointerLeave={() => setPointedArrangementCell((current) => current === cellKey ? null : current)}
           onClick={() => {
             const latest = useActiveRun.getState().run;
             if (latest?.id !== prepared.id || latest.phase !== 'deployment' || !selectedCardId) return;
-            replace(placeArrangedDeploymentCard(
+            // A formation already standing here is still the player's to move. Clicking it takes
+            // it back into the hand rather than reading as an attempt to drop the held one on
+            // top of it — the only way to reposition a formation without removing it first.
+            const standing = arrangedCardAtCell(latest, cell);
+            if (standing && standing !== selectedCardId) {
+              selectArrangementCard(standing);
+              return;
+            }
+            // Commit the box on screen, not a fresh guess from the square: after a turn the
+            // formation is standing in a held box, and the pointed square may be the corner it
+            // leaves empty. Re-resolving from the square would place something else.
+            const seating = turnedCardPlacement(
               latest,
               level,
               selectedCardId,
               arrangementRotation,
-              placement.anchor,
-            ));
-            setHoveredArrangementAnchor(null);
+              heldAnchor,
+              cell,
+            );
+            if (!seating) return;
+            const placed = placeArrangedDeploymentCard(
+              latest,
+              level,
+              selectedCardId,
+              arrangementRotation,
+              seating.anchor,
+            );
+            replace(placed);
+            // Placing finishes with a formation, so the hand moves on rather than leaving the
+            // player holding one already on the board. The pointed square is KEPT: the next
+            // formation appears under the cursor ready to place, so a whole hand is seated
+            // without the mouse having to leave the battlefield between cards.
+            const following = nextArrangedCardToPlace(placed, selectedCardId);
+            if (following) {
+              setSelectedCardId(following);
+              setArrangementRotation(0);
+            }
           }}
         >
+          {/* One paint at two strengths: quiet across the squares the formation could take,
+              full across the squares this seating fills. The band never goes dark, so a turn
+              that finds no seating still leaves the player looking at where they may deploy. */}
           <PredrawnMoveHighlightPaint />
         </button>
       );
@@ -696,12 +909,11 @@ function useRunDeploymentPresentation({
         run={prepared}
         stage={stage}
         selectedCardId={selectedCardId}
-        rotation={arrangementRotation}
         availableRotations={availableArrangementRotations}
         dealProgress={dealProgress}
         onDealProgress={setDealProgress}
-        onSelectCard={selectArrangementCard}
-        onRotation={(rotation) => { setArrangementRotation(rotation); setHoveredArrangementAnchor(null); }}
+        onStepCard={stepArrangementCard}
+        onTurn={turnArrangement}
         onRemove={removeArrangementCard}
         onBeginBattle={startArrangedBattle}
         onDealComplete={finishDeal}
@@ -834,7 +1046,7 @@ function SectioPanel({
   const replace = useActiveRun((state) => state.replace);
   const sectio = run.sectio!;
   const availableOffers = sectio.cardOffers.filter((offer) => !sectio.adlectedCardOfferIds.includes(offer.offerId));
-  const cardBackMediaUrl = resolvedLiveMediaUrl(RUN_CARD_BACK_SLOT);
+  const cardBackMediaUrl = useRunCardBackMediaUrl();
   return (
     <>
       {view === 'expunctio'
@@ -1142,7 +1354,11 @@ function RunBattlefieldPanel({
 
   const transformCommittedBoard = useCallback<RunBattleTransformSink>((game, events) => {
       let active = useActiveRun.getState().run;
-      if (!active || active.phase !== 'battle' || active.id !== run.id || !active.battleRuntime) return game;
+      // Every change below reports itself here. The Battle log, the gold rising off the board,
+      // and the coin all come from this one list, so there is no arrangement of this function
+      // that moves the Run's gold without the player being told.
+      const notices: RunBattleNotice[] = [];
+      if (!active || active.phase !== 'battle' || active.id !== run.id || !active.battleRuntime) return { game, notices };
       let transformed: GameState = game;
       let changed = false;
       // The en passant bounty is the PLAYER's alone: the same capture is available to the
@@ -1150,10 +1366,14 @@ function RunBattlefieldPanel({
       // the Run roster, so a Reservist or a promoted pawn earns it like any other unit.
       for (const event of events) {
         if (event.kind !== 'captured' || !event.enPassant) continue;
-        if (transformed.pieces.find((candidate) => candidate.id === event.by)?.side !== 'player') continue;
-        const paid = payRunEnPassantBounty(active);
-        if (paid === active) continue;
-        active = paid;
+        const capturer = transformed.pieces.find((candidate) => candidate.id === event.by);
+        if (capturer?.side !== 'player') continue;
+        // The bounty is seated on the square the capturing pawn now stands on, not the victim's
+        // vacated one — that is where the player is looking, and where the unit that earned it is.
+        const paid = payRunEnPassantBounty(active, { x: capturer.x, y: capturer.y });
+        if (!paid) continue;
+        active = paid.run;
+        notices.push(paid.notice);
         changed = true;
       }
       const observedDeadUnitIds = active.battleRuntime?.observedDeadUnitIds ?? [];
@@ -1188,12 +1408,17 @@ function RunBattlefieldPanel({
           startY: cell.y,
           ...(reservist.type === 'pawn' ? { pawnForward: facing } : {}),
         };
+        // Record and narrate the arrival BEFORE the unit is on the board, so a Reservist that
+        // the Run could not account for never appears unannounced either.
+        const deployed = markReservistDeployed(active, reservist.id, cell);
+        if (!deployed) continue;
+        active = deployed.run;
+        notices.push(deployed.notice);
         transformed = { ...transformed, pieces: [...transformed.pieces, spawned] };
-        active = markReservistDeployed(active, reservist.id);
         changed = true;
       }
       if (changed) useActiveRun.getState().replace(active);
-      return transformed;
+      return { game: transformed, notices };
   }, [baseLevel, run.id]);
 
   const presentation = useMemo<RunBattlePresentation>(() => ({
