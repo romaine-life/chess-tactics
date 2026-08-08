@@ -61,7 +61,7 @@ test('already-applied migration 36 remains the immutable drawable-media migratio
   );
 });
 
-test('the exact sparse numeric legacy history upgrades through migration 68', () => {
+test('the exact sparse numeric legacy history upgrades through migration 69', () => {
   const versions = migrationVersions();
   const appliedBeforeUpgrade = new Set(
     versions.filter((version) => version <= 27 || version === 36),
@@ -540,6 +540,17 @@ test('the exact sparse numeric legacy history upgrades through migration 68', ()
     /runSaveVersion'[\s\S]*29[\s\S]*deploymentMode[\s\S]*automatic[\s\S]*runSaveVersion'[\s\S]*'28'/i,
     'migration 68 must preserve version-28 behavior by naming automatic Deployment',
   );
+  const migration69 = inlineMigration(69);
+  assert.equal(
+    migration69.name,
+    'player-arranged formations and complete card shuffle',
+    'migration 69 must own the arranged-only placement and shuffled-catalog boundary',
+  );
+  assert.match(
+    migration69.sql,
+    /runSaveVersion'[^]*30[^]*deploymentMode'[^]*arranged[^]*sectioCardCursor'[^]*0[^]*runSaveVersion'[^]*'29'/i,
+    'migration 69 must arrange every Run and restart its changed market cursor',
+  );
   assert.equal(
     (serverSource.match(/never_saved: savedRevision === 0/g) || []).length,
     2,
@@ -576,7 +587,7 @@ test('the exact sparse numeric legacy history upgrades through migration 68', ()
   );
   assert.deepEqual(
     plan.pending.map((entry) => entry.version),
-    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68],
+    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69],
     'the bridge must fill the historical gap before applying every post-36 contract',
   );
   assert.throws(
@@ -814,6 +825,11 @@ test('required-schema readiness and repair enforce the migrations 37 through 68 
     contractReadiness,
     /unmigrated_active_run_version_28_count[\s\S]*version === 68[\s\S]*repair explicit Run deployment mode contract/,
     'readiness must route version-28 account Runs through migration 68',
+  );
+  assert.match(
+    contractReadiness,
+    /unmigrated_active_run_version_29_count[\s\S]*version === 69[\s\S]*repair player-arranged formation contract/,
+    'readiness must route version-29 account Runs through migration 69',
   );
   assert.match(
     contractReadiness,

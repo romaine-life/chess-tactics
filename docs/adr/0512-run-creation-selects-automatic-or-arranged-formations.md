@@ -2,6 +2,7 @@
 status: accepted
 date: 2026-08-07
 deciders: owner (Nelson) + Codex
+superseded_by: "[ADR-0515](0515-player-arranges-rotation-canonical-cards-from-a-complete-shuffle.md)"
 partially_supersedes:
   - "[ADR-0493](0493-generated-run-formations-fall-sideways-and-own-rarity.md)'s mandatory sideways automatic placement"
   - "[ADR-0509](0509-run-formations-summon-off-board-before-sliding.md)'s universal formation-arrival choreography"

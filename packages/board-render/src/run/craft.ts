@@ -115,7 +115,7 @@ export interface RunCraftSpec {
   warId: string | null;
   seed: number;
   ataraxiaTier: AtaraxiaTier;
-  /** Omitted specs retain the historical automatic deployment behavior. */
+  /** Retained in the craft shape as the single explicit placement contract. */
   deploymentMode?: RunDeploymentMode;
   goldTenths: number | null;
   army: RunCraftUnit[] | null;
@@ -226,9 +226,8 @@ function integer(raw: string, label: string, min: number, max: number): number {
 }
 
 function deploymentMode(raw: unknown): RunDeploymentMode {
-  if (raw === undefined || raw === null || raw === '') return 'automatic';
-  if (raw === 'automatic' || raw === 'arranged') return raw;
-  throw new RunCraftError(`craft deployment: "${String(raw)}" must be automatic or arranged.`);
+  if (raw === undefined || raw === null || raw === '' || raw === 'arranged') return 'arranged';
+  throw new RunCraftError(`craft deployment: "${String(raw)}" is retired; formations are player-arranged.`);
 }
 
 /** Read a craft spec out of a Run address. Returns null when the address asks for no crafting. */
@@ -867,9 +866,7 @@ export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDo
   if (spec.phase !== 'victory' && targetIndex >= battles) {
     throw new RunCraftError(`craft battle: ${war.name} has ${battles} Battle${battles === 1 ? '' : 's'}.`);
   }
-  const opening = createRun(war, spec.seed, spec.ataraxiaTier, {
-    deploymentMode: spec.deploymentMode ?? 'automatic',
-  });
+  const opening = createRun(war, spec.seed, spec.ataraxiaTier);
 
   // The Run's own first state. Bona Vacantia sits directly in front of Battle 1.
   if (spec.phase === 'bona-vacantia' && targetIndex === 0) {

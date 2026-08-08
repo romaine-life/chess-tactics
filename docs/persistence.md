@@ -112,6 +112,9 @@ schema readiness treats either surviving generation as a repairable contract vio
 Migration 68 advances version 28 to 29 by assigning **Automatic formations** to every existing
 Run. No current phase, deal, placement, Battle position, economy field, or card is reset. New Runs
 persist the preparation choice between Automatic formations and Arrange formations.
+Migration 69 advances version 29 to 30, makes player arrangement the sole Deployment contract,
+and restarts the hidden card cursor because the live catalog and pile algorithm changed. An
+in-progress Deployment returns to its deal boundary; an underway Battle keeps its exact board.
 Each account migration advances the Run's CAS revision, while the browser applies the same chain
 to its local document on first load. Saves older than version 16 remain unavailable because their
 retired gameplay state has no declared lossless transform. See
@@ -127,24 +130,23 @@ migration for account and browser storage. Retired content maps to a typed tombs
 replacement—for example, a removed card remains in the deck as **Removed card**—rather than
 invalidating the Run.
 
-RunSaveVersion 29 begins in Bona Vacantia when the opening Conflict offers a lipsanon, otherwise
+RunSaveVersion 30 begins in Bona Vacantia when the opening Conflict offers a lipsanon, otherwise
 in Battle 1's Deployment. Taking that opening lipsanon also enters Deployment; there is no opening
 Sectio. The Run carries the permanent King and two starting Pawns through the single starter-only
 His Grace card and retains eight starting gold. The first Sectio follows Battle 1.
 
 Every Run persists a non-negative `sectioCardCursor` into its seed-derived hidden card sequence.
-Each 180-card pile contains exactly 135 Common, 36 Uncommon, and 9 Rare cards. Per-rarity queues
-include all still-unseen identities before recycling; their selected quotas are shuffled together.
+Each pile is a complete seeded shuffle of all 272 live offer identities. Rarity remains persisted
+card metadata but does not currently influence selection.
 A normal Sectio consumes three positions and Quartermaster's Ledger consumes four. Reset Sectio
 retains the same visible offers and cursor rather than redrawing. Army, whole-card Expunctio,
 Adlectio, Reset Sectio, and Continue reuse the post-Battle model. Expunctio may remove one held card and its remaining units
 per visit for its printed value plus those units' standard value; His Grace is never eligible.
-Continue may perform no Adlectio. Every Run persists one immutable Deployment mode. Deployment
+Continue may perform no Adlectio. Player arrangement is the sole Deployment rule. Deployment
 always persists the exact dealt-card
 order, stable nullable seats, capacity decision, active card, revealed-card prefix, seat cursor,
-deal boundary, paused/play/full-deploy transport, committed placements, settlement boundary, and
-discard cursor. Automatic mode's one-gold in-Deployment reroll, or either mode's five-gold
-post-Battle position reroll, replaces those
+deal boundary, committed placements, and per-card formation plans. The five-gold
+post-Battle position reroll replaces those
 existing fields at the initial deal boundary with a new placement seed while retaining the dealt
 card ids and nullable seat order. Its registered unit-departure track is presentation-only: the
 atomic persisted replacement and gold debit occur after compositor completion, so animation

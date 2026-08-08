@@ -3016,14 +3016,14 @@ async function validateImmutableFormationAndLegacyDrawableRepairMigrations66And6
   }
 }
 
-async function validateRunDeploymentModeMigration68() {
+async function validatePlayerFormationMigrations68And69() {
   const { Client } = require('pg');
   const client = new Client({ connectionString: process.env.DATABASE_URL });
   await client.connect();
   try {
     await client.query('BEGIN');
-    await client.query('CREATE SCHEMA smoke_run_deployment_mode_migration_68');
-    await client.query('SET LOCAL search_path TO smoke_run_deployment_mode_migration_68');
+    await client.query('CREATE SCHEMA smoke_player_formation_migrations_68_69');
+    await client.query('SET LOCAL search_path TO smoke_player_formation_migrations_68_69');
     await client.query(`
       CREATE TABLE active_runs (
         owner_email text PRIMARY KEY, body jsonb NOT NULL, revision integer NOT NULL,
@@ -3032,13 +3032,14 @@ async function validateRunDeploymentModeMigration68() {
     `);
     const legacy = {
       runSaveVersion: 28,
-      phase: 'battle',
+      phase: 'deployment',
       goldTenths: 40,
       deployment: { stage: 'complete', placements: { king: '2,3' } },
     };
     const current = {
       ...legacy,
       runSaveVersion: 29,
+      phase: 'battle',
       deploymentMode: 'arranged',
     };
     await client.query(
@@ -3050,6 +3051,8 @@ async function validateRunDeploymentModeMigration68() {
 
     await client.query(inlineMigrationSql(68));
     await client.query(inlineMigrationSql(68));
+    await client.query(inlineMigrationSql(69));
+    await client.query(inlineMigrationSql(69));
     const rows = (await client.query(
       'SELECT owner_email, body, revision FROM active_runs ORDER BY owner_email',
     )).rows;
@@ -3057,15 +3060,18 @@ async function validateRunDeploymentModeMigration68() {
     const migrated = byOwner.get('legacy@example.com');
     const untouched = byOwner.get('current@example.com');
     if (
-      migrated?.body?.runSaveVersion !== 29
-      || migrated.body.deploymentMode !== 'automatic'
-      || migrated.body.phase !== 'battle'
-      || migrated.body.deployment?.placements?.king !== '2,3'
-      || Number(migrated.revision) !== 5
+      migrated?.body?.runSaveVersion !== 30
+      || migrated.body.deploymentMode !== 'arranged'
+      || migrated.body.phase !== 'deployment'
+      || migrated.body.deployment !== null
+      || migrated.body.sectioCardCursor !== 0
+      || Number(migrated.revision) !== 6
+      || untouched?.body?.runSaveVersion !== 30
       || untouched?.body?.deploymentMode !== 'arranged'
-      || Number(untouched?.revision) !== 9
+      || untouched.body.deployment?.placements?.king !== '2,3'
+      || Number(untouched?.revision) !== 10
     ) {
-      throw new Error(`Migration 68 did not name automatic Deployment losslessly: ${JSON.stringify(rows)}`);
+      throw new Error(`Migrations 68 and 69 did not install player arrangement safely: ${JSON.stringify(rows)}`);
     }
     await client.query('ROLLBACK');
   } catch (error) {
@@ -3241,7 +3247,7 @@ async function main() {
   await validateDerivedSectioPileRunMigration64();
   await validateQueenPawnCatalogRunMigration65();
   await validateImmutableFormationAndLegacyDrawableRepairMigrations66And67();
-  await validateRunDeploymentModeMigration68();
+  await validatePlayerFormationMigrations68And69();
   await validateRepairedEditorDocumentDiscardOperation62();
   await resetDb();
 

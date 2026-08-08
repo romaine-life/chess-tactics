@@ -45,7 +45,6 @@ import {
   resetSectio,
   RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS,
   RUN_BATTLE_RETRY_COST_TENTHS,
-  RUN_DEPLOYMENT_REROLL_COST_TENTHS,
   restartBattle,
   runBattleActivityId,
   performExpunctio,
@@ -57,31 +56,21 @@ import {
   type LipsanonId,
 } from '../run/model';
 import {
-  advanceAutomaticDeployment,
-  advanceDeploymentTransport,
   arrangedCardPlacementOptions,
   arrangedDeploymentCanBegin,
   arrangedDeploymentCards,
   beginArrangedBattle,
   beginDeploymentDeal,
   completeDeploymentDeal,
-  currentDeploymentUnit,
-  deploymentFormationEntryDelta,
   deploymentInteractionStage,
   deploymentOptions,
-  finishDeploymentCardDiscard,
-  finishDeploymentCardReveal,
-  finishDeploymentUnitSettlement,
   gameForRunDeployment,
   levelWithRunDeployment,
   normalReservistCell,
   placeArrangedDeploymentCard,
-  placeRevealedDeploymentUnit,
-  revealActiveDeploymentCard,
   resolveForcedDeploymentChoices,
   removeArrangedDeploymentCard,
   selectedDeploymentLayout,
-  setDeploymentTransport,
   type RunDeploymentInteractionStage,
   type RunFormationRotation,
 } from '../run/deployment';
@@ -357,9 +346,7 @@ function RunMetaControls({
                 data-testid="continue-run-sectio"
                 title={!canLeave && continueHint ? continueHint : undefined}
                 onClick={() => {
-                  const deployment = prepareDeployment(leaveSectio(run));
-                  const level = deployment.war.battles[deployment.battleIndex]?.level;
-                  replace(level ? advanceAutomaticDeployment(deployment, level) : deployment);
+                  replace(prepareDeployment(leaveSectio(run)));
                   onNavigate('primary');
                 }}
               >
@@ -386,148 +373,6 @@ function RunMetaControls({
             </div>
           </div>
         ) : null}
-      </section>
-    </>
-  );
-}
-
-function DeploymentControls({
-  run,
-  stage,
-  activeUnit,
-  dealProgress,
-  onDealProgress,
-  onSetTransport,
-  onNext,
-  onDealComplete,
-  onRevealComplete,
-  onDiscardComplete,
-  onReroll,
-  departing,
-}: {
-  run: RunDocument;
-  stage: RunDeploymentInteractionStage;
-  activeUnit: ReturnType<typeof currentDeploymentUnit>;
-  dealProgress: number;
-  onDealProgress: (count: number) => void;
-  onSetTransport: (transport: 'paused' | 'playing' | 'full-deploy') => void;
-  onNext: () => void;
-  onDealComplete: () => void;
-  onRevealComplete: () => void;
-  onDiscardComplete: () => void;
-  onReroll: () => void;
-  departing: boolean;
-}): ReactElement {
-  const { abandonDialog, abandoning, requestAbandon } = useRunAbandon(run);
-  const transport = run.deployment?.transport ?? 'paused';
-  const transportReady = stage !== 'dealing' && stage !== 'ready';
-  const nextReady = stage === 'await-deal' || stage === 'reveal-card' || stage === 'place';
-  return (
-    <>
-      {abandonDialog}
-      <section
-        className="run-meta-controls run-deployment-controls"
-        aria-label="Deployment controls"
-        aria-busy={departing || undefined}
-        inert={departing || undefined}
-      >
-        <RunDeploymentCardStack
-          run={run}
-          dealProgress={dealProgress}
-          onDealProgress={onDealProgress}
-          onDealComplete={onDealComplete}
-          onRevealComplete={onRevealComplete}
-          onDiscardComplete={onDiscardComplete}
-        />
-
-        <div className="skirmish-view-group run-deployment-control" data-testid="deployment-transport-control">
-          <div className="run-deployment-transport" role="group" aria-label="Deployment transport">
-            <ChromeButton
-              unit="inner-text-button"
-              className={chromeUnitClassNames('inner-text-button', 'app-header-button', transport === 'paused' && 'active')}
-              aria-label="Pause deployment"
-              title="Pause"
-              aria-pressed={transport === 'paused'}
-              disabled={departing || !transportReady || transport === 'paused'}
-              onClick={() => onSetTransport('paused')}
-            >
-              ⏸
-            </ChromeButton>
-            <ChromeButton
-              unit="inner-text-button"
-              data-testid="deployment-play"
-              className={chromeUnitClassNames('inner-text-button', 'app-header-button', transport === 'playing' && 'active')}
-              aria-label="Play deployment"
-              title="Play"
-              aria-pressed={transport === 'playing'}
-              disabled={departing || !transportReady}
-              onClick={() => onSetTransport('playing')}
-            >
-              ▶
-            </ChromeButton>
-            <ChromeButton
-              unit="inner-text-button"
-              data-testid="deployment-next"
-              className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
-              aria-label="Next deployment step"
-              title="Next step"
-              disabled={departing || !nextReady}
-              onClick={onNext}
-            >
-              ⏭
-            </ChromeButton>
-            <ChromeButton
-              unit="inner-text-button"
-              data-testid="deployment-full-deploy"
-              className={chromeUnitClassNames('inner-text-button', 'app-header-button', transport === 'full-deploy' && 'active')}
-              aria-pressed={transport === 'full-deploy'}
-              disabled={departing || !transportReady}
-              onClick={() => onSetTransport('full-deploy')}
-            >
-              Full deploy
-            </ChromeButton>
-          </div>
-        </div>
-
-        <div className="skirmish-view-group run-deployment-control">
-          <span className="skirmish-eyebrow">Formation</span>
-          <RunDeploymentRerollButton
-            testId="reroll-deployment"
-            costTenths={RUN_DEPLOYMENT_REROLL_COST_TENTHS}
-            canReroll={!departing && canRerollDeployment(run)}
-            onReroll={onReroll}
-            departing={departing}
-          />
-          <p className="skirmish-grid-hint">Redo every unit placement from the beginning.</p>
-        </div>
-
-        {activeUnit && stage === 'place' ? (
-          <div className="skirmish-view-group run-deployment-control" data-testid="deployment-active-unit">
-            <span className="skirmish-eyebrow">Deploying</span>
-            <strong>{runUnitRosterLabel(activeUnit)}</strong>
-            <p>The full card formation is placed in one step.</p>
-          </div>
-        ) : null}
-
-        {stage === 'settling' && activeUnit ? (
-          <div className="skirmish-view-group run-deployment-control">
-            <span className="skirmish-eyebrow">Settling</span>
-            <strong>{runUnitRosterLabel(activeUnit)}</strong>
-          </div>
-        ) : null}
-
-        <div className="skirmish-view-group run-meta-abandon">
-          <span className="skirmish-eyebrow">Run</span>
-          <ChromeButton
-            unit="inner-text-button"
-            className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'danger')}
-            data-testid="abandon-run"
-            disabled={abandoning || departing}
-            onClick={() => { void requestAbandon(); }}
-          >
-            {abandoning ? 'Abandoning…' : 'Abandon Run'}
-          </ChromeButton>
-        </div>
       </section>
     </>
   );
@@ -668,11 +513,9 @@ function ArrangedDeploymentControls({
 function useRunDeploymentPresentation({
   run,
   departureActive,
-  requestReroll,
 }: {
   run: RunDocument;
   departureActive: boolean;
-  requestReroll: () => boolean;
 }): RunDeploymentPresentation | null {
   const replace = useActiveRun((state) => state.replace);
   const level = run.war.battles[run.battleIndex].level;
@@ -682,12 +525,10 @@ function useRunDeploymentPresentation({
   );
   const options = useMemo(() => deploymentOptions(prepared, level), [level, prepared]);
   const stage = deploymentInteractionStage(prepared, options);
-  const activeUnit = currentDeploymentUnit(prepared);
   const [dealProgress, setDealProgress] = useState(0);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [arrangementRotation, setArrangementRotation] = useState<RunFormationRotation>(0);
   const [hoveredArrangementAnchor, setHoveredArrangementAnchor] = useState<string | null>(null);
-  const advanceOneAfterRevealRef = useRef(false);
   const arrangementCards = useMemo(() => arrangedDeploymentCards(prepared), [prepared]);
   const selectedArrangementCard = arrangementCards.find(({ card }) => card.id === selectedCardId) ?? null;
   const arrangementPlacementOptions = useMemo(
@@ -731,14 +572,6 @@ function useRunDeploymentPresentation({
     () => gameForRunDeployment(prepared, level, layout, true),
     [layout, level, prepared],
   );
-  const unitArrivalStartDelta = useMemo(() => {
-    if (prepared.deploymentMode === 'arranged') return { x: 0, y: 0 };
-    const settlingUnitIds = new Set(prepared.deployment?.settlingUnitIds ?? []);
-    return deploymentFormationEntryDelta(
-      level,
-      deploymentGame.pieces.filter((piece) => settlingUnitIds.has(piece.id)),
-    );
-  }, [deploymentGame.pieces, level, prepared.deployment?.settlingUnitIds, prepared.deploymentMode]);
   const deploymentSurfaceState = useMemo<SkirmishBoardSurfaceState>(() => ({
     game: deploymentGame,
     seed: prepared.deployment?.seed ?? prepared.seed,
@@ -771,31 +604,10 @@ function useRunDeploymentPresentation({
     setHoveredArrangementAnchor(null);
   }, [arrangementRotation, availableArrangementRotations]);
 
-  useEffect(() => {
-    if (departureActive) return;
-    if (prepared.phase !== 'deployment') return;
-    if (prepared.deploymentMode === 'arranged') return;
-    if (prepared.deployment?.stage === 'card') {
-      if (prepared.deployment.transport === 'full-deploy') {
-        replace(advanceDeploymentTransport(prepared, level));
-      } else if (prepared.deployment.transport === 'playing') {
-        replace(revealActiveDeploymentCard(prepared));
-      }
-      return;
-    }
-    if (
-      stage === 'place'
-      && (prepared.deployment?.transport === 'playing' || prepared.deployment?.transport === 'full-deploy')
-    ) {
-      replace(advanceDeploymentTransport(prepared, level));
-    }
-  }, [departureActive, level, prepared, replace, stage]);
-
   const beginDeal = useCallback(() => {
     if (departureActive) return;
     const latest = useActiveRun.getState().run;
     if (latest?.id === prepared.id && latest.phase === 'deployment') {
-      advanceOneAfterRevealRef.current = false;
       replace(beginDeploymentDeal(latest));
     }
   }, [departureActive, prepared.id, replace]);
@@ -803,89 +615,9 @@ function useRunDeploymentPresentation({
     if (departureActive) return;
     const latest = useActiveRun.getState().run;
     if (latest?.id === prepared.id && latest.phase === 'deployment') {
-      const completed = completeDeploymentDeal(latest, level);
-      if (completed.deploymentMode === 'arranged') {
-        replace(completed);
-      } else if (advanceOneAfterRevealRef.current) {
-        replace(revealActiveDeploymentCard(completed));
-      } else if (completed.deployment?.transport === 'full-deploy') {
-        replace(advanceDeploymentTransport(completed, level));
-      } else {
-        replace(completed);
-      }
+      replace(completeDeploymentDeal(latest, level));
     }
   }, [departureActive, level, prepared.id, replace]);
-  const setTransport = useCallback((transport: 'paused' | 'playing' | 'full-deploy') => {
-    if (departureActive) return;
-    const latest = useActiveRun.getState().run;
-    if (latest?.id === prepared.id && latest.phase === 'deployment') {
-      advanceOneAfterRevealRef.current = false;
-      if (latest.deployment?.stage === 'awaiting-deal') {
-        replace(beginDeploymentDeal(latest, transport));
-        return;
-      }
-      const requested = setDeploymentTransport(latest, transport);
-      replace(transport === 'full-deploy'
-        ? advanceDeploymentTransport(requested, level)
-        : requested);
-    }
-  }, [departureActive, level, prepared.id, replace]);
-  const advanceOne = useCallback(() => {
-    if (departureActive) return;
-    const latest = useActiveRun.getState().run;
-    if (latest?.id !== prepared.id || latest.phase !== 'deployment') return;
-    const latestStage = deploymentInteractionStage(latest);
-    if (latestStage === 'await-deal') {
-      advanceOneAfterRevealRef.current = true;
-      replace(beginDeploymentDeal(latest));
-      return;
-    }
-    if (latestStage === 'reveal-card') {
-      advanceOneAfterRevealRef.current = true;
-      replace(revealActiveDeploymentCard(latest));
-      return;
-    }
-    const paused = setDeploymentTransport(latest, 'paused');
-    if (deploymentInteractionStage(paused) === 'place') {
-      replace(placeRevealedDeploymentUnit(paused, level));
-    } else if (paused !== latest) {
-      replace(paused);
-    }
-  }, [departureActive, level, prepared.id, replace]);
-  const finishReveal = useCallback(() => {
-    if (departureActive) return;
-    const latest = useActiveRun.getState().run;
-    if (latest?.id === prepared.id && latest.phase === 'deployment') {
-      let revealed = finishDeploymentCardReveal(latest);
-      if (advanceOneAfterRevealRef.current) {
-        advanceOneAfterRevealRef.current = false;
-        if (deploymentInteractionStage(revealed) === 'place') {
-          revealed = placeRevealedDeploymentUnit(revealed, level);
-        }
-      }
-      replace(revealed);
-    }
-  }, [departureActive, level, prepared.id, replace]);
-  const finishDiscard = useCallback(() => {
-    if (departureActive) return;
-    const latest = useActiveRun.getState().run;
-    if (latest?.id === prepared.id && latest.phase === 'deployment') {
-      replace(finishDeploymentCardDiscard(latest));
-    }
-  }, [departureActive, prepared.id, replace]);
-  const reportArrivals = useCallback((unitIds: readonly string[]) => {
-    if (departureActive) return;
-    const latest = useActiveRun.getState().run;
-    const settlingUnitIds = latest?.id === prepared.id && latest.phase === 'deployment'
-      ? latest.deployment?.settlingUnitIds ?? []
-      : [];
-    if (settlingUnitIds.length > 0 && settlingUnitIds.every((unitId) => !unitIds.includes(unitId))) {
-      replace(finishDeploymentUnitSettlement(latest!, level));
-    }
-  }, [departureActive, level, prepared.id, replace]);
-  const reroll = useCallback(() => {
-    requestReroll();
-  }, [requestReroll]);
   const selectArrangementCard = useCallback((cardId: string) => {
     setSelectedCardId(cardId);
     setArrangementRotation(0);
@@ -913,11 +645,11 @@ function useRunDeploymentPresentation({
     screenClassName: 'run-deployment-screen',
     boardClassName: 'run-deployment-board',
     boardAriaLabel: `${level.name} deployment battlefield`,
-    unitArrivalTrack: prepared.deploymentMode === 'arranged' ? 'drop' : 'slide-from-right',
-    unitArrivalStartDelta,
-    onArrivingUnitIdsChange: reportArrivals,
+    unitArrivalTrack: 'drop',
+    unitArrivalStartDelta: { x: 0, y: 0 },
+    onArrivingUnitIdsChange: () => undefined,
     renderCellOverlay: ({ cell, visualFootprintStyle }) => {
-      if (prepared.deploymentMode !== 'arranged' || stage !== 'arrange' || !selectedArrangementCard?.admitted) {
+      if (stage !== 'arrange' || !selectedArrangementCard?.admitted) {
         return null;
       }
       const cellKey = `${cell.x},${cell.y}`;
@@ -951,7 +683,7 @@ function useRunDeploymentPresentation({
         </button>
       );
     },
-    controlsContent: prepared.deploymentMode === 'arranged' ? (
+    controlsContent: (
       <ArrangedDeploymentControls
         run={prepared}
         stage={stage}
@@ -967,21 +699,6 @@ function useRunDeploymentPresentation({
         onDealComplete={finishDeal}
         departing={departureActive}
       />
-    ) : (
-      <DeploymentControls
-          run={prepared}
-          stage={stage}
-          activeUnit={activeUnit}
-          dealProgress={dealProgress}
-          onDealProgress={setDealProgress}
-          onSetTransport={setTransport}
-          onNext={advanceOne}
-          onDealComplete={finishDeal}
-          onRevealComplete={finishReveal}
-          onDiscardComplete={finishDiscard}
-          onReroll={reroll}
-          departing={departureActive}
-        />
     ),
     boardOverlay: (
       <>
@@ -1385,7 +1102,6 @@ function RunBattlefieldPanel({
   const deploymentPresentation = useRunDeploymentPresentation({
     run,
     departureActive: Boolean(unitDeparture),
-    requestReroll: requestDeploymentReroll,
   });
   const baseLevel = run.war.battles[run.battleIndex].level;
   // Battle-runtime writes (including Restart) do not change deployment. Keep the

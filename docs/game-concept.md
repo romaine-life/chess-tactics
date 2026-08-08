@@ -95,20 +95,20 @@ these.
   outside the active ruleset. Existing accepted composition illustrations, names, and
   flavor may be reused while dedicated formation identities are authored; the diagram
   is always the rules authority (ADR-0497).
-- The active offer deck contains a deterministic 720-card generated core plus six
-  retained authored exceptions. The core assigns Pawn, Knight, Bishop, Rook, and Queen
+- The generator evaluates a deterministic 720-card labeled core plus six retained authored
+  exceptions, then collapses translation and quarter-turn-equivalent identities into a
+  **272-card live offer deck**. The core assigns Pawn, Knight, Bishop, Rook, and Queen
   rosters worth at most nine material to every edge-connected one-to-four-cell footprint
   in a two-row, four-column band, with Queen + Pawn admitted as the one ten-material
-  roster so it receives all six connected arrangements. Horizontal translation is
-  normalized, front/back is preserved, and left/right mirrors remain distinct. The retained
+  roster. Translation and rotation are normalized because the player can freely rotate cards;
+  reflections remain distinct. The retained
   exceptions preserve useful existing triangles, a diagonal Bishop pair, and the vertical
   Rook pair outside that grammar. His Grace remains the separate starter.
 - Rarity describes desirability rather than material price. Queens, two Rooks, three
   non-Pawns, and every formation containing Bishops on opposite-colored squares are
   Rare. A Rook or two non-Pawns is ordinarily Uncommon; same-color Bishop pairs remain
-  Common. Each Run derives a hidden 180-card pile containing exactly 135 Common, 36
-  Uncommon, and 9 Rare cards. Per-rarity queues consume every unseen identity before
-  recycling, then the selected cards are shuffled together without smoothing streaks.
+  Common. Rarity remains visible card metadata, but it does not currently influence dealing.
+  Each hidden pile is one complete seeded shuffle of the 272 live offer identities.
 - A Sectio reveals three seeded formation-card offers, or four while
   Quartermaster's Ledger is held. Each offer costs exactly its printed material
   value. Adlectio adds the card and its units without rolling, assigning, or
@@ -128,14 +128,8 @@ these.
   face-down Chartulary in the center. Deal order is seeded per combat, with His
   Grace first and up to three cards in the first Conflict; later Conflicts add one
   card. The undrawn remainder returns to the persistent Chartulary mark.
-- Run preparation selects **Arrange formations** or **Automatic formations** and persists
-  that rule for the complete Run. Automatic mode plays each card as one atomic authored
-  formation: its front and back rows enter the two-row Deployment band from the right and
-  advance left until the next translation would collide. Deployment persists the complete
-  hidden destination plan before the visible arrival. Each unit first summons onto its
-  off-board formation seat; once the final unit lands, the complete rigid shape begins its
-  sideways slide.
-- Arrange mode turns the dealt cards face up together. The player may select them in any
+- Player arrangement is the only Deployment rule. Completing the deal turns the cards face up
+  together. The player may select them in any
   order, quarter-turn a complete formation, place it anywhere it legally fits in the same
   two-row band, and remove or replace it before Battle. His Grace's King must be placed;
   any other admitted card left out sits out that Battle. The deck and deal remain random,
@@ -144,10 +138,8 @@ these.
   isometric battlefield, using the same projected axes and north-facing unit art as
   combat. Its complete two-row footprint is solid while one ring of neighboring
   diamonds fades away; empty front or back seats remain visible rules information.
-- In Automatic mode, if no legal translation fits the whole shape, Deployment makes a deterministic
-  seeded best effort by placing individual units on legal squares. Board capacity
-  may cut off units only after those whole-shape and fallback attempts. Blocked
-  units remain recorded for Reservist mechanics. This recovery rule is provisional
+- Board capacity admits complete cards in deal order and never splits one. A non-royal admitted
+  card may be left unplaced for that Battle; blocked units remain recorded for Reservist mechanics.
   and favors completing a Run over adding a new placement dialogue.
 - Deployment mode, Deal, reveal, card cursor, transport, complete formation plans, committed
   placements, settling units, capacity result, discards, and blocked units persist

@@ -421,21 +421,15 @@ function currentLayout(run: RunDocument, level: Level): RunDeploymentLayout {
 export function resolveDeploymentCapacity(run: RunDocument, level: Level): RunDocument {
   if (run.phase !== 'deployment' || !run.deployment || run.deployment.capacityResolved) return run;
   const capacity = playerDeploymentCells(level).length;
-  const orderedUnitIds = deploymentOrderedUnitIds(run);
-  const deployingUnitIds = run.deploymentMode === 'arranged'
-    ? (() => {
-        let remaining = capacity;
-        const admitted: string[] = [];
-        for (const card of dealtCards(run)) {
-          const unitIds = runCardUnitIds(card)
-            .filter((id) => run.army.some((unit) => unit.id === id));
-          if (unitIds.length > remaining) break;
-          admitted.push(...unitIds);
-          remaining -= unitIds.length;
-        }
-        return admitted;
-      })()
-    : orderedUnitIds.slice(0, capacity);
+  let remaining = capacity;
+  const deployingUnitIds: string[] = [];
+  for (const card of dealtCards(run)) {
+    const unitIds = runCardUnitIds(card)
+      .filter((id) => run.army.some((unit) => unit.id === id));
+    if (unitIds.length > remaining) break;
+    deployingUnitIds.push(...unitIds);
+    remaining -= unitIds.length;
+  }
   const unavailableUnitIds = run.army.map((unit) => unit.id).filter((id) => !deployingUnitIds.includes(id));
   return setDeploymentChoices(run, {
     deployingUnitIds,
@@ -501,13 +495,11 @@ export function beginDeploymentDeal(
 export function completeDeploymentDeal(run: RunDocument, level: Level): RunDocument {
   const resolved = resolveDeploymentCapacity(run, level);
   if (resolved.phase !== 'deployment' || resolved.deployment?.stage !== 'dealing') return resolved;
-  return setDeploymentChoices(resolved, resolved.deploymentMode === 'arranged'
-    ? {
-        stage: 'arranging',
-        revealedCardIds: [...resolved.deployment.dealtCardIds],
-        transport: 'paused',
-      }
-    : { stage: 'card' });
+  return setDeploymentChoices(resolved, {
+    stage: 'arranging',
+    revealedCardIds: [...resolved.deployment.dealtCardIds],
+    transport: 'paused',
+  });
 }
 
 function rotatedFormation(
@@ -535,7 +527,6 @@ export function arrangedCardPlacementOptions(
 ): RunArrangedPlacementOption[] {
   if (
     run.phase !== 'deployment'
-    || run.deploymentMode !== 'arranged'
     || run.deployment?.stage !== 'arranging'
   ) return [];
   const card = dealtCards(run).find((candidate) => candidate.id === cardId);
@@ -611,7 +602,6 @@ export function placeArrangedDeploymentCard(
 export function removeArrangedDeploymentCard(run: RunDocument, cardId: string): RunDocument {
   if (
     run.phase !== 'deployment'
-    || run.deploymentMode !== 'arranged'
     || run.deployment?.stage !== 'arranging'
   ) return run;
   const card = dealtCards(run).find((candidate) => candidate.id === cardId);
@@ -627,7 +617,6 @@ export function removeArrangedDeploymentCard(run: RunDocument, cardId: string): 
 export function arrangedDeploymentCanBegin(run: RunDocument): boolean {
   if (
     run.phase !== 'deployment'
-    || run.deploymentMode !== 'arranged'
     || run.deployment?.stage !== 'arranging'
   ) return false;
   const king = run.army.find((unit) => unit.type === 'king');

@@ -45,7 +45,7 @@ import {
 import { drawableAssets } from '@chess-tactics/board-render';
 import { useWars, runEligibleOfficialWars } from '../war/store';
 import { useActiveRun } from '../run/store';
-import { ATARAXIA_BY_TIER, createRun, formatGold, snapshotWar, type AtaraxiaTier, type RunDeploymentMode } from '../run/model';
+import { ATARAXIA_BY_TIER, createRun, formatGold, snapshotWar, type AtaraxiaTier } from '../run/model';
 import {
   RUN_PROGRESSION_EVENT,
   highestUnlockedAtaraxiaTier,
@@ -55,7 +55,6 @@ import { InnerChromeBox } from './shared/ChromeBox';
 import { loadMatch, type PersistedMatch } from '../game/matchPersistence';
 import { continueInventory, type ContinueInventory } from './playContinue';
 import { AtaraxiaSelector } from './AtaraxiaSelector';
-import { RunDeploymentModeSelector } from './RunDeploymentModeSelector';
 import { ActionList } from './shared/ActionList';
 import { SettingsRow, SettingsSection } from './shared/SettingsControls';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
@@ -220,7 +219,6 @@ function RunPanel({
   const keepRunButtonRef = useRef<HTMLButtonElement>(null);
   const [progression, setProgression] = useState(readRunProgression);
   const [ataraxiaTier, setAtaraxiaTier] = useState<AtaraxiaTier>(0);
-  const [deploymentMode, setDeploymentMode] = useState<RunDeploymentMode>('arranged');
   const eligible = useMemo(() => runEligibleOfficialWars(wars), [wars]);
   const highestUnlockedTier = highestUnlockedAtaraxiaTier(progression);
   // An adoption conflict does not gate a new Run: starting one discards both candidates, so it
@@ -265,7 +263,7 @@ function RunPanel({
       globalThis.crypto?.getRandomValues?.(seedArray);
       const seed = seedArray[0] || (Date.now() >>> 0);
       const war = [...eligible].sort((a, b) => a.id.localeCompare(b.id))[seed % eligible.length];
-      replace(createRun(snapshotWar(war, levels), seed, ataraxiaTier, { deploymentMode }));
+      replace(createRun(snapshotWar(war, levels), seed, ataraxiaTier));
       navigationAccepted = navigateApp('/run');
     } finally {
       // A successful scene replacement retains this component as the outgoing layer
@@ -350,7 +348,7 @@ function RunPanel({
               >
                 <div className="settings-row-copy">
                   <h4>Start New Run</h4>
-                  <p>Choose Ataraxia and Deployment</p>
+                  <p>Choose Ataraxia</p>
                 </div>
               </ChromeNavButton>
             </div>
@@ -373,7 +371,7 @@ function RunPanel({
                   <div><dt>Army</dt><dd>{presentedRun.army.length} units</dd></div>
                   <div><dt>Gold</dt><dd>{formatGold(presentedRun.goldTenths)}</dd></div>
                   <div><dt>Ataraxia</dt><dd>{ATARAXIA_BY_TIER[presentedRun.ataraxiaTier].label}</dd></div>
-                  <div><dt>Deployment</dt><dd>{presentedRun.deploymentMode === 'arranged' ? 'Arrange formations' : 'Automatic formations'}</dd></div>
+                  <div><dt>Deployment</dt><dd>Arrange formations</dd></div>
                 </dl>
               </InnerChromeBox>
             </div>
@@ -391,11 +389,6 @@ function RunPanel({
                 value={ataraxiaTier}
                 highestUnlockedTier={highestUnlockedTier}
                 onChange={(tier) => { setArmed(false); setAtaraxiaTier(tier); }}
-                fillSurface={CHROME_LEAF_FILL_SURFACE}
-              />
-              <RunDeploymentModeSelector
-                value={deploymentMode}
-                onChange={(mode) => { setArmed(false); setDeploymentMode(mode); }}
                 fillSurface={CHROME_LEAF_FILL_SURFACE}
               />
             </div>

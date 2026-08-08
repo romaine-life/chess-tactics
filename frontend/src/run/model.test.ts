@@ -4,7 +4,6 @@ import {
   CURRENT_RUN_SAVE_VERSION,
   RUN_GENERATED_CARD_COUNT,
   RUN_OFFER_CARD_COUNT,
-  RUN_SECTIO_CARD_PILE_RARITY_COUNT,
   RUN_SECTIO_CARD_PILE_SIZE,
   RUN_CARD_BY_ID,
   RUN_CARD_CATALOG,
@@ -57,12 +56,12 @@ describe('formation card catalog', () => {
   it('contains the complete generated core, six authored exceptions, and the starter', () => {
     expect(RUN_GENERATED_CARD_COUNT).toBe(720);
     expect(RUN_CARD_DECK).toHaveLength(RUN_OFFER_CARD_COUNT);
-    expect(RUN_OFFER_CARD_COUNT).toBe(726);
+    expect(RUN_OFFER_CARD_COUNT).toBe(272);
     expect(RUN_CARD_DECK.every((card) => card.pieces.length >= 1 && card.pieces.length <= 4)).toBe(true);
-    expect(RUN_CARD_CATALOG).toHaveLength(727);
+    expect(RUN_CARD_CATALOG).toHaveLength(273);
   });
 
-  it('includes every connected two-cell Queen and Pawn arrangement', () => {
+  it('collapses quarter-turn-equivalent Queen and Pawn arrangements', () => {
     const queenPawnCards = RUN_CARD_DECK.filter((card) => (
       card.pieces.length === 2
       && card.pieces.includes('queen')
@@ -73,14 +72,7 @@ describe('formation card catalog', () => {
       .sort()
       .join('|'))
       .sort();
-    expect(signatures).toEqual([
-      'pawn@0,0|queen@0,1',
-      'pawn@0,0|queen@1,0',
-      'pawn@0,1|queen@1,1',
-      'pawn@0,1|queen@0,0',
-      'pawn@1,0|queen@0,0',
-      'pawn@1,1|queen@0,1',
-    ].sort());
+    expect(signatures).toEqual(['pawn@0,0|queen@0,1']);
     expect(queenPawnCards.every((card) => card.rarity === 'rare')).toBe(true);
     expect(queenPawnCards.every((card) => card.artId === 'q')).toBe(true);
   });
@@ -130,7 +122,7 @@ describe('formation card catalog', () => {
     expect(Object.fromEntries(['common', 'uncommon', 'rare'].map((rarity) => [
       rarity,
       RUN_CARD_DECK.filter((card) => card.rarity === rarity).length,
-    ]))).toEqual({ common: 197, uncommon: 415, rare: 114 });
+    ]))).toEqual({ common: 79, uncommon: 151, rare: 42 });
   });
 
   it('keeps His Grace on one protected three-unit starter card', () => {
@@ -163,11 +155,11 @@ describe('plain Run creation and acquisition', () => {
     expect(run.phase).toBe('deployment');
     expect(run.sectio).toBeNull();
     expect(run.sectioCardCursor).toBe(0);
-    expect(run.deploymentMode).toBe('automatic');
+    expect(run.deploymentMode).toBe('arranged');
   });
 
-  it('persists the deployment rule selected at Run creation', () => {
-    const run = createRun(war(), 19, 0, { deploymentMode: 'arranged' });
+  it('uses player arrangement for every Run', () => {
+    const run = createRun(war(), 19);
     expect(run.deploymentMode).toBe('arranged');
   });
 
@@ -236,46 +228,19 @@ describe('plain Run creation and acquisition', () => {
 });
 
 describe('derived Sectio card pile', () => {
-  it('contains exactly 135 common, 36 uncommon, and 9 rare cards', () => {
+  it('contains every live offer identity exactly once', () => {
     const pile = sectioCardPile(101, 0);
     expect(pile).toHaveLength(RUN_SECTIO_CARD_PILE_SIZE);
-    expect(Object.fromEntries(['common', 'uncommon', 'rare'].map((rarity) => [
-      rarity,
-      pile.filter((card) => card.rarity === rarity).length,
-    ]))).toEqual(RUN_SECTIO_CARD_PILE_RARITY_COUNT);
+    expect(new Set(pile.map((card) => card.id)).size).toBe(RUN_CARD_DECK.length);
+    expect(new Set(pile.map((card) => card.id))).toEqual(new Set(RUN_CARD_DECK.map((card) => card.id)));
   });
 
-  it('is deterministic and keeps every possible four-card row identity-distinct across a seam', () => {
+  it('is deterministic and independently shuffles each exhausted pile', () => {
     const first = sectioCardPile(211, 0);
     const second = sectioCardPile(211, 1);
     expect(sectioCardPile(211, 0).map((card) => card.id)).toEqual(first.map((card) => card.id));
-    const sequence = [...first, ...second];
-    for (let index = 0; index <= sequence.length - 4; index += 1) {
-      expect(new Set(sequence.slice(index, index + 4).map((card) => card.id)).size).toBe(4);
-    }
-  });
-
-  it('reorders a late recycled pile when a greedy shuffle would strand a duplicate', () => {
-    const previous = sectioCardPile(2, 9);
-    const recycled = sectioCardPile(2, 10);
-    const sequence = [...previous.slice(-3), ...recycled];
-    for (let index = 0; index <= sequence.length - 4; index += 1) {
-      expect(new Set(sequence.slice(index, index + 4).map((card) => card.id)).size).toBe(4);
-    }
-  });
-
-  it('exhausts each rarity queue before recycling that rarity', () => {
-    for (const rarity of ['common', 'uncommon', 'rare'] as const) {
-      const quota = RUN_SECTIO_CARD_PILE_RARITY_COUNT[rarity];
-      const tierCount = RUN_CARD_DECK.filter((card) => card.rarity === rarity).length;
-      const pilesNeeded = Math.ceil(tierCount / quota);
-      const seen = new Set<string>();
-      for (let pileIndex = 0; pileIndex < pilesNeeded; pileIndex += 1) {
-        const cards = sectioCardPile(307, pileIndex).filter((card) => card.rarity === rarity);
-        for (const card of cards) seen.add(card.id);
-      }
-      expect(seen.size).toBe(tierCount);
-    }
+    expect(second.map((card) => card.id)).not.toEqual(first.map((card) => card.id));
+    expect(new Set(second.map((card) => card.id))).toEqual(new Set(first.map((card) => card.id)));
   });
 });
 
@@ -431,12 +396,12 @@ describe('ability retirement migration', () => {
     expect(migrated.sectio).not.toHaveProperty('alienatedUnits');
   });
 
-  it('names automatic deployment when migrating a version-28 Run', () => {
-    const current = createRun(war(), 89, 0, { deploymentMode: 'arranged' });
+  it('migrates a version-28 Run through automatic into player arrangement', () => {
+    const current = createRun(war(), 89);
     const { deploymentMode: _missingMode, ...legacy } = current;
     const migrated = migrateRunSaveDocument({ ...legacy, runSaveVersion: 28 });
 
     expect(migrated.runSaveVersion).toBe(CURRENT_RUN_SAVE_VERSION);
-    expect(migrated.deploymentMode).toBe('automatic');
+    expect(migrated.deploymentMode).toBe('arranged');
   });
 });
