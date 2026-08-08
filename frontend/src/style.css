@@ -19620,6 +19620,17 @@ button.tileset-relationship-cell {
   pointer-events: none;
 }
 
+/* A covered pile conceals its back completely. The back is generated on a flat
+   near-black backdrop it still paints, so its opaque canvas runs to all four
+   corners while every face frame is die-cut to the shared painted card box
+   (paintBounds 26,42 1009x1402 of 1060x1484). Left visible, that backdrop reads
+   as a black edge around the offer. Concealing rather than unmounting keeps the
+   seat and the decoded pixels, so Adlectio reveals the back without a reflow or
+   a flash. */
+.run-card-pile.is-covered > .run-card-pile-back {
+  visibility: hidden;
+}
+
 .run-card-pile-back > .run-card-back {
   inline-size: 100%;
 }
