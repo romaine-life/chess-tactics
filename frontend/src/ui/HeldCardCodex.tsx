@@ -15,7 +15,7 @@ import {
 } from '../run/model';
 import {
   cardMatchesFilters,
-  cardsByGoldValue,
+  cardsByTier,
   CardGalleryFilters,
   ReferenceSectionFrame,
   type CardGoldFilter,
@@ -25,7 +25,11 @@ import {
 import { KitScroll } from './KitScroll';
 import { RunCard } from './RunCard';
 import { InnerChromeBox } from './shared/ChromeBox';
-import { RunCardGoldTierDivider, useRunCardGoldTierDividerSource } from './shared/RunCardGoldTierDivider';
+import {
+  RunCardGoldTierDivider,
+  runCardTierLabel,
+  useRunCardGoldTierDividerSource,
+} from './shared/RunCardGoldTierDivider';
 import { ChromeButton } from './shared/ChromeButton';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 
@@ -71,7 +75,7 @@ export function HeldCardCodex({
     )),
     [all, dealt, goldFilter, rarityFilter, thisCombatAvailable, thisCombatOnly, unitFilter],
   );
-  const groups = useMemo(() => cardsByGoldValue(visible, (held) => held.core), [visible]);
+  const groups = useMemo(() => cardsByTier(visible, (held) => held.core), [visible]);
   return (
     <ReferenceSectionFrame
       chromeConsumer="strategikon-chartulary"
@@ -105,10 +109,10 @@ export function HeldCardCodex({
           <div
             className="enchiridion-card-gallery-browser"
             role="list"
-            aria-label="Held cards by gold value"
+            aria-label="Held cards by tier"
           >
             {groups.map(([value, cards]) => (
-              <section className="enchiridion-card-gallery-group" key={value} aria-label={`${value} gold cards`}>
+              <section className="enchiridion-card-gallery-group" key={value} aria-label={runCardTierLabel(value)}>
                 <h3 className="enchiridion-card-gallery-heading">
                   <RunCardGoldTierDivider value={value} source={goldTierDividerSource} />
                 </h3>

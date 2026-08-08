@@ -726,6 +726,27 @@ export function runCardDefinition(coreId: string): RunCardDefinition | undefined
     ?? RUN_STARTER_CARD_BY_ID[coreId as RunStarterCardId];
 }
 
+/** True for a card the Run begins holding rather than one Sectio can offer. */
+export function isRunStarterCard(card: Pick<RunCardDefinition, 'id'>): boolean {
+  return Boolean(RUN_STARTER_CARD_BY_ID[card.id as RunStarterCardId]);
+}
+
+/**
+ * How a card gallery bands its cards. A starter card is not for sale, so banding it by the
+ * gold it is nominally worth files it beside cards a player could buy for that price and
+ * implies a purchase that cannot happen. It gets its own band, ahead of every priced one.
+ */
+export type RunCardTier = number | 'starter';
+
+/** Starter first, then ascending price. */
+export function runCardTierRank(tier: RunCardTier): number {
+  return tier === 'starter' ? -1 : tier;
+}
+
+export function runCardTierOf(card: Pick<RunCardDefinition, 'id' | 'value'>): RunCardTier {
+  return isRunStarterCard(card) ? 'starter' : card.value;
+}
+
 export function mixSeed(seed: number, label: string, index = 0): number {
   let value = (seed ^ Math.imul(index + 1, 0x9e3779b1)) >>> 0;
   for (let cursor = 0; cursor < label.length; cursor += 1) {

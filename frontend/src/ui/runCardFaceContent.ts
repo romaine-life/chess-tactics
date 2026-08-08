@@ -1,6 +1,7 @@
 import { runCardArtSlot, runCardFlavor, runCardName } from '../run/cardNames';
 import {
   PIECE_VALUE,
+  isRunStarterCard,
   runCardRarity,
   type AdlectablePieceType,
   type RunArmyPieceType,
@@ -113,7 +114,8 @@ export function runCardFaceContent(
     name: runCardName(identity),
     rarity: identity.rarity,
     cost: offer?.cost ?? card.value,
-    showsCost: identity.id !== 'his-grace',
+    // A starter card carries no price, on its face or on the band that heads it.
+    showsCost: !isRunStarterCard(identity),
     typeLine: RUN_CARD_TYPE_LINE,
     grants: runCardGrants(card, options),
     formation: runCardFormation(card, options),
