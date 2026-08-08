@@ -251,6 +251,7 @@ export function RunDeploymentCardStack({
     const easeInOut = style.getPropertyValue('--ds-ease-in-out').trim() || easing;
     const animations: Animation[] = [];
     let cancelled = false;
+    let landed = 0;
     onDealProgress(0);
 
     // Four acts, in this order: the hand is dealt face down, the deck clears, the hand turns
@@ -305,14 +306,18 @@ export function RunDeploymentCardStack({
         fill: 'both',
       });
       if (turn) animations.push(turn);
-      // Act four: after the beat, the whole hand gathers into the Controls seat together.
+      // Act four: after the beat, the hand gathers into the Controls seat from the far end IN.
+      // Collecting left-to-right sent the head of the hand away first and landed it under
+      // everything, so the pile assembled in the opposite order to the one it rests in. Taken
+      // from the right, each card lands under the one before it and the head arrives last, on
+      // top — the order a hand is actually squared up in.
       const gathered = restingOn(cards[index].getBoundingClientRect());
       const collect = scene.animate(flight, [
         { transform: laid },
         { transform: gathered },
       ], {
         duration: gather,
-        delay: gatherAt + index * gatherStagger,
+        delay: gatherAt + (flights.length - 1 - index) * gatherStagger,
         easing: easeInOut,
         // FORWARDS only. `both` would back-fill `laid` from time zero, and because this is the
         // later animation on the element it outranks act one for the whole of the draw — every
@@ -322,7 +327,10 @@ export function RunDeploymentCardStack({
       if (!collect) return;
       animations.push(collect);
       void collect.finished.then(() => {
-        if (!cancelled) onDealProgress(index + 1);
+        // Counted as they land, not by index: the hand is collected from the right, so the
+        // index would walk the progress backwards and the resting pile would flicker.
+        landed += 1;
+        if (!cancelled) onDealProgress(landed);
       }).catch(() => undefined);
     });
 
@@ -453,14 +461,24 @@ export function RunDeploymentCardStack({
                 clearing. Both faces ride the same element: the flight itself carries the journey
                 across the screen, and this inner box carries the turn, so a card being flipped
                 mid-flight would still be two transforms that never fight over one element. */}
-            {remainingIds.map((cardId) => {
+            {remainingIds.map((cardId, index) => {
               const owned = cardById.get(cardId);
               const identity = owned ? runCardDefinition(owned.coreId) ?? null : null;
               const presentation = owned
                 ? deploymentCardPresentation(run, owned, deployment?.unitCursor ?? 0)
                 : null;
               return (
-                <div className="run-deployment-deal-flight" data-deployment-flight-card={cardId} key={cardId}>
+                <div
+                  className="run-deployment-deal-flight"
+                  data-deployment-flight-card={cardId}
+                  // First in hand sits highest, matching the resting stack underneath, which
+                  // gives the head of the hand the top of the pile. Left to DOM order the LAST
+                  // card would paint over the others all the way into the seat and then be
+                  // replaced by the first one the moment the stack resolved — the head of the
+                  // hand appearing to surface out of nowhere.
+                  style={{ zIndex: remainingIds.length - index } as CSSProperties}
+                  key={cardId}
+                >
                   <span className="run-deployment-flight-faces" data-deployment-flight-faces={cardId}>
                     <span className="run-deployment-flight-side is-back">
                       <RunCardBack mediaUrl={backMediaUrl} />
