@@ -952,7 +952,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 69 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 70 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -967,7 +967,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 33 }, (_, index) => index + 37),
+    ...Array.from({ length: 34 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -3082,6 +3082,94 @@ async function validatePlayerFormationMigrations68And69() {
   }
 }
 
+/**
+ * ADR-0516. The opening screen grants a formation card, so migration 70 has to advance a
+ * version-30 document, hand an opening screen card offers in place of its lipsana, and leave
+ * every later Conflict's lipsanon offer exactly where it is. Idempotent, like its neighbours.
+ */
+async function validateOpeningCardGrantMigration70() {
+  const { Client } = require('pg');
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('CREATE SCHEMA smoke_opening_card_grant_migration_70');
+    await client.query('SET LOCAL search_path TO smoke_opening_card_grant_migration_70');
+    await client.query(`
+      CREATE TABLE active_runs (
+        owner_email text PRIMARY KEY, body jsonb NOT NULL, revision integer NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+    `);
+    const opening = {
+      runSaveVersion: 30,
+      phase: 'bona-vacantia',
+      vacantia: {
+        kind: 'opening',
+        conflictIndex: 0,
+        afterBattleIndex: 0,
+        victoryGoldTenths: 0,
+        offers: ['royal-tent', 'occult-dagger', 'merchants-shopkey'],
+      },
+    };
+    const later = {
+      runSaveVersion: 30,
+      phase: 'bona-vacantia',
+      vacantia: {
+        kind: 'post-battle',
+        conflictIndex: 1,
+        afterBattleIndex: 2,
+        victoryGoldTenths: 60,
+        offers: ['royal-tent', 'occult-dagger'],
+      },
+    };
+    const elsewhere = { runSaveVersion: 30, phase: 'battle', vacantia: null };
+    await client.query(
+      `INSERT INTO active_runs (owner_email, body, revision) VALUES
+        ('opening@example.com', $1::jsonb, 3),
+        ('later@example.com', $2::jsonb, 7),
+        ('elsewhere@example.com', $3::jsonb, 11)`,
+      [JSON.stringify(opening), JSON.stringify(later), JSON.stringify(elsewhere)],
+    );
+
+    await client.query(inlineMigrationSql(70));
+    await client.query(inlineMigrationSql(70));
+    const rows = (await client.query(
+      'SELECT owner_email, body, revision FROM active_runs ORDER BY owner_email',
+    )).rows;
+    const byOwner = new Map(rows.map((row) => [row.owner_email, row]));
+    const granted = byOwner.get('opening@example.com');
+    const relic = byOwner.get('later@example.com');
+    const untouched = byOwner.get('elsewhere@example.com');
+    if (
+      granted?.body?.runSaveVersion !== 31
+      || granted.body.vacantia?.kind !== 'opening'
+      || !Array.isArray(granted.body.vacantia?.cardOffers)
+      || granted.body.vacantia.cardOffers.length !== 3
+      || new Set(granted.body.vacantia.cardOffers).size !== 3
+      || !Array.isArray(granted.body.vacantia?.offers)
+      || granted.body.vacantia.offers.length !== 0
+      || Number(granted.revision) !== 4
+      || relic?.body?.runSaveVersion !== 31
+      || relic.body.vacantia?.offers?.join(',') !== 'royal-tent,occult-dagger'
+      || !Array.isArray(relic.body.vacantia?.cardOffers)
+      || relic.body.vacantia.cardOffers.length !== 0
+      || Number(relic.revision) !== 8
+      || untouched?.body?.runSaveVersion !== 31
+      || untouched.body.vacantia !== null
+      || Number(untouched.revision) !== 12
+    ) {
+      throw new Error(`Migration 70 did not install the opening card grant safely: ${JSON.stringify(rows)}`);
+    }
+    await client.query('ROLLBACK');
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve validation error */ }
+    throw error;
+  } finally {
+    await client.end();
+  }
+}
+
 async function validateRepairedEditorDocumentDiscardOperation62() {
   const documentId = '00000000-0000-4000-8000-000000000262';
   const levelId = 'migration-operation-level';
@@ -3248,6 +3336,7 @@ async function main() {
   await validateQueenPawnCatalogRunMigration65();
   await validateImmutableFormationAndLegacyDrawableRepairMigrations66And67();
   await validatePlayerFormationMigrations68And69();
+  await validateOpeningCardGrantMigration70();
   await validateRepairedEditorDocumentDiscardOperation62();
   await resetDb();
 
