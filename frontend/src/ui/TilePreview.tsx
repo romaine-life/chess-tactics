@@ -2054,7 +2054,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       controls: <button type="button" className="tileset-view-action" onClick={() => openViewer('cardlayout')}>Open Card Layout</button>,
     },
     {
-      id: 'cardsize', label: 'Card Size', hint: 'Tune how large the Bona Vacantia grant and the Sectio print their card rows.',
+      id: 'cardsize', label: 'Card Size', hint: 'Tune how large the Bona Vacantia grant and the Sectio print their card rows, and the drift and light those cards carry.',
       main: <RunCardSizeCatalog onOpen={() => openViewer('cardsize')} />,
       controls: <button type="button" className="tileset-view-action" data-testid="open-run-card-size" onClick={() => openViewer('cardsize')}>Open Card Size</button>,
     },

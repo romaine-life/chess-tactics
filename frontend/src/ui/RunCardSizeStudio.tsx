@@ -10,12 +10,21 @@ import {
   sameRunCardRowSizing,
   type RunCardRowSizing,
 } from './runCardRowSizing';
-import { SliderRow } from './dressing/SliderRow';
+import { SliderRow, ctlReset } from './dressing/SliderRow';
+import { ChoiceGroup } from './shared/ChoiceGroup';
 import { useInjectedStyle } from './dressing/useInjectedStyle';
 import { useWindowScaledPreview } from './useWindowScaledPreview';
 import { StudioCatalogCard } from './studio/StudioCatalogCard';
+import {
+  RUN_CARD_LIFE_COMMITTED,
+  RUN_CARD_LIFE_LIMITS,
+  runCardLifeCss,
+  sameRunCardLife,
+  type RunCardLifeTuning,
+} from './runCardLife';
 
 const DRAFT_KEY = 'studio.runCardRowSizing.draft.v1';
+const LIFE_DRAFT_KEY = 'studio.runCardLife.draft.v1';
 
 /**
  * The two screens this tuning is for, each addressed by the craft spec that puts
@@ -47,6 +56,24 @@ function readDraft(): RunCardRowSizing {
   return { ...RUN_CARD_ROW_SIZING_DEFAULTS };
 }
 
+/**
+ * The card LIFE draft. It rides the same injected-stylesheet channel the sizing does, so every
+ * knob moves the drift and the light on the real screen beside it. Unlike the sizing there is no
+ * Save: the committed numbers are Git-owned constants in runCardLife.ts, mirrored as the CSS
+ * fallbacks — so Copy hands over the exact block to paste, and Reset returns to what ships
+ * (ADR-0057).
+ */
+function readLifeDraft(): RunCardLifeTuning {
+  if (typeof window === 'undefined') return { ...RUN_CARD_LIFE_COMMITTED };
+  try {
+    const value = JSON.parse(window.localStorage.getItem(LIFE_DRAFT_KEY) ?? 'null') as Partial<RunCardLifeTuning> | null;
+    if (value && typeof value === 'object') return { ...RUN_CARD_LIFE_COMMITTED, ...value };
+  } catch {
+    // A malformed old draft is disposable; the committed constants remain authoritative.
+  }
+  return { ...RUN_CARD_LIFE_COMMITTED };
+}
+
 /** What the previewed row is actually printing, read back out of the live screen. */
 interface PrintedRow {
   cardWidth: number;
@@ -67,7 +94,7 @@ export function RunCardSizeCatalog({ onOpen }: { onOpen: () => void }): ReactEle
         selected
         onSelect={onOpen}
         onOpen={onOpen}
-        titleText="Open the Bona Vacantia and Sectio card-size instrument"
+        titleText="Open the Bona Vacantia and Sectio card-size and card-life instrument"
         imageClassName="run-card-size-catalog-image"
         media={(
           <span className="run-card-size-catalog-specimen">
@@ -76,7 +103,7 @@ export function RunCardSizeCatalog({ onOpen }: { onOpen: () => void }): ReactEle
             ))}
           </span>
         )}
-        textExtra={<span>How large the Run prints its card rows.</span>}
+        textExtra={<span>How large the Run prints its card rows, and how they drift and catch the light.</span>}
       />
     </div>
   );
@@ -96,6 +123,7 @@ export function RunCardSizeViewer({
   const { canvasStyle, frameStyle } = useWindowScaledPreview(viewerZoom);
   const [baseline, setBaseline] = useState<RunCardRowSizing>({ ...RUN_CARD_ROW_SIZING_DEFAULTS });
   const [sizing, setSizing] = useState<RunCardRowSizing>(readDraft);
+  const [life, setLife] = useState<RunCardLifeTuning>(readLifeDraft);
   const [screenId, setScreenId] = useState(SCREENS[0].id);
   const [printed, setPrinted] = useState<PrintedRow | null>(null);
   const [busy, setBusy] = useState(false);
@@ -106,9 +134,14 @@ export function RunCardSizeViewer({
     window.localStorage.setItem(DRAFT_KEY, JSON.stringify(sizing));
   }, [sizing]);
 
+  useEffect(() => {
+    window.localStorage.setItem(LIFE_DRAFT_KEY, JSON.stringify(life));
+  }, [life]);
+
   // The audition channel: the real screen inside the iframe reads these properties,
   // so every slider moves the cards on the screen they ship to.
   useInjectedStyle(iframeRef, 'run-card-size-tuning', runCardRowSizingCss(sizing));
+  useInjectedStyle(iframeRef, 'run-card-life-tuning', runCardLifeCss(life));
 
   // Read the printed row back out of the live screen rather than recomputing it here:
   // the number shown is the number the screen drew.
@@ -163,6 +196,16 @@ export function RunCardSizeViewer({
   const copy = async (): Promise<void> => {
     await navigator.clipboard.writeText(JSON.stringify({ card: sizing }, null, 2));
     setStatus('Copied the current sizing JSON.');
+  };
+
+  const tuneLife = (patch: Partial<RunCardLifeTuning>): void => {
+    setLife((current) => ({ ...current, ...patch }));
+    setStatus('Life changed. Copy the CSS and paste the numbers into runCardLife.ts to commit them.');
+  };
+
+  const copyLife = async (): Promise<void> => {
+    await navigator.clipboard.writeText(runCardLifeCss(life));
+    setStatus('Copied the card-life CSS.');
   };
 
   return (
@@ -242,6 +285,90 @@ export function RunCardSizeViewer({
             </button>
             <button type="button" className="tileset-view-action" disabled={sameRunCardRowSizing(sizing, baseline)} onClick={resetAll}>Reset all</button>
             <button type="button" className="tileset-view-action" onClick={() => { void copy(); }}>Copy sizing JSON</button>
+
+            {/* Life on the table. The cards drift and give off a little light so the screen reads
+                as goods worth taking rather than three thumbnails — the same treatment the
+                lipsana on the Conflict mat already carry, scaled for a much larger object. */}
+            <h3 className="tileset-catalog-note">Life on the table</h3>
+            <label className="tileset-catalog-zoom">
+              <span>Drift character</span>
+              <div className="pages-ctl-row">
+                <ChoiceGroup
+                  ariaLabel="Drift character"
+                  value={life.stepped ? 'stepped' : 'smooth'}
+                  options={[
+                    { value: 'smooth', label: 'Smooth' },
+                    { value: 'stepped', label: 'Stepped' },
+                  ]}
+                  onChange={(value) => tuneLife({ stepped: value === 'stepped' })}
+                />
+                {ctlReset(() => tuneLife({ stepped: RUN_CARD_LIFE_COMMITTED.stepped }))}
+              </div>
+            </label>
+            <SliderRow
+              label={<>Drift rise <strong data-testid="run-card-life-rise-value">{life.rise}px</strong></>}
+              value={life.rise}
+              set={(value) => tuneLife({ rise: Math.round(value) })}
+              {...RUN_CARD_LIFE_LIMITS.rise}
+              dflt={RUN_CARD_LIFE_COMMITTED.rise}
+            />
+            <SliderRow
+              label={<>Drift period <strong data-testid="run-card-life-period-value">{life.period.toFixed(1)}s</strong></>}
+              value={life.period}
+              set={(value) => tuneLife({ period: value })}
+              {...RUN_CARD_LIFE_LIMITS.period}
+              dflt={RUN_CARD_LIFE_COMMITTED.period}
+            />
+            <SliderRow
+              label={<>Glow <strong data-testid="run-card-life-glow-value">{life.glow.toFixed(2)}×</strong></>}
+              value={life.glow}
+              set={(value) => tuneLife({ glow: value })}
+              {...RUN_CARD_LIFE_LIMITS.glow}
+              dflt={RUN_CARD_LIFE_COMMITTED.glow}
+            />
+            <SliderRow
+              label={<>Glow breath <strong data-testid="run-card-life-pulse-value">{life.pulse.toFixed(2)}×</strong> — 0 holds one steady light</>}
+              value={life.pulse}
+              set={(value) => tuneLife({ pulse: value })}
+              {...RUN_CARD_LIFE_LIMITS.pulse}
+              dflt={RUN_CARD_LIFE_COMMITTED.pulse}
+            />
+            <SliderRow
+              label={<>Hover raise <strong data-testid="run-card-life-hover-raise-value">{life.hoverRaise}px</strong></>}
+              value={life.hoverRaise}
+              set={(value) => tuneLife({ hoverRaise: Math.round(value) })}
+              {...RUN_CARD_LIFE_LIMITS.hoverRaise}
+              dflt={RUN_CARD_LIFE_COMMITTED.hoverRaise}
+            />
+            <SliderRow
+              label={<>Hover flare <strong data-testid="run-card-life-hover-flare-value">{life.hoverFlare.toFixed(2)}×</strong></>}
+              value={life.hoverFlare}
+              set={(value) => tuneLife({ hoverFlare: value })}
+              {...RUN_CARD_LIFE_LIMITS.hoverFlare}
+              dflt={RUN_CARD_LIFE_COMMITTED.hoverFlare}
+            />
+            <SliderRow
+              label={<>Hover lift shadow <strong data-testid="run-card-life-lift-value">{life.hoverLift.toFixed(2)}×</strong></>}
+              value={life.hoverLift}
+              set={(value) => tuneLife({ hoverLift: value })}
+              {...RUN_CARD_LIFE_LIMITS.hoverLift}
+              dflt={RUN_CARD_LIFE_COMMITTED.hoverLift}
+            />
+            <p className="tileset-catalog-note">
+              Hover a card in the panel to see the settle, the raise and the flare. The drift and
+              the light are Git-owned constants, so Copy hands over the block to paste into
+              <code> runCardLife.ts</code> and <code> style.css</code>.
+            </p>
+            <button
+              type="button"
+              className="tileset-view-action"
+              data-testid="run-card-life-reset"
+              disabled={sameRunCardLife(life, RUN_CARD_LIFE_COMMITTED)}
+              onClick={() => { setLife({ ...RUN_CARD_LIFE_COMMITTED }); setStatus('Life reset to what the Run ships.'); }}
+            >
+              Reset life
+            </button>
+            <button type="button" className="tileset-view-action" onClick={() => { void copyLife(); }}>Copy card-life CSS</button>
           </div>
           <dl data-testid="run-card-size-readout">
             <div>

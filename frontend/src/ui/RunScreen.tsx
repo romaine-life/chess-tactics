@@ -855,12 +855,13 @@ function SectioPanel({
         >
           <span className="sr-only" role="status" aria-live="polite">{adlectioAnnouncement}</span>
           <SectioCardRow>
-            {sectio.cardOffers.map((offer) => {
+            {sectio.cardOffers.map((offer, index) => {
               const adlected = sectio.adlectedCardOfferIds.includes(offer.offerId);
               return (
                 <RunCardPile
                   backMediaUrl={cardBackMediaUrl}
                   key={offer.offerId}
+                  seatIndex={index}
                 >
                   {adlected ? null : (
                     <RunCard
