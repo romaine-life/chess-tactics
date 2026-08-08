@@ -15450,34 +15450,33 @@ button.tileset-relationship-cell {
   z-index: 1;
 }
 
-/* A hairline vanished into painted artwork and detailed terrain alike, and a translucent line
-   picked up whatever it sat on instead of holding one colour. Both lines here are OPAQUE: solid
-   dark ink with a solid warm bevel offset directly beneath it, at zero blur, so the grid reads as
-   a groove pressed into the ground rather than a wash laid over it. Keep them opaque — the whole
-   point is that a square looks the same over grass, dirt, stone, and water.
+/* A flat 2D grid: ONE opaque line, no offset companion. An offset second colour under the stroke
+   bevels the line and makes it read as a groove carved into the ground; that is a 3D treatment and
+   is not wanted here.
+   Two properties carry it. OPAQUE, because a translucent line picks up whatever it sits on and a
+   square then looks different over grass, dirt, stone, and water. LIGHT, because with no bevel the
+   colour alone has to hold up, and a dark line disappears into shadowed terrain and painted
+   artwork — which is the legibility problem this rule exists to solve.
    The stroke is non-scaling, so this is a constant screen weight at every zoom. */
 .tileset-board-grid-layer path {
   fill: none;
-  stroke: #241a10;
+  stroke: #f2e3bd;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 2.6;
-  filter: drop-shadow(0 1.5px 0 #f2e3bd);
+  stroke-width: 2.2;
 }
 
 /* Wall-art placement is a geometry-verification surface, so its canonical cell grid stays a step
    more decisive than the board grid above rather than matching it. */
 .wall-art-board-surface .tileset-board-grid-layer path {
-  stroke: #14100c;
+  stroke: #fff6e0;
   stroke-width: 3.2;
-  filter: drop-shadow(0 2px 0 #ffeec9);
 }
 
 /* Placement previews sit under their own chrome, so they keep the board grid's weight and stay
-   opaque, but soften both inks a step rather than reverting to the old hairline. */
+   flat and opaque, but step the line back toward the terrain rather than reverting to a hairline. */
 .tileset-placement-board .tileset-board-grid-layer path {
-  stroke: #3a2c1c;
-  filter: drop-shadow(0 1.5px 0 #d9cba8);
+  stroke: #cbbb94;
 }
 
 /* Persisted player-camera coverage boundary. Unlike a viewport snapshot, this world-space box is
