@@ -15460,38 +15460,50 @@ button.tileset-relationship-cell {
    The stroke is non-scaling, so this is a constant screen weight at every zoom. */
 .tileset-board-grid-layer path {
   fill: none;
-  stroke: #f2e3bd;
+  filter: var(--board-grid-bevel, none);
+  stroke: var(--board-grid-stroke, #f2e3bd);
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 2.2;
+  stroke-width: var(--board-grid-weight, 2.2);
 }
 
-/* Settings → Gameplay → Board grid style. The default above is `chalk` and needs no attribute, so
-   a board draws correctly during boot and in any renderer that never publishes a choice.
-   `:where()` contributes NO specificity, so each variant ties the base rule and wins on source
-   order alone — which keeps the creator-surface overrides below decisively on top of all of them,
-   rather than being silently outranked by whatever the player picked. */
-:where(:root[data-board-grid-style='ink']) .tileset-board-grid-layer path {
-  stroke: #241a10;
-  stroke-width: 2.6;
+/* Settings → Gameplay → Grid style. Each style is three INHERITED custom properties rather than a
+   competing `... path` rule, so the nearest ancestor carrying the attribute wins by inheritance
+   instead of by specificity or source order. That is what lets the settings picker draw all five
+   at once — five swatch elements, each wearing its own attribute, inside a :root already set to
+   the player's current pick — which a `:root`-anchored rule set cannot express.
+   The fallbacks above are `chalk`, so a board draws correctly with NO attribute present: during
+   boot, before the settings module runs, and in any renderer that never publishes a choice. The
+   creator-surface overrides below still state stroke/weight/filter directly at a higher
+   specificity than the base rule, so they remain decisively on top of every player choice. */
+[data-board-grid-style='chalk'] {
+  --board-grid-bevel: none;
+  --board-grid-stroke: #f2e3bd;
+  --board-grid-weight: 2.2;
 }
 
-:where(:root[data-board-grid-style='carved']) .tileset-board-grid-layer path {
-  stroke: #241a10;
-  stroke-width: 2.6;
-  filter: drop-shadow(0 1.5px 0 #f2e3bd);
+[data-board-grid-style='ink'] {
+  --board-grid-bevel: none;
+  --board-grid-stroke: #241a10;
+  --board-grid-weight: 2.6;
 }
 
-:where(:root[data-board-grid-style='bold']) .tileset-board-grid-layer path {
-  stroke: #14100c;
-  stroke-width: 3.2;
-  filter: drop-shadow(0 2px 0 #ffeec9);
+[data-board-grid-style='carved'] {
+  --board-grid-bevel: drop-shadow(0 1.5px 0 #f2e3bd);
+  --board-grid-stroke: #241a10;
+  --board-grid-weight: 2.6;
 }
 
-:where(:root[data-board-grid-style='hairline']) .tileset-board-grid-layer path {
-  stroke: rgba(0, 0, 0, 0.36);
-  stroke-width: 1.15;
-  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.14));
+[data-board-grid-style='bold'] {
+  --board-grid-bevel: drop-shadow(0 2px 0 #ffeec9);
+  --board-grid-stroke: #14100c;
+  --board-grid-weight: 3.2;
+}
+
+[data-board-grid-style='hairline'] {
+  --board-grid-bevel: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.14));
+  --board-grid-stroke: rgba(0, 0, 0, 0.36);
+  --board-grid-weight: 1.15;
 }
 
 /* Wall-art placement is a geometry-verification surface, so its canonical cell grid stays a step
@@ -15510,6 +15522,61 @@ button.tileset-relationship-cell {
   stroke: #cbbb94;
   stroke-width: 2.2;
   filter: none;
+}
+
+/* The Grid style swatch is the ONE surface whose whole job is showing the player's line, so it
+   takes the styled variables back off the placement pin above — same specificity, later source
+   order. Without this the picker would draw five identical placement-grey lines and answer no
+   question at all. Every other creator surface keeps the pin. */
+.board-grid-style-swatch-board .tileset-board-grid-layer path {
+  filter: var(--board-grid-bevel, none);
+  stroke: var(--board-grid-stroke, #f2e3bd);
+  stroke-width: var(--board-grid-weight, 2.2);
+}
+
+/* Settings → Gameplay → Grid style picker. Every style is on screen at once — that is the whole
+   point of the surface — so the track floor is the width at which a swatch still reads as a piece
+   of battlefield rather than a texture chip. Below that they wrap to a second line instead of
+   shrinking; five styles at 3-up + 2-up still compare in one glance, five illegible chips do not. */
+.board-grid-style-swatches {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  inline-size: 100%;
+}
+
+.board-grid-style-swatch {
+  gap: 5px;
+  padding: 5px 4px 6px;
+}
+
+/* The selected FRAME is the registered inner-box active chrome (ChromeButton publishes
+   aria-pressed); only the label tone is local, so the lit swatch names itself as well as
+   framing itself. */
+.board-grid-style-swatch.is-selected {
+  color: #eafaff;
+}
+
+.board-grid-style-swatch:not(.is-selected):hover {
+  filter: brightness(1.06);
+}
+
+.board-grid-style-swatch small {
+  font-size: var(--ds-text-xs);
+  line-height: 1;
+  text-align: center;
+}
+
+/* A fixed WINDOW, never a fitted camera: the board inside is held at canonical 1× and overflows
+   this box on every edge, so each swatch shows the grid at exactly the weight a battlefield draws
+   it. Sizing this box is a crop, not a zoom. */
+.board-grid-style-swatch-window {
+  block-size: 84px;
+  display: block;
+  inline-size: 100%;
+  min-inline-size: 0;
+  overflow: hidden;
+  position: relative;
 }
 
 /* Persisted player-camera coverage boundary. Unlike a viewport snapshot, this world-space box is
@@ -18592,6 +18659,22 @@ button.tileset-relationship-cell {
 
 .settings-row-tall {
   min-height: 80px;
+}
+
+/* A control too wide to sit beside its copy — a picker of five board swatches — takes its own
+   line under the copy instead of squeezing both.
+   The full width is claimed with a WIDTH FLOOR, not `flex-basis: 100%`: below 560px the row flips
+   to `flex-direction: column`, where a 100% basis is a HEIGHT and a wrapping column container
+   answers it by pushing the copy into a second column beside the control. A min-inline-size is
+   the same instruction in row direction and inert in column direction. */
+.settings-row-stacked-control {
+  flex-wrap: wrap;
+}
+
+.settings-row-stacked-control > .settings-row-control {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+  min-inline-size: 100%;
 }
 
 .action-list,
