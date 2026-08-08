@@ -5636,6 +5636,23 @@ const MIGRATIONS = [
          AND EXISTS (SELECT 1 FROM retired_slots);
     `,
   },
+  {
+    version: 68,
+    name: 'explicit Run deployment mode',
+    // ADR-0512: version 29 persists the Run-wide placement rule. Every version-28
+    // Run already used automatic sideways placement, so the migration names that
+    // exact behavior without resetting a phase, deal, placement, or Battle.
+    sql: `
+      UPDATE active_runs
+         SET body = body || jsonb_build_object(
+               'runSaveVersion', 29,
+               'deploymentMode', 'automatic'
+             ),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE body->'runSaveVersion' = '28'::jsonb;
+    `,
+  },
 ];
 
 let pool = null;
@@ -6254,7 +6271,10 @@ async function unmigratedActiveRunSaveCounts(client) {
        )::integer AS version_26_count,
        count(*) FILTER (
          WHERE body->'runSaveVersion' = '27'::jsonb
-       )::integer AS version_27_count
+       )::integer AS version_27_count,
+       count(*) FILTER (
+         WHERE body->'runSaveVersion' = '28'::jsonb
+       )::integer AS version_28_count
        FROM active_runs`,
   );
   return Object.freeze({
@@ -6270,6 +6290,7 @@ async function unmigratedActiveRunSaveCounts(client) {
     version_25_count: Number(rows[0]?.version_25_count) || 0,
     version_26_count: Number(rows[0]?.version_26_count) || 0,
     version_27_count: Number(rows[0]?.version_27_count) || 0,
+    version_28_count: Number(rows[0]?.version_28_count) || 0,
   });
 }
 
@@ -6433,7 +6454,8 @@ async function requiredSchemaContractIssues(client) {
       + unmigratedActiveRunSaves.version_24_count
       + unmigratedActiveRunSaves.version_25_count
       + unmigratedActiveRunSaves.version_26_count
-      + unmigratedActiveRunSaves.version_27_count,
+      + unmigratedActiveRunSaves.version_27_count
+      + unmigratedActiveRunSaves.version_28_count,
     unmigrated_active_run_version_16_count: unmigratedActiveRunSaves.version_16_count,
     unmigrated_active_run_version_17_count: unmigratedActiveRunSaves.version_17_count,
     unmigrated_active_run_version_18_count: unmigratedActiveRunSaves.version_18_count,
@@ -6446,6 +6468,7 @@ async function requiredSchemaContractIssues(client) {
     unmigrated_active_run_version_25_count: unmigratedActiveRunSaves.version_25_count,
     unmigrated_active_run_version_26_count: unmigratedActiveRunSaves.version_26_count,
     unmigrated_active_run_version_27_count: unmigratedActiveRunSaves.version_27_count,
+    unmigrated_active_run_version_28_count: unmigratedActiveRunSaves.version_28_count,
     unmigrated_level_format_1_count: unmigratedLevelDocuments,
     unrepaired_saved_editor_baseline_count: unrepairedSavedEditorBaselines,
     primogeniture_non_retired_slot_count: primogenitureRetirement.non_retired_slot_count,
@@ -6669,6 +6692,17 @@ async function repairRequiredSchemaContracts(
     await executeMigration(migration, 'repair immutable held formations contract');
     completedSteps.push(Object.freeze({
       contract: 'immutable held formations Run save version',
+      migration_version: migration.version,
+    }));
+    markInspection(`inspect required contract repairs after migration ${migration.version}`);
+    issues = await requiredSchemaContractIssues(client);
+  }
+  if (issues.unmigrated_active_run_version_28_count > 0) {
+    const migration = MIGRATIONS.find((candidate) => candidate.version === 68);
+    if (!migration) throw new Error('explicit Run deployment mode repair migration is unavailable');
+    await executeMigration(migration, 'repair explicit Run deployment mode contract');
+    completedSteps.push(Object.freeze({
+      contract: 'explicit Run deployment mode save version',
       migration_version: migration.version,
     }));
     markInspection(`inspect required contract repairs after migration ${migration.version}`);
@@ -22805,6 +22839,9 @@ function validateFormationRunBody(run) {
   if (typeof run.id !== 'string' || !run.id || run.id.length > 160) return 'run.id is invalid';
   if (!isFiniteInteger(run.seed) || run.seed < 0 || run.seed > 0xffffffff) return 'run.seed is invalid';
   if (run.ataraxiaTier !== 0) return 'run.ataraxiaTier is invalid';
+  if (run.deploymentMode !== 'automatic' && run.deploymentMode !== 'arranged') {
+    return 'run.deploymentMode is invalid';
+  }
   if (typeof run.updatedAt !== 'string' || !run.updatedAt) return 'run.updatedAt is required';
   if (!ACTIVE_RUN_PHASES.has(run.phase)) return 'run.phase is invalid';
   if (!isFiniteInteger(run.battleIndex) || run.battleIndex < 0) return 'run.battleIndex is invalid';
@@ -22913,11 +22950,17 @@ function validateFormationRunBody(run) {
       || !isFiniteInteger(deployment.discardCursor) || deployment.discardCursor < 0
       || deployment.discardCursor > deployment.dealtCardIds.length
       || !['paused', 'playing', 'full-deploy'].includes(deployment.transport)
-      || !['awaiting-deal', 'dealing', 'card', 'revealing', 'unit', 'settling', 'discarding', 'complete'].includes(deployment.stage)
+      || !['awaiting-deal', 'dealing', 'arranging', 'card', 'revealing', 'unit', 'settling', 'discarding', 'complete'].includes(deployment.stage)
     ) return 'run.deployment contains invalid state';
+    const deployingIds = new Set(deployment.deployingUnitIds);
+    const unavailableIds = new Set(deployment.unavailableUnitIds);
+    if (
+      [...deployingIds].some((id) => unavailableIds.has(id))
+      || new Set([...deployingIds, ...unavailableIds]).size !== unitIds.size
+    ) return 'run.deployment unit pools are inconsistent';
     const placementSquares = new Set();
     for (const [unitId, square] of Object.entries(deployment.placements)) {
-      if (!unitIds.has(unitId) || typeof square !== 'string' || !/^-?\d+,-?\d+$/.test(square)
+      if (!deployingIds.has(unitId) || typeof square !== 'string' || !/^-?\d+,-?\d+$/.test(square)
         || placementSquares.has(square)) return 'run.deployment placements are invalid';
       placementSquares.add(square);
     }
@@ -22935,6 +22978,27 @@ function validateFormationRunBody(run) {
         planSquares.add(square);
       }
     }
+    if (deployment.stage === 'arranging') {
+      if (
+        run.deploymentMode !== 'arranged'
+        || deployment.transport !== 'paused'
+        || deployment.activeCardIndex !== 0
+        || deployment.unitCursor !== 0
+        || deployment.discardCursor !== 0
+        || deployment.settlingUnitIds.length !== 0
+        || deployment.revealedCardIds.length !== deployment.dealtCardIds.length
+        || deployment.revealedCardIds.some((cardId, index) => cardId !== deployment.dealtCardIds[index])
+      ) return 'run arranged Deployment state is inconsistent';
+    } else if (run.phase === 'deployment' && run.deploymentMode === 'arranged'
+      && !['awaiting-deal', 'dealing', 'complete'].includes(deployment.stage)) {
+      return 'run arranged Deployment uses an automatic stage';
+    }
+    if (run.phase === 'battle' && (
+      deployment.stage !== 'complete'
+      || deployment.activeCardIndex !== deployment.dealtCardIds.length
+      || deployment.discardCursor !== deployment.dealtCardIds.length
+      || deployment.settlingUnitIds.length !== 0
+    )) return 'run Battle has incomplete deployment state';
   }
 
   if (run.phase === 'aftermath') {

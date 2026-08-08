@@ -39,11 +39,15 @@ import {
   type AdlectablePieceType,
   type RunCardOffer,
   type RunDocument,
+  type RunDeploymentMode,
   type LipsanonId,
   type RunWarSnapshot,
 } from './model';
 import {
   advanceDeploymentTransport,
+  arrangedCardPlacementOptions,
+  arrangedDeploymentCards,
+  beginArrangedBattle,
   beginDeploymentDeal,
   completeDeploymentDeal,
   deploymentOptions,
@@ -51,11 +55,13 @@ import {
   finishDeploymentCardReveal,
   finishDeploymentUnitSettlement,
   placeRevealedDeploymentUnit,
+  placeArrangedDeploymentCard,
   revealActiveDeploymentCard,
   resolveDeploymentCapacity,
   selectedDeploymentLayout,
   setDeploymentTransport,
   type RunDeploymentLayout,
+  type RunFormationRotation,
 } from './deployment';
 
 /** Every query parameter the crafter consumes. Stripped from the address once applied so the
@@ -66,6 +72,7 @@ export const RUN_CRAFT_PARAMS: readonly string[] = Object.freeze([
   'war',
   'seed',
   'tier',
+  'deployment',
   'gold',
   'army',
   'add',
@@ -108,6 +115,8 @@ export interface RunCraftSpec {
   warId: string | null;
   seed: number;
   ataraxiaTier: AtaraxiaTier;
+  /** Omitted specs retain the historical automatic deployment behavior. */
+  deploymentMode?: RunDeploymentMode;
   goldTenths: number | null;
   army: RunCraftUnit[] | null;
   add: RunCraftUnit[] | null;
@@ -216,6 +225,12 @@ function integer(raw: string, label: string, min: number, max: number): number {
   return value;
 }
 
+function deploymentMode(raw: unknown): RunDeploymentMode {
+  if (raw === undefined || raw === null || raw === '') return 'automatic';
+  if (raw === 'automatic' || raw === 'arranged') return raw;
+  throw new RunCraftError(`craft deployment: "${String(raw)}" must be automatic or arranged.`);
+}
+
 /** Read a craft spec out of a Run address. Returns null when the address asks for no crafting. */
 export function parseRunCraftSpec(search: string): RunCraftSpec | null {
   const params = new URLSearchParams(search);
@@ -242,6 +257,7 @@ export function parseRunCraftSpec(search: string): RunCraftSpec | null {
     warId: params.get('war'),
     seed: params.get('seed') === null ? DEFAULT_CRAFT_SEED : integer(params.get('seed')!, 'seed', 0, 0xffffffff),
     ataraxiaTier: (params.get('tier') === null ? 0 : integer(params.get('tier')!, 'tier', 0, 0)) as AtaraxiaTier,
+    deploymentMode: deploymentMode(params.get('deployment')),
     goldTenths,
     army: army === null ? null : craftUnits(pieceList(army, 'army')),
     add: add === null ? null : craftUnits(pieceList(add, 'add')),
@@ -297,7 +313,7 @@ function jsonInteger(raw: unknown, label: string, min: number, max: number): num
 export function runCraftSpecFromJson(raw: unknown): RunCraftSpec {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new RunCraftError('craft: the spec must be an object.');
   const spec = raw as Record<string, unknown>;
-  const known = new Set([...RUN_CRAFT_PARAMS, 'phase', 'ataraxiaTier']);
+  const known = new Set([...RUN_CRAFT_PARAMS, 'phase', 'ataraxiaTier', 'deploymentMode']);
   const unknown = Object.keys(spec).filter((key) => !known.has(key));
   if (unknown.length) {
     throw new RunCraftError(`craft: unknown field${unknown.length === 1 ? '' : 's'} ${unknown.map((key) => `"${key}"`).join(', ')}.`);
@@ -319,6 +335,7 @@ export function runCraftSpecFromJson(raw: unknown): RunCraftSpec {
     warId: spec.war === undefined || spec.war === null ? null : String(spec.war),
     seed: spec.seed === undefined || spec.seed === null ? DEFAULT_CRAFT_SEED : jsonInteger(spec.seed, 'seed', 0, 0xffffffff),
     ataraxiaTier: (tier === undefined || tier === null ? 0 : jsonInteger(tier, 'tier', 0, 0)) as AtaraxiaTier,
+    deploymentMode: deploymentMode(spec.deploymentMode ?? spec.deployment),
     goldTenths,
     army: spec.army === undefined || spec.army === null ? null : craftUnitList(spec.army, 'army'),
     add: spec.add === undefined || spec.add === null ? null : craftUnitList(spec.add, 'add'),
@@ -399,6 +416,7 @@ export function isRunCraftLinkPath(pathname: string): boolean {
  */
 export function runCraftSpecToJson(spec: RunCraftSpec): Record<string, unknown> {
   const json: Record<string, unknown> = { phase: spec.phase, battle: spec.battle, seed: spec.seed, tier: spec.ataraxiaTier };
+  if (spec.deploymentMode === 'arranged') json.deployment = 'arranged';
   if (spec.warId !== null) json.war = spec.warId;
   if (spec.goldTenths !== null) json.gold = spec.goldTenths / GOLD_SCALE;
   if (spec.army) json.army = spec.army.map((entry) => entry.type);
@@ -433,6 +451,7 @@ export function runCraftAddressParams(spec: RunCraftSpec): URLSearchParams {
   if (spec.warId !== null) params.set('war', spec.warId);
   if (spec.seed !== DEFAULT_CRAFT_SEED) params.set('seed', String(spec.seed));
   if (spec.ataraxiaTier !== 0) params.set('tier', String(spec.ataraxiaTier));
+  if (spec.deploymentMode === 'arranged') params.set('deployment', 'arranged');
   if (spec.goldTenths !== null) params.set('gold', String(spec.goldTenths / GOLD_SCALE));
   if (spec.army) params.set('army', spec.army.map((entry) => entry.type).join(','));
   if (spec.add) params.set('add', spec.add.map((entry) => entry.type).join(','));
@@ -509,6 +528,29 @@ function autoDeploy(run: RunDocument): { run: RunDocument; layout: RunDeployment
   prepared = resolveDeploymentCapacity(prepared, level);
   prepared = beginDeploymentDeal(prepared);
   prepared = completeDeploymentDeal(prepared, level);
+  if (prepared.deploymentMode === 'arranged') {
+    const rotations: RunFormationRotation[] = [0, 1, 2, 3];
+    for (const summary of arrangedDeploymentCards(prepared)) {
+      if (!summary.admitted) continue;
+      const option = rotations.flatMap((rotation) => (
+        arrangedCardPlacementOptions(prepared, level, summary.card.id, rotation)
+      ))[0];
+      if (option) {
+        prepared = placeArrangedDeploymentCard(
+          prepared,
+          level,
+          summary.card.id,
+          option.rotation,
+          option.anchor,
+        );
+      }
+    }
+    const started = beginArrangedBattle(prepared);
+    if (started.phase !== 'battle') {
+      throw new RunCraftError(`craft: Battle ${prepared.battleIndex + 1} could not be arranged automatically.`);
+    }
+    return { run: started, layout: selectedDeploymentLayout(started, deploymentOptions(started, level)) };
+  }
   prepared = setDeploymentTransport(prepared, 'full-deploy');
   while (prepared.phase === 'deployment') {
     if (prepared.deployment?.stage === 'card') {
@@ -825,7 +867,9 @@ export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDo
   if (spec.phase !== 'victory' && targetIndex >= battles) {
     throw new RunCraftError(`craft battle: ${war.name} has ${battles} Battle${battles === 1 ? '' : 's'}.`);
   }
-  const opening = createRun(war, spec.seed, spec.ataraxiaTier);
+  const opening = createRun(war, spec.seed, spec.ataraxiaTier, {
+    deploymentMode: spec.deploymentMode ?? 'automatic',
+  });
 
   // The Run's own first state. Bona Vacantia sits directly in front of Battle 1.
   if (spec.phase === 'bona-vacantia' && targetIndex === 0) {

@@ -21,7 +21,7 @@ export {
 };
 
 /** The schema version of one persisted in-progress Run. Only this exact save shape is read. */
-export const CURRENT_RUN_SAVE_VERSION = 28;
+export const CURRENT_RUN_SAVE_VERSION = 29;
 export type RunSaveVersion = typeof CURRENT_RUN_SAVE_VERSION;
 
 export class UnsupportedRunSaveError extends Error {
@@ -43,6 +43,7 @@ const RUN_SAVE_VERSION_SIDEWAYS_FORMATIONS_SOURCE = 24;
 const RUN_SAVE_VERSION_SECTIO_PILE_SOURCE = 25;
 const RUN_SAVE_VERSION_QUEEN_PAWN_FORMATIONS_SOURCE = 26;
 const RUN_SAVE_VERSION_IMMUTABLE_FORMATIONS_SOURCE = 27;
+const RUN_SAVE_VERSION_DEPLOYMENT_MODE_SOURCE = 28;
 export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
@@ -228,6 +229,7 @@ export interface RunWarSnapshot {
 export type RunPhase = 'aftermath' | 'bona-vacantia' | 'deployment' | 'battle' | 'sectio' | 'victory';
 
 export type RunDeploymentTransport = 'paused' | 'playing' | 'full-deploy';
+export type RunDeploymentMode = 'automatic' | 'arranged';
 
 export interface RunDeploymentState {
   battleIndex: number;
@@ -252,7 +254,7 @@ export interface RunDeploymentState {
   /** One persisted transport controls the same ordered deployment sequence. */
   transport: RunDeploymentTransport;
   /** Each value is a persisted information or animation boundary. */
-  stage: 'awaiting-deal' | 'dealing' | 'card' | 'revealing' | 'unit' | 'settling' | 'discarding' | 'complete';
+  stage: 'awaiting-deal' | 'dealing' | 'arranging' | 'card' | 'revealing' | 'unit' | 'settling' | 'discarding' | 'complete';
   /** Battle-runtime aliases for formation units that could not enter the board. */
   blockedUnitIds: string[];
 }
@@ -367,6 +369,8 @@ export interface RunDocument {
   id: string;
   seed: number;
   ataraxiaTier: AtaraxiaTier;
+  /** One Run-wide contract selected before creation; it never changes in-flight. */
+  deploymentMode: RunDeploymentMode;
   updatedAt: string;
   war: RunWarSnapshot;
   phase: RunPhase;
@@ -872,15 +876,25 @@ export function createRun(
   war: RunWarSnapshot,
   seed: number,
   ataraxiaTierOrNow: AtaraxiaTier | string = 0,
-  now = new Date().toISOString(),
+  nowOrOptions: string | Readonly<{
+    now?: string;
+    deploymentMode?: RunDeploymentMode;
+  }> = new Date().toISOString(),
 ): RunDocument {
   const ataraxiaTier: AtaraxiaTier = 0;
-  const createdAt = typeof ataraxiaTierOrNow === 'string' ? ataraxiaTierOrNow : now;
+  const options = typeof nowOrOptions === 'string' ? null : nowOrOptions;
+  const createdAt = typeof ataraxiaTierOrNow === 'string'
+    ? ataraxiaTierOrNow
+    : typeof nowOrOptions === 'string'
+      ? nowOrOptions
+      : options?.now ?? new Date().toISOString();
+  const deploymentMode = options?.deploymentMode ?? 'automatic';
   const run: RunDocument = {
     runSaveVersion: CURRENT_RUN_SAVE_VERSION,
     id: freshRunId(),
     seed: seed >>> 0,
     ataraxiaTier,
+    deploymentMode,
     updatedAt: createdAt,
     war,
     phase: 'deployment',
@@ -1132,6 +1146,9 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
   };
   if (raw.runSaveVersion !== CURRENT_RUN_SAVE_VERSION || 'formatVersion' in raw) {
     throw new UnsupportedRunSaveError();
+  }
+  if (raw.deploymentMode !== 'automatic' && raw.deploymentMode !== 'arranged') {
+    throw new UnsupportedRunSaveError('This Run contains an invalid Deployment mode.');
   }
   if (
     !raw.war
@@ -1999,7 +2016,7 @@ function migrateRunToImmutableFormations(stored: Record<string, unknown>): Recor
 
   return {
     ...stored,
-    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    runSaveVersion: RUN_SAVE_VERSION_DEPLOYMENT_MODE_SOURCE,
     ...(rawSnapshot ? {
       goldTenths: restored.goldTenths,
       army: restored.army,
@@ -2017,6 +2034,16 @@ function migrateRunToImmutableFormations(stored: Record<string, unknown>): Recor
   };
 }
 
+/** Version 29 makes the placement rule a Run-owned choice. Every predecessor already used
+ * automatic sideways settling, so naming that exact behavior preserves its current position. */
+function migrateRunToDeploymentMode(stored: Record<string, unknown>): Record<string, unknown> {
+  return {
+    ...stored,
+    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    deploymentMode: 'automatic',
+  };
+}
+
 /**
  * Advances every losslessly migratable predecessor through the declared save chain.
  * Version 16 first receives the version-marker rename from 17, version 17's Shop
@@ -2029,10 +2056,10 @@ function migrateRunToImmutableFormations(stored: Record<string, unknown>): Recor
  * advances every embedded War Battle through the Level document chain. Version 23 then retires
  * unit abilities and installs authored formation cards. Version 24 expands that catalog and
  * resets in-flight placement plans for sideways settling. Version 25 removes the opening
- * Sectio and begins a seed-derived card pile. Version 26 then restarts that hidden sequence
- * against the expanded Queen + Pawn formation catalog. Version 27 retires individual
- * against the expanded Queen + Pawn formation catalog. Version 28 retires individual
- * formation mutation and its two dependent lipsana. Older saves remain unsupported.
+ * Sectio and begins a seed-derived card pile. Version 26 then restarts that hidden sequence,
+ * and Version 27 expands the Queen + Pawn formation catalog. Version 28 retires individual
+ * formation mutation and its two dependent lipsana. Version 29 names automatic or arranged
+ * Deployment as an immutable Run rule. Older saves remain unsupported.
  */
 export function migrateRunSaveDocument(value: unknown): RunDocument {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -2097,6 +2124,9 @@ export function migrateRunSaveDocument(value: unknown): RunDocument {
   }
   if (stored.runSaveVersion === RUN_SAVE_VERSION_IMMUTABLE_FORMATIONS_SOURCE) {
     stored = migrateRunToImmutableFormations(stored);
+  }
+  if (stored.runSaveVersion === RUN_SAVE_VERSION_DEPLOYMENT_MODE_SOURCE) {
+    stored = migrateRunToDeploymentMode(stored);
   }
   return normalizeRunDocument(stored as unknown as RunDocument);
 }
@@ -2219,7 +2249,9 @@ export function prepareDeployment(run: RunDocument): RunDocument {
 }
 
 export function deploymentRerollCostTenths(run: RunDocument): number | null {
-  if (run.phase === 'deployment') return RUN_DEPLOYMENT_REROLL_COST_TENTHS;
+  if (run.phase === 'deployment') {
+    return run.deploymentMode === 'arranged' ? null : RUN_DEPLOYMENT_REROLL_COST_TENTHS;
+  }
   if (run.phase === 'battle') return RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS;
   return null;
 }
@@ -2241,11 +2273,19 @@ export function rerollDeployment(run: RunDocument): RunDocument {
   if (cost === null || !canRerollDeployment(run) || !run.deployment) return run;
   const mixedSeed = mixSeed(run.deployment.seed, 'deployment-reroll');
   const nextSeed = mixedSeed === run.deployment.seed ? (mixedSeed + 1) >>> 0 : mixedSeed;
+  const fresh = freshDeploymentState(run, nextSeed, run.deployment.dealtCardIds);
+  const deployment = run.deploymentMode === 'arranged' && run.phase === 'battle'
+    ? {
+        ...fresh,
+        revealedCardIds: [...fresh.dealtCardIds],
+        stage: 'arranging' as const,
+      }
+    : fresh;
   return touch({
     ...run,
     phase: 'deployment',
     goldTenths: run.goldTenths - cost,
-    deployment: freshDeploymentState(run, nextSeed, run.deployment.dealtCardIds),
+    deployment,
     battleRuntime: null,
     aftermath: null,
   });

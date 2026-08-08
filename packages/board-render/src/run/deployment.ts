@@ -52,6 +52,20 @@ export interface RunDeploymentOptions {
   layouts: [RunDeploymentLayout, RunDeploymentLayout];
 }
 
+export type RunFormationRotation = 0 | 1 | 2 | 3;
+
+export interface RunArrangedCardSummary {
+  card: RunOwnedCard;
+  admitted: boolean;
+  placed: boolean;
+}
+
+export interface RunArrangedPlacementOption {
+  anchor: Vec;
+  rotation: RunFormationRotation;
+  placements: Record<string, Vec>;
+}
+
 export interface PlayerDeploymentPools {
   all: Vec[];
   byType: Record<PlayablePieceType, Vec[]>;
@@ -212,6 +226,21 @@ function dealtCards(run: RunDocument): RunOwnedCard[] {
   return (run.deployment?.dealtCardIds ?? []).flatMap((cardId) => {
     const card = byId.get(cardId);
     return card ? [card] : [];
+  });
+}
+
+/** The visible arrangement hand in persisted deal order. Admission and placement are separate:
+ * the hand explains what was drawn even when a complete later formation exceeds capacity. */
+export function arrangedDeploymentCards(run: RunDocument): RunArrangedCardSummary[] {
+  const admitted = new Set(run.deployment?.deployingUnitIds ?? []);
+  const placements = decodedPlacements(run);
+  return dealtCards(run).map((card) => {
+    const unitIds = runCardUnitIds(card).filter((id) => run.army.some((unit) => unit.id === id));
+    return {
+      card,
+      admitted: unitIds.length > 0 && unitIds.every((id) => admitted.has(id)),
+      placed: unitIds.length > 0 && unitIds.every((id) => Boolean(placements[id])),
+    };
   });
 }
 
@@ -393,7 +422,20 @@ export function resolveDeploymentCapacity(run: RunDocument, level: Level): RunDo
   if (run.phase !== 'deployment' || !run.deployment || run.deployment.capacityResolved) return run;
   const capacity = playerDeploymentCells(level).length;
   const orderedUnitIds = deploymentOrderedUnitIds(run);
-  const deployingUnitIds = orderedUnitIds.slice(0, capacity);
+  const deployingUnitIds = run.deploymentMode === 'arranged'
+    ? (() => {
+        let remaining = capacity;
+        const admitted: string[] = [];
+        for (const card of dealtCards(run)) {
+          const unitIds = runCardUnitIds(card)
+            .filter((id) => run.army.some((unit) => unit.id === id));
+          if (unitIds.length > remaining) break;
+          admitted.push(...unitIds);
+          remaining -= unitIds.length;
+        }
+        return admitted;
+      })()
+    : orderedUnitIds.slice(0, capacity);
   const unavailableUnitIds = run.army.map((unit) => unit.id).filter((id) => !deployingUnitIds.includes(id));
   return setDeploymentChoices(run, {
     deployingUnitIds,
@@ -423,6 +465,7 @@ export function currentDeploymentUnit(run: RunDocument): RunArmyUnit | null {
 export type RunDeploymentInteractionStage =
   | 'await-deal'
   | 'dealing'
+  | 'arrange'
   | 'reveal-card'
   | 'revealing-card'
   | 'place'
@@ -434,6 +477,7 @@ export function deploymentInteractionStage(run: RunDocument, _options?: RunDeplo
   const deployment = run.deployment;
   if (!deployment || deployment.stage === 'awaiting-deal') return 'await-deal';
   if (deployment.stage === 'dealing') return 'dealing';
+  if (deployment.stage === 'arranging') return 'arrange';
   if (deployment.stage === 'card') return 'reveal-card';
   if (deployment.stage === 'revealing') return 'revealing-card';
   if (deployment.stage === 'settling') return 'settling';
@@ -457,7 +501,155 @@ export function beginDeploymentDeal(
 export function completeDeploymentDeal(run: RunDocument, level: Level): RunDocument {
   const resolved = resolveDeploymentCapacity(run, level);
   if (resolved.phase !== 'deployment' || resolved.deployment?.stage !== 'dealing') return resolved;
-  return setDeploymentChoices(resolved, { stage: 'card' });
+  return setDeploymentChoices(resolved, resolved.deploymentMode === 'arranged'
+    ? {
+        stage: 'arranging',
+        revealedCardIds: [...resolved.deployment.dealtCardIds],
+        transport: 'paused',
+      }
+    : { stage: 'card' });
+}
+
+function rotatedFormation(
+  formation: readonly Vec[],
+  rotation: RunFormationRotation,
+): Vec[] {
+  const rotated = formation.map(({ x, y }) => {
+    if (rotation === 1) return { x: -y, y: x };
+    if (rotation === 2) return { x: -x, y: -y };
+    if (rotation === 3) return { x: y, y: -x };
+    return { x, y };
+  });
+  const minX = Math.min(...rotated.map((cell) => cell.x));
+  const minY = Math.min(...rotated.map((cell) => cell.y));
+  return rotated.map((cell) => ({ x: cell.x - minX, y: cell.y - minY }));
+}
+
+/** Every legal translation for one selected rotation. The anchor is the normalized shape's
+ * front-left cell; rotations that exceed the authored two-row band naturally have no options. */
+export function arrangedCardPlacementOptions(
+  run: RunDocument,
+  level: Level,
+  cardId: string,
+  rotation: RunFormationRotation,
+): RunArrangedPlacementOption[] {
+  if (
+    run.phase !== 'deployment'
+    || run.deploymentMode !== 'arranged'
+    || run.deployment?.stage !== 'arranging'
+  ) return [];
+  const card = dealtCards(run).find((candidate) => candidate.id === cardId);
+  const definition = card ? runCardDefinition(card.coreId) : null;
+  if (!card) return [];
+  const admitted = new Set(run.deployment.deployingUnitIds);
+  const formation = definition?.formation ?? card.unitSeats.map((_, x) => ({ x, y: 0 }));
+  const seats = formation.flatMap((offset, index) => {
+    const unitId = card.unitSeats[index];
+    const unit = unitId ? run.army.find((candidate) => candidate.id === unitId) : undefined;
+    return unit && admitted.has(unit.id) ? [{ unit, offset }] : [];
+  });
+  if (!seats.length || seats.length !== runCardUnitIds(card).length) return [];
+  const transformed = rotatedFormation(seats.map(({ offset }) => offset), rotation);
+  const pools = playerDeploymentPools(level);
+  const eligibleByType = new Map(
+    PLAYABLE_PIECE_TYPES.map((type) => [type, new Set(pools.byType[type].map(key))]),
+  );
+  const ownUnitIds = new Set(seats.map(({ unit }) => unit.id));
+  const occupied = new Set(Object.entries(decodedPlacements(run))
+    .filter(([unitId]) => !ownUnitIds.has(unitId))
+    .map(([, cell]) => key(cell)));
+  const laneRows = playerDeploymentLaneRows(level);
+  const anchorXs = [...new Set(pools.all.map((cell) => cell.x))].sort((a, b) => a - b);
+  return laneRows.flatMap((anchorY, anchorRowIndex) => anchorXs.flatMap((anchorX): RunArrangedPlacementOption[] => {
+    const targets = seats.flatMap(({ unit }, index) => {
+      const offset = transformed[index];
+      const y = laneRows[anchorRowIndex + offset.y];
+      return y === undefined ? [] : [{ unit, cell: { x: anchorX + offset.x, y } }];
+    });
+    const targetKeys = targets.map(({ cell }) => key(cell));
+    if (
+      targets.length !== seats.length
+      || new Set(targetKeys).size !== targets.length
+      || targets.some(({ unit, cell }) => (
+        occupied.has(key(cell)) || !eligibleByType.get(unit.type)?.has(key(cell))
+      ))
+    ) return [];
+    return [{
+      anchor: { x: anchorX, y: anchorY },
+      rotation,
+      placements: Object.fromEntries(targets.map(({ unit, cell }) => [unit.id, cell])),
+    }];
+  }));
+}
+
+export function placeArrangedDeploymentCard(
+  run: RunDocument,
+  level: Level,
+  cardId: string,
+  rotation: RunFormationRotation,
+  anchor: Vec,
+): RunDocument {
+  const option = arrangedCardPlacementOptions(run, level, cardId, rotation)
+    .find((candidate) => key(candidate.anchor) === key(anchor));
+  if (!option || !run.deployment) return run;
+  const card = dealtCards(run).find((candidate) => candidate.id === cardId);
+  if (!card) return run;
+  const ownUnitIds = new Set(runCardUnitIds(card));
+  const placements = Object.fromEntries(Object.entries(run.deployment.placements)
+    .filter(([unitId]) => !ownUnitIds.has(unitId)));
+  const formationPlans = Object.fromEntries(Object.entries(run.deployment.formationPlans ?? {})
+    .filter(([plannedCardId]) => plannedCardId !== cardId));
+  const encoded = Object.fromEntries(
+    Object.entries(option.placements).map(([unitId, cell]) => [unitId, key(cell)]),
+  );
+  return setDeploymentChoices(run, {
+    placements: { ...placements, ...encoded },
+    formationPlans: { ...formationPlans, [cardId]: encoded },
+  });
+}
+
+export function removeArrangedDeploymentCard(run: RunDocument, cardId: string): RunDocument {
+  if (
+    run.phase !== 'deployment'
+    || run.deploymentMode !== 'arranged'
+    || run.deployment?.stage !== 'arranging'
+  ) return run;
+  const card = dealtCards(run).find((candidate) => candidate.id === cardId);
+  if (!card) return run;
+  const ownUnitIds = new Set(runCardUnitIds(card));
+  const placements = Object.fromEntries(Object.entries(run.deployment.placements)
+    .filter(([unitId]) => !ownUnitIds.has(unitId)));
+  const formationPlans = Object.fromEntries(Object.entries(run.deployment.formationPlans ?? {})
+    .filter(([plannedCardId]) => plannedCardId !== cardId));
+  return setDeploymentChoices(run, { placements, formationPlans });
+}
+
+export function arrangedDeploymentCanBegin(run: RunDocument): boolean {
+  if (
+    run.phase !== 'deployment'
+    || run.deploymentMode !== 'arranged'
+    || run.deployment?.stage !== 'arranging'
+  ) return false;
+  const king = run.army.find((unit) => unit.type === 'king');
+  return Boolean(king && run.deployment.placements[king.id]);
+}
+
+export function beginArrangedBattle(run: RunDocument): RunDocument {
+  if (!arrangedDeploymentCanBegin(run) || !run.deployment) return run;
+  const deployedUnitIds = Object.keys(run.deployment.placements);
+  const blockedUnitIds = run.army
+    .map((unit) => unit.id)
+    .filter((unitId) => !deployedUnitIds.includes(unitId));
+  const completed = setDeploymentChoices(run, {
+    activeCardIndex: run.deployment.dealtCardIds.length,
+    unitCursor: 0,
+    discardCursor: run.deployment.dealtCardIds.length,
+    settlingUnitIds: [],
+    transport: 'paused',
+    stage: 'complete',
+    blockedUnitIds,
+  });
+  return beginBattle(completed, deployedUnitIds, [], blockedUnitIds);
 }
 
 function stageAfterCommittedUnits(run: RunDocument): RunDocument {

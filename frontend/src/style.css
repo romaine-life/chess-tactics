@@ -21335,6 +21335,72 @@ button.tileset-relationship-cell {
   z-index: 8;
 }
 
+.run-arrangement-controls {
+  align-content: start;
+  overflow-y: auto;
+}
+
+.run-arrangement-hand {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  min-inline-size: 0;
+}
+
+.run-arrangement-hand-cards {
+  display: grid;
+  gap: var(--ds-space-2);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.run-arrangement-card {
+  appearance: none;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  gap: var(--ds-space-1);
+  min-inline-size: 0;
+  padding: var(--ds-space-1);
+}
+
+.run-arrangement-card > .run-card-action {
+  inline-size: 100%;
+  pointer-events: none;
+}
+
+.run-arrangement-card:hover,
+.run-arrangement-card.is-selected {
+  filter: brightness(1.12);
+}
+
+.run-arrangement-card.is-placed:not(.is-selected) .run-arrangement-card-state {
+  color: var(--good);
+}
+
+.run-arrangement-card.is-reserve {
+  cursor: not-allowed;
+  filter: saturate(.45);
+  opacity: .52;
+}
+
+.run-arrangement-card-state {
+  color: var(--skirmish-muted);
+  font-size: var(--ds-text-2xs);
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.run-arrangement-rotations {
+  display: grid;
+  gap: var(--ds-space-1);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.run-arrangement-rotations > button {
+  min-inline-size: 0;
+  padding-inline: var(--ds-space-1);
+}
+
 .run-deployment-deal-overlay {
   align-items: center;
   display: flex;

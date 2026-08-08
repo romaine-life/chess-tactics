@@ -952,7 +952,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 67 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 68 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -967,7 +967,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 31 }, (_, index) => index + 37),
+    ...Array.from({ length: 32 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1081,7 +1081,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
     )
   ) {
     throw new Error(
-      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 67: `
+      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 68: `
       + `${JSON.stringify({
         history: history.rows,
         identity_columns: identityColumns.rows,
@@ -3016,6 +3016,66 @@ async function validateImmutableFormationAndLegacyDrawableRepairMigrations66And6
   }
 }
 
+async function validateRunDeploymentModeMigration68() {
+  const { Client } = require('pg');
+  const client = new Client({ connectionString: process.env.DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('CREATE SCHEMA smoke_run_deployment_mode_migration_68');
+    await client.query('SET LOCAL search_path TO smoke_run_deployment_mode_migration_68');
+    await client.query(`
+      CREATE TABLE active_runs (
+        owner_email text PRIMARY KEY, body jsonb NOT NULL, revision integer NOT NULL,
+        updated_at timestamptz NOT NULL DEFAULT now()
+      );
+    `);
+    const legacy = {
+      runSaveVersion: 28,
+      phase: 'battle',
+      goldTenths: 40,
+      deployment: { stage: 'complete', placements: { king: '2,3' } },
+    };
+    const current = {
+      ...legacy,
+      runSaveVersion: 29,
+      deploymentMode: 'arranged',
+    };
+    await client.query(
+      `INSERT INTO active_runs (owner_email, body, revision) VALUES
+        ('legacy@example.com', $1::jsonb, 4),
+        ('current@example.com', $2::jsonb, 9)`,
+      [JSON.stringify(legacy), JSON.stringify(current)],
+    );
+
+    await client.query(inlineMigrationSql(68));
+    await client.query(inlineMigrationSql(68));
+    const rows = (await client.query(
+      'SELECT owner_email, body, revision FROM active_runs ORDER BY owner_email',
+    )).rows;
+    const byOwner = new Map(rows.map((row) => [row.owner_email, row]));
+    const migrated = byOwner.get('legacy@example.com');
+    const untouched = byOwner.get('current@example.com');
+    if (
+      migrated?.body?.runSaveVersion !== 29
+      || migrated.body.deploymentMode !== 'automatic'
+      || migrated.body.phase !== 'battle'
+      || migrated.body.deployment?.placements?.king !== '2,3'
+      || Number(migrated.revision) !== 5
+      || untouched?.body?.deploymentMode !== 'arranged'
+      || Number(untouched?.revision) !== 9
+    ) {
+      throw new Error(`Migration 68 did not name automatic Deployment losslessly: ${JSON.stringify(rows)}`);
+    }
+    await client.query('ROLLBACK');
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch { /* preserve validation error */ }
+    throw error;
+  } finally {
+    await client.end();
+  }
+}
+
 async function validateRepairedEditorDocumentDiscardOperation62() {
   const documentId = '00000000-0000-4000-8000-000000000262';
   const levelId = 'migration-operation-level';
@@ -3181,6 +3241,7 @@ async function main() {
   await validateDerivedSectioPileRunMigration64();
   await validateQueenPawnCatalogRunMigration65();
   await validateImmutableFormationAndLegacyDrawableRepairMigrations66And67();
+  await validateRunDeploymentModeMigration68();
   await validateRepairedEditorDocumentDiscardOperation62();
   await resetDb();
 
