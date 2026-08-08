@@ -59,7 +59,10 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
               than floating above it. Both columns stretch to the one row, which is what makes
               their tops and bottoms agree; the pane FILLS the frame it is given (ADR-0201), so
               no surplus of the frame is left over to be painted as a band across the art. */}
-          <InnerChromeBox className="run-battle-preview-board-frame">
+          {/* The title strip is chrome, not a window: it takes the same installed OUTER marble as
+              the title bar and the readout beside it. Without a fill it shows the frame's
+              semi-transparent surface, which lets the scene behind bleed against the level art. */}
+          <InnerChromeBox className="run-battle-preview-board-frame" fillRole="outer">
             <header className="run-battle-preview-board-head">
               <h2 id="run-battle-preview-title">{level.name}</h2>
             </header>
