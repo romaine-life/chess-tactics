@@ -228,14 +228,19 @@ and don't tell the user screenshots are impossible. Use the helper below.
    ```
    npm run verify:run-scenes -- '<bona-vacantia-craft-url>'
    ```
-   It drives mat → target ledger, target ledger → profile, and ordinary Army
-   ledger → profile; each must execute one director preparation/entrance with a
-   changed committed identity. (Run's overlapping layers acknowledge exit in the
-   same commit, so the observable phases begin at `loading`.) It also fails if more
-   than one Run viewport contribution
-   is visible, a contribution escapes the authored Run slot, the target repeats
-   its lipsanon icon/phase prose, or unit rows do not identify themselves as
-   Select actions (ADR-0383).
+   It drives Army ledger → unit profile and a Bona take → Sectio; each must
+   execute one director preparation/entrance with a changed committed identity.
+   (Run's overlapping layers acknowledge exit in the same commit, so the
+   observable phases begin at `loading`.) It also fails if more than one Run
+   viewport contribution is visible, a contribution escapes the authored Run
+   slot, the ultrawide mat does not fill its content box, a ledger row is an
+   unlabelled action, or the taken lipsanon does not land in the held strip
+   exactly once (ADR-0383).
+
+   Any Bona Vacantia craft link works — `battle=4` and `battle=7` are both
+   valid. The gate takes whichever lipsanon the Run dealt rather than naming
+   one; it was pinned to Conscription Notice, and when that left the offer pool
+   every run timed out with no verdict. Do not reintroduce a named offer.
 
    Board reveal / unit-entrance changes additionally run the live entrance gate,
    which records the real transition and reads its pixels:

@@ -69,6 +69,25 @@ async function auditViewport(page, expectedView) {
   }, expectedView);
 }
 
+// WHICH lipsanon the mat offers is content, not contract. This gate used to name one —
+// Conscription Notice — and when that left the offer pool the selector stopped matching, so every
+// run timed out after 30s with no verdict instead of failing on anything real. Take whatever the
+// Run actually dealt: the scene behaviour under test is the same for any of them.
+async function offeredLipsanon(page) {
+  const offer = await page.evaluate(() => {
+    const button = document.querySelector('.run-vacantia-take[data-lipsanon-id]');
+    if (!button) return null;
+    return {
+      id: button.getAttribute('data-lipsanon-id'),
+      name: (button.getAttribute('aria-label') ?? '').replace(/^Take\s+/, ''),
+    };
+  });
+  if (!offer?.id || !offer.name) {
+    throw new Error('Bona mat offered no takeable lipsanon, so the transition under test cannot be driven');
+  }
+  return offer;
+}
+
 async function transition(page, {
   label,
   click,
@@ -284,20 +303,29 @@ try {
     { timeout: TIMEOUT },
   );
 
+  // The mat fills the slot it is GIVEN, which is the content box — not clientHeight. A Run that
+  // already holds a lipsanon pads the workspace to clear the held strip, so the two differ by
+  // exactly that padding; comparing against clientHeight only ever passed because this gate was
+  // pinned to a Run with an empty strip, and read as an 84px "escape" the moment one wasn't.
   const matGeometry = await page.evaluate(() => {
     const content = document.querySelector('.run-vacantia-content');
     const stage = document.querySelector('.run-vacantia-content > .lipsanon-mat-stage');
+    const style = content ? getComputedStyle(content) : null;
+    const inset = style ? Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom) : 0;
     return {
       contentClientHeight: content?.clientHeight ?? -1,
       contentScrollHeight: content?.scrollHeight ?? -1,
+      contentBoxHeight: content ? content.clientHeight - inset : -1,
       stageHeight: stage?.getBoundingClientRect().height ?? -1,
-      overflowY: content ? getComputedStyle(content).overflowY : null,
+      overflowY: style ? style.overflowY : null,
     };
   });
   if (
-    matGeometry.contentClientHeight < 1
+    matGeometry.contentBoxHeight < 1
+    // Nothing scrolls: the slot never grows past the room it was given.
     || matGeometry.contentScrollHeight !== matGeometry.contentClientHeight
-    || Math.abs(matGeometry.stageHeight - matGeometry.contentClientHeight) > 1
+    // The stage fills that slot exactly — neither short of it nor over it.
+    || Math.abs(matGeometry.stageHeight - matGeometry.contentBoxHeight) > 1
     || matGeometry.overflowY !== 'hidden'
   ) {
     throw new Error(`Bona mat escaped its ultrawide scene slot: ${JSON.stringify(matGeometry)}`);
@@ -308,43 +336,27 @@ try {
   await page.waitForFunction(settled, { timeout: TIMEOUT });
 
   const results = [];
-  results.push(await transition(page, {
-    label: 'Bona mat -> target ledger',
-    click: '.run-vacantia-take[aria-label="Take Conscription Notice"]',
-    final: `${settled} && new URLSearchParams(location.search).get('view') === 'bona-target' && Boolean(document.querySelector('[data-testid="run-bona-vacantia-target"]'))`,
-    expectedView: 'bona-target',
-    relationship: 'selection-change',
-    continuityLipsanonId: 'conscription-notice',
-  }));
-
-  const targetUi = await page.evaluate(() => ({
-    targetText: document.querySelector('[data-testid="run-bona-vacantia-target"]')?.textContent ?? '',
-    targetIcons: document.querySelectorAll('[data-testid="run-bona-vacantia-target"] .run-lipsanon-icon').length,
-    stripIcons: document.querySelectorAll('[data-testid="run-lipsanon-strip"] [data-lipsanon-id="conscription-notice"]').length,
-    selectLabels: [...document.querySelectorAll('.run-army-ledger-row')].map((node) => node.getAttribute('aria-label')),
-  }));
-  const uiViolations = [];
-  if (/Bona Vacantia/i.test(targetUi.targetText)) uiViolations.push('target workspace repeats “Bona Vacantia”');
-  if (targetUi.targetIcons !== 0) uiViolations.push(`target workspace draws ${targetUi.targetIcons} duplicate lipsanon icon(s)`);
-  if (targetUi.stripIcons !== 1) uiViolations.push(`held strip draws ${targetUi.stripIcons} Conscription Notice icons`);
-  if (!targetUi.selectLabels.length || targetUi.selectLabels.some((label) => !label?.startsWith('Select '))) {
-    uiViolations.push(`unit rows are not explicitly selectable: ${JSON.stringify(targetUi.selectLabels)}`);
-  }
-  results.push({ label: 'Target UI contract', phases: [], topology: null, violations: uiViolations });
-
-  results.push(await transition(page, {
-    label: 'Bona target ledger -> unit profile',
-    click: '.run-army-ledger-row',
-    final: `${settled} && Boolean(new URLSearchParams(location.search).get('unit')) && Boolean(document.querySelector('[data-testid="run-army-profile-workspace"]'))`,
-    expectedView: 'bona-target',
-    relationship: 'selection-change',
-  }));
 
   await page.goto(new URL('/run?view=army', origin).href, { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
   await page.waitForFunction(
     `${settled} && Boolean(document.querySelector('[data-testid="run-army-ledger-workspace"]'))`,
     { timeout: TIMEOUT },
   );
+  // A unit row is a named action, whatever verb it carries. ADR-0383's "the ledger labels every
+  // row as Select" is scoped to the retired targeted-Bona choice; the ordinary Army ledger opens a
+  // profile, and labels its rows Inspect. What still has to hold is that a row is labelled at all.
+  const rowLabels = await page.evaluate(
+    () => [...document.querySelectorAll('.run-army-ledger-row')].map((node) => node.getAttribute('aria-label')),
+  );
+  results.push({
+    label: 'Army ledger rows name their action',
+    phases: [],
+    topology: null,
+    violations: rowLabels.length && rowLabels.every((label) => /\S/.test(label ?? ''))
+      ? []
+      : [`unit rows are not labelled actions: ${JSON.stringify(rowLabels)}`],
+  });
+
   results.push(await transition(page, {
     label: 'Army ledger -> unit profile',
     click: '.run-army-ledger-row',
@@ -353,19 +365,33 @@ try {
     relationship: 'selection-change',
   }));
 
+  // The start URL is a craft link, so returning to it deals the mat again after the take above.
   await page.goto(startUrl.href, { waitUntil: 'domcontentloaded', timeout: TIMEOUT });
   await page.waitForFunction(
     `${settled} && Boolean(document.querySelector('[data-testid="run-bona-vacantia"]'))`,
     { timeout: TIMEOUT },
   );
+  const offer = await offeredLipsanon(page);
   results.push(await transition(page, {
-    label: 'Ordinary Bona take -> Sectio continuity',
-    click: '.run-vacantia-take[aria-label="Take Royal Decree"]',
+    label: `Ordinary Bona take -> Sectio continuity (${offer.name})`,
+    click: `.run-vacantia-take[data-lipsanon-id="${offer.id}"]`,
     final: `${settled} && Boolean(document.querySelector('[data-testid="run-sectio-workspace"]'))`,
     expectedView: 'sectio',
     relationship: 'scene-replacement',
-    continuityLipsanonId: 'royal-decree',
+    continuityLipsanonId: offer.id,
   }));
+
+  // What was taken arrives in the held strip exactly once — the flight lands, and lands one icon.
+  const stripIcons = await page.evaluate(
+    (lipsanonId) => document.querySelectorAll(`[data-testid="run-lipsanon-strip"] [data-lipsanon-id="${lipsanonId}"]`).length,
+    offer.id,
+  );
+  results.push({
+    label: 'Held strip carries the taken lipsanon once',
+    phases: [],
+    topology: null,
+    violations: stripIcons === 1 ? [] : [`held strip draws ${stripIcons} ${offer.name} icons`],
+  });
 
   let failed = false;
   for (const result of results) {

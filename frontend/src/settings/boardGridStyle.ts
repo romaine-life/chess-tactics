@@ -1,4 +1,4 @@
-import { appSettingsSnapshot, subscribeAppSettings, type BoardGridStyle } from './appSettings';
+import { appSettingsSnapshot, DEFAULT_APP_SETTINGS, subscribeAppSettings, type BoardGridStyle } from './appSettings';
 
 export const BOARD_GRID_STYLE_ATTRIBUTE = 'data-board-grid-style';
 
@@ -16,7 +16,9 @@ export const BOARD_GRID_STYLE_LABELS: Readonly<Record<BoardGridStyle, { label: s
  *
  * The default style is the plain rule in style.css, so it is what a board draws before this ever
  * runs — during boot, with JavaScript still loading, or in any renderer that never calls this.
- * Only a non-default choice writes the attribute.
+ * Only a non-default choice writes the attribute. Which style that is comes from
+ * DEFAULT_APP_SETTINGS rather than a literal here, so changing the shipped style cannot leave this
+ * writing an attribute the CSS fallbacks already draw.
  */
 /** The part of an element this needs, so the rule can be proven without a DOM. */
 export interface BoardGridStyleTarget {
@@ -27,7 +29,7 @@ export interface BoardGridStyleTarget {
 export function applyBoardGridStyle(style: BoardGridStyle, target?: BoardGridStyleTarget): void {
   const root = target ?? (typeof document === 'undefined' ? undefined : document.documentElement);
   if (!root) return;
-  if (style === 'chalk') root.removeAttribute(BOARD_GRID_STYLE_ATTRIBUTE);
+  if (style === DEFAULT_APP_SETTINGS.boardGridStyle) root.removeAttribute(BOARD_GRID_STYLE_ATTRIBUTE);
   else root.setAttribute(BOARD_GRID_STYLE_ATTRIBUTE, style);
 }
 

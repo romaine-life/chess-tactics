@@ -177,7 +177,6 @@ export type RunCardFormationBoardCell = Readonly<{
   x: number;
   y: number;
   dark: boolean;
-  faded: boolean;
 }>;
 
 /** The card uses the same two-axis projection as the battlefield, scaled into card units. */
@@ -194,37 +193,21 @@ export function runCardFormationIsoPoint(x: number, y: number): Readonly<{
   };
 }
 
-/** Print the complete two-rank footprint, plus one faint ring of neighboring board squares. */
-export function runCardFormationBoardCells(columns: number, rows: number): RunCardFormationBoardCell[] {
-  const safeColumns = Math.max(1, Math.floor(columns));
-  const safeRows = Math.max(1, Math.floor(rows));
-  const solid = Array.from({ length: safeColumns * safeRows }, (_, index) => {
-    const x = index % safeColumns;
-    const y = Math.floor(index / safeColumns);
-    return {
-      x,
-      y,
-      dark: (x + y) % 2 === 1,
-      faded: false,
-    };
-  });
-  const faded = new Map<string, RunCardFormationBoardCell>();
-  for (const cell of solid) {
-    for (const neighbor of [
-      { x: cell.x - 1, y: cell.y },
-      { x: cell.x + 1, y: cell.y },
-      { x: cell.x, y: cell.y - 1 },
-      { x: cell.x, y: cell.y + 1 },
-    ]) {
-      if (neighbor.x >= 0 && neighbor.x < safeColumns && neighbor.y >= 0 && neighbor.y < safeRows) continue;
-      faded.set(`${neighbor.x}:${neighbor.y}`, {
-        ...neighbor,
-        dark: (neighbor.x + neighbor.y) % 2 !== 0,
-        faded: true,
-      });
-    }
-  }
-  return [...faded.values(), ...solid];
+/**
+ * Print the card's own footprint and nothing else. A vacant board square is not part of what the
+ * card grants, and drawing the whole enclosing rectangle turned every card into the same grid.
+ * The squares themselves are unchanged; only the seats the card occupies are printed.
+ */
+export function runCardFormationBoardCells(
+  seats: readonly Readonly<{ x: number; y: number }>[],
+): RunCardFormationBoardCell[] {
+  const occupied = new Set(seats.map((seat) => `${seat.x}:${seat.y}`));
+  return [...occupied]
+    .map((key) => {
+      const [x, y] = key.split(':').map(Number);
+      return { x, y, dark: (x + y) % 2 === 1 };
+    })
+    .sort((left, right) => (left.x + left.y) - (right.x + right.y) || left.x - right.x);
 }
 
 function runCardFormationBoardMetrics(columns: number, rows: number): Readonly<{
@@ -266,7 +249,9 @@ function FormationDiagram({
   // The formation's empty front/back row is rules information. Cropping a singleton
   // to its occupied cell made "Queen in front" and "Queen in back" print identically.
   const rows = runCardFormationRows(pieces);
-  const boardCells = runCardFormationBoardCells(columns, rows);
+  const boardCells = runCardFormationBoardCells(pieces);
+  // The box still spans the whole two-rank band even though only the footprint is drawn, so a
+  // front-rank singleton and a back-rank singleton keep the different seats they are placed on.
   const metrics = runCardFormationBoardMetrics(columns, rows);
   const position = (x: number, y: number): CSSProperties => {
     const point = runCardFormationIsoPoint(x, y);
@@ -292,7 +277,7 @@ function FormationDiagram({
       {boardCells.map((cell) => (
         <span
           aria-hidden="true"
-          className={`run-card-formation-square${cell.dark ? ' is-dark' : ''}${cell.faded ? ' is-faded' : ''}`}
+          className={`run-card-formation-square${cell.dark ? ' is-dark' : ''}`}
           data-formation-grid-x={cell.x}
           data-formation-grid-y={cell.y}
           key={`grid:${cell.x}:${cell.y}`}
