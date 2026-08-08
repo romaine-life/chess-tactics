@@ -1,5 +1,4 @@
 import { useRef, type CSSProperties, type ReactElement } from 'react';
-import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import {
   runCardDefinition,
   type RunArmyPieceType,
@@ -10,7 +9,7 @@ import {
 } from '../run/model';
 import { updateAppSettings, useAppSettings } from '../settings/appSettings';
 import { RunCard } from './RunCard';
-import { RunCardBack, RUN_CARD_BACK_SLOT } from './RunCardBack';
+import { RunCardBack, useRunCardBackMediaUrl } from './RunCardBack';
 import { runCardFlightGeometry, runCardMotionDurationMs } from './runCardFlightView';
 import { useSceneEnteredAction } from './shell/SceneActivity';
 import { SceneContinuityPortal } from './shell/SceneContinuity';
@@ -73,6 +72,7 @@ export function RunDeploymentDeckDeal({
 }): ReactElement | null {
   const deployment = run.deployment;
   const settings = useAppSettings();
+  const backMediaUrl = useRunCardBackMediaUrl();
   const visible = deployment?.stage === 'awaiting-deal' || deployment?.stage === 'dealing';
   const awaiting = deployment?.stage === 'awaiting-deal';
   const centerCount = Math.max(0, run.cards.length - dealtCount);
@@ -99,7 +99,7 @@ export function RunDeploymentDeckDeal({
               aria-hidden={depth > 0 ? true : undefined}
               key={depth}
             >
-              <RunCardBack mediaUrl={resolvedLiveMediaUrl(RUN_CARD_BACK_SLOT)} />
+              <RunCardBack mediaUrl={backMediaUrl} />
             </span>
           );
         })}
@@ -150,6 +150,7 @@ export function RunDeploymentCardStack({
   onDiscardComplete: () => void;
 }): ReactElement {
   const deployment = run.deployment;
+  const backMediaUrl = useRunCardBackMediaUrl();
   const rootRef = useRef<HTMLDivElement | null>(null);
   const dealtKey = deployment?.dealtCardIds.join(':') ?? '';
   const cardById = new Map(run.cards.map((card) => [card.id, card]));
@@ -363,11 +364,11 @@ export function RunDeploymentCardStack({
           <div className="run-deployment-deal-flights">
             {remainingIds.map((cardId) => (
               <div className="run-deployment-deal-flight" data-deployment-flight-card={cardId} key={cardId}>
-                <RunCardBack mediaUrl={resolvedLiveMediaUrl(RUN_CARD_BACK_SLOT)} />
+                <RunCardBack mediaUrl={backMediaUrl} />
               </div>
             ))}
             <div className="run-deployment-deal-flight is-remainder" data-deployment-remainder-flight="">
-              <RunCardBack mediaUrl={resolvedLiveMediaUrl(RUN_CARD_BACK_SLOT)} />
+              <RunCardBack mediaUrl={backMediaUrl} />
               <strong className="run-deployment-center-count">{undealtCardCount}</strong>
             </div>
           </div>
@@ -395,7 +396,7 @@ export function RunDeploymentCardStack({
                       emptyPieceIndices={presentation.emptyPieceIndices}
                     />
                   ) : (
-                    <RunCardBack mediaUrl={resolvedLiveMediaUrl(RUN_CARD_BACK_SLOT)} />
+                    <RunCardBack mediaUrl={backMediaUrl} />
                   )}
                 </div>
               );
@@ -431,7 +432,7 @@ export function RunDeploymentCardStack({
               key={cardId}
             >
               <span className="run-deployment-stack-side is-back">
-                <RunCardBack mediaUrl={resolvedLiveMediaUrl(RUN_CARD_BACK_SLOT)} />
+                <RunCardBack mediaUrl={backMediaUrl} />
               </span>
               {isActive && owned && activeDefinition && activeIdentity ? (
                 <span className="run-deployment-stack-side is-front">
