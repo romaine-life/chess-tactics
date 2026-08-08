@@ -1,11 +1,17 @@
 import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { sectioUpcomingBattleIndex, type RunDocument } from '../run/model';
 import { levelToEditorBoard } from '../core/levelBoard';
-import { InnerChromeBox } from './shared/ChromeBox';
+import { ChromeDivider, InnerChromeBox } from './shared/ChromeBox';
 import { FramedReadOnlyBoardView } from './shared/BoardViewFraming';
 import { LevelInfoCompact } from './LevelInfoCompact';
 import { RunSceneViewport } from './RunWorkspace';
 import { PaintedSurfaceBoundary } from './shell/PaintedSurfaceBoundary';
+
+/**
+ * Closest installed surface material to the owner's asked-for tealish marble. The catalog ships
+ * stone-blue and oak only; this is the stone-blue one, not a teal marble.
+ */
+const RUN_BATTLE_PREVIEW_INFO_SURFACE = 'hybrid-stone-blue';
 
 /**
  * Sectio-only reconnaissance of the next canonical War Level. This is deliberately a read-only
@@ -55,38 +61,51 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
         className="run-battle-preview-surface"
       >
         <div className="run-battle-preview-layout">
-          <header className="run-battle-preview-head">
-            <span className="skirmish-eyebrow">
-              Upcoming Battle · {battleIndex + 1} of {run.war.battles.length}
-            </span>
-            <h2 id="run-battle-preview-title">{level.name}</h2>
-            <p>Drag to pan · scroll to zoom</p>
-          </header>
-
-          {/* The frame HUGS the canonical 4:3 drawable window rather than stretching to the
-              column, so the level art meets the chrome on all four sides. A stretched frame
-              seats a centred 4:3 pane inside itself and paints the surplus as a flat opaque
-              band across the artwork (ADR-0192/ADR-0259). */}
-          <div className="run-battle-preview-board-seat">
-            <InnerChromeBox className="run-battle-preview-board-frame">
-              <div className="ce-level-viewer run-battle-preview-board-view">
-                <FramedReadOnlyBoardView
-                  board={board}
-                  viewKey={`${run.id}:${battleIndex}:${level.id}`}
-                  ariaLabel={`${level.name} upcoming Battle preview`}
-                  onTerrainFirstFrame={() => setTerrainPainted(true)}
-                  onSceneFirstFrame={() => setScenePainted(true)}
-                  onFrameError={(value) => setFrameError(
-                    value instanceof Error ? value : new Error(String(value)),
-                  )}
-                />
-              </div>
-            </InnerChromeBox>
-          </div>
+          {/* The board box carries its own title bar, so the name belongs to the frame rather
+              than floating above it. Both columns stretch to the one row, which is what makes
+              their tops and bottoms agree; the pane FILLS the frame it is given (ADR-0201), so
+              no surplus of the frame is left over to be painted as a band across the art. */}
+          <InnerChromeBox className="run-battle-preview-board-frame">
+            <header className="run-battle-preview-board-head">
+              <h2 id="run-battle-preview-title">{level.name}</h2>
+            </header>
+            <ChromeDivider role="inner" />
+            <div className="ce-level-viewer run-battle-preview-board-view">
+              <FramedReadOnlyBoardView
+                board={board}
+                viewKey={`${run.id}:${battleIndex}:${level.id}`}
+                ariaLabel={`${level.name} upcoming Battle preview`}
+                viewportMode="fill"
+                showGrid
+                onTerrainFirstFrame={() => setTerrainPainted(true)}
+                onSceneFirstFrame={() => setScenePainted(true)}
+                onFrameError={(value) => setFrameError(
+                  value instanceof Error ? value : new Error(String(value)),
+                )}
+              />
+            </div>
+          </InnerChromeBox>
 
           <aside className="run-battle-preview-intelligence" aria-label="Upcoming Battle intelligence">
-            <LevelInfoCompact level={level} />
-            <InnerChromeBox className="run-battle-preview-note">
+            <LevelInfoCompact
+              level={level}
+              showZones={false}
+              fillSurface={RUN_BATTLE_PREVIEW_INFO_SURFACE}
+              className="run-battle-preview-info"
+              lead={(
+                <section className="ce-li-zones-row">
+                  <span className="ce-li-title">Battle</span>
+                  <span className="ce-li-zones">
+                    {battleIndex + 1} of {run.war.battles.length} · {run.cards.length} formation
+                    {run.cards.length === 1 ? '' : 's'} deploy with you
+                  </span>
+                </section>
+              )}
+            />
+            <InnerChromeBox
+              className="run-battle-preview-note"
+              fillSurface={RUN_BATTLE_PREVIEW_INFO_SURFACE}
+            >
               <h3>Before deployment</h3>
               <p>
                 Fixed pieces appear on the map. The Forces ledger also counts setup forces whose

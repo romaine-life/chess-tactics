@@ -53,6 +53,22 @@ function countTotal(counts: PieceCounts): number {
   return PIECE_ORDER.reduce((sum, piece) => sum + (counts[piece] ?? 0), 0);
 }
 
+/**
+ * Pieces a side brings whose exact squares are DEALT when the Battle begins, as opposed to the
+ * fixed ones authored onto the map. The Forces ledger sums both, so without this the reader
+ * cannot tell a known position from one the Battle will choose.
+ */
+function dealtCountForSide(level: Level, side: 'player' | 'enemy'): number {
+  let dealt = 0;
+  for (const event of spawnEventsForLevel(level)) {
+    if (event.side !== side) continue;
+    for (const count of Object.values(event.roster ?? {})) {
+      if (typeof count === 'number' && count > 0) dealt += count;
+    }
+  }
+  return dealt;
+}
+
 // Which side "owns" the King for a level, mirroring core's kingSideOf(pieces) but read
 // off the LEVEL's own content instead of a live board: authored units plus setup spawn
 // events. Same rule — the player owns it only when the player fields a King and the enemy
@@ -81,20 +97,46 @@ export function levelShowsTerrainTypeCounts(level: Level): boolean {
   return !isPredrawnBackgroundActive(levelToEditorBoard(level));
 }
 
-function Roster({ counts, tone, label }: { counts: PieceCounts; tone: string; label: string }): ReactElement {
+function Roster({ counts, tone, label, dealt = 0 }: {
+  counts: PieceCounts;
+  tone: string;
+  label: string;
+  dealt?: number;
+}): ReactElement {
   const present = PIECE_ORDER.filter((p) => counts[p]);
+  const total = countTotal(counts);
   return (
     <div className="ce-li-roster">
-      <div className={`ce-li-roster-head ${tone}`}><span>{label}</span><strong>{countTotal(counts)}</strong></div>
+      <div className={`ce-li-roster-head ${tone}`}><span>{label}</span><strong>{total}</strong></div>
       <ul>
         {present.map((p) => <li key={p}><span>{PIECE_LABEL[p]}</span><b>×{counts[p]}</b></li>)}
         {present.length === 0 ? <li className="ce-li-none">none</li> : null}
       </ul>
+      {dealt > 0 ? (
+        <p className="ce-li-dealt">
+          {dealt} of {total} dealt at start · {total - dealt} fixed on the map
+        </p>
+      ) : null}
     </div>
   );
 }
 
-export function LevelInfoCompact({ level }: { level: Level }): ReactElement {
+export function LevelInfoCompact({
+  level,
+  showZones = true,
+  fillSurface,
+  className = '',
+  lead = null,
+}: {
+  level: Level;
+  /** Zones are authoring detail; a player-facing reconnaissance readout omits them. */
+  showZones?: boolean;
+  /** Installed surface material under the readout. */
+  fillSurface?: string;
+  className?: string;
+  /** Rows this readout's consumer owns, above the level's own derived facts. */
+  lead?: ReactElement | null;
+}): ReactElement {
   const { cols, rows } = level.board;
   const total = cols * rows;
   const filled = level.layers.terrain.filter((tile) => tile.terrain !== 'void').length;
@@ -108,7 +150,12 @@ export function LevelInfoCompact({ level }: { level: Level }): ReactElement {
   const zoneParts = ZONE_ORDER.filter((z) => zoneMix[z]).map((z) => `${ZONE_LABEL[z]} ${zoneMix[z]}`);
 
   return (
-    <InnerChromeBox className="ce-level-info" data-testid="level-info-compact">
+    <InnerChromeBox
+      className={`ce-level-info ${className}`.trim()}
+      fillSurface={fillSurface}
+      data-testid="level-info-compact"
+    >
+      {lead}
       <section className="ce-li-board">
         <span className="ce-li-title">Board</span>
         <div className="ce-li-stat"><span>Size</span><strong>{cols} × {rows}</strong></div>
@@ -125,15 +172,17 @@ export function LevelInfoCompact({ level }: { level: Level }): ReactElement {
       <section className="ce-li-forces">
         <span className="ce-li-title">Forces</span>
         <div className="ce-li-rosters">
-          <Roster counts={allies} tone="is-ally" label="Allies" />
-          <Roster counts={enemies} tone="is-enemy" label="Enemies" />
+          <Roster counts={allies} tone="is-ally" label="Allies" dealt={dealtCountForSide(level, 'player')} />
+          <Roster counts={enemies} tone="is-enemy" label="Enemies" dealt={dealtCountForSide(level, 'enemy')} />
         </div>
       </section>
 
-      <section className="ce-li-zones-row">
-        <span className="ce-li-title">Zones</span>
-        <span className="ce-li-zones">{zoneParts.length ? zoneParts.join('  ·  ') : 'None defined'}</span>
-      </section>
+      {showZones ? (
+        <section className="ce-li-zones-row">
+          <span className="ce-li-title">Zones</span>
+          <span className="ce-li-zones">{zoneParts.length ? zoneParts.join('  ·  ') : 'None defined'}</span>
+        </section>
+      ) : null}
 
       <section className="ce-li-zones-row">
         <span className="ce-li-title">Rules</span>

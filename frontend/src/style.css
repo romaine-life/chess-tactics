@@ -19613,53 +19613,22 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
+/* ONE row, two columns, both stretched: that is what makes the board box and the intelligence
+   boxes share a top AND a bottom line. Nothing sits above the board to push it down — its name
+   is its own title bar. */
 .run-battle-preview-layout {
   display: grid;
   gap: var(--ds-stack);
-  grid-template-areas:
-    "head intelligence"
-    "board intelligence";
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 34%);
-  grid-template-rows: auto minmax(0, 1fr);
-}
-
-.run-battle-preview-head {
-  align-content: start;
-  display: grid;
-  gap: var(--ds-space-1);
-  grid-area: head;
-}
-
-.run-battle-preview-head p {
-  color: var(--skirmish-muted);
-  font-size: var(--ds-text-sm);
-}
-
-/* The board area is the measuring container: the frame inside it takes the largest box whose
-   INTERIOR is the canonical 4:3 drawable window (ADR-0192/ADR-0259), exactly as Play's
-   `.skirmish-board-frame` does. A frame stretched to the area instead seats a centred 4:3 pane
-   inside itself, and the surplus becomes an opaque band painted across the level art. */
-.run-battle-preview-board-seat {
-  container-type: size;
-  display: grid;
-  grid-area: board;
-  /* Explicit filling tracks, not auto ones: a size container's contents cannot size its tracks,
-     so an auto track plus a percentage-width child resolves to zero. */
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "board intelligence";
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 34%);
   grid-template-rows: minmax(0, 1fr);
-  min-block-size: 0;
-  min-inline-size: 0;
 }
 
 .run-battle-preview-board-frame {
-  align-self: center;
-  justify-self: center;
-  /* Both sides of the registered inner-box border: the pixels between the measured area and the
-     4:3 interior the aspect is solved for. */
-  --run-battle-preview-frame-inset: calc(2 * var(--le-chrome-inner-rail-w, 7px));
-  block-size: auto;
   display: grid;
-  inline-size: 100%;
+  grid-area: board;
+  /* Title bar, its registered divider, then the pane takes the whole remainder. */
+  grid-template-rows: auto auto minmax(0, 1fr);
   min-block-size: 0;
   min-inline-size: 0;
   overflow: hidden;
@@ -19670,20 +19639,25 @@ button.tileset-relationship-cell {
   padding: 0;
 }
 
-@supports (inline-size: 1cqb) {
-  .run-battle-preview-board-frame {
-    max-inline-size: calc(
-      (100cqb - var(--run-battle-preview-frame-inset))
-        * var(--board-view-aspect-width) / var(--board-view-aspect-height)
-      + var(--run-battle-preview-frame-inset)
-    );
-  }
+/* The board's own title bar, seated ON the frame with no gap between it and the pane below. It
+   paints nothing of its own: the frame's registered inner surface is what shows behind it, and
+   the seam is a registered divider (ADR-0032/0059). */
+.run-battle-preview-board-head {
+  align-items: center;
+  display: flex;
+  padding: var(--ds-space-1) var(--ds-space-2);
 }
 
-/* No block-size override: the canonical `.ce-level-viewer` 4:3 governs, so the frame's height
-   is derived from its width and the seated pane fills the interior exactly. */
-.run-battle-preview-board-view,
-.run-battle-preview-board-view > .board-view-pane-seat {
+.run-battle-preview-board-head h2 {
+  font-size: var(--ds-text-lg);
+  margin: 0;
+}
+
+/* The pane FILLS the frame it is given: no nested fixed-aspect seat, so no surplus of the frame
+   is left over to be painted as a band across the art (ADR-0201/ADR-0278). */
+.run-battle-preview-board-view {
+  aspect-ratio: auto;
+  block-size: 100%;
   min-block-size: 0;
   min-inline-size: 0;
 }
@@ -19692,28 +19666,81 @@ button.tileset-relationship-cell {
   cursor: default;
 }
 
+/* The readout takes the height its facts need; the note below it absorbs the remainder, so the
+   column still bottoms out level with the board without leaving dead space inside the readout. */
 .run-battle-preview-intelligence {
   display: grid;
   gap: var(--ds-inline);
   grid-area: intelligence;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
   min-block-size: 0;
   min-inline-size: 0;
 }
 
-.run-battle-preview-intelligence .ce-level-info {
+/* The readout was borrowed from a narrow editor tab and kept that tab's compact type. Here it
+   owns a full column, so every level of it steps up and the sections spread into the height they
+   are given instead of huddling at the top over dead space. */
+.run-battle-preview-info.ce-level-info {
+  align-content: start;
+  block-size: auto;
   grid-template-columns: minmax(0, 1fr);
+  overflow: auto;
+  padding: var(--ds-inset);
+  row-gap: var(--ds-stack);
+}
+
+.run-battle-preview-info .ce-level-info-section,
+.run-battle-preview-info section {
+  gap: var(--ds-space-2);
+}
+
+.run-battle-preview-info .ce-li-title {
+  font-size: var(--ds-text-md);
+  letter-spacing: .06em;
+}
+
+.run-battle-preview-info :is(.ce-li-stat span, .ce-li-roster li span, .ce-li-roster-head span) {
+  font-size: var(--ds-text-lg);
+}
+
+.run-battle-preview-info :is(.ce-li-stat strong, .ce-li-roster li b, .ce-li-zones) {
+  font-size: var(--ds-text-lg);
+}
+
+.run-battle-preview-info .ce-li-roster-head strong {
+  font-size: var(--ds-text-xl);
+}
+
+.run-battle-preview-info .ce-li-rosters {
+  gap: var(--ds-stack);
+}
+
+.run-battle-preview-info .ce-li-roster ul {
+  gap: var(--ds-space-1);
+}
+
+.run-battle-preview-info .ce-li-none {
+  font-size: var(--ds-text-md);
+}
+
+.ce-li-dealt {
+  color: var(--ce-muted);
+  font-size: var(--ds-text-sm);
+  margin: var(--ds-space-2) 0 0;
 }
 
 .run-battle-preview-note {
+  align-content: start;
   display: grid;
   gap: var(--ds-space-2);
+  min-block-size: 0;
+  overflow: auto;
   padding: var(--ds-inset);
 }
 
 .run-battle-preview-note p {
   color: var(--skirmish-muted);
-  font-size: var(--ds-text-sm);
+  font-size: var(--ds-text-md);
 }
 
 @media (max-width: 900px) {
@@ -19732,21 +19759,16 @@ button.tileset-relationship-cell {
   .run-battle-preview-layout {
     align-self: start;
     grid-template-areas:
-      "head"
       "board"
       "intelligence";
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto auto;
+    grid-template-rows: auto auto;
   }
 
-  /* Stacked, the board row is content-height, so there is no definite block size to solve the
-     4:3 against — the frame simply takes the column width and the viewer derives its height. */
-  .run-battle-preview-board-seat {
-    container-type: inline-size;
-  }
-
-  .run-battle-preview-board-frame {
-    max-inline-size: none;
+  /* Stacked, nothing constrains the board's height, so it takes the canonical shape. */
+  .run-battle-preview-board-view {
+    aspect-ratio: var(--board-view-aspect);
+    block-size: auto;
   }
 
   .run-battle-preview-intelligence {
