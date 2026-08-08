@@ -5848,6 +5848,86 @@ body.loading-bootstrap .app-startup-status {
   --chrome-surface-position-y: calc(var(--promotion-leaf-index, 0) * -1 * var(--promotion-leaf-surface-pitch));
 }
 
+/* Gold the Run paid for something that happened ON the board reads off that square, not off a
+   panel. Same zero-size board-space anchor as the promotion picker, so it inherits pan/zoom
+   while the marker's inline inverse scale keeps the number one screen size. It rises out of
+   the unit and fades; nothing about it is interactive, and it retires itself. */
+.skirmish-gold-notice-anchor {
+  height: 0;
+  pointer-events: none;
+  position: absolute;
+  width: 0;
+  z-index: 39000;
+}
+
+/* The rise plays by DEFAULT, even under OS prefers-reduced-motion: this machine (and many
+   players' — Windows "Animation effects" off) reports reduce FALSELY, and the rise IS the
+   feedback, so gating it on that query would silently delete the whole cue. Hence !important,
+   clearing the global `* { animation: none }` OS-reduce reset further down this file. The
+   EXPLICIT in-game choice (:root.reduce-motion) keeps the number and drops the travel. */
+.skirmish-gold-notice {
+  align-items: center;
+  animation: skirmish-gold-notice-rise 1400ms ease-out forwards !important;
+  color: #ffd27b;
+  display: flex;
+  /* The display face is a pixel face, and those are 400-only (ADR-0016) — a synthetic bold
+     on it is smeared, not heavier. Contrast comes from the shadow below, not from weight. */
+  font: var(--ds-weight-regular) var(--ds-text-xl)/1 var(--ds-font-display);
+  gap: var(--ds-space-1);
+  left: 0;
+  position: absolute;
+  /* The board underneath is arbitrary art, so the number carries its own contrast rather
+     than assuming a readable tile behind it. */
+  text-shadow: 0 2px 0 #02070b, 0 0 10px rgba(2, 7, 11, .6);
+  transform-origin: bottom center;
+  translate: -50% 0;
+  white-space: nowrap;
+}
+
+.skirmish-gold-notice.is-loss {
+  color: #ffad9d;
+}
+
+/* Explicitly reduced motion still gets told what it earned — it just holds still and fades. */
+:root.reduce-motion .skirmish-gold-notice {
+  animation: skirmish-gold-notice-hold 1400ms ease-out forwards !important;
+}
+
+.skirmish-gold-notice .run-gold-icon {
+  block-size: 34px;
+  inline-size: 34px;
+}
+
+/* Rise and fade. `translate` carries the motion so the inline `transform` scale (the inverse
+   zoom) is never overwritten by the animation. */
+@keyframes skirmish-gold-notice-rise {
+  0% {
+    opacity: 0;
+    translate: -50% 14px;
+  }
+
+  14% {
+    opacity: 1;
+    translate: -50% 0;
+  }
+
+  70% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    translate: -50% -58px;
+  }
+}
+
+@keyframes skirmish-gold-notice-hold {
+  0% { opacity: 0; }
+  14% { opacity: 1; }
+  70% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 .skirmish-promotion-picker-heading {
   display: grid;
   gap: 2px;
@@ -20000,7 +20080,7 @@ button.tileset-relationship-cell {
 .run-gold-amount {
   align-items: center;
   display: inline-flex;
-  font: var(--ds-weight-bold) var(--ds-text-lg)/1 var(--ds-font-display);
+  font: var(--ds-weight-regular) var(--ds-text-lg)/1 var(--ds-font-display);
   gap: var(--ds-space-1);
   white-space: nowrap;
 }
@@ -20030,7 +20110,7 @@ button.tileset-relationship-cell {
 .run-gold-transaction-amount {
   align-items: center;
   display: inline-flex;
-  font: var(--ds-weight-bold) var(--ds-text-lg)/1 var(--ds-font-display);
+  font: var(--ds-weight-regular) var(--ds-text-lg)/1 var(--ds-font-display);
   gap: var(--ds-space-1);
   min-block-size: 64px;
   min-inline-size: calc(64px + var(--ds-space-1) + 4ch);

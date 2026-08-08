@@ -30,6 +30,19 @@ describe('administrator battle interventions', () => {
     expect(targets).toContainEqual({ x: 2, y: 2 });
   });
 
+  it('offers geometry for the side NOT to move, and never for scenery', () => {
+    // Setting up a position mostly means arranging what the opponent did, so the army to
+    // move is not the only one that can be picked up.
+    const targets = adminMoveTargets(game(), 'enemy');
+    expect(targets).toContainEqual({ x: 0, y: 0, capture: 'player-rook' });
+    expect(targets).toContainEqual({ x: 2, y: 2 });
+    // Its own square and the neutral rock stay blocked, exactly as for the moving side.
+    expect(targets).not.toContainEqual(expect.objectContaining({ x: 2, y: 0 }));
+    expect(targets).not.toContainEqual(expect.objectContaining({ x: 1, y: 1 }));
+
+    expect(adminMoveTargets(game(), 'rock')).toEqual([]);
+  });
+
   it('kills any living unit without mutating the input position', () => {
     const before = game();
     const result = killUnitForAdmin(before, 'friend');
