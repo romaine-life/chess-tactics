@@ -8,12 +8,6 @@ import { RunSceneViewport } from './RunWorkspace';
 import { PaintedSurfaceBoundary } from './shell/PaintedSurfaceBoundary';
 
 /**
- * Closest installed surface material to the owner's asked-for tealish marble. The catalog ships
- * stone-blue and oak only; this is the stone-blue one, not a teal marble.
- */
-const RUN_BATTLE_PREVIEW_INFO_SURFACE = 'hybrid-stone-blue';
-
-/**
  * Sectio-only reconnaissance of the next canonical War Level. This is deliberately a read-only
  * Level projection: it neither prepares Deployment nor resolves the Run army or enemy setup
  * squares ahead of the transition that owns them.
@@ -90,7 +84,9 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
             <LevelInfoCompact
               level={level}
               showZones={false}
-              fillSurface={RUN_BATTLE_PREVIEW_INFO_SURFACE}
+              // The marble the title bar and Controls rail are painted with: the installed
+              // OUTER role material, borrowed under an inner frame (ADR-0433 borrowing rule).
+              fillRole="outer"
               className="run-battle-preview-info"
               lead={(
                 <section className="ce-li-zones-row">
@@ -102,10 +98,7 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
                 </section>
               )}
             />
-            <InnerChromeBox
-              className="run-battle-preview-note"
-              fillSurface={RUN_BATTLE_PREVIEW_INFO_SURFACE}
-            >
+            <InnerChromeBox className="run-battle-preview-note" fillRole="outer">
               <h3>Before deployment</h3>
               <p>
                 Fixed pieces appear on the map. The Forces ledger also counts setup forces whose

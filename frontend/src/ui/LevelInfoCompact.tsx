@@ -3,7 +3,7 @@
 // itself — board composition, unit roster by piece, zones, and its win-rule mode
 // (the Rules row). Its consumer (CampaignEditor's Info tab) is display-only, so
 // there is no editing grid; this is the whole readout, not a header above one.
-import { type ReactElement } from 'react';
+import { type ComponentProps, type ReactElement } from 'react';
 import type { Level, ZoneType } from '../core/level';
 import { MODE_NAME, objectiveContextForLevel, victoryRulesForLevel } from '../core/objectives';
 import { formatClockSeconds } from '../core/clock';
@@ -124,15 +124,15 @@ function Roster({ counts, tone, label, dealt = 0 }: {
 export function LevelInfoCompact({
   level,
   showZones = true,
-  fillSurface,
+  fillRole,
   className = '',
   lead = null,
 }: {
   level: Level;
   /** Zones are authoring detail; a player-facing reconnaissance readout omits them. */
   showZones?: boolean;
-  /** Installed surface material under the readout. */
-  fillSurface?: string;
+  /** Installed role material under the readout; the frame's own role stays inner. */
+  fillRole?: ComponentProps<typeof InnerChromeBox>['fillRole'];
   className?: string;
   /** Rows this readout's consumer owns, above the level's own derived facts. */
   lead?: ReactElement | null;
@@ -152,7 +152,7 @@ export function LevelInfoCompact({
   return (
     <InnerChromeBox
       className={`ce-level-info ${className}`.trim()}
-      fillSurface={fillSurface}
+      fillRole={fillRole}
       data-testid="level-info-compact"
     >
       {lead}
