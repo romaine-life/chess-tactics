@@ -26748,16 +26748,17 @@ button.run-card-formation-cell {
   max-inline-size: 78ch;
 }
 
-.run-card-outline-widths {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+.run-card-outline-size {
+  margin: 0;
 }
 
 .run-card-outline-columns {
+  align-items: start;
   display: grid;
   gap: 16px;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  /* Two columns while they fit; below that they stack rather than squeezing the cards, because a
+     squeezed card is a different rasterization and would not be the thing under comparison. */
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
   min-inline-size: 0;
 }
 

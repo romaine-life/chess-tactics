@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
+import { type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { RUN_CARD_BY_ID } from '../run/model';
 import { RunCard } from './RunCard';
 import { StudioCatalogCard } from './studio/StudioCatalogCard';
@@ -42,11 +42,12 @@ const SPECIMENS: readonly Readonly<{ id: string; shape: string }>[] = Object.fre
   Object.freeze({ id: 'p', shape: 'Single seat' }),
 ]);
 
-const CARD_WIDTHS: readonly Readonly<{ id: string; label: string; width: string }>[] = Object.freeze([
-  Object.freeze({ id: 'shipped', label: 'As the Run prints it', width: '196px' }),
-  Object.freeze({ id: 'double', label: '2x', width: '392px' }),
-  Object.freeze({ id: 'quadruple', label: '4x', width: '784px' }),
-]);
+/**
+ * The width a Sectio offer prints at. Zoom is the Viewer's own control and means what it means
+ * everywhere else in the Studio — 100% is full size — so at 100% these cards are the exact size
+ * the game deals them, and the comparison starts from what a player actually sees.
+ */
+export const RUN_CARD_OUTLINE_PRINTED_WIDTH = 196;
 
 export function RunCardOutlineCatalog({ onOpen }: { onOpen: () => void }): ReactElement {
   return (
@@ -84,9 +85,14 @@ export function RunCardOutlineCatalog({ onOpen }: { onOpen: () => void }): React
   );
 }
 
-export function RunCardOutlineViewer({ header }: { header: ReactNode }): ReactElement {
-  const [widthId, setWidthId] = useState(CARD_WIDTHS[0].id);
-  const width = CARD_WIDTHS.find((candidate) => candidate.id === widthId) ?? CARD_WIDTHS[0];
+export function RunCardOutlineViewer({
+  header,
+  viewerZoom,
+}: {
+  header: ReactNode;
+  viewerZoom: number;
+}): ReactElement {
+  const cardWidth = Math.round(RUN_CARD_OUTLINE_PRINTED_WIDTH * viewerZoom);
 
   return (
     <div className="run-card-outline-viewer" data-testid="run-card-outline-viewer">
@@ -96,19 +102,10 @@ export function RunCardOutlineViewer({ header }: { header: ReactNode }): ReactEl
         about one pixel wide, so how they rasterize is the whole of how they read. Both are live
         below — the same cards, the same line colour and weight, differing only in antialiasing.
       </p>
-      <div className="run-card-outline-widths" role="group" aria-label="Card size">
-        {CARD_WIDTHS.map((candidate) => (
-          <button
-            type="button"
-            key={candidate.id}
-            className={`tileset-view-action${candidate.id === widthId ? ' is-active' : ''}`}
-            aria-pressed={candidate.id === widthId}
-            onClick={() => setWidthId(candidate.id)}
-          >
-            {candidate.label}
-          </button>
-        ))}
-      </div>
+      <p className="run-card-outline-size" role="status">
+        {`Cards are ${cardWidth}px wide`}
+        {viewerZoom === 1 ? ' — the size the Run deals them.' : `, against ${RUN_CARD_OUTLINE_PRINTED_WIDTH}px dealt. Zoom drives it.`}
+      </p>
       <div className="run-card-outline-columns">
         {RENDERINGS.map((rendering) => (
           <section className="run-card-outline-column" key={rendering.id} aria-label={rendering.label}>
@@ -119,7 +116,7 @@ export function RunCardOutlineViewer({ header }: { header: ReactNode }): ReactEl
                 <figure className="run-card-outline-specimen" key={specimen.id}>
                   <span
                     className="run-card-outline-face"
-                    style={{ '--run-card-outline-face-width': width.width } as CSSProperties}
+                    style={{ '--run-card-outline-face-width': `${cardWidth}px` } as CSSProperties}
                   >
                     <RunCard
                       card={RUN_CARD_BY_ID[specimen.id]}
