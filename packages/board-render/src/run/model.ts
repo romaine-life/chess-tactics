@@ -1,4 +1,10 @@
-import { validateLevel, type Level, type War } from '../core/level';
+import {
+  LEVEL_BATTLE_CARDS_DEALT_MAX,
+  LEVEL_BATTLE_CARDS_DEALT_MIN,
+  validateLevel,
+  type Level,
+  type War,
+} from '../core/level';
 import { migrateLevelDocument } from '../core/levelMigration';
 import type { PieceType, Vec } from '../core/types';
 import {
@@ -57,6 +63,10 @@ export const RUN_DEPLOYMENT_REROLL_COST_TENTHS = GOLD_SCALE;
 export const RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS = 5 * GOLD_SCALE;
 export const RUN_SECTIO_CARD_OFFER_COUNT = 3;
 export const RUN_SECTIO_CARD_PILE_SIZE = 20;
+
+/** The Deployment deal a Battle opens with when its Level authors no count of its own, before the
+ * seat every cleared Conflict adds to it. See `runDeploymentDealCount`. */
+export const RUN_DEPLOYMENT_BASE_DEAL = 3;
 
 /** How often each rarity reaches the market. These are quotas, not roll odds: a pile holds
  * exactly this composition every time, so what a Battle can buy is the same number rather than
@@ -2524,6 +2534,25 @@ function freshDeploymentState(
   };
 }
 
+/**
+ * How many cards a Battle's Deployment deals. A Level may author the count its own board asks for
+ * (`battle.cardsDealt`), which is how a cramped map stops being handed a force it has no room to
+ * place; absent, the Run's progression opens one more seat per Conflict already cleared. One
+ * shared answer, so the deal and everything that reads it cannot drift apart.
+ */
+export function runDeploymentDealCount(
+  run: Pick<RunDocument, 'war' | 'battleIndex' | 'conflictIndex'>,
+): number {
+  const authored = run.war.battles[run.battleIndex]?.level.battle?.cardsDealt;
+  if (typeof authored === 'number' && Number.isFinite(authored)) {
+    return Math.min(
+      LEVEL_BATTLE_CARDS_DEALT_MAX,
+      Math.max(LEVEL_BATTLE_CARDS_DEALT_MIN, Math.floor(authored)),
+    );
+  }
+  return Math.max(1, RUN_DEPLOYMENT_BASE_DEAL + run.conflictIndex);
+}
+
 export function prepareDeployment(run: RunDocument): RunDocument {
   if (run.phase !== 'deployment') return run;
   if (run.deployment?.battleIndex === run.battleIndex) {
@@ -2535,7 +2564,7 @@ export function prepareDeployment(run: RunDocument): RunDocument {
     run.cards.filter((card) => card.id !== hisGrace?.id),
     mixSeed(seed, 'deployment-cards'),
   );
-  const dealCount = Math.max(1, 3 + run.conflictIndex);
+  const dealCount = runDeploymentDealCount(run);
   const dealtCardIds = [...(hisGrace ? [hisGrace] : []), ...ordinary]
     .slice(0, dealCount)
     .map((card) => card.id);

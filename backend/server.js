@@ -9221,6 +9221,10 @@ function validateWorkspaceEvents(events, key) {
 const WORKSPACE_BOARD_COLS = { min: 1, max: 48 };
 const WORKSPACE_BOARD_ROWS = { min: 1, max: 48 };
 const WORKSPACE_LEVEL_FORMAT_VERSION = serverRender?.LEVEL_FORMAT_VERSION ?? 2;
+// Mirrors LEVEL_BATTLE_CARDS_DEALT_MIN/MAX in core/level.ts — the bounds a Level may author its
+// own Deployment deal within. Same shared-constant-with-literal-fallback shape as the line above.
+const WORKSPACE_BATTLE_CARDS_DEALT_MIN = serverRender?.LEVEL_BATTLE_CARDS_DEALT_MIN ?? 1;
+const WORKSPACE_BATTLE_CARDS_DEALT_MAX = serverRender?.LEVEL_BATTLE_CARDS_DEALT_MAX ?? 12;
 
 function isFiniteInteger(value) {
   return Number.isInteger(value) && Number.isFinite(value);
@@ -9272,7 +9276,10 @@ function validateWorkspaceLevel(level, key) {
   if (level.battle !== undefined) {
     const battle = level.battle;
     if (!battle || typeof battle !== 'object' || Array.isArray(battle)
-      || (battle.loot !== undefined && typeof battle.loot !== 'boolean')) {
+      || (battle.loot !== undefined && typeof battle.loot !== 'boolean')
+      || (battle.cardsDealt !== undefined && (!isFiniteInteger(battle.cardsDealt)
+        || battle.cardsDealt < WORKSPACE_BATTLE_CARDS_DEALT_MIN
+        || battle.cardsDealt > WORKSPACE_BATTLE_CARDS_DEALT_MAX))) {
       return `levels.${key}.battle is invalid`;
     }
   }
