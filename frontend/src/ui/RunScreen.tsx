@@ -48,6 +48,7 @@ import {
   RUN_BATTLE_RETRY_COST_TENTHS,
   restartBattle,
   runBattleActivityId,
+  runCardUnitIds,
   performExpunctio,
   sectioHasChanges,
   takeVacantiaLipsanon,
@@ -57,6 +58,7 @@ import {
   type LipsanonId,
 } from '../run/model';
 import {
+  arrangedCardAtCell,
   arrangedCardPlaceableCells,
   arrangedCardPlacementAtAnchor,
   arrangedCardPlacementOptions,
@@ -75,6 +77,7 @@ import {
   nextCardRotation,
   normalReservistCell,
   previousCardRotation,
+  steppedArrangedCard,
   turnableCardRotations,
   turnedCardPlacement,
   placeArrangedDeploymentCard,
@@ -129,8 +132,9 @@ import {
 import { isStrategikonPath, strategikonRouteCrumbs } from './strategikonRoute';
 import { createRunForm, runActivity, type RunForm } from './RunForm';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
+import { KitScroll } from './KitScroll';
 import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
-import { useFormationTurnKeys, type FormationTurnDirection } from './formationTurnKeys';
+import { useFormationKeys, type FormationTurnDirection } from './formationKeys';
 import type { SkirmishBoardSurfaceState, UnitDepartureRequest } from '../render/SkirmishBoard';
 
 type RunScreenView = RunWorkspaceView;
@@ -397,7 +401,7 @@ function ArrangedDeploymentControls({
   availableRotations,
   dealProgress,
   onDealProgress,
-  onSelectCard,
+  onStepCard,
   onRotation,
   onRemove,
   onBeginBattle,
@@ -411,7 +415,7 @@ function ArrangedDeploymentControls({
   availableRotations: ReadonlySet<RunFormationRotation>;
   dealProgress: number;
   onDealProgress: (count: number) => void;
-  onSelectCard: (cardId: string) => void;
+  onStepCard: (step: 1 | -1) => void;
   onRotation: (rotation: RunFormationRotation) => void;
   onRemove: () => void;
   onBeginBattle: () => void;
@@ -431,6 +435,10 @@ function ArrangedDeploymentControls({
         aria-busy={departing || undefined}
         inert={departing || undefined}
       >
+        {/* ADR-0030: the panel itself never scrolls. The house rail is a drawn element that
+            is always present, so nothing here may fall back to the browser's own bar. Abandon
+            Run stays outside it, pinned, rather than scrolling out of reach. */}
+        <KitScroll className="run-arrangement-scroll">
         {stage === 'await-deal' || stage === 'dealing' ? (
           <RunDeploymentCardStack
             run={run}
@@ -448,7 +456,7 @@ function ArrangedDeploymentControls({
               run={run}
               cards={cards}
               selectedCardId={selectedCardId}
-              onSelect={onSelectCard}
+              onStep={onStepCard}
             />
             {selected?.admitted ? (
               <div className="skirmish-view-group run-deployment-control" data-testid="arrangement-rotation-control">
@@ -504,6 +512,7 @@ function ArrangedDeploymentControls({
             </div>
           </>
         ) : null}
+        </KitScroll>
 
         <div className="skirmish-view-group run-meta-abandon">
           <span className="skirmish-eyebrow">Run</span>
@@ -554,6 +563,19 @@ function useRunDeploymentPresentation({
     (selectedCardId ? openDeploymentBandCells(prepared, level, selectedCardId) : [])
       .map((cell) => `${cell.x},${cell.y}`),
   ), [level, prepared, selectedCardId]);
+  // Squares held by a formation ALREADY on the board, other than the one in hand. Clicking one
+  // takes that formation back rather than trying to drop the held one on top of it.
+  const arrangementPlacedCells = useMemo(() => {
+    const seats = new Map<string, string>();
+    for (const { card, placed } of arrangementCards) {
+      if (!placed || card.id === selectedCardId) continue;
+      for (const unitId of runCardUnitIds(card)) {
+        const seat = prepared.deployment?.placements?.[unitId];
+        if (seat) seats.set(seat, card.id);
+      }
+    }
+    return seats;
+  }, [arrangementCards, prepared.deployment?.placements, selectedCardId]);
   // The squares the player may point at — every square the formation could COVER at this turn,
   // not the squares its bounding-box corner could sit on. Aiming at a unit is the whole gesture.
   const arrangementPlaceableCells = useMemo(() => new Set(
@@ -677,6 +699,17 @@ function useRunDeploymentPresentation({
       replace(completeDeploymentDeal(latest, level));
     }
   }, [departureActive, level, prepared.id, replace]);
+  // The hand shows one card at a time, so the arrows and the W/S keys are the only way through
+  // it. Both run this, so they cannot disagree about what "the next card" is.
+  const stepArrangementCard = useCallback((step: 1 | -1) => {
+    if (departureActive) return;
+    const next = steppedArrangedCard(arrangementCards, selectedCardId, step);
+    if (!next || next === selectedCardId) return;
+    setSelectedCardId(next);
+    setArrangementRotation(0);
+    setPointedArrangementCell(null);
+    setHeldArrangementAnchor(null);
+  }, [arrangementCards, departureActive, selectedCardId]);
   const selectArrangementCard = useCallback((cardId: string) => {
     setSelectedCardId(cardId);
     setArrangementRotation(0);
@@ -719,11 +752,11 @@ function useRunDeploymentPresentation({
   }, [departureActive, prepared.id, replace, selectedCardId]);
   // The keys are offered on exactly the terms the rail's turn buttons are, so the two cannot
   // drift apart: a dealt formation admitted and selected, on a screen that is not departing.
-  useFormationTurnKeys(
-    stage === 'arrange' && selectedArrangementCard?.admitted && !departureActive
-      ? turnArrangement
-      : null,
-  );
+  const arranging = stage === 'arrange' && !departureActive;
+  useFormationKeys({
+    turn: arranging && selectedArrangementCard?.admitted ? turnArrangement : null,
+    step: arranging ? stepArrangementCard : null,
+  });
   const startArrangedBattle = useCallback(() => {
     if (departureActive) return;
     const latest = useActiveRun.getState().run;
@@ -764,6 +797,8 @@ function useRunDeploymentPresentation({
       const placeable = arrangementPlaceableCells.has(cellKey)
         || (pointedArrangementOption !== null && cellKey === pointedArrangementCell);
       const filled = arrangementFootprint.has(cellKey);
+      const standing = arrangementPlacedCells.get(cellKey) ?? null;
+      const actionable = placeable || Boolean(standing);
       return (
         <button
           type="button"
@@ -772,13 +807,16 @@ function useRunDeploymentPresentation({
             'run-deployment-cell',
             band ? 'is-band' : '',
             placeable ? 'is-placeable' : '',
+            standing ? 'is-seated-formation' : '',
             filled ? 'is-move' : '',
           ].filter(Boolean).join(' ')}
-          aria-label={placeable
-            ? `Place formation covering ${cell.x}, ${cell.y}`
-            : `Tile ${cell.x}, ${cell.y}`}
-          aria-hidden={placeable ? undefined : true}
-          tabIndex={placeable ? undefined : -1}
+          aria-label={standing
+            ? `Take back the formation at ${cell.x}, ${cell.y}`
+            : placeable
+              ? `Place formation covering ${cell.x}, ${cell.y}`
+              : `Tile ${cell.x}, ${cell.y}`}
+          aria-hidden={actionable ? undefined : true}
+          tabIndex={actionable ? undefined : -1}
           style={visualFootprintStyle}
           onPointerDown={(event) => {
             if (event.button === 0) event.stopPropagation();
@@ -790,6 +828,14 @@ function useRunDeploymentPresentation({
           onClick={() => {
             const latest = useActiveRun.getState().run;
             if (latest?.id !== prepared.id || latest.phase !== 'deployment' || !selectedCardId) return;
+            // A formation already standing here is still the player's to move. Clicking it takes
+            // it back into the hand rather than reading as an attempt to drop the held one on
+            // top of it — the only way to reposition a formation without removing it first.
+            const standing = arrangedCardAtCell(latest, cell);
+            if (standing && standing !== selectedCardId) {
+              selectArrangementCard(standing);
+              return;
+            }
             // Commit the box on screen, not a fresh guess from the square: after a turn the
             // formation is standing in a held box, and the pointed square may be the corner it
             // leaves empty. Re-resolving from the square would place something else.
@@ -837,7 +883,7 @@ function useRunDeploymentPresentation({
         availableRotations={availableArrangementRotations}
         dealProgress={dealProgress}
         onDealProgress={setDealProgress}
-        onSelectCard={selectArrangementCard}
+        onStepCard={stepArrangementCard}
         onRotation={(rotation) => {
           setArrangementRotation(rotation);
           setPointedArrangementCell(null);

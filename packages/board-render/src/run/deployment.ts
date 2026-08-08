@@ -269,6 +269,26 @@ export function nextArrangedCardToPlace(
   return null;
 }
 
+/**
+ * The dealt card one step away in the hand, wrapping.
+ *
+ * The hand shows one card at a time, so stepping is how the player reaches the rest of it —
+ * from the arrows and from the keys, which must agree. Only admitted cards are stepped to:
+ * a reserve cannot be placed this Battle, and the selection would bounce straight off it. The
+ * whole dealt hand, reserves included, is read in the Chartulary.
+ */
+export function steppedArrangedCard(
+  cards: readonly RunArrangedCardSummary[],
+  currentId: string | null,
+  step: 1 | -1,
+): string | null {
+  const admitted = cards.filter((summary) => summary.admitted);
+  if (!admitted.length) return null;
+  const from = admitted.findIndex(({ card }) => card.id === currentId);
+  if (from < 0) return admitted[step > 0 ? 0 : admitted.length - 1].card.id;
+  return admitted[(from + step + admitted.length) % admitted.length].card.id;
+}
+
 export function activeDeploymentCard(run: RunDocument): RunOwnedCard | null {
   return dealtCards(run)[run.deployment?.activeCardIndex ?? -1] ?? null;
 }
@@ -753,6 +773,21 @@ export function arrangedCardPlacementAtCell(
     if (!best || shift < best.shift) best = { option, shift };
   }
   return best?.option ?? null;
+}
+
+/**
+ * The dealt card whose units are standing on `cell`, if any.
+ *
+ * A formation already on the board is still the player's to move: clicking it takes it back into
+ * the hand rather than being read as an attempt to place whatever is currently held there.
+ */
+export function arrangedCardAtCell(run: RunDocument, cell: Vec): string | null {
+  if (run.phase !== 'deployment' || run.deployment?.stage !== 'arranging') return null;
+  const placements = decodedPlacements(run);
+  const standing = Object.entries(placements)
+    .find(([, seat]) => key(seat) === key(cell))?.[0];
+  if (!standing) return null;
+  return dealtCards(run).find((card) => runCardUnitIds(card).includes(standing))?.id ?? null;
 }
 
 /** The seating at an exact anchor, or null when the band cannot take the formation there. */

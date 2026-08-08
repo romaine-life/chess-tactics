@@ -21428,13 +21428,19 @@ button.tileset-relationship-cell {
   opacity: .26;
 }
 
+/* A formation already on the board is still the player's to move, so its squares read as
+   pickable rather than as inert ground. */
+.run-deployment-cell.is-seated-formation {
+  cursor: grab;
+}
+
 /* Squares outside the formation's reach carry a hit target only so the pointer can be located
    over them — pointing at one is how a turn finds a fit that the current turn has not got. They
    are not actions, so they take none of the shared board's square-local paint. Without this the
    generic hover ring rides the cursor across ground nothing can be placed on, lighting a tile on
    the far side of the board as if it were a target. Board-scoped to outrank `:hover`. */
-.run-deployment-board .run-deployment-cell:not(.is-placeable)::before,
-.run-deployment-board .run-deployment-cell:not(.is-placeable)::after {
+.run-deployment-board .run-deployment-cell:not(.is-placeable):not(.is-seated-formation)::before,
+.run-deployment-board .run-deployment-cell:not(.is-placeable):not(.is-seated-formation)::after {
   opacity: 0;
 }
 
@@ -21447,9 +21453,25 @@ button.tileset-relationship-cell {
   cursor: not-allowed;
 }
 
-.run-arrangement-controls {
+/* The panel does not scroll; its KitScroll rail does (ADR-0030). Both class names are named so
+   this outranks `.run-meta-controls { overflow-y: auto }` whatever the source order — matched on
+   one class it loses to the later rule and the browser's own bar returns beside the drawn one. */
+.run-meta-controls.run-arrangement-controls {
   align-content: start;
-  overflow-y: auto;
+  overflow-y: hidden;
+}
+
+.run-arrangement-scroll {
+  flex: 1 1 auto;
+  min-block-size: 0;
+}
+
+/* The scrolled body keeps the panel's own stacking, so groups sit apart exactly as they did
+   when the section itself was the scroll pane. */
+.run-arrangement-scroll > .kit-scroll-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-stack);
 }
 
 .run-arrangement-hand {
@@ -21458,40 +21480,30 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
-.run-arrangement-hand-cards {
-  display: grid;
-  gap: var(--ds-space-2);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.run-arrangement-card {
-  appearance: none;
-  color: inherit;
-  cursor: pointer;
+/* One card at full size between two steppers. A formation card is read by its SHAPE, so a
+   hand laid out at once squeezed away the only information on it. */
+.run-arrangement-hand-strip {
+  align-items: center;
   display: grid;
   gap: var(--ds-space-1);
-  min-inline-size: 0;
-  padding: var(--ds-space-1);
+  grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
-.run-arrangement-card > .run-card-action {
+.run-arrangement-step {
+  min-inline-size: 0;
+  padding-inline: var(--ds-space-1);
+}
+
+.run-arrangement-hand-card {
+  display: grid;
+  gap: var(--ds-space-1);
+  justify-items: center;
+  min-inline-size: 0;
+}
+
+.run-arrangement-hand-card > .run-card-action {
   inline-size: 100%;
   pointer-events: none;
-}
-
-.run-arrangement-card:hover,
-.run-arrangement-card.is-selected {
-  filter: brightness(1.12);
-}
-
-.run-arrangement-card.is-placed:not(.is-selected) .run-arrangement-card-state {
-  color: var(--good);
-}
-
-.run-arrangement-card.is-reserve {
-  cursor: not-allowed;
-  filter: saturate(.45);
-  opacity: .52;
 }
 
 .run-arrangement-card-state {

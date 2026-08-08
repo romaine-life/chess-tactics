@@ -13,6 +13,7 @@ import {
   type RunWarSnapshot,
 } from './model';
 import {
+  arrangedCardAtCell,
   arrangedCardGripSeat,
   arrangedCardPlaceableCells,
   arrangedCardPlacementAtAnchor,
@@ -31,6 +32,7 @@ import {
   nextArrangedCardToPlace,
   nextCardRotation,
   previousCardRotation,
+  steppedArrangedCard,
   placeArrangedDeploymentCard,
   turnableCardRotations,
   turnedCardPlacement,
@@ -340,6 +342,61 @@ describe('formation deployment', () => {
     expect(openDeploymentBandCells(seated, level, hisGrace.id)).toHaveLength(before - taken);
     // A formation being MOVED does not read as blocking the squares it currently stands on.
     expect(openDeploymentBandCells(seated, level, line.id)).toHaveLength(before);
+  });
+
+  // A formation already on the board is still the player's to move. Without this, repositioning
+  // one meant finding it in the hand and removing it first.
+  it('names the formation standing on a square so clicking it takes it back', () => {
+    const { run, level } = fixture(8, 8, 101, ['ppp']);
+    const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+    const line = arranging.cards.find((card) => card.coreId === 'ppp')!;
+    const seating = arrangedCardPlacementOptions(arranging, level, line.id, 0)[0];
+    const placed = placeArrangedDeploymentCard(arranging, level, line.id, 0, seating.anchor);
+
+    for (const cell of Object.values(seating.placements)) {
+      expect(arrangedCardAtCell(placed, cell)).toBe(line.id);
+    }
+    // Empty ground names nothing, so a click there still places what is held.
+    const empty = arrangedCardPlaceableCells(placed, level, line.id, 0)
+      .find((cell) => !Object.values(seating.placements)
+        .some((seat) => seat.x === cell.x && seat.y === cell.y));
+    expect(arrangedCardAtCell(placed, empty!)).toBeNull();
+    // And before anything is placed there is nothing to take back.
+    expect(arrangedCardAtCell(arranging, seating.anchor)).toBeNull();
+  });
+
+  // The hand shows one card at a time, so stepping is the only way through it. Both the arrows
+  // and the W/S keys run this, so they cannot disagree about what the next card is.
+  it('steps through the admitted hand in both directions, wrapping', () => {
+    const { run, level } = fixture(8, 8, 103, ['ppp', 'q', 'pp']);
+    const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+    const cards = arrangedDeploymentCards(arranging);
+    const admitted = cards.filter((summary) => summary.admitted).map(({ card }) => card.id);
+
+    expect(admitted.length).toBeGreaterThan(2);
+    // Forward round the whole hand and back to the start.
+    let at = admitted[0];
+    const walked = [at];
+    for (let step = 1; step < admitted.length; step += 1) {
+      at = steppedArrangedCard(cards, at, 1)!;
+      walked.push(at);
+    }
+    expect(new Set(walked).size).toBe(admitted.length);
+    expect(steppedArrangedCard(cards, at, 1)).toBe(admitted[0]);
+    // Backwards is the exact inverse.
+    for (const cardId of admitted) {
+      expect(steppedArrangedCard(cards, steppedArrangedCard(cards, cardId, 1), -1)).toBe(cardId);
+    }
+    // A reserve is never stepped onto — it cannot be placed this Battle, and the whole dealt
+    // hand is read in the Chartulary instead.
+    const reserves = cards.filter((summary) => !summary.admitted).map(({ card }) => card.id);
+    for (const cardId of admitted) {
+      expect(reserves).not.toContain(steppedArrangedCard(cards, cardId, 1));
+    }
+    // Nothing selected yet lands on an end rather than refusing to move.
+    expect(steppedArrangedCard(cards, null, 1)).toBe(admitted[0]);
+    expect(steppedArrangedCard(cards, null, -1)).toBe(admitted.at(-1));
+    expect(steppedArrangedCard([], null, 1)).toBeNull();
   });
 
   // A turn spins the formation IN PLACE. Re-seating from the pointed square kept a unit under

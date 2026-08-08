@@ -63,16 +63,73 @@ describe('Run Deployment secondary-click turn', () => {
 
   // The pointer gesture turns one way only, so overshooting a quarter turn meant three more
   // presses to get back. Q and E supply both directions of the same verb.
-  it('binds Q and E to the same turn, on the same terms as the rail buttons', () => {
+  it('binds Q/E to the turn and W/S to the hand, on the same terms as the controls', () => {
     expect(runScreen).toContain(
-      "import { useFormationTurnKeys, type FormationTurnDirection } from './formationTurnKeys';",
+      "import { useFormationKeys, type FormationTurnDirection } from './formationKeys';",
     );
     expect(runScreen).toMatch(
-      /useFormationTurnKeys\(\s*stage === 'arrange' && selectedArrangementCard\?\.admitted && !departureActive\s*\? turnArrangement\s*: null,\s*\);/,
+      /useFormationKeys\(\{\s*turn: arranging && selectedArrangementCard\?\.admitted \? turnArrangement : null,\s*step: arranging \? stepArrangementCard : null,\s*\}\);/,
     );
-    // Both directions walk the SAME cell-aware list the click does, so no key can turn the
-    // formation out of sight either.
-    expect(runScreen).not.toMatch(/useFormationTurnKeys\([^)]*availableArrangementRotationList/);
+    // Turning needs a formation in hand; stepping is how one is CHOSEN, so it stays available
+    // even while the selection is settling.
+    expect(runScreen).toContain("const arranging = stage === 'arrange' && !departureActive;");
+    // Both turn directions walk the same list the click does, so no key can turn the formation
+    // out of sight either.
+    expect(runScreen).not.toMatch(/useFormationKeys\([^)]*availableArrangementRotationList/);
+  });
+});
+
+describe('Run Deployment hand', () => {
+  const hand = readFileSync(new URL('./RunArrangementHand.tsx', import.meta.url), 'utf8');
+  const styles = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+
+  // A formation card is read by its SHAPE, so laying the whole hand out at once squeezed away
+  // the only information on it.
+  it('shows one card at full size between two steppers', () => {
+    expect(hand).toContain('data-testid="arrangement-hand-card"');
+    expect(hand).toContain('aria-label="Previous formation"');
+    expect(hand).toContain('aria-label="Next formation"');
+    expect(hand).toContain('onClick={() => onStep(-1)}');
+    expect(hand).toContain('onClick={() => onStep(1)}');
+    // No survivor of the grid that squeezed them.
+    expect(hand).not.toContain('run-arrangement-hand-cards');
+    expect(hand).not.toContain('cards.map(');
+    expect(styles).not.toContain('.run-arrangement-hand-cards');
+    expect(styles).toContain('.run-arrangement-hand-strip {');
+  });
+
+  it('steps the hand from the arrows and the keys through one path', () => {
+    expect(runScreen).toMatch(
+      /const stepArrangementCard = useCallback\(\(step: 1 \| -1\) => \{[\s\S]*?steppedArrangedCard\(arrangementCards, selectedCardId, step\)/,
+    );
+    expect(runScreen).toContain('onStepCard={stepArrangementCard}');
+    expect(runScreen).toContain('onStep={onStepCard}');
+  });
+
+  // ADR-0030: the drawn rail is the one scrollbar. The panel must not also scroll, or the
+  // browser paints its own bar beside it.
+  it('scrolls the controls on the house rail, never the browser bar', () => {
+    expect(runScreen).toContain('<KitScroll className="run-arrangement-scroll">');
+    expect(styles).toContain('.run-meta-controls.run-arrangement-controls {');
+    // Both class names, so this outranks `.run-meta-controls { overflow-y: auto }` whatever the
+    // source order — matched on one class it loses and the OS bar comes back.
+    expect(styles).toMatch(
+      /\.run-meta-controls\.run-arrangement-controls \{[\s\S]*?overflow-y: hidden;[\s\S]*?\}/,
+    );
+    // Abandon Run stays outside the rail, pinned, rather than scrolling out of reach.
+    expect(runScreen).toMatch(/<\/KitScroll>\s*<div className="skirmish-view-group run-meta-abandon">/);
+  });
+
+  // A formation already on the board is still the player's to move.
+  it('takes a seated formation back into the hand when its square is clicked', () => {
+    expect(runScreen).toMatch(
+      /const standing = arrangedCardAtCell\(latest, cell\);\s*if \(standing && standing !== selectedCardId\) \{\s*selectArrangementCard\(standing\);\s*return;\s*\}/,
+    );
+    expect(runScreen).toContain("standing ? 'is-seated-formation' : ''");
+    expect(runScreen).toContain('`Take back the formation at ${cell.x}, ${cell.y}`');
+    // Its squares are a real action, so they are reachable and read as pickable.
+    expect(runScreen).toContain('const actionable = placeable || Boolean(standing);');
+    expect(styles).toMatch(/\.run-deployment-cell\.is-seated-formation \{\s*cursor: grab;\s*\}/);
   });
 });
 
@@ -204,8 +261,10 @@ describe('Run Deployment aiming', () => {
   // placed on, on the far side of the board from the band.
   it('keeps square-local paint off squares outside the formation\'s reach', () => {
     const styles = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+    // A seated formation is exempt: its squares are a real action (take it back), so they keep
+    // the shared board's target ring.
     const suppression = styles.match(
-      /\.run-deployment-board \.run-deployment-cell:not\(\.is-placeable\)::before,\s*\.run-deployment-board \.run-deployment-cell:not\(\.is-placeable\)::after \{\s*opacity: 0;\s*\}/,
+      /\.run-deployment-board \.run-deployment-cell:not\(\.is-placeable\):not\(\.is-seated-formation\)::before,\s*\.run-deployment-board \.run-deployment-cell:not\(\.is-placeable\):not\(\.is-seated-formation\)::after \{\s*opacity: 0;\s*\}/,
     );
 
     expect(suppression).toBeTruthy();
@@ -213,7 +272,7 @@ describe('Run Deployment aiming', () => {
     // bare `.run-deployment-cell:not(.is-placeable)::after` ties on specificity and would be
     // decided by source order alone.
     expect(styles).toContain('.skirmish-board-cell-hit:hover::after {');
-    expect(styles.indexOf('.run-deployment-board .run-deployment-cell:not(.is-placeable)::after'))
+    expect(styles.indexOf('.run-deployment-board .run-deployment-cell:not(.is-placeable):not(.is-seated-formation)::after'))
       .toBeGreaterThan(styles.indexOf('.skirmish-board-cell-hit:hover::after {'));
     // The square is still a hit target — pointing at one is how a turn finds a fit.
     expect(runScreen).toContain('onPointerEnter={() => { setPointedArrangementCell(cellKey); setHeldArrangementAnchor(null); }}');

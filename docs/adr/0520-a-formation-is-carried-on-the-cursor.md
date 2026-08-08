@@ -127,7 +127,23 @@ the seating; a secondary click turns what is being carried.**
    the keys that turn are the ones printed Q and E on the player's own keyboard, which is what the
    on-screen hint names. Auto-repeat is refused: one press is one quarter turn. A field or an open
    dialog owns a bare letter first.
-9. **Placing hands the next formation to the cursor.** Seating a formation finishes with it, so
+9. **A formation already on the board is taken back by clicking it.** Its squares are a real
+   action, so they carry the pointer, the target ring, and a grip cursor, and say so. Clicking one
+   selects that card again rather than reading as an attempt to drop the held formation on top of
+   it — repositioning otherwise meant finding the card in the hand and removing it first.
+10. **The hand shows one card at a time.** A formation card is read by its SHAPE, so laying the
+   whole hand out at once squeezed away the only information on it. One card at full size sits
+   between a previous and a next stepper, and **W and S** step it — the same single path the
+   arrows take, wrapping, over the admitted cards only. A reserve cannot be placed this Battle, so
+   it is not stepped onto.
+11. **The whole dealt hand is read in the Chartulary**, reserves included. Opened while arranging
+   it comes up already narrowed to this Battle's dealt cards — the setting exists either way, and
+   still widens to the full Chartulary — so the register answers what the one-card hand cannot
+   show at once.
+12. **The Controls scroll on the house rail** (`KitScroll`, ADR-0030), never the browser's own
+   bar. The panel itself does not scroll; Abandon Run stays outside the rail, pinned, rather than
+   scrolling out of reach.
+13. **Placing hands the next formation to the cursor.** Seating a formation finishes with it, so
    the hand advances to the next admitted card still to be placed, resuming after the one just
    seated and wrapping — placing out of order walks the rest of the hand rather than jumping back
    to the front. The pointed square is deliberately kept, so the next formation appears under the
