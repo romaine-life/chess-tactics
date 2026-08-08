@@ -88,7 +88,20 @@ export interface EditorZoneEntry {
 
 export type BoardFactionDirections = Partial<Record<UnitPalette, UnitFacing>>;
 
-/** Retired runtime-registration declaration retained only until installed plates are migrated. */
+/**
+ * A board painting placed by hand: four corners dragged onto the board's own corners, which the
+ * renderer honours as an exact projective registration.
+ *
+ * NO level uses this any more. Fortress Gate was the last, and it was migrated by baking its exact
+ * registration into the raster — the same projective map, resampled onto the level's 16:9 viewing
+ * pane — so the painting kept its position to the pixel while becoming an ordinary versioned
+ * surface.
+ *
+ * Decoding it is kept anyway, because the document's own older revisions still carry it: restoring
+ * one must bring its artwork back rather than a blank board. So anything deciding whether artwork
+ * may paint still has to accept it (ADR-0528) — a check that understands only versioned surfaces
+ * blanks the board of any level holding one.
+ */
 export interface LegacyPredrawnBoardSurface {
   kind: 'predrawn';
   slot: string;

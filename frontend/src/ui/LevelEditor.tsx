@@ -169,9 +169,11 @@ import {
   predrawnEnvironmentGeometrySha256,
 } from '../render/predrawnBackgroundProcessing';
 import {
+  predrawnSelectionIsDrawable,
   predrawnSelectionNeedsRevalidation,
   predrawnSelectionReadFailure,
   predrawnSelectionReadShouldRetry,
+  predrawnSelectionSeed,
   predrawnSelectionValidity as resolvePredrawnSelectionValidity,
   type PredrawnSelectionCheck,
 } from './predrawnSelectionValidity';
@@ -2847,9 +2849,7 @@ export function LevelEditor(): ReactElement {
     () => boardBackgroundMode(initialBoard ?? {}),
   );
   const [predrawnSelectionValidation, setPredrawnSelectionValidation] = useState<LevelEditorPredrawnSelectionValidity>(
-    () => initialBoard?.surface && isVersionedPredrawnBoardSurface(initialBoard.surface)
-      ? { kind: 'checking' }
-      : { kind: 'missing' },
+    () => predrawnSelectionSeed(initialBoard?.surface),
   );
   // Bumped to ask the server again after a read that failed for a reason that can pass. Nothing
   // else re-runs the check: its other inputs are the board's own geometry and identity, which a
@@ -2880,7 +2880,7 @@ export function LevelEditor(): ReactElement {
     // Drawn through the shared render seam so the editor plate, gameplay, and both thumbnail
     // renderers place the owner's artwork identically.
     const activeSurface = boardBackgroundModeState === 'ai'
-      && predrawnSelectionValidation.kind === 'valid'
+      && predrawnSelectionIsDrawable(predrawnSelectionValidation)
       ? predrawnRenderSurface({ surface: boardSurface, predrawnPlateOffset: boardPredrawnPlateOffset })
       : undefined;
     return predrawnBoardPlateForEditorReview(activeSurface, predrawnPreview, predrawnRegistration);
@@ -3832,16 +3832,18 @@ export function LevelEditor(): ReactElement {
   const currentVersionedPredrawnSurface = boardSurface && isVersionedPredrawnBoardSurface(boardSurface)
     ? boardSurface
     : undefined;
-  const currentPredrawnSurfaceKey = currentVersionedPredrawnSurface
-    ? JSON.stringify(currentVersionedPredrawnSurface)
-    : '';
+  // Keyed on the WHOLE remembered surface, not just a versioned one: swapping between two plates,
+  // or clearing one, has to re-seed the check exactly as a version swap does.
+  const currentPredrawnSurfaceKey = boardSurface ? JSON.stringify(boardSurface) : '';
   const currentEnvironmentGeometryFingerprintV2 = useMemo(
     () => predrawnEnvironmentGeometryFingerprintInputV2(currentEditorBoard),
     [currentEditorBoard],
   );
   useEffect(() => {
+    // Only a versioned selection has a list to prove. A plate settles here without a read at all,
+    // and an absent surface settles as `missing` — neither reaches the server.
     if (!currentVersionedPredrawnSurface) {
-      setPredrawnSelectionValidation({ kind: 'missing' });
+      setPredrawnSelectionValidation(predrawnSelectionSeed(boardSurface));
       return undefined;
     }
     if (!editorDocument) {
@@ -3909,11 +3911,7 @@ export function LevelEditor(): ReactElement {
   const applyLevelDocument = (level: Level, options: { editingId?: string; clean?: boolean; seed?: boolean } = {}): void => {
     const board = levelToEditorBoard(level);
     if (predrawnSelectionNeedsRevalidation(currentEditorBoardRef.current, board)) {
-      setPredrawnSelectionValidation(
-        board.surface && isVersionedPredrawnBoardSurface(board.surface)
-          ? { kind: 'checking' }
-          : { kind: 'missing' },
-      );
+      setPredrawnSelectionValidation(predrawnSelectionSeed(board.surface));
     }
     applyEditorBoard(board);
     setActiveGeneratedRegionId(null);
@@ -3943,11 +3941,7 @@ export function LevelEditor(): ReactElement {
     }
     if (boardSignature(normalized) === boardSignature(current)) return false;
     if (predrawnSelectionNeedsRevalidation(current, normalized)) {
-      setPredrawnSelectionValidation(
-        normalized.surface && isVersionedPredrawnBoardSurface(normalized.surface)
-          ? { kind: 'checking' }
-          : { kind: 'missing' },
-      );
+      setPredrawnSelectionValidation(predrawnSelectionSeed(normalized.surface));
     }
     setUndoStack((prev) => [...prev, cloneEditorBoard(current)].slice(-HISTORY_LIMIT));
     setRedoStack([]);
@@ -4057,7 +4051,7 @@ export function LevelEditor(): ReactElement {
       return;
     }
     const current = currentEditorBoardRef.current;
-    if (mode === 'ai' && predrawnSelectionValidation.kind !== 'valid') {
+    if (mode === 'ai' && !predrawnSelectionIsDrawable(predrawnSelectionValidation)) {
       const detail = predrawnSelectionValidation.kind === 'stale'
         ? 'The remembered artwork belongs to an earlier terrain or scenery layout. Set matching artwork from a new attempt before activating AI mode.'
         : predrawnSelectionValidation.kind === 'checking'
@@ -4218,11 +4212,7 @@ export function LevelEditor(): ReactElement {
     setRedoStack((next) => [departing, ...next].slice(0, HISTORY_LIMIT));
     setUndoStack((next) => next.slice(0, -1));
     const restored = cloneEditorBoard(prev);
-    setPredrawnSelectionValidation(
-      restored.surface && isVersionedPredrawnBoardSurface(restored.surface)
-        ? { kind: 'checking' }
-        : { kind: 'missing' },
-    );
+    setPredrawnSelectionValidation(predrawnSelectionSeed(restored.surface));
     currentEditorBoardRef.current = restored;
     applyEditorBoardWithSelectionSafety(restored);
     setForestDragBounds(null);
@@ -4238,11 +4228,7 @@ export function LevelEditor(): ReactElement {
     setUndoStack((prev) => [...prev, departing].slice(-HISTORY_LIMIT));
     setRedoStack((prev) => prev.slice(1));
     const restored = cloneEditorBoard(next);
-    setPredrawnSelectionValidation(
-      restored.surface && isVersionedPredrawnBoardSurface(restored.surface)
-        ? { kind: 'checking' }
-        : { kind: 'missing' },
-    );
+    setPredrawnSelectionValidation(predrawnSelectionSeed(restored.surface));
     currentEditorBoardRef.current = restored;
     applyEditorBoardWithSelectionSafety(restored);
     setForestDragBounds(null);
@@ -10661,10 +10647,12 @@ export function LevelEditor(): ReactElement {
               <ChromeButton unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', boardBackgroundModeState === 'ai' && 'active')}
                 aria-pressed={boardBackgroundModeState === 'ai'}
-                disabled={!editorSessionCanWrite || predrawnSelectionValidation.kind !== 'valid'}
+                disabled={!editorSessionCanWrite || !predrawnSelectionIsDrawable(predrawnSelectionValidation)}
                 title={!editorSessionCanWrite
                   ? 'This review page is read-only.'
-                  : predrawnSelectionValidation.kind === 'valid'
+                  : predrawnSelectionValidation.kind === 'plate'
+                    ? 'Use this level’s installed board plate as its background.'
+                    : predrawnSelectionValidation.kind === 'valid'
                     ? 'Use the remembered AI artwork as this level background.'
                     : predrawnSelectionValidation.kind === 'stale'
                       ? 'This artwork belongs to an earlier terrain or scenery layout. Set matching artwork from a new attempt.'
@@ -10683,7 +10671,9 @@ export function LevelEditor(): ReactElement {
             >
               <strong>
                 {boardBackgroundModeState === 'ai'
-                  ? predrawnSelectionValidation.kind === 'valid'
+                  ? predrawnSelectionValidation.kind === 'plate'
+                    ? 'Board plate is active'
+                    : predrawnSelectionValidation.kind === 'valid'
                     ? 'AI artwork is active'
                     // "Unavailable" would be a verdict about the artwork. Nothing is wrong with it;
                     // the check simply could not be made, and it is still the level's selection.
@@ -10693,7 +10683,11 @@ export function LevelEditor(): ReactElement {
                   : 'Legacy tileset is active'}
               </strong>
               <span>
-                {predrawnSelectionValidation.kind === 'valid'
+                {predrawnSelectionValidation.kind === 'plate'
+                  ? boardBackgroundModeState === 'ai'
+                    ? 'This level uses an installed board plate, painted before the version pipeline. It has no version lineage to check.'
+                    : 'The installed board plate is remembered while terrain and scenery remain editable.'
+                  : predrawnSelectionValidation.kind === 'valid'
                   ? boardBackgroundModeState === 'ai'
                     ? 'The selected AI version is the level background. Units and live Cover render over it.'
                     : 'The selected AI version is valid and remembered while terrain and scenery remain editable.'

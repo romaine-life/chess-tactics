@@ -181,10 +181,19 @@ and don't tell the user screenshots are impossible. Use the helper below.
    ```
    # one element off a REAL screen — small, exact, no fixture needed:
    npm run shot -- <vite-url>/play/select/skirmish --select '.menu-dest'
-   npm run shot -- '<vite-url>/play?campaignId=off-c-crown-valoria&levelId=off-l-hold-bridge' --select '.skirmish-board-unit' --out tmp-shots/unit.png
+   npm run shot -- '<vite-url>/play?campaignId=off-c-crown-valoria&levelId=off-l-hold-bridge' --select '.skirmish-board-lab' --out tmp-shots/board.png
    # whole viewport / a small fixture page:
    npm run shot -- <vite-url>/unit-studio --size 1200x800
    ```
+   **Units are canvas-drawn, so there is no per-unit selector on a live board** — the board
+   element is the smallest thing you can clip a piece out of. (`.skirmish-board-unit` is not
+   in the DOM; a capture asking for it exits 3.)
+
+   A board capture waits for the army to finish ARRIVING before it fires. Scene activation is
+   what releases the unit entrance, so the scene director reaches `current` while the pieces
+   are still in the air — capturing there wrote boards that looked finished and had no pieces
+   on them at all. If the entrance never lands the capture fails loudly instead of writing
+   that; `--allow-arriving-units` opts out when the entrance itself is the subject.
    Level Editor captures automatically use an authenticated observation-only session: the real
    private document renders without gaining write access or changing its working copy. Do not
    replace this with a normal headless editor visit.
@@ -277,6 +286,18 @@ and don't tell the user screenshots are impossible. Use the helper below.
    fires on the FIRST tap — click-to-deselect implemented that way makes the board
    completely unselectable. The gate asserts a fresh first click still selects,
    alongside the second-click cancel; no unit test reproduces that ordering.
+
+   Board-earned bounty changes additionally run the royal fork gate, which plays a
+   real fork with real clicks and reads the gold, the log line and the seated marker:
+   ```
+   npm run verify:royal-fork -- '<royal-fork-craft-url>'
+   ```
+   The craft link must already offer a fork in one — the gate refuses to manoeuvre
+   toward one, because a run that plays several plies is at the mercy of the enemy's
+   reply and ends in a timeout with no verdict. Battle 3 with `army=queen` and
+   `seed=1` deals one: the Queen's first move checks the enemy King and hits their
+   Queen (ADR-0527). The gate takes whichever fork the position offers rather than
+   naming a piece or a square.
 
 This works on ANY live route by selector — no per-target fixture, so there's no "new
 screen ⇒ flail" cliff. `frontend/scripts/shot.mjs` is the implementation.

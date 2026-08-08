@@ -60,9 +60,11 @@ describe('Level Artwork controls and workspaces', () => {
       /const setLevelBackgroundMode = \(mode: BoardBackgroundMode\): void => \{([\s\S]*?)\n  \};/,
     )?.[1] ?? '';
     expect(modeMutation).toContain('if (!editorSessionCanWrite)');
-    expect(modeMutation).toContain("predrawnSelectionValidation.kind !== 'valid'");
+    // Drawability, not `valid` alone: an installed plate has no version list to prove and must
+    // still activate, while every unsettled or failed versioned check stays closed.
+    expect(modeMutation).toContain('!predrawnSelectionIsDrawable(predrawnSelectionValidation)');
     expect(editor).toContain('data-selection-validity={predrawnSelectionValidation.kind}');
-    expect(editor).toContain('disabled={!editorSessionCanWrite || predrawnSelectionValidation.kind');
+    expect(editor).toContain('disabled={!editorSessionCanWrite || !predrawnSelectionIsDrawable(predrawnSelectionValidation)}');
     expect(editor).toContain("predrawnBackgroundActive={boardBackgroundModeState === 'ai'");
   });
 });
