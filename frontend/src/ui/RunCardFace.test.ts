@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { TILE_TEMPLATE } from '@chess-tactics/board-render';
-import { RUN_CARD_BY_ID } from '../run/model';
+import { RUN_CARD_BY_ID, RUN_CARD_DECK } from '../run/model';
 import { runCardFaceContent } from './runCardFaceContent';
 import {
   RUN_CARD_FORMATION_EDGE_LINE,
@@ -10,6 +10,7 @@ import {
   RUN_CARD_FORMATION_TILE_VIEW_BOX,
   requiredRunCardImageKinds,
   runCardFormationBoardCells,
+  runCardFormationOutlineRings,
   runCardFormationIsoPoint,
   runCardContentCanUpdateWithoutMediaLoad,
   runCardPresentationCanPromote,
@@ -91,6 +92,42 @@ describe('formation-only Run card face', () => {
     }
   });
 
+  /**
+   * The boundary is ONE closed ring per footprint, traced in the diagram's own space.
+   *
+   * Drawn as separate segments inside separate per-seat SVGs, each rasterizes on its own sub-pixel
+   * grid, so corners jog and edges antialias to different weights. One ring is what lets the
+   * rasterizer mitre the corners instead of reproducing a coincidence.
+   */
+  it('traces every dealt footprint as a single closed outline', () => {
+    const origin = { minLeft: 0, minTop: 0 };
+    for (const definition of RUN_CARD_DECK) {
+      const cells = runCardFormationBoardCells(runCardFaceContent(definition).formation);
+      const rings = runCardFormationOutlineRings(cells, origin);
+      // Every dealt formation is orthogonally connected, so its boundary is exactly one ring.
+      expect(rings.map((ring) => ring.length), `${definition.id} is not one ring`).toHaveLength(1);
+    }
+  });
+
+  /** Whatever the footprint, the rings consume every outward edge once and revisit no vertex. */
+  it('spends each outward edge exactly once, even on a disconnected legacy footprint', () => {
+    const origin = { minLeft: 0, minTop: 0 };
+    for (const definition of Object.values(RUN_CARD_BY_ID)) {
+      const cells = runCardFormationBoardCells(runCardFaceContent(definition).formation);
+      const rings = runCardFormationOutlineRings(cells, origin);
+      const drawn = rings.reduce((total, ring) => total + ring.length, 0);
+      expect(drawn, `${definition.id} lost or repeated an edge`)
+        .toBe(cells.reduce((total, cell) => total + cell.edges.length, 0));
+      for (const ring of rings) {
+        const visited = ring.map((point) => `${point.x.toFixed(4)}:${point.y.toFixed(4)}`);
+        expect(new Set(visited).size, `${definition.id} doubled back`).toBe(visited.length);
+      }
+    }
+    // The retired diagonals are the case that proves it: three seats touching at corners only.
+    const scattered = runCardFormationBoardCells(runCardFaceContent(RUN_CARD_BY_ID['ppb-protected']).formation);
+    expect(runCardFormationOutlineRings(scattered, origin)).toHaveLength(3);
+  });
+
   it('never prints a board square the card does not occupy', () => {
     for (const definition of Object.values(RUN_CARD_BY_ID)) {
       const seats = runCardFaceContent(definition).formation;
@@ -156,7 +193,7 @@ describe('formation-only Run card face', () => {
     const styles = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
     expect(styles).toMatch(/\.run-card-formation-square polygon\s*\{\s*fill:\s*rgba\(212, 196, 161, \.46\);\s*\}/);
     expect(styles).toMatch(/\.run-card-formation-square\.is-dark polygon\s*\{\s*fill:\s*rgba\(101, 115, 113, \.34\);/);
-    const outline = /\.run-card-formation-outline\s*\{([^}]*)\}/.exec(styles)?.[1] ?? '';
+    const outline = /\.run-card-formation-outline path\s*\{([^}]*)\}/.exec(styles)?.[1] ?? '';
     expect(outline).toContain('stroke: rgba(55, 48, 39, .56);');
     expect(outline).toContain('stroke-width: 1.15;');
     // The seats must not carry a second line of their own, or the seam comes back.
