@@ -987,11 +987,14 @@ function AftermathPanel({
           <AftermathMeasure label="Time">
             {aftermath.elapsedMs === null ? '—' : formatBattleElapsed(aftermath.elapsedMs)}
           </AftermathMeasure>
+          {/* Being taken off the board costs a unit the rest of the Battle and nothing more --
+              it is back in the army for the next one. "Fallen" read as a permanent loss the
+              Run does not actually impose, so the measure says what happened instead. */}
           <AftermathMeasure
-            label="Fallen"
+            label="Recovered from wounds"
             detail={aftermath.fallenUnits.length
               ? aftermath.fallenUnits.map((unit) => unit.name).join(' · ')
-              : 'The whole force came through.'}
+              : 'The whole force came through unhurt.'}
           >
             {aftermath.fallenUnits.length}
           </AftermathMeasure>
