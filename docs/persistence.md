@@ -72,8 +72,11 @@ version 2, advances version 23 to RunSaveVersion 24's ability-free authored form
 advances version 24 to RunSaveVersion 25's generated rarity deck and sideways formation settling,
 advances version 25 to RunSaveVersion 26's Battle-first opening and derived Sectio pile cursor,
 advances version 26 to RunSaveVersion 27's complete Queen + Pawn formation catalog, advances
-version 27 to RunSaveVersion 28's immutable held formations, and advances version 28 to
-RunSaveVersion 29's explicit Run Deployment mode.
+version 27 to RunSaveVersion 28's immutable held formations, advances version 28 to
+RunSaveVersion 29's explicit Run Deployment mode, advances version 29 to RunSaveVersion 30's
+player-arranged rotation-canonical deal, advances version 30 to RunSaveVersion 31's opening
+formation-card grant, and advances version 31 to RunSaveVersion 32's banded card rarity, exact
+pile quotas, and capped opening market.
 Migration 54 owns the marker rename; migration 55 advances the Sectio vocabulary; migration 56
 adds His Grace and Front Lines and returns a version-18 Deployment or Battle to its then-current
 pre-information boundary because that version did not persist exact automatic destinations.
@@ -115,6 +118,13 @@ persist the preparation choice between Automatic formations and Arrange formatio
 Migration 69 advances version 29 to 30, makes player arrangement the sole Deployment contract,
 and restarts the hidden card cursor because the live catalog and pile algorithm changed. An
 in-progress Deployment returns to its deal boundary; an underway Battle keeps its exact board.
+Migration 70 advances version 30 to 31 and replaces the opening lipsanon with a formation-card
+grant; a document still on the opening screen receives one fixed valid triad from the 4-to-6 band
+because the live shuffle is model logic rather than SQL, and every later Conflict keeps its
+lipsana. Migration 71 advances version 31 to 32 for banded card rarity, exact pile quotas, and the
+capped opening market, restarting the hidden cursor because the pile sequence changed. It leaves
+an open Sectio showing the row the player is part-way through, which relabels its own rarity from
+the live catalog on load.
 Each account migration advances the Run's CAS revision, while the browser applies the same chain
 to its local document on first load. Saves older than version 16 remain unavailable because their
 retired gameplay state has no declared lossless transform. See
@@ -130,14 +140,19 @@ migration for account and browser storage. Retired content maps to a typed tombs
 replacement—for example, a removed card remains in the deck as **Removed card**—rather than
 invalidating the Run.
 
-RunSaveVersion 30 begins in Bona Vacantia when the opening Conflict offers a lipsanon, otherwise
-in Battle 1's Deployment. Taking that opening lipsanon also enters Deployment; there is no opening
-Sectio. The Run carries the permanent King and two starting Pawns through the single starter-only
-His Grace card and retains eight starting gold. The first Sectio follows Battle 1.
+RunSaveVersion 32 begins in Bona Vacantia when the opening Conflict offers a formation-card grant,
+otherwise in Battle 1's Deployment. Taking that opening grant also enters Deployment; there is no
+opening Sectio. The Run carries the permanent King and two starting Pawns through the single
+starter-only His Grace card and retains eight starting gold. The first Sectio follows Battle 1.
 
 Every Run persists a non-negative `sectioCardCursor` into its seed-derived hidden card sequence.
-Each pile is a complete seeded shuffle of all 272 live offer identities. Rarity remains persisted
-card metadata but does not currently influence selection.
+Each pile holds 20 cards carrying an exact rarity quota—16 Common, 3 Uncommon, 1 Rare—rather than
+a per-card roll, so a pile's composition is the same every time instead of only converging over a
+long sample. The Sectios following Battles 1 and 2 draw from a pile capped at a card cost of six;
+that ceiling empties the Rare tier, whose share is re-apportioned to the tiers still standing. The
+ceiling then lifts for good. Rarity itself is derived card metadata, not a persisted field: it is a
+material band adjusted by footprint, so a stored offer relabels itself from the live catalog on
+load. A card passed over while the market was capped may be offered again once it is not.
 A normal Sectio consumes three positions and Quartermaster's Ledger consumes four. Reset Sectio
 retains the same visible offers and cursor rather than redrawing. Army, whole-card Expunctio,
 Adlectio, Reset Sectio, and Continue reuse the post-Battle model. Expunctio may remove one held card and its remaining units
