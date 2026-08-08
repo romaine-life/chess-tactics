@@ -1,4 +1,4 @@
-import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
+import { resolvedLiveMediaUrl, type RunCardTier } from '@chess-tactics/board-render';
 import { useEffect, useState, type CSSProperties, type ReactElement } from 'react';
 import {
   fetchAdminLiveMediaCatalog,
@@ -140,25 +140,51 @@ function DividerSlice({ sourceUrl, viewBox }: { sourceUrl: string; viewBox: stri
   );
 }
 
-/** Text-free generated metalwork around the existing live gold-value coin. */
+/** How a band of the card gallery names itself in prose and to a screen reader. */
+export function runCardTierLabel(value: RunCardTier): string {
+  return value === 'starter' ? 'Starter cards' : `${value} gold cards`;
+}
+
+/**
+ * Text-free generated metalwork around the existing live gold-value coin. The starter band
+ * carries a word in the coin's seat instead: the card is not for sale, so a price there would
+ * be the one thing the ornament must not say.
+ */
 export function RunCardGoldTierDivider({
   value,
   source,
   coinTuning = RUN_CARD_GOLD_TIER_COIN_DEFAULTS,
 }: {
-  value: number;
+  value: RunCardTier;
   source: RunCardGoldTierDividerSource;
   coinTuning?: RunCardGoldTierCoinTuning;
 }): ReactElement {
   if (source.status === 'error') throw new Error(source.message);
   if (source.status === 'loading') {
-    return <span className="run-card-gold-tier-divider is-loading" aria-label={`${value} gold cards`} />;
+    return <span className="run-card-gold-tier-divider is-loading" aria-label={runCardTierLabel(value)} />;
   }
   const tuningStyle = {
     '--run-card-gold-tier-coin-size': `${coinTuning.size}px`,
     '--run-card-gold-tier-coin-x': `${coinTuning.x}px`,
     '--run-card-gold-tier-coin-y': `${coinTuning.y}px`,
   } as CSSProperties;
+  // The left cap is a socket cut for a coin. The starter band has no price to seat there, so it
+  // drops the socket, leads with the word, and starts the same rail after it.
+  if (value === 'starter') {
+    return (
+      <span
+        className="run-card-gold-tier-divider is-starter"
+        data-gold-tier-divider-ready="true"
+        style={tuningStyle}
+      >
+        <span className="run-card-gold-tier-divider-label">Starter</span>
+        <span className="run-card-gold-tier-divider-art" aria-hidden="true">
+          <DividerSlice sourceUrl={source.url} viewBox="132 138 500 107" />
+          <DividerSlice sourceUrl={source.url} viewBox="632 138 56 107" />
+        </span>
+      </span>
+    );
+  }
   return (
     <span
       className="run-card-gold-tier-divider"

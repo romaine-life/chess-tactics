@@ -22901,6 +22901,32 @@ button.tileset-relationship-cell {
   position: absolute;
 }
 
+/* The starter band has no coin to seat, so it leads with the word and the rail follows it. */
+.run-card-gold-tier-divider.is-starter {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-space-2);
+  inline-size: 100%;
+  margin-inline-start: 0;
+}
+
+.run-card-gold-tier-divider.is-starter .run-card-gold-tier-divider-art {
+  grid-template-columns: minmax(0, 1fr) 20px;
+  inset: auto;
+  min-inline-size: 0;
+  position: relative;
+}
+
+/* Bands stack, so their leftmost ink must share one edge. A priced band's leftmost ink is the
+ * bezel drawn into the divider's left cap -- fixed art, 3px in from the heading, independent of
+ * the Studio-tunable coin offset that only moves the coin within it. The word matches the bezel. */
+.run-card-gold-tier-divider-label {
+  flex: none;
+  line-height: 1;
+  margin-inline-start: 3px;
+  white-space: nowrap;
+}
+
 .enchiridion-card-gallery-grid {
   display: grid;
   gap: var(--ds-stack);
