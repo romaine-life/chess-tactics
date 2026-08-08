@@ -9430,7 +9430,12 @@ export function LevelEditor(): ReactElement {
               maxZoom={viewMaxZoom}
               onZoomChange={setViewZoom}
               onPanChange={setViewPan}
-              coverPolygon={predrawnCoverPolygon}
+              // No coverage clamp here. Play must never show past the environment art, but the
+              // editor is where that art's extent is DECIDED — against the camera boundary, the
+              // grid placement and the artwork's own edges. Clamping to coverage made all of those
+              // unreachable: on a level whose boundary is larger than its art, every edge and
+              // corner handle of the boundary sits outside the canvas at every zoom the clamp
+              // permits, so the box could be neither seen nor grabbed.
               onMinimumZoomChange={setViewMinZoom}
               onViewportSizeChange={setViewViewportSize}
               onViewInteraction={markBoardViewInteraction}
