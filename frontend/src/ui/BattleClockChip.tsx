@@ -51,6 +51,9 @@ export function BattleClockChip({ fillSurface }: { fillSurface?: string } = {}):
           a bare pair of numbers between two labelled chips. One glyph for both branches:
           a bank draining and time accumulating are the same fact to the eye. */}
       <span className="skirmish-icon skirmish-icon-hourglass" aria-hidden="true" />
+      {/* An untimed Battle gets the count and nothing else. A label under it said only
+          what the absence of a countdown already says, and it was the widest thing in
+          the chip — the tip above carries "no time control" for anyone who asks. */}
       <span className="skirmish-clock-readout">
         {clock ? (
           <>
@@ -58,10 +61,7 @@ export function BattleClockChip({ fillSurface }: { fillSurface?: string } = {}):
             <small>{clock.incrementMs > 0 ? `+${clock.incrementMs / 1000}s / move` : 'Battle Clock'}</small>
           </>
         ) : (
-          <>
-            <strong data-testid="untimed-battle-clock">{readout}</strong>
-            <small>No limit</small>
-          </>
+          <strong data-testid="untimed-battle-clock">{readout}</strong>
         )}
       </span>
     </TitleBarStatusTip>

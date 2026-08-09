@@ -4646,6 +4646,13 @@ h1 {
   gap: 0;
 }
 
+/* With no label under it the clock is shaped exactly like the marks beside it — one
+   glyph, one value — so it takes their size. The two-line timed readout keeps the
+   smaller face, which is what lets two lines sit in one control height. */
+.skirmish-clock-readout > strong:only-child {
+  font-size: var(--ds-text-md);
+}
+
 .skirmish-clock strong {
   font-variant-numeric: tabular-nums;
 }

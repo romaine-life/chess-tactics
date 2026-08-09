@@ -101,8 +101,11 @@ describe('Skirmish chrome hierarchy', () => {
   it('shows elapsed time instead of a static infinity for an untimed Battle', () => {
     expect(battleClockChip).toContain('data-testid="untimed-battle-clock"');
     expect(battleClockChip).toContain('formatElapsedClockMs(elapsedReadoutMs)');
-    expect(battleClockChip).toContain('<small>No limit</small>');
     expect(battleClockChip).toContain('skirmish-status-chip skirmish-clock');
+    // An untimed Battle shows the count alone: a label under it said only what the
+    // absent countdown already says, and the tip carries "no time control".
+    expect(battleClockChip).not.toContain('No limit');
+    expect(battleClockChip).toContain('This Battle has no time control.');
     // The chip reads the mounted session store, so a portalled title bar reports the
     // Battle actually on screen rather than a time its host had to thread through.
     expect(battleClockChip).toContain('useSkirmish((s) => s.clock)');
