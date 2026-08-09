@@ -434,6 +434,11 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('runWorkspaceTitleSegment(`/run${search}`, view)');
     expect(runScreen).toContain('strategikonRouteCrumbs(path).map');
     expect(runScreen).toContain('<RunTitleBarStatus run={shellRun} path={routePath} search={routeSearch} view={view} />');
+    // A Run Battle is timed like every other Battle, and by the SAME chip — the Run bar
+    // showed no clock at all, so a Battle could be played with nothing saying how long it
+    // had been running. It is seated only while the battlefield is mounted.
+    expect(runScreen).toContain("import { BattleClockChip } from './BattleClockChip';");
+    expect(runScreen).toContain("{run.phase === 'battle' ? <BattleClockChip fillSurface={CHROME_LEAF_FILL_SURFACE} /> : null}");
     // Address-only Play breadcrumbs are App-owned, so they remain present even
     // while the replaceable battlefield scene is not yet active.
     expect(skirmish).not.toContain('<TitleBarSlot region="route">');

@@ -51,12 +51,7 @@ import { clearPersistedNetIntent } from '../game/netIntentPersistence';
 import { acquireNetSeatLease } from '../game/netSeatLease';
 import { objectiveSummary, victoryRulesForObjective } from '../core/objectives';
 import { objectiveBriefingForSide } from '../game/objectiveBriefing';
-import {
-  formatClockMs,
-  formatElapsedClockMs,
-  readElapsedClockMs,
-  type ElapsedClockState,
-} from '../core/clock';
+import { BattleClockChip } from './BattleClockChip';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { decodeBoard } from './boardCode';
@@ -201,17 +196,6 @@ export function canRetryRunBattle(
 /** A Deployment reroll retains the mounted Battle activity but must promote its new seed once. */
 export function runBattlePresentationKey(activityId: string, seed: number): string {
   return `${activityId}:${seed}`;
-}
-
-function useElapsedClockReadout(clock: ElapsedClockState, enabled: boolean): number {
-  const [nowMs, setNowMs] = useState(() => Date.now());
-  useEffect(() => {
-    setNowMs(Date.now());
-    if (!enabled || clock.startedAtMs === null) return undefined;
-    const ticker = window.setInterval(() => setNowMs(Date.now()), 250);
-    return () => window.clearInterval(ticker);
-  }, [clock.startedAtMs, enabled]);
-  return readElapsedClockMs(clock, nowMs);
 }
 
 function SkirmishSession(props: SkirmishProps = {}) {
@@ -458,12 +442,6 @@ function SkirmishSession(props: SkirmishProps = {}) {
   const objective = useSkirmish((s) => s.objective);
   const objectiveCtx = useSkirmish((s) => s.objectiveCtx);
   const victoryOverride = useSkirmish((s) => s.victoryOverride);
-  // The battle clock (null = untimed level). The store quantizes
-  // remainingMs to the displayed readout, so this subscription re-renders about
-  // once a second, not per tick.
-  const clock = useSkirmish((s) => s.clock);
-  const battleElapsed = useSkirmish((s) => s.battleElapsed);
-  const elapsedReadoutMs = useElapsedClockReadout(battleElapsed, clock === null);
   const net = useSkirmish((s) => s.net);
   const localSide: PlayingSide = net ? net.localSide : 'player';
   const activeLevel = useMemo(() => {
@@ -1447,30 +1425,15 @@ function SkirmishSession(props: SkirmishProps = {}) {
   ) : null;
   const skirmishTitleBarContent = playableSurfaceReady ? (
     <div className="skirmish-topbar-status">
-      {/* The battle clock is ALWAYS the middle chip on every play surface — a timed game
-        counts down and an authored untimed level counts elapsed Battle time upward. Keeping the
-        centre chip present means
+      {/* The battle clock is ALWAYS the middle chip on every play surface (BattleClockChip
+        also seats it in the Run's bar). Keeping the centre chip present means
         the turn plate and objective always flank a real element, so the clock stays
         page-centred over the title bar's diamond (equal-width flanks, see style.css). */}
       <TitleBarStatus className="skirmish-status-chip skirmish-turn-plate">
         <strong>{turnLabel}</strong>
         <small>{game.winner ? 'Skirmish Complete' : 'Live Board'}</small>
       </TitleBarStatus>
-      <TitleBarStatus className={`skirmish-status-chip skirmish-clock${clock && clock.remainingMs <= 20_000 ? ' danger is-low' : ''}`}>
-        {clock ? (
-          <>
-            <strong>{formatClockMs(clock.remainingMs)}</strong>
-            <small>{clock.incrementMs > 0 ? `+${clock.incrementMs / 1000}s / move` : 'Battle Clock'}</small>
-          </>
-        ) : (
-          <>
-            <strong data-testid="untimed-battle-clock" aria-label={`Elapsed time ${formatElapsedClockMs(elapsedReadoutMs)}`}>
-              {formatElapsedClockMs(elapsedReadoutMs)}
-            </strong>
-            <small>No limit</small>
-          </>
-        )}
-      </TitleBarStatus>
+      <BattleClockChip />
       <TitleBarStatus className="skirmish-status-chip skirmish-objective">
         <span className="skirmish-icon skirmish-icon-flag" aria-hidden="true" />
         <span>

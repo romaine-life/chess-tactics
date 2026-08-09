@@ -11,6 +11,7 @@ import { TitleBarStatus } from './shell/TitleBarControls';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleRoute, type TitleRouteSegment } from './shell/TitleRoute';
 import { RunIdentityChip, RunTitleBarMeasures } from './RunTitleBarChips';
+import { BattleClockChip } from './BattleClockChip';
 import { PLAY_RUN_SELECTOR_HREF } from './playHubRoute';
 import {
   Skirmish,
@@ -247,6 +248,11 @@ function RunTitleBarStatus({ run, path, search, view }: {
           warName={run.war.name}
           levelName={isGeneratedRunBattleName(levelName) ? null : levelName}
         />
+        {/* A Run Battle is a Battle: it gets the same clock every other play surface shows,
+            from the same chip. It is only mounted while the battlefield is — the Sectio and
+            the Aftermath have no Battle to time — and it reads the live session store it is
+            portalled out of, so the readout is the Battle actually on screen. */}
+        {run.phase === 'battle' ? <BattleClockChip fillSurface={CHROME_LEAF_FILL_SURFACE} /> : null}
         <RunTitleBarMeasures
           tier={run.ataraxiaTier}
           goldTenths={run.goldTenths}
