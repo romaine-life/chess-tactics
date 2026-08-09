@@ -127,6 +127,21 @@ function mergeValue(base: MergeValue, local: MergeValue, remote: MergeValue): Me
 }
 
 /**
+ * Every metadata field a merge must carry across. `formatVersion`, `board`, `boardCode` and
+ * `layers` are re-derived from the merged EditorBoard projection below, and `runRules` is a
+ * runtime-only Run projection that is never persisted — everything else on a Level has to be
+ * named explicitly, because `editorBoardToLevel` copies from a LevelMeta whose fields are all
+ * optional. Omitting one therefore compiles clean and silently DROPS it on every merge: that is
+ * how `parTurns` was lost the moment a second page or an autosave echo merged the level, which
+ * made an authored par snap back to the board estimate and read as "par won't let me set it".
+ * The `satisfies` below makes forgetting the NEXT field a type error here instead.
+ */
+type MergedLevelMetaKey = Exclude<
+  keyof Level,
+  'formatVersion' | 'board' | 'boardCode' | 'layers' | 'runRules'
+>;
+
+/**
  * Merge one stale Level Editor snapshot onto the latest shared cloud working copy.
  * Board state is merged through the lossless EditorBoard projection, then projected back into
  * both boardCode and gameplay layers so those two persistence channels cannot disagree.
@@ -139,7 +154,7 @@ export function mergeSharedLevel(base: Level, local: Level, remote: Level): Leve
     levelToEditorBoard(remote),
   ) as ReturnType<typeof levelToEditorBoard>;
 
-  return editorBoardToLevel(board, {
+  const carried = {
     id: remote.id,
     name: metadata.name,
     notes: metadata.notes,
@@ -148,12 +163,13 @@ export function mergeSharedLevel(base: Level, local: Level, remote: Level): Leve
     roster: metadata.roster,
     surviveTurns: metadata.surviveTurns,
     timeControl: metadata.timeControl,
+    parTurns: metadata.parTurns,
     victory: metadata.victory,
     events: metadata.events,
     battle: metadata.battle,
     difficulty: metadata.difficulty,
     economy: metadata.economy,
     theme: metadata.theme,
-    previousTerrain: remote.layers.terrain,
-  });
+  } satisfies Record<MergedLevelMetaKey, unknown>;
+  return editorBoardToLevel(board, { ...carried, previousTerrain: remote.layers.terrain });
 }
