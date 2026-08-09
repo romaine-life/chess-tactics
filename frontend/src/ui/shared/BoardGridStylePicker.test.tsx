@@ -10,6 +10,7 @@ import { BoardGridStylePicker, boardGridStyleOptions } from './BoardGridStylePic
 import { boardGridStyleSwatchBoard } from './boardGridStyleSwatchBoard';
 
 const styleSheet = readFileSync(new URL('../../style.css', import.meta.url), 'utf8');
+const levelEditor = readFileSync(new URL('../LevelEditor.tsx', import.meta.url), 'utf8');
 
 describe('board grid style picker', () => {
   beforeAll(() => {
@@ -100,15 +101,30 @@ describe('board grid style picker', () => {
     expect(styleSheet).toMatch(/\.tileset-board-grid-layer path \{[^}]*var\(--board-grid-stroke/);
   });
 
-  it('takes the styled line back off the placement pin, and only for the swatch', () => {
+  it('takes the styled line back off the placement pin, for the swatch and the authoring board', () => {
     // StudioReadOnlyBoard is a placement board, and placement boards pin the grid to one grey line
-    // so a player's choice cannot disturb a geometry-verification surface. The picker is the one
-    // surface whose job IS the player's line, so it must win — by source order, at equal
-    // specificity — while every other placement board keeps the pin.
+    // so a player's choice cannot disturb a geometry-verification surface or a picture baked from
+    // one. The picker is the one surface whose job IS the player's line, so it must win — by source
+    // order, at equal specificity — while every read-only placement board keeps the pin.
     const placementPin = styleSheet.indexOf('.tileset-placement-board .tileset-board-grid-layer path');
     const swatchOverride = styleSheet.indexOf('.board-grid-style-swatch-board .tileset-board-grid-layer path');
     expect(placementPin).toBeGreaterThan(-1);
     expect(swatchOverride).toBeGreaterThan(placementPin);
     expect(styleSheet.slice(swatchOverride)).toMatch(/^[^}]*var\(--board-grid-stroke/);
+
+    // The Level Editor's board is the other exception: a level is authored on the same grid it is
+    // played on, so its Playable grid / Whole grid overlay wears the player's choice. This one wins
+    // by specificity rather than source order, so moving the block cannot silently re-pin it.
+    const authoringOverride = styleSheet.indexOf('.tileset-placement-board.is-authoring .tileset-board-grid-layer path');
+    expect(authoringOverride).toBeGreaterThan(-1);
+    const authoringBlock = styleSheet.slice(authoringOverride).split('}')[0];
+    expect(authoringBlock).toContain('var(--board-grid-stroke');
+    expect(authoringBlock).toContain('var(--board-grid-weight');
+    expect(authoringBlock).toContain('var(--board-grid-bevel');
+
+    // A selector with no host draws nothing, and the failure is invisible: the editor would quietly
+    // fall back to the placement grey. Keep the class the rule hangs on and the board that emits it
+    // in the same assertion.
+    expect(levelEditor).toContain('tileset-placement-board is-authoring is-tool-');
   });
 });

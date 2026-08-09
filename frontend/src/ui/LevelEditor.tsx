@@ -1520,11 +1520,14 @@ function StudioEditableBoard({
     featureExits: {},
     zones: {},
   };
+  // `is-authoring` separates the one placement board a level is BUILT on from the read-only
+  // placement boards that preview or export one. Only this board wears the player's chosen grid
+  // style; see the board grid rules in style.css.
   return (
     <TileGrid
       cells={cells}
       originCells={playableGridCells}
-      className={`tileset-placement-board is-tool-${tool}`}
+      className={`tileset-placement-board is-authoring is-tool-${tool}`}
       ariaLabel="Editable tile board"
       boardZoom={boardZoom}
       boardPan={boardPan}
