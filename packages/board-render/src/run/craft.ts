@@ -91,7 +91,7 @@ export const RUN_CRAFT_PARAMS: readonly string[] = Object.freeze([
 
 export const DEFAULT_CRAFT_SEED = 1337;
 
-export type RunCraftPhase = 'aftermath' | 'bona-vacantia' | 'sectio' | 'deployment' | 'battle' | 'battle-victory' | 'victory';
+export type RunCraftPhase = 'aftermath' | 'bona-vacantia' | 'commendatio' | 'sectio' | 'deployment' | 'battle' | 'battle-victory' | 'victory';
 
 /**
  * What a crafted aftermath reports when the spec does not say. A crafted Battle is placed,
@@ -165,7 +165,7 @@ const PIECE_ALIASES: Readonly<Record<string, AdlectablePieceType>> = Object.free
   queen: 'queen',
 });
 
-const CRAFT_PHASES: readonly RunCraftPhase[] = ['aftermath', 'bona-vacantia', 'sectio', 'deployment', 'battle', 'battle-victory', 'victory'];
+const CRAFT_PHASES: readonly RunCraftPhase[] = ['aftermath', 'bona-vacantia', 'commendatio', 'sectio', 'deployment', 'battle', 'battle-victory', 'victory'];
 
 function pieceList(raw: string, label: string): AdlectablePieceType[] {
   const pieces: AdlectablePieceType[] = [];
@@ -948,7 +948,20 @@ export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDo
   if (spec.phase !== 'victory' && targetIndex >= battles) {
     throw new RunCraftError(`craft battle: ${war.name} has ${battles} Battle${battles === 1 ? '' : 's'}.`);
   }
-  const opening = createRun(war, spec.seed, spec.ataraxiaTier);
+  const opening = createRun(war, spec.seed, spec.ataraxiaTier, {
+    chooseKing: spec.phase === 'commendatio',
+  });
+
+  // Commendatio is the Run's very first screen: the King has not been chosen, so the document
+  // holds no army, no card and no King-borne gold. Nothing about a later Battle can be crafted
+  // onto it, which is why it takes no overrides at all.
+  if (spec.phase === 'commendatio') {
+    if (targetIndex !== 0) throw new RunCraftError('craft: Commendatio is only ever before Battle 1.');
+    if (spec.cards?.length || spec.army?.length || spec.add?.length) {
+      throw new RunCraftError('craft: Commendatio precedes the King, so it can hold no army or cards.');
+    }
+    return opening;
+  }
 
   // The Run's own first state. Bona Vacantia sits directly in front of Battle 1.
   if (spec.phase === 'bona-vacantia' && targetIndex === 0) {
