@@ -43,6 +43,10 @@ import {
 } from './routePrefetch';
 import { SceneBoundary } from './shell/SceneBoundary';
 import { SceneContinuityHost } from './shell/SceneContinuity';
+import { createSceneFailureRecovery, sceneFailureRemedy } from './shell/sceneFailure';
+import { ChromeButton } from './shared/ChromeButton';
+import { goSignIn } from '../net/auth';
+import { authSessionIdentityKey, refreshAuthSession, useAuthSession } from '../net/authSession';
 import { initialSceneState, reduceScene } from './shell/sceneDirector';
 import {
   isEmptySlotDestination,
@@ -77,12 +81,21 @@ const BrushIconReview = lazy(() => import('./BrushIconReview').then((module) => 
 
 const SCENE_LOADING_MIN_MS = 350;
 const STARTUP_STAGE_BEAT_MS = 140;
-const sceneFailureCopy = (error: Error | null): string => (
-  error?.message.includes('Canonical thumbnail derivative')
-    ? 'A required level preview could not be prepared. Retry to rebuild the preview.'
-    : error?.message.includes('Canonical Play content')
-      ? 'Play content could not be reached. Check your connection and try again.'
-      : 'Required scene data or artwork could not be reached. Check your connection and try again.'
+// A failed scene is watched, not abandoned: while it is on screen the session owner is re-read on
+// this beat (and on focus / visibility / regained connectivity) so a backend that comes back is
+// noticed in seconds rather than whenever the owner happens to press something.
+const SCENE_FAILURE_REPROBE_MS = 3_000;
+const sceneFailureTitle = (needsSignIn: boolean): string => (
+  needsSignIn ? 'Sign in to load this screen.' : 'This scene could not be loaded.'
+);
+const sceneFailureCopy = (error: Error | null, needsSignIn: boolean): string => (
+  needsSignIn
+    ? 'This address opens content owned by your account. Signing in returns you to this exact screen.'
+    : error?.message.includes('Canonical thumbnail derivative')
+      ? 'A required level preview could not be prepared. Retry to rebuild the preview.'
+      : error?.message.includes('Canonical Play content')
+        ? 'Play content could not be reached. Check your connection and try again.'
+        : 'Required scene data or artwork could not be reached. Check your connection and try again.'
 );
 
 /**
@@ -115,6 +128,11 @@ export function App(): ReactElement {
     ),
   );
   const sceneRef = useRef(scene);
+  // Read, never re-probed: the shared owner is the only thing that reads identity (ADR-0306), and
+  // the failure screen only needs to compare the one it failed under with the one it is told next.
+  const authStatus = useAuthSession((session) => session.status);
+  const authPhase = useAuthSession((session) => session.phase);
+  const authStatusRef = useRef(authStatus);
   const loadingStartedAt = useRef(performance.now());
   const timers = useRef<number[]>([]);
   const startupStageStartedAt = useRef(performance.now());
@@ -124,6 +142,7 @@ export function App(): ReactElement {
   );
 
   useLayoutEffect(() => { sceneRef.current = scene; }, [scene]);
+  useLayoutEffect(() => { authStatusRef.current = authStatus; }, [authStatus]);
   const resolveScene = useCallback((nextPath: string, nextSearch: string): ScenePath => (
     sceneManifest(nextPath, nextSearch, {
       run: { hydrated: activeRunHydrated, document: activeRun },
@@ -460,15 +479,53 @@ export function App(): ReactElement {
   const destinationFailed = useCallback((generation: number, error: Error): void => {
     dispatchScene({ type: 'failed', generation, error });
   }, []);
-  const retryScene = useCallback((): void => {
+  const retryScene = useCallback((reason: 'owner' | 'session-recovered' = 'owner'): void => {
     const failed = sceneRef.current;
     const destination = failed.destination ?? failed.current;
     loadingMark(destination.id, 'scene-retry', {
       failedGeneration: failed.generation,
       retryGeneration: failed.generation + 1,
+      reason,
     });
     dispatchScene({ type: 'retry' });
   }, []);
+  // A failed scene is a dead end unless something notices the world change underneath it, and the
+  // world only changes in two ways worth acting on: the backend comes back, or the account session
+  // moves (expired here, restored in another tab). ADR-0306's owner is the one thing entitled to
+  // know either, so the failure asks it to re-read and retries itself when the answer is MATERIALLY
+  // better than the one it failed under — a backend that had stopped answering doing so again, or
+  // a changed identity. A same-answer probe changes nothing and leaves the manual action in place,
+  // so a scene broken for its own reasons can never retry-loop on the beat.
+  useEffect(() => {
+    if (scene.phase !== 'error') return undefined;
+    const recovery = createSceneFailureRecovery(authSessionIdentityKey(authStatusRef.current));
+    let recovering = false;
+    const probe = (): void => {
+      if (recovering) return;
+      void refreshAuthSession().then((status) => {
+        if (recovering || sceneRef.current.phase !== 'error') return;
+        if (!recovery.observe({
+          reachable: status.reachable,
+          identityKey: authSessionIdentityKey(status),
+        })) return;
+        recovering = true;
+        retryScene('session-recovered');
+      });
+    };
+    const probeWhenVisible = (): void => { if (!document.hidden) probe(); };
+    const timer = window.setInterval(probeWhenVisible, SCENE_FAILURE_REPROBE_MS);
+    window.addEventListener('focus', probe);
+    window.addEventListener('online', probe);
+    document.addEventListener('visibilitychange', probeWhenVisible);
+    probe();
+    return () => {
+      recovering = true;
+      window.clearInterval(timer);
+      window.removeEventListener('focus', probe);
+      window.removeEventListener('online', probe);
+      document.removeEventListener('visibilitychange', probeWhenVisible);
+    };
+  }, [retryScene, scene.generation, scene.phase]);
   useEffect(() => {
     if (scene.phase !== 'entering') return undefined;
     const generation = scene.generation;
@@ -508,6 +565,15 @@ export function App(): ReactElement {
     ? scene.current
     : scene.destination ?? scene.current;
   const showSceneFailure = scene.phase === 'error';
+  // Who decides that signing in is the fix, in order of authority. A screen that failed on a
+  // private address KNOWS, and says so on the error itself; nothing else may overrule it. Otherwise
+  // the session owner is asked, and "authoritatively signed out" is the one answer that makes
+  // signing in worth offering — as an addition beside Retry, never as a replacement for it,
+  // because a signed-out browser is a perfectly ordinary way to be here (ADR-0060).
+  const failureRemedy = sceneFailureRemedy(scene.error);
+  const sceneFailureNeedsSignIn = failureRemedy === 'sign-in';
+  const sceneFailureOffersSignIn = sceneFailureNeedsSignIn
+    || (failureRemedy === null && authPhase === 'anonymous');
   const titleBarLoading = manifest.waitPresentation === 'loading' && (
     scene.phase === 'loading' || scene.phase === 'entering'
   );
@@ -552,7 +618,10 @@ export function App(): ReactElement {
           visualRole: 'outgoing' as const,
         },
         {
-          key: sceneLayerKey(scene.destination!),
+          // The incoming layer carries the retry epoch for the same reason the single
+          // layer does: a retried destination that failed while overlapping its outgoing
+          // scene must be rebuilt, not re-driven around the instance holding the failure.
+          key: `${sceneLayerKey(scene.destination!)}#${scene.retryEpoch}`,
           scene: scene.destination!,
           manifest: scene.destination!,
           search: destinationSearch,
@@ -569,7 +638,10 @@ export function App(): ReactElement {
           // here would destroy and recreate the just-committed screen and its store.
           // A nested detail leaf shares its host's key (sceneLayerKey) so selecting a
           // Run choice re-renders the retained action column instead of remounting it.
-          key: sceneLayerKey(mountedScene),
+          // The retry epoch is the one thing that DOES change it, because a screen that
+          // failed is holding the failure and must be rebuilt to try again — see
+          // SceneState.retryEpoch. It advances only on retry, never on navigation.
+          key: `${sceneLayerKey(mountedScene)}#${scene.retryEpoch}`,
           scene: mountedScene,
           manifest,
           search,
@@ -645,9 +717,37 @@ export function App(): ReactElement {
           <div className="scene-loading-presentation" role={scene.phase === 'error' ? 'alert' : 'status'}>
             {showSceneFailure ? (
               <>
-                <strong>This scene could not be loaded.</strong>
-                <small>{sceneFailureCopy(scene.error)}</small>
-                <button type="button" onClick={retryScene}>Retry</button>
+                <strong>{sceneFailureTitle(sceneFailureNeedsSignIn)}</strong>
+                <small>{sceneFailureCopy(scene.error, sceneFailureNeedsSignIn)}</small>
+                <div className="scene-failure-actions">
+                  {sceneFailureOffersSignIn ? (
+                    // The address that failed is still the address in the bar, so goSignIn's default
+                    // returnTo IS this screen: the round trip through the identity provider lands
+                    // back on the exact thing that could not load, already signed in.
+                    <ChromeButton
+                      unit="inner-text-button"
+                      tone="primary"
+                      className="le-seg-btn"
+                      data-scene-failure-action="sign-in"
+                      onClick={() => goSignIn()}
+                    >
+                      Sign in
+                    </ChromeButton>
+                  ) : null}
+                  {/* Kept beside Sign in rather than replaced by it: being signed out does not prove
+                      the sign-out is what broke this screen, and playing never requires an account
+                      (ADR-0060). Only a screen that declared `sign-in` retires it. */}
+                  {sceneFailureNeedsSignIn ? null : (
+                    <ChromeButton
+                      unit="inner-text-button"
+                      className="le-seg-btn"
+                      data-scene-failure-action="retry"
+                      onClick={() => retryScene()}
+                    >
+                      Retry
+                    </ChromeButton>
+                  )}
+                </div>
               </>
             ) : <span>Loading…</span>}
           </div>
