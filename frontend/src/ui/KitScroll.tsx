@@ -10,11 +10,51 @@ import {
 } from 'react';
 
 const KIT_SCROLL_MIN_THUMB = 24;
+const KIT_SCROLL_MAX_GUTTER_FLIPS = 2;
 
 export interface KitScrollMetrics {
   scrollable: boolean;
   h: number;
   top: number;
+}
+
+export interface KitScrollGutter {
+  reserved: boolean;
+  flips: number;
+  clientHeight: number;
+}
+
+export const KIT_SCROLL_INITIAL_GUTTER: KitScrollGutter = {
+  reserved: true,
+  flips: 0,
+  clientHeight: -1,
+};
+
+/**
+ * Whether the rail is drawn and its inline gutter reserved (ADR-0534): a pane
+ * with nothing to scroll gives the space back to its rows instead of standing a
+ * bare groove beside them.
+ *
+ * Collapsing the gutter WIDENS the content, and content whose height grows with
+ * its width — an image grid, an aspect-ratio card lane — can overflow again at
+ * that wider measure, then fit again once the gutter returns. Left alone that
+ * ping-pongs forever. A horizontal gutter cannot change the viewport's height,
+ * so an unchanged `clientHeight` identifies one settling episode; after two
+ * flips inside it we latch to the reserved rail, ADR-0030's always-drawn state,
+ * which is stable under both widths.
+ */
+export function resolveKitScrollGutter({ overflows, clientHeight, previous }: {
+  overflows: boolean;
+  clientHeight: number;
+  previous: KitScrollGutter;
+}): KitScrollGutter {
+  const settling = previous.clientHeight === clientHeight;
+  const flips = settling ? previous.flips : 0;
+  const latched = flips >= KIT_SCROLL_MAX_GUTTER_FLIPS;
+  const reserved = overflows === previous.reserved ? previous.reserved : latched || overflows;
+  const nextFlips = reserved === previous.reserved ? flips : flips + 1;
+  if (settling && reserved === previous.reserved && nextFlips === previous.flips) return previous;
+  return { reserved, flips: nextFlips, clientHeight };
 }
 
 /**
@@ -47,11 +87,16 @@ export function computeKitScrollMetrics({
   return { scrollable, h, top: Math.round(progress * maxThumb) };
 }
 
-// A DRAWN scrollbar (ADR-0030). The native scrollbar is hidden; we render an always-present rail
-// (a real DOM element — the browser can't hide it) plus a grip thumb that appears only when there's
-// scrollable content and tracks the scroll position. Because it's DOM, the rail never vanishes on an
-// empty pane AND it screenshots like any other element (native ::-webkit skins don't render in
-// headless captures). Content still scrolls natively (wheel/keys); we only draw + drive the bar.
+// A DRAWN scrollbar (ADR-0030). The native scrollbar is hidden; we render the rail as a real DOM
+// element plus a grip thumb that appears only when there's scrollable content and tracks the scroll
+// position. Because it's DOM we own when it shows AND it screenshots like any other element (native
+// ::-webkit skins don't render in headless captures). Content still scrolls natively (wheel/keys);
+// we only draw + drive the bar.
+//
+// The rail is mounted unconditionally so its rendered height stays measurable, but a pane with
+// nothing to scroll marks itself `data-kit-scroll-rail="collapsed"` (ADR-0534): the CSS then stops
+// painting the groove and zeroes `--kit-scroll-gutter`, handing the reserved inline strip back to
+// the rows. Consumers reserve their gutter FROM that token so the whole family collapses together.
 export function KitScroll({ children, className, style, contentRef }: {
   children: ReactNode;
   className?: string;
@@ -63,16 +108,23 @@ export function KitScroll({ children, className, style, contentRef }: {
   const rail = useRef<HTMLDivElement>(null);
   const drag = useRef<{ y: number; top: number; h: number } | null>(null);
   const [m, setM] = useState<{ scrollable: boolean; h: number; top: number }>({ scrollable: false, h: 0, top: 0 });
+  const [gutter, setGutter] = useState<KitScrollGutter>(KIT_SCROLL_INITIAL_GUTTER);
 
   const recompute = (): void => {
     const el = content.current;
     const track = rail.current;
     if (!el || !track) return;
-    setM(computeKitScrollMetrics({
+    const metrics = computeKitScrollMetrics({
       clientHeight: el.clientHeight,
       scrollHeight: el.scrollHeight,
       scrollTop: el.scrollTop,
       trackHeight: track.clientHeight,
+    });
+    setM(metrics);
+    setGutter((previous) => resolveKitScrollGutter({
+      overflows: metrics.scrollable,
+      clientHeight: el.clientHeight,
+      previous,
     }));
   };
 
@@ -114,7 +166,11 @@ export function KitScroll({ children, className, style, contentRef }: {
   };
 
   return (
-    <div className={`kit-scroll-wrap ${className ?? ''}`.trim()} style={style}>
+    <div
+      className={`kit-scroll-wrap ${className ?? ''}`.trim()}
+      style={style}
+      data-kit-scroll-rail={gutter.reserved ? 'reserved' : 'collapsed'}
+    >
       <div className="kit-scroll-content" ref={content} onScroll={recompute}>
         {children}
       </div>

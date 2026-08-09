@@ -7064,21 +7064,35 @@ body.loading-bootstrap .app-startup-status {
   flex-direction: column;
   gap: var(--ds-gutter);
   padding-left: var(--le-inner-atom-left-overhang, 0px);
-  padding-right: calc(18px + var(--le-inner-atom-right-overhang, 0px));
+  padding-right: calc(var(--kit-scroll-gutter) + var(--le-inner-atom-right-overhang, 0px));
 }
 
 /* kit-scroll — the DRAWN scroll primitive (ADR-0030), rendered by <KitScroll>. The native bar is
-   hidden; we draw an ALWAYS-PRESENT rail (a real DOM element the browser can't hide) + a grip thumb
-   that shows only when scrollable. Content scrolls natively; we just paint and drive the bar. This
-   is why the rail can't vanish on an empty pane — and why it screenshots (native ::-webkit skins
-   do not render in headless captures). */
+   hidden; we draw the rail (a real DOM element we control) + a grip thumb that shows only when
+   scrollable. Content scrolls natively; we just paint and drive the bar — which is why it
+   screenshots at all (native ::-webkit skins do not render in headless captures).
+
+   ADR-0534: a pane with NOTHING to scroll draws no rail and reserves no gutter. The element stays
+   mounted (its rendered height is the thumb's track, so it has to stay measurable) and is marked
+   `data-kit-scroll-rail="collapsed"`, which stops the paint and zeroes --kit-scroll-gutter.
+   --kit-scroll-gutter-size is the reservation a consumer wants; --kit-scroll-gutter is what it
+   gets after that collapse. Reserve inline space FROM the latter — never from a literal — or the
+   rows keep standing clear of a rail that is no longer there. */
 .kit-scroll-wrap {
   --kit-scroll-rail-inline-offset: 2px;
   --kit-scroll-rail-width: 14px;
+  --kit-scroll-gutter-size: 18px;
+  --kit-scroll-gutter: var(--kit-scroll-gutter-size);
   position: relative;
   min-height: 0;
 }
-.kit-scroll-content { height: 100%; overflow-y: auto; overflow-x: hidden; padding-right: 18px; scrollbar-width: none; }
+.kit-scroll-wrap[data-kit-scroll-rail='collapsed'] {
+  --kit-scroll-gutter: 0px;
+}
+.kit-scroll-wrap[data-kit-scroll-rail='collapsed'] > .kit-scroll-rail {
+  visibility: hidden;
+}
+.kit-scroll-content { height: 100%; overflow-y: auto; overflow-x: hidden; padding-right: var(--kit-scroll-gutter); scrollbar-width: none; }
 .kit-scroll-content::-webkit-scrollbar { width: 0; height: 0; }
 .kit-scroll-rail { position: absolute; top: 0; right: 2px; bottom: 0; width: 14px; border-radius: 3px; background: linear-gradient(180deg, #060d16, #091523); box-shadow: inset 2px 2px 4px rgba(0, 0, 0, 0.72), inset -1px -1px 1px rgba(130, 170, 215, 0.2), 0 0 0 1px rgba(118, 158, 203, 0.22); pointer-events: none; }
 /* Carved oak grip as a 9-slice (ADR-0030): the capital (top) and base (bottom) keep a
@@ -7141,6 +7155,15 @@ body.loading-bootstrap .app-startup-status {
   box-sizing: border-box;
   overflow-x: hidden;
   padding-inline: var(--chrome-divided-grid-inline-apron-start) 0;
+}
+
+/* ADR-0534 exempts this one: the grid's gutter is a declared COLUMN whose sides
+   carry drawn dividers and junctions, so the rail is a member of that frame
+   rather than a bar floating beside the rows. Collapsing it would leave an empty
+   framed strip and move every junction on the boundary — ADR-0030's "the frame
+   never moves" still governs a framed gutter. The rail stays drawn when idle. */
+.chrome-divided-grid__scroll[data-kit-scroll-rail='collapsed'] > .kit-scroll-rail {
+  visibility: visible;
 }
 
 .chrome-divided-grid__rows {
@@ -18546,6 +18569,7 @@ button.tileset-relationship-cell {
 /* The settings panel's scroll viewport always occupies the main frame's second (1fr)
    row so the ADR-0030 rail spans the scrollable height, below any pinned header. */
 .settings-scroll {
+  --kit-scroll-gutter-size: 24px;
   block-size: 100%;
   grid-row: 2;
   min-height: 0;
@@ -18553,9 +18577,10 @@ button.tileset-relationship-cell {
 .settings-scroll > .kit-scroll-content {
   /* Settings owns two literal horizontal regions: a scroll viewport and a
      separate 24px drawn-scrollbar gutter. Do not merely pad a full-width
-     viewport—the row frames would still extend beneath the rail. */
+     viewport—the row frames would still extend beneath the rail. The width comes
+     off --kit-scroll-gutter so an idle pane gives that region back (ADR-0534). */
   box-sizing: border-box;
-  inline-size: calc(100% - 24px);
+  inline-size: calc(100% - var(--kit-scroll-gutter));
   padding-inline-end: 0;
 }
 .settings-scroll > .kit-scroll-rail {
@@ -22844,14 +22869,17 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
+.run-expunctio-workspace .run-sectio-operation-list-scroll {
+  --kit-scroll-gutter-size: calc(
+    var(--kit-scroll-rail-inline-offset)
+    + var(--kit-scroll-rail-width)
+  );
+}
+
 .run-expunctio-workspace .run-sectio-operation-list-scroll > .kit-scroll-content {
   box-sizing: border-box;
   padding-inline-start: var(--ds-space-1);
-  padding-inline-end: calc(
-    var(--kit-scroll-rail-inline-offset)
-    + var(--kit-scroll-rail-width)
-    + var(--ds-space-1)
-  );
+  padding-inline-end: calc(var(--kit-scroll-gutter) + var(--ds-space-1));
 }
 
 .run-expunctio-list {

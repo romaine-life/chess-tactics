@@ -207,7 +207,10 @@ describe('professional loading architecture guards', () => {
     expect(settings).not.toContain('settings-xfade-');
     expect(styles).toContain('data-scene-transition-active');
     expect(styles).toContain('.settings-scroll > .kit-scroll-content');
-    expect(styles).toContain('inline-size: calc(100% - 24px)');
+    // Still a separate 24px scrollbar region rather than a padded full-width viewport — taken
+    // off the collapsing token (ADR-0534) so an idle pane hands the region back to the rows.
+    expect(styles).toContain('--kit-scroll-gutter-size: 24px');
+    expect(styles).toContain('inline-size: calc(100% - var(--kit-scroll-gutter))');
     expect(read('./ui/App.tsx')).toContain("manifest.waitPresentation === 'loading'");
   });
 
