@@ -6838,6 +6838,22 @@ body.loading-bootstrap .app-startup-status {
   opacity: 1;
 }
 
+/* Seating a TILE-frame overlay inside a TileGrid overlay seat.
+   There are two frames a square-local overlay can be mounted in, and they need different tops.
+   The 180px tile frame is translated by the whole equator (-68px), so its surface diamond sits
+   at `--iso-tile-surface-top` (41px) — that is where the Level Editor mounts zones and tactical
+   paint, as `cell.children`. A TileGrid overlay seat is translated by the equator PLANE
+   (-step-y, 27px) instead, so the same diamond is at the seat's own origin; that is why the
+   region marquee below and the battlefield's own `.skirmish-board-cell-hit` both use `top: 0`
+   there. An overlay authored for the tile frame and mounted through `renderCellOverlay` lands
+   41px BELOW the square it names — three quarters of a tile, plainly visible.
+   Owned by the BAND rather than by each host: the Enchiridion carried its own copy of this
+   correction, and the next caller through `renderCellOverlay` would have had to know to write
+   a third. */
+.tileset-generated-board-overlay-cell > :is(.le-zone-cell, .le-tactical-cell) {
+  top: 0;
+}
+
 /* Marquee selection highlight for the Generate/Tile scope. TileGrid's flat overlay cell is
    already seated at the top edge of the surface diamond, so this begins at 0 rather than applying
    the terrain-frame equator offset again. Keeping it in that 10k overlay band makes north/west
@@ -7243,6 +7259,36 @@ body.loading-bootstrap .app-startup-status {
 .chrome-divided-grid__row-boundary,
 .chrome-divided-grid__row {
   grid-template-columns: var(--chrome-divided-grid-columns);
+}
+
+/* A framed grid's rails BLEED past its content box on purpose: the authored junction atoms tee
+   into the box's own side rails. An unframed grid has no such rails — the host's chrome is its
+   boundary — so that bleed lands on the title bar and the Controls rail instead, and the corner
+   atoms sit on top of chrome they are supposed to disappear behind. Clip it to the grid's own
+   box. Internal crossings sit well inside and are untouched. */
+.chrome-divided-grid[data-chrome-grid-framed="false"] {
+  overflow: hidden;
+}
+
+/* An UNFRAMED grid still carries a surface — a workspace that replaces a retained scene has
+   nothing of its own behind it. The inner box's own fill rules are scoped to that box, so the
+   surface and the lift above it are declared here for the frameless form. */
+.chrome-divided-grid.has-chrome-surface-fill > .chrome-divided-grid__fill {
+  inset: 0;
+}
+
+/* Lift the CONTENT above the fill — not every child. A blanket rule here also caught the rail
+   layer, whose own `z-index: 2` it outranks, dropping the rails to the content's level; the board
+   then painted over the vertical rail below the header junction and its south stroke came out
+   thinner than the north, east and west ones the junction atom covers. */
+/* `position` only, deliberately NO z-index. A positioned child already paints above the fill
+   below it, and naming a layer here would make this a stacking context — the row boundaries
+   inside it carry the junction atoms at z-index 3 precisely so they land ON TOP of the vertical
+   rails at 2, and trapping them under a level-1 parent buries every four-way crossing under the
+   rail it is supposed to cap. */
+.chrome-divided-grid.has-chrome-surface-fill > .chrome-divided-grid__rows,
+.chrome-divided-grid.has-chrome-surface-fill > .chrome-divided-grid__scroll {
+  position: relative;
 }
 
 .chrome-divided-grid__fixed-rails {
@@ -10716,6 +10762,118 @@ body { font-size: 17px; }
 .ce-li-none { color: var(--ce-muted); font-size: var(--ds-text-xs); }
 
 .ce-li-zones { color: var(--ce-slate); font-size: var(--ds-text-sm); }
+
+/* The Deployment section sits under Board and Forces and reads as a full-width block: its
+   caption is a sentence, which cannot be squeezed into a half-width column beside a roster. */
+.ce-li-deployment { grid-column: 1 / -1; }
+
+/* ---- Row marks ---------------------------------------------------------------------------
+   A row's mark rides INSIDE its label, so it inherits the label's line and cannot push the value
+   off the shared right edge. The seat is square and sized from the label's own type, so every
+   mark in the readout is the same size whatever its art's aspect, and a type-scale change carries
+   the marks with it instead of leaving them behind. */
+.ce-li-icon {
+  align-items: center;
+  block-size: 1.6em;
+  display: inline-flex;
+  flex: none;
+  inline-size: 1.6em;
+  justify-content: center;
+  margin-inline-end: 6px;
+  vertical-align: -.45em;
+}
+
+.ce-li-icon > img {
+  display: block;
+  max-block-size: 100%;
+  max-inline-size: 100%;
+  object-fit: contain;
+}
+
+/* Board art is pixel art; a mark cut from it keeps its pixels rather than being smoothed into
+   mush at icon scale. The kit's own icons are authored at their seat size and need no such say. */
+.ce-li-tile-icon > img { image-rendering: pixelated; }
+
+/* A surface tile ships in the whole 96x180 TILE frame, whose diamond is one band across the
+   equator at 68/180. Contained in a square seat that band shrinks to a sliver, so the frame is
+   sized by height and hung with its equator on the seat's centre line, overflowing the seat
+   instead of shrinking inside it. The seat keeps its 1.6em for layout, so the row does not grow. */
+.ce-li-tile-icon { overflow: visible; position: relative; }
+
+.ce-li-tile-icon > img {
+  block-size: 3.4em;
+  inline-size: auto;
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  max-block-size: none;
+  max-inline-size: none;
+  position: absolute;
+  translate: -50% -37.8%;
+}
+
+/* The label rows are flex; a label that carries a mark becomes a flex line of its own so the
+   mark and the word share a baseline instead of the mark stretching the row. */
+.ce-li-stat > span,
+.ce-li-zones-row > .ce-li-title {
+  align-items: center;
+  display: inline-flex;
+}
+
+/* A side's flag leads its own heading, before the word and the count. */
+.ce-li-roster-head > .ce-li-flag {
+  margin-inline-end: 5px;
+}
+
+/* ---- The file of units behind a roster line -----------------------------------------------
+   A count of a piece is drawn as that many of the piece. They OVERLAP, so a dozen pawns still
+   fit a narrow column and read as a body rather than a queue; the negative margin is the overlap
+   and the first one cancels it so the file starts flush. The numeral stays at the column's edge
+   — the file says what is coming, the numeral settles exactly how many. */
+.ce-li-file {
+  align-items: center;
+  display: inline-flex;
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  min-inline-size: 0;
+  overflow: hidden;
+  padding-inline: 6px;
+}
+
+.ce-li-file > .ce-li-file-unit {
+  block-size: 1.9em;
+  inline-size: 1.5em;
+  margin-inline-start: -.45em;
+}
+
+.ce-li-file > .ce-li-file-unit:first-child {
+  margin-inline-start: 0;
+}
+
+/* Rocks and rubble have no unit sprite, so their line keeps name and count with nothing between. */
+.ce-li-file.is-unsprited { display: none; }
+
+/* The Zone row's control is a real button, so the row is control + value rather than two spans.
+   Width only — the registered text button owns its height (`width-only` control policy). Sized to
+   the label so it does not read as a wide command bar in a column of quiet facts. */
+.ce-li-zone-toggle {
+  block-size: var(--le-inner-control-h);
+  flex: none;
+  inline-size: 96px;
+  justify-content: center;
+  min-inline-size: 72px;
+  padding: 0 8px;
+}
+
+/* Band shown reads as a lift, exactly as `.le-seg-btn.active` states it: there is no separate
+   active frame installed, so the runtime aliases it to the normal one and the swap is invisible.
+   Same numbers as that rule, so a selected control does not read two ways in one app. */
+.ce-li-zone-toggle.is-selected {
+  filter: brightness(1.35) saturate(1.25);
+}
+
+.ce-li-zone-toggle.is-selected:hover {
+  filter: brightness(1.45) saturate(1.3);
+}
 
 .terrain-grass { background: #6a9b3f; }
 .terrain-water { background: #3a78c8; }
@@ -19668,89 +19826,91 @@ button.tileset-relationship-cell {
   grid-row: 2;
 }
 
+/* The pane fills the WHOLE workspace, the way the Strategikon's sheet does: the shell's body
+   perimeter is dropped for this scene so there is no margin of scene left showing around it, and
+   the pane's own material is what the screen is made of rather than a plate floating on it. */
+/* Declared on the SHELL element, not on the scene around it: `.run-shell-workspace` sets these
+   itself, so a declaration on an ancestor is simply shadowed and the body keeps its gutter. */
+.run-battle-preview-workspace > .run-shell-workspace {
+  --shell-workspace-body-inset-block: 0px;
+  --shell-workspace-body-inset-start: 0px;
+}
+
 .run-battle-preview-content {
   align-content: stretch;
   grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
+  padding: 0;
 }
 
 .run-battle-preview-surface,
 .run-battle-preview-surface > .painted-surface-content,
-.run-battle-preview-layout {
+.run-battle-preview-pane {
   block-size: 100%;
   min-block-size: 0;
   min-inline-size: 0;
 }
 
-/* ONE row, two columns, both stretched: that is what makes the board box and the intelligence
-   boxes share a top AND a bottom line. Nothing sits above the board to push it down — its name
-   is its own title bar. */
-.run-battle-preview-layout {
+/* ONE pane, filled, with RAILS instead of gaps. Three framed boxes with gaps between them let
+   strips of the page show through; this is a single divided box, so every separation on the
+   screen is one of its own drawn rails and there is nothing between them to show through.
+   Two rows: the header band takes its content's height, the body takes all the rest — that is
+   what makes the board and the readout share a bottom line. */
+.run-battle-preview-pane {
   display: grid;
-  gap: var(--ds-stack);
-  grid-template-areas: "board intelligence";
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 34%);
   grid-template-rows: minmax(0, 1fr);
-}
-
-.run-battle-preview-board-frame {
-  display: grid;
-  /* Exactly two rows, no gap: title strip, then the pane takes the whole remainder. Any third
-     track or row gap would expose the frame's own surface as a band across the level art. */
-  gap: 0;
-  grid-area: board;
-  grid-template-rows: auto minmax(0, 1fr);
-  min-block-size: 0;
-  min-inline-size: 0;
-  /* NOT clipped: the title rule's authored T caps bleed onto the side rails by design, and a
-     clip here puts them inside the frame. The pane owns its own clip. */
-  overflow: visible;
-  /* NO padding. The installed inner-box surface paints an opaque `background-color` under every
-     inner box, so any padding here is a flat slab of that material ringing the level art between
-     the border art and the board. The board is the frame's whole content: it must reach the
-     border on all four sides so the surface is never visible. */
+  /* NO padding. The installed surface paints under the whole pane, so padding would ring the
+     level art with a flat slab of that material between the border art and the board.
+     Clipping is the frameless grid's own (see `[data-chrome-grid-framed="false"]`). */
   padding: 0;
 }
 
-/* ONE title bar, worn by every box on this screen: name and its registered rule inside one
-   painted strip. The strip owns the installed OUTER marble and both children sit on it, so the
-   rule has no unpainted row of its own to open up — that gap is what let the fill bleed. */
-.run-battle-preview-titlebar {
+/* Three children for two rows: the grid interleaves a zero-height boundary element carrying the
+   horizontal rail, so the tracks are header, rail, body. Naming only two would put the rail in
+   the flexible track and the body in an implicit one — the rail would take the height meant for
+   the board. */
+.run-battle-preview-pane > .chrome-divided-grid__rows {
+  align-content: stretch;
   display: grid;
-  grid-template-rows: auto auto;
-  position: relative;
+  grid-template-rows: auto 0 minmax(0, 1fr);
+  min-block-size: 0;
 }
 
-.run-battle-preview-titlebar > .run-battle-preview-titlebar-fill {
-  inset: 0;
+/* Both header cells sit on one band, split by the pane's own vertical rail — the level's name on
+   the board's side, the Battle it is on the readout's. */
+.run-battle-preview-headers {
+  align-items: stretch;
 }
 
-.run-battle-preview-titlebar > :not(.run-battle-preview-titlebar-fill) {
-  position: relative;
-  z-index: 1;
-}
-
-/* Divider host contract (see `.kit-divider`): the host states how far the rule bleeds out of its
-   content box so the authored T caps tee INTO the side rails. This host's rails are the inner
-   box's, so the reach is that rail's width — the same declaration `.house-select-menu-options`
-   makes. The bleed must not be clipped, or the caps land inside the frame. */
-.run-battle-preview-titlebar > .run-battle-preview-titlebar-rule {
-  --kit-divider-gap: 0px;
-  --kit-divider-reach: var(--le-chrome-inner-rail-w, 7px);
-}
-
-.run-battle-preview-titlebar-head {
+.run-battle-preview-header {
   align-items: center;
   display: flex;
+  min-inline-size: 0;
   padding: var(--ds-space-1) var(--ds-space-2);
 }
 
-/* The box's own name is the largest thing in it. Section headers govern the rows beneath them,
-   and rows outrank their labels: title > section header > value > label, with no step skipped
-   and none inverted. */
-.run-battle-preview-titlebar-head > h2 {
+/* The pane's own names are the largest things in it. Section headers govern the rows beneath
+   them, and rows outrank their labels: title > section header > value > label. */
+.run-battle-preview-header > h2 {
   font-size: var(--ds-text-xl);
   margin: 0;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The Battle mark rides the pane's title, at the title's line. */
+.run-battle-preview-header > h2 > .run-battle-preview-battle-icon {
+  block-size: 1.15em;
+  inline-size: 1.15em;
+  margin-inline-end: var(--ds-space-2);
+  vertical-align: -.18em;
+}
+
+.run-battle-preview-body {
+  min-block-size: 0;
+  min-inline-size: 0;
 }
 
 /* The pane FILLS the frame it is given: no nested fixed-aspect seat, so no surplus of the frame
@@ -19766,15 +19926,15 @@ button.tileset-relationship-cell {
   cursor: default;
 }
 
-/* The readout takes the height its facts need; the note below it absorbs the remainder, so the
-   column still bottoms out level with the board without leaving dead space inside the readout. */
+/* One continuous ledger down the pane's right column: the facts, then the note as its last
+   section. Nothing between them is a frame — the pane's rail is the column's left edge. */
 .run-battle-preview-intelligence {
+  align-content: start;
   display: grid;
-  gap: var(--ds-inline);
-  grid-area: intelligence;
-  grid-template-rows: auto minmax(0, 1fr);
   min-block-size: 0;
   min-inline-size: 0;
+  overflow: auto;
+  row-gap: var(--ds-stack);
 }
 
 /* The readout was borrowed from a narrow editor tab and kept that tab's compact type. Here it
@@ -19787,15 +19947,11 @@ button.tileset-relationship-cell {
 .run-battle-preview-info.ce-level-info {
   align-content: start;
   block-size: auto;
+  display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  overflow: auto;
-  padding: 0 0 var(--ds-inset);
+  overflow: visible;
+  padding: var(--ds-inset) 0 0;
   row-gap: var(--ds-stack);
-}
-
-.run-battle-preview-info > .run-battle-preview-titlebar {
-  grid-column: 1 / -1;
-  margin-block-end: calc(var(--ds-stack) * -1 + var(--ds-inset));
 }
 
 .run-battle-preview-info > section {
@@ -19806,7 +19962,7 @@ button.tileset-relationship-cell {
   grid-template-columns: subgrid;
 }
 
-.run-battle-preview-info :is(.ce-li-board, .ce-li-forces) {
+.run-battle-preview-info :is(.ce-li-board, .ce-li-forces, .ce-li-deployment) {
   grid-column: 1 / -1;
 }
 
@@ -19824,7 +19980,7 @@ button.tileset-relationship-cell {
 /* A section header governs the rows under it, so it reads LARGER than they do — the borrowed
    compact scale had it smaller, which is why it did not read as a header at all. It stays a step
    under the box's own title, which is the largest thing in the box. */
-.run-battle-preview-info :is(.ce-li-board, .ce-li-forces) > .ce-li-title {
+.run-battle-preview-info :is(.ce-li-board, .ce-li-forces, .ce-li-deployment) > .ce-li-title {
   color: var(--ce-ink);
   font-size: var(--ds-text-lg);
   letter-spacing: .04em;
@@ -19861,20 +20017,20 @@ button.tileset-relationship-cell {
   margin: var(--ds-space-2) 0 0;
 }
 
-/* Same shape as the readout: the title strip is flush to the frame, the prose is inset. */
+/* The last section of the readout's column, not a box of its own. Its prose runs the column's
+   full width rather than sitting in the labelled two-track grid, so the sentence is not squeezed
+   into the value lane beside a header. */
 .run-battle-preview-note {
-  align-content: start;
   display: grid;
   gap: var(--ds-space-2);
-  min-block-size: 0;
-  overflow: auto;
-  padding: 0 0 var(--ds-inset);
+  grid-template-columns: minmax(0, 1fr);
+  padding: 0 var(--ds-inset) var(--ds-inset);
 }
 
-.run-battle-preview-note p {
+.run-battle-preview-note > p {
   color: var(--skirmish-muted);
   font-size: var(--ds-text-md);
-  padding-inline: var(--ds-inset);
+  margin: 0;
 }
 
 @media (max-width: 900px) {
@@ -19886,27 +20042,31 @@ button.tileset-relationship-cell {
 
   .run-battle-preview-surface,
   .run-battle-preview-surface > .painted-surface-content,
-  .run-battle-preview-layout {
+  .run-battle-preview-pane {
     block-size: auto;
   }
 
-  .run-battle-preview-layout {
+  /* Narrow, the pane keeps its single frame and drops to ONE column, so the vertical rail goes
+     and the header band becomes two stacked names above the board and the readout. */
+  .run-battle-preview-pane {
     align-self: start;
-    grid-template-areas:
-      "board"
-      "intelligence";
-    grid-template-columns: minmax(0, 1fr);
+    --chrome-divided-grid-columns: minmax(0, 1fr);
+  }
+
+  .run-battle-preview-pane > .chrome-divided-grid__rows {
+    align-content: start;
     grid-template-rows: auto auto;
+  }
+
+  .run-battle-preview-headers,
+  .run-battle-preview-body {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   /* Stacked, nothing constrains the board's height, so it takes the canonical shape. */
   .run-battle-preview-board-view {
     aspect-ratio: var(--board-view-aspect);
     block-size: auto;
-  }
-
-  .run-battle-preview-intelligence {
-    grid-template-rows: auto auto;
   }
 }
 
@@ -23313,6 +23473,14 @@ button.tileset-relationship-cell {
   z-index: 1;
 }
 
+/* The divided grid's rail layer is a lifted OVERLAY, not a row of the box. The lift above sets
+   every non-fill child to `position: relative` so content clears the fill; applied to this layer
+   it drops the rails into the flow, where they take a whole grid row and push the rows layer off
+   the bottom of the box. It is already above the fill by z-index, so it stays absolute. */
+.inner-chrome-box.has-chrome-surface-fill > .chrome-divided-grid__fixed-rails {
+  position: absolute;
+}
+
 .run-expunctio-card,
 .run-expunctio-card > .run-card-action {
   display: block;
@@ -23549,12 +23717,9 @@ button.tileset-relationship-cell {
 }
 
 /* Movement marks reuse THE registered tactical-preview cell (.le-tactical-cell is-move /
-   is-threat + the cyan move paint) — no parallel paint. Its canonical top offset assumes the
-   tile-children band; here it rides TileGrid's flat overlay band, which is already seated at
-   the surface diamond's top edge (see .le-region-cell), so the offset resets to zero. */
-.enchiridion-unit-board .le-tactical-cell {
-  top: 0;
-}
+   is-threat + the cyan move paint) — no parallel paint. The overlay-band top correction that
+   used to live here is now owned by the band itself (see
+   `.tileset-generated-board-overlay-cell > :is(.le-zone-cell, .le-tactical-cell)`). */
 
 .enchiridion-terrain-row,
 .enchiridion-ability-card,

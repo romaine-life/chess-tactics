@@ -11,8 +11,12 @@ describe('campaign level preview chrome', () => {
   it('uses the registered inner-box primitive for both preview boxes', () => {
     expect(preview).toContain('<InnerChromeBox className="ce-preview-frame">');
     // The consumer may compose an extra class onto the readout, but the registered inner-box
-    // primitive and the `ce-level-info` role class are not negotiable.
-    expect(info).toMatch(/<InnerChromeBox\s+className=\{`ce-level-info \$\{className\}`\.trim\(\)\}/);
+    // primitive and the `ce-level-info` role class are not negotiable. A host that already owns
+    // the frame — a divided pane whose rail is this readout's edge — takes `framed={false}` and
+    // gets the same class and test id with no second frame; nothing else may drop the box.
+    expect(info).toContain('const Frame = framed ? InnerChromeBox : UnframedLevelInfo;');
+    expect(info).toMatch(/<Frame\s+className=\{`ce-level-info \$\{className\}`\.trim\(\)\}/);
+    expect(info).toContain('framed = true,');
   });
 
   it('does not restore either deprecated local preview frame', () => {

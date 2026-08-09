@@ -232,6 +232,7 @@ export function FramedReadOnlyBoardView({
   emphasisZoom,
   viewportMode = 'canonical',
   showGrid = false,
+  renderCellOverlay,
   onTerrainFirstFrame,
   onSceneFirstFrame,
   onFrameError,
@@ -252,6 +253,8 @@ export function FramedReadOnlyBoardView({
   viewportMode?: 'canonical' | 'fill';
   /** Draw the playable grid over the board. */
   showGrid?: boolean;
+  /** Per-playable-cell paint, on the same terms the static view offers it. */
+  renderCellOverlay?: ComponentProps<typeof StudioReadOnlyBoard>['renderCellOverlay'];
   onTerrainFirstFrame?: () => void;
   onSceneFirstFrame?: () => void;
   onFrameError?: (error: unknown) => void;
@@ -302,6 +305,7 @@ export function FramedReadOnlyBoardView({
           boardPan={pan}
           ariaLabel={ariaLabel}
           showGrid={showGrid}
+          renderCellOverlay={renderCellOverlay}
           onTerrainFirstFrame={onTerrainFirstFrame}
           onSceneFirstFrame={onSceneFirstFrame}
           onFrameError={onFrameError}

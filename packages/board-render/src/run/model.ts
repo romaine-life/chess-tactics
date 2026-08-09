@@ -1,7 +1,6 @@
 import {
   LEVEL_BATTLE_CARDS_DEALT_DEFAULT,
-  LEVEL_BATTLE_CARDS_DEALT_MAX,
-  LEVEL_BATTLE_CARDS_DEALT_MIN,
+  levelBattleCardsDealt,
   validateLevel,
   type Level,
   type War,
@@ -2880,20 +2879,19 @@ function freshDeploymentState(
  *
  * Every Battle that reaches here has one. `snapshotWar` refuses a War with an unauthored Battle,
  * `validateWarBattlePlayability` refuses to save one, and save version 33 wrote the default into
- * the Runs that predate the requirement. The clamp is the stored value meeting the same bounds
- * the panel and both validators hold it to.
+ * the Runs that predate the requirement. Reading and clamping the stored value is
+ * `levelBattleCardsDealt`, shared with the Sectio readout that reports the count ahead of time;
+ * what this adds is the Run's refusal to proceed without one.
  */
 export function runDeploymentDealCount(
   run: Pick<RunDocument, 'war' | 'battleIndex'>,
 ): number {
-  const authored = run.war.battles[run.battleIndex]?.level.battle?.cardsDealt;
-  if (typeof authored !== 'number' || !Number.isFinite(authored)) {
+  const level = run.war.battles[run.battleIndex]?.level;
+  const dealt = level ? levelBattleCardsDealt(level) : null;
+  if (dealt === null) {
     throw new Error(`Battle ${run.battleIndex + 1} does not author how many cards it deals.`);
   }
-  return Math.min(
-    LEVEL_BATTLE_CARDS_DEALT_MAX,
-    Math.max(LEVEL_BATTLE_CARDS_DEALT_MIN, Math.floor(authored)),
-  );
+  return dealt;
 }
 
 export function prepareDeployment(run: RunDocument): RunDocument {

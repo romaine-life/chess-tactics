@@ -367,6 +367,24 @@ export interface BattleSettings {
   cardsDealt?: number;
 }
 
+/**
+ * How many cards a Battle Level authors its Deployment to deal, held to the same bounds the
+ * authoring panel and both validators hold it to — or null when the Level authors none, which is
+ * every Campaign and standalone Level and an unfinished War Battle.
+ *
+ * ONE clamp, so a readout that answers "how many cards does this stage play" and the Deployment
+ * that follows it cannot report different numbers (`runDeploymentDealCount` is this function plus
+ * the Run's demand that a Battle have one).
+ */
+export function levelBattleCardsDealt(level: Pick<Level, 'battle'>): number | null {
+  const authored = level.battle?.cardsDealt;
+  if (typeof authored !== 'number' || !Number.isFinite(authored)) return null;
+  return Math.min(
+    LEVEL_BATTLE_CARDS_DEALT_MAX,
+    Math.max(LEVEL_BATTLE_CARDS_DEALT_MIN, Math.floor(authored)),
+  );
+}
+
 export interface Level {
   formatVersion: number;
   id: string;

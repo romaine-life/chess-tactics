@@ -3,6 +3,7 @@ import {
   Fragment,
   isValidElement,
   type ButtonHTMLAttributes,
+  type ComponentProps,
   type CSSProperties,
   type HTMLAttributes,
   type ReactElement,
@@ -13,6 +14,7 @@ import { KitScroll } from '../KitScroll';
 import {
   ChromeDivider,
   ChromeJunction,
+  ChromeSurfaceFill,
   InnerChromeBox,
   type ChromeJunctionSides,
 } from './ChromeBox';
@@ -133,11 +135,44 @@ export function ChromeDividedGridRow({
   return <div {...props as HTMLAttributes<HTMLDivElement>} className={classes} />;
 }
 
+/**
+ * The grid's own element when it IS the workspace rather than a box inside one: same classes and
+ * same rails, no box frame. It still takes a SURFACE — a workspace that replaces a retained scene
+ * has nothing of its own behind it, and without one the scene reads straight through the text.
+ * Frame and surface are separate decisions; this drops the first and keeps the second.
+ */
+function UnframedDividedGrid({
+  className = '',
+  fillRole,
+  fillSurface,
+  children,
+  ...props
+}: ComponentProps<typeof InnerChromeBox>): ReactElement {
+  const hasFill = Boolean(fillRole || fillSurface);
+  return (
+    <div
+      {...props}
+      data-chrome-grid-framed="false"
+      className={`${className}${hasFill ? ' has-chrome-surface-fill' : ''}`}
+    >
+      {hasFill ? (
+        <ChromeSurfaceFill
+          role={fillRole}
+          surface={fillSurface}
+          className="chrome-divided-grid__fill"
+        />
+      ) : null}
+      {children}
+    </div>
+  );
+}
+
 export function DividedInnerChromeBox({
   columns,
   scroll = false,
   contentRef,
   className = '',
+  framed = true,
   children,
   ...props
 }: Omit<HTMLAttributes<HTMLElement>, 'children'> & {
@@ -145,9 +180,28 @@ export function DividedInnerChromeBox({
   scroll?: boolean;
   contentRef?: RefObject<HTMLDivElement | null>;
   children: ReactNode;
+  /** Installed material under the whole pane, on the inner box's own borrowing terms. */
+  fillRole?: ComponentProps<typeof InnerChromeBox>['fillRole'];
+  fillSurface?: ComponentProps<typeof InnerChromeBox>['fillSurface'];
+  /**
+   * False when the grid IS a shell workspace rather than a box standing inside one: the title
+   * bar above it and the Controls rail beside it are already its boundary, so a box frame here
+   * draws a second outline just inside them with a strip of surface trapped between (ADR-0297 —
+   * an edge-attached body reaches the Controls boundary; the same holds for its own frame).
+   * The internal rails are unaffected — they are the whole point.
+   */
+  framed?: boolean;
 }): ReactElement {
   const rows = Children.toArray(children);
   const topology = chromeDividedGridTopology(columns.length, scroll);
+  // A junction is the cap where a rail MEETS the box's own frame. An unframed grid has no such
+  // frame — the host's chrome is its boundary — so its boundary caps caps nothing and simply sits
+  // on top of that chrome as a stray atom. Internal crossings, where two of the grid's own rails
+  // actually meet, are the whole point and are kept either way.
+  const boundaryNodes = (nodes: readonly ChromeDividedGridNode[]): ChromeDividedGridNode[] => (
+    framed ? [...nodes] : nodes.filter((node) => node.inlineBoundary === 'internal')
+  );
+  const blockBoundaryNodes = framed ? topology : { ...topology, topNodes: [], bottomNodes: [] };
   const template = [
     ...columns,
     ...(scroll ? ['var(--chrome-divided-grid-scroll-gutter)'] : []),
@@ -169,7 +223,7 @@ export function DividedInnerChromeBox({
                 data-chrome-grid-inline-end={topology.horizontalEndBoundary}
                 style={{ gridColumn: `1 / ${topology.horizontalEndLine}` }}
               />
-              {topology.rowNodes.map((node) => (
+              {boundaryNodes(topology.rowNodes).map((node) => (
                 <GridJunction
                   key={`${node.line}-${node.sides}`}
                   node={node}
@@ -184,8 +238,9 @@ export function DividedInnerChromeBox({
     </div>
   );
 
+  const Frame = framed ? InnerChromeBox : UnframedDividedGrid;
   return (
-    <InnerChromeBox
+    <Frame
       {...props}
       className={`chrome-divided-grid ${className}`.trim()}
       style={{ ...gridStyle, ...props.style }}
@@ -203,7 +258,7 @@ export function DividedInnerChromeBox({
             style={linePlacement(line, topology.trackCount)}
           />
         ))}
-        {topology.topNodes.map((node) => (
+        {blockBoundaryNodes.topNodes.map((node) => (
           <GridJunction
             key={`top-${node.line}`}
             node={node}
@@ -211,7 +266,7 @@ export function DividedInnerChromeBox({
             blockBoundary="frame-start"
           />
         ))}
-        {topology.bottomNodes.map((node) => (
+        {blockBoundaryNodes.bottomNodes.map((node) => (
           <GridJunction
             key={`bottom-${node.line}`}
             node={node}
@@ -225,6 +280,6 @@ export function DividedInnerChromeBox({
           {rowLayer}
         </KitScroll>
       ) : rowLayer}
-    </InnerChromeBox>
+    </Frame>
   );
 }
