@@ -14,6 +14,7 @@ export const LEVEL_EDITOR_ROUTE_LAYERS = [
   'cover',
   'zone',
   'rules',
+  'war',
   'status',
   'history',
 ] as const;
