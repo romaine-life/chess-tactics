@@ -3,7 +3,7 @@ status: "accepted"
 date: 2026-07-12
 deciders: Nelson, Codex
 partially_superseded_by:
-  - "[ADR-0374](0374-the-profile-owns-what-an-interface-cue-sounds-like.md)'s extension of the document to interface cue assignments"
+  - "[ADR-0375](0375-the-profile-owns-what-an-interface-cue-sounds-like.md)'s extension of the document to interface cue assignments"
 partially_supersedes:
   - ADR-0047
 ---

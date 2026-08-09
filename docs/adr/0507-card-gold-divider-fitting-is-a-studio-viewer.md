@@ -3,8 +3,8 @@ status: accepted
 date: 2026-08-06
 deciders: owner (Nelson) + Codex
 refines:
-  - "[ADR-0057](0057-authoring-controls-reset-to-the-canonical-default.md)"
-  - "[ADR-0058](0058-studio-ui-must-be-click-reachable.md)"
+  - "[ADR-0057](0057-studio-tuning-surfaces-reset-to-authoritative-baseline.md)"
+  - "[ADR-0058](0058-every-route-is-click-reachable.md)"
   - "[ADR-0071](0071-the-deliverable-is-the-instrument.md)"
   - "[ADR-0506](0506-card-gold-groups-use-the-open-rail-divider.md)"
 ---

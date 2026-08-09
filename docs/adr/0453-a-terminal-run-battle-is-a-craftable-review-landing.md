@@ -6,8 +6,8 @@ partially_superseded_by:
   - "[ADR-0460](0460-a-crafted-terminal-marker-lasts-through-its-victory-surface.md)"
 refines:
   - "[ADR-0071](0071-the-deliverable-is-the-instrument.md)"
-  - "[ADR-0338](0338-a-run-state-is-handed-over-as-a-link-that-crafts-it.md)"
-  - "[ADR-0354](0354-a-crafted-run-link-is-a-stored-restart-address.md)"
+  - "[ADR-0338](0338-a-crafted-run-is-composed-from-real-transitions-not-authored-state.md)"
+  - "[ADR-0354](0354-a-run-link-crafts-the-state-it-opens.md)"
   - "[ADR-0452](0452-a-won-run-battle-pauses-on-its-visible-board-before-rewards.md)"
 ---
 

@@ -88,7 +88,7 @@ is introduced.
   [ADR-0076](0076-scaling-is-calibration-production-art-is-native-1x.md),
   [ADR-0098](0098-authored-board-extends-beyond-playable-grid.md),
   [ADR-0106](0106-installed-content-is-database-owned.md),
-  [ADR-0120](0120-predrawn-reference-is-canonical-and-gridless.md), and
+  [ADR-0120](0120-canonical-top-only-image-owns-predrawn-appearance.md), and
   [ADR-0142](0142-owner-authored-frame-defines-predrawn-generation-reference.md).
 - Storage and promotion remain governed by
   [ADR-0085](0085-runtime-assets-are-live-storage-backed.md).

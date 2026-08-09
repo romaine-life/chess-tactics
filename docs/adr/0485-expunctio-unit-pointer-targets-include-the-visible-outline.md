@@ -7,7 +7,7 @@ partially_superseded_by:
 supersedes:
   - "[ADR-0484](0484-expunctio-unit-pointers-follow-sprite-alpha.md)"
 refines:
-  - "[ADR-0427](0427-run-unit-controls-are-keyboard-and-touch-operable.md)"
+  - "[ADR-0427](0427-deployment-cards-retain-their-authored-seat-geometry.md)"
   - "[ADR-0483](0483-expunctio-unit-selection-is-explicit.md)"
 ---
 
