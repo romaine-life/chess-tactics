@@ -22660,7 +22660,9 @@ app.put('/api/run-progression', async (req, res) => {
 // --- Account-scoped active Run (ADR-0193) ---------------------------------
 // Anonymous Runs stay in browser storage. Once signed in, the client adopts that
 // document here; the server owns one CAS-updated active Run per account.
-const ACTIVE_RUN_PHASES = new Set(['aftermath', 'bona-vacantia', 'deployment', 'battle', 'sectio', 'victory']);
+const ACTIVE_RUN_PHASES = new Set([
+  'aftermath', 'bona-vacantia', 'commendatio', 'deployment', 'battle', 'sectio', 'victory',
+]);
 const ACTIVE_RUN_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
 const ACTIVE_RUN_UNIT_SOURCES = new Set(['king', 'starting', 'adlectio']);
 const ACTIVE_RUN_PIECE_VALUES = Object.freeze({ pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9, king: 0 });
@@ -22765,7 +22767,11 @@ function validateActiveRunBody(run) {
     if (levelError) return `run.war.battles.${index}: ${levelError}`;
   }
   if (run.battleIndex >= run.war.battles.length) return 'run.battleIndex is outside the War';
-  if (!Array.isArray(run.army) || run.army.length < 1 || run.army.length > 200) return 'run.army is invalid';
+  // Commendatio precedes the King, and the King is what gives a Run its army and its one held
+  // card, so this one phase is legitimately empty. Every later phase must carry a King.
+  const beforeTheKing = run.phase === 'commendatio';
+  const leastArmy = beforeTheKing ? 0 : 1;
+  if (!Array.isArray(run.army) || run.army.length < leastArmy || run.army.length > 200) return 'run.army is invalid';
   const unitIds = new Set();
   for (const unit of run.army) {
     if (!unit || typeof unit.id !== 'string' || !unit.id || unitIds.has(unit.id) || !ACTIVE_RUN_PIECES.has(unit.type)) {
@@ -23573,6 +23579,11 @@ function validateFormationRunBody(run) {
   }
   if (run.battleIndex >= run.war.battles.length) return 'run.battleIndex is outside the War';
 
+  // Commendatio precedes the King, and the King is what gives a Run its army and its one held
+  // card, so this one phase is legitimately empty and has no King to retain. Every later phase
+  // must carry exactly one.
+  const beforeTheKing = run.phase === 'commendatio';
+  if (beforeTheKing && run.army.length === 0 && run.cards.length === 0) return null;
   if (!Array.isArray(run.army) || run.army.length < 1 || run.army.length > 200) return 'run.army is invalid';
   const unitIds = new Set();
   for (const unit of run.army) {
