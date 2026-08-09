@@ -81,8 +81,23 @@ def srgb(hex_string):
     return tuple(out)
 
 
-STONE = [srgb("#102030"), srgb("#204060"), srgb("#406090")]
-GOLD = [srgb("#3a2408"), srgb("#8a6a1e"), srgb("#d8b45a")]
+# The team palettes recolour the STONE band only; the crown stays gold-and-red so a
+# king reads as a king whichever side holds it. The golden body is the exception —
+# gold on gold loses the crown, so its accents go to dark iron.
+STONE_PALETTES = {
+    "navy-blue": ("#102030", "#204060", "#406090"),
+    "crimson":   ("#300f14", "#6a1f2a", "#9e4552"),
+    "golden":    ("#33280c", "#7a6118", "#c2a24a"),
+    "emerald":   ("#0f2a1c", "#1f5a3c", "#46916a"),
+    "black":     ("#101214", "#262a30", "#4a525c"),
+    "white":     ("#4a505a", "#8e97a3", "#d8dee6"),
+}
+IRON = ("#14161a", "#3a4048", "#6e7782")
+PALETTE = os.environ.get("UNIT_ART_TOON_PALETTE", "navy-blue")
+if PALETTE not in STONE_PALETTES:
+    raise RuntimeError(f"unknown palette {PALETTE}; expected one of {sorted(STONE_PALETTES)}")
+STONE = [srgb(value) for value in STONE_PALETTES[PALETTE]]
+GOLD = [srgb(value) for value in (IRON if PALETTE == "golden" else ("#3a2408", "#8a6a1e", "#d8b45a"))]
 VELVET = [srgb("#3a0a0c"), srgb("#701010"), srgb("#a83028")]
 
 
@@ -282,4 +297,4 @@ rig.rotation_euler = (0, 0, 0)
 bpy.context.view_layer.update()
 v = world_to_camera_view(scene, scene.camera, mathutils.Vector((0, 0, 0)))
 print("ANCHOR  unitAnchorX=%.3f%%  unitAnchorY=%.3f%%" % (v.x * 100, (1 - v.y) * 100))
-print("KING_TOON_DONE ->", OUT, "bands=%d outline=%.2fpx simplify=%d" % (BANDS, OUTLINE_PX, SIMPLIFY))
+print("KING_TOON_DONE ->", OUT, "palette=%s bands=%d outline=%.2fpx simplify=%d" % (PALETTE, BANDS, OUTLINE_PX, SIMPLIFY))
