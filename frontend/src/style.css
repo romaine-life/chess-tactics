@@ -23570,6 +23570,19 @@ button.tileset-relationship-cell {
   font: var(--ds-weight-regular) var(--ds-text-md)/1.35 var(--ds-font-display);
 }
 
+/* The one clause in the status line that reports state rather than describing the record: this
+   visit admitted the card, and Reset Sectio would take it back. It carries the copy's own ink so
+   it separates from the muted line it shares without inventing a colour for the Run's palette. */
+.run-expunctio-visit-mark {
+  color: var(--skirmish-ink);
+}
+
+.run-expunctio-visit-mark::before {
+  color: var(--skirmish-muted);
+  content: '·';
+  margin-inline: var(--ds-space-1);
+}
+
 .run-expunctio-price {
   align-content: center;
   display: grid;

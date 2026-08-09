@@ -3821,6 +3821,32 @@ export function resetSectio(run: RunDocument): RunDocument {
   });
 }
 
+/**
+ * The cards THIS Sectio visit admitted: held (or already struck) now, absent from the snapshot the
+ * visit was entered with. Reset Sectio takes back exactly these, so a surface that lists held cards
+ * can say which ones the visit is still holding provisionally instead of leaving the player to
+ * remember what was just bought. The struck card is included because it too was admitted this
+ * visit — Expunctio shows that record alongside the cards still held.
+ *
+ * The entry snapshot is the authority rather than `acquiredAfterBattleIndex`, which numbers the
+ * Sectio a card came from and cannot separate this visit's Adlectiones from what the visit opened
+ * holding once a Run is crafted or migrated. An absent snapshot yields nothing: no Run holds zero
+ * cards, so an empty one means the visit has no record to compare against, not that everything is
+ * new.
+ */
+export function sectioAdmittedCardIds(run: RunDocument): ReadonlySet<string> {
+  if (run.phase !== 'sectio' || !run.sectio) return new Set();
+  const entryCards = run.sectio.entrySnapshot?.cards ?? [];
+  if (entryCards.length === 0) return new Set();
+  const entryCardIds = new Set(entryCards.map((card) => card.id));
+  const struck = run.sectio.expunctedCard ? [run.sectio.expunctedCard.card] : [];
+  return new Set(
+    [...run.cards, ...struck]
+      .filter((card) => !entryCardIds.has(card.id))
+      .map((card) => card.id),
+  );
+}
+
 export function sectioHasChanges(run: RunDocument): boolean {
   if (run.phase !== 'sectio' || !run.sectio?.entrySnapshot) return false;
   const snapshot = run.sectio.entrySnapshot;

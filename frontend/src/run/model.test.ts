@@ -37,7 +37,9 @@ import {
   payRunManubium,
   RUN_MANUBIAE,
   performAdlectio,
+  performExpunctio,
   resetSectio,
+  sectioAdmittedCardIds,
   runCardDefinition,
   undoRunBattleMove,
   runCardUnitIds,
@@ -453,6 +455,32 @@ describe('plain Run creation and acquisition', () => {
     const card = acquired.cards.at(-1)!;
     expect(runCardUnitIds(card).map((id) => acquired.army.find((unit) => unit.id === id)!.type))
       .toEqual(['knight', 'pawn', 'pawn']);
+  });
+
+  it('reports which cards THIS Sectio visit admitted, so Expunctio can say so', () => {
+    const base = firstSectio(31);
+    const offer = createRunCardOffer(base, RUN_CARD_BY_ID['ppk-protected'], -1, 0);
+    const run = {
+      ...base,
+      goldTenths: 400 * GOLD_SCALE,
+      sectio: { ...base.sectio!, cardOffers: [offer] },
+    };
+    // A visit that has bought nothing has admitted nothing, however the Run came to hold its cards.
+    expect(sectioAdmittedCardIds(run).size).toBe(0);
+
+    const acquired = performAdlectio(run, offer.offerId);
+    const admitted = acquired.cards.at(-1)!;
+    expect([...sectioAdmittedCardIds(acquired)]).toEqual([admitted.id]);
+    expect(sectioAdmittedCardIds(acquired).has(acquired.cards[0].id)).toBe(false);
+
+    // Struck by the same visit that bought it: no longer held, still this visit's doing, and
+    // Expunctio shows that record beside the cards still held.
+    const struck = performExpunctio(acquired, admitted.id);
+    expect(struck.cards.some((card) => card.id === admitted.id)).toBe(false);
+    expect([...sectioAdmittedCardIds(struck)]).toEqual([admitted.id]);
+
+    // Reset restores the entry snapshot, so the visit has admitted nothing again.
+    expect(sectioAdmittedCardIds(resetSectio(struck)).size).toBe(0);
   });
 });
 

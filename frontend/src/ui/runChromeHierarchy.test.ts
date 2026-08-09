@@ -364,6 +364,11 @@ describe('Run chrome hierarchy', () => {
     expect(runExpunctioWorkspace).toContain("if (status === 'expuncted') return 'Athetized this visit';");
     expect(runExpunctioWorkspace).not.toContain("return 'Expunctio';");
     expect(runExpunctioWorkspace).toContain('className="run-expunctio-companion"');
+    // The gallery says which formations this visit admitted, because Reset Sectio takes back
+    // exactly those and nothing else on the tile reveals it.
+    expect(runExpunctioWorkspace).toContain('sectioAdmittedCardIds(run)');
+    expect(runExpunctioWorkspace).toContain('<span className="run-expunctio-visit-mark">Adlected this visit</span>');
+    expect(styleCss).toMatch(/\.run-expunctio-visit-mark\s*\{[\s\S]*?color:\s*var\(--skirmish-ink\)/);
     expect(runExpunctioWorkspace).toContain('runCardFramePaintInsetRatios');
     expect(runExpunctioWorkspace).toContain('fillRole="outer"');
     expect(runExpunctioWorkspace).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');

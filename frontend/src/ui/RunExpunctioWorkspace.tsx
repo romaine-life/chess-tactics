@@ -2,6 +2,7 @@ import type { CSSProperties, ReactElement } from 'react';
 import {
   cardExpunctioPriceTenths,
   runCardDefinition,
+  sectioAdmittedCardIds,
   type RunArmyUnit,
   type RunCardDefinition,
   type RunDocument,
@@ -27,6 +28,8 @@ type ExpunctioRow = Readonly<{
   emptyPieceIndices: readonly number[];
   priceTenths: number | null;
   status: 'available' | 'unavailable' | 'unaffordable' | 'spent' | 'expuncted';
+  /** Admitted by this visit's Adlectio rather than carried into it. */
+  admittedThisVisit: boolean;
 }>;
 
 function cardUnitProjection(
@@ -48,6 +51,7 @@ function cardUnitProjection(
 
 function expunctioRows(run: RunDocument): ExpunctioRow[] {
   const spent = run.sectio?.expunctedCard ?? null;
+  const admitted = sectioAdmittedCardIds(run);
   const current = run.cards.flatMap((card): ExpunctioRow[] => {
     const definition = runCardDefinition(card.coreId);
     if (!definition) return [];
@@ -61,7 +65,14 @@ function expunctioRows(run: RunDocument): ExpunctioRow[] {
         : priceTenths === null || run.goldTenths < priceTenths
           ? 'unaffordable'
           : 'available';
-    return [{ card, definition, ...projection, priceTenths, status }];
+    return [{
+      card,
+      definition,
+      ...projection,
+      priceTenths,
+      status,
+      admittedThisVisit: admitted.has(card.id),
+    }];
   });
   if (!spent) return current;
   const definition = runCardDefinition(spent.card.coreId);
@@ -72,6 +83,7 @@ function expunctioRows(run: RunDocument): ExpunctioRow[] {
         ...cardUnitProjection(spent.card, definition, spent.units),
         priceTenths: spent.priceTenths,
         status: 'expuncted',
+        admittedThisVisit: admitted.has(spent.card.id),
       }, ...current]
     : current;
 }
@@ -99,11 +111,11 @@ function ExpunctioCardTile({
   index: number;
   onExpunct: (cardId: string) => void;
 }): ReactElement {
-  const { card, definition, units, emptyPieceIndices, priceTenths, status } = row;
+  const { card, definition, units, emptyPieceIndices, priceTenths, status, admittedThisVisit } = row;
   const paintInsets = runCardFramePaintInsetRatios(runCardFrameGeometryForSlot(runCardFrameSlot(definition)));
   return (
     <InnerChromeBox
-      className={`run-expunctio-row is-${status}`}
+      className={`run-expunctio-row is-${status}${admittedThisVisit ? ' is-admitted-this-visit' : ''}`}
       fillRole="outer"
       style={{
         ['--run-operation-row-index' as string]: index,
@@ -120,7 +132,16 @@ function ExpunctioCardTile({
       </span>
       <span className="run-expunctio-companion">
         <span className="run-expunctio-copy">
-          <small>{formationStatusLabel(status, units)}</small>
+          {/*
+            Which formations this visit admitted is information the player already paid for and
+            would otherwise have to hold in their head: Reset Sectio takes exactly these back, so
+            the choice between striking one and resetting the visit is only legible once the
+            gallery says which cards the visit brought in.
+          */}
+          <small>
+            {formationStatusLabel(status, units)}
+            {admittedThisVisit ? <span className="run-expunctio-visit-mark">Adlected this visit</span> : null}
+          </small>
           <strong>{runCardName(definition)}</strong>
           <span>{status === 'expuncted'
             ? 'The card and all of its units left together.'
