@@ -169,41 +169,43 @@ export function RunCardPoolCatalog(): ReactElement {
   return (
     <div className="rcp">
       <style>{`
-        .rcp { display: grid; grid-template-columns: minmax(240px, 300px) 1fr; gap: 20px; align-items: start; }
-        .rcp h3 { margin: 0 0 8px; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.75; }
-        .rcp-panel { border: 1px solid rgba(255,255,255,0.16); border-radius: 6px; padding: 12px 14px; margin-bottom: 14px; }
-        .rcp-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 5px 0; font-size: 12px; }
+        .rcp { display: grid; grid-template-columns: minmax(300px, 360px) 1fr; gap: 22px; align-items: start; font-size: 15px; }
+        .rcp h3 { margin: 0 0 10px; font-size: 15px; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.8; }
+        .rcp-panel { border: 1px solid rgba(255,255,255,0.16); border-radius: 6px; padding: 14px 16px; margin-bottom: 16px; }
+        .rcp-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 7px 0; font-size: 15px; }
         .rcp-row-label { opacity: 0.85; }
-        .rcp-row input[type=number] { width: 76px; padding: 2px 6px; font: inherit; font-size: 12px; }
-        .rcp-check { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 12px; }
-        .rcp-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 10px; margin-bottom: 14px; }
-        .rcp-stat { border: 1px solid rgba(255,255,255,0.16); border-radius: 6px; padding: 10px 12px; }
-        .rcp-stat b { display: block; font-size: 22px; line-height: 1.1; font-variant-numeric: tabular-nums; }
-        .rcp-stat span { font-size: 11px; opacity: 0.7; letter-spacing: 0.03em; }
-        .rcp table { border-collapse: collapse; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
-        .rcp th, .rcp td { text-align: right; padding: 3px 8px; border-bottom: 1px solid rgba(255,255,255,0.09); }
+        .rcp-row input[type=number] { width: 92px; padding: 4px 8px; font: inherit; font-size: 15px; }
+        .rcp-check { display: flex; align-items: center; gap: 9px; margin: 8px 0; font-size: 15px; }
+        .rcp-check input { width: 16px; height: 16px; }
+        .rcp-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
+        .rcp-stat { border: 1px solid rgba(255,255,255,0.16); border-radius: 6px; padding: 12px 14px; }
+        .rcp-stat b { display: block; font-size: 30px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+        .rcp-stat span { font-size: 13px; opacity: 0.72; letter-spacing: 0.03em; }
+        .rcp table { border-collapse: collapse; width: 100%; font-size: 15px; font-variant-numeric: tabular-nums; }
+        .rcp th, .rcp td { text-align: right; padding: 5px 10px; border-bottom: 1px solid rgba(255,255,255,0.09); }
+        .rcp th { font-size: 14px; opacity: 0.8; }
         .rcp th:first-child, .rcp td:first-child, .rcp th:nth-child(2), .rcp td:nth-child(2) { text-align: left; }
         .rcp-shape { display: inline-grid; gap: 1px; vertical-align: middle; }
-        .rcp-cell { width: 13px; height: 13px; font-size: 9px; line-height: 13px; text-align: center; border-radius: 2px; }
+        .rcp-cell { width: 18px; height: 18px; font-size: 12px; line-height: 18px; text-align: center; border-radius: 2px; }
         .rcp-cell.is-filled { background: rgba(255,255,255,0.22); }
-        .rcp-band-common { opacity: 0.62; }
+        .rcp-band-common { opacity: 0.68; }
         .rcp-band-rare { font-weight: 700; }
-        .rcp-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; font-size: 12px; align-items: center; }
-        .rcp-filters button { font: inherit; font-size: 12px; padding: 3px 9px; border-radius: 4px; cursor: pointer; }
+        .rcp-filters { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 12px; font-size: 15px; align-items: center; }
+        .rcp-filters button { font: inherit; font-size: 15px; padding: 5px 12px; border-radius: 4px; cursor: pointer; }
         .rcp-filters button[aria-pressed=true] { outline: 2px solid currentColor; }
-        .rcp-filters select { font: inherit; font-size: 12px; padding: 3px 6px; }
-        .rcp-draft-grid { display: grid; gap: 2px; margin: 8px 0; }
-        .rcp-draft-grid button { width: 30px; height: 30px; font: inherit; font-size: 13px; cursor: pointer; border-radius: 3px; }
-        .rcp-note { font-size: 11px; opacity: 0.62; margin: 6px 0 0; line-height: 1.45; }
-        .rcp-model select { width: 100%; font: inherit; font-size: 13px; padding: 5px 6px; }
-        .rcp-model-note { font-size: 11px; opacity: 0.72; margin: 8px 0 0; line-height: 1.5; }
-        .rcp-custom { display: inline-block; margin-top: 8px; font-size: 11px; padding: 2px 8px; border-radius: 10px; border: 1px solid currentColor; }
-        .rcp-group { border: 1px solid rgba(255,255,255,0.14); border-radius: 6px; margin-bottom: 10px; overflow: hidden; }
-        .rcp-group-head { display: flex; align-items: baseline; gap: 12px; padding: 7px 12px; background: rgba(255,255,255,0.05); font-size: 12px; }
-        .rcp-group-name { font-weight: 700; font-size: 13px; white-space: pre; font-family: ui-monospace, monospace; }
+        .rcp-filters select { font: inherit; font-size: 15px; padding: 5px 8px; }
+        .rcp-draft-grid { display: grid; gap: 3px; margin: 10px 0; }
+        .rcp-draft-grid button { width: 40px; height: 40px; font: inherit; font-size: 18px; cursor: pointer; border-radius: 3px; }
+        .rcp-note { font-size: 13.5px; opacity: 0.68; margin: 8px 0 0; line-height: 1.5; }
+        .rcp-model select { width: 100%; font: inherit; font-size: 16px; padding: 7px 8px; }
+        .rcp-model-note { font-size: 13.5px; opacity: 0.78; margin: 10px 0 0; line-height: 1.55; }
+        .rcp-custom { display: inline-block; margin-top: 10px; font-size: 13px; padding: 3px 10px; border-radius: 10px; border: 1px solid currentColor; }
+        .rcp-group { border: 1px solid rgba(255,255,255,0.14); border-radius: 6px; margin-bottom: 12px; overflow: hidden; }
+        .rcp-group-head { display: flex; align-items: baseline; gap: 14px; padding: 9px 14px; background: rgba(255,255,255,0.05); font-size: 15px; }
+        .rcp-group-name { font-weight: 700; font-size: 17px; white-space: pre; font-family: ui-monospace, monospace; }
         .rcp-group-count { font-variant-numeric: tabular-nums; }
-        .rcp-group-bands { margin-left: auto; opacity: 0.72; font-variant-numeric: tabular-nums; }
-        .rcp-group-body { max-height: 340px; overflow: auto; }
+        .rcp-group-bands { margin-left: auto; opacity: 0.75; font-variant-numeric: tabular-nums; }
+        .rcp-group-body { max-height: 420px; overflow: auto; }
       `}</style>
 
       <div>
