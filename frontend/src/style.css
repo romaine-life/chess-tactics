@@ -6228,7 +6228,8 @@ body.loading-bootstrap .app-startup-status {
   min-width: 72px;
   padding-inline: 4px;
 }
-/* Level settings live under the Board layer: rule readout + faction-control assignment. */
+/* Level settings live under the Board layer (rule readout); the declaration the level fields has
+   its own Factions layer. */
 .le-level-name-input { box-sizing: border-box; width: 100%; }
 .le-settings-list { display: grid; gap: var(--ds-inline-tight); margin: 0 0 var(--ds-gutter); }
 .le-settings-list div { align-items: start; display: grid; gap: 8px; grid-template-columns: 74px minmax(0, 1fr); }
@@ -6236,16 +6237,15 @@ body.loading-bootstrap .app-startup-status {
 .le-settings-label { color: #6edcff; font-size: var(--ds-text-xs); margin: 0; text-transform: uppercase; }
 .le-settings-list dd { color: #f3ead8; font-size: var(--ds-text-sm); line-height: 1.25; margin: 0; word-break: break-word; }
 .le-faction-control { display: grid; gap: 7px; }
-.le-faction-assignments { display: grid; gap: 6px; }
-/* Name above, controls below. Three controls cannot share half a narrow panel and still read —
-   the colour select loses its label first, leaving a bare swatch nobody can name. */
-.le-faction-assignment { display: grid; gap: 5px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
-/* Colour, facing. The facing stays a fixed square; the colour select takes the rest. The role is
-   named in the row above, so the declaration needs no control dropdown beside it. */
-.le-faction-fields { display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr) var(--le-inner-square); min-width: 0; }
+.le-faction-assignments { display: grid; gap: 10px; }
+/* Name above, one LABELLED row per control below — the shape the unit brush already uses for its
+   own facing. Three controls cannot share half a narrow panel and still read, and an unlabelled
+   compass square says neither what it sets nor which side it sets it for. */
+.le-faction-assignment { display: grid; gap: 0; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+/* The colour select takes the row's free width; the facing stays a fixed square. */
+.le-faction-assignment .le-faction-color-select { flex: 0 1 170px; min-width: 120px; }
 /* The repair block for pieces wearing a colour no faction declares. */
 .le-faction-undeclared { display: grid; gap: 5px; }
-.le-faction-fields .le-select-wrap { min-width: 0; }
 .le-faction-color-select { min-width: 0; }
 .le-faction-color-select .palette-select-trigger { min-width: 0; width: 100%; }
 .le-faction-name { align-items: center; color: #f3ead8; display: grid; font-size: var(--ds-text-sm); gap: 6px; grid-template-columns: auto minmax(0, 1fr) auto; min-width: 0; }
@@ -6416,8 +6416,8 @@ body.loading-bootstrap .app-startup-status {
 .le-direction-trigger:focus-visible { outline: 2px solid rgba(101, 184, 255, .72); outline-offset: 2px; }
 .le-direction-popover { inline-size: var(--le-inner-square); min-width: 0; position: relative; width: var(--le-inner-square); }
 .le-direction-trigger { align-items: center; block-size: var(--le-inner-square); display: flex; inline-size: var(--le-inner-square); justify-content: center; min-block-size: var(--le-inner-square); min-inline-size: var(--le-inner-square); min-width: var(--le-inner-square); padding: 0; text-align: center; width: var(--le-inner-square); }
-.le-faction-fields .le-direction-popover,
-.le-faction-fields .le-direction-trigger {
+.le-faction-assignment .le-direction-popover,
+.le-faction-assignment .le-direction-trigger {
   inline-size: var(--le-inner-square);
   min-inline-size: var(--le-inner-square);
   min-width: var(--le-inner-square);

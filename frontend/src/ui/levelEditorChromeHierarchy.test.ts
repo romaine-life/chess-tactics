@@ -397,7 +397,9 @@ describe('Level Editor chrome hierarchy', () => {
     expect(levelEditor).toMatch(/<HouseSelect<string>\s+ariaLabel="Composite terrain footprint"[\s\S]*?value=\{macroTileFootprint\}[\s\S]*?options=\{leMacroTileFootprints\(\)\.map\(\(footprint\) => \(\{ value: footprint, label: footprint \}\)\)\}[\s\S]*?setMacroTileFootprint\(footprint\);[\s\S]*?setMacroTileBrushId\(null\);/);
     expect(levelEditor).not.toContain('function SelectFrame');
     expect(styleCss).not.toContain('.le-layer-select');
-    expect(levelEditor).toContain('<div className="le-faction-fields">');
+    // The declaration's colour select rides a LABELLED row, like every other editor control.
+    expect(levelEditor).toMatch(/<span className="le-ctrllabel">Colour<\/span>\s*<PaletteSelect\s+className="le-faction-color-select"/);
+    expect(levelEditor).not.toContain('<div className="le-faction-fields">');
   });
 
   it('does not substitute another fence kit for a retired or unknown review id', () => {
