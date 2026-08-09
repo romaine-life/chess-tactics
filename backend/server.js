@@ -553,6 +553,12 @@ app.use(
   requireBackgroundVersionOwnerBeforeRawUpload,
   express.raw({ type: () => true, limit: '32mb' }),
 );
+// An active Run embeds its War: every Battle's Level, snapshotted at Run creation so editing or
+// deleting authored content cannot change a Run already underway. That is far past the global
+// ceiling — the ten-Battle War alone is ~325 KB — so Run creation needs its own headroom, the way
+// the editor-document and campaign routes do. Ordinary saves omit the War entirely (see
+// `PUT /api/active-run`), so this limit is reached by Run CREATION, not by playing one.
+app.use('/api/active-run', express.json({ limit: '4mb' }));
 app.use(express.json({ limit: '256kb' }));
 
 // ---------------------------------------------------------------------------
@@ -23683,10 +23689,23 @@ app.put('/api/active-run', async (req, res) => {
     res.status(400).json({ error: 'active_run_revision_required' });
     return;
   }
-  const validation = validateFormationRunBody(raw.run);
-  if (validation) {
-    res.status(400).json({ error: 'invalid_active_run', details: validation });
+  const submitted = isObjectRecord(raw.run) ? raw.run : null;
+  if (!submitted) {
+    res.status(400).json({ error: 'invalid_active_run', details: 'run must be an object' });
     return;
+  }
+  // A save that carries no War is asking the server to keep the one it already holds. The War is
+  // authored content snapshotted ONCE at Run creation and never written again in flight, so
+  // sending it on every autosave re-uploaded and rewrote ~325 KB per placement to change ~3 KB of
+  // Run state — and put the body past any sane request ceiling. The client omits it and names the
+  // Run it belongs to; the server refuses to guess when that Run is not the one it is holding.
+  const carriesWar = submitted.war !== undefined;
+  if (carriesWar) {
+    const validation = validateFormationRunBody(submitted);
+    if (validation) {
+      res.status(400).json({ error: 'invalid_active_run', details: validation });
+      return;
+    }
   }
   try {
     await ensureDbReady();
@@ -23698,12 +23717,22 @@ app.put('/api/active-run', async (req, res) => {
       );
       const current = currentResult.rows[0] || null;
       if ((Number(current && current.revision) || 0) !== expectedRevision) return { conflict: true, row: current };
+      let run = submitted;
+      if (!carriesWar) {
+        const held = isObjectRecord(current && current.body) ? current.body : null;
+        // Only this Run's own War will do. A different id means the account moved to a new Run,
+        // whose first save has to carry its own content.
+        if (!held || held.id !== submitted.id || !isObjectRecord(held.war)) return { warRequired: true };
+        run = { ...submitted, war: held.war };
+        const validation = validateFormationRunBody(run);
+        if (validation) return { invalid: validation };
+      }
       if (!current) {
         const { rows } = await client.query(
           `INSERT INTO active_runs (owner_email, body, revision)
            VALUES ($1, $2::jsonb, 1)
            RETURNING body, revision, updated_at`,
-          [user.email, JSON.stringify(raw.run)],
+          [user.email, JSON.stringify(run)],
         );
         return { row: rows[0] };
       }
@@ -23712,10 +23741,18 @@ app.put('/api/active-run', async (req, res) => {
             SET body = $2::jsonb, revision = revision + 1, updated_at = now()
           WHERE owner_email = $1
           RETURNING body, revision, updated_at`,
-        [user.email, JSON.stringify(raw.run)],
+        [user.email, JSON.stringify(run)],
       );
       return { row: rows[0] };
     });
+    if (result.warRequired) {
+      res.status(400).json({ error: 'active_run_war_required' });
+      return;
+    }
+    if (result.invalid) {
+      res.status(400).json({ error: 'invalid_active_run', details: result.invalid });
+      return;
+    }
     if (result.conflict) {
       res.status(409).json({ error: 'active_run_revision_conflict', ...publicActiveRun(result.row) });
       return;
