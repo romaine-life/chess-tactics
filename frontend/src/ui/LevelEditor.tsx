@@ -1945,6 +1945,13 @@ const LEGACY_ZONE_COLOR: Record<ZoneType, ZoneColor> = {
   'falling-rock': 'slate',
   'pawn-promotion': 'amber',
 };
+// The zone types the SYSTEM gives a fixed meaning to. A row wearing one of these tags cannot be
+// repurposed by renaming it, so the list says so instead of letting the name imply it.
+const LE_ZONE_ROLE_LABEL: Partial<Record<ZoneType, string>> = {
+  'player-spawn': 'Player',
+  'player-king-spawn': 'King',
+  'enemy-spawn': 'Enemy',
+};
 const LE_ZONE_COLOR_OPTIONS = [
   { color: 'teal', label: 'Teal' },
   { color: 'blue', label: 'Blue' },
@@ -3762,6 +3769,19 @@ export function LevelEditor(): ReactElement {
     const entries = zoneEntriesForBoard(initialBoard ?? { cols: boardCols, rows: boardRows, cells: {}, units: {}, doodads: {}, props: {}, cover: {}, features: {}, featureCuts: {}, featureExits: {}, zones: {} });
     return Math.max(0, entries.findIndex((entry) => entry.id === studioArm.brush));
   });
+  // The seed above only works for a board carried IN the address: a document's board arrives
+  // after mount, so `?brush=<zoneId>` found nothing to match and the link quietly landed on
+  // whichever zone sorts first. Consume the request when the entries that can satisfy it exist,
+  // and consume it exactly ONCE — a mount seed that keeps firing steals back the author's own
+  // later selection (#453).
+  const pendingZoneArm = useRef(studioArm.kind === 'zone' ? studioArm.brush ?? null : null);
+  useEffect(() => {
+    const wanted = pendingZoneArm.current;
+    if (!wanted || boardZoneEntries.length === 0) return;
+    pendingZoneArm.current = null;
+    const index = boardZoneEntries.findIndex((entry) => entry.id === wanted);
+    if (index >= 0) setSelectedZoneIndex(index);
+  }, [boardZoneEntries]);
   const boardZones = useMemo(() => zoneCellMapFromEntries(boardZoneEntries), [boardZoneEntries]);
   // Indices of the zones that are ON the level. A dedicated zone whose type is not broken off is
   // retained but hidden: it cannot be selected, cycled, painted or seen (ADR-0367).
@@ -9499,14 +9519,6 @@ export function LevelEditor(): ReactElement {
     const index = boardZoneEntries.findIndex((zone) => zone.id === id);
     if (index >= 0 && visibleZoneIndices.includes(index)) setSelectedZoneIndex(index);
   };
-  const stepZoneEntry = (delta: -1 | 1): void => {
-    const count = visibleZoneIndices.length;
-    if (!count) return;
-    setSelectedZoneIndex((current) => {
-      const at = Math.max(0, visibleZoneIndices.indexOf(current));
-      return visibleZoneIndices[(at + delta + count) % count];
-    });
-  };
   const setActiveZoneName = (name: string): void => {
     if (!activeZone) return;
     const next = cloneEditorBoard(currentEditorBoardRef.current);
@@ -11689,37 +11701,42 @@ export function LevelEditor(): ReactElement {
         {brushKind === 'zone' ? (
           <section className="skirmish-card le-brush-panel le-zone-panel">
             <h2>Zone</h2>
-            <div className="le-ctrlrow le-zone-selection-row">
-              <span className="le-ctrllabel">Zone</span>
-              <div className="le-zone-select-controls">
-                <CyclePicker
-                  className="le-zone-cycle"
-                  buttonClassName="le-zone-stepper-button"
-                  previousLabel="Previous zone"
-                  nextLabel="Next zone"
-                  previousDisabled={visibleZoneIndices.length <= 1}
-                  nextDisabled={visibleZoneIndices.length <= 1}
-                  onPrevious={() => stepZoneEntry(-1)}
-                  onNext={() => stepZoneEntry(1)}
-                >
-                  <HouseSelect<string>
-                    value={activeZone?.id ?? ''}
-                    options={[
-                      ...(activeZone ? [] : [{ value: '', label: 'None' }]),
-                      ...visibleZoneIndices.map((index) => ({ value: boardZoneEntries[index].id, label: zoneDisplayName(boardZoneEntries[index], index) })),
-                    ]}
-                    disabled={!activeZone}
-                    ariaLabel="Selected zone"
-                    onChange={selectZoneEntry}
-                  />
-                </CyclePicker>
-                <ChromeButton unit="inner-minus-key" className={chromeUnitClassNames('inner-minus-key', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Remove selected zone" title="Remove selected zone" disabled={!activeZone} onClick={removeActiveZoneEntry}>
-                  <span><span className="stepper-glyph stepper-minus" aria-hidden="true" /></span>
-                </ChromeButton>
-                <ChromeButton unit="inner-plus-key" className={chromeUnitClassNames('inner-plus-key', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Add zone" title="Add zone" onClick={addZoneEntry}>
-                  <span><span className="stepper-glyph stepper-plus" aria-hidden="true" /></span>
-                </ChromeButton>
+            {/* The zones ARE the control. A dropdown hid every zone but the armed one behind a
+              * click, which is backwards for a brush target you switch between while painting:
+              * the list arms a zone in one click and states, without being opened, what zones
+              * this board has, what colour each paints, and which of them are still empty.
+              * Add and Remove act on that list, under it. */}
+            {visibleZoneIndices.length ? (
+              <div className="le-zone-list" role="group" aria-label="Zones">
+                {visibleZoneIndices.map((index) => {
+                  const entry = boardZoneEntries[index];
+                  const role = LE_ZONE_ROLE_LABEL[entry.type];
+                  const painted = entry.tiles.length;
+                  return (
+                    <ChromeButton
+                      unit="inner-list-row"
+                      key={entry.id}
+                      className={chromeUnitClassNames('inner-list-row', 'le-zone-row')}
+                      selected={index === selectedZoneIndex}
+                      title={`Paint into ${zoneDisplayName(entry, index)}`}
+                      onClick={() => selectZoneEntry(entry.id)}
+                    >
+                      <span className={`le-zone-dot le-zone-${zoneDisplayColor(entry)}`} aria-hidden="true" />
+                      <span className="le-zone-row-text">
+                        <strong>{zoneDisplayName(entry, index)}</strong>
+                        <small>{painted ? `${painted} tile${painted === 1 ? '' : 's'}` : 'Not painted yet'}</small>
+                      </span>
+                      {role ? <span className="le-zone-row-role">{role}</span> : null}
+                    </ChromeButton>
+                  );
+                })}
               </div>
+            ) : (
+              <p className="le-board-warning">No zones yet. Add one, then paint the tiles it covers.</p>
+            )}
+            <div className="le-cond-add le-zone-list-actions">
+              <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={addZoneEntry}>+ Add zone</ChromeButton>
+              <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} disabled={!activeZone} onClick={removeActiveZoneEntry}>Remove zone</ChromeButton>
             </div>
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Name</span>
@@ -12757,7 +12774,7 @@ export function LevelEditor(): ReactElement {
                 <span className="le-pal-grouplabel">Artwork</span>
                 <CyclePicker
                   className="le-fence-artwork-cycle"
-                  buttonClassName="le-zone-stepper-button"
+                  buttonClassName="le-layer-stepper-button"
                   previousLabel="Previous fence artwork"
                   nextLabel="Next fence artwork"
                   onPrevious={() => stepFenceArtwork(-1)}

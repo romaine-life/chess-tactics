@@ -290,9 +290,15 @@ function useRunAbandon(run: RunDocument): {
     });
     if (!confirmed) return;
     setAbandoning(true);
-    await abandon();
+    // Leave in the same tick the Run is cleared. `abandon()` drops it from this browser before
+    // it suspends, so nothing here waits on the account's DELETE — and holding for it parked the
+    // player on the empty "No active Run" workspace for the length of a round trip, which is a
+    // dead end nobody chose. The DELETE is ordered inside the save chain, so a Run started from
+    // the picker in the next second still lands behind it.
+    const abandoned = abandon();
     clearMatch();
     navigateApp(PLAY_RUN_SELECTOR_HREF, { replace: true, scroll: false });
+    await abandoned;
   }, [abandon, abandoning, ask, run.war.name]);
   return { abandonDialog: dialog, abandoning, requestAbandon };
 }
@@ -1503,9 +1509,10 @@ function VictoryPanel({ run }: { run: RunDocument }): ReactElement {
       <ChromeButton unit="inner-text-button"
         className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
         onClick={() => {
-          void abandon().then(() => {
-            navigateApp(PLAY_RUN_SELECTOR_HREF, { replace: true, scroll: false });
-          });
+          // Same as Abandon: the Run is closed locally before this suspends, so the finished
+          // War does not hold the player on an empty workspace while its row is deleted.
+          void abandon();
+          navigateApp(PLAY_RUN_SELECTOR_HREF, { replace: true, scroll: false });
         }}
       >
         Finish Run
