@@ -530,7 +530,15 @@ describe('Run chrome hierarchy', () => {
 
     expect(runBattlePreview).toContain('<DividedInnerChromeBox');
     expect(runBattlePreview).toContain("columns={['minmax(0, 1fr)', 'minmax(300px, 34%)']}");
+    // The pane wears no frame of its own: the title bar above and the Controls rail beside it are
+    // already its boundary, and a box frame there draws a second outline just inside them with a
+    // strip of surface trapped between. It still takes the SURFACE — this workspace replaces a
+    // retained scene, so without one the Sectio market reads straight through the text.
+    expect(runBattlePreview).toContain('framed={false}');
     expect(runBattlePreview).toContain('fillRole="outer"');
+    expect(styleCss).toMatch(
+      /\.chrome-divided-grid\.has-chrome-surface-fill > \.chrome-divided-grid__fill\s*\{\s*inset: 0;/,
+    );
     expect(runBattlePreview).not.toContain('PreviewTitleBar');
     expect(runBattlePreview).not.toContain('<InnerChromeBox');
     expect(styleCss).not.toContain('.run-battle-preview-titlebar');

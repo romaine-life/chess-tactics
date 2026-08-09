@@ -87,6 +87,7 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
         <DividedInnerChromeBox
           className="run-battle-preview-pane"
           columns={['minmax(0, 1fr)', 'minmax(300px, 34%)']}
+          framed={false}
           fillRole="outer"
           aria-label="Upcoming Battle reconnaissance"
         >

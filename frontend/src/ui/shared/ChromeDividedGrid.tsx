@@ -14,6 +14,7 @@ import { KitScroll } from '../KitScroll';
 import {
   ChromeDivider,
   ChromeJunction,
+  ChromeSurfaceFill,
   InnerChromeBox,
   type ChromeJunctionSides,
 } from './ChromeBox';
@@ -134,11 +135,40 @@ export function ChromeDividedGridRow({
   return <div {...props as HTMLAttributes<HTMLDivElement>} className={classes} />;
 }
 
+/**
+ * The grid's own element when it IS the workspace rather than a box inside one: same classes and
+ * same rails, no box frame. It still takes a SURFACE — a workspace that replaces a retained scene
+ * has nothing of its own behind it, and without one the scene reads straight through the text.
+ * Frame and surface are separate decisions; this drops the first and keeps the second.
+ */
+function UnframedDividedGrid({
+  className = '',
+  fillRole,
+  fillSurface,
+  children,
+  ...props
+}: ComponentProps<typeof InnerChromeBox>): ReactElement {
+  const hasFill = Boolean(fillRole || fillSurface);
+  return (
+    <div {...props} className={`${className}${hasFill ? ' has-chrome-surface-fill' : ''}`}>
+      {hasFill ? (
+        <ChromeSurfaceFill
+          role={fillRole}
+          surface={fillSurface}
+          className="chrome-divided-grid__fill"
+        />
+      ) : null}
+      {children}
+    </div>
+  );
+}
+
 export function DividedInnerChromeBox({
   columns,
   scroll = false,
   contentRef,
   className = '',
+  framed = true,
   children,
   ...props
 }: Omit<HTMLAttributes<HTMLElement>, 'children'> & {
@@ -149,6 +179,14 @@ export function DividedInnerChromeBox({
   /** Installed material under the whole pane, on the inner box's own borrowing terms. */
   fillRole?: ComponentProps<typeof InnerChromeBox>['fillRole'];
   fillSurface?: ComponentProps<typeof InnerChromeBox>['fillSurface'];
+  /**
+   * False when the grid IS a shell workspace rather than a box standing inside one: the title
+   * bar above it and the Controls rail beside it are already its boundary, so a box frame here
+   * draws a second outline just inside them with a strip of surface trapped between (ADR-0297 —
+   * an edge-attached body reaches the Controls boundary; the same holds for its own frame).
+   * The internal rails are unaffected — they are the whole point.
+   */
+  framed?: boolean;
 }): ReactElement {
   const rows = Children.toArray(children);
   const topology = chromeDividedGridTopology(columns.length, scroll);
@@ -188,8 +226,9 @@ export function DividedInnerChromeBox({
     </div>
   );
 
+  const Frame = framed ? InnerChromeBox : UnframedDividedGrid;
   return (
-    <InnerChromeBox
+    <Frame
       {...props}
       className={`chrome-divided-grid ${className}`.trim()}
       style={{ ...gridStyle, ...props.style }}
@@ -229,6 +268,6 @@ export function DividedInnerChromeBox({
           {rowLayer}
         </KitScroll>
       ) : rowLayer}
-    </InnerChromeBox>
+    </Frame>
   );
 }

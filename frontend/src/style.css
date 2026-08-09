@@ -7211,6 +7211,17 @@ body.loading-bootstrap .app-startup-status {
   grid-template-columns: var(--chrome-divided-grid-columns);
 }
 
+/* An UNFRAMED grid still carries a surface — a workspace that replaces a retained scene has
+   nothing of its own behind it. The inner box's own fill rules are scoped to that box, so the
+   surface and the lift above it are declared here for the frameless form. */
+.chrome-divided-grid.has-chrome-surface-fill > .chrome-divided-grid__fill {
+  inset: 0;
+}
+
+.chrome-divided-grid.has-chrome-surface-fill > :not(.chrome-divided-grid__fill) {
+  z-index: 1;
+}
+
 .chrome-divided-grid__fixed-rails {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
