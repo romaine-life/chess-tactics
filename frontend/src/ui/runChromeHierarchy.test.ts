@@ -278,11 +278,21 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('<RunCardPile');
     expect(runCardPile).toContain('<RunCardBack');
     expect(runScreen).toContain('admitted by Adlectio and added to the Chartulary.');
-    // A Sectio admits one card, and the row says so on both sides of the choice: the count
-    // above the faces before it is made, the closure below them after.
+    // A Sectio admits one card. The count stands over the row for the whole visit and a padlock
+    // is laid on each survivor when the admission is spent; the two together are the whole
+    // statement, so nothing pops up to announce it.
     expect(runScreen).toContain('They require compensation. Only one may be admitted.');
-    expect(runScreen).toContain('This Sectio has admitted its card. Reset Sectio to choose again.');
+    expect(runScreen).toContain('locked={adlectioSpent}');
     expect(runScreen).toContain('disabled={adlectioSpent || run.goldTenths < offer.cost * GOLD_SCALE}');
+    // The kit's own lock, not a mark drawn for this row.
+    expect(runScreen).toContain("const RUN_SECTIO_LOCK_SLOT = 'ui/kit/icons/lock.png';");
+    expect(runCardPile).toContain("data-run-card-pile-lock={locked ? 'locked' : 'open'}");
+    // Supplied for the whole visit and CONCEALED until it locks, exactly as the back beneath it
+    // is: a lock mounted at the moment of locking is fetched then too, and the survivors of an
+    // Adlectio stand unmarked until it arrives.
+    expect(runScreen).toContain('lockMediaUrl={lockMediaUrl}');
+    expect(styleCss).toMatch(/\.run-card-pile-lock:not\(\.is-locked\)\s*\{[\s\S]*?visibility:\s*hidden;/);
+    expect(runScreen).not.toContain('run-sectio-cards-empty');
     expect(runCardFlight).toContain('<RunCard card={flight.offer} mode="reference" />');
     expect(runCard).not.toContain('run-card-purchased-indicator');
   });
@@ -768,7 +778,8 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain("import { RunCard } from './RunCard';");
     expect(styleCss).toMatch(/\.run-card-action\s*\{[\s\S]*?aspect-ratio:\s*5 \/ 7;/);
     expect(styleCss).toMatch(/\.run-card-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,[\s\S]*?justify-content:\s*center;/);
-    expect(styleCss).toMatch(/\.run-card-pile > :is\(\.run-card-pile-back, \.run-card-offer\)\s*\{[\s\S]*?grid-column:\s*1;[\s\S]*?grid-row:\s*1;/);
+    // Back, face, and the padlock a spent Sectio lays on a survivor all occupy the ONE seat.
+    expect(styleCss).toMatch(/\.run-card-pile > :is\(\.run-card-pile-back, \.run-card-offer, \.run-card-pile-lock\)\s*\{[\s\S]*?grid-column:\s*1;[\s\S]*?grid-row:\s*1;/);
     // A covered pile paints no part of the card it conceals: the back's opaque
     // generated backdrop otherwise reads as a black edge around every offer.
     expect(styleCss).toMatch(/\.run-card-pile\.is-covered > \.run-card-pile-back\s*\{[\s\S]*?visibility:\s*hidden;/);

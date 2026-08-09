@@ -37,16 +37,26 @@ refuses a second admission however much gold remains — the refusal is the rule
 `sectioAdlectioSpent` is the single answer every surface asks.
 
 The rule is **stated before the choice, not discovered by being refused**, which is the exact
-failure ADR-0323 named:
+failure ADR-0323 named — and it is said by the row itself rather than by anything that pops up:
 
-- Above the row, before anything is taken: *They require compensation. Only one may be admitted.*
-- Below it, once the admission is spent: *This Sectio has admitted its card. Reset Sectio to
-  choose again.* The same closure is appended to the Adlectio announcement, because a screen
-  reader gets no second cue from a row whose remaining faces are printed exactly as they were.
+- One line stands over the row for the whole visit, before and after the take: *They require
+  compensation. Only one may be admitted.*
+- When the admission is spent, a **padlock is laid on every surviving offer**. Together the two
+  are the complete statement: you get one, and this is the one you took. There is no notice, no
+  status box, and no copy that changes state.
+
+The lock is the installed kit lock, `ui/kit/icons/lock.png` — the ordinary "you cannot have this"
+glyph the app already uses. A second padlock drawn for one row would be a bespoke parallel
+(ADR-0059). `RunCardPile` owns it as a third layer registered in the same seat as the face and
+the back, sized as a share of the card so it stays an object laid on the card rather than a badge
+stuck to a control, and inert so the disabled offer beneath it is still what the pointer meets.
+It is decorative to assistive technology: the disabled control carries the state, and the
+Adlectio announcement says the visit admits no other card.
 
 Every unbought offer stays on the table, face up and unfaded — cards here are printed art, never
 faded controls (ADR-0481), and what a player turned down is part of what they decided. The
-offers become non-interactive; the bought seat still reveals its pile back.
+offers become non-interactive; the bought seat still reveals its pile back, and a revealed back
+carries no lock because it has no offer left to lock.
 
 **Reset Sectio returns the admission to the visit.** It already restored the entry snapshot, so
 one card is a decision rather than a misclick: the player may reset and admit a different one.
@@ -76,7 +86,8 @@ holding Run do the same thing for the same reason.
 - Card prices now tune *which* card is reachable rather than *how many*, which is a smaller and
   much better-behaved lever.
 - ADR-0323's communication failure is answered directly rather than reintroduced: the count is on
-  the surface before the decision, in the same sentence as the cost.
+  the surface before the decision, in the same sentence as the cost, and the closed state is a
+  visible object on each card rather than a sentence the player has to read.
 
 ## More Information
 

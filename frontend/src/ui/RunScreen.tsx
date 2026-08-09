@@ -306,6 +306,13 @@ function useRunAbandon(run: RunDocument): {
   return { abandonDialog: dialog, abandoning, requestAbandon };
 }
 
+/**
+ * The padlock laid on a Sectio offer the visit's one admission has closed. It is the installed
+ * kit lock rather than a Sectio-specific mark: this is the ordinary "you cannot have this" glyph
+ * the app already uses, and a second padlock drawn for one row would be a bespoke parallel.
+ */
+const RUN_SECTIO_LOCK_SLOT = 'ui/kit/icons/lock.png';
+
 /** The installed full-screen Sectio scene, or null when the Sectio has no scene art. */
 function useInstalledSectioScene(): ReactElement | null {
   return useMemo(() => {
@@ -1229,9 +1236,10 @@ function SectioPanel({
   const replace = useActiveRun((state) => state.replace);
   const sectio = run.sectio!;
   // One card to a Sectio. The row keeps every unbought face on the table afterwards -- what you
-  // turned down is part of what you decided -- so the sentences around it carry the rule instead.
+  // turned down is part of what you decided -- and a padlock is laid on each one instead.
   const adlectioSpent = sectioAdlectioSpent(run);
   const cardBackMediaUrl = useRunCardBackMediaUrl();
+  const lockMediaUrl = resolvedLiveMediaUrl(RUN_SECTIO_LOCK_SLOT);
   return (
     <>
       {view === 'expunctio'
@@ -1256,20 +1264,20 @@ function SectioPanel({
           {/*
             The answering half of the opening grant's line. Both screens deal the same faces
             with the same number printed on them; only here is that number what you hand over,
-            and only here is one of them all you may have. The count is said BEFORE the choice,
-            because a player who learns it by being refused has already made it. It goes once
-            the admission is spent — the screen never invites a take it has just called
-            impossible — and the notice below speaks for that state.
+            and only here is one of them all you may have. It stands over the row for the whole
+            visit, before and after the take: with the padlocks that appear on the survivors it
+            reads as one statement — you get one, and this is the one you took. Nothing has to
+            pop up to say so.
           */}
-          {adlectioSpent ? null : (
-            <p className="run-card-row-call">They require compensation. Only one may be admitted.</p>
-          )}
+          <p className="run-card-row-call">They require compensation. Only one may be admitted.</p>
           <SectioCardRow>
             {sectio.cardOffers.map((offer, index) => {
               const adlected = sectio.adlectedCardOfferIds.includes(offer.offerId);
               return (
                 <RunCardPile
                   backMediaUrl={cardBackMediaUrl}
+                  lockMediaUrl={lockMediaUrl}
+                  locked={adlectioSpent}
                   key={offer.offerId}
                   seatIndex={index}
                 >
@@ -1286,11 +1294,6 @@ function SectioPanel({
               );
             })}
           </SectioCardRow>
-          {adlectioSpent ? (
-            <InnerChromeBox className="run-sectio-cards-empty" role="status">
-              This Sectio has admitted its card. Reset Sectio to choose again.
-            </InnerChromeBox>
-          ) : null}
         </section>
 
 

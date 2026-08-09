@@ -20185,7 +20185,7 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
-.run-card-pile > :is(.run-card-pile-back, .run-card-offer) {
+.run-card-pile > :is(.run-card-pile-back, .run-card-offer, .run-card-pile-lock) {
   grid-column: 1;
   grid-row: 1;
 }
@@ -20244,9 +20244,35 @@ button.tileset-relationship-cell {
   opacity: 1;
 }
 
-.run-sectio-cards-empty {
+/* The padlock laid on an offer the visit's one admission has closed (ADR-0549). It sits in the
+   pile's own registered seat, over the middle of the printed face, and is drawn from the kit's
+   64x64 lock at a fraction of the card so it reads as an object placed on the card rather than
+   as a badge stuck to the corner of a control. Nearest-neighbour, like every other pixel mark
+   the Run prints. Inert: the disabled offer beneath it stays the thing under the pointer.
+
+   Concealed rather than unmounted while the offer is open, exactly as the back beneath it is:
+   a lock mounted only at the moment of locking is also FETCHED only then, and the survivors of
+   an Adlectio stand there unmarked until it arrives. */
+.run-card-pile-lock:not(.is-locked) {
+  visibility: hidden;
+}
+
+.run-card-pile-lock {
+  align-self: center;
+  /* A share of the CARD, not a fixed size: the row's cards are sized by their host, and a lock
+     that stayed put while they grew would drift from an object on the card to a badge on it. */
+  inline-size: 26%;
   justify-self: center;
-  padding: var(--ds-space-3) var(--ds-space-4);
+  line-height: 0;
+  pointer-events: none;
+  /* Above the offer's own z-index: 1. The face it is laid on is opaque. */
+  z-index: 2;
+}
+
+.run-card-pile-lock > img {
+  display: block;
+  image-rendering: pixelated;
+  inline-size: 100%;
 }
 
 /* Adlected cards travel above every clipped Sectio and shell layer into the real

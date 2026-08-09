@@ -9,10 +9,25 @@ import { runCardFloatClock } from './runCardLife';
  */
 export function RunCardPile({
   backMediaUrl,
+  lockMediaUrl = null,
+  locked = false,
   seatIndex,
   children,
 }: {
   backMediaUrl: string;
+  /**
+   * The padlock this pile lays on its face when `locked`. Supplied for the whole visit rather
+   * than at the moment of locking, and concealed until then for the same reason the back is: a
+   * lock mounted only once it is needed is fetched and decoded only once it is needed, and the
+   * survivors of an Adlectio stand there unmarked for the interval.
+   */
+  lockMediaUrl?: string | null;
+  /**
+   * Whether the offer on this pile is no longer to be had — a Sectio admits one card, and the
+   * rest of the row locks when it is spent. It is a lock on the OFFER, so a revealed back never
+   * shows one: it has no offer left to lock.
+   */
+  locked?: boolean;
   /**
    * The pile's place in the row, which makes it drift and glow on its own clock. The WHOLE
    * pile carries that life rather than the face alone: the back is registered exactly beneath
@@ -34,6 +49,17 @@ export function RunCardPile({
         <RunCardBack mediaUrl={backMediaUrl} />
       </span>
       {children}
+      {covered && lockMediaUrl ? (
+        // Decorative: the offer beneath it is a disabled control, which is what carries the
+        // state to assistive technology. The lock is what carries it to the eye.
+        <span
+          className={`run-card-pile-lock${locked ? ' is-locked' : ''}`}
+          data-run-card-pile-lock={locked ? 'locked' : 'open'}
+          aria-hidden="true"
+        >
+          <img src={lockMediaUrl} alt="" draggable={false} />
+        </span>
+      ) : null}
     </span>
   );
 }
