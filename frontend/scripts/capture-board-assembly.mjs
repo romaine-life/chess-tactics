@@ -27,6 +27,23 @@ const selector = String(flag('selector', 'canvas.tileset-scene-layer'));
 const wanted = Number(flag('frames', 10));
 const recordMs = Number(flag('record', 4000));
 const scale = Number(flag('scale', 0.6));
+// Level Editor placements: `--click-cell x,y --cols n` clicks that playable cell and records from
+// the click. Playable cells are the board's own tiles in row-major order; the scenic apron is
+// excluded because it is appended after them and would shift every index.
+const PLAYABLE_CELL = '.tileset-generated-board-tile:not([data-decorative-cell])';
+const rawClickCell = flag('click-cell', null);
+const settleMs = Number(flag('settle', 15000)); // budget for the target cell to become clickable
+const clickCell = rawClickCell
+  ? (() => {
+      const [x, y] = String(rawClickCell).split(',').map(Number);
+      const cols = Number(flag('cols', NaN));
+      if (![x, y, cols].every(Number.isInteger)) {
+        console.error('--click-cell needs "x,y" and --cols <n>');
+        process.exit(2);
+      }
+      return { x, y, cols };
+    })()
+  : null;
 
 const CHROMES = [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
@@ -36,7 +53,7 @@ const CHROMES = [
 ];
 const executablePath = CHROMES.find(existsSync);
 if (!url || url.startsWith('--')) {
-  console.error('usage: capture-board-assembly <url> [--out path] [--size WxH] [--frames n] [--record ms] [--scale n]');
+  console.error('usage: capture-board-assembly <url> [--out path] [--size WxH] [--frames n] [--record ms] [--scale n] [--click-cell x,y --cols n] [--settle ms]');
   process.exit(2);
 }
 if (!executablePath) { console.error('No Chrome/Edge found.'); process.exit(1); }
@@ -56,8 +73,48 @@ try {
   await page.setViewport({ width: w, height: h, deviceScaleFactor: 1 });
   await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60_000 });
   await page.waitForSelector(selector, { timeout: 90_000 });
+  // Wait for the clickable diamond, not just the cell box: the hit spans mount after the board is
+  // interactive, and measuring before they exist aims the click at the page behind the board.
+  if (clickCell) await page.waitForSelector('.tileset-cell-hit', { timeout: 90_000 });
 
-  const recorded = await page.evaluate(async (sel, budgetMs, downscale) => {
+  // The editor paints from real pointer input on the board, not from an event dispatched at a
+  // cell: a synthetic PointerEvent reaches the DOM but never becomes a placement, which records a
+  // convincing strip of nothing happening. So resolve the point here and let the browser deliver a
+  // genuine click while the recorder is already running.
+  const clickPoint = clickCell
+    ? await page.evaluate(async (cell, cellSelector, budgetMs) => {
+        // The board zooms to fit and its hit spans mount with it, so the target is only reliable
+        // once the cell actually answers a hit test. Poll for that rather than trusting a fixed
+        // settle: a click measured a frame early lands on the page behind the board and records a
+        // convincing strip of nothing happening.
+        const deadline = performance.now() + budgetMs;
+        let last = 'no cell';
+        for (;;) {
+          const tiles = [...document.querySelectorAll(cellSelector)];
+          const node = tiles[cell.y * cell.cols + cell.x];
+          if (node) {
+            // The cell's own box is the sprite's bounding rectangle; the tile the author clicks is
+            // the diamond hit span inside it, and their centres differ by most of a tile height.
+            const hit = node.querySelector('.tileset-cell-hit');
+            if (hit) {
+              const rect = hit.getBoundingClientRect();
+              const x = rect.left + rect.width / 2;
+              const y = rect.top + rect.height / 2;
+              const landed = document.elementFromPoint(x, y);
+              if (landed && hit.contains(landed)) return { x, y };
+              last = `covered by ${landed?.tagName}.${String(landed?.className).slice(0, 40)}`;
+            } else last = 'no hit span';
+          } else last = `no cell among ${tiles.length}`;
+          if (performance.now() > deadline) {
+            return { error: `cell ${cell.x},${cell.y} never became clickable: ${last}` };
+          }
+          await new Promise((resolve) => { requestAnimationFrame(() => resolve()); });
+        }
+      }, clickCell, PLAYABLE_CELL, settleMs)
+    : null;
+  if (clickPoint?.error) throw new Error(clickPoint.error);
+
+  const recording = page.evaluate(async (sel, budgetMs, downscale, cell) => {
     const scene = document.querySelector(sel);
     if (!scene) return { error: 'no canvas' };
     // Terrain and scene are separate stacked compositors. Recording only one of them produces a
@@ -85,7 +142,7 @@ try {
       let frame = null;
       const tick = (timeMs) => {
         if (start == null) {
-          if (!painted()) { requestAnimationFrame(tick); return; }
+          if (!cell && !painted()) { requestAnimationFrame(tick); return; }
           start = timeMs;
           const rects = layers().map((layer) => layer.getBoundingClientRect());
           frame = {
@@ -116,7 +173,14 @@ try {
       requestAnimationFrame(tick);
     });
     return { frames };
-  }, selector, recordMs, scale);
+  }, selector, recordMs, scale, clickCell);
+
+  if (clickPoint) {
+    // A short lead-in so frame 0 is the board as it stood, and the placement lands on the strip.
+    await new Promise((resolve) => { setTimeout(resolve, 80); });
+    await page.mouse.click(clickPoint.x, clickPoint.y);
+  }
+  const recorded = await recording;
 
   if (recorded.error) throw new Error(recorded.error);
   const all = recorded.frames;

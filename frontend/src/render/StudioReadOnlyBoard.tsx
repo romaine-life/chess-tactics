@@ -50,11 +50,22 @@ export type FeatureOverlayMap = Record<string, ResolvedFeatureOverlay>;
 
 /** Remove every live channel excluded from an immutable Source Artwork capture. */
 export function boardForPredrawnSourceArtwork(board: EditorBoard): EditorBoard {
+  // Obstacles standing ON a plate are a live channel like units and cover, and must leave with them
+  // (ADR-0537): a reference that shows them asks the next generation to PAINT them, and the owner
+  // ends up with a rock in the picture and the same rock standing on top of it. Empty on any board
+  // without a plate, so an ordinary tileset reference still carries its props.
+  const liveProps = new Set(board.liveProps ?? []);
   return {
     ...board,
     units: {},
     cover: {},
     coverTypes: {},
+    // Identity is preserved when there is nothing to strip, so a board without obstacles on a plate
+    // — which is every board authored before they existed — passes the same object through.
+    props: liveProps.size
+      ? Object.fromEntries(Object.entries(board.props ?? {}).filter(([key]) => !liveProps.has(key)))
+      : board.props,
+    liveProps: undefined,
   };
 }
 
