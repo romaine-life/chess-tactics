@@ -359,6 +359,32 @@ export function runCardFramePaintInsetRatios(
   });
 }
 
+export type RunCardPrintBoxVariables = Readonly<Record<string, string>>;
+
+/**
+ * Where a printed card actually sits inside its 5:7 canvas, as shares of that canvas.
+ *
+ * Every frame is drawn 1009x1402 at (26,42) of 1060x1484: the transparent margin is part of the
+ * printed object, not slack. The face-DOWN rasters are painted corner to corner instead, so a back
+ * given the same BOX as a face printed a whole card 5.05% wider and 5.85% taller than the offer
+ * standing next to it — most visible in Sectio, where buying an offer reveals its pile's back
+ * beside the ones still face up.
+ *
+ * Seating the back's raster in this box is what makes the two one size, and it is read off the
+ * frames' own measured paint bounds so a re-cut frame carries the back with it rather than leaving
+ * a second set of numbers to remember.
+ */
+export function runCardPrintBoxVariables(
+  geometry: RunCardFrameGeometry = RUN_CARD_STANDARD_FRAME_GEOMETRY,
+): RunCardPrintBoxVariables {
+  return Object.freeze({
+    '--run-card-print-inline-start': percentage(geometry.paintBounds.x, geometry.sourceWidth),
+    '--run-card-print-block-start': percentage(geometry.paintBounds.y, geometry.sourceHeight),
+    '--run-card-print-inline-size': percentage(geometry.paintBounds.width, geometry.sourceWidth),
+    '--run-card-print-block-size': percentage(geometry.paintBounds.height, geometry.sourceHeight),
+  });
+}
+
 /** Converts native frame-pixel boxes into the shared face's responsive CSS variables. */
 export function runCardFrameGeometryVariables(
   geometry: RunCardFrameGeometry,

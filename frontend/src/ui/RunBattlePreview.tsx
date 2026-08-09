@@ -19,6 +19,9 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
   // Battle just fought while the Sectio is open, so reading it directly previews the last map.
   const battleIndex = sectioUpcomingBattleIndex(run);
   const level = run.war.battles[battleIndex].level;
+  // The canonical runtime answer, not a re-derivation: what Deployment will actually deal here.
+  // A deck smaller than the deal is dealt whole, so the note never promises cards that do not exist.
+  const dealt = Math.min(runDeploymentDealCount({ war: run.war, battleIndex }), run.cards.length);
   const board = useMemo(() => levelToEditorBoard(level), [level]);
   const signature = useMemo(() => JSON.stringify(level), [level]);
   // How much of the player's collection this stage takes, and where it goes. Both are the

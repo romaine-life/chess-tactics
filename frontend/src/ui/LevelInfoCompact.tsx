@@ -5,7 +5,13 @@
 // consumer (CampaignEditor's Info tab) is display-only, so there is no editing
 // grid; this is the whole readout, not a header above one.
 import { type ComponentProps, type ReactElement } from 'react';
-import { levelBattleCardsDealt, type Level, type ZoneType } from '../core/level';
+import {
+  LEVEL_BATTLE_CARDS_DEALT_MAX,
+  LEVEL_BATTLE_CARDS_DEALT_MIN,
+  levelBattleCardsDealt,
+  type Level,
+  type ZoneType,
+} from '../core/level';
 import { playerDeploymentCells } from '@chess-tactics/board-render/run/deployment';
 import { MODE_NAME, objectiveContextForLevel, victoryRulesForLevel } from '../core/objectives';
 import { formatClockSeconds } from '../core/clock';
@@ -189,6 +195,25 @@ export function levelObjectiveLine(level: Level, perspectiveSide: PlayingSide = 
   return `${MODE_NAME[level.objective]} — ${objectiveBriefingForSide(rules, perspectiveSide).summary}`;
 }
 
+/**
+ * The Deployment deal a War Battle authors — the bare count, because that is the fact the readout
+ * is missing: a Battle's player force arrives as dealt cards, not as pieces standing on the map,
+ * so an ally roster of 0 is otherwise the whole answer.
+ *
+ * Null for a level that is not a Battle — Campaign and standalone levels are never dealt anything
+ * and carry no `battle` block. A Battle that authors no count is unfinished rather than untuned
+ * (`W4_BATTLE_CARDS_DEALT` blocks its Save), so it says so instead of dropping the row.
+ */
+export function levelBattleDealLine(level: Level): string | null {
+  if (!level.battle) return null;
+  const dealt = level.battle.cardsDealt;
+  if (typeof dealt !== 'number' || !Number.isInteger(dealt)
+    || dealt < LEVEL_BATTLE_CARDS_DEALT_MIN || dealt > LEVEL_BATTLE_CARDS_DEALT_MAX) {
+    return 'Not set';
+  }
+  return String(dealt);
+}
+
 /** Whole-board AI artwork owns the environment pixels, so its logical terrain cannot be
  * presented as a roster of individually rendered tile types. */
 export function levelShowsTerrainTypeCounts(level: Level): boolean {
@@ -302,7 +327,10 @@ export function LevelInfoCompact({
   // Present only for a War Battle; a Campaign or standalone Level deals nothing and reads its
   // deployment geometry off the Zones row instead.
   const cardsDealt = levelBattleCardsDealt(level);
-  const deploymentSquares = cardsDealt === null ? 0 : playerDeploymentCells(level).length;
+  const dealLine = levelBattleDealLine(level);
+  // The band's size is a real fact about any Battle, including one whose deal is still unset —
+  // gating it on the COUNT would print "0 squares" for a board that has a band.
+  const deploymentSquares = dealLine === null ? 0 : playerDeploymentCells(level).length;
   const zoneMix = countMap(level.layers.zones.map((z) => z.type));
   const zoneParts = ZONE_ORDER.filter((z) => zoneMix[z]).map((z) => `${ZONE_LABEL[z]} ${zoneMix[z]}`);
 
@@ -352,12 +380,16 @@ export function LevelInfoCompact({
         </div>
       </section>
 
-      {cardsDealt !== null ? (
+      {/* Directly under Forces, because that is where the question is asked: a Battle's Allies
+          column reads 0, and this section is the answer to why. The COUNT comes from the readout's
+          own reader, which says "Not set" for a Battle that authors none — the state
+          W4_BATTLE_CARDS_DEALT blocks Save on, and one a clamp would quietly hide. */}
+      {dealLine !== null ? (
         <section className="ce-li-deployment">
           <span className="ce-li-title">Deployment</span>
           <div className="ce-li-stat">
             <span><RowIcon src={cardsIconSrc} className="ce-li-card-icon" />Cards dealt</span>
-            <strong>{cardsDealt}</strong>
+            <strong>{dealLine}</strong>
           </div>
           <div className="ce-li-stat">
             {deploymentBand ? (
@@ -383,12 +415,17 @@ export function LevelInfoCompact({
             ) : <span>Zone</span>}
             <strong>{deploymentSquares} square{deploymentSquares === 1 ? '' : 's'}</strong>
           </div>
-          <p className="ce-li-dealt">
-            {cardsDealt === 1
-              ? 'One card comes off your collection, and His Grace is always it.'
-              : `${cardsDealt} cards come off your collection, His Grace first.`}
-            {' '}Each is admitted whole, in order, while the zone still has room for it.
-          </p>
+          {/* Only when there is a real count to describe: an unfinished Battle's row says "Not
+              set", and a sentence about how many cards come off the collection would be inventing
+              a number the Level does not have. */}
+          {cardsDealt !== null ? (
+            <p className="ce-li-dealt">
+              {cardsDealt === 1
+                ? 'One card comes off your collection, and His Grace is always it.'
+                : `${cardsDealt} cards come off your collection, His Grace first.`}
+              {' '}Each is admitted whole, in order, while the zone still has room for it.
+            </p>
+          ) : null}
         </section>
       ) : null}
 

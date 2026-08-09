@@ -99,6 +99,9 @@ const {
   runResourceIconSlotId,
   runExpunctioReviewSurface,
   runGoldTransactionReviewSurface,
+  titleBarMarkReviewSurface,
+  titleBarMarkSlot,
+  titleBarMarkMediaIssue,
   runSectioWrapMediaIssue,
   workspaceBackgroundSlotId,
   workspaceBackgroundMediaIssue,
@@ -9295,6 +9298,10 @@ const WORKSPACE_LEVEL_FORMAT_VERSION = serverRender?.LEVEL_FORMAT_VERSION ?? 2;
 // own Deployment deal within. Same shared-constant-with-literal-fallback shape as the line above.
 const WORKSPACE_BATTLE_CARDS_DEALT_MIN = serverRender?.LEVEL_BATTLE_CARDS_DEALT_MIN ?? 1;
 const WORKSPACE_BATTLE_CARDS_DEALT_MAX = serverRender?.LEVEL_BATTLE_CARDS_DEALT_MAX ?? 12;
+// Mirrors LEVEL_PAR_TURNS_MIN/MAX in core/level.ts — the bounds a Level may author its own par
+// within (ADR-0539). Same shared-constant-with-literal-fallback shape as the lines above.
+const WORKSPACE_PAR_TURNS_MIN = serverRender?.LEVEL_PAR_TURNS_MIN ?? 1;
+const WORKSPACE_PAR_TURNS_MAX = serverRender?.LEVEL_PAR_TURNS_MAX ?? 99;
 
 function isFiniteInteger(value) {
   return Number.isInteger(value) && Number.isFinite(value);
@@ -9342,6 +9349,10 @@ function validateWorkspaceLevel(level, key) {
       || !isFiniteInteger(tc.incrementSeconds) || tc.incrementSeconds < 0) {
       return `levels.${key}.timeControl is invalid`;
     }
+  }
+  if (level.parTurns !== undefined && (!isFiniteInteger(level.parTurns)
+    || level.parTurns < WORKSPACE_PAR_TURNS_MIN || level.parTurns > WORKSPACE_PAR_TURNS_MAX)) {
+    return `levels.${key}.parTurns is invalid`;
   }
   if (level.battle !== undefined) {
     const battle = level.battle;
@@ -19384,6 +19395,9 @@ function mediaDomainProjectionIssue(row) {
   if (ataraxiaNumeralSlot(row.slot)) {
     return ataraxiaNumeralMediaIssue(row, runtime.value);
   }
+  if (titleBarMarkSlot(row.slot)) {
+    return titleBarMarkMediaIssue(row, runtime.value);
+  }
   const runCardFrame = runCardFrameProjection(row);
   if (runCardFrame.claimed) return runCardFrame.issue;
   const runCardArt = runCardArtProjection(row);
@@ -20224,8 +20238,15 @@ function gameOwnedReviewSurfaceUrl(req, raw) {
       : url.host.toLowerCase() === String(req.get('host') || '').toLowerCase();
     // Each entry is a surface some art domain is genuinely reviewed on; the Ataraxia rung
     // marks are worn by the Ataraxia reference rows, on either host (ADR-0363).
+    //
+    // The live play surfaces are here because the persistent title bar's marks — the
+    // battle clock's hourglass, the objective flag — are worn nowhere else. No Studio page
+    // and no reference row shows them, so before this the ONLY seat they exist in was not
+    // a legal place to prove them, and an owner-authorized swap of those bytes could not
+    // be recorded at all. A play route is not a bespoke review page; it is the game.
     const gameOwnedPath = url.pathname === '/studio' || url.pathname === '/editor/level'
       || url.pathname === '/enchiridion/cards'
+      || url.pathname === '/play' || url.pathname === '/run'
       || url.pathname === '/play/strategikon/enchiridion/units'
       || runExpunctioReviewSurface(url)
       || ATARAXIA_NUMERAL_REVIEW_PATH.test(url.pathname);
@@ -20421,7 +20442,8 @@ async function validateMediaReviewProofSnapshot(client, current, evidence, surfa
   }
   const genericReviewUrl = new URL(surfaceUrl);
   const runExpunctioTransactionReview = runGoldTransactionReviewSurface(genericReviewUrl, current.slot);
-  if (genericReviewUrl.pathname !== '/studio' && !runExpunctioTransactionReview) {
+  const titleBarMarkReview = titleBarMarkReviewSurface(genericReviewUrl, current.slot);
+  if (genericReviewUrl.pathname !== '/studio' && !runExpunctioTransactionReview && !titleBarMarkReview) {
     throw mediaMutationError(
       'invalid_media_review_proof',
       409,

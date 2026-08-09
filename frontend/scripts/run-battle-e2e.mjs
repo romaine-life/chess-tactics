@@ -4,10 +4,19 @@
 // not the pointer path — an invisible overlay shielding the board passes every unit
 // test while making the game unplayable; see the strategikon-slot regression, #552).
 //
-// Drives a FRESH anonymous profile end-to-end: start run → take opening Bona Vacantia → begin battle
-// → click a unit's tile → click a legal destination → assert the move commits, the
-// enemy replies, and the open Strategikon still takes the pointer. Fails loudly at
-// the exact step where a click is swallowed.
+// Drives a FRESH anonymous profile end-to-end: start run → take whatever the opening Bona
+// Vacantia deals → draw the Deployment hand → seat every formation by aiming at a square and
+// clicking → Begin Battle → click a unit's tile → click a legal destination → assert the move
+// commits, the enemy replies, paid Undo rewinds for exactly one gold, and the open Strategikon
+// still takes the pointer. Fails loudly at the exact step where a click is swallowed.
+//
+// Two rules keep this from rotting again, both learned the hard way:
+//   * Never name the content. Which relic or card the grant deals, and which piece has a legal
+//     move, are the game's to choose — a selector pinned to one of them reports a timeout with
+//     no verdict the day that content changes.
+//   * Read the SCREEN, not a re-imported store. `import('/src/run/store.ts')` from an evaluate
+//     answers from its own module record, which only catches up through the server; it reported
+//     an empty board while three units stood on it.
 //
 // Usage: npm run e2e:run-battle -- <base-url>   (needs a live dev server; anonymous
 // runs live in the browser profile, so every invocation starts clean)
@@ -58,18 +67,26 @@ try {
   // loopback request. This proof explicitly owns a disposable anonymous Run, so
   // answer only the read-only auth projection as signed out and leave all game,
   // content, media, and health requests on the real backend.
-  await page.setRequestInterception(true);
-  page.on('request', (request) => {
-    const requestUrl = new URL(request.url());
-    if (request.method() === 'GET' && requestUrl.pathname === '/api/auth/me') {
-      void request.respond({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ signed_in: false }),
-      });
-      return;
-    }
-    void request.continue();
+  //
+  // Patched IN THE PAGE rather than with CDP request interception. Interception routes the
+  // whole module graph through this process, and a dev-server module request that stalls there
+  // stalls forever — here that surfaced as an enemy that never replied, because the search it
+  // runs never finished loading. Only fetch needs answering, so only fetch is patched.
+  await page.evaluateOnNewDocument(() => {
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      const href = typeof input === 'string' ? input
+        : input instanceof Request ? input.url
+          : String(input);
+      const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
+      if (method === 'GET' && new URL(href, location.href).pathname === '/api/auth/me') {
+        return Promise.resolve(new Response(JSON.stringify({ signed_in: false }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }));
+      }
+      return nativeFetch(input, init);
+    };
   });
 
   const navigationResponse = await page.goto(`${base}/play/select/run/new`, { waitUntil: 'domcontentloaded' });
@@ -405,11 +422,43 @@ try {
     probe.frame = requestAnimationFrame(tick);
   });
 
-  const bonaOffer = await page.$('button.run-vacantia-take:not([data-lipsanon-id="conscription-notice"])');
-  if (bonaOffer) {
-    const offerBox = await bonaOffer.boundingBox();
-    if (!offerBox) await fail('opening-bona-vacantia', 'ordinary lipsanon offer has no geometry');
-    await page.mouse.click(offerBox.x + offerBox.width / 2, offerBox.y + offerBox.height / 2);
+  // WHAT the opening Bona Vacantia deals is content, not contract: a Run's opening grant is a
+  // row of formation cards, and a Conflict that opens on the lipsanon mat offers relics. Take
+  // whichever the mat is actually showing, and never name one — this step named a single
+  // lipsanon, kept hunting its take button after the opening screen became a card grant, and
+  // so clicked nothing and spent 45 seconds timing out on a phase that was never coming.
+  const OPENING_OFFERS = [
+    { kind: 'card', selector: '[data-testid="run-vacantia-card-offers"] .run-card-action:not([disabled])' },
+    { kind: 'lipsanon', selector: 'button.run-vacantia-take[data-lipsanon-id]:not([disabled])' },
+  ];
+  const openingScene = await page.evaluate(() => (
+    document.querySelector('.scene-director')?.getAttribute('data-scene-committed') ?? ''
+  ));
+  // A War with no opening Bona Vacantia goes straight to Deployment; there is nothing to take.
+  if (openingScene.includes(':bona-vacantia:')) {
+    let taken = null;
+    for (const offer of OPENING_OFFERS) {
+      const handle = await page.$(offer.selector);
+      if (!handle) continue;
+      // Read the label before the press: taking ends the phase, so the button is gone after.
+      const label = await page.evaluate((element) => element.getAttribute('aria-label'), handle);
+      const offerBox = await handle.boundingBox();
+      if (!offerBox) {
+        await fail('opening-bona-vacantia', `the ${offer.kind} offer "${label}" has no geometry — something is covering the mat`);
+      }
+      await page.mouse.click(offerBox.x + offerBox.width / 2, offerBox.y + offerBox.height / 2);
+      taken = { kind: offer.kind, label };
+      break;
+    }
+    if (!taken) {
+      const mat = await page.evaluate(() => ({
+        offerRows: [...document.querySelectorAll('[data-testid^="run-vacantia"]')].map((node) => node.dataset.testid),
+        takeables: [...document.querySelectorAll('.run-card-action, .run-vacantia-take')]
+          .map((node) => `${node.className}${node.disabled ? ' (disabled)' : ''}`),
+      }));
+      await fail('opening-bona-vacantia', `the Run is on Bona Vacantia and offered nothing takeable; ${JSON.stringify(mat)}`);
+    }
+    console.log(`opening Bona Vacantia: took the ${taken.kind} offer — ${taken.label}`);
   }
   await waitPhase('deployment', 'opening-bona-vacantia-to-deployment');
   await page.waitForFunction(() => {
@@ -420,21 +469,25 @@ try {
   });
   await page.waitForSelector('[data-deployment-stack-card]', { timeout: 5_000 });
   // Deployment begins as a committed, empty battlefield with the complete deck in the
-  // middle. Nothing has moved or been revealed, and transport already owns its stable
-  // Controls seat while the player decides whether to deal.
+  // middle. Nothing has moved or been dealt, and the arranging panel is already DRESSED —
+  // every control it will hold is on screen, answering nothing, so the deal does not re-lay
+  // the panel under the player's hand at the one moment they are watching it.
+  // Read the SCREEN, never a re-imported store. `import('/src/run/store.ts')` from an evaluate
+  // resolves to a module record of its own, whose Run document only ever catches up through the
+  // server — it reported an empty board while three units stood on it. Everything this proof is
+  // about is on screen anyway, which is the whole point of driving it with a mouse.
   const awaitingDealState = await page.evaluate(async () => {
-    const { useActiveRun } = await import('/src/run/store.ts');
-    const run = useActiveRun.getState().run;
     // Found by testid, not by label: the label counts the hand ("Draw 3 cards").
     const deal = document.querySelector('[data-testid="deployment-deal"]');
-    const transportRect = document.querySelector('[data-testid="deployment-transport-control"]')?.getBoundingClientRect();
+    const begin = document.querySelector('[data-testid="arrangement-begin-battle"]');
     const probe = window.__ctBattlefieldTransitionProbe;
+    const progress = document.querySelector('[data-testid="arrangement-progress"]')?.textContent?.trim() ?? null;
     return {
-      phase: run?.phase ?? null,
-      stage: run?.deployment?.stage ?? null,
-      placements: run?.deployment ? Object.keys(run.deployment.placements).length : null,
-      totalCards: run?.cards.length ?? null,
-      dealtCards: run?.deployment?.dealtCardIds.length ?? null,
+      stage: document.querySelector('[data-deployment-card-stage]')?.getAttribute('data-deployment-card-stage') ?? null,
+      // Nothing is on the ground yet, and the panel already says how much there will be to put there.
+      placed: Number(/(\d+) of \d+ on the board/.exec(progress ?? '')?.[1] ?? NaN),
+      dealtCards: Number(/of (\d+) on the board/.exec(progress ?? '')?.[1] ?? NaN),
+      totalCards: Number(document.querySelector('.run-deployment-center-count')?.textContent ?? NaN),
       stackCards: document.querySelectorAll('[data-deployment-stack-card]').length,
       backs: document.querySelectorAll('[data-deployment-stack-card] .run-card-back').length,
       centerDeck: Boolean(document.querySelector('[data-deployment-center-deck]')),
@@ -443,12 +496,13 @@ try {
       board: Boolean(document.querySelector('[data-testid="skirmish-board"]')),
       deal: Boolean(deal),
       dealDisabled: deal?.disabled ?? null,
-      playDisabled: document.querySelector('[data-testid="deployment-play"]')?.disabled ?? null,
-      nextDisabled: document.querySelector('[data-testid="deployment-next"]')?.disabled ?? null,
-      fullDeployDisabled: document.querySelector('[data-testid="deployment-full-deploy"]')?.disabled ?? null,
-      transportRect: transportRect
-        ? { x: transportRect.x, y: transportRect.y, width: transportRect.width, height: transportRect.height }
-        : null,
+      begin: Boolean(begin),
+      beginDisabled: begin?.disabled ?? null,
+      rotationControl: Boolean(document.querySelector('[data-testid="arrangement-rotation-control"]')),
+      removeControl: Boolean(document.querySelector('[data-testid="arrangement-remove-formation"]')),
+      progress: document.querySelector('[data-testid="arrangement-progress"]')?.textContent?.trim() ?? null,
+      // Nothing is placeable before there is a hand: the board takes no arranging pointer yet.
+      arrangingCells: document.querySelectorAll('.run-deployment-cell').length,
       strategikonToggle: Boolean(document.querySelector('[data-testid="strategikon-toggle"]')),
       obsoleteDeploymentButton: [...document.querySelectorAll('.run-deployment-controls button')]
         .some((button) => button.textContent?.trim() === 'Deployment'),
@@ -458,9 +512,9 @@ try {
     };
   });
   if (
-    awaitingDealState.phase !== 'deployment'
-    || awaitingDealState.stage !== 'awaiting-deal'
-    || awaitingDealState.placements !== 0
+    awaitingDealState.stage !== 'awaiting-deal'
+    || awaitingDealState.placed !== 0
+    || !(awaitingDealState.dealtCards > 0)
     || awaitingDealState.totalCards < awaitingDealState.dealtCards
     || awaitingDealState.stackCards !== awaitingDealState.dealtCards
     || awaitingDealState.backs !== awaitingDealState.stackCards
@@ -470,10 +524,11 @@ try {
     || !awaitingDealState.board
     || !awaitingDealState.deal
     || awaitingDealState.dealDisabled
-    || awaitingDealState.playDisabled
-    || awaitingDealState.nextDisabled
-    || awaitingDealState.fullDeployDisabled
-    || !awaitingDealState.transportRect
+    || !awaitingDealState.begin
+    || !awaitingDealState.beginDisabled
+    || !awaitingDealState.rotationControl
+    || !awaitingDealState.removeControl
+    || awaitingDealState.arrangingCells !== 0
     || !awaitingDealState.strategikonToggle
     || awaitingDealState.obsoleteDeploymentButton
     || awaitingDealState.explanatoryCopy
@@ -494,246 +549,68 @@ try {
   await page.screenshot({ path: dealMotionShot });
   console.log('Deployment deal-motion screenshot:', dealMotionShot);
 
-  const dealingState = await page.evaluate(async () => {
-    const { useActiveRun } = await import('/src/run/store.ts');
-    const run = useActiveRun.getState().run;
-    return {
-      stage: run?.deployment?.stage ?? null,
-      placements: run?.deployment ? Object.keys(run.deployment.placements).length : null,
-      dealDisabled: document.querySelector('[data-testid="deployment-deal"]')?.disabled ?? null,
-      playDisabled: document.querySelector('[data-testid="deployment-play"]')?.disabled ?? null,
-      nextDisabled: document.querySelector('[data-testid="deployment-next"]')?.disabled ?? null,
-      fullDeployDisabled: document.querySelector('[data-testid="deployment-full-deploy"]')?.disabled ?? null,
-    };
-  });
+  const dealingState = await page.evaluate(() => ({
+    stage: document.querySelector('[data-deployment-card-stage]')?.getAttribute('data-deployment-card-stage') ?? null,
+    dealDisabled: document.querySelector('[data-testid="deployment-deal"]')?.disabled ?? null,
+    beginDisabled: document.querySelector('[data-testid="arrangement-begin-battle"]')?.disabled ?? null,
+    // The board must not take an arranging pointer while the cards are still in the air.
+    arrangingCells: document.querySelectorAll('.run-deployment-cell').length,
+  }));
   if (
     dealingState.stage !== 'dealing'
-    || dealingState.placements !== 0
     || !dealingState.dealDisabled
-    || !dealingState.playDisabled
-    || !dealingState.nextDisabled
-    || !dealingState.fullDeployDisabled
+    || !dealingState.beginDisabled
+    || dealingState.arrangingCells !== 0
   ) {
     await fail('deployment-dealing-boundary', JSON.stringify(dealingState));
   }
 
+  // The hand lands and the panel becomes an ARRANGING panel: a formation in hand, the board
+  // taking the pointer on every square of the band, and Begin Battle still refusing until His
+  // Grace is on the ground.
+  // The centre deck goes with the deal, so arranging is read off the panel and the board: a
+  // formation in hand, and every square of the band taking the pointer.
   try {
-    await page.waitForFunction(() => document.querySelector('[data-deployment-card-stage="card"]')
-      && !document.querySelector('[data-testid="deployment-next"]')?.disabled);
-    await page.click('[data-testid="deployment-next"]');
-    await page.waitForFunction(() => document.querySelector('[data-deployment-stack-card].is-active.is-revealing'));
-    await page.evaluate(() => new Promise((resolve) => {
-      requestAnimationFrame(() => requestAnimationFrame(resolve));
-    }));
+    await page.waitForFunction(() => document.querySelector('[data-testid="arrangement-hand-card"]')
+      && document.querySelectorAll('.run-deployment-cell.is-band').length > 0
+      && !document.querySelector('[data-deployment-card-stage="dealing"]'));
   } catch {
-    await fail('deployment-card-flip-motion', JSON.stringify(await sceneDiagnostics()));
+    await fail('deployment-hand-arrives', JSON.stringify(await sceneDiagnostics()));
   }
-  const revealMotionShot = 'tmp-shots/run-opening-deployment-card-reveal.png';
-  await page.screenshot({ path: revealMotionShot });
-  console.log('Deployment card-reveal screenshot:', revealMotionShot);
+  const arrangingShot = 'tmp-shots/run-opening-deployment-arranging.png';
+  await page.screenshot({ path: arrangingShot });
+  console.log('Deployment arranging screenshot:', arrangingShot);
 
-  if (deploymentOnly) {
-    let arrival = null;
-    try {
-      await page.waitForFunction(() => {
-        const board = document.querySelector('[data-testid="skirmish-board"]');
-        return board?.getAttribute('data-unit-arrival-track') === 'slide-from-right'
-          && board.getAttribute('data-arrival-state') === 'entering';
-      }, { timeout: 5_000 });
-      arrival = await page.evaluate(async () => {
-        const board = document.querySelector('[data-testid="skirmish-board"]');
-        const [{ useActiveRun }, deployment] = await Promise.all([
-          import('/src/run/store.ts'),
-          import('/src/run/deployment.ts'),
-        ]);
-        const run = useActiveRun.getState().run;
-        const level = run?.war.battles[run.battleIndex].level;
-        const settlingUnitIds = new Set(run?.deployment?.settlingUnitIds ?? []);
-        const layout = run && level
-          ? deployment.selectedDeploymentLayout(run, deployment.deploymentOptions(run, level))
-          : null;
-        const pieces = run && level && layout
-          ? deployment.gameForRunDeployment(run, level, layout, true).pieces
-            .filter((piece) => settlingUnitIds.has(piece.id))
-          : [];
-        return {
-          track: board?.getAttribute('data-unit-arrival-track') ?? null,
-          arriving: board?.getAttribute('data-arriving') ?? null,
-          state: board?.getAttribute('data-arrival-state') ?? null,
-          startDelta: board?.getAttribute('data-unit-arrival-start-delta') ?? null,
-          unitIds: (board?.getAttribute('data-arriving-unit-ids') ?? '').split(',').filter(Boolean),
-          model: level ? {
-            boardCols: level.board.cols,
-            pieces: pieces.map(({ id, x, y }) => ({ id, x, y })),
-            startDelta: deployment.deploymentFormationEntryDelta(level, pieces),
-          } : null,
-        };
-      });
-    } catch {
-      await fail('deployment-formation-entry', JSON.stringify(await sceneDiagnostics()));
-    }
-    await new Promise((resolve) => setTimeout(resolve, 220));
-    const arrivalShot = 'tmp-shots/run-deployment-formation-summon.png';
-    await page.screenshot({ path: arrivalShot });
-    await new Promise((resolve) => setTimeout(resolve, 780));
-    const slideShot = 'tmp-shots/run-deployment-formation-slide.png';
-    await page.screenshot({ path: slideShot });
-
-    try {
-      await page.waitForFunction(async () => {
-        const { useActiveRun } = await import('/src/run/store.ts');
-        const run = useActiveRun.getState().run;
-        return run?.phase === 'battle'
-          && document.querySelector('[data-testid="skirmish-board"]')?.getAttribute('data-arriving') === 'false';
-      }, { timeout: 15_000 });
-    } catch {
-      await fail('deployment-formation-settle', JSON.stringify(await sceneDiagnostics()));
-    }
-
-    const settled = await page.evaluate(async () => {
-      const { useActiveRun } = await import('/src/run/store.ts');
-      const { runCardUnitIds } = await import('/src/run/model.ts');
-      const run = useActiveRun.getState().run;
-      const card = run?.cards[0];
-      const seats = card && run?.deployment
-        ? runCardUnitIds(card).map((id) => ({ id, cell: run.deployment.placements[id] ?? null }))
-        : [];
-      return { phase: run?.phase ?? null, seats };
-    });
-    const occupied = settled.seats.map(({ cell }) => cell).filter(Boolean);
-    const parsed = occupied.map((cell) => cell.split(',').map(Number));
-    const ys = new Set(parsed.map(([, y]) => y));
-    const [startDeltaX, startDeltaY] = (arrival?.startDelta ?? '').split(',').map(Number);
-    const stagedMinX = Math.min(...(arrival?.model?.pieces ?? [])
-      .map((piece) => piece.x + startDeltaX));
-    if (
-      arrival?.track !== 'slide-from-right'
-      || arrival.arriving !== 'true'
-      || arrival.state !== 'entering'
-      || !(startDeltaX > 0)
-      || startDeltaY !== 0
-      || startDeltaX !== arrival.model?.startDelta.x
-      || startDeltaY !== arrival.model?.startDelta.y
-      || stagedMinX < arrival.model?.boardCols
-      || arrival.unitIds.length !== 3
-      || settled.phase !== 'battle'
-      || occupied.length !== 3
-      || new Set(occupied).size !== 3
-      || ys.size !== 2
-    ) {
-      await fail('deployment-sideways-formation', JSON.stringify({ arrival, settled }));
-    }
-    console.log('Off-board formation summon screenshot:', arrivalShot);
-    console.log('Rigid board-axis slide screenshot:', slideShot);
-    console.log('PASS — one card summons every unit completely beyond the board\'s right edge, waits for the final drop, slides as one rigid formation toward decreasing board x, settles, and promotes the same Battle');
-    await browser.close();
-    rmSync(browserProfile, { recursive: true, force: true });
-    process.exit(0);
-  }
-
-  try {
-    await page.waitForFunction(() => document.querySelector('[data-deployment-card-stage="unit"]')
-      && !document.querySelector('[data-testid="deployment-next"]')?.disabled);
-  } catch {
-    const stalledDeal = await page.evaluate(async () => {
-      const { useActiveRun } = await import('/src/run/store.ts');
-      const { currentDeploymentUnit, deploymentInteractionStage } = await import('/src/run/deployment.ts');
-      const run = useActiveRun.getState().run;
-      const probe = window.__ctBattlefieldTransitionProbe;
-      const director = document.querySelector('.scene-director');
-      return {
-        phase: run?.phase ?? null,
-        stage: run?.deployment?.stage ?? null,
-        transport: run?.deployment?.transport ?? null,
-        interactionStage: run ? deploymentInteractionStage(run) : null,
-        activeUnit: run ? currentDeploymentUnit(run) : null,
-        placements: Object.keys(run?.deployment?.placements ?? {}).length,
-        nextDisabled: document.querySelector('[data-testid="deployment-next"]')?.disabled ?? null,
-        dealCount: document.querySelector('.run-deployment-card-count')?.textContent ?? null,
-        centerCount: document.querySelector('.run-deployment-center-count')?.textContent ?? null,
-        flightCount: document.querySelectorAll('[data-deployment-flight-card]').length,
-        cards: [...document.querySelectorAll('[data-deployment-stack-card]')]
-          .map((card) => ({ id: card.getAttribute('data-deployment-stack-card'), className: card.className })),
-        animations: probe?.dealAnimationRefs.map((animation) => ({
-          playState: animation.playState,
-          currentTime: Number(animation.currentTime ?? 0),
-          pending: animation.pending,
-        })) ?? null,
-        dealCalls: probe?.dealCalls ?? null,
-        directorPhase: director?.getAttribute('data-scene-phase') ?? null,
-        committed: director?.getAttribute('data-scene-committed') ?? null,
-        pending: director?.getAttribute('data-scene-pending') ?? null,
-      };
-    });
-    await fail('deployment-deal-settle', JSON.stringify(stalledDeal));
-  }
-
-  try {
-    await page.waitForFunction(() => {
-      const card = document.querySelector('[data-deployment-stack-card].is-active.is-revealed');
-      const front = card?.querySelector('.run-deployment-stack-side.is-front');
-      const rect = card?.getBoundingClientRect();
-      if (!card || !front || !rect) return false;
-      const paintedSide = document.elementsFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
-        .map((element) => element.closest('.run-deployment-stack-side'))
-        .find(Boolean);
-      return paintedSide === front;
-    }, { timeout: 5_000 });
-  } catch {
-    const revealPresentation = await page.evaluate(() => {
-      const card = document.querySelector('[data-deployment-stack-card].is-active');
-      const front = card?.querySelector('.run-deployment-stack-side.is-front');
-      const back = card?.querySelector('.run-deployment-stack-side.is-back');
-      const rect = card?.getBoundingClientRect();
-      const hitStack = rect
-        ? document.elementsFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)
-          .slice(0, 8)
-          .map((element) => ({ tag: element.tagName, className: element.className }))
-        : [];
-      return {
-        className: card?.className ?? null,
-        front: Boolean(front),
-        frontLabel: front?.querySelector('.run-card-action')?.getAttribute('aria-label') ?? null,
-        frontTransform: front ? getComputedStyle(front).transform : null,
-        frontBackface: front ? getComputedStyle(front).backfaceVisibility : null,
-        backTransform: back ? getComputedStyle(back).transform : null,
-        backBackface: back ? getComputedStyle(back).backfaceVisibility : null,
-        hitStack,
-      };
-    });
-    await fail('deployment-card-reveal', JSON.stringify(revealPresentation));
-  }
-
-  const transportState = await page.evaluate(() => {
-    const transportRect = document.querySelector('[data-testid="deployment-transport-control"]')?.getBoundingClientRect();
+  const arrangingState = await page.evaluate(() => {
+    const progress = document.querySelector('[data-testid="arrangement-progress"]')?.textContent?.trim() ?? '';
     return {
-      stackCards: document.querySelectorAll('[data-deployment-stack-card]').length,
-      count: Number(document.querySelector('.run-deployment-card-count')?.textContent ?? 0),
+      placed: Number(/(\d+) of \d+ on the board/.exec(progress)?.[1] ?? NaN),
+      handSize: Number(/of (\d+) on the board/.exec(progress)?.[1] ?? NaN),
+      handCard: Boolean(document.querySelector('[data-testid="arrangement-hand-card"]')),
+      // One mark per formation the player may place this Battle — a dealt reserve has no mark,
+      // so the row is the admitted hand rather than the whole deal.
+      handMarks: document.querySelectorAll('.run-arrangement-hand-mark').length,
+      bandCells: document.querySelectorAll('.run-deployment-cell.is-band').length,
+      placeableCells: document.querySelectorAll('.run-deployment-cell.is-placeable').length,
+      seatedCells: document.querySelectorAll('.run-deployment-cell.is-seated-formation').length,
+      beginDisabled: document.querySelector('[data-testid="arrangement-begin-battle"]')?.disabled ?? null,
       board: Boolean(document.querySelector('[data-testid="skirmish-board"]')),
-      playDisabled: document.querySelector('[data-testid="deployment-play"]')?.disabled ?? null,
-      nextDisabled: document.querySelector('[data-testid="deployment-next"]')?.disabled ?? null,
-      fullDeployDisabled: document.querySelector('[data-testid="deployment-full-deploy"]')?.disabled ?? null,
-      transportRect: transportRect
-        ? { x: transportRect.x, y: transportRect.y, width: transportRect.width, height: transportRect.height }
-        : null,
       strategikonToggle: Boolean(document.querySelector('[data-testid="strategikon-toggle"]')),
     };
   });
-  const transportGeometryChanged = !awaitingDealState.transportRect || !transportState.transportRect
-    || ['x', 'y', 'width', 'height'].some((key) => (
-      Math.abs(awaitingDealState.transportRect[key] - transportState.transportRect[key]) > 0.5
-    ));
   if (
-    transportState.stackCards === 0
-    || transportState.count !== transportState.stackCards
-    || !transportState.board
-    || transportState.playDisabled
-    || transportState.nextDisabled
-    || transportState.fullDeployDisabled
-    || transportGeometryChanged
-    || !transportState.strategikonToggle
+    arrangingState.placed !== 0
+    || arrangingState.seatedCells !== 0
+    || !(arrangingState.handSize > 0)
+    || !arrangingState.handCard
+    || arrangingState.handMarks !== arrangingState.handSize
+    || arrangingState.bandCells === 0
+    || arrangingState.placeableCells === 0
+    || !arrangingState.beginDisabled
+    || !arrangingState.board
+    || !arrangingState.strategikonToggle
   ) {
-    await fail('deployment-transport-boundary', JSON.stringify(transportState));
+    await fail('deployment-arranging-boundary', JSON.stringify(arrangingState));
   }
 
   const battlefieldTransition = await page.evaluate(() => {
@@ -785,13 +662,15 @@ try {
     || battlefieldTransition.visibleEnteringCameraFrames === 0
     || battlefieldTransition.cameraSamples.length !== 1
     || battlefieldTransition.cameraSamples[0]?.camera !== battlefieldTransition.finalCamera
-    || battlefieldTransition.dealAnimations !== transportState.stackCards
+       // Every dealt card flies, and the remainder pile flies with them when the deck keeps some
+    // back. How MANY animations each flight is built from is presentation the card stack owns.
+    || battlefieldTransition.dealAnimations < awaitingDealState.stackCards
       + (awaitingDealState.totalCards > awaitingDealState.dealtCards ? 1 : 0)
     || battlefieldTransition.dealConstructedBeforeCommit
     || battlefieldTransition.dealPlayedBeforeCommit
     || !battlefieldTransition.dealAdvancedAfterCommit
     || JSON.stringify(battlefieldTransition.dealCountSamples) !== JSON.stringify(
-      Array.from({ length: transportState.stackCards + 1 }, (_, index) => index),
+      Array.from({ length: awaitingDealState.stackCards + 1 }, (_, index) => index),
     )
     || battlefieldTransition.dealCalls.some((call) => (
       call.phase !== 'current'
@@ -809,7 +688,7 @@ try {
 
   await page.waitForFunction(() => document.querySelector('[data-testid="skirmish-board"]')
     ?.getAttribute('data-arriving') === 'false');
-  const transitionShot = 'tmp-shots/run-deployment-transport.png';
+  const transitionShot = 'tmp-shots/run-deployment-hand-dealt.png';
   const transitionBoard = await page.$('.skirmish-war-room');
   if (!transitionBoard) await fail('transition-screenshot', 'Deployment battlefield unavailable after deal');
   await page.screenshot({ path: transitionShot });
@@ -864,148 +743,87 @@ try {
       };
       window.__ctDeploymentProbe.frame = requestAnimationFrame(tick);
       return {
-        deployment: Boolean(document.querySelector('[data-testid="run-deployment"]')),
-        pause: Boolean(document.querySelector('button[aria-label="Pause deployment"]')),
-        play: Boolean(document.querySelector('[data-testid="deployment-play"]')),
-        next: Boolean(document.querySelector('[data-testid="deployment-next"]')),
-        fullDeploy: Boolean(document.querySelector('[data-testid="deployment-full-deploy"]')),
+        // The centre deck is spent, and the band is taking the pointer.
+        arranging: document.querySelectorAll('.run-deployment-cell.is-band').length > 0
+          && !document.querySelector('[data-deployment-center-deck]'),
+        handCard: Boolean(document.querySelector('[data-testid="arrangement-hand-card"]')),
+        rotationControl: Boolean(document.querySelector('[data-testid="arrangement-rotation-control"]')),
+        removeControl: Boolean(document.querySelector('[data-testid="arrangement-remove-formation"]')),
+        begin: Boolean(document.querySelector('[data-testid="arrangement-begin-battle"]')),
       };
     });
     if (
-      !deploymentState.deployment
-      || !deploymentState.pause
-      || !deploymentState.play
-      || !deploymentState.next
-      || !deploymentState.fullDeploy
+      !deploymentState.arranging
+      || !deploymentState.handCard
+      || !deploymentState.rotationControl
+      || !deploymentState.removeControl
+      || !deploymentState.begin
     ) {
       await fail('deployment-fixture', JSON.stringify(deploymentState));
     }
 
-    const placementsBeforeStep = await page.evaluate(async () => {
-      const { useActiveRun } = await import('/src/run/store.ts');
-      return Object.keys(useActiveRun.getState().run?.deployment?.placements ?? {}).length;
-    });
-    const separatePlaceButton = await page.evaluate(() => [...document.querySelectorAll('button')]
-      .some((button) => button.textContent?.trim().startsWith('Place ')));
-    if (separatePlaceButton) await fail('deployment-next-control', 'a separate Place button was mounted');
-    await page.click('[data-testid="deployment-next"]');
-    await page.waitForFunction(async (before) => {
-      const { useActiveRun } = await import('/src/run/store.ts');
-      return Object.keys(useActiveRun.getState().run?.deployment?.placements ?? {}).length > before;
-    }, {}, placementsBeforeStep);
-
-    await page.click('[data-testid="deployment-full-deploy"]');
-    // Full deploy is the fastest transport, not permission to answer required choices.
-    // The fixture deliberately gives two units Adlected. Each highlighted-square choice
-    // leaves transport paused, so the player must explicitly resume Full deploy afterward.
-    const presentedCardGeometry = () => page.evaluate(() => {
-      const layer = document.querySelector(
-        '[data-deployment-stack-card].is-active .run-card-face-layer.is-presented',
-      );
-      const rect = layer?.getBoundingClientRect();
-      const ledger = layer?.querySelector('.run-card-prototype-ledger');
-      if (!layer || !rect || !ledger) return null;
-      return {
-        signature: layer.getAttribute('data-card-presentation'),
-        density: layer.getAttribute('data-contents-density'),
-        unitHeight: getComputedStyle(layer).getPropertyValue('--run-card-unit-height'),
-        cellCount: Number(ledger.getAttribute('data-cell-count')),
-        count: Number(layer.querySelector('.run-card-prototype-ledger-count')?.textContent ?? NaN),
-        unitSeats: [...layer.querySelectorAll(
-          '.run-card-prototype-unit-icon-seat:not(.run-card-prototype-unit-marker-seat)',
-        )].map((seat) => {
-          const seatRect = seat.getBoundingClientRect();
-          return {
-            stackIndex: Number(seat.getAttribute('data-stack-index')),
-            x: seatRect.left - rect.left,
-            y: seatRect.top - rect.top,
-            width: seatRect.width,
-            height: seatRect.height,
-          };
-        }),
-      };
-    });
-    let fullFrontLinesGeometry = null;
-    let emptySeatVerified = false;
-    for (let choice = 0; choice < 10; choice += 1) {
-      await page.waitForFunction(() => (
-        !document.querySelector('[data-testid="run-deployment"]')
-        || Boolean(document.querySelector('button.run-deployment-cell.is-move:not([aria-disabled="true"])'))
-        || (
-          !document.querySelector('[data-testid="deployment-next"]')?.disabled
-          && document.querySelector('[data-testid="deployment-full-deploy"]')?.getAttribute('aria-pressed') !== 'true'
-        )
-      ));
-      if (!await page.$('[data-testid="run-deployment"]')) break;
-      const legal = await page.$('button.run-deployment-cell.is-move:not([aria-disabled="true"])');
-      if (!legal) {
-        await page.click('[data-testid="deployment-full-deploy"]');
-        continue;
+    // Arranging is done with the POINTER: aim at a square, the seating resolves under it, and
+    // the click commits what was previewed. Place the whole admitted hand that way — placing
+    // finishes with a formation and hands the next unplaced one to the cursor, so this walks
+    // the hand without touching the steppers. The panel's own count says how many there are,
+    // because a dealt reserve cannot be placed this Battle.
+    const handSize = arrangingState.handSize;
+    let seatedShot = null;
+    for (let seated = 0; seated < handSize; seated += 1) {
+      const target = await page.$('button.run-deployment-cell.is-placeable');
+      if (!target) {
+        await fail('deployment-arrange-placement', JSON.stringify(await page.evaluate(() => ({
+          cells: document.querySelectorAll('.run-deployment-cell').length,
+          band: document.querySelectorAll('.run-deployment-cell.is-band').length,
+          placeable: document.querySelectorAll('.run-deployment-cell.is-placeable').length,
+          progress: document.querySelector('[data-testid="arrangement-progress"]')?.textContent?.trim() ?? null,
+        }))));
       }
-      const activeLabel = await page.$eval(
-        '[data-testid="deployment-active-unit"]',
-        (element) => element.textContent?.replace(/\s+/g, ' ').trim() ?? '',
-      );
-      const beforeChoiceGeometry = await presentedCardGeometry();
-      if (
-        !fullFrontLinesGeometry
-        && beforeChoiceGeometry?.count === 2
-        && beforeChoiceGeometry.unitSeats.length === 2
-      ) {
-        fullFrontLinesGeometry = beforeChoiceGeometry;
-        const fullSeatShot = 'tmp-shots/run-deployment-card-full-seats.png';
-        await page.screenshot({ path: fullSeatShot });
-        console.log('Deployment full-seat screenshot:', fullSeatShot);
-      }
-      const box = await legal.boundingBox();
-      if (!box) await fail('deployment-required-choice', 'highlighted square has no pointer geometry');
+      const box = await target.boundingBox();
+      if (!box) await fail('deployment-arrange-placement', 'a highlighted square has no pointer geometry');
+      // Aim, then press: the seating is resolved from the square the pointer is already over,
+      // so a click that never hovered would commit a formation nobody was shown.
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
       await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-      await page.waitForFunction((previous) => {
-        const active = document.querySelector('[data-testid="deployment-active-unit"]');
-        return !document.querySelector('[data-testid="run-deployment"]')
-          || !active
-          || active.textContent?.replace(/\s+/g, ' ').trim() !== previous;
-      }, {}, activeLabel);
-      if (fullFrontLinesGeometry && !emptySeatVerified) {
-        await page.waitForFunction((fullSignature) => {
-          const layer = document.querySelector(
-            '[data-deployment-stack-card].is-active .run-card-face-layer.is-presented',
-          );
-          return layer?.getAttribute('data-card-presentation') !== fullSignature
-            && Number(layer?.querySelector('.run-card-prototype-ledger-count')?.textContent ?? NaN) === 1;
-        }, {}, fullFrontLinesGeometry.signature);
-        const emptySeatGeometry = await presentedCardGeometry();
-        const remaining = emptySeatGeometry?.unitSeats[0];
-        const original = remaining
-          ? fullFrontLinesGeometry.unitSeats.find((seat) => seat.stackIndex === remaining.stackIndex)
-          : null;
-        const moved = !remaining || !original || ['x', 'y', 'width', 'height'].some((key) => (
-          Math.abs(remaining[key] - original[key]) > 0.75
-        ));
-        if (
-          !emptySeatGeometry
-          || emptySeatGeometry.count !== 1
-          || emptySeatGeometry.unitSeats.length !== 1
-          || emptySeatGeometry.density !== fullFrontLinesGeometry.density
-          || emptySeatGeometry.unitHeight !== fullFrontLinesGeometry.unitHeight
-          || emptySeatGeometry.cellCount !== fullFrontLinesGeometry.cellCount
-          || moved
-        ) {
-          await fail('deployment-card-empty-seat', JSON.stringify({
-            full: fullFrontLinesGeometry,
-            emptied: emptySeatGeometry,
-          }));
-        }
-        const emptySeatShot = 'tmp-shots/run-deployment-card-empty-seat.png';
-        await page.screenshot({ path: emptySeatShot });
-        console.log('Deployment empty-seat screenshot:', emptySeatShot);
-        emptySeatVerified = true;
+      try {
+        await page.waitForFunction((want) => {
+          const progress = document.querySelector('[data-testid="arrangement-progress"]')?.textContent ?? '';
+          return Number(/(\d+) of \d+ on the board/.exec(progress)?.[1] ?? NaN) >= want
+            || /All \d+ on the board/.test(progress);
+        }, { timeout: 10_000 }, seated + 1);
+      } catch {
+        await fail(
+          'deployment-arrange-placement',
+          `clicking a highlighted square seated nothing (${seated} of ${handSize} formations placed)`,
+        );
+      }
+      if (!seatedShot) {
+        seatedShot = 'tmp-shots/run-deployment-formation-seated.png';
+        await page.screenshot({ path: seatedShot });
+        console.log('Seated-formation screenshot:', seatedShot);
       }
     }
-    if (!emptySeatVerified) await fail('deployment-card-empty-seat', 'Front Lines never exposed one occupied seat');
+
+    const readyToBegin = await page.evaluate(() => ({
+      beginDisabled: document.querySelector('[data-testid="arrangement-begin-battle"]')?.disabled ?? null,
+      reading: document.querySelector('[data-testid="arrangement-progress"]')?.textContent?.trim() ?? null,
+      seatedCells: document.querySelectorAll('.run-deployment-cell.is-seated-formation').length,
+    }));
+    if (
+      readyToBegin.beginDisabled !== false
+      || !readyToBegin.reading?.includes(`All ${handSize} on the board`)
+      // A one-formation hand leaves nothing OTHER than the card in hand on the ground.
+      || (handSize > 1 && readyToBegin.seatedCells === 0)
+    ) {
+      await fail('deployment-arrange-complete', JSON.stringify(readyToBegin));
+    }
+    console.log(`arranged by pointer: ${readyToBegin.reading}`);
+    await page.click('[data-testid="arrangement-begin-battle"]');
     try {
+      // The arranging panel is replaced by the battle controls, and the army the plan promised
+      // arrives together rather than piece by piece.
       await page.waitForFunction(() => document.querySelector('[data-testid="skirmish"]')
-        && !document.querySelector('[data-testid="run-deployment"]'));
+        && !document.querySelector('[data-testid="arrangement-begin-battle"]'));
       await page.waitForFunction(() => document.querySelector('[data-testid="skirmish-board"]')
         ?.getAttribute('data-arriving') === 'false');
     } catch {
@@ -1017,9 +835,8 @@ try {
         return {
           phase: run?.phase ?? null,
           deploymentStage: run?.deployment?.stage ?? null,
-          deploymentTransport: run?.deployment?.transport ?? null,
-          activeCardIndex: run?.deployment?.activeCardIndex ?? null,
-          unitCursor: run?.deployment?.unitCursor ?? null,
+          placements: Object.keys(run?.deployment?.placements ?? {}).length,
+          formationPlans: Object.keys(run?.deployment?.formationPlans ?? {}).length,
           settlingUnitIds: run?.deployment?.settlingUnitIds ?? null,
           directorPhase: director?.getAttribute('data-scene-phase') ?? null,
           committed: director?.getAttribute('data-scene-committed') ?? null,
@@ -1028,7 +845,7 @@ try {
           controls: document.querySelector('.run-deployment-controls')?.textContent?.trim() ?? null,
         };
       });
-      await fail('deployment-deploy-all-settle', JSON.stringify(stalled));
+      await fail('deployment-begin-battle-settle', JSON.stringify(stalled));
     }
 
     const deploymentResult = await page.evaluate(async () => {
@@ -1083,10 +900,10 @@ try {
     ) {
       await fail('deployment-battle-continuity', JSON.stringify(deploymentResult));
     }
-    console.log('Deployment Next placement → Full deploy with required pauses → Battle provider, DOM, canvas, camera, and Strategikon continuity: OK');
+    console.log('Pointer-arranged hand → Begin Battle → Battle provider, DOM, canvas, camera, and Strategikon continuity: OK');
     console.log('Battle continuity screenshot:', deploymentShot);
     if (deploymentOnly) {
-      console.log('PASS — Deployment partitions the centered deck, advances one unit with Next, resumes required pauses, and promotes the same battlefield in place');
+      console.log('PASS — Deployment partitions the centered deck, deals a hand the pointer arranges square by square, and promotes the same battlefield in place');
       await browser.close();
       rmSync(browserProfile, { recursive: true, force: true });
       process.exit(0);
@@ -1097,6 +914,30 @@ try {
     await browser.close();
     rmSync(browserProfile, { recursive: true, force: true });
     process.exit(0);
+  }
+
+  // Begin Battle promotes the arranged plan into an army, and that army ARRIVES. The board
+  // reaches the scene's `current` while the pieces are still in the air, so a click aimed here
+  // before the entrance lands is aimed at a board that is not taking input yet — which reads
+  // exactly like the shielded-board bug this proof exists to catch.
+  try {
+    await page.waitForFunction(() => {
+      const board = document.querySelector('[data-testid="skirmish-board"]');
+      return board?.getAttribute('data-interactive') === 'true'
+        && board.getAttribute('data-arriving') === 'false'
+        && !board.classList.contains('is-board-loading');
+    }, { timeout: 30_000 });
+  } catch {
+    await fail('battle-interactive', JSON.stringify(await page.evaluate(() => {
+      const board = document.querySelector('[data-testid="skirmish-board"]');
+      return {
+        board: Boolean(board),
+        interactive: board?.getAttribute('data-interactive') ?? null,
+        arriving: board?.getAttribute('data-arriving') ?? null,
+        arrivalState: board?.getAttribute('data-arrival-state') ?? null,
+        loading: board?.classList.contains('is-board-loading') ?? null,
+      };
+    })));
   }
 
   // Pick a real legal move from the live store.
@@ -1150,6 +991,23 @@ try {
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   }, cell);
 
+  // A battle opens holding NOTHING, and this proof depends on it: a cell's press selects the
+  // piece under it, so a click on a piece the board is already holding is a deselect, and the
+  // first click below would then prove the opposite of what it claims.
+  const openingHold = await page.evaluate(() => import('/src/game/SkirmishStoreContext.tsx').then((m) => {
+    const state = m.activeSkirmishStoreForDiagnostics()?.getState();
+    return {
+      selectedId: state?.selectedId ?? null,
+      focusedId: state?.focusedId ?? null,
+      ring: document.querySelectorAll('.skirmish-board-cell-hit.is-selected').length,
+      moves: document.querySelectorAll('.skirmish-board-cell-hit.is-move').length,
+    };
+  }));
+  if (openingHold.selectedId || openingHold.focusedId || openingHold.ring || openingHold.moves) {
+    await fail('battle-opens-holding-nothing', JSON.stringify(openingHold));
+  }
+  console.log('battle opens holding nothing: OK');
+
   // Select the piece by clicking its tile — the click must REACH the tile.
   const fromPoint = await tileCenter(plan.from);
   if (!fromPoint) await fail('select', 'source tile button missing');
@@ -1161,7 +1019,24 @@ try {
       plan.pieceId,
     );
   } catch {
-    await fail('select', `clicking the unit tile did not select it — board clicks are still shielded`);
+    const shielded = await page.evaluate(async ({ x, y, cell }) => {
+      const context = await import('/src/game/SkirmishStoreContext.tsx');
+      const state = context.activeSkirmishStoreForDiagnostics()?.getState();
+      const board = document.querySelector('[data-testid="skirmish-board"]');
+      const tile = document.querySelector(`button.skirmish-board-cell-hit[data-cx="${cell.x}"][data-cy="${cell.y}"]`);
+      return {
+        // What actually answers the pointer at the aimed coordinate.
+        hitStack: document.elementsFromPoint(x, y).slice(0, 5)
+          .map((element) => `${element.tagName}.${String(element.className).slice(0, 48)}`),
+        tileRect: tile?.getBoundingClientRect().toJSON() ?? null,
+        interactive: board?.getAttribute('data-interactive') ?? null,
+        arriving: board?.getAttribute('data-arriving') ?? null,
+        selectedId: state?.selectedId ?? null,
+        turn: state?.game.turn ?? null,
+        started: state?.started ?? null,
+      };
+    }, { x: fromPoint.x, y: fromPoint.y, cell: plan.from });
+    await fail('select', `clicking the unit tile did not select it — ${JSON.stringify(shielded)}`);
   }
   console.log('selection by real click: OK');
 
@@ -1196,7 +1071,9 @@ try {
           if (!s) return false;
           return s.game.turn === 'player' && !s.game.winner;
         }),
-        { timeout: 15_000 },
+        // The reply is a real search, in a headless browser, on whatever else the machine is
+        // doing. This is a wait budget, not a claim about how fast the AI ought to think.
+        { timeout: 45_000 },
       );
     } catch {
       const replyState = await page.evaluate(async () => {
@@ -1229,44 +1106,56 @@ try {
   await controlsPanel.screenshot({ path: undoShot });
   console.log('undo control screenshot:', undoShot);
 
+  // The purse is read off the SCREEN. A re-imported Run store answers from the server and lags
+  // the board by a save, so an exact one-gold charge cannot be measured through it.
+  const purse = () => page.evaluate(() => {
+    // The purse is the title bar's Gold measure. Every .run-gold-amount on a battle screen is a
+    // button's PRICE — Undo's own cost among them — so reading one of those measures nothing.
+    const measure = [...document.querySelectorAll('.run-topbar-measures [aria-label]')]
+      .map((node) => node.getAttribute('aria-label') ?? '')
+      .find((text) => /^[\d.]+ gold$/.test(text)) ?? '';
+    return Number(/^([\d.]+) gold$/.exec(measure)?.[1] ?? NaN);
+  });
+  const goldBeforeUndo = await purse();
+  if (!Number.isFinite(goldBeforeUndo)) await fail('undo', 'the purse is not readable on screen');
   const undoButton = await page.$('[data-testid="undo-run-move"]');
   const undoBox = await undoButton?.boundingBox();
   if (!undoBox) await fail('undo', 'paid Undo button has no hit target');
   await page.mouse.click(undoBox.x + undoBox.width / 2, undoBox.y + undoBox.height / 2);
   try {
     await page.waitForFunction(
-      ({ pieceId, from, goldTenths }) => Promise.all([
-        import('/src/game/SkirmishStoreContext.tsx'),
-        import('/src/run/store.ts'),
-      ]).then(([gameContext, activeRun]) => {
+      ({ pieceId, from, spent }) => import('/src/game/SkirmishStoreContext.tsx').then((gameContext) => {
         const state = gameContext.activeSkirmishStoreForDiagnostics()?.getState();
-        const run = activeRun.useActiveRun.getState().run;
         const piece = state?.game.pieces.find((candidate) => candidate.id === pieceId);
+        const measure = [...document.querySelectorAll('.run-topbar-measures [aria-label]')]
+          .map((node) => node.getAttribute('aria-label') ?? '')
+          .find((text) => /^[\d.]+ gold$/.test(text)) ?? '';
         return state?.game.turn === 'player'
           && !state.game.winner
           && state.undoCheckpoint === null
           && piece?.x === from.x
           && piece?.y === from.y
-          && run?.goldTenths === goldTenths - 10;
+          && Number(/^([\d.]+) gold$/.exec(measure)?.[1] ?? NaN) === spent;
       }),
       { timeout: 5_000 },
-      plan,
+      { pieceId: plan.pieceId, from: plan.from, spent: Number((goldBeforeUndo - 1).toFixed(1)) },
     );
   } catch {
     const undoState = await page.evaluate(async (planned) => {
       const gameContext = await import('/src/game/SkirmishStoreContext.tsx');
-      const activeRun = await import('/src/run/store.ts');
       const state = gameContext.activeSkirmishStoreForDiagnostics()?.getState();
-      const run = activeRun.useActiveRun.getState().run;
-      return state && run ? {
+      const measures = [...document.querySelectorAll('.run-topbar-measures [aria-label]')]
+        .map((node) => node.getAttribute('aria-label') ?? '');
+      return state ? {
         turn: state.game.turn,
         winner: state.game.winner,
         undo: Boolean(state.undoCheckpoint),
-        goldTenths: run.goldTenths,
+        gold: Number(/^([\d.]+) gold$/.exec(measures.find((text) => /^[\d.]+ gold$/.test(text)) ?? '')?.[1] ?? NaN),
+        measures,
         piece: state.game.pieces.find((candidate) => candidate.id === planned.pieceId),
       } : null;
     }, plan);
-    await fail('undo', JSON.stringify(undoState));
+    await fail('undo', JSON.stringify({ ...undoState, goldBeforeUndo }));
   }
   console.log(`${undoOnly ? 'thinking reply cancelled and player decision' : 'player decision and enemy reply'} undone for exactly one gold: OK`);
 
@@ -1288,17 +1177,42 @@ try {
   await page.mouse.click(toggleBox.x + toggleBox.width / 2, toggleBox.y + toggleBox.height / 2);
   try {
     await page.waitForSelector('[data-testid="strategikon"]', { timeout: 10_000 });
+    // Mounted is not yet ARRIVED: the workspace opens through the scene director, and while the
+    // battle screen is still the outgoing layer it is the thing under the pointer. Measuring
+    // there reports a perfectly reachable rail as shielded.
+    await page.waitForFunction(() => {
+      const director = document.querySelector('.scene-director');
+      return director?.getAttribute('data-scene-phase') === 'current'
+        && !director.getAttribute('data-scene-pending')
+        && (director.getAttribute('data-scene-committed') ?? '').includes('strategikon');
+    }, { timeout: 15_000 });
   } catch {
-    await fail('strategikon-open', 'workspace did not mount after a real toggle click');
+    await fail('strategikon-open', `workspace did not arrive after a real toggle click; ${JSON.stringify(await sceneDiagnostics())}`);
   }
   const railHit = await page.evaluate(() => {
-    const btn = document.querySelector('.strategikon-rail button');
+    // A rail tab NAVIGATES, so it is a link, not a button — asking for `button` here found
+    // nothing and reported the workspace as unreachable whatever it was actually doing.
+    const btn = document.querySelector('.strategikon-rail a, .strategikon-rail button, .strategikon-rail [role="tab"]');
     if (!btn) return null;
     const r = btn.getBoundingClientRect();
     const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-    return { reachable: btn === top || btn.contains(top) || (top !== null && btn.closest('.strategikon-workspace') === top.closest('.strategikon-workspace') && top.closest('.strategikon-workspace') !== null) };
+    return {
+      reachable: btn === top || btn.contains(top) || (top !== null && btn.closest('.strategikon-workspace') === top.closest('.strategikon-workspace') && top.closest('.strategikon-workspace') !== null),
+      tab: `${btn.tagName}.${String(btn.className).slice(0, 48)}`,
+      rect: { x: r.x, y: r.y, width: r.width, height: r.height },
+      hitStack: document.elementsFromPoint(r.left + r.width / 2, r.top + r.height / 2).slice(0, 5)
+        .map((element) => `${element.tagName}.${String(element.className).slice(0, 48)}`),
+    };
   });
-  if (!railHit?.reachable) await fail('strategikon-open', 'open workspace does not receive the pointer');
+  if (!railHit?.reachable) {
+    const rail = await page.evaluate(() => ({
+      workspace: Boolean(document.querySelector('.strategikon-workspace')),
+      rail: Boolean(document.querySelector('.strategikon-rail')),
+      railChildren: [...(document.querySelector('.strategikon-rail')?.children ?? [])]
+        .map((node) => `${node.tagName}.${String(node.className).slice(0, 48)}`),
+    }));
+    await fail('strategikon-open', `open workspace does not receive the pointer — ${JSON.stringify({ railHit, rail })}`);
+  }
   console.log('open Strategikon takes the pointer: OK');
 
   console.log('PASS — anonymous Run battle is fully playable and paid Undo is exact');

@@ -105,7 +105,27 @@ function queueRemoteSave(run: RunDocument): void {
   });
 }
 
-export const useActiveRun = create<ActiveRunState>((set, get) => ({
+const activeRunGlobal = globalThis as typeof globalThis & {
+  __ctActiveRunStore?: ReturnType<typeof createActiveRunStore>;
+};
+
+/**
+ * The one active-Run store, held on a global so it SURVIVES Vite replacing this module.
+ *
+ * Same reasoning as the mounted-Skirmish registry in `game/SkirmishStoreContext`: in dev the
+ * app can be running one module generation while a later `import()` — a browser probe, a
+ * verification gate, a lazily-loaded route — evaluates a fresh one. Two generations of a
+ * module-scope `create()` are two stores, and then the Run the screen is paying into is not
+ * the Run the other caller is reading. That failure is silent and looks exactly like the
+ * payment never happening: the Battle log names the gold, the title bar moves, and the probe
+ * sees an unchanged balance.
+ *
+ * In production there is only ever one generation, so this is just where the store lives.
+ */
+export const useActiveRun = activeRunGlobal.__ctActiveRunStore ??= createActiveRunStore();
+
+function createActiveRunStore() {
+  return create<ActiveRunState>((set, get) => ({
   run: readLocalRun(),
   hydrated: false,
   syncing: false,
@@ -267,4 +287,5 @@ export const useActiveRun = create<ActiveRunState>((set, get) => ({
       set({ syncing: false, persistenceError: 'The browser Run could not replace the account Run.' });
     }
   },
-}));
+  }));
+}

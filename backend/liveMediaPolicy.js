@@ -169,6 +169,7 @@ const SFX_MEDIA_TYPE_BY_EXTENSION = Object.freeze({
 // as one set and reviewed on the Ataraxia reference rows of either host.
 const ATARAXIA_NUMERAL_SLOT = /^ui\/kit\/numerals\/([a-z][a-z0-9-]{0,31})\/([a-z][a-z0-9-]{0,15})\.png$/;
 const ATARAXIA_NUMERAL_COMPONENT = 'ataraxia-rung-numeral';
+const TITLE_BAR_MARK_COMPONENT = 'title-bar-mark';
 // The rung marks compose the GENERIC typed owner proof (which acceptance requires of every
 // non-terrain, non-group domain) with the domain rules below — one evidence object that both
 // the review-time surface check and the accept-time typed-proof check read.
@@ -727,6 +728,83 @@ function runExpunctioReviewSurface(url) {
 function runGoldTransactionReviewSurface(url, slot) {
   return RUN_GOLD_TRANSACTION_REVIEW_SLOTS.has(String(slot || ''))
     && runExpunctioReviewSurface(url);
+}
+
+/**
+ * The marks the persistent title bar wears — the battle clock's hourglass and the
+ * objective flag. They are worn on the live play surfaces and NOWHERE else: no Studio
+ * page lists them and no reference row shows them, so the generic `/studio` proof rule
+ * had the perverse effect of accepting a page these glyphs are invisible on while
+ * refusing the only page they actually appear on. A registered surface for them is the
+ * same shape every other domain already uses (predrawn boards, sfx, brush icons), and it
+ * makes the strongest available proof — a capture of the real seat — the legal one.
+ */
+const TITLE_BAR_MARK_REVIEW_SLOTS = new Set([
+  'ui/kit/icons/game/wait.png',
+  'ui/kit/icons/game/objective.png',
+]);
+
+function titleBarMarkReviewSurface(url, slot) {
+  return titleBarMarkSlot(slot)
+    && url instanceof URL
+    && (url.pathname === '/play' || url.pathname === '/run');
+}
+
+/** Whether this slot is a mark the persistent title bar wears. */
+function titleBarMarkSlot(slot) {
+  return TITLE_BAR_MARK_REVIEW_SLOTS.has(String(slot || ''));
+}
+
+/**
+ * The typed completeness validator that lifts title-bar marks out of `ui-kit`'s
+ * bridge-only default.
+ *
+ * The contract these marks have to state is the one the seat depends on: a mark is
+ * TRIMMED TO ITS OWN INK. A square seat draws with `contain`, which scales the canvas, so
+ * transparent margin left on the canvas comes straight off the drawn glyph — an untrimmed
+ * mark silently draws smaller than the marks beside it, and the only fix at that point is
+ * a hand-copied compensation number in CSS that goes stale the moment the art changes.
+ * Requiring the bytes to be trimmed at acceptance means the seat can stay dumb and the
+ * marks cannot drift apart.
+ *
+ * Deliberately no fixed dimensions: these glyphs are not all the same shape (an hourglass
+ * is tall and narrow, a flag is not), and forcing a square would reintroduce the padding
+ * this exists to reject.
+ */
+function titleBarMarkMediaIssue(row, projectedRuntime = null) {
+  if (!titleBarMarkSlot(row.slot)) return 'Title-bar marks require a registered semantic slot';
+  if (row.domain !== 'ui-kit') return 'Title-bar marks require the ui-kit domain';
+  if (row.media_type !== 'image/png') return 'Title-bar marks require image/png';
+  if (!Number(row.width) || !Number(row.height)) return 'Title-bar marks require decoded raster dimensions';
+
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime)) return 'Title-bar marks require metadata.runtime';
+  const allowed = new Set(['component', 'variant', 'altText', 'nativeRole']);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `Title-bar mark runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== TITLE_BAR_MARK_COMPONENT) {
+    return `Title-bar mark metadata.runtime.component must be ${TITLE_BAR_MARK_COMPONENT}`;
+  }
+  if (runtime.nativeRole !== TITLE_BAR_MARK_COMPONENT) {
+    return `Title-bar mark metadata.runtime.nativeRole must be ${TITLE_BAR_MARK_COMPONENT}`;
+  }
+  // The mark carries its own accessible name nowhere: the chip's text does. An alt string
+  // here would be read out beside a value that already says it.
+  if (runtime.altText !== '') {
+    return 'Title-bar mark metadata.runtime.altText must be empty because the chip owns its accessible name';
+  }
+  // Trimmed-ness is a claim about the BYTES, so it is stated where the row's other byte
+  // claims live rather than in the runtime projection, whose key set is shared and closed.
+  const native = isObjectRecord(row.native_evidence) ? row.native_evidence : {};
+  const inkBox = isObjectRecord(native.inkBox) ? native.inkBox : null;
+  if (!inkBox) return 'Title-bar marks must state nativeEvidence.inkBox, the measured ink box of these bytes';
+  if (Number(inkBox.width) !== Number(row.width) || Number(inkBox.height) !== Number(row.height)) {
+    return 'Title-bar marks must be trimmed to their own ink: the measured ink box must fill the canvas';
+  }
+  return null;
 }
 
 /**
@@ -1974,6 +2052,9 @@ module.exports = {
   runResourceIconSlotId,
   runExpunctioReviewSurface,
   runGoldTransactionReviewSurface,
+  titleBarMarkReviewSurface,
+  titleBarMarkSlot,
+  titleBarMarkMediaIssue,
   runSectioWrapMediaIssue,
   workspaceBackgroundSlotId,
   workspaceBackgroundMediaIssue,

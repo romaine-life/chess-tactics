@@ -8,6 +8,10 @@ const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8'
 const runScreen = readFileSync(new URL('./RunScreen.tsx', import.meta.url), 'utf8');
 const formationKeys = readFileSync(new URL('./formationKeys.ts', import.meta.url), 'utf8');
 const appStyles = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+const runDeployment = readFileSync(
+  new URL('../../../packages/board-render/src/run/deployment.ts', import.meta.url),
+  'utf8',
+);
 
 describe('Run Deployment secondary-click turn', () => {
   // ADR-0128 kept the secondary DRAG pan-only because the board is wall-to-wall hit targets.
@@ -40,8 +44,13 @@ describe('Run Deployment secondary-click turn', () => {
     )?.[0];
 
     expect(turn).toBeDefined();
-    expect(turn).toContain('nextCardRotation(turnableArrangementRotationList, arrangementRotation)');
-    expect(turn).toContain('previousCardRotation(turnableArrangementRotationList, arrangementRotation)');
+    // Where a turn lands and which box it holds are ONE decision, and it is the Run's, not the
+    // screen's — see cardTurn and its tests in run/deployment.
+    expect(turn).toMatch(
+      /const turn = cardTurn\(\s*prepared,\s*level,\s*selectedCardId,\s*arrangementRotation,\s*direction,\s*heldAnchor,\s*pointedCell,\s*\);/,
+    );
+    expect(turn).toContain('if (!turn) return;');
+    expect(turn).toContain('setArrangementRotation(turn.rotation);');
     expect(turn).not.toContain('setPointedArrangementCell');
     // Nothing is committed by a turn — placement stays on the primary button.
     expect(turn).not.toContain('placeArrangedDeploymentCard');
@@ -436,33 +445,49 @@ describe('Run Deployment aiming', () => {
   });
 
   // Turning walked the band-wide list, so a turn with no seating anywhere it could hold blanked
-  // the formation the player was holding.
-  it('turns through the list it can actually hold, so the formation cannot vanish', () => {
-    expect(runScreen).toMatch(
-      /const turnableArrangementRotationList = useMemo<readonly RunFormationRotation\[\]>\(\(\) => \{[\s\S]*?const held = turnableCardRotations\(prepared, level, selectedCardId, heldAnchor, pointedCell\);[\s\S]*?return held\.length \? held : availableArrangementRotationList;/,
+  // the formation the player was holding. Narrowing it to the pointed square fixed that and
+  // introduced the opposite failure: on a square only ONE turn can cover, the narrowed list named
+  // the turn already on screen and every gesture died there. Both halves of that rule now live in
+  // cardTurn, where run/deployment tests drive them on a real band rather than on source text.
+  it('leaves the turn rule to the Run, and keeps the rail band-wide', () => {
+    expect(runDeployment).toContain('export function cardTurn(');
+    // The pointed square first, so a turn cannot blank the formation...
+    expect(runDeployment).toContain(
+      'turnableCardRotations(run, level, cardId, heldAnchor, pointedCell)',
     );
-    // Off the board there is nothing to preserve, so the rail's own list applies.
-    expect(runScreen).toContain(
-      'if (!selectedCardId || (!pointedCell && !heldAnchor)) return availableArrangementRotationList;',
-    );
+    // ...and the band's own list as the second chance, so a turn is never a dead press.
+    expect(runDeployment).toContain('const next = step(held) === rotation ? step(placeable) : step(held);');
+    expect(runDeployment).toContain('if (next === rotation) return null;');
+    // The screen keeps no turn list of its own to drift out of step with it.
+    expect(runScreen).not.toContain('turnableArrangementRotationList');
+    expect(runScreen).not.toContain('turnableCardRotations');
     // The RAIL stays band-wide — its buttons must not flicker as the cursor moves.
     expect(runScreen).toMatch(/availableRotations=\{availableArrangementRotations\}/);
+    expect(runScreen).toContain('placeableCardRotations(prepared, level, selectedCardId)');
   });
 
   // Re-seating from the pointed square kept a unit under the cursor but walked the box a square
   // every quarter turn, so an L that only ever covers two by two swept three by three.
   it('turns the formation inside the box it stands in, and lets the pointer choose a new one', () => {
-    const turn = runScreen.match(
-      /const turnArrangement = useCallback\(\(direction: FormationTurnDirection\) => \{[\s\S]*?\n {2}\]\);/,
+    const decision = runDeployment.match(
+      /export function cardTurn\([\s\S]*?\n\}/,
     )?.[0];
 
-    expect(turn).toBeDefined();
-    expect(turn).toContain('const box = pointedArrangementOption?.anchor ?? null;');
-    expect(turn).toMatch(
-      /const stays = box\s*&& arrangedCardPlacementAtAnchor\(prepared, level, selectedCardId, next, box\) !== null;/,
+    expect(decision).toBeDefined();
+    expect(decision).toContain(
+      'if (box && arrangedCardPlacementAtAnchor(run, level, cardId, next, box)) {',
     );
-    // The band still decides: an unusable box is dropped rather than shown empty.
-    expect(turn).toContain('setHeldArrangementAnchor(stays ? `${box.x},${box.y}` : null);');
+    // The band still decides: an unusable box is dropped and the pointed square re-seats it...
+    expect(decision).toContain(
+      'if (pointedCell && arrangedCardPlacementAtCell(run, level, cardId, next, pointedCell)) {',
+    );
+    // ...and where neither can hold the new turn the formation shifts to the nearest seating,
+    // because a turn the player cannot see is the same as no turn at all.
+    expect(decision).toContain('nearestCardPlacementToCell(run, level, cardId, next, aim)');
+    // The screen only applies the answer.
+    expect(runScreen).toContain(
+      'setHeldArrangementAnchor(turn.anchor ? `${turn.anchor.x},${turn.anchor.y}` : null);',
+    );
     // Moving the pointer releases the box — the mouse says where, the turn says which way.
     expect(runScreen).toContain(
       'onPointerEnter={() => { setPointedArrangementCell(cellKey); setHeldArrangementAnchor(null); }}',

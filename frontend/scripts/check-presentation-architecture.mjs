@@ -179,7 +179,11 @@ for (const required of [
   '<RunDeploymentCardStack',
   '<RunDeploymentDeckDeal',
   '<ArrangedDeploymentControls',
-  'arrangedCardPlacementOptions(',
+  // The arrangement's turns come from the Run's own projection of the band. Which quarter turns
+  // the rail offers, and where a turn lands, are both the model's answer -- the screen asks for
+  // them, it does not work them out from placement options of its own.
+  'placeableCardRotations(',
+  'cardTurn(',
   'placeArrangedDeploymentCard(',
   'removeArrangedDeploymentCard(',
   'beginArrangedBattle(latest)',

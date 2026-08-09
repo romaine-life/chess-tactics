@@ -1,5 +1,5 @@
 import { DEFAULT_SURVIVE_TURNS } from '../core/objectives';
-import { LEVEL_BATTLE_CARDS_DEALT_MAX, LEVEL_BATTLE_CARDS_DEALT_MIN, OBJECTIVE_TYPES, type LevelEvents, type ObjectiveType, type TimeControl, type VictoryRules } from '../core/level';
+import { LEVEL_BATTLE_CARDS_DEALT_MAX, LEVEL_BATTLE_CARDS_DEALT_MIN, LEVEL_PAR_TURNS_MAX, LEVEL_PAR_TURNS_MIN, OBJECTIVE_TYPES, type LevelEvents, type ObjectiveType, type TimeControl, type VictoryRules } from '../core/level';
 import { normalizeLevelEvents, type StoredLevelEvent } from '../core/levelEvents';
 import { decodeBoard, encodeBoard, type EditorBoard } from './boardCode';
 
@@ -38,6 +38,8 @@ export interface LevelEditorDraft {
   timeControl?: TimeControl;
   // The Battle's authored Deployment deal, or undefined when it defers to the Run's progression.
   cardsDealt?: number;
+  // The level's authored par in turns (ADR-0539), or undefined when it defers to the estimate.
+  parTurns?: number;
   // Authored victory conditions (ADR-0064), or undefined when the level uses the objective preset.
   victory?: VictoryRules;
   // Authored non-victory events: setup spawns and trigger/action events.
@@ -580,6 +582,7 @@ export function serializeLevelEditorDraft(draft: LevelEditorDraft): string {
     surviveTurns: draft.surviveTurns,
     timeControl: draft.timeControl,
     cardsDealt: draft.cardsDealt,
+    parTurns: draft.parTurns,
     victory: draft.victory,
     events: draft.events,
   });
@@ -602,6 +605,16 @@ const cleanTimeControl = (raw: unknown): TimeControl | undefined => {
 const cleanCardsDealt = (raw: unknown): number | undefined => (
   typeof raw === 'number' && Number.isInteger(raw)
     && raw >= LEVEL_BATTLE_CARDS_DEALT_MIN && raw <= LEVEL_BATTLE_CARDS_DEALT_MAX
+    ? raw
+    : undefined
+);
+
+// A stored par survives the round-trip only as a whole number inside the schema's bounds;
+// anything else restores as unauthored, so the level falls back to the board-derived estimate
+// rather than seeding a par validateLevel would reject.
+const cleanParTurns = (raw: unknown): number | undefined => (
+  typeof raw === 'number' && Number.isInteger(raw)
+    && raw >= LEVEL_PAR_TURNS_MIN && raw <= LEVEL_PAR_TURNS_MAX
     ? raw
     : undefined
 );
@@ -655,6 +668,7 @@ export function parseLevelEditorDraft(raw: string): LevelEditorDraft | null {
       surviveTurns,
       timeControl: cleanTimeControl(value.timeControl),
       cardsDealt: cleanCardsDealt(value.cardsDealt),
+      parTurns: cleanParTurns(value.parTurns),
       victory: cleanVictory(value.victory),
       events: cleanEvents(value.events),
     };
