@@ -31,8 +31,21 @@ inside a gold filigree border, crossed corner to corner by one bold red X. It sa
 *this card, removed* without depending on the word beside it.
 
 - The subject is **our** card, not a stock playing card or a bare delete glyph — the
-  ornate navy-and-gold back the Run already deals (ADR-0035's world-object vocabulary).
+  ornate gold-on-black back the Run already deals (ADR-0035's world-object vocabulary).
   The red belongs to the act: this is the button that already wears the `danger` tone.
+- **The card it draws is the card the game deals.** The Chartulary's mark in the
+  Strategikon is the player's LIVE card back — one of seven, resolved through
+  `runCardBackMediaUrl` so a card in flight and the register it lands in cannot disagree
+  about what a card looks like. A mark that strikes a *differently drawn* card therefore
+  contradicts the register it removes from. The first candidates invented a pale navy
+  card with a thin gold frame and read as a generic card beside the game's ornate ones;
+  the accepted family is generated from the standard back as its style reference, so the
+  struck card belongs to the same deck. It stays ONE installed raster rather than
+  compositing an X over the live back: this mark names an action, not a card instance,
+  and the seat's single-raster contract is what keeps it trimmed, tokenized and
+  installable through the ordinary review. The consequence is accepted deliberately — the
+  mark matches the standard back, and a player on one of the other six sees a card of the
+  same deck rather than their exact chosen one.
 - The mark belongs to the **control**, not to the screen. Expunctio owns the noun and
   already titles the workspace; what the button needs named is its effect. So the seat is
   `RunActionIcon`, a new shared primitive beside `RunProgressIcon`, and the slot joins the

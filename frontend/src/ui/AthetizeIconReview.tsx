@@ -27,7 +27,13 @@ import { useSceneParticipant } from './shell/SceneBoundary';
  * The public drawable catalog refuses a role bound to an unaccepted slot, so the
  * binding can only ever follow acceptance (ADR-0316 review shape, ADR-0318 roles).
  */
-export const ATHETIZE_ICON_BATCH_ID = 'athetize-action-mark-2026-08-09-v1';
+/**
+ * v2 draws the card the game actually deals: the ornate gold-on-black back, not an
+ * invented pale one. The Chartulary's mark is the player's LIVE card back, so a mark
+ * that strikes a different-looking card contradicts the register it removes from. v1's
+ * candidates remain uploaded and unaccepted; they are not offered here.
+ */
+export const ATHETIZE_ICON_BATCH_ID = 'athetize-action-mark-2026-08-09-v2';
 
 const SLOT = RUN_ACTION_ICON_SLOT.athetize;
 const ROLE = RUN_ACTION_MEDIA_ROLE.athetize;
