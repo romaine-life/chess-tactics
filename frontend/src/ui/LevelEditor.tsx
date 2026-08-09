@@ -4017,16 +4017,32 @@ export function LevelEditor(): ReactElement {
   // A Level load and an undo/import restore must hydrate the exact same complete EditorBoard.
   // Keeping a second list of board setters previously omitted subterrain and turned opening a
   // document into a destructive autosave. The one primitive above is the hydration authority.
-  const applyLevelDocument = (level: Level, options: { editingId?: string; clean?: boolean; seed?: boolean } = {}): void => {
+  //
+  // `hydration` names WHY the body arrived, because the two reasons differ in what may survive it.
+  // A `load` is a different lineage — opening the document, a browser-recovery restore, a revision
+  // restore, Discard changes — so session-local board history and region selection are meaningless
+  // and reset. A `sync` is the SAME working copy coming back acknowledged or merged: autosave echoes
+  // it about a second after every stroke, and the shared-sync poll re-mounts it whenever another
+  // page advances the revision. Resetting on those deleted the owner's Undo seconds after they
+  // painted, which is the entire history they had. A sync prunes only selections whose subject
+  // genuinely vanished from the merged body and leaves the stacks standing.
+  const applyLevelDocument = (
+    level: Level,
+    options: { editingId?: string; clean?: boolean; seed?: boolean; hydration?: 'load' | 'sync' } = {},
+  ): void => {
     const board = levelToEditorBoard(level);
     if (predrawnSelectionNeedsRevalidation(currentEditorBoardRef.current, board)) {
       setPredrawnSelectionValidation(predrawnSelectionSeed(board.surface));
     }
-    applyEditorBoard(board);
-    setActiveGeneratedRegionId(null);
-    setRegionSelection(new Set());
-    setUndoStack([]);
-    setRedoStack([]);
+    if (options.hydration === 'sync') {
+      applyEditorBoardWithSelectionSafety(board);
+    } else {
+      applyEditorBoard(board);
+      setActiveGeneratedRegionId(null);
+      setRegionSelection(new Set());
+      setUndoStack([]);
+      setRedoStack([]);
+    }
     applyLevelRules(level, options.seed ? 'seed' : 'load');
     setEditingId(options.editingId);
     if (options.clean !== false) {
@@ -6150,7 +6166,7 @@ export function LevelEditor(): ReactElement {
     documentConflictKindRef.current = latest.baseline_conflict ? 'baseline' : null;
     editorDocumentRef.current = latest;
     setEditorDocument(latest);
-    applyLevelDocumentRef.current(latest.level, { editingId: latest.level_id, clean: false });
+    applyLevelDocumentRef.current(latest.level, { editingId: latest.level_id, clean: false, hydration: 'sync' });
     setCloudSaveState(latest.baseline_conflict ? 'conflict' : 'saved');
   }, []);
   const mountAcknowledgedPredrawnWorkspaceMutation = useCallback((
@@ -7331,7 +7347,7 @@ export function LevelEditor(): ReactElement {
         documentConflictKindRef.current = latest.baseline_conflict ? 'baseline' : null;
         editorDocumentRef.current = latest;
         setEditorDocument(latest);
-        applyLevelDocumentRef.current(merged, { editingId: latest.level_id, clean: false });
+        applyLevelDocumentRef.current(merged, { editingId: latest.level_id, clean: false, hydration: 'sync' });
         setCloudSaveState(latest.baseline_conflict ? 'conflict' : 'pending');
         setCloudSaveDetail(latest.baseline_conflict
           ? 'The canonical saved level changed. The shared unpublished working copy remains intact.'
@@ -7691,13 +7707,13 @@ export function LevelEditor(): ReactElement {
             currentCandidateRef.current = doc.level;
             currentSigRef.current = acknowledgedSignature;
             currentEditorBoardRef.current = levelToEditorBoard(doc.level);
-            applyLevelDocumentRef.current(doc.level, { editingId: doc.level_id, clean: false });
+            applyLevelDocumentRef.current(doc.level, { editingId: doc.level_id, clean: false, hydration: 'sync' });
           } else {
             const merged = mergeSharedLevel(levelAtSave, currentCandidateRef.current, doc.level);
             currentCandidateRef.current = merged;
             currentSigRef.current = normalizedLevelEditorSignature(merged);
             currentEditorBoardRef.current = levelToEditorBoard(merged);
-            applyLevelDocumentRef.current(merged, { editingId: doc.level_id, clean: false });
+            applyLevelDocumentRef.current(merged, { editingId: doc.level_id, clean: false, hydration: 'sync' });
           }
           if (doc.baseline_conflict) {
             documentConflictRef.current = true;
@@ -7748,7 +7764,7 @@ export function LevelEditor(): ReactElement {
             currentCandidateRef.current = merged;
             currentSigRef.current = normalizedLevelEditorSignature(merged);
             currentEditorBoardRef.current = levelToEditorBoard(merged);
-            applyLevelDocumentRef.current(merged, { editingId: latest.level_id, clean: false });
+            applyLevelDocumentRef.current(merged, { editingId: latest.level_id, clean: false, hydration: 'sync' });
             documentConflictRef.current = latest.baseline_conflict;
             documentConflictKindRef.current = latest.baseline_conflict ? 'baseline' : null;
             setCloudSaveState(latest.baseline_conflict ? 'conflict' : 'pending');

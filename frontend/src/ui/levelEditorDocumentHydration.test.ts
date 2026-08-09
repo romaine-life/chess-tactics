@@ -21,7 +21,7 @@ describe('Level Editor document hydration', () => {
       /const applyEditorBoard = \(board: EditorBoard\): void => \{[\s\S]*?\n  \};/,
     )?.[0] ?? '';
     const hydration = levelEditor.match(
-      /const applyLevelDocument = \(level: Level,[\s\S]*?\n  \};/,
+      /const applyLevelDocument = \(\s*level: Level,[\s\S]*?\n  \};/,
     )?.[0] ?? '';
     const historyHydration = levelEditor.match(
       /const applyEditorBoardWithSelectionSafety = \(board: EditorBoard\): void => \{[\s\S]*?\n  \};/,
@@ -35,7 +35,7 @@ describe('Level Editor document hydration', () => {
 
   it('does not hide a validated AI plate when takeover rehydrates the same Level body', () => {
     const hydration = levelEditor.match(
-      /const applyLevelDocument = \(level: Level,[\s\S]*?\n  \};/,
+      /const applyLevelDocument = \(\s*level: Level,[\s\S]*?\n  \};/,
     )?.[0] ?? '';
 
     expect(hydration).toContain(
@@ -73,6 +73,38 @@ describe('Level Editor document hydration', () => {
     expect(levelEditor.slice(unsafeStart, preserve)).toContain('board: levelToEditorBoard(localLevel)');
     expect(levelEditor).toContain('claimedUnscopedDraft && recoveryDraftIsClaimed && !unsafeLocalRecovery');
     expect(levelEditor.slice(handoffGate, recoveryClear)).toContain('if (recoveryHandoffReady)');
+  });
+
+  it('keeps board Undo alive when the same working copy syncs back', () => {
+    const hydration = levelEditor.match(
+      /const applyLevelDocument = \(\s*level: Level,[\s\S]*?\n  \};/,
+    )?.[0] ?? '';
+    const syncBranch = hydration.indexOf("if (options.hydration === 'sync') {");
+    const selectionSafety = hydration.indexOf('applyEditorBoardWithSelectionSafety(board);', syncBranch);
+    const loadBranch = hydration.indexOf('} else {', selectionSafety);
+    const historyReset = hydration.indexOf('setUndoStack([]);', loadBranch);
+
+    expect(syncBranch).toBeGreaterThan(-1);
+    expect(selectionSafety).toBeGreaterThan(syncBranch);
+    expect(loadBranch).toBeGreaterThan(selectionSafety);
+    // Both stacks and the region selection reset on a document LOAD only. Autosave acknowledgement
+    // re-mounts the same body about a second after every stroke; resetting there deleted Undo.
+    expect(historyReset).toBeGreaterThan(loadBranch);
+    expect(hydration.indexOf('setRedoStack([]);')).toBeGreaterThan(loadBranch);
+    expect(hydration.indexOf('setRegionSelection(new Set());')).toBeGreaterThan(loadBranch);
+    expect(hydration.match(/setUndoStack\(\[\]\);/g)).toHaveLength(1);
+  });
+
+  it('declares every acknowledged re-mount of the open working copy a sync', () => {
+    // The ref-dispatched hydrations are exactly the paths that re-mount the document already open:
+    // autosave acknowledgement, its merge and conflict merges, and the shared-sync poll. A new one
+    // added without `hydration: 'sync'` silently reintroduces the vanishing-Undo defect.
+    const remounts = levelEditor.match(/applyLevelDocumentRef\.current\([^\n]*\n?/g) ?? [];
+
+    expect(remounts.length).toBeGreaterThan(0);
+    for (const remount of remounts) {
+      expect(remount).toContain("hydration: 'sync'");
+    }
   });
 
   it('keeps an accepted claimed draft current across the document remount', () => {
