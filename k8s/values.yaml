@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:e7276c08fce2c6c9f58d1af9895e223fb41937f47187527f57c39021bb545dc6"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:87a963c952ba7851e5d596b3ef554db4c75ec4bf9cd400f41db628638e90c7f5"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "The Par reset says Reset"
-  prNumber: "837"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/837"
-  commit: "15335ba1"
+  prTitle: "Give title-bar marks a media contract, so an authorized swap can land"
+  prNumber: "838"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/838"
+  commit: "7164bcea"
 
 name: chess-tactics
 namespace: chess-tactics
