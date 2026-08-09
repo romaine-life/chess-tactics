@@ -651,6 +651,14 @@ export function unitDeparturePose(
 export type UnitArrivalLifecycle = 'pending' | 'active' | 'settled';
 export type UnitArrivalTrack = 'drop' | 'slide-from-right';
 
+/**
+ * What a unit that is only PLANNED looks like: the same strength a previewed unit is drawn at,
+ * because a seating the player may still take back is the same kind of statement as one being
+ * carried on the cursor. Seating a formation is a decision about the plan, not an event on the
+ * battlefield, so it neither solidifies the unit nor spends its entrance.
+ */
+export const PLANNED_UNIT_OPACITY = 0.62;
+
 export function unitArrivalPlan(
   lifecycle: UnitArrivalLifecycle,
   now: number,
@@ -1044,6 +1052,7 @@ function SkirmishSceneLayer({
   ambientCover,
   livePieces,
   previewPieces,
+  plannedPieceIds,
   unitArrivals,
   unitArrivalTrack,
   unitArrivalStartDelta,
@@ -1066,6 +1075,7 @@ function SkirmishSceneLayer({
   ambientCover: boolean;
   livePieces: readonly Piece[];
   previewPieces: readonly Piece[];
+  plannedPieceIds: ReadonlySet<string>;
   unitArrivals: UnitArrivalLifecycle;
   unitArrivalTrack: UnitArrivalTrack;
   unitArrivalStartDelta: Vec;
@@ -1168,6 +1178,7 @@ function SkirmishSceneLayer({
     bounds,
     livePieces,
     previewPieces,
+    plannedPieceIds,
     draggingId,
     premovedIds,
     afterGhosts,
@@ -1214,6 +1225,7 @@ function SkirmishSceneLayer({
       bounds,
       livePieces,
       previewPieces,
+      plannedPieceIds,
       draggingId,
       premovedIds,
       afterGhosts,
@@ -1268,7 +1280,9 @@ function SkirmishSceneLayer({
           startTop: seated.top + arrival.dy,
           endLeft: destination.left,
           endTop: destination.top,
-          startOpacity: arrival.opacity,
+          // A withdrawal begins from the strength the unit was actually being drawn at, so a
+          // merely PLANNED unit fades out from its plan strength instead of solidifying to leave.
+          startOpacity: (plannedPieceIds.has(piece.id) ? PLANNED_UNIT_OPACITY : 1) * arrival.opacity,
           facing: destination.facing,
         });
         // Reroll is now the unit's active lifecycle. An arrival cannot keep settling while the
@@ -1279,13 +1293,18 @@ function SkirmishSceneLayer({
       reportDepartingUnits();
     }
     const nextIds = new Set(livePieces.map((piece) => piece.id));
+    // A PLANNED unit is a seating the player may still take back, not a unit standing on the
+    // field, so it is kept out of the arrival ledger entirely: seating a formation spends no
+    // entrance, and the whole plan takes its entrance at once when Battle promotes it.
+    const deployedPieces = livePieces.filter((piece) => !plannedPieceIds.has(piece.id));
+    const deployedIds = new Set(deployedPieces.map((piece) => piece.id));
     for (const id of visibleUnitIdsRef.current) {
-      if (!nextIds.has(id)) visibleUnitIdsRef.current.delete(id);
+      if (!deployedIds.has(id)) visibleUnitIdsRef.current.delete(id);
     }
     for (const id of arrivalPlansRef.current.keys()) {
-      if (!nextIds.has(id)) arrivalPlansRef.current.delete(id);
+      if (!deployedIds.has(id)) arrivalPlansRef.current.delete(id);
     }
-    const additions = newlyVisibleArrivalPieces(visibleUnitIdsRef.current, livePieces);
+    const additions = newlyVisibleArrivalPieces(visibleUnitIdsRef.current, deployedPieces);
     // A cold board keeps ADR-0045's reveal beat. Once this mounted battlefield is visible,
     // later additions begin immediately: a Discipline click and Battle promotion are already
     // the event that communicates why those pieces are entering.
@@ -1301,7 +1320,7 @@ function SkirmishSceneLayer({
     const summonWaveDelayMs = formationAdditions.length
       ? Math.max(...formationAdditions.map((piece) => delays.get(piece.id) ?? 0))
       : 0;
-    for (const piece of livePieces) visibleUnitIdsRef.current.add(piece.id);
+    for (const piece of deployedPieces) visibleUnitIdsRef.current.add(piece.id);
     arrivalLifecycleStartedRef.current = true;
     // Admission happens whether or not the entrance may play yet, so a battlefield preparing
     // behind a scene transition already knows these units are off the board. Activation then
@@ -1405,6 +1424,7 @@ function SkirmishSceneLayer({
     onFirstFrame,
     reportArrivingUnits,
     onFrameError,
+    plannedPieceIds,
     premovedIds,
     previewPieces,
     requestSceneFrame,
@@ -1456,7 +1476,9 @@ function SkirmishSceneLayer({
           const arrival = departure
             ? { dx: 0, dy: 0, opacity: departure.opacity }
             : arrivalOffset(timeMs, arrivalPlansRef.current.get(piece.id), arrivalTrack);
-          const baseOpacity = state.draggingId === piece.id ? 0.3 : state.premovedIds.has(piece.id) ? 0.4 : 1;
+          const baseOpacity = state.plannedPieceIds.has(piece.id)
+            ? PLANNED_UNIT_OPACITY
+            : state.draggingId === piece.id ? 0.3 : state.premovedIds.has(piece.id) ? 0.4 : 1;
           const presentedPiece = departurePlan ? { ...piece, facing: departurePlan.facing } : piece;
           const depthPiece = departure
             ? { ...presentedPiece, ...unprojectBoardPoint(seat) }
@@ -1475,7 +1497,7 @@ function SkirmishSceneLayer({
         ops.push(...reflectedOpsForSubjects(state.mirrorSurfaces, reflectionSubjects));
         ops.push(...physicalPieceOps);
         for (const piece of state.previewPieces) {
-          const op = pieceOp(piece, boardLabCellPosition(piece), { opacity: 0.62 });
+          const op = pieceOp(piece, boardLabCellPosition(piece), { opacity: PLANNED_UNIT_OPACITY });
           if (op) ops.push(op);
         }
         for (const group of state.afterGhosts) {
@@ -1642,6 +1664,7 @@ function SkirmishSceneLayer({
 
 const EMPTY_PREMOVES: readonly PremoveStep[] = [];
 const EMPTY_PREVIEW_PIECES: readonly Piece[] = [];
+const EMPTY_PLANNED_PIECE_IDS: ReadonlySet<string> = new Set();
 export interface SkirmishBoardSurfaceState {
   /** A passive position projected through the live Battle compositor without starting a match. */
   game: GameState;
@@ -1650,6 +1673,12 @@ export interface SkirmishBoardSurfaceState {
   viewKey: string;
   /** Translucent board-space units previewed through the same projection as live pieces. */
   previewPieces?: readonly Piece[];
+  /**
+   * Live pieces the player has SEATED but not yet sent into battle. They are drawn at the same
+   * plan strength as `previewPieces` and take no entrance while they stay planned; the arrival
+   * belongs to the moment the plan becomes a deployment, which is the Battle, not the placement.
+   */
+  plannedPieceIds?: ReadonlySet<string>;
 }
 
 export interface SkirmishBoardCellOverlayContext {
@@ -1769,6 +1798,7 @@ export function SkirmishBoard({
   const storedSeed = useSkirmish((s) => s.seed);
   const game = surfaceState?.game ?? storedGame;
   const previewPieces = surfaceState?.previewPieces ?? EMPTY_PREVIEW_PIECES;
+  const plannedPieceIds = surfaceState?.plannedPieceIds ?? EMPTY_PLANNED_PIECE_IDS;
   const env = useMemo(
     () => surfaceState ? { ...gameEnv(game), lastMove: game.lastMove } : storedEnv,
     [game, storedEnv, surfaceState],
@@ -2526,6 +2556,7 @@ export function SkirmishBoard({
               ambientCover={ambientSceneCover}
               livePieces={livePieces}
               previewPieces={previewPieces}
+              plannedPieceIds={plannedPieceIds}
               unitArrivals={arrivalLifecycle}
               unitArrivalTrack={unitArrivalTrack}
               unitArrivalStartDelta={unitArrivalStartDelta}

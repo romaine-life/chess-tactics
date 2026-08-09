@@ -741,12 +741,22 @@ function useRunDeploymentPresentation({
     () => gameForRunDeployment(prepared, level, layout, true),
     [layout, level, prepared],
   );
+  // A seated formation is still a PLAN: it can be taken back, turned, or left off the board
+  // entirely, so it is drawn at the same strength as the formation on the cursor and spends no
+  // entrance. Every one of these units arrives together when Begin Battle promotes the plan into
+  // an army — the seating is a decision, the arrival is the event. The board keys the plan by
+  // piece id, which is the Run unit id these placements are written under (setup.ts runUnitId).
+  const plannedPieceIds = useMemo(
+    () => new Set(Object.keys(layout.placements)),
+    [layout.placements],
+  );
   const deploymentSurfaceState = useMemo<SkirmishBoardSurfaceState>(() => ({
     game: deploymentGame,
     seed: prepared.deployment?.seed ?? prepared.seed,
     viewKey: runBattleActivityId(prepared.id, prepared.battleIndex),
     previewPieces: arrangementPreviewPieces,
-  }), [arrangementPreviewPieces, deploymentGame, prepared.battleIndex, prepared.deployment?.seed, prepared.id, prepared.seed]);
+    plannedPieceIds,
+  }), [arrangementPreviewPieces, deploymentGame, plannedPieceIds, prepared.battleIndex, prepared.deployment?.seed, prepared.id, prepared.seed]);
 
   useEffect(() => {
     if (prepared !== run && prepared.phase === 'deployment') replace(prepared);

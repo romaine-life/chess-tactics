@@ -341,7 +341,11 @@ for (const required of [
 const skirmishBoardPath = resolve(src, 'render/SkirmishBoard.tsx');
 const skirmishBoard = readFileSync(skirmishBoardPath, 'utf8');
 for (const required of [
-  'newlyVisibleArrivalPieces(visibleUnitIdsRef.current, livePieces)',
+  // The ledger admits only DEPLOYED units. A unit the player has merely planned is outside it,
+  // so seating a formation spends no entrance and the whole plan arrives when Battle promotes it.
+  'newlyVisibleArrivalPieces(visibleUnitIdsRef.current, deployedPieces)',
+  'livePieces.filter((piece) => !plannedPieceIds.has(piece.id))',
+  'for (const piece of deployedPieces) visibleUnitIdsRef.current.add(piece.id);',
   "if (unitArrivals === 'settled') arrivalPlansRef.current.clear()",
   "data-arriving-unit-ids={presentingArrivals ? arrivingUnitIds.join(',') : ''}",
   'data-unit-arrivals={unitArrivals}',
