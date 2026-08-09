@@ -90,11 +90,31 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+/**
+ * Pick up the first player piece that can move, the way a player's click would.
+ *
+ * A battle opens holding nothing, so a test that wants to MOVE has to say which unit it is
+ * moving — `movesForSelected()` answers for whoever is held, and at the start of a battle that
+ * is nobody.
+ */
+function holdFirstMovablePiece(): string {
+  const state = useSkirmish.getState();
+  const piece = state.game.pieces.find((candidate) => (
+    candidate.side === 'player'
+    && candidate.alive
+    && legalMoves(candidate, state.game.pieces, state.game.size, state.env).length > 0
+  ));
+  if (!piece) throw new Error('no player piece has a legal move to pick up');
+  useSkirmish.getState().select(piece.id);
+  return piece.id;
+}
+
 function playFirstMove(seed: number) {
   // Untimed: these flow tests drive the enemy reply with runAllTimers, which would
   // otherwise drain the now-default 5:00 free-skirmish clock to a flag-fall and end the
   // game mid-assertion. The clock is covered on its own by the "battle clock" suite.
   useSkirmish.getState().newSkirmish({ seed, timeControl: null });
+  holdFirstMovablePiece();
   const moves = useSkirmish.getState().movesForSelected();
   if (moves.length) useSkirmish.getState().tryMoveTo(moves[0].x, moves[0].y);
   vi.runAllTimers(); // resolve the staged enemy reply
@@ -121,57 +141,18 @@ function runUndoCheckpoint(goldTenths = 20): RunBattleUndoCheckpoint {
 }
 
 describe('skirmish store', () => {
-  it('starts on the player turn holding a piece that can actually move', () => {
+  // The ring says "picked up", and there is no unit the game has any business preferring on the
+  // player's behalf. Opening on the first piece of the roster put it on a Run army's King, walled
+  // in by the formation just arranged around him — a ring offering nothing, whose only effect on
+  // the player's first click was to disappear. Choosing a different unit only moves the
+  // arbitrariness; the battle holds nothing until the player picks something up.
+  it('starts on the player turn holding nothing', () => {
     useSkirmish.getState().newSkirmish({ seed: 5 });
     const s = useSkirmish.getState();
     expect(s.game.turn).toBe('player');
-    expect(s.selectedId).not.toBeNull();
-    expect(s.focusedId).toBe(s.selectedId);
+    expect(s.selectedId).toBeNull();
+    expect(s.focusedId).toBeNull();
     expect(livingPieces(s.game.pieces, 'player').length).toBeGreaterThan(0);
-
-    // The ring says "picked up", so it has to come with the squares that explain it. Opening on
-    // the first piece of the roster put it on a Run army's King, walled in by the formation the
-    // player had just arranged around him: a ring offering nothing, whose only effect on their
-    // first click was to disappear.
-    const opened = s.game.pieces.find((piece) => piece.id === s.selectedId)!;
-    expect(legalMoves(opened, s.game.pieces, s.game.size, s.env).length).toBeGreaterThan(0);
-  });
-
-  // ...and it skips PAST a piece that cannot move rather than ringing it. A Run army lists its
-  // King first, and he is routinely walled in by the formation just arranged around him.
-  it('opens past a boxed-in leading piece to one that can move', () => {
-    useSkirmish.getState().newSkirmish({ seed: 5 });
-    const before = useSkirmish.getState();
-    // King in the corner with his own pawns on every square he could step to; the last pawn is
-    // clear of them and is the only piece on the board with anywhere to go.
-    const pieces: Piece[] = [
-      { id: 'boxed-king', name: 'King', type: 'king', side: 'player', x: 0, y: 0, alive: true, facing: 'north', startX: 0, startY: 0 },
-      { id: 'wall-a', name: 'Pawn', type: 'pawn', side: 'player', x: 1, y: 0, alive: true, facing: 'north', startX: 1, startY: 0, pawnForward: 'north' },
-      { id: 'wall-b', name: 'Pawn', type: 'pawn', side: 'player', x: 0, y: 1, alive: true, facing: 'north', startX: 0, startY: 1, pawnForward: 'north' },
-      { id: 'wall-c', name: 'Pawn', type: 'pawn', side: 'player', x: 1, y: 1, alive: true, facing: 'north', startX: 1, startY: 1, pawnForward: 'north' },
-      { id: 'runner', name: 'Pawn', type: 'pawn', side: 'player', x: 5, y: 5, alive: true, facing: 'north', startX: 5, startY: 5, pawnForward: 'north' },
-      { id: 'enemy-king', name: 'King', type: 'king', side: 'enemy', x: 7, y: 7, alive: true, facing: 'south', startX: 7, startY: 7 },
-    ];
-    const env: MoveEnv = { terrain: undefined, lastMove: undefined };
-
-    expect(legalMoves(pieces[0], pieces, before.game.size, env)).toHaveLength(0);
-    expect(legalMoves(pieces[4], pieces, before.game.size, env).length).toBeGreaterThan(0);
-
-    useSkirmish.getState().resumeMatch({
-      game: { ...before.game, pieces, turn: 'player', winner: null },
-      seed: before.seed,
-      tick: before.tick,
-      log: before.log,
-      objective: before.objective,
-      objectiveCtx: before.objectiveCtx,
-      victoryOverride: before.victoryOverride,
-      turnsElapsed: before.turnsElapsed,
-      levelId: 'boxed-in',
-      clock: before.clock,
-      battleElapsed: { elapsedMs: readElapsedClockMs(before.battleElapsed), startedAtMs: null },
-    });
-
-    expect(useSkirmish.getState().selectedId).toBe('runner');
   });
 
   it('can focus an enemy without changing the player movement selection', () => {
@@ -288,6 +269,7 @@ describe('skirmish store', () => {
       notices: [{ log: 'En passant — 5 gold claimed.', at: { x: 2, y: 3 }, goldTenths: 50 }],
     }));
     useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null });
+    holdFirstMovablePiece();
     const moves = useSkirmish.getState().movesForSelected();
     useSkirmish.getState().tryMoveTo(moves[0].x, moves[0].y);
 
@@ -303,6 +285,7 @@ describe('skirmish store', () => {
         : [],
     }));
     useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null });
+    holdFirstMovablePiece();
     const moves = useSkirmish.getState().movesForSelected();
     useSkirmish.getState().tryMoveTo(moves[0].x, moves[0].y);
     vi.runAllTimers();
@@ -343,6 +326,7 @@ describe('skirmish store', () => {
 
   it('a legal move applies immediately and stages the enemy reply on a beat', () => {
     useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null }); // untimed: runAllTimers below must not flag-fall the clock
+    holdFirstMovablePiece();
     const before = useSkirmish.getState().game;
     const moves = useSkirmish.getState().movesForSelected();
     expect(moves.length).toBeGreaterThan(0);
@@ -362,6 +346,7 @@ describe('skirmish store', () => {
 
   it('clears the moved piece through the enemy turn and into the next player turn', () => {
     useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null }); // untimed: runAllTimers below must not flag-fall the clock
+    holdFirstMovablePiece();
     const moves = useSkirmish.getState().movesForSelected();
     expect(moves.length).toBeGreaterThan(0);
     useSkirmish.getState().tryMoveTo(moves[0].x, moves[0].y);
@@ -398,6 +383,7 @@ describe('skirmish store', () => {
       canRestore: () => true,
       restore,
     });
+    holdFirstMovablePiece();
     const before = useSkirmish.getState();
     const move = before.movesForSelected()[0];
 
@@ -419,6 +405,7 @@ describe('skirmish store', () => {
 
   it('rewinds the deterministic enemy reply with the player decision and allows no Redo', () => {
     useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null });
+    holdFirstMovablePiece();
     useSkirmish.getState().setRunBattleUndoAdapter({
       capture: () => runUndoCheckpoint(),
       canRestore: () => true,
@@ -446,6 +433,7 @@ describe('skirmish store', () => {
       canRestore: () => false,
       restore,
     });
+    holdFirstMovablePiece();
     const before = useSkirmish.getState();
     const move = before.movesForSelected()[0];
     before.tryMoveTo(move.x, move.y);
@@ -499,13 +487,14 @@ describe('skirmish store', () => {
     expect(r.started).toBe(true);
     expect(r.levelId).toBe('lvl-9');
     expect(r.game).toEqual(saved.game);
-    expect(r.selectedId).not.toBeNull(); // a player piece is reselected
+    expect(r.selectedId).toBeNull(); // a resumed board is held by nobody until the player picks
     expect(shouldStartFreshSkirmish(r, 'lvl-9', null)).toBe(false); // gate now says "resume"
     expect(shouldStartFreshSkirmish(r, 'other', null)).toBe(true); // a different level still starts fresh
   });
 
   it('resumeMatch re-stages the enemy reply that a reload interrupts', () => {
     useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null }); // untimed: runAllTimers below must not flag-fall the clock
+    holdFirstMovablePiece();
     const moves = useSkirmish.getState().movesForSelected();
     useSkirmish.getState().tryMoveTo(moves[0].x, moves[0].y);
     expect(useSkirmish.getState().game.turn).toBe('enemy'); // reply staged on a timer
@@ -953,6 +942,7 @@ describe('skirmish store: battle clock', () => {
 
   it('counts down on the player turn and freezes for the whole enemy reply', () => {
     useSkirmish.getState().newSkirmish({ seed: 5, level: timedLevel(60) });
+    holdFirstMovablePiece();
     vi.advanceTimersByTime(3_000);
     expect(clock()!.remainingMs).toBe(57_000);
 
@@ -981,6 +971,7 @@ describe('skirmish store: battle clock', () => {
 
   it('banks the Fischer increment when a move completes', () => {
     useSkirmish.getState().newSkirmish({ seed: 5, level: timedLevel(60, 5) });
+    holdFirstMovablePiece();
     vi.advanceTimersByTime(2_000); // 58s left on the deadline
     const moves = useSkirmish.getState().movesForSelected();
     useSkirmish.getState().tryMoveTo(moves[0].x, moves[0].y);
@@ -1007,6 +998,7 @@ describe('skirmish store: battle clock', () => {
       restore,
     });
     useSkirmish.getState().newSkirmish({ seed: 5, level: timedLevel(2) });
+    holdFirstMovablePiece();
     const before = useSkirmish.getState();
     const move = before.movesForSelected()[0];
     before.tryMoveTo(move.x, move.y);
@@ -1530,6 +1522,7 @@ describe('skirmish store: multiplayer session parity', () => {
     }> = [];
     useSkirmish.getState().setNetMoveSink((pieceId, move, expected, intentId) => { sent.push({ pieceId, move, expected, intentId }); });
     useSkirmish.getState().newNetMatch({ lobbyId: 'L1', localSide: 'player', level: playableNetLevel(), seed: 7 });
+    holdFirstMovablePiece();
     const before = useSkirmish.getState();
     const selected = before.selectedId!;
     const move = before.movesForSelected()[0];
@@ -1590,6 +1583,7 @@ describe('skirmish store: multiplayer session parity', () => {
 
     const level = playableNetLevel();
     useSkirmish.getState().newNetMatch({ lobbyId: 'reload-lobby', localSide: 'player', level, seed: 7 });
+    holdFirstMovablePiece();
     const beforeReload = useSkirmish.getState();
     const pieceId = beforeReload.selectedId!;
     const legal = beforeReload.movesForSelected()[0];
@@ -1625,6 +1619,7 @@ describe('skirmish store: multiplayer session parity', () => {
     const sent = vi.fn();
     useSkirmish.getState().setNetMoveSink(sent);
     useSkirmish.getState().newNetMatch({ lobbyId: 'no-storage', localSide: 'player', level: playableNetLevel(), seed: 7 });
+    holdFirstMovablePiece();
     const before = useSkirmish.getState();
     const move = before.movesForSelected()[0];
     before.tryMoveTo(move.x, move.y);

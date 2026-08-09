@@ -297,21 +297,18 @@ function promotionChoicesForMove(game: GameState, piece: Piece, move: Move): rea
 }
 
 /**
- * The piece a battle opens holding, or null when none of them can move.
+ * A battle opens holding NOTHING.
  *
- * Not simply the first on the roster. A Run army lists its King first, and a King walled in by
- * the formation the player has just arranged around him wears the selection ring with nowhere to
- * go: a ring that says "picked up", offers nothing, and whose only effect on the player's first
- * click is to vanish. The opening selection is therefore the first piece of this side that can
- * actually move, so the ring always comes with the squares that explain it.
+ * The selection ring says "picked up", and there is no unit the game has any business preferring
+ * on the player's behalf. Opening on the first piece of the roster put the ring on a Run army's
+ * King — walled in by the formation just arranged around him, so it offered nothing and its only
+ * effect on the player's first click was to vanish; a cell's press selects the piece under it, so
+ * a click on a piece the board is already holding is a deselect. Picking a different unit only
+ * moves the arbitrariness somewhere else. The turn boundary already works this way — see the
+ * enemy-reply commit, "Turn returns to the player with no implicit selection" — and this is the
+ * same rule at the door into the battle.
  */
-function openingSelectionId(game: GameState, env: MoveEnv, side: Side): string | null {
-  return game.pieces.find((piece) => (
-    piece.side === side
-    && piece.alive
-    && legalMoves(piece, game.pieces, game.size, env).length > 0
-  ))?.id ?? null;
-}
+const OPENS_HOLDING_NOTHING = { selectedId: null, focusedId: null } as const;
 
 /**
  * The current selection if that piece is still a living piece of `side`, else null.
@@ -1381,7 +1378,6 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     const intro = opts.level
       ? `Test play begins — objective: ${objectiveSummary(objective, objectiveCtx.kingSide)}.`
       : `Skirmish begins — ${objectiveSummary(objective, objectiveCtx.kingSide)}.`;
-    const selectedId = game.winner ? null : openingSelectionId(game, env, 'player');
     const log = initial.adjudication
       ? [logNote(adjudicationCopy(initial.adjudication, 'player', !!victoryOverride)), logNote(intro)]
       : [logNote(intro)];
@@ -1409,8 +1405,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       objectiveCtx,
       victoryOverride,
       resultDetail,
-      selectedId,
-      focusedId: selectedId,
+      ...OPENS_HOLDING_NOTHING,
       log,
       goldNotices: [],
       objective,
@@ -1477,8 +1472,6 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       env,
     });
     const game = initial.state;
-    const localTurn = !game.winner && game.turn === localSide;
-    const selectedId = localTurn ? openingSelectionId(game, env, localSide) : null;
     const youCommand = localSide === 'player' ? 'the vanguard' : 'the challenger';
     const intro = `Multiplayer skirmish — ${objectiveBriefingForSide(victoryRules, localSide).summary}. You command ${youCommand}.`;
     const log = initial.adjudication
@@ -1508,8 +1501,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       // here also stops a prior single-player game's override leaking into the match.
       victoryOverride,
       resultDetail: adjudicationResultDetail(initial.adjudication, localSide, !!victoryOverride),
-      selectedId,
-      focusedId: selectedId,
+      ...OPENS_HOLDING_NOTHING,
       log,
       started: true,
       levelId: level.id,
@@ -1769,7 +1761,6 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       env,
     });
     const game = settled.state;
-    const selectedId = game.winner ? null : openingSelectionId(game, env, 'player');
     const log = settled.adjudication
       ? extendLog(match.log, [logNote(adjudicationCopy(settled.adjudication, 'player', !!victoryOverride))])
       : match.log;
@@ -1790,8 +1781,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       // Restore the enemy policy so the ?ai=greedy A/B lever survives a reload
       // (older snapshots predate the field ⇒ default to the search AI).
       aiMode: match.aiMode ?? 'search',
-      selectedId,
-      focusedId: selectedId,
+      ...OPENS_HOLDING_NOTHING,
       started: true,
       // A queued premove is ephemeral thinking-time intent — a reload drops it, like
       // navigating away mid-plan.
