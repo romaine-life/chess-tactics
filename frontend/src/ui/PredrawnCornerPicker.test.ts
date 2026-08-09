@@ -3,6 +3,8 @@ import { clampPredrawnGuide } from '../render/PredrawnBoardLayer';
 import {
   clonePredrawnGridCalibrationSnapshot,
   emptyPredrawnGridHistory,
+  predrawnGridSpanFraction,
+  predrawnGridSpanPercent,
   predrawnGridStretchSummary,
   predrawnIdealGridSeed,
   predrawnIdealGridSnap,
@@ -10,6 +12,8 @@ import {
   predrawnLocalNodeIsBoundary,
   predrawnSourcePointForClient,
   predrawnUniformGridScale,
+  predrawnUniformGridScaleForSpan,
+  predrawnUniformGridScaleLimit,
   predrawnViewportScrollForZoomAnchor,
   predrawnZoomAfterWheel,
   predrawnZoomAnchorForViewport,
@@ -162,6 +166,48 @@ describe('pre-drawn source corner picking', () => {
       (seeded.east![1] - seeded.north![1]) * 1.02,
       3,
     );
+  });
+
+  it('measures the placed grid against the artwork it has to sit on', () => {
+    const source = { width: 2000, height: 1200 };
+    const seeded = predrawnIdealGridSeed(source, 6, 10)!;
+    const fraction = predrawnGridSpanFraction(seeded, source)!;
+    const xs = [seeded.north!, seeded.east!, seeded.south!, seeded.west!].map(([x]) => x);
+    expect(fraction).toBeCloseTo((Math.max(...xs) - Math.min(...xs)) / source.width, 6);
+    expect(fraction).toBeGreaterThan(0);
+    expect(fraction).toBeLessThanOrEqual(1);
+    expect(predrawnGridSpanFraction({ ...seeded, east: undefined }, source)).toBeUndefined();
+  });
+
+  it('bounds the size control at the largest grid the artwork can still supply pixels for', () => {
+    const source = { width: 2000, height: 1200 };
+    const seeded = predrawnIdealGridSeed(source, 6, 10)!;
+    const limit = predrawnUniformGridScaleLimit(seeded, source)!;
+    expect(limit).toBeGreaterThan(1);
+
+    const atLimit = predrawnUniformGridScale(seeded, source, limit * 0.999)!;
+    expect(atLimit).toBeDefined();
+    for (const point of [atLimit.north!, atLimit.east!, atLimit.south!, atLimit.west!]) {
+      expect(point[0]).toBeGreaterThanOrEqual(0);
+      expect(point[0]).toBeLessThanOrEqual(source.width);
+      expect(point[1]).toBeGreaterThanOrEqual(0);
+      expect(point[1]).toBeLessThanOrEqual(source.height);
+    }
+    expect(predrawnUniformGridScale(seeded, source, limit * 1.05)).toBeUndefined();
+  });
+
+  it('resizes a placed grid to span an exact fraction of the artwork width', () => {
+    const source = { width: 2000, height: 1200 };
+    const seeded = predrawnIdealGridSeed(source, 6, 10)!;
+    const factor = predrawnUniformGridScaleForSpan(seeded, source, 0.5)!;
+    const resized = predrawnUniformGridScale(seeded, source, factor)!;
+    expect(predrawnGridSpanFraction(resized, source)).toBeCloseTo(0.5, 4);
+    expect(predrawnUniformGridScaleForSpan(seeded, source, 0)).toBeUndefined();
+  });
+
+  it('quantizes grid size onto the control lattice so the slider round-trips its own value', () => {
+    expect(predrawnGridSpanPercent(0.6666)).toBe(66.7);
+    expect(predrawnGridSpanPercent(0.5)).toBe(50);
   });
 
   it('addresses one tile through four shared mesh intersections', () => {

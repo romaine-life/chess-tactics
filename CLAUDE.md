@@ -54,6 +54,11 @@ stands", never as the handoff for a state you crafted.
   `/editor/level?layer=prop&brush=oak&board=<code>` — `/editor/level?board=<code>` alone lands on
   Board and makes him go find them.
 - **Level Editor events** — `layer=rules&eventsEditor=1`, plus `eventsTab=deployment|other`.
+- **Level Artwork workspaces** — `layer=level-artwork&levelArtworkEditor=source|pipeline` opens AI
+  Generation References or the Board Art Pipeline. Inside the pipeline,
+  `predrawnGridFitter=<version-id>` opens **Adjust grid** straight onto that exact board, and
+  `predrawnOcclusionEditor=<version-id>` opens the mask editor onto that warp. Linking the pipeline
+  alone lands one click short and makes him go find the board.
 - **A whole board from a URL** — `?board=<code>` on the editor (see `ui/boardCode.encodeBoard`;
   the wire is base64url JSON, `c`/`r` dims, `f` fill tile, `t` tiles, `u` units, `p` props keyed by
   anchor cell). Tile ids are catalog ids like `grass-surf-0`, not family names.

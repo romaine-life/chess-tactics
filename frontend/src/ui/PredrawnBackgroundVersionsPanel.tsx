@@ -85,6 +85,10 @@ import { HouseSelect } from './shared/HouseSelect';
 import { useConfirm } from './shared/ConfirmDialog';
 import { navigateApp } from './navigation';
 import {
+  predrawnGridFitterArtifactId,
+  predrawnGridFitterHref,
+} from './predrawnGridFitterRoute';
+import {
   predrawnOcclusionEditorArtifactId,
   predrawnOcclusionEditorHref,
 } from './predrawnOcclusionEditorRoute';
@@ -406,6 +410,7 @@ export function PredrawnBackgroundVersionsPanel({
   canWrite,
   getEditFence,
   onSetSurface,
+  onResizeBoard,
   onDocumentUpdated,
   onOpenCanonicalAction,
   onMutationError,
@@ -428,6 +433,14 @@ export function PredrawnBackgroundVersionsPanel({
   canWrite: boolean;
   getEditFence: () => EditorDocumentEditFence | null;
   onSetSurface: (surface: VersionedPredrawnBoardSurface) => void;
+  /**
+   * Resize the working copy's playable grid from the grid fitter.
+   *
+   * The fitter measures the grid the candidate PAINTED, which is why it may differ from the
+   * authored board; this is the way back, so a measurement the owner accepts can become the
+   * level's own count instead of a permanent mismatch.
+   */
+  onResizeBoard?: (columns: number, rows: number) => void;
   onDocumentUpdated: (result: PredrawnGenerationAttemptWorkspaceMutationResult) => void;
   onOpenCanonicalAction: () => void;
   onMutationError: (error: unknown) => boolean;
@@ -442,8 +455,14 @@ export function PredrawnBackgroundVersionsPanel({
   const [warpDiscardFeedback, setWarpDiscardFeedback] = useState<AttemptCreationFeedback | null>(null);
   const [occlusionDiscardFeedback, setOcclusionDiscardFeedback] = useState<AttemptCreationFeedback | null>(null);
   const [occlusionEditorNotice, setOcclusionEditorNotice] = useState<string | null>(null);
+  // An addressed grid fitter names the exact board it is open against, so the link that opens it
+  // also decides what is selected underneath.
+  const openingGridFitterArtifactId = useRef(predrawnGridFitterArtifactId(window.location.search));
   const [selectedArtifactId, setSelectedArtifactId] = useState(
-    currentSurface?.occlusionVersionId ?? currentSurface?.backgroundVersionId ?? '',
+    openingGridFitterArtifactId.current
+      ?? currentSurface?.occlusionVersionId
+      ?? currentSurface?.backgroundVersionId
+      ?? '',
   );
   const pngIngressGuardRef = useRef<PredrawnPngIngressGuard | null>(null);
   if (!pngIngressGuardRef.current) {
@@ -480,6 +499,13 @@ export function PredrawnBackgroundVersionsPanel({
   const setOcclusionEditorRoute = useCallback((artifactId: string | null): void => {
     setOcclusionEditorArtifactId(artifactId);
     navigateApp(predrawnOcclusionEditorHref(window.location.href, artifactId), {
+      replace: true,
+      scroll: false,
+    });
+  }, []);
+  const setGridFitterRoute = useCallback((artifactId: string | null): void => {
+    setPickerOpen(Boolean(artifactId));
+    navigateApp(predrawnGridFitterHref(window.location.href, artifactId), {
       replace: true,
       scroll: false,
     });
@@ -759,6 +785,45 @@ export function PredrawnBackgroundVersionsPanel({
             : warpedSlotOccupied
               ? 'This slot already has a warped board. Inspect that board or use another slot for a different fit.'
               : undefined;
+  // An address that opens the fitter names the board it opens ON. It has to survive the load that
+  // would otherwise re-select whatever the working copy last used, AND clear the same guard the
+  // button clears — an address may not walk past a slot that already holds a warped board.
+  // One Raw Pipeline Source can seed several slots, so prefer a slot still free to take a fit over
+  // one that already committed its warped board.
+  const addressedGridFitterCandidates = openingGridFitterArtifactId.current
+    ? attemptModels.filter((model) => model.artifacts.some(
+        (artifact) => artifact.id === openingGridFitterArtifactId.current,
+      ))
+    : [];
+  const addressedGridFitterAttempt = addressedGridFitterCandidates.find((model) => !model.warped)
+    ?? addressedGridFitterCandidates[0];
+  useEffect(() => {
+    const addressed = openingGridFitterArtifactId.current;
+    if (!addressed || !addressedGridFitterAttempt) return;
+    const artifact = addressedGridFitterAttempt.artifacts.find((entry) => entry.id === addressed);
+    if (!artifact) return;
+    if (selectedArtifactId !== artifact.id) {
+      selectAttemptId(addressedGridFitterAttempt.attempt.id);
+      setSelectedArtifactId(artifact.id);
+      setRegistration(predrawnRegistrationForBackground(artifact.backgroundVersion, versions));
+      return;
+    }
+    if (busy) return;
+    openingGridFitterArtifactId.current = null;
+    if (adjustGridDisabledReason) {
+      setGridFitterRoute(null);
+      setError(adjustGridDisabledReason);
+      return;
+    }
+    setPickerOpen(true);
+  }, [
+    addressedGridFitterAttempt,
+    adjustGridDisabledReason,
+    busy,
+    selectedArtifactId,
+    setGridFitterRoute,
+    versions,
+  ]);
   const generateWarpDisabledReason = !canWrite
     ? 'Reload an owner editing page before generating a warped board.'
     : busy
@@ -1047,7 +1112,7 @@ export function PredrawnBackgroundVersionsPanel({
 
   const adjustSelectedGrid = (): void => {
     if (adjustGridDisabledReason) return;
-    setPickerOpen(true);
+    setGridFitterRoute(selectedBackground?.id ?? null);
   };
 
   const openMoveHighlightEditor = (
@@ -1192,11 +1257,12 @@ export function PredrawnBackgroundVersionsPanel({
       upsertVersion(result.discarded_version);
       await refreshAfterCompletedMutation('The warped board was discarded.');
       selectAttemptId(result.attempt.id);
-      setSelectedArtifactId(result.attempt.generated_version_id ?? targetAttempt.generated?.id ?? '');
+      const reopenedArtifactId = result.attempt.generated_version_id ?? targetAttempt.generated?.id ?? '';
+      setSelectedArtifactId(reopenedArtifactId);
       setSelectedPreviewState(null);
       setRegistration(rejectedRegistration);
       setInspectedArtifactId(null);
-      setPickerOpen(true);
+      setGridFitterRoute(reopenedArtifactId || null);
       setWarpDiscardFeedback({
         tone: 'success',
         message: 'Warped board discarded. Adjust the preserved grid, then generate another warped board in this slot.',
@@ -1569,7 +1635,7 @@ export function PredrawnBackgroundVersionsPanel({
     const created = await createAttemptFromPipelineSource(pipelineSource);
     if (!created) return;
     setRegistration(savedRegistration);
-    setPickerOpen(true);
+    setGridFitterRoute(pipelineSource.id);
     onStatus(
       'The saved grid is open in a new slot.',
       'success',
@@ -2992,13 +3058,14 @@ export function PredrawnBackgroundVersionsPanel({
           columns={board.cols}
           rows={board.rows}
           onChange={setRegistration}
+          onApplyLevelGrid={canWrite ? onResizeBoard : undefined}
           onSaveRegistration={(next) => {
             storePredrawnBoardRegistration(
               predrawnBackgroundVersionContentUrl(selectedBackground.id),
               next,
             );
             setRegistration(next);
-            setPickerOpen(false);
+            setGridFitterRoute(null);
             void generateWarp({
               registrationOverride: next,
               setWorkingCopy: true,
@@ -3007,7 +3074,7 @@ export function PredrawnBackgroundVersionsPanel({
           }}
           saveLabel="USE FITTED BOARD"
           showCodexHandoff={false}
-          onClose={() => setPickerOpen(false)}
+          onClose={() => setGridFitterRoute(null)}
         />
       ) : null}
       {moveHighlightEditorPortal}

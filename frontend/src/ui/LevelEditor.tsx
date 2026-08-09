@@ -10243,6 +10243,7 @@ export function LevelEditor(): ReactElement {
                       canWrite={editorSessionCanWrite && !saving}
                       getEditFence={currentEditFence}
                       onSetSurface={setPredrawnVersionSurface}
+                      onResizeBoard={(cols, rows) => resizeBoard(cols, rows, 'right')}
                       onDocumentUpdated={mountAcknowledgedPredrawnWorkspaceMutation}
                       onOpenCanonicalAction={() => selectLayer('status')}
                       onMutationError={handlePredrawnVersionMutationError}
