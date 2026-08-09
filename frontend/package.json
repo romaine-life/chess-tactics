@@ -44,7 +44,8 @@
     "verify:grant-carry": "node scripts/check-run-grant-carry.mjs",
     "verify:board-selection": "node scripts/verify-board-selection.mjs",
     "verify:royal-fork": "node scripts/verify-royal-fork-bounty.mjs",
-    "verify:manubiae": "node scripts/verify-manubiae.mjs"
+    "verify:manubiae": "node scripts/verify-manubiae.mjs",
+    "verify:icon-seats": "node scripts/verify-icon-seats.mjs"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",
