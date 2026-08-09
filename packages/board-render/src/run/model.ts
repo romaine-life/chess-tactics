@@ -28,7 +28,7 @@ export {
 };
 
 /** The schema version of one persisted in-progress Run. Only this exact save shape is read. */
-export const CURRENT_RUN_SAVE_VERSION = 33;
+export const CURRENT_RUN_SAVE_VERSION = 34;
 export type RunSaveVersion = typeof CURRENT_RUN_SAVE_VERSION;
 
 export class UnsupportedRunSaveError extends Error {
@@ -54,6 +54,7 @@ const RUN_SAVE_VERSION_DEPLOYMENT_MODE_SOURCE = 28;
 const RUN_SAVE_VERSION_PLAYER_FORMATIONS_SOURCE = 29;
 const RUN_SAVE_VERSION_ARRANGED_PILE_SOURCE = 30;
 const RUN_SAVE_VERSION_OPENING_CARD_GRANT_SOURCE = 31;
+const RUN_SAVE_VERSION_AUTHORED_DEAL_SOURCE = 33;
 const RUN_SAVE_VERSION_RARITY_BANDS_SOURCE = 32;
 export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
@@ -353,20 +354,53 @@ export interface RunCardFormationCell {
   y: number;
 }
 
-export type RunStarterCardId = 'his-grace';
+export type RunStarterCardId =
+  | 'sole-surviving-issue'
+  | 'entered-without-objection'
+  | 'his-grace'
+  | 'household-roll'
+  | 'staggered-muster'
+  | 'muster-incomplete'
+  | 'turning-stone'
+  | 'called-to-the-bounds'
+  | 'one-left-at-the-marker'
+  | 'within-the-old-bounds'
+  | 'witness-to-the-oath'
+  | 'anointed-late'
+  | 'the-anointing'
+  | 'homage-withheld'
+  | 'homage-done-mounted';
 
 /** Starter-only Chartulary cards. They are never offered by Adlectio, but otherwise
- * participate in the Deployment deal exactly like every card the player holds. */
+ * participate in the Deployment deal exactly like every card the player holds.
+ *
+ * One of these is chosen before the Run exists (there is no Run without a King), so the whole
+ * set is the opening decision rather than a fixed prologue. Every arrangement is its own King:
+ * the same three units in a line and around a corner are different cards, because where the
+ * crown stands in its own formation is the thing being picked. */
 export interface RunStarterCard {
   id: RunStarterCardId;
   pieces: RunArmyPieceType[];
   artId?: string;
   formation?: RunCardFormationCell[];
   value: number;
+  /**
+   * Gold handed over with the card, to price a thin King against a fat one. Material cannot
+   * balance these: a Pawn is 1 and a Knight is 3, so no King carrying a minor can ever cost the
+   * same as one carrying only Pawns. Gold is the only lever with the granularity to close it.
+   */
+  goldBonusTenths: number;
   rarity: RunCardRarity;
   name: string;
   flavor: string;
   removable: boolean;
+}
+
+/** The material a King is topped up to. Every starter is worth 4 once its gold is counted. */
+export const RUN_STARTER_GOLD_BASELINE_VALUE = 4;
+
+function starterGoldBonusTenths(value: number): number {
+  return Math.max(0, RUN_STARTER_GOLD_BASELINE_VALUE - value) * GOLD_SCALE;
 }
 
 export interface RunCardOffer extends RunCoreCard {
@@ -957,19 +991,107 @@ export const RUN_CARD_BY_ID: Readonly<Record<string, RunCoreCard>> = Object.free
   Object.fromEntries(LEGACY_RUN_CARD_DECK.map((card) => [card.id, card])),
 );
 
-export const RUN_STARTER_CARDS: readonly RunStarterCard[] = Object.freeze([
-  Object.freeze<RunStarterCard>({
-    id: 'his-grace',
-    pieces: ['king', 'pawn', 'pawn'],
-    artId: 'his-grace',
-    formation: [{ x: 0, y: 1 }, { x: 0, y: 0 }, { x: 1, y: 0 }],
-    value: 2,
+const starter = (
+  id: RunStarterCardId,
+  pieces: RunArmyPieceType[],
+  formation: RunCardFormationCell[],
+  name: string,
+  flavor: string,
+): RunStarterCard => {
+  const value = pieces.reduce((total, piece) => total + PIECE_VALUE[piece], 0);
+  return Object.freeze<RunStarterCard>({
+    id,
+    pieces,
+    artId: `k-${id}`,
+    formation,
+    value,
+    goldBonusTenths: starterGoldBonusTenths(value),
     rarity: 'common',
-    name: 'His Grace',
-    flavor: 'Two names stood before his. Neither was entered twice.',
+    name,
+    flavor,
     removable: false,
-  }),
+  });
+};
+
+/**
+ * The fifteen Kings, in ascending material. Each is a real administrative act, anchored for
+ * authoring purposes to the monarch whose reign best attests it (docs/art/run-king-prompts-v2.json)
+ * -- that name drives the illustration and never reaches the card face, exactly as the historical
+ * anchors do. Pawn-free Kings are absent on purpose: K+N, K+B and K+NN cannot force mate against a
+ * lone King, and Battle 1 is a lone King.
+ *
+ * No King is a straight run of four. That shape needs a deployment band with a four-long axis, which
+ * is a harder demand on every authored Battle than the rest of the pool makes; the widest footprint
+ * here is two by three. Retiring it also put the minors at exactly a third of the pool.
+ */
+export const RUN_STARTER_CARDS: readonly RunStarterCard[] = Object.freeze([
+  starter('sole-surviving-issue', ['king', 'pawn'],
+    [{ x: 0, y: 0 }, { x: 0, y: 1 }],
+    'Sole Surviving Issue',
+    'The inquest returned one name. It had not been a long inquest.'),
+  starter('entered-without-objection', ['king', 'pawn', 'pawn'],
+    [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 0, y: 2 }],
+    'Entered Without Objection',
+    'A space was ruled beneath the entry for objections. It reached the binder still empty.'),
+  // His Grace keeps its authored bend. A straight line of three cannot be placed in the smallest
+  // supported two-by-two deployment band in any rotation, and this is the card every Run that does
+  // not choose otherwise begins holding, so its shape is load-bearing rather than decorative.
+  starter('his-grace', ['king', 'pawn', 'pawn'],
+    [{ x: 0, y: 1 }, { x: 0, y: 0 }, { x: 1, y: 0 }],
+    'His Grace',
+    'Two names stood before his. Neither was entered twice.'),
+  starter('household-roll', ['king', 'pawn', 'pawn', 'pawn'],
+    [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 0 }, { x: 1, y: 1 }],
+    'The Household Roll',
+    'The same roll once served a household of forty. It is still ruled for forty.'),
+  starter('staggered-muster', ['king', 'pawn', 'pawn', 'pawn'],
+    [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 2 }],
+    'Staggered Muster',
+    'The muster was called for dawn. The clerk held the roll open until dark, then ruled it off where it stood.'),
+  starter('muster-incomplete', ['pawn', 'king', 'pawn', 'pawn'],
+    [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 2 }],
+    'Muster Incomplete',
+    'Absent men are written in the same ink as present ones. Only the column changes.'),
+  starter('turning-stone', ['king', 'pawn', 'pawn', 'pawn'],
+    [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 0, y: 2 }, { x: 1, y: 0 }],
+    'The Turning Stone',
+    'The stone marks a boundary older than the wall it leans on. Both are described as original.'),
+  starter('called-to-the-bounds', ['king', 'pawn', 'pawn', 'pawn'],
+    [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }],
+    'Called to the Bounds',
+    'The parish walked its line once a year, so someone would still know it when the maps were gone.'),
+  starter('one-left-at-the-marker', ['king', 'pawn', 'pawn', 'pawn'],
+    [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 2, y: 1 }],
+    'One Left at the Marker',
+    'At each marker a boy was struck, so that he would remember the place. It was held to be a sound method.'),
+  starter('within-the-old-bounds', ['pawn', 'king', 'pawn', 'pawn'],
+    [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 0, y: 2 }, { x: 1, y: 0 }],
+    'Within the Old Bounds',
+    'The bank is older than the grant, the grant older than the survey. Only the survey can be produced.'),
+  starter('witness-to-the-oath', ['king', 'bishop', 'pawn'],
+    [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 0, y: 2 }],
+    'Witness to the Oath',
+    'The articles were read out, agreed to, and written down in the same afternoon. The agreeing is the only part anyone later disputed.'),
+  starter('anointed-late', ['king', 'pawn', 'bishop'],
+    [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 0, y: 2 }],
+    'Anointed Late',
+    'The oil does not spoil. Whether the delay had was not asked aloud.'),
+  starter('the-anointing', ['bishop', 'king', 'pawn'],
+    [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 0, y: 2 }],
+    'The Anointing',
+    'He went in behind the man who could make him king, and came out ahead of him.'),
+  starter('homage-withheld', ['king', 'knight', 'pawn'],
+    [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 0 }],
+    'Homage Withheld',
+    'He came, and was counted as having come. Nothing else was written beside his name.'),
+  starter('homage-done-mounted', ['king', 'pawn', 'knight'],
+    [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 0 }],
+    'Homage Done Mounted',
+    'Homage is sworn kneeling and unarmed. What he swore from the saddle was entered under the same heading.'),
 ]);
+
+/** The opening pick. Every starter is a King, and a Run cannot exist without one. */
+export const RUN_KING_CARDS: readonly RunStarterCard[] = RUN_STARTER_CARDS;
 
 export const RUN_STARTER_CARD_BY_ID: Readonly<Record<RunStarterCardId, RunStarterCard>> = Object.freeze(
   Object.fromEntries(RUN_STARTER_CARDS.map((card) => [card.id, card])) as Record<RunStarterCardId, RunStarterCard>,
@@ -1221,61 +1343,80 @@ export function snapshotWar(war: War, levels: Record<string, Level>): RunWarSnap
   return { id: war.id, name: war.name, description: war.description, battles };
 }
 
-function initialArmy(seed: number): RunArmyUnit[] {
-  return [
-    {
-      id: 'run-king',
-      name: runUnitName(seed, 'king', 0),
-      type: 'king',
-      number: 1,
-      inspectionSeed: mixSeed(seed, 'run-unit-inspection:run-king'),
-      source: 'king',
-    },
-    {
-      id: 'run-pawn-a',
-      name: runUnitName(seed, 'pawn', 0),
-      type: 'pawn',
-      number: 1,
-      inspectionSeed: mixSeed(seed, 'run-unit-inspection:run-pawn-a'),
-      source: 'starting',
-    },
-    {
-      id: 'run-pawn-b',
-      name: runUnitName(seed, 'pawn', 1),
-      type: 'pawn',
-      number: 2,
-      inspectionSeed: mixSeed(seed, 'run-unit-inspection:run-pawn-b'),
-      source: 'starting',
-    },
-  ];
+const STARTER_SEAT_SUFFIX = ['a', 'b', 'c', 'd'] as const;
+
+/**
+ * The chosen King's own formation, built as units in seat order. The unit ids stay derived from
+ * type and seat rather than from the card, so a Run's army reads the same whichever King opened
+ * it and `run-king` remains the King's stable id everywhere downstream.
+ */
+function initialArmy(seed: number, card: RunStarterCard): RunArmyUnit[] {
+  const seenByType = new Map<RunArmyPieceType, number>();
+  return card.pieces.map((type) => {
+    const index = seenByType.get(type) ?? 0;
+    seenByType.set(type, index + 1);
+    const id = type === 'king' ? 'run-king' : `run-${type}-${STARTER_SEAT_SUFFIX[index]}`;
+    return {
+      id,
+      name: runUnitName(seed, type, index),
+      type,
+      number: index + 1,
+      inspectionSeed: mixSeed(seed, `run-unit-inspection:${id}`),
+      source: type === 'king' ? 'king' : 'starting',
+    } satisfies RunArmyUnit;
+  });
 }
 
-function initialCards(seed: number): RunOwnedCard[] {
-  void seed;
+function initialCards(card: RunStarterCard, army: readonly RunArmyUnit[]): RunOwnedCard[] {
   return [
     {
-      id: 'run-card-his-grace',
-      coreId: 'his-grace',
-      unitSeats: ['run-king', 'run-pawn-a', 'run-pawn-b'],
+      id: `run-card-${card.id}`,
+      coreId: card.id,
+      unitSeats: army.map((unit) => unit.id),
       acquiredAfterBattleIndex: 0,
     },
   ];
 }
 
+function initialArmyNumbersFor(card: RunStarterCard): RunArmyNumberState {
+  const numbers = initialArmyNumberState();
+  for (const type of card.pieces) numbers[type] += 1;
+  return numbers;
+}
+
+export interface RunCreateOptions {
+  now?: string;
+  /** The King this Run opens on. Defaults to His Grace, the Run's original starter. */
+  kingId?: RunStarterCardId;
+}
+
 export function createRun(
   war: RunWarSnapshot,
   seed: number,
-  ataraxiaTierOrNow: AtaraxiaTier | string = 0,
-  nowOrOptions: string | Readonly<{ now?: string }> = new Date().toISOString(),
+  ataraxiaTierOrNow: AtaraxiaTier | string | RunCreateOptions = 0,
+  nowOrOptions: string | RunCreateOptions = new Date().toISOString(),
 ): RunDocument {
   const ataraxiaTier: AtaraxiaTier = 0;
-  const options = typeof nowOrOptions === 'string' ? null : nowOrOptions;
+  // Options are accepted in either trailing slot. The tier argument is vestigial (every Run is
+  // tier 0), so `createRun(war, seed, { kingId })` is the call a reader expects to work.
+  const options = typeof nowOrOptions === 'object' && nowOrOptions
+    ? nowOrOptions
+    : typeof ataraxiaTierOrNow === 'object' && ataraxiaTierOrNow
+      ? ataraxiaTierOrNow
+      : null;
   const createdAt = typeof ataraxiaTierOrNow === 'string'
     ? ataraxiaTierOrNow
     : typeof nowOrOptions === 'string'
       ? nowOrOptions
       : options?.now ?? new Date().toISOString();
-  const run: RunDocument = {
+  const king = RUN_STARTER_CARD_BY_ID[options?.kingId ?? 'his-grace'];
+  if (!king) throw new Error(`createRun: ${String(options?.kingId)} is not a King.`);
+  const army = initialArmy(seed, king);
+  // The King IS the opening decision, taken before this document exists, so the Run begins in
+  // Deployment on the formation that was chosen. The opening Bona Vacantia card grant that used
+  // to stand here is gone: Battle 1 is the King alone against a lone King, which every authored
+  // King can already win by escorting a Pawn to promotion.
+  return {
     runSaveVersion: CURRENT_RUN_SAVE_VERSION,
     id: freshRunId(),
     seed: seed >>> 0,
@@ -1286,18 +1427,14 @@ export function createRun(
     phase: 'deployment',
     battleIndex: 0,
     conflictIndex: 0,
-    goldTenths: RUN_STARTING_GOLD_TENTHS,
-    army: initialArmy(seed),
-    cards: initialCards(seed),
+    goldTenths: RUN_STARTING_GOLD_TENTHS + king.goldBonusTenths,
+    army,
+    cards: initialCards(king, army),
     lipsana: [],
     seenLipsana: [],
     conflictPaidLipsana: {},
     nextArmyUnitSequence: 1,
-    nextArmyUnitNumberByType: {
-      ...initialArmyNumberState(),
-      pawn: 3,
-      king: 2,
-    },
+    nextArmyUnitNumberByType: initialArmyNumbersFor(king),
     nextCardSequence: 1,
     sectioCardCursor: 0,
     deployment: null,
@@ -1306,25 +1443,6 @@ export function createRun(
     sectio: null,
     vacantia: null,
   };
-  // A Conflict that ends in loot opens with Bona Vacantia. The Run's opening screen grants a
-  // formation card rather than a lipsanon, so Battle 1 is arranged with something beyond His
-  // Grace and teaches placement instead of demonstrating it with one fixed shape. Taking it
-  // leads straight into Battle 1; a war with no loot Battles begins in Deployment immediately.
-  if (conflictOpensWithVacantia(war, 0)) {
-    return {
-      ...run,
-      phase: 'bona-vacantia',
-      vacantia: {
-        kind: 'opening',
-        conflictIndex: 0,
-        afterBattleIndex: 0,
-        victoryGoldTenths: 0,
-        offers: [],
-        cardOffers: openingCardGrantOffers(seed),
-      },
-    };
-  }
-  return run;
 }
 
 /**
@@ -2505,10 +2623,10 @@ function migrateRunToAuthoredDeal(stored: Record<string, unknown>): Record<strin
     ? stored.war as Record<string, unknown>
     : null;
   const battles = Array.isArray(war?.battles) ? war.battles : null;
-  if (!war || !battles) return { ...stored, runSaveVersion: CURRENT_RUN_SAVE_VERSION };
+  if (!war || !battles) return { ...stored, runSaveVersion: RUN_SAVE_VERSION_AUTHORED_DEAL_SOURCE };
   return {
     ...stored,
-    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    runSaveVersion: RUN_SAVE_VERSION_AUTHORED_DEAL_SOURCE,
     war: {
       ...war,
       battles: battles.map((entry) => {
@@ -2634,7 +2752,29 @@ export function migrateRunSaveDocument(value: unknown): RunDocument {
   if (stored.runSaveVersion === RUN_SAVE_VERSION_RARITY_BANDS_SOURCE) {
     stored = migrateRunToAuthoredDeal(stored);
   }
+  if (stored.runSaveVersion === RUN_SAVE_VERSION_AUTHORED_DEAL_SOURCE) {
+    stored = migrateRunToKingChoice(stored);
+  }
   return normalizeRunDocument(stored as unknown as RunDocument);
+}
+
+/**
+ * The King became the opening decision, so the opening Bona Vacantia card grant that used to be
+ * the Run's first screen no longer exists. A save parked on that screen has not taken its card
+ * yet and there is nothing left to take it from, so it moves to the Deployment the grant used to
+ * lead into. The army and the held King are already correct: the grant only ever added to them.
+ * Mid-run Bona Vacantia (kind 'conflict') is untouched -- only the opening one is retired.
+ */
+function migrateRunToKingChoice(stored: Record<string, unknown>): Record<string, unknown> {
+  const vacantia = stored.vacantia && typeof stored.vacantia === 'object' && !Array.isArray(stored.vacantia)
+    ? stored.vacantia as Record<string, unknown>
+    : null;
+  const parkedOnOpeningGrant = stored.phase === 'bona-vacantia' && vacantia?.kind === 'opening';
+  return {
+    ...stored,
+    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    ...(parkedOnOpeningGrant ? { phase: 'deployment', vacantia: null } : {}),
+  };
 }
 
 export function addArmyPieces(

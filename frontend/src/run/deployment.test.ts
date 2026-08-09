@@ -8,8 +8,10 @@ import {
   performAdlectio,
   prepareDeployment,
   RUN_CARD_BY_ID,
+  RUN_STARTER_CARDS,
   runCardUnitIds,
   type RunDocument,
+  type RunStarterCardId,
   type RunWarSnapshot,
 } from './model';
 import {
@@ -52,6 +54,7 @@ function fixture(
   columns = 8,
   seed = 17,
   cardIds: readonly string[] = [],
+  kingId: RunStarterCardId = 'his-grace',
 ): { run: RunDocument; level: ReturnType<typeof createBlankLevel> } {
   const level = createBlankLevel('formation-level', 'Formation Level', columns, rows + 3);
   level.layers.zones = [{
@@ -69,7 +72,7 @@ function fixture(
     description: 'Deployment fixture.',
     battles: [{ level, loot: false }, { level: structuredClone(level), loot: false }],
   };
-  let assembled = createRun(war, seed);
+  let assembled = createRun(war, seed, { kingId });
   if (cardIds.length) {
     assembled = openSectio(
       { ...assembled, phase: 'battle' },
@@ -728,6 +731,43 @@ describe('formation deployment', () => {
     // Three wide cannot stand up in a two-row band, so the standing turn is not on offer.
     expect(offered).toEqual([0]);
     expect(nextCardRotation(offered, 0)).toBe(0);
+  });
+
+  /**
+   * Every King has to be placeable or the Run it opens is unplayable from its first Battle, and
+   * the King is chosen before the Run exists so there is no later screen at which to notice.
+   *
+   * This pins the demand the POOL makes on an authored band. It cannot see the shipped Wars --
+   * those live in the database -- so it fixes the requirement from the other end: change a King's
+   * footprint and this says exactly which band size that costs.
+   */
+  const placeableInBand = (rows: number, columns: number, kingId: RunStarterCardId): boolean => {
+    const { run, level } = fixture(rows, columns, 30, [], kingId);
+    const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+    const king = arranging.cards.find((card) => card.coreId === kingId)!;
+    // Every quarter turn, because the player has all four. Asking only for turn 0 tests the
+    // authored orientation and calls a line of three unplaceable in a band three columns wide.
+    return ([0, 1, 2, 3] as const)
+      .some((turn) => arrangedCardPlacementOptions(arranging, level, king.id, turn).length > 0);
+  };
+
+  it('places every King in a band with a three-long axis', () => {
+    for (const king of RUN_STARTER_CARDS) {
+      expect(placeableInBand(2, 3, king.id), `${king.id} does not fit a 2x3 band`).toBe(true);
+      expect(placeableInBand(3, 2, king.id), `${king.id} does not fit a 3x2 band`).toBe(true);
+    }
+  });
+
+  /**
+   * Which Kings survive the smallest band the game supports at all. Everything else needs the
+   * three-long axis above, so a Battle authoring a 2x2 player spawn can only be opened by these.
+   * Listed by name rather than counted, so shrinking the pool's floor is a visible diff.
+   */
+  it('names the only Kings that fit the smallest two-by-two band', () => {
+    const fits = RUN_STARTER_CARDS.filter((king) => placeableInBand(2, 2, king.id));
+    expect(fits.map((king) => king.id)).toEqual([
+      'sole-surviving-issue', 'his-grace', 'household-roll', 'homage-withheld', 'homage-done-mounted',
+    ]);
   });
 
   it('fits His Grace in the smallest two-by-two deployment band', () => {
