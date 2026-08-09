@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:7b22138d5aaa9f8f60af3d7ae80cd1e720a6fc1c4ebf91c5fc842b9d76f6f250"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:bfa8882dccc05fd02b687db1c663f243cd5adecadf376389492dffdee07c307e"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Retire the main-menu profile rook slots"
-  prNumber: "864"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/864"
-  commit: "f83bc0b3"
+  prTitle: "The camera runs on a zoom ladder"
+  prNumber: "865"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/865"
+  commit: "f9ac87f2"
 
 name: chess-tactics
 namespace: chess-tactics
