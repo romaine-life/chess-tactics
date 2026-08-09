@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { FramedReadOnlyBoardView } from './shared/BoardViewFraming';
 import { levelToEditorBoard } from '../core/levelBoard';
-import { LevelInfoCompact } from './LevelInfoCompact';
+import { boardPalettes, LevelInfoCompact, levelBattleDealLine } from './LevelInfoCompact';
 import type { Level } from '../core/level';
-import { installedUiMedia } from './installedUiMedia';
 import { InnerChromeBox } from './shared/ChromeBox';
+import { PieceTypeIcon } from './shared/PieceTypeIcon';
+import { useStrategikonCardsIcon } from './strategikonNavigation';
 import { PaintedSurfaceBoundary } from './shell/PaintedSurfaceBoundary';
 
 export function LevelPreviewColumn({
@@ -35,6 +36,15 @@ export function LevelPreviewColumn({
   }, [signature]);
   const allyCount = level.layers.units.filter((unit) => unit.side === 'player').length;
   const enemyCount = level.layers.units.filter((unit) => unit.side === 'enemy').length;
+  // What the player brings to a WAR BATTLE is the deal, not a roster: their army arrives from
+  // their own collection as cards, so an ally unit count there is a 0 that means nothing. The
+  // headline number is how many cards the Battle deals. A Campaign or standalone level fields
+  // real allies on the map, and keeps counting them.
+  const dealLine = levelBattleDealLine(level);
+  // The colours each side wears on the very board beside this line, read from the projection the
+  // renderer consumes — so the mark and the piece standing on the map are the same sprite.
+  const palettes = boardPalettes(level);
+  const cardsIconSrc = useStrategikonCardsIcon();
   const resetFrame = (): void => {
     setTerrainPainted(false);
     setScenePainted(false);
@@ -54,10 +64,22 @@ export function LevelPreviewColumn({
       <aside className={embedded ? 'menu-dest-col menu-dest-preview ce-preview-col' : 'ce-editor-preview-col ce-preview-col'} aria-label="Selected level">
         <div className="ce-selected-head">
           <h2>{title}</h2>
-          <div className="ce-force-readout" aria-label="Level forces">
-            <span className="ce-force ce-force-ally"><img src={installedUiMedia('ui-main-menu-profile-rook-blue-png')} alt="" />Allies <strong>{allyCount}</strong></span>
-            <span className="ce-force ce-force-enemy"><img src={installedUiMedia('ui-main-menu-profile-rook-red-png')} alt="" />Enemies <strong>{enemyCount}</strong></span>
-          </div>
+          {/* Small marks and small numerals over the night sky had nothing behind them to read
+              against — whatever board art the backdrop was showing WAS their background. They sit
+              on the same installed marble as the facts box below instead (ADR-0433), so the line
+              has a settled surface of its own. Each side's mark is the piece the player actually
+              meets on the board, in that side's own palette — not a glyph cut out of a mockup —
+              and the card back is the one the player deals with. */}
+          <InnerChromeBox className="ce-force-readout-box" fillRole="outer">
+            <div className="ce-force-readout" aria-label="Level forces">
+              {dealLine !== null ? (
+                <span className="ce-force ce-force-cards"><img className="ce-force-card" src={cardsIconSrc} alt="" draggable={false} />Cards <strong>{dealLine}</strong></span>
+              ) : (
+                <span className="ce-force ce-force-ally"><PieceTypeIcon type="rook" palette={palettes.player} className="ce-force-unit" />Allies <strong>{allyCount}</strong></span>
+              )}
+              <span className="ce-force ce-force-enemy"><PieceTypeIcon type="rook" palette={palettes.enemy} className="ce-force-unit" />Enemies <strong>{enemyCount}</strong></span>
+            </div>
+          </InnerChromeBox>
         </div>
         {board ? (
           <InnerChromeBox className="ce-preview-frame">

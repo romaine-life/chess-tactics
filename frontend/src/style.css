@@ -10624,7 +10624,15 @@ body { font-size: 17px; }
 }
 
 /* Force composition for the selected level — the allies/enemies counts read off
-   the level's board, so they live with the level, not the global title bar. */
+   the level's board, so they live with the level, not the global title bar.
+   The line is seated on its own inner box so its marks have a surface to read against instead of
+   whatever the night sky is showing. It runs the column's full width like the board frame and the
+   facts box: the column is a stack of boxes sharing one pair of edges, and a box that hugged its
+   own content broke that line. */
+.ce-force-readout-box {
+  padding: 6px 10px;
+}
+
 .ce-force-readout {
   align-items: center;
   display: flex;
@@ -10641,10 +10649,20 @@ body { font-size: 17px; }
   text-transform: uppercase;
 }
 
-.ce-force img {
-  height: 22px;
+/* The side marks are live battlefield sprites, so they are seated the way every other unit mark
+   in this column is: the SEAT is sized and AlphaBoundIcon fits the visible pixels inside it.
+   Sizing the <img> instead would fight the inline fit and letterbox the piece in its own canvas. */
+.ce-force-unit {
+  block-size: 30px;
+  inline-size: 24px;
+}
+
+/* The card back is authored at its own aspect and needs no alpha fit — it is contained. */
+.ce-force-card {
+  block-size: 26px;
   image-rendering: pixelated;
-  width: 22px;
+  inline-size: auto;
+  object-fit: contain;
 }
 
 .ce-force strong {
@@ -10655,6 +10673,7 @@ body { font-size: 17px; }
 
 .ce-force-ally { color: var(--ce-ally); }
 .ce-force-enemy { color: var(--ce-enemy); }
+.ce-force-cards { color: var(--ce-ally); }
 
 /* ===== Compact Level Info — stacked under the map preview in the Editor's 4th column ===== */
 
@@ -10745,6 +10764,10 @@ body { font-size: 17px; }
   gap: 12px;
   grid-template-columns: 1fr 1fr;
 }
+
+/* A Battle drops its empty Allies roster, so the surviving side takes the whole width rather
+   than sitting in a half column beside a gap where a column used to be. */
+.ce-li-rosters.is-single { grid-template-columns: 1fr; }
 
 .ce-li-roster-head {
   align-items: center;
@@ -19488,11 +19511,14 @@ button.tileset-relationship-cell {
   min-width: 0;
 }
 /* Two-line head: the level name gets its OWN line (full width, no truncation), with the
-   ally/enemy force counts on a second line beneath it. */
+   ally/enemy force counts on a second line beneath it. The shared head rule's horizontal padding
+   is dropped here: the counts are a framed box now, and that inset held it 8px inside the board
+   frame and facts box under it, so the column's three boxes did not share an edge. */
 .ce-preview-col .ce-selected-head {
   align-items: stretch;
   flex-direction: column;
   gap: 4px;
+  padding-inline: 0;
 }
 .ce-preview-col .ce-selected-head h2 {
   overflow: visible;
