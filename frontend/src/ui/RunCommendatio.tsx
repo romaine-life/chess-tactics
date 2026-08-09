@@ -9,6 +9,9 @@ import {
 } from '../run/model';
 import { RunCard } from './RunCard';
 import { RunCardRow } from './RunCardRow';
+import { RunGoldAmount } from './RunResources';
+import { Tooltip } from './shared/InfoTip';
+import { liveMediaForSlot } from '@chess-tactics/board-render';
 import { RunSceneViewport } from './RunWorkspace';
 import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
 
@@ -46,11 +49,6 @@ export function RunCommendatio({
     >
       <div className="run-commendatio">
         <h2 className="run-commendatio-question">Who do you serve?</h2>
-        {/*
-          The terms, and nothing else. A thin King hands over gold to make up the difference, so
-          the line states that the choice is not a matter of who is strongest.
-        */}
-        <p className="run-card-row-call">Enter one household. What it lacks, it pays for.</p>
         <RunCardRow count={offers.length} testId="run-commendatio-king-offers">
           {offers.map((kingId, index) => (
             <CommendatioSeat key={kingId} kingId={kingId}>
@@ -83,18 +81,35 @@ export function RunCommendatio({
  * again — so it is a property of this screen rather than of the card. The line keeps its seat
  * whether or not there is gold, so three cards sit at one height.
  */
+/**
+ * The gold-gain mark. It is the original directional mark drawn for unit disposal, whose own slot
+ * was retired with that feature; retirement is terminal, so the same archived bytes were installed
+ * into a slot of their own rather than the retired one being revived. Decorative: an absent slot
+ * falls back to the plain gold resource icon.
+ */
+function goldGainedMarkUrl(): string | null {
+  try {
+    return liveMediaForSlot('ui/run/resources/gold-gained.png').media?.immutableUrl ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function CommendatioSeat({ kingId, children }: { kingId: string; children: ReactNode }): ReactElement {
   const king = RUN_STARTER_CARD_BY_ID[kingId as RunStarterCardId];
   const bonus = king?.goldBonusTenths ?? 0;
+  const gainMark = goldGainedMarkUrl();
   return (
     <div className="run-card-grant-seat">
-      <p
-        className="run-card-grant-bonus"
-        data-testid={`run-commendatio-bonus-${kingId}`}
-        data-empty={bonus > 0 ? 'false' : 'true'}
-      >
-        {bonus > 0 ? `and ${formatGold(bonus)} gold` : 'and no gold'}
-      </p>
+      {bonus > 0 ? (
+        <Tooltip
+          className="run-card-grant-bonus"
+          label={`You gain ${formatGold(bonus)} gold on pickup`}
+          trigger={<RunGoldAmount valueTenths={bonus} iconSrc={gainMark ?? undefined} />}
+        >
+          You gain {formatGold(bonus)} gold on pickup.
+        </Tooltip>
+      ) : null}
       {children}
     </div>
   );

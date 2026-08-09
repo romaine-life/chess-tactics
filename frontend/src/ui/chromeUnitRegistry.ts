@@ -336,11 +336,13 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     maxWidth: 620,
     selectors: [
       '.le-md-item',
+      '.le-zone-row',
       '.palette-select-option',
       '[data-chrome-unit="inner-list-row"]',
     ],
     usage: [
       'Rules and event master-detail list rows',
+      'Zone picker rows',
       'Palette dropdown option rows',
       'Selectable named rows with trailing status text',
     ],
@@ -574,12 +576,10 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     parentId: 'inner-tool-square',
     selectors: [
       '.settings-stepper .settings-chrome-button',
-      '.le-zone-stepper-button.settings-chrome-button',
       '[data-chrome-unit="inner-plus-key"]',
     ],
     usage: [
       'Stepper increment key',
-      'Zone add/select controls',
     ],
   },
   {
@@ -598,12 +598,10 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     parentId: 'inner-tool-square',
     selectors: [
       '.settings-stepper .settings-chrome-button',
-      '.le-zone-stepper-button.settings-chrome-button',
       '[data-chrome-unit="inner-minus-key"]',
     ],
     usage: [
       'Stepper decrement key',
-      'Zone remove/select controls',
     ],
   },
   {
