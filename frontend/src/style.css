@@ -19532,10 +19532,23 @@ button.tileset-relationship-cell {
   min-block-size: 0;
 }
 
+/* The call heads the section on its own auto track so the elastic row below it stays the
+   one thing that takes the leftover lane. Without the leading `auto` the call claims the
+   1fr and the card row drops into an implicit track it cannot measure. Both are placed
+   explicitly, because the call is absent once the stall is bought out and auto-placement
+   would slide the row up into the auto track and collapse it exactly then. */
 .run-sectio-workspace-content:not(:has(.run-sectio-wrap-host)) > .run-sectio-cards-section {
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   min-block-size: 0;
   padding: var(--ds-inset);
+}
+
+.run-sectio-workspace-content:not(:has(.run-sectio-wrap-host)) > .run-sectio-cards-section > .run-card-row-call {
+  grid-row: 1;
+}
+
+.run-sectio-workspace-content:not(:has(.run-sectio-wrap-host)) > .run-sectio-cards-section > .run-card-grid {
+  grid-row: 2;
 }
 
 .run-battle-preview-content {
@@ -20856,9 +20869,11 @@ button.tileset-relationship-cell {
   padding: var(--ds-inset);
 }
 
-/* The only sentence on the Run's first screen, so it prints at the scale of something
-   meant to be read rather than a caption filed under the scene. */
-.run-vacantia-grant-call {
+/* What a row of cards is asking of the player, said once above it. The opening grant and
+   the Sectio deal the same faces at the same size and differ only in what they cost, so
+   the sentence that tells them apart is the same object on both and prints at the scale
+   of something meant to be read rather than a caption filed under the scene. */
+.run-card-row-call {
   color: var(--ink-strong);
   font-size: var(--ds-text-xl);
   letter-spacing: .02em;

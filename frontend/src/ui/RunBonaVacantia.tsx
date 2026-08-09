@@ -43,7 +43,7 @@ function RunVacantiaCardGrant({
         grant with no words on it reads as a shop the starting purse can barely afford.
         The line says what to do and that it is free before the badges can say otherwise.
       */}
-      <p className="run-vacantia-grant-call">Take one. They&apos;ll join for free.</p>
+      <p className="run-card-row-call">Take one. They&apos;ll join for free.</p>
       <RunCardRow count={offers.length} testId="run-vacantia-card-offers">
         {offers.map((coreId, index) => (
           <RunCard

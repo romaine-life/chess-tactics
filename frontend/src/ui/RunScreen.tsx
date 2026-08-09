@@ -1189,6 +1189,15 @@ function SectioPanel({
           aria-label="Cards"
         >
           <span className="sr-only" role="status" aria-live="polite">{adlectioAnnouncement}</span>
+          {/*
+            The answering half of the opening grant's line. Both screens deal the same faces
+            with the same number printed on them; only here is that number what you hand over.
+            It goes once the stall is bought out, so the screen never invites a take it has
+            just told you is impossible — the empty notice below speaks for that state.
+          */}
+          {availableOffers.length === 0 ? null : (
+            <p className="run-card-row-call">Take what you like. They require compensation.</p>
+          )}
           <SectioCardRow>
             {sectio.cardOffers.map((offer, index) => {
               const adlected = sectio.adlectedCardOfferIds.includes(offer.offerId);
