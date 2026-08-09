@@ -31,7 +31,10 @@ describe('Run Deployment secondary-click turn', () => {
 
   it('carries the gesture from the shared viewport to the Deployment board', () => {
     expect(skirmishBoard).toContain('onSecondaryClick?: () => void;');
-    expect(skirmishBoard).toContain('onSecondaryClick={onSecondaryClick}');
+    expect(skirmishBoard).toContain('onSecondaryClick={secondaryClick}');
+    // Deployment carries a formation on the cursor, so it OWNS the button while it is arranging;
+    // the board's own premove take-back (ADR-0550) is only the fallback.
+    expect(skirmishBoard).toContain('const secondaryClick = onSecondaryClick ?? takeBackPremoves;');
     expect(skirmish).toContain('onBoardSecondaryClick?: () => void;');
     expect(skirmish).toContain('onSecondaryClick={runDeployment?.onBoardSecondaryClick}');
   });

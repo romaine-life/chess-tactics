@@ -1776,7 +1776,8 @@ export function SkirmishBoard({
   renderCellOverlay?: (context: SkirmishBoardCellOverlayContext) => ReactNode;
   /** Board-space content, such as a placement ghost, seated in the canonical scene. */
   boardOverlay?: ReactNode;
-  /** A secondary click that never panned. Reserved for non-destructive phase modes. */
+  /** A secondary click that never panned, claimed by a phase that carries something on the
+   *  cursor. Left unset, the board takes its own premove chain back (ADR-0550). */
   onSecondaryClick?: () => void;
   className?: string;
   ariaLabel?: string;
@@ -2273,6 +2274,19 @@ export function SkirmishBoard({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [premoves.length, premoveSelectedId, clearPremoves]);
+  // ...and so does a right click on the board (ADR-0550), which is the gesture a chess player
+  // already reaches for. The board is wall-to-wall hit targets, so the secondary button also
+  // pans (ADR-0128) — ViewPane owns that distinction and only calls this for a press that
+  // released without ever crossing the pan threshold. A right DRAG moves the camera and keeps
+  // the chain; with nothing queued this does nothing at all.
+  const takeBackPremoves = useCallback(() => {
+    if (!interactionEnabled) return;
+    clearPremoves();
+    setPremoveSelectedId(null);
+  }, [clearPremoves, interactionEnabled]);
+  // Run Deployment claims the button to turn the formation it is carrying (ADR-0526). An
+  // ordinary battle board carries no formation, so the gesture is the take-back there.
+  const secondaryClick = onSecondaryClick ?? takeBackPremoves;
 
   // Resolve targets from the CURRENT input boundary, not the pickup boundary. In particular,
   // a premove drag may outlive the post-reply landing beat; once live control resumes, both its
@@ -2601,7 +2615,7 @@ export function SkirmishBoard({
         onMinimumZoomChange={setMinZoom}
         onViewportSizeChange={setViewViewportSize}
         onViewInteraction={markViewInteraction}
-        onSecondaryClick={onSecondaryClick}
+        onSecondaryClick={secondaryClick}
       >
         <BoardLabBoard
           board={board}
