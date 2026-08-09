@@ -3,6 +3,7 @@ import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import type { RunBattleTransformSink, RunBattleUndoAdapter } from '../game/store';
 import { defaultFacingForSide } from '../core/pieces';
 import { gameEnv, royalForkVictim } from '../core/rules';
+import { levelParTurns, speedBonusClockMs, speedBonusRemainingMs, speedBonusTenths } from '../core/speedBonus';
 import type { GameState, Piece, Vec } from '../core/types';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox } from './shared/ChromeBox';
@@ -1300,8 +1301,24 @@ function AftermathPanel({
 }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   const aftermath = run.aftermath!;
-  const levelName = run.war.battles[aftermath.battleIndex]?.level.name ?? '';
+  const battleLevel = run.war.battles[aftermath.battleIndex]?.level;
+  const levelName = battleLevel?.name ?? '';
   const named = levelName && !isGeneratedRunBattleName(levelName) ? levelName : null;
+  // Par and the speed bonus are DERIVED here from the Battle's own level and the report's
+  // frozen elapsed time -- the same pure functions closeBattle paid the gold with, so this
+  // screen reports the exact number the Run banks without the saved report carrying a field
+  // for it (ADR-0539).
+  const parTurns = battleLevel ? levelParTurns(battleLevel) : null;
+  const speedTenths = battleLevel ? speedBonusTenths(battleLevel, aftermath.elapsedMs) : 0;
+  const speedClockMs = battleLevel ? speedBonusClockMs(battleLevel) : 0;
+  const speedRemainingMs = battleLevel ? speedBonusRemainingMs(battleLevel, aftermath.elapsedMs) : 0;
+  const underPar = parTurns === null ? 0 : parTurns - aftermath.turns;
+  // One line naming every source folded into the purse, so the measures below read as a
+  // breakdown of "Gold won" rather than as extras stacked on top of it.
+  const goldSources = [
+    aftermath.bonusGoldTenths ? LIPSANON_BY_ID['mercenarys-rifle'].name : null,
+    speedTenths ? 'the speed bonus' : null,
+  ].filter((source): source is string => source !== null);
   return (
     <RunSceneViewport
       scene={{
@@ -1322,15 +1339,36 @@ function AftermathPanel({
         <dl className="run-aftermath-ledger">
           <AftermathMeasure
             label="Gold won"
-            detail={aftermath.bonusGoldTenths
-              ? `including ${LIPSANON_BY_ID['mercenarys-rifle'].name}`
-              : null}
+            detail={goldSources.length ? `including ${goldSources.join(' and ')}` : null}
           >
             <RunGoldAmount valueTenths={aftermath.goldTenths} />
           </AftermathMeasure>
-          <AftermathMeasure label="Turns taken">{aftermath.turns}</AftermathMeasure>
+          {/* Par is a benchmark and never a rule -- crossing it costs nothing, so the detail
+              states the standing plainly rather than dressing it as a pass or a failure. */}
+          <AftermathMeasure
+            label="Turns taken"
+            detail={parTurns === null ? null : (
+              underPar > 0
+                ? `${underPar} under par of ${parTurns}`
+                : underPar < 0
+                  ? `${-underPar} over par of ${parTurns}`
+                  : `Level par of ${parTurns}`
+            )}
+          >
+            {aftermath.turns}
+          </AftermathMeasure>
           <AftermathMeasure label="Time">
             {aftermath.elapsedMs === null ? '—' : formatBattleElapsed(aftermath.elapsedMs)}
+          </AftermathMeasure>
+          {/* What the clock paid. The bonus clock is sized from par and is not lethal: an
+              exhausted one reads 0:00 here and took nothing away from the fight. */}
+          <AftermathMeasure
+            label="Speed bonus"
+            detail={aftermath.elapsedMs === null
+              ? 'The battle clock was never started.'
+              : `${formatBattleElapsed(speedRemainingMs)} left of ${formatBattleElapsed(speedClockMs)}`}
+          >
+            <RunGoldAmount valueTenths={speedTenths} />
           </AftermathMeasure>
           {/* Being taken off the board costs a unit the rest of the Battle and nothing more --
               it is back in the army for the next one. "Fallen" read as a permanent loss the

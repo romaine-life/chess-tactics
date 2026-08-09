@@ -190,7 +190,7 @@ export function levelEditorHrefForDocument(
   url.searchParams.set('document', document.documentId);
   url.searchParams.delete('map');
   if (!options.keepRecoverySnapshot) {
-    for (const param of ['board', 'name', 'obj', 'survive', 'time', 'inc', 'events', 'victory', 'docRev']) {
+    for (const param of ['board', 'name', 'obj', 'survive', 'time', 'inc', 'par', 'events', 'victory', 'docRev']) {
       url.searchParams.delete(param);
     }
   }
