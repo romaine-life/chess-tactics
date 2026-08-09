@@ -5843,6 +5843,22 @@ const MIGRATIONS = [
        WHERE body->'runSaveVersion' = '33'::jsonb;
     `,
   },
+  {
+    version: 74,
+    name: 'Commendatio is its own phase',
+    // The Run's opening screen had been riding Bona Vacantia, which is the RELIC phase a Conflict
+    // opens with -- one state doing two unrelated jobs, and the conflation read immediately as a
+    // bug. Commendatio gets its own phase and its own field. Migration 73 already moved every Run
+    // off the retired opening screen, so nothing is in flight there and each Run simply gains the
+    // empty field.
+    sql: `
+      UPDATE active_runs
+         SET body = body || jsonb_build_object('runSaveVersion', 35, 'commendatio', 'null'::jsonb),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE body->'runSaveVersion' = '34'::jsonb;
+    `,
+  },
 ];
 
 let pool = null;

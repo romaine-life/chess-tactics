@@ -48,6 +48,7 @@ import {
   sectioCardOffersAtCursor,
   sectioCardPile,
   sectioPileRarityQuota,
+  takeCommendatioKing,
   takeVacantiaCard,
   takeVacantiaLipsanon,
   type RunDocument,
@@ -344,14 +345,14 @@ describe('plain Run creation and acquisition', () => {
   it('opens the player-facing Run on three shuffled Kings and nothing else', () => {
     const dealt = [1, 7, 42, 1234].map((seed) => {
       const run = createRun(war(), seed, { chooseKing: true });
-      expect(run.phase).toBe('bona-vacantia');
-      expect(run.vacantia!.kind).toBe('opening');
-      expect(run.vacantia!.offers).toEqual([]);
+      // Commendatio is its own phase. Bona Vacantia is the RELIC phase a Conflict opens with.
+      expect(run.phase).toBe('commendatio');
+      expect(run.vacantia).toBeNull();
       // Nothing is held until a King is taken: the choice is what gives the Run its army.
       expect(run.army).toEqual([]);
       expect(run.cards).toEqual([]);
       expect(run.goldTenths).toBe(RUN_STARTING_GOLD_TENTHS);
-      const offers = run.vacantia!.cardOffers;
+      const offers = run.commendatio!.kingOffers;
       expect(offers).toHaveLength(3);
       expect(new Set(offers).size).toBe(3);
       for (const id of offers) expect(RUN_STARTER_CARDS.some((king) => king.id === id)).toBe(true);
@@ -363,12 +364,12 @@ describe('plain Run creation and acquisition', () => {
 
   it('takes a King from the opening screen into its army, card and gold', () => {
     const run = createRun(war(), 42, { chooseKing: true });
-    const chosen = run.vacantia!.cardOffers[0];
+    const chosen = run.commendatio!.kingOffers[0];
     const king = RUN_STARTER_CARDS.find((candidate) => candidate.id === chosen)!;
-    const taken = takeVacantiaCard(run, chosen);
+    const taken = takeCommendatioKing(run, chosen);
 
     expect(taken.phase).toBe('deployment');
-    expect(taken.vacantia).toBeNull();
+    expect(taken.commendatio).toBeNull();
     expect(taken.cards).toHaveLength(1);
     expect(taken.cards[0].coreId).toBe(chosen);
     expect(taken.army.map((unit) => unit.type)).toEqual(king.pieces);
@@ -383,7 +384,7 @@ describe('plain Run creation and acquisition', () => {
   it('moves a save parked on the retired opening grant into its Deployment', () => {
     const stale = {
       ...createRun(war(), 29),
-      runSaveVersion: CURRENT_RUN_SAVE_VERSION - 1,
+      runSaveVersion: CURRENT_RUN_SAVE_VERSION - 2,
       phase: 'bona-vacantia',
       vacantia: {
         kind: 'opening', conflictIndex: 0, afterBattleIndex: 0, victoryGoldTenths: 0, offers: [], cardOffers: ['p'],

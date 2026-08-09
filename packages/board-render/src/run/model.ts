@@ -28,7 +28,7 @@ export {
 };
 
 /** The schema version of one persisted in-progress Run. Only this exact save shape is read. */
-export const CURRENT_RUN_SAVE_VERSION = 34;
+export const CURRENT_RUN_SAVE_VERSION = 35;
 export type RunSaveVersion = typeof CURRENT_RUN_SAVE_VERSION;
 
 export class UnsupportedRunSaveError extends Error {
@@ -55,6 +55,7 @@ const RUN_SAVE_VERSION_PLAYER_FORMATIONS_SOURCE = 29;
 const RUN_SAVE_VERSION_ARRANGED_PILE_SOURCE = 30;
 const RUN_SAVE_VERSION_OPENING_CARD_GRANT_SOURCE = 31;
 const RUN_SAVE_VERSION_AUTHORED_DEAL_SOURCE = 33;
+const RUN_SAVE_VERSION_KING_CHOICE_SOURCE = 34;
 const RUN_SAVE_VERSION_RARITY_BANDS_SOURCE = 32;
 export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
@@ -449,7 +450,8 @@ export interface RunWarSnapshot {
  * the Run moves on. The reward used to be reported by a line inside the Sectio, which put
  * the result of the fight in the room where the money is spent.
  */
-export type RunPhase = 'aftermath' | 'bona-vacantia' | 'deployment' | 'battle' | 'sectio' | 'victory';
+export type RunPhase =
+  | 'aftermath' | 'bona-vacantia' | 'commendatio' | 'deployment' | 'battle' | 'sectio' | 'victory';
 
 export type RunDeploymentTransport = 'paused' | 'playing' | 'full-deploy';
 export type RunDeploymentMode = 'automatic' | 'arranged';
@@ -571,6 +573,17 @@ export interface RunSectioState {
  * offers formation cards instead, so the player reaches Battle 1 holding something to arrange.
  * The two offer lists are exclusive -- `kind` decides which one is populated.
  */
+/**
+ * Commendatio: the act of entering a lord's service, and the Run's opening screen. It asks whose
+ * household you join and deals three Kings to choose between. It is NOT Bona Vacantia -- that is
+ * the relic phase a Conflict opens with, later and repeatedly. They shared a state once and the
+ * conflation was immediately confusing.
+ */
+export interface RunCommendatioState {
+  /** Starter card ids, three of the fifteen, shuffled by the Run's own seed. */
+  kingOffers: string[];
+}
+
 export interface RunVacantiaState {
   kind: 'opening' | 'post-battle';
   conflictIndex: number;
@@ -622,6 +635,7 @@ export interface RunDocument {
   aftermath: RunAftermathState | null;
   sectio: RunSectioState | null;
   vacantia: RunVacantiaState | null;
+  commendatio: RunCommendatioState | null;
 }
 
 /** Stable identity for the one playable battle inside a Run. Level ids are not
@@ -1452,25 +1466,19 @@ export function createRun(
     aftermath: null,
     sectio: null,
     vacantia: null,
+    commendatio: null,
   } satisfies RunDocument;
   // Only the player-facing entry asks for the choice. Craft links, the War editor and every test
   // name their King (or take the default) and get a Run that is already in Deployment.
   if (!chooseKing) return base;
   return {
     ...base,
-    phase: 'bona-vacantia',
+    phase: 'commendatio',
     goldTenths: RUN_STARTING_GOLD_TENTHS,
     army: [],
     cards: [],
     nextArmyUnitNumberByType: initialArmyNumberState(),
-    vacantia: {
-      kind: 'opening',
-      conflictIndex: 0,
-      afterBattleIndex: 0,
-      victoryGoldTenths: 0,
-      offers: [],
-      cardOffers: openingKingOffers(seed),
-    },
+    commendatio: { kingOffers: openingKingOffers(seed) },
   };
 }
 
@@ -2784,6 +2792,9 @@ export function migrateRunSaveDocument(value: unknown): RunDocument {
   if (stored.runSaveVersion === RUN_SAVE_VERSION_AUTHORED_DEAL_SOURCE) {
     stored = migrateRunToKingChoice(stored);
   }
+  if (stored.runSaveVersion === RUN_SAVE_VERSION_KING_CHOICE_SOURCE) {
+    stored = migrateRunToCommendatio(stored);
+  }
   return normalizeRunDocument(stored as unknown as RunDocument);
 }
 
@@ -2801,9 +2812,19 @@ function migrateRunToKingChoice(stored: Record<string, unknown>): Record<string,
   const parkedOnOpeningGrant = stored.phase === 'bona-vacantia' && vacantia?.kind === 'opening';
   return {
     ...stored,
-    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    runSaveVersion: RUN_SAVE_VERSION_KING_CHOICE_SOURCE,
     ...(parkedOnOpeningGrant ? { phase: 'deployment', vacantia: null } : {}),
   };
+}
+
+/**
+ * Commendatio becomes its own phase. It had been riding Bona Vacantia, which is the RELIC phase a
+ * Conflict opens with -- one state doing two unrelated jobs, and the conflation read immediately as
+ * a bug. The previous migration already cleared every Run off the retired opening screen, so
+ * nothing is in flight there and each Run simply gains the empty field.
+ */
+function migrateRunToCommendatio(stored: Record<string, unknown>): Record<string, unknown> {
+  return { ...stored, runSaveVersion: CURRENT_RUN_SAVE_VERSION, commendatio: null };
 }
 
 export function addArmyPieces(
@@ -3676,29 +3697,37 @@ export function takeVacantiaLipsanon(run: RunDocument, lipsanon: LipsanonId): Ru
  * taking it is what opens Deployment. It admits the card the same way Adlectio does, so the
  * units, seats, and card sequence are indistinguishable from a purchased formation.
  */
+/**
+ * Entering a King's service. This is what gives the Run its army, its one held card and its
+ * opening gold, so a Run genuinely cannot exist without the choice having been made.
+ */
+export function takeCommendatioKing(run: RunDocument, kingId: string): RunDocument {
+  if (
+    run.phase !== 'commendatio'
+    || !run.commendatio?.kingOffers.includes(kingId)
+  ) return run;
+  const king = RUN_STARTER_CARD_BY_ID[kingId as RunStarterCardId];
+  if (!king) return run;
+  const army = initialArmy(run.seed, king);
+  return touch({
+    ...run,
+    army,
+    cards: initialCards(king, army),
+    goldTenths: run.goldTenths + king.goldBonusTenths,
+    nextArmyUnitNumberByType: initialArmyNumbersFor(king),
+    phase: 'deployment',
+    commendatio: null,
+    vacantia: null,
+    sectio: null,
+  });
+}
+
 export function takeVacantiaCard(run: RunDocument, coreId: string): RunDocument {
   if (
     run.phase !== 'bona-vacantia'
     || run.vacantia?.kind !== 'opening'
     || !run.vacantia.cardOffers.includes(coreId)
   ) return run;
-  // The opening screen now deals KINGS, so a starter card is the expected answer here: taking one
-  // is what gives the Run its army, its one held card and its opening gold. A Run that already
-  // holds a King (a crafted or migrated one) still takes an ordinary offer card the old way.
-  const king = RUN_STARTER_CARD_BY_ID[coreId as RunStarterCardId];
-  if (king) {
-    const army = initialArmy(run.seed, king);
-    return touch({
-      ...run,
-      army,
-      cards: [...run.cards, ...initialCards(king, army)],
-      goldTenths: run.goldTenths + king.goldBonusTenths,
-      nextArmyUnitNumberByType: initialArmyNumbersFor(king),
-      phase: 'deployment',
-      vacantia: null,
-      sectio: null,
-    });
-  }
   // Deck lookup, not runCardDefinition: the grant is an offer card, and the starter
   // catalog it would also reach carries a King that no admission may add.
   const definition = RUN_CARD_BY_ID[coreId];

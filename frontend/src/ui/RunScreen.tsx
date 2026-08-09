@@ -100,6 +100,7 @@ import { runLinkTargetMismatch } from '../run/craft';
 import { useRunCraft } from './useRunCraft';
 import { clearCraftedBattleResult, craftedBattleResultFor } from './craftedRunLanding';
 import { LipsanonIcon, LipsanaWorkspace } from './Lipsana';
+import { RunCommendatio } from './RunCommendatio';
 import { RunBonaVacantia } from './RunBonaVacantia';
 import { useLipsanonFlight } from './runLipsanonFlightView';
 import { RunGoldAmount } from './RunResources';
@@ -194,6 +195,7 @@ function runPhaseRouteName(run: RunDocument): string {
       : run.phase === 'bona-vacantia'
         ? 'Bona Vacantia'
         : `${run.phase.charAt(0).toUpperCase()}${run.phase.slice(1)}`;
+  // Commendatio capitalises from its own id, so it needs no case of its own here.
 }
 
 export function runTitleBarRouteSegments(
@@ -1959,6 +1961,8 @@ export function RunScreen({
             )
             // Explicit, because the branch below is an else-fallthrough: any phase without
             // its own case silently renders Victory.
+            : shellRun.phase === 'commendatio' && shellRun.commendatio
+              ? <RunCommendatio run={shellRun} replace={replace} />
             : shellRun.phase === 'bona-vacantia' && shellRun.vacantia
               ? (
                 <RunBonaVacantia

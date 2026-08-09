@@ -27774,3 +27774,18 @@ button.run-card-formation-cell {
 .run-card-grant-bonus[data-empty='true'] {
   opacity: 0.55;
 }
+
+/* Commendatio asks one question and shows three answers. The question is the loudest thing on the
+   screen because the room behind it is deliberately empty of the man it names. */
+.run-commendatio {
+  display: grid;
+  gap: var(--ds-space-2);
+  justify-items: center;
+  align-content: center;
+  min-block-size: 0;
+}
+
+.run-commendatio-question {
+  margin: 0;
+  text-align: center;
+}
