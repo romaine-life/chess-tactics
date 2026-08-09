@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:5ee81d5effcfc01e9d9b9b947ce67f627cfaffde0936b668534063d67dc30b1d"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:cf39a83d521ce4815ded6804a26f033814f0f3d836e95356ac20059e60e324bc"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Level Editor: a War tab that shows the force a Battle will actually meet"
-  prNumber: "816"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/816"
-  commit: "8ff547f8"
+  prTitle: "A scroll rail is drawn only when there is something to scroll (ADR-0536)"
+  prNumber: "817"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/817"
+  commit: "c61cbde2"
 
 name: chess-tactics
 namespace: chess-tactics
