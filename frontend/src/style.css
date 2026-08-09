@@ -1161,14 +1161,23 @@ h1 {
   align-items: center;
   background: rgba(3, 12, 19, .74);
   border: 1px solid rgba(91, 157, 216, .26);
-  display: grid;
-  gap: 12px;
-  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
   min-height: 34px;
   padding: 4px 6px 4px 10px;
 }
-.predrawn-grid-calibration-bar.is-local {
-  grid-template-columns: auto minmax(0, 1fr) auto;
+/* Coarse fitting carries measurements AND actions. A rigid track list crushed the correction
+   readout into a one-word column and pushed the last action off the edge, so the groups flow and
+   wrap instead: everything stays legible at 1440 and collapses to one row when there is room. */
+.predrawn-grid-legend,
+.predrawn-grid-size-controls,
+.predrawn-grid-uniform-scale {
+  flex: 0 0 auto;
+}
+.predrawn-grid-calibration-bar > output {
+  flex: 1 1 220px;
+  min-width: 0;
 }
 .predrawn-grid-size-controls {
   align-items: end;
@@ -1229,6 +1238,7 @@ h1 {
 .predrawn-grid-calibration-actions {
   align-items: center;
   display: flex;
+  flex: 1 1 auto;
   flex-wrap: wrap;
   gap: 5px;
   justify-content: end;
@@ -1247,6 +1257,34 @@ h1 {
 .predrawn-grid-calibration-bar .predrawn-grid-uniform-scale .le-seg-btn {
   min-width: 34px;
   padding-inline: 6px;
+}
+.predrawn-grid-uniform-scale input[type="range"] {
+  accent-color: #42dcff;
+  cursor: ew-resize;
+  height: 20px;
+  width: 118px;
+}
+.predrawn-grid-uniform-scale input[type="range"]:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+.predrawn-grid-calibration-bar .predrawn-grid-uniform-scale output {
+  color: var(--ds-ink-3, #9eb1c5);
+  font-size: 10px;
+  min-width: 56px;
+  text-align: left;
+  white-space: nowrap;
+}
+.predrawn-grid-level-link {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding-left: 2px;
+}
+.predrawn-grid-calibration-bar .predrawn-grid-level-link .le-seg-btn {
+  min-width: 0;
+  padding-inline: 8px;
 }
 .predrawn-grid-history {
   border-right: 1px solid rgba(91, 157, 216, .24);
@@ -1747,21 +1785,17 @@ h1 {
     justify-content: end;
     width: 100%;
   }
-  .predrawn-grid-calibration-bar {
-    grid-template-columns: 1fr auto;
-  }
-  .predrawn-grid-calibration-bar.is-local {
-    grid-template-columns: 1fr;
-  }
   .predrawn-grid-size-controls {
     border-left: 0;
-    grid-column: 1 / -1;
-    grid-row: 2;
+    flex: 1 1 100%;
     padding-left: 0;
   }
-  .predrawn-grid-calibration-bar output {
-    grid-column: 1 / -1;
-    grid-row: 3;
+  .predrawn-grid-uniform-scale {
+    flex: 1 1 100%;
+    padding-left: 0;
+  }
+  .predrawn-grid-calibration-bar > output {
+    flex: 1 1 100%;
     text-align: left;
   }
   .predrawn-generation-frame-header,

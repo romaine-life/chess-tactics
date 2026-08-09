@@ -406,6 +406,7 @@ export function PredrawnBackgroundVersionsPanel({
   canWrite,
   getEditFence,
   onSetSurface,
+  onResizeBoard,
   onDocumentUpdated,
   onOpenCanonicalAction,
   onMutationError,
@@ -428,6 +429,14 @@ export function PredrawnBackgroundVersionsPanel({
   canWrite: boolean;
   getEditFence: () => EditorDocumentEditFence | null;
   onSetSurface: (surface: VersionedPredrawnBoardSurface) => void;
+  /**
+   * Resize the working copy's playable grid from the grid fitter.
+   *
+   * The fitter measures the grid the candidate PAINTED, which is why it may differ from the
+   * authored board; this is the way back, so a measurement the owner accepts can become the
+   * level's own count instead of a permanent mismatch.
+   */
+  onResizeBoard?: (columns: number, rows: number) => void;
   onDocumentUpdated: (result: PredrawnGenerationAttemptWorkspaceMutationResult) => void;
   onOpenCanonicalAction: () => void;
   onMutationError: (error: unknown) => boolean;
@@ -2992,6 +3001,7 @@ export function PredrawnBackgroundVersionsPanel({
           columns={board.cols}
           rows={board.rows}
           onChange={setRegistration}
+          onApplyLevelGrid={canWrite ? onResizeBoard : undefined}
           onSaveRegistration={(next) => {
             storePredrawnBoardRegistration(
               predrawnBackgroundVersionContentUrl(selectedBackground.id),
