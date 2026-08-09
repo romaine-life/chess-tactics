@@ -20261,16 +20261,19 @@ button.tileset-relationship-cell {
 
    And it is PUT ON the card rather than switched on over it. Appearing at full strength on its
    final centre gives a padlock no arrival at all -- it is simply somewhere it had not been, which
-   is the one thing a heavy object never does. It comes down onto the face over the same beat and
-   the same curve the card uses to settle underneath it, so the two read as one hand closing the
-   offer. A visit entered already spent mounts in the locked state and plays nothing: nothing has
-   just happened there. */
+   is the one thing a heavy object never does.
+
+   It comes down at the speed a Run card moves: the hover RAISE, exactly -- same duration, same
+   curve, and the same distance, since the descent IS the tuned hover raise read backwards. A card
+   lifting under the pointer and a lock being set onto one are one move in two directions, and
+   binding them means the Studio cannot tune the two of them apart. A visit entered already spent
+   mounts locked and plays nothing: nothing has just happened there. */
 .run-card-pile-lock {
   opacity: 0;
   transition:
-    opacity var(--ds-duration-fade) var(--ds-ease-standard),
-    translate var(--ds-duration-fade) var(--ds-ease-standard);
-  translate: 0 calc(-1 * var(--run-card-lock-descent, 18px));
+    opacity var(--run-card-raise-duration) var(--run-card-raise-ease),
+    translate var(--run-card-raise-duration) var(--run-card-raise-ease);
+  translate: 0 calc(-1 * var(--run-card-hover-raise, 7px));
 }
 
 .run-card-pile-lock.is-locked {
@@ -20340,6 +20343,15 @@ button.tileset-relationship-cell {
    easier write and the wrong one -- it rings the layout rectangle, and it is surface paint under
    the ADR-0032/0059 contract, which this is not. Nothing here paints a surface or touches the
    printed face. */
+
+/* How fast a Run card MOVES when something happens to it, named once because two gestures have
+   to agree. A hovered card is picked up off the table over this; a padlock is set down onto a
+   locked one over the same, across the same distance -- the tuned hover raise -- so the two are
+   one move in opposite directions rather than two speeds a screen has to reconcile. */
+:root {
+  --run-card-raise-duration: 200ms;
+  --run-card-raise-ease: cubic-bezier(0.2, 0.75, 0.3, 1);
+}
 
 /* Registered so the amplitude itself can be TRANSITIONED. That is what lets a hovered card
    settle: the drift keeps running on its own clock while its rise eases to zero, so the card
@@ -20471,7 +20483,12 @@ button.tileset-relationship-cell {
     var(--run-card-float-timing, linear)
     var(--run-card-float-delay, 0s)
     infinite !important;
-  transition: --run-card-float-rise 240ms cubic-bezier(0.3, 0.7, 0.3, 1);
+  /* The steady light rides the settle: a hovered card never changes it, and a locked one has to
+     lose it over exactly the beat it comes to rest, or the card is still moving after it has
+     gone dark. */
+  transition:
+    --run-card-float-rise 240ms cubic-bezier(0.3, 0.7, 0.3, 1),
+    --run-card-glow 240ms cubic-bezier(0.3, 0.7, 0.3, 1);
   /* Promoted deliberately: a composited layer is rasterized once and MOVED by the compositor,
      so whole-pixel drift never resamples this pixel art. */
   will-change: translate;
@@ -20497,7 +20514,7 @@ button.tileset-relationship-cell {
     --run-card-flare 220ms ease,
     --run-card-glow-pulse 240ms cubic-bezier(0.3, 0.7, 0.3, 1),
     --run-card-lift 220ms ease,
-    translate 200ms cubic-bezier(0.2, 0.75, 0.3, 1);
+    translate var(--run-card-raise-duration) var(--run-card-raise-ease);
 }
 
 /* The two cases that hold ONE steady light rather than a breathing one, at the emanation's
@@ -20557,20 +20574,14 @@ button.tileset-relationship-cell {
    taking the animation away: the rise eases to nothing, so a card caught mid-drift comes DOWN
    onto its seat instead of snapping onto it.
 
-   It does NOT inherit the hover settle's timing, though. That curve is tuned for a card being
-   PICKED UP -- 240ms with two thirds of the travel spent in its first quarter, so the card
-   answers the pointer instantly -- and over the few pixels of drift a lock happens to catch,
-   answering instantly is indistinguishable from not moving at all. Being set down and closed is
-   the opposite gesture: the standard curve is slow off the mark and slow into the seat, and over
-   the fade duration that is a glide. The light leaves on the same curve and the same beat, so the
-   card dimming and the card settling are one event rather than a cut followed by a glide. */
+   It is the hover's own settle, on the hover's own timing: the rise and the steady light ease out
+   over the beat a hovered card takes to come to rest, because that is the speed a Run card moves
+   at. The lock coming down over it is the hover RAISE, same duration, same curve, same distance.
+   Nothing here invents a pace of its own. */
 .run-card-pile.is-locked {
   --run-card-float-rise: 0px;
   --run-card-glow: 0;
   --run-card-glow-pulse: 0;
-  transition:
-    --run-card-float-rise var(--ds-duration-fade) var(--ds-ease-standard),
-    --run-card-glow var(--ds-duration-fade) var(--ds-ease-standard);
 }
 
 .run-card-pile.is-locked,

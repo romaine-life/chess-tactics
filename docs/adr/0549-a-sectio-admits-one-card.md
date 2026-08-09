@@ -55,26 +55,26 @@ Adlectio announcement says the visit admits no other card. It is present for the
 hidden until it locks, rather than mounted at the moment of locking — a lock mounted then is
 fetched then too, and the survivors stand unmarked until it arrives.
 
-**The lock is put on the card, and the card goes quiet under it.** These are one gesture on one
-beat, and every part of it takes the same duration and the same standard curve:
+**The lock is put on the card, and the card goes quiet under it.** These are one gesture, and
+every part of it moves at **the speed a Run card already moves** — the hover, which is the only
+place this screen had ever said how fast one of these objects travels. Nothing here invents a
+pace of its own:
 
-- The padlock **comes down onto the face** and fades up from just above its seat. Appearing at
-  full strength on its final centre gives it no arrival at all — it is simply somewhere it had
-  not been, which is the one thing a heavy object never does.
-- The card's **drift settles**. A card's life — its drift, and the gold emanation it throws — is
-  the card asking to be picked up, and a Sectio that has spent its admission is not asking for
-  anything. The rise eases to nothing through the seat's own registered variable, with the
-  animation paused rather than deleted, so a card caught mid-drift comes down onto its seat
-  instead of snapping onto it.
-- The **light leaves** with it. `--run-card-glow` is registered for this: every use already read
-  it as `var(--run-card-glow, 1)`, so an initial value of 1 changes nothing and makes the steady
-  level transitionable. A light that cut out while the card was still moving would be a second
-  event laid over the first.
-
-The settle deliberately does not inherit the hover timing. That curve is tuned for a card being
-picked up — fast off the mark, so the card answers the pointer instantly — and over the few
-pixels of drift a lock happens to catch, answering instantly is indistinguishable from not moving
-at all. Being set down and closed is the opposite gesture.
+- The padlock **comes down onto the face** and fades up. Appearing at full strength on its final
+  centre gives it no arrival at all — it is simply somewhere it had not been, which is the one
+  thing a heavy object never does. It descends on the hover **raise**: same duration, same curve,
+  and the same distance, because the descent *is* the tuned hover raise read backwards. A card
+  lifting under the pointer and a lock being set onto one are one move in two directions, and
+  binding them to one pair of variables means the Studio cannot tune them apart.
+- The card's **drift settles** on the hover **settle**. A card's life — its drift, and the gold
+  emanation it throws — is the card asking to be picked up, and a Sectio that has spent its
+  admission is not asking for anything. The rise eases to nothing through the seat's own
+  registered variable, with the animation paused rather than deleted, so a card caught mid-drift
+  comes down onto its seat instead of snapping onto it.
+- The **light leaves with the settle**, on that same timing. `--run-card-glow` is registered for
+  this: every use already read it as `var(--run-card-glow, 1)`, so an initial value of 1 changes
+  nothing and makes the tuned steady level transitionable. A light that cut out while the card
+  was still moving would be a second event laid over the first.
 
 **The pointer says nothing.** `not-allowed`'s barred circle adds a rebuke on top of a state the
 card has already stated plainly, so a disabled Run card takes the ordinary arrow. That covers the

@@ -299,10 +299,17 @@ describe('Run chrome hierarchy', () => {
     // is: a lock mounted at the moment of locking is fetched then too, and the survivors of an
     // Adlectio stand unmarked until it arrives.
     expect(runScreen).toContain('lockMediaUrl={lockMediaUrl}');
-    // And it is PUT ON the card: it comes down onto the face and fades up over the same beat and
-    // curve the card settles on, rather than appearing at full strength on its final centre.
-    expect(styleCss).toMatch(/\.run-card-pile-lock\s*\{[\s\S]*?opacity:\s*0;[\s\S]*?translate:\s*0 calc\(-1 \* var\(--run-card-lock-descent/);
+    // And it is PUT ON the card rather than switched on over it: it comes down onto the face and
+    // fades up. At the speed a Run card moves -- the hover RAISE exactly, same duration, same
+    // curve, and the same distance, so the Studio cannot tune the two of them apart.
+    expect(styleCss).toMatch(/\.run-card-pile-lock\s*\{[\s\S]*?opacity:\s*0;[\s\S]*?translate:\s*0 calc\(-1 \* var\(--run-card-hover-raise, 7px\)\);/);
     expect(styleCss).toMatch(/\.run-card-pile-lock\.is-locked\s*\{[\s\S]*?opacity:\s*1;[\s\S]*?translate:\s*0 0;/);
+    expect(styleCss).toMatch(/\.run-card-pile-lock\s*\{[\s\S]*?transition:[\s\S]*?opacity var\(--run-card-raise-duration\) var\(--run-card-raise-ease\),[\s\S]*?translate var\(--run-card-raise-duration\) var\(--run-card-raise-ease\);/);
+    // The same two variables the hovered card's own raise is declared with -- one speed, named
+    // once, so neither gesture can drift away from the other.
+    expect(styleCss).toMatch(/\.run-card-alive \.run-card-action\s*\{[\s\S]*?translate var\(--run-card-raise-duration\) var\(--run-card-raise-ease\);/);
+    // The settle and the light it takes with it stay on the hover settle's own timing.
+    expect(styleCss).toMatch(/\.run-card-alive\s*\{[\s\S]*?--run-card-float-rise 240ms cubic-bezier\(0\.3, 0\.7, 0\.3, 1\),[\s\S]*?--run-card-glow 240ms cubic-bezier\(0\.3, 0\.7, 0\.3, 1\);/);
     expect(runScreen).not.toContain('run-sectio-cards-empty');
     expect(runCardFlight).toContain('<RunCard card={flight.offer} mode="reference" />');
     expect(runCard).not.toContain('run-card-purchased-indicator');
