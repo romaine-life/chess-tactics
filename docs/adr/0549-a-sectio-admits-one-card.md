@@ -51,7 +51,21 @@ glyph the app already uses. A second padlock drawn for one row would be a bespok
 the back, sized as a share of the card so it stays an object laid on the card rather than a badge
 stuck to a control, and inert so the disabled offer beneath it is still what the pointer meets.
 It is decorative to assistive technology: the disabled control carries the state, and the
-Adlectio announcement says the visit admits no other card.
+Adlectio announcement says the visit admits no other card. It is supplied for the whole visit and
+concealed until it locks, exactly as the back beneath it is — a lock mounted at the moment of
+locking is fetched at that moment too, and the survivors stand unmarked until it arrives.
+
+**A locked offer stops asking.** A card's life — its drift, and the gold emanation it throws — is
+the card asking to be picked up, and a Sectio that has spent its admission is not asking for
+anything. Both end when the padlock lands, settled through the seat's own registered variables
+and the same pause a hovered card uses rather than by deleting the animation: the rise eases to
+nothing over its transition, so a card caught mid-drift comes down onto its seat instead of
+snapping onto it. The steady light has no such easing to ride, so it goes out on the beat the
+lock arrives — one event, not a fade.
+
+**The pointer says nothing.** `not-allowed`'s barred circle adds a rebuke on top of a state the
+card has already stated plainly, so a disabled Run card takes the ordinary arrow. That covers the
+unaffordable offer as well: neither is an error to be scolded for reaching toward.
 
 Every unbought offer stays on the table, face up and unfaded — cards here are printed art, never
 faded controls (ADR-0481), and what a player turned down is part of what they decided. The

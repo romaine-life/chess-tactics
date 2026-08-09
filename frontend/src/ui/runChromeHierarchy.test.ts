@@ -286,7 +286,15 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('disabled={adlectioSpent || run.goldTenths < offer.cost * GOLD_SCALE}');
     // The kit's own lock, not a mark drawn for this row.
     expect(runScreen).toContain("const RUN_SECTIO_LOCK_SLOT = 'ui/kit/icons/lock.png';");
-    expect(runCardPile).toContain("data-run-card-pile-lock={locked ? 'locked' : 'open'}");
+    expect(runCardPile).toContain("data-run-card-pile-lock={sealed ? 'locked' : 'open'}");
+    // A locked offer stops asking: the drift and the gold emanation are settled through the
+    // seat's own registered vars and paused, not deleted, so a card caught mid-drift comes down
+    // onto its seat instead of snapping onto it.
+    expect(runCardPile).toContain('const sealed = covered && locked;');
+    expect(styleCss).toMatch(/\.run-card-pile\.is-locked\s*\{[\s\S]*?--run-card-float-rise:\s*0px;[\s\S]*?--run-card-glow:\s*0;/);
+    expect(styleCss).toMatch(/\.run-card-pile\.is-locked \.run-card-action\s*\{\s*animation-play-state:\s*paused\s*!important;/);
+    // A card you cannot take is not an error to be scolded for reaching toward.
+    expect(styleCss).toMatch(/\.run-card-action:disabled\s*\{[\s\S]*?cursor:\s*default;/);
     // Supplied for the whole visit and CONCEALED until it locks, exactly as the back beneath it
     // is: a lock mounted at the moment of locking is fetched then too, and the survivors of an
     // Adlectio stand unmarked until it arrives.

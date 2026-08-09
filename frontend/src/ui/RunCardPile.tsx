@@ -32,16 +32,27 @@ export function RunCardPile({
    * The pile's place in the row, which makes it drift and glow on its own clock. The WHOLE
    * pile carries that life rather than the face alone: the back is registered exactly beneath
    * the face, so a face that drifted by itself would show a sliver of the back it is meant to
-   * be hiding. A pile that has been bought from has nothing left to offer and goes still.
+   * be hiding.
+   *
+   * A pile that has been bought from has nothing left to offer and goes still.
+   *
+   * A LOCKED pile keeps the class and is settled by it (`is-locked` in style.css) rather than
+   * having it taken away: the life is the card asking to be picked up -- it drifts and it throws
+   * gold light -- and a lock has to end both. Dropping the class ends them by deleting the
+   * animation, which snaps a mid-drift card back onto its seat. Settling through the class eases
+   * it down exactly as a hovered card comes to rest.
    */
   seatIndex?: number;
   children?: ReactNode;
 }): ReactElement {
   const covered = children !== null && children !== undefined;
   const alive = covered && typeof seatIndex === 'number';
+  // A lock is a statement about an OFFER, so a seat whose face is gone is untouched by one: a
+  // host may say the whole row is locked without having to except the seat it just bought from.
+  const sealed = covered && locked;
   return (
     <span
-      className={`run-card-pile${covered ? ' is-covered' : ' is-revealed'}${alive ? ' run-card-alive' : ''}`}
+      className={`run-card-pile${covered ? ' is-covered' : ' is-revealed'}${alive ? ' run-card-alive' : ''}${sealed ? ' is-locked' : ''}`}
       data-run-card-pile={covered ? 'covered' : 'revealed'}
       style={alive ? runCardFloatClock(seatIndex) : undefined}
     >
@@ -53,8 +64,8 @@ export function RunCardPile({
         // Decorative: the offer beneath it is a disabled control, which is what carries the
         // state to assistive technology. The lock is what carries it to the eye.
         <span
-          className={`run-card-pile-lock${locked ? ' is-locked' : ''}`}
-          data-run-card-pile-lock={locked ? 'locked' : 'open'}
+          className={`run-card-pile-lock${sealed ? ' is-locked' : ''}`}
+          data-run-card-pile-lock={sealed ? 'locked' : 'open'}
           aria-hidden="true"
         >
           <img src={lockMediaUrl} alt="" draggable={false} />

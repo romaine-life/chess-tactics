@@ -20237,10 +20237,15 @@ button.tileset-relationship-cell {
   cursor: default;
 }
 
-/* A card is printed art, never a faded control: an unaffordable or already-purchased
-   offer stays fully opaque. Overrides the global `button:disabled` fade. */
+/* A card is printed art, never a faded control: an unaffordable or locked offer stays fully
+   opaque. Overrides the global `button:disabled` fade.
+
+   The pointer stays quiet for the same reason. A card you cannot take is not an error to be
+   scolded for reaching toward -- the price is printed on it and the lock is laid on it, and
+   `not-allowed`'s barred circle adds a rebuke on top of a state the card has already said
+   plainly. It takes the ordinary arrow instead: this is not a control right now. */
 .run-card-action:disabled {
-  cursor: not-allowed;
+  cursor: default;
   opacity: 1;
 }
 
@@ -20514,6 +20519,27 @@ button.tileset-relationship-cell {
 .run-card-alive:has(.run-card-action:enabled:hover) .run-card-action,
 .run-card-alive:focus-within .run-card-action {
   translate: 0 calc(-1 * var(--run-card-hover-raise, 7px));
+}
+
+/* A LOCKED offer stops asking (ADR-0549). The life is a card asking to be picked up -- it drifts
+   and it throws gold light -- and a Sectio that has spent its admission is not asking for
+   anything, so both end when the padlock lands.
+
+   Settled the way a hovered card is settled, through the same two registered vars and the same
+   pause, rather than by taking the animation away: the rise eases to nothing over its 240ms
+   transition, so a card caught mid-drift comes DOWN onto its seat instead of snapping onto it.
+   The light has no such easing to ride -- `--run-card-glow` is the tuned steady level, not a
+   registered transitionable one -- so it goes out on the beat the lock arrives, which is the
+   right beat for it: one event, not a fade. */
+.run-card-pile.is-locked {
+  --run-card-float-rise: 0px;
+  --run-card-glow: 0;
+  --run-card-glow-pulse: 0;
+}
+
+.run-card-pile.is-locked,
+.run-card-pile.is-locked .run-card-action {
+  animation-play-state: paused !important;
 }
 
 /* The explicit in-game reduced-motion choice stills the drift; the steady-light rule above keeps
