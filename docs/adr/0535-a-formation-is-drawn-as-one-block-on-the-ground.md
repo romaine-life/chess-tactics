@@ -7,7 +7,7 @@ refines:
   - "[ADR-0492](0492-run-cards-are-small-authored-formations-without-abilities.md)"
 ---
 
-# ADR-0534: A formation is drawn as one block on the ground, in hand and seated alike
+# ADR-0535: A formation is drawn as one block on the ground, in hand and seated alike
 
 ## Context and Problem Statement
 

@@ -21926,7 +21926,7 @@ button.tileset-relationship-cell {
   cursor: not-allowed;
 }
 
-/* ---- The formation block on the deployment board (ADR-0534) ----------------------------
+/* ---- The formation block on the deployment board (ADR-0535) ----------------------------
    A formation card puts its units down as one body, and one click takes the whole of it back.
    The card face already draws that body as a single outlined plot; this is the same drawing on
    the ground, on the same 96x54 tile geometry, for the block in hand and the block seated
