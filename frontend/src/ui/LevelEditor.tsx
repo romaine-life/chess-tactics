@@ -250,8 +250,10 @@ import {
   brushIconProductionCandidate,
   LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_STAGE,
 } from './brushIconLiveMedia';
-import { ShellControlsPanel, ShellViewportSwap, ShellWorkspace } from './shared/ChromeBox';
+import { InnerChromeBox, ShellControlsPanel, ShellViewportSwap, ShellWorkspace } from './shared/ChromeBox';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
+import { useWars } from '../war/store';
+import { HIS_GRACE_VALUE, expectedWarValue, type ExpectedBattleValue } from '../run/expectedValue';
 import {
   directionCompassCells,
   hasDirectionSprite,
@@ -337,7 +339,7 @@ import {
   type EditorDocumentEditSessionResult,
 } from '../net/editorDocuments';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
-import { LEVEL_BATTLE_CARDS_DEALT_DEFAULT, LEVEL_BATTLE_CARDS_DEALT_MAX, LEVEL_BATTLE_CARDS_DEALT_MIN, OBJECTIVE_TYPES, ZONE_COLORS, zoneEntriesOnLevel, type CastleEventAction, type ChessDrawsEventAction, type ConditionSide, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
+import { LEVEL_BATTLE_CARDS_DEALT_DEFAULT, LEVEL_BATTLE_CARDS_DEALT_MAX, LEVEL_BATTLE_CARDS_DEALT_MIN, OBJECTIVE_TYPES, ZONE_COLORS, zoneEntriesOnLevel, type CastleEventAction, type ChessDrawsEventAction, type ConditionSide, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type VictoryRules, type War, type ZoneColor, type ZoneType } from '../core/level';
 
 import { computeCastleTemplatePairs, type CastleTemplateUnit } from './castlingTemplate';
 import { MODE_NAME, DEFAULT_SURVIVE_TURNS, victoryRulesForObjective, kingSideOf } from '../core/objectives';
@@ -1858,6 +1860,18 @@ const CHESS_MATERIAL_POINT_VALUE: Record<PlayablePieceType, number> = {
   king: 0,
 };
 const MATERIAL_VALUE_NOTE = 'P=1 / N,B=3 / R=5 / Q=9';
+/** Points read at a tenth. An average market buys fractions of a card, so a whole number here is
+ * a real whole number rather than a rounded one. */
+const formatPoints = (value: number): string => (
+  Math.abs(value - Math.round(value)) < 0.05 ? String(Math.round(value)) : value.toFixed(1)
+);
+const formatAdvantage = (value: number): string => (
+  Math.abs(value) < 0.05
+    ? 'Even'
+    : value > 0
+      ? `Player ahead by ${formatPoints(value)}`
+      : `Enemy ahead by ${formatPoints(-value)}`
+);
 const materialPointsForUnitId = (unitId: string): number => {
   const type = unitFamilyForId(unitId);
   return type ? CHESS_MATERIAL_POINT_VALUE[type] : 0;
@@ -2616,6 +2630,7 @@ const LEVEL_EDITOR_LAYER_OPTIONS: ReadonlyArray<{ id: LayerKey; label: string }>
   { id: 'cover', label: 'Cover' },
   { id: 'zone', label: 'Zone' },
   { id: 'rules', label: 'Rules' },
+  { id: 'war', label: 'War' },
   { id: 'status', label: 'Status' },
   { id: 'history', label: 'History' },
 ];
@@ -2652,13 +2667,14 @@ const toolForLayer = (layer: LayerKey): 'select' | 'brush' => (
   || layer === 'status'
   || layer === 'history'
   || layer === 'rules'
+  || layer === 'war'
   || layer === 'generate'
   || layer === 'level-artwork'
 ) ? 'select' : 'brush';
 const brushKindForInitialLayer = (layer: LayerKey): BrushKind => {
   if (layer === 'paths') return 'road';
   if (layer === 'placed-art') return 'artwork';
-  if (layer === 'board' || layer === 'camera' || layer === 'status' || layer === 'history' || layer === 'rules' || layer === 'generate' || layer === 'level-artwork') return 'tile';
+  if (layer === 'board' || layer === 'camera' || layer === 'status' || layer === 'history' || layer === 'rules' || layer === 'war' || layer === 'generate' || layer === 'level-artwork') return 'tile';
   return layer as BrushKind;
 };
 const brushKindForRouteState = (layer: LayerKey, kind: BrushKind | undefined): BrushKind => {
@@ -5859,6 +5875,23 @@ export function LevelEditor(): ReactElement {
     () => isWarBattle ? validateWarBattlePlayability(candidateLevel) : validatePlayability(candidateLevel),
     [candidateLevel, isWarBattle],
   );
+  // The War this Battle sits in, and the economy that reaches it. The whole War is walked because
+  // a Battle's expected force is the sum of every earlier Battle's reward: change an enemy Rook
+  // three Battles back and this one is fought with less. The Battle being edited substitutes the
+  // LIVE candidate for its stored Level, so painting a piece moves the numbers immediately.
+  const warBattleLevels = useCampaigns((state) => state.levels);
+  const editorWar = useWars((state) => state.wars.find((candidate) => candidate.id === routeParams.warId));
+  const warEconomy = useMemo<{ war: War; curve: ExpectedBattleValue[]; index: number } | null>(() => {
+    if (!isWarBattle || !editorWar) return null;
+    const ordered = [...editorWar.battles].sort((left, right) => left.ordinal - right.ordinal);
+    const index = ordered.findIndex((battle) => battle.levelId === routeParams.levelId);
+    const levels = ordered.map((battle, position) => (
+      position === index ? candidateLevel : warBattleLevels[battle.levelId]
+    ));
+    if (index < 0 || levels.some((level) => !level)) return null;
+    return { war: editorWar, curve: expectedWarValue(levels as Level[]), index };
+  }, [candidateLevel, editorWar, isWarBattle, routeParams.levelId, warBattleLevels]);
+  const warValueHere = warEconomy?.curve[warEconomy.index] ?? null;
   const previewPlayerFaction = useMemo<UnitPalette | null>(() => {
     if (playerFaction) return playerFaction;
     for (let y = 0; y < boardRows; y += 1) {
@@ -10919,36 +10952,6 @@ export function LevelEditor(): ReactElement {
             <ChromeButton unit="inner-text-button" ref={eventsOpenButtonRef} className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-events-open')} disabled={eventsOpen} onClick={() => openEventsEditor(isWarBattle ? 'deployment' : 'victory')}>Open rules editor</ChromeButton>
           </section>
 
-          {/* Only a War Battle is ever dealt cards — a Campaign or standalone level is entered
-              with its authored army, so the control would be inert there. Every Battle carries a
-              count: there is no off, and Save is blocked until this level has one. */}
-          {isWarBattle ? (
-            <section className="skirmish-card">
-              <h2>Deployment deal</h2>
-              <div className="le-ctrlrow">
-                <span className="le-ctrllabel">Cards dealt</span>
-                <Stepper
-                  suffix=""
-                  decreaseLabel="Deal fewer cards on this Battle"
-                  increaseLabel="Deal more cards on this Battle"
-                  onDecrease={() => setBattleCardsDealt((v) => clampCardsDealt(v - 1))}
-                  onIncrease={() => setBattleCardsDealt((v) => clampCardsDealt(v + 1))}
-                  edit={{
-                    value: battleCardsDealt,
-                    min: LEVEL_BATTLE_CARDS_DEALT_MIN,
-                    format: (v) => String(v),
-                    parse: parseCardsDealt,
-                    onCommit: (v) => setBattleCardsDealt(clampCardsDealt(v)),
-                    ariaLabel: 'Cards dealt at Deployment',
-                  }}
-                />
-              </div>
-              <p className="le-board-note">
-                {`This Battle deals ${battleCardsDealt} card${battleCardsDealt === 1 ? '' : 's'} from the player’s collection, and they field only the units those cards carry. His Grace is always the first one dealt, so a deal of 1 sends the King in alone. Nothing else decides this — the counts across a War are the whole curve. From ${LEVEL_BATTLE_CARDS_DEALT_MIN} to ${LEVEL_BATTLE_CARDS_DEALT_MAX}.`}
-              </p>
-            </section>
-          ) : null}
-
           <section className="skirmish-card">
             <h2>Battle clock</h2>
             <div className="le-ctrlrow">
@@ -11003,6 +11006,134 @@ export function LevelEditor(): ReactElement {
                 : 'Untimed — the player can think as long as they like.'}
             </p>
           </section>
+        </>) : layer === 'war' ? (<>
+          {/* War mode. Only a War Battle is dealt cards or reached by a Run economy — a Campaign
+              or standalone level is entered with its authored army — so this panel says that
+              plainly elsewhere rather than offering controls that would be inert. */}
+          {!isWarBattle ? (
+            <section className="skirmish-card">
+              <h2>War</h2>
+              <p className="le-board-note">This level is not a War Battle. Nothing deals it cards and no Run economy reaches it, so it has no deal to author and no expected force to balance against. Add it to a War first.</p>
+              <ChromeNavButton unit="inner-text-button" to="/editor/wars" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}>Open the War editor</ChromeNavButton>
+            </section>
+          ) : (<>
+            {/* Every Battle carries a count: there is no off, and Save is blocked until this
+                level has one. */}
+            <section className="skirmish-card">
+              <h2>Deployment deal</h2>
+              <div className="le-ctrlrow">
+                <span className="le-ctrllabel">Cards dealt</span>
+                <Stepper
+                  suffix=""
+                  decreaseLabel="Deal fewer cards on this Battle"
+                  increaseLabel="Deal more cards on this Battle"
+                  onDecrease={() => setBattleCardsDealt((v) => clampCardsDealt(v - 1))}
+                  onIncrease={() => setBattleCardsDealt((v) => clampCardsDealt(v + 1))}
+                  edit={{
+                    value: battleCardsDealt,
+                    min: LEVEL_BATTLE_CARDS_DEALT_MIN,
+                    format: (v) => String(v),
+                    parse: parseCardsDealt,
+                    onCommit: (v) => setBattleCardsDealt(clampCardsDealt(v)),
+                    ariaLabel: 'Cards dealt at Deployment',
+                  }}
+                />
+              </div>
+              <p className="le-board-note">
+                {`This Battle deals ${battleCardsDealt} card${battleCardsDealt === 1 ? '' : 's'} from the player’s collection, and they field only the units those cards carry. His Grace is always the first one dealt, so a deal of 1 sends the King in alone. Nothing else decides this — the counts across a War are the whole curve. From ${LEVEL_BATTLE_CARDS_DEALT_MIN} to ${LEVEL_BATTLE_CARDS_DEALT_MAX}.`}
+              </p>
+            </section>
+
+            {/* How much force this Battle will actually meet, beside the force it puts up. The
+                player side is postulated at the ceiling — perfect play, everything bought,
+                nothing lost — because a Battle balanced against the best case is balanced. */}
+            <section className="skirmish-card le-war-value" aria-live="polite">
+              <h2>Expected player value</h2>
+              {warValueHere ? (<>
+                <InnerChromeBox className="le-war-balance">
+                  <dl>
+                    <div>
+                      <dt>Player fields</dt>
+                      <dd>{formatPoints(warValueHere.playerValue)}</dd>
+                    </div>
+                    <div>
+                      <dt>Enemy on board</dt>
+                      <dd>{formatPoints(warValueHere.enemy.value)}</dd>
+                    </div>
+                  </dl>
+                  <p className={`le-war-verdict ${warValueHere.advantage < -0.05 ? 'is-behind' : warValueHere.advantage > 0.05 ? 'is-ahead' : 'is-even'}`}>
+                    {formatAdvantage(warValueHere.advantage)}
+                  </p>
+                </InnerChromeBox>
+                <dl className="le-war-inputs">
+                  <div>
+                    <dt>Battle</dt>
+                    <dd>{warValueHere.battleIndex + 1} of {warEconomy?.curve.length}</dd>
+                  </div>
+                  <div>
+                    <dt>Deal</dt>
+                    <dd>His Grace + {formatPoints(warValueHere.ordinaryCardsDealt)}</dd>
+                  </div>
+                  <div>
+                    <dt>Avg card value</dt>
+                    <dd>{formatPoints(warValueHere.meanCardValue)}</dd>
+                  </div>
+                  <div>
+                    <dt>Deck by now</dt>
+                    <dd>{formatPoints(warValueHere.cardsHeld)} cards · {formatPoints(warValueHere.deckValue)} pts</dd>
+                  </div>
+                  <div>
+                    <dt>Gold unspent</dt>
+                    <dd>{formatPoints(warValueHere.goldUnspent)}</dd>
+                  </div>
+                  <div>
+                    <dt>Enemy force</dt>
+                    <dd>{warValueHere.enemy.units} piece{warValueHere.enemy.units === 1 ? '' : 's'}{warValueHere.enemy.kings ? ` · ${warValueHere.enemy.kings} King` : ''}</dd>
+                  </div>
+                  <div>
+                    <dt>Pays on victory</dt>
+                    <dd>{formatPoints(warValueHere.victoryGold)} gold</dd>
+                  </div>
+                </dl>
+                <p className="le-board-note">
+                  {`Player value is the ceiling: the perfect player buys every card the market offers, loses nothing, and pays for no retry or reroll. Cards cost exactly what they are worth, so a Battle's reward converts one-for-one into the material the NEXT Battle can bring. What they field here is His Grace (${formatPoints(HIS_GRACE_VALUE)} pts) plus ${formatPoints(warValueHere.ordinaryCardsDealt)} more card${warValueHere.ordinaryCardsDealt === 1 ? '' : 's'} at the deck's average of ${formatPoints(warValueHere.meanCardValue)}. Board bounties, lipsanon gold and the Quartermaster's fourth offer are left out — every one of them only pushes it higher. Kings count 0 on both sides.`}
+                </p>
+              </>) : (
+                <p className="le-board-note">This War's Battles have not all loaded, so the economy that reaches this one cannot be walked yet.</p>
+              )}
+            </section>
+
+            {warEconomy && warEconomy.curve.length > 1 ? (
+              <section className="skirmish-card">
+                <h2>Across the War</h2>
+                <ol className="le-war-curve">
+                  <li className="le-war-curve-head" aria-hidden="true">
+                    <span>#</span>
+                    <span>Deal</span>
+                    <span>Player</span>
+                    <span>Enemy</span>
+                    <span>Δ</span>
+                  </li>
+                  {warEconomy.curve.map((point) => (
+                    <li
+                      key={point.levelId || point.battleIndex}
+                      className={point.battleIndex === warEconomy.index ? 'is-current' : ''}
+                      aria-current={point.battleIndex === warEconomy.index ? 'true' : undefined}
+                    >
+                      <span>{point.battleIndex + 1}</span>
+                      <span>{point.cardsDealt}</span>
+                      <span>{formatPoints(point.playerValue)}</span>
+                      <span>{formatPoints(point.enemy.value)}</span>
+                      <span className={point.advantage < -0.05 ? 'is-behind' : point.advantage > 0.05 ? 'is-ahead' : 'is-even'}>
+                        {Math.abs(point.advantage) < 0.05 ? '0' : `${point.advantage > 0 ? '+' : '−'}${formatPoints(Math.abs(point.advantage))}`}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+                <p className="le-board-note">Every Battle in {warEconomy.war.name}, in order. Player value only climbs where a Battle deals more cards — the deck keeps growing, but the deal is what reaches the board.</p>
+              </section>
+            ) : null}
+          </>)}
         </>) : layer === 'level-artwork' ? (
           <section className="skirmish-card le-artwork-controls" data-testid="ai-artwork-controls">
             <h2>Level Artwork</h2>

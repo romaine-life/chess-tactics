@@ -8691,6 +8691,77 @@ body.loading-bootstrap .app-startup-status {
 }
 .le-material-values dt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .le-material-values dd { color: #9fe0ff; font-size: var(--ds-text-sm); font-weight: 800; margin: 0; }
+
+/* War panel — the expected-force readout. The shared InnerChromeBox owns the frame and the
+   surface (ADR-0032/0059); everything here is layout, type and the ahead/behind accent. */
+.le-war-value { display: grid; gap: var(--ds-stack); }
+.le-war-balance { display: grid; gap: var(--ds-stack); }
+.le-war-balance dl { display: grid; gap: var(--ds-inline-tight); margin: 0; }
+.le-war-balance dl div {
+  align-items: baseline;
+  display: grid;
+  gap: var(--ds-inline);
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.le-war-balance dt {
+  color: #d6ecf5;
+  font-size: var(--ds-text-sm);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.le-war-balance dd { color: #9fe0ff; font-size: var(--ds-text-lg); font-weight: 800; margin: 0; }
+.le-war-verdict {
+  font-size: var(--ds-text-xs);
+  letter-spacing: .04em;
+  margin: 0;
+  text-transform: uppercase;
+}
+.le-war-verdict.is-ahead, .le-war-curve .is-ahead { color: #8fe0a8; }
+.le-war-verdict.is-behind, .le-war-curve .is-behind { color: #f0a08c; }
+.le-war-verdict.is-even, .le-war-curve .is-even { color: #cbb98a; }
+.le-war-inputs { display: grid; gap: var(--ds-inline-tight); margin: 0; }
+.le-war-inputs div {
+  align-items: baseline;
+  display: grid;
+  gap: var(--ds-inline);
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+}
+.le-war-inputs dt {
+  color: var(--skirmish-muted);
+  font-size: var(--ds-text-2xs);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.le-war-inputs dd {
+  color: #d6ecf5;
+  font-size: var(--ds-text-2xs);
+  margin: 0;
+  text-align: right;
+}
+/* One row per Battle, current row marked by weight and colour rather than a second surface. */
+.le-war-curve { display: grid; gap: 2px; list-style: none; margin: 0; padding: 0; }
+.le-war-curve li {
+  align-items: baseline;
+  color: #b7d4e2;
+  display: grid;
+  font-size: var(--ds-text-2xs);
+  font-variant-numeric: tabular-nums;
+  gap: var(--ds-inline-tight);
+  grid-template-columns: 1.4em 2.2em minmax(0, 1fr) minmax(0, 1fr) 2.8em;
+}
+.le-war-curve li span:not(:first-child):not(:nth-child(2)) { text-align: right; }
+.le-war-curve .le-war-curve-head {
+  color: var(--skirmish-muted);
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.le-war-curve li.is-current { color: #fff5df; font-weight: 800; }
+
 .le-status-log { display: grid; gap: var(--ds-stack); }
 /* Each log entry is a kit line frame (panel-line over its own navy surface, ADR-0032/0034);
    its tone swaps the SOURCE to the success/warning/error twin — the semantic accent that was a
