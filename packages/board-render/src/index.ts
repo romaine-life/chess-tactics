@@ -179,6 +179,7 @@ export * from './render/sceneDepth';
 export * from './render/structureGeometry';
 export * from './render/terrainSides';
 export * from './ui/boardCode';
+export * from './core/generatorAreas';
 export * from './core/generatorComposition';
 export * from './ui/doodadCatalog';
 export * from './ui/studioBoard';
