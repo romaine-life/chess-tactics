@@ -85,6 +85,10 @@ import { HouseSelect } from './shared/HouseSelect';
 import { useConfirm } from './shared/ConfirmDialog';
 import { navigateApp } from './navigation';
 import {
+  predrawnGridFitterArtifactId,
+  predrawnGridFitterHref,
+} from './predrawnGridFitterRoute';
+import {
   predrawnOcclusionEditorArtifactId,
   predrawnOcclusionEditorHref,
 } from './predrawnOcclusionEditorRoute';
@@ -451,8 +455,14 @@ export function PredrawnBackgroundVersionsPanel({
   const [warpDiscardFeedback, setWarpDiscardFeedback] = useState<AttemptCreationFeedback | null>(null);
   const [occlusionDiscardFeedback, setOcclusionDiscardFeedback] = useState<AttemptCreationFeedback | null>(null);
   const [occlusionEditorNotice, setOcclusionEditorNotice] = useState<string | null>(null);
+  // An addressed grid fitter names the exact board it is open against, so the link that opens it
+  // also decides what is selected underneath.
+  const openingGridFitterArtifactId = useRef(predrawnGridFitterArtifactId(window.location.search));
   const [selectedArtifactId, setSelectedArtifactId] = useState(
-    currentSurface?.occlusionVersionId ?? currentSurface?.backgroundVersionId ?? '',
+    openingGridFitterArtifactId.current
+      ?? currentSurface?.occlusionVersionId
+      ?? currentSurface?.backgroundVersionId
+      ?? '',
   );
   const pngIngressGuardRef = useRef<PredrawnPngIngressGuard | null>(null);
   if (!pngIngressGuardRef.current) {
@@ -464,7 +474,7 @@ export function PredrawnBackgroundVersionsPanel({
     setSelectedAttemptId(attemptId);
   };
   const [registration, setRegistration] = useState<PredrawnBoardCornerRegistration | undefined>();
-  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(() => Boolean(openingGridFitterArtifactId.current));
   const [inspectedArtifactId, setInspectedArtifactId] = useState<string | null>(null);
   const [moveHighlightEditorArtifactId, setMoveHighlightEditorArtifactId] = useState<string | null>(null);
   const [occlusionEditorArtifactId, setOcclusionEditorArtifactId] = useState<string | null>(
@@ -489,6 +499,13 @@ export function PredrawnBackgroundVersionsPanel({
   const setOcclusionEditorRoute = useCallback((artifactId: string | null): void => {
     setOcclusionEditorArtifactId(artifactId);
     navigateApp(predrawnOcclusionEditorHref(window.location.href, artifactId), {
+      replace: true,
+      scroll: false,
+    });
+  }, []);
+  const setGridFitterRoute = useCallback((artifactId: string | null): void => {
+    setPickerOpen(Boolean(artifactId));
+    navigateApp(predrawnGridFitterHref(window.location.href, artifactId), {
       replace: true,
       scroll: false,
     });
@@ -675,6 +692,23 @@ export function PredrawnBackgroundVersionsPanel({
     === occlusionEditorArtifactId
     ? occlusionEditorAttempt.warped
     : undefined;
+  // An address that opens the fitter names the board it opens ON, so it has to survive the load
+  // that would otherwise re-select whatever the working copy last used.
+  const addressedGridFitterAttempt = openingGridFitterArtifactId.current
+    ? attemptModels.find((model) => model.artifacts.some(
+        (artifact) => artifact.id === openingGridFitterArtifactId.current,
+      ))
+    : undefined;
+  useEffect(() => {
+    const addressed = openingGridFitterArtifactId.current;
+    if (!addressed || !addressedGridFitterAttempt) return;
+    const artifact = addressedGridFitterAttempt.artifacts.find((entry) => entry.id === addressed);
+    if (!artifact) return;
+    openingGridFitterArtifactId.current = null;
+    selectAttemptId(addressedGridFitterAttempt.attempt.id);
+    setSelectedArtifactId(artifact.id);
+    setRegistration(predrawnRegistrationForBackground(artifact.backgroundVersion, versions));
+  }, [addressedGridFitterAttempt, versions]);
   useEffect(() => {
     if (!occlusionEditorAttempt || !occlusionEditorArtifact) return;
     if (
@@ -1056,7 +1090,7 @@ export function PredrawnBackgroundVersionsPanel({
 
   const adjustSelectedGrid = (): void => {
     if (adjustGridDisabledReason) return;
-    setPickerOpen(true);
+    setGridFitterRoute(selectedBackground?.id ?? null);
   };
 
   const openMoveHighlightEditor = (
@@ -1201,11 +1235,12 @@ export function PredrawnBackgroundVersionsPanel({
       upsertVersion(result.discarded_version);
       await refreshAfterCompletedMutation('The warped board was discarded.');
       selectAttemptId(result.attempt.id);
-      setSelectedArtifactId(result.attempt.generated_version_id ?? targetAttempt.generated?.id ?? '');
+      const reopenedArtifactId = result.attempt.generated_version_id ?? targetAttempt.generated?.id ?? '';
+      setSelectedArtifactId(reopenedArtifactId);
       setSelectedPreviewState(null);
       setRegistration(rejectedRegistration);
       setInspectedArtifactId(null);
-      setPickerOpen(true);
+      setGridFitterRoute(reopenedArtifactId || null);
       setWarpDiscardFeedback({
         tone: 'success',
         message: 'Warped board discarded. Adjust the preserved grid, then generate another warped board in this slot.',
@@ -1578,7 +1613,7 @@ export function PredrawnBackgroundVersionsPanel({
     const created = await createAttemptFromPipelineSource(pipelineSource);
     if (!created) return;
     setRegistration(savedRegistration);
-    setPickerOpen(true);
+    setGridFitterRoute(pipelineSource.id);
     onStatus(
       'The saved grid is open in a new slot.',
       'success',
@@ -3008,7 +3043,7 @@ export function PredrawnBackgroundVersionsPanel({
               next,
             );
             setRegistration(next);
-            setPickerOpen(false);
+            setGridFitterRoute(null);
             void generateWarp({
               registrationOverride: next,
               setWorkingCopy: true,
@@ -3017,7 +3052,7 @@ export function PredrawnBackgroundVersionsPanel({
           }}
           saveLabel="USE FITTED BOARD"
           showCodexHandoff={false}
-          onClose={() => setPickerOpen(false)}
+          onClose={() => setGridFitterRoute(null)}
         />
       ) : null}
       {moveHighlightEditorPortal}

@@ -178,12 +178,24 @@ describe('creation attempts', () => {
     expect(panel).not.toContain('saveLabel="USE THIS GRID"');
   });
 
+  it('makes the grid fitter an address, not just a click target', () => {
+    expect(panel).toContain("from './predrawnGridFitterRoute'");
+    expect(panel).toContain('predrawnGridFitterArtifactId(window.location.search)');
+    expect(panel).toContain('predrawnGridFitterHref(window.location.href, artifactId)');
+    expect(panel).toContain('useState(() => Boolean(openingGridFitterArtifactId.current))');
+    // The address names the board it opens ON, so the load that re-selects the working copy's
+    // last artifact must not steal the selection back.
+    expect(panel).toContain('openingGridFitterArtifactId.current = null;');
+    expect(panel).toContain('setGridFitterRoute(selectedBackground?.id ?? null)');
+    expect(panel).toContain('onClose={() => setGridFitterRoute(null)}');
+  });
+
   it('reopens a retained corrected board from its exact saved grid', () => {
     expect(panel).toContain('data-testid="refit-predrawn-board"');
     expect(panel).toContain('const savedRegistration = selectedWarpRegistration');
     expect(panel).toContain('await createAttemptFromPipelineSource(pipelineSource)');
     expect(panel).toContain('setRegistration(savedRegistration)');
-    expect(panel).toContain('setPickerOpen(true)');
+    expect(panel).toContain('setGridFitterRoute(pipelineSource.id)');
     expect(panel).toContain('Its exact prior placement is restored. Adjust it, then choose Use fitted board.');
   });
 
@@ -309,9 +321,10 @@ describe('creation attempts', () => {
     expect(panel).toContain('predrawnDirectRegistrationForBackground(targetWarp)');
     expect(panel).toContain('expectedRevision: targetAttempt.attempt.row_revision');
     expect(panel).toContain('expectedWarpedVersionId: targetWarp.id');
-    expect(panel).toContain('setSelectedArtifactId(result.attempt.generated_version_id');
+    expect(panel).toContain('const reopenedArtifactId = result.attempt.generated_version_id');
+    expect(panel).toContain('setSelectedArtifactId(reopenedArtifactId)');
     expect(panel).toContain('setRegistration(rejectedRegistration)');
-    expect(panel).toContain('setPickerOpen(true)');
+    expect(panel).toContain('setGridFitterRoute(reopenedArtifactId || null)');
     expect(panel).toContain('setInspectedArtifactId(null)');
     expect(panel).toContain('data-testid="discard-predrawn-warp-feedback"');
     expect(panel).toContain('Discard this warped board?');

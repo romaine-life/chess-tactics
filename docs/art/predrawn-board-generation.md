@@ -454,7 +454,9 @@ Geometry and semantics above override all artistic discretion.
    board**. This sets its exact pixels at the original viewing-pane placement
    with no corrected raster and no occlusion mask; it does not apply a fitted
    grid. If the painted grid needs a different placement, open **Adjust grid
-   (optional)** against that Raw Pipeline Source. Place the complete grid
+   (optional)** against that Raw Pipeline Source — or address it directly with
+   `predrawnGridFitter=<version-id>` on the pipeline URL, which opens the fitter
+   on that exact board. Place the complete grid
    with the owner calibration instrument. First set the
    refit row/column counts to the grid actually painted by the candidate (which
    may expose an unwanted extra row or column), register its N/E/S/W painted-image
