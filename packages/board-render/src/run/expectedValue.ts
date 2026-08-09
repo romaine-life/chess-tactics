@@ -151,7 +151,9 @@ export interface ExpectedBattleValue {
   battleIndex: number;
   levelId: string;
   levelName: string;
-  /** Gold in hand arriving at this Battle, after every earlier market has been cleared out. */
+  /** Gold in hand arriving at this Battle, after every earlier market has been cleared out.
+   * In material POINTS, the unit the whole walk works in so gold and card values compare
+   * directly; ten gold to the point (`cardCostGold`) on the way to a screen. */
   goldUnspent: number;
   /** Ordinary cards held (His Grace excluded); fractional, because the market is an average. */
   cardsHeld: number;
@@ -168,7 +170,8 @@ export interface ExpectedBattleValue {
   enemy: LevelSideMaterial;
   /** Player minus enemy. Negative means the board outweighs the force sent at it. */
   advantage: number;
-  /** Gold this Battle pays on being won; zero for the last one, which pays nothing spendable. */
+  /** Gold this Battle pays on being won, in material POINTS like `goldUnspent`; zero for the
+   * last one, which pays nothing spendable. */
   victoryGold: number;
   /** The market that follows this Battle: what it offers, and what the player can take from it. */
   nextMarket: { meanOfferValue: number; maxValue: number; rowValue: number; spend: number } | null;
@@ -187,7 +190,7 @@ export interface ExpectedWarValueOptions {
  * it: the gold a board pays and the cards it buys arrive for the NEXT one, never its own.
  *
  * Purchases are continuous rather than whole cards. That is the point of an average market -- 8
- * gold against a row averaging 3.4 buys "2.35 cards" here where a real Sectio buys two and keeps
+ * points of gold against a row averaging 3.4 buys "2.35 cards" here where a real Sectio buys two and keeps
  * the change. Over a War the fractional reading is the unbiased one, and the discrete one would
  * only be exact for one particular seed.
  */

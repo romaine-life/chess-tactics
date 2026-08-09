@@ -6231,7 +6231,8 @@ body.loading-bootstrap .app-startup-status {
   min-width: 72px;
   padding-inline: 4px;
 }
-/* Level settings live under the Board layer: rule readout + faction-control assignment. */
+/* Level settings live under the Board layer (rule readout); the declaration the level fields has
+   its own Factions layer. */
 .le-level-name-input { box-sizing: border-box; width: 100%; }
 .le-settings-list { display: grid; gap: var(--ds-inline-tight); margin: 0 0 var(--ds-gutter); }
 .le-settings-list div { align-items: start; display: grid; gap: 8px; grid-template-columns: 74px minmax(0, 1fr); }
@@ -6239,16 +6240,15 @@ body.loading-bootstrap .app-startup-status {
 .le-settings-label { color: #6edcff; font-size: var(--ds-text-xs); margin: 0; text-transform: uppercase; }
 .le-settings-list dd { color: #f3ead8; font-size: var(--ds-text-sm); line-height: 1.25; margin: 0; word-break: break-word; }
 .le-faction-control { display: grid; gap: 7px; }
-.le-faction-assignments { display: grid; gap: 6px; }
-/* Name above, controls below. Three controls cannot share half a narrow panel and still read —
-   the colour select loses its label first, leaving a bare swatch nobody can name. */
-.le-faction-assignment { display: grid; gap: 5px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
-/* Colour, facing. The facing stays a fixed square; the colour select takes the rest. The role is
-   named in the row above, so the declaration needs no control dropdown beside it. */
-.le-faction-fields { display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr) var(--le-inner-square); min-width: 0; }
+.le-faction-assignments { display: grid; gap: 10px; }
+/* Name above, one LABELLED row per control below — the shape the unit brush already uses for its
+   own facing. Three controls cannot share half a narrow panel and still read, and an unlabelled
+   compass square says neither what it sets nor which side it sets it for. */
+.le-faction-assignment { display: grid; gap: 0; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+/* The colour select takes the row's free width; the facing stays a fixed square. */
+.le-faction-assignment .le-faction-color-select { flex: 0 1 170px; min-width: 120px; }
 /* The repair block for pieces wearing a colour no faction declares. */
 .le-faction-undeclared { display: grid; gap: 5px; }
-.le-faction-fields .le-select-wrap { min-width: 0; }
 .le-faction-color-select { min-width: 0; }
 .le-faction-color-select .palette-select-trigger { min-width: 0; width: 100%; }
 .le-faction-name { align-items: center; color: #f3ead8; display: grid; font-size: var(--ds-text-sm); gap: 6px; grid-template-columns: auto minmax(0, 1fr) auto; min-width: 0; }
@@ -6419,8 +6419,8 @@ body.loading-bootstrap .app-startup-status {
 .le-direction-trigger:focus-visible { outline: 2px solid rgba(101, 184, 255, .72); outline-offset: 2px; }
 .le-direction-popover { inline-size: var(--le-inner-square); min-width: 0; position: relative; width: var(--le-inner-square); }
 .le-direction-trigger { align-items: center; block-size: var(--le-inner-square); display: flex; inline-size: var(--le-inner-square); justify-content: center; min-block-size: var(--le-inner-square); min-inline-size: var(--le-inner-square); min-width: var(--le-inner-square); padding: 0; text-align: center; width: var(--le-inner-square); }
-.le-faction-fields .le-direction-popover,
-.le-faction-fields .le-direction-trigger {
+.le-faction-assignment .le-direction-popover,
+.le-faction-assignment .le-direction-trigger {
   inline-size: var(--le-inner-square);
   min-inline-size: var(--le-inner-square);
   min-width: var(--le-inner-square);
@@ -10514,15 +10514,19 @@ body { font-size: 17px; }
   line-height: 1.5;
   max-width: min(520px, calc(100vw - 48px));
 }
-.scene-director.is-error .scene-loading-presentation button {
-  background: transparent;
-  border: 12px solid transparent;
-  border-image: var(--media-ui-kit-button-primary-png) 24 fill / 12px round;
-  color: var(--ds-color-text, #f4ead7);
-  font: inherit;
-  min-height: 44px;
-  min-width: 128px;
-  padding: 0 14px;
+/* Layout only, exactly like .confirm-actions. The actions are registered inner-text-button units
+   sharing the app's one text-button content geometry, and they take their complete frame, state
+   art, and tone from the installed chrome family the app root scopes (ADR-0102) — this surface
+   owns no border, background, or frame source of its own. */
+.scene-director.is-error .scene-loading-presentation .scene-failure-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+.scene-director.is-error .scene-loading-presentation .scene-failure-actions .le-seg-btn {
+  min-width: 116px;
+  padding: 0 16px;
 }
 
 .ce-row-actions {
@@ -10624,7 +10628,15 @@ body { font-size: 17px; }
 }
 
 /* Force composition for the selected level — the allies/enemies counts read off
-   the level's board, so they live with the level, not the global title bar. */
+   the level's board, so they live with the level, not the global title bar.
+   The line is seated on its own inner box so its marks have a surface to read against instead of
+   whatever the night sky is showing. It runs the column's full width like the board frame and the
+   facts box: the column is a stack of boxes sharing one pair of edges, and a box that hugged its
+   own content broke that line. */
+.ce-force-readout-box {
+  padding: 6px 10px;
+}
+
 .ce-force-readout {
   align-items: center;
   display: flex;
@@ -10641,10 +10653,20 @@ body { font-size: 17px; }
   text-transform: uppercase;
 }
 
-.ce-force img {
-  height: 22px;
+/* The side marks are live battlefield sprites, so they are seated the way every other unit mark
+   in this column is: the SEAT is sized and AlphaBoundIcon fits the visible pixels inside it.
+   Sizing the <img> instead would fight the inline fit and letterbox the piece in its own canvas. */
+.ce-force-unit {
+  block-size: 30px;
+  inline-size: 24px;
+}
+
+/* The card back is authored at its own aspect and needs no alpha fit — it is contained. */
+.ce-force-card {
+  block-size: 26px;
   image-rendering: pixelated;
-  width: 22px;
+  inline-size: auto;
+  object-fit: contain;
 }
 
 .ce-force strong {
@@ -10655,6 +10677,7 @@ body { font-size: 17px; }
 
 .ce-force-ally { color: var(--ce-ally); }
 .ce-force-enemy { color: var(--ce-enemy); }
+.ce-force-cards { color: var(--ce-ally); }
 
 /* ===== Compact Level Info — stacked under the map preview in the Editor's 4th column ===== */
 
@@ -10745,6 +10768,10 @@ body { font-size: 17px; }
   gap: 12px;
   grid-template-columns: 1fr 1fr;
 }
+
+/* A Battle drops its empty Allies roster, so the surviving side takes the whole width rather
+   than sitting in a half column beside a gap where a column used to be. */
+.ce-li-rosters.is-single { grid-template-columns: 1fr; }
 
 .ce-li-roster-head {
   align-items: center;
@@ -19488,11 +19515,14 @@ button.tileset-relationship-cell {
   min-width: 0;
 }
 /* Two-line head: the level name gets its OWN line (full width, no truncation), with the
-   ally/enemy force counts on a second line beneath it. */
+   ally/enemy force counts on a second line beneath it. The shared head rule's horizontal padding
+   is dropped here: the counts are a framed box now, and that inset held it 8px inside the board
+   frame and facts box under it, so the column's three boxes did not share an edge. */
 .ce-preview-col .ce-selected-head {
   align-items: stretch;
   flex-direction: column;
   gap: 4px;
+  padding-inline: 0;
 }
 .ce-preview-col .ce-selected-head h2 {
   overflow: visible;

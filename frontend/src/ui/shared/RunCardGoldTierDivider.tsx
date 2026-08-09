@@ -1,4 +1,4 @@
-import { resolvedLiveMediaUrl, type RunCardTier } from '@chess-tactics/board-render';
+import { cardCostGold, resolvedLiveMediaUrl, type RunCardTier } from '@chess-tactics/board-render';
 import { useEffect, useState, type CSSProperties, type ReactElement } from 'react';
 import {
   fetchAdminLiveMediaCatalog,
@@ -140,9 +140,15 @@ function DividerSlice({ sourceUrl, viewBox }: { sourceUrl: string; viewBox: stri
   );
 }
 
+/** The price a band bands on, in GOLD -- a tier is carried as the material points a card is
+ * worth, and gold is what the coin and the heading say. */
+export function runCardTierGold(value: RunCardTier): RunCardTier {
+  return value === 'starter' ? 'starter' : cardCostGold(value);
+}
+
 /** How a band of the card gallery names itself in prose and to a screen reader. */
 export function runCardTierLabel(value: RunCardTier): string {
-  return value === 'starter' ? 'Starter cards' : `${value} gold cards`;
+  return value === 'starter' ? 'Starter cards' : `${cardCostGold(value)} gold cards`;
 }
 
 /**
@@ -187,7 +193,7 @@ export function RunCardGoldTierDivider({
         <DividerSlice sourceUrl={source.url} viewBox="132 138 500 107" />
         <DividerSlice sourceUrl={source.url} viewBox="632 138 56 107" />
       </span>
-      <RunCardCostCoin value={value} className="enchiridion-card-group-gold" {...(crownUrl === undefined ? {} : { crownUrl })} {...(markFill === undefined ? {} : { markFill })} />
+      <RunCardCostCoin value={runCardTierGold(value)} className="enchiridion-card-group-gold" {...(crownUrl === undefined ? {} : { crownUrl })} {...(markFill === undefined ? {} : { markFill })} />
     </span>
   );
 }

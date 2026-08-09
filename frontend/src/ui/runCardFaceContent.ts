@@ -1,6 +1,7 @@
 import { runCardArtSlot, runCardFlavor, runCardName } from '../run/cardNames';
 import {
   PIECE_VALUE,
+  cardCostGold,
   isRunStarterCard,
   runCardRarity,
   type AdlectablePieceType,
@@ -34,6 +35,7 @@ export type RunCardFormationPiece = Readonly<{
 export type RunCardFaceContent = Readonly<{
   name: string;
   rarity: RunCardRarity;
+  /** The price struck on the coin, in GOLD -- not the material points the document prices in. */
   cost: number;
   showsCost: boolean;
   typeLine: string;
@@ -122,7 +124,7 @@ export function runCardFaceContent(
   return {
     name: runCardName(identity),
     rarity: identity.rarity,
-    cost: offer?.cost ?? card.value,
+    cost: cardCostGold(offer?.cost ?? card.value),
     // A starter card carries no price, on its face or on the band that heads it.
     showsCost: !isRunStarterCard(identity),
     typeLine: RUN_CARD_TYPE_LINE,

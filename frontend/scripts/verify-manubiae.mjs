@@ -160,7 +160,7 @@ try {
     await fail('position', `no ${want ?? 'Manubium'} is available in one move here — craft a position that offers one (board: ${plan.none.join(' ')})`);
   }
   const owed = plan.earned.reduce((sum, entry) => sum + entry.goldTenths, 0);
-  console.log(`${plan.type} ${plan.from.x},${plan.from.y} → ${plan.to.x},${plan.to.y} earns ${plan.earned.map((e) => `${e.name} (${e.goldTenths / 10})`).join(' + ')}`);
+  console.log(`${plan.type} ${plan.from.x},${plan.from.y} → ${plan.to.x},${plan.to.y} earns ${plan.earned.map((e) => `${e.name} (${e.goldTenths})`).join(' + ')}`);
 
   const tileCenter = (cell) => page.evaluate(({ x, y }) => {
     const button = document.querySelector(`button.skirmish-board-cell-hit[data-cx="${x}"][data-cy="${y}"]`);
@@ -198,7 +198,7 @@ try {
   `);
   const delta = paid.gold - plan.gold;
   if (delta !== owed) {
-    await fail('gold', `the move moved gold by ${delta / 10} instead of ${owed / 10} (${plan.gold / 10} → ${paid.gold / 10})`);
+    await fail('gold', `the move moved gold by ${delta} instead of ${owed} (${plan.gold} → ${paid.gold})`);
   }
   for (const entry of plan.earned) {
     // The log line is the player's only durable record — the marker fades.
@@ -209,14 +209,14 @@ try {
       notice.goldTenths === entry.goldTenths && notice.at.x === entry.at.x && notice.at.y === entry.at.y
     ));
     if (!seated) {
-      await fail('marker', `no ${entry.goldTenths / 10}-gold marker was seated at ${JSON.stringify(entry.at)} for ${entry.name} (notices: ${JSON.stringify(paid.notices)})`);
+      await fail('marker', `no ${entry.goldTenths}-gold marker was seated at ${JSON.stringify(entry.at)} for ${entry.name} (notices: ${JSON.stringify(paid.notices)})`);
     }
   }
 
   const board = await page.$('.skirmish-board-viewport') ?? await page.$('.skirmish-board');
   await (board ?? page).screenshot({ path: shotPath });
 
-  console.log(`gold ${plan.gold / 10} → ${paid.gold / 10} (+${owed / 10})`);
+  console.log(`gold ${plan.gold} → ${paid.gold} (+${owed})`);
   console.log(`log: ${paid.tail.join(' | ')}`);
   console.log(`PASS — ${plan.earned.length} Manubium(s) paid on the live board (${shotPath})`);
   await done(0);

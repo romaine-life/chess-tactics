@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AuthStatus } from './auth';
-import { createAuthSessionController } from './authSession';
+import { authSessionIdentityKey, createAuthSessionController } from './authSession';
 
 const unavailable: AuthStatus = { user: { signed_in: false }, reachable: false };
 const authenticated: AuthStatus = {
@@ -104,8 +104,17 @@ describe('auth session owner', () => {
     await controller.start();
 
     // A transport blip during a background re-read is not a sign-out and must not
-    // knock a signed-in shell into `unavailable`.
-    await expect(controller.refresh()).resolves.toEqual(authenticated);
+    // knock a signed-in shell into `unavailable`. The caller that ASKED still learns the
+    // backend did not answer — that is the fact a screen waiting for it to come back needs.
+    await expect(controller.refresh()).resolves.toEqual(unavailable);
     expect(controller.getSnapshot()).toEqual({ phase: 'authenticated', status: authenticated });
+  });
+
+  it('names identities so a consumer compares them without reading them', () => {
+    expect(authSessionIdentityKey(authenticated)).toBe('account:player@example.com');
+    expect(authSessionIdentityKey({ user: { signed_in: false }, reachable: true })).toBe('anonymous');
+    // A probe that never reached the backend carries no identity to compare.
+    expect(authSessionIdentityKey(unavailable)).toBe('unknown');
+    expect(authSessionIdentityKey(null)).toBe('unknown');
   });
 });

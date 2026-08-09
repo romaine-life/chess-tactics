@@ -72,7 +72,13 @@ describe('professional loading architecture guards', () => {
     const director = read('./ui/shell/sceneDirector.ts');
     expect(app).toContain('const sceneLayers = overlapsCompleteScenes');
     expect(app).toContain('key: sceneLayerKey(scene.current)');
-    expect(app).toContain('key: sceneLayerKey(scene.destination!)');
+    // A prepared layer's mount identity is its scene, plus the retry epoch — and ONLY the retry
+    // epoch. Retry re-drove the director around the very instance still holding the failure, so
+    // the screen re-reported it and the retry did nothing at all; rebuilding is the fix, and
+    // rebuilding on `generation` instead would remount every just-committed screen (ADR-0548).
+    expect(app).toContain('key: `${sceneLayerKey(scene.destination!)}#${scene.retryEpoch}`');
+    expect(director).toContain('retryEpoch: state.retryEpoch + 1');
+    expect(director).not.toContain('retryEpoch: state.generation');
     expect(app).toContain('sceneLayers.map((layer)');
     expect(app).toContain('key={layer.key}');
     expect(app).not.toContain('key={`incoming:');
@@ -260,7 +266,7 @@ describe('professional loading architecture guards', () => {
     // whole destination has entered (ADR-0369).
     expect(app).toContain('|| scene.startupStage >= 0');
     expect(app).toContain('|| !scene.startupActive;');
-    expect(app).toContain('key: sceneLayerKey(mountedScene)');
+    expect(app).toContain('key: `${sceneLayerKey(mountedScene)}#${scene.retryEpoch}`');
     expect(titleBar).toContain('screenName={config.screenName}');
     expect(titleBar).toContain('transitionStatus={transitionStatus}');
     expect(titleBar).toContain('config.centerSlot ? <div className="app-shell-titlebar-center"');

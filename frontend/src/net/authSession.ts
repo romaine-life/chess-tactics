@@ -87,6 +87,13 @@ export function createAuthSessionController(
    * use this to notice either transition without polling or caching identity themselves. An
    * unreachable probe keeps the last authoritative snapshot: a transport blip is not a sign-out,
    * and must not knock a signed-in shell into `unavailable` behind the owner's back.
+   *
+   * The RETURN value is this probe's own result, including a false `reachable`. The published
+   * snapshot and the probe outcome answer different questions: the snapshot is what the shell may
+   * claim about the user, while the caller that asked also needs to know whether the backend
+   * answered at all. Returning the retained snapshot instead reported a reachable backend on a
+   * probe that never reached one, which is the single fact a caller waiting for the backend to
+   * come back is waiting on.
    */
   const refresh = (): Promise<AuthStatus> => {
     if (refreshInFlight) return refreshInFlight;
@@ -97,7 +104,7 @@ export function createAuthSessionController(
       } catch {
         status = { user: { signed_in: false }, reachable: false };
       }
-      if (!status.reachable) return snapshot.status ?? status;
+      if (!status.reachable) return status;
       publish({
         phase: status.user.signed_in ? 'authenticated' : 'anonymous',
         status,
@@ -140,10 +147,25 @@ export function startAuthSession(): Promise<AuthStatus> {
 }
 
 /**
- * Re-read the authoritative identity status once and publish it. See `refresh` above.
+ * Re-read the authoritative identity status once and publish it. Resolves with THIS probe's
+ * result, so an unreachable backend resolves `reachable: false` even though the published
+ * snapshot deliberately keeps the last authoritative one. See `refresh` above.
  */
 export function refreshAuthSession(): Promise<AuthStatus> {
   return authSession.refresh();
+}
+
+/**
+ * A comparable scalar for "which account this browser is currently acting as".
+ *
+ * The owner derives it so no screen re-reads identity out of the raw status (ADR-0306). Equal keys
+ * are the same session; a changed key is a real transition — signed in, signed out, or a different
+ * account — and that is the only identity movement a consumer is entitled to react to. A status
+ * that never reached the backend has no identity to compare and answers `unknown`.
+ */
+export function authSessionIdentityKey(status: AuthStatus | null): string {
+  if (!status?.reachable) return 'unknown';
+  return status.user.signed_in ? `account:${status.user.email ?? ''}` : 'anonymous';
 }
 
 export function updateAuthSessionUser(user: AuthUser): void {

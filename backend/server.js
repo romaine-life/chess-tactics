@@ -12253,6 +12253,16 @@ async function dbPublishLevelBackgroundVersions(
     ? versions.get(String(background.parent_version_id)) || null
     : null;
   const environmentGeometryDigests = predrawnEnvironmentGeometryDigests(level);
+  // Resizing or sliding the playable grid over a plate is a declared owner operation, and it
+  // records `predrawnGridDetached` on the Level (ADR-0516). The environment-geometry digest asks
+  // exactly one question — "does this raster depict this exact terrain" — and detaching is the
+  // owner answering it. Growing a board does not make a painted pixel wrong: the plate is drawn at
+  // its own absolute `worldBounds` with no dependence on cols/rows, so there is nothing here for a
+  // canonical boundary to protect. Every OTHER check in this transaction still applies and still
+  // fails closed: identity, document scope, lineage, stage completeness, archive status, content
+  // digests, frame dimensions, world bounds, and the profile's binding to its exact background.
+  const decodedBoard = serverRender?.decodeBoard?.(level.boardCode) || null;
+  const gridDetached = decodedBoard?.predrawnGridDetached === true;
   const selectable = (row) => row && ['ready', 'published'].includes(row.status) && row.blob_sha256;
   const scopedToDocument = (row) => {
     if (!row) return false;
@@ -12359,10 +12369,18 @@ async function dbPublishLevelBackgroundVersions(
     actorEmail,
     actorName,
   );
+  // The binding attempt above stays unconditional: it fails closed and writes nothing unless the
+  // server-held Level reproduces the stored v1 digest exactly (ADR-0163), so a detached board that
+  // still hashes to its art — a pure slide changes no digest input — normalizes as it always did.
+  // A detached board that no longer reproduces it simply goes unbound; nothing is compared against
+  // it below, and no binding is invented to bless the new geometry as equivalent to the old art.
   if (
-    !backgroundGeometryBound
-    || !backgroundVersionHasEnvironmentGeometry(background, environmentGeometryDigests.v2)
-    || (rawParent && !backgroundVersionHasEnvironmentGeometry(rawParent, environmentGeometryDigests.v2))
+    !gridDetached
+    && (
+      !backgroundGeometryBound
+      || !backgroundVersionHasEnvironmentGeometry(background, environmentGeometryDigests.v2)
+      || (rawParent && !backgroundVersionHasEnvironmentGeometry(rawParent, environmentGeometryDigests.v2))
+    )
   ) {
     throw editorDocumentError(
       409,
@@ -12372,7 +12390,8 @@ async function dbPublishLevelBackgroundVersions(
     );
   }
   if (
-    occlusion
+    !gridDetached
+    && occlusion
     && (occlusionLineage.value || []).some((row) => (
       !backgroundVersionHasEnvironmentGeometry(row, environmentGeometryDigests.v2)
     ))
@@ -12385,14 +12404,20 @@ async function dbPublishLevelBackgroundVersions(
     );
   }
   if (surface.move_highlight_profile) {
-    const board = serverRender?.decodeBoard?.(level.boardCode);
-    const moveHighlightProfile = board
+    const moveHighlightProfile = decodedBoard
       ? normalizeMoveHighlightProfile(surface.move_highlight_profile, {
           backgroundVersionId: String(background.id),
-          boardColumns: board.cols,
-          boardRows: board.rows,
-          environmentGeometrySha256: environmentGeometryDigests.v2,
-          playableCellKeys: new Set(Object.keys(board.cells)),
+          // A detached grid has deliberately moved away from the board the cyan footprints were
+          // measured on. A calibrated cell the board no longer covers becomes uncalibrated and
+          // falls back to the full-cell highlight; it does not invalidate the selection
+          // (ADR-0516). The profile's signature over its own content, and its binding to this
+          // exact background version, are both still proven.
+          ...(gridDetached ? {} : {
+            boardColumns: decodedBoard.cols,
+            boardRows: decodedBoard.rows,
+            environmentGeometrySha256: environmentGeometryDigests.v2,
+            playableCellKeys: new Set(Object.keys(decodedBoard.cells)),
+          }),
         })
       : { error: 'the Level board could not be decoded' };
     if (
@@ -23335,9 +23360,11 @@ function craftedRunSummary(run) {
     war: run.war.name,
     phase: run.phase,
     battle: `${run.battleIndex + 1}/${run.war.battles.length}`,
-    gold: run.goldTenths / 10,
+    // Gold is whole and exact, and `goldTenths` carries it unscaled (ADR-0547). An offer's
+    // `cost` is material POINTS, which is what the document prices in; ten gold to the point.
+    gold: run.goldTenths,
     army: run.army.map((unit) => unit.type),
-    offers: run.sectio ? run.sectio.cardOffers.map((offer) => `${offer.pieces.join('+')}@${offer.cost}`) : null,
+    offers: run.sectio ? run.sectio.cardOffers.map((offer) => `${offer.pieces.join('+')}@${offer.cost * 10}`) : null,
     lipsana: run.lipsana,
   };
 }

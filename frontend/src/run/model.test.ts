@@ -751,7 +751,7 @@ describe('Manubiae — what the board pays for', () => {
     const capture = payRunManubium(battle, { id: 'advantageous-capture', marginPoints: 8 }, { x: 2, y: 2 })!;
     expect(capture.notice.goldTenths).toBe(16);
     expect(capture.notice.log).toContain('Advantageous capture');
-    expect(capture.notice.log).toContain('1.6');
+    expect(capture.notice.log).toContain('16');
   });
 
   it('pays nothing outside a Battle, nothing without a runtime, and nothing for a worthless award', () => {
