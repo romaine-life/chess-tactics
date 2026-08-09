@@ -55,6 +55,18 @@ this game. Two filters apply:
   (1), discovered check (2), double check (3), en passant (5), smothered mate (5). Prices sit
   between the two poles ADR-0517 and ADR-0527 set: five gold is worth going out of your way for
   and you almost never can; one gold is the Run noticing something you were going to do anyway.
+- **A royal fork must leave the forking unit somewhere the enemy cannot take it.** ADR-0527
+  decided not to ask whether the *victim* is defended, and that stands. It never asked whether
+  the *forker* survives, and that turns out to be the whole difference between a fork and a
+  blunder: the forking unit is the piece giving check, so capturing it is how the enemy ANSWERS
+  the check. A fork that can simply be taken never collects its second prong — the player has
+  handed over a piece and been paid for it. `sideCanCaptureUnit` asks the question in terms of
+  the enemy's LEGAL moves rather than attack geometry, because a pinned piece attacks the square
+  without being able to go there and a king may not take a defended piece at all.
+  This is the only Manubium that needs the clause. A discovered or double check is safe without
+  it (the enemy must answer the check before they can collect a hanging mover, which is the
+  point of a discovery), an advantageous capture has already won material by definition, an en
+  passant is an even trade, and a smothered mate has ended the Battle.
 - **An advantageous capture is scaled, not flat.** It is the one deed here a player lands
   constantly, and a single flat number is either too much for a rook taking a queen or too
   little for a pawn taking one. Two tenths per point of material won is exact in the gold scale,

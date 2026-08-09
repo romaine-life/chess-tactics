@@ -217,7 +217,7 @@ export const RUN_MANUBIAE: readonly ManubiumDefinition[] = Object.freeze([
   {
     id: 'royal-fork',
     name: 'Royal fork',
-    earnedBy: 'Attack the enemy King and a Rook or Queen with one unit, from the square it just moved to.',
+    earnedBy: 'Attack the enemy King and a Rook or Queen with one unit, from the square it just moved to — and leave that unit somewhere the enemy cannot take it.',
     goldTenths: GOLD_SCALE,
   },
   {

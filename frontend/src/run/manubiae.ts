@@ -12,7 +12,7 @@
 //
 // Nothing here consults or changes board law. It reads a board that has already committed.
 
-import { gameEnv, kingCheckers, royalForkVictim, smotheredMateBy } from '../core/rules';
+import { gameEnv, kingCheckers, royalForkVictim, sideCanCaptureUnit, smotheredMateBy } from '../core/rules';
 import type { GameEvent, GameState, Vec } from '../core/types';
 import { manubiaeUnitWorth, RUN_ROYAL_FORK_MIN_VICTIM_VALUE, type ManubiumAward } from './model';
 
@@ -71,7 +71,18 @@ export function manubiaeEarnedBy(game: GameState, events: readonly GameEvent[]):
     // and a Rook or better itself. A discovered check is two pieces doing that, and is paid
     // below as the different thing it is. Seated on the forking unit's own square -- that is
     // what the player just placed, and where the two lines they are paid for meet.
-    if (royalForkVictim(mover, game.pieces, game.size, env, RUN_ROYAL_FORK_MIN_VICTIM_VALUE)) {
+    //
+    // AND the forking unit has to survive the square it forked from. A fork the enemy can
+    // simply take is not a fork at all: taking it IS how they answer the check, so the second
+    // prong is never collected and the player has handed over a piece. That is the one thing
+    // the geometry cannot see, and paying for it teaches exactly the wrong move.
+    //
+    // This asks only about the FORKER, never the victim. Whether the victim is defended stays
+    // unasked (ADR-0527) -- what a real fork is worth to answer is the position's business.
+    if (
+      royalForkVictim(mover, game.pieces, game.size, env, RUN_ROYAL_FORK_MIN_VICTIM_VALUE)
+      && !sideCanCaptureUnit(mover, 'enemy', game.pieces, game.size, env)
+    ) {
       earned.push({ award: { id: 'royal-fork' }, at });
     }
     if (smotheredMateBy(mover, game.pieces, game.size, env)) {

@@ -59,6 +59,32 @@ describe('what a committed board earns', () => {
     });
   });
 
+  it('pays a royal fork only when the forking unit survives the square it forked from', () => {
+    // A Knight forking the King and a Rook, standing where nothing can reach it.
+    const knight = P('player', 'knight', 4, 6);
+    const king = P('enemy', 'king', 5, 2);
+    const rook = P('enemy', 'rook', 3, 2);
+    const safe = earned([knight, king, rook], knight, { x: 4, y: 4 });
+    expect(ids(safe)).toContain('royal-fork');
+
+    // The same geometry, with an enemy Pawn that can simply take the Knight. Taking it IS how
+    // the check gets answered, so the Rook is never collected and the player has handed over a
+    // piece — the exact move the bounty must not teach.
+    const taker = P('enemy', 'pawn', 5, 3);
+    const thrown = earned([knight, king, rook, taker], knight, { x: 4, y: 4 });
+    expect(ids(thrown)).not.toContain('royal-fork');
+  });
+
+  it('asks only whether the FORKER can be taken, never whether the victim is defended', () => {
+    // ADR-0527 deliberately does not ask about the victim: what a real fork is worth to answer
+    // is the position's business. A defended Rook is still a fork.
+    const knight = P('player', 'knight', 4, 6);
+    const king = P('enemy', 'king', 5, 2);
+    const rook = P('enemy', 'rook', 3, 2);
+    const guard = P('enemy', 'rook', 3, 0); // defends the forked Rook down the file
+    expect(ids(earned([knight, king, rook, guard], knight, { x: 4, y: 4 }))).toContain('royal-fork');
+  });
+
   it('pays a discovered check to the piece that stepped out of the way', () => {
     // The Bishop leaves the file; the Rook behind it now runs all the way to the King.
     const rook = P('player', 'rook', 2, 4);

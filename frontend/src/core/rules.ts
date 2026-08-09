@@ -925,6 +925,36 @@ export function kingCheckers(side: Side, pieces: readonly Piece[], size: BoardSi
 }
 
 /**
+ * Whether `bySide` has a LEGAL move that captures `target` — "can they just take it?".
+ *
+ * Legality, not merely attack geometry, because the two answer different questions. A piece
+ * pinned against its own king attacks the square and cannot go there, and a king may not
+ * capture a defended piece at all; asking `attacksSquare` would call both of those a capture
+ * and they are not.
+ *
+ * Only worth asking about a piece that has just done something the position must answer, so
+ * callers should reach for it after a cheaper geometry test has already matched.
+ */
+export function sideCanCaptureUnit(
+  target: Piece,
+  bySide: Side,
+  pieces: readonly Piece[],
+  size: BoardSize,
+  env?: MoveEnv,
+): boolean {
+  if (!target || !target.alive) return false;
+  for (const piece of livingPieces(pieces, bySide)) {
+    if (isObstacle(piece)) continue;
+    for (const move of legalMoves(piece, pieces, size, env)) {
+      // A capture is named by `capture` (en passant takes a piece that is not on the landing
+      // square), and otherwise is simply landing where the target stands.
+      if (move.capture === target.id || (move.x === target.x && move.y === target.y)) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Whether `side` has any legal move at all — the "no legal action" half of checkmate and
  * stalemate. Lives here beside `legalMoves` so the canonical adjudicator and every caller
  * that needs to recognize a *shape* of mate ask one implementation rather than two that can
