@@ -25,23 +25,25 @@ describe('skirmish dynamic zoom floor', () => {
     viewStore.getState().setMinZoom(1.1);
     viewStore.getState().setZoom(0.6);
     expect(viewStore.getState().zoom).toBe(1.1);
-    expect(viewStore.getState().maxZoom).toBe(1.45);
 
     viewStore.getState().setMinZoom(1.8);
     expect(viewStore.getState().zoom).toBe(1.8);
-    // A floor above the absolute cap must still leave the player somewhere to go. This used to
-    // collapse to 1.8 — floor and ceiling identical, so the board could not be zoomed at all.
-    expect(viewStore.getState().maxZoom).toBeCloseTo(2.61, 5);
+    // The floor no longer has to be rescued from a ceiling. It used to be possible for a
+    // derived floor to land on top of the cap and collapse the range onto one zoom, which is
+    // what the proportional headroom existed to undo; an uncapped store cannot reach that state.
+    expect(viewStore.getState().maxZoom).toBe(Number.POSITIVE_INFINITY);
 
     viewStore.getState().resetView();
     expect(viewStore.getState().zoom).toBe(1.8);
   });
 
-  it('keeps the ordinary cap for every level whose floor still sits under it', () => {
+  it('imposes no ceiling of its own, whatever the floor', () => {
+    // How far in a player may go is the ladder's closest tier, measured where the viewport is
+    // known. The store holding a second, smaller cap could only ever narrow that silently.
     viewStore.getState().setMinZoom(1.44);
-    expect(viewStore.getState().maxZoom).toBe(1.45);
+    expect(viewStore.getState().maxZoom).toBe(Number.POSITIVE_INFINITY);
     viewStore.getState().setMinZoom(0.4);
-    expect(viewStore.getState().maxZoom).toBe(1.45);
+    expect(viewStore.getState().maxZoom).toBe(Number.POSITIVE_INFINITY);
   });
 
   it('preserves an accepted-art floor between human-facing control increments', () => {
@@ -60,14 +62,15 @@ describe('skirmish dynamic zoom floor', () => {
     expect(viewStore.getState().pan).toEqual({ x: 4, y: -8 });
   });
 
-  it('raises the interactive ceiling when the canonical opening fit needs it', () => {
+  it('holds an opening closer than any old cap, and does not clamp past it', () => {
     viewStore.getState().setOpeningView({ zoom: 1.92, pan: { x: 0, y: 14 } });
     viewStore.getState().setZoom(1.92);
-    expect(viewStore.getState().maxZoom).toBe(1.92);
     expect(viewStore.getState().zoom).toBe(1.92);
 
+    // Previously clamped back to the opening because the ceiling was raised only far enough to
+    // admit it. Nothing in the store stops a player going further in now.
     viewStore.getState().setZoom(2.5);
-    expect(viewStore.getState().zoom).toBe(1.92);
+    expect(viewStore.getState().zoom).toBe(2.5);
   });
 
   it('isolates every mounted battlefield view from independently preparing scenes', () => {
