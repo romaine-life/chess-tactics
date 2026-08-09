@@ -2,7 +2,9 @@
 status: accepted
 date: 2026-08-06
 deciders: Nelson
-partially_superseded_by: "[ADR-0504](0504-promotion-choices-stay-with-the-arrived-pawn.md)'s board-anchored choice presentation"
+partially_superseded_by:
+  - "[ADR-0504](0504-promotion-choices-stay-with-the-arrived-pawn.md)'s board-anchored choice presentation"
+  - "[ADR-0541](0541-a-promotion-premove-is-asked-what-it-becomes-as-it-is-queued.md)'s queue-time premove choice, which replaces the destination-only premove clause and its unresolved type boundary"
 ---
 
 # ADR-0503: Pawns arrive before their promotion choice

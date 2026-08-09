@@ -394,7 +394,15 @@ export interface ClockState {
 }
 
 export interface PendingPromotion {
-  mode: 'move' | 'premove';
+  /**
+   * Which gesture is asking.
+   *
+   * `move` and `premove` are a move MID-COMMIT: the Pawn's arrival is projected onto the real
+   * board and the canonical position waits on the answer. `premove-queue` is the queue-time
+   * question (ADR-0541) — nothing is committing, the premoved Pawn's ghost already stands on the
+   * promotion cell, and the answer is written onto the queued step for the drain to fire later.
+   */
+  mode: 'move' | 'premove' | 'premove-queue';
   phase: 'landing' | 'choosing' | 'submitted';
   pieceId: string;
   move: Move;
@@ -829,8 +837,9 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     if (s.sessionEpoch !== epoch || s.game !== gameRef || s.game.winner || !s.premoveInputOpen) return;
     // An open promotion picker is an unfinished input gesture, not idle time. Closing the beat
     // underneath it would strand the player's choice as a queued premove that only fires a whole
-    // round later — "I picked Queen and it turned into a premove". Hold the beat (and the clock)
-    // until choosePromotion resolves it.
+    // round later — "I picked Queen and it turned into a premove" — and a queue-time question
+    // asked during this same beat would have its step fired before it knew the answer. Hold the
+    // beat (and the clock) until choosePromotion resolves it.
     if (s.pendingPromotion) { schedulePremoveInputBeat(gameRef); return; }
     premoveFireTimer = null;
     if (s.premoves.length > 0) {
@@ -1141,6 +1150,9 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     const p = s.game.pieces.find((q) => q.id === head.pieceId && q.alive && q.side === side);
     const mv = p ? legalMoves(p, s.game.pieces, s.game.size, s.env).find((m) => m.x === head.x && m.y === head.y) : undefined;
     if (!p || !mv) { set({ premoves: [], premoveInputOpen: false }); return false; }
+    // Player-authored promotion premoves answer this at queue time (ADR-0541), so a head that
+    // still carries no choice came from somewhere else — a programmatic or legacy step. It falls
+    // back to the arrive-then-ask presentation rather than picking for the player.
     if (movePromotesPawn(s.game, p, mv) && head.promotion === undefined) {
       stagePromotionArrival('premove', p, mv, promotionChoicesForMove(s.game, p, mv), rest);
       return true;
@@ -1235,7 +1247,10 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       turnsElapsed,
       ...interaction,
       sessionEpoch: nextEpoch,
-      pendingPromotion: null,
+      // An arrival projection belongs to a move this relay has now settled. A queue-time
+      // question belongs to a premove the relay did not touch, so it survives beside its step —
+      // the opponent moving is not an answer to what the player's Pawn will become.
+      pendingPromotion: !game.winner && s.pendingPromotion?.mode === 'premove-queue' ? s.pendingPromotion : null,
       premoves: game.winner ? [] : s.premoves,
       premoveInputOpen: returnedToLocal,
       log: extendLog(s.log, msgs),
@@ -1953,6 +1968,23 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     if (!pending || pending.phase !== 'choosing' || !pending.choices.includes(type)) return;
     const side = s.net ? s.net.localSide : 'player';
 
+    // Answered while the step is still QUEUED: write the choice onto that step and leave the
+    // board alone. It is still a prediction — exact legality, the atomic apply, and (in netplay)
+    // the ordered submission all remain the drain's job when control returns.
+    if (pending.mode === 'premove-queue') {
+      let index = -1;
+      for (let at = s.premoves.length - 1; at >= 0; at -= 1) {
+        const step = s.premoves[at];
+        if (step.pieceId === pending.pieceId && step.x === pending.move.x && step.y === pending.move.y) { index = at; break; }
+      }
+      if (index < 0) { set({ pendingPromotion: null }); return; }
+      set({
+        premoves: s.premoves.map((step, at) => (at === index ? { ...step, promotion: type } : step)),
+        pendingPromotion: null,
+      });
+      return;
+    }
+
     const p = s.game.pieces.find((q) => q.id === pending.pieceId && q.alive && q.side === side);
     const mv = p
       ? legalMoves(p, s.game.pieces, s.game.size, s.env).find((m) => m.x === pending.move.x && m.y === pending.move.y)
@@ -1983,17 +2015,38 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     // so the chain builds on itself; the tip stays legal for the click that follows.
     const mv = premoveTargets(s.game, s.premoves, pieceId, side).find((m) => m.x === x && m.y === y);
     if (!mv) return;
+    const premoves = [...s.premoves, { pieceId, x, y }];
+    // A queued step that promotes asks WHAT IT BECOMES NOW, while the player is still looking at
+    // the plan they just drew (ADR-0541). Its ghost already stands on the promotion cell, so the
+    // question has a visible subject; the answer rides on the step and the drain fires one
+    // complete move. Nothing commits here — the premove is still a prediction.
     const projected = provisionalBoard(s.game, s.premoves, side);
     const p = projected.pieces.find((q) => q.id === pieceId && q.alive && q.side === side);
     if (p && movePromotesPawn(projected, p, mv)) {
-      set({ premoves: [...s.premoves, { pieceId, x, y }] });
+      set({
+        premoves,
+        // No arrival glide to wait out: the ghost appears in the same frame the step is queued,
+        // so the choice opens with it rather than one presentation interval later.
+        pendingPromotion: {
+          mode: 'premove-queue',
+          phase: 'choosing',
+          pieceId,
+          move: mv,
+          choices: promotionChoicesForMove(projected, p, mv),
+        },
+      });
       return;
     }
-    set({ premoves: [...s.premoves, { pieceId, x, y }] });
+    set({ premoves });
   },
 
   clearPremoves: () => {
-    if (get().premoves.length) set({ premoves: [] });
+    const s = get();
+    // Escape drops the chain, and an unanswered queue-time promotion question belongs to the
+    // step it was asked for — it goes with it rather than outliving the plan.
+    const queueChoice = s.pendingPromotion?.mode === 'premove-queue' ? s.pendingPromotion : null;
+    if (!s.premoves.length && !queueChoice) return;
+    set({ premoves: [], ...(queueChoice ? { pendingPromotion: null } : {}) });
   },
 
   setTestMode: (on) => {

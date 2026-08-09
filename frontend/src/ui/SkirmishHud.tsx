@@ -346,7 +346,9 @@ export function SkirmishHud({
   // 'you' = the lobby seat this client controls (host='player', guest='enemy'), so the
   // guest sees "Victory" when the 'enemy' side wins and "Your turn" on the enemy turn.
   const localSide = clientSide(net);
-  const presentedPieces = pendingPromotion
+  // Only a promotion that is MID-COMMIT has a Pawn standing somewhere the board state does not
+  // say it is. A queue-time question (ADR-0541) is about a premove, which has moved nothing.
+  const presentedPieces = pendingPromotion && pendingPromotion.mode !== 'premove-queue'
     ? promotionArrivalPieces(game, pendingPromotion.pieceId, pendingPromotion.move)
     : game.pieces;
   const rosterRows = clientSideOrder(localSide).map((side) => ({ side, pieces: livingPieces(presentedPieces, side) }));

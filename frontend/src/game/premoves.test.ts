@@ -147,6 +147,23 @@ describe('premoveGhosts', () => {
     expect(premoveGhosts(g, steps, 'enemy')[0]).toMatchObject({ key: '0,4', pieces: [{ id: 'er', side: 'enemy' }] });
   });
 
+  it('projects a chosen promotion premove as the piece it becomes, and keeps planning from there', () => {
+    const g: GameState = {
+      ...board([
+        piece('pp', 'player', 'pawn', 4, 1),
+        piece('pk', 'player', 'king', 7, 0),
+        piece('ek', 'enemy', 'king', 7, 7),
+      ]),
+      promotionRules: [{ side: 'player', cells: [{ x: 4, y: 0 }], choices: ['queen', 'knight'] }],
+    };
+    const steps = [{ pieceId: 'pp', x: 4, y: 0, promotion: 'queen' as const }];
+
+    expect(provisionalBoard(g, steps, 'player').pieces.find((p) => p.id === 'pp')).toMatchObject({ type: 'queen', x: 4, y: 0 });
+    expect(premoveGhosts(g, steps, 'player')[0]?.pieces[0]?.type).toBe('queen');
+    // A resolved type has moves, so the chain continues — as the Queen, down its new diagonal.
+    expect(premoveTargets(g, steps, 'pp', 'player')).toContainEqual(expect.objectContaining({ x: 0, y: 4 }));
+  });
+
   it('projects an unchosen promotion premove as the Pawn that will arrive', () => {
     const g: GameState = {
       ...board([

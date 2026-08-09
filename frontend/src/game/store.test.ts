@@ -1283,8 +1283,8 @@ describe('skirmish store: premoves', () => {
     expect(useSkirmish.getState().premoves).toEqual([]);
   });
 
-  // Promotion premoves carry only the destination. When the step reaches the front of the
-  // queue, its Pawn visibly arrives and only then asks what it became.
+  // A promotion premove is asked what it becomes AS IT IS QUEUED (ADR-0541), so the answer rides
+  // on the step and the drain fires one complete move without interrupting the player again.
   function loadPromotionBoard(): void {
     useSkirmish.setState({
       game: {
@@ -1313,32 +1313,88 @@ describe('skirmish store: premoves', () => {
     });
   }
 
-  it('waits for a promotion premove to arrive before opening its picker', () => {
+  it('asks a promotion premove what it becomes the moment it is queued', () => {
     loadPromotionBoard();
     useSkirmish.getState().tryMoveTo(1, 7); // king step → opponent's turn
     useSkirmish.getState().queueMove('pp', 0, 0);
-    expect(useSkirmish.getState().pendingPromotion).toBeNull();
-    expect(useSkirmish.getState().premoves).toEqual([{ pieceId: 'pp', x: 0, y: 0 }]);
 
-    vi.advanceTimersByTime(520 + 620); // reply lands, then the queued Pawn starts its move
+    // Open immediately — the ghost is already on the promotion cell, so there is no arrival
+    // glide to wait out and no 'landing' phase to sit through.
+    expect(useSkirmish.getState().pendingPromotion).toMatchObject({
+      mode: 'premove-queue',
+      phase: 'choosing',
+      pieceId: 'pp',
+      move: { x: 0, y: 0 },
+    });
+    // Nothing has moved: the board is still the opponent's and the Pawn is still on its square.
+    expect(useSkirmish.getState().game.turn).toBe('enemy');
+    expect(useSkirmish.getState().game.pieces.find((p) => p.id === 'pp')).toMatchObject({ type: 'pawn', x: 0, y: 1 });
+
+    useSkirmish.getState().choosePromotion('queen');
+    expect(useSkirmish.getState().pendingPromotion).toBeNull();
+    expect(useSkirmish.getState().premoves).toEqual([{ pieceId: 'pp', x: 0, y: 0, promotion: 'queen' }]);
+    expect(useSkirmish.getState().game.turn).toBe('enemy'); // still only a prediction
+  });
+
+  it('fires a chosen promotion premove as one complete move, asking nothing again', () => {
+    loadPromotionBoard();
+    useSkirmish.getState().tryMoveTo(1, 7);
+    useSkirmish.getState().queueMove('pp', 0, 0);
+    useSkirmish.getState().choosePromotion('queen');
+
+    vi.advanceTimersByTime(520 + 620); // reply lands, then the queued step fires
+    const s = useSkirmish.getState();
+    expect(s.pendingPromotion).toBeNull();
+    expect(s.premoves).toEqual([]);
+    expect(s.game.pieces.find((p) => p.id === 'pp')).toMatchObject({ type: 'queen', x: 0, y: 0 });
+    expect(s.game.turn).toBe('enemy');
+  });
+
+  it('holds the premove beat open while a queue-time promotion question is unanswered', () => {
+    loadPromotionBoard();
+    useSkirmish.getState().tryMoveTo(1, 7);
+
+    vi.advanceTimersByTime(520); // reply lands; the landing beat accepts premoves
+    useSkirmish.getState().queueMove('pp', 0, 0);
+    expect(useSkirmish.getState().pendingPromotion).toMatchObject({ mode: 'premove-queue', phase: 'choosing' });
+
+    vi.advanceTimersByTime(5000); // the beat must not close and fire the step underneath the question
+    expect(useSkirmish.getState().premoveInputOpen).toBe(true);
+    expect(useSkirmish.getState().game.pieces.find((p) => p.id === 'pp')).toMatchObject({ type: 'pawn', x: 0, y: 1 });
+
+    useSkirmish.getState().choosePromotion('knight');
+    vi.advanceTimersByTime(620);
+    expect(useSkirmish.getState().game.pieces.find((p) => p.id === 'pp')).toMatchObject({ type: 'knight', x: 0, y: 0 });
+    expect(useSkirmish.getState().premoves).toEqual([]);
+  });
+
+  it('drops an unanswered queue-time promotion question with the chain it belongs to', () => {
+    loadPromotionBoard();
+    useSkirmish.getState().tryMoveTo(1, 7);
+    useSkirmish.getState().queueMove('pp', 0, 0);
+
+    useSkirmish.getState().clearPremoves();
+    expect(useSkirmish.getState().pendingPromotion).toBeNull();
+    expect(useSkirmish.getState().premoves).toEqual([]);
+
+    vi.advanceTimersByTime(520 + 620);
+    expect(useSkirmish.getState().game.pieces.find((p) => p.id === 'pp')).toMatchObject({ type: 'pawn', x: 0, y: 1 });
+  });
+
+  it('lands a programmatic promotion premove before asking, since nobody chose for it', () => {
+    loadPromotionBoard();
+    useSkirmish.getState().tryMoveTo(1, 7);
+    // Queued without a choice — the shape a legacy/programmatic step still has.
+    useSkirmish.setState({ premoves: [{ pieceId: 'pp', x: 0, y: 0 }] });
+
+    vi.advanceTimersByTime(520 + 620);
     expect(useSkirmish.getState()).toMatchObject({
       premoveInputOpen: true,
       pendingPromotion: { mode: 'premove', phase: 'landing', pieceId: 'pp' },
     });
     expect(useSkirmish.getState().game.pieces.find((p) => p.id === 'pp')).toMatchObject({ type: 'pawn', x: 0, y: 1 });
-    vi.advanceTimersByTime(359);
-    expect(useSkirmish.getState().pendingPromotion).toMatchObject({ phase: 'landing' });
-    vi.advanceTimersByTime(1);
+    vi.advanceTimersByTime(360);
     expect(useSkirmish.getState().pendingPromotion).toMatchObject({ phase: 'choosing' });
-  });
-
-  it('commits a promotion premove only after its arrived Pawn receives a choice', () => {
-    loadPromotionBoard();
-    useSkirmish.getState().tryMoveTo(1, 7);
-    useSkirmish.getState().queueMove('pp', 0, 0);
-
-    vi.advanceTimersByTime(520 + 620 + 360);
-    expect(useSkirmish.getState().game.turn).toBe('player');
 
     useSkirmish.getState().choosePromotion('queen');
     const s = useSkirmish.getState();
@@ -1630,7 +1686,7 @@ describe('skirmish store: multiplayer session parity', () => {
     expect(useSkirmish.getState().log[0].text).toContain('browser storage is unavailable');
   });
 
-  it('lands an enemy-seat promotion premove before relaying the chosen promotion', () => {
+  it('asks an enemy-seat promotion premove at queue time and relays one complete move', () => {
     const sent: Array<{ pieceId: string; move: { x: number; y: number; promotion?: 'queen' | 'rook' | 'bishop' | 'knight' }; expected: number }> = [];
     useSkirmish.getState().setNetMoveSink((pieceId, move, expected) => { sent.push({ pieceId, move, expected }); });
     useSkirmish.getState().newNetMatch({ lobbyId: 'L1', localSide: 'enemy', level: playableNetLevel(), seed: 7 });
@@ -1658,21 +1714,24 @@ describe('skirmish store: multiplayer session parity', () => {
     });
 
     useSkirmish.getState().queueMove('ep', 4, 7);
-    expect(useSkirmish.getState().pendingPromotion).toBeNull();
+    expect(useSkirmish.getState().pendingPromotion).toMatchObject({ mode: 'premove-queue', phase: 'choosing', pieceId: 'ep' });
     expect(useSkirmish.getState().premoves).toEqual([{ pieceId: 'ep', x: 4, y: 7 }]);
+    expect(sent).toEqual([]); // a queue-time answer is not an intent
+
+    useSkirmish.getState().choosePromotion('knight');
+    expect(useSkirmish.getState().pendingPromotion).toBeNull();
+    expect(useSkirmish.getState().premoves).toEqual([{ pieceId: 'ep', x: 4, y: 7, promotion: 'knight' }]);
+    expect(sent).toEqual([]);
 
     useSkirmish.getState().applyRemoteMove('pk', { x: 0, y: 1 });
     expect(useSkirmish.getState().net?.moveCount).toBe(1);
     vi.advanceTimersByTime(621);
-    expect(useSkirmish.getState().pendingPromotion).toMatchObject({ mode: 'premove', phase: 'landing', pieceId: 'ep' });
-    expect(sent).toEqual([]);
-    vi.advanceTimersByTime(360);
-    expect(useSkirmish.getState().pendingPromotion).toMatchObject({ phase: 'choosing' });
-    useSkirmish.getState().choosePromotion('knight');
+    // One ordered submission carrying the whole move; nothing is projected onto this seat's board.
     expect(sent).toEqual([{ pieceId: 'ep', move: { x: 4, y: 7, promotion: 'knight' }, expected: 1 }]);
+    expect(useSkirmish.getState().pendingPromotion).toBeNull();
+    expect(useSkirmish.getState().premoves).toEqual([]);
     expect(useSkirmish.getState().game.pieces.find((candidate) => candidate.id === 'ep')).toMatchObject({ type: 'pawn', x: 4, y: 6 });
     expect(useSkirmish.getState().net?.pendingMove?.expectedMoveCount).toBe(1);
-    expect(useSkirmish.getState().pendingPromotion).toMatchObject({ phase: 'submitted' });
 
     useSkirmish.getState().applyRemoteMove('ep', sent[0].move);
     expect(useSkirmish.getState().game.pieces.find((candidate) => candidate.id === 'ep')).toMatchObject({ type: 'knight', x: 4, y: 7 });
