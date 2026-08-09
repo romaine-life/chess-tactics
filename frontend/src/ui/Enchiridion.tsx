@@ -55,6 +55,7 @@ import {
   type EnchiridionSection,
 } from './enchiridionRoute';
 import { installedUiMedia } from './installedUiMedia';
+import { useStrategikonCardsIcon } from './strategikonNavigation';
 import { LipsanonIcon } from './Lipsana';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
 import { ataraxiaNumeralArtUrl } from './ataraxiaNumeral';
@@ -87,13 +88,20 @@ import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
  * the shared kit objective flag, which Start, zones and the Skirmish HUD also paint —
  * a second symbol for a ladder that already has one (ADR-0059, ADR-0363).
  */
-const SECTION_ICON_SRC: Record<EnchiridionSection, string> = {
-  units: installedUiMedia('ui-kit-icons-unit-studio-png'),
-  terrain: installedUiMedia('ui-kit-icons-tileset-studio-png'),
-  cards: installedUiMedia('ui-kit-icons-players-png'),
-  lipsana: installedUiMedia('ui-kit-icons-info-png'),
-  ataraxia: installedUiMedia(RUN_PROGRESS_MEDIA_ROLE.ataraxia),
-};
+/**
+ * Cards are marked by the back of a card, the same one the Chartulary wears and the same one
+ * the Run deals — a hook rather than a constant, because the back follows the player's choice.
+ */
+function useSectionIconSrc(): Record<EnchiridionSection, string> {
+  const cards = useStrategikonCardsIcon();
+  return {
+    units: installedUiMedia('ui-kit-icons-unit-studio-png'),
+    terrain: installedUiMedia('ui-kit-icons-tileset-studio-png'),
+    cards,
+    lipsana: installedUiMedia('ui-kit-icons-info-png'),
+    ataraxia: installedUiMedia(RUN_PROGRESS_MEDIA_ROLE.ataraxia),
+  };
+}
 
 const UNIT_COPY: Record<PlayablePieceType, string> = {
   pawn: 'Moves one square forward; from its starting square it may move two. Captures one square diagonally forward.',
@@ -946,6 +954,7 @@ export function EnchiridionSectionRail({
   section: EnchiridionSection | null;
   sectionHref: (section: EnchiridionSection) => string;
 }): ReactElement {
+  const sectionIconSrc = useSectionIconSrc();
   return (
     <ApparatusRailColumn className="enchiridion-section-rail" aria-label="Enchiridion sections">
       {ENCHIRIDION_SECTIONS.map((candidate, index) => (
@@ -955,7 +964,7 @@ export function EnchiridionSectionRail({
           to={sectionHref(candidate)}
           index={index}
           active={section === candidate}
-          iconSrc={SECTION_ICON_SRC[candidate]}
+          iconSrc={sectionIconSrc[candidate]}
           markCanvas={candidate === 'ataraxia' ? 'bleed' : 'inset'}
         />
       ))}
