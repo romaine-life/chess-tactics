@@ -22,6 +22,7 @@ const strategikonTitleNavigation = readFileSync(new URL('./StrategikonTitleNavig
 const runCardFace = readFileSync(new URL('./RunCardFace.tsx', import.meta.url), 'utf8');
 const runBattlePreview = readFileSync(new URL('./RunBattlePreview.tsx', import.meta.url), 'utf8');
 const levelInfoCompact = readFileSync(new URL('./LevelInfoCompact.tsx', import.meta.url), 'utf8');
+const chromeDividedGrid = readFileSync(new URL('./shared/ChromeDividedGrid.tsx', import.meta.url), 'utf8');
 const runDeploymentCardStack = readFileSync(new URL('./RunDeploymentCardStack.tsx', import.meta.url), 'utf8');
 const runLipsana = readFileSync(new URL('./Lipsana.tsx', import.meta.url), 'utf8');
 const runSelfInspection = readFileSync(new URL('./RunSelfInspection.tsx', import.meta.url), 'utf8');
@@ -538,6 +539,22 @@ describe('Run chrome hierarchy', () => {
     expect(runBattlePreview).toContain('fillRole="outer"');
     expect(styleCss).toMatch(
       /\.chrome-divided-grid\.has-chrome-surface-fill > \.chrome-divided-grid__fill\s*\{\s*inset: 0;/,
+    );
+    // Lift the CONTENT above that fill, not every child: a blanket rule also catches the rail
+    // layer, whose own z-index it outranks, and the board then paints over the vertical rail
+    // below the header — its south stroke comes out thinner than the three the atom covers.
+    expect(styleCss).toMatch(
+      /\.chrome-divided-grid\.has-chrome-surface-fill > \.chrome-divided-grid__rows,[\s\S]*?z-index: 1;/,
+    );
+    expect(styleCss).not.toMatch(
+      /\.chrome-divided-grid\.has-chrome-surface-fill > :not\(\.chrome-divided-grid__fill\)/,
+    );
+    // A junction caps a rail where it meets the box's own FRAME. Unframed there is no such frame,
+    // so a boundary cap caps nothing and sits on the host's chrome as a stray atom.
+    expect(chromeDividedGrid).toContain("nodes.filter((node) => node.inlineBoundary === 'internal')");
+    expect(chromeDividedGrid).toContain('const blockBoundaryNodes = framed ? topology : { ...topology, topNodes: [], bottomNodes: [] };');
+    expect(styleCss).toMatch(
+      /\.chrome-divided-grid\[data-chrome-grid-framed="false"\]\s*\{\s*overflow: hidden;/,
     );
     expect(runBattlePreview).not.toContain('PreviewTitleBar');
     expect(runBattlePreview).not.toContain('<InnerChromeBox');

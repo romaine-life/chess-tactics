@@ -7211,6 +7211,15 @@ body.loading-bootstrap .app-startup-status {
   grid-template-columns: var(--chrome-divided-grid-columns);
 }
 
+/* A framed grid's rails BLEED past its content box on purpose: the authored junction atoms tee
+   into the box's own side rails. An unframed grid has no such rails — the host's chrome is its
+   boundary — so that bleed lands on the title bar and the Controls rail instead, and the corner
+   atoms sit on top of chrome they are supposed to disappear behind. Clip it to the grid's own
+   box. Internal crossings sit well inside and are untouched. */
+.chrome-divided-grid[data-chrome-grid-framed="false"] {
+  overflow: hidden;
+}
+
 /* An UNFRAMED grid still carries a surface — a workspace that replaces a retained scene has
    nothing of its own behind it. The inner box's own fill rules are scoped to that box, so the
    surface and the lift above it are declared here for the frameless form. */
@@ -7218,7 +7227,13 @@ body.loading-bootstrap .app-startup-status {
   inset: 0;
 }
 
-.chrome-divided-grid.has-chrome-surface-fill > :not(.chrome-divided-grid__fill) {
+/* Lift the CONTENT above the fill — not every child. A blanket rule here also caught the rail
+   layer, whose own `z-index: 2` it outranks, dropping the rails to the content's level; the board
+   then painted over the vertical rail below the header junction and its south stroke came out
+   thinner than the north, east and west ones the junction atom covers. */
+.chrome-divided-grid.has-chrome-surface-fill > .chrome-divided-grid__rows,
+.chrome-divided-grid.has-chrome-surface-fill > .chrome-divided-grid__scroll {
+  position: relative;
   z-index: 1;
 }
 
@@ -19721,11 +19736,9 @@ button.tileset-relationship-cell {
 .run-battle-preview-pane {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
-  /* NOT clipped: the rails' authored junction caps bleed onto the frame's side rails by design,
-     and a clip here puts them inside the frame. */
-  overflow: visible;
   /* NO padding. The installed surface paints under the whole pane, so padding would ring the
-     level art with a flat slab of that material between the border art and the board. */
+     level art with a flat slab of that material between the border art and the board.
+     Clipping is the frameless grid's own (see `[data-chrome-grid-framed="false"]`). */
   padding: 0;
 }
 

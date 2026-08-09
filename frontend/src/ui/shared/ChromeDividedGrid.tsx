@@ -150,7 +150,11 @@ function UnframedDividedGrid({
 }: ComponentProps<typeof InnerChromeBox>): ReactElement {
   const hasFill = Boolean(fillRole || fillSurface);
   return (
-    <div {...props} className={`${className}${hasFill ? ' has-chrome-surface-fill' : ''}`}>
+    <div
+      {...props}
+      data-chrome-grid-framed="false"
+      className={`${className}${hasFill ? ' has-chrome-surface-fill' : ''}`}
+    >
       {hasFill ? (
         <ChromeSurfaceFill
           role={fillRole}
@@ -190,6 +194,14 @@ export function DividedInnerChromeBox({
 }): ReactElement {
   const rows = Children.toArray(children);
   const topology = chromeDividedGridTopology(columns.length, scroll);
+  // A junction is the cap where a rail MEETS the box's own frame. An unframed grid has no such
+  // frame — the host's chrome is its boundary — so its boundary caps caps nothing and simply sits
+  // on top of that chrome as a stray atom. Internal crossings, where two of the grid's own rails
+  // actually meet, are the whole point and are kept either way.
+  const boundaryNodes = (nodes: readonly ChromeDividedGridNode[]): ChromeDividedGridNode[] => (
+    framed ? [...nodes] : nodes.filter((node) => node.inlineBoundary === 'internal')
+  );
+  const blockBoundaryNodes = framed ? topology : { ...topology, topNodes: [], bottomNodes: [] };
   const template = [
     ...columns,
     ...(scroll ? ['var(--chrome-divided-grid-scroll-gutter)'] : []),
@@ -211,7 +223,7 @@ export function DividedInnerChromeBox({
                 data-chrome-grid-inline-end={topology.horizontalEndBoundary}
                 style={{ gridColumn: `1 / ${topology.horizontalEndLine}` }}
               />
-              {topology.rowNodes.map((node) => (
+              {boundaryNodes(topology.rowNodes).map((node) => (
                 <GridJunction
                   key={`${node.line}-${node.sides}`}
                   node={node}
@@ -246,7 +258,7 @@ export function DividedInnerChromeBox({
             style={linePlacement(line, topology.trackCount)}
           />
         ))}
-        {topology.topNodes.map((node) => (
+        {blockBoundaryNodes.topNodes.map((node) => (
           <GridJunction
             key={`top-${node.line}`}
             node={node}
@@ -254,7 +266,7 @@ export function DividedInnerChromeBox({
             blockBoundary="frame-start"
           />
         ))}
-        {topology.bottomNodes.map((node) => (
+        {blockBoundaryNodes.bottomNodes.map((node) => (
           <GridJunction
             key={`bottom-${node.line}`}
             node={node}
