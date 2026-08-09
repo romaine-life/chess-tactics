@@ -28,7 +28,10 @@ export interface RunCardArtPromptPlan {
 
 const SHA256 = /^[0-9a-f]{64}$/;
 const CARD_ID = /^[pkbrq]+$/;
-const FAMILY_ID = /^[0-9]+-[pkbrq]+$/;
+// A family id is a footprint and a roster. Kings do not fit that grammar and are not meant to:
+// every King arrangement is its own card, so its art is keyed to the card's own slug behind a
+// `k-` namespace rather than to a (footprint, roster) pair the King would share with nothing.
+const FAMILY_ID = /^(?:[0-9]+-[pkbrq]+|k-[a-z0-9]+(?:-[a-z0-9]+)*)$/;
 const PIECES: readonly AdlectablePieceType[] = ['pawn', 'knight', 'bishop', 'rook', 'queen'];
 
 function objectValue(value: unknown): Record<string, unknown> | null {

@@ -1,10 +1,13 @@
-import { useState, type ReactElement } from 'react';
+import { useState, type ReactElement, type ReactNode } from 'react';
 import {
   LIPSANON_BY_ID,
-  RUN_CARD_BY_ID,
+  RUN_STARTER_CARD_BY_ID,
+  formatGold,
+  runCardDefinition,
   takeVacantiaLipsanon,
   type LipsanonId,
   type RunDocument,
+  type RunStarterCardId,
 } from '../run/model';
 import { LipsanonIcon } from './Lipsana';
 import { RunCard } from './RunCard';
@@ -31,7 +34,7 @@ function RunVacantiaCardGrant({
   const [taken, setTaken] = useState<string | null>(null);
   // The row is sized from how many cards it actually prints, so an offer whose core
   // has left the Chartulary shrinks the row rather than reserving a seat for nothing.
-  const offers = (run.vacantia?.cardOffers ?? []).filter((coreId) => Boolean(RUN_CARD_BY_ID[coreId]));
+  const offers = (run.vacantia?.cardOffers ?? []).filter((coreId) => Boolean(runCardDefinition(coreId)));
 
   // The Sectio's own card row, not the lipsanon mat: the mat is sized for 64x64 relic
   // icons and collapses around a card face.
@@ -47,9 +50,9 @@ function RunVacantiaCardGrant({
       <p className="run-card-row-call">They&apos;ll join for free.</p>
       <RunCardRow count={offers.length} testId="run-vacantia-card-offers">
         {offers.map((coreId, index) => (
+          <RunCardGrantSeat key={coreId} coreId={coreId}>
           <RunCard
-            key={coreId}
-            card={RUN_CARD_BY_ID[coreId]}
+            card={runCardDefinition(coreId)!}
             mode="grant"
             layoutId={coreId}
             seatIndex={index}
@@ -64,8 +67,39 @@ function RunVacantiaCardGrant({
               takeCard(coreId, source);
             }}
           />
+          </RunCardGrantSeat>
         ))}
       </RunCardRow>
+    </div>
+  );
+}
+
+/**
+ * A grant seat, with what the card hands over ABOVE it.
+ *
+ * Only a King carries gold, and only here: it is paid once for taking a thin King and never
+ * applies again, so it is not a property of the card and does not belong on its face. The card's
+ * own cost corner would be the obvious place and is exactly wrong -- that corner reads as a PRICE
+ * on every other card in the game, and this is a number the player receives.
+ *
+ * The line holds its seat whether or not there is gold, so a row of three does not sit at three
+ * different heights.
+ */
+function RunCardGrantSeat({ coreId, children }: { coreId: string; children: ReactNode }): ReactElement {
+  const king = RUN_STARTER_CARD_BY_ID[coreId as RunStarterCardId];
+  const bonus = king?.goldBonusTenths ?? 0;
+  return (
+    <div className="run-card-grant-seat">
+      {king ? (
+        <p
+          className="run-card-grant-bonus"
+          data-testid={`run-grant-bonus-${coreId}`}
+          data-empty={bonus > 0 ? 'false' : 'true'}
+        >
+          {bonus > 0 ? `and ${formatGold(bonus)} gold` : 'and no gold'}
+        </p>
+      ) : null}
+      {children}
     </div>
   );
 }

@@ -9,7 +9,8 @@ import { liveMediaForSlot } from '@chess-tactics/board-render';
  *
  * The Strategikon owns its own byte-pinned background (ADR-0336) and is not listed here.
  */
-export type WorkspaceBackgroundId = 'run-victory' | 'run-bona-vacantia' | 'level-editor-events';
+export type WorkspaceBackgroundId =
+  | 'run-victory' | 'run-bona-vacantia' | 'run-commendatio' | 'level-editor-events';
 
 export function workspaceBackgroundSlot(id: WorkspaceBackgroundId): string {
   return `ui/workspaces/${id}/background.png`;

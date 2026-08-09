@@ -5843,6 +5843,22 @@ const MIGRATIONS = [
        WHERE body->'runSaveVersion' = '33'::jsonb;
     `,
   },
+  {
+    version: 74,
+    name: 'Commendatio is its own phase',
+    // The Run's opening screen had been riding Bona Vacantia, which is the RELIC phase a Conflict
+    // opens with -- one state doing two unrelated jobs, and the conflation read immediately as a
+    // bug. Commendatio gets its own phase and its own field. Migration 73 already moved every Run
+    // off the retired opening screen, so nothing is in flight there and each Run simply gains the
+    // empty field.
+    sql: `
+      UPDATE active_runs
+         SET body = body || jsonb_build_object('runSaveVersion', 35, 'commendatio', 'null'::jsonb),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE body->'runSaveVersion' = '34'::jsonb;
+    `,
+  },
 ];
 
 let pool = null;
@@ -18714,8 +18730,14 @@ const RUN_STARTER_CARD_ART_BY_ID = Object.freeze({
 // live deck rather than restated. A frozen list is what made the roster-keyed set impossible to
 // extend without editing the server. Falls back to empty when the shared package is absent,
 // which fails the projection closed rather than admitting an unknown id.
+// Kings come from the starter set, not the offer deck: they are never dealt, so RUN_CARD_DECK
+// alone would refuse every King illustration as an unknown identity. Both are derived, so neither
+// needs restating here.
 const RUN_CARD_ART_FAMILY_IDS = Object.freeze([...new Set(
-  (Array.isArray(serverRender?.RUN_CARD_DECK) ? serverRender.RUN_CARD_DECK : [])
+  [
+    ...(Array.isArray(serverRender?.RUN_CARD_DECK) ? serverRender.RUN_CARD_DECK : []),
+    ...(Array.isArray(serverRender?.RUN_STARTER_CARDS) ? serverRender.RUN_STARTER_CARDS : []),
+  ]
     .map((card) => card?.artId)
     .filter((artId) => typeof artId === 'string' && artId),
 )].sort());
@@ -19008,8 +19030,15 @@ function runCardArtFamilyProjection(row, metadata, provenance) {
     .map((piece) => RUN_CARD_ART_PIECE_INITIAL[piece])
     .join('');
   const baseCost = metadata.pieces.reduce((sum, piece) => sum + RUN_CARD_ART_PIECE_VALUE[piece], 0);
-  // A family id is `<footprint>-<roster>`, so the roster half must agree with the pieces.
-  if (!cardId.endsWith(`-${roster}`) || metadata.baseCost !== baseCost || baseCost < 1 || baseCost > 10) {
+  // A family id is `<footprint>-<roster>`, so the roster half must agree with the pieces. A King is
+  // keyed to its own card slug instead, because every arrangement is its own King and encodes no
+  // shared roster; its identity is checked against the live starter set above, and the pieces here
+  // are its companions, so only the cost band is left to agree.
+  const kingCard = cardId.startsWith('k-');
+  if (
+    (!kingCard && !cardId.endsWith(`-${roster}`))
+    || metadata.baseCost !== baseCost || baseCost < 1 || baseCost > 10
+  ) {
     return { claimed: true, issue: 'Units-card art composition does not match its family identity', value: null };
   }
   if (row.slot !== `ui/run/card-art/${cardId}/illustration.png`) {
@@ -20765,6 +20794,14 @@ app.post('/api/admin/media-versions/:id/review', async (req, res) => {
 });
 
 function mediaAcceptanceContract(row) {
+  // v3 family card art is promoted PER FAMILY -- each illustration is complete on its own and the
+  // review carries that one card's decoded raster. A group contract on such a version is therefore
+  // incoherent rather than merely unusual: the batch path refuses it for being family art, and the
+  // per-family path would refuse it for being grouped, which strands the candidate with no way out.
+  // Family art is standalone whatever the slot metadata claims.
+  if (isObjectRecord(row.metadata) && row.metadata.schema === 'run-card-art-plan-v3') {
+    return { mode: 'standalone' };
+  }
   const raw = isObjectRecord(row.slot_metadata?.acceptance) ? row.slot_metadata.acceptance : null;
   if (!raw || raw.mode === undefined || raw.mode === 'standalone') return { mode: 'standalone' };
   if (raw.mode !== 'group') throw mediaMutationError('media_slot_acceptance_contract_invalid', 409, { slot: row.slot });
