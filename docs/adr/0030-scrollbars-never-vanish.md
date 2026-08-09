@@ -1,5 +1,5 @@
 ---
-status: "accepted; asset-storage clauses superseded by ADR-0085; the always-visible rail and its reserved gutter (clauses 1 and 3) partially superseded by ADR-0534"
+status: "accepted; asset-storage clauses superseded by ADR-0085; the always-visible rail and its reserved gutter (clauses 1 and 3) partially superseded by ADR-0536"
 date: 2026-06-27
 deciders: Nelson, Claude
 ---
@@ -38,7 +38,7 @@ Chosen: **scrollbars never vanish.** Concretely:
    browser-painted bar that the engine can drop. With nothing to scroll, the **bare rail
    stays** and must read as a visibly recessed groove, distinct from the panel behind it —
    not a near-invisible line.
-   > **Partially superseded by [ADR-0534](0534-a-scroll-rail-is-drawn-only-when-there-is-something-to-scroll.md).**
+   > **Partially superseded by [ADR-0536](0536-a-scroll-rail-is-drawn-only-when-there-is-something-to-scroll.md).**
    > A pane with nothing to scroll now draws no rail at all. Everything here still governs
    > the rail once it is drawn, and still rules out conditional `overflow: auto`,
    > hidden-until-hover, and browser-painted bars.
@@ -52,7 +52,7 @@ Chosen: **scrollbars never vanish.** Concretely:
 3. **The frame never moves.** The rail occupies fixed reserved space on the right (the
    content is padded clear of it), so adding or removing scrollable content never reflows
    the panel.
-   > **Partially superseded by [ADR-0534](0534-a-scroll-rail-is-drawn-only-when-there-is-something-to-scroll.md).**
+   > **Partially superseded by [ADR-0536](0536-a-scroll-rail-is-drawn-only-when-there-is-something-to-scroll.md).**
    > An idle pane hands that reserved space back to its rows, so crossing the overflow
    > threshold does reflow it. This still governs a gutter that is a framed grid column
    > with drawn dividers on its sides — those rails stay, and no drawn line moves.

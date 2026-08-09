@@ -85,7 +85,7 @@ describe('KitScroll gutter', () => {
   });
 });
 
-describe('KitScroll gutter styling (ADR-0534)', () => {
+describe('KitScroll gutter styling (ADR-0536)', () => {
   const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 
   it('routes the reservation through --kit-scroll-gutter so a collapse reaches the content', () => {

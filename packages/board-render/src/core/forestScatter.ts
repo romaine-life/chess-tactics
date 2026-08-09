@@ -30,7 +30,13 @@ import { projectBoardPoint } from '../render/boardProjection';
 import type { Direction } from '../ui/unitCatalog';
 import type { BoardForestTree, FloatingArtworkPlacement } from '../ui/boardCode';
 import {
+  clipGeneratorAreas,
+  generatorAreasBounds,
+  generatorAreasContainCell,
+} from './generatorAreas';
+import {
   projectedGroundFootprintWithinGridRect,
+  projectedGroundFootprintWithinGridRects,
   type ProjectedGroundFootprint,
 } from './projectedGroundFootprint';
 
@@ -118,18 +124,38 @@ export function forestGroundFootprint(
   return { x: ground.x, y: ground.y, rx: width / 2, ry: depth / 2 };
 }
 
+/** A grid area stated in cell EDGES rather than cell centres. */
+const gridAreaEdges = (area: ForestGridArea): ForestGridArea => {
+  const bounds = normalizedGridArea(area);
+  return {
+    minX: bounds.minX - 0.5,
+    minY: bounds.minY - 0.5,
+    maxX: bounds.maxX + 0.5,
+    maxY: bounds.maxY + 0.5,
+  };
+};
+
 /** True when the whole root/base footprint remains on the selected cells. */
 export function forestGroundFootprintWithinArea(
   footprint: ProjectedGroundFootprint,
   area: ForestGridArea,
 ): boolean {
-  const bounds = normalizedGridArea(area);
-  return projectedGroundFootprintWithinGridRect(footprint, {
-    minX: bounds.minX - 0.5,
-    minY: bounds.minY - 0.5,
-    maxX: bounds.maxX + 0.5,
-    maxY: bounds.maxY + 0.5,
-  });
+  return projectedGroundFootprintWithinGridRect(footprint, gridAreaEdges(area));
+}
+
+/**
+ * True when the whole root/base footprint remains on the union of several selected patches.
+ *
+ * Tested against the union rather than each patch in turn, so a tree standing where two patches
+ * meet is kept: the ground is continuous there, and rejecting it would carve a bare seam through
+ * a Forest the author extended by dragging a second area onto it.
+ */
+export function forestGroundFootprintWithinAreas(
+  footprint: ProjectedGroundFootprint,
+  areas: readonly ForestGridArea[],
+): boolean {
+  if (areas.length === 1) return forestGroundFootprintWithinArea(footprint, areas[0]);
+  return projectedGroundFootprintWithinGridRects(footprint, areas.map(gridAreaEdges));
 }
 
 export interface ForestScatterInput {
@@ -138,6 +164,13 @@ export interface ForestScatterInput {
   /** Optional section identity, keeping independently generated approaches collision-free. */
   scopeId?: string;
   area: ForestGridArea;
+  /**
+   * The Forest's complete ground, when it is more than one rectangle. `area` still states the
+   * territory this run may use; the scatter fills `area` INTERSECTED with this union, so an
+   * author who shift-dragged a second patch on gets one Forest across both instead of a Forest
+   * that spills over the rectangle it was never given.
+   */
+  areas?: readonly ForestGridArea[];
   params: ForestScatterParams;
   geometry: ForestSpeciesGeometry;
   /** Everything already in the scene. Used for id de-duplication and spacing rejection. */
@@ -245,6 +278,85 @@ const normalizedGridArea = (area: ForestGridArea): ForestGridArea => ({
   maxY: Math.max(area.minY, area.maxY),
 });
 
+/**
+ * How far a grid point is from the ground's edge, measured along the four grid axes.
+ *
+ * For ONE rectangle this is exactly `min(x - (minX - 0.5), (maxX + 0.5) - x, …)` — the same edge
+ * ramp the falloff has always used, so a Forest on a single patch is unchanged. For several
+ * rectangles it walks out cell by cell, which is what makes two patches that meet feather as one
+ * piece of ground: measuring each rectangle separately would fade the Forest out along the join
+ * and leave a bare stripe where the author expected it to continue.
+ *
+ * Runs are precomputed once per scatter so a candidate point costs four array reads.
+ */
+interface ForestGroundEdgeField {
+  distance(cellX: number, cellY: number, x: number, y: number): number;
+}
+
+function forestGroundEdgeField(areas: readonly ForestGridArea[]): ForestGroundEdgeField {
+  if (areas.length === 1) {
+    const bounds = normalizedGridArea(areas[0]);
+    return {
+      distance: (_cellX, _cellY, x, y) => Math.min(
+        x - (bounds.minX - 0.5),
+        bounds.maxX + 0.5 - x,
+        y - (bounds.minY - 0.5),
+        bounds.maxY + 0.5 - y,
+      ),
+    };
+  }
+  const bounds = generatorAreasBounds(areas);
+  const width = bounds.maxX - bounds.minX + 1;
+  const height = bounds.maxY - bounds.minY + 1;
+  const member = new Uint8Array(width * height);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      member[y * width + x] = generatorAreasContainCell(areas, bounds.minX + x, bounds.minY + y) ? 1 : 0;
+    }
+  }
+  // Consecutive member cells STRICTLY beyond each cell, per axis. The ground therefore ends at
+  // `cell + run + 0.5` on that side.
+  const left = new Int32Array(width * height);
+  const right = new Int32Array(width * height);
+  const up = new Int32Array(width * height);
+  const down = new Int32Array(width * height);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const index = y * width + x;
+      left[index] = x > 0 && member[index - 1] ? left[index - 1] + 1 : 0;
+    }
+    for (let x = width - 1; x >= 0; x -= 1) {
+      const index = y * width + x;
+      right[index] = x < width - 1 && member[index + 1] ? right[index + 1] + 1 : 0;
+    }
+  }
+  for (let x = 0; x < width; x += 1) {
+    for (let y = 0; y < height; y += 1) {
+      const index = y * width + x;
+      up[index] = y > 0 && member[index - width] ? up[index - width] + 1 : 0;
+    }
+    for (let y = height - 1; y >= 0; y -= 1) {
+      const index = y * width + x;
+      down[index] = y < height - 1 && member[index + width] ? down[index + width] + 1 : 0;
+    }
+  }
+  return {
+    distance: (cellX, cellY, x, y) => {
+      const localX = cellX - bounds.minX;
+      const localY = cellY - bounds.minY;
+      if (localX < 0 || localY < 0 || localX >= width || localY >= height) return 0;
+      const index = localY * width + localX;
+      if (!member[index]) return 0;
+      return Math.min(
+        x - (cellX - left[index] - 0.5),
+        cellX + right[index] + 0.5 - x,
+        y - (cellY - up[index] - 0.5),
+        cellY + down[index] + 0.5 - y,
+      );
+    },
+  };
+}
+
 /** Deterministic low-discrepancy coordinate in [0, 1), used for clean per-cell candidate slots. */
 function halton(index: number, base: number): number {
   let fraction = 1;
@@ -299,7 +411,14 @@ export function scatterForest(input: ForestScatterInput): FloatingArtworkPlaceme
   const totalTreeWeight = trees.reduce((sum, tree) => sum + tree.weight, 0);
   if (!trees.length || totalTreeWeight <= 0 || params.density <= 0) return [];
 
-  const bounds = normalizedGridArea(area);
+  // The ground this run may actually use: the territory it was handed, kept to the Forest's own
+  // patches. A Forest on one rectangle resolves straight back to that rectangle.
+  const territory = input.areas?.length
+    ? clipGeneratorAreas(input.areas, area)
+    : [normalizedGridArea(area)];
+  if (!territory.length) return [];
+  const bounds = generatorAreasBounds(territory);
+  const edgeField = forestGroundEdgeField(territory);
   const seed = params.seed >>> 0;
   const scaleLow = Math.min(params.scaleMin, params.scaleMax);
   const scaleHigh = Math.max(params.scaleMin, params.scaleMax);
@@ -326,6 +445,7 @@ export function scatterForest(input: ForestScatterInput): FloatingArtworkPlaceme
 
   for (let cellY = bounds.minY; cellY <= bounds.maxY; cellY += 1) {
     for (let cellX = bounds.minX; cellX <= bounds.maxX; cellX += 1) {
+      if (!generatorAreasContainCell(territory, cellX, cellY)) continue;
       const count = wholeCandidates
         + (fractionalCandidate > 0 && hashUnit(cellX, cellY, seed, 0) < fractionalCandidate ? 1 : 0);
       for (let slot = 0; slot < Math.min(count, candidateSlots); slot += 1) {
@@ -344,17 +464,11 @@ export function scatterForest(input: ForestScatterInput): FloatingArtworkPlaceme
         const projected = projectBoardPoint(gridPoint);
         const ground: ForestGroundPoint = { x: projected.left, y: projected.top };
 
-        // Feather inward from the selected grid rect's four boundaries. This is grid distance, so
-        // the same selected cells produce the same edge at every camera zoom and projection scale.
+        // Feather inward from the selected ground's boundary. This is grid distance, so the same
+        // selected cells produce the same edge at every camera zoom and projection scale.
         let keep = 1;
         if (featherDepth > 0) {
-          const edgeDistance = Math.min(
-            gridPoint.x - (bounds.minX - 0.5),
-            bounds.maxX + 0.5 - gridPoint.x,
-            gridPoint.y - (bounds.minY - 0.5),
-            bounds.maxY + 0.5 - gridPoint.y,
-          );
-          keep *= clamp(edgeDistance / featherDepth, 0, 1);
+          keep *= clamp(edgeField.distance(cellX, cellY, gridPoint.x, gridPoint.y) / featherDepth, 0, 1);
         }
         // Clumping biases the same density into groves and glades instead of thinning uniformly.
         if (clumping > 0) {
@@ -396,7 +510,7 @@ export function scatterForest(input: ForestScatterInput): FloatingArtworkPlaceme
         // enough to let a "minimum 80px" forest ship trees 79.9px apart if the raw point is used.
         const seated = floatingArtworkGroundPoint(placement, geometry) ?? ground;
         const footprint = forestGroundFootprint(seated, sprite, instanceScale);
-        if (!forestGroundFootprintWithinArea(footprint, bounds)) continue;
+        if (!forestGroundFootprintWithinAreas(footprint, territory)) continue;
         if (spacing > 0 && occupied.some(
           (point) => Math.hypot(point.x - seated.x, point.y - seated.y) < spacing,
         )) continue;

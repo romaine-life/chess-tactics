@@ -291,6 +291,83 @@ describe('scatterForest', () => {
     expect(second.some((placement) => isForestMember(placement, 'forest-a'))).toBe(false);
   });
 
+  // Shift-drag lets one Forest own several patches. The scatter fills their UNION, so a Forest can
+  // wrap a lake or run on past the edge of one screenful of board.
+  describe('several patches of ground', () => {
+    const cellOf = (placement: FloatingArtworkPlacement) => {
+      const ground = floatingArtworkGroundPoint(placement, geometry)!;
+      const point = unprojectBoardPoint({ left: ground.x, top: ground.y });
+      return { x: Math.round(point.x), y: Math.round(point.y) };
+    };
+
+    it('changes nothing when the one patch is the area itself', () => {
+      const plain = run();
+      const stated = scatterForest({
+        forestId: 'forest-a', area, areas: [area], params: params(), geometry, existing: [],
+      });
+      expect(stated).toEqual(plain);
+    });
+
+    it('leaves the hole in an L-shape empty', () => {
+      const arm = { minX: 2, minY: 3, maxX: 7, maxY: 14 };
+      const foot = { minX: 8, minY: 10, maxX: 13, maxY: 14 };
+      const placements = scatterForest({
+        forestId: 'forest-a', area, areas: [arm, foot], params: params(), geometry, existing: [],
+      });
+      expect(placements.length).toBeGreaterThan(0);
+      const inside = (cell: { x: number; y: number }) => (
+        (cell.x >= arm.minX && cell.x <= arm.maxX && cell.y >= arm.minY && cell.y <= arm.maxY)
+        || (cell.x >= foot.minX && cell.x <= foot.maxX && cell.y >= foot.minY && cell.y <= foot.maxY)
+      );
+      expect(placements.map(cellOf).every(inside)).toBe(true);
+      // The missing corner of the bounding box is genuinely covered by neither patch.
+      expect(placements.map(cellOf).some((cell) => cell.x > 7 && cell.y < 10)).toBe(false);
+    });
+
+    it('grows across the join instead of feathering out a bare seam', () => {
+      const left = { minX: 2, minY: 3, maxX: 7, maxY: 14 };
+      const right = { minX: 8, minY: 3, maxX: 13, maxY: 14 };
+      const joined = scatterForest({
+        forestId: 'forest-a',
+        area,
+        areas: [left, right],
+        params: params({ falloff: 0.6 }),
+        geometry,
+        existing: [],
+      });
+      const seam = joined.map(cellOf).filter((cell) => cell.x === 7 || cell.x === 8).length;
+      expect(seam).toBeGreaterThan(0);
+      // Two patches that tile the same ground are ONE piece of ground: the same cells, the same
+      // edge ramp, the same trees as the single rectangle they add up to.
+      expect(joined).toEqual(scatterForest({
+        forestId: 'forest-a', area, params: params({ falloff: 0.6 }), geometry, existing: [],
+      }));
+    });
+
+    it('fills only the part of a territory the Forest actually owns', () => {
+      const patch = { minX: 2, minY: 3, maxX: 6, maxY: 8 };
+      const placements = scatterForest({
+        forestId: 'forest-a', area, areas: [patch], params: params(), geometry, existing: [],
+      });
+      expect(placements.length).toBeGreaterThan(0);
+      expect(placements.map(cellOf).every(
+        (cell) => cell.x >= patch.minX && cell.x <= patch.maxX
+          && cell.y >= patch.minY && cell.y <= patch.maxY,
+      )).toBe(true);
+    });
+
+    it('produces nothing when the territory misses every patch', () => {
+      expect(scatterForest({
+        forestId: 'forest-a',
+        area,
+        areas: [{ minX: 40, minY: 40, maxX: 44, maxY: 44 }],
+        params: params(),
+        geometry,
+        existing: [],
+      })).toEqual([]);
+    });
+  });
+
   it('returns a batch already in back-to-front paint order', () => {
     const grounds = run().map((placement) => floatingArtworkGroundPoint(placement, geometry)!.y);
     expect([...grounds].sort((a, b) => a - b)).toEqual(grounds);

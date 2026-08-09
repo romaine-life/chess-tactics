@@ -4,7 +4,7 @@ date: 2026-08-08
 deciders: Nelson, Claude
 ---
 
-# ADR-0534: A scroll rail is drawn only when there is something to scroll
+# ADR-0536: A scroll rail is drawn only when there is something to scroll
 
 [ADR-0030](0030-scrollbars-never-vanish.md) decided that the drawn rail is **always**
 present — bare groove when empty, reserved inline gutter either way, "the frame never

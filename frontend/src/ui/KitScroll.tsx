@@ -31,7 +31,7 @@ export const KIT_SCROLL_INITIAL_GUTTER: KitScrollGutter = {
 };
 
 /**
- * Whether the rail is drawn and its inline gutter reserved (ADR-0534): a pane
+ * Whether the rail is drawn and its inline gutter reserved (ADR-0536): a pane
  * with nothing to scroll gives the space back to its rows instead of standing a
  * bare groove beside them.
  *
@@ -94,7 +94,7 @@ export function computeKitScrollMetrics({
 // we only draw + drive the bar.
 //
 // The rail is mounted unconditionally so its rendered height stays measurable, but a pane with
-// nothing to scroll marks itself `data-kit-scroll-rail="collapsed"` (ADR-0534): the CSS then stops
+// nothing to scroll marks itself `data-kit-scroll-rail="collapsed"` (ADR-0536): the CSS then stops
 // painting the groove and zeroes `--kit-scroll-gutter`, handing the reserved inline strip back to
 // the rows. Consumers reserve their gutter FROM that token so the whole family collapses together.
 export function KitScroll({ children, className, style, contentRef }: {

@@ -65,7 +65,7 @@ search for before constructing a control or repeated surface.
   opening camera policy; `StaticReadOnlyBoardView` owns non-interactive stacks.
 - `ui/KitScroll.tsx` — the only application scrollbar renderer. It hides the
   native scrollbar and owns the drawn rail plus overflow-only thumb required by
-  ADR-0030. Per ADR-0534 the rail is drawn only while the content overflows: an
+  ADR-0030. Per ADR-0536 the rail is drawn only while the content overflows: an
   idle pane marks itself `data-kit-scroll-rail="collapsed"`, which hides the rail
   and zeroes `--kit-scroll-gutter`. Reserve inline space from that token (sized by
   `--kit-scroll-gutter-size`) and never from a literal, or the rows keep standing

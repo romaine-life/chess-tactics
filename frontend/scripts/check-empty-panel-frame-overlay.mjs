@@ -231,7 +231,7 @@ if (!/margin-inline\s*:/.test(hudScrollBlock)
   || !hudScrollBlock.includes('--le-inner-atom-left-overhang')
   || !hudScrollBlock.includes('--le-inner-atom-right-overhang')
   || !/padding-left\s*:\s*var\(--le-inner-atom-left-overhang/.test(hudScrollContentBlock)
-  // The rail's share comes off --kit-scroll-gutter (ADR-0534), never a literal, so an idle
+  // The rail's share comes off --kit-scroll-gutter (ADR-0536), never a literal, so an idle
   // palette hands that strip back to its rows while the atom apron stays exactly as wide.
   || !/padding-right\s*:\s*calc\(var\(--kit-scroll-gutter\) \+ var\(--le-inner-atom-right-overhang/.test(hudScrollContentBlock)) {
   failures.push('the Level Editor scrollport must expand a two-sided atom clip apron without moving its rail-aligned content');
