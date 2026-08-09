@@ -6570,6 +6570,81 @@ async function main() {
   ) {
     throw new Error(`Active Runs must reject retired Deployment pace state: ${retiredDeploymentMode.statusCode} ${retiredDeploymentMode.body}`);
   }
+  // Commendatio is the Run's opening screen and precedes the King, so its document carries no
+  // army and no cards. The phase was once missing from the server's accepted set, which left a
+  // freshly started Run unsaveable until the player answered it (#851).
+  const commendatioRun = {
+    ...boardRender.craftRunDocument(
+      boardRender.runCraftSpecFromJson({ phase: 'commendatio', seed: 23 }),
+      {
+        id: 'war-smoke',
+        name: 'Smoke War',
+        description: 'Pinned War snapshot.',
+        battles: [
+          { level: warBattleLevel, loot: false },
+          { level: structuredClone(warBattleLevel), loot: false },
+        ],
+      },
+    ),
+    id: 'run-smoke',
+    updatedAt: '2026-01-01T02:00:00.000Z',
+  };
+  const savedCommendatioRun = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({ run: commendatioRun, revision: 4 }),
+  );
+  const savedCommendatioRunBody = JSON.parse(savedCommendatioRun.body);
+  if (
+    savedCommendatioRun.statusCode !== 200
+    || savedCommendatioRunBody.revision !== 5
+    || savedCommendatioRunBody.run.phase !== 'commendatio'
+    || savedCommendatioRunBody.run.army.length !== 0
+    || savedCommendatioRunBody.run.cards.length !== 0
+    || savedCommendatioRunBody.run.commendatio?.kingOffers?.length !== boardRender.RUN_OPENING_CARD_OFFER_COUNT
+  ) {
+    throw new Error(`A Run in Commendatio did not save: ${savedCommendatioRun.statusCode} ${savedCommendatioRun.body}`);
+  }
+  const commendatioOutsideItsPhase = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      run: { ...deploymentRun, commendatio: commendatioRun.commendatio },
+      revision: 5,
+    }),
+  );
+  if (
+    commendatioOutsideItsPhase.statusCode !== 400
+    || JSON.parse(commendatioOutsideItsPhase.body).error !== 'invalid_active_run'
+  ) {
+    throw new Error(`Commendatio state must not outlive its phase: ${commendatioOutsideItsPhase.statusCode} ${commendatioOutsideItsPhase.body}`);
+  }
+  // Fifteen Kings can open a Run and each mints its own card seating its own roster (#850). The
+  // server pinned His Grace's card id and pawn seats, so the other fourteen could never be saved.
+  const chosenKingId = savedCommendatioRunBody.run.commendatio.kingOffers.find((id) => id !== 'his-grace');
+  if (!chosenKingId) throw new Error('Commendatio should deal a King other than His Grace to choose.');
+  const chosenKingRun = {
+    ...boardRender.takeCommendatioKing(savedCommendatioRunBody.run, chosenKingId),
+    updatedAt: '2026-01-01T03:00:00.000Z',
+  };
+  const savedChosenKingRun = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({ run: chosenKingRun, revision: 5 }),
+  );
+  const savedChosenKingRunBody = JSON.parse(savedChosenKingRun.body);
+  if (
+    savedChosenKingRun.statusCode !== 200
+    || savedChosenKingRunBody.revision !== 6
+    || savedChosenKingRunBody.run.phase !== 'deployment'
+    || savedChosenKingRunBody.run.commendatio !== null
+    || savedChosenKingRunBody.run.cards.length !== 1
+    || savedChosenKingRunBody.run.cards[0].coreId !== chosenKingId
+    || savedChosenKingRunBody.run.cards[0].id === 'run-card-his-grace'
+    || !savedChosenKingRunBody.run.army.some((unit) => unit.id === 'run-king' && unit.type === 'king')
+  ) {
+    throw new Error(`A Run that chose a King other than His Grace did not save: ${savedChosenKingRun.statusCode} ${savedChosenKingRun.body}`);
+  }
   const rivalRun = await get('/api/active-run', { cookie: '__Host-chess-tactics-access=rival' });
   const rivalRunBody = JSON.parse(rivalRun.body);
   if (
@@ -6584,13 +6659,13 @@ async function main() {
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ run: { ...activeRunDocument, updatedAt: '2026-01-02T00:00:00.000Z' }, revision: 0 }),
   );
-  if (staleRun.statusCode !== 409 || JSON.parse(staleRun.body).revision !== 4) {
+  if (staleRun.statusCode !== 409 || JSON.parse(staleRun.body).revision !== 6) {
     throw new Error(`Stale active Run write should conflict: ${staleRun.statusCode} ${staleRun.body}`);
   }
   const deletedRun = await request(
     'DELETE', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({ revision: 4 }),
+    JSON.stringify({ revision: 6 }),
   );
   if (deletedRun.statusCode !== 200 || JSON.parse(deletedRun.body).ok !== true) {
     throw new Error(`Active Run did not delete: ${deletedRun.statusCode} ${deletedRun.body}`);
