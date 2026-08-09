@@ -96,6 +96,7 @@ describe('BoardCanvasLayer pre-drawn occlusion', () => {
     let filteredAlpha = -1;
     const mainContext = {
       clearRect: () => {},
+      setTransform: () => {},
       drawImage: () => {},
       imageSmoothingEnabled: true,
     } as unknown as CanvasRenderingContext2D;
@@ -104,6 +105,7 @@ describe('BoardCanvasLayer pre-drawn occlusion', () => {
       globalCompositeOperation: 'source-over',
       imageSmoothingEnabled: true,
       clearRect: () => {},
+      setTransform: () => {},
       save: () => {},
       restore: () => {},
       drawImage: () => {},
@@ -113,6 +115,7 @@ describe('BoardCanvasLayer pre-drawn occlusion', () => {
       globalCompositeOperation: 'source-over',
       imageSmoothingEnabled: true,
       clearRect: () => {},
+      setTransform: () => {},
       drawImage: () => {},
       getImageData: () => ({ data: new Uint8ClampedArray([red, green, blue, 255]) }),
       putImageData: (data: ImageData) => { filteredAlpha = data.data[3]; },
@@ -150,6 +153,7 @@ describe('BoardCanvasLayer pre-drawn occlusion', () => {
     const scratchCanvas = { width: 10, height: 10 } as HTMLCanvasElement;
     const mainContext = {
       clearRect: () => {},
+      setTransform: () => {},
       drawImage: () => {},
       imageSmoothingEnabled: true,
     } as unknown as CanvasRenderingContext2D;
@@ -158,6 +162,7 @@ describe('BoardCanvasLayer pre-drawn occlusion', () => {
       globalCompositeOperation: 'source-over',
       imageSmoothingEnabled: true,
       clearRect: () => {},
+      setTransform: () => {},
       save: () => {},
       restore: () => {},
       drawImage: (...args: unknown[]) => {
@@ -169,6 +174,7 @@ describe('BoardCanvasLayer pre-drawn occlusion', () => {
       globalCompositeOperation: 'source-over',
       imageSmoothingEnabled: true,
       clearRect: () => {},
+      setTransform: () => {},
       drawImage: () => {},
       getImageData: (_x: number, _y: number, width: number, height: number) => ({
         data: new Uint8ClampedArray(width * height * 4),
@@ -217,6 +223,7 @@ describe('BoardCanvasLayer pre-drawn occlusion', () => {
         globalAlpha: 1,
         imageSmoothingEnabled: true,
         clearRect: () => {},
+        setTransform: () => {},
         save() { stack.push(state.composite); },
         restore() { state.composite = stack.pop() ?? 'source-over'; },
         drawImage(image: HTMLImageElement) {
@@ -300,6 +307,7 @@ describe('BoardCanvasLayer pre-drawn occlusion', () => {
       const context = {
         imageSmoothingEnabled: true,
         clearRect: (...args: unknown[]) => record('clearRect', ...args),
+        setTransform: (...args: unknown[]) => record('setTransform', ...args),
         save: () => stack.push({ ...state }),
         restore: () => Object.assign(state, stack.pop() ?? state),
         beginPath: () => record('beginPath'),
@@ -422,6 +430,7 @@ describe('BoardCanvasLayer pre-drawn occlusion', () => {
       globalCompositeOperation: 'source-over',
       imageSmoothingEnabled: true,
       clearRect: () => {},
+      setTransform: () => {},
       save: () => {},
       restore: () => {},
       drawImage: (...args: unknown[]) => draws.push(args),
