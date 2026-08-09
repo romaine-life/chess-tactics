@@ -44,7 +44,7 @@ describe('pre-drawn editor policy', () => {
     expect(['tile', 'generate', 'paths', 'fence', 'wall', 'wallart', 'subterrain'].every((layer) => (
       isPredrawnLockedLayer(layer as Parameters<typeof isPredrawnLockedLayer>[0])
     ))).toBe(true);
-    expect(['board', 'camera', 'level-artwork', 'unit', 'cover', 'zone', 'rules', 'status', 'history'].every((layer) => (
+    expect(['board', 'factions', 'camera', 'level-artwork', 'unit', 'cover', 'zone', 'rules', 'status', 'history'].every((layer) => (
       !isPredrawnLockedLayer(layer as Parameters<typeof isPredrawnLockedLayer>[0])
     ))).toBe(true);
   });

@@ -90,11 +90,18 @@ const paintedPalettes = (board: FactionDeclarationSource): UnitPalette[] => {
  */
 export function resolveDeclaredFactions(board: FactionDeclarationSource): DeclaredFactions {
   const painted = paintedPalettes(board);
+  // A declared enemy half is not available to the player's fallback. Reading the opposition's own
+  // colour as the player is exactly how a single-colour board inverts: every piece is the enemy's,
+  // the enemy half says so, and "the first painted palette is the player" hands it back anyway.
+  const declaredOpposition = isUnitPalette(board.enemyFaction) ? board.enemyFaction : undefined;
   const player = isUnitPalette(board.playerFaction)
     ? board.playerFaction
-    : painted[0] ?? DEFAULT_DECLARED_FACTIONS.player;
-  const declaredEnemy = isUnitPalette(board.enemyFaction) && board.enemyFaction !== player
-    ? board.enemyFaction
+    : painted.find((palette) => palette !== declaredOpposition)
+      ?? (declaredOpposition === DEFAULT_DECLARED_FACTIONS.player
+        ? DEFAULT_DECLARED_FACTIONS.enemy
+        : DEFAULT_DECLARED_FACTIONS.player);
+  const declaredEnemy = declaredOpposition && declaredOpposition !== player
+    ? declaredOpposition
     : undefined;
   const enemy = declaredEnemy
     ?? painted.find((palette) => palette !== player)
