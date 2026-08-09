@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:b4119b4c5b42fa775d27b897bbb16a7bfb9a60a5b51fcb939a45336550c4ffb5"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:e584e72c7a5b20bb0824f8ccd0656e8e6e78672c38e92a2883ff00eb6609d333"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Level Editor remembers its grid, and starts with it drawn"
-  prNumber: "855"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/855"
-  commit: "223ae72d"
+  prTitle: "A Run can be saved before its King, and by whichever King it chose"
+  prNumber: "856"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/856"
+  commit: "ab879299"
 
 name: chess-tactics
 namespace: chess-tactics
