@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { loadingError } from '../../diagnostics/loadingTimeline';
+import { ChromeButton } from '../shared/ChromeButton';
 
 interface Props {
   resetKey: string;
@@ -29,9 +30,12 @@ export class RouteLoadBoundary extends Component<Props, State> {
   render(): ReactNode {
     if (!this.state.error) return this.props.children;
     return (
-      <main className="route-load-error" role="alert">
+      // A registered inner-text-button, like every other runtime control (ADR-0102). The route
+      // failed to load, not the chrome family, so this reaches the same installed frame the rest
+      // of the app's buttons wear.
+      <main className="route-load-error chrome-family-surface" role="alert">
         <strong>This screen could not be loaded.</strong>
-        <button type="button" onClick={() => window.location.reload()}>Retry</button>
+        <ChromeButton unit="inner-text-button" className="le-seg-btn" onClick={() => window.location.reload()}>Retry</ChromeButton>
       </main>
     );
   }

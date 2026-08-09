@@ -971,7 +971,7 @@ try {
     );
   }
   if (retrySceneError) {
-    await page.waitForSelector('[data-scene-phase="error"] .scene-loading-presentation button', {
+    await page.waitForSelector('[data-scene-phase="error"] .scene-loading-presentation [data-scene-failure-action="retry"]', {
       visible: true,
       timeout,
     });
@@ -980,7 +980,7 @@ try {
       (node) => Number(node.getAttribute('data-scene-generation')),
     );
     retryFailureReleased = true;
-    await page.click('[data-scene-phase="error"] .scene-loading-presentation button');
+    await page.click('[data-scene-phase="error"] .scene-loading-presentation [data-scene-failure-action="retry"]');
     await page.waitForFunction(
       (generation) => {
         const scene = document.querySelector('[data-scene-phase="current"]');

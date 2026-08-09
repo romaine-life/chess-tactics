@@ -246,6 +246,7 @@ import {
 } from './levelEditorPersistence';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { useSceneParticipant } from './shell/SceneBoundary';
+import { sceneFailureError } from './shell/sceneFailure';
 import { loadingMark } from '../diagnostics/loadingTimeline';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { useInstalledChromeCss } from './useInstalledChromeCss';
@@ -3030,9 +3031,16 @@ export function LevelEditor(): ReactElement {
     return predrawnBoardPlateForEditorReview(activeSurface, predrawnPreview, predrawnRegistration);
   }, [boardBackgroundModeState, boardPredrawnPlateOffset, boardSurface, predrawnPreview, predrawnRegistration, predrawnSelectionValidation.kind]);
   const isPredrawnBoard = boardBackgroundModeState === 'ai' || editorPredrawnPlate !== undefined;
+  // The scene the editor sits in presents this failure, not the editor, because a failed
+  // participant hides the whole boundary — the Sign in and Retry the panels below render are
+  // inert and invisible for exactly this state. So the remedy the editor already knows travels
+  // with the error and the director offers the same one action (ADR-0545).
   const editorRouteError = useMemo(
     () => editorFrameError ?? (editorLoadError
-      ? new Error(`${editorLoadError.title}: ${editorLoadError.detail}`)
+      ? sceneFailureError(
+        `${editorLoadError.title}: ${editorLoadError.detail}`,
+        editorLoadError.signIn ? 'sign-in' : 'retry',
+      )
       : null),
     [editorFrameError, editorLoadError],
   );
@@ -7482,12 +7490,17 @@ export function LevelEditor(): ReactElement {
             setEditorReady(true);
             return;
           }
+          // Retry and Sign in are not interchangeable (ADR-0519). Re-reading a document this
+          // account may not have cannot start succeeding however often it is pressed, so 403/404
+          // offers the one act that can change the answer — the same act its own copy names. It
+          // previously offered neither and left the screen with no reachable action at all.
           setEditorLoadError({
             title: status === 403 || status === 404 ? 'No access to this editor document' : 'Editor document unavailable',
             detail: status === 403 || status === 404
               ? 'Sign in with the account that owns this working copy.'
               : 'The working copy could not be reached. No other level was substituted for it.',
             retry: status !== 403 && status !== 404,
+            signIn: status === 403 || status === 404,
           });
           setCloudSaveState('error');
           setCloudSaveDetail(null);

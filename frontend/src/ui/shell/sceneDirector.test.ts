@@ -194,6 +194,44 @@ describe('scene director', () => {
     expect(reduceScene(state, { type: 'retry' })).toMatchObject({ phase: 'loading', error: null });
   });
 
+  it('advances the retry epoch on retry and on nothing else', () => {
+    // The epoch is the mounted layer's identity, so a screen holding its own failure is rebuilt
+    // rather than re-driven around the instance still reporting it. Advancing it on navigation
+    // instead would remount every just-committed screen and its store.
+    let state = initialSceneState(sceneManifest('/'));
+    expect(state.retryEpoch).toBe(0);
+
+    state = reduceScene(state, { type: 'navigate', destination: sceneManifest('/play'), href: '/play' });
+    state = reduceScene(state, { type: 'exit-finished', generation: state.generation });
+    expect(state.retryEpoch).toBe(0);
+
+    state = reduceScene(state, { type: 'failed', generation: state.generation, error: new Error('backend down') });
+    expect(state.retryEpoch).toBe(0);
+
+    state = reduceScene(state, { type: 'retry' });
+    expect(state).toMatchObject({ phase: 'loading', retryEpoch: 1, error: null });
+
+    // A retry that the director refuses (there is nothing in error to retry) rebuilds nothing.
+    expect(reduceScene(state, { type: 'retry' }).retryEpoch).toBe(1);
+
+    state = reduceScene(state, { type: 'failed', generation: state.generation, error: new Error('still down') });
+    expect(reduceScene(state, { type: 'retry' }).retryEpoch).toBe(2);
+
+    // Committing the retried scene and navigating on leaves the epoch where it is.
+    state = reduceScene(state, { type: 'retry' });
+    state = reduceScene(state, { type: 'destination-painted', generation: state.generation });
+    state = reduceScene(state, { type: 'entrance-finished', generation: state.generation });
+    expect(state).toMatchObject({ phase: 'current', retryEpoch: 2 });
+    state = reduceScene(state, { type: 'navigate', destination: sceneManifest('/'), href: '/' });
+    expect(state.retryEpoch).toBe(2);
+  });
+
+  it('rebuilds a failed cold load as well as a failed navigation', () => {
+    let state = initialSceneState(sceneManifest('/editor/level'), '/editor/level');
+    state = reduceScene(state, { type: 'startup-failed', generation: 0, error: new Error('chrome failed') });
+    expect(reduceScene(state, { type: 'retry' })).toMatchObject({ phase: 'startup', retryEpoch: 1 });
+  });
+
   it.each([
     ['/play/select/run', 'play-selector'],
     ['/editor/level', 'level-editor'],

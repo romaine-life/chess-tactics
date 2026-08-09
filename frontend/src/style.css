@@ -10514,15 +10514,19 @@ body { font-size: 17px; }
   line-height: 1.5;
   max-width: min(520px, calc(100vw - 48px));
 }
-.scene-director.is-error .scene-loading-presentation button {
-  background: transparent;
-  border: 12px solid transparent;
-  border-image: var(--media-ui-kit-button-primary-png) 24 fill / 12px round;
-  color: var(--ds-color-text, #f4ead7);
-  font: inherit;
-  min-height: 44px;
-  min-width: 128px;
-  padding: 0 14px;
+/* Layout only, exactly like .confirm-actions. The actions are registered inner-text-button units
+   sharing the app's one text-button content geometry, and they take their complete frame, state
+   art, and tone from the installed chrome family the app root scopes (ADR-0102) — this surface
+   owns no border, background, or frame source of its own. */
+.scene-director.is-error .scene-loading-presentation .scene-failure-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+.scene-director.is-error .scene-loading-presentation .scene-failure-actions .le-seg-btn {
+  min-width: 116px;
+  padding: 0 16px;
 }
 
 .ce-row-actions {
