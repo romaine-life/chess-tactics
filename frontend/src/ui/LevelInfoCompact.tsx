@@ -97,10 +97,9 @@ export function levelObjectiveLine(level: Level, perspectiveSide: PlayingSide = 
 }
 
 /**
- * The Deployment deal a War Battle authors, phrased for a reader who has just seen an ally roster
- * of 0: a Battle's player force arrives as cards, not as pieces standing on the map, so without
- * this the readout looks like the player brings nothing. His Grace is always the first card dealt
- * (`runDeploymentDealCount` / `prepareDeployment`), which is what makes a deal of 1 the King alone.
+ * The Deployment deal a War Battle authors — the bare count, because that is the fact the readout
+ * is missing: a Battle's player force arrives as dealt cards, not as pieces standing on the map,
+ * so an ally roster of 0 is otherwise the whole answer.
  *
  * Null for a level that is not a Battle — Campaign and standalone levels are never dealt anything
  * and carry no `battle` block. A Battle that authors no count is unfinished rather than untuned
@@ -111,12 +110,9 @@ export function levelBattleDealLine(level: Level): string | null {
   const dealt = level.battle.cardsDealt;
   if (typeof dealt !== 'number' || !Number.isInteger(dealt)
     || dealt < LEVEL_BATTLE_CARDS_DEALT_MIN || dealt > LEVEL_BATTLE_CARDS_DEALT_MAX) {
-    return `Not set — needs a deal from ${LEVEL_BATTLE_CARDS_DEALT_MIN} to ${LEVEL_BATTLE_CARDS_DEALT_MAX} cards`;
+    return 'Not set';
   }
-  const source = dealt === 1
-    ? 'His Grace alone'
-    : `His Grace + ${dealt - 1} from the player’s collection`;
-  return `${dealt} dealt at Deployment  ·  ${source}`;
+  return String(dealt);
 }
 
 /** Whole-board AI artwork owns the environment pixels, so its logical terrain cannot be
