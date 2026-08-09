@@ -4,6 +4,7 @@ import {
   DEFAULT_POOL_KNOBS,
   POOL_MODELS,
   buildPool,
+  cardSynergy,
   countSupportPairs,
   groupPool,
   hasOppositeColourBishopPair,
@@ -84,10 +85,11 @@ describe('runCardPool synergy', () => {
     expect(support(['B', 'B'], [[0, 0], [0, 1]])).toBe(0);
   });
 
-  it('ignores pawn support unless asked, because it turns with the card', () => {
+  it('ignores pawn support unless asked', () => {
     // A Pawn at (1,1) covers (0,0) and (2,0), so it shelters the Rook in front of it. The Rook
-    // returns nothing — (1,1) is a diagonal from (0,0). So this pair is pawn support or nothing,
-    // which is exactly the case that stops being priceable while rotation is free.
+    // returns nothing — (1,1) is a diagonal from (0,0). So this pair is pawn support or nothing.
+    // This is the RAW reading of one seating; `cardSynergy` is what decides whether the card is
+    // priced on its authored orientation or on the best one available to a rotating player.
     expect(countSupportPairs(cells([0, 0], [1, 1]), ['R', 'P'], false)).toBe(0);
     expect(countSupportPairs(cells([0, 0], [1, 1]), ['R', 'P'], true)).toBe(1);
   });
@@ -198,6 +200,38 @@ describe('runCardPool rotation contract', () => {
       // that says the player does not rotate must be paying for that in cards.
       if (contract.playerRotatesAtPlacement) expect(size, model.id).toBe(ifCollapsed);
       else expect(size, model.id).toBeGreaterThan(ifCollapsed);
+    }
+  });
+});
+
+describe('runCardPool synergy under rotation', () => {
+  const withPawns = { ...DEFAULT_POOL_KNOBS, countPawnSupport: true };
+
+  it('takes the best orientation while the player rotates', () => {
+    // Rook at (0,0), Pawn at (1,1). As authored the Pawn covers (0,0) and shelters the Rook.
+    const sheltering = cardSynergy(cells([0, 0], [1, 1]), ['R', 'P'], withPawns);
+    expect(sheltering.supportPairs).toBe(1);
+
+    // Same two pieces, seated so the Pawn covers nothing. A quarter turn fixes that, and the
+    // player will take the turn -- so the card is worth the sheltered reading either way.
+    const seatedBadly = cardSynergy(cells([0, 1], [1, 0]), ['R', 'P'], withPawns);
+    expect(seatedBadly.supportPairs).toBe(1);
+    // Reading only the authored seating would have priced this at zero.
+    expect(countSupportPairs(cells([0, 1], [1, 0]), ['R', 'P'], true)).toBe(0);
+  });
+
+  it('collapses to the authored seating once facing is bought', () => {
+    const fixed = { ...withPawns, collapseRotation: false };
+    expect(cardSynergy(cells([0, 0], [1, 1]), ['R', 'P'], fixed).supportPairs).toBe(1);
+    expect(cardSynergy(cells([0, 1], [1, 0]), ['R', 'P'], fixed).supportPairs).toBe(0);
+  });
+
+  it('leaves the rotation-invariant terms untouched by the max', () => {
+    // Non-pawn support and colour parity survive a quarter turn, so max changes nothing.
+    for (const knobs of [DEFAULT_POOL_KNOBS, { ...DEFAULT_POOL_KNOBS, collapseRotation: false }]) {
+      expect(cardSynergy(cells([0, 0], [0, 1]), ['R', 'R'], knobs).supportPairs).toBe(2);
+      expect(cardSynergy(cells([0, 0], [0, 1]), ['B', 'B'], knobs).hasBishopPair).toBe(true);
+      expect(cardSynergy(cells([0, 0], [1, 1]), ['B', 'B'], knobs).hasBishopPair).toBe(false);
     }
   });
 });

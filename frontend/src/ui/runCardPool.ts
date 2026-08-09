@@ -52,7 +52,11 @@ export type PoolKnobs = Readonly<{
   bishopPairBonus: number;
   /** Any piece defending another piece's square on the card's own geometry. */
   supportBonus: number;
-  /** Pawns are directional, so pawn support is not rotation-invariant. */
+  /**
+   * Whether a Pawn sheltering a piece counts toward synergy at all. This is a design question
+   * (is pawn shelter worth money?), not a workaround: while the player rotates, `cardSynergy`
+   * already reads the best orientation, so the directional term is priceable either way.
+   */
   countPawnSupport: boolean;
   /** Cost bands. */
   commonMaxCost: number;
@@ -255,6 +259,40 @@ export function roundTo(value: number, step: number): number {
   return Math.round(value / step) * step;
 }
 
+/** Rotate the seats without reordering them, so `pieces[i]` still names `cells[i]`. */
+function rotateSeated(cells: readonly PoolCell[], turns: number): PoolCell[] {
+  const rotated = rotate(cells, turns);
+  const minX = Math.min(...rotated.map((c) => c.x));
+  const minY = Math.min(...rotated.map((c) => c.y));
+  return rotated.map((c) => ({ x: c.x - minX, y: c.y - minY }));
+}
+
+/**
+ * The synergy the card will actually deliver.
+ *
+ * Only ONE term varies with rotation. Support between non-pawn pieces survives a quarter turn —
+ * ranks map to files, diagonals to diagonals, knight moves to knight moves — and colour parity is
+ * invariant too. A Pawn is the sole directional piece, so which squares it shelters turn with the
+ * card and its support is the only rotation-dependent term.
+ *
+ * So while the player rotates at placement, the card is worth its BEST orientation, because that
+ * is the one they will take. Reading the authored seating alone would price a Pawn shelter the
+ * player never has to give up. When facing is bought instead, the authored orientation is the only
+ * one there is, and the max collapses to it.
+ */
+export function cardSynergy(
+  cells: readonly PoolCell[],
+  pieces: readonly PoolPiece[],
+  knobs: PoolKnobs,
+): Readonly<{ supportPairs: number; hasBishopPair: boolean }> {
+  const hasBishopPair = hasOppositeColourBishopPair(cells, pieces);
+  const turns = knobs.collapseRotation ? [0, 1, 2, 3] : [0];
+  const supportPairs = Math.max(...turns.map((turn) => (
+    countSupportPairs(rotateSeated(cells, turn), pieces, knobs.countPawnSupport)
+  )));
+  return { supportPairs, hasBishopPair };
+}
+
 export function priceCard(
   cells: readonly PoolCell[],
   pieces: readonly PoolPiece[],
@@ -264,8 +302,7 @@ export function priceCard(
   const volume = cells.length;
   const density = volume === 0 ? 0 : value / volume;
   const baseCost = value * (density / 3) ** knobs.densityPower * knobs.costScale;
-  const hasBishopPair = hasOppositeColourBishopPair(cells, pieces);
-  const supportPairs = countSupportPairs(cells, pieces, knobs.countPawnSupport);
+  const { hasBishopPair, supportPairs } = cardSynergy(cells, pieces, knobs);
   const withSynergy = baseCost
     * (1 + (hasBishopPair ? knobs.bishopPairBonus : 0))
     * (1 + supportPairs * knobs.supportBonus);

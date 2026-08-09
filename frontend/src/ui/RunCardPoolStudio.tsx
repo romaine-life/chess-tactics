@@ -290,7 +290,10 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
             <input type="checkbox" checked={knobs.countPawnSupport} onChange={(e) => set('countPawnSupport', e.target.checked)} />
             <span>Count pawn support</span>
           </label>
-          <p className="rcp-note">Pawn support is only invariant with rotation collapse OFF — a pawn's covered squares turn with the card.</p>
+          <p className="rcp-note">
+            Pawn support is the only rotation-dependent term. While the player rotates, the score reads
+            the card's BEST orientation, because that is the one they will take.
+          </p>
         </div>
 
         <div className="rcp-panel">
