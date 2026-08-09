@@ -1051,7 +1051,6 @@ export function commitSkirmishSceneFirstFrame(
 }
 
 function SkirmishSceneLayer({
-  renderScale,
   sceneBoard,
   seed,
   ambientCover,
@@ -1075,8 +1074,6 @@ function SkirmishSceneLayer({
   onFirstFrame,
   onFrameError,
 }: {
-  /** Camera zoom, so the unit canvas rasterises at the size it is actually shown. */
-  renderScale: number;
   sceneBoard: EditorBoard;
   seed: number;
   ambientCover: boolean;
@@ -1101,10 +1098,6 @@ function SkirmishSceneLayer({
   onFrameError: (error: unknown) => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  // Read through a ref: the paint loop is long-lived and a zoom step must resize and
-  // repaint the existing scene, not tear down and restart the animation.
-  const renderScaleRef = useRef(renderScale);
-  renderScaleRef.current = renderScale;
   const motionRef = useRef<Map<string, PieceMotion>>(new Map());
   const visibleUnitIdsRef = useRef<Set<string>>(new Set());
   const arrivalPlansRef = useRef<Map<string, UnitArrivalPlan>>(new Map());
@@ -1527,7 +1520,7 @@ function SkirmishSceneLayer({
           state.occlusionDepthMap,
           imagesRef.current,
           () => {
-            sizeCanvasForBounds(canvas, state.bounds, renderScaleRef.current);
+            sizeCanvasForBounds(canvas, state.bounds);
             drawBoardOps(
               ctx,
               ops,
@@ -1538,7 +1531,6 @@ function SkirmishSceneLayer({
               state.occlusionMasks,
               undefined,
               state.occlusionDepthMap,
-              renderScaleRef.current,
             );
           },
           () => {
@@ -1634,14 +1626,6 @@ function SkirmishSceneLayer({
       acknowledgementFrameRef.current = null;
     };
   }, [requestSceneFrame]);
-
-  // A zoom step changes how many device pixels the scene owns, so the canvas has to
-  // be resized and repainted. The paint loop reads the scale through a ref precisely
-  // so it is not torn down and restarted mid-animation, which means nothing else
-  // would notice the change; ask for the frame explicitly.
-  useEffect(() => {
-    requestSceneFrame();
-  }, [renderScale, requestSceneFrame]);
 
   useEffect(() => {
     let active = true;
@@ -2583,7 +2567,6 @@ export function SkirmishBoard({
           onFrameError={boardFrame.fail}
           sceneLayer={(
             <SkirmishSceneLayer
-              renderScale={boardZoom}
               sceneBoard={sceneBoard}
               seed={seed}
               ambientCover={ambientSceneCover}

@@ -74,7 +74,6 @@ export function BoardSceneLayer({
   predrawnBackgroundActive = false,
   predrawnOcclusion = true,
   frameTransform,
-  renderScale = 1,
   onFirstFrame,
   onFrameError,
 }: {
@@ -98,12 +97,6 @@ export function BoardSceneLayer({
   predrawnOcclusion?: boolean;
   /** Per-frame op substitution for an entrance in flight. See BoardCanvasLayer. */
   frameTransform?: (op: BoardDrawOp, timeMs: number) => BoardDrawOp;
-  /**
-   * Camera zoom, so the scene canvas rasterises at the size it is actually shown.
-   * Unit art is resampled to reach the board, so drawing it at board size and
-   * letting the container transform rescale the result costs it twice.
-   */
-  renderScale?: number;
   /** Acknowledge only after this compositor has painted its first complete frame. */
   onFirstFrame?: () => void;
   onFrameError?: (error: unknown) => void;
@@ -153,7 +146,6 @@ export function BoardSceneLayer({
       occlusionMasks={occlusionMasks}
       occlusionDepthMap={occlusionDepthMap}
       frameTransform={still ? undefined : frameTransform}
-      renderScale={renderScale}
       onFirstFrame={onFirstFrame}
       onFrameError={onFrameError}
     />

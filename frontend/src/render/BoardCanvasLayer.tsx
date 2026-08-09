@@ -40,37 +40,12 @@ export function loadCanvasImage(src: string): Promise<CanvasImage> {
 /** Resize the backing store only when a complete replacement frame is ready to paint.
  * Setting width/height during React render clears the visible bitmap immediately, exposing a
  * blank compositor while asynchronous resources for the next frame are still settling. */
-/**
- * How much backing store a layer gets per board-space pixel.
- *
- * The board composites in board space and the whole element is then CSS-scaled by
- * the camera's zoom, so at any zoom other than 1 the browser is resampling the
- * finished picture. For terrain that is the authored behaviour. For the scene
- * layer it means a unit is drawn at 78px and then rescaled again on the way to
- * the screen, and no amount of care inside the canvas survives that second pass.
- *
- * Passing the zoom here sizes the backing store so one board-space pixel lands on
- * one device pixel: the canvas keeps its board-space CSS box, so nothing about
- * layout or alignment with the other layers changes, and the container transform
- * then maps it 1:1. Clamped because a runaway zoom should not allocate a runaway
- * canvas, and below the floor there is nothing left to resolve.
- */
-export const MIN_BOARD_RENDER_SCALE = 0.25;
-export const MAX_BOARD_RENDER_SCALE = 3;
-
-export function boardRenderScale(zoom: number | undefined): number {
-  if (!Number.isFinite(zoom) || !zoom || zoom <= 0) return 1;
-  return Math.min(MAX_BOARD_RENDER_SCALE, Math.max(MIN_BOARD_RENDER_SCALE, zoom));
-}
-
 export function sizeCanvasForBounds(
   canvas: Pick<HTMLCanvasElement, 'width' | 'height'>,
   bounds: BakeBounds,
-  renderScale = 1,
 ): void {
-  const scale = boardRenderScale(renderScale);
-  const width = Math.max(1, Math.ceil(bounds.width * scale));
-  const height = Math.max(1, Math.ceil(bounds.height * scale));
+  const width = Math.max(1, Math.ceil(bounds.width));
+  const height = Math.max(1, Math.ceil(bounds.height));
   if (canvas.width !== width) canvas.width = width;
   if (canvas.height !== height) canvas.height = height;
 }
@@ -378,23 +353,9 @@ export function drawBoardOps(
   occlusionMasks: readonly BoardDrawOp[] = [],
   scratchFactory: BoardCanvasScratchFactory = createBoardCanvasScratchSurface,
   occlusionDepthMap?: PredrawnOcclusionDepthMap,
-  renderScale = 1,
 ): void {
-  // Every op, mask and depth sample below is authored in board space. Scaling the
-  // context rather than the coordinates keeps it that way: the only things that
-  // have to know about the scale are the backing stores and the getImageData
-  // window, both of which are measured in real device pixels.
-  const scale = boardRenderScale(renderScale);
-  const scaled = (value: number) => Math.max(1, Math.ceil(value * scale));
-  ctx.setTransform(scale, 0, 0, scale, 0, 0);
   ctx.clearRect(0, 0, bounds.width, bounds.height);
-  // At a fractional scale every op lands on fractional device pixels. Nearest
-  // sampling there drops or doubles whole columns PER SPRITE, which turns a blade
-  // of groundcover grass into a bright vertical streak — worse than the uniform
-  // resample the container transform used to apply to the finished picture. Once
-  // the layer is being scaled at all, it has to be filtered.
-  ctx.imageSmoothingEnabled = scale !== 1;
-  ctx.imageSmoothingQuality = 'high';
+  ctx.imageSmoothingEnabled = false;
   let scratch: BoardCanvasScratchSurface | undefined;
   let depthScratch: BoardCanvasScratchSurface | undefined;
   for (const op of ops) {
@@ -413,30 +374,23 @@ export function drawBoardOps(
     }
     const region = boardCanvasScratchRegion(op, bounds);
     if (!region) continue;
-    const regionW = scaled(region.width);
-    const regionH = scaled(region.height);
-    scratch ??= scratchFactory(regionW, regionH);
+    scratch ??= scratchFactory(region.width, region.height);
     if (!scratch) continue;
-    if (scratch.canvas.width < regionW) scratch.canvas.width = regionW;
-    if (scratch.canvas.height < regionH) scratch.canvas.height = regionH;
+    if (scratch.canvas.width < region.width) scratch.canvas.width = region.width;
+    if (scratch.canvas.height < region.height) scratch.canvas.height = region.height;
     const scratchCtx = scratch.context;
-    scratchCtx.setTransform(scale, 0, 0, scale, 0, 0);
     scratchCtx.clearRect(0, 0, region.width, region.height);
-    scratchCtx.imageSmoothingEnabled = scale !== 1;
+    scratchCtx.imageSmoothingEnabled = false;
     scratchCtx.globalCompositeOperation = 'source-over';
     scratchCtx.globalAlpha = 1;
     paintOp(scratchCtx, img, op, region.bounds, timeMs);
     if (hasDepthOcclusion && occlusionDepthMap) {
-      depthScratch ??= scratchFactory(regionW, regionH);
+      depthScratch ??= scratchFactory(region.width, region.height);
       if (depthScratch) {
-        if (depthScratch.canvas.width < regionW) depthScratch.canvas.width = regionW;
-        if (depthScratch.canvas.height < regionH) depthScratch.canvas.height = regionH;
+        if (depthScratch.canvas.width < region.width) depthScratch.canvas.width = region.width;
+        if (depthScratch.canvas.height < region.height) depthScratch.canvas.height = region.height;
         const depthContext = depthScratch.context;
-        depthContext.setTransform(scale, 0, 0, scale, 0, 0);
         depthContext.clearRect(0, 0, region.width, region.height);
-        // The depth raster is READ back per pixel to build an erase mask, so it must
-        // stay hard-sampled whatever the layer scale is: a filtered depth value is a
-        // depth that never existed and it erases the wrong pixels.
         depthContext.imageSmoothingEnabled = false;
         depthContext.globalCompositeOperation = 'source-over';
         depthContext.globalAlpha = 1;
@@ -452,9 +406,7 @@ export function drawBoardOps(
           mapBounds.width,
           mapBounds.height,
         );
-        // getImageData/putImageData address the backing store directly and ignore
-        // the context transform, so this window is in device pixels, not board space.
-        const depthPixels = depthContext.getImageData(0, 0, regionW, regionH);
+        const depthPixels = depthContext.getImageData(0, 0, region.width, region.height);
         depthPixels.data.set(filterPredrawnOcclusionDepthPixels(depthPixels.data, op.z));
         depthContext.putImageData(depthPixels, 0, 0);
       }
@@ -466,14 +418,12 @@ export function drawBoardOps(
       if (imageReady(maskImage)) paintOp(scratchCtx, maskImage, mask, region.bounds, timeMs);
     }
     if (hasDepthOcclusion && depthScratch) {
-      // Source rect reads the scratch backing store (device pixels); the
-      // destination is board space because this context carries the scale.
       scratchCtx.drawImage(
         depthScratch.canvas,
         0,
         0,
-        regionW,
-        regionH,
+        region.width,
+        region.height,
         0,
         0,
         region.width,
@@ -485,8 +435,8 @@ export function drawBoardOps(
       scratch.canvas,
       0,
       0,
-      regionW,
-      regionH,
+      region.width,
+      region.height,
       region.offsetX,
       region.offsetY,
       region.width,
@@ -576,20 +526,12 @@ export function BoardCanvasLayer({
   occlusionMasks = EMPTY_OCCLUSION_MASKS,
   occlusionDepthMap,
   frameTransform,
-  renderScale = 1,
   onFirstFrame,
   onFrameError,
 }: {
   ops: readonly BoardDrawOp[];
   bounds: BakeBounds;
   className?: string;
-  /**
-   * Backing store per board-space pixel. Pass the camera zoom on a layer whose art
-   * is resampled to reach the board — the scene layer — so its sprites land on real
-   * device pixels instead of being drawn at board size and rescaled again by the
-   * container transform. Layers whose art is authored for the board leave this at 1.
-   */
-  renderScale?: number;
   /** Review mask: replace every drawn sprite pixel with one solid color while preserving alpha. */
   maskTint?: string;
   /** Canonical raised silhouettes that erase lower-depth additive art to reveal a pre-drawn plate. */
@@ -661,7 +603,7 @@ export function BoardCanvasLayer({
     const animated = orderedOps.some(isAnimatedGroundCoverOp) || !!frameTransform;
     const paint = (images: ReadonlyMap<string, CanvasImage>, timeMs = performance.now()): void => {
       generation.runIfCurrent(() => {
-        sizeCanvasForBounds(canvas, bounds, renderScale);
+        sizeCanvasForBounds(canvas, bounds);
         // Re-sorted after the transform: an entrance moves ops in `dy`, not in depth, but a
         // transform is free to change `z`, and the composed canvas is only correct in depth order.
         const frameOps = frameTransform
@@ -677,7 +619,6 @@ export function BoardCanvasLayer({
           orderedOcclusionMasks,
           undefined,
           occlusionDepthMap,
-          renderScale,
         );
       });
     };
@@ -699,7 +640,7 @@ export function BoardCanvasLayer({
     }, (error) => onFrameError?.(error));
 
     return generation.cancel;
-  }, [bounds, depthSignature, frameTransform, maskTint, occlusionDepthMap, occlusionSignature, onFirstFrame, onFrameError, orderedOcclusionMasks, orderedOps, renderScale, signature]);
+  }, [bounds, depthSignature, frameTransform, maskTint, occlusionDepthMap, occlusionSignature, onFirstFrame, onFrameError, orderedOcclusionMasks, orderedOps, signature]);
 
   if (orderedOps.length === 0) return null;
 
