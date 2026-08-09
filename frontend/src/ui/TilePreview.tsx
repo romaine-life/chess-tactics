@@ -2213,7 +2213,7 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         </>
         ) : studioMode === 'viewer' ? (
           viewerKind === 'unitroster'
-            ? <UnitRosterLab header={studioViewerHeader} zoom={viewerZoom} />
+            ? <UnitRosterLab />
             : viewerKind === 'unitart'
             ? <UnitArtLab
                 selectedUnit={unitBrushAsset}

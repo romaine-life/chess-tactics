@@ -9,9 +9,17 @@ import { activeUnitFamilies, tileFrameSrc, type UnitFacing } from '@chess-tactic
 import { tileAssets } from '../art/tileset';
 import { fetchAdminUnitCatalog } from '../net/unitAssets';
 
-/** Mirrors the Studio viewer zoom slider, whose travel this maps onto whole multiples. */
-const STUDIO_ZOOM_REST = 1;
-const STUDIO_ZOOM_MAX = 2;
+/**
+ * The magnifications this surface offers, and the only ones it can.
+ *
+ * Pixel art has to be magnified by whole multiples or its columns come out uneven,
+ * which is the very artifact this surface exists to catch. That makes zoom a
+ * DISCRETE quantity here, and the Studio's shared slider is a continuous control:
+ * mapping one onto the other gives a control that ignores most of its own travel,
+ * which reads as broken because it effectively is. So this viewer declines the
+ * shared slider and steps the ladder directly -- every press moves exactly one rung.
+ */
+const MAGNIFICATIONS = [1, 2, 3, 4, 6, 8] as const;
 
 /**
  * The whole shipped roster at once, at 1:1.
@@ -32,34 +40,11 @@ const STUDIO_ZOOM_MAX = 2;
  * real thing anyway. Judge separation against terrain on a board.
  */
 
-export function UnitRosterLab({ header, zoom = 1 }: { header?: ReactNode; zoom?: number }): ReactElement {
+export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactElement {
   const [palette, setPalette] = useState<UnitPalette>('navy-blue');
   const [allPalettes, setAllPalettes] = useState(false);
 
-  /**
-   * Slider travel mapped onto whole magnifications.
-   *
-   * A fractional magnification of pixel art gives uneven columns -- the exact
-   * artifact this surface exists to catch -- so the multiple has to be an integer.
-   * But rounding the slider's own value is why it felt dead: its range is 0.25 to
-   * 2.0, so `round` yielded 1 for everything under 1.5 and 2 above it -- two
-   * settings, most of the travel doing nothing. The ladder is spread across the
-   * travel above the rest position instead, so every part of it that can change the
-   * picture does.
-   *
-   * The header still reports the slider as a percentage, which is its own number and
-   * will not match; the note below states the multiple actually being drawn.
-   */
-  const magnify = useMemo(() => {
-    // The slider rests at 1, and that has to mean 1:1 -- this surface opens on the
-    // read it exists to judge. Everything below the rest position stays 1:1 too:
-    // there is no honest way to show art authored at its delivery size any smaller
-    // than that, which is the entire point of authoring it that way.
-    if (zoom <= STUDIO_ZOOM_REST) return 1;
-    const ladder = [2, 3, 4, 5, 6, 8, 10];
-    const travel = (zoom - STUDIO_ZOOM_REST) / (STUDIO_ZOOM_MAX - STUDIO_ZOOM_REST);
-    return ladder[Math.round(Math.min(1, travel) * (ladder.length - 1))];
-  }, [zoom]);
+  const [magnify, setMagnify] = useState<number>(1);
   const [showBefore, setShowBefore] = useState(false);
   const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof fetchAdminUnitCatalog>> | null>(null);
   // The ADMIN catalog, because accepting a new asset archives the one it replaced and
@@ -97,7 +82,6 @@ export function UnitRosterLab({ header, zoom = 1 }: { header?: ReactNode; zoom?:
 
   return (
     <div className="unit-roster-lab">
-      {header}
       <div className="unit-roster-controls">
         <label>
           <span>Palette</span>
@@ -125,6 +109,25 @@ export function UnitRosterLab({ header, zoom = 1 }: { header?: ReactNode; zoom?:
           />
           <span>Before / after</span>
         </label>
+        <span className="unit-roster-magnify">
+          <button
+            type="button"
+            aria-label="Magnify out"
+            disabled={magnify === MAGNIFICATIONS[0]}
+            onClick={() => setMagnify((current) => MAGNIFICATIONS[Math.max(0, MAGNIFICATIONS.indexOf(current as never) - 1)])}
+          >
+            −
+          </button>
+          <span className="unit-roster-magnify-value">{magnify}×</span>
+          <button
+            type="button"
+            aria-label="Magnify in"
+            disabled={magnify === MAGNIFICATIONS[MAGNIFICATIONS.length - 1]}
+            onClick={() => setMagnify((current) => MAGNIFICATIONS[Math.min(MAGNIFICATIONS.length - 1, MAGNIFICATIONS.indexOf(current as never) + 1)])}
+          >
+            +
+          </button>
+        </span>
         <p className="unit-roster-note">
           {magnify === 1
             ? 'Drawn at 1:1 — every sprite is authored at its delivery size.'
