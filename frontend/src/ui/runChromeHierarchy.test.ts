@@ -516,46 +516,50 @@ describe('Run chrome hierarchy', () => {
     // The Sectio's own battleIndex is the Battle just fought; reconnaissance is of the next one.
     expect(runBattlePreview).toContain('const battleIndex = sectioUpcomingBattleIndex(run);');
     expect(runBattlePreview).not.toMatch(/battles\[run\.battleIndex\]/);
-    // ONE title bar worn by all three boxes, so they cannot drift apart in weight or seam. The
-    // marble is bounded to that strip, and the registered rule lives INSIDE it: a frame-wide fill
-    // or a rule in a row of its own shows through wherever the content does not cover.
+    // ONE filled pane, and every separation on it is one of that pane's own drawn rails. Three
+    // framed boxes with gaps between them let strips of the page show through between them.
+    expect(runBattlePreview).toContain('<DividedInnerChromeBox');
+    expect(runBattlePreview).toContain("columns={['minmax(0, 1fr)', 'minmax(300px, 34%)']}");
+    expect(runBattlePreview).toContain('fillRole="outer"');
+    expect(runBattlePreview).not.toContain('PreviewTitleBar');
+    expect(runBattlePreview).not.toContain('<InnerChromeBox');
+    expect(styleCss).not.toContain('.run-battle-preview-titlebar');
+    expect(styleCss).not.toContain('.run-battle-preview-board-frame');
+    expect(styleCss).not.toContain('.run-battle-preview-layout');
+
+    // The header band is ONE row split by the pane's vertical rail: the level's name over the
+    // board, the Battle it is over the readout.
     expect(runBattlePreview).toMatch(
-      /function PreviewTitleBar\([\s\S]*?<ChromeSurfaceFill role="outer" className="run-battle-preview-titlebar-fill" \/>[\s\S]*?<ChromeDivider role="inner" className="run-battle-preview-titlebar-rule" \/>/,
+      /<ChromeDividedGridRow className="run-battle-preview-headers">[\s\S]*?<h2 id="run-battle-preview-title">\{level\.name\}<\/h2>[\s\S]*?Battle \{battleIndex \+ 1\} of \{run\.war\.battles\.length\}[\s\S]*?<\/ChromeDividedGridRow>/,
     );
-    expect(runBattlePreview).toContain('<PreviewTitleBar id="run-battle-preview-title">{level.name}</PreviewTitleBar>');
-    expect(runBattlePreview).toMatch(
-      /titleBar=\{\(\s*<PreviewTitleBar>[\s\S]*?Battle \{battleIndex \+ 1\} of \{run\.war\.battles\.length\}\s*<\/PreviewTitleBar>/,
-    );
-    expect(runBattlePreview).toContain('<PreviewTitleBar>Before deployment</PreviewTitleBar>');
-    // The rule's host states its own reach so the authored T caps tee INTO the frame's side
-    // rails, and the bleed is not clipped. Hand-zeroing margins instead puts the caps inside.
+    expect(runBattlePreview).toContain('<ChromeDividedGridRow className="run-battle-preview-body">');
+    // Header, rail, body — three tracks for three children. Naming two puts the zero-height rail
+    // in the flexible track and the board in an implicit one.
     expect(styleCss).toMatch(
-      /\.run-battle-preview-titlebar > \.run-battle-preview-titlebar-rule\s*\{[^}]*--kit-divider-reach: var\(--le-chrome-inner-rail-w/,
+      /\.run-battle-preview-pane > \.chrome-divided-grid__rows\s*\{[^}]*grid-template-rows:\s*auto 0 minmax\(0, 1fr\);/,
     );
+    // A filled inner box lifts its children above the fill; the rail layer must stay an absolute
+    // OVERLAY or it takes a grid row and pushes the rows layer off the bottom of the pane.
     expect(styleCss).toMatch(
-      /\.run-battle-preview-titlebar > \.run-battle-preview-titlebar-rule\s*\{[^}]*--kit-divider-gap: 0px;/,
+      /\.inner-chrome-box\.has-chrome-surface-fill > \.chrome-divided-grid__fixed-rails\s*\{\s*position: absolute;/,
     );
-    expect(styleCss).not.toMatch(/\.run-battle-preview-titlebar\s*\{[^}]*overflow:\s*hidden/);
-    expect(styleCss).not.toMatch(/\.run-battle-preview-board-frame\s*\{[^}]*overflow:\s*hidden/);
-    expect(runBattlePreview).not.toMatch(/run-battle-preview-board-frame"\s+fillRole/);
-    expect(styleCss).toMatch(/\.run-battle-preview-board-frame\s*\{[^}]*gap:\s*0;/);
-    expect(styleCss).toMatch(/\.run-battle-preview-board-frame\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\);/);
+
     expect(runBattlePreview).not.toContain('Drag to pan');
-    // A box's own name outranks the section headers inside it, which outrank their rows.
-    expect(styleCss).toMatch(/\.run-battle-preview-titlebar-head > h2\s*\{[^}]*--ds-text-xl/);
+    // A pane's own name outranks the section headers inside it, which outrank their rows.
+    expect(styleCss).toMatch(/\.run-battle-preview-header > h2\s*\{[^}]*--ds-text-xl/);
     expect(styleCss).toMatch(/:is\(\.ce-li-board, \.ce-li-forces, \.ce-li-deployment\) > \.ce-li-title\s*\{[^}]*--ds-text-lg/);
-    // ONE stretched row is what makes the board box and the intelligence boxes share a top and a
-    // bottom line, and the pane FILLS the frame so no surplus is painted across the level art.
-    expect(styleCss).toMatch(/\.run-battle-preview-layout\s*\{[^}]*grid-template-areas: "board intelligence";/);
-    expect(styleCss).toMatch(/\.run-battle-preview-layout\s*\{[^}]*grid-template-rows:\s*minmax\(0, 1fr\);/);
     expect(runBattlePreview).toContain('viewportMode="fill"');
     expect(runBattlePreview).toContain('showGrid');
-    // The installed inner-box surface paints an opaque background under every inner box, so any
-    // padding here rings the level art with a flat slab of that material.
-    expect(styleCss).toMatch(/\.run-battle-preview-board-frame\s*\{[^}]*padding:\s*0;/);
-    expect(styleCss).not.toMatch(
-      /\.run-battle-preview-board-frame\s*\{[^}]*padding:\s*var\(--ds-space/,
-    );
+    // The installed surface paints under the whole pane, so padding would ring the level art with
+    // a flat slab of that material between the border art and the board.
+    expect(styleCss).toMatch(/\.run-battle-preview-pane\s*\{[^}]*padding:\s*0;/);
+    expect(styleCss).not.toMatch(/\.run-battle-preview-pane\s*\{[^}]*overflow:\s*hidden/);
+
+    // The readout takes no frame of its own — the pane's rail is already its left edge — and the
+    // note is its last section rather than a third box.
+    expect(runBattlePreview).toContain('framed={false}');
+    expect(runBattlePreview).toContain('<section className="ce-li-zones-row run-battle-preview-note">');
+    expect(levelInfoCompact).toContain('const Frame = framed ? InnerChromeBox : UnframedLevelInfo;');
     // Zones are authoring detail, and the readout reads at column scale rather than tab scale.
     expect(runBattlePreview).toContain('showZones={false}');
     expect(styleCss).toMatch(/\.run-battle-preview-info \.ce-li-roster-head strong\s*\{[^}]*--ds-text-lg/);

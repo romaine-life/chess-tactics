@@ -102,6 +102,20 @@ function flagIconSrc(palette: UnitPalette): string {
 }
 
 /**
+ * The readout's own element when the HOST owns the frame. Same class and same test id, so the
+ * readout is the same thing to CSS and to a guard whichever way it is mounted — it simply has no
+ * frame and no fill of its own, because the pane it sits in supplies both.
+ */
+function UnframedLevelInfo({
+  className = '',
+  fillRole: _fillRole,
+  children,
+  ...props
+}: ComponentProps<typeof InnerChromeBox>): ReactElement {
+  return <div {...props} className={className}>{children}</div>;
+}
+
+/**
  * The empty grass surface, exactly as the Level Editor paints it. "Tiles" counts squares of
  * board, so its mark is a square of board.
  */
@@ -246,6 +260,7 @@ export function LevelInfoCompact({
   className = '',
   titleBar = null,
   deploymentBand = null,
+  framed = true,
 }: {
   level: Level;
   /** Zones are authoring detail; a player-facing reconnaissance readout omits them. */
@@ -261,6 +276,12 @@ export function LevelInfoCompact({
    * "where". A readout with no board of its own leaves this null and the row states the fact.
    */
   deploymentBand?: { shown: boolean; onToggle: () => void } | null;
+  /**
+   * False when the HOST already owns the frame this readout sits in — a divided pane whose rails
+   * separate it from its neighbours. A second frame inside that one would draw a box around a
+   * column that the pane's own rail has already bounded (ADR-0059).
+   */
+  framed?: boolean;
 }): ReactElement {
   const cardsIconSrc = useStrategikonCardsIcon();
   const hourglassIconSrc = installedUiMedia('ui-kit-icons-game-wait-png');
@@ -284,8 +305,9 @@ export function LevelInfoCompact({
   const zoneMix = countMap(level.layers.zones.map((z) => z.type));
   const zoneParts = ZONE_ORDER.filter((z) => zoneMix[z]).map((z) => `${ZONE_LABEL[z]} ${zoneMix[z]}`);
 
+  const Frame = framed ? InnerChromeBox : UnframedLevelInfo;
   return (
-    <InnerChromeBox
+    <Frame
       className={`ce-level-info ${className}`.trim()}
       fillRole={fillRole}
       data-testid="level-info-compact"
@@ -383,6 +405,6 @@ export function LevelInfoCompact({
             : 'Untimed'}
         </span>
       </section>
-    </InnerChromeBox>
+    </Frame>
   );
 }

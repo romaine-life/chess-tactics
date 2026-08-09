@@ -2,29 +2,12 @@ import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 
 import { runDeploymentDealCount, sectioUpcomingBattleIndex, type RunDocument } from '../run/model';
 import { playerDeploymentCells } from '../run/deployment';
 import { levelToEditorBoard } from '../core/levelBoard';
-import { ChromeDivider, ChromeSurfaceFill, InnerChromeBox } from './shared/ChromeBox';
+import { ChromeDividedGridRow, DividedInnerChromeBox } from './shared/ChromeDividedGrid';
 import { RunProgressIcon } from './shared/RunProgressIcon';
 import { FramedReadOnlyBoardView } from './shared/BoardViewFraming';
 import { LevelInfoCompact } from './LevelInfoCompact';
 import { RunSceneViewport } from './RunWorkspace';
 import { PaintedSurfaceBoundary } from './shell/PaintedSurfaceBoundary';
-
-/**
- * The one title bar every box on this screen wears: a marble strip carrying the box's name and
- * the registered rule beneath it. One implementation so the three boxes cannot drift apart in
- * weight, treatment, or seam.
- */
-function PreviewTitleBar({ id, children }: { id?: string; children: ReactNode }): ReactElement {
-  return (
-    <div className="run-battle-preview-titlebar">
-      <ChromeSurfaceFill role="outer" className="run-battle-preview-titlebar-fill" />
-      <header className="run-battle-preview-titlebar-head">
-        <h2 id={id}>{children}</h2>
-      </header>
-      <ChromeDivider role="inner" className="run-battle-preview-titlebar-rule" />
-    </div>
-  );
-}
 
 /**
  * Sectio-only reconnaissance of the next canonical War Level. This is deliberately a read-only
@@ -92,17 +75,33 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
         onRetry={resetFrame}
         className="run-battle-preview-surface"
       >
-        <div className="run-battle-preview-layout">
-          {/* The board box carries its own title bar, so the name belongs to the frame rather
-              than floating above it. Both columns stretch to the one row, which is what makes
-              their tops and bottoms agree; the pane FILLS the frame it is given (ADR-0201), so
-              no surplus of the frame is left over to be painted as a band across the art. */}
-          {/* The marble is painted by the TITLE STRIP, not by the frame. A frame-wide fill shows
-              through anywhere the board does not cover — under a divider, in a row gap — which is
-              the same bleeding band as an opaque padding. Bounding the paint to the strip means
-              there is no such area: strip, then board, then border. */}
-          <InnerChromeBox className="run-battle-preview-board-frame">
-            <PreviewTitleBar id="run-battle-preview-title">{level.name}</PreviewTitleBar>
+        {/* ONE pane, filled, with rails instead of gaps. Three separate boxes left strips of the
+            page showing between them; this is a single divided box whose own grid draws every
+            separation — the vertical rail at the column line runs the full height, through the
+            header band AND between the board and the readout, and the horizontal rail under the
+            header is one unbroken line across the whole pane. Junctions where they cross are the
+            grid's, not hand-placed (ADR-0059: the divided grid is the primitive for this). */}
+        <DividedInnerChromeBox
+          className="run-battle-preview-pane"
+          columns={['minmax(0, 1fr)', 'minmax(300px, 34%)']}
+          fillRole="outer"
+          aria-label="Upcoming Battle reconnaissance"
+        >
+          <ChromeDividedGridRow className="run-battle-preview-headers">
+            <header className="run-battle-preview-header">
+              <h2 id="run-battle-preview-title">{level.name}</h2>
+            </header>
+            <header className="run-battle-preview-header">
+              <h2>
+                {/* The Run's own Battle mark, the same one the title bar carries — reconnaissance
+                    of a Battle is named by the thing a Battle is named by. */}
+                <RunProgressIcon variant="battle" className="run-battle-preview-battle-icon" />
+                Battle {battleIndex + 1} of {run.war.battles.length}
+              </h2>
+            </header>
+          </ChromeDividedGridRow>
+
+          <ChromeDividedGridRow className="run-battle-preview-body">
             <div className="ce-level-viewer run-battle-preview-board-view">
               <FramedReadOnlyBoardView
                 board={board}
@@ -127,36 +126,30 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
                 )}
               />
             </div>
-          </InnerChromeBox>
 
-          <aside className="run-battle-preview-intelligence" aria-label="Upcoming Battle intelligence">
-            <LevelInfoCompact
-              level={level}
-              showZones={false}
-              // The marble the title bar and Controls rail are painted with: the installed
-              // OUTER role material, borrowed under an inner frame (ADR-0433 borrowing rule).
-              fillRole="outer"
-              className="run-battle-preview-info"
-              deploymentBand={{ shown: bandShown, onToggle: () => setBandShown((shown) => !shown) }}
-              titleBar={(
-                <PreviewTitleBar>
-                  {/* The Run's own Battle mark, the same one the title bar carries — reconnaissance
-                      of a Battle is named by the thing a Battle is named by. */}
-                  <RunProgressIcon variant="battle" className="run-battle-preview-battle-icon" />
-                  Battle {battleIndex + 1} of {run.war.battles.length}
-                </PreviewTitleBar>
-              )}
-            />
-            <InnerChromeBox className="run-battle-preview-note" fillRole="outer">
-              <PreviewTitleBar>Before deployment</PreviewTitleBar>
-              <p>
-                Fixed pieces appear on the map. The Forces ledger also counts setup forces whose
-                exact squares are dealt when the Battle begins. Your own army arrives after you
-                leave the Sectio: {dealtLine}, onto the lit band.
-              </p>
-            </InnerChromeBox>
-          </aside>
-        </div>
+            {/* The readout takes no frame of its own — the pane's rail is already its left edge,
+                and a box inside a bounded column would draw the same line twice. The note that
+                used to be a third box is now this column's last section, so the column reads as
+                one continuous ledger rather than two stacked plates. */}
+            <aside className="run-battle-preview-intelligence" aria-label="Upcoming Battle intelligence">
+              <LevelInfoCompact
+                level={level}
+                showZones={false}
+                framed={false}
+                className="run-battle-preview-info"
+                deploymentBand={{ shown: bandShown, onToggle: () => setBandShown((shown) => !shown) }}
+              />
+              <section className="ce-li-zones-row run-battle-preview-note">
+                <span className="ce-li-title">Before deployment</span>
+                <p className="ce-li-zones">
+                  Fixed pieces appear on the map. The Forces ledger also counts setup forces whose
+                  exact squares are dealt when the Battle begins. Your own army arrives after you
+                  leave the Sectio: {dealtLine}, onto the lit band.
+                </p>
+              </section>
+            </aside>
+          </ChromeDividedGridRow>
+        </DividedInnerChromeBox>
       </PaintedSurfaceBoundary>
     </RunSceneViewport>
   );

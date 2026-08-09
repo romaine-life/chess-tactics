@@ -3,6 +3,7 @@ import {
   Fragment,
   isValidElement,
   type ButtonHTMLAttributes,
+  type ComponentProps,
   type CSSProperties,
   type HTMLAttributes,
   type ReactElement,
@@ -145,6 +146,9 @@ export function DividedInnerChromeBox({
   scroll?: boolean;
   contentRef?: RefObject<HTMLDivElement | null>;
   children: ReactNode;
+  /** Installed material under the whole pane, on the inner box's own borrowing terms. */
+  fillRole?: ComponentProps<typeof InnerChromeBox>['fillRole'];
+  fillSurface?: ComponentProps<typeof InnerChromeBox>['fillSurface'];
 }): ReactElement {
   const rows = Children.toArray(children);
   const topology = chromeDividedGridTopology(columns.length, scroll);

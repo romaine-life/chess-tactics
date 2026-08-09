@@ -19685,89 +19685,74 @@ button.tileset-relationship-cell {
 
 .run-battle-preview-surface,
 .run-battle-preview-surface > .painted-surface-content,
-.run-battle-preview-layout {
+.run-battle-preview-pane {
   block-size: 100%;
   min-block-size: 0;
   min-inline-size: 0;
 }
 
-/* ONE row, two columns, both stretched: that is what makes the board box and the intelligence
-   boxes share a top AND a bottom line. Nothing sits above the board to push it down — its name
-   is its own title bar. */
-.run-battle-preview-layout {
+/* ONE pane, filled, with RAILS instead of gaps. Three framed boxes with gaps between them let
+   strips of the page show through; this is a single divided box, so every separation on the
+   screen is one of its own drawn rails and there is nothing between them to show through.
+   Two rows: the header band takes its content's height, the body takes all the rest — that is
+   what makes the board and the readout share a bottom line. */
+.run-battle-preview-pane {
   display: grid;
-  gap: var(--ds-stack);
-  grid-template-areas: "board intelligence";
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 34%);
   grid-template-rows: minmax(0, 1fr);
-}
-
-.run-battle-preview-board-frame {
-  display: grid;
-  /* Exactly two rows, no gap: title strip, then the pane takes the whole remainder. Any third
-     track or row gap would expose the frame's own surface as a band across the level art. */
-  gap: 0;
-  grid-area: board;
-  grid-template-rows: auto minmax(0, 1fr);
-  min-block-size: 0;
-  min-inline-size: 0;
-  /* NOT clipped: the title rule's authored T caps bleed onto the side rails by design, and a
-     clip here puts them inside the frame. The pane owns its own clip. */
+  /* NOT clipped: the rails' authored junction caps bleed onto the frame's side rails by design,
+     and a clip here puts them inside the frame. */
   overflow: visible;
-  /* NO padding. The installed inner-box surface paints an opaque `background-color` under every
-     inner box, so any padding here is a flat slab of that material ringing the level art between
-     the border art and the board. The board is the frame's whole content: it must reach the
-     border on all four sides so the surface is never visible. */
+  /* NO padding. The installed surface paints under the whole pane, so padding would ring the
+     level art with a flat slab of that material between the border art and the board. */
   padding: 0;
 }
 
-/* ONE title bar, worn by every box on this screen: name and its registered rule inside one
-   painted strip. The strip owns the installed OUTER marble and both children sit on it, so the
-   rule has no unpainted row of its own to open up — that gap is what let the fill bleed. */
-.run-battle-preview-titlebar {
+/* Three children for two rows: the grid interleaves a zero-height boundary element carrying the
+   horizontal rail, so the tracks are header, rail, body. Naming only two would put the rail in
+   the flexible track and the body in an implicit one — the rail would take the height meant for
+   the board. */
+.run-battle-preview-pane > .chrome-divided-grid__rows {
+  align-content: stretch;
   display: grid;
-  grid-template-rows: auto auto;
-  position: relative;
+  grid-template-rows: auto 0 minmax(0, 1fr);
+  min-block-size: 0;
 }
 
-.run-battle-preview-titlebar > .run-battle-preview-titlebar-fill {
-  inset: 0;
+/* Both header cells sit on one band, split by the pane's own vertical rail — the level's name on
+   the board's side, the Battle it is on the readout's. */
+.run-battle-preview-headers {
+  align-items: stretch;
 }
 
-.run-battle-preview-titlebar > :not(.run-battle-preview-titlebar-fill) {
-  position: relative;
-  z-index: 1;
-}
-
-/* Divider host contract (see `.kit-divider`): the host states how far the rule bleeds out of its
-   content box so the authored T caps tee INTO the side rails. This host's rails are the inner
-   box's, so the reach is that rail's width — the same declaration `.house-select-menu-options`
-   makes. The bleed must not be clipped, or the caps land inside the frame. */
-.run-battle-preview-titlebar > .run-battle-preview-titlebar-rule {
-  --kit-divider-gap: 0px;
-  --kit-divider-reach: var(--le-chrome-inner-rail-w, 7px);
-}
-
-.run-battle-preview-titlebar-head {
+.run-battle-preview-header {
   align-items: center;
   display: flex;
+  min-inline-size: 0;
   padding: var(--ds-space-1) var(--ds-space-2);
 }
 
-/* The box's own name is the largest thing in it. Section headers govern the rows beneath them,
-   and rows outrank their labels: title > section header > value > label, with no step skipped
-   and none inverted. */
-/* The Battle mark rides the box's own title, at the title's line. */
-.run-battle-preview-titlebar-head > h2 > .run-battle-preview-battle-icon {
+/* The pane's own names are the largest things in it. Section headers govern the rows beneath
+   them, and rows outrank their labels: title > section header > value > label. */
+.run-battle-preview-header > h2 {
+  font-size: var(--ds-text-xl);
+  margin: 0;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The Battle mark rides the pane's title, at the title's line. */
+.run-battle-preview-header > h2 > .run-battle-preview-battle-icon {
   block-size: 1.15em;
   inline-size: 1.15em;
   margin-inline-end: var(--ds-space-2);
   vertical-align: -.18em;
 }
 
-.run-battle-preview-titlebar-head > h2 {
-  font-size: var(--ds-text-xl);
-  margin: 0;
+.run-battle-preview-body {
+  min-block-size: 0;
+  min-inline-size: 0;
 }
 
 /* The pane FILLS the frame it is given: no nested fixed-aspect seat, so no surplus of the frame
@@ -19783,15 +19768,15 @@ button.tileset-relationship-cell {
   cursor: default;
 }
 
-/* The readout takes the height its facts need; the note below it absorbs the remainder, so the
-   column still bottoms out level with the board without leaving dead space inside the readout. */
+/* One continuous ledger down the pane's right column: the facts, then the note as its last
+   section. Nothing between them is a frame — the pane's rail is the column's left edge. */
 .run-battle-preview-intelligence {
+  align-content: start;
   display: grid;
-  gap: var(--ds-inline);
-  grid-area: intelligence;
-  grid-template-rows: auto minmax(0, 1fr);
   min-block-size: 0;
   min-inline-size: 0;
+  overflow: auto;
+  row-gap: var(--ds-stack);
 }
 
 /* The readout was borrowed from a narrow editor tab and kept that tab's compact type. Here it
@@ -19804,15 +19789,11 @@ button.tileset-relationship-cell {
 .run-battle-preview-info.ce-level-info {
   align-content: start;
   block-size: auto;
+  display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  overflow: auto;
-  padding: 0 0 var(--ds-inset);
+  overflow: visible;
+  padding: var(--ds-inset) 0 0;
   row-gap: var(--ds-stack);
-}
-
-.run-battle-preview-info > .run-battle-preview-titlebar {
-  grid-column: 1 / -1;
-  margin-block-end: calc(var(--ds-stack) * -1 + var(--ds-inset));
 }
 
 .run-battle-preview-info > section {
@@ -19878,20 +19859,20 @@ button.tileset-relationship-cell {
   margin: var(--ds-space-2) 0 0;
 }
 
-/* Same shape as the readout: the title strip is flush to the frame, the prose is inset. */
+/* The last section of the readout's column, not a box of its own. Its prose runs the column's
+   full width rather than sitting in the labelled two-track grid, so the sentence is not squeezed
+   into the value lane beside a header. */
 .run-battle-preview-note {
-  align-content: start;
   display: grid;
   gap: var(--ds-space-2);
-  min-block-size: 0;
-  overflow: auto;
-  padding: 0 0 var(--ds-inset);
+  grid-template-columns: minmax(0, 1fr);
+  padding: 0 var(--ds-inset) var(--ds-inset);
 }
 
-.run-battle-preview-note p {
+.run-battle-preview-note > p {
   color: var(--skirmish-muted);
   font-size: var(--ds-text-md);
-  padding-inline: var(--ds-inset);
+  margin: 0;
 }
 
 @media (max-width: 900px) {
@@ -19903,27 +19884,31 @@ button.tileset-relationship-cell {
 
   .run-battle-preview-surface,
   .run-battle-preview-surface > .painted-surface-content,
-  .run-battle-preview-layout {
+  .run-battle-preview-pane {
     block-size: auto;
   }
 
-  .run-battle-preview-layout {
+  /* Narrow, the pane keeps its single frame and drops to ONE column, so the vertical rail goes
+     and the header band becomes two stacked names above the board and the readout. */
+  .run-battle-preview-pane {
     align-self: start;
-    grid-template-areas:
-      "board"
-      "intelligence";
-    grid-template-columns: minmax(0, 1fr);
+    --chrome-divided-grid-columns: minmax(0, 1fr);
+  }
+
+  .run-battle-preview-pane > .chrome-divided-grid__rows {
+    align-content: start;
     grid-template-rows: auto auto;
+  }
+
+  .run-battle-preview-headers,
+  .run-battle-preview-body {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   /* Stacked, nothing constrains the board's height, so it takes the canonical shape. */
   .run-battle-preview-board-view {
     aspect-ratio: var(--board-view-aspect);
     block-size: auto;
-  }
-
-  .run-battle-preview-intelligence {
-    grid-template-rows: auto auto;
   }
 }
 
@@ -23296,6 +23281,14 @@ button.tileset-relationship-cell {
 .inner-chrome-box.has-chrome-surface-fill > :not(.inner-chrome-box-fill) {
   position: relative;
   z-index: 1;
+}
+
+/* The divided grid's rail layer is a lifted OVERLAY, not a row of the box. The lift above sets
+   every non-fill child to `position: relative` so content clears the fill; applied to this layer
+   it drops the rails into the flow, where they take a whole grid row and push the rows layer off
+   the bottom of the box. It is already above the fill by z-index, so it stays absolute. */
+.inner-chrome-box.has-chrome-surface-fill > .chrome-divided-grid__fixed-rails {
+  position: absolute;
 }
 
 .run-expunctio-card,
