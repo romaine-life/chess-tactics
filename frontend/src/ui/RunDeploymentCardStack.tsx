@@ -356,25 +356,9 @@ export function RunDeploymentCardStack({
         { opacity: 0, transform: `${shelved} scale(.55)` },
       ], { duration, delay: deckLeavesAt, easing, fill: 'both' });
       if (remainder) animations.push(remainder);
-      // The register answers. A card shrinking into a 24px mark is a few pixels of movement and
-      // reads as a flicker; the destination reacting is what says the cards went IN rather than
-      // stopped on top. It rides transform and brightness, neither of which the mark's own hover
-      // and active states use, and leaves nothing behind.
-      // Eased PER KEYFRAME, on a linear effect. The shared curves are strongly front-loaded —
-      // right for a flight, wrong for a pulse: applied to the whole effect they carried the
-      // progress past the peak keyframe almost immediately and the mark twitched by 6% instead
-      // of the authored quarter.
-      const receive = scene.animate(chartulary, [
-        { transform: 'scale(1)', filter: 'brightness(1)', easing: 'ease-out' },
-        { transform: 'scale(1.24)', filter: 'brightness(1.45)', offset: 0.34, easing: 'ease-in' },
-        { transform: 'scale(1)', filter: 'brightness(1)' },
-      ], {
-        duration: 360,
-        delay: Math.max(0, deckLeavesAt + duration - 200),
-        easing: 'linear',
-        fill: 'none',
-      });
-      if (receive) animations.push(receive);
+      // The register does not react. The card putting itself away is the whole of the event; a
+      // mark that jumped as it arrived drew the eye to the corner of the screen at the moment
+      // the hand on the table is what the player should be reading.
       const sourceFade = scene.animate(source, [{ opacity: 1 }, { opacity: 0 }], {
         duration: 1,
         delay: deckLeavesAt,
@@ -391,9 +375,10 @@ export function RunDeploymentCardStack({
       if (remainder) animations.push(remainder);
     }
 
-    // Pour, turn and gather for every card, the deck's own fade, and — when there is a remainder
-    // to sweep — that card's flight plus the register's answer to it.
-    const expectedAnimationCount = cards.length * 3 + 1 + (sweeping ? 2 : 0);
+    // Pour, turn and gather for every card, the deck's own fade, and its remainder when there is
+    // one to sweep. A count that does not match cancels the whole draw, so it moves with the
+    // animations above rather than being an estimate of them.
+    const expectedAnimationCount = cards.length * 3 + 1 + (sweeping ? 1 : 0);
     if (animations.length < expectedAnimationCount) {
       animations.forEach((animation) => animation.cancel());
       return scene.nextFrame(onDealComplete);
