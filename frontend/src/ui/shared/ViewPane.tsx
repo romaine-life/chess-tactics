@@ -1,3 +1,5 @@
+import { TILE_STEP_X, TILE_STEP_Y } from '@chess-tactics/board-render';
+import { snapToTier, stepTier, zoomTierRange } from '../../game/zoomTiers';
 import {
   useLayoutEffect,
   useRef,
@@ -280,6 +282,35 @@ export function exceedsViewPanePanThreshold(deltaX: number, deltaY: number): boo
  * same board-centred coordinate system as `.tileset-generated-board`; current pan does not affect
  * the stable floor. Pan is reclamped separately when zoom changes.
  */
+/**
+ * The zoomed-OUT limit a level offers, as a tier.
+ *
+ * This used to binary-search for the smallest zoom at which the board art still
+ * COVERED the viewport, and clamp the camera up to meet it. That asked the wrong
+ * question: a level whose art stops at its own edge could not be zoomed out to see
+ * itself, the answer was a per-window float nobody chose, and it is where an
+ * opening zoom like 121% came from.
+ *
+ * The question now is whether the level FITS. Zooming out ends with the whole board
+ * visible and never further, and the answer is a rung on the global ladder rather
+ * than a number derived per window.
+ */
+/**
+ * A board cell's on-screen footprint at zoom 1, which is what the closest tier is
+ * expressed in: the ladder stops zooming in once about two cells fill the frame.
+ */
+const BOARD_CELL_SIZE = { width: TILE_STEP_X * 2, height: TILE_STEP_Y * 2 };
+
+/** The closest tier this viewport offers; falls back to the ladder base before measurement. */
+function closestTierFor(viewport: { width: number; height: number } | null): number {
+  if (!viewport) return Number.POSITIVE_INFINITY;
+  return zoomTierRange({
+    viewport,
+    levelBox: BOARD_CELL_SIZE,
+    cell: BOARD_CELL_SIZE,
+  }).inner;
+}
+
 export function minimumZoomToCoverViewport({
   viewport,
   polygon,
@@ -291,8 +322,6 @@ export function minimumZoomToCoverViewport({
   minZoom: number;
   maxZoom: number;
 }): number {
-  const lower = Math.min(maxZoom, Math.max(0.01, minZoom));
-  const upper = Math.max(lower, maxZoom);
   if (
     polygon.length < 3
     || viewport.width <= 0
@@ -300,23 +329,22 @@ export function minimumZoomToCoverViewport({
     || !Number.isFinite(viewport.width)
     || !Number.isFinite(viewport.height)
     || polygon.some((point) => !Number.isFinite(point.x) || !Number.isFinite(point.y))
-  ) return lower;
-  const covers = (zoom: number): boolean => feasiblePanRegion({ viewport, polygon, zoom }).length > 0;
-  if (covers(lower)) return lower;
-  if (!covers(upper)) return upper;
-  let low = lower;
-  let high = upper;
-  for (let iteration = 0; iteration < 32; iteration += 1) {
-    const middle = (low + high) / 2;
-    if (covers(middle)) high = middle;
-    else low = middle;
+  ) return snapToTier(Math.min(maxZoom, Math.max(0.01, minZoom)));
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const point of polygon) {
+    minX = Math.min(minX, point.x);
+    minY = Math.min(minY, point.y);
+    maxX = Math.max(maxX, point.x);
+    maxY = Math.max(maxY, point.y);
   }
-  // Start from the first six-decimal candidate above the infeasible side of the search, then
-  // verify it. Exact decimal boundaries therefore stay exact; a candidate that is still just
-  // below the geometric limit advances by one safety-precision unit.
-  const safetyScale = 1_000_000;
-  const candidate = Math.ceil(low * safetyScale) / safetyScale;
-  return Math.min(upper, covers(candidate) ? candidate : candidate + 1 / safetyScale);
+  return zoomTierRange({
+    viewport,
+    levelBox: { width: maxX - minX, height: maxY - minY },
+    cell: BOARD_CELL_SIZE,
+  }).outer;
 }
 
 export function ViewPane({
@@ -383,7 +411,12 @@ export function ViewPane({
   const lastViewportSizeRef = useRef<ViewPaneViewportSize | null>(null);
   const didDragRef = useRef(false);
   const [resolvedMinZoom, setResolvedMinZoom] = useState(minZoom);
-  const resolvedMaxZoom = Math.max(maxZoom, resolvedMinZoom);
+  // The zoomed-IN limit is the ladder's closest tier, not a fixed cap. An authored
+  // per-level limit still applies when it is tighter; nothing else narrows it.
+  const resolvedMaxZoom = Math.max(
+    resolvedMinZoom,
+    Math.min(maxZoom, closestTierFor(lastViewportSizeRef.current)),
+  );
 
   useLayoutEffect(() => {
     const stage = stageRef.current;
@@ -569,7 +602,7 @@ export function ViewPane({
     event.preventDefault();
     onViewInteraction?.();
     const direction = event.deltaY < 0 ? 1 : -1;
-    const nextZoom = clamp(Number((zoom + direction * 0.05).toFixed(2)), resolvedMinZoom, resolvedMaxZoom);
+    const nextZoom = stepTier(zoom, direction, { inner: resolvedMaxZoom, outer: resolvedMinZoom });
     const stage = stageRef.current;
     if (stage && coverPolygon) {
       onPanChange(constrainPanToCoverViewport({
