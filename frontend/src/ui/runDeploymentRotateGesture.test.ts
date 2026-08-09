@@ -184,7 +184,7 @@ describe('Run Deployment hand', () => {
   // had nothing to press.
   it('pins Begin Battle to the foot of the panel, outside the rail', () => {
     expect(runScreen).toMatch(
-      /<\/KitScroll>\s*\{\/\*[\s\S]*?\*\/\}\s*\{stage === 'arrange' \? \(\s*<div className="skirmish-view-group run-arrangement-begin-group">/,
+      /<\/KitScroll>\s*\{\/\*[\s\S]*?\*\/\}\s*<div className="skirmish-view-group run-arrangement-begin-group">/,
     );
     expect(runScreen).toMatch(
       /run-arrangement-begin-group"[\s\S]*?data-testid="arrangement-begin-battle"/,
@@ -245,9 +245,30 @@ describe('Run Deployment hand', () => {
   // A control that appears and disappears re-lays the panel under the player's hand.
   it('keeps Remove formation on screen, greyed until there is one to remove', () => {
     expect(runScreen).toContain('data-testid="arrangement-remove-formation"');
-    expect(runScreen).toContain('disabled={departing || !selected.placed}');
+    expect(runScreen).toContain('disabled={!arranging || departing || !selected?.placed}');
     // It is never conditionally rendered.
     expect(runScreen).not.toMatch(/\{selected\.placed \? \(\s*<ChromeButton/);
+  });
+
+  // Building the panel as the cards landed re-laid the whole of it under the player at the one
+  // moment they were watching it, and made the arrival read as a different screen. Everything the
+  // panel will hold is known when Deployment is prepared, so it is DRESSED from the start.
+  it('holds every control from before the draw, answering nothing until the hand arrives', () => {
+    expect(runScreen).toContain("const arranging = stage === 'arrange';");
+    expect(runScreen).toContain("const turnable = arranging && Boolean(selected?.admitted);");
+    // Steppers, turns, Remove and Begin Battle are all present whatever the stage...
+    expect(runScreen).toContain('disabled={!arranging}');
+    expect(runScreen).toContain('disabled={!turnable || departing || availableRotations.size < 2}');
+    // ...and none of them is gated on the stage or on there being a formation in hand.
+    expect(runScreen).not.toMatch(/\{stage === 'arrange' \? \(\s*<>\s*<RunArrangementSteppers/);
+    expect(runScreen).not.toMatch(/\{selected\?\.admitted \? \(/);
+    expect(runScreen).not.toMatch(/\{stage === 'arrange' \? \(\s*<div className="skirmish-view-group run-arrangement-begin-group"/);
+    // The rotation group and the pinned Begin foot are rendered flat, once.
+    expect((runScreen.match(/data-testid="arrangement-rotation-control"/g) ?? [])).toHaveLength(1);
+    expect((runScreen.match(/run-arrangement-begin-group/g) ?? [])).toHaveLength(1);
+    // The count answers before the draw too, which is what lets the foot be dressed rather than
+    // built: the hand's size is settled when Deployment is prepared.
+    expect(runScreen).toContain('const progress = arrangedDeploymentProgress(run);');
   });
 
   // The Run's leaf controls carry the installed oak fill, offset per control so neighbours do
@@ -298,8 +319,9 @@ describe('Run Deployment hand', () => {
     expect(styles).toMatch(
       /\.run-arrangement-rotations \{[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/,
     );
-    // The rail stays band-wide, so its buttons do not flicker as the cursor moves.
-    expect(runScreen).toContain('disabled={departing || availableRotations.size < 2}');
+    // The rail stays band-wide, so its buttons do not flicker as the cursor moves — and it is
+    // present before the hand is, greyed, so the panel does not gain a group as the cards land.
+    expect(runScreen).toContain('disabled={!turnable || departing || availableRotations.size < 2}');
   });
 
   it('steps the hand from the arrows and the keys through one path', () => {

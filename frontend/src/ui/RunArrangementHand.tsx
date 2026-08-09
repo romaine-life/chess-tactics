@@ -68,11 +68,14 @@ export function RunArrangementSteppers({
   selectedCardId,
   onStep,
   onSelect,
+  disabled = false,
 }: {
   cards: readonly RunArrangedCardSummary[];
   selectedCardId: string | null;
   onStep: (step: 1 | -1) => void;
   onSelect: (cardId: string) => void;
+  /** The hand is dealt but not yet in the player's hands: dressed, and not yet answering. */
+  disabled?: boolean;
 }): ReactElement {
   const admitted = admittedCards(cards);
   const reserves = cards.length - admitted.length;
@@ -84,7 +87,7 @@ export function RunArrangementSteppers({
           data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
           className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'run-arrangement-step')}
           style={{ ['--run-leaf-control-index' as string]: 0 } as CSSProperties}
-          disabled={admitted.length < 2}
+          disabled={disabled || admitted.length < 2}
           onClick={() => onStep(-1)}
           aria-label="Previous formation"
         >
@@ -104,6 +107,7 @@ export function RunArrangementSteppers({
                 aria-label={`Formation ${position + 1} of ${admitted.length}, ${
                   placed ? 'on the board' : 'not yet placed'
                 }`}
+                disabled={disabled}
                 key={card.id}
                 onClick={() => onSelect(card.id)}
               >
@@ -117,7 +121,7 @@ export function RunArrangementSteppers({
           data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
           className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'run-arrangement-step')}
           style={{ ['--run-leaf-control-index' as string]: 1 } as CSSProperties}
-          disabled={admitted.length < 2}
+          disabled={disabled || admitted.length < 2}
           onClick={() => onStep(1)}
           aria-label="Next formation"
         >
