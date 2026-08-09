@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-// Live gate for the Run opening grant's card carry (ADR-0385, ADR-0516).
+// Live gate for the Commendatio card carry (ADR-0385, ADR-0516).
 //
-// Taking the opening grant admits a card exactly as Adlectio does, so it gets the same travel
+// Taking a King admits a card exactly as Adlectio does, so it gets the same travel
 // into the Chartulary. It differs in one way that matters: the take ends its own phase. A carry
 // released at landing therefore lets go while Deployment is still preparing, and the card is
 // gone for that interval — the bug class ADR-0385 exists to prevent. This drives the real take
 // and reads the real pixels rather than trusting that the launch is wired.
 //
-// Usage: npm run verify:grant-carry -- '<opening-grant-craft-url>'
+// Usage: npm run verify:grant-carry -- '<commendatio-craft-url>'
 
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -16,7 +16,7 @@ import puppeteer from 'puppeteer-core';
 
 const start = process.argv[2];
 if (!start) {
-  console.error("usage: npm run verify:grant-carry -- '<opening-grant-craft-url>'");
+  console.error("usage: npm run verify:grant-carry -- '<commendatio-craft-url>'");
   process.exit(2);
 }
 
@@ -34,7 +34,7 @@ if (!executablePath) {
 
 const TIMEOUT = 30_000;
 const settled = "document.querySelector('[data-scene-phase]')?.getAttribute('data-scene-phase') === 'current'";
-const GRANT_CARD = '[data-testid="run-vacantia-card-offers"] .run-card-action';
+const GRANT_CARD = '[data-testid="run-commendatio-king-offers"] .run-card-action';
 
 const profile = mkdtempSync(join(tmpdir(), 'ct-grant-carry-'));
 const browser = await puppeteer.launch({
@@ -69,7 +69,7 @@ try {
       seatId: button.closest('.run-card-offer')?.getAttribute('data-run-sectio-offer-id') ?? null,
     };
   }, GRANT_CARD);
-  if (!offer?.name) throw new Error('The opening grant offered no takeable card, so the carry cannot be driven');
+  if (!offer?.name) throw new Error('Commendatio offered no takeable King, so the carry cannot be driven');
   if (!offer.seatId) throw new Error('The offered card has no identified seat, so a duplicate cannot be detected');
   const offered = offer.name;
 
@@ -111,7 +111,7 @@ try {
         carry,
         sourceOpacity: seat ? effectiveOpacity(seat) : null,
         mark: markBox ? { x: Math.round(markBox.x + markBox.width / 2), y: Math.round(markBox.y + markBox.height / 2) } : null,
-        matPresent: Boolean(document.querySelector('[data-testid="run-vacantia-card-offers"]')),
+        matPresent: Boolean(document.querySelector('[data-testid="run-commendatio-king-offers"]')),
       });
       requestAnimationFrame(sample);
     };
@@ -137,7 +137,7 @@ try {
   const firstCarry = frames.findIndex((frame) => frame.carry?.visible);
   if (firstCarry === -1) {
     violations.push(
-      `taking the opening grant (${offered}) never produced a visible card carry — the admission has no transfer at all`,
+      `taking the King (${offered}) never produced a visible card carry — the admission has no transfer at all`,
     );
   } else {
     // Every frame from the carry appearing to the director settling must still show it. A gap

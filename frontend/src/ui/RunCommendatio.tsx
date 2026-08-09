@@ -3,7 +3,6 @@ import {
   RUN_STARTER_CARD_BY_ID,
   formatGold,
   runCardDefinition,
-  takeCommendatioKing,
   type RunDocument,
   type RunStarterCardId,
 } from '../run/model';
@@ -28,10 +27,11 @@ import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
  */
 export function RunCommendatio({
   run,
-  replace,
+  takeKing,
 }: {
   run: RunDocument;
-  replace: (next: RunDocument) => void;
+  /** The take ends this phase, so its carry belongs to the Run screen and outlives this view. */
+  takeKing: (kingId: string, source: HTMLButtonElement) => void;
 }): ReactElement {
   const [taken, setTaken] = useState<string | null>(null);
   const offers = (run.commendatio?.kingOffers ?? []).filter((id) => Boolean(runCardDefinition(id)));
@@ -59,10 +59,10 @@ export function RunCommendatio({
                 seatIndex={index}
                 disabled={Boolean(taken)}
                 flying={taken === kingId}
-                onSelect={() => {
+                onSelect={(source) => {
                   if (taken) return;
                   setTaken(kingId);
-                  replace(takeCommendatioKing(run, kingId));
+                  takeKing(kingId, source);
                 }}
               />
             </CommendatioSeat>
