@@ -4619,11 +4619,12 @@ h1 {
    tick every second, and a timed clock gains tenths under ten seconds) so the
    flanking chips don't breathe with it. Tabular figures are a best-effort on the
    pixel font stack. */
-/* Centred as a pair, exactly like the objective chip's glyph+copy — otherwise the
-   glyph sits jammed against the chip's left rail while the readout drifts right. */
+/* Glyph then copy, hugging: the readout starts immediately after the hourglass
+   instead of being centred over a label wider than it, which read as a gap the
+   chip had not earned. The label is the widest line in every mode, so it — not a
+   minimum — is what holds the width steady while the digits tick. */
 .skirmish-clock {
-  justify-content: center;
-  min-inline-size: 136px;
+  gap: var(--ds-inline-tight);
 }
 
 .skirmish-clock .skirmish-icon {
@@ -4635,9 +4636,6 @@ h1 {
   align-content: center;
   display: grid;
   gap: 0;
-  justify-items: center;
-  min-inline-size: 78px;
-  text-align: center;
 }
 
 .skirmish-clock strong {
@@ -9280,6 +9278,19 @@ body.loading-bootstrap .app-startup-status {
     display: flex;
   }
 
+  /* Every measure carries a frame now, and four frames cost width the narrow bar does
+     not have — at 740 the last one ran under the control lane. Nothing is dropped:
+     the marks and their numbers draw smaller and closer instead, which is the whole
+     point of shedding the wide chip first. */
+  .app-shell-titlebar .run-topbar-measures {
+    --run-measure-seat: 20px;
+    gap: 2px;
+  }
+
+  .app-shell-titlebar .run-topbar-measure {
+    font-size: var(--ds-text-xs);
+    gap: 2px;
+  }
 }
 
 @media (max-width: 860px) {
@@ -20368,45 +20379,40 @@ button.tileset-relationship-cell {
   object-fit: contain;
 }
 
-/* A measure is one icon and its number, sitting bare on the bar — Ataraxia tier,
-   gold, Conflict, Battle are all the same kind of fact and read as one row of
-   marks. Only the War/Battle identity, which cannot be drawn, keeps a chip
-   frame; a measure never gets a box of its own. */
+/* A measure is one icon and its number — Ataraxia tier, gold, Conflict, Battle are
+   all the same kind of fact and read as one row. Each one is FRAMED, like every
+   other element in the bar, and the frame is earned rather than decorative: the box
+   is exactly one hover/keyboard target that names what is inside it. They used to
+   sit bare while already being tooltips, so nothing stated where one target ended
+   and the next began. The row is the bar's tightest, so its boxes hug their marks
+   and sit on the tight gap. */
 .run-topbar-measures {
   /* One seat for every mark, because every mark is trimmed to its own ink: the
      coin, the wreath and the drum all draw at the same size, and the gap between
      a mark and its number is the same gap everywhere in the row. */
-  --run-measure-seat: 30px;
+  --run-measure-seat: 26px;
   align-items: center;
   display: flex;
-  gap: var(--ds-inline);
+  gap: var(--ds-inline-tight);
   min-width: 0;
 }
 
 .run-topbar-measure {
   align-items: center;
   color: #eaf6ff;
-  display: inline-flex;
   font: var(--ds-weight-strong) var(--ds-text-md)/1 var(--ds-font-display);
-  gap: var(--ds-space-1);
+  gap: var(--ds-inline-tight);
   letter-spacing: .04em;
   min-width: 0;
   white-space: nowrap;
 }
 
-/* A measure has no frame between it and the bar's painted wall, so its mark needs
-   a stroke to hold its silhouette. The stroke is baked into the artwork
-   (scripts/bake-icon-stroke.mjs), the way the accepted ui-kit icons carry theirs —
-   NOT a CSS shadow standing in for one. Only the number gets a contact shadow,
-   which is ordinary type treatment. */
-.run-topbar-measure > span {
-  text-shadow: 0 2px 0 #02070b;
-}
-
-/* A mark is a symbol standing in for a word, so every measure names itself on
-   hover or keyboard focus through the shared Tooltip. The popup owns its whole
-   treatment (ADR-0362's promotion); this only keeps the trigger's own layout. */
-.run-topbar-measure-tip {
+/* Every element in the bar is a tooltip target and therefore a box. The shared
+   trigger is already inline-flex and hugs the frame exactly, which is what lets the
+   tip hang off the BOX's own rect — it must keep a box of its own for that, so this
+   only lets a wide chip shrink with the row instead of forcing it wider. */
+.titlebar-status-tip,
+.titlebar-status-trigger {
   min-width: 0;
 }
 

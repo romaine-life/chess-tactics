@@ -24,7 +24,7 @@ import { useSceneOpacityEntrance } from './shell/SceneActivity';
 import { NavButton } from './shared/NavButton';
 import { RestartGlyph } from './shared/actionGlyphs';
 import { TitleBarSlot } from './shell/TitleBarSlot';
-import { TitleBarControlContribution, TitleBarStatus } from './shell/TitleBarControls';
+import { TitleBarControlContribution, TitleBarStatusTip } from './shell/TitleBarControls';
 import { shouldStartFreshSkirmish, type RunBattleTransformSink, type RunBattleUndoAdapter } from '../game/store';
 import { SkirmishStoreProvider, useSkirmish, useSkirmishStoreApi } from '../game/SkirmishStoreContext';
 import {
@@ -1428,19 +1428,35 @@ function SkirmishSession(props: SkirmishProps = {}) {
       {/* The battle clock is ALWAYS the middle chip on every play surface (BattleClockChip
         also seats it in the Run's bar). Keeping the centre chip present means
         the turn plate and objective always flank a real element, so the clock stays
-        page-centred over the title bar's diamond (equal-width flanks, see style.css). */}
-      <TitleBarStatus className="skirmish-status-chip skirmish-turn-plate">
+        page-centred over the title bar's diamond (equal-width flanks, see style.css).
+        Every box in the bar is one hover/keyboard target that names itself — that is
+        what a frame costs its width for (TitleBarStatusTip). */}
+      <TitleBarStatusTip
+        className="skirmish-status-chip skirmish-turn-plate"
+        label={`${turnLabel}. ${game.winner ? 'Skirmish complete' : 'Live board'}`}
+        name={turnLabel}
+        detail={game.winner
+          ? 'This Battle has been decided. The board is left standing to review.'
+          : 'Whose move it is. The board only accepts input on your own turn.'}
+        explainMechanics={false}
+      >
         <strong>{turnLabel}</strong>
         <small>{game.winner ? 'Skirmish Complete' : 'Live Board'}</small>
-      </TitleBarStatus>
+      </TitleBarStatusTip>
       <BattleClockChip />
-      <TitleBarStatus className="skirmish-status-chip skirmish-objective">
+      <TitleBarStatusTip
+        className="skirmish-status-chip skirmish-objective"
+        label={`Objective. ${objectiveGoal}`}
+        name="Objective"
+        detail={objectiveGoal}
+        explainMechanics={false}
+      >
         <span className="skirmish-icon skirmish-icon-flag" aria-hidden="true" />
         <span>
           <strong>Objective</strong>
           <small>{objectiveGoal}</small>
         </span>
-      </TitleBarStatus>
+      </TitleBarStatusTip>
     </div>
   ) : null;
   const titleBarContent = skirmishTitleBarContent;

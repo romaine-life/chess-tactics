@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react';
 import { formatClockMs, formatElapsedClockMs, readElapsedClockMs, type ElapsedClockState } from '../core/clock';
 import { useSkirmish } from '../game/SkirmishStoreContext';
-import { TitleBarStatus } from './shell/TitleBarControls';
+import { TitleBarStatusTip } from './shell/TitleBarControls';
 
 // THE battle clock readout, for every play surface that mounts a battlefield — the
 // standalone Skirmish title bar and the Run's (ADR-0059: one primitive, not a second
@@ -30,10 +30,21 @@ export function BattleClockChip({ fillSurface }: { fillSurface?: string } = {}):
   const clock = useSkirmish((s) => s.clock);
   const battleElapsed = useSkirmish((s) => s.battleElapsed);
   const elapsedReadoutMs = useElapsedClockReadout(battleElapsed, clock === null);
+  const readout = clock ? formatClockMs(clock.remainingMs) : formatElapsedClockMs(elapsedReadoutMs);
   return (
-    <TitleBarStatus
+    <TitleBarStatusTip
       className={`skirmish-status-chip skirmish-clock${clock && clock.remainingMs <= 20_000 ? ' danger is-low' : ''}`}
-      data-chrome-fill-surface={fillSurface}
+      fillSurface={fillSurface}
+      label={clock ? `Battle clock. ${readout} remaining` : `Elapsed time ${readout}`}
+      name={clock ? 'Battle clock' : 'Elapsed time'}
+      detail={clock
+        ? (clock.incrementMs > 0
+            ? `Time left on this Battle's clock. Each move you make adds ${clock.incrementMs / 1000} seconds back.`
+            : "Time left on this Battle's clock.")
+        : 'This Battle has no time control. The clock counts up from the first move, and the Aftermath reports it.'}
+      // A clock is not a Run mechanic, and its own words ("Battle") would otherwise
+      // raise a definition pane under a readout that explains itself.
+      explainMechanics={false}
     >
       {/* The installed kit hourglass, the same forged glyph family the objective chip's
           flag comes from — so the reading is marked as TIME at a glance instead of being
@@ -43,18 +54,16 @@ export function BattleClockChip({ fillSurface }: { fillSurface?: string } = {}):
       <span className="skirmish-clock-readout">
         {clock ? (
           <>
-            <strong>{formatClockMs(clock.remainingMs)}</strong>
+            <strong>{readout}</strong>
             <small>{clock.incrementMs > 0 ? `+${clock.incrementMs / 1000}s / move` : 'Battle Clock'}</small>
           </>
         ) : (
           <>
-            <strong data-testid="untimed-battle-clock" aria-label={`Elapsed time ${formatElapsedClockMs(elapsedReadoutMs)}`}>
-              {formatElapsedClockMs(elapsedReadoutMs)}
-            </strong>
+            <strong data-testid="untimed-battle-clock">{readout}</strong>
             <small>No limit</small>
           </>
         )}
       </span>
-    </TitleBarStatus>
+    </TitleBarStatusTip>
   );
 }

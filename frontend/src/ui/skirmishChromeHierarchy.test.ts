@@ -12,6 +12,7 @@ const chromeRuntime = readFileSync(new URL('./chromeFamilyRuntime.ts', import.me
 const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
 const battleClockChip = readFileSync(new URL('./BattleClockChip.tsx', import.meta.url), 'utf8');
+const titleBarControls = readFileSync(new URL('./shell/TitleBarControls.tsx', import.meta.url), 'utf8');
 const portraitPreload = readFileSync(new URL('../art/preload.ts', import.meta.url), 'utf8');
 const runBattleUndoButton = readFileSync(new URL('./RunBattleUndoButton.tsx', import.meta.url), 'utf8');
 
@@ -84,12 +85,17 @@ describe('Skirmish chrome hierarchy', () => {
     const titleContent = titleStart >= 0 && titleEnd > titleStart ? skirmish.slice(titleStart, titleEnd) : '';
     // Turn plate and objective are Skirmish's own; the middle chip is the ONE shared
     // battle clock, so the Run's bar shows the same readout from the same component.
-    expect(titleContent.match(/<TitleBarStatus\b/g)).toHaveLength(2);
+    // Every one of the three is a BOXED tooltip: a frame in the persistent bar costs
+    // width, and what earns it is being a single target that names itself.
+    expect(titleContent.match(/<TitleBarStatusTip\b/g)).toHaveLength(2);
     expect(titleContent).toContain('<BattleClockChip />');
-    expect(battleClockChip).toContain('<TitleBarStatus');
+    expect(battleClockChip).toContain('<TitleBarStatusTip');
+    expect(titleContent).not.toMatch(/<TitleBarStatus\b[^T]/);
     expect(skirmish).not.toContain("from '../core/clock'");
     expect(titleContent).not.toMatch(/<div\b[^>]*skirmish-status-chip/);
-    expect(skirmish).toMatch(/import \{[^}]*TitleBarStatus[^}]*\} from '\.\/shell\/TitleBarControls';/);
+    expect(skirmish).toMatch(/import \{[^}]*TitleBarStatusTip[^}]*\} from '\.\/shell\/TitleBarControls';/);
+    // The box IS the trigger, so the tip hangs off the frame's own rect.
+    expect(titleBarControls).toMatch(/trigger=\{\([\s\S]*?<TitleBarStatus as="span"/);
   });
 
   it('shows elapsed time instead of a static infinity for an untimed Battle', () => {

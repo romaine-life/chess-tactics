@@ -6,6 +6,7 @@ const runScreen = readFileSync(new URL('./RunScreen.tsx', import.meta.url), 'utf
 const runArmyWorkspace = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url), 'utf8');
 const runExpunctioWorkspace = readFileSync(new URL('./RunExpunctioWorkspace.tsx', import.meta.url), 'utf8');
 const runTitleBarChips = readFileSync(new URL('./RunTitleBarChips.tsx', import.meta.url), 'utf8');
+const titleBarControls = readFileSync(new URL('./shell/TitleBarControls.tsx', import.meta.url), 'utf8');
 const app = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8');
 const enchiridionSource = readFileSync(new URL('./Enchiridion.tsx', import.meta.url), 'utf8');
 const sceneManifest = readFileSync(new URL('./shell/sceneManifest.ts', import.meta.url), 'utf8');
@@ -494,7 +495,11 @@ describe('Run chrome hierarchy', () => {
 
     expect(runArmyWorkspace).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
     expect(runExpunctioWorkspace).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
-    expect(runTitleBarChips).toMatch(/<TitleBarStatus[\s\S]*?data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}/);
+    // Every element in the Run bar is a framed leaf now, so the leaf fill rides the
+    // shared box-is-the-tooltip primitive rather than a hand-placed attribute.
+    expect((runTitleBarChips.match(/fillSurface=\{CHROME_LEAF_FILL_SURFACE\}/g) ?? [])).toHaveLength(2);
+    expect(runTitleBarChips).not.toContain('data-chrome-fill-surface=');
+    expect(titleBarControls).toContain('data-chrome-fill-surface={fillSurface}');
     expect(runExpunctioWorkspace).toContain('fillRole="outer"');
     expect(styleCss).not.toMatch(/\.run-(?:roster-filters|meta-controls)[^}]*:nth-child/);
   });
