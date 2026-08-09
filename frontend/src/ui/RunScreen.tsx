@@ -2,7 +2,8 @@ import { Children, useCallback, useEffect, useMemo, useRef, useState, type CSSPr
 import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import type { RunBattleTransformSink, RunBattleUndoAdapter } from '../game/store';
 import { defaultFacingForSide } from '../core/pieces';
-import { gameEnv, royalForkVictim } from '../core/rules';
+import { manubiaeEarnedBy } from '../run/manubiae';
+import { levelParTurns, speedBonusClockMs, speedBonusRemainingMs, speedBonusTenths } from '../core/speedBonus';
 import type { GameState, Piece, Vec } from '../core/types';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox } from './shared/ChromeBox';
@@ -42,14 +43,12 @@ import {
   leaveSectio,
   markReservistDeployed,
   observeRunUnitDeath,
-  payRunEnPassantBounty,
-  payRunRoyalForkBounty,
+  payRunManubium,
   prepareDeployment,
   rerollDeployment,
   resetSectio,
   RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS,
   RUN_BATTLE_RETRY_COST_TENTHS,
-  RUN_ROYAL_FORK_MIN_VICTIM_VALUE,
   RUN_CARD_BY_ID,
   restartBattle,
   runBattleActivityId,
@@ -67,14 +66,12 @@ import {
 import {
   arrangedCardAtCell,
   arrangedCardPlaceableCells,
-  arrangedCardPlacementAtAnchor,
-  arrangedCardPlacementOptions,
-  distinctCardRotations,
   arrangedDeploymentCanBegin,
   arrangedDeploymentCards,
   arrangedDeploymentProgress,
   beginArrangedBattle,
   beginDeploymentDeal,
+  cardTurn,
   completeDeploymentDeal,
   deploymentInteractionStage,
   deploymentOptions,
@@ -82,11 +79,9 @@ import {
   levelWithRunDeployment,
   openDeploymentBandCells,
   nextArrangedCardToPlace,
-  nextCardRotation,
   normalReservistCell,
-  previousCardRotation,
+  placeableCardRotations,
   steppedArrangedCard,
-  turnableCardRotations,
   turnedCardPlacement,
   placeArrangedDeploymentCard,
   resolveForcedDeploymentChoices,
@@ -709,11 +704,7 @@ function useRunDeploymentPresentation({
   // the control never presents two buttons that produce the same board. The rail and the
   // secondary-click cycle read this one ordered list, so both walk the same turns.
   const availableArrangementRotationList = useMemo<readonly RunFormationRotation[]>(() => (
-    selectedCardId
-      ? distinctCardRotations(prepared, selectedCardId).filter((rotation) => (
-          arrangedCardPlacementOptions(prepared, level, selectedCardId, rotation).length > 0
-        ))
-      : []
+    selectedCardId ? placeableCardRotations(prepared, level, selectedCardId) : []
   ), [level, prepared, selectedCardId]);
   const availableArrangementRotations = useMemo(
     () => new Set<RunFormationRotation>(availableArrangementRotationList),
@@ -735,15 +726,6 @@ function useRunDeploymentPresentation({
       ? turnedCardPlacement(prepared, level, selectedCardId, arrangementRotation, heldAnchor, pointedCell)
       : null
   ), [arrangementRotation, heldAnchor, level, pointedCell, prepared, selectedCardId]);
-  // The turns on offer are the ones this formation can actually take from where it is being
-  // held — its box first, the pointed square as the fallback. Walking the band-wide list would
-  // step onto a turn with no seating either way, and the formation under the player's hand would
-  // vanish. Off the board there is nothing to preserve, so the rail's own list applies.
-  const turnableArrangementRotationList = useMemo<readonly RunFormationRotation[]>(() => {
-    if (!selectedCardId || (!pointedCell && !heldAnchor)) return availableArrangementRotationList;
-    const held = turnableCardRotations(prepared, level, selectedCardId, heldAnchor, pointedCell);
-    return held.length ? held : availableArrangementRotationList;
-  }, [availableArrangementRotationList, heldAnchor, level, pointedCell, prepared, selectedCardId]);
   const arrangementFootprint = useMemo(() => new Set(
     Object.values(pointedArrangementOption?.placements ?? {}).map((cell) => `${cell.x},${cell.y}`),
   ), [pointedArrangementOption]);
@@ -853,27 +835,28 @@ function useRunDeploymentPresentation({
     setArrangementRotation(0);
     setHeldArrangementAnchor(null);
   }, []);
-  // A secondary click, and Q/E, turn the formation carried on the cursor. They deliberately keep
-  // the pointed square: the formation spins about its grip seat, on the square being aimed at,
-  // rather than vanishing until the mouse is jiggled. All three walk the same list — the turns
-  // that keep a seating over that square — so no gesture can turn the formation out of sight.
+  // A secondary click, the rail, and Q/E all run one verb, and cardTurn is the whole of it: which
+  // way the formation faces next and which box it holds while it turns are one decision, so the
+  // three gestures cannot disagree about it. They deliberately keep the pointed square — the
+  // formation spins about its grip seat, on the square being aimed at, rather than vanishing until
+  // the mouse is jiggled.
   const turnArrangement = useCallback((direction: FormationTurnDirection) => {
     if (departureActive || !selectedCardId) return;
-    const next = direction === 'clockwise'
-      ? nextCardRotation(turnableArrangementRotationList, arrangementRotation)
-      : previousCardRotation(turnableArrangementRotationList, arrangementRotation);
-    if (next === arrangementRotation) return;
-    // Hold the box the formation is standing in now, so the turn happens INSIDE it. The band
-    // still decides: where it cannot take the formation there, the anchor is dropped and the
-    // seating re-resolves from the pointed square rather than leaving the player holding nothing.
-    const box = pointedArrangementOption?.anchor ?? null;
-    const stays = box
-      && arrangedCardPlacementAtAnchor(prepared, level, selectedCardId, next, box) !== null;
-    setArrangementRotation(next);
-    setHeldArrangementAnchor(stays ? `${box.x},${box.y}` : null);
+    const turn = cardTurn(
+      prepared,
+      level,
+      selectedCardId,
+      arrangementRotation,
+      direction,
+      heldAnchor,
+      pointedCell,
+    );
+    if (!turn) return;
+    setArrangementRotation(turn.rotation);
+    setHeldArrangementAnchor(turn.anchor ? `${turn.anchor.x},${turn.anchor.y}` : null);
   }, [
-    arrangementRotation, departureActive, level, pointedArrangementOption, prepared,
-    selectedCardId, turnableArrangementRotationList,
+    arrangementRotation, departureActive, heldAnchor, level, pointedCell, prepared,
+    selectedCardId,
   ]);
   const turnArrangementUnderCursor = useCallback(() => {
     turnArrangement('clockwise');
@@ -1202,6 +1185,15 @@ function SectioPanel({
           aria-label="Cards"
         >
           <span className="sr-only" role="status" aria-live="polite">{adlectioAnnouncement}</span>
+          {/*
+            The answering half of the opening grant's line. Both screens deal the same faces
+            with the same number printed on them; only here is that number what you hand over.
+            It goes once the stall is bought out, so the screen never invites a take it has
+            just told you is impossible — the empty notice below speaks for that state.
+          */}
+          {availableOffers.length === 0 ? null : (
+            <p className="run-card-row-call">They require compensation.</p>
+          )}
           <SectioCardRow>
             {sectio.cardOffers.map((offer, index) => {
               const adlected = sectio.adlectedCardOfferIds.includes(offer.offerId);
@@ -1304,8 +1296,24 @@ function AftermathPanel({
 }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   const aftermath = run.aftermath!;
-  const levelName = run.war.battles[aftermath.battleIndex]?.level.name ?? '';
+  const battleLevel = run.war.battles[aftermath.battleIndex]?.level;
+  const levelName = battleLevel?.name ?? '';
   const named = levelName && !isGeneratedRunBattleName(levelName) ? levelName : null;
+  // Par and the speed bonus are DERIVED here from the Battle's own level and the report's
+  // frozen elapsed time -- the same pure functions closeBattle paid the gold with, so this
+  // screen reports the exact number the Run banks without the saved report carrying a field
+  // for it (ADR-0539).
+  const parTurns = battleLevel ? levelParTurns(battleLevel) : null;
+  const speedTenths = battleLevel ? speedBonusTenths(battleLevel, aftermath.elapsedMs) : 0;
+  const speedClockMs = battleLevel ? speedBonusClockMs(battleLevel) : 0;
+  const speedRemainingMs = battleLevel ? speedBonusRemainingMs(battleLevel, aftermath.elapsedMs) : 0;
+  const underPar = parTurns === null ? 0 : parTurns - aftermath.turns;
+  // One line naming every source folded into the purse, so the measures below read as a
+  // breakdown of "Gold won" rather than as extras stacked on top of it.
+  const goldSources = [
+    aftermath.bonusGoldTenths ? LIPSANON_BY_ID['mercenarys-rifle'].name : null,
+    speedTenths ? 'the speed bonus' : null,
+  ].filter((source): source is string => source !== null);
   return (
     <RunSceneViewport
       scene={{
@@ -1326,15 +1334,36 @@ function AftermathPanel({
         <dl className="run-aftermath-ledger">
           <AftermathMeasure
             label="Gold won"
-            detail={aftermath.bonusGoldTenths
-              ? `including ${LIPSANON_BY_ID['mercenarys-rifle'].name}`
-              : null}
+            detail={goldSources.length ? `including ${goldSources.join(' and ')}` : null}
           >
             <RunGoldAmount valueTenths={aftermath.goldTenths} />
           </AftermathMeasure>
-          <AftermathMeasure label="Turns taken">{aftermath.turns}</AftermathMeasure>
+          {/* Par is a benchmark and never a rule -- crossing it costs nothing, so the detail
+              states the standing plainly rather than dressing it as a pass or a failure. */}
+          <AftermathMeasure
+            label="Turns taken"
+            detail={parTurns === null ? null : (
+              underPar > 0
+                ? `${underPar} under par of ${parTurns}`
+                : underPar < 0
+                  ? `${-underPar} over par of ${parTurns}`
+                  : `Level par of ${parTurns}`
+            )}
+          >
+            {aftermath.turns}
+          </AftermathMeasure>
           <AftermathMeasure label="Time">
             {aftermath.elapsedMs === null ? '—' : formatBattleElapsed(aftermath.elapsedMs)}
+          </AftermathMeasure>
+          {/* What the clock paid. The bonus clock is sized from par and is not lethal: an
+              exhausted one reads 0:00 here and took nothing away from the fight. */}
+          <AftermathMeasure
+            label="Speed bonus"
+            detail={aftermath.elapsedMs === null
+              ? 'The battle clock was never started.'
+              : `${formatBattleElapsed(speedRemainingMs)} left of ${formatBattleElapsed(speedClockMs)}`}
+          >
+            <RunGoldAmount valueTenths={speedTenths} />
           </AftermathMeasure>
           {/* Being taken off the board costs a unit the rest of the Battle and nothing more --
               it is back in the army for the next one. "Fallen" read as a permanent loss the
@@ -1488,42 +1517,25 @@ function RunBattlefieldPanel({
   const battleCanReroll = !onReviewRewards && !unitDeparture && canRerollDeployment(retryRun);
 
   const transformCommittedBoard = useCallback<RunBattleTransformSink>((game, events) => {
-      let active = useActiveRun.getState().run;
+      const live = useActiveRun.getState().run;
       // Every change below reports itself here. The Battle log, the gold rising off the board,
       // and the coin all come from this one list, so there is no arrangement of this function
       // that moves the Run's gold without the player being told.
       const notices: RunBattleNotice[] = [];
-      if (!active || active.phase !== 'battle' || active.id !== run.id || !active.battleRuntime) return { game, notices };
+      if (!live || live.phase !== 'battle' || live.id !== run.id || !live.battleRuntime) return { game, notices };
+      // Re-bound as non-null past the guard: the payment helpers below close over it, and a
+      // closure does not carry the narrowing the guard just established.
+      let active: RunDocument = live;
       let transformed: GameState = game;
       let changed = false;
-      // The en passant bounty is the PLAYER's alone: the same capture is available to the
-      // enemy and pays it nothing. The capturer is read off the committed board rather than
-      // the Run roster, so a Reservist or a promoted pawn earns it like any other unit.
-      for (const event of events) {
-        if (event.kind !== 'captured' || !event.enPassant) continue;
-        const capturer = transformed.pieces.find((candidate) => candidate.id === event.by);
-        if (capturer?.side !== 'player') continue;
-        // The bounty is seated on the square the capturing pawn now stands on, not the victim's
-        // vacated one — that is where the player is looking, and where the unit that earned it is.
-        const paid = payRunEnPassantBounty(active, { x: capturer.x, y: capturer.y });
-        if (!paid) continue;
-        active = paid.run;
-        notices.push(paid.notice);
-        changed = true;
-      }
-      // The royal fork bounty is the player's alone as well, and it is one piece's work: the
-      // unit that just moved has to strike the enemy King and a Rook or better itself. A
-      // discovered check is two pieces doing that, and pays nothing. Read against the board
-      // as the move committed it — before any Reservist below lands and stands in a ray.
-      const forkEnv = gameEnv(transformed);
-      for (const event of events) {
-        if (event.kind !== 'moved') continue;
-        const mover = transformed.pieces.find((candidate) => candidate.id === event.pieceId);
-        if (mover?.side !== 'player' || !mover.alive) continue;
-        if (!royalForkVictim(mover, transformed.pieces, transformed.size, forkEnv, RUN_ROYAL_FORK_MIN_VICTIM_VALUE)) continue;
-        // Seated on the forking unit's own square: that is what the player just placed, and
-        // where the two lines they are being paid for meet.
-        const paid = payRunRoyalForkBounty(active, { x: mover.x, y: mover.y });
+      // Manubiae are the PLAYER's alone: the same deeds are available to the enemy and pay it
+      // nothing. What was earned is asked of one shared reader (ADR-0540) rather than worked
+      // out here, so the Battle screen, the unit tests and the live gate cannot disagree about
+      // what a board is worth. It is asked against the board as the move committed it — before
+      // any Reservist below lands and stands in a ray, which would make the Run pay for a line
+      // it drew itself.
+      for (const { award, at } of manubiaeEarnedBy(transformed, events)) {
+        const paid = payRunManubium(active, award, at);
         if (!paid) continue;
         active = paid.run;
         notices.push(paid.notice);

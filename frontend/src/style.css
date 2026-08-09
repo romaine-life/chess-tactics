@@ -6245,8 +6245,11 @@ body.loading-bootstrap .app-startup-status {
 /* Name above, controls below. Three controls cannot share half a narrow panel and still read —
    the colour select loses its label first, leaving a bare swatch nobody can name. */
 .le-faction-assignment { display: grid; gap: 5px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
-/* Control, colour, facing. The facing stays a fixed square; the two selects share the rest. */
-.le-faction-fields { display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) var(--le-inner-square); min-width: 0; }
+/* Colour, facing. The facing stays a fixed square; the colour select takes the rest. The role is
+   named in the row above, so the declaration needs no control dropdown beside it. */
+.le-faction-fields { display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr) var(--le-inner-square); min-width: 0; }
+/* The repair block for pieces wearing a colour no faction declares. */
+.le-faction-undeclared { display: grid; gap: 5px; }
 .le-faction-fields .le-select-wrap { min-width: 0; }
 .le-faction-color-select { min-width: 0; }
 .le-faction-color-select .palette-select-trigger { min-width: 0; width: 100%; }
@@ -6371,9 +6374,31 @@ body.loading-bootstrap .app-startup-status {
   background: rgba(143, 189, 235, .26);
   color: #ffffff;
 }
-.le-faction-palette-select {
+/* The unit brush's faction picker. It names the FACTION and shows the colour that follows from the
+   declaration, so the two read as one thing rather than as a colour choice. */
+.le-faction-role-select {
   flex: 0 1 170px;
   min-width: 140px;
+}
+.le-faction-role-choice {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  min-width: 0;
+  width: 100%;
+}
+.le-faction-role-choice .le-faction-dot { flex: 0 0 auto; }
+.le-faction-role-choice-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The colour rides at the far end, dimmer: it is a consequence of the faction, not the choice. */
+.le-faction-role-choice-colour {
+  color: rgba(226, 238, 248, .62);
+  font-size: var(--ds-text-xs);
+  margin-left: auto;
+  white-space: nowrap;
 }
 .le-direction-trigger {
   appearance: none;
@@ -15740,12 +15765,13 @@ button.tileset-relationship-cell {
   padding: 10px;
 }
 
-/* Height-led, because 5:7 is tall: bounding the block size is what keeps the row from growing to
-   the width of the settings column. The card keeps its own aspect ratio from the image. */
+/* Width-led: the sample fills the framed box it sits in and takes its height from the card's own
+   5:7 proportion. (This asked for a 210px block-size for a while and never got one — the shared
+   .run-card-back rule below it declared `block-size: auto` and won on source order, so the raster
+   sized itself to the box. Stating what it actually does is what keeps it stable now that the
+   card back is a box rather than a bare image.) */
 .run-card-back-preview-card {
-  block-size: 210px;
-  inline-size: auto;
-  max-inline-size: 100%;
+  inline-size: 100%;
 }
 
 .run-card-back-select {
@@ -19628,10 +19654,23 @@ button.tileset-relationship-cell {
   min-block-size: 0;
 }
 
+/* The call heads the section on its own auto track so the elastic row below it stays the
+   one thing that takes the leftover lane. Without the leading `auto` the call claims the
+   1fr and the card row drops into an implicit track it cannot measure. Both are placed
+   explicitly, because the call is absent once the stall is bought out and auto-placement
+   would slide the row up into the auto track and collapse it exactly then. */
 .run-sectio-workspace-content:not(:has(.run-sectio-wrap-host)) > .run-sectio-cards-section {
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   min-block-size: 0;
   padding: var(--ds-inset);
+}
+
+.run-sectio-workspace-content:not(:has(.run-sectio-wrap-host)) > .run-sectio-cards-section > .run-card-row-call {
+  grid-row: 1;
+}
+
+.run-sectio-workspace-content:not(:has(.run-sectio-wrap-host)) > .run-sectio-cards-section > .run-card-grid {
+  grid-row: 2;
 }
 
 .run-battle-preview-content {
@@ -19951,12 +19990,13 @@ button.tileset-relationship-cell {
 }
 
 /* A covered pile conceals its back completely. The back is generated on a flat
-   near-black backdrop it still paints, so its opaque canvas runs to all four
-   corners while every face frame is die-cut to the shared painted card box
-   (paintBounds 26,42 1009x1402 of 1060x1484). Left visible, that backdrop reads
-   as a black edge around the offer. Concealing rather than unmounting keeps the
-   seat and the decoded pixels, so Adlectio reveals the back without a reflow or
-   a flash. */
+   near-black backdrop it still paints, so its raster is opaque to all four
+   corners; RunCardBack seats it in the same die-cut card box the face frames
+   are drawn in (paintBounds 26,42 1009x1402 of 1060x1484), which is what keeps
+   a revealed pile the same size as the offers still face up, but the two edges
+   then coincide exactly and any antialiasing bleeds. Concealing rather than
+   unmounting keeps the seat and the decoded pixels, so Adlectio reveals the
+   back without a reflow or a flash. */
 .run-card-pile.is-covered > .run-card-pile-back {
   visibility: hidden;
 }
@@ -20934,14 +20974,32 @@ button.tileset-relationship-cell {
 
 /* The Run's opening grant is a card row rather than the relic mat, so it takes the whole
    content lane and centers in it. Without this the content's justify-items:start leaves the
-   grid at one card's width and the row stacks into a clipped column. */
-.run-vacantia-content > .run-card-grid {
+   grid at one card's width and the row stacks into a clipped column. The call heads the lane
+   on its own track, so the row keeps measuring a box it wholly owns and sizes its faces to
+   whatever height the sentence leaves. */
+.run-vacantia-content > .run-vacantia-grant {
   align-content: center;
   block-size: 100%;
+  display: grid;
+  gap: var(--ds-space-3);
+  grid-template-rows: auto minmax(0, 1fr);
   inline-size: 100%;
   justify-self: stretch;
   min-block-size: 0;
   padding: var(--ds-inset);
+}
+
+/* What a row of cards is asking of the player, said once above it. The opening grant and
+   the Sectio deal the same faces at the same size and differ only in what they cost, so
+   the sentence that tells them apart is the same object on both and prints at the scale
+   of something meant to be read rather than a caption filed under the scene. */
+.run-card-row-call {
+  color: var(--ink-strong);
+  font-size: var(--ds-text-xl);
+  letter-spacing: .02em;
+  margin: 0;
+  text-align: center;
+  text-shadow: 0 3px 0 #02070b;
 }
 
 /* A targeted lipsanon replaces the mat with the same ledger/profile instrument used by
@@ -22465,9 +22523,7 @@ button.tileset-relationship-cell {
 
 .run-deployment-center-card > .run-card-back {
   block-size: 100%;
-  display: block;
   inline-size: 100%;
-  object-fit: contain;
 }
 
 .run-deployment-center-count {
@@ -22611,14 +22667,12 @@ button.tileset-relationship-cell {
   block-size: 100%;
   display: block;
   inline-size: 100%;
-  object-fit: contain;
 }
 
 .run-deployment-deal-flight > :is(.run-card-back, .run-card-action) {
   block-size: 100%;
   display: block;
   inline-size: 100%;
-  object-fit: contain;
 }
 
 .run-deployment-stack-card {
@@ -22653,11 +22707,6 @@ button.tileset-relationship-cell {
   inline-size: 100%;
 }
 
-.run-deployment-discard-flight > .run-card-back {
-  display: block;
-  object-fit: contain;
-}
-
 .run-deployment-stack-side {
   backface-visibility: hidden;
   display: block;
@@ -22682,11 +22731,6 @@ button.tileset-relationship-cell {
 .run-deployment-stack-side > :is(.run-card-back, .run-card-action) {
   block-size: 100%;
   inline-size: 100%;
-}
-
-.run-deployment-stack-side .run-card-back {
-  display: block;
-  object-fit: contain;
 }
 
 .run-deployment-card-count {
@@ -23403,6 +23447,16 @@ button.tileset-relationship-cell {
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
+/* Manubiae is the one section with BOTH an opening line and a closing note around its scroll:
+   title, intro, the scrolling ladder, then how they add up. Every panel states the rows its own
+   children need, and a panel whose children outnumber its rows pushes the extras into implicit
+   ones — which the `overflow: hidden` above then clips, taking the second line of the intro
+   with it. Declared for both transports because the framed host owns the grid instead. */
+.enchiridion-manubiae-panel.enchiridion-panel-unframed,
+.enchiridion-manubiae-panel > .le-outer-panel-content {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
 .enchiridion-panel :is(h3, p),
 .enchiridion-empty :is(h3, p) {
   margin: 0;
@@ -23449,6 +23503,16 @@ button.tileset-relationship-cell {
   align-self: center;
   display: grid;
   gap: var(--ds-space-2);
+}
+
+/* A Manubium's price sits between its name and the sentence that earns it, on the shared
+   gold mark. The rate line (the one entry priced per point rather than at a number) wears
+   the same mark beside its own words, so the column reads as one list of prices. */
+.enchiridion-manubium-price {
+  align-items: center;
+  column-gap: var(--ds-space-2);
+  display: flex;
+  flex-wrap: wrap;
 }
 
 /* The card's diagram IS the Battle board: the shared read-only renderer contained in this
@@ -26046,18 +26110,39 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   }
 }
 
+/* The face-down card's BOX is the whole card, the same 5:7 box a face-up card is given, so every
+   host keeps sizing it exactly as before. It states no block-size of its own: the box carries no
+   intrinsic size the way the bare raster did, so a height-led host (the Settings preview, the
+   Studio specimen) must be free to lead with block-size and take its width off the ratio. */
 .run-card-back {
   aspect-ratio: 5 / 7;
-  block-size: auto;
   display: block;
   max-inline-size: 100%;
-  object-fit: cover;
+  position: relative;
   user-select: none;
 }
 
-/* The acceptance proof asserts the review covered the decoded native raster at
-   exact scale, so the specimens print at their stored 1060x1484 pixels and this
-   pane scrolls. Scaling them to fit would make that claim false. */
+/* The printed back, seated in the die-cut opening every frame occupies (--run-card-print-*, written
+   from the frames' own measured paint bounds). Frames are drawn 1009x1402 of a 1060x1484 canvas and
+   the back rasters are painted corner to corner, so a back laid over the whole box printed 5.05%
+   wider and 5.85% taller than the offer beside it — a bought Sectio pile came back visibly bigger
+   than the cards still face up. `cover` rather than `fill`: the opening is 1009:1402 and the raster
+   1060:1484, so covering it trims a third of a percent off the top and bottom instead of stretching
+   the artwork. */
+.run-card-back-print {
+  block-size: var(--run-card-print-block-size, 94.4744%);
+  inline-size: var(--run-card-print-inline-size, 95.1887%);
+  inset-block-start: var(--run-card-print-block-start, 2.8302%);
+  inset-inline-start: var(--run-card-print-inline-start, 2.4528%);
+  object-fit: cover;
+  position: absolute;
+}
+
+/* The acceptance proof asserts the review covered the whole decoded 1060x1484
+   raster, so the two specimens are laid side by side at whatever height the
+   window allows and this pane scrolls rather than cropping either of them.
+   (The specimen rule below is height-led and does not print at stored pixels;
+   what the proof needs is every pixel visible, not one screen pixel each.) */
 .run-card-back-study {
   align-items: start;
   display: flex;
@@ -26154,17 +26239,31 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   min-block-size: 0;
 }
 
-/* Beats the base card-image img rule, which sizes every catalog image to an iso
-   tile. Height-led rather than a fixed width: at 100% both cards are whole and
-   on screen at any window this Studio is usable in, and zoom scales from there.
+/* Height-led rather than a fixed width: at 100% both cards are whole and on
+   screen at any window this Studio is usable in, and zoom scales from there.
    A fixed size looked right on one window and ran off the bottom of every
    shorter one. The 5:7 aspect on .run-card-back gives the width. */
-.tileset-studio-card-image.run-card-back-specimen img.run-card-back {
+.tileset-studio-card-image.run-card-back-specimen > .run-card-back {
   block-size: calc(clamp(220px, 100vh - 440px, 588px) * var(--run-card-gallery-zoom, 1));
-  image-rendering: auto;
   inline-size: auto;
   max-inline-size: none;
-  object-fit: cover;
+}
+
+/* The specimen is the RASTER under review, not a card in play. The backend accepts a card back
+   only against a proof claiming the owner covered the whole decoded 1060x1484 canvas
+   (liveMediaPolicy.runCardBackOwnerProofIssue), and the die-cut seating every game surface uses
+   trims a third of a percent off the top and bottom to sit inside the frames' opening — pixels
+   the reviewer would then never see. So this one surface prints the canvas whole. The box is
+   exactly 5:7 and so is the canvas, so `contain` neither crops nor letterboxes; it is stated
+   rather than `cover` because nothing here may be lost. Also beats the base card-image img rule,
+   which sizes every catalog image to an iso tile and pixelates it. */
+.tileset-studio-card-image.run-card-back-specimen .run-card-back-print {
+  block-size: 100%;
+  image-rendering: auto;
+  inline-size: 100%;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  object-fit: contain;
 }
 
 .run-card-back-study figcaption {

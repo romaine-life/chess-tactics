@@ -9,8 +9,11 @@
 // reaches for without looking, which is exactly why it is the key that leaves the screen.
 import { useEffect } from 'react';
 import { deleteKeyIsClaimedByPage } from './shared/deleteKeyAction';
+import type { RunFormationTurnDirection } from '../run/deployment';
 
-export type FormationTurnDirection = 'clockwise' | 'counter-clockwise';
+/** The keyboard names the Run's own turn directions rather than a parallel pair of its own:
+ * Q and E are a way INTO that verb, not a second definition of it. */
+export type FormationTurnDirection = RunFormationTurnDirection;
 
 export interface FormationKeyChord {
   key: string;
