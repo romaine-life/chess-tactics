@@ -10,6 +10,7 @@ import {
 import { RunCard } from './RunCard';
 import { RunCardRow } from './RunCardRow';
 import { RunGoldAmount } from './RunResources';
+import { Tooltip } from './shared/InfoTip';
 import { liveMediaForSlot } from '@chess-tactics/board-render';
 import { RunSceneViewport } from './RunWorkspace';
 import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
@@ -101,14 +102,13 @@ function CommendatioSeat({ kingId, children }: { kingId: string; children: React
   return (
     <div className="run-card-grant-seat">
       {bonus > 0 ? (
-        <span
+        <Tooltip
           className="run-card-grant-bonus"
-          data-testid={`run-commendatio-bonus-${kingId}`}
-          title={`You gain ${formatGold(bonus)} gold on pickup`}
-          aria-label={`You gain ${formatGold(bonus)} gold on pickup`}
+          label={`You gain ${formatGold(bonus)} gold on pickup`}
+          trigger={<RunGoldAmount valueTenths={bonus} iconSrc={gainMark ?? undefined} />}
         >
-          <RunGoldAmount valueTenths={bonus} iconSrc={gainMark ?? undefined} />
-        </span>
+          You gain {formatGold(bonus)} gold on pickup.
+        </Tooltip>
       ) : null}
       {children}
     </div>
