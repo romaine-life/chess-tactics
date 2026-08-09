@@ -57,7 +57,7 @@ describe('Run chrome hierarchy', () => {
     expect(skirmish).toContain('return runForm.add(runActivity({');
     expect(skirmish).not.toContain('titleBarContent: ReactNode;');
     expect(runScreen).toContain('const form = createRunForm({');
-    expect(runScreen).toContain('<RunTitleBarStatus run={shellRun} path={routePath} search={routeSearch} view={view} />');
+    expect(runScreen).toContain('<RunTitleBarStatus run={shellRun} path={routePath} search={routeSearch} view={view} battlefieldMounted={battlefieldActive} />');
     expect(skirmish).toMatch(/export function Skirmish\b[\s\S]*?<SkirmishStoreProvider>/);
     expect(skirmishShell).toContain('<SceneSurfaceReadiness');
     expect(skirmishShell).toContain('surface="gameplay-hud"');
@@ -433,12 +433,16 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('<TitleRoute segments={runTitleBarRouteSegments(run, path, search, view)} />');
     expect(runScreen).toContain('runWorkspaceTitleSegment(`/run${search}`, view)');
     expect(runScreen).toContain('strategikonRouteCrumbs(path).map');
-    expect(runScreen).toContain('<RunTitleBarStatus run={shellRun} path={routePath} search={routeSearch} view={view} />');
     // A Run Battle is timed like every other Battle, and by the SAME chip — the Run bar
     // showed no clock at all, so a Battle could be played with nothing saying how long it
-    // had been running. It is seated only while the battlefield is mounted.
+    // had been running. The seat is the mounted battlefield, never the phase alone: the
+    // chip reads the battlefield's session store, so a Run bar rendered beside any other
+    // workspace would report the module default store's clock instead.
     expect(runScreen).toContain("import { BattleClockChip } from './BattleClockChip';");
-    expect(runScreen).toContain("{run.phase === 'battle' ? <BattleClockChip fillSurface={CHROME_LEAF_FILL_SURFACE} /> : null}");
+    expect(runScreen).toContain('battlefieldMounted={battlefieldActive}');
+    expect(runScreen).toMatch(
+      /\{battlefieldMounted && run\.phase === 'battle'\s*\?\s*<BattleClockChip fillSurface=\{CHROME_LEAF_FILL_SURFACE\} \/>\s*:\s*null\}/,
+    );
     // Address-only Play breadcrumbs are App-owned, so they remain present even
     // while the replaceable battlefield scene is not yet active.
     expect(skirmish).not.toContain('<TitleBarSlot region="route">');

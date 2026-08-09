@@ -35,19 +35,26 @@ export function BattleClockChip({ fillSurface }: { fillSurface?: string } = {}):
       className={`skirmish-status-chip skirmish-clock${clock && clock.remainingMs <= 20_000 ? ' danger is-low' : ''}`}
       data-chrome-fill-surface={fillSurface}
     >
-      {clock ? (
-        <>
-          <strong>{formatClockMs(clock.remainingMs)}</strong>
-          <small>{clock.incrementMs > 0 ? `+${clock.incrementMs / 1000}s / move` : 'Battle Clock'}</small>
-        </>
-      ) : (
-        <>
-          <strong data-testid="untimed-battle-clock" aria-label={`Elapsed time ${formatElapsedClockMs(elapsedReadoutMs)}`}>
-            {formatElapsedClockMs(elapsedReadoutMs)}
-          </strong>
-          <small>No limit</small>
-        </>
-      )}
+      {/* The installed kit hourglass, the same forged glyph family the objective chip's
+          flag comes from — so the reading is marked as TIME at a glance instead of being
+          a bare pair of numbers between two labelled chips. One glyph for both branches:
+          a bank draining and time accumulating are the same fact to the eye. */}
+      <span className="skirmish-icon skirmish-icon-hourglass" aria-hidden="true" />
+      <span className="skirmish-clock-readout">
+        {clock ? (
+          <>
+            <strong>{formatClockMs(clock.remainingMs)}</strong>
+            <small>{clock.incrementMs > 0 ? `+${clock.incrementMs / 1000}s / move` : 'Battle Clock'}</small>
+          </>
+        ) : (
+          <>
+            <strong data-testid="untimed-battle-clock" aria-label={`Elapsed time ${formatElapsedClockMs(elapsedReadoutMs)}`}>
+              {formatElapsedClockMs(elapsedReadoutMs)}
+            </strong>
+            <small>No limit</small>
+          </>
+        )}
+      </span>
     </TitleBarStatus>
   );
 }

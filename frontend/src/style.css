@@ -4613,15 +4613,30 @@ h1 {
 }
 
 /* Battle-clock chip: sits between the turn plate and the objective on timed games,
-   same two-line centered stack as the turn plate. The time line needs a stable
-   width (digits tick every second) so the flanking chips don't breathe with it;
-   tabular figures are a best-effort on the pixel font stack. */
+   same two-line centered stack as the turn plate, behind the installed kit hourglass —
+   glyph then copy, exactly as the objective chip reads. The chip keeps the base
+   status-chip flex row for that pairing; the READOUT owns the stable width (digits
+   tick every second, and a timed clock gains tenths under ten seconds) so the
+   flanking chips don't breathe with it. Tabular figures are a best-effort on the
+   pixel font stack. */
+/* Centred as a pair, exactly like the objective chip's glyph+copy — otherwise the
+   glyph sits jammed against the chip's left rail while the readout drifts right. */
 .skirmish-clock {
+  justify-content: center;
+  min-inline-size: 136px;
+}
+
+.skirmish-clock .skirmish-icon {
+  height: 24px;
+  width: 24px;
+}
+
+.skirmish-clock-readout {
   align-content: center;
   display: grid;
   gap: 0;
   justify-items: center;
-  min-inline-size: 112px;
+  min-inline-size: 78px;
   text-align: center;
 }
 
