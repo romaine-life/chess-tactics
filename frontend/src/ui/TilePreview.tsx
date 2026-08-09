@@ -88,7 +88,12 @@ import { TitleBarControlContribution, type TitleBarControlSpec } from './shell/T
 import { RunCardPrototypeCatalog, RunCardPrototypeViewer } from './RunCardPrototype';
 import { RunCardGoldTierDividerCatalog, RunCardGoldTierDividerViewer } from './RunCardGoldTierDividerStudio';
 import { RunCardFitCatalog, RunCardFitViewer } from './RunCardFitStudio';
-import { RunCardPoolCatalog } from './RunCardPoolStudio';
+import {
+  RUN_CARD_POOL_DEFAULT_TEXT_SIZE,
+  RUN_CARD_POOL_MAX_TEXT_SIZE,
+  RUN_CARD_POOL_MIN_TEXT_SIZE,
+  RunCardPoolCatalog,
+} from './RunCardPoolStudio';
 import { RunCardOutlineCatalog, RunCardOutlineViewer } from './RunCardOutlineStudio';
 import { RunCardSizeCatalog, RunCardSizeViewer } from './RunCardSizeStudio';
 import { RunCardPromptCatalog, RunCardPromptViewer } from './RunCardPromptStudio';
@@ -643,6 +648,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [gymSearch, setGymSearch] = useState('');
   const [selectedGymLevelId, setSelectedGymLevelId] = useState<string | undefined>(initialRoute.selectedGymLevelId);
   const [solverSearch, setSolverSearch] = useState('');
+  // Card Pool's body size lives here rather than inside the page, because the control for it
+  // belongs in the Controls rail and the rail is rendered as a sibling of the page it governs.
+  const [cardPoolTextSize, setCardPoolTextSize] = useState(RUN_CARD_POOL_DEFAULT_TEXT_SIZE);
   const [selectedSolverLevelId, setSelectedSolverLevelId] = useState<string | undefined>(initialRoute.selectedSolverLevelId);
   const [solverTab, setSolverTab] = useState<'step' | 'run' | 'help' | 'glossary'>(initialRoute.solverTab ?? 'step');
   // The Gym's open surface from the URL (`gymtab=`), read once at mount so a deep link
@@ -2074,8 +2082,17 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
     },
     {
       id: 'cardpool', label: 'Card Pool', hint: 'Re-derive the offer catalog live: piece material, footprint rules, the density cost curve, and where the rarity bands land.',
-      main: <RunCardPoolCatalog />,
-      controls: <p className="rcp-controls-note">Every control for this page is in the left column of the page itself, because the knobs and the counts have to be read together.</p>,
+      main: <RunCardPoolCatalog textSize={cardPoolTextSize} />,
+      controls: (
+        <SliderRow
+          label="Text size"
+          value={cardPoolTextSize}
+          set={setCardPoolTextSize}
+          min={RUN_CARD_POOL_MIN_TEXT_SIZE}
+          max={RUN_CARD_POOL_MAX_TEXT_SIZE}
+          dflt={RUN_CARD_POOL_DEFAULT_TEXT_SIZE}
+        />
+      ),
     },
     {
       id: 'cardfit', label: 'Card Fit', hint: 'Tune how far a small formation grows into the room its card leaves, across every footprint the deck deals.',

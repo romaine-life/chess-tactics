@@ -34,6 +34,11 @@ import {
 const BANDS: readonly PoolBand[] = ['common', 'uncommon', 'rare'];
 const MAX_ROWS_PER_GROUP = 60;
 
+/** Body size the surface is authored at. Owned by Controls, not by the page it governs. */
+export const RUN_CARD_POOL_DEFAULT_TEXT_SIZE = 15;
+export const RUN_CARD_POOL_MIN_TEXT_SIZE = 11;
+export const RUN_CARD_POOL_MAX_TEXT_SIZE = 26;
+
 function ShapeGrid({ cells, pieces }: { cells: readonly PoolCell[]; pieces: readonly PoolPiece[] }): ReactElement {
   const w = Math.max(...cells.map((c) => c.x)) + 1;
   const h = Math.max(...cells.map((c) => c.y)) + 1;
@@ -99,7 +104,7 @@ function CardTable({ cards }: { cards: readonly PoolCard[] }): ReactElement {
   );
 }
 
-export function RunCardPoolCatalog(): ReactElement {
+export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactElement {
   const [modelId, setModelId] = useState<string>('density-cost');
   const [knobs, setKnobs] = useState<PoolKnobs>(DEFAULT_POOL_KNOBS);
   const [bandFilter, setBandFilter] = useState<PoolBand | 'all'>('all');
@@ -107,9 +112,6 @@ export function RunCardPoolCatalog(): ReactElement {
   const [pieceFilter, setPieceFilter] = useState<PoolPiece | 'all'>('all');
   const [grouping, setGrouping] = useState<PoolGrouping>('band');
   const [draft, setDraft] = useState<Map<string, PoolPiece>>(new Map([['0,0', 'P']]));
-  // One number drives every size on the surface, so the whole page scales together rather than
-  // drifting into a mix of resized and un-resized parts.
-  const [textSize, setTextSize] = useState<number>(15);
 
   const set = useCallback(<K extends keyof PoolKnobs>(field: K, value: PoolKnobs[K]) => {
     setKnobs((prev) => ({ ...prev, [field]: value }));
@@ -216,9 +218,6 @@ export function RunCardPoolCatalog(): ReactElement {
         /* No inner scroller. The page scrolls now, and a scroll box inside a scrolling page means
            two bars competing for the same wheel gesture. Row count per group is what bounds this. */
         .rcp-group-body { overflow: visible; }
-        .rcp-textsize { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; font-size: var(--rcp-fs); }
-        .rcp-textsize input[type=range] { flex: 1; max-width: calc(var(--rcp-fs) * 18); }
-        .rcp-textsize output { font-variant-numeric: tabular-nums; opacity: 0.75; min-width: calc(var(--rcp-fs) * 3.4); }
       `}</style>
 
       <div>
@@ -284,20 +283,6 @@ export function RunCardPoolCatalog(): ReactElement {
       </div>
 
       <div>
-        <label className="rcp-textsize">
-          <span>Text size</span>
-          <input
-            type="range"
-            min={11}
-            max={26}
-            step={1}
-            value={textSize}
-            onChange={(event) => setTextSize(Number(event.target.value))}
-          />
-          <output>{textSize}px</output>
-          <button type="button" className="tileset-view-action" onClick={() => setTextSize(15)}>Reset</button>
-        </label>
-
         <div className="rcp-summary">
           <div className="rcp-stat"><b>{summary.total}</b><span>CARDS IN POOL</span></div>
           {BANDS.map((band) => (
