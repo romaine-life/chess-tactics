@@ -331,6 +331,10 @@ export function sceneBoardForSkirmish(
       ...(exactBoard?.props ?? {}),
       ...Object.fromEntries((game.props ?? []).map((prop) => [`${prop.x},${prop.y}`, { propId: prop.propId }])),
     },
+    // Which of those anchors stand ON a plate rather than being painted into it (ADR-0534). The
+    // gameplay projection and the authored board agree on the anchor key, so one marker set covers
+    // the merge; without it every obstacle placed on artwork is suppressed as baked scenery.
+    liveProps: exactBoard?.liveProps,
     floatingArtwork: exactBoard?.floatingArtwork ?? [],
     cover: coverMapRecordForGame(game, exactBoard),
     coverTypes: exactBoard?.coverTypes ?? coverTypes,

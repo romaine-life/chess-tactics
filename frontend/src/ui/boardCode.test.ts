@@ -663,3 +663,33 @@ describe('boardCode round-trip', () => {
     expect(decodeBoard(encodeBoard(emptyBoard()))?.predrawnGridDetached).toBe(false);
   });
 });
+
+describe('live obstacles standing on a plate (ADR-0534)', () => {
+  const withRocks = (over: Partial<EditorBoard> = {}): EditorBoard => emptyBoard({
+    props: { '1,1': { propId: 'oak' }, '3,3': { propId: 'rock' } },
+    ...over,
+  });
+
+  it('round-trips the anchors marked as standing on the artwork', () => {
+    const decoded = decodeBoard(encodeBoard(withRocks({ liveProps: ['3,3'] })));
+    expect(decoded?.props).toEqual({ '1,1': { propId: 'oak' }, '3,3': { propId: 'rock' } });
+    expect(decoded?.liveProps).toEqual(['3,3']);
+  });
+
+  it('encodes a board with no live obstacle byte-identically to a code that predates them', () => {
+    // The field is additive: every level authored before it keeps its exact bytes, which is what
+    // makes this a no-migration change.
+    expect(encodeBoard(withRocks())).toBe(encodeBoard(withRocks({ liveProps: [] })));
+    expect(encodeBoard(emptyBoard())).toBe(encodeBoard(emptyBoard({ liveProps: [] })));
+    expect(decodeWire(encodeBoard(withRocks()))).not.toHaveProperty('lp');
+  });
+
+  it('normalizes the marker set so the same board always encodes the same bytes', () => {
+    expect(encodeBoard(withRocks({ liveProps: ['3,3', '3,3'] })))
+      .toBe(encodeBoard(withRocks({ liveProps: ['3,3'] })));
+    // A marker for a prop that is no longer placed is dropped rather than carried.
+    expect(decodeBoard(encodeBoard(withRocks({ liveProps: ['3,3', '4,4'] })))?.liveProps)
+      .toEqual(['3,3']);
+    expect(decodeBoard(encodeBoard(emptyBoard({ liveProps: ['3,3'] })))?.liveProps).toBeUndefined();
+  });
+});

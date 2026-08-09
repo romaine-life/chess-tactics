@@ -1,5 +1,6 @@
+import { propDef, resolvePlacedPropId } from '../core/props';
 import type { EditorBoard } from './boardCode';
-import type { LevelEditorLayerKey } from './levelEditorRoute';
+import type { LevelEditorLayerKey, PlacedArtBrushKind } from './levelEditorRoute';
 
 // A continuous pre-drawn plate already owns these pixels. Mutating their logical
 // sources without regenerating the plate would make the artwork lie about play.
@@ -10,12 +11,36 @@ const PREDRAWN_LOCKED_LAYERS = new Set<LevelEditorLayerKey>([
   'fence',
   'wall',
   'wallart',
-  'placed-art',
   'subterrain',
 ]);
 
 export function isPredrawnLockedLayer(layer: LevelEditorLayerKey): boolean {
   return PREDRAWN_LOCKED_LAYERS.has(layer);
+}
+
+/**
+ * Placed Art stays open on a plate board for exactly one thing: standing an obstacle on the picture
+ * (ADR-0534). Scene Art, Forest, Town and Doodads are scenery, and scenery is what the plate already
+ * painted — offering those brushes would offer edits the renderer then refuses to show.
+ */
+export function isPredrawnLockedPlacedArtKind(kind: PlacedArtBrushKind): boolean {
+  return kind !== 'prop';
+}
+
+/** The only prop kind that may stand on a plate. Obstacles shape play; trees and houses dress it. */
+export function isPredrawnLiveProp(propId: string, x: number, y: number): boolean {
+  return propDef(resolvePlacedPropId(propId, x, y))?.kind === 'rock';
+}
+
+/**
+ * The props a plate is answerable for. An anchor marked live stands ON the artwork and is depicted
+ * by none of its pixels, so it is neither guarded as baked geometry nor counted against the raster.
+ */
+function predrawnBakedProps(board: EditorBoard): Record<string, { propId: string }> {
+  const liveProps = new Set(board.liveProps ?? []);
+  return Object.fromEntries(
+    Object.entries(board.props ?? {}).filter(([key]) => !liveProps.has(key)),
+  );
 }
 
 export function predrawnBakedArtSignature(board: EditorBoard): string {
@@ -32,7 +57,7 @@ export function predrawnBakedArtSignature(board: EditorBoard): string {
     cells: board.cells,
     macroTiles: board.macroTiles ?? [],
     doodads: board.doodads,
-    props: board.props,
+    props: predrawnBakedProps(board),
     floatingArtwork: board.floatingArtwork ?? [],
     features: board.features,
     fences: board.fences ?? {},

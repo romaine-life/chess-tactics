@@ -353,3 +353,58 @@ test('environment geometry fingerprint does not depend on the host locale collat
     String.prototype.localeCompare = originalLocaleCompare;
   }
 });
+
+// ADR-0534: an obstacle placed ON a plate is not part of what the artwork depicts.
+test('a live obstacle leaves the occlusion seed, and the plate keeps the props it painted', () => {
+  const source = board({
+    props: { '0,5': { propId: 'fieldstone' }, '2,7': { propId: 'rock' } },
+    liveProps: ['2,7'],
+  });
+  const seed = predrawnOcclusionSeedBoard(source);
+
+  // A live rock has no baked pixels to mask with: seeding one would have it erase whatever passed
+  // behind it as though the raster depicted it, and erase its own live sprite as well.
+  assert.deepEqual(seed.props, { '0,5': { propId: 'fieldstone' } });
+  assert.equal(seed.liveProps, undefined);
+});
+
+test('placing or erasing a live obstacle does not stale the artwork it stands on', () => {
+  const baked = board({ props: { '0,5': { propId: 'fieldstone' } } });
+  const withLiveRock = board({
+    props: { '0,5': { propId: 'fieldstone' }, '2,7': { propId: 'rock' } },
+    liveProps: ['2,7'],
+  });
+  // The whole point: the digest is the staleness test, and a rock standing on the picture changes
+  // nothing the picture claims to depict.
+  assert.equal(
+    predrawnEnvironmentGeometryFingerprintInput(withLiveRock),
+    predrawnEnvironmentGeometryFingerprintInput(baked),
+  );
+  // A prop the plate DID bake still stales it, which is what the digest is for.
+  assert.notEqual(
+    predrawnEnvironmentGeometryFingerprintInput(board({
+      props: { '0,5': { propId: 'fieldstone' }, '2,7': { propId: 'rock' } },
+    })),
+    predrawnEnvironmentGeometryFingerprintInput(baked),
+  );
+});
+
+test('the live-obstacle carve-out needs no schema version: existing digests are byte-identical', () => {
+  // Nothing could carry a live marker before the field existed, so every hash already persisted
+  // against v1 or v2 is reproduced exactly by the filtered input.
+  const source = board();
+  assert.equal(
+    predrawnEnvironmentGeometryFingerprintInputV2(source),
+    predrawnEnvironmentGeometryFingerprintInputV2({ ...source, liveProps: [] }),
+  );
+  assert.equal(
+    predrawnEnvironmentGeometryFingerprintInputV1(source),
+    predrawnEnvironmentGeometryFingerprintInputV1({ ...source, liveProps: undefined }),
+  );
+  assert.ok(predrawnEnvironmentGeometryFingerprintInputV2(source).includes(
+    PREDRAWN_ENVIRONMENT_GEOMETRY_SCHEMA_V2,
+  ));
+  assert.ok(predrawnEnvironmentGeometryFingerprintInputV1(source).includes(
+    PREDRAWN_ENVIRONMENT_GEOMETRY_SCHEMA_V1,
+  ));
+});

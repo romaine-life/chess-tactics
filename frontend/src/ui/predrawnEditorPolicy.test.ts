@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { applyTestPropSeats } from '../test/livePropSeats';
 import type { EditorBoard } from './boardCode';
 import {
+  isPredrawnLiveProp,
   isPredrawnLockedLayer,
+  isPredrawnLockedPlacedArtKind,
   predrawnEditorHrefAfterPicker,
   preservesPredrawnBakedArt,
   sharesPredrawnSelection,
@@ -34,13 +37,32 @@ const board = (): EditorBoard => ({
 });
 
 describe('pre-drawn editor policy', () => {
-  it('locks Placed Art with the baked-art layers while retaining Level Artwork and live cover authoring', () => {
-    expect(['tile', 'generate', 'paths', 'fence', 'wall', 'wallart', 'placed-art', 'subterrain'].every((layer) => (
+  // The obstacle gate reads a prop's kind, and kinds are live DB-owned content.
+  beforeAll(() => { applyTestPropSeats(); });
+
+  it('locks the baked-art layers while retaining Level Artwork and live cover authoring', () => {
+    expect(['tile', 'generate', 'paths', 'fence', 'wall', 'wallart', 'subterrain'].every((layer) => (
       isPredrawnLockedLayer(layer as Parameters<typeof isPredrawnLockedLayer>[0])
     ))).toBe(true);
     expect(['board', 'camera', 'level-artwork', 'unit', 'cover', 'zone', 'rules', 'status', 'history'].every((layer) => (
       !isPredrawnLockedLayer(layer as Parameters<typeof isPredrawnLockedLayer>[0])
     ))).toBe(true);
+  });
+
+  it('keeps Placed Art open for obstacles alone, because the plate painted its own scenery', () => {
+    // ADR-0534. Scene Art, Forest, Town and Doodads would offer edits the renderer then refuses to
+    // show, so the destination stays reachable and narrows to the one thing that is not decoration.
+    expect(isPredrawnLockedLayer('placed-art')).toBe(false);
+    expect(isPredrawnLockedPlacedArtKind('prop')).toBe(false);
+    expect((['artwork', 'forest', 'town', 'doodad'] as const).every(isPredrawnLockedPlacedArtKind)).toBe(true);
+  });
+
+  it('admits rocks onto a plate and nothing else', () => {
+    expect(isPredrawnLiveProp('rock', 0, 0)).toBe(true);
+    expect(isPredrawnLiveProp('oak', 0, 0)).toBe(false);
+    expect(isPredrawnLiveProp('cottage', 0, 0)).toBe(false);
+    // An id the catalog does not know is not an obstacle by default.
+    expect(isPredrawnLiveProp('not-a-prop', 0, 0)).toBe(false);
   });
 
   it('rejects baked environment changes while permitting live cover, units, and tactical zones', () => {
@@ -70,6 +92,24 @@ describe('pre-drawn editor policy', () => {
       units: { '0,0': { unitId: 'rook', direction: 's', faction: 'navy-blue' } },
       zones: { '0,0': 'region' },
     })).toBe(true);
+  });
+
+  it('lets an obstacle stand on the plate while still refusing a prop that claims to be painted', () => {
+    const current = board();
+    // ADR-0534: a marked rock contradicts no pixel the plate owns, so the guard has nothing to
+    // protect. The same placement without the marker claims to be baked geometry, and is refused.
+    expect(preservesPredrawnBakedArt(current, {
+      ...current,
+      props: { '2,7': { propId: 'rock' } },
+      liveProps: ['2,7'],
+    })).toBe(true);
+    expect(preservesPredrawnBakedArt(current, {
+      ...current,
+      props: { '2,7': { propId: 'rock' } },
+    })).toBe(false);
+    // Erasing one is the same act in reverse.
+    const withRock = { ...current, props: { '2,7': { propId: 'rock' } }, liveProps: ['2,7'] };
+    expect(preservesPredrawnBakedArt(withRock, current)).toBe(true);
   });
 
   it('lets history step across a resize or grid slide while refusing another plate selection', () => {

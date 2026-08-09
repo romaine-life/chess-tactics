@@ -135,7 +135,13 @@ function generationRequiredBoard(board: EditorBoard): EditorBoard {
     )),
     units: {},
     doodads: filterPlayableCells(board.doodads, board),
-    props: filterPlayableCells(board.props, board),
+    // An obstacle standing on the plate is not geometry the crop must protect — nothing depicts it
+    // (ADR-0534). Empty on a board with no plate, so a tileset reference still guards its props.
+    props: Object.fromEntries(
+      Object.entries(filterPlayableCells(board.props, board))
+        .filter(([key]) => !(board.liveProps ?? []).includes(key)),
+    ),
+    liveProps: undefined,
     // Direct source artwork is visual-only composition input. It remains visible in Image 1 but
     // may cross or sit outside the owner's deliberate crop, so it never expands required bounds.
     floatingArtwork: [],
