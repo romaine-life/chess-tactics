@@ -356,7 +356,6 @@ import { validatePlayability, validateWarBattlePlayability } from '../core/playa
 import { PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import { effectiveLevelEvents, normalizeLevelEvents } from '../core/levelEvents';
 import { battleSettingsForSave, guardRulesSeed, levelRulesSeed, seededBaselineLevel, type AuthoredRulesField, type LevelRulesSeed } from './levelEditorRulesSeed';
-import { consumeRulesHandoff, stageRulesHandoff, type LevelEditorRulesHandoff } from './levelEditorRulesHandoff';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 
 type BoardUnitPlacement = {
@@ -4011,44 +4010,6 @@ export function LevelEditor(): ReactElement {
     seedSkewRef.current = mode === 'seed' && guarded.skippedAuthored ? seed : null;
   };
 
-  /**
-   * Adopt the rules the instance this one replaced had already authored (see stageRulesHandoff).
-   * Runs before this instance's first paint, so the owner never sees their edit blink away. Re-adding
-   * each field to authoredRulesRef is the other half: the document load that lands a moment later
-   * then WITHHOLDS exactly these fields and seeds the rest, which is the same "loaded document + the
-   * user's edit" convergence the seed guard already produces inside a single instance.
-   */
-  const adoptRulesHandoff = (handoff: LevelEditorRulesHandoff): void => {
-    const seed = levelRulesSeed(handoff.level);
-    for (const field of handoff.authored) {
-      authoredRulesRef.current.add(field);
-      if (field === 'clock') {
-        setClockEnabledState(seed.clock.enabled);
-        setClockInitialSecondsState(seed.clock.initialSeconds);
-        setClockIncrementSecondsState(seed.clock.incrementSeconds);
-      } else if (field === 'battleDeal') {
-        setBattleCardsDealtState(seed.battleDeal);
-      } else if (field === 'par') {
-        setParAuthoredState(seed.par.authored);
-        setParTurnsState(seed.par.turns);
-      } else if (field === 'victory') {
-        setVictoryState(seed.victory);
-      } else if (field === 'events') {
-        setEventsState(seed.events);
-      } else if (field === 'name') {
-        setLevelNameState(seed.name);
-      }
-    }
-  };
-  // Take the handoff before this instance paints, so the canonicalizing remount is invisible
-  // rather than a flash of the document's values. useLayoutEffect, not an effect: an ordinary
-  // effect runs after paint, which is the blink.
-  useLayoutEffect(() => {
-    const handoff = consumeRulesHandoff(routeParams.levelId);
-    if (handoff) adoptRulesHandoff(handoff);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // Every route that hydrates an EditorBoard must use this complete field mapping. Keeping the
   // document-load and undo/redo paths on one primitive prevents newly persisted visual channels
   // (such as explicit Subterrain or generation framing) from being silently reset and autosaved.
@@ -7435,13 +7396,6 @@ export function LevelEditor(): ReactElement {
         if (recoveryHandoffReady) {
           sameDocumentRemountRef.current = levelEditorRouteIdentity(window.location.search)
             !== levelEditorRouteIdentity(canonicalEditorUrl.search);
-          // The rewrite changes the route identity, so App is about to replace this instance. Hand
-          // the rules the owner authored while the document was resolving to the one taking over;
-          // without this they are discarded, which is every rules edit made in the first second.
-          // currentCandidateRef is assigned during render, so it holds those edits now.
-          if (sameDocumentRemountRef.current) {
-            stageRulesHandoff(doc.level_id, currentCandidateRef.current, authoredRulesRef.current);
-          }
           navigateApp(canonicalEditorHref, { replace: true, scroll: false });
         }
 
