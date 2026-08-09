@@ -21997,6 +21997,107 @@ button.tileset-relationship-cell {
   cursor: not-allowed;
 }
 
+/* ---- The formation block on the deployment board (ADR-0535) ----------------------------
+   A formation card puts its units down as one body, and one click takes the whole of it back.
+   The card face already draws that body as a single outlined plot; this is the same drawing on
+   the ground, on the same 96x54 tile geometry, for the block in hand and the block seated
+   alike. */
+
+.run-formation-group-paint {
+  block-size: 100%;
+  inline-size: 100%;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  position: absolute;
+  /* Over the band paint, under the pieces the canvas draws. */
+  z-index: 2;
+}
+
+/* The boundary sits ON the tile edge, and the square hosting it is clipped to exactly that edge
+   — so a centred stroke loses its outer half and antialiases the rest to nothing. Both strokes
+   are therefore drawn at twice their intended weight and the clip is what halves them, which
+   keeps the line hugging the true edge. Insetting the geometry instead would open a gap at every
+   corner where an outward edge meets a shared one, breaking the footprint's outline into
+   per-square arcs — the grid reading this exists to remove. Widths are in screen pixels
+   (non-scaling-stroke), so the visible weight does not change with board zoom. */
+.run-formation-group-edge-under {
+  fill: none;
+  stroke: rgba(26, 20, 13, .85);
+  stroke-linecap: square;
+  stroke-width: 12;
+}
+
+/* The battlefield already draws a dark line on every tile edge, so a dark boundary is
+   camouflaged by the grid it is meant to be read against. The livery rides the light stroke. */
+.run-formation-group-edge {
+  fill: none;
+  stroke: var(--run-formation-livery-line, rgba(247, 234, 200, .92));
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  stroke-width: 6;
+}
+
+.run-formation-group-plot {
+  fill: var(--run-formation-livery, rgba(232, 214, 176, .3));
+  stroke: none;
+}
+
+/* One livery per formation, by its place in the dealt hand. Marking every block identically only
+   says "these squares are spoken for"; it does not say WHICH body holds them, which is the
+   half-answer a shared banner gives. A Battle deals three cards, four while the Quartermaster's
+   Ledger is held, so the cycle is never reached in play — see RUN_FORMATION_LIVERY_COUNT. */
+.run-deployment-cell[data-formation-index='0'] {
+  --run-formation-livery: rgba(226, 196, 118, .42);
+  --run-formation-livery-line: rgba(255, 226, 148, .95);
+}
+
+.run-deployment-cell[data-formation-index='1'] {
+  --run-formation-livery: rgba(150, 196, 224, .42);
+  --run-formation-livery-line: rgba(196, 230, 255, .95);
+}
+
+.run-deployment-cell[data-formation-index='2'] {
+  --run-formation-livery: rgba(206, 142, 132, .42);
+  --run-formation-livery-line: rgba(255, 196, 184, .95);
+}
+
+.run-deployment-cell[data-formation-index='3'] {
+  --run-formation-livery: rgba(158, 202, 152, .42);
+  --run-formation-livery-line: rgba(206, 246, 200, .95);
+}
+
+.run-deployment-cell[data-formation-index='4'] {
+  --run-formation-livery: rgba(196, 166, 216, .42);
+  --run-formation-livery-line: rgba(232, 210, 250, .95);
+}
+
+.run-deployment-cell[data-formation-index='5'] {
+  --run-formation-livery: rgba(224, 186, 140, .42);
+  --run-formation-livery-line: rgba(255, 222, 180, .95);
+}
+
+/* The block in the player's hand wears its OWN livery, not a brighter generic ink: it is the
+   same body a moment before it is seated, and it must not change colour under their hand at the
+   moment they commit it. Only the ground it covers is lifted, because that ground is the one
+   thing on the board still being decided. */
+.run-deployment-cell.is-formation-carried .run-formation-group-plot {
+  fill: var(--run-formation-livery-carried, rgba(244, 230, 196, .34));
+}
+
+.run-deployment-cell[data-formation-index='0'] { --run-formation-livery-carried: rgba(226, 196, 118, .56); }
+.run-deployment-cell[data-formation-index='1'] { --run-formation-livery-carried: rgba(150, 196, 224, .56); }
+.run-deployment-cell[data-formation-index='2'] { --run-formation-livery-carried: rgba(206, 142, 132, .56); }
+.run-deployment-cell[data-formation-index='3'] { --run-formation-livery-carried: rgba(158, 202, 152, .56); }
+.run-deployment-cell[data-formation-index='4'] { --run-formation-livery-carried: rgba(196, 166, 216, .56); }
+.run-deployment-cell[data-formation-index='5'] { --run-formation-livery-carried: rgba(224, 186, 140, .56); }
+
+/* Pointing at a seated formation lifts its whole plot, so the gesture that picks a block up is
+   also what confirms the block is one thing. */
+.run-deployment-cell.is-formation-hovered .run-formation-group-plot {
+  fill: var(--run-formation-livery-carried, rgba(244, 230, 196, .34));
+}
+
 /* The panel does not scroll; its KitScroll rail does (ADR-0030). Both class names are named so
    this outranks `.run-meta-controls { overflow-y: auto }` whatever the source order — matched on
    one class it loses to the later rule and the browser's own bar returns beside the drawn one. */

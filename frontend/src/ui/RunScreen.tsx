@@ -131,6 +131,12 @@ import { RunCardRow } from './RunCardRow';
 import { RunBattlePreview } from './RunBattlePreview';
 import { RunDeploymentCardStack, RunDeploymentDeckDeal } from './RunDeploymentCardStack';
 import { RunArrangementCard, RunArrangementSteppers } from './RunArrangementHand';
+import { RunFormationGroupPaint } from './RunFormationGroupPaint';
+import {
+  RUN_FORMATION_LIVERY_COUNT,
+  formationBlockSquares,
+  seatedFormationsBySquare,
+} from './runDeploymentGrouping';
 import { RunDeploymentRerollButton } from './RunDeploymentRerollButton';
 import { RunExpunctioWorkspace } from './RunExpunctioWorkspace';
 import { runCardName } from '../run/cardNames';
@@ -620,9 +626,11 @@ function ArrangedDeploymentControls({
 function useRunDeploymentPresentation({
   run,
   departureActive,
+  routeSearch,
 }: {
   run: RunDocument;
   departureActive: boolean;
+  routeSearch: string;
 }): RunDeploymentPresentation | null {
   const replace = useActiveRun((state) => state.replace);
   const level = run.war.battles[run.battleIndex].level;
@@ -646,6 +654,16 @@ function useRunDeploymentPresentation({
   const [heldArrangementAnchor, setHeldArrangementAnchor] = useState<string | null>(null);
   const arrangementCards = useMemo(() => arrangedDeploymentCards(prepared), [prepared]);
   const selectedArrangementCard = arrangementCards.find(({ card }) => card.id === selectedCardId) ?? null;
+  // Which square belongs to which seated formation. A projection of the card's seats and the
+  // committed placements — nothing is persisted for it, so no save version moves.
+  const seatedFormationSquares = useMemo(() => seatedFormationsBySquare(prepared), [prepared]);
+  // Which SEATED formation the pointer is over — the whole card, not the square. Read off the
+  // square the pointer already reports rather than tracked separately: a second enter/leave pair
+  // on the same element is a second source of truth for where the mouse is, and the one that is
+  // already there is the one the placement gesture trusts.
+  const hoveredFormationCardId = pointedArrangementCell
+    ? seatedFormationSquares.get(pointedArrangementCell)?.cardId ?? null
+    : null;
   // Where deployment is allowed at all. A property of the level and of what is already seated,
   // so it holds still while the carried formation is turned — turning a formation in one corner
   // must not put out a square at the other end of the band.
@@ -716,6 +734,16 @@ function useRunDeploymentPresentation({
   const arrangementFootprint = useMemo(() => new Set(
     Object.values(pointedArrangementOption?.placements ?? {}).map((cell) => `${cell.x},${cell.y}`),
   ), [pointedArrangementOption]);
+  // The block the CARRIED formation makes, solved exactly like a seated one. Since ADR-0533 the
+  // formation on the cursor and the formation on the ground are both a plan drawn at the same
+  // strength, so a mark that says "this is one block" has to be on both: showing it only once the
+  // formation is let go would say the block is made by placing rather than by the card.
+  const carriedFormationBlock = useMemo(() => formationBlockSquares(
+    Object.values(pointedArrangementOption?.placements ?? {}),
+  ), [pointedArrangementOption]);
+  // The livery the carried block will keep once it is seated, so the colour does not change under
+  // the player's hand at the moment they commit it.
+  const carriedGroupIndex = arrangementCards.findIndex(({ card }) => card.id === selectedCardId);
   const arrangementPreviewPieces = useMemo<readonly Piece[]>(() => {
     if (!pointedArrangementOption) return [];
     const facing = defaultFacingForSide('player');
@@ -899,6 +927,17 @@ function useRunDeploymentPresentation({
       const filled = arrangementFootprint.has(cellKey);
       const standing = arrangementPlacedCells.get(cellKey) ?? null;
       const actionable = placeable || Boolean(standing);
+      // Which formation this square belongs to, if any is seated on it. Derived from the card's
+      // own seats and the committed placements — see runDeploymentGrouping on why nothing is
+      // persisted for it.
+      const seated = seatedFormationSquares.get(cellKey) ?? null;
+      // The carried block wins the square it is over: the formation under the cursor is the one
+      // the player is deciding about, and where it overlaps ground it may take, what it will look
+      // like there is the useful answer.
+      const carriedEdges = carriedFormationBlock.get(cellKey) ?? null;
+      const block = carriedEdges
+        ? { edges: carriedEdges, groupIndex: carriedGroupIndex, cardId: selectedCardId }
+        : seated;
       return (
         <button
           type="button"
@@ -909,7 +948,15 @@ function useRunDeploymentPresentation({
             placeable ? 'is-placeable' : '',
             standing ? 'is-seated-formation' : '',
             filled ? 'is-move' : '',
+            block ? 'has-formation-group' : '',
+            carriedEdges ? 'is-formation-carried' : '',
+            !carriedEdges && seated && hoveredFormationCardId === seated.cardId
+              ? 'is-formation-hovered'
+              : '',
           ].filter(Boolean).join(' ')}
+          data-formation-card={block?.cardId ?? undefined}
+          data-formation-index={block && block.groupIndex >= 0 ? block.groupIndex % RUN_FORMATION_LIVERY_COUNT : undefined}
+          data-formation-edges={block?.edges.join(' ')}
           aria-label={standing
             ? `Take back the formation at ${cell.x}, ${cell.y}`
             : placeable
@@ -971,6 +1018,9 @@ function useRunDeploymentPresentation({
               full across the squares this seating fills. The band never goes dark, so a turn
               that finds no seating still leaves the player looking at where they may deploy. */}
           <PredrawnMoveHighlightPaint />
+          {/* The seated formation's own boundary, drawn on the sides that face OFF it — the
+              card's rule, on the card's geometry, at board scale. */}
+          {block ? <RunFormationGroupPaint edges={block.edges} /> : null}
         </button>
       );
     },
@@ -1399,6 +1449,7 @@ function RunBattlefieldPanel({
   const deploymentPresentation = useRunDeploymentPresentation({
     run,
     departureActive: Boolean(unitDeparture),
+    routeSearch,
   });
   const baseLevel = run.war.battles[run.battleIndex].level;
   // Battle-runtime writes (including Restart) do not change deployment. Keep the
