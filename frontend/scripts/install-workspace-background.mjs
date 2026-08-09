@@ -83,15 +83,17 @@ async function api(session, route, options = {}) {
 const session = await openOwnerSession();
 try {
   const before = await api(session, '/api/admin/media-assets');
-  let version = (before.versions ?? []).find((row) => row.slot === slot);
+  // A version's domain is fixed at creation and no endpoint can repair it, so a candidate uploaded
+  // under a domain that has no runtime projection is superseded rather than reused.
+  let version = (before.versions ?? []).find((row) => row.slot === slot && row.domain === 'ui-kit');
   if (!version) {
     const created = await api(session, '/api/admin/media-versions', {
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'idempotency-key': `workspace-background:${id}:${sha256.slice(0, 32)}` },
+      headers: { 'content-type': 'application/json', 'idempotency-key': `workspace-background-v3:${id}:${sha256.slice(0, 32)}` },
       body: JSON.stringify({
         slot,
-        domain: 'screen-art',
-        role: 'backdrop',
+        domain: 'ui-kit',
+        role: 'background',
         label,
         availabilityPolicy: 'decorative',
         slotMetadata: { schema: 'workspace-background-slot-v1', workspaceId: id },
@@ -101,6 +103,15 @@ try {
           generationModel: 'codex-image-gen',
           nativeWidth: width,
           nativeHeight: height,
+          runtime: {
+            component: 'workspace-background',
+            nativeRole: 'workspace-background',
+            variant: id,
+            frameWidth: width,
+            frameHeight: height,
+            frameCount: 1,
+            altText: '',
+          },
         },
         provenance: {
           schema: 'workspace-background-prompt-v1',

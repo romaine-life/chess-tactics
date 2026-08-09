@@ -38,6 +38,7 @@ import {
   canUndoRunBattleMove,
   captureRunBattleUndo,
   closeBattle,
+  deditioGoldTenths,
   hasLipsanon,
   leaveAftermath,
   leaveSectio,
@@ -1370,10 +1371,14 @@ function AftermathPanel({
   const speedClockMs = battleLevel ? speedBonusClockMs(battleLevel) : 0;
   const speedRemainingMs = battleLevel ? speedBonusRemainingMs(battleLevel, aftermath.elapsedMs) : 0;
   const underPar = parTurns === null ? 0 : parTurns - aftermath.turns;
+  // Priced from the standing count the report froze, for the same reason par and the speed
+  // bonus are derived here: one number read twice rather than two numbers agreeing by luck.
+  const deditioTenths = deditioGoldTenths(aftermath.standingEnemyValue);
   // One line naming every source folded into the purse, so the measures below read as a
   // breakdown of "Gold won" rather than as extras stacked on top of it.
   const goldSources = [
     aftermath.bonusGoldTenths ? LIPSANON_BY_ID['mercenarys-rifle'].name : null,
+    deditioTenths ? 'Deditio' : null,
     speedTenths ? 'the speed bonus' : null,
   ].filter((source): source is string => source !== null);
   return (
@@ -1416,6 +1421,17 @@ function AftermathPanel({
           </AftermathMeasure>
           <AftermathMeasure label="Time">
             {aftermath.elapsedMs === null ? '—' : formatBattleElapsed(aftermath.elapsedMs)}
+          </AftermathMeasure>
+          {/* What the enemy still had on the board when its King fell. A player who mates
+              early is paid for the army they never had to take; one who grinds the board down
+              to a bare King reads zero here, which is the whole of the incentive. */}
+          <AftermathMeasure
+            label="Deditio"
+            detail={aftermath.standingEnemyValue > 0
+              ? `${aftermath.standingEnemyValue} points of enemy force surrendered with their King`
+              : 'The enemy had nothing left to surrender.'}
+          >
+            <RunGoldAmount valueTenths={deditioTenths} />
           </AftermathMeasure>
           {/* What the clock paid. The bonus clock is sized from par and is not lethal: an
               exhausted one reads 0:00 here and took nothing away from the fight. */}

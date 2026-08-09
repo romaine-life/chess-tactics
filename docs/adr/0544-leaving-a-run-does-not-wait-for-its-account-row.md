@@ -8,7 +8,7 @@ refines:
   - "[ADR-0428](0428-run-defeat-offers-retry-and-exits-without-blocking-controls.md)"
 ---
 
-# ADR-0543: Leaving a Run does not wait for its account row
+# ADR-0544: Leaving a Run does not wait for its account row
 
 ## Context
 

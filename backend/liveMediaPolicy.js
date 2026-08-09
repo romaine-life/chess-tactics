@@ -189,7 +189,9 @@ const LIPSANON_MAT_SLOT = 'ui/run/bona-vacantia/mat.png';
 const runLipsanonMatSlot = (slot) => String(slot || '') === LIPSANON_MAT_SLOT;
 const WORKSPACE_BACKGROUND_COMPONENT = 'workspace-background';
 const WORKSPACE_BACKGROUND_SLOT = /^ui\/workspaces\/([a-z][a-z0-9-]{0,63})\/background\.png$/;
-const WORKSPACE_BACKGROUND_IDS = Object.freeze(['run-victory', 'run-bona-vacantia', 'level-editor-events']);
+const WORKSPACE_BACKGROUND_IDS = Object.freeze([
+  'run-victory', 'run-bona-vacantia', 'run-commendatio', 'level-editor-events',
+]);
 // Perimeter walls live in the terrain domain but are NOT board tiles: they carry their own
 // full-height frame geometry (ADR-0086) instead of the 96x180 tile projection, so they are
 // dispatched before the tile rules the way the brush icon and SFX takes are.

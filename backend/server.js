@@ -5859,6 +5859,36 @@ const MIGRATIONS = [
        WHERE body->'runSaveVersion' = '34'::jsonb;
     `,
   },
+  {
+    version: 75,
+    name: 'The Battle report records the enemy force left standing',
+    // Deditio pays for what the enemy still had on the board when its King fell (ADR-0543), so
+    // the aftermath report gains the count it is priced from. A Run already parked on one earned
+    // its gold under the old rules and its `goldTenths` is settled, so the field arrives as the
+    // zero it truthfully was: that report was never paid a Deditio, and Continue must bank
+    // exactly the total the screen has been showing. Every later Battle reads its own count.
+    sql: `
+      UPDATE active_runs
+         SET body = jsonb_set(
+               body || jsonb_build_object('runSaveVersion', 36),
+               '{aftermath,standingEnemyValue}',
+               '0'::jsonb,
+               true
+             ),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE body->'runSaveVersion' = '35'::jsonb
+         AND jsonb_typeof(body->'aftermath') = 'object';
+
+      -- Every other Run has no report in flight and advances on the version alone. This runs
+      -- after the rewrite above, which has already moved its rows off 35.
+      UPDATE active_runs
+         SET body = body || jsonb_build_object('runSaveVersion', 36),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE body->'runSaveVersion' = '35'::jsonb;
+    `,
+  },
 ];
 
 let pool = null;
@@ -20097,8 +20127,26 @@ app.post('/api/admin/media-versions', async (req, res) => {
         const currentSlot = await client.query('SELECT * FROM media_slots WHERE slot = $1 FOR UPDATE', [value.slot]);
         const current = currentSlot.rows[0];
         if (!current) throw new Error('media slot insert did not produce a row');
+        // A slot that has never served an active version has no runtime contract to protect: its
+        // domain/role are whatever the first candidate happened to claim, and if that claim was
+        // wrong the slot is otherwise unusable forever — no endpoint can repair a version's domain
+        // and none can discard the candidate. Let a never-activated slot be re-declared.
+        const slotEverActivated = Boolean(current.active_version_id);
         if (current.lifecycle_state === 'retired') {
           throw mediaMutationError('media_slot_retired', 409, { slot: value.slot });
+        } else if (
+          !slotEverActivated
+          && (current.domain !== value.domain || current.role !== value.role
+            || current.availability_policy !== value.availabilityPolicy)
+        ) {
+          await client.query(
+            `UPDATE media_slots SET domain = $2, role = $3, availability_policy = $4, updated_by = $5
+              WHERE slot = $1`,
+            [value.slot, value.domain, value.role, value.availabilityPolicy, user.email],
+          );
+          current.domain = value.domain;
+          current.role = value.role;
+          current.availability_policy = value.availabilityPolicy;
         } else if (
           current.domain !== value.domain || current.role !== value.role
           || current.availability_policy !== value.availabilityPolicy
@@ -22642,7 +22690,9 @@ app.put('/api/run-progression', async (req, res) => {
 // --- Account-scoped active Run (ADR-0193) ---------------------------------
 // Anonymous Runs stay in browser storage. Once signed in, the client adopts that
 // document here; the server owns one CAS-updated active Run per account.
-const ACTIVE_RUN_PHASES = new Set(['aftermath', 'bona-vacantia', 'deployment', 'battle', 'sectio', 'victory']);
+const ACTIVE_RUN_PHASES = new Set([
+  'aftermath', 'bona-vacantia', 'commendatio', 'deployment', 'battle', 'sectio', 'victory',
+]);
 const ACTIVE_RUN_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
 const ACTIVE_RUN_UNIT_SOURCES = new Set(['king', 'starting', 'adlectio']);
 const ACTIVE_RUN_PIECE_VALUES = Object.freeze({ pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9, king: 0 });
@@ -22674,6 +22724,7 @@ const ACTIVE_RUN_AFTERMATH_FIELDS = new Set([
   'elapsedMs',
   'goldTenths',
   'bonusGoldTenths',
+  'standingEnemyValue',
   'survivingUnitIds',
   'fallenUnits',
 ]);
@@ -22747,7 +22798,11 @@ function validateActiveRunBody(run) {
     if (levelError) return `run.war.battles.${index}: ${levelError}`;
   }
   if (run.battleIndex >= run.war.battles.length) return 'run.battleIndex is outside the War';
-  if (!Array.isArray(run.army) || run.army.length < 1 || run.army.length > 200) return 'run.army is invalid';
+  // Commendatio precedes the King, and the King is what gives a Run its army and its one held
+  // card, so this one phase is legitimately empty. Every later phase must carry a King.
+  const beforeTheKing = run.phase === 'commendatio';
+  const leastArmy = beforeTheKing ? 0 : 1;
+  if (!Array.isArray(run.army) || run.army.length < leastArmy || run.army.length > 200) return 'run.army is invalid';
   const unitIds = new Set();
   for (const unit of run.army) {
     if (!unit || typeof unit.id !== 'string' || !unit.id || unitIds.has(unit.id) || !ACTIVE_RUN_PIECES.has(unit.type)) {
@@ -23160,10 +23215,12 @@ function validateActiveRunBody(run) {
       if (aftermath.elapsedMs !== null && (!isFiniteInteger(aftermath.elapsedMs) || aftermath.elapsedMs < 0)) {
         return 'run.aftermath.elapsedMs is invalid';
       }
-      for (const field of ['goldTenths', 'bonusGoldTenths']) {
+      for (const field of ['goldTenths', 'bonusGoldTenths', 'standingEnemyValue']) {
         if (!isFiniteInteger(aftermath[field]) || aftermath[field] < 0) return `run.aftermath.${field} is invalid`;
       }
       if (aftermath.bonusGoldTenths > aftermath.goldTenths) return 'run.aftermath.bonusGoldTenths is invalid';
+      // A whole enemy army is worth well under this; the bound only refuses nonsense.
+      if (aftermath.standingEnemyValue > 999) return 'run.aftermath.standingEnemyValue is invalid';
       if (
         !Array.isArray(aftermath.survivingUnitIds)
         || aftermath.survivingUnitIds.length > 100
@@ -23555,6 +23612,11 @@ function validateFormationRunBody(run) {
   }
   if (run.battleIndex >= run.war.battles.length) return 'run.battleIndex is outside the War';
 
+  // Commendatio precedes the King, and the King is what gives a Run its army and its one held
+  // card, so this one phase is legitimately empty and has no King to retain. Every later phase
+  // must carry exactly one.
+  const beforeTheKing = run.phase === 'commendatio';
+  if (beforeTheKing && run.army.length === 0 && run.cards.length === 0) return null;
   if (!Array.isArray(run.army) || run.army.length < 1 || run.army.length > 200) return 'run.army is invalid';
   const unitIds = new Set();
   for (const unit of run.army) {
