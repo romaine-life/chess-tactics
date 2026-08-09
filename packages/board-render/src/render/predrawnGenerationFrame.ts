@@ -136,7 +136,7 @@ function generationRequiredBoard(board: EditorBoard): EditorBoard {
     units: {},
     doodads: filterPlayableCells(board.doodads, board),
     // An obstacle standing on the plate is not geometry the crop must protect — nothing depicts it
-    // (ADR-0534). Empty on a board with no plate, so a tileset reference still guards its props.
+    // (ADR-0537). Empty on a board with no plate, so a tileset reference still guards its props.
     props: Object.fromEntries(
       Object.entries(filterPlayableCells(board.props, board))
         .filter(([key]) => !(board.liveProps ?? []).includes(key)),

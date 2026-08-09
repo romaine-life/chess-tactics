@@ -354,7 +354,7 @@ test('environment geometry fingerprint does not depend on the host locale collat
   }
 });
 
-// ADR-0534: an obstacle placed ON a plate is not part of what the artwork depicts.
+// ADR-0537: an obstacle placed ON a plate is not part of what the artwork depicts.
 test('a live obstacle leaves the occlusion seed, and the plate keeps the props it painted', () => {
   const source = board({
     props: { '0,5': { propId: 'fieldstone' }, '2,7': { propId: 'rock' } },

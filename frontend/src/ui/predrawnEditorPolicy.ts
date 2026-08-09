@@ -20,7 +20,7 @@ export function isPredrawnLockedLayer(layer: LevelEditorLayerKey): boolean {
 
 /**
  * Placed Art stays open on a plate board for exactly one thing: standing an obstacle on the picture
- * (ADR-0534). Scene Art, Forest, Town and Doodads are scenery, and scenery is what the plate already
+ * (ADR-0537). Scene Art, Forest, Town and Doodads are scenery, and scenery is what the plate already
  * painted — offering those brushes would offer edits the renderer then refuses to show.
  */
 export function isPredrawnLockedPlacedArtKind(kind: PlacedArtBrushKind): boolean {

@@ -10,7 +10,7 @@ refines:
   - "[ADR-0162](0162-predrawn-backgrounds-retain-live-ground-cover.md)"
 ---
 
-# ADR-0534: An obstacle stands on the artwork; it is not painted into it
+# ADR-0537: An obstacle stands on the artwork; it is not painted into it
 
 ## Context and Problem Statement
 

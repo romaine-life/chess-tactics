@@ -46,7 +46,7 @@ function predrawnEnvironmentGeometryFingerprintValue(
     .map(canonicalJsonValue)
     .sort((left, right) => compareCanonicalText(JSON.stringify(left), JSON.stringify(right)));
   // An obstacle standing ON the plate is not part of the geometry the raster depicts, so placing or
-  // erasing one must not make the artwork stale (ADR-0534) — the same reasoning that keeps live
+  // erasing one must not make the artwork stale (ADR-0537) — the same reasoning that keeps live
   // ground cover out of v2. This needs no schema version of its own: no board could carry a live
   // marker before the field existed, so every hash already persisted is byte-identical under it.
   const liveProps = new Set(board.liveProps ?? []);
@@ -135,7 +135,7 @@ export function predrawnOcclusionSeedBoard(board: EditorBoard): EditorBoard {
     units: {},
     // An obstacle standing ON the plate is not painted into it, so it has no baked pixels to mask
     // with. Seeding one here would have a live rock erase whatever passes behind it as though the
-    // artwork depicted it, and erase its own live sprite besides (ADR-0534).
+    // artwork depicted it, and erase its own live sprite besides (ADR-0537).
     props: liveProps.size
       ? Object.fromEntries(Object.entries(board.props ?? {}).filter(([key]) => !liveProps.has(key)))
       : board.props,

@@ -710,4 +710,64 @@ describe('townIdPrefix', () => {
   it('produces a prefix the sanitizer accepts', () => {
     expect(`${townIdPrefix('a1')}0`).toMatch(/^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,127}$/);
   });
+
+  // Shift-drag lets one town own several patches. The plan is still fitted to a rectangle; what
+  // changes is which ground a building may stand on.
+  describe('several patches of ground', () => {
+    const plan = (areas: Array<{ minX: number; minY: number; maxX: number; maxY: number }> | undefined,
+      overrides: Partial<TownPlanParams> = {}, bounds = AREA) => planTown({
+      townId: 'a1', bounds, areas, params: params({ size: 40, ...overrides }), geometry, existing: [],
+    });
+
+    it('changes nothing when the one patch is the area itself', () => {
+      expect(plan([AREA]).placements).toEqual(plan(undefined).placements);
+    });
+
+    it('is the same town when two patches tile the same rectangle', () => {
+      const halves = [
+        { ...AREA, maxX: 22 },
+        { ...AREA, minX: 23 },
+      ];
+      // Both halves are one continuous piece of ground, so nothing may drop out along their join.
+      expect(plan(halves).placements).toEqual(plan(undefined).placements);
+    });
+
+    it('keeps every building out of the hole in an L-shape', () => {
+      const arm = { minX: 14, minY: 10, maxX: 22, maxY: 22 };
+      const foot = { minX: 23, minY: 17, maxX: 30, maxY: 22 };
+      const placements = plan([arm, foot]).placements;
+      expect(placements.length).toBeGreaterThan(0);
+      for (const placement of placements) {
+        const cell = cellOf(groundOf(placement));
+        const inside = (cell.x >= arm.minX && cell.x <= arm.maxX && cell.y >= arm.minY && cell.y <= arm.maxY)
+          || (cell.x >= foot.minX && cell.x <= foot.maxX && cell.y >= foot.minY && cell.y <= foot.maxY);
+        expect(inside).toBe(true);
+      }
+    });
+
+    it('builds on both arms of an L, because each arm gets a street of its own', () => {
+      const arm = { minX: 14, minY: 10, maxX: 22, maxY: 22 };
+      const foot = { minX: 23, minY: 17, maxX: 34, maxY: 22 };
+      const cells = plan([arm, foot]).placements.map((placement) => cellOf(groundOf(placement)));
+      expect(cells.some((cell) => cell.x <= arm.maxX)).toBe(true);
+      expect(cells.some((cell) => cell.x >= foot.minX)).toBe(true);
+    });
+
+    it('builds on patches that do not touch, and never in the gap between them', () => {
+      const west = { minX: 0, minY: 10, maxX: 8, maxY: 20 };
+      const east = { minX: 40, minY: 10, maxX: 48, maxY: 20 };
+      const both = plan([west, east], {}, { minX: 0, minY: 10, maxX: 48, maxY: 20 });
+      expect(both.placements.length).toBeGreaterThan(0);
+      for (const placement of both.placements) {
+        const cell = cellOf(groundOf(placement));
+        expect(cell.x <= west.maxX || cell.x >= east.minX).toBe(true);
+      }
+    });
+
+    it('builds nothing when the territory misses every patch', () => {
+      const result = plan([{ minX: 60, minY: 60, maxX: 70, maxY: 70 }]);
+      expect(result.placements).toEqual([]);
+      expect(result.plotsOffered).toBe(0);
+    });
+  });
 });

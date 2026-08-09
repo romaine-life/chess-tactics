@@ -20,7 +20,7 @@ after(() => {
   resetTestDrawableCatalog();
 });
 
-// ADR-0534. A plate paints its own scenery, so an ordinary prop under one is already in the
+// ADR-0537. A plate paints its own scenery, so an ordinary prop under one is already in the
 // picture. A rock the owner stands ON the plate is depicted by nothing and has to draw live.
 function board(overrides = {}) {
   return {

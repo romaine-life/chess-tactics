@@ -50,7 +50,7 @@ describe('pre-drawn editor policy', () => {
   });
 
   it('keeps Placed Art open for obstacles alone, because the plate painted its own scenery', () => {
-    // ADR-0534. Scene Art, Forest, Town and Doodads would offer edits the renderer then refuses to
+    // ADR-0537. Scene Art, Forest, Town and Doodads would offer edits the renderer then refuses to
     // show, so the destination stays reachable and narrows to the one thing that is not decoration.
     expect(isPredrawnLockedLayer('placed-art')).toBe(false);
     expect(isPredrawnLockedPlacedArtKind('prop')).toBe(false);
@@ -96,7 +96,7 @@ describe('pre-drawn editor policy', () => {
 
   it('lets an obstacle stand on the plate while still refusing a prop that claims to be painted', () => {
     const current = board();
-    // ADR-0534: a marked rock contradicts no pixel the plate owns, so the guard has nothing to
+    // ADR-0537: a marked rock contradicts no pixel the plate owns, so the guard has nothing to
     // protect. The same placement without the marker claims to be baked geometry, and is refused.
     expect(preservesPredrawnBakedArt(current, {
       ...current,

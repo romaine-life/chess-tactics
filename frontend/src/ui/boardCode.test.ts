@@ -323,6 +323,81 @@ describe('boardCode round-trip', () => {
     expect(decodeBoard(encodeBoard(emptyBoard({ towns })))!.towns).toEqual(towns);
   });
 
+  it('round-trips the several patches of ground a shift-dragged Town or Forest owns', () => {
+    const areas = [
+      { minX: 1, minY: 1, maxX: 8, maxY: 8 },
+      { minX: 9, minY: 4, maxX: 16, maxY: 12 },
+    ];
+    const towns: EditorBoard['towns'] = [{
+      id: 'town-wide',
+      name: 'Long street',
+      // Deliberately stale: `bounds` is derived from the patches, never trusted from the wire.
+      bounds: { minX: 1, minY: 1, maxX: 8, maxY: 8 },
+      areas,
+      sections: [],
+      seed: 21,
+    }];
+    const forests: EditorBoard['forests'] = [{
+      id: 'forest-wide',
+      name: 'Lakeside woods',
+      bounds: { minX: 1, minY: 1, maxX: 8, maxY: 8 },
+      areas,
+      sections: [],
+      seed: 22,
+    }];
+    const decoded = decodeBoard(encodeBoard(emptyBoard({ towns, forests })))!;
+    expect(decoded.towns?.[0].areas).toEqual(areas);
+    expect(decoded.towns?.[0].bounds).toEqual({ minX: 1, minY: 1, maxX: 16, maxY: 12 });
+    expect(decoded.forests?.[0].areas).toEqual(areas);
+    expect(decoded.forests?.[0].bounds).toEqual({ minX: 1, minY: 1, maxX: 16, maxY: 12 });
+  });
+
+  it('leaves a one-rectangle Town or Forest exactly as it encoded before shift-drag existed', () => {
+    const towns: EditorBoard['towns'] = [{
+      id: 'town-plain', name: 'Plain', bounds: { minX: 1, minY: 1, maxX: 8, maxY: 8 }, sections: [], seed: 3,
+    }];
+    const forests: EditorBoard['forests'] = [{
+      id: 'forest-plain', name: 'Plain', bounds: { minX: 0, minY: 0, maxX: 4, maxY: 4 }, sections: [], seed: 4,
+    }];
+    // Stating the single patch explicitly is the same board, and does not grow the code.
+    const stated = emptyBoard({
+      towns: towns.map((town) => ({ ...town, areas: [town.bounds] })),
+      forests: forests.map((forest) => ({ ...forest, areas: [forest.bounds] })),
+    });
+    expect(encodeBoard(stated)).toBe(encodeBoard(emptyBoard({ towns, forests })));
+    const decoded = decodeBoard(encodeBoard(stated))!;
+    expect(decoded.towns?.[0].areas).toBeUndefined();
+    expect(decoded.forests?.[0].areas).toBeUndefined();
+  });
+
+  it('drops a patch of ground another patch already covers', () => {
+    const towns: EditorBoard['towns'] = [{
+      id: 'town-nested',
+      name: 'Nested',
+      bounds: { minX: 0, minY: 0, maxX: 9, maxY: 9 },
+      areas: [{ minX: 0, minY: 0, maxX: 9, maxY: 9 }, { minX: 2, minY: 2, maxX: 4, maxY: 4 }],
+      sections: [],
+      seed: 5,
+    }];
+    const decoded = decodeBoard(encodeBoard(emptyBoard({ towns })))!;
+    expect(decoded.towns?.[0].areas).toBeUndefined();
+    expect(decoded.towns?.[0].bounds).toEqual({ minX: 0, minY: 0, maxX: 9, maxY: 9 });
+  });
+
+  it('falls back to the saved rectangle when the patch list is unusable', () => {
+    const towns: EditorBoard['towns'] = [{
+      id: 'town-bad',
+      name: 'Bad patches',
+      bounds: { minX: 2, minY: 2, maxX: 6, maxY: 6 },
+      areas: [{ minX: Number.NaN, minY: 0, maxX: 4, maxY: 4 }] as never,
+      sections: [],
+      seed: 6,
+    }];
+    const decoded = decodeBoard(encodeBoard(emptyBoard({ towns })))!;
+    expect(decoded.towns?.[0].areas).toBeUndefined();
+    expect(decoded.towns?.[0].bounds).toEqual({ minX: 2, minY: 2, maxX: 6, maxY: 6 });
+  });
+
   it('round-trips zero-Section Town and Forest recipes as valid unfinished authoring state', () => {
     const towns: EditorBoard['towns'] = [{
       id: 'town-empty',
@@ -664,7 +739,7 @@ describe('boardCode round-trip', () => {
   });
 });
 
-describe('live obstacles standing on a plate (ADR-0534)', () => {
+describe('live obstacles standing on a plate (ADR-0537)', () => {
   const withRocks = (over: Partial<EditorBoard> = {}): EditorBoard => emptyBoard({
     props: { '1,1': { propId: 'oak' }, '3,3': { propId: 'rock' } },
     ...over,

@@ -44,6 +44,7 @@ import type { TileFamilyId } from '../core/tileSockets';
 import { PLAYABLE_PIECE_TYPES, UNIT_FACINGS, UNIT_PALETTES, type PlayablePieceType, type UnitPalette } from '../core/pieces';
 import type { UnitFacing } from '../core/types';
 import { rookDirections, type Direction } from './unitCatalog';
+import { generatorAreasBounds, normalizeGeneratorAreas } from '../core/generatorAreas';
 import { cleanSubterrainPlacements, type SubterrainPlacementMap } from '../core/subterrain';
 import {
   normalizePredrawnGenerationFrame,
@@ -255,7 +256,13 @@ export interface BoardForestSection {
 export interface BoardForest {
   id: string;
   name: string;
+  /** Bounding box of `areas`. Layout templates are fitted to it; membership reads `areas`. */
   bounds: { minX: number; minY: number; maxX: number; maxY: number };
+  /**
+   * Every patch of ground this Forest occupies, as a union. Absent means the single rectangle in
+   * `bounds` — which is what every Forest saved before shift-drag existed carries.
+   */
+  areas?: Array<{ minX: number; minY: number; maxX: number; maxY: number }>;
   /** Complete approaches; the generator derives every internal territory from these. */
   sections: BoardForestSection[];
   /** Absent/false means Generate chooses a fresh seed; true opts into exact replay. */
@@ -296,8 +303,13 @@ export interface BoardTownSection {
 export interface BoardTown {
   id: string;
   name: string;
-  /** Grid-cell rect the town fills. */
+  /** Bounding box of `areas`. Layout templates are fitted to it; membership reads `areas`. */
   bounds: { minX: number; minY: number; maxX: number; maxY: number };
+  /**
+   * Every patch of ground this town occupies, as a union. Absent means the single rectangle in
+   * `bounds` — which is what every town saved before shift-drag existed carries.
+   */
+  areas?: Array<{ minX: number; minY: number; maxX: number; maxY: number }>;
   /** Complete approaches; the generator derives every internal territory from these. */
   sections: BoardTownSection[];
   /** Absent/false means Generate chooses a fresh seed; true opts into exact replay. */
@@ -367,7 +379,7 @@ export interface EditorBoard {
   /** Multi-cell props (trees/houses), keyed by ANCHOR cell "x,y" -> {propId} (mirrors doodads). */
   props: Record<string, { propId: string }>;
   /**
-   * Anchors in `props` that STAND ON a pre-drawn plate instead of being painted into it (ADR-0534).
+   * Anchors in `props` that STAND ON a pre-drawn plate instead of being painted into it (ADR-0537).
    *
    * A plate board's props are ordinarily the picture's own pixels — generated from that geometry,
    * suppressed at render, kept only for their colliders. A rock the owner places after the art
@@ -805,6 +817,39 @@ function cleanFloatingArtwork(value: unknown): FloatingArtworkPlacement[] {
  */
 const townIdPattern = /^[A-Za-z0-9][A-Za-z0-9._:@+-]{0,63}$/;
 
+/** More patches than an author can keep track of is a corrupt document, not an ambitious town. */
+const MAX_GENERATOR_AREAS = 32;
+
+type GeneratorAreaRect = { minX: number; minY: number; maxX: number; maxY: number };
+
+const readGeneratorAreaRect = (value: unknown): GeneratorAreaRect | null => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const raw = value as Record<string, unknown>;
+  const rect = ['minX', 'minY', 'maxX', 'maxY'].map((key) => Number(raw[key]));
+  if (rect.some((n) => !Number.isSafeInteger(n) || Math.abs(n) > 4096)) return null;
+  return {
+    minX: Math.min(rect[0], rect[2]),
+    minY: Math.min(rect[1], rect[3]),
+    maxX: Math.max(rect[0], rect[2]),
+    maxY: Math.max(rect[1], rect[3]),
+  };
+};
+
+/**
+ * The patches a saved generator occupies. A document written before shift-drag existed carries
+ * only `bounds`, which is exactly the one-rectangle case, so it needs no migration: the fallback
+ * IS the old meaning. Patches another patch already covers are dropped, because every membership
+ * test walks this list.
+ */
+function cleanGeneratorAreas(value: unknown, bounds: GeneratorAreaRect): GeneratorAreaRect[] {
+  if (!Array.isArray(value)) return [bounds];
+  const parsed = value
+    .slice(0, MAX_GENERATOR_AREAS)
+    .map(readGeneratorAreaRect)
+    .filter((rect): rect is GeneratorAreaRect => rect !== null);
+  return parsed.length ? normalizeGeneratorAreas(parsed) : [bounds];
+}
+
 /** Saved town instances, rejecting anything that could not be regenerated from. */
 function cleanTowns(value: unknown): BoardTown[] {
   if (!Array.isArray(value)) return [];
@@ -884,10 +929,20 @@ function cleanTowns(value: unknown): BoardTown[] {
       landmarkIds: section.landmarkIds.length || index > 0 ? section.landmarkIds : legacyLandmarks,
     }));
     seen.add(id);
+    const areas = cleanGeneratorAreas(t.areas, {
+      minX: Math.min(rect[0], rect[2]),
+      minY: Math.min(rect[1], rect[3]),
+      maxX: Math.max(rect[0], rect[2]),
+      maxY: Math.max(rect[1], rect[3]),
+    });
     out.push({
       id,
       name: typeof t.name === 'string' && t.name.trim() ? t.name.trim().slice(0, 64) : id,
-      bounds: { minX: rect[0], minY: rect[1], maxX: rect[2], maxY: rect[3] },
+      // `bounds` is derived, never authored: it is the union's box, so it cannot disagree with it.
+      bounds: generatorAreasBounds(areas),
+      // One patch is the whole meaning of `bounds`; writing it out too would grow every board code
+      // that never used shift-drag.
+      ...(areas.length > 1 ? { areas } : {}),
       sections,
       ...(t.fixedSeed === true ? { fixedSeed: true } : {}),
       seed: Math.round(clampNumber(t.seed, 1, 1, 0xffffffff)),
@@ -952,12 +1007,19 @@ function cleanForests(value: unknown): BoardForest[] {
       }];
     });
     seen.add(id);
+    const areas = cleanGeneratorAreas(forest.areas, {
+      minX: Math.min(rect[0], rect[2]),
+      minY: Math.min(rect[1], rect[3]),
+      maxX: Math.max(rect[0], rect[2]),
+      maxY: Math.max(rect[1], rect[3]),
+    });
     out.push({
       id,
       name: typeof forest.name === 'string' && forest.name.trim()
         ? forest.name.trim().slice(0, 64)
         : id,
-      bounds: { minX: rect[0], minY: rect[1], maxX: rect[2], maxY: rect[3] },
+      bounds: generatorAreasBounds(areas),
+      ...(areas.length > 1 ? { areas } : {}),
       sections,
       ...(forest.fixedSeed === true ? { fixedSeed: true } : {}),
       seed: Math.round(clampNumber(forest.seed, 1, 1, 0xffffffff)),
@@ -1210,7 +1272,7 @@ export function encodeBoard(b: EditorBoard): string {
   // prop-free board encodes byte-identically to a pre-props board.
   if (b.props && nonEmpty(b.props)) wire.p = Object.fromEntries(Object.entries(b.props).map(([k, v]) => [k, v.propId]));
   // Sorted so the same set of live anchors always encodes to the same bytes. Emitted only when the
-  // board actually has one, so no existing board code changes (ADR-0534).
+  // board actually has one, so no existing board code changes (ADR-0537).
   const liveProps = [...new Set(b.liveProps ?? [])].filter((key) => b.props?.[key]).sort();
   if (liveProps.length) wire.lp = liveProps;
   const floatingArtwork = cleanFloatingArtwork(b.floatingArtwork);

@@ -325,7 +325,7 @@ export function movePlayableGrid(
   }
   // Live markers are anchor keys, so a rebase has to carry them to the anchors their props landed
   // on. Leaving the old keys behind would silently sink every obstacle back into the artwork
-  // (ADR-0534). A marker whose prop did not survive the move is dropped with it.
+  // (ADR-0537). A marker whose prop did not survive the move is dropped with it.
   if (source.liveProps?.length) {
     const moved = Object.fromEntries(
       Object.keys(shiftCellMap(

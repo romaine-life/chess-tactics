@@ -29,6 +29,12 @@ import {
   type ForestScatterParams,
   type ForestSpeciesGeometry,
 } from '../core/forestScatter';
+import {
+  generatorAreasBounds,
+  generatorAreasCellCount,
+  generatorAreasContainCell,
+  normalizeGeneratorAreas,
+} from '../core/generatorAreas';
 import { composeGeneratorSections, type GeneratorSectionRelationship } from '../core/generatorComposition';
 import {
   TOWN_FIT_LABELS,
@@ -250,8 +256,10 @@ import {
   brushIconProductionCandidate,
   LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_STAGE,
 } from './brushIconLiveMedia';
-import { ShellControlsPanel, ShellViewportSwap, ShellWorkspace } from './shared/ChromeBox';
+import { InnerChromeBox, ShellControlsPanel, ShellViewportSwap, ShellWorkspace } from './shared/ChromeBox';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
+import { useWars } from '../war/store';
+import { HIS_GRACE_VALUE, expectedWarValue, type ExpectedBattleValue } from '../run/expectedValue';
 import {
   directionCompassCells,
   hasDirectionSprite,
@@ -337,7 +345,7 @@ import {
   type EditorDocumentEditSessionResult,
 } from '../net/editorDocuments';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
-import { LEVEL_BATTLE_CARDS_DEALT_DEFAULT, LEVEL_BATTLE_CARDS_DEALT_MAX, LEVEL_BATTLE_CARDS_DEALT_MIN, OBJECTIVE_TYPES, ZONE_COLORS, zoneEntriesOnLevel, type CastleEventAction, type ChessDrawsEventAction, type ConditionSide, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type VictoryRules, type ZoneColor, type ZoneType } from '../core/level';
+import { LEVEL_BATTLE_CARDS_DEALT_DEFAULT, LEVEL_BATTLE_CARDS_DEALT_MAX, LEVEL_BATTLE_CARDS_DEALT_MIN, OBJECTIVE_TYPES, ZONE_COLORS, zoneEntriesOnLevel, type CastleEventAction, type ChessDrawsEventAction, type ConditionSide, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type VictoryRules, type War, type ZoneColor, type ZoneType } from '../core/level';
 
 import { computeCastleTemplatePairs, type CastleTemplateUnit } from './castlingTemplate';
 import { MODE_NAME, DEFAULT_SURVIVE_TURNS, victoryRulesForObjective, kingSideOf } from '../core/objectives';
@@ -570,7 +578,7 @@ function StudioEditableBoard({
   doodads: Record<string, { doodadId: string }>;
   /** Multi-cell props keyed by ANCHOR cell "x,y" -> {propId}. */
   props?: Record<string, { propId: string }>;
-  /** Anchors standing ON a plate rather than painted into it — the editor must draw these (ADR-0534). */
+  /** Anchors standing ON a plate rather than painted into it — the editor must draw these (ADR-0537). */
   liveProps?: readonly string[];
   /** A prop anchor currently playing its entrance, so the author watches it land as they place it. */
   arrivingProp?: { key: string; startMs: number } | null;
@@ -1485,7 +1493,7 @@ function StudioEditableBoard({
     doodads: placedDoodads,
     props: placedProps,
     // Without this the editor suppresses an obstacle the author just placed as though the plate had
-    // painted it, and the rock only appears in Play Test (ADR-0534).
+    // painted it, and the rock only appears in Play Test (ADR-0537).
     liveProps: placedLiveProps ? [...placedLiveProps] : undefined,
     // Live drag preview. Dragging one member of a selection previews the whole selection sliding
     // by the same offset, so what the author releases is what they watched move.
@@ -1699,6 +1707,53 @@ const nextGeneratedRegionName = (regions: readonly BoardGeneratedRegion[]): stri
   while (used.has(`Region ${n}`)) n += 1;
   return `Region ${n}`;
 };
+/**
+ * Every patch of ground a saved Town or Forest occupies.
+ *
+ * Instances saved before shift-drag existed carry only `bounds`, which IS the one-rectangle case,
+ * so there is nothing to migrate — the fallback is the old meaning stated explicitly.
+ */
+const generatorInstanceAreas = (
+  instance: { bounds: TownBounds; areas?: readonly TownBounds[] },
+): readonly TownBounds[] => (instance.areas?.length ? instance.areas : [instance.bounds]);
+/** A live Town/Forest drag: the rectangle under the pointer, and whether it EXTENDS the selection. */
+type PlacementDrag = { area: TownBounds; additive: boolean };
+type PlacementDragOrigin = { pointerId: number; cellX: number; cellY: number; additive: boolean };
+/**
+ * The saved `bounds`/`areas` pair for a new ground union.
+ *
+ * `bounds` is derived from the patches rather than authored, so it can never disagree with them,
+ * and a single patch stays a plain rectangle — the shape every instance placed before shift-drag
+ * existed already has.
+ */
+const generatorAreaChange = (
+  areas: readonly TownBounds[],
+): { bounds: TownBounds; areas?: TownBounds[] } => {
+  const kept = normalizeGeneratorAreas([...areas]);
+  return { bounds: generatorAreasBounds(kept), areas: kept.length > 1 ? kept : undefined };
+};
+/**
+ * How much ground an instance holds, in the terms the author dragged it out in.
+ *
+ * A single rectangle keeps reading as its two sides, because that is the shape it is. Several
+ * patches have no width and height worth quoting — the bounding box would name ground the town
+ * does not own — so they report how many patches and how many tiles those actually cover.
+ */
+const placementGroundLabel = (areas: readonly TownBounds[]): string => {
+  if (areas.length === 1) {
+    const [area] = areas;
+    return `${Math.abs(area.maxX - area.minX)}×${Math.abs(area.maxY - area.minY)} tiles`;
+  }
+  return `${areas.length} areas · ${generatorAreasCellCount(areas)} tiles`;
+};
+/** True when a saved instance's ground touches a dragged rectangle, for erase hit-testing. */
+const placementAreasOverlap = (
+  areas: readonly TownBounds[],
+  rect: TownBounds,
+): boolean => areas.some((area) => (
+  area.minX <= rect.maxX && area.maxX >= rect.minX
+  && area.minY <= rect.maxY && area.maxY >= rect.minY
+));
 // A terrain's own cover set (grass tufts / water reeds / sand), or null — the default cover a region
 // picks up when it uses that terrain (the author can then change it to anything).
 const defaultCoverType = (terrain: TileFamilyId): GroundCoverId | null => {
@@ -1836,6 +1891,18 @@ const CHESS_MATERIAL_POINT_VALUE: Record<PlayablePieceType, number> = {
   king: 0,
 };
 const MATERIAL_VALUE_NOTE = 'P=1 / N,B=3 / R=5 / Q=9';
+/** Points read at a tenth. An average market buys fractions of a card, so a whole number here is
+ * a real whole number rather than a rounded one. */
+const formatPoints = (value: number): string => (
+  Math.abs(value - Math.round(value)) < 0.05 ? String(Math.round(value)) : value.toFixed(1)
+);
+const formatAdvantage = (value: number): string => (
+  Math.abs(value) < 0.05
+    ? 'Even'
+    : value > 0
+      ? `Player ahead by ${formatPoints(value)}`
+      : `Enemy ahead by ${formatPoints(-value)}`
+);
 const materialPointsForUnitId = (unitId: string): number => {
   const type = unitFamilyForId(unitId);
   return type ? CHESS_MATERIAL_POINT_VALUE[type] : 0;
@@ -2594,6 +2661,7 @@ const LEVEL_EDITOR_LAYER_OPTIONS: ReadonlyArray<{ id: LayerKey; label: string }>
   { id: 'cover', label: 'Cover' },
   { id: 'zone', label: 'Zone' },
   { id: 'rules', label: 'Rules' },
+  { id: 'war', label: 'War' },
   { id: 'status', label: 'Status' },
   { id: 'history', label: 'History' },
 ];
@@ -2630,13 +2698,14 @@ const toolForLayer = (layer: LayerKey): 'select' | 'brush' => (
   || layer === 'status'
   || layer === 'history'
   || layer === 'rules'
+  || layer === 'war'
   || layer === 'generate'
   || layer === 'level-artwork'
 ) ? 'select' : 'brush';
 const brushKindForInitialLayer = (layer: LayerKey): BrushKind => {
   if (layer === 'paths') return 'road';
   if (layer === 'placed-art') return 'artwork';
-  if (layer === 'board' || layer === 'camera' || layer === 'status' || layer === 'history' || layer === 'rules' || layer === 'generate' || layer === 'level-artwork') return 'tile';
+  if (layer === 'board' || layer === 'camera' || layer === 'status' || layer === 'history' || layer === 'rules' || layer === 'war' || layer === 'generate' || layer === 'level-artwork') return 'tile';
   return layer as BrushKind;
 };
 const brushKindForRouteState = (layer: LayerKey, kind: BrushKind | undefined): BrushKind => {
@@ -3214,7 +3283,7 @@ export function LevelEditor(): ReactElement {
   const [boardDoodads, setBoardDoodads] = useState<Record<string, { doodadId: string }>>(initialBoard?.doodads ?? {});
   // Multi-cell props (trees/houses), keyed by ANCHOR cell. Seeded from a loaded board, else empty.
   const [boardProps, setBoardProps] = useState<Record<string, { propId: string }>>(initialBoard?.props ?? {});
-  // Which prop anchors STAND ON a plate rather than being painted into it (ADR-0534). Only ever
+  // Which prop anchors STAND ON a plate rather than being painted into it (ADR-0537). Only ever
   // populated on a pre-drawn board; `commitEditorBoard` keeps it in step with `props`.
   const [boardLiveProps, setBoardLiveProps] = useState<string[]>(initialBoard?.liveProps ?? []);
   // The obstacle currently falling into the cell it was just placed on. Board state is committed
@@ -3238,7 +3307,7 @@ export function LevelEditor(): ReactElement {
       : defaultPropDef().id
   ));
   // The prop kinds a board will accept. A plate paints its own trees and houses, so only obstacles
-  // are offered there (ADR-0534) — and an armed tree becomes the first rock rather than a brush
+  // are offered there (ADR-0537) — and an armed tree becomes the first rock rather than a brush
   // that silently refuses every cell.
   const propBrushKinds = useMemo<PropKind[]>(
     () => isPredrawnBoard ? ['rock'] : ['tree', 'house', 'rock'],
@@ -3299,8 +3368,8 @@ export function LevelEditor(): ReactElement {
   const [expandedForestTrees, setExpandedForestTrees] = useState<Set<string>>(() => new Set());
   const [forestGenerationResult, setForestGenerationResult] = useState<{ forestId: string; count: number } | null>(null);
   /** The live Forest drag in the same snapped logical cells used by Town. */
-  const [forestDragBounds, setForestDragBounds] = useState<ForestGridArea | null>(null);
-  const forestDragRef = useRef<{ pointerId: number; cellX: number; cellY: number } | null>(null);
+  const [forestDrag, setForestDrag] = useState<PlacementDrag | null>(null);
+  const forestDragRef = useRef<PlacementDragOrigin | null>(null);
   useEffect(() => {
     if (!boardForests.length) {
       if (selectedForestId !== null) setSelectedForestId(null);
@@ -3309,7 +3378,10 @@ export function LevelEditor(): ReactElement {
     if (!boardForests.some((forest) => forest.id === selectedForestId)) setSelectedForestId(boardForests[0].id);
   }, [boardForests, selectedForestId]);
   const selectedForest = boardForests.find((forest) => forest.id === selectedForestId) ?? null;
-  const forestArea: ForestGridArea | null = selectedForest?.bounds ?? null;
+  const forestAreas = useMemo(
+    () => (selectedForest ? generatorInstanceAreas(selectedForest) : []),
+    [selectedForest],
+  );
   const selectedForestGenerated = selectedForest
     ? boardFloatingArtwork.some((placement) => isForestMember(placement, selectedForest.id))
       || forestGenerationResult?.forestId === selectedForest.id
@@ -3435,8 +3507,8 @@ export function LevelEditor(): ReactElement {
   });
   const [selectedTownId, setSelectedTownId] = useState<string | null>(null);
   /** The live selection in grid cells, snapped, so the preview shows exactly what will be used. */
-  const [townDragBounds, setTownDragBounds] = useState<TownBounds | null>(null);
-  const townDragRef = useRef<{ pointerId: number; cellX: number; cellY: number } | null>(null);
+  const [townDrag, setTownDrag] = useState<PlacementDrag | null>(null);
+  const townDragRef = useRef<PlacementDragOrigin | null>(null);
   const [townSited, setTownSited] = useState<
     { placed: number; target: number; spacing: number; outside: number; offered: number } | null>(null);
   // Keep the selection on a town that exists. Without this the dropdown opens empty on a board
@@ -3449,7 +3521,10 @@ export function LevelEditor(): ReactElement {
     if (!boardTowns.some((town) => town.id === selectedTownId)) setSelectedTownId(boardTowns[0].id);
   }, [boardTowns, selectedTownId]);
   const selectedTown = boardTowns.find((town) => town.id === selectedTownId) ?? null;
-  const townArea: TownBounds | null = selectedTown?.bounds ?? null;
+  const townAreas = useMemo(
+    () => (selectedTown ? generatorInstanceAreas(selectedTown) : []),
+    [selectedTown],
+  );
   const selectedTownGenerated = selectedTown
     ? boardFloatingArtwork.some((placement) => isTownMember(placement, selectedTown.id))
     : false;
@@ -4034,7 +4109,7 @@ export function LevelEditor(): ReactElement {
     options: { playableWindow?: boolean } = {},
   ): boolean => {
     const current = currentEditorBoardRef.current;
-    // A live marker is only ever a note about a prop that is actually placed (ADR-0534). Settling
+    // A live marker is only ever a note about a prop that is actually placed (ADR-0537). Settling
     // that here rather than at each call site is what lets erase, the Move tool's vacated anchor,
     // and a resize that prunes a prop off the board all stay correct without knowing about it.
     const liveProps = [...new Set(next.liveProps ?? [])].filter((key) => next.props?.[key]).sort();
@@ -4379,7 +4454,7 @@ export function LevelEditor(): ReactElement {
     setPredrawnSelectionValidation(predrawnSelectionSeed(restored.surface));
     currentEditorBoardRef.current = restored;
     applyEditorBoardWithSelectionSafety(restored);
-    setForestDragBounds(null);
+    setForestDrag(null);
     setForestGenerationResult(null);
     setSelectedCell(null);
     setSelectedArtworkId(null);
@@ -4395,7 +4470,7 @@ export function LevelEditor(): ReactElement {
     setPredrawnSelectionValidation(predrawnSelectionSeed(restored.surface));
     currentEditorBoardRef.current = restored;
     applyEditorBoardWithSelectionSafety(restored);
-    setForestDragBounds(null);
+    setForestDrag(null);
     setForestGenerationResult(null);
     setSelectedCell(null);
     setSelectedArtworkId(null);
@@ -4646,15 +4721,16 @@ export function LevelEditor(): ReactElement {
    *
    * Drawn here rather than through the board's renderCellOverlay because that only runs for
    * playable cells, while Town and Forest both belong in the scenic apron too.
+   *
+   * Takes the instance's whole ground — one rectangle, or the union of several — and outlines
+   * only the cells actually in it, so an author who shift-dragged a second patch on sees the
+   * shape the generator will fill rather than the box it happens to fit inside.
    */
-  const placementGridHighlight = useCallback((bounds: TownBounds | null) => {
-    if (!bounds || !viewViewportSize) return null;
-    const minX = Math.min(bounds.minX, bounds.maxX);
-    const maxX = Math.max(bounds.minX, bounds.maxX);
-    const minY = Math.min(bounds.minY, bounds.maxY);
-    const maxY = Math.max(bounds.minY, bounds.maxY);
-    const across = maxX - minX;
-    const down = maxY - minY;
+  const placementGridHighlight = useCallback((areas: readonly TownBounds[] | null) => {
+    if (!areas?.length || !viewViewportSize) return null;
+    const bounds = generatorAreasBounds(areas);
+    const across = bounds.maxX - bounds.minX;
+    const down = bounds.maxY - bounds.minY;
     // A selection this large is a mis-drag; drawing every tile would stall the editor.
     if ((across + 1) * (down + 1) > 4096) return null;
     const halfWidth = (TILE_TEMPLATE.topWidth / 2) * viewZoom;
@@ -4663,8 +4739,9 @@ export function LevelEditor(): ReactElement {
     // as four corner fragments — clip-path cuts an inset ring that follows the RECTANGLE — which
     // is invisible over bright terrain.
     const cells: Array<{ key: string; points: string }> = [];
-    for (let y = minY; y <= maxY; y += 1) {
-      for (let x = minX; x <= maxX; x += 1) {
+    for (let y = bounds.minY; y <= bounds.maxY; y += 1) {
+      for (let x = bounds.minX; x <= bounds.maxX; x += 1) {
+        if (!generatorAreasContainCell(areas, x, y)) continue;
         const seat = projectBoardPoint({ x, y });
         const point = placementSurfacePoint({ x: seat.left, y: seat.top }, viewViewportSize);
         cells.push({
@@ -4679,7 +4756,10 @@ export function LevelEditor(): ReactElement {
       }
     }
     const corner = placementSurfacePoint(
-      (() => { const seat = projectBoardPoint({ x: minX, y: minY }); return { x: seat.left, y: seat.top }; })(),
+      (() => {
+        const seat = projectBoardPoint({ x: bounds.minX, y: bounds.minY });
+        return { x: seat.left, y: seat.top };
+      })(),
       viewViewportSize,
     );
     return {
@@ -4688,18 +4768,32 @@ export function LevelEditor(): ReactElement {
       down,
       cellCountAcross: across + 1,
       cellCountDown: down + 1,
+      areaCount: areas.length,
+      cellCount: cells.length,
       labelX: corner.x - halfWidth,
       labelY: corner.y - halfHeight * 2,
     };
   }, [viewViewportSize, viewZoom, viewPan.x, viewPan.y,
     artworkBoardOrigin.originLeft, artworkBoardOrigin.originTop]);
+  /**
+   * What a drag is about to leave behind. A shift-drag EXTENDS the selected instance, so its
+   * preview has to show the ground already owned alongside the pending patch — otherwise the
+   * outline collapses to the new rectangle mid-drag and reads as "this replaces everything".
+   */
+  const placementDragAreas = (
+    drag: { area: TownBounds; additive: boolean } | null,
+    saved: readonly TownBounds[],
+  ): readonly TownBounds[] | null => {
+    if (!drag) return saved.length ? saved : null;
+    return drag.additive ? [...saved, drag.area] : [drag.area];
+  };
   const townHighlight = useMemo(
-    () => placementGridHighlight(townDragBounds ?? townArea),
-    [placementGridHighlight, townDragBounds, townArea],
+    () => placementGridHighlight(placementDragAreas(townDrag, townAreas)),
+    [placementGridHighlight, townDrag, townAreas],
   );
   const forestHighlight = useMemo(
-    () => placementGridHighlight(forestDragBounds ?? forestArea),
-    [placementGridHighlight, forestDragBounds, forestArea],
+    () => placementGridHighlight(placementDragAreas(forestDrag, forestAreas)),
+    [placementGridHighlight, forestDrag, forestAreas],
   );
 
   /**
@@ -4780,6 +4874,7 @@ export function LevelEditor(): ReactElement {
           forestId: forest.id,
           scopeId: section.id,
           area: group.bounds,
+          areas: generatorInstanceAreas(generatedForest),
           params: forestParams(section, sectionSeed(generatedForest.seed, index)),
           geometry: forestGeometry,
           existing: [...preserved, ...grown],
@@ -4871,6 +4966,24 @@ export function LevelEditor(): ReactElement {
   };
   const addForestAtView = (): void => createForest(placementAreaAtView({ x: 6, y: 6 }));
 
+  /**
+   * Extend the selected Forest's ground with another patch, or take the last one back.
+   *
+   * The ground is the whole of what changes; the recipe, seed and trees already standing stay
+   * put until Generate is pressed again, which is the same interaction boundary every other
+   * generator setting sits behind.
+   */
+  const addForestArea = (forest: BoardForest, area: ForestGridArea): void => {
+    updateForest(forest.id, generatorAreaChange([...generatorInstanceAreas(forest), area]));
+    setForestGenerationResult(null);
+  };
+  const dropLastForestArea = (forest: BoardForest): void => {
+    const areas = generatorInstanceAreas(forest);
+    if (areas.length < 2) return;
+    updateForest(forest.id, generatorAreaChange(areas.slice(0, -1)));
+    setForestGenerationResult(null);
+  };
+
   const resetForestParams = (): void => {
     if (!selectedForest) return;
     updateForest(selectedForest.id, {
@@ -4921,6 +5034,7 @@ export function LevelEditor(): ReactElement {
           townId: town.id,
           scopeId: section.id,
           bounds: group.bounds,
+          areas: generatorInstanceAreas(generatedTown),
           params: {
             sections: [{ ...section, share: 1 }],
             blend: 0,
@@ -5019,6 +5133,24 @@ export function LevelEditor(): ReactElement {
     commitEditorBoard(next, null);
   };
 
+  /**
+   * Extend the selected town's ground with another patch, or take the last one back.
+   *
+   * This is what lets a town stop being a rectangle: it can bend around a corner, wrap a lake, or
+   * carry on past the edge of one screenful of board. Buildings already standing are left alone
+   * until Regenerate, like every other town setting.
+   */
+  const addTownArea = (town: BoardTown, area: TownBounds): void => {
+    updateTown(town.id, generatorAreaChange([...generatorInstanceAreas(town), area]));
+    setTownSited(null);
+  };
+  const dropLastTownArea = (town: BoardTown): void => {
+    const areas = generatorInstanceAreas(town);
+    if (areas.length < 2) return;
+    updateTown(town.id, generatorAreaChange(areas.slice(0, -1)));
+    setTownSited(null);
+  };
+
   const resetTownParams = (): void => {
     if (!selectedTown) return;
     updateTown(selectedTown.id, {
@@ -5072,7 +5204,7 @@ export function LevelEditor(): ReactElement {
       if (!canPlaceProp(propBrushDef, x, y)) return;
       next.props[key] = { propId: propBrushDef.id };
       // On a plate the picture already painted its scenery, so a prop placed now is an obstacle
-      // STANDING on it: mark it live so it draws and drops instead of being suppressed (ADR-0534).
+      // STANDING on it: mark it live so it draws and drops instead of being suppressed (ADR-0537).
       if (isPredrawnBoard) next.liveProps = [...(next.liveProps ?? []), key];
       if (!commitEditorBoard(next)) return;
       // Whether an obstacle drops is a property of its KIND (ADR-0518), so the editor asks the same
@@ -5829,6 +5961,23 @@ export function LevelEditor(): ReactElement {
     () => isWarBattle ? validateWarBattlePlayability(candidateLevel) : validatePlayability(candidateLevel),
     [candidateLevel, isWarBattle],
   );
+  // The War this Battle sits in, and the economy that reaches it. The whole War is walked because
+  // a Battle's expected force is the sum of every earlier Battle's reward: change an enemy Rook
+  // three Battles back and this one is fought with less. The Battle being edited substitutes the
+  // LIVE candidate for its stored Level, so painting a piece moves the numbers immediately.
+  const warBattleLevels = useCampaigns((state) => state.levels);
+  const editorWar = useWars((state) => state.wars.find((candidate) => candidate.id === routeParams.warId));
+  const warEconomy = useMemo<{ war: War; curve: ExpectedBattleValue[]; index: number } | null>(() => {
+    if (!isWarBattle || !editorWar) return null;
+    const ordered = [...editorWar.battles].sort((left, right) => left.ordinal - right.ordinal);
+    const index = ordered.findIndex((battle) => battle.levelId === routeParams.levelId);
+    const levels = ordered.map((battle, position) => (
+      position === index ? candidateLevel : warBattleLevels[battle.levelId]
+    ));
+    if (index < 0 || levels.some((level) => !level)) return null;
+    return { war: editorWar, curve: expectedWarValue(levels as Level[]), index };
+  }, [candidateLevel, editorWar, isWarBattle, routeParams.levelId, warBattleLevels]);
+  const warValueHere = warEconomy?.curve[warEconomy.index] ?? null;
   const previewPlayerFaction = useMemo<UnitPalette | null>(() => {
     if (playerFaction) return playerFaction;
     for (let y = 0; y < boardRows; y += 1) {
@@ -8729,7 +8878,7 @@ export function LevelEditor(): ReactElement {
       delete next.props[fromKey];
       next.props[toKey] = placement;
       // Dragging an obstacle across a plate moves the same object; it must not stop being live and
-      // sink back into the artwork on arrival (ADR-0534).
+      // sink back into the artwork on arrival (ADR-0537).
       if ((next.liveProps ?? []).includes(fromKey)) {
         next.liveProps = [...(next.liveProps ?? []).filter((anchor) => anchor !== fromKey), toKey];
       }
@@ -9716,7 +9865,9 @@ export function LevelEditor(): ReactElement {
                   <div
                     className="le-artwork-free-placement-surface le-town-placement-surface"
                     data-testid="town-placement-surface"
-                    aria-label={tool === 'erase' ? 'Drag over a town to remove it' : 'Drag out the area the town fills'}
+                    aria-label={tool === 'erase'
+                      ? 'Drag over a town to remove it'
+                      : 'Drag out the area the town fills, or shift-drag to add another area to the selected town'}
                     onPointerDown={(event) => {
                       if (event.button !== 0) return;
                       event.preventDefault();
@@ -9724,8 +9875,11 @@ export function LevelEditor(): ReactElement {
                       const surface = event.currentTarget;
                       surface.setPointerCapture(event.pointerId);
                       const cell = placementCellAt(event.clientX, event.clientY, surface.getBoundingClientRect());
-                      townDragRef.current = { pointerId: event.pointerId, cellX: cell.x, cellY: cell.y };
-                      setTownDragBounds({ minX: cell.x, minY: cell.y, maxX: cell.x, maxY: cell.y });
+                      // Shift EXTENDS the selected town rather than starting another one. Decided at
+                      // the press, so letting the key go mid-drag cannot change what the drag was.
+                      const additive = event.shiftKey && Boolean(selectedTown);
+                      townDragRef.current = { pointerId: event.pointerId, cellX: cell.x, cellY: cell.y, additive };
+                      setTownDrag({ area: { minX: cell.x, minY: cell.y, maxX: cell.x, maxY: cell.y }, additive });
                     }}
                     onPointerMove={(event) => {
                       const drag = townDragRef.current;
@@ -9733,9 +9887,12 @@ export function LevelEditor(): ReactElement {
                       const cell = placementCellAt(
                         event.clientX, event.clientY, event.currentTarget.getBoundingClientRect(),
                       );
-                      setTownDragBounds({
-                        minX: Math.min(drag.cellX, cell.x), minY: Math.min(drag.cellY, cell.y),
-                        maxX: Math.max(drag.cellX, cell.x), maxY: Math.max(drag.cellY, cell.y),
+                      setTownDrag({
+                        area: {
+                          minX: Math.min(drag.cellX, cell.x), minY: Math.min(drag.cellY, cell.y),
+                          maxX: Math.max(drag.cellX, cell.x), maxY: Math.max(drag.cellY, cell.y),
+                        },
+                        additive: drag.additive,
                       });
                     }}
                     onPointerUp={(event) => {
@@ -9744,7 +9901,7 @@ export function LevelEditor(): ReactElement {
                         event.currentTarget.releasePointerCapture(event.pointerId);
                       }
                       townDragRef.current = null;
-                      setTownDragBounds(null);
+                      setTownDrag(null);
                       if (!drag || drag.pointerId !== event.pointerId) return;
                       const cell = placementCellAt(
                         event.clientX, event.clientY, event.currentTarget.getBoundingClientRect(),
@@ -9753,23 +9910,27 @@ export function LevelEditor(): ReactElement {
                         minX: Math.min(drag.cellX, cell.x), minY: Math.min(drag.cellY, cell.y),
                         maxX: Math.max(drag.cellX, cell.x), maxY: Math.max(drag.cellY, cell.y),
                       };
-                      // A stray click is not a town, but a thin strip is: dragging along a screen
-                      // diagonal runs along ONE grid axis, and an 8x1 selection is exactly the
-                      // roadside row plan. Only reject a selection with no extent at all.
-                      if (area.maxX - area.minX < 1 && area.maxY - area.minY < 1) return;
                       if (tool === 'erase') {
-                        // Erase drops every town whose area the stroke covers.
-                        const overlapped = boardTowns.filter((town) => (
-                          town.bounds.minX <= area.maxX && town.bounds.maxX >= area.minX
-                          && town.bounds.minY <= area.maxY && town.bounds.maxY >= area.minY
-                        ));
+                        // Erase drops every town any of whose patches the stroke covers.
+                        const overlapped = boardTowns.filter(
+                          (town) => placementAreasOverlap(generatorInstanceAreas(town), area),
+                        );
                         overlapped.forEach(removeTown);
                         return;
                       }
+                      // Extending is a correction as often as an extension, so a single shift-click
+                      // adds its one cell. A NEW town still needs real ground: a stray click is not
+                      // a town, though a thin strip is — dragging along a screen diagonal runs along
+                      // ONE grid axis, and an 8x1 selection is exactly the roadside row plan.
+                      if (drag.additive && selectedTown) {
+                        addTownArea(selectedTown, area);
+                        return;
+                      }
+                      if (area.maxX - area.minX < 1 && area.maxY - area.minY < 1) return;
                       createTown(area);
                     }}
                     onPointerCancel={() => {
-                      townDragRef.current = null; setTownDragBounds(null);
+                      townDragRef.current = null; setTownDrag(null);
                     }}
                   >
                     {/* The committed selection stays outlined once the drag ends: Regenerate and
@@ -9802,7 +9963,7 @@ export function LevelEditor(): ReactElement {
                     {townHighlight ? (
                       <>
                         <svg
-                          className={`le-town-cells${townDragBounds ? '' : ' is-settled'}`}
+                          className={`le-town-cells${townDrag ? '' : ' is-settled'}`}
                           aria-hidden="true"
                         >
                           {townHighlight.cells.map((cell) => (
@@ -9820,7 +9981,9 @@ export function LevelEditor(): ReactElement {
                           className="le-town-drag-size"
                           aria-hidden="true"
                           style={{ left: `${townHighlight.labelX}px`, top: `${townHighlight.labelY}px` }}
-                        >{townHighlight.across} × {townHighlight.down} tiles</span>
+                        >{townHighlight.areaCount > 1
+                          ? `${townHighlight.areaCount} areas · ${townHighlight.cellCount} tiles`
+                          : `${townHighlight.across} × ${townHighlight.down} tiles`}</span>
                       </>
                     ) : null}
                   </div>
@@ -9832,7 +9995,7 @@ export function LevelEditor(): ReactElement {
                     data-testid="forest-placement-surface"
                     aria-label={tool === 'erase'
                       ? 'Drag out grid cells to remove saved Forests'
-                      : 'Drag out the grid cells for a new Forest'}
+                      : 'Drag out the grid cells for a new Forest, or shift-drag to add another area to the selected Forest'}
                     onPointerDown={(event) => {
                       if (event.button !== 0) return;
                       event.preventDefault();
@@ -9842,11 +10005,14 @@ export function LevelEditor(): ReactElement {
                       const cell = placementCellAt(
                         event.clientX, event.clientY, surface.getBoundingClientRect(),
                       );
+                      // Shift EXTENDS the selected Forest rather than starting another one.
+                      const additive = event.shiftKey && Boolean(selectedForest);
                       forestDragRef.current = {
-                        pointerId: event.pointerId, cellX: cell.x, cellY: cell.y,
+                        pointerId: event.pointerId, cellX: cell.x, cellY: cell.y, additive,
                       };
-                      setForestDragBounds({
-                        minX: cell.x, minY: cell.y, maxX: cell.x, maxY: cell.y,
+                      setForestDrag({
+                        area: { minX: cell.x, minY: cell.y, maxX: cell.x, maxY: cell.y },
+                        additive,
                       });
                     }}
                     onPointerMove={(event) => {
@@ -9855,9 +10021,12 @@ export function LevelEditor(): ReactElement {
                       const cell = placementCellAt(
                         event.clientX, event.clientY, event.currentTarget.getBoundingClientRect(),
                       );
-                      setForestDragBounds({
-                        minX: Math.min(drag.cellX, cell.x), minY: Math.min(drag.cellY, cell.y),
-                        maxX: Math.max(drag.cellX, cell.x), maxY: Math.max(drag.cellY, cell.y),
+                      setForestDrag({
+                        area: {
+                          minX: Math.min(drag.cellX, cell.x), minY: Math.min(drag.cellY, cell.y),
+                          maxX: Math.max(drag.cellX, cell.x), maxY: Math.max(drag.cellY, cell.y),
+                        },
+                        additive: drag.additive,
                       });
                     }}
                     onPointerUp={(event) => {
@@ -9866,7 +10035,7 @@ export function LevelEditor(): ReactElement {
                       }
                       const drag = forestDragRef.current;
                       forestDragRef.current = null;
-                      setForestDragBounds(null);
+                      setForestDrag(null);
                       if (!drag || drag.pointerId !== event.pointerId) return;
                       const cell = placementCellAt(
                         event.clientX, event.clientY, event.currentTarget.getBoundingClientRect(),
@@ -9876,23 +10045,26 @@ export function LevelEditor(): ReactElement {
                         maxX: Math.max(drag.cellX, cell.x), maxY: Math.max(drag.cellY, cell.y),
                       };
                       if (tool === 'erase') {
-                        const overlapped = boardForests.filter((forest) => (
-                          forest.bounds.minX <= area.maxX && forest.bounds.maxX >= area.minX
-                          && forest.bounds.minY <= area.maxY && forest.bounds.maxY >= area.minY
-                        ));
+                        const overlapped = boardForests.filter(
+                          (forest) => placementAreasOverlap(generatorInstanceAreas(forest), area),
+                        );
                         removeForests(new Set(overlapped.map((forest) => forest.id)));
+                        return;
+                      }
+                      if (drag.additive && selectedForest) {
+                        addForestArea(selectedForest, area);
                         return;
                       }
                       createForest(area);
                     }}
                     onPointerCancel={() => {
                       forestDragRef.current = null;
-                      setForestDragBounds(null);
+                      setForestDrag(null);
                     }}
                   >
                     {forestHighlight ? (
                       <svg
-                        className={`le-forest-cells${forestDragBounds ? '' : ' is-settled'}`}
+                        className={`le-forest-cells${forestDrag ? '' : ' is-settled'}`}
                         aria-hidden="true"
                       >
                         {forestHighlight.cells.map((cell) => (
@@ -9912,7 +10084,9 @@ export function LevelEditor(): ReactElement {
                         className="le-forest-drag-size"
                         aria-hidden="true"
                         style={{ left: `${forestHighlight.labelX}px`, top: `${forestHighlight.labelY}px` }}
-                      >{forestHighlight.cellCountAcross} × {forestHighlight.cellCountDown} grid cells</span>
+                      >{forestHighlight.areaCount > 1
+                        ? `${forestHighlight.areaCount} areas · ${forestHighlight.cellCount} grid cells`
+                        : `${forestHighlight.cellCountAcross} × ${forestHighlight.cellCountDown} grid cells`}</span>
                     ) : null}
                   </div>
                 ) : null}
@@ -10871,36 +11045,6 @@ export function LevelEditor(): ReactElement {
             <ChromeButton unit="inner-text-button" ref={eventsOpenButtonRef} className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-events-open')} disabled={eventsOpen} onClick={() => openEventsEditor(isWarBattle ? 'deployment' : 'victory')}>Open rules editor</ChromeButton>
           </section>
 
-          {/* Only a War Battle is ever dealt cards — a Campaign or standalone level is entered
-              with its authored army, so the control would be inert there. Every Battle carries a
-              count: there is no off, and Save is blocked until this level has one. */}
-          {isWarBattle ? (
-            <section className="skirmish-card">
-              <h2>Deployment deal</h2>
-              <div className="le-ctrlrow">
-                <span className="le-ctrllabel">Cards dealt</span>
-                <Stepper
-                  suffix=""
-                  decreaseLabel="Deal fewer cards on this Battle"
-                  increaseLabel="Deal more cards on this Battle"
-                  onDecrease={() => setBattleCardsDealt((v) => clampCardsDealt(v - 1))}
-                  onIncrease={() => setBattleCardsDealt((v) => clampCardsDealt(v + 1))}
-                  edit={{
-                    value: battleCardsDealt,
-                    min: LEVEL_BATTLE_CARDS_DEALT_MIN,
-                    format: (v) => String(v),
-                    parse: parseCardsDealt,
-                    onCommit: (v) => setBattleCardsDealt(clampCardsDealt(v)),
-                    ariaLabel: 'Cards dealt at Deployment',
-                  }}
-                />
-              </div>
-              <p className="le-board-note">
-                {`This Battle deals ${battleCardsDealt} card${battleCardsDealt === 1 ? '' : 's'} from the player’s collection, and they field only the units those cards carry. His Grace is always the first one dealt, so a deal of 1 sends the King in alone. Nothing else decides this — the counts across a War are the whole curve. From ${LEVEL_BATTLE_CARDS_DEALT_MIN} to ${LEVEL_BATTLE_CARDS_DEALT_MAX}.`}
-              </p>
-            </section>
-          ) : null}
-
           <section className="skirmish-card">
             <h2>Battle clock</h2>
             <div className="le-ctrlrow">
@@ -10955,6 +11099,134 @@ export function LevelEditor(): ReactElement {
                 : 'Untimed — the player can think as long as they like.'}
             </p>
           </section>
+        </>) : layer === 'war' ? (<>
+          {/* War mode. Only a War Battle is dealt cards or reached by a Run economy — a Campaign
+              or standalone level is entered with its authored army — so this panel says that
+              plainly elsewhere rather than offering controls that would be inert. */}
+          {!isWarBattle ? (
+            <section className="skirmish-card">
+              <h2>War</h2>
+              <p className="le-board-note">This level is not a War Battle. Nothing deals it cards and no Run economy reaches it, so it has no deal to author and no expected force to balance against. Add it to a War first.</p>
+              <ChromeNavButton unit="inner-text-button" to="/editor/wars" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}>Open the War editor</ChromeNavButton>
+            </section>
+          ) : (<>
+            {/* Every Battle carries a count: there is no off, and Save is blocked until this
+                level has one. */}
+            <section className="skirmish-card">
+              <h2>Deployment deal</h2>
+              <div className="le-ctrlrow">
+                <span className="le-ctrllabel">Cards dealt</span>
+                <Stepper
+                  suffix=""
+                  decreaseLabel="Deal fewer cards on this Battle"
+                  increaseLabel="Deal more cards on this Battle"
+                  onDecrease={() => setBattleCardsDealt((v) => clampCardsDealt(v - 1))}
+                  onIncrease={() => setBattleCardsDealt((v) => clampCardsDealt(v + 1))}
+                  edit={{
+                    value: battleCardsDealt,
+                    min: LEVEL_BATTLE_CARDS_DEALT_MIN,
+                    format: (v) => String(v),
+                    parse: parseCardsDealt,
+                    onCommit: (v) => setBattleCardsDealt(clampCardsDealt(v)),
+                    ariaLabel: 'Cards dealt at Deployment',
+                  }}
+                />
+              </div>
+              <p className="le-board-note">
+                {`This Battle deals ${battleCardsDealt} card${battleCardsDealt === 1 ? '' : 's'} from the player’s collection, and they field only the units those cards carry. His Grace is always the first one dealt, so a deal of 1 sends the King in alone. Nothing else decides this — the counts across a War are the whole curve. From ${LEVEL_BATTLE_CARDS_DEALT_MIN} to ${LEVEL_BATTLE_CARDS_DEALT_MAX}.`}
+              </p>
+            </section>
+
+            {/* How much force this Battle will actually meet, beside the force it puts up. The
+                player side is postulated at the ceiling — perfect play, everything bought,
+                nothing lost — because a Battle balanced against the best case is balanced. */}
+            <section className="skirmish-card le-war-value" aria-live="polite">
+              <h2>Expected player value</h2>
+              {warValueHere ? (<>
+                <InnerChromeBox className="le-war-balance">
+                  <dl>
+                    <div>
+                      <dt>Player fields</dt>
+                      <dd>{formatPoints(warValueHere.playerValue)}</dd>
+                    </div>
+                    <div>
+                      <dt>Enemy on board</dt>
+                      <dd>{formatPoints(warValueHere.enemy.value)}</dd>
+                    </div>
+                  </dl>
+                  <p className={`le-war-verdict ${warValueHere.advantage < -0.05 ? 'is-behind' : warValueHere.advantage > 0.05 ? 'is-ahead' : 'is-even'}`}>
+                    {formatAdvantage(warValueHere.advantage)}
+                  </p>
+                </InnerChromeBox>
+                <dl className="le-war-inputs">
+                  <div>
+                    <dt>Battle</dt>
+                    <dd>{warValueHere.battleIndex + 1} of {warEconomy?.curve.length}</dd>
+                  </div>
+                  <div>
+                    <dt>Deal</dt>
+                    <dd>His Grace + {formatPoints(warValueHere.ordinaryCardsDealt)}</dd>
+                  </div>
+                  <div>
+                    <dt>Avg card value</dt>
+                    <dd>{formatPoints(warValueHere.meanCardValue)}</dd>
+                  </div>
+                  <div>
+                    <dt>Deck by now</dt>
+                    <dd>{formatPoints(warValueHere.cardsHeld)} cards · {formatPoints(warValueHere.deckValue)} pts</dd>
+                  </div>
+                  <div>
+                    <dt>Gold unspent</dt>
+                    <dd>{formatPoints(warValueHere.goldUnspent)}</dd>
+                  </div>
+                  <div>
+                    <dt>Enemy force</dt>
+                    <dd>{warValueHere.enemy.units} piece{warValueHere.enemy.units === 1 ? '' : 's'}{warValueHere.enemy.kings ? ` · ${warValueHere.enemy.kings} King` : ''}</dd>
+                  </div>
+                  <div>
+                    <dt>Pays on victory</dt>
+                    <dd>{formatPoints(warValueHere.victoryGold)} gold</dd>
+                  </div>
+                </dl>
+                <p className="le-board-note">
+                  {`Player value is the ceiling: the perfect player buys every card the market offers, loses nothing, and pays for no retry or reroll. Cards cost exactly what they are worth, so a Battle's reward converts one-for-one into the material the NEXT Battle can bring. What they field here is His Grace (${formatPoints(HIS_GRACE_VALUE)} pts) plus ${formatPoints(warValueHere.ordinaryCardsDealt)} more card${warValueHere.ordinaryCardsDealt === 1 ? '' : 's'} at the deck's average of ${formatPoints(warValueHere.meanCardValue)}. Board bounties, lipsanon gold and the Quartermaster's fourth offer are left out — every one of them only pushes it higher. Kings count 0 on both sides.`}
+                </p>
+              </>) : (
+                <p className="le-board-note">This War's Battles have not all loaded, so the economy that reaches this one cannot be walked yet.</p>
+              )}
+            </section>
+
+            {warEconomy && warEconomy.curve.length > 1 ? (
+              <section className="skirmish-card">
+                <h2>Across the War</h2>
+                <ol className="le-war-curve">
+                  <li className="le-war-curve-head" aria-hidden="true">
+                    <span>#</span>
+                    <span>Deal</span>
+                    <span>Player</span>
+                    <span>Enemy</span>
+                    <span>Δ</span>
+                  </li>
+                  {warEconomy.curve.map((point) => (
+                    <li
+                      key={point.levelId || point.battleIndex}
+                      className={point.battleIndex === warEconomy.index ? 'is-current' : ''}
+                      aria-current={point.battleIndex === warEconomy.index ? 'true' : undefined}
+                    >
+                      <span>{point.battleIndex + 1}</span>
+                      <span>{point.cardsDealt}</span>
+                      <span>{formatPoints(point.playerValue)}</span>
+                      <span>{formatPoints(point.enemy.value)}</span>
+                      <span className={point.advantage < -0.05 ? 'is-behind' : point.advantage > 0.05 ? 'is-ahead' : 'is-even'}>
+                        {Math.abs(point.advantage) < 0.05 ? '0' : `${point.advantage > 0 ? '+' : '−'}${formatPoints(Math.abs(point.advantage))}`}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+                <p className="le-board-note">Every Battle in {warEconomy.war.name}, in order. Player value only climbs where a Battle deals more cards — the deck keeps growing, but the deal is what reaches the board.</p>
+              </section>
+            ) : null}
+          </>)}
         </>) : layer === 'level-artwork' ? (
           <section className="skirmish-card le-artwork-controls" data-testid="ai-artwork-controls">
             <h2>Level Artwork</h2>
@@ -11388,7 +11660,7 @@ export function LevelEditor(): ReactElement {
                   options={boardTowns.length
                     ? boardTowns.map((town) => ({
                       value: town.id,
-                      label: `${town.name} · ${Math.abs(town.bounds.maxX - town.bounds.minX)}×${Math.abs(town.bounds.maxY - town.bounds.minY)} tiles`,
+                      label: `${town.name} · ${placementGroundLabel(generatorInstanceAreas(town))}`,
                     }))
                     : [{ value: '', label: 'No towns yet' }]}
                 />
@@ -11411,6 +11683,21 @@ export function LevelEditor(): ReactElement {
             {boardTowns.length ? null : (
               <p className="le-board-note">Or drag out an area on the board to choose the ground yourself.</p>
             )}
+            {selectedTown ? (
+              <div className="le-gen-scope">
+                <span className="le-gen-scope-label">Ground · {placementGroundLabel(townAreas)}</span>
+                {townAreas.length > 1 ? (
+                  <ChromeButton unit="inner-text-button"
+                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                    onClick={() => dropLastTownArea(selectedTown)}
+                    title={`Take the last area back off ${selectedTown.name}. Regenerate to rebuild it on the smaller ground.`}
+                  >Undo last area</ChromeButton>
+                ) : null}
+              </div>
+            ) : null}
+            {selectedTown ? (
+              <p className="le-board-note">Shift-drag on the board to add another area to {selectedTown.name}, so it need not be one rectangle — bend it around a corner, or pan and carry it on past the edge of the view. Regenerate to rebuild it across the whole ground.</p>
+            ) : null}
             {selectedTown ? (<>
               <h2 className="le-card-subhead">Sections</h2>
               <p className="le-board-note">You define each approach; the generator decides where it belongs inside the selected patch. A mixed Section shares the preceding Section's generated territory. A distinct Section receives another automatically generated territory.</p>
@@ -11748,7 +12035,7 @@ export function LevelEditor(): ReactElement {
                   options={boardForests.length
                     ? boardForests.map((forest) => ({
                       value: forest.id,
-                      label: `${forest.name} · ${Math.abs(forest.bounds.maxX - forest.bounds.minX)}×${Math.abs(forest.bounds.maxY - forest.bounds.minY)} tiles`,
+                      label: `${forest.name} · ${placementGroundLabel(generatorInstanceAreas(forest))}`,
                     }))
                     : [{ value: '', label: 'No Forests yet' }]}
                 />
@@ -11771,6 +12058,21 @@ export function LevelEditor(): ReactElement {
             {boardForests.length ? null : (
               <p className="le-board-note">Or drag out an area on the board to choose the ground yourself. Nothing is generated until you press Generate.</p>
             )}
+            {selectedForest ? (
+              <div className="le-gen-scope">
+                <span className="le-gen-scope-label">Ground · {placementGroundLabel(forestAreas)}</span>
+                {forestAreas.length > 1 ? (
+                  <ChromeButton unit="inner-text-button"
+                    className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                    onClick={() => dropLastForestArea(selectedForest)}
+                    title={`Take the last area back off ${selectedForest.name}. Generate to rebuild it on the smaller ground.`}
+                  >Undo last area</ChromeButton>
+                ) : null}
+              </div>
+            ) : null}
+            {selectedForest ? (
+              <p className="le-board-note">Shift-drag on the board to add another area to {selectedForest.name}, so it need not be one rectangle — wrap it around a lake, or pan and carry it on past the edge of the view. Generate to rebuild it across the whole ground.</p>
+            ) : null}
             {selectedForest ? (<>
               <h2 className="le-card-subhead">Sections</h2>
               <p className="le-board-note">You define each Forest approach; the generator decides where it belongs inside the selected patch. Mixed Sections share generated ground, while distinct Sections receive separate generated ground.</p>

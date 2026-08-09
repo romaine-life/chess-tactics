@@ -48,7 +48,7 @@ stands", never as the handoff for a state you crafted.
 
 - **Level Editor panels** — `?layer=<id>` opens straight on a panel: `board`, `camera`,
   `level-artwork`, `tile`, `generate`, `paths`, `fence`, `wall`, `subterrain`, `wallart`, `unit`,
-  `placed-art`, `cover`, `zone`, `rules`, `status`, `history`. `?kind=<brush>` arms a brush and
+  `placed-art`, `cover`, `zone`, `rules`, `war`, `status`, `history`. `?kind=<brush>` arms a brush and
   `?brush=<id>` pre-selects one; `layer=prop` and `layer=doodad` are aliases that open Placed Art
   with that brush kind. Props are **Placed Art → Props**, so a prop link is
   `/editor/level?layer=prop&brush=oak&board=<code>` — `/editor/level?board=<code>` alone lands on
