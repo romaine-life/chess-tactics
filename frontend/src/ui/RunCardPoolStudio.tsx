@@ -107,6 +107,9 @@ export function RunCardPoolCatalog(): ReactElement {
   const [pieceFilter, setPieceFilter] = useState<PoolPiece | 'all'>('all');
   const [grouping, setGrouping] = useState<PoolGrouping>('band');
   const [draft, setDraft] = useState<Map<string, PoolPiece>>(new Map([['0,0', 'P']]));
+  // One number drives every size on the surface, so the whole page scales together rather than
+  // drifting into a mix of resized and un-resized parts.
+  const [textSize, setTextSize] = useState<number>(15);
 
   const set = useCallback(<K extends keyof PoolKnobs>(field: K, value: PoolKnobs[K]) => {
     setKnobs((prev) => ({ ...prev, [field]: value }));
@@ -167,45 +170,50 @@ export function RunCardPoolCatalog(): ReactElement {
   }, []);
 
   return (
-    <div className="rcp">
+    <div className="rcp" style={{ ['--rcp-fs' as string]: `${textSize}px` }}>
       <style>{`
-        .rcp { display: grid; grid-template-columns: minmax(300px, 360px) 1fr; gap: 22px; align-items: start; font-size: 15px; }
-        .rcp h3 { margin: 0 0 10px; font-size: 15px; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.8; }
+        /* Every size below is a multiple of --rcp-fs, so the slider moves the whole surface
+           together instead of leaving half of it at its authored size. */
+        .rcp { display: grid; grid-template-columns: minmax(calc(var(--rcp-fs) * 20), calc(var(--rcp-fs) * 24)) 1fr; gap: 22px; align-items: start; font-size: var(--rcp-fs); }
+        .rcp h3 { margin: 0 0 10px; font-size: var(--rcp-fs); letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.8; }
         .rcp-panel { border: 1px solid rgba(255,255,255,0.16); border-radius: 6px; padding: 14px 16px; margin-bottom: 16px; }
-        .rcp-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 7px 0; font-size: 15px; }
+        .rcp-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 7px 0; font-size: var(--rcp-fs); }
         .rcp-row-label { opacity: 0.85; }
-        .rcp-row input[type=number] { width: 92px; padding: 4px 8px; font: inherit; font-size: 15px; }
-        .rcp-check { display: flex; align-items: center; gap: 9px; margin: 8px 0; font-size: 15px; }
-        .rcp-check input { width: 16px; height: 16px; }
-        .rcp-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
+        .rcp-row input[type=number] { width: calc(var(--rcp-fs) * 6); padding: 4px 8px; font: inherit; font-size: var(--rcp-fs); }
+        .rcp-check { display: flex; align-items: center; gap: 9px; margin: 8px 0; font-size: var(--rcp-fs); }
+        .rcp-check input { width: calc(var(--rcp-fs) * 1.05); height: calc(var(--rcp-fs) * 1.05); }
+        .rcp-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(calc(var(--rcp-fs) * 10), 1fr)); gap: 10px; margin-bottom: 16px; }
         .rcp-stat { border: 1px solid rgba(255,255,255,0.16); border-radius: 6px; padding: 12px 14px; }
-        .rcp-stat b { display: block; font-size: 30px; line-height: 1.1; font-variant-numeric: tabular-nums; }
-        .rcp-stat span { font-size: 13px; opacity: 0.72; letter-spacing: 0.03em; }
-        .rcp table { border-collapse: collapse; width: 100%; font-size: 15px; font-variant-numeric: tabular-nums; }
+        .rcp-stat b { display: block; font-size: calc(var(--rcp-fs) * 2); line-height: 1.1; font-variant-numeric: tabular-nums; }
+        .rcp-stat span { font-size: calc(var(--rcp-fs) * 0.87); opacity: 0.72; letter-spacing: 0.03em; }
+        .rcp table { border-collapse: collapse; width: 100%; font-size: var(--rcp-fs); font-variant-numeric: tabular-nums; }
         .rcp th, .rcp td { text-align: right; padding: 5px 10px; border-bottom: 1px solid rgba(255,255,255,0.09); }
-        .rcp th { font-size: 14px; opacity: 0.8; }
+        .rcp th { font-size: calc(var(--rcp-fs) * 0.93); opacity: 0.8; }
         .rcp th:first-child, .rcp td:first-child, .rcp th:nth-child(2), .rcp td:nth-child(2) { text-align: left; }
         .rcp-shape { display: inline-grid; gap: 1px; vertical-align: middle; }
-        .rcp-cell { width: 18px; height: 18px; font-size: 12px; line-height: 18px; text-align: center; border-radius: 2px; }
+        .rcp-cell { width: calc(var(--rcp-fs) * 1.2); height: calc(var(--rcp-fs) * 1.2); font-size: calc(var(--rcp-fs) * 0.8); line-height: calc(var(--rcp-fs) * 1.2); text-align: center; border-radius: 2px; }
         .rcp-cell.is-filled { background: rgba(255,255,255,0.22); }
         .rcp-band-common { opacity: 0.68; }
         .rcp-band-rare { font-weight: 700; }
-        .rcp-filters { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 12px; font-size: 15px; align-items: center; }
-        .rcp-filters button { font: inherit; font-size: 15px; padding: 5px 12px; border-radius: 4px; cursor: pointer; }
+        .rcp-filters { display: flex; gap: 9px; flex-wrap: wrap; margin-bottom: 12px; font-size: var(--rcp-fs); align-items: center; }
+        .rcp-filters button { font: inherit; font-size: var(--rcp-fs); padding: 5px 12px; border-radius: 4px; cursor: pointer; }
         .rcp-filters button[aria-pressed=true] { outline: 2px solid currentColor; }
-        .rcp-filters select { font: inherit; font-size: 15px; padding: 5px 8px; }
+        .rcp-filters select { font: inherit; font-size: var(--rcp-fs); padding: 5px 8px; }
         .rcp-draft-grid { display: grid; gap: 3px; margin: 10px 0; }
-        .rcp-draft-grid button { width: 40px; height: 40px; font: inherit; font-size: 18px; cursor: pointer; border-radius: 3px; }
-        .rcp-note { font-size: 13.5px; opacity: 0.68; margin: 8px 0 0; line-height: 1.5; }
-        .rcp-model select { width: 100%; font: inherit; font-size: 16px; padding: 7px 8px; }
-        .rcp-model-note { font-size: 13.5px; opacity: 0.78; margin: 10px 0 0; line-height: 1.55; }
-        .rcp-custom { display: inline-block; margin-top: 10px; font-size: 13px; padding: 3px 10px; border-radius: 10px; border: 1px solid currentColor; }
+        .rcp-draft-grid button { width: calc(var(--rcp-fs) * 2.67); height: calc(var(--rcp-fs) * 2.67); font: inherit; font-size: calc(var(--rcp-fs) * 1.2); cursor: pointer; border-radius: 3px; }
+        .rcp-note { font-size: calc(var(--rcp-fs) * 0.9); opacity: 0.68; margin: 8px 0 0; line-height: 1.5; }
+        .rcp-model select { width: 100%; font: inherit; font-size: calc(var(--rcp-fs) * 1.07); padding: 7px 8px; }
+        .rcp-model-note { font-size: calc(var(--rcp-fs) * 0.9); opacity: 0.78; margin: 10px 0 0; line-height: 1.55; }
+        .rcp-custom { display: inline-block; margin-top: 10px; font-size: calc(var(--rcp-fs) * 0.87); padding: 3px 10px; border-radius: 10px; border: 1px solid currentColor; }
         .rcp-group { border: 1px solid rgba(255,255,255,0.14); border-radius: 6px; margin-bottom: 12px; overflow: hidden; }
-        .rcp-group-head { display: flex; align-items: baseline; gap: 14px; padding: 9px 14px; background: rgba(255,255,255,0.05); font-size: 15px; }
-        .rcp-group-name { font-weight: 700; font-size: 17px; white-space: pre; font-family: ui-monospace, monospace; }
+        .rcp-group-head { display: flex; align-items: baseline; gap: 14px; padding: 9px 14px; background: rgba(255,255,255,0.05); font-size: var(--rcp-fs); }
+        .rcp-group-name { font-weight: 700; font-size: calc(var(--rcp-fs) * 1.13); white-space: pre; font-family: ui-monospace, monospace; }
         .rcp-group-count { font-variant-numeric: tabular-nums; }
         .rcp-group-bands { margin-left: auto; opacity: 0.75; font-variant-numeric: tabular-nums; }
-        .rcp-group-body { max-height: 420px; overflow: auto; }
+        .rcp-group-body { max-height: calc(var(--rcp-fs) * 28); overflow: auto; }
+        .rcp-textsize { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; font-size: var(--rcp-fs); }
+        .rcp-textsize input[type=range] { flex: 1; max-width: calc(var(--rcp-fs) * 18); }
+        .rcp-textsize output { font-variant-numeric: tabular-nums; opacity: 0.75; min-width: calc(var(--rcp-fs) * 3.4); }
       `}</style>
 
       <div>
@@ -271,6 +279,20 @@ export function RunCardPoolCatalog(): ReactElement {
       </div>
 
       <div>
+        <label className="rcp-textsize">
+          <span>Text size</span>
+          <input
+            type="range"
+            min={11}
+            max={26}
+            step={1}
+            value={textSize}
+            onChange={(event) => setTextSize(Number(event.target.value))}
+          />
+          <output>{textSize}px</output>
+          <button type="button" className="tileset-view-action" onClick={() => setTextSize(15)}>Reset</button>
+        </label>
+
         <div className="rcp-summary">
           <div className="rcp-stat"><b>{summary.total}</b><span>CARDS IN POOL</span></div>
           {BANDS.map((band) => (
