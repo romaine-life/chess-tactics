@@ -13,11 +13,24 @@ const model = read('../../../packages/board-render/src/run/model.ts');
 const style = read('../style.css');
 
 describe('Enchiridion and Strategikon reference contract', () => {
-  it('keeps the five useful player reference sections and no ability catalog', () => {
-    expect(route).toContain("['units', 'terrain', 'cards', 'lipsana', 'ataraxia']");
+  it('keeps the useful player reference sections and no ability catalog', () => {
+    // Manubiae sits with Units and Terrain — the three sections about the board itself —
+    // ahead of the three about the Run's economy.
+    expect(route).toContain("['units', 'terrain', 'manubiae', 'cards', 'lipsana', 'ataraxia']");
     expect(route).not.toContain('card-types');
     expect(route).not.toContain('abilities');
     expect(enchiridion).not.toMatch(/AbilitiesSection|CardTypesSection|UNIT_STATE_REFERENCES|cardProperty/);
+  });
+
+  it('reads every Manubium from the model catalog rather than restating its prices', () => {
+    // The Enchiridion is a reader of the economy, never a second copy of it: a price written
+    // here could disagree with the one the Battle actually pays.
+    expect(enchiridion).toContain('RUN_MANUBIAE.map');
+    // Prices are drawn by the shared gold amount, so one reads exactly like every other
+    // price in the Run rather than through a lookalike built here (ADR-0059).
+    expect(enchiridion).toContain('<RunGoldAmount valueTenths={entry.goldTenths} />');
+    expect(enchiridion).not.toMatch(/RUN_EN_PASSANT_BOUNTY_TENTHS|RUN_ROYAL_FORK_BOUNTY_TENTHS/);
+    expect(model).toContain('export const RUN_MANUBIAE');
   });
 
   it('uses the shared rail in both the main-menu and Battle reference hosts', () => {

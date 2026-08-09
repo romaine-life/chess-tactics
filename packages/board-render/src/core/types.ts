@@ -60,6 +60,18 @@ export interface Piece {
   /** Original pawn-forward direction. Unlike `facing`, this never changes after setup. */
   pawnForward?: UnitFacing;
   /**
+   * What this piece was before it promoted. Set once, by `applyMove`, at the moment the
+   * promotion commits; absent on everything that never promoted.
+   *
+   * Board law never reads it — a promoted pawn moves as exactly what it promoted to. It
+   * exists because `type` is overwritten in place, so the board would otherwise have no
+   * memory that the queen on the back rank walked there as a pawn. A surrounding layer that
+   * prices a unit (a Run's Manubiae) needs that memory: a unit is worth what it started as,
+   * which is already the Run's law elsewhere, since the roster has no promotion concept and
+   * hands the pawn back as a pawn next Battle.
+   */
+  promotedFrom?: PieceType;
+  /**
    * True once this piece has made any move this game. Castling rights are history-exact:
    * a king or rook that has EVER moved may not castle, even after returning to its square
    * (the positional startX/startY proxy can't tell those apart).

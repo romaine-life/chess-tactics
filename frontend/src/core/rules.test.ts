@@ -8,12 +8,15 @@ import {
   enemyThreats,
   gameEnv,
   isEnemy,
+  kingCheckers,
   legalMoves,
   positionKey,
   recordPosition,
   royalForkVictim,
   ruleDraw,
+  sideHasLegalMove,
   sideInCheck,
+  smotheredMateBy,
   type MoveEnv,
 } from './rules';
 import { roadEdgeKey } from './featureAutotile';
@@ -358,7 +361,126 @@ describe('royal fork', () => {
   });
 });
 
+describe('kingCheckers', () => {
+  it('names the piece giving check, not merely that there is one', () => {
+    const rook = P('player', 'rook', 4, 0);
+    const king = P('enemy', 'king', 4, 4);
+    const pieces = [rook, king];
+    expect(sideInCheck({ size: SIZE, pieces, turn: 'enemy', winner: null }, 'enemy')).toBe(true);
+    expect(kingCheckers('enemy', pieces, SIZE).map((p) => p.id)).toEqual([rook.id]);
+  });
+
+  it('names BOTH when two pieces check at once — what makes a double check one', () => {
+    const rook = P('player', 'rook', 4, 0);
+    const knight = P('player', 'knight', 5, 6);
+    const king = P('enemy', 'king', 4, 4);
+    const pieces = [rook, knight, king];
+    const checkers = kingCheckers('enemy', pieces, SIZE).map((p) => p.id);
+    expect(checkers).toHaveLength(2);
+    expect(checkers).toContain(rook.id);
+    expect(checkers).toContain(knight.id);
+  });
+
+  it('is empty when no one is checking, and never counts an obstacle', () => {
+    const king = P('enemy', 'king', 4, 4);
+    expect(kingCheckers('enemy', [P('player', 'rook', 5, 0), king], SIZE)).toEqual([]);
+    expect(kingCheckers('enemy', [P('neutral', 'rock', 4, 3), king], SIZE)).toEqual([]);
+  });
+});
+
+describe('smothered mate', () => {
+  // The classic corner shape, in this board's coordinates: the enemy King is boxed into
+  // (7,0) by its own Rook and two Pawns, and a Knight on (5,1) strikes the one square it
+  // cannot leave. Nothing can take the Knight, so every enemy move would leave the King in
+  // check and none is legal.
+  const smothered = () => {
+    const knight = P('player', 'knight', 5, 1);
+    const king = P('enemy', 'king', 7, 0);
+    const rook = P('enemy', 'rook', 6, 0);
+    const pawnA = P('enemy', 'pawn', 7, 1);
+    const pawnB = P('enemy', 'pawn', 6, 1);
+    return { knight, king, rook, pawnA, pawnB, pieces: [knight, king, rook, pawnA, pawnB] };
+  };
+
+  it('recognizes a Knight mating a King its own men have hemmed in', () => {
+    const { knight, pieces } = smothered();
+    // It really is mate: a Knight's check can only be answered by taking the Knight or
+    // moving the King, and here neither is available, so no enemy move is legal at all.
+    expect(sideHasLegalMove(pieces, 'enemy', SIZE)).toBe(false);
+    expect(smotheredMateBy(knight, pieces, SIZE)).toBe(true);
+  });
+
+  it('needs the mate: a King with an answer is merely surrounded', () => {
+    // A Bishop that can take the Knight gives the enemy a legal move, so there is no mate.
+    const { knight, pieces } = smothered();
+    const rescuer = P('enemy', 'bishop', 3, 3); // (3,3) → (5,1) is a clear diagonal
+    expect(smotheredMateBy(knight, [...pieces, rescuer], SIZE)).toBe(false);
+  });
+
+  it('is about men, not squares: an empty neighbour is some other mate', () => {
+    // Lift one Pawn off the King's shoulder and the shape stops being smothered even where
+    // the position is still mate. Board edges may hem a King in — that is what keeps the
+    // corner mate a corner mate — but an open square next to it never counts.
+    const { knight, king, rook, pawnA } = smothered();
+    const pieces = [knight, king, rook, pawnA];
+    expect(smotheredMateBy(knight, pieces, SIZE)).toBe(false);
+  });
+
+  it('will not read a King boxed in by the ENEMY as smothered', () => {
+    const { knight, king, rook, pawnA } = smothered();
+    const attacker = P('player', 'pawn', 6, 1); // stands where the King's own Pawn stood
+    expect(smotheredMateBy(knight, [knight, king, rook, pawnA, attacker], SIZE)).toBe(false);
+  });
+
+  it('is a Knight’s mate: the same mate by a Queen is some other mate', () => {
+    const { king, rook, pawnA, pawnB } = smothered();
+    const queen = P('player', 'queen', 5, 2);
+    expect(smotheredMateBy(queen, [queen, king, rook, pawnA, pawnB], SIZE)).toBe(false);
+  });
+
+  it('is one Knight’s work: two of them checking at once is a double check that mates', () => {
+    // A fully hemmed King can only ever be reached by a Knight — every line into it runs
+    // through one of its own men, which is the whole reason the shape exists. So the only
+    // way to get a second checker is a second Knight, and then the King is answering two
+    // pieces rather than being smothered by one.
+    const ring = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]] as const;
+    const king = P('enemy', 'king', 4, 4);
+    const men = ring.map(([dx, dy]) => P('enemy', 'pawn', 4 + dx, 4 + dy));
+    // Both Knights stand clear of the ring Pawns' capture squares, so neither check can be
+    // answered by taking the Knight — the Pawns hem their own King in and defend nothing.
+    const one = P('player', 'knight', 5, 2);
+    const two = P('player', 'knight', 3, 2);
+
+    expect(smotheredMateBy(one, [one, king, ...men], SIZE)).toBe(true);
+
+    const doubled = [one, two, king, ...men];
+    expect(kingCheckers('enemy', doubled, SIZE)).toHaveLength(2);
+    expect(sideHasLegalMove(doubled, 'enemy', SIZE)).toBe(false);
+    expect(smotheredMateBy(one, doubled, SIZE)).toBe(false);
+  });
+});
+
 describe('applyMove', () => {
+  it('records what a promoted piece started as, without changing how it moves', () => {
+    // `type` is overwritten in place, so the board would otherwise have no memory that this
+    // Queen walked up as a Pawn. A layer that prices units (Manubiae) needs that memory.
+    const pawn = P('player', 'pawn', 4, 1);
+    const foe = P('enemy', 'queen', 7, 0);
+    const state: GameState = { size: SIZE, pieces: [pawn, foe], turn: 'player', winner: null, promotionZones: [{ x: 4, y: 0 }] };
+    const promoted = applyMove(state, pawn.id, { x: 4, y: 0 }).state.pieces.find((p) => p.id === pawn.id)!;
+
+    expect(promoted.type).toBe('queen');
+    expect(promoted.promotedFrom).toBe('pawn');
+    // Board law is untouched: it moves as the Queen it now is.
+    expect(has(legalMoves(promoted, [promoted, foe], SIZE), 4, 5)).toBe(true);
+  });
+
+  it('leaves promotedFrom absent on a piece that never promoted', () => {
+    const pawn = P('player', 'pawn', 4, 1);
+    const state = { size: SIZE, pieces: [pawn], turn: 'player' as const, winner: null };
+    expect(applyMove(state, pawn.id, { x: 4, y: 0 }).state.pieces[0].promotedFrom).toBeUndefined();
+  });
+
   it('captures, leaves the source state untouched (immutable)', () => {
     const queen = P('player', 'queen', 4, 6);
     const pawn = P('player', 'pawn', 0, 11);

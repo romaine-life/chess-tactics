@@ -23358,6 +23358,16 @@ button.tileset-relationship-cell {
   gap: var(--ds-space-2);
 }
 
+/* A Manubium's price sits between its name and the sentence that earns it, on the shared
+   gold mark. The rate line (the one entry priced per point rather than at a number) wears
+   the same mark beside its own words, so the column reads as one list of prices. */
+.enchiridion-manubium-price {
+  align-items: center;
+  column-gap: var(--ds-space-2);
+  display: flex;
+  flex-wrap: wrap;
+}
+
 /* The card's diagram IS the Battle board: the shared read-only renderer contained in this
    box (StaticReadOnlyBoardView measures it and fits the whole playable board). */
 .enchiridion-unit-board {

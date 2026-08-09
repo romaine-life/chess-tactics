@@ -3,7 +3,7 @@ import { legalMoves } from '../core/rules';
 import { createBlankLevel } from '../core/level';
 import { levelToEditorBoard, unitsForGamePieces } from '../core/levelBoard';
 import { PIECE_LABEL, PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
-import type { BoardSize, Piece } from '../core/types';
+import type { BoardSize, Piece, PieceType, Side } from '../core/types';
 import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
 import { runCardArtSlot, runCardName } from '../run/cardNames';
@@ -13,10 +13,13 @@ import {
   RUN_CARD_BY_ID,
   RUN_CARD_CATALOG,
   RUN_LIPSANA,
+  RUN_MANUBIAE,
   cardContentsLabel,
   runCardTierOf,
   runCardTierRank,
   type AtaraxiaTier,
+  type ManubiumDefinition,
+  type ManubiumId,
   type RunArmyPieceType,
   type RunCardDefinition,
   type RunCardRarity,
@@ -65,7 +68,8 @@ import { navigateApp } from './navigation';
 import { NavButton } from './shared/NavButton';
 import { ChromeButton } from './shared/ChromeButton';
 import { PieceTypeIcon } from './shared/PieceTypeIcon';
-import { RunCardCostCoin } from './shared/RunCardCostCoin';
+import { RunCardCostCoin, RUN_CARD_COST_COIN_SLOT } from './shared/RunCardCostCoin';
+import { RunGoldAmount, RunGoldIcon } from './RunResources';
 import {
   RunCardGoldTierDivider,
   runCardTierLabel,
@@ -97,6 +101,9 @@ function useSectionIconSrc(): Record<EnchiridionSection, string> {
   return {
     units: installedUiMedia('ui-kit-icons-unit-studio-png'),
     terrain: installedUiMedia('ui-kit-icons-tileset-studio-png'),
+    // Manubiae are money, so they wear the Run's own gold coin rather than a second symbol
+    // minted for them — the same coin a card's cost is struck on (ADR-0329, ADR-0059).
+    manubiae: resolvedLiveMediaUrl(RUN_CARD_COST_COIN_SLOT),
     cards,
     lipsana: installedUiMedia('ui-kit-icons-info-png'),
     ataraxia: installedUiMedia(RUN_PROGRESS_MEDIA_ROLE.ataraxia),
@@ -302,6 +309,204 @@ const TERRAIN_FEATURES = [
     icon: 'skirmish-icon skirmish-icon-crossed-swords',
   },
 ] as const;
+
+/**
+ * One Manubium's board: the shape that earns it, standing still.
+ *
+ * Every entry is a real position on a real board, drawn by the Battle renderer through the
+ * same read-only view the Units section uses — not an illustration of a tactic but the tactic
+ * itself, arranged. `struck` marks what the move hits, in the game's own threat paint;
+ * `opened` marks the line it works along, in the move paint. A player who has seen a legal
+ * destination on this board has already learned what both colours mean.
+ */
+interface ManubiumExample {
+  readonly size: BoardSize;
+  readonly pieces: readonly Piece[];
+  /** Squares the deed strikes — enemy units it attacks or takes. */
+  readonly struck: readonly string[];
+  /** Squares it works through — an opened line, a square captured onto. */
+  readonly opened: readonly string[];
+  readonly seed: number;
+}
+
+function unit(side: Side, type: PieceType, x: number, y: number): Piece {
+  const forward = side === 'player' ? 'north' : 'south';
+  return {
+    id: `manubiae-${side}-${type}-${x}-${y}`,
+    side,
+    type,
+    x,
+    y,
+    alive: true,
+    startX: x,
+    startY: y,
+    facing: forward,
+    ...(type === 'pawn' ? { pawnForward: forward } : {}),
+  };
+}
+
+// Player units stand toward the bottom of each board and enemies toward the top, the way a
+// Battle is laid out, so a reader recognizes the sides before reading a word.
+const MANUBIUM_EXAMPLE: Readonly<Record<ManubiumId, ManubiumExample>> = {
+  'advantageous-capture': {
+    size: { cols: 5, rows: 5 },
+    pieces: [unit('player', 'knight', 1, 3), unit('enemy', 'rook', 2, 1)],
+    struck: ['2,1'],
+    opened: [],
+    seed: 811,
+  },
+  'royal-fork': {
+    size: { cols: 5, rows: 5 },
+    pieces: [unit('player', 'knight', 2, 2), unit('enemy', 'king', 3, 0), unit('enemy', 'rook', 1, 0)],
+    struck: ['3,0', '1,0'],
+    opened: [],
+    seed: 822,
+  },
+  'discovered-check': {
+    // The Bishop has just stepped off the file to the corner, and the Rook behind it now runs
+    // all the way to the King. The open squares between them are the discovery.
+    size: { cols: 5, rows: 5 },
+    pieces: [unit('player', 'rook', 2, 4), unit('player', 'bishop', 4, 4), unit('enemy', 'king', 2, 0)],
+    struck: ['2,0'],
+    opened: ['2,3', '2,2', '2,1'],
+    seed: 833,
+  },
+  'double-check': {
+    // The same open file, and a Knight that strikes the King as well. Two attackers at once:
+    // no block and no capture answers both, so the King has to move.
+    size: { cols: 5, rows: 5 },
+    pieces: [unit('player', 'rook', 2, 4), unit('player', 'knight', 1, 2), unit('enemy', 'king', 2, 0)],
+    struck: ['2,0'],
+    opened: ['2,3', '2,1'],
+    seed: 844,
+  },
+  'en-passant': {
+    // The enemy Pawn has just stepped two squares past. The marked empty square is the one it
+    // stepped over, and the one the capturing Pawn lands on.
+    size: { cols: 5, rows: 5 },
+    pieces: [unit('player', 'pawn', 2, 3), unit('enemy', 'pawn', 3, 3)],
+    struck: ['3,3'],
+    opened: ['3,2'],
+    seed: 855,
+  },
+  'smothered-mate': {
+    size: { cols: 5, rows: 5 },
+    pieces: [
+      unit('player', 'knight', 2, 1),
+      unit('enemy', 'king', 4, 0),
+      unit('enemy', 'rook', 3, 0),
+      unit('enemy', 'pawn', 4, 1),
+      unit('enemy', 'pawn', 3, 1),
+    ],
+    struck: ['4,0'],
+    opened: [],
+    seed: 866,
+  },
+};
+
+function ManubiumDiagram({ id, name }: { id: ManubiumId; name: string }): ReactElement {
+  const example = MANUBIUM_EXAMPLE[id];
+  const board = useMemo(() => {
+    const level = createBlankLevel(`enchiridion-${id}`, name, example.size.cols, example.size.rows);
+    const dressing = generateTerrainDressing({
+      cols: example.size.cols,
+      rows: example.size.rows,
+      seed: example.seed,
+      // The tactical content stays on calm default grass so the marks and the pieces read;
+      // the generated accents dress the board around it, exactly as the Units section does.
+      keepClear: new Set([
+        ...example.struck,
+        ...example.opened,
+        ...example.pieces.map((piece) => `${piece.x},${piece.y}`),
+      ]),
+    });
+    return {
+      ...levelToEditorBoard(level),
+      ...dressing,
+      units: unitsForGamePieces(example.pieces),
+    };
+  }, [example, id, name]);
+  return (
+    <div className="enchiridion-unit-board" role="img" aria-label={`${name} on an example board`}>
+      <StaticReadOnlyBoardView
+        board={board}
+        ariaLabel={`${name} board`}
+        renderCellOverlay={(cell) => {
+          const key = `${cell.x},${cell.y}`;
+          const isStruck = example.struck.includes(key);
+          const isOpen = example.opened.includes(key) && !isStruck;
+          if (!isStruck && !isOpen) return null;
+          return (
+            <span className={`le-tactical-cell ${isStruck ? 'is-threat' : 'is-move'}`} aria-hidden="true">
+              {isOpen ? <PredrawnMoveHighlightPaint /> : null}
+            </span>
+          );
+        }}
+      />
+    </div>
+  );
+}
+
+/**
+ * What one Manubium is worth, in the same gold vocabulary every other Run surface uses —
+ * through the shared amount, so a price here is drawn exactly like a price anywhere else
+ * (ADR-0059). The one scaled entry has a rate rather than a number, so it wears the mark
+ * beside its own words instead.
+ */
+function ManubiumPrice({ entry }: { entry: ManubiumDefinition }): ReactElement {
+  if (entry.goldTenths === null) {
+    return (
+      <p className="enchiridion-manubium-price">
+        <RunGoldIcon />
+        <span>{entry.priceNote}</span>
+      </p>
+    );
+  }
+  return (
+    <p className="enchiridion-manubium-price">
+      <RunGoldAmount valueTenths={entry.goldTenths} />
+    </p>
+  );
+}
+
+/**
+ * Manubiae — the things the board itself pays for.
+ *
+ * Ordered cheapest first, which is also roughly most-often-first, so the section reads as the
+ * ladder it is: the deed a competent player lands several times a Battle sits at the top, and
+ * the one they may never land sits at the bottom.
+ */
+function ManubiaeSection({ framed }: { framed: boolean }): ReactElement {
+  return (
+    <ReferenceSectionFrame
+      chromeConsumer="enchiridion-manubiae"
+      className="enchiridion-manubiae-panel"
+      framed={framed}
+      title="Manubiae"
+    >
+      <p>Gold a Battle pays you for what your units do, the moment they do it — over and above the Battle&rsquo;s own reward. Only your units earn it, and each earning pays again the next time. Red squares are what the move strikes; cyan squares are the line it works along.</p>
+      <KitScroll className="enchiridion-reference-scroll">
+        <div className="enchiridion-unit-grid">
+          {RUN_MANUBIAE.map((entry) => (
+            <InnerChromeBox className="enchiridion-unit-card" key={entry.id}>
+              <div className="enchiridion-unit-copy">
+                <h3>{entry.name}</h3>
+                <ManubiumPrice entry={entry} />
+                <p>{entry.earnedBy}</p>
+              </div>
+              <ManubiumDiagram id={entry.id} name={entry.name} />
+            </InnerChromeBox>
+          ))}
+        </div>
+      </KitScroll>
+      <InnerChromeBox className="enchiridion-rule-exceptions">
+        <h3>How they add up</h3>
+        <p>One move may earn <strong>several</strong> of these at once, and each pays in full — a capture that also forks is both. The two check bounties are the exception: they are rungs of one ladder, so a double check pays instead of a discovered check rather than on top of it.</p>
+        <p><strong>Undo</strong> takes back the gold along with the move that earned it, so no deed here is worth undoing for profit.</p>
+      </InnerChromeBox>
+    </ReferenceSectionFrame>
+  );
+}
 
 function TerrainSection({ framed }: { framed: boolean }): ReactElement {
   return (
@@ -876,6 +1081,7 @@ export function EnchiridionReference({
   cardFiltersHref?: (filters: EnchiridionCardFilters) => string;
 }): ReactElement {
   if (section === 'terrain') return <TerrainSection framed={framed} />;
+  if (section === 'manubiae') return <ManubiaeSection framed={framed} />;
   if (section === 'cards') {
     return (
       <CardCodex

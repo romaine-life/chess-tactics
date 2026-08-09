@@ -59,8 +59,6 @@ export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
 export const RUN_BATTLE_RETRY_COST_TENTHS = 3 * GOLD_SCALE;
-export const RUN_EN_PASSANT_BOUNTY_TENTHS = 5 * GOLD_SCALE;
-export const RUN_ROYAL_FORK_BOUNTY_TENTHS = GOLD_SCALE;
 export const RUN_DEPLOYMENT_REROLL_COST_TENTHS = GOLD_SCALE;
 export const RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS = 5 * GOLD_SCALE;
 export const RUN_SECTIO_CARD_OFFER_COUNT = 3;
@@ -154,6 +152,146 @@ export const PIECE_VALUE: Readonly<Record<RunArmyPieceType, number>> = Object.fr
  * piece's worth.
  */
 export const RUN_ROYAL_FORK_MIN_VICTIM_VALUE = PIECE_VALUE.rook;
+
+// ---- Manubiae ---------------------------------------------------------------------------
+//
+// The Roman commander's cash share of what was taken in the field. Here: the things a Run
+// pays a player for DOING on the board, as opposed to the Battle reward banked on the way
+// out (ADR-0220) or a lipsanon paying on acquisition.
+//
+// Naming the category is what lets it grow. En passant (ADR-0517) and the royal fork
+// (ADR-0527) each arrived as a bespoke constant and a bespoke pay function, and ADR-0527
+// closed by saying a third would want a shared name before it wants its own machinery.
+// This is that machinery: one catalog, one payment function, one notice shape. A new
+// bounty is an entry in the table and a detection at the board seam — never a new path
+// through the Run's economy.
+
+export type ManubiumId =
+  | 'advantageous-capture'
+  | 'royal-fork'
+  | 'discovered-check'
+  | 'double-check'
+  | 'en-passant'
+  | 'smothered-mate';
+
+export interface ManubiumDefinition {
+  readonly id: ManubiumId;
+  /** The name on the log line and the Enchiridion record. */
+  readonly name: string;
+  /** Exactly what the board must do to earn it, in one sentence, in player words. */
+  readonly earnedBy: string;
+  /** The fixed price in tenths, or null when the award carries its own (see `marginPoints`). */
+  readonly goldTenths: number | null;
+  /** How the price reads when it is not one fixed number. */
+  readonly priceNote?: string;
+}
+
+/**
+ * What an advantageous capture pays per point of material margin.
+ *
+ * Scaled rather than flat because this is the one bounty in the category a player earns
+ * constantly, and the same flat number would be either too much for a rook taking a queen
+ * or too little for a pawn taking one. Two tenths a point lands the whole ladder inside the
+ * band the fixed bounties already occupy — 0.4 for a knight taking a rook, 1.6 for a pawn
+ * taking a queen — and it is exact in tenths, so no rounding rule is needed.
+ */
+export const RUN_ADVANTAGEOUS_CAPTURE_TENTHS_PER_POINT = 2;
+
+/**
+ * Every Manubium, cheapest first, which is also roughly rarest-last-to-first: the ladder
+ * runs from what a competent player does several times a Battle to what they may never do.
+ *
+ * Prices follow the band ADR-0517 and ADR-0527 set between them. Five gold is "worth going
+ * out of your way for, and you almost never can"; one gold is "the Run noticing something
+ * you were going to do anyway". Everything here is placed against those two poles.
+ */
+export const RUN_MANUBIAE: readonly ManubiumDefinition[] = Object.freeze([
+  {
+    id: 'advantageous-capture',
+    name: 'Advantageous capture',
+    earnedBy: 'Capture an enemy unit worth more than the unit that takes it. A unit is worth what it started as, so a promoted pawn is still a Pawn on both sides of that comparison.',
+    goldTenths: null,
+    priceNote: '0.2 gold for each point of material won',
+  },
+  {
+    id: 'royal-fork',
+    name: 'Royal fork',
+    earnedBy: 'Attack the enemy King and a Rook or Queen with one unit, from the square it just moved to.',
+    goldTenths: GOLD_SCALE,
+  },
+  {
+    id: 'discovered-check',
+    name: 'Discovered check',
+    earnedBy: 'Move one unit out of the way so that a different unit behind it gives check.',
+    goldTenths: 2 * GOLD_SCALE,
+  },
+  {
+    id: 'double-check',
+    name: 'Double check',
+    earnedBy: 'Give check with two units at once. Pays instead of the discovered check, not on top of it.',
+    goldTenths: 3 * GOLD_SCALE,
+  },
+  {
+    id: 'en-passant',
+    name: 'En passant',
+    earnedBy: 'Capture a Pawn in passing, on the square it stepped over.',
+    goldTenths: 5 * GOLD_SCALE,
+  },
+  {
+    id: 'smothered-mate',
+    name: 'Smothered mate',
+    earnedBy: 'Checkmate with a Knight while the enemy King is hemmed in on every side by its own men.',
+    goldTenths: 5 * GOLD_SCALE,
+  },
+] as const);
+
+export const RUN_MANUBIUM_BY_ID: Readonly<Record<ManubiumId, ManubiumDefinition>> = Object.freeze(
+  Object.fromEntries(RUN_MANUBIAE.map((entry) => [entry.id, entry])) as Record<ManubiumId, ManubiumDefinition>,
+);
+
+/**
+ * One earned Manubium, described rather than priced: a caller says what the board did and
+ * the model says what that is worth. A caller cannot pay the wrong number because it never
+ * names one.
+ */
+export type ManubiumAward =
+  | { readonly id: 'advantageous-capture'; readonly marginPoints: number }
+  | { readonly id: Exclude<ManubiumId, 'advantageous-capture'> };
+
+/**
+ * What a unit is worth when Manubiae compares two of them — what it STARTED as, never what
+ * it promoted into.
+ *
+ * This is not a special case invented for the bounty. The Run roster has no promotion
+ * concept at all: a pawn that queens on the board is a Pawn again in the next Battle,
+ * because a Pawn is what was bought. Reading `promotedFrom` here keeps one meaning of
+ * "worth" across the whole Run rather than letting a board minute mint a Queen nobody paid
+ * for — on either side of the comparison.
+ *
+ * `null` for anything with no purchase price: obstacles, and the King, whose zero above is
+ * a sentinel for "priceless, never bought" rather than a claim that it is worth nothing.
+ * A null on either side means there is no margin to be had, not a margin of zero.
+ */
+export function manubiaeUnitWorth(
+  piece: { readonly type: string; readonly promotedFrom?: string } | null | undefined,
+): number | null {
+  const started = piece?.promotedFrom ?? piece?.type;
+  if (!started || started === 'king' || !Object.hasOwn(PIECE_VALUE, started)) return null;
+  return PIECE_VALUE[started as RunArmyPieceType];
+}
+
+/** What an award pays, in tenths. */
+export function manubiumGoldTenths(award: ManubiumAward): number {
+  if (award.id === 'advantageous-capture') {
+    return Math.max(0, Math.round(award.marginPoints)) * RUN_ADVANTAGEOUS_CAPTURE_TENTHS_PER_POINT;
+  }
+  return RUN_MANUBIUM_BY_ID[award.id].goldTenths ?? 0;
+}
+
+// The two bounties that predate the category keep their names, derived from the catalog so
+// the number lives in exactly one place. `verify:royal-fork` reads the second of these.
+export const RUN_EN_PASSANT_BOUNTY_TENTHS = manubiumGoldTenths({ id: 'en-passant' });
+export const RUN_ROYAL_FORK_BOUNTY_TENTHS = manubiumGoldTenths({ id: 'royal-fork' });
 
 export const PIECE_LABEL: Readonly<Record<RunArmyPieceType, string>> = Object.freeze({
   pawn: 'Pawn',
@@ -2887,62 +3025,35 @@ export interface RunBattleChange {
 }
 
 /**
- * One en passant capture the player landed pays a bounty, in gold.
+ * One Manubium the player earned on the board pays out, in gold.
  *
- * It is paid the moment the capture commits rather than banked with the Battle's reward,
- * so the gold measure moves while the fight is still on -- the capture is the whole of the
- * reason, and a number that only appears two screens later does not read as one. That also
- * makes the Undo checkpoint the exact reversal: it restores the pre-move balance, so a
- * taken-back en passant takes its bounty back with it.
+ * Paid the moment the move commits rather than banked with the Battle's reward, so the gold
+ * measure moves while the fight is still on -- the move is the whole of the reason, and a
+ * number that only appears two screens later does not read as one. That also makes the Undo
+ * checkpoint the exact reversal: it predates the move, so taking the move back takes its
+ * gold back with it, and no bounty is ever worth undoing for profit.
  *
- * Board law is untouched. The Run pays for what the pieces did; it does not change what
- * they may do (ADR-0193).
+ * Per earning, not per Battle: two of the same thing in one Battle pay twice. The enemy's
+ * are never paid -- the earner is read off the committed board, so a Reservist or a promoted
+ * pawn earns like any other player unit.
  *
- * `null` when this Run has no live Battle to be paid from. Otherwise the paid document
- * arrives with its notice attached, because the five gold and the report of the five gold
- * are the same event.
+ * Board law is untouched. The Run pays for what the pieces did; it does not change what they
+ * may do (ADR-0193). A Skirmish or campaign level outside the Run economy pays nothing.
+ *
+ * `null` when this Run has no live Battle to be paid from, or when the award is worth
+ * nothing. Otherwise the paid document arrives with its notice attached, because the gold
+ * and the report of the gold are the same event (ADR-0525).
  */
-export function payRunEnPassantBounty(run: RunDocument, at: Vec): RunBattleChange | null {
+export function payRunManubium(run: RunDocument, award: ManubiumAward, at: Vec): RunBattleChange | null {
   if (run.phase !== 'battle' || !run.battleRuntime) return null;
+  const goldTenths = manubiumGoldTenths(award);
+  if (goldTenths <= 0) return null;
   return {
-    run: touch({ ...run, goldTenths: run.goldTenths + RUN_EN_PASSANT_BOUNTY_TENTHS }),
+    run: touch({ ...run, goldTenths: run.goldTenths + goldTenths }),
     notice: {
-      log: `En passant — ${formatGold(RUN_EN_PASSANT_BOUNTY_TENTHS)} gold claimed.`,
+      log: `${RUN_MANUBIUM_BY_ID[award.id].name} — ${formatGold(goldTenths)} gold claimed.`,
       at: { x: at.x, y: at.y },
-      goldTenths: RUN_EN_PASSANT_BOUNTY_TENTHS,
-    },
-  };
-}
-
-/**
- * One royal fork the player landed pays a bounty, in gold.
- *
- * Paid the moment the forking move commits, for the same reason the en passant bounty is:
- * the move is the whole of the reason, and gold that only appears two screens later does
- * not read as one. The Undo checkpoint is captured before the move, so a taken-back fork
- * takes its bounty back with it.
- *
- * It is per fork, not per Battle: two of them in one Battle pay two gold. A fork cannot
- * simply sit and pay every turn -- the check has to be answered, and only the move that
- * lands the strike is examined -- but a position that lets the same fork be re-established
- * after each escape does pay each time. That farm is left open at one gold, where at five
- * it would not be.
- *
- * Board law is untouched. The Run pays for what the pieces did; it does not change what
- * they may do (ADR-0193).
- *
- * `null` when this Run has no live Battle to be paid from. Otherwise the paid document
- * arrives with its notice attached, because the gold and the report of the gold are the
- * same event (ADR-0525).
- */
-export function payRunRoyalForkBounty(run: RunDocument, at: Vec): RunBattleChange | null {
-  if (run.phase !== 'battle' || !run.battleRuntime) return null;
-  return {
-    run: touch({ ...run, goldTenths: run.goldTenths + RUN_ROYAL_FORK_BOUNTY_TENTHS }),
-    notice: {
-      log: `Royal fork — ${formatGold(RUN_ROYAL_FORK_BOUNTY_TENTHS)} gold claimed.`,
-      at: { x: at.x, y: at.y },
-      goldTenths: RUN_ROYAL_FORK_BOUNTY_TENTHS,
+      goldTenths,
     },
   };
 }

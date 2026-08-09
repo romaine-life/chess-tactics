@@ -2,7 +2,7 @@ import { Children, useCallback, useEffect, useMemo, useRef, useState, type CSSPr
 import { resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import type { RunBattleTransformSink, RunBattleUndoAdapter } from '../game/store';
 import { defaultFacingForSide } from '../core/pieces';
-import { gameEnv, royalForkVictim } from '../core/rules';
+import { manubiaeEarnedBy } from '../run/manubiae';
 import type { GameState, Piece, Vec } from '../core/types';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox } from './shared/ChromeBox';
@@ -41,14 +41,12 @@ import {
   leaveSectio,
   markReservistDeployed,
   observeRunUnitDeath,
-  payRunEnPassantBounty,
-  payRunRoyalForkBounty,
+  payRunManubium,
   prepareDeployment,
   rerollDeployment,
   resetSectio,
   RUN_BATTLE_DEPLOYMENT_REROLL_COST_TENTHS,
   RUN_BATTLE_RETRY_COST_TENTHS,
-  RUN_ROYAL_FORK_MIN_VICTIM_VALUE,
   RUN_CARD_BY_ID,
   restartBattle,
   runBattleActivityId,
@@ -1475,42 +1473,25 @@ function RunBattlefieldPanel({
   const battleCanReroll = !onReviewRewards && !unitDeparture && canRerollDeployment(retryRun);
 
   const transformCommittedBoard = useCallback<RunBattleTransformSink>((game, events) => {
-      let active = useActiveRun.getState().run;
+      const live = useActiveRun.getState().run;
       // Every change below reports itself here. The Battle log, the gold rising off the board,
       // and the coin all come from this one list, so there is no arrangement of this function
       // that moves the Run's gold without the player being told.
       const notices: RunBattleNotice[] = [];
-      if (!active || active.phase !== 'battle' || active.id !== run.id || !active.battleRuntime) return { game, notices };
+      if (!live || live.phase !== 'battle' || live.id !== run.id || !live.battleRuntime) return { game, notices };
+      // Re-bound as non-null past the guard: the payment helpers below close over it, and a
+      // closure does not carry the narrowing the guard just established.
+      let active: RunDocument = live;
       let transformed: GameState = game;
       let changed = false;
-      // The en passant bounty is the PLAYER's alone: the same capture is available to the
-      // enemy and pays it nothing. The capturer is read off the committed board rather than
-      // the Run roster, so a Reservist or a promoted pawn earns it like any other unit.
-      for (const event of events) {
-        if (event.kind !== 'captured' || !event.enPassant) continue;
-        const capturer = transformed.pieces.find((candidate) => candidate.id === event.by);
-        if (capturer?.side !== 'player') continue;
-        // The bounty is seated on the square the capturing pawn now stands on, not the victim's
-        // vacated one — that is where the player is looking, and where the unit that earned it is.
-        const paid = payRunEnPassantBounty(active, { x: capturer.x, y: capturer.y });
-        if (!paid) continue;
-        active = paid.run;
-        notices.push(paid.notice);
-        changed = true;
-      }
-      // The royal fork bounty is the player's alone as well, and it is one piece's work: the
-      // unit that just moved has to strike the enemy King and a Rook or better itself. A
-      // discovered check is two pieces doing that, and pays nothing. Read against the board
-      // as the move committed it — before any Reservist below lands and stands in a ray.
-      const forkEnv = gameEnv(transformed);
-      for (const event of events) {
-        if (event.kind !== 'moved') continue;
-        const mover = transformed.pieces.find((candidate) => candidate.id === event.pieceId);
-        if (mover?.side !== 'player' || !mover.alive) continue;
-        if (!royalForkVictim(mover, transformed.pieces, transformed.size, forkEnv, RUN_ROYAL_FORK_MIN_VICTIM_VALUE)) continue;
-        // Seated on the forking unit's own square: that is what the player just placed, and
-        // where the two lines they are being paid for meet.
-        const paid = payRunRoyalForkBounty(active, { x: mover.x, y: mover.y });
+      // Manubiae are the PLAYER's alone: the same deeds are available to the enemy and pay it
+      // nothing. What was earned is asked of one shared reader (ADR-0539) rather than worked
+      // out here, so the Battle screen, the unit tests and the live gate cannot disagree about
+      // what a board is worth. It is asked against the board as the move committed it — before
+      // any Reservist below lands and stands in a ray, which would make the Run pay for a line
+      // it drew itself.
+      for (const { award, at } of manubiaeEarnedBy(transformed, events)) {
+        const paid = payRunManubium(active, award, at);
         if (!paid) continue;
         active = paid.run;
         notices.push(paid.notice);
