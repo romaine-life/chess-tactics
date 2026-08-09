@@ -11237,19 +11237,24 @@ export function LevelEditor(): ReactElement {
                 }}
               />
             </div>
+            {/* This is a RESET, and it was labelled "Use the estimate" — which appears only after
+                you tune par, sits directly under the number you just typed, and therefore reads as
+                the Set button this panel does not have. Pressing it threw the tuning away. It now
+                says Reset, like every other reset in this editor (ADR-0057). */}
             {parAuthored ? (
               <ChromeButton
                 unit="inner-text-button"
                 className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                title={`Discard this hand-tuned par and go back to the board's own estimate of ${estimatedParTurns}.`}
                 onClick={resetParToEstimate}
               >
-                Use the estimate
+                Reset
               </ChromeButton>
             ) : null}
             <p className="le-board-note">
               {parAuthored
-                ? `Hand-tuned. Winning inside ${effectiveParTurns} turn${effectiveParTurns === 1 ? '' : 's'} reads as under par on the victory screen, and par sets a ${formatClockSeconds(effectiveParTurns * SPEED_BONUS_SECONDS_PER_PAR_TURN)} bonus clock whose leftover pays the speed bonus. Nothing is won or lost by crossing it — an exhausted bonus clock costs only the bonus. Estimated par for this board is ${estimatedParTurns}.`
-                : `Estimated from the board — ${estimatedParTurns} turn${estimatedParTurns === 1 ? '' : 's'}, and it re-estimates as you edit. Use +/– or type a value to hand-tune it. Par is the turn budget the victory screen measures against, and it sets a ${formatClockSeconds(effectiveParTurns * SPEED_BONUS_SECONDS_PER_PAR_TURN)} bonus clock whose leftover pays the speed bonus.`}
+                ? `Set to ${effectiveParTurns} turn${effectiveParTurns === 1 ? '' : 's'} — hand-tuned, and kept as you type. Winning inside it reads as under par on the victory screen, and it sets a ${formatClockSeconds(effectiveParTurns * SPEED_BONUS_SECONDS_PER_PAR_TURN)} bonus clock whose leftover pays the speed bonus. Nothing is won or lost by crossing par — an exhausted bonus clock costs only the bonus. Reset puts this board back on its own estimate of ${estimatedParTurns}.`
+                : `Estimated from the board — ${estimatedParTurns} turn${estimatedParTurns === 1 ? '' : 's'}, and it re-estimates as you edit. Type a value or use +/– to hand-tune it; there is nothing to confirm, the number you leave in the field is the par. Par is the turn budget the victory screen measures against, and it sets a ${formatClockSeconds(effectiveParTurns * SPEED_BONUS_SECONDS_PER_PAR_TURN)} bonus clock whose leftover pays the speed bonus.`}
             </p>
           </section>
 
