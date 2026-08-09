@@ -174,7 +174,10 @@ export function RunCardPoolCatalog(): ReactElement {
       <style>{`
         /* Every size below is a multiple of --rcp-fs, so the slider moves the whole surface
            together instead of leaving half of it at its authored size. */
-        .rcp { display: grid; grid-template-columns: minmax(calc(var(--rcp-fs) * 20), calc(var(--rcp-fs) * 24)) 1fr; gap: 22px; align-items: start; font-size: var(--rcp-fs); }
+        /* The studio shell is height:100% + overflow:hidden and only hands scrolling to a child
+           carrying the tileset-studio-grid class. This page is not that grid, so it has to own
+           its own scrolling or its lower half is simply unreachable. */
+        .rcp { display: grid; grid-template-columns: minmax(calc(var(--rcp-fs) * 20), calc(var(--rcp-fs) * 24)) 1fr; gap: 22px; align-items: start; font-size: var(--rcp-fs); min-height: 0; height: 100%; overflow-y: auto; overscroll-behavior: contain; padding-bottom: calc(var(--rcp-fs) * 3); }
         .rcp h3 { margin: 0 0 10px; font-size: var(--rcp-fs); letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.8; }
         .rcp-panel { border: 1px solid rgba(255,255,255,0.16); border-radius: 6px; padding: 14px 16px; margin-bottom: 16px; }
         .rcp-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 7px 0; font-size: var(--rcp-fs); }
@@ -210,7 +213,9 @@ export function RunCardPoolCatalog(): ReactElement {
         .rcp-group-name { font-weight: 700; font-size: calc(var(--rcp-fs) * 1.13); white-space: pre; font-family: ui-monospace, monospace; }
         .rcp-group-count { font-variant-numeric: tabular-nums; }
         .rcp-group-bands { margin-left: auto; opacity: 0.75; font-variant-numeric: tabular-nums; }
-        .rcp-group-body { max-height: calc(var(--rcp-fs) * 28); overflow: auto; }
+        /* No inner scroller. The page scrolls now, and a scroll box inside a scrolling page means
+           two bars competing for the same wheel gesture. Row count per group is what bounds this. */
+        .rcp-group-body { overflow: visible; }
         .rcp-textsize { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; font-size: var(--rcp-fs); }
         .rcp-textsize input[type=range] { flex: 1; max-width: calc(var(--rcp-fs) * 18); }
         .rcp-textsize output { font-variant-numeric: tabular-nums; opacity: 0.75; min-width: calc(var(--rcp-fs) * 3.4); }
