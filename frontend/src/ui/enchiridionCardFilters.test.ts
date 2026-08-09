@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { RUN_CARD_CATALOG, RUN_OFFER_CARD_COUNT } from '../run/model';
+import { RUN_CARD_CATALOG, RUN_OFFER_CARD_COUNT, RUN_STARTER_CARDS } from '../run/model';
 import { CardGalleryFilters, cardMatchesFilters, cardsByTier } from './Enchiridion';
 import { runCardTierLabel } from './shared/RunCardGoldTierDivider';
 
@@ -10,7 +10,7 @@ describe('Enchiridion card bands', () => {
     const bands = cardsByTier(RUN_CARD_CATALOG, (card) => card);
     const [firstTier, firstCards] = bands[0];
     expect(firstTier).toBe('starter');
-    expect(firstCards.map((card) => card.id)).toEqual(['his-grace']);
+    expect(firstCards.map((card) => card.id)).toEqual(RUN_STARTER_CARDS.map((king) => king.id));
     expect(runCardTierLabel(firstTier)).toBe('Starter cards');
     // His Grace is worth 2 gold, and that band must no longer contain it.
     const twoGold = bands.find(([tier]) => tier === 2);
@@ -22,15 +22,15 @@ describe('Enchiridion card bands', () => {
     for (const [tier, cards] of bands.slice(1)) {
       expect(cards.every((card) => card.value === tier)).toBe(true);
     }
-    expect(bands.flatMap(([, cards]) => cards)).toHaveLength(RUN_OFFER_CARD_COUNT + 1);
+    expect(bands.flatMap(([, cards]) => cards)).toHaveLength(RUN_OFFER_CARD_COUNT + RUN_STARTER_CARDS.length);
   });
 });
 
 describe('Enchiridion card filters', () => {
   it('shows the combined starter and complete formation deck when both filters are All', () => {
     const visible = RUN_CARD_CATALOG.filter((card) => cardMatchesFilters(card, 'all', 'all', 'all'));
-    expect(visible).toHaveLength(RUN_OFFER_CARD_COUNT + 1);
-    expect(visible[0].id).toBe('his-grace');
+    expect(visible).toHaveLength(RUN_OFFER_CARD_COUNT + RUN_STARTER_CARDS.length);
+    expect(RUN_STARTER_CARDS.some((king) => king.id === visible[0].id)).toBe(true);
   });
 
   it('matches exact gold and contained unit type independently', () => {
@@ -52,7 +52,7 @@ describe('Enchiridion card filters', () => {
 
   it('filters the two-gold combined starter normally', () => {
     expect(RUN_CARD_CATALOG.filter((card) => cardMatchesFilters(card, '2', 'king', 'all')).map((card) => card.id))
-      .toEqual(['his-grace']);
+      .toEqual(RUN_STARTER_CARDS.filter((king) => king.value === 2).map((king) => king.id));
     expect(RUN_CARD_CATALOG.filter((card) => cardMatchesFilters(card, '2', 'pawn', 'all')).map((card) => card.id))
       .toEqual(expect.arrayContaining(['his-grace', 'pp']));
   });

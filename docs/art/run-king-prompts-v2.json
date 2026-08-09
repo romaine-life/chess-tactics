@@ -1,0 +1,294 @@
+{
+  "schemaVersion": "run-king-art-prompt-v2",
+  "cardType": "run-starter-king",
+  "slotPrefix": "ui/run/card-art/",
+  "note": "Kings are hand-authored starter cards and every arrangement is its own king, so art is keyed per CARD rather than per (footprint, roster) family. artId is the card's own slug. The v2/v3 family-id grammar (^[0-9]+-[pkbrq]+$) has no king glyph; installation to live media needs that grammar widened before these slots validate. All of them forge on Codex: pixflux renders a squad regardless of the briefed figure count, and for a king card the count is the identity. Straight-run-of-four Kings (The Purveyance, One Cart Ahead) were retired: that footprint needs a four-long deployment axis, which is a harder demand on every authored Battle than the rest of the pool makes.",
+  "monarchRule": "Each card names the monarch under whose reign the administrative act it is named for is best attested. The monarch is chosen by that rule alone, never by viciousness or by conflict with the church -- those are verdicts, and a verdict explains. Per docs/lore/historical-anchors/README.md the anchor is 'for us, not for the viewer to be able to identify from a caption': the monarch drives the regalia, period and setting, and never appears on the card face. Every name, date and act here is factual.",
+  "sharedDirection": {
+    "subject": "The subject of this card is the KING HIMSELF. Draw him as the nearest, largest and most legible figure in the frame, facing the viewer and LOOKING DIRECTLY OUT OF THE PICTURE, meeting the viewer's eye, holding the centre of the composition, unmistakably royal in the mantle, crown or circlet and regalia of his own period. He is a real historical monarch drawn as a man, not a fantasy king and not a hero. His retinue are smaller, set behind or beside him, and they may be turned away. Never draw chess pieces, a chessboard, or any abstracted game token.",
+    "format": "Landscape illustration for an indie tactics game card, composed for roughly a 1.43:1 crop. Keep the figures inside a generous crop-safe centre. Do not draw the card frame or any interface.",
+    "medium": "This is PIXEL ART — visible pixels, a limited palette, hard edges, hand-placed detail. Not a smooth digital painting: no airbrush gradients, no oil-paint texture, no photorealistic rendering. Stated first because medium buried late in a brief reads as a mood and gets rendered as a painting.",
+    "world": "Grounded historical material, restrained natural colour, hand-made indie game art with character. The named historical anchor sets the place and period. The tragedy already happened; the image shows life continuing around its residue.",
+    "eyeRule": "DELIBERATE EXCEPTION to the facelessness rule in docs/lore-anti-story.md. That rule holds because the pieces are remembered enough to move and not remembered enough to be whole. A named monarch is the one figure in this game who IS whole -- he has a reign, a record and a death -- so his gaze is what marks him as real while the men around him are not. Do not restore facelessness to king cards.",
+    "exclusions": "The king's face is fully shown, lit, and turned to the viewer, and his eyes are clear and readable and looking straight out of the picture. Never turn him away, hide him at a distance, shadow out his eyes or reduce him to a silhouette. Everyone else keeps the usual reticence: the retinue's eyes stay broken by helm, hood, brow, weather or distance. No text, numbers, icons, card border, chessboard, chess pieces, readable heraldry or banner lettering, magical effect, glowing rune, gore, modern signage, or heroic poster energy."
+  },
+  "derivedFrom": "docs/lore-anti-story.md, docs/lore/historical-anchors/README.md",
+  "families": [
+    {
+      "artId": "k-sole-surviving-issue",
+      "slot": "ui/run/card-art/k-sole-surviving-issue/illustration.png",
+      "cardId": "sole-surviving-issue",
+      "pieces": [
+        "king",
+        "pawn"
+      ],
+      "title": "Sole Surviving Issue",
+      "monarch": "Charles VII of France",
+      "monarchNote": "Fifth son. His elder brothers died one after another until the crown reached him; disinherited at Troyes in 1420, uncrowned for years, mocked as the King of Bourges.",
+      "historicalAnchor": "siege-of-orleans-1429",
+      "sceneDirection": "The king stands nearest the viewer on a cart road outside a walled town whose gate has not opened for him, holding the centre of the frame, dressed better than anyone who would follow him and past the point where that means anything. His one remaining soldier waits behind with both packs. Rutted mud, wet light, a shut gate.",
+      "roles": "the king himself, a young disinherited claimant in a good mantle gone shabby and a plain circlet, wearing no armour, and the one foot soldier still with him",
+      "arrangement": "two figures, the king large and forward at the centre, the soldier smaller and set behind him.",
+      "generator": "codex"
+    },
+    {
+      "artId": "k-entered-without-objection",
+      "slot": "ui/run/card-art/k-entered-without-objection/illustration.png",
+      "cardId": "entered-without-objection",
+      "pieces": [
+        "king",
+        "pawn",
+        "pawn"
+      ],
+      "title": "Entered Without Objection",
+      "monarch": "Henry IV of England",
+      "monarchNote": "Took the throne in 1399 by a deposition the parliament roll recorded as Richard II's voluntary renunciation.",
+      "historicalAnchor": "deposition-of-richard-ii-1399",
+      "sceneDirection": "The king stands forward and central on the threshold of a great hall, newly and heavily dressed, holding the frame while two soldiers wait behind him. A clerk's table sits to one side with a roll open on it and weighted, too far off to read. Nobody in the frame is objecting.",
+      "roles": "the king himself, a usurper newly in possession, in a heavy mantle and plain circlet, and two foot soldiers of his retinue",
+      "arrangement": "three figures in a loose single file, the king at the head of the line, nearest the viewer and much the largest in frame, the two soldiers smaller behind him.",
+      "generator": "codex"
+    },
+    {
+      "artId": "k-his-grace",
+      "slot": "ui/run/card-art/k-his-grace/illustration.png",
+      "cardId": "his-grace",
+      "pieces": [
+        "king",
+        "pawn",
+        "pawn"
+      ],
+      "title": "His Grace",
+      "monarch": "Richard III of England",
+      "monarchNote": "Two names stood before his: Edward V and Richard of Shrewsbury, declared illegitimate in 1483 and then absent from the record. The card's existing flavor was already about him.",
+      "historicalAnchor": "princes-in-the-tower-1483",
+      "sceneDirection": "The king holds the centre of the frame, nearest the viewer, on a walled river path, with one soldier ahead of him and one behind. He is plainly and carefully dressed under a thin gold circlet, and the two men with him are a guard rather than a ceremony. A bridge behind, low light.",
+      "roles": "the king himself, careful and plainly dressed under a thin gold circlet, and two foot soldiers who are plainly a guard",
+      "arrangement": "three figures in file, the king in the middle, nearest the viewer and much the largest in frame, one soldier ahead of him and one behind.",
+      "generator": "codex"
+    },
+    {
+      "artId": "k-household-roll",
+      "slot": "ui/run/card-art/k-household-roll/illustration.png",
+      "cardId": "household-roll",
+      "pieces": [
+        "king",
+        "pawn",
+        "pawn",
+        "pawn"
+      ],
+      "title": "The Household Roll",
+      "monarch": "Henry VIII of England",
+      "monarchNote": "The Valor Ecclesiasticus of 1535 counted every monastic income in the realm before the houses were dissolved. The survey came first.",
+      "historicalAnchor": "dissolution-of-the-monasteries",
+      "sceneDirection": "The king stands square and forward in a cloister garth built for forty men and now holding four, filling the centre of the frame, with an inventory board leaning against the arcade behind him. His three men stand close around him, smaller, in a compact block. Bare stone, grass through the paving.",
+      "roles": "the king himself, broad and richly dressed with a heavy chain and a flat cap over a circlet, and three foot soldiers of his household",
+      "arrangement": "four figures in a compact square block, two and two, with the king forward at the front of the block, nearest the viewer and much the largest in frame.",
+      "generator": "codex"
+    },
+    {
+      "artId": "k-staggered-muster",
+      "slot": "ui/run/card-art/k-staggered-muster/illustration.png",
+      "cardId": "staggered-muster",
+      "pieces": [
+        "king",
+        "pawn",
+        "pawn",
+        "pawn"
+      ],
+      "title": "Staggered Muster",
+      "monarch": "King John of England",
+      "monarchNote": "The 1205 muster at Portsmouth for the recovery of Normandy dissolved when the host would not sail; the feudal summons stopped reliably producing an army.",
+      "historicalAnchor": "loss-of-normandy-1204",
+      "sceneDirection": "The king stands forward at the centre of a wide muster field, facing the viewer, while his men arrive at different moments and never form into a rank. Trestle tables and a tally stick wait under a canvas awning. The field is large and mostly empty behind him.",
+      "roles": "the king himself, compact and richly dressed in a mantle and plain crown, and three foot soldiers arriving separately",
+      "arrangement": "four figures across two ranks in a broken, stepped line rather than an even row, the king forward and central, nearest the viewer and much the largest in frame.",
+      "generator": "codex"
+    },
+    {
+      "artId": "k-muster-incomplete",
+      "slot": "ui/run/card-art/k-muster-incomplete/illustration.png",
+      "cardId": "muster-incomplete",
+      "pieces": [
+        "king",
+        "pawn",
+        "pawn",
+        "pawn"
+      ],
+      "title": "Muster Incomplete",
+      "monarch": "Henry VI of England",
+      "monarchNote": "Crowned in infancy in two realms and reigning as the English position in France came apart; the rolls stayed neat while the companies emptied.",
+      "historicalAnchor": "hundred-years-war",
+      "sceneDirection": "The king stands among the few who came, forward and central and facing the viewer, dressed for a far larger occasion than this one, while a clerk's roll lies weighted open on a table in front of ground nobody is standing on. The pike stands are half full.",
+      "roles": "the king himself, thin and mild and over-dressed for the day in a heavy mantle and crown, and three foot soldiers",
+      "arrangement": "four figures across two ranks in a stepped, offset line, the king set among them but nearest the viewer and much the largest in frame.",
+      "generator": "codex"
+    },
+    {
+      "artId": "k-turning-stone",
+      "slot": "ui/run/card-art/k-turning-stone/illustration.png",
+      "cardId": "turning-stone",
+      "pieces": [
+        "king",
+        "pawn",
+        "pawn",
+        "pawn"
+      ],
+      "title": "The Turning Stone",
+      "monarch": "Henry VIII of England",
+      "monarchNote": "Abbey stone went straight into walls, barns and lanes; the boundaries it was built across were older than the house that had been pulled down.",
+      "historicalAnchor": "dissolution-of-the-monasteries",
+      "sceneDirection": "The king stands at the corner where a lane turns hard against a new wall built out of reused abbey masonry, forward and facing the viewer, an old boundary stone at his feet. His men are strung back along the lane behind him. The stone is older than everything else in the frame.",
+      "roles": "the king himself, broad and richly dressed with a heavy chain and a flat cap over a circlet, and three foot soldiers",
+      "arrangement": "four figures around a right-angled turn, the king at the corner itself, nearest the viewer and much the largest in frame.",
+      "generator": "codex"
+    },
+    {
+      "artId": "k-called-to-the-bounds",
+      "slot": "ui/run/card-art/k-called-to-the-bounds/illustration.png",
+      "cardId": "called-to-the-bounds",
+      "pieces": [
+        "king",
+        "pawn",
+        "pawn",
+        "pawn"
+      ],
+      "title": "Called to the Bounds",
+      "monarch": "Edward VI of England",
+      "monarchNote": "The 1547 injunctions banned most processions but deliberately preserved the Rogationtide perambulation, because walking the line was how a parish still knew where it ran.",
+      "historicalAnchor": "edwardian-injunctions-1547",
+      "sceneDirection": "The boy king waits at the corner post of a field boundary, forward and central in the frame and facing the viewer, formally dressed and much too well for the ground he is standing on, while three men stand together in a line along the other arm. A ditch and a new fence run away behind them.",
+      "roles": "the king himself, a slight and formally dressed boy monarch in a mantle and circlet, and three foot soldiers",
+      "arrangement": "four figures around a right-angled turn, the king alone at one end, nearest the viewer and much the largest in frame, three soldiers together along the other arm.",
+      "generator": "codex"
+    },
+    {
+      "artId": "k-one-left-at-the-marker",
+      "slot": "ui/run/card-art/k-one-left-at-the-marker/illustration.png",
+      "cardId": "one-left-at-the-marker",
+      "pieces": [
+        "king",
+        "pawn",
+        "pawn",
+        "pawn"
+      ],
+      "title": "One Left at the Marker",
+      "monarch": "Edward I of England",
+      "monarchNote": "The Hundred Rolls inquests of 1274-75 sent commissioners into every hundred to record boundaries and franchises from sworn local memory. The memory was the evidence.",
+      "historicalAnchor": "hundred-rolls-inquests-1274",
+      "sceneDirection": "The king walks on along a field edge at the head of a boundary party, forward and facing the viewer and holding the centre, while one soldier stays behind at the last marker. Cut turf shows where the line was re-walked this season. Nobody looks back at him.",
+      "roles": "the king himself, tall and long-limbed in a plain mantle and crown, and three foot soldiers",
+      "arrangement": "four figures around a right-angled turn, the king leading a row of three and nearest the viewer, much the largest in frame, with the last man set back behind the far end of that row.",
+      "generator": "codex"
+    },
+    {
+      "artId": "k-within-the-old-bounds",
+      "slot": "ui/run/card-art/k-within-the-old-bounds/illustration.png",
+      "cardId": "within-the-old-bounds",
+      "pieces": [
+        "king",
+        "pawn",
+        "pawn",
+        "pawn"
+      ],
+      "title": "Within the Old Bounds",
+      "monarch": "Henry VIII of England",
+      "monarchNote": "When a house went down its muniments went with it, and the bank in the field outlived every document that described who owned it.",
+      "historicalAnchor": "dissolution-of-the-monasteries",
+      "sceneDirection": "The king stands inside the crook of an old boundary bank, forward and facing the viewer and holding the centre, with his men out along both of its arms. Thorn has grown thick along the top of the bank. The enclosed ground holds nothing worth enclosing.",
+      "roles": "the king himself, broad and richly dressed with a heavy chain and a flat cap over a circlet, and three foot soldiers",
+      "arrangement": "four figures around a right-angled turn, the king set inside the angle, nearest the viewer and much the largest in frame, with soldiers along both arms.",
+      "generator": "codex"
+    },
+    {
+      "artId": "k-witness-to-the-oath",
+      "slot": "ui/run/card-art/k-witness-to-the-oath/illustration.png",
+      "cardId": "witness-to-the-oath",
+      "pieces": [
+        "king",
+        "bishop",
+        "pawn"
+      ],
+      "title": "Witness to the Oath",
+      "monarch": "Henry II of England",
+      "monarchNote": "The Constitutions of Clarendon, 1164: sixteen articles read out and assented to by the bishops in one sitting, then written down and disputed for the rest of the reign.",
+      "historicalAnchor": "constitutions-of-clarendon-1164",
+      "sceneDirection": "The king stands forward at the centre of a hall, facing the viewer, restless and plainly dressed for a man with that much authority, with a bishop close behind him holding a sealed document and one soldier further back. The oath is being taken where everyone present can hear it. Nothing in the bishop's posture suggests he wanted to be there.",
+      "roles": "the king himself, stocky and restless in a short mantle and circlet, a bishop in full vestment and mitre, and one foot soldier",
+      "arrangement": "three figures in file, the king at the head and nearest the viewer, much the largest in frame, the bishop immediately behind him and the soldier last.",
+      "generator": "codex"
+    },
+    {
+      "artId": "k-anointed-late",
+      "slot": "ui/run/card-art/k-anointed-late/illustration.png",
+      "cardId": "anointed-late",
+      "pieces": [
+        "king",
+        "pawn",
+        "bishop"
+      ],
+      "title": "Anointed Late",
+      "monarch": "Charles VII of France",
+      "monarchNote": "Crowned at Reims in July 1429, seven years after his father died, because the coronation city had to be reached before the rite could happen at all.",
+      "historicalAnchor": "coronation-at-reims-1429",
+      "sceneDirection": "The king walks at the head of a long road toward a cathedral town, forward and central and facing the viewer, with one soldier between him and the bishop who follows carrying oil in a covered vessel. The rite has been carried this entire way. The road behind them is empty.",
+      "roles": "the king himself, mantled under a plain circlet and travelling rather than enthroned, one foot soldier, and a bishop in full vestment and mitre",
+      "arrangement": "three figures in file, the king at the head and nearest the viewer, much the largest in frame, one soldier between him and the bishop who comes last.",
+      "generator": "codex"
+    },
+    {
+      "artId": "k-the-anointing",
+      "slot": "ui/run/card-art/k-the-anointing/illustration.png",
+      "cardId": "the-anointing",
+      "pieces": [
+        "bishop",
+        "king",
+        "pawn"
+      ],
+      "title": "The Anointing",
+      "monarch": "Pepin the Short",
+      "monarchNote": "Anointed in 751 and again by Pope Stephen II in 754. The anointing is what made him king in place of the dynasty he had displaced; the church went first, and he followed.",
+      "historicalAnchor": "anointing-of-pepin-751",
+      "sceneDirection": "The bishop goes up the church steps first and the king follows immediately behind him, forward and central in the frame and facing the viewer, with one soldier last. A vessel of oil is carried covered. What makes him a king is the man walking in front of him.",
+      "roles": "the king himself, short and powerfully built, in a plain Frankish mantle and not yet crowned, a bishop in full vestment and mitre, and one foot soldier",
+      "arrangement": "three figures in file, the bishop leading, the king behind him but nearest the viewer and much the largest in frame, one soldier last.",
+      "generator": "codex"
+    },
+    {
+      "artId": "k-homage-withheld",
+      "slot": "ui/run/card-art/k-homage-withheld/illustration.png",
+      "cardId": "homage-withheld",
+      "pieces": [
+        "king",
+        "pawn",
+        "knight"
+      ],
+      "title": "Homage Withheld",
+      "monarch": "Philip VI of France",
+      "monarchNote": "At Amiens in 1329 he received simple homage for Gascony rather than the liege homage he was owed. The difference between the two was one of the quarrels the Hundred Years' War was fought over.",
+      "historicalAnchor": "homage-at-amiens-1329",
+      "sceneDirection": "The king stands forward at a turn in the road, facing the viewer and holding the centre in a heavy mantle and crown, with a foot soldier at his shoulder. Behind him a horseman keeps his mount reined in at a distance, still mounted and still armed. Nobody has dismounted.",
+      "roles": "the king himself, tall and formally dressed in a heavy mantle and crown, one foot soldier, and a mounted man-at-arms with his horse",
+      "arrangement": "three figures around a right-angled turn, the king at the corner, nearest the viewer and much the largest in frame, the horseman set back behind him and the foot soldier beside him.",
+      "generator": "codex"
+    },
+    {
+      "artId": "k-homage-done-mounted",
+      "slot": "ui/run/card-art/k-homage-done-mounted/illustration.png",
+      "cardId": "homage-done-mounted",
+      "pieces": [
+        "king",
+        "knight",
+        "pawn"
+      ],
+      "title": "Homage Done Mounted",
+      "monarch": "Charles the Simple",
+      "monarchNote": "The grant at Saint-Clair-sur-Epte in 911 bought off a Viking army with land in exchange for homage. The homage was performed. How well it was performed was argued about for a century afterwards.",
+      "historicalAnchor": "treaty-of-saint-clair-sur-epte-911",
+      "sceneDirection": "A rider brings his horse up level with the king at a roadside meeting and addresses him from the saddle without dismounting. The king holds the centre of the frame, forward and facing the viewer, and does not move. The horse's head is higher than the crown.",
+      "roles": "the king himself, lean and long-mantled under a plain crown, a mounted man-at-arms with his horse, and one foot soldier",
+      "arrangement": "three figures around a right-angled turn, the king at the corner, nearest the viewer and much the largest in frame, the horseman drawn up alongside him and the foot soldier set back.",
+      "generator": "codex"
+    }
+  ]
+}

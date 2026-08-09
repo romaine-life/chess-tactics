@@ -22514,6 +22514,36 @@ button.tileset-relationship-cell {
   flex: 0 0 auto;
 }
 
+/* Choosing the King. Same shape as the dealt hand below and for the same reason: one card, full
+   width, steppers under it, because where the crown stands in its own formation is the substance
+   of the choice and a grid of fifteen would shrink exactly that away. */
+.run-king-selector {
+  display: grid;
+  gap: var(--ds-space-1);
+  min-inline-size: 0;
+}
+
+.run-king-selector-card {
+  display: grid;
+  gap: var(--ds-space-1);
+  justify-items: center;
+  min-inline-size: 0;
+}
+
+/* The gold sits above the card, never in its cost corner: that corner reads as a PRICE on every
+   other card in the game, and this is a number the player receives. It holds its line whether or
+   not there is a bonus, so stepping through the pool never reflows the card underneath it. */
+.run-king-selector-bonus {
+  margin: 0;
+  text-align: center;
+  font-size: var(--ds-font-size-sm, 0.85rem);
+  color: var(--ds-text-strong, inherit);
+}
+
+.run-king-selector-bonus[data-empty='true'] {
+  opacity: 0.62;
+}
+
 /* The card takes the panel's whole width. A formation card is read by its SHAPE, so a hand laid
    out at once squeezed away the only information on it — and steppers either side took width
    the card needed, so they sit under it instead. */

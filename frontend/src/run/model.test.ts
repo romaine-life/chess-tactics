@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createBlankLevel } from '../core/level';
 import {
   CURRENT_RUN_SAVE_VERSION,
+  GOLD_SCALE,
   PIECE_VALUE,
   RUN_GENERATED_CARD_COUNT,
   RUN_OFFER_CARD_COUNT,
@@ -20,6 +21,8 @@ import {
   RUN_CARD_RARITIES,
   RUN_LIPSANA,
   RUN_STARTER_CARD_BY_ID,
+  RUN_STARTER_CARDS,
+  RUN_STARTER_GOLD_BASELINE_VALUE,
   RUN_STARTING_GOLD_TENTHS,
   acquireLipsanon,
   captureRunBattleUndo,
@@ -97,7 +100,27 @@ describe('formation card catalog', () => {
     expect(RUN_CARD_DECK).toHaveLength(RUN_OFFER_CARD_COUNT);
     expect(RUN_OFFER_CARD_COUNT).toBe(269);
     expect(RUN_CARD_DECK.every((card) => card.pieces.length >= 1 && card.pieces.length <= 4)).toBe(true);
-    expect(RUN_CARD_CATALOG).toHaveLength(270);
+    // The offer deck plus the fifteen Kings, which are never dealt into it.
+    expect(RUN_STARTER_CARDS).toHaveLength(15);
+    expect(RUN_CARD_CATALOG).toHaveLength(RUN_OFFER_CARD_COUNT + RUN_STARTER_CARDS.length);
+  });
+
+  it('gives every King mating material against a lone King and prices the thin ones in gold', () => {
+    for (const king of RUN_STARTER_CARDS) {
+      const companions = king.pieces.filter((piece) => piece !== 'king');
+      const minors = companions.filter((piece) => piece === 'knight' || piece === 'bishop');
+      // Battle 1 is a lone King. K+N, K+B and K+NN cannot force mate; a Pawn always can, by
+      // promotion, and two minors can between them. No King may be authored without one or other.
+      expect(
+        companions.includes('pawn') || minors.length >= 2,
+        `${king.id} cannot force mate against a lone King`,
+      ).toBe(true);
+      expect(king.value + king.goldBonusTenths / GOLD_SCALE).toBe(RUN_STARTER_GOLD_BASELINE_VALUE);
+      expect(king.pieces.filter((piece) => piece === 'king')).toHaveLength(1);
+      expect(king.formation).toHaveLength(king.pieces.length);
+      expect(king.removable).toBe(false);
+    }
+    expect(new Set(RUN_STARTER_CARDS.map((king) => king.id)).size).toBe(RUN_STARTER_CARDS.length);
   });
 
   /**
@@ -261,7 +284,8 @@ describe('plain Run creation and acquisition', () => {
   it('starts with one combined starter card, three units, and eight gold', () => {
     const run = createRun(war(), 17, '2026-01-01T00:00:00.000Z');
     expect(run.runSaveVersion).toBe(CURRENT_RUN_SAVE_VERSION);
-    expect(run.goldTenths).toBe(RUN_STARTING_GOLD_TENTHS);
+    // His Grace is two material short of the four-value baseline, so it opens with the gold.
+    expect(run.goldTenths).toBe(RUN_STARTING_GOLD_TENTHS + RUN_STARTER_CARD_BY_ID['his-grace'].goldBonusTenths);
     expect(run.army.map((unit) => unit.type)).toEqual(['king', 'pawn', 'pawn']);
     expect(run.cards).toHaveLength(1);
     expect(run.cards[0]).toMatchObject({ coreId: 'his-grace' });
@@ -289,48 +313,53 @@ describe('plain Run creation and acquisition', () => {
     );
   });
 
-  it('opens the Run on a formation-card grant and moves it into Battle 1 Deployment', () => {
+  // The King replaced the opening card grant: the Run's first decision happens before the
+  // document exists, so a loot Battle 1 no longer opens on Bona Vacantia at all.
+  it('opens straight into Battle 1 Deployment even when Battle 1 carries loot', () => {
     const openingWar = war();
     openingWar.battles[0].loot = true;
     const run = createRun(openingWar, 29);
-    expect(run.phase).toBe('bona-vacantia');
-    expect(run.vacantia!.kind).toBe('opening');
-    // The opening screen grants a card, not a lipsanon: Battle 1 has to be arrangeable.
-    expect(run.vacantia!.offers).toEqual([]);
-    expect(run.vacantia!.cardOffers).toHaveLength(RUN_OPENING_CARD_OFFER_COUNT);
-    expect(new Set(run.vacantia!.cardOffers).size).toBe(RUN_OPENING_CARD_OFFER_COUNT);
-    for (const coreId of run.vacantia!.cardOffers) {
-      const card = RUN_CARD_BY_ID[coreId];
-      expect(card).toBeDefined();
-      expect(card.value).toBeGreaterThanOrEqual(RUN_OPENING_CARD_VALUE_MIN);
-      expect(card.value).toBeLessThanOrEqual(RUN_OPENING_CARD_VALUE_MAX);
-    }
 
-    const chosen = run.vacantia!.cardOffers[0];
-    const taken = takeVacantiaCard(run, chosen);
-    expect(taken.phase).toBe('deployment');
-    expect(taken.battleIndex).toBe(0);
-    expect(taken.sectio).toBeNull();
-    expect(taken.vacantia).toBeNull();
-    expect(taken.lipsana).toEqual([]);
-
-    // Admitted exactly as Adlectio would: a held card with one army seat per piece.
-    const held = taken.cards.at(-1)!;
-    expect(held.coreId).toBe(chosen);
-    expect(held.unitSeats).toHaveLength(RUN_CARD_BY_ID[chosen].pieces.length);
-    expect(taken.army.filter((unit) => held.unitSeats.includes(unit.id)).map((unit) => unit.type))
-      .toEqual(RUN_CARD_BY_ID[chosen].pieces);
-    expect(taken.goldTenths).toBe(run.goldTenths);
+    expect(run.phase).toBe('deployment');
+    expect(run.vacantia).toBeNull();
+    expect(run.battleIndex).toBe(0);
+    expect(run.cards).toHaveLength(1);
   });
 
-  it('refuses a grant the opening screen did not offer', () => {
-    const openingWar = war();
-    openingWar.battles[0].loot = true;
-    const run = createRun(openingWar, 29);
-    const unoffered = RUN_CARD_DECK.find((card) => !run.vacantia!.cardOffers.includes(card.id))!;
+  it('builds the army and the opening gold from the chosen King', () => {
+    for (const king of RUN_STARTER_CARDS) {
+      const run = createRun(war(), 23, { kingId: king.id });
 
-    expect(takeVacantiaCard(run, unoffered.id)).toBe(run);
-    expect(takeVacantiaCard(run, 'his-grace')).toBe(run);
+      expect(run.cards).toHaveLength(1);
+      expect(run.cards[0].coreId).toBe(king.id);
+      expect(run.army.map((unit) => unit.type)).toEqual(king.pieces);
+      expect(runCardUnitIds(run.cards[0])).toEqual(run.army.map((unit) => unit.id));
+      expect(run.army.filter((unit) => unit.type === 'king')).toHaveLength(1);
+      // Thin Kings are topped up so every opening hand is worth the same four.
+      expect(run.goldTenths).toBe(RUN_STARTING_GOLD_TENTHS + king.goldBonusTenths);
+      expect(run.phase).toBe('deployment');
+    }
+  });
+
+  it('defaults to His Grace when no King is named', () => {
+    expect(createRun(war(), 23).cards[0].coreId).toBe('his-grace');
+  });
+
+  it('moves a save parked on the retired opening grant into its Deployment', () => {
+    const stale = {
+      ...createRun(war(), 29),
+      runSaveVersion: CURRENT_RUN_SAVE_VERSION - 1,
+      phase: 'bona-vacantia',
+      vacantia: {
+        kind: 'opening', conflictIndex: 0, afterBattleIndex: 0, victoryGoldTenths: 0, offers: [], cardOffers: ['p'],
+      },
+    };
+    const migrated = migrateRunSaveDocument(stale);
+
+    expect(migrated.runSaveVersion).toBe(CURRENT_RUN_SAVE_VERSION);
+    expect(migrated.phase).toBe('deployment');
+    expect(migrated.vacantia).toBeNull();
+    expect(migrated.cards[0].coreId).toBe('his-grace');
   });
 
 
