@@ -21,7 +21,7 @@ export interface SceneState {
    * document error is the canonical one — and a resolve effect that has already run does not run
    * again just because the phase moved back to `loading`. Retry therefore did nothing at all for
    * those scenes: the participant re-reported the error it still held and the director failed
-   * straight back, whichever button was pressed and however many times (ADR-0545). Generation
+   * straight back, whichever button was pressed and however many times (ADR-0547). Generation
    * cannot serve here: it advances on every navigation, and remounting on that would destroy and
    * rebuild every just-committed screen and its store.
    */

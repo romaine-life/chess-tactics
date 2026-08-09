@@ -1,7 +1,7 @@
 // A failed scene reaches the director as a bare Error, and the director then has to guess what
 // would fix it. The screen that failed usually knows: an editor document behind a private URL is
 // not "artwork could not be reached", it is a missing account session, and offering Retry for it
-// is an action that cannot succeed however many times it is pressed (ADR-0545).
+// is an action that cannot succeed however many times it is pressed (ADR-0547).
 //
 // So the remedy travels ON the error rather than being re-derived from its wording. A screen that
 // knows tags it; a screen that does not leaves it untagged and the director falls back to the

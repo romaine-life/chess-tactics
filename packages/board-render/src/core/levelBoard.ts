@@ -18,7 +18,7 @@ import { defaultTerrainFamily, familyForGameplayTerrain, gameplayTerrainForFamil
 import { decodeBoard, encodeBoard, zoneCellMapFromEntries, zoneEntriesFromCellMap, type EditorBoard, type EditorZoneEntry } from '../ui/boardCode';
 import { parseEdgeKey, isOrthogonalPair, isNorthWestBoundaryWallEdge, defaultFenceMaterial } from './featureAutotile';
 import { studioFamilies } from '../ui/studioBoard';
-import { isUnitPalette } from './pieces';
+import { UNIT_PALETTES, isUnitPalette } from './pieces';
 import { unitFamilyForId, type Faction } from '../ui/unitCatalog';
 
 // Terrain the editor can REPRESENT (and thus round-trip), so the save-time guard need not
@@ -48,6 +48,57 @@ const isFaction = (faction: string | null | undefined): faction is Faction =>
   isUnitPalette(faction);
 const sideForFaction = (faction: string, playerFaction: string | null | undefined): Side =>
   playerFaction && faction === playerFaction ? 'player' : 'enemy';
+
+/** The colour a saved unit wears — its own, or the one its side wore before palettes existed. */
+const paletteOfLevelUnit = (unit: LevelUnit): Faction | undefined => {
+  if (isFaction(unit.palette)) return unit.palette;
+  return unit.side === 'player' || unit.side === 'enemy' ? SIDE_TO_FACTION[unit.side] : undefined;
+};
+
+/**
+ * The declaration a saved Level already implies, read from the sides its units play on.
+ *
+ * `boardCode` stores the colour a piece WEARS; `layers.units` stores the side it PLAYS ON. A level
+ * saved before it declared its factions carries only the second, and the editor was reading only
+ * the first — so `resolveDeclaredFactions` fell through to "the first painted palette is the
+ * player", which on a single-colour board names the OPPOSITION as the player and inverts the level
+ * on the next save (`sideForFaction` above re-derives every side from that guess).
+ *
+ * A palette worn by both sides names neither. That is the pre-palette shape, where a unit had no
+ * colour of its own and took its side's; `paletteOfLevelUnit` already gives those two sides
+ * different colours, so the pair comes out of that rather than out of a collision.
+ */
+export function declaredFactionsFromLevelUnits(units: readonly LevelUnit[]): {
+  playerFaction?: Faction;
+  enemyFaction?: Faction;
+} {
+  const worn: Record<'player' | 'enemy', Set<Faction>> = { player: new Set(), enemy: new Set() };
+  for (const unit of units) {
+    if (unit.side !== 'player' && unit.side !== 'enemy') continue;
+    const palette = paletteOfLevelUnit(unit);
+    if (palette) worn[unit.side].add(palette);
+  }
+  const declared = (side: 'player' | 'enemy', other: 'player' | 'enemy'): Faction | undefined =>
+    UNIT_PALETTES.find((palette) => worn[side].has(palette) && !worn[other].has(palette));
+  return { playerFaction: declared('player', 'enemy'), enemyFaction: declared('enemy', 'player') };
+}
+
+/**
+ * Fill a half the board never declared from the sides the Level already stores.
+ *
+ * An authored half always wins, so this only ever speaks where the board was silent — and once
+ * either half is recovered it is written into the board code by the next save and read from there
+ * instead, which makes the projection a fixed point rather than a value that drifts each reopen.
+ */
+function withRecoveredDeclaration(level: Level, board: EditorBoard): EditorBoard {
+  if (isFaction(board.playerFaction) && isFaction(board.enemyFaction)) return board;
+  const recovered = declaredFactionsFromLevelUnits(level.layers.units);
+  return {
+    ...board,
+    playerFaction: isFaction(board.playerFaction) ? board.playerFaction : recovered.playerFaction,
+    enemyFaction: isFaction(board.enemyFaction) ? board.enemyFaction : recovered.enemyFaction,
+  };
+}
 
 /**
  * Project the editor's authored zone entries into `layers.zones`. Empty entries are preserved
@@ -232,7 +283,7 @@ export function levelToEditorBoard(level: Level): EditorBoard {
       const zoneEntries = decoded.zoneEntries?.length
         ? decoded.zoneEntries
         : zoneEntriesFromLayers(level.layers.zones, decoded.cols, decoded.rows);
-      return { ...decoded, zoneEntries, zones: zoneCellMapFromEntries(zoneEntries) };
+      return withRecoveredDeclaration(level, { ...decoded, zoneEntries, zones: zoneCellMapFromEntries(zoneEntries) });
     }
   }
 
@@ -286,11 +337,9 @@ export function levelToEditorBoard(level: Level): EditorBoard {
     if (!fenceTouchesBoard(edge, cols, rows)) continue;
     fences[edge] = defaultFenceMaterial();
   }
-  const hasAuthoredPlayer = level.layers.units.some((unit) => unit.side === 'player');
-  return {
+  return withRecoveredDeclaration(level, {
     cols,
     rows,
-    playerFaction: hasAuthoredPlayer ? SIDE_TO_FACTION.player : undefined,
     cells,
     units,
     doodads: {},
@@ -305,7 +354,7 @@ export function levelToEditorBoard(level: Level): EditorBoard {
     featureExits: {},
     zoneEntries,
     zones,
-  };
+  });
 }
 
 // Serialize the painted board into a valid `Level`. `boardCode` is stamped for a lossless

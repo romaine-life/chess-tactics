@@ -1,5 +1,6 @@
 export const LEVEL_EDITOR_ROUTE_LAYERS = [
   'board',
+  'factions',
   'camera',
   'level-artwork',
   'tile',
