@@ -7,7 +7,7 @@ import {
 import { resolveDeclaredFactions } from './pieces';
 import type { Level, LevelUnit } from './level';
 
-// ADR-0545. A Level stores which SIDE each piece plays on; a board code stores only the COLOUR it
+// ADR-0546. A Level stores which SIDE each piece plays on; a board code stores only the COLOUR it
 // wears. Opening a level used to read the colour and throw the side away, so `resolveDeclaredFactions`
 // fell back to "the first painted palette is the player" — and on a board painted in one colour that
 // names the OPPOSITION as the player. The next save then re-derived every side from that guess and

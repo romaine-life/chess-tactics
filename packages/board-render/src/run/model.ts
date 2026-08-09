@@ -1198,9 +1198,18 @@ export function runCardDefinition(coreId: string): RunCardDefinition | undefined
     ?? RUN_STARTER_CARD_BY_ID[coreId as RunStarterCardId];
 }
 
+/**
+ * True for a card identity the Run begins holding rather than one Sectio can offer. Every King is
+ * one of these (#850), so this is how the Run's own King card is picked out of a Chartulary --
+ * by identity rather than by naming His Grace, which is only the default of fifteen.
+ */
+export function isRunStarterCardId(coreId: string): boolean {
+  return Boolean(RUN_STARTER_CARD_BY_ID[coreId as RunStarterCardId]);
+}
+
 /** True for a card the Run begins holding rather than one Sectio can offer. */
 export function isRunStarterCard(card: Pick<RunCardDefinition, 'id'>): boolean {
-  return Boolean(RUN_STARTER_CARD_BY_ID[card.id as RunStarterCardId]);
+  return isRunStarterCardId(card.id);
 }
 
 /**
@@ -1440,16 +1449,31 @@ export function snapshotWar(war: War, levels: Record<string, Level>): RunWarSnap
 const STARTER_SEAT_SUFFIX = ['a', 'b', 'c', 'd'] as const;
 
 /**
+ * The unit ids a King's own formation seats, in seat order. Exported because the server verifies
+ * the same seats when it accepts a saved Run, and fifteen Kings each seat a different roster
+ * (#850): restating the ids there is what refused to save the fourteen that are not His Grace.
+ */
+export function starterFormationSeatIds(card: RunStarterCard): string[] {
+  const seenByType = new Map<RunArmyPieceType, number>();
+  return card.pieces.map((type) => {
+    const index = seenByType.get(type) ?? 0;
+    seenByType.set(type, index + 1);
+    return type === 'king' ? 'run-king' : `run-${type}-${STARTER_SEAT_SUFFIX[index]}`;
+  });
+}
+
+/**
  * The chosen King's own formation, built as units in seat order. The unit ids stay derived from
  * type and seat rather than from the card, so a Run's army reads the same whichever King opened
  * it and `run-king` remains the King's stable id everywhere downstream.
  */
 function initialArmy(seed: number, card: RunStarterCard): RunArmyUnit[] {
+  const seatIds = starterFormationSeatIds(card);
   const seenByType = new Map<RunArmyPieceType, number>();
-  return card.pieces.map((type) => {
+  return card.pieces.map((type, seat) => {
     const index = seenByType.get(type) ?? 0;
     seenByType.set(type, index + 1);
-    const id = type === 'king' ? 'run-king' : `run-${type}-${STARTER_SEAT_SUFFIX[index]}`;
+    const id = seatIds[seat];
     return {
       id,
       name: runUnitName(seed, type, index),
@@ -3046,13 +3070,17 @@ export function prepareDeployment(run: RunDocument): RunDocument {
     return touch({ ...run, battleRuntime: null });
   }
   const seed = mixSeed(run.seed, 'deployment', run.battleIndex);
-  const hisGrace = run.cards.find((card) => card.coreId === 'his-grace');
+  // The Run's King card is always dealt, ahead of the shuffle: it seats the King, and a Battle
+  // that did not deal it could not deploy him at all. Which card that is depends on the King the
+  // Run opened on (#850), so it is found through the starter catalog -- naming His Grace left the
+  // other fourteen Kings' cards to be shuffled in like any other and missed out of small deals.
+  const kingCard = run.cards.find((card) => isRunStarterCardId(card.coreId));
   const ordinary = shuffled(
-    run.cards.filter((card) => card.id !== hisGrace?.id),
+    run.cards.filter((card) => card.id !== kingCard?.id),
     mixSeed(seed, 'deployment-cards'),
   );
   const dealCount = runDeploymentDealCount(run);
-  const dealtCardIds = [...(hisGrace ? [hisGrace] : []), ...ordinary]
+  const dealtCardIds = [...(kingCard ? [kingCard] : []), ...ordinary]
     .slice(0, dealCount)
     .map((card) => card.id);
   return touch({

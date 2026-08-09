@@ -58,7 +58,7 @@ describe('Factions panel contents', () => {
 
   it('says which declared side the human actually commands', () => {
     // The question this panel exists to answer: a level that never declared has one READ off its
-    // pixels, and the read can name the army the player fights (ADR-0538, ADR-0544).
+    // pixels, and the read can name the army the player fights (ADR-0538, ADR-0546).
     expect(factionsPanel).toContain('is the army the human commands in play. Every other piece fights it.');
   });
 

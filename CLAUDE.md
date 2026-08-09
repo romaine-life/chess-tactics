@@ -411,6 +411,7 @@ browser and it is minted into its `/run/craft/<id>` address before anything is c
 hand-authored one-off leaves a durable link behind:
 
 ```
+/run?craft=commendatio
 /run?craft=sectio&battle=3&gold=25&army=knight,rook&offers=q,pb-front,rr-vertical
 /run?craft=deployment&battle=2&army=rook,rook,bishop,pawn&gold=12
 /run?craft=battle&battle=4&lipsana=royal-tent
@@ -419,8 +420,12 @@ hand-authored one-off leaves a durable link behind:
 /run?craft=victory&gold=40
 ```
 
-- `craft=sectio|deployment|battle|battle-victory|aftermath|victory` — the phase to land on;
-  `battle-victory` opens the settled Battle directly on its board-visible Victory/Rewards state.
+- `craft=commendatio|sectio|deployment|battle|battle-victory|aftermath|victory` — the phase to
+  land on; `battle-victory` opens the settled Battle directly on its board-visible
+  Victory/Rewards state.
+- `craft=commendatio` is the Run's opening King choice. It precedes the King, so the document it
+  crafts holds no army and no cards and takes no `army`, `add`, `cards` or `offers` override —
+  what it takes is `seed`, which is what picks the three Kings dealt.
 - `battle=N` — the Battle you are at, 1-based. For a Sectio that is the Sectio you leave into
   Battle N, so `battle=1` is the opening Sectio (which takes no overrides — the Run contract
   pins its offers, army and 8 gold).

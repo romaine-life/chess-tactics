@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { PLAYER_PALETTES } from '../core/pieces';
-import { BOARD_GRID_STYLES, DEFAULT_APP_SETTINGS, normalizeAppSettings } from './appSettings';
+import { BOARD_GRID_STYLES, DEFAULT_APP_SETTINGS, LEVEL_EDITOR_GRID_SCOPES, normalizeAppSettings } from './appSettings';
 
 describe('application settings', () => {
   it('losslessly adds gameplay preferences to an existing settings blob', () => {
@@ -18,10 +18,24 @@ describe('application settings', () => {
       interfaceSounds: false,
       showBoardGrid: true,
       boardGridStyle: 'ink',
+      levelEditorGridScope: 'playable',
       autoDealDeployment: false,
       playerPalette: 'white',
       runCardBack: 'kings-position',
     });
+  });
+
+  it('opens the Level Editor on a visible grid and keeps the scope the author last chose', () => {
+    // The editor's grid is a measuring instrument, so it starts drawn — a settings blob written
+    // before the editor remembered anything must not open the editor with the grid switched off.
+    expect(DEFAULT_APP_SETTINGS.levelEditorGridScope).toBe('playable');
+    expect(normalizeAppSettings({}).levelEditorGridScope).toBe('playable');
+    for (const scope of LEVEL_EDITOR_GRID_SCOPES) {
+      expect(normalizeAppSettings({ levelEditorGridScope: scope }).levelEditorGridScope).toBe(scope);
+    }
+    for (const bad of ['registered', '', 'Playable', 1, true, null, {}]) {
+      expect(normalizeAppSettings({ levelEditorGridScope: bad }).levelEditorGridScope).toBe('playable');
+    }
   });
 
   it('falls back to the shipped card back when a stored one is no longer offered', () => {

@@ -33,6 +33,19 @@ export function isRunCardBack(value: unknown): value is RunCardBack {
   return typeof value === 'string' && (RUN_CARD_BACKS as readonly string[]).includes(value);
 }
 
+/**
+ * How much of the board the Level Editor draws its grid over. `playable` is the tactical
+ * rectangle, `whole` adds the scenic apron, and on an AI-painted board any value other than `off`
+ * draws the registered grid. The editor's grid is a measuring instrument rather than a look, so
+ * the author's last choice is remembered here and comes back with the next editor page.
+ */
+export const LEVEL_EDITOR_GRID_SCOPES = ['off', 'playable', 'whole'] as const;
+export type LevelEditorGridScope = typeof LEVEL_EDITOR_GRID_SCOPES[number];
+
+export function isLevelEditorGridScope(value: unknown): value is LevelEditorGridScope {
+  return typeof value === 'string' && (LEVEL_EDITOR_GRID_SCOPES as readonly string[]).includes(value);
+}
+
 export const APP_SETTINGS_STORAGE_KEY = 'chess-tactics-settings-v1';
 export const APP_SETTINGS_CHANGE_EVENT = 'chess-tactics:settings-change';
 
@@ -44,6 +57,8 @@ export interface AppSettings {
   interfaceSounds: boolean;
   showBoardGrid: boolean;
   boardGridStyle: BoardGridStyle;
+  /** How much of the board the Level Editor draws its grid over. Authoring, not gameplay. */
+  levelEditorGridScope: LevelEditorGridScope;
   autoDealDeployment: boolean;
   /** The color the pieces you command wear. Opponents own every other palette. */
   playerPalette: PlayerPalette;
@@ -59,6 +74,7 @@ export const DEFAULT_APP_SETTINGS: Readonly<AppSettings> = Object.freeze({
   interfaceSounds: true,
   showBoardGrid: true,
   boardGridStyle: 'ink',
+  levelEditorGridScope: 'playable',
   autoDealDeployment: false,
   playerPalette: DEFAULT_PLAYER_PALETTE,
   runCardBack: 'kings-position',
@@ -93,6 +109,11 @@ export function normalizeAppSettings(value: unknown): AppSettings {
     boardGridStyle: isBoardGridStyle(parsed.boardGridStyle)
       ? parsed.boardGridStyle
       : DEFAULT_APP_SETTINGS.boardGridStyle,
+    // A blob written before the editor remembered its grid — or by a build that named the scopes
+    // differently — opens the editor on the shipped default rather than a grid nobody can draw.
+    levelEditorGridScope: isLevelEditorGridScope(parsed.levelEditorGridScope)
+      ? parsed.levelEditorGridScope
+      : DEFAULT_APP_SETTINGS.levelEditorGridScope,
     autoDealDeployment: typeof parsed.autoDealDeployment === 'boolean'
       ? parsed.autoDealDeployment
       : DEFAULT_APP_SETTINGS.autoDealDeployment,

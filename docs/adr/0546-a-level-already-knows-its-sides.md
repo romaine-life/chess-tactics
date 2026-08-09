@@ -1,4 +1,4 @@
-# ADR-0545 — A level already knows its sides
+# ADR-0546 — A level already knows its sides
 
 **Status:** Accepted
 **Date:** 2026-08-09
