@@ -28013,3 +28013,45 @@ button.run-card-formation-cell {
   color: #ffb4b4;
   font-size: 10px;
 }
+
+/* A unit is drawn standing on a tile, so inspect it standing on one. The seat is
+   sized by the tile art itself; the unit is bottom-anchored so its contact point
+   sits where the board would put it. */
+.unit-roster-seat {
+  display: inline-block;
+  position: relative;
+}
+
+.unit-roster-ground {
+  display: block;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+/* Seated exactly where the board seats it. The tile frame is 96x180 with its top
+   face near the TOP -- the equator is 68px down -- so anchoring to the frame's
+   bottom edge drops the unit clean off the tile. The unit's own contact point is
+   80.241% down its sprite (the anchor the render pipeline validates), and a
+   percentage in `translate` resolves against the element, so this puts that point
+   on the equator whatever size the sprite is. */
+.unit-roster-unit {
+  image-rendering: pixelated;
+  left: 50%;
+  position: absolute;
+  top: var(--iso-tile-equator, 68px);
+  transform: translate(-50%, -80.241%);
+}
+
+.unit-roster-pair {
+  display: flex;
+  gap: 6px;
+}
+
+/* The superseded sprites are mostly the old 512px renders, which at 1:1 would be
+   six times the tile and wreck the comparison. Capping them to the board's 1x draw
+   rect is not a cheat -- it is precisely what the board did to them, which is the
+   before worth looking at. */
+.unit-roster-unit.is-before {
+  max-height: 92px;
+  max-width: 78px;
+}
