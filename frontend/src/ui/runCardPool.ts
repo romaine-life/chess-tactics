@@ -445,6 +445,41 @@ export function groupPool(cards: readonly PoolCard[], grouping: PoolGrouping): P
     .sort((a, b) => a.sort - b.sort || a.label.localeCompare(b.label));
 }
 
+/**
+ * What the two rotation settings mean at the table, which is the part neither checkbox states.
+ *
+ * The catalog rule and the placement rule are joined at the hip. If four quarter-turns are one
+ * card, that card cannot carry an orientation, so somebody has to choose one when it is placed —
+ * ADR-0515 gives that to the player. If instead each orientation is its own card, the card already
+ * says which way it faces, and letting the player turn it at placement would refund the very thing
+ * they bought. So the placement rule is implied by the identity rule rather than being free.
+ */
+export type PoolRotationContract = Readonly<{
+  playerRotatesAtPlacement: boolean;
+  frontBackIs: 'a placement choice' | 'a purchase';
+  orientationsPerShape: 'one card covers all four' | 'one authored orientation' | 'every rotation is its own card';
+  summary: string;
+}>;
+
+export function poolRotationContract(knobs: PoolKnobs): PoolRotationContract {
+  if (knobs.collapseRotation) {
+    return {
+      playerRotatesAtPlacement: true,
+      frontBackIs: 'a placement choice',
+      orientationsPerShape: 'one card covers all four',
+      summary: 'The card carries no orientation, so the player turns it when placing. Who stands in front is decided on the board, not in the shop.',
+    };
+  }
+  return {
+    playerRotatesAtPlacement: false,
+    frontBackIs: 'a purchase',
+    orientationsPerShape: knobs.oneOrientationPerShape ? 'one authored orientation' : 'every rotation is its own card',
+    summary: knobs.oneOrientationPerShape
+      ? 'The card fixes its own facing and no rotation happens at placement. Who stands in front is bought.'
+      : 'The card fixes its own facing, and every rotation of a shape is separately purchasable — so each card also has a horizontal twin meaning the same thing.',
+  };
+}
+
 export type PoolSummary = Readonly<{
   total: number;
   byBand: Readonly<Record<PoolBand, number>>;

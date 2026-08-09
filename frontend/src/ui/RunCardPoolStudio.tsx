@@ -7,6 +7,7 @@ import {
   POOL_PILE_SLOTS,
   buildPool,
   groupPool,
+  poolRotationContract,
   priceCard,
   sameKnobs,
   summarizePool,
@@ -129,6 +130,7 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
   const activeModel = POOL_MODELS.find((model) => model.id === modelId) ?? null;
   const isCustom = activeModel !== null && !sameKnobs(activeModel.knobs, knobs);
 
+  const rotation = useMemo(() => poolRotationContract(knobs), [knobs]);
   const cards = useMemo(() => buildPool(knobs), [knobs]);
   const summary = useMemo(() => summarizePool(cards), [cards]);
 
@@ -218,6 +220,10 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
         /* No inner scroller. The page scrolls now, and a scroll box inside a scrolling page means
            two bars competing for the same wheel gesture. Row count per group is what bounds this. */
         .rcp-group-body { overflow: visible; }
+        .rcp-contract { margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.14); }
+        .rcp-contract-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 5px 0; font-size: calc(var(--rcp-fs) * 0.93); }
+        .rcp-contract-row span { opacity: 0.72; }
+        .rcp-contract-row b { text-align: right; }
       `}</style>
 
       <div>
@@ -255,10 +261,22 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
             <input type="checkbox" checked={knobs.allowQueenPawnOverCap} onChange={(e) => set('allowQueenPawnOverCap', e.target.checked)} />
             <span>Queen+Pawn exempt from cap</span>
           </label>
-          <p className="rcp-note">
-            Collapse off alone makes every rotation its own card too. Add one-orientation-per-shape for the
-            vertical-only rule: front/back becomes a purchase without a horizontal twin for every card.
-          </p>
+
+          <div className="rcp-contract">
+            <div className="rcp-contract-row">
+              <span>Player rotates at placement</span>
+              <b>{rotation.playerRotatesAtPlacement ? 'yes' : 'no'}</b>
+            </div>
+            <div className="rcp-contract-row">
+              <span>Front/back is</span>
+              <b>{rotation.frontBackIs}</b>
+            </div>
+            <div className="rcp-contract-row">
+              <span>Orientations</span>
+              <b>{rotation.orientationsPerShape}</b>
+            </div>
+            <p className="rcp-note">{rotation.summary}</p>
+          </div>
         </div>
 
         <div className="rcp-panel">

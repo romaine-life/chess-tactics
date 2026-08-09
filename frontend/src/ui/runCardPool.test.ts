@@ -7,6 +7,7 @@ import {
   countSupportPairs,
   groupPool,
   hasOppositeColourBishopPair,
+  poolRotationContract,
   poolShapeSignature,
   priceCard,
   sameKnobs,
@@ -164,5 +165,39 @@ describe('runCardPool summary', () => {
     expect(summary.artOwed).toBe(summary.byBand.uncommon + summary.byBand.rare);
     // A tier far larger than its slot count is a tier the player never learns.
     expect(summary.perPileShare.uncommon).toBeLessThan(0.05);
+  });
+});
+
+describe('runCardPool rotation contract', () => {
+  it('states the placement rule the checkboxes only imply', () => {
+    const collapsed = poolRotationContract(DEFAULT_POOL_KNOBS);
+    expect(collapsed.playerRotatesAtPlacement).toBe(true);
+    expect(collapsed.frontBackIs).toBe('a placement choice');
+
+    // Fixing the orientation on the card is what turns front/back into something bought.
+    const vertical = poolRotationContract({
+      ...DEFAULT_POOL_KNOBS, collapseRotation: false, oneOrientationPerShape: true,
+    });
+    expect(vertical.playerRotatesAtPlacement).toBe(false);
+    expect(vertical.frontBackIs).toBe('a purchase');
+    expect(vertical.orientationsPerShape).toBe('one authored orientation');
+
+    // Dropping collapse without restricting generation still fixes facing, but every rotation
+    // becomes separately purchasable -- the horizontal twin problem.
+    const every = poolRotationContract({ ...DEFAULT_POOL_KNOBS, collapseRotation: false });
+    expect(every.playerRotatesAtPlacement).toBe(false);
+    expect(every.orientationsPerShape).toBe('every rotation is its own card');
+  });
+
+  it('agrees with what each model actually generates', () => {
+    for (const model of POOL_MODELS) {
+      const contract = poolRotationContract(model.knobs);
+      const size = buildPool(model.knobs).length;
+      const ifCollapsed = buildPool({ ...model.knobs, collapseRotation: true }).length;
+      // Fixing the facing on the card is exactly what splits one offer into several, so a model
+      // that says the player does not rotate must be paying for that in cards.
+      if (contract.playerRotatesAtPlacement) expect(size, model.id).toBe(ifCollapsed);
+      else expect(size, model.id).toBeGreaterThan(ifCollapsed);
+    }
   });
 });
