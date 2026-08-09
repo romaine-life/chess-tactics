@@ -56,6 +56,8 @@ import {
   runCardUnitIds,
   performExpunctio,
   sectioHasChanges,
+  runCardDefinition,
+  takeCommendatioKing,
   takeVacantiaCard,
   takeVacantiaLipsanon,
   undoRunBattleMove,
@@ -1863,6 +1865,22 @@ export function RunScreen({
     replace(granted);
     if (card) setGrantAnnouncement(`${runCardName(card)} taken and added to the Chartulary.`);
   };
+  /**
+   * Taking a King ends its own phase, so the carry must outlive this component: a flight released
+   * at landing lets go while Deployment is still preparing and the card is gone for that interval
+   * (ADR-0385). Same launch the opening grant used, for the same reason.
+   */
+  const takeCommendatioCard = (kingId: string, source: HTMLButtonElement): void => {
+    const latest = useActiveRun.getState().run;
+    if (!latest || latest.phase !== 'commendatio') return;
+    const served = takeCommendatioKing(latest, kingId);
+    if (served === latest) return;
+    const card = runCardDefinition(kingId);
+    const target = document.querySelector('[data-run-card-flight-target]');
+    if (card) launchGrantCardFlight(card, source, target);
+    replace(served);
+    if (card) setGrantAnnouncement(`${runCardName(card)} taken and added to the Chartulary.`);
+  };
   const selectedUnitId = sceneSnapshot.workspace.view === 'army'
     ? sceneSnapshot.workspace.unitId
     : null;
@@ -2039,7 +2057,7 @@ export function RunScreen({
             // Explicit, because the branch below is an else-fallthrough: any phase without
             // its own case silently renders Victory.
             : shellRun.phase === 'commendatio' && shellRun.commendatio
-              ? <RunCommendatio run={shellRun} replace={replace} />
+              ? <RunCommendatio run={shellRun} takeKing={takeCommendatioCard} />
             : shellRun.phase === 'bona-vacantia' && shellRun.vacantia
               ? (
                 <RunBonaVacantia
