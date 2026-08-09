@@ -1284,6 +1284,13 @@ export function openingCardGrantPool(): RunCoreCard[] {
 }
 
 /** The Run's opening card offers: distinct identities drawn from the band, fixed by seed. */
+/** The Kings the opening screen deals: three of the fifteen, shuffled by the Run's own seed. */
+export function openingKingOffers(seed: number): string[] {
+  return shuffled([...RUN_STARTER_CARDS], mixSeed(seed, 'vacantia-opening-kings', 0))
+    .slice(0, RUN_OPENING_CARD_OFFER_COUNT)
+    .map((card) => card.id);
+}
+
 export function openingCardGrantOffers(seed: number): string[] {
   return shuffled(openingCardGrantPool(), mixSeed(seed, 'vacantia-opening-cards', 0))
     .slice(0, RUN_OPENING_CARD_OFFER_COUNT)
@@ -1462,7 +1469,7 @@ export function createRun(
       afterBattleIndex: 0,
       victoryGoldTenths: 0,
       offers: [],
-      cardOffers: RUN_STARTER_CARDS.map((candidate) => candidate.id),
+      cardOffers: openingKingOffers(seed),
     },
   };
 }

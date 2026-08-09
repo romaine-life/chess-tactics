@@ -341,6 +341,41 @@ describe('plain Run creation and acquisition', () => {
     }
   });
 
+  it('opens the player-facing Run on three shuffled Kings and nothing else', () => {
+    const dealt = [1, 7, 42, 1234].map((seed) => {
+      const run = createRun(war(), seed, { chooseKing: true });
+      expect(run.phase).toBe('bona-vacantia');
+      expect(run.vacantia!.kind).toBe('opening');
+      expect(run.vacantia!.offers).toEqual([]);
+      // Nothing is held until a King is taken: the choice is what gives the Run its army.
+      expect(run.army).toEqual([]);
+      expect(run.cards).toEqual([]);
+      expect(run.goldTenths).toBe(RUN_STARTING_GOLD_TENTHS);
+      const offers = run.vacantia!.cardOffers;
+      expect(offers).toHaveLength(3);
+      expect(new Set(offers).size).toBe(3);
+      for (const id of offers) expect(RUN_STARTER_CARDS.some((king) => king.id === id)).toBe(true);
+      return offers.join(',');
+    });
+    // Shuffled by the Run's own seed, so two Runs are not handed the same three Kings.
+    expect(new Set(dealt).size).toBeGreaterThan(1);
+  });
+
+  it('takes a King from the opening screen into its army, card and gold', () => {
+    const run = createRun(war(), 42, { chooseKing: true });
+    const chosen = run.vacantia!.cardOffers[0];
+    const king = RUN_STARTER_CARDS.find((candidate) => candidate.id === chosen)!;
+    const taken = takeVacantiaCard(run, chosen);
+
+    expect(taken.phase).toBe('deployment');
+    expect(taken.vacantia).toBeNull();
+    expect(taken.cards).toHaveLength(1);
+    expect(taken.cards[0].coreId).toBe(chosen);
+    expect(taken.army.map((unit) => unit.type)).toEqual(king.pieces);
+    expect(runCardUnitIds(taken.cards[0])).toEqual(taken.army.map((unit) => unit.id));
+    expect(taken.goldTenths).toBe(RUN_STARTING_GOLD_TENTHS + king.goldBonusTenths);
+  });
+
   it('defaults to His Grace when no King is named', () => {
     expect(createRun(war(), 23).cards[0].coreId).toBe('his-grace');
   });
