@@ -10391,10 +10391,19 @@ async function main() {
   // (ADR-0516). It records `predrawnGridDetached`, and from then on the environment-geometry
   // comparison is the owner's answered question rather than a canonical gate — so the same Save
   // the rejection above proves is fail-closed must SUCCEED once the grid is detached.
+  const detachedGrownCells = { ...coverChangedBoard.cells };
+  const detachedGrownFill = Object.values(coverChangedBoard.cells)[0];
+  for (let y = 0; y <= coverChangedBoard.rows; y += 1) {
+    for (let x = 0; x <= coverChangedBoard.cols; x += 1) {
+      // A grow seeds its new squares as ordinary ground, exactly as the editor does.
+      if (detachedGrownCells[`${x},${y}`] === undefined) detachedGrownCells[`${x},${y}`] = detachedGrownFill;
+    }
+  }
   const detachedGrownBoard = {
     ...coverChangedBoard,
     cols: coverChangedBoard.cols + 1,
     rows: coverChangedBoard.rows + 1,
+    cells: detachedGrownCells,
     predrawnGridDetached: true,
   };
   const detachedGrownLevel = {
