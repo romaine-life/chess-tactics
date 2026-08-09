@@ -9,6 +9,7 @@ import { activeUnitFamilies, tileFrameSrc, type UnitFacing } from '@chess-tactic
 import { tileAssets } from '../art/tileset';
 import { fetchAdminUnitCatalog } from '../net/unitAssets';
 import { zoomForTier } from '../game/zoomTiers';
+import { UnitRungSprite } from './UnitRungSprite';
 
 /**
  * The camera's own tiers, not an inspection magnifier.
@@ -55,6 +56,9 @@ export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactEl
   // the board does and what the art was authored for.
   const nearest = tierZoom >= 1;
   const [showBefore, setShowBefore] = useState(false);
+  // Rungs on by default: the whole question is whether cutting a sprite for the zoom
+  // beats magnifying one authored size, and it is only answerable side by side.
+  const [compareRungs, setCompareRungs] = useState(true);
   const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof fetchAdminUnitCatalog>> | null>(null);
   // The ADMIN catalog, because accepting a new asset archives the one it replaced and
   // the public catalog omits archived assets — the before would always be missing.
@@ -113,6 +117,14 @@ export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactEl
         <label className="unit-roster-toggle">
           <input
             type="checkbox"
+            checked={compareRungs}
+            onChange={(event) => setCompareRungs(event.target.checked)}
+          />
+          <span>Rung vs magnified</span>
+        </label>
+        <label className="unit-roster-toggle">
+          <input
+            type="checkbox"
             checked={showBefore}
             onChange={(event) => setShowBefore(event.target.checked)}
           />
@@ -167,20 +179,63 @@ export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactEl
                 } catch {
                   src = undefined;
                 }
+                const asset = catalog?.assets.find(
+                  (a) => a.id === catalog.families.find((f) => f.family === family)?.acceptedAssetId,
+                );
+                // The board's 1x draw rect: the single authored size in use today.
+                const baseW = Math.min(78, asset?.footprint.sourceCanvasWidth ?? 78);
+                const baseH = Math.min(92, asset?.footprint.sourceCanvasHeight ?? 92);
                 const previous = showBefore ? beforeFor(family) : undefined;
                 const beforeSrc = previous?.sprites?.[paletteId]?.[facing]?.url;
-                const seat = (label: string, sprite: string | undefined) => (
+                const seat = (label: string, sprite: string | undefined, mode?: 'rung' | 'magnified') => (
                   <figure className="unit-roster-cell" key={`${family}:${facing}:${label}`}>
+                    {/* Everything in this seat is sized in REAL pixels for the tier:
+                        the tile scaled explicitly, the unit canvas already cut for it.
+                        No nested CSS zoom — two of those fought each other and pushed
+                        the unit off its tile. */}
                     <span className="unit-roster-seat">
-                      {groundTile ? <img className="unit-roster-ground" src={tileFrameSrc(groundTile)} alt="" aria-hidden="true" /> : null}
+                      {groundTile
+                        ? <img
+                            className="unit-roster-ground"
+                            src={tileFrameSrc(groundTile)}
+                            style={{
+                              width: `${Math.round(96 * tierZoom)}px`,
+                              height: `${Math.round(180 * tierZoom)}px`,
+                            }}
+                            alt=""
+                            aria-hidden="true"
+                          />
+                        : null}
                       {sprite
-                        ? <img className={`unit-roster-unit${label === 'before' ? ' is-before' : ''}`} src={sprite} alt={`${family} ${paletteId} ${facing}`} draggable={false} />
+                        ? (mode
+                          ? <span
+                              className="unit-roster-unit-slot"
+                              style={{ top: `${Math.round(68 * tierZoom)}px` }}
+                            >
+                              <UnitRungSprite
+                                src={sprite}
+                                baseWidth={baseW}
+                                baseHeight={baseH}
+                                zoom={tierZoom}
+                                mode={mode}
+                                alt={`${family} ${paletteId} ${facing} ${mode}`}
+                              />
+                            </span>
+                          : <img className={`unit-roster-unit${label === 'before' ? ' is-before' : ''}`} src={sprite} alt={`${family} ${paletteId} ${facing}`} draggable={false} />)
                         : <span className="unit-roster-missing">missing</span>}
                     </span>
                     <figcaption>{label}</figcaption>
                   </figure>
                 );
                 const caption = allPalettes ? family : facing;
+                if (compareRungs) {
+                  return (
+                    <div className="unit-roster-pair" key={`${family}:${facing}`}>
+                      {seat('magnified', src, 'magnified')}
+                      {seat(`rung · ${caption}`, src, 'rung')}
+                    </div>
+                  );
+                }
                 return showBefore
                   ? (
                     <div className="unit-roster-pair" key={`${family}:${facing}`}>

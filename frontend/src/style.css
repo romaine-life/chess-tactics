@@ -28087,3 +28087,20 @@ button.run-card-formation-cell {
 .unit-roster-grid[data-nearest='0'] .unit-roster-ground {
   image-rendering: auto;
 }
+
+/* The seat scales with the tier so the tile grows with the piece, but the unit
+   canvas is already sized in real pixels for that tier — so it is un-zoomed back
+   out, leaving the canvas to speak for itself. */
+ /* `top` is supplied inline, scaled to the tier, because the tile's equator moves
+    with it. Only the contact-point offset lives here. */
+.unit-roster-unit-slot {
+  left: 50%;
+  position: absolute;
+  transform: translate(-50%, -80.241%);
+}
+
+.unit-roster-unit-slot canvas {
+  display: block;
+  position: static;
+  transform: none;
+}
