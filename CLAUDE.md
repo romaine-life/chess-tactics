@@ -438,10 +438,13 @@ hand-authored one-off leaves a durable link behind:
   never touch). That is deliberate: it is how you reproduce a Run that still holds one.
   Those ids no longer appear in an ordinary draw, so do not use them to demonstrate
   what the market offers.
-- Aftermath only: `turns=<n>`, `seconds=<n>` and `fallen=<n>` write the Battle report a
-  crafted Battle cannot produce on its own — it is placed, not played. `battle=N` is the
-  Battle just won; the FINAL Battle has no aftermath (its report is the War victory
-  screen), so craft `victory` for that one.
+- Aftermath only: `turns=<n>`, `seconds=<n>`, `fallen=<n>` and `standing=<n>` write the Battle
+  report a crafted Battle cannot produce on its own — it is placed, not played. `standing` is
+  the points of enemy force still alive at the mate, which Deditio is paid on (ADR-0543); it
+  defaults to the WHOLE force the level fields, because a placed Battle killed nothing. Give
+  `standing=0` for the ground-down mate that pays nothing. `battle=N` is the Battle just won;
+  the FINAL Battle has no aftermath (its report is the War victory screen), so craft `victory`
+  for that one.
 - `war=<id>` picks the War (default: the first Run-eligible official one), `seed=<n>` and
   `tier=0` fix the roll. `view=army|lipsana|expunctio` still applies and survives the craft.
 - `cards=<card>[,<card>]` — the cards the Run already HOLDS, written exactly like `offers`.
