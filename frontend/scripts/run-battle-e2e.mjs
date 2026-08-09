@@ -991,18 +991,22 @@ try {
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   }, cell);
 
-  // Start from nothing selected. A battle OPENS holding a piece — the first one with a move —
-  // and a cell's press selects the piece under it, so a click on the piece the board is already
-  // holding is a deselect. Whichever piece the plan happens to pick would otherwise decide
-  // whether this proof passes. 'r' is the HUD's Deselect all; clearing by key can never move
-  // anything.
-  await page.keyboard.press('r');
-  await page.waitForFunction(
-    () => import('/src/game/SkirmishStoreContext.tsx').then((m) => (
-      m.activeSkirmishStoreForDiagnostics()?.getState().selectedId == null
-    )),
-    { timeout: 5_000 },
-  );
+  // A battle opens holding NOTHING, and this proof depends on it: a cell's press selects the
+  // piece under it, so a click on a piece the board is already holding is a deselect, and the
+  // first click below would then prove the opposite of what it claims.
+  const openingHold = await page.evaluate(() => import('/src/game/SkirmishStoreContext.tsx').then((m) => {
+    const state = m.activeSkirmishStoreForDiagnostics()?.getState();
+    return {
+      selectedId: state?.selectedId ?? null,
+      focusedId: state?.focusedId ?? null,
+      ring: document.querySelectorAll('.skirmish-board-cell-hit.is-selected').length,
+      moves: document.querySelectorAll('.skirmish-board-cell-hit.is-move').length,
+    };
+  }));
+  if (openingHold.selectedId || openingHold.focusedId || openingHold.ring || openingHold.moves) {
+    await fail('battle-opens-holding-nothing', JSON.stringify(openingHold));
+  }
+  console.log('battle opens holding nothing: OK');
 
   // Select the piece by clicking its tile — the click must REACH the tile.
   const fromPoint = await tileCenter(plan.from);
