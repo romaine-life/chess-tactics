@@ -14,6 +14,11 @@
 // and a downscaled file cannot honestly make that claim.
 //
 //   node frontend/scripts/forge-screen-art.mjs <set> [--scene <id>] [--tries 2] -- <upload options>
+//
+// A workspace backdrop uploads under domain ui-kit / role background, NOT screen-art: screen-art
+// has no runtime projection, so a candidate uploaded under it can never be accepted, and a slot
+// bound to it by a first upload was until recently unusable forever. See liveMediaPolicy.js
+// workspaceBackgroundMediaIssue for the full typed contract, including metadata.runtime.
 import { mkdirSync, mkdtempSync, copyFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';

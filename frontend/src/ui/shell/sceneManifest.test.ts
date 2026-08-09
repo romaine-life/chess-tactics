@@ -580,6 +580,7 @@ describe('scene manifests', () => {
         elapsedMs: 1000,
         goldTenths: 10,
         bonusGoldTenths: 0,
+        standingEnemyValue: 0,
         survivingUnitIds: [],
         fallenUnits: [],
       },
