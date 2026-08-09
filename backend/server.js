@@ -22695,10 +22695,6 @@ const ACTIVE_RUN_PHASES = new Set([
 ]);
 const ACTIVE_RUN_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
 const ACTIVE_RUN_UNIT_SOURCES = new Set(['king', 'starting', 'adlectio']);
-const ACTIVE_RUN_PIECE_VALUES = Object.freeze({ pawn: 1, knight: 3, bishop: 3, rook: 5, queen: 9, king: 0 });
-const ACTIVE_RUN_ABILITIES = new Set(['adlected', 'eutactic', 'agminate']);
-const ACTIVE_RUN_MODIFIERS = new Set(['cacochymic']);
-const ACTIVE_RUN_CACOCHYMIC_DISCOUNTS = Object.freeze({ pawn: 0, knight: 1, bishop: 1, rook: 2, queen: 3 });
 const ACTIVE_RUN_SECTIO_FIELDS = new Set([
   'afterBattleIndex',
   'conflictIndex',
@@ -22709,24 +22705,6 @@ const ACTIVE_RUN_SECTIO_FIELDS = new Set([
   'paidLipsanonBought',
   'expunctedCard',
   'entrySnapshot',
-]);
-const ACTIVE_RUN_VACANTIA_FIELDS = new Set([
-  'kind',
-  'conflictIndex',
-  'afterBattleIndex',
-  'victoryGoldTenths',
-  'offers',
-  'cardOffers',
-]);
-const ACTIVE_RUN_AFTERMATH_FIELDS = new Set([
-  'battleIndex',
-  'turns',
-  'elapsedMs',
-  'goldTenths',
-  'bonusGoldTenths',
-  'standingEnemyValue',
-  'survivingUnitIds',
-  'fallenUnits',
 ]);
 const ACTIVE_RUN_DEPLOYMENT_FIELDS = new Set([
   'battleIndex',
@@ -22748,733 +22726,13 @@ const ACTIVE_RUN_DEPLOYMENT_FIELDS = new Set([
 ]);
 const ACTIVE_RUN_SAVE_VERSION = serverRender?.CURRENT_RUN_SAVE_VERSION;
 const ACTIVE_RUN_CARD_BY_ID = serverRender?.RUN_CARD_BY_ID ?? {};
+// Every King is a starter card and only a King is (#850), so this table is how the Run's own King
+// card is recognised. Naming His Grace instead refused to save the other fourteen outright.
 const ACTIVE_RUN_STARTER_CARD_BY_ID = serverRender?.RUN_STARTER_CARD_BY_ID ?? {};
-// Read from the model rather than restated here, so the opening grant's band cannot drift
-// between the client that mints the offers and the server that verifies them.
-const RUN_OPENING_CARD_VALUE_MIN = serverRender?.RUN_OPENING_CARD_VALUE_MIN ?? 4;
-const RUN_OPENING_CARD_VALUE_MAX = serverRender?.RUN_OPENING_CARD_VALUE_MAX ?? 6;
+const ACTIVE_RUN_KING_OFFER_COUNT = serverRender?.RUN_OPENING_CARD_OFFER_COUNT ?? 3;
 const RUN_LIPSANA = Array.isArray(serverRender?.RUN_LIPSANA) ? serverRender.RUN_LIPSANA : [];
 const LIPSANON_BY_ID = serverRender?.LIPSANON_BY_ID ?? {};
 const RUN_LIPSANON_IDS = new Set(RUN_LIPSANA.map((lipsanon) => lipsanon.id));
-/**
- * Gold the Run's held lipsana paid the moment they were taken. Read from the model's own
- * table (RUN_LIPSANON_IMMEDIATE_GOLD) rather than restated here, so the opening Sectio's pinned
- * gold check stays exact when a lipsanon's payout changes.
- */
-function openingLipsanonGoldTenths(run) {
-  if (!Array.isArray(run.lipsana)) return 0;
-  if (typeof serverRender?.lipsanonImmediateGoldTenths === 'function') {
-    return serverRender.lipsanonImmediateGoldTenths(run.lipsana);
-  }
-  const table = serverRender?.RUN_LIPSANON_IMMEDIATE_GOLD ?? {};
-  return run.lipsana.reduce((total, lipsanon) => total + (table[lipsanon] ?? 0) * 10, 0);
-}
-
-function validateActiveRunBody(run) {
-  if (!run || typeof run !== 'object' || Array.isArray(run)) return 'run must be an object';
-  if (run.runSaveVersion !== ACTIVE_RUN_SAVE_VERSION) return 'run.runSaveVersion is unsupported';
-  if ('formatVersion' in run) return 'run contains the retired formatVersion field';
-  if ('shop' in run) return 'run contains retired Shop state';
-  if (typeof run.id !== 'string' || !run.id || run.id.length > 160) return 'run.id is invalid';
-  if (!isFiniteInteger(run.seed) || run.seed < 0 || run.seed > 0xffffffff) return 'run.seed is invalid';
-  if (run.ataraxiaTier !== 0 && run.ataraxiaTier !== 1) return 'run.ataraxiaTier is invalid';
-  if (typeof run.updatedAt !== 'string' || !run.updatedAt) return 'run.updatedAt is required';
-  if (!ACTIVE_RUN_PHASES.has(run.phase)) return 'run.phase is invalid';
-  if ('draftOffers' in run || 'chosenDraftId' in run) return 'run contains retired draft state';
-  if (!isFiniteInteger(run.battleIndex) || run.battleIndex < 0) return 'run.battleIndex is invalid';
-  if (!isFiniteInteger(run.conflictIndex) || run.conflictIndex < 0) return 'run.conflictIndex is invalid';
-  if (typeof run.goldTenths !== 'number' || !Number.isFinite(run.goldTenths) || run.goldTenths < 0) return 'run.goldTenths is invalid';
-  if (!run.war || typeof run.war !== 'object' || Array.isArray(run.war)) return 'run.war is required';
-  if (typeof run.war.id !== 'string' || !run.war.id || typeof run.war.name !== 'string' || typeof run.war.description !== 'string') {
-    return 'run.war identity is invalid';
-  }
-  if (!Array.isArray(run.war.battles) || run.war.battles.length < 1 || run.war.battles.length > 100) {
-    return 'run.war.battles is invalid';
-  }
-  for (const [index, battle] of run.war.battles.entries()) {
-    if (!battle || typeof battle !== 'object' || typeof battle.loot !== 'boolean') return `run.war.battles.${index} is invalid`;
-    const level = battle.level;
-    const levelError = validateWorkspaceLevel(level, level && level.id);
-    if (levelError) return `run.war.battles.${index}: ${levelError}`;
-  }
-  if (run.battleIndex >= run.war.battles.length) return 'run.battleIndex is outside the War';
-  // Commendatio precedes the King, and the King is what gives a Run its army and its one held
-  // card, so this one phase is legitimately empty. Every later phase must carry a King.
-  const beforeTheKing = run.phase === 'commendatio';
-  const leastArmy = beforeTheKing ? 0 : 1;
-  if (!Array.isArray(run.army) || run.army.length < leastArmy || run.army.length > 200) return 'run.army is invalid';
-  const unitIds = new Set();
-  for (const unit of run.army) {
-    if (!unit || typeof unit.id !== 'string' || !unit.id || unitIds.has(unit.id) || !ACTIVE_RUN_PIECES.has(unit.type)) {
-      return 'run.army contains an invalid unit';
-    }
-    if (!ACTIVE_RUN_UNIT_SOURCES.has(unit.source)) {
-      return 'run.army contains an invalid source';
-    }
-    unitIds.add(unit.id);
-    const validName = typeof unit.name === 'string' && unit.name.trim().length > 0 && unit.name.length <= 80;
-    if (!validName) {
-      return 'run.army contains an invalid unit name';
-    }
-    if (
-      !Array.isArray(unit.abilities)
-      || new Set(unit.abilities).size !== unit.abilities.length
-      || unit.abilities.some((ability) => !ACTIVE_RUN_ABILITIES.has(ability))
-      || unit.abilities.length > 1
-    ) {
-      return 'run.army contains invalid abilities';
-    }
-    if (!Array.isArray(unit.modifiers) || unit.modifiers.some((modifier) => !ACTIVE_RUN_MODIFIERS.has(modifier))) {
-      return 'run.army contains invalid modifiers';
-    }
-    if (unit.number !== undefined && (!isFiniteInteger(unit.number) || unit.number < 1)) {
-      return 'run.army contains an invalid unit number';
-    }
-    if (!isFiniteInteger(unit.inspectionSeed) || unit.inspectionSeed < 0 || unit.inspectionSeed > 0xffffffff) {
-      return 'run.army contains an invalid inspection seed';
-    }
-  }
-  if (
-    run.army.filter((unit) => unit.id === 'run-king' && unit.type === 'king').length !== 1
-    || run.army.filter((unit) => unit.type === 'king').length !== 1
-  ) return 'run.army must retain its one King';
-  {
-    if (!Array.isArray(run.cards) || run.cards.length > 200) return 'run.cards is invalid';
-    const cardIds = new Set();
-    const cardUnitIds = new Set();
-    const lostCardUnitIds = new Set();
-    const cacochymicTargetUnitIds = new Set();
-    const unitIdsForCard = (card) => card.unitSeats.filter((unitId) => typeof unitId === 'string');
-    for (const card of run.cards) {
-      if (!isObjectRecord(card)) return 'run.cards contains an invalid card';
-      const cardTypeValid = card.cardType === null
-        || card.cardType === 'pestiferous'
-        || card.cardType === 'concinnous'
-        || card.cardType === 'legatine'
-        || card.cardType === 'hieratic';
-      const directEffectTarget = card.effectTargetUnitId;
-      const effectTarget = directEffectTarget;
-      const attachedUnitIds = Array.isArray(card.unitSeats) ? unitIdsForCard(card) : [];
-      const affectedCard = card.cardType === 'concinnous'
-        || card.cardType === 'legatine'
-        || card.cardType === 'hieratic';
-      // Each acquisition qualifier grants exactly one ability to its recorded target unit.
-      const expectedGrantedAbility = card.cardType === 'legatine'
-        ? 'adlected'
-        : card.cardType === 'hieratic'
-          ? 'agminate'
-          : 'eutactic';
-      const effectTargetValid = affectedCard
-        ? directEffectTarget === null
-          || (typeof effectTarget === 'string'
-            && effectTarget.length > 0
-            && effectTarget.length <= 160
-            && attachedUnitIds.includes(effectTarget))
-        : directEffectTarget === null;
-      if (
-        typeof card.id !== 'string'
-        || !card.id
-        || card.id.length > 160
-        || cardIds.has(card.id)
-        || typeof card.coreId !== 'string'
-        || !card.coreId
-        || card.coreId.length > 160
-        || !cardTypeValid
-        || !effectTargetValid
-        || !isFiniteInteger(card.effectSeed)
-        || card.effectSeed < 0
-        || card.effectSeed > 0xffffffff
-        || !Array.isArray(card.unitSeats)
-        || card.unitSeats.length > 200
-        || card.unitSeats.some((unitId) => unitId !== null && typeof unitId !== 'string')
-        || !Array.isArray(card.lostUnitIds)
-        || card.lostUnitIds.length > 200
-        || !isFiniteInteger(card.acquiredAfterBattleIndex)
-        || card.acquiredAfterBattleIndex < 0
-        || card.acquiredAfterBattleIndex >= run.war.battles.length
-      ) return 'run.cards contains an invalid card';
-      if (affectedCard && effectTarget !== null) {
-        const targetUnit = run.army.find((unit) => unit.id === effectTarget);
-        if (!targetUnit?.abilities.includes(expectedGrantedAbility)) return 'run.cards contains an invalid ability target';
-      }
-      {
-        const validPlaguedTarget = card.cardType === 'pestiferous'
-          ? attachedUnitIds.length > 0
-            ? typeof card.cacochymicUnitId === 'string' && attachedUnitIds.includes(card.cacochymicUnitId)
-            : card.cacochymicUnitId === null
-          : card.cacochymicUnitId === null;
-        if (!validPlaguedTarget) return 'run.cards contains an invalid Cacochymic target';
-        if (card.cacochymicUnitId !== null) cacochymicTargetUnitIds.add(card.cacochymicUnitId);
-      }
-      cardIds.add(card.id);
-      if (new Set(attachedUnitIds).size !== attachedUnitIds.length) return 'run.cards repeats unit membership';
-      for (const unitId of attachedUnitIds) {
-        if (
-          typeof unitId !== 'string'
-          || !unitId
-          || !unitIds.has(unitId)
-          || cardUnitIds.has(unitId)
-          || lostCardUnitIds.has(unitId)
-        ) {
-          return 'run.cards contains invalid unit membership';
-        }
-        cardUnitIds.add(unitId);
-      }
-      for (const unitId of card.lostUnitIds) {
-        if (
-          typeof unitId !== 'string'
-          || !unitId
-          || unitIds.has(unitId)
-          || cardUnitIds.has(unitId)
-          || lostCardUnitIds.has(unitId)
-        ) return 'run.cards contains invalid loss history';
-        lostCardUnitIds.add(unitId);
-      }
-    }
-    for (const unit of run.army) {
-      if (unit.modifiers.includes('cacochymic') !== cacochymicTargetUnitIds.has(unit.id)) {
-        return 'run.army Cacochymic modifiers do not match card targets';
-      }
-    }
-    const hisGraceCards = run.cards.filter((card) => card.coreId === 'his-grace');
-    const frontLinesCards = run.cards.filter((card) => card.coreId === 'front-lines');
-    if (
-      hisGraceCards.length !== 1
-      || hisGraceCards[0].id !== 'run-card-his-grace'
-      || hisGraceCards[0].cardType !== null
-      || hisGraceCards[0].effectTargetUnitId !== null
-      || hisGraceCards[0].cacochymicUnitId !== null
-      || hisGraceCards[0].unitSeats.length !== 1
-      || hisGraceCards[0].unitSeats[0] !== 'run-king'
-      || hisGraceCards[0].lostUnitIds.length !== 0
-    ) return 'run.cards must retain His Grace';
-    if (frontLinesCards.length > 1) return 'run.cards repeats Front Lines';
-    if (frontLinesCards.length === 1) {
-      const frontLines = frontLinesCards[0];
-      const startingPawnIds = run.army
-        .filter((unit) => unit.type === 'pawn' && unit.source === 'starting')
-        .map((unit) => unit.id);
-      if (
-        frontLines.id !== 'run-card-front-lines'
-        || frontLines.cardType !== null
-        || frontLines.effectTargetUnitId !== null
-        || frontLines.cacochymicUnitId !== null
-        || frontLines.lostUnitIds.length !== 0
-        || unitIdsForCard(frontLines).some((unitId) => {
-          const unit = run.army.find((candidate) => candidate.id === unitId);
-          return unit?.type !== 'pawn' || unit.source !== 'starting';
-        })
-        || startingPawnIds.length !== unitIdsForCard(frontLines).length
-        || startingPawnIds.some((unitId) => !unitIdsForCard(frontLines).includes(unitId))
-      ) return 'run.cards contains invalid Front Lines membership';
-    }
-    if (
-      frontLinesCards.length === 0
-      && run.army.some((unit) => unit.type === 'pawn' && unit.source === 'starting')
-    ) return 'run.army retains units from removed Front Lines';
-    if (!Array.isArray(run.pestiferousLosses) || run.pestiferousLosses.length > 20000) {
-      return 'run.pestiferousLosses is invalid';
-    }
-    const lossKeys = new Set();
-    const lossUnitIds = new Set();
-    for (const loss of run.pestiferousLosses) {
-      const unit = loss && loss.unit;
-      const card = loss && run.cards.find((candidate) => candidate.id === loss.cardId);
-      const key = loss ? `${loss.cardId}:${loss.battleIndex}` : '';
-      if (
-        !isObjectRecord(loss)
-        || !isFiniteInteger(loss.battleIndex)
-        || loss.battleIndex < 0
-        || loss.battleIndex >= run.war.battles.length
-        || !card
-        || card.cardType !== 'pestiferous'
-        || lossKeys.has(key)
-        || !isObjectRecord(unit)
-        || typeof unit.id !== 'string'
-        || !card.lostUnitIds.includes(unit.id)
-        || lossUnitIds.has(unit.id)
-        || !ACTIVE_RUN_PIECES.has(unit.type)
-        || unit.type === 'king'
-        || typeof unit.name !== 'string'
-        || !unit.name.trim()
-        || unit.name.length > 80
-        || !Array.isArray(unit.abilities)
-        || unit.abilities.some((ability) => !ACTIVE_RUN_ABILITIES.has(ability))
-        || !Array.isArray(unit.modifiers)
-        || !unit.modifiers.includes('cacochymic')
-        || unit.modifiers.some((modifier) => !ACTIVE_RUN_MODIFIERS.has(modifier))
-        || !ACTIVE_RUN_UNIT_SOURCES.has(unit.source)
-        || !isFiniteInteger(unit.inspectionSeed)
-        || unit.inspectionSeed < 0
-        || unit.inspectionSeed > 0xffffffff
-      ) return 'run.pestiferousLosses contains an invalid loss';
-      lossKeys.add(key);
-      lossUnitIds.add(unit.id);
-    }
-    if (lossUnitIds.size !== lostCardUnitIds.size) return 'run.cards loss history is incomplete';
-    if (!isFiniteInteger(run.nextCardSequence) || run.nextCardSequence < 1) return 'run.nextCardSequence is invalid';
-  }
-  {
-    const deployment = run.deployment;
-    if (run.phase === 'battle' && deployment === null) return 'run.deployment is required during Battle';
-    if (run.phase !== 'deployment' && run.phase !== 'battle') {
-      if (deployment !== null) return 'run.deployment is invalid outside deployment and Battle';
-    } else if (deployment !== null) {
-      if (!isObjectRecord(deployment)) return 'run.deployment is invalid';
-      if (Object.keys(deployment).some((field) => !ACTIVE_RUN_DEPLOYMENT_FIELDS.has(field))) {
-        return 'run.deployment contains an unsupported field';
-      }
-      const validUniqueIds = (value, allowedIds, maximum = 200) => Array.isArray(value)
-        && value.length <= maximum
-        && new Set(value).size === value.length
-        && value.every((id) => typeof id === 'string' && allowedIds.has(id));
-      const cardIds = new Set(run.cards.map((card) => card.id));
-      const deploymentStages = new Set([
-        'awaiting-deal',
-        'dealing',
-        'card',
-        'revealing',
-        'unit',
-        'settling',
-        'discarding',
-        'complete',
-      ]);
-      if (
-        deployment.battleIndex !== run.battleIndex
-        || !isFiniteInteger(deployment.seed)
-        || deployment.seed < 0
-        || deployment.seed > 0xffffffff
-        || !validUniqueIds(deployment.dealtCardIds, cardIds)
-        || deployment.dealtCardIds[0] !== 'run-card-his-grace'
-        || !validUniqueIds(deployment.deployingUnitIds, unitIds)
-        || !validUniqueIds(deployment.unavailableUnitIds, unitIds)
-        || typeof deployment.capacityResolved !== 'boolean'
-        || !isFiniteInteger(deployment.activeCardIndex)
-        || deployment.activeCardIndex < 0
-        || deployment.activeCardIndex > deployment.dealtCardIds.length
-        || !isFiniteInteger(deployment.unitCursor)
-        || deployment.unitCursor < 0
-        || !isFiniteInteger(deployment.discardCursor)
-        || deployment.discardCursor < 0
-        || deployment.discardCursor > deployment.dealtCardIds.length
-        || !validUniqueIds(deployment.revealedCardIds, cardIds)
-        || !validUniqueIds(deployment.settlingUnitIds, unitIds)
-        || !deploymentStages.has(deployment.stage)
-        || !['paused', 'playing', 'full-deploy'].includes(deployment.transport)
-        || !isObjectRecord(deployment.placements)
-        || !isObjectRecord(deployment.manualPlacements)
-        || !validUniqueIds(deployment.blockedUnitIds, unitIds)
-      ) return 'run.deployment contains invalid state';
-      const deployingIds = new Set(deployment.deployingUnitIds);
-      const unavailableIds = new Set(deployment.unavailableUnitIds);
-      if (
-        [...deployingIds].some((id) => unavailableIds.has(id))
-        || new Set([...deployingIds, ...unavailableIds]).size !== unitIds.size
-        || deployment.blockedUnitIds.length !== deployment.unavailableUnitIds.length
-        || deployment.blockedUnitIds.some((id, index) => id !== deployment.unavailableUnitIds[index])
-      ) return 'run.deployment unit pools are inconsistent';
-      const dealtUnitOrder = deployment.dealtCardIds.flatMap((cardId) => {
-        const card = run.cards.find((candidate) => candidate.id === cardId);
-        return Array.isArray(card?.unitSeats)
-          ? card.unitSeats.filter((unitId) => typeof unitId === 'string')
-          : [];
-      });
-      const dealtUnitIds = new Set(dealtUnitOrder);
-      if (
-        deployment.deployingUnitIds.some((id) => !dealtUnitIds.has(id))
-        || deployment.deployingUnitIds.some((id, index) => id !== dealtUnitOrder[index])
-        || (!deployment.capacityResolved && deployment.deployingUnitIds.length !== dealtUnitOrder.length)
-      ) return 'run.deployment pool does not match its dealt cards';
-      const placementEntries = Object.entries(deployment.placements);
-      const placementSquares = new Set();
-      for (const [unitId, square] of placementEntries) {
-        if (
-          !deployingIds.has(unitId)
-          || typeof square !== 'string'
-          || !/^-?\d+,-?\d+$/.test(square)
-          || placementSquares.has(square)
-        ) return 'run.deployment placements are invalid';
-        placementSquares.add(square);
-      }
-      for (const [unitId, square] of Object.entries(deployment.manualPlacements)) {
-        if (deployment.placements[unitId] !== square) return 'run.deployment manual placements are invalid';
-      }
-      const activeCardId = deployment.dealtCardIds[deployment.activeCardIndex];
-      const activeCard = run.cards.find((card) => card.id === activeCardId);
-      const activeSeats = Array.isArray(activeCard?.unitSeats) ? activeCard.unitSeats : [];
-      if (
-        deployment.unitCursor > activeSeats.length
-        || deployment.discardCursor !== deployment.activeCardIndex
-      ) return 'run.deployment cursors are inconsistent';
-      const expectedRevealedCount = ['revealing', 'unit', 'settling', 'discarding'].includes(deployment.stage)
-        ? deployment.activeCardIndex + 1
-        : deployment.activeCardIndex;
-      if (
-        deployment.revealedCardIds.length !== expectedRevealedCount
-        || deployment.revealedCardIds.some((cardId, index) => cardId !== deployment.dealtCardIds[index])
-      ) return 'run.deployment revealed cards are inconsistent';
-      if (
-        deployment.settlingUnitIds.some((unitId) => (
-          !deployingIds.has(unitId) || !Object.hasOwn(deployment.placements, unitId)
-        ))
-        || (deployment.stage === 'settling') !== (deployment.settlingUnitIds.length > 0)
-      ) return 'run.deployment settling units are invalid';
-      if (
-        deployment.temporaryAdlectedUnitId !== undefined
-        && !deployingIds.has(deployment.temporaryAdlectedUnitId)
-      ) return 'run.deployment temporary Adlected unit is invalid';
-      if (
-        (deployment.stage === 'awaiting-deal' || deployment.stage === 'dealing')
-        && (deployment.transport !== 'paused' || deployment.activeCardIndex !== 0 || deployment.unitCursor !== 0)
-      ) {
-        return 'run.deployment pre-placement state is invalid';
-      }
-      if (
-        run.phase === 'battle'
-        && (!deployment.capacityResolved
-          || deployment.stage !== 'complete'
-          || deployment.activeCardIndex !== deployment.dealtCardIds.length
-          || deployment.discardCursor !== deployment.dealtCardIds.length
-          || deployment.settlingUnitIds.length !== 0)
-      ) return 'run Battle has incomplete deployment state';
-    }
-  }
-  for (const field of ['lipsana', 'seenLipsana']) {
-    if (!Array.isArray(run[field]) || run[field].length > 100 || run[field].some((id) => typeof id !== 'string' || !id)) {
-      return `run.${field} is invalid`;
-    }
-  }
-  if (!isFiniteInteger(run.nextArmyUnitSequence) || run.nextArmyUnitSequence < 1) return 'run.nextArmyUnitSequence is invalid';
-  if (run.nextArmyUnitNumberByType !== undefined) {
-    if (!isObjectRecord(run.nextArmyUnitNumberByType)) return 'run.nextArmyUnitNumberByType is invalid';
-    for (const type of ACTIVE_RUN_PIECES) {
-      if (!isFiniteInteger(run.nextArmyUnitNumberByType[type]) || run.nextArmyUnitNumberByType[type] < 1) {
-        return 'run.nextArmyUnitNumberByType is invalid';
-      }
-    }
-  }
-  if (run.phase === 'sectio' && !isObjectRecord(run.sectio)) return 'run.sectio is required';
-  if (run.phase !== 'sectio' && run.sectio !== null) return 'run.sectio is invalid outside the Sectio phase';
-  // Bona Vacantia carries its own offers and, like the Sectio, exists only in its own phase.
-  {
-    if (run.phase === 'bona-vacantia') {
-      if (!isObjectRecord(run.vacantia)) return 'run.vacantia is required';
-      const vacantia = run.vacantia;
-      if (Object.keys(vacantia).some((field) => !ACTIVE_RUN_VACANTIA_FIELDS.has(field))) {
-        return 'run.vacantia contains an unsupported field';
-      }
-      if (vacantia.kind !== 'opening' && vacantia.kind !== 'post-battle') return 'run.vacantia.kind is invalid';
-      if (!isFiniteInteger(vacantia.conflictIndex) || vacantia.conflictIndex < 0) return 'run.vacantia.conflictIndex is invalid';
-      if (!isFiniteInteger(vacantia.afterBattleIndex) || vacantia.afterBattleIndex < 0) return 'run.vacantia.afterBattleIndex is invalid';
-      if (!isFiniteInteger(vacantia.victoryGoldTenths) || vacantia.victoryGoldTenths < 0) return 'run.vacantia.victoryGoldTenths is invalid';
-      // The Run's opening grants a formation card; every later Conflict grants a lipsanon.
-      // The two offer lists are exclusive, so each kind must leave the other one empty.
-      const opening = vacantia.kind === 'opening';
-      const cardOffers = vacantia.cardOffers ?? [];
-      if (!Array.isArray(cardOffers)) return 'run.vacantia.cardOffers is invalid';
-      if (opening) {
-        if (Array.isArray(vacantia.offers) && vacantia.offers.length) {
-          return 'run.vacantia opening offers a lipsanon';
-        }
-        if (cardOffers.length < 1 || cardOffers.length > 3) return 'run.vacantia.cardOffers is invalid';
-        if (new Set(cardOffers).size !== cardOffers.length) return 'run.vacantia.cardOffers repeats a card';
-        for (const coreId of cardOffers) {
-          const card = typeof coreId === 'string' ? ACTIVE_RUN_CARD_BY_ID[coreId] : null;
-          if (!card) return 'run.vacantia.cardOffers is invalid';
-          if (card.value < RUN_OPENING_CARD_VALUE_MIN || card.value > RUN_OPENING_CARD_VALUE_MAX) {
-            return 'run.vacantia.cardOffers is outside the opening grant band';
-          }
-        }
-      } else {
-        if (cardOffers.length) return 'run.vacantia offers a card outside the opening';
-        if (!Array.isArray(vacantia.offers) || vacantia.offers.length < 1 || vacantia.offers.length > 3) {
-          return 'run.vacantia.offers is invalid';
-        }
-        if (new Set(vacantia.offers).size !== vacantia.offers.length) return 'run.vacantia.offers repeats a lipsanon';
-        for (const lipsanon of vacantia.offers) {
-          if (!RUN_LIPSANON_IDS.has(lipsanon)) return 'run.vacantia.offers is invalid';
-          // An offer the player already holds could never have been revealed.
-          if (Array.isArray(run.lipsana) && run.lipsana.includes(lipsanon)) return 'run.vacantia offers a held lipsanon';
-        }
-      }
-    } else if (run.vacantia !== null && run.vacantia !== undefined) {
-      return 'run.vacantia is invalid outside the bona-vacantia phase';
-    }
-  }
-  // The aftermath report is the aftermath phase: it exists only there, and cannot be absent
-  // there, because the Sectio that follows is opened from the survivors it carries.
-  {
-    if (run.phase === 'aftermath') {
-      if (!isObjectRecord(run.aftermath)) return 'run.aftermath is required';
-      const aftermath = run.aftermath;
-      if (Object.keys(aftermath).some((field) => !ACTIVE_RUN_AFTERMATH_FIELDS.has(field))) {
-        return 'run.aftermath contains an unsupported field';
-      }
-      if (!isFiniteInteger(aftermath.battleIndex) || aftermath.battleIndex < 0) return 'run.aftermath.battleIndex is invalid';
-      if (!isFiniteInteger(aftermath.turns) || aftermath.turns < 0) return 'run.aftermath.turns is invalid';
-      if (aftermath.elapsedMs !== null && (!isFiniteInteger(aftermath.elapsedMs) || aftermath.elapsedMs < 0)) {
-        return 'run.aftermath.elapsedMs is invalid';
-      }
-      for (const field of ['goldTenths', 'bonusGoldTenths', 'standingEnemyValue']) {
-        if (!isFiniteInteger(aftermath[field]) || aftermath[field] < 0) return `run.aftermath.${field} is invalid`;
-      }
-      if (aftermath.bonusGoldTenths > aftermath.goldTenths) return 'run.aftermath.bonusGoldTenths is invalid';
-      // A whole enemy army is worth well under this; the bound only refuses nonsense.
-      if (aftermath.standingEnemyValue > 999) return 'run.aftermath.standingEnemyValue is invalid';
-      if (
-        !Array.isArray(aftermath.survivingUnitIds)
-        || aftermath.survivingUnitIds.length > 100
-        || aftermath.survivingUnitIds.some((id) => typeof id !== 'string' || !id)
-      ) return 'run.aftermath.survivingUnitIds is invalid';
-      if (!Array.isArray(aftermath.fallenUnits) || aftermath.fallenUnits.length > 100) {
-        return 'run.aftermath.fallenUnits is invalid';
-      }
-      for (const unit of aftermath.fallenUnits) {
-        if (!isObjectRecord(unit)) return 'run.aftermath.fallenUnits is invalid';
-        if (typeof unit.id !== 'string' || !unit.id || unit.id.length > 160) return 'run.aftermath.fallenUnits is invalid';
-        if (typeof unit.name !== 'string' || unit.name.length > 160) return 'run.aftermath.fallenUnits is invalid';
-        if (!ACTIVE_RUN_PIECES.has(unit.type)) return 'run.aftermath.fallenUnits is invalid';
-      }
-    } else if (run.aftermath !== null && run.aftermath !== undefined) {
-      return 'run.aftermath is invalid outside the aftermath phase';
-    }
-  }
-  if (run.sectio !== null && run.sectio !== undefined) {
-    if (!isObjectRecord(run.sectio)) return 'run.sectio is invalid';
-    if (Object.keys(run.sectio).some((field) => !ACTIVE_RUN_SECTIO_FIELDS.has(field))) {
-      return 'run.sectio contains an unsupported field';
-    }
-    if (run.sectio.kind !== 'opening' && run.sectio.kind !== 'post-battle') {
-      return 'run.sectio.kind is invalid';
-    }
-    if (!Object.hasOwn(run.sectio, 'expunctedCard')) return 'run.sectio.expunctedCard is required';
-    if (run.sectio.expunctedCard !== null && !isObjectRecord(run.sectio.expunctedCard)) {
-      return 'run.sectio.expunctedCard is invalid';
-    }
-    if (run.sectio.entrySnapshot !== undefined && !isObjectRecord(run.sectio.entrySnapshot)) {
-      return 'run.sectio.entrySnapshot is invalid';
-    }
-    if (
-      Array.isArray(run.sectio.entrySnapshot?.army)
-      && run.sectio.entrySnapshot.army.some((unit) => (
-        !isObjectRecord(unit) || !ACTIVE_RUN_UNIT_SOURCES.has(unit.source)
-      ))
-    ) return 'run.sectio.entrySnapshot.army contains an invalid unit source';
-    const expunctedCard = run.sectio.expunctedCard;
-    if (expunctedCard) {
-      const card = expunctedCard.card;
-      const units = expunctedCard.units;
-      const attachedUnitIds = Array.isArray(card?.unitSeats)
-        ? card.unitSeats.filter((unitId) => typeof unitId === 'string')
-        : [];
-      if (
-        !isObjectRecord(card)
-        || card.coreId === 'his-grace'
-        || typeof card.id !== 'string'
-        || !card.id
-        || run.cards.some((candidate) => candidate.id === card.id)
-        || !Array.isArray(card.unitSeats)
-        || !Array.isArray(card.lostUnitIds)
-        || !Array.isArray(units)
-        || units.length !== attachedUnitIds.length
-        || units.some((unit, index) => (
-          !isObjectRecord(unit)
-          || unit.id !== attachedUnitIds[index]
-          || unitIds.has(unit.id)
-          || !ACTIVE_RUN_PIECES.has(unit.type)
-          || !ACTIVE_RUN_UNIT_SOURCES.has(unit.source)
-          || typeof unit.name !== 'string'
-          || !unit.name.trim()
-          || !Array.isArray(unit.abilities)
-          || !Array.isArray(unit.modifiers)
-        ))
-        || new Set(attachedUnitIds).size !== attachedUnitIds.length
-        || (card.effectTargetUnitId !== null && !attachedUnitIds.includes(card.effectTargetUnitId))
-        || (card.cardType === 'pestiferous'
-          ? attachedUnitIds.length > 0
-            ? !attachedUnitIds.includes(card.cacochymicUnitId)
-            : card.cacochymicUnitId !== null
-          : card.cacochymicUnitId !== null)
-        || !isFiniteInteger(expunctedCard.priceTenths)
-        || expunctedCard.priceTenths <= 0
-        || typeof serverRender?.cardExpunctioPriceTenths !== 'function'
-        || serverRender.cardExpunctioPriceTenths(card, units) !== expunctedCard.priceTenths
-      ) return 'run.sectio.expunctedCard is invalid';
-    }
-    {
-      if (!Array.isArray(run.sectio.cardOffers) || run.sectio.cardOffers.length < 1 || run.sectio.cardOffers.length > 10) {
-        return 'run.sectio.cardOffers is invalid';
-      }
-      const offerIds = new Set();
-      const offerValues = new Set();
-      for (const offer of run.sectio.cardOffers) {
-        if (!isObjectRecord(offer)) return 'run.sectio.cardOffers contains an invalid offer';
-        const cardTypeValid = offer.cardType === null
-          || offer.cardType === 'pestiferous'
-          || offer.cardType === 'concinnous'
-          || offer.cardType === 'legatine'
-          || offer.cardType === 'hieratic';
-        const effectTargetValid = offer.cardType === 'concinnous'
-          ? isFiniteInteger(offer.effectTargetIndex)
-            && offer.effectTargetIndex >= 0
-            && offer.effectTargetIndex < offer.pieces?.length
-          : offer.effectTargetIndex === null;
-        const costValid = isFiniteInteger(offer.cost)
-          && offer.cost >= 1
-          && offer.cost <= 12;
-        if (
-          typeof offer.offerId !== 'string'
-          || !offer.offerId
-          || offer.offerId.startsWith('shop-')
-          || offerIds.has(offer.offerId)
-          || typeof offer.id !== 'string'
-          || !offer.id
-          || !Array.isArray(offer.pieces)
-          || offer.pieces.length < 1
-          || offer.pieces.length > 9
-          || offer.pieces.some((piece) => !ACTIVE_RUN_PIECES.has(piece) || piece === 'king')
-          || !isFiniteInteger(offer.value)
-          || offer.value < 1
-          || offer.value > 9
-          || !costValid
-          || !cardTypeValid
-          || !effectTargetValid
-          || !isFiniteInteger(offer.effectSeed)
-          || offer.effectSeed < 0
-          || offer.effectSeed > 0xffffffff
-          || offer.pieces.reduce((total, piece) => total + ACTIVE_RUN_PIECE_VALUES[piece], 0) !== offer.value
-        ) return 'run.sectio.cardOffers contains an invalid offer';
-        const validPlaguedTarget = offer.cardType === 'pestiferous'
-          ? isFiniteInteger(offer.cacochymicPieceIndex)
-            && offer.cacochymicPieceIndex >= 0
-            && offer.cacochymicPieceIndex < offer.pieces.length
-          : offer.cacochymicPieceIndex === null;
-        if (!validPlaguedTarget) return 'run.sectio.cardOffers contains an invalid Cacochymic target';
-        const plaguedPiece = offer.cacochymicPieceIndex === null ? null : offer.pieces[offer.cacochymicPieceIndex];
-        const expectedCost = offer.cardType === 'pestiferous'
-          ? offer.value - (plaguedPiece ? ACTIVE_RUN_CACOCHYMIC_DISCOUNTS[plaguedPiece] : 0)
-          : offer.value + (
-            offer.cardType === 'legatine' || offer.cardType === 'hieratic'
-              ? 3
-              : offer.cardType === 'concinnous' ? 2 : 0
-          );
-        if (offer.cost !== expectedCost) {
-          return 'run.sectio.cardOffers contains invalid affected pricing';
-        }
-        offerIds.add(offer.offerId);
-        offerValues.add(offer.value);
-      }
-      if (
-        !Array.isArray(run.sectio.adlectedCardOfferIds)
-        || run.sectio.adlectedCardOfferIds.length > run.sectio.cardOffers.length
-        || new Set(run.sectio.adlectedCardOfferIds).size !== run.sectio.adlectedCardOfferIds.length
-        || run.sectio.adlectedCardOfferIds.some((offerId) => !offerIds.has(offerId))
-      ) return 'run.sectio.adlectedCardOfferIds is invalid';
-      if (
-        run.sectio.entrySnapshot !== undefined
-        && (
-          !Array.isArray(run.sectio.entrySnapshot.cards)
-          || !Array.isArray(run.sectio.entrySnapshot.pestiferousLosses)
-          || !isFiniteInteger(run.sectio.entrySnapshot.nextCardSequence)
-          || run.sectio.entrySnapshot.nextCardSequence < 1
-        )
-      ) return 'run.sectio.entrySnapshot card state is invalid';
-      if (
-        run.sectio.entrySnapshot !== undefined
-        && run.sectio.entrySnapshot.cards.some((card) => (
-          !isObjectRecord(card)
-          || !Array.isArray(card.unitSeats)
-          || (
-            card.cardType === 'pestiferous'
-              ? card.unitSeats.some((unitId) => typeof unitId === 'string')
-                ? typeof card.cacochymicUnitId !== 'string' || !card.unitSeats.includes(card.cacochymicUnitId)
-                : card.cacochymicUnitId !== null
-              : card.cacochymicUnitId !== null
-          )
-        ))
-      ) return 'run.sectio.entrySnapshot contains an invalid Cacochymic target';
-      if (run.sectio.entrySnapshot !== undefined) {
-        const transactionCards = expunctedCard
-          ? [...run.cards, expunctedCard.card]
-          : run.cards;
-        const entryCardIds = new Set(run.sectio.entrySnapshot.cards.map((card) => card.id));
-        const adlectedCards = transactionCards.filter((card) => !entryCardIds.has(card.id));
-        if (
-          transactionCards.length !== run.sectio.entrySnapshot.cards.length + run.sectio.adlectedCardOfferIds.length
-          || run.sectio.entrySnapshot.cards.some((card) => !transactionCards.some((candidate) => candidate.id === card.id))
-          || adlectedCards.length !== run.sectio.adlectedCardOfferIds.length
-          || run.sectio.adlectedCardOfferIds.some((offerId) => {
-            const offer = run.sectio.cardOffers.find((candidate) => candidate.offerId === offerId);
-            return !offer || !adlectedCards.some((card) => (
-              card.coreId === offer.id
-              && card.cardType === offer.cardType
-              && card.effectSeed === offer.effectSeed
-            ));
-          })
-        ) return 'run.sectio Adlectio state is invalid';
-      }
-      if (run.sectio.kind === 'opening') {
-        if (
-          run.phase !== 'sectio'
-          || run.battleIndex !== 0
-          || run.conflictIndex !== 0
-          || run.sectio.afterBattleIndex !== 0
-          || run.sectio.conflictIndex !== 0
-          || run.sectio.victoryGoldTenths !== 0
-          || typeof serverRender?.runSectioCardOfferCount !== 'function'
-          || run.sectio.cardOffers.length !== serverRender.runSectioCardOfferCount(run)
-          || offerValues.size !== serverRender.runSectioCardOfferCount(run)
-          // Opening offers carry the same qualifiers as any other draw and are priced by the
-          // shared affected-pricing rule checked above, so a qualifier may price one past the
-          // starting gold. At least one remains buyable even though leaving without Adlectio is
-          // allowed; the first Deployment deal can consequently contain only the two starter cards.
-          || run.sectio.cardOffers.some((offer) => offer.value > 8)
-          || !run.sectio.cardOffers.some((offer) => offer.cost <= 8)
-          || run.sectio.paidLipsanonOffer !== null
-          || run.sectio.paidLipsanonBought !== false
-          || !isObjectRecord(run.sectio.entrySnapshot)
-          // Bona Vacantia runs BEFORE the opening Sectio, so a lipsanon taken there may already
-          // have paid out. The gold is still pinned value-by-value -- to the starting gold
-          // plus exactly what the lipsana held are worth on acquisition, computed from the
-          // model's own payout table so the two cannot drift.
-          || run.sectio.entrySnapshot.goldTenths !== 80 + openingLipsanonGoldTenths(run)
-          || !Array.isArray(run.sectio.entrySnapshot.army)
-          || run.sectio.entrySnapshot.army.length !== 3
-          || run.sectio.entrySnapshot.army[0]?.id !== 'run-king'
-          || run.sectio.entrySnapshot.army[0]?.type !== 'king'
-          || run.sectio.entrySnapshot.army[0]?.abilities?.length !== 0
-          || run.sectio.entrySnapshot.army[1]?.id !== 'run-pawn-a'
-          || run.sectio.entrySnapshot.army[1]?.type !== 'pawn'
-          || run.sectio.entrySnapshot.army[1]?.source !== 'starting'
-          || run.sectio.entrySnapshot.army[2]?.id !== 'run-pawn-b'
-          || run.sectio.entrySnapshot.army[2]?.type !== 'pawn'
-          || run.sectio.entrySnapshot.army[2]?.source !== 'starting'
-          || !Array.isArray(run.sectio.entrySnapshot.cards)
-          || run.sectio.entrySnapshot.cards.length !== 2
-          || run.sectio.entrySnapshot.cards[0]?.id !== 'run-card-his-grace'
-          || run.sectio.entrySnapshot.cards[0]?.coreId !== 'his-grace'
-          || run.sectio.entrySnapshot.cards[0]?.unitSeats?.length !== 1
-          || run.sectio.entrySnapshot.cards[0]?.unitSeats?.[0] !== 'run-king'
-          || run.sectio.entrySnapshot.cards[1]?.id !== 'run-card-front-lines'
-          || run.sectio.entrySnapshot.cards[1]?.coreId !== 'front-lines'
-          || run.sectio.entrySnapshot.cards[1]?.unitSeats?.length !== 2
-          || !run.sectio.entrySnapshot.cards[1]?.unitSeats?.includes('run-pawn-a')
-          || !run.sectio.entrySnapshot.cards[1]?.unitSeats?.includes('run-pawn-b')
-        ) return 'run opening Sectio is invalid';
-        const openingUnitIds = new Set([
-          'run-king',
-          'run-pawn-a',
-          'run-pawn-b',
-          ...run.cards.flatMap((card) => card.unitSeats.filter((unitId) => typeof unitId === 'string')),
-        ]);
-        if (run.army.some((unit) => !openingUnitIds.has(unit.id))) {
-          return 'run opening Sectio purchase state is invalid';
-        }
-      }
-    }
-  }
-  return null;
-}
 
 const RETIRED_FORMATION_RUN_FIELDS = new Set([
   'abilities',
@@ -23614,22 +22872,25 @@ function validateFormationRunBody(run) {
 
   // Commendatio precedes the King, and the King is what gives a Run its army and its one held
   // card, so this one phase is legitimately empty and has no King to retain. Every later phase
-  // must carry exactly one.
+  // must carry exactly one. The emptiness is checked rather than assumed, and every check below
+  // still runs: returning early here accepted a pre-King document carrying a Deployment or a
+  // Sectio, which is nonsense the phase itself cannot have produced.
   const beforeTheKing = run.phase === 'commendatio';
-  if (beforeTheKing && run.army.length === 0 && run.cards.length === 0) return null;
-  if (!Array.isArray(run.army) || run.army.length < 1 || run.army.length > 200) return 'run.army is invalid';
+  if (!Array.isArray(run.army) || run.army.length > 200) return 'run.army is invalid';
+  if (!Array.isArray(run.cards) || run.cards.length > 200) return 'run.cards is invalid';
+  if (beforeTheKing) {
+    if (run.army.length !== 0 || run.cards.length !== 0) {
+      return 'run before the King must hold no army and no cards';
+    }
+  } else if (run.army.length < 1) return 'run.army is invalid';
+  else if (run.cards.length < 1) return 'run.cards is invalid';
+
   const unitIds = new Set();
   for (const unit of run.army) {
     const issue = formationRunUnitIssue(unit);
     if (issue || unitIds.has(unit.id)) return `run.army contains an invalid unit${issue ? `: ${issue}` : ''}`;
     unitIds.add(unit.id);
   }
-  if (run.army.filter((unit) => unit.type === 'king' && unit.id === 'run-king').length !== 1
-    || run.army.filter((unit) => unit.type === 'king').length !== 1) {
-    return 'run.army must retain its one King';
-  }
-
-  if (!Array.isArray(run.cards) || run.cards.length < 1 || run.cards.length > 200) return 'run.cards is invalid';
   const cardIds = new Set();
   const seatedUnitIds = new Set();
   for (const card of run.cards) {
@@ -23646,14 +22907,29 @@ function validateFormationRunBody(run) {
       seatedUnitIds.add(unitId);
     }
   }
-  const starter = run.cards.filter((card) => card.coreId === 'his-grace');
-  if (
-    starter.length !== 1
-    || starter[0].id !== 'run-card-his-grace'
-    || starter[0].unitSeats[0] !== 'run-king'
-    || !['run-pawn-a', null].includes(starter[0].unitSeats[1])
-    || !['run-pawn-b', null].includes(starter[0].unitSeats[2])
-  ) return 'run.cards must retain the complete His Grace formation';
+
+  // The Run's one King card. Fifteen Kings can open a Run and each mints `run-card-<its id>`
+  // seating its own roster (#850), so the card is found through the starter catalog and its seats
+  // are read from the model's own derivation. Restating His Grace's seats here refused to save
+  // every Run that chose one of the other fourteen, for the whole life of the Run.
+  let kingCard = null;
+  if (!beforeTheKing) {
+    if (run.army.filter((unit) => unit.type === 'king' && unit.id === 'run-king').length !== 1
+      || run.army.filter((unit) => unit.type === 'king').length !== 1) {
+      return 'run.army must retain its one King';
+    }
+    const starterCards = run.cards.filter((card) => Boolean(ACTIVE_RUN_STARTER_CARD_BY_ID[card.coreId]));
+    if (starterCards.length !== 1) return 'run.cards must retain its one King card';
+    kingCard = starterCards[0];
+    if (typeof serverRender?.starterFormationSeatIds !== 'function') {
+      return 'run King formation cannot be verified';
+    }
+    const kingSeats = serverRender.starterFormationSeatIds(ACTIVE_RUN_STARTER_CARD_BY_ID[kingCard.coreId]);
+    if (
+      kingCard.id !== `run-card-${kingCard.coreId}`
+      || kingCard.unitSeats.some((unitId, seat) => unitId !== null && unitId !== kingSeats[seat])
+    ) return 'run.cards must retain the complete King formation';
+  }
   if (run.army.some((unit) => !seatedUnitIds.has(unit.id))) return 'run.army contains a unit outside the Chartulary';
 
   if (!isFiniteInteger(run.nextCardSequence) || run.nextCardSequence < 1) return 'run.nextCardSequence is invalid';
@@ -23689,7 +22965,8 @@ function validateFormationRunBody(run) {
       deployment.battleIndex !== run.battleIndex
       || !isFiniteInteger(deployment.seed) || deployment.seed < 0 || deployment.seed > 0xffffffff
       || !uniqueIds(deployment.dealtCardIds, cardIds)
-      || deployment.dealtCardIds[0] !== 'run-card-his-grace'
+      // The King card is always dealt first, whichever King the Run opened on (#850).
+      || deployment.dealtCardIds[0] !== kingCard?.id
       || !uniqueIds(deployment.deployingUnitIds, unitIds)
       || !uniqueIds(deployment.unavailableUnitIds, unitIds)
       || !uniqueIds(deployment.blockedUnitIds, unitIds)
@@ -23755,6 +23032,22 @@ function validateFormationRunBody(run) {
     )) return 'run Battle has incomplete deployment state';
   }
 
+  // Commendatio deals the Kings the Run may enter the service of. It is the Run's opening screen
+  // and nothing precedes it, so it can only ever sit before Battle 1.
+  if (beforeTheKing) {
+    if (!isObjectRecord(run.commendatio)) return 'run.commendatio is invalid';
+    if (Object.keys(run.commendatio).some((field) => field !== 'kingOffers')) {
+      return 'run.commendatio contains an unsupported field';
+    }
+    const kingOffers = run.commendatio.kingOffers;
+    if (!Array.isArray(kingOffers) || kingOffers.length !== ACTIVE_RUN_KING_OFFER_COUNT
+      || new Set(kingOffers).size !== kingOffers.length
+      || kingOffers.some((id) => !ACTIVE_RUN_STARTER_CARD_BY_ID[id])) return 'run.commendatio.kingOffers is invalid';
+    if (run.battleIndex !== 0 || run.conflictIndex !== 0) return 'run.commendatio is outside the Run opening';
+  } else if (run.commendatio !== null && run.commendatio !== undefined) {
+    return 'run.commendatio is invalid outside Commendatio';
+  }
+
   if (run.phase === 'aftermath') {
     if (!isObjectRecord(run.aftermath) || !Array.isArray(run.aftermath.survivingUnitIds)
       || !Array.isArray(run.aftermath.fallenUnits)) return 'run.aftermath is invalid';
@@ -23791,8 +23084,10 @@ function validateFormationRunBody(run) {
     if (formationRunSnapshotIssue(sectio.entrySnapshot, run.war.battles.length)) return 'run.sectio.entrySnapshot is invalid';
     if (sectio.expunctedCard !== null) {
       const record = sectio.expunctedCard;
+      // No King may be expuncted -- the Run cannot exist without one -- and that is every starter
+      // card, not only His Grace (#850).
       if (!isObjectRecord(record) || formationRunOwnedCardIssue(record.card, run.war.battles.length)
-        || record.card.coreId === 'his-grace' || !Array.isArray(record.units)
+        || Boolean(ACTIVE_RUN_STARTER_CARD_BY_ID[record.card.coreId]) || !Array.isArray(record.units)
         || record.units.some((unit) => formationRunUnitIssue(unit))
         || !isFiniteInteger(record.priceTenths) || record.priceTenths <= 0) return 'run.sectio.expunctedCard is invalid';
     }
