@@ -521,8 +521,10 @@ describe('Run chrome hierarchy', () => {
     // And it fills the WHOLE workspace, the way the Strategikon's sheet does — no margin of the
     // Sectio scene left showing around a plate laid on top of it.
     expect(runBattlePreview).toContain('edgeAttached: true');
+    // On the SHELL element: `.run-shell-workspace` declares these itself, so the same declaration
+    // on the scene around it is shadowed and the body silently keeps its 12px gutter.
     expect(styleCss).toMatch(
-      /\.run-battle-preview-workspace\s*\{[^}]*--shell-workspace-body-inset-block: 0px;[^}]*--shell-workspace-body-inset-start: 0px;/,
+      /\.run-battle-preview-workspace > \.run-shell-workspace\s*\{[^}]*--shell-workspace-body-inset-block: 0px;[^}]*--shell-workspace-body-inset-start: 0px;/,
     );
     expect(styleCss).toMatch(/\.run-battle-preview-content\s*\{[^}]*padding:\s*0;/);
 

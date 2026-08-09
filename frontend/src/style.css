@@ -19680,7 +19680,9 @@ button.tileset-relationship-cell {
 /* The pane fills the WHOLE workspace, the way the Strategikon's sheet does: the shell's body
    perimeter is dropped for this scene so there is no margin of scene left showing around it, and
    the pane's own material is what the screen is made of rather than a plate floating on it. */
-.run-battle-preview-workspace {
+/* Declared on the SHELL element, not on the scene around it: `.run-shell-workspace` sets these
+   itself, so a declaration on an ancestor is simply shadowed and the body keeps its gutter. */
+.run-battle-preview-workspace > .run-shell-workspace {
   --shell-workspace-body-inset-block: 0px;
   --shell-workspace-body-inset-start: 0px;
 }
