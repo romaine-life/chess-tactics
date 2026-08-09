@@ -4519,11 +4519,42 @@ h1 {
   line-height: 1.15;
 }
 
-/* Objective chip: keep the flag glyph proportionate to the two text lines and
-   let the chip padding + gap do the spacing. */
+/* ONE seat for every mark in the title bar — the hourglass in the clock, the flag on
+   the objective, and the Run's measures all draw at the same size, because they are
+   read as one row of marks.
+   The seat alone is not enough to make them MATCH, because the two families are drawn
+   differently. Every Run mark ships trimmed to its own ink, so `contain` in a square
+   seat draws it at the seat's full size. The kit's game glyphs carry their transparent
+   margin — measured, the hourglass's ink fills 63% of its 64px canvas and the flag's
+   73%, against 100% for every Run mark — and `contain` scales the CANVAS, so that
+   margin comes straight off the drawn glyph: the hourglass rendered about 15px beside
+   26px marks. So an untrimmed glyph states the fraction of its canvas its own ink
+   fills, and its box grows by exactly that much and BLEEDS the surplus back out with a
+   negative margin — the drawn ink lands on the shared seat while the layout footprint
+   stays the seat. It is geometry, not paint: the sprite is never rescaled by a
+   background declaration. A trimmed mark declares nothing and needs nothing, which is
+   the whole point of the trimming rule; trimming these two source PNGs would delete
+   their two lines below. The fractions are measured from the installed bytes, not
+   guessed. */
+.skirmish-topbar-status {
+  --titlebar-mark-seat: 26px;
+}
+
+.skirmish-status-chip .skirmish-icon {
+  --titlebar-mark-canvas: calc(var(--titlebar-mark-seat) / var(--titlebar-mark-ink-fill, 1));
+  block-size: var(--titlebar-mark-canvas);
+  inline-size: var(--titlebar-mark-canvas);
+  margin: calc((var(--titlebar-mark-seat) - var(--titlebar-mark-canvas)) / 2);
+}
+
+/* ui/kit/icons/game/wait.png — ink 27x40 on a 64x64 canvas. */
+.skirmish-clock .skirmish-icon {
+  --titlebar-mark-ink-fill: .625;
+}
+
+/* ui/kit/icons/game/objective.png — ink 35x47 on a 64x64 canvas. */
 .skirmish-objective .skirmish-icon {
-  height: 24px;
-  width: 24px;
+  --titlebar-mark-ink-fill: .734;
 }
 
 /* The two-line objective copy sits as a left-aligned stack next to the glyph. */
@@ -4630,14 +4661,10 @@ h1 {
 /* Glyph then copy, hugging: the readout starts immediately after the hourglass
    instead of being centred over a label wider than it, which read as a gap the
    chip had not earned. The label is the widest line in every mode, so it — not a
-   minimum — is what holds the width steady while the digits tick. */
+   minimum — is what holds the width steady while the digits tick. The hourglass
+   takes the bar's shared mark seat; see the seat rule above. */
 .skirmish-clock {
   gap: var(--ds-inline-tight);
-}
-
-.skirmish-clock .skirmish-icon {
-  height: 24px;
-  width: 24px;
 }
 
 .skirmish-clock-readout {
@@ -9297,8 +9324,11 @@ body.loading-bootstrap .app-startup-status {
      not have — at 740 the last one ran under the control lane. Nothing is dropped:
      the marks and their numbers draw smaller and closer instead, which is the whole
      point of shedding the wide chip first. */
+  .app-shell-titlebar .run-topbar-status {
+    --titlebar-mark-seat: 20px;
+  }
+
   .app-shell-titlebar .run-topbar-measures {
-    --run-measure-seat: 20px;
     gap: 2px;
   }
 
@@ -9402,16 +9432,8 @@ body.loading-bootstrap .app-startup-status {
      thing to give would have to be a box, which is a design call, not a CSS one. */
   .app-shell-titlebar .run-topbar-status {
     --skirmish-status-chip-inset: var(--ds-space-1);
+    --titlebar-mark-seat: 18px;
     gap: var(--ds-space-1);
-  }
-
-  .app-shell-titlebar .run-topbar-measures {
-    --run-measure-seat: 18px;
-  }
-
-  .app-shell-titlebar .run-topbar-status .skirmish-clock .skirmish-icon {
-    height: 20px;
-    width: 20px;
   }
 }
 
@@ -20435,10 +20457,12 @@ button.tileset-relationship-cell {
    and the next began. The row is the bar's tightest, so its boxes hug their marks
    and sit on the tight gap. */
 .run-topbar-measures {
-  /* One seat for every mark, because every mark is trimmed to its own ink: the
-     coin, the wreath and the drum all draw at the same size, and the gap between
-     a mark and its number is the same gap everywhere in the row. */
-  --run-measure-seat: 26px;
+  /* The bar's one mark seat, so the coin, the wreath, the drum and the clock's
+     hourglass all draw at the same size and the gap between a mark and its number
+     is the same gap everywhere in the row. The seat itself is declared on the row
+     above (--titlebar-mark-seat) because the clock is not one of these measures
+     and still has to answer to it. */
+  --run-measure-seat: var(--titlebar-mark-seat, 26px);
   align-items: center;
   display: flex;
   gap: var(--ds-inline-tight);
