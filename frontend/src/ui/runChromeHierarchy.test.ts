@@ -592,8 +592,17 @@ describe('Run chrome hierarchy', () => {
     expect(styleCss).toMatch(/\.le-zone-cell\s*\{[^}]*box-shadow: inset 0 0 0 2px rgba\(var\(--le-zone-accent\)/);
     expect(styleCss).toContain('.le-zone-blue, .le-zone-player { --le-zone-accent:');
     expect(styleCss).not.toContain('.run-battle-preview-band');
-    // The zone diamond seats on the tile EQUATOR, which is what puts it on the same square the
-    // grid draws. Measured on the live board: a cell's top resolves to 41px against a 54px tile.
+
+    // A tile-frame overlay mounted through renderCellOverlay rides a DIFFERENT band: the seat is
+    // translated by the equator plane rather than the whole equator, so the tile frame's 41px top
+    // puts the diamond three quarters of a tile below the square it names. The band owns the
+    // correction, so the next caller cannot land off-grid by forgetting to write its own — the
+    // Enchiridion's local copy of it is gone. Measured live: 0px offset on both surfaces.
+    expect(styleCss).toMatch(
+      /\.tileset-generated-board-overlay-cell > :is\(\.le-zone-cell, \.le-tactical-cell\)\s*\{\s*top: 0;/,
+    );
+    expect(styleCss).not.toMatch(/\.enchiridion-unit-board \.le-tactical-cell\s*\{/);
+    // The tile-frame seating itself is untouched — that is what the Level Editor's own mounts use.
     expect(styleCss).toMatch(/\.le-zone-cell\s*\{[^}]*top: var\(--iso-tile-surface-top\)/);
 
     // Both facts also stand in the Level readout, which is where a reader looks for numbers.

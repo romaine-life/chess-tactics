@@ -6788,6 +6788,22 @@ body.loading-bootstrap .app-startup-status {
   opacity: 1;
 }
 
+/* Seating a TILE-frame overlay inside a TileGrid overlay seat.
+   There are two frames a square-local overlay can be mounted in, and they need different tops.
+   The 180px tile frame is translated by the whole equator (-68px), so its surface diamond sits
+   at `--iso-tile-surface-top` (41px) — that is where the Level Editor mounts zones and tactical
+   paint, as `cell.children`. A TileGrid overlay seat is translated by the equator PLANE
+   (-step-y, 27px) instead, so the same diamond is at the seat's own origin; that is why the
+   region marquee below and the battlefield's own `.skirmish-board-cell-hit` both use `top: 0`
+   there. An overlay authored for the tile frame and mounted through `renderCellOverlay` lands
+   41px BELOW the square it names — three quarters of a tile, plainly visible.
+   Owned by the BAND rather than by each host: the Enchiridion carried its own copy of this
+   correction, and the next caller through `renderCellOverlay` would have had to know to write
+   a third. */
+.tileset-generated-board-overlay-cell > :is(.le-zone-cell, .le-tactical-cell) {
+  top: 0;
+}
+
 /* Marquee selection highlight for the Generate/Tile scope. TileGrid's flat overlay cell is
    already seated at the top edge of the surface diamond, so this begins at 0 rather than applying
    the terrain-frame equator offset again. Keeping it in that 10k overlay band makes north/west
@@ -23396,12 +23412,9 @@ button.tileset-relationship-cell {
 }
 
 /* Movement marks reuse THE registered tactical-preview cell (.le-tactical-cell is-move /
-   is-threat + the cyan move paint) — no parallel paint. Its canonical top offset assumes the
-   tile-children band; here it rides TileGrid's flat overlay band, which is already seated at
-   the surface diamond's top edge (see .le-region-cell), so the offset resets to zero. */
-.enchiridion-unit-board .le-tactical-cell {
-  top: 0;
-}
+   is-threat + the cyan move paint) — no parallel paint. The overlay-band top correction that
+   used to live here is now owned by the band itself (see
+   `.tileset-generated-board-overlay-cell > :is(.le-zone-cell, .le-tactical-cell)`). */
 
 .enchiridion-terrain-row,
 .enchiridion-ability-card,
