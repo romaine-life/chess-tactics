@@ -566,16 +566,30 @@ const AWKWARD_CARD_FOOTPRINTS: ReadonlySet<string> = new Set(([
   [[0, 0], [1, 0], [2, 0], [0, 1]], // ### / #..  L
 ] as const).map((cells) => rotationalFootprintId(cells.map(([x, y]) => ({ x, y })))));
 
+/** One step along the rarity ladder, clamped at both ends. */
+function stepRarity(rarity: RunCardRarity, steps: number): RunCardRarity {
+  const index = RUN_CARD_RARITIES.indexOf(rarity) + steps;
+  return RUN_CARD_RARITIES[Math.max(0, Math.min(RUN_CARD_RARITIES.length - 1, index))];
+}
+
 /**
- * Rarity is the market's ramp control, and it reads two things.
+ * Rarity is the market's ramp control, and it reads three things.
  *
  * Material value sets the band: Common through four, Uncommon at five and six, Rare above that.
+ *
  * Footprint then adjusts it. The five awkward shapes pack badly enough that their material
  * overstates what they are worth on a board, so each drops one tier -- which is what puts genuinely
  * high-value cards in the Common pool without letting the Common pool hand out clean material.
  *
- * An opposite-colour Bishop pair is the exception, and keeps its band on any footprint. The pair
- * is the prize; the shape it arrives on does not spoil it.
+ * A Bishop then costs a band back, because material understates it. The player places every
+ * formation by hand (ADR-0526), so they choose the square each Bishop lands on: any two Bishops
+ * they own become the opposite-colour pair. The pair is assembled in the deployment band out of
+ * whatever cards it came from, and every Bishop card is half of it. Card-local parity is therefore
+ * not read at all -- it decides what one card's own two Bishops cover, never whether the player
+ * ends the Run holding the pair, which is the thing rarity is pricing.
+ *
+ * The two adjustments cancel on an awkward shape carrying a Bishop, and that is the intended
+ * reading rather than a coincidence: a Bishop is worth exactly the band a wasteful shape costs.
  */
 export function runCardRarity(
   pieces: readonly AdlectablePieceType[],
@@ -585,14 +599,10 @@ export function runCardRarity(
   const band: RunCardRarity = value <= RUN_CARD_COMMON_MAX_VALUE
     ? 'common'
     : value <= RUN_CARD_UNCOMMON_MAX_VALUE ? 'uncommon' : 'rare';
-  const bishops = pieces.flatMap((piece, index) => piece === 'bishop' ? [formation[index]] : []);
-  const hasOppositeColorBishopPair = bishops.some((left, index) => bishops
-    .slice(index + 1)
-    .some((right) => (left.x + left.y) % 2 !== (right.x + right.y) % 2));
-  if (hasOppositeColorBishopPair || !AWKWARD_CARD_FOOTPRINTS.has(rotationalFootprintId(formation))) {
-    return band;
-  }
-  return band === 'rare' ? 'uncommon' : 'common';
+  const shaped = AWKWARD_CARD_FOOTPRINTS.has(rotationalFootprintId(formation))
+    ? stepRarity(band, -1)
+    : band;
+  return pieces.includes('bishop') ? stepRarity(shaped, 1) : shaped;
 }
 
 const formationCard = (
@@ -944,8 +954,9 @@ export function runSectioCardMaxValue(battleIndex: number): number {
 
 /**
  * How many pile seats each rarity owns under a cost ceiling. A ceiling that empties a tier hands
- * that tier's share to the ones still standing -- under six gold there is no Rare card in the
- * catalog at all, so the opening market is Common and Uncommon apportioned between themselves.
+ * that tier's share to the ones still standing. The live six-gold ceiling empties nothing: cheap
+ * Bishop cards are Rare on material a first Battle can afford, so the opening market keeps its
+ * whole ladder and only its prices are held down.
  * Seats are handed out by largest remainder, so a pile is always exactly its declared size.
  */
 export function sectioPileRarityQuota(

@@ -149,10 +149,11 @@ Every Run persists a non-negative `sectioCardCursor` into its seed-derived hidde
 Each pile holds 20 cards carrying an exact rarity quota—16 Common, 3 Uncommon, 1 Rare—rather than
 a per-card roll, so a pile's composition is the same every time instead of only converging over a
 long sample. The Sectios following Battles 1 and 2 draw from a pile capped at a card cost of six;
-that ceiling empties the Rare tier, whose share is re-apportioned to the tiers still standing. The
+that ceiling holds prices down without emptying a tier, so a capped pile carries the same quota.
+A ceiling low enough to empty a tier still re-apportions its share to the tiers still standing. The
 ceiling then lifts for good. Rarity itself is derived card metadata, not a persisted field: it is a
-material band adjusted by footprint, so a stored offer relabels itself from the live catalog on
-load. A card passed over while the market was capped may be offered again once it is not.
+material band adjusted by footprint and by the Bishop, which costs a band of its own, so a stored
+offer relabels itself from the live catalog on load. A card passed over while the market was capped may be offered again once it is not.
 A normal Sectio consumes three positions and Quartermaster's Ledger consumes four. Reset Sectio
 retains the same visible offers and cursor rather than redrawing. Army, whole-card Expunctio,
 Adlectio, Reset Sectio, and Continue reuse the post-Battle model. Expunctio may remove one held card and its remaining units
