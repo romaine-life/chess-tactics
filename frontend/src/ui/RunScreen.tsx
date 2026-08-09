@@ -66,14 +66,12 @@ import {
 import {
   arrangedCardAtCell,
   arrangedCardPlaceableCells,
-  arrangedCardPlacementAtAnchor,
-  arrangedCardPlacementOptions,
-  distinctCardRotations,
   arrangedDeploymentCanBegin,
   arrangedDeploymentCards,
   arrangedDeploymentProgress,
   beginArrangedBattle,
   beginDeploymentDeal,
+  cardTurn,
   completeDeploymentDeal,
   deploymentInteractionStage,
   deploymentOptions,
@@ -81,11 +79,9 @@ import {
   levelWithRunDeployment,
   openDeploymentBandCells,
   nextArrangedCardToPlace,
-  nextCardRotation,
   normalReservistCell,
-  previousCardRotation,
+  placeableCardRotations,
   steppedArrangedCard,
-  turnableCardRotations,
   turnedCardPlacement,
   placeArrangedDeploymentCard,
   resolveForcedDeploymentChoices,
@@ -696,11 +692,7 @@ function useRunDeploymentPresentation({
   // the control never presents two buttons that produce the same board. The rail and the
   // secondary-click cycle read this one ordered list, so both walk the same turns.
   const availableArrangementRotationList = useMemo<readonly RunFormationRotation[]>(() => (
-    selectedCardId
-      ? distinctCardRotations(prepared, selectedCardId).filter((rotation) => (
-          arrangedCardPlacementOptions(prepared, level, selectedCardId, rotation).length > 0
-        ))
-      : []
+    selectedCardId ? placeableCardRotations(prepared, level, selectedCardId) : []
   ), [level, prepared, selectedCardId]);
   const availableArrangementRotations = useMemo(
     () => new Set<RunFormationRotation>(availableArrangementRotationList),
@@ -722,15 +714,6 @@ function useRunDeploymentPresentation({
       ? turnedCardPlacement(prepared, level, selectedCardId, arrangementRotation, heldAnchor, pointedCell)
       : null
   ), [arrangementRotation, heldAnchor, level, pointedCell, prepared, selectedCardId]);
-  // The turns on offer are the ones this formation can actually take from where it is being
-  // held — its box first, the pointed square as the fallback. Walking the band-wide list would
-  // step onto a turn with no seating either way, and the formation under the player's hand would
-  // vanish. Off the board there is nothing to preserve, so the rail's own list applies.
-  const turnableArrangementRotationList = useMemo<readonly RunFormationRotation[]>(() => {
-    if (!selectedCardId || (!pointedCell && !heldAnchor)) return availableArrangementRotationList;
-    const held = turnableCardRotations(prepared, level, selectedCardId, heldAnchor, pointedCell);
-    return held.length ? held : availableArrangementRotationList;
-  }, [availableArrangementRotationList, heldAnchor, level, pointedCell, prepared, selectedCardId]);
   const arrangementFootprint = useMemo(() => new Set(
     Object.values(pointedArrangementOption?.placements ?? {}).map((cell) => `${cell.x},${cell.y}`),
   ), [pointedArrangementOption]);
@@ -840,27 +823,28 @@ function useRunDeploymentPresentation({
     setArrangementRotation(0);
     setHeldArrangementAnchor(null);
   }, []);
-  // A secondary click, and Q/E, turn the formation carried on the cursor. They deliberately keep
-  // the pointed square: the formation spins about its grip seat, on the square being aimed at,
-  // rather than vanishing until the mouse is jiggled. All three walk the same list — the turns
-  // that keep a seating over that square — so no gesture can turn the formation out of sight.
+  // A secondary click, the rail, and Q/E all run one verb, and cardTurn is the whole of it: which
+  // way the formation faces next and which box it holds while it turns are one decision, so the
+  // three gestures cannot disagree about it. They deliberately keep the pointed square — the
+  // formation spins about its grip seat, on the square being aimed at, rather than vanishing until
+  // the mouse is jiggled.
   const turnArrangement = useCallback((direction: FormationTurnDirection) => {
     if (departureActive || !selectedCardId) return;
-    const next = direction === 'clockwise'
-      ? nextCardRotation(turnableArrangementRotationList, arrangementRotation)
-      : previousCardRotation(turnableArrangementRotationList, arrangementRotation);
-    if (next === arrangementRotation) return;
-    // Hold the box the formation is standing in now, so the turn happens INSIDE it. The band
-    // still decides: where it cannot take the formation there, the anchor is dropped and the
-    // seating re-resolves from the pointed square rather than leaving the player holding nothing.
-    const box = pointedArrangementOption?.anchor ?? null;
-    const stays = box
-      && arrangedCardPlacementAtAnchor(prepared, level, selectedCardId, next, box) !== null;
-    setArrangementRotation(next);
-    setHeldArrangementAnchor(stays ? `${box.x},${box.y}` : null);
+    const turn = cardTurn(
+      prepared,
+      level,
+      selectedCardId,
+      arrangementRotation,
+      direction,
+      heldAnchor,
+      pointedCell,
+    );
+    if (!turn) return;
+    setArrangementRotation(turn.rotation);
+    setHeldArrangementAnchor(turn.anchor ? `${turn.anchor.x},${turn.anchor.y}` : null);
   }, [
-    arrangementRotation, departureActive, level, pointedArrangementOption, prepared,
-    selectedCardId, turnableArrangementRotationList,
+    arrangementRotation, departureActive, heldAnchor, level, pointedCell, prepared,
+    selectedCardId,
   ]);
   const turnArrangementUnderCursor = useCallback(() => {
     turnArrangement('clockwise');

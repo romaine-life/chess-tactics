@@ -24,6 +24,7 @@ import {
   arrangedDeploymentProgress,
   beginArrangedBattle,
   beginDeploymentDeal,
+  cardTurn,
   completeDeploymentDeal,
   deploymentInteractionStage,
   arrangedDeploymentCards,
@@ -32,8 +33,10 @@ import {
   deploymentOptions,
   distinctCardRotations,
   gameForRunDeployment,
+  nearestCardPlacementToCell,
   nextArrangedCardToPlace,
   nextCardRotation,
+  placeableCardRotations,
   previousCardRotation,
   steppedArrangedCard,
   placeArrangedDeploymentCard,
@@ -558,7 +561,119 @@ describe('formation deployment', () => {
     for (const cell of cells) {
       expect(cardRotationsAtCell(arranging, level, line.id, cell)).toEqual([0]);
       expect(nextCardRotation(cardRotationsAtCell(arranging, level, line.id, cell), 0)).toBe(0);
+      // The band has no other turn either, so the gesture genuinely has nowhere to go.
+      expect(placeableCardRotations(arranging, level, line.id)).toEqual([0]);
+      expect(cardTurn(arranging, level, line.id, 0, 'clockwise', null, cell)).toBeNull();
     }
+  });
+
+  // The bug this was written for: an L in a two-row band sits over the squares at either END of
+  // the band exactly one way, so the turns-that-keep-this-square list named only the turn already
+  // on screen. Walking it returned that same turn, and every gesture — right-click, Q, E and the
+  // rail's own buttons — died on those squares while the formation sat there in plain sight.
+  it('turns from a square that can hold only the turn it is already showing', () => {
+    const { run, level } = fixture(2, 8, 101, ['f-00102021-pppb']);
+    const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+    const wedge = arranging.cards.find((card) => card.coreId === 'f-00102021-pppb')!;
+    // Three across with one unit tucked behind the right-hand end. Standing it up needs three
+    // rows, so the band offers the two flat turns and nothing else.
+    expect(placeableCardRotations(arranging, level, wedge.id)).toEqual([0, 2]);
+    const wedged = { x: 7, y: 3 };
+    expect(cardRotationsAtCell(arranging, level, wedge.id, wedged)).toEqual([0]);
+    // The list the gesture used to walk on its own, and what walking it returned: the turn it
+    // started on. That is the whole of the dead end.
+    expect(turnableCardRotations(arranging, level, wedge.id, null, wedged)).toEqual([0]);
+    expect(nextCardRotation([0], 0)).toBe(0);
+
+    for (const direction of ['clockwise', 'counter-clockwise'] as const) {
+      const turn = cardTurn(arranging, level, wedge.id, 0, direction, null, wedged)!;
+
+      expect(turn).not.toBeNull();
+      expect(turn.rotation).toBe(2);
+      // ...and the result is something the player can SEE: the formation turns inside the very
+      // box it was standing in rather than vanishing off the band.
+      const seating = turnedCardPlacement(arranging, level, wedge.id, turn.rotation, turn.anchor, wedged);
+      expect(seating).not.toBeNull();
+      expect(turn.anchor).toEqual({ x: 5, y: 3 });
+    }
+  });
+
+  // The guarantee behind that fix, stated over the whole band: wherever the formation is visible
+  // under the cursor, a turn moves it and leaves it visible. One dead square is one place the
+  // player finds the controls inert.
+  it('leaves no square where a visible formation refuses to turn', () => {
+    for (const [rows, columns] of [[2, 5], [2, 8], [3, 8]] as const) {
+      const { run, level } = fixture(rows, columns, 103, ['f-00102021-pppb']);
+      const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+      const wedge = arranging.cards.find((card) => card.coreId === 'f-00102021-pppb')!;
+      const placeable = placeableCardRotations(arranging, level, wedge.id);
+
+      expect(placeable.length).toBeGreaterThan(1);
+      for (const rotation of placeable) {
+        for (const cell of arrangedCardPlaceableCells(arranging, level, wedge.id, rotation)) {
+          for (const direction of ['clockwise', 'counter-clockwise'] as const) {
+            const turn = cardTurn(arranging, level, wedge.id, rotation, direction, null, cell);
+
+            expect(turn).not.toBeNull();
+            expect(turn!.rotation).not.toBe(rotation);
+            expect(turnedCardPlacement(arranging, level, wedge.id, turn!.rotation, turn!.anchor, cell))
+              .not.toBeNull();
+          }
+        }
+      }
+    }
+  });
+
+  // Where the band can take the formation in the box it is standing in, that is where it turns:
+  // the shape spins, the box holds still.
+  it('turns inside the held box wherever the band can take it there', () => {
+    const { run, level } = fixture(8, 8, 107);
+    const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+    const hisGrace = arranging.cards.find((card) => card.coreId === 'his-grace')!;
+    const box = arrangedCardPlacementOptions(arranging, level, hisGrace.id, 0)
+      .find(({ anchor }) => anchor.x > 0 && anchor.y > 3)!.anchor;
+    const turn = cardTurn(arranging, level, hisGrace.id, 0, 'clockwise', box, null)!;
+
+    expect(turn.rotation).toBe(1);
+    expect(turn.anchor).toEqual(box);
+    // ...and back again, so one press undoes one press.
+    expect(cardTurn(arranging, level, hisGrace.id, turn.rotation, 'counter-clockwise', box, null))
+      .toEqual({ rotation: 0, anchor: box });
+  });
+
+  // A formation that reads the same whichever way it is turned has nothing to turn to.
+  it('holds a formation still when no turn would change it', () => {
+    const { run, level } = fixture(8, 8, 109, ['q']);
+    const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+    const queen = arranging.cards.find((card) => card.coreId === 'q')!;
+    const cell = arrangedCardPlaceableCells(arranging, level, queen.id, 0)[0];
+
+    expect(distinctCardRotations(arranging, queen.id)).toEqual([0]);
+    expect(cardTurn(arranging, level, queen.id, 0, 'clockwise', null, cell)).toBeNull();
+    expect(cardTurn(arranging, level, queen.id, 0, 'counter-clockwise', null, null)).toBeNull();
+  });
+
+  // The shift of last resort is measured to the nearest UNIT, not to the anchor: the anchor of an
+  // L is a square nobody stands on, so ranking by it would carry the formation AWAY from the
+  // cursor to bring an empty corner closer to it.
+  it('shifts to the seating whose units come nearest the square being aimed at', () => {
+    const { run, level } = fixture(2, 8, 113, ['f-00102021-pppb']);
+    const arranging = completeDeploymentDeal(beginDeploymentDeal(run), level);
+    const wedge = arranging.cards.find((card) => card.coreId === 'f-00102021-pppb')!;
+
+    for (const cell of [{ x: 0, y: 3 }, { x: 4, y: 4 }, { x: 7, y: 4 }]) {
+      const nearest = nearestCardPlacementToCell(arranging, level, wedge.id, 0, cell)!;
+      const gap = (option: typeof nearest): number => Math.min(...Object.values(option.placements)
+        .map((seat) => (seat.x - cell.x) ** 2 + (seat.y - cell.y) ** 2));
+
+      expect(nearest).not.toBeNull();
+      for (const option of arrangedCardPlacementOptions(arranging, level, wedge.id, 0)) {
+        expect(gap(nearest)).toBeLessThanOrEqual(gap(option));
+      }
+    }
+    // Off the band entirely it still answers, which is what keeps a turn from ever blanking.
+    expect(nearestCardPlacementToCell(arranging, level, wedge.id, 0, { x: 99, y: 99 }))
+      .not.toBeNull();
   });
 
   // Repeated turning walks the same turns the rail offers and nothing else, so the gesture can
