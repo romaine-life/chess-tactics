@@ -372,6 +372,7 @@ describe('Run chrome hierarchy', () => {
     expect(styleCss).toMatch(/\.run-expunctio-visit-mark\s*\{[\s\S]*?color:\s*var\(--skirmish-ink\)/);
     // The plain installed coin, never a transaction mark: the fee on the same tile already paints
     // the loss arrow, and a second arrowed mark reads as a second price.
+    expect(runExpunctioWorkspace).toContain('<RunGoldOfferedIcon className="run-expunctio-visit-mark-icon" />');
     expect(runExpunctioWorkspace).toContain('<RunGoldIcon className="run-expunctio-visit-mark-icon" />');
     expect(runExpunctioWorkspace).not.toContain('<RunGoldTransactionIcon');
     expect(runExpunctioWorkspace).toContain('runCardFramePaintInsetRatios');

@@ -1,9 +1,13 @@
 import { drawableAssets } from '@chess-tactics/board-render';
 import type { ReactElement } from 'react';
 import { formatGold } from '../run/model';
+import { installedUiMediaIfPresent } from './installedUiMedia';
 
 const GOLD_CANDIDATE_QUERY = 'goldCandidate';
 const GOLD_TRANSACTION_CANDIDATE_QUERY = 'goldLossCandidate';
+const GOLD_OFFERED_CANDIDATE_QUERY = 'goldOfferedCandidate';
+/** The role `ui/run/resources/gold-offered.png` binds once a candidate is installed. */
+const GOLD_OFFERED_MEDIA_ROLE = 'ui-run-resources-gold-offered-png';
 const SHA256 = /^[0-9a-f]{64}$/;
 
 export type RunGoldTransactionDirection = 'loss';
@@ -11,6 +15,12 @@ export type RunGoldTransactionDirection = 'loss';
 function reviewedGoldCandidateSrc(): string | null {
   if (typeof window === 'undefined') return null;
   const sha256 = new URLSearchParams(window.location.search).get(GOLD_CANDIDATE_QUERY)?.trim().toLowerCase();
+  return sha256 && SHA256.test(sha256) ? `/api/admin/media/${sha256}` : null;
+}
+
+function reviewedGoldOfferedCandidateSrc(): string | null {
+  if (typeof window === 'undefined') return null;
+  const sha256 = new URLSearchParams(window.location.search).get(GOLD_OFFERED_CANDIDATE_QUERY)?.trim().toLowerCase();
   return sha256 && SHA256.test(sha256) ? `/api/admin/media/${sha256}` : null;
 }
 
@@ -54,6 +64,31 @@ export function RunGoldIcon({
   return (
     <span className={`run-gold-icon${src ? '' : ' is-unavailable'} ${className}`.trim()} aria-hidden="true">
       {src ? <img src={src} alt="" draggable={false} /> : <span>?</span>}
+    </span>
+  );
+}
+
+/**
+ * Gold HANDED OVER: the hand that gave it, drawn beside the coin it gave.
+ *
+ * Its art decision is still open, so this seat renders nothing at all until one is installed —
+ * an empty reserved box would push the coin beside it sideways for a mark that says nothing yet.
+ * Candidates are auditioned in the real seat through `?goldOfferedCandidate=<sha256>`, the same
+ * review seam the live gold icon uses (ADR-0219), and installing binds the role (ADR-0318).
+ */
+export function RunGoldOfferedIcon({
+  className = '',
+  src: override,
+}: {
+  className?: string;
+  /** Review-only: paint exact candidate bytes in the real seat without installing them. */
+  src?: string;
+}): ReactElement | null {
+  const src = override ?? reviewedGoldOfferedCandidateSrc() ?? installedUiMediaIfPresent(GOLD_OFFERED_MEDIA_ROLE);
+  if (!src) return null;
+  return (
+    <span className={`run-gold-offered-icon ${className}`.trim()} aria-hidden="true">
+      <img src={src} alt="" draggable={false} />
     </span>
   );
 }

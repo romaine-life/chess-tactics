@@ -13,7 +13,7 @@ import { RunCard } from './RunCard';
 import { runCardFrameSlot } from './runCardFaceContent';
 import { runCardFrameGeometryForSlot, runCardFramePaintInsetRatios } from './runCardFrameGeometry';
 import { emptyRunCardPieceIndices, projectRunCardUnitSeats } from './runCardUnitProjection';
-import { RunGoldIcon, RunGoldTransactionAmount } from './RunResources';
+import { RunGoldIcon, RunGoldOfferedIcon, RunGoldTransactionAmount } from './RunResources';
 import { RunSceneViewport } from './RunWorkspace';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { ChromeButton } from './shared/ChromeButton';
@@ -136,11 +136,16 @@ function ExpunctioCardTile({
           {admittedThisVisit ? (
             <span className="run-expunctio-visit-mark">
               {/*
-                The installed coin stack, not a transaction mark: the fee below this line already
-                paints the loss arrow, and a second arrowed mark on one tile reads as a second
-                price. What the plain stack says is the true thing — gold bought this record, at
-                this visit — and there is no purchase glyph in the kit to say it with instead.
+                The hand that gave the gold, then the gold it gave. The coin alone said only that
+                gold was involved, which the fee below already says; the giving is the half that
+                makes the line mean "bought, this visit". The hand's own art decision is still
+                open, so its seat draws nothing until one is installed and the line falls back to
+                the coin (ADR-0318).
+
+                Never a transaction mark here: the fee beneath this line already paints the loss
+                arrow, and a second arrowed mark on one tile reads as a second price.
               */}
+              <RunGoldOfferedIcon className="run-expunctio-visit-mark-icon" />
               <RunGoldIcon className="run-expunctio-visit-mark-icon" />
               Adlected this visit
             </span>
