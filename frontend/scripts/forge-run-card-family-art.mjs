@@ -25,7 +25,7 @@ import {
 const require = createRequire(import.meta.url);
 const sharp = require('sharp');
 
-const MANIFEST = fileURLToPath(new URL('../../docs/art/run-card-family-prompts-v2.json', import.meta.url));
+const DEFAULT_MANIFEST = fileURLToPath(new URL('../../docs/art/run-card-family-prompts-v2.json', import.meta.url));
 const WIDTH = 400;
 const HEIGHT = 280;
 
@@ -39,6 +39,9 @@ const ONLY = flag('only', '') ? new Set(flag('only', '').split(',')) : null;
 const LIMIT = Number(flag('limit', '0')) || 0;
 const CODEX_CONCURRENCY = Number(flag('codex-concurrency', '4'));
 const PIXELLAB_CONCURRENCY = Number(flag('pixellab-concurrency', '4'));
+// Starter kings key art per CARD rather than per (footprint, roster) family, so they carry
+// their own manifest in the same shape; --manifest points the same two pools at it.
+const MANIFEST = flag('manifest', DEFAULT_MANIFEST);
 
 mkdirSync(OUT, { recursive: true });
 
@@ -93,18 +96,37 @@ const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
 // subject. PixelLab keeps the tighter style parameters, because its look is the one that
 // matches the installed catalog.
 
+// A king card names the monarch whose reign produced the act it is titled after. That name is
+// context for the generator and for us, never a caption: it buys period-exact dress, regalia and
+// setting that "a medieval king" does not. Cards without a monarch keep the original unit framing.
+function framingFor(family) {
+  return family.monarch
+    ? `The king in this picture is ${family.monarch}. ${family.monarchNote ?? ''} Draw that man, in the dress and regalia of his own reign, and put no name, date, caption or lettering anywhere in the image.`
+    : 'They are a unit in the field, in the middle of a war, and they read as individuals.';
+}
+
 function codexPrompt(family) {
   return `IMAGE-GENERATION task: create ONE PNG by GENERATING it with the built-in image_gen tool (the imagegen skill). Do NOT hand-draw it with code (PIL/Pillow, cairo, matplotlib, SVG, HTML/CSS, canvas), do NOT write a script, and do NOT crop or extract from any file — programmatic output is automatically rejected and you will be asked again.
 
 Card art for an indie tactics game. Landscape, roughly 1.43:1.
 
-These are the real people a chess set stands for, drawn as themselves — ${family.roles}. Do NOT draw chess pieces, a chessboard, or any abstract game token.
+${shared.medium ?? 'Indie game pixel art.'}
 
-They are a unit in the field, in the middle of a war, and they read as individuals. Draw EXACTLY ${family.pieces.length} ${family.pieces.length === 1 ? 'figure' : 'figures'} — no crowd, no extra soldiers behind them. ${family.arrangement}
+${shared.subject}
+
+The figures are — ${family.roles}.
+
+${framingFor(family)} Draw EXACTLY ${family.pieces.length} ${family.pieces.length === 1 ? 'figure' : 'figures'} — no crowd, no extra soldiers behind them. ${family.arrangement}
+
+${family.sceneDirection}
 
 Setting: ${family.historicalAnchor}.
 
-Indie game pixel art. Fill the frame edge to edge. Save it as ./card.png in the current working directory, then stop.`;
+${shared.world}
+
+${shared.exclusions}
+
+Fill the frame edge to edge. Save it as ./card.png in the current working directory, then stop.`;
 }
 
 function pixelLabPrompt(family) {
@@ -112,10 +134,16 @@ function pixelLabPrompt(family) {
     `Exactly ${family.pieces.length} ${family.pieces.length === 1 ? 'figure' : 'figures'} and no more, a unit at war in the field: ${family.roles}.`,
     `They read as individual soldiers, armed and kitted for the fighting, not as townsfolk at work.`,
     family.arrangement,
+    // The manifest's scene is the richest signal there is, and it used to be dropped here:
+    // without it pixflux falls back to what it is best at, a character line-up, and answers a
+    // four-figure brief with nine identical soldiers on a flat field (kings batch, 8/8).
+    family.sceneDirection,
+    `One illustrated moment happening in a real place, never a character line-up, roster row, turnaround or sprite sheet.`,
+    `Do not repeat, mirror or duplicate a figure, and put nobody in the background behind them.`,
     `Setting: ${family.historicalAnchor}. Grounded historical material, restrained natural colour.`,
     `A real place around them with ground, structures and depth — never a flat empty backdrop.`,
-    `No chess pieces, no chessboard, no text, no icons, no card border.`,
-  ].join(' ');
+    `No chess pieces, no chessboard, no text, no icons, no card border, no signature or artist mark.`,
+  ].filter(Boolean).join(' ');
 }
 
 // --- Generators -------------------------------------------------------------------------------
@@ -134,7 +162,8 @@ async function forgePixelLab(server, family) {
     detail: 'highly detailed',
     shading: 'detailed shading',
     outline: 'selective outline',
-    view: 'low top-down',
+    // A top-down view reads as a map tile, not card art. Scene cards override it to 'side'.
+    view: family.pixelLabView ?? 'low top-down',
     text_guidance_scale: 9,
     ...(palette() ? { color_image_base64: palette() } : {}),
   });
@@ -183,13 +212,26 @@ async function pool(items, concurrency, worker, label) {
       cursor += 1;
       if (index >= items.length) return;
       const family = items[index];
-      try {
-        const outcome = await worker(family);
-        results.push({ artId: family.artId, generator: label, ok: true, ...outcome });
-        process.stdout.write(`ok   ${label.padEnd(8)} ${family.artId.padEnd(18)} ${outcome.seconds.toFixed(0)}s  (${results.length}/${items.length})\n`);
-      } catch (error) {
-        results.push({ artId: family.artId, generator: label, ok: false, error: String(error.message ?? error) });
-        process.stdout.write(`FAIL ${label.padEnd(8)} ${family.artId.padEnd(18)} ${String(error.message ?? error).slice(0, 120)}\n`);
+      // One retry. The whole batch is one wall-clock wave at full width, so a transient failure
+      // otherwise costs a whole second run of the script to recover a single image.
+      let last;
+      for (let attempt = 1; attempt <= 2; attempt += 1) {
+        try {
+          const outcome = await worker(family);
+          results.push({ artId: family.artId, generator: label, ok: true, attempt, ...outcome });
+          process.stdout.write(`ok   ${label.padEnd(8)} ${family.artId.padEnd(18)} ${outcome.seconds.toFixed(0)}s${attempt > 1 ? ` (retry ${attempt})` : ''}  (${results.length}/${items.length})\n`);
+          last = null;
+          break;
+        } catch (error) {
+          last = String(error.message ?? error);
+          if (attempt < 2) {
+            process.stdout.write(`retry ${label.padEnd(7)} ${family.artId.padEnd(18)} ${last.slice(0, 100)}\n`);
+          }
+        }
+      }
+      if (last) {
+        results.push({ artId: family.artId, generator: label, ok: false, error: last });
+        process.stdout.write(`FAIL ${label.padEnd(8)} ${family.artId.padEnd(18)} ${last.slice(0, 120)}\n`);
       }
     }
   });

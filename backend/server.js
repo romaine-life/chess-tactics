@@ -5805,6 +5805,41 @@ const MIGRATIONS = [
        WHERE body->'runSaveVersion' = '32'::jsonb;
     `,
   },
+  {
+    version: 73,
+    name: 'the King is the opening choice and the opening card grant is retired',
+    // A Run now begins on a King chosen before the document exists, so the opening Bona Vacantia
+    // that used to deal three formation cards as the Run's first screen no longer exists.
+    //
+    // A Run parked on that screen has not taken its card and there is nothing left to take it
+    // from, so it advances to the Deployment the grant used to lead into. Nothing else moves: the
+    // army and the held King were never the grant's to change, and the grant only ever ADDED to
+    // them, so a Run that already took its card keeps everything it was given.
+    //
+    // Mid-run Bona Vacantia is untouched. Only `kind = 'opening'` is retired; a Conflict's own
+    // lipsanon screen is a different phase state that shares the column.
+    sql: `
+      UPDATE active_runs
+         SET body = body || jsonb_build_object(
+               'runSaveVersion', 34,
+               'phase', 'deployment',
+               'vacantia', 'null'::jsonb
+             ),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE body->'runSaveVersion' = '33'::jsonb
+         AND body->>'phase' = 'bona-vacantia'
+         AND body->'vacantia'->>'kind' = 'opening';
+
+      -- Every other Run never saw that screen and advances on the version alone. This runs after
+      -- the rewrite above, which has already moved its rows off 33.
+      UPDATE active_runs
+         SET body = body || jsonb_build_object('runSaveVersion', 34),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE body->'runSaveVersion' = '33'::jsonb;
+    `,
+  },
 ];
 
 let pool = null;

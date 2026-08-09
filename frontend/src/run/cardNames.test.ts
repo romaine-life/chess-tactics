@@ -74,9 +74,13 @@ describe('Run card names', () => {
     ))).toBe(true);
   });
 
-  it('gives the starter formation a dedicated illustration slot', () => {
+  // Kings are keyed per card rather than per (footprint, roster) family, because every arrangement
+  // is its own King, so their slots carry the `k-` prefix that namespaces them off the family grid.
+  it('gives each King its own illustration slot', () => {
     expect(runCardArtSlot({ id: 'his-grace', pieces: ['king', 'pawn', 'pawn'] }))
-      .toBe('ui/run/card-art/his-grace/illustration.png');
+      .toBe('ui/run/card-art/k-his-grace/illustration.png');
+    expect(runCardArtSlot({ id: 'homage-done-mounted', pieces: ['king', 'pawn', 'knight'] }))
+      .toBe('ui/run/card-art/k-homage-done-mounted/illustration.png');
   });
 
   it('authors one nonempty flavor fragment for every core card and no orphan flavor', () => {
