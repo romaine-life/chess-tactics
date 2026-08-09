@@ -27769,8 +27769,10 @@ button.run-card-formation-cell {
 }
 
 .run-card-grant-seat > .run-card-grant-bonus {
+  display: flex;
   inset-block-end: 100%;
   inset-inline: 0;
+  justify-content: center;
   margin-block-end: var(--ds-space-1);
   position: absolute;
 }
