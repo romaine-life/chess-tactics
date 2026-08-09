@@ -8,7 +8,7 @@ import type { GameState, Piece, Vec } from '../core/types';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox } from './shared/ChromeBox';
 import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
-import { TitleBarStatus } from './shell/TitleBarControls';
+import { TitleBarControlContribution, TitleBarStatus } from './shell/TitleBarControls';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleRoute, type TitleRouteSegment } from './shell/TitleRoute';
 import { RunIdentityChip, RunTitleBarMeasures } from './RunTitleBarChips';
@@ -35,6 +35,7 @@ import {
   canRerollDeployment,
   canRestartBattle,
   canLeaveSectio,
+  canReturnToSectio,
   canUndoRunBattleMove,
   captureRunBattleUndo,
   closeBattle,
@@ -52,6 +53,7 @@ import {
   RUN_BATTLE_RETRY_COST_TENTHS,
   RUN_CARD_BY_ID,
   restartBattle,
+  returnToSectio,
   runBattleActivityId,
   runCardUnitIds,
   performExpunctio,
@@ -270,6 +272,44 @@ function RunTitleBarStatus({ run, path, search, view, battlefieldMounted }: {
         />
       </div>
     </>
+  );
+}
+
+/**
+ * The way back out of a Deployment, in the title bar's return lane.
+ *
+ * That lane is where this app puts Back — Settings, both editors, a test-play and the Strategikon's
+ * own `‹ Back to Run` all ride it — so the Run's phase return sits there rather than inventing a
+ * seat for itself in the Controls rail, whose groups are the things the player is arranging with.
+ *
+ * It is an ACTION, not a destination: the Sectio is a Run phase and not an address, so going back
+ * is a document transition and the address is left exactly as it stands. A craft link therefore
+ * stays in the bar and stays pressable (ADR-0531).
+ *
+ * Rendered only when the market is genuinely still open behind this Deployment: Battle 1 is
+ * reached from the King choice or the opening grant, and there is no Sectio behind either.
+ */
+function RunDeploymentSectioReturn({ run }: { run: RunDocument }): ReactElement | null {
+  const replace = useActiveRun((state) => state.replace);
+  if (!canReturnToSectio(run)) return null;
+  return (
+    <TitleBarControlContribution
+      ariaLabel="Deployment navigation"
+      controls={[{
+        id: 'run-deployment-sectio-return',
+        kind: 'action',
+        presentation: 'return',
+        label: '‹ Back to Sectio',
+        title: 'Back to the Sectio. Nothing is committed until Battle begins, so what was bought there can still be changed.',
+        testId: 'run-deployment-sectio-return',
+        onActivate: () => {
+          const latest = useActiveRun.getState().run;
+          if (!latest || latest.id !== run.id) return;
+          const returned = returnToSectio(latest);
+          if (returned !== latest) replace(returned);
+        },
+      }]}
+    />
   );
 }
 
@@ -2140,8 +2180,15 @@ export function RunScreen({
         }))}
       </SkirmishViewStoreProvider>
     );
+  // The return lane holds one control. An open workspace contributes its own `‹ Back to Run`, and
+  // that one is the way out of what is actually in front of the player, so Deployment's yields to
+  // it rather than standing beside it.
+  const deploymentSectioReturn = shellRun && !strategikonOpen && !inspectionWorkspace
+    ? <RunDeploymentSectioReturn run={shellRun} />
+    : null;
   return (
     <RunPresentationSceneSlot className="run-scene-slot" sceneInstance={sceneInstance}>
+      {deploymentSectioReturn}
       {cardFlightElement}
       {grantCardFlightElement}
       {bonaLipsanonFlightElement}

@@ -25,10 +25,15 @@ import {
   RUN_STARTER_GOLD_BASELINE_VALUE,
   RUN_STARTING_GOLD_TENTHS,
   acquireLipsanon,
+  beginBattle,
+  canReturnToSectio,
   captureRunBattleUndo,
   createRun,
   createRunCardOffer,
   leaveSectio,
+  prepareDeployment,
+  returnToSectio,
+  sectioHasChanges,
   migrateRunSaveDocument,
   normalizeRunDocument,
   openSectio,
@@ -453,6 +458,109 @@ describe('plain Run creation and acquisition', () => {
     const card = acquired.cards.at(-1)!;
     expect(runCardUnitIds(card).map((id) => acquired.army.find((unit) => unit.id === id)!.type))
       .toEqual(['knight', 'pawn', 'pawn']);
+  });
+});
+
+describe('the Sectio stays open behind a Deployment', () => {
+  /** A War whose first Battle closes a Conflict and whose remainder opens none. */
+  function lootWar(): RunWarSnapshot {
+    const base = war();
+    return { ...base, battles: base.battles.map((battle, index) => ({ ...battle, loot: index === 0 })) };
+  }
+
+  function adlectFirstOffer(run: RunDocument): RunDocument {
+    const offer = run.sectio!.cardOffers[0];
+    const adlected = performAdlectio({ ...run, goldTenths: 10_000 }, offer.offerId);
+    expect(adlected.cards.length).toBe(run.cards.length + 1);
+    return adlected;
+  }
+
+  it('carries the Sectio out into Deployment and puts it back exactly as it stood', () => {
+    const bought = adlectFirstOffer(firstSectio(43));
+    const deployment = leaveSectio(bought);
+
+    expect(deployment.phase).toBe('deployment');
+    expect(deployment.sectio).toBeNull();
+    expect(canReturnToSectio(deployment)).toBe(true);
+
+    const back = returnToSectio(deployment);
+    expect(back.phase).toBe('sectio');
+    expect(back.battleIndex).toBe(bought.battleIndex);
+    expect(back.conflictIndex).toBe(bought.conflictIndex);
+    expect(back.sectio).toEqual(bought.sectio);
+    expect(back.sectioReturn).toBeNull();
+    expect(back.deployment).toBeNull();
+    expect(canReturnToSectio(back)).toBe(false);
+    // No second draw: coming back must not consume another row of the hidden pile.
+    expect(back.sectioCardCursor).toBe(bought.sectioCardCursor);
+  });
+
+  it('leaves the purchase undoable, which is the whole point of going back', () => {
+    const entered = firstSectio(43);
+    const bought = adlectFirstOffer(entered);
+    const back = returnToSectio(leaveSectio(bought));
+    expect(sectioHasChanges(back)).toBe(true);
+
+    const undone = resetSectio(back);
+    expect(undone.goldTenths).toBe(entered.goldTenths);
+    expect(undone.cards).toEqual(entered.cards);
+    expect(undone.army).toEqual(entered.army);
+    expect(undone.sectio!.adlectedCardOfferIds).toEqual([]);
+    // And the way out is still the way out: leaving again lands on the same Battle.
+    expect(leaveSectio(undone).battleIndex).toBe(leaveSectio(bought).battleIndex);
+  });
+
+  it('restores the Conflict the Sectio closed, not only the Battle', () => {
+    const closing = openSectio(
+      { ...createRun(lootWar(), 61), phase: 'battle' },
+      createRun(lootWar(), 61).army.map((unit) => unit.id),
+    );
+    const deployment = leaveSectio(closing);
+    expect(deployment.conflictIndex).toBe(closing.conflictIndex + 1);
+    expect(returnToSectio(deployment).conflictIndex).toBe(closing.conflictIndex);
+  });
+
+  it('closes the market the moment Battle begins', () => {
+    // Its own War, because preparing a Deployment reads the deal its Battle authors.
+    const dealing = war();
+    for (const battle of dealing.battles) battle.level.battle = { cardsDealt: 3 };
+    const run = createRun(dealing, 43);
+    const inSectio = openSectio({ ...run, phase: 'battle' }, run.army.map((unit) => unit.id));
+    const deployment = prepareDeployment(leaveSectio(inSectio));
+    expect(canReturnToSectio(deployment)).toBe(true);
+    const fighting = beginBattle(deployment, deployment.army.map((unit) => unit.id), [], []);
+
+    expect(fighting.phase).toBe('battle');
+    expect(fighting.sectioReturn).toBeNull();
+    expect(canReturnToSectio(fighting)).toBe(false);
+    expect(returnToSectio(fighting)).toBe(fighting);
+  });
+
+  it('offers no way back out of the Deployment the King choice leads into', () => {
+    const opening = takeCommendatioKing(
+      createRun(war(), 43, { chooseKing: true }),
+      createRun(war(), 43, { chooseKing: true }).commendatio!.kingOffers[0],
+    );
+    expect(opening.phase).toBe('deployment');
+    expect(canReturnToSectio(opening)).toBe(false);
+  });
+
+  it('drops a retained Sectio that has been carried into another phase', () => {
+    const deployment = leaveSectio(firstSectio(43));
+    const repaired = normalizeRunDocument({ ...deployment, phase: 'battle' } as RunDocument);
+    expect(repaired.sectioReturn).toBeNull();
+  });
+
+  it('gives a save that predates the retained Sectio no way back', () => {
+    const { sectioReturn: _absent, ...stale } = leaveSectio(firstSectio(43));
+    const migrated = migrateRunSaveDocument({
+      // Pinned rather than CURRENT minus one: 36 is the version that had no retained Sectio.
+      ...stale,
+      runSaveVersion: 36,
+    });
+    expect(migrated.runSaveVersion).toBe(CURRENT_RUN_SAVE_VERSION);
+    expect(migrated.sectioReturn).toBeNull();
+    expect(canReturnToSectio(migrated)).toBe(false);
   });
 });
 

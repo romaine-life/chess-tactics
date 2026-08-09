@@ -25,6 +25,7 @@ import {
   performAdlectio,
   canLeaveSectio,
   closeBattle,
+  createSectioEntrySnapshot,
   levelEnemyForceValue,
   createRun,
   leaveSectio,
@@ -929,6 +930,24 @@ function applyVacantiaOffers(run: RunDocument, spec: RunCraftSpec): RunDocument 
   };
 }
 
+/**
+ * A crafted Deployment keeps the Sectio behind it, so the link's Back to Sectio works — but the
+ * fast-forward left that Sectio before `army`, `lipsana` and `gold` were applied, so its entry
+ * snapshot still describes the roster the fast-forward happened to build. Restate it as the
+ * CRAFTED state, so going back and pressing Discard changes returns to what the link asked for
+ * rather than to a roster the link never mentioned.
+ */
+function alignSectioReturn(run: RunDocument): RunDocument {
+  if (!run.sectioReturn) return run;
+  return {
+    ...run,
+    sectioReturn: {
+      ...run.sectioReturn,
+      entrySnapshot: createSectioEntrySnapshot(run, run.sectioReturn.paidLipsanonBought),
+    },
+  };
+}
+
 /** Gold is set last so lipsanon payouts and Battle rewards cannot move the number off the request.
  * Inside a Sectio the entry snapshot moves with it, so Discard changes restores the crafted gold. */
 function applyGold(run: RunDocument, goldTenths: number | null): RunDocument {
@@ -1011,7 +1030,9 @@ export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDo
   let run = advanceToDeployment(opening, deploymentIndex, spec.cards);
   run = applyLipsana(applyArmy(run, spec), spec);
 
-  if (spec.phase === 'deployment') return applyGold(prepareDeployment(run), spec.goldTenths);
+  if (spec.phase === 'deployment') {
+    return alignSectioReturn(applyGold(prepareDeployment(run), spec.goldTenths));
+  }
 
   // battle-victory is the same valid persisted Battle document. Its terminal board result is
   // an admin-only presentation instruction returned with the crafted response, never a second

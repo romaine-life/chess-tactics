@@ -6015,6 +6015,26 @@ const MIGRATIONS = [
          AND EXISTS (SELECT 1 FROM retired_slot);
     `,
   },
+  {
+    version: 77,
+    name: 'Deployment retains the Sectio it may be taken back to',
+    // Leaving the Sectio stops being a commitment: Deployment reveals nothing the market did not
+    // already know, so a purchase there stays undoable until Battle begins. The Sectio is kept
+    // whole on the document rather than recomputed -- its entry snapshot records the state BEFORE
+    // that visit's purchases, which nothing can reconstruct once they are applied, and its offers
+    // were drawn off `sectioCardCursor` and must come back identical rather than as a second draw.
+    //
+    // A Run already standing in a Deployment left its Sectio before anything was retained and that
+    // state is gone, so the field arrives empty: that one Deployment offers no way back, and every
+    // later one does. Every other phase carries it null, which is what the validator requires.
+    sql: `
+      UPDATE active_runs
+         SET body = body || jsonb_build_object('runSaveVersion', 37, 'sectioReturn', 'null'::jsonb),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE body->'runSaveVersion' = '36'::jsonb;
+    `,
+  },
 ];
 
 let pool = null;
@@ -23217,22 +23237,25 @@ function validateFormationRunBody(run) {
     if (grantOffers.some((id) => !known(id))) return 'run.vacantia is invalid';
   } else if (run.vacantia !== null) return 'run.vacantia is invalid outside Bona Vacantia';
 
-  if (run.phase === 'sectio') {
-    const sectio = run.sectio;
+  // One Sectio's persisted state, whichever field carries it. `run.sectio` is the Sectio the Run
+  // is IN; `run.sectioReturn` is the one a Deployment may still be taken back to. They hold the
+  // same shape and answer to the same checks; only what the offer count is measured against
+  // differs, because a retained Sectio's offers were dealt before the Run moved on.
+  const sectioStateIssue = (label, sectio, offerCountBasis) => {
     if (!isObjectRecord(sectio) || Object.keys(sectio).some((field) => !ACTIVE_RUN_SECTIO_FIELDS.has(field))) {
-      return 'run.sectio is invalid';
+      return `run.${label} is invalid`;
     }
     if (!Array.isArray(sectio.cardOffers) || sectio.cardOffers.length < 1
-      || sectio.cardOffers.some((offer) => formationRunOfferIssue(offer))) return 'run.sectio.cardOffers is invalid';
+      || sectio.cardOffers.some((offer) => formationRunOfferIssue(offer))) return `run.${label}.cardOffers is invalid`;
     if (typeof serverRender?.runSectioCardOfferCount !== 'function'
-      || sectio.cardOffers.length !== serverRender.runSectioCardOfferCount(run)) {
-      return 'run.sectio.cardOffers has an invalid count';
+      || sectio.cardOffers.length !== serverRender.runSectioCardOfferCount(offerCountBasis)) {
+      return `run.${label}.cardOffers has an invalid count`;
     }
     const offerIds = new Set(sectio.cardOffers.map((offer) => offer.offerId));
     if (!Array.isArray(sectio.adlectedCardOfferIds)
       || new Set(sectio.adlectedCardOfferIds).size !== sectio.adlectedCardOfferIds.length
-      || sectio.adlectedCardOfferIds.some((id) => !offerIds.has(id))) return 'run.sectio.adlectedCardOfferIds is invalid';
-    if (formationRunSnapshotIssue(sectio.entrySnapshot, run.war.battles.length)) return 'run.sectio.entrySnapshot is invalid';
+      || sectio.adlectedCardOfferIds.some((id) => !offerIds.has(id))) return `run.${label}.adlectedCardOfferIds is invalid`;
+    if (formationRunSnapshotIssue(sectio.entrySnapshot, run.war.battles.length)) return `run.${label}.entrySnapshot is invalid`;
     if (sectio.expunctedCard !== null) {
       const record = sectio.expunctedCard;
       // No King may be expuncted -- the Run cannot exist without one -- and that is every starter
@@ -23240,13 +23263,44 @@ function validateFormationRunBody(run) {
       if (!isObjectRecord(record) || formationRunOwnedCardIssue(record.card, run.war.battles.length)
         || Boolean(ACTIVE_RUN_STARTER_CARD_BY_ID[record.card.coreId]) || !Array.isArray(record.units)
         || record.units.some((unit) => formationRunUnitIssue(unit))
-        || !isFiniteInteger(record.priceTenths) || record.priceTenths <= 0) return 'run.sectio.expunctedCard is invalid';
+        || !isFiniteInteger(record.priceTenths) || record.priceTenths <= 0) return `run.${label}.expunctedCard is invalid`;
     }
     if (sectio.paidLipsanonOffer !== null && !RUN_LIPSANON_IDS.has(sectio.paidLipsanonOffer)) {
-      return 'run.sectio.paidLipsanonOffer is invalid';
+      return `run.${label}.paidLipsanonOffer is invalid`;
     }
-    if (typeof sectio.paidLipsanonBought !== 'boolean') return 'run.sectio.paidLipsanonBought is invalid';
+    if (typeof sectio.paidLipsanonBought !== 'boolean') return `run.${label}.paidLipsanonBought is invalid`;
+    return null;
+  };
+
+  if (run.phase === 'sectio') {
+    const issue = sectioStateIssue('sectio', run.sectio, run);
+    if (issue) return issue;
   } else if (run.sectio !== null) return 'run.sectio is invalid outside Sectio';
+
+  // Leaving the Sectio is not a commitment: the market stays open behind the Deployment until
+  // Battle begins, so a purchase there is undoable. The retained Sectio must be the exact one
+  // this Deployment was left from -- one Battle back, and one Conflict back when that Battle
+  // closed a Conflict -- or the way back would rewind past a Battle already fought.
+  if (run.sectioReturn !== null) {
+    if (run.phase !== 'deployment') return 'run.sectioReturn is invalid outside Deployment';
+    const retained = run.sectioReturn;
+    if (!isObjectRecord(retained)) return 'run.sectioReturn is invalid';
+    if (retained.afterBattleIndex !== run.battleIndex - 1) {
+      return 'run.sectioReturn is not the Sectio this Deployment was left from';
+    }
+    const closedConflict = run.war.battles[retained.afterBattleIndex]?.loot === true;
+    if (retained.conflictIndex !== run.conflictIndex - (closedConflict ? 1 : 0)) {
+      return 'run.sectioReturn is not the Sectio this Deployment was left from';
+    }
+    // The offers were dealt when that Sectio opened, so the count is read from the lipsana held
+    // THEN. Reading the Run's current lipsana would refuse every Run that bought one there.
+    const entryLipsana = retained.entrySnapshot?.lipsana;
+    if (!Array.isArray(entryLipsana) || entryLipsana.some((id) => !RUN_LIPSANON_IDS.has(id))) {
+      return 'run.sectioReturn.entrySnapshot is invalid';
+    }
+    const issue = sectioStateIssue('sectioReturn', retained, { lipsana: entryLipsana });
+    if (issue) return issue;
+  }
 
   // The aftermath report is the Battle just fought, still being read: closeBattle carries its
   // runtime across and only leaving for the Sectio retires it (ADR-0377, ADR-0452). Requiring

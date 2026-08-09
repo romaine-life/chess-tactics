@@ -263,7 +263,15 @@ describe('Run chrome hierarchy', () => {
     expect(skirmishHud).toContain('<span className="skirmish-eyebrow">Run</span>');
     expect(skirmish).toContain('canResign: !isRunPlay');
     expect(skirmishHud).toContain('canResign && !game.winner');
-    expect(runScreen).not.toContain('TitleBarControlContribution');
+    // Run ACTIONS stay in Controls — Abandon Run at the foot of the rail, never a title-bar button.
+    // The bar's return lane is the exception, and only for a return: it is where every screen in
+    // this app puts Back, so Deployment's way back to the Sectio rides it exactly as Settings, the
+    // editors and the Strategikon's own `‹ Back to Run` do.
+    expect(runScreen).not.toMatch(/TitleBarControlContribution[\s\S]{0,600}abandon/i);
+    expect(runScreen).toContain("id: 'run-deployment-sectio-return'");
+    expect(runScreen).toContain("presentation: 'return'");
+    expect(runScreen).toContain("label: '‹ Back to Sectio'");
+    expect(runScreen).toContain('const deploymentSectioReturn = shellRun && !strategikonOpen && !inspectionWorkspace');
   });
 
   it('uses the gold transaction cue and transfers adlected cards into the Chartulary', () => {

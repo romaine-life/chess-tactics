@@ -28,7 +28,7 @@ export {
 };
 
 /** The schema version of one persisted in-progress Run. Only this exact save shape is read. */
-export const CURRENT_RUN_SAVE_VERSION = 36;
+export const CURRENT_RUN_SAVE_VERSION = 37;
 export type RunSaveVersion = typeof CURRENT_RUN_SAVE_VERSION;
 
 export class UnsupportedRunSaveError extends Error {
@@ -57,6 +57,7 @@ const RUN_SAVE_VERSION_OPENING_CARD_GRANT_SOURCE = 31;
 const RUN_SAVE_VERSION_AUTHORED_DEAL_SOURCE = 33;
 const RUN_SAVE_VERSION_KING_CHOICE_SOURCE = 34;
 const RUN_SAVE_VERSION_COMMENDATIO_SOURCE = 35;
+const RUN_SAVE_VERSION_DEDITIO_SOURCE = 36;
 const RUN_SAVE_VERSION_RARITY_BANDS_SOURCE = 32;
 /**
  * How much gold one point of material value is worth (ADR-0547).
@@ -723,6 +724,20 @@ export interface RunDocument {
   battleRuntime: RunBattleRuntime | null;
   aftermath: RunAftermathState | null;
   sectio: RunSectioState | null;
+  /**
+   * The Sectio this Deployment may still be taken back to, or null when there is none.
+   *
+   * Deployment reveals nothing the Sectio did not already know -- the offers are the ones already
+   * seen, the board is the one the Sectio previewed -- so leaving the market is not a commitment
+   * and a purchase made there stays undoable until Battle begins. Kept whole rather than
+   * recomputed: `entrySnapshot` records the state BEFORE this visit's purchases, which nothing
+   * downstream can reconstruct once they have been applied, and the card offers were drawn off
+   * `sectioCardCursor` and must come back identical rather than as a second draw.
+   *
+   * `sectio` is the Sectio the Run is IN; this is the one behind it. They are never both set:
+   * the field is populated only by `leaveSectio` and only ever read during Deployment.
+   */
+  sectioReturn: RunSectioState | null;
   vacantia: RunVacantiaState | null;
   commendatio: RunCommendatioState | null;
 }
@@ -1578,6 +1593,7 @@ export function createRun(
     battleRuntime: null,
     aftermath: null,
     sectio: null,
+    sectioReturn: null,
     vacantia: null,
     commendatio: null,
   } satisfies RunDocument;
@@ -1666,7 +1682,7 @@ function cloneConflictPaidLipsana(
   );
 }
 
-function createSectioEntrySnapshot(run: RunDocument, paidLipsanonBought: boolean): RunSectioEntrySnapshot {
+export function createSectioEntrySnapshot(run: RunDocument, paidLipsanonBought: boolean): RunSectioEntrySnapshot {
   return {
     goldTenths: run.goldTenths,
     army: cloneArmy(run.army),
@@ -1684,11 +1700,15 @@ function createSectioEntrySnapshot(run: RunDocument, paidLipsanonBought: boolean
 function normalizedArmyIdentity(run: RunDocument): {
   army: RunArmyUnit[];
   sectio: RunSectioState | null;
+  sectioReturn: RunSectioState | null;
   nextArmyUnitNumberByType: RunArmyNumberState;
   changed: boolean;
 } {
-  const entryArmy = run.sectio?.entrySnapshot?.army ?? [];
-  const expunctedArmy = run.sectio?.expunctedCard?.units ?? [];
+  // The Sectio the Run is in and the Sectio it may go back to are never both set, so this reads
+  // whichever one the document carries.
+  const openSectio = run.sectio ?? run.sectioReturn;
+  const entryArmy = openSectio?.entrySnapshot?.army ?? [];
+  const expunctedArmy = openSectio?.expunctedCard?.units ?? [];
   const units = [...entryArmy, ...run.army, ...expunctedArmy];
   const byId = new Map<string, RunArmyUnit>();
   for (const unit of units) {
@@ -1755,24 +1775,20 @@ function normalizedArmyIdentity(run: RunDocument): {
     };
   });
   const army = rewriteArmy(run.army);
-  let sectio = run.sectio;
-  if (sectio) {
-    const expunctedCard = sectio.expunctedCard
-      ? { ...sectio.expunctedCard, units: rewriteArmy(sectio.expunctedCard.units) }
+  const rewriteSectio = (state: RunSectioState | null): RunSectioState | null => {
+    if (!state) return state;
+    const expunctedCard = state.expunctedCard
+      ? { ...state.expunctedCard, units: rewriteArmy(state.expunctedCard.units) }
       : null;
-    const entrySnapshot = sectio.entrySnapshot
-      ? {
-          ...sectio.entrySnapshot,
-          army: rewriteArmy(sectio.entrySnapshot.army),
-        }
-      : sectio.entrySnapshot;
-    if (
-      expunctedCard !== sectio.expunctedCard
-      || entrySnapshot !== sectio.entrySnapshot
-    ) {
-      sectio = { ...sectio, expunctedCard, entrySnapshot };
-    }
-  }
+    const entrySnapshot = state.entrySnapshot
+      ? { ...state.entrySnapshot, army: rewriteArmy(state.entrySnapshot.army) }
+      : state.entrySnapshot;
+    return expunctedCard !== state.expunctedCard || entrySnapshot !== state.entrySnapshot
+      ? { ...state, expunctedCard, entrySnapshot }
+      : state;
+  };
+  const sectio = rewriteSectio(run.sectio);
+  const sectioReturn = rewriteSectio(run.sectioReturn);
 
   const existingNumbers = run.nextArmyUnitNumberByType;
   const nextArmyUnitNumberByType = initialArmyNumberState();
@@ -1788,7 +1804,7 @@ function normalizedArmyIdentity(run: RunDocument): {
     || ARMY_PIECE_ORDER.some((type) => existingNumbers[type] !== nextArmyUnitNumberByType[type])
   ) changed = true;
 
-  return { army, sectio, nextArmyUnitNumberByType, changed };
+  return { army, sectio, sectioReturn, nextArmyUnitNumberByType, changed };
 }
 
 export function normalizeRunDocument(run: RunDocument): RunDocument {
@@ -1871,6 +1887,11 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
   if (next.aftermath && !(Number.isSafeInteger(next.aftermath.standingEnemyValue) && next.aftermath.standingEnemyValue >= 0)) {
     next = { ...next, aftermath: { ...next.aftermath, standingEnemyValue: 0 } };
   }
+  // Only a Deployment has a market open behind it. Anywhere else the retained Sectio is either
+  // absent or stale, and a stale one would offer a way back past a Battle already fought.
+  if (next.sectioReturn === undefined || (next.phase !== 'deployment' && next.sectioReturn !== null)) {
+    next = { ...next, sectioReturn: next.phase === 'deployment' ? next.sectioReturn ?? null : null };
+  }
   if (
     next.phase !== 'sectio'
     || !next.sectio
@@ -1899,28 +1920,32 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
   const nextCardSequence = Number.isSafeInteger(stored.nextCardSequence) && Number(stored.nextCardSequence) > 0
     ? Number(stored.nextCardSequence)
     : cards.length + 1;
-  let sectio = stored.sectio;
-  if (sectio) {
-    sectio = {
-      ...sectio,
-      cardOffers: repairRunCardOffers(sectio.cardOffers),
-      ...(sectio.entrySnapshot
-        ? {
-            entrySnapshot: {
-              ...sectio.entrySnapshot,
-              cards: repairRunCards(sectio.entrySnapshot.cards),
-            },
-          }
-        : {}),
-    };
-  }
+  // The Sectio the Run is in and the one it may go back to hold the same state and get the same
+  // repairs. Neither is ever a document the other has already been through.
+  const repairSectio = (state: RunSectioState | null): RunSectioState | null => (state
+    ? {
+        ...state,
+        cardOffers: repairRunCardOffers(state.cardOffers),
+        ...(state.entrySnapshot
+          ? {
+              entrySnapshot: {
+                ...state.entrySnapshot,
+                cards: repairRunCards(state.entrySnapshot.cards),
+              },
+            }
+          : {}),
+      }
+    : state);
+  const sectio = repairSectio(stored.sectio);
+  const sectioReturn = repairSectio(next.sectioReturn);
   if (
     next.ataraxiaTier !== ataraxiaTier
     || JSON.stringify(next.cards) !== JSON.stringify(cards)
     || next.nextCardSequence !== nextCardSequence
     || next.sectio !== sectio
+    || next.sectioReturn !== sectioReturn
   ) {
-    next = { ...next, ataraxiaTier, cards, nextCardSequence, sectio };
+    next = { ...next, ataraxiaTier, cards, nextCardSequence, sectio, sectioReturn };
   }
 
   const identity = normalizedArmyIdentity(next);
@@ -1929,6 +1954,7 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
       ...next,
       army: identity.army,
       sectio: identity.sectio,
+      sectioReturn: identity.sectioReturn,
       nextArmyUnitNumberByType: identity.nextArmyUnitNumberByType,
     };
   }
@@ -1961,6 +1987,21 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
           : createSectioEntrySnapshot(next, paidLipsanonBought),
       },
     };
+  }
+  // A retained Sectio with no entry snapshot cannot undo the visit it is being kept for, and one
+  // fabricated from the CURRENT document would silently make Discard changes a no-op there. Drop
+  // it instead: the Deployment simply offers no way back, which is true rather than misleading.
+  if (
+    next.sectioReturn
+    && (
+      !next.sectioReturn.entrySnapshot
+      || !Array.isArray(next.sectioReturn.entrySnapshot.cards)
+      || !Number.isSafeInteger(next.sectioReturn.entrySnapshot.nextCardSequence)
+      || !Number.isSafeInteger(next.sectioReturn.afterBattleIndex)
+      || !next.war.battles[next.sectioReturn.afterBattleIndex]
+    )
+  ) {
+    next = { ...next, sectioReturn: null };
   }
   return next;
 }
@@ -2916,7 +2957,21 @@ export function migrateRunSaveDocument(value: unknown): RunDocument {
   if (stored.runSaveVersion === RUN_SAVE_VERSION_COMMENDATIO_SOURCE) {
     stored = migrateRunToDeditio(stored);
   }
+  if (stored.runSaveVersion === RUN_SAVE_VERSION_DEDITIO_SOURCE) {
+    stored = migrateRunToSectioReturn(stored);
+  }
   return normalizeRunDocument(stored as unknown as RunDocument);
+}
+
+/**
+ * Deployment retains the Sectio it was left from, so a purchase stays undoable until Battle.
+ *
+ * A Run already standing in a Deployment left that Sectio before anything was kept, and the state
+ * is gone -- its offers, its Adlectiones and its entry snapshot were all discarded on the way out.
+ * So the field arrives empty: that one Deployment offers no way back, and every later one does.
+ */
+function migrateRunToSectioReturn(stored: Record<string, unknown>): Record<string, unknown> {
+  return { ...stored, runSaveVersion: CURRENT_RUN_SAVE_VERSION, sectioReturn: null };
 }
 
 /**
@@ -2960,7 +3015,7 @@ function migrateRunToDeditio(stored: Record<string, unknown>): Record<string, un
   const aftermath = stored.aftermath && typeof stored.aftermath === 'object' && !Array.isArray(stored.aftermath)
     ? { ...stored.aftermath as Record<string, unknown>, standingEnemyValue: 0 }
     : stored.aftermath;
-  return { ...stored, runSaveVersion: CURRENT_RUN_SAVE_VERSION, aftermath };
+  return { ...stored, runSaveVersion: RUN_SAVE_VERSION_DEDITIO_SOURCE, aftermath };
 }
 
 export function addArmyPieces(
@@ -3185,6 +3240,9 @@ export function beginBattle(
   return touch({
     ...run,
     phase: 'battle',
+    // Committing to the Battle is what closes the market behind the player. Everything after
+    // this point knows what the enemy does, so the purchase is no longer an undo.
+    sectioReturn: null,
     deployment: { ...run.deployment, blockedUnitIds: [...blockedUnitIds] },
     battleRuntime: {
       battleIndex: run.battleIndex,
@@ -3671,7 +3729,7 @@ export function openSectio(
  * between: when a Conflict closes, the lipsanon screen comes first and then hands off here.
  */
 function openPostBattleSectio(run: RunDocument, victoryGoldTenths: number): RunDocument {
-  let next: RunDocument = { ...run, phase: 'sectio', vacantia: null };
+  let next: RunDocument = { ...run, phase: 'sectio', vacantia: null, sectioReturn: null };
   const cardCount = runSectioCardOfferCount(next);
   const cardOffers = sectioCardOffersAtCursor(
     next.seed,
@@ -3852,7 +3910,7 @@ export function takeVacantiaLipsanon(run: RunDocument, lipsanon: LipsanonId): Ru
   if (acquired === run) return run;
   const vacantia = run.vacantia;
   const opened = vacantia.kind === 'opening'
-    ? { ...acquired, phase: 'deployment' as const, vacantia: null, sectio: null }
+    ? { ...acquired, phase: 'deployment' as const, vacantia: null, sectio: null, sectioReturn: null }
     : openPostBattleSectio(acquired, vacantia.victoryGoldTenths);
   return touch(opened);
 }
@@ -3885,6 +3943,7 @@ export function takeCommendatioKing(run: RunDocument, kingId: string): RunDocume
     commendatio: null,
     vacantia: null,
     sectio: null,
+    sectioReturn: null,
   });
 }
 
@@ -3914,6 +3973,7 @@ export function takeVacantiaCard(run: RunDocument, coreId: string): RunDocument 
     phase: 'deployment',
     vacantia: null,
     sectio: null,
+    sectioReturn: null,
   });
 }
 
@@ -3957,6 +4017,40 @@ export function leaveSectio(run: RunDocument): RunDocument {
     deployment: null,
     battleRuntime: null,
     sectio: null,
+    // The market stays open behind the player until Battle begins. See `sectioReturn`.
+    sectioReturn: run.sectio,
+  });
+}
+
+/** Whether the Deployment on screen was reached from a Sectio that can still be gone back to. */
+export function canReturnToSectio(run: RunDocument): boolean {
+  return run.phase === 'deployment' && Boolean(run.sectioReturn);
+}
+
+/**
+ * Go back to the Sectio this Deployment was left from, exactly as it stood.
+ *
+ * The reverse of `leaveSectio` and nothing more: the market's own offers, its Adlectiones, its
+ * Expunctio and its entry snapshot all come back intact, so Discard changes still undoes this
+ * visit and Continue leads back out to the same Battle. The Deployment is discarded rather than
+ * held -- leaving again re-deals it, which is the point of coming back at all: what a Battle
+ * deals is drawn from the cards held, so a Chartulary changed here must change the hand.
+ *
+ * `battleIndex` and `conflictIndex` are read off the retained Sectio rather than decremented,
+ * because the Sectio itself records where the Run stood while it was open.
+ */
+export function returnToSectio(run: RunDocument): RunDocument {
+  const sectio = run.sectioReturn;
+  if (!canReturnToSectio(run) || !sectio) return run;
+  return touch({
+    ...run,
+    phase: 'sectio',
+    battleIndex: sectio.afterBattleIndex,
+    conflictIndex: sectio.conflictIndex,
+    deployment: null,
+    battleRuntime: null,
+    sectio,
+    sectioReturn: null,
   });
 }
 
