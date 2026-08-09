@@ -3,6 +3,7 @@ import { StudioReadOnlyBoard } from '../../render/StudioReadOnlyBoard';
 import { BOARD_GRID_STYLES, type BoardGridStyle } from '../../settings/appSettings';
 import { BOARD_GRID_STYLE_LABELS } from '../../settings/boardGridStyle';
 import { InnerChromeBox } from './ChromeBox';
+import { CHROME_LEAF_FILL_SURFACE } from './chromeSurfacePolicy';
 import { HouseSelect, type HouseSelectOption } from './HouseSelect';
 import { boardGridStyleSwatchBoard } from './boardGridStyleSwatchBoard';
 
@@ -89,12 +90,15 @@ export function BoardGridStylePicker({
           />
         </span>
       </InnerChromeBox>
+      {/* The closed trigger is a leaf and wears the oak; the preview box above it is a
+          structural sample surface and keeps the panel's material (ADR-0433). */}
       <HouseSelect
         className="board-grid-style-select"
         ariaLabel="Board grid style"
         value={value}
         onChange={onChange}
         options={boardGridStyleOptions()}
+        fillSurface={CHROME_LEAF_FILL_SURFACE}
       />
     </div>
   );

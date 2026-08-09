@@ -365,7 +365,9 @@ describe('Level Editor chrome hierarchy', () => {
     expect(nativeSelectOpenings).toEqual([]);
     expect(nativeSelectOpenings.some((opening) => opening.includes('data-chrome-unit="inner-dropdown"'))).toBe(false);
     expect(nativeSelectOpenings.some((opening) => opening.includes("chromeUnitClassNames('inner-dropdown'"))).toBe(false);
-    expect(levelEditor).toMatch(/<HouseSelect<FactionControl>[\s\S]*?ariaLabel=\{`\$\{LE_FACTION_LABELS\[faction\]\} control`\}/);
+    // The unit brush picks a DECLARED FACTION, never a bare colour: the option names the role and
+    // carries the declaration's colour with it.
+    expect(levelEditor).toMatch(/<HouseSelect<FactionRole>[\s\S]*?ariaLabel="Paint faction"/);
     expect(levelEditor).toMatch(/<HouseSelect<string>[\s\S]*?ariaLabel="Saved generated region"/);
     expect(levelEditor).toMatch(/<HouseSelect<ScenicTerrainGenerationMode>[\s\S]*?ariaLabel="Scenic terrain generation mode"/);
     expect(levelEditor).toMatch(/<HouseSelect<TileFamilyId>[\s\S]*?className="le-gen-region-select"[\s\S]*?ariaLabel=\{`Region \$\{sectionIndex \+ 1\} terrain`\}/);

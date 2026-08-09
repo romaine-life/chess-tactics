@@ -35,6 +35,7 @@ export function Stepper({
   onDecrease,
   onIncrease,
   edit,
+  fillSurface,
 }: {
   /** The read-only readout: a plain number, or a pre-formatted string (e.g. "5:00").
    *  Ignored when `edit` is given (the field renders from `edit.value`). */
@@ -45,11 +46,16 @@ export function Stepper({
   onDecrease: () => void;
   onIncrease: () => void;
   edit?: StepperEdit;
+  /** Name an installed chrome surface for the two keys — the oak a surface that has adopted
+   *  the ADR-0433 hierarchy paints its triggers with. The readout between them is not a
+   *  trigger and keeps the structural field it sits on. */
+  fillSurface?: string;
 }): ReactElement {
   return (
     <div className="settings-stepper">
       <ChromeButton unit="inner-minus-key"
         className={chromeUnitClassNames('inner-minus-key', 'settings-chrome-button', 'settings-chrome-button-neutral')}
+        data-chrome-fill-surface={fillSurface}
         aria-label={decreaseLabel}
         onClick={onDecrease}
       >
@@ -60,6 +66,7 @@ export function Stepper({
         : <output>{value}{suffix}</output>}
       <ChromeButton unit="inner-plus-key"
         className={chromeUnitClassNames('inner-plus-key', 'settings-chrome-button', 'settings-chrome-button-neutral')}
+        data-chrome-fill-surface={fillSurface}
         aria-label={increaseLabel}
         onClick={onIncrease}
       >

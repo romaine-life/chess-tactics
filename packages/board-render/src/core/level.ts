@@ -346,6 +346,13 @@ export const LEVEL_BATTLE_CARDS_DEALT_MAX = 12;
  * fallback: a Battle with no count is not playable, it is unfinished. */
 export const LEVEL_BATTLE_CARDS_DEALT_DEFAULT = 3;
 
+/**
+ * Authoring bounds for a level's par (ADR-0539). One turn is the floor because a Battle can in
+ * principle be won on the opening move; the ceiling only exists to keep a typo out of the schema.
+ */
+export const LEVEL_PAR_TURNS_MIN = 1;
+export const LEVEL_PAR_TURNS_MAX = 99;
+
 /** War-specific metadata authored on the Level's Battle tab (ADR-0193). */
 export interface BattleSettings {
   /** This non-final Battle closes a Conflict whose successor opens with three lipsanon choices. */
@@ -389,6 +396,12 @@ export interface Level {
   // The battle clock (see TimeControl). Absent ⇒ untimed — the back-compat default, same
   // optional-field pattern as placement/roster/surviveTurns.
   timeControl?: TimeControl;
+  // The level's par IN TURNS — the turn budget this board is expected to take, hand-tuned per
+  // level. It is a benchmark, never a rule: nothing is won or lost by crossing it. It also
+  // sizes the Battle's bonus clock, whose leftover pays the speed bonus (ADR-0539,
+  // core/speedBonus.ts). Absent ⇒ derivedParTurns estimates one from the board, so levels
+  // authored before the field still read a par and still pay a bonus.
+  parTurns?: number;
   /** Optional because ordinary Campaign/standalone Levels are not War Battles. */
   battle?: BattleSettings;
   /**
@@ -773,6 +786,10 @@ export function validateLevel(value: unknown): ValidateResult {
       || !Number.isInteger(tc.incrementSeconds) || (tc.incrementSeconds as number) < 0) {
       errors.push('timeControl needs an integer initialSeconds of at least 1 and a non-negative integer incrementSeconds');
     }
+  }
+  if (v.parTurns !== undefined
+    && (!Number.isInteger(v.parTurns) || v.parTurns < LEVEL_PAR_TURNS_MIN || v.parTurns > LEVEL_PAR_TURNS_MAX)) {
+    errors.push(`parTurns must be a whole number from ${LEVEL_PAR_TURNS_MIN} to ${LEVEL_PAR_TURNS_MAX}`);
   }
   if (v.battle !== undefined) {
     if (!v.battle || typeof v.battle !== 'object' || Array.isArray(v.battle)

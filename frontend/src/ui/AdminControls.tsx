@@ -10,6 +10,7 @@ import { RunGoldIcon } from './RunResources';
 import { SettingsButton, SettingsRow, SettingsSection } from './shared/SettingsControls';
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
 import { InnerChromeBox } from './shared/ChromeBox';
+import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
 
 type LipsanonChoice = LipsanonId | '';
 
@@ -246,6 +247,7 @@ export function AdminControls({
                   onChange={setLipsanonId}
                   ariaLabel="Lipsanon to grant"
                   disabled={!run || busy !== null}
+                  fillSurface={CHROME_LEAF_FILL_SURFACE}
                 />
                 <SettingsButton
                   tone="primary"
@@ -343,6 +345,7 @@ export function AdminControls({
               onChange={setLipsanonId}
               ariaLabel="Lipsanon to grant"
               disabled={!run || busy !== null}
+              fillSurface={CHROME_LEAF_FILL_SURFACE}
             />
             <SettingsButton
               tone="primary"

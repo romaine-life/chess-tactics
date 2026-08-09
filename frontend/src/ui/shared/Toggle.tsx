@@ -10,14 +10,19 @@ export function Toggle({
   checked,
   label,
   onChange,
+  fillSurface,
 }: {
   checked: boolean;
   label: string;
   onChange: (checked: boolean) => void;
+  /** Name an installed chrome surface for this leaf control — the oak a surface that has
+   *  adopted the ADR-0433 hierarchy paints its triggers with. */
+  fillSurface?: string;
 }): ReactElement {
   return (
     <ChromeButton unit="inner-toggle"
       className={chromeUnitClassNames('inner-toggle', 'settings-toggle', checked ? 'is-on' : 'is-off')}
+      data-chrome-fill-surface={fillSurface}
       role="switch"
       aria-checked={checked}
       aria-label={label}
