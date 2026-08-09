@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:f795f066a600700360381c8728dd14a88ebff26e3381d738e5bc4cbaf3a1a1e5"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:061036e334c47e0350b27e2309bf581aef47180cc2a538d0eb1e529a82b6b4cc"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Mip the board draw path, and add a cel-shaded king renderer"
-  prNumber: "858"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/858"
-  commit: "56c1135f"
+  prTitle: "The sides a level fields have their own page, and the level already knows them"
+  prNumber: "859"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/859"
+  commit: "6da1f6f2"
 
 name: chess-tactics
 namespace: chess-tactics
