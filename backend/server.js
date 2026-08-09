@@ -20097,8 +20097,26 @@ app.post('/api/admin/media-versions', async (req, res) => {
         const currentSlot = await client.query('SELECT * FROM media_slots WHERE slot = $1 FOR UPDATE', [value.slot]);
         const current = currentSlot.rows[0];
         if (!current) throw new Error('media slot insert did not produce a row');
+        // A slot that has never served an active version has no runtime contract to protect: its
+        // domain/role are whatever the first candidate happened to claim, and if that claim was
+        // wrong the slot is otherwise unusable forever — no endpoint can repair a version's domain
+        // and none can discard the candidate. Let a never-activated slot be re-declared.
+        const slotEverActivated = Boolean(current.active_version_id);
         if (current.lifecycle_state === 'retired') {
           throw mediaMutationError('media_slot_retired', 409, { slot: value.slot });
+        } else if (
+          !slotEverActivated
+          && (current.domain !== value.domain || current.role !== value.role
+            || current.availability_policy !== value.availabilityPolicy)
+        ) {
+          await client.query(
+            `UPDATE media_slots SET domain = $2, role = $3, availability_policy = $4, updated_by = $5
+              WHERE slot = $1`,
+            [value.slot, value.domain, value.role, value.availabilityPolicy, user.email],
+          );
+          current.domain = value.domain;
+          current.role = value.role;
+          current.availability_policy = value.availabilityPolicy;
         } else if (
           current.domain !== value.domain || current.role !== value.role
           || current.availability_policy !== value.availabilityPolicy
