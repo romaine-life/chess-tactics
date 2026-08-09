@@ -13,7 +13,8 @@ import { RunCard } from './RunCard';
 import { runCardFrameSlot } from './runCardFaceContent';
 import { runCardFrameGeometryForSlot, runCardFramePaintInsetRatios } from './runCardFrameGeometry';
 import { emptyRunCardPieceIndices, projectRunCardUnitSeats } from './runCardUnitProjection';
-import { RunGoldIcon, RunGoldOfferedIcon, RunGoldTransactionAmount } from './RunResources';
+import { RunAdlectioMarkIcon } from './RunAdlectioMark';
+import { RunGoldIcon, RunGoldTransactionAmount } from './RunResources';
 import { RunSceneViewport } from './RunWorkspace';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { ChromeButton } from './shared/ChromeButton';
@@ -136,16 +137,16 @@ function ExpunctioCardTile({
           {admittedThisVisit ? (
             <span className="run-expunctio-visit-mark">
               {/*
-                The hand that gave the gold, then the gold it gave. The coin alone said only that
-                gold was involved, which the fee below already says; the giving is the half that
-                makes the line mean "bought, this visit". The hand's own art decision is still
-                open, so its seat draws nothing until one is installed and the line falls back to
-                the coin (ADR-0318).
+                The admission itself, then the gold it cost. The coin alone said only that gold was
+                involved, which the fee below already says; the act — gold handed over, or the card
+                taken with it — is the half that makes the line mean "bought, this visit". Which
+                act it draws is still an open art decision, so the seat draws nothing until one is
+                installed and the line falls back to the coin (ADR-0318).
 
                 Never a transaction mark here: the fee beneath this line already paints the loss
                 arrow, and a second arrowed mark on one tile reads as a second price.
               */}
-              <RunGoldOfferedIcon className="run-expunctio-visit-mark-icon" />
+              <RunAdlectioMarkIcon className="run-expunctio-visit-mark-icon" />
               <RunGoldIcon className="run-expunctio-visit-mark-icon" />
               Adlected this visit
             </span>

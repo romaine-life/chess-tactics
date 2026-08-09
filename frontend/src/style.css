@@ -20521,7 +20521,7 @@ button.tileset-relationship-cell {
 }
 
 .run-gold-icon img,
-.run-gold-offered-icon img {
+.run-adlectio-mark-icon img {
   block-size: 100%;
   image-rendering: pixelated;
   inline-size: 100%;
@@ -20530,7 +20530,7 @@ button.tileset-relationship-cell {
 
 /* The gold a Run HANDED OVER, drawn beside the coin it gave. Same seat rules as the coin; the
    size belongs to whichever line mounts it, because this mark has no measure row of its own. */
-.run-gold-offered-icon {
+.run-adlectio-mark-icon {
   align-items: center;
   display: inline-flex;
   justify-content: center;
@@ -23593,7 +23593,7 @@ button.tileset-relationship-cell {
 }
 
 .run-gold-icon.run-expunctio-visit-mark-icon,
-.run-gold-offered-icon.run-expunctio-visit-mark-icon {
+.run-adlectio-mark-icon.run-expunctio-visit-mark-icon {
   block-size: 24px;
   flex: none;
   inline-size: 24px;

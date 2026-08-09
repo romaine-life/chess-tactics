@@ -53,16 +53,20 @@ have been renormalized.
 - The Expunctio tile prints **Adlected this visit**, answering ADR-0443's *Athetized this visit* in
   the same register. It carries the tile's own ink rather than the muted register the supporting
   labels use, because it reports state instead of labelling a field.
-- The mark wears the hand that gave the gold, then the gold it gave. Never a transaction mark: the
-  fee directly beneath this line already paints `lose-gold`'s arrow, and a second arrowed mark on
-  one tile reads as a second price, while `gold-gained` says the opposite of what happened.
-- The giving hand is a new slot, `ui/run/resources/gold-offered.png` (`ui-kit` domain, `icon` role,
+- The mark wears the admission itself, then the gold it cost. Never a transaction mark: the fee
+  directly beneath this line already paints `lose-gold`'s arrow, and a second arrowed mark on one
+  tile reads as a second price, while `gold-gained` says the opposite of what happened.
+- The admission gets a new slot, `ui/run/sectio/adlectio-mark.png` (`ui-kit` domain, `icon` role,
   decorative), because the kit had no glyph for it — `game/adlected` belongs to the retired
-  unit-ability vocabulary and depicts pikes, not a payment. Its art decision is OPEN: the seat
-  draws nothing at all until a candidate is installed, so the line falls back to the coin alone
-  rather than reserving an empty box that would shove the coin sideways for a mark saying nothing
-  (ADR-0318). Candidates are auditioned in the real seat through `?goldOfferedCandidate=<sha256>`,
-  the review seam the live gold icon already uses (ADR-0219), and installing binds the role.
+  unit-ability vocabulary and depicts pikes. The slot is named for WHAT IT MARKS, not for what it
+  draws, because what it should draw is an open question with two live answers: the hand that
+  handed the gold over, or the hand that took the card the gold bought. Both audition in the one
+  seat, so choosing between them is choosing an image and not a code path.
+- That decision stays open in the code: the seat draws nothing at all until a candidate is
+  installed, so the line falls back to the coin alone rather than reserving an empty box that would
+  shove the coin sideways for a mark saying nothing (ADR-0318). Candidates are auditioned in the
+  real seat through `?adlectioMarkCandidate=<sha256>`, the review seam the live gold icon already
+  uses (ADR-0219), and installing binds the role.
 - That mark is the *only* thing the companion says in words. The attached-unit count, the repeated
   card name and the per-tile restatement of the Athetize rule are deleted; what remains beside the
   face is the mark, the fee, and the action. The face is the sole title owner, as ADR-0446 said,
