@@ -991,10 +991,11 @@ try {
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   }, cell);
 
-  // Start from nothing selected. A cell's press selects the piece under it, so a click on a
-  // piece the board is ALREADY holding is a deselect — and Deployment can hand the battle a
-  // selection. Whichever piece the plan happens to pick then decides whether this proof passes.
-  // 'r' is the HUD's Deselect all; clearing by key can never move anything.
+  // Start from nothing selected. A battle OPENS holding a piece — the first one with a move —
+  // and a cell's press selects the piece under it, so a click on the piece the board is already
+  // holding is a deselect. Whichever piece the plan happens to pick would otherwise decide
+  // whether this proof passes. 'r' is the HUD's Deselect all; clearing by key can never move
+  // anything.
   await page.keyboard.press('r');
   await page.waitForFunction(
     () => import('/src/game/SkirmishStoreContext.tsx').then((m) => (
