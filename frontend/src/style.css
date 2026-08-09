@@ -23310,6 +23310,16 @@ button.tileset-relationship-cell {
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
+/* Manubiae is the one section with BOTH an opening line and a closing note around its scroll:
+   title, intro, the scrolling ladder, then how they add up. Every panel states the rows its own
+   children need, and a panel whose children outnumber its rows pushes the extras into implicit
+   ones — which the `overflow: hidden` above then clips, taking the second line of the intro
+   with it. Declared for both transports because the framed host owns the grid instead. */
+.enchiridion-manubiae-panel.enchiridion-panel-unframed,
+.enchiridion-manubiae-panel > .le-outer-panel-content {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
 .enchiridion-panel :is(h3, p),
 .enchiridion-empty :is(h3, p) {
   margin: 0;

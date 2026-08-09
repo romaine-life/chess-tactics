@@ -484,7 +484,7 @@ function ManubiaeSection({ framed }: { framed: boolean }): ReactElement {
       framed={framed}
       title="Manubiae"
     >
-      <p>Gold a Battle pays you for what your units do, the moment they do it — over and above the Battle&rsquo;s own reward. Only your units earn it, and each earning pays again the next time. Red squares are what the move strikes; cyan squares are the line it works along.</p>
+      <p>Gold a Battle pays for what your units do, the moment they do it — over and above the Battle&rsquo;s own reward. Red squares are what the move strikes; cyan squares are the line it works along.</p>
       <KitScroll className="enchiridion-reference-scroll">
         <div className="enchiridion-unit-grid">
           {RUN_MANUBIAE.map((entry) => (
@@ -501,7 +501,8 @@ function ManubiaeSection({ framed }: { framed: boolean }): ReactElement {
       </KitScroll>
       <InnerChromeBox className="enchiridion-rule-exceptions">
         <h3>How they add up</h3>
-        <p>One move may earn <strong>several</strong> of these at once, and each pays in full — a capture that also forks is both. The two check bounties are the exception: they are rungs of one ladder, so a double check pays instead of a discovered check rather than on top of it.</p>
+        <p>Only <strong>your</strong> units earn these — the enemy does the same things and is paid nothing — and each one pays again every time you land it.</p>
+        <p>One move may earn <strong>several</strong> at once, and each pays in full: a capture that also forks is both. The two check bounties are the exception — they are rungs of one ladder, so a double check pays instead of a discovered check rather than on top of it.</p>
         <p><strong>Undo</strong> takes back the gold along with the move that earned it, so no deed here is worth undoing for profit.</p>
       </InnerChromeBox>
     </ReferenceSectionFrame>
