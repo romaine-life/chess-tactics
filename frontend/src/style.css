@@ -17748,6 +17748,22 @@ button.tileset-relationship-cell {
   border-image-width: 0 0 0 var(--le-chrome-outer-rail-w) !important;
 }
 
+/* The fill box is held a couple of pixels inside the panel so the frame's rail can
+   sit over its edge without the surface bleeding out from under the art. The rule
+   directly above removes the right rail at the viewport edge — so on that one side
+   there is no rail to sit over, and the inset stops being a seam and becomes a
+   visible strip of backdrop between the panel's stone and the edge of the screen.
+   Spend the inset only where a rail actually lands. The panel's own box already
+   reaches the viewport; this is only its paint catching up.
+
+   Declared on the PANEL, not on the fill: the title band is seated off the same
+   box, so fixing one and not the other leaves the strip showing beside the title
+   and nowhere else. The title's own padding already subtracts this inset, so its
+   text and marks stay exactly where they were while its wood reaches the edge. */
+:root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel] {
+  --le-outer-fill-box-right: 0px;
+}
+
 /* Persistent app-shell title bar (src/ui/shell/AppTitleBar) — rendered once by
    App outside every replaceable SceneBoundary, so route transitions cannot
    resize, fade, or unmount its invariant frame.
