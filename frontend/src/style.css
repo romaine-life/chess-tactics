@@ -19796,7 +19796,7 @@ button.tileset-relationship-cell {
 
 /* The primary Sectio workspaces normally paint the shell's standard fill. When the
    retained viewport artwork is installed, that fill must yield so the shared scene
-   remains visible beneath Sectio, View Battle, and Expunctio alike. */
+   remains visible beneath Sectio, Exploratio, and Expunctio alike. */
 .run-screen.has-persistent-viewport-artwork .run-phase-primary > .run-workspace .shell-workspace-fill {
   visibility: hidden;
 }

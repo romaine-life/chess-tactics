@@ -1970,7 +1970,7 @@ export function RunScreen({
   ) : null;
   // The Sectio scene belongs to the retained shell viewport, not to whichever Sectio
   // workspace happens to be in front of it. Keeping it outside the transition region
-  // prevents Sectio/View Battle/Expunctio swaps from fading or remounting the room.
+  // prevents Sectio/Exploratio/Expunctio swaps from fading or remounting the room.
   const persistentSectioScene = shellRun?.phase === 'sectio' ? sectioScene : null;
   // A craft request speaks for the whole screen while it runs: the Run it is about to replace must
   // not flash its own phase first, and a refused spec has to say why instead of silently doing
