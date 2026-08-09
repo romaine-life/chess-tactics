@@ -13649,6 +13649,124 @@ function isStandaloneAiArtworkIntake(value) {
     && value.operation?.intakeSchema === ATTEMPT_INTAKE_SOURCE_REQUEST_SCHEMA;
 }
 
+// A background version is owned by the exact Level whose document created it, so copying a
+// Level cannot carry its board artwork by reference — the workspace write refuses a selection
+// the copy does not own. The create route cannot mint that ownership either: it only knows how
+// to register artwork mid-GENERATION, and demands the attempt and processing history a copy has
+// never had. So copying is its own operation, and this is the only path that attaches an image
+// at creation instead of through a separate upload.
+//
+// What a copy is, precisely: new rows, on the target Level's document, naming the SAME stored
+// image. The bytes are content-addressed, so identical artwork is one file however many Levels
+// show it; every row that decides behaviour — selection, lifecycle, archive, publish — is the
+// copy's own. Provenance records the version it was copied from rather than claiming a
+// generation that never ran.
+const COPIED_ARTWORK_PROVENANCE_SCHEMA = 'predrawn-copied-artwork-v1';
+
+async function dbCopyBackgroundArtwork(targetDocumentRow, sourceDocumentRow, user, authority, selection) {
+  return withEditorDocumentTransaction(async (client) => {
+    const currentDocument = await dbLockEditorDocument(
+      client,
+      targetDocumentRow.owner_email,
+      targetDocumentRow.document_id,
+    );
+    if (!currentDocument) throw editorDocumentError(404, 'editor_document_not_found');
+    await assertActiveEditorEditSession(
+      client,
+      currentDocument,
+      authority.sessionId,
+      authority.editGeneration,
+      authority.sessionKeyHash,
+    );
+
+    const read = async (versionId) => (versionId
+      ? dbBackgroundVersionRow(sourceDocumentRow.document_id, versionId, client)
+      : null);
+    const background = await read(selection.backgroundVersionId);
+    if (!background) throw backgroundVersionError(404, 'background_version_not_found');
+    const occlusion = await read(selection.occlusionVersionId);
+    if (selection.occlusionVersionId && !occlusion) {
+      throw backgroundVersionError(404, 'background_version_not_found', 'the occlusion selection is not on the source Level');
+    }
+    // The lineage a selection needs to stand on its own: a warped background keeps its raw
+    // parent, and an occlusion keeps the background it was cut against.
+    const parent = background.parent_version_id ? await read(background.parent_version_id) : null;
+    if (background.parent_version_id && !parent) {
+      throw backgroundVersionError(409, 'background_version_lineage_incomplete');
+    }
+    const ordered = [parent, background, occlusion].filter(Boolean);
+    for (const row of ordered) {
+      if (!row.blob_sha256) {
+        throw backgroundVersionError(409, 'background_version_content_missing', 'the source artwork has no stored image');
+      }
+    }
+
+    const remapped = new Map();
+    const copied = [];
+    for (const row of ordered) {
+      const id = crypto.randomUUID();
+      remapped.set(row.id, id);
+      const provenance = {
+        ...row.provenance,
+        levelId: targetDocumentRow.level_id,
+        copiedFrom: {
+          schema: COPIED_ARTWORK_PROVENANCE_SCHEMA,
+          versionId: row.id,
+          documentId: sourceDocumentRow.document_id,
+          levelId: sourceDocumentRow.level_id,
+          contentSha256: row.blob_sha256,
+        },
+      };
+      const { rows } = await client.query(
+        `INSERT INTO predrawn_background_versions (
+           id, document_id, owner_email, level_id, kind, label,
+           parent_version_id, source_background_version_id,
+           blob_sha256, width, height,
+           world_bounds, operation, provenance, status,
+           created_by_email, created_by_name, updated_by
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+           $12::jsonb, $13::jsonb, $14::jsonb, 'ready', $15, $16, $15)
+         RETURNING id`,
+        [
+          id,
+          targetDocumentRow.document_id,
+          targetDocumentRow.owner_email,
+          targetDocumentRow.level_id,
+          row.kind,
+          row.label,
+          row.parent_version_id ? remapped.get(row.parent_version_id) ?? null : null,
+          row.source_background_version_id ? remapped.get(row.source_background_version_id) ?? null : null,
+          row.blob_sha256,
+          row.width,
+          row.height,
+          JSON.stringify(row.world_bounds),
+          JSON.stringify(row.operation),
+          JSON.stringify(provenance),
+          user.email,
+          user.name || user.email,
+        ],
+      );
+      const stored = await dbBackgroundVersionRow(targetDocumentRow.document_id, rows[0].id, client);
+      copied.push(stored);
+      // Recorded as a creation, because that is what it is: this row did not exist before.
+      // The details name the version it was copied from, so the audit trail never has to
+      // guess whether artwork was generated here or brought from another Level.
+      await dbRecordBackgroundVersionEvent(client, stored, 'created', user.email, user.name || user.email, {
+        copied_from_version_id: row.id,
+        copied_from_document_id: sourceDocumentRow.document_id,
+        copied_from_level_id: sourceDocumentRow.level_id,
+        content_sha256: row.blob_sha256,
+      });
+    }
+
+    return {
+      versions: copied,
+      backgroundVersionId: remapped.get(background.id),
+      occlusionVersionId: occlusion ? remapped.get(occlusion.id) : null,
+    };
+  });
+}
+
 async function dbCreateBackgroundVersion(documentRow, user, authority, value, idempotencyKey) {
   const actor = String(user.email).trim().toLowerCase();
   const fingerprint = crypto.createHash('sha256').update(canonicalJson({
@@ -15678,6 +15796,50 @@ app.post('/api/editor-documents/:documentId/background-versions', async (req, re
     });
   } catch (error) {
     respondBackgroundVersionError(res, error, 'create');
+  }
+});
+
+// Copy another Level's board artwork onto this one. The create route above registers artwork
+// that is being generated and requires the attempt behind it; a copy has no generation to point
+// at, and the workspace write refuses a selection the Level does not own — so without this a
+// copied Level silently loses its board art. Read access to the source is the only extra gate:
+// this mints nothing new, it re-owns an image the actor can already see.
+app.post('/api/editor-documents/:documentId/background-versions/copy', async (req, res) => {
+  try {
+    const access = await authorizedBackgroundVersionDocument(req, res, { mutate: true });
+    if (!access) return;
+    const raw = isObjectRecord(req.body) ? req.body : {};
+    const sourceDocumentId = editorDocumentId(raw.source_document_id ?? raw.sourceDocumentId);
+    const requestedBackground = raw.background_version_id ?? raw.backgroundVersionId;
+    const requestedOcclusion = raw.occlusion_version_id ?? raw.occlusionVersionId;
+    const backgroundId = backgroundVersionId(requestedBackground);
+    const occlusionId = requestedOcclusion ? backgroundVersionId(requestedOcclusion) : null;
+    if (!sourceDocumentId) { res.status(400).json({ error: 'invalid_editor_document_id' }); return; }
+    if (!backgroundId) { res.status(400).json({ error: 'invalid_background_version_id' }); return; }
+    if (requestedOcclusion && !occlusionId) {
+      res.status(400).json({ error: 'invalid_background_version_id' }); return;
+    }
+    if (sourceDocumentId === access.documentId) {
+      res.status(400).json({ error: 'background_version_copy_same_document' }); return;
+    }
+    const sourceDocument = await dbGetEditorDocumentForViewer(access.user.email, sourceDocumentId);
+    if (!sourceDocument) { res.status(404).json({ error: 'editor_document_not_found' }); return; }
+    if (!editorDocumentRowIsAuthorized(sourceDocument, access.user, res)) return;
+
+    const result = await dbCopyBackgroundArtwork(
+      access.row,
+      sourceDocument,
+      access.user,
+      access.authority,
+      { backgroundVersionId: backgroundId, occlusionVersionId: occlusionId },
+    );
+    res.status(201).json({
+      versions: result.versions.map(publicBackgroundVersion),
+      background_version_id: result.backgroundVersionId,
+      occlusion_version_id: result.occlusionVersionId,
+    });
+  } catch (error) {
+    respondBackgroundVersionError(res, error, 'copy');
   }
 });
 
