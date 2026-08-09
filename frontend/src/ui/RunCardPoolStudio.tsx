@@ -84,7 +84,7 @@ function CardTable({ cards }: { cards: readonly PoolCard[] }): ReactElement {
   return (
     <table>
       <thead>
-        <tr><th>shape</th><th>pieces</th><th>mat</th><th>vol</th><th>dens</th><th>cost</th><th>band</th><th>supp</th><th>BB</th></tr>
+        <tr><th>shape</th><th>pieces</th><th>mat</th><th>vol</th><th>dens</th><th>cost</th><th>band</th><th title="How many of the card's pieces arrive defended by another">def</th><th>BB</th></tr>
       </thead>
       <tbody>
         {cards.slice(0, MAX_ROWS_PER_GROUP).map((card) => (
@@ -96,7 +96,7 @@ function CardTable({ cards }: { cards: readonly PoolCard[] }): ReactElement {
             <td>{card.density.toFixed(2)}</td>
             <td>{card.cost}</td>
             <td>{card.band}</td>
-            <td>{card.supportPairs || ''}</td>
+            <td>{card.defended || ''}</td>
             <td>{card.hasBishopPair ? '✦' : ''}</td>
           </tr>
         ))}
@@ -285,7 +285,7 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
           <NumberRow label="Scale" value={knobs.costScale} onChange={(v) => set('costScale', v)} step={1} min={1} />
           <NumberRow label="Round to" value={knobs.roundTo} onChange={(v) => set('roundTo', Math.max(0, v))} step={1} min={0} />
           <NumberRow label="Bishop pair +" value={knobs.bishopPairBonus} onChange={(v) => set('bishopPairBonus', v)} step={0.05} hint="Bonus for two Bishops on opposite colours." />
-          <NumberRow label="Support pair +" value={knobs.supportBonus} onChange={(v) => set('supportBonus', v)} step={0.05} hint="Per pair where one piece defends another's square." />
+          <NumberRow label="Defended +" value={knobs.supportBonus} onChange={(v) => set('supportBonus', v)} step={0.05} hint="Per piece that arrives defended by another on the same card." />
           <label className="rcp-check">
             <input type="checkbox" checked={knobs.countPawnSupport} onChange={(e) => set('countPawnSupport', e.target.checked)} />
             <span>Count pawn support</span>
@@ -358,7 +358,7 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
               <tbody>
                 <tr><td>material</td><td>{draftStats.value}</td><td>volume</td><td>{draftStats.volume}</td></tr>
                 <tr><td>density</td><td>{draftStats.density.toFixed(2)}</td><td>cost</td><td><b>{draftStats.cost}</b></td></tr>
-                <tr><td>band</td><td>{draftStats.band}</td><td>support pairs</td><td>{draftStats.supportPairs}</td></tr>
+                <tr><td>band</td><td>{draftStats.band}</td><td>pieces defended</td><td>{draftStats.defended}</td></tr>
                 <tr><td>bishop pair</td><td>{draftStats.hasBishopPair ? 'yes' : 'no'}</td><td>in pool</td><td>{draftInPool ? 'yes' : 'no — outside the generator'}</td></tr>
               </tbody>
             </table>

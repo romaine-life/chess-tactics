@@ -6,6 +6,7 @@ import {
   buildPool,
   cardSynergy,
   countSupportPairs,
+  defendedPieceCount,
   groupPool,
   hasOppositeColourBishopPair,
   poolRotationContract,
@@ -85,13 +86,29 @@ describe('runCardPool synergy', () => {
     expect(support(['B', 'B'], [[0, 0], [0, 1]])).toBe(0);
   });
 
+  it('counts a piece once however many times it is defended', () => {
+    // Three Rooks abreast. The middle one is covered from both sides, the outer two from the
+    // middle, and the outer pair cannot see each other through it.
+    const row: [number, number][] = [[0, 0], [1, 0], [2, 0]];
+    // Four defending relationships...
+    expect(countSupportPairs(cells(...row), ['R', 'R', 'R'], false)).toBe(4);
+    // ...but only three pieces stop hanging, which is the thing that changes the position.
+    expect(defendedPieceCount(cells(...row), ['R', 'R', 'R'], false)).toBe(3);
+  });
+
+  it('can never score more than the card has pieces', () => {
+    for (const card of buildPool({ ...DEFAULT_POOL_KNOBS, countPawnSupport: true })) {
+      expect(card.defended, card.key).toBeLessThanOrEqual(card.volume);
+    }
+  });
+
   it('ignores pawn support unless asked', () => {
     // A Pawn at (1,1) covers (0,0) and (2,0), so it shelters the Rook in front of it. The Rook
     // returns nothing — (1,1) is a diagonal from (0,0). So this pair is pawn support or nothing.
     // This is the RAW reading of one seating; `cardSynergy` is what decides whether the card is
     // priced on its authored orientation or on the best one available to a rotating player.
-    expect(countSupportPairs(cells([0, 0], [1, 1]), ['R', 'P'], false)).toBe(0);
-    expect(countSupportPairs(cells([0, 0], [1, 1]), ['R', 'P'], true)).toBe(1);
+    expect(defendedPieceCount(cells([0, 0], [1, 1]), ['R', 'P'], false)).toBe(0);
+    expect(defendedPieceCount(cells([0, 0], [1, 1]), ['R', 'P'], true)).toBe(1);
   });
 });
 
@@ -210,26 +227,26 @@ describe('runCardPool synergy under rotation', () => {
   it('takes the best orientation while the player rotates', () => {
     // Rook at (0,0), Pawn at (1,1). As authored the Pawn covers (0,0) and shelters the Rook.
     const sheltering = cardSynergy(cells([0, 0], [1, 1]), ['R', 'P'], withPawns);
-    expect(sheltering.supportPairs).toBe(1);
+    expect(sheltering.defended).toBe(1);
 
     // Same two pieces, seated so the Pawn covers nothing. A quarter turn fixes that, and the
     // player will take the turn -- so the card is worth the sheltered reading either way.
     const seatedBadly = cardSynergy(cells([0, 1], [1, 0]), ['R', 'P'], withPawns);
-    expect(seatedBadly.supportPairs).toBe(1);
+    expect(seatedBadly.defended).toBe(1);
     // Reading only the authored seating would have priced this at zero.
-    expect(countSupportPairs(cells([0, 1], [1, 0]), ['R', 'P'], true)).toBe(0);
+    expect(defendedPieceCount(cells([0, 1], [1, 0]), ['R', 'P'], true)).toBe(0);
   });
 
   it('collapses to the authored seating once facing is bought', () => {
     const fixed = { ...withPawns, collapseRotation: false };
-    expect(cardSynergy(cells([0, 0], [1, 1]), ['R', 'P'], fixed).supportPairs).toBe(1);
-    expect(cardSynergy(cells([0, 1], [1, 0]), ['R', 'P'], fixed).supportPairs).toBe(0);
+    expect(cardSynergy(cells([0, 0], [1, 1]), ['R', 'P'], fixed).defended).toBe(1);
+    expect(cardSynergy(cells([0, 1], [1, 0]), ['R', 'P'], fixed).defended).toBe(0);
   });
 
   it('leaves the rotation-invariant terms untouched by the max', () => {
     // Non-pawn support and colour parity survive a quarter turn, so max changes nothing.
     for (const knobs of [DEFAULT_POOL_KNOBS, { ...DEFAULT_POOL_KNOBS, collapseRotation: false }]) {
-      expect(cardSynergy(cells([0, 0], [0, 1]), ['R', 'R'], knobs).supportPairs).toBe(2);
+      expect(cardSynergy(cells([0, 0], [0, 1]), ['R', 'R'], knobs).defended).toBe(2);
       expect(cardSynergy(cells([0, 0], [0, 1]), ['B', 'B'], knobs).hasBishopPair).toBe(true);
       expect(cardSynergy(cells([0, 0], [1, 1]), ['B', 'B'], knobs).hasBishopPair).toBe(false);
     }
