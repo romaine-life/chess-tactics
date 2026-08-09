@@ -26,6 +26,36 @@ const SCRIPTS = dirname(fileURLToPath(import.meta.url));
 const NATIVE_DIR = join(SCRIPTS, '..', 'tmp', 'screen-art');
 
 const SETS = {
+  // The Run's opening screen: Commendatio, the act of entering a lord's service. The player is
+  // asked whose household they join, so the room is a court that has been made ready to receive
+  // someone — and the seat of the man they would serve is the thing the picture withholds.
+  commendatio: {
+    scenario: 'a hall has been prepared for someone to be received into service. The household has set the room, laid out the record, and stepped back. The lord is not shown, the oath is not being sworn, and whoever is about to enter has not entered yet',
+    contradiction: 'ceremonial and transactional; prepared and unoccupied; grand and thinly staffed',
+    forbidden: 'no crowning, no kneeling figure mid-oath, no hands clasped between hands, no crowd or court audience, no throned figure, no readable heraldry, crest, banner lettering or blazon that names a house, no weapons drawn, and nothing that says which lord this is',
+    scenes: {
+      'commendatio-hall': {
+        label: 'Commendatio — The Hall Made Ready',
+        shot: 'Eye-level, standing at the foot of a long stone hall looking up its length toward a raised dais at the far end. On the dais a single high-backed carved chair stands EMPTY, angled slightly, with a folded cloth over one arm. The floor between is bare swept flagstone. Along the side walls hang heavy plain textiles with no device on them. A single clerk in a dark gown stands well off to one side at a small writing table with an open ledger, seen in profile with head down and face not readable. Nobody else is in the room. Tall lancet windows throw long light across the empty floor.',
+        palette: 'cold north daylight through tall glass; grey limestone, deep red and umber hangings, dark oak, one warm candle on the clerk\'s table',
+      },
+      'commendatio-dais': {
+        label: 'Commendatio — The Dais, Close',
+        shot: 'Low three-quarter view close to a stone dais of three worn steps, looking up. The carved chair on it is EMPTY and seen from the side. On the top step sit the things a reception needs and nothing more: a shallow bowl, a folded stole, an unrolled blank sheet weighted at its corners with two smooth stones. The stone of the steps is dished from centuries of feet. Behind, a plain hanging and the corner of a high window. No people at all.',
+        palette: 'warm low afternoon light raking across worn stone; honey limestone, faded crimson cloth, black shadow under the chair, cool blue in the window',
+      },
+      'commendatio-antechamber': {
+        label: 'Commendatio — The Waiting Room',
+        shot: 'Interior of a small vaulted antechamber beside the great hall, seen from a corner. A plain bench runs along one wall with three cloaks and a travelling bag left on it, as if their owners have just been called through. A heavy door stands ajar at the far side, spilling brighter light from the hall beyond into this dimmer room. On a stool by the door, a doorkeeper sits with a staff across their knees, head turned away toward the light so their face is not readable. Boot-mud dries on the flagstones.',
+        palette: 'dim stone-blue shadow in the near room against a warm bright wedge of light through the open door; grey vault, brown leather and wool, one iron lamp',
+      },
+      'commendatio-yard': {
+        label: 'Commendatio — The Court Below',
+        shot: 'High three-quarter view down into a small enclosed castle courtyard at first light, from an upper gallery. The yard is swept clean and empty except for three saddled horses standing tied at a rail with nobody attending them, and a trestle set up by the door to the keep with a closed box on it. A wide stone stair climbs from the yard to a doorway standing open. Frost still lies in the shadowed half of the yard. One figure in a hooded cloak crosses the yard toward the stair, small and seen from above and behind.',
+        palette: 'pale blue-gold first light, frost-white in the shade; grey granite, dark timber galleries, chestnut horses, one lit window high in the keep',
+      },
+    },
+  },
   // docs/background-set-briefs.md -> "Set 06 Candidate: Spolia".
   spolia: {
     scenario: 'goods have changed hands without anyone handing them over. A household, a chapel or a farm has stopped, and what it owned is being counted, tagged, wrapped and moved by people who did not own it and are not explained',
