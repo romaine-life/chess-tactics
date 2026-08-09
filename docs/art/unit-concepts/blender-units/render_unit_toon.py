@@ -207,7 +207,11 @@ if TOON:
 # and the native render is the downscale-from-512 without the downscale.
 scene.render.engine = "BLENDER_EEVEE" if TOON else "CYCLES"
 if not TOON:
-    scene.cycles.samples = 1024
+    # A master is downsampled 8:1, so 64 rendered pixels average into each delivery
+    # pixel: 128 samples here is an effective 8192 per pixel that ships. Spending
+    # 1024 on the master buys nothing the averaging does not already provide, and it
+    # is the difference between seconds and ten minutes per palette.
+    scene.cycles.samples = 128
     scene.cycles.use_denoising = False
 scene.eevee.taa_render_samples = 64
 # A narrow reconstruction filter keeps a drawn ink line hard, which is what the
