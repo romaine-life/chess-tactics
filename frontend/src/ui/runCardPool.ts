@@ -50,7 +50,7 @@ export type PoolKnobs = Readonly<{
   roundTo: number;
   /** Two Bishops whose cells differ in colour parity — the blind-spot fix. */
   bishopPairBonus: number;
-  /** Per PIECE that arrives defended by another on the same card, not per relationship. */
+  /** Per defence on the card. A piece covered twice contributes two. */
   supportBonus: number;
   /**
    * Whether a Pawn sheltering a piece counts toward synergy at all. This is a design question
@@ -99,8 +99,8 @@ export type PoolCard = Readonly<{
   cost: number;
   band: PoolBand;
   hasBishopPair: boolean;
-  /** How many of this card's pieces arrive covered by another. Bounded by `volume`. */
-  defended: number;
+  /** Total defences across the card: per piece, how many others cover it, summed. */
+  defences: number;
 }>;
 
 const key = (cells: readonly PoolCell[]): string => cells.map((c) => `${c.x},${c.y}`).join(' ');
@@ -222,56 +222,37 @@ function defends(
   return true;
 }
 
-/** Pairs where one piece covers another's square. Stability, and it is why connected Rooks read. */
-export function countSupportPairs(
-  cells: readonly PoolCell[],
-  pieces: readonly PoolPiece[],
-  countPawnSupport: boolean,
-): number {
-  let pairs = 0;
-  for (let i = 0; i < cells.length; i += 1) {
-    for (let j = 0; j < cells.length; j += 1) {
-      if (i === j) continue;
-      if (!countPawnSupport && pieces[i] === 'P') continue;
-      if (defends(pieces[i], cells[i], cells[j], cells)) pairs += 1;
-    }
-  }
-  return pairs;
-}
-
 /**
- * How many of the card's pieces arrive DEFENDED — covered by at least one other piece on the card.
+ * Total defences on the card: for every piece, how many other pieces cover its square, summed.
  *
- * This is a property of pieces, not of relationships, and the distinction is the whole point. What
- * changes a position is that a piece stops hanging: taking it now costs a trade instead of being
- * free. A second defender does not change that fact, and neither does which piece is doing it. So
- * a piece covered three times scores exactly what a piece covered once scores, and the total can
- * never exceed the number of pieces on the card.
+ * The count matters and is not merely "is it defended". Whether a square holds is attacker against
+ * defender arithmetic -- a piece covered twice survives two attackers where a piece covered once
+ * does not -- so a second defender buys something real and is counted.
  *
- * Deliberately unweighted by the defended piece's material, because support is applied as a
- * MULTIPLIER on a base that already scales with material -- a Rook card's base is 65 against a Pawn
- * card's 5, so the same percentage is already worth thirteen times as much on the Rook. Weighting
- * the score too would charge for the same value twice.
+ * What is NOT read is the defender's identity. A Rook covering a Pawn counts the same as a Pawn
+ * covering a Rook, because what changes the position is that a capture becomes a trade, and any
+ * defender does that. Value is already carried by the base price this multiplies, so weighting the
+ * count by material as well would charge for the same thing twice.
  */
-export function defendedPieceCount(
+export function countDefences(
   cells: readonly PoolCell[],
   pieces: readonly PoolPiece[],
   countPawnSupport: boolean,
 ): number {
-  let defended = 0;
+  let defences = 0;
   for (let target = 0; target < cells.length; target += 1) {
     for (let by = 0; by < cells.length; by += 1) {
       if (by === target) continue;
       if (!countPawnSupport && pieces[by] === 'P') continue;
-      if (defends(pieces[by], cells[by], cells[target], cells)) { defended += 1; break; }
+      if (defends(pieces[by], cells[by], cells[target], cells)) defences += 1;
     }
   }
-  return defended;
+  return defences;
 }
 
 /**
  * Two Bishops on opposite colours. The Bishop is the only piece with a permanent reachability
- * restriction, so it is the only one whose pair removes a blind spot rather than doubling reach —
+ * restriction, so it is the only one whose pair removes a blind spot rather than doubling reach --
  * which is why nothing else earns this. Colour parity survives translation and rotation.
  */
 export function hasOppositeColourBishopPair(
@@ -315,33 +296,33 @@ export function cardSynergy(
   cells: readonly PoolCell[],
   pieces: readonly PoolPiece[],
   knobs: PoolKnobs,
-): Readonly<{ defended: number; hasBishopPair: boolean }> {
+): Readonly<{ defences: number; hasBishopPair: boolean }> {
   const hasBishopPair = hasOppositeColourBishopPair(cells, pieces);
   const turns = knobs.collapseRotation ? [0, 1, 2, 3] : [0];
-  const defended = Math.max(...turns.map((turn) => (
-    defendedPieceCount(rotateSeated(cells, turn), pieces, knobs.countPawnSupport)
+  const defences = Math.max(...turns.map((turn) => (
+    countDefences(rotateSeated(cells, turn), pieces, knobs.countPawnSupport)
   )));
-  return { defended, hasBishopPair };
+  return { defences, hasBishopPair };
 }
 
 export function priceCard(
   cells: readonly PoolCell[],
   pieces: readonly PoolPiece[],
   knobs: PoolKnobs,
-): Pick<PoolCard, 'value' | 'volume' | 'density' | 'baseCost' | 'cost' | 'band' | 'hasBishopPair' | 'defended'> {
+): Pick<PoolCard, 'value' | 'volume' | 'density' | 'baseCost' | 'cost' | 'band' | 'hasBishopPair' | 'defences'> {
   const value = pieces.reduce((total, piece) => total + knobs.pieceValue[piece], 0);
   const volume = cells.length;
   const density = volume === 0 ? 0 : value / volume;
   const baseCost = value * (density / 3) ** knobs.densityPower * knobs.costScale;
-  const { hasBishopPair, defended } = cardSynergy(cells, pieces, knobs);
+  const { hasBishopPair, defences } = cardSynergy(cells, pieces, knobs);
   const withSynergy = baseCost
     * (1 + (hasBishopPair ? knobs.bishopPairBonus : 0))
-    * (1 + defended * knobs.supportBonus);
+    * (1 + defences * knobs.supportBonus);
   const cost = roundTo(withSynergy, knobs.roundTo);
   const band: PoolBand = cost <= knobs.commonMaxCost
     ? 'common'
     : cost <= knobs.uncommonMaxCost ? 'uncommon' : 'rare';
-  return { value, volume, density, baseCost, cost, band, hasBishopPair, defended };
+  return { value, volume, density, baseCost, cost, band, hasBishopPair, defences };
 }
 
 export function buildPool(knobs: PoolKnobs): PoolCard[] {
