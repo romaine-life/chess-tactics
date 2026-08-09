@@ -3,7 +3,7 @@ import { readAdminBattleHref } from '../admin/battleRoute';
 import { type AdminBattleMode } from '../game/store';
 import { useSkirmish } from '../game/SkirmishStoreContext';
 import { authorizeAdminPlaytest } from '../net/adminPlaytest';
-import { acquireLipsanon, GOLD_SCALE, grantGold, LIPSANON_BY_ID, RUN_LIPSANA, type LipsanonId } from '../run/model';
+import { acquireLipsanon, grantGold, LIPSANON_BY_ID, RUN_LIPSANA, type LipsanonId } from '../run/model';
 import { useActiveRun } from '../run/store';
 import { navigateApp, readValidatedReturnTo } from './navigation';
 import { RunGoldIcon } from './RunResources';
@@ -34,7 +34,7 @@ export function AdminControls({
   const runHydrated = useActiveRun((state) => state.hydrated);
   const hydrateRun = useActiveRun((state) => state.hydrate);
   const replaceRun = useActiveRun((state) => state.replace);
-  const [goldAmount, setGoldAmount] = useState('5');
+  const [goldAmount, setGoldAmount] = useState('50');
   const [lipsanonId, setLipsanonId] = useState<LipsanonChoice>('');
   const [busy, setBusy] = useState<string | null>(null);
   const [status, setStatus] = useState('');
@@ -75,10 +75,10 @@ export function AdminControls({
 
   const gainGold = async (): Promise<void> => {
     if (!run) return;
-    const amount = Number(goldAmount);
-    const amountTenths = Math.round(amount * GOLD_SCALE);
-    if (!Number.isFinite(amount) || amount <= 0 || amountTenths / GOLD_SCALE !== amount) {
-      setStatus('Enter a positive gold amount in tenths.');
+    // Gold is whole and exact (ADR-0547), so the box takes the number the Run screen shows.
+    const amountTenths = Number(goldAmount);
+    if (!Number.isSafeInteger(amountTenths) || amountTenths <= 0) {
+      setStatus('Enter a positive whole gold amount.');
       return;
     }
     setBusy('gain-gold');
@@ -86,7 +86,7 @@ export function AdminControls({
     try {
       await authorizeAdminPlaytest({ action: 'gain-gold', amountTenths });
       replaceRun(grantGold(run, amountTenths));
-      setStatus(`Granted ${amount} gold.`);
+      setStatus(`Granted ${amountTenths} gold.`);
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Gold could not be granted.');
     } finally {
@@ -214,9 +214,9 @@ export function AdminControls({
                   <input
                     className="admin-gold-input"
                     type="number"
-                    min="0.1"
+                    min="1"
                     max="1000000"
-                    step="0.1"
+                    step="1"
                     value={goldAmount}
                     disabled={!run || busy !== null}
                     onChange={(event) => setGoldAmount(event.target.value)}
@@ -305,16 +305,16 @@ export function AdminControls({
       <SettingsSection title="Active Run">
         <SettingsRow
           title="Gain Gold"
-          description={run ? `Add gold to ${run.war.name}. Enter an amount in tenths.` : 'Start a Run before granting gold.'}
+          description={run ? `Add gold to ${run.war.name}. Enter a whole amount of gold.` : 'Start a Run before granting gold.'}
         >
           <div className="admin-control-inline">
             <InnerChromeBox as="span" className="admin-gold-field">
               <input
                 className="admin-gold-input"
                 type="number"
-                min="0.1"
+                min="1"
                 max="1000000"
-                step="0.1"
+                step="1"
                 value={goldAmount}
                 disabled={!run || busy !== null}
                 onChange={(event) => setGoldAmount(event.target.value)}
