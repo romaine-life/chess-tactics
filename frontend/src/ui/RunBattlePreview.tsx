@@ -62,6 +62,9 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
         view: 'battle-preview',
         className: 'run-battle-preview-workspace',
         contentClassName: 'run-battle-preview-content',
+        // The pane IS this screen's surface, not a plate laid on it: it reaches the workspace
+        // boundary on every side, the way the Strategikon's own sheet does.
+        edgeAttached: true,
         testId: 'run-battle-preview-workspace',
         ariaLabelledBy: 'run-battle-preview-title',
       }}

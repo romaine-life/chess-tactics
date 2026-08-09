@@ -518,6 +518,14 @@ describe('Run chrome hierarchy', () => {
     expect(runBattlePreview).not.toMatch(/battles\[run\.battleIndex\]/);
     // ONE filled pane, and every separation on it is one of that pane's own drawn rails. Three
     // framed boxes with gaps between them let strips of the page show through between them.
+    // And it fills the WHOLE workspace, the way the Strategikon's sheet does — no margin of the
+    // Sectio scene left showing around a plate laid on top of it.
+    expect(runBattlePreview).toContain('edgeAttached: true');
+    expect(styleCss).toMatch(
+      /\.run-battle-preview-workspace\s*\{[^}]*--shell-workspace-body-inset-block: 0px;[^}]*--shell-workspace-body-inset-start: 0px;/,
+    );
+    expect(styleCss).toMatch(/\.run-battle-preview-content\s*\{[^}]*padding:\s*0;/);
+
     expect(runBattlePreview).toContain('<DividedInnerChromeBox');
     expect(runBattlePreview).toContain("columns={['minmax(0, 1fr)', 'minmax(300px, 34%)']}");
     expect(runBattlePreview).toContain('fillRole="outer"');

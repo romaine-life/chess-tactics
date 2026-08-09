@@ -19677,10 +19677,19 @@ button.tileset-relationship-cell {
   padding: var(--ds-inset);
 }
 
+/* The pane fills the WHOLE workspace, the way the Strategikon's sheet does: the shell's body
+   perimeter is dropped for this scene so there is no margin of scene left showing around it, and
+   the pane's own material is what the screen is made of rather than a plate floating on it. */
+.run-battle-preview-workspace {
+  --shell-workspace-body-inset-block: 0px;
+  --shell-workspace-body-inset-start: 0px;
+}
+
 .run-battle-preview-content {
   align-content: stretch;
   grid-template-rows: minmax(0, 1fr);
   overflow: hidden;
+  padding: 0;
 }
 
 .run-battle-preview-surface,
