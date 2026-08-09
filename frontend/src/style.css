@@ -21921,6 +21921,168 @@ button.tileset-relationship-cell {
   cursor: not-allowed;
 }
 
+/* ---- Seated-formation grouping (review candidates, chosen by ?group=) --------------------
+   A formation that has been placed is still one body: its units came down together, and one
+   click takes the whole of it back. Today the only thing that says so is the grab cursor, so
+   a seated hand reads as a row of individuals. Each candidate below answers that differently;
+   `data-formation-group` on the square picks which is painted. */
+
+.run-formation-group-paint {
+  block-size: 100%;
+  inline-size: 100%;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  position: absolute;
+  /* Over the band paint, under the pieces the canvas draws. */
+  z-index: 2;
+}
+
+.run-formation-group-paint > * {
+  opacity: 0;
+}
+
+/* The card's own line: drawn only on the sides that face off the footprint, so two adjacent
+   seats are wrapped rather than divided.
+
+   The line sits ON the tile boundary, and the square hosting it is clipped to exactly that
+   boundary — so a centred stroke loses its outer half and antialiases the rest to nothing. The
+   stroke is therefore drawn at twice its intended weight and the clip is what halves it, which
+   keeps the line hugging the true edge. Insetting the geometry instead would open a gap at every
+   corner where an outward edge meets a shared one, and break the footprint's outline into
+   per-square arcs — the grid reading this exists to remove. Width is in screen pixels
+   (non-scaling-stroke), so the visible weight does not change with board zoom. */
+.run-formation-group-edge-under {
+  fill: none;
+  stroke: rgba(26, 20, 13, .85);
+  stroke-linecap: square;
+  stroke-width: 12;
+}
+
+.run-formation-group-edge {
+  fill: none;
+  stroke: rgba(247, 234, 200, .92);
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  stroke-width: 6;
+}
+
+.run-formation-group-plot {
+  fill: rgba(232, 214, 176, .3);
+  stroke: none;
+}
+
+/* The tether carries the same two-stroke ink as the outline, so the candidates are judged on
+   what they draw rather than on which one got the readable colour. */
+.run-formation-group-tether-under {
+  stroke: rgba(26, 20, 13, .85);
+  stroke-linecap: round;
+  stroke-width: 11;
+}
+
+.run-formation-group-tether {
+  stroke: rgba(247, 234, 200, .92);
+  stroke-linecap: round;
+  stroke-width: 6;
+}
+
+.run-formation-group-node {
+  fill: rgba(247, 234, 200, .92);
+  stroke: rgba(26, 20, 13, .85);
+  stroke-width: 2;
+}
+
+/* Outline — the card's answer, on the ground. */
+.run-deployment-cell[data-formation-group='outline'] .run-formation-group-edge,
+.run-deployment-cell[data-formation-group='outline'] .run-formation-group-edge-under {
+  opacity: 1;
+}
+
+/* Plot — the outline, plus the ground inside it read as one surface. */
+.run-deployment-cell[data-formation-group='plot'] .run-formation-group-edge,
+.run-deployment-cell[data-formation-group='plot'] .run-formation-group-edge-under,
+.run-deployment-cell[data-formation-group='plot'] .run-formation-group-plot {
+  opacity: 1;
+}
+
+/* Plot + colours — the same plot, but each formation in its own livery.
+   A marker that marks every group identically only says "these squares are spoken for"; it does
+   not say WHICH body holds them, which is the half-solution Total War's own players complain of
+   when every unit wears the same banner. The hue is the formation's place in the dealt hand, so
+   it is stable for as long as the hand is. */
+.run-deployment-cell[data-formation-group='heraldry'] .run-formation-group-edge,
+.run-deployment-cell[data-formation-group='heraldry'] .run-formation-group-edge-under,
+.run-deployment-cell[data-formation-group='heraldry'] .run-formation-group-plot {
+  opacity: 1;
+}
+
+.run-deployment-cell[data-formation-group='heraldry'] .run-formation-group-plot {
+  fill: var(--run-formation-livery, rgba(232, 214, 176, .3));
+}
+
+.run-deployment-cell[data-formation-group='heraldry'] .run-formation-group-edge {
+  stroke: var(--run-formation-livery-line, rgba(247, 234, 200, .92));
+}
+
+.run-deployment-cell[data-formation-index='0'] {
+  --run-formation-livery: rgba(226, 196, 118, .42);
+  --run-formation-livery-line: rgba(255, 226, 148, .95);
+}
+
+.run-deployment-cell[data-formation-index='1'] {
+  --run-formation-livery: rgba(150, 196, 224, .42);
+  --run-formation-livery-line: rgba(196, 230, 255, .95);
+}
+
+.run-deployment-cell[data-formation-index='2'] {
+  --run-formation-livery: rgba(206, 142, 132, .42);
+  --run-formation-livery-line: rgba(255, 196, 184, .95);
+}
+
+.run-deployment-cell[data-formation-index='3'] {
+  --run-formation-livery: rgba(158, 202, 152, .42);
+  --run-formation-livery-line: rgba(206, 246, 200, .95);
+}
+
+.run-deployment-cell[data-formation-index='4'] {
+  --run-formation-livery: rgba(196, 166, 216, .42);
+  --run-formation-livery-line: rgba(232, 210, 250, .95);
+}
+
+.run-deployment-cell[data-formation-index='5'] {
+  --run-formation-livery: rgba(224, 186, 140, .42);
+  --run-formation-livery-line: rgba(255, 222, 180, .95);
+}
+
+/* Tether — no boundary at all, just what joins the members. */
+.run-deployment-cell[data-formation-group='tether'] .run-formation-group-tether,
+.run-deployment-cell[data-formation-group='tether'] .run-formation-group-tether-under,
+.run-deployment-cell[data-formation-group='tether'] .run-formation-group-node {
+  opacity: 1;
+}
+
+/* On hover — nothing at rest; the whole formation lights when any square of it is pointed at.
+   The low-clutter baseline every persistent candidate has to beat. */
+.run-deployment-cell[data-formation-group='hover'].is-formation-hovered .run-formation-group-edge,
+.run-deployment-cell[data-formation-group='hover'].is-formation-hovered .run-formation-group-edge-under,
+.run-deployment-cell[data-formation-group='hover'].is-formation-hovered .run-formation-group-plot {
+  opacity: 1;
+}
+
+.run-formation-group-switch {
+  display: grid;
+  gap: var(--ds-space-1);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+/* A pointed formation answers under every candidate, so the pickup affordance is confirmed by
+   the same gesture that uses it. */
+.run-deployment-cell[data-formation-group='outline'].is-formation-hovered .run-formation-group-plot,
+.run-deployment-cell[data-formation-group='plot'].is-formation-hovered .run-formation-group-plot,
+.run-deployment-cell[data-formation-group='tether'].is-formation-hovered .run-formation-group-plot {
+  opacity: 1;
+}
+
 /* The panel does not scroll; its KitScroll rail does (ADR-0030). Both class names are named so
    this outranks `.run-meta-controls { overflow-y: auto }` whatever the source order — matched on
    one class it loses to the later rule and the browser's own bar returns beside the drawn one. */

@@ -130,6 +130,14 @@ import { RunCardRow } from './RunCardRow';
 import { RunBattlePreview } from './RunBattlePreview';
 import { RunDeploymentCardStack, RunDeploymentDeckDeal } from './RunDeploymentCardStack';
 import { RunArrangementCard, RunArrangementSteppers } from './RunArrangementHand';
+import { RunFormationGroupPaint } from './RunFormationGroupPaint';
+import {
+  RUN_FORMATION_GROUP_TREATMENTS,
+  RUN_FORMATION_GROUP_TREATMENT_LABEL,
+  runFormationGroupTreatment,
+  seatedFormationsBySquare,
+  type RunFormationGroupTreatment,
+} from './runDeploymentGrouping';
 import { RunDeploymentRerollButton } from './RunDeploymentRerollButton';
 import { RunExpunctioWorkspace } from './RunExpunctioWorkspace';
 import { runCardName } from '../run/cardNames';
@@ -414,6 +422,8 @@ function ArrangedDeploymentControls({
   onBeginBattle,
   onDealComplete,
   departing,
+  groupTreatment,
+  onChooseGroupTreatment,
 }: {
   run: RunDocument;
   stage: RunDeploymentInteractionStage;
@@ -427,6 +437,8 @@ function ArrangedDeploymentControls({
   onBeginBattle: () => void;
   onDealComplete: () => void;
   departing: boolean;
+  groupTreatment: RunFormationGroupTreatment;
+  onChooseGroupTreatment: (treatment: RunFormationGroupTreatment) => void;
 }): ReactElement {
   const { abandonDialog, abandoning, requestAbandon } = useRunAbandon(run);
   const cards = arrangedDeploymentCards(run);
@@ -521,6 +533,32 @@ function ArrangedDeploymentControls({
               </div>
             ) : null}
 
+            {/* Review only. The candidates for "these units were placed together" are switched
+                here rather than being described, so the same seated board is judged under each
+                without re-placing a hand. The choice rides the address, so any one of them is
+                also a link on its own. */}
+            <div className="skirmish-view-group run-deployment-control" data-testid="formation-group-review">
+              <span className="skirmish-eyebrow">Formation grouping</span>
+              <div className="run-formation-group-switch" role="group" aria-label="Formation grouping candidate">
+                {RUN_FORMATION_GROUP_TREATMENTS.map((treatment, index) => (
+                  <ChromeButton
+                    unit="inner-text-button"
+                    data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                    className={chromeUnitClassNames(
+                      'inner-text-button', 'app-header-button',
+                      'run-formation-group-option', groupTreatment === treatment && 'active',
+                    )}
+                    style={{ ['--run-leaf-control-index' as string]: 7 + index } as CSSProperties}
+                    key={treatment}
+                    aria-pressed={groupTreatment === treatment}
+                    onClick={() => onChooseGroupTreatment(treatment)}
+                  >
+                    {RUN_FORMATION_GROUP_TREATMENT_LABEL[treatment]}
+                  </ChromeButton>
+                ))}
+              </div>
+            </div>
+
             <div className="skirmish-view-group run-deployment-control">
               <span className="skirmish-eyebrow">Battle</span>
               {/* The panel's one key that leaves the screen, so it wears its cap like the rest:
@@ -574,9 +612,11 @@ function ArrangedDeploymentControls({
 function useRunDeploymentPresentation({
   run,
   departureActive,
+  routeSearch,
 }: {
   run: RunDocument;
   departureActive: boolean;
+  routeSearch: string;
 }): RunDeploymentPresentation | null {
   const replace = useActiveRun((state) => state.replace);
   const level = run.war.battles[run.battleIndex].level;
@@ -600,6 +640,28 @@ function useRunDeploymentPresentation({
   const [heldArrangementAnchor, setHeldArrangementAnchor] = useState<string | null>(null);
   const arrangementCards = useMemo(() => arrangedDeploymentCards(prepared), [prepared]);
   const selectedArrangementCard = arrangementCards.find(({ card }) => card.id === selectedCardId) ?? null;
+  // Which square belongs to which seated formation. A projection of the card's seats and the
+  // committed placements — nothing is persisted for it, so no save version moves.
+  const seatedFormationSquares = useMemo(() => seatedFormationsBySquare(prepared), [prepared]);
+  const groupTreatment = runFormationGroupTreatment(routeSearch);
+  // Which SEATED formation the pointer is over — the whole card, not the square. Read off the
+  // square the pointer already reports rather than tracked separately: a second enter/leave pair
+  // on the same element is a second source of truth for where the mouse is, and the one that is
+  // already there is the one the placement gesture trusts.
+  const hoveredFormationCardId = pointedArrangementCell
+    ? seatedFormationSquares.get(pointedArrangementCell)?.cardId ?? null
+    : null;
+  // Switching candidate rewrites only `group`, and lands on the PRESENTED Run address rather
+  // than the craft link that may still be in the bar. Every candidate is a craft link on its own
+  // — that is how one is handed over — but a switch made while comparing must not re-craft, or
+  // the hand the player just seated is thrown away between one candidate and the next.
+  const chooseGroupTreatment = useCallback((treatment: RunFormationGroupTreatment) => {
+    const presented = presentedRunAddress(window.location.pathname, window.location.search);
+    const address = new URL(`${presented.path}${presented.search}`, window.location.origin);
+    if (treatment === 'off') address.searchParams.delete('group');
+    else address.searchParams.set('group', treatment);
+    navigateApp(`${address.pathname}${address.search}`, { replace: true, scroll: false });
+  }, []);
   // Where deployment is allowed at all. A property of the level and of what is already seated,
   // so it holds still while the carried formation is turned — turning a formation in one corner
   // must not put out a square at the other end of the band.
@@ -843,6 +905,10 @@ function useRunDeploymentPresentation({
       const filled = arrangementFootprint.has(cellKey);
       const standing = arrangementPlacedCells.get(cellKey) ?? null;
       const actionable = placeable || Boolean(standing);
+      // Which formation this square belongs to, if any is seated on it. Derived from the card's
+      // own seats and the committed placements — see runDeploymentGrouping on why nothing is
+      // persisted for it.
+      const seated = seatedFormationSquares.get(cellKey) ?? null;
       return (
         <button
           type="button"
@@ -853,7 +919,13 @@ function useRunDeploymentPresentation({
             placeable ? 'is-placeable' : '',
             standing ? 'is-seated-formation' : '',
             filled ? 'is-move' : '',
+            seated ? 'has-formation-group' : '',
+            seated && hoveredFormationCardId === seated.cardId ? 'is-formation-hovered' : '',
           ].filter(Boolean).join(' ')}
+          data-formation-group={groupTreatment}
+          data-formation-card={seated?.cardId}
+          data-formation-index={seated ? seated.groupIndex % 6 : undefined}
+          data-formation-edges={seated?.edges.join(' ')}
           aria-label={standing
             ? `Take back the formation at ${cell.x}, ${cell.y}`
             : placeable
@@ -915,6 +987,9 @@ function useRunDeploymentPresentation({
               full across the squares this seating fills. The band never goes dark, so a turn
               that finds no seating still leaves the player looking at where they may deploy. */}
           <PredrawnMoveHighlightPaint />
+          {/* The seated formation's own boundary, drawn on the sides that face OFF it — the
+              card's rule, on the card's geometry, at board scale. */}
+          {seated ? <RunFormationGroupPaint seated={seated} /> : null}
         </button>
       );
     },
@@ -932,6 +1007,8 @@ function useRunDeploymentPresentation({
         onBeginBattle={startArrangedBattle}
         onDealComplete={finishDeal}
         departing={departureActive}
+        groupTreatment={groupTreatment}
+        onChooseGroupTreatment={chooseGroupTreatment}
       />
     ),
     boardOverlay: (
@@ -1342,6 +1419,7 @@ function RunBattlefieldPanel({
   const deploymentPresentation = useRunDeploymentPresentation({
     run,
     departureActive: Boolean(unitDeparture),
+    routeSearch,
   });
   const baseLevel = run.war.battles[run.battleIndex].level;
   // Battle-runtime writes (including Restart) do not change deployment. Keep the
