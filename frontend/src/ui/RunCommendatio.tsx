@@ -1,6 +1,7 @@
 import { useState, type ReactElement, type ReactNode } from 'react';
 import {
   RUN_STARTER_CARD_BY_ID,
+  GOLD_SCALE,
   formatGold,
   runCardDefinition,
   takeCommendatioKing,
@@ -9,6 +10,7 @@ import {
 } from '../run/model';
 import { RunCard } from './RunCard';
 import { RunCardRow } from './RunCardRow';
+import { RunCardCostCoin } from './shared/RunCardCostCoin';
 import { RunSceneViewport } from './RunWorkspace';
 import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
 
@@ -83,13 +85,15 @@ function CommendatioSeat({ kingId, children }: { kingId: string; children: React
   const bonus = king?.goldBonusTenths ?? 0;
   return (
     <div className="run-card-grant-seat">
-      <p
-        className="run-card-grant-bonus"
-        data-testid={`run-commendatio-bonus-${kingId}`}
-        data-empty={bonus > 0 ? 'false' : 'true'}
-      >
-        {bonus > 0 ? `and ${formatGold(bonus)} gold` : 'and no gold'}
-      </p>
+      {bonus > 0 ? (
+        <span
+          className="run-card-grant-bonus"
+          data-testid={`run-commendatio-bonus-${kingId}`}
+          aria-label={`and ${formatGold(bonus)} gold`}
+        >
+          <RunCardCostCoin value={bonus / GOLD_SCALE} />
+        </span>
+      ) : null}
       {children}
     </div>
   );
