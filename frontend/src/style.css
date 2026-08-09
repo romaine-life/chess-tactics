@@ -10659,6 +10659,100 @@ body { font-size: 17px; }
    caption is a sentence, which cannot be squeezed into a half-width column beside a roster. */
 .ce-li-deployment { grid-column: 1 / -1; }
 
+/* ---- Row marks ---------------------------------------------------------------------------
+   A row's mark rides INSIDE its label, so it inherits the label's line and cannot push the value
+   off the shared right edge. The seat is square and sized from the label's own type, so every
+   mark in the readout is the same size whatever its art's aspect, and a type-scale change carries
+   the marks with it instead of leaving them behind. */
+.ce-li-icon {
+  align-items: center;
+  block-size: 1.6em;
+  display: inline-flex;
+  flex: none;
+  inline-size: 1.6em;
+  justify-content: center;
+  margin-inline-end: 6px;
+  vertical-align: -.45em;
+}
+
+.ce-li-icon > img {
+  display: block;
+  max-block-size: 100%;
+  max-inline-size: 100%;
+  object-fit: contain;
+}
+
+/* Board art is pixel art; a mark cut from it keeps its pixels rather than being smoothed into
+   mush at icon scale. The kit's own icons are authored at their seat size and need no such say. */
+.ce-li-tile-icon > img { image-rendering: pixelated; }
+
+/* A surface tile ships in the whole 96x180 TILE frame, whose diamond is one band across the
+   equator at 68/180. Contained in a square seat that band shrinks to a sliver, so the frame is
+   sized by height and hung with its equator on the seat's centre line, overflowing the seat
+   instead of shrinking inside it. The seat keeps its 1.6em for layout, so the row does not grow. */
+.ce-li-tile-icon { overflow: visible; position: relative; }
+
+.ce-li-tile-icon > img {
+  block-size: 3.4em;
+  inline-size: auto;
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  max-block-size: none;
+  max-inline-size: none;
+  position: absolute;
+  translate: -50% -37.8%;
+}
+
+/* The label rows are flex; a label that carries a mark becomes a flex line of its own so the
+   mark and the word share a baseline instead of the mark stretching the row. */
+.ce-li-stat > span,
+.ce-li-zones-row > .ce-li-title {
+  align-items: center;
+  display: inline-flex;
+}
+
+/* A side's flag leads its own heading, before the word and the count. */
+.ce-li-roster-head > .ce-li-flag {
+  margin-inline-end: 5px;
+}
+
+/* ---- The file of units behind a roster line -----------------------------------------------
+   A count of a piece is drawn as that many of the piece. They OVERLAP, so a dozen pawns still
+   fit a narrow column and read as a body rather than a queue; the negative margin is the overlap
+   and the first one cancels it so the file starts flush. The numeral stays at the column's edge
+   — the file says what is coming, the numeral settles exactly how many. */
+.ce-li-file {
+  align-items: center;
+  display: inline-flex;
+  flex: 1 1 auto;
+  justify-content: flex-end;
+  min-inline-size: 0;
+  overflow: hidden;
+  padding-inline: 6px;
+}
+
+.ce-li-file > .ce-li-file-unit {
+  block-size: 1.9em;
+  inline-size: 1.5em;
+  margin-inline-start: -.45em;
+}
+
+.ce-li-file > .ce-li-file-unit:first-child {
+  margin-inline-start: 0;
+}
+
+/* Rocks and rubble have no unit sprite, so their line keeps name and count with nothing between. */
+.ce-li-file.is-unsprited { display: none; }
+
+/* The Zone row's control is a real button, so the row is control + value rather than two spans.
+   Width only — the registered text button owns its height (`width-only` control policy). Sized to
+   the label so it does not read as a wide command bar in a column of quiet facts. */
+.ce-li-zone-toggle {
+  flex: none;
+  inline-size: 92px;
+  min-inline-size: 72px;
+}
+
 .terrain-grass { background: #6a9b3f; }
 .terrain-water { background: #3a78c8; }
 .terrain-bridge { background: #b08750; }
@@ -19663,6 +19757,14 @@ button.tileset-relationship-cell {
 /* The box's own name is the largest thing in it. Section headers govern the rows beneath them,
    and rows outrank their labels: title > section header > value > label, with no step skipped
    and none inverted. */
+/* The Battle mark rides the box's own title, at the title's line. */
+.run-battle-preview-titlebar-head > h2 > .run-battle-preview-battle-icon {
+  block-size: 1.15em;
+  inline-size: 1.15em;
+  margin-inline-end: var(--ds-space-2);
+  vertical-align: -.18em;
+}
+
 .run-battle-preview-titlebar-head > h2 {
   font-size: var(--ds-text-xl);
   margin: 0;

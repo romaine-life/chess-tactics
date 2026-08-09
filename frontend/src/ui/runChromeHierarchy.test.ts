@@ -523,7 +523,9 @@ describe('Run chrome hierarchy', () => {
       /function PreviewTitleBar\([\s\S]*?<ChromeSurfaceFill role="outer" className="run-battle-preview-titlebar-fill" \/>[\s\S]*?<ChromeDivider role="inner" className="run-battle-preview-titlebar-rule" \/>/,
     );
     expect(runBattlePreview).toContain('<PreviewTitleBar id="run-battle-preview-title">{level.name}</PreviewTitleBar>');
-    expect(runBattlePreview).toMatch(/titleBar=\{\(\s*<PreviewTitleBar>Battle \{battleIndex \+ 1\} of \{run\.war\.battles\.length\}<\/PreviewTitleBar>/);
+    expect(runBattlePreview).toMatch(
+      /titleBar=\{\(\s*<PreviewTitleBar>[\s\S]*?Battle \{battleIndex \+ 1\} of \{run\.war\.battles\.length\}\s*<\/PreviewTitleBar>/,
+    );
     expect(runBattlePreview).toContain('<PreviewTitleBar>Before deployment</PreviewTitleBar>');
     // The rule's host states its own reach so the authored T caps tee INTO the frame's side
     // rails, and the bleed is not clipped. Hand-zeroing margins instead puts the caps inside.
@@ -582,7 +584,9 @@ describe('Run chrome hierarchy', () => {
     expect(runBattlePreview).toMatch(
       /const bandCells = useMemo\(\s*\(\) => new Set\(playerDeploymentCells\(level\)\.map\(\(cell\) => `\$\{cell\.x\},\$\{cell\.y\}`\)\),/,
     );
-    expect(runBattlePreview).toContain('renderCellOverlay={(cell) => bandCells.has(`${cell.x},${cell.y}`)');
+    expect(runBattlePreview).toMatch(
+      /renderCellOverlay=\{bandShown\s*\?\s*\(cell\) => bandCells\.has\(`\$\{cell\.x\},\$\{cell\.y\}`\)/,
+    );
     // The board already has ONE drawing for a zone — the Level Editor's tinted diamond with its
     // own per-square outline, in the Player Deployment accent. A move highlight here was a second
     // language for the same fact, and without a per-square edge it read as an invented slab.
@@ -608,9 +612,42 @@ describe('Run chrome hierarchy', () => {
     // Both facts also stand in the Level readout, which is where a reader looks for numbers.
     expect(levelInfoCompact).toContain('const cardsDealt = levelBattleCardsDealt(level);');
     expect(levelInfoCompact).toContain('playerDeploymentCells(level).length');
-    expect(levelInfoCompact).toContain('<span>Cards dealt</span><strong>{cardsDealt}</strong>');
+    expect(levelInfoCompact).toMatch(/<RowIcon src=\{cardsIconSrc\}[^>]*\/>Cards dealt<\/span>\s*<strong>\{cardsDealt\}<\/strong>/);
     // Campaign and standalone Levels deal nothing, so the section is a War Battle's alone.
     expect(levelInfoCompact).toContain('{cardsDealt !== null ? (');
+  });
+
+  // Every mark in the readout resolves REAL game art through its installed role. A readout that
+  // invents a glyph for a fact the game already has a picture of teaches the player a second
+  // vocabulary for the same thing.
+  it('marks the readout rows with the game’s own art, and makes Zone the band’s control', () => {
+    expect(levelInfoCompact).toContain("installedUiMedia('ui-kit-icons-game-objective-png')");
+    expect(levelInfoCompact).toContain("installedUiMedia('ui-kit-icons-game-wait-png')");
+    expect(levelInfoCompact).toContain('useStrategikonCardsIcon()');
+    // The tile mark is a tile: the same installed grass surface the Level Editor paints.
+    expect(levelInfoCompact).toMatch(/studioFamilies\.find\(\(family\) => family\.id === 'grass'\)/);
+    // The Battle mark is the Run's registered Battle icon, not a second drawing of a Battle.
+    expect(runBattlePreview).toContain('<RunProgressIcon variant="battle"');
+
+    // A count of a piece is drawn as that many of the piece, in the palette that side wears on
+    // the board beside it — read from the projection the renderer itself consumes.
+    expect(levelInfoCompact).toContain('<PieceFile type={p} count={counts[p] ?? 0} palette={palette} />');
+    expect(levelInfoCompact).toContain('const projected = levelToEditorBoard(level).units ?? {};');
+    // Bare count, never "×N": N sprites beside "×N" reads as N lots of N.
+    expect(levelInfoCompact).toContain('<b>{counts[p]}</b>');
+    expect(levelInfoCompact).not.toContain('×{counts[p]}');
+    // Rocks and rubble have no unit sprite and must not ask for one.
+    expect(levelInfoCompact).toContain('if (!isPlayablePieceType(type))');
+
+    // Zone is the control for the band, through the registered text button's toggle variant.
+    expect(levelInfoCompact).toContain('unit="inner-text-button"');
+    expect(levelInfoCompact).toContain('selected={deploymentBand.shown}');
+    expect(levelInfoCompact).toContain('onClick={deploymentBand.onToggle}');
+    // Verified live: pressing it takes the painted band from 18 cells to 0 and back.
+    expect(runBattlePreview).toContain('deploymentBand={{ shown: bandShown, onToggle: () => setBandShown((shown) => !shown) }}');
+    expect(runBattlePreview).toContain('renderCellOverlay={bandShown');
+    // A readout with no board of its own states the fact instead of offering a dead control.
+    expect(levelInfoCompact).toContain('deploymentBand ? (');
   });
 
   it('retains the installed Sectio scene outside the workspace transition region', () => {

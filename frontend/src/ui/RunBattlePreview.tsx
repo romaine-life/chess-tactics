@@ -3,6 +3,7 @@ import { runDeploymentDealCount, sectioUpcomingBattleIndex, type RunDocument } f
 import { playerDeploymentCells } from '../run/deployment';
 import { levelToEditorBoard } from '../core/levelBoard';
 import { ChromeDivider, ChromeSurfaceFill, InnerChromeBox } from './shared/ChromeBox';
+import { RunProgressIcon } from './shared/RunProgressIcon';
 import { FramedReadOnlyBoardView } from './shared/BoardViewFraming';
 import { LevelInfoCompact } from './LevelInfoCompact';
 import { RunSceneViewport } from './RunWorkspace';
@@ -53,6 +54,9 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
     () => new Set(playerDeploymentCells(level).map((cell) => `${cell.x},${cell.y}`)),
     [level],
   );
+  // Shown by default: the band is the answer to the first question a player asks of a map they
+  // are about to fight on. The Zone row turns it off for an unobstructed look at the ground.
+  const [bandShown, setBandShown] = useState(true);
   const [terrainPainted, setTerrainPainted] = useState(false);
   const [scenePainted, setScenePainted] = useState(false);
   const [frameError, setFrameError] = useState<Error | null>(null);
@@ -111,9 +115,11 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
                 // Level Editor paints this very zone with. A move highlight would have been a
                 // second language for a fact the board already has a drawing for, and reads as an
                 // invented slab because it has no per-square edge.
-                renderCellOverlay={(cell) => bandCells.has(`${cell.x},${cell.y}`)
-                  ? <span className="le-zone-cell le-zone-player" aria-hidden="true" />
-                  : null}
+                renderCellOverlay={bandShown
+                  ? (cell) => bandCells.has(`${cell.x},${cell.y}`)
+                    ? <span className="le-zone-cell le-zone-player" aria-hidden="true" />
+                    : null
+                  : undefined}
                 onTerrainFirstFrame={() => setTerrainPainted(true)}
                 onSceneFirstFrame={() => setScenePainted(true)}
                 onFrameError={(value) => setFrameError(
@@ -131,8 +137,14 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
               // OUTER role material, borrowed under an inner frame (ADR-0433 borrowing rule).
               fillRole="outer"
               className="run-battle-preview-info"
+              deploymentBand={{ shown: bandShown, onToggle: () => setBandShown((shown) => !shown) }}
               titleBar={(
-                <PreviewTitleBar>Battle {battleIndex + 1} of {run.war.battles.length}</PreviewTitleBar>
+                <PreviewTitleBar>
+                  {/* The Run's own Battle mark, the same one the title bar carries — reconnaissance
+                      of a Battle is named by the thing a Battle is named by. */}
+                  <RunProgressIcon variant="battle" className="run-battle-preview-battle-icon" />
+                  Battle {battleIndex + 1} of {run.war.battles.length}
+                </PreviewTitleBar>
               )}
             />
             <InnerChromeBox className="run-battle-preview-note" fillRole="outer">

@@ -10,12 +10,17 @@ import { playerDeploymentCells } from '@chess-tactics/board-render/run/deploymen
 import { MODE_NAME, objectiveContextForLevel, victoryRulesForLevel } from '../core/objectives';
 import { formatClockSeconds } from '../core/clock';
 import type { PieceType } from '../core/types';
+import { isPlayablePieceType, isUnitPalette, paletteForSide, type UnitPalette } from '../core/pieces';
 import { spawnEventsForLevel } from '../core/levelEvents';
 import { objectiveBriefingForSide } from '../game/objectiveBriefing';
 import type { PlayingSide } from '../game/clientPerspective';
+import { ChromeButton } from './shared/ChromeButton';
 import { InnerChromeBox } from './shared/ChromeBox';
+import { PieceTypeIcon } from './shared/PieceTypeIcon';
+import { installedUiMedia } from './installedUiMedia';
+import { useStrategikonCardsIcon } from './strategikonNavigation';
 import { levelToEditorBoard } from '../core/levelBoard';
-import { isPredrawnBackgroundActive } from '@chess-tactics/board-render';
+import { assetFrameSrc, isPredrawnBackgroundActive, studioFamilies } from '@chess-tactics/board-render';
 
 const PIECE_ORDER: PieceType[] = ['king', 'queen', 'rook', 'bishop', 'knight', 'pawn', 'rock', 'random-rock'];
 const PIECE_LABEL: Record<PieceType, string> = {
@@ -29,6 +34,53 @@ const TERRAIN_LABEL: Record<string, string> = {
   grass: 'Grass', water: 'Water', bridge: 'Bridge', road: 'Road', stone: 'Stone', rock: 'Rock', cliff: 'Cliff', dirt: 'Dirt', pebble: 'Pebble', sand: 'Sand',
   void: 'Gap',
 };
+
+/**
+ * A row's mark: installed art at the row's own scale, beside the label it belongs to. Every one
+ * of these resolves a real game asset — the objective flag, the Run's Battle drum, the card back
+ * the player deals, the grass surface the editor paints — rather than a glyph invented for a
+ * readout. `aria-hidden` because the label beside it already says the word.
+ */
+function RowIcon({ src, className = '' }: { src: string; className?: string }): ReactElement {
+  return (
+    <span className={`ce-li-icon ${className}`.trim()} aria-hidden="true">
+      <img src={src} alt="" draggable={false} />
+    </span>
+  );
+}
+
+/**
+ * The colours each side wears on the board this readout sits beside, read from the very
+ * projection that board renders — so a roster icon and the piece standing on the map are the
+ * same sprite rather than two guesses at the same side. A side with nothing authored (the player,
+ * on a Battle whose army arrives from cards) has no projected faction to read, and falls back to
+ * the gameplay side default the projection would give it.
+ */
+function boardPalettes(level: Level): Record<'player' | 'enemy', UnitPalette> {
+  const projected = levelToEditorBoard(level).units ?? {};
+  const authored = (side: 'player' | 'enemy'): UnitPalette | undefined => {
+    for (const unit of level.layers.units) {
+      if (unit.side !== side) continue;
+      const faction = projected[`${unit.x},${unit.y}`]?.faction;
+      if (isUnitPalette(faction)) return faction;
+    }
+    return undefined;
+  };
+  return {
+    player: authored('player') ?? paletteForSide('player'),
+    enemy: authored('enemy') ?? paletteForSide('enemy'),
+  };
+}
+
+/**
+ * The empty grass surface, exactly as the Level Editor paints it. "Tiles" counts squares of
+ * board, so its mark is a square of board.
+ */
+function grassSurfaceIconSrc(): string {
+  const asset = studioFamilies.find((family) => family.id === 'grass')?.assets[0];
+  if (!asset) throw new Error('the grass terrain family has no installed surface');
+  return assetFrameSrc(asset, 0);
+}
 
 function countMap<K extends string>(keys: K[]): Partial<Record<K, number>> {
   const out: Partial<Record<K, number>> = {};
@@ -99,19 +151,54 @@ export function levelShowsTerrainTypeCounts(level: Level): boolean {
   return !isPredrawnBackgroundActive(levelToEditorBoard(level));
 }
 
-function Roster({ counts, tone, label, dealt = 0 }: {
+/**
+ * A side's own count of a piece, as that many of the piece. The sprites overlap into one file so
+ * a dozen pawns still fit the column, and the numeral stays at the column's edge: the file says
+ * what is coming at a glance and the numeral settles exactly how many. Written as a bare count
+ * rather than "×3" — three sprites beside "×3" reads as three lots of three.
+ */
+function PieceFile({ type, count, palette }: {
+  type: PieceType;
+  count: number;
+  palette: UnitPalette;
+}): ReactElement {
+  // Rocks and rubble are board furniture with no unit sprite; they keep the name alone.
+  if (!isPlayablePieceType(type)) return <span className="ce-li-file is-unsprited" aria-hidden="true" />;
+  return (
+    <span className="ce-li-file" aria-hidden="true">
+      {Array.from({ length: count }, (_, index) => (
+        <PieceTypeIcon key={index} type={type} palette={palette} className="ce-li-file-unit" />
+      ))}
+    </span>
+  );
+}
+
+function Roster({ counts, tone, label, palette, flagSrc, dealt = 0 }: {
   counts: PieceCounts;
   tone: string;
   label: string;
+  /** The colours this side's pieces actually wear on the board beside the readout. */
+  palette: UnitPalette;
+  flagSrc: string;
   dealt?: number;
 }): ReactElement {
   const present = PIECE_ORDER.filter((p) => counts[p]);
   const total = countTotal(counts);
   return (
     <div className="ce-li-roster">
-      <div className={`ce-li-roster-head ${tone}`}><span>{label}</span><strong>{total}</strong></div>
+      <div className={`ce-li-roster-head ${tone}`}>
+        <RowIcon src={flagSrc} className="ce-li-flag" />
+        <span>{label}</span>
+        <strong>{total}</strong>
+      </div>
       <ul>
-        {present.map((p) => <li key={p}><span>{PIECE_LABEL[p]}</span><b>×{counts[p]}</b></li>)}
+        {present.map((p) => (
+          <li key={p}>
+            <span>{PIECE_LABEL[p]}</span>
+            <PieceFile type={p} count={counts[p] ?? 0} palette={palette} />
+            <b>{counts[p]}</b>
+          </li>
+        ))}
         {present.length === 0 ? <li className="ce-li-none">none</li> : null}
       </ul>
       {dealt > 0 ? (
@@ -129,6 +216,7 @@ export function LevelInfoCompact({
   fillRole,
   className = '',
   titleBar = null,
+  deploymentBand = null,
 }: {
   level: Level;
   /** Zones are authoring detail; a player-facing reconnaissance readout omits them. */
@@ -138,7 +226,16 @@ export function LevelInfoCompact({
   className?: string;
   /** The box's own title strip, seated flush at its top edge above the derived facts. */
   titleBar?: ReactElement | null;
+  /**
+   * When a board is showing beside this readout, the Zone row becomes the control that paints or
+   * clears the deployment band on it — the number answers "how big" and the control answers
+   * "where". A readout with no board of its own leaves this null and the row states the fact.
+   */
+  deploymentBand?: { shown: boolean; onToggle: () => void } | null;
 }): ReactElement {
+  const cardsIconSrc = useStrategikonCardsIcon();
+  const flagIconSrc = installedUiMedia('ui-kit-icons-game-objective-png');
+  const hourglassIconSrc = installedUiMedia('ui-kit-icons-game-wait-png');
   const { cols, rows } = level.board;
   const total = cols * rows;
   const filled = level.layers.terrain.filter((tile) => tile.terrain !== 'void').length;
@@ -148,6 +245,7 @@ export function LevelInfoCompact({
     : [];
   const allies = forceCountsForSide(level, 'player');
   const enemies = forceCountsForSide(level, 'enemy');
+  const palettes = boardPalettes(level);
   // What the player brings is not in the Forces ledger at all — it arrives from their own
   // collection, and how much of it this stage takes is the stage's own answer. Two numbers say
   // it: how many cards the Battle deals, and how many squares its band has to seat them on.
@@ -168,7 +266,10 @@ export function LevelInfoCompact({
       <section className="ce-li-board">
         <span className="ce-li-title">Board</span>
         <div className="ce-li-stat"><span>Size</span><strong>{cols} × {rows}</strong></div>
-        <div className="ce-li-stat"><span>Tiles</span><strong>{filled} / {total}</strong></div>
+        <div className="ce-li-stat">
+          <span><RowIcon src={grassSurfaceIconSrc()} className="ce-li-tile-icon" />Tiles</span>
+          <strong>{filled} / {total}</strong>
+        </div>
         {showsTerrainTypeCounts ? (
           <div className="ce-li-chips">
             {terrainMix.map(([t, n]) => (
@@ -181,17 +282,48 @@ export function LevelInfoCompact({
       <section className="ce-li-forces">
         <span className="ce-li-title">Forces</span>
         <div className="ce-li-rosters">
-          <Roster counts={allies} tone="is-ally" label="Allies" dealt={dealtCountForSide(level, 'player')} />
-          <Roster counts={enemies} tone="is-enemy" label="Enemies" dealt={dealtCountForSide(level, 'enemy')} />
+          <Roster
+            counts={allies}
+            tone="is-ally"
+            label="Allies"
+            palette={palettes.player}
+            flagSrc={flagIconSrc}
+            dealt={dealtCountForSide(level, 'player')}
+          />
+          <Roster
+            counts={enemies}
+            tone="is-enemy"
+            label="Enemies"
+            palette={palettes.enemy}
+            flagSrc={flagIconSrc}
+            dealt={dealtCountForSide(level, 'enemy')}
+          />
         </div>
       </section>
 
       {cardsDealt !== null ? (
         <section className="ce-li-deployment">
           <span className="ce-li-title">Deployment</span>
-          <div className="ce-li-stat"><span>Cards dealt</span><strong>{cardsDealt}</strong></div>
           <div className="ce-li-stat">
-            <span>Zone</span>
+            <span><RowIcon src={cardsIconSrc} className="ce-li-card-icon" />Cards dealt</span>
+            <strong>{cardsDealt}</strong>
+          </div>
+          <div className="ce-li-stat">
+            {deploymentBand ? (
+              // The registered text button's TOGGLE variant — a label that is also its own
+              // on/off state, which is what this row is. The `inner-toggle` unit is the Off/On
+              // switch pair; it would put a second control beside a word that is already the
+              // control.
+              <ChromeButton
+                unit="inner-text-button"
+                className="le-seg-btn ce-li-zone-toggle"
+                selected={deploymentBand.shown}
+                onClick={deploymentBand.onToggle}
+                title={deploymentBand.shown ? 'Hide the deployment zone on the board' : 'Show the deployment zone on the board'}
+              >
+                Zone
+              </ChromeButton>
+            ) : <span>Zone</span>}
             <strong>{deploymentSquares} square{deploymentSquares === 1 ? '' : 's'}</strong>
           </div>
           <p className="ce-li-dealt">
@@ -216,7 +348,7 @@ export function LevelInfoCompact({
       </section>
 
       <section className="ce-li-zones-row">
-        <span className="ce-li-title">Time</span>
+        <span className="ce-li-title"><RowIcon src={hourglassIconSrc} className="ce-li-clock-icon" />Time</span>
         <span className="ce-li-zones">
           {level.timeControl
             ? `${formatClockSeconds(level.timeControl.initialSeconds)}${level.timeControl.incrementSeconds ? ` +${level.timeControl.incrementSeconds}s / move` : ''}`
