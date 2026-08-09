@@ -8,18 +8,22 @@ import {
 import { activeUnitFamilies, tileFrameSrc, type UnitFacing } from '@chess-tactics/board-render';
 import { tileAssets } from '../art/tileset';
 import { fetchAdminUnitCatalog } from '../net/unitAssets';
+import { zoomForTier } from '../game/zoomTiers';
 
 /**
- * The magnifications this surface offers, and the only ones it can.
+ * The camera's own tiers, not an inspection magnifier.
  *
- * Pixel art has to be magnified by whole multiples or its columns come out uneven,
- * which is the very artifact this surface exists to catch. That makes zoom a
- * DISCRETE quantity here, and the Studio's shared slider is a continuous control:
- * mapping one onto the other gives a control that ignores most of its own travel,
- * which reads as broken because it effectively is. So this viewer declines the
- * shared slider and steps the ladder directly -- every press moves exactly one rung.
+ * The question this surface has to answer is what a player SEES when they zoom in a
+ * level, so the control walks the game's zoom ladder and draws each unit at the size
+ * that tier actually puts on screen. An arbitrary 2x/4x magnifier answers a
+ * different question -- how do these pixels look up close -- which is not the one
+ * the roster is for.
+ *
+ * Sampled every few rungs rather than every 5% step: the ladder is deliberately fine
+ * for the wheel, and a stepper wants strides you can see between.
  */
-const MAGNIFICATIONS = [1, 2, 3, 4, 6, 8] as const;
+const TIER_STRIDE = 6;
+const TIER_INDEX_RANGE = { min: -18, max: 30 };
 
 /**
  * The whole shipped roster at once, at 1:1.
@@ -44,7 +48,12 @@ export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactEl
   const [palette, setPalette] = useState<UnitPalette>('navy-blue');
   const [allPalettes, setAllPalettes] = useState(false);
 
-  const [magnify, setMagnify] = useState<number>(1);
+  const [tierIndex, setTierIndex] = useState(0);
+  const tierZoom = zoomForTier(tierIndex);
+  // Below 1:1 the board minifies through its mip chain rather than dropping columns,
+  // so the browser is allowed to resample here too; magnified, whole-pixel is what
+  // the board does and what the art was authored for.
+  const nearest = tierZoom >= 1;
   const [showBefore, setShowBefore] = useState(false);
   const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof fetchAdminUnitCatalog>> | null>(null);
   // The ADMIN catalog, because accepting a new asset archives the one it replaced and
@@ -112,36 +121,37 @@ export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactEl
         <span className="unit-roster-magnify">
           <button
             type="button"
-            aria-label="Magnify out"
-            disabled={magnify === MAGNIFICATIONS[0]}
-            onClick={() => setMagnify((current) => MAGNIFICATIONS[Math.max(0, MAGNIFICATIONS.indexOf(current as never) - 1)])}
+            aria-label="Zoom out one tier"
+            disabled={tierIndex <= TIER_INDEX_RANGE.min}
+            onClick={() => setTierIndex((current) => Math.max(TIER_INDEX_RANGE.min, current - TIER_STRIDE))}
           >
             −
           </button>
-          <span className="unit-roster-magnify-value">{magnify}×</span>
+          <span className="unit-roster-magnify-value">{Math.round(tierZoom * 100)}%</span>
           <button
             type="button"
-            aria-label="Magnify in"
-            disabled={magnify === MAGNIFICATIONS[MAGNIFICATIONS.length - 1]}
-            onClick={() => setMagnify((current) => MAGNIFICATIONS[Math.min(MAGNIFICATIONS.length - 1, MAGNIFICATIONS.indexOf(current as never) + 1)])}
+            aria-label="Zoom in one tier"
+            disabled={tierIndex >= TIER_INDEX_RANGE.max}
+            onClick={() => setTierIndex((current) => Math.min(TIER_INDEX_RANGE.max, current + TIER_STRIDE))}
           >
             +
           </button>
         </span>
         <p className="unit-roster-note">
-          {magnify === 1
-            ? 'Drawn at 1:1 — every sprite is authored at its delivery size.'
-            : `Magnified ${magnify}x — whole multiples only; judge the read at 1:1.`}
+          {tierIndex === 0
+            ? 'Camera zoom 100% — every sprite is authored at this size.'
+            : `Camera zoom ${Math.round(tierZoom * 100)}% — what a player sees at this tier.`}
         </p>
       </div>
 
       <div
         className="unit-roster-grid"
         // `zoom` rather than `transform: scale`: a transform does not affect layout,
-        // so the magnified grid overflowed its scroll area and everything past the
+        // so a magnified grid overflowed its scroll area and everything past the
         // first unit became unreachable. `zoom` scales the box too, so the panel
         // scrolls to the rest of the roster.
-        style={magnify === 1 ? undefined : { zoom: magnify }}
+        style={tierIndex === 0 ? undefined : { zoom: tierZoom }}
+        data-nearest={nearest ? '1' : '0'}
       >
         {(allPalettes ? UNIT_PALETTES : families).map((rowKey) => (
           <div className="unit-roster-row" key={rowKey}>

@@ -28079,3 +28079,11 @@ button.run-card-formation-cell {
   min-width: 26px;
   text-align: center;
 }
+
+/* Zoomed OUT, the board minifies through its mip chain rather than dropping
+   columns, so let the browser resample here too — forcing nearest would show an
+   artifact the game no longer has. */
+.unit-roster-grid[data-nearest='0'] .unit-roster-unit,
+.unit-roster-grid[data-nearest='0'] .unit-roster-ground {
+  image-rendering: auto;
+}
