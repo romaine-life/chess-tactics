@@ -10624,7 +10624,17 @@ body { font-size: 17px; }
 }
 
 /* Force composition for the selected level — the allies/enemies counts read off
-   the level's board, so they live with the level, not the global title bar. */
+   the level's board, so they live with the level, not the global title bar.
+   The line is seated on its own inner box so its marks have a surface to read against instead of
+   whatever the night sky is showing. The box HUGS the line rather than running the column's full
+   width: a stretched one leaves a third of its marble empty, which reads as a box missing its
+   content. It still yields to the column when the line is wider than the width available. */
+.ce-force-readout-box {
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  padding: 6px 10px;
+}
+
 .ce-force-readout {
   align-items: center;
   display: flex;

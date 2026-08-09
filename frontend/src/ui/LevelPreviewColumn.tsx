@@ -64,17 +64,22 @@ export function LevelPreviewColumn({
       <aside className={embedded ? 'menu-dest-col menu-dest-preview ce-preview-col' : 'ce-editor-preview-col ce-preview-col'} aria-label="Selected level">
         <div className="ce-selected-head">
           <h2>{title}</h2>
-          {/* Each side's mark is the piece the player actually meets on the board below, in that
-              side's own palette — not a glyph cut out of a mockup. The card back is the one the
-              player deals with, so the Battle's force is drawn with the thing it arrives as. */}
-          <div className="ce-force-readout" aria-label="Level forces">
-            {dealLine !== null ? (
-              <span className="ce-force ce-force-cards"><img className="ce-force-card" src={cardsIconSrc} alt="" draggable={false} />Cards <strong>{dealLine}</strong></span>
-            ) : (
-              <span className="ce-force ce-force-ally"><PieceTypeIcon type="rook" palette={palettes.player} className="ce-force-unit" />Allies <strong>{allyCount}</strong></span>
-            )}
-            <span className="ce-force ce-force-enemy"><PieceTypeIcon type="rook" palette={palettes.enemy} className="ce-force-unit" />Enemies <strong>{enemyCount}</strong></span>
-          </div>
+          {/* Small marks and small numerals over the night sky had nothing behind them to read
+              against — whatever board art the backdrop was showing WAS their background. They sit
+              on the same installed marble as the facts box below instead (ADR-0433), so the line
+              has a settled surface of its own. Each side's mark is the piece the player actually
+              meets on the board, in that side's own palette — not a glyph cut out of a mockup —
+              and the card back is the one the player deals with. */}
+          <InnerChromeBox className="ce-force-readout-box" fillRole="outer">
+            <div className="ce-force-readout" aria-label="Level forces">
+              {dealLine !== null ? (
+                <span className="ce-force ce-force-cards"><img className="ce-force-card" src={cardsIconSrc} alt="" draggable={false} />Cards <strong>{dealLine}</strong></span>
+              ) : (
+                <span className="ce-force ce-force-ally"><PieceTypeIcon type="rook" palette={palettes.player} className="ce-force-unit" />Allies <strong>{allyCount}</strong></span>
+              )}
+              <span className="ce-force ce-force-enemy"><PieceTypeIcon type="rook" palette={palettes.enemy} className="ce-force-unit" />Enemies <strong>{enemyCount}</strong></span>
+            </div>
+          </InnerChromeBox>
         </div>
         {board ? (
           <InnerChromeBox className="ce-preview-frame">
