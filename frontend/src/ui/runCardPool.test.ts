@@ -8,6 +8,7 @@ import {
   countDefences,
   groupPool,
   hasOppositeColourBishopPair,
+  poolPriceSteps,
   poolRotationContract,
   poolShapeSignature,
   priceCard,
@@ -212,33 +213,80 @@ describe('runCardPool rotation contract', () => {
 });
 
 describe('runCardPool synergy under rotation', () => {
-  const withPawns = { ...DEFAULT_POOL_KNOBS, countPawnSupport: true };
+  const rotating = DEFAULT_POOL_KNOBS;
 
   it('takes the best orientation while the player rotates', () => {
     // Rook at (0,0), Pawn at (1,1). As authored the Pawn covers (0,0) and shelters the Rook.
-    const sheltering = cardSynergy(cells([0, 0], [1, 1]), ['R', 'P'], withPawns);
+    const sheltering = cardSynergy(cells([0, 0], [1, 1]), ['R', 'P'], rotating, true);
     expect(sheltering.defences).toBe(1);
 
     // Same two pieces, seated so the Pawn covers nothing. A quarter turn fixes that, and the
     // player will take the turn -- so the card is worth the sheltered reading either way.
-    const seatedBadly = cardSynergy(cells([0, 1], [1, 0]), ['R', 'P'], withPawns);
+    const seatedBadly = cardSynergy(cells([0, 1], [1, 0]), ['R', 'P'], rotating, true);
     expect(seatedBadly.defences).toBe(1);
     // Reading only the authored seating would have priced this at zero.
     expect(countDefences(cells([0, 1], [1, 0]), ['R', 'P'], true)).toBe(0);
   });
 
   it('collapses to the authored seating once facing is bought', () => {
-    const fixed = { ...withPawns, collapseRotation: false };
-    expect(cardSynergy(cells([0, 0], [1, 1]), ['R', 'P'], fixed).defences).toBe(1);
-    expect(cardSynergy(cells([0, 1], [1, 0]), ['R', 'P'], fixed).defences).toBe(0);
+    const fixed = { ...DEFAULT_POOL_KNOBS, collapseRotation: false };
+    expect(cardSynergy(cells([0, 0], [1, 1]), ['R', 'P'], fixed, true).defences).toBe(1);
+    expect(cardSynergy(cells([0, 1], [1, 0]), ['R', 'P'], fixed, true).defences).toBe(0);
   });
 
   it('leaves the rotation-invariant terms untouched by the max', () => {
     // Non-pawn support and colour parity survive a quarter turn, so max changes nothing.
     for (const knobs of [DEFAULT_POOL_KNOBS, { ...DEFAULT_POOL_KNOBS, collapseRotation: false }]) {
-      expect(cardSynergy(cells([0, 0], [0, 1]), ['R', 'R'], knobs).defences).toBe(2);
-      expect(cardSynergy(cells([0, 0], [0, 1]), ['B', 'B'], knobs).hasBishopPair).toBe(true);
-      expect(cardSynergy(cells([0, 0], [1, 1]), ['B', 'B'], knobs).hasBishopPair).toBe(false);
+      expect(cardSynergy(cells([0, 0], [0, 1]), ['R', 'R'], knobs, false).defences).toBe(2);
+      expect(cardSynergy(cells([0, 0], [0, 1]), ['B', 'B'], knobs, false).hasBishopPair).toBe(true);
+      expect(cardSynergy(cells([0, 0], [1, 1]), ['B', 'B'], knobs, false).hasBishopPair).toBe(false);
     }
+  });
+});
+
+describe('runCardPool models own their formula', () => {
+  const price = (id: string, pieces: PoolPiece[], at: [number, number][]) => {
+    const model = POOL_MODELS.find((m) => m.id === id);
+    if (!model) throw new Error(`no model ${id}`);
+    return priceCard(cells(...at), pieces, model.knobs);
+  };
+
+  it('carries no term a model has not declared', () => {
+    const plain = POOL_MODELS.find((m) => m.id === 'density-cost')!.knobs;
+    expect(plain.terms.map((t) => t.kind)).toEqual(['density', 'round']);
+    // Material bands prices at raw material, so it declares nothing at all.
+    expect(POOL_MODELS.find((m) => m.id === 'material-bands')!.knobs.terms).toEqual([]);
+    const synergy = POOL_MODELS.find((m) => m.id === 'synergy')!.knobs;
+    expect(synergy.terms.map((t) => t.kind)).toEqual(['density', 'bishopPair', 'defences', 'round']);
+  });
+
+  it('is the only thing separating the synergy proposal from the plain curve', () => {
+    // Two Rooks on a file defend each other, so the synergy model charges for them and the plain
+    // density curve does not. Same card, two formulas, a difference you can read.
+    const rooks: [number, number][] = [[0, 0], [0, 1]];
+    expect(price('density-cost', ['R', 'R'], rooks).cost).toBe(130);
+    expect(price('synergy', ['R', 'R'], rooks).cost).toBeGreaterThan(130);
+    // A card with nothing defending anything is priced identically by both.
+    const pawns: [number, number][] = [[0, 0], [1, 0]];
+    expect(price('synergy', ['P', 'P'], pawns).cost).toBe(price('density-cost', ['P', 'P'], pawns).cost);
+  });
+
+  it('makes the pawn-shelter question a difference between two models', () => {
+    // A Pawn behind a Rook shelters it. The two synergy models disagree about paying for that,
+    // which is the point of having both.
+    const sheltered: [number, number][] = [[0, 0], [1, 1]];
+    const withPawns = price('synergy', ['R', 'P'], sheltered).cost;
+    const without = price('synergy-no-pawns', ['R', 'P'], sheltered).cost;
+    expect(withPawns).toBeGreaterThan(without);
+  });
+
+  it('walks the steps it declares, and marks the ones that did not apply', () => {
+    const synergy = POOL_MODELS.find((m) => m.id === 'synergy')!.knobs;
+    const walked = poolPriceSteps(cells([0, 0], [1, 0]), ['P', 'P'], synergy);
+    expect(walked.steps.map((s) => s.term.kind)).toEqual(['density', 'bishopPair', 'defences', 'round']);
+    // No Bishops and nothing defended, so those two steps leave the price untouched.
+    expect(walked.steps[1].worked).toBeNull();
+    expect(walked.steps[2].worked).toBeNull();
+    expect(walked.steps[1].before).toBe(walked.steps[1].after);
   });
 });

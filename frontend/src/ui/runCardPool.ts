@@ -19,6 +19,22 @@ export const POOL_PIECE_NAME: Readonly<Record<PoolPiece, string>> = {
 
 export type PoolCell = Readonly<{ x: number; y: number }>;
 
+/**
+ * One step of a price formula, applied in order starting from the card's raw material.
+ *
+ * Adding a pricing idea means adding a kind here and a model that uses it — never a constant that
+ * every other model has to carry at zero.
+ */
+export type PoolTerm =
+  /** x (density / 3) ^ power x scale — pays for concentration rather than raw material. */
+  | Readonly<{ kind: 'density'; power: number; scale: number }>
+  /** x (1 + bonus) when the card holds two Bishops on opposite colours. */
+  | Readonly<{ kind: 'bishopPair'; bonus: number }>
+  /** x (1 + defences x bonus). `countPawnSupport` decides whether Pawn shelter counts. */
+  | Readonly<{ kind: 'defences'; bonus: number; countPawnSupport: boolean }>
+  /** Round to the nearest `to`. Normally last. */
+  | Readonly<{ kind: 'round'; to: number }>;
+
 export type PoolKnobs = Readonly<{
   /** Material per piece. Drives value, and therefore density and cost. */
   pieceValue: Readonly<Record<PoolPiece, number>>;
@@ -44,20 +60,15 @@ export type PoolKnobs = Readonly<{
    * Combined with `collapseRotation: false` this is the vertical-only, front-and-back-distinct rule.
    */
   oneOrientationPerShape: boolean;
-  /** cost = value * (density / 3) ^ densityPower * costScale, rounded to `roundTo`. */
-  densityPower: number;
-  costScale: number;
-  roundTo: number;
-  /** Two Bishops whose cells differ in colour parity — the blind-spot fix. */
-  bishopPairBonus: number;
-  /** Per defence on the card. A piece covered twice contributes two. */
-  supportBonus: number;
   /**
-   * Whether a Pawn sheltering a piece counts toward synergy at all. This is a design question
-   * (is pawn shelter worth money?), not a workaround: while the player rotates, `cardSynergy`
-   * already reads the best orientation, so the directional term is priceable either way.
+   * The price formula, as an ordered list of terms starting from raw material.
+   *
+   * A model owns its FORMULA and not merely its constants. A pricing idea that exists on every
+   * model with a zero in front of it is not a proposal you can compare against anything -- it is
+   * one formula wearing several hats. Since we do not yet know what later terms will do, the shape
+   * of the formula has to be per-model too, not just its numbers.
    */
-  countPawnSupport: boolean;
+  terms: readonly PoolTerm[];
   /** Cost bands. */
   commonMaxCost: number;
   uncommonMaxCost: number;
@@ -72,12 +83,10 @@ export const DEFAULT_POOL_KNOBS: PoolKnobs = {
   allowQueenPawnOverCap: true,
   collapseRotation: true,
   oneOrientationPerShape: false,
-  densityPower: 0.5,
-  costScale: 10,
-  roundTo: 5,
-  bishopPairBonus: 0,
-  supportBonus: 0,
-  countPawnSupport: false,
+  terms: [
+    { kind: 'density', power: 0.5, scale: 10 },
+    { kind: 'round', to: 5 },
+  ],
   commonMaxCost: 35,
   uncommonMaxCost: 90,
 };
@@ -94,8 +103,6 @@ export type PoolCard = Readonly<{
   volume: number;
   /** value / volume, which is also mean piece value. */
   density: number;
-  /** Price before synergy. */
-  baseCost: number;
   cost: number;
   band: PoolBand;
   hasBishopPair: boolean;
@@ -296,33 +303,99 @@ export function cardSynergy(
   cells: readonly PoolCell[],
   pieces: readonly PoolPiece[],
   knobs: PoolKnobs,
+  countPawnSupport: boolean,
 ): Readonly<{ defences: number; hasBishopPair: boolean }> {
   const hasBishopPair = hasOppositeColourBishopPair(cells, pieces);
   const turns = knobs.collapseRotation ? [0, 1, 2, 3] : [0];
   const defences = Math.max(...turns.map((turn) => (
-    countDefences(rotateSeated(cells, turn), pieces, knobs.countPawnSupport)
+    countDefences(rotateSeated(cells, turn), pieces, countPawnSupport)
   )));
   return { defences, hasBishopPair };
+}
+
+/** One applied step, so the formula readout and the worked example share a single source. */
+export type PoolPriceStep = Readonly<{
+  term: PoolTerm;
+  /** The term written out with this model's constants, independent of any card. */
+  formula: string;
+  /** The same term with this card's numbers substituted, or null when it did not apply. */
+  worked: string | null;
+  before: number;
+  after: number;
+}>;
+
+/** The term written with its constants only — what the Pricing panel prints. */
+export function poolTermFormula(term: PoolTerm): string {
+  if (term.kind === 'density') return `x (density / 3)^${term.power} x ${term.scale}`;
+  if (term.kind === 'bishopPair') return `x (1 + ${term.bonus}) when the card holds an opposite-colour Bishop pair`;
+  if (term.kind === 'defences') {
+    return `x (1 + defences x ${term.bonus})${term.countPawnSupport ? '' : ', Pawn shelter not counted'}`;
+  }
+  return `rounded to the nearest ${term.to}`;
+}
+
+export function poolTermLabel(term: PoolTerm): string {
+  if (term.kind === 'density') return 'Density curve';
+  if (term.kind === 'bishopPair') return 'Bishop pair';
+  if (term.kind === 'defences') return 'Defences';
+  return 'Rounding';
+}
+
+/**
+ * Run a model's formula over one card, from raw material through every term it declares.
+ *
+ * A model that does not declare a term does not carry it at all, so its price is derived from
+ * exactly the steps it names -- there is no inert factor sitting in the arithmetic multiplying
+ * by one.
+ */
+export function poolPriceSteps(
+  cells: readonly PoolCell[],
+  pieces: readonly PoolPiece[],
+  knobs: PoolKnobs,
+): Readonly<{ value: number; volume: number; density: number; hasBishopPair: boolean; defences: number; cost: number; steps: readonly PoolPriceStep[] }> {
+  const value = pieces.reduce((total, piece) => total + knobs.pieceValue[piece], 0);
+  const volume = cells.length;
+  const density = volume === 0 ? 0 : value / volume;
+  const hasBishopPair = hasOppositeColourBishopPair(cells, pieces);
+  const turns = knobs.collapseRotation ? [0, 1, 2, 3] : [0];
+  const defencesFor = (countPawnSupport: boolean): number => Math.max(...turns.map((turn) => (
+    countDefences(rotateSeated(cells, turn), pieces, countPawnSupport)
+  )));
+
+  const steps: PoolPriceStep[] = [];
+  let cost = value;
+  let reportedDefences = 0;
+  for (const term of knobs.terms) {
+    const before = cost;
+    let worked: string | null = null;
+    if (term.kind === 'density') {
+      cost = before * (density / 3) ** term.power * term.scale;
+      worked = `x (${density.toFixed(2)} / 3)^${term.power} x ${term.scale}`;
+    } else if (term.kind === 'bishopPair') {
+      if (hasBishopPair) { cost = before * (1 + term.bonus); worked = `x (1 + ${term.bonus})`; }
+    } else if (term.kind === 'defences') {
+      const defences = defencesFor(term.countPawnSupport);
+      reportedDefences = Math.max(reportedDefences, defences);
+      if (defences > 0) { cost = before * (1 + defences * term.bonus); worked = `x (1 + ${defences} x ${term.bonus})`; }
+    } else {
+      cost = roundTo(before, term.to);
+      worked = `-> ${cost}`;
+    }
+    steps.push({ term, formula: poolTermFormula(term), worked, before, after: cost });
+  }
+  return { value, volume, density, hasBishopPair, defences: reportedDefences, cost, steps };
 }
 
 export function priceCard(
   cells: readonly PoolCell[],
   pieces: readonly PoolPiece[],
   knobs: PoolKnobs,
-): Pick<PoolCard, 'value' | 'volume' | 'density' | 'baseCost' | 'cost' | 'band' | 'hasBishopPair' | 'defences'> {
-  const value = pieces.reduce((total, piece) => total + knobs.pieceValue[piece], 0);
-  const volume = cells.length;
-  const density = volume === 0 ? 0 : value / volume;
-  const baseCost = value * (density / 3) ** knobs.densityPower * knobs.costScale;
-  const { hasBishopPair, defences } = cardSynergy(cells, pieces, knobs);
-  const withSynergy = baseCost
-    * (1 + (hasBishopPair ? knobs.bishopPairBonus : 0))
-    * (1 + defences * knobs.supportBonus);
-  const cost = roundTo(withSynergy, knobs.roundTo);
+): Pick<PoolCard, 'value' | 'volume' | 'density' | 'cost' | 'band' | 'hasBishopPair' | 'defences'> {
+  const { value, volume, density, hasBishopPair, defences, cost } = poolPriceSteps(cells, pieces, knobs);
   const band: PoolBand = cost <= knobs.commonMaxCost
     ? 'common'
     : cost <= knobs.uncommonMaxCost ? 'uncommon' : 'rare';
-  return { value, volume, density, baseCost, cost, band, hasBishopPair, defences };
+  return { value, volume, density, cost, band, hasBishopPair, defences };
 }
 
 export function buildPool(knobs: PoolKnobs): PoolCard[] {
@@ -376,31 +449,31 @@ export const POOL_MODELS: readonly PoolModel[] = Object.freeze([
   {
     id: 'material-bands',
     label: 'Material bands',
-    note: 'The live generator with cost = material and rarity by raw value (<=4, <=6). NOT the shipped rarity: that also steps any Bishop card up a band and steps awkward footprints down one, which is what puts 23 four-cell cards into common. This model shows the bands without those two adjustments.',
-    knobs: { ...DEFAULT_POOL_KNOBS, densityPower: 0, costScale: 1, roundTo: 0, commonMaxCost: 4, uncommonMaxCost: 6 },
+    note: 'cost = material, nothing else, and rarity by raw value. NOT the shipped rarity: that also steps any Bishop card up a band and steps awkward footprints down one, which is what puts 23 four-cell cards into common.',
+    knobs: { ...DEFAULT_POOL_KNOBS, terms: [], commonMaxCost: 4, uncommonMaxCost: 6 },
   },
   {
     id: 'density-cost',
     label: 'Density cost curve',
-    note: 'Price reads density on a curve rather than raw material, and the rarity bands are drawn on price. The exact formula is stated live under Pricing.',
+    note: 'Price pays for concentration rather than raw material, and the rarity bands are drawn on price. No synergy terms at all — this is the formula against which the synergy proposals are compared.',
     knobs: DEFAULT_POOL_KNOBS,
   },
   {
     id: 'front-and-back',
     label: 'Front and back',
-    note: 'One orientation per shape, every seating distinct — the vertical-only rule, where who stands in front is bought rather than chosen at placement.',
-    knobs: { ...DEFAULT_POOL_KNOBS, collapseRotation: false, oneOrientationPerShape: true, countPawnSupport: true },
+    note: 'The density curve, generated one orientation per shape with every seating distinct — the vertical-only rule, where who stands in front is bought rather than chosen at placement.',
+    knobs: { ...DEFAULT_POOL_KNOBS, collapseRotation: false, oneOrientationPerShape: true },
   },
   {
     id: 'every-orientation',
     label: 'Every orientation',
-    note: 'Rotation collapse simply dropped: each rotation of a shape is also its own card. The expensive reading, and the one that doubles the small tier for nothing.',
-    knobs: { ...DEFAULT_POOL_KNOBS, collapseRotation: false, countPawnSupport: true },
+    note: 'Rotation collapse simply dropped, so each rotation of a shape is also its own card. The expensive reading, and the one that doubles the small tier for nothing.',
+    knobs: { ...DEFAULT_POOL_KNOBS, collapseRotation: false },
   },
   {
     id: 'small-catalog',
     label: 'Small catalog',
-    note: 'Footprints capped at two cells — the tier called the game’s identity, generated exhaustively.',
+    note: 'The density curve with footprints capped at two cells — the tier called the game’s identity, generated exhaustively.',
     knobs: { ...DEFAULT_POOL_KNOBS, maxCells: 2 },
   },
   {
@@ -408,23 +481,45 @@ export const POOL_MODELS: readonly PoolModel[] = Object.freeze([
     label: 'Generate small, author big',
     note: 'Two-cell cap, one orientation, seatings distinct: complete coverage of the tier that carries the identity, leaving 3- and 4-cell to be authored rather than generated.',
     knobs: {
-      ...DEFAULT_POOL_KNOBS, maxCells: 2, collapseRotation: false, oneOrientationPerShape: true, countPawnSupport: true,
+      ...DEFAULT_POOL_KNOBS, maxCells: 2, collapseRotation: false, oneOrientationPerShape: true,
     },
   },
   {
     id: 'synergy',
     label: 'Synergy priced',
-    note: 'Density cost plus the two chess rules material cannot express: the opposite-colour Bishop pair, and mutual support.',
-    knobs: { ...DEFAULT_POOL_KNOBS, bishopPairBonus: 0.25, supportBonus: 0.1 },
+    note: 'The density curve plus the two chess rules material cannot express: the opposite-colour Bishop pair, and defences. Pawn shelter counts — it is the cheapest defender and therefore the best one, and a rotating player takes whichever turn supplies it.',
+    knobs: {
+      ...DEFAULT_POOL_KNOBS,
+      terms: [
+        { kind: 'density', power: 0.5, scale: 10 },
+        { kind: 'bishopPair', bonus: 0.25 },
+        { kind: 'defences', bonus: 0.1, countPawnSupport: true },
+        { kind: 'round', to: 5 },
+      ],
+    },
+  },
+  {
+    id: 'synergy-no-pawns',
+    label: 'Synergy, pawns excluded',
+    note: 'The same synergy proposal with Pawn shelter left out, so the question "is a Pawn in front worth paying for" can be read as a difference between two models rather than argued.',
+    knobs: {
+      ...DEFAULT_POOL_KNOBS,
+      terms: [
+        { kind: 'density', power: 0.5, scale: 10 },
+        { kind: 'bishopPair', bonus: 0.25 },
+        { kind: 'defences', bonus: 0.1, countPawnSupport: false },
+        { kind: 'round', to: 5 },
+      ],
+    },
   },
 ]);
 
 export function sameKnobs(a: PoolKnobs, b: PoolKnobs): boolean {
-  return (Object.keys(a) as (keyof PoolKnobs)[]).every((field) => (
-    field === 'pieceValue'
-      ? POOL_PIECES.every((piece) => a.pieceValue[piece] === b.pieceValue[piece])
-      : a[field] === b[field]
-  ));
+  return (Object.keys(a) as (keyof PoolKnobs)[]).every((field) => {
+    if (field === 'pieceValue') return POOL_PIECES.every((piece) => a.pieceValue[piece] === b.pieceValue[piece]);
+    if (field === 'terms') return JSON.stringify(a.terms) === JSON.stringify(b.terms);
+    return a[field] === b[field];
+  });
 }
 
 export type PoolGrouping = 'none' | 'band' | 'volume' | 'cost' | 'material' | 'density' | 'composition' | 'shape' | 'piece';

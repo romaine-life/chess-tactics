@@ -7,7 +7,10 @@ import {
   POOL_PILE_SLOTS,
   buildPool,
   groupPool,
+  poolPriceSteps,
   poolRotationContract,
+  poolTermFormula,
+  poolTermLabel,
   priceCard,
   sameKnobs,
   summarizePool,
@@ -17,6 +20,7 @@ import {
   type PoolGrouping,
   type PoolKnobs,
   type PoolPiece,
+  type PoolTerm,
 } from './runCardPool';
 
 // Studio → Card Pool. The offer catalog re-derived live from its own rules, so the distribution
@@ -117,6 +121,9 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
   const set = useCallback(<K extends keyof PoolKnobs>(field: K, value: PoolKnobs[K]) => {
     setKnobs((prev) => ({ ...prev, [field]: value }));
   }, []);
+  const setTerm = useCallback((index: number, term: PoolTerm) => {
+    setKnobs((prev) => ({ ...prev, terms: prev.terms.map((existing, at) => (at === index ? term : existing)) }));
+  }, []);
   const setPieceValue = useCallback((piece: PoolPiece, value: number) => {
     setKnobs((prev) => ({ ...prev, pieceValue: { ...prev.pieceValue, [piece]: value } }));
   }, []);
@@ -151,6 +158,9 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
   const draftPieces = useMemo(() => draftCells.map((c) => draft.get(`${c.x},${c.y}`) as PoolPiece), [draftCells, draft]);
   const draftStats = useMemo(() => (
     draftCells.length === 0 ? null : priceCard(draftCells, draftPieces, knobs)
+  ), [draftCells, draftPieces, knobs]);
+  const draftSteps = useMemo(() => (
+    draftCells.length === 0 ? null : poolPriceSteps(draftCells, draftPieces, knobs)
   ), [draftCells, draftPieces, knobs]);
   const draftInPool = useMemo(() => {
     if (!draftStats) return false;
@@ -225,6 +235,14 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
         .rcp-formula-line code { font-family: ui-monospace, monospace; font-size: calc(var(--rcp-fs) * 0.88); line-height: 1.5; }
         .rcp-formula-line.is-off { opacity: 0.38; }
         .rcp-formula sup { font-size: 0.75em; }
+        .rcp-term { border-top: 1px solid rgba(255,255,255,0.12); padding: 10px 0 4px; }
+        .rcp-term:first-of-type { border-top: 0; padding-top: 0; }
+        .rcp-term-head { font-size: calc(var(--rcp-fs) * 0.87); letter-spacing: 0.05em; text-transform: uppercase; opacity: 0.62; }
+        .rcp-term-formula { display: block; font-family: ui-monospace, monospace; font-size: calc(var(--rcp-fs) * 0.88); margin: 4px 0 6px; line-height: 1.45; }
+        .rcp-active-model { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+        .rcp-active-model span { font-size: calc(var(--rcp-fs) * 0.87); opacity: 0.62; letter-spacing: 0.05em; text-transform: uppercase; }
+        .rcp-active-model b { font-size: calc(var(--rcp-fs) * 1.2); }
+        .rcp-active-model em { font-size: calc(var(--rcp-fs) * 0.87); font-style: normal; opacity: 0.8; padding: 2px 9px; border-radius: 10px; border: 1px solid currentColor; }
         .rcp-contract { margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.14); }
         .rcp-contract-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 5px 0; font-size: calc(var(--rcp-fs) * 0.93); }
         .rcp-contract-row span { opacity: 0.72; }
@@ -285,35 +303,45 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
         </div>
 
         <div className="rcp-panel">
-          <h3>Pricing</h3>
-          <NumberRow label="Density power" value={knobs.densityPower} onChange={(v) => set('densityPower', v)} step={0.1} hint="cost = value x (density/3)^power x scale. 0 is flat material pricing; 0.5 is the sqrt curve." />
-          <NumberRow label="Scale" value={knobs.costScale} onChange={(v) => set('costScale', v)} step={1} min={1} />
-          <NumberRow label="Round to" value={knobs.roundTo} onChange={(v) => set('roundTo', Math.max(0, v))} step={1} min={0} />
-          <NumberRow label="Bishop pair +" value={knobs.bishopPairBonus} onChange={(v) => set('bishopPairBonus', v)} step={0.05} hint="Bonus for two Bishops on opposite colours." />
-          <NumberRow label="Defence +" value={knobs.supportBonus} onChange={(v) => set('supportBonus', v)} step={0.05} hint="Per defence on the card. A piece covered twice contributes two." />
-          <label className="rcp-check">
-            <input type="checkbox" checked={knobs.countPawnSupport} onChange={(e) => set('countPawnSupport', e.target.checked)} />
-            <span>Count pawn support</span>
-          </label>
-          <div className="rcp-formula">
-            <div className="rcp-formula-line">
-              <code>cost = material × (density / 3)<sup>{knobs.densityPower}</sup> × {knobs.costScale}</code>
+          <h3>Price formula</h3>
+          {knobs.terms.length === 0 ? (
+            <p className="rcp-note">This model prices a card at its raw material and nothing else.</p>
+          ) : null}
+          {knobs.terms.map((term, index) => (
+            <div className="rcp-term" key={`${term.kind}-${index}`}>
+              <div className="rcp-term-head">{poolTermLabel(term)}</div>
+              <code className="rcp-term-formula">{poolTermFormula(term)}</code>
+              {term.kind === 'density' ? (
+                <>
+                  <NumberRow label="power" value={term.power} onChange={(v) => setTerm(index, { ...term, power: v })} step={0.1} />
+                  <NumberRow label="scale" value={term.scale} onChange={(v) => setTerm(index, { ...term, scale: v })} step={1} min={1} />
+                </>
+              ) : null}
+              {term.kind === 'bishopPair' ? (
+                <NumberRow label="bonus" value={term.bonus} onChange={(v) => setTerm(index, { ...term, bonus: v })} step={0.05} />
+              ) : null}
+              {term.kind === 'defences' ? (
+                <>
+                  <NumberRow label="bonus" value={term.bonus} onChange={(v) => setTerm(index, { ...term, bonus: v })} step={0.05} />
+                  <label className="rcp-check">
+                    <input
+                      type="checkbox"
+                      checked={term.countPawnSupport}
+                      onChange={(e) => setTerm(index, { ...term, countPawnSupport: e.target.checked })}
+                    />
+                    <span>Count pawn shelter</span>
+                  </label>
+                </>
+              ) : null}
+              {term.kind === 'round' ? (
+                <NumberRow label="to" value={term.to} onChange={(v) => setTerm(index, { ...term, to: Math.max(0, v) })} step={1} min={0} />
+              ) : null}
             </div>
-            <div className={knobs.bishopPairBonus === 0 ? 'rcp-formula-line is-off' : 'rcp-formula-line'}>
-              <code>× (1 + {knobs.bishopPairBonus}) when the card holds an opposite-colour Bishop pair</code>
-            </div>
-            <div className={knobs.supportBonus === 0 ? 'rcp-formula-line is-off' : 'rcp-formula-line'}>
-              <code>× (1 + defences × {knobs.supportBonus})</code>
-            </div>
-            <div className={knobs.roundTo === 0 ? 'rcp-formula-line is-off' : 'rcp-formula-line'}>
-              <code>rounded to the nearest {knobs.roundTo}</code>
-            </div>
-            <p className="rcp-note">
-              Dimmed lines are multiplying by one, so they change nothing at these settings. Pawn defences
-              are the only rotation-dependent term; while the player rotates, the count reads the card's
-              best orientation, because that is the one they will take.
-            </p>
-          </div>
+          ))}
+          <p className="rcp-note">
+            These are the terms this model declares. A model that does not name a term does not carry it
+            at all — comparing two models compares two formulas, not one formula with zeros in it.
+          </p>
         </div>
 
         <div className="rcp-panel">
@@ -324,6 +352,12 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
       </div>
 
       <div>
+        <div className="rcp-active-model">
+          <span>Model</span>
+          <b>{activeModel?.label ?? 'Custom'}</b>
+          {isCustom ? <em>edited — no longer {activeModel?.label}</em> : null}
+        </div>
+
         <div className="rcp-summary">
           <div className="rcp-stat"><b>{summary.total}</b><span>CARDS IN POOL</span></div>
           {BANDS.map((band) => (
@@ -383,21 +417,15 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
               </tbody>
             </table>
           ) : <p className="rcp-note">Click cells to seat pieces. Each click cycles P → N → B → R → Q → empty.</p>}
-          {draftStats ? (
+          {draftSteps ? (
             <div className="rcp-formula rcp-worked">
-              <div className="rcp-formula-line">
-                <code>
-                  {draftStats.value} × ({draftStats.density.toFixed(2)} / 3)<sup>{knobs.densityPower}</sup> × {knobs.costScale}
-                  {' = '}{draftStats.baseCost.toFixed(1)}
-                </code>
-              </div>
-              {draftStats.hasBishopPair && knobs.bishopPairBonus !== 0 ? (
-                <div className="rcp-formula-line"><code>× (1 + {knobs.bishopPairBonus}) bishop pair</code></div>
-              ) : null}
-              {draftStats.defences > 0 && knobs.supportBonus !== 0 ? (
-                <div className="rcp-formula-line"><code>× (1 + {draftStats.defences} × {knobs.supportBonus})</code></div>
-              ) : null}
-              <div className="rcp-formula-line"><code>→ {draftStats.cost}</code></div>
+              <div className="rcp-formula-line"><code>material = {draftSteps.value}</code></div>
+              {draftSteps.steps.map((step, index) => (
+                <div className={step.worked ? 'rcp-formula-line' : 'rcp-formula-line is-off'} key={index}>
+                  <code>{step.worked ?? `${step.formula} — does not apply`}</code>
+                  {step.worked && step.term.kind !== 'round' ? <code>{` = ${step.after.toFixed(1)}`}</code> : null}
+                </div>
+              ))}
             </div>
           ) : null}
           <p className="rcp-note">Row 0 is the edge toward the enemy, so a piece in the top row is the front rank.</p>
