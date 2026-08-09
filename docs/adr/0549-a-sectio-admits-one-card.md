@@ -51,17 +51,30 @@ glyph the app already uses. A second padlock drawn for one row would be a bespok
 the back, sized as a share of the card so it stays an object laid on the card rather than a badge
 stuck to a control, and inert so the disabled offer beneath it is still what the pointer meets.
 It is decorative to assistive technology: the disabled control carries the state, and the
-Adlectio announcement says the visit admits no other card. It is supplied for the whole visit and
-concealed until it locks, exactly as the back beneath it is — a lock mounted at the moment of
-locking is fetched at that moment too, and the survivors stand unmarked until it arrives.
+Adlectio announcement says the visit admits no other card. It is present for the whole visit and
+hidden until it locks, rather than mounted at the moment of locking — a lock mounted then is
+fetched then too, and the survivors stand unmarked until it arrives.
 
-**A locked offer stops asking.** A card's life — its drift, and the gold emanation it throws — is
-the card asking to be picked up, and a Sectio that has spent its admission is not asking for
-anything. Both end when the padlock lands, settled through the seat's own registered variables
-and the same pause a hovered card uses rather than by deleting the animation: the rise eases to
-nothing over its transition, so a card caught mid-drift comes down onto its seat instead of
-snapping onto it. The steady light has no such easing to ride, so it goes out on the beat the
-lock arrives — one event, not a fade.
+**The lock is put on the card, and the card goes quiet under it.** These are one gesture on one
+beat, and every part of it takes the same duration and the same standard curve:
+
+- The padlock **comes down onto the face** and fades up from just above its seat. Appearing at
+  full strength on its final centre gives it no arrival at all — it is simply somewhere it had
+  not been, which is the one thing a heavy object never does.
+- The card's **drift settles**. A card's life — its drift, and the gold emanation it throws — is
+  the card asking to be picked up, and a Sectio that has spent its admission is not asking for
+  anything. The rise eases to nothing through the seat's own registered variable, with the
+  animation paused rather than deleted, so a card caught mid-drift comes down onto its seat
+  instead of snapping onto it.
+- The **light leaves** with it. `--run-card-glow` is registered for this: every use already read
+  it as `var(--run-card-glow, 1)`, so an initial value of 1 changes nothing and makes the steady
+  level transitionable. A light that cut out while the card was still moving would be a second
+  event laid over the first.
+
+The settle deliberately does not inherit the hover timing. That curve is tuned for a card being
+picked up — fast off the mark, so the card answers the pointer instantly — and over the few
+pixels of drift a lock happens to catch, answering instantly is indistinguishable from not moving
+at all. Being set down and closed is the opposite gesture.
 
 **The pointer says nothing.** `not-allowed`'s barred circle adds a rebuke on top of a state the
 card has already stated plainly, so a disabled Run card takes the ordinary arrow. That covers the

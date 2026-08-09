@@ -299,7 +299,10 @@ describe('Run chrome hierarchy', () => {
     // is: a lock mounted at the moment of locking is fetched then too, and the survivors of an
     // Adlectio stand unmarked until it arrives.
     expect(runScreen).toContain('lockMediaUrl={lockMediaUrl}');
-    expect(styleCss).toMatch(/\.run-card-pile-lock:not\(\.is-locked\)\s*\{[\s\S]*?visibility:\s*hidden;/);
+    // And it is PUT ON the card: it comes down onto the face and fades up over the same beat and
+    // curve the card settles on, rather than appearing at full strength on its final centre.
+    expect(styleCss).toMatch(/\.run-card-pile-lock\s*\{[\s\S]*?opacity:\s*0;[\s\S]*?translate:\s*0 calc\(-1 \* var\(--run-card-lock-descent/);
+    expect(styleCss).toMatch(/\.run-card-pile-lock\.is-locked\s*\{[\s\S]*?opacity:\s*1;[\s\S]*?translate:\s*0 0;/);
     expect(runScreen).not.toContain('run-sectio-cards-empty');
     expect(runCardFlight).toContain('<RunCard card={flight.offer} mode="reference" />');
     expect(runCard).not.toContain('run-card-purchased-indicator');

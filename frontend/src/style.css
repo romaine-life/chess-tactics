@@ -20255,11 +20255,27 @@ button.tileset-relationship-cell {
    as a badge stuck to the corner of a control. Nearest-neighbour, like every other pixel mark
    the Run prints. Inert: the disabled offer beneath it stays the thing under the pointer.
 
-   Concealed rather than unmounted while the offer is open, exactly as the back beneath it is:
-   a lock mounted only at the moment of locking is also FETCHED only then, and the survivors of
-   an Adlectio stand there unmarked until it arrives. */
-.run-card-pile-lock:not(.is-locked) {
-  visibility: hidden;
+   Present but hidden while the offer is open, rather than mounted at the moment of locking: a
+   lock mounted then is also FETCHED then, and the survivors of an Adlectio stand there unmarked
+   until it arrives.
+
+   And it is PUT ON the card rather than switched on over it. Appearing at full strength on its
+   final centre gives a padlock no arrival at all -- it is simply somewhere it had not been, which
+   is the one thing a heavy object never does. It comes down onto the face over the same beat and
+   the same curve the card uses to settle underneath it, so the two read as one hand closing the
+   offer. A visit entered already spent mounts in the locked state and plays nothing: nothing has
+   just happened there. */
+.run-card-pile-lock {
+  opacity: 0;
+  transition:
+    opacity var(--ds-duration-fade) var(--ds-ease-standard),
+    translate var(--ds-duration-fade) var(--ds-ease-standard);
+  translate: 0 calc(-1 * var(--run-card-lock-descent, 18px));
+}
+
+.run-card-pile-lock.is-locked {
+  opacity: 1;
+  translate: 0 0;
 }
 
 .run-card-pile-lock {
@@ -20334,6 +20350,18 @@ button.tileset-relationship-cell {
   syntax: '<length>';
   inherits: true;
   initial-value: 8px;
+}
+
+/* The emanation's STEADY LEVEL, registered on the same principle so it too can be transitioned:
+   a locked card has to go dark, and a light that cuts out while the card is still gliding down
+   onto its seat is a second event laid over the first. Every use already reads it as
+   `var(--run-card-glow, 1)`, so an initial value of 1 is exactly the fallback they were getting.
+   The Studio's Card Size instrument writes it as a plain number, which is what the syntax below
+   accepts. */
+@property --run-card-glow {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
 }
 
 /* The emanation's PULSE DEPTH, on the same principle. A hovered card has to stop moving, and a
@@ -20525,16 +20553,24 @@ button.tileset-relationship-cell {
    and it throws gold light -- and a Sectio that has spent its admission is not asking for
    anything, so both end when the padlock lands.
 
-   Settled the way a hovered card is settled, through the same two registered vars and the same
-   pause, rather than by taking the animation away: the rise eases to nothing over its 240ms
-   transition, so a card caught mid-drift comes DOWN onto its seat instead of snapping onto it.
-   The light has no such easing to ride -- `--run-card-glow` is the tuned steady level, not a
-   registered transitionable one -- so it goes out on the beat the lock arrives, which is the
-   right beat for it: one event, not a fade. */
+   Settled through the same registered vars and the same pause a hovered card uses, rather than by
+   taking the animation away: the rise eases to nothing, so a card caught mid-drift comes DOWN
+   onto its seat instead of snapping onto it.
+
+   It does NOT inherit the hover settle's timing, though. That curve is tuned for a card being
+   PICKED UP -- 240ms with two thirds of the travel spent in its first quarter, so the card
+   answers the pointer instantly -- and over the few pixels of drift a lock happens to catch,
+   answering instantly is indistinguishable from not moving at all. Being set down and closed is
+   the opposite gesture: the standard curve is slow off the mark and slow into the seat, and over
+   the fade duration that is a glide. The light leaves on the same curve and the same beat, so the
+   card dimming and the card settling are one event rather than a cut followed by a glide. */
 .run-card-pile.is-locked {
   --run-card-float-rise: 0px;
   --run-card-glow: 0;
   --run-card-glow-pulse: 0;
+  transition:
+    --run-card-float-rise var(--ds-duration-fade) var(--ds-ease-standard),
+    --run-card-glow var(--ds-duration-fade) var(--ds-ease-standard);
 }
 
 .run-card-pile.is-locked,
