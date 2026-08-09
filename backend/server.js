@@ -99,6 +99,9 @@ const {
   runResourceIconSlotId,
   runExpunctioReviewSurface,
   runGoldTransactionReviewSurface,
+  titleBarMarkReviewSurface,
+  titleBarMarkSlot,
+  titleBarMarkMediaIssue,
   runSectioWrapMediaIssue,
   workspaceBackgroundSlotId,
   workspaceBackgroundMediaIssue,
@@ -19392,6 +19395,9 @@ function mediaDomainProjectionIssue(row) {
   if (ataraxiaNumeralSlot(row.slot)) {
     return ataraxiaNumeralMediaIssue(row, runtime.value);
   }
+  if (titleBarMarkSlot(row.slot)) {
+    return titleBarMarkMediaIssue(row, runtime.value);
+  }
   const runCardFrame = runCardFrameProjection(row);
   if (runCardFrame.claimed) return runCardFrame.issue;
   const runCardArt = runCardArtProjection(row);
@@ -20232,8 +20238,15 @@ function gameOwnedReviewSurfaceUrl(req, raw) {
       : url.host.toLowerCase() === String(req.get('host') || '').toLowerCase();
     // Each entry is a surface some art domain is genuinely reviewed on; the Ataraxia rung
     // marks are worn by the Ataraxia reference rows, on either host (ADR-0363).
+    //
+    // The live play surfaces are here because the persistent title bar's marks — the
+    // battle clock's hourglass, the objective flag — are worn nowhere else. No Studio page
+    // and no reference row shows them, so before this the ONLY seat they exist in was not
+    // a legal place to prove them, and an owner-authorized swap of those bytes could not
+    // be recorded at all. A play route is not a bespoke review page; it is the game.
     const gameOwnedPath = url.pathname === '/studio' || url.pathname === '/editor/level'
       || url.pathname === '/enchiridion/cards'
+      || url.pathname === '/play' || url.pathname === '/run'
       || url.pathname === '/play/strategikon/enchiridion/units'
       || runExpunctioReviewSurface(url)
       || ATARAXIA_NUMERAL_REVIEW_PATH.test(url.pathname);
@@ -20429,7 +20442,8 @@ async function validateMediaReviewProofSnapshot(client, current, evidence, surfa
   }
   const genericReviewUrl = new URL(surfaceUrl);
   const runExpunctioTransactionReview = runGoldTransactionReviewSurface(genericReviewUrl, current.slot);
-  if (genericReviewUrl.pathname !== '/studio' && !runExpunctioTransactionReview) {
+  const titleBarMarkReview = titleBarMarkReviewSurface(genericReviewUrl, current.slot);
+  if (genericReviewUrl.pathname !== '/studio' && !runExpunctioTransactionReview && !titleBarMarkReview) {
     throw mediaMutationError(
       'invalid_media_review_proof',
       409,

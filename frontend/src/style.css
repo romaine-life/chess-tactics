@@ -4547,11 +4547,6 @@ h1 {
   margin: calc((var(--titlebar-mark-seat) - var(--titlebar-mark-canvas)) / 2);
 }
 
-/* ui/kit/icons/game/wait.png — ink 27x40 on a 64x64 canvas. */
-.skirmish-clock .skirmish-icon {
-  --titlebar-mark-ink-fill: .625;
-}
-
 /* ui/kit/icons/game/objective.png — ink 35x47 on a 64x64 canvas. */
 .skirmish-objective .skirmish-icon {
   --titlebar-mark-ink-fill: .734;
