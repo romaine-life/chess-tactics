@@ -32,8 +32,13 @@ import {
   type ForestSpeciesGeometry,
 } from './forestScatter';
 import {
+  clipGeneratorAreas,
+  generatorAreasBounds,
+  mergeGeneratorAreas,
+} from './generatorAreas';
+import {
   projectedGroundFootprintGridRadius,
-  projectedGroundFootprintWithinGridRect,
+  projectedGroundFootprintWithinGridRects,
 } from './projectedGroundFootprint';
 import type { FloatingArtworkPlacement } from '../ui/boardCode';
 
@@ -452,9 +457,25 @@ export function footprintGridRadius(box: TownFootprint): number {
   return projectedGroundFootprintGridRadius(box);
 }
 
-/** True when the whole footprint sits inside the selection, not merely its centre. */
-function footprintWithin(box: TownFootprint, area: TownBounds): boolean {
-  return projectedGroundFootprintWithinGridRect(box, area);
+/**
+ * True when the whole footprint sits inside the selection, not merely its centre.
+ *
+ * The selection may be several rectangles. They are restated in cell EDGES and the footprint is
+ * grown by the same half cell, which is the identity that keeps a single rectangle answering
+ * exactly as it always did while stopping the half-cell inset from also being applied along a
+ * seam where two rectangles meet — a building there stands on continuous ground.
+ */
+function footprintWithin(box: TownFootprint, areas: readonly TownBounds[]): boolean {
+  return projectedGroundFootprintWithinGridRects(
+    box,
+    areas.map((area) => ({
+      minX: area.minX - 0.5,
+      minY: area.minY - 0.5,
+      maxX: area.maxX + 0.5,
+      maxY: area.maxY + 0.5,
+    })),
+    0.5,
+  );
 }
 
 interface TownPlot {
@@ -476,6 +497,13 @@ export interface TownPlanInput {
   scopeId?: string;
   /** The area the author dragged. The town fills it and never leaves it. */
   bounds: TownBounds;
+  /**
+   * The town's complete ground, when it is more than one rectangle. `bounds` still states the
+   * territory this run may use; the town fills `bounds` INTERSECTED with this union. The street
+   * skeleton is still fitted to a rectangle — that rectangle just tightens onto the real ground,
+   * so a town extended around a corner runs its streets through the ground it was given.
+   */
+  areas?: readonly TownBounds[];
   params: TownPlanParams;
   geometry: ForestSpeciesGeometry;
   /** Scene art already present, for spacing rejection. Town members are excluded by the caller. */
@@ -537,12 +565,18 @@ export function planTown(input: TownPlanInput): TownPlanResult {
     bands.push({ end: running, section });
   }
   bands[bands.length - 1].end = 1;
-  const area = {
-    minX: Math.min(bounds.minX, bounds.maxX),
-    maxX: Math.max(bounds.minX, bounds.maxX),
-    minY: Math.min(bounds.minY, bounds.maxY),
-    maxY: Math.max(bounds.minY, bounds.maxY),
-  };
+  // The ground this run may actually use: the territory it was handed, kept to the town's own
+  // patches. A town on one rectangle resolves straight back to that rectangle.
+  const territory = input.areas?.length
+    ? clipGeneratorAreas(input.areas, bounds)
+    : [{
+      minX: Math.min(bounds.minX, bounds.maxX),
+      maxX: Math.max(bounds.minX, bounds.maxX),
+      minY: Math.min(bounds.minY, bounds.maxY),
+      maxY: Math.max(bounds.minY, bounds.maxY),
+    }];
+  if (!territory.length) return empty;
+  const area = generatorAreasBounds(territory);
   // A thin strip is a valid town (a roadside row), so only a selection with no extent on BOTH
   // axes is rejected. The street skeleton handles the degenerate axis by running along the other.
   if (area.maxX - area.minX < 1 && area.maxY - area.minY < 1) return empty;
@@ -558,11 +592,20 @@ export function planTown(input: TownPlanInput): TownPlanResult {
   // Setback is an ideal, not a floor. On a small selection the full setback would consume the
   // whole area and leave no street to front, so it scales down with the area in SCENE pixels:
   // a tight selection gets a tighter town rather than an empty one.
-  const corners = townBoundsScenePolygon(area);
-  const sceneHalfW = (Math.max(...corners.map((c) => c.x)) - Math.min(...corners.map((c) => c.x))) / 2;
-  const sceneHalfH = (Math.max(...corners.map((c) => c.y)) - Math.min(...corners.map((c) => c.y))) / 2;
-  const setback = Math.max(4, Math.min(params.setback, Math.min(sceneHalfW, sceneHalfH) * 0.45));
-  const streets = townStreets(params.plan, area, setback, seed);
+  const setbackWithin = (patch: TownBounds): number => {
+    const corners = townBoundsScenePolygon(patch);
+    const halfW = (Math.max(...corners.map((c) => c.x)) - Math.min(...corners.map((c) => c.x))) / 2;
+    const halfH = (Math.max(...corners.map((c) => c.y)) - Math.min(...corners.map((c) => c.y))) / 2;
+    return Math.max(4, Math.min(params.setback, Math.min(halfW, halfH) * 0.45));
+  };
+  // The plan is fitted to the town's own rectangles, not to the box around them: on a town bent
+  // around a corner the box's middle is ground the town does not hold, and a skeleton laid through
+  // it fronts buildings onto nothing. Patches that join edge to edge are merged first, so a town
+  // extended along its length still runs ONE street the whole way instead of breaking at the join.
+  const streets = mergeGeneratorAreas(territory).flatMap((patch) => {
+    const setback = setbackWithin(patch);
+    return townStreets(params.plan, patch, setback, seed).map((street) => ({ street, setback }));
+  });
 
   // 1. Walk each street's frontage, laying out plots.
   //
@@ -584,7 +627,7 @@ export function planTown(input: TownPlanInput): TownPlanResult {
 
   const plots: TownPlot[] = [];
   let index = 0;
-  for (const [streetIndex, street] of streets.entries()) {
+  for (const [streetIndex, { street, setback }] of streets.entries()) {
     const dx = street.x1 - street.x0;
     const dy = street.y1 - street.y0;
     const length = Math.hypot(dx, dy);
@@ -619,6 +662,9 @@ export function planTown(input: TownPlanInput): TownPlanResult {
         };
         // Coarse reject on the plot centre; the real boundary test is on the building's whole
         // footprint once its size is known, since the sprite reaches well past its ground point.
+        // Against the territory's BOX, not its patches: this is a cheap pre-filter on a bare
+        // point, and a point test would fall through the half-cell gap where two patches meet and
+        // thin the town along the join. Membership is settled below, on the whole footprint.
         const cell = unprojectBoardPoint({ left: ground.x, top: ground.y });
         if (cell.x < area.minX || cell.x > area.maxX
           || cell.y < area.minY || cell.y > area.maxY) continue;
@@ -725,7 +771,7 @@ export function planTown(input: TownPlanInput): TownPlanResult {
       // Measure against where the sprite actually lands, after integer rounding.
       const seated = floatingArtworkGroundPoint(candidate, geometry) ?? plot.ground;
       const box = townFootprint(seated, sprite, scale, spacing);
-      if (!footprintWithin(box, area)) {
+      if (!footprintWithin(box, territory)) {
         blockedBy = 'outside';
       } else if (occupied.some((other) => footprintsOverlap(box, other))) {
         blockedBy = 'overlap';
