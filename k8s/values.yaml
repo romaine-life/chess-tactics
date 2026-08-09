@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:e825eba2d25332cf8872afe74c7d08b04c8507ed46801dd39dd912db69fc4e47"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:2dae174062acfe05bb7e9918619f2b2fcd543024e9842ed74122c1ec033ffbd3"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Autosave stops deleting the board's Undo history"
-  prNumber: "822"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/822"
-  commit: "c58cbe3c"
+  prTitle: "A level declares its factions"
+  prNumber: "823"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/823"
+  commit: "7b113233"
 
 name: chess-tactics
 namespace: chess-tactics
