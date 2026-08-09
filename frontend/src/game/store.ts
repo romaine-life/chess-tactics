@@ -461,7 +461,14 @@ export interface SkirmishState {
   /** Multiplayer context (null = single-player). When set, the AI never fires and
    *  input is gated to `net.localSide` instead of 'player'. */
   net: NetState | null;
-  newSkirmish: (opts: SkirmishOptions & { preserveBoardPresentation?: boolean; activityId?: string | null }) => void;
+  newSkirmish: (opts: SkirmishOptions & {
+    preserveBoardPresentation?: boolean;
+    /** Voice the deploy roll-call even on a preserved board. A Run Battle is promoted in place
+     *  from its Deployment plan, so its army arrives HERE and has to be heard arriving; a plain
+     *  restart re-seats units that never left, and stays silent. */
+    voiceDeployRollCall?: boolean;
+    activityId?: string | null;
+  }) => void;
   /** Reset match state on the board already being presented. This invalidates async
    *  match work without replacing, reframing, or replaying the board presentation. */
   restartSkirmish: (opts: SkirmishOptions & { activityId?: string | null }) => void;
@@ -1427,7 +1434,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     // squad arriving reads as a roll-call swell, not one loud stack. Silent until a
     // gesture arms the AudioContext — entering a skirmish is one, so the navigating
     // click covers it.
-    if (!opts.preserveBoardPresentation) {
+    if (!opts.preserveBoardPresentation || opts.voiceDeployRollCall) {
       game.pieces
         .filter((pc) => pc.alive && pc.side === 'player')
         .forEach((pc, i) => {
