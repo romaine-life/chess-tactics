@@ -182,10 +182,12 @@ describe('creation attempts', () => {
     expect(panel).toContain("from './predrawnGridFitterRoute'");
     expect(panel).toContain('predrawnGridFitterArtifactId(window.location.search)');
     expect(panel).toContain('predrawnGridFitterHref(window.location.href, artifactId)');
-    expect(panel).toContain('useState(() => Boolean(openingGridFitterArtifactId.current))');
     // The address names the board it opens ON, so the load that re-selects the working copy's
     // last artifact must not steal the selection back.
     expect(panel).toContain('openingGridFitterArtifactId.current = null;');
+    // ...and it clears the same guard the button clears rather than walking past an occupied slot.
+    expect(panel).toContain('if (adjustGridDisabledReason) {');
+    expect(panel).toContain('setError(adjustGridDisabledReason);');
     expect(panel).toContain('setGridFitterRoute(selectedBackground?.id ?? null)');
     expect(panel).toContain('onClose={() => setGridFitterRoute(null)}');
   });
