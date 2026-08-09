@@ -2,10 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { allRunCards } from '../run/model';
 import {
   DEFAULT_POOL_KNOBS,
+  POOL_MODELS,
   buildPool,
   countSupportPairs,
+  groupPool,
   hasOppositeColourBishopPair,
+  poolShapeSignature,
   priceCard,
+  sameKnobs,
   summarizePool,
   type PoolPiece,
 } from './runCardPool';
@@ -85,6 +89,70 @@ describe('runCardPool synergy', () => {
     // which is exactly the case that stops being priceable while rotation is free.
     expect(countSupportPairs(cells([0, 0], [1, 1]), ['R', 'P'], false)).toBe(0);
     expect(countSupportPairs(cells([0, 0], [1, 1]), ['R', 'P'], true)).toBe(1);
+  });
+});
+
+describe('runCardPool models', () => {
+  it('gives every model a distinct position worth comparing', () => {
+    const sizes = new Map(POOL_MODELS.map((model) => [model.id, buildPool(model.knobs).length]));
+    expect(sizes.get('material-bands')).toBe(268);
+    expect(sizes.get('density-cost')).toBe(268);
+    expect(sizes.get('every-orientation')).toBe(619);
+    expect(sizes.get('small-catalog')).toBe(15);
+  });
+
+  it('separates the vertical-only rule from simply dropping collapse', () => {
+    // Collapse off alone emits the horizontal domino as well as the vertical one, so every
+    // two-cell card gets a twin that means the same thing.
+    const everyOrientation = buildPool({ ...DEFAULT_POOL_KNOBS, maxCells: 2, collapseRotation: false });
+    expect(everyOrientation.filter((card) => card.volume === 2)).toHaveLength(34);
+
+    // One orientation per shape is the rule as described: 5 singles, 17 ordered pairs.
+    const verticalOnly = buildPool({
+      ...DEFAULT_POOL_KNOBS, maxCells: 2, collapseRotation: false, oneOrientationPerShape: true,
+    });
+    expect(verticalOnly.filter((card) => card.volume === 1)).toHaveLength(5);
+    expect(verticalOnly.filter((card) => card.volume === 2)).toHaveLength(17);
+    expect(buildPool(POOL_MODELS.find((m) => m.id === 'generate-small-author-big')!.knobs)).toHaveLength(22);
+  });
+
+  it('detects an edited model so the dropdown cannot lie about what is on screen', () => {
+    const model = POOL_MODELS.find((candidate) => candidate.id === 'density-cost');
+    expect(model).toBeDefined();
+    expect(sameKnobs(model!.knobs, DEFAULT_POOL_KNOBS)).toBe(true);
+    expect(sameKnobs(model!.knobs, { ...DEFAULT_POOL_KNOBS, commonMaxCost: 40 })).toBe(false);
+    expect(sameKnobs(model!.knobs, {
+      ...DEFAULT_POOL_KNOBS,
+      pieceValue: { ...DEFAULT_POOL_KNOBS.pieceValue, B: 3.5 },
+    })).toBe(false);
+  });
+});
+
+describe('runCardPool grouping', () => {
+  const cards = buildPool(DEFAULT_POOL_KNOBS);
+
+  it('groups without losing or inventing cards', () => {
+    for (const grouping of ['none', 'band', 'volume', 'cost', 'material', 'density', 'composition', 'shape'] as const) {
+      const total = groupPool(cards, grouping).reduce((sum, group) => sum + group.cards.length, 0);
+      expect(total, grouping).toBe(cards.length);
+    }
+  });
+
+  it('puts a card in every piece register it belongs to, which is the one overlapping dimension', () => {
+    const groups = groupPool(cards, 'piece');
+    const total = groups.reduce((sum, group) => sum + group.cards.length, 0);
+    expect(total).toBeGreaterThan(cards.length);
+    const rooks = groups.find((group) => group.key === 'R');
+    expect(rooks?.cards.every((card) => card.pieces.includes('R'))).toBe(true);
+  });
+
+  it('orders bands by tier rather than alphabetically', () => {
+    expect(groupPool(cards, 'band').map((group) => group.key)).toEqual(['common', 'uncommon', 'rare']);
+  });
+
+  it('reads a shape blind to who is seated in it', () => {
+    expect(poolShapeSignature(cells([0, 0], [1, 0], [1, 1]))).toBe('##/.#');
+    expect(poolShapeSignature(cells([0, 0], [0, 1]))).toBe('#/#');
   });
 });
 

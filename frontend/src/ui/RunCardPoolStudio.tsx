@@ -1,14 +1,19 @@
 import { useCallback, useMemo, useState, type ReactElement } from 'react';
 import {
   DEFAULT_POOL_KNOBS,
+  POOL_GROUPINGS,
+  POOL_MODELS,
   POOL_PIECES,
   POOL_PILE_SLOTS,
   buildPool,
+  groupPool,
   priceCard,
+  sameKnobs,
   summarizePool,
   type PoolBand,
   type PoolCard,
   type PoolCell,
+  type PoolGrouping,
   type PoolKnobs,
   type PoolPiece,
 } from './runCardPool';
@@ -16,14 +21,18 @@ import {
 // Studio → Card Pool. The offer catalog re-derived live from its own rules, so the distribution
 // questions can be asked at the surface instead of one probe script at a time: how big is common,
 // what does a cost band admit, what does dropping rotation collapse actually cost in cards and in
-// illustrations. Every number here is computed from the knobs on the left, so moving one and
-// watching the tiers move IS the answer.
+// illustrations. Every number here is computed from the knobs on the left.
+//
+// Two things make it usable in a conversation rather than only in a sitting. MODELS are named whole
+// positions, because a design argument moves by proposing a complete alternative and not by nudging
+// one number. GROUPS are a register in the Prosopography sense: choose a dimension and read who is
+// actually in each bucket, because a tier count answers "how many" and never answers "which".
 //
 // Defaults reproduce the shipped generator, with one known gap: `rr-vertical` is a named card
 // injected past the material cap, so this lands on 268 where the live catalog carries 269.
 
 const BANDS: readonly PoolBand[] = ['common', 'uncommon', 'rare'];
-const MAX_ROWS = 300;
+const MAX_ROWS_PER_GROUP = 60;
 
 function ShapeGrid({ cells, pieces }: { cells: readonly PoolCell[]; pieces: readonly PoolPiece[] }): ReactElement {
   const w = Math.max(...cells.map((c) => c.x)) + 1;
@@ -65,10 +74,38 @@ function NumberRow({
   );
 }
 
+function CardTable({ cards }: { cards: readonly PoolCard[] }): ReactElement {
+  return (
+    <table>
+      <thead>
+        <tr><th>shape</th><th>pieces</th><th>mat</th><th>vol</th><th>dens</th><th>cost</th><th>band</th><th>supp</th><th>BB</th></tr>
+      </thead>
+      <tbody>
+        {cards.slice(0, MAX_ROWS_PER_GROUP).map((card) => (
+          <tr key={card.key} className={`rcp-band-${card.band}`}>
+            <td><ShapeGrid cells={card.cells} pieces={card.pieces} /></td>
+            <td>{card.pieces.join('')}</td>
+            <td>{card.value}</td>
+            <td>{card.volume}</td>
+            <td>{card.density.toFixed(2)}</td>
+            <td>{card.cost}</td>
+            <td>{card.band}</td>
+            <td>{card.supportPairs || ''}</td>
+            <td>{card.hasBishopPair ? '✦' : ''}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 export function RunCardPoolCatalog(): ReactElement {
+  const [modelId, setModelId] = useState<string>('density-cost');
   const [knobs, setKnobs] = useState<PoolKnobs>(DEFAULT_POOL_KNOBS);
   const [bandFilter, setBandFilter] = useState<PoolBand | 'all'>('all');
   const [volumeFilter, setVolumeFilter] = useState<number | 'all'>('all');
+  const [pieceFilter, setPieceFilter] = useState<PoolPiece | 'all'>('all');
+  const [grouping, setGrouping] = useState<PoolGrouping>('band');
   const [draft, setDraft] = useState<Map<string, PoolPiece>>(new Map([['0,0', 'P']]));
 
   const set = useCallback(<K extends keyof PoolKnobs>(field: K, value: PoolKnobs[K]) => {
@@ -77,6 +114,15 @@ export function RunCardPoolCatalog(): ReactElement {
   const setPieceValue = useCallback((piece: PoolPiece, value: number) => {
     setKnobs((prev) => ({ ...prev, pieceValue: { ...prev.pieceValue, [piece]: value } }));
   }, []);
+  const applyModel = useCallback((id: string) => {
+    const model = POOL_MODELS.find((candidate) => candidate.id === id);
+    if (!model) return;
+    setModelId(id);
+    setKnobs(model.knobs);
+  }, []);
+
+  const activeModel = POOL_MODELS.find((model) => model.id === modelId) ?? null;
+  const isCustom = activeModel !== null && !sameKnobs(activeModel.knobs, knobs);
 
   const cards = useMemo(() => buildPool(knobs), [knobs]);
   const summary = useMemo(() => summarizePool(cards), [cards]);
@@ -84,9 +130,11 @@ export function RunCardPoolCatalog(): ReactElement {
   const shown = useMemo(() => cards.filter((card) => (
     (bandFilter === 'all' || card.band === bandFilter)
     && (volumeFilter === 'all' || card.volume === volumeFilter)
-  )), [cards, bandFilter, volumeFilter]);
+    && (pieceFilter === 'all' || card.pieces.includes(pieceFilter))
+  )), [cards, bandFilter, volumeFilter, pieceFilter]);
 
-  // The ad-hoc card: click the grid to seat pieces and read where it would land.
+  const groups = useMemo(() => groupPool(shown, grouping), [shown, grouping]);
+
   const draftCells = useMemo(() => (
     [...draft.keys()].map((k) => {
       const [x, y] = k.split(',').map(Number);
@@ -123,7 +171,6 @@ export function RunCardPoolCatalog(): ReactElement {
       <style>{`
         .rcp { display: grid; grid-template-columns: minmax(240px, 300px) 1fr; gap: 20px; align-items: start; }
         .rcp h3 { margin: 0 0 8px; font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase; opacity: 0.75; }
-        .rcp h4 { margin: 16px 0 6px; font-size: 12px; letter-spacing: 0.03em; opacity: 0.7; }
         .rcp-panel { border: 1px solid rgba(255,255,255,0.16); border-radius: 6px; padding: 12px 14px; margin-bottom: 14px; }
         .rcp-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 5px 0; font-size: 12px; }
         .rcp-row-label { opacity: 0.85; }
@@ -141,27 +188,38 @@ export function RunCardPoolCatalog(): ReactElement {
         .rcp-cell.is-filled { background: rgba(255,255,255,0.22); }
         .rcp-band-common { opacity: 0.62; }
         .rcp-band-rare { font-weight: 700; }
-        .rcp-scroll { max-height: 60vh; overflow: auto; border: 1px solid rgba(255,255,255,0.14); border-radius: 6px; }
         .rcp-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; font-size: 12px; align-items: center; }
         .rcp-filters button { font: inherit; font-size: 12px; padding: 3px 9px; border-radius: 4px; cursor: pointer; }
         .rcp-filters button[aria-pressed=true] { outline: 2px solid currentColor; }
+        .rcp-filters select { font: inherit; font-size: 12px; padding: 3px 6px; }
         .rcp-draft-grid { display: grid; gap: 2px; margin: 8px 0; }
         .rcp-draft-grid button { width: 30px; height: 30px; font: inherit; font-size: 13px; cursor: pointer; border-radius: 3px; }
         .rcp-note { font-size: 11px; opacity: 0.62; margin: 6px 0 0; line-height: 1.45; }
+        .rcp-model select { width: 100%; font: inherit; font-size: 13px; padding: 5px 6px; }
+        .rcp-model-note { font-size: 11px; opacity: 0.72; margin: 8px 0 0; line-height: 1.5; }
+        .rcp-custom { display: inline-block; margin-top: 8px; font-size: 11px; padding: 2px 8px; border-radius: 10px; border: 1px solid currentColor; }
+        .rcp-group { border: 1px solid rgba(255,255,255,0.14); border-radius: 6px; margin-bottom: 10px; overflow: hidden; }
+        .rcp-group-head { display: flex; align-items: baseline; gap: 12px; padding: 7px 12px; background: rgba(255,255,255,0.05); font-size: 12px; }
+        .rcp-group-name { font-weight: 700; font-size: 13px; white-space: pre; font-family: ui-monospace, monospace; }
+        .rcp-group-count { font-variant-numeric: tabular-nums; }
+        .rcp-group-bands { margin-left: auto; opacity: 0.72; font-variant-numeric: tabular-nums; }
+        .rcp-group-body { max-height: 340px; overflow: auto; }
       `}</style>
 
       <div>
+        <div className="rcp-panel rcp-model">
+          <h3>Model</h3>
+          <select value={modelId} onChange={(event) => applyModel(event.target.value)}>
+            {POOL_MODELS.map((model) => <option key={model.id} value={model.id}>{model.label}</option>)}
+          </select>
+          <p className="rcp-model-note">{activeModel?.note}</p>
+          {isCustom ? <span className="rcp-custom">edited — no longer {activeModel?.label}</span> : null}
+        </div>
+
         <div className="rcp-panel">
           <h3>Piece material</h3>
           {POOL_PIECES.map((piece) => (
-            <NumberRow
-              key={piece}
-              label={piece}
-              value={knobs.pieceValue[piece]}
-              onChange={(next) => setPieceValue(piece, next)}
-              step={0.5}
-              min={0}
-            />
+            <NumberRow key={piece} label={piece} value={knobs.pieceValue[piece]} onChange={(next) => setPieceValue(piece, next)} step={0.5} min={0} />
           ))}
         </div>
 
@@ -169,19 +227,23 @@ export function RunCardPoolCatalog(): ReactElement {
           <h3>Generation</h3>
           <NumberRow label="Grid cols" value={knobs.cols} onChange={(v) => set('cols', Math.max(1, Math.min(6, v)))} min={1} max={6} />
           <NumberRow label="Grid rows" value={knobs.rows} onChange={(v) => set('rows', Math.max(1, Math.min(4, v)))} min={1} max={4} />
-          <NumberRow label="Max cells" value={knobs.maxCells} onChange={(v) => set('maxCells', Math.max(1, Math.min(6, v)))} min={1} max={6} hint="Cap the footprint size. Set to 2 to see the small-card-only catalog." />
+          <NumberRow label="Max cells" value={knobs.maxCells} onChange={(v) => set('maxCells', Math.max(1, Math.min(6, v)))} min={1} max={6} hint="Cap the footprint size. Set to 2 for the small-card-only catalog." />
           <NumberRow label="Max material" value={knobs.maxValue} onChange={(v) => set('maxValue', v)} min={1} />
           <label className="rcp-check">
             <input type="checkbox" checked={knobs.collapseRotation} onChange={(e) => set('collapseRotation', e.target.checked)} />
             <span>Rotation collapse</span>
           </label>
           <label className="rcp-check">
+            <input type="checkbox" checked={knobs.oneOrientationPerShape} onChange={(e) => set('oneOrientationPerShape', e.target.checked)} />
+            <span>One orientation per shape</span>
+          </label>
+          <label className="rcp-check">
             <input type="checkbox" checked={knobs.allowQueenPawnOverCap} onChange={(e) => set('allowQueenPawnOverCap', e.target.checked)} />
             <span>Queen+Pawn exempt from cap</span>
           </label>
           <p className="rcp-note">
-            Collapse off makes every orientation and seating its own card — front/back becomes a purchase
-            rather than a placement choice.
+            Collapse off alone makes every rotation its own card too. Add one-orientation-per-shape for the
+            vertical-only rule: front/back becomes a purchase without a horizontal twin for every card.
           </p>
         </div>
 
@@ -190,22 +252,19 @@ export function RunCardPoolCatalog(): ReactElement {
           <NumberRow label="Density power" value={knobs.densityPower} onChange={(v) => set('densityPower', v)} step={0.1} hint="cost = value x (density/3)^power x scale. 0 is flat material pricing; 0.5 is the sqrt curve." />
           <NumberRow label="Scale" value={knobs.costScale} onChange={(v) => set('costScale', v)} step={1} min={1} />
           <NumberRow label="Round to" value={knobs.roundTo} onChange={(v) => set('roundTo', Math.max(0, v))} step={1} min={0} />
-          <NumberRow label="Bishop pair +" value={knobs.bishopPairBonus} onChange={(v) => set('bishopPairBonus', v)} step={0.05} hint="Multiplier bonus for two Bishops on opposite colours." />
+          <NumberRow label="Bishop pair +" value={knobs.bishopPairBonus} onChange={(v) => set('bishopPairBonus', v)} step={0.05} hint="Bonus for two Bishops on opposite colours." />
           <NumberRow label="Support pair +" value={knobs.supportBonus} onChange={(v) => set('supportBonus', v)} step={0.05} hint="Per pair where one piece defends another's square." />
           <label className="rcp-check">
             <input type="checkbox" checked={knobs.countPawnSupport} onChange={(e) => set('countPawnSupport', e.target.checked)} />
             <span>Count pawn support</span>
           </label>
-          <p className="rcp-note">
-            Pawn support is only invariant with rotation collapse OFF — a pawn's covered squares turn with the card.
-          </p>
+          <p className="rcp-note">Pawn support is only invariant with rotation collapse OFF — a pawn's covered squares turn with the card.</p>
         </div>
 
         <div className="rcp-panel">
           <h3>Bands</h3>
           <NumberRow label="Common ≤" value={knobs.commonMaxCost} onChange={(v) => set('commonMaxCost', v)} step={5} />
           <NumberRow label="Uncommon ≤" value={knobs.uncommonMaxCost} onChange={(v) => set('uncommonMaxCost', v)} step={5} />
-          <button type="button" className="tileset-view-action" onClick={() => setKnobs(DEFAULT_POOL_KNOBS)}>Reset to shipped</button>
         </div>
       </div>
 
@@ -273,45 +332,52 @@ export function RunCardPoolCatalog(): ReactElement {
         </div>
 
         <div className="rcp-filters">
-          <span>band</span>
+          <label>group by <select value={grouping} onChange={(e) => setGrouping(e.target.value as PoolGrouping)}>
+            {POOL_GROUPINGS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+          </select></label>
+          <span style={{ marginLeft: 6 }}>band</span>
           {(['all', ...BANDS] as const).map((band) => (
             <button key={band} type="button" aria-pressed={bandFilter === band} onClick={() => setBandFilter(band as PoolBand | 'all')}>{band}</button>
           ))}
-          <span style={{ marginLeft: 10 }}>volume</span>
+          <span style={{ marginLeft: 6 }}>vol</span>
           {(['all', 1, 2, 3, 4] as const).map((v) => (
             <button key={String(v)} type="button" aria-pressed={volumeFilter === v} onClick={() => setVolumeFilter(v as number | 'all')}>{v}</button>
           ))}
-          <span style={{ marginLeft: 'auto', opacity: 0.7 }}>{shown.length} shown</span>
+          <span style={{ marginLeft: 6 }}>has</span>
+          {(['all', ...POOL_PIECES] as const).map((p) => (
+            <button key={p} type="button" aria-pressed={pieceFilter === p} onClick={() => setPieceFilter(p as PoolPiece | 'all')}>{p}</button>
+          ))}
+          <span style={{ marginLeft: 'auto', opacity: 0.7 }}>{shown.length} of {summary.total} · {groups.length} group{groups.length === 1 ? '' : 's'}</span>
         </div>
 
-        <div className="rcp-scroll">
-          <table>
-            <thead>
-              <tr><th>shape</th><th>pieces</th><th>mat</th><th>vol</th><th>dens</th><th>cost</th><th>band</th><th>supp</th><th>BB</th></tr>
-            </thead>
-            <tbody>
-              {shown.slice(0, MAX_ROWS).map((card: PoolCard) => (
-                <tr key={card.key} className={`rcp-band-${card.band}`}>
-                  <td><ShapeGrid cells={card.cells} pieces={card.pieces} /></td>
-                  <td>{card.pieces.join('')}</td>
-                  <td>{card.value}</td>
-                  <td>{card.volume}</td>
-                  <td>{card.density.toFixed(2)}</td>
-                  <td>{card.cost}</td>
-                  <td>{card.band}</td>
-                  <td>{card.supportPairs || ''}</td>
-                  <td>{card.hasBishopPair ? '✦' : ''}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {shown.length > MAX_ROWS ? (
-          <p className="rcp-note">Showing the first {MAX_ROWS} of {shown.length}. Every summary above counts all of them — nothing is silently dropped from the numbers.</p>
-        ) : null}
+        {groups.map((group) => {
+          const bandCounts = BANDS.map((band) => `${band[0]}${group.cards.filter((card) => card.band === band).length}`).join(' · ');
+          const costs = group.cards.map((card) => card.cost);
+          const range = costs.length === 0 ? '—' : `${Math.min(...costs)}–${Math.max(...costs)} gold`;
+          return (
+            <div className="rcp-group" key={group.key}>
+              <div className="rcp-group-head">
+                <span className="rcp-group-name">{group.label}</span>
+                <span className="rcp-group-count">{group.cards.length} card{group.cards.length === 1 ? '' : 's'}</span>
+                <span style={{ opacity: 0.72 }}>{range}</span>
+                <span className="rcp-group-bands">{bandCounts}</span>
+              </div>
+              <div className="rcp-group-body">
+                <CardTable cards={group.cards} />
+                {group.cards.length > MAX_ROWS_PER_GROUP ? (
+                  <p className="rcp-note" style={{ padding: '4px 10px 8px' }}>
+                    Showing {MAX_ROWS_PER_GROUP} of {group.cards.length}. The counts above and every summary
+                    stat cover all of them — nothing is dropped from the numbers, only from the rows.
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+
         <p className="rcp-note">
-          At shipped defaults this pool holds 268 where the live catalog holds 269: `rr-vertical` is a named
-          card injected past the material cap, and this generator only exempts the Queen+Pawn pair.
+          At shipped generation rules this pool holds 268 where the live catalog holds 269: `rr-vertical` is a
+          named card injected past the material cap, and this generator exempts the Queen+Pawn pair alone.
         </p>
       </div>
     </div>

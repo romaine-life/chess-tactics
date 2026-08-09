@@ -32,6 +32,18 @@ export type PoolKnobs = Readonly<{
   allowQueenPawnOverCap: boolean;
   /** Rotation-canonical identity (shipped) vs every orientation and seating distinct. */
   collapseRotation: boolean;
+  /**
+   * Emit one representative orientation per footprint class rather than every rotation of it.
+   *
+   * This is a GENERATION restriction and not an identity rule, and it cannot be folded into
+   * `collapseRotation`. Quotienting by rotation is what merges a vertical domino with a horizontal
+   * one, but the same quarter-turns also merge N-over-P with P-over-N — the 180 turn is in the same
+   * group as the 90. So "shape is orientation-blind, seat is not" is unreachable by collapsing, and
+   * the only coherent way to get it is to generate one orientation and keep every seating.
+   *
+   * Combined with `collapseRotation: false` this is the vertical-only, front-and-back-distinct rule.
+   */
+  oneOrientationPerShape: boolean;
   /** cost = value * (density / 3) ^ densityPower * costScale, rounded to `roundTo`. */
   densityPower: number;
   costScale: number;
@@ -55,6 +67,7 @@ export const DEFAULT_POOL_KNOBS: PoolKnobs = {
   maxValue: 9,
   allowQueenPawnOverCap: true,
   collapseRotation: true,
+  oneOrientationPerShape: false,
   densityPower: 0.5,
   costScale: 10,
   roundTo: 5,
@@ -144,11 +157,19 @@ function cardIdentity(
   return [0, 1, 2, 3].map(seated).sort()[0];
 }
 
+/** The footprint's rotation class, blind to who is seated in it. */
+function shapeClass(cells: readonly PoolCell[]): string {
+  return [0, 1, 2, 3]
+    .map((turns) => normalize(rotate(cells, turns)).map((c) => `${c.x}${c.y}`).join(''))
+    .sort()[0];
+}
+
 /** Footprints the generator emits: connected, size-capped, left-anchored (the shipped rule). */
 export function poolFootprints(knobs: PoolKnobs): PoolCell[][] {
   const out: PoolCell[][] = [];
   const total = knobs.cols * knobs.rows;
   if (total > 20) return out;
+  const seenShape = new Set<string>();
   for (let mask = 1; mask < (1 << total); mask += 1) {
     const cells: PoolCell[] = [];
     for (let i = 0; i < total; i += 1) {
@@ -157,6 +178,11 @@ export function poolFootprints(knobs: PoolKnobs): PoolCell[][] {
     if (cells.length > knobs.maxCells) continue;
     if (Math.min(...cells.map((c) => c.x)) !== 0) continue;
     if (!connected(cells)) continue;
+    if (knobs.oneOrientationPerShape) {
+      const shape = shapeClass(cells);
+      if (seenShape.has(shape)) continue;
+      seenShape.add(shape);
+    }
     out.push(cells.sort((a, b) => a.x - b.x || a.y - b.y));
   }
   return out;
@@ -283,6 +309,140 @@ export function buildPool(knobs: PoolKnobs): PoolCard[] {
     walk(0, 0);
   }
   return [...byIdentity.values()].sort((a, b) => a.cost - b.cost || a.volume - b.volume || a.key.localeCompare(b.key));
+}
+
+/**
+ * Named parameter sets. A design conversation moves by proposing a whole position, not by nudging
+ * one number, so the positions worth comparing are written down and selectable rather than
+ * reconstructed by hand each time. Adding one is adding an entry here.
+ */
+export type PoolModel = Readonly<{
+  id: string;
+  label: string;
+  note: string;
+  knobs: PoolKnobs;
+}>;
+
+export const POOL_MODELS: readonly PoolModel[] = Object.freeze([
+  {
+    id: 'material-bands',
+    label: 'Material bands',
+    note: 'The live generator with cost = material and rarity by raw value (<=4, <=6). NOT the shipped rarity: that also steps any Bishop card up a band and steps awkward footprints down one, which is what puts 23 four-cell cards into common. This model shows the bands without those two adjustments.',
+    knobs: { ...DEFAULT_POOL_KNOBS, densityPower: 0, costScale: 1, roundTo: 0, commonMaxCost: 4, uncommonMaxCost: 6 },
+  },
+  {
+    id: 'density-cost',
+    label: 'Density cost curve',
+    note: 'cost = value x sqrt(density/3) x 10, rounded to 5s. Bands by cost: common <=35, uncommon <=90.',
+    knobs: DEFAULT_POOL_KNOBS,
+  },
+  {
+    id: 'front-and-back',
+    label: 'Front and back',
+    note: 'One orientation per shape, every seating distinct — the vertical-only rule, where who stands in front is bought rather than chosen at placement.',
+    knobs: { ...DEFAULT_POOL_KNOBS, collapseRotation: false, oneOrientationPerShape: true, countPawnSupport: true },
+  },
+  {
+    id: 'every-orientation',
+    label: 'Every orientation',
+    note: 'Rotation collapse simply dropped: each rotation of a shape is also its own card. The expensive reading, and the one that doubles the small tier for nothing.',
+    knobs: { ...DEFAULT_POOL_KNOBS, collapseRotation: false, countPawnSupport: true },
+  },
+  {
+    id: 'small-catalog',
+    label: 'Small catalog',
+    note: 'Footprints capped at two cells — the tier called the game’s identity, generated exhaustively.',
+    knobs: { ...DEFAULT_POOL_KNOBS, maxCells: 2 },
+  },
+  {
+    id: 'generate-small-author-big',
+    label: 'Generate small, author big',
+    note: 'Two-cell cap, one orientation, seatings distinct: complete coverage of the tier that carries the identity, leaving 3- and 4-cell to be authored rather than generated.',
+    knobs: {
+      ...DEFAULT_POOL_KNOBS, maxCells: 2, collapseRotation: false, oneOrientationPerShape: true, countPawnSupport: true,
+    },
+  },
+  {
+    id: 'synergy',
+    label: 'Synergy priced',
+    note: 'Density cost plus the two chess rules material cannot express: the opposite-colour Bishop pair, and mutual support.',
+    knobs: { ...DEFAULT_POOL_KNOBS, bishopPairBonus: 0.25, supportBonus: 0.1 },
+  },
+]);
+
+export function sameKnobs(a: PoolKnobs, b: PoolKnobs): boolean {
+  return (Object.keys(a) as (keyof PoolKnobs)[]).every((field) => (
+    field === 'pieceValue'
+      ? POOL_PIECES.every((piece) => a.pieceValue[piece] === b.pieceValue[piece])
+      : a[field] === b[field]
+  ));
+}
+
+export type PoolGrouping = 'none' | 'band' | 'volume' | 'cost' | 'material' | 'density' | 'composition' | 'shape' | 'piece';
+
+export const POOL_GROUPINGS: readonly Readonly<{ id: PoolGrouping; label: string }>[] = Object.freeze([
+  { id: 'none', label: 'Flat list' },
+  { id: 'band', label: 'Band' },
+  { id: 'volume', label: 'Volume' },
+  { id: 'cost', label: 'Cost' },
+  { id: 'material', label: 'Material' },
+  { id: 'density', label: 'Density' },
+  { id: 'composition', label: 'Composition' },
+  { id: 'shape', label: 'Shape' },
+  { id: 'piece', label: 'Contains piece' },
+]);
+
+const BAND_ORDER: Readonly<Record<PoolBand, number>> = { common: 0, uncommon: 1, rare: 2 };
+
+/** The footprint alone, blind to who is seated in it. */
+export function poolShapeSignature(cells: readonly PoolCell[]): string {
+  const w = Math.max(...cells.map((c) => c.x)) + 1;
+  const h = Math.max(...cells.map((c) => c.y)) + 1;
+  const rows: string[] = [];
+  for (let y = 0; y < h; y += 1) {
+    let row = '';
+    for (let x = 0; x < w; x += 1) row += cells.some((c) => c.x === x && c.y === y) ? '#' : '.';
+    rows.push(row);
+  }
+  return rows.join('/');
+}
+
+export type PoolGroup = Readonly<{ key: string; label: string; sort: number; cards: readonly PoolCard[] }>;
+
+/**
+ * A register: every group the chosen dimension produces, with its membership. `piece` is the one
+ * dimension where a card belongs to more than one group, because a card carrying a Rook and a Pawn
+ * is genuinely in both registers.
+ */
+export function groupPool(cards: readonly PoolCard[], grouping: PoolGrouping): PoolGroup[] {
+  if (grouping === 'none') return [{ key: 'all', label: 'All cards', sort: 0, cards }];
+  const groups = new Map<string, { label: string; sort: number; cards: PoolCard[] }>();
+  const add = (key: string, label: string, sort: number, card: PoolCard): void => {
+    const existing = groups.get(key);
+    if (existing) existing.cards.push(card);
+    else groups.set(key, { label, sort, cards: [card] });
+  };
+  for (const card of cards) {
+    if (grouping === 'band') add(card.band, card.band, BAND_ORDER[card.band], card);
+    else if (grouping === 'volume') add(`v${card.volume}`, `${card.volume} cell${card.volume === 1 ? '' : 's'}`, card.volume, card);
+    else if (grouping === 'cost') add(`c${card.cost}`, `${card.cost} gold`, card.cost, card);
+    else if (grouping === 'material') add(`m${card.value}`, `${card.value} material`, card.value, card);
+    else if (grouping === 'density') add(`d${card.density.toFixed(2)}`, `density ${card.density.toFixed(2)}`, card.density, card);
+    else if (grouping === 'composition') {
+      const composition = [...card.pieces].sort().join('');
+      add(composition, composition, card.value * 100 + card.volume, card);
+    } else if (grouping === 'shape') {
+      const shape = poolShapeSignature(card.cells);
+      add(shape, shape, card.volume * 100 + shape.length, card);
+    } else {
+      for (const piece of POOL_PIECES) {
+        if (card.pieces.includes(piece)) add(piece, POOL_PIECE_NAME[piece], POOL_PIECES.indexOf(piece), card);
+      }
+    }
+  }
+  return [...groups.entries()]
+    .map(([key, value]) => ({ key, label: value.label, sort: value.sort, cards: value.cards }))
+    .sort((a, b) => a.sort - b.sort || a.label.localeCompare(b.label));
 }
 
 export type PoolSummary = Readonly<{
