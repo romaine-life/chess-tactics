@@ -18714,8 +18714,14 @@ const RUN_STARTER_CARD_ART_BY_ID = Object.freeze({
 // live deck rather than restated. A frozen list is what made the roster-keyed set impossible to
 // extend without editing the server. Falls back to empty when the shared package is absent,
 // which fails the projection closed rather than admitting an unknown id.
+// Kings come from the starter set, not the offer deck: they are never dealt, so RUN_CARD_DECK
+// alone would refuse every King illustration as an unknown identity. Both are derived, so neither
+// needs restating here.
 const RUN_CARD_ART_FAMILY_IDS = Object.freeze([...new Set(
-  (Array.isArray(serverRender?.RUN_CARD_DECK) ? serverRender.RUN_CARD_DECK : [])
+  [
+    ...(Array.isArray(serverRender?.RUN_CARD_DECK) ? serverRender.RUN_CARD_DECK : []),
+    ...(Array.isArray(serverRender?.RUN_STARTER_CARDS) ? serverRender.RUN_STARTER_CARDS : []),
+  ]
     .map((card) => card?.artId)
     .filter((artId) => typeof artId === 'string' && artId),
 )].sort());
@@ -19008,8 +19014,15 @@ function runCardArtFamilyProjection(row, metadata, provenance) {
     .map((piece) => RUN_CARD_ART_PIECE_INITIAL[piece])
     .join('');
   const baseCost = metadata.pieces.reduce((sum, piece) => sum + RUN_CARD_ART_PIECE_VALUE[piece], 0);
-  // A family id is `<footprint>-<roster>`, so the roster half must agree with the pieces.
-  if (!cardId.endsWith(`-${roster}`) || metadata.baseCost !== baseCost || baseCost < 1 || baseCost > 10) {
+  // A family id is `<footprint>-<roster>`, so the roster half must agree with the pieces. A King is
+  // keyed to its own card slug instead, because every arrangement is its own King and encodes no
+  // shared roster; its identity is checked against the live starter set above, and the pieces here
+  // are its companions, so only the cost band is left to agree.
+  const kingCard = cardId.startsWith('k-');
+  if (
+    (!kingCard && !cardId.endsWith(`-${roster}`))
+    || metadata.baseCost !== baseCost || baseCost < 1 || baseCost > 10
+  ) {
     return { claimed: true, issue: 'Units-card art composition does not match its family identity', value: null };
   }
   if (row.slot !== `ui/run/card-art/${cardId}/illustration.png`) {
