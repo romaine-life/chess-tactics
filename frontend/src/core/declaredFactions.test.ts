@@ -105,6 +105,28 @@ describe('the level editor paints only declared factions', () => {
     expect(levelEditor).toContain('setUnitFaction(declaredFactions.player);');
   });
 
+  it('names a faction by the role it plays, never by its colour', () => {
+    // One naming function, so no surface can drift back to calling a faction "White". The colour
+    // survives only as a qualifier beside a role, or alone for pieces no faction declares.
+    expect(levelEditor).toContain('const factionDisplayName = (faction: UnitPalette): string => {');
+    expect(levelEditor).toContain('return role ? factionRoleLabels[role] : `Undeclared · ${LE_FACTION_LABELS[faction]}`;');
+    // The armed brush and its default facing.
+    expect(levelEditor).toContain('`unit · ${factionDisplayName(unitFaction)}`');
+    expect(levelEditor).toContain('label={`${factionDisplayName(unitFaction)} default facing`}');
+    // The victory rules' "IF <faction>" dropdown.
+    expect(levelEditor).toMatch(/victoryFactions = useMemo\(\(\): FactionOption\[\][\s\S]*?label: factionRoleLabels\[side\],/);
+  });
+
+  it('counts material for the factions the level fields, not for the palette catalog', () => {
+    // Six rows for a two-faction level was the inferred model leaking: four of them named sides the
+    // level does not field and cannot paint.
+    const material = levelEditor.slice(levelEditor.indexOf('className="le-material-values"'));
+    const list = material.slice(0, material.indexOf('</dl>'));
+    expect(list).toContain('[...FACTION_ROLES.map((role) => declaredFactions[role]), ...undeclaredFactions]');
+    expect(list).toContain('{factionDisplayName(faction)}');
+    expect(list).not.toContain('UNIT_PALETTES.map');
+  });
+
   it('declares both halves together so neither is left implicit', () => {
     expect(levelEditor).toContain("if (role === 'player' && !isUnitPalette(next.enemyFaction)) next.enemyFaction = declaredFactions.enemy;");
     expect(levelEditor).toContain("if (role === 'enemy' && !isUnitPalette(next.playerFaction)) next.playerFaction = declaredFactions.player;");

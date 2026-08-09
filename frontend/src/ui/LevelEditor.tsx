@@ -3626,6 +3626,18 @@ export function LevelEditor(): ReactElement {
   );
   const declaredFactionRole = (faction: UnitPalette): FactionRole | null =>
     faction === declaredFactions.player ? 'player' : faction === declaredFactions.enemy ? 'enemy' : null;
+  // The staged selector is the source of truth here: choosing a campaign immediately turns on
+  // campaign-only requirements (notably a player faction that fields units) before the association
+  // is published.
+  const isCampaignLevel = Boolean(campaignAssignmentId);
+  const factionRoleLabels = useMemo(() => LE_FACTION_ROLE_LABELS(isCampaignLevel), [isCampaignLevel]);
+  // How a faction is NAMED anywhere the editor talks about one: by the role it plays. The colour is
+  // a consequence of the declaration, so it is never the name — it appears beside a role, or alone
+  // only for pieces wearing a colour no faction declares.
+  const factionDisplayName = (faction: UnitPalette): string => {
+    const role = declaredFactionRole(faction);
+    return role ? factionRoleLabels[role] : `Undeclared · ${LE_FACTION_LABELS[faction]}`;
+  };
   // The brush opens on the side you are authoring FOR — the declared player faction — so the first
   // pieces painted land on the player's side.
   const initialUnitFaction = resolveDeclaredFactions({
@@ -5889,10 +5901,11 @@ export function LevelEditor(): ReactElement {
   // The factions offered in each condition's "IF <faction>" dropdown — one per side, labelled by the
   // board's assigned palette (ADR-0064). Maps to the engine's player/enemy side; true multi-faction
   // (two distinct enemies) is future work.
+  // The factions offered in each rule's "IF <faction>" dropdown, named by the role they play.
   const victoryFactions = useMemo((): FactionOption[] => FACTION_ROLES.map((side) => ({
     side,
-    label: LE_FACTION_LABELS[declaredFactions[side]],
-  })), [declaredFactions]);
+    label: factionRoleLabels[side],
+  })), [factionRoleLabels]);
   // A level stores `victory` only when the lists DIVERGE from the objective preset — else the
   // preset drives it (keeps preset bodies clean + out of the dirty check, and preserves
   // capture-king's runtime kingSide direction-awareness for an untouched King Assault). ADR-0064.
@@ -8140,9 +8153,6 @@ export function LevelEditor(): ReactElement {
     }), { replace: true, scroll: false });
   }, [cloudSaveState, currentSig, editorDocument]);
 
-  // The staged selector is the source of truth here: choosing a campaign immediately turns on
-  // campaign-only requirements (notably Player faction) before the association is published.
-  const isCampaignLevel = Boolean(campaignAssignmentId);
   const boardFactionCounts = useMemo<Record<UnitPalette, number>>(() => {
     const counts = Object.fromEntries(UNIT_PALETTES.map((faction) => [faction, 0])) as Record<UnitPalette, number>;
     for (const unit of Object.values(boardUnits)) counts[unit.faction] += 1;
@@ -8176,7 +8186,6 @@ export function LevelEditor(): ReactElement {
   const needsPlayerFaction = isCampaignLevel && !playerFactionPresent;
   const levelObjectiveLabel = OBJECTIVE_LABEL[targetLevel?.objective ?? 'capture-all'];
   const levelDifficultyLabel = formatDifficulty(targetLevel?.difficulty);
-  const factionRoleLabels = useMemo(() => LE_FACTION_ROLE_LABELS(isCampaignLevel), [isCampaignLevel]);
   const browserRecoverySafetyDetail = localBackupAvailable === true
     ? 'A browser recovery copy is available.'
     : localBackupAvailable === false
@@ -10560,11 +10569,14 @@ export function LevelEditor(): ReactElement {
                 <span>{MATERIAL_VALUE_NOTE}</span>
               </div>
               <dl>
-                {UNIT_PALETTES.map((faction) => (
+                {/* The factions this level DECLARES, plus any colour still worn by pieces no
+                  * faction declares — never the whole palette catalog, which listed four sides the
+                  * level does not field and cannot paint. */}
+                {[...FACTION_ROLES.map((role) => declaredFactions[role]), ...undeclaredFactions].map((faction) => (
                   <div key={faction}>
                     <dt>
                       <i className={`le-faction-dot is-${faction}`} aria-hidden="true" />
-                      <span>{LE_FACTION_LABELS[faction]}</span>
+                      <span>{factionDisplayName(faction)}</span>
                     </dt>
                     <dd>{boardFactionMaterialValues[faction]}</dd>
                   </div>
@@ -11388,7 +11400,7 @@ export function LevelEditor(): ReactElement {
             </span>
             <span className="le-brush-meta">
               <strong>{brushKind === 'unit' ? unitBrushAsset.label : brushKind === 'doodad' ? doodadBrushAsset.label : brushKind === 'prop' ? propBrushDef.label : brushKind === 'artwork' ? (artworkBrushAsset?.label ?? 'No scene art') : brushKind === 'cover' ? `${coverBrushDensity} ${coverBrushAsset.label}` : brushKind === 'zone' ? (activeZone ? activeZoneName : 'No zones') : subterrainTool ? (subterrainBrushAsset?.label ?? 'No Subterrain assets') : wallTool ? `${wallMaterialLabel(wallBrushMaterial)} Wall` : wallArtTool ? wallArtLabel(wallArtBrushId) : fenceTool ? `${activeFenceArtwork?.label ?? fenceMaterialLabel(fenceBrushMaterial)} · ${fencePaintTarget}` : featureKind ? `${featureMaterialLabel(featureBrushMaterial[featureKind], featureKind)} ${featureKind}` : macroTileBrushAsset?.label ?? brushAsset.label}</strong>
-              <span>Active brush · {brushKind === 'unit' ? `unit · ${LE_FACTION_LABELS[unitFaction]}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'prop' ? `prop · ${propBrushDef.w}×${propBrushDef.h}` : brushKind === 'artwork' ? 'scene art' : brushKind === 'cover' ? 'ground cover' : brushKind === 'zone' ? 'zone' : subterrainTool ? 'subterrain · exposed face' : wallTool ? 'wall · edge · material' : wallArtTool ? `wall art · edge · ${wallArtBadge(wallArtBrushId)}` : fenceTool ? `fence · ${fencePaintTarget === 'post' ? 'vertex' : 'edge'}` : featureKind ? `feature · ${featureKind}` : macroTileBrushAsset ? `composite tile · ${macroTileBrushAsset.columns}×${macroTileBrushAsset.rows}` : 'tile'}</span>
+              <span>Active brush · {brushKind === 'unit' ? `unit · ${factionDisplayName(unitFaction)}` : brushKind === 'doodad' ? 'doodad' : brushKind === 'prop' ? `prop · ${propBrushDef.w}×${propBrushDef.h}` : brushKind === 'artwork' ? 'scene art' : brushKind === 'cover' ? 'ground cover' : brushKind === 'zone' ? 'zone' : subterrainTool ? 'subterrain · exposed face' : wallTool ? 'wall · edge · material' : wallArtTool ? `wall art · edge · ${wallArtBadge(wallArtBrushId)}` : fenceTool ? `fence · ${fencePaintTarget === 'post' ? 'vertex' : 'edge'}` : featureKind ? `feature · ${featureKind}` : macroTileBrushAsset ? `composite tile · ${macroTileBrushAsset.columns}×${macroTileBrushAsset.rows}` : 'tile'}</span>
             </span>
           </div>
         </section>
@@ -11547,7 +11559,7 @@ export function LevelEditor(): ReactElement {
               <span className="le-ctrllabel">Default facing</span>
               <DirectionPopover
                 value={directionForFaction(unitFaction)}
-                label={`${LE_FACTION_LABELS[unitFaction]} default facing`}
+                label={`${factionDisplayName(unitFaction)} default facing`}
                 onChange={(direction) => setFactionDefaultDirection(unitFaction, direction)}
               />
             </div>
