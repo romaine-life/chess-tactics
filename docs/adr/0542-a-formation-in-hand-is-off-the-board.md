@@ -7,7 +7,7 @@ refines:
   - "[ADR-0526](0526-a-formation-is-carried-on-the-cursor.md)"
 ---
 
-# ADR-0541: A formation in hand is off the board
+# ADR-0542: A formation in hand is off the board
 
 ## Context and Problem Statement
 

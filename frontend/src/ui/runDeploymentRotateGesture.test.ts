@@ -64,7 +64,7 @@ describe('Run Deployment secondary-click turn', () => {
 
   it('offers the gesture only while a dealt formation is waiting to be placed', () => {
     // ...and only while that formation is IN HAND. One resting on the board has nothing to turn
-    // until it is picked up (ADR-0541).
+    // until it is picked up (ADR-0542).
     expect(runScreen).toMatch(
       /onBoardSecondaryClick: stage === 'arrange' && selectedArrangementCard\?\.admitted && cardInHandId\s*\? turnArrangementUnderCursor\s*: undefined,/,
     );
@@ -392,7 +392,7 @@ describe('Run Deployment hand', () => {
 
   // A formation already on the board is still the player's to move. The one exception is the
   // formation already IN HAND: the document still records where it stood, so its own old squares
-  // have to take the placement instead of picking it up again (ADR-0541).
+  // have to take the placement instead of picking it up again (ADR-0542).
   it('takes a seated formation back into the hand when its square is clicked', () => {
     expect(runScreen).toMatch(
       /const standing = arrangedCardAtCell\(latest, cell\);\s*if \(standing && standing !== heldFormationCardId\) \{\s*selectArrangementCard\(standing\);\s*return;\s*\}/,

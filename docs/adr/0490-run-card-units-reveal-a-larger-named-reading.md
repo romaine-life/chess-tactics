@@ -3,7 +3,7 @@ status: accepted
 date: 2026-08-05
 deciders: owner (Nelson) + Codex
 refines:
-  - "[ADR-0217](0217-run-relic-icons-use-immediate-styled-tooltips.md)"
+  - "[ADR-0217](0217-run-lipsanon-icons-use-immediate-styled-tooltips.md)"
   - "[ADR-0218](0218-new-ui-surface-paint-is-build-blocked.md)"
   - "[ADR-0225](0225-run-bundle-cards-show-every-board-unit.md)"
   - "[ADR-0283](0283-run-card-face-is-one-shared-live-runtime-component.md)"
