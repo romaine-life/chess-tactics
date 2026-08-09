@@ -446,9 +446,9 @@ export function ViewPane({
     if (Math.abs(next.zoom - zoom) >= 1e-9) onZoomChange(next.zoom);
   }, [onMinimumZoomChange, onZoomChange, resolvedMinZoom, zoom]);
 
-  const startPan = (event: PointerEvent<HTMLElement>) => {
+  const startPan = (event: PointerEvent<HTMLElement>, claimPointer = true) => {
     event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
+    if (claimPointer) event.currentTarget.setPointerCapture(event.pointerId);
     const tileElement = (event.target as HTMLElement).closest<HTMLElement>('[data-asset-id]');
     const stage = stageRef.current;
     const rendered = stage?.getBoundingClientRect();
@@ -472,9 +472,17 @@ export function ViewPane({
   // capture so a full-surface child cannot accidentally shield panning by stopping
   // the bubbling pointer event. Primary and middle-button behavior remains on the
   // ordinary bubbling path so editable children can keep their tool gestures.
+  //
+  // The POINTER itself is deliberately not claimed yet. Taking pointer capture makes the browser
+  // fire a leave/enter pair on whatever is under the cursor — once when capture is taken and again
+  // when it is released — so a secondary CLICK told every hover-driven surface underneath that the
+  // mouse had left and come back without it having moved a pixel. That is what wiped the box the
+  // Run's turn gesture had just taken, leaving a formation to vanish on the square it was turned
+  // on. A press that is still only a press does not need the pointer; the pan takes it below, the
+  // moment it becomes a pan.
   const startSecondaryPan = (event: PointerEvent<HTMLElement>) => {
     if (event.button !== 2) return;
-    startPan(event);
+    startPan(event, false);
   };
 
   const startNonSecondaryPan = (event: PointerEvent<HTMLElement>) => {
@@ -486,7 +494,14 @@ export function ViewPane({
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     if (exceedsViewPanePanThreshold(event.clientX - drag.startX, event.clientY - drag.startY)) {
-      if (!didDragRef.current) onViewInteraction?.();
+      if (!didDragRef.current) {
+        onViewInteraction?.();
+        // NOW it is a pan, so it takes the pointer: the drag has to keep panning if it runs off
+        // the viewport, and nothing underneath is being pointed at any more anyway.
+        if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
+          event.currentTarget.setPointerCapture(event.pointerId);
+        }
+      }
       didDragRef.current = true;
     }
     const candidate = {
@@ -513,11 +528,27 @@ export function ViewPane({
       : candidate);
   };
 
+  // A secondary press keeps its move and release on the capture path for the same reason the
+  // press itself is claimed there: a full-surface child must not be able to shield the viewport's
+  // own gesture. The bubbling handlers below skip it, so each event is answered once.
+  const moveSecondaryPan = (event: PointerEvent<HTMLElement>) => {
+    if (!dragRef.current?.secondary) return;
+    movePan(event);
+  };
+
+  const moveNonSecondaryPan = (event: PointerEvent<HTMLElement>) => {
+    if (dragRef.current?.secondary) return;
+    movePan(event);
+  };
+
   const endPan = (event: PointerEvent<HTMLElement>) => {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     dragRef.current = null;
-    event.currentTarget.releasePointerCapture(event.pointerId);
+    // Only a gesture that became a pan ever took the pointer.
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
     if (!didDragRef.current && drag.secondary) {
       onSecondaryClick?.();
     }
@@ -527,6 +558,11 @@ export function ViewPane({
     window.setTimeout(() => {
       didDragRef.current = false;
     }, 0);
+  };
+
+  const endSecondaryPan = (event: PointerEvent<HTMLElement>) => {
+    if (!dragRef.current?.secondary) return;
+    endPan(event);
   };
 
   const zoomPane = (event: WheelEvent<HTMLElement>) => {
@@ -556,7 +592,9 @@ export function ViewPane({
       data-max-zoom={resolvedMaxZoom}
       onPointerDownCapture={startSecondaryPan}
       onPointerDown={startNonSecondaryPan}
-      onPointerMove={movePan}
+      onPointerMoveCapture={moveSecondaryPan}
+      onPointerMove={moveNonSecondaryPan}
+      onPointerUpCapture={endSecondaryPan}
       onPointerUp={endPan}
       onPointerCancel={endPan}
       onContextMenuCapture={(event) => event.preventDefault()}

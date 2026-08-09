@@ -55,6 +55,17 @@ export interface RunDeploymentOptions {
 
 export type RunFormationRotation = 0 | 1 | 2 | 3;
 
+/** Which way round a turn gesture takes the carried formation. Rotation indices increase
+ * clockwise, so a clockwise turn is one step forward round the offered cycle. */
+export type RunFormationTurnDirection = 'clockwise' | 'counter-clockwise';
+
+/** Where a turn lands: the way the formation faces next, and the box it holds while it does.
+ * A null anchor leaves the seating to the square the player is pointing at. */
+export interface RunCardTurn {
+  rotation: RunFormationRotation;
+  anchor: Vec | null;
+}
+
 export interface RunArrangedCardSummary {
   card: RunOwnedCard;
   admitted: boolean;
@@ -970,6 +981,100 @@ export function cardRotationsAtCell(
   return distinctCardRotations(run, cardId).filter((rotation) => (
     arrangedCardPlacementAtCell(run, level, cardId, rotation, cell) !== null
   ));
+}
+
+/** The turns the band can take this formation at all, in quarter-turn order. What the rail
+ * offers: a property of the level and of what is already seated, so its buttons hold still
+ * while the cursor moves. */
+export function placeableCardRotations(
+  run: RunDocument,
+  level: Level,
+  cardId: string,
+): RunFormationRotation[] {
+  return distinctCardRotations(run, cardId).filter((rotation) => (
+    arrangedCardPlacementOptions(run, level, cardId, rotation).length > 0
+  ));
+}
+
+/**
+ * The legal seating whose units come nearest `cell`, for a turn the pointed square itself cannot
+ * hold. Distance is measured to the nearest UNIT rather than to the anchor, because the anchor of
+ * an L is a square nobody stands on -- ranking by it would shift the formation away from the
+ * cursor to bring an empty corner closer to it.
+ */
+export function nearestCardPlacementToCell(
+  run: RunDocument,
+  level: Level,
+  cardId: string,
+  rotation: RunFormationRotation,
+  cell: Vec,
+): RunArrangedPlacementOption | null {
+  let best: { option: RunArrangedPlacementOption; distance: number } | null = null;
+  for (const option of arrangedCardPlacementOptions(run, level, cardId, rotation)) {
+    const distance = Math.min(...Object.values(option.placements)
+      .map((seat) => (seat.x - cell.x) ** 2 + (seat.y - cell.y) ** 2));
+    if (!best || distance < best.distance) best = { option, distance };
+  }
+  return best?.option ?? null;
+}
+
+/**
+ * Where a turn gesture lands. One rule for the right-click, for Q and E, and for the rail.
+ *
+ * Turning walks the turns that keep a seating over the square being aimed at, so a turn can never
+ * blank the formation the player is holding. That list can name only the turn already on screen --
+ * a formation wedged into what is left of a band has exactly one way to sit over the square under
+ * the cursor -- and walking it then returned the turn it started on, so every gesture died on that
+ * square while the formation sat there in plain sight, with the rail's buttons lit and inert.
+ *
+ * So the band's own list is the second chance: where the pointed square can offer no other turn,
+ * the formation turns anyway and SHIFTS to the seating nearest that square. The promise a turn
+ * makes is that the player can SEE the result, not that it stays pinned to a square that cannot
+ * hold it.
+ *
+ * Returns null when there is nowhere to turn to -- a formation with a single distinct turn, or one
+ * the band cannot take at all, simply holds still.
+ */
+export function cardTurn(
+  run: RunDocument,
+  level: Level,
+  cardId: string,
+  rotation: RunFormationRotation,
+  direction: RunFormationTurnDirection,
+  heldAnchor: Vec | null,
+  pointedCell: Vec | null,
+): RunCardTurn | null {
+  const step = (list: readonly RunFormationRotation[]): RunFormationRotation => (
+    direction === 'clockwise'
+      ? nextCardRotation(list, rotation)
+      : previousCardRotation(list, rotation)
+  );
+  const placeable = placeableCardRotations(run, level, cardId);
+  // Off the board there is no seating to preserve, so the band's list applies from the start.
+  const aimed = heldAnchor || pointedCell
+    ? turnableCardRotations(run, level, cardId, heldAnchor, pointedCell)
+    : [];
+  const held = aimed.length ? aimed : placeable;
+  const next = step(held) === rotation ? step(placeable) : step(held);
+  if (next === rotation) return null;
+
+  // The formation spins INSIDE the box it stands in, so an L cycles which corner it leaves empty
+  // without the box itself walking across the band.
+  const box = turnedCardPlacement(run, level, cardId, rotation, heldAnchor, pointedCell)?.anchor
+    ?? null;
+  if (box && arrangedCardPlacementAtAnchor(run, level, cardId, next, box)) {
+    return { rotation: next, anchor: box };
+  }
+  // Where the box cannot take it, the square under the cursor resolves the seating afresh.
+  if (pointedCell && arrangedCardPlacementAtCell(run, level, cardId, next, pointedCell)) {
+    return { rotation: next, anchor: null };
+  }
+  // Neither: hold the nearest seating, so the turn is still something the player can see.
+  const aim = pointedCell ?? box;
+  return {
+    rotation: next,
+    anchor: (aim ? nearestCardPlacementToCell(run, level, cardId, next, aim) : null)?.anchor ?? null,
+  };
 }
 
 /**
