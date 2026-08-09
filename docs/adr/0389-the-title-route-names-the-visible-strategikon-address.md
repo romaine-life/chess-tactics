@@ -8,7 +8,7 @@ partially_superseded_by:
 refines:
   - "[ADR-0366](0366-a-run-names-its-phase-as-route-and-its-repeatable-ideas-as-icons.md)"
   - "[ADR-0335](0335-the-strategikon-is-a-run-wide-reference-not-a-battle-only-workspace.md)"
-  - "[ADR-0231](0231-battle-reference-material-lives-in-the-strategikon.md)"
+  - "[ADR-0231](0231-strategikon-and-enchiridion-share-one-reference-workspace-language.md)"
   - "[ADR-0387](0387-bought-cards-travel-into-a-title-reachable-chartulary.md)"
 ---
 

@@ -154,9 +154,9 @@ run
 
 ## More Information
 
-- Extends [ADR-0205](0205-one-application-scene-director.md),
-  [ADR-0209](0209-route-intent-resolves-to-authored-scene-paths.md),
-  [ADR-0211](0211-every-navigable-drawn-region-is-an-authored-scene-slot.md),
+- Extends [ADR-0205](0205-navigation-loads-atomic-scenes-through-one-director.md),
+  [ADR-0209](0209-routes-request-authored-scene-instances.md),
+  [ADR-0211](0211-navigational-drawing-requires-an-authored-scene-slot.md),
   [ADR-0214](0214-the-scene-director-owns-transition-target-lifetime.md), and
   [ADR-0237](0237-run-destinations-fill-the-shell-workspace.md).
 - Applies ADR-0059's canonical-primitive rule to presentation replacement and

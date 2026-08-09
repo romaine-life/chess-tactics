@@ -46,6 +46,24 @@ describe('PawnPromotionPicker', () => {
     }
   });
 
+  it('asks about a Pawn that has not arrived yet when the subject is a queued premove', () => {
+    const markup = renderToStaticMarkup(
+      <PawnPromotionPicker
+        piece={pawn}
+        choices={['queen', 'knight']}
+        subject="queued"
+        boardSeat={{ left: 0, top: 0 }}
+        boardZoom={1}
+        onChoose={() => {}}
+      />,
+    );
+
+    expect(markup).toContain('Premove queued');
+    expect(markup).toContain('Choose what this Pawn will become');
+    expect(markup).not.toContain('Pawn arrived');
+    expect(markup).toContain('aria-label="Pawn promotion"');
+  });
+
   it('opens toward the board middle and cancels board zoom for its screen-size controls', () => {
     expect(promotionPickerSideForSeat(40)).toBe('left');
     expect(promotionPickerSideForSeat(-40)).toBe('right');

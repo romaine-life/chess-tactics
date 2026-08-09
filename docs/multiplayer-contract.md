@@ -25,9 +25,12 @@ cross-consumer settlement parity.
 Selection, focus, inspection, overlays, promotion choice and premoves are client-local
 interface features and must work for both lobby seats. A premove is queued only for
 `localSide`, may be entered only while the opponent owns the turn/landing beat, and is
-revalidated against the authoritative board before submission. A promotion premove stores
-only its destination and cannot extend beyond that unresolved type boundary. When it reaches
-the front of the queue, the Pawn visibly arrives before the replacement choice appears.
+revalidated against the authoritative board before submission. A promotion premove is asked what
+its Pawn becomes as the step is queued, beside that step's ghost, and stores the answer alongside
+its destination; the chain may continue past it as the chosen piece, and the whole move is
+submitted as one complete ordered intent when the step fires, with no local arrival projection.
+A step carrying no choice — programmatic or legacy, never player-authored — falls back to arriving
+first and asking at the front of the queue.
 
 Objective and result presentation must use the same resolved `VictoryRule[]` as gameplay.
 Each seat is told its own win paths and threats. Authored rule names and exact draw reasons

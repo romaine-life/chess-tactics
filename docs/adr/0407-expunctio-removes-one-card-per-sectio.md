@@ -7,7 +7,7 @@ partially_superseded_by:
 partially_supersedes:
   - "[ADR-0393](0393-adlectio-and-alienatio-are-the-movements-within-sectio.md)'s two-movement inventory"
 refines:
-  - "[ADR-0230](0230-the-shop-is-a-full-screen-post-battle-phase.md)"
+  - "[ADR-0230](0230-run-shops-separate-buying-army-inspection-and-selling.md)"
   - "[ADR-0380](0380-run-save-versions-always-migrate.md)"
   - "[ADR-0392](0392-sectio-is-the-run-disposal-and-acquisition-phase.md)"
   - "[ADR-0406](0406-klerosis-deals-cards-before-one-unit-at-a-time-deployment.md)"

@@ -7,7 +7,7 @@ superseded_by:
 partially_supersedes:
   - "[ADR-0483](0483-expunctio-unit-selection-is-explicit.md)'s magenta-edge and dark-violet-glow palette"
 refines:
-  - "[ADR-0427](0427-run-unit-controls-are-keyboard-and-touch-operable.md)"
+  - "[ADR-0427](0427-deployment-cards-retain-their-authored-seat-geometry.md)"
   - "[ADR-0485](0485-expunctio-unit-pointer-targets-include-the-visible-outline.md)"
   - "[ADR-0487](0487-expunctio-selection-swaps-content-within-persistent-seats.md)"
 ---

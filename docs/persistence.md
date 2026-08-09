@@ -219,7 +219,7 @@ Per-user scoping means each user has their own `id` namespace — two users can
 both have a level `my-level` without colliding, and neither can read or
 overwrite the other's. Writes upsert and bump a `revision`.
 
-Per [ADR-0193](adr/0193-runs-are-war-driven-account-persisted-and-share-the-skirmish-shell.md),
+Per [ADR-0193](adr/0193-runs-are-persistent-wars-around-unchanged-chess-battles.md),
 anonymous Run progress remains browser-local while a signed-in account owns one
 compare-and-swap protected `active_runs` document. Per
 [ADR-0230](adr/0230-run-shops-separate-buying-army-inspection-and-selling.md),

@@ -3,7 +3,7 @@ status: accepted
 date: 2026-08-04
 deciders: owner (Nelson) + Codex
 refines:
-  - "[ADR-0369](0369-shell-and-scene-reveal-on-one-explicit-ladder.md)"
+  - "[ADR-0369](0369-one-cold-load-ladder-builds-background-then-chrome-then-scene.md)"
   - "[ADR-0389](0389-the-title-route-names-the-visible-strategikon-address.md)"
   - "[ADR-0409](0409-the-title-route-is-a-clickable-breadcrumb.md)"
 ---

@@ -5,7 +5,7 @@ deciders: owner (Nelson) + Codex
 superseded_by:
   - "[ADR-0399](0399-deployment-lab-launches-the-real-player-flow.md)"
 refines:
-  - "[ADR-0058](0058-studio-uses-catalog-and-viewer-destinations.md)"
+  - "[ADR-0058](0058-every-route-is-click-reachable.md)"
   - "[ADR-0071](0071-the-deliverable-is-the-instrument.md)"
   - "[ADR-0367](0367-a-piece-type-can-be-broken-off-the-deployment-pool.md)"
   - "[ADR-0396](0396-eutactic-and-agminate-compose-as-best-fit-row-and-station.md)"

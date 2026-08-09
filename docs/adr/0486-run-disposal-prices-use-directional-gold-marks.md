@@ -5,8 +5,8 @@ deciders: owner (Nelson) + Codex
 partially_superseded_by:
   - "[ADR-0511](0511-held-cards-are-immutable-formations.md)'s retirement of the gain transaction"
 refines:
-  - "[ADR-0026](0026-ui-icons-are-generated-as-a-cohesive-kit.md)"
-  - "[ADR-0076](0076-generated-raster-assets-render-at-native-1x.md)"
+  - "[ADR-0026](0026-ui-kit-icon-canvas.md)"
+  - "[ADR-0076](0076-scaling-is-calibration-production-art-is-native-1x.md)"
   - "[ADR-0219](0219-run-piece-bundles-are-portrait-cards-with-a-live-gold-icon.md)"
   - "[ADR-0407](0407-expunctio-removes-one-card-per-sectio.md)"
   - "[ADR-0482](0482-expunctio-owns-card-aware-alienatio.md)"

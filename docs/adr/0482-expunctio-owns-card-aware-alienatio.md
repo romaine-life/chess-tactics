@@ -12,7 +12,7 @@ partially_supersedes:
   - "[ADR-0462](0462-transition-choreography-is-derived-from-scene-ownership.md)'s enumeration of Alienatio as a separate Sectio workspace"
 refines:
   - "[ADR-0407](0407-expunctio-removes-one-card-per-sectio.md)"
-  - "[ADR-0427](0427-run-unit-controls-are-keyboard-and-touch-operable.md)"
+  - "[ADR-0427](0427-deployment-cards-retain-their-authored-seat-geometry.md)"
   - "[ADR-0433](0433-leaf-chrome-uses-oak-over-structural-teal-fields.md)"
   - "[ADR-0442](0442-expunctio-is-a-card-first-gallery.md)"
   - "[ADR-0445](0445-card-companions-align-to-painted-frame-keylines.md)"

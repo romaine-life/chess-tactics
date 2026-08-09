@@ -6,7 +6,7 @@ superseded_by:
   - "[ADR-0508](0508-alienatio-leaves-the-authored-formation-seat-vacant.md)"
   - "[ADR-0511](0511-held-cards-are-immutable-formations.md)"
 refines:
-  - "[ADR-0421](0421-scene-activity-owns-imperative-motion.md)"
+  - "[ADR-0421](0421-a-preparing-scene-has-no-permission-to-perform.md)"
   - "[ADR-0431](0431-sectio-transactions-never-wait-for-presentation.md)"
   - "[ADR-0482](0482-expunctio-owns-card-aware-alienatio.md)"
   - "[ADR-0487](0487-expunctio-selection-swaps-content-within-persistent-seats.md)"
