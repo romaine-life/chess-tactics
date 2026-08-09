@@ -621,7 +621,13 @@ describe('Run chrome hierarchy', () => {
   // invents a glyph for a fact the game already has a picture of teaches the player a second
   // vocabulary for the same thing.
   it('marks the readout rows with the game’s own art, and makes Zone the band’s control', () => {
-    expect(levelInfoCompact).toContain("installedUiMedia('ui-kit-icons-game-objective-png')");
+    // Each side flies its OWN palette's flag; a palette with no variant falls back to the one
+    // shared objective flag rather than flying nothing. Reviewing a candidate never installs it.
+    expect(levelInfoCompact).toContain('installedUiMediaIfPresent(`ui-kit-icons-game-objective-${palette}-png`)');
+    expect(levelInfoCompact).toContain("?? installedUiMedia('ui-kit-icons-game-objective-png')");
+    expect(levelInfoCompact).toContain("new URLSearchParams(window.location.search).get('flagCandidate')");
+    expect(levelInfoCompact).toContain('flagSrc={flagIconSrc(palettes.player)}');
+    expect(levelInfoCompact).toContain('flagSrc={flagIconSrc(palettes.enemy)}');
     expect(levelInfoCompact).toContain("installedUiMedia('ui-kit-icons-game-wait-png')");
     expect(levelInfoCompact).toContain('useStrategikonCardsIcon()');
     // The tile mark is a tile: the same installed grass surface the Level Editor paints.

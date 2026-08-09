@@ -17,7 +17,7 @@ import type { PlayingSide } from '../game/clientPerspective';
 import { ChromeButton } from './shared/ChromeButton';
 import { InnerChromeBox } from './shared/ChromeBox';
 import { PieceTypeIcon } from './shared/PieceTypeIcon';
-import { installedUiMedia } from './installedUiMedia';
+import { installedUiMedia, installedUiMediaIfPresent } from './installedUiMedia';
 import { useStrategikonCardsIcon } from './strategikonNavigation';
 import { levelToEditorBoard } from '../core/levelBoard';
 import { assetFrameSrc, isPredrawnBackgroundActive, studioFamilies } from '@chess-tactics/board-render';
@@ -70,6 +70,35 @@ function boardPalettes(level: Level): Record<'player' | 'enemy', UnitPalette> {
     player: authored('player') ?? paletteForSide('player'),
     enemy: authored('enemy') ?? paletteForSide('enemy'),
   };
+}
+
+const SHA256 = /^[0-9a-f]{64}$/;
+
+/**
+ * A palette flag the owner is auditioning in this exact seat, read from
+ * `?flagCandidate=<palette>:<sha256>[,<palette>:<sha256>]`. The same review seam the Run's
+ * progress icons use (ADR-0219): reviewing never installs anything, and the accepted roles below
+ * are the runtime authority the moment the parameter is dropped.
+ */
+function reviewedFlagSrc(palette: UnitPalette): string | null {
+  if (typeof window === 'undefined') return null;
+  const declared = new URLSearchParams(window.location.search).get('flagCandidate');
+  for (const entry of declared?.split(',') ?? []) {
+    const [name, sha256] = entry.split(':').map((part) => part.trim().toLowerCase());
+    if (name === palette && SHA256.test(sha256 ?? '')) return `/api/admin/media/${sha256}`;
+  }
+  return null;
+}
+
+/**
+ * A side's flag in that side's own colours. A palette with no variant of its own falls back to
+ * the one shared objective flag rather than flying nothing — which is what every palette did
+ * before the variants existed.
+ */
+function flagIconSrc(palette: UnitPalette): string {
+  return reviewedFlagSrc(palette)
+    ?? installedUiMediaIfPresent(`ui-kit-icons-game-objective-${palette}-png`)
+    ?? installedUiMedia('ui-kit-icons-game-objective-png');
 }
 
 /**
@@ -234,7 +263,6 @@ export function LevelInfoCompact({
   deploymentBand?: { shown: boolean; onToggle: () => void } | null;
 }): ReactElement {
   const cardsIconSrc = useStrategikonCardsIcon();
-  const flagIconSrc = installedUiMedia('ui-kit-icons-game-objective-png');
   const hourglassIconSrc = installedUiMedia('ui-kit-icons-game-wait-png');
   const { cols, rows } = level.board;
   const total = cols * rows;
@@ -287,7 +315,7 @@ export function LevelInfoCompact({
             tone="is-ally"
             label="Allies"
             palette={palettes.player}
-            flagSrc={flagIconSrc}
+            flagSrc={flagIconSrc(palettes.player)}
             dealt={dealtCountForSide(level, 'player')}
           />
           <Roster
@@ -295,7 +323,7 @@ export function LevelInfoCompact({
             tone="is-enemy"
             label="Enemies"
             palette={palettes.enemy}
-            flagSrc={flagIconSrc}
+            flagSrc={flagIconSrc(palettes.enemy)}
             dealt={dealtCountForSide(level, 'enemy')}
           />
         </div>
