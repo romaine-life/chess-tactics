@@ -2011,11 +2011,16 @@ export function SkirmishBoard({
     () => exactBoard ? wallArtSrcs(exactBoard.wallArt, { cols: game.size.cols, rows: game.size.rows }) : [],
     [exactBoard, game.size.cols, game.size.rows],
   );
+  // Only a promotion that is MID-COMMIT projects its Pawn onto the real board. A queue-time
+  // question (ADR-0541) is asked about a premove, whose Pawn is already drawn twice by the
+  // ordinary premove projection — dimmed at its origin and ghosted on the promotion cell — so
+  // moving the real piece here would put a third one on the board.
+  const arrivingPromotion = pendingPromotion && pendingPromotion.mode !== 'premove-queue' ? pendingPromotion : null;
   const presentedPieces = useMemo(
-    () => pendingPromotion
-      ? promotionArrivalPieces(game, pendingPromotion.pieceId, pendingPromotion.move)
+    () => arrivingPromotion
+      ? promotionArrivalPieces(game, arrivingPromotion.pieceId, arrivingPromotion.move)
       : game.pieces,
-    [game, pendingPromotion],
+    [game, arrivingPromotion],
   );
   const livePieces = useMemo(
     // Prop colliders (`prop-…`) block movement but render as the tall PropSprite, not a unit
@@ -2024,10 +2029,6 @@ export function SkirmishBoard({
     [presentedPieces],
   );
   const choosingPromotion = pendingPromotion?.phase === 'choosing' ? pendingPromotion : null;
-  const promotingPiece = choosingPromotion
-    ? livePieces.find((piece) => piece.id === choosingPromotion.pieceId && piece.alive) ?? null
-    : null;
-  const promotionPickerSeat = promotingPiece ? boardLabCellPosition(promotingPiece) : null;
   const goldNotices = useSkirmish((s) => s.goldNotices);
   const retireGoldNotice = useSkirmish((s) => s.retireGoldNotice);
   const sceneUrls = useMemo(
@@ -2194,6 +2195,17 @@ export function SkirmishBoard({
   };
   const premoveDraggablePieceAt = (x: number, y: number): Piece | null =>
     premovedOriginPieceAt(x, y) ?? provisionalLocalPieceAt(x, y);
+
+  // Whose promotion is being asked about, and where the callout attaches. A mid-commit move asks
+  // beside the Pawn it has just landed; a queue-time question asks beside that Pawn's GHOST, which
+  // the premove projection is already drawing on the promotion cell (ADR-0541).
+  const promotingPiece = choosingPromotion
+    ? (choosingPromotion.mode === 'premove-queue' ? provGame.pieces : livePieces)
+        .find((piece) => piece.id === choosingPromotion.pieceId && piece.alive) ?? null
+    : null;
+  const promotionPickerSeat = choosingPromotion && promotingPiece
+    ? boardLabCellPosition(choosingPromotion.mode === 'premove-queue' ? choosingPromotion.move : promotingPiece)
+    : null;
 
   // The chain-building selection is only meaningful during the opponent's turn; when it
   // ends (a premove fires, or the player regains a live turn) drop it so the next enemy
@@ -2657,6 +2669,7 @@ export function SkirmishBoard({
             <PawnPromotionPicker
               piece={promotingPiece}
               choices={choosingPromotion.choices}
+              subject={choosingPromotion.mode === 'premove-queue' ? 'queued' : 'arrived'}
               boardSeat={promotionPickerSeat}
               boardZoom={boardZoom}
               onChoose={choosePromotion}

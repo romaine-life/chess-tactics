@@ -15,6 +15,20 @@ const PROMOTION_LABEL: Record<PromotionPieceType, string> = {
 
 export type PromotionPickerSide = 'left' | 'right';
 
+/**
+ * Which Pawn the picker is standing beside.
+ *
+ * `arrived` is the one that has physically finished its move (ADR-0503). `queued` is the ghost of
+ * a premoved Pawn — the move is still a prediction, so the copy asks about a Pawn that WILL
+ * arrive rather than claiming one has (ADR-0541).
+ */
+export type PromotionPickerSubject = 'arrived' | 'queued';
+
+const SUBJECT_COPY: Record<PromotionPickerSubject, { eyebrow: string; question: string }> = {
+  arrived: { eyebrow: 'Pawn arrived', question: 'Choose what this Pawn becomes' },
+  queued: { eyebrow: 'Premove queued', question: 'Choose what this Pawn will become' },
+};
+
 /** Keep the callout toward the board's middle instead of pushing it off an outside edge. */
 export function promotionPickerSideForSeat(left: number): PromotionPickerSide {
   return left > 0 ? 'left' : 'right';
@@ -42,18 +56,21 @@ export function promotionPickerPositionStyle(
 export function PawnPromotionPicker({
   piece,
   choices,
+  subject = 'arrived',
   boardSeat,
   boardZoom,
   onChoose,
 }: {
   piece: Piece;
   choices: readonly PromotionPieceType[];
+  subject?: PromotionPickerSubject;
   boardSeat: { left: number; top: number };
   boardZoom: number;
   onChoose: (type: PromotionPieceType) => void;
 }): ReactElement {
   const side = promotionPickerSideForSeat(boardSeat.left);
   const palette = paletteForSide(piece.side, piece.palette);
+  const copy = SUBJECT_COPY[subject];
 
   return (
     <div
@@ -72,8 +89,8 @@ export function PawnPromotionPicker({
         onWheel={(event) => event.stopPropagation()}
       >
         <header className="skirmish-promotion-picker-heading">
-          <span className="skirmish-eyebrow">Pawn arrived</span>
-          <strong>Choose what this Pawn becomes</strong>
+          <span className="skirmish-eyebrow">{copy.eyebrow}</span>
+          <strong>{copy.question}</strong>
         </header>
         <div className="skirmish-promotion-options">
           {choices.map((type, index) => (

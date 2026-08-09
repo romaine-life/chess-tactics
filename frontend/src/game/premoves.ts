@@ -24,8 +24,11 @@ export interface PremoveStep {
   x: number;
   y: number;
   /**
-   * Legacy/programmatic preselected choice. Player-authored premoves now leave this absent:
-   * the Pawn arrives first and asks what it became only when the premove actually fires.
+   * What this step's Pawn becomes on arrival. The player answers this as the step is QUEUED
+   * (ADR-0541), so a player-authored promotion step carries it and its ghost stands on the
+   * promotion cell as the chosen piece — which is also what lets the chain continue past it.
+   * It stays optional for programmatic/legacy steps, whose Pawn instead arrives and asks at
+   * fire time; such a step ends its own plan, because a type nobody has chosen has no moves.
    */
   promotion?: PromotionPieceType;
 }
