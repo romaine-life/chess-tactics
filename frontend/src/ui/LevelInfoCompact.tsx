@@ -1,10 +1,12 @@
 // Compact "Level Info" view that toggles into the level panel's preview slot
 // (same footprint as the board). Surfaces the DERIVED data a level knows about
-// itself — board composition, unit roster by piece, zones, and its win-rule mode
-// (the Rules row). Its consumer (CampaignEditor's Info tab) is display-only, so
-// there is no editing grid; this is the whole readout, not a header above one.
+// itself — board composition, unit roster by piece, the deal and band a War
+// Battle deploys through, zones, and its win-rule mode (the Rules row). Its
+// consumer (CampaignEditor's Info tab) is display-only, so there is no editing
+// grid; this is the whole readout, not a header above one.
 import { type ComponentProps, type ReactElement } from 'react';
-import type { Level, ZoneType } from '../core/level';
+import { levelBattleCardsDealt, type Level, type ZoneType } from '../core/level';
+import { playerDeploymentCells } from '@chess-tactics/board-render/run/deployment';
 import { MODE_NAME, objectiveContextForLevel, victoryRulesForLevel } from '../core/objectives';
 import { formatClockSeconds } from '../core/clock';
 import type { PieceType } from '../core/types';
@@ -146,6 +148,13 @@ export function LevelInfoCompact({
     : [];
   const allies = forceCountsForSide(level, 'player');
   const enemies = forceCountsForSide(level, 'enemy');
+  // What the player brings is not in the Forces ledger at all — it arrives from their own
+  // collection, and how much of it this stage takes is the stage's own answer. Two numbers say
+  // it: how many cards the Battle deals, and how many squares its band has to seat them on.
+  // Present only for a War Battle; a Campaign or standalone Level deals nothing and reads its
+  // deployment geometry off the Zones row instead.
+  const cardsDealt = levelBattleCardsDealt(level);
+  const deploymentSquares = cardsDealt === null ? 0 : playerDeploymentCells(level).length;
   const zoneMix = countMap(level.layers.zones.map((z) => z.type));
   const zoneParts = ZONE_ORDER.filter((z) => zoneMix[z]).map((z) => `${ZONE_LABEL[z]} ${zoneMix[z]}`);
 
@@ -176,6 +185,23 @@ export function LevelInfoCompact({
           <Roster counts={enemies} tone="is-enemy" label="Enemies" dealt={dealtCountForSide(level, 'enemy')} />
         </div>
       </section>
+
+      {cardsDealt !== null ? (
+        <section className="ce-li-deployment">
+          <span className="ce-li-title">Deployment</span>
+          <div className="ce-li-stat"><span>Cards dealt</span><strong>{cardsDealt}</strong></div>
+          <div className="ce-li-stat">
+            <span>Zone</span>
+            <strong>{deploymentSquares} square{deploymentSquares === 1 ? '' : 's'}</strong>
+          </div>
+          <p className="ce-li-dealt">
+            {cardsDealt === 1
+              ? 'One card comes off your collection, and His Grace is always it.'
+              : `${cardsDealt} cards come off your collection, His Grace first.`}
+            {' '}Each is admitted whole, in order, while the zone still has room for it.
+          </p>
+        </section>
+      ) : null}
 
       {showZones ? (
         <section className="ce-li-zones-row">

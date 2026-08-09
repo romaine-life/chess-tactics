@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
-import { sectioUpcomingBattleIndex, type RunDocument } from '../run/model';
+import { runDeploymentDealCount, sectioUpcomingBattleIndex, type RunDocument } from '../run/model';
+import { playerDeploymentCells } from '../run/deployment';
 import { levelToEditorBoard } from '../core/levelBoard';
+import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
 import { ChromeDivider, ChromeSurfaceFill, InnerChromeBox } from './shared/ChromeBox';
 import { FramedReadOnlyBoardView } from './shared/BoardViewFraming';
 import { LevelInfoCompact } from './LevelInfoCompact';
@@ -36,6 +38,22 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
   const level = run.war.battles[battleIndex].level;
   const board = useMemo(() => levelToEditorBoard(level), [level]);
   const signature = useMemo(() => JSON.stringify(level), [level]);
+  // How much of the player's collection this stage takes, and where it goes. Both are the
+  // stage's own answer, and neither is visible anywhere else in the Sectio — the Forces ledger
+  // counts the map's pieces, not the ones arriving from the Chartulary.
+  const dealCount = runDeploymentDealCount({ war: run.war, battleIndex });
+  // A stage can ask for more than the player is carrying — an early Run holds two cards against
+  // a deal of three — so the sentence must not read a fraction off a smaller hand.
+  const held = run.cards.length;
+  const dealtLine = held <= dealCount
+    ? `this stage deals up to ${dealCount}, so every card you hold comes with you`
+    : `this stage deals ${dealCount} of the ${held} cards you hold`;
+  // The same squares `resolveDeploymentCapacity` counts when it decides how many dealt cards fit,
+  // so the band drawn here IS the band admission is measured against.
+  const bandCells = useMemo(
+    () => new Set(playerDeploymentCells(level).map((cell) => `${cell.x},${cell.y}`)),
+    [level],
+  );
   const [terrainPainted, setTerrainPainted] = useState(false);
   const [scenePainted, setScenePainted] = useState(false);
   const [frameError, setFrameError] = useState<Error | null>(null);
@@ -89,6 +107,21 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
                 ariaLabel={`${level.name} upcoming Battle preview`}
                 viewportMode="fill"
                 showGrid
+                // Where the player's own force lands, in the SAME paint the live Deployment board
+                // washes its band with — the preview answers "where may I deploy" ahead of time,
+                // so a second treatment would read as a different marking. At full strength,
+                // which is the marked-square treatment everywhere it is not being underlapped:
+                // the live band drops to a fraction only because the seating in hand paints over
+                // it, and nothing overlays a read-only thumbnail. Held down, the wash disappears
+                // into busy terrain and the zone stops being readable at a glance, which is the
+                // whole reason it is drawn.
+                renderCellOverlay={(cell) => bandCells.has(`${cell.x},${cell.y}`)
+                  ? (
+                    <span className="le-tactical-cell is-move" aria-hidden="true">
+                      <PredrawnMoveHighlightPaint />
+                    </span>
+                  )
+                  : null}
                 onTerrainFirstFrame={() => setTerrainPainted(true)}
                 onSceneFirstFrame={() => setScenePainted(true)}
                 onFrameError={(value) => setFrameError(
@@ -114,9 +147,8 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
               <PreviewTitleBar>Before deployment</PreviewTitleBar>
               <p>
                 Fixed pieces appear on the map. The Forces ledger also counts setup forces whose
-                exact squares are dealt when the Battle begins. Your Run army deploys after you
-                leave the Sectio — {run.cards.length} formation
-                {run.cards.length === 1 ? '' : 's'} deploy with you.
+                exact squares are dealt when the Battle begins. Your own army arrives after you
+                leave the Sectio: {dealtLine}, onto the lit band.
               </p>
             </InnerChromeBox>
           </aside>

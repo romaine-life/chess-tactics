@@ -21,6 +21,7 @@ const runCardFlight = readFileSync(new URL('./runCardFlightView.tsx', import.met
 const strategikonTitleNavigation = readFileSync(new URL('./StrategikonTitleNavigation.tsx', import.meta.url), 'utf8');
 const runCardFace = readFileSync(new URL('./RunCardFace.tsx', import.meta.url), 'utf8');
 const runBattlePreview = readFileSync(new URL('./RunBattlePreview.tsx', import.meta.url), 'utf8');
+const levelInfoCompact = readFileSync(new URL('./LevelInfoCompact.tsx', import.meta.url), 'utf8');
 const runDeploymentCardStack = readFileSync(new URL('./RunDeploymentCardStack.tsx', import.meta.url), 'utf8');
 const runLipsana = readFileSync(new URL('./Lipsana.tsx', import.meta.url), 'utf8');
 const runSelfInspection = readFileSync(new URL('./RunSelfInspection.tsx', import.meta.url), 'utf8');
@@ -540,7 +541,7 @@ describe('Run chrome hierarchy', () => {
     expect(runBattlePreview).not.toContain('Drag to pan');
     // A box's own name outranks the section headers inside it, which outrank their rows.
     expect(styleCss).toMatch(/\.run-battle-preview-titlebar-head > h2\s*\{[^}]*--ds-text-xl/);
-    expect(styleCss).toMatch(/:is\(\.ce-li-board, \.ce-li-forces\) > \.ce-li-title\s*\{[^}]*--ds-text-lg/);
+    expect(styleCss).toMatch(/:is\(\.ce-li-board, \.ce-li-forces, \.ce-li-deployment\) > \.ce-li-title\s*\{[^}]*--ds-text-lg/);
     // ONE stretched row is what makes the board box and the intelligence boxes share a top and a
     // bottom line, and the pane FILLS the frame so no surplus is painted across the level art.
     expect(styleCss).toMatch(/\.run-battle-preview-layout\s*\{[^}]*grid-template-areas: "board intelligence";/);
@@ -560,6 +561,42 @@ describe('Run chrome hierarchy', () => {
     expect(runBattlePreview).not.toContain('<OuterChromeBox');
     expect(runBattlePreview).not.toContain('<LevelPreviewColumn');
     expect(runBattlePreview).not.toContain('backgroundArtwork');
+  });
+
+  // The stage decides how much of the player's collection it plays, and the Forces ledger says
+  // nothing about it — reconnaissance that omits both leaves the one force the player controls
+  // unaccounted for.
+  it('reports the stage’s own deal and lights the band it deploys onto', () => {
+    // The count comes from the Run's own reader, so the readout and the Deployment that follows
+    // it cannot disagree — and it reads the UPCOMING Battle, not the one just fought.
+    expect(runBattlePreview).toContain('runDeploymentDealCount({ war: run.war, battleIndex })');
+    expect(runBattlePreview).toContain('leave the Sectio: {dealtLine}, onto the lit band.');
+    // A stage may deal more than the player carries, so the sentence cannot take a fraction of
+    // a smaller hand — "deals 3 of the 2 cards you hold" is the shape that must not come back.
+    expect(runBattlePreview).toContain('held <= dealCount');
+    expect(runBattlePreview).toContain('`this stage deals ${dealCount} of the ${held} cards you hold`');
+    // The whole held hand deploying was never true, and stated it as a fact.
+    expect(runBattlePreview).not.toMatch(/\{run\.cards\.length\} formation/);
+
+    // The band is the same square set capacity admission is measured against.
+    expect(runBattlePreview).toMatch(
+      /const bandCells = useMemo\(\s*\(\) => new Set\(playerDeploymentCells\(level\)\.map\(\(cell\) => `\$\{cell\.x\},\$\{cell\.y\}`\)\),/,
+    );
+    expect(runBattlePreview).toContain('renderCellOverlay={(cell) => bandCells.has(`${cell.x},${cell.y}`)');
+    // The registered marked-square treatment, not a preview-local wash: one paint for the fact,
+    // and no bespoke opacity rule to drift from it. Held below full strength the band vanished
+    // into busy terrain, which is the one thing the drawing exists to prevent.
+    expect(runBattlePreview).toContain('<span className="le-tactical-cell is-move" aria-hidden="true">');
+    expect(runBattlePreview).toContain('<PredrawnMoveHighlightPaint />');
+    expect(styleCss).toContain('.le-tactical-cell.is-move:not(.is-blocked-candidate) > .predrawn-cyan-move-highlight-paint {');
+    expect(styleCss).not.toContain('.run-battle-preview-band');
+
+    // Both facts also stand in the Level readout, which is where a reader looks for numbers.
+    expect(levelInfoCompact).toContain('const cardsDealt = levelBattleCardsDealt(level);');
+    expect(levelInfoCompact).toContain('playerDeploymentCells(level).length');
+    expect(levelInfoCompact).toContain('<span>Cards dealt</span><strong>{cardsDealt}</strong>');
+    // Campaign and standalone Levels deal nothing, so the section is a War Battle's alone.
+    expect(levelInfoCompact).toContain('{cardsDealt !== null ? (');
   });
 
   it('retains the installed Sectio scene outside the workspace transition region', () => {

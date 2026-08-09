@@ -10639,6 +10639,10 @@ body { font-size: 17px; }
 
 .ce-li-zones { color: var(--ce-slate); font-size: var(--ds-text-sm); }
 
+/* The Deployment section sits under Board and Forces and reads as a full-width block: its
+   caption is a sentence, which cannot be squeezed into a half-width column beside a roster. */
+.ce-li-deployment { grid-column: 1 / -1; }
+
 .terrain-grass { background: #6a9b3f; }
 .terrain-water { background: #3a78c8; }
 .terrain-bridge { background: #b08750; }
@@ -19701,7 +19705,7 @@ button.tileset-relationship-cell {
   grid-template-columns: subgrid;
 }
 
-.run-battle-preview-info :is(.ce-li-board, .ce-li-forces) {
+.run-battle-preview-info :is(.ce-li-board, .ce-li-forces, .ce-li-deployment) {
   grid-column: 1 / -1;
 }
 
@@ -19719,7 +19723,7 @@ button.tileset-relationship-cell {
 /* A section header governs the rows under it, so it reads LARGER than they do — the borrowed
    compact scale had it smaller, which is why it did not read as a header at all. It stays a step
    under the box's own title, which is the largest thing in the box. */
-.run-battle-preview-info :is(.ce-li-board, .ce-li-forces) > .ce-li-title {
+.run-battle-preview-info :is(.ce-li-board, .ce-li-forces, .ce-li-deployment) > .ce-li-title {
   color: var(--ce-ink);
   font-size: var(--ds-text-lg);
   letter-spacing: .04em;
