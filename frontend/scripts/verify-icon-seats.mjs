@@ -30,6 +30,10 @@ const TOLERANCE = 0.01;
 const DECLARED = [
   { rule: '.skirmish-clock .skirmish-icon', slot: 'ui/kit/icons/game/wait.png' },
   { rule: '.skirmish-objective .skirmish-icon', slot: 'ui/kit/icons/game/objective.png' },
+  { rule: '[data-strategikon-section="enchiridion"] img', slot: 'ui/kit/icons/design-index.png' },
+  { rule: '[data-strategikon-section="prosopography"] img', slot: 'ui/kit/icons/unit-studio.png' },
+  { rule: '[data-strategikon-section="lipsanotheca"] img', slot: 'ui/kit/icons/info.png' },
+  { rule: '.skirmish-hud-title-action-glyph', slot: 'ui/kit/icons/studio-catalog.png' },
 ];
 
 function declaredInkFill(css, rule) {
