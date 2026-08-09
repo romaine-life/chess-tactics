@@ -8,6 +8,7 @@ refines:
   - "[ADR-0393](0393-adlectio-and-alienatio-are-the-movements-within-sectio.md)"
   - "[ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md)"
   - "[ADR-0533](0533-a-seated-formation-is-a-plan-until-battle.md)"
+  - "[ADR-0045](0045-units-deploy-with-a-staggered-drop-in.md)"
 ---
 
 # ADR-0549: Exploratio can imagine the army onto the ground, and every Sectio control wears a mark
@@ -64,6 +65,18 @@ that it is imagining.**
 - **A turn is part of the shuffle.** Every distinguishable rotation's seatings go into one pool and
   one is drawn from it, so a formation is as likely to be seated sideways as along the band, and a
   turn the remaining band cannot hold simply contributes nothing.
+- **The army ARRIVES; it does not appear.** It plays ADR-0045's drop, on the battlefield's own
+  curve (`arrivalOffset`) and in its own staggered order (`computeArrivalDelays`, royals last) —
+  the same motion Deployment seats a formation with, not a second entrance to keep in step with
+  the first. That runs through the read-only renderer's one seam for a motion, `frameTransform`,
+  which the Level Editor already plays a placed obstacle's fall through: `BoardDrawOp` gains a
+  `unit` identity beside the `structure` one it already carried, for exactly the reason that one
+  exists — a renderer with a flat op list has to be able to find a subject's ops without
+  re-deriving placement — and `StudioReadOnlyBoard` forwards the seam it was already built on.
+  The surface stays STILL by default: supplying the transform starts the scene canvas repainting
+  and dropping it when the last unit lands stops it again, so nothing here gives a read-only board
+  a permanent clock. Obstacles take no delay and are simply there, because the battlefield seats
+  its obstacles before the armies too.
 - The imagining is dropped when the map changes, and it is deliberately **not** in the address:
   it is a toy for asking a question, not a state worth linking. The screen's own craft link is
   what reproduces the ground it is asked about.

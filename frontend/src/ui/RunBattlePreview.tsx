@@ -6,6 +6,12 @@ import {
   shuffledDeploymentPreview,
 } from '../run/deployment';
 import { levelToEditorBoard, unitsForLevelUnits } from '../core/levelBoard';
+import type { BoardDrawOp } from '@chess-tactics/board-render';
+import {
+  computeArrivalDelays,
+  UNIT_ENTRANCE_MS,
+  unitArrivalOp,
+} from '../render/SkirmishBoard';
 import { ChromeDividedGridRow, DividedInnerChromeBox } from './shared/ChromeDividedGrid';
 import { RunProgressIcon } from './shared/RunProgressIcon';
 import { FramedReadOnlyBoardView } from './shared/BoardViewFraming';
@@ -39,15 +45,63 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
   // The Run's figures are laid over the authored board's own unit snapshot rather than into the
   // Level: a board built from `boardCode` reads its units from that code, so a level carrying
   // extra units would render without a single one of them.
+  const previewUnits = useMemo(
+    () => (preview ? runDeploymentLevelUnits(run, level, preview.layout) : []),
+    [level, preview, run],
+  );
   const board = useMemo(() => (preview
-    ? {
-      ...authoredBoard,
-      units: {
-        ...authoredBoard.units,
-        ...unitsForLevelUnits(runDeploymentLevelUnits(run, level, preview.layout)),
-      },
-    }
-    : authoredBoard), [authoredBoard, level, preview, run]);
+    ? { ...authoredBoard, units: { ...authoredBoard.units, ...unitsForLevelUnits(previewUnits) } }
+    : authoredBoard), [authoredBoard, preview, previewUnits]);
+
+  // The army ARRIVES; it does not appear. This is ADR-0045's drop, played on the battlefield's own
+  // curve and in its own staggered order, through the read-only renderer's one seam for a motion
+  // (`frameTransform`) — so what a shuffle looks like here is what placing looks like there, and
+  // there is no second entrance to keep in step with the first (ADR-0059).
+  //
+  // The delay map is the whole of the choreography, so it is built once when the shuffle is and
+  // then read per frame. `baseDelayMs` is zero because nothing is being revealed: the board is
+  // already on screen and the player just pressed the button. The shared orderer excludes rocks —
+  // the tent's are ground the army lands ON, and the battlefield seats its obstacles before the
+  // armies too — so they take no delay and are simply there, which is what leaves them untouched.
+  const [entrance, setEntrance] = useState<{ shuffle: number; startMs: number } | null>(null);
+  const entranceDelays = useMemo(() => computeArrivalDelays(previewUnits.map((unit) => ({
+    id: `${unit.x},${unit.y}`,
+    side: 'player' as const,
+    type: unit.type,
+    x: unit.x,
+    y: unit.y,
+  })), 0), [previewUnits]);
+  const entrancePlaying = entrance?.shuffle === shuffle;
+  const frameTransform = useMemo(() => {
+    if (!entrancePlaying || !entrance) return undefined;
+    const { startMs } = entrance;
+    return (op: BoardDrawOp, timeMs: number): BoardDrawOp => {
+      const delayMs = op.unit ? entranceDelays.get(op.unit.key) : undefined;
+      // Only the figures this shuffle dealt move. The map's own pieces are already standing.
+      return delayMs === undefined ? op : unitArrivalOp(op, { startMs, delayMs }, timeMs);
+    };
+  }, [entrance, entranceDelays, entrancePlaying]);
+
+  // The clock stops when the last unit has landed, and the surface goes back to being still.
+  useEffect(() => {
+    if (!entrancePlaying || !entrance) return undefined;
+    const last = Math.max(0, ...entranceDelays.values());
+    const timer = window.setTimeout(
+      () => setEntrance((current) => (current === entrance ? null : current)),
+      Math.max(0, entrance.startMs + last + UNIT_ENTRANCE_MS - performance.now()),
+    );
+    return () => window.clearTimeout(timer);
+  }, [entrance, entranceDelays, entrancePlaying]);
+
+  const shuffleBoard = (): void => {
+    const next = shuffle + 1;
+    setShuffle(next);
+    setEntrance({ shuffle: next, startMs: performance.now() });
+  };
+  const clearBoard = (): void => {
+    setShuffle(0);
+    setEntrance(null);
+  };
   // How much of the player's collection this stage takes, and where it goes. Both are the
   // stage's own answer, and neither is visible anywhere else in the Sectio — the Forces ledger
   // counts the map's pieces, not the ones arriving from the Chartulary.
@@ -77,6 +131,7 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
     setFrameError(null);
     // A different map is a different question, so the imagining does not carry over onto it.
     setShuffle(0);
+    setEntrance(null);
   }, [signature]);
 
   const resetFrame = (): void => {
@@ -152,6 +207,7 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
                     ? <span className="le-zone-cell le-zone-player" aria-hidden="true" />
                     : null
                   : undefined}
+                frameTransform={frameTransform}
                 onTerrainFirstFrame={() => setTerrainPainted(true)}
                 onSceneFirstFrame={() => setScenePainted(true)}
                 onFrameError={(value) => setFrameError(
@@ -175,8 +231,8 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
                   shown: preview !== null,
                   placedUnitCount: preview?.placedUnitCount ?? 0,
                   placedCardCount: preview?.cards.filter((entry) => entry.placed).length ?? 0,
-                  onShuffle: () => setShuffle((current) => current + 1),
-                  onClear: () => setShuffle(0),
+                  onShuffle: shuffleBoard,
+                  onClear: clearBoard,
                 }}
               />
               <section className="ce-li-zones-row run-battle-preview-note">
