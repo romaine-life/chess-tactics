@@ -5884,7 +5884,6 @@ body.loading-bootstrap .app-startup-status {
   --le-inner-control-compact-h: 30px;
   --le-inner-tab-compact-h: 28px;
   --le-inner-row-h: 42px;
-  --le-inner-zone-button-w: var(--le-inner-square);
   --skirmish-chrome-outer-rail-w: var(--le-chrome-outer-rail-w);
   --skirmish-chrome-inner-rail-w: var(--le-chrome-inner-rail-w);
   grid-template-areas:
@@ -6020,6 +6019,10 @@ body.loading-bootstrap .app-startup-status {
   min-width: var(--le-inner-square);
   padding: 0;
   width: var(--le-inner-square);
+}
+.le-layer-stepper-button:disabled {
+  cursor: default;
+  opacity: .42;
 }
 
 /* Repeatable divider host: each instance represents one section break in the
@@ -6228,7 +6231,8 @@ body.loading-bootstrap .app-startup-status {
   min-width: 72px;
   padding-inline: 4px;
 }
-/* Level settings live under the Board layer: rule readout + faction-control assignment. */
+/* Level settings live under the Board layer (rule readout); the declaration the level fields has
+   its own Factions layer. */
 .le-level-name-input { box-sizing: border-box; width: 100%; }
 .le-settings-list { display: grid; gap: var(--ds-inline-tight); margin: 0 0 var(--ds-gutter); }
 .le-settings-list div { align-items: start; display: grid; gap: 8px; grid-template-columns: 74px minmax(0, 1fr); }
@@ -6236,16 +6240,15 @@ body.loading-bootstrap .app-startup-status {
 .le-settings-label { color: #6edcff; font-size: var(--ds-text-xs); margin: 0; text-transform: uppercase; }
 .le-settings-list dd { color: #f3ead8; font-size: var(--ds-text-sm); line-height: 1.25; margin: 0; word-break: break-word; }
 .le-faction-control { display: grid; gap: 7px; }
-.le-faction-assignments { display: grid; gap: 6px; }
-/* Name above, controls below. Three controls cannot share half a narrow panel and still read —
-   the colour select loses its label first, leaving a bare swatch nobody can name. */
-.le-faction-assignment { display: grid; gap: 5px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
-/* Colour, facing. The facing stays a fixed square; the colour select takes the rest. The role is
-   named in the row above, so the declaration needs no control dropdown beside it. */
-.le-faction-fields { display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr) var(--le-inner-square); min-width: 0; }
+.le-faction-assignments { display: grid; gap: 10px; }
+/* Name above, one LABELLED row per control below — the shape the unit brush already uses for its
+   own facing. Three controls cannot share half a narrow panel and still read, and an unlabelled
+   compass square says neither what it sets nor which side it sets it for. */
+.le-faction-assignment { display: grid; gap: 0; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+/* The colour select takes the row's free width; the facing stays a fixed square. */
+.le-faction-assignment .le-faction-color-select { flex: 0 1 170px; min-width: 120px; }
 /* The repair block for pieces wearing a colour no faction declares. */
 .le-faction-undeclared { display: grid; gap: 5px; }
-.le-faction-fields .le-select-wrap { min-width: 0; }
 .le-faction-color-select { min-width: 0; }
 .le-faction-color-select .palette-select-trigger { min-width: 0; width: 100%; }
 .le-faction-name { align-items: center; color: #f3ead8; display: grid; font-size: var(--ds-text-sm); gap: 6px; grid-template-columns: auto minmax(0, 1fr) auto; min-width: 0; }
@@ -6416,8 +6419,8 @@ body.loading-bootstrap .app-startup-status {
 .le-direction-trigger:focus-visible { outline: 2px solid rgba(101, 184, 255, .72); outline-offset: 2px; }
 .le-direction-popover { inline-size: var(--le-inner-square); min-width: 0; position: relative; width: var(--le-inner-square); }
 .le-direction-trigger { align-items: center; block-size: var(--le-inner-square); display: flex; inline-size: var(--le-inner-square); justify-content: center; min-block-size: var(--le-inner-square); min-inline-size: var(--le-inner-square); min-width: var(--le-inner-square); padding: 0; text-align: center; width: var(--le-inner-square); }
-.le-faction-fields .le-direction-popover,
-.le-faction-fields .le-direction-trigger {
+.le-faction-assignment .le-direction-popover,
+.le-faction-assignment .le-direction-trigger {
   inline-size: var(--le-inner-square);
   min-inline-size: var(--le-inner-square);
   min-width: var(--le-inner-square);
@@ -6617,36 +6620,13 @@ body.loading-bootstrap .app-startup-status {
   pointer-events: none;
   z-index: 6;
 }
-.le-zone-select-controls {
-  align-items: center;
-  display: grid;
-  gap: 6px;
-  grid-template-columns: minmax(0, 1fr) var(--le-inner-square) var(--le-inner-square);
-  min-width: 0;
-}
-.le-zone-stepper-button.settings-chrome-button {
-  height: var(--le-inner-square);
-  min-height: var(--le-inner-square);
-  min-width: var(--le-inner-square);
-  padding: 0;
-  width: var(--le-inner-square);
-}
-.le-zone-stepper-button:disabled {
-  cursor: default;
-  opacity: .42;
-}
-.le-zone-panel {
-  --le-zone-button-w: var(--le-inner-zone-button-w);
-  --le-zone-row-h: var(--le-inner-row-h);
-}
 .le-zone-panel .le-ctrlrow {
   align-items: center;
   display: grid;
   gap: 6px;
   grid-template-columns: 42px minmax(0, 1fr);
-  min-height: var(--le-zone-row-h);
+  min-height: var(--le-inner-row-h);
 }
-.le-zone-panel .le-zone-select-controls,
 .le-zone-panel .le-select-wrap,
 .le-zone-panel .le-zone-name-input,
 .le-zone-panel .le-zone-color-select {
@@ -6655,45 +6635,73 @@ body.loading-bootstrap .app-startup-status {
   min-width: 0;
   width: 100%;
 }
-.le-zone-panel .le-zone-select-controls {
-  gap: 6px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-template-rows: var(--le-zone-row-h) var(--le-zone-row-h);
-  height: auto;
-}
-.le-zone-panel .le-zone-select-controls > .le-select-wrap {
-  grid-column: 1 / -1;
-  grid-row: 1;
-}
-.le-zone-panel .le-zone-select-controls > .le-zone-stepper-button.settings-chrome-button {
-  grid-row: 2;
-  min-width: 0;
-  width: 100%;
-}
-.le-zone-panel .le-zone-selection-row {
-  align-items: start;
-}
-.le-zone-panel .le-zone-selection-row > .le-ctrllabel {
-  align-items: center;
-  align-self: start;
-  display: flex;
-  height: var(--le-zone-row-h);
-  justify-content: center;
-  text-align: center;
-}
 .le-zone-panel .le-select-wrap,
-.le-zone-panel .le-zone-name-input,
-.le-zone-panel .le-zone-stepper-button.settings-chrome-button {
-  height: var(--le-zone-row-h);
-  min-height: var(--le-zone-row-h);
-}
-.le-zone-panel .le-zone-stepper-button.settings-chrome-button {
-  min-width: var(--le-zone-button-w);
-  width: var(--le-zone-button-w);
+.le-zone-panel .le-zone-name-input {
+  height: var(--le-inner-row-h);
+  min-height: var(--le-inner-row-h);
 }
 .le-zone-panel .le-zone-name-input {
   max-width: none;
 }
+/* The zone picker is the list itself: one selectable inner-list-row per zone, carrying the
+   tint dot that identifies it on the board. Rows are full width — the name is the thing being
+   read, so nothing competes with it for horizontal room. */
+.le-zone-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  min-width: 0;
+}
+.le-zone-row {
+  align-items: center;
+  color: #cfe6f2;
+  cursor: pointer;
+  display: flex;
+  gap: 9px;
+  min-height: var(--le-inner-row-h);
+  min-width: 0;
+  padding: 4px 10px;
+  text-align: left;
+  width: 100%;
+}
+/* Which zone the brush paints into is the one state this panel exists to show. The kit aliases
+   the active inner frame to the normal one (no separate active frame is installed), so the
+   armed row lifts exactly the way `.le-seg-btn.active` already does rather than inventing
+   chrome of its own. */
+.le-zone-row.is-selected {
+  color: #eafaff;
+  filter: brightness(1.35) saturate(1.25);
+}
+.le-zone-row:not(:disabled):hover { filter: brightness(1.12); }
+.le-zone-row.is-selected:not(:disabled):hover { filter: brightness(1.45) saturate(1.3); }
+.le-zone-row > .le-zone-dot { flex: none; }
+.le-zone-row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.le-zone-row-text strong {
+  font-size: var(--ds-text-sm);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.le-zone-row-text small {
+  color: #a9c0cd;
+  font-size: var(--ds-text-2xs);
+  line-height: 1.2;
+}
+/* A deployment zone's meaning is fixed by the system, not by its name, so the row says which
+   one it is. Reads as the master-detail list's trailing status text. */
+.le-zone-row-role {
+  flex: none;
+  font-size: var(--ds-text-2xs);
+  opacity: .85;
+  text-transform: uppercase;
+}
+.le-zone-list-actions { margin-top: var(--ds-space-2); }
 /* The board-link field wears the kit `field-input` 9-slice (its own navy well is the frame's
    fill slice), never a hand-rolled border (ADR-0032/0034) — the same input chrome the Codex
    editor uses. Single-line control: horizontal inset on the role token, vertical centring from
@@ -10506,15 +10514,19 @@ body { font-size: 17px; }
   line-height: 1.5;
   max-width: min(520px, calc(100vw - 48px));
 }
-.scene-director.is-error .scene-loading-presentation button {
-  background: transparent;
-  border: 12px solid transparent;
-  border-image: var(--media-ui-kit-button-primary-png) 24 fill / 12px round;
-  color: var(--ds-color-text, #f4ead7);
-  font: inherit;
-  min-height: 44px;
-  min-width: 128px;
-  padding: 0 14px;
+/* Layout only, exactly like .confirm-actions. The actions are registered inner-text-button units
+   sharing the app's one text-button content geometry, and they take their complete frame, state
+   art, and tone from the installed chrome family the app root scopes (ADR-0102) — this surface
+   owns no border, background, or frame source of its own. */
+.scene-director.is-error .scene-loading-presentation .scene-failure-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+.scene-director.is-error .scene-loading-presentation .scene-failure-actions .le-seg-btn {
+  min-width: 116px;
+  padding: 0 16px;
 }
 
 .ce-row-actions {
@@ -10616,7 +10628,15 @@ body { font-size: 17px; }
 }
 
 /* Force composition for the selected level — the allies/enemies counts read off
-   the level's board, so they live with the level, not the global title bar. */
+   the level's board, so they live with the level, not the global title bar.
+   The line is seated on its own inner box so its marks have a surface to read against instead of
+   whatever the night sky is showing. It runs the column's full width like the board frame and the
+   facts box: the column is a stack of boxes sharing one pair of edges, and a box that hugged its
+   own content broke that line. */
+.ce-force-readout-box {
+  padding: 6px 10px;
+}
+
 .ce-force-readout {
   align-items: center;
   display: flex;
@@ -10633,10 +10653,20 @@ body { font-size: 17px; }
   text-transform: uppercase;
 }
 
-.ce-force img {
-  height: 22px;
+/* The side marks are live battlefield sprites, so they are seated the way every other unit mark
+   in this column is: the SEAT is sized and AlphaBoundIcon fits the visible pixels inside it.
+   Sizing the <img> instead would fight the inline fit and letterbox the piece in its own canvas. */
+.ce-force-unit {
+  block-size: 30px;
+  inline-size: 24px;
+}
+
+/* The card back is authored at its own aspect and needs no alpha fit — it is contained. */
+.ce-force-card {
+  block-size: 26px;
   image-rendering: pixelated;
-  width: 22px;
+  inline-size: auto;
+  object-fit: contain;
 }
 
 .ce-force strong {
@@ -10647,6 +10677,7 @@ body { font-size: 17px; }
 
 .ce-force-ally { color: var(--ce-ally); }
 .ce-force-enemy { color: var(--ce-enemy); }
+.ce-force-cards { color: var(--ce-ally); }
 
 /* ===== Compact Level Info — stacked under the map preview in the Editor's 4th column ===== */
 
@@ -10737,6 +10768,10 @@ body { font-size: 17px; }
   gap: 12px;
   grid-template-columns: 1fr 1fr;
 }
+
+/* A Battle drops its empty Allies roster, so the surviving side takes the whole width rather
+   than sitting in a half column beside a gap where a column used to be. */
+.ce-li-rosters.is-single { grid-template-columns: 1fr; }
 
 .ce-li-roster-head {
   align-items: center;
@@ -17748,6 +17783,22 @@ button.tileset-relationship-cell {
   border-image-width: 0 0 0 var(--le-chrome-outer-rail-w) !important;
 }
 
+/* The fill box is held a couple of pixels inside the panel so the frame's rail can
+   sit over its edge without the surface bleeding out from under the art. The rule
+   directly above removes the right rail at the viewport edge — so on that one side
+   there is no rail to sit over, and the inset stops being a seam and becomes a
+   visible strip of backdrop between the panel's stone and the edge of the screen.
+   Spend the inset only where a rail actually lands. The panel's own box already
+   reaches the viewport; this is only its paint catching up.
+
+   Declared on the PANEL, not on the fill: the title band is seated off the same
+   box, so fixing one and not the other leaves the strip showing beside the title
+   and nowhere else. The title's own padding already subtracts this inset, so its
+   text and marks stay exactly where they were while its wood reaches the edge. */
+:root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel] {
+  --le-outer-fill-box-right: 0px;
+}
+
 /* Persistent app-shell title bar (src/ui/shell/AppTitleBar) — rendered once by
    App outside every replaceable SceneBoundary, so route transitions cannot
    resize, fade, or unmount its invariant frame.
@@ -19097,10 +19148,6 @@ button.tileset-relationship-cell {
 .cluster-run-detail-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 .cluster-run-line { font-size: 12px; color: #c3ccd8; margin: 4px 0; }
 
-.le-zone-cycle {
-  display: contents;
-}
-
 /* Leading board preview in a campaign level-select row. The content box uses the canonical
    4:3 board window; the shell calculation adds the frame rails outside that surface. */
 .settings-row-thumb {
@@ -19468,11 +19515,14 @@ button.tileset-relationship-cell {
   min-width: 0;
 }
 /* Two-line head: the level name gets its OWN line (full width, no truncation), with the
-   ally/enemy force counts on a second line beneath it. */
+   ally/enemy force counts on a second line beneath it. The shared head rule's horizontal padding
+   is dropped here: the counts are a framed box now, and that inset held it 8px inside the board
+   frame and facts box under it, so the column's three boxes did not share an edge. */
 .ce-preview-col .ce-selected-head {
   align-items: stretch;
   flex-direction: column;
   gap: 4px;
+  padding-inline: 0;
 }
 .ce-preview-col .ce-selected-head h2 {
   overflow: visible;
@@ -24369,15 +24419,17 @@ button.tileset-relationship-cell {
 }
 
 .skirmish-hud-titlebar > .kit-panel-title {
-  /* Four 24px section marks, four 4px gaps, and the 32px book. */
-  padding-inline-end: calc(144px + var(--ds-space-3) + var(--le-control-content-inset));
+  /* Five 24px marks and four 4px gaps. */
+  padding-inline-end: calc(136px + var(--ds-space-3) + var(--le-control-content-inset));
 }
 
 .skirmish-screen .skirmish-hud-titlebar > .outer-chrome-header-title-actions {
-  /* Seat the visible book edge on the same right boundary as every control
-     below it. The installed codex canvas contributes 5px of transparent edge
-     at this display size; use the visible pixels, not the image element. */
-  inset-inline-end: calc(var(--le-control-content-inset) - 5px);
+  /* Seat the mark row on the same right boundary as every control below it. The
+     seat below bleeds each glyph's canvas margin back out, so a mark's footprint is
+     its own 24px hit target rather than whatever margin its art happened to bake in
+     — no hand-measured nudge, and the last mark's ink stops 1px inside the boundary
+     because every mark in the row is a 22px seat centred in that target. */
+  inset-inline-end: var(--le-control-content-inset);
 }
 
 .skirmish-hud-title-action {
@@ -24395,15 +24447,86 @@ button.tileset-relationship-cell {
   padding: 0;
 }
 
+/* ONE box for every mark in this index — the four registers AND the book itself.
+   The eye reads the BOX a mark occupies, not how much ink is inside it, so a glyph
+   that fills less of its own canvas must not draw smaller than its neighbours.
+   This is the same seat the topbar status marks use, for the same reason; see the
+   --titlebar-mark-* block above.
+   Measured on the installed bytes: the three kit glyphs' ink fills 62.5% of their
+   64px canvas and the codex's 75%, while a Run card back is trimmed to its own
+   edges. `contain` scales the CANVAS, so bare seats drew one row at four different
+   sizes — 13.8px kit glyphs beside a 22px card back and a 24px book. An untrimmed
+   mark states the fraction its ink fills; its box grows by exactly that much and
+   BLEEDS the surplus back out with a negative margin, so the drawn ink spans the
+   seat while the layout footprint stays the seat.
+
+   A shared box is not yet a shared BASELINE, and the eye reads the row off the
+   bottoms. `fill` is the mark's LONGEST edge, because that is what has to fit; for
+   a mark taller than it is wide that edge is its height and centring the canvas
+   lands the ink on the seat's floor by itself, but the codex is 48x41 — width
+   governs, its ink comes out short, and centring left it floating 1.84px above the
+   four registers beside it. So a mark also states how much canvas sits BELOW its
+   ink, and the seat spends that against the bleed: the ink's bottom edge lands on
+   the seat's bottom edge whichever dimension governed its size. The bleed stays
+   symmetric in total, so the footprint is still the seat.
+
+   Both numbers are measured on the installed bytes, not guessed, and
+   scripts/verify-icon-seats.mjs fails when re-uploaded art stops matching them. */
 .strategikon-title-navigation {
+  --titlebar-mark-seat: 22px;
   align-items: center;
   display: flex;
   gap: var(--ds-space-1);
 }
 
-.strategikon-title-section-action {
+.strategikon-title-navigation .skirmish-hud-title-action {
   block-size: 24px;
   inline-size: 24px;
+}
+
+.strategikon-title-navigation img {
+  /* Grown so the ink's longest edge measures one seat... */
+  --titlebar-mark-canvas: calc(var(--titlebar-mark-seat) / var(--titlebar-mark-ink-fill, 1));
+  /* ...and bled back out, halved, so the footprint is still one seat. */
+  --titlebar-mark-bleed: calc((var(--titlebar-mark-seat) - var(--titlebar-mark-canvas)) / 2);
+  /* Distance the ink's bottom would float above the seat's floor if the bleed were
+     spent evenly — zero whenever height governed the size, positive when width did. */
+  --titlebar-mark-baseline: calc(
+    var(--titlebar-mark-canvas) * var(--titlebar-mark-ink-below, 0) + var(--titlebar-mark-bleed)
+  );
+  block-size: var(--titlebar-mark-canvas);
+  image-rendering: pixelated;
+  inline-size: var(--titlebar-mark-canvas);
+  margin-block-end: calc(var(--titlebar-mark-bleed) - var(--titlebar-mark-baseline));
+  margin-block-start: calc(var(--titlebar-mark-bleed) + var(--titlebar-mark-baseline));
+  margin-inline: var(--titlebar-mark-bleed);
+  object-fit: contain;
+  pointer-events: none;
+}
+
+/* ui/kit/icons/design-index.png — ink 40x40 at (12,12) on a 64x64 canvas. */
+[data-strategikon-section="enchiridion"] img {
+  --titlebar-mark-ink-below: .1875;
+  --titlebar-mark-ink-fill: .625;
+}
+
+/* ui/kit/icons/unit-studio.png — ink 26x40 at (19,12) on a 64x64 canvas. */
+[data-strategikon-section="prosopography"] img {
+  --titlebar-mark-ink-below: .1875;
+  --titlebar-mark-ink-fill: .625;
+}
+
+/* ui/kit/icons/info.png — ink 39x40 at (12,12) on a 64x64 canvas. */
+[data-strategikon-section="lipsanotheca"] img {
+  --titlebar-mark-ink-below: .1875;
+  --titlebar-mark-ink-fill: .625;
+}
+
+/* The Chartulary's mark is whichever Run card back the player chose. Every one of
+   them is printed edge to edge, so they declare nothing: a trimmed mark's canvas IS
+   its ink, so it needs neither the growth nor the baseline correction. */
+
+.strategikon-title-section-action {
   transition: filter var(--ds-duration-fast) var(--ds-ease-standard);
 }
 
@@ -24414,14 +24537,6 @@ button.tileset-relationship-cell {
 .strategikon-title-section-action:focus-visible {
   outline: 2px solid rgba(255, 216, 122, .85);
   outline-offset: 1px;
-}
-
-.strategikon-title-section-action img {
-  block-size: 22px;
-  image-rendering: pixelated;
-  inline-size: 22px;
-  object-fit: contain;
-  pointer-events: none;
 }
 
 .skirmish-hud-title-action.active {
@@ -24439,12 +24554,14 @@ button.tileset-relationship-cell {
   outline-offset: 2px;
 }
 
+/* ui/kit/icons/studio-catalog.png — ink 48x41 at (8,11) on a 64x64 canvas. The book
+   takes the same seat as the registers it indexes: it was a third larger while it
+   alone drew at 32px, which read as a different row rather than the same one. It is
+   also the one mark here whose WIDTH governs its size, so it is the one that needs
+   the baseline correction above to sit its bottom edge down on the row. */
 .skirmish-hud-title-action-glyph {
-  block-size: 32px;
-  image-rendering: pixelated;
-  inline-size: 32px;
-  object-fit: contain;
-  pointer-events: none;
+  --titlebar-mark-ink-below: .1875;
+  --titlebar-mark-ink-fill: .75;
 }
 
 @media (max-width: 1100px) {
@@ -27757,12 +27874,24 @@ button.run-card-formation-cell {
    this screen: it is paid once for taking a thin King and never applies again, so it is not a
    property of the card and must not sit in the cost corner, which reads as a PRICE everywhere
    else. The line holds its seat with or without gold so a row of three sits at one height. */
+/* The seat must measure EXACTLY its card. The row track is content-sized (align-content:center),
+   so anything the seat contributes above the card feeds back: the card takes its height from the
+   track, the track from the seat, and the seat from its tallest child — with the label in flow the
+   label won and the card resolved to zero. The line is therefore out of flow, sitting on top of
+   the card's own box. */
 .run-card-grant-seat {
   display: grid;
-  grid-template-rows: auto 1fr;
-  gap: var(--ds-space-1);
-  justify-items: center;
   min-inline-size: 0;
+  position: relative;
+}
+
+.run-card-grant-seat > .run-card-grant-bonus {
+  display: flex;
+  inset-block-end: 100%;
+  inset-inline: 0;
+  justify-content: center;
+  margin-block-end: var(--ds-space-1);
+  position: absolute;
 }
 
 .run-card-grant-bonus {
@@ -27775,14 +27904,28 @@ button.run-card-formation-cell {
   opacity: 0.55;
 }
 
-/* Commendatio asks one question and shows three answers. The question is the loudest thing on the
-   screen because the room behind it is deliberately empty of the man it names. */
-.run-commendatio {
+/* Commendatio asks one question and shows three answers.
+   The card row measures the lane it is given and writes its own tracks, so it must be handed a
+   box with a DEFINITE height. A content-sized track makes its block-size:100% resolve to zero,
+   the measured width comes back zero, and the cards render with no size at all — the gold lines
+   print and the faces do not. Same trap the opening grant records above. */
+.run-commendatio-content {
   display: grid;
-  gap: var(--ds-space-2);
-  justify-items: center;
-  align-content: center;
+  grid-template-rows: minmax(0, 1fr);
   min-block-size: 0;
+  overflow: hidden;
+}
+
+.run-commendatio-content > .run-commendatio {
+  align-content: center;
+  block-size: 100%;
+  display: grid;
+  gap: var(--ds-space-3);
+  grid-template-rows: auto minmax(0, 1fr);
+  inline-size: 100%;
+  justify-self: stretch;
+  min-block-size: 0;
+  padding: var(--ds-inset);
 }
 
 .run-commendatio-question {

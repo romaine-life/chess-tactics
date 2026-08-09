@@ -210,6 +210,96 @@ function withClipPolygons(
   ctx.restore();
 }
 
+/**
+ * Halved copies of a source that the board is MINIFYING, built once and reused.
+ *
+ * Canvas2D has no mipmapping: `drawImage` takes a single bilinear tap regardless
+ * of how far the source is being shrunk, so a sprite squeezed past 2:1 samples a
+ * 2x2 neighbourhood out of a much larger footprint and throws the rest away.
+ * With smoothing off it is worse still — one source pixel in N survives, which is
+ * what turned the 512px unit renders into speckle on a zoomed-out board.
+ *
+ * Halving repeatedly averages every source pixel into the result, so the level we
+ * finally draw from is at most 2:1 away from the destination and a single tap is
+ * an honest sample of it. This is Williams' 1983 pyramid, built by hand because
+ * the 2D context will not build it for us.
+ */
+const mipChains = new WeakMap<CanvasImage, HTMLCanvasElement[]>();
+
+/** Below this the destination is near enough to 1:1 that a direct draw is correct. */
+const MIP_MIN_MINIFICATION = 2;
+
+function mipChainFor(img: CanvasImage): HTMLCanvasElement[] {
+  const cached = mipChains.get(img);
+  if (cached) return cached;
+  const chain: HTMLCanvasElement[] = [];
+  if (typeof document !== 'undefined') {
+    let width = img.naturalWidth;
+    let height = img.naturalHeight;
+    let source: CanvasImageSource = img;
+    while (width >= 2 && height >= 2) {
+      width = Math.max(1, Math.floor(width / 2));
+      height = Math.max(1, Math.floor(height / 2));
+      const level = document.createElement('canvas');
+      level.width = width;
+      level.height = height;
+      const levelCtx = level.getContext('2d');
+      if (!levelCtx) break;
+      levelCtx.imageSmoothingEnabled = true;
+      levelCtx.imageSmoothingQuality = 'high';
+      levelCtx.drawImage(source, 0, 0, width, height);
+      chain.push(level);
+      source = level;
+    }
+  }
+  mipChains.set(img, chain);
+  return chain;
+}
+
+/**
+ * The level to sample when drawing `img` at `dw`x`dh`: the smallest one still at
+ * or above the destination size. Returns the original when the op is not being
+ * minified enough to matter, which is every correctly-sized sprite on the board —
+ * so authored pixel art that draws at its own size keeps its exact pixels.
+ */
+function mipSourceFor(img: CanvasImage, dw: number, dh: number): CanvasImageSource {
+  const natW = img.naturalWidth;
+  const natH = img.naturalHeight;
+  if (!natW || !natH || dw <= 0 || dh <= 0) return img;
+  if (natW < dw * MIP_MIN_MINIFICATION && natH < dh * MIP_MIN_MINIFICATION) return img;
+  let chosen: CanvasImageSource = img;
+  for (const level of mipChainFor(img)) {
+    if (level.width < dw || level.height < dh) break;
+    chosen = level;
+  }
+  return chosen;
+}
+
+/**
+ * Draw a minified op through its mip chain. Smoothing is enabled only for this
+ * final tap, and only when we actually took a level: the board keeps its global
+ * nearest-neighbour draw for everything sized for the grid.
+ */
+function drawMinified(
+  ctx: CanvasRenderingContext2D,
+  img: CanvasImage,
+  dx: number,
+  dy: number,
+  dw: number,
+  dh: number,
+): void {
+  const source = mipSourceFor(img, dw, dh);
+  if (source === img) {
+    ctx.drawImage(img, dx, dy, dw, dh);
+    return;
+  }
+  const smoothing = ctx.imageSmoothingEnabled;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(source, dx, dy, dw, dh);
+  ctx.imageSmoothingEnabled = smoothing;
+}
+
 function paintOp(
   ctx: CanvasRenderingContext2D,
   img: CanvasImage,
@@ -230,7 +320,7 @@ function paintOp(
           const h = natH * fit;
           const cx = dx + (op.dw - w) / 2;
           const cy = dy + (op.dh - h) / 2;
-          ctx.drawImage(img, cx, cy, w, h);
+          drawMinified(ctx, img, cx, cy, w, h);
           return;
         }
         if (op.sw != null) {
@@ -247,7 +337,7 @@ function paintOp(
           );
           return;
         }
-        ctx.drawImage(img, dx, dy, op.dw, op.dh);
+        drawMinified(ctx, img, dx, dy, op.dw, op.dh);
       });
     });
   });

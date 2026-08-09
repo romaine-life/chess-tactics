@@ -917,7 +917,7 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('const restored = undoRunBattleMove(latest, checkpoint);');
     expect(skirmish).toContain('setRunBattleUndoAdapter(runBattle?.undoAdapter ?? null)');
     expect(gameStore).toContain('const undoCheckpoint = capturePlayerMoveUndo();');
-    expect(gameStore).toContain("log: extendLog(checkpoint.log, [logNote('Move undone — 1 gold paid.')])");
+    expect(gameStore).toContain("log: extendLog(checkpoint.log, [logNote('Move undone — 10 gold paid.')])");
     expect(gameStore).toContain('commitPlayerMove(p, mv, type, true);');
     expect(matchPersistence).toContain('undoCheckpoint: state.undoCheckpoint ?? null');
   });

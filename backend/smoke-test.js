@@ -952,7 +952,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
       ORDER BY column_name`,
   );
   const versions = history.rows.map((row) => Number(row.version));
-  const expectedVersions = Array.from({ length: 74 }, (_, index) => index + 1);
+  const expectedVersions = Array.from({ length: 76 }, (_, index) => index + 1);
   const expectedMigrations = expectedVersions.map(inlineMigrationDefinition);
   const expectedByVersion = new Map(
     expectedMigrations.map((migration) => [migration.version, migration]),
@@ -967,7 +967,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
   });
   const appliedMigrationVersions = [
     ...Array.from({ length: 8 }, (_, index) => index + 28),
-    ...Array.from({ length: 38 }, (_, index) => index + 37),
+    ...Array.from({ length: 40 }, (_, index) => index + 37),
   ];
   const skippedMigrationVersions = [
     ...Array.from({ length: 27 }, (_, index) => index + 1),
@@ -1081,7 +1081,7 @@ async function validatePrimarySparseNumericMigrationUpgrade64() {
     )
   ) {
     throw new Error(
-      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 74: `
+      `Primary server did not fill sparse numeric history 1-27 and 36 through migration 76: `
       + `${JSON.stringify({
         history: history.rows,
         identity_columns: identityColumns.rows,
@@ -6570,6 +6570,81 @@ async function main() {
   ) {
     throw new Error(`Active Runs must reject retired Deployment pace state: ${retiredDeploymentMode.statusCode} ${retiredDeploymentMode.body}`);
   }
+  // Commendatio is the Run's opening screen and precedes the King, so its document carries no
+  // army and no cards. The phase was once missing from the server's accepted set, which left a
+  // freshly started Run unsaveable until the player answered it (#851).
+  const commendatioRun = {
+    ...boardRender.craftRunDocument(
+      boardRender.runCraftSpecFromJson({ phase: 'commendatio', seed: 23 }),
+      {
+        id: 'war-smoke',
+        name: 'Smoke War',
+        description: 'Pinned War snapshot.',
+        battles: [
+          { level: warBattleLevel, loot: false },
+          { level: structuredClone(warBattleLevel), loot: false },
+        ],
+      },
+    ),
+    id: 'run-smoke',
+    updatedAt: '2026-01-01T02:00:00.000Z',
+  };
+  const savedCommendatioRun = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({ run: commendatioRun, revision: 4 }),
+  );
+  const savedCommendatioRunBody = JSON.parse(savedCommendatioRun.body);
+  if (
+    savedCommendatioRun.statusCode !== 200
+    || savedCommendatioRunBody.revision !== 5
+    || savedCommendatioRunBody.run.phase !== 'commendatio'
+    || savedCommendatioRunBody.run.army.length !== 0
+    || savedCommendatioRunBody.run.cards.length !== 0
+    || savedCommendatioRunBody.run.commendatio?.kingOffers?.length !== boardRender.RUN_OPENING_CARD_OFFER_COUNT
+  ) {
+    throw new Error(`A Run in Commendatio did not save: ${savedCommendatioRun.statusCode} ${savedCommendatioRun.body}`);
+  }
+  const commendatioOutsideItsPhase = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({
+      run: { ...deploymentRun, commendatio: commendatioRun.commendatio },
+      revision: 5,
+    }),
+  );
+  if (
+    commendatioOutsideItsPhase.statusCode !== 400
+    || JSON.parse(commendatioOutsideItsPhase.body).error !== 'invalid_active_run'
+  ) {
+    throw new Error(`Commendatio state must not outlive its phase: ${commendatioOutsideItsPhase.statusCode} ${commendatioOutsideItsPhase.body}`);
+  }
+  // Fifteen Kings can open a Run and each mints its own card seating its own roster (#850). The
+  // server pinned His Grace's card id and pawn seats, so the other fourteen could never be saved.
+  const chosenKingId = savedCommendatioRunBody.run.commendatio.kingOffers.find((id) => id !== 'his-grace');
+  if (!chosenKingId) throw new Error('Commendatio should deal a King other than His Grace to choose.');
+  const chosenKingRun = {
+    ...boardRender.takeCommendatioKing(savedCommendatioRunBody.run, chosenKingId),
+    updatedAt: '2026-01-01T03:00:00.000Z',
+  };
+  const savedChosenKingRun = await request(
+    'PUT', '/api/active-run',
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify({ run: chosenKingRun, revision: 5 }),
+  );
+  const savedChosenKingRunBody = JSON.parse(savedChosenKingRun.body);
+  if (
+    savedChosenKingRun.statusCode !== 200
+    || savedChosenKingRunBody.revision !== 6
+    || savedChosenKingRunBody.run.phase !== 'deployment'
+    || savedChosenKingRunBody.run.commendatio !== null
+    || savedChosenKingRunBody.run.cards.length !== 1
+    || savedChosenKingRunBody.run.cards[0].coreId !== chosenKingId
+    || savedChosenKingRunBody.run.cards[0].id === 'run-card-his-grace'
+    || !savedChosenKingRunBody.run.army.some((unit) => unit.id === 'run-king' && unit.type === 'king')
+  ) {
+    throw new Error(`A Run that chose a King other than His Grace did not save: ${savedChosenKingRun.statusCode} ${savedChosenKingRun.body}`);
+  }
   const rivalRun = await get('/api/active-run', { cookie: '__Host-chess-tactics-access=rival' });
   const rivalRunBody = JSON.parse(rivalRun.body);
   if (
@@ -6584,13 +6659,13 @@ async function main() {
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
     JSON.stringify({ run: { ...activeRunDocument, updatedAt: '2026-01-02T00:00:00.000Z' }, revision: 0 }),
   );
-  if (staleRun.statusCode !== 409 || JSON.parse(staleRun.body).revision !== 4) {
+  if (staleRun.statusCode !== 409 || JSON.parse(staleRun.body).revision !== 6) {
     throw new Error(`Stale active Run write should conflict: ${staleRun.statusCode} ${staleRun.body}`);
   }
   const deletedRun = await request(
     'DELETE', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({ revision: 4 }),
+    JSON.stringify({ revision: 6 }),
   );
   if (deletedRun.statusCode !== 200 || JSON.parse(deletedRun.body).ok !== true) {
     throw new Error(`Active Run did not delete: ${deletedRun.statusCode} ${deletedRun.body}`);
@@ -10310,6 +10385,64 @@ async function main() {
     || JSON.parse(staleBakedSave.body).error !== 'predrawn_background_geometry_mismatch'
   ) {
     throw new Error(`Legacy geometry binding failed its first-cover-edit migration boundary: ${selectLegacyAutosave.statusCode} ${selectLegacyAutosave.body} / ${JSON.stringify(bindingsBeforeCoverEdit.rows)} / ${coverFirstAutosave.statusCode} ${coverFirstAutosave.body} / ${JSON.stringify(binding)} / ${listedLegacyVersions.statusCode} ${listedLegacyVersions.body} / ${coverChangedSave.statusCode} ${coverChangedSave.body} / ${staleBakedAutosave.statusCode} ${staleBakedAutosave.body} / ${staleBakedSave.statusCode} ${staleBakedSave.body}`);
+  }
+
+  // Growing the playable grid over a plate is a declared owner operation, not a stale artifact
+  // (ADR-0516). It records `predrawnGridDetached`, and from then on the environment-geometry
+  // comparison is the owner's answered question rather than a canonical gate — so the same Save
+  // the rejection above proves is fail-closed must SUCCEED once the grid is detached.
+  const detachedGrownCells = { ...coverChangedBoard.cells };
+  const detachedGrownFill = Object.values(coverChangedBoard.cells)[0];
+  for (let y = 0; y <= coverChangedBoard.rows; y += 1) {
+    for (let x = 0; x <= coverChangedBoard.cols; x += 1) {
+      // A grow seeds its new squares as ordinary ground, exactly as the editor does.
+      if (detachedGrownCells[`${x},${y}`] === undefined) detachedGrownCells[`${x},${y}`] = detachedGrownFill;
+    }
+  }
+  const detachedGrownBoard = {
+    ...coverChangedBoard,
+    cols: coverChangedBoard.cols + 1,
+    rows: coverChangedBoard.rows + 1,
+    cells: detachedGrownCells,
+    predrawnGridDetached: true,
+  };
+  const detachedGrownLevel = {
+    ...coverChangedLevel,
+    boardCode: boardRender.encodeBoard(detachedGrownBoard),
+  };
+  const detachedGrownAutosave = await request(
+    'PUT',
+    `/api/editor-documents/${legacyDocumentId}`,
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(legacyDocumentId, '__Host-chess-tactics-access=abc', {
+      revision: 5,
+      level: detachedGrownLevel,
+    })),
+  );
+  const detachedGrownSave = await request(
+    'POST',
+    `/api/editor-documents/${legacyDocumentId}/save`,
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(legacyDocumentId, '__Host-chess-tactics-access=abc', { revision: 6 })),
+    5000,
+  );
+  const savedDetachedBoard = detachedGrownSave.statusCode === 200
+    ? boardRender.decodeBoard(
+      JSON.parse((await get(
+        `/api/editor-documents/${legacyDocumentId}`,
+        { cookie: '__Host-chess-tactics-access=abc' },
+      )).body).document.level.boardCode,
+    )
+    : null;
+  if (
+    detachedGrownAutosave.statusCode !== 200
+    || detachedGrownSave.statusCode !== 200
+    || savedDetachedBoard?.predrawnGridDetached !== true
+    || savedDetachedBoard?.cols !== detachedGrownBoard.cols
+    || savedDetachedBoard?.rows !== detachedGrownBoard.rows
+    || savedDetachedBoard?.surface?.backgroundVersionId !== legacyRawReady.id
+  ) {
+    throw new Error(`A detached playable grid could not Save over its own artwork: ${detachedGrownAutosave.statusCode} ${detachedGrownAutosave.body} / ${detachedGrownSave.statusCode} ${detachedGrownSave.body} / ${JSON.stringify(savedDetachedBoard && { cols: savedDetachedBoard.cols, rows: savedDetachedBoard.rows, detached: savedDetachedBoard.predrawnGridDetached, surface: savedDetachedBoard.surface })}`);
   }
 
   // Operational bounds are part of the permanent version-store contract. Fill

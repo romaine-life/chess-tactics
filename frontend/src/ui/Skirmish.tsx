@@ -90,7 +90,7 @@ import { useSkirmishViewStoreApi } from '../game/SkirmishViewStoreContext';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox, ShellViewportSwap } from './shared/ChromeBox';
 import { rememberAdminBattleHref } from '../admin/battleRoute';
-import { formatGold, type RunBattleReport } from '../run/model';
+import { formatGold, standingEnemyForceValue, type RunBattleReport } from '../run/model';
 import { Strategikon } from './Strategikon';
 import { isStrategikonPath } from './strategikonRoute';
 import { GameplayWorkspaceSceneSlot } from './shell/AuthoredSceneSlot';
@@ -1372,6 +1372,10 @@ function SkirmishSession(props: SkirmishProps = {}) {
                 .filter((piece) => piece.alive && piece.side === 'player' && piece.id.startsWith('run-'))
                 .map((piece) => piece.id),
               turns: turnsElapsed,
+              // What the enemy still had standing when its King fell, read off the committed
+              // board this overlay is sitting on (ADR-0543). Every enemy unit counts, spawned
+              // ones included -- they were on the board and they surrendered with the rest.
+              standingEnemyValue: standingEnemyForceValue(game.pieces),
             })}
           >
             Rewards &gt;

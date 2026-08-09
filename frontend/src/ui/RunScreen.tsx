@@ -38,6 +38,7 @@ import {
   canUndoRunBattleMove,
   captureRunBattleUndo,
   closeBattle,
+  deditioGoldTenths,
   hasLipsanon,
   leaveAftermath,
   leaveSectio,
@@ -55,6 +56,8 @@ import {
   runCardUnitIds,
   performExpunctio,
   sectioHasChanges,
+  runCardDefinition,
+  takeCommendatioKing,
   takeVacantiaCard,
   takeVacantiaLipsanon,
   undoRunBattleMove,
@@ -289,9 +292,15 @@ function useRunAbandon(run: RunDocument): {
     });
     if (!confirmed) return;
     setAbandoning(true);
-    await abandon();
+    // Leave in the same tick the Run is cleared. `abandon()` drops it from this browser before
+    // it suspends, so nothing here waits on the account's DELETE — and holding for it parked the
+    // player on the empty "No active Run" workspace for the length of a round trip, which is a
+    // dead end nobody chose. The DELETE is ordered inside the save chain, so a Run started from
+    // the picker in the next second still lands behind it.
+    const abandoned = abandon();
     clearMatch();
     navigateApp(PLAY_RUN_SELECTOR_HREF, { replace: true, scroll: false });
+    await abandoned;
   }, [abandon, abandoning, ask, run.war.name]);
   return { abandonDialog: dialog, abandoning, requestAbandon };
 }
@@ -1364,10 +1373,14 @@ function AftermathPanel({
   const speedClockMs = battleLevel ? speedBonusClockMs(battleLevel) : 0;
   const speedRemainingMs = battleLevel ? speedBonusRemainingMs(battleLevel, aftermath.elapsedMs) : 0;
   const underPar = parTurns === null ? 0 : parTurns - aftermath.turns;
+  // Priced from the standing count the report froze, for the same reason par and the speed
+  // bonus are derived here: one number read twice rather than two numbers agreeing by luck.
+  const deditioTenths = deditioGoldTenths(aftermath.standingEnemyValue);
   // One line naming every source folded into the purse, so the measures below read as a
   // breakdown of "Gold won" rather than as extras stacked on top of it.
   const goldSources = [
     aftermath.bonusGoldTenths ? LIPSANON_BY_ID['mercenarys-rifle'].name : null,
+    deditioTenths ? 'Deditio' : null,
     speedTenths ? 'the speed bonus' : null,
   ].filter((source): source is string => source !== null);
   return (
@@ -1410,6 +1423,17 @@ function AftermathPanel({
           </AftermathMeasure>
           <AftermathMeasure label="Time">
             {aftermath.elapsedMs === null ? '—' : formatBattleElapsed(aftermath.elapsedMs)}
+          </AftermathMeasure>
+          {/* What the enemy still had on the board when its King fell. A player who mates
+              early is paid for the army they never had to take; one who grinds the board down
+              to a bare King reads zero here, which is the whole of the incentive. */}
+          <AftermathMeasure
+            label="Deditio"
+            detail={aftermath.standingEnemyValue > 0
+              ? `${aftermath.standingEnemyValue} points of enemy force surrendered with their King`
+              : 'The enemy had nothing left to surrender.'}
+          >
+            <RunGoldAmount valueTenths={deditioTenths} />
           </AftermathMeasure>
           {/* What the clock paid. The bonus clock is sized from par and is not lethal: an
               exhausted one reads 0:00 here and took nothing away from the fight. */}
@@ -1487,9 +1511,10 @@ function VictoryPanel({ run }: { run: RunDocument }): ReactElement {
       <ChromeButton unit="inner-text-button"
         className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
         onClick={() => {
-          void abandon().then(() => {
-            navigateApp(PLAY_RUN_SELECTOR_HREF, { replace: true, scroll: false });
-          });
+          // Same as Abandon: the Run is closed locally before this suspends, so the finished
+          // War does not hold the player on an empty workspace while its row is deleted.
+          void abandon();
+          navigateApp(PLAY_RUN_SELECTOR_HREF, { replace: true, scroll: false });
         }}
       >
         Finish Run
@@ -1840,6 +1865,22 @@ export function RunScreen({
     replace(granted);
     if (card) setGrantAnnouncement(`${runCardName(card)} taken and added to the Chartulary.`);
   };
+  /**
+   * Taking a King ends its own phase, so the carry must outlive this component: a flight released
+   * at landing lets go while Deployment is still preparing and the card is gone for that interval
+   * (ADR-0385). Same launch the opening grant used, for the same reason.
+   */
+  const takeCommendatioCard = (kingId: string, source: HTMLButtonElement): void => {
+    const latest = useActiveRun.getState().run;
+    if (!latest || latest.phase !== 'commendatio') return;
+    const served = takeCommendatioKing(latest, kingId);
+    if (served === latest) return;
+    const card = runCardDefinition(kingId);
+    const target = document.querySelector('[data-run-card-flight-target]');
+    if (card) launchGrantCardFlight(card, source, target);
+    replace(served);
+    if (card) setGrantAnnouncement(`${runCardName(card)} taken and added to the Chartulary.`);
+  };
   const selectedUnitId = sceneSnapshot.workspace.view === 'army'
     ? sceneSnapshot.workspace.unitId
     : null;
@@ -2016,7 +2057,7 @@ export function RunScreen({
             // Explicit, because the branch below is an else-fallthrough: any phase without
             // its own case silently renders Victory.
             : shellRun.phase === 'commendatio' && shellRun.commendatio
-              ? <RunCommendatio run={shellRun} replace={replace} />
+              ? <RunCommendatio run={shellRun} takeKing={takeCommendatioCard} />
             : shellRun.phase === 'bona-vacantia' && shellRun.vacantia
               ? (
                 <RunBonaVacantia

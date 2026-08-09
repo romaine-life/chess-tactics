@@ -183,9 +183,10 @@ describe('Level Editor chrome hierarchy', () => {
   });
 
   it('registers every previous and next control as a concrete mirrored chevron key', () => {
-    // Three mirrored pairs remain: layer navigation plus the two authoring steppers.
-    // The former fourth pair browsed server recovery branches, which no longer exist.
-    expect((levelEditor + levelEditorChromeConsumers).match(/<CyclePicker\b/g)).toHaveLength(3);
+    // Two mirrored pairs remain: layer navigation and the fence artwork stepper. The former
+    // third pair stepped the Zone selector, which is now a visible list of rows; the fourth
+    // browsed server recovery branches, which no longer exist.
+    expect((levelEditor + levelEditorChromeConsumers).match(/<CyclePicker\b/g)).toHaveLength(2);
     const chevronButtons = buttonBlocks(cyclePicker).filter((block) => block.includes('unit="inner-chevron-key"'));
     expect(chevronButtons).toHaveLength(2);
     expect(cyclePicker).toContain('className={`stepper-glyph stepper-chevron stepper-chevron-${direction === \'previous\' ? \'left\' : \'right\'}`}');
@@ -381,23 +382,22 @@ describe('Level Editor chrome hierarchy', () => {
       'Other event template',
       'Promotion faction',
       'Promotion zone',
-      'Selected zone',
       'Fence artwork',
       'Composite terrain footprint',
     ]) {
       expect(levelEditor).toContain(`ariaLabel="${label}"`);
       expect(nativeSelectOpenings.some((opening) => opening.includes(`aria-label="${label}"`))).toBe(false);
     }
-    expect(levelEditor).toMatch(/<HouseSelect<string>\s+value=\{activeZone\?\.id \?\? ''\}[\s\S]*?disabled=\{!activeZone\}[\s\S]*?ariaLabel="Selected zone"[\s\S]*?onChange=\{selectZoneEntry\}/);
-    expect(levelEditor).toContain("...(activeZone ? [] : [{ value: '', label: 'None' }]),");
-    // The dropdown lists only the zones that are ON the level: a dedicated deployment zone whose
+    // The zone list shows only the zones that are ON the level: a dedicated deployment zone whose
     // type is not broken off is retained but hidden, and must not be selectable (ADR-0367).
-    expect(levelEditor).toContain('...visibleZoneIndices.map((index) => ({ value: boardZoneEntries[index].id, label: zoneDisplayName(boardZoneEntries[index], index) }))');
+    expect(levelEditor).toContain('{visibleZoneIndices.map((index) => {');
     expect(levelEditor).toMatch(/<HouseSelect<string>\s+value=\{activeFenceArtwork\.id\}[\s\S]*?options=\{fenceArtCatalog\.map\(\(artwork\) => \(\{ value: artwork\.id, label: artwork\.label \}\)\)\}[\s\S]*?ariaLabel="Fence artwork"[\s\S]*?onChange=\{selectFenceArtwork\}/);
     expect(levelEditor).toMatch(/<HouseSelect<string>\s+ariaLabel="Composite terrain footprint"[\s\S]*?value=\{macroTileFootprint\}[\s\S]*?options=\{leMacroTileFootprints\(\)\.map\(\(footprint\) => \(\{ value: footprint, label: footprint \}\)\)\}[\s\S]*?setMacroTileFootprint\(footprint\);[\s\S]*?setMacroTileBrushId\(null\);/);
     expect(levelEditor).not.toContain('function SelectFrame');
     expect(styleCss).not.toContain('.le-layer-select');
-    expect(levelEditor).toContain('<div className="le-faction-fields">');
+    // The declaration's colour select rides a LABELLED row, like every other editor control.
+    expect(levelEditor).toMatch(/<span className="le-ctrllabel">Colour<\/span>\s*<PaletteSelect\s+className="le-faction-color-select"/);
+    expect(levelEditor).not.toContain('<div className="le-faction-fields">');
   });
 
   it('does not substitute another fence kit for a retired or unknown review id', () => {
@@ -430,12 +430,27 @@ describe('Level Editor chrome hierarchy', () => {
     expect(levelEditor).not.toContain('le-zone-color-swatches');
   });
 
-  it('gives the narrow Zone selector a full row above its four action buttons', () => {
-    expect(levelEditor).toContain('<div className="le-ctrlrow le-zone-selection-row">');
-    expect(styleCss).toMatch(/\.le-zone-panel \.le-zone-select-controls\s*\{[\s\S]*?grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);[\s\S]*?grid-template-rows:\s*var\(--le-zone-row-h\) var\(--le-zone-row-h\);[\s\S]*?height:\s*auto;/);
-    expect(styleCss).toMatch(/\.le-zone-panel \.le-zone-select-controls > \.le-select-wrap\s*\{[\s\S]*?grid-column:\s*1 \/ -1;[\s\S]*?grid-row:\s*1;/);
-    expect(styleCss).toMatch(/\.le-zone-panel \.le-zone-select-controls > \.le-zone-stepper-button\.settings-chrome-button\s*\{[\s\S]*?grid-row:\s*2;[\s\S]*?width:\s*100%;/);
-    expect(styleCss).toMatch(/\.le-zone-panel \.le-zone-selection-row > \.le-ctrllabel\s*\{[\s\S]*?align-items:\s*center;[\s\S]*?height:\s*var\(--le-zone-row-h\);[\s\S]*?justify-content:\s*center;[\s\S]*?text-align:\s*center;/);
+  it('picks a zone from a visible list of registered rows, not a dropdown behind chevrons', () => {
+    expectRegisteredFamily(levelEditor, 'le-zone-row', 'inner-list-row');
+    expect(levelEditor).toContain('<div className="le-zone-list" role="group" aria-label="Zones">');
+    expect(levelEditor).toContain('selected={index === selectedZoneIndex}');
+    // Every zone's tint dot rides its own row, so the list reads as the board's legend.
+    expect(levelEditor).toMatch(/<span className=\{`le-zone-dot le-zone-\$\{zoneDisplayColor\(entry\)\}`\}/);
+    // The retired control: no CyclePicker, no HouseSelect, and no ± keys for the zone list.
+    expect(levelEditor).not.toContain('le-zone-cycle');
+    expect(levelEditor).not.toContain('le-zone-select-controls');
+    expect(levelEditor).not.toContain('le-zone-stepper-button');
+    expect(levelEditor).not.toContain("ariaLabel=\"Selected zone\"");
+    expect(styleCss).not.toContain('.le-zone-cycle');
+  });
+
+  it('keeps a cycle picker owning its own three-column track instead of display: contents', () => {
+    // `display: contents` removes the box but NOT the DOM parent, so every `.le-<host> > .le-child`
+    // placement rule written against the collapsed picker silently stops matching and its keys
+    // pile onto the value control. Each host lays its own chevron/value/chevron track out.
+    expect(styleCss).toMatch(/\.le-layer-picker-row\s*\{[\s\S]*?grid-template-columns:\s*var\(--le-inner-square\) minmax\(0, 1fr\) var\(--le-inner-square\);/);
+    expect(styleCss).toMatch(/\.le-fence-artwork-cycle\s*\{[\s\S]*?grid-template-columns:\s*28px minmax\(0, 1fr\) 28px;/);
+    expect(styleCss).not.toMatch(/\.le-[\w-]*(?:cycle|picker-row)\s*\{[^}]*display:\s*contents;/);
   });
 
   it('keeps portaled confirmation actions inside an explicit chrome-family surface', () => {

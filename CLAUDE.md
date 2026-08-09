@@ -384,7 +384,7 @@ Run to that state, and answers with both:
 
 ```
 curl -X POST <url>/api/active-run/craft -H 'content-type: application/json' -d '{
-  "phase": "sectio", "battle": 4, "gold": 33.5,
+  "phase": "sectio", "battle": 4, "gold": 335,
   "army": [{ "type": "rook" }, "knight", "pawn"],
   "offers": [{ "id": "q" }, { "id": "pb-front" }, { "id": "p" }, { "id": "pp" }],
   "loot": ["royal-tent"], "lipsana": ["quartermasters-ledger"] }'
@@ -411,20 +411,26 @@ browser and it is minted into its `/run/craft/<id>` address before anything is c
 hand-authored one-off leaves a durable link behind:
 
 ```
-/run?craft=sectio&battle=3&gold=25&army=knight,rook&offers=q,pb-front,rr-vertical
-/run?craft=deployment&battle=2&army=rook,rook,bishop,pawn&gold=12
+/run?craft=commendatio
+/run?craft=sectio&battle=3&gold=250&army=knight,rook&offers=q,pb-front,rr-vertical
+/run?craft=deployment&battle=2&army=rook,rook,bishop,pawn&gold=120
 /run?craft=battle&battle=4&lipsana=royal-tent
 /run?craft=battle-victory&battle=4&lipsana=royal-tent
 /run?craft=aftermath&battle=3&turns=21&seconds=402&fallen=2
-/run?craft=victory&gold=40
+/run?craft=victory&gold=400
 ```
 
-- `craft=sectio|deployment|battle|battle-victory|aftermath|victory` — the phase to land on;
-  `battle-victory` opens the settled Battle directly on its board-visible Victory/Rewards state.
+- `craft=commendatio|sectio|deployment|battle|battle-victory|aftermath|victory` — the phase to
+  land on; `battle-victory` opens the settled Battle directly on its board-visible
+  Victory/Rewards state.
+- `craft=commendatio` is the Run's opening King choice. It precedes the King, so the document it
+  crafts holds no army and no cards and takes no `army`, `add`, `cards` or `offers` override —
+  what it takes is `seed`, which is what picks the three Kings dealt.
 - `battle=N` — the Battle you are at, 1-based. For a Sectio that is the Sectio you leave into
   Battle N, so `battle=1` is the opening Sectio (which takes no overrides — the Run contract
-  pins its offers, army and 8 gold).
-- `gold=25` (decimals fine), `army=knight,rook` (the exact non-King army; `add=queen`
+  pins its offers, army and 80 gold).
+- `gold=250` (gold is whole and exact per ADR-0547 — a decimal is refused, and the number is
+  the one the Run screen shows), `army=knight,rook` (the exact non-King army; `add=queen`
   appends instead), `lipsana=<id,id>`.
 - Sectio only: `offers=<card-id>[,<card-id>]` — and the list must be exactly as long as the
   Sectio deals, which is three, or FOUR while the Quartermaster's Ledger is held. A Run crafted
@@ -438,10 +444,13 @@ hand-authored one-off leaves a durable link behind:
   never touch). That is deliberate: it is how you reproduce a Run that still holds one.
   Those ids no longer appear in an ordinary draw, so do not use them to demonstrate
   what the market offers.
-- Aftermath only: `turns=<n>`, `seconds=<n>` and `fallen=<n>` write the Battle report a
-  crafted Battle cannot produce on its own — it is placed, not played. `battle=N` is the
-  Battle just won; the FINAL Battle has no aftermath (its report is the War victory
-  screen), so craft `victory` for that one.
+- Aftermath only: `turns=<n>`, `seconds=<n>`, `fallen=<n>` and `standing=<n>` write the Battle
+  report a crafted Battle cannot produce on its own — it is placed, not played. `standing` is
+  the points of enemy force still alive at the mate, which Deditio is paid on (ADR-0543); it
+  defaults to the WHOLE force the level fields, because a placed Battle killed nothing. Give
+  `standing=0` for the ground-down mate that pays nothing. `battle=N` is the Battle just won;
+  the FINAL Battle has no aftermath (its report is the War victory screen), so craft `victory`
+  for that one.
 - `war=<id>` picks the War (default: the first Run-eligible official one), `seed=<n>` and
   `tier=0` fix the roll. `view=army|lipsana|expunctio` still applies and survives the craft.
 - `cards=<card>[,<card>]` — the cards the Run already HOLDS, written exactly like `offers`.

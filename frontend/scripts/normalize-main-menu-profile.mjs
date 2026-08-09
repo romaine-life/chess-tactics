@@ -4,7 +4,13 @@
 //
 // The panel frame is cropped from the approved render and cleaned by removing
 // baked live text/icons from the content area. Runtime copy and counts remain
-// DOM text; the crest/rook/cog are standalone transparent PNG assets.
+// DOM text; the crest/cog are standalone transparent PNG assets.
+//
+// The two profile ROOKS this used to emit are gone (migration 76). A crop keyed out of a
+// full-screen concept render reads blurred and black-haloed beside real pixel art, and the one
+// screen that mounted them — the selected-level force readout — now draws each side with the live
+// battlefield sprite instead. Their slots are retired, so re-adding them here would mint
+// candidates for slots nothing can accept.
 
 import { PNG } from 'pngjs';
 import fs from 'node:fs';
@@ -35,8 +41,6 @@ const PANEL = {
 
 const ICONS = [
   { id: 'profile-crest', x: 1188, y: 38, w: 58, h: 59, out: 'profile-crest.png', tol: 28 },
-  { id: 'profile-rook-blue', x: 1195, y: 142, w: 34, h: 38, out: 'profile-rook-blue.png', tol: 30 },
-  { id: 'profile-rook-red', x: 1387, y: 142, w: 34, h: 38, out: 'profile-rook-red.png', tol: 30 },
   { id: 'profile-cog', x: 1516, y: 47, w: 37, h: 37, out: 'profile-cog.png', tol: 30 },
 ];
 

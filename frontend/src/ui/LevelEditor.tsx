@@ -8,6 +8,7 @@ import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, 
 import { boardLabCellPosition, boardLabMetrics, immutableBoardLabTerrainSrc } from '../render/BoardLabBoard';
 import { projectBoardPoint, unprojectBoardPoint, type BoardForest, type BoardForestSection, type BoardForestTree, type BoardTown, type BoardTownSection } from '@chess-tactics/board-render';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
+import { updateAppSettings, useAppSettings, type LevelEditorGridScope } from '../settings/appSettings';
 import { PropSprite, propHalfSrc } from '../render/BoardStructure';
 import { PROP_DEFS, defaultPropDef, propCells, propDef, type PropDef, type PropKind } from '../core/props';
 import {
@@ -245,6 +246,7 @@ import {
 } from './levelEditorPersistence';
 import { ArtRouteChrome } from './shell/ArtRouteChrome';
 import { useSceneParticipant } from './shell/SceneBoundary';
+import { sceneFailureError } from './shell/sceneFailure';
 import { loadingMark } from '../diagnostics/loadingTimeline';
 import { HomepageBackdrop } from './HomepageBackdrop';
 import { useInstalledChromeCss } from './useInstalledChromeCss';
@@ -261,6 +263,9 @@ import { InnerChromeBox, ShellControlsPanel, ShellViewportSwap, ShellWorkspace }
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { useWars } from '../war/store';
 import { HIS_GRACE_VALUE, expectedWarValue, type ExpectedBattleValue } from '../run/expectedValue';
+// The War economy walks in material POINTS so it can compare gold against card values; the two
+// gold readings it shows are converted on the way to the screen (ADR-0548).
+import { cardCostGold } from '../run/model';
 import {
   directionCompassCells,
   hasDirectionSprite,
@@ -659,7 +664,7 @@ function StudioEditableBoard({
   selectedArtworkIds?: readonly string[];
   boardZoom: number;
   boardPan: { x: number; y: number };
-  gridScope?: 'off' | 'playable' | 'whole';
+  gridScope?: LevelEditorGridScope;
   cameraBoundary?: BoardCameraBounds | null;
   cameraBoundaryEditable?: boolean;
   onCameraBoundaryCommit?: (bounds: BoardCameraBounds) => void;
@@ -1944,6 +1949,13 @@ const LEGACY_ZONE_COLOR: Record<ZoneType, ZoneColor> = {
   'falling-rock': 'slate',
   'pawn-promotion': 'amber',
 };
+// The zone types the SYSTEM gives a fixed meaning to. A row wearing one of these tags cannot be
+// repurposed by renaming it, so the list says so instead of letting the name imply it.
+const LE_ZONE_ROLE_LABEL: Partial<Record<ZoneType, string>> = {
+  'player-spawn': 'Player',
+  'player-king-spawn': 'King',
+  'enemy-spawn': 'Enemy',
+};
 const LE_ZONE_COLOR_OPTIONS = [
   { color: 'teal', label: 'Teal' },
   { color: 'blue', label: 'Blue' },
@@ -2293,12 +2305,17 @@ function LevelEventsEditor({ value, zones, onChange, templates }: {
   );
 }
 
-function DirectionPopover({ value, label, onChange }: {
+// The trigger is one or two compass letters in a square, which says nothing on its own about what
+// it sets or that it opens a compass. `title` is what the pointer gets: `describe` names the
+// setting, and the current facing is always spelled out after it, because "S" is not a word.
+function DirectionPopover({ value, label, describe, onChange }: {
   value: Direction;
   label: string;
+  describe?: string;
   onChange: (direction: Direction) => void;
 }): ReactElement {
   const [open, setOpen] = useState(false);
+  const tooltip = `${describe ?? label}. Currently facing ${value}.`;
   const choose = (direction: Direction): void => {
     onChange(direction);
     setOpen(false);
@@ -2319,6 +2336,7 @@ function DirectionPopover({ value, label, onChange }: {
       <ChromeButton unit="inner-tool-square"
         className={chromeUnitClassNames('inner-tool-square', 'le-direction-trigger')}
         aria-label={label}
+        title={tooltip}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
@@ -2670,6 +2688,7 @@ type LayerKey = LevelEditorLayerKey;
 type BrushKind = LevelEditorBrushKind;
 const LEVEL_EDITOR_LAYER_OPTIONS: ReadonlyArray<{ id: LayerKey; label: string }> = [
   { id: 'board', label: 'Board' },
+  { id: 'factions', label: 'Factions' },
   { id: 'camera', label: 'Camera' },
   { id: 'level-artwork', label: 'Level Artwork' },
   { id: 'tile', label: 'Tile' },
@@ -2717,6 +2736,7 @@ function perimeterWallArt(placements: Record<string, WallArtId> | undefined, col
 // Workspace/rules/status/history pages and Generate are non-painting layers → select tool.
 const toolForLayer = (layer: LayerKey): 'select' | 'brush' => (
   layer === 'board'
+  || layer === 'factions'
   || layer === 'camera'
   || layer === 'status'
   || layer === 'history'
@@ -2728,7 +2748,7 @@ const toolForLayer = (layer: LayerKey): 'select' | 'brush' => (
 const brushKindForInitialLayer = (layer: LayerKey): BrushKind => {
   if (layer === 'paths') return 'road';
   if (layer === 'placed-art') return 'artwork';
-  if (layer === 'board' || layer === 'camera' || layer === 'status' || layer === 'history' || layer === 'rules' || layer === 'war' || layer === 'generate' || layer === 'level-artwork') return 'tile';
+  if (layer === 'board' || layer === 'factions' || layer === 'camera' || layer === 'status' || layer === 'history' || layer === 'rules' || layer === 'war' || layer === 'generate' || layer === 'level-artwork') return 'tile';
   return layer as BrushKind;
 };
 const brushKindForRouteState = (layer: LayerKey, kind: BrushKind | undefined): BrushKind => {
@@ -3022,9 +3042,16 @@ export function LevelEditor(): ReactElement {
     return predrawnBoardPlateForEditorReview(activeSurface, predrawnPreview, predrawnRegistration);
   }, [boardBackgroundModeState, boardPredrawnPlateOffset, boardSurface, predrawnPreview, predrawnRegistration, predrawnSelectionValidation.kind]);
   const isPredrawnBoard = boardBackgroundModeState === 'ai' || editorPredrawnPlate !== undefined;
+  // The scene the editor sits in presents this failure, not the editor, because a failed
+  // participant hides the whole boundary — the Sign in and Retry the panels below render are
+  // inert and invisible for exactly this state. So the remedy the editor already knows travels
+  // with the error and the director offers the same one action (ADR-0548).
   const editorRouteError = useMemo(
     () => editorFrameError ?? (editorLoadError
-      ? new Error(`${editorLoadError.title}: ${editorLoadError.detail}`)
+      ? sceneFailureError(
+        `${editorLoadError.title}: ${editorLoadError.detail}`,
+        editorLoadError.signIn ? 'sign-in' : 'retry',
+      )
       : null),
     [editorFrameError, editorLoadError],
   );
@@ -3196,7 +3223,18 @@ export function LevelEditor(): ReactElement {
     setViewZoom(camera.zoom);
     setViewPan(camera.pan);
   };
-  const [gridScope, setGridScope] = useState<'off' | 'playable' | 'whole'>('off');
+  // The grid an author measures against is not per-page state: it is a remembered device
+  // preference, so it comes back the way it was left on the next editor page and starts visible
+  // on a fresh install. Held in app settings rather than a private key so one store owns it.
+  const gridScope = useAppSettings().levelEditorGridScope;
+  const setGridScope = (
+    update: LevelEditorGridScope | ((value: LevelEditorGridScope) => LevelEditorGridScope),
+  ): void => {
+    updateAppSettings((current) => ({
+      ...current,
+      levelEditorGridScope: typeof update === 'function' ? update(current.levelEditorGridScope) : update,
+    }));
+  };
   const toggleRegisteredGrid = (): void => setGridScope((value) => value === 'off' ? 'whole' : 'off');
   const [predrawnOcclusionEnabled, setPredrawnOcclusionEnabled] = useState(
     () => new URL(window.location.href).searchParams.get('predrawnOcclusion') !== '0',
@@ -3750,6 +3788,19 @@ export function LevelEditor(): ReactElement {
     const entries = zoneEntriesForBoard(initialBoard ?? { cols: boardCols, rows: boardRows, cells: {}, units: {}, doodads: {}, props: {}, cover: {}, features: {}, featureCuts: {}, featureExits: {}, zones: {} });
     return Math.max(0, entries.findIndex((entry) => entry.id === studioArm.brush));
   });
+  // The seed above only works for a board carried IN the address: a document's board arrives
+  // after mount, so `?brush=<zoneId>` found nothing to match and the link quietly landed on
+  // whichever zone sorts first. Consume the request when the entries that can satisfy it exist,
+  // and consume it exactly ONCE — a mount seed that keeps firing steals back the author's own
+  // later selection (#453).
+  const pendingZoneArm = useRef(studioArm.kind === 'zone' ? studioArm.brush ?? null : null);
+  useEffect(() => {
+    const wanted = pendingZoneArm.current;
+    if (!wanted || boardZoneEntries.length === 0) return;
+    pendingZoneArm.current = null;
+    const index = boardZoneEntries.findIndex((entry) => entry.id === wanted);
+    if (index >= 0) setSelectedZoneIndex(index);
+  }, [boardZoneEntries]);
   const boardZones = useMemo(() => zoneCellMapFromEntries(boardZoneEntries), [boardZoneEntries]);
   // Indices of the zones that are ON the level. A dedicated zone whose type is not broken off is
   // retained but hidden: it cannot be selected, cycled, painted or seen (ADR-0367).
@@ -7450,12 +7501,17 @@ export function LevelEditor(): ReactElement {
             setEditorReady(true);
             return;
           }
+          // Retry and Sign in are not interchangeable (ADR-0519). Re-reading a document this
+          // account may not have cannot start succeeding however often it is pressed, so 403/404
+          // offers the one act that can change the answer — the same act its own copy names. It
+          // previously offered neither and left the screen with no reachable action at all.
           setEditorLoadError({
             title: status === 403 || status === 404 ? 'No access to this editor document' : 'Editor document unavailable',
             detail: status === 403 || status === 404
               ? 'Sign in with the account that owns this working copy.'
               : 'The working copy could not be reached. No other level was substituted for it.',
             retry: status !== 403 && status !== 404,
+            signIn: status === 403 || status === 404,
           });
           setCloudSaveState('error');
           setCloudSaveDetail(null);
@@ -8428,8 +8484,8 @@ export function LevelEditor(): ReactElement {
     // disabled while violations exist, but re-check here so a programmatic call can't slip past.
     if (!playability.ok) return;
     if (needsPlayerFaction) {
-      reportStatus('Save needs a player faction.', 'warning', 'Open Board > Level Settings and assign Player to one board faction.');
-      setLayer('board');
+      reportStatus('Save needs a player faction.', 'warning', 'Open Factions and paint at least one unit for the player faction.');
+      setLayer('factions');
       return;
     }
     // Carry the existing level's authored metadata (objective/difficulty/economy/notes/theme)
@@ -8638,6 +8694,7 @@ export function LevelEditor(): ReactElement {
     }
     if (
       nextLayer !== 'board'
+      && nextLayer !== 'factions'
       && nextLayer !== 'camera'
       && nextLayer !== 'status'
       && nextLayer !== 'history'
@@ -9487,14 +9544,6 @@ export function LevelEditor(): ReactElement {
     const index = boardZoneEntries.findIndex((zone) => zone.id === id);
     if (index >= 0 && visibleZoneIndices.includes(index)) setSelectedZoneIndex(index);
   };
-  const stepZoneEntry = (delta: -1 | 1): void => {
-    const count = visibleZoneIndices.length;
-    if (!count) return;
-    setSelectedZoneIndex((current) => {
-      const at = Math.max(0, visibleZoneIndices.indexOf(current));
-      return visibleZoneIndices[(at + delta + count) % count];
-    });
-  };
   const setActiveZoneName = (name: string): void => {
     if (!activeZone) return;
     const next = cloneEditorBoard(currentEditorBoardRef.current);
@@ -9590,7 +9639,7 @@ export function LevelEditor(): ReactElement {
     : !playability.ok
     ? 'Resolve the issues in the Fix-before-saving list above, then Save.'
     : needsPlayerFaction
-    ? 'Open Board > Level Settings, then assign Player to one board faction.'
+    ? 'Open Factions, then paint at least one unit for the player faction.'
     : !dirty && targetLevelId
     ? 'Make an edit to create a new saved position.'
     : !dirty
@@ -9599,7 +9648,7 @@ export function LevelEditor(): ReactElement {
   const explainBlockedSave = (): void => {
     if (!saveBlockedMessage) return;
     // Playability blocks stay on 'status': the Fix-before-saving list renders there, beside Save.
-    setLayer(needsPlayerFaction && playability.ok ? 'board' : 'status');
+    setLayer(needsPlayerFaction && playability.ok ? 'factions' : 'status');
     setTool('select');
     reportStatus(saveBlockedMessage, saving || persistenceHydration === 'loading' ? 'info' : 'warning', saveBlockedDetail);
   };
@@ -10910,66 +10959,81 @@ export function LevelEditor(): ReactElement {
               <div><dt>Rule</dt><dd>{levelObjectiveLabel}</dd></div>
               <div><dt>Difficulty</dt><dd>{levelDifficultyLabel}</dd></div>
             </dl>
-            <div className="le-faction-control">
-              <span className="le-settings-label">Declared Factions</span>
-              <p className="le-board-note">The sides this level fields. Units are painted for a faction, and wear its colour.</p>
-              <div className="le-faction-assignments">
-                {FACTION_ROLES.map((role) => {
-                  const faction = declaredFactions[role];
-                  return (
-                    <div className="le-faction-assignment" key={role}>
-                      <span className="le-faction-name">
-                        <i className={`le-faction-dot is-${faction}`} aria-hidden="true" />
-                        <span>{factionRoleLabels[role]}</span>
-                        <b>{boardFactionCounts[faction]}</b>
-                      </span>
-                      <div className="le-faction-fields">
-                        <PaletteSelect
-                          className="le-faction-color-select"
-                          value={faction}
-                          options={declarableFactions[role]}
-                          ariaLabel={`${factionRoleLabels[role]} colour`}
-                          title={`The colour ${factionRoleLabels[role]} wears. Changing it repaints every ${factionRoleLabels[role]} unit on the board.`}
-                          onChange={(next) => setDeclaredFaction(role, next)}
-                        />
-                        <DirectionPopover
-                          value={directionForFaction(faction)}
-                          label={`${factionRoleLabels[role]} default facing`}
-                          onChange={(direction) => setFactionDefaultDirection(faction, direction)}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="le-board-actions">
-                <ChromeButton unit="inner-text-button"
-                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                  onClick={swapDeclaredFactions}
-                  title={`Trade colours between ${factionRoleLabels.player} and ${factionRoleLabels.enemy}, repainting every unit on the board.`}
-                >Swap sides</ChromeButton>
-              </div>
-              {undeclaredFactions.map((faction) => (
-                <div className="le-faction-undeclared" key={faction}>
-                  <p className="le-board-warning">
-                    {boardFactionCounts[faction]} {LE_FACTION_LABELS[faction]} unit{boardFactionCounts[faction] === 1 ? '' : 's'} belong to no declared faction. They play as {factionRoleLabels.enemy}.
-                  </p>
-                  <div className="le-board-actions">
-                    {FACTION_ROLES.map((role) => (
-                      <ChromeButton unit="inner-text-button"
-                        key={role}
-                        className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
-                        onClick={() => foldUndeclaredFaction(faction, role)}
-                        title={`Repaint every ${LE_FACTION_LABELS[faction]} unit into ${factionRoleLabels[role]}.`}
-                      >Move to {factionRoleLabels[role]}</ChromeButton>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              {needsPlayerFaction ? <p className="le-board-warning">{factionRoleLabels.player} fields no units. Paint at least one before saving.</p> : null}
-            </div>
           </section>
           </>
+        ) : layer === 'factions' ? (
+          <section className="skirmish-card le-faction-panel" aria-label="Declared factions" data-testid="le-faction-controls">
+            <h2>Declared Factions</h2>
+            {/* Which side is which is not a colour preference — it decides who the board hands to the
+              * player. `sideForFaction` resolves every unit wearing the PLAYER colour to the side the
+              * human commands and everything else to the opposition, and that is what a saved Level
+              * carries into play. Say so here, because a level that never authored a declaration has
+              * one READ off its pixels (ADR-0538), and the read can name the wrong army. */}
+            <p className="le-board-note">The sides this level fields. Units are painted for a faction, and wear its colour.</p>
+            <p className="le-board-note">{factionRoleLabels.player} is the army the human commands in play. Every other piece fights it.</p>
+            <div className="le-faction-assignments">
+              {FACTION_ROLES.map((role) => {
+                const faction = declaredFactions[role];
+                return (
+                  <div className="le-faction-assignment" key={role}>
+                    <span className="le-faction-name">
+                      <i className={`le-faction-dot is-${faction}`} aria-hidden="true" />
+                      <span>{factionRoleLabels[role]}</span>
+                      <b>{boardFactionCounts[faction]}</b>
+                    </span>
+                    {/* One labelled row per control, the way the unit brush names its own facing.
+                      * Two bare squares side by side named neither what they set nor which side
+                      * they set it for. */}
+                    <div className="le-ctrlrow">
+                      <span className="le-ctrllabel">Colour</span>
+                      <PaletteSelect
+                        className="le-faction-color-select"
+                        value={faction}
+                        options={declarableFactions[role]}
+                        ariaLabel={`${factionRoleLabels[role]} colour`}
+                        title={`The colour ${factionRoleLabels[role]} wears. Changing it repaints every ${factionRoleLabels[role]} unit on the board.`}
+                        onChange={(next) => setDeclaredFaction(role, next)}
+                      />
+                    </div>
+                    <div className="le-ctrlrow">
+                      <span className="le-ctrllabel">Default facing</span>
+                      <DirectionPopover
+                        value={directionForFaction(faction)}
+                        label={`${factionRoleLabels[role]} default facing`}
+                        describe={`The way a newly painted ${factionRoleLabels[role]} unit stands`}
+                        onChange={(direction) => setFactionDefaultDirection(faction, direction)}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="le-board-actions">
+              <ChromeButton unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                onClick={swapDeclaredFactions}
+                title={`Trade colours between ${factionRoleLabels.player} and ${factionRoleLabels.enemy}, repainting every unit on the board.`}
+              >Swap sides</ChromeButton>
+            </div>
+            {undeclaredFactions.map((faction) => (
+              <div className="le-faction-undeclared" key={faction}>
+                <p className="le-board-warning">
+                  {boardFactionCounts[faction]} {LE_FACTION_LABELS[faction]} unit{boardFactionCounts[faction] === 1 ? '' : 's'} belong to no declared faction. They play as {factionRoleLabels.enemy}.
+                </p>
+                <div className="le-board-actions">
+                  {FACTION_ROLES.map((role) => (
+                    <ChromeButton unit="inner-text-button"
+                      key={role}
+                      className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                      onClick={() => foldUndeclaredFaction(faction, role)}
+                      title={`Repaint every ${LE_FACTION_LABELS[faction]} unit into ${factionRoleLabels[role]}.`}
+                    >Move to {factionRoleLabels[role]}</ChromeButton>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {needsPlayerFaction ? <p className="le-board-warning">{factionRoleLabels.player} fields no units. Paint at least one before saving.</p> : null}
+          </section>
         ) : layer === 'camera' ? (
           <>
           <section className="skirmish-card" aria-label="Camera boundary" data-testid="le-camera-controls">
@@ -11390,7 +11454,7 @@ export function LevelEditor(): ReactElement {
                   </div>
                   <div>
                     <dt>Gold unspent</dt>
-                    <dd>{formatPoints(warValueHere.goldUnspent)}</dd>
+                    <dd>{formatPoints(cardCostGold(warValueHere.goldUnspent))}</dd>
                   </div>
                   <div>
                     <dt>Enemy force</dt>
@@ -11398,7 +11462,7 @@ export function LevelEditor(): ReactElement {
                   </div>
                   <div>
                     <dt>Pays on victory</dt>
-                    <dd>{formatPoints(warValueHere.victoryGold)} gold</dd>
+                    <dd>{formatPoints(cardCostGold(warValueHere.victoryGold))} gold</dd>
                   </div>
                 </dl>
                 <p className="le-board-note">
@@ -11677,37 +11741,42 @@ export function LevelEditor(): ReactElement {
         {brushKind === 'zone' ? (
           <section className="skirmish-card le-brush-panel le-zone-panel">
             <h2>Zone</h2>
-            <div className="le-ctrlrow le-zone-selection-row">
-              <span className="le-ctrllabel">Zone</span>
-              <div className="le-zone-select-controls">
-                <CyclePicker
-                  className="le-zone-cycle"
-                  buttonClassName="le-zone-stepper-button"
-                  previousLabel="Previous zone"
-                  nextLabel="Next zone"
-                  previousDisabled={visibleZoneIndices.length <= 1}
-                  nextDisabled={visibleZoneIndices.length <= 1}
-                  onPrevious={() => stepZoneEntry(-1)}
-                  onNext={() => stepZoneEntry(1)}
-                >
-                  <HouseSelect<string>
-                    value={activeZone?.id ?? ''}
-                    options={[
-                      ...(activeZone ? [] : [{ value: '', label: 'None' }]),
-                      ...visibleZoneIndices.map((index) => ({ value: boardZoneEntries[index].id, label: zoneDisplayName(boardZoneEntries[index], index) })),
-                    ]}
-                    disabled={!activeZone}
-                    ariaLabel="Selected zone"
-                    onChange={selectZoneEntry}
-                  />
-                </CyclePicker>
-                <ChromeButton unit="inner-minus-key" className={chromeUnitClassNames('inner-minus-key', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Remove selected zone" title="Remove selected zone" disabled={!activeZone} onClick={removeActiveZoneEntry}>
-                  <span><span className="stepper-glyph stepper-minus" aria-hidden="true" /></span>
-                </ChromeButton>
-                <ChromeButton unit="inner-plus-key" className={chromeUnitClassNames('inner-plus-key', 'settings-chrome-button', 'settings-chrome-button-neutral', 'le-zone-stepper-button')} aria-label="Add zone" title="Add zone" onClick={addZoneEntry}>
-                  <span><span className="stepper-glyph stepper-plus" aria-hidden="true" /></span>
-                </ChromeButton>
+            {/* The zones ARE the control. A dropdown hid every zone but the armed one behind a
+              * click, which is backwards for a brush target you switch between while painting:
+              * the list arms a zone in one click and states, without being opened, what zones
+              * this board has, what colour each paints, and which of them are still empty.
+              * Add and Remove act on that list, under it. */}
+            {visibleZoneIndices.length ? (
+              <div className="le-zone-list" role="group" aria-label="Zones">
+                {visibleZoneIndices.map((index) => {
+                  const entry = boardZoneEntries[index];
+                  const role = LE_ZONE_ROLE_LABEL[entry.type];
+                  const painted = entry.tiles.length;
+                  return (
+                    <ChromeButton
+                      unit="inner-list-row"
+                      key={entry.id}
+                      className={chromeUnitClassNames('inner-list-row', 'le-zone-row')}
+                      selected={index === selectedZoneIndex}
+                      title={`Paint into ${zoneDisplayName(entry, index)}`}
+                      onClick={() => selectZoneEntry(entry.id)}
+                    >
+                      <span className={`le-zone-dot le-zone-${zoneDisplayColor(entry)}`} aria-hidden="true" />
+                      <span className="le-zone-row-text">
+                        <strong>{zoneDisplayName(entry, index)}</strong>
+                        <small>{painted ? `${painted} tile${painted === 1 ? '' : 's'}` : 'Not painted yet'}</small>
+                      </span>
+                      {role ? <span className="le-zone-row-role">{role}</span> : null}
+                    </ChromeButton>
+                  );
+                })}
               </div>
+            ) : (
+              <p className="le-board-warning">No zones yet. Add one, then paint the tiles it covers.</p>
+            )}
+            <div className="le-cond-add le-zone-list-actions">
+              <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} onClick={addZoneEntry}>+ Add zone</ChromeButton>
+              <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')} disabled={!activeZone} onClick={removeActiveZoneEntry}>Remove zone</ChromeButton>
             </div>
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Name</span>
@@ -11757,8 +11826,8 @@ export function LevelEditor(): ReactElement {
           <section className="skirmish-card le-brush-panel">
             <h2>Paint Faction</h2>
             {/* Only a faction this level DECLARES can be painted, and its colour follows the
-              * declaration — the brush has no colour of its own. Board → Declared Factions is where
-              * the pair is named and where a colour is changed. */}
+              * declaration — the brush has no colour of its own. The Factions page is where the
+              * pair is named and where a colour is changed. */}
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Faction</span>
               <HouseSelect<FactionRole>
@@ -11783,6 +11852,7 @@ export function LevelEditor(): ReactElement {
               <DirectionPopover
                 value={directionForFaction(unitFaction)}
                 label={`${factionDisplayName(unitFaction)} default facing`}
+                describe={`The way a newly painted ${factionDisplayName(unitFaction)} unit stands`}
                 onChange={(direction) => setFactionDefaultDirection(unitFaction, direction)}
               />
             </div>
@@ -12745,7 +12815,7 @@ export function LevelEditor(): ReactElement {
                 <span className="le-pal-grouplabel">Artwork</span>
                 <CyclePicker
                   className="le-fence-artwork-cycle"
-                  buttonClassName="le-zone-stepper-button"
+                  buttonClassName="le-layer-stepper-button"
                   previousLabel="Previous fence artwork"
                   nextLabel="Next fence artwork"
                   onPrevious={() => stepFenceArtwork(-1)}

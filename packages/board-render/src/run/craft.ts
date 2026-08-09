@@ -1,6 +1,6 @@
 // Craft an active Run directly into a named state so a Run screen can be reached by URL.
 //
-// Debugging and feature work constantly need "the Sectio after Battle 3 with 25 gold and a Rook on
+// Debugging and feature work constantly need "the Sectio after Battle 3 with 250 gold and a Rook on
 // offer". Playing there by hand is slow, and hand-authoring the document is worse: the server
 // validator (validateActiveRunBody) cross-checks army/card membership, offer pricing and the
 // Sectio entry snapshot, so a typed-out document is rejected far more often than it
@@ -25,6 +25,7 @@ import {
   performAdlectio,
   canLeaveSectio,
   closeBattle,
+  levelEnemyForceValue,
   createRun,
   leaveSectio,
   mixSeed,
@@ -85,11 +86,12 @@ export const RUN_CRAFT_PARAMS: readonly string[] = Object.freeze([
   'turns',
   'seconds',
   'fallen',
+  'standing',
 ]);
 
 export const DEFAULT_CRAFT_SEED = 1337;
 
-export type RunCraftPhase = 'aftermath' | 'bona-vacantia' | 'sectio' | 'deployment' | 'battle' | 'battle-victory' | 'victory';
+export type RunCraftPhase = 'aftermath' | 'bona-vacantia' | 'commendatio' | 'sectio' | 'deployment' | 'battle' | 'battle-victory' | 'victory';
 
 /**
  * What a crafted aftermath reports when the spec does not say. A crafted Battle is placed,
@@ -132,6 +134,13 @@ export interface RunCraftSpec {
   turns: number | null;
   elapsedMs: number | null;
   fallen: number | null;
+  /**
+   * Points of enemy force the report says were still standing at the mate, which Deditio is
+   * paid on. Defaults to the WHOLE force the level fields: a placed Battle killed nothing, so
+   * an untouched enemy army is the honest reading, and it is also the state worth looking at.
+   * Give 0 for the ground-down mate that pays nothing.
+   */
+  standingEnemyValue: number | null;
 }
 
 /** A spec the crafter refuses. The message is written for the person reading it on the screen. */
@@ -156,7 +165,7 @@ const PIECE_ALIASES: Readonly<Record<string, AdlectablePieceType>> = Object.free
   queen: 'queen',
 });
 
-const CRAFT_PHASES: readonly RunCraftPhase[] = ['aftermath', 'bona-vacantia', 'sectio', 'deployment', 'battle', 'battle-victory', 'victory'];
+const CRAFT_PHASES: readonly RunCraftPhase[] = ['aftermath', 'bona-vacantia', 'commendatio', 'sectio', 'deployment', 'battle', 'battle-victory', 'victory'];
 
 function pieceList(raw: string, label: string): AdlectablePieceType[] {
   const pieces: AdlectablePieceType[] = [];
@@ -239,10 +248,11 @@ export function parseRunCraftSpec(search: string): RunCraftSpec | null {
   if (!CRAFT_PHASES.includes(phase as RunCraftPhase)) {
     throw new RunCraftError(`craft: "${phase}" is not a Run phase. Use ${CRAFT_PHASES.join(', ')}.`);
   }
+  // Gold is whole and exact (ADR-0547), so the address carries the number the screen shows.
   const goldRaw = params.get('gold');
-  const goldTenths = goldRaw === null ? null : Math.round(Number(goldRaw) * GOLD_SCALE);
+  const goldTenths = goldRaw === null ? null : Number(goldRaw);
   if (goldRaw !== null && (!Number.isSafeInteger(goldTenths) || (goldTenths as number) < 0)) {
-    throw new RunCraftError(`craft gold: "${goldRaw}" must be a gold amount of 0 or more.`);
+    throw new RunCraftError(`craft gold: "${goldRaw}" must be a whole gold amount of 0 or more.`);
   }
   const offers = params.get('offers');
   const cards = params.get('cards');
@@ -271,6 +281,9 @@ export function parseRunCraftSpec(search: string): RunCraftSpec | null {
       ? null
       : integer(params.get('seconds')!, 'seconds', 0, 86_400) * 1000,
     fallen: params.get('fallen') === null ? null : integer(params.get('fallen')!, 'fallen', 0, 100),
+    standingEnemyValue: params.get('standing') === null
+      ? null
+      : integer(params.get('standing')!, 'standing', 0, 999),
   };
 }
 
@@ -323,9 +336,9 @@ export function runCraftSpecFromJson(raw: unknown): RunCraftSpec {
     throw new RunCraftError(`craft: "${String(phase)}" is not a Run phase. Use ${CRAFT_PHASES.join(', ')}.`);
   }
   const gold = spec.gold;
-  const goldTenths = gold === undefined || gold === null ? null : Math.round(Number(gold) * GOLD_SCALE);
+  const goldTenths = gold === undefined || gold === null ? null : Number(gold);
   if (goldTenths !== null && (!Number.isSafeInteger(goldTenths) || goldTenths < 0)) {
-    throw new RunCraftError(`craft gold: "${String(gold)}" must be a gold amount of 0 or more.`);
+    throw new RunCraftError(`craft gold: "${String(gold)}" must be a whole gold amount of 0 or more.`);
   }
   const tier = spec.tier ?? spec.ataraxiaTier;
   const offers = spec.offers;
@@ -349,6 +362,9 @@ export function runCraftSpecFromJson(raw: unknown): RunCraftSpec {
       ? null
       : jsonInteger(spec.seconds, 'seconds', 0, 86_400) * 1000,
     fallen: spec.fallen === undefined || spec.fallen === null ? null : jsonInteger(spec.fallen, 'fallen', 0, 100),
+    standingEnemyValue: spec.standing === undefined || spec.standing === null
+      ? null
+      : jsonInteger(spec.standing, 'standing', 0, 999),
   };
 }
 
@@ -418,7 +434,7 @@ export function runCraftSpecToJson(spec: RunCraftSpec): Record<string, unknown> 
   const json: Record<string, unknown> = { phase: spec.phase, battle: spec.battle, seed: spec.seed, tier: spec.ataraxiaTier };
   if (spec.deploymentMode === 'arranged') json.deployment = 'arranged';
   if (spec.warId !== null) json.war = spec.warId;
-  if (spec.goldTenths !== null) json.gold = spec.goldTenths / GOLD_SCALE;
+  if (spec.goldTenths !== null) json.gold = spec.goldTenths;
   if (spec.army) json.army = spec.army.map((entry) => entry.type);
   if (spec.add) json.add = spec.add.map((entry) => entry.type);
   if (spec.offers) json.offers = spec.offers.map((card) => card.coreId);
@@ -429,6 +445,7 @@ export function runCraftSpecToJson(spec: RunCraftSpec): Record<string, unknown> 
   if (spec.turns !== null) json.turns = spec.turns;
   if (spec.elapsedMs !== null) json.seconds = spec.elapsedMs / 1000;
   if (spec.fallen !== null) json.fallen = spec.fallen;
+  if (spec.standingEnemyValue !== null) json.standing = spec.standingEnemyValue;
   return json;
 }
 
@@ -452,7 +469,7 @@ export function runCraftAddressParams(spec: RunCraftSpec): URLSearchParams {
   if (spec.seed !== DEFAULT_CRAFT_SEED) params.set('seed', String(spec.seed));
   if (spec.ataraxiaTier !== 0) params.set('tier', String(spec.ataraxiaTier));
   if (spec.deploymentMode === 'arranged') params.set('deployment', 'arranged');
-  if (spec.goldTenths !== null) params.set('gold', String(spec.goldTenths / GOLD_SCALE));
+  if (spec.goldTenths !== null) params.set('gold', String(spec.goldTenths));
   if (spec.army) params.set('army', spec.army.map((entry) => entry.type).join(','));
   if (spec.add) params.set('add', spec.add.map((entry) => entry.type).join(','));
   if (spec.offers) {
@@ -471,6 +488,7 @@ export function runCraftAddressParams(spec: RunCraftSpec): URLSearchParams {
   if (spec.turns !== null) params.set('turns', String(spec.turns));
   if (spec.elapsedMs !== null) params.set('seconds', String(spec.elapsedMs / 1000));
   if (spec.fallen !== null) params.set('fallen', String(spec.fallen));
+  if (spec.standingEnemyValue !== null) params.set('standing', String(spec.standingEnemyValue));
   return params;
 }
 
@@ -635,9 +653,14 @@ function craftAftermath(run: RunDocument, spec: RunCraftSpec): RunDocument {
       ? { ...started.battleRuntime, startedAtMs: Date.now() - elapsedMs }
       : null,
   };
+  // Nothing on the enemy side was taken in a Battle nobody played, so the force the level
+  // fields is what a placed mate found still standing -- and that is also the report worth
+  // landing on, since a Deditio of zero shows an empty measure.
   const closed = closeBattle(started, {
     survivingUnitIds: deployedUnitIds.filter((id) => !fallen.has(id)),
     turns: spec.turns ?? DEFAULT_CRAFT_AFTERMATH_TURNS,
+    standingEnemyValue: spec.standingEnemyValue
+      ?? levelEnemyForceValue(started.war.battles[started.battleIndex].level),
   });
   if (closed.phase !== 'aftermath') {
     throw new RunCraftError(
@@ -926,7 +949,20 @@ export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDo
   if (spec.phase !== 'victory' && targetIndex >= battles) {
     throw new RunCraftError(`craft battle: ${war.name} has ${battles} Battle${battles === 1 ? '' : 's'}.`);
   }
-  const opening = createRun(war, spec.seed, spec.ataraxiaTier);
+  const opening = createRun(war, spec.seed, spec.ataraxiaTier, {
+    chooseKing: spec.phase === 'commendatio',
+  });
+
+  // Commendatio is the Run's very first screen: the King has not been chosen, so the document
+  // holds no army, no card and no King-borne gold. Nothing about a later Battle can be crafted
+  // onto it, which is why it takes no overrides at all.
+  if (spec.phase === 'commendatio') {
+    if (targetIndex !== 0) throw new RunCraftError('craft: Commendatio is only ever before Battle 1.');
+    if (spec.cards?.length || spec.army?.length || spec.add?.length) {
+      throw new RunCraftError('craft: Commendatio precedes the King, so it can hold no army or cards.');
+    }
+    return opening;
+  }
 
   // The Run's own first state. Bona Vacantia sits directly in front of Battle 1.
   if (spec.phase === 'bona-vacantia' && targetIndex === 0) {
@@ -949,8 +985,11 @@ export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDo
   const deploymentIndex = spec.phase === 'sectio'
     ? targetIndex - 1
     : spec.phase === 'victory' ? battles - 1 : targetIndex;
-  if (spec.phase !== 'aftermath' && (spec.turns !== null || spec.elapsedMs !== null || spec.fallen !== null)) {
-    throw new RunCraftError('craft: turns, seconds and fallen describe a Battle report, so they belong to craft=aftermath.');
+  if (
+    spec.phase !== 'aftermath'
+    && (spec.turns !== null || spec.elapsedMs !== null || spec.fallen !== null || spec.standingEnemyValue !== null)
+  ) {
+    throw new RunCraftError('craft: turns, seconds, fallen and standing describe a Battle report, so they belong to craft=aftermath.');
   }
   // A crafted army REPLACES the roster, which takes the units the held cards put there with it —
   // so the two ways of saying what the Run has cannot both be given.

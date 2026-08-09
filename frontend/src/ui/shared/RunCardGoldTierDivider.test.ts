@@ -108,7 +108,7 @@ describe('RunCardGoldTierDivider', () => {
     expect(source).toContain('<DividerSlice sourceUrl={source.url} viewBox="0 138 132 107" />');
     expect(source).toContain('<DividerSlice sourceUrl={source.url} viewBox="132 138 500 107" />');
     expect(source).toContain('<DividerSlice sourceUrl={source.url} viewBox="632 138 56 107" />');
-    expect(source).toContain('<RunCardCostCoin value={value}');
+    expect(source).toContain('<RunCardCostCoin value={runCardTierGold(value)}');
     expect(source).not.toContain('<text');
     // Both galleries pass the same mark down, so a starter band and the card under it can
     // never disagree about what is struck on a priceless coin (ADR-0530).

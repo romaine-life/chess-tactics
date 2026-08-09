@@ -100,6 +100,27 @@ describe('a Battle deals the count its own Level authors', () => {
     expect(wide.deployment?.dealtCardIds.length).toBe(3);
     expect(wide.deployment?.dealtCardIds[0]).toBe('run-card-his-grace');
   });
+
+  it('leads the deal with whichever King the Run opened on, not with His Grace', () => {
+    // Fifteen Kings can open a Run and each mints its own card (#850). Finding that card by
+    // naming His Grace left the other fourteen to be shuffled in like any other card -- so a
+    // Battle dealing fewer cards than the player holds could leave the King undealt entirely,
+    // with no way to deploy him.
+    for (const kingId of ['homage-withheld', 'muster-incomplete', 'sole-surviving-issue'] as const) {
+      const run = createRun(war(3, 1), 11, { kingId });
+      const held = holding(run, ['p', 'pp', 'q']);
+      expect(held.cards[0].coreId).toBe(kingId);
+
+      // The Battle authored at 1 sends the King in alone, whichever King that is.
+      const narrow = prepareDeployment({ ...at(held, 1), phase: 'deployment', deployment: null });
+      expect(narrow.deployment?.dealtCardIds).toEqual([`run-card-${kingId}`]);
+
+      const wide = prepareDeployment({ ...at(held, 0), phase: 'deployment', deployment: null });
+      expect(wide.deployment?.dealtCardIds[0]).toBe(`run-card-${kingId}`);
+      // And the King himself is deployable, which is the whole point of dealing his card.
+      expect(wide.deployment?.deployingUnitIds).toContain('run-king');
+    }
+  });
 });
 
 describe('a War is not startable until every Battle authors its deal', () => {

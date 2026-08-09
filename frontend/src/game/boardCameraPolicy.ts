@@ -1,37 +1,38 @@
 import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM } from '@chess-tactics/board-render';
 
-/** Defensive renderer floor; authored/default camera bounds own the actual level-specific floor. */
+/** Defensive renderer floor; the zoom ladder owns the actual level-specific floor. */
 export const PLAYER_TECHNICAL_MINIMUM_ZOOM = BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM;
-export const PLAYER_MAXIMUM_ZOOM = 1.45;
 
 /**
- * How far in a player may always travel from whatever the level's own floor turns out to be.
- *
- * The absolute ceiling above was written for levels whose floor sits below 1. A level whose
- * environment art forces a HIGHER floor than that ceiling collapsed the whole range onto a single
- * zoom — the board could not be moved in or out at all, which reads as a cramped, locked camera.
- * Keeping a proportional headroom means every level offers the same travel the canonical
- * floor-of-one level always did, however its own floor lands.
+ * Initial ceiling before a pane has measured itself. Not a policy limit — the
+ * ladder replaces it as soon as a viewport exists.
  */
-export const PLAYER_ZOOM_HEADROOM = PLAYER_MAXIMUM_ZOOM;
+export const PLAYER_MAXIMUM_ZOOM = Number.POSITIVE_INFINITY;
 
 /**
- * The ceiling a player actually gets.
+ * How far in a player may zoom.
  *
- * Levels whose floor still sits under the absolute cap keep exactly the cap they have always had.
- * The proportional headroom engages only once the floor has climbed past it, which is precisely the
- * case the absolute cap cannot express: without this the ceiling collapses onto the floor and the
- * player is left with no zoom travel whatsoever.
+ * There used to be an absolute cap here, plus proportional headroom to rescue the
+ * levels whose floor had climbed past it. Both existed to survive a floor derived
+ * continuously from geometry: it could land anywhere, including on top of the
+ * ceiling, and collapse the range onto a single zoom.
+ *
+ * The floor is now a rung on the global ladder and the ceiling is the ladder's
+ * closest tier — about two board cells filling the frame, past which zooming in
+ * tells you nothing. Neither can collapse onto the other, so there is nothing left
+ * to rescue and no cap to impose. A level that genuinely wants a tighter limit
+ * still states one, and that is the only thing that narrows it.
+ *
+ * `atLeast` keeps a ceiling from landing under a zoom the camera already holds —
+ * an authored opening composition is allowed to be closer than the authored limit.
  */
 export function playerMaximumZoom(
   minZoom: number,
   authoredZoomIn: number | null | undefined,
   ...atLeast: number[]
 ): number {
-  // An authored limit is the level speaking for itself, and it wins: only the author knows how
-  // much detail this level's environment art actually holds. The floor still overrides it, because
-  // a ceiling under the floor is not a camera.
   if (authoredZoomIn && authoredZoomIn > 0) return Math.max(authoredZoomIn, minZoom, ...atLeast);
-  const headroom = minZoom >= PLAYER_MAXIMUM_ZOOM ? minZoom * PLAYER_ZOOM_HEADROOM : 0;
-  return Math.max(PLAYER_MAXIMUM_ZOOM, headroom, minZoom, ...atLeast);
+  // Uncapped: the ladder's closest tier is the real ceiling and it is measured
+  // where the viewport is known, so this must not narrow it.
+  return Number.POSITIVE_INFINITY;
 }

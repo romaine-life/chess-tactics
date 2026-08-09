@@ -242,20 +242,28 @@ function createActiveRunStore() {
   },
 
   abandon: async () => {
+    // The browser is rid of the Run before this function ever suspends, so a caller that only
+    // wants it gone — and to leave — needs nothing from the promise. Awaiting it is for callers
+    // that go on to write a REPLACEMENT Run under the same account.
     writeLocalRun(null);
     set({ run: null, adoptionConflict: null, persistenceError: null });
     if (!get().accountLinked) return;
-    // Serialize abandonment behind any already-queued progress writes so a late PUT cannot
-    // resurrect the Run after its DELETE.
+    // The DELETE belongs IN the save chain, not merely behind it. Behind it only stops an
+    // already-queued PUT from resurrecting the Run; inside it also stops the reverse, where a
+    // Run started moments later queues its PUT while this DELETE is still in flight and has its
+    // brand-new row deleted out from under it. That reverse race is what an unawaited abandon
+    // would otherwise open.
+    saveChain = saveChain.then(async () => {
+      const revision = useActiveRun.getState().remoteRevision;
+      try {
+        await deleteActiveRun(revision);
+        useActiveRun.setState({ remoteRevision: 0 });
+      } catch (error) {
+        reportAuthSessionFailure(error);
+        useActiveRun.setState({ persistenceError: 'The browser Run was cleared, but the account copy could not be abandoned yet.' });
+      }
+    });
     await saveChain;
-    const revision = get().remoteRevision;
-    try {
-      await deleteActiveRun(revision);
-      set({ remoteRevision: 0 });
-    } catch (error) {
-      reportAuthSessionFailure(error);
-      set({ persistenceError: 'The browser Run was cleared, but the account copy could not be abandoned yet.' });
-    }
   },
 
   keepAccountRun: () => {
