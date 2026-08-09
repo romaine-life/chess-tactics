@@ -271,16 +271,23 @@ and don't tell the user screenshots are impossible. Use the helper below.
    one; it was pinned to Conscription Notice, and when that left the offer pool
    every run timed out with no verdict. Do not reintroduce a named offer.
 
-   Card-admission changes additionally run the opening grant's carry gate, on a
-   craft link for the Run's opening Bona Vacantia (`craft=bona-vacantia&battle=1`):
+   Card-admission changes additionally run the carry gate, on a craft link for
+   Commendatio, the Run's opening King choice (`craft=commendatio&battle=1`):
    ```
-   npm run verify:grant-carry -- '<opening-grant-craft-url>'
+   npm run verify:grant-carry -- '<commendatio-craft-url>'
    ```
    It drives the real take and reads the real pixels: the admission must produce
    a visible card carry, that carry must stay visible on every frame from launch
    until the director settles Deployment underneath it, the taken card's own seat
    must be empty while its copy is in the air, and the carry must be released
-   afterwards. It takes whichever card the grant dealt — do not name one.
+   afterwards. It takes whichever King the screen dealt — do not name one.
+
+   The gate exists because this take ENDS ITS OWN PHASE: a carry released at
+   landing lets go while Deployment is still preparing, so the card is gone for
+   that interval (ADR-0385). It caught exactly that the day Commendatio shipped —
+   the view called the model directly and skipped the flight the Run screen owns,
+   so a King reached the Chartulary with no travel at all. No unit test and no
+   screenshot can see that; only this gate can.
 
    Board reveal / unit-entrance changes additionally run the live entrance gate,
    which records the real transition and reads its pixels:

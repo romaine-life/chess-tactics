@@ -140,10 +140,16 @@ migration for account and browser storage. Retired content maps to a typed tombs
 replacement—for example, a removed card remains in the deck as **Removed card**—rather than
 invalidating the Run.
 
-RunSaveVersion 32 begins in Bona Vacantia when the opening Conflict offers a formation-card grant,
-otherwise in Battle 1's Deployment. Taking that opening grant also enters Deployment; there is no
-opening Sectio. The Run carries the permanent King and two starting Pawns through the single
-starter-only His Grace card and retains eight starting gold. The first Sectio follows Battle 1.
+RunSaveVersion 35 begins in **Commendatio**, the Run's opening King choice, which deals three of
+the fifteen starter-only King cards by the Run's own seed. Taking one enters Battle 1's Deployment;
+there is no opening Sectio. Until that take the Run holds no army and no cards — the King is what
+supplies both, plus the gold that tops a thin King to the same four every other King is worth — so
+Commendatio is the one phase whose army and Chartulary are legitimately empty. Every later phase
+carries exactly one King. The first Sectio follows Battle 1.
+
+Commendatio is not Bona Vacantia: that is the relic phase a Conflict opens with, later and
+repeatedly. The two briefly shared a state and the conflation read immediately as a bug. The
+formation-card grant that used to open a Run was retired with RunSaveVersion 34.
 
 Every Run persists a non-negative `sectioCardCursor` into its seed-derived hidden card sequence.
 Each pile holds 20 cards carrying an exact rarity quota—16 Common, 3 Uncommon, 1 Rare—rather than
