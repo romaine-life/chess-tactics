@@ -20694,6 +20694,22 @@ button.tileset-relationship-cell {
   object-fit: contain;
 }
 
+/* The card mark is the only mark in these rails that is a PAINTING rather than native
+   pixel art: the player's 1060x1484 card back, drawn at a ~22px seat. Every mark beside
+   it is a 64px sprite whose placed pixels `image-rendering: pixelated` protects, but
+   point-sampling a 48x reduction keeps roughly one source pixel in 2300 and returns
+   speckle rather than a card — so this one mark asks the compositor to filter. The class
+   is declared once in strategikonNavigation.ts and worn by every seat it occupies.
+
+   The class is doubled on purpose. Each seat sets `image-rendering: pixelated` on a bare
+   `img` inside its own class (0,1,1), which outranks a single class (0,1,0) — the mark
+   wore this class and still computed `pixelated`. Doubling makes it 0,2,0, so the mark
+   carries its treatment into any seat without that seat having to know about it, and
+   without depending on which rule the stylesheet happens to state last. */
+.strategikon-card-mark.strategikon-card-mark {
+  image-rendering: auto;
+}
+
 /* A Run card ACTION's mark, seated on the control that performs it (Athetize is the
    founding member). Same reserved-seat contract as the measures above: the seat holds
    its geometry before the art decision exists, so installing one never shifts the

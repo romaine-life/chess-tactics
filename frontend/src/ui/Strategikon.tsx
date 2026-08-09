@@ -92,6 +92,7 @@ export function Strategikon({
               index={index}
               active={section === item.section}
               iconSrc={item.iconSrc}
+              iconClassName={item.iconClassName}
             />
           ))}
         </ApparatusRailColumn>
