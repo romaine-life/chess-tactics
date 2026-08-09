@@ -96,6 +96,20 @@ describe('what a committed board earns', () => {
     expect(got[0].at).toEqual({ x: 4, y: 4 });
   });
 
+  it('still pays a discovered check when the piece that stepped aside is hanging', () => {
+    // The forker's safety clause is deliberately NOT applied here, and this is why: the piece
+    // that steps aside is not the one giving check, so the enemy has to answer the check
+    // before they can collect it. Getting a free move out of an exposed piece is the whole
+    // point of a discovery, not a blunder to be discouraged.
+    const rook = P('player', 'rook', 2, 4);
+    const bishop = P('player', 'bishop', 2, 2);
+    const king = P('enemy', 'king', 2, 0);
+    const taker = P('enemy', 'rook', 7, 4); // sweeps the rank the Bishop lands on
+    const got = earned([rook, bishop, king, taker], bishop, { x: 4, y: 4 });
+
+    expect(ids(got)).toEqual(['discovered-check']);
+  });
+
   it('pays a double check INSTEAD of the discovered check, never both', () => {
     // The Knight opens the Rook's file and checks from where it lands: two checkers at once.
     const rook = P('player', 'rook', 2, 4);
