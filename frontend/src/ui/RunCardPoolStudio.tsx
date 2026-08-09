@@ -220,6 +220,11 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
         /* No inner scroller. The page scrolls now, and a scroll box inside a scrolling page means
            two bars competing for the same wheel gesture. Row count per group is what bounds this. */
         .rcp-group-body { overflow: visible; }
+        .rcp-formula { margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.14); }
+        .rcp-formula-line { margin: 4px 0; }
+        .rcp-formula-line code { font-family: ui-monospace, monospace; font-size: calc(var(--rcp-fs) * 0.88); line-height: 1.5; }
+        .rcp-formula-line.is-off { opacity: 0.38; }
+        .rcp-formula sup { font-size: 0.75em; }
         .rcp-contract { margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.14); }
         .rcp-contract-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 5px 0; font-size: calc(var(--rcp-fs) * 0.93); }
         .rcp-contract-row span { opacity: 0.72; }
@@ -290,10 +295,25 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
             <input type="checkbox" checked={knobs.countPawnSupport} onChange={(e) => set('countPawnSupport', e.target.checked)} />
             <span>Count pawn support</span>
           </label>
-          <p className="rcp-note">
-            Pawn support is the only rotation-dependent term. While the player rotates, the score reads
-            the card's BEST orientation, because that is the one they will take.
-          </p>
+          <div className="rcp-formula">
+            <div className="rcp-formula-line">
+              <code>cost = material × (density / 3)<sup>{knobs.densityPower}</sup> × {knobs.costScale}</code>
+            </div>
+            <div className={knobs.bishopPairBonus === 0 ? 'rcp-formula-line is-off' : 'rcp-formula-line'}>
+              <code>× (1 + {knobs.bishopPairBonus}) when the card holds an opposite-colour Bishop pair</code>
+            </div>
+            <div className={knobs.supportBonus === 0 ? 'rcp-formula-line is-off' : 'rcp-formula-line'}>
+              <code>× (1 + defences × {knobs.supportBonus})</code>
+            </div>
+            <div className={knobs.roundTo === 0 ? 'rcp-formula-line is-off' : 'rcp-formula-line'}>
+              <code>rounded to the nearest {knobs.roundTo}</code>
+            </div>
+            <p className="rcp-note">
+              Dimmed lines are multiplying by one, so they change nothing at these settings. Pawn defences
+              are the only rotation-dependent term; while the player rotates, the count reads the card's
+              best orientation, because that is the one they will take.
+            </p>
+          </div>
         </div>
 
         <div className="rcp-panel">
@@ -363,6 +383,23 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
               </tbody>
             </table>
           ) : <p className="rcp-note">Click cells to seat pieces. Each click cycles P → N → B → R → Q → empty.</p>}
+          {draftStats ? (
+            <div className="rcp-formula rcp-worked">
+              <div className="rcp-formula-line">
+                <code>
+                  {draftStats.value} × ({draftStats.density.toFixed(2)} / 3)<sup>{knobs.densityPower}</sup> × {knobs.costScale}
+                  {' = '}{draftStats.baseCost.toFixed(1)}
+                </code>
+              </div>
+              {draftStats.hasBishopPair && knobs.bishopPairBonus !== 0 ? (
+                <div className="rcp-formula-line"><code>× (1 + {knobs.bishopPairBonus}) bishop pair</code></div>
+              ) : null}
+              {draftStats.defences > 0 && knobs.supportBonus !== 0 ? (
+                <div className="rcp-formula-line"><code>× (1 + {draftStats.defences} × {knobs.supportBonus})</code></div>
+              ) : null}
+              <div className="rcp-formula-line"><code>→ {draftStats.cost}</code></div>
+            </div>
+          ) : null}
           <p className="rcp-note">Row 0 is the edge toward the enemy, so a piece in the top row is the front rank.</p>
         </div>
 

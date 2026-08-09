@@ -382,7 +382,7 @@ export const POOL_MODELS: readonly PoolModel[] = Object.freeze([
   {
     id: 'density-cost',
     label: 'Density cost curve',
-    note: 'cost = value x sqrt(density/3) x 10, rounded to 5s. Bands by cost: common <=35, uncommon <=90.',
+    note: 'Price reads density on a curve rather than raw material, and the rarity bands are drawn on price. The exact formula is stated live under Pricing.',
     knobs: DEFAULT_POOL_KNOBS,
   },
   {
