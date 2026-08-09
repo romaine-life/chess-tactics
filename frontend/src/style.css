@@ -6153,9 +6153,14 @@ body.loading-bootstrap .app-startup-status {
 .le-settings-list dd { color: #f3ead8; font-size: var(--ds-text-sm); line-height: 1.25; margin: 0; word-break: break-word; }
 .le-faction-control { display: grid; gap: 7px; }
 .le-faction-assignments { display: grid; gap: 6px; }
-.le-faction-assignment { align-items: center; display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) minmax(0, .95fr); min-width: 0; }
-.le-faction-fields { display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr) var(--le-inner-square); min-width: 0; }
+/* Name above, controls below. Three controls cannot share half a narrow panel and still read —
+   the colour select loses its label first, leaving a bare swatch nobody can name. */
+.le-faction-assignment { display: grid; gap: 5px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+/* Control, colour, facing. The facing stays a fixed square; the two selects share the rest. */
+.le-faction-fields { display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) var(--le-inner-square); min-width: 0; }
 .le-faction-fields .le-select-wrap { min-width: 0; }
+.le-faction-color-select { min-width: 0; }
+.le-faction-color-select .palette-select-trigger { min-width: 0; width: 100%; }
 .le-faction-name { align-items: center; color: #f3ead8; display: grid; font-size: var(--ds-text-sm); gap: 6px; grid-template-columns: auto minmax(0, 1fr) auto; min-width: 0; }
 .le-faction-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .le-faction-name b { color: #9fe0ff; font-size: var(--ds-text-xs); font-weight: 700; }
@@ -21964,6 +21969,28 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
+/* The primary action is pinned to the foot of the panel: below the card, the steppers, the turns
+   and Remove there was no height left for it in the rail, so the one control that leaves the
+   screen sat under the fold. The rail above takes all the slack, so this never shrinks; the end
+   padding keeps its hint off the frame's edge rather than sitting on the boundary. */
+.run-arrangement-begin-group {
+  flex: 0 0 auto;
+  padding-block-end: var(--ds-space-1);
+}
+
+/* Begin Battle STATES the arrangement rather than sitting beside a line that states it, so it
+   stacks its two readings: the action, then how much of the hand is down. */
+.run-arrangement-begin {
+  flex-direction: column;
+}
+
+.run-arrangement-begin-go {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-space-1);
+  justify-content: center;
+}
+
 /* Whether the whole dealt hand is down. Always present so completion does not re-lay the panel
    at the moment the player is reading it; it changes state rather than appearing. */
 .run-arrangement-progress {
@@ -21995,12 +22022,40 @@ button.tileset-relationship-cell {
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 }
 
-.run-arrangement-hand-position {
+/* The hand itself, one mark per admitted formation in deal order. It replaced a bare `2 / 4`,
+   which said where the player was standing and nothing about what they had already done. */
+.run-arrangement-hand-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-1);
+  justify-content: center;
+  max-inline-size: 120px;
+}
+
+.run-arrangement-hand-mark {
+  background: none;
+  border: 0;
   color: var(--skirmish-muted);
+  cursor: pointer;
+  display: block;
   font-size: var(--ds-text-xs);
-  font-weight: 700;
-  letter-spacing: .04em;
-  text-align: center;
+  line-height: 1;
+  padding: var(--ds-space-1);
+}
+
+/* Filled once its formation is on the board — the whole hand's state in one glance. */
+.run-arrangement-hand-mark[data-placed='true'] {
+  color: var(--good);
+}
+
+/* The one in hand. It is the card on screen, so it is the brightest thing in the row. */
+.run-arrangement-hand-mark[data-current='true'] {
+  color: #effcff;
+  transform: scale(1.35);
+}
+
+.run-arrangement-hand-mark[data-current='true'][data-placed='true'] {
+  color: var(--good);
 }
 
 /* Controls that wear the key that does the same thing, in the shared shortcut cap the in-match
@@ -22104,23 +22159,42 @@ button.tileset-relationship-cell {
   gap: var(--ds-space-2);
 }
 
+/* The dealt stack shares the arranging card's pinned seat, so it carries NO padding, no minimum
+   height and no label of its own: every one of those offset the landing from the box the card
+   takes over, and the hand jumped the instant the deal finished. */
+/* A POUR, not a dole. The stagger used to be most of a card's flight, so each card had almost
+   landed before the next one left and the deal read as one-at-a-time. Lengthening the flight and
+   cutting the gap between departures puts the whole hand in the air at once: cards leave the deck
+   in a stream and arrive in the same order, still separately legible, without the wait between
+   them. The gap is what makes it a stream; the longer flight is what keeps it unhurried. */
 .run-deployment-card-stack {
-  --deployment-deal-duration: 560ms;
-  --deployment-deal-stagger: 340ms;
+  --deployment-deal-duration: 720ms;
+  --deployment-deal-stagger: 130ms;
+  /* Dealt face down, deck cleared, turned over, and only then gathered. The settle is the gap
+     between the deck finishing and the turn starting; the beat is the pause the player reads the
+     hand in, and is the whole reason the spread exists — without it the cards would arrive, turn
+     and leave in one motion nobody could follow. */
+  --deployment-flip-settle: 160ms;
+  --deployment-flip-duration: 400ms;
+  --deployment-flip-stagger: 70ms;
+  --deployment-spread-beat: 560ms;
+  --deployment-gather-duration: 500ms;
+  --deployment-gather-stagger: 64ms;
   --deployment-discard-duration: 560ms;
   --deployment-discard-stagger: 72ms;
   align-items: start;
   display: grid;
+  flex: 0 0 auto;
   gap: var(--ds-inline-tight);
-  justify-items: start;
-  min-block-size: 178px;
+  justify-items: stretch;
   overflow: visible;
-  padding: var(--ds-space-1) var(--ds-space-2) var(--ds-space-3);
+  padding: 0;
 }
 
+/* The same width the card takes: the whole panel. This IS the deal's target rect. */
 .run-deployment-card-pile {
   aspect-ratio: 5 / 7;
-  inline-size: clamp(104px, 8.5vw, 132px);
+  inline-size: 100%;
   perspective: 700px;
   position: relative;
 }
@@ -22134,6 +22208,33 @@ button.tileset-relationship-cell {
   opacity: 0;
 }
 
+/* The table the drawn hand is laid out on, in the middle of the board. It holds SEATS only —
+   the drawn cards are the flight elements coming to rest on them — so it paints nothing and
+   takes no pointer. Sized as a lane for the shared card row to fit the hand into, so a Battle
+   that draws six lays them out at the size six will fit rather than overflowing the board. */
+.run-deployment-spread {
+  block-size: clamp(180px, 34vh, 320px);
+  inline-size: min(84%, 980px);
+  /* Taken OUT of the column so its arrival cannot move the deck the cards are leaving. It lays
+     out across the middle of the board, over where the deck stands — by the time the hand
+     arrives the deck has already been swept back to the Chartulary. */
+  position: absolute;
+  pointer-events: none;
+}
+
+/* Hidden, not unmounted: the deck's position is the flight's source rect, and it must be the
+   same box after the press as the player saw before it. */
+.run-deployment-deal-actions.is-spent {
+  visibility: hidden;
+}
+
+/* The row writes the track WIDTH; the seat takes the card's own proportion from it. `100%` of an
+   auto-height track is zero, which scaled every card in flight down to nothing. */
+.run-deployment-spread-seat {
+  aspect-ratio: 5 / 7;
+  inline-size: 100%;
+}
+
 .run-deployment-deal-flight {
   opacity: 0;
   position: fixed;
@@ -22141,7 +22242,37 @@ button.tileset-relationship-cell {
   will-change: opacity, transform;
 }
 
-.run-deployment-deal-flight > .run-card-back {
+/* The turn. It rides an inner box so the card's journey across the screen and its flip are never
+   two animations fighting over one element's transform. */
+.run-deployment-flight-faces {
+  block-size: 100%;
+  display: block;
+  inline-size: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+.run-deployment-flight-side {
+  backface-visibility: hidden;
+  display: block;
+  inset: 0;
+  position: absolute;
+}
+
+/* Turned away until the parent box rotates, which brings it to 360 and the back to 180. */
+.run-deployment-flight-side.is-front {
+  transform: rotateY(180deg);
+}
+
+.run-deployment-flight-side > :is(.run-card-back, .run-card-action) {
+  block-size: 100%;
+  display: block;
+  inline-size: 100%;
+  object-fit: contain;
+}
+
+.run-deployment-deal-flight > :is(.run-card-back, .run-card-action) {
   block-size: 100%;
   display: block;
   inline-size: 100%;

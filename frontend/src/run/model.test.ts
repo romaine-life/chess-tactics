@@ -172,8 +172,9 @@ describe('formation card catalog', () => {
     expect(RUN_CARD_BY_ID.r.rarity).toBe('uncommon');
     expect(RUN_CARD_BY_ID.q.rarity).toBe('rare');
     expect(RUN_CARD_BY_ID['rr-vertical'].rarity).toBe('rare');
-    expect(RUN_CARD_BY_ID['bb-diagonal'].rarity).toBe('uncommon');
-    expect(RUN_CARD_BY_ID['bb-vertical'].rarity).toBe('uncommon');
+    // Bishop material is six either way; the Bishops are what carry both pairs past the band.
+    expect(RUN_CARD_BY_ID['bb-diagonal'].rarity).toBe('rare');
+    expect(RUN_CARD_BY_ID['bb-vertical'].rarity).toBe('rare');
     expect(runCardRarityForRoll(0)).toBe('common');
     expect(runCardRarityForRoll(79)).toBe('common');
     expect(runCardRarityForRoll(80)).toBe('uncommon');
@@ -199,29 +200,40 @@ describe('formation card catalog', () => {
     // The drop reads the shape after rotation, exactly as card identity does.
     expect(runCardRarity(['rook', ...threePawns], z.map(({ x, y }) => ({ x: -y, y: x }))))
       .toBe('uncommon');
-    // An opposite-color Bishop pair is the prize, and the awkward shape does not spoil it.
+    // A Bishop is worth exactly the band a wasteful shape costs, so the two cancel.
+    expect(runCardRarity(['bishop', ...threePawns], z)).toBe('uncommon');
     expect(runCardRarity(['bishop', 'bishop', 'pawn', 'pawn'], z)).toBe('rare');
   });
 
-  it('keeps an opposite-color Bishop pair in its band on any footprint', () => {
-    const paired = RUN_CARD_DECK.filter((card) => card.pieces.filter((piece) => piece === 'bishop').length >= 2);
-    const opposite = paired.filter((card) => {
-      const bishops = card.pieces.flatMap((piece, index) => piece === 'bishop' ? [card.formation![index]] : []);
-      return bishops.some((left, index) => bishops.slice(index + 1)
-        .some((right) => (left.x + left.y) % 2 !== (right.x + right.y) % 2));
-    });
-    expect(opposite.length).toBeGreaterThan(0);
-    expect(opposite.every((card) => card.rarity === (card.value > 6 ? 'rare' : 'uncommon'))).toBe(true);
+  it('costs a band for a Bishop however that card places it', () => {
+    const withBishop = RUN_CARD_DECK.filter((card) => card.pieces.includes('bishop'));
+    expect(withBishop.length).toBeGreaterThan(0);
+    // Free placement decides the colour a Bishop lands on, so the card's own parity earns nothing:
+    // every Bishop card sits one band above the same roster's material-and-shape reading.
+    for (const card of withBishop) {
+      const withoutBishops = card.pieces.map((piece) => piece === 'bishop' ? 'knight' as const : piece);
+      const unpriced = runCardRarity(withoutBishops, card.formation!);
+      const ladder = [...RUN_CARD_RARITIES];
+      expect(ladder.indexOf(card.rarity), card.id)
+        .toBe(Math.min(ladder.length - 1, ladder.indexOf(unpriced) + 1));
+    }
+    // No Bishop reaches the tier that owns 80% of a pile's seats, and the made pair is always Rare.
+    expect(withBishop.some((card) => card.rarity === 'common')).toBe(false);
+    const paired = withBishop.filter((card) => (
+      card.pieces.filter((piece) => piece === 'bishop').length >= 2
+    ));
+    expect(paired.length).toBeGreaterThan(0);
+    expect(paired.every((card) => card.rarity === 'rare')).toBe(true);
   });
 
   it('holds the catalog to a Common tier that cannot hand out clean material', () => {
     expect(Object.fromEntries(RUN_CARD_RARITIES.map((rarity) => [
       rarity,
       RUN_CARD_DECK.filter((card) => card.rarity === rarity).length,
-    ]))).toEqual({ common: 47, uncommon: 120, rare: 102 });
+    ]))).toEqual({ common: 29, uncommon: 71, rare: 169 });
     // Every Common above the value band is there because its footprint wastes the band.
     const richCommons = RUN_CARD_DECK.filter((card) => card.rarity === 'common' && card.value > 4);
-    expect(richCommons).toHaveLength(32);
+    expect(richCommons).toHaveLength(16);
     expect(richCommons.every((card) => card.value === 6 && card.formation!.length === 4)).toBe(true);
   });
 
@@ -391,14 +403,20 @@ describe('derived Sectio card pile', () => {
 
   it('re-apportions a tier the cost ceiling empties', () => {
     expect(sectioPileRarityQuota()).toEqual({ common: 16, uncommon: 3, rare: 1 });
-    // No card in the catalog costs seven or less and is Rare, so Rare's share is handed on.
+    // The live ceiling empties nothing: a Bishop card is Rare on material an early Battle can
+    // afford, so the opening market keeps its whole ladder and only its prices are held down.
     expect(sectioPileRarityQuota(RUN_SECTIO_EARLY_CARD_MAX_VALUE)).toEqual({
-      common: 17, uncommon: 3, rare: 0,
+      common: 16, uncommon: 3, rare: 1,
     });
     const capped = sectioCardPile(101, 0, RUN_SECTIO_EARLY_CARD_MAX_VALUE);
     expect(capped).toHaveLength(RUN_SECTIO_CARD_PILE_SIZE);
     expect(capped.every((card) => card.value <= RUN_SECTIO_EARLY_CARD_MAX_VALUE)).toBe(true);
-    expect(composition(capped)).toEqual({ common: 17, uncommon: 3, rare: 0 });
+    expect(composition(capped)).toEqual({ common: 16, uncommon: 3, rare: 1 });
+
+    // A ceiling low enough to empty one still hands that tier's share on: nothing at four gold
+    // or less is Rare, so Common and Uncommon apportion the whole pile between themselves.
+    expect(RUN_CARD_DECK.some((card) => card.value <= 4 && card.rarity === 'rare')).toBe(false);
+    expect(sectioPileRarityQuota(4)).toEqual({ common: 17, uncommon: 3, rare: 0 });
   });
 
   it('is deterministic and independently shuffles each exhausted pile', () => {

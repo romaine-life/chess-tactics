@@ -6,7 +6,7 @@ partially_supersedes:
   - "[ADR-0351](0351-unit-arrival-choreography-follows-newly-visible-unit-identity.md)'s rule that a placement click is itself an entry beat, for Run Deployment's arranged formations"
 ---
 
-# ADR-0532: A seated formation is a plan until Battle
+# ADR-0533: A seated formation is a plan until Battle
 
 ## Context and Problem Statement
 

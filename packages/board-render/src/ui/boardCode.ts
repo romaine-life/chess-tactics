@@ -1289,6 +1289,29 @@ function decodeMoveHighlightProfileWire(
 }
 
 /**
+ * Read only the authored faction orientation out of an encoded board.
+ *
+ * Like `withoutPredrawnBoardSurfaceCode`, this reads the compact wire object rather than
+ * decoding: callers outside the editor (the Run's deployment axis) want two authored fields
+ * and must not pay for — or fail on — resolving database-owned catalogs to get them.
+ */
+export function readBoardFactionOrientation(
+  code: string,
+): { playerFaction?: string; factionDirections: BoardFactionDirections } | null {
+  try {
+    const value = JSON.parse(dec(code)) as unknown;
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const wire = value as Record<string, unknown>;
+    return {
+      ...(typeof wire.pf === 'string' ? { playerFaction: wire.pf } : {}),
+      factionDirections: cleanFactionDirections(wire.fd),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Remove only the remembered pre-drawn surface from an encoded board.
  *
  * This intentionally edits the compact wire object instead of decode/encode round-tripping it.

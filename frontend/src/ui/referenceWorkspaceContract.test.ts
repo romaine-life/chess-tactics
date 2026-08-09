@@ -44,7 +44,10 @@ describe('Enchiridion and Strategikon reference contract', () => {
 
   it('uses the installed reference artwork roles rather than CSS glyph substitutes', () => {
     expect(enchiridion).toContain("terrain: installedUiMedia('ui-kit-icons-tileset-studio-png')");
-    expect(enchiridion).toContain('iconSrc={SECTION_ICON_SRC[candidate]}');
+    // Cards are marked by the back of a card, which follows the player's chosen back, so the
+    // table is resolved per render rather than frozen at module load.
+    expect(enchiridion).toContain('iconSrc={sectionIconSrc[candidate]}');
+    expect(enchiridion).toContain('const cards = useStrategikonCardsIcon();');
     expect(style).not.toContain('.ic-terrain');
   });
 

@@ -6,7 +6,7 @@ partially_supersedes:
   - "[ADR-0350](0350-run-deployment-promotes-the-mounted-battlefield-in-place.md)'s blanket suppression of arrival choreography during Deployment-to-Battle continuation"
 partially_superseded_by:
   - "[ADR-0352](0352-final-discipline-arrival-precedes-the-automatic-deployment-wave.md)'s sequential final-manual-then-automatic arrival rule"
-  - "[ADR-0532](0532-a-seated-formation-is-a-plan-until-battle.md)'s planned-until-Battle rule, which withholds the entry beat from an arranged Deployment placement"
+  - "[ADR-0533](0533-a-seated-formation-is-a-plan-until-battle.md)'s planned-until-Battle rule, which withholds the entry beat from an arranged Deployment placement"
 ---
 
 # ADR-0351: Unit arrival choreography follows newly visible unit identity

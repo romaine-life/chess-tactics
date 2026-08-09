@@ -391,7 +391,7 @@ describe('Run chrome hierarchy', () => {
     expect(runDeploymentCardStack).not.toContain('Deploy all');
     expect(runDeploymentCardStack).not.toContain('Step through');
     expect(runDeploymentCardStack).not.toContain('SkirmishBoard');
-    expect(runDeploymentCardStack).toContain('Deal automatically');
+    expect(runDeploymentCardStack).toContain('Draw automatically');
     expect(runDeploymentCardStack).toContain('data-deployment-center-deck');
     expect(runDeploymentCardStack).toContain('data-testid="deployment-deal"');
     expect(runDeploymentCardStack).toContain("deployment?.stage === 'awaiting-deal' || deployment?.stage === 'dealing'");

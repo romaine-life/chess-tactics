@@ -16,7 +16,7 @@ import {
 import { TitleBarControlContribution } from './shell/TitleBarControls';
 import type { EnchiridionSection } from './enchiridionRoute';
 import { strategikonAddress, strategikonHref, type StrategikonSection } from './strategikonRoute';
-import { strategikonNavigationItems } from './strategikonNavigation';
+import { strategikonNavigationItems, useStrategikonCardsIcon } from './strategikonNavigation';
 import { installedUiMedia } from './installedUiMedia';
 
 function UnavailableRunReference({ title, copy }: { title: string; copy: string }): ReactElement {
@@ -54,6 +54,7 @@ export function Strategikon({
   run?: RunDocument | null;
 }): ReactElement {
   const { base, section, reference } = strategikonAddress(path);
+  const cardsIcon = useStrategikonCardsIcon();
   const [filters, setFilters] = useState<RunArmyFilters>({ ...DEFAULT_RUN_ARMY_FILTERS });
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
   const href = (next: StrategikonSection, nextReference: EnchiridionSection | null = null): string => (
@@ -82,7 +83,7 @@ export function Strategikon({
       edgeAttached
       rail={(
         <ApparatusRailColumn className="strategikon-rail" aria-label="Strategikon sections">
-          {strategikonNavigationItems().map((item, index) => (
+          {strategikonNavigationItems(cardsIcon).map((item, index) => (
             <ApparatusRailTab
               key={item.section}
               label={item.label}
