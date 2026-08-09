@@ -19,6 +19,7 @@ import {
   resolveTerrainSideFaces,
   subterrainFaceKey,
   subterrainMaterialSrc,
+  type BoardDrawOp,
   type PredrawnBoardCornerRegistration,
   type TerrainSideMaterials,
   type TerrainSideExposure,
@@ -255,6 +256,7 @@ export function StudioReadOnlyBoard({
   showGrid = false,
   reviewGridRegistration,
   renderCellOverlay,
+  frameTransform,
   onTerrainFirstFrame,
   onSceneFirstFrame,
   onFrameError,
@@ -285,6 +287,13 @@ export function StudioReadOnlyBoard({
     cell: TileGridCell,
     position: { left: number; top: number },
   ) => ReactNode;
+  /**
+   * Per-frame op substitution for an entrance in flight — the one way this renderer moves, and
+   * the same seam the Level Editor plays a placed obstacle's fall through. It owns no clock of
+   * its own: supplying this starts the scene canvas repainting, and dropping it stops it again,
+   * so a surface is still by default and animated only while something is actually in motion.
+   */
+  frameTransform?: (op: BoardDrawOp, timeMs: number) => BoardDrawOp;
   onTerrainFirstFrame?: () => void;
   onSceneFirstFrame?: () => void;
   onFrameError?: (error: unknown) => void;
@@ -351,6 +360,7 @@ export function StudioReadOnlyBoard({
             coverScale={coverScale}
             omitTerrain
             still={still}
+            frameTransform={frameTransform}
             onFirstFrame={onSceneFirstFrame}
             onFrameError={onFrameError}
           />

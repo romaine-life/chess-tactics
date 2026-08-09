@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Live gate for the right click that takes a premove chain back (ADR-0549).
+// Live gate for the right click that takes a premove chain back (ADR-0550).
 //
 // Why this needs REAL pointer events rather than a unit test: the board is wall-to-wall hit
 // targets, so the secondary button also pans it (ADR-0128). The ONLY thing separating a

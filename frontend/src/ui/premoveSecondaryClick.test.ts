@@ -80,7 +80,7 @@ describe('the right click that takes it back', () => {
     expect(takeBack).toContain('clearPremoves();');
     expect(takeBack).toContain('setPremoveSelectedId(null);');
     // And nothing else. A gesture told apart from a pan by four pixels may take back what the
-    // player has not played yet; it may never commit, capture, or spend anything (ADR-0549).
+    // player has not played yet; it may never commit, capture, or spend anything (ADR-0550).
     for (const forbidden of ['tryMoveTo', 'queueMove', 'adminKillUnit', 'select(', 'resign']) {
       expect(takeBack).not.toContain(forbidden);
     }

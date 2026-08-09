@@ -10910,6 +10910,15 @@ body { font-size: 17px; }
   filter: brightness(1.45) saturate(1.3);
 }
 
+/* Shuffle and Clear are one control group on the row's label side, where the Zone row's single
+   button stands — so the two rows share a left edge and the readout stays a ledger of label and
+   value rather than a column of loose buttons. */
+.ce-li-preview-controls {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--ds-inline-tight);
+}
+
 .terrain-grass { background: #6a9b3f; }
 .terrain-water { background: #3a78c8; }
 .terrain-bridge { background: #b08750; }
@@ -19787,7 +19796,7 @@ button.tileset-relationship-cell {
 
 /* The primary Sectio workspaces normally paint the shell's standard fill. When the
    retained viewport artwork is installed, that fill must yield so the shared scene
-   remains visible beneath Sectio, View Battle, and Expunctio alike. */
+   remains visible beneath Sectio, Exploratio, and Expunctio alike. */
 .run-screen.has-persistent-viewport-artwork .run-phase-primary > .run-workspace .shell-workspace-fill {
   visibility: hidden;
 }
@@ -19978,9 +19987,17 @@ button.tileset-relationship-cell {
 
 /* One continuous ledger down the pane's right column: the facts, then the note as its last
    section. Nothing between them is a frame — the pane's rail is the column's left edge. */
+/* The readout's sections are sized by their own content and the COLUMN scrolls; the rows must
+   say so explicitly. Left `auto`, grid's maximize-tracks step can only grow a row as far as the
+   free space allows, so a column taller than its viewport is handed rows BETWEEN min-content and
+   max-content — every section then quietly renders past the bottom of the row it was given, and
+   the last of them (Time) printed straight through the note underneath it while the column
+   reported nothing to scroll. `max-content` takes the row's full height as its base size, which
+   is what leaves a real overflow for the installed scrollbar to carry. */
 .run-battle-preview-intelligence {
   align-content: start;
   display: grid;
+  grid-auto-rows: max-content;
   min-block-size: 0;
   min-inline-size: 0;
   overflow: auto;
@@ -23048,6 +23065,27 @@ button.tileset-relationship-cell {
 
 .run-meta-controls [data-chrome-fill-surface] {
   --chrome-surface-position-y: calc(var(--run-leaf-control-index, 0) * -1 * var(--run-leaf-control-surface-pitch));
+}
+
+/* The Sectio rail's controls read as a column of destinations, so each one's mark takes a fixed
+   seat at its leading edge and every label starts on the same line. The seat is square and holds
+   its size whatever the glyph's own aspect, which is what stops a wide mark from pushing one
+   button's word further in than its neighbours'. The buttons themselves are already inline flex
+   rows with their own gap (.app-header-button), so nothing here re-states that. */
+.run-control-mark {
+  align-items: center;
+  block-size: 22px;
+  display: inline-flex;
+  flex: none;
+  inline-size: 22px;
+  justify-content: center;
+}
+
+.run-control-mark > img {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  object-fit: contain;
 }
 
 .run-meta-abandon {

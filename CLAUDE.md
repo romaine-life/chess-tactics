@@ -312,7 +312,7 @@ and don't tell the user screenshots are impossible. Use the helper below.
    npm run verify:premove-cancel -- '<vite-url>/play?campaignId=off-c-crown-valoria&levelId=off-l-hold-bridge'
    ```
    The board is wall-to-wall hit targets, so the secondary button both pans it and
-   takes the premove chain back (ADR-0128/ADR-0549) — the ONLY thing separating the
+   takes the premove chain back (ADR-0128/ADR-0550) — the ONLY thing separating the
    two is how far the press travelled before it was released. The gate plays a real
    move, queues a premove in the opponent's thinking window, and proves a right DRAG
    keeps the chain while a right CLICK drops it. It zooms in first: a battle opens

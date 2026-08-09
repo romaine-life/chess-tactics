@@ -386,7 +386,7 @@ export function ViewPane({
    * A secondary press that released without panning. The drag stays pan-only (ADR-0128); a
    * press that never moved carried no navigation, so a viewport owner may claim it for a mode
    * change, or for taking back the player's own uncommitted intent — the formation still on the
-   * cursor, the premove chain still queued (ADR-0549). Never bind authored content or a
+   * cursor, the premove chain still queued (ADR-0550). Never bind authored content or a
    * committed move here: the threshold that tells this apart from a pan is exactly what
    * ADR-0128 refused to put in front of an erase.
    */

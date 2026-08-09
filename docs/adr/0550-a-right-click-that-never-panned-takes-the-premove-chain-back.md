@@ -7,7 +7,7 @@ refines:
   - "[ADR-0526](0526-a-formation-is-carried-on-the-cursor.md)"
 ---
 
-# ADR-0549: A right click that never panned takes the premove chain back
+# ADR-0550: A right click that never panned takes the premove chain back
 
 ## Context and Problem Statement
 
