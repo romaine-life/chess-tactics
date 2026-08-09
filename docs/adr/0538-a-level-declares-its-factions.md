@@ -3,6 +3,11 @@
 **Status:** Accepted
 **Date:** 2026-08-08
 
+> **Where the declaration lives moved in
+> [ADR-0545](0545-the-sides-a-level-fields-have-their-own-page.md).** "Board → Declared Factions"
+> below is now the editor's own **Factions** page (`?layer=factions`). Everything else here — the
+> role pair, colour-follows-declaration, swap-not-merge, read-only resolution — is unchanged.
+
 ## The problem
 
 The Level Editor had no place to say who is fighting. It had a **Player Faction** block that listed
