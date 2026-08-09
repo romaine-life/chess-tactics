@@ -903,6 +903,109 @@ export function royalForkVictim(
 }
 
 /**
+ * Every living piece hostile to `side` that currently attacks one of `side`'s kings.
+ *
+ * `sideInCheck` answers whether that list is non-empty; this hands back the list itself,
+ * because the two things worth paying for about a check are properties of *who* is giving
+ * it — how many there are, and whether the piece that just moved is among them.
+ *
+ * Read through the same `attacksSquare` geometry as check detection, so a checker here is
+ * exactly a checker there. Board law never consults it.
+ */
+export function kingCheckers(side: Side, pieces: readonly Piece[], size: BoardSize, env?: MoveEnv): Piece[] {
+  const kings = pieces.filter((p) => p.alive && p.side === side && p.type === 'king');
+  if (!kings.length) return [];
+  // isHostileTo already excludes neutrals and obstacles, which is the same bar check
+  // detection applies — a rock cannot give check.
+  return pieces.filter((p) => (
+    p.alive
+    && isHostileTo(p, side)
+    && kings.some((king) => attacksSquare(p, pieces, size, env, king.x, king.y))
+  ));
+}
+
+/**
+ * Whether `bySide` has a LEGAL move that captures `target` — "can they just take it?".
+ *
+ * Legality, not merely attack geometry, because the two answer different questions. A piece
+ * pinned against its own king attacks the square and cannot go there, and a king may not
+ * capture a defended piece at all; asking `attacksSquare` would call both of those a capture
+ * and they are not.
+ *
+ * Only worth asking about a piece that has just done something the position must answer, so
+ * callers should reach for it after a cheaper geometry test has already matched.
+ */
+export function sideCanCaptureUnit(
+  target: Piece,
+  bySide: Side,
+  pieces: readonly Piece[],
+  size: BoardSize,
+  env?: MoveEnv,
+): boolean {
+  if (!target || !target.alive) return false;
+  for (const piece of livingPieces(pieces, bySide)) {
+    if (isObstacle(piece)) continue;
+    for (const move of legalMoves(piece, pieces, size, env)) {
+      // A capture is named by `capture` (en passant takes a piece that is not on the landing
+      // square), and otherwise is simply landing where the target stands.
+      if (move.capture === target.id || (move.x === target.x && move.y === target.y)) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Whether `side` has any legal move at all — the "no legal action" half of checkmate and
+ * stalemate. Lives here beside `legalMoves` so the canonical adjudicator and every caller
+ * that needs to recognize a *shape* of mate ask one implementation rather than two that can
+ * drift apart (ADR-0059).
+ */
+export function sideHasLegalMove(pieces: readonly Piece[], side: Side, size: BoardSize, env?: MoveEnv): boolean {
+  return livingPieces(pieces, side).some((piece) => legalMoves(piece, pieces, size, env).length > 0);
+}
+
+/**
+ * Whether `mover` has just delivered a smothered mate: a knight's mate on a king that cannot
+ * move because its own men are standing on every square around it.
+ *
+ * Nearly every named mating pattern is anchored to 8x8 geometry — a back rank, a rook file,
+ * a specific corner — and none of those survive a board this game can author, with arbitrary
+ * dimensions, terrain, walls and water. Smothered mate is the one that ports, because its
+ * definition is entirely local: it names a relationship between a king and its neighbours,
+ * and that relationship means the same thing on any board.
+ *
+ * So the test is the classical one, kept literal:
+ *  - the mover is a knight, and is the ONLY piece giving check (a second checker is some
+ *    other mate that happens to include a knight),
+ *  - the mated side has no legal move,
+ *  - and every in-bounds square around the king is occupied by one of the king's OWN pieces.
+ *
+ * That last clause is deliberately about men, not about squares. A king sealed into a pocket
+ * by cliffs or walls is trapped by the terrain, not smothered, and does not pay. Off-board
+ * neighbours are allowed, which is what keeps the classic corner mate a corner mate.
+ */
+export function smotheredMateBy(mover: Piece, pieces: readonly Piece[], size: BoardSize, env?: MoveEnv): boolean {
+  if (!mover || !mover.alive || mover.type !== 'knight' || isObstacle(mover)) return false;
+  const victimSide: Side = mover.side === 'player' ? 'enemy' : 'player';
+  const checkers = kingCheckers(victimSide, pieces, size, env);
+  if (checkers.length !== 1 || checkers[0].id !== mover.id) return false;
+  if (sideHasLegalMove(pieces, victimSide, size, env)) return false;
+  const kings = pieces.filter((p) => p.alive && p.side === victimSide && p.type === 'king');
+  return kings.length > 0 && kings.every((king) => {
+    let own = 0;
+    for (const [dx, dy] of ALL8) {
+      const x = king.x + dx;
+      const y = king.y + dy;
+      if (!inBounds(x, y, size)) continue; // the board's own edge — a corner mate is still smothered
+      const occupant = pieceAt(pieces, x, y);
+      if (!occupant || !occupant.alive || occupant.side !== victimSide || isObstacle(occupant)) return false;
+      own += 1;
+    }
+    return own > 0;
+  });
+}
+
+/**
  * Mark every square `side` threatens into a board-sized bitmap (`y * size.cols + x`),
  * allocation-free. The evaluation's danger map; exported for core/ai.
  */
@@ -1070,6 +1173,11 @@ export function applyMove(state: GameState, pieceId: string, move: Move, options
   const promoRule = promotionRuleForMove(state, { ...piece, type: movedPieceType }, { x: piece.x, y: piece.y });
   if (promoRule) {
     const promotion = promotionChoice(promoRule, options.promotion);
+    // Remember what walked up the board before `type` is overwritten. Nothing in board law
+    // reads it back — the piece moves as what it promoted to — but a promotion is otherwise
+    // unrecoverable from the committed board, and a layer that prices units needs to know
+    // this queen is a pawn's work. First promotion wins; a piece cannot promote twice.
+    piece.promotedFrom = piece.promotedFrom ?? movedPieceType;
     piece.type = promotion;
     events.push({ kind: 'promoted', pieceId: piece.id, to: promotion });
   }

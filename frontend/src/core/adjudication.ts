@@ -7,7 +7,7 @@
 
 import type { VictoryRule, VictoryRules } from './level';
 import type { GameState, Side } from './types';
-import { gameEnv, legalMoves, livingPieces, ruleDraw, sideInCheck, type MoveEnv, type RuleDrawKind } from './rules';
+import { gameEnv, ruleDraw, sideHasLegalMove, sideInCheck, type MoveEnv, type RuleDrawKind } from './rules';
 import { resolveVictory, type ObjectiveContext } from './objectives';
 
 type CombatSide = Exclude<Side, 'neutral'>;
@@ -87,9 +87,7 @@ export function adjudicateCommittedPosition(state: GameState, input: Adjudicatio
 
   const side = state.turn;
   const env = envFor(state, input.env);
-  const hasMove = livingPieces(state.pieces, side)
-    .some((piece) => legalMoves(piece, state.pieces, state.size, env).length > 0);
-  if (!hasMove) {
+  if (!sideHasLegalMove(state.pieces, side, state.size, env)) {
     if (sideInCheck(state, side, env)) {
       if (
         state.checkmateRequiresEnemyNonKingEliminated

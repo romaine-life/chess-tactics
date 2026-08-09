@@ -16,13 +16,14 @@ import {
   type RunCardRarity,
 } from '../run/model';
 
-export const ENCHIRIDION_SECTIONS = ['units', 'terrain', 'cards', 'lipsana', 'ataraxia'] as const;
+export const ENCHIRIDION_SECTIONS = ['units', 'terrain', 'manubiae', 'cards', 'lipsana', 'ataraxia'] as const;
 export type EnchiridionSection = typeof ENCHIRIDION_SECTIONS[number];
 
 /** One label inventory for rails, title routes, and every other address presenter. */
 export const ENCHIRIDION_SECTION_LABEL: Readonly<Record<EnchiridionSection, string>> = {
   units: 'Units',
   terrain: 'Terrain',
+  manubiae: 'Manubiae',
   cards: 'Cards',
   lipsana: 'Lipsana',
   ataraxia: 'Ataraxia',

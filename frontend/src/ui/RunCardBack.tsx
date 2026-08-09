@@ -2,6 +2,7 @@ import type { CSSProperties, ReactElement } from 'react';
 import { liveMediaSlotsWithPrefix, resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import { useAppSettings, type RunCardBack as RunCardBackId } from '../settings/appSettings';
 import { RUN_CARD_BACK_SLOT_PREFIX, runCardBackSlot } from '../settings/runCardBack';
+import { runCardPrintBoxVariables } from './runCardFrameGeometry';
 
 /** The accepted default runtime identity; review candidates live in the paired review slot. */
 export const RUN_CARD_BACK_SLOT = 'ui/run/card-back/standard.png';
@@ -31,9 +32,18 @@ export function useRunCardBackMediaUrl(): string {
   return runCardBackMediaUrl(useAppSettings().runCardBack);
 }
 
+/** Computed once: the print box is a code constant, not per-card state. */
+const PRINT_BOX = runCardPrintBoxVariables();
+
 /**
  * One complete, universal face-down card. Hosts choose the exact media version;
  * the object itself never learns which card it conceals.
+ *
+ * The element a host sizes is the whole 5:7 CARD BOX, exactly as a face-up card's is, and the
+ * raster is seated inside it in the same die-cut opening every printed frame occupies
+ * (runCardPrintBoxVariables). A back and a face given the same box therefore print at the same
+ * size — which they did not while the back was a bare raster, because the frames carry a
+ * transparent margin the back rasters do not.
  */
 export function RunCardBack({
   mediaUrl,
@@ -49,14 +59,20 @@ export function RunCardBack({
   onError?: () => void;
 }): ReactElement {
   return (
-    <img
-      src={mediaUrl}
-      alt="Face-down card"
+    <span
       className={`run-card-back${className ? ` ${className}` : ''}`}
-      style={width ? { inlineSize: width } as CSSProperties : undefined}
-      draggable={false}
-      onLoad={onLoad}
-      onError={onError}
-    />
+      style={{ ...PRINT_BOX, ...(width ? { inlineSize: width } : null) } as CSSProperties}
+      role="img"
+      aria-label="Face-down card"
+    >
+      <img
+        className="run-card-back-print"
+        src={mediaUrl}
+        alt=""
+        draggable={false}
+        onLoad={onLoad}
+        onError={onError}
+      />
+    </span>
   );
 }

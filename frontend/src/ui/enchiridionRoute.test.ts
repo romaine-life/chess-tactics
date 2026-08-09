@@ -27,7 +27,7 @@ describe('main-menu Enchiridion addresses', () => {
   });
 
   it('does not expose the retired card-type and ability sections', () => {
-    expect(ENCHIRIDION_SECTIONS).toEqual(['units', 'terrain', 'cards', 'lipsana', 'ataraxia']);
+    expect(ENCHIRIDION_SECTIONS).toEqual(['units', 'terrain', 'manubiae', 'cards', 'lipsana', 'ataraxia']);
     for (const path of ['/enchiridion/card-types', '/enchiridion/card-types/hieratic', '/enchiridion/abilities']) {
       expect(enchiridionSectionFromPath(path)).toBeNull();
       expect(enchiridionSectionPath(path)).toBe('/enchiridion');
