@@ -296,13 +296,21 @@ function promotionChoicesForMove(game: GameState, piece: Piece, move: Move): rea
   return promotionRuleForMove(game, piece, { x: move.x, y: move.y })?.choices ?? PROMOTION_PIECE_TYPES;
 }
 
-function firstPlayerId(game: GameState): string | null {
-  return game.pieces.find((p) => p.side === 'player' && p.alive)?.id ?? null;
-}
-
-/** First living piece of a given side (netplay pre-selects the side this client owns). */
-function firstOwnId(game: GameState, side: Side): string | null {
-  return game.pieces.find((p) => p.side === side && p.alive)?.id ?? null;
+/**
+ * The piece a battle opens holding, or null when none of them can move.
+ *
+ * Not simply the first on the roster. A Run army lists its King first, and a King walled in by
+ * the formation the player has just arranged around him wears the selection ring with nowhere to
+ * go: a ring that says "picked up", offers nothing, and whose only effect on the player's first
+ * click is to vanish. The opening selection is therefore the first piece of this side that can
+ * actually move, so the ring always comes with the squares that explain it.
+ */
+function openingSelectionId(game: GameState, env: MoveEnv, side: Side): string | null {
+  return game.pieces.find((piece) => (
+    piece.side === side
+    && piece.alive
+    && legalMoves(piece, game.pieces, game.size, env).length > 0
+  ))?.id ?? null;
 }
 
 /**
@@ -1373,7 +1381,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     const intro = opts.level
       ? `Test play begins — objective: ${objectiveSummary(objective, objectiveCtx.kingSide)}.`
       : `Skirmish begins — ${objectiveSummary(objective, objectiveCtx.kingSide)}.`;
-    const selectedId = game.winner ? null : firstPlayerId(game);
+    const selectedId = game.winner ? null : openingSelectionId(game, env, 'player');
     const log = initial.adjudication
       ? [logNote(adjudicationCopy(initial.adjudication, 'player', !!victoryOverride)), logNote(intro)]
       : [logNote(intro)];
@@ -1470,7 +1478,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     });
     const game = initial.state;
     const localTurn = !game.winner && game.turn === localSide;
-    const selectedId = localTurn ? firstOwnId(game, localSide) : null;
+    const selectedId = localTurn ? openingSelectionId(game, env, localSide) : null;
     const youCommand = localSide === 'player' ? 'the vanguard' : 'the challenger';
     const intro = `Multiplayer skirmish — ${objectiveBriefingForSide(victoryRules, localSide).summary}. You command ${youCommand}.`;
     const log = initial.adjudication
@@ -1761,7 +1769,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       env,
     });
     const game = settled.state;
-    const selectedId = game.winner ? null : firstPlayerId(game);
+    const selectedId = game.winner ? null : openingSelectionId(game, env, 'player');
     const log = settled.adjudication
       ? extendLog(match.log, [logNote(adjudicationCopy(settled.adjudication, 'player', !!victoryOverride))])
       : match.log;

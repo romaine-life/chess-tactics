@@ -121,13 +121,57 @@ function runUndoCheckpoint(goldTenths = 20): RunBattleUndoCheckpoint {
 }
 
 describe('skirmish store', () => {
-  it('starts on the player turn with a selected player piece', () => {
+  it('starts on the player turn holding a piece that can actually move', () => {
     useSkirmish.getState().newSkirmish({ seed: 5 });
     const s = useSkirmish.getState();
     expect(s.game.turn).toBe('player');
     expect(s.selectedId).not.toBeNull();
     expect(s.focusedId).toBe(s.selectedId);
     expect(livingPieces(s.game.pieces, 'player').length).toBeGreaterThan(0);
+
+    // The ring says "picked up", so it has to come with the squares that explain it. Opening on
+    // the first piece of the roster put it on a Run army's King, walled in by the formation the
+    // player had just arranged around him: a ring offering nothing, whose only effect on their
+    // first click was to disappear.
+    const opened = s.game.pieces.find((piece) => piece.id === s.selectedId)!;
+    expect(legalMoves(opened, s.game.pieces, s.game.size, s.env).length).toBeGreaterThan(0);
+  });
+
+  // ...and it skips PAST a piece that cannot move rather than ringing it. A Run army lists its
+  // King first, and he is routinely walled in by the formation just arranged around him.
+  it('opens past a boxed-in leading piece to one that can move', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5 });
+    const before = useSkirmish.getState();
+    // King in the corner with his own pawns on every square he could step to; the last pawn is
+    // clear of them and is the only piece on the board with anywhere to go.
+    const pieces: Piece[] = [
+      { id: 'boxed-king', name: 'King', type: 'king', side: 'player', x: 0, y: 0, alive: true, facing: 'north', startX: 0, startY: 0 },
+      { id: 'wall-a', name: 'Pawn', type: 'pawn', side: 'player', x: 1, y: 0, alive: true, facing: 'north', startX: 1, startY: 0, pawnForward: 'north' },
+      { id: 'wall-b', name: 'Pawn', type: 'pawn', side: 'player', x: 0, y: 1, alive: true, facing: 'north', startX: 0, startY: 1, pawnForward: 'north' },
+      { id: 'wall-c', name: 'Pawn', type: 'pawn', side: 'player', x: 1, y: 1, alive: true, facing: 'north', startX: 1, startY: 1, pawnForward: 'north' },
+      { id: 'runner', name: 'Pawn', type: 'pawn', side: 'player', x: 5, y: 5, alive: true, facing: 'north', startX: 5, startY: 5, pawnForward: 'north' },
+      { id: 'enemy-king', name: 'King', type: 'king', side: 'enemy', x: 7, y: 7, alive: true, facing: 'south', startX: 7, startY: 7 },
+    ];
+    const env: MoveEnv = { terrain: undefined, lastMove: undefined };
+
+    expect(legalMoves(pieces[0], pieces, before.game.size, env)).toHaveLength(0);
+    expect(legalMoves(pieces[4], pieces, before.game.size, env).length).toBeGreaterThan(0);
+
+    useSkirmish.getState().resumeMatch({
+      game: { ...before.game, pieces, turn: 'player', winner: null },
+      seed: before.seed,
+      tick: before.tick,
+      log: before.log,
+      objective: before.objective,
+      objectiveCtx: before.objectiveCtx,
+      victoryOverride: before.victoryOverride,
+      turnsElapsed: before.turnsElapsed,
+      levelId: 'boxed-in',
+      clock: before.clock,
+      battleElapsed: { elapsedMs: readElapsedClockMs(before.battleElapsed), startedAtMs: null },
+    });
+
+    expect(useSkirmish.getState().selectedId).toBe('runner');
   });
 
   it('can focus an enemy without changing the player movement selection', () => {
