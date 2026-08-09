@@ -32,23 +32,29 @@ describe('authored camera zoom-in limit', () => {
     expect(playerMaximumZoom(3.004, 1.2)).toBe(3.004);
   });
 
-  it('restores the automatic ceiling when the level states nothing', () => {
-    expect(playerMaximumZoom(0.9, null)).toBe(1.45);
-    expect(playerMaximumZoom(3.004, undefined)).toBeCloseTo(4.356, 3);
+  it('states no ceiling of its own when the level states nothing', () => {
+    // An unstated limit is not a limit. The ladder's closest tier is the real ceiling and it is
+    // measured against the viewport, so anything returned here could only narrow it silently.
+    expect(playerMaximumZoom(0.9, null)).toBe(Number.POSITIVE_INFINITY);
+    expect(playerMaximumZoom(3.004, undefined)).toBe(Number.POSITIVE_INFINITY);
   });
 
   it('applies the level limit through the live view store', () => {
     const store = createSkirmishViewStore();
     store.getState().setMinZoom(3.004);
-    expect(store.getState().maxZoom).toBeCloseTo(4.356, 3);
+    expect(store.getState().maxZoom).toBe(Number.POSITIVE_INFINITY);
 
+    // An authored limit is the level speaking for itself and is the one thing that narrows the
+    // ceiling; it binds the camera immediately.
     store.getState().setAuthoredZoomIn(9);
     expect(store.getState().maxZoom).toBe(9);
     store.getState().setZoom(9);
     expect(store.getState().zoom).toBe(9);
+    store.getState().setZoom(12);
+    expect(store.getState().zoom).toBe(9);
 
+    // Withdrawing it hands the ceiling back to the ladder rather than to another number here.
     store.getState().setAuthoredZoomIn(null);
-    expect(store.getState().maxZoom).toBeCloseTo(4.356, 3);
-    expect(store.getState().zoom).toBeCloseTo(4.356, 3);
+    expect(store.getState().maxZoom).toBe(Number.POSITIVE_INFINITY);
   });
 });
