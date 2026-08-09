@@ -1196,7 +1196,7 @@ function SectioPanel({
             just told you is impossible — the empty notice below speaks for that state.
           */}
           {availableOffers.length === 0 ? null : (
-            <p className="run-card-row-call">Take what you like. They require compensation.</p>
+            <p className="run-card-row-call">They require compensation.</p>
           )}
           <SectioCardRow>
             {sectio.cardOffers.map((offer, index) => {

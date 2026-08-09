@@ -41,9 +41,10 @@ function RunVacantiaCardGrant({
         The first screen of a Run, and the only one whose cards cost nothing. Every card
         prints its value, and on the Sectio that same number IS its price, so an opening
         grant with no words on it reads as a shop the starting purse can barely afford.
-        The line says what to do and that it is free before the badges can say otherwise.
+        The line states the terms and nothing else — the cards are plainly takeable, so
+        an instruction to take one would only say what the row already says.
       */}
-      <p className="run-card-row-call">Take one. They&apos;ll join for free.</p>
+      <p className="run-card-row-call">They&apos;ll join for free.</p>
       <RunCardRow count={offers.length} testId="run-vacantia-card-offers">
         {offers.map((coreId, index) => (
           <RunCard
