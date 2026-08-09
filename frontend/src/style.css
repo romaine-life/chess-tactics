@@ -6153,9 +6153,14 @@ body.loading-bootstrap .app-startup-status {
 .le-settings-list dd { color: #f3ead8; font-size: var(--ds-text-sm); line-height: 1.25; margin: 0; word-break: break-word; }
 .le-faction-control { display: grid; gap: 7px; }
 .le-faction-assignments { display: grid; gap: 6px; }
-.le-faction-assignment { align-items: center; display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr) minmax(0, .95fr); min-width: 0; }
-.le-faction-fields { display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr) var(--le-inner-square); min-width: 0; }
+/* Name above, controls below. Three controls cannot share half a narrow panel and still read —
+   the colour select loses its label first, leaving a bare swatch nobody can name. */
+.le-faction-assignment { display: grid; gap: 5px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
+/* Control, colour, facing. The facing stays a fixed square; the two selects share the rest. */
+.le-faction-fields { display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) var(--le-inner-square); min-width: 0; }
 .le-faction-fields .le-select-wrap { min-width: 0; }
+.le-faction-color-select { min-width: 0; }
+.le-faction-color-select .palette-select-trigger { min-width: 0; width: 100%; }
 .le-faction-name { align-items: center; color: #f3ead8; display: grid; font-size: var(--ds-text-sm); gap: 6px; grid-template-columns: auto minmax(0, 1fr) auto; min-width: 0; }
 .le-faction-name span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .le-faction-name b { color: #9fe0ff; font-size: var(--ds-text-xs); font-weight: 700; }

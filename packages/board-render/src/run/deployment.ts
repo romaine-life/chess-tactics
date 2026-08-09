@@ -1,8 +1,9 @@
 import type { Level, LevelUnit } from '../core/level';
-import type { Vec } from '../core/types';
+import type { UnitFacing, Vec } from '../core/types';
 import { createRng } from '../core/rng';
 import { isPassableTerrain } from '../core/terrain';
 import { propCells, propDef } from '../core/props';
+import { readBoardFactionOrientation } from '../ui/boardCode';
 import { defaultFacingForSide, PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import {
   beginBattle,
@@ -88,28 +89,103 @@ function authoredOccupied(level: Level): Set<string> {
   return occupied;
 }
 
-/** Every authored deployment row, front (lowest y, enemy-facing) to back. The depth is the
- * level's to choose: a three-row band is what lets a three-wide formation stand up under a
- * quarter turn, and clamping it here silently discarded the rows a level had authored. */
-function authoredDeploymentLaneRows(level: Level): number[] {
-  return [...new Set(level.layers.zones
-    .filter((zone) => zone.type === 'player-spawn' || zone.type === 'player-king-spawn')
-    .flatMap((zone) => zone.tiles.map(([, y]) => y))
-    .filter((y) => y >= 0 && y < level.board.rows))]
-    .sort((left, right) => left - right);
+/**
+ * Which way the player's side advances, and therefore how its deployment band is read.
+ *
+ * A board does not have to be fought north-to-south. The Level Editor already states the
+ * answer — a faction's starting unit orientation — so deployment takes it from the level
+ * rather than assuming an axis: `forward` points at the enemy, `across` runs along the
+ * band's long edge. Every level authored facing north resolves to exactly the historical
+ * behaviour (front lane = lowest y, formations enter from the right and settle leftwards).
+ *
+ * Only the four cardinals define an axis. A diagonal facing is a unit's art direction, not a
+ * battle line, so it falls through to the next signal rather than inventing a skewed band.
+ */
+export interface RunDeploymentAxis {
+  /** Unit vector toward the enemy. Lanes are counted along it, front first. */
+  forward: Vec;
+  /** Unit vector along the band. Formations spread and settle along it. */
+  across: Vec;
 }
 
-/** The generated card grammar has two absolute lanes. Lower y is the enemy-facing
- * front lane; the next authored deployment row is the back lane. */
+const CARDINAL_VECTORS: Record<string, Vec> = {
+  north: { x: 0, y: -1 },
+  south: { x: 0, y: 1 },
+  east: { x: 1, y: 0 },
+  west: { x: -1, y: 0 },
+};
+const NORTHWARD: RunDeploymentAxis = { forward: { x: 0, y: -1 }, across: { x: 1, y: 0 } };
+
+/** The dominant cardinal among a set of authored facings, or null when none is cardinal. */
+function dominantCardinal(facings: readonly (string | undefined)[]): Vec | null {
+  const tally = new Map<string, number>();
+  for (const facing of facings) {
+    if (!facing || !CARDINAL_VECTORS[facing]) continue;
+    tally.set(facing, (tally.get(facing) ?? 0) + 1);
+  }
+  let best: string | null = null;
+  for (const [facing, count] of tally) {
+    if (!best || count > tally.get(best)! ) best = facing;
+  }
+  return best ? CARDINAL_VECTORS[best] : null;
+}
+
+export function runDeploymentAxis(level: Level): RunDeploymentAxis {
+  // 1. The faction-level control in the editor's Board tab, when the level authored one.
+  const authored = level.boardCode ? readBoardFactionOrientation(level.boardCode) : null;
+  const declared = authored?.playerFaction
+    ? (authored.factionDirections as Record<string, string | undefined>)[authored.playerFaction]
+    : undefined;
+  // 2. Otherwise the player's own pieces. 3. Otherwise the enemy's, reversed — a Run Battle
+  //    carries no player units at all, so the enemy line is the only orientation left on it.
+  const units = level.layers.units;
+  const enemyward = dominantCardinal(units.filter((unit) => unit.side === 'enemy').map((unit) => unit.facing));
+  const forward = (declared ? CARDINAL_VECTORS[declared] : null)
+    ?? dominantCardinal(units.filter((unit) => unit.side === 'player').map((unit) => unit.facing))
+    // `0 -` rather than unary minus: negating a zero component yields -0, which survives into
+    // the entry vector and reads as a different value to an equality check.
+    ?? (enemyward ? { x: 0 - enemyward.x, y: 0 - enemyward.y } : null)
+    ?? NORTHWARD.forward;
+  // Across is forward turned a quarter clockwise on screen, which for a northward board is
+  // due east — the direction the historical "enter from the right, advance left" ran along.
+  return { forward, across: { x: 0 - forward.y, y: 0 + forward.x } };
+}
+
+const along = (cell: Vec, axis: Vec): number => cell.x * axis.x + cell.y * axis.y;
+
+/** The facing a Run unit takes when it deploys onto this level: the way its side advances. */
+export function runDeploymentFacing(level: Level): UnitFacing {
+  const { forward } = runDeploymentAxis(level);
+  const named = Object.entries(CARDINAL_VECTORS)
+    .find(([, vector]) => vector.x === forward.x && vector.y === forward.y)?.[0];
+  return (named as UnitFacing | undefined) ?? defaultFacingForSide('player');
+}
+
+/** Every authored deployment lane, front (nearest the enemy) to back. The depth is the
+ * level's to choose: a three-lane band is what lets a three-wide formation stand up under a
+ * quarter turn, and clamping it here silently discarded the lanes a level had authored. */
+function authoredDeploymentLanes(level: Level, axis: RunDeploymentAxis): number[] {
+  return [...new Set(level.layers.zones
+    .filter((zone) => zone.type === 'player-spawn' || zone.type === 'player-king-spawn')
+    .flatMap((zone) => zone.tiles
+      .filter(([x, y]) => x >= 0 && y >= 0 && x < level.board.cols && y < level.board.rows)
+      .map(([x, y]) => along({ x, y }, axis.forward))))]
+    .sort((left, right) => right - left);
+}
+
+/** The generated card grammar has two absolute lanes. The first is the enemy-facing front
+ * lane; the next authored lane is the back lane. On a northward board these are rows, lowest
+ * y first, which is what every level authored before deployment had an axis relies on. */
 export function playerDeploymentLaneRows(level: Level): number[] {
-  return authoredDeploymentLaneRows(level);
+  return authoredDeploymentLanes(level, runDeploymentAxis(level));
 }
 
 /** Pawn-only deployment geometry is retired. The general player zone owns every unit;
  * existing King-only geometry remains readable for old authored levels but is not required. */
 function deploymentPools(level: Level, occupied: ReadonlySet<string>): PlayerDeploymentPools {
   const terrain = new Map(level.layers.terrain.map((cell) => [key(cell), cell]));
-  const laneRows = new Set(authoredDeploymentLaneRows(level));
+  const axis = runDeploymentAxis(level);
+  const laneRows = new Set(authoredDeploymentLanes(level, axis));
   const all = new Map<string, Vec>();
   const byType = new Map<PlayablePieceType, Map<string, Vec>>(
     PLAYABLE_PIECE_TYPES.map((type) => [type, new Map<string, Vec>()]),
@@ -123,7 +199,7 @@ function deploymentPools(level: Level, occupied: ReadonlySet<string>): PlayerDep
       const cell = { x, y };
       const terrainCell = terrain.get(key(cell));
       if (
-        !laneRows.has(y)
+        !laneRows.has(along(cell, axis.forward))
         || x < 0 || y < 0 || x >= level.board.cols || y >= level.board.rows
         || occupied.has(key(cell))
         || (terrainCell && !isPassableTerrain(terrainCell.terrain))
@@ -148,17 +224,22 @@ export function playerDeploymentCells(level: Level): Vec[] {
   return playerDeploymentPools(level).all;
 }
 
-/** Translate a settled rigid formation fully beyond the board's right edge. The compositor
- * projects this board-space vector once and gives it to every member, preserving rows, holes,
- * and the planner's decreasing-x direction. The deployment band may stop before the board edge,
- * so it cannot define the spawn boundary: every staged placement must begin at x >= board.cols. */
+/** Translate a settled rigid formation fully beyond the far end of the band's own axis. The
+ * compositor projects this board-space vector once and gives it to every member, preserving
+ * lanes, holes, and the planner's settling direction. The deployment band may stop before the
+ * board edge, so it cannot define the spawn boundary: every staged placement must begin past
+ * the board's extent along that axis. On a northward board this is the historical "one board
+ * width to the right". */
 export function deploymentFormationEntryDelta(
   level: Level,
   placements: readonly Vec[],
 ): Vec {
   if (!placements.length) return { x: 0, y: 0 };
-  const formationMinX = Math.min(...placements.map((cell) => cell.x));
-  return { x: Math.max(0, level.board.cols - formationMinX), y: 0 };
+  const axis = runDeploymentAxis(level);
+  const extent = axis.across.x !== 0 ? level.board.cols : level.board.rows;
+  const formationMin = Math.min(...placements.map((cell) => along(cell, axis.across)));
+  const steps = Math.max(0, extent - formationMin);
+  return { x: axis.across.x * steps, y: axis.across.y * steps };
 }
 
 type PlacementChoice = Readonly<{
@@ -333,16 +414,30 @@ function planCardFormation(
   const eligibleByType = new Map(
     PLAYABLE_PIECE_TYPES.map((type) => [type, new Set(pools.byType[type].map(key))]),
   );
-  const laneRows = playerDeploymentLaneRows(level);
-  const bandMinX = Math.min(...pools.all.map((cell) => cell.x));
-  const bandMaxX = Math.max(...pools.all.map((cell) => cell.x));
+  // A seat offset is read in BAND coordinates, not board ones: `offset.x` steps along the
+  // band and `offset.y` picks a lane. On a northward board those are board x and board rows,
+  // which is the shape this planner was originally written against.
+  const axis = runDeploymentAxis(level);
+  const laneRows = authoredDeploymentLanes(level, axis);
+  const acrossOf = (cell: Vec): number => along(cell, axis.across);
+  const cellAt = (anchorAcross: number, offset: Vec): Vec | null => {
+    const lane = laneRows[offset.y];
+    if (lane === undefined) return null;
+    const across = anchorAcross + offset.x;
+    return {
+      x: axis.across.x * across + axis.forward.x * lane,
+      y: axis.across.y * across + axis.forward.y * lane,
+    };
+  };
+  const bandMinX = Math.min(...pools.all.map(acrossOf));
+  const bandMaxX = Math.max(...pools.all.map(acrossOf));
   const shapeMinX = Math.min(...seats.map(({ offset }) => offset.x));
   const shapeMaxX = Math.max(...seats.map(({ offset }) => offset.x));
   const targetsAt = (anchorX: number) => seats.flatMap(({ unit, offset }) => {
-    const y = laneRows[offset.y];
-    return y === undefined ? [] : [{
+    const cell = cellAt(anchorX, offset);
+    return cell === null ? [] : [{
       unitId: unit.id,
-      cell: { x: anchorX + offset.x, y },
+      cell,
       type: unit.type,
     }];
   });
@@ -374,15 +469,16 @@ function planCardFormation(
   }
 
   // Pragmatic recovery: preserve each seat's authored lane where possible, filling
-  // that lane from the left. Only then use any remaining legal band cell.
+  // that lane from the band's near end. Only then use any remaining legal band cell.
   const fallback: Record<string, Vec> = {};
   for (const { unit, offset } of seats) {
     const used = new Set([...occupied, ...Object.values(fallback).map(key)]);
     const candidates = pools.byType[unit.type]
       .filter((cell) => !used.has(key(cell)))
-      .sort((left, right) => left.x - right.x || left.y - right.y);
-    const preferredY = laneRows[offset.y];
-    const chosen = candidates.find((cell) => cell.y === preferredY) ?? candidates[0] ?? null;
+      .sort((left, right) => acrossOf(left) - acrossOf(right)
+        || along(right, axis.forward) - along(left, axis.forward));
+    const preferredLane = laneRows[offset.y];
+    const chosen = candidates.find((cell) => along(cell, axis.forward) === preferredLane) ?? candidates[0] ?? null;
     if (chosen) fallback[unit.id] = chosen;
   }
   return { placements: fallback, preserved: false };
@@ -659,12 +755,22 @@ export function arrangedCardPlacementOptions(
   const occupied = new Set(Object.entries(decodedPlacements(run))
     .filter(([unitId]) => !ownUnitIds.has(unitId))
     .map(([, cell]) => key(cell)));
-  const laneRows = playerDeploymentLaneRows(level);
-  const anchorXs = [...new Set(pools.all.map((cell) => cell.x))].sort((a, b) => a - b);
-  return laneRows.flatMap((anchorY) => anchorXs.flatMap((anchorX): RunArrangedPlacementOption[] => {
+  // Anchors sweep the band in its own coordinates — every lane against every position along
+  // it — so a band standing on its side is enumerated as completely as one lying flat. The
+  // seat offsets stay in BOARD space here: the player turns the shape themselves, so this
+  // path needs the band's extent, not its axis. A northward band yields the same anchors, in
+  // the same order, as the rows-by-columns sweep this replaces.
+  const axis = runDeploymentAxis(level);
+  const lanes = authoredDeploymentLanes(level, axis);
+  const acrossValues = [...new Set(pools.all.map((cell) => along(cell, axis.across)))].sort((a, b) => a - b);
+  return lanes.flatMap((lane) => acrossValues.flatMap((acrossValue): RunArrangedPlacementOption[] => {
+    const anchor = {
+      x: axis.across.x * acrossValue + axis.forward.x * lane,
+      y: axis.across.y * acrossValue + axis.forward.y * lane,
+    };
     const targets = seats.map(({ unit }, index) => {
       const offset = transformed[index];
-      return { unit, cell: { x: anchorX + offset.x, y: anchorY + offset.y } };
+      return { unit, cell: { x: anchor.x + offset.x, y: anchor.y + offset.y } };
     });
     const targetKeys = targets.map(({ cell }) => key(cell));
     if (
@@ -674,7 +780,7 @@ export function arrangedCardPlacementOptions(
       ))
     ) return [];
     return [{
-      anchor: { x: anchorX, y: anchorY },
+      anchor,
       rotation,
       placements: Object.fromEntries(targets.map(({ unit, cell }) => [unit.id, cell])),
     }];
@@ -1239,7 +1345,9 @@ export function levelWithRunDeployment(run: RunDocument, level: Level, layout: R
       ...cell,
       type: unit.type,
       side: 'player' as const,
-      facing: defaultFacingForSide('player'),
+      // The Run's army faces the way this level's player side is authored to advance, so a
+      // board fought west-to-east does not deploy an army looking at its own back line.
+      facing: runDeploymentFacing(level),
       runUnitId: unit.id,
       runUnitName: unit.name,
     }];
