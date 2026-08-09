@@ -200,7 +200,9 @@ describe('Level Editor chrome hierarchy', () => {
   it('aligns inner rails to the contents box while atom paint gets a separate clip apron', () => {
     expect(styleCss).toMatch(/:is\(\.level-editor-screen, \.skirmish-screen, \.chrome-family-surface\) \.outer-chrome-header > :not\(\.kit-panel-title\)\s*\{[\s\S]*?margin-inline:\s*var\(--le-control-content-inset\)/);
     expect(styleCss).toMatch(/\.le-hud-scroll\s*\{[\s\S]*?margin-inline:[\s\S]*?--le-inner-atom-left-overhang[\s\S]*?--le-inner-atom-right-overhang/);
-    expect(styleCss).toMatch(/\.le-hud-scroll > \.kit-scroll-content\s*\{[\s\S]*?padding-left:\s*var\(--le-inner-atom-left-overhang[\s\S]*?padding-right:\s*calc\(18px \+ var\(--le-inner-atom-right-overhang/);
+    // The rail's share is --kit-scroll-gutter (ADR-0536) so an idle palette collapses it; the
+    // atom apron beside it is unaffected and keeps the ADR-0297 content line where it was.
+    expect(styleCss).toMatch(/\.le-hud-scroll > \.kit-scroll-content\s*\{[\s\S]*?padding-left:\s*var\(--le-inner-atom-left-overhang[\s\S]*?padding-right:\s*calc\(var\(--kit-scroll-gutter\) \+ var\(--le-inner-atom-right-overhang/);
     expect(styleCss).toMatch(/\.le-md-rules\s*\{[\s\S]*?margin-inline:[\s\S]*?--le-inner-atom-left-overhang[\s\S]*?padding-left:\s*var\(--le-inner-atom-left-overhang/);
     expect(styleCss).toMatch(/\.le-md-detail\s*\{[\s\S]*?margin-inline:[\s\S]*?--le-inner-atom-left-overhang[\s\S]*?padding-left:\s*var\(--le-inner-atom-left-overhang/);
     expect(styleCss).not.toContain('--le-inner-atom-left-footprint');
