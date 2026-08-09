@@ -23574,9 +23574,19 @@ button.tileset-relationship-cell {
 
 /* The only words the companion says about the record itself: this visit admitted the card, and
    Reset Sectio would take it back. It carries the tile's own ink rather than the muted register
-   the supporting labels use, because it reports state instead of labelling a field. */
+   the supporting labels use, because it reports state instead of labelling a field, and it wears
+   the installed coin the same way every other Run measure wears its mark. */
 .run-expunctio-visit-mark {
+  align-items: center;
   color: var(--skirmish-ink);
+  display: inline-flex;
+  gap: var(--ds-space-1);
+}
+
+.run-gold-icon.run-expunctio-visit-mark-icon {
+  block-size: 24px;
+  flex: none;
+  inline-size: 24px;
 }
 
 .run-expunctio-price {

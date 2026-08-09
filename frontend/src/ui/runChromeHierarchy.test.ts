@@ -367,8 +367,13 @@ describe('Run chrome hierarchy', () => {
     // The gallery says which formations this visit admitted, because Reset Sectio takes back
     // exactly those and nothing else on the tile reveals it.
     expect(runExpunctioWorkspace).toContain('sectioAdmittedCardIds(run)');
-    expect(runExpunctioWorkspace).toContain('<span className="run-expunctio-visit-mark">Adlected this visit</span>');
+    expect(runExpunctioWorkspace).toContain('<span className="run-expunctio-visit-mark">');
+    expect(runExpunctioWorkspace).toContain('Adlected this visit');
     expect(styleCss).toMatch(/\.run-expunctio-visit-mark\s*\{[\s\S]*?color:\s*var\(--skirmish-ink\)/);
+    // The plain installed coin, never a transaction mark: the fee on the same tile already paints
+    // the loss arrow, and a second arrowed mark reads as a second price.
+    expect(runExpunctioWorkspace).toContain('<RunGoldIcon className="run-expunctio-visit-mark-icon" />');
+    expect(runExpunctioWorkspace).not.toContain('<RunGoldTransactionIcon');
     expect(runExpunctioWorkspace).toContain('runCardFramePaintInsetRatios');
     expect(runExpunctioWorkspace).toContain('fillRole="outer"');
     expect(runExpunctioWorkspace).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');

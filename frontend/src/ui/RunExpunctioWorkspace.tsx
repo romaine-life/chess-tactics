@@ -13,7 +13,7 @@ import { RunCard } from './RunCard';
 import { runCardFrameSlot } from './runCardFaceContent';
 import { runCardFrameGeometryForSlot, runCardFramePaintInsetRatios } from './runCardFrameGeometry';
 import { emptyRunCardPieceIndices, projectRunCardUnitSeats } from './runCardUnitProjection';
-import { RunGoldTransactionAmount } from './RunResources';
+import { RunGoldIcon, RunGoldTransactionAmount } from './RunResources';
 import { RunSceneViewport } from './RunWorkspace';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { ChromeButton } from './shared/ChromeButton';
@@ -133,7 +133,18 @@ function ExpunctioCardTile({
           striking one and resetting the visit is illegible until the gallery says so.
         */}
         <span className="run-expunctio-copy">
-          {admittedThisVisit ? <span className="run-expunctio-visit-mark">Adlected this visit</span> : null}
+          {admittedThisVisit ? (
+            <span className="run-expunctio-visit-mark">
+              {/*
+                The installed coin stack, not a transaction mark: the fee below this line already
+                paints the loss arrow, and a second arrowed mark on one tile reads as a second
+                price. What the plain stack says is the true thing — gold bought this record, at
+                this visit — and there is no purchase glyph in the kit to say it with instead.
+              */}
+              <RunGoldIcon className="run-expunctio-visit-mark-icon" />
+              Adlected this visit
+            </span>
+          ) : null}
         </span>
         <span className="run-expunctio-price">
           <small>{status === 'expuncted' ? 'Paid' : 'Expunctio fee'}</small>

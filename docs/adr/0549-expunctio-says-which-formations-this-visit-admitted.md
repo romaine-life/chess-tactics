@@ -53,6 +53,12 @@ have been renormalized.
 - The Expunctio tile prints **Adlected this visit**, answering ADR-0443's *Athetized this visit* in
   the same register. It carries the tile's own ink rather than the muted register the supporting
   labels use, because it reports state instead of labelling a field.
+- The mark wears the installed gold coin (`ui/run/resources/gold.png`, through the shared
+  `RunGoldIcon` and its review seam), not a transaction mark. The fee directly beneath it already
+  paints `lose-gold`'s arrow, and a second arrowed mark on one tile reads as a second price;
+  `gold-gained` says the opposite of what happened. The kit has no purchase glyph — `game/adlected`
+  belongs to the retired unit-ability vocabulary and depicts pikes, not a payment — so the plain
+  stack is the true and available statement: gold bought this record, at this visit.
 - That mark is the *only* thing the companion says in words. The attached-unit count, the repeated
   card name and the per-tile restatement of the Athetize rule are deleted; what remains beside the
   face is the mark, the fee, and the action. The face is the sole title owner, as ADR-0446 said,
