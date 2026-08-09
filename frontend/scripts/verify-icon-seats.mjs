@@ -26,17 +26,29 @@ const base = (flag('base', 'http://127.0.0.1:5175') ?? '').replace(/\/$/, '');
 const ALPHA = 24;
 const TOLERANCE = 0.01;
 
-/** Which slot each compensated CSS rule is really talking about. */
+/** Which slot each compensated CSS rule is really talking about.
+ *
+ * `baseline: true` marks a rule in a row that shares a BOTTOM edge, not merely a box.
+ * Those also declare --titlebar-mark-ink-below — the fraction of the canvas under the
+ * ink — and it is checked here for the same reason the fill is: a re-upload that moves
+ * the glyph inside its canvas lifts it off the row with nothing pointing at the cause. */
 const DECLARED = [
   { rule: '.skirmish-clock .skirmish-icon', slot: 'ui/kit/icons/game/wait.png' },
   { rule: '.skirmish-objective .skirmish-icon', slot: 'ui/kit/icons/game/objective.png' },
+  { rule: '[data-strategikon-section="enchiridion"] img', slot: 'ui/kit/icons/design-index.png', baseline: true },
+  { rule: '[data-strategikon-section="prosopography"] img', slot: 'ui/kit/icons/unit-studio.png', baseline: true },
+  { rule: '[data-strategikon-section="lipsanotheca"] img', slot: 'ui/kit/icons/info.png', baseline: true },
+  { rule: '.skirmish-hud-title-action-glyph', slot: 'ui/kit/icons/studio-catalog.png', baseline: true },
 ];
 
-function declaredInkFill(css, rule) {
+function declaredNumber(css, rule, property) {
   const escaped = rule.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const match = css.match(new RegExp(`${escaped}\\s*\\{[^}]*--titlebar-mark-ink-fill:\\s*([0-9.]+)`));
+  const match = css.match(new RegExp(`${escaped}\\s*\\{[^}]*${property}:\\s*([0-9.]+)`));
   return match ? Number(match[1]) : null;
 }
+
+const declaredInkFill = (css, rule) => declaredNumber(css, rule, '--titlebar-mark-ink-fill');
+const declaredInkBelow = (css, rule) => declaredNumber(css, rule, '--titlebar-mark-ink-below');
 
 function inkFill(bytes) {
   const png = PNG.sync.read(bytes);
@@ -50,12 +62,13 @@ function inkFill(bytes) {
       if (y > maxY) maxY = y;
     }
   }
-  if (maxX < 0) return { fill: 0, ink: '0x0', canvas: `${png.width}x${png.height}` };
+  if (maxX < 0) return { fill: 0, below: 0, ink: '0x0', canvas: `${png.width}x${png.height}` };
   const w = maxX - minX + 1;
   const h = maxY - minY + 1;
   return {
     fill: Math.max(w, h) / Math.max(png.width, png.height),
-    ink: `${w}x${h}`,
+    below: (png.height - (maxY + 1)) / png.height,
+    ink: `${w}x${h} at (${minX},${minY})`,
     canvas: `${png.width}x${png.height}`,
   };
 }
@@ -68,8 +81,9 @@ const slots = Array.isArray(catalog.slots)
 const bySlot = new Map(slots.map((row) => [row.slot, row]));
 
 const failures = [];
-for (const { rule, slot } of DECLARED) {
+for (const { rule, slot, baseline } of DECLARED) {
   const declared = declaredInkFill(css, rule);
+  const declaredBelow = declaredInkBelow(css, rule);
   const row = bySlot.get(slot);
   if (!row?.media?.sha256) { failures.push(`${slot}: not in the live catalog`); continue; }
   const response = await fetch(`${base}/api/media/${row.media.sha256}`);
@@ -92,8 +106,25 @@ for (const { rule, slot } of DECLARED) {
       + `${measured.fill.toFixed(3)} (${measured.canvas}, ink ${measured.ink}). The art changed; update the rule.`,
     );
   }
+  if (baseline && !trimmed) {
+    if (declaredBelow === null) {
+      failures.push(
+        `${slot} sits in a row that shares a bottom edge, but ${rule} declares no `
+        + `--titlebar-mark-ink-below. Its canvas carries ${(measured.below * 100).toFixed(1)}% under the ink, `
+        + 'so it floats off the row.',
+      );
+    } else if (Math.abs(declaredBelow - measured.below) > TOLERANCE) {
+      failures.push(
+        `${slot}: style.css declares --titlebar-mark-ink-below: ${declaredBelow}, installed bytes measure `
+        + `${measured.below.toFixed(4)} (${measured.canvas}, ink ${measured.ink}). The glyph moved inside its `
+        + 'canvas; update the rule or its bottom edge leaves the row.',
+      );
+    }
+  }
   console.log(
-    `${slot.padEnd(34)} declared ${String(declared ?? '—').padEnd(6)} measured ${measured.fill.toFixed(3)}  ${measured.canvas} ink ${measured.ink}`,
+    `${slot.padEnd(34)} fill ${String(declared ?? '—').padEnd(6)}/${measured.fill.toFixed(3)}`
+    + `  below ${String(baseline ? declaredBelow ?? '—' : '—').padEnd(6)}/${measured.below.toFixed(4)}`
+    + `  ${measured.canvas} ink ${measured.ink}`,
   );
 }
 

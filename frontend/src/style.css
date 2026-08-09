@@ -17756,6 +17756,22 @@ button.tileset-relationship-cell {
   border-image-width: 0 0 0 var(--le-chrome-outer-rail-w) !important;
 }
 
+/* The fill box is held a couple of pixels inside the panel so the frame's rail can
+   sit over its edge without the surface bleeding out from under the art. The rule
+   directly above removes the right rail at the viewport edge — so on that one side
+   there is no rail to sit over, and the inset stops being a seam and becomes a
+   visible strip of backdrop between the panel's stone and the edge of the screen.
+   Spend the inset only where a rail actually lands. The panel's own box already
+   reaches the viewport; this is only its paint catching up.
+
+   Declared on the PANEL, not on the fill: the title band is seated off the same
+   box, so fixing one and not the other leaves the strip showing beside the title
+   and nowhere else. The title's own padding already subtracts this inset, so its
+   text and marks stay exactly where they were while its wood reaches the edge. */
+:root:has(.app-titlebar.chrome-rails-offscreen) :is(.level-editor-screen, .skirmish-screen) [data-shell-controls-panel] {
+  --le-outer-fill-box-right: 0px;
+}
+
 /* Persistent app-shell title bar (src/ui/shell/AppTitleBar) — rendered once by
    App outside every replaceable SceneBoundary, so route transitions cannot
    resize, fade, or unmount its invariant frame.
@@ -24373,15 +24389,17 @@ button.tileset-relationship-cell {
 }
 
 .skirmish-hud-titlebar > .kit-panel-title {
-  /* Four 24px section marks, four 4px gaps, and the 32px book. */
-  padding-inline-end: calc(144px + var(--ds-space-3) + var(--le-control-content-inset));
+  /* Five 24px marks and four 4px gaps. */
+  padding-inline-end: calc(136px + var(--ds-space-3) + var(--le-control-content-inset));
 }
 
 .skirmish-screen .skirmish-hud-titlebar > .outer-chrome-header-title-actions {
-  /* Seat the visible book edge on the same right boundary as every control
-     below it. The installed codex canvas contributes 5px of transparent edge
-     at this display size; use the visible pixels, not the image element. */
-  inset-inline-end: calc(var(--le-control-content-inset) - 5px);
+  /* Seat the mark row on the same right boundary as every control below it. The
+     seat below bleeds each glyph's canvas margin back out, so a mark's footprint is
+     its own 24px hit target rather than whatever margin its art happened to bake in
+     — no hand-measured nudge, and the last mark's ink stops 1px inside the boundary
+     because every mark in the row is a 22px seat centred in that target. */
+  inset-inline-end: var(--le-control-content-inset);
 }
 
 .skirmish-hud-title-action {
@@ -24399,15 +24417,86 @@ button.tileset-relationship-cell {
   padding: 0;
 }
 
+/* ONE box for every mark in this index — the four registers AND the book itself.
+   The eye reads the BOX a mark occupies, not how much ink is inside it, so a glyph
+   that fills less of its own canvas must not draw smaller than its neighbours.
+   This is the same seat the topbar status marks use, for the same reason; see the
+   --titlebar-mark-* block above.
+   Measured on the installed bytes: the three kit glyphs' ink fills 62.5% of their
+   64px canvas and the codex's 75%, while a Run card back is trimmed to its own
+   edges. `contain` scales the CANVAS, so bare seats drew one row at four different
+   sizes — 13.8px kit glyphs beside a 22px card back and a 24px book. An untrimmed
+   mark states the fraction its ink fills; its box grows by exactly that much and
+   BLEEDS the surplus back out with a negative margin, so the drawn ink spans the
+   seat while the layout footprint stays the seat.
+
+   A shared box is not yet a shared BASELINE, and the eye reads the row off the
+   bottoms. `fill` is the mark's LONGEST edge, because that is what has to fit; for
+   a mark taller than it is wide that edge is its height and centring the canvas
+   lands the ink on the seat's floor by itself, but the codex is 48x41 — width
+   governs, its ink comes out short, and centring left it floating 1.84px above the
+   four registers beside it. So a mark also states how much canvas sits BELOW its
+   ink, and the seat spends that against the bleed: the ink's bottom edge lands on
+   the seat's bottom edge whichever dimension governed its size. The bleed stays
+   symmetric in total, so the footprint is still the seat.
+
+   Both numbers are measured on the installed bytes, not guessed, and
+   scripts/verify-icon-seats.mjs fails when re-uploaded art stops matching them. */
 .strategikon-title-navigation {
+  --titlebar-mark-seat: 22px;
   align-items: center;
   display: flex;
   gap: var(--ds-space-1);
 }
 
-.strategikon-title-section-action {
+.strategikon-title-navigation .skirmish-hud-title-action {
   block-size: 24px;
   inline-size: 24px;
+}
+
+.strategikon-title-navigation img {
+  /* Grown so the ink's longest edge measures one seat... */
+  --titlebar-mark-canvas: calc(var(--titlebar-mark-seat) / var(--titlebar-mark-ink-fill, 1));
+  /* ...and bled back out, halved, so the footprint is still one seat. */
+  --titlebar-mark-bleed: calc((var(--titlebar-mark-seat) - var(--titlebar-mark-canvas)) / 2);
+  /* Distance the ink's bottom would float above the seat's floor if the bleed were
+     spent evenly — zero whenever height governed the size, positive when width did. */
+  --titlebar-mark-baseline: calc(
+    var(--titlebar-mark-canvas) * var(--titlebar-mark-ink-below, 0) + var(--titlebar-mark-bleed)
+  );
+  block-size: var(--titlebar-mark-canvas);
+  image-rendering: pixelated;
+  inline-size: var(--titlebar-mark-canvas);
+  margin-block-end: calc(var(--titlebar-mark-bleed) - var(--titlebar-mark-baseline));
+  margin-block-start: calc(var(--titlebar-mark-bleed) + var(--titlebar-mark-baseline));
+  margin-inline: var(--titlebar-mark-bleed);
+  object-fit: contain;
+  pointer-events: none;
+}
+
+/* ui/kit/icons/design-index.png — ink 40x40 at (12,12) on a 64x64 canvas. */
+[data-strategikon-section="enchiridion"] img {
+  --titlebar-mark-ink-below: .1875;
+  --titlebar-mark-ink-fill: .625;
+}
+
+/* ui/kit/icons/unit-studio.png — ink 26x40 at (19,12) on a 64x64 canvas. */
+[data-strategikon-section="prosopography"] img {
+  --titlebar-mark-ink-below: .1875;
+  --titlebar-mark-ink-fill: .625;
+}
+
+/* ui/kit/icons/info.png — ink 39x40 at (12,12) on a 64x64 canvas. */
+[data-strategikon-section="lipsanotheca"] img {
+  --titlebar-mark-ink-below: .1875;
+  --titlebar-mark-ink-fill: .625;
+}
+
+/* The Chartulary's mark is whichever Run card back the player chose. Every one of
+   them is printed edge to edge, so they declare nothing: a trimmed mark's canvas IS
+   its ink, so it needs neither the growth nor the baseline correction. */
+
+.strategikon-title-section-action {
   transition: filter var(--ds-duration-fast) var(--ds-ease-standard);
 }
 
@@ -24418,14 +24507,6 @@ button.tileset-relationship-cell {
 .strategikon-title-section-action:focus-visible {
   outline: 2px solid rgba(255, 216, 122, .85);
   outline-offset: 1px;
-}
-
-.strategikon-title-section-action img {
-  block-size: 22px;
-  image-rendering: pixelated;
-  inline-size: 22px;
-  object-fit: contain;
-  pointer-events: none;
 }
 
 .skirmish-hud-title-action.active {
@@ -24443,12 +24524,14 @@ button.tileset-relationship-cell {
   outline-offset: 2px;
 }
 
+/* ui/kit/icons/studio-catalog.png — ink 48x41 at (8,11) on a 64x64 canvas. The book
+   takes the same seat as the registers it indexes: it was a third larger while it
+   alone drew at 32px, which read as a different row rather than the same one. It is
+   also the one mark here whose WIDTH governs its size, so it is the one that needs
+   the baseline correction above to sit its bottom edge down on the row. */
 .skirmish-hud-title-action-glyph {
-  block-size: 32px;
-  image-rendering: pixelated;
-  inline-size: 32px;
-  object-fit: contain;
-  pointer-events: none;
+  --titlebar-mark-ink-below: .1875;
+  --titlebar-mark-ink-fill: .75;
 }
 
 @media (max-width: 1100px) {
