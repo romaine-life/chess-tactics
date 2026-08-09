@@ -13706,8 +13706,21 @@ async function dbCopyBackgroundArtwork(targetDocumentRow, sourceDocumentRow, use
     for (const row of ordered) {
       const id = crypto.randomUUID();
       remapped.set(row.id, id);
+      // Lineage ids appear inside operation and provenance as well as in their own columns, and
+      // the publish contract checks the two agree. Remap every one that names a version being
+      // copied; anything pointing outside the copied set is left exactly as authored.
+      const relink = (value) => (value && remapped.has(String(value)) ? remapped.get(String(value)) : value);
+      const operation = { ...row.operation };
+      if (operation.sourceBackgroundVersionId) {
+        operation.sourceBackgroundVersionId = relink(operation.sourceBackgroundVersionId);
+      }
+      if (operation.parentVersionId) operation.parentVersionId = relink(operation.parentVersionId);
       const provenance = {
         ...row.provenance,
+        ...(row.provenance?.parentVersionId
+          ? { parentVersionId: relink(row.provenance.parentVersionId) } : {}),
+        ...(row.provenance?.sourceBackgroundVersionId
+          ? { sourceBackgroundVersionId: relink(row.provenance.sourceBackgroundVersionId) } : {}),
         levelId: targetDocumentRow.level_id,
         copiedFrom: {
           schema: COPIED_ARTWORK_PROVENANCE_SCHEMA,
@@ -13740,11 +13753,34 @@ async function dbCopyBackgroundArtwork(targetDocumentRow, sourceDocumentRow, use
           row.width,
           row.height,
           JSON.stringify(row.world_bounds),
-          JSON.stringify(row.operation),
+          JSON.stringify(operation),
           JSON.stringify(provenance),
           user.email,
           user.name || user.email,
         ],
+      );
+      // A version migrated from an older contract keeps its modern geometry and raw-contract
+      // fields in side tables rather than in `operation`, and the publish check reads them
+      // through those bindings. A copy without them is a version the publish path calls
+      // malformed, so the bindings travel with the row.
+      await client.query(
+        `INSERT INTO predrawn_background_geometry_bindings (
+           version_id, document_id, legacy_environment_geometry_schema,
+           legacy_environment_geometry_sha256, environment_geometry_schema,
+           environment_geometry_sha256, bound_by_email, bound_by_name)
+         SELECT $1, $2, legacy_environment_geometry_schema, legacy_environment_geometry_sha256,
+                environment_geometry_schema, environment_geometry_sha256, $4, $5
+           FROM predrawn_background_geometry_bindings WHERE version_id = $3`,
+        [id, targetDocumentRow.document_id, row.id, user.email, user.name || user.email],
+      );
+      await client.query(
+        `INSERT INTO predrawn_background_raw_contract_bindings (
+           version_id, document_id, legacy_operation_kind, legacy_operation_sha256,
+           coordinate_basis, viewing_pane, bound_by_email, bound_by_name)
+         SELECT $1, $2, legacy_operation_kind, legacy_operation_sha256,
+                coordinate_basis, viewing_pane, $4, $5
+           FROM predrawn_background_raw_contract_bindings WHERE version_id = $3`,
+        [id, targetDocumentRow.document_id, row.id, user.email, user.name || user.email],
       );
       const stored = await dbBackgroundVersionRow(targetDocumentRow.document_id, rows[0].id, client);
       copied.push(stored);
@@ -15833,10 +15869,38 @@ app.post('/api/editor-documents/:documentId/background-versions/copy', async (re
       access.authority,
       { backgroundVersionId: backgroundId, occlusionVersionId: occlusionId },
     );
+    // The selection also carries a move-highlight profile signed against the artwork id it was
+    // measured against. Dropping it makes the whole selection unreadable, and it cannot be
+    // carried verbatim, so the copy re-signs it for its own artwork: the same measured cells,
+    // bound to the copied background. This is the same normalizer the generation pipeline signs
+    // with, not a forged digest.
+    let moveHighlightProfile = null;
+    const sourceSurface = decodedVersionedPredrawnSurface(sourceDocument.body, { activeOnly: true });
+    if (sourceSurface?.move_highlight_profile) {
+      const board = serverRender?.decodeBoard?.(access.row.body?.boardCode);
+      const digests = board ? predrawnEnvironmentGeometryDigests(access.row.body) : null;
+      const resigned = board && digests
+        ? normalizeMoveHighlightProfile(sourceSurface.move_highlight_profile, {
+            backgroundVersionId: result.backgroundVersionId,
+            boardColumns: board.cols,
+            boardRows: board.rows,
+            environmentGeometrySha256: digests.v2,
+          })
+        : { error: 'the copied Level board could not be decoded' };
+      // A profile that will not re-sign is a calibration measured on a board the copy is not:
+      // a Run Battle drops the authored army, which changes the very geometry the profile is
+      // signed over. That does not make the artwork invalid, so the copy succeeds without one
+      // and the caller selects the artwork through the profile-free selection shape.
+      moveHighlightProfile = resigned.error ? null : (resigned.value ?? resigned);
+      if (resigned.error) {
+        console.warn('background artwork copy dropped its move-highlight profile:', resigned.error);
+      }
+    }
     res.status(201).json({
       versions: result.versions.map(publicBackgroundVersion),
       background_version_id: result.backgroundVersionId,
       occlusion_version_id: result.occlusionVersionId,
+      move_highlight_profile: moveHighlightProfile,
     });
   } catch (error) {
     respondBackgroundVersionError(res, error, 'copy');
