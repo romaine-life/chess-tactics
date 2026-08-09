@@ -385,7 +385,10 @@ export function drawBoardOps(
   // have to know about the scale are the backing stores and the getImageData
   // window, both of which are measured in real device pixels.
   const scale = boardRenderScale(renderScale);
-  ctx.setTransform(scale, 0, 0, scale, 0, 0);
+  // Only touch the transform when there is a scale to apply. At 1:1 this is an
+  // identity write, and the server-side thumbnail renderer draws through a canvas
+  // shim that implements what the unscaled path needs and no more.
+  if (scale !== 1) ctx.setTransform(scale, 0, 0, scale, 0, 0);
   ctx.clearRect(0, 0, bounds.width, bounds.height);
   // At a fractional scale every op lands on fractional device pixels. Nearest
   // sampling there drops or doubles whole columns PER SPRITE, which turns a blade
@@ -424,7 +427,7 @@ export function drawBoardOps(
     if (scratch.canvas.width < regionW) scratch.canvas.width = regionW;
     if (scratch.canvas.height < regionH) scratch.canvas.height = regionH;
     const scratchCtx = scratch.context;
-    scratchCtx.setTransform(scale, 0, 0, scale, 0, 0);
+    if (scale !== 1) scratchCtx.setTransform(scale, 0, 0, scale, 0, 0);
     scratchCtx.clearRect(0, 0, region.bounds.width, region.bounds.height);
     scratchCtx.imageSmoothingEnabled = scale !== 1;
     scratchCtx.globalCompositeOperation = 'source-over';
@@ -436,7 +439,7 @@ export function drawBoardOps(
         if (depthScratch.canvas.width < regionW) depthScratch.canvas.width = regionW;
         if (depthScratch.canvas.height < regionH) depthScratch.canvas.height = regionH;
         const depthContext = depthScratch.context;
-        depthContext.setTransform(scale, 0, 0, scale, 0, 0);
+        if (scale !== 1) depthContext.setTransform(scale, 0, 0, scale, 0, 0);
         depthContext.clearRect(0, 0, region.bounds.width, region.bounds.height);
         // The depth raster is READ back per pixel to build an erase mask, so it must
         // stay hard-sampled whatever the layer scale is: a filtered depth value is a
