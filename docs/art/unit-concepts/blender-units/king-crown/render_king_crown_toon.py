@@ -20,7 +20,22 @@ extend past the model, and what is left is a rim of exactly the authored
 thickness. It is drawn geometry, not a post-process, so it stays hard at every
 size instead of dissolving the way a downsampled line does.
 
-Per-rung knobs, because a 28px king is a redesign and not a smaller 113px king:
+Authored rung ladder, in delivery frames. The camera runs on a global multiplicative
+zoom ladder (`frontend/src/game/zoomTiers.ts`), so the sizes a unit is ever drawn at
+are finite and known. Art is authored one rung per OCTAVE rather than one per tier:
+within an octave the gap is at most 2:1, which is where a single filtered sample is
+still honest, and the renderer's mip chain covers it. Past 2:1 it is not, which is
+what the old 512px sprites looked like on a zoomed-out board.
+
+    55x65    bands=2 simplify=1   the crown is a mass, not a jewelled interior
+    110x130  bands=3
+    220x260  bands=3
+    440x520  bands=3
+
+The bottom rung is a redesign rather than a smaller top rung, which is the whole
+reason it is authored instead of derived.
+
+Per-rung knobs, because a 55px king is a redesign and not a smaller 440px king:
   UNIT_ART_TOON_BANDS       shading steps (3 reads as form, 2 reads as a mass)
   UNIT_ART_TOON_OUTLINE_PX  ink width in DELIVERY pixels, converted to world units
   UNIT_ART_TOON_SIMPLIFY    1 collapses the crown's interior detail to one mass
