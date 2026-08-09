@@ -222,7 +222,7 @@ try {
           evidence: {
             schema: 'live-media-owner-proof-v1',
             canonicalScale: 1,
-            surfaceKind: 'Studio Card Prompts King illustration',
+            surfaceKind: 'Studio Card Prompts family illustration',
             renderer: 'RunCardPromptCatalog/RunCardArtCandidateGrid',
             versionId: row.id,
             slot: row.slot,

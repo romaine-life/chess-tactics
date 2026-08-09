@@ -20778,6 +20778,14 @@ app.post('/api/admin/media-versions/:id/review', async (req, res) => {
 });
 
 function mediaAcceptanceContract(row) {
+  // v3 family card art is promoted PER FAMILY -- each illustration is complete on its own and the
+  // review carries that one card's decoded raster. A group contract on such a version is therefore
+  // incoherent rather than merely unusual: the batch path refuses it for being family art, and the
+  // per-family path would refuse it for being grouped, which strands the candidate with no way out.
+  // Family art is standalone whatever the slot metadata claims.
+  if (isObjectRecord(row.metadata) && row.metadata.schema === 'run-card-art-plan-v3') {
+    return { mode: 'standalone' };
+  }
   const raw = isObjectRecord(row.slot_metadata?.acceptance) ? row.slot_metadata.acceptance : null;
   if (!raw || raw.mode === undefined || raw.mode === 'standalone') return { mode: 'standalone' };
   if (raw.mode !== 'group') throw mediaMutationError('media_slot_acceptance_contract_invalid', 409, { slot: row.slot });
