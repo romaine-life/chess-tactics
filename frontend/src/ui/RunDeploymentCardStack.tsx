@@ -87,9 +87,9 @@ export function RunDeploymentDeckDeal({
   const awaiting = deployment?.stage === 'awaiting-deal';
   const centerCount = Math.max(0, run.cards.length - dealtCount);
   const visibleDeckLayers = Math.min(3, Math.max(1, centerCount));
-  // What pressing it actually does. The Battle's allowance is `3 + conflictIndex`, but a hand
-  // shorter than that draws every card there is, so the allowance would be a promise the deck
-  // cannot keep — the dealt list is the honest count.
+  // What pressing it actually does. The Battle authors how many cards it deals, but a hand
+  // shorter than that draws every card there is, so the authored count would be a promise the
+  // deck cannot keep — the dealt list is the honest one.
   const drawIds = deployment?.dealtCardIds ?? [];
 
   useSceneEnteredAction(
