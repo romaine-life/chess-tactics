@@ -12,9 +12,56 @@
 //
 // Nothing here consults or changes board law. It reads a board that has already committed.
 
-import { gameEnv, kingCheckers, royalForkVictim, sideCanCaptureUnit, smotheredMateBy } from '../core/rules';
-import type { GameEvent, GameState, Vec } from '../core/types';
+import {
+  applyMove,
+  gameEnv,
+  kingCheckers,
+  legalMoves,
+  livingPieces,
+  royalForkVictim,
+  sideCanCaptureUnit,
+  smotheredMateBy,
+  type MoveEnv,
+} from '../core/rules';
+import type { GameEvent, GameState, Piece, Vec } from '../core/types';
 import { manubiaeUnitWorth, RUN_ROYAL_FORK_MIN_VICTIM_VALUE, type ManubiumAward } from './model';
+
+/**
+ * Whether a fork HOLDS — whether the enemy can break it by taking the forking unit without
+ * paying more than that unit is worth.
+ *
+ * The forking unit is the piece giving check, so capturing it is how the enemy ANSWERS the
+ * check: a fork they can profitably take never collects its second prong, and the player has
+ * simply handed over a piece. But a fork whose only taker is a bigger piece is a fork that
+ * WINS — they either lose the exchange or lose the second prong.
+ *
+ * So each legal capture of the forker is played out one ply to see what it actually costs
+ * them: nothing at all when the square is undefended (they win the unit outright, whatever
+ * took it), and the taker's own worth when the player can take back. Anything at or below the
+ * forking unit's worth breaks the fork — an even trade included, because trading pieces is
+ * not what the bounty is for.
+ *
+ * One ply, not a search. Whether the recapture is itself answerable is the position's
+ * business, the same way ADR-0527 leaves the victim's defenders unasked.
+ */
+function forkHolds(mover: Piece, game: GameState, env: MoveEnv | undefined): boolean {
+  const moverWorth = manubiaeUnitWorth(mover);
+  if (moverWorth === null) return false; // a King cannot be priced, so no exchange can be judged
+  for (const enemy of livingPieces(game.pieces, 'enemy')) {
+    for (const move of legalMoves(enemy, game.pieces, game.size, env)) {
+      if (move.capture !== mover.id && !(move.x === mover.x && move.y === mover.y)) continue;
+      const after = applyMove(game, enemy.id, move, { stats: false });
+      const taker = after.state.pieces.find((piece) => piece.id === enemy.id);
+      // What the capture costs them: the taker, but only if it can be taken back.
+      const answered = taker
+        ? sideCanCaptureUnit(taker, 'player', after.state.pieces, after.state.size, gameEnv(after.state))
+        : false;
+      const cost = answered ? manubiaeUnitWorth(taker) ?? 0 : 0;
+      if (cost <= moverWorth) return false;
+    }
+  }
+  return true;
+}
 
 /** One Manubium the board earned, and the square it is seated on. */
 export interface EarnedManubium {
@@ -72,16 +119,16 @@ export function manubiaeEarnedBy(game: GameState, events: readonly GameEvent[]):
     // below as the different thing it is. Seated on the forking unit's own square -- that is
     // what the player just placed, and where the two lines they are paid for meet.
     //
-    // AND the forking unit has to survive the square it forked from. A fork the enemy can
-    // simply take is not a fork at all: taking it IS how they answer the check, so the second
-    // prong is never collected and the player has handed over a piece. That is the one thing
-    // the geometry cannot see, and paying for it teaches exactly the wrong move.
+    // AND the fork has to HOLD -- see `forkHolds`. A fork the enemy can profitably take is not
+    // a fork at all, because taking it is how they answer the check; a fork whose only taker
+    // costs them more than it is worth still wins. That is the one thing the geometry cannot
+    // see, and paying for the first case teaches exactly the wrong move.
     //
     // This asks only about the FORKER, never the victim. Whether the victim is defended stays
     // unasked (ADR-0527) -- what a real fork is worth to answer is the position's business.
     if (
       royalForkVictim(mover, game.pieces, game.size, env, RUN_ROYAL_FORK_MIN_VICTIM_VALUE)
-      && !sideCanCaptureUnit(mover, 'enemy', game.pieces, game.size, env)
+      && forkHolds(mover, game, env)
     ) {
       earned.push({ award: { id: 'royal-fork' }, at });
     }

@@ -59,20 +59,51 @@ describe('what a committed board earns', () => {
     });
   });
 
-  it('pays a royal fork only when the forking unit survives the square it forked from', () => {
-    // A Knight forking the King and a Rook, standing where nothing can reach it.
+  it('pays a royal fork the enemy cannot reach at all', () => {
     const knight = P('player', 'knight', 4, 6);
     const king = P('enemy', 'king', 5, 2);
     const rook = P('enemy', 'rook', 3, 2);
-    const safe = earned([knight, king, rook], knight, { x: 4, y: 4 });
-    expect(ids(safe)).toContain('royal-fork');
+    expect(ids(earned([knight, king, rook], knight, { x: 4, y: 4 }))).toContain('royal-fork');
+  });
 
-    // The same geometry, with an enemy Pawn that can simply take the Knight. Taking it IS how
-    // the check gets answered, so the Rook is never collected and the player has handed over a
-    // piece — the exact move the bounty must not teach.
-    const taker = P('enemy', 'pawn', 5, 3);
-    const thrown = earned([knight, king, rook, taker], knight, { x: 4, y: 4 });
-    expect(ids(thrown)).not.toContain('royal-fork');
+  it('does not pay a fork the enemy can take with something CHEAPER', () => {
+    // Taking the Knight IS how the check gets answered, so the Rook is never collected and the
+    // player has handed over a piece for a Pawn — the exact move the bounty must not teach.
+    const knight = P('player', 'knight', 4, 6);
+    const king = P('enemy', 'king', 5, 2);
+    const rook = P('enemy', 'rook', 3, 2);
+    const pawn = P('enemy', 'pawn', 5, 3);
+    expect(ids(earned([knight, king, rook, pawn], knight, { x: 4, y: 4 }))).not.toContain('royal-fork');
+  });
+
+  it('pays a fork whose only taker costs the enemy MORE than the forking unit', () => {
+    // Their Queen can take the Knight, and our Rook takes back: they spend a Queen to answer a
+    // Knight, or they lose the Rook. Either way the fork won, so it pays.
+    const knight = P('player', 'knight', 4, 6);
+    const guard = P('player', 'rook', 4, 0); // recaptures down the file the Knight stands on
+    const king = P('enemy', 'king', 5, 2);
+    const rook = P('enemy', 'rook', 3, 2);
+    const queen = P('enemy', 'queen', 7, 1); // (7,1) → (4,4) is a clear diagonal
+    expect(ids(earned([knight, guard, king, rook, queen], knight, { x: 4, y: 4 }))).toContain('royal-fork');
+  });
+
+  it('does not pay when that bigger taker gets the forking unit for FREE', () => {
+    // The same Queen, with nothing to take back: "only a bigger piece can reach it" is not
+    // safety on its own — an undefended unit is simply lost, whatever takes it.
+    const knight = P('player', 'knight', 4, 6);
+    const king = P('enemy', 'king', 5, 2);
+    const rook = P('enemy', 'rook', 3, 2);
+    const queen = P('enemy', 'queen', 7, 1);
+    expect(ids(earned([knight, king, rook, queen], knight, { x: 4, y: 4 }))).not.toContain('royal-fork');
+  });
+
+  it('does not pay an even trade — the fork has to win something', () => {
+    const knight = P('player', 'knight', 4, 6);
+    const guard = P('player', 'rook', 4, 0);
+    const king = P('enemy', 'king', 5, 2);
+    const rook = P('enemy', 'rook', 3, 2);
+    const trader = P('enemy', 'bishop', 7, 1); // worth the same as the Knight
+    expect(ids(earned([knight, guard, king, rook, trader], knight, { x: 4, y: 4 }))).not.toContain('royal-fork');
   });
 
   it('asks only whether the FORKER can be taken, never whether the victim is defended', () => {

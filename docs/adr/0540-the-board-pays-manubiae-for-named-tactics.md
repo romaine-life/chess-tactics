@@ -55,18 +55,28 @@ this game. Two filters apply:
   (1), discovered check (2), double check (3), en passant (5), smothered mate (5). Prices sit
   between the two poles ADR-0517 and ADR-0527 set: five gold is worth going out of your way for
   and you almost never can; one gold is the Run noticing something you were going to do anyway.
-- **A royal fork must leave the forking unit somewhere the enemy cannot take it.** ADR-0527
-  decided not to ask whether the *victim* is defended, and that stands. It never asked whether
-  the *forker* survives, and that turns out to be the whole difference between a fork and a
-  blunder: the forking unit is the piece giving check, so capturing it is how the enemy ANSWERS
-  the check. A fork that can simply be taken never collects its second prong — the player has
-  handed over a piece and been paid for it. `sideCanCaptureUnit` asks the question in terms of
-  the enemy's LEGAL moves rather than attack geometry, because a pinned piece attacks the square
-  without being able to go there and a king may not take a defended piece at all.
+- **A royal fork must HOLD: taking the forking unit has to cost the enemy more than that unit
+  is worth.** ADR-0527 decided not to ask whether the *victim* is defended, and that stands. It
+  never asked whether the *forker* survives, and that turns out to be the whole difference
+  between a fork and a blunder: the forking unit is the piece giving check, so capturing it is
+  how the enemy ANSWERS the check. A fork they can profitably take never collects its second
+  prong — the player has handed over a piece and been paid for it. A fork whose only taker is a
+  bigger piece still wins, though, so "unreachable" is too strict a bar; what matters is the
+  price of breaking it.
+  `forkHolds` plays each legal capture of the forker out ONE ply and reads what it cost: nothing
+  at all when the square is undefended — an undefended unit is simply lost, whatever takes it,
+  which is why "only a bigger piece can reach it" is not safety on its own — and the taker's own
+  worth when the player can take back. Anything at or below the forking unit's worth breaks the
+  fork, an even trade included, because trading pieces is not what the bounty is for. One ply,
+  not a search: whether the recapture is itself answerable is the position's business, the same
+  way ADR-0527 leaves the victim's defenders unasked. Captures are read from the enemy's LEGAL
+  moves rather than attack geometry, because a pinned piece attacks a square without being able
+  to go there and a king may not take a defended piece at all.
   This is the only Manubium that needs the clause. A discovered or double check is safe without
   it (the enemy must answer the check before they can collect a hanging mover, which is the
-  point of a discovery), an advantageous capture has already won material by definition, an en
-  passant is an even trade, and a smothered mate has ended the Battle.
+  point of a discovery), an advantageous capture has already won material by definition — the
+  victim is worth more than the capturer, so even a full recapture leaves the player ahead — an
+  en passant is an even trade, and a smothered mate has ended the Battle.
 - **An advantageous capture is scaled, not flat.** It is the one deed here a player lands
   constantly, and a single flat number is either too much for a rook taking a queen or too
   little for a pawn taking one. Two tenths per point of material won is exact in the gold scale,
