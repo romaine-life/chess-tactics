@@ -46,6 +46,9 @@ function sectioFixture({
   };
   // Adlectio is how a Run comes to hold cards, so the fixture buys them rather than writing them
   // into the document — a hand assembled by hand would not carry real army units in its seats.
+  // Each staged offer is withdrawn once it is taken, exactly as `craft` stages held cards: a
+  // Sectio admits one card, and these are cards the Run arrived holding rather than one visit's
+  // shopping.
   let run = openSectio({ ...createRun(war, seed), phase: 'battle' }, []);
   cardIds.forEach((cardId, index) => {
     const offer = createRunCardOffer(run, RUN_CARD_BY_ID[cardId], 0, 200 + index);
@@ -55,6 +58,7 @@ function sectioFixture({
       sectio: { ...run.sectio!, cardOffers: [...run.sectio!.cardOffers, offer] },
     };
     run = performAdlectio(run, offer.offerId);
+    run = { ...run, sectio: { ...run.sectio!, adlectedCardOfferIds: [] } };
   });
   return { run, level, battleIndex: sectioUpcomingBattleIndex(run) };
 }

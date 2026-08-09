@@ -3719,11 +3719,33 @@ function openPostBattleSectio(run: RunDocument, victoryGoldTenths: number): RunD
   };
 }
 
+/**
+ * How many cards one Sectio admits. A visit is a CHOICE between the faces it dealt, not a
+ * shopping list drawn against whatever gold the Run happens to be carrying: an army that can
+ * buy the whole row outgrows its War in a Sectio or two, and every Battle after that is priced
+ * for someone else. One is also what the visit's other two transactions already allow --
+ * Expunctio strikes one card, the After-Hours Key sells one lipsanon -- so the card row stops
+ * being the surface that behaves differently.
+ *
+ * Reset Sectio restores the whole visit, which is what keeps the single admission a decision
+ * rather than a misclick.
+ */
+export const SECTIO_ADLECTIO_LIMIT = 1;
+
+/**
+ * Whether this Sectio's admission has been spent. The unbought offers stay on the table and
+ * stay readable; they simply cannot be taken until Reset returns the visit to its entry.
+ */
+export function sectioAdlectioSpent(run: RunDocument): boolean {
+  return (run.sectio?.adlectedCardOfferIds.length ?? 0) >= SECTIO_ADLECTIO_LIMIT;
+}
+
 export function performAdlectio(run: RunDocument, offerId: string): RunDocument {
   const offer = run.sectio?.cardOffers.find((candidate) => candidate.offerId === offerId);
   if (
     run.phase !== 'sectio'
     || !run.sectio
+    || sectioAdlectioSpent(run)
     || run.sectio.adlectedCardOfferIds.includes(offerId)
     || !offer
   ) return run;
