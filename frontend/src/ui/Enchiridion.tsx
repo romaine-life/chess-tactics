@@ -15,6 +15,7 @@ import {
   RUN_LIPSANA,
   RUN_MANUBIAE,
   cardContentsLabel,
+  cardCostGold,
   runCardTierOf,
   runCardTierRank,
   type AtaraxiaTier,
@@ -767,7 +768,7 @@ export function cardMatchesFilters(
   unitFilter: CardUnitFilter,
   rarityFilter: CardRarityFilter,
 ): boolean {
-  return (goldFilter === 'all' || card.value === Number(goldFilter))
+  return (goldFilter === 'all' || cardCostGold(card.value) === Number(goldFilter))
     && (unitFilter === 'all' || card.pieces.some((piece) => piece === unitFilter))
     && (rarityFilter === 'all' || card.rarity === rarityFilter);
 }
@@ -847,7 +848,7 @@ export function CardGalleryFilters({
 
 /**
  * Bands a gallery for display. Starter cards band on their own ahead of the priced ones:
- * His Grace is worth 2 gold on paper but can never be bought, so filing it under "2 gold"
+ * His Grace is worth 20 gold on paper but can never be bought, so filing it under "20 gold"
  * sat it among cards a player could actually pay that for (ADR-0414).
  */
 export function cardsByTier<T>(
@@ -954,7 +955,7 @@ export function CardCodex({
                           onSelect={() => setLocalSelectedId(card.id)}
                           data-ui-sfx="card"
                           className="enchiridion-card-gallery-trigger"
-                          aria-label={`${runCardName(card)}. ${cardContentsLabel(card)}. Worth ${card.value} gold.`}
+                          aria-label={`${runCardName(card)}. ${cardContentsLabel(card)}. Worth ${cardCostGold(card.value)} gold.`}
                           aria-pressed={focused}
                           aria-current={focused ? 'true' : undefined}
                         >

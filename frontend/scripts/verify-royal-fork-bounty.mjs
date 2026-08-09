@@ -182,7 +182,7 @@ try {
   `);
   const delta = paid.gold - plan.gold;
   if (delta !== paid.bounty) {
-    await fail('gold', `the fork moved gold by ${delta / 10} instead of ${paid.bounty / 10} (${plan.gold / 10} → ${paid.gold / 10})`);
+    await fail('gold', `the fork moved gold by ${delta} instead of ${paid.bounty} (${plan.gold} → ${paid.gold})`);
   }
   if (!paid.log.length) await fail('log', 'the Battle log never said a fork had been paid for');
   const seated = paid.notices.find((notice) => notice.goldTenths === paid.bounty);
@@ -194,7 +194,7 @@ try {
   const board = await page.$('.skirmish-board-viewport') ?? await page.$('.skirmish-board');
   await (board ?? page).screenshot({ path: shotPath });
 
-  console.log(`gold ${plan.gold / 10} → ${paid.gold / 10} (+${paid.bounty / 10})`);
+  console.log(`gold ${plan.gold} → ${paid.gold} (+${paid.bounty})`);
   console.log(`log: ${paid.tail.join(' | ')}`);
   console.log(`marker seated at ${seated.at.x},${seated.at.y}`);
   console.log(`PASS — royal fork bounty paid on the live board (${shotPath})`);

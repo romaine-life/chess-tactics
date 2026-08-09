@@ -397,7 +397,7 @@ describe('skirmish store', () => {
     expect(useSkirmish.getState().game).toBe(before.game);
     expect(useSkirmish.getState().selectedId).toBe(before.selectedId);
     expect(useSkirmish.getState().undoCheckpoint).toBeNull();
-    expect(useSkirmish.getState().log[0].text).toBe('Move undone — 1 gold paid.');
+    expect(useSkirmish.getState().log[0].text).toBe('Move undone — 10 gold paid.');
 
     vi.runAllTimers();
     expect(useSkirmish.getState().game).toBe(before.game);

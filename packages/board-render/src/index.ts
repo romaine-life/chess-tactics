@@ -201,6 +201,7 @@ export {
   RUN_STARTER_CARDS,
   RUN_STARTER_CARD_BY_ID,
   RUN_LIPSANON_IMMEDIATE_GOLD,
+  cardCostGold,
   cardExpunctioPriceTenths,
   isRunStarterCard,
   isRunStarterCardId,

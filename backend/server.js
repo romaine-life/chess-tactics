@@ -23335,9 +23335,11 @@ function craftedRunSummary(run) {
     war: run.war.name,
     phase: run.phase,
     battle: `${run.battleIndex + 1}/${run.war.battles.length}`,
-    gold: run.goldTenths / 10,
+    // Gold is whole and exact, and `goldTenths` carries it unscaled (ADR-0547). An offer's
+    // `cost` is material POINTS, which is what the document prices in; ten gold to the point.
+    gold: run.goldTenths,
     army: run.army.map((unit) => unit.type),
-    offers: run.sectio ? run.sectio.cardOffers.map((offer) => `${offer.pieces.join('+')}@${offer.cost}`) : null,
+    offers: run.sectio ? run.sectio.cardOffers.map((offer) => `${offer.pieces.join('+')}@${offer.cost * 10}`) : null,
     lipsana: run.lipsana,
   };
 }

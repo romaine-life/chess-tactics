@@ -69,12 +69,12 @@ describe('card gallery filter addresses', () => {
   });
 
   it('round-trips every filter it writes', () => {
-    const filters = { gold: '6', unit: 'rook', rarity: 'rare' } as const;
+    const filters = { gold: '60', unit: 'rook', rarity: 'rare' } as const;
     const href = enchiridionCardsHref(filters);
-    expect(href).toBe('/enchiridion/cards?gold=6&unit=rook&rarity=rare');
+    expect(href).toBe('/enchiridion/cards?gold=60&unit=rook&rarity=rare');
     expect(enchiridionCardFiltersFromSearch(href.slice(href.indexOf('?')))).toEqual(filters);
     // A leading '?' is optional, so a caller may pass location.search either way.
-    expect(enchiridionCardFiltersFromSearch('gold=6&unit=rook&rarity=rare')).toEqual(filters);
+    expect(enchiridionCardFiltersFromSearch('gold=60&unit=rook&rarity=rare')).toEqual(filters);
   });
 
   it('omits only the filters that are off', () => {
@@ -90,25 +90,27 @@ describe('card gallery filter addresses', () => {
     const junk = '?gold=99&unit=dragon&rarity=mythic';
     expect(enchiridionCardFiltersFromSearch(junk)).toEqual(ENCHIRIDION_CARD_FILTERS_ALL);
     expect(enchiridionCardFiltersFromSearch('?gold=&unit=&rarity=')).toEqual(ENCHIRIDION_CARD_FILTERS_ALL);
-    expect(enchiridionCardFiltersFromSearch('?gold=6&unit=dragon'))
-      .toEqual({ gold: '6', unit: 'all', rarity: 'all' });
+    expect(enchiridionCardFiltersFromSearch('?gold=60&unit=dragon'))
+      .toEqual({ gold: '60', unit: 'all', rarity: 'all' });
     // Inherited keys are values here, not lookups, but a filter named for one must still miss.
     expect(enchiridionCardFiltersFromSearch('?unit=constructor&rarity=toString'))
       .toEqual(ENCHIRIDION_CARD_FILTERS_ALL);
-    // Gold is a band, not a number: '06' and '6.0' name no band even though Number() likes them.
-    expect(enchiridionCardFiltersFromSearch('?gold=06')).toEqual(ENCHIRIDION_CARD_FILTERS_ALL);
-    expect(enchiridionCardFiltersFromSearch('?gold=6.0')).toEqual(ENCHIRIDION_CARD_FILTERS_ALL);
+    // Gold is a band, not a number: '060' and '60.0' name no band even though Number() likes them.
+    expect(enchiridionCardFiltersFromSearch('?gold=060')).toEqual(ENCHIRIDION_CARD_FILTERS_ALL);
+    expect(enchiridionCardFiltersFromSearch('?gold=60.0')).toEqual(ENCHIRIDION_CARD_FILTERS_ALL);
+    // And a band that WAS one before gold was redenominated names none now.
+    expect(enchiridionCardFiltersFromSearch('?gold=6')).toEqual(ENCHIRIDION_CARD_FILTERS_ALL);
   });
 
   it('carries the browsed filters onto a card address, and drops the card when they change', () => {
-    const filters = { gold: '9', unit: 'all', rarity: 'rare' } as const;
+    const filters = { gold: '90', unit: 'all', rarity: 'rare' } as const;
     const cardHref = enchiridionCardHrefUnderFilters('q', filters);
-    expect(cardHref).toBe('/enchiridion/cards/regal-serenity?gold=9&rarity=rare');
+    expect(cardHref).toBe('/enchiridion/cards/regal-serenity?gold=90&rarity=rare');
     // The card stays addressable through its filters, and the filters survive the click.
     expect(enchiridionCardFromPath(cardHref.split('?')[0])).toBe('q');
     expect(enchiridionCardFiltersFromSearch(cardHref.slice(cardHref.indexOf('?')))).toEqual(filters);
     // Changing a filter returns to the gallery: the path must not keep naming a hidden face.
-    expect(enchiridionCardsHref({ ...filters, gold: '1' })).toBe('/enchiridion/cards?gold=1&rarity=rare');
+    expect(enchiridionCardsHref({ ...filters, gold: '10' })).toBe('/enchiridion/cards?gold=10&rarity=rare');
   });
 
   it('is wired to the live address rather than to component state', () => {

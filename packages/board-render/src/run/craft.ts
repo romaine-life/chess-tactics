@@ -1,6 +1,6 @@
 // Craft an active Run directly into a named state so a Run screen can be reached by URL.
 //
-// Debugging and feature work constantly need "the Sectio after Battle 3 with 25 gold and a Rook on
+// Debugging and feature work constantly need "the Sectio after Battle 3 with 250 gold and a Rook on
 // offer". Playing there by hand is slow, and hand-authoring the document is worse: the server
 // validator (validateActiveRunBody) cross-checks army/card membership, offer pricing and the
 // Sectio entry snapshot, so a typed-out document is rejected far more often than it
@@ -248,10 +248,11 @@ export function parseRunCraftSpec(search: string): RunCraftSpec | null {
   if (!CRAFT_PHASES.includes(phase as RunCraftPhase)) {
     throw new RunCraftError(`craft: "${phase}" is not a Run phase. Use ${CRAFT_PHASES.join(', ')}.`);
   }
+  // Gold is whole and exact (ADR-0547), so the address carries the number the screen shows.
   const goldRaw = params.get('gold');
-  const goldTenths = goldRaw === null ? null : Math.round(Number(goldRaw) * GOLD_SCALE);
+  const goldTenths = goldRaw === null ? null : Number(goldRaw);
   if (goldRaw !== null && (!Number.isSafeInteger(goldTenths) || (goldTenths as number) < 0)) {
-    throw new RunCraftError(`craft gold: "${goldRaw}" must be a gold amount of 0 or more.`);
+    throw new RunCraftError(`craft gold: "${goldRaw}" must be a whole gold amount of 0 or more.`);
   }
   const offers = params.get('offers');
   const cards = params.get('cards');
@@ -335,9 +336,9 @@ export function runCraftSpecFromJson(raw: unknown): RunCraftSpec {
     throw new RunCraftError(`craft: "${String(phase)}" is not a Run phase. Use ${CRAFT_PHASES.join(', ')}.`);
   }
   const gold = spec.gold;
-  const goldTenths = gold === undefined || gold === null ? null : Math.round(Number(gold) * GOLD_SCALE);
+  const goldTenths = gold === undefined || gold === null ? null : Number(gold);
   if (goldTenths !== null && (!Number.isSafeInteger(goldTenths) || goldTenths < 0)) {
-    throw new RunCraftError(`craft gold: "${String(gold)}" must be a gold amount of 0 or more.`);
+    throw new RunCraftError(`craft gold: "${String(gold)}" must be a whole gold amount of 0 or more.`);
   }
   const tier = spec.tier ?? spec.ataraxiaTier;
   const offers = spec.offers;
@@ -433,7 +434,7 @@ export function runCraftSpecToJson(spec: RunCraftSpec): Record<string, unknown> 
   const json: Record<string, unknown> = { phase: spec.phase, battle: spec.battle, seed: spec.seed, tier: spec.ataraxiaTier };
   if (spec.deploymentMode === 'arranged') json.deployment = 'arranged';
   if (spec.warId !== null) json.war = spec.warId;
-  if (spec.goldTenths !== null) json.gold = spec.goldTenths / GOLD_SCALE;
+  if (spec.goldTenths !== null) json.gold = spec.goldTenths;
   if (spec.army) json.army = spec.army.map((entry) => entry.type);
   if (spec.add) json.add = spec.add.map((entry) => entry.type);
   if (spec.offers) json.offers = spec.offers.map((card) => card.coreId);
@@ -468,7 +469,7 @@ export function runCraftAddressParams(spec: RunCraftSpec): URLSearchParams {
   if (spec.seed !== DEFAULT_CRAFT_SEED) params.set('seed', String(spec.seed));
   if (spec.ataraxiaTier !== 0) params.set('tier', String(spec.ataraxiaTier));
   if (spec.deploymentMode === 'arranged') params.set('deployment', 'arranged');
-  if (spec.goldTenths !== null) params.set('gold', String(spec.goldTenths / GOLD_SCALE));
+  if (spec.goldTenths !== null) params.set('gold', String(spec.goldTenths));
   if (spec.army) params.set('army', spec.army.map((entry) => entry.type).join(','));
   if (spec.add) params.set('add', spec.add.map((entry) => entry.type).join(','));
   if (spec.offers) {

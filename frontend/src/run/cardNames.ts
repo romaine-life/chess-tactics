@@ -54,7 +54,7 @@ export function canonicalCardId(card: NameableRunCard): string {
 //
 // A card outside the deck (e.g. an art-review fixture) falls back to its prose label.
 const ALL_RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.freeze({
-  // --- 1-4 gold: single pieces, pairs, and the seven Pawn quartets ---
+  // --- 10-40 gold: single pieces, pairs, and the seven Pawn quartets ---
   p: 'The Volunteer',
   pp: 'Two Good Boots',
   b: 'Wandering Preacher',
@@ -71,7 +71,7 @@ const ALL_RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.freeze(
   'f-01101120-pppp': 'The Staggered Sowing',
   'f-01112021-pppp': 'The Trailing Fourth',
 
-  // --- 5 gold ---
+  // --- 50 gold ---
   r: 'The Watchtower',
   'ppb-protected': 'Country Parish',
   'ppk-protected': 'Outrider Patrol',
@@ -90,7 +90,7 @@ const ALL_RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.freeze(
   'f-011011-pkp': 'Rider at the Elbow',
   'f-011011-ppk': 'Last Horse in the Lane',
 
-  // --- 6 gold ---
+  // --- 60 gold ---
   'bb-vertical': 'Matins and Vespers',
   'pr-front': "Gatekeeper's Charge",
   'kk-horizontal': 'Thundering Lances',
@@ -137,7 +137,7 @@ const ALL_RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.freeze(
   'f-01112021-ppkp': 'The Overlooking Rider',
   'f-01112021-pppk': 'Corner Outrider',
 
-  // --- 7 gold: three-piece formations in a line, and around a corner ---
+  // --- 70 gold: three-piece formations in a line, and around a corner ---
   'f-011121-bbp': 'Two Offices Abreast',
   'f-011121-bpb': 'Synod on the Road',
   'f-011121-bkp': 'Little Crusade',
@@ -163,7 +163,7 @@ const ALL_RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.freeze(
   'f-011011-prp': 'Tower Above the Lane',
   'f-011011-rpp': 'Keep at the Turning',
 
-  // --- 8 gold, square footprint (PP/PP) ---
+  // --- 80 gold, square footprint (PP/PP) ---
   'f-00011011-bbpp': 'Traveling Chapel',
   'f-00011011-bppb': 'Chapel Corner to Corner',
   'f-00011011-bkpp': "Wayfarers' Compact",
@@ -173,7 +173,7 @@ const ALL_RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.freeze(
   'f-00011011-kppk': 'Lances at Opposite Corners',
   'f-00011011-rppp': 'Rampart Detail',
 
-  // --- 8 gold, stepped footprint (XX./.XX) ---
+  // --- 80 gold, stepped footprint (XX./.XX) ---
   'f-00101121-bbpp': 'Two Offices, One Step',
   'f-00101121-bpbp': 'The Divided Chapter',
   'f-00101121-bppb': 'Chapel Across the Gap',
@@ -191,7 +191,7 @@ const ALL_RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.freeze(
   'f-00101121-prpp': 'Tower on the Step',
   'f-00101121-rppp': 'The Offset Rampart',
 
-  // --- 8 gold, hooked footprint (XXX/..X) ---
+  // --- 80 gold, hooked footprint (XXX/..X) ---
   'f-00102021-bbpp': 'Chapter at the Hook',
   'f-00102021-bpbp': 'Two Offices, One Rank',
   'f-00102021-bppb': 'Preacher Fore and Aft',
@@ -221,11 +221,11 @@ const ALL_RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.freeze(
   'f-00102021-prpp': 'Keep Amid the Rank',
   'f-00102021-rppp': 'Tower Leads the Hook',
 
-  // --- 8 gold, two-piece pairs ---
+  // --- 80 gold, two-piece pairs ---
   'f-0111-rb': 'Cloister and Keep',
   'f-0111-rk': "Castellan's Sally",
 
-  // --- 8 gold, line of four (..../XXXX) ---
+  // --- 80 gold, line of four (..../XXXX) ---
   'f-01112131-bbpp': 'Two Offices in Front',
   'f-01112131-bpbp': 'Alternating Office',
   'f-01112131-bppb': 'Offices at Both Ends',
@@ -243,7 +243,7 @@ const ALL_RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.freeze(
   'f-01112131-prpp': 'Tower Second in Line',
   'f-01112131-rppp': 'Tower Heads the Line',
 
-  // --- 8 gold, tee footprint (.X./XXX) ---
+  // --- 80 gold, tee footprint (.X./XXX) ---
   'f-01101121-bbpp': 'Chapter at the Crossroad',
   'f-01101121-bpbp': 'Two Offices Below',
   'f-01101121-bppb': 'Offices Flanking the Road',
@@ -273,7 +273,7 @@ const ALL_RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.freeze(
   'f-01101121-prpp': 'Tower Above the Crossroad',
   'f-01101121-rppp': 'Tower Holds the Left',
 
-  // --- 8 gold, zigzag footprint (.XX/XX.) ---
+  // --- 80 gold, zigzag footprint (.XX/XX.) ---
   'f-01101120-bbpp': 'Chapter on the Offset',
   'f-01101120-bpbp': 'Two Offices Below the Step',
   'f-01101120-bppb': 'Offices Across the Zigzag',
@@ -291,7 +291,7 @@ const ALL_RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.freeze(
   'f-01101120-prpp': 'Tower on the Offset',
   'f-01101120-rppp': 'Tower Below the Step',
 
-  // --- 8 gold, flagged footprint (..X/XXX) ---
+  // --- 80 gold, flagged footprint (..X/XXX) ---
   'f-01112021-bbpp': 'Two Offices Under the Flank',
   'f-01112021-bpbp': 'Office Above, Office Leading',
   'f-01112021-bppb': "Offices at the Line's Ends",
@@ -321,7 +321,7 @@ const ALL_RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.freeze(
   'f-01112021-prpp': 'Tower Amid the Rank',
   'f-01112021-rppp': 'Tower Leads the Rank',
 
-  // --- 9 gold ---
+  // --- 90 gold ---
   q: 'Regal Serenity',
   'f-011121-bbb': 'Ecumenical Council',
   'f-011121-bbk': 'Blessed Charger',
@@ -356,7 +356,7 @@ const ALL_RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.freeze(
   'f-011011-rkp': 'Lance Above the Rampart',
   'f-011011-rpk': 'Sally from the Bend',
 
-  // --- 10 gold ---
+  // --- 100 gold ---
   'pq-front': 'The Last Attendant',
   'rr-vertical': 'The Twin Keeps',
 });
@@ -395,7 +395,7 @@ export const RUN_CARD_NAME_BY_ID: Readonly<Record<string, string>> = Object.free
 // its own, keyed and ordered exactly as ALL_RUN_CARD_NAME_BY_ID above. They identify a card
 // without explaining why this history has surfaced in the game.
 const ALL_RUN_CARD_FLAVOR_BY_ID: Readonly<Record<string, string>> = Object.freeze({
-  // --- 1-4 gold ---
+  // --- 10-40 gold ---
   p: 'The frost came in June. By August, the road had found him.',
   pp: 'The road kept both pairs of boots, and returned neither name.',
   b: 'The sanctuary was gone. The lesson continued beside the road.',
@@ -412,7 +412,7 @@ const ALL_RUN_CARD_FLAVOR_BY_ID: Readonly<Record<string, string>> = Object.freez
   'f-01101120-pppp': 'They sowed a week apart because the seed arrived a week apart.',
   'f-01112021-pppp': 'Three kept the pace. The fourth kept the count.',
 
-  // --- 5 gold ---
+  // --- 50 gold ---
   r: 'From the tower, every road led away.',
   'ppb-protected': 'The parish kept watch while the last lesson was read.',
   'ppk-protected': 'The horse advanced under two borrowed shields.',
@@ -427,7 +427,7 @@ const ALL_RUN_CARD_FLAVOR_BY_ID: Readonly<Record<string, string>> = Object.freez
   'f-011011-pkp': 'The horse held the elbow of the road, and the road held nothing else.',
   'f-011011-ppk': 'One horse remained in the lane. The lane remembered more.',
 
-  // --- 6 gold ---
+  // --- 60 gold ---
   'bb-vertical': 'Matins stood before Vespers because the roof admitted only one.',
   'pr-front': 'The gatekeeper put one name between the wall and morning.',
   'kk-horizontal': 'Neither rider yielded the width of the road.',
@@ -472,7 +472,7 @@ const ALL_RUN_CARD_FLAVOR_BY_ID: Readonly<Record<string, string>> = Object.freez
   'f-01112021-ppkp': 'From the rise he counted them twice and got two answers.',
   'f-01112021-pppk': 'The outrider held the corner, and the corner held the road shut.',
 
-  // --- 7 gold ---
+  // --- 70 gold ---
   'f-011121-bbp': 'Two offices walked abreast because neither would follow.',
   'f-011121-bpb': 'The council adjourned to the road and never reconvened indoors.',
   'f-011121-bkp': 'No city received them. They continued as though one might.',
@@ -498,7 +498,7 @@ const ALL_RUN_CARD_FLAVOR_BY_ID: Readonly<Record<string, string>> = Object.freez
   'f-011011-prp': 'The tower stood above the lane after the lane stopped being used.',
   'f-011011-rpp': 'The keep held the turning. The turning was all it held.',
 
-  // --- 8 gold, square footprint ---
+  // --- 80 gold, square footprint ---
   'f-00011011-bbpp': 'The chapel traveled because the wounded could not.',
   'f-00011011-bppb': 'Two offices, opposite corners, and the same short liturgy between them.',
   'f-00011011-bkpp': 'They agreed upon the road, having nowhere left to meet.',
@@ -508,7 +508,7 @@ const ALL_RUN_CARD_FLAVOR_BY_ID: Readonly<Record<string, string>> = Object.freez
   'f-00011011-kppk': 'Two lances at opposite corners, watching the same empty middle.',
   'f-00011011-rppp': 'They repaired the wall with stones from the abandoned quarter.',
 
-  // --- 8 gold, stepped footprint ---
+  // --- 80 gold, stepped footprint ---
   'f-00101121-bbpp': 'Both offices took the higher step. The lower one flooded in March.',
   'f-00101121-bpbp': 'The chapter divided at the seam and read the same office twice.',
   'f-00101121-bppb': 'The chapel spanned the gap because the gap was where the people were.',
@@ -526,7 +526,7 @@ const ALL_RUN_CARD_FLAVOR_BY_ID: Readonly<Record<string, string>> = Object.freez
   'f-00101121-prpp': 'The tower took the high step and watched the low one empty.',
   'f-00101121-rppp': 'The rampart did not meet the wall. It was built after the wall stopped mattering.',
 
-  // --- 8 gold, hooked footprint ---
+  // --- 80 gold, hooked footprint ---
   'f-00102021-bbpp': 'The chapter met at the bend, standing, because the meeting was short.',
   'f-00102021-bpbp': 'Two offices in one rank, and one voice between them by evening.',
   'f-00102021-bppb': 'One preacher at each end, in case the column parted.',
@@ -556,11 +556,11 @@ const ALL_RUN_CARD_FLAVOR_BY_ID: Readonly<Record<string, string>> = Object.freez
   'f-00102021-prpp': 'The keep stood in the rank, and the rank formed around it.',
   'f-00102021-rppp': 'The tower led the bend, which is to say the bend was fortified first.',
 
-  // --- 8 gold, two-piece pairs ---
+  // --- 80 gold, two-piece pairs ---
   'f-0111-rb': 'The cloister was sold. The keep remained employed.',
   'f-0111-rk': 'At dawn the castellan rode through an abbey with no brothers.',
 
-  // --- 8 gold, line of four ---
+  // --- 80 gold, line of four ---
   'f-01112131-bbpp': 'Two offices in front and two boys behind, in that order, for a week.',
   'f-01112131-bpbp': 'Office, boy, office, boy — the line as the road had assembled it.',
   'f-01112131-bppb': 'An office at each end of the line, and the middle left to itself.',
@@ -578,7 +578,7 @@ const ALL_RUN_CARD_FLAVOR_BY_ID: Readonly<Record<string, string>> = Object.freez
   'f-01112131-prpp': 'The tower held second place, and the first place moved when it moved.',
   'f-01112131-rppp': 'The tower led the line down a road it had been built to watch.',
 
-  // --- 8 gold, tee footprint ---
+  // --- 80 gold, tee footprint ---
   'f-01101121-bbpp': 'The chapter convened at the crossroad. It adjourned in three directions.',
   'f-01101121-bpbp': 'Both offices kept the low road. The high one had a watch on it.',
   'f-01101121-bppb': 'An office at each verge, and the road between them going on regardless.',
@@ -608,7 +608,7 @@ const ALL_RUN_CARD_FLAVOR_BY_ID: Readonly<Record<string, string>> = Object.freez
   'f-01101121-prpp': 'From above the crossroad it watched three roads empty at three different rates.',
   'f-01101121-rppp': 'The tower held the left road because the left road held the mill.',
 
-  // --- 8 gold, zigzag footprint ---
+  // --- 80 gold, zigzag footprint ---
   'f-01101120-bbpp': 'The chapter met on the offset road, which no map had corrected.',
   'f-01101120-bpbp': 'Both offices took the lower road. The upper had been requisitioned.',
   'f-01101120-bppb': 'An office on each leg of the bend, and the bend between them.',
@@ -626,7 +626,7 @@ const ALL_RUN_CARD_FLAVOR_BY_ID: Readonly<Record<string, string>> = Object.freez
   'f-01101120-prpp': 'They fortified the offset road. The straight one had already been given up.',
   'f-01101120-rppp': 'The tower sat under the step and saw only the last of what passed.',
 
-  // --- 8 gold, flagged footprint ---
+  // --- 80 gold, flagged footprint ---
   'f-01112021-bbpp': 'Both offices kept the low road, under a flank they did not hold.',
   'f-01112021-bpbp': 'One office on the height, one at the head, and one road between them.',
   'f-01112021-bppb': 'An office at each end of the line, and the line shorter every week.',
@@ -656,7 +656,7 @@ const ALL_RUN_CARD_FLAVOR_BY_ID: Readonly<Record<string, string>> = Object.freez
   'f-01112021-prpp': 'The tower stood in the rank and the rank re-formed around it.',
   'f-01112021-rppp': 'The tower led, and three men followed a wall down a road.',
 
-  // --- 9 gold ---
+  // --- 90 gold ---
   q: 'She watched the empty court until ceremony became weather.',
   'f-011121-bbb': 'Three doctrines agreed that the room could no longer hold them.',
   'f-011121-bbk': 'The charger knelt where the altar had been carted away.',
@@ -691,7 +691,7 @@ const ALL_RUN_CARD_FLAVOR_BY_ID: Readonly<Record<string, string>> = Object.freez
   'f-011011-rkp': 'The rider crossed above the rampart while it was still being built.',
   'f-011011-rpk': 'They came out at the bend, where the road could not be seen along.',
 
-  // --- 10 gold ---
+  // --- 100 gold ---
   'pq-front': 'One attendant remained after the court learned to empty itself.',
   'rr-vertical': 'One keep watched the road. The other watched the first.',
 });
