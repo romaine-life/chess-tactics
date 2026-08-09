@@ -10626,12 +10626,10 @@ body { font-size: 17px; }
 /* Force composition for the selected level — the allies/enemies counts read off
    the level's board, so they live with the level, not the global title bar.
    The line is seated on its own inner box so its marks have a surface to read against instead of
-   whatever the night sky is showing. The box HUGS the line rather than running the column's full
-   width: a stretched one leaves a third of its marble empty, which reads as a box missing its
-   content. It still yields to the column when the line is wider than the width available. */
+   whatever the night sky is showing. It runs the column's full width like the board frame and the
+   facts box: the column is a stack of boxes sharing one pair of edges, and a box that hugged its
+   own content broke that line. */
 .ce-force-readout-box {
-  inline-size: fit-content;
-  max-inline-size: 100%;
   padding: 6px 10px;
 }
 
@@ -19513,11 +19511,14 @@ button.tileset-relationship-cell {
   min-width: 0;
 }
 /* Two-line head: the level name gets its OWN line (full width, no truncation), with the
-   ally/enemy force counts on a second line beneath it. */
+   ally/enemy force counts on a second line beneath it. The shared head rule's horizontal padding
+   is dropped here: the counts are a framed box now, and that inset held it 8px inside the board
+   frame and facts box under it, so the column's three boxes did not share an edge. */
 .ce-preview-col .ce-selected-head {
   align-items: stretch;
   flex-direction: column;
   gap: 4px;
+  padding-inline: 0;
 }
 .ce-preview-col .ce-selected-head h2 {
   overflow: visible;
