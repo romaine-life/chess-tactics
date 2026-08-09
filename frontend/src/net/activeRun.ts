@@ -40,13 +40,38 @@ export async function loadActiveRun(): Promise<RevisionedActiveRun> {
   return parsedActiveRun(await response.json());
 }
 
-export async function saveActiveRun(run: RunDocument, revision: number): Promise<RevisionedActiveRun> {
-  const response = await fetch('/api/active-run', {
+async function putActiveRun(
+  body: Readonly<{ run: unknown; revision: number }>,
+): Promise<Response> {
+  return fetch('/api/active-run', {
     method: 'PUT',
     headers: { 'content-type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ run, revision }),
+    body: JSON.stringify(body),
   });
+}
+
+/**
+ * Save the Run WITHOUT its War.
+ *
+ * `run.war` is every Battle's Level, snapshotted once when the Run is created so that editing or
+ * deleting authored content cannot change a Run already underway. It is never written again in
+ * flight — so sending it with each save shipped ~325 KB to change ~3 KB of actual Run state, on
+ * every placement, and put the body past the request ceiling entirely.
+ *
+ * The server keeps the War it is already holding for this Run. It refuses when that is a DIFFERENT
+ * Run, which is exactly the case a new Run's first save is, so that answer is repaired here by
+ * sending the whole document once rather than by tracking on the client which Runs the server has
+ * seen. A save is not a place to be clever about state the server can simply be asked about.
+ */
+export async function saveActiveRun(run: RunDocument, revision: number): Promise<RevisionedActiveRun> {
+  const { war: _war, ...withoutWar } = run;
+  let response = await putActiveRun({ run: withoutWar, revision });
+  if (response.status === 400) {
+    const error = await HttpError.fromResponse('save-active-run', response);
+    if (!error.details?.includes('active_run_war_required')) throw error;
+    response = await putActiveRun({ run, revision });
+  }
   if (!response.ok) throw await HttpError.fromResponse('save-active-run', response);
   return parsedActiveRun(await response.json());
 }

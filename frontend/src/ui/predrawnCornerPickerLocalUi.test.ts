@@ -47,6 +47,50 @@ describe('pre-drawn grid calibration instrument', () => {
     expect(style).toMatch(/\.predrawn-grid-uniform-scale\s*\{/);
   });
 
+  it('sizes the whole grid continuously and lands one sweep as one history entry', () => {
+    expect(picker).toContain('data-testid="predrawn-grid-scale-slider"');
+    expect(picker).toContain('data-testid="predrawn-grid-scale-readout"');
+    expect(picker).toContain('aria-label="Grid size across the artwork"');
+    expect(picker).toContain('min={PREDRAWN_GRID_SPAN_MIN_PERCENT}');
+    expect(picker).toContain('max={gridSizeMaxPercent}');
+    expect(picker).toContain('value={gridSizePercent}');
+    expect(picker).toContain('disabled={!complete || coarseRebaseLocked}');
+    expect(picker).toContain('onPointerDown={() => { beginGridSizeDrag(); }}');
+    expect(picker).toContain('onChange={(event) => setGridSizePercent(Number(event.currentTarget.value))}');
+    expect(picker).toContain('onPointerUp={endGridSizeDrag}');
+    expect(picker).toContain('onPointerCancel={endGridSizeDrag}');
+    expect(picker).toContain('onKeyUp={endGridSizeDrag}');
+    expect(picker).toContain('onBlur={endGridSizeDrag}');
+    // Every frame scales the placement the sweep STARTED from, so a back-and-forth drag cannot
+    // accumulate rounding drift, and the whole sweep is one Undo.
+    expect(picker).toContain('basePoints: clonePredrawnCornerPoints(pointsRef.current)');
+    expect(picker).toContain('predrawnUniformGridScaleForSpan(drag.basePoints, sourceSize, target / 100)');
+    expect(picker).toContain('predrawnUniformGridScale(drag.basePoints, sourceSize, factor)');
+    expect(picker).toContain('recordGridEdit(drag.before);');
+    expect(style).toMatch(/\.predrawn-grid-uniform-scale input\[type="range"\]\s*\{/);
+  });
+
+  it('connects the refit count to the level grid in both directions', () => {
+    expect(picker).toContain('data-testid="predrawn-grid-level-link"');
+    expect(picker).toContain('data-testid="predrawn-grid-apply-to-level"');
+    expect(picker).toContain('data-testid="predrawn-grid-match-level"');
+    expect(picker).toContain('onApplyLevelGrid?.(gridColumns, gridRows)');
+    expect(picker).toContain('onClick={applyRefitToLevelGrid}');
+    expect(picker).toContain('onClick={matchLevelGridDimensions}');
+    expect(picker).toContain('const levelGridMatchesRefit = gridColumns === columns && gridRows === rows;');
+    // Reachable from the Level Editor only, and only inside the engine's own board bounds.
+    expect(picker).toContain('Open this fitter from the Level Editor to resize the level grid.');
+    expect(picker).toContain('BOARD_COLS.min');
+    expect(picker).toContain('BOARD_ROWS.max');
+    expect(picker).toContain('disabled={Boolean(applyLevelGridDisabledReason)}');
+    // Taking the level's count is one reversible step across BOTH axes, not two.
+    const start = picker.indexOf('const matchLevelGridDimensions =');
+    const body = picker.slice(start, picker.indexOf('\n  };', start));
+    expect(body).toContain('const before = currentGridSnapshot();');
+    expect(body).toContain('recordGridEdit(before);');
+    expect(style).toMatch(/\.predrawn-grid-level-link\s*\{/);
+  });
+
   it('offers full-grid undo and redo with one history entry per completed drag', () => {
     const toolbar = picker.indexOf('<div className="predrawn-corner-picker-toolbar">');
     const calibrationBar = picker.indexOf('<div className={`predrawn-grid-calibration-bar is-${editMode}`}>');

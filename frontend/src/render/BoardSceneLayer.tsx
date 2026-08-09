@@ -73,6 +73,7 @@ export function BoardSceneLayer({
   className,
   predrawnBackgroundActive = false,
   predrawnOcclusion = true,
+  frameTransform,
   onFirstFrame,
   onFrameError,
 }: {
@@ -94,6 +95,8 @@ export function BoardSceneLayer({
   predrawnBackgroundActive?: boolean;
   /** Owner proof can suppress clipping; gameplay and ordinary viewers keep it enabled. */
   predrawnOcclusion?: boolean;
+  /** Per-frame op substitution for an entrance in flight. See BoardCanvasLayer. */
+  frameTransform?: (op: BoardDrawOp, timeMs: number) => BoardDrawOp;
   /** Acknowledge only after this compositor has painted its first complete frame. */
   onFirstFrame?: () => void;
   onFrameError?: (error: unknown) => void;
@@ -142,6 +145,7 @@ export function BoardSceneLayer({
       className={className}
       occlusionMasks={occlusionMasks}
       occlusionDepthMap={occlusionDepthMap}
+      frameTransform={still ? undefined : frameTransform}
       onFirstFrame={onFirstFrame}
       onFrameError={onFrameError}
     />

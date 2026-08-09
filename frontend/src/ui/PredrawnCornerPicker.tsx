@@ -40,6 +40,7 @@ import {
   type PredrawnBoardCornerRegistration,
   type PredrawnPoint,
 } from '../render/PredrawnBoardLayer';
+import { BOARD_COLS, BOARD_ROWS } from '../core/level';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { ChromeButton } from './shared/ChromeButton';
 
@@ -72,6 +73,19 @@ type DragState = ActiveControl & {
   startMeshOverrides?: readonly PredrawnMeshNodeOverride[];
   startGridSnapshot: PredrawnGridCalibrationSnapshot;
 };
+/**
+ * One continuous size drag, anchored to the placement the drag STARTED from.
+ *
+ * Every slider frame scales the base points rather than the previous frame's, so sweeping the
+ * control back and forth cannot accumulate rounding drift, and the whole sweep lands in history
+ * as the single edit it reads as.
+ */
+type GridSizeDragState = {
+  before: PredrawnGridCalibrationSnapshot;
+  basePoints: PredrawnCornerPoints;
+  baseSpanPercent: number;
+  maxSpanPercent: number;
+};
 type ViewportPanState = {
   pointerId: number;
   startClientX: number;
@@ -103,6 +117,9 @@ export interface PredrawnGridHistory {
 
 const GRID_HISTORY_LIMIT = 100;
 const PREDRAWN_SOURCE_ZOOM_LEVELS = [0.5, 0.75, 1, 1.5, 2, 3, 4] as const;
+/** The smallest grid the size control will place, as a percentage of the artwork width. */
+const PREDRAWN_GRID_SPAN_MIN_PERCENT = 5;
+const PREDRAWN_GRID_SPAN_STEP_PERCENT = 0.1;
 
 const CORNERS: readonly PredrawnCornerName[] = ['north', 'east', 'south', 'west'];
 const CORNER_POINT_NUMBER: Record<PredrawnCornerName, number> = {
@@ -417,6 +434,66 @@ export function predrawnUniformGridScale(
   return next;
 }
 
+/** The placed grid's projected width as a fraction of the artwork's own width. */
+export function predrawnGridSpanFraction(
+  points: PredrawnCornerPoints,
+  sourceSize: { width: number; height: number },
+): number | undefined {
+  const placed = CORNERS.map((corner) => points[corner]);
+  if (placed.some((point) => !point) || sourceSize.width <= 0) return undefined;
+  const xs = (placed as PredrawnPoint[]).map(([x]) => x);
+  return (Math.max(...xs) - Math.min(...xs)) / sourceSize.width;
+}
+
+/**
+ * The largest uniform factor that still keeps all four corners on the artwork.
+ *
+ * The rasterizer samples SOURCE pixels, so a corner past the edge has nothing to read. Bounding
+ * the size control here lets the owner drag confidently to the biggest legal grid instead of
+ * discovering the limit as a refused step.
+ */
+export function predrawnUniformGridScaleLimit(
+  points: PredrawnCornerPoints,
+  sourceSize: { width: number; height: number },
+): number | undefined {
+  const placed = CORNERS.map((corner) => points[corner]);
+  if (placed.some((point) => !point) || sourceSize.width <= 0 || sourceSize.height <= 0) {
+    return undefined;
+  }
+  const current = placed as PredrawnPoint[];
+  const center: PredrawnPoint = [
+    current.reduce((sum, point) => sum + point[0], 0) / current.length,
+    current.reduce((sum, point) => sum + point[1], 0) / current.length,
+  ];
+  // center + factor * offset must stay inside [0, extent] on both axes.
+  const axisLimit = (value: number, origin: number, extent: number): number => {
+    const offset = value - origin;
+    if (Math.abs(offset) < 1e-9) return Number.POSITIVE_INFINITY;
+    return offset > 0 ? (extent - origin) / offset : -origin / offset;
+  };
+  const limit = Math.min(...current.map((point) => Math.min(
+    axisLimit(point[0], center[0], sourceSize.width),
+    axisLimit(point[1], center[1], sourceSize.height),
+  )));
+  return Number.isFinite(limit) ? Math.max(0, limit) : undefined;
+}
+
+/** The uniform factor that resizes a placed grid to span an exact fraction of the artwork width. */
+export function predrawnUniformGridScaleForSpan(
+  points: PredrawnCornerPoints,
+  sourceSize: { width: number; height: number },
+  spanFraction: number,
+): number | undefined {
+  const current = predrawnGridSpanFraction(points, sourceSize);
+  if (
+    current === undefined
+    || current <= 0
+    || !Number.isFinite(spanFraction)
+    || spanFraction <= 0
+  ) return undefined;
+  return spanFraction / current;
+}
+
 /** Snap a placed refit grid to the exact accepted board projection at its current count. */
 export function predrawnIdealGridSnap(
   points: PredrawnCornerPoints,
@@ -635,6 +712,11 @@ function formatScale(value: number): string {
   return `${value.toFixed(2)}×`;
 }
 
+/** Quantize a span fraction onto the size control's own one-tenth-of-a-percent lattice. */
+export function predrawnGridSpanPercent(fraction: number): number {
+  return Math.round(fraction * 1000) / 10;
+}
+
 function activeControlLabel(control: ActiveControl): string {
   if (control.kind === 'corner') return boundaryPointLabel(control.corner);
   if (control.kind === 'reference-corner') return `Pinned ${boundaryPointLabel(control.corner).toLowerCase()}`;
@@ -655,6 +737,7 @@ export function PredrawnCornerPicker({
   onChange,
   onClose,
   onSaveRegistration,
+  onApplyLevelGrid,
   saveLabel = 'SAVE REGISTRATION',
   showCodexHandoff = true,
 }: {
@@ -666,6 +749,15 @@ export function PredrawnCornerPicker({
   onClose: () => void;
   /** Version-pipeline mode hands the exact calibration to its durable create-and-select action. */
   onSaveRegistration?: (registration: PredrawnBoardCornerRegistration) => void;
+  /**
+   * Resize the LEVEL's playable grid to the count fitted here.
+   *
+   * The refit count measures the grid the candidate actually painted, which is why it is allowed to
+   * differ from the authored board. But once the owner has seen how the art came out, that
+   * measurement is usually the answer: the level should become the grid in the picture. Without
+   * this the two counts can only ever disagree, and the mismatch has no way back into the level.
+   */
+  onApplyLevelGrid?: (columns: number, rows: number) => void;
   saveLabel?: string;
   showCodexHandoff?: boolean;
 }): ReactElement {
@@ -722,6 +814,7 @@ export function PredrawnCornerPicker({
   const meshOverridesRef = useRef(meshOverrides);
   const gridHistoryRef = useRef(gridHistory);
   const dragRef = useRef<DragState | null>(null);
+  const sizeDragRef = useRef<GridSizeDragState | null>(null);
   const viewportPanRef = useRef<ViewportPanState | null>(null);
   const viewportZoomAnchorRef = useRef<PredrawnViewportZoomAnchor | null>(null);
 
@@ -768,6 +861,27 @@ export function PredrawnCornerPicker({
   ), [boundaryPoints, columnGuides, gridColumns, gridRows, meshOverrides, points, rowGuides, sourceSize]);
   const complete = Boolean(registration);
   const boundaryReference = boundaryReferenceFromPoints(boundaryPoints);
+  const gridSpanFraction = useMemo(
+    () => predrawnGridSpanFraction(points, sourceSize),
+    [points, sourceSize],
+  );
+  const gridSpanScaleLimit = useMemo(
+    () => predrawnUniformGridScaleLimit(points, sourceSize),
+    [points, sourceSize],
+  );
+  // A sweep in progress owns its own bounds, so the slider's ceiling cannot move under the thumb
+  // as the grid approaches the artwork edge.
+  const gridSizePercent = gridSpanFraction === undefined
+    ? PREDRAWN_GRID_SPAN_MIN_PERCENT
+    : predrawnGridSpanPercent(gridSpanFraction);
+  const gridSizeMaxPercent = Math.max(
+    PREDRAWN_GRID_SPAN_MIN_PERCENT,
+    gridSizePercent,
+    sizeDragRef.current?.maxSpanPercent
+      ?? (gridSpanFraction !== undefined && gridSpanScaleLimit !== undefined
+        ? predrawnGridSpanPercent(gridSpanFraction * gridSpanScaleLimit)
+        : gridSizePercent),
+  );
   const stretch = useMemo(
     () => predrawnGridStretchSummary(columnGuides, rowGuides),
     [columnGuides, rowGuides],
@@ -1651,6 +1765,50 @@ export function PredrawnCornerPicker({
     recordGridEdit(before);
   };
 
+  /** Open a size sweep against the exact placement it started from. */
+  const beginGridSizeDrag = (): GridSizeDragState | null => {
+    if (sizeDragRef.current) return sizeDragRef.current;
+    if (meshOverridesRef.current.length) return null;
+    const fraction = predrawnGridSpanFraction(pointsRef.current, sourceSize);
+    const limit = predrawnUniformGridScaleLimit(pointsRef.current, sourceSize);
+    if (fraction === undefined || limit === undefined) return null;
+    const basePercent = predrawnGridSpanPercent(fraction);
+    sizeDragRef.current = {
+      before: currentGridSnapshot(),
+      basePoints: clonePredrawnCornerPoints(pointsRef.current),
+      baseSpanPercent: basePercent,
+      maxSpanPercent: Math.max(basePercent, predrawnGridSpanPercent(fraction * limit)),
+    };
+    return sizeDragRef.current;
+  };
+
+  const setGridSizePercent = (percent: number): void => {
+    if (meshOverridesRef.current.length) {
+      const count = meshOverridesRef.current.length;
+      setLocalConstraintState('constrained');
+      setLocalFeedback(`Clear all ${count} local adjustment${count === 1 ? '' : 's'} before scaling the coarse grid.`);
+      return;
+    }
+    const drag = beginGridSizeDrag();
+    if (!drag) return;
+    const target = clamp(percent, PREDRAWN_GRID_SPAN_MIN_PERCENT, drag.maxSpanPercent);
+    const factor = predrawnUniformGridScaleForSpan(drag.basePoints, sourceSize, target / 100);
+    if (factor === undefined) return;
+    const nextPoints = predrawnUniformGridScale(drag.basePoints, sourceSize, factor);
+    if (!nextPoints) return;
+    commitPoints(nextPoints);
+    setActiveControl({ kind: 'move' });
+    setPlacingCorner(null);
+  };
+
+  /** Land one completed size sweep in history, however many frames it took. */
+  const endGridSizeDrag = (): void => {
+    const drag = sizeDragRef.current;
+    sizeDragRef.current = null;
+    if (!drag) return;
+    recordGridEdit(drag.before);
+  };
+
   const pinBoundaryReference = (): void => {
     if (!CORNERS.every((corner) => pointsRef.current[corner])) return;
     const before = currentGridSnapshot();
@@ -1711,6 +1869,51 @@ export function PredrawnCornerPicker({
       setActiveControl({ kind: 'move' });
     }
     recordGridEdit(before);
+  };
+
+  const levelGridMatchesRefit = gridColumns === columns && gridRows === rows;
+  const levelGridSupportsRefit = gridColumns >= BOARD_COLS.min
+    && gridColumns <= BOARD_COLS.max
+    && gridRows >= BOARD_ROWS.min
+    && gridRows <= BOARD_ROWS.max;
+  const applyLevelGridDisabledReason = !onApplyLevelGrid
+    ? 'Open this fitter from the Level Editor to resize the level grid.'
+    : !levelGridSupportsRefit
+      ? `A level grid is ${BOARD_COLS.min}–${BOARD_COLS.max} columns by ${BOARD_ROWS.min}–${BOARD_ROWS.max} rows.`
+      : undefined;
+
+  /** Take the level's own count as the refit target, in one reversible step across both axes. */
+  const matchLevelGridDimensions = (): void => {
+    const nextColumns = normalizePredrawnGridCount(columns, gridColumns);
+    const nextRows = normalizePredrawnGridCount(rows, gridRows);
+    if (nextColumns === gridColumns && nextRows === gridRows) return;
+    if (meshOverridesRef.current.length) {
+      const count = meshOverridesRef.current.length;
+      setLocalConstraintState('constrained');
+      setLocalFeedback(`Clear all ${count} local adjustment${count === 1 ? '' : 's'} before changing grid dimensions.`);
+      return;
+    }
+    const before = currentGridSnapshot();
+    gridColumnsRef.current = nextColumns;
+    gridRowsRef.current = nextRows;
+    setGridColumns(nextColumns);
+    setGridRows(nextRows);
+    setSelectedCell(null);
+    commitColumnGuides(uniformPredrawnGuides(nextColumns));
+    commitRowGuides(uniformPredrawnGuides(nextRows));
+    if (activeControl.kind !== 'corner' && activeControl.kind !== 'reference-corner') {
+      setActiveControl({ kind: 'move' });
+    }
+    setLocalFeedback(`Refit target set to the level's ${nextColumns} × ${nextRows} grid.`);
+    recordGridEdit(before);
+  };
+
+  /** Push the fitted count back into the level, so the game grid becomes the grid in the picture. */
+  const applyRefitToLevelGrid = (): void => {
+    if (applyLevelGridDisabledReason) return;
+    onApplyLevelGrid?.(gridColumns, gridRows);
+    setLocalConstraintState('reset');
+    setLocalFeedback(`Level grid set to ${gridColumns} × ${gridRows}. Terrain and units keep their coordinates.`);
   };
 
   const chooseEditMode = (mode: GridEditMode): void => {
@@ -2045,7 +2248,33 @@ export function PredrawnCornerPicker({
                     }}
                   />
                 </label>
-                <small>Level remains {columns} × {rows}</small>
+                <div className="predrawn-grid-level-link">
+                  <small data-testid="predrawn-grid-level-link">
+                    {levelGridMatchesRefit
+                      ? `Level grid matches: ${columns} × ${rows}`
+                      : `Level grid is ${columns} × ${rows}`}
+                  </small>
+                  {levelGridMatchesRefit ? null : (
+                    <>
+                      <ChromeButton unit="inner-text-button"
+                        data-testid="predrawn-grid-apply-to-level"
+                        className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                        disabled={Boolean(applyLevelGridDisabledReason)}
+                        title={applyLevelGridDisabledReason
+                          ?? `Resize the level's playable grid to ${gridColumns} × ${gridRows} so the game grid is the grid painted here. Terrain and units keep their coordinates; columns and rows are added or removed at the right and bottom. The artwork is not re-warped.`}
+                        onClick={applyRefitToLevelGrid}
+                      >Set level to {gridColumns} × {gridRows}</ChromeButton>
+                      <ChromeButton unit="inner-text-button"
+                        data-testid="predrawn-grid-match-level"
+                        className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                        disabled={coarseRebaseLocked}
+                        title={coarseRebaseTitle
+                          ?? `Set the refit target back to the level's ${columns} × ${rows} grid.`}
+                        onClick={matchLevelGridDimensions}
+                      >Match level</ChromeButton>
+                    </>
+                  )}
+                </div>
               </div>
               <output data-testid="predrawn-grid-stretch-summary">
                 Refit {gridColumns} × {gridRows} · Columns {formatScale(stretch.columnMinScale)}–{formatScale(stretch.columnMaxScale)} · Rows {formatScale(stretch.rowMinScale)}–{formatScale(stretch.rowMaxScale)} · Max correction {stretch.maximumDeviationPercent.toFixed(1)}%
@@ -2090,6 +2319,24 @@ export function PredrawnCornerPicker({
                     title="Scale the whole grid down 2% around its center while preserving its proportions."
                     onClick={() => scaleGridUniformly(0.98)}
                   >−</ChromeButton>
+                  <input
+                    data-testid="predrawn-grid-scale-slider"
+                    type="range"
+                    aria-label="Grid size across the artwork"
+                    min={PREDRAWN_GRID_SPAN_MIN_PERCENT}
+                    max={gridSizeMaxPercent}
+                    step={PREDRAWN_GRID_SPAN_STEP_PERCENT}
+                    value={gridSizePercent}
+                    disabled={!complete || coarseRebaseLocked}
+                    title={coarseRebaseTitle
+                      ?? 'Size the whole grid with its proportions locked, then drag it into place. One sweep is one Undo step.'}
+                    onPointerDown={() => { beginGridSizeDrag(); }}
+                    onChange={(event) => setGridSizePercent(Number(event.currentTarget.value))}
+                    onPointerUp={endGridSizeDrag}
+                    onPointerCancel={endGridSizeDrag}
+                    onKeyUp={endGridSizeDrag}
+                    onBlur={endGridSizeDrag}
+                  />
                   <ChromeButton unit="inner-text-button"
                     data-testid="predrawn-grid-scale-up"
                     className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
@@ -2097,6 +2344,9 @@ export function PredrawnCornerPicker({
                     title="Scale the whole grid up 2% around its center while preserving its proportions."
                     onClick={() => scaleGridUniformly(1.02)}
                   >+</ChromeButton>
+                  <output data-testid="predrawn-grid-scale-readout">
+                    {gridSizePercent.toFixed(1)}% wide
+                  </output>
                 </div>
                 <ChromeButton unit="inner-text-button"
                   data-testid="predrawn-grid-reset-spacing"

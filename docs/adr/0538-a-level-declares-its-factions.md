@@ -1,4 +1,4 @@
-# ADR-0537 — A level declares its factions
+# ADR-0538 — A level declares its factions
 
 **Status:** Accepted
 **Date:** 2026-08-08

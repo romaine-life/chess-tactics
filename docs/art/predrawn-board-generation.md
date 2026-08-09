@@ -454,12 +454,26 @@ Geometry and semantics above override all artistic discretion.
    board**. This sets its exact pixels at the original viewing-pane placement
    with no corrected raster and no occlusion mask; it does not apply a fitted
    grid. If the painted grid needs a different placement, open **Adjust grid
-   (optional)** against that Raw Pipeline Source. Place the complete grid
+   (optional)** against that Raw Pipeline Source — or address it directly with
+   `predrawnGridFitter=<version-id>` on the pipeline URL, which opens the fitter
+   on that exact board. Place the complete grid
    with the owner calibration instrument. First set the
    refit row/column counts to the grid actually painted by the candidate (which
    may expose an unwanted extra row or column), register its N/E/S/W painted-image
    corners, then stretch monotonic internal guides only where painted geometry
-   supplies evidence. Use `SNAP IDEAL GRID` to compare that count against the
+   supplies evidence. **Uniform size** resizes the whole placed grid with its
+   proportions locked: the slider is the grid's projected width as a percentage of
+   the artwork's own width, bounded so no corner can leave the pixels the
+   rasterizer has to sample, and one sweep is one Undo. Size it, then drag the
+   whole grid into place.
+   The refit count and the level's own playable grid are reconcilable in both
+   directions from that same bar. **Set level to N × M** resizes the level to the
+   count fitted here — columns and rows are added or removed at the right and
+   bottom, so terrain and units keep their coordinates, and the artwork is not
+   re-warped. **Match level** takes the level's count back as the refit target in
+   one reversible step across both axes. Neither is automatic: a deliberate
+   mismatch stays visible, and named, until the owner resolves it.
+   Use `SNAP IDEAL GRID` to compare that count against the
    exact final projection angles, aspect, and equal cell spacing; it keeps the
    count and does not change the authored level. Before snapping, `PIN BOUNDARY`
    can preserve the hand-fitted painted edge as an independent magenta reference;
@@ -643,6 +657,18 @@ selection rather than runtime alignment instructions.
 
 ## Amendment log
 
+- **2026-08-08 — the refit grid is sizable and reconcilable with the level:** the
+  coarse bar gains a continuous **Uniform size** slider — absolute projected width
+  as a percentage of the artwork, anchored to the placement each sweep started
+  from so a back-and-forth drag accumulates no rounding drift and lands as one
+  Undo — beside the existing ±2% steps. The refit count stops being a dead end:
+  **Set level to N × M** resizes the level's playable grid to the count fitted on
+  the candidate (grown or trimmed at the right and bottom, through the same
+  `resizeBoard` the Board panel uses, so coordinates and the immutable artwork are
+  untouched), and **Match level** adopts the level's count as the refit target.
+  The 2026-07-13 owner-configurable refit dimensions stay the measurement of what
+  the candidate PAINTED; this only supplies the two explicit owner actions that
+  let that measurement and the authored board agree.
 - **2026-08-05 — fitted grid is one durable selection action:**
   [ADR-0480](../adr/0480-using-a-fitted-grid-saves-and-selects-its-board.md)
   makes **Use fitted board** create/resume the immutable corrected raster and
