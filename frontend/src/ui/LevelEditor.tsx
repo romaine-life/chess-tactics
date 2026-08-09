@@ -200,6 +200,7 @@ import {
 import {
   currentBoardTestHref,
   readLevelEventsParam,
+  readParTurnsParam,
   readTimeControlParams,
   readVictoryRulesParam,
 } from './playtestRoute';
@@ -345,11 +346,12 @@ import {
   type EditorDocumentEditSessionResult,
 } from '../net/editorDocuments';
 import { consumeNewBuildReloadIntent } from '../net/appUpdate';
-import { LEVEL_BATTLE_CARDS_DEALT_DEFAULT, LEVEL_BATTLE_CARDS_DEALT_MAX, LEVEL_BATTLE_CARDS_DEALT_MIN, OBJECTIVE_TYPES, ZONE_COLORS, zoneEntriesOnLevel, type CastleEventAction, type ChessDrawsEventAction, type ConditionSide, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type VictoryRules, type War, type ZoneColor, type ZoneType } from '../core/level';
+import { LEVEL_BATTLE_CARDS_DEALT_DEFAULT, LEVEL_BATTLE_CARDS_DEALT_MAX, LEVEL_BATTLE_CARDS_DEALT_MIN, LEVEL_PAR_TURNS_MAX, LEVEL_PAR_TURNS_MIN, OBJECTIVE_TYPES, ZONE_COLORS, zoneEntriesOnLevel, type CastleEventAction, type ChessDrawsEventAction, type ConditionSide, type Level, type LevelEvent, type LevelEventAction, type LevelEvents, type ObjectiveType, type VictoryRules, type War, type ZoneColor, type ZoneType } from '../core/level';
 
 import { computeCastleTemplatePairs, type CastleTemplateUnit } from './castlingTemplate';
 import { MODE_NAME, DEFAULT_SURVIVE_TURNS, victoryRulesForObjective, kingSideOf } from '../core/objectives';
 import { CLOCK_INCREMENT_SECONDS, CLOCK_INITIAL_SECONDS, DEFAULT_TIME_CONTROL, formatClockSeconds, parseClockSeconds, stepLadder } from '../core/clock';
+import { SPEED_BONUS_SECONDS_PER_PAR_TURN, derivedParTurns } from '../core/speedBonus';
 import { validatePlayability, validateWarBattlePlayability } from '../core/playability';
 import { PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import { effectiveLevelEvents, normalizeLevelEvents } from '../core/levelEvents';
@@ -373,6 +375,17 @@ const clampCardsDealt = (value: number): number => Math.min(
   Math.max(LEVEL_BATTLE_CARDS_DEALT_MIN, Math.round(value)),
 );
 const parseCardsDealt = (raw: string): number | null => {
+  const parsed = Number.parseInt(raw.trim(), 10);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+// The authored par is a whole turn count inside the schema's bounds (ADR-0539) — same shape as
+// the deal above, so neither the stepper keys nor the typed field can write a rejected level.
+const clampParTurns = (value: number): number => Math.min(
+  LEVEL_PAR_TURNS_MAX,
+  Math.max(LEVEL_PAR_TURNS_MIN, Math.round(value)),
+);
+const parseParTurns = (raw: string): number | null => {
   const parsed = Number.parseInt(raw.trim(), 10);
   return Number.isFinite(parsed) ? parsed : null;
 };
@@ -2823,6 +2836,7 @@ export function LevelEditor(): ReactElement {
   const fenceArtReviewEnabled = fenceArtReviewRequested && !fenceArtReviewDismissed;
   const initialFenceArtworkId = urlParams.get('fenceArt') ?? '';
   const urlTimeControl = useMemo(() => readTimeControlParams(urlParams), [urlParams]);
+  const urlParTurns = useMemo(() => readParTurnsParam(urlParams), [urlParams]);
   const urlEvents = useMemo(() => readLevelEventsParam(urlParams), [urlParams]);
   const urlVictory = useMemo(() => readVictoryRulesParam(urlParams), [urlParams]);
   const urlLevelName = useMemo(() => urlParams.get('name')?.trim() || undefined, [urlParams]);
@@ -3769,6 +3783,13 @@ export function LevelEditor(): ReactElement {
   const [battleCardsDealt, setBattleCardsDealtState] = useState<number>(
     localDraft?.cardsDealt ?? initialCampaignLevel?.battle?.cardsDealt ?? LEVEL_BATTLE_CARDS_DEALT_DEFAULT,
   );
+  // The level's par in turns (ADR-0539) — the turn budget the victory screen benchmarks against
+  // and the size of the Battle's bonus clock. Unauthored by default: the board's own estimate
+  // stands until someone tunes it, so `parAuthored` is what decides whether a number is written
+  // at all. Seeded like the clock, a restored draft ahead of the campaign level.
+  const initialParTurns = localDraft?.parTurns ?? initialCampaignLevel?.parTurns ?? urlParTurns;
+  const [parAuthored, setParAuthoredState] = useState<boolean>(initialParTurns !== undefined);
+  const [parTurns, setParTurnsState] = useState<number>(initialParTurns ?? LEVEL_PAR_TURNS_MIN);
   // Victory conditions (ADR-0064): `victory` is the working win/lose lists — always the truth for
   // this level's outcome, edited in the RULES panel. Seeded from the objective preset for a level
   // that never customized them; a level stores `victory` only when the lists diverge from that
@@ -3825,6 +3846,17 @@ export function LevelEditor(): ReactElement {
   const setClockIncrementSeconds = authorRulesField('clock', setClockIncrementSecondsState);
   const setTemplateChoice = authorRulesField('templateChoice', setTemplateChoiceState);
   const setBattleCardsDealt = authorRulesField('battleDeal', setBattleCardsDealtState);
+  // Touching par is what authors it: the panel opens on the board's estimate, and the first
+  // nudge pins that number onto the level. Reset hands the level back to the estimate.
+  const authorParTurns = (turns: number): void => {
+    authoredRulesRef.current.add('par');
+    setParAuthoredState(true);
+    setParTurnsState(clampParTurns(turns));
+  };
+  const resetParToEstimate = (): void => {
+    authoredRulesRef.current.add('par');
+    setParAuthoredState(false);
+  };
   const [quietDraftRestore] = useState(() => consumeNewBuildReloadIntent());
   const [statusLog, setStatusLog] = useState<StatusLogEntry[]>([]);
   const statusLogSeq = useRef(0);
@@ -3961,6 +3993,10 @@ export function LevelEditor(): ReactElement {
     }
     if (guarded.apply.battleDeal) {
       setBattleCardsDealtState(seed.battleDeal);
+    }
+    if (guarded.apply.par) {
+      setParAuthoredState(seed.par.authored);
+      setParTurnsState(seed.par.turns);
     }
     if (guarded.apply.victory) setVictoryState(seed.victory);
     if (guarded.apply.events) setEventsState(seed.events);
@@ -6019,13 +6055,21 @@ export function LevelEditor(): ReactElement {
     [victory, objective, surviveTurns],
   );
   const eventsForSave = useMemo(() => (events.length ? events : undefined), [events]);
+  const parTurnsForSave = useMemo(
+    () => (parAuthored ? clampParTurns(parTurns) : undefined),
+    [parAuthored, parTurns],
+  );
   const modeMeta = useMemo(() => ({
     objective,
     surviveTurns: objective === 'survive' ? surviveTurns : undefined,
     timeControl: clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined,
+    // Only an AUTHORED par is written. Leaving it out is what keeps the board's estimate live,
+    // so a level nobody has tuned re-derives its par as the board changes instead of freezing
+    // whatever the panel happened to display.
+    parTurns: parTurnsForSave,
     victory: victoryForSave,
     events: eventsForSave,
-  }), [objective, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds, victoryForSave, eventsForSave]);
+  }), [objective, surviveTurns, clockEnabled, clockInitialSeconds, clockIncrementSeconds, parTurnsForSave, victoryForSave, eventsForSave]);
   // The live candidate Level — the exact document a Save would persist — recomputed from the board
   // + mode meta. Both the playability gate and the Save serialize from THIS, so what the violation
   // list judges is precisely what would be written.
@@ -6053,6 +6097,11 @@ export function LevelEditor(): ReactElement {
     }),
     [candidateMetadataSource, battleForSave, currentEditorBoard, editingId, levelNameForSave, modeMeta],
   );
+  // The board's own par estimate, recomputed from the live candidate so the Par panel tracks the
+  // pieces as they are painted. `effectiveParTurns` is what the level actually plays to: the
+  // authored number when there is one, else the estimate.
+  const estimatedParTurns = useMemo(() => derivedParTurns(candidateLevel), [candidateLevel]);
+  const effectiveParTurns = parAuthored ? clampParTurns(parTurns) : estimatedParTurns;
   // Live playability (ADR-0050): the plain-language violation list the panel shows, and the gate on
   // Save. Recomputed from the candidate Level so it always matches what would persist. Pure.
   const playability = useMemo(
@@ -6445,6 +6494,7 @@ export function LevelEditor(): ReactElement {
       surviveTurns,
       timeControl: clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined,
       cardsDealt: battleForSave?.cardsDealt,
+      parTurns: parTurnsForSave,
       victory: victoryForSave,
       events: eventsForSave,
     };
@@ -9608,6 +9658,7 @@ export function LevelEditor(): ReactElement {
       objective,
       surviveTurns,
       timeControl: clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined,
+      parTurns: parTurnsForSave,
       events: eventsForSave,
       victory: victoryForSave,
       editorSearch: new URL(canonicalEditorHref, window.location.origin).search,
@@ -11148,6 +11199,45 @@ export function LevelEditor(): ReactElement {
                 shell-owned board workspace while this control rail stays in place. */}
             <p className="le-board-note">How this level is won, lost, deployed, and promoted. {victory.length} victory event{victory.length === 1 ? '' : 's'} and {otherEvents.length} other event{otherEvents.length === 1 ? '' : 's'} set.</p>
             <ChromeButton unit="inner-text-button" ref={eventsOpenButtonRef} className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', 'le-events-open')} disabled={eventsOpen} onClick={() => openEventsEditor(isWarBattle ? 'deployment' : 'victory')}>Open rules editor</ChromeButton>
+          </section>
+
+          {/* Par is authored here rather than in the events editor because it decides nothing
+              about how the level is won — it is the turn budget the victory screen measures
+              against, and the size of the bonus clock the speed reward is paid from. */}
+          <section className="skirmish-card">
+            <h2>Par</h2>
+            <div className="le-ctrlrow">
+              <span className="le-ctrllabel">Turns</span>
+              <Stepper
+                suffix=""
+                decreaseLabel="Lower this level’s par"
+                increaseLabel="Raise this level’s par"
+                onDecrease={() => authorParTurns(effectiveParTurns - 1)}
+                onIncrease={() => authorParTurns(effectiveParTurns + 1)}
+                edit={{
+                  value: effectiveParTurns,
+                  min: LEVEL_PAR_TURNS_MIN,
+                  format: (v) => String(v),
+                  parse: parseParTurns,
+                  onCommit: (v) => authorParTurns(v),
+                  ariaLabel: 'Par in turns',
+                }}
+              />
+            </div>
+            {parAuthored ? (
+              <ChromeButton
+                unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                onClick={resetParToEstimate}
+              >
+                Use the estimate
+              </ChromeButton>
+            ) : null}
+            <p className="le-board-note">
+              {parAuthored
+                ? `Hand-tuned. Winning inside ${effectiveParTurns} turn${effectiveParTurns === 1 ? '' : 's'} reads as under par on the victory screen, and par sets a ${formatClockSeconds(effectiveParTurns * SPEED_BONUS_SECONDS_PER_PAR_TURN)} bonus clock whose leftover pays the speed bonus. Nothing is won or lost by crossing it — an exhausted bonus clock costs only the bonus. Estimated par for this board is ${estimatedParTurns}.`
+                : `Estimated from the board — ${estimatedParTurns} turn${estimatedParTurns === 1 ? '' : 's'}, and it re-estimates as you edit. Use +/– or type a value to hand-tune it. Par is the turn budget the victory screen measures against, and it sets a ${formatClockSeconds(effectiveParTurns * SPEED_BONUS_SECONDS_PER_PAR_TURN)} bonus clock whose leftover pays the speed bonus.`}
+            </p>
           </section>
 
           <section className="skirmish-card">
