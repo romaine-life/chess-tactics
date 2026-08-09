@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
 import { runDeploymentDealCount, sectioUpcomingBattleIndex, type RunDocument } from '../run/model';
-import { playerDeploymentCells } from '../run/deployment';
-import { levelToEditorBoard } from '../core/levelBoard';
+import {
+  playerDeploymentCells,
+  runDeploymentLevelUnits,
+  shuffledDeploymentPreview,
+} from '../run/deployment';
+import { levelToEditorBoard, unitsForLevelUnits } from '../core/levelBoard';
 import { ChromeDividedGridRow, DividedInnerChromeBox } from './shared/ChromeDividedGrid';
 import { RunProgressIcon } from './shared/RunProgressIcon';
 import { FramedReadOnlyBoardView } from './shared/BoardViewFraming';
@@ -22,8 +26,28 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
   // The canonical runtime answer, not a re-derivation: what Deployment will actually deal here.
   // A deck smaller than the deal is dealt whole, so the note never promises cards that do not exist.
   const dealt = Math.min(runDeploymentDealCount({ war: run.war, battleIndex }), run.cards.length);
-  const board = useMemo(() => levelToEditorBoard(level), [level]);
+  const authoredBoard = useMemo(() => levelToEditorBoard(level), [level]);
   const signature = useMemo(() => JSON.stringify(level), [level]);
+  // One arrangement this Battle could open with, and never the one it will. Zero is the ground
+  // the reconnaissance stands on: the authored map, with nothing of the player's on it. Every
+  // press is a new imagining, so the number is the state and pressing again is the reshuffle.
+  const [shuffle, setShuffle] = useState(0);
+  const preview = useMemo(
+    () => (shuffle > 0 ? shuffledDeploymentPreview({ run, level, battleIndex, shuffle }) : null),
+    [battleIndex, level, run, shuffle],
+  );
+  // The Run's figures are laid over the authored board's own unit snapshot rather than into the
+  // Level: a board built from `boardCode` reads its units from that code, so a level carrying
+  // extra units would render without a single one of them.
+  const board = useMemo(() => (preview
+    ? {
+      ...authoredBoard,
+      units: {
+        ...authoredBoard.units,
+        ...unitsForLevelUnits(runDeploymentLevelUnits(run, level, preview.layout)),
+      },
+    }
+    : authoredBoard), [authoredBoard, level, preview, run]);
   // How much of the player's collection this stage takes, and where it goes. Both are the
   // stage's own answer, and neither is visible anywhere else in the Sectio — the Forces ledger
   // counts the map's pieces, not the ones arriving from the Chartulary.
@@ -51,6 +75,8 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
     setTerrainPainted(false);
     setScenePainted(false);
     setFrameError(null);
+    // A different map is a different question, so the imagining does not carry over onto it.
+    setShuffle(0);
   }, [signature]);
 
   const resetFrame = (): void => {
@@ -145,6 +171,13 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
                 framed={false}
                 className="run-battle-preview-info"
                 deploymentBand={{ shown: bandShown, onToggle: () => setBandShown((shown) => !shown) }}
+                deploymentPreview={{
+                  shown: preview !== null,
+                  placedUnitCount: preview?.placedUnitCount ?? 0,
+                  placedCardCount: preview?.cards.filter((entry) => entry.placed).length ?? 0,
+                  onShuffle: () => setShuffle((current) => current + 1),
+                  onClear: () => setShuffle(0),
+                }}
               />
               <section className="ce-li-zones-row run-battle-preview-note">
                 <span className="ce-li-title">Before deployment</span>
@@ -152,6 +185,11 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
                   Fixed pieces appear on the map. The Forces ledger also counts setup forces whose
                   exact squares are dealt when the Battle begins. Your own army arrives after you
                   leave the Sectio: {dealtLine}, onto the lit band.
+                  {preview
+                    ? ' What stands there now is one way that could fall, dealt fresh and seated at'
+                      + ' random by the rules Deployment will use — not the hand you will be given.'
+                      + ' Shuffle again for another.'
+                    : ''}
                 </p>
               </section>
             </aside>

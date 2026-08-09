@@ -109,14 +109,17 @@ import { useLipsanonFlight } from './runLipsanonFlightView';
 import { RunGoldAmount } from './RunResources';
 import {
   isSectioWorkspaceView,
+  RUN_SECTIO_CONTROL_ICON_ROLE,
   RUN_WORKSPACE_VIEW_LABEL,
   SECTIO_WORKSPACE_VIEWS,
   runArmyUnitHref,
   runWorkspaceHref,
   runWorkspaceTitleSegment,
+  type RunSectioControl,
   type RunSelfInspectionView,
   type RunWorkspaceView,
 } from './RunSelfInspection';
+import { installedUiMedia } from './installedUiMedia';
 import {
   DEFAULT_RUN_ARMY_FILTERS,
   RunArmyWorkspace,
@@ -315,6 +318,21 @@ function useInstalledSectioScene(): ReactElement | null {
   }, []);
 }
 
+/**
+ * A Sectio control's mark, seated ahead of its word.
+ *
+ * `.app-header-button` is already an inline flex row with its own gap, so the mark takes a fixed
+ * seat and the label follows it — every button in the rail then starts its text on the same line
+ * whatever glyph it wears, which is what makes the column scannable rather than ragged.
+ */
+function RunControlMark({ control }: { control: RunSectioControl }): ReactElement {
+  return (
+    <span className="run-control-mark" aria-hidden="true">
+      <img src={installedUiMedia(RUN_SECTIO_CONTROL_ICON_ROLE[control])} alt="" draggable={false} />
+    </span>
+  );
+}
+
 function RunMetaControls({
   run,
   view,
@@ -353,6 +371,7 @@ function RunMetaControls({
                 aria-pressed={view === 'primary'}
                 onClick={() => onNavigate('primary')}
               >
+                <RunControlMark control="primary" />
                 Sectio
               </ChromeButton>
               {SECTIO_WORKSPACE_VIEWS.map((candidate, index) => (
@@ -365,6 +384,7 @@ function RunMetaControls({
                   aria-pressed={view === candidate}
                   onClick={() => onNavigate(candidate)}
                 >
+                  <RunControlMark control={candidate} />
                   {RUN_WORKSPACE_VIEW_LABEL[candidate]}
                 </ChromeButton>
               ))}
@@ -386,6 +406,7 @@ function RunMetaControls({
                   onNavigate('primary');
                 }}
               >
+                <RunControlMark control="reset-sectio" />
                 Reset Sectio
               </ChromeButton>
               <ChromeButton unit="inner-text-button"
@@ -400,6 +421,7 @@ function RunMetaControls({
                   onNavigate('primary');
                 }}
               >
+                <RunControlMark control="continue" />
                 Continue to next Battle
               </ChromeButton>
             </div>
@@ -418,6 +440,7 @@ function RunMetaControls({
                 disabled={abandoning}
                 onClick={() => { void requestAbandon(); }}
               >
+                <RunControlMark control="abandon" />
                 {abandoning ? 'Abandoning…' : 'Abandon Run'}
               </ChromeButton>
             </div>
@@ -585,6 +608,9 @@ function ArrangedDeploymentControls({
             disabled={abandoning || departing}
             onClick={() => { void requestAbandon(); }}
           >
+            {/* The same control as the Sectio rail's, so it wears the same mark: one button
+                cannot read two ways because it is reached from two screens. */}
+            <RunControlMark control="abandon" />
             {abandoning ? 'Abandoning…' : 'Abandon Run'}
           </ChromeButton>
         </div>
