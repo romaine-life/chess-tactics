@@ -97,18 +97,27 @@ these.
   is always the rules authority (ADR-0497).
 - The generator evaluates a deterministic 720-card labeled core plus six retained authored
   exceptions, then collapses translation and quarter-turn-equivalent identities into a
-  **272-card live offer deck**. The core assigns Pawn, Knight, Bishop, Rook, and Queen
+  **269-card live offer deck**. The core assigns Pawn, Knight, Bishop, Rook, and Queen
   rosters worth at most nine material to every edge-connected one-to-four-cell footprint
   in a two-row, four-column band, with Queen + Pawn admitted as the one ten-material
   roster. Translation and rotation are normalized because the player can freely rotate cards;
   reflections remain distinct. The retained
   exceptions preserve useful existing triangles, a diagonal Bishop pair, and the vertical
   Rook pair outside that grammar. His Grace remains the separate starter.
-- Rarity describes desirability rather than material price. Queens, two Rooks, three
-  non-Pawns, and every formation containing Bishops on opposite-colored squares are
-  Rare. A Rook or two non-Pawns is ordinarily Uncommon; same-color Bishop pairs remain
-  Common. Rarity remains visible card metadata, but it does not currently influence dealing.
-  Each hidden pile is one complete seeded shuffle of the 272 live offer identities.
+- Rarity is a **material band adjusted by footprint and by the Bishop** (ADR-0523, ADR-0532).
+  Common runs through four material, Uncommon covers five and six, and Rare is anything
+  above; the five four-cell footprints that waste the deployment band (both Z chiralities,
+  T, J, and L) then drop one tier, because their material overstates what they are worth on
+  a board. A card carrying **any Bishop** moves back up one tier: the player places every
+  formation by hand, so they choose the colour each Bishop lands on and any two Bishops they
+  own become the opposite-colour pair. No Bishop card is Common, every two-Bishop card is
+  Rare, and a card's own Bishop parity is not read at all. That yields 29 Common, 71
+  Uncommon, and 169 Rare identities.
+- Rarity drives dealing. Each hidden pile is 20 cards carrying an exact quota — 16 Common,
+  3 Uncommon, 1 Rare — drawn from independently seeded per-tier shuffles and then shuffled
+  together, so a pile's composition is identical every time rather than converging over a
+  long sample. The Sectios following Battles 1 and 2 draw from a pile capped at six gold;
+  the cap holds prices down without emptying a tier.
 - A Sectio reveals three seeded formation-card offers, or four while
   Quartermaster's Ledger is held. Each offer costs exactly its printed material
   value. Adlectio adds the card and its units without rolling, assigning, or
