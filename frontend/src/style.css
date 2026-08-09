@@ -20841,14 +20841,30 @@ button.tileset-relationship-cell {
 
 /* The Run's opening grant is a card row rather than the relic mat, so it takes the whole
    content lane and centers in it. Without this the content's justify-items:start leaves the
-   grid at one card's width and the row stacks into a clipped column. */
-.run-vacantia-content > .run-card-grid {
+   grid at one card's width and the row stacks into a clipped column. The call heads the lane
+   on its own track, so the row keeps measuring a box it wholly owns and sizes its faces to
+   whatever height the sentence leaves. */
+.run-vacantia-content > .run-vacantia-grant {
   align-content: center;
   block-size: 100%;
+  display: grid;
+  gap: var(--ds-space-3);
+  grid-template-rows: auto minmax(0, 1fr);
   inline-size: 100%;
   justify-self: stretch;
   min-block-size: 0;
   padding: var(--ds-inset);
+}
+
+/* The only sentence on the Run's first screen, so it prints at the scale of something
+   meant to be read rather than a caption filed under the scene. */
+.run-vacantia-grant-call {
+  color: var(--ink-strong);
+  font-size: var(--ds-text-xl);
+  letter-spacing: .02em;
+  margin: 0;
+  text-align: center;
+  text-shadow: 0 3px 0 #02070b;
 }
 
 /* A targeted lipsanon replaces the mat with the same ledger/profile instrument used by
