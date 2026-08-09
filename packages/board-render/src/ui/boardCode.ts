@@ -3,7 +3,8 @@
 // doodads, cover, and linear features — roads + rivers). Used both to LOAD a board on mount
 // and to EXPORT the current one.
 //
-// Wire shape (keys kept short): { c:cols, r:rows, pf?:playerFaction, fd?:{faction:defaultDir},
+// Wire shape (keys kept short): { c:cols, r:rows, pf?:playerFaction, ef?:enemyFaction,
+//   fd?:{faction:defaultDir},
 //   f?:fillTileId, t?:{cell:tileId}, h?:[cell], u?:{cell:[unitId,dir,faction]},
 //   d?:{cell:doodadId}, p?:{anchorCell:propId}, mt?:[[macroTileId,x,y,breakMask?]], v?:{cell:density},
 //   rd?:{cell:roadMaterial}, rv?:{cell:riverMaterial}, fe?:{edgeKey:fenceMaterial},
@@ -343,6 +344,16 @@ export interface EditorBoard {
   decorativeWalls?: Record<string, WallMaterial>;
   /** Palette faction the human player controls. Undefined/null means choose at play-load time. */
   playerFaction?: string | null;
+  /**
+   * Palette faction the CPU opposition wears. Declared alongside `playerFaction` so the pair is the
+   * level's authored roster of sides rather than something inferred from whatever colours happen to
+   * be painted — a board with no enemy pieces yet still knows what colour its enemy is.
+   *
+   * Undefined means the declaration has never been authored; readers resolve it from the painted
+   * units and fall back to the classic pairing. Every unit still carries its own palette, so this
+   * field is the DECLARATION, not the per-piece colour.
+   */
+  enemyFaction?: string | null;
   /** Per-faction default facing used when the level editor places new units. */
   factionDirections?: BoardFactionDirections;
   cells: Record<string, string>;
@@ -1248,6 +1259,7 @@ export function encodeBoard(b: EditorBoard): string {
   if (b.decorativeFencePosts && nonEmpty(b.decorativeFencePosts)) wire.dfp = b.decorativeFencePosts;
   if (b.decorativeWalls && nonEmpty(b.decorativeWalls)) wire.dwl = b.decorativeWalls;
   if (b.playerFaction) wire.pf = b.playerFaction;
+  if (b.enemyFaction) wire.ef = b.enemyFaction;
   const fd = cleanFactionDirections(b.factionDirections);
   if (nonEmpty(fd)) wire.fd = fd;
   if (fill) wire.f = fill;
@@ -1359,13 +1371,14 @@ function decodeMoveHighlightProfileWire(
  */
 export function readBoardFactionOrientation(
   code: string,
-): { playerFaction?: string; factionDirections: BoardFactionDirections } | null {
+): { playerFaction?: string; enemyFaction?: string; factionDirections: BoardFactionDirections } | null {
   try {
     const value = JSON.parse(dec(code)) as unknown;
     if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
     const wire = value as Record<string, unknown>;
     return {
       ...(typeof wire.pf === 'string' ? { playerFaction: wire.pf } : {}),
+      ...(typeof wire.ef === 'string' ? { enemyFaction: wire.ef } : {}),
       factionDirections: cleanFactionDirections(wire.fd),
     };
   } catch {
@@ -1588,7 +1601,9 @@ export function decodeBoard(code: string): EditorBoard | null {
       decorativeFences: (w.dfe && typeof w.dfe === 'object' && !Array.isArray(w.dfe) ? w.dfe : {}) as Record<string, FenceMaterial>,
       decorativeFencePosts: (w.dfp && typeof w.dfp === 'object' && !Array.isArray(w.dfp) ? w.dfp : {}) as Record<string, FenceMaterial>,
       decorativeWalls: (w.dwl && typeof w.dwl === 'object' && !Array.isArray(w.dwl) ? w.dwl : {}) as Record<string, WallMaterial>,
-      playerFaction: typeof w.pf === 'string' ? w.pf : undefined, factionDirections, cells, macroTiles, units, doodads, props, floatingArtwork,
+      playerFaction: typeof w.pf === 'string' ? w.pf : undefined,
+      enemyFaction: typeof w.ef === 'string' ? w.ef : undefined,
+      factionDirections, cells, macroTiles, units, doodads, props, floatingArtwork,
       cover: (w.v ?? {}) as Record<string, GroundCoverDensity>,
       coverTypes: (w.ct ?? {}) as Record<string, TileFamilyId>,
       coverSeeds: cleanCoverSeeds(w.vs, (w.v ?? {}) as Record<string, GroundCoverDensity>),

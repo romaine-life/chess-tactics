@@ -300,7 +300,7 @@ import {
 import { SliderRow, ctlReset } from './dressing/SliderRow';
 import { objectBaseZIndex, structureFrontZIndex } from '../render/sceneDepth';
 import { groundCoverSet, LEGACY_GROUND_COVER_SEED, type GroundCoverDensity } from '../core/groundCover';
-import { UNIT_PALETTE_LABELS, UNIT_PALETTES, isUnitPalette, type UnitPalette } from '../core/pieces';
+import { DEFAULT_DECLARED_FACTIONS, FACTION_ROLES, UNIT_PALETTE_LABELS, UNIT_PALETTES, isUnitPalette, resolveDeclaredFactions, undeclaredPaintedFactions, type DeclaredFactions, type FactionRole, type UnitPalette } from '../core/pieces';
 import { useCampaigns } from '../campaign/store';
 import { ensureCampaignsHydrated } from '../campaign/hydrate';
 import { editorBoardToLevel, levelToEditorBoard } from '../core/levelBoard';
@@ -1810,8 +1810,14 @@ const LE_FACTION_LABELS = UNIT_PALETTE_LABELS;
 // A board that has not authored its own sides opens on the classic chess pairing: the player is
 // White, the CPU is Black. Only a NEW board adopts the player half automatically — an existing
 // level that never authored a player faction keeps it unset rather than being claimed on load.
-const DEFAULT_EDITOR_PLAYER_FACTION: UnitPalette = 'white';
-const DEFAULT_EDITOR_CPU_FACTION: UnitPalette = 'black';
+const DEFAULT_EDITOR_PLAYER_FACTION: UnitPalette = DEFAULT_DECLARED_FACTIONS.player;
+const DEFAULT_EDITOR_CPU_FACTION: UnitPalette = DEFAULT_DECLARED_FACTIONS.enemy;
+// The role each declared faction plays. "Player 1" on a standalone board, where the seat is a
+// human's rather than the campaign's protagonist.
+const LE_FACTION_ROLE_LABELS = (campaign: boolean): Record<FactionRole, string> => ({
+  player: campaign ? 'Player' : 'Player 1',
+  enemy: 'Enemy',
+});
 type FactionDirections = Partial<Record<UnitPalette, Direction>>;
 const DEFAULT_FACTION_DIRECTIONS: Record<UnitPalette, Direction> = {
   'navy-blue': 'north',
@@ -1829,18 +1835,13 @@ const normalizeFactionDirections = (directions?: BoardFactionDirections): Factio
   ) as FactionDirections;
 const factionDefaultDirection = (faction: UnitPalette, directions: FactionDirections): Direction =>
   directions[faction] ?? DEFAULT_FACTION_DIRECTIONS[faction];
+/** The palette a side's pieces wear: the level's own declaration, resolved. */
 const sideDefaultFaction = (
-  side: 'player' | 'enemy',
+  side: FactionRole,
   playerFaction: UnitPalette | null,
   units: Record<string, BoardUnitPlacement>,
-): UnitPalette => {
-  const player = playerFaction ?? DEFAULT_EDITOR_PLAYER_FACTION;
-  if (side === 'player') return player;
-  const authoredEnemy = Object.values(units).find((unit) => unit.faction !== player)?.faction;
-  if (isUnitPalette(authoredEnemy)) return authoredEnemy;
-  if (playerFaction && playerFaction !== DEFAULT_EDITOR_CPU_FACTION) return DEFAULT_EDITOR_CPU_FACTION;
-  return UNIT_PALETTES.find((faction) => faction !== player) ?? DEFAULT_EDITOR_CPU_FACTION;
-};
+  enemyFaction?: UnitPalette | null,
+): UnitPalette => resolveDeclaredFactions({ playerFaction, enemyFaction, units })[side];
 const promotionEdgeTiles = (cols: number, rows: number, direction: Direction): string[] => {
   const tiles = new Set<string>();
   const add = (x: number, y: number): void => { if (x >= 0 && y >= 0 && x < cols && y < rows) tiles.add(`${x},${y}`); };
@@ -2681,11 +2682,6 @@ const brushKindForRouteState = (layer: LayerKey, kind: BrushKind | undefined): B
   const routedKind = levelEditorRouteBrushKind(layer, kind);
   return routedKind ?? brushKindForInitialLayer(layer);
 };
-type FactionControl = 'cpu' | 'player';
-const factionControlOptions = (campaign: boolean): Array<{ value: FactionControl; label: string }> => [
-  { value: 'cpu', label: 'CPU' },
-  { value: 'player', label: campaign ? 'Player' : 'Player 1' },
-];
 const formatDifficulty = (difficulty: string | undefined): string => {
   const value = difficulty?.trim() || 'normal';
   return value.charAt(0).toUpperCase() + value.slice(1);
@@ -3044,6 +3040,15 @@ export function LevelEditor(): ReactElement {
     // A brand-new board opens already assigned to White. A board that LOADED without a player
     // faction keeps it unset, so opening an old level never silently claims a side for it.
     return initialBoard ? null : DEFAULT_EDITOR_PLAYER_FACTION;
+  });
+  // The declared opposition colour. Same load contract as the player half: authored wins, a loaded
+  // board that never declared one keeps it unset (the panel shows the RESOLVED pair either way), and
+  // only a brand-new board adopts the default. This is what lets a board with no enemy pieces yet
+  // still know what colour its enemy is.
+  const [enemyFaction, setEnemyFaction] = useState<UnitPalette | null>(() => {
+    const authored = initialBoard?.enemyFaction;
+    if (isUnitPalette(authored)) return authored;
+    return initialBoard ? null : DEFAULT_EDITOR_CPU_FACTION;
   });
   const [boardFactionDirections, setBoardFactionDirections] = useState<FactionDirections>(() => initialFactionDirections);
   const [tool, setTool] = useState<'select' | 'brush' | 'erase' | 'move' | 'region'>(
@@ -3612,9 +3617,22 @@ export function LevelEditor(): ReactElement {
   const wallArtTool = brushKind === 'wallart';
   const [unitBrushId, setUnitBrushId] = useState<string>(() => studioArm.kind === 'unit' && studioArm.brush ? studioArm.brush : 'pawn');
   const [doodadBrushId, setDoodadBrushId] = useState<string>(() => studioArm.kind === 'doodad' && studioArm.brush ? studioArm.brush : defaultDoodadAsset().id);
-  // The brush opens on the side you are authoring FOR — the board's player faction, or White on
-  // a board that has not named one — so the first pieces painted land on the player's side.
-  const initialUnitFaction = playerFaction ?? DEFAULT_EDITOR_PLAYER_FACTION;
+  // The two factions THIS level declares, always resolved to real palettes. Every faction-facing
+  // surface reads this one value: the Declared Factions panel edits it, the unit brush paints from
+  // it, and nothing offers a palette it does not name.
+  const declaredFactions = useMemo<DeclaredFactions>(
+    () => resolveDeclaredFactions({ playerFaction, enemyFaction, units: boardUnits }),
+    [playerFaction, enemyFaction, boardUnits],
+  );
+  const declaredFactionRole = (faction: UnitPalette): FactionRole | null =>
+    faction === declaredFactions.player ? 'player' : faction === declaredFactions.enemy ? 'enemy' : null;
+  // The brush opens on the side you are authoring FOR — the declared player faction — so the first
+  // pieces painted land on the player's side.
+  const initialUnitFaction = resolveDeclaredFactions({
+    playerFaction: initialBoard?.playerFaction ?? (initialBoard ? undefined : DEFAULT_EDITOR_PLAYER_FACTION),
+    enemyFaction: initialBoard?.enemyFaction,
+    units: initialBoard?.units,
+  }).player;
   const [unitBrushDirection, setUnitBrushDirection] = useState<Direction>(() => factionDefaultDirection(initialUnitFaction, initialFactionDirections));
   const [unitFaction, setUnitFactionState] = useState<UnitPalette>(initialUnitFaction);
   const [undoStack, setUndoStack] = useState<EditorBoard[]>([]);
@@ -3908,6 +3926,7 @@ export function LevelEditor(): ReactElement {
     setBoardZoneEntries(zoneEntriesForBoard(board));
     setGeneratedRegions(board.generatedRegions ?? []);
     setPlayerFaction((board.playerFaction && (UNIT_PALETTES as readonly string[]).includes(board.playerFaction)) ? board.playerFaction as UnitPalette : null);
+    setEnemyFaction(isUnitPalette(board.enemyFaction) ? board.enemyFaction : null);
     setBoardFactionDirections(normalizeFactionDirections(board.factionDirections));
   };
   useEffect(() => {
@@ -3929,8 +3948,8 @@ export function LevelEditor(): ReactElement {
   // The current painted board as a single EditorBoard — the one shape both the transient
   // play-test URL and the level save serialize from, so they can never describe different boards.
   const currentEditorBoard = useMemo<EditorBoard>(
-    () => ({ cols: boardCols, rows: boardRows, cameraBounds: boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, backgroundMode: boardBackgroundModeState, surface: boardSurface, predrawnGridDetached: boardPredrawnGridDetached, predrawnPlateOffset: boardPredrawnPlateOffset, predrawnGenerationFrame: boardPredrawnGenerationFrame, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, floatingArtwork: boardFloatingArtwork, cover: boardCover, coverTypes: boardCoverTypes, coverSeeds: boardCoverSeeds, features: boardFeatures, fences: boardFences, fencePosts: boardFencePosts, walls: boardWalls, wallArt: boardWallArt, subterrain: boardSubterrain, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions, towns: boardTowns, forests: boardForests }),
-    [boardCols, boardRows, boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, boardFactionDirections, boardCells, boardBackgroundModeState, boardSurface, boardPredrawnGridDetached, boardPredrawnPlateOffset, boardPredrawnGenerationFrame, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardFloatingArtwork, boardCover, boardCoverTypes, boardCoverSeeds, boardFeatures, boardFences, boardFencePosts, boardWalls, boardWallArt, boardSubterrain, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions, boardTowns, boardForests],
+    () => ({ cols: boardCols, rows: boardRows, cameraBounds: boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, enemyFaction, factionDirections: boardFactionDirections, cells: boardCells, backgroundMode: boardBackgroundModeState, surface: boardSurface, predrawnGridDetached: boardPredrawnGridDetached, predrawnPlateOffset: boardPredrawnPlateOffset, predrawnGenerationFrame: boardPredrawnGenerationFrame, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, floatingArtwork: boardFloatingArtwork, cover: boardCover, coverTypes: boardCoverTypes, coverSeeds: boardCoverSeeds, features: boardFeatures, fences: boardFences, fencePosts: boardFencePosts, walls: boardWalls, wallArt: boardWallArt, subterrain: boardSubterrain, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions, towns: boardTowns, forests: boardForests }),
+    [boardCols, boardRows, boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, enemyFaction, boardFactionDirections, boardCells, boardBackgroundModeState, boardSurface, boardPredrawnGridDetached, boardPredrawnPlateOffset, boardPredrawnGenerationFrame, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardFloatingArtwork, boardCover, boardCoverTypes, boardCoverSeeds, boardFeatures, boardFences, boardFencePosts, boardWalls, boardWallArt, boardSubterrain, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions, boardTowns, boardForests],
   );
   const predrawnVersionCells = useMemo(
     () => Array.from({ length: boardRows }, (_, y) => (
@@ -4404,6 +4423,23 @@ export function LevelEditor(): ReactElement {
     next.playerFaction = faction;
     commitEditorBoard(next);
   };
+  // Repaint every unit wearing `from` into `to`, carrying that faction's authored default facing
+  // with it. Shared by every declaration edit — changing a declared colour, swapping the two sides,
+  // and folding an undeclared legacy colour into a declared faction are all this one move.
+  const repaintUnits = (board: EditorBoard, from: UnitPalette, to: UnitPalette): void => {
+    for (const [key, unit] of Object.entries(board.units)) {
+      if (unit.faction === from) board.units[key] = { ...unit, faction: to };
+    }
+    const directions = normalizeFactionDirections(board.factionDirections);
+    if (directions[from] !== undefined) {
+      const carried = directions[from];
+      delete directions[from];
+      // An authored facing that happens to equal the new colour's own default stays implicit,
+      // so a recolour cannot introduce a redundant override the editor would have omitted.
+      if (carried !== DEFAULT_FACTION_DIRECTIONS[to]) directions[to] = carried;
+    }
+    board.factionDirections = directions;
+  };
   const brushAsset = resolveAsset(brushId);
   if (!brushAsset) throw new Error(`Selected terrain surface "${brushId}" is unavailable`);
   const macroTileBrushAsset = macroTileBrushId ? macroTileAsset(macroTileBrushId) : undefined;
@@ -4416,29 +4452,63 @@ export function LevelEditor(): ReactElement {
     const dir = directionForFaction(faction);
     setUnitBrushDirection(hasDirectionSprite(unitBrushAsset, dir) ? dir : 'south');
   };
-  // Recolour a whole faction in place: every unit wearing `from` changes to `to`, and the
-  // faction's authored identity travels with it (who the player controls, its default facing,
-  // the paint brush if it was armed with that colour). Only a palette nothing else on the board
-  // wears is offered, so this can never silently MERGE two sides into one.
-  const recolorFaction = (from: UnitPalette, to: UnitPalette): void => {
-    if (from === to) return;
+  // Trade the two declared colours. Every piece changes sides' colour with its faction, so the
+  // board that was White-versus-Black is Black-versus-White and nothing else moves.
+  const swapDeclaredFactions = (): void => {
+    const { player, enemy } = declaredFactions;
     const next = cloneEditorBoard(currentEditorBoardRef.current);
-    for (const [key, unit] of Object.entries(next.units)) {
-      if (unit.faction === from) next.units[key] = { ...unit, faction: to };
-    }
-    const directions = normalizeFactionDirections(next.factionDirections);
-    if (directions[from] !== undefined) {
-      const carried = directions[from];
-      delete directions[from];
-      // An authored facing that happens to equal the new colour's own default stays implicit,
-      // so a recolour cannot introduce a redundant override the editor would have omitted.
-      if (carried !== DEFAULT_FACTION_DIRECTIONS[to]) directions[to] = carried;
-    }
-    next.factionDirections = directions;
-    if (next.playerFaction === from) next.playerFaction = to;
+    const parked = UNIT_PALETTES.find((palette) => palette !== player && palette !== enemy);
+    if (!parked) return;
+    // Via a third colour nothing wears, so the first repaint cannot swallow the second's units.
+    repaintUnits(next, player, parked);
+    repaintUnits(next, enemy, player);
+    repaintUnits(next, parked, enemy);
+    next.playerFaction = enemy;
+    next.enemyFaction = player;
     commitEditorBoard(next);
-    if (unitFaction === from) setUnitFaction(to);
+    if (unitFaction === player) setUnitFaction(enemy);
+    else if (unitFaction === enemy) setUnitFaction(player);
   };
+  // Declare the colour a role's faction wears. The declaration and the pieces move together: every
+  // unit of that faction is repainted, so the board never disagrees with what the level declares.
+  // Picking the colour the OTHER role already holds swaps the two sides rather than merging them —
+  // two factions can never fold into one, because that is a different act than recolouring.
+  const setDeclaredFaction = (role: FactionRole, faction: UnitPalette): void => {
+    const from = declaredFactions[role];
+    if (from === faction) return;
+    const otherRole: FactionRole = role === 'player' ? 'enemy' : 'player';
+    if (faction === declaredFactions[otherRole]) {
+      swapDeclaredFactions();
+      return;
+    }
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    repaintUnits(next, from, faction);
+    if (role === 'player') next.playerFaction = faction;
+    else next.enemyFaction = faction;
+    // Both halves are written the moment either is authored, so a level that declares one side
+    // never leaves the other implicit for the next reader to guess.
+    if (role === 'player' && !isUnitPalette(next.enemyFaction)) next.enemyFaction = declaredFactions.enemy;
+    if (role === 'enemy' && !isUnitPalette(next.playerFaction)) next.playerFaction = declaredFactions.player;
+    commitEditorBoard(next);
+    if (unitFaction === from) setUnitFaction(faction);
+  };
+  // Fold a legacy colour no faction declares into one that is declared. Those pieces already PLAY as
+  // that side — everything outside the player faction is the enemy — so this only makes the board
+  // say what the level always meant.
+  const foldUndeclaredFaction = (from: UnitPalette, role: FactionRole): void => {
+    const next = cloneEditorBoard(currentEditorBoardRef.current);
+    repaintUnits(next, from, declaredFactions[role]);
+    commitEditorBoard(next);
+    if (unitFaction === from) setUnitFaction(declaredFactions[role]);
+  };
+  // The brush can only ever be armed with a declared faction. Undo, redo, a board load or a
+  // declaration edit made from another panel can all move the declaration out from under it, so the
+  // brush follows the declaration back to the player's side rather than painting an undeclared colour.
+  useEffect(() => {
+    if (declaredFactionRole(unitFaction)) return;
+    setUnitFaction(declaredFactions.player);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [declaredFactions, unitFaction]);
   const setFactionDefaultDirection = (faction: UnitPalette, direction: Direction): void => {
     const next = cloneEditorBoard(currentEditorBoardRef.current);
     const factionDirections = normalizeFactionDirections(next.factionDirections);
@@ -5819,14 +5889,10 @@ export function LevelEditor(): ReactElement {
   // The factions offered in each condition's "IF <faction>" dropdown — one per side, labelled by the
   // board's assigned palette (ADR-0064). Maps to the engine's player/enemy side; true multi-faction
   // (two distinct enemies) is future work.
-  const victoryFactions = useMemo((): FactionOption[] => {
-    const label = (p: string): string => (isUnitPalette(p) ? LE_FACTION_LABELS[p] : p);
-    const enemyPalette = Object.values(boardUnits).map((u) => u.faction).find((f) => f && f !== playerFaction);
-    return [
-      { side: 'player', label: playerFaction ? label(playerFaction) : 'You (Player)' },
-      { side: 'enemy', label: enemyPalette ? label(enemyPalette) : 'Enemy' },
-    ];
-  }, [playerFaction, boardUnits]);
+  const victoryFactions = useMemo((): FactionOption[] => FACTION_ROLES.map((side) => ({
+    side,
+    label: LE_FACTION_LABELS[declaredFactions[side]],
+  })), [declaredFactions]);
   // A level stores `victory` only when the lists DIVERGE from the objective preset — else the
   // preset drives it (keeps preset bodies clean + out of the dirty check, and preserves
   // capture-king's runtime kingSide direction-awareness for an untouched King Assault). ADR-0064.
@@ -5892,23 +5958,12 @@ export function LevelEditor(): ReactElement {
     return { war: editorWar, curve: expectedWarValue(levels as Level[]), index };
   }, [candidateLevel, editorWar, isWarBattle, routeParams.levelId, warBattleLevels]);
   const warValueHere = warEconomy?.curve[warEconomy.index] ?? null;
-  const previewPlayerFaction = useMemo<UnitPalette | null>(() => {
-    if (playerFaction) return playerFaction;
-    for (let y = 0; y < boardRows; y += 1) {
-      for (let x = 0; x < boardCols; x += 1) {
-        const faction = boardUnits[`${x},${y}`]?.faction;
-        if (isUnitPalette(faction)) return faction;
-      }
-    }
-    return null;
-  }, [boardCols, boardRows, boardUnits, playerFaction]);
-  const tacticalPreviewLevel = useMemo<Level | null>(() => {
-    if (!previewPlayerFaction) return null;
-    return editorBoardToLevel(
-      { ...currentEditorBoard, playerFaction: previewPlayerFaction },
-      { id: editingId ?? 'draft-preview', name: levelNameForSave, ...modeMeta },
-    );
-  }, [currentEditorBoard, editingId, levelNameForSave, modeMeta, previewPlayerFaction]);
+  // The tactical preview plays as the level's declared player faction.
+  const previewPlayerFaction = declaredFactions.player;
+  const tacticalPreviewLevel = useMemo<Level | null>(() => editorBoardToLevel(
+    { ...currentEditorBoard, playerFaction: previewPlayerFaction },
+    { id: editingId ?? 'draft-preview', name: levelNameForSave, ...modeMeta },
+  ), [currentEditorBoard, editingId, levelNameForSave, modeMeta, previewPlayerFaction]);
   const tacticalPreviewGame = useMemo<GameState | null>(() => {
     if (!tacticalPreviewLevel) return null;
     const game = createFromLevel(tacticalPreviewLevel, 1);
@@ -8098,32 +8153,30 @@ export function LevelEditor(): ReactElement {
     for (const unit of Object.values(boardUnits)) totals[unit.faction] += materialPointsForUnitId(unit.unitId);
     return totals;
   }, [boardUnits]);
-  const presentFactions = useMemo(
-    () => UNIT_PALETTES.filter((faction) => boardFactionCounts[faction] > 0),
-    [boardFactionCounts],
+  // Colours a declared faction may move to: everything except the one the other side already holds,
+  // which is offered separately as an explicit swap. A colour worn by undeclared legacy pieces stays
+  // offered — choosing it ADOPTS those pieces into the faction, which is the repair the author wants.
+  const declarableFactions = useMemo(
+    () => FACTION_ROLES.reduce((options, role) => {
+      const taken = declaredFactions[role === 'player' ? 'enemy' : 'player'];
+      options[role] = UNIT_PALETTES.filter((faction) => faction !== taken);
+      return options;
+    }, {} as Record<FactionRole, readonly UnitPalette[]>),
+    [declaredFactions],
   );
-  // The colours a faction may move to: the ones no unit on the board is wearing. Offering a
-  // colour already in use would fold two factions into one, which is a different act than
-  // recolouring and is not what this control is for.
-  const unassignedFactions = useMemo(
-    () => UNIT_PALETTES.filter((faction) => boardFactionCounts[faction] === 0),
-    [boardFactionCounts],
+  // Pieces wearing a colour this level never declared — the legacy three-plus-colour boards. They
+  // play as the enemy today; the panel offers to fold them into a declared faction.
+  const undeclaredFactions = useMemo(
+    () => undeclaredPaintedFactions({ units: boardUnits }, declaredFactions),
+    [boardUnits, declaredFactions],
   );
-  const playerFactionPresent = Boolean(playerFaction && presentFactions.includes(playerFaction));
+  // The declaration always names a player faction, so the only thing left to check is whether that
+  // faction actually fields anything.
+  const playerFactionPresent = boardFactionCounts[declaredFactions.player] > 0;
   const needsPlayerFaction = isCampaignLevel && !playerFactionPresent;
   const levelObjectiveLabel = OBJECTIVE_LABEL[targetLevel?.objective ?? 'capture-all'];
   const levelDifficultyLabel = formatDifficulty(targetLevel?.difficulty);
-  const controlOptions = useMemo(() => factionControlOptions(isCampaignLevel), [isCampaignLevel]);
-  const setFactionControl = (faction: UnitPalette, control: FactionControl): void => {
-    if (control === 'player') {
-      setPlayerFactionWithHistory(faction);
-      return;
-    }
-    if (playerFaction === faction) setPlayerFactionWithHistory(null);
-  };
-  const onFactionControlChange = (faction: UnitPalette) => (control: FactionControl): void => {
-    setFactionControl(faction, control);
-  };
+  const factionRoleLabels = useMemo(() => LE_FACTION_ROLE_LABELS(isCampaignLevel), [isCampaignLevel]);
   const browserRecoverySafetyDetail = localBackupAvailable === true
     ? 'A browser recovery copy is available.'
     : localBackupAvailable === false
@@ -8674,7 +8727,12 @@ export function LevelEditor(): ReactElement {
     const directions = normalizeFactionDirections(board.factionDirections);
     const makeZone = (side: 'player' | 'enemy'): string => {
       const boardPlayerFaction = isUnitPalette(board.playerFaction) ? board.playerFaction : playerFaction;
-      const faction = sideDefaultFaction(side, boardPlayerFaction, board.units as Record<string, BoardUnitPlacement>);
+      const faction = sideDefaultFaction(
+        side,
+        boardPlayerFaction,
+        board.units as Record<string, BoardUnitPlacement>,
+        isUnitPalette(board.enemyFaction) ? board.enemyFaction : enemyFaction,
+      );
       const direction = factionDefaultDirection(faction, directions);
       const name = uniqueZoneEntryName(side === 'player' ? 'Player promotion zone' : 'Enemy promotion zone', entries);
       const id = nextZoneEntryId(entries);
@@ -10664,47 +10722,62 @@ export function LevelEditor(): ReactElement {
               <div><dt>Difficulty</dt><dd>{levelDifficultyLabel}</dd></div>
             </dl>
             <div className="le-faction-control">
-              <span className="le-settings-label">Player Faction</span>
-              {presentFactions.length ? (
-                <div className="le-faction-assignments">
-                  {presentFactions.map((faction) => (
-                    <div className="le-faction-assignment" key={faction}>
+              <span className="le-settings-label">Declared Factions</span>
+              <p className="le-board-note">The sides this level fields. Units are painted for a faction, and wear its colour.</p>
+              <div className="le-faction-assignments">
+                {FACTION_ROLES.map((role) => {
+                  const faction = declaredFactions[role];
+                  return (
+                    <div className="le-faction-assignment" key={role}>
                       <span className="le-faction-name">
                         <i className={`le-faction-dot is-${faction}`} aria-hidden="true" />
-                        <span>{LE_FACTION_LABELS[faction]}</span>
+                        <span>{factionRoleLabels[role]}</span>
                         <b>{boardFactionCounts[faction]}</b>
                       </span>
                       <div className="le-faction-fields">
-                        <HouseSelect<FactionControl>
-                          value={playerFaction === faction ? 'player' : 'cpu'}
-                          ariaLabel={`${LE_FACTION_LABELS[faction]} control`}
-                          onChange={onFactionControlChange(faction)}
-                          options={controlOptions}
-                        />
                         <PaletteSelect
                           className="le-faction-color-select"
                           value={faction}
-                          options={unassignedFactions}
-                          ariaLabel={`${LE_FACTION_LABELS[faction]} colour`}
-                          disabled={!unassignedFactions.length}
-                          title={unassignedFactions.length
-                            ? 'Repaint every unit of this faction in another colour.'
-                            : 'Every colour is already in use by a faction on this board.'}
-                          onChange={(next) => recolorFaction(faction, next)}
+                          options={declarableFactions[role]}
+                          ariaLabel={`${factionRoleLabels[role]} colour`}
+                          title={`The colour ${factionRoleLabels[role]} wears. Changing it repaints every ${factionRoleLabels[role]} unit on the board.`}
+                          onChange={(next) => setDeclaredFaction(role, next)}
                         />
                         <DirectionPopover
                           value={directionForFaction(faction)}
-                          label={`${LE_FACTION_LABELS[faction]} default facing`}
+                          label={`${factionRoleLabels[role]} default facing`}
                           onChange={(direction) => setFactionDefaultDirection(faction, direction)}
                         />
                       </div>
                     </div>
-                  ))}
+                  );
+                })}
+              </div>
+              <div className="le-board-actions">
+                <ChromeButton unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  onClick={swapDeclaredFactions}
+                  title={`Trade colours between ${factionRoleLabels.player} and ${factionRoleLabels.enemy}, repainting every unit on the board.`}
+                >Swap sides</ChromeButton>
+              </div>
+              {undeclaredFactions.map((faction) => (
+                <div className="le-faction-undeclared" key={faction}>
+                  <p className="le-board-warning">
+                    {boardFactionCounts[faction]} {LE_FACTION_LABELS[faction]} unit{boardFactionCounts[faction] === 1 ? '' : 's'} belong to no declared faction. They play as {factionRoleLabels.enemy}.
+                  </p>
+                  <div className="le-board-actions">
+                    {FACTION_ROLES.map((role) => (
+                      <ChromeButton unit="inner-text-button"
+                        key={role}
+                        className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                        onClick={() => foldUndeclaredFaction(faction, role)}
+                        title={`Repaint every ${LE_FACTION_LABELS[faction]} unit into ${factionRoleLabels[role]}.`}
+                      >Move to {factionRoleLabels[role]}</ChromeButton>
+                    ))}
+                  </div>
                 </div>
-              ) : (
-                <p className="le-board-note">Place a unit before assigning control.</p>
-              )}
-              {needsPlayerFaction ? <p className="le-board-warning">Assign Player to one board faction before saving.</p> : null}
+              ))}
+              {needsPlayerFaction ? <p className="le-board-warning">{factionRoleLabels.player} fields no units. Paint at least one before saving.</p> : null}
             </div>
           </section>
           </>
@@ -11448,13 +11521,26 @@ export function LevelEditor(): ReactElement {
         {brushKind === 'unit' ? (
           <section className="skirmish-card le-brush-panel">
             <h2>Paint Faction</h2>
+            {/* Only a faction this level DECLARES can be painted, and its colour follows the
+              * declaration — the brush has no colour of its own. Board → Declared Factions is where
+              * the pair is named and where a colour is changed. */}
             <div className="le-ctrlrow">
               <span className="le-ctrllabel">Faction</span>
-              <PaletteSelect
-                className="le-faction-palette-select"
-                value={unitFaction}
-                aria-label="Paint faction"
-                onChange={setUnitFaction}
+              <HouseSelect<FactionRole>
+                className="le-faction-role-select"
+                value={declaredFactionRole(unitFaction) ?? 'player'}
+                options={FACTION_ROLES.map((role) => ({
+                  value: role,
+                  label: (
+                    <span className="le-faction-role-choice">
+                      <span className={`le-faction-dot is-${declaredFactions[role]}`} aria-hidden="true" />
+                      <span className="le-faction-role-choice-label">{factionRoleLabels[role]}</span>
+                      <span className="le-faction-role-choice-colour">{LE_FACTION_LABELS[declaredFactions[role]]}</span>
+                    </span>
+                  ),
+                }))}
+                ariaLabel="Paint faction"
+                onChange={(role) => setUnitFaction(declaredFactions[role])}
               />
             </div>
             <div className="le-ctrlrow">
@@ -12827,8 +12913,14 @@ export function LevelEditor(): ReactElement {
           ) : selectedUnitAsset && selectedUnit ? (
             <dl>
               <div><dt>Piece</dt><dd>{selectedUnitAsset.label}</dd></div>
-              <div><dt>Faction</dt><dd>{LE_FACTION_LABELS[selectedUnit.faction as UnitPalette] ?? selectedUnit.faction}</dd></div>
-              <div><dt>Control</dt><dd>{playerFaction && selectedUnit.faction === playerFaction ? 'Player' : 'CPU'}</dd></div>
+              <div>
+                <dt>Faction</dt>
+                <dd>{(() => {
+                  const role = declaredFactionRole(selectedUnit.faction as UnitPalette);
+                  return role ? factionRoleLabels[role] : `Undeclared (${factionRoleLabels.enemy})`;
+                })()}</dd>
+              </div>
+              <div><dt>Colour</dt><dd>{LE_FACTION_LABELS[selectedUnit.faction as UnitPalette] ?? selectedUnit.faction}</dd></div>
               <div><dt>Facing</dt><dd>{selectedUnit.direction}</dd></div>
             </dl>
           ) : selectedDoodadAsset && selectedDoodad ? (

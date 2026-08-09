@@ -6156,8 +6156,11 @@ body.loading-bootstrap .app-startup-status {
 /* Name above, controls below. Three controls cannot share half a narrow panel and still read —
    the colour select loses its label first, leaving a bare swatch nobody can name. */
 .le-faction-assignment { display: grid; gap: 5px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
-/* Control, colour, facing. The facing stays a fixed square; the two selects share the rest. */
-.le-faction-fields { display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) var(--le-inner-square); min-width: 0; }
+/* Colour, facing. The facing stays a fixed square; the colour select takes the rest. The role is
+   named in the row above, so the declaration needs no control dropdown beside it. */
+.le-faction-fields { display: grid; gap: 6px; grid-template-columns: minmax(0, 1fr) var(--le-inner-square); min-width: 0; }
+/* The repair block for pieces wearing a colour no faction declares. */
+.le-faction-undeclared { display: grid; gap: 5px; }
 .le-faction-fields .le-select-wrap { min-width: 0; }
 .le-faction-color-select { min-width: 0; }
 .le-faction-color-select .palette-select-trigger { min-width: 0; width: 100%; }
@@ -6282,9 +6285,31 @@ body.loading-bootstrap .app-startup-status {
   background: rgba(143, 189, 235, .26);
   color: #ffffff;
 }
-.le-faction-palette-select {
+/* The unit brush's faction picker. It names the FACTION and shows the colour that follows from the
+   declaration, so the two read as one thing rather than as a colour choice. */
+.le-faction-role-select {
   flex: 0 1 170px;
   min-width: 140px;
+}
+.le-faction-role-choice {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  min-width: 0;
+  width: 100%;
+}
+.le-faction-role-choice .le-faction-dot { flex: 0 0 auto; }
+.le-faction-role-choice-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The colour rides at the far end, dimmer: it is a consequence of the faction, not the choice. */
+.le-faction-role-choice-colour {
+  color: rgba(226, 238, 248, .62);
+  font-size: var(--ds-text-xs);
+  margin-left: auto;
+  white-space: nowrap;
 }
 .le-direction-trigger {
   appearance: none;
