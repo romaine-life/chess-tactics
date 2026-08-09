@@ -41,7 +41,10 @@ Chosen: **an idle pane draws no rail and reserves no gutter.**
    `--kit-scroll-gutter-size` and **reserves its space from `--kit-scroll-gutter`** — never
    from a literal, or its rows keep standing clear of a rail that is no longer there.
    Settings' separate 24px region and the Level Editor palette's overhang-aware padding are
-   both expressed that way.
+   both expressed that way. A clearance split across two elements — the Editor rail's 18px
+   of groove plus a 6px breath padded onto the list *inside* the scroll pane — is declared
+   as one 24px gutter on the wrapper instead, because half a reservation collapsing is worse
+   than none: the rows come back six pixels short of the verbs pinned beneath them.
 
 3. **A framed gutter is exempt — the frame still never moves.** Where the gutter is a
    declared grid column with drawn dividers and junctions on its sides

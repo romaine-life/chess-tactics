@@ -18956,6 +18956,11 @@ button.tileset-relationship-cell {
   grid-template-rows: minmax(0, 1fr) auto;
 }
 .ce-editor-rail .ce-rail-scroll {
+  /* The rail's clearance is 18px of groove plus a 6px breath, and ALL of it is the
+     scrollbar's — so it is declared here as one gutter rather than as a literal on the
+     list inside. That way an idle rail returns the whole 24px and the tabs finish on the
+     same line as the pinned New Level / Import / Save verbs beneath them (ADR-0534). */
+  --kit-scroll-gutter-size: 24px;
   block-size: 100%;
   min-height: 0;
 }
@@ -18963,7 +18968,6 @@ button.tileset-relationship-cell {
   align-content: start;
   display: grid;
   gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
-  padding-right: 6px; /* clear the drawn scrollbar (ADR-0030) */
 }
 .ce-rail-list .campaign-rail-group {
   align-items: baseline;

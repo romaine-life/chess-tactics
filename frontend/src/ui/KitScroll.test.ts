@@ -97,6 +97,13 @@ describe('KitScroll gutter styling (ADR-0534)', () => {
     expect(styleCss).toMatch(/\.le-hud-scroll > \.kit-scroll-content\s*\{[\s\S]*?padding-right:\s*calc\(var\(--kit-scroll-gutter\)/);
   });
 
+  it('declares the Editor rail clearance on the wrapper so all 24px collapse together', () => {
+    // The 6px breath used to be padded onto .ce-rail-list INSIDE the scroll pane, out of the
+    // token's reach — so a collapsed rail left the tabs 6px short of the verbs pinned below.
+    expect(styleCss).toMatch(/\.ce-editor-rail \.ce-rail-scroll\s*\{[\s\S]*?--kit-scroll-gutter-size:\s*24px;/);
+    expect(styleCss).not.toMatch(/\.ce-editor-rail \.ce-rail-list\s*\{[^}]*padding-right:/);
+  });
+
   it('hides the idle rail without unmounting the track the thumb is measured from', () => {
     expect(styleCss).toMatch(/\.kit-scroll-wrap\[data-kit-scroll-rail='collapsed'\] > \.kit-scroll-rail\s*\{\s*visibility:\s*hidden;\s*\}/);
     expect(styleCss).not.toMatch(/\[data-kit-scroll-rail='collapsed'\] > \.kit-scroll-rail\s*\{\s*display:\s*none/);
