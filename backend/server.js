@@ -5889,6 +5889,132 @@ const MIGRATIONS = [
        WHERE body->'runSaveVersion' = '35'::jsonb;
     `,
   },
+  {
+    version: 76,
+    name: 'retire the main-menu profile rook marks',
+    // The selected-level readout was the only consumer of these two roles, and it now draws each
+    // side with the live battlefield sprite in that side's own palette (#863) — the same sprite the
+    // board beside it renders. What they had been was a pair of 34x38 crops flood-keyed out of the
+    // aspirational main-menu mockup, which is why they read as blurred and haloed beside real
+    // pixel art. Nothing references them, so the slots are retired rather than left installed as
+    // required roles no screen asks for.
+    //
+    // Shaped after migration 59: remove the app-ui consumer BEFORE retiring the semantic slot, so
+    // no catalog snapshot can retain a role whose media is already gone. Every write is
+    // conditional, so the migration is safe to re-run and safe after an owner has already
+    // completed the same canonical transactions by hand.
+    sql: `
+      WITH removed_media AS (
+        DELETE FROM drawable_asset_media
+         WHERE asset_id = 'app-ui'
+           AND role IN (
+             'ui-main-menu-profile-rook-blue-png',
+             'ui-main-menu-profile-rook-red-png'
+           )
+        RETURNING asset_id
+      ), updated_asset AS (
+        UPDATE drawable_assets
+           SET behavior = jsonb_set(
+                 COALESCE(behavior, '{}'::jsonb),
+                 '{requiredRoles}',
+                 COALESCE((
+                   SELECT jsonb_agg(required_role ORDER BY ordinal)
+                     FROM jsonb_array_elements(
+                       CASE WHEN jsonb_typeof(behavior->'requiredRoles') = 'array'
+                         THEN behavior->'requiredRoles' ELSE '[]'::jsonb END
+                     ) WITH ORDINALITY AS required(required_role, ordinal)
+                    WHERE required_role NOT IN (
+                      to_jsonb('ui-main-menu-profile-rook-blue-png'::text),
+                      to_jsonb('ui-main-menu-profile-rook-red-png'::text)
+                    )
+                 ), '[]'::jsonb),
+                 true
+               ),
+               row_revision = row_revision + 1,
+               updated_at = now(),
+               updated_by = 'migration-76'
+         WHERE id = 'app-ui'
+           AND (
+             EXISTS (SELECT 1 FROM removed_media)
+             OR (
+               jsonb_typeof(behavior->'requiredRoles') = 'array'
+               AND (
+                 (behavior->'requiredRoles') ? 'ui-main-menu-profile-rook-blue-png'
+                 OR (behavior->'requiredRoles') ? 'ui-main-menu-profile-rook-red-png'
+               )
+             )
+           )
+        RETURNING id
+      )
+      UPDATE drawable_catalog_state
+         SET revision = revision + 1,
+             updated_at = now()
+       WHERE singleton = true
+         AND (
+           EXISTS (SELECT 1 FROM removed_media)
+           OR EXISTS (SELECT 1 FROM updated_asset)
+         );
+
+      WITH target_slot AS (
+        SELECT slot, active_version_id
+          FROM media_slots
+         WHERE slot IN (
+                 'ui/main-menu/profile-rook-blue.png',
+                 'ui/main-menu/profile-rook-red.png'
+               )
+           AND lifecycle_state <> 'retired'
+      ), archived_version AS (
+        UPDATE media_versions AS version
+           SET status = 'archived',
+               row_revision = row_revision + 1,
+               updated_at = now(),
+               updated_by = 'migration-76'
+          FROM target_slot
+         WHERE version.id = target_slot.active_version_id
+           AND version.status <> 'archived'
+        RETURNING version.id
+      ), retired_slot AS (
+        UPDATE media_slots AS slot
+           SET active_version_id = NULL,
+               lifecycle_state = 'retired',
+               retired_at = now(),
+               retirement_evidence = jsonb_build_object(
+                 'reason', 'Main-menu profile rook marks retired with the live-sprite force readout',
+                 'evidence', jsonb_build_object(
+                   'decision', 'PR #863',
+                   'replacement', 'PieceTypeIcon battlefield sprite in each side''s own palette'
+                 ),
+                 'retiredBy', 'migration-76',
+                 'retiredAt', now(),
+                 'previousVersionId', target_slot.active_version_id
+               ),
+               row_revision = row_revision + 1,
+               updated_at = now(),
+               updated_by = 'migration-76'
+          FROM target_slot
+         WHERE slot.slot = target_slot.slot
+        RETURNING slot.slot, target_slot.active_version_id
+      ), retirement_event AS (
+        INSERT INTO media_asset_events (
+          slot, source_path, version_id, action, actor_email, details
+        )
+        SELECT retired_slot.slot, NULL, retired_slot.active_version_id,
+               'slot-retired', 'migration-76',
+               jsonb_build_object(
+                 'reason', 'Main-menu profile rook marks retired with the live-sprite force readout',
+                 'decision', 'PR #863',
+                 'previousVersionId', retired_slot.active_version_id
+               )
+          FROM retired_slot
+        RETURNING id
+      )
+      UPDATE media_catalog_state
+         SET revision = revision + 1,
+             updated_at = now()
+       WHERE singleton = true
+         AND EXISTS (SELECT 1 FROM retired_slot);
+    `,
+  },
 ];
 
 let pool = null;
