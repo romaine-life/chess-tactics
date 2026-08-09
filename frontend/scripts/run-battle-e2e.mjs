@@ -175,6 +175,52 @@ try {
     };
   }, label);
 
+  // Same aiming as clickButton, addressed by testid. A control whose label carries live data --
+  // "Draw 3 cards" -- has no fixed text to match on, and its testid is the stable handle.
+  const clickTestId = async (testId) => {
+    const selector = `[data-testid="${testId}"]`;
+    try {
+      await page.waitForFunction((css) => {
+        const btn = document.querySelector(css);
+        return !!btn && btn.getBoundingClientRect().width > 0 && !btn.disabled && !btn.closest('[inert]');
+      }, { timeout: 15_000 }, selector);
+    } catch {
+      return false;
+    }
+    const point = await page.evaluate((css) => {
+      const btn = document.querySelector(css);
+      if (!btn || btn.disabled || btn.closest('[inert]')) return null;
+      btn.scrollIntoView({ block: 'nearest' });
+      const r = btn.getBoundingClientRect();
+      const samples = [[0.5, 0.5], [0.5, 0.25], [0.5, 0.75], [0.25, 0.5], [0.75, 0.5], [0.15, 0.15], [0.85, 0.85]];
+      for (const [fx, fy] of samples) {
+        const x = r.left + r.width * fx;
+        const y = r.top + r.height * fy;
+        const top = document.elementFromPoint(x, y);
+        if (top && (top === btn || btn.contains(top))) return { x, y };
+      }
+      return null;
+    }, selector);
+    if (!point) return false;
+    await page.mouse.click(point.x, point.y);
+    return true;
+  };
+
+  const testIdDiagnostics = (testId) => page.evaluate((css) => {
+    const button = document.querySelector(css);
+    if (!button) return { found: false };
+    const rect = button.getBoundingClientRect();
+    const hit = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    return {
+      found: true,
+      label: button.textContent?.trim() ?? null,
+      disabled: button.disabled,
+      inert: Boolean(button.closest('[inert]')),
+      rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+      hit: hit ? { tag: hit.tagName, className: hit.className } : null,
+    };
+  }, `[data-testid="${testId}"]`);
+
   const sceneDiagnostics = () => page.evaluate(async () => {
     const timeline = await import('/src/diagnostics/loadingTimeline.ts');
     const director = document.querySelector('.scene-director');
@@ -379,8 +425,8 @@ try {
   const awaitingDealState = await page.evaluate(async () => {
     const { useActiveRun } = await import('/src/run/store.ts');
     const run = useActiveRun.getState().run;
-    const deal = [...document.querySelectorAll('button')]
-      .find((button) => button.textContent?.trim() === 'Deal');
+    // Found by testid, not by label: the label counts the hand ("Draw 3 cards").
+    const deal = document.querySelector('[data-testid="deployment-deal"]');
     const transportRect = document.querySelector('[data-testid="deployment-transport-control"]')?.getBoundingClientRect();
     const probe = window.__ctBattlefieldTransitionProbe;
     return {
@@ -440,8 +486,8 @@ try {
   const awaitingDealShot = 'tmp-shots/run-opening-deployment-awaiting-deal.png';
   await page.screenshot({ path: awaitingDealShot });
   console.log('Deployment awaiting-deal screenshot:', awaitingDealShot);
-  if (!await clickButton('Deal')) {
-    await fail('deployment-deal', JSON.stringify(await buttonDiagnostics('Deal')));
+  if (!await clickTestId('deployment-deal')) {
+    await fail('deployment-deal', JSON.stringify(await testIdDiagnostics('deployment-deal')));
   }
   await page.waitForFunction(() => document.querySelector('[data-deployment-card-stage="dealing"]'));
   const dealMotionShot = 'tmp-shots/run-opening-deployment-deal-motion.png';
@@ -454,8 +500,7 @@ try {
     return {
       stage: run?.deployment?.stage ?? null,
       placements: run?.deployment ? Object.keys(run.deployment.placements).length : null,
-      dealDisabled: [...document.querySelectorAll('button')]
-        .find((button) => button.textContent?.trim() === 'Dealing…')?.disabled ?? null,
+      dealDisabled: document.querySelector('[data-testid="deployment-deal"]')?.disabled ?? null,
       playDisabled: document.querySelector('[data-testid="deployment-play"]')?.disabled ?? null,
       nextDisabled: document.querySelector('[data-testid="deployment-next"]')?.disabled ?? null,
       fullDeployDisabled: document.querySelector('[data-testid="deployment-full-deploy"]')?.disabled ?? null,

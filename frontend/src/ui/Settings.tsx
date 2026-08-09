@@ -627,12 +627,12 @@ export function Settings({
         />
       </SettingsRow>
       <SettingsRow
-        title="Deal automatically"
-        description="Begin the Deployment deal as soon as the battlefield is ready."
+        title="Draw automatically"
+        description="Draw the Deployment hand as soon as the battlefield is ready."
       >
         <Toggle
           checked={settings.autoDealDeployment}
-          label="Deal Deployment cards automatically"
+          label="Draw Deployment cards automatically"
           onChange={(value) => updateSetting('autoDealDeployment', value)}
         />
       </SettingsRow>

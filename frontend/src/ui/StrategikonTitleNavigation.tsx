@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
 import { NavButton } from './shared/NavButton';
 import { installedUiMedia } from './installedUiMedia';
-import { strategikonNavigationItems } from './strategikonNavigation';
+import { strategikonNavigationItems, useStrategikonCardsIcon } from './strategikonNavigation';
 import {
   isStrategikonPath,
   strategikonAddress,
@@ -21,6 +21,7 @@ export function StrategikonTitleNavigation({
   path: string;
   search?: string;
 }): ReactElement {
+  const cardsIcon = useStrategikonCardsIcon();
   const open = isStrategikonPath(path);
   const base = strategikonBase(path);
   const current = open ? strategikonAddress(path).section : null;
@@ -32,7 +33,7 @@ export function StrategikonTitleNavigation({
 
   return (
     <nav className="strategikon-title-navigation" aria-label="Strategikon destinations">
-      {strategikonNavigationItems().map((item) => {
+      {strategikonNavigationItems(cardsIcon).map((item) => {
         const active = item.section === current;
         return (
           <NavButton
