@@ -323,6 +323,21 @@ export function movePlayableGrid(
       : onAuthoredSurface(anchor.x, anchor.y);
     if (fits) next.props[key] = placement;
   }
+  // Live markers are anchor keys, so a rebase has to carry them to the anchors their props landed
+  // on. Leaving the old keys behind would silently sink every obstacle back into the artwork
+  // (ADR-0534). A marker whose prop did not survive the move is dropped with it.
+  if (source.liveProps?.length) {
+    const moved = Object.fromEntries(
+      Object.keys(shiftCellMap(
+        Object.fromEntries(source.liveProps.map((key) => [key, true])),
+        dx,
+        dy,
+      )).map((key) => [key, true]),
+    );
+    const carried = Object.keys(next.props).filter((key) => moved[key]).sort();
+    if (carried.length) next.liveProps = carried;
+    else delete next.liveProps;
+  }
 
   const sourceZoneEntries = source.zoneEntries
     ?? zoneEntriesFromCellMap(source.zones, source.cols, source.rows);

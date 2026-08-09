@@ -130,3 +130,34 @@ format having to be the thing that enforces it.
   (`frontend/src/ui/boardCode.test.ts`).
 - The live Level Editor on an AI level offers Placed Art → Props → Rocks and nothing else, and the
   placed rock renders over the plate on the real board.
+
+## Addendum: placing one shows it, and shows it arriving
+
+Two things the first pass got wrong, both found by placing a rock rather than by reading the code.
+
+**The editor suppressed the obstacle the author had just placed.** `EditorBoard` is rebuilt
+field-by-field in more than one place, and each such constructor silently drops a field it has not
+been taught. `sceneBoardForSkirmish` dropped `liveProps`, so gameplay showed nothing; the Level
+Editor's own `sceneBoard` dropped it too, so a placed rock appeared only in Play Test — which reads
+as the tool refusing the edit. Both now carry it, and `levelEditorPlayableGridMove` re-keys the
+markers when a rebase moves their anchors instead of leaving them pointing at vacated cells.
+
+**A placed obstacle plays its entrance in the editor.** Watching it land is how the author judges
+the thing, so placing a rock runs ADR-0518's curve — the same `arrivalOffset`, resolved from the
+same `structureArrives` predicate, on any board rather than only over a plate, because whether an
+obstacle drops is a property of its kind. Board state is committed on the click; the fall is
+presentation only, so an interrupted one costs nothing but the motion.
+
+This needed a seam: `BoardCanvasLayer` gained an optional `frameTransform`, a per-frame op
+substitution for motion an op list cannot describe. Supplying one starts the repaint clock, so a
+falling rock costs a repaint per frame rather than a whole board rebuild per frame, and the caller
+clears it when the motion ends.
+
+### Verification
+
+- `npm run shot` on an AI board: a marked rock draws in the editor, an unmarked one does not.
+- `capture-board-assembly.mjs` gained `--click-cell x,y --cols n`, which performs a real placement
+  and records from the click, so the editor entrance is reviewable by the instrument ADR-0518 built
+  for the battle one. It polls until the target cell answers a hit test, because the clickable
+  diamond is inset within the cell's box and a click measured early lands behind the board and
+  records a convincing strip of nothing happening.

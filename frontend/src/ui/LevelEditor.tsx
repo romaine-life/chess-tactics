@@ -49,6 +49,12 @@ import {
   type TownPlanKind,
 } from '../core/townPlan';
 import { BoardSceneLayer } from '../render/BoardSceneLayer';
+import {
+  STRUCTURE_ENTRANCE_MS,
+  structureArrivalOp,
+  structureArrives,
+} from '../render/SkirmishBoard';
+import type { BoardDrawOp } from '@chess-tactics/board-render/render/renderPlan';
 import { PredrawnOcclusionSeedLayer } from '../render/PredrawnOcclusion';
 import {
   FENCE_ART_REVIEW_ID,
@@ -485,6 +491,8 @@ function StudioEditableBoard({
   units: placedUnits,
   doodads: placedDoodads,
   props: placedProps = {},
+  liveProps: placedLiveProps,
+  arrivingProp,
   floatingArtwork: placedFloatingArtwork = [],
   macroTiles: placedMacroTiles = [],
   features: placedFeatures = {},
@@ -562,6 +570,10 @@ function StudioEditableBoard({
   doodads: Record<string, { doodadId: string }>;
   /** Multi-cell props keyed by ANCHOR cell "x,y" -> {propId}. */
   props?: Record<string, { propId: string }>;
+  /** Anchors standing ON a plate rather than painted into it — the editor must draw these (ADR-0534). */
+  liveProps?: readonly string[];
+  /** A prop anchor currently playing its entrance, so the author watches it land as they place it. */
+  arrivingProp?: { key: string; startMs: number } | null;
   floatingArtwork?: readonly FloatingArtworkPlacement[];
   /** Opaque multi-cell terrain tops that replace the covered 1x1 top sprites. */
   macroTiles?: readonly MacroTilePlacement[];
@@ -1433,6 +1445,21 @@ function StudioEditableBoard({
     );
   }
 
+  // An obstacle placed in the editor falls in on the entrance it will play at board start
+  // (ADR-0518's curve, not a second one), so the author sees the motion as they place it. Applied
+  // per painted frame rather than by rebuilding the board, and cleared when the fall is over.
+  const arrivalPlan = useMemo(
+    () => arrivingProp ? { startMs: arrivingProp.startMs, delayMs: 0 } : null,
+    [arrivingProp],
+  );
+  const arrivalFrameTransform = useMemo(() => {
+    if (!arrivingProp || !arrivalPlan) return undefined;
+    const anchor = arrivingProp.key;
+    return (op: BoardDrawOp, timeMs: number): BoardDrawOp => (
+      op.structure?.key === anchor ? structureArrivalOp(op, arrivalPlan, timeMs) : op
+    );
+  }, [arrivalPlan, arrivingProp]);
+
   // Registration is defined against the tactical grid. A scenic apron may coexist in persisted
   // editor data, but it must not change the plate's alignment or add rows to its review overlay.
   const playableGridCells = cells.filter(
@@ -1457,6 +1484,9 @@ function StudioEditableBoard({
     units: placedUnits,
     doodads: placedDoodads,
     props: placedProps,
+    // Without this the editor suppresses an obstacle the author just placed as though the plate had
+    // painted it, and the rock only appears in Play Test (ADR-0534).
+    liveProps: placedLiveProps ? [...placedLiveProps] : undefined,
     // Live drag preview. Dragging one member of a selection previews the whole selection sliding
     // by the same offset, so what the author releases is what they watched move.
     floatingArtwork: placedFloatingArtwork.map((placement) => {
@@ -1523,6 +1553,7 @@ function StudioEditableBoard({
             omitTerrain
             predrawnBackgroundActive={predrawnBackgroundActive}
             predrawnOcclusion={predrawnOcclusionEnabled}
+            frameTransform={arrivalFrameTransform}
             transformOps={fenceArtwork ? ((ops, board) => transformFenceArtReviewOps(ops, board, fenceArtwork)) : undefined}
             onFirstFrame={onSceneFirstFrame}
             onFrameError={onFrameError}
@@ -3186,6 +3217,18 @@ export function LevelEditor(): ReactElement {
   // Which prop anchors STAND ON a plate rather than being painted into it (ADR-0534). Only ever
   // populated on a pre-drawn board; `commitEditorBoard` keeps it in step with `props`.
   const [boardLiveProps, setBoardLiveProps] = useState<string[]>(initialBoard?.liveProps ?? []);
+  // The obstacle currently falling into the cell it was just placed on. Board state is committed
+  // immediately — this is presentation only, so an interrupted fall costs nothing but the motion.
+  const [arrivingProp, setArrivingProp] = useState<{ key: string; startMs: number } | null>(null);
+  useEffect(() => {
+    if (!arrivingProp) return undefined;
+    const remaining = arrivingProp.startMs + STRUCTURE_ENTRANCE_MS - performance.now();
+    const timer = window.setTimeout(
+      () => setArrivingProp((current) => (current === arrivingProp ? null : current)),
+      Math.max(0, remaining),
+    );
+    return () => window.clearTimeout(timer);
+  }, [arrivingProp]);
   // A prop link is only worth sending if it arrives with that prop in hand. `?brush=` was
   // honoured for every other placed-art kind and silently ignored for props, so every prop link
   // landed on the default oak and made the recipient go find the thing it named.
@@ -5031,7 +5074,13 @@ export function LevelEditor(): ReactElement {
       // On a plate the picture already painted its scenery, so a prop placed now is an obstacle
       // STANDING on it: mark it live so it draws and drops instead of being suppressed (ADR-0534).
       if (isPredrawnBoard) next.liveProps = [...(next.liveProps ?? []), key];
-      commitEditorBoard(next);
+      if (!commitEditorBoard(next)) return;
+      // Whether an obstacle drops is a property of its KIND (ADR-0518), so the editor asks the same
+      // predicate the battle asks rather than deciding for itself which brushes are worth watching.
+      const [ax, ay] = key.split(',').map(Number);
+      if (structureArrives({ key, kind: propBrushDef.kind, x: ax, y: ay, artId: propBrushDef.spriteId })) {
+        setArrivingProp({ key, startMs: performance.now() });
+      }
       return;
     }
     if (brushKind === 'cover') {
@@ -9588,6 +9637,8 @@ export function LevelEditor(): ReactElement {
                     units={boardUnits}
                     doodads={boardDoodads}
                     props={boardProps}
+                    liveProps={boardLiveProps}
+                    arrivingProp={arrivingProp}
                     floatingArtwork={boardFloatingArtwork}
                     features={featureOverlays}
                     zones={visibleZones}
