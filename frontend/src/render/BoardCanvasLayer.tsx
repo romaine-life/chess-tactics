@@ -385,7 +385,6 @@ export function drawBoardOps(
   // have to know about the scale are the backing stores and the getImageData
   // window, both of which are measured in real device pixels.
   const scale = boardRenderScale(renderScale);
-  const scaled = (value: number) => Math.max(1, Math.ceil(value * scale));
   ctx.setTransform(scale, 0, 0, scale, 0, 0);
   ctx.clearRect(0, 0, bounds.width, bounds.height);
   // At a fractional scale every op lands on fractional device pixels. Nearest
@@ -411,17 +410,22 @@ export function drawBoardOps(
       paintOp(ctx, img, op, bounds, timeMs);
       continue;
     }
-    const region = boardCanvasScratchRegion(op, bounds);
+    // Pass the scale: the region rounds to whole PHYSICAL pixels and reports its
+    // board-space origin back. Rounding to whole board pixels instead — which is
+    // what omitting the scale does — lands the composite on fractional device
+    // coordinates and turns every region edge into a half-pixel seam. That is what
+    // drew the streaks; the atlas was innocent.
+    const region = boardCanvasScratchRegion(op, bounds, scale);
     if (!region) continue;
-    const regionW = scaled(region.width);
-    const regionH = scaled(region.height);
+    const regionW = region.width;
+    const regionH = region.height;
     scratch ??= scratchFactory(regionW, regionH);
     if (!scratch) continue;
     if (scratch.canvas.width < regionW) scratch.canvas.width = regionW;
     if (scratch.canvas.height < regionH) scratch.canvas.height = regionH;
     const scratchCtx = scratch.context;
     scratchCtx.setTransform(scale, 0, 0, scale, 0, 0);
-    scratchCtx.clearRect(0, 0, region.width, region.height);
+    scratchCtx.clearRect(0, 0, region.bounds.width, region.bounds.height);
     scratchCtx.imageSmoothingEnabled = scale !== 1;
     scratchCtx.globalCompositeOperation = 'source-over';
     scratchCtx.globalAlpha = 1;
@@ -433,7 +437,7 @@ export function drawBoardOps(
         if (depthScratch.canvas.height < regionH) depthScratch.canvas.height = regionH;
         const depthContext = depthScratch.context;
         depthContext.setTransform(scale, 0, 0, scale, 0, 0);
-        depthContext.clearRect(0, 0, region.width, region.height);
+        depthContext.clearRect(0, 0, region.bounds.width, region.bounds.height);
         // The depth raster is READ back per pixel to build an erase mask, so it must
         // stay hard-sampled whatever the layer scale is: a filtered depth value is a
         // depth that never existed and it erases the wrong pixels.
@@ -476,8 +480,8 @@ export function drawBoardOps(
         regionH,
         0,
         0,
-        region.width,
-        region.height,
+        region.bounds.width,
+        region.bounds.height,
       );
     }
     scratchCtx.restore();
@@ -487,10 +491,10 @@ export function drawBoardOps(
       0,
       regionW,
       regionH,
-      region.offsetX,
-      region.offsetY,
-      region.width,
-      region.height,
+      region.bounds.minX - bounds.minX,
+      region.bounds.minY - bounds.minY,
+      region.bounds.width,
+      region.bounds.height,
     );
   }
   if (maskTint) {
