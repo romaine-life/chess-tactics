@@ -75,7 +75,7 @@ describe('professional loading architecture guards', () => {
     // A prepared layer's mount identity is its scene, plus the retry epoch — and ONLY the retry
     // epoch. Retry re-drove the director around the very instance still holding the failure, so
     // the screen re-reported it and the retry did nothing at all; rebuilding is the fix, and
-    // rebuilding on `generation` instead would remount every just-committed screen (ADR-0547).
+    // rebuilding on `generation` instead would remount every just-committed screen (ADR-0548).
     expect(app).toContain('key: `${sceneLayerKey(scene.destination!)}#${scene.retryEpoch}`');
     expect(director).toContain('retryEpoch: state.retryEpoch + 1');
     expect(director).not.toContain('retryEpoch: state.generation');

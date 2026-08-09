@@ -26,9 +26,9 @@ import { spawnEventsForLevel } from './levelEvents';
  */
 export const SPEED_BONUS_SECONDS_PER_PAR_TURN = 30;
 
-/** The most a single Battle's speed can pay, in gold tenths (1.0 gold). Against a Battle
- * reward that typically runs 5-10 gold and a mean card price near 3.4, this reads as a
- * bonus and never as the point of the fight. */
+/** The most a single Battle's speed can pay, in gold. Against a Battle reward that typically
+ * runs 50-100 gold and a mean card price near 34, this reads as a bonus and never as the
+ * point of the fight. */
 export const SPEED_BONUS_MAX_TENTHS = 10;
 
 const clampPar = (turns: number): number => Math.min(
@@ -81,8 +81,8 @@ export function speedBonusRemainingMs(level: Level, elapsedMs: number | null): n
 }
 
 /**
- * The speed bonus a won Battle pays, in gold tenths: the fraction of the bonus clock still
- * standing, scaled to the cap and rounded to a tenth. Pure and deterministic in
+ * The speed bonus a won Battle pays, in gold: the fraction of the bonus clock still
+ * standing, scaled to the cap and rounded to whole gold. Pure and deterministic in
  * (level, elapsedMs) -- which is what lets the aftermath screen re-derive the same number
  * the Run banks, without the persisted report having to carry it.
  */

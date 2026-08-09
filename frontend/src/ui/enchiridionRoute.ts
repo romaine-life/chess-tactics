@@ -10,6 +10,7 @@
 import { RUN_CARD_ID_BY_SLUG, runCardSlug } from '../run/cardNames';
 import {
   RUN_LIPSANA,
+  cardCostGold,
   runCardDefinition,
   type LipsanonId,
   type RunArmyPieceType,
@@ -89,8 +90,10 @@ export function enchiridionCardFromPath(path: string): string | null {
 // here rather than in the gallery because the address is what validates it -- a query carries
 // whatever a reader typed, so every value is checked against these lists before it is believed.
 
+// One band per price the catalog can carry, written in GOLD -- the number on the coin the
+// filter draws, so the address and the chip the reader clicked always say the same thing.
 export const CARD_GOLD_FILTER_VALUES = Object.freeze(
-  Array.from({ length: 10 }, (_, index) => String(index)),
+  Array.from({ length: 10 }, (_, index) => String(cardCostGold(index))),
 ) as readonly string[];
 export const CARD_UNIT_FILTER_VALUES = Object.freeze(
   ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'],
@@ -99,7 +102,7 @@ export const CARD_RARITY_FILTER_VALUES = Object.freeze(
   ['common', 'uncommon', 'rare'],
 ) as readonly RunCardRarity[];
 
-export type CardGoldFilter = 'all' | '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9';
+export type CardGoldFilter = 'all' | '0' | '10' | '20' | '30' | '40' | '50' | '60' | '70' | '80' | '90';
 export type CardUnitFilter = 'all' | RunArmyPieceType;
 export type CardRarityFilter = 'all' | RunCardRarity;
 

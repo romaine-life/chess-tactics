@@ -9,7 +9,7 @@ refines:
   - "[ADR-0102](0102-runtime-buttons-use-registered-inner-chrome.md)"
 ---
 
-# ADR-0547: A failed scene offers the one act that can fix it, and retries itself when the world changes
+# ADR-0548: A failed scene offers the one act that can fix it, and retries itself when the world changes
 
 ## Context and Problem Statement
 

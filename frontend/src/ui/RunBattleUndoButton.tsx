@@ -1,6 +1,6 @@
 import type { ReactElement } from 'react';
 import { useSkirmish } from '../game/SkirmishStoreContext';
-import { RUN_BATTLE_UNDO_COST_TENTHS } from '../run/model';
+import { RUN_BATTLE_UNDO_COST_TENTHS, formatGold } from '../run/model';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { RunGoldAmount } from './RunResources';
 import { ChromeButton } from './shared/ChromeButton';
@@ -20,10 +20,11 @@ export function RunBattleUndoButton({
   if (!runUndoEnabled) return null;
 
   const canUndo = Boolean(checkpoint) && canUndoLastPlayerMove();
+  const cost = formatGold(RUN_BATTLE_UNDO_COST_TENTHS);
   const title = canUndo
-    ? 'Undo your last move and the opponent’s reply for 1 gold.'
+    ? `Undo your last move and the opponent’s reply for ${cost} gold.`
     : checkpoint
-      ? 'Undo costs 1 gold.'
+      ? `Undo costs ${cost} gold.`
       : 'Make a move before undoing.';
 
   return (
@@ -33,7 +34,7 @@ export function RunBattleUndoButton({
       data-testid={testId}
       data-ui-sfx="gold"
       disabled={!canUndo}
-      aria-label="Undo last move for 1 gold"
+      aria-label={`Undo last move for ${cost} gold`}
       title={title}
       onClick={() => { undoLastPlayerMove(); }}
     >

@@ -7,7 +7,7 @@
 // Drives a FRESH anonymous profile end-to-end: start run → take whatever the opening Bona
 // Vacantia deals → draw the Deployment hand → seat every formation by aiming at a square and
 // clicking → Begin Battle → click a unit's tile → click a legal destination → assert the move
-// commits, the enemy replies, paid Undo rewinds for exactly one gold, and the open Strategikon
+// commits, the enemy replies, paid Undo rewinds for exactly ten gold, and the open Strategikon
 // still takes the pointer. Fails loudly at the exact step where a click is swallowed.
 //
 // Two rules keep this from rotting again, both learned the hard way:
@@ -31,6 +31,9 @@ if (!base) { console.error('usage: npm run e2e:run-battle -- <base-url>'); proce
 const transitionOnly = process.argv.includes('--transition-only');
 const deploymentOnly = process.argv.includes('--deployment-only');
 const undoOnly = process.argv.includes('--undo-only');
+
+// What paid Undo charges, read off the screen in whole gold (RUN_BATTLE_UNDO_COST_TENTHS).
+const RUN_UNDO_COST_GOLD = 10;
 
 const CHROMES = [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',
@@ -1092,8 +1095,8 @@ try {
   }
 
   // Run Undo is a real Controls action: expose it through the HUD tab, prove its canonical
-  // one-gold presentation is enabled, click it through hit-testing, and verify that the player
-  // decision + enemy reply rewind while the Run pays exactly one gold.
+  // ten-gold presentation is enabled, click it through hit-testing, and verify that the player
+  // decision + enemy reply rewind while the Run pays exactly ten gold.
   const controlsTab = await page.$('#skirmish-tab-controls');
   if (!controlsTab) await fail('undo-controls', 'Controls tab is missing');
   const controlsBox = await controlsTab.boundingBox();
@@ -1107,7 +1110,7 @@ try {
   console.log('undo control screenshot:', undoShot);
 
   // The purse is read off the SCREEN. A re-imported Run store answers from the server and lags
-  // the board by a save, so an exact one-gold charge cannot be measured through it.
+  // the board by a save, so an exact ten-gold charge cannot be measured through it.
   const purse = () => page.evaluate(() => {
     // The purse is the title bar's Gold measure. Every .run-gold-amount on a battle screen is a
     // button's PRICE — Undo's own cost among them — so reading one of those measures nothing.
@@ -1138,7 +1141,7 @@ try {
           && Number(/^([\d.]+) gold$/.exec(measure)?.[1] ?? NaN) === spent;
       }),
       { timeout: 5_000 },
-      { pieceId: plan.pieceId, from: plan.from, spent: Number((goldBeforeUndo - 1).toFixed(1)) },
+      { pieceId: plan.pieceId, from: plan.from, spent: goldBeforeUndo - RUN_UNDO_COST_GOLD },
     );
   } catch {
     const undoState = await page.evaluate(async (planned) => {
@@ -1157,14 +1160,14 @@ try {
     }, plan);
     await fail('undo', JSON.stringify({ ...undoState, goldBeforeUndo }));
   }
-  console.log(`${undoOnly ? 'thinking reply cancelled and player decision' : 'player decision and enemy reply'} undone for exactly one gold: OK`);
+  console.log(`${undoOnly ? 'thinking reply cancelled and player decision' : 'player decision and enemy reply'} undone for exactly ${RUN_UNDO_COST_GOLD} gold: OK`);
 
   const shot = 'tmp-shots/run-battle-e2e.png';
   const board = await page.$('.skirmish-war-room');
   if (board) await board.screenshot({ path: shot });
   console.log('screenshot:', shot);
   if (undoOnly) {
-    console.log('PASS — paid Undo cancels a pending reply, restores the player decision, and costs exactly one gold');
+    console.log(`PASS — paid Undo cancels a pending reply, restores the player decision, and costs exactly ${RUN_UNDO_COST_GOLD} gold`);
     await browser.close();
     rmSync(browserProfile, { recursive: true, force: true });
     process.exit(0);

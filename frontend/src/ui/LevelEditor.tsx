@@ -263,6 +263,9 @@ import { InnerChromeBox, ShellControlsPanel, ShellViewportSwap, ShellWorkspace }
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { useWars } from '../war/store';
 import { HIS_GRACE_VALUE, expectedWarValue, type ExpectedBattleValue } from '../run/expectedValue';
+// The War economy walks in material POINTS so it can compare gold against card values; the two
+// gold readings it shows are converted on the way to the screen (ADR-0548).
+import { cardCostGold } from '../run/model';
 import {
   directionCompassCells,
   hasDirectionSprite,
@@ -3042,7 +3045,7 @@ export function LevelEditor(): ReactElement {
   // The scene the editor sits in presents this failure, not the editor, because a failed
   // participant hides the whole boundary — the Sign in and Retry the panels below render are
   // inert and invisible for exactly this state. So the remedy the editor already knows travels
-  // with the error and the director offers the same one action (ADR-0547).
+  // with the error and the director offers the same one action (ADR-0548).
   const editorRouteError = useMemo(
     () => editorFrameError ?? (editorLoadError
       ? sceneFailureError(
@@ -11451,7 +11454,7 @@ export function LevelEditor(): ReactElement {
                   </div>
                   <div>
                     <dt>Gold unspent</dt>
-                    <dd>{formatPoints(warValueHere.goldUnspent)}</dd>
+                    <dd>{formatPoints(cardCostGold(warValueHere.goldUnspent))}</dd>
                   </div>
                   <div>
                     <dt>Enemy force</dt>
@@ -11459,7 +11462,7 @@ export function LevelEditor(): ReactElement {
                   </div>
                   <div>
                     <dt>Pays on victory</dt>
-                    <dd>{formatPoints(warValueHere.victoryGold)} gold</dd>
+                    <dd>{formatPoints(cardCostGold(warValueHere.victoryGold))} gold</dd>
                   </div>
                 </dl>
                 <p className="le-board-note">
