@@ -148,7 +148,6 @@ for (const token of [
   '--le-inner-control-compact-h',
   '--le-inner-tab-compact-h',
   '--le-inner-row-h',
-  '--le-inner-zone-button-w',
 ]) {
   if (screen && !new RegExp(`${token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*:`).test(screen)) {
     failures.push(`level editor must declare the named inner size role ${token}`);
@@ -495,8 +494,8 @@ const levelEditorCyclePickers = [...(levelEditor + levelEditorChromeConsumers).m
 const cyclePickerChevronButtons = [...cyclePicker.matchAll(/<ChromeButton\b[\s\S]*?<\/ChromeButton>/g)]
   .map((match) => match[0])
   .filter((block) => block.includes('unit="inner-chevron-key"'));
-if (levelEditorCyclePickers.length !== 3 || cyclePickerChevronButtons.length !== 2) {
-  failures.push('all six previous/next Level Editor controls must use the concrete inner-chevron-key hierarchy leaf');
+if (levelEditorCyclePickers.length !== 2 || cyclePickerChevronButtons.length !== 2) {
+  failures.push('all four previous/next Level Editor controls must use the concrete inner-chevron-key hierarchy leaf');
 }
 if (!/unit\.id === 'inner-chevron-key'[\s\S]*?stepper-glyph stepper-chevron/.test(chromeUnitAudit)) {
   failures.push('Chrome Lab must render the real previous/next chevron-key specimen instead of a generic tool-square fallback');
@@ -785,7 +784,8 @@ for (const [selector, token] of [
   ['.le-action-toolbar-divider', '--le-inner-control-h'],
   ['.le-icon-btn', '--le-inner-square'],
   ['.le-select-wrap', '--le-inner-field-h'],
-  ['.le-zone-stepper-button.settings-chrome-button', '--le-inner-square'],
+  ['.le-layer-stepper-button.settings-chrome-button', '--le-inner-square'],
+  ['.le-zone-row', '--le-inner-row-h'],
   ['.le-seg-icons .le-seg-btn', '--le-inner-square'],
   ['.le-action-toolbar .le-seg-btn', '--le-inner-square'],
   ['.le-cond-add .le-seg-btn', '--le-inner-control-compact-h'],

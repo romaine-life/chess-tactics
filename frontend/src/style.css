@@ -5884,7 +5884,6 @@ body.loading-bootstrap .app-startup-status {
   --le-inner-control-compact-h: 30px;
   --le-inner-tab-compact-h: 28px;
   --le-inner-row-h: 42px;
-  --le-inner-zone-button-w: var(--le-inner-square);
   --skirmish-chrome-outer-rail-w: var(--le-chrome-outer-rail-w);
   --skirmish-chrome-inner-rail-w: var(--le-chrome-inner-rail-w);
   grid-template-areas:
@@ -6020,6 +6019,10 @@ body.loading-bootstrap .app-startup-status {
   min-width: var(--le-inner-square);
   padding: 0;
   width: var(--le-inner-square);
+}
+.le-layer-stepper-button:disabled {
+  cursor: default;
+  opacity: .42;
 }
 
 /* Repeatable divider host: each instance represents one section break in the
@@ -6617,36 +6620,13 @@ body.loading-bootstrap .app-startup-status {
   pointer-events: none;
   z-index: 6;
 }
-.le-zone-select-controls {
-  align-items: center;
-  display: grid;
-  gap: 6px;
-  grid-template-columns: minmax(0, 1fr) var(--le-inner-square) var(--le-inner-square);
-  min-width: 0;
-}
-.le-zone-stepper-button.settings-chrome-button {
-  height: var(--le-inner-square);
-  min-height: var(--le-inner-square);
-  min-width: var(--le-inner-square);
-  padding: 0;
-  width: var(--le-inner-square);
-}
-.le-zone-stepper-button:disabled {
-  cursor: default;
-  opacity: .42;
-}
-.le-zone-panel {
-  --le-zone-button-w: var(--le-inner-zone-button-w);
-  --le-zone-row-h: var(--le-inner-row-h);
-}
 .le-zone-panel .le-ctrlrow {
   align-items: center;
   display: grid;
   gap: 6px;
   grid-template-columns: 42px minmax(0, 1fr);
-  min-height: var(--le-zone-row-h);
+  min-height: var(--le-inner-row-h);
 }
-.le-zone-panel .le-zone-select-controls,
 .le-zone-panel .le-select-wrap,
 .le-zone-panel .le-zone-name-input,
 .le-zone-panel .le-zone-color-select {
@@ -6655,45 +6635,73 @@ body.loading-bootstrap .app-startup-status {
   min-width: 0;
   width: 100%;
 }
-.le-zone-panel .le-zone-select-controls {
-  gap: 6px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  grid-template-rows: var(--le-zone-row-h) var(--le-zone-row-h);
-  height: auto;
-}
-.le-zone-panel .le-zone-select-controls > .le-select-wrap {
-  grid-column: 1 / -1;
-  grid-row: 1;
-}
-.le-zone-panel .le-zone-select-controls > .le-zone-stepper-button.settings-chrome-button {
-  grid-row: 2;
-  min-width: 0;
-  width: 100%;
-}
-.le-zone-panel .le-zone-selection-row {
-  align-items: start;
-}
-.le-zone-panel .le-zone-selection-row > .le-ctrllabel {
-  align-items: center;
-  align-self: start;
-  display: flex;
-  height: var(--le-zone-row-h);
-  justify-content: center;
-  text-align: center;
-}
 .le-zone-panel .le-select-wrap,
-.le-zone-panel .le-zone-name-input,
-.le-zone-panel .le-zone-stepper-button.settings-chrome-button {
-  height: var(--le-zone-row-h);
-  min-height: var(--le-zone-row-h);
-}
-.le-zone-panel .le-zone-stepper-button.settings-chrome-button {
-  min-width: var(--le-zone-button-w);
-  width: var(--le-zone-button-w);
+.le-zone-panel .le-zone-name-input {
+  height: var(--le-inner-row-h);
+  min-height: var(--le-inner-row-h);
 }
 .le-zone-panel .le-zone-name-input {
   max-width: none;
 }
+/* The zone picker is the list itself: one selectable inner-list-row per zone, carrying the
+   tint dot that identifies it on the board. Rows are full width — the name is the thing being
+   read, so nothing competes with it for horizontal room. */
+.le-zone-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+  min-width: 0;
+}
+.le-zone-row {
+  align-items: center;
+  color: #cfe6f2;
+  cursor: pointer;
+  display: flex;
+  gap: 9px;
+  min-height: var(--le-inner-row-h);
+  min-width: 0;
+  padding: 4px 10px;
+  text-align: left;
+  width: 100%;
+}
+/* Which zone the brush paints into is the one state this panel exists to show. The kit aliases
+   the active inner frame to the normal one (no separate active frame is installed), so the
+   armed row lifts exactly the way `.le-seg-btn.active` already does rather than inventing
+   chrome of its own. */
+.le-zone-row.is-selected {
+  color: #eafaff;
+  filter: brightness(1.35) saturate(1.25);
+}
+.le-zone-row:not(:disabled):hover { filter: brightness(1.12); }
+.le-zone-row.is-selected:not(:disabled):hover { filter: brightness(1.45) saturate(1.3); }
+.le-zone-row > .le-zone-dot { flex: none; }
+.le-zone-row-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.le-zone-row-text strong {
+  font-size: var(--ds-text-sm);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.le-zone-row-text small {
+  color: #a9c0cd;
+  font-size: var(--ds-text-2xs);
+  line-height: 1.2;
+}
+/* A deployment zone's meaning is fixed by the system, not by its name, so the row says which
+   one it is. Reads as the master-detail list's trailing status text. */
+.le-zone-row-role {
+  flex: none;
+  font-size: var(--ds-text-2xs);
+  opacity: .85;
+  text-transform: uppercase;
+}
+.le-zone-list-actions { margin-top: var(--ds-space-2); }
 /* The board-link field wears the kit `field-input` 9-slice (its own navy well is the frame's
    fill slice), never a hand-rolled border (ADR-0032/0034) — the same input chrome the Codex
    editor uses. Single-line control: horizontal inset on the role token, vertical centring from
@@ -19096,10 +19104,6 @@ button.tileset-relationship-cell {
 .cluster-run-detail { flex: 1; min-width: 260px; padding: 10px; min-height: 120px; }
 .cluster-run-detail-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; }
 .cluster-run-line { font-size: 12px; color: #c3ccd8; margin: 4px 0; }
-
-.le-zone-cycle {
-  display: contents;
-}
 
 /* Leading board preview in a campaign level-select row. The content box uses the canonical
    4:3 board window; the shell calculation adds the frame rails outside that surface. */
