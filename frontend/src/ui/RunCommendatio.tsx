@@ -46,11 +46,6 @@ export function RunCommendatio({
     >
       <div className="run-commendatio">
         <h2 className="run-commendatio-question">Who do you serve?</h2>
-        {/*
-          The terms, and nothing else. A thin King hands over gold to make up the difference, so
-          the line states that the choice is not a matter of who is strongest.
-        */}
-        <p className="run-card-row-call">Enter one household. What it lacks, it pays for.</p>
         <RunCardRow count={offers.length} testId="run-commendatio-king-offers">
           {offers.map((kingId, index) => (
             <CommendatioSeat key={kingId} kingId={kingId}>
