@@ -10387,6 +10387,55 @@ async function main() {
     throw new Error(`Legacy geometry binding failed its first-cover-edit migration boundary: ${selectLegacyAutosave.statusCode} ${selectLegacyAutosave.body} / ${JSON.stringify(bindingsBeforeCoverEdit.rows)} / ${coverFirstAutosave.statusCode} ${coverFirstAutosave.body} / ${JSON.stringify(binding)} / ${listedLegacyVersions.statusCode} ${listedLegacyVersions.body} / ${coverChangedSave.statusCode} ${coverChangedSave.body} / ${staleBakedAutosave.statusCode} ${staleBakedAutosave.body} / ${staleBakedSave.statusCode} ${staleBakedSave.body}`);
   }
 
+  // Growing the playable grid over a plate is a declared owner operation, not a stale artifact
+  // (ADR-0516). It records `predrawnGridDetached`, and from then on the environment-geometry
+  // comparison is the owner's answered question rather than a canonical gate — so the same Save
+  // the rejection above proves is fail-closed must SUCCEED once the grid is detached.
+  const detachedGrownBoard = {
+    ...coverChangedBoard,
+    cols: coverChangedBoard.cols + 1,
+    rows: coverChangedBoard.rows + 1,
+    predrawnGridDetached: true,
+  };
+  const detachedGrownLevel = {
+    ...coverChangedLevel,
+    boardCode: boardRender.encodeBoard(detachedGrownBoard),
+  };
+  const detachedGrownAutosave = await request(
+    'PUT',
+    `/api/editor-documents/${legacyDocumentId}`,
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(legacyDocumentId, '__Host-chess-tactics-access=abc', {
+      revision: 5,
+      level: detachedGrownLevel,
+    })),
+  );
+  const detachedGrownSave = await request(
+    'POST',
+    `/api/editor-documents/${legacyDocumentId}/save`,
+    { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
+    JSON.stringify(editorMutationBody(legacyDocumentId, '__Host-chess-tactics-access=abc', { revision: 6 })),
+    5000,
+  );
+  const savedDetachedBoard = detachedGrownSave.statusCode === 200
+    ? boardRender.decodeBoard(
+      JSON.parse((await get(
+        `/api/editor-documents/${legacyDocumentId}`,
+        { cookie: '__Host-chess-tactics-access=abc' },
+      )).body).document.level.boardCode,
+    )
+    : null;
+  if (
+    detachedGrownAutosave.statusCode !== 200
+    || detachedGrownSave.statusCode !== 200
+    || savedDetachedBoard?.predrawnGridDetached !== true
+    || savedDetachedBoard?.cols !== detachedGrownBoard.cols
+    || savedDetachedBoard?.rows !== detachedGrownBoard.rows
+    || savedDetachedBoard?.surface?.backgroundVersionId !== legacyRawReady.id
+  ) {
+    throw new Error(`A detached playable grid could not Save over its own artwork: ${detachedGrownAutosave.statusCode} ${detachedGrownAutosave.body} / ${detachedGrownSave.statusCode} ${detachedGrownSave.body} / ${JSON.stringify(savedDetachedBoard && { cols: savedDetachedBoard.cols, rows: savedDetachedBoard.rows, detached: savedDetachedBoard.predrawnGridDetached, surface: savedDetachedBoard.surface })}`);
+  }
+
   // Operational bounds are part of the permanent version-store contract. Fill
   // this one disposable document through direct fixture rows so the smoke can
   // exercise the exact HTTP boundaries without uploading a real GiB.

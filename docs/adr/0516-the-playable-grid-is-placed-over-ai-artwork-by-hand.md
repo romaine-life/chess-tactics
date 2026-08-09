@@ -125,3 +125,10 @@ existing Level's board code changes, and no Level gains a field it did not have.
   (`frontend/src/ui/predrawnEditorPolicy.test.ts`).
 - The live Board page on an AI Level shows working Width/Height steppers and an enabled
   Move-grid pad.
+- The **server's** canonical boundary honours detachment, not just the browser's validity
+  resolver: a detached resized selection Saves, while the same resize with an attached grid is
+  still rejected as `predrawn_background_geometry_mismatch`
+  (`backend/smoke-test.js`). Detachment is decided in three places at that boundary — the legacy
+  v1→v2 binding, the raster/occlusion digest comparison, and the move-highlight profile's board
+  binding — and relaxing only the browser's copy leaves Save failing on exactly the resize this
+  decision exists to allow.
