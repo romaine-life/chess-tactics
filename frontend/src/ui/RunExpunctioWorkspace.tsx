@@ -8,7 +8,6 @@ import {
   type RunDocument,
   type RunOwnedCard,
 } from '../run/model';
-import { runCardName } from '../run/cardNames';
 import { KitScroll } from './KitScroll';
 import { RunCard } from './RunCard';
 import { runCardFrameSlot } from './runCardFaceContent';
@@ -96,12 +95,6 @@ function actionLabel(status: ExpunctioRow['status']): string {
   return 'Unavailable';
 }
 
-function formationStatusLabel(status: ExpunctioRow['status'], units: readonly RunArmyUnit[]): string {
-  if (status === 'expuncted') return 'Formation removed';
-  if (status === 'unavailable') return 'Permanently retained';
-  return `${units.length} attached unit${units.length === 1 ? '' : 's'}`;
-}
-
 function ExpunctioCardTile({
   row,
   index,
@@ -111,7 +104,7 @@ function ExpunctioCardTile({
   index: number;
   onExpunct: (cardId: string) => void;
 }): ReactElement {
-  const { card, definition, units, emptyPieceIndices, priceTenths, status, admittedThisVisit } = row;
+  const { card, definition, emptyPieceIndices, priceTenths, status, admittedThisVisit } = row;
   const paintInsets = runCardFramePaintInsetRatios(runCardFrameGeometryForSlot(runCardFrameSlot(definition)));
   return (
     <InnerChromeBox
@@ -131,21 +124,16 @@ function ExpunctioCardTile({
         />
       </span>
       <span className="run-expunctio-companion">
+        {/*
+          The only thing the companion says in words is what THIS visit did to the record, because
+          everything else it used to say was already on the tile: the face prints the card's name,
+          the workspace's own rules copy states that Athetize takes the complete formation, and the
+          action states the state it is in. Which formations the visit admitted is the one fact
+          nothing else carries — Reset Sectio takes exactly those back, so the choice between
+          striking one and resetting the visit is illegible until the gallery says so.
+        */}
         <span className="run-expunctio-copy">
-          {/*
-            Which formations this visit admitted is information the player already paid for and
-            would otherwise have to hold in their head: Reset Sectio takes exactly these back, so
-            the choice between striking one and resetting the visit is only legible once the
-            gallery says which cards the visit brought in.
-          */}
-          <small>
-            {formationStatusLabel(status, units)}
-            {admittedThisVisit ? <span className="run-expunctio-visit-mark">Adlected this visit</span> : null}
-          </small>
-          <strong>{runCardName(definition)}</strong>
-          <span>{status === 'expuncted'
-            ? 'The card and all of its units left together.'
-            : 'Athetize removes this card and every attached unit as one formation.'}</span>
+          {admittedThisVisit ? <span className="run-expunctio-visit-mark">Adlected this visit</span> : null}
         </span>
         <span className="run-expunctio-price">
           <small>{status === 'expuncted' ? 'Paid' : 'Expunctio fee'}</small>

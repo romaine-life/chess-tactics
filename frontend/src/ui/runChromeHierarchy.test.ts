@@ -515,7 +515,12 @@ describe('Run chrome hierarchy', () => {
     expect(runExpunctioWorkspace).toContain('<h2 id="run-expunctio-workspace-title">Expunctio</h2>');
     expect(runExpunctioWorkspace).toContain('Athetize one complete formation.');
     expect(runExpunctioWorkspace).toContain('Individual units cannot be removed from a held card.');
-    expect(runExpunctioWorkspace).toContain('Athetize removes this card and every attached unit as one formation.');
+    // The tile repeats nothing the face, the workspace copy or the action already says: no card
+    // name beside a face that prints one, no per-tile restatement of the Athetize rule, and no
+    // attached-unit count left over from the retired per-unit Alienatio (ADR-0511).
+    expect(runExpunctioWorkspace).not.toContain('attached unit${');
+    expect(runExpunctioWorkspace).not.toContain('runCardName');
+    expect(runExpunctioWorkspace).not.toContain('Athetize removes this card and every attached unit as one formation.');
     expect(runExpunctioWorkspace).toContain('<RunGoldTransactionAmount direction="loss"');
     expect(runExpunctioWorkspace).toContain('onExpunct(card.id)');
     expect(runScreen).toContain('<RunExpunctioWorkspace run={shellRun} onExpunct={expunctCard} />');

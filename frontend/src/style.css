@@ -23556,31 +23556,27 @@ button.tileset-relationship-cell {
   padding-block: var(--run-expunctio-card-paint-start-inset) var(--run-expunctio-card-paint-end-inset);
 }
 
+/* One short line of state, seated level with the card's own title plate rather than floating in
+   the middle of the empty column the stripped-back tile leaves behind. */
 .run-expunctio-copy {
-  align-content: center;
+  align-content: start;
   display: grid;
   gap: var(--ds-space-1);
   min-inline-size: 0;
   grid-area: copy;
 }
 
-.run-expunctio-copy > :is(small, span),
-.run-expunctio-price > small {
+.run-expunctio-price > small,
+.run-expunctio-visit-mark {
   color: var(--skirmish-muted);
   font: var(--ds-weight-regular) var(--ds-text-md)/1.35 var(--ds-font-display);
 }
 
-/* The one clause in the status line that reports state rather than describing the record: this
-   visit admitted the card, and Reset Sectio would take it back. It carries the copy's own ink so
-   it separates from the muted line it shares without inventing a colour for the Run's palette. */
+/* The only words the companion says about the record itself: this visit admitted the card, and
+   Reset Sectio would take it back. It carries the tile's own ink rather than the muted register
+   the supporting labels use, because it reports state instead of labelling a field. */
 .run-expunctio-visit-mark {
   color: var(--skirmish-ink);
-}
-
-.run-expunctio-visit-mark::before {
-  color: var(--skirmish-muted);
-  content: '·';
-  margin-inline: var(--ds-space-1);
 }
 
 .run-expunctio-price {
