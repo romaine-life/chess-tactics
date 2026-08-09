@@ -15,7 +15,7 @@ partially_supersedes:
   - "[ADR-0393](0393-adlectio-and-alienatio-are-the-movements-within-sectio.md)'s Alienatio operation"
   - "[ADR-0407](0407-expunctio-removes-one-card-per-sectio.md)'s individual-unit disposal and discounted-fee clauses"
   - "[ADR-0486](0486-run-disposal-prices-use-directional-gold-marks.md)'s gain transaction mark"
-  - "[ADR-0332](0332-eight-run-relic-icons-ship-the-approved-resized-pixels.md)'s installed Paid Crossing asset"
+  - "[ADR-0332](0332-eight-run-lipsanon-icons-ship-the-approved-resized-pixels.md)'s installed Paid Crossing asset"
 refines:
   - "[ADR-0442](0442-expunctio-is-a-card-first-gallery.md)"
   - "[ADR-0493](0493-generated-run-formations-fall-sideways-and-own-rarity.md)"

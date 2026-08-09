@@ -5,7 +5,7 @@ deciders: owner (Nelson) + Codex
 superseded_by: "[ADR-0317](0317-plagued-iconography-depicts-the-condition-not-a-chess-piece.md)"
 refines:
   - "[ADR-0085](0085-runtime-assets-are-live-storage-backed.md)"
-  - "[ADR-0198](0198-run-lipsana-use-live-native-ui-icons.md)"
+  - "[ADR-0198](0198-run-lipsanon-icons-are-installed-live-art-and-persistently-visible.md)"
   - "[ADR-0313](0313-enchiridion-filters-cards-and-previews-affected-types.md)"
 ---
 
