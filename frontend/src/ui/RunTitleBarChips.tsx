@@ -3,21 +3,24 @@ import { ATARAXIA_BY_TIER, ATARAXIA_TIERS, formatGold, type AtaraxiaTier } from 
 import { RunGoldIcon } from './RunResources';
 import { ataraxiaNumeralArtUrl } from './ataraxiaNumeral';
 import { RunProgressIcon } from './shared/RunProgressIcon';
-import { Tooltip } from './shared/InfoTip';
 import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
-import { TitleBarStatus } from './shell/TitleBarControls';
+import { TitleBarStatusTip } from './shell/TitleBarControls';
 
-// What the persistent title bar says about a Run, in two parts.
+// What the persistent title bar says about a Run.
 //
 // ONE chip carries the identity you cannot draw — the War's name, and the
-// authored name of the Battle you are at. Everything else is a MEASURE: an icon
-// and its number, sitting bare on the bar with no frame of its own. A Run's
-// Ataraxia tier, gold, Conflict and Battle are all the same kind of fact, so
-// they read as one row of marks rather than a row of little boxes.
+// authored name of the Battle you are at. The rest are MEASURES: an icon and
+// its number. A Run's Ataraxia tier, gold, Conflict and Battle are all the same
+// kind of fact, so they read as one row.
 //
-// A mark is a symbol standing in for a word, so every measure names itself
-// through the shared Tooltip — never a native title="", which is a browser
-// convention rather than a game one (ADR-0052).
+// Every one of them is framed, and the frame is earned rather than decorative:
+// each box is exactly one hover/keyboard target that names what is inside it. A
+// mark is a symbol standing in for a word, so it has to be able to say the word
+// — through the shared Tooltip, never a native title="", which is a browser
+// convention rather than a game one (ADR-0052). Measures used to sit bare on the
+// bar with no frame; they were already tooltips, so nothing said where one
+// target ended and the next began. TitleBarStatusTip is that box-is-the-target
+// rule, and it is the same rule the battle clock and the identity chip answer to.
 //
 // The icon review mounts these SAME components (ADR-0059), so a candidate is
 // judged in its real seat. `…IconSrc` is the review-only seam: it paints exact
@@ -31,13 +34,19 @@ export function RunIdentityChip({
   levelName: string | null;
 }): ReactElement {
   return (
-    <TitleBarStatus
+    <TitleBarStatusTip
       className="skirmish-status-chip skirmish-turn-plate run-topbar-identity"
-      data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+      fillSurface={CHROME_LEAF_FILL_SURFACE}
+      label={levelName ? `${warName}. Battle: ${levelName}` : warName}
+      name={warName}
+      detail={levelName
+        ? <>The War this Run is fighting, and the Battle it is at.</>
+        : <>The War this Run is fighting.</>}
+      explainMechanics={false}
     >
       <strong>{warName}</strong>
       {levelName ? <small>{levelName}</small> : null}
-    </TitleBarStatus>
+    </TitleBarStatusTip>
   );
 }
 
@@ -57,17 +66,17 @@ function RunMeasure({
   children: ReactNode;
 }): ReactElement {
   return (
-    <Tooltip
-      className="run-topbar-measure-tip"
-      triggerClassName="run-topbar-measure"
+    <TitleBarStatusTip
+      className="skirmish-status-chip run-topbar-measure"
+      fillSurface={CHROME_LEAF_FILL_SURFACE}
       label={label}
-      title={name}
-      trigger={children}
+      name={name}
+      detail={detail}
       explainMechanics={explainMechanics}
       popupClassName={popupClassName}
     >
-      {detail}
-    </Tooltip>
+      {children}
+    </TitleBarStatusTip>
   );
 }
 

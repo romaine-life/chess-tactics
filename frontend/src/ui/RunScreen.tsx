@@ -12,6 +12,7 @@ import { TitleBarStatus } from './shell/TitleBarControls';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleRoute, type TitleRouteSegment } from './shell/TitleRoute';
 import { RunIdentityChip, RunTitleBarMeasures } from './RunTitleBarChips';
+import { BattleClockChip } from './BattleClockChip';
 import { PLAY_RUN_SELECTOR_HREF } from './playHubRoute';
 import {
   Skirmish,
@@ -221,11 +222,13 @@ export function runTitleBarRouteSegments(
   return segments;
 }
 
-function RunTitleBarStatus({ run, path, search, view }: {
+function RunTitleBarStatus({ run, path, search, view, battlefieldMounted }: {
   run: RunDocument;
   path: string;
   search: string;
   view: RunScreenView;
+  /** Whether the battlefield activity — and so its session store — is actually mounted. */
+  battlefieldMounted: boolean;
 }): ReactElement {
   const progress = runBattleProgress(run);
   const levelName = run.war.battles[run.battleIndex]?.level.name ?? 'Battle';
@@ -242,6 +245,16 @@ function RunTitleBarStatus({ run, path, search, view }: {
           warName={run.war.name}
           levelName={isGeneratedRunBattleName(levelName) ? null : levelName}
         />
+        {/* A Run Battle is a Battle: it gets the same clock every other play surface shows,
+            from the same chip. The phase alone is NOT the condition. The chip reads the
+            session store it is portalled out of, and only the battlefield activity provides
+            one — a Run bar rendered beside any other workspace (a craft still landing, most
+            visibly) would fall through to the module default store and report a clock
+            belonging to no Battle on screen. So it is seated exactly while the battlefield
+            it is timing is. */}
+        {battlefieldMounted && run.phase === 'battle'
+          ? <BattleClockChip fillSurface={CHROME_LEAF_FILL_SURFACE} />
+          : null}
         <RunTitleBarMeasures
           tier={run.ataraxiaTier}
           goldTenths={run.goldTenths}
@@ -1979,7 +1992,7 @@ export function RunScreen({
     routeSearch,
     strategikonOpen,
     titleBarContent: shellRun ? (
-      <RunTitleBarStatus run={shellRun} path={routePath} search={routeSearch} view={view} />
+      <RunTitleBarStatus run={shellRun} path={routePath} search={routeSearch} view={view} battlefieldMounted={battlefieldActive} />
     ) : null,
     lipsanonIds: visibleLipsanonIds,
     inspectionWorkspace,
