@@ -306,6 +306,20 @@ and don't tell the user screenshots are impossible. Use the helper below.
    completely unselectable. The gate asserts a fresh first click still selects,
    alongside the second-click cancel; no unit test reproduces that ordering.
 
+   SECONDARY-button changes on the board additionally run the premove-cancel gate,
+   which drives a real right drag and a real right click and reads the painted chain:
+   ```
+   npm run verify:premove-cancel -- '<vite-url>/play?campaignId=off-c-crown-valoria&levelId=off-l-hold-bridge'
+   ```
+   The board is wall-to-wall hit targets, so the secondary button both pans it and
+   takes the premove chain back (ADR-0128/ADR-0549) — the ONLY thing separating the
+   two is how far the press travelled before it was released. The gate plays a real
+   move, queues a premove in the opponent's thinking window, and proves a right DRAG
+   keeps the chain while a right CLICK drops it. It zooms in first: a battle opens
+   fitted to its board with the pan pinned, and a drag on a camera that cannot move
+   proves nothing. Each gesture gets its own ~2s premove window, and a window that
+   closes mid-gesture is re-entered rather than reported as a verdict.
+
    Board-earned bounty changes additionally run the royal fork gate, which plays a
    real fork with real clicks and reads the gold, the log line and the seated marker:
    ```

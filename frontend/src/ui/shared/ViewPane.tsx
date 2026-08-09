@@ -384,9 +384,11 @@ export function ViewPane({
   onAssetClick?: (assetId: string) => void;
   /**
    * A secondary press that released without panning. The drag stays pan-only (ADR-0128); a
-   * press that never moved carried no navigation, so a viewport owner may claim it for a
-   * NON-DESTRUCTIVE mode change. Never bind content mutation here — the threshold that tells
-   * this apart from a pan is exactly what ADR-0128 refused to put in front of an erase.
+   * press that never moved carried no navigation, so a viewport owner may claim it for a mode
+   * change, or for taking back the player's own uncommitted intent — the formation still on the
+   * cursor, the premove chain still queued (ADR-0549). Never bind authored content or a
+   * committed move here: the threshold that tells this apart from a pan is exactly what
+   * ADR-0128 refused to put in front of an erase.
    */
   onSecondaryClick?: () => void;
   /** Play fills its live board allocation; fixed previews retain the canonical aspect. */
