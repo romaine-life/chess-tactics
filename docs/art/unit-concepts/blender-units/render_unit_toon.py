@@ -30,6 +30,12 @@ PALETTE = os.environ.get("UNIT_ART_TOON_PALETTE", "navy-blue")
 # the same key that models a smooth pawn leaves it sitting in its darkest band and
 # the crenellations stop reading. Raising the key is what separates them again.
 SUN = float(os.environ.get("UNIT_ART_TOON_SUN", "4"))
+# Cel shading is a STYLE choice and it is off by default. Rendering natively at the
+# delivery size is not: it is the fix, and it is wanted whichever style is on top.
+# With TOON=0 the source materials are kept as authored -- the shipped look -- and
+# only the team colour is applied, so a native render replaces a downscaled one
+# without changing how the piece reads.
+TOON = os.environ.get("UNIT_ART_TOON", "0") == "1"
 # Fill, as a fraction of what the source lit it with. Nearly killing the fill is
 # right for a smooth piece -- it is what gives the terminator somewhere to fall --
 # but a piece that is mostly recesses needs the fill back or its interior never
@@ -131,40 +137,87 @@ if rig is None:
             obj.parent = rig
             obj.matrix_parent_inverse = rig.matrix_world.inverted()
 
+def palette_material(material):
+    """Keep the authored PBR surface, recolour the team-coloured band only.
+
+    EEVEE rather than Cycles, because the frames are small: a path tracer given a
+    51px frame has too few pixels to converge and its denoiser smears, which is the
+    reason these pieces were downscaled from 512 in the first place. Rasterising
+    sidesteps that entirely and keeps the render native.
+    """
+    if not material.use_nodes or not material.node_tree:
+        return
+    # navy-blue IS the authored colour of these sources, so touching it can only move
+    # the piece away from the look being preserved. Recolour the other teams from it.
+    if PALETTE == "navy-blue":
+        return
+    if role_for(material.name) != "stone":
+        return
+    base = srgb(ROLES["stone"][1])
+    for node in material.node_tree.nodes:
+        if node.type == "BSDF_PRINCIPLED" and "Base Color" in node.inputs:
+            node.inputs["Base Color"].default_value = (*base, 1)
+
+
 for material in bpy.data.materials:
-    toon_material(material)
-
-ink = bpy.data.materials.new("toon_ink")
-ink.use_nodes = True
-ink_tree = ink.node_tree
-ink_tree.nodes.clear()
-ink_out = ink_tree.nodes.new("ShaderNodeOutputMaterial")
-ink_emit = ink_tree.nodes.new("ShaderNodeEmission")
-ink_emit.inputs["Color"].default_value = (*srgb("#0a0d14"), 1)
-ink_tree.links.new(ink_emit.outputs["Emission"], ink_out.inputs["Surface"])
-ink.use_backface_culling = True
-
-camera = scene.camera
-world_per_px = (camera.data.ortho_scale * max(1.0, FRAME_HEIGHT / FRAME_WIDTH)) / FRAME_HEIGHT
-for obj in [o for o in bpy.data.objects if o.type == "MESH"]:
-    obj.data.materials.append(ink)
-    shell = obj.modifiers.new("toon_ink_hull", "SOLIDIFY")
-    shell.thickness = OUTLINE_PX * world_per_px
-    shell.offset = 1.0
-    shell.use_rim = False
-    shell.use_flip_normals = True
-    shell.material_offset = len(obj.data.materials) - 1
-    shell.material_offset_rim = len(obj.data.materials) - 1
-
-for obj in [o for o in bpy.data.objects if o.type == "LIGHT"]:
-    if obj.data.type == "SUN":
-        obj.data.energy = SUN
+    if TOON:
+        toon_material(material)
     else:
-        obj.data.energy *= FILL
+        palette_material(material)
 
-scene.render.engine = "BLENDER_EEVEE"
+# The ink line is part of the cel-shaded style, so it rides with it.
+if TOON:
+    ink = bpy.data.materials.new("toon_ink")
+    ink.use_nodes = True
+    ink_tree = ink.node_tree
+    ink_tree.nodes.clear()
+    ink_out = ink_tree.nodes.new("ShaderNodeOutputMaterial")
+    ink_emit = ink_tree.nodes.new("ShaderNodeEmission")
+    ink_emit.inputs["Color"].default_value = (*srgb("#0a0d14"), 1)
+    ink_tree.links.new(ink_emit.outputs["Emission"], ink_out.inputs["Surface"])
+    ink.use_backface_culling = True
+
+    camera = scene.camera
+    world_per_px = (camera.data.ortho_scale * max(1.0, FRAME_HEIGHT / FRAME_WIDTH)) / FRAME_HEIGHT
+    for obj in [o for o in bpy.data.objects if o.type == "MESH"]:
+        obj.data.materials.append(ink)
+        shell = obj.modifiers.new("toon_ink_hull", "SOLIDIFY")
+        shell.thickness = OUTLINE_PX * world_per_px
+        shell.offset = 1.0
+        shell.use_rim = False
+        shell.use_flip_normals = True
+        shell.material_offset = len(obj.data.materials) - 1
+        shell.material_offset_rim = len(obj.data.materials) - 1
+
+# Only the banded look needs one dominant key; the authored lighting IS the shipped
+# look, so a native render must not touch it.
+if TOON:
+    for obj in [o for o in bpy.data.objects if o.type == "LIGHT"]:
+        if obj.data.type == "SUN":
+            obj.data.energy = SUN
+        else:
+            obj.data.energy *= FILL
+
+# EEVEE only for the banded look, where Shader to RGB requires it. The shipped look
+# is path-traced, and its depth comes from GI and contact shadow that a rasteriser
+# does not compute -- rendering it in EEVEE reads flat however the lights are set.
+#
+# Path-tracing a 51px frame was the ORIGINAL complaint, but the fault was 48 samples,
+# not the engine: at ~3k pixels a frame, converging costs seconds. Sample properly
+# and the native render is the downscale-from-512 without the downscale.
+scene.render.engine = "BLENDER_EEVEE" if TOON else "CYCLES"
+if not TOON:
+    scene.cycles.samples = 1024
+    scene.cycles.use_denoising = False
 scene.eevee.taa_render_samples = 64
-scene.render.filter_size = 0.5
+# A narrow reconstruction filter keeps a drawn ink line hard, which is what the
+# banded look needs. The shipped look is the opposite: it wants each delivery pixel
+# to be a proper average of the geometry behind it -- that averaging is exactly what
+# the old downscale-from-512 was providing, and dropping to 0.5 here threw it away
+# and made the native render read flat.
+scene.render.filter_size = 0.5 if TOON else 1.5
+if TOON:
+    scene.eevee.taa_render_samples = 64
 scene.view_settings.view_transform = "Standard"
 scene.render.resolution_x = FRAME_WIDTH
 scene.render.resolution_y = FRAME_HEIGHT
