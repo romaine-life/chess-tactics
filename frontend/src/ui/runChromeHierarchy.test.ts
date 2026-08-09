@@ -583,13 +583,18 @@ describe('Run chrome hierarchy', () => {
       /const bandCells = useMemo\(\s*\(\) => new Set\(playerDeploymentCells\(level\)\.map\(\(cell\) => `\$\{cell\.x\},\$\{cell\.y\}`\)\),/,
     );
     expect(runBattlePreview).toContain('renderCellOverlay={(cell) => bandCells.has(`${cell.x},${cell.y}`)');
-    // The registered marked-square treatment, not a preview-local wash: one paint for the fact,
-    // and no bespoke opacity rule to drift from it. Held below full strength the band vanished
-    // into busy terrain, which is the one thing the drawing exists to prevent.
-    expect(runBattlePreview).toContain('<span className="le-tactical-cell is-move" aria-hidden="true">');
-    expect(runBattlePreview).toContain('<PredrawnMoveHighlightPaint />');
-    expect(styleCss).toContain('.le-tactical-cell.is-move:not(.is-blocked-candidate) > .predrawn-cyan-move-highlight-paint {');
+    // The board already has ONE drawing for a zone — the Level Editor's tinted diamond with its
+    // own per-square outline, in the Player Deployment accent. A move highlight here was a second
+    // language for the same fact, and without a per-square edge it read as an invented slab.
+    expect(runBattlePreview).toContain('<span className="le-zone-cell le-zone-player" aria-hidden="true" />');
+    expect(runBattlePreview).not.toContain('PredrawnMoveHighlightPaint');
+    expect(styleCss).toMatch(/\.le-zone-cell\s*\{[^}]*background: rgba\(var\(--le-zone-accent\)/);
+    expect(styleCss).toMatch(/\.le-zone-cell\s*\{[^}]*box-shadow: inset 0 0 0 2px rgba\(var\(--le-zone-accent\)/);
+    expect(styleCss).toContain('.le-zone-blue, .le-zone-player { --le-zone-accent:');
     expect(styleCss).not.toContain('.run-battle-preview-band');
+    // The zone diamond seats on the tile EQUATOR, which is what puts it on the same square the
+    // grid draws. Measured on the live board: a cell's top resolves to 41px against a 54px tile.
+    expect(styleCss).toMatch(/\.le-zone-cell\s*\{[^}]*top: var\(--iso-tile-surface-top\)/);
 
     // Both facts also stand in the Level readout, which is where a reader looks for numbers.
     expect(levelInfoCompact).toContain('const cardsDealt = levelBattleCardsDealt(level);');

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 
 import { runDeploymentDealCount, sectioUpcomingBattleIndex, type RunDocument } from '../run/model';
 import { playerDeploymentCells } from '../run/deployment';
 import { levelToEditorBoard } from '../core/levelBoard';
-import { PredrawnMoveHighlightPaint } from '../render/PredrawnMoveHighlightPaint';
 import { ChromeDivider, ChromeSurfaceFill, InnerChromeBox } from './shared/ChromeBox';
 import { FramedReadOnlyBoardView } from './shared/BoardViewFraming';
 import { LevelInfoCompact } from './LevelInfoCompact';
@@ -107,20 +106,13 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
                 ariaLabel={`${level.name} upcoming Battle preview`}
                 viewportMode="fill"
                 showGrid
-                // Where the player's own force lands, in the SAME paint the live Deployment board
-                // washes its band with — the preview answers "where may I deploy" ahead of time,
-                // so a second treatment would read as a different marking. At full strength,
-                // which is the marked-square treatment everywhere it is not being underlapped:
-                // the live band drops to a fraction only because the seating in hand paints over
-                // it, and nothing overlays a read-only thumbnail. Held down, the wash disappears
-                // into busy terrain and the zone stops being readable at a glance, which is the
-                // whole reason it is drawn.
+                // Where the player's own force lands, drawn as the registered ZONE overlay in the
+                // Player Deployment accent — the same tinted diamond with its own outline that the
+                // Level Editor paints this very zone with. A move highlight would have been a
+                // second language for a fact the board already has a drawing for, and reads as an
+                // invented slab because it has no per-square edge.
                 renderCellOverlay={(cell) => bandCells.has(`${cell.x},${cell.y}`)
-                  ? (
-                    <span className="le-tactical-cell is-move" aria-hidden="true">
-                      <PredrawnMoveHighlightPaint />
-                    </span>
-                  )
+                  ? <span className="le-zone-cell le-zone-player" aria-hidden="true" />
                   : null}
                 onTerrainFirstFrame={() => setTerrainPainted(true)}
                 onSceneFirstFrame={() => setScenePainted(true)}
