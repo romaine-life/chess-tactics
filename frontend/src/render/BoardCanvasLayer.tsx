@@ -435,6 +435,7 @@ export function BoardCanvasLayer({
   maskTint,
   occlusionMasks = EMPTY_OCCLUSION_MASKS,
   occlusionDepthMap,
+  frameTransform,
   onFirstFrame,
   onFrameError,
 }: {
@@ -447,6 +448,16 @@ export function BoardCanvasLayer({
   occlusionMasks?: readonly BoardDrawOp[];
   /** Persisted source-aligned scene depth; selected with an immutable background version. */
   occlusionDepthMap?: PredrawnOcclusionDepthMap;
+  /**
+   * Per-frame op substitution for motion the op list cannot describe on its own — an entrance
+   * offset, which is a moving `dy`/`opacity` rather than a sprite-sheet frame.
+   *
+   * Supplying one starts the repaint clock and keeps it running, so the caller clears it when the
+   * motion is over. Applied at paint time, so the composed op list is still computed once: a
+   * falling rock costs a repaint per frame, not a whole board rebuild per frame. Keep the function
+   * identity stable across renders — it is an effect dependency.
+   */
+  frameTransform?: (op: BoardDrawOp, timeMs: number) => BoardDrawOp;
   onFirstFrame?: () => void;
   onFrameError?: (error: unknown) => void;
 }): ReactElement | null {
@@ -499,13 +510,18 @@ export function BoardCanvasLayer({
     const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) return undefined;
 
-    const animated = orderedOps.some(isAnimatedGroundCoverOp);
+    const animated = orderedOps.some(isAnimatedGroundCoverOp) || !!frameTransform;
     const paint = (images: ReadonlyMap<string, CanvasImage>, timeMs = performance.now()): void => {
       generation.runIfCurrent(() => {
         sizeCanvasForBounds(canvas, bounds);
+        // Re-sorted after the transform: an entrance moves ops in `dy`, not in depth, but a
+        // transform is free to change `z`, and the composed canvas is only correct in depth order.
+        const frameOps = frameTransform
+          ? orderedOps.map((op) => frameTransform(op, timeMs)).sort((a, b) => a.z - b.z)
+          : orderedOps;
         drawBoardOps(
           ctx,
-          orderedOps,
+          frameOps,
           bounds,
           images,
           timeMs,
@@ -534,7 +550,7 @@ export function BoardCanvasLayer({
     }, (error) => onFrameError?.(error));
 
     return generation.cancel;
-  }, [bounds, depthSignature, maskTint, occlusionDepthMap, occlusionSignature, onFirstFrame, onFrameError, orderedOcclusionMasks, orderedOps, signature]);
+  }, [bounds, depthSignature, frameTransform, maskTint, occlusionDepthMap, occlusionSignature, onFirstFrame, onFrameError, orderedOcclusionMasks, orderedOps, signature]);
 
   if (orderedOps.length === 0) return null;
 

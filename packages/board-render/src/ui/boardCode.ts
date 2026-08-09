@@ -378,6 +378,19 @@ export interface EditorBoard {
   doodads: Record<string, { doodadId: string }>;
   /** Multi-cell props (trees/houses), keyed by ANCHOR cell "x,y" -> {propId} (mirrors doodads). */
   props: Record<string, { propId: string }>;
+  /**
+   * Anchors in `props` that STAND ON a pre-drawn plate instead of being painted into it (ADR-0537).
+   *
+   * A plate board's props are ordinarily the picture's own pixels — generated from that geometry,
+   * suppressed at render, kept only for their colliders. A rock the owner places after the art
+   * exists is the opposite: nothing depicts it, so it must draw live and take part in the board's
+   * entrance. One marker set rather than a second props map, so occupancy, erase, move, resize and
+   * the gameplay projection keep working off the single canonical channel.
+   *
+   * Absent on every board authored before this existed, which is exactly right: their props ARE
+   * baked, and they keep rendering as they always have.
+   */
+  liveProps?: string[];
   /** Floating, gameplay-inert source artwork used by the pre-drawn generation reference. */
   floatingArtwork?: FloatingArtworkPlacement[];
   cover: Record<string, GroundCoverDensity>;
@@ -1258,6 +1271,10 @@ export function encodeBoard(b: EditorBoard): string {
   // Props mirror doodads on the wire: anchor cell -> bare propId. Emitted only when nonEmpty so a
   // prop-free board encodes byte-identically to a pre-props board.
   if (b.props && nonEmpty(b.props)) wire.p = Object.fromEntries(Object.entries(b.props).map(([k, v]) => [k, v.propId]));
+  // Sorted so the same set of live anchors always encodes to the same bytes. Emitted only when the
+  // board actually has one, so no existing board code changes (ADR-0537).
+  const liveProps = [...new Set(b.liveProps ?? [])].filter((key) => b.props?.[key]).sort();
+  if (liveProps.length) wire.lp = liveProps;
   const floatingArtwork = cleanFloatingArtwork(b.floatingArtwork);
   if (floatingArtwork.length) {
     wire.fa = floatingArtwork.map((placement) => [
@@ -1443,6 +1460,13 @@ export function decodeBoard(code: string): EditorBoard | null {
     if (w.d) for (const [k, id] of Object.entries(w.d as Record<string, string>)) doodads[k] = { doodadId: id };
     const props: EditorBoard['props'] = {};
     if (w.p) for (const [k, id] of Object.entries(w.p as Record<string, string>)) props[k] = { propId: id };
+    // A live marker only means anything while its prop is still placed; a dangling one is dropped
+    // rather than retained, so erasing the rock forgets that it was ever live.
+    const liveProps: string[] = Array.isArray(w.lp)
+      ? [...new Set((w.lp as unknown[]).filter(
+          (key): key is string => typeof key === 'string' && !!props[key],
+        ))].sort()
+      : [];
     const macroTiles = cleanMacroTiles(w.mt, cols, rows);
     const featureCuts: Record<string, true> = {};
     if (Array.isArray(w.rc)) for (const e of w.rc) featureCuts[e] = true;
@@ -1589,6 +1613,7 @@ export function decodeBoard(code: string): EditorBoard | null {
       decorativeFencePosts: (w.dfp && typeof w.dfp === 'object' && !Array.isArray(w.dfp) ? w.dfp : {}) as Record<string, FenceMaterial>,
       decorativeWalls: (w.dwl && typeof w.dwl === 'object' && !Array.isArray(w.dwl) ? w.dwl : {}) as Record<string, WallMaterial>,
       playerFaction: typeof w.pf === 'string' ? w.pf : undefined, factionDirections, cells, macroTiles, units, doodads, props, floatingArtwork,
+      ...(liveProps.length ? { liveProps } : {}),
       cover: (w.v ?? {}) as Record<string, GroundCoverDensity>,
       coverTypes: (w.ct ?? {}) as Record<string, TileFamilyId>,
       coverSeeds: cleanCoverSeeds(w.vs, (w.v ?? {}) as Record<string, GroundCoverDensity>),
