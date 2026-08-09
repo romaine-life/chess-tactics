@@ -20694,6 +20694,32 @@ button.tileset-relationship-cell {
   object-fit: contain;
 }
 
+/* A Run card ACTION's mark, seated on the control that performs it (Athetize is the
+   founding member). Same reserved-seat contract as the measures above: the seat holds
+   its geometry before the art decision exists, so installing one never shifts the
+   label beside it. The host button already supplies the row and its gap. */
+.run-action-icon {
+  align-items: center;
+  /* One seat for every action mark, sized to the 46px control it rides so the mark
+     reads as the button's subject rather than a sticker on it. A host that needs
+     another size sets the token on any ancestor rather than reaching past this
+     rule for the img. */
+  block-size: var(--run-action-seat, 32px);
+  display: inline-flex;
+  flex: none;
+  inline-size: var(--run-action-seat, 32px);
+  justify-content: center;
+}
+
+/* The mark ships trimmed to its own ink, so a square seat plus contain draws it at
+   one size with no per-icon compensating transform. */
+.run-action-icon img {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  object-fit: contain;
+}
+
 /* A measure is one icon and its number — Ataraxia tier, gold, Conflict, Battle are
    all the same kind of fact and read as one row. Each one is FRAMED, like every
    other element in the bar, and the frame is earned rather than decorative: the box
@@ -21762,6 +21788,41 @@ button.tileset-relationship-cell {
 }
 
 .run-progress-icon-review-grid small {
+  color: var(--skirmish-muted);
+}
+
+/* Athetize action-mark review: every candidate is mounted in the SAME button the
+   Expunctio row paints, in both states that control has — offered, and refused —
+   with its native pixels beside it. Layout only; the buttons bring their own kit
+   frame and the review never restyles the seat it is judging. */
+.athetize-icon-review-grid {
+  display: grid;
+  gap: var(--ds-inline);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.athetize-icon-review-grid figure {
+  align-items: start;
+  display: grid;
+  gap: var(--ds-inline);
+  grid-template-columns: 64px minmax(0, 1fr);
+  margin: 0;
+  padding: var(--ds-inset);
+}
+
+.athetize-icon-review-buttons {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  inline-size: 100%;
+  justify-items: stretch;
+}
+
+.athetize-icon-review-grid figcaption {
+  display: grid;
+  gap: var(--ds-space-1);
+}
+
+.athetize-icon-review-grid small {
   color: var(--skirmish-muted);
 }
 

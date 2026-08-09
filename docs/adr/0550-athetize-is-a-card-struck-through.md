@@ -1,0 +1,78 @@
+---
+status: accepted
+date: 2026-08-09
+deciders: owner (Nelson) + Claude
+refines:
+  - "[ADR-0035](0035-semantic-ui-icons-carry-a-private-anti-story-anchor.md)"
+  - "[ADR-0318](0318-plagued-and-pestiferous-use-separate-owner-selected-icons.md)"
+  - "[ADR-0366](0366-a-run-names-its-phase-as-route-and-its-repeatable-ideas-as-icons.md)"
+  - "[ADR-0443](0443-athetize-is-the-card-action-within-expunctio.md)"
+---
+
+# ADR-0550: Athetize is a card struck through
+
+## Context
+
+[ADR-0443](0443-athetize-is-the-card-action-within-expunctio.md) gave the card-level
+act inside Expunctio its own transitive verb so the containing movement and the act
+performed on one record stopped sharing a noun. The control it named stayed a bare
+word on a wide button.
+
+That leaves **Athetize** carrying its whole meaning in a deliberately unfamiliar word.
+The register is intentional and is not up for revision, but every other repeated act in
+this game is also drawn: the board verbs (move, attack, capture, defend, wait, end-turn,
+power) each own a mark, and so do the card properties and the unit states they grant. The
+one destructive act a player performs on their own held formation had nothing.
+
+## Decision
+
+**Athetize gets a mark, and the mark is a card struck through by an X.** A navy card face
+inside a gold filigree border, crossed corner to corner by one bold red X. It says
+*this card, removed* without depending on the word beside it.
+
+- The subject is **our** card, not a stock playing card or a bare delete glyph — the
+  ornate navy-and-gold back the Run already deals (ADR-0035's world-object vocabulary).
+  The red belongs to the act: this is the button that already wears the `danger` tone.
+- The mark belongs to the **control**, not to the screen. Expunctio owns the noun and
+  already titles the workspace; what the button needs named is its effect. So the seat is
+  `RunActionIcon`, a new shared primitive beside `RunProgressIcon`, and the slot joins the
+  action family at `ui/kit/icons/game/athetize.png` rather than the Run-position marks at
+  `ui/kit/icons/run/`.
+- The seat is **reserved, not fail-closed** (ADR-0318): it holds its geometry before any
+  art decision exists, so installing one later cannot shift the label beside it. It rides
+  every state of that button — offered, spent, refused — because it is one control with
+  one meaning, and the disabled styling already says which state it is in.
+- The mark ships **trimmed to its own ink and padded to the square that bounds it**, the
+  same finish ADR-0366 gave the measures, so one seat size draws whatever is installed
+  and no per-icon compensating transform exists to drift. `run-action-icon` therefore
+  registers as a trimmed game-condition icon in the live-media policy, accepting a square
+  raster from 16×16 through 64×64 whose runtime frame equals its own side.
+
+**The pixels are the owner's call, not the agent's.** Ten candidates are uploaded to the
+slot and mounted at `/studio?athetizeIconReview=1` — each one in the real Expunctio
+button, in both states that button has, with its native raster beside it. Nothing is
+installed until the owner installs one, and Install is the whole decision in one act:
+record approval of those exact bytes, accept the version into its slot, bind the slot to
+its `app-ui` role. The candidate seam `?athetizeCandidate=<sha256>` auditions one in the
+live workspace without installing anything (ADR-0219).
+
+## Consequences
+
+- The Expunctio button states its effect in a mark as well as a learned word; the word
+  keeps its register without carrying the whole load alone.
+- `RunActionIcon` exists for the next card action that needs one — the family is a
+  variant map, not a second bespoke seat.
+- Until an option is installed the seat renders empty. That is the reserved state working,
+  not a missing asset: the button is unchanged from before this ADR.
+- No Run document, database, or save-format migration follows. This is presentation and
+  one additive live-media slot, which is recoverable by retiring it.
+
+## More Information
+
+- Candidates were generated with PixelLab `create_image_pro` off a style reference
+  composited from the three accepted Run marks, then trimmed by
+  `frontend/scripts/bake-icon-stroke.mjs`'s `trimToInkSquare` — crop and pad only, so the
+  bytes stay honestly native 1× under [ADR-0076](0076-scaling-is-calibration-production-art-is-native-1x.md).
+- Transparent-background generation hollowed out the card's flat interior on the first
+  portrait attempt; the accepted portrait candidates were generated on uniform chroma
+  green and keyed, which is the standing remedy for large flat interiors.
