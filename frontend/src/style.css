@@ -10641,10 +10641,20 @@ body { font-size: 17px; }
   text-transform: uppercase;
 }
 
-.ce-force img {
-  height: 22px;
+/* The side marks are live battlefield sprites, so they are seated the way every other unit mark
+   in this column is: the SEAT is sized and AlphaBoundIcon fits the visible pixels inside it.
+   Sizing the <img> instead would fight the inline fit and letterbox the piece in its own canvas. */
+.ce-force-unit {
+  block-size: 30px;
+  inline-size: 24px;
+}
+
+/* The card back is authored at its own aspect and needs no alpha fit — it is contained. */
+.ce-force-card {
+  block-size: 26px;
   image-rendering: pixelated;
-  width: 22px;
+  inline-size: auto;
+  object-fit: contain;
 }
 
 .ce-force strong {
@@ -10655,6 +10665,7 @@ body { font-size: 17px; }
 
 .ce-force-ally { color: var(--ce-ally); }
 .ce-force-enemy { color: var(--ce-enemy); }
+.ce-force-cards { color: var(--ce-ally); }
 
 /* ===== Compact Level Info — stacked under the map preview in the Editor's 4th column ===== */
 
@@ -10745,6 +10756,10 @@ body { font-size: 17px; }
   gap: 12px;
   grid-template-columns: 1fr 1fr;
 }
+
+/* A Battle drops its empty Allies roster, so the surviving side takes the whole width rather
+   than sitting in a half column beside a gap where a column used to be. */
+.ce-li-rosters.is-single { grid-template-columns: 1fr; }
 
 .ce-li-roster-head {
   align-items: center;

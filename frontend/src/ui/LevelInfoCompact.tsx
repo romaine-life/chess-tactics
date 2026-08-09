@@ -63,7 +63,7 @@ function RowIcon({ src, className = '' }: { src: string; className?: string }): 
  * on a Battle whose army arrives from cards) has no projected faction to read, and falls back to
  * the gameplay side default the projection would give it.
  */
-function boardPalettes(level: Level): Record<'player' | 'enemy', UnitPalette> {
+export function boardPalettes(level: Level): Record<'player' | 'enemy', UnitPalette> {
   const projected = levelToEditorBoard(level).units ?? {};
   const authored = (side: 'player' | 'enemy'): UnitPalette | undefined => {
     for (const unit of level.layers.units) {
@@ -331,6 +331,11 @@ export function LevelInfoCompact({
   // The band's size is a real fact about any Battle, including one whose deal is still unset —
   // gating it on the COUNT would print "0 squares" for a board that has a band.
   const deploymentSquares = dealLine === null ? 0 : playerDeploymentCells(level).length;
+  // A Battle's player force arrives as dealt cards, not as pieces standing on the map, so its
+  // Allies roster is a column of zeroes above a "none" — a question the reader has to carry down
+  // to the Deployment section to answer. Drop it there and let Deployment state the force. A
+  // Battle that authors FIXED allies keeps its roster: those pieces are real and on the map.
+  const showsAllyRoster = dealLine === null || countTotal(allies) > 0;
   const zoneMix = countMap(level.layers.zones.map((z) => z.type));
   const zoneParts = ZONE_ORDER.filter((z) => zoneMix[z]).map((z) => `${ZONE_LABEL[z]} ${zoneMix[z]}`);
 
@@ -360,15 +365,17 @@ export function LevelInfoCompact({
 
       <section className="ce-li-forces">
         <span className="ce-li-title">Forces</span>
-        <div className="ce-li-rosters">
-          <Roster
-            counts={allies}
-            tone="is-ally"
-            label="Allies"
-            palette={palettes.player}
-            flagSrc={flagIconSrc(palettes.player)}
-            dealt={dealtCountForSide(level, 'player')}
-          />
+        <div className={`ce-li-rosters${showsAllyRoster ? '' : ' is-single'}`}>
+          {showsAllyRoster ? (
+            <Roster
+              counts={allies}
+              tone="is-ally"
+              label="Allies"
+              palette={palettes.player}
+              flagSrc={flagIconSrc(palettes.player)}
+              dealt={dealtCountForSide(level, 'player')}
+            />
+          ) : null}
           <Roster
             counts={enemies}
             tone="is-enemy"
@@ -380,8 +387,8 @@ export function LevelInfoCompact({
         </div>
       </section>
 
-      {/* Directly under Forces, because that is where the question is asked: a Battle's Allies
-          column reads 0, and this section is the answer to why. The COUNT comes from the readout's
+      {/* Directly under Forces, because this IS the Battle's player force — it stands where an
+          Allies roster would, rather than beside an empty one. The COUNT comes from the readout's
           own reader, which says "Not set" for a Battle that authors none — the state
           W4_BATTLE_CARDS_DEALT blocks Save on, and one a clamp would quietly hide. */}
       {dealLine !== null ? (
