@@ -27758,10 +27758,10 @@ button.run-card-formation-cell {
    property of the card and must not sit in the cost corner, which reads as a PRICE everywhere
    else. The line holds its seat with or without gold so a row of three sits at one height. */
 .run-card-grant-seat {
-  display: grid;
-  grid-template-rows: auto 1fr;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: var(--ds-space-1);
-  justify-items: center;
   min-inline-size: 0;
 }
 
