@@ -1972,15 +1972,21 @@ const OTHER_EVENT_TEMPLATES = [
 ] as const;
 type OtherEventTemplateId = typeof OTHER_EVENT_TEMPLATES[number]['id'];
 
+// Rebuild the Level a browser recovery draft stands for. Every rules field the draft STORES has to
+// be read back here: the draft is what a reload recovers from, so a field carried into the draft and
+// dropped on the way out is written away by the recovering page's first autosave. `parTurns` and the
+// Battle's `cardsDealt` were both stored and never read, which is how an authored par survived being
+// typed, survived autosave, and then vanished the moment the level was reopened (ADR-0539).
 const levelFromDraft = (draft: LevelEditorDraft, base: Level): Level => editorBoardToLevel(draft.board, {
   id: base.id,
   name: draft.levelName,
   objective: draft.objective,
   surviveTurns: draft.objective === 'survive' ? draft.surviveTurns : undefined,
   timeControl: draft.timeControl,
+  parTurns: draft.parTurns,
   victory: draft.victory,
   events: draft.events,
-  battle: base.battle,
+  battle: battleSettingsForSave(base.battle, draft.cardsDealt ?? null),
   notes: base.notes,
   difficulty: base.difficulty,
   economy: base.economy,
@@ -6519,7 +6525,14 @@ export function LevelEditor(): ReactElement {
         } satisfies EditorSignInRecoveryIntent));
       } catch { /* The browser copy still exists even if sessionStorage is unavailable. */ }
     }
-  }, [campaignAssignmentId, clockEnabled, clockIncrementSeconds, clockInitialSeconds, currentEditorBoard, draftKey, editAuthorityState, editorClientIdentity, editorDocument, editorLoadError, editorReady, eventsForSave, levelNameForSave, me?.email, objective, savedSig, surviveTurns, targetLevelId, victoryForSave]);
+    // EVERY field written into the draft above must appear below, or an edit that touches only
+    // that field never reaches the browser copy. `battleForSave` and `parTurnsForSave` were both
+    // added to the draft body without being added here, so a Deployment-deal-only or par-only edit
+    // wrote nothing — and because canonicalizing levelId -> document deliberately REMOUNTS this
+    // component (see sameDocumentRemountRef), the new instance re-seeded from a draft that had
+    // never heard of the edit and silently discarded it. That is what made an authored par snap
+    // back to the board estimate a second after it was typed (ADR-0539).
+  }, [battleForSave, campaignAssignmentId, clockEnabled, clockIncrementSeconds, clockInitialSeconds, currentEditorBoard, draftKey, editAuthorityState, editorClientIdentity, editorDocument, editorLoadError, editorReady, eventsForSave, levelNameForSave, me?.email, objective, parTurnsForSave, savedSig, surviveTurns, targetLevelId, victoryForSave]);
 
   const eventsEditorHref = (open: boolean, tab: LevelEditorEventsTab = eventsTab): string => (
     levelEditorHrefWithRouteState(window.location.href, {
