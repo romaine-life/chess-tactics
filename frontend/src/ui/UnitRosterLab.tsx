@@ -9,6 +9,10 @@ import { activeUnitFamilies, tileFrameSrc, type UnitFacing } from '@chess-tactic
 import { tileAssets } from '../art/tileset';
 import { fetchAdminUnitCatalog } from '../net/unitAssets';
 
+/** Mirrors the Studio viewer zoom slider, whose travel this maps onto whole multiples. */
+const STUDIO_ZOOM_REST = 1;
+const STUDIO_ZOOM_MAX = 2;
+
 /**
  * The whole shipped roster at once, at 1:1.
  *
@@ -32,11 +36,30 @@ export function UnitRosterLab({ header, zoom = 1 }: { header?: ReactNode; zoom?:
   const [palette, setPalette] = useState<UnitPalette>('navy-blue');
   const [allPalettes, setAllPalettes] = useState(false);
 
-  // The Studio's zoom is continuous, and a fractional magnification of pixel art
-  // gives uneven columns -- the exact artifact this surface exists to catch. Snap
-  // to whole multiples so a magnified sprite is still an honest picture of itself,
-  // and say which multiple it landed on rather than reporting the slider's float.
-  const magnify = Math.max(1, Math.round(zoom));
+  /**
+   * Slider travel mapped onto whole magnifications.
+   *
+   * A fractional magnification of pixel art gives uneven columns -- the exact
+   * artifact this surface exists to catch -- so the multiple has to be an integer.
+   * But rounding the slider's own value is why it felt dead: its range is 0.25 to
+   * 2.0, so `round` yielded 1 for everything under 1.5 and 2 above it -- two
+   * settings, most of the travel doing nothing. The ladder is spread across the
+   * travel above the rest position instead, so every part of it that can change the
+   * picture does.
+   *
+   * The header still reports the slider as a percentage, which is its own number and
+   * will not match; the note below states the multiple actually being drawn.
+   */
+  const magnify = useMemo(() => {
+    // The slider rests at 1, and that has to mean 1:1 -- this surface opens on the
+    // read it exists to judge. Everything below the rest position stays 1:1 too:
+    // there is no honest way to show art authored at its delivery size any smaller
+    // than that, which is the entire point of authoring it that way.
+    if (zoom <= STUDIO_ZOOM_REST) return 1;
+    const ladder = [2, 3, 4, 5, 6, 8, 10];
+    const travel = (zoom - STUDIO_ZOOM_REST) / (STUDIO_ZOOM_MAX - STUDIO_ZOOM_REST);
+    return ladder[Math.round(Math.min(1, travel) * (ladder.length - 1))];
+  }, [zoom]);
   const [showBefore, setShowBefore] = useState(false);
   const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof fetchAdminUnitCatalog>> | null>(null);
   // The ADMIN catalog, because accepting a new asset archives the one it replaced and
@@ -105,13 +128,17 @@ export function UnitRosterLab({ header, zoom = 1 }: { header?: ReactNode; zoom?:
         <p className="unit-roster-note">
           {magnify === 1
             ? 'Drawn at 1:1 — every sprite is authored at its delivery size.'
-            : `Magnified ${magnify}x — judge the read at 1:1.`}
+            : `Magnified ${magnify}x — whole multiples only; judge the read at 1:1.`}
         </p>
       </div>
 
       <div
         className="unit-roster-grid"
-        style={magnify === 1 ? undefined : { transform: `scale(${magnify})`, transformOrigin: 'top left' }}
+        // `zoom` rather than `transform: scale`: a transform does not affect layout,
+        // so the magnified grid overflowed its scroll area and everything past the
+        // first unit became unreachable. `zoom` scales the box too, so the panel
+        // scrolls to the rest of the roster.
+        style={magnify === 1 ? undefined : { zoom: magnify }}
       >
         {(allPalettes ? UNIT_PALETTES : families).map((rowKey) => (
           <div className="unit-roster-row" key={rowKey}>
