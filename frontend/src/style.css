@@ -7231,10 +7231,14 @@ body.loading-bootstrap .app-startup-status {
    layer, whose own `z-index: 2` it outranks, dropping the rails to the content's level; the board
    then painted over the vertical rail below the header junction and its south stroke came out
    thinner than the north, east and west ones the junction atom covers. */
+/* `position` only, deliberately NO z-index. A positioned child already paints above the fill
+   below it, and naming a layer here would make this a stacking context — the row boundaries
+   inside it carry the junction atoms at z-index 3 precisely so they land ON TOP of the vertical
+   rails at 2, and trapping them under a level-1 parent buries every four-way crossing under the
+   rail it is supposed to cap. */
 .chrome-divided-grid.has-chrome-surface-fill > .chrome-divided-grid__rows,
 .chrome-divided-grid.has-chrome-surface-fill > .chrome-divided-grid__scroll {
   position: relative;
-  z-index: 1;
 }
 
 .chrome-divided-grid__fixed-rails {
@@ -10774,9 +10778,23 @@ body { font-size: 17px; }
    Width only — the registered text button owns its height (`width-only` control policy). Sized to
    the label so it does not read as a wide command bar in a column of quiet facts. */
 .ce-li-zone-toggle {
+  block-size: var(--le-inner-control-h);
   flex: none;
-  inline-size: 92px;
+  inline-size: 96px;
+  justify-content: center;
   min-inline-size: 72px;
+  padding: 0 8px;
+}
+
+/* Band shown reads as a lift, exactly as `.le-seg-btn.active` states it: there is no separate
+   active frame installed, so the runtime aliases it to the normal one and the swap is invisible.
+   Same numbers as that rule, so a selected control does not read two ways in one app. */
+.ce-li-zone-toggle.is-selected {
+  filter: brightness(1.35) saturate(1.25);
+}
+
+.ce-li-zone-toggle.is-selected:hover {
+  filter: brightness(1.45) saturate(1.3);
 }
 
 .terrain-grass { background: #6a9b3f; }

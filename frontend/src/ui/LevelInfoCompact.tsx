@@ -16,6 +16,7 @@ import { objectiveBriefingForSide } from '../game/objectiveBriefing';
 import type { PlayingSide } from '../game/clientPerspective';
 import { ChromeButton } from './shared/ChromeButton';
 import { InnerChromeBox } from './shared/ChromeBox';
+import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
 import { PieceTypeIcon } from './shared/PieceTypeIcon';
 import { installedUiMedia, installedUiMediaIfPresent } from './installedUiMedia';
 import { useStrategikonCardsIcon } from './strategikonNavigation';
@@ -366,7 +367,13 @@ export function LevelInfoCompact({
               // control.
               <ChromeButton
                 unit="inner-text-button"
-                className="le-seg-btn ce-li-zone-toggle"
+                // A box wears the marble; every trigger inside it wears the oak (ADR-0433). The
+                // segmented `le-seg-btn` skin is deliberately absent: its frame is a `fill`
+                // border-image, which paints the button's interior itself and covers any surface
+                // under it — that is why this control came out slate while every other button on
+                // the screen is wood.
+                className="app-header-button ce-li-zone-toggle"
+                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                 selected={deploymentBand.shown}
                 onClick={deploymentBand.onToggle}
                 title={deploymentBand.shown ? 'Hide the deployment zone on the board' : 'Show the deployment zone on the board'}

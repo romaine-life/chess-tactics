@@ -684,8 +684,15 @@ describe('Run chrome hierarchy', () => {
     // Rocks and rubble have no unit sprite and must not ask for one.
     expect(levelInfoCompact).toContain('if (!isPlayablePieceType(type))');
 
-    // Zone is the control for the band, through the registered text button's toggle variant.
+    // Zone is the control for the band, through the registered text button's toggle variant, and
+    // it wears the OAK every other trigger wears. The segmented `le-seg-btn` skin must stay off
+    // it: that frame is a `fill` border-image, so it paints the interior itself and covers the
+    // surface — which is how this one control came out slate on a screen of wooden buttons.
     expect(levelInfoCompact).toContain('unit="inner-text-button"');
+    expect(levelInfoCompact).toContain('className="app-header-button ce-li-zone-toggle"');
+    expect(levelInfoCompact).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
+    // On a className, not anywhere — the comment above the control names the class it avoids.
+    expect(levelInfoCompact).not.toMatch(/className="[^"]*le-seg-btn/);
     expect(levelInfoCompact).toContain('selected={deploymentBand.shown}');
     expect(levelInfoCompact).toContain('onClick={deploymentBand.onToggle}');
     // Verified live: pressing it takes the painted band from 18 cells to 0 and back.
