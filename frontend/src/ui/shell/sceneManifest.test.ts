@@ -9,7 +9,14 @@ import {
 } from './sceneManifest';
 import { createRun, openSectio, prepareDeployment } from '../../run/model';
 import { completeDeploymentDeal } from '../../run/deployment';
-import { createBlankLevel } from '../../core/level';
+import { createBlankLevel, LEVEL_BATTLE_CARDS_DEALT_DEFAULT, type Level } from '../../core/level';
+
+/** A War Battle level: every one authors how many cards its Deployment deals. */
+const battleLevel = (id: string, name: string): Level => ({
+  ...createBlankLevel(id, name, 8, 8),
+  battle: { loot: false, cardsDealt: LEVEL_BATTLE_CARDS_DEALT_DEFAULT },
+});
+
 
 describe('scene manifests', () => {
   it('resolves route intent into an authored nested scene path', () => {
@@ -79,7 +86,7 @@ describe('scene manifests', () => {
       id: 'war',
       name: 'War',
       description: 'War',
-      battles: [{ level: createBlankLevel('battle', 'Battle', 8, 8), loot: false }],
+      battles: [{ level: battleLevel('battle', 'Battle'), loot: false }],
     }, 19, '2026-08-01T00:00:00.000Z');
     const addresses: ReadonlyArray<[string, string?, Parameters<typeof sceneManifest>[2]?]> = [
       ['/'], ['/menu-next'], ['/main-menu'], ['/unknown-route'],
@@ -350,7 +357,7 @@ describe('scene manifests', () => {
   });
 
   it('projects active Run state into authored phase and workspace slots', () => {
-    const level = createBlankLevel('run-battle', 'Run Battle', 8, 8);
+    const level = battleLevel('run-battle', 'Run Battle');
     const draft = createRun({
       id: 'run-war',
       name: 'Run War',
@@ -416,7 +423,7 @@ describe('scene manifests', () => {
   });
 
   it('authors unit inspection as a distinct Run workspace scene', () => {
-    const level = createBlankLevel('run-battle', 'Run Battle', 8, 8);
+    const level = battleLevel('run-battle', 'Run Battle');
     const base = createRun({
       id: 'run-war',
       name: 'Run War',
@@ -518,8 +525,8 @@ describe('scene manifests', () => {
       name: 'War',
       description: 'War',
       battles: [
-        { level: createBlankLevel('battle', 'Battle', 8, 8), loot: false },
-        { level: createBlankLevel('battle-2', 'Battle 2', 8, 8), loot: false },
+        { level: battleLevel('battle', 'Battle'), loot: false },
+        { level: battleLevel('battle-2', 'Battle 2'), loot: false },
       ],
     };
     const opening = createRun(war, 19, '2026-08-01T00:00:00.000Z');

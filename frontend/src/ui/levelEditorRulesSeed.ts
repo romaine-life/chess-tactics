@@ -18,7 +18,17 @@
 // the SEEDED document's signature (not the merged on-screen state), so the user's edit
 // reads dirty and flows into drafts/saves — `seededBaselineLevel` reconstructs it.
 
-import type { Level, LevelEvents, ObjectiveType, TimeControl, VictoryRules } from '../core/level';
+import {
+  LEVEL_BATTLE_CARDS_DEALT_DEFAULT,
+  LEVEL_BATTLE_CARDS_DEALT_MAX,
+  LEVEL_BATTLE_CARDS_DEALT_MIN,
+  type BattleSettings,
+  type Level,
+  type LevelEvents,
+  type ObjectiveType,
+  type TimeControl,
+  type VictoryRules,
+} from '../core/level';
 import { DEFAULT_SURVIVE_TURNS, victoryRulesForObjective } from '../core/objectives';
 import { effectiveLevelEvents } from '../core/levelEvents';
 import { DEFAULT_TIME_CONTROL } from '../core/clock';
@@ -27,12 +37,15 @@ import { rulesEqual } from './VictoryConditionsEditor';
 /** Rules-state fields with a direct user-authoring surface in the editor UI. `objective`
  * and `surviveTurns` are absent on purpose: they have no user-facing setter (ADR-0064
  * replaced the objective dropdown with victory templates), so a seed always writes them. */
-export type AuthoredRulesField = 'victory' | 'events' | 'name' | 'clock' | 'templateChoice';
+export type AuthoredRulesField = 'victory' | 'events' | 'name' | 'clock' | 'templateChoice' | 'battleDeal';
 
 export interface LevelRulesSeed {
   objective: ObjectiveType;
   surviveTurns: number;
   clock: { enabled: boolean; initialSeconds: number; incrementSeconds: number };
+  /** The Deployment deal this Battle authors. A Battle level that predates the requirement seeds
+   * the default, which is what makes opening it enough to finish it. */
+  battleDeal: number;
   /** Working victory list — the objective preset materialized when the level stores none. */
   victory: VictoryRules;
   events: LevelEvents;
@@ -45,7 +58,30 @@ export interface LevelRulesSeed {
     timeControl: TimeControl | undefined;
     victory: VictoryRules | undefined;
     events: LevelEvents | undefined;
+    battle: BattleSettings | undefined;
   };
+}
+
+/**
+ * The Battle block a save writes, preserving whatever else the document's block already carried
+ * (the War editor's Loot flag, which this editor never authors).
+ *
+ * `deal` is the authored count for a War Battle, or null for anything else: a Campaign or
+ * standalone level is never dealt cards, so it must not pick the field up merely by passing
+ * through the editor. Returns undefined when nothing is left to store.
+ */
+export function battleSettingsForSave(
+  base: BattleSettings | undefined,
+  deal: number | null,
+): BattleSettings | undefined {
+  const next: BattleSettings = { ...base };
+  if (deal !== null) {
+    next.cardsDealt = Math.min(
+      LEVEL_BATTLE_CARDS_DEALT_MAX,
+      Math.max(LEVEL_BATTLE_CARDS_DEALT_MIN, Math.round(deal)),
+    );
+  }
+  return Object.keys(next).length ? next : undefined;
 }
 
 /** The rules state a level document seeds into the editor — the single derivation both
@@ -63,6 +99,7 @@ export function levelRulesSeed(level: Level): LevelRulesSeed {
       initialSeconds: level.timeControl?.initialSeconds ?? DEFAULT_TIME_CONTROL.initialSeconds,
       incrementSeconds: level.timeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds,
     },
+    battleDeal: level.battle?.cardsDealt ?? LEVEL_BATTLE_CARDS_DEALT_DEFAULT,
     victory,
     events,
     name: level.name,
@@ -71,6 +108,7 @@ export function levelRulesSeed(level: Level): LevelRulesSeed {
       timeControl: level.timeControl,
       victory: rulesEqual(victory, preset) ? undefined : victory,
       events: events.length ? events : undefined,
+      battle: level.battle,
     },
   };
 }
@@ -93,8 +131,13 @@ export function guardRulesSeed(seed: LevelRulesSeed, authored: ReadonlySet<Autho
     name: !authored.has('name'),
     clock: !authored.has('clock'),
     templateChoice: !authored.has('templateChoice'),
+    battleDeal: !authored.has('battleDeal'),
   };
-  return { seed, apply, skippedAuthored: !apply.victory || !apply.events || !apply.name || !apply.clock };
+  return {
+    seed,
+    apply,
+    skippedAuthored: !apply.victory || !apply.events || !apply.name || !apply.clock || !apply.battleDeal,
+  };
 }
 
 /** The Level whose signature is the CLEAN baseline after a seed skipped authored fields:
@@ -111,5 +154,6 @@ export function seededBaselineLevel(candidate: Level, seed: LevelRulesSeed): Lev
     timeControl: seed.save.timeControl,
     victory: seed.save.victory,
     events: seed.save.events,
+    battle: seed.save.battle,
   };
 }

@@ -1,5 +1,5 @@
 import { normalizeRoutePath } from '../navigation';
-import { isRunRoutePath, isRunStrategikonPath } from '../runRoute';
+import { isRunRoutePath, isRunStrategikonPath, presentedRunAddress } from '../runRoute';
 import { isStrategikonPath, strategikonBase, strategikonSectionPath } from '../strategikonRoute';
 import {
   SCENE_DEFINITIONS,
@@ -127,27 +127,31 @@ export function sceneManifest(
   sources: SceneSources = {},
 ): ScenePath {
   const path = normalizeRoutePath(pathname);
-  const strategikon = isStrategikonPath(path);
-  const base = strategikon ? strategikonBase(path) : null;
+  // A craft link keeps its own address so it stays pressable (ADR-0531) and PRESENTS the Run
+  // address it names, so the scene is resolved from what the link lands on rather than from the
+  // link. `scene()` still records the browser path, which is what the Run screen crafts from.
+  const presented = presentedRunAddress(path, search);
+  const strategikon = isStrategikonPath(presented.path);
+  const base = strategikon ? strategikonBase(presented.path) : null;
 
   // --- Run: state-driven phase and workspace slots, optionally hosting the Strategikon.
-  // `isRunRoutePath` also covers craft links, which craft and then land on the Run.
+  // `isRunRoutePath` also covers craft links, which craft and then present the Run.
   if (isRunRoutePath(path)) {
-    const snapshot = runSceneSnapshot(path, search, sources.run);
+    const snapshot = runSceneSnapshot(presented.path, presented.search, sources.run);
     const instances = runStateInstances(snapshot);
     const runIdentity = `run:${snapshot.run?.id ?? 'none'}:${runPhaseIdentity(snapshot)}:${runSceneWorkspaceIdentity(snapshot.workspace)}`;
     const fields = manifest(runIdentity, 'battlefield', 'gameplay-hud', [
       'gameplay-hud',
     ], [], 'gameplay-shell', 'transition-only');
     if (!strategikon) return scene(path, fields, instances, snapshot);
-    const reference = resolveSectionedShellScene('strategikon', path, search, instances)!;
+    const reference = resolveSectionedShellScene('strategikon', presented.path, presented.search, instances)!;
     return scene(path, {
       ...fields,
       ...reference.manifest,
       // The Run shell stays painted beneath the reference workspace, so its own
       // critical resources remain required alongside the Strategikon's.
       critical: [...fields.critical, ...reference.manifest.critical],
-      id: `${runIdentity}:${strategikonSectionPath(path)}`,
+      id: `${runIdentity}:${strategikonSectionPath(presented.path)}`,
     }, reference.instances, snapshot);
   }
 

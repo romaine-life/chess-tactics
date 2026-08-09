@@ -1,6 +1,7 @@
 import { type AriaRole, type ReactElement, type ReactNode } from 'react';
 import type { InterfaceSfxCue } from '../../core/sfxProfile';
-import { chromeUnitClassNames } from '../chromeUnitRegistry';
+import type { ChromeRole } from '../chromeCandidateSources';
+import { InnerChromeBox } from './ChromeBox';
 import { InnerTextButton, InnerTextNavButton, type ChromeButtonTone } from './ChromeButton';
 
 // The shared settings/menu "rail + content" control primitives (ADR-0059): a section
@@ -22,6 +23,7 @@ export function SettingsButton({
   external = false,
   disabled = false,
   title,
+  fillSurface,
   'data-testid': dataTestid,
   'data-ui-sfx': dataUiSfx,
 }: {
@@ -34,6 +36,9 @@ export function SettingsButton({
   external?: boolean;
   disabled?: boolean;
   title?: string;
+  /** Name an installed chrome surface for this control's fill — the registered-material
+   *  override the inner role's default tint yields to (see `namedChromeFillSurfaceCss`). */
+  fillSurface?: string;
   'data-testid'?: string;
   'data-ui-sfx'?: InterfaceSfxCue;
 }): ReactElement {
@@ -42,7 +47,7 @@ export function SettingsButton({
     // External destinations still open a new tab — via a button, not an anchor
     // (ADR-0052): no hover URL leaks into the game shell; noopener guards the opener.
     return (
-      <InnerTextButton className={classes} tone={tone} aria-label={ariaLabel} title={title} disabled={disabled} data-testid={dataTestid} data-ui-sfx={dataUiSfx} onClick={() => window.open(href, '_blank', 'noopener,noreferrer')}>
+      <InnerTextButton className={classes} tone={tone} aria-label={ariaLabel} title={title} disabled={disabled} data-chrome-fill-surface={fillSurface} data-testid={dataTestid} data-ui-sfx={dataUiSfx} onClick={() => window.open(href, '_blank', 'noopener,noreferrer')}>
         <span>{children}</span>
       </InnerTextButton>
     );
@@ -50,13 +55,13 @@ export function SettingsButton({
   if (href && !disabled) {
     // Internal routes are game controls — a NavButton, not a hyperlink (ADR-0052).
     return (
-      <InnerTextNavButton className={classes} tone={tone} to={href} aria-label={ariaLabel} title={title} data-testid={dataTestid} data-ui-sfx={dataUiSfx}>
+      <InnerTextNavButton className={classes} tone={tone} to={href} aria-label={ariaLabel} title={title} data-chrome-fill-surface={fillSurface} data-testid={dataTestid} data-ui-sfx={dataUiSfx}>
         <span>{children}</span>
       </InnerTextNavButton>
     );
   }
   return (
-    <InnerTextButton className={classes} tone={tone} aria-label={ariaLabel} title={title} disabled={disabled} data-testid={dataTestid} data-ui-sfx={dataUiSfx} onClick={onClick}>
+    <InnerTextButton className={classes} tone={tone} aria-label={ariaLabel} title={title} disabled={disabled} data-chrome-fill-surface={fillSurface} data-testid={dataTestid} data-ui-sfx={dataUiSfx} onClick={onClick}>
       <span>{children}</span>
     </InnerTextButton>
   );
@@ -70,6 +75,8 @@ export function SettingsRow({
   tall = false,
   className = '',
   role,
+  fillRole,
+  fillSurface,
   children,
 }: {
   title: string;
@@ -79,13 +86,19 @@ export function SettingsRow({
   tall?: boolean;
   className?: string;
   role?: AriaRole;
+  /** Borrow another role's installed fill under this row's inner frame — `outer` is the
+   *  marble the app's panels and title strips wear (ADR-0433 borrowing rule). */
+  fillRole?: ChromeRole;
+  fillSurface?: string;
   children?: ReactNode;
 }): ReactElement {
   return (
-    <section
-      data-chrome-unit="inner-box"
-      className={chromeUnitClassNames('inner-box', 'settings-row', tall && 'settings-row-tall', className)}
+    <InnerChromeBox
+      as="section"
+      className={`settings-row ${tall ? 'settings-row-tall' : ''} ${className}`.replace(/\s+/g, ' ').trim()}
       role={role}
+      fillRole={fillRole}
+      fillSurface={fillSurface}
     >
       <div className="settings-row-copy">
         {eyebrow ? <span className="settings-row-eyebrow">{eyebrow}</span> : null}
@@ -94,7 +107,7 @@ export function SettingsRow({
       </div>
       {value ? <div className="settings-row-value">{value}</div> : null}
       {children ? <div className="settings-row-control">{children}</div> : null}
-    </section>
+    </InnerChromeBox>
   );
 }
 

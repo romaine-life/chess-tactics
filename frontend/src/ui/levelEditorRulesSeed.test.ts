@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { createBlankLevel, type Level, type VictoryRules } from '../core/level';
 import { victoryRulesForObjective } from '../core/objectives';
 import { appendRules } from './VictoryConditionsEditor';
+import { LEVEL_BATTLE_CARDS_DEALT_DEFAULT } from '../core/level';
 import {
+  battleSettingsForSave,
   guardRulesSeed,
   levelRulesSeed,
   seededBaselineLevel,
@@ -119,5 +121,46 @@ describe('seededBaselineLevel', () => {
     expect(baseline.boardCode).toBe('settled-board-code');
     // And the live candidate (with the authored rules) differs from it ⇒ dirty.
     expect(JSON.stringify(candidate.victory)).not.toBe(JSON.stringify(baseline.victory));
+  });
+});
+
+describe('the Battle Deployment deal', () => {
+  it('seeds the authoring default for a Battle that predates the requirement', () => {
+    const seed = levelRulesSeed(kingAssaultLevel());
+    expect(seed.battleDeal).toBe(LEVEL_BATTLE_CARDS_DEALT_DEFAULT);
+    // The document itself is unchanged until a save writes one — the seed is what the panel shows.
+    expect(seed.save.battle).toBeUndefined();
+  });
+
+  it('reads an authored count off the document', () => {
+    const level: Level = { ...kingAssaultLevel(), battle: { loot: true, cardsDealt: 5 } };
+    const seed = levelRulesSeed(level);
+    expect(seed.battleDeal).toBe(5);
+    expect(seed.save.battle).toEqual({ loot: true, cardsDealt: 5 });
+  });
+
+  it('folds the count into the Battle block without disturbing Loot', () => {
+    expect(battleSettingsForSave({ loot: true }, 5)).toEqual({ loot: true, cardsDealt: 5 });
+    expect(battleSettingsForSave(undefined, 5)).toEqual({ cardsDealt: 5 });
+    // null is "this level is not a Battle": it must not pick the field up by passing through.
+    expect(battleSettingsForSave({ loot: true }, null)).toEqual({ loot: true });
+    expect(battleSettingsForSave(undefined, null)).toBeUndefined();
+    // A level that already carries one keeps it rather than being stripped by a non-Battle route.
+    expect(battleSettingsForSave({ cardsDealt: 5 }, null)).toEqual({ cardsDealt: 5 });
+    // The panel can never write a count the level validator would reject.
+    expect(battleSettingsForSave(undefined, 0)).toEqual({ cardsDealt: 1 });
+    expect(battleSettingsForSave(undefined, 400)).toEqual({ cardsDealt: 12 });
+  });
+
+  it('withholds a late seed from a deal the user already authored, and keeps the baseline on the document', () => {
+    const level: Level = { ...kingAssaultLevel(), battle: { cardsDealt: 5 } };
+    const seed = levelRulesSeed(level);
+    expect(guardRulesSeed(seed, authored('battleDeal')).apply.battleDeal).toBe(false);
+    expect(guardRulesSeed(seed, authored('battleDeal')).skippedAuthored).toBe(true);
+    expect(guardRulesSeed(seed, authored()).apply.battleDeal).toBe(true);
+
+    // The user's own count is what reads dirty against the seeded document's.
+    const candidate: Level = { ...level, battle: { cardsDealt: 2 } };
+    expect(seededBaselineLevel(candidate, seed).battle).toEqual({ cardsDealt: 5 });
   });
 });

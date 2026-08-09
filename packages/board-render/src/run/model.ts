@@ -1,4 +1,11 @@
-import { validateLevel, type Level, type War } from '../core/level';
+import {
+  LEVEL_BATTLE_CARDS_DEALT_DEFAULT,
+  LEVEL_BATTLE_CARDS_DEALT_MAX,
+  LEVEL_BATTLE_CARDS_DEALT_MIN,
+  validateLevel,
+  type Level,
+  type War,
+} from '../core/level';
 import { migrateLevelDocument } from '../core/levelMigration';
 import type { PieceType, Vec } from '../core/types';
 import {
@@ -21,7 +28,7 @@ export {
 };
 
 /** The schema version of one persisted in-progress Run. Only this exact save shape is read. */
-export const CURRENT_RUN_SAVE_VERSION = 32;
+export const CURRENT_RUN_SAVE_VERSION = 33;
 export type RunSaveVersion = typeof CURRENT_RUN_SAVE_VERSION;
 
 export class UnsupportedRunSaveError extends Error {
@@ -47,6 +54,7 @@ const RUN_SAVE_VERSION_DEPLOYMENT_MODE_SOURCE = 28;
 const RUN_SAVE_VERSION_PLAYER_FORMATIONS_SOURCE = 29;
 const RUN_SAVE_VERSION_ARRANGED_PILE_SOURCE = 30;
 const RUN_SAVE_VERSION_OPENING_CARD_GRANT_SOURCE = 31;
+const RUN_SAVE_VERSION_RARITY_BANDS_SOURCE = 32;
 export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
 export const RUN_STARTING_GOLD_TENTHS = RUN_STARTING_GOLD * GOLD_SCALE;
@@ -1052,6 +1060,12 @@ export function snapshotWar(war: War, levels: Record<string, Level>): RunWarSnap
     .map((battle) => {
       const level = levels[battle.levelId];
       if (!level) throw new Error(`War ${war.name} is missing Battle level ${battle.levelId}.`);
+      // A Battle that does not say how many cards it deals is unfinished, not merely untuned:
+      // there is no progression left to stand in for it. Refuse the War rather than start a Run
+      // that cannot deal a hand when it reaches that Battle.
+      if (typeof level.battle?.cardsDealt !== 'number') {
+        throw new Error(`War ${war.name}: Battle level ${battle.levelId} does not author how many cards it deals.`);
+      }
       return { level: structuredClone(level), loot: level.battle?.loot === true };
     });
   if (!battles.length) throw new Error(`War ${war.name} has no Battles.`);
@@ -2323,8 +2337,49 @@ function migrateRunToOpeningCardGrant(stored: Record<string, unknown>): Record<s
 function migrateRunToRarityBands(stored: Record<string, unknown>): Record<string, unknown> {
   return {
     ...stored,
-    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    runSaveVersion: RUN_SAVE_VERSION_RARITY_BANDS_SOURCE,
     sectioCardCursor: 0,
+  };
+}
+
+/**
+ * Version 33 makes the Deployment deal a property of the Battle rather than of run progress.
+ * Every embedded Battle level that predates the requirement receives the authoring default, so a
+ * Run in flight keeps dealing a hand at every Battle it has left. It is a neutral replacement,
+ * not a reconstruction: the progression this retires was `3 + conflictIndex`, so a Run deep into
+ * a War will find its later Battles dealing fewer cards than it did yesterday. That is the
+ * design change landing, and the alternative — baking one Run's progress into levels it merely
+ * snapshotted — would make the same Battle deal differently for every player who reached it.
+ */
+function migrateRunToAuthoredDeal(stored: Record<string, unknown>): Record<string, unknown> {
+  const war = stored.war && typeof stored.war === 'object' && !Array.isArray(stored.war)
+    ? stored.war as Record<string, unknown>
+    : null;
+  const battles = Array.isArray(war?.battles) ? war.battles : null;
+  if (!war || !battles) return { ...stored, runSaveVersion: CURRENT_RUN_SAVE_VERSION };
+  return {
+    ...stored,
+    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    war: {
+      ...war,
+      battles: battles.map((entry) => {
+        const battle = entry && typeof entry === 'object' && !Array.isArray(entry)
+          ? entry as Record<string, unknown>
+          : null;
+        const level = battle?.level && typeof battle.level === 'object' && !Array.isArray(battle.level)
+          ? battle.level as Record<string, unknown>
+          : null;
+        if (!battle || !level) return entry;
+        const settings = level.battle && typeof level.battle === 'object' && !Array.isArray(level.battle)
+          ? level.battle as Record<string, unknown>
+          : {};
+        if (typeof settings.cardsDealt === 'number') return entry;
+        return {
+          ...battle,
+          level: { ...level, battle: { ...settings, cardsDealt: LEVEL_BATTLE_CARDS_DEALT_DEFAULT } },
+        };
+      }),
+    },
   };
 }
 
@@ -2347,7 +2402,8 @@ function migrateRunToRarityBands(stored: Record<string, unknown>): Record<string
  * quarter-turn-equivalent offer identities, and deals complete random catalog shuffles.
  * Version 31 replaces the Run's opening lipsanon with a formation-card grant. Version 32 rebuilds
  * the card market on material bands adjusted by footprint, exact per-pile rarity quotas, and an
- * opening cost ceiling, restarting the hidden card sequence.
+ * opening cost ceiling, restarting the hidden card sequence. Version 33 retires the run-progress
+ * Deployment deal and gives every embedded Battle level the authored count it now requires.
  * Older saves remain unsupported.
  */
 export function migrateRunSaveDocument(value: unknown): RunDocument {
@@ -2425,6 +2481,9 @@ export function migrateRunSaveDocument(value: unknown): RunDocument {
   }
   if (stored.runSaveVersion === RUN_SAVE_VERSION_OPENING_CARD_GRANT_SOURCE) {
     stored = migrateRunToRarityBands(stored);
+  }
+  if (stored.runSaveVersion === RUN_SAVE_VERSION_RARITY_BANDS_SOURCE) {
+    stored = migrateRunToAuthoredDeal(stored);
   }
   return normalizeRunDocument(stored as unknown as RunDocument);
 }
@@ -2524,6 +2583,29 @@ function freshDeploymentState(
   };
 }
 
+/**
+ * How many cards a Battle's Deployment deals — the count its own Level authors, and nothing else.
+ * There is no run-side progression behind this: a War's authored counts are the whole curve, so
+ * how large a force a board can be asked to hold is a property of the board.
+ *
+ * Every Battle that reaches here has one. `snapshotWar` refuses a War with an unauthored Battle,
+ * `validateWarBattlePlayability` refuses to save one, and save version 33 wrote the default into
+ * the Runs that predate the requirement. The clamp is the stored value meeting the same bounds
+ * the panel and both validators hold it to.
+ */
+export function runDeploymentDealCount(
+  run: Pick<RunDocument, 'war' | 'battleIndex'>,
+): number {
+  const authored = run.war.battles[run.battleIndex]?.level.battle?.cardsDealt;
+  if (typeof authored !== 'number' || !Number.isFinite(authored)) {
+    throw new Error(`Battle ${run.battleIndex + 1} does not author how many cards it deals.`);
+  }
+  return Math.min(
+    LEVEL_BATTLE_CARDS_DEALT_MAX,
+    Math.max(LEVEL_BATTLE_CARDS_DEALT_MIN, Math.floor(authored)),
+  );
+}
+
 export function prepareDeployment(run: RunDocument): RunDocument {
   if (run.phase !== 'deployment') return run;
   if (run.deployment?.battleIndex === run.battleIndex) {
@@ -2535,7 +2617,7 @@ export function prepareDeployment(run: RunDocument): RunDocument {
     run.cards.filter((card) => card.id !== hisGrace?.id),
     mixSeed(seed, 'deployment-cards'),
   );
-  const dealCount = Math.max(1, 3 + run.conflictIndex);
+  const dealCount = runDeploymentDealCount(run);
   const dealtCardIds = [...(hisGrace ? [hisGrace] : []), ...ordinary]
     .slice(0, dealCount)
     .map((card) => card.id);

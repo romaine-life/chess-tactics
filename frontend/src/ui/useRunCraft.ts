@@ -1,10 +1,12 @@
-// Apply a craft link: set the account's active Run to the state the id stands for, then land on
-// a clean /run.
+// Apply a craft link: set the account's active Run to the state the id stands for, and stay at
+// the link while the Run screen presents it.
 //
 // The link is the whole point (ADR-0354). Finding a bug on a crafted Run and being unable to get
 // back to it is the failure this exists to prevent, so `/run/craft/<id>` is re-runnable by
 // design: opening it again re-crafts and drops you back at the same state. It is the restart
-// button.
+// button — which is why the address stays in the bar rather than being spent on arrival
+// (ADR-0531). Reloading the page a bug was found on is pressing the button again; the Run it
+// overwrites is disposable test state.
 //
 // The id is all the address carries. The spec lives on the server, which composes the state out
 // of the game's real transitions — so the address never grows a grammar to outgrow, and the
@@ -35,25 +37,6 @@ function craftRequest(routePath: string, routeSearch: string): 'link' | 'mint' |
   return hasRunCraftRequest(routeSearch) ? 'mint' : null;
 }
 
-/**
- * Where a craft link lands. `/run` by default; `to=` names a deeper Run address so a crafted
- * state can be handed over with the workspace it is about already open — the Strategikon's
- * Chartulary, say — instead of one click short of it.
- *
- * Only an address inside the Run is honoured, and never another craft link: the link's job is to
- * land on the Run it just crafted, and anything else would make it mean something other than
- * what it says.
- */
-export function craftDestination(routeSearch: string): string {
-  const params = new URLSearchParams(routeSearch);
-  const to = params.get('to');
-  params.delete('to');
-  const inRun = to !== null && /^\/run(?:[/?#]|$)/.test(to) && !isRunCraftLinkPath(to);
-  const destination = new URL(inRun ? to : '/run', 'http://localhost');
-  for (const [name, value] of params) destination.searchParams.append(name, value);
-  return `${destination.pathname}${destination.search}${destination.hash}`;
-}
-
 /** Resolves to the refusal message, or null once the crafted Run has been adopted. Never rejects:
  * the outcome is the screen's copy, not an unhandled failure. */
 async function applyCraft(routePath: string, routeSearch: string): Promise<string | null> {
@@ -74,7 +57,9 @@ async function applyCraft(routePath: string, routeSearch: string): Promise<strin
     if (!crafted.run) return 'The Run was crafted, but the server did not return it.';
     registerCraftedBattleResult(crafted.run, crafted.battleResult);
     useActiveRun.getState().adoptCraftedRun(crafted.run, crafted.revision);
-    navigateApp(craftDestination(routeSearch), { replace: true, scroll: false });
+    // No landing navigation: the address IS the link, and the Run screen presents the address it
+    // names through `presentedRunAddress`. Rewriting it here would spend the restart button on
+    // the first press.
     return null;
   } catch (error) {
     return error instanceof Error ? error.message : String(error);
@@ -84,8 +69,9 @@ async function applyCraft(routePath: string, routeSearch: string): Promise<strin
 /** One craft per visit to a craft address, shared by every mount of it. The scene director
  * remounts the Run screen as the crafted Run arrives, so the work — and its outcome — has to
  * outlive a single mount: an effect that owned its own attempt would leave a remounted screen
- * crafting forever. Cleared once the address is a plain Run again, so coming back to the link
- * crafts again rather than replaying the first answer. */
+ * crafting forever. Cleared once the address is a plain Run again — navigating out of the link
+ * inside the Run — so coming back to it crafts again rather than replaying the first answer.
+ * Staying on the link does NOT re-craft: only opening it does, and a reload is a fresh page. */
 let pending: { address: string; task: Promise<string | null> } | null = null;
 
 export function useRunCraft(routePath: string, routeSearch: string): RunCraftStatus {

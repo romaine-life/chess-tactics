@@ -22,6 +22,13 @@ describe('UnassignedRailTab', () => {
       .toBe('/editor?keep=yes');
     expect(editorCollectionFromLocation('/editor/wars', '?collection=unassigned')).toBe('wars');
     expect(editorCollectionFromLocation('/editor', '?collection=unassigned')).toBe('unassigned');
+    // The Editor's default page is Wars: a bare address names no collection, so it must not
+    // open the campaign panel with no campaign in it.
+    expect(editorCollectionFromLocation('/editor', '')).toBe('wars');
+    expect(editorCollectionFromLocation('/editor', '?returnTo=%2F')).toBe('wars');
+    expect(editorCollectionFromLocation('/editor', '?campaign=crown')).toBe('campaign');
+    expect(editorCollectionFromLocation('/editor', '?campaign=%20')).toBe('wars');
+    expect(editorCollectionFromLocation('/editor', '?collection=unknown')).toBe('campaign');
     expect(campaignCollectionHref('/editor?keep=yes#section', 'wars'))
       .toBe('/editor/wars?keep=yes#section');
     expect(campaignCollectionHref('/editor/wars?keep=yes#section', 'campaign'))

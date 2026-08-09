@@ -6,6 +6,7 @@ import { levelObjectiveLine } from '../LevelInfoCompact';
 import { installedUiMedia } from '../installedUiMedia';
 import { GatedLevelThumbnail } from '../shell/ThumbnailSurface';
 import { ActionListRow, type ActionListAction } from './ActionList';
+import { EDITOR_COLUMN_BOX_FILL_ROLE, EDITOR_COLUMN_CONTROL_FILL_SURFACE } from './EditorColumnControls';
 
 const EDITOR_ROW_ICONS = {
   favorite: installedUiMedia('ui-kit-icons-brand-shield-png'),
@@ -18,6 +19,15 @@ const EDITOR_ROW_ICONS = {
 } as const;
 
 export type EditorRowIconName = keyof typeof EDITOR_ROW_ICONS;
+
+/**
+ * The preview is a compartment of the row, so it fills the row's content height rather than
+ * being a smaller picture floating in a pane: 86px box less the 7px inner rail on each side is
+ * 72px tall, which at the board's canonical 4:3 window is 96px wide. LevelThumbnail owns its
+ * ratio and takes only a width, so the width is what this states — keep it in step with
+ * `.ce-editor-level-row`'s `block-size` in style.css.
+ */
+const LEVEL_ROW_PREVIEW_WIDTH = 96;
 
 /** The carved glyph every editor row control draws — never a typed arrow or ✕ character. */
 export function EditorRowIcon({ icon }: { icon: EditorRowIconName }): ReactElement {
@@ -102,11 +112,14 @@ export function EditorLevelRow({
   const rowName = displayName ?? level?.name ?? levelId;
   const goalLine = description ?? (level ? levelObjectiveLine(level) : MODE_NAME[objective ?? 'capture-all']);
   const hasDefaultActions = !readOnly && Boolean(editHref || onMoveUp || onMoveDown || onDelete);
+  // Every verb on the row is a trigger, so every verb wears the column's oak (see
+  // EditorColumnControls) rather than the inner role's tint.
+  const oak = EDITOR_COLUMN_CONTROL_FILL_SURFACE;
   const defaultActions: ActionListAction[] = hasDefaultActions ? [
-    ...(editHref ? [{ id: 'edit', href: editHref, label: `Edit board for ${rowName}`, title: 'Edit board', icon: <EditorRowIcon icon="pencil" /> }] : []),
-    ...(onMoveUp ? [{ id: 'move-up', label: `Move ${rowName} up`, title: 'Move up', icon: <EditorRowIcon icon="chevron-up" />, disabled: !canMoveUp, onPress: onMoveUp }] : []),
-    ...(onMoveDown ? [{ id: 'move-down', label: `Move ${rowName} down`, title: 'Move down', icon: <EditorRowIcon icon="chevron-down" />, disabled: !canMoveDown, onPress: onMoveDown }] : []),
-    ...(onDelete ? [{ id: 'delete', label: deleteLabel ?? `Delete saved level ${rowName}`, title: deleteTitle ?? 'Delete saved level', icon: <EditorRowIcon icon="delete" />, tone: 'danger' as const, onPress: onDelete }] : []),
+    ...(editHref ? [{ id: 'edit', href: editHref, label: `Edit board for ${rowName}`, title: 'Edit board', icon: <EditorRowIcon icon="pencil" />, fillSurface: oak }] : []),
+    ...(onMoveUp ? [{ id: 'move-up', label: `Move ${rowName} up`, title: 'Move up', icon: <EditorRowIcon icon="chevron-up" />, disabled: !canMoveUp, fillSurface: oak, onPress: onMoveUp }] : []),
+    ...(onMoveDown ? [{ id: 'move-down', label: `Move ${rowName} down`, title: 'Move down', icon: <EditorRowIcon icon="chevron-down" />, disabled: !canMoveDown, fillSurface: oak, onPress: onMoveDown }] : []),
+    ...(onDelete ? [{ id: 'delete', label: deleteLabel ?? `Delete saved level ${rowName}`, title: deleteTitle ?? 'Delete saved level', icon: <EditorRowIcon icon="delete" />, tone: 'danger' as const, fillSurface: oak, onPress: onDelete }] : []),
   ] : [];
   const rowActions = actions === undefined ? defaultActions : undefined;
   const actionContent = actions === undefined ? undefined : actions;
@@ -123,15 +136,25 @@ export function EditorLevelRow({
         </div>
       ),
       descriptionId,
+      // The board preview is a COMPARTMENT of this box, not a second box inside it: it seats
+      // flush against the row's own frame and the kit's 9-slice divider separates it from the
+      // copy, so the row reads as one framed object split into panes (the treatment the Run's
+      // Battle preview wears). A nested inner frame here also could not fit — its rails made
+      // the leading content taller than the row's content box, which is what pushed every
+      // control in the row off centre.
+      leadingChrome: false,
+      leadingClassName: 'ce-editor-level-thumb',
+      leadingDivider: true,
       leading: level ? (
           <GatedLevelThumbnail
             level={level}
-            width={66}
+            width={LEVEL_ROW_PREVIEW_WIDTH}
             authoringPreview={!levelThumbnailUrl(level.id)}
           />
         ) : (
           <span className="settings-row-thumb-empty" />
         ),
+      fillRole: EDITOR_COLUMN_BOX_FILL_ROLE,
       selected: active,
       readOnly: !hasActions,
       neutral: !containerIsButton,

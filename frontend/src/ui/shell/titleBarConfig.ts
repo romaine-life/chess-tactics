@@ -13,7 +13,7 @@ import {
   enchiridionSectionHref,
 } from '../enchiridionRoute';
 import { isPlaySelectorPath } from '../playHubRoute';
-import { isRunRoutePath } from '../runRoute';
+import { isRunRoutePath, presentedRunAddress } from '../runRoute';
 import { runWorkspaceHref } from '../RunSelfInspection';
 import { isStrategikonPath, strategikonBase, strategikonRouteCrumbs } from '../strategikonRoute';
 import type { TitleRouteSegment } from './TitleRoute';
@@ -66,10 +66,13 @@ export function titleBarConfig(path: string, search = ''): TitleBarConfig | null
     // studSlot lets a single-player battle turn the ornament diamond into a Retry button
     // (the Skirmish screen portals it in, netplay omitted).
     const run = path.startsWith('/run');
+    // A craft link keeps its own address and presents the Run address it names (ADR-0531), so
+    // the brand's Run link is an ordinary Run address rather than the link itself.
+    const runSearch = run ? presentedRunAddress(path, search).search : search;
     const playStrategikon = isStrategikonPath(path) && strategikonBase(path) === '/play';
     return {
       screenName: run ? 'Run' : playRouteScreenName({ path: '/play', search }),
-      screenNameTo: run ? runWorkspaceHref(`/run${search}`, 'primary') : playStrategikon ? `/play${search}` : undefined,
+      screenNameTo: run ? runWorkspaceHref(`/run${runSearch}`, 'primary') : playStrategikon ? `/play${search}` : undefined,
       routeSegments: playStrategikon
         ? strategikonRouteCrumbs(path).map((crumb) => ({ ...crumb, to: `${crumb.to}${search}` }))
         : undefined,

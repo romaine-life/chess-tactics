@@ -4,6 +4,8 @@ date: 2026-08-02
 deciders: owner (Nelson) + Claude
 refines:
   - "[ADR-0338](0338-a-crafted-run-is-composed-from-real-transitions-not-authored-state.md)"
+partially_superseded_by:
+  - "[ADR-0531](0531-a-craft-link-keeps-its-address-and-presents-the-run.md)'s kept craft address, which the Run screen presents rather than navigating away from"
 ---
 
 # ADR-0354: A Run link crafts the state it opens
@@ -48,9 +50,12 @@ and the identity link was.
   browser it is minted into its permanent id and the address becomes that id, so a hand-authored
   one-off leaves a durable link behind instead of a spec in the address bar. There is exactly one
   thing a crafted state is handed over as.
-- **The craft address is spent on arrival.** The screen lands on a clean `/run`, so playing,
+- ~~**The craft address is spent on arrival.** The screen lands on a clean `/run`, so playing,
   reloading and navigating from there never re-craft; only returning to the link does. That
-  separation is what makes the link safe to keep and safe to press.
+  separation is what makes the link safe to keep and safe to press.~~ **Superseded by
+  [ADR-0531](0531-a-craft-link-keeps-its-address-and-presents-the-run.md):** the link keeps its
+  address and the screen presents the Run address it names, so reloading re-crafts. Only
+  *opening* the link crafts; staying on it still does not.
 - **The crafted Run is adopted at the revision the server acknowledged**, not saved back from the
   browser. The server wrote the row; a second write could only race its own craft.
 - **`run_craft_links` is not a schema-readiness requirement.** Craft links are a debugging
@@ -63,8 +68,8 @@ and the identity link was.
   link that cannot reproduce what it shows. `CLAUDE.md` states the craft link as the required
   hand-off for Run work, including mid-troubleshooting.
 - Pressing a craft link discards the Run in progress. That is the intent — an active Run is
-  disposable test state — and it is why the craft address is dropped on arrival rather than kept
-  in the address bar where a reload would spend it.
+  disposable test state. ADR-0531 follows that through: the address is kept in the address bar
+  precisely so a reload spends it again.
 - Crafting now needs the backend and an administrator sign-in, where the address form previously
   needed neither. A refusal says which, on the screen, and writes nothing.
 - A craft link is meaningless to a server whose database was not the one that minted it. That is

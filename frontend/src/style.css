@@ -9759,11 +9759,6 @@ body { font-size: 17px; }
   opacity: .58;
 }
 
-.ce-new-campaign {
-  margin: 10px 4px 8px;
-  width: calc(100% - 8px);
-}
-
 .ce-status,
 .ce-sign-in,
 .ce-empty {
@@ -10559,44 +10554,12 @@ body { font-size: 17px; }
   grid-column: 1 / -1;
 }
 
+/* This field held a native <select> with its own kit frame, an OS-drawn menu, and a
+   hand-painted option list. It is the house dropdown now, which brings its own registered
+   frame, chevron, menu and fill — so the field states nothing but where it sits. */
 .ce-assign-field {
   display: grid;
   min-width: 0;
-}
-
-.ce-assign-field select {
-  appearance: none;
-  background: transparent;
-  border: 12px solid transparent;
-  border-image: var(--media-ui-kit-field-select-png) 18 fill / 12px stretch;
-  box-sizing: border-box;
-  color: var(--ce-ink);
-  cursor: pointer;
-  font-family: var(--ds-font-display);
-  font-size: var(--ds-text-xs);
-  image-rendering: pixelated;
-  min-height: 40px;
-  min-width: 0;
-  outline: none;
-  padding: 0 12px;
-  text-transform: uppercase;
-  width: 100%;
-}
-
-.ce-assign-field select:disabled {
-  cursor: default;
-  filter: grayscale(.7) brightness(.7);
-  opacity: .58;
-}
-
-.ce-assign-field select:focus-visible {
-  outline: 2px solid rgba(101, 184, 255, .72);
-  outline-offset: 2px;
-}
-
-.ce-assign-field option {
-  background: #061019;
-  color: var(--ce-ink);
 }
 
 .ce-link-button-ghost {
@@ -19098,18 +19061,37 @@ button.tileset-relationship-cell {
   min-height: 0;
 }
 
-/* A selectable level row (a role=button div over the shared .settings-row). */
-.ce-editor-level-row {
+/* A selectable level row (a role=button div over the shared .settings-row).
+
+   ONE framed box split into panes by the kit's registered divider — board preview | copy |
+   verbs — the treatment the Run's Battle preview wears. The preview used to be a SECOND inner
+   frame nested inside this one, and it did not fit: its own rails made the leading content
+   taller than this box's content area, so the grid track overflowed downward and every control
+   in the row sat ~15px above centre. Baking the preview into this box's geometry is what makes
+   the row centre correctly, so the two are one change, not two. */
+/* Two classes, so the narrow-width `.settings-row` rules that stack a settings row's copy over
+   its control cannot reassign this row's four panes. It does not stack: it is a fixed-height
+   card whose preview and verbs keep their places at every width. */
+.settings-row.ce-editor-level-row {
+  /* The content height (86px box less the 7px inner rail each side) at the board's 4:3 window.
+     Its twin is LEVEL_ROW_PREVIEW_WIDTH in shared/EditorLevelRow.tsx, which is what the
+     thumbnail is actually sized by; this track keeps the compartment from being squeezed
+     narrower than the board it holds when the column is tight. */
+  --ce-level-row-preview-inline: 96px;
   align-items: center;
   block-size: 86px;
   cursor: pointer;
   display: grid;
-  gap: 10px;
-  grid-template-areas: "thumb copy actions";
-  grid-template-columns: 78px minmax(0, 1fr) auto;
+  gap: 0;
+  grid-template-areas: "thumb rule copy actions";
+  grid-template-columns: var(--ce-level-row-preview-inline) auto minmax(0, 1fr) auto;
   min-block-size: 86px;
-  overflow: hidden;
-  padding: 12px 18px;
+  /* NOT clipped: the divider's authored T caps bleed onto this frame's side rails by design
+     (see `.kit-divider`), and a clip here would put them inside the frame. */
+  overflow: visible;
+  /* NO padding. The preview is a compartment of this box and reaches the frame on three sides;
+     the copy and the verbs carry their own inset instead. */
+  padding: 0;
 }
 
 /* Draft cards keep navigation and management controls as sibling buttons. This transparent
@@ -19122,7 +19104,8 @@ button.tileset-relationship-cell {
   background: transparent;
   border: 0;
   cursor: pointer;
-  grid-column: 1 / 3;
+  /* Preview, rule and copy — everything up to the verbs, which stay their own buttons. */
+  grid-column: 1 / 4;
   grid-row: 1;
   inline-size: 100%;
   min-block-size: 0;
@@ -19135,22 +19118,49 @@ button.tileset-relationship-cell {
   outline-offset: -2px;
 }
 
-.ce-editor-level-row.is-read-only {
-  grid-template-areas: "thumb copy";
-  grid-template-columns: 76px minmax(0, 1fr);
+.settings-row.ce-editor-level-row.is-read-only {
+  grid-template-areas: "thumb rule copy";
+  grid-template-columns: var(--ce-level-row-preview-inline) auto minmax(0, 1fr);
 }
 
-.ce-editor-level-row .settings-row-thumb {
-  --level-thumb-shell-width: 76px;
-  border-width: 5px;
-  border-image-width: 5px;
+/* The preview pane. LevelThumbnail owns the board's 4:3 window and is handed the width that
+   fills this box's content height (LEVEL_ROW_PREVIEW_WIDTH), so the compartment is exactly the
+   shape of the board it shows and reaches the frame on three sides. */
+.ce-editor-level-thumb {
+  align-self: stretch;
+  display: block;
   grid-area: thumb;
+  /* The clip would otherwise let this pane's automatic minimum size fall to zero, and a tight
+     column would squeeze the board out of its own compartment. */
+  min-inline-size: var(--ce-level-row-preview-inline);
+  overflow: hidden;
 }
 
+.ce-editor-level-thumb .settings-row-thumb-empty {
+  aspect-ratio: var(--board-view-aspect);
+  block-size: 100%;
+  display: block;
+}
+
+/* Divider host contract (see `.kit-divider`): the reach is supplied by the registered inner
+   role; the host only says the rule sits flush between its two panes. */
+.ce-editor-level-row > .action-list-leading-rule {
+  --kit-divider-gap: 0px;
+  grid-area: rule;
+}
+
+.ce-editor-level-row.is-disabled .ce-editor-level-thumb {
+  opacity: .5;
+}
+
+/* The box no longer pads itself (the preview reaches its frame), so the two text-bearing panes
+   carry the inset the row used to. */
 .ce-editor-level-copy {
   align-content: center;
   gap: 4px;
   grid-area: copy;
+  padding-block: 12px;
+  padding-inline: 14px;
 }
 
 .ce-editor-level-heading {
@@ -19180,9 +19190,15 @@ button.tileset-relationship-cell {
 }
 
 .ce-editor-level-row .ce-row-actions {
+  align-items: center;
   gap: 4px;
   grid-area: actions;
   justify-content: end;
+  /* The narrow-width rule for the legacy .ce-level-row layout stacks its verbs under the copy
+     and adds a top margin. This row does not stack, so that margin only pushes the verbs off
+     the row's centre line. */
+  margin-block: 0;
+  padding-inline-end: 14px;
   z-index: 2;
 }
 
@@ -20094,6 +20110,21 @@ button.tileset-relationship-cell {
   object-fit: contain;
   pointer-events: none;
   position: absolute;
+}
+
+/* The crown takes the numeral's seat and its share of the coin's striking face, so a
+   priceless coin is marked rather than blank (ADR-0530). */
+.run-card-cost-coin-crown {
+  /* A share of the drawn coin, tuned in Studio > Card Gold Divider and handed down as a ratio
+     against this box. Square, and smoothly resampled, for the reasons the card face's seat states. */
+  block-size: calc(var(--run-card-cost-coin-size) * var(--run-card-cost-coin-mark, .703));
+  inline-size: calc(var(--run-card-cost-coin-size) * var(--run-card-cost-coin-mark, .703));
+  object-fit: contain;
+  pointer-events: none;
+  position: relative;
+  /* Match the card face's measured ink-centre correction (ADR-0359). */
+  transform: translateY(.0667em);
+  z-index: 1;
 }
 
 .run-card-cost-coin-value {
@@ -23914,6 +23945,32 @@ button.tileset-relationship-cell {
   max-inline-size: 100%;
 }
 
+/* Every generated mark on the two coins it is struck on, at print size, so they are compared
+   against each other rather than remembered one address at a time (ADR-0530). */
+.run-card-coin-mark-study {
+  display: grid;
+  gap: 8px;
+}
+
+/* Layout only — the card chrome, selection state and label are the registered Studio catalog
+   card's (ADR-0059). This positions the two real coins inside its media slot. */
+.run-card-coin-mark-study-row {
+  grid-template-columns: repeat(auto-fill, minmax(180px, 220px));
+}
+
+.run-card-coin-mark-option-specimen {
+  display: grid;
+  gap: 8px;
+  inline-size: 100%;
+  justify-items: center;
+  padding: 8px;
+}
+
+.run-card-coin-mark-option-card {
+  display: block;
+  inline-size: 132px;
+}
+
 .run-card-gold-tier-divider-studio-crop {
   block-size: 168px;
   inline-size: 220px;
@@ -26027,6 +26084,26 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   font-size: calc(var(--run-card-cost-size, 6.2cqw) * .76);
   letter-spacing: -.35cqw;
   padding-inline-end: .35cqw;
+}
+
+/* A priceless card is struck with its mark, centred on the coin the numeral would read on
+   (ADR-0530). It sits above the coin raster and below the frame boxes overlay.
+
+   The box is SQUARE and the mark's own square raster seats it: the transparent margin the art
+   carries IS the layout, so a wide mark and a tall one both land correctly with no second rule.
+   Deliberately NOT `image-rendering: pixelated` — the mark draws at a fraction of its native
+   size, and nearest-neighbour at that ratio drops most of its rows and shreds the shape. Smooth
+   resampling is what keeps it legible at the size a card actually prints. */
+.run-card-prototype-cost-crown {
+  block-size: var(--run-card-coin-mark, 7.425cqw);
+  inline-size: var(--run-card-coin-mark, 7.425cqw);
+  inset-block-start: calc(var(--run-card-cost-top, 5.1%) + var(--run-card-cost-height, 7.2%) / 2);
+  inset-inline-start: calc(var(--run-card-cost-left, 82.4%) + var(--run-card-cost-width, 11.1%) / 2);
+  object-fit: contain;
+  pointer-events: none;
+  position: absolute;
+  transform: translate(-50%, -50%);
+  z-index: 3;
 }
 
 .run-card-prototype-type {

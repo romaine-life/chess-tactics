@@ -35,8 +35,10 @@ path is at best extra context, never the deliverable.
 **Run states — a link that CRAFTS what it shows (the common case).** `POST /api/active-run/craft`
 mints `/run/craft/<id>`. Opening it *sets* the active Run to that state, from whatever the Run has
 since become — so it is a repeatable restart button: he finds a bug on the state you sent, presses
-the same link, and is back at it without asking you. Lead with one of these while troubleshooting,
-not just at the end. Full grammar under "Crafting a Run state to link to" below.
+the same link, and is back at it without asking you. The link STAYS in the address bar while the
+screen presents the Run, so reloading the page re-crafts it (ADR-0531) — that is the fast loop he
+actually uses. Lead with one of these while troubleshooting, not just at the end. Full grammar
+under "Crafting a Run state to link to" below.
 
 **Run states — a one-shot identity address (rare).** `/run?run=<id>` only asserts a Run already in
 hand and cannot restore one that has moved on. Use it only when you specifically mean "the Run as it
@@ -413,7 +415,9 @@ hand-authored one-off leaves a durable link behind:
 **Append `?to=<address>` to a craft link to land inside a Run workspace** rather than one click
 short of it — `/run/craft/<id>?to=/run/strategikon/chartulary` crafts the state and opens the
 Strategikon's held-card register on it. Only an address inside the Run is honoured. Use it
-whenever the thing to judge lives in a Run workspace; `/run` alone makes him go find it.
+whenever the thing to judge lives in a Run workspace; `/run` alone makes him go find it. The
+address bar keeps the craft link either way, so reload re-crafts and reopens the same workspace;
+the first click on a Run control leaves the link behind for an ordinary `/run` address.
 
 A refused spec prints the reason on the Run screen and writes nothing. Crafting **replaces
 the account's active Run** — there is one per account. Overwrite it freely; see below.

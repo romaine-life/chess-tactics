@@ -1,5 +1,6 @@
 import { type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
-import { InnerChromeBox } from './ChromeBox';
+import type { ChromeRole } from '../chromeCandidateSources';
+import { ChromeDivider, InnerChromeBox } from './ChromeBox';
 import { IconButton, IconNavButton, InnerTextButton, InnerTextNavButton, type ChromeButtonTone } from './ChromeButton';
 import { NavButton } from './NavButton';
 
@@ -14,6 +15,8 @@ export type ActionListAction = {
   selected?: boolean;
   tone?: ChromeButtonTone;
   className?: string;
+  /** Installed chrome surface for this control's fill (e.g. the oak every trigger wears). */
+  fillSurface?: string;
   onPress?: () => void;
   presentation?: 'icon' | 'text';
 };
@@ -36,6 +39,9 @@ export type ActionListItem = {
   leading?: ReactNode;
   leadingClassName?: string;
   leadingChrome?: boolean;
+  /** Register the kit's 9-slice divider between the leading slot and the copy, so the leading
+   *  content reads as a compartment of this box rather than a second box floating inside it. */
+  leadingDivider?: boolean;
   selected?: boolean;
   disabled?: boolean;
   readOnly?: boolean;
@@ -43,6 +49,9 @@ export type ActionListItem = {
   className?: string;
   copyClassName?: string;
   actionsClassName?: string;
+  /** Borrow another role's installed fill under this row's inner frame (ADR-0433). */
+  fillRole?: ChromeRole;
+  fillSurface?: string;
   ariaLabel?: string;
   actionsLabel?: string;
   onSelect?: () => void;
@@ -67,6 +76,7 @@ function ActionControl({ action }: { action: ActionListAction }): ReactElement {
     className: action.className,
     disabled: action.disabled,
     'aria-label': action.label,
+    'data-chrome-fill-surface': action.fillSurface,
     title: action.title,
     stopPropagation: true,
   } as const;
@@ -102,6 +112,8 @@ export function ActionListRow({ item }: { item: ActionListItem }): ReactElement 
   return (
     <InnerChromeBox
       className={`settings-row action-list-row ${item.className ?? ''} ${item.selected ? 'active is-active is-selected' : ''} ${item.disabled ? 'is-disabled' : ''} ${item.readOnly ? 'is-read-only' : ''} ${item.neutral ? 'is-neutral' : ''}`.replace(/\s+/g, ' ').trim()}
+      fillRole={item.fillRole}
+      fillSurface={item.fillSurface}
       role={interactive ? 'button' : undefined}
       tabIndex={interactive ? 0 : undefined}
       aria-label={interactive ? item.ariaLabel : undefined}
@@ -113,6 +125,9 @@ export function ActionListRow({ item }: { item: ActionListItem }): ReactElement 
       }}
     >
       {leading}
+      {leading && item.leadingDivider ? (
+        <ChromeDivider role="inner" orientation="vertical" className="action-list-leading-rule" />
+      ) : null}
       <div className={`settings-row-copy action-list-copy ${item.copyClassName ?? ''}`.trim()}>
         {item.heading ?? <h4 id={item.headingId}>{item.title}</h4>}
         {item.description !== undefined ? <div id={item.descriptionId} className="action-list-description">{item.description}</div> : null}

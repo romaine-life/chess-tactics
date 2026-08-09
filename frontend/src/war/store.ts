@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Level, War } from '../core/level';
-import { CAMPAIGN_FORMAT_VERSION, createBlankLevel } from '../core/level';
+import { CAMPAIGN_FORMAT_VERSION, LEVEL_BATTLE_CARDS_DEALT_DEFAULT, createBlankLevel } from '../core/level';
 import { useCampaigns } from '../campaign/store';
 
 type WarWorkspaceSlice = {
@@ -87,7 +87,7 @@ function starterBattle(id: string, ordinal: number): Level {
     ...base,
     objective: 'rival-kings',
     economy: { startingFunds: 0, incomePerTurn: 0 },
-    battle: { loot: false },
+    battle: { loot: false, cardsDealt: LEVEL_BATTLE_CARDS_DEALT_DEFAULT },
     layers: {
       ...base.layers,
       units: [
