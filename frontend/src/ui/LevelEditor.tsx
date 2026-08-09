@@ -55,6 +55,12 @@ import {
   type TownPlanKind,
 } from '../core/townPlan';
 import { BoardSceneLayer } from '../render/BoardSceneLayer';
+import {
+  STRUCTURE_ENTRANCE_MS,
+  structureArrivalOp,
+  structureArrives,
+} from '../render/SkirmishBoard';
+import type { BoardDrawOp } from '@chess-tactics/board-render/render/renderPlan';
 import { PredrawnOcclusionSeedLayer } from '../render/PredrawnOcclusion';
 import {
   FENCE_ART_REVIEW_ID,
@@ -164,7 +170,7 @@ import { PredrawnBackgroundVersionsPanel } from './PredrawnBackgroundVersionsPan
 import { PredrawnSourceArtworkPanel } from './PredrawnSourceArtworkPanel';
 import { PredrawnGenerationFramePicker } from './PredrawnGenerationFramePicker';
 import { predrawnGenerationFrameStatus } from './predrawnGenerationFrameStatus';
-import { isPredrawnLockedLayer, predrawnEditorHrefAfterPicker, preservesPredrawnBakedArt, sharesPredrawnSelection } from './predrawnEditorPolicy';
+import { isPredrawnLiveProp, isPredrawnLockedLayer, isPredrawnLockedPlacedArtKind, predrawnEditorHrefAfterPicker, preservesPredrawnBakedArt, sharesPredrawnSelection } from './predrawnEditorPolicy';
 import { predrawnReferenceHref } from './PredrawnReference';
 import {
   listPredrawnBackgroundVersions,
@@ -493,6 +499,8 @@ function StudioEditableBoard({
   units: placedUnits,
   doodads: placedDoodads,
   props: placedProps = {},
+  liveProps: placedLiveProps,
+  arrivingProp,
   floatingArtwork: placedFloatingArtwork = [],
   macroTiles: placedMacroTiles = [],
   features: placedFeatures = {},
@@ -570,6 +578,10 @@ function StudioEditableBoard({
   doodads: Record<string, { doodadId: string }>;
   /** Multi-cell props keyed by ANCHOR cell "x,y" -> {propId}. */
   props?: Record<string, { propId: string }>;
+  /** Anchors standing ON a plate rather than painted into it — the editor must draw these (ADR-0537). */
+  liveProps?: readonly string[];
+  /** A prop anchor currently playing its entrance, so the author watches it land as they place it. */
+  arrivingProp?: { key: string; startMs: number } | null;
   floatingArtwork?: readonly FloatingArtworkPlacement[];
   /** Opaque multi-cell terrain tops that replace the covered 1x1 top sprites. */
   macroTiles?: readonly MacroTilePlacement[];
@@ -1441,6 +1453,21 @@ function StudioEditableBoard({
     );
   }
 
+  // An obstacle placed in the editor falls in on the entrance it will play at board start
+  // (ADR-0518's curve, not a second one), so the author sees the motion as they place it. Applied
+  // per painted frame rather than by rebuilding the board, and cleared when the fall is over.
+  const arrivalPlan = useMemo(
+    () => arrivingProp ? { startMs: arrivingProp.startMs, delayMs: 0 } : null,
+    [arrivingProp],
+  );
+  const arrivalFrameTransform = useMemo(() => {
+    if (!arrivingProp || !arrivalPlan) return undefined;
+    const anchor = arrivingProp.key;
+    return (op: BoardDrawOp, timeMs: number): BoardDrawOp => (
+      op.structure?.key === anchor ? structureArrivalOp(op, arrivalPlan, timeMs) : op
+    );
+  }, [arrivalPlan, arrivingProp]);
+
   // Registration is defined against the tactical grid. A scenic apron may coexist in persisted
   // editor data, but it must not change the plate's alignment or add rows to its review overlay.
   const playableGridCells = cells.filter(
@@ -1465,6 +1492,9 @@ function StudioEditableBoard({
     units: placedUnits,
     doodads: placedDoodads,
     props: placedProps,
+    // Without this the editor suppresses an obstacle the author just placed as though the plate had
+    // painted it, and the rock only appears in Play Test (ADR-0537).
+    liveProps: placedLiveProps ? [...placedLiveProps] : undefined,
     // Live drag preview. Dragging one member of a selection previews the whole selection sliding
     // by the same offset, so what the author releases is what they watched move.
     floatingArtwork: placedFloatingArtwork.map((placement) => {
@@ -1490,11 +1520,14 @@ function StudioEditableBoard({
     featureExits: {},
     zones: {},
   };
+  // `is-authoring` separates the one placement board a level is BUILT on from the read-only
+  // placement boards that preview or export one. Only this board wears the player's chosen grid
+  // style; see the board grid rules in style.css.
   return (
     <TileGrid
       cells={cells}
       originCells={playableGridCells}
-      className={`tileset-placement-board is-tool-${tool}`}
+      className={`tileset-placement-board is-authoring is-tool-${tool}`}
       ariaLabel="Editable tile board"
       boardZoom={boardZoom}
       boardPan={boardPan}
@@ -1531,6 +1564,7 @@ function StudioEditableBoard({
             omitTerrain
             predrawnBackgroundActive={predrawnBackgroundActive}
             predrawnOcclusion={predrawnOcclusionEnabled}
+            frameTransform={arrivalFrameTransform}
             transformOps={fenceArtwork ? ((ops, board) => transformFenceArtReviewOps(ops, board, fenceArtwork)) : undefined}
             onFirstFrame={onSceneFirstFrame}
             onFrameError={onFrameError}
@@ -3238,10 +3272,35 @@ export function LevelEditor(): ReactElement {
     setLayer('board');
     setTool('select');
   }, [isPredrawnBoard, layer]);
+  // Placed Art stays reachable on a plate for obstacles alone, so a link or a remembered brush that
+  // arrives on Scene Art, Forest, Town or Doodads lands on Props instead of on a dead panel.
+  useEffect(() => {
+    if (!isPredrawnBoard || !isPredrawnLockedPlacedArtKind(placedArtKind)) return;
+    setPlacedArtKind('prop');
+    if (layer === 'placed-art') {
+      setBrushKind('prop');
+      setTool('brush');
+    }
+  }, [isPredrawnBoard, layer, placedArtKind]);
   const [boardUnits, setBoardUnits] = useState<Record<string, BoardUnitPlacement>>((initialBoard?.units as Record<string, BoardUnitPlacement>) ?? {});
   const [boardDoodads, setBoardDoodads] = useState<Record<string, { doodadId: string }>>(initialBoard?.doodads ?? {});
   // Multi-cell props (trees/houses), keyed by ANCHOR cell. Seeded from a loaded board, else empty.
   const [boardProps, setBoardProps] = useState<Record<string, { propId: string }>>(initialBoard?.props ?? {});
+  // Which prop anchors STAND ON a plate rather than being painted into it (ADR-0537). Only ever
+  // populated on a pre-drawn board; `commitEditorBoard` keeps it in step with `props`.
+  const [boardLiveProps, setBoardLiveProps] = useState<string[]>(initialBoard?.liveProps ?? []);
+  // The obstacle currently falling into the cell it was just placed on. Board state is committed
+  // immediately — this is presentation only, so an interrupted fall costs nothing but the motion.
+  const [arrivingProp, setArrivingProp] = useState<{ key: string; startMs: number } | null>(null);
+  useEffect(() => {
+    if (!arrivingProp) return undefined;
+    const remaining = arrivingProp.startMs + STRUCTURE_ENTRANCE_MS - performance.now();
+    const timer = window.setTimeout(
+      () => setArrivingProp((current) => (current === arrivingProp ? null : current)),
+      Math.max(0, remaining),
+    );
+    return () => window.clearTimeout(timer);
+  }, [arrivingProp]);
   // A prop link is only worth sending if it arrives with that prop in hand. `?brush=` was
   // honoured for every other placed-art kind and silently ignored for props, so every prop link
   // landed on the default oak and made the recipient go find the thing it named.
@@ -3250,6 +3309,18 @@ export function LevelEditor(): ReactElement {
       ? studioArm.brush
       : defaultPropDef().id
   ));
+  // The prop kinds a board will accept. A plate paints its own trees and houses, so only obstacles
+  // are offered there (ADR-0537) — and an armed tree becomes the first rock rather than a brush
+  // that silently refuses every cell.
+  const propBrushKinds = useMemo<PropKind[]>(
+    () => isPredrawnBoard ? ['rock'] : ['tree', 'house', 'rock'],
+    [isPredrawnBoard],
+  );
+  useEffect(() => {
+    if (!isPredrawnBoard || isPredrawnLiveProp(propBrushId, 0, 0)) return;
+    const rock = PROP_DEFS.find((def) => def.kind === 'rock');
+    if (rock) setPropBrushId(rock.id);
+  }, [isPredrawnBoard, propBrushId]);
   const [boardFloatingArtwork, setBoardFloatingArtwork] = useState<FloatingArtworkPlacement[]>(initialBoard?.floatingArtwork ?? []);
   const artworkAssets = STRUCTURE_ART_ASSETS.filter((asset) => structureArtHasCompleteTurntable(asset.id));
   const [artworkBrushId, setArtworkBrushId] = useState<string>(() => (
@@ -3891,6 +3962,7 @@ export function LevelEditor(): ReactElement {
     setBoardUnits(board.units as Record<string, BoardUnitPlacement>);
     setBoardDoodads(board.doodads);
     setBoardProps(board.props);
+    setBoardLiveProps(board.liveProps ?? []);
     setBoardFloatingArtwork(board.floatingArtwork ?? []);
     setBoardForests(board.forests ?? []);
     setBoardCover(board.cover);
@@ -3929,8 +4001,8 @@ export function LevelEditor(): ReactElement {
   // The current painted board as a single EditorBoard — the one shape both the transient
   // play-test URL and the level save serialize from, so they can never describe different boards.
   const currentEditorBoard = useMemo<EditorBoard>(
-    () => ({ cols: boardCols, rows: boardRows, cameraBounds: boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, backgroundMode: boardBackgroundModeState, surface: boardSurface, predrawnGridDetached: boardPredrawnGridDetached, predrawnPlateOffset: boardPredrawnPlateOffset, predrawnGenerationFrame: boardPredrawnGenerationFrame, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, floatingArtwork: boardFloatingArtwork, cover: boardCover, coverTypes: boardCoverTypes, coverSeeds: boardCoverSeeds, features: boardFeatures, fences: boardFences, fencePosts: boardFencePosts, walls: boardWalls, wallArt: boardWallArt, subterrain: boardSubterrain, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions, towns: boardTowns, forests: boardForests }),
-    [boardCols, boardRows, boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, boardFactionDirections, boardCells, boardBackgroundModeState, boardSurface, boardPredrawnGridDetached, boardPredrawnPlateOffset, boardPredrawnGenerationFrame, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardFloatingArtwork, boardCover, boardCoverTypes, boardCoverSeeds, boardFeatures, boardFences, boardFencePosts, boardWalls, boardWallArt, boardSubterrain, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions, boardTowns, boardForests],
+    () => ({ cols: boardCols, rows: boardRows, cameraBounds: boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, factionDirections: boardFactionDirections, cells: boardCells, backgroundMode: boardBackgroundModeState, surface: boardSurface, predrawnGridDetached: boardPredrawnGridDetached, predrawnPlateOffset: boardPredrawnPlateOffset, predrawnGenerationFrame: boardPredrawnGenerationFrame, macroTiles: boardMacroTiles, units: boardUnits, doodads: boardDoodads, props: boardProps, liveProps: boardLiveProps, floatingArtwork: boardFloatingArtwork, cover: boardCover, coverTypes: boardCoverTypes, coverSeeds: boardCoverSeeds, features: boardFeatures, fences: boardFences, fencePosts: boardFencePosts, walls: boardWalls, wallArt: boardWallArt, subterrain: boardSubterrain, featureCuts, featureExits, zoneEntries: boardZoneEntries, zones: boardZones, generatedRegions, towns: boardTowns, forests: boardForests }),
+    [boardCols, boardRows, boardCameraBounds, decorativeApron, decorativeCells, decorativeFootprint, decorativeFeatures, decorativeFences, decorativeFencePosts, decorativeWalls, playerFaction, boardFactionDirections, boardCells, boardBackgroundModeState, boardSurface, boardPredrawnGridDetached, boardPredrawnPlateOffset, boardPredrawnGenerationFrame, boardMacroTiles, boardUnits, boardDoodads, boardProps, boardLiveProps, boardFloatingArtwork, boardCover, boardCoverTypes, boardCoverSeeds, boardFeatures, boardFences, boardFencePosts, boardWalls, boardWallArt, boardSubterrain, featureCuts, featureExits, boardZoneEntries, boardZones, generatedRegions, boardTowns, boardForests],
   );
   const predrawnVersionCells = useMemo(
     () => Array.from({ length: boardRows }, (_, y) => (
@@ -4056,7 +4128,15 @@ export function LevelEditor(): ReactElement {
     options: { playableWindow?: boolean } = {},
   ): boolean => {
     const current = currentEditorBoardRef.current;
-    const normalized = { ...next, macroTiles: validMacroTilesForBoard(next) };
+    // A live marker is only ever a note about a prop that is actually placed (ADR-0537). Settling
+    // that here rather than at each call site is what lets erase, the Move tool's vacated anchor,
+    // and a resize that prunes a prop off the board all stay correct without knowing about it.
+    const liveProps = [...new Set(next.liveProps ?? [])].filter((key) => next.props?.[key]).sort();
+    const normalized = {
+      ...next,
+      macroTiles: validMacroTilesForBoard(next),
+      ...(liveProps.length ? { liveProps } : { liveProps: undefined }),
+    };
     // The baked-art guard stops an EDIT from silently contradicting pixels the plate already owns.
     // Resizing the grid and sliding it across the artwork are not that: they declare themselves,
     // they change no depicted family on purpose, and rebasing or pruning coordinates is the
@@ -5142,7 +5222,16 @@ export function LevelEditor(): ReactElement {
       // footprint cell overlapping a unit or another prop. Anything else is a no-op.
       if (!canPlaceProp(propBrushDef, x, y)) return;
       next.props[key] = { propId: propBrushDef.id };
-      commitEditorBoard(next);
+      // On a plate the picture already painted its scenery, so a prop placed now is an obstacle
+      // STANDING on it: mark it live so it draws and drops instead of being suppressed (ADR-0537).
+      if (isPredrawnBoard) next.liveProps = [...(next.liveProps ?? []), key];
+      if (!commitEditorBoard(next)) return;
+      // Whether an obstacle drops is a property of its KIND (ADR-0518), so the editor asks the same
+      // predicate the battle asks rather than deciding for itself which brushes are worth watching.
+      const [ax, ay] = key.split(',').map(Number);
+      if (structureArrives({ key, kind: propBrushDef.kind, x: ax, y: ay, artId: propBrushDef.spriteId })) {
+        setArrivingProp({ key, startMs: performance.now() });
+      }
       return;
     }
     if (brushKind === 'cover') {
@@ -8807,6 +8896,11 @@ export function LevelEditor(): ReactElement {
       if (!placement || placement.propId !== subject.propId) return;
       delete next.props[fromKey];
       next.props[toKey] = placement;
+      // Dragging an obstacle across a plate moves the same object; it must not stop being live and
+      // sink back into the artwork on arrival (ADR-0537).
+      if ((next.liveProps ?? []).includes(fromKey)) {
+        next.liveProps = [...(next.liveProps ?? []).filter((anchor) => anchor !== fromKey), toKey];
+      }
     }
     commitEditorBoard(next, to);
   };
@@ -9711,6 +9805,8 @@ export function LevelEditor(): ReactElement {
                     units={boardUnits}
                     doodads={boardDoodads}
                     props={boardProps}
+                    liveProps={boardLiveProps}
+                    arrivingProp={arrivingProp}
                     floatingArtwork={boardFloatingArtwork}
                     features={featureOverlays}
                     zones={visibleZones}
@@ -11268,7 +11364,7 @@ export function LevelEditor(): ReactElement {
                 ['town', 'Town'],
                 ['doodad', 'Doodads'],
                 ['prop', 'Props'],
-              ] as const).map(([kind, label]) => (
+              ] as const).filter(([kind]) => !(isPredrawnBoard && isPredrawnLockedPlacedArtKind(kind))).map(([kind, label]) => (
                 <ChromeButton unit="inner-text-button"
                   key={kind}
                   className={chromeUnitClassNames('inner-text-button', 'le-seg-btn', placedArtKind === kind && 'active')}
@@ -11278,7 +11374,9 @@ export function LevelEditor(): ReactElement {
               ))}
             </div>
             <p className="le-board-note">
-              {placedArtKind === 'artwork'
+              {isPredrawnBoard
+                ? 'This board is a painting, so it already has its own trees and houses. Rocks are the exception: they stand on the artwork, block movement, and drop into place when the board starts.'
+                : placedArtKind === 'artwork'
                 ? 'Scene Art can be placed anywhere in the scene and never affects movement.'
                 : placedArtKind === 'forest'
                   ? 'Forest fills a tile-aligned area with Scene Art trees and never affects movement.'
@@ -11534,7 +11632,7 @@ export function LevelEditor(): ReactElement {
           </section>
         ) : brushKind === 'prop' ? (
           <section className="skirmish-card le-brush-panel">
-            {(['tree', 'house', 'rock'] as PropKind[]).map((kind) => {
+            {propBrushKinds.map((kind) => {
               const group = PROP_DEFS.filter((def) => def.kind === kind);
               if (!group.length) return null;
               return (
@@ -11563,7 +11661,7 @@ export function LevelEditor(): ReactElement {
                 </div>
               );
             })}
-            <p className="le-board-note">This prop spans {propBrushDef.w}×{propBrushDef.h} tile{propBrushDef.w * propBrushDef.h > 1 ? 's' : ''}, anchored at the clicked cell. Props only land where every footprint tile is one of their terrains and no unit or other prop is in the way. Blocking props (trees, houses, rocks) become impassable in play.</p>
+            <p className="le-board-note">This prop spans {propBrushDef.w}×{propBrushDef.h} tile{propBrushDef.w * propBrushDef.h > 1 ? 's' : ''}, anchored at the clicked cell. Props only land where every footprint tile is one of their terrains and no unit or other prop is in the way. Blocking props (trees, houses, rocks) become impassable in play.{isPredrawnBoard ? ' A rock placed here stands on the artwork rather than being painted into it, so the picture is left exactly as it is.' : ''}</p>
           </section>
         ) : brushKind === 'town' ? (
           <section className="skirmish-card le-brush-panel le-town-panel" data-testid="town-controls">

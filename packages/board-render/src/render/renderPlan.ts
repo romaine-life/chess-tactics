@@ -742,12 +742,21 @@ export function boardDrawOps(board: RenderBoard, options: BoardDrawOptions = {})
     if (unitSubject) ops.push(unitSubject.op);
   }
 
-  for (const [key, placement] of Object.entries(predrawnBackgroundActive ? {} : (board.props ?? {}))) {
+  const liveProps = new Set(board.liveProps ?? []);
+  for (const [key, placement] of Object.entries(board.props ?? {})) {
+    // A plate paints its own scenery, so an ordinary prop under one is already in the picture and
+    // must not be drawn twice. Skipping before the def is resolved keeps a suppressed plate from
+    // needing the prop catalog at all, exactly as it did when the whole map was skipped.
+    if (predrawnBackgroundActive && !liveProps.has(key)) continue;
     const [ax, ay] = key.split(',').map(Number);
     // A retired rock draws as its successor, so the editor and the battle agree about what is
     // standing on the cell without either of them rewriting the saved level.
     const def = propDef(resolvePlacedPropId(placement.propId, ax, ay));
     if (!def) continue;
+    // An obstacle the owner placed ON the plate is depicted by nothing and draws live (ADR-0537).
+    // The kind gate is here rather than only in the editor so a hand-authored marker cannot stand a
+    // tree or a house on artwork that already owns its scenery.
+    if (predrawnBackgroundActive && def.kind !== 'rock') continue;
     const { left, top } = structureSeatPoint({ x: ax, y: ay }, def.w, def.h);
     const { back, front } = propZBracket(ax, ay, def.w, def.h);
     const parts = def.spriteParts?.length
