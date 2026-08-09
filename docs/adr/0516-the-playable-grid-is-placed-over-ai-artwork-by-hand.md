@@ -6,7 +6,7 @@ partially_supersedes:
   - "[ADR-0165](0165-ai-artwork-separates-sources-attempts-and-background-mode.md)'s rule that stale environment geometry blocks activating, saving, or publishing an AI selection"
 refines:
   - "[ADR-0071](0071-the-deliverable-is-the-instrument.md)"
-  - "[ADR-0121](0121-predrawn-camera-limits-follow-the-selected-raster.md)"
+  - "[ADR-0121](0121-predrawn-pan-stops-at-art-boundary.md)"
   - "[ADR-0158](0158-immutable-predrawn-background-versions-own-derived-raster-and-occlusion.md)"
 ---
 

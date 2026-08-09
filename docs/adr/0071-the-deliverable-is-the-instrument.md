@@ -108,7 +108,7 @@ Chosen: **features are confirmed against the meta-project**, concretely:
 ## More Information
 
 The general rule behind [ADR-0054](0054-nine-slice-editor-is-the-devs-calibration-bench.md),
-[ADR-0057](0057-studio-tuning-surfaces-reset-to-committed-baseline.md),
+[ADR-0057](0057-studio-tuning-surfaces-reset-to-authoritative-baseline.md),
 [ADR-0058](0058-every-route-is-click-reachable.md),
 [ADR-0070](0070-board-content-answers-to-the-one-content-system.md); sibling in
 spirit to [ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md)

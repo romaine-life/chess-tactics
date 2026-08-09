@@ -269,7 +269,7 @@ crossing has two possible routes around the shared corner and is blocked only
 when both routes encounter barriers; one open route leaves the diagonal open.
 Knights and other non-adjacent jumps hop intervening edges. The same rule governs
 movement, captures, attacks, and check, and it reads canonical level geometry
-rather than rendered pixels. See [ADR-0119](adr/0119-edge-barriers-close-diagonals-only-when-both-routes-are-blocked.md).
+rather than rendered pixels. See [ADR-0124](adr/0124-edge-barriers-close-diagonals-only-when-both-routes-are-blocked.md).
 
 ## 7. Variation levers
 

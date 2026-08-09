@@ -81,5 +81,5 @@ or Battle returns to Deployment so its placement plan is derived under the new r
 ## More Information
 
 - [Game concept](../game-concept.md)
-- [ADR-0346](0346-run-state-crafting-composes-real-transitions.md)
-- [ADR-0435](0435-full-deploy-commits-one-wave-without-reveal.md)
+- [ADR-0346](0346-run-deployment-is-a-battlefield-state-with-conditional-input.md)
+- [ADR-0435](0435-full-deploy-is-one-placement-wave-and-one-discard.md)

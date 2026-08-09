@@ -4,7 +4,7 @@ date: 2026-06-25
 deciders: Nelson, Claude
 ---
 
-> **Navigation superseded by [ADR-0058](0058-studio-editors-are-viewer-kinds-not-routes.md) (2026-07-03).**
+> **Navigation superseded by [ADR-0058](0058-every-route-is-click-reachable.md) (2026-07-03).**
 > The compare *surface* stands — the decision to keep a permanent in-app art-vs-live
 > comparator is unchanged. What changed is only *where it lives*: it is no longer a
 > standalone `/artwork-compare` route with its own toolbar; it is now the Studio's

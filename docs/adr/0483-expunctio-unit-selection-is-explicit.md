@@ -8,7 +8,7 @@ partially_superseded_by:
 partially_supersedes:
   - "[ADR-0482](0482-expunctio-owns-card-aware-alienatio.md)'s initially selected unit, cycle-primary interaction, and rejection of direct figure selection"
 refines:
-  - "[ADR-0427](0427-run-unit-controls-are-keyboard-and-touch-operable.md)"
+  - "[ADR-0427](0427-deployment-cards-retain-their-authored-seat-geometry.md)"
   - "[ADR-0442](0442-expunctio-is-a-card-first-gallery.md)"
   - "[ADR-0482](0482-expunctio-owns-card-aware-alienatio.md)"
 ---

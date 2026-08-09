@@ -98,7 +98,7 @@ Rules:
 
 ## More Information
 
-- Per-domain instances of this same rule: [ADR-0058](0058-studio-editors-are-viewer-kinds-not-routes.md)
+- Per-domain instances of this same rule: [ADR-0058](0058-every-route-is-click-reachable.md)
   (Studio navigation), [ADR-0032](0032-no-bland-html-css-every-surface-is-kit.md) (chrome is kit),
   [ADR-0057](0057-studio-tuning-surfaces-reset-to-authoritative-baseline.md) (Reset via shared control
   primitives), [ADR-0042](0042-title-bar-is-an-invariant-screens-add-slots.md) (one title bar),

@@ -7,8 +7,8 @@ refines:
   - "[ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md)"
   - "[ADR-0076](0076-scaling-is-calibration-production-art-is-native-1x.md)"
   - "[ADR-0085](0085-runtime-assets-are-live-storage-backed.md)"
-  - "[ADR-0364](0364-cards-is-a-filterable-full-face-gallery.md)"
-  - "[ADR-0371](0371-chartulary-is-the-held-card-gallery.md)"
+  - "[ADR-0364](0364-enchiridion-cards-is-a-terminal-gallery-with-no-fourth-column.md)"
+  - "[ADR-0371](0371-the-chartulary-is-the-held-half-of-the-cards-reference.md)"
 ---
 
 # ADR-0506: Card gold groups use the open-rail divider

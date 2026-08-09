@@ -3,7 +3,7 @@ status: accepted
 date: 2026-08-04
 deciders: owner (Nelson) + Codex
 refines:
-  - "[ADR-0205](0205-one-application-scene-director.md)"
+  - "[ADR-0205](0205-navigation-loads-atomic-scenes-through-one-director.md)"
   - "[ADR-0307](0307-every-replaceable-region-is-a-director-owned-scene-slot.md)"
   - "[ADR-0415](0415-every-run-page-is-assembled-by-one-closed-form.md)"
   - "[ADR-0419](0419-deployment-draws-a-hidden-card-stack-in-play-order.md)"
