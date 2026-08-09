@@ -663,34 +663,6 @@ export type UnitArrivalTrack = 'drop' | 'slide-from-right';
  */
 export const PLANNED_UNIT_OPACITY = 0.62;
 
-/**
- * What a planned unit that has been PICKED UP looks like: the shadow it leaves on the ground it
- * still holds, while the unit itself is the one on the cursor.
- *
- * ADR-0533 draws a seated formation at exactly the strength the carried one is drawn at, which is
- * right while they are different formations and wrong the moment they are the same one — moving a
- * formation already on the board then paints it twice, identically, and neither copy says which is
- * the one being decided. Half plan strength is the same answer the board already gives a piece
- * being dragged away from its square.
- */
-export const LIFTED_UNIT_OPACITY = 0.3;
-
-/**
- * The strength a unit that is only PLANNED is drawn at, or null for a unit that is actually on
- * the battlefield and whose strength is the live board's business.
- *
- * One answer for every place that paints a plan — the frame, and a withdrawal's starting
- * strength — so a formation cannot fade out from a strength it was never drawn at.
- */
-export function plannedUnitOpacity(
-  pieceId: string,
-  plannedPieceIds: ReadonlySet<string>,
-  liftedPieceIds: ReadonlySet<string>,
-): number | null {
-  if (liftedPieceIds.has(pieceId)) return LIFTED_UNIT_OPACITY;
-  return plannedPieceIds.has(pieceId) ? PLANNED_UNIT_OPACITY : null;
-}
-
 export function unitArrivalPlan(
   lifecycle: UnitArrivalLifecycle,
   now: number,
@@ -1085,7 +1057,6 @@ function SkirmishSceneLayer({
   livePieces,
   previewPieces,
   plannedPieceIds,
-  liftedPieceIds,
   unitArrivals,
   unitArrivalTrack,
   unitArrivalStartDelta,
@@ -1109,7 +1080,6 @@ function SkirmishSceneLayer({
   livePieces: readonly Piece[];
   previewPieces: readonly Piece[];
   plannedPieceIds: ReadonlySet<string>;
-  liftedPieceIds: ReadonlySet<string>;
   unitArrivals: UnitArrivalLifecycle;
   unitArrivalTrack: UnitArrivalTrack;
   unitArrivalStartDelta: Vec;
@@ -1213,7 +1183,6 @@ function SkirmishSceneLayer({
     livePieces,
     previewPieces,
     plannedPieceIds,
-    liftedPieceIds,
     draggingId,
     premovedIds,
     afterGhosts,
@@ -1261,7 +1230,6 @@ function SkirmishSceneLayer({
       livePieces,
       previewPieces,
       plannedPieceIds,
-      liftedPieceIds,
       draggingId,
       premovedIds,
       afterGhosts,
@@ -1318,8 +1286,7 @@ function SkirmishSceneLayer({
           endTop: destination.top,
           // A withdrawal begins from the strength the unit was actually being drawn at, so a
           // merely PLANNED unit fades out from its plan strength instead of solidifying to leave.
-          startOpacity: (plannedUnitOpacity(piece.id, plannedPieceIds, liftedPieceIds) ?? 1)
-            * arrival.opacity,
+          startOpacity: (plannedPieceIds.has(piece.id) ? PLANNED_UNIT_OPACITY : 1) * arrival.opacity,
           facing: destination.facing,
         });
         // Reroll is now the unit's active lifecycle. An arrival cannot keep settling while the
@@ -1513,10 +1480,9 @@ function SkirmishSceneLayer({
           const arrival = departure
             ? { dx: 0, dy: 0, opacity: departure.opacity }
             : arrivalOffset(timeMs, arrivalPlansRef.current.get(piece.id), arrivalTrack);
-          // A planned unit the player has taken back into their hand is drawn as the shadow it
-          // left on the square it still holds — the copy on the cursor is the one being decided.
-          const baseOpacity = plannedUnitOpacity(piece.id, state.plannedPieceIds, state.liftedPieceIds)
-            ?? (state.draggingId === piece.id ? 0.3 : state.premovedIds.has(piece.id) ? 0.4 : 1);
+          const baseOpacity = state.plannedPieceIds.has(piece.id)
+            ? PLANNED_UNIT_OPACITY
+            : state.draggingId === piece.id ? 0.3 : state.premovedIds.has(piece.id) ? 0.4 : 1;
           const presentedPiece = departurePlan ? { ...piece, facing: departurePlan.facing } : piece;
           const depthPiece = departure
             ? { ...presentedPiece, ...unprojectBoardPoint(seat) }
@@ -1703,7 +1669,6 @@ function SkirmishSceneLayer({
 const EMPTY_PREMOVES: readonly PremoveStep[] = [];
 const EMPTY_PREVIEW_PIECES: readonly Piece[] = [];
 const EMPTY_PLANNED_PIECE_IDS: ReadonlySet<string> = new Set();
-const EMPTY_LIFTED_PIECE_IDS: ReadonlySet<string> = new Set();
 export interface SkirmishBoardSurfaceState {
   /** A passive position projected through the live Battle compositor without starting a match. */
   game: GameState;
@@ -1718,12 +1683,6 @@ export interface SkirmishBoardSurfaceState {
    * belongs to the moment the plan becomes a deployment, which is the Battle, not the placement.
    */
   plannedPieceIds?: ReadonlySet<string>;
-  /**
-   * Planned pieces the player currently has IN HAND — the formation they picked back up. The unit
-   * on the cursor is the one being decided, so the seating it came from is drawn as the shadow it
-   * left behind rather than as a second identical copy of the same formation.
-   */
-  liftedPieceIds?: ReadonlySet<string>;
 }
 
 export interface SkirmishBoardCellOverlayContext {
@@ -1844,7 +1803,6 @@ export function SkirmishBoard({
   const game = surfaceState?.game ?? storedGame;
   const previewPieces = surfaceState?.previewPieces ?? EMPTY_PREVIEW_PIECES;
   const plannedPieceIds = surfaceState?.plannedPieceIds ?? EMPTY_PLANNED_PIECE_IDS;
-  const liftedPieceIds = surfaceState?.liftedPieceIds ?? EMPTY_LIFTED_PIECE_IDS;
   const env = useMemo(
     () => surfaceState ? { ...gameEnv(game), lastMove: game.lastMove } : storedEnv,
     [game, storedEnv, surfaceState],
@@ -2603,7 +2561,6 @@ export function SkirmishBoard({
               livePieces={livePieces}
               previewPieces={previewPieces}
               plannedPieceIds={plannedPieceIds}
-              liftedPieceIds={liftedPieceIds}
               unitArrivals={arrivalLifecycle}
               unitArrivalTrack={unitArrivalTrack}
               unitArrivalStartDelta={unitArrivalStartDelta}

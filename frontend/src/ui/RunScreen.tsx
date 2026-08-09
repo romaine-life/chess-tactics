@@ -130,6 +130,7 @@ import { RunArrangementCard, RunArrangementSteppers } from './RunArrangementHand
 import { RunFormationGroupPaint } from './RunFormationGroupPaint';
 import {
   RUN_FORMATION_LIVERY_COUNT,
+  deploymentLayoutInHand,
   formationBlockSquares,
   seatedFormationsBySquare,
 } from './runDeploymentGrouping';
@@ -660,11 +661,25 @@ function useRunDeploymentPresentation({
   // pointer moves, so the mouse always says where the formation goes and a turn only says which
   // way it faces there.
   const [heldArrangementAnchor, setHeldArrangementAnchor] = useState<string | null>(null);
+  // The formation the player has PICKED UP. It comes off the board whole — its units and its plot
+  // both — so a formation being moved looks exactly like one being placed for the first time.
+  // Drawing it at its old seats as well as on the cursor painted the same formation twice over,
+  // and the player could not tell which of the two they were deciding about.
+  //
+  // Held is a gesture, not a selection: placing the last card of a hand leaves it selected, and a
+  // card resting on the board must stay on the board. Nothing is written to the Run for it, so a
+  // player who picks a formation up and wanders off has not lost the seat it came from.
+  const [heldCardId, setHeldCardId] = useState<string | null>(null);
   const arrangementCards = useMemo(() => arrangedDeploymentCards(prepared), [prepared]);
   const selectedArrangementCard = arrangementCards.find(({ card }) => card.id === selectedCardId) ?? null;
+  const heldFormationCardId = heldCardId === selectedCardId ? heldCardId : null;
   // Which square belongs to which seated formation. A projection of the card's seats and the
-  // committed placements — nothing is persisted for it, so no save version moves.
-  const seatedFormationSquares = useMemo(() => seatedFormationsBySquare(prepared), [prepared]);
+  // committed placements — nothing is persisted for it, so no save version moves. The formation in
+  // hand is not among them: it is not on the ground to be wrapped.
+  const seatedFormationSquares = useMemo(
+    () => seatedFormationsBySquare(prepared, heldFormationCardId),
+    [heldFormationCardId, prepared],
+  );
   // Which SEATED formation the pointer is over — the whole card, not the square. Read off the
   // square the pointer already reports rather than tracked separately: a second enter/leave pair
   // on the same element is a second source of truth for where the mouse is, and the one that is
@@ -672,40 +687,50 @@ function useRunDeploymentPresentation({
   const hoveredFormationCardId = pointedArrangementCell
     ? seatedFormationSquares.get(pointedArrangementCell)?.cardId ?? null
     : null;
+  // The card the player is HOLDING, if any. A card that has not been placed is in hand by
+  // definition; a card on the board is in hand only once it has been picked up. Everything the
+  // carry gesture paints — the band, the reachable squares, the turns, the formation on the
+  // cursor — belongs to a card in hand, so a formation resting on the board is not also
+  // following the mouse around (ADR-0526: the band is painted whenever a formation is in hand).
+  const cardInHandId = selectedArrangementCard && (!selectedArrangementCard.placed || heldFormationCardId)
+    ? selectedCardId
+    : null;
   // Where deployment is allowed at all. A property of the level and of what is already seated,
   // so it holds still while the carried formation is turned — turning a formation in one corner
   // must not put out a square at the other end of the band.
   const arrangementBandCells = useMemo(() => new Set(
-    (selectedCardId ? openDeploymentBandCells(prepared, level, selectedCardId) : [])
+    (cardInHandId ? openDeploymentBandCells(prepared, level, cardInHandId) : [])
       .map((cell) => `${cell.x},${cell.y}`),
-  ), [level, prepared, selectedCardId]);
-  // Squares held by a formation ALREADY on the board, other than the one in hand. Clicking one
-  // takes that formation back rather than trying to drop the held one on top of it.
+  ), [cardInHandId, level, prepared]);
+  // Squares held by a formation ALREADY on the board. Clicking one picks that formation up rather
+  // than trying to drop the held one on top of it — including the card just placed, which is
+  // still selected and is standing on the ground like any other. Only the formation actually in
+  // hand is missing from this: it is off the board, so its old squares are open ground.
   const arrangementPlacedCells = useMemo(() => {
     const seats = new Map<string, string>();
     for (const { card, placed } of arrangementCards) {
-      if (!placed || card.id === selectedCardId) continue;
+      if (!placed || card.id === heldFormationCardId) continue;
       for (const unitId of runCardUnitIds(card)) {
         const seat = prepared.deployment?.placements?.[unitId];
         if (seat) seats.set(seat, card.id);
       }
     }
     return seats;
-  }, [arrangementCards, prepared.deployment?.placements, selectedCardId]);
+  }, [arrangementCards, heldFormationCardId, prepared.deployment?.placements]);
   // The squares the player may point at — every square the formation could COVER at this turn,
   // not the squares its bounding-box corner could sit on. Aiming at a unit is the whole gesture.
   const arrangementPlaceableCells = useMemo(() => new Set(
-    (selectedCardId
-      ? arrangedCardPlaceableCells(prepared, level, selectedCardId, arrangementRotation)
+    (cardInHandId
+      ? arrangedCardPlaceableCells(prepared, level, cardInHandId, arrangementRotation)
       : []).map((cell) => `${cell.x},${cell.y}`),
-  ), [arrangementRotation, level, prepared, selectedCardId]);
+  ), [arrangementRotation, cardInHandId, level, prepared]);
   // A rotation is offered only when it both fits the band and looks different from a turn
   // already on the rail. Redundant turns are skipped the same way unplaceable ones are, so
   // the control never presents two buttons that produce the same board. The rail and the
   // secondary-click cycle read this one ordered list, so both walk the same turns.
   const availableArrangementRotationList = useMemo<readonly RunFormationRotation[]>(() => (
-    selectedCardId ? placeableCardRotations(prepared, level, selectedCardId) : []
-  ), [level, prepared, selectedCardId]);
+    cardInHandId ? placeableCardRotations(prepared, level, cardInHandId) : []
+  ), [cardInHandId, level, prepared]);
   const availableArrangementRotations = useMemo(
     () => new Set<RunFormationRotation>(availableArrangementRotationList),
     [availableArrangementRotationList],
@@ -722,10 +747,10 @@ function useRunDeploymentPresentation({
   // the player never has to work out where a corner would have to go. Once a turn has held a box
   // the formation stays in it and spins there, until the pointer moves and picks a new one.
   const pointedArrangementOption = useMemo(() => (
-    selectedCardId
-      ? turnedCardPlacement(prepared, level, selectedCardId, arrangementRotation, heldAnchor, pointedCell)
+    cardInHandId
+      ? turnedCardPlacement(prepared, level, cardInHandId, arrangementRotation, heldAnchor, pointedCell)
       : null
-  ), [arrangementRotation, heldAnchor, level, pointedCell, prepared, selectedCardId]);
+  ), [arrangementRotation, cardInHandId, heldAnchor, level, pointedCell, prepared]);
   const arrangementFootprint = useMemo(() => new Set(
     Object.values(pointedArrangementOption?.placements ?? {}).map((cell) => `${cell.x},${cell.y}`),
   ), [pointedArrangementOption]);
@@ -759,7 +784,14 @@ function useRunDeploymentPresentation({
       }];
     });
   }, [pointedArrangementOption, prepared.army]);
-  const layout = selectedDeploymentLayout(prepared, options);
+  const seatedLayout = selectedDeploymentLayout(prepared, options);
+  // The board as it stands with the formation in hand taken off it — see deploymentLayoutInHand.
+  const layout = useMemo(() => {
+    const held = heldFormationCardId
+      ? arrangementCards.find(({ card }) => card.id === heldFormationCardId)?.card
+      : null;
+    return deploymentLayoutInHand(seatedLayout, held ? runCardUnitIds(held) : []);
+  }, [arrangementCards, heldFormationCardId, seatedLayout]);
   const deploymentGame = useMemo(
     () => gameForRunDeployment(prepared, level, layout, true),
     [layout, level, prepared],
@@ -773,25 +805,13 @@ function useRunDeploymentPresentation({
     () => new Set(Object.keys(layout.placements)),
     [layout.placements],
   );
-  // The units of the formation currently IN HAND that are also standing on the board — a formation
-  // the player picked back up to move. It is on the cursor and on its old squares at once, and
-  // ADR-0533 draws both at the same strength, so without this the same formation is painted twice
-  // over and neither copy says which one the player is deciding. The seats keep the shadow; the
-  // copy under the hand is the formation. Only while a seating actually resolves: a card merely
-  // selected is resting on the board, not being carried anywhere.
-  const liftedPieceIds = useMemo(() => new Set(
-    pointedArrangementOption && selectedArrangementCard?.placed
-      ? runCardUnitIds(selectedArrangementCard.card).filter((unitId) => layout.placements[unitId])
-      : [],
-  ), [layout.placements, pointedArrangementOption, selectedArrangementCard]);
   const deploymentSurfaceState = useMemo<SkirmishBoardSurfaceState>(() => ({
     game: deploymentGame,
     seed: prepared.deployment?.seed ?? prepared.seed,
     viewKey: runBattleActivityId(prepared.id, prepared.battleIndex),
     previewPieces: arrangementPreviewPieces,
     plannedPieceIds,
-    liftedPieceIds,
-  }), [arrangementPreviewPieces, deploymentGame, liftedPieceIds, plannedPieceIds, prepared.battleIndex, prepared.deployment?.seed, prepared.id, prepared.seed]);
+  }), [arrangementPreviewPieces, deploymentGame, plannedPieceIds, prepared.battleIndex, prepared.deployment?.seed, prepared.id, prepared.seed]);
 
   useEffect(() => {
     if (prepared !== run && prepared.phase === 'deployment') replace(prepared);
@@ -808,6 +828,9 @@ function useRunDeploymentPresentation({
     setSelectedCardId(arrangementCards.find(({ admitted, placed }) => admitted && !placed)?.card.id
       ?? arrangementCards.find(({ admitted }) => admitted)?.card.id
       ?? null);
+    // Falling back to a card because the last one went away is not the player picking it up, so a
+    // formation the fallback lands on stays where it is standing.
+    setHeldCardId(null);
     setArrangementRotation(0);
     setHeldArrangementAnchor(null);
   }, [arrangementCards, selectedCardId, stage]);
@@ -839,11 +862,16 @@ function useRunDeploymentPresentation({
     const next = steppedArrangedCard(arrangementCards, selectedCardId, step);
     if (!next || next === selectedCardId) return;
     setSelectedCardId(next);
+    setHeldCardId(next);
     setArrangementRotation(0);
     setHeldArrangementAnchor(null);
   }, [arrangementCards, departureActive, selectedCardId]);
+  // Choosing a card is taking it in hand, wherever the choice comes from — the rail, the keys, or
+  // a click on the formation itself. A card already on the board comes off it: it is the one being
+  // decided about, so it cannot also be standing where it used to be.
   const selectArrangementCard = useCallback((cardId: string) => {
     setSelectedCardId(cardId);
+    setHeldCardId(cardId);
     setArrangementRotation(0);
     setHeldArrangementAnchor(null);
   }, []);
@@ -853,11 +881,11 @@ function useRunDeploymentPresentation({
   // formation spins about its grip seat, on the square being aimed at, rather than vanishing until
   // the mouse is jiggled.
   const turnArrangement = useCallback((direction: FormationTurnDirection) => {
-    if (departureActive || !selectedCardId) return;
+    if (departureActive || !cardInHandId) return;
     const turn = cardTurn(
       prepared,
       level,
-      selectedCardId,
+      cardInHandId,
       arrangementRotation,
       direction,
       heldAnchor,
@@ -867,8 +895,7 @@ function useRunDeploymentPresentation({
     setArrangementRotation(turn.rotation);
     setHeldArrangementAnchor(turn.anchor ? `${turn.anchor.x},${turn.anchor.y}` : null);
   }, [
-    arrangementRotation, departureActive, heldAnchor, level, pointedCell, prepared,
-    selectedCardId,
+    arrangementRotation, cardInHandId, departureActive, heldAnchor, level, pointedCell, prepared,
   ]);
   const turnArrangementUnderCursor = useCallback(() => {
     turnArrangement('clockwise');
@@ -878,6 +905,9 @@ function useRunDeploymentPresentation({
     const latest = useActiveRun.getState().run;
     if (latest?.id === prepared.id && latest.phase === 'deployment') {
       replace(removeArrangedDeploymentCard(latest, selectedCardId));
+      // Taken off the board by the control rather than by hand, and now unplaced, so it is in
+      // hand for the same reason any undealt card is. Holding it as well would say nothing more.
+      setHeldCardId(null);
       setHeldArrangementAnchor(null);
     }
   }, [departureActive, prepared.id, replace, selectedCardId]);
@@ -893,10 +923,11 @@ function useRunDeploymentPresentation({
     }
   }, [departureActive, prepared.id, replace]);
   // The keys are offered on exactly the terms the rail's turn buttons are, so the two cannot
-  // drift apart: a dealt formation admitted and selected, on a screen that is not departing.
+  // drift apart: a dealt formation admitted and IN HAND, on a screen that is not departing. A
+  // formation resting on the board has nothing to turn until it is picked up.
   const arranging = stage === 'arrange' && !departureActive;
   useFormationKeys({
-    turn: arranging && selectedArrangementCard?.admitted ? turnArrangement : null,
+    turn: arranging && selectedArrangementCard?.admitted && cardInHandId ? turnArrangement : null,
     step: arranging ? stepArrangementCard : null,
     begin: arranging ? startArrangedBattle : null,
   });
@@ -915,7 +946,7 @@ function useRunDeploymentPresentation({
     unitArrivalTrack: 'drop',
     unitArrivalStartDelta: { x: 0, y: 0 },
     onArrivingUnitIdsChange: () => undefined,
-    onBoardSecondaryClick: stage === 'arrange' && selectedArrangementCard?.admitted
+    onBoardSecondaryClick: stage === 'arrange' && selectedArrangementCard?.admitted && cardInHandId
       ? turnArrangementUnderCursor
       : undefined,
     // Every square takes the pointer, not just the ones a corner could sit on. The player
@@ -946,10 +977,6 @@ function useRunDeploymentPresentation({
       const block = carriedEdges
         ? { edges: carriedEdges, groupIndex: carriedGroupIndex, cardId: selectedCardId }
         : seated;
-      // Ground the formation now in hand was picked up FROM. Its plot is still drawn — this is
-      // where the formation goes back to if the player never seats it elsewhere — but it recedes
-      // to a shadow, because the block being decided is the one on the cursor.
-      const lifted = !carriedEdges && seated?.cardId === selectedCardId && liftedPieceIds.size > 0;
       return (
         <button
           type="button"
@@ -962,8 +989,7 @@ function useRunDeploymentPresentation({
             filled ? 'is-move' : '',
             block ? 'has-formation-group' : '',
             carriedEdges ? 'is-formation-carried' : '',
-            lifted ? 'is-formation-lifted' : '',
-            !lifted && !carriedEdges && seated && hoveredFormationCardId === seated.cardId
+            !carriedEdges && seated && hoveredFormationCardId === seated.cardId
               ? 'is-formation-hovered'
               : '',
           ].filter(Boolean).join(' ')}
@@ -988,21 +1014,27 @@ function useRunDeploymentPresentation({
           onClick={() => {
             const latest = useActiveRun.getState().run;
             if (latest?.id !== prepared.id || latest.phase !== 'deployment' || !selectedCardId) return;
-            // A formation already standing here is still the player's to move. Clicking it takes
-            // it back into the hand rather than reading as an attempt to drop the held one on
-            // top of it — the only way to reposition a formation without removing it first.
+            // A formation already standing here is still the player's to move. Clicking it picks
+            // it up rather than reading as an attempt to drop the held one on top of it — the
+            // only way to reposition a formation without removing it first. The card in hand is
+            // the one exception: the document still records where it stood, but the player is
+            // holding it, so its old squares take the placement instead of picking it up again.
             const standing = arrangedCardAtCell(latest, cell);
-            if (standing && standing !== selectedCardId) {
+            if (standing && standing !== heldFormationCardId) {
               selectArrangementCard(standing);
               return;
             }
+            // Only a formation in hand can be put down. A card resting on the board paints no
+            // band, no reachable squares and nothing on the cursor, so a click on open ground
+            // must not silently move it out from under a player who was shown no such offer.
+            if (!cardInHandId) return;
             // Commit the box on screen, not a fresh guess from the square: after a turn the
             // formation is standing in a held box, and the pointed square may be the corner it
             // leaves empty. Re-resolving from the square would place something else.
             const seating = turnedCardPlacement(
               latest,
               level,
-              selectedCardId,
+              cardInHandId,
               arrangementRotation,
               heldAnchor,
               cell,
@@ -1011,18 +1043,23 @@ function useRunDeploymentPresentation({
             const placed = placeArrangedDeploymentCard(
               latest,
               level,
-              selectedCardId,
+              cardInHandId,
               arrangementRotation,
               seating.anchor,
             );
             replace(placed);
+            // Put down: the formation is on the ground again, so it is no longer in hand. When
+            // nothing else is left to place this card stays SELECTED, and it has to keep standing
+            // on the board while it is — a released formation is not a carried one.
+            setHeldCardId(null);
             // Placing finishes with a formation, so the hand moves on rather than leaving the
             // player holding one already on the board. The pointed square is KEPT: the next
             // formation appears under the cursor ready to place, so a whole hand is seated
             // without the mouse having to leave the battlefield between cards.
-            const following = nextArrangedCardToPlace(placed, selectedCardId);
+            const following = nextArrangedCardToPlace(placed, cardInHandId);
             if (following) {
               setSelectedCardId(following);
+              setHeldCardId(following);
               setArrangementRotation(0);
             }
           }}

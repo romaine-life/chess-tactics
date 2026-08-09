@@ -47,7 +47,7 @@ describe('Run Deployment secondary-click turn', () => {
     // Where a turn lands and which box it holds are ONE decision, and it is the Run's, not the
     // screen's — see cardTurn and its tests in run/deployment.
     expect(turn).toMatch(
-      /const turn = cardTurn\(\s*prepared,\s*level,\s*selectedCardId,\s*arrangementRotation,\s*direction,\s*heldAnchor,\s*pointedCell,\s*\);/,
+      /const turn = cardTurn\(\s*prepared,\s*level,\s*cardInHandId,\s*arrangementRotation,\s*direction,\s*heldAnchor,\s*pointedCell,\s*\);/,
     );
     expect(turn).toContain('if (!turn) return;');
     expect(turn).toContain('setArrangementRotation(turn.rotation);');
@@ -63,8 +63,10 @@ describe('Run Deployment secondary-click turn', () => {
   });
 
   it('offers the gesture only while a dealt formation is waiting to be placed', () => {
+    // ...and only while that formation is IN HAND. One resting on the board has nothing to turn
+    // until it is picked up (ADR-0541).
     expect(runScreen).toMatch(
-      /onBoardSecondaryClick: stage === 'arrange' && selectedArrangementCard\?\.admitted\s*\? turnArrangementUnderCursor\s*: undefined,/,
+      /onBoardSecondaryClick: stage === 'arrange' && selectedArrangementCard\?\.admitted && cardInHandId\s*\? turnArrangementUnderCursor\s*: undefined,/,
     );
     // The rail and the gesture walk one ordered list, so a clicked turn is always a pressable one.
     expect(runScreen).toContain('const availableArrangementRotationList = useMemo<readonly RunFormationRotation[]>');
@@ -79,7 +81,7 @@ describe('Run Deployment secondary-click turn', () => {
       "import { useFormationKeys, type FormationTurnDirection } from './formationKeys';",
     );
     expect(runScreen).toMatch(
-      /useFormationKeys\(\{\s*turn: arranging && selectedArrangementCard\?\.admitted \? turnArrangement : null,\s*step: arranging \? stepArrangementCard : null,\s*begin: arranging \? startArrangedBattle : null,\s*\}\);/,
+      /useFormationKeys\(\{\s*turn: arranging && selectedArrangementCard\?\.admitted && cardInHandId \? turnArrangement : null,\s*step: arranging \? stepArrangementCard : null,\s*begin: arranging \? startArrangedBattle : null,\s*\}\);/,
     );
     // Turning needs a formation in hand; stepping is how one is CHOSEN, so it stays available
     // even while the selection is settling.
@@ -388,10 +390,12 @@ describe('Run Deployment hand', () => {
     expect(runScreen).not.toMatch(/<\/KitScroll>\s*<div className="skirmish-view-group run-meta-abandon">/);
   });
 
-  // A formation already on the board is still the player's to move.
+  // A formation already on the board is still the player's to move. The one exception is the
+  // formation already IN HAND: the document still records where it stood, so its own old squares
+  // have to take the placement instead of picking it up again (ADR-0541).
   it('takes a seated formation back into the hand when its square is clicked', () => {
     expect(runScreen).toMatch(
-      /const standing = arrangedCardAtCell\(latest, cell\);\s*if \(standing && standing !== selectedCardId\) \{\s*selectArrangementCard\(standing\);\s*return;\s*\}/,
+      /const standing = arrangedCardAtCell\(latest, cell\);\s*if \(standing && standing !== heldFormationCardId\) \{\s*selectArrangementCard\(standing\);\s*return;\s*\}/,
     );
     expect(runScreen).toContain("standing ? 'is-seated-formation' : ''");
     expect(runScreen).toContain('`Take back the formation at ${cell.x}, ${cell.y}`');
@@ -425,7 +429,7 @@ describe('Run Deployment aiming', () => {
   // A click must commit the same seating the player was shown, resolved from the same square.
   it('commits the seating that was previewed under the pointer', () => {
     expect(runScreen).toMatch(
-      /const seating = turnedCardPlacement\(\s*latest,\s*level,\s*selectedCardId,\s*arrangementRotation,\s*heldAnchor,\s*cell,\s*\);/,
+      /const seating = turnedCardPlacement\(\s*latest,\s*level,\s*cardInHandId,\s*arrangementRotation,\s*heldAnchor,\s*cell,\s*\);/,
     );
     expect(runScreen).toContain('if (!seating) return;');
     expect(runScreen).toContain('seating.anchor,');
@@ -434,9 +438,9 @@ describe('Run Deployment aiming', () => {
   // Placing finishes with a formation. The hand must move on by itself, and it must read the
   // document it just wrote — the render-time card list is a placement behind.
   it('hands the next formation to the cursor once one is seated', () => {
-    expect(runScreen).toContain('const following = nextArrangedCardToPlace(placed, selectedCardId);');
+    expect(runScreen).toContain('const following = nextArrangedCardToPlace(placed, cardInHandId);');
     expect(runScreen).toMatch(
-      /if \(following\) \{\s*setSelectedCardId\(following\);\s*setArrangementRotation\(0\);\s*\}/,
+      /if \(following\) \{\s*setSelectedCardId\(following\);\s*setHeldCardId\(following\);\s*setArrangementRotation\(0\);\s*\}/,
     );
     // Advancing must NOT clear the pointed square: the next formation appears under the cursor.
     const click = runScreen.match(/const placed = placeArrangedDeploymentCard\([\s\S]*?\n {10}\}\}/)?.[0];
@@ -463,7 +467,7 @@ describe('Run Deployment aiming', () => {
     expect(runScreen).not.toContain('turnableCardRotations');
     // The RAIL stays band-wide — its buttons must not flicker as the cursor moves.
     expect(runScreen).toMatch(/availableRotations=\{availableArrangementRotations\}/);
-    expect(runScreen).toContain('placeableCardRotations(prepared, level, selectedCardId)');
+    expect(runScreen).toContain('placeableCardRotations(prepared, level, cardInHandId)');
   });
 
   // Re-seating from the pointed square kept a unit under the cursor but walked the box a square
@@ -495,7 +499,7 @@ describe('Run Deployment aiming', () => {
     // The click commits the box on screen, not a fresh guess from the square under it: after a
     // turn that square may be the corner the formation leaves empty.
     expect(runScreen).toMatch(
-      /const seating = turnedCardPlacement\(\s*latest,\s*level,\s*selectedCardId,\s*arrangementRotation,\s*heldAnchor,\s*cell,\s*\);/,
+      /const seating = turnedCardPlacement\(\s*latest,\s*level,\s*cardInHandId,\s*arrangementRotation,\s*heldAnchor,\s*cell,\s*\);/,
     );
     expect(runScreen).toContain(
       '|| (pointedArrangementOption !== null && cellKey === pointedArrangementCell)',
@@ -524,7 +528,7 @@ describe('Run Deployment aiming', () => {
   // at the other end.
   it('paints the band from the level and its occupancy, never from the current turn', () => {
     expect(runScreen).toMatch(
-      /const arrangementBandCells = useMemo\(\(\) => new Set\(\s*\(selectedCardId \? openDeploymentBandCells\(prepared, level, selectedCardId\) : \[\]\)[\s\S]*?\), \[level, prepared, selectedCardId\]\);/,
+      /const arrangementBandCells = useMemo\(\(\) => new Set\(\s*\(cardInHandId \? openDeploymentBandCells\(prepared, level, cardInHandId\) : \[\]\)[\s\S]*?\), \[cardInHandId, level, prepared\]\);/,
     );
     // The rotation is deliberately absent from its dependencies — that is the whole fix.
     // Anchored on the dependency array rather than a line ending: the sources are CRLF, so a
@@ -537,7 +541,7 @@ describe('Run Deployment aiming', () => {
     expect(runScreen).toContain("band ? 'is-band' : ''");
     // The reachable set stays per-turn: it drives the label, tab order, and crosshair.
     expect(runScreen).toContain("placeable ? 'is-placeable' : ''");
-    expect(runScreen).toMatch(/arrangedCardPlaceableCells\(prepared, level, selectedCardId, arrangementRotation\)/);
+    expect(runScreen).toMatch(/arrangedCardPlaceableCells\(prepared, level, cardInHandId, arrangementRotation\)/);
   });
 
   // Aim-anywhere needs a hit target on every square, and that opted every square into the shared

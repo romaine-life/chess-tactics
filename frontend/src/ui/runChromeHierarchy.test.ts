@@ -427,12 +427,7 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('plannedPieceIds,');
     expect(skirmishBoard).toContain('export const PLANNED_UNIT_OPACITY = 0.62;');
     expect(skirmishBoard).toContain('opacity: PLANNED_UNIT_OPACITY });');
-    // One answer for plan strength, and the frame asks it before it asks anything else — a plan
-    // is not a live piece being dragged or premoved. The formation the player has taken back
-    // into their hand is the one exception it makes, and it is quieter still.
-    expect(skirmishBoard).toContain(
-      'const baseOpacity = plannedUnitOpacity(piece.id, state.plannedPieceIds, state.liftedPieceIds)',
-    );
+    expect(skirmishBoard).toContain('const baseOpacity = state.plannedPieceIds.has(piece.id)');
     expect(runScreen).not.toContain('advanceAutomaticDeployment(deployment, level)');
     expect(runScreen).toContain('data-testid="arrangement-begin-battle"');
     expect(runScreen).toContain('onBeginBattle={startArrangedBattle}');
