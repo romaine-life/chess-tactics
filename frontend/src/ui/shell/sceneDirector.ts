@@ -12,6 +12,20 @@ export interface SceneState {
   destinationHref: string | null;
   generation: number;
   error: Error | null;
+  /**
+   * How many times a failed scene has been asked to try again. It advances ONLY on `retry`, and
+   * the mounted layer key carries it, so retrying rebuilds the screen that failed instead of
+   * re-running the director around the same instance.
+   *
+   * A failure is usually held in the failed screen's own state — the Level Editor's resolved
+   * document error is the canonical one — and a resolve effect that has already run does not run
+   * again just because the phase moved back to `loading`. Retry therefore did nothing at all for
+   * those scenes: the participant re-reported the error it still held and the director failed
+   * straight back, whichever button was pressed and however many times (ADR-0548). Generation
+   * cannot serve here: it advances on every navigation, and remounting on that would destroy and
+   * rebuild every just-committed screen and its store.
+   */
+  retryEpoch: number;
   /** True while a cold load is walking the shell ladder in front of the scene rung. */
   startupActive: boolean;
   /** Index into SHELL_LADDER of the deepest rung already revealed; -1 before the first. */
@@ -54,6 +68,7 @@ export function initialSceneState(
     destinationHref: cold ? coldLoadHref : null,
     generation: 0,
     error: null,
+    retryEpoch: 0,
     startupActive: cold,
     startupStage: cold ? -1 : SETTLED_STAGE,
     startupReady: [],
@@ -155,13 +170,20 @@ export function reduceScene(state: SceneState, action: SceneAction): SceneState 
         ...state,
         phase: 'startup',
         generation: state.generation + 1,
+        retryEpoch: state.retryEpoch + 1,
         error: null,
         startupStage: -1,
         startupReady: [],
       };
     }
     if (!state.destination || !state.destinationHref || state.phase !== 'error') return state;
-    return { ...state, phase: 'loading', generation: state.generation + 1, error: null };
+    return {
+      ...state,
+      phase: 'loading',
+      generation: state.generation + 1,
+      retryEpoch: state.retryEpoch + 1,
+      error: null,
+    };
   }
   if (action.generation !== state.generation) return state;
   if (action.type === 'empty-slot-committed' && state.phase === 'exiting' && state.destination) {

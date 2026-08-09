@@ -3166,14 +3166,6 @@
       "kind": "css",
       "file": "src/style.css",
       "context": "",
-      "selector": ".scene-director.is-error .scene-loading-presentation button",
-      "surfaceHash": "34db55180825374225dd05c05a3ec3813864e99f52381b74986cbedbb9f51cbb",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
       "selector": ".scene-homepage-background",
       "surfaceHash": "ed093d4c29454db2a22af373e9ba8811aec2d61ef31c644925e2ba15b49ffb1d",
       "occurrence": 1
