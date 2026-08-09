@@ -79,6 +79,8 @@ function fixture(
       assembled.army.map((unit) => unit.id),
     );
   }
+  // Each staged offer is withdrawn once it is taken, exactly as `craft` stages held cards: a
+  // Sectio admits one card, and these are cards the Run arrived holding.
   cardIds.forEach((cardId, index) => {
     const definition = RUN_CARD_BY_ID[cardId];
     const offer = createRunCardOffer(assembled, definition, 0, 100 + index);
@@ -91,6 +93,10 @@ function fixture(
       },
     };
     assembled = performAdlectio(assembled, offer.offerId);
+    assembled = {
+      ...assembled,
+      sectio: { ...assembled.sectio!, adlectedCardOfferIds: [] },
+    };
   });
   const ready = assembled.phase === 'sectio' ? leaveSectio(assembled) : assembled;
   const run = resolveForcedDeploymentChoices(prepareDeployment(ready), level);

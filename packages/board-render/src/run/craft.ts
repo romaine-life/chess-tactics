@@ -710,6 +710,11 @@ function leaveSectioAuto(run: RunDocument): RunDocument {
  * themselves out of what the Run has to spend, and the staged offers are withdrawn so the Sectio
  * that is about to be left still reads as the one the game dealt.
  *
+ * That withdrawal also takes the offer back out of `adlectedCardOfferIds`, which is what lets a
+ * spec name more than one held card: a Sectio admits ONE card (`SECTIO_ADLECTIO_LIMIT`), and each
+ * staged admission is retracted before the next is staged, so no card is ever adlected into a
+ * visit that has already spent its admission.
+ *
  * They are adlected at the earliest legal point, after Battle 1, and then live through every
  * later Battle before the target.
  */

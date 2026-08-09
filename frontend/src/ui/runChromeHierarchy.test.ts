@@ -278,7 +278,11 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('<RunCardPile');
     expect(runCardPile).toContain('<RunCardBack');
     expect(runScreen).toContain('admitted by Adlectio and added to the Chartulary.');
-    expect(runScreen).toContain('All offered cards are in the Chartulary.');
+    // A Sectio admits one card, and the row says so on both sides of the choice: the count
+    // above the faces before it is made, the closure below them after.
+    expect(runScreen).toContain('They require compensation. Only one may be admitted.');
+    expect(runScreen).toContain('This Sectio has admitted its card. Reset Sectio to choose again.');
+    expect(runScreen).toContain('disabled={adlectioSpent || run.goldTenths < offer.cost * GOLD_SCALE}');
     expect(runCardFlight).toContain('<RunCard card={flight.offer} mode="reference" />');
     expect(runCard).not.toContain('run-card-purchased-indicator');
   });

@@ -55,6 +55,7 @@ import {
   runBattleActivityId,
   runCardUnitIds,
   performExpunctio,
+  sectioAdlectioSpent,
   sectioHasChanges,
   runCardDefinition,
   takeCommendatioKing,
@@ -1227,7 +1228,9 @@ function SectioPanel({
 }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   const sectio = run.sectio!;
-  const availableOffers = sectio.cardOffers.filter((offer) => !sectio.adlectedCardOfferIds.includes(offer.offerId));
+  // One card to a Sectio. The row keeps every unbought face on the table afterwards -- what you
+  // turned down is part of what you decided -- so the sentences around it carry the rule instead.
+  const adlectioSpent = sectioAdlectioSpent(run);
   const cardBackMediaUrl = useRunCardBackMediaUrl();
   return (
     <>
@@ -1252,12 +1255,14 @@ function SectioPanel({
           <span className="sr-only" role="status" aria-live="polite">{adlectioAnnouncement}</span>
           {/*
             The answering half of the opening grant's line. Both screens deal the same faces
-            with the same number printed on them; only here is that number what you hand over.
-            It goes once the stall is bought out, so the screen never invites a take it has
-            just told you is impossible — the empty notice below speaks for that state.
+            with the same number printed on them; only here is that number what you hand over,
+            and only here is one of them all you may have. The count is said BEFORE the choice,
+            because a player who learns it by being refused has already made it. It goes once
+            the admission is spent — the screen never invites a take it has just called
+            impossible — and the notice below speaks for that state.
           */}
-          {availableOffers.length === 0 ? null : (
-            <p className="run-card-row-call">They require compensation.</p>
+          {adlectioSpent ? null : (
+            <p className="run-card-row-call">They require compensation. Only one may be admitted.</p>
           )}
           <SectioCardRow>
             {sectio.cardOffers.map((offer, index) => {
@@ -1273,7 +1278,7 @@ function SectioPanel({
                       card={offer}
                       mode="sectio"
                       layoutId={offer.offerId}
-                      disabled={run.goldTenths < offer.cost * GOLD_SCALE}
+                      disabled={adlectioSpent || run.goldTenths < offer.cost * GOLD_SCALE}
                       onSelect={(source) => onAdlect(offer, source)}
                     />
                   )}
@@ -1281,9 +1286,9 @@ function SectioPanel({
               );
             })}
           </SectioCardRow>
-          {availableOffers.length === 0 ? (
+          {adlectioSpent ? (
             <InnerChromeBox className="run-sectio-cards-empty" role="status">
-              All offered cards are in the Chartulary.
+              This Sectio has admitted its card. Reset Sectio to choose again.
             </InnerChromeBox>
           ) : null}
         </section>
@@ -1849,7 +1854,12 @@ export function RunScreen({
     // every remaining affordable card and every Sectio control stays responsive while
     // any number of independent visual flights finish in the continuity layer.
     replace(adlected);
-    setAdlectioAnnouncement(`${runCardName(offer)} admitted by Adlectio and added to the Chartulary.`);
+    // The closure is spoken with the admission because it is the same event: a screen reader
+    // gets no second cue from a row whose remaining faces are printed exactly as they were.
+    setAdlectioAnnouncement(
+      `${runCardName(offer)} admitted by Adlectio and added to the Chartulary.`
+      + ' This Sectio admits no other card.',
+    );
   };
   // The Run's opening grant is the same admission as Adlectio and reads as one: the taken
   // card travels into the Chartulary from where it was lying. The Run phase owns that carry

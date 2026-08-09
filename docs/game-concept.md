@@ -119,9 +119,12 @@ these.
   long sample. The Sectios following Battles 1 and 2 draw from a pile capped at six gold;
   the cap holds prices down without emptying a tier.
 - A Sectio reveals three seeded formation-card offers, or four while
-  Quartermaster's Ledger is held. Each offer costs exactly its printed material
-  value. Adlectio adds the card and its units without rolling, assigning, or
-  revealing another property. The Run persists only its cursor through the hidden
+  Quartermaster's Ledger is held, and **admits exactly one of them** (ADR-0549).
+  Each offer costs exactly its printed material value. Adlectio adds the card and
+  its units without rolling, assigning, or revealing another property, and the
+  second admission is refused however much gold remains — the unbought offers stay
+  face up and stop being takeable until Reset Sectio returns the admission to the
+  visit. The Run persists only its cursor through the hidden
   pile; its seed reproduces membership and order across reload. The revealed backs
   in consumed offer seats still provide no replacement draw during that Sectio.
 - Run difficulty currently exposes only **Ataraxia 0 — The Untroubled Mind**,
@@ -427,9 +430,10 @@ cursed terrain and pieces; named-tactic surfacing; a competent search-based AI.
 Player armies and Run progression are governed by ADR-0193. ADR-0321 retired the
 separate draft phase in favor of Sectio, while ADR-0494 now removes that opening
 Sectio so Battle 1 introduces the Run before its card economy. ADR-0322's two-Pawn,
-8-gold starter remains. ADR-0323 removes the inherited one-card-per-Sectio cap so
-every affordable dealt card can undergo Adlectio once, and ADR-0393 names that
-optional card admission **Adlectio** in every post-Battle Sectio.
+8-gold starter remains. ADR-0393 names the optional card admission **Adlectio** in
+every post-Battle Sectio, and ADR-0549 holds each Sectio to exactly one of them —
+reversing ADR-0323's uncapped purchasing, whose acquisition rate was governed only
+by gold and outran the difficulty curve its Wars are authored against.
 
 ## 14. Administrator playtesting
 

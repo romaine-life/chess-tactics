@@ -193,6 +193,7 @@ export * from './ui/unitCatalog';
 export * from './run/craft';
 export {
   CURRENT_RUN_SAVE_VERSION,
+  SECTIO_ADLECTIO_LIMIT,
   RUN_CARD_BY_ID,
   RUN_CARD_DECK,
   RUN_OPENING_CARD_OFFER_COUNT,
@@ -212,6 +213,7 @@ export {
   runCardTierRank,
   runSectioCardMaxValue,
   runSectioCardOfferCount,
+  sectioAdlectioSpent,
   sectioCardOffersAtCursor,
   sectioCardPile,
   sectioPileRarityQuota,
