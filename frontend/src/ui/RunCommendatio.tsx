@@ -10,6 +10,7 @@ import {
 import { RunCard } from './RunCard';
 import { RunCardRow } from './RunCardRow';
 import { RunGoldAmount } from './RunResources';
+import { liveMediaForSlot } from '@chess-tactics/board-render';
 import { RunSceneViewport } from './RunWorkspace';
 import { workspaceBackgroundArtwork } from './workspaceBackgrounds';
 
@@ -79,9 +80,24 @@ export function RunCommendatio({
  * again — so it is a property of this screen rather than of the card. The line keeps its seat
  * whether or not there is gold, so three cards sit at one height.
  */
+/**
+ * The gold-gain mark. It is the original directional mark drawn for unit disposal, whose own slot
+ * was retired with that feature; retirement is terminal, so the same archived bytes were installed
+ * into a slot of their own rather than the retired one being revived. Decorative: an absent slot
+ * falls back to the plain gold resource icon.
+ */
+function goldGainedMarkUrl(): string | null {
+  try {
+    return liveMediaForSlot('ui/run/resources/gold-gained.png').media?.immutableUrl ?? null;
+  } catch {
+    return null;
+  }
+}
+
 function CommendatioSeat({ kingId, children }: { kingId: string; children: ReactNode }): ReactElement {
   const king = RUN_STARTER_CARD_BY_ID[kingId as RunStarterCardId];
   const bonus = king?.goldBonusTenths ?? 0;
+  const gainMark = goldGainedMarkUrl();
   return (
     <div className="run-card-grant-seat">
       {bonus > 0 ? (
@@ -91,7 +107,7 @@ function CommendatioSeat({ kingId, children }: { kingId: string; children: React
           title={`You gain ${formatGold(bonus)} gold on pickup`}
           aria-label={`You gain ${formatGold(bonus)} gold on pickup`}
         >
-          <RunGoldAmount valueTenths={bonus} />
+          <RunGoldAmount valueTenths={bonus} iconSrc={gainMark ?? undefined} />
         </span>
       ) : null}
       {children}
