@@ -5,7 +5,6 @@ import {
   RUN_CARD_FORMATION_TILE_VIEW_BOX,
   type RunCardFormationEdge,
 } from './RunCardFace';
-import type { SeatedFormationSquare } from './runDeploymentGrouping';
 
 const EDGES: readonly RunCardFormationEdge[] = Object.freeze(['north', 'east', 'south', 'west']);
 
@@ -24,7 +23,9 @@ const EDGE_MIDPOINT: Readonly<Record<RunCardFormationEdge, readonly [number, num
 const CENTRE = [48, 27] as const;
 
 /**
- * A seated formation's own boundary, drawn on the board.
+ * A formation's own boundary, drawn on the board — the one it is carried in and the one it is
+ * seated in alike, because since ADR-0533 both are a plan drawn at the same strength and a block
+ * that appeared only on release would say the block is made by letting go of it.
  *
  * The card face already prints its units on ONE outlined plot, because a line between two
  * occupied seats reads as a grid rather than as a body. The tile geometry is shared exactly —
@@ -35,8 +36,12 @@ const CENTRE = [48, 27] as const;
  * is visible, so switching treatments is a repaint rather than a remount and the same crafted
  * board can be compared under each.
  */
-export function RunFormationGroupPaint({ seated }: { seated: SeatedFormationSquare }): ReactElement {
-  const outward = new Set(seated.edges);
+export function RunFormationGroupPaint({
+  edges,
+}: {
+  edges: readonly RunCardFormationEdge[];
+}): ReactElement {
+  const outward = new Set(edges);
   const inward = EDGES.filter((edge) => !outward.has(edge));
   return (
     <svg

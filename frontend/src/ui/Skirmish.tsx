@@ -414,7 +414,9 @@ function SkirmishSession(props: SkirmishProps = {}) {
   // final Deployment position as the board source for the transition render, build the live
   // match into this same session store before paint, then release that temporary source. The
   // compositor never unmounts: incumbent units stay seated while its unit-identity ledger gives
-  // only the newly introduced formation members the canonical arrival treatment.
+  // only the newly introduced formation members the canonical arrival treatment. Deployment
+  // seats the player's army as a PLAN rather than as live units, so it is that army the ledger
+  // introduces here — the arrival is the promotion, which is why this is where it is voiced.
   useLayoutEffect(() => {
     if (runDeployment || !runBattle || !continuedFromDeploymentRef.current) return;
     if (stagedBattlePresentationKey === battlePresentationKey) return;
@@ -426,6 +428,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
       ai,
       deferClockStart: true,
       preserveBoardPresentation: true,
+      voiceDeployRollCall: true,
     });
     setRouteLevel(runBattle.level);
     setBoardSettled(true);

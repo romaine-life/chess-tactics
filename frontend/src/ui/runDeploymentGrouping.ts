@@ -61,6 +61,20 @@ export type SeatedFormationSquare = Readonly<{
 const cellKey = (cell: Readonly<{ x: number; y: number }>): string => `${cell.x},${cell.y}`;
 
 /**
+ * The block a set of squares makes, keyed by square.
+ *
+ * One solver for the formation in hand and the formation on the ground, because they are the same
+ * body at two moments. Since ADR-0533 a seated formation is a PLAN drawn at the same strength as
+ * the one on the cursor, so anything that says "this is one block" has to say it in both places or
+ * it says the block is created by letting go of it.
+ */
+export function formationBlockSquares(
+  cells: readonly Readonly<{ x: number; y: number }>[],
+): Map<string, readonly RunCardFormationEdge[]> {
+  return new Map(runCardFormationBoardCells(cells).map((cell) => [cellKey(cell), cell.edges]));
+}
+
+/**
  * Every square held by a formation ALREADY on the board, keyed by square.
  *
  * A formation counts once all of its units are seated, which is how `arrangedDeploymentCards`
@@ -84,8 +98,8 @@ export function seatedFormationsBySquare(run: RunDocument): Map<string, SeatedFo
     // The card's own edge solver, fed the squares the formation actually took. A formation is
     // authored orthogonally connected and is placed by rigid translation and rotation, so the
     // shape on the ground is the shape on the card and this is one closed outline.
-    for (const cell of runCardFormationBoardCells(squares)) {
-      seated.set(cellKey(cell), { cardId: card.id, groupIndex, edges: cell.edges, siblings });
+    for (const [key, edges] of formationBlockSquares(squares)) {
+      seated.set(key, { cardId: card.id, groupIndex, edges, siblings });
     }
   });
   return seated;

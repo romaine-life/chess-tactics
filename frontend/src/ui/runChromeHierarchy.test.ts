@@ -132,7 +132,13 @@ describe('Run chrome hierarchy', () => {
     expect(skirmishBoard).toContain('data-unit-arrivals={unitArrivals}');
     expect(skirmishBoard).toContain("if (unitArrivals === 'settled') arrivalPlansRef.current.clear()");
     expect(skirmish).toContain('onArrivingUnitIdsChange={reportArrivingUnitIds}');
-    expect(skirmishBoard).toContain('newlyVisibleArrivalPieces(visibleUnitIdsRef.current, livePieces)');
+    // A merely PLANNED unit is outside the arrival ledger, so seating a formation spends no
+    // entrance and the promotion into Battle is what introduces — and voices — the army.
+    expect(skirmishBoard).toContain('newlyVisibleArrivalPieces(visibleUnitIdsRef.current, deployedPieces)');
+    expect(skirmishBoard).toContain('livePieces.filter((piece) => !plannedPieceIds.has(piece.id))');
+    expect(skirmishBoard).toContain('for (const piece of deployedPieces) visibleUnitIdsRef.current.add(piece.id);');
+    expect(skirmish).toContain('voiceDeployRollCall: true');
+    expect(gameStore).toContain('if (!opts.preserveBoardPresentation || opts.voiceDeployRollCall) {');
     expect(runScreen).toContain('placeArrangedDeploymentCard(');
     expect(runScreen).not.toContain('pendingPlacementArrivalUnitIdRef');
     expect(runScreen).not.toContain('RunWorkspaceStages');
@@ -385,7 +391,7 @@ describe('Run chrome hierarchy', () => {
     expect(runDeploymentCardStack).not.toContain('Deploy all');
     expect(runDeploymentCardStack).not.toContain('Step through');
     expect(runDeploymentCardStack).not.toContain('SkirmishBoard');
-    expect(runDeploymentCardStack).toContain('Deal automatically');
+    expect(runDeploymentCardStack).toContain('Draw automatically');
     expect(runDeploymentCardStack).toContain('data-deployment-center-deck');
     expect(runDeploymentCardStack).toContain('data-testid="deployment-deal"');
     expect(runDeploymentCardStack).toContain("deployment?.stage === 'awaiting-deal' || deployment?.stage === 'dealing'");
@@ -411,6 +417,14 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('gameForRunDeployment(prepared, level, layout, true)');
     expect(runScreen).not.toContain('placeAdlectedDeploymentUnit');
     expect(runScreen).toContain('previewPieces: arrangementPreviewPieces');
+    // A seated formation reads as a PLAN, not a deployment: the same strength as the formation
+    // on the cursor, and no entrance until Begin Battle promotes the whole plan at once.
+    expect(runScreen).toContain('const plannedPieceIds = useMemo(');
+    expect(runScreen).toContain('() => new Set(Object.keys(layout.placements)),');
+    expect(runScreen).toContain('plannedPieceIds,');
+    expect(skirmishBoard).toContain('export const PLANNED_UNIT_OPACITY = 0.62;');
+    expect(skirmishBoard).toContain('opacity: PLANNED_UNIT_OPACITY });');
+    expect(skirmishBoard).toContain('const baseOpacity = state.plannedPieceIds.has(piece.id)');
     expect(runScreen).not.toContain('advanceAutomaticDeployment(deployment, level)');
     expect(runScreen).toContain('data-testid="arrangement-begin-battle"');
     expect(runScreen).toContain('onBeginBattle={startArrangedBattle}');

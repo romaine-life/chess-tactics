@@ -11,6 +11,7 @@ export function PaletteSelect({
   disabled = false,
   title,
   className = '',
+  options,
 }: {
   value: UnitPalette;
   onChange: (value: UnitPalette) => void;
@@ -18,10 +19,16 @@ export function PaletteSelect({
   disabled?: boolean;
   title?: string;
   className?: string;
+  /** Restrict the offered palettes. Defaults to the full catalog. The current `value` is always
+   * offered even when absent, so a select can never hide the colour it is displaying. */
+  options?: readonly UnitPalette[];
 }): ReactElement {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const listId = useId();
+  const offered = options
+    ? UNIT_PALETTES.filter((palette) => palette === value || options.includes(palette))
+    : UNIT_PALETTES;
 
   useEffect(() => {
     if (!open) return undefined;
@@ -40,8 +47,8 @@ export function PaletteSelect({
   };
 
   const move = (offset: number): void => {
-    const index = UNIT_PALETTES.indexOf(value);
-    const next = UNIT_PALETTES[(index + offset + UNIT_PALETTES.length) % UNIT_PALETTES.length];
+    const index = offered.indexOf(value);
+    const next = offered[(index + offset + offered.length) % offered.length];
     onChange(next);
   };
 
@@ -57,10 +64,10 @@ export function PaletteSelect({
       setOpen(true);
     } else if (event.key === 'Home') {
       event.preventDefault();
-      onChange(UNIT_PALETTES[0]);
+      onChange(offered[0]);
     } else if (event.key === 'End') {
       event.preventDefault();
-      onChange(UNIT_PALETTES[UNIT_PALETTES.length - 1]);
+      onChange(offered[offered.length - 1]);
     } else if (event.key === 'Escape') {
       setOpen(false);
     }
@@ -84,7 +91,7 @@ export function PaletteSelect({
       </ChromeButton>
       {open && !disabled ? (
         <div id={listId} className="palette-select-menu" role="listbox" aria-label={ariaLabel}>
-          {UNIT_PALETTES.map((palette) => (
+          {offered.map((palette) => (
             <ChromeButton unit="inner-list-row"
               key={palette}
               className={chromeUnitClassNames('inner-list-row', 'palette-select-option', palette === value && 'is-active')}

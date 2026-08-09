@@ -71,6 +71,7 @@ import {
   distinctCardRotations,
   arrangedDeploymentCanBegin,
   arrangedDeploymentCards,
+  arrangedDeploymentProgress,
   beginArrangedBattle,
   beginDeploymentDeal,
   completeDeploymentDeal,
@@ -135,6 +136,7 @@ import {
   RUN_FORMATION_GROUP_TREATMENTS,
   RUN_FORMATION_GROUP_TREATMENT_LABEL,
   runFormationGroupTreatment,
+  formationBlockSquares,
   seatedFormationsBySquare,
   type RunFormationGroupTreatment,
 } from './runDeploymentGrouping';
@@ -417,6 +419,7 @@ function ArrangedDeploymentControls({
   dealProgress,
   onDealProgress,
   onStepCard,
+  onSelectCard,
   onTurn,
   onRemove,
   onBeginBattle,
@@ -432,6 +435,7 @@ function ArrangedDeploymentControls({
   dealProgress: number;
   onDealProgress: (count: number) => void;
   onStepCard: (step: 1 | -1) => void;
+  onSelectCard: (cardId: string) => void;
   onTurn: (direction: FormationTurnDirection) => void;
   onRemove: () => void;
   onBeginBattle: () => void;
@@ -444,6 +448,13 @@ function ArrangedDeploymentControls({
   const cards = arrangedDeploymentCards(run);
   const selected = cards.find(({ card }) => card.id === selectedCardId) ?? null;
   const canBegin = arrangedDeploymentCanBegin(run);
+  // The one count of how much of the hand is down, read from the Run rather than recounted here.
+  // It answers before the draw too — the hand's size is settled when Deployment is prepared —
+  // which is what lets the panel below be dressed rather than built as the cards land.
+  const progress = arrangedDeploymentProgress(run);
+  // The hand is in the player's hands. Until then every control is present but answers nothing.
+  const arranging = stage === 'arrange';
+  const turnable = arranging && Boolean(selected?.admitted);
   return (
     <>
       {abandonDialog}
@@ -456,11 +467,15 @@ function ArrangedDeploymentControls({
         {/* The card is the subject of the whole panel, so it is PINNED above the rail and only
             the controls beneath it move. ADR-0030: the panel itself never scrolls — the house
             rail is a drawn element that is always present, so nothing here may fall back to the
-            browser's own bar. */}
+            browser's own bar.
+
+            The dealt stack takes the SAME pinned seat, because it is the same card one moment
+            earlier. It used to land inside the rail at a third of this width, so the deal flew
+            to a box the card never occupied and the hand jumped across the panel and doubled in
+            size the instant dealing finished. One seat, and the deal ends where the card lives. */}
         {stage === 'arrange' ? (
           <RunArrangementCard run={run} cards={cards} selectedCardId={selectedCardId} />
         ) : null}
-        <KitScroll className="run-arrangement-scroll">
         {stage === 'await-deal' || stage === 'dealing' ? (
           <RunDeploymentCardStack
             run={run}
@@ -471,16 +486,23 @@ function ArrangedDeploymentControls({
             onDiscardComplete={() => undefined}
           />
         ) : null}
-
-        {stage === 'arrange' ? (
-          <>
+        <KitScroll className="run-arrangement-scroll">
+        {/* The panel is DRESSED from the moment Deployment opens and never gains a control: the
+            hand's size, its rotations and its Battle are all known before the draw, so every
+            group below is the arranging panel exactly, disabled until the cards are in hand.
+            Building it as the cards landed re-laid the whole panel under the player at the one
+            moment they were watching it, and made the arrival look like a different screen. */}
+        <>
             <RunArrangementSteppers
               cards={cards}
               selectedCardId={selectedCardId}
               onStep={onStepCard}
+              onSelect={onSelectCard}
+              disabled={!arranging}
             />
-            {selected?.admitted ? (
-              <div className="skirmish-view-group run-deployment-control" data-testid="arrangement-rotation-control">
+            {/* Never conditional on there being a formation in hand. A group that comes and goes
+                as the hand is stepped moves everything under it, Remove included. */}
+            <div className="skirmish-view-group run-deployment-control" data-testid="arrangement-rotation-control">
                 <span className="skirmish-eyebrow">Rotation</span>
                 {/* Two turns, not four absolute angles. The formation on the board already shows
                     which way it faces, so the control is the VERB — and it is the same verb the
@@ -491,7 +513,7 @@ function ArrangedDeploymentControls({
                     data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                     className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'run-arrangement-turn')}
                     style={{ ['--run-leaf-control-index' as string]: 2 } as CSSProperties}
-                    disabled={departing || availableRotations.size < 2}
+                    disabled={!turnable || departing || availableRotations.size < 2}
                     onClick={() => onTurn('counter-clockwise')}
                     aria-label="Turn the formation left"
                   >
@@ -503,7 +525,7 @@ function ArrangedDeploymentControls({
                     data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                     className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'run-arrangement-turn')}
                     style={{ ['--run-leaf-control-index' as string]: 3 } as CSSProperties}
-                    disabled={departing || availableRotations.size < 2}
+                    disabled={!turnable || departing || availableRotations.size < 2}
                     onClick={() => onTurn('clockwise')}
                     aria-label="Turn the formation right"
                   >
@@ -511,8 +533,11 @@ function ArrangedDeploymentControls({
                     <span className="skirmish-grid-label">Right</span>
                   </ChromeButton>
                 </div>
+                {/* The instruction the hand is about to answer to. It reads the same before the
+                    draw as it does the moment the first card is in hand, so the line does not
+                    rewrite itself as the cards land. */}
                 <p className="skirmish-grid-hint">
-                  {selected.placed
+                  {selected?.placed
                     ? 'Point somewhere else on the battlefield to move this formation, or remove it.'
                     : 'Point at the battlefield and click to place this formation.'}
                   {availableRotations.size > 1 ? ' Right-click turns it too.' : ''}
@@ -525,18 +550,17 @@ function ArrangedDeploymentControls({
                   className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
                   style={{ ['--run-leaf-control-index' as string]: 4 } as CSSProperties}
                   data-testid="arrangement-remove-formation"
-                  disabled={departing || !selected.placed}
+                  disabled={!arranging || departing || !selected?.placed}
                   onClick={onRemove}
                 >
                   Remove formation
                 </ChromeButton>
               </div>
-            ) : null}
-
             {/* Review only. The candidates for "these units were placed together" are switched
                 here rather than being described, so the same seated board is judged under each
                 without re-placing a hand. The choice rides the address, so any one of them is
-                also a link on its own. */}
+                also a link on its own. Present from the moment Deployment opens and disabled
+                until the hand is, like every other group in this panel. */}
             <div className="skirmish-view-group run-deployment-control" data-testid="formation-group-review">
               <span className="skirmish-eyebrow">Formation grouping</span>
               <div className="run-formation-group-switch" role="group" aria-label="Formation grouping candidate">
@@ -550,6 +574,7 @@ function ArrangedDeploymentControls({
                     )}
                     style={{ ['--run-leaf-control-index' as string]: 7 + index } as CSSProperties}
                     key={treatment}
+                    disabled={!arranging || departing}
                     aria-pressed={groupTreatment === treatment}
                     onClick={() => onChooseGroupTreatment(treatment)}
                   >
@@ -558,33 +583,7 @@ function ArrangedDeploymentControls({
                 ))}
               </div>
             </div>
-
-            <div className="skirmish-view-group run-deployment-control">
-              <span className="skirmish-eyebrow">Battle</span>
-              {/* The panel's one key that leaves the screen, so it wears its cap like the rest:
-                  Space confirms the arrangement and goes. */}
-              <ChromeButton
-                unit="inner-text-button"
-                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                className={chromeUnitClassNames(
-                  'inner-text-button', 'app-header-button', 'run-arrangement-begin', canBegin && 'active',
-                )}
-                style={{ ['--run-leaf-control-index' as string]: 5 } as CSSProperties}
-                data-testid="arrangement-begin-battle"
-                disabled={departing || !canBegin}
-                onClick={onBeginBattle}
-              >
-                <kbd className="skirmish-grid-cap">Space</kbd>
-                <span className="skirmish-grid-label">Begin Battle</span>
-              </ChromeButton>
-              <p className="skirmish-grid-hint">
-                {canBegin
-                  ? 'Any formation left off the board sits out this Battle.'
-                  : 'Place His Grace before beginning Battle.'}
-              </p>
-            </div>
-          </>
-        ) : null}
+        </>
 
         {/* Abandon Run scrolls with everything else. Pinning it took height from the controls
             the player is actually using, and it is not worth more than them — it is the one
@@ -604,6 +603,55 @@ function ArrangedDeploymentControls({
           </ChromeButton>
         </div>
         </KitScroll>
+        {/* The panel's one key that leaves the screen, so it wears its cap like the rest: Space
+            confirms the arrangement and goes.
+
+            It is PINNED to the foot rather than sitting last in the rail. Below the card, the
+            steppers, the turns and Remove there was no height left for it, so the primary action
+            of the whole screen was under the fold — the player finished arranging and had nothing
+            to press. Pinned, it costs the rail a row and is always reachable.
+
+            It also STATES the arrangement rather than sitting beside a line that states it. The
+            count used to be its own row under the card, which read as the thing to press once it
+            said the hand was down, and was not pressable. The sentence a player wants to act on
+            and the control that acts are one control. It is always rendered, changing state
+            rather than appearing, so completion never re-lays the panel under a moving hand. */}
+        <div className="skirmish-view-group run-arrangement-begin-group">
+            <ChromeButton
+              unit="inner-text-button"
+              data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+              className={chromeUnitClassNames(
+                'inner-text-button', 'app-header-button', 'run-arrangement-begin', canBegin && 'active',
+              )}
+              style={{ ['--run-leaf-control-index' as string]: 5 } as CSSProperties}
+              data-testid="arrangement-begin-battle"
+              disabled={departing || !canBegin}
+              onClick={onBeginBattle}
+            >
+              <span className="run-arrangement-begin-go">
+                <kbd className="skirmish-grid-cap">Space</kbd>
+                <span className="skirmish-grid-label">Begin Battle</span>
+              </span>
+              <span
+                className={`run-arrangement-progress${progress.complete ? ' is-complete' : ''}`}
+                data-testid="arrangement-progress"
+                data-complete={progress.complete ? 'true' : 'false'}
+                aria-live="polite"
+              >
+                <span className="run-arrangement-progress-mark" aria-hidden="true">
+                  {progress.complete ? '✓' : '·'}
+                </span>
+                {progress.complete
+                  ? `All ${progress.total} on the board`
+                  : `${progress.placed} of ${progress.total} on the board`}
+              </span>
+            </ChromeButton>
+            <p className="skirmish-grid-hint">
+              {canBegin
+                ? 'Any formation left off the board sits out this Battle.'
+                : 'Place His Grace before beginning Battle.'}
+            </p>
+        </div>
       </section>
     </>
   );
@@ -732,6 +780,16 @@ function useRunDeploymentPresentation({
   const arrangementFootprint = useMemo(() => new Set(
     Object.values(pointedArrangementOption?.placements ?? {}).map((cell) => `${cell.x},${cell.y}`),
   ), [pointedArrangementOption]);
+  // The block the CARRIED formation makes, solved exactly like a seated one. Since ADR-0533 the
+  // formation on the cursor and the formation on the ground are both a plan drawn at the same
+  // strength, so a mark that says "this is one block" has to be on both: showing it only once the
+  // formation is let go would say the block is made by placing rather than by the card.
+  const carriedFormationBlock = useMemo(() => formationBlockSquares(
+    Object.values(pointedArrangementOption?.placements ?? {}),
+  ), [pointedArrangementOption]);
+  // The livery the carried block will keep once it is seated, so the colour does not change under
+  // the player's hand at the moment they commit it.
+  const carriedGroupIndex = arrangementCards.findIndex(({ card }) => card.id === selectedCardId);
   const arrangementPreviewPieces = useMemo<readonly Piece[]>(() => {
     if (!pointedArrangementOption) return [];
     const facing = defaultFacingForSide('player');
@@ -757,12 +815,22 @@ function useRunDeploymentPresentation({
     () => gameForRunDeployment(prepared, level, layout, true),
     [layout, level, prepared],
   );
+  // A seated formation is still a PLAN: it can be taken back, turned, or left off the board
+  // entirely, so it is drawn at the same strength as the formation on the cursor and spends no
+  // entrance. Every one of these units arrives together when Begin Battle promotes the plan into
+  // an army — the seating is a decision, the arrival is the event. The board keys the plan by
+  // piece id, which is the Run unit id these placements are written under (setup.ts runUnitId).
+  const plannedPieceIds = useMemo(
+    () => new Set(Object.keys(layout.placements)),
+    [layout.placements],
+  );
   const deploymentSurfaceState = useMemo<SkirmishBoardSurfaceState>(() => ({
     game: deploymentGame,
     seed: prepared.deployment?.seed ?? prepared.seed,
     viewKey: runBattleActivityId(prepared.id, prepared.battleIndex),
     previewPieces: arrangementPreviewPieces,
-  }), [arrangementPreviewPieces, deploymentGame, prepared.battleIndex, prepared.deployment?.seed, prepared.id, prepared.seed]);
+    plannedPieceIds,
+  }), [arrangementPreviewPieces, deploymentGame, plannedPieceIds, prepared.battleIndex, prepared.deployment?.seed, prepared.id, prepared.seed]);
 
   useEffect(() => {
     if (prepared !== run && prepared.phase === 'deployment') replace(prepared);
@@ -909,6 +977,13 @@ function useRunDeploymentPresentation({
       // own seats and the committed placements — see runDeploymentGrouping on why nothing is
       // persisted for it.
       const seated = seatedFormationSquares.get(cellKey) ?? null;
+      // The carried block wins the square it is over: the formation under the cursor is the one
+      // the player is deciding about, and where it overlaps ground it may take, what it will look
+      // like there is the useful answer.
+      const carriedEdges = carriedFormationBlock.get(cellKey) ?? null;
+      const block = carriedEdges
+        ? { edges: carriedEdges, groupIndex: carriedGroupIndex, cardId: selectedCardId }
+        : seated;
       return (
         <button
           type="button"
@@ -919,13 +994,16 @@ function useRunDeploymentPresentation({
             placeable ? 'is-placeable' : '',
             standing ? 'is-seated-formation' : '',
             filled ? 'is-move' : '',
-            seated ? 'has-formation-group' : '',
-            seated && hoveredFormationCardId === seated.cardId ? 'is-formation-hovered' : '',
+            block ? 'has-formation-group' : '',
+            carriedEdges ? 'is-formation-carried' : '',
+            !carriedEdges && seated && hoveredFormationCardId === seated.cardId
+              ? 'is-formation-hovered'
+              : '',
           ].filter(Boolean).join(' ')}
           data-formation-group={groupTreatment}
-          data-formation-card={seated?.cardId}
-          data-formation-index={seated ? seated.groupIndex % 6 : undefined}
-          data-formation-edges={seated?.edges.join(' ')}
+          data-formation-card={block?.cardId ?? undefined}
+          data-formation-index={block && block.groupIndex >= 0 ? block.groupIndex % 6 : undefined}
+          data-formation-edges={block?.edges.join(' ')}
           aria-label={standing
             ? `Take back the formation at ${cell.x}, ${cell.y}`
             : placeable
@@ -989,7 +1067,7 @@ function useRunDeploymentPresentation({
           <PredrawnMoveHighlightPaint />
           {/* The seated formation's own boundary, drawn on the sides that face OFF it — the
               card's rule, on the card's geometry, at board scale. */}
-          {seated ? <RunFormationGroupPaint seated={seated} /> : null}
+          {block ? <RunFormationGroupPaint edges={block.edges} /> : null}
         </button>
       );
     },
@@ -1002,6 +1080,7 @@ function useRunDeploymentPresentation({
         dealProgress={dealProgress}
         onDealProgress={setDealProgress}
         onStepCard={stepArrangementCard}
+        onSelectCard={selectArrangementCard}
         onTurn={turnArrangement}
         onRemove={removeArrangementCard}
         onBeginBattle={startArrangedBattle}
