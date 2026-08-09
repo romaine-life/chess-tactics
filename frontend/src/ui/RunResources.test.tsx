@@ -17,8 +17,8 @@ describe('Run resource artwork', () => {
 
   it('keeps the live currency value accessible without rendering the word gold', () => {
     const markup = renderToStaticMarkup(<RunGoldAmount valueTenths={25} />);
-    expect(markup).toContain('aria-label="2.5 gold"');
-    expect(markup).toContain('>2.5</span>');
+    expect(markup).toContain('aria-label="25 gold"');
+    expect(markup).toContain('>25</span>');
     expect(markup).not.toContain('>gold<');
   });
 
@@ -33,8 +33,8 @@ describe('Run resource artwork', () => {
     const markup = renderToStaticMarkup(
       <RunGoldTransactionAmount direction="loss" valueTenths={25} />,
     );
-    expect(markup).toContain('aria-label="2.5 gold lost"');
-    expect(markup).toContain('>2.5</span>');
+    expect(markup).toContain('aria-label="25 gold lost"');
+    expect(markup).toContain('>25</span>');
     expect(markup).not.toContain('>gold<');
   });
 

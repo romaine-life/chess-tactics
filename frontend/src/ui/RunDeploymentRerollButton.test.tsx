@@ -7,7 +7,7 @@ import {
 import { RunDeploymentRerollButton } from './RunDeploymentRerollButton';
 
 describe('RunDeploymentRerollButton', () => {
-  it('states the one-gold Deployment price', () => {
+  it('states the ten-gold Deployment price', () => {
     const markup = renderToStaticMarkup(
       <RunDeploymentRerollButton
         testId="deployment-reroll-test"
@@ -17,13 +17,13 @@ describe('RunDeploymentRerollButton', () => {
       />,
     );
 
-    expect(markup).toContain('aria-label="Reroll deployment for 1 gold"');
+    expect(markup).toContain('aria-label="Reroll deployment for 10 gold"');
     expect(markup).toContain('Redo every unit placement.');
     expect(markup).toContain('data-ui-sfx="gold"');
-    expect(markup).toContain('aria-label="1 gold"');
+    expect(markup).toContain('aria-label="10 gold"');
   });
 
-  it('states the five-gold Battle price and disables an unaffordable reroll', () => {
+  it('states the fifty-gold Battle price and disables an unaffordable reroll', () => {
     const markup = renderToStaticMarkup(
       <RunDeploymentRerollButton
         testId="battle-deployment-reroll-test"
@@ -34,9 +34,9 @@ describe('RunDeploymentRerollButton', () => {
     );
 
     expect(markup).toContain('disabled=""');
-    expect(markup).toContain('aria-label="Reroll deployment for 5 gold"');
-    expect(markup).toContain('title="Reroll deployment costs 5 gold."');
-    expect(markup).toContain('aria-label="5 gold"');
+    expect(markup).toContain('aria-label="Reroll deployment for 50 gold"');
+    expect(markup).toContain('title="Reroll deployment costs 50 gold."');
+    expect(markup).toContain('aria-label="50 gold"');
   });
 
   it('keeps the paid action visibly occupied while units withdraw', () => {
