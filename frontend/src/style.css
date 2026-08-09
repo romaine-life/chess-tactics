@@ -27932,3 +27932,84 @@ button.run-card-formation-cell {
   margin: 0;
   text-align: center;
 }
+
+/* Unit Roster — the shipped roster at 1:1, for comparative judgement.
+   No zoom control by design: these sprites are authored at their delivery size,
+   so magnifying them would hide the thing being inspected. */
+.unit-roster-lab {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+}
+
+.unit-roster-controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.unit-roster-controls label {
+  align-items: center;
+  display: flex;
+  font-size: var(--ds-text-xs);
+  gap: 6px;
+}
+
+.unit-roster-toggle { cursor: pointer; }
+
+.unit-roster-note {
+  color: var(--ds-text-muted, #9aa4b0);
+  font-size: var(--ds-text-xs);
+  margin: 0;
+}
+
+.unit-roster-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.unit-roster-row {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+}
+
+.unit-roster-row-label {
+  color: #f2f6ea;
+  flex: 0 0 84px;
+  font-size: var(--ds-text-xs);
+  text-shadow: 0 1px 2px rgb(0 0 0 / 70%);
+}
+
+.unit-roster-cells {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.unit-roster-cell {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+}
+
+/* Intrinsic size only — never width/height, which would scale the sprite. */
+.unit-roster-cell img { image-rendering: pixelated; }
+
+.unit-roster-cell figcaption {
+  color: #e7eedd;
+  font-size: 10px;
+  text-shadow: 0 1px 2px rgb(0 0 0 / 70%);
+}
+
+.unit-roster-missing {
+  color: #ffb4b4;
+  font-size: 10px;
+}

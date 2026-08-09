@@ -53,6 +53,7 @@ import { SliderRow } from './dressing/SliderRow';
 import { SliderLibraryStudio, SliderViewer } from './SliderLibraryStudio';
 import { SfxLibraryStudio, SfxViewer } from './SfxLibraryStudio';
 import { UnitArtLab } from './UnitArtLab';
+import { UnitRosterLab } from './UnitRosterLab';
 import { PortraitLab } from './PortraitEditor';
 import { NineSliceLab, DEFAULT_NINE_SLICE_ASSET } from './NineSliceEditor';
 import { PropSeatLab, type StructureEditorDraft } from './PropSeatLab';
@@ -2211,7 +2212,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
         </aside>
         </>
         ) : studioMode === 'viewer' ? (
-          viewerKind === 'unitart'
+          viewerKind === 'unitroster'
+            ? <UnitRosterLab header={studioViewerHeader} />
+            : viewerKind === 'unitart'
             ? <UnitArtLab
                 selectedUnit={unitBrushAsset}
                 direction={catalogFacing}
