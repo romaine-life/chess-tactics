@@ -42,6 +42,15 @@ inside a gold filigree border, crossed corner to corner by one bold red X. It sa
   art decision exists, so installing one later cannot shift the label beside it. It rides
   every state of that button — offered, spent, refused — because it is one control with
   one meaning, and the disabled styling already says which state it is in.
+- The seat's size is **derived from the control it rides, never asserted**. It fills that
+  control's content box and is held off the drawn frame by one `--ds-space-1` step on the
+  block axis; the inline axis already clears the frame by the host's own `--ds-inset`
+  (ADR-0055). Stating the block step is what makes the mark sit symmetrically inside the
+  frame rather than flush against it — text gets away with a zero block inset because a
+  line box carries its own leading, and a raster is ink to its edge. On the Expunctio
+  button (46px tall, 7px frame, `0 var(--ds-inset)`) that resolves to a 24px seat with
+  4px clear top and bottom. A first pass asserted 32px, which is exactly the content box,
+  and the mark touched the frame.
 - The mark ships **trimmed to its own ink and padded to the square that bounds it**, the
   same finish ADR-0366 gave the measures, so one seat size draws whatever is installed
   and no per-icon compensating transform exists to drift. `run-action-icon` therefore

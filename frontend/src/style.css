@@ -20700,14 +20700,17 @@ button.tileset-relationship-cell {
    label beside it. The host button already supplies the row and its gap. */
 .run-action-icon {
   align-items: center;
-  /* One seat for every action mark, sized to the 46px control it rides so the mark
-     reads as the button's subject rather than a sticker on it. A host that needs
-     another size sets the token on any ancestor rather than reaching past this
-     rule for the img. */
-  block-size: var(--run-action-seat, 32px);
+  aspect-ratio: 1;
+  /* The seat is DERIVED from the control it rides, not asserted: it fills that
+     control's content box and is held off the drawn frame by one space step on the
+     block axis. The inline axis already clears the frame by the host's own --ds-inset,
+     so stating the block step is what makes the mark sit symmetrically inside the
+     frame instead of flush against it (ADR-0055). Text gets away with a zero block
+     inset because a line box carries its own leading; a raster is ink to its edge and
+     does not. A host whose own height is indefinite names --run-action-seat instead. */
+  block-size: var(--run-action-seat, calc(100% - var(--ds-space-1) * 2));
   display: inline-flex;
   flex: none;
-  inline-size: var(--run-action-seat, 32px);
   justify-content: center;
 }
 
