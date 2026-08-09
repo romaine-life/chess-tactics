@@ -4473,8 +4473,9 @@ h1 {
 
 .skirmish-topbar-status {
   align-items: center;
+  block-size: 100%;
   display: flex;
-  gap: 12px;
+  gap: var(--titlebar-control-gap);
   justify-self: center;
   min-width: 0;
 }
@@ -4484,12 +4485,19 @@ h1 {
 .skirmish-status-chip {
   /* Kit panel frame so the status reads as a contained chip, not floating text —
      in-theme (panel.png), never the bland CSS box it replaced (ADR-0032/0033).
-     Fixed 46px height = the header buttons, so the bar's elements line up. */
+     The bar has ONE control height and ONE origin: a status box is the same
+     52px as the always-visible cluster buttons and shares their top and bottom
+     coordinate, so nothing in the bar sits on its own line. It used to be 46px
+     and 7px lower, which read as two families rather than one.
+     The frame's rail is not padding: at 7px of border the content used to begin
+     exactly on the rail's inner edge, with nothing between the two. The inset is
+     stated here, in the shared chip, so no consumer has to restate it. */
   align-items: center;
-  block-size: 46px;
+  block-size: var(--titlebar-control-size, 52px);
   box-sizing: border-box;
   display: flex;
   gap: var(--ds-inline);
+  padding-inline: var(--skirmish-status-chip-inset, var(--ds-space-2));
 }
 
 /* Chip text on the --ds-text role scale (ADR-0024) — label line over a muted
@@ -9377,6 +9385,26 @@ body.loading-bootstrap .app-startup-status {
 
   .run-topbar-status {
     display: flex;
+  }
+
+  /* The frames tighten before any information leaves the bar. The bar's three parts
+     are all invariants here — the brand's wordmark, five status boxes, and a 212px
+     control lane — and at the comfortable inset they do not all fit in 740. So the
+     frames and the marks give up their slack first: a narrower frame and a smaller
+     mark cost less than a missing measure. This is the floor; below it the next
+     thing to give would have to be a box, which is a design call, not a CSS one. */
+  .app-shell-titlebar .run-topbar-status {
+    --skirmish-status-chip-inset: var(--ds-space-1);
+    gap: var(--ds-space-1);
+  }
+
+  .app-shell-titlebar .run-topbar-measures {
+    --run-measure-seat: 18px;
+  }
+
+  .app-shell-titlebar .run-topbar-status .skirmish-clock .skirmish-icon {
+    height: 20px;
+    width: 20px;
   }
 }
 
@@ -17585,7 +17613,20 @@ button.tileset-relationship-cell {
   outline-offset: 2px;
 }
 
+/* The center slot answers to the SAME coordinate system as the control lane above:
+   origin at the title bar's origin, bottom at the structural divider's top edge. That
+   is what makes a status box and an always-visible cluster button share a top and a
+   bottom line instead of each being centred in a different box. */
 .app-shell-titlebar-center {
+  /* Centre whatever a route contributes inside that lane box. Adopting the lane's
+     coordinates without this seats a short contribution (the Editor's save state) on
+     the bar's top edge instead of on its control line. */
+  align-items: center;
+  align-self: start;
+  block-size: calc(var(--app-header-h) - var(--titlebar-rule-h));
+  display: flex;
+  justify-content: center;
+  margin-block: calc(-1 * var(--ds-titlebar-inset)) 0;
   min-width: 0;
 }
 
