@@ -26025,9 +26025,11 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   position: absolute;
 }
 
-/* The acceptance proof asserts the review covered the decoded native raster at
-   exact scale, so the specimens print at their stored 1060x1484 pixels and this
-   pane scrolls. Scaling them to fit would make that claim false. */
+/* The acceptance proof asserts the review covered the whole decoded 1060x1484
+   raster, so the two specimens are laid side by side at whatever height the
+   window allows and this pane scrolls rather than cropping either of them.
+   (The specimen rule below is height-led and does not print at stored pixels;
+   what the proof needs is every pixel visible, not one screen pixel each.) */
 .run-card-back-study {
   align-items: start;
   display: flex;
@@ -26134,15 +26136,21 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   max-inline-size: none;
 }
 
-/* Beats the base card-image img rule, which sizes every catalog image to an iso
-   tile and pixelates it. The specimen prints exactly as the Run prints it —
-   seated in the shared die-cut opening — so what is accepted here is what the
-   player is dealt. */
+/* The specimen is the RASTER under review, not a card in play. The backend accepts a card back
+   only against a proof claiming the owner covered the whole decoded 1060x1484 canvas
+   (liveMediaPolicy.runCardBackOwnerProofIssue), and the die-cut seating every game surface uses
+   trims a third of a percent off the top and bottom to sit inside the frames' opening — pixels
+   the reviewer would then never see. So this one surface prints the canvas whole. The box is
+   exactly 5:7 and so is the canvas, so `contain` neither crops nor letterboxes; it is stated
+   rather than `cover` because nothing here may be lost. Also beats the base card-image img rule,
+   which sizes every catalog image to an iso tile and pixelates it. */
 .tileset-studio-card-image.run-card-back-specimen .run-card-back-print {
-  block-size: var(--run-card-print-block-size, 94.4744%);
+  block-size: 100%;
   image-rendering: auto;
-  inline-size: var(--run-card-print-inline-size, 95.1887%);
-  object-fit: cover;
+  inline-size: 100%;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  object-fit: contain;
 }
 
 .run-card-back-study figcaption {
