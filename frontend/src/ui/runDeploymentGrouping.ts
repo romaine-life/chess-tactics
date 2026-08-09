@@ -2,8 +2,9 @@
 //
 // The card face already answers "are these units one thing?": it prints its units on a single
 // connected plot and wraps that plot in ONE outline, because a line between two occupied seats
-// reads as a grid rather than as a body (see runCardFormationBoardCells). The board drops that
-// answer the moment a formation is seated — seven pieces along the band read as seven pieces.
+// reads as a grid rather than as a body (see runCardFormationBoardCells). The board used to drop
+// that answer the moment a formation left the hand — seven pieces along the band read as seven
+// pieces, and the one thing that said otherwise was the cursor turning to grab.
 //
 // Nothing here is persisted. The grouping is already in the document twice over — a card's
 // `unitSeats` name its units for the life of the card, and `deployment.placements` names the
@@ -15,38 +16,14 @@ import { runCardUnitIds, type RunDocument } from '../run/model';
 import { runCardFormationBoardCells, type RunCardFormationEdge } from './RunCardFace';
 
 /**
- * How a seated formation is told apart from the ground and from its neighbours.
+ * How many liveries the board cycles through.
  *
- * Review-only, chosen by `?group=` on the Run address, so each candidate is a link that lands on
- * the same crafted board with a different answer painted on it.
+ * A Battle deals three cards, four while the Quartermaster's Ledger is held, so this is never
+ * reached in play; it exists so a hand longer than the palette wraps rather than losing its
+ * colour. Marking every block identically only says "these squares are spoken for" — it does not
+ * say WHICH body holds them, which is the half-answer a shared banner gives.
  */
-export type RunFormationGroupTreatment =
-  | 'off'
-  | 'outline'
-  | 'plot'
-  | 'heraldry'
-  | 'tether'
-  | 'hover';
-
-export const RUN_FORMATION_GROUP_TREATMENTS: readonly RunFormationGroupTreatment[] = Object.freeze([
-  'off', 'outline', 'plot', 'heraldry', 'tether', 'hover',
-]);
-
-/** Human labels for the review switcher; the id is what the address carries. */
-export const RUN_FORMATION_GROUP_TREATMENT_LABEL:
-Readonly<Record<RunFormationGroupTreatment, string>> = Object.freeze({
-  off: 'Off (today)',
-  outline: 'Outline',
-  plot: 'Plot',
-  heraldry: 'Plot + colours',
-  tether: 'Tether',
-  hover: 'On hover',
-});
-
-export function runFormationGroupTreatment(search: string): RunFormationGroupTreatment {
-  const value = new URLSearchParams(search).get('group');
-  return RUN_FORMATION_GROUP_TREATMENTS.find((treatment) => treatment === value) ?? 'off';
-}
+export const RUN_FORMATION_LIVERY_COUNT = 6;
 
 export type SeatedFormationSquare = Readonly<{
   cardId: string;
@@ -54,8 +31,6 @@ export type SeatedFormationSquare = Readonly<{
   groupIndex: number;
   /** The sides of this square that face off ITS OWN formation. The line is drawn on these only. */
   edges: readonly RunCardFormationEdge[];
-  /** The squares of this same formation, for the tether and for a whole-group hover. */
-  siblings: readonly string[];
 }>;
 
 const cellKey = (cell: Readonly<{ x: number; y: number }>): string => `${cell.x},${cell.y}`;
@@ -94,12 +69,11 @@ export function seatedFormationsBySquare(run: RunDocument): Map<string, SeatedFo
       })
       .filter((cell) => Number.isFinite(cell.x) && Number.isFinite(cell.y));
     if (!squares.length) return;
-    const siblings = squares.map(cellKey);
     // The card's own edge solver, fed the squares the formation actually took. A formation is
     // authored orthogonally connected and is placed by rigid translation and rotation, so the
     // shape on the ground is the shape on the card and this is one closed outline.
     for (const [key, edges] of formationBlockSquares(squares)) {
-      seated.set(key, { cardId: card.id, groupIndex, edges, siblings });
+      seated.set(key, { cardId: card.id, groupIndex, edges });
     }
   });
   return seated;

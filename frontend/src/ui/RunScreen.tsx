@@ -133,12 +133,9 @@ import { RunDeploymentCardStack, RunDeploymentDeckDeal } from './RunDeploymentCa
 import { RunArrangementCard, RunArrangementSteppers } from './RunArrangementHand';
 import { RunFormationGroupPaint } from './RunFormationGroupPaint';
 import {
-  RUN_FORMATION_GROUP_TREATMENTS,
-  RUN_FORMATION_GROUP_TREATMENT_LABEL,
-  runFormationGroupTreatment,
+  RUN_FORMATION_LIVERY_COUNT,
   formationBlockSquares,
   seatedFormationsBySquare,
-  type RunFormationGroupTreatment,
 } from './runDeploymentGrouping';
 import { RunDeploymentRerollButton } from './RunDeploymentRerollButton';
 import { RunExpunctioWorkspace } from './RunExpunctioWorkspace';
@@ -425,8 +422,6 @@ function ArrangedDeploymentControls({
   onBeginBattle,
   onDealComplete,
   departing,
-  groupTreatment,
-  onChooseGroupTreatment,
 }: {
   run: RunDocument;
   stage: RunDeploymentInteractionStage;
@@ -441,8 +436,6 @@ function ArrangedDeploymentControls({
   onBeginBattle: () => void;
   onDealComplete: () => void;
   departing: boolean;
-  groupTreatment: RunFormationGroupTreatment;
-  onChooseGroupTreatment: (treatment: RunFormationGroupTreatment) => void;
 }): ReactElement {
   const { abandonDialog, abandoning, requestAbandon } = useRunAbandon(run);
   const cards = arrangedDeploymentCards(run);
@@ -556,33 +549,6 @@ function ArrangedDeploymentControls({
                   Remove formation
                 </ChromeButton>
               </div>
-            {/* Review only. The candidates for "these units were placed together" are switched
-                here rather than being described, so the same seated board is judged under each
-                without re-placing a hand. The choice rides the address, so any one of them is
-                also a link on its own. Present from the moment Deployment opens and disabled
-                until the hand is, like every other group in this panel. */}
-            <div className="skirmish-view-group run-deployment-control" data-testid="formation-group-review">
-              <span className="skirmish-eyebrow">Formation grouping</span>
-              <div className="run-formation-group-switch" role="group" aria-label="Formation grouping candidate">
-                {RUN_FORMATION_GROUP_TREATMENTS.map((treatment, index) => (
-                  <ChromeButton
-                    unit="inner-text-button"
-                    data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                    className={chromeUnitClassNames(
-                      'inner-text-button', 'app-header-button',
-                      'run-formation-group-option', groupTreatment === treatment && 'active',
-                    )}
-                    style={{ ['--run-leaf-control-index' as string]: 7 + index } as CSSProperties}
-                    key={treatment}
-                    disabled={!arranging || departing}
-                    aria-pressed={groupTreatment === treatment}
-                    onClick={() => onChooseGroupTreatment(treatment)}
-                  >
-                    {RUN_FORMATION_GROUP_TREATMENT_LABEL[treatment]}
-                  </ChromeButton>
-                ))}
-              </div>
-            </div>
         </>
 
         {/* Abandon Run scrolls with everything else. Pinning it took height from the controls
@@ -691,7 +657,6 @@ function useRunDeploymentPresentation({
   // Which square belongs to which seated formation. A projection of the card's seats and the
   // committed placements — nothing is persisted for it, so no save version moves.
   const seatedFormationSquares = useMemo(() => seatedFormationsBySquare(prepared), [prepared]);
-  const groupTreatment = runFormationGroupTreatment(routeSearch);
   // Which SEATED formation the pointer is over — the whole card, not the square. Read off the
   // square the pointer already reports rather than tracked separately: a second enter/leave pair
   // on the same element is a second source of truth for where the mouse is, and the one that is
@@ -699,17 +664,6 @@ function useRunDeploymentPresentation({
   const hoveredFormationCardId = pointedArrangementCell
     ? seatedFormationSquares.get(pointedArrangementCell)?.cardId ?? null
     : null;
-  // Switching candidate rewrites only `group`, and lands on the PRESENTED Run address rather
-  // than the craft link that may still be in the bar. Every candidate is a craft link on its own
-  // — that is how one is handed over — but a switch made while comparing must not re-craft, or
-  // the hand the player just seated is thrown away between one candidate and the next.
-  const chooseGroupTreatment = useCallback((treatment: RunFormationGroupTreatment) => {
-    const presented = presentedRunAddress(window.location.pathname, window.location.search);
-    const address = new URL(`${presented.path}${presented.search}`, window.location.origin);
-    if (treatment === 'off') address.searchParams.delete('group');
-    else address.searchParams.set('group', treatment);
-    navigateApp(`${address.pathname}${address.search}`, { replace: true, scroll: false });
-  }, []);
   // Where deployment is allowed at all. A property of the level and of what is already seated,
   // so it holds still while the carried formation is turned — turning a formation in one corner
   // must not put out a square at the other end of the band.
@@ -1000,9 +954,8 @@ function useRunDeploymentPresentation({
               ? 'is-formation-hovered'
               : '',
           ].filter(Boolean).join(' ')}
-          data-formation-group={groupTreatment}
           data-formation-card={block?.cardId ?? undefined}
-          data-formation-index={block && block.groupIndex >= 0 ? block.groupIndex % 6 : undefined}
+          data-formation-index={block && block.groupIndex >= 0 ? block.groupIndex % RUN_FORMATION_LIVERY_COUNT : undefined}
           data-formation-edges={block?.edges.join(' ')}
           aria-label={standing
             ? `Take back the formation at ${cell.x}, ${cell.y}`
@@ -1086,8 +1039,6 @@ function useRunDeploymentPresentation({
         onBeginBattle={startArrangedBattle}
         onDealComplete={finishDeal}
         departing={departureActive}
-        groupTreatment={groupTreatment}
-        onChooseGroupTreatment={chooseGroupTreatment}
       />
     ),
     boardOverlay: (
