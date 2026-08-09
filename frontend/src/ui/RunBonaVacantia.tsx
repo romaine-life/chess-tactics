@@ -36,27 +36,37 @@ function RunVacantiaCardGrant({
   // The Sectio's own card row, not the lipsanon mat: the mat is sized for 64x64 relic
   // icons and collapses around a card face.
   return (
-    <RunCardRow count={offers.length} testId="run-vacantia-card-offers">
-      {offers.map((coreId, index) => (
-        <RunCard
-          key={coreId}
-          card={RUN_CARD_BY_ID[coreId]}
-          mode="grant"
-          layoutId={coreId}
-          seatIndex={index}
-          disabled={Boolean(taken)}
-          flying={taken === coreId}
-          // Local only so the untaken offers dim in the same frame as the press. The
-          // admission itself, and the card's travel into the Chartulary, belong to the
-          // Run phase: this take ends the phase, so the carry outlives this component.
-          onSelect={(source) => {
-            if (taken) return;
-            setTaken(coreId);
-            takeCard(coreId, source);
-          }}
-        />
-      ))}
-    </RunCardRow>
+    <div className="run-vacantia-grant">
+      {/*
+        The first screen of a Run, and the only one whose cards cost nothing. Every card
+        prints its value, and on the Sectio that same number IS its price, so an opening
+        grant with no words on it reads as a shop the starting purse can barely afford.
+        The line states the terms and nothing else — the cards are plainly takeable, so
+        an instruction to take one would only say what the row already says.
+      */}
+      <p className="run-card-row-call">They&apos;ll join for free.</p>
+      <RunCardRow count={offers.length} testId="run-vacantia-card-offers">
+        {offers.map((coreId, index) => (
+          <RunCard
+            key={coreId}
+            card={RUN_CARD_BY_ID[coreId]}
+            mode="grant"
+            layoutId={coreId}
+            seatIndex={index}
+            disabled={Boolean(taken)}
+            flying={taken === coreId}
+            // Local only so the untaken offers dim in the same frame as the press. The
+            // admission itself, and the card's travel into the Chartulary, belong to the
+            // Run phase: this take ends the phase, so the carry outlives this component.
+            onSelect={(source) => {
+              if (taken) return;
+              setTaken(coreId);
+              takeCard(coreId, source);
+            }}
+          />
+        ))}
+      </RunCardRow>
+    </div>
   );
 }
 
