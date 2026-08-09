@@ -231,6 +231,19 @@ and don't tell the user screenshots are impossible. Use the helper below.
    decorative atom overhang. A source check that merely finds `ShellWorkspace`
    does not satisfy this geometry gate.
 
+   Title-bar mark changes additionally run the seat gate, which reads the
+   INSTALLED bytes rather than trusting a number in CSS:
+   ```
+   npm run verify:icon-seats -- --base http://127.0.0.1:5175
+   ```
+   A mark is drawn into a square seat with `contain`, which scales the CANVAS, so
+   transparent margin baked into an icon comes straight off the drawn glyph. Marks
+   that ship trimmed to their own ink need no compensation; the kit's game glyphs
+   are NOT trimmed, so `style.css` states each one's ink fraction by hand. Nothing
+   in CI can check those numbers — the bytes live in blob storage, not git — so this
+   gate fails when a re-uploaded icon no longer matches its declaration, and tells
+   you to delete the rule outright once an icon ships trimmed.
+
    Scene-director / navigation-lifecycle changes additionally run the live
    transition gate (menu → Play with a mid-transition address canonicalization):
    ```
