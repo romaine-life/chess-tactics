@@ -5859,6 +5859,36 @@ const MIGRATIONS = [
        WHERE body->'runSaveVersion' = '34'::jsonb;
     `,
   },
+  {
+    version: 75,
+    name: 'The Battle report records the enemy force left standing',
+    // Deditio pays for what the enemy still had on the board when its King fell (ADR-0543), so
+    // the aftermath report gains the count it is priced from. A Run already parked on one earned
+    // its gold under the old rules and its `goldTenths` is settled, so the field arrives as the
+    // zero it truthfully was: that report was never paid a Deditio, and Continue must bank
+    // exactly the total the screen has been showing. Every later Battle reads its own count.
+    sql: `
+      UPDATE active_runs
+         SET body = jsonb_set(
+               body || jsonb_build_object('runSaveVersion', 36),
+               '{aftermath,standingEnemyValue}',
+               '0'::jsonb,
+               true
+             ),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE body->'runSaveVersion' = '35'::jsonb
+         AND jsonb_typeof(body->'aftermath') = 'object';
+
+      -- Every other Run has no report in flight and advances on the version alone. This runs
+      -- after the rewrite above, which has already moved its rows off 35.
+      UPDATE active_runs
+         SET body = body || jsonb_build_object('runSaveVersion', 36),
+             revision = revision + 1,
+             updated_at = now()
+       WHERE body->'runSaveVersion' = '35'::jsonb;
+    `,
+  },
 ];
 
 let pool = null;
@@ -22694,6 +22724,7 @@ const ACTIVE_RUN_AFTERMATH_FIELDS = new Set([
   'elapsedMs',
   'goldTenths',
   'bonusGoldTenths',
+  'standingEnemyValue',
   'survivingUnitIds',
   'fallenUnits',
 ]);
@@ -23184,10 +23215,12 @@ function validateActiveRunBody(run) {
       if (aftermath.elapsedMs !== null && (!isFiniteInteger(aftermath.elapsedMs) || aftermath.elapsedMs < 0)) {
         return 'run.aftermath.elapsedMs is invalid';
       }
-      for (const field of ['goldTenths', 'bonusGoldTenths']) {
+      for (const field of ['goldTenths', 'bonusGoldTenths', 'standingEnemyValue']) {
         if (!isFiniteInteger(aftermath[field]) || aftermath[field] < 0) return `run.aftermath.${field} is invalid`;
       }
       if (aftermath.bonusGoldTenths > aftermath.goldTenths) return 'run.aftermath.bonusGoldTenths is invalid';
+      // A whole enemy army is worth well under this; the bound only refuses nonsense.
+      if (aftermath.standingEnemyValue > 999) return 'run.aftermath.standingEnemyValue is invalid';
       if (
         !Array.isArray(aftermath.survivingUnitIds)
         || aftermath.survivingUnitIds.length > 100

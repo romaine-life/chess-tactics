@@ -28,7 +28,7 @@ export {
 };
 
 /** The schema version of one persisted in-progress Run. Only this exact save shape is read. */
-export const CURRENT_RUN_SAVE_VERSION = 35;
+export const CURRENT_RUN_SAVE_VERSION = 36;
 export type RunSaveVersion = typeof CURRENT_RUN_SAVE_VERSION;
 
 export class UnsupportedRunSaveError extends Error {
@@ -56,6 +56,7 @@ const RUN_SAVE_VERSION_ARRANGED_PILE_SOURCE = 30;
 const RUN_SAVE_VERSION_OPENING_CARD_GRANT_SOURCE = 31;
 const RUN_SAVE_VERSION_AUTHORED_DEAL_SOURCE = 33;
 const RUN_SAVE_VERSION_KING_CHOICE_SOURCE = 34;
+const RUN_SAVE_VERSION_COMMENDATIO_SOURCE = 35;
 const RUN_SAVE_VERSION_RARITY_BANDS_SOURCE = 32;
 export const GOLD_SCALE = 10;
 export const RUN_STARTING_GOLD = 8;
@@ -294,6 +295,68 @@ export function manubiumGoldTenths(award: ManubiumAward): number {
 // the number lives in exactly one place. `verify:royal-fork` reads the second of these.
 export const RUN_EN_PASSANT_BOUNTY_TENTHS = manubiumGoldTenths({ id: 'en-passant' });
 export const RUN_ROYAL_FORK_BOUNTY_TENTHS = manubiumGoldTenths({ id: 'royal-fork' });
+
+// ---- Deditio -----------------------------------------------------------------------------
+//
+// The surrender of a force that was still standing when its King fell. Every Battle is won by
+// checkmate -- the win rule wants the enemy King CAPTURED, which legal-move generation never
+// permits, so mate is the only ending a Battle has -- and until now the Run paid the same
+// whether that mate came on move twelve against a whole army or on move sixty against a
+// stripped King. The Battle's own reward is computed from the enemies the level FIELDS, not the
+// ones the player took, so grinding the board down cost nothing and was strictly safer.
+//
+// Deditio is the price on that choice: what the enemy still had on the board when it gave in.
+// It is the only reward here that a player can lose by playing longer, which is the whole
+// point of it.
+
+/**
+ * What each point of enemy force still standing at the mate pays.
+ *
+ * Two tenths a point is the same rate an advantageous capture pays per point of margin, which
+ * is the internal consistency worth having: material won and material the player never had to
+ * take are priced alike. Against a typical Battle -- an enemy force near sixteen points, paying
+ * nine gold -- mating with the army whole banks 3.2, about one card, and grinding to a bare
+ * King banks nothing at all. That spread is the incentive; the floor is today's payout, so no
+ * Run gets worse and only the ceiling moves.
+ */
+export const RUN_DEDITIO_TENTHS_PER_POINT = 2;
+
+/** A board unit as Deditio reads it -- the same structural shape `manubiaeUnitWorth` prices. */
+interface StandingForceUnit {
+  readonly side: string;
+  readonly alive: boolean;
+  readonly type: string;
+  readonly promotedFrom?: string;
+}
+
+/**
+ * What the enemy still had on the board, in points.
+ *
+ * Priced through `manubiaeUnitWorth`, so this agrees with every other place the Run values a
+ * unit: a promoted pawn counts as the Pawn it started as, and anything with no purchase price
+ * -- the King, an obstacle -- counts for nothing. The King costing zero is what makes a
+ * ground-down force score zero rather than one, which is exactly the reading intended.
+ */
+export function standingEnemyForceValue(pieces: readonly StandingForceUnit[]): number {
+  return pieces.reduce(
+    (total, piece) => total + (piece.alive && piece.side === 'enemy' ? manubiaeUnitWorth(piece) ?? 0 : 0),
+    0,
+  );
+}
+
+/** The whole enemy force a level fields, in points -- what a Battle nobody has fought yet
+ * still has standing. The crafter places Battles rather than playing them, so this is the
+ * honest default for one of its reports. */
+export function levelEnemyForceValue(level: Level): number {
+  return standingEnemyForceValue(
+    level.layers.units.map((unit) => ({ side: unit.side, alive: true, type: unit.type })),
+  );
+}
+
+/** What a surrender of `standingEnemyValue` points pays, in tenths. */
+export function deditioGoldTenths(standingEnemyValue: number): number {
+  return Math.max(0, Math.round(standingEnemyValue)) * RUN_DEDITIO_TENTHS_PER_POINT;
+}
 
 export const PIECE_LABEL: Readonly<Record<RunArmyPieceType, string>> = Object.freeze({
   pawn: 'Pawn',
@@ -539,6 +602,14 @@ export interface RunAftermathState {
   goldTenths: number;
   /** The part of `goldTenths` a lipsanon paid on top of the Battle's own reward. */
   bonusGoldTenths: number;
+  /**
+   * Points of enemy force still standing at the mate, which Deditio is paid on.
+   *
+   * The FACT is stored rather than the gold, the way `elapsedMs` is stored rather than the
+   * speed bonus: this screen and the Continue that banks it then price one number twice
+   * instead of agreeing by luck. The board it was read off is gone by the time either asks.
+   */
+  standingEnemyValue: number;
   survivingUnitIds: string[];
   fallenUnits: RunAftermathFallenUnit[];
 }
@@ -547,6 +618,8 @@ export interface RunAftermathState {
 export interface RunBattleReport {
   survivingUnitIds: readonly string[];
   turns: number;
+  /** Points of enemy force alive on the committed final board (`standingEnemyForceValue`). */
+  standingEnemyValue: number;
 }
 
 export interface RunSectioState {
@@ -1753,6 +1826,11 @@ export function normalizeRunDocument(run: RunDocument): RunDocument {
   if (next.aftermath === undefined || (next.phase !== 'aftermath' && next.aftermath !== null)) {
     next = { ...next, aftermath: next.phase === 'aftermath' ? next.aftermath ?? null : null };
   }
+  // A report whose standing count is missing or nonsense surrendered nothing, which is the
+  // reading that keeps Continue banking the total this screen already showed.
+  if (next.aftermath && !(Number.isSafeInteger(next.aftermath.standingEnemyValue) && next.aftermath.standingEnemyValue >= 0)) {
+    next = { ...next, aftermath: { ...next.aftermath, standingEnemyValue: 0 } };
+  }
   if (
     next.phase !== 'sectio'
     || !next.sectio
@@ -2795,6 +2873,9 @@ export function migrateRunSaveDocument(value: unknown): RunDocument {
   if (stored.runSaveVersion === RUN_SAVE_VERSION_KING_CHOICE_SOURCE) {
     stored = migrateRunToCommendatio(stored);
   }
+  if (stored.runSaveVersion === RUN_SAVE_VERSION_COMMENDATIO_SOURCE) {
+    stored = migrateRunToDeditio(stored);
+  }
   return normalizeRunDocument(stored as unknown as RunDocument);
 }
 
@@ -2824,7 +2905,22 @@ function migrateRunToKingChoice(stored: Record<string, unknown>): Record<string,
  * nothing is in flight there and each Run simply gains the empty field.
  */
 function migrateRunToCommendatio(stored: Record<string, unknown>): Record<string, unknown> {
-  return { ...stored, runSaveVersion: CURRENT_RUN_SAVE_VERSION, commendatio: null };
+  return { ...stored, runSaveVersion: RUN_SAVE_VERSION_COMMENDATIO_SOURCE, commendatio: null };
+}
+
+/**
+ * The Battle report gains what the enemy still had standing when its King fell (ADR-0543).
+ *
+ * A Run parked on an aftermath earned its gold under the old rules and its `goldTenths` is
+ * already settled, so the field arrives as the zero it truthfully was: that report was never
+ * paid a Deditio, and Continue must bank exactly the total the screen has been showing. Every
+ * Battle from here on reads its own count off the board.
+ */
+function migrateRunToDeditio(stored: Record<string, unknown>): Record<string, unknown> {
+  const aftermath = stored.aftermath && typeof stored.aftermath === 'object' && !Array.isArray(stored.aftermath)
+    ? { ...stored.aftermath as Record<string, unknown>, standingEnemyValue: 0 }
+    : stored.aftermath;
+  return { ...stored, runSaveVersion: CURRENT_RUN_SAVE_VERSION, aftermath };
 }
 
 export function addArmyPieces(
@@ -3393,10 +3489,16 @@ function battleElapsedMsForReward(run: RunDocument): number | null {
   return Number.isSafeInteger(startedAtMs) ? Math.max(0, Date.now() - (startedAtMs as number)) : null;
 }
 
-function battleRewardTenths(run: RunDocument, survivingUnitIds: readonly string[], elapsedMs?: number | null): {
+function battleRewardTenths(
+  run: RunDocument,
+  survivingUnitIds: readonly string[],
+  standingEnemyValue: number,
+  elapsedMs?: number | null,
+): {
   victoryGoldTenths: number;
   bonusGoldTenths: number;
   speedGoldTenths: number;
+  deditioGoldTenths: number;
 } {
   const survivorSet = new Set(survivingUnitIds);
   const level = run.war.battles[run.battleIndex].level;
@@ -3409,6 +3511,10 @@ function battleRewardTenths(run: RunDocument, survivingUnitIds: readonly string[
     // re-derive the identical number without the persisted report carrying a field for it
     // (ADR-0539).
     speedGoldTenths: speedBonusTenths(level, elapsedMs === undefined ? battleElapsedMsForReward(run) : elapsedMs),
+    // What the enemy still had standing when its King fell (ADR-0543). Priced from the report's
+    // own count for the same reason the speed bonus is priced from its frozen clock: the board
+    // is gone, and the screen and the banking must not read two different numbers.
+    deditioGoldTenths: deditioGoldTenths(standingEnemyValue),
   };
 }
 
@@ -3422,15 +3528,20 @@ function battleRewardTenths(run: RunDocument, survivingUnitIds: readonly string[
  */
 export function closeBattle(run: RunDocument, report: RunBattleReport): RunDocument {
   if (run.phase !== 'battle') return run;
-  if (run.battleIndex >= run.war.battles.length - 1) return openSectio(run, report.survivingUnitIds);
+  if (run.battleIndex >= run.war.battles.length - 1) {
+    return openSectio(run, report.survivingUnitIds, report.standingEnemyValue);
+  }
   const startedAtMs = run.battleRuntime?.startedAtMs;
   // Read the wall clock ONCE and settle the report on it, so the elapsed time the screen
   // shows and the elapsed time the speed bonus is paid on are the same reading.
   const elapsedMs = Number.isSafeInteger(startedAtMs)
     ? Math.max(0, Date.now() - (startedAtMs as number))
     : null;
-  const { victoryGoldTenths, bonusGoldTenths, speedGoldTenths } =
-    battleRewardTenths(run, report.survivingUnitIds, elapsedMs);
+  const standingEnemyValue = Number.isSafeInteger(report.standingEnemyValue)
+    ? Math.max(0, report.standingEnemyValue)
+    : 0;
+  const { victoryGoldTenths, bonusGoldTenths, speedGoldTenths, deditioGoldTenths: deditioTenths } =
+    battleRewardTenths(run, report.survivingUnitIds, standingEnemyValue, elapsedMs);
   const armyById = new Map(run.army.map((unit) => [unit.id, unit]));
   return touch({
     ...run,
@@ -3440,8 +3551,9 @@ export function closeBattle(run: RunDocument, report: RunBattleReport): RunDocum
       battleIndex: run.battleIndex,
       turns: Number.isSafeInteger(report.turns) && report.turns > 0 ? report.turns : 0,
       elapsedMs,
-      goldTenths: victoryGoldTenths + bonusGoldTenths + speedGoldTenths,
+      goldTenths: victoryGoldTenths + bonusGoldTenths + speedGoldTenths + deditioTenths,
       bonusGoldTenths,
+      standingEnemyValue,
       survivingUnitIds: [...report.survivingUnitIds],
       fallenUnits: (run.battleRuntime?.observedDeadUnitIds ?? []).flatMap((id) => {
         const unit = armyById.get(id);
@@ -3454,23 +3566,33 @@ export function closeBattle(run: RunDocument, report: RunBattleReport): RunDocum
 /** Leave the aftermath report; whatever follows the Battle opens now. */
 export function leaveAftermath(run: RunDocument): RunDocument {
   if (run.phase !== 'aftermath' || !run.aftermath) return run;
-  return openSectio(run, run.aftermath.survivingUnitIds);
+  return openSectio(run, run.aftermath.survivingUnitIds, run.aftermath.standingEnemyValue);
 }
 
-export function openSectio(run: RunDocument, survivingUnitIds: readonly string[]): RunDocument {
+/**
+ * `standingEnemyValue` defaults to nothing standing, which is what a Battle that was PLACED
+ * rather than played has to report: the crafter fast-forwards through Battles nobody fought,
+ * and a mate that never happened surrendered no army. A real victory always passes its own
+ * count, from the report or from the aftermath that froze it.
+ */
+export function openSectio(
+  run: RunDocument,
+  survivingUnitIds: readonly string[],
+  standingEnemyValue = 0,
+): RunDocument {
   // Reachable from the Battle itself (the final one, and every fast-forwarded Battle the
   // crafter plays) and from the aftermath report the other Battles stop at.
   if (run.phase !== 'battle' && run.phase !== 'aftermath') return run;
   const finalBattle = run.battleIndex >= run.war.battles.length - 1;
 
-  const { victoryGoldTenths, bonusGoldTenths: rifleTenths, speedGoldTenths } =
-    battleRewardTenths(run, survivingUnitIds);
+  const { victoryGoldTenths, bonusGoldTenths: rifleTenths, speedGoldTenths, deditioGoldTenths: deditioTenths } =
+    battleRewardTenths(run, survivingUnitIds, standingEnemyValue);
   if (finalBattle) {
     return touch({ ...run, phase: 'victory', sectio: null, deployment: null, battleRuntime: null, aftermath: null });
   }
   const banked: RunDocument = {
     ...run,
-    goldTenths: run.goldTenths + victoryGoldTenths + rifleTenths + speedGoldTenths,
+    goldTenths: run.goldTenths + victoryGoldTenths + rifleTenths + speedGoldTenths + deditioTenths,
     deployment: null,
     battleRuntime: null,
     aftermath: null,
