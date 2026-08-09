@@ -233,6 +233,7 @@ export function FramedReadOnlyBoardView({
   viewportMode = 'canonical',
   showGrid = false,
   renderCellOverlay,
+  frameTransform,
   onTerrainFirstFrame,
   onSceneFirstFrame,
   onFrameError,
@@ -255,6 +256,9 @@ export function FramedReadOnlyBoardView({
   showGrid?: boolean;
   /** Per-playable-cell paint, on the same terms the static view offers it. */
   renderCellOverlay?: ComponentProps<typeof StudioReadOnlyBoard>['renderCellOverlay'];
+  /** An entrance in flight, on the same terms the read-only renderer offers it. Absent, this
+   * surface is still and starts no clock. */
+  frameTransform?: ComponentProps<typeof StudioReadOnlyBoard>['frameTransform'];
   onTerrainFirstFrame?: () => void;
   onSceneFirstFrame?: () => void;
   onFrameError?: (error: unknown) => void;
@@ -306,6 +310,7 @@ export function FramedReadOnlyBoardView({
           ariaLabel={ariaLabel}
           showGrid={showGrid}
           renderCellOverlay={renderCellOverlay}
+          frameTransform={frameTransform}
           onTerrainFirstFrame={onTerrainFirstFrame}
           onSceneFirstFrame={onSceneFirstFrame}
           onFrameError={onFrameError}

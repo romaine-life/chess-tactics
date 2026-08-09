@@ -167,11 +167,15 @@ these.
   standard value (ADR-0220).
 - Sectio visits separate Adlectio, upcoming-Battle reconnaissance, detailed army
   inspection, and card-aware **Expunctio** into explicit main-pane destinations.
-  **View Battle** shows the next canonical Level in a
+  **Exploratio** shows the next canonical Level in a
   pannable read-only board beside its rules, zones, time control, and forces.
   Fixed opponents appear on the map; known setup-event rosters appear in the
-  ledger without resolving their exact squares, and the persistent Run army
-  still waits for Deployment. The persistent Controls panel navigates these
+  ledger without resolving their exact squares. Its **Shuffle** deals the held
+  collection onto the deployment band and seats it at random, by Deployment's own
+  admission and placement rules, so the band can be judged against the army that
+  will stand on it; that arrangement is one possibility rather than the hand the
+  Run will deal, re-seats on every press, and is never written to the Run — the
+  actual deal still waits for Deployment (ADR-0549). The persistent Controls panel navigates these
   destinations, resets the complete same-offer Sectio visit, and continues the
   Run; Army inspection remains available in every Run phase without pausing an
   active Battle. A held card is one formation: Sectio never sells, condenses, or rearranges an
