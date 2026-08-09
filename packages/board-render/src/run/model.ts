@@ -1388,6 +1388,8 @@ export interface RunCreateOptions {
   now?: string;
   /** The King this Run opens on. Defaults to His Grace, the Run's original starter. */
   kingId?: RunStarterCardId;
+  /** Open on the King choice rather than starting one. Only the player-facing entry sets this. */
+  chooseKing?: boolean;
 }
 
 export function createRun(
@@ -1409,14 +1411,15 @@ export function createRun(
     : typeof nowOrOptions === 'string'
       ? nowOrOptions
       : options?.now ?? new Date().toISOString();
-  const king = RUN_STARTER_CARD_BY_ID[options?.kingId ?? 'his-grace'];
-  if (!king) throw new Error(`createRun: ${String(options?.kingId)} is not a King.`);
+  // The King is chosen on the Run's opening screen -- the same screen the formation-card grant
+  // used, dealing Kings instead of the broader deck -- so a Run begins holding nothing and is
+  // given its army by that choice. `kingId` skips the screen, for craft links and tests.
+  const named = options?.kingId ? RUN_STARTER_CARD_BY_ID[options.kingId] : null;
+  if (options?.kingId && !named) throw new Error(`createRun: ${String(options.kingId)} is not a King.`);
+  const chooseKing = options?.chooseKing === true && !named;
+  const king = named ?? RUN_STARTER_CARD_BY_ID['his-grace'];
   const army = initialArmy(seed, king);
-  // The King IS the opening decision, taken before this document exists, so the Run begins in
-  // Deployment on the formation that was chosen. The opening Bona Vacantia card grant that used
-  // to stand here is gone: Battle 1 is the King alone against a lone King, which every authored
-  // King can already win by escorting a Pawn to promotion.
-  return {
+  const base = {
     runSaveVersion: CURRENT_RUN_SAVE_VERSION,
     id: freshRunId(),
     seed: seed >>> 0,
@@ -1442,6 +1445,25 @@ export function createRun(
     aftermath: null,
     sectio: null,
     vacantia: null,
+  } satisfies RunDocument;
+  // Only the player-facing entry asks for the choice. Craft links, the War editor and every test
+  // name their King (or take the default) and get a Run that is already in Deployment.
+  if (!chooseKing) return base;
+  return {
+    ...base,
+    phase: 'bona-vacantia',
+    goldTenths: RUN_STARTING_GOLD_TENTHS,
+    army: [],
+    cards: [],
+    nextArmyUnitNumberByType: initialArmyNumberState(),
+    vacantia: {
+      kind: 'opening',
+      conflictIndex: 0,
+      afterBattleIndex: 0,
+      victoryGoldTenths: 0,
+      offers: [],
+      cardOffers: RUN_STARTER_CARDS.map((candidate) => candidate.id),
+    },
   };
 }
 
@@ -3653,6 +3675,23 @@ export function takeVacantiaCard(run: RunDocument, coreId: string): RunDocument 
     || run.vacantia?.kind !== 'opening'
     || !run.vacantia.cardOffers.includes(coreId)
   ) return run;
+  // The opening screen now deals KINGS, so a starter card is the expected answer here: taking one
+  // is what gives the Run its army, its one held card and its opening gold. A Run that already
+  // holds a King (a crafted or migrated one) still takes an ordinary offer card the old way.
+  const king = RUN_STARTER_CARD_BY_ID[coreId as RunStarterCardId];
+  if (king) {
+    const army = initialArmy(run.seed, king);
+    return touch({
+      ...run,
+      army,
+      cards: [...run.cards, ...initialCards(king, army)],
+      goldTenths: run.goldTenths + king.goldBonusTenths,
+      nextArmyUnitNumberByType: initialArmyNumbersFor(king),
+      phase: 'deployment',
+      vacantia: null,
+      sectio: null,
+    });
+  }
   // Deck lookup, not runCardDefinition: the grant is an offer card, and the starter
   // catalog it would also reach carries a King that no admission may add.
   const definition = RUN_CARD_BY_ID[coreId];

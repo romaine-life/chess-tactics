@@ -1,7 +1,7 @@
 import { useState, type ReactElement } from 'react';
 import {
   LIPSANON_BY_ID,
-  RUN_CARD_BY_ID,
+  runCardDefinition,
   takeVacantiaLipsanon,
   type LipsanonId,
   type RunDocument,
@@ -31,7 +31,7 @@ function RunVacantiaCardGrant({
   const [taken, setTaken] = useState<string | null>(null);
   // The row is sized from how many cards it actually prints, so an offer whose core
   // has left the Chartulary shrinks the row rather than reserving a seat for nothing.
-  const offers = (run.vacantia?.cardOffers ?? []).filter((coreId) => Boolean(RUN_CARD_BY_ID[coreId]));
+  const offers = (run.vacantia?.cardOffers ?? []).filter((coreId) => Boolean(runCardDefinition(coreId)));
 
   // The Sectio's own card row, not the lipsanon mat: the mat is sized for 64x64 relic
   // icons and collapses around a card face.
@@ -49,7 +49,7 @@ function RunVacantiaCardGrant({
         {offers.map((coreId, index) => (
           <RunCard
             key={coreId}
-            card={RUN_CARD_BY_ID[coreId]}
+            card={runCardDefinition(coreId)!}
             mode="grant"
             layoutId={coreId}
             seatIndex={index}

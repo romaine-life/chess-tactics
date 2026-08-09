@@ -45,9 +45,8 @@ import { useWars, runEligibleOfficialWars } from '../war/store';
 import { useActiveRun } from '../run/store';
 import {
   ATARAXIA_BY_TIER, createRun, formatGold, snapshotWar,
-  type AtaraxiaTier, type RunStarterCardId,
+  type AtaraxiaTier,
 } from '../run/model';
-import { RunKingSelector } from './RunKingSelector';
 import {
   RUN_PROGRESSION_EVENT,
   highestUnlockedAtaraxiaTier,
@@ -221,8 +220,6 @@ function RunPanel({
   const keepRunButtonRef = useRef<HTMLButtonElement>(null);
   const [progression, setProgression] = useState(readRunProgression);
   const [ataraxiaTier, setAtaraxiaTier] = useState<AtaraxiaTier>(0);
-  // A Run cannot exist without a King, so this is the opening decision rather than a setting on it.
-  const [kingId, setKingId] = useState<RunStarterCardId>('his-grace');
   const eligible = useMemo(() => runEligibleOfficialWars(wars), [wars]);
   const highestUnlockedTier = highestUnlockedAtaraxiaTier(progression);
   // An adoption conflict does not gate a new Run: starting one discards both candidates, so it
@@ -267,7 +264,7 @@ function RunPanel({
       globalThis.crypto?.getRandomValues?.(seedArray);
       const seed = seedArray[0] || (Date.now() >>> 0);
       const war = [...eligible].sort((a, b) => a.id.localeCompare(b.id))[seed % eligible.length];
-      replace(createRun(snapshotWar(war, levels), seed, ataraxiaTier, { kingId }));
+      replace(createRun(snapshotWar(war, levels), seed, ataraxiaTier, { chooseKing: true }));
       navigationAccepted = navigateApp('/run');
     } finally {
       // A successful scene replacement retains this component as the outgoing layer
@@ -404,11 +401,6 @@ function RunPanel({
           <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Start New Run" data-testid="run-detail-new">
             <div className="ce-selected-head"><h2>Start New Run</h2></div>
             <div className="play-detail-body">
-              <RunKingSelector
-                kingId={kingId}
-                disabled={starting}
-                onSelect={(next) => { setArmed(false); setKingId(next); }}
-              />
               <AtaraxiaSelector
                 value={ataraxiaTier}
                 highestUnlockedTier={highestUnlockedTier}
