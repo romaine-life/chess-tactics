@@ -284,8 +284,10 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('They require compensation. Only one may be admitted.');
     expect(runScreen).toContain('locked={adlectioSpent}');
     expect(runScreen).toContain('disabled={adlectioSpent || run.goldTenths < offer.cost * GOLD_SCALE}');
-    // The kit's own lock, not a mark drawn for this row.
-    expect(runScreen).toContain("const RUN_SECTIO_LOCK_SLOT = 'ui/kit/icons/lock.png';");
+    // The kit's own lock, not a mark drawn for this row -- and through the same installed
+    // `app-ui` role every other mark on this screen resolves, not a second door to it.
+    expect(runScreen).toContain("const RUN_SECTIO_LOCK_ICON_ROLE = 'ui-kit-icons-lock-png';");
+    expect(runScreen).toContain('installedUiMedia(RUN_SECTIO_LOCK_ICON_ROLE)');
     expect(runCardPile).toContain("data-run-card-pile-lock={sealed ? 'locked' : 'open'}");
     // A locked offer stops asking: the drift and the gold emanation are settled through the
     // seat's own registered vars and paused, not deleted, so a card caught mid-drift comes down

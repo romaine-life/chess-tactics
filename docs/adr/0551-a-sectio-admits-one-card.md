@@ -10,7 +10,7 @@ refines:
   - "[ADR-0494](0494-runs-begin-in-battle-and-sectio-deals-a-derived-rarity-pile.md)"
 ---
 
-# ADR-0549: A Sectio admits one card
+# ADR-0551: A Sectio admits one card
 
 ## Context
 
@@ -45,9 +45,10 @@ failure ADR-0323 named — and it is said by the row itself rather than by anyth
   are the complete statement: you get one, and this is the one you took. There is no notice, no
   status box, and no copy that changes state.
 
-The lock is the installed kit lock, `ui/kit/icons/lock.png` — the ordinary "you cannot have this"
-glyph the app already uses. A second padlock drawn for one row would be a bespoke parallel
-(ADR-0059). `RunCardPile` owns it as a third layer registered in the same seat as the face and
+The lock is the installed kit lock, resolved through the `ui-kit-icons-lock-png` app-ui role the
+Level Editor's own lock already uses — the ordinary "you cannot have this" glyph, reached by the
+same door as every other mark on this screen. Both a padlock drawn for one row and a second way
+of reaching this one would be a bespoke parallel (ADR-0059). `RunCardPile` owns it as a third layer registered in the same seat as the face and
 the back, sized as a share of the card so it stays an object laid on the card rather than a badge
 stuck to a control, and inert so the disabled offer beneath it is still what the pointer meets.
 It is decorative to assistive technology: the disabled control carries the state, and the

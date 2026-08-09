@@ -110,14 +110,17 @@ import { useLipsanonFlight } from './runLipsanonFlightView';
 import { RunGoldAmount } from './RunResources';
 import {
   isSectioWorkspaceView,
+  RUN_SECTIO_CONTROL_ICON_ROLE,
   RUN_WORKSPACE_VIEW_LABEL,
   SECTIO_WORKSPACE_VIEWS,
   runArmyUnitHref,
   runWorkspaceHref,
   runWorkspaceTitleSegment,
+  type RunSectioControl,
   type RunSelfInspectionView,
   type RunWorkspaceView,
 } from './RunSelfInspection';
+import { installedUiMedia } from './installedUiMedia';
 import {
   DEFAULT_RUN_ARMY_FILTERS,
   RunArmyWorkspace,
@@ -307,11 +310,13 @@ function useRunAbandon(run: RunDocument): {
 }
 
 /**
- * The padlock laid on a Sectio offer the visit's one admission has closed. It is the installed
- * kit lock rather than a Sectio-specific mark: this is the ordinary "you cannot have this" glyph
- * the app already uses, and a second padlock drawn for one row would be a bespoke parallel.
+ * The padlock laid on a Sectio offer the visit's one admission has closed. The installed kit
+ * lock, through the same `app-ui` role the Level Editor's own lock resolves and the same door
+ * every other mark on this screen uses: this is the ordinary "you cannot have this" glyph, and
+ * both a padlock drawn for one row and a second way of reaching this one would be a bespoke
+ * parallel (ADR-0059).
  */
-const RUN_SECTIO_LOCK_SLOT = 'ui/kit/icons/lock.png';
+const RUN_SECTIO_LOCK_ICON_ROLE = 'ui-kit-icons-lock-png';
 
 /** The installed full-screen Sectio scene, or null when the Sectio has no scene art. */
 function useInstalledSectioScene(): ReactElement | null {
@@ -321,6 +326,21 @@ function useInstalledSectioScene(): ReactElement | null {
       ? <img className="run-sectio-scene-artwork" src={installed.src} alt="" draggable={false} />
       : null;
   }, []);
+}
+
+/**
+ * A Sectio control's mark, seated ahead of its word.
+ *
+ * `.app-header-button` is already an inline flex row with its own gap, so the mark takes a fixed
+ * seat and the label follows it — every button in the rail then starts its text on the same line
+ * whatever glyph it wears, which is what makes the column scannable rather than ragged.
+ */
+function RunControlMark({ control }: { control: RunSectioControl }): ReactElement {
+  return (
+    <span className="run-control-mark" aria-hidden="true">
+      <img src={installedUiMedia(RUN_SECTIO_CONTROL_ICON_ROLE[control])} alt="" draggable={false} />
+    </span>
+  );
 }
 
 function RunMetaControls({
@@ -361,6 +381,7 @@ function RunMetaControls({
                 aria-pressed={view === 'primary'}
                 onClick={() => onNavigate('primary')}
               >
+                <RunControlMark control="primary" />
                 Sectio
               </ChromeButton>
               {SECTIO_WORKSPACE_VIEWS.map((candidate, index) => (
@@ -373,6 +394,7 @@ function RunMetaControls({
                   aria-pressed={view === candidate}
                   onClick={() => onNavigate(candidate)}
                 >
+                  <RunControlMark control={candidate} />
                   {RUN_WORKSPACE_VIEW_LABEL[candidate]}
                 </ChromeButton>
               ))}
@@ -394,6 +416,7 @@ function RunMetaControls({
                   onNavigate('primary');
                 }}
               >
+                <RunControlMark control="reset-sectio" />
                 Reset Sectio
               </ChromeButton>
               <ChromeButton unit="inner-text-button"
@@ -408,6 +431,7 @@ function RunMetaControls({
                   onNavigate('primary');
                 }}
               >
+                <RunControlMark control="continue" />
                 Continue to next Battle
               </ChromeButton>
             </div>
@@ -426,6 +450,7 @@ function RunMetaControls({
                 disabled={abandoning}
                 onClick={() => { void requestAbandon(); }}
               >
+                <RunControlMark control="abandon" />
                 {abandoning ? 'Abandoning…' : 'Abandon Run'}
               </ChromeButton>
             </div>
@@ -593,6 +618,9 @@ function ArrangedDeploymentControls({
             disabled={abandoning || departing}
             onClick={() => { void requestAbandon(); }}
           >
+            {/* The same control as the Sectio rail's, so it wears the same mark: one button
+                cannot read two ways because it is reached from two screens. */}
+            <RunControlMark control="abandon" />
             {abandoning ? 'Abandoning…' : 'Abandon Run'}
           </ChromeButton>
         </div>
@@ -1239,7 +1267,7 @@ function SectioPanel({
   // turned down is part of what you decided -- and a padlock is laid on each one instead.
   const adlectioSpent = sectioAdlectioSpent(run);
   const cardBackMediaUrl = useRunCardBackMediaUrl();
-  const lockMediaUrl = resolvedLiveMediaUrl(RUN_SECTIO_LOCK_SLOT);
+  const lockMediaUrl = installedUiMedia(RUN_SECTIO_LOCK_ICON_ROLE);
   return (
     <>
       {view === 'expunctio'
@@ -1957,7 +1985,7 @@ export function RunScreen({
   ) : null;
   // The Sectio scene belongs to the retained shell viewport, not to whichever Sectio
   // workspace happens to be in front of it. Keeping it outside the transition region
-  // prevents Sectio/View Battle/Expunctio swaps from fading or remounting the room.
+  // prevents Sectio/Exploratio/Expunctio swaps from fading or remounting the room.
   const persistentSectioScene = shellRun?.phase === 'sectio' ? sectioScene : null;
   // A craft request speaks for the whole screen while it runs: the Run it is about to replace must
   // not flash its own phase first, and a refused spec has to say why instead of silently doing

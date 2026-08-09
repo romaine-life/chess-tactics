@@ -3,7 +3,7 @@ status: superseded
 date: 2026-08-01
 deciders: owner (Nelson) + Codex
 superseded_by:
-  - "[ADR-0549](0549-a-sectio-admits-one-card.md)"
+  - "[ADR-0551](0551-a-sectio-admits-one-card.md)"
 partially_superseded_by:
   - "[ADR-0347](0347-opening-shop-purchases-are-optional.md)'s removal of the retained mandatory opening purchase"
   - "[ADR-0387](0387-bought-cards-travel-into-a-title-reachable-chartulary.md)'s removal of a bought offer from the Shop after its transfer lands"
