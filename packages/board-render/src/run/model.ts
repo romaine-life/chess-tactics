@@ -229,7 +229,7 @@ export const RUN_MANUBIAE: readonly ManubiumDefinition[] = Object.freeze([
   {
     id: 'double-check',
     name: 'Double check',
-    earnedBy: 'Give check with two units at once. Pays instead of the discovered check, not on top of it.',
+    earnedBy: 'Give check with two units at once — the unit you move and the one it uncovers behind it. That is a discovered check as well, so this pays in its place rather than on top of it.',
     goldTenths: 3 * GOLD_SCALE,
   },
   {

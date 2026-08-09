@@ -502,7 +502,8 @@ function ManubiaeSection({ framed }: { framed: boolean }): ReactElement {
       <InnerChromeBox className="enchiridion-rule-exceptions">
         <h3>How they add up</h3>
         <p>Only <strong>your</strong> units earn these — the enemy does the same things and is paid nothing — and each one pays again every time you land it.</p>
-        <p>One move may earn <strong>several</strong> at once, and each pays in full: a capture that also forks is both. The two check bounties are the exception — they are rungs of one ladder, so a double check pays instead of a discovered check rather than on top of it.</p>
+        <p>One move may earn <strong>several</strong> at once, and each pays in full: a capture that also forks is both.</p>
+        <p>The two checks are the exception, because every double check <em>is</em> a discovered check — uncovering the second attacker is the only way to give check with two units at once. They are rungs of one ladder, so a double check pays <strong>3</strong> in place of the discovered check&rsquo;s 2, never 5 for the same check.</p>
         <p><strong>Undo</strong> takes back the gold along with the move that earned it, so no deed here is worth undoing for profit.</p>
       </InnerChromeBox>
     </ReferenceSectionFrame>
