@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import { RunAdlectioMarkIcon } from './RunAdlectioMark';
+import { RunAdlectioMarkIcon, RunAdlectioMarkLine } from './RunAdlectioMark';
 
 describe('Adlectio mark', () => {
   it('draws nothing while its art decision is open', () => {
@@ -14,5 +14,20 @@ describe('Adlectio mark', () => {
     expect(markup).toContain('run-adlectio-mark-icon');
     expect(markup).toContain('src="/api/admin/media/candidate"');
     expect(markup).toContain('aria-hidden="true"');
+  });
+
+  it('keeps the coin and the words when the mark is still undecided', () => {
+    const markup = renderToStaticMarkup(<RunAdlectioMarkLine />);
+    expect(markup).toContain('run-expunctio-visit-mark');
+    expect(markup).toContain('Adlected this visit');
+    expect(markup).toContain('run-gold-icon');
+    expect(markup).not.toContain('run-adlectio-mark-icon');
+  });
+
+  it('mounts a candidate in the same line the tile prints, which is what review means', () => {
+    const markup = renderToStaticMarkup(<RunAdlectioMarkLine src="/api/admin/media/candidate" />);
+    expect(markup).toContain('run-adlectio-mark-icon');
+    expect(markup).toContain('src="/api/admin/media/candidate"');
+    expect(markup).toContain('Adlected this visit');
   });
 });

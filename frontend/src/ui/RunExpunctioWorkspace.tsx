@@ -13,8 +13,8 @@ import { RunCard } from './RunCard';
 import { runCardFrameSlot } from './runCardFaceContent';
 import { runCardFrameGeometryForSlot, runCardFramePaintInsetRatios } from './runCardFrameGeometry';
 import { emptyRunCardPieceIndices, projectRunCardUnitSeats } from './runCardUnitProjection';
-import { RunAdlectioMarkIcon } from './RunAdlectioMark';
-import { RunGoldIcon, RunGoldTransactionAmount } from './RunResources';
+import { RunAdlectioMarkLine } from './RunAdlectioMark';
+import { RunGoldTransactionAmount } from './RunResources';
 import { RunSceneViewport } from './RunWorkspace';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { ChromeButton } from './shared/ChromeButton';
@@ -134,23 +134,15 @@ function ExpunctioCardTile({
           striking one and resetting the visit is illegible until the gallery says so.
         */}
         <span className="run-expunctio-copy">
-          {admittedThisVisit ? (
-            <span className="run-expunctio-visit-mark">
-              {/*
-                The admission itself, then the gold it cost. The coin alone said only that gold was
-                involved, which the fee below already says; the act — gold handed over, or the card
-                taken with it — is the half that makes the line mean "bought, this visit". Which
-                act it draws is still an open art decision, so the seat draws nothing until one is
-                installed and the line falls back to the coin (ADR-0318).
-
-                Never a transaction mark here: the fee beneath this line already paints the loss
-                arrow, and a second arrowed mark on one tile reads as a second price.
-              */}
-              <RunAdlectioMarkIcon className="run-expunctio-visit-mark-icon" />
-              <RunGoldIcon className="run-expunctio-visit-mark-icon" />
-              Adlected this visit
-            </span>
-          ) : null}
+          {/*
+            The admission itself, then the gold it cost. The coin alone said only that gold was
+            involved, which the fee below already says; the act — gold handed over, or the card
+            taken with it — is the half that makes the line mean "bought, this visit". Which act it
+            draws is still an open art decision, so the seat draws nothing until one is installed
+            and the line falls back to the coin (ADR-0318); the Studio's Adlectio Mark category is
+            where candidates are auditioned in this same line.
+          */}
+          {admittedThisVisit ? <RunAdlectioMarkLine /> : null}
         </span>
         <span className="run-expunctio-price">
           <small>{status === 'expuncted' ? 'Paid' : 'Expunctio fee'}</small>

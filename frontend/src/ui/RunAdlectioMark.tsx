@@ -1,34 +1,28 @@
 import type { ReactElement } from 'react';
 import { installedUiMediaIfPresent } from './installedUiMedia';
+import { RunGoldIcon } from './RunResources';
 
 /**
- * The mark for a record THIS Sectio visit admitted — the seat beside Expunctio's
- * "Adlected this visit" line (ADR-0549).
+ * The mark for a record THIS Sectio visit admitted — the line Expunctio prints above a
+ * just-admitted formation's fee (ADR-0549).
  *
  * The seat is named for what it marks rather than for what it draws, because what it should draw
  * is still an open question: a hand handing over the gold, or a hand taking the card that gold
- * bought. Both audition in this one seat instead of each owning a slot named after its own
- * metaphor, so choosing between them is choosing an image and not a code path.
+ * bought. Both audition in this one seat, so choosing between them is choosing an image and not a
+ * code path.
  *
- * Until a candidate is installed the seat draws NOTHING at all — an empty reserved box would
- * shove the coin beside it sideways for a mark that says nothing yet (ADR-0318). Candidates are
- * auditioned in the real seat through `?adlectioMarkCandidate=<sha256>`, the review seam the live
- * gold icon already uses (ADR-0219); installing binds the role.
+ * Until a candidate is installed the seat draws NOTHING — an empty reserved box would shove the
+ * coin beside it sideways for a mark that says nothing yet (ADR-0318). Candidates are auditioned
+ * in the Studio's **Adlectio Mark** category, which mounts every one of them in this exact line
+ * (ADR-0058): a review surface is a Studio category reached by clicking, never a review parameter
+ * bolted onto a player route.
  */
-const ADLECTIO_MARK_CANDIDATE_QUERY = 'adlectioMarkCandidate';
 /** The role `ui/run/sectio/adlectio-mark.png` binds once a candidate is installed. */
-const ADLECTIO_MARK_MEDIA_ROLE = 'ui-run-sectio-adlectio-mark-png';
-const SHA256 = /^[0-9a-f]{64}$/;
-
-function reviewedAdlectioMarkSrc(): string | null {
-  if (typeof window === 'undefined') return null;
-  const sha256 = new URLSearchParams(window.location.search)
-    .get(ADLECTIO_MARK_CANDIDATE_QUERY)?.trim().toLowerCase();
-  return sha256 && SHA256.test(sha256) ? `/api/admin/media/${sha256}` : null;
-}
+export const ADLECTIO_MARK_MEDIA_ROLE = 'ui-run-sectio-adlectio-mark-png';
+export const ADLECTIO_MARK_SLOT = 'ui/run/sectio/adlectio-mark.png';
 
 export function runAdlectioMarkUrl(): string | null {
-  return reviewedAdlectioMarkSrc() ?? installedUiMediaIfPresent(ADLECTIO_MARK_MEDIA_ROLE);
+  return installedUiMediaIfPresent(ADLECTIO_MARK_MEDIA_ROLE);
 }
 
 export function RunAdlectioMarkIcon({
@@ -44,6 +38,20 @@ export function RunAdlectioMarkIcon({
   return (
     <span className={`run-adlectio-mark-icon ${className}`.trim()} aria-hidden="true">
       <img src={src} alt="" draggable={false} />
+    </span>
+  );
+}
+
+/**
+ * The whole line, so the Studio review mounts the real thing rather than a lookalike: the mark,
+ * the coin it cost, and the words — one component, two seats (ADR-0059).
+ */
+export function RunAdlectioMarkLine({ src }: { src?: string }): ReactElement {
+  return (
+    <span className="run-expunctio-visit-mark">
+      <RunAdlectioMarkIcon className="run-expunctio-visit-mark-icon" {...(src === undefined ? {} : { src })} />
+      <RunGoldIcon className="run-expunctio-visit-mark-icon" />
+      Adlected this visit
     </span>
   );
 }

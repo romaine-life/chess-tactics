@@ -64,9 +64,14 @@ have been renormalized.
   seat, so choosing between them is choosing an image and not a code path.
 - That decision stays open in the code: the seat draws nothing at all until a candidate is
   installed, so the line falls back to the coin alone rather than reserving an empty box that would
-  shove the coin sideways for a mark saying nothing (ADR-0318). Candidates are auditioned in the
-  real seat through `?adlectioMarkCandidate=<sha256>`, the review seam the live gold icon already
-  uses (ADR-0219), and installing binds the role.
+  shove the coin sideways for a mark saying nothing (ADR-0318).
+- Candidates are auditioned in the Studio's **Adlectio Mark** category, which mounts every one of
+  them in this exact line — the same `RunAdlectioMarkLine` the tile renders, not a lookalike — on
+  one page, and installs the chosen one. A review surface is a Studio category reached by clicking
+  (ADR-0058); it is never a review parameter bolted onto a player route. The Run route reads no
+  such parameter for this mark, and the guard in `runChromeHierarchy.test.ts` fails if one appears.
+  One page also means one comparison: an address per candidate makes the owner do the navigating,
+  which is the work the surface exists to do.
 - That mark is the *only* thing the companion says in words. The attached-unit count, the repeated
   card name and the per-tile restatement of the Athetize rule are deleted; what remains beside the
   face is the mark, the fee, and the action. The face is the sole title owner, as ADR-0446 said,

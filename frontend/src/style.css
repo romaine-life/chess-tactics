@@ -20528,8 +20528,9 @@ button.tileset-relationship-cell {
   object-fit: contain;
 }
 
-/* The gold a Run HANDED OVER, drawn beside the coin it gave. Same seat rules as the coin; the
-   size belongs to whichever line mounts it, because this mark has no measure row of its own. */
+/* The mark for a record this Sectio visit admitted, drawn beside the coin it cost. Same seat rules
+   as the coin; the size belongs to whichever line mounts it, because this mark has no measure row
+   of its own. */
 .run-adlectio-mark-icon {
   align-items: center;
   display: inline-flex;
@@ -23592,11 +23593,12 @@ button.tileset-relationship-cell {
   gap: var(--ds-space-1);
 }
 
+/* 30px, not the coin's own 28: every hand and card candidate turned to mush below it. */
 .run-gold-icon.run-expunctio-visit-mark-icon,
 .run-adlectio-mark-icon.run-expunctio-visit-mark-icon {
-  block-size: 24px;
+  block-size: 30px;
   flex: none;
-  inline-size: 24px;
+  inline-size: 30px;
 }
 
 .run-expunctio-price {

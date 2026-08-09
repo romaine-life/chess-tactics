@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest';
 const runScreen = readFileSync(new URL('./RunScreen.tsx', import.meta.url), 'utf8');
 const runArmyWorkspace = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url), 'utf8');
 const runExpunctioWorkspace = readFileSync(new URL('./RunExpunctioWorkspace.tsx', import.meta.url), 'utf8');
+const runAdlectioMark = readFileSync(new URL('./RunAdlectioMark.tsx', import.meta.url), 'utf8');
+const tilePreview = readFileSync(new URL('./TilePreview.tsx', import.meta.url), 'utf8');
 const runTitleBarChips = readFileSync(new URL('./RunTitleBarChips.tsx', import.meta.url), 'utf8');
 const titleBarControls = readFileSync(new URL('./shell/TitleBarControls.tsx', import.meta.url), 'utf8');
 const app = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8');
@@ -367,14 +369,22 @@ describe('Run chrome hierarchy', () => {
     // The gallery says which formations this visit admitted, because Reset Sectio takes back
     // exactly those and nothing else on the tile reveals it.
     expect(runExpunctioWorkspace).toContain('sectioAdmittedCardIds(run)');
-    expect(runExpunctioWorkspace).toContain('<span className="run-expunctio-visit-mark">');
-    expect(runExpunctioWorkspace).toContain('Adlected this visit');
+    // One component owns the line, so the Studio review mounts the real thing (ADR-0059) and the
+    // workspace cannot drift from what the owner judged.
+    expect(runExpunctioWorkspace).toContain('<RunAdlectioMarkLine />');
+    expect(runAdlectioMark).toContain('<span className="run-expunctio-visit-mark">');
+    expect(runAdlectioMark).toContain('Adlected this visit');
     expect(styleCss).toMatch(/\.run-expunctio-visit-mark\s*\{[\s\S]*?color:\s*var\(--skirmish-ink\)/);
     // The plain installed coin, never a transaction mark: the fee on the same tile already paints
     // the loss arrow, and a second arrowed mark reads as a second price.
-    expect(runExpunctioWorkspace).toContain('<RunAdlectioMarkIcon className="run-expunctio-visit-mark-icon" />');
-    expect(runExpunctioWorkspace).toContain('<RunGoldIcon className="run-expunctio-visit-mark-icon" />');
+    expect(runAdlectioMark).toContain('<RunGoldIcon className="run-expunctio-visit-mark-icon" />');
     expect(runExpunctioWorkspace).not.toContain('<RunGoldTransactionIcon');
+    // A review surface is a Studio category reached by clicking, never a review parameter on a
+    // player route (ADR-0058). Nothing in the Run may read one for this mark.
+    expect(runAdlectioMark).not.toContain('URLSearchParams');
+    expect(runAdlectioMark).not.toContain('Candidate=');
+    expect(tilePreview).toContain("id: 'adlectiomark', label: 'Adlectio Mark'");
+    expect(tilePreview).toContain('<AdlectioMarkReviewCatalog');
     expect(runExpunctioWorkspace).toContain('runCardFramePaintInsetRatios');
     expect(runExpunctioWorkspace).toContain('fillRole="outer"');
     expect(runExpunctioWorkspace).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
