@@ -15,6 +15,7 @@ import { installedUiMedia } from './installedUiMedia';
 import { useAuthSession } from '../net/authSession';
 import { AdminControls } from './AdminControls';
 import { ChromeNavButton } from './shared/ChromeButton';
+import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
 import { ApparatusRailColumn } from './shared/ApparatusRailTab';
 import { SettingsContentSceneSlot } from './shell/AuthoredSceneSlot';
 import {
@@ -457,6 +458,7 @@ export function Settings({
             increaseLabel="Increase UI Scale"
             onDecrease={() => adjustScale(-5)}
             onIncrease={() => adjustScale(5)}
+            fillSurface={CHROME_LEAF_FILL_SURFACE}
           />
         </SettingsRow>
       </SettingsSection>
@@ -488,7 +490,7 @@ export function Settings({
     <>
       <SettingsSection title="Master">
         <SettingsRow title="Master Audio" description="Mute or restore all browser audio for Chess Tactics.">
-          <Toggle checked={settings.masterAudio} label="Toggle Master Audio" onChange={setMasterAudio} />
+          <Toggle checked={settings.masterAudio} label="Toggle Master Audio" onChange={setMasterAudio} fillSurface={CHROME_LEAF_FILL_SURFACE} />
         </SettingsRow>
       </SettingsSection>
       <SettingsSection title="Music">
@@ -516,7 +518,7 @@ export function Settings({
           <SettingsButton onClick={() => previewTerrain('water')} ariaLabel="Play a sample effect sound">Test</SettingsButton>
         </SettingsRow>
         <SettingsRow title="Interface Sounds" description="Enable or disable menu and control feedback sounds.">
-          <Toggle checked={settings.interfaceSounds} label="Toggle Interface Sounds" onChange={(enabled) => updateSetting('interfaceSounds', enabled)} />
+          <Toggle checked={settings.interfaceSounds} label="Toggle Interface Sounds" onChange={(enabled) => updateSetting('interfaceSounds', enabled)} fillSurface={CHROME_LEAF_FILL_SURFACE} />
         </SettingsRow>
       </SettingsSection>
       <SettingsSection title="Notes">
@@ -561,6 +563,7 @@ export function Settings({
                   checked={enabled}
                   label={`Include ${track.title} in background music`}
                   onChange={(value) => setTrackEnabled(track, value)}
+                  fillSurface={CHROME_LEAF_FILL_SURFACE}
                 />
               </SettingsRow>
             );
@@ -596,6 +599,7 @@ export function Settings({
           ariaLabel={`Your piece color — ${PLAYER_PALETTE_LABELS[settings.playerPalette].label}`}
           testId="settings-player-palette"
           onChange={(palette) => updateSetting('playerPalette', palette)}
+          fillSurface={CHROME_LEAF_FILL_SURFACE}
         />
       </SettingsRow>
       {/* Showing or hiding the grid is a per-battle decision and already lives on the in-game HUD's
@@ -634,6 +638,7 @@ export function Settings({
           checked={settings.autoDealDeployment}
           label="Draw Deployment cards automatically"
           onChange={(value) => updateSetting('autoDealDeployment', value)}
+          fillSurface={CHROME_LEAF_FILL_SURFACE}
         />
       </SettingsRow>
     </SettingsSection>

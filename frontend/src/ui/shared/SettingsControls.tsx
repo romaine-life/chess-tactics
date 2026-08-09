@@ -3,6 +3,7 @@ import type { InterfaceSfxCue } from '../../core/sfxProfile';
 import type { ChromeRole } from '../chromeCandidateSources';
 import { InnerChromeBox } from './ChromeBox';
 import { InnerTextButton, InnerTextNavButton, type ChromeButtonTone } from './ChromeButton';
+import { CHROME_LEAF_FILL_SURFACE, CHROME_STRUCTURAL_FILL_ROLE } from './chromeSurfacePolicy';
 
 // The shared settings/menu "rail + content" control primitives (ADR-0059): a section
 // (uppercase eyebrow + grouped rows), a row (copy · value · control grid), and a chrome
@@ -10,6 +11,13 @@ import { InnerTextButton, InnerTextNavButton, type ChromeButtonTone } from './Ch
 // surface — Settings, the Editor (/editor), and future ones — composes the SAME controls
 // instead of forking a bespoke parallel. Styling lives on the `.settings-*` classes in
 // style.css (real 9-slice kit art, not CSS imitation).
+//
+// The two materials are carried HERE, not chosen per call site (ADR-0433): a row is a
+// structural box and wears the installed marble; a button is a leaf and wears the oak.
+// Left to each surface this drifts one control at a time — which is how both the Editor
+// column and Settings ended up stacks of tinted voids with unpainted buttons in them. A
+// call site that genuinely needs another material still passes `fillRole`/`fillSurface`
+// and states why.
 
 export type ButtonTone = ChromeButtonTone;
 
@@ -23,7 +31,7 @@ export function SettingsButton({
   external = false,
   disabled = false,
   title,
-  fillSurface,
+  fillSurface = CHROME_LEAF_FILL_SURFACE,
   'data-testid': dataTestid,
   'data-ui-sfx': dataUiSfx,
 }: {
@@ -37,7 +45,8 @@ export function SettingsButton({
   disabled?: boolean;
   title?: string;
   /** Name an installed chrome surface for this control's fill — the registered-material
-   *  override the inner role's default tint yields to (see `namedChromeFillSurfaceCss`). */
+   *  override the inner role's default tint yields to (see `namedChromeFillSurfaceCss`).
+   *  Defaults to the leaf oak; pass another installed surface only with a reason. */
   fillSurface?: string;
   'data-testid'?: string;
   'data-ui-sfx'?: InterfaceSfxCue;
@@ -75,7 +84,7 @@ export function SettingsRow({
   tall = false,
   className = '',
   role,
-  fillRole,
+  fillRole = CHROME_STRUCTURAL_FILL_ROLE,
   fillSurface,
   children,
 }: {
@@ -87,7 +96,8 @@ export function SettingsRow({
   className?: string;
   role?: AriaRole;
   /** Borrow another role's installed fill under this row's inner frame — `outer` is the
-   *  marble the app's panels and title strips wear (ADR-0433 borrowing rule). */
+   *  marble the app's panels and title strips wear (ADR-0433 borrowing rule), and is what
+   *  a row wears unless a call site names a different structural material. */
   fillRole?: ChromeRole;
   fillSurface?: string;
   children?: ReactNode;
