@@ -773,13 +773,25 @@ function useRunDeploymentPresentation({
     () => new Set(Object.keys(layout.placements)),
     [layout.placements],
   );
+  // The units of the formation currently IN HAND that are also standing on the board — a formation
+  // the player picked back up to move. It is on the cursor and on its old squares at once, and
+  // ADR-0533 draws both at the same strength, so without this the same formation is painted twice
+  // over and neither copy says which one the player is deciding. The seats keep the shadow; the
+  // copy under the hand is the formation. Only while a seating actually resolves: a card merely
+  // selected is resting on the board, not being carried anywhere.
+  const liftedPieceIds = useMemo(() => new Set(
+    pointedArrangementOption && selectedArrangementCard?.placed
+      ? runCardUnitIds(selectedArrangementCard.card).filter((unitId) => layout.placements[unitId])
+      : [],
+  ), [layout.placements, pointedArrangementOption, selectedArrangementCard]);
   const deploymentSurfaceState = useMemo<SkirmishBoardSurfaceState>(() => ({
     game: deploymentGame,
     seed: prepared.deployment?.seed ?? prepared.seed,
     viewKey: runBattleActivityId(prepared.id, prepared.battleIndex),
     previewPieces: arrangementPreviewPieces,
     plannedPieceIds,
-  }), [arrangementPreviewPieces, deploymentGame, plannedPieceIds, prepared.battleIndex, prepared.deployment?.seed, prepared.id, prepared.seed]);
+    liftedPieceIds,
+  }), [arrangementPreviewPieces, deploymentGame, liftedPieceIds, plannedPieceIds, prepared.battleIndex, prepared.deployment?.seed, prepared.id, prepared.seed]);
 
   useEffect(() => {
     if (prepared !== run && prepared.phase === 'deployment') replace(prepared);
@@ -934,6 +946,10 @@ function useRunDeploymentPresentation({
       const block = carriedEdges
         ? { edges: carriedEdges, groupIndex: carriedGroupIndex, cardId: selectedCardId }
         : seated;
+      // Ground the formation now in hand was picked up FROM. Its plot is still drawn — this is
+      // where the formation goes back to if the player never seats it elsewhere — but it recedes
+      // to a shadow, because the block being decided is the one on the cursor.
+      const lifted = !carriedEdges && seated?.cardId === selectedCardId && liftedPieceIds.size > 0;
       return (
         <button
           type="button"
@@ -946,7 +962,8 @@ function useRunDeploymentPresentation({
             filled ? 'is-move' : '',
             block ? 'has-formation-group' : '',
             carriedEdges ? 'is-formation-carried' : '',
-            !carriedEdges && seated && hoveredFormationCardId === seated.cardId
+            lifted ? 'is-formation-lifted' : '',
+            !lifted && !carriedEdges && seated && hoveredFormationCardId === seated.cardId
               ? 'is-formation-hovered'
               : '',
           ].filter(Boolean).join(' ')}

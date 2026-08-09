@@ -22481,6 +22481,15 @@ button.tileset-relationship-cell {
   fill: var(--run-formation-livery-carried, rgba(244, 230, 196, .34));
 }
 
+/* The plot a formation has been PICKED UP from. The formation itself is on the cursor, so the
+   ground it came from recedes to a shadow of the same plot rather than holding a second block at
+   full strength — the pieces standing here are drawn at LIFTED_UNIT_OPACITY for the same reason.
+   The outline stays, quietly: it is still this formation's ground until the player seats it
+   somewhere else, and it is where the formation returns to if they never do. */
+.run-deployment-cell.is-formation-lifted .run-formation-group-paint {
+  opacity: .5;
+}
+
 /* The panel does not scroll; its KitScroll rail does (ADR-0030). Both class names are named so
    this outranks `.run-meta-controls { overflow-y: auto }` whatever the source order — matched on
    one class it loses to the later rule and the browser's own bar returns beside the drawn one. */
