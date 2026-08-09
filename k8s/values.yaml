@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:97befe19adf6363aa8b4d6f85ec216401880def23267f89f73e3ddd23d52f392"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:dea94df9d9024bcf15d5d0c8c01b6d914393dfa6d9d1985c3c03c3e41413011e"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "One box and one baseline for every mark in the Strategikon index"
-  prNumber: "853"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/853"
-  commit: "a74ba677"
+  prTitle: "Abandon Run leaves for the picker instead of the empty workspace (ADR-0544)"
+  prNumber: "852"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/852"
+  commit: "5eccbef0"
 
 name: chess-tactics
 namespace: chess-tactics
