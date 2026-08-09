@@ -22,6 +22,8 @@ const runCardFlight = readFileSync(new URL('./runCardFlightView.tsx', import.met
 const strategikonTitleNavigation = readFileSync(new URL('./StrategikonTitleNavigation.tsx', import.meta.url), 'utf8');
 const runCardFace = readFileSync(new URL('./RunCardFace.tsx', import.meta.url), 'utf8');
 const runBattlePreview = readFileSync(new URL('./RunBattlePreview.tsx', import.meta.url), 'utf8');
+const levelInfoCompact = readFileSync(new URL('./LevelInfoCompact.tsx', import.meta.url), 'utf8');
+const chromeDividedGrid = readFileSync(new URL('./shared/ChromeDividedGrid.tsx', import.meta.url), 'utf8');
 const runDeploymentCardStack = readFileSync(new URL('./RunDeploymentCardStack.tsx', import.meta.url), 'utf8');
 const runLipsana = readFileSync(new URL('./Lipsana.tsx', import.meta.url), 'utf8');
 const runSelfInspection = readFileSync(new URL('./RunSelfInspection.tsx', import.meta.url), 'utf8');
@@ -529,44 +531,84 @@ describe('Run chrome hierarchy', () => {
     // The Sectio's own battleIndex is the Battle just fought; reconnaissance is of the next one.
     expect(runBattlePreview).toContain('const battleIndex = sectioUpcomingBattleIndex(run);');
     expect(runBattlePreview).not.toMatch(/battles\[run\.battleIndex\]/);
-    // ONE title bar worn by all three boxes, so they cannot drift apart in weight or seam. The
-    // marble is bounded to that strip, and the registered rule lives INSIDE it: a frame-wide fill
-    // or a rule in a row of its own shows through wherever the content does not cover.
+    // ONE filled pane, and every separation on it is one of that pane's own drawn rails. Three
+    // framed boxes with gaps between them let strips of the page show through between them.
+    // And it fills the WHOLE workspace, the way the Strategikon's sheet does — no margin of the
+    // Sectio scene left showing around a plate laid on top of it.
+    expect(runBattlePreview).toContain('edgeAttached: true');
+    // On the SHELL element: `.run-shell-workspace` declares these itself, so the same declaration
+    // on the scene around it is shadowed and the body silently keeps its 12px gutter.
+    expect(styleCss).toMatch(
+      /\.run-battle-preview-workspace > \.run-shell-workspace\s*\{[^}]*--shell-workspace-body-inset-block: 0px;[^}]*--shell-workspace-body-inset-start: 0px;/,
+    );
+    expect(styleCss).toMatch(/\.run-battle-preview-content\s*\{[^}]*padding:\s*0;/);
+
+    expect(runBattlePreview).toContain('<DividedInnerChromeBox');
+    expect(runBattlePreview).toContain("columns={['minmax(0, 1fr)', 'minmax(300px, 34%)']}");
+    // The pane wears no frame of its own: the title bar above and the Controls rail beside it are
+    // already its boundary, and a box frame there draws a second outline just inside them with a
+    // strip of surface trapped between. It still takes the SURFACE — this workspace replaces a
+    // retained scene, so without one the Sectio market reads straight through the text.
+    expect(runBattlePreview).toContain('framed={false}');
+    expect(runBattlePreview).toContain('fillRole="outer"');
+    expect(styleCss).toMatch(
+      /\.chrome-divided-grid\.has-chrome-surface-fill > \.chrome-divided-grid__fill\s*\{\s*inset: 0;/,
+    );
+    // Lift the CONTENT above that fill, not every child: a blanket rule also catches the rail
+    // layer, whose own z-index it outranks, and the board then paints over the vertical rail
+    // below the header — its south stroke comes out thinner than the three the atom covers.
+    expect(styleCss).toMatch(
+      /\.chrome-divided-grid\.has-chrome-surface-fill > \.chrome-divided-grid__rows,[\s\S]*?z-index: 1;/,
+    );
+    expect(styleCss).not.toMatch(
+      /\.chrome-divided-grid\.has-chrome-surface-fill > :not\(\.chrome-divided-grid__fill\)/,
+    );
+    // A junction caps a rail where it meets the box's own FRAME. Unframed there is no such frame,
+    // so a boundary cap caps nothing and sits on the host's chrome as a stray atom.
+    expect(chromeDividedGrid).toContain("nodes.filter((node) => node.inlineBoundary === 'internal')");
+    expect(chromeDividedGrid).toContain('const blockBoundaryNodes = framed ? topology : { ...topology, topNodes: [], bottomNodes: [] };');
+    expect(styleCss).toMatch(
+      /\.chrome-divided-grid\[data-chrome-grid-framed="false"\]\s*\{\s*overflow: hidden;/,
+    );
+    expect(runBattlePreview).not.toContain('PreviewTitleBar');
+    expect(runBattlePreview).not.toContain('<InnerChromeBox');
+    expect(styleCss).not.toContain('.run-battle-preview-titlebar');
+    expect(styleCss).not.toContain('.run-battle-preview-board-frame');
+    expect(styleCss).not.toContain('.run-battle-preview-layout');
+
+    // The header band is ONE row split by the pane's vertical rail: the level's name over the
+    // board, the Battle it is over the readout.
     expect(runBattlePreview).toMatch(
-      /function PreviewTitleBar\([\s\S]*?<ChromeSurfaceFill role="outer" className="run-battle-preview-titlebar-fill" \/>[\s\S]*?<ChromeDivider role="inner" className="run-battle-preview-titlebar-rule" \/>/,
+      /<ChromeDividedGridRow className="run-battle-preview-headers">[\s\S]*?<h2 id="run-battle-preview-title">\{level\.name\}<\/h2>[\s\S]*?Battle \{battleIndex \+ 1\} of \{run\.war\.battles\.length\}[\s\S]*?<\/ChromeDividedGridRow>/,
     );
-    expect(runBattlePreview).toContain('<PreviewTitleBar id="run-battle-preview-title">{level.name}</PreviewTitleBar>');
-    expect(runBattlePreview).toMatch(/titleBar=\{\(\s*<PreviewTitleBar>Battle \{battleIndex \+ 1\} of \{run\.war\.battles\.length\}<\/PreviewTitleBar>/);
-    expect(runBattlePreview).toContain('<PreviewTitleBar>Before deployment</PreviewTitleBar>');
-    // The rule's host states its own reach so the authored T caps tee INTO the frame's side
-    // rails, and the bleed is not clipped. Hand-zeroing margins instead puts the caps inside.
+    expect(runBattlePreview).toContain('<ChromeDividedGridRow className="run-battle-preview-body">');
+    // Header, rail, body — three tracks for three children. Naming two puts the zero-height rail
+    // in the flexible track and the board in an implicit one.
     expect(styleCss).toMatch(
-      /\.run-battle-preview-titlebar > \.run-battle-preview-titlebar-rule\s*\{[^}]*--kit-divider-reach: var\(--le-chrome-inner-rail-w/,
+      /\.run-battle-preview-pane > \.chrome-divided-grid__rows\s*\{[^}]*grid-template-rows:\s*auto 0 minmax\(0, 1fr\);/,
     );
+    // A filled inner box lifts its children above the fill; the rail layer must stay an absolute
+    // OVERLAY or it takes a grid row and pushes the rows layer off the bottom of the pane.
     expect(styleCss).toMatch(
-      /\.run-battle-preview-titlebar > \.run-battle-preview-titlebar-rule\s*\{[^}]*--kit-divider-gap: 0px;/,
+      /\.inner-chrome-box\.has-chrome-surface-fill > \.chrome-divided-grid__fixed-rails\s*\{\s*position: absolute;/,
     );
-    expect(styleCss).not.toMatch(/\.run-battle-preview-titlebar\s*\{[^}]*overflow:\s*hidden/);
-    expect(styleCss).not.toMatch(/\.run-battle-preview-board-frame\s*\{[^}]*overflow:\s*hidden/);
-    expect(runBattlePreview).not.toMatch(/run-battle-preview-board-frame"\s+fillRole/);
-    expect(styleCss).toMatch(/\.run-battle-preview-board-frame\s*\{[^}]*gap:\s*0;/);
-    expect(styleCss).toMatch(/\.run-battle-preview-board-frame\s*\{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\);/);
+
     expect(runBattlePreview).not.toContain('Drag to pan');
-    // A box's own name outranks the section headers inside it, which outrank their rows.
-    expect(styleCss).toMatch(/\.run-battle-preview-titlebar-head > h2\s*\{[^}]*--ds-text-xl/);
-    expect(styleCss).toMatch(/:is\(\.ce-li-board, \.ce-li-forces\) > \.ce-li-title\s*\{[^}]*--ds-text-lg/);
-    // ONE stretched row is what makes the board box and the intelligence boxes share a top and a
-    // bottom line, and the pane FILLS the frame so no surplus is painted across the level art.
-    expect(styleCss).toMatch(/\.run-battle-preview-layout\s*\{[^}]*grid-template-areas: "board intelligence";/);
-    expect(styleCss).toMatch(/\.run-battle-preview-layout\s*\{[^}]*grid-template-rows:\s*minmax\(0, 1fr\);/);
+    // A pane's own name outranks the section headers inside it, which outrank their rows.
+    expect(styleCss).toMatch(/\.run-battle-preview-header > h2\s*\{[^}]*--ds-text-xl/);
+    expect(styleCss).toMatch(/:is\(\.ce-li-board, \.ce-li-forces, \.ce-li-deployment\) > \.ce-li-title\s*\{[^}]*--ds-text-lg/);
     expect(runBattlePreview).toContain('viewportMode="fill"');
     expect(runBattlePreview).toContain('showGrid');
-    // The installed inner-box surface paints an opaque background under every inner box, so any
-    // padding here rings the level art with a flat slab of that material.
-    expect(styleCss).toMatch(/\.run-battle-preview-board-frame\s*\{[^}]*padding:\s*0;/);
-    expect(styleCss).not.toMatch(
-      /\.run-battle-preview-board-frame\s*\{[^}]*padding:\s*var\(--ds-space/,
-    );
+    // The installed surface paints under the whole pane, so padding would ring the level art with
+    // a flat slab of that material between the border art and the board.
+    expect(styleCss).toMatch(/\.run-battle-preview-pane\s*\{[^}]*padding:\s*0;/);
+    expect(styleCss).not.toMatch(/\.run-battle-preview-pane\s*\{[^}]*overflow:\s*hidden/);
+
+    // The readout takes no frame of its own — the pane's rail is already its left edge — and the
+    // note is its last section rather than a third box.
+    expect(runBattlePreview).toContain('framed={false}');
+    expect(runBattlePreview).toContain('<section className="ce-li-zones-row run-battle-preview-note">');
+    expect(levelInfoCompact).toContain('const Frame = framed ? InnerChromeBox : UnframedLevelInfo;');
     // Zones are authoring detail, and the readout reads at column scale rather than tab scale.
     expect(runBattlePreview).toContain('showZones={false}');
     expect(styleCss).toMatch(/\.run-battle-preview-info \.ce-li-roster-head strong\s*\{[^}]*--ds-text-lg/);
@@ -574,6 +616,109 @@ describe('Run chrome hierarchy', () => {
     expect(runBattlePreview).not.toContain('<OuterChromeBox');
     expect(runBattlePreview).not.toContain('<LevelPreviewColumn');
     expect(runBattlePreview).not.toContain('backgroundArtwork');
+  });
+
+  // The stage decides how much of the player's collection it plays, and the Forces ledger says
+  // nothing about it — reconnaissance that omits both leaves the one force the player controls
+  // unaccounted for.
+  it('reports the stage’s own deal and lights the band it deploys onto', () => {
+    // The count comes from the Run's own reader, so the readout and the Deployment that follows
+    // it cannot disagree — and it reads the UPCOMING Battle, not the one just fought.
+    expect(runBattlePreview).toContain('runDeploymentDealCount({ war: run.war, battleIndex })');
+    expect(runBattlePreview).toContain('leave the Sectio: {dealtLine}, onto the lit band.');
+    // A stage may deal more than the player carries, so the sentence cannot take a fraction of
+    // a smaller hand — "deals 3 of the 2 cards you hold" is the shape that must not come back.
+    expect(runBattlePreview).toContain('held <= dealCount');
+    expect(runBattlePreview).toContain('`this stage deals ${dealCount} of the ${held} cards you hold`');
+    // The whole held hand deploying was never true, and stated it as a fact.
+    expect(runBattlePreview).not.toMatch(/\{run\.cards\.length\} formation/);
+
+    // The band is the same square set capacity admission is measured against.
+    expect(runBattlePreview).toMatch(
+      /const bandCells = useMemo\(\s*\(\) => new Set\(playerDeploymentCells\(level\)\.map\(\(cell\) => `\$\{cell\.x\},\$\{cell\.y\}`\)\),/,
+    );
+    expect(runBattlePreview).toMatch(
+      /renderCellOverlay=\{bandShown\s*\?\s*\(cell\) => bandCells\.has\(`\$\{cell\.x\},\$\{cell\.y\}`\)/,
+    );
+    // The board already has ONE drawing for a zone — the Level Editor's tinted diamond with its
+    // own per-square outline, in the Player Deployment accent. A move highlight here was a second
+    // language for the same fact, and without a per-square edge it read as an invented slab.
+    expect(runBattlePreview).toContain('<span className="le-zone-cell le-zone-player" aria-hidden="true" />');
+    expect(runBattlePreview).not.toContain('PredrawnMoveHighlightPaint');
+    expect(styleCss).toMatch(/\.le-zone-cell\s*\{[^}]*background: rgba\(var\(--le-zone-accent\)/);
+    expect(styleCss).toMatch(/\.le-zone-cell\s*\{[^}]*box-shadow: inset 0 0 0 2px rgba\(var\(--le-zone-accent\)/);
+    expect(styleCss).toContain('.le-zone-blue, .le-zone-player { --le-zone-accent:');
+    expect(styleCss).not.toContain('.run-battle-preview-band');
+
+    // A tile-frame overlay mounted through renderCellOverlay rides a DIFFERENT band: the seat is
+    // translated by the equator plane rather than the whole equator, so the tile frame's 41px top
+    // puts the diamond three quarters of a tile below the square it names. The band owns the
+    // correction, so the next caller cannot land off-grid by forgetting to write its own — the
+    // Enchiridion's local copy of it is gone. Measured live: 0px offset on both surfaces.
+    expect(styleCss).toMatch(
+      /\.tileset-generated-board-overlay-cell > :is\(\.le-zone-cell, \.le-tactical-cell\)\s*\{\s*top: 0;/,
+    );
+    expect(styleCss).not.toMatch(/\.enchiridion-unit-board \.le-tactical-cell\s*\{/);
+    // The tile-frame seating itself is untouched — that is what the Level Editor's own mounts use.
+    expect(styleCss).toMatch(/\.le-zone-cell\s*\{[^}]*top: var\(--iso-tile-surface-top\)/);
+
+    // Both facts also stand in the Level readout, which is where a reader looks for numbers.
+    expect(levelInfoCompact).toContain('const cardsDealt = levelBattleCardsDealt(level);');
+    expect(levelInfoCompact).toContain('playerDeploymentCells(level).length');
+    // The COUNT is the readout's own reader, which says "Not set" for a Battle that authors none
+    // — the state W4_BATTLE_CARDS_DEALT blocks Save on, and one a clamp would quietly hide. The
+    // clamped number stays for the prose beneath, which needs a real quantity to describe.
+    expect(levelInfoCompact).toMatch(/<RowIcon src=\{cardsIconSrc\}[^>]*\/>Cards dealt<\/span>\s*<strong>\{dealLine\}<\/strong>/);
+    expect(levelInfoCompact).toContain('{dealLine !== null ? (');
+    expect(levelInfoCompact).toContain('const deploymentSquares = dealLine === null ? 0 : playerDeploymentCells(level).length;');
+    // Campaign and standalone Levels deal nothing, so the section is a War Battle's alone.
+    expect(levelInfoCompact).toContain('{cardsDealt !== null ? (');
+  });
+
+  // Every mark in the readout resolves REAL game art through its installed role. A readout that
+  // invents a glyph for a fact the game already has a picture of teaches the player a second
+  // vocabulary for the same thing.
+  it('marks the readout rows with the game’s own art, and makes Zone the band’s control', () => {
+    // Each side flies its OWN palette's flag; a palette with no variant falls back to the one
+    // shared objective flag rather than flying nothing. Reviewing a candidate never installs it.
+    expect(levelInfoCompact).toContain('installedUiMediaIfPresent(`ui-kit-icons-game-objective-${palette}-png`)');
+    expect(levelInfoCompact).toContain("?? installedUiMedia('ui-kit-icons-game-objective-png')");
+    expect(levelInfoCompact).toContain("new URLSearchParams(window.location.search).get('flagCandidate')");
+    expect(levelInfoCompact).toContain('flagSrc={flagIconSrc(palettes.player)}');
+    expect(levelInfoCompact).toContain('flagSrc={flagIconSrc(palettes.enemy)}');
+    expect(levelInfoCompact).toContain("installedUiMedia('ui-kit-icons-game-wait-png')");
+    expect(levelInfoCompact).toContain('useStrategikonCardsIcon()');
+    // The tile mark is a tile: the same installed grass surface the Level Editor paints.
+    expect(levelInfoCompact).toMatch(/studioFamilies\.find\(\(family\) => family\.id === 'grass'\)/);
+    // The Battle mark is the Run's registered Battle icon, not a second drawing of a Battle.
+    expect(runBattlePreview).toContain('<RunProgressIcon variant="battle"');
+
+    // A count of a piece is drawn as that many of the piece, in the palette that side wears on
+    // the board beside it — read from the projection the renderer itself consumes.
+    expect(levelInfoCompact).toContain('<PieceFile type={p} count={counts[p] ?? 0} palette={palette} />');
+    expect(levelInfoCompact).toContain('const projected = levelToEditorBoard(level).units ?? {};');
+    // Bare count, never "×N": N sprites beside "×N" reads as N lots of N.
+    expect(levelInfoCompact).toContain('<b>{counts[p]}</b>');
+    expect(levelInfoCompact).not.toContain('×{counts[p]}');
+    // Rocks and rubble have no unit sprite and must not ask for one.
+    expect(levelInfoCompact).toContain('if (!isPlayablePieceType(type))');
+
+    // Zone is the control for the band, through the registered text button's toggle variant, and
+    // it wears the OAK every other trigger wears. The segmented `le-seg-btn` skin must stay off
+    // it: that frame is a `fill` border-image, so it paints the interior itself and covers the
+    // surface — which is how this one control came out slate on a screen of wooden buttons.
+    expect(levelInfoCompact).toContain('unit="inner-text-button"');
+    expect(levelInfoCompact).toContain('className="app-header-button ce-li-zone-toggle"');
+    expect(levelInfoCompact).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
+    // On a className, not anywhere — the comment above the control names the class it avoids.
+    expect(levelInfoCompact).not.toMatch(/className="[^"]*le-seg-btn/);
+    expect(levelInfoCompact).toContain('selected={deploymentBand.shown}');
+    expect(levelInfoCompact).toContain('onClick={deploymentBand.onToggle}');
+    // Verified live: pressing it takes the painted band from 18 cells to 0 and back.
+    expect(runBattlePreview).toContain('deploymentBand={{ shown: bandShown, onToggle: () => setBandShown((shown) => !shown) }}');
+    expect(runBattlePreview).toContain('renderCellOverlay={bandShown');
+    // A readout with no board of its own states the fact instead of offering a dead control.
+    expect(levelInfoCompact).toContain('deploymentBand ? (');
   });
 
   it('retains the installed Sectio scene outside the workspace transition region', () => {
