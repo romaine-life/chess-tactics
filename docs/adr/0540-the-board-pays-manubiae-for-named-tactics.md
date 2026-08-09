@@ -9,7 +9,7 @@ refines:
   - "[ADR-0527](0527-a-royal-fork-pays-one-gold.md)"
 ---
 
-# ADR-0539: The board pays Manubiae for named tactics
+# ADR-0540: The board pays Manubiae for named tactics
 
 ## Context
 

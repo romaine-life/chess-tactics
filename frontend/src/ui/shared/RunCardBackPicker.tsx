@@ -3,6 +3,7 @@ import { RUN_CARD_BACKS, type RunCardBack } from '../../settings/appSettings';
 import { RUN_CARD_BACK_LABELS } from '../../settings/runCardBack';
 import { RunCardBack as RunCardBackImage, runCardBackMediaUrl } from '../RunCardBack';
 import { InnerChromeBox } from './ChromeBox';
+import { CHROME_LEAF_FILL_SURFACE } from './chromeSurfacePolicy';
 import { HouseSelect, type HouseSelectOption } from './HouseSelect';
 
 // Settings → Gameplay → Card back: ONE card at a size the artwork actually reads at, and a
@@ -53,12 +54,15 @@ export function RunCardBackPicker({
           />
         </span>
       </InnerChromeBox>
+      {/* The closed trigger is a leaf and wears the oak; the preview box above it is a
+          structural sample surface and keeps the panel's material (ADR-0433). */}
       <HouseSelect
         className="run-card-back-select"
         ariaLabel="Run card back"
         value={value}
         onChange={onChange}
         options={runCardBackOptions()}
+        fillSurface={CHROME_LEAF_FILL_SURFACE}
       />
     </div>
   );

@@ -9295,6 +9295,10 @@ const WORKSPACE_LEVEL_FORMAT_VERSION = serverRender?.LEVEL_FORMAT_VERSION ?? 2;
 // own Deployment deal within. Same shared-constant-with-literal-fallback shape as the line above.
 const WORKSPACE_BATTLE_CARDS_DEALT_MIN = serverRender?.LEVEL_BATTLE_CARDS_DEALT_MIN ?? 1;
 const WORKSPACE_BATTLE_CARDS_DEALT_MAX = serverRender?.LEVEL_BATTLE_CARDS_DEALT_MAX ?? 12;
+// Mirrors LEVEL_PAR_TURNS_MIN/MAX in core/level.ts — the bounds a Level may author its own par
+// within (ADR-0539). Same shared-constant-with-literal-fallback shape as the lines above.
+const WORKSPACE_PAR_TURNS_MIN = serverRender?.LEVEL_PAR_TURNS_MIN ?? 1;
+const WORKSPACE_PAR_TURNS_MAX = serverRender?.LEVEL_PAR_TURNS_MAX ?? 99;
 
 function isFiniteInteger(value) {
   return Number.isInteger(value) && Number.isFinite(value);
@@ -9342,6 +9346,10 @@ function validateWorkspaceLevel(level, key) {
       || !isFiniteInteger(tc.incrementSeconds) || tc.incrementSeconds < 0) {
       return `levels.${key}.timeControl is invalid`;
     }
+  }
+  if (level.parTurns !== undefined && (!isFiniteInteger(level.parTurns)
+    || level.parTurns < WORKSPACE_PAR_TURNS_MIN || level.parTurns > WORKSPACE_PAR_TURNS_MAX)) {
+    return `levels.${key}.parTurns is invalid`;
   }
   if (level.battle !== undefined) {
     const battle = level.battle;

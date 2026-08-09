@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Live gate for Manubiae (ADR-0539): plays a REAL earning move with real hit-tested clicks on
+// Live gate for Manubiae (ADR-0540): plays a REAL earning move with real hit-tested clicks on
 // a real Run Battle and reads what the player would see — the gold measure moving by exactly
 // the catalog price, the Battle log naming the deed, and a marker seated on the square.
 //

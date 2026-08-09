@@ -309,7 +309,7 @@ and don't tell the user screenshots are impossible. Use the helper below.
    forking square to move to. Sweep seeds until one takes; the gate names the board it
    was given when it refuses, so a refusal tells you what you got.
 
-   The wider Manubiae gate (ADR-0539) covers the same path for every board-earned
+   The wider Manubiae gate (ADR-0540) covers the same path for every board-earned
    bounty — advantageous capture, royal fork, discovered check, double check, en
    passant, smothered mate:
    ```

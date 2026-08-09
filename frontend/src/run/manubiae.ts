@@ -1,4 +1,4 @@
-// What a committed board just earned (ADR-0539).
+// What a committed board just earned (ADR-0540).
 //
 // Manubiae are the things a Run pays a player for DOING on the board. The catalog, the prices
 // and the payment live in the Run model; this module answers the other half of the question --

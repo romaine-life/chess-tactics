@@ -16,6 +16,7 @@ import {
   type LipsanonId,
 } from '../core/runLipsana';
 import { spawnEventsForLevel } from '../core/levelEvents';
+import { speedBonusTenths } from '../core/speedBonus';
 import { createRng } from '../core/rng';
 import { runUnitName } from './unitNames';
 
@@ -3190,16 +3191,36 @@ export function removeUnitFromArmyAndCards(
   };
 }
 
-function battleRewardTenths(run: RunDocument, survivingUnitIds: readonly string[]): {
+/**
+ * How long the Battle took, for the purpose of paying its speed bonus.
+ *
+ * Once the aftermath exists, its `elapsedMs` is the frozen answer and the ONLY one that may
+ * be used: the player may sit on the report for a minute or an hour, and re-reading the wall
+ * clock at Continue would bank a smaller bonus than the screen promised. Before then (the
+ * final Battle, and the crafter's fast-forwarded ones) the live runtime is all there is.
+ */
+function battleElapsedMsForReward(run: RunDocument): number | null {
+  if (run.phase === 'aftermath' && run.aftermath) return run.aftermath.elapsedMs;
+  const startedAtMs = run.battleRuntime?.startedAtMs;
+  return Number.isSafeInteger(startedAtMs) ? Math.max(0, Date.now() - (startedAtMs as number)) : null;
+}
+
+function battleRewardTenths(run: RunDocument, survivingUnitIds: readonly string[], elapsedMs?: number | null): {
   victoryGoldTenths: number;
   bonusGoldTenths: number;
+  speedGoldTenths: number;
 } {
   const survivorSet = new Set(survivingUnitIds);
+  const level = run.war.battles[run.battleIndex].level;
   return {
-    victoryGoldTenths: battleVictoryGoldTenths(run.war.battles[run.battleIndex].level),
+    victoryGoldTenths: battleVictoryGoldTenths(level),
     bonusGoldTenths: hasLipsanon(run, 'mercenarys-rifle')
       ? run.army.reduce((total, unit) => total + (survivorSet.has(unit.id) ? PIECE_VALUE[unit.type] : 0), 0)
       : 0,
+    // Derived from the Battle's own level and elapsed time, so the aftermath screen can
+    // re-derive the identical number without the persisted report carrying a field for it
+    // (ADR-0539).
+    speedGoldTenths: speedBonusTenths(level, elapsedMs === undefined ? battleElapsedMsForReward(run) : elapsedMs),
   };
 }
 
@@ -3214,8 +3235,14 @@ function battleRewardTenths(run: RunDocument, survivingUnitIds: readonly string[
 export function closeBattle(run: RunDocument, report: RunBattleReport): RunDocument {
   if (run.phase !== 'battle') return run;
   if (run.battleIndex >= run.war.battles.length - 1) return openSectio(run, report.survivingUnitIds);
-  const { victoryGoldTenths, bonusGoldTenths } = battleRewardTenths(run, report.survivingUnitIds);
   const startedAtMs = run.battleRuntime?.startedAtMs;
+  // Read the wall clock ONCE and settle the report on it, so the elapsed time the screen
+  // shows and the elapsed time the speed bonus is paid on are the same reading.
+  const elapsedMs = Number.isSafeInteger(startedAtMs)
+    ? Math.max(0, Date.now() - (startedAtMs as number))
+    : null;
+  const { victoryGoldTenths, bonusGoldTenths, speedGoldTenths } =
+    battleRewardTenths(run, report.survivingUnitIds, elapsedMs);
   const armyById = new Map(run.army.map((unit) => [unit.id, unit]));
   return touch({
     ...run,
@@ -3224,10 +3251,8 @@ export function closeBattle(run: RunDocument, report: RunBattleReport): RunDocum
     aftermath: {
       battleIndex: run.battleIndex,
       turns: Number.isSafeInteger(report.turns) && report.turns > 0 ? report.turns : 0,
-      elapsedMs: Number.isSafeInteger(startedAtMs)
-        ? Math.max(0, Date.now() - (startedAtMs as number))
-        : null,
-      goldTenths: victoryGoldTenths + bonusGoldTenths,
+      elapsedMs,
+      goldTenths: victoryGoldTenths + bonusGoldTenths + speedGoldTenths,
       bonusGoldTenths,
       survivingUnitIds: [...report.survivingUnitIds],
       fallenUnits: (run.battleRuntime?.observedDeadUnitIds ?? []).flatMap((id) => {
@@ -3250,13 +3275,14 @@ export function openSectio(run: RunDocument, survivingUnitIds: readonly string[]
   if (run.phase !== 'battle' && run.phase !== 'aftermath') return run;
   const finalBattle = run.battleIndex >= run.war.battles.length - 1;
 
-  const { victoryGoldTenths, bonusGoldTenths: rifleTenths } = battleRewardTenths(run, survivingUnitIds);
+  const { victoryGoldTenths, bonusGoldTenths: rifleTenths, speedGoldTenths } =
+    battleRewardTenths(run, survivingUnitIds);
   if (finalBattle) {
     return touch({ ...run, phase: 'victory', sectio: null, deployment: null, battleRuntime: null, aftermath: null });
   }
   const banked: RunDocument = {
     ...run,
-    goldTenths: run.goldTenths + victoryGoldTenths + rifleTenths,
+    goldTenths: run.goldTenths + victoryGoldTenths + rifleTenths + speedGoldTenths,
     deployment: null,
     battleRuntime: null,
     aftermath: null,

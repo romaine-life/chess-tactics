@@ -46,6 +46,76 @@ export const UNIT_PALETTE_LABELS: Record<UnitPalette, string> = {
   white: 'White',
 };
 
+// ---------------------------------------------------------------------------
+// Declared factions
+//
+// A level DECLARES its sides. The engine fields exactly two of them — `sideForFaction` resolves a
+// unit to `player` when its palette matches the declared player faction and to `enemy` otherwise —
+// so the declaration is a pair, and every palette outside it is undeclared and unpaintable.
+//
+// Before this existed, a board's factions were INFERRED from whatever colours happened to be
+// painted: six palettes were offered, one became the player, and the rest silently collapsed into a
+// single enemy side. The declaration replaces that inference, so the colour a piece wears follows
+// from the faction it belongs to rather than being an independent choice.
+// ---------------------------------------------------------------------------
+
+export const FACTION_ROLES = ['player', 'enemy'] as const;
+export type FactionRole = typeof FACTION_ROLES[number];
+
+/** A brand-new board opens on the classic chess pairing. */
+export const DEFAULT_DECLARED_FACTIONS: Record<FactionRole, UnitPalette> = { player: 'white', enemy: 'black' };
+
+export type DeclaredFactions = Record<FactionRole, UnitPalette>;
+
+/** The board fields the declaration reads. Structural so this module stays free of board imports. */
+type FactionDeclarationSource = {
+  playerFaction?: string | null;
+  enemyFaction?: string | null;
+  units?: Record<string, { faction?: string }>;
+};
+
+const paintedPalettes = (board: FactionDeclarationSource): UnitPalette[] => {
+  const painted = new Set<string>(Object.values(board.units ?? {}).map((unit) => unit.faction ?? ''));
+  return UNIT_PALETTES.filter((palette) => painted.has(palette));
+};
+
+/**
+ * The two factions a board declares, always resolved to real palettes so every level has values.
+ *
+ * An authored declaration wins. A board that never authored one is READ, not rewritten: the player
+ * falls back to the first painted palette (matching how the editor's own preview picked a side) and
+ * the enemy to the first painted palette that is not the player. Only a board with nothing painted
+ * reaches the default pairing. Resolution is pure — persisting it is an explicit authoring act, so
+ * merely opening an old level cannot claim a side for it.
+ */
+export function resolveDeclaredFactions(board: FactionDeclarationSource): DeclaredFactions {
+  const painted = paintedPalettes(board);
+  const player = isUnitPalette(board.playerFaction)
+    ? board.playerFaction
+    : painted[0] ?? DEFAULT_DECLARED_FACTIONS.player;
+  const declaredEnemy = isUnitPalette(board.enemyFaction) && board.enemyFaction !== player
+    ? board.enemyFaction
+    : undefined;
+  const enemy = declaredEnemy
+    ?? painted.find((palette) => palette !== player)
+    ?? (player === DEFAULT_DECLARED_FACTIONS.enemy ? DEFAULT_DECLARED_FACTIONS.player : DEFAULT_DECLARED_FACTIONS.enemy);
+  return { player, enemy };
+}
+
+/**
+ * Palettes worn by pieces on the board that no faction declares.
+ *
+ * These are the legacy three-plus-colour boards. Their pieces still play — everything outside the
+ * player faction is the enemy side — but the colour is a side the level never declared, so the
+ * editor surfaces them for repair instead of pretending they are a faction.
+ */
+export function undeclaredPaintedFactions(
+  board: FactionDeclarationSource,
+  declared: DeclaredFactions,
+): UnitPalette[] {
+  return paintedPalettes(board).filter((palette) => palette !== declared.player && palette !== declared.enemy);
+}
+
 export const UNIT_FACINGS: readonly UnitFacing[] = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'];
 
 export const defaultFacingForSide = (side: Side): UnitFacing => {
