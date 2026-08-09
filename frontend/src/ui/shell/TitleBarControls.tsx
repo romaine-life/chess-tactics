@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { chromeUnitClassNames } from '../chromeUnitRegistry';
 import { useTitleBarPortalTarget } from './TitleBarPortalContext';
 import { ChromeButton, ChromeNavButton } from '../shared/ChromeButton';
+import { Tooltip } from '../shared/InfoTip';
 import { useSceneActivation } from './SceneBoundary';
 
 type TitleBarControlVariant = 'label' | 'return' | 'icon';
@@ -12,18 +13,78 @@ function cx(...parts: Array<string | false | null | undefined>): string {
 }
 
 export function TitleBarStatus({
+  as: Tag = 'div',
   children,
   className,
   ...props
-}: HTMLAttributes<HTMLDivElement> & { children: ReactNode }): ReactElement {
+}: HTMLAttributes<HTMLElement> & {
+  /** `span` when the box is seated inside inline content — a tooltip trigger. */
+  as?: 'div' | 'span';
+  children: ReactNode;
+}): ReactElement {
   return (
-    <div
+    <Tag
       data-chrome-unit="inner-box"
       className={chromeUnitClassNames('inner-box', 'titlebar-status', className)}
       {...props}
     >
       {children}
-    </div>
+    </Tag>
+  );
+}
+
+/**
+ * A title-bar box that IS its own hover/focus tooltip.
+ *
+ * The box is not decoration and is not free: every framed element in the bar costs
+ * width on a row that has none to spare, so a box has to be earned. What earns it is
+ * being one target — hovering anywhere on the frame names the thing inside it. That
+ * is the whole rule for the persistent bar, and it is why the Run's measures, which
+ * were bare marks, are boxed now: they were already tooltips, so the frame states
+ * where each target begins and ends instead of leaving the reader to guess.
+ *
+ * The box is the trigger, not a wrapper around one — the tip is positioned from the
+ * frame's own rect, so it hangs off the box rather than off some span inside it.
+ */
+export function TitleBarStatusTip({
+  children,
+  className,
+  detail,
+  explainMechanics,
+  fillSurface,
+  label,
+  name,
+  popupClassName,
+}: {
+  children: ReactNode;
+  className?: string;
+  /** The explanation. */
+  detail: ReactNode;
+  explainMechanics?: boolean;
+  /** Installed leaf fill for a box that ends a containment level (ADR-0433). */
+  fillSurface?: string;
+  /** What a screen reader hears in place of the marks. */
+  label: string;
+  /** The named thing the tip is about. */
+  name?: ReactNode;
+  popupClassName?: string;
+}): ReactElement {
+  return (
+    <Tooltip
+      className="titlebar-status-tip"
+      triggerClassName="titlebar-status-trigger"
+      label={label}
+      title={name}
+      explainMechanics={explainMechanics}
+      popupClassName={popupClassName}
+      trigger={(
+        <TitleBarStatus as="span" className={className} data-chrome-fill-surface={fillSurface}>
+          {children}
+        </TitleBarStatus>
+      )}
+    >
+      {detail}
+    </Tooltip>
   );
 }
 

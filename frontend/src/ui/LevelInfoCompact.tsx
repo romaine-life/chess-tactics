@@ -4,7 +4,12 @@
 // (the Rules row). Its consumer (CampaignEditor's Info tab) is display-only, so
 // there is no editing grid; this is the whole readout, not a header above one.
 import { type ComponentProps, type ReactElement } from 'react';
-import type { Level, ZoneType } from '../core/level';
+import {
+  LEVEL_BATTLE_CARDS_DEALT_MAX,
+  LEVEL_BATTLE_CARDS_DEALT_MIN,
+  type Level,
+  type ZoneType,
+} from '../core/level';
 import { MODE_NAME, objectiveContextForLevel, victoryRulesForLevel } from '../core/objectives';
 import { formatClockSeconds } from '../core/clock';
 import type { PieceType } from '../core/types';
@@ -91,6 +96,25 @@ export function levelObjectiveLine(level: Level, perspectiveSide: PlayingSide = 
   return `${MODE_NAME[level.objective]} — ${objectiveBriefingForSide(rules, perspectiveSide).summary}`;
 }
 
+/**
+ * The Deployment deal a War Battle authors — the bare count, because that is the fact the readout
+ * is missing: a Battle's player force arrives as dealt cards, not as pieces standing on the map,
+ * so an ally roster of 0 is otherwise the whole answer.
+ *
+ * Null for a level that is not a Battle — Campaign and standalone levels are never dealt anything
+ * and carry no `battle` block. A Battle that authors no count is unfinished rather than untuned
+ * (`W4_BATTLE_CARDS_DEALT` blocks its Save), so it says so instead of dropping the row.
+ */
+export function levelBattleDealLine(level: Level): string | null {
+  if (!level.battle) return null;
+  const dealt = level.battle.cardsDealt;
+  if (typeof dealt !== 'number' || !Number.isInteger(dealt)
+    || dealt < LEVEL_BATTLE_CARDS_DEALT_MIN || dealt > LEVEL_BATTLE_CARDS_DEALT_MAX) {
+    return 'Not set';
+  }
+  return String(dealt);
+}
+
 /** Whole-board AI artwork owns the environment pixels, so its logical terrain cannot be
  * presented as a roster of individually rendered tile types. */
 export function levelShowsTerrainTypeCounts(level: Level): boolean {
@@ -148,6 +172,7 @@ export function LevelInfoCompact({
   const enemies = forceCountsForSide(level, 'enemy');
   const zoneMix = countMap(level.layers.zones.map((z) => z.type));
   const zoneParts = ZONE_ORDER.filter((z) => zoneMix[z]).map((z) => `${ZONE_LABEL[z]} ${zoneMix[z]}`);
+  const dealLine = levelBattleDealLine(level);
 
   return (
     <InnerChromeBox
@@ -176,6 +201,15 @@ export function LevelInfoCompact({
           <Roster counts={enemies} tone="is-enemy" label="Enemies" dealt={dealtCountForSide(level, 'enemy')} />
         </div>
       </section>
+
+      {/* Directly under Forces, because that is where the question is asked: a Battle's Allies
+          column reads 0, and this row is the answer to why. */}
+      {dealLine ? (
+        <section className="ce-li-zones-row">
+          <span className="ce-li-title">Cards</span>
+          <span className="ce-li-zones">{dealLine}</span>
+        </section>
+      ) : null}
 
       {showZones ? (
         <section className="ce-li-zones-row">

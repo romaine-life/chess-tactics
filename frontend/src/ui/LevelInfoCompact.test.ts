@@ -1,6 +1,16 @@
 import { describe, it, expect } from 'vitest';
-import { kingSideForLevel, levelObjectiveLine, levelShowsTerrainTypeCounts } from './LevelInfoCompact';
-import { createBlankLevel, type Level } from '../core/level';
+import {
+  kingSideForLevel,
+  levelBattleDealLine,
+  levelObjectiveLine,
+  levelShowsTerrainTypeCounts,
+} from './LevelInfoCompact';
+import {
+  createBlankLevel,
+  LEVEL_BATTLE_CARDS_DEALT_MAX,
+  LEVEL_BATTLE_CARDS_DEALT_MIN,
+  type Level,
+} from '../core/level';
 import { MODE_NAME } from '../core/objectives';
 import type { PieceType, Side } from '../core/types';
 import { encodeBoard } from './boardCode';
@@ -100,6 +110,31 @@ describe('levelObjectiveLine — mode name + seat-relative rule briefing', () =>
       l.objective = 'capture-all';
     });
     expect(levelObjectiveLine(level)).toBe('Last Man Standing — Eliminate the opposing force; protect your force');
+  });
+});
+
+describe('levelBattleDealLine — how many cards a Battle deals, in the readout', () => {
+  const battle = (battleSettings: unknown): Level => (
+    { ...fixedLevel([]), battle: battleSettings } as unknown as Level
+  );
+
+  it('says nothing at all for a level that is not a Battle', () => {
+    expect(levelBattleDealLine(fixedLevel([]))).toBeNull();
+  });
+
+  it('is the bare count, and nothing else', () => {
+    expect(levelBattleDealLine(battle({ loot: false, cardsDealt: 3 }))).toBe('3');
+    expect(levelBattleDealLine(battle({ cardsDealt: LEVEL_BATTLE_CARDS_DEALT_MIN }))).toBe('1');
+    expect(levelBattleDealLine(battle({ cardsDealt: LEVEL_BATTLE_CARDS_DEALT_MAX }))).toBe('12');
+  });
+
+  it('reports an unfinished Battle instead of dropping the row', () => {
+    // A Battle that carries a Loot flag and no count is the shape that predates the requirement.
+    expect(levelBattleDealLine(battle({ loot: true }))).toBe('Not set');
+    expect(levelBattleDealLine(battle({ cardsDealt: 0 }))).toBe('Not set');
+    expect(levelBattleDealLine(battle({ cardsDealt: LEVEL_BATTLE_CARDS_DEALT_MAX + 1 }))).toBe('Not set');
+    expect(levelBattleDealLine(battle({ cardsDealt: 3.5 }))).toBe('Not set');
+    expect(levelBattleDealLine(battle({ cardsDealt: '3' }))).toBe('Not set');
   });
 });
 

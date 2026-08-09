@@ -4473,8 +4473,9 @@ h1 {
 
 .skirmish-topbar-status {
   align-items: center;
+  block-size: 100%;
   display: flex;
-  gap: 12px;
+  gap: var(--titlebar-control-gap);
   justify-self: center;
   min-width: 0;
 }
@@ -4484,12 +4485,19 @@ h1 {
 .skirmish-status-chip {
   /* Kit panel frame so the status reads as a contained chip, not floating text —
      in-theme (panel.png), never the bland CSS box it replaced (ADR-0032/0033).
-     Fixed 46px height = the header buttons, so the bar's elements line up. */
+     The bar has ONE control height and ONE origin: a status box is the same
+     52px as the always-visible cluster buttons and shares their top and bottom
+     coordinate, so nothing in the bar sits on its own line. It used to be 46px
+     and 7px lower, which read as two families rather than one.
+     The frame's rail is not padding: at 7px of border the content used to begin
+     exactly on the rail's inner edge, with nothing between the two. The inset is
+     stated here, in the shared chip, so no consumer has to restate it. */
   align-items: center;
-  block-size: 46px;
+  block-size: var(--titlebar-control-size, 52px);
   box-sizing: border-box;
   display: flex;
   gap: var(--ds-inline);
+  padding-inline: var(--skirmish-status-chip-inset, var(--ds-space-2));
 }
 
 /* Chip text on the --ds-text role scale (ADR-0024) — label line over a muted
@@ -4511,11 +4519,37 @@ h1 {
   line-height: 1.15;
 }
 
-/* Objective chip: keep the flag glyph proportionate to the two text lines and
-   let the chip padding + gap do the spacing. */
+/* ONE seat for every mark in the title bar — the hourglass in the clock, the flag on
+   the objective, and the Run's measures all draw at the same size, because they are
+   read as one row of marks.
+   The seat alone is not enough to make them MATCH, because the two families are drawn
+   differently. Every Run mark ships trimmed to its own ink, so `contain` in a square
+   seat draws it at the seat's full size. The kit's game glyphs carry their transparent
+   margin — measured, the hourglass's ink fills 63% of its 64px canvas and the flag's
+   73%, against 100% for every Run mark — and `contain` scales the CANVAS, so that
+   margin comes straight off the drawn glyph: the hourglass rendered about 15px beside
+   26px marks. So an untrimmed glyph states the fraction of its canvas its own ink
+   fills, and its box grows by exactly that much and BLEEDS the surplus back out with a
+   negative margin — the drawn ink lands on the shared seat while the layout footprint
+   stays the seat. It is geometry, not paint: the sprite is never rescaled by a
+   background declaration. A trimmed mark declares nothing and needs nothing, which is
+   the whole point of the trimming rule; trimming these two source PNGs would delete
+   their two lines below. The fractions are measured from the installed bytes, not
+   guessed. */
+.skirmish-topbar-status {
+  --titlebar-mark-seat: 26px;
+}
+
+.skirmish-status-chip .skirmish-icon {
+  --titlebar-mark-canvas: calc(var(--titlebar-mark-seat) / var(--titlebar-mark-ink-fill, 1));
+  block-size: var(--titlebar-mark-canvas);
+  inline-size: var(--titlebar-mark-canvas);
+  margin: calc((var(--titlebar-mark-seat) - var(--titlebar-mark-canvas)) / 2);
+}
+
+/* ui/kit/icons/game/objective.png — ink 35x47 on a 64x64 canvas. */
 .skirmish-objective .skirmish-icon {
-  height: 24px;
-  width: 24px;
+  --titlebar-mark-ink-fill: .734;
 }
 
 /* The two-line objective copy sits as a left-aligned stack next to the glyph. */
@@ -4613,16 +4647,32 @@ h1 {
 }
 
 /* Battle-clock chip: sits between the turn plate and the objective on timed games,
-   same two-line centered stack as the turn plate. The time line needs a stable
-   width (digits tick every second) so the flanking chips don't breathe with it;
-   tabular figures are a best-effort on the pixel font stack. */
+   same two-line centered stack as the turn plate, behind the installed kit hourglass —
+   glyph then copy, exactly as the objective chip reads. The chip keeps the base
+   status-chip flex row for that pairing; the READOUT owns the stable width (digits
+   tick every second, and a timed clock gains tenths under ten seconds) so the
+   flanking chips don't breathe with it. Tabular figures are a best-effort on the
+   pixel font stack. */
+/* Glyph then copy, hugging: the readout starts immediately after the hourglass
+   instead of being centred over a label wider than it, which read as a gap the
+   chip had not earned. The label is the widest line in every mode, so it — not a
+   minimum — is what holds the width steady while the digits tick. The hourglass
+   takes the bar's shared mark seat; see the seat rule above. */
 .skirmish-clock {
+  gap: var(--ds-inline-tight);
+}
+
+.skirmish-clock-readout {
   align-content: center;
   display: grid;
   gap: 0;
-  justify-items: center;
-  min-inline-size: 112px;
-  text-align: center;
+}
+
+/* With no label under it the clock is shaped exactly like the marks beside it — one
+   glyph, one value — so it takes their size. The two-line timed readout keeps the
+   smaller face, which is what lets two lines sit in one control height. */
+.skirmish-clock-readout > strong:only-child {
+  font-size: var(--ds-text-md);
 }
 
 .skirmish-clock strong {
@@ -9290,6 +9340,22 @@ body.loading-bootstrap .app-startup-status {
     display: flex;
   }
 
+  /* Every measure carries a frame now, and four frames cost width the narrow bar does
+     not have — at 740 the last one ran under the control lane. Nothing is dropped:
+     the marks and their numbers draw smaller and closer instead, which is the whole
+     point of shedding the wide chip first. */
+  .app-shell-titlebar .run-topbar-status {
+    --titlebar-mark-seat: 20px;
+  }
+
+  .app-shell-titlebar .run-topbar-measures {
+    gap: 2px;
+  }
+
+  .app-shell-titlebar .run-topbar-measure {
+    font-size: var(--ds-text-xs);
+    gap: 2px;
+  }
 }
 
 @media (max-width: 860px) {
@@ -9376,6 +9442,18 @@ body.loading-bootstrap .app-startup-status {
 
   .run-topbar-status {
     display: flex;
+  }
+
+  /* The frames tighten before any information leaves the bar. The bar's three parts
+     are all invariants here — the brand's wordmark, five status boxes, and a 212px
+     control lane — and at the comfortable inset they do not all fit in 740. So the
+     frames and the marks give up their slack first: a narrower frame and a smaller
+     mark cost less than a missing measure. This is the floor; below it the next
+     thing to give would have to be a box, which is a design call, not a CSS one. */
+  .app-shell-titlebar .run-topbar-status {
+    --skirmish-status-chip-inset: var(--ds-space-1);
+    --titlebar-mark-seat: 18px;
+    gap: var(--ds-space-1);
   }
 }
 
@@ -15682,12 +15760,13 @@ button.tileset-relationship-cell {
   padding: 10px;
 }
 
-/* Height-led, because 5:7 is tall: bounding the block size is what keeps the row from growing to
-   the width of the settings column. The card keeps its own aspect ratio from the image. */
+/* Width-led: the sample fills the framed box it sits in and takes its height from the card's own
+   5:7 proportion. (This asked for a 210px block-size for a while and never got one — the shared
+   .run-card-back rule below it declared `block-size: auto` and won on source order, so the raster
+   sized itself to the box. Stating what it actually does is what keeps it stable now that the
+   card back is a box rather than a bare image.) */
 .run-card-back-preview-card {
-  block-size: 210px;
-  inline-size: auto;
-  max-inline-size: 100%;
+  inline-size: 100%;
 }
 
 .run-card-back-select {
@@ -17584,7 +17663,20 @@ button.tileset-relationship-cell {
   outline-offset: 2px;
 }
 
+/* The center slot answers to the SAME coordinate system as the control lane above:
+   origin at the title bar's origin, bottom at the structural divider's top edge. That
+   is what makes a status box and an always-visible cluster button share a top and a
+   bottom line instead of each being centred in a different box. */
 .app-shell-titlebar-center {
+  /* Centre whatever a route contributes inside that lane box. Adopting the lane's
+     coordinates without this seats a short contribution (the Editor's save state) on
+     the bar's top edge instead of on its control line. */
+  align-items: center;
+  align-self: start;
+  block-size: calc(var(--app-header-h) - var(--titlebar-rule-h));
+  display: flex;
+  justify-content: center;
+  margin-block: calc(-1 * var(--ds-titlebar-inset)) 0;
   min-width: 0;
 }
 
@@ -19557,10 +19649,23 @@ button.tileset-relationship-cell {
   min-block-size: 0;
 }
 
+/* The call heads the section on its own auto track so the elastic row below it stays the
+   one thing that takes the leftover lane. Without the leading `auto` the call claims the
+   1fr and the card row drops into an implicit track it cannot measure. Both are placed
+   explicitly, because the call is absent once the stall is bought out and auto-placement
+   would slide the row up into the auto track and collapse it exactly then. */
 .run-sectio-workspace-content:not(:has(.run-sectio-wrap-host)) > .run-sectio-cards-section {
-  grid-template-rows: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   min-block-size: 0;
   padding: var(--ds-inset);
+}
+
+.run-sectio-workspace-content:not(:has(.run-sectio-wrap-host)) > .run-sectio-cards-section > .run-card-row-call {
+  grid-row: 1;
+}
+
+.run-sectio-workspace-content:not(:has(.run-sectio-wrap-host)) > .run-sectio-cards-section > .run-card-grid {
+  grid-row: 2;
 }
 
 .run-battle-preview-content {
@@ -19880,12 +19985,13 @@ button.tileset-relationship-cell {
 }
 
 /* A covered pile conceals its back completely. The back is generated on a flat
-   near-black backdrop it still paints, so its opaque canvas runs to all four
-   corners while every face frame is die-cut to the shared painted card box
-   (paintBounds 26,42 1009x1402 of 1060x1484). Left visible, that backdrop reads
-   as a black edge around the offer. Concealing rather than unmounting keeps the
-   seat and the decoded pixels, so Adlectio reveals the back without a reflow or
-   a flash. */
+   near-black backdrop it still paints, so its raster is opaque to all four
+   corners; RunCardBack seats it in the same die-cut card box the face frames
+   are drawn in (paintBounds 26,42 1009x1402 of 1060x1484), which is what keeps
+   a revealed pile the same size as the offers still face up, but the two edges
+   then coincide exactly and any antialiasing bleeds. Concealing rather than
+   unmounting keeps the seat and the decoded pixels, so Adlectio reveals the
+   back without a reflow or a flash. */
 .run-card-pile.is-covered > .run-card-pile-back {
   visibility: hidden;
 }
@@ -20378,45 +20484,42 @@ button.tileset-relationship-cell {
   object-fit: contain;
 }
 
-/* A measure is one icon and its number, sitting bare on the bar — Ataraxia tier,
-   gold, Conflict, Battle are all the same kind of fact and read as one row of
-   marks. Only the War/Battle identity, which cannot be drawn, keeps a chip
-   frame; a measure never gets a box of its own. */
+/* A measure is one icon and its number — Ataraxia tier, gold, Conflict, Battle are
+   all the same kind of fact and read as one row. Each one is FRAMED, like every
+   other element in the bar, and the frame is earned rather than decorative: the box
+   is exactly one hover/keyboard target that names what is inside it. They used to
+   sit bare while already being tooltips, so nothing stated where one target ended
+   and the next began. The row is the bar's tightest, so its boxes hug their marks
+   and sit on the tight gap. */
 .run-topbar-measures {
-  /* One seat for every mark, because every mark is trimmed to its own ink: the
-     coin, the wreath and the drum all draw at the same size, and the gap between
-     a mark and its number is the same gap everywhere in the row. */
-  --run-measure-seat: 30px;
+  /* The bar's one mark seat, so the coin, the wreath, the drum and the clock's
+     hourglass all draw at the same size and the gap between a mark and its number
+     is the same gap everywhere in the row. The seat itself is declared on the row
+     above (--titlebar-mark-seat) because the clock is not one of these measures
+     and still has to answer to it. */
+  --run-measure-seat: var(--titlebar-mark-seat, 26px);
   align-items: center;
   display: flex;
-  gap: var(--ds-inline);
+  gap: var(--ds-inline-tight);
   min-width: 0;
 }
 
 .run-topbar-measure {
   align-items: center;
   color: #eaf6ff;
-  display: inline-flex;
   font: var(--ds-weight-strong) var(--ds-text-md)/1 var(--ds-font-display);
-  gap: var(--ds-space-1);
+  gap: var(--ds-inline-tight);
   letter-spacing: .04em;
   min-width: 0;
   white-space: nowrap;
 }
 
-/* A measure has no frame between it and the bar's painted wall, so its mark needs
-   a stroke to hold its silhouette. The stroke is baked into the artwork
-   (scripts/bake-icon-stroke.mjs), the way the accepted ui-kit icons carry theirs —
-   NOT a CSS shadow standing in for one. Only the number gets a contact shadow,
-   which is ordinary type treatment. */
-.run-topbar-measure > span {
-  text-shadow: 0 2px 0 #02070b;
-}
-
-/* A mark is a symbol standing in for a word, so every measure names itself on
-   hover or keyboard focus through the shared Tooltip. The popup owns its whole
-   treatment (ADR-0362's promotion); this only keeps the trigger's own layout. */
-.run-topbar-measure-tip {
+/* Every element in the bar is a tooltip target and therefore a box. The shared
+   trigger is already inline-flex and hugs the frame exactly, which is what lets the
+   tip hang off the BOX's own rect — it must keep a box of its own for that, so this
+   only lets a wide chip shrink with the row instead of forcing it wider. */
+.titlebar-status-tip,
+.titlebar-status-trigger {
   min-width: 0;
 }
 
@@ -20866,14 +20969,32 @@ button.tileset-relationship-cell {
 
 /* The Run's opening grant is a card row rather than the relic mat, so it takes the whole
    content lane and centers in it. Without this the content's justify-items:start leaves the
-   grid at one card's width and the row stacks into a clipped column. */
-.run-vacantia-content > .run-card-grid {
+   grid at one card's width and the row stacks into a clipped column. The call heads the lane
+   on its own track, so the row keeps measuring a box it wholly owns and sizes its faces to
+   whatever height the sentence leaves. */
+.run-vacantia-content > .run-vacantia-grant {
   align-content: center;
   block-size: 100%;
+  display: grid;
+  gap: var(--ds-space-3);
+  grid-template-rows: auto minmax(0, 1fr);
   inline-size: 100%;
   justify-self: stretch;
   min-block-size: 0;
   padding: var(--ds-inset);
+}
+
+/* What a row of cards is asking of the player, said once above it. The opening grant and
+   the Sectio deal the same faces at the same size and differ only in what they cost, so
+   the sentence that tells them apart is the same object on both and prints at the scale
+   of something meant to be read rather than a caption filed under the scene. */
+.run-card-row-call {
+  color: var(--ink-strong);
+  font-size: var(--ds-text-xl);
+  letter-spacing: .02em;
+  margin: 0;
+  text-align: center;
+  text-shadow: 0 3px 0 #02070b;
 }
 
 /* A targeted lipsanon replaces the mat with the same ledger/profile instrument used by
@@ -22427,9 +22548,7 @@ button.tileset-relationship-cell {
 
 .run-deployment-center-card > .run-card-back {
   block-size: 100%;
-  display: block;
   inline-size: 100%;
-  object-fit: contain;
 }
 
 .run-deployment-center-count {
@@ -22573,14 +22692,12 @@ button.tileset-relationship-cell {
   block-size: 100%;
   display: block;
   inline-size: 100%;
-  object-fit: contain;
 }
 
 .run-deployment-deal-flight > :is(.run-card-back, .run-card-action) {
   block-size: 100%;
   display: block;
   inline-size: 100%;
-  object-fit: contain;
 }
 
 .run-deployment-stack-card {
@@ -22615,11 +22732,6 @@ button.tileset-relationship-cell {
   inline-size: 100%;
 }
 
-.run-deployment-discard-flight > .run-card-back {
-  display: block;
-  object-fit: contain;
-}
-
 .run-deployment-stack-side {
   backface-visibility: hidden;
   display: block;
@@ -22644,11 +22756,6 @@ button.tileset-relationship-cell {
 .run-deployment-stack-side > :is(.run-card-back, .run-card-action) {
   block-size: 100%;
   inline-size: 100%;
-}
-
-.run-deployment-stack-side .run-card-back {
-  display: block;
-  object-fit: contain;
 }
 
 .run-deployment-card-count {
@@ -23365,6 +23472,16 @@ button.tileset-relationship-cell {
   grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
+/* Manubiae is the one section with BOTH an opening line and a closing note around its scroll:
+   title, intro, the scrolling ladder, then how they add up. Every panel states the rows its own
+   children need, and a panel whose children outnumber its rows pushes the extras into implicit
+   ones — which the `overflow: hidden` above then clips, taking the second line of the intro
+   with it. Declared for both transports because the framed host owns the grid instead. */
+.enchiridion-manubiae-panel.enchiridion-panel-unframed,
+.enchiridion-manubiae-panel > .le-outer-panel-content {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
 .enchiridion-panel :is(h3, p),
 .enchiridion-empty :is(h3, p) {
   margin: 0;
@@ -23411,6 +23528,16 @@ button.tileset-relationship-cell {
   align-self: center;
   display: grid;
   gap: var(--ds-space-2);
+}
+
+/* A Manubium's price sits between its name and the sentence that earns it, on the shared
+   gold mark. The rate line (the one entry priced per point rather than at a number) wears
+   the same mark beside its own words, so the column reads as one list of prices. */
+.enchiridion-manubium-price {
+  align-items: center;
+  column-gap: var(--ds-space-2);
+  display: flex;
+  flex-wrap: wrap;
 }
 
 /* The card's diagram IS the Battle board: the shared read-only renderer contained in this
@@ -26008,18 +26135,39 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   }
 }
 
+/* The face-down card's BOX is the whole card, the same 5:7 box a face-up card is given, so every
+   host keeps sizing it exactly as before. It states no block-size of its own: the box carries no
+   intrinsic size the way the bare raster did, so a height-led host (the Settings preview, the
+   Studio specimen) must be free to lead with block-size and take its width off the ratio. */
 .run-card-back {
   aspect-ratio: 5 / 7;
-  block-size: auto;
   display: block;
   max-inline-size: 100%;
-  object-fit: cover;
+  position: relative;
   user-select: none;
 }
 
-/* The acceptance proof asserts the review covered the decoded native raster at
-   exact scale, so the specimens print at their stored 1060x1484 pixels and this
-   pane scrolls. Scaling them to fit would make that claim false. */
+/* The printed back, seated in the die-cut opening every frame occupies (--run-card-print-*, written
+   from the frames' own measured paint bounds). Frames are drawn 1009x1402 of a 1060x1484 canvas and
+   the back rasters are painted corner to corner, so a back laid over the whole box printed 5.05%
+   wider and 5.85% taller than the offer beside it — a bought Sectio pile came back visibly bigger
+   than the cards still face up. `cover` rather than `fill`: the opening is 1009:1402 and the raster
+   1060:1484, so covering it trims a third of a percent off the top and bottom instead of stretching
+   the artwork. */
+.run-card-back-print {
+  block-size: var(--run-card-print-block-size, 94.4744%);
+  inline-size: var(--run-card-print-inline-size, 95.1887%);
+  inset-block-start: var(--run-card-print-block-start, 2.8302%);
+  inset-inline-start: var(--run-card-print-inline-start, 2.4528%);
+  object-fit: cover;
+  position: absolute;
+}
+
+/* The acceptance proof asserts the review covered the whole decoded 1060x1484
+   raster, so the two specimens are laid side by side at whatever height the
+   window allows and this pane scrolls rather than cropping either of them.
+   (The specimen rule below is height-led and does not print at stored pixels;
+   what the proof needs is every pixel visible, not one screen pixel each.) */
 .run-card-back-study {
   align-items: start;
   display: flex;
@@ -26116,17 +26264,31 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   min-block-size: 0;
 }
 
-/* Beats the base card-image img rule, which sizes every catalog image to an iso
-   tile. Height-led rather than a fixed width: at 100% both cards are whole and
-   on screen at any window this Studio is usable in, and zoom scales from there.
+/* Height-led rather than a fixed width: at 100% both cards are whole and on
+   screen at any window this Studio is usable in, and zoom scales from there.
    A fixed size looked right on one window and ran off the bottom of every
    shorter one. The 5:7 aspect on .run-card-back gives the width. */
-.tileset-studio-card-image.run-card-back-specimen img.run-card-back {
+.tileset-studio-card-image.run-card-back-specimen > .run-card-back {
   block-size: calc(clamp(220px, 100vh - 440px, 588px) * var(--run-card-gallery-zoom, 1));
-  image-rendering: auto;
   inline-size: auto;
   max-inline-size: none;
-  object-fit: cover;
+}
+
+/* The specimen is the RASTER under review, not a card in play. The backend accepts a card back
+   only against a proof claiming the owner covered the whole decoded 1060x1484 canvas
+   (liveMediaPolicy.runCardBackOwnerProofIssue), and the die-cut seating every game surface uses
+   trims a third of a percent off the top and bottom to sit inside the frames' opening — pixels
+   the reviewer would then never see. So this one surface prints the canvas whole. The box is
+   exactly 5:7 and so is the canvas, so `contain` neither crops nor letterboxes; it is stated
+   rather than `cover` because nothing here may be lost. Also beats the base card-image img rule,
+   which sizes every catalog image to an iso tile and pixelates it. */
+.tileset-studio-card-image.run-card-back-specimen .run-card-back-print {
+  block-size: 100%;
+  image-rendering: auto;
+  inline-size: 100%;
+  inset-block-start: 0;
+  inset-inline-start: 0;
+  object-fit: contain;
 }
 
 .run-card-back-study figcaption {

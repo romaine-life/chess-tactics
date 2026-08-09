@@ -162,6 +162,9 @@ export interface LevelMeta {
   surviveTurns?: number;
   // The battle clock, authored in the RULES panel. Omitted ⇒ untimed (back-compat).
   timeControl?: TimeControl;
+  // The level's par in turns, authored in the RULES panel. Omitted ⇒ estimated from the board
+  // (ADR-0539, core/speedBonus.ts).
+  parTurns?: number;
   // Authored win/lose lists (ADR-0064). Omitted ⇒ the `objective` preset defines the outcome
   // (the RULES panel's "Custom win/lose" toggle is off) — the same back-compat default as above.
   victory?: VictoryRules;
@@ -430,6 +433,7 @@ export function editorBoardToLevel(board: EditorBoard, meta: LevelMeta): Level {
   if (meta.roster !== undefined) level.roster = meta.roster;
   if (meta.surviveTurns !== undefined) level.surviveTurns = meta.surviveTurns;
   if (meta.timeControl !== undefined) level.timeControl = meta.timeControl;
+  if (meta.parTurns !== undefined) level.parTurns = meta.parTurns;
   if (meta.victory !== undefined) level.victory = meta.victory;
   if (meta.events !== undefined) level.events = meta.events;
   if (meta.battle !== undefined) level.battle = meta.battle;

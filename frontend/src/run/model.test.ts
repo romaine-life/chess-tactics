@@ -32,8 +32,10 @@ import {
   migrateRunSaveDocument,
   normalizeRunDocument,
   openSectio,
-  payRunEnPassantBounty,
-  payRunRoyalForkBounty,
+  manubiaeUnitWorth,
+  manubiumGoldTenths,
+  payRunManubium,
+  RUN_MANUBIAE,
   performAdlectio,
   resetSectio,
   runCardDefinition,
@@ -631,92 +633,115 @@ describe('ability retirement migration', () => {
   });
 });
 
-describe('en passant bounty', () => {
-  it('pays five gold the moment the capture lands, and pays again for a second one', () => {
+describe('Manubiae — what the board pays for', () => {
+  it('states one price per entry, and the two that predate the category still read it', () => {
+    // The catalog is the source. A named constant that disagreed with it would be a second
+    // price for the same deed, which is exactly what naming the category was meant to end.
+    expect(RUN_MANUBIAE.map((entry) => entry.id)).toEqual([
+      'advantageous-capture', 'royal-fork', 'discovered-check', 'double-check', 'en-passant', 'smothered-mate',
+    ]);
+    expect(new Set(RUN_MANUBIAE.map((entry) => entry.id)).size).toBe(RUN_MANUBIAE.length);
+    expect(RUN_EN_PASSANT_BOUNTY_TENTHS).toBe(50);
+    expect(RUN_ROYAL_FORK_BOUNTY_TENTHS).toBe(10);
+    for (const entry of RUN_MANUBIAE) {
+      // Exactly one of the two ways to carry a price, never both and never neither.
+      expect(entry.goldTenths === null).toBe(Boolean(entry.priceNote));
+      if (entry.goldTenths !== null) expect(entry.goldTenths).toBeGreaterThan(0);
+      expect(entry.earnedBy.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('prices each fixed award at its catalog entry', () => {
+    expect(manubiumGoldTenths({ id: 'royal-fork' })).toBe(10);
+    expect(manubiumGoldTenths({ id: 'discovered-check' })).toBe(20);
+    expect(manubiumGoldTenths({ id: 'double-check' })).toBe(30);
+    expect(manubiumGoldTenths({ id: 'en-passant' })).toBe(50);
+    expect(manubiumGoldTenths({ id: 'smothered-mate' })).toBe(50);
+  });
+
+  it('scales an advantageous capture by the material actually won', () => {
+    // A pawn taking a queen is not the same deed as a rook taking one, so it is not paid the
+    // same. Two tenths a point keeps every rung exact in the gold scale — no rounding rule.
+    const won = (marginPoints: number) => manubiumGoldTenths({ id: 'advantageous-capture', marginPoints });
+    expect(won(PIECE_VALUE.queen - PIECE_VALUE.pawn)).toBe(16);
+    expect(won(PIECE_VALUE.queen - PIECE_VALUE.rook)).toBe(8);
+    expect(won(PIECE_VALUE.rook - PIECE_VALUE.knight)).toBe(4);
+    // An even or losing trade is not an advantageous capture and never pays.
+    expect(won(0)).toBe(0);
+    expect(won(-4)).toBe(0);
+  });
+
+  it('is worth what a unit STARTED as, so promotion never re-prices it', () => {
+    // The Run roster has no promotion concept — a queened pawn is a Pawn again next Battle —
+    // and this keeps the board agreeing with it, on both sides of the comparison.
+    expect(manubiaeUnitWorth({ type: 'queen', promotedFrom: 'pawn' })).toBe(PIECE_VALUE.pawn);
+    expect(manubiaeUnitWorth({ type: 'knight', promotedFrom: 'pawn' })).toBe(PIECE_VALUE.pawn);
+    expect(manubiaeUnitWorth({ type: 'queen' })).toBe(PIECE_VALUE.queen);
+    // No purchase price, so no margin either way: a King and an obstacle are unpriceable,
+    // not free. The King's zero on the scale is a sentinel, and reading it as worth would
+    // make every capture a King makes look advantageous.
+    expect(manubiaeUnitWorth({ type: 'king' })).toBeNull();
+    expect(manubiaeUnitWorth({ type: 'rock' })).toBeNull();
+    expect(manubiaeUnitWorth(null)).toBeNull();
+  });
+
+  it('pays the moment it lands, and pays again for the next one', () => {
     const battle = inBattle(createRun(war(), 11));
 
-    const once = payRunEnPassantBounty(battle, { x: 3, y: 4 })!;
+    const once = payRunManubium(battle, { id: 'en-passant' }, { x: 3, y: 4 })!;
     expect(once.run.goldTenths).toBe(battle.goldTenths + RUN_EN_PASSANT_BOUNTY_TENTHS);
-    expect(RUN_EN_PASSANT_BOUNTY_TENTHS).toBe(50);
 
-    const twice = payRunEnPassantBounty(once.run, { x: 3, y: 4 })!;
+    const twice = payRunManubium(once.run, { id: 'en-passant' }, { x: 3, y: 4 })!;
     expect(twice.run.goldTenths).toBe(battle.goldTenths + 2 * RUN_EN_PASSANT_BOUNTY_TENTHS);
   });
 
   it('hands back the notice that accounts for the payment, welded to the paid document', () => {
-    // The bounty and the report of the bounty are one return value on purpose: there is no
-    // call that produces the gold and leaves the player with nothing to see or read.
+    // The gold and the report of the gold are one return value on purpose (ADR-0525): there
+    // is no call that produces gold and leaves the player with nothing to see or read.
     const battle = inBattle(createRun(war(), 21));
-    const paid = payRunEnPassantBounty(battle, { x: 5, y: 2 })!;
 
-    expect(paid.notice.goldTenths).toBe(RUN_EN_PASSANT_BOUNTY_TENTHS);
-    expect(paid.notice.at).toEqual({ x: 5, y: 2 });
-    expect(paid.notice.log).toContain('En passant');
-    expect(paid.notice.log).toContain('5');
+    const passant = payRunManubium(battle, { id: 'en-passant' }, { x: 5, y: 2 })!;
+    expect(passant.notice.goldTenths).toBe(50);
+    expect(passant.notice.at).toEqual({ x: 5, y: 2 });
+    expect(passant.notice.log).toContain('En passant');
+    expect(passant.notice.log).toContain('5');
+
+    const smothered = payRunManubium(battle, { id: 'smothered-mate' }, { x: 1, y: 6 })!;
+    expect(smothered.notice.log).toContain('Smothered mate');
+
+    // The scaled one reports the number it actually paid, not the rate it was paid at.
+    const capture = payRunManubium(battle, { id: 'advantageous-capture', marginPoints: 8 }, { x: 2, y: 2 })!;
+    expect(capture.notice.goldTenths).toBe(16);
+    expect(capture.notice.log).toContain('Advantageous capture');
+    expect(capture.notice.log).toContain('1.6');
   });
 
-  it('pays nothing outside a Battle, and nothing without a battle runtime', () => {
+  it('pays nothing outside a Battle, nothing without a runtime, and nothing for a worthless award', () => {
     const sectio = firstSectio(12);
-    expect(payRunEnPassantBounty(sectio, { x: 0, y: 0 })).toBeNull();
+    expect(payRunManubium(sectio, { id: 'en-passant' }, { x: 0, y: 0 })).toBeNull();
 
     const noRuntime: RunDocument = { ...sectio, phase: 'battle', battleRuntime: null };
-    expect(payRunEnPassantBounty(noRuntime, { x: 0, y: 0 })).toBeNull();
+    expect(payRunManubium(noRuntime, { id: 'en-passant' }, { x: 0, y: 0 })).toBeNull();
+
+    // An even trade produces no notice at all rather than a "0 gold claimed" line.
+    const battle = inBattle(createRun(war(), 14));
+    expect(payRunManubium(battle, { id: 'advantageous-capture', marginPoints: 0 }, { x: 0, y: 0 })).toBeNull();
   });
 
   it('is taken back with the move that earned it', () => {
     // The Undo checkpoint is captured BEFORE the move commits, so restoring it removes the
-    // bounty the move paid -- an en passant cannot be taken twice by taking it back.
+    // gold the move paid -- no Manubium can be claimed twice by taking it back, and none is
+    // ever worth undoing for profit.
     const battle = inBattle(createRun(war(), 13));
     const checkpoint = captureRunBattleUndo(battle);
-    const paid = payRunEnPassantBounty(battle, { x: 1, y: 1 })!;
-    expect(paid.run.goldTenths).toBeGreaterThan(battle.goldTenths);
-
-    const undone = undoRunBattleMove(paid.run, checkpoint);
-    expect(undone.goldTenths).toBe(battle.goldTenths - RUN_BATTLE_UNDO_COST_TENTHS);
-  });
-});
-
-describe('royal fork bounty', () => {
-  it('pays one gold per fork, and pays again for the next one', () => {
-    const battle = inBattle(createRun(war(), 41));
-
-    const once = payRunRoyalForkBounty(battle, { x: 4, y: 6 })!;
-    expect(once.run.goldTenths).toBe(battle.goldTenths + RUN_ROYAL_FORK_BOUNTY_TENTHS);
-    expect(RUN_ROYAL_FORK_BOUNTY_TENTHS).toBe(10);
-
-    const twice = payRunRoyalForkBounty(once.run, { x: 2, y: 5 })!;
-    expect(twice.run.goldTenths).toBe(battle.goldTenths + 2 * RUN_ROYAL_FORK_BOUNTY_TENTHS);
-  });
-
-  it('hands back the notice that accounts for the payment, welded to the paid document', () => {
-    const battle = inBattle(createRun(war(), 42));
-    const paid = payRunRoyalForkBounty(battle, { x: 3, y: 7 })!;
-
-    expect(paid.notice.goldTenths).toBe(RUN_ROYAL_FORK_BOUNTY_TENTHS);
-    expect(paid.notice.at).toEqual({ x: 3, y: 7 });
-    expect(paid.notice.log).toContain('Royal fork');
-    expect(paid.notice.log).toContain('1');
-  });
-
-  it('pays nothing outside a Battle, and nothing without a battle runtime', () => {
-    const sectio = firstSectio(43);
-    expect(payRunRoyalForkBounty(sectio, { x: 0, y: 0 })).toBeNull();
-
-    const noRuntime: RunDocument = { ...sectio, phase: 'battle', battleRuntime: null };
-    expect(payRunRoyalForkBounty(noRuntime, { x: 0, y: 0 })).toBeNull();
-  });
-
-  it('is taken back with the move that earned it', () => {
-    const battle = inBattle(createRun(war(), 44));
-    const checkpoint = captureRunBattleUndo(battle);
-    const paid = payRunRoyalForkBounty(battle, { x: 1, y: 1 })!;
+    const paid = payRunManubium(battle, { id: 'double-check' }, { x: 1, y: 1 })!;
     expect(paid.run.goldTenths).toBeGreaterThan(battle.goldTenths);
 
     const undone = undoRunBattleMove(paid.run, checkpoint);
     expect(undone.goldTenths).toBe(battle.goldTenths - RUN_BATTLE_UNDO_COST_TENTHS);
   });
 
-  it('asks for a Rook or better, reading the bar off the piece scale itself', () => {
+  it('asks a royal fork for a Rook or better, reading the bar off the piece scale itself', () => {
     // A bare 5 would silently become some other piece's worth if the scale were re-weighted.
     expect(RUN_ROYAL_FORK_MIN_VICTIM_VALUE).toBe(PIECE_VALUE.rook);
     expect(PIECE_VALUE.queen).toBeGreaterThanOrEqual(RUN_ROYAL_FORK_MIN_VICTIM_VALUE);

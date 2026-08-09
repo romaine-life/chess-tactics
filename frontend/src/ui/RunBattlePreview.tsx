@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react';
-import { sectioUpcomingBattleIndex, type RunDocument } from '../run/model';
+import { runDeploymentDealCount, sectioUpcomingBattleIndex, type RunDocument } from '../run/model';
 import { levelToEditorBoard } from '../core/levelBoard';
 import { ChromeDivider, ChromeSurfaceFill, InnerChromeBox } from './shared/ChromeBox';
 import { FramedReadOnlyBoardView } from './shared/BoardViewFraming';
@@ -34,6 +34,9 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
   // Battle just fought while the Sectio is open, so reading it directly previews the last map.
   const battleIndex = sectioUpcomingBattleIndex(run);
   const level = run.war.battles[battleIndex].level;
+  // The canonical runtime answer, not a re-derivation: what Deployment will actually deal here.
+  // A deck smaller than the deal is dealt whole, so the note never promises cards that do not exist.
+  const dealt = Math.min(runDeploymentDealCount({ war: run.war, battleIndex }), run.cards.length);
   const board = useMemo(() => levelToEditorBoard(level), [level]);
   const signature = useMemo(() => JSON.stringify(level), [level]);
   const [terrainPainted, setTerrainPainted] = useState(false);
@@ -115,8 +118,8 @@ export function RunBattlePreview({ run }: { run: RunDocument }): ReactElement {
               <p>
                 Fixed pieces appear on the map. The Forces ledger also counts setup forces whose
                 exact squares are dealt when the Battle begins. Your Run army deploys after you
-                leave the Sectio — {run.cards.length} formation
-                {run.cards.length === 1 ? '' : 's'} deploy with you.
+                leave the Sectio — this Battle deals {dealt} of the {run.cards.length} formation
+                {run.cards.length === 1 ? '' : 's'} you hold.
               </p>
             </InnerChromeBox>
           </aside>

@@ -231,6 +231,19 @@ and don't tell the user screenshots are impossible. Use the helper below.
    decorative atom overhang. A source check that merely finds `ShellWorkspace`
    does not satisfy this geometry gate.
 
+   Title-bar mark changes additionally run the seat gate, which reads the
+   INSTALLED bytes rather than trusting a number in CSS:
+   ```
+   npm run verify:icon-seats -- --base http://127.0.0.1:5175
+   ```
+   A mark is drawn into a square seat with `contain`, which scales the CANVAS, so
+   transparent margin baked into an icon comes straight off the drawn glyph. Marks
+   that ship trimmed to their own ink need no compensation; the kit's game glyphs
+   are NOT trimmed, so `style.css` states each one's ink fraction by hand. Nothing
+   in CI can check those numbers — the bytes live in blob storage, not git — so this
+   gate fails when a re-uploaded icon no longer matches its declaration, and tells
+   you to delete the rule outright once an icon ships trimmed.
+
    Scene-director / navigation-lifecycle changes additionally run the live
    transition gate (menu → Play with a mid-transition address canonicalization):
    ```
@@ -300,10 +313,27 @@ and don't tell the user screenshots are impossible. Use the helper below.
    ```
    The craft link must already offer a fork in one — the gate refuses to manoeuvre
    toward one, because a run that plays several plies is at the mercy of the enemy's
-   reply and ends in a timeout with no verdict. Battle 3 with `army=queen` and
-   `seed=1` deals one: the Queen's first move checks the enemy King and hits their
-   Queen (ADR-0527). The gate takes whichever fork the position offers rather than
-   naming a piece or a square.
+   reply and ends in a timeout with no verdict. The gate takes whichever fork the
+   position offers rather than naming a piece or a square.
+
+   **The `army=queen&seed=1` Battle-3 link ADR-0527 named no longer deals a fork.**
+   Arranged Deployment (ADR-0533/0535) moved where the army stands, and that position
+   now opens with the Queen already checking the enemy King from her seat, with no
+   forking square to move to. Sweep seeds until one takes; the gate names the board it
+   was given when it refuses, so a refusal tells you what you got.
+
+   The wider Manubiae gate (ADR-0540) covers the same path for every board-earned
+   bounty — advantageous capture, royal fork, discovered check, double check, en
+   passant, smothered mate:
+   ```
+   npm run verify:manubiae -- '<craft-url>'
+   ```
+   It plans with the app's own `manubiaeEarnedBy`, so it cannot be satisfied by a
+   reader the Battle screen is not paying from, and it asserts the exact catalog price,
+   a log line naming the deed, and a marker seated on the earning square. Same rule
+   about the position: it must offer something in ONE move. An opening position rarely
+   does — the armies are not yet in contact, so a capture is out of reach and only a
+   long-range check or fork can land — so craft a Battle that is already joined.
 
 This works on ANY live route by selector — no per-target fixture, so there's no "new
 screen ⇒ flail" cliff. `frontend/scripts/shot.mjs` is the implementation.

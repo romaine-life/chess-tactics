@@ -1,8 +1,9 @@
-import type { LevelEvents, ObjectiveType, TimeControl, VictoryRules } from '../core/level';
+import { LEVEL_PAR_TURNS_MAX, LEVEL_PAR_TURNS_MIN, type LevelEvents, type ObjectiveType, type TimeControl, type VictoryRules } from '../core/level';
 import { normalizeLevelEvents, type StoredLevelEvent } from '../core/levelEvents';
 
 const TIME_INITIAL_PARAM = 'time';
 const TIME_INCREMENT_PARAM = 'inc';
+const PAR_PARAM = 'par';
 const EVENTS_PARAM = 'events';
 const VICTORY_PARAM = 'victory';
 const ROUTE_PARSE_BASE = 'https://chess-tactics.invalid';
@@ -52,6 +53,23 @@ export function readTimeControlParams(params: URLSearchParams): TimeControl | un
   return { initialSeconds, incrementSeconds };
 }
 
+/** The authored par rides the playtest round-trip so returning to the editor restores the
+ * number the author set, rather than silently dropping back to the board-derived estimate
+ * (ADR-0539). Absent ⇒ unauthored, exactly as on the Level. */
+export function appendParTurnsParam(params: URLSearchParams, parTurns: number | undefined): void {
+  params.delete(PAR_PARAM);
+  if (parTurns === undefined) return;
+  params.set(PAR_PARAM, String(parTurns));
+}
+
+export function readParTurnsParam(params: URLSearchParams): number | undefined {
+  const raw = params.get(PAR_PARAM);
+  if (raw === null) return undefined;
+  const parTurns = Number(raw);
+  if (!Number.isInteger(parTurns) || parTurns < LEVEL_PAR_TURNS_MIN || parTurns > LEVEL_PAR_TURNS_MAX) return undefined;
+  return parTurns;
+}
+
 export function appendLevelEventsParam(params: URLSearchParams, events: LevelEvents | undefined): void {
   params.delete(EVENTS_PARAM);
   if (!events?.length) return;
@@ -94,6 +112,7 @@ export function currentBoardTestHref(input: {
   objective: ObjectiveType;
   surviveTurns: number;
   timeControl?: TimeControl;
+  parTurns?: number;
   events?: LevelEvents;
   victory?: VictoryRules;
   editorSearch?: string;
@@ -118,6 +137,7 @@ export function currentBoardTestHref(input: {
   if (input.editorReturnTo) backParams.set('returnTo', input.editorReturnTo);
   if (input.layer) backParams.set('layer', input.layer);
   appendTimeControlParams(backParams, input.timeControl);
+  appendParTurnsParam(backParams, input.parTurns);
   appendLevelEventsParam(backParams, input.events);
   appendVictoryRulesParam(backParams, input.victory);
 
@@ -130,6 +150,7 @@ export function currentBoardTestHref(input: {
     returnTo: `/editor/level?${backParams.toString()}`,
   });
   appendTimeControlParams(playParams, input.timeControl);
+  appendParTurnsParam(playParams, input.parTurns);
   appendLevelEventsParam(playParams, input.events);
   appendVictoryRulesParam(playParams, input.victory);
   const predrawnPreview = backParams.get('predrawnPreview');

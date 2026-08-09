@@ -11,6 +11,8 @@ const appTitleBar = readFileSync(new URL('./shell/AppTitleBar.tsx', import.meta.
 const chromeRuntime = readFileSync(new URL('./chromeFamilyRuntime.ts', import.meta.url), 'utf8');
 const styleCss = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
 const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
+const battleClockChip = readFileSync(new URL('./BattleClockChip.tsx', import.meta.url), 'utf8');
+const titleBarControls = readFileSync(new URL('./shell/TitleBarControls.tsx', import.meta.url), 'utf8');
 const portraitPreload = readFileSync(new URL('../art/preload.ts', import.meta.url), 'utf8');
 const runBattleUndoButton = readFileSync(new URL('./RunBattleUndoButton.tsx', import.meta.url), 'utf8');
 
@@ -81,17 +83,36 @@ describe('Skirmish chrome hierarchy', () => {
     const titleStart = skirmish.indexOf('const skirmishTitleBarContent = playableSurfaceReady ? (');
     const titleEnd = skirmish.indexOf('const titleBarContent =', titleStart);
     const titleContent = titleStart >= 0 && titleEnd > titleStart ? skirmish.slice(titleStart, titleEnd) : '';
-    expect(titleContent.match(/<TitleBarStatus\b/g)).toHaveLength(3);
+    // Turn plate and objective are Skirmish's own; the middle chip is the ONE shared
+    // battle clock, so the Run's bar shows the same readout from the same component.
+    // Every one of the three is a BOXED tooltip: a frame in the persistent bar costs
+    // width, and what earns it is being a single target that names itself.
+    expect(titleContent.match(/<TitleBarStatusTip\b/g)).toHaveLength(2);
+    expect(titleContent).toContain('<BattleClockChip />');
+    expect(battleClockChip).toContain('<TitleBarStatusTip');
+    expect(titleContent).not.toMatch(/<TitleBarStatus\b[^T]/);
+    expect(skirmish).not.toContain("from '../core/clock'");
     expect(titleContent).not.toMatch(/<div\b[^>]*skirmish-status-chip/);
-    expect(skirmish).toMatch(/import \{[^}]*TitleBarStatus[^}]*\} from '\.\/shell\/TitleBarControls';/);
+    expect(skirmish).toMatch(/import \{[^}]*TitleBarStatusTip[^}]*\} from '\.\/shell\/TitleBarControls';/);
+    // The box IS the trigger, so the tip hangs off the frame's own rect.
+    expect(titleBarControls).toMatch(/trigger=\{\([\s\S]*?<TitleBarStatus as="span"/);
   });
 
   it('shows elapsed time instead of a static infinity for an untimed Battle', () => {
-    expect(skirmish).toContain('data-testid="untimed-battle-clock"');
-    expect(skirmish).toContain('formatElapsedClockMs(elapsedReadoutMs)');
-    expect(skirmish).toContain('<small>No limit</small>');
-    expect(skirmish).not.toContain('skirmish-clock-unlimited');
-    expect(skirmish).not.toContain('>∞<');
+    expect(battleClockChip).toContain('data-testid="untimed-battle-clock"');
+    expect(battleClockChip).toContain('formatElapsedClockMs(elapsedReadoutMs)');
+    expect(battleClockChip).toContain('skirmish-status-chip skirmish-clock');
+    // An untimed Battle shows the count alone: a label under it said only what the
+    // absent countdown already says, and the tip carries "no time control".
+    expect(battleClockChip).not.toContain('No limit');
+    expect(battleClockChip).toContain('This Battle has no time control.');
+    // The chip reads the mounted session store, so a portalled title bar reports the
+    // Battle actually on screen rather than a time its host had to thread through.
+    expect(battleClockChip).toContain('useSkirmish((s) => s.clock)');
+    expect(battleClockChip).toContain('useSkirmish((s) => s.battleElapsed)');
+    expect(battleClockChip).not.toContain('useSkirmish.getState');
+    expect(battleClockChip).not.toContain('skirmish-clock-unlimited');
+    expect(battleClockChip).not.toContain('>∞<');
     expect(styleCss).not.toContain('.skirmish-clock-unlimited');
     expect(skirmish).toContain("window.addEventListener('pagehide', bankBeforeUnload)");
     expect(skirmish).toContain('persistMatch(skirmishStore.getState())');

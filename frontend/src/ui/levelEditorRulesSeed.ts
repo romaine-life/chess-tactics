@@ -30,6 +30,7 @@ import {
   type VictoryRules,
 } from '../core/level';
 import { DEFAULT_SURVIVE_TURNS, victoryRulesForObjective } from '../core/objectives';
+import { levelParTurns } from '../core/speedBonus';
 import { effectiveLevelEvents } from '../core/levelEvents';
 import { DEFAULT_TIME_CONTROL } from '../core/clock';
 import { rulesEqual } from './VictoryConditionsEditor';
@@ -37,7 +38,7 @@ import { rulesEqual } from './VictoryConditionsEditor';
 /** Rules-state fields with a direct user-authoring surface in the editor UI. `objective`
  * and `surviveTurns` are absent on purpose: they have no user-facing setter (ADR-0064
  * replaced the objective dropdown with victory templates), so a seed always writes them. */
-export type AuthoredRulesField = 'victory' | 'events' | 'name' | 'clock' | 'templateChoice' | 'battleDeal';
+export type AuthoredRulesField = 'victory' | 'events' | 'name' | 'clock' | 'templateChoice' | 'battleDeal' | 'par';
 
 export interface LevelRulesSeed {
   objective: ObjectiveType;
@@ -46,6 +47,9 @@ export interface LevelRulesSeed {
   /** The Deployment deal this Battle authors. A Battle level that predates the requirement seeds
    * the default, which is what makes opening it enough to finish it. */
   battleDeal: number;
+  /** The level's par in turns. A level that authors none seeds the board-derived estimate, so
+   * the stepper always opens on a usable number to tune away from (ADR-0539). */
+  par: { authored: boolean; turns: number };
   /** Working victory list — the objective preset materialized when the level stores none. */
   victory: VictoryRules;
   events: LevelEvents;
@@ -56,6 +60,7 @@ export interface LevelRulesSeed {
   save: {
     surviveTurns: number | undefined;
     timeControl: TimeControl | undefined;
+    parTurns: number | undefined;
     victory: VictoryRules | undefined;
     events: LevelEvents | undefined;
     battle: BattleSettings | undefined;
@@ -100,12 +105,14 @@ export function levelRulesSeed(level: Level): LevelRulesSeed {
       incrementSeconds: level.timeControl?.incrementSeconds ?? DEFAULT_TIME_CONTROL.incrementSeconds,
     },
     battleDeal: level.battle?.cardsDealt ?? LEVEL_BATTLE_CARDS_DEALT_DEFAULT,
+    par: { authored: level.parTurns !== undefined, turns: levelParTurns(level) },
     victory,
     events,
     name: level.name,
     save: {
       surviveTurns: level.objective === 'survive' ? surviveTurns : undefined,
       timeControl: level.timeControl,
+      parTurns: level.parTurns,
       victory: rulesEqual(victory, preset) ? undefined : victory,
       events: events.length ? events : undefined,
       battle: level.battle,
@@ -132,11 +139,12 @@ export function guardRulesSeed(seed: LevelRulesSeed, authored: ReadonlySet<Autho
     clock: !authored.has('clock'),
     templateChoice: !authored.has('templateChoice'),
     battleDeal: !authored.has('battleDeal'),
+    par: !authored.has('par'),
   };
   return {
     seed,
     apply,
-    skippedAuthored: !apply.victory || !apply.events || !apply.name || !apply.clock || !apply.battleDeal,
+    skippedAuthored: !apply.victory || !apply.events || !apply.name || !apply.clock || !apply.battleDeal || !apply.par,
   };
 }
 
@@ -152,6 +160,7 @@ export function seededBaselineLevel(candidate: Level, seed: LevelRulesSeed): Lev
     objective: seed.objective,
     surviveTurns: seed.save.surviveTurns,
     timeControl: seed.save.timeControl,
+    parTurns: seed.save.parTurns,
     victory: seed.save.victory,
     events: seed.save.events,
     battle: seed.save.battle,
