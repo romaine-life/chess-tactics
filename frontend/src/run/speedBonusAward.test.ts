@@ -54,7 +54,12 @@ function fighting(parTurns: number | undefined, elapsedMs: number): RunDocument 
   };
 }
 
-const report = (run: RunDocument) => ({ survivingUnitIds: run.army.map((unit) => unit.id), turns: 9 });
+// Nothing left standing, so Deditio pays nothing and the clock is the only bonus in play here.
+const report = (run: RunDocument) => ({
+  survivingUnitIds: run.army.map((unit) => unit.id),
+  turns: 9,
+  standingEnemyValue: 0,
+});
 
 beforeEach(() => {
   vi.useFakeTimers();

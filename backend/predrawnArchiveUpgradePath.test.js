@@ -596,9 +596,11 @@ test('the exact sparse numeric legacy history upgrades through migration 70', ()
     [...versions.filter((version) => version <= 27), 36],
     'the bridge must skip only the exact numeric-only history that actually shipped',
   );
+  // Derived as the exact complement of the skipped set, not written out: a hardcoded list is a
+  // second registry that silently goes stale the next time a migration is appended.
   assert.deepEqual(
     plan.pending.map((entry) => entry.version),
-    [28, 29, 30, 31, 32, 33, 34, 35, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74],
+    versions.filter((version) => version > 27 && version !== 36),
     'the bridge must fill the historical gap before applying every post-36 contract',
   );
   assert.throws(
@@ -1228,8 +1230,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*74\s*\}/,
-    'the production upgrade proof must require a complete 1-74 history',
+    /expectedVersions\s*=\s*Array\.from\(\{\s*length:\s*75\s*\}/,
+    'the production upgrade proof must require a complete 1-75 history',
   );
   assert.match(
     primaryUpgradeProof,
@@ -1243,8 +1245,8 @@ test('full smoke proves the sparse recorded-36 upgrade and the real authenticate
   );
   assert.match(
     primaryUpgradeProof,
-    /length:\s*38[\s\S]*index\s*\+\s*37/,
-    'the production report must include every post-36 migration through 74',
+    /length:\s*39[\s\S]*index\s*\+\s*37/,
+    'the production report must include every post-36 migration through 75',
   );
   assert.match(
     primaryUpgradeProof,

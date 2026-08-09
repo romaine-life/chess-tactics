@@ -25,6 +25,7 @@ import {
   performAdlectio,
   canLeaveSectio,
   closeBattle,
+  levelEnemyForceValue,
   createRun,
   leaveSectio,
   mixSeed,
@@ -85,6 +86,7 @@ export const RUN_CRAFT_PARAMS: readonly string[] = Object.freeze([
   'turns',
   'seconds',
   'fallen',
+  'standing',
 ]);
 
 export const DEFAULT_CRAFT_SEED = 1337;
@@ -132,6 +134,13 @@ export interface RunCraftSpec {
   turns: number | null;
   elapsedMs: number | null;
   fallen: number | null;
+  /**
+   * Points of enemy force the report says were still standing at the mate, which Deditio is
+   * paid on. Defaults to the WHOLE force the level fields: a placed Battle killed nothing, so
+   * an untouched enemy army is the honest reading, and it is also the state worth looking at.
+   * Give 0 for the ground-down mate that pays nothing.
+   */
+  standingEnemyValue: number | null;
 }
 
 /** A spec the crafter refuses. The message is written for the person reading it on the screen. */
@@ -271,6 +280,9 @@ export function parseRunCraftSpec(search: string): RunCraftSpec | null {
       ? null
       : integer(params.get('seconds')!, 'seconds', 0, 86_400) * 1000,
     fallen: params.get('fallen') === null ? null : integer(params.get('fallen')!, 'fallen', 0, 100),
+    standingEnemyValue: params.get('standing') === null
+      ? null
+      : integer(params.get('standing')!, 'standing', 0, 999),
   };
 }
 
@@ -349,6 +361,9 @@ export function runCraftSpecFromJson(raw: unknown): RunCraftSpec {
       ? null
       : jsonInteger(spec.seconds, 'seconds', 0, 86_400) * 1000,
     fallen: spec.fallen === undefined || spec.fallen === null ? null : jsonInteger(spec.fallen, 'fallen', 0, 100),
+    standingEnemyValue: spec.standing === undefined || spec.standing === null
+      ? null
+      : jsonInteger(spec.standing, 'standing', 0, 999),
   };
 }
 
@@ -429,6 +444,7 @@ export function runCraftSpecToJson(spec: RunCraftSpec): Record<string, unknown> 
   if (spec.turns !== null) json.turns = spec.turns;
   if (spec.elapsedMs !== null) json.seconds = spec.elapsedMs / 1000;
   if (spec.fallen !== null) json.fallen = spec.fallen;
+  if (spec.standingEnemyValue !== null) json.standing = spec.standingEnemyValue;
   return json;
 }
 
@@ -471,6 +487,7 @@ export function runCraftAddressParams(spec: RunCraftSpec): URLSearchParams {
   if (spec.turns !== null) params.set('turns', String(spec.turns));
   if (spec.elapsedMs !== null) params.set('seconds', String(spec.elapsedMs / 1000));
   if (spec.fallen !== null) params.set('fallen', String(spec.fallen));
+  if (spec.standingEnemyValue !== null) params.set('standing', String(spec.standingEnemyValue));
   return params;
 }
 
@@ -635,9 +652,14 @@ function craftAftermath(run: RunDocument, spec: RunCraftSpec): RunDocument {
       ? { ...started.battleRuntime, startedAtMs: Date.now() - elapsedMs }
       : null,
   };
+  // Nothing on the enemy side was taken in a Battle nobody played, so the force the level
+  // fields is what a placed mate found still standing -- and that is also the report worth
+  // landing on, since a Deditio of zero shows an empty measure.
   const closed = closeBattle(started, {
     survivingUnitIds: deployedUnitIds.filter((id) => !fallen.has(id)),
     turns: spec.turns ?? DEFAULT_CRAFT_AFTERMATH_TURNS,
+    standingEnemyValue: spec.standingEnemyValue
+      ?? levelEnemyForceValue(started.war.battles[started.battleIndex].level),
   });
   if (closed.phase !== 'aftermath') {
     throw new RunCraftError(
@@ -949,8 +971,11 @@ export function craftRunDocument(spec: RunCraftSpec, war: RunWarSnapshot): RunDo
   const deploymentIndex = spec.phase === 'sectio'
     ? targetIndex - 1
     : spec.phase === 'victory' ? battles - 1 : targetIndex;
-  if (spec.phase !== 'aftermath' && (spec.turns !== null || spec.elapsedMs !== null || spec.fallen !== null)) {
-    throw new RunCraftError('craft: turns, seconds and fallen describe a Battle report, so they belong to craft=aftermath.');
+  if (
+    spec.phase !== 'aftermath'
+    && (spec.turns !== null || spec.elapsedMs !== null || spec.fallen !== null || spec.standingEnemyValue !== null)
+  ) {
+    throw new RunCraftError('craft: turns, seconds, fallen and standing describe a Battle report, so they belong to craft=aftermath.');
   }
   // A crafted army REPLACES the roster, which takes the units the held cards put there with it —
   // so the two ways of saying what the Run has cannot both be given.

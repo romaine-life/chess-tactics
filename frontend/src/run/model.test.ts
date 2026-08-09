@@ -384,7 +384,9 @@ describe('plain Run creation and acquisition', () => {
   it('moves a save parked on the retired opening grant into its Deployment', () => {
     const stale = {
       ...createRun(war(), 29),
-      runSaveVersion: CURRENT_RUN_SAVE_VERSION - 2,
+      // Pinned, not CURRENT minus an offset: 33 is the version that HAD the opening grant, and
+      // an offset silently re-aims at a different migration every time the current one moves.
+      runSaveVersion: 33,
       phase: 'bona-vacantia',
       vacantia: {
         kind: 'opening', conflictIndex: 0, afterBattleIndex: 0, victoryGoldTenths: 0, offers: [], cardOffers: ['p'],
