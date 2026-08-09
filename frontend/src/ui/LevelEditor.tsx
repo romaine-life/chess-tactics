@@ -8,6 +8,7 @@ import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, 
 import { boardLabCellPosition, boardLabMetrics, immutableBoardLabTerrainSrc } from '../render/BoardLabBoard';
 import { projectBoardPoint, unprojectBoardPoint, type BoardForest, type BoardForestSection, type BoardForestTree, type BoardTown, type BoardTownSection } from '@chess-tactics/board-render';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
+import { updateAppSettings, useAppSettings, type LevelEditorGridScope } from '../settings/appSettings';
 import { PropSprite, propHalfSrc } from '../render/BoardStructure';
 import { PROP_DEFS, defaultPropDef, propCells, propDef, type PropDef, type PropKind } from '../core/props';
 import {
@@ -659,7 +660,7 @@ function StudioEditableBoard({
   selectedArtworkIds?: readonly string[];
   boardZoom: number;
   boardPan: { x: number; y: number };
-  gridScope?: 'off' | 'playable' | 'whole';
+  gridScope?: LevelEditorGridScope;
   cameraBoundary?: BoardCameraBounds | null;
   cameraBoundaryEditable?: boolean;
   onCameraBoundaryCommit?: (bounds: BoardCameraBounds) => void;
@@ -3203,7 +3204,18 @@ export function LevelEditor(): ReactElement {
     setViewZoom(camera.zoom);
     setViewPan(camera.pan);
   };
-  const [gridScope, setGridScope] = useState<'off' | 'playable' | 'whole'>('off');
+  // The grid an author measures against is not per-page state: it is a remembered device
+  // preference, so it comes back the way it was left on the next editor page and starts visible
+  // on a fresh install. Held in app settings rather than a private key so one store owns it.
+  const gridScope = useAppSettings().levelEditorGridScope;
+  const setGridScope = (
+    update: LevelEditorGridScope | ((value: LevelEditorGridScope) => LevelEditorGridScope),
+  ): void => {
+    updateAppSettings((current) => ({
+      ...current,
+      levelEditorGridScope: typeof update === 'function' ? update(current.levelEditorGridScope) : update,
+    }));
+  };
   const toggleRegisteredGrid = (): void => setGridScope((value) => value === 'off' ? 'whole' : 'off');
   const [predrawnOcclusionEnabled, setPredrawnOcclusionEnabled] = useState(
     () => new URL(window.location.href).searchParams.get('predrawnOcclusion') !== '0',
