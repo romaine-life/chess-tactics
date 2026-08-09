@@ -50,16 +50,46 @@ export function formationBlockSquares(
 }
 
 /**
+ * The board with the formation in the player's HAND taken off it.
+ *
+ * A picked-up formation is not on the battlefield in any sense the screen cares about: it holds no
+ * square, wraps no plot, and frees the ground it stood on, exactly as it did before it was ever
+ * placed. Drawing it at its old seats as well as on the cursor painted the same formation twice
+ * over and left the player unable to tell which of the two they were deciding about.
+ *
+ * The Run document keeps the placement, so putting the formation down is an ordinary placement and
+ * walking away without placing it restores the seat it came from. Nothing is persisted for the
+ * hand, so no save version moves.
+ */
+export function deploymentLayoutInHand<T extends { placements: Readonly<Record<string, unknown>> }>(
+  layout: T,
+  unitIdsInHand: readonly string[],
+): T {
+  if (!unitIdsInHand.length) return layout;
+  const inHand = new Set(unitIdsInHand);
+  return {
+    ...layout,
+    placements: Object.fromEntries(
+      Object.entries(layout.placements).filter(([unitId]) => !inHand.has(unitId)),
+    ),
+  };
+}
+
+/**
  * Every square held by a formation ALREADY on the board, keyed by square.
  *
  * A formation counts once all of its units are seated, which is how `arrangedDeploymentCards`
- * already defines placed — a half-seated card is mid-gesture and has no shape to wrap yet.
+ * already defines placed — a half-seated card is mid-gesture and has no shape to wrap yet. The
+ * card in the player's hand is not among them: it is not on the ground to be wrapped.
  */
-export function seatedFormationsBySquare(run: RunDocument): Map<string, SeatedFormationSquare> {
+export function seatedFormationsBySquare(
+  run: RunDocument,
+  cardInHandId: string | null = null,
+): Map<string, SeatedFormationSquare> {
   const placements = run.deployment?.placements ?? {};
   const seated = new Map<string, SeatedFormationSquare>();
   arrangedDeploymentCards(run).forEach(({ card, placed }, groupIndex) => {
-    if (!placed) return;
+    if (!placed || card.id === cardInHandId) return;
     const squares = runCardUnitIds(card)
       .map((unitId) => placements[unitId])
       .filter((value): value is string => typeof value === 'string')
