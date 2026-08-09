@@ -23,9 +23,13 @@ const boardCodeWith = (wire: Record<string, unknown>): string =>
   Buffer.from(JSON.stringify(wire), 'utf8').toString('base64')
     .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
+/** Every Battle authors how many cards it deals; these fixtures are about the axis, not the deal. */
+const DEALS_THREE = { loot: false, cardsDealt: 3 } as const;
+
 /** A board fought south-to-north: enemy on the top rank, band across the bottom rows. */
 function northwardLevel(): Level {
   const level = createBlankLevel('northward', 'Northward', 6, 8);
+  level.battle = { ...DEALS_THREE };
   level.layers.zones = [{
     id: 'run-player-deploy',
     type: 'player-spawn',
@@ -41,6 +45,7 @@ function northwardLevel(): Level {
 /** The same battle turned on its side: enemy on the east file, band down the west columns. */
 function eastwardLevel(): Level {
   const level = createBlankLevel('eastward', 'Eastward', 8, 6);
+  level.battle = { ...DEALS_THREE };
   level.layers.zones = [{
     id: 'run-player-deploy',
     type: 'player-spawn',
