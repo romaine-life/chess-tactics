@@ -13,12 +13,12 @@
 // kept beside it under frontend/tmp/screen-art/ because acceptance attests native 1x
 // and a downscaled file cannot honestly make that claim.
 //
-//   node frontend/scripts/forge-screen-art.mjs <set> [--scene <id>] [--tries 2] -- <upload options>
+//   node frontend/scripts/forge-screen-art.mjs <set> [--scene <id>] [--tries 2] -- --api-base <url>
 //
-// A workspace backdrop uploads under domain ui-kit / role background, NOT screen-art: screen-art
-// has no runtime projection, so a candidate uploaded under it can never be accepted, and a slot
-// bound to it by a first upload was until recently unusable forever. See liveMediaPolicy.js
-// workspaceBackgroundMediaIssue for the full typed contract, including metadata.runtime.
+// This forges REVIEW candidates only. Putting one behind a live workspace is a separate step —
+// scripts/install-workspace-background.mjs — which uploads under ui-kit/background with the typed
+// metadata.runtime block liveMediaPolicy.js requires (workspaceBackgroundMediaIssue), into
+// ui/workspaces/<id>/background.png for an id registered in WORKSPACE_BACKGROUND_IDS.
 import { mkdirSync, mkdtempSync, copyFileSync, rmSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
@@ -168,8 +168,14 @@ async function forgeScene(setName, set, sceneId, scene, maxTries) {
   return { sceneId, pass: false };
 }
 
-const { toolArgs, uploadArgs } = splitGeneratorArgs(process.argv.slice(2));
-if (!uploadArgs.length) throw new Error('forge-screen-art requires live-media options after --');
+const { toolArgs, uploadArgs: givenUploadArgs } = splitGeneratorArgs(process.argv.slice(2));
+// The candidate lands in a REVIEW slot, so its domain and role are the script's to know rather
+// than the caller's to guess. Leaving that to the caller is what put a backdrop under
+// `screen-art` — a domain with no runtime projection, which uploads happily and can never be
+// accepted, and which binds the slot it lands in for good. Callers may still override.
+const uploadArgs = givenUploadArgs.includes('--domain')
+  ? givenUploadArgs
+  : ['--domain', 'review-media', '--role', 'backdrop', ...givenUploadArgs];
 const setName = toolArgs.find((arg) => !arg.startsWith('--') && SETS[arg]) || 'spolia';
 const set = SETS[setName];
 const only = optionValue(toolArgs, '--scene');
