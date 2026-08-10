@@ -28,8 +28,21 @@ OUT = os.environ["LAB_OUT"]
 
 # Start from the addon's scene so its compositor, world and render settings are the
 # ones its author validated.
-bpy.ops.wm.open_mainfile(filepath=BTP)
-scene = bpy.context.scene
+# NOT open_mainfile on the addon's file -- see build_accent_filter_lab.py. Opening it
+# inherits its Introduction workspace, which the lab then opens on every time and
+# which cannot be removed afterwards by any scripted means. A factory-empty file
+# carries Blender's standard workspaces instead, and an appended Scene brings the
+# compositor with it.
+bpy.ops.wm.read_homefile(use_empty=True)
+with bpy.data.libraries.load(BTP, link=False) as (_src, _dst):
+    _dst.scenes = list(_src.scenes)
+_appended = [s for s in bpy.data.scenes if getattr(s, "compositing_node_group", None)]
+if not _appended:
+    raise SystemExit("appended scene carries no compositor")
+for _wm in bpy.data.window_managers:
+    for _win in _wm.windows:
+        _win.scene = _appended[0]
+scene = _appended[0]
 
 existing = {o.name for o in bpy.data.objects}
 

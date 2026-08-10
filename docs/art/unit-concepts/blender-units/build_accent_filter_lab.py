@@ -39,8 +39,26 @@ def srgb(h):
         out.append(c/12.92 if c<=0.04045 else ((c+0.055)/1.055)**2.4)
     return out
 
-bpy.ops.wm.open_mainfile(filepath=os.environ["BTP"])
-scene = bpy.context.scene
+# NOT open_mainfile on the addon's file. Opening it inherits its UI wholesale --
+# including the Introduction workspace holding its manual, which is then what the lab
+# opens on, every time, undoing anything fixed by hand. That cannot be repaired after
+# the fact: deleting a workspace segfaults Blender 5.1, assigning window.workspace is
+# ignored (verified WITH a real window, not just headless), and workspace.delete()
+# under temp_override reports success and deletes nothing.
+#
+# So never inherit it. A factory-empty file carries Blender's own standard workspaces
+# and none of the addon's, and an appended Scene brings the compositor -- the only
+# thing the addon's file is wanted for -- along with it.
+bpy.ops.wm.read_homefile(use_empty=True)
+with bpy.data.libraries.load(os.environ["BTP"], link=False) as (_src, _dst):
+    _dst.scenes = list(_src.scenes)
+_appended = [s for s in bpy.data.scenes if getattr(s, "compositing_node_group", None)]
+if not _appended:
+    raise SystemExit("appended scene carries no compositor")
+for _wm in bpy.data.window_managers:
+    for _win in _wm.windows:
+        _win.scene = _appended[0]
+scene = _appended[0]
 existing = {o.name for o in bpy.data.objects}
 with bpy.data.libraries.load(os.environ["SRC"], link=False) as (src, dst):
     dst.objects = list(src.objects)
