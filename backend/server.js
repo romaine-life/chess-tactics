@@ -22850,6 +22850,9 @@ const ACTIVE_RUN_PHASES = new Set([
   'aftermath', 'bona-vacantia', 'commendatio', 'deployment', 'battle', 'sectio', 'victory',
 ]);
 const ACTIVE_RUN_PIECES = new Set(['pawn', 'knight', 'bishop', 'rook', 'queen', 'king']);
+const ACTIVE_RUN_CARD_SPANS = new Set([2, 4]);
+const ACTIVE_RUN_CARD_PRICING = new Set(['material', 'density']);
+const ACTIVE_RUN_RULES_FIELDS = new Set(['cardSpan', 'pricing', 'mayRotate']);
 const ACTIVE_RUN_UNIT_SOURCES = new Set(['king', 'starting', 'adlectio']);
 const ACTIVE_RUN_SECTIO_FIELDS = new Set([
   'afterBattleIndex',
@@ -22950,7 +22953,34 @@ function formationRunOwnedCardIssue(card, warBattleCount) {
   return null;
 }
 
-function formationRunOfferIssue(offer) {
+/**
+ * A Run's own rules, or null when the document predates them and is therefore playing the legacy
+ * game. Pricing is the field this validator reads: an offer's cost is DERIVED from it, so a
+ * malformed rules block would silently reprice the market rather than be rejected.
+ */
+function formationRunRulesIssue(rules) {
+  if (rules === null || rules === undefined) return null;
+  if (!isObjectRecord(rules)) return 'run.rules is invalid';
+  if (Object.keys(rules).some((field) => !ACTIVE_RUN_RULES_FIELDS.has(field))) {
+    return 'run.rules contains an unsupported field';
+  }
+  if (!ACTIVE_RUN_CARD_SPANS.has(rules.cardSpan)) return 'run.rules.cardSpan is invalid';
+  if (!ACTIVE_RUN_CARD_PRICING.has(rules.pricing)) return 'run.rules.pricing is invalid';
+  if (typeof rules.mayRotate !== 'boolean') return 'run.rules.mayRotate is invalid';
+  return null;
+}
+
+/**
+ * What a card costs the Run being saved. Pricing is a Run rule (material, or material weighted by
+ * density), so the printed price cannot be restated here as the card's material -- doing that
+ * rejected every Sectio a density Run ever tried to save.
+ */
+function formationRunOfferCost(definition, rules) {
+  if (typeof serverRender?.runCardCost !== 'function') return definition.value;
+  return serverRender.runCardCost(definition, rules ?? serverRender.LEGACY_RUN_RULES);
+}
+
+function formationRunOfferIssue(offer, rules) {
   if (!isObjectRecord(offer)) return 'offer must be an object';
   if (containsRetiredFormationRunField(offer)) return 'offer contains retired ability state';
   const definition = typeof offer.id === 'string' ? ACTIVE_RUN_CARD_BY_ID[offer.id] : null;
@@ -22958,7 +22988,7 @@ function formationRunOfferIssue(offer) {
   if (typeof offer.offerId !== 'string' || !offer.offerId || offer.offerId.length > 200) return 'offer.offerId is invalid';
   if (!Array.isArray(offer.pieces) || offer.pieces.join(',') !== definition.pieces.join(',')) return 'offer.pieces is invalid';
   if (!isFiniteInteger(offer.value) || offer.value !== definition.value) return 'offer.value is invalid';
-  if (!isFiniteInteger(offer.cost) || offer.cost !== definition.value) return 'offer.cost is invalid';
+  if (!isFiniteInteger(offer.cost) || offer.cost !== formationRunOfferCost(definition, rules)) return 'offer.cost is invalid';
   if (offer.rarity !== definition.rarity) return 'offer.rarity is invalid';
   if (!Array.isArray(offer.formation) || offer.formation.length !== definition.formation.length) {
     return 'offer.formation is invalid';
@@ -23013,6 +23043,8 @@ function validateFormationRunBody(run) {
   if (!isFiniteInteger(run.sectioCardCursor) || run.sectioCardCursor < 0) {
     return 'run.sectioCardCursor is invalid';
   }
+  const rulesIssue = formationRunRulesIssue(run.rules);
+  if (rulesIssue) return rulesIssue;
 
   if (!isObjectRecord(run.war) || typeof run.war.id !== 'string' || !run.war.id) return 'run.war is invalid';
   if (typeof run.war.name !== 'string' || typeof run.war.description !== 'string') return 'run.war is invalid';
@@ -23228,7 +23260,7 @@ function validateFormationRunBody(run) {
       return 'run.sectio is invalid';
     }
     if (!Array.isArray(sectio.cardOffers) || sectio.cardOffers.length < 1
-      || sectio.cardOffers.some((offer) => formationRunOfferIssue(offer))) return 'run.sectio.cardOffers is invalid';
+      || sectio.cardOffers.some((offer) => formationRunOfferIssue(offer, run.rules ?? null))) return 'run.sectio.cardOffers is invalid';
     if (typeof serverRender?.runSectioCardOfferCount !== 'function'
       || sectio.cardOffers.length !== serverRender.runSectioCardOfferCount(run)) {
       return 'run.sectio.cardOffers has an invalid count';

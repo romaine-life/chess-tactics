@@ -23,6 +23,7 @@ import {
   RUN_STARTER_CARD_BY_ID,
   RUN_STARTER_CARDS,
   RUN_STARTER_GOLD_BASELINE_VALUE,
+  RUN_STARTING_GOLD,
   RUN_STARTING_GOLD_TENTHS,
   acquireLipsanon,
   captureRunBattleUndo,
@@ -922,21 +923,42 @@ describe('card pricing is a Run rule', () => {
     expect(card, id).toBeDefined();
     return runCardCost(card!, rules);
   };
+  const material = { ...DEFAULT_RUN_RULES, pricing: 'material' as const };
   const density = { ...DEFAULT_RUN_RULES, pricing: 'density' as const };
+
+  it('weights material by density unless the Run was told otherwise', () => {
+    expect(DEFAULT_RUN_RULES.pricing).toBe('density');
+    // Legacy Runs keep the game they were dealt: their offers were priced flat when they were
+    // dealt, so the mode they are bound to has to stay flat too.
+    expect(LEGACY_RUN_RULES.pricing).toBe('material');
+  });
 
   it('charges material when told to, which is what the game has always done', () => {
     for (const card of RUN_CARD_DECK) {
-      expect(runCardCost(card, DEFAULT_RUN_RULES), card.id).toBe(card.value);
+      expect(runCardCost(card, material), card.id).toBe(card.value);
     }
   });
 
   it('charges concentration when told to, so the same material costs differently', () => {
     // A Queen alone and a Queen behind a Pawn are 9 and 10 material -- nearly equal -- but one
     // occupies a single square. Material pricing cannot tell them apart; density can.
-    expect(priced('q', DEFAULT_RUN_RULES)).toBe(9);
-    expect(priced('pq-front', DEFAULT_RUN_RULES)).toBe(10);
+    expect(priced('q', material)).toBe(9);
+    expect(priced('pq-front', material)).toBe(10);
     expect(priced('q', density)).toBe(16);
     expect(priced('pq-front', density)).toBe(13);
+  });
+
+  it('leaves the opening market inside the opening purse', () => {
+    // The early ceiling is a VALUE ceiling, so under density an offer can cost more than the
+    // ceiling reads. It still cannot outrun the starting gold -- the dearest card the six-value
+    // band admits is a lone Rook, at six against eight.
+    const early = RUN_CARD_DECK.filter((card) => (
+      card.value <= RUN_SECTIO_EARLY_CARD_MAX_VALUE && cardAllowedByRules(card, DEFAULT_RUN_RULES)
+    ));
+    expect(early.length).toBeGreaterThan(0);
+    const dearest = Math.max(...early.map((card) => runCardCost(card, DEFAULT_RUN_RULES)));
+    expect(dearest).toBe(6);
+    expect(dearest).toBeLessThanOrEqual(RUN_STARTING_GOLD);
   });
 
   it('never gives a card away, however thin it is', () => {
@@ -952,11 +974,11 @@ describe('card pricing is a Run rule', () => {
   });
 
   it('prices an offer by the rules of the Run that was dealt it', () => {
-    const materialRun = createRun(war(), 5, { rules: DEFAULT_RUN_RULES });
+    const materialRun = createRun(war(), 5, { rules: material });
     const densityRun = createRun(war(), 5, { rules: density });
     expect(materialRun.rules.pricing).toBe('material');
     expect(densityRun.rules.pricing).toBe('density');
-    const asMaterial = sectioCardOffersAtCursor(5, 0, 0, 3, DEFAULT_RUN_RULES);
+    const asMaterial = sectioCardOffersAtCursor(5, 0, 0, 3, material);
     const asDensity = sectioCardOffersAtCursor(5, 0, 0, 3, density);
     expect(asDensity.map((o) => o.id)).toEqual(asMaterial.map((o) => o.id));
     expect(asDensity.map((o) => o.cost)).not.toEqual(asMaterial.map((o) => o.cost));

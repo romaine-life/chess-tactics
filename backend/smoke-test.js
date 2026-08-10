@@ -6493,12 +6493,19 @@ async function main() {
     JSON.stringify({ run: plainSectioRun, revision: 2 }),
   );
   const savedPlainSectioRunBody = JSON.parse(savedPlainSectioRun.body);
+  // Pricing is a Run rule, so an offer's price is what the RUN'S rules charge -- not the card's
+  // material. A default Run is priced by density, where the two differ on almost every card.
   if (
     savedPlainSectioRun.statusCode !== 200
     || savedPlainSectioRunBody.revision !== 3
-    || savedPlainSectioRunBody.run.sectio.cardOffers.some((offer) => offer.cost !== offer.value)
+    || savedPlainSectioRunBody.run.sectio.cardOffers.some((offer) => (
+      offer.cost !== boardRender.runCardCost(offer, boardRender.runRules(savedPlainSectioRunBody.run))
+    ))
   ) {
     throw new Error(`Plain formation Sectio Run did not save: ${savedPlainSectioRun.statusCode} ${savedPlainSectioRun.body}`);
+  }
+  if (savedPlainSectioRunBody.run.rules.pricing !== 'density') {
+    throw new Error(`A default Run prices its market by density: ${savedPlainSectioRun.body}`);
   }
   const mispricedFormationRun = await request(
     'PUT', '/api/active-run',
