@@ -1024,8 +1024,13 @@ describe('Run chrome hierarchy', () => {
     expect(styleCss).toMatch(/\.run-victory-report\s*\{[\s\S]*?grid-row:\s*2;/);
     // Only the display heading may stand on the artwork; every factual line moved into the
     // report box, because Victory's backdrop is a bright daylight sky.
-    expect(runScreen).toMatch(/<InnerChromeBox as="div" className="run-victory-report">[\s\S]*?run\.war\.description[\s\S]*?<\/InnerChromeBox>/);
+    expect(runScreen).toMatch(/<InnerChromeBox as="div" className="run-victory-report"[\s\S]*?run\.war\.description[\s\S]*?<\/InnerChromeBox>/);
     expect(runScreen).not.toMatch(/<h2>\{run\.war\.name\}<\/h2>/);
+    // Both report boxes name the structural marble. Naming no fill drops a box onto the inner
+    // role's TINT — a translucent field rather than an installed material, and unapproved paint
+    // no gate catches, because it arrives from the generated role CSS and not from style.css.
+    expect(runScreen).toMatch(/className="run-victory-report" fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/);
+    expect(runScreen).toMatch(/className="run-aftermath-report" fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/);
     expect(styleCss).toMatch(/\.run-screen\.has-lipsana \.run-aftermath-workspace-content\s*\{[\s\S]*?padding-block-start:\s*0;/);
 
     // The reward is reported in aftermath; restating it in Sectio remains retired.

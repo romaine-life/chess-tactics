@@ -7,7 +7,7 @@ import { levelParTurns, speedBonusClockMs, speedBonusRemainingMs, speedBonusTent
 import type { GameState, Piece, Vec } from '../core/types';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox } from './shared/ChromeBox';
-import { CHROME_LEAF_FILL_SURFACE, leafSurfacePhase } from './shared/chromeSurfacePolicy';
+import { CHROME_LEAF_FILL_SURFACE, CHROME_STRUCTURAL_FILL_ROLE, leafSurfacePhase } from './shared/chromeSurfacePolicy';
 import { TitleBarStatus } from './shell/TitleBarControls';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleRoute, type TitleRouteSegment } from './shell/TitleRoute';
@@ -1452,7 +1452,10 @@ function AftermathPanel({
         {named ? <p className="run-aftermath-subtitle">{named}</p> : null}
       </header>
 
-      <InnerChromeBox as="div" className="run-aftermath-report">
+      {/* Marble, like every structural box. Naming no fill drops it onto the inner role's TINT,
+          which is a translucent field rather than an installed material — unapproved paint that no
+          gate catches, because it arrives from the generated role CSS and not from style.css. */}
+      <InnerChromeBox as="div" className="run-aftermath-report" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
         <dl className="run-aftermath-ledger">
           <AftermathMeasure
             label="Gold won"
@@ -1564,7 +1567,7 @@ function VictoryPanel({ run }: { run: RunDocument }): ReactElement {
         <h2 id="run-victory-workspace-title" className="run-victory-title">War won</h2>
       </header>
 
-      <InnerChromeBox as="div" className="run-victory-report">
+      <InnerChromeBox as="div" className="run-victory-report" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
         <h3 className="run-victory-war">{run.war.name}</h3>
         <p className="run-victory-ataraxia">
           {ATARAXIA_BY_TIER[run.ataraxiaTier].label} — {ATARAXIA_BY_TIER[run.ataraxiaTier].title}
