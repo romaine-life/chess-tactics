@@ -1974,6 +1974,16 @@ h1 {
      width, ui/shell/layoutViewport.ts) so browser zoom magnifies them instead of
      re-flowing; identical to plain vw at 100% zoom. */
   --app-header-h: clamp(84px, calc(var(--layout-vw, 100vw) * .05), 88px);
+  /* Kit frame art is drawn with a 1px fully transparent margin on each edge of its 24px
+     slice, so a rail lands its ink one raster line inside the box it was asked to fill.
+     Where that line falls between two surfaces, neither paints it and the screen behind
+     shows through as a hairline. The app-shell title divider's inner margin is covered from
+     BELOW — the Controls panel already does it with --app-shell-divider-fill-overlap, and
+     this is the same apron for the shell workspace's surface fill. (The Controls panel's
+     own outer margin is answered on the chrome side instead, by outsetting its frame; see
+     chromeFamilyRuntime.) Kept a plain length: overflow-clip-margin, which has to let the
+     apron past the workspace hosts, drops calc() and max() values whole. */
+  --shell-workspace-paint-apron: 1px;
   /* motion — duration + easing tokens (ADR-0043, revised by ADR-0046). Map MOTION ROLES
      onto these; don't hand-pick ms per element. Just TWO durations, by design:
        fast = instant feedback (hover / toggle / focus / filter swap),
@@ -4371,6 +4381,15 @@ h1 {
 /* A complete pre-drawn raster owns every environment pixel. Remove the ordinary
    battlefield backdrop layer altogether instead of retaining an invisible decoded image. */
 .skirmish-screen.is-predrawn-board::before {
+  content: none;
+}
+
+/* Same call for a Run phase whose workspace paints an opaque installed raster across the
+   whole environment column (RunScreen sets the class). The battlefield backdrop reaches no
+   pixel there — measured, it showed only in the seams the workspace paint apron now closes —
+   so it is a decoded image nothing can see. A phase that yields its fill to a retained scene
+   (Sectio's room) still needs it, and keeps it. */
+.skirmish-screen.run-workspace-owns-environment::before {
   content: none;
 }
 
@@ -7582,14 +7601,24 @@ body.loading-bootstrap .app-startup-status {
   isolation: isolate;
   min-height: 0;
   min-width: 0;
-  overflow: hidden;
+  /* `clip` rather than `hidden` so the paint apron below can pass. Content is unaffected:
+     .shell-workspace-content clips it, and neither box has ever scrolled here. */
+  overflow: clip;
+  overflow-clip-margin: var(--shell-workspace-paint-apron, 0px);
   padding: 0;
   position: absolute;
   text-align: left;
   z-index: 2;
 }
+/* The title divider lays its last raster row over the top of the workspace and leaves it
+   transparent (see --shell-workspace-paint-apron), so the surface fill has to reach up under
+   it exactly as the Controls panel's fill already does — otherwise that row belongs to
+   neither and the screen behind shows through as a hairline. Only the fill takes the apron:
+   it is a repeating texture, so the row costs it a one-pixel phase and nothing else. The
+   background artwork keeps the workspace box exactly, because its cover fit is pixelated and
+   re-scaling a whole vista to gain one row is a far worse trade than the row. */
 .shell-workspace-fill {
-  inset: 0;
+  inset: calc(-1 * var(--shell-workspace-paint-apron, 0px)) 0 0 0;
 }
 .shell-workspace-background-artwork {
   inset: 0;
@@ -18808,12 +18837,15 @@ button.tileset-relationship-cell {
      at every seat size (73% of 64/44/40), because these are raster marks. */
   --settings-tab-icon-bleed-size: 47px;
   align-items: center;
-  /* The single grid row is the 40px icon slot, and the tab's content box is 30px (61 − 2·7 border
-     − 2·8.5 padding), so the row is 10px TALLER than the space it sits in. Left at the default
-     `normal` it starts at the content top and hangs all 10px off the bottom, which put the icon
-     and the label ~5px below the button's centre — the icon's own rule below computes its centring
-     against the 61px tab and never got it, because the box it centres inside was itself low.
-     Centring the row splits the overflow, so both land on the button's centre line. */
+  /* Centre the icon+label ROW in whatever content box the button actually has.
+     Both rail heights were computed against a 2px border — "border(4) + 2·padding + icon
+     slot(40)" — but the panel-line border-image resolves to 7px a side, so the real content
+     box is 30px against a 40px row track. The row overflowed the full 10px DOWNWARD from its
+     start edge, seating every mark and label 5px below its button's centre line: the menu's
+     marks sat 10.6px under the frame and 0.6px above it. Centring the track spreads that
+     overflow evenly instead, which is what the fixed heights always meant. Deliberately not
+     re-derived padding: the border-image width is the thing that moved once already, and a
+     hand-computed inset would go stale the next time it does. */
   align-content: center;
   appearance: none;
   /* Rendered as a <button> since ADR-0052: buttons don't inherit font (UA default) and
@@ -18970,9 +19002,13 @@ button.tileset-relationship-cell {
 .main-menu-mode-tab .settings-tab-icon img {
   position: absolute;
   left: 50%;
-  /* 61px tab - 44px icon = 17px: exact centring is 8.5px. Resolve the
-     half-pixel upward so the raster icon paints on whole logical pixels. */
-  top: calc(50% - .5px);
+  /* 61px tab - 44px icon = 17px, so exact centring is 8.5px and lands the icon box on a
+     half pixel. This used to resolve that half pixel UPWARD to keep the raster on whole
+     logical pixels — which bought nothing (44/64 is already a fractional scale, so the
+     art is resampled either way) and cost the thing the eye actually reads: it made the
+     gap above the mark 6px and the gap below it 7px, on every button in the rail. The
+     half pixel stays where it belongs and the mark sits on the button's centre line. */
+  top: 50%;
   transform: translate(calc(-50% + 0px), -50%);
 }
 
@@ -19830,7 +19866,10 @@ button.tileset-relationship-cell {
   grid-column: 1;
   grid-row: 2;
   min-block-size: 0;
-  overflow: hidden;
+  /* Hosts a .shell-workspace, so it must pass that surface's paint apron rather than
+     clipping it back to the grid column and reopening the seam against the chrome. */
+  overflow: clip;
+  overflow-clip-margin: var(--shell-workspace-paint-apron, 0px);
   position: relative;
 }
 
@@ -22011,6 +22050,73 @@ button.tileset-relationship-cell {
 
 .run-progress-icon-review-grid small {
   color: var(--skirmish-muted);
+}
+
+/* Main-menu mark review: each candidate SET is mounted as a whole rail through the same
+   primitive the menu paints, laid out side by side so the sets can be read against each
+   other and against what is installed. Layout only — the rail brings its own column
+   width, gap, surface and seat, and the review never restyles the thing it is judging
+   (a review that re-sizes the seat proves nothing about the seat). */
+.menu-icon-review-screen {
+  block-size: 100%;
+  box-sizing: border-box;
+  grid-template-columns: minmax(0, 1fr);
+  overflow: auto;
+  padding: var(--ds-inset);
+}
+
+.menu-icon-review-panel {
+  grid-column: 1;
+  grid-row: 2;
+  margin-inline: auto;
+  /* Four 322px rails plus their gaps. The panel is sized to hold the comparison, not
+     to a house width — a panel that clips the fourth set hides the set. */
+  max-inline-size: 1480px;
+  overflow: auto;
+  inline-size: 100%;
+}
+
+.menu-icon-review-panel > .le-outer-panel-content {
+  display: grid;
+  gap: var(--ds-inline);
+}
+
+.menu-icon-review-sets {
+  align-items: start;
+  display: flex;
+  gap: var(--ds-inline);
+  /* One row, always. A wrapped set is a set that can no longer be compared against the
+     one it wrapped away from, which is the entire job of this page; a narrow window
+     scrolls the row instead of breaking it. */
+  overflow-x: auto;
+}
+
+.menu-icon-review-set {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  justify-items: start;
+}
+
+.menu-icon-review-set > h2,
+.menu-icon-review-set > p {
+  margin: 0;
+}
+
+/* Reserve two lines for the set name whether or not it needs them. A one-line title next
+   to a wrapped one starts its rail a line higher, and two rails at different heights
+   cannot be read against each other — which is the only thing this page does. */
+.menu-icon-review-set > h2 {
+  align-content: end;
+  min-block-size: 2.4em;
+}
+
+.menu-icon-review-set > p {
+  color: var(--skirmish-muted);
+}
+
+.menu-icon-review-missing {
+  color: var(--skirmish-muted);
+  margin: 0;
 }
 
 /* Studio > Action Marks: each catalog card carries the candidate in the SAME button the
@@ -24809,10 +24915,13 @@ button.tileset-relationship-cell {
   pointer-events: none;
 }
 
-/* ui/kit/icons/design-index.png — ink 40x40 at (12,12) on a 64x64 canvas. */
+/* ui/main-menu/icons-carved/enchiridion.png — ink 48x52 at (8,6) on a 64x64 canvas. The
+   Strategikon's Enchiridion tab draws whatever the Enchiridion DESTINATION draws
+   (menuModeIcon), so it moved off the shared design-index kit glyph when that destination
+   gained a mark of its own family (ADR-0560). 6/64 below the ink, 52/64 across it. */
 [data-strategikon-section="enchiridion"] img {
-  --titlebar-mark-ink-below: .1875;
-  --titlebar-mark-ink-fill: .625;
+  --titlebar-mark-ink-below: .09375;
+  --titlebar-mark-ink-fill: .8125;
 }
 
 /* ui/kit/icons/unit-studio.png — ink 26x40 at (19,12) on a 64x64 canvas. */
@@ -27057,6 +27166,43 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   position: relative;
 }
 
+/* Studio → Card Layout. The gallery had no rule of its own, so every card took the panel's whole
+   width: one card per screen, and the Zoom slider — which sets --run-card-gallery-zoom on this
+   grid — drove nothing, because only the card-back study ever read that variable. Zoom is what
+   sizes a card here, so 100% is the width a Sectio deals one and the grid reflows around it. */
+.run-card-prototype-study-grid {
+  --run-card-gallery-card: calc(196px * var(--run-card-gallery-zoom, 1));
+  align-content: start;
+  display: grid;
+  gap: var(--ds-space-4);
+  grid-auto-rows: max-content;
+  grid-template-columns: repeat(auto-fill, var(--run-card-gallery-card));
+  justify-content: start;
+}
+
+.run-card-prototype-study {
+  display: grid;
+  gap: var(--ds-space-2);
+  inline-size: var(--run-card-gallery-card);
+  justify-items: center;
+}
+
+/* The readings the coin fill is actually judged on, pinned above the identity gallery. The
+   catalog opens on fifteen Kings and a King is struck with a mark rather than a price
+   (ADR-0530), so without this the first screenful of a price-tuning surface carries no price.
+   Separated by rhythm rather than by a rule of its own: spacing encodes the grouping
+   (ADR-0056), and a hand-painted divider here would be unregistered chrome. */
+.run-card-prototype-readings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-4);
+  margin-block-end: calc(var(--ds-space-4) * 2);
+}
+
+.run-card-prototype-readings > .run-card-prototype-study {
+  inline-size: var(--run-card-gallery-card, 196px);
+}
+
 .run-card-face-layer {
   display: block;
   inset: 0;
@@ -27158,10 +27304,14 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   transform: translateY(calc(var(--run-card-text-ink-centre, .0667) * 1em));
 }
 
+/* Tracking only. The size is `--run-card-cost-size`, which runCardCostSizeCqw already reduced
+   to fit the coin face WITH this tracking priced in — a second flat shrink here stacked on that
+   one and, because the two won at different lengths, made a three-digit price a third smaller
+   than a two-digit one. The padding gives back the trailing letter-space so the reading stays
+   centred in its seat. */
 .run-card-prototype-cost.is-multi-digit {
-  font-size: calc(var(--run-card-cost-size, 6.2cqw) * .76);
-  letter-spacing: -.35cqw;
-  padding-inline-end: .35cqw;
+  letter-spacing: var(--run-card-cost-tracking, -.35cqw);
+  padding-inline-end: calc(var(--run-card-cost-tracking, -.35cqw) * -1);
 }
 
 /* A priceless card is struck with its mark, centred on the coin the numeral would read on

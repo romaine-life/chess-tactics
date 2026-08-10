@@ -1,9 +1,18 @@
 ---
-status: "accepted; downscale-without-reforge clauses superseded by ADR-0076; asset-storage clauses superseded by ADR-0085"
+status: "accepted; §C keyline table superseded by ADR-0560 for the main-menu set; downscale-without-reforge clauses superseded by ADR-0076; asset-storage clauses superseded by ADR-0085"
 date: 2026-06-27
 deciders: Nelson, Claude
 ---
 
+> **Section C's keyline table superseded by
+> [ADR-0560](0560-main-menu-marks-share-one-ink-box-and-one-centre.md) (2026-08-09),
+> for the main-menu set only.** Those five marks stack in one column at a fixed seat,
+> so the column itself is a size reference and five per-shape targets read as five
+> sizes; they now share one 52px ink box and one centre line. A dense *functional*
+> set on this canvas still takes its keyline from the table below. Everything else
+> here — the canvas (§A), safe area (§B), optical-centring-as-padding (§D), pixel
+> discipline (§E) and consumption (§F) — stands for both.
+>
 > **Downscale-without-reforge clauses superseded by
 > [ADR-0076](0076-scaling-is-calibration-production-art-is-native-1x.md) (2026-07-10).**
 > The canvas, optical keylines, shape classes, and optical centering stand.

@@ -6286,11 +6286,15 @@ async function main() {
   if (invalidOfferCountRun.statusCode !== 400 || JSON.parse(invalidOfferCountRun.body).error !== 'invalid_active_run') {
     throw new Error(`Current Run saves must persist their complete Sectio deal: ${invalidOfferCountRun.statusCode} ${invalidOfferCountRun.body}`);
   }
+  // Dealt under the RUN'S rules, like the three it joins. Omitting them deals the fourth card at
+  // the legacy flat-material price into a Run priced by density, which is a market the game
+  // cannot produce and the validator refuses.
   const quartermasterOffer = boardRender.sectioCardOffersAtCursor(
     activeRunDocument.seed,
     activeRunDocument.battleIndex,
     0,
     4,
+    boardRender.runRules(activeRunDocument),
   )[3];
   const quartermasterOpeningRun = {
     ...activeRunDocument,
@@ -6330,7 +6334,9 @@ async function main() {
           cardOffers: [
             activeRunOffers[0],
             activeRunOffers[1],
-            { ...activeRunOffers[2], cardType: 'legatine', cost: 5, effectTargetIndex: null },
+            // Correctly priced on purpose: the 400 below must be the retired ability state and
+            // nothing else, so the offer is left valid in every other respect.
+            { ...activeRunOffers[2], cardType: 'legatine', effectTargetIndex: null },
           ],
         },
       },
@@ -6351,7 +6357,9 @@ async function main() {
       cardOffers: expensiveDefinitions.map((card, index) => ({
         ...card,
         offerId: `sectio-expensive-${index}-${card.id}`,
-        cost: card.value,
+        // The Run's own price, not the card's material. Under density a value-9 card is dearer
+        // still, so what this proves — a Sectio may deal past the purse — only gets sharper.
+        cost: boardRender.runCardCost(card, boardRender.runRules(activeRunDocument)),
       })),
     },
   };
@@ -6493,12 +6501,19 @@ async function main() {
     JSON.stringify({ run: plainSectioRun, revision: 2 }),
   );
   const savedPlainSectioRunBody = JSON.parse(savedPlainSectioRun.body);
+  // Pricing is a Run rule, so an offer's price is what the RUN'S rules charge -- not the card's
+  // material. A default Run is priced by density, where the two differ on almost every card.
   if (
     savedPlainSectioRun.statusCode !== 200
     || savedPlainSectioRunBody.revision !== 3
-    || savedPlainSectioRunBody.run.sectio.cardOffers.some((offer) => offer.cost !== offer.value)
+    || savedPlainSectioRunBody.run.sectio.cardOffers.some((offer) => (
+      offer.cost !== boardRender.runCardCost(offer, boardRender.runRules(savedPlainSectioRunBody.run))
+    ))
   ) {
     throw new Error(`Plain formation Sectio Run did not save: ${savedPlainSectioRun.statusCode} ${savedPlainSectioRun.body}`);
+  }
+  if (savedPlainSectioRunBody.run.rules.pricing !== 'density') {
+    throw new Error(`A default Run prices its market by density: ${savedPlainSectioRun.body}`);
   }
   const mispricedFormationRun = await request(
     'PUT', '/api/active-run',

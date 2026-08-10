@@ -131,26 +131,78 @@ export const RUN_CARD_TEXT_PLACEMENT: RunCardTextPlacement = Object.freeze({
  */
 export const RUN_CARD_COIN_FACE_CQW = 6.01;
 
-/** The share of that face the widest numeral of a given length may occupy. */
-export const RUN_CARD_COIN_FACE_FILL = .72;
+/**
+ * The share of that face the widest numeral of a given length may occupy.
+ *
+ * The whole of it. The face is the coin's flat striking surface, already measured inside the rim,
+ * so a reading that spans it is struck edge to edge of the strikeable area rather than crowding
+ * the raised edge — and holding a numeral short of that only made the longer prices harder to
+ * read for room nothing was using. Chosen on the Studio's Card Layout surface against the real
+ * dealt readings.
+ */
+export const RUN_CARD_COIN_FACE_FILL = 1;
 
 /**
- * The display face's widest numeral at each length, in em. Digits are not equal
- * width — "1" is narrower than "0" — so a two-digit reading is measured as a
- * pair rather than assumed to be twice one digit.
+ * The display face's digit advance, in em, measured in the font itself rather than estimated.
+ *
+ * The face is monospaced at this width for every digit but "1", which is narrower — so the
+ * WIDEST reading of any length is that many of this advance, and a reading carrying a 1 comes
+ * in under its own cap instead of over it. There is no per-length table to keep: a table that
+ * declared a two-digit pair at .8125em was measuring a pair CONTAINING the narrow 1, which
+ * understated every widest reading by 7%, and had no entry at all past two digits.
  */
-const NUMERAL_EM_WIDTH: readonly number[] = Object.freeze([0, .4375, .8125]);
+export const RUN_CARD_NUMERAL_EM_ADVANCE = .4375;
+
+/** The one exception, also measured: "1" is narrower than the rest of the face. */
+export const RUN_CARD_NUMERAL_ONE_EM_ADVANCE = .375;
 
 /**
- * The cost numeral's size: the approved size, reduced only as far as it takes to
- * keep the reading inside the coin's face. One digit never reaches the cap, so
- * the common card is unchanged and two digits stop touching the rim.
+ * The tightening a multi-digit reading is set with, in cqw, applied after every digit. The size
+ * below reads it because it is real width: a reading is its advances PLUS its tracking, and a
+ * cap blind to the tracking leaves the coin under-filled.
  */
-export function runCardCostSizeCqw(cost: number, approvedSizeCqw: number): number {
+export const RUN_CARD_COST_LETTER_SPACING_CQW = -.35;
+
+/**
+ * The cost numeral's size: the approved size, reduced only as far as it takes to keep the
+ * reading inside the coin's face. One digit never reaches the cap, so the common card is
+ * unchanged; longer readings shrink exactly enough to sit in the face and no further.
+ *
+ * This is the ONLY authority on the numeral's size. A second, flat shrink in CSS used to stack
+ * on top of it, and because the two won at different lengths — CSS at two digits, this cap at
+ * three — a three-digit price rendered a third smaller than a two-digit one for no reason the
+ * geometry could account for.
+ */
+export function runCardCostSizeCqw(
+  cost: number,
+  approvedSizeCqw: number,
+  faceFill: number = RUN_CARD_COIN_FACE_FILL,
+): number {
   const digits = Math.abs(Math.trunc(cost)).toString().length;
-  const emWidth = NUMERAL_EM_WIDTH[digits] ?? NUMERAL_EM_WIDTH[NUMERAL_EM_WIDTH.length - 1] * digits / 2;
-  const fits = (RUN_CARD_COIN_FACE_CQW * RUN_CARD_COIN_FACE_FILL) / emWidth;
+  const emWidth = RUN_CARD_NUMERAL_EM_ADVANCE * digits;
+  const tracking = digits > 1 ? RUN_CARD_COST_LETTER_SPACING_CQW * digits : 0;
+  const fits = (RUN_CARD_COIN_FACE_CQW * faceFill - tracking) / emWidth;
   return Math.round(Math.min(approvedSizeCqw, fits) * 100) / 100;
+}
+
+/**
+ * The share of the coin face a reading of `digits` actually inks at `faceFill`. The size above is
+ * a cap on the WIDEST reading of a length, so a reading carrying the narrow "1" lands under it —
+ * `cost` is read for its real digits rather than assumed to be all-wide.
+ */
+export function runCardCostFaceShare(
+  cost: number,
+  approvedSizeCqw: number,
+  faceFill: number = RUN_CARD_COIN_FACE_FILL,
+): number {
+  const reading = Math.abs(Math.trunc(cost)).toString();
+  const size = runCardCostSizeCqw(cost, approvedSizeCqw, faceFill);
+  const advances = [...reading].reduce(
+    (total, digit) => total + (digit === '1' ? RUN_CARD_NUMERAL_ONE_EM_ADVANCE : RUN_CARD_NUMERAL_EM_ADVANCE),
+    0,
+  );
+  const tracking = reading.length > 1 ? RUN_CARD_COST_LETTER_SPACING_CQW * reading.length : 0;
+  return (advances * size + tracking) / RUN_CARD_COIN_FACE_CQW;
 }
 
 const SHA256 = /^[0-9a-f]{64}$/;

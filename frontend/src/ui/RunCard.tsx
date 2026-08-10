@@ -2,7 +2,7 @@ import type { ReactElement } from 'react';
 import { liveMediaForSlot, resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import { runCardArtSlot, runCardName } from '../run/cardNames';
 import { cardContentsLabel, type RunCardDefinition, type RunCardOffer } from '../run/model';
-import { RunCardFace, type RunCardOutlineRendering } from './RunCardFace';
+import { RunCardFace, type RunCardFaceTuning, type RunCardOutlineRendering } from './RunCardFace';
 import { runCardFaceContent, runCardFrameSlot } from './runCardFaceContent';
 import { runCardFrameGeometryForSlot } from './runCardFrameGeometry';
 import { runCardFloatClock } from './runCardLife';
@@ -19,6 +19,7 @@ export function RunCard({
   disabled = false,
   flying = false,
   outlineRendering,
+  tuning,
   crownUrl,
   markFill,
   onSelect,
@@ -38,6 +39,8 @@ export function RunCard({
   disabled?: boolean;
   /** Review-only: how the footprint outline rasterizes. Omitted, the card prints as it ships. */
   outlineRendering?: RunCardOutlineRendering;
+  /** Review-only: the face typography under test. Omitted, the card prints at the approved tuning. */
+  tuning?: RunCardFaceTuning;
   /** Omitted, the face resolves the installed priceless-coin mark itself. */
   crownUrl?: string | null;
   /** Omitted, the face uses the saved runtime fill for that mark. */
@@ -64,6 +67,7 @@ export function RunCard({
       artUrl={resolvedLiveMediaUrl(runCardArtSlot(identity))}
       frameGeometry={runCardFrameGeometryForSlot(frameSlot)}
       outlineRendering={outlineRendering}
+      {...(tuning === undefined ? {} : { tuning })}
       {...(crownUrl === undefined ? {} : { crownUrl })}
       {...(markFill === undefined ? {} : { markFill })}
       ariaHidden={mode !== 'reference'}

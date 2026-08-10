@@ -171,7 +171,11 @@ describe('unified Play menu contract (ADR-0074)', () => {
   });
 
   it('resolves Play rail icons from installed drawable membership, not retired path-shaped app-ui roles', () => {
-    expect(playMenu).toContain("drawableAssets('menu-mode')");
+    // Through the SHARED menuModeIcon resolver, not a private copy of it. Play carried a
+    // byte-identical duplicate of that lookup, which is the drift menuModeIcon.ts documents:
+    // two surfaces offering one destination under two marks, with nothing to contradict them.
+    expect(playMenu).toContain("import { menuModeIcon } from './menuModeIcon'");
+    expect(playMenu).not.toContain("drawableAssets('menu-mode')");
     expect(playMenu).toContain("installedUiMedia('ui-kit-icons-design-index-png')");
     expect(playMenu).not.toContain('ui-main-menu-icons-carved-solo-skirmish-png');
     expect(playMenu).not.toContain('ui-main-menu-icons-carved-level-editor-png');

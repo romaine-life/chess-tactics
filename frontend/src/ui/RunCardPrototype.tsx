@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { liveMediaForSlot, resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import {
   acceptLiveMediaVersions,
@@ -6,15 +6,26 @@ import {
   reviewLiveMediaVersion,
   type AdminLiveMediaCatalog,
 } from '../net/liveMediaAdmin';
-import { RUN_CARD_CATALOG } from '../run/model';
+import {
+  DEFAULT_RUN_RULES,
+  GOLD_SCALE,
+  RUN_CARD_CATALOG,
+  RUN_CARD_DECK,
+  createRunCardOffer,
+  runCardCost,
+  type RunCardOffer,
+} from '../run/model';
 import { runCardArtSlot, runCardName } from '../run/cardNames';
 import { RunCard } from './RunCard';
-import { RunCardFace } from './RunCardFace';
+import { RUN_CARD_APPROVED_TUNING, RunCardFace } from './RunCardFace';
 import { runCardFaceContent } from './runCardFaceContent';
 import {
   RUN_CARD_FRAME_SLOT,
   RUN_CARD_STANDARD_FRAME_GEOMETRY,
+  runCardCostFaceShare,
+  runCardCostSizeCqw,
 } from './runCardFrameGeometry';
+import { SliderRow } from './dressing/SliderRow';
 import {
   runCardRarityFrameAcceptanceItem,
   runCardRarityFrameReviewProof,
@@ -306,6 +317,36 @@ function RunCardBackStudy({ header, viewerZoom }: { header: ReactNode; viewerZoo
   );
 }
 
+/**
+ * How far the cost numeral may be pushed from the Studio, in whole percent of the coin's face.
+ *
+ * The ceiling is the face itself: past 100 the reading is wider than the flat striking surface it
+ * is struck on and starts climbing the rim, which is the thing the fit exists to prevent. The
+ * floor is low enough to see the shrink actually bite.
+ */
+const COIN_FACE_FILL_LIMITS = Object.freeze({ min: 40, max: 100, step: 1, nudge: 1 });
+
+/**
+ * The readings the fill is judged against — the cheapest card the market deals, the dearest, and
+ * one in between, priced the way the Run itself prices them.
+ *
+ * Real prices rather than round hypotheticals, because the fill is decided by what is actually
+ * printed: no card costs a single digit (the cheapest is ten gold), and the dearest is a lone
+ * Queen, whose three digits are the reading the coin is tightest on.
+ */
+function coinFillSpecimens(): readonly RunCardOffer[] {
+  const priced = RUN_CARD_DECK
+    .map((card) => ({ card, gold: runCardCost(card, DEFAULT_RUN_RULES) * GOLD_SCALE }))
+    .sort((left, right) => left.gold - right.gold);
+  const cheapest = priced[0];
+  const dearest = priced[priced.length - 1];
+  // The widest TWO-digit reading between them, which is the length the size cap binds first.
+  const middle = [...priced].reverse().find((entry) => String(entry.gold).length === 2) ?? cheapest;
+  return [cheapest, middle, dearest].map((entry, index) => (
+    createRunCardOffer({ seed: 0 }, entry.card, 0, index, DEFAULT_RUN_RULES)
+  ));
+}
+
 /** The Studio's live formation-card review surface. */
 export function RunCardPrototypeViewer({
   header,
@@ -315,6 +356,23 @@ export function RunCardPrototypeViewer({
   viewerZoom: number;
 }): ReactElement {
   const studioSearch = new URLSearchParams(window.location.search);
+  const [faceFillPercent, setFaceFillPercent] = useState(
+    () => Math.round(RUN_CARD_APPROVED_TUNING.costFaceFill * 100),
+  );
+  const [status, setStatus] = useState(
+    'The cost numeral is sized to fit the coin. Reset returns the fill the cards ship at.',
+  );
+  const faceFill = faceFillPercent / 100;
+  const tuning = { ...RUN_CARD_APPROVED_TUNING, costFaceFill: faceFill };
+  const specimens = useMemo(() => coinFillSpecimens(), []);
+  const shipped = Math.round(RUN_CARD_APPROVED_TUNING.costFaceFill * 100);
+  const copyFill = async (): Promise<void> => {
+    await navigator.clipboard.writeText(
+      `export const RUN_CARD_COIN_FACE_FILL = ${String(faceFill)};`,
+    );
+    setStatus('Copied. Commit the number in runCardFrameGeometry.ts to make it what the Run deals.');
+  };
+
   if (studioSearch.get('cardSide') === 'back') {
     return <RunCardBackStudy header={header} viewerZoom={viewerZoom} />;
   }
@@ -322,20 +380,96 @@ export function RunCardPrototypeViewer({
     return <RunCardRarityStudy header={header} viewerZoom={viewerZoom} />;
   }
   return (
-    <section className="run-card-prototype-workspace" aria-label="Formation card gallery">
-      {header}
-      <div
-        className="run-card-prototype-study-grid"
-        style={{ '--run-card-gallery-zoom': viewerZoom } as CSSProperties}
-      >
-        {RUN_CARD_CATALOG.map((card) => (
-          <article className="run-card-prototype-study" key={card.id}>
-            <RunCard card={card} mode="reference" />
-            <small>{runCardName(card)} · {card.pieces.length} unit{card.pieces.length === 1 ? '' : 's'}</small>
-          </article>
-        ))}
-      </div>
-    </section>
+    <>
+      <section className="run-card-prototype-workspace" aria-label="Formation card gallery">
+        <div
+          className="run-card-prototype-study-grid run-card-prototype-readings"
+          aria-label="The readings the coin fill is judged on"
+          style={{ '--run-card-gallery-zoom': viewerZoom } as CSSProperties}
+        >
+          {specimens.map((offer) => (
+            <article className="run-card-prototype-study" key={offer.offerId}>
+              <RunCard card={offer} mode="reference" tuning={tuning} />
+              <small>
+                {offer.cost * GOLD_SCALE} gold ·{' '}
+                {runCardCostSizeCqw(offer.cost * GOLD_SCALE, tuning.costSize, faceFill).toFixed(2)}cqw ·
+                {' inks '}{Math.round(runCardCostFaceShare(offer.cost * GOLD_SCALE, tuning.costSize, faceFill) * 100)}%
+              </small>
+            </article>
+          ))}
+        </div>
+        <div
+          className="run-card-prototype-study-grid"
+          style={{ '--run-card-gallery-zoom': viewerZoom } as CSSProperties}
+        >
+          {RUN_CARD_CATALOG.map((card) => (
+            <article className="run-card-prototype-study" key={card.id}>
+              <RunCard card={card} mode="reference" tuning={tuning} />
+              <small>{runCardName(card)} · {card.pieces.length} unit{card.pieces.length === 1 ? '' : 's'}</small>
+            </article>
+          ))}
+        </div>
+      </section>
+      <aside className="tileset-view-controls" aria-label="Card face controls">
+        <section className="tileset-inspector-section">
+          <h2>Controls</h2>
+          {header}
+          <div className="tileset-control-stack">
+            <div data-testid="run-card-coin-fill-control">
+              <SliderRow
+                label={<>Cost numeral fills the coin <strong data-testid="run-card-coin-fill-value">{faceFillPercent}%</strong></>}
+                value={faceFillPercent}
+                set={(next) => {
+                  setFaceFillPercent(next);
+                  setStatus(next === shipped
+                    ? 'Back at the shipped fill.'
+                    : 'Fill changed. Copy it and commit the number to make it what the Run deals.');
+                }}
+                {...COIN_FACE_FILL_LIMITS}
+                dflt={shipped}
+              />
+            </div>
+            <p className="tileset-catalog-note">
+              This is the knob a multi-digit price answers to. A one-digit reading is held by the
+              approved size long before it reaches the coin, so it does not move until the fill is
+              pushed well past where the longer readings are already touching the rim.
+            </p>
+            <button
+              type="button"
+              className="tileset-view-action"
+              data-testid="run-card-coin-fill-reset"
+              disabled={faceFillPercent === shipped}
+              onClick={() => {
+                setFaceFillPercent(shipped);
+                setStatus('Fill reset to what the Run ships.');
+              }}
+            >
+              Reset fill
+            </button>
+            <button type="button" className="tileset-view-action" onClick={() => { void copyFill(); }}>
+              Copy fill
+            </button>
+          </div>
+          <dl data-testid="run-card-coin-fill-readout">
+            {specimens.map((offer) => {
+              const gold = offer.cost * GOLD_SCALE;
+              const size = runCardCostSizeCqw(gold, tuning.costSize, faceFill);
+              return (
+                <div key={offer.offerId}>
+                  <dt>{gold} gold</dt>
+                  <dd>
+                    {size.toFixed(2)}cqw · inks{' '}
+                    {Math.round(runCardCostFaceShare(gold, tuning.costSize, faceFill) * 100)}%
+                    {size === tuning.costSize ? ' · at the size cap' : ''}
+                  </dd>
+                </div>
+              );
+            })}
+          </dl>
+          <p role="status">{status}</p>
+        </section>
+      </aside>
+    </>
   );
 }
 

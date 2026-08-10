@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { shouldLoadSkirmishWorldBackground, skirmishScreenClassName } from './Skirmish';
+import { runWorkspaceOwnsEnvironment } from './RunScreen';
 import { readFileSync } from 'node:fs';
 
 const skirmishSource = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
@@ -41,6 +42,23 @@ describe('Skirmish screen class composition', () => {
   it('applies the pre-drawn rule with no phase class', () => {
     expect(skirmishScreenClassName(undefined, true)).toBe('is-predrawn-board');
     expect(skirmishScreenClassName(undefined, false)).toBe('');
+  });
+
+  it('drops the world backdrop behind a Run workspace that owns every environment pixel', () => {
+    expect(runWorkspaceOwnsEnvironment('victory')).toBe(true);
+    expect(runWorkspaceOwnsEnvironment('aftermath')).toBe(true);
+    expect(styleCss).toMatch(
+      /\.skirmish-screen\.run-workspace-owns-environment::before\s*\{[\s\S]*?content:\s*none;/,
+    );
+  });
+
+  it('keeps the world backdrop for phases whose workspace does not cover it', () => {
+    // Sectio yields .shell-workspace-fill to its retained room scene, so the backdrop is
+    // what remains behind the transparent parts of that scene.
+    for (const phase of ['sectio', 'commendatio', 'deployment', 'battle', 'bona-vacantia'] as const) {
+      expect(runWorkspaceOwnsEnvironment(phase)).toBe(false);
+    }
+    expect(runWorkspaceOwnsEnvironment(undefined)).toBe(false);
   });
 
   it('never lets a construction path opt back into the default world raster', () => {

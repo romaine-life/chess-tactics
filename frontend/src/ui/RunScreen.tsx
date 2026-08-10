@@ -66,6 +66,7 @@ import {
   type RunBattleNotice,
   type RunCardOffer,
   type RunDocument,
+  type RunPhase,
   type LipsanonId,
 } from '../run/model';
 import {
@@ -162,6 +163,21 @@ type RunScreenView = RunWorkspaceView;
 
 function visibleLipsanonCount(run: RunDocument): number {
   return run.lipsana.filter((lipsanonId) => Boolean(LIPSANON_BY_ID[lipsanonId])).length;
+}
+
+/**
+ * Phases whose workspace paints an installed opaque raster over the whole environment
+ * column, so the shell's battlefield backdrop reaches no pixel behind them and is dropped
+ * (`.skirmish-screen.run-workspace-owns-environment`). Both mount the `run-victory`
+ * workspace background at cover fit over the shell's own opaque surface fill.
+ *
+ * This is a claim about pixels, so re-measure it rather than extend it by eye: paint
+ * `.skirmish-screen::before` a flat colour on the live phase and count the pixels that
+ * change. A phase that yields its fill to a retained scene — Sectio's room, which hides
+ * `.shell-workspace-fill` — does NOT qualify, and keeps the backdrop.
+ */
+export function runWorkspaceOwnsEnvironment(phase: RunPhase | undefined): boolean {
+  return phase === 'victory' || phase === 'aftermath';
 }
 
 function runBattleProgress(run: RunDocument): {
@@ -2159,6 +2175,7 @@ export function RunScreen({
         {form.add(runActivity({
           id: sceneInstance,
           testId: 'run-screen',
+          className: runWorkspaceOwnsEnvironment(shellRun?.phase) ? 'run-workspace-owns-environment' : undefined,
           controlsContent: shellRun ? (
             <RunMetaControls
               run={shellRun}

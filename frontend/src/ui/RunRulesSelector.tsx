@@ -40,15 +40,15 @@ const ROTATION_COPY: Readonly<Record<'on' | 'off', { label: string; effect: stri
 };
 
 const PRICING_COPY: Readonly<Record<'material' | 'density', { label: string; effect: string }>> = {
-  material: {
-    label: 'Flat material',
-    effect: 'A card costs what its pieces are worth. A Queen is nine whether she arrives alone or beside three Pawns.',
-  },
   density: {
     // Not "by density": density only WEIGHTS the material, it does not replace it. Priced by
     // density alone, one Pawn and four Pawns would cost the same -- both are density 1.
     label: 'Weighted by density',
     effect: 'Still material, scaled by how concentrated it is: the same pieces in fewer squares cost more. A Queen alone is dearer than a Queen with a Pawn beside her.',
+  },
+  material: {
+    label: 'Flat material',
+    effect: 'A card costs what its pieces are worth. A Queen is nine whether she arrives alone or beside three Pawns.',
   },
 };
 
@@ -82,7 +82,8 @@ export function RunRulesSelector({
 
   const rotationKey = value.mayRotate ? 'on' : 'off';
 
-  const pricingOptions: readonly HouseSelectOption[] = (['material', 'density'] as const).map((key) => ({
+  // Default first, as the span and facing lists above are ordered.
+  const pricingOptions: readonly HouseSelectOption[] = (['density', 'material'] as const).map((key) => ({
     value: key,
     label: (
       <span className="run-rules-option-copy">
