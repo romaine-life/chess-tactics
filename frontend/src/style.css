@@ -7358,6 +7358,15 @@ body.loading-bootstrap .app-startup-status {
   position: relative;
 }
 
+/* A per-row segment does NOT bleed past its row. The box-level rail bleeds because it is one line
+   meeting the frame at both ends; a segment's ends are seams with the next segment, and the
+   junction atom the boundary layer places sits exactly there and covers them. Left bleeding, the
+   last divided row's overhang carried on into the row below it — which is how a stub of rail
+   appeared inside the spanning verb after the rail itself had correctly stopped. */
+.chrome-divided-grid__row-rails > .chrome-divided-grid__vertical-rail {
+  margin-block: 0 !important;
+}
+
 .chrome-divided-grid__row-rails {
   display: grid;
   grid-column: 1 / -1;
