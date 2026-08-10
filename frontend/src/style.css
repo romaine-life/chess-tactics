@@ -18765,6 +18765,16 @@ button.tileset-relationship-cell {
   inline-size: var(--col-tab-w);
 }
 
+/* Two stacks of the same button, side by side, must step by the same amount. The rail's gap is
+   baked from --main-menu-tab-column-gap (a clamp on --layout-vw), so a list next to it that used
+   the shared 10px row gap drifted apart from the first gap onward — 12.79px against 10px at
+   1600vw, and only coincidentally equal near 1250vw. Read the rail's own number instead of
+   restating a literal; the plank pitch is built from --settings-section-rows-gap, so it follows
+   this automatically and still steps by exactly what layout steps by. ADR-0556. */
+.play-run-choice-col .settings-section-rows {
+  --settings-section-rows-gap: var(--main-menu-tab-column-gap);
+}
+
 /* A selected campaign level adds the authored preview as the next destination column.
    On narrower desktop viewports, fit that master/detail pair inside the action column's
    original width instead of drawing the preview beyond the right edge. The compact list
@@ -27702,23 +27712,28 @@ button.run-card-formation-cell {
    "Loading Runs…" or "Runs unavailable" row joins the list. ADR-0063.
 
    Height: these rows sit beside the main-menu buttons at the same width, so they are held to
-   the same 61px seat those buttons use (.main-menu-mode-tab) instead of .settings-row's
-   18px-padded 60px floor, which drew a 96px slab for one line of text. Both states stay ONE
-   line — the empty state's "No active Run" is the row's end value, not a second line — so the
-   seat is a constant and the plank below it does not shift with Run existence. ADR-0556.
+   the same 61px seat those buttons use, the same way — a FIXED block-size, not .settings-row's
+   18px-padded 60px floor (which drew a 96px slab for one line of text) and not a min-height
+   the clamp()ed copy then grows past. A min-height measured 55.83px at 1280vw and 61.86px at
+   1920vw against the tab's flat 61px, so the two stacks disagreed on row two onward. Both row
+   states stay ONE line — the empty state's "No active Run" is the row's end value, not a second
+   line — so the seat is a constant and the plank below it does not shift with Run existence.
+   ADR-0556.
 
-   Pitch = the row's rendered block size + the list gap: border(2 x 7) + padding(2 x 10.5) +
-   one clamp()ed copy line = 61px at the design width, drifting a few px at the extremes of the
-   range. That is invisible in wood, and the 10px gap of open scene between rows breaks literal
-   grain continuity anyway — same accepted trade as the tab rail's measured step. */
+   Pitch = the row's rendered block size + the list gap, and with a fixed seat and the rail's own
+   gap (above) both terms are now exact at every width rather than drifting a few px at the
+   extremes. */
 .play-choice-row {
   --play-choice-row-surface-pitch: calc(61px + var(--settings-section-rows-gap, 10px));
   --chrome-surface-position-y: calc(var(--play-choice-row-index, 0) * -1 * var(--play-choice-row-surface-pitch));
   appearance: none;
+  block-size: 61px;
   color: inherit;
   cursor: pointer;
   font: inherit;
   min-height: 61px;
+  /* The seat is fixed, so this only centers the copy inside it (.settings-row is align-items:
+     center); it is stated to keep the box arithmetic in the comment above readable. */
   padding-block: 10.5px;
   text-align: start;
 }

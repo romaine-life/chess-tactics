@@ -128,7 +128,12 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // The pitch is only a constant because BOTH row states are one line — the empty state's
     // sentence is the row's end value, not a second line that would shift the plank when a Run
     // starts or ends. The seat is the main-menu button's, so the rows read as its siblings.
-    expect(style).toMatch(/\.play-choice-row\s*\{[\s\S]*?min-height:\s*61px;/);
+    // A FIXED seat, and the RAIL's gap — the two stacks stand side by side, so they must step by
+    // the same amount. A min-height let the clamp()ed copy grow the row past the tab's flat 61px
+    // (55.83px at 1280vw, 61.86px at 1920vw), and the shared 10px row gap disagreed with the
+    // rail's clamp from the first gap onward. Both terms of the plank pitch are now exact.
+    expect(style).toMatch(/\.play-choice-row\s*\{[\s\S]*?block-size:\s*61px;/);
+    expect(style).toMatch(/\.play-run-choice-col \.settings-section-rows\s*\{\s*--settings-section-rows-gap:\s*var\(--main-menu-tab-column-gap\);/);
     // And no eyebrow over the one group in the column — it named the column after the only thing
     // in it, and cost the first row its alignment with the first main-menu button (ADR-0556).
     expect(playMenu).not.toContain('<h3 className="settings-section-title">Run</h3>');

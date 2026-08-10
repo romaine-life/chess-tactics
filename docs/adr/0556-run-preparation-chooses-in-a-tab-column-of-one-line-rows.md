@@ -60,8 +60,13 @@ Between them they bought a 96px slab for a row whose content is a name.
 - Run preparation reads as one family with the rail beside it: same width, same seat height, same
   material.
 - The Battle position and Ataraxia are stated once, in the detail column, instead of twice.
-- The pitch constant tracks the 61px seat; the copy is `clamp()`ed type, so the real row runs
-  56–62px across the viewport range and the sheet drifts a few px at the extremes — the same
-  accepted trade the tab rail's measured step already makes.
+- The two stacks are byte-identical, not merely similar. The seat is a FIXED `block-size: 61px`
+  like the tab's, not a `min-height` the `clamp()`ed copy grows past (55.83px at 1280vw, 61.86px
+  at 1920vw), and the list reads the rail's own `--main-menu-tab-column-gap` instead of the shared
+  10px row gap, which disagreed with the rail's clamp from the first gap onward. Measured equal
+  top, bottom, height, gap and pitch at 1280, 1600 and 1920.
+- Both terms of the plank pitch are therefore exact at every width. The sheet no longer drifts a
+  few px at the extremes, so the accepted trade the tab rail's measured step makes is not needed
+  here.
 - Reintroducing a second mode rail (ADR-0514's policy switch) does not restore the old width:
   the choice column is sized as what it is, not as what is left over.
