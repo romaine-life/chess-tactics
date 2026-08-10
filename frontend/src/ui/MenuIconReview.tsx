@@ -30,7 +30,7 @@ import { useSceneParticipant } from './shell/SceneBoundary';
  * drawable re-point the Enchiridion mark needs (it currently borrows a shared kit
  * glyph and gains a mark of its own family here).
  */
-export const MENU_ICON_BATCH_ID = 'main-menu-icons-2026-08-10-r6';
+export const MENU_ICON_BATCH_ID = 'main-menu-icons-2026-08-10-natural';
 
 /** The rail, in the order the menu stacks it — `slug` is the `behavior.value` the
  *  menu-mode drawable routes on, so a mark and its destination cannot drift apart. */
@@ -286,8 +286,9 @@ export function MenuIconReview(): ReactElement {
           surface, the same 40px seat drawing the 64px canvas at 44px. Every candidate mark
           is fitted the same way: ink scaled to exactly 52px tall on the 64px canvas, both
           ink dimensions pinned even, and the mark seated on the button's own centre line —
-          so every mark in every set carries the same 5.6px above it and below it. Nothing
-          is installed until you install a set.
+          so every mark in every set carries the same 5.6px above it and below it. Each mark
+          is drawn in the materials its own object is made of, not in one material shared
+          across the set (ADR-0035, ADR-0556). Nothing is installed until you install a set.
         </p>
         {error ? <p role="alert">{error}</p> : null}
         {!catalog && !error ? <p role="status">Loading candidates…</p> : null}

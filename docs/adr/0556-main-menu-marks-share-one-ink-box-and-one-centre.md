@@ -74,9 +74,19 @@ is carved in a lore material rather than the structural blue.**
   seat gate use, and fails when the ink is not exactly 52px tall or when the margins above and
   below (or left and right) differ at all. A fit nobody can check is a fit that drifts on the
   next regeneration.
-- **Material.** The set leaves structural blue. Candidates are generated per
-  ADR-0035's material vocabulary — stone, bronze, pewter — one material across all five marks,
-  so the rail reads as one family.
+- **Material is per-object, and that is the whole of the rule.** The set leaves structural blue,
+  and each mark is then drawn in the materials its own object is actually made of — steel and
+  brass on the sword, parchment and wood on the map, bone and ebony on the pawns, leather and
+  brass on the handbook, iron on the cog. This is
+  [ADR-0035](0035-semantic-ui-icons-carry-a-private-anti-story-anchor.md)'s standing rule
+  ("material palette **per-image** … never a forced UI-blue"), and the precedent the kit's
+  wooden `lyre` beside its bronze `bell` already set.
+
+  Written down because the first pass got it backwards: the marks were regenerated as one
+  material across all five (a limestone set, a bronze set, a pewter set), which is the same
+  constraint the retired blue stone imposed, in a different hue. A family made of one material
+  is not what holds this set together — the canvas, the ink height, the centre line and the
+  low-fi treatment are. **A uniform material across the set is a defect, not a style.**
 - **Enchiridion gets a mark of its own family**, at
   `ui/main-menu/icons-carved/enchiridion.png`, instead of borrowing the shared kit
   blueprint glyph that other surfaces also draw.
