@@ -28,6 +28,17 @@ export const NO_ATOM_SOURCE_ID = 'none';
 export const DIVIDER_H = 34;
 export const INNER_DIVIDER_H = 7;
 export const DEFAULT_DIVIDER_ATOM_SIZE = 17;
+/**
+ * Transparent margin the kit's frame and divider art carries outside its ink, in source
+ * pixels — measured from the installed rasters, whose 24px slice runs alpha 0, then 22 rows
+ * of ink, then alpha 0 again. Nothing in the catalog declares it (the bytes live in blob
+ * storage), so it is stated here the way the icon seats state their ink fractions.
+ *
+ * It only costs anything where a rail borders a FOREIGN surface: there the bleed is a raster
+ * line neither side paints, and the screen behind shows through it. Re-measure this if the
+ * kit frame is redrawn, and drop the compensation outright once the art ships trimmed.
+ */
+export const FRAME_EDGE_BLEED_PX = 1;
 export const EMPTY_FRAME: FrameRender = { url: '', slice: 1, size: 3, atomOverlay: null };
 export const EMPTY_DIVIDER: DividerRender = { railUrl: '', railHeight: 1, railTileWidth: 1, height: DIVIDER_H, atomOverlay: null };
 export const ATOM_TURNS = [0, 1, 2, 3] as const;
@@ -1330,9 +1341,17 @@ ${familySurface} [data-shell-controls-panel] {
   --app-shell-divider-fill-overlap: 1px;
   --le-outer-fill-box-top: calc(-1 * var(--app-shell-divider-fill-overlap)) !important;
 }
+/* The workspace-facing rail is the one frame edge that borders a foreign surface rather
+   than the viewport, and kit frame art carries FRAME_EDGE_BLEED_PX of fully transparent
+   margin outside its ink. Undisplaced, the rail therefore starts its ink that far inside
+   the panel and leaves a raster column the workspace does not paint either — the screen
+   behind shows through it as a hairline. Outset the border image by the bleed so the ink
+   lands on the panel's own edge; the transparent margin moves harmlessly over the
+   workspace. Every other edge meets the viewport, where the same margin costs nothing. */
 ${familySurface} [data-shell-controls-panel]::before {
   border-width: 0 ${outerRailWidth}px ${outerRailWidth}px ${outerRailWidth}px !important;
   border-image-width: 0 ${outerRailWidth}px ${outerRailWidth}px ${outerRailWidth}px !important;
+  border-image-outset: 0 0 0 ${FRAME_EDGE_BLEED_PX}px !important;
 }
 ${cornerAtomOverlayCss(`${familySurface} .le-outer-panel`, outerFrame.atomOverlay)}
 ${controlSeamAtomCss}
