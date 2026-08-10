@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { LEVEL_BATTLE_CARDS_DEALT_DEFAULT, createBlankLevel } from '../core/level';
 import {
+  LEGACY_RUN_RULES,
   createRun,
   createRunCardOffer,
   leaveSectio,
@@ -72,7 +73,9 @@ function fixture(
     description: 'Deployment fixture.',
     battles: [{ level, loot: false }, { level: structuredClone(level), loot: false }],
   };
-  let assembled = createRun(war, seed, { kingId });
+  // These exercise placement, including turning a formation, so the fixture names the wide
+  // turnable rules explicitly rather than inheriting whatever a new Run happens to default to.
+  let assembled = createRun(war, seed, { kingId, rules: LEGACY_RUN_RULES });
   if (cardIds.length) {
     assembled = openSectio(
       { ...assembled, phase: 'battle' },

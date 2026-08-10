@@ -1132,12 +1132,21 @@ describe('canonical settled-position guard (no manual End Turn)', () => {
   });
 
   it('returns null while the side to move can still move', () => {
-    const g = { ...stateOf([piece('ek', 'enemy', 'king', 0, 0), piece('pk', 'player', 'king', 5, 5)], 6, 6), turn: 'enemy' as const };
+    // A rook keeps a mate on the board: bare Kings would be a dead position (ADR-0554).
+    const g = { ...stateOf([
+      piece('ek', 'enemy', 'king', 0, 0),
+      piece('pk', 'player', 'king', 5, 5),
+      piece('pr', 'player', 'rook', 3, 3),
+    ], 6, 6), turn: 'enemy' as const };
     expect(settleCommittedPosition(g, { victoryRules: [], env: OPEN_ENV }).adjudication).toBeNull();
   });
 
   it('ends a movable position as a draw when the chess draw rules say so', () => {
-    const base = { ...stateOf([piece('ek', 'enemy', 'king', 0, 0), piece('pk', 'player', 'king', 5, 5)], 6, 6), turn: 'enemy' as const };
+    const base = { ...stateOf([
+      piece('ek', 'enemy', 'king', 0, 0),
+      piece('pk', 'player', 'king', 5, 5),
+      piece('pr', 'player', 'rook', 3, 3),
+    ], 6, 6), turn: 'enemy' as const };
     const clocked = { ...base, drawRules: { fiftyMove: true }, halfmoveClock: 100 };
     expect(settleCommittedPosition(clocked, { victoryRules: [], env: OPEN_ENV }).adjudication)
       .toEqual({ winner: 'draw', kind: 'fifty-move', rule: null, side: 'enemy' });

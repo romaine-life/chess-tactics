@@ -44,7 +44,7 @@ export interface Lobby {
   result_disputed: boolean;
 }
 
-export type LobbyGameResultReason = 'victory-rule' | 'checkmate' | 'stalemate' | 'fifty-move' | 'threefold';
+export type LobbyGameResultReason = 'victory-rule' | 'checkmate' | 'stalemate' | 'dead-position' | 'fifty-move' | 'threefold';
 export interface LobbyResult {
   winner: 'player' | 'enemy' | 'draw';
   reason: 'resign' | LobbyGameResultReason;

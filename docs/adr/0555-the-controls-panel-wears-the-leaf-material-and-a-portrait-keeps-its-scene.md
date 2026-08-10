@@ -8,7 +8,7 @@ refines:
   - "[ADR-0433](0433-leaf-chrome-uses-oak-over-structural-teal-fields.md)"
 ---
 
-# ADR-0554: The Controls panel wears the leaf material, and a portrait keeps its scene
+# ADR-0555: The Controls panel wears the leaf material, and a portrait keeps its scene
 
 ## Context and Problem Statement
 
