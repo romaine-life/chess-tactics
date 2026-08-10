@@ -57,6 +57,18 @@ export interface ApparatusRailTabProps {
   /** A badge or control seated at the tab's trailing edge (a lock, a favourite toggle). */
   trailing?: ReactNode;
   /**
+   * This tab's panel is the one currently expanded beside the rail — draws the `›` open mark
+   * at its trailing edge. Only a tab that OPENS something takes it; a tab that navigates away
+   * to a full screen has no panel to be open.
+   *
+   * Deliberately not folded into `active`. `active` is the committed scene's identity and
+   * lights a beat late, after the destination's crossfade; the open mark is the player's
+   * intent and appears on the press. See shared/railOpenIntent.ts for how a rail decides it,
+   * and use that — a hand-remembered click goes stale on Back, on a refused navigation, and
+   * on arrival by deep link.
+   */
+  expanded?: boolean;
+  /**
    * What taking the tab does. Beside `to` it is a side effect; without `to` it IS the take,
    * and the tab renders on a role="button" host instead of the nav control.
    */
@@ -130,6 +142,7 @@ export function ApparatusRailTab({
   locked = false,
   trailing,
   onSelect,
+  expanded = false,
   className,
 }: ApparatusRailTabProps): ReactElement {
   const unavailable = disabled || locked;
@@ -140,6 +153,7 @@ export function ApparatusRailTab({
     active && 'is-active',
     disabled && 'is-disabled',
     locked && 'is-locked',
+    expanded && 'is-expanded',
   );
   const seat = { ['--tab-index' as string]: index } as CSSProperties;
   const body = (
@@ -153,6 +167,11 @@ export function ApparatusRailTab({
           <small>{detail}</small>
         </span>
       ) : <FittedTabLabel>{label}</FittedTabLabel>}
+      {/* Placed into the label's own grid cell (see .settings-tab-open-mark), so a tab that
+          gains the mark keeps the exact geometry it had without one — no reserved column, no
+          relaid label, nothing for the fitter to re-measure. aria-hidden because it restates
+          `aria-current`, which already says this to a reader. */}
+      {expanded ? <span className="settings-tab-open-mark" aria-hidden="true">›</span> : null}
       {trailing}
     </>
   );
