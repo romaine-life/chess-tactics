@@ -104,6 +104,8 @@ const {
   titleBarMarkReviewSurface,
   adlectioMarkSlot,
   adlectioMarkMediaIssue,
+  mainMenuMarkSlot,
+  mainMenuMarkMediaIssue,
   titleBarMarkSlot,
   titleBarMarkMediaIssue,
   runSectioWrapMediaIssue,
@@ -19652,6 +19654,9 @@ function mediaDomainProjectionIssue(row) {
   }
   if (adlectioMarkSlot(row.slot)) {
     return adlectioMarkMediaIssue(row, runtime.value);
+  }
+  if (mainMenuMarkSlot(row.slot)) {
+    return mainMenuMarkMediaIssue(row, runtime.value);
   }
   const runCardFrame = runCardFrameProjection(row);
   if (runCardFrame.claimed) return runCardFrame.issue;
