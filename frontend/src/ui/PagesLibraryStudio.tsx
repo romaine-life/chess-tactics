@@ -116,6 +116,26 @@ const RING_STEPS: ReadonlyArray<readonly [number, number]> = [
   [-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0],
 ];
 
+// An outline is the first thing this label has ever painted OUTSIDE its own text box, and the
+// fitted label clips both axes (`.settings-tab-label` and its `strong` are overflow:hidden). The
+// glyph ink starts flush at the box's left edge — measured slack is 0px — so every left-hand ring
+// copy and the left half of a stroke land outside and are cut, while the right side survives on
+// the box's spare width. That reads as an outline that is missing down one side of the word.
+//
+// So an armed outline carries its own clip relief. It rides WITH the treatment (preview and bake
+// alike) rather than being lifted globally, because the clip is only wrong when there is ink
+// outside the box: with no outline, hidden is the correct fallback behind FittedTabLabel's
+// shrink-to-fit. Lifting it trades that fallback — a label that still overran at the fitter's 8px
+// floor would spill instead of being cut — for an outline that paints on all four sides.
+// Scoped to the FITTED label only; the `.apparatus-tab-copy` variant needs its hidden overflow for
+// text-overflow: ellipsis, and the menu does not use it.
+export const LABEL_CLIP_RELIEF_SELECTOR = '.settings-tab-label, .settings-tab-label strong';
+
+/** True when the treatment paints outside the text box and would be clipped without relief. */
+export function outlineNeedsClipRelief(t: LabelTreatment): boolean {
+  return t.outline !== 'off' && t.strokeW > 0;
+}
+
 /** The declarations the treatment needs — `[]` when it matches what ships (an untouched panel emits nothing). */
 export function labelTreatmentDecls(t: LabelTreatment): string[] {
   const ringW = Math.max(1, Math.round(t.strokeW));
@@ -289,9 +309,14 @@ function MainMenuViewer({ page, header, zoom = 1 }: { page: PageEntry; header?: 
   // Label text treatment (outline + drop shadow). Targets `.settings-tab strong`, the SHARED tab
   // label — the same selector the shipped shadow lives on — so the Settings/Campaign rails keep
   // matching the menu, exactly as the geometry knobs above already do.
+  const clipRelief = outlineNeedsClipRelief(treatment);
+  const reliefPreview = clipRelief
+    ? `\n${LABEL_CLIP_RELIEF_SELECTOR.split(', ').map((s) => `.pages-menu-tweak ${s}`).join(', ')} { overflow: visible !important; }`
+    : '';
+  const reliefBake = clipRelief ? `\n\n${LABEL_CLIP_RELIEF_SELECTOR} {\n  overflow: visible;\n}` : '';
   add(labelDecls.length > 0,
-    `.pages-menu-tweak .settings-tab strong { ${labelDecls.map((d) => `${d} !important;`).join(' ')} }`,
-    `.settings-tab strong {\n${labelDecls.map((d) => `  ${d};`).join('\n')}\n}`);
+    `.pages-menu-tweak .settings-tab strong { ${labelDecls.map((d) => `${d} !important;`).join(' ')} }${reliefPreview}`,
+    `.settings-tab strong {\n${labelDecls.map((d) => `  ${d};`).join('\n')}\n}${reliefBake}`);
   add(!!surfaceUrl,
     `.pages-menu-tweak .main-menu-mode-tab { background-image: url("${surfaceUrl}") !important; }`,
     `.main-menu-mode-tab {\n  background-image: url("${surfaceUrl}");\n}`);
@@ -412,6 +437,9 @@ function MainMenuViewer({ page, header, zoom = 1 }: { page: PageEntry; header?: 
                   {' '}<strong>Pixel ring</strong> is eight hard shadow copies: square corners, whole pixels, the outline this font is drawn for.
                   {' '}<strong>Stroke</strong> is a real antialiased stroke — softer, and it rounds the pixel corners at this size.
                 </p>
+                {clipRelief ? (
+                  <p className="tileset-catalog-note">The word’s ink starts flush against the label box, which clips both axes — so an outline needs <strong>overflow: visible</strong> on the label or it is cut off down the left of every word. That declaration rides with the outline here and in the copied CSS.</p>
+                ) : null}
                 <SliderRow label={<>Shadow · horizontal · {shadowX > 0 ? '+' : ''}{shadowX}px{shadowX === MM_LABEL_LIVE.shadowX ? ' · live' : ''}</>} value={shadowX} set={setShadowX} min={-6} max={6} dflt={MM_LABEL_LIVE.shadowX} />
                 <SliderRow label={<>Shadow · vertical · {shadowY > 0 ? '+' : ''}{shadowY}px{shadowY === MM_LABEL_LIVE.shadowY ? ' · live' : ''}</>} value={shadowY} set={setShadowY} min={-6} max={6} dflt={MM_LABEL_LIVE.shadowY} />
                 <SliderRow label={<>Shadow · blur · {shadowBlur}px{shadowBlur === MM_LABEL_LIVE.shadowBlur ? ' · live' : ''}</>} value={shadowBlur} set={setShadowBlur} min={0} max={12} dflt={MM_LABEL_LIVE.shadowBlur} />

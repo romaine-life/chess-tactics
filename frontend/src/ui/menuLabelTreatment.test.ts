@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { labelTreatmentDecls, type LabelTreatment } from './PagesLibraryStudio';
+import { labelTreatmentDecls, outlineNeedsClipRelief, type LabelTreatment } from './PagesLibraryStudio';
 import { MM_LABEL_LIVE } from './dressing/mmLive';
 
 // The dressing-room principle: an untouched panel must emit NOTHING, so the preview is the real
@@ -50,5 +50,23 @@ describe('menu label text treatment', () => {
 
   it('a moved shadow is emitted with CSS shorthand zeroes', () => {
     expect(labelTreatmentDecls(tune({ shadowY: 3, shadowBlur: 2 }))).toEqual(['text-shadow: 0 3px 2px #02070b']);
+  });
+});
+
+// The label box clips both axes and the glyph ink starts flush against its left edge (measured
+// slack: 0px), so ink painted outside is cut down the left of every word. Relief must ride with
+// the outline — an outline emitted without it is an outline you cannot judge.
+describe('outline clip relief', () => {
+  it('is required by any armed outline, of either kind', () => {
+    expect(outlineNeedsClipRelief(tune({ outline: 'ring', strokeW: 1 }))).toBe(true);
+    expect(outlineNeedsClipRelief(tune({ outline: 'stroke', strokeW: 0.5 }))).toBe(true);
+  });
+
+  it('is NOT applied when there is no ink outside the box', () => {
+    // The shipped drop shadow lands inside the line box, so hidden stays correct — relief is not
+    // a blanket "lift the clip", it is scoped to the case that needs it.
+    expect(outlineNeedsClipRelief(live)).toBe(false);
+    expect(outlineNeedsClipRelief(tune({ shadowY: 4, shadowBlur: 3 }))).toBe(false);
+    expect(outlineNeedsClipRelief(tune({ outline: 'ring', strokeW: 0 }))).toBe(false);
   });
 });
