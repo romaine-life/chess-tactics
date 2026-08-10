@@ -121,6 +121,41 @@ function playFirstMove(seed: number) {
   return useSkirmish.getState().game;
 }
 
+/** What run/model charges per Undo, mirrored here so the fake economy prices like the real one. */
+const UNDO_COST_TENTHS = 10;
+
+/**
+ * A stand-in Run economy that behaves like the real adapter: a purse the checkpoints are cut
+ * from, a price every restore pays, and the same charge applied to checkpoints the walk back
+ * passes over. Anything less would let a multi-step rewind assert against a purse that never
+ * moves, which is the one thing these tests exist to catch.
+ */
+function installFakeRunEconomy(startingGoldTenths: number): { gold: () => number } {
+  let goldTenths = startingGoldTenths;
+  useSkirmish.getState().setRunBattleUndoAdapter({
+    capture: () => runUndoCheckpoint(goldTenths),
+    canRestore: (checkpoint) => checkpoint.goldTenths >= UNDO_COST_TENTHS,
+    restore: (checkpoint) => {
+      if (checkpoint.goldTenths < UNDO_COST_TENTHS) return false;
+      goldTenths = checkpoint.goldTenths - UNDO_COST_TENTHS;
+      return true;
+    },
+    chargeEarlier: (checkpoint) => ({
+      ...checkpoint,
+      goldTenths: Math.max(0, checkpoint.goldTenths - UNDO_COST_TENTHS),
+    }),
+  });
+  return { gold: () => goldTenths };
+}
+
+/** Play one legal player move and let the enemy answer it. */
+function playOneMove(): void {
+  holdFirstMovablePiece();
+  const move = useSkirmish.getState().movesForSelected()[0];
+  useSkirmish.getState().tryMoveTo(move.x, move.y);
+  vi.runAllTimers();
+}
+
 function runUndoCheckpoint(goldTenths = 20): RunBattleUndoCheckpoint {
   return {
     runId: 'undo-run',
@@ -382,6 +417,7 @@ describe('skirmish store', () => {
       capture: () => runCheckpoint,
       canRestore: () => true,
       restore,
+      chargeEarlier: (checkpoint) => checkpoint,
     });
     holdFirstMovablePiece();
     const before = useSkirmish.getState();
@@ -389,14 +425,14 @@ describe('skirmish store', () => {
 
     before.tryMoveTo(move.x, move.y);
     expect(useSkirmish.getState().game.turn).toBe('enemy');
-    expect(useSkirmish.getState().undoCheckpoint?.run).toEqual(runCheckpoint);
+    expect(useSkirmish.getState().undoStack.at(-1)?.run).toEqual(runCheckpoint);
     expect(useSkirmish.getState().canUndoLastPlayerMove()).toBe(true);
 
     expect(useSkirmish.getState().undoLastPlayerMove()).toBe(true);
     expect(restore).toHaveBeenCalledWith(runCheckpoint);
     expect(useSkirmish.getState().game).toBe(before.game);
     expect(useSkirmish.getState().selectedId).toBe(before.selectedId);
-    expect(useSkirmish.getState().undoCheckpoint).toBeNull();
+    expect(useSkirmish.getState().undoStack).toEqual([]);
     expect(useSkirmish.getState().log[0].text).toBe('Move undone — 10 gold paid.');
 
     vi.runAllTimers();
@@ -410,6 +446,7 @@ describe('skirmish store', () => {
       capture: () => runUndoCheckpoint(),
       canRestore: () => true,
       restore: () => true,
+      chargeEarlier: (checkpoint) => checkpoint,
     });
     const before = useSkirmish.getState();
     const move = before.movesForSelected()[0];
@@ -422,7 +459,81 @@ describe('skirmish store', () => {
     expect(useSkirmish.getState().game).toBe(before.game);
     expect(useSkirmish.getState().tick).toBe(before.tick);
     expect(useSkirmish.getState().turnsElapsed).toBe(before.turnsElapsed);
+    // The move that was taken back is gone, not re-offered: there is no Redo, and the only
+    // history left is whatever was played BEFORE it — here, nothing.
     expect(useSkirmish.getState().undoLastPlayerMove()).toBe(false);
+  });
+
+  it('walks the whole Battle back a decision at a time, charging for each step', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null });
+    const economy = installFakeRunEconomy(100);
+
+    const positions = [useSkirmish.getState().game];
+    for (let i = 0; i < 3; i += 1) {
+      playOneMove();
+      positions.push(useSkirmish.getState().game);
+    }
+    expect(useSkirmish.getState().undoStack).toHaveLength(3);
+    expect(economy.gold()).toBe(100);
+
+    // Third move back.
+    expect(useSkirmish.getState().undoLastPlayerMove()).toBe(true);
+    expect(useSkirmish.getState().game).toBe(positions[2]);
+    expect(economy.gold()).toBe(90);
+
+    // Second move back — the price is paid again, not refunded by the older checkpoint's
+    // photograph of a purse that had not yet bought the first Undo.
+    expect(useSkirmish.getState().undoLastPlayerMove()).toBe(true);
+    expect(useSkirmish.getState().game).toBe(positions[1]);
+    expect(economy.gold()).toBe(80);
+
+    // First move back: the Battle is at its opening position and the history is spent.
+    expect(useSkirmish.getState().undoLastPlayerMove()).toBe(true);
+    expect(useSkirmish.getState().game).toBe(positions[0]);
+    expect(economy.gold()).toBe(70);
+    expect(useSkirmish.getState().undoStack).toEqual([]);
+    expect(useSkirmish.getState().canUndoLastPlayerMove()).toBe(false);
+    expect(useSkirmish.getState().undoLastPlayerMove()).toBe(false);
+  });
+
+  it('stops the walk back at the move the purse can no longer pay for', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null });
+    const economy = installFakeRunEconomy(25);
+
+    playOneMove();
+    const afterFirst = useSkirmish.getState().game;
+    playOneMove();
+
+    expect(useSkirmish.getState().undoLastPlayerMove()).toBe(true);
+    expect(useSkirmish.getState().game).toBe(afterFirst);
+    expect(economy.gold()).toBe(15);
+
+    // The remaining checkpoint was cut from a 25-gold purse, but 10 of that has since been
+    // spent getting here. 15 still buys one more step.
+    expect(useSkirmish.getState().undoLastPlayerMove()).toBe(true);
+    expect(economy.gold()).toBe(5);
+    expect(useSkirmish.getState().undoStack).toEqual([]);
+  });
+
+  it('drops the history when a move commits with no checkpoint to pair it with', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null });
+    let capturing = true;
+    useSkirmish.getState().setRunBattleUndoAdapter({
+      capture: () => (capturing ? runUndoCheckpoint(200) : null),
+      canRestore: () => true,
+      restore: () => true,
+      chargeEarlier: (checkpoint) => checkpoint,
+    });
+
+    playOneMove();
+    expect(useSkirmish.getState().undoStack).toHaveLength(1);
+
+    // A move nothing recorded cannot be rewound, so the moves BEHIND it cannot be reached
+    // either — rewinding to one would leave the Run holding a position it never played from.
+    capturing = false;
+    playOneMove();
+    expect(useSkirmish.getState().undoStack).toEqual([]);
+    expect(useSkirmish.getState().canUndoLastPlayerMove()).toBe(false);
   });
 
   it('keeps the board unchanged when the Run cannot pay for Undo', () => {
@@ -432,6 +543,7 @@ describe('skirmish store', () => {
       capture: () => runUndoCheckpoint(0),
       canRestore: () => false,
       restore,
+      chargeEarlier: (checkpoint) => checkpoint,
     });
     holdFirstMovablePiece();
     const before = useSkirmish.getState();
@@ -816,7 +928,7 @@ describe('skirmish store: survive + reach objectives', () => {
       log: [],
     });
     useSkirmish.getState().tryMoveTo(0, 0); // pawn steps onto the target
-    // Answerable in the same tick — no timer runs between the move and the question (ADR-0556).
+    // Answerable in the same tick — no timer runs between the move and the question (ADR-0558).
     expect(useSkirmish.getState().pendingPromotion).toMatchObject({ pieceId: 'pp', phase: 'choosing' });
     expect(useSkirmish.getState().game.pieces.find((p) => p.id === 'pp')).toMatchObject({ type: 'pawn', x: 0, y: 1 });
     useSkirmish.getState().choosePromotion('rook');
@@ -991,6 +1103,7 @@ describe('skirmish store: battle clock', () => {
       capture: () => runUndoCheckpoint(),
       canRestore: () => true,
       restore,
+      chargeEarlier: (checkpoint) => checkpoint,
     });
     useSkirmish.getState().newSkirmish({ seed: 5, level: timedLevel(2) });
     holdFirstMovablePiece();
@@ -1323,7 +1436,7 @@ describe('skirmish store: premoves', () => {
     useSkirmish.getState().tryMoveTo(0, 0);
 
     // No timer has run: the Pawn is still gliding and the choice is already answerable
-    // (ADR-0556). The canonical board has not moved it — that waits on the answer.
+    // (ADR-0558). The canonical board has not moved it — that waits on the answer.
     expect(useSkirmish.getState().pendingPromotion).toMatchObject({
       mode: 'move',
       phase: 'choosing',

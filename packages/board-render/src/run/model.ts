@@ -3476,6 +3476,29 @@ export function undoRunBattleMove(
 }
 
 /**
+ * Charge a checkpoint older than one just restored for the Undo that restoring it cost.
+ *
+ * A checkpoint records the purse the Battle held before its move, so it is a photograph of a
+ * moment, not a running balance. Undoing back to it restores that photograph -- including
+ * gold that has since been spent undoing everything in between, which would make the whole
+ * walk back through a Battle cost the single gold of its last step. Every earlier checkpoint
+ * therefore pays the price the moment it is passed over, and the purse it will restore stays
+ * the one the player would really be holding there.
+ *
+ * The floor is the empty purse rather than a debt: a checkpoint too poor to buy its own Undo
+ * is unreachable, and `canUndoRunBattleMove` already says so from the price alone. Letting it
+ * go negative would say the same thing by making the checkpoint malformed instead.
+ */
+export function chargeRunBattleUndoCheckpoint(
+  checkpoint: RunBattleUndoCheckpoint,
+): RunBattleUndoCheckpoint {
+  return {
+    ...checkpoint,
+    goldTenths: Math.max(0, checkpoint.goldTenths - RUN_BATTLE_UNDO_COST_TENTHS),
+  };
+}
+
+/**
  * One thing the Run did to a live Battle, said in the words the Battle will use.
  *
  * The Run reaches into a running Battle to pay bounties and land Reservists -- changes the

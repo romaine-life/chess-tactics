@@ -19,7 +19,7 @@ export type PromotionPickerSide = 'left' | 'right';
  * Which Pawn the picker is standing beside.
  *
  * `promoting` is a Pawn whose move is committing: the question opens as the move is authored
- * and the sprite is still gliding to the square underneath it (ADR-0556), so the copy names the
+ * and the sprite is still gliding to the square underneath it (ADR-0558), so the copy names the
  * event rather than claiming the Pawn has landed. `queued` is the ghost of a premoved Pawn —
  * the move is still a prediction, so it asks about a Pawn that WILL arrive (ADR-0541).
  */

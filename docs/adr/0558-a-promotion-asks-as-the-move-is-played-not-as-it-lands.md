@@ -9,7 +9,7 @@ refines:
   - "[ADR-0541](0541-a-promotion-premove-is-asked-what-it-becomes-as-it-is-queued.md)"
 ---
 
-# ADR-0556: A promotion asks as the move is played, not as it lands
+# ADR-0558: A promotion asks as the move is played, not as it lands
 
 ## Context and Problem Statement
 

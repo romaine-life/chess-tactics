@@ -7,7 +7,7 @@ import { levelParTurns, speedBonusClockMs, speedBonusRemainingMs, speedBonusTent
 import type { GameState, Piece, Vec } from '../core/types';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox } from './shared/ChromeBox';
-import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
+import { CHROME_LEAF_FILL_SURFACE, leafSurfacePhase } from './shared/chromeSurfacePolicy';
 import { TitleBarStatus } from './shell/TitleBarControls';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleRoute, type TitleRouteSegment } from './shell/TitleRoute';
@@ -37,6 +37,7 @@ import {
   canLeaveSectio,
   canUndoRunBattleMove,
   captureRunBattleUndo,
+  chargeRunBattleUndoCheckpoint,
   closeBattle,
   deditioGoldTenths,
   hasLipsanon,
@@ -1502,6 +1503,7 @@ function AftermathPanel({
           <ChromeButton unit="inner-text-button"
             data-testid="run-aftermath-back"
             className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+            style={leafSurfacePhase(0)}
             onClick={onReviewBattle}
           >
             Back
@@ -1510,6 +1512,7 @@ function AftermathPanel({
         <ChromeButton unit="inner-text-button"
           data-testid="run-aftermath-continue"
           className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+          style={leafSurfacePhase(1)}
           onClick={() => {
             replace(leaveAftermath(run));
             clearMatch();
@@ -1545,7 +1548,7 @@ function VictoryPanel({ run }: { run: RunDocument }): ReactElement {
         <RunGoldAmount valueTenths={run.goldTenths} />
       </p>
       <ChromeButton unit="inner-text-button"
-        className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+        className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active', 'run-victory-finish')}
         onClick={() => {
           // Same as Abandon: the Run is closed locally before this suspends, so the finished
           // War does not hold the player on an empty workspace while its row is deleted.
@@ -1730,6 +1733,7 @@ function RunBattlefieldPanel({
         replace(restored);
         return true;
       },
+      chargeEarlier: (checkpoint) => chargeRunBattleUndoCheckpoint(checkpoint),
     } satisfies RunBattleUndoAdapter,
     onVictory: (report) => {
       if (onReviewRewards) {
