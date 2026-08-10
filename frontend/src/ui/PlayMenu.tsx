@@ -119,9 +119,9 @@ function levelForceSummary(level: Level): string {
   return `${count('player')}v${count('enemy')}`;
 }
 
-function ActionColumn({ children }: { children: ReactElement }): ReactElement {
+function ActionColumn({ children, className = '' }: { children: ReactElement; className?: string }): ReactElement {
   return (
-    <main className="menu-dest-col menu-dest-action play-action-col">
+    <main className={`menu-dest-col menu-dest-action play-action-col ${className}`.trim()}>
       <KitScroll className="play-action-scroll">{children}</KitScroll>
     </main>
   );
@@ -170,10 +170,10 @@ function ContinuePanel({ inventory }: { inventory: ContinueInventory }): ReactEl
 
 /**
  * Where each Run destination sits on the one plank the list is cut from, so its installed oak
- * steps instead of restarting (`.play-choice-row` in style.css builds the offset from this).
- * The panel owns the seats rather than the DOM: Current always seats above New whatever
- * transient status row the list is carrying, and New keeps its slice when the adoption
- * conflict card speaks for Current instead — a :nth-child ladder would re-cut both. ADR-0063.
+ * steps instead of restarting — the rail tab's `index`, which is the same seat every other rail
+ * in the app states (ADR-0063). The panel owns the seats rather than the DOM: Current always
+ * seats above New whatever transient status row the list is carrying, so a :nth-child ladder
+ * would re-cut both the moment "Loading Runs…" joins.
  */
 const PLAY_CHOICE_ROW_SEATS = { current: 0, new: 1 } as const;
 
@@ -223,6 +223,13 @@ function RunPanel({
   const [ataraxiaTier, setAtaraxiaTier] = useState<AtaraxiaTier>(0);
   const [runRules, setRunRules] = useState<RunRules>(DEFAULT_RUN_RULES);
   const eligible = useMemo(() => runEligibleOfficialWars(wars), [wars]);
+  // Each destination wears its OWN installed mark, authored for this seat and reviewed on this
+  // tab (ADR-0559). They borrowed the title bar's Battle and Ataraxia marks first, which read as
+  // arbitrary: those are minted for the bar's tight measure chip, warm where the kit is not, and
+  // authored edge-to-edge so they needed the `bleed` canvas. These are kit-canvas marks, so they
+  // take the same `inset` seat every other rail mark uses.
+  const currentRunMark = installedUiMedia('ui-kit-icons-run-current-png');
+  const newRunMark = installedUiMedia('ui-kit-icons-run-new-png');
   const highestUnlockedTier = highestUnlockedAtaraxiaTier(progression);
   // An adoption conflict does not gate a new Run: starting one discards both candidates, so it
   // is a third answer to "which Run does the account keep?" rather than something blocked by the
@@ -281,107 +288,109 @@ function RunPanel({
 
   return (
     <>
-      <ActionColumn>
-        <div className="settings-panel-content run-selector-panel">
-          <section className="settings-section">
-            <h3 className="settings-section-title">Run</h3>
-            <div className="settings-section-rows">
-              {!hydrated || loading ? (
-                <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status">
-                  <div className="settings-row-copy"><h4>Loading Runs…</h4></div>
-                </section>
-              ) : null}
-              {presentation.adoptionConflict ? (
-                <div className="run-adoption-conflict" role="alert" data-testid="run-adoption-conflict">
-                  <div className="run-adoption-conflict-copy">
-                    <h3>Two active Runs</h3>
-                    <p>This browser has {presentation.adoptionConflict.browserRun.war.name}; your account has {presentation.adoptionConflict.accountRun.war.name}. Choose which one the account keeps.</p>
-                  </div>
-                  <div className="run-inline-actions">
-                    <ChromeButton unit="inner-text-button"
-                      className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
-                      data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                      data-testid="run-keep-account"
-                      onClick={keepAccountRun}
-                    >
-                      Keep account Run
-                    </ChromeButton>
-                    <ChromeButton unit="inner-text-button"
-                      className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-                      data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                      data-testid="run-adopt-browser"
-                      disabled={presentation.syncing}
-                      onClick={() => { void adoptBrowserRun(); }}
-                    >
-                      Adopt browser Run
-                    </ChromeButton>
-                  </div>
-                </div>
-              ) : null}
-              {/* The row keeps its place when no Run exists — disabled like the Continue
-                  rows ("Nothing to continue") and the locked Ataraxia tiers, so the
-                  resume point stays learnable where it will appear (ADR-0289's
-                  visible-but-disabled language). It only leaves the list while the
-                  adoption conflict card speaks for the current Run instead. */}
-              {!presentation.adoptionConflict && (presentedRun || (hydrated && !loading)) ? (
-                <ChromeNavButton unit="inner-list-row"
-                  to={PLAY_RUN_CURRENT_SELECTOR_HREF}
-                  className={chromeUnitClassNames('inner-list-row', 'settings-row play-choice-row', !presentedRun && 'is-disabled', choice === 'current' && 'active is-selected')}
-                  data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                  style={{ ['--play-choice-row-index' as string]: PLAY_CHOICE_ROW_SEATS.current } as CSSProperties}
-                  disabled={!presentedRun}
-                  aria-current={choice === 'current' ? 'page' : undefined}
-                  data-testid="run-choice-current"
-                >
-                  <div className="settings-row-copy">
-                    <h4>Current Run</h4>
-                    <p>{presentedRun
-                      ? `Battle ${presentedRun.battleIndex + 1} of ${presentedRun.war.battles.length} · ${ATARAXIA_BY_TIER[presentedRun.ataraxiaTier].label}`
-                      : 'No active Run'}</p>
-                  </div>
-                </ChromeNavButton>
-              ) : null}
-              {!loading && officialAvailable && eligible.length === 0 ? (
-                <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status">
-                  <div className="settings-row-copy">
-                    <h4>No Runs available</h4>
-                    <p>No official Wars are currently marked Eligible for Run.</p>
-                  </div>
-                </section>
-              ) : null}
-              {!loading && !officialAvailable ? (
-                <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status">
-                  <div className="settings-row-copy">
-                    <h4>Runs unavailable</h4>
-                    <p>Official Wars could not be loaded. Reopen Play to retry.</p>
-                  </div>
-                </section>
-              ) : null}
-              <ChromeNavButton unit="inner-list-row"
-                to={PLAY_RUN_NEW_SELECTOR_HREF}
-                className={chromeUnitClassNames('inner-list-row', 'settings-row play-choice-row', newRunUnavailable && 'is-disabled', choice === 'new' && 'active is-selected')}
-                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                style={{ ['--play-choice-row-index' as string]: PLAY_CHOICE_ROW_SEATS.new } as CSSProperties}
-                disabled={newRunUnavailable}
-                aria-current={choice === 'new' ? 'page' : undefined}
-                data-testid="run-choice-new"
-              >
-                <div className="settings-row-copy">
-                  <h4>Start New Run</h4>
-                  <p>Choose Ataraxia</p>
-                </div>
-              </ChromeNavButton>
+      {/* Run's two destinations are menu-language rail buttons, so they ARE rail tabs — the same
+          primitive the main menu, Settings, Enchiridion and Strategikon mount (ADR-0558). They
+          were hand-assembled from `inner-list-row` + settings-row classes before, and the
+          lookalike drifted: its own gap, its own seat, its own plank-phase machinery, none of it
+          tied to the rail standing beside it. The column carries no eyebrow — a section title
+          distinguishes one group from others beside it, and this column holds exactly one
+          (ADR-0556). */}
+      <ApparatusRailColumn className="play-run-choice-rail" placement="open" aria-label="Run">
+        {!hydrated || loading ? (
+          <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status">
+            <div className="settings-row-copy"><h4>Loading Runs…</h4></div>
+          </section>
+        ) : null}
+        {/* The tab keeps its place when no Run exists — disabled like the locked Ataraxia tiers,
+            so the resume point stays learnable where it will appear (ADR-0289's
+            visible-but-disabled language). It keeps its place during an adoption conflict too:
+            that question belongs to whoever is going to resume, and a card standing in the tab's
+            seat removed the expected control from a player who was only ever going to start a
+            new Run (ADR-0557). The question is now what the tab OPENS.
+            An available tab carries its name and nothing else — the Battle position and Ataraxia
+            it used to restate are the first two facts of the detail column it opens (ADR-0556).
+            ADR-0334's "No active Run" is the tab's detail line, which is why it appears only
+            when the tab cannot be taken. */}
+        {presentedRun || (hydrated && !loading) ? (
+          <ApparatusRailTab
+            label="Current Run"
+            detail={presentedRun ? undefined : 'No active Run'}
+            to={PLAY_RUN_CURRENT_SELECTOR_HREF}
+            index={PLAY_CHOICE_ROW_SEATS.current}
+            active={choice === 'current'}
+            disabled={!presentedRun}
+            iconSrc={currentRunMark}
+            testId="run-choice-current"
+          />
+        ) : null}
+        {!loading && officialAvailable && eligible.length === 0 ? (
+          <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status">
+            <div className="settings-row-copy">
+              <h4>No Runs available</h4>
+              <p>No official Wars are currently marked Eligible for Run.</p>
             </div>
           </section>
-          {presentation.persistenceError ? <p className="play-content-warning" role="status">{presentation.persistenceError}</p> : null}
-        </div>
-      </ActionColumn>
+        ) : null}
+        {!loading && !officialAvailable ? (
+          <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status">
+            <div className="settings-row-copy">
+              <h4>Runs unavailable</h4>
+              <p>Official Wars could not be loaded. Reopen Play to retry.</p>
+            </div>
+          </section>
+        ) : null}
+        <ApparatusRailTab
+          label="Start New Run"
+          to={PLAY_RUN_NEW_SELECTOR_HREF}
+          index={PLAY_CHOICE_ROW_SEATS.new}
+          active={choice === 'new'}
+          disabled={newRunUnavailable}
+          iconSrc={newRunMark}
+          testId="run-choice-new"
+        />
+        {presentation.persistenceError ? <p className="play-content-warning" role="status">{presentation.persistenceError}</p> : null}
+      </ApparatusRailColumn>
 
       <RunDetailContentSceneSlot
         className="play-run-detail-slot"
         sceneInstance={choice ? `play/run/${choice}` : 'play/run'}
       >
-        {choice === 'current' && presentedRun ? (
+        {/* Which Run the account keeps is a question for the player who is about to RESUME one,
+            so it is answered here, behind Current Run, in the seat that already holds "what
+            happens if I take this row". Someone starting a new Run never has to read it —
+            starting one is itself a third answer, and it was already never blocked by the
+            question (ADR-0557). */}
+        {choice === 'current' && presentation.adoptionConflict ? (
+          <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Two active Runs" data-testid="run-detail-current">
+            <div className="ce-selected-head"><h2>Two active Runs</h2></div>
+            <div className="play-detail-body">
+              <div className="run-adoption-conflict" data-testid="run-adoption-conflict">
+                <div className="run-adoption-conflict-copy">
+                  <p>This browser has {presentation.adoptionConflict.browserRun.war.name}; your account has {presentation.adoptionConflict.accountRun.war.name}. Choose which one the account keeps.</p>
+                </div>
+              </div>
+            </div>
+            <div className="ce-preview-actions run-adoption-decision">
+              <ChromeButton unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
+                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                data-testid="run-keep-account"
+                onClick={keepAccountRun}
+              >
+                <span>Keep account Run</span>
+              </ChromeButton>
+              <ChromeButton unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
+                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                data-testid="run-adopt-browser"
+                disabled={presentation.syncing}
+                onClick={() => { void adoptBrowserRun(); }}
+              >
+                <span>Adopt browser Run</span>
+              </ChromeButton>
+            </div>
+          </aside>
+        ) : choice === 'current' && presentedRun ? (
           <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Current Run" data-testid="run-detail-current">
             <div className="ce-selected-head"><h2>Current Run</h2></div>
             <div className="play-detail-body">

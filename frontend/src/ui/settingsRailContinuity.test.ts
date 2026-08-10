@@ -20,6 +20,10 @@ const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
  *  inside CSS template strings (PagesLibraryStudio) or selector props (SurfaceDressingRoom),
  *  which aren't render sites, and the `settings-tab-icon` child span (negative lookahead). */
 function rendersSettingsTab(src: string): boolean {
+  // The class may be composed away from the attribute — the primitive builds one list and hands
+  // it to either of its two hosts — so a registry call naming the tab class counts wherever it
+  // sits, not only immediately after `className=`.
+  if (/chromeUnitClassNames\(\s*['"][^'"]*['"],\s*['"]settings-tab(?:\s|['"])/.test(src)) return true;
   for (const m of src.matchAll(/className=([\s\S]{0,160})/g)) {
     const head = m[1].replace(/^[\s{("'`]+/, '');
     if (/^settings-tab(?![-\w])/.test(head) || /chromeUnitClassNames\([\s\S]*?['"]settings-tab(?:\s|['"])/.test(head)) return true;
@@ -46,10 +50,11 @@ describe('settings-rail stone continuity is index-driven (ADR-0063)', () => {
     const mainMenu = readFileSync(new URL('./MainMenu.tsx', import.meta.url), 'utf8');
     const playMenu = readFileSync(new URL('./PlayMenu.tsx', import.meta.url), 'utf8');
 
-    // The remaining direct renderers are a stand-in that guarantees the scan actually
-    // found files. MainMenu and PlayMenu intentionally delegate their rails to the
-    // shared apparatus primitive instead of duplicating the registered control.
-    expect(renderers.sort()).toEqual(['CampaignEditor.tsx', 'Settings.tsx']);
+    // ZERO direct renderers. Settings and the Campaign Editor were the last two, and both mount
+    // <ApparatusRailTab> now — so the index is wired once, in the primitive, and a rail cannot
+    // be added without it. check-rail-tab-primitive.mjs fails the build if one comes back
+    // (ADR-0558). The scan is proven live by the primitive itself matching, below.
+    expect(renderers.sort()).toEqual([]);
 
     for (const f of renderers) {
       const src = readFileSync(new URL(f, import.meta.url), 'utf8');

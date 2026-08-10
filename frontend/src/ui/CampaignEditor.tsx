@@ -36,7 +36,7 @@ import {
   EditorButton,
   EditorRow,
 } from './shared/EditorColumnControls';
-import { ApparatusRailColumn } from './shared/ApparatusRailTab';
+import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
 import { HouseSelect } from './shared/HouseSelect';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { LEVEL_NAME_MAX, normalizeLevelName } from './shared/levelNamePolicy';
@@ -199,33 +199,19 @@ function CampaignRailTab({
     if (!locked) onSelect();
   };
   return (
-    <div
-      role="button"
-      tabIndex={locked ? -1 : 0}
-      aria-current={active ? 'page' : undefined}
-      aria-disabled={locked || undefined}
+    <ApparatusRailTab
+      label={campaign.name}
+      detail={`${campaign.levels.length} levels`}
       // --tab-index drives the shared stone-continuity slice so the rail's stone reads as
       // one sheet however many campaigns there are (counted continuously past the Unassigned
       // tab), matching the menu / Settings / Campaign rails.
-      style={{ ['--tab-index' as string]: index }}
-      data-chrome-unit="inner-box"
-      className={chromeUnitClassNames('inner-box', 'settings-tab main-menu-mode-tab ce-campaign-tab', active && 'is-active', locked && 'is-locked')}
-      onClick={selectCampaign}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          selectCampaign();
-        }
-      }}
-    >
-      <span className="settings-tab-icon" aria-hidden="true">
-        <img src={CAMPAIGN_TAB_ICON} alt="" />
-      </span>
-      <span className="ce-campaign-tab-copy">
-        <strong>{campaign.name}</strong>
-        <small>{campaign.levels.length} levels</small>
-      </span>
-      {locked ? (
+      index={index}
+      active={active}
+      locked={locked}
+      iconSrc={CAMPAIGN_TAB_ICON}
+      className="ce-campaign-tab"
+      onSelect={selectCampaign}
+      trailing={locked ? (
         <span className="ce-tab-trail ce-row-lock" aria-label={`${campaign.name} locked`} role="img">
           <EditorRowIcon icon="lock" />
         </span>
@@ -237,8 +223,8 @@ function CampaignRailTab({
         >
           <EditorRowIcon icon="favorite" />
         </ChromeButton>
-      ) : null}
-    </div>
+      ) : undefined}
+    />
   );
 }
 

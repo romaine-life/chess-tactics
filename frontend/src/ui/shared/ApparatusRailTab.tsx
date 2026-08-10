@@ -1,4 +1,11 @@
 import type { CSSProperties, HTMLAttributes, ReactElement, ReactNode } from 'react';
+// Every menu-language rail button in the app is this component. `check-rail-tab-primitive.mjs`
+// fails the build on any other file that names `settings-tab` / `main-menu-mode-tab` in markup,
+// because FOUR surfaces had each hand-assembled their own and drifted: the Run choice list
+// stepped by a different gap and grew a different seat than the rail beside it (ADR-0556), and
+// a mark that arrived by class name once painted itself under another surface's sizing rules.
+// New states belong HERE as props — `disabled`, `locked`, `trailing`, `onSelect`, `ariaLabel`
+// and the non-navigating host all arrived by converting a lookalike back in. ADR-0558.
 import { chromeUnitClassNames } from '../chromeUnitRegistry';
 import { FittedTabLabel } from './FittedTabLabel';
 import { ChromeNavButton } from './ChromeButton';
@@ -6,7 +13,8 @@ import { CHROME_LEAF_FILL_SURFACE } from './chromeSurfacePolicy';
 
 export interface ApparatusRailTabProps {
   label: string;
-  to: string;
+  /** Where the tab goes. Omit only for a tab that selects in place; then `onSelect` is required. */
+  to?: string;
   index: number;
   active?: boolean;
   /**
@@ -34,6 +42,29 @@ export interface ApparatusRailTabProps {
   title?: string;
   testId?: string;
   detail?: string;
+  /**
+   * A tab that exists but cannot be taken right now — Run preparation's Current Run with no Run
+   * to resume. It keeps its seat and its place in the stone (ADR-0289's visible-but-disabled
+   * language, ADR-0334); only its interaction goes.
+   */
+  disabled?: boolean;
+  /**
+   * Content permanently unavailable to this account, as opposed to momentarily unavailable:
+   * the Campaign Editor's locked campaigns. Drawn dimmer than `disabled` and, like it,
+   * unreachable — a separate word because the two say different things to the player.
+   */
+  locked?: boolean;
+  /** A badge or control seated at the tab's trailing edge (a lock, a favourite toggle). */
+  trailing?: ReactNode;
+  /**
+   * What taking the tab does. Beside `to` it is a side effect; without `to` it IS the take,
+   * and the tab renders on a role="button" host instead of the nav control.
+   */
+  onSelect?: () => void;
+  /** Surface-specific layout for this tab's own row (the Campaign Editor's trailing column). */
+  className?: string;
+  /** Spoken name, when the visible label alone does not identify the tab (a count, a badge). */
+  ariaLabel?: string;
 }
 
 export interface ApparatusRailColumnProps extends HTMLAttributes<HTMLElement> {
@@ -94,16 +125,25 @@ export function ApparatusRailTab({
   title,
   testId,
   detail,
+  ariaLabel,
+  disabled = false,
+  locked = false,
+  trailing,
+  onSelect,
+  className,
 }: ApparatusRailTabProps): ReactElement {
-  return (
-    <ChromeNavButton unit="inner-box"
-      data-testid={testId}
-      className={chromeUnitClassNames('inner-box', 'settings-tab main-menu-mode-tab', active && 'is-active')}
-      to={to}
-      aria-current={active ? 'page' : undefined}
-      title={title}
-      style={{ ['--tab-index' as string]: index } as CSSProperties}
-    >
+  const unavailable = disabled || locked;
+  const classes = chromeUnitClassNames(
+    'inner-box',
+    'settings-tab main-menu-mode-tab',
+    className,
+    active && 'is-active',
+    disabled && 'is-disabled',
+    locked && 'is-locked',
+  );
+  const seat = { ['--tab-index' as string]: index } as CSSProperties;
+  const body = (
+    <>
       <span className="settings-tab-icon" data-mark-canvas={markCanvas} aria-hidden="true">
         <img className={iconClassName} src={iconSrc} alt="" />
       </span>
@@ -113,6 +153,56 @@ export function ApparatusRailTab({
           <small>{detail}</small>
         </span>
       ) : <FittedTabLabel>{label}</FittedTabLabel>}
+      {trailing}
+    </>
+  );
+
+  // A tab that selects in place rather than navigating gets a role="button" host instead of the
+  // nav control. Two surfaces need it and for different reasons — the Campaign Editor seats an
+  // interactive favourite at the tab's trailing edge, which cannot nest inside a button, and the
+  // editor collection tabs select a collection without an address. Both hand-rolled the whole
+  // tab to get it. It is a HOST choice, not a second tab: identical classes, seat, mark, copy
+  // and states, so the two hosts cannot drift the way four hand-assembled tabs did (ADR-0558).
+  if (!to) {
+    return (
+      <div
+        role="button"
+        tabIndex={unavailable ? -1 : 0}
+        data-testid={testId}
+        data-chrome-unit="inner-box"
+        className={classes}
+        aria-current={active && !unavailable ? 'page' : undefined}
+        aria-disabled={unavailable || undefined}
+        aria-label={ariaLabel}
+        title={title}
+        style={seat}
+        onClick={() => { if (!unavailable) onSelect?.(); }}
+        onKeyDown={(event) => {
+          if (unavailable) return;
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onSelect?.();
+          }
+        }}
+      >
+        {body}
+      </div>
+    );
+  }
+
+  return (
+    <ChromeNavButton unit="inner-box"
+      data-testid={testId}
+      className={classes}
+      to={to}
+      disabled={unavailable}
+      aria-current={active && !unavailable ? 'page' : undefined}
+      aria-label={ariaLabel}
+      title={title}
+      style={seat}
+      onClick={onSelect}
+    >
+      {body}
     </ChromeNavButton>
   );
 }
