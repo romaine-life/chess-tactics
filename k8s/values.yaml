@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:7c33bc686bd0b29a40b74534e8a119472de74fb8a75bd1a5b816918c7fa1f86d"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:feee902c77e06b1ee995d8cacb43e49802f3d1598a0f59e9d40eb77ffe4a857d"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Menu rail buttons keep their oak under the inner role field default"
-  prNumber: "881"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/881"
-  commit: "057f772d"
+  prTitle: "Undo walks a Battle back a decision at a time (ADR-0556)"
+  prNumber: "882"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/882"
+  commit: "f12e611a"
 
 name: chess-tactics
 namespace: chess-tactics
