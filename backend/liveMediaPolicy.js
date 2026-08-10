@@ -7,6 +7,28 @@ const PREDRAWN_BOARD_SLOT = /^boards\/([a-z0-9][a-z0-9._-]{0,119})\/plate\.png$/
 const PREDRAWN_BOARD_COMPONENT = 'predrawn-board-plate';
 const PREDRAWN_BOARD_PROOF_SCHEMA = 'predrawn-board-canonical-level-proof-v1';
 const PREDRAWN_BOARD_PROOF_RENDERER = 'LevelEditor/PredrawnBoardLayer';
+// ADR-0556: the five main-menu marks, and the kit gear slot the rest of the app draws its
+// gear from, are fitted to one ink HEIGHT so the whole rail carries the same padding above
+// and below every mark. That fit RESAMPLES — the generator draws a 64x64 canvas whose ink is
+// whatever height it happened to draw, and the packer scales that ink until it is exactly 52
+// tall — so this records spatial resampling truthfully instead of claiming a native 1x the
+// bytes do not have (ADR-0076).
+//
+// Unlike ADR-0332's eight lipsana, this family is expected to be REGENERATED as the marks are
+// iterated on, so the contract pins the SHAPE — the slot, the canvas, the ink height, the exact
+// transform, and an archived source — rather than exact output hashes. Pinning hashes would
+// make every new mark a backend edit, which is how a gate stops being run.
+const MAIN_MENU_MARK_FITTED_EXCEPTION_SCHEMA = 'main-menu-mark-fitted-production-exception-v1';
+const MAIN_MENU_MARK_FITTED_TRANSFORM = 'ink-crop-lanczos-fit-height-52-even-quantize-48-center-64';
+const MAIN_MENU_MARK_FITTED_SLOTS = Object.freeze([
+  'ui/main-menu/icons-carved/solo-skirmish.png',
+  'ui/main-menu/icons-carved/campaign-editor.png',
+  'ui/main-menu/icons-carved/lobbies.png',
+  'ui/main-menu/icons-carved/enchiridion.png',
+  'ui/main-menu/icons-carved/settings.png',
+  'ui/kit/icons/gear.png',
+]);
+
 const LIPSANON_ICON_COMPONENT = 'run-lipsanon-icon';
 const LIPSANON_ICON_SLOT = /^ui\/run\/lipsana\/([a-z][a-z0-9-]{0,79})\.png$/;
 const LIPSANON_RESIZED_PRODUCTION_EXCEPTION_SCHEMA = 'run-lipsanon-resized-production-exception-v1';
@@ -833,6 +855,48 @@ const ADLECTIO_MARK_SLOT = 'ui/run/sectio/adlectio-mark.png';
 /** Whether this slot is the mark Expunctio prints for a formation admitted this visit. */
 function adlectioMarkSlot(slot) {
   return String(slot || '') === ADLECTIO_MARK_SLOT;
+}
+
+function mainMenuMarkSlot(slot) {
+  return MAIN_MENU_MARK_FITTED_SLOTS.includes(String(slot || '')) ? String(slot) : null;
+}
+
+/**
+ * The typed completeness validator that lifts the main-menu marks out of `ui-kit`'s
+ * bridge-only default (ADR-0556).
+ *
+ * What the rail actually depends on is geometry, not a runtime component: the seat draws the
+ * WHOLE 64x64 canvas at a fixed size and lets the asset's own transparent padding decide how
+ * big the mark reads and where it sits. So a mark that ships on another canvas, or with its
+ * ink at another height, silently mis-sizes one row of a five-row column with nothing pointing
+ * at the cause — which is exactly the state this ADR was opened to fix. The declared shape is
+ * checked here, the pixels are enforced by `frontend/scripts/pack-menu-icons.mjs`, and the
+ * owner proves them on the rail at `/studio?menuIconReview=1`.
+ *
+ * The kit gear slot is a member because the Battle HUD's Controls tab, the Settings General
+ * section and `.icon-gear` all draw the gear from it — one mark, one contract, wherever it is
+ * painted.
+ */
+function mainMenuMarkMediaIssue(row, projectedRuntime = null) {
+  if (!mainMenuMarkSlot(row.slot)) return 'A main-menu mark requires one of its registered semantic slots';
+  if (row.domain !== 'ui-kit') return 'A main-menu mark requires the ui-kit domain';
+  if (row.media_type !== 'image/png') return 'A main-menu mark requires image/png';
+  if (Number(row.width) !== 64 || Number(row.height) !== 64) {
+    return 'A main-menu mark requires the canonical 64x64 icon canvas (ADR-0026)';
+  }
+
+  const metadata = mediaVersionMetadata(row);
+  if (Number(metadata.canvas) !== 64) return 'A main-menu mark requires metadata.canvas 64';
+  if (Number(metadata.inkHeight) !== 52) {
+    return 'A main-menu mark requires metadata.inkHeight 52, the one height the whole rail is fitted to';
+  }
+  if (metadata.evenInkDimensions !== true) {
+    return 'A main-menu mark requires metadata.evenInkDimensions true, so its ink centres exactly on an even canvas';
+  }
+
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (runtime !== null && !isObjectRecord(runtime)) return 'A main-menu mark runtime projection must be an object';
+  return null;
 }
 
 /**
@@ -2001,6 +2065,33 @@ function nativeMediaEvidenceIssue(row) {
     ) return 'ADR-0520 resampled card-art evidence must authorize these bytes and its exact transform';
     return null;
   }
+  if (evidence.schema === MAIN_MENU_MARK_FITTED_EXCEPTION_SCHEMA) {
+    if (!MAIN_MENU_MARK_FITTED_SLOTS.includes(String(row.slot || ''))) {
+      return 'ADR-0556 fitted mark evidence is restricted to the main-menu mark slots';
+    }
+    if (
+      evidence.decision !== 'ADR-0556'
+      || evidence.status !== 'owner-approved-production-exception'
+      || evidence.native1x !== false
+      || evidence.spatialResampling !== true
+    ) return 'ADR-0556 fitted mark evidence is incomplete';
+    if (
+      Number(row.width) !== 64 || Number(row.height) !== 64
+      || Number(evidence.outputWidth) !== 64 || Number(evidence.outputHeight) !== 64
+      || Number(evidence.inkHeight) !== 52
+    ) return 'ADR-0556 fitted mark evidence must declare a 64x64 canvas holding exactly 52px of ink';
+    if (
+      !Number.isFinite(Number(evidence.sourceWidth)) || Number(evidence.sourceWidth) <= 0
+      || !Number.isFinite(Number(evidence.sourceHeight)) || Number(evidence.sourceHeight) <= 0
+    ) return 'ADR-0556 fitted mark evidence must name the generator canvas it was fitted from';
+    if (
+      !normalizedSha(evidence.outputSha256)
+      || normalizedSha(evidence.outputSha256) !== normalizedSha(row.blob_sha256)
+      || !normalizedSha(evidence.sourceSha256)
+      || evidence.transform !== MAIN_MENU_MARK_FITTED_TRANSFORM
+    ) return 'ADR-0556 fitted mark evidence must authorize these bytes and name its exact transform';
+    return null;
+  }
   if (evidence.native1x !== true) return 'nativeEvidence.native1x must be true';
   if (evidence.spatialResampling !== false) return 'nativeEvidence.spatialResampling must be false';
   if (row.width !== null || row.height !== null) {
@@ -2056,6 +2147,11 @@ module.exports = {
   LEVEL_EDITOR_BRUSH_ICON_SCALED_PRODUCTION_EXCEPTION_SCHEMA,
   LIPSANON_ICON_COMPONENT,
   LIPSANON_RESIZED_PRODUCTION_EXCEPTION_SCHEMA,
+  MAIN_MENU_MARK_FITTED_EXCEPTION_SCHEMA,
+  MAIN_MENU_MARK_FITTED_TRANSFORM,
+  MAIN_MENU_MARK_FITTED_SLOTS,
+  mainMenuMarkSlot,
+  mainMenuMarkMediaIssue,
   RUN_CARD_COST_COIN_COMPONENT,
   RUN_CARD_COST_CROWN_COMPONENT,
   RUN_CARD_COST_CROWN_SLOT,

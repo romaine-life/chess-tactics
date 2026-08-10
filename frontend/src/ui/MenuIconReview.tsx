@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactElement } from 're
 import {
   acceptLiveMediaVersions,
   fetchAdminLiveMediaCatalog,
-  reviewLiveMediaVersions,
+  reviewLiveMediaVersion,
   type AdminLiveMediaCatalog,
   type AdminLiveMediaVersion,
 } from '../net/liveMediaAdmin';
@@ -203,21 +203,31 @@ function InstallSetControl({
         .map((destination) => treatment.marks.get(destination.slug))
         .filter((version): version is AdminLiveMediaVersion => Boolean(version));
       setStatus('Recording approval for these exact bytes…');
-      const reviewed = await reviewLiveMediaVersions({
-        versions,
-        notes: `Selected the ${treatment.label} main-menu mark set from the live menu rail it paints.`,
-        surfaceUrl: window.location.href,
-        evidence: {
-          schema: 'live-media-owner-proof-v1',
-          batchId: MENU_ICON_BATCH_ID,
-          treatment: treatment.treatment,
-          canonicalScale: 1,
-          surfaceKind: 'Main-menu apparatus rail at the live 44px seat',
-          versions: versions.map((version) => ({ id: version.id, contentSha256: version.media!.sha256, slot: version.slot })),
-        },
-      });
+      // One review call per version, NOT the review batch. A review batch is only for versions
+      // that share a declared acceptance group, and these five occupy five independent slots —
+      // sending them together is refused with media_review_batch_requires_one_acceptance_group.
+      // Acceptance is still one batch, which is what makes the set land together or not at all.
+      const reviewedVersions: AdminLiveMediaVersion[] = [];
+      for (const version of versions) {
+        reviewedVersions.push(await reviewLiveMediaVersion({
+          id: version.id,
+          expectedRevision: version.rowRevision,
+          notes: `Selected the ${treatment.label} main-menu mark set from the live menu rail it paints. Slot: ${version.slot}.`,
+          surfaceUrl: window.location.href,
+          evidence: {
+            schema: 'live-media-owner-proof-v1',
+            batchId: MENU_ICON_BATCH_ID,
+            treatment: treatment.treatment,
+            versionId: version.id,
+            contentSha256: version.media!.sha256,
+            slot: version.slot,
+            canonicalScale: 1,
+            surfaceKind: 'Main-menu apparatus rail at the live 44px seat',
+          },
+        }));
+      }
       setStatus('Installing the set…');
-      await acceptLiveMediaVersions(reviewed.versions.map((version) => {
+      await acceptLiveMediaVersions(reviewedVersions.map((version) => {
         const slot = catalog.slots.find((entry) => entry.slot === version.slot);
         return {
           id: version.id,

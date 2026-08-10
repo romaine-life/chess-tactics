@@ -24831,10 +24831,13 @@ button.tileset-relationship-cell {
   pointer-events: none;
 }
 
-/* ui/kit/icons/design-index.png — ink 40x40 at (12,12) on a 64x64 canvas. */
+/* ui/main-menu/icons-carved/enchiridion.png — ink 48x52 at (8,6) on a 64x64 canvas. The
+   Strategikon's Enchiridion tab draws whatever the Enchiridion DESTINATION draws
+   (menuModeIcon), so it moved off the shared design-index kit glyph when that destination
+   gained a mark of its own family (ADR-0556). 6/64 below the ink, 52/64 across it. */
 [data-strategikon-section="enchiridion"] img {
-  --titlebar-mark-ink-below: .1875;
-  --titlebar-mark-ink-fill: .625;
+  --titlebar-mark-ink-below: .09375;
+  --titlebar-mark-ink-fill: .8125;
 }
 
 /* ui/kit/icons/unit-studio.png — ink 26x40 at (19,12) on a 64x64 canvas. */

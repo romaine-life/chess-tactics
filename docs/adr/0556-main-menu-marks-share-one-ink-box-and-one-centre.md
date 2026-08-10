@@ -93,7 +93,47 @@ is carved in a lore material rather than the structural blue.**
 - **The set is the unit of review and of installation.** A mark can only be judged against the
   other four it stands beside, so candidates are mounted as whole rails through the real
   `ApparatusRailColumn`/`ApparatusRailTab` primitive at `/studio?menuIconReview=1`, and
-  installing accepts all five slots in one act.
+  installing accepts every slot in one act. Review is one call PER VERSION and acceptance is one
+  batch: a review batch is only for versions sharing a declared acceptance group, and five
+  independent slots are refused with `media_review_batch_requires_one_acceptance_group`.
+
+### A mark changes everywhere it is drawn, or it has not changed
+
+A destination's mark is resolved through **`menuModeIcon`** and nowhere else, so every surface
+offering that destination moves together. The main-menu rail, the Strategikon's section rail and
+the compact Strategikon index beside the Controls title all read it, and all three followed this
+change without an edit — which is the entire reason that resolver exists.
+
+Two consumers were bypassing it and are now routed through it: `PlayMenu` carried a
+**byte-identical private copy** of the lookup, and the Strategikon seat's compensation numbers in
+`style.css` named the old kit glyph by hand.
+
+The gear is the case the resolver does NOT cover, because most gears in the app are not the
+Settings *destination*: the Battle HUD's Controls tab, the Settings General section and
+`.icon-gear` all draw `ui/kit/icons/gear.png`. So the chosen gear is installed into **both** its
+menu slot and that kit slot — one set of bytes, two slots — rather than re-pointing three call
+sites at the menu's own asset. The title-bar cluster gear and the shell's cold-load ladder read
+the menu-mode drawable and follow on their own.
+
+**What deliberately did NOT move:** `ui/kit/icons/design-index.png`. It looks like the Enchiridion's
+old mark, but it is also the Level Editor tab's mark in `PlayMenu` and the "open ground" terrain
+bullet in the Enchiridion's own rules copy. Overwriting it would have changed two unrelated
+things; the Enchiridion instead gained a slot of its own and the kit glyph was left alone.
+
+### These slots need a typed projection and honest resampling evidence
+
+`ui-kit` candidates are bridge-only by default, so the marks carry a `mainMenuMarkMediaIssue`
+completeness validator: the registered slot, the `ui-kit` domain, `image/png`, the 64×64 canvas,
+and the declared `inkHeight: 52` with even ink dimensions. What the rail depends on is geometry,
+so geometry is what the backend checks.
+
+The fit also **resamples** — the generator draws a 64×64 canvas whose ink is whatever height it
+drew, and the packer scales that ink to exactly 52 — so these versions record
+`native1x: false, spatialResampling: true` with the exact transform, under a declared exception
+schema, rather than claiming a native 1× the bytes do not have ([ADR-0076](0076-scaling-is-calibration-production-art-is-native-1x.md)).
+Unlike [ADR-0332](0332-eight-run-lipsanon-icons-ship-the-approved-resized-pixels.md)'s eight
+lipsana it pins the **shape** and not the output hashes, because this family is expected to be
+regenerated and a hash-pinned gate becomes a gate nobody runs.
 
 ### What this costs, stated plainly
 

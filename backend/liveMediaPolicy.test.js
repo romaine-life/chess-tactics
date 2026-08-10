@@ -61,6 +61,11 @@ const {
   levelEditorBrushIconMediaIssue,
   levelEditorBrushIconOwnerProofIssue,
   levelEditorBrushIconSlot,
+  MAIN_MENU_MARK_FITTED_EXCEPTION_SCHEMA,
+  MAIN_MENU_MARK_FITTED_SLOTS,
+  MAIN_MENU_MARK_FITTED_TRANSFORM,
+  mainMenuMarkMediaIssue,
+  mainMenuMarkSlot,
   nativeMediaEvidenceIssue,
   predrawnBoardAlignmentIssue,
   predrawnBoardMediaIssue,
@@ -125,6 +130,84 @@ test('raster native evidence is required to identify the exact uploaded bytes', 
   delete missingSha.native_evidence.sourceSha256;
   assert.match(nativeMediaEvidenceIssue(missingSha), /sourceSha256 is required/);
   assert.equal(nativeMediaEvidenceIssue(raster()), null);
+});
+
+test('ADR-0556 main-menu marks carry a typed projection instead of staying bridge-only', () => {
+  const row = (overrides = {}, metadata = {}) => ({
+    slot: 'ui/main-menu/icons-carved/settings.png',
+    domain: 'ui-kit',
+    media_type: 'image/png',
+    width: 64,
+    height: 64,
+    metadata: { canvas: 64, inkHeight: 52, evenInkDimensions: true, ...metadata },
+    ...overrides,
+  });
+
+  assert.equal(mainMenuMarkMediaIssue(row()), null);
+  for (const slot of MAIN_MENU_MARK_FITTED_SLOTS) {
+    assert.equal(mainMenuMarkSlot(slot), slot);
+    assert.equal(mainMenuMarkMediaIssue(row({ slot })), null, slot);
+  }
+  assert.equal(mainMenuMarkSlot('ui/kit/icons/design-index.png'), null);
+  assert.match(
+    mainMenuMarkMediaIssue(row({ slot: 'ui/kit/icons/design-index.png' })),
+    /registered semantic slots/,
+  );
+  // The seat draws the WHOLE canvas, so the canvas and the ink height ARE the contract.
+  assert.match(mainMenuMarkMediaIssue(row({ width: 128, height: 128 })), /64x64 icon canvas/);
+  assert.match(mainMenuMarkMediaIssue(row({}, { canvas: 128 })), /metadata\.canvas 64/);
+  assert.match(mainMenuMarkMediaIssue(row({}, { inkHeight: 48 })), /metadata\.inkHeight 52/);
+  assert.match(mainMenuMarkMediaIssue(row({}, { evenInkDimensions: false })), /evenInkDimensions/);
+  assert.match(mainMenuMarkMediaIssue(row({ media_type: 'image/webp' })), /image\/png/);
+  assert.match(mainMenuMarkMediaIssue(row({ domain: 'ui' })), /ui-kit domain/);
+});
+
+test('ADR-0556 fitted main-menu marks record their resampling instead of claiming native 1x', () => {
+  const mark = (overrides = {}, evidence = {}) => ({
+    media_type: 'image/png',
+    blob_sha256: originalSha,
+    width: 64,
+    height: 64,
+    slot: 'ui/main-menu/icons-carved/settings.png',
+    native_evidence: {
+      schema: MAIN_MENU_MARK_FITTED_EXCEPTION_SCHEMA,
+      decision: 'ADR-0556',
+      status: 'owner-approved-production-exception',
+      native1x: false,
+      spatialResampling: true,
+      outputWidth: 64,
+      outputHeight: 64,
+      inkHeight: 52,
+      sourceWidth: 64,
+      sourceHeight: 64,
+      outputSha256: originalSha,
+      sourceSha256: replacementSha,
+      transform: MAIN_MENU_MARK_FITTED_TRANSFORM,
+      ...evidence,
+    },
+    ...overrides,
+  });
+
+  assert.equal(nativeMediaEvidenceIssue(mark()), null);
+  // Every slot the marks and the shared kit gear occupy, and nothing else.
+  for (const slot of MAIN_MENU_MARK_FITTED_SLOTS) {
+    assert.equal(nativeMediaEvidenceIssue(mark({ slot })), null, slot);
+  }
+  assert.match(
+    nativeMediaEvidenceIssue(mark({ slot: 'ui/kit/icons/design-index.png' })),
+    /restricted to the main-menu mark slots/,
+  );
+  // The exception exists to be HONEST about the fit; it cannot be used to claim the opposite.
+  assert.match(nativeMediaEvidenceIssue(mark({}, { native1x: true })), /incomplete/);
+  assert.match(nativeMediaEvidenceIssue(mark({}, { spatialResampling: false })), /incomplete/);
+  // The ink height IS the decision, so evidence that does not state 52 does not pass.
+  assert.match(nativeMediaEvidenceIssue(mark({}, { inkHeight: 48 })), /exactly 52px of ink/);
+  assert.match(nativeMediaEvidenceIssue(mark({ width: 128, height: 128 })), /exactly 52px of ink/);
+  // It must authorize THESE bytes and name the transform that produced them.
+  assert.match(nativeMediaEvidenceIssue(mark({}, { outputSha256: replacementSha })), /authorize these bytes/);
+  assert.match(nativeMediaEvidenceIssue(mark({}, { transform: 'nearest-neighbor' })), /authorize these bytes/);
+  assert.match(nativeMediaEvidenceIssue(mark({}, { sourceSha256: '' })), /authorize these bytes/);
+  assert.match(nativeMediaEvidenceIssue(mark({}, { sourceWidth: 0 })), /generator canvas/);
 });
 
 test('only the active exact ADR-0414 starter-card derivatives pass their production evidence gate', () => {
