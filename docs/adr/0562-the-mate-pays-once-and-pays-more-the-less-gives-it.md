@@ -69,9 +69,16 @@ a Knight underpromotion into a smothered mate would collect all four for one mat
   advantage, passing the Pawn and walking it home is a lean, skilful win, and pricing that Queen at
   nine pays nothing for the whole endgame. Every part of that is true, and it is still not what
   this entry is for. This one pays for the SHAPE OF THE MATE — what is standing there at the end —
-  and a grind-out that finishes with a Queen has no unusual shape however it was reached. Rewarding
-  the grind is a real gap and a real thing to want, but it is a reward for the POSITION, and it
-  needs its own entry measured against this one rather than a reinterpretation of this one.
+  and a grind-out that finishes with a Queen has no unusual shape however it was reached.
+- **A grind-out is a player choice, and it stays unrewarded on purpose.** Trading everything off,
+  converting a material edge and queening a passed Pawn is a real choice a player makes, and the
+  Run pays nothing for it. That is not an oversight for a later entry to close: *a grind-out is not
+  desirable, and it means the level was not good enough to force interesting decisions.* Paying for
+  it would pay for the level's failure and point players at the levels that fail. So the remedy for
+  a Battle that grinds is the BATTLE — its material, its terrain, its objective, its clock — and
+  not a position-shaped bounty ("won with little on the board", "won an endgame", "won from
+  behind"). ADR-0543's Deditio already prices the symptom, which is why it is priced DOWN rather
+  than merely priced differently.
 - **The King is refused explicitly.** Its zero on the piece scale is a sentinel for "never
   bought", so left to the formula it would read as the humblest unit on the board and pay the
   most. A King may not give check at all, so this cannot arise — the scale is simply not asked to
@@ -89,12 +96,13 @@ a Knight underpromotion into a smothered mate would collect all four for one mat
   standing term of the economy — 12 gold on the ordinary Rook mate, against a Battle reward near
   80. That is the intent, and the pays-once rule is what keeps it from compounding: the end of a
   Battle can now pay at most 80, not 80 plus 50 plus 18.
-- **It pulls against Deditio (ADR-0543), on purpose.** Deditio pays for the enemy force still
-  standing at the mate, so it rewards mating EARLY with everything alive; the humble mate rewards
-  mating with a SMALL piece, which usually means later, after the heavy pieces have traded off.
-  ADR-0561 opened that tension with the Pawn walk and this widens it. Two named rewards pulling in
-  opposite directions is a choice about how to finish, which is what the Battle screen has been
-  short of.
+- **It points the same way as Deditio (ADR-0543) rather than against it.** Deditio pays for the
+  enemy force still standing at the mate, rewarding a sharp early finish. This ladder's FLOOR — a
+  Rook's 12 — is reachable at the end of a long endgame, but its TOP is not: the Knight, Bishop and
+  Pawn mates at 18 and 24 need the enemy King boxed in by its own men or caught in a sharp
+  position, and that happens with force still on the board. So the reward is concentrated where
+  Deditio's is, and a grind-out collects the least from both. That is the intended shape, per the
+  clause above.
 - A player who queens a Pawn now has a reason not to mate with her. That is a strange sentence and
   a good one: the game is teaching that the last move is a choice, not a formality.
 - `verify:manubiae` can reach this entry more easily than any other, since every won Battle offers
