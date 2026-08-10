@@ -545,6 +545,22 @@ export type PoolModel = Readonly<{
 
 export const POOL_MODELS: readonly PoolModel[] = Object.freeze([
   {
+    id: '2026-08-09-2141-2x2-density-only',
+    label: '2026-08-09 21:41 · 2x2, density only',
+    note: 'Material and density, and nothing else. The synergy terms come out: they were three unratified percentages that could not be judged in chess terms, and a formula that has to be understood is worth more than one that is subtle. Same shape rule and same bands as its parent, so the only difference is the pricing.',
+    knobs: {
+      ...DEFAULT_POOL_KNOBS,
+      cols: 2,
+      rows: 2,
+      terms: [
+        { kind: 'density', power: 0.5, scale: 10 },
+        { kind: 'round', to: 5 },
+      ],
+      commonMaxCost: 70,
+      uncommonMaxCost: 100,
+    },
+  },
+  {
     id: '2026-08-09-1921-2x2-no-rotation',
     label: '2026-08-09 19:21 · 2x2, no rotation',
     note: 'The 19:13 shape rule and pricing, with rotation collapse dropped so facing is bought rather than chosen at placement. Every orientation is therefore its own card — a player who cannot turn a card needs the horizontal pair and the vertical pair sold separately. That is what takes the catalog from 68 to 244, and what finally gives the blocked-Pawn penalty teeth: 98 cards carry one here against 10 with rotation on.',
