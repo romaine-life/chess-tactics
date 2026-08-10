@@ -1467,9 +1467,18 @@ export function openingCardGrantPool(): RunCoreCard[] {
 }
 
 /** The Run's opening card offers: distinct identities drawn from the band, fixed by seed. */
-/** The Kings the opening screen deals: three of the fifteen, shuffled by the Run's own seed. */
-export function openingKingOffers(seed: number): string[] {
-  return shuffled([...RUN_STARTER_CARDS], mixSeed(seed, 'vacantia-opening-kings', 0))
+/**
+ * The Kings the opening screen deals, shuffled by the Run's own seed.
+ *
+ * The Run's rules bind the King as firmly as the market. A Run playing the two-by-two catalog
+ * cannot open by handing the player a three-long or Z-shaped starter -- it would break the rule
+ * on the very first card, before the market has offered anything, and that formation then sits in
+ * the army for the whole Run.
+ */
+export function openingKingOffers(seed: number, rules: RunRules = LEGACY_RUN_RULES): string[] {
+  const eligible = RUN_STARTER_CARDS.filter((card) => cardAllowedByRules(card, rules));
+  if (!eligible.length) throw new Error('No King fits this Run’s formation rules.');
+  return shuffled([...eligible], mixSeed(seed, 'vacantia-opening-kings', 0))
     .slice(0, RUN_OPENING_CARD_OFFER_COUNT)
     .map((card) => card.id);
 }
@@ -1666,7 +1675,7 @@ export function createRun(
     army: [],
     cards: [],
     nextArmyUnitNumberByType: initialArmyNumberState(),
-    commendatio: { kingOffers: openingKingOffers(seed) },
+    commendatio: { kingOffers: openingKingOffers(seed, options?.rules ?? DEFAULT_RUN_RULES) },
   };
 }
 
