@@ -359,17 +359,18 @@ const MANUBIUM_EXAMPLE: Readonly<Record<ManubiumId, ManubiumExample>> = {
     seed: 811,
   },
   'knight-fork': {
-    // Three prongs at once, and a Knight none of them can answer: the Queen, Rook and Bishop it
-    // strikes all move on lines that do not reach the square it landed on. The marked empty
+    // Three prongs the enemy cannot answer, drawn as one of each kind: the King, which must move,
+    // beside a Rook and a Bishop that nothing of theirs defends. One move cannot save all three,
+    // and nothing on the board reaches the square the Knight landed on either. The marked empty
     // square below-left is where it came from.
     size: { cols: 5, rows: 5 },
     pieces: [
       unit('player', 'knight', 2, 2),
-      unit('enemy', 'queen', 1, 0),
+      unit('enemy', 'king', 1, 0),
       unit('enemy', 'rook', 3, 0),
-      unit('enemy', 'bishop', 4, 1),
+      unit('enemy', 'bishop', 4, 3),
     ],
-    struck: ['1,0', '3,0', '4,1'],
+    struck: ['1,0', '3,0', '4,3'],
     opened: ['0,3'],
     seed: 933,
   },
@@ -591,6 +592,7 @@ function ManubiaeSection({ framed }: { framed: boolean }): ReactElement {
         <p>Only <strong>your</strong> units earn these — the enemy does the same things and is paid nothing — and each one pays again every time you land it.</p>
         <p>One move may earn <strong>several</strong> at once, and each pays in full: a capture that also forks is both, and a promotion that mates is paid alongside the check it discovered.</p>
         <p>The two checks are one ladder, because every double check <em>is</em> a discovered check — uncovering the second attacker is the only way to give check with two units at once. The better rung pays and the other stands down: a double check pays <strong>30</strong> in place of the discovered check&rsquo;s 20, never 50 for the same check.</p>
+        <p><strong>The two forks are one ladder too.</strong> A Knight striking the King and an undefended Rook is a royal fork <em>and</em> a two-prong Knight&rsquo;s fork, and one Knight&rsquo;s fork is one deed, so the dearer pays: the royal fork&rsquo;s <strong>10</strong> beats two prongs at 5, and a third prong overtakes it at 15. They ask different questions — the royal fork asks how <em>good</em> the piece beside the King is and never minds a recapture, because a Rook won for a Knight is worth the exchange; the Knight&rsquo;s fork asks how <em>many</em> things it hits that they cannot answer, and their King and a piece nothing of theirs defends count the same there.</p>
         <p><strong>The mate pays once.</strong> Every Battle ends in checkmate, and four of these describe one — what the mating unit is worth, what the King&rsquo;s own men were doing around it, and whether that unit arrived by promoting. A smothered mate <em>is</em> a Knight&rsquo;s mate and an underpromotion mate <em>is</em> a mate by the lesser piece you chose, so they are rungs of one ladder too. The dearest that fits your mate is the one you are paid.</p>
         <p><strong>Undo</strong> takes back the gold along with the move that earned it, so no deed here is worth undoing for profit.</p>
       </InnerChromeBox>

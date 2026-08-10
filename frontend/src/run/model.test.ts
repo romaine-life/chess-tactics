@@ -819,7 +819,7 @@ describe('Manubiae — what the board pays for', () => {
   it("accelerates a Knight's fork, so each further prong is worth more than the last", () => {
     const paid = (targets: number) => manubiumGoldTenths({ id: 'knight-fork', targets });
     expect(paid(0)).toBe(0);
-    expect(paid(1)).toBe(0); // one unit attacked is not a fork
+    expect(paid(1)).toBe(0); // one prong is not a fork
     expect(paid(2)).toBe(5);
     expect(paid(3)).toBe(15);
     expect(paid(4)).toBe(30);
@@ -833,7 +833,7 @@ describe('Manubiae — what the board pays for', () => {
     expect(paid(2)).toBeLessThan(manubiumGoldTenths({ id: 'royal-fork' }));
     expect(paid(3)).toBeGreaterThan(manubiumGoldTenths({ id: 'royal-fork' }));
     expect(RUN_MANUBIUM_BY_ID['knight-fork'].priceNote)
-      .toBe('5 for two units, 15 for three, 30 for four, 50 for five');
+      .toBe('5 for two prongs, 15 for three, 30 for four, 50 for five');
   });
 
   it('pays a humble mate for the distance the mating unit falls short of a Queen', () => {

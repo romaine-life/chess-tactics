@@ -386,12 +386,12 @@ export const RUN_LONG_REACH_SQUARES = 8;
 /**
  * What each further rung of a Knight's fork is worth.
  *
- * The price ACCELERATES: the second unit attacked adds one of these, the third adds two, the
- * fourth adds three, and so on, so the run of prices is 5, 15, 30, 50, 75 for two, three, four,
- * five and six units. A flat rate per unit would say a Knight hitting four things is twice a
- * Knight hitting two, and it is nothing of the sort — the second prong is a fork, and every
- * prong after it is a square the enemy cannot answer, which is why the marginal one is worth
- * more than the one before it.
+ * The price ACCELERATES: the second prong adds one of these, the third adds two, the fourth
+ * adds three, and so on, so the run of prices is 5, 15, 30, 50, 75 for two, three, four, five
+ * and six prongs. A flat rate per prong would say a Knight hitting four things is twice a Knight
+ * hitting two, and it is nothing of the sort — the second prong is a fork, and every prong after
+ * it is a square the enemy cannot answer, which is why the marginal one is worth more than the
+ * one before it.
  *
  * Five rather than ten so the plain two-prong fork lands UNDER the royal fork it is often a
  * lesser version of; three prongs then passes it, which is the right order.
@@ -399,8 +399,12 @@ export const RUN_LONG_REACH_SQUARES = 8;
 export const RUN_KNIGHT_FORK_TENTHS_PER_RUNG = 5;
 
 /**
- * What a Knight attacking `targets` enemy units at once pays. Nothing for fewer than two: one
- * unit attacked is not a fork, it is just an attack.
+ * What a Knight's fork of `targets` prongs pays. Nothing for fewer than two: one prong is not a
+ * fork, it is just an attack.
+ *
+ * A prong is something the enemy cannot answer — their King, which must move, or an undefended
+ * unit their one move cannot save alongside another (ADR-0566). Counting is the board seam's
+ * job; this only prices the count.
  */
 export function knightForkGoldTenths(targets: number): number {
   const prongs = Math.max(0, Math.floor(targets) - 1);
@@ -438,10 +442,10 @@ export const RUN_MANUBIAE: readonly ManubiumDefinition[] = Object.freeze([
   {
     id: 'knight-fork',
     name: "Knight's fork",
-    earnedBy: 'Attack two or more enemy units at once with a Knight, from the square it just moved to. Each further unit is worth more than the last. The fork has to hold: taking the Knight must cost the enemy more than the Knight is worth.',
+    earnedBy: 'Strike two or more things at once with a Knight that the enemy cannot answer, from the square it just moved to: their King, which must move, or an UNDEFENDED unit, which their one move cannot save alongside another. Each further prong is worth more than the last. A defended unit is no prong, because they simply take the Knight back. The fork has to hold: taking the Knight must cost the enemy more than the Knight is worth.',
     goldTenths: null,
     // Written from the rate rather than beside it, so the sentence cannot drift from the gold.
-    priceNote: `${knightForkGoldTenths(2)} for two units, ${knightForkGoldTenths(3)} for three, ${knightForkGoldTenths(4)} for four, ${knightForkGoldTenths(5)} for five`,
+    priceNote: `${knightForkGoldTenths(2)} for two prongs, ${knightForkGoldTenths(3)} for three, ${knightForkGoldTenths(4)} for four, ${knightForkGoldTenths(5)} for five`,
   },
   {
     id: 'royal-fork',

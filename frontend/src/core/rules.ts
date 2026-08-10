@@ -927,6 +927,29 @@ export function enemiesAttackedBy(
 }
 
 /**
+ * Whether `piece` is DEFENDED — whether any OTHER living unit of its own side attacks the
+ * square it stands on, so taking it there is answered rather than free.
+ *
+ * The plain board reading of the word, and deliberately so: it is what a player sees when they
+ * look at a square and ask "can I just take that?". Attack geometry, not legality — a defender
+ * pinned against its own king still counts here, because the question is what guards the square
+ * rather than what the position would survive. Callers that need the harder question already
+ * have `sideCanCaptureUnit`, which plays legal moves.
+ *
+ * Read through the same `attacksSquare` geometry as check detection, so a defence here is an
+ * attack there; obstacles guard nothing, and a unit never defends itself. Board law never
+ * consults it.
+ */
+export function unitIsDefended(piece: Piece, pieces: readonly Piece[], size: BoardSize, env?: MoveEnv): boolean {
+  if (!piece || !piece.alive) return false;
+  for (const other of pieces) {
+    if (other.id === piece.id || !other.alive || other.side !== piece.side || isObstacle(other)) continue;
+    if (attacksSquare(other, pieces, size, env, piece.x, piece.y)) return true;
+  }
+  return false;
+}
+
+/**
  * Every living piece hostile to `side` that currently attacks one of `side`'s kings.
  *
  * `sideInCheck` answers whether that list is non-empty; this hands back the list itself,
