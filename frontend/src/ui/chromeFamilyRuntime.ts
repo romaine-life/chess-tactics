@@ -784,9 +784,25 @@ function namedChromeFillSurfacePaint(id: ChromeFillSurfaceId): string {
   background-size: 1024px auto !important;`;
 }
 
+/**
+ * A rail tab does not name its own surface: the rail COLUMN carries
+ * `data-chrome-tab-fill-surface` and every `.settings-tab` under it inherits that material
+ * (ApparatusRailColumn is the only stamper). The role-field default below must exclude this
+ * inherited path the same way it excludes a box that names its own surface — it cannot see it
+ * through a `:not([data-chrome-fill-surface])` on the tab itself, and out-specifying instead of
+ * excluding is what silently blanked every menu button once the field rule grew a second
+ * `:not()`. These two names are the whole contract; keep the fill rule and its exclusion here.
+ */
+const CHROME_TAB_FILL_HOST_ATTR = 'data-chrome-tab-fill-surface';
+const CHROME_TAB_FILL_INHERITED_SELECTOR = `[${CHROME_TAB_FILL_HOST_ATTR}] .settings-tab`;
+
+function chromeTabFillSelector(id: ChromeFillSurfaceId): string {
+  return `[${CHROME_TAB_FILL_HOST_ATTR}="${id}"] .settings-tab`;
+}
+
 function namedChromeFillSurfaceCss(): string {
   return CHROME_FILL_SURFACES.map((surface) => `${CHROME_FAMILY_SURFACE_SELECTOR} [data-chrome-fill-surface="${surface.id}"],
-${CHROME_FAMILY_SURFACE_SELECTOR} [data-chrome-tab-fill-surface="${surface.id}"] .settings-tab {
+${CHROME_FAMILY_SURFACE_SELECTOR} ${chromeTabFillSelector(surface.id)} {
 ${namedChromeFillSurfacePaint(surface.id)}
 }`).join('\n');
 }
@@ -1118,11 +1134,13 @@ export function frameCss(
   // A box that carries its own installed image is not competing with the role field, so it is
   // excluded here rather than out-specified later: a named surface and a portrait scene both
   // arrive from the catalog, and an `!important` role default that merely loses a specificity
-  // race would put the two one edit apart from swapping places.
+  // race would put the two one edit apart from swapping places. A rail tab is that same case
+  // one level up — it inherits its material from the rail column, so it needs its own
+  // exclusion; without it this rule out-specified the tab fill and blanked every menu button.
   const innerChromeFieldSelectors = chromeUnitScopedSelectors(
     familySurface,
     chromeUnitRoleSelectors('inner').map(
-      (selector) => `${selector}:not(.has-backdrop):not([data-chrome-fill-surface])`,
+      (selector) => `${selector}:not(.has-backdrop):not([data-chrome-fill-surface]):not(${CHROME_TAB_FILL_INHERITED_SELECTOR})`,
     ),
   );
   const titlebarJoint = dividers.outer.atomOverlay;
