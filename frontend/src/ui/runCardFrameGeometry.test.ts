@@ -101,11 +101,11 @@ describe('Run card frame geometry', () => {
   });
 
   it('sizes the cost reading to the coin face instead of letting it crowd the rim', () => {
-    // A one-digit reading never reaches the cap, so the common card is untouched.
+    // At the full face a one- and two-digit reading both fit at the approved size, so the size
+    // is what holds them and only the three-digit readings are shrunk to fit at all.
     for (const cost of [1, 4, 9]) expect(runCardCostSizeCqw(cost, 6.2)).toBe(6.2);
-    // Longer readings shrink only as far as it takes to sit inside the face.
-    for (const cost of [10, 11, 12, 90]) expect(runCardCostSizeCqw(cost, 6.2)).toBe(5.75);
-    for (const cost of [100, 160, 250]) expect(runCardCostSizeCqw(cost, 6.2)).toBe(4.1);
+    for (const cost of [10, 11, 12, 90]) expect(runCardCostSizeCqw(cost, 6.2)).toBe(6.2);
+    for (const cost of [100, 160, 250]) expect(runCardCostSizeCqw(cost, 6.2)).toBe(5.38);
     expect(runCardCostSizeCqw(12, 4)).toBe(4);
   });
 
@@ -121,18 +121,20 @@ describe('Run card frame geometry', () => {
 
   it('measures the display face rather than assuming digits scale', () => {
     // Advance Wars 2 GBA is monospaced at this advance for every digit but "1", measured in
-    // the font. So the widest reading of a length is that many advances, and the widest ink
-    // of every multi-digit reading lands on the same share of the coin face.
+    // the font, so the widest reading of a length is that many advances.
     expect(RUN_CARD_NUMERAL_EM_ADVANCE).toBe(.4375);
     const inkCqw = (digits: number): number => {
       const size = runCardCostSizeCqw(Number('9'.repeat(digits)), 6.2);
       return RUN_CARD_NUMERAL_EM_ADVANCE * digits * size + RUN_CARD_COST_LETTER_SPACING_CQW * digits;
     };
     const face = RUN_CARD_COIN_FACE_CQW * RUN_CARD_COIN_FACE_FILL;
-    expect(inkCqw(2)).toBeCloseTo(face, 1);
-    expect(inkCqw(3)).toBeCloseTo(face, 1);
-    // Four digits are not reachable in play, but the rule must not fall off a table's end.
-    expect(inkCqw(4)).toBeCloseTo(face, 1);
+    // A reading the FIT is holding lands on the fill exactly, at every length — including the
+    // four digits no card reaches, because the rule must not fall off the end of a table.
+    for (const digits of [3, 4, 5]) expect(inkCqw(digits)).toBeCloseTo(face, 1);
+    // A reading the approved SIZE is holding comes in under it. Two digits fit at full size now,
+    // so the fill is a ceiling they never reach rather than a target they sit on.
+    expect(runCardCostSizeCqw(99, 6.2)).toBe(6.2);
+    expect(inkCqw(2)).toBeLessThan(face);
   });
 
   it('opens the fill as a knob, because how full the coin reads is a judgement', () => {
@@ -145,13 +147,15 @@ describe('Run card frame geometry', () => {
   });
 
   it('reads a price for the digits it actually has, not the widest of its length', () => {
-    // 160 carries the narrow "1", so it inks less than its own cap allows; 60 is all-wide and
-    // lands on the fill exactly. A readout that assumed the widest would overstate 160.
-    expect(runCardCostFaceShare(60, 6.2)).toBeCloseTo(RUN_CARD_COIN_FACE_FILL, 2);
-    expect(runCardCostFaceShare(160, 6.2)).toBeLessThan(RUN_CARD_COIN_FACE_FILL);
-    expect(runCardCostFaceShare(160, 6.2)).toBeGreaterThan(.6);
-    // Nothing may ink past the face itself at the shipped fill.
-    for (const cost of [9, 10, 60, 90, 100, 160]) expect(runCardCostFaceShare(cost, 6.2)).toBeLessThan(1);
+    // 999 is all-wide and held by the fit, so it lands on the fill exactly. 160 carries the
+    // narrow "1" and comes in under its own cap; a readout assuming the widest would overstate it.
+    expect(runCardCostFaceShare(999, 6.2)).toBeCloseTo(RUN_CARD_COIN_FACE_FILL, 2);
+    expect(runCardCostFaceShare(160, 6.2)).toBeLessThan(runCardCostFaceShare(999, 6.2));
+    expect(runCardCostFaceShare(160, 6.2)).toBeGreaterThan(.9);
+    // Nothing the market can print may ink past the coin's own striking face.
+    for (const cost of [10, 60, 90, 100, 160]) {
+      expect(runCardCostFaceShare(cost, 6.2), String(cost)).toBeLessThanOrEqual(RUN_CARD_COIN_FACE_FILL);
+    }
   });
 
   it('states the entire text-placement rule as two shared values', () => {

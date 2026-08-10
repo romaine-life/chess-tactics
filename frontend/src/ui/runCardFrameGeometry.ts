@@ -131,8 +131,16 @@ export const RUN_CARD_TEXT_PLACEMENT: RunCardTextPlacement = Object.freeze({
  */
 export const RUN_CARD_COIN_FACE_CQW = 6.01;
 
-/** The share of that face the widest numeral of a given length may occupy. */
-export const RUN_CARD_COIN_FACE_FILL = .72;
+/**
+ * The share of that face the widest numeral of a given length may occupy.
+ *
+ * The whole of it. The face is the coin's flat striking surface, already measured inside the rim,
+ * so a reading that spans it is struck edge to edge of the strikeable area rather than crowding
+ * the raised edge — and holding a numeral short of that only made the longer prices harder to
+ * read for room nothing was using. Chosen on the Studio's Card Layout surface against the real
+ * dealt readings.
+ */
+export const RUN_CARD_COIN_FACE_FILL = 1;
 
 /**
  * The display face's digit advance, in em, measured in the font itself rather than estimated.
