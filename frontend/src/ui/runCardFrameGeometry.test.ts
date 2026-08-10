@@ -20,6 +20,7 @@ import {
   runCardFrameGeometryForSlot,
   runCardFrameGeometryKnowsPixels,
   runCardFramePaintInsetRatios,
+  runCardCostFaceShare,
   runCardCostSizeCqw,
   runCardFrameGeometryVariables,
   runCardFrameGeometryWithBoxes,
@@ -132,6 +133,25 @@ describe('Run card frame geometry', () => {
     expect(inkCqw(3)).toBeCloseTo(face, 1);
     // Four digits are not reachable in play, but the rule must not fall off a table's end.
     expect(inkCqw(4)).toBeCloseTo(face, 1);
+  });
+
+  it('opens the fill as a knob, because how full the coin reads is a judgement', () => {
+    // The Studio drives this. Raising it grows the readings the fit is holding, and a one-digit
+    // reading does not move until the fill passes where the longer ones already touch the rim.
+    expect(runCardCostSizeCqw(160, 6.2, .88)).toBeGreaterThan(runCardCostSizeCqw(160, 6.2, .72));
+    expect(runCardCostSizeCqw(9, 6.2, .88)).toBe(runCardCostSizeCqw(9, 6.2, .72));
+    // Omitted, it is what the cards ship at — a caller that does not tune gets the Run's own face.
+    expect(runCardCostSizeCqw(160, 6.2)).toBe(runCardCostSizeCqw(160, 6.2, RUN_CARD_COIN_FACE_FILL));
+  });
+
+  it('reads a price for the digits it actually has, not the widest of its length', () => {
+    // 160 carries the narrow "1", so it inks less than its own cap allows; 60 is all-wide and
+    // lands on the fill exactly. A readout that assumed the widest would overstate 160.
+    expect(runCardCostFaceShare(60, 6.2)).toBeCloseTo(RUN_CARD_COIN_FACE_FILL, 2);
+    expect(runCardCostFaceShare(160, 6.2)).toBeLessThan(RUN_CARD_COIN_FACE_FILL);
+    expect(runCardCostFaceShare(160, 6.2)).toBeGreaterThan(.6);
+    // Nothing may ink past the face itself at the shipped fill.
+    for (const cost of [9, 10, 60, 90, 100, 160]) expect(runCardCostFaceShare(cost, 6.2)).toBeLessThan(1);
   });
 
   it('states the entire text-placement rule as two shared values', () => {

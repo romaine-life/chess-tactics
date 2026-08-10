@@ -145,6 +145,9 @@ export const RUN_CARD_COIN_FACE_FILL = .72;
  */
 export const RUN_CARD_NUMERAL_EM_ADVANCE = .4375;
 
+/** The one exception, also measured: "1" is narrower than the rest of the face. */
+export const RUN_CARD_NUMERAL_ONE_EM_ADVANCE = .375;
+
 /**
  * The tightening a multi-digit reading is set with, in cqw, applied after every digit. The size
  * below reads it because it is real width: a reading is its advances PLUS its tracking, and a
@@ -162,12 +165,36 @@ export const RUN_CARD_COST_LETTER_SPACING_CQW = -.35;
  * three — a three-digit price rendered a third smaller than a two-digit one for no reason the
  * geometry could account for.
  */
-export function runCardCostSizeCqw(cost: number, approvedSizeCqw: number): number {
+export function runCardCostSizeCqw(
+  cost: number,
+  approvedSizeCqw: number,
+  faceFill: number = RUN_CARD_COIN_FACE_FILL,
+): number {
   const digits = Math.abs(Math.trunc(cost)).toString().length;
   const emWidth = RUN_CARD_NUMERAL_EM_ADVANCE * digits;
   const tracking = digits > 1 ? RUN_CARD_COST_LETTER_SPACING_CQW * digits : 0;
-  const fits = (RUN_CARD_COIN_FACE_CQW * RUN_CARD_COIN_FACE_FILL - tracking) / emWidth;
+  const fits = (RUN_CARD_COIN_FACE_CQW * faceFill - tracking) / emWidth;
   return Math.round(Math.min(approvedSizeCqw, fits) * 100) / 100;
+}
+
+/**
+ * The share of the coin face a reading of `digits` actually inks at `faceFill`. The size above is
+ * a cap on the WIDEST reading of a length, so a reading carrying the narrow "1" lands under it —
+ * `cost` is read for its real digits rather than assumed to be all-wide.
+ */
+export function runCardCostFaceShare(
+  cost: number,
+  approvedSizeCqw: number,
+  faceFill: number = RUN_CARD_COIN_FACE_FILL,
+): number {
+  const reading = Math.abs(Math.trunc(cost)).toString();
+  const size = runCardCostSizeCqw(cost, approvedSizeCqw, faceFill);
+  const advances = [...reading].reduce(
+    (total, digit) => total + (digit === '1' ? RUN_CARD_NUMERAL_ONE_EM_ADVANCE : RUN_CARD_NUMERAL_EM_ADVANCE),
+    0,
+  );
+  const tracking = reading.length > 1 ? RUN_CARD_COST_LETTER_SPACING_CQW * reading.length : 0;
+  return (advances * size + tracking) / RUN_CARD_COIN_FACE_CQW;
 }
 
 const SHA256 = /^[0-9a-f]{64}$/;

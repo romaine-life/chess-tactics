@@ -9,12 +9,15 @@ import {
 import { RUN_CARD_CATALOG } from '../run/model';
 import { runCardArtSlot, runCardName } from '../run/cardNames';
 import { RunCard } from './RunCard';
-import { RunCardFace } from './RunCardFace';
+import { RUN_CARD_APPROVED_TUNING, RunCardFace } from './RunCardFace';
 import { runCardFaceContent } from './runCardFaceContent';
 import {
   RUN_CARD_FRAME_SLOT,
   RUN_CARD_STANDARD_FRAME_GEOMETRY,
+  runCardCostFaceShare,
+  runCardCostSizeCqw,
 } from './runCardFrameGeometry';
+import { SliderRow } from './dressing/SliderRow';
 import {
   runCardRarityFrameAcceptanceItem,
   runCardRarityFrameReviewProof,
@@ -306,6 +309,18 @@ function RunCardBackStudy({ header, viewerZoom }: { header: ReactNode; viewerZoo
   );
 }
 
+/**
+ * How far the cost numeral may be pushed from the Studio, in whole percent of the coin's face.
+ *
+ * The ceiling is the face itself: past 100 the reading is wider than the flat striking surface it
+ * is struck on and starts climbing the rim, which is the thing the fit exists to prevent. The
+ * floor is low enough to see the shrink actually bite.
+ */
+const COIN_FACE_FILL_LIMITS = Object.freeze({ min: 40, max: 100, step: 1, nudge: 1 });
+
+/** The readings the fill is judged against: one of every length the deck can print. */
+const COIN_FILL_SPECIMEN_COSTS: readonly number[] = Object.freeze([9, 60, 160]);
+
 /** The Studio's live formation-card review surface. */
 export function RunCardPrototypeViewer({
   header,
@@ -315,6 +330,22 @@ export function RunCardPrototypeViewer({
   viewerZoom: number;
 }): ReactElement {
   const studioSearch = new URLSearchParams(window.location.search);
+  const [faceFillPercent, setFaceFillPercent] = useState(
+    () => Math.round(RUN_CARD_APPROVED_TUNING.costFaceFill * 100),
+  );
+  const [status, setStatus] = useState(
+    'The cost numeral is sized to fit the coin. Reset returns the fill the cards ship at.',
+  );
+  const faceFill = faceFillPercent / 100;
+  const tuning = { ...RUN_CARD_APPROVED_TUNING, costFaceFill: faceFill };
+  const shipped = Math.round(RUN_CARD_APPROVED_TUNING.costFaceFill * 100);
+  const copyFill = async (): Promise<void> => {
+    await navigator.clipboard.writeText(
+      `export const RUN_CARD_COIN_FACE_FILL = ${String(faceFill)};`,
+    );
+    setStatus('Copied. Commit the number in runCardFrameGeometry.ts to make it what the Run deals.');
+  };
+
   if (studioSearch.get('cardSide') === 'back') {
     return <RunCardBackStudy header={header} viewerZoom={viewerZoom} />;
   }
@@ -322,20 +353,76 @@ export function RunCardPrototypeViewer({
     return <RunCardRarityStudy header={header} viewerZoom={viewerZoom} />;
   }
   return (
-    <section className="run-card-prototype-workspace" aria-label="Formation card gallery">
-      {header}
-      <div
-        className="run-card-prototype-study-grid"
-        style={{ '--run-card-gallery-zoom': viewerZoom } as CSSProperties}
-      >
-        {RUN_CARD_CATALOG.map((card) => (
-          <article className="run-card-prototype-study" key={card.id}>
-            <RunCard card={card} mode="reference" />
-            <small>{runCardName(card)} · {card.pieces.length} unit{card.pieces.length === 1 ? '' : 's'}</small>
-          </article>
-        ))}
-      </div>
-    </section>
+    <>
+      <section className="run-card-prototype-workspace" aria-label="Formation card gallery">
+        {header}
+        <div
+          className="run-card-prototype-study-grid"
+          style={{ '--run-card-gallery-zoom': viewerZoom } as CSSProperties}
+        >
+          {RUN_CARD_CATALOG.map((card) => (
+            <article className="run-card-prototype-study" key={card.id}>
+              <RunCard card={card} mode="reference" tuning={tuning} />
+              <small>{runCardName(card)} · {card.pieces.length} unit{card.pieces.length === 1 ? '' : 's'}</small>
+            </article>
+          ))}
+        </div>
+      </section>
+      <aside className="tileset-view-controls" aria-label="Card face controls">
+        <section className="tileset-inspector-section">
+          <h2>Controls</h2>
+          <div className="tileset-control-stack">
+            <div data-testid="run-card-coin-fill-control">
+              <SliderRow
+                label={<>Cost numeral fills the coin <strong data-testid="run-card-coin-fill-value">{faceFillPercent}%</strong></>}
+                value={faceFillPercent}
+                set={(next) => {
+                  setFaceFillPercent(next);
+                  setStatus(next === shipped
+                    ? 'Back at the shipped fill.'
+                    : 'Fill changed. Copy it and commit the number to make it what the Run deals.');
+                }}
+                {...COIN_FACE_FILL_LIMITS}
+                dflt={shipped}
+              />
+            </div>
+            <p className="tileset-catalog-note">
+              This is the knob a multi-digit price answers to. A one-digit reading is held by the
+              approved size long before it reaches the coin, so it does not move until the fill is
+              pushed well past where the longer readings are already touching the rim.
+            </p>
+            <button
+              type="button"
+              className="tileset-view-action"
+              data-testid="run-card-coin-fill-reset"
+              disabled={faceFillPercent === shipped}
+              onClick={() => {
+                setFaceFillPercent(shipped);
+                setStatus('Fill reset to what the Run ships.');
+              }}
+            >
+              Reset fill
+            </button>
+            <button type="button" className="tileset-view-action" onClick={() => { void copyFill(); }}>
+              Copy fill
+            </button>
+          </div>
+          <dl data-testid="run-card-coin-fill-readout">
+            {COIN_FILL_SPECIMEN_COSTS.map((cost) => (
+              <div key={cost}>
+                <dt>{cost} gold</dt>
+                <dd>
+                  {runCardCostSizeCqw(cost, tuning.costSize, faceFill).toFixed(2)}cqw
+                  {' · inks '}
+                  {Math.round(runCardCostFaceShare(cost, tuning.costSize, faceFill) * 100)}%
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <p role="status">{status}</p>
+        </section>
+      </aside>
+    </>
   );
 }
 
