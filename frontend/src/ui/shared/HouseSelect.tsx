@@ -1,8 +1,7 @@
-import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { chromeUnitClassNames } from '../chromeUnitRegistry';
-import { KitScroll } from '../KitScroll';
-import { ChromeDivider, InnerChromeBox } from './ChromeBox';
+import { ChromeDividedGridRow, ChromeDividedGridRowGroup, DividedInnerChromeBox } from './ChromeDividedGrid';
 import { ChromeButton } from './ChromeButton';
 
 export type HouseSelectOption<TValue extends string = string> = {
@@ -235,49 +234,53 @@ export function HouseSelect<TValue extends string>({
         className="house-select-menu chrome-family-surface"
         style={menuStyle}
       >
-        <InnerChromeBox
+        {/* Every option is a ROW of one divided box, so the rails between them — inside a group and
+            between groups alike — are the box's own, laid and capped by its topology. They used to
+            be dividers dropped between the options by this file, which could only cap themselves as
+            though they met a frame; a group is a semantic wrapper with no box for exactly that
+            reason (see ChromeDividedGridRowGroup). */}
+        <DividedInnerChromeBox
           id={`${id}-menu`}
+          columns={['minmax(0, 1fr)']}
+          scroll
           className="house-select-menu-box"
           role="listbox"
           aria-label={ariaLabel}
         >
-          <KitScroll className="house-select-menu-scroll">
-            <div className="house-select-menu-options">
-              {optionSections.map((section, sectionIndex) => {
-                const groupLabelId = `${id}-group-${sectionIndex}`;
-                const optionRows = section.options.map(({ option, index }, optionIndex) => (
-                  <Fragment key={option.value}>
-                    {optionIndex > 0 ? <ChromeDivider role="inner" /> : null}
-                    <button
-                      type="button"
-                      id={`${id}-option-${option.value}`}
-                      className={`house-select-option ${index === activeIndex ? 'is-active' : ''}`.trim()}
-                      role="option"
-                      aria-selected={option.value === value}
-                      disabled={option.disabled}
-                      title={option.title}
-                      onMouseEnter={() => { if (!option.disabled) setActiveIndex(index); }}
-                      onClick={() => chooseIndex(index)}
-                    >
-                      {option.label}
-                    </button>
-                  </Fragment>
-                ));
-                return (
-                  <Fragment key={`${section.group ?? 'ungrouped'}-${sectionIndex}`}>
-                    {sectionIndex > 0 ? <ChromeDivider role="inner" /> : null}
-                    {section.group ? (
-                      <div className="house-select-option-group" role="group" aria-labelledby={groupLabelId}>
-                        <div id={groupLabelId} className="house-select-option-group-label">{section.group}</div>
-                        <div className="house-select-option-group-items">{optionRows}</div>
-                      </div>
-                    ) : optionRows}
-                  </Fragment>
-                );
-              })}
-            </div>
-          </KitScroll>
-        </InnerChromeBox>
+          {optionSections.flatMap((section, sectionIndex) => {
+            const groupLabelId = `${id}-group-${sectionIndex}`;
+            const optionRows = section.options.map(({ option, index }) => (
+              <ChromeDividedGridRow
+                key={option.value}
+                as="button"
+                id={`${id}-option-${option.value}`}
+                className={`house-select-option ${index === activeIndex ? 'is-active' : ''}`.trim()}
+                role="option"
+                aria-selected={option.value === value}
+                disabled={option.disabled}
+                title={option.title}
+                onMouseEnter={() => { if (!option.disabled) setActiveIndex(index); }}
+                onClick={() => chooseIndex(index)}
+              >
+                <span className="house-select-option-label">{option.label}</span>
+              </ChromeDividedGridRow>
+            ));
+            if (!section.group) return optionRows;
+            return [(
+              <ChromeDividedGridRowGroup
+                key={`group-${sectionIndex}`}
+                className="house-select-option-group"
+                role="group"
+                aria-labelledby={groupLabelId}
+              >
+                <ChromeDividedGridRow id={groupLabelId} className="house-select-option-group-label">
+                  {section.group}
+                </ChromeDividedGridRow>
+                {optionRows}
+              </ChromeDividedGridRowGroup>
+            )];
+          })}
+        </DividedInnerChromeBox>
       </div>,
       document.body,
     )

@@ -1,6 +1,7 @@
 import {
   Children,
   Fragment,
+  cloneElement,
   createContext,
   isValidElement,
   useContext,
@@ -169,9 +170,60 @@ export function ChromeDividedGridRow({
   return <div {...props as HTMLAttributes<HTMLDivElement>} className={classes}>{body}</div>;
 }
 
+/**
+ * A run of rows that belong together under one label — the campaign picker's "Official campaigns".
+ *
+ * It draws NO box and generates no layout of its own: its rows are rows of the grid around it, so
+ * the rails between them are that grid's rails, capped by that grid's topology. A group that drew
+ * its own box would have to terminate those rails against a frame it does not own, which is the
+ * exact failure this module exists to prevent. What the element is for is the SEMANTIC grouping —
+ * `role="group"` and its label — which is why it survives as an element at all.
+ */
+export function ChromeDividedGridRowGroup({
+  className = '',
+  children,
+  ...props
+}: HTMLAttributes<HTMLDivElement>): ReactElement {
+  return (
+    <div {...props} className={`chrome-divided-grid__row-group ${className}`.trim()}>
+      {children}
+    </div>
+  );
+}
+
 /** Whether a grid child declared itself one thing across every column. */
 function rowSpansAllColumns(row: ReactNode): boolean {
   return isValidElement<{ spans?: 'all' }>(row) && row.props.spans === 'all';
+}
+
+type ChromeDividedGridChild = {
+  row: ReactNode;
+  key: string;
+  /** The group element this row was declared inside, if any. */
+  group: ReactElement | null;
+  groupKey: string | null;
+};
+
+/**
+ * The grid's rows in one flat list, seeing straight through any row groups.
+ *
+ * Boundaries have to be computed across the whole box: the rail between a group's last row and the
+ * next group's first row is no different from any other, and a grid that only looked at its direct
+ * children would leave every rail inside a group to the group — which cannot cap them.
+ */
+function flattenGridChildren(children: ReactNode): ChromeDividedGridChild[] {
+  return Children.toArray(children).flatMap((child, index): ChromeDividedGridChild[] => {
+    const key = isValidElement(child) && child.key != null ? String(child.key) : `child-${index}`;
+    if (isValidElement<{ children?: ReactNode }>(child) && child.type === ChromeDividedGridRowGroup) {
+      return Children.toArray(child.props.children).map((row, rowIndex): ChromeDividedGridChild => ({
+        row,
+        key: `${key}-${isValidElement(row) && row.key != null ? String(row.key) : rowIndex}`,
+        group: child,
+        groupKey: key,
+      }));
+    }
+    return [{ row: child, key, group: null, groupKey: null }];
+  });
 }
 
 /**
@@ -231,7 +283,8 @@ export function DividedInnerChromeBox({
    */
   framed?: boolean;
 }): ReactElement {
-  const rows = Children.toArray(children);
+  const entries = flattenGridChildren(children);
+  const rows = entries.map((entry) => entry.row);
   const topology = chromeDividedGridTopology(columns.length, scroll);
   // A junction is the cap where a rail MEETS the box's own frame. An unframed grid has no such
   // frame — the host's chrome is its boundary — so its boundary caps caps nothing and simply sits
@@ -255,12 +308,15 @@ export function DividedInnerChromeBox({
   const gridStyle = {
     '--chrome-divided-grid-columns': template,
   } as CSSProperties;
-  const rowLayer = (
-    <div className="chrome-divided-grid__rows" style={gridStyle}>
-      {rows.map((row, index) => (
-        <Fragment key={isValidElement(row) && row.key != null ? row.key : index}>
-          {index > 0 ? (
-            <div className="chrome-divided-grid__row-boundary">
+  // Rows are rendered in one pass and then re-wrapped into their groups, so a group never gets a
+  // say in where its rails go: the boundary above a row is decided by the row before it in the
+  // BOX, not the row before it in the group.
+  const renderedEntries = entries.map((entry, index) => {
+    const row = entry.row;
+    return (
+      <Fragment key={entry.key}>
+        {index > 0 ? (
+          <div className="chrome-divided-grid__row-boundary">
               <ChromeGridRail
                 role="inner"
                 className="chrome-divided-grid__horizontal-rail"
@@ -282,11 +338,32 @@ export function DividedInnerChromeBox({
                   trackCount={topology.trackCount}
                 />
               ))}
-            </div>
-          ) : null}
-          {row}
-        </Fragment>
-      ))}
+          </div>
+        ) : null}
+        {row}
+      </Fragment>
+    );
+  });
+  // Consecutive rows from the same group go back inside it. The group is a semantic wrapper only:
+  // it lays out nothing, so the rows it holds stay grid items of this grid.
+  const chunks: { group: ReactElement | null; key: string; nodes: ReactNode[] }[] = [];
+  entries.forEach((entry, index) => {
+    const last = chunks.at(-1);
+    if (last && last.group !== null && entry.groupKey === last.key) {
+      last.nodes.push(renderedEntries[index]);
+      return;
+    }
+    chunks.push({
+      group: entry.group,
+      key: entry.groupKey ?? entry.key,
+      nodes: [renderedEntries[index]],
+    });
+  });
+  const rowLayer = (
+    <div className="chrome-divided-grid__rows" style={gridStyle}>
+      {chunks.map((chunk) => chunk.group
+        ? cloneElement(chunk.group, { key: chunk.key }, chunk.nodes)
+        : <Fragment key={chunk.key}>{chunk.nodes}</Fragment>)}
     </div>
   );
 

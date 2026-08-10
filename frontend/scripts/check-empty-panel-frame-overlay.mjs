@@ -250,8 +250,14 @@ if (/--le-inner-atom-(?:left|right)-footprint|--le-visible-content-(?:left|right
   failures.push('atom footprint must not become control, title, or section alignment state');
 }
 
-if (!/className="le-control-divider-host"[\s\S]*?<ChromeDivider role="outer"\s*\/>/.test(levelEditorChromeConsumers)) {
-  failures.push('level editor rail must place the shared outer-role ChromeDivider between fixed controls and dynamic content');
+// The break under the fixed action dock is the PANEL's: its ends are meetings with the panel's own
+// frame, which nothing inside the panel can see. The consumer asks for it by handing over its fixed
+// section, so there is no placement left for a screen to get wrong.
+if (!/className="le-control-divider-host shell-controls-break"[\s\S]*?<ChromeDivider role="outer"\s*\/>/.test(chromeBox)) {
+  failures.push('ShellControlsPanel must lay the shared outer-role break between its fixed head and its scrolling body');
+}
+if (!/<ShellControlsPanel[\s\S]*?fixed=\{\(/.test(levelEditorChromeConsumers)) {
+  failures.push('level editor rail must hand its fixed action dock to ShellControlsPanel instead of placing the break itself');
 }
 if (!/data-chrome-unit="inner-box"\s+className=\{chromeUnitClassNames\('inner-box', 'le-brush-thumb'\)\}/.test(levelEditor)) {
   failures.push('shared Level Editor active-brush thumbnail must inherit the registered inner-box frame');
@@ -584,29 +590,29 @@ if (!chromeRuntime.includes("calc(-1 * var(--ds-space-3))")) {
 if (/id:\s*'inner-dropdown'[\s\S]*?selectors:\s*\[[\s\S]*?'\.le-(?:layer|event)-select(?:-wrap)?'/.test(chromeUnitRegistry)) {
   failures.push('inner dropdown registry must not retain retired native-select selectors');
 }
+// The menu is one DIVIDED inner box: options are its rows, the scrollbar sits in the framed gutter
+// it rules off, and every rail between options — inside a group and between groups — is laid and
+// capped by its topology. It used to be an inner box with dividers dropped between the options by
+// HouseSelect itself, which could only cap them as though they met a frame.
 const houseSelectMenuBlock = blockFor('.house-select-menu');
-const houseSelectScrollBlock = blockFor('.house-select-menu-scroll');
-const houseSelectScrollContentBlock = blockFor('.house-select-menu-scroll > .kit-scroll-content');
-const houseSelectScrollRailBlock = blockFor('.house-select-menu-scroll > .kit-scroll-rail');
+const houseSelectScrollContentBlock = blockFor('.chrome-divided-grid__scroll > .kit-scroll-content');
 const houseSelectOptionBlock = blockFor('.house-select-option');
-if (!/<KitScroll\s+className="house-select-menu-scroll"/.test(houseSelect)
-  || !/<InnerChromeBox[\s\S]*?className="house-select-menu-box"[\s\S]*?<ChromeDivider role="inner"/.test(houseSelect)
+if (!/<DividedInnerChromeBox[\s\S]*?columns=\{\['minmax\(0, 1fr\)'\]\}[\s\S]*?scroll[\s\S]*?className="house-select-menu-box"/.test(houseSelect)
+  || !/<ChromeDividedGridRow[\s\S]*?className=\{`house-select-option /.test(houseSelect)
+  || /<ChromeDivider\b/.test(houseSelect)
   || /chromeUnitClassNames\('inner-list-row',\s*'house-select-option'/.test(houseSelect)
   || /\.house-select-option'/.test(chromeUnitRegistry)
   || !/overflow\s*:\s*visible/.test(houseSelectMenuBlock)
-  || !houseSelectScrollBlock.includes('--house-select-clip-apron-left')
-  || !houseSelectScrollBlock.includes('--house-select-clip-apron-right')
-  || !houseSelectScrollBlock.includes('--le-inner-divider-atom-left-overhang')
-  || !houseSelectScrollBlock.includes('--le-inner-divider-atom-right-overhang')
-  || !/padding-inline\s*:\s*var\(--house-select-clip-apron-left\) var\(--house-select-clip-apron-right\)/.test(houseSelectScrollContentBlock)
-  || !/bottom\s*:\s*0/.test(houseSelectScrollRailBlock)
-  || !/right\s*:\s*calc\(var\(--house-select-clip-apron-right\) - var\(--le-chrome-inner-rail-w, 7px\)\)/.test(houseSelectScrollRailBlock)
-  || !/top\s*:\s*0/.test(houseSelectScrollRailBlock)
-  || !/z-index\s*:\s*5/.test(houseSelectScrollRailBlock)
   || !/overflow-x\s*:\s*hidden/.test(houseSelectScrollContentBlock)
   || /overflow-x\s*:\s*(?:auto|scroll)/.test(houseSelectScrollContentBlock)
   || /--le-inner-atom-(?:left|right)-(?:overhang|footprint)/.test(houseSelectOptionBlock)) {
-  failures.push('HouseSelect menus must be one divided inner box with a joint-safe clip apron, unframed rows, and vertical-only scrolling');
+  failures.push('HouseSelect menus must be one divided inner box whose options are its rows, with vertical-only scrolling and no hand-placed rail');
+}
+// A semantic group of options draws no box, so its rows stay rows of the menu's own grid and the
+// rails inside it stay the menu's. A group that boxed its options would cap rails against a frame
+// it does not own — the failure the whole divided grid exists to prevent.
+if (!/display\s*:\s*contents/.test(blockFor('.chrome-divided-grid__row-group'))) {
+  failures.push('a divided-grid row group must generate no box, so its rows remain rows of the grid that caps their rails');
 }
 for (const side of ['left', 'right', 'top', 'bottom']) {
   if (!houseSelect.includes(`paintOverhang('--le-inner-atom-${side}-overhang')`)) {

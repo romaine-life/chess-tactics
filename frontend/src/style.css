@@ -6558,52 +6558,23 @@ body.loading-bootstrap .app-startup-status {
   position: fixed;
   z-index: 2200;
 }
+/* The menu is a divided grid: its options are rows, its scrollbar sits in the framed gutter the
+   grid rules off, and every rail between options is the grid's own. The apron that used to be
+   hand-computed here is the grid's --chrome-divided-grid-inline-apron-start. */
 .house-select-menu-box {
-  display: block;
   max-height: var(--house-select-menu-max-height, 260px);
   min-height: 0;
   min-width: 0;
-  overflow: visible;
   width: 100%;
 }
-.house-select-menu-scroll {
-  --house-select-clip-apron-left: calc(var(--le-chrome-inner-rail-w, 7px) + max(var(--le-inner-atom-left-overhang, 0px), var(--le-inner-divider-atom-left-overhang, 0px)));
-  --house-select-clip-apron-right: calc(var(--le-chrome-inner-rail-w, 7px) + max(var(--le-inner-atom-right-overhang, 0px), var(--le-inner-divider-atom-right-overhang, 0px)));
-  margin-inline:
-    calc(-1 * var(--house-select-clip-apron-left))
-    calc(-1 * var(--house-select-clip-apron-right));
-  max-height: calc(var(--house-select-menu-max-height, 260px) - (var(--le-chrome-inner-rail-w, 7px) * 2));
-  min-height: 0;
+.house-select-menu-box > .chrome-divided-grid__scroll {
+  block-size: auto;
+  max-block-size: calc(var(--house-select-menu-max-height, 260px) - (var(--le-chrome-inner-rail-w, 7px) * 2));
+  min-block-size: 0;
 }
-.house-select-menu-scroll > .kit-scroll-content {
-  box-sizing: border-box;
+.house-select-menu-box > .chrome-divided-grid__scroll > .kit-scroll-content {
   height: auto;
   max-height: inherit;
-  overflow-x: hidden;
-  padding-inline: var(--house-select-clip-apron-left) var(--house-select-clip-apron-right);
-}
-.house-select-menu-scroll > .kit-scroll-rail {
-  bottom: 0;
-  right: calc(var(--house-select-clip-apron-right) - var(--le-chrome-inner-rail-w, 7px));
-  top: 0;
-  z-index: 5;
-}
-.house-select-menu-options {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  padding: 0;
-}
-.house-select-menu-options > .chrome-divider[data-chrome-divider-role="inner"],
-.house-select-option-group-items > .chrome-divider[data-chrome-divider-role="inner"] {
-  --kit-divider-gap: 0px;
-  --kit-divider-reach: var(--le-chrome-inner-rail-w, 7px);
-}
-.house-select-option-group,
-.house-select-option-group-items {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
 }
 .house-select-option-group-label {
   background: rgba(4, 15, 24, .78);
@@ -6626,14 +6597,19 @@ body.loading-bootstrap .app-startup-status {
   font: 800 var(--ds-text-xs)/1 var(--ds-font-sans, system-ui, sans-serif);
   min-height: 30px;
   min-width: 0;
-  overflow: hidden;
-  padding: 7px 26px 7px 9px;
+  padding: 7px 12px 7px 9px;
   text-align: left;
-  text-overflow: ellipsis;
   text-shadow: 0 2px 0 #010407;
   text-transform: uppercase;
-  white-space: nowrap;
   width: 100%;
+}
+/* The option row is a grid cell of the menu, so the truncation lives on the label rather than on
+   the row: text-overflow needs a block container, and an anonymous grid item is not one. */
+.house-select-option-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .house-select-option.is-active,
 .house-select-option:hover:not(:disabled) {
@@ -7408,6 +7384,13 @@ body.loading-bootstrap .app-startup-status {
   box-sizing: border-box;
   display: grid;
   min-inline-size: 0;
+}
+
+/* A semantic group of rows generates no box of its own, so the rows inside it stay grid items of
+   the grid and the rails between them stay that grid's — laid and capped by one topology. A group
+   that boxed its rows would have to cap rails against a frame it does not own. */
+.chrome-divided-grid__row-group {
+  display: contents;
 }
 
 .chrome-divided-grid__row-boundary {
@@ -19941,10 +19924,8 @@ button.tileset-relationship-cell {
   outline-offset: -2px;
 }
 
-.settings-row.ce-editor-level-row.is-read-only {
-  grid-template-areas: "thumb rule copy";
-  grid-template-columns: var(--ce-level-row-preview-inline) auto minmax(0, 1fr);
-}
+/* Nothing restates the row's tracks for a read-only row: the box owns the preview/copy split as a
+   column line, and the body cell's own "copy actions" grid simply has no actions to place. */
 
 /* The preview pane. LevelThumbnail owns the board's 4:3 window and is handed the width that
    fills this box's content height (LEVEL_ROW_PREVIEW_WIDTH), so the compartment is exactly the
@@ -19965,11 +19946,38 @@ button.tileset-relationship-cell {
   display: block;
 }
 
-/* Divider host contract (see `.kit-divider`): the reach is supplied by the registered inner
-   role; the host only says the rule sits flush between its two panes. */
-.ce-editor-level-row > .action-list-leading-rule {
-  --kit-divider-gap: 0px;
-  grid-area: rule;
+/* A framed row is its own ONE-ROW divided box: the rail between the preview and the copy is that
+   box's column line, so the box places it and caps both ends against its own frame. It used to be
+   a rule this row drew for itself, which could only cap as though it met a frame — true here, and
+   the reason the same markup was wrong for an unframed member. */
+.ce-editor-level-row-box {
+  --ce-level-row-preview-inline: 96px;
+  block-size: 86px;
+  cursor: pointer;
+}
+
+.ce-editor-level-row-box > .chrome-divided-grid__rows,
+.ce-editor-level-row-box .ce-editor-level-row-cells {
+  block-size: 100%;
+  min-block-size: 0;
+}
+
+/* The cells are shared with the unframed member, where the row IS 86px. Inside a frame they fill
+   the content box the frame leaves instead of restating its height — so the selectors have to
+   outrank the member's own, which state that height in three classes. */
+.ce-editor-level-row-box .ce-editor-level-thumb.ce-editor-level-cell-preview,
+.ce-editor-level-row-box .settings-row.ce-editor-level-row.ce-editor-level-cell-body {
+  block-size: 100%;
+  min-block-size: 0;
+}
+
+/* The whole row opens the level, verbs excepted. The grid row is the positioned ancestor, so the
+   overlay covers preview and copy together rather than only the cell it is declared in. */
+.ce-editor-level-row-box .ce-editor-level-primary {
+  grid-column: auto;
+  grid-row: auto;
+  inset: 0;
+  position: absolute;
 }
 
 .ce-editor-level-row.is-disabled .ce-editor-level-thumb {
@@ -20039,6 +20047,10 @@ button.tileset-relationship-cell {
 
 .ce-editor-level-row.is-selected { box-shadow: inset 0 0 0 2px rgba(101, 184, 255, .78); }
 .ce-editor-level-row:not(.is-selected):hover { filter: brightness(1.06); }
+/* The framed box carries `ce-editor-level-row` itself, so the two rules above light ITS frame and
+   nothing new paints. The body cell carries the class too and must not brighten a second time
+   under the box that is already brightening. */
+.ce-editor-level-row-box .ce-editor-level-cell-body:hover { filter: none; }
 
 /* Inline draft rename stays inside the shared row and reuses the canonical kit field + icon
    buttons. The form itself is invisible layout; every perceived surface remains kit-backed. */

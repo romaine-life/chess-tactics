@@ -20,16 +20,20 @@ const RAIL_INTERNALS_OWNERS = new Set([
 ]);
 
 /**
- * Who may render a bare `<ChromeDivider>` at all. Everything here OWNS a boundary and can say where
- * the rail's ends are: the divided grid, a row that splits itself into compartments, the select
- * menu's own box, the editor rail's fixed/dynamic seam, and the two surfaces whose SUBJECT is the
- * kit itself. A feature screen is not on this list — it asks its box for members instead.
+ * Who may render a bare `<ChromeDivider>` at all — and by now, nothing that builds a screen.
+ *
+ * A rail is placed by the element that owns the frame its ends meet, and there are exactly two of
+ * those: the divided grid, which computes its whole junction graph from its grid lines, and
+ * ShellControlsPanel, whose own frame is what the break under its fixed head runs into. Both live
+ * in the shared chrome and neither takes a rail from a caller. The remaining two entries are the
+ * kit's display cases, where a divider IS the subject on the page rather than chrome in a screen.
+ *
+ * This list used to carry feature files, and that was the hole: it encoded a judgement about who
+ * could be trusted with a rail. Nobody is trusted with one now. A surface that needs to separate
+ * things asks its box for members, and the box lays the rails and their caps.
  */
 const DIVIDER_OWNERS = new Set([
   'ui/shared/ChromeDividedGrid.tsx',
-  'ui/shared/ActionList.tsx',
-  'ui/shared/HouseSelect.tsx',
-  'ui/LevelEditorChromeConsumers.tsx',
   'ui/ChromeLab.tsx',
   'ui/ChromeUnitAudit.tsx',
 ]);
@@ -82,4 +86,4 @@ if (failures.length) {
   for (const failure of failures) console.error(`  - ${failure}`);
   process.exit(1);
 }
-console.log(`✓ chrome rails: ${DIVIDER_OWNERS.size} boundary owners may draw one; every other surface asks its box for members.`);
+console.log(`✓ chrome rails: only the divided grid, the controls panel and ${DIVIDER_OWNERS.size - 1} kit display cases may draw one; every screen asks its box for members.`);

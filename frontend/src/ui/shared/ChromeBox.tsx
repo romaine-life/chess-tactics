@@ -187,12 +187,19 @@ export function ShellControlsPanel({
   titleActions,
   titleClassName = '',
   titleContent = null,
+  fixed = null,
   children,
   ...props
 }: ComponentPropsWithoutRef<'aside'> & {
   titleActions?: ReactNode;
   titleClassName?: string;
   titleContent?: ReactNode;
+  /**
+   * Content pinned above the scrolling body. The panel lays the rail between the two itself,
+   * because the rail's ends are meetings with THIS panel's frame and nothing inside the panel
+   * can see where those are. A caller that placed its own got a bar stopping in mid-air.
+   */
+  fixed?: ReactNode;
 }): ReactElement {
   return (
     <OuterChromeBox
@@ -211,6 +218,12 @@ export function ShellControlsPanel({
       >
         {titleContent}
       </OuterChromeHeader>
+      {fixed}
+      {fixed ? (
+        <div className="le-control-divider-host shell-controls-break" aria-hidden="true">
+          <ChromeDivider role="outer" />
+        </div>
+      ) : null}
       {children}
     </OuterChromeBox>
   );

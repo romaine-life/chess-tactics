@@ -6,6 +6,7 @@ import { levelObjectiveLine } from '../LevelInfoCompact';
 import { installedUiMedia } from '../installedUiMedia';
 import { GatedLevelThumbnail } from '../shell/ThumbnailSurface';
 import { ActionListRow, type ActionListAction } from './ActionList';
+import { ChromeDividedGridRow, DividedInnerChromeBox } from './ChromeDividedGrid';
 import { EDITOR_COLUMN_BOX_FILL_ROLE, EDITOR_COLUMN_CONTROL_FILL_SURFACE } from './EditorColumnControls';
 
 const EDITOR_ROW_ICONS = {
@@ -160,88 +161,71 @@ export function EditorLevelRow({
     <span className="settings-row-thumb-empty" />
   );
 
-  // An unframed MEMBER hands its box TWO CELLS — preview, then everything else — so the rail
-  // between them is the box's own column line. A framed row is a single object that splits itself
-  // into panes and keeps the preview inside.
-  if (!framed) {
-    return (
-      <>
-        <div className="ce-editor-level-thumb ce-editor-level-cell-preview">{preview}</div>
-        <ActionListRow item={{
-          id: levelId,
-          title: `${showOrdinal ? `${index + 1}. ` : ''}${rowName}`,
-          description: <p>{goalLine}</p>,
-          heading: (
-            <div className="ce-editor-level-heading">
-              {heading ?? <h4 id={headingId}>{showOrdinal ? `${index + 1}. ` : ''}{rowName}</h4>}
-            </div>
-          ),
-          descriptionId,
-          framed: false,
-          selected: false,
-          readOnly: !hasActions,
-          neutral: !containerIsButton,
-          className: `${className} ce-editor-level-cell-body`,
-          copyClassName,
-          ariaLabel,
-          actionsLabel: actionsLabel ?? `Actions for ${rowName}`,
-          onSelect,
-          actions: rowActions,
-          actionContent,
-        }} />
-      </>
-    );
-  }
+  // The row is TWO CELLS — preview, then everything else — either way. What differs is who owns
+  // the rail between them: a member hands its cells to the list box around it and that box's
+  // column line divides them; a framed row is its OWN one-row box and its own column line does.
+  // Neither draws a rule of its own, because a rule drawn here can only cap its ends as though
+  // they met a frame, and the ends it actually has belong to whichever box is around it.
+  const cells = (
+    <>
+      <div className="ce-editor-level-thumb ce-editor-level-cell-preview">{preview}</div>
+      <ActionListRow item={{
+        id: levelId,
+        title: `${showOrdinal ? `${index + 1}. ` : ''}${rowName}`,
+        description: <p>{goalLine}</p>,
+        heading: (
+          <div className="ce-editor-level-heading">
+            {heading ?? <h4 id={headingId}>{showOrdinal ? `${index + 1}. ` : ''}{rowName}</h4>}
+          </div>
+        ),
+        descriptionId,
+        framed: false,
+        // Never on the cell. A framed row shows which one is current by lighting its own frame,
+        // and that frame is the box's; the same class on the cell would outline the copy alone.
+        // The current row is announced on the box instead (aria-current below).
+        selected: false,
+        readOnly: !hasActions,
+        neutral: !containerIsButton,
+        className: `${className} ce-editor-level-cell-body`,
+        copyClassName,
+        // A framed row is pressable as a whole, so the label and the press live on the box; the
+        // body cell would otherwise announce the row a second time and leave the preview dead.
+        ariaLabel: framed ? undefined : ariaLabel,
+        actionsLabel: actionsLabel ?? `Actions for ${rowName}`,
+        onSelect: framed ? undefined : onSelect,
+        primaryAction: primaryHref || onPrimarySelect ? {
+          label: primaryAriaLabel ?? `Open ${rowName}`,
+          title: primaryTitle,
+          href: primaryHref,
+          describedBy: descriptionId,
+          onPress: onPrimarySelect,
+        } : undefined,
+        actions: rowActions,
+        actionContent,
+      }} />
+    </>
+  );
+
+  if (!framed) return cells;
 
   return (
-    <ActionListRow item={{
-      id: levelId,
-      title: `${showOrdinal ? `${index + 1}. ` : ''}${rowName}`,
-      description: <p>{goalLine}</p>,
-      heading: (
-        <div className="ce-editor-level-heading">
-          {heading ?? <h4 id={headingId}>{showOrdinal ? `${index + 1}. ` : ''}{rowName}</h4>}
-        </div>
-      ),
-      descriptionId,
-      // The board preview is a COMPARTMENT of this box, not a second box inside it: it seats
-      // flush against the row's own frame and the kit's 9-slice divider separates it from the
-      // copy, so the row reads as one framed object split into panes (the treatment the Run's
-      // Battle preview wears). A nested inner frame here also could not fit — its rails made
-      // the leading content taller than the row's content box, which is what pushed every
-      // control in the row off centre.
-      leadingChrome: false,
-      leadingClassName: 'ce-editor-level-thumb',
-      // A FRAMED row draws the rail between its preview and its copy itself, because the row's own
-      // frame is what the rail's ends meet. An unframed MEMBER must not: its ends meet the row
-      // boundaries of the box around it, which belong to that box's topology, and a rail drawn
-      // here can only cap itself as though it met a frame — landing a terminator in the middle of
-      // the row rail it actually crosses. The box declares a COLUMN instead, and the crossing
-      // becomes the four-way junction the grid places. See SectionBox's `columns`.
-      leadingDivider: framed,
-      leading: preview,
-      fillRole: framed ? EDITOR_COLUMN_BOX_FILL_ROLE : undefined,
-      framed,
-      // A framed row shows which one is current by lighting its own frame. An unframed member has
-      // none to light, and the same class paints a bare outline floating in the list — so the "i"
-      // that opened the details carries the state instead, which is also the thing you pressed.
-      selected: framed ? active : false,
-      readOnly: !hasActions,
-      neutral: !containerIsButton,
-      className,
-      copyClassName,
-      ariaLabel,
-      actionsLabel: actionsLabel ?? `Actions for ${rowName}`,
-      onSelect,
-      primaryAction: primaryHref || onPrimarySelect ? {
-        label: primaryAriaLabel ?? `Open ${rowName}`,
-        title: primaryTitle,
-        href: primaryHref,
-        describedBy: descriptionId,
-        onPress: onPrimarySelect,
-      } : undefined,
-      actions: rowActions,
-      actionContent,
-    }} />
+    <DividedInnerChromeBox
+      columns={['var(--ce-level-row-preview-inline)', 'minmax(0, 1fr)']}
+      className={`ce-editor-level-row-box ${className} ${active ? 'active is-active is-selected' : ''} ${!hasActions ? 'is-read-only' : ''} ${!containerIsButton ? 'is-neutral' : ''}`.replace(/\s+/g, ' ').trim()}
+      fillRole={EDITOR_COLUMN_BOX_FILL_ROLE}
+      role={containerIsButton ? 'button' : undefined}
+      tabIndex={containerIsButton ? 0 : undefined}
+      aria-label={containerIsButton ? ariaLabel : undefined}
+      aria-current={active ? 'true' : undefined}
+      onClick={onSelect}
+      onKeyDown={(event) => {
+        if (onSelect && (event.key === 'Enter' || event.key === ' ')) {
+          event.preventDefault();
+          onSelect();
+        }
+      }}
+    >
+      <ChromeDividedGridRow className="ce-editor-level-row-cells">{cells}</ChromeDividedGridRow>
+    </DividedInnerChromeBox>
   );
 }
