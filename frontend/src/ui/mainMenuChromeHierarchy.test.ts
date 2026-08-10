@@ -61,7 +61,17 @@ describe('Main Menu chrome hierarchy', () => {
   it('owns the main-menu icon footprint without changing shared settings tabs', () => {
     expect(styleCss).toMatch(/\.settings-tab\.main-menu-mode-tab\s*\{[\s\S]*?--settings-tab-icon-size:\s*44px;[\s\S]*?overflow:\s*hidden;/);
     expect(styleCss).toMatch(/\.main-menu-mode-tab \.settings-tab-icon\s*\{[\s\S]*?overflow:\s*visible;[\s\S]*?position:\s*relative;/);
-    expect(styleCss).toMatch(/\.main-menu-mode-tab \.settings-tab-icon img\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?left:\s*50%;[\s\S]*?top:\s*calc\(50% - \.5px\);[\s\S]*?transform:\s*translate\(calc\(-50% \+ 0px\), -50%\);/);
+    // `top: 50%`, NOT the `calc(50% - .5px)` this used to pin. That nudge existed to keep the
+    // raster on whole logical pixels and bought nothing — 44/64 is already a fractional scale,
+    // so the art resamples either way — while costing the symmetry the eye reads: it put 6px
+    // above the mark and 7px below it on every button in the rail (ADR-0556).
+    expect(styleCss).toMatch(/\.main-menu-mode-tab \.settings-tab-icon img\s*\{[\s\S]*?position:\s*absolute;[\s\S]*?left:\s*50%;[\s\S]*?top:\s*50%;[\s\S]*?transform:\s*translate\(calc\(-50% \+ 0px\), -50%\);/);
+    expect(styleCss).not.toMatch(/\.main-menu-mode-tab \.settings-tab-icon img\s*\{[^}]*top:\s*calc\(50% - \.5px\)/);
+    // The shared rail button centres its own icon+label row. Both rail heights were computed
+    // against a 2px border while the panel-line border-image resolves to 7px a side, so a 40px
+    // icon row sat in a 30px content box and overflowed the full 10px downward — every mark and
+    // label 5px under its button's centre line, on every rail in the family (ADR-0556).
+    expect(styleCss).toMatch(/\.settings-tab\s*\{[\s\S]*?align-content:\s*center;/);
   });
 
   it('rejects legacy button boxes anywhere in a menu destination', () => {

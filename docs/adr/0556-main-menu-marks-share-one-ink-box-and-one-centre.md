@@ -10,7 +10,7 @@ refines:
   - "[ADR-0433](0433-leaf-chrome-uses-oak-over-structural-teal-fields.md)"
 ---
 
-# ADR-0556: Main-menu marks share one ink box and one centre line
+# ADR-0556: Main-menu marks share one ink height and one centre line
 
 ## Context
 
@@ -37,23 +37,43 @@ forced UI-blue" for semantic icons; the carved set was the last place still doin
 
 ## Decision
 
-**Every mark in the main-menu set is fitted to one ink box and one centre line, and the set is
-carved in a lore material rather than the structural blue.**
+**Every mark in the main-menu set is fitted to one ink HEIGHT and one centre line, and the set
+is carved in a lore material rather than the structural blue.**
 
-- **One box.** A mark's ink is scaled until its **long axis is exactly 52px** on
-  [ADR-0026](0026-ui-kit-icon-canvas.md)'s canonical 64×64 canvas. 52/64 = 0.8125 sits inside
-  the 62–84% band `ApparatusRailTab`'s `'inset'` mark canvas assumes, so the seat keeps drawing
-  the whole asset at `--settings-tab-icon-size` and gains no new rule. It is also where the two
-  largest marks of the retired set already sat — the small ones grow to meet them rather than
-  the whole rail changing size.
-- **One centre.** The ink box is centred on the canvas centre on **both** axes. Vertical
+- **One height.** A mark's ink is scaled until it is **exactly 52px tall** on
+  [ADR-0026](0026-ui-kit-icon-canvas.md)'s canonical 64×64 canvas. Width follows the aspect and
+  is bounded only by the canvas. 52/64 = 0.8125 sits inside the 62–84% band
+  `ApparatusRailTab`'s `'inset'` mark canvas assumes, so the seat keeps drawing the whole asset
+  at `--settings-tab-icon-size` and gains no new rule.
+
+  Height, and **not** the long axis. Pinning the long axis equalizes size but not vertical
+  padding: a mark wider than it is tall spends the box on its width and comes back short, so it
+  sits with more air above and below it than its neighbours. Measured on the live rail, that was
+  14.6px of padding on the wide Lobbies mark against 5.6px on its neighbours, and 6.3px on the
+  slightly-wide Editor. The rail stacks five marks in a column against a shared button frame, so
+  the gap above and below each mark is the thing the eye compares. Pinning the height makes that
+  gap identical for every mark in the set by construction — measured 5.625px above and below,
+  on every mark.
+- **A subject too wide for that height is refused, not shrunk.** Shrinking it is exactly the
+  unequal padding this rule exists to remove. Three marks in a row become three upright marks;
+  the packer names the file and the width it came out at.
+- **One centre.** The ink box is centred on the canvas centre on **both** axes, and both ink
+  dimensions are pinned **even** so that division is exact — an odd dimension against an even
+  canvas resolves half a pixel off and leaves one more row of margin on one side. Vertical
   placement is derived from the glyph's own pixels, never from a hand-tuned nudge; the old
   `nudgeY` column is deleted. Centring is frozen as the asset's transparent padding, so
   downstream centres naively and gets it for free (this clause of ADR-0027 §D stands).
-- **Verified on the written bytes.** `pack-menu-icons.mjs` measures every file it produces with
-  the same `inkBounds` primitive `trim-icon-margin.mjs` and the title-bar seat gate use, and
-  fails when a long axis is not exactly 52px or a box is off centre by more than half a pixel.
-  A fit nobody can check is a fit that drifts on the next regeneration.
+- **The button centres its own row.** Both rail heights were computed against a 2px border —
+  "border(4) + 2·padding + icon slot(40)" — but the panel-line border-image resolves to **7px** a
+  side, leaving a 30px content box around a 40px icon row. The row overflowed the whole 10px
+  downward, seating every mark and label 5px below its button's centre line on every rail in the
+  family. `.settings-tab` now centres its track (`align-content: center`) rather than re-deriving
+  a padding number, because the border-image width is the thing that moved once already.
+- **Verified on the written bytes and on the live rail.** `pack-menu-icons.mjs` measures every
+  file it produces with the same `inkBounds` primitive `trim-icon-margin.mjs` and the title-bar
+  seat gate use, and fails when the ink is not exactly 52px tall or when the margins above and
+  below (or left and right) differ at all. A fit nobody can check is a fit that drifts on the
+  next regeneration.
 - **Material.** The set leaves structural blue. Candidates are generated per
   ADR-0035's material vocabulary — stone, bronze, pewter — one material across all five marks,
   so the rail reads as one family.
@@ -67,17 +87,23 @@ carved in a lore material rather than the structural blue.**
 
 ### What this costs, stated plainly
 
-A single box does **not** equalize optical mass, and ADR-0027 was right that it does not. A wide
-subject fitted to 52px of width is short: three pawns in a row land near 52×29 beside a sword at
-39×52, so the Lobbies mark carries visibly less ink than its neighbours. That is the accepted
-trade — an exactly equal box, judged on the rail. If the owner later wants the mass back, the
-lever is the **subject** (a taller arrangement of the same three pawns), not a return to
-per-icon target numbers, because those are what made the column read as five sizes.
+One height does **not** equalize optical mass, and ADR-0027 was right that it does not: a wide
+mark at the same height carries more ink than a narrow one. That is the accepted trade — equal
+size and equal padding, judged on the rail, over equal mass computed per shape.
+
+The rule also **constrains the subjects**. A mark's arrangement now has to fit roughly inside the
+canvas at 52px tall, which is why Lobbies is three upright marks rather than three in a row: the
+row is 108px wide at that height and the packer refuses it. This is the intended direction of
+pressure — the lever is the subject, never a per-icon target number, because per-icon numbers are
+what made the column read as five sizes.
 
 ## Consequences
 
-- The rail reads at one size and one centre line, and a regenerated mark cannot silently change
-  either without failing the packer.
+- The rail reads at one size and one centre line, every mark carries the same 5.6px above and
+  below it, and a regenerated mark cannot silently change either without failing the packer.
+- Centring the rail button's own row fixes the same 5px drop on every rail in the family —
+  Settings, Editor, Play, Enchiridion and the Strategikon rails all move their mark and label
+  onto the button centre line, which is what their fixed heights always meant.
 - ADR-0027's canvas (§A), safe area (§B), optical-centring-as-padding (§D), pixel discipline
   (§E) and consumption rules (§F) all stand. Only its §C keyline table is retired, and only for
   this set — a dense functional set on the same canvas still keeps keylines.

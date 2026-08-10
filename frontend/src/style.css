@@ -18799,6 +18799,16 @@ button.tileset-relationship-cell {
      at every seat size (73% of 64/44/40), because these are raster marks. */
   --settings-tab-icon-bleed-size: 47px;
   align-items: center;
+  /* Centre the icon+label ROW in whatever content box the button actually has.
+     Both rail heights were computed against a 2px border — "border(4) + 2·padding + icon
+     slot(40)" — but the panel-line border-image resolves to 7px a side, so the real content
+     box is 30px against a 40px row track. The row overflowed the full 10px DOWNWARD from its
+     start edge, seating every mark and label 5px below its button's centre line: the menu's
+     marks sat 10.6px under the frame and 0.6px above it. Centring the track spreads that
+     overflow evenly instead, which is what the fixed heights always meant. Deliberately not
+     re-derived padding: the border-image width is the thing that moved once already, and a
+     hand-computed inset would go stale the next time it does. */
+  align-content: center;
   appearance: none;
   /* Rendered as a <button> since ADR-0052: buttons don't inherit font (UA default) and
      get the arrow cursor — restore the exact look/feel the anchor version had. */
@@ -18947,9 +18957,13 @@ button.tileset-relationship-cell {
 .main-menu-mode-tab .settings-tab-icon img {
   position: absolute;
   left: 50%;
-  /* 61px tab - 44px icon = 17px: exact centring is 8.5px. Resolve the
-     half-pixel upward so the raster icon paints on whole logical pixels. */
-  top: calc(50% - .5px);
+  /* 61px tab - 44px icon = 17px, so exact centring is 8.5px and lands the icon box on a
+     half pixel. This used to resolve that half pixel UPWARD to keep the raster on whole
+     logical pixels — which bought nothing (44/64 is already a fractional scale, so the
+     art is resampled either way) and cost the thing the eye actually reads: it made the
+     gap above the mark 6px and the gap below it 7px, on every button in the rail. The
+     half pixel stays where it belongs and the mark sits on the button's centre line. */
+  top: 50%;
   transform: translate(calc(-50% + 0px), -50%);
 }
 

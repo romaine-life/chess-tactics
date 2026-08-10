@@ -52,13 +52,24 @@ const COLORS = Number(option('colors', 48));
  *  the number this script fits to is the number every other tool measures. */
 const ALPHA = Number(option('alpha', 24));
 /**
- * THE box, in px on the canvas, that every glyph's long axis is scaled to fill.
+ * THE ink HEIGHT, in px on the canvas, that every glyph is scaled to.
  *
- * 52 of 64 = 0.8125. That is inside the 62-84% band ApparatusRailTab's 'inset' mark
- * canvas assumes (a glyph that reserves its own canvas margin), so the seat keeps
- * drawing the whole 64px asset at --settings-tab-icon-size and needs no new rule. It
- * is also where the two largest marks of the retired set already sat, so the change
- * is the small ones growing to meet them rather than the whole rail resizing.
+ * Height and not the long axis. Pinning the long axis equalizes size but NOT vertical
+ * padding: a mark wider than it is tall spends the box on its width and comes back
+ * short, so it sits with more room above and below it than its neighbours — the rail
+ * then has marks at one size sitting on different amounts of air. The rail stacks these
+ * five in a column against a shared button frame, so the gap above and below each mark
+ * is the thing the eye actually compares. Pin the height and every mark in the set has
+ * identical top and bottom padding to its button by construction.
+ *
+ * 52 of 64 = 0.8125, inside the 62-84% band ApparatusRailTab's 'inset' mark canvas
+ * assumes (a glyph that reserves its own canvas margin), so the seat keeps drawing the
+ * whole 64px asset at --settings-tab-icon-size and needs no new rule.
+ *
+ * Width follows the aspect and is only bounded by the canvas. A subject too wide to fit
+ * at this height is REFUSED rather than quietly shrunk, because shrinking it is exactly
+ * the unequal padding this rule exists to remove — the fix is a subject that is not that
+ * wide (three marks in a row become three upright marks), not a smaller mark.
  */
 const BOX = Number(option('box', 52));
 if (!Number.isInteger(BOX) || BOX < 8 || BOX > CANVAS) {
@@ -69,8 +80,17 @@ if (!Number.isInteger(BOX) || BOX < 8 || BOX > CANVAS) {
 // Fit is iterative because the two steps disagree by up to a pixel: LANCZOS lays a soft
 // fringe outside the shape, and clamping that fringe below the ink threshold can drop the
 // outermost row back off again. Re-measuring the ACTUAL ink after each attempt and
-// correcting the target converges in one or two passes, and asserting afterwards means a
+// correcting the resize converges in one or two passes, and asserting afterwards means a
 // non-converging glyph fails loudly instead of shipping a size nobody checked.
+//
+// Both ink dimensions are pinned EVEN. An odd dimension cannot sit on the centre of an
+// even canvas — `(64 - 49) / 2` is 7.5, so the glyph resolves half a pixel off and the
+// margin above it differs from the margin below by one canvas pixel. That is small in the
+// file and not small on the rail: the canvas is drawn at 44px inside a 61px button, where
+// a mark that is a pixel high reads as a mark that is not centred. The long axis is `box`
+// and even by construction; only the short axis is ever nudged, by at most one pixel
+// against a dimension of 25 or more, which is under a 4% change to an aspect nothing else
+// depends on.
 const PYSRC = `
 from PIL import Image
 import sys
@@ -86,25 +106,38 @@ def ink(im):
     a = im.split()[3].point(lambda v: 255 if v > alpha else 0)
     return a.getbbox()
 
+def even(value, limit):
+    """Round to an even number, toward the long axis so a glyph never shrinks below itself."""
+    if value % 2 == 0:
+        return value
+    return value + 1 if value < limit else value - 1
+
 im = clamp(Image.open(src).convert('RGBA'))
 bbox = ink(im)
 if bbox is None:
     print('EMPTY'); sys.exit(3)
 im = im.crop(bbox)
 
-target = box
-for _ in range(6):
-    w, h = im.size
-    s = target / max(w, h)
-    nw, nh = max(1, round(w * s)), max(1, round(h * s))
-    scaled = clamp(im.resize((nw, nh), Image.LANCZOS))
+w, h = im.size
+target_h = box
+target_w = even(max(2, round(w * box / h)), box)
+if target_w > canvas:
+    print(f'TOO_WIDE {target_w}')
+    sys.exit(6)
+
+# The resize dimensions and the ink they PRODUCE are not the same number once the fringe
+# is clamped, so drive the resize by the error against the target rather than assuming it.
+resize_w, resize_h = target_w, target_h
+for _ in range(8):
+    scaled = clamp(im.resize((max(1, resize_w), max(1, resize_h)), Image.LANCZOS))
     measured = ink(scaled)
     if measured is None:
         print('VANISHED'); sys.exit(4)
-    long_axis = max(measured[2] - measured[0], measured[3] - measured[1])
-    if long_axis == box:
+    ink_w, ink_h = measured[2] - measured[0], measured[3] - measured[1]
+    if (ink_w, ink_h) == (target_w, target_h):
         break
-    target += box - long_axis
+    resize_w += target_w - ink_w
+    resize_h += target_h - ink_h
 else:
     print('NO_CONVERGE'); sys.exit(5)
 
@@ -115,15 +148,14 @@ rgb.putalpha(a)
 nw, nh = rgb.size
 
 cv = Image.new('RGBA', (canvas, canvas), (0, 0, 0, 0))
-# Centre the INK BOX on the canvas centre, both axes, on whole pixels. A glyph whose ink
-# box is odd against an even canvas cannot be exactly centred; it resolves up, which is
-# the same direction the seat's own half-pixel rule resolves.
+# Both dimensions are even against an even canvas, so this division is exact: the ink box
+# carries identical transparent margin above and below, and left and right.
 x = (canvas - nw) // 2
 y = (canvas - nh) // 2
 cv.alpha_composite(rgb, (x, y))
 ncols = len(cv.convert('RGB').getcolors(maxcolors=100000) or [None] * 99999)
 cv.save(out)
-print(f'{canvas}x{canvas} | ink {nw}x{nh} @ ({x},{y}) | colors {ncols}')
+print(f'{canvas}x{canvas} | ink {nw}x{nh} @ ({x},{y}) | margin y {y}/{canvas - y - nh} | colors {ncols}')
 `;
 
 const sources = readdirSync(SOURCE_DIR).filter((name) => name.toLowerCase().endsWith('.png')).sort();
@@ -143,7 +175,13 @@ for (const name of sources) {
     { encoding: 'utf8' },
   );
   if (result.status !== 0) {
-    console.error(`FAIL ${name}: ${(result.stdout || '').trim()} ${result.stderr || result.error || ''}`.trim());
+    const reported = (result.stdout || '').trim();
+    const tooWide = reported.match(/^TOO_WIDE (\d+)$/);
+    console.error(tooWide
+      ? `FAIL ${name}: at ${BOX}px tall this subject is ${tooWide[1]}px wide, past the ${CANVAS}px canvas. `
+        + 'Every mark is pinned to one height so the whole set shares one top and bottom margin; '
+        + 'a subject this wide has to become a narrower arrangement, not a shorter mark.'
+      : `FAIL ${name}: ${reported} ${result.stderr || result.error || ''}`.trim());
     failed += 1;
     continue;
   }
@@ -166,16 +204,20 @@ for (const file of packed) {
     failures.push(`${label}: canvas is ${png.width}x${png.height}, expected ${CANVAS}x${CANVAS}`);
     continue;
   }
-  const longAxis = Math.max(box.width, box.height);
-  if (longAxis !== BOX) {
-    failures.push(`${label}: ink long axis is ${longAxis}px, expected exactly ${BOX}px (ink ${box.width}x${box.height})`);
+  if (box.height !== BOX) {
+    failures.push(`${label}: ink is ${box.height}px tall, expected exactly ${BOX}px (ink ${box.width}x${box.height})`);
   }
-  const offsetX = box.x - (CANVAS - box.width) / 2;
-  const offsetY = box.y - (CANVAS - box.height) / 2;
-  if (Math.abs(offsetX) > 0.5 || Math.abs(offsetY) > 0.5) {
+  // EXACTLY centred, not centred-to-within-a-pixel. The seat draws this canvas at 44px in
+  // a 61px button and lets the asset's own padding place the mark, so one pixel of margin
+  // difference in the file is a mark that visibly does not sit on the button's centre line.
+  const marginTop = box.y;
+  const marginBottom = CANVAS - (box.y + box.height);
+  const marginLeft = box.x;
+  const marginRight = CANVAS - (box.x + box.width);
+  if (marginTop !== marginBottom || marginLeft !== marginRight) {
     failures.push(
-      `${label}: ink box is off centre by (${offsetX}, ${offsetY}) — `
-      + `ink ${box.width}x${box.height} at (${box.x},${box.y}) on ${CANVAS}x${CANVAS}`,
+      `${label}: margins are top ${marginTop} / bottom ${marginBottom}, left ${marginLeft} / right ${marginRight} — `
+      + `every pair must be equal (ink ${box.width}x${box.height} at (${box.x},${box.y}) on ${CANVAS}x${CANVAS})`,
     );
   }
 }
@@ -188,5 +230,5 @@ if (failed || failures.length) {
   if (failed) console.error(`\n${failed} icon(s) failed to pack.`);
   process.exit(1);
 }
-console.log(`\n✓ ${packed.length} icon(s) packed to ${CANVAS}x${CANVAS}: every ink box ${BOX}px on its long axis, centred on both axes.`);
+console.log(`\n✓ ${packed.length} icon(s) packed to ${CANVAS}x${CANVAS}: every ink exactly ${BOX}px tall, with equal margin above and below and left and right — so the whole set shares one top and bottom padding on the rail.`);
 console.log('Upload the packed files as live-media candidates; this script does not publish repository media.');
