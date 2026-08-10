@@ -28048,12 +28048,13 @@ button.run-card-formation-cell {
 }
 
 /* The superseded sprites are mostly the old 512px renders, which at 1:1 would be
-   six times the tile and wreck the comparison. Capping them to the board's 1x draw
-   rect is not a cheat -- it is precisely what the board did to them, which is the
-   before worth looking at. */
+   six times the tile. They are capped to the board's 1x draw rect -- precisely what
+   the board did to them -- and then scaled BY THE TIER like everything else in the
+   seat. A fixed cap left the before stuck at 78px while the tier-sized canvas beside
+   it grew past 200, so the pair stopped being a comparison at all. */
 .unit-roster-unit.is-before {
-  max-height: 92px;
-  max-width: 78px;
+  max-height: calc(92px * var(--roster-tier, 1));
+  max-width: calc(78px * var(--roster-tier, 1));
 }
 
 /* A stepper, not a slider: the magnifications are a fixed ladder, so the control

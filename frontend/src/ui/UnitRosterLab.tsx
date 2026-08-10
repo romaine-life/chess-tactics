@@ -193,7 +193,7 @@ export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactEl
                         the tile scaled explicitly, the unit canvas already cut for it.
                         No nested CSS zoom — two of those fought each other and pushed
                         the unit off its tile. */}
-                    <span className="unit-roster-seat">
+                    <span className="unit-roster-seat" style={{ ['--roster-tier' as string]: tierZoom }}>
                       {groundTile
                         ? <img
                             className="unit-roster-ground"
