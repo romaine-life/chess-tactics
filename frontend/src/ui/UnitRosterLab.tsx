@@ -23,11 +23,12 @@ import { UnitRungSprite } from './UnitRungSprite';
  * Sampled every few rungs rather than every 5% step: the ladder is deliberately fine
  * for the wheel, and a stepper wants strides you can see between.
  */
-// One rung per input, matching the board exactly. This surface exists to test what a
-// player actually gets, so its zoom has to be the player's zoom rather than a
-// convenient stepper -- an easier-to-click stride would be testing something the game
-// does not do.
-const TIER_STRIDE = 1;
+// The wheel is the player's control and matches the board exactly: one 5% rung per
+// notch. The buttons are navigation rather than simulation -- a deliberate click
+// wants a change you can see, and 5% is invisible -- so they travel further. Six
+// rungs was 34% and skipped past the tier you were aiming at; three is about 16%.
+const WHEEL_STRIDE = 1;
+const BUTTON_STRIDE = 3;
 const TIER_INDEX_RANGE = { min: -18, max: 30 };
 
 /**
@@ -151,7 +152,7 @@ export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactEl
             type="button"
             aria-label="Zoom out one tier"
             disabled={tierIndex <= TIER_INDEX_RANGE.min}
-            onClick={() => setTierIndex((current) => Math.max(TIER_INDEX_RANGE.min, current - TIER_STRIDE))}
+            onClick={() => setTierIndex((current) => Math.max(TIER_INDEX_RANGE.min, current - BUTTON_STRIDE))}
           >
             −
           </button>
@@ -160,7 +161,7 @@ export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactEl
             type="button"
             aria-label="Zoom in one tier"
             disabled={tierIndex >= TIER_INDEX_RANGE.max}
-            onClick={() => setTierIndex((current) => Math.min(TIER_INDEX_RANGE.max, current + TIER_STRIDE))}
+            onClick={() => setTierIndex((current) => Math.min(TIER_INDEX_RANGE.max, current + BUTTON_STRIDE))}
           >
             +
           </button>
