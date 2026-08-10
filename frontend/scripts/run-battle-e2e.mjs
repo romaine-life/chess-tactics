@@ -1135,7 +1135,7 @@ try {
           .find((text) => /^[\d.]+ gold$/.test(text)) ?? '';
         return state?.game.turn === 'player'
           && !state.game.winner
-          && state.undoCheckpoint === null
+          && state.undoStack.length === 0
           && piece?.x === from.x
           && piece?.y === from.y
           && Number(/^([\d.]+) gold$/.exec(measure)?.[1] ?? NaN) === spent;
@@ -1152,7 +1152,7 @@ try {
       return state ? {
         turn: state.game.turn,
         winner: state.game.winner,
-        undo: Boolean(state.undoCheckpoint),
+        undo: state.undoStack.length,
         gold: Number(/^([\d.]+) gold$/.exec(measures.find((text) => /^[\d.]+ gold$/.test(text)) ?? '')?.[1] ?? NaN),
         measures,
         piece: state.game.pieces.find((candidate) => candidate.id === planned.pieceId),

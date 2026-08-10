@@ -981,9 +981,24 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('canUndoRunBattleMove(latest, checkpoint)');
     expect(runScreen).toContain('const restored = undoRunBattleMove(latest, checkpoint);');
     expect(skirmish).toContain('setRunBattleUndoAdapter(runBattle?.undoAdapter ?? null)');
-    expect(gameStore).toContain('const undoCheckpoint = capturePlayerMoveUndo();');
+    expect(gameStore).toContain('const captured = capturePlayerMoveUndo();');
     expect(gameStore).toContain("log: extendLog(checkpoint.log, [logNote('Move undone — 10 gold paid.')])");
     expect(gameStore).toContain('commitPlayerMove(p, mv, type, true);');
-    expect(matchPersistence).toContain('undoCheckpoint: state.undoCheckpoint ?? null');
+    expect(matchPersistence).toContain('undoStack: state.undoStack ?? []');
+  });
+
+  it('keeps one checkpoint per played move and prices every step of the walk back', () => {
+    // The history is a stack the Battle grows a move at a time, and Undo pops it rather than
+    // emptying it, so the whole Battle is reachable a decision at a time (ADR-0556).
+    expect(gameStore).toContain('const undoStack = captured ? [...s.undoStack, captured] : [];');
+    expect(gameStore).toContain('const checkpoint = s.undoStack[s.undoStack.length - 1];');
+    expect(gameStore).toContain('undoStack: s.undoStack.slice(0, -1).map((older) => ({');
+    expect(gameStore).toContain('run: adapter.chargeEarlier(older.run),');
+    expect(runScreen).toContain('chargeEarlier: (checkpoint) => chargeRunBattleUndoCheckpoint(checkpoint),');
+    // The board store holds the history; only the Run names a price for it, so the store's
+    // view of run/model stays type-only and no gold arithmetic leaks into the board.
+    expect(gameStore).toContain(
+      "import type { RunBattleNotice, RunBattleUndoCheckpoint } from '../run/model';",
+    );
   });
 });
