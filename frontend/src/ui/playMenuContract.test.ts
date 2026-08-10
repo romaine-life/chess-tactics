@@ -345,6 +345,11 @@ describe('Run rule options are a departure from the defaults, not a step in setu
     // The trigger fills the accepted InnerChromeBox rather than being a framed control seated
     // inside it, so the box's own frame is the button's edge and its name rides in it.
     expect(source).toMatch(/<InnerChromeBox[\s\S]*?className=\{`run-rules-selector\$\{open \? ' is-open' : ''\}`\}/);
+    // Marble on the box, oak on the pickers inside it: opened, this is a box holding other
+    // people's controls, and a wood field behind wooden pickers gives them nothing to read
+    // against (ADR-0433). It is the same material as the replacement note above it.
+    expect(source).toMatch(/<InnerChromeBox[\s\S]*?fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/);
+    expect(source).toMatch(/<HouseSelect[\s\S]*?fillSurface=\{fillSurface\}/);
     expect(source).toMatch(/<button[\s\S]*?className="run-rules-disclosure"/);
     expect(source).toContain('<span className="run-rules-title" id="run-rules-title">Options</span>');
     expect(source).not.toContain('run-rules-head');

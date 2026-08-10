@@ -1,6 +1,7 @@
 import { useState, type ReactElement } from 'react';
 import { RUN_CARD_SPANS, type RunRules } from '../run/model';
 import { InnerChromeBox } from './shared/ChromeBox';
+import { CHROME_STRUCTURAL_FILL_ROLE } from './shared/chromeSurfacePolicy';
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
 
 // Start New Run → the rules the Run is bound to, behind a disclosure that starts closed.
@@ -19,6 +20,10 @@ import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
 // heading-plus-Change-button row for a panel that appears beneath it. The trigger is the same DOM
 // node in both states, so it keeps focus across a press, and the header row stays the way back
 // out.
+//
+// It wears the structural marble, not the leaf oak, because opened it is a box holding other
+// people's controls: the pickers inside are the oak, and a wood field behind wooden pickers left
+// them with nothing to read against.
 //
 // It seats BELOW Start Run in the detail column, after the verb rather than before it — see the
 // comment at its mount in PlayMenu.
@@ -102,7 +107,7 @@ export function RunRulesSelector({
     <InnerChromeBox
       as="section"
       className={`run-rules-selector${open ? ' is-open' : ''}`}
-      fillSurface={fillSurface}
+      fillRole={CHROME_STRUCTURAL_FILL_ROLE}
       aria-labelledby="run-rules-title"
     >
       {/* Not a ChromeButton: a registered unit brings its own frame, and a second frame inside
