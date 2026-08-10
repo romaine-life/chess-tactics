@@ -7,17 +7,18 @@ import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
 //
 // The defaults ARE the game. Everything in here changes what the market deals or what may be done
 // with a card, and almost nobody should touch it -- it exists to play the alternatives against
-// each other, not to be configured before a normal Run. So it is collapsed, and the closed state
-// says the defaults are already what you want rather than inviting a decision.
+// each other, not to be configured before a normal Run. So it is collapsed, and closed it states
+// nothing but its own name: a reassuring subtitle there could only repeat that the defaults are
+// the defaults, which is what being closed already says.
 //
 // Not hidden, though: a Run is bound to these for its whole life, so a player who did change one
 // has to be able to see what they are about to start.
 //
-// The BOX is the control. Closed, the whole slab -- its own name, the summary under it, the
-// chevron -- is one pressable thing; opening it grows that same box downward around the choices
-// instead of swapping a heading-plus-Change-button row for a panel that appears beneath it. The
-// trigger is the same DOM node in both states, so it keeps focus across a press, and the header
-// row stays the way back out.
+// The BOX is the control. Closed, the whole slab -- its name and the chevron -- is one pressable
+// thing; opening it grows that same box downward around the choices instead of swapping a
+// heading-plus-Change-button row for a panel that appears beneath it. The trigger is the same DOM
+// node in both states, so it keeps focus across a press, and the header row stays the way back
+// out.
 //
 // It seats BELOW Start Run in the detail column, after the verb rather than before it — see the
 // comment at its mount in PlayMenu.
@@ -115,18 +116,11 @@ export function RunRulesSelector({
         data-testid="run-rules-toggle"
         onClick={() => setOpen((wasOpen) => !wasOpen)}
       >
-        <span className="run-rules-disclosure-head">
-          <span className="run-rules-title" id="run-rules-title">Rule options</span>
-          <span
-            className={`stepper-glyph stepper-chevron stepper-chevron-${open ? 'up' : 'down'}`}
-            aria-hidden="true"
-          />
-        </span>
-        {/* Closed, the box has to say the defaults are already right. Open, the choices say it
-            themselves, and repeating it would push the first one further down the column. */}
-        {!open ? (
-          <span className="run-rules-summary">Standard formations and pricing. Most Runs want these.</span>
-        ) : null}
+        <span className="run-rules-title" id="run-rules-title">Options</span>
+        <span
+          className={`stepper-glyph stepper-chevron stepper-chevron-${open ? 'up' : 'down'}`}
+          aria-hidden="true"
+        />
       </button>
 
       <div id="run-rules-content" className="run-rules-content" hidden={!open}>

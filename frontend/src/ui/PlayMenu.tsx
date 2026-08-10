@@ -60,7 +60,7 @@ import { RunRulesSelector } from './RunRulesSelector';
 import { ActionList } from './shared/ActionList';
 import { SettingsRow, SettingsSection } from './shared/SettingsControls';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
-import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
+import { CHROME_LEAF_FILL_SURFACE, CHROME_STRUCTURAL_FILL_ROLE } from './shared/chromeSurfacePolicy';
 import {
   CAMPAIGN_RAIL_START_INDEX,
   PLAY_MODE_ENTRY_ENABLED,
@@ -411,8 +411,11 @@ function RunPanel({
         ) : null}
 
         {choice === 'new' ? (
+          /* No heading. The rail tab that opened this column already says Start New Run, and the
+             verb at the bottom says it again — a title that only repeats the tab you just pressed
+             spends a row of the column and settles nothing. The aside keeps the name for anyone
+             reading the page by its landmarks. */
           <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Start New Run" data-testid="run-detail-new">
-            <div className="ce-selected-head"><h2>Start New Run</h2></div>
             <div className="play-detail-body">
               <AtaraxiaSelector
                 value={ataraxiaTier}
@@ -422,9 +425,13 @@ function RunPanel({
               />
             </div>
             {presentedRun ? (
+              /* Marble, not oak. Nothing in this box can be pressed — it is a standing statement
+                 about the Run you are replacing — and the oak is what tells you a surface takes a
+                 click (ADR-0433). Wearing it here made the one slab you cannot act on look like
+                 the two either side of it that you can. */
               <InnerChromeBox
                 className="run-replace-note"
-                fillSurface={CHROME_LEAF_FILL_SURFACE}
+                fillRole={CHROME_STRUCTURAL_FILL_ROLE}
                 role="note"
                 data-testid="run-replace-warning"
               >

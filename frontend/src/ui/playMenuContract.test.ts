@@ -189,6 +189,11 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toMatch(/<ApparatusRailTab[\s\S]*?label="Start New Run"/);
     expect(playMenu).toContain('to={PLAY_RUN_NEW_SELECTOR_HREF}');
     expect(playMenu).toContain('data-testid="run-detail-new"');
+    // No heading over it. The rail tab that opened the column already says Start New Run and the
+    // verb at the bottom says it again, so a title there only spends a row repeating the press
+    // that got you here. The aside's own label keeps the name for the landmark.
+    expect(playMenu).not.toMatch(/<div className="ce-selected-head"><h2>Start New Run<\/h2><\/div>/);
+    expect(playMenu).toMatch(/aria-label="Start New Run" data-testid="run-detail-new"/);
     expect(playMenu).toContain('<RunDetailContentSceneSlot');
     expect(authoredSceneSlots).toContain('region="run-detail" mode="contents"');
     expect(playMenu).not.toContain("sceneTransitionTargetAttributes('run-detail'");
@@ -304,7 +309,9 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // arms an explicit Keep Run / Abandon and Start pair in the same actions row.
     expect(playMenu).not.toContain('useConfirm');
     expect(playMenu).toContain('data-testid="run-replace-warning"');
-    expect(playMenu).toMatch(/<InnerChromeBox[^>]*fillSurface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-replace-warning"/);
+    // Marble, not oak: nothing in this box takes a click, and the oak is what says a surface does
+    // (ADR-0433). Its neighbours above and below it are both pressable and both wear the wood.
+    expect(playMenu).toMatch(/<InnerChromeBox[^>]*fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}[^>]*data-testid="run-replace-warning"/);
     expect(playMenu).toContain('This cannot be undone.');
     expect(playMenu).toContain('if (presentedRun) { setArmed(true); return; }');
     expect(playMenu).toContain('data-testid="run-keep"');
@@ -326,8 +333,12 @@ describe('Run rule options are a departure from the defaults, not a step in setu
     expect(source).toContain('hidden={!open}');
   });
 
-  it('says the defaults are already right while it is closed', () => {
-    expect(source).toContain('Standard formations and pricing. Most Runs want these.');
+  it('closed, states only its own name — no reassuring subtitle under it', () => {
+    // "Standard formations and pricing. Most Runs want these." said nothing a Run is bound by and
+    // nothing about the cost of changing one, so the box carries its name and the chevron alone.
+    expect(source).not.toContain('Standard formations and pricing');
+    expect(source).not.toContain('run-rules-summary');
+    expect(style).not.toContain('.run-rules-summary');
   });
 
   it('is one box that grows, with the box itself as the thing you press', () => {
@@ -335,7 +346,7 @@ describe('Run rule options are a departure from the defaults, not a step in setu
     // inside it, so the box's own frame is the button's edge and its name rides in it.
     expect(source).toMatch(/<InnerChromeBox[\s\S]*?className=\{`run-rules-selector\$\{open \? ' is-open' : ''\}`\}/);
     expect(source).toMatch(/<button[\s\S]*?className="run-rules-disclosure"/);
-    expect(source).toContain('<span className="run-rules-title" id="run-rules-title">Rule options</span>');
+    expect(source).toContain('<span className="run-rules-title" id="run-rules-title">Options</span>');
     expect(source).not.toContain('run-rules-head');
     expect(source).not.toContain("unit=\"inner-text-button\"");
     // Its inset is the box's whole content padding, so the pressable area reaches the frame.

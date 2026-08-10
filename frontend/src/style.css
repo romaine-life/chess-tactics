@@ -28432,37 +28432,27 @@ button.run-card-formation-cell {
 }
 
 .run-rules-disclosure {
+  align-items: center;
   background: none;
   border: 0;
   border-radius: 0;
   box-shadow: none;
   color: inherit;
   cursor: pointer;
-  display: grid;
+  display: flex;
   font: inherit;
   gap: var(--ds-inline-tight);
+  justify-content: space-between;
   min-block-size: 0;
   padding: var(--ds-inset);
   text-align: start;
   text-shadow: inherit;
 }
 
-.run-rules-disclosure-head {
-  align-items: center;
-  display: flex;
-  gap: var(--ds-inline-tight);
-  justify-content: space-between;
-}
-
 /* The box's own name, and the label of the control it is. Sized as the section heading it
-   replaced so Rule options still reads level with Ataraxia above it. */
+   replaced so Options still reads level with Ataraxia above it. */
 .run-rules-title {
   font-size: var(--ds-text-md);
-}
-
-.run-rules-summary {
-  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
-  font-size: var(--ds-text-xs);
 }
 
 .run-rules-selector [hidden] {
