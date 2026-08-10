@@ -26,6 +26,10 @@ import {
   RUN_STARTING_GOLD_TENTHS,
   acquireLipsanon,
   captureRunBattleUndo,
+  DEFAULT_RUN_RULES,
+  LEGACY_RUN_RULES,
+  RUN_SECTIO_CARD_PILE_RARITY_COUNT,
+  cardAllowedByRules,
   createRun,
   createRunCardOffer,
   leaveSectio,
@@ -55,6 +59,7 @@ import {
   takeVacantiaCard,
   takeVacantiaLipsanon,
   type RunDocument,
+  type RunRules,
   type RunWarSnapshot,
 } from './model';
 
@@ -73,8 +78,12 @@ function war(): RunWarSnapshot {
   };
 }
 
-function firstSectio(seed: number): RunDocument {
-  const run = createRun(war(), seed);
+// These exercise the PILE mechanism -- cursor advance, row retention, deterministic ordering --
+// so they name the wide rules rather than inheriting the default. The narrow default cannot show
+// three distinct commons in a row (see 'repeats commons under the narrow default'), which would
+// make a mechanism test fail for a reason that has nothing to do with the mechanism.
+function firstSectio(seed: number, rules: RunRules = LEGACY_RUN_RULES): RunDocument {
+  const run = createRun(war(), seed, { rules });
   return openSectio(
     { ...run, phase: 'battle' },
     run.army.map((unit) => unit.id),
@@ -305,6 +314,18 @@ describe('plain Run creation and acquisition', () => {
     expect(run.deploymentMode).toBe('arranged');
   });
 
+  it('repeats commons under the narrow default, because the shipped bands leave six of them', () => {
+    // Recorded rather than asserted-away. At a span of two the material bands leave six distinct
+    // commons against sixteen pile seats, so a pile fills its seats by repeating them. The mode is
+    // playable and this is what it looks like; it resolves when the rarity rule moves.
+    const narrow = RUN_CARD_DECK.filter((card) => cardAllowedByRules(card, DEFAULT_RUN_RULES));
+    expect(narrow.filter((card) => card.rarity === 'common')).toHaveLength(6);
+    expect(RUN_SECTIO_CARD_PILE_RARITY_COUNT.common).toBe(16);
+    const pile = sectioCardPile(23, 0, Number.POSITIVE_INFINITY, DEFAULT_RUN_RULES);
+    expect(pile).toHaveLength(20);
+    expect(new Set(pile.map((card) => card.id)).size).toBeLessThan(pile.length);
+  });
+
   it('deals the first three hidden-pile cards only after Battle 1', () => {
     const run = firstSectio(23);
     const offers = run.sectio!.cardOffers;
@@ -313,7 +334,7 @@ describe('plain Run creation and acquisition', () => {
     expect(offers.every((offer) => ['common', 'uncommon', 'rare'].includes(offer.rarity))).toBe(true);
     expect(run.sectioCardCursor).toBe(3);
     expect(offers.map((offer) => offer.id)).toEqual(
-      sectioCardOffersAtCursor(run.seed, 0, 0, 3).map((offer) => offer.id),
+      sectioCardOffersAtCursor(run.seed, 0, 0, 3, LEGACY_RUN_RULES).map((offer) => offer.id),
     );
   });
 

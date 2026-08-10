@@ -14,6 +14,7 @@ import {
   runCardDefinition,
   runCardUnitIds,
   runDeploymentDealCount,
+  runRules,
   setDeploymentChoices,
   shuffled,
   type RunArmyUnit,
@@ -683,6 +684,10 @@ export function distinctCardRotations(
   run: RunDocument,
   cardId: string,
 ): RunFormationRotation[] {
+  // A Run created without rotation places a card as it was dealt. This is the one place the
+  // offered turns are decided -- the rail reads it and the cycling gestures walk it -- so the
+  // rule is enforced here rather than at each control that would otherwise have to remember it.
+  if (!runRules(run).mayRotate) return [0];
   const card = dealtCards(run).find((candidate) => candidate.id === cardId);
   return card ? distinctFormationRotations(card, run.army) : [];
 }

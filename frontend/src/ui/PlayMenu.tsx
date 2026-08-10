@@ -44,7 +44,7 @@ import { drawableAssets } from '@chess-tactics/board-render';
 import { useWars, runEligibleOfficialWars } from '../war/store';
 import { useActiveRun } from '../run/store';
 import {
-  ATARAXIA_BY_TIER, createRun, formatGold, snapshotWar,
+  ATARAXIA_BY_TIER, DEFAULT_RUN_RULES, createRun, formatGold, snapshotWar, type RunRules,
   type AtaraxiaTier,
 } from '../run/model';
 import {
@@ -56,6 +56,7 @@ import { InnerChromeBox } from './shared/ChromeBox';
 import { loadMatch, type PersistedMatch } from '../game/matchPersistence';
 import { continueInventory, type ContinueInventory } from './playContinue';
 import { AtaraxiaSelector } from './AtaraxiaSelector';
+import { RunRulesSelector } from './RunRulesSelector';
 import { ActionList } from './shared/ActionList';
 import { SettingsRow, SettingsSection } from './shared/SettingsControls';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
@@ -220,6 +221,7 @@ function RunPanel({
   const keepRunButtonRef = useRef<HTMLButtonElement>(null);
   const [progression, setProgression] = useState(readRunProgression);
   const [ataraxiaTier, setAtaraxiaTier] = useState<AtaraxiaTier>(0);
+  const [runRules, setRunRules] = useState<RunRules>(DEFAULT_RUN_RULES);
   const eligible = useMemo(() => runEligibleOfficialWars(wars), [wars]);
   const highestUnlockedTier = highestUnlockedAtaraxiaTier(progression);
   // An adoption conflict does not gate a new Run: starting one discards both candidates, so it
@@ -264,7 +266,7 @@ function RunPanel({
       globalThis.crypto?.getRandomValues?.(seedArray);
       const seed = seedArray[0] || (Date.now() >>> 0);
       const war = [...eligible].sort((a, b) => a.id.localeCompare(b.id))[seed % eligible.length];
-      replace(createRun(snapshotWar(war, levels), seed, ataraxiaTier, { chooseKing: true }));
+      replace(createRun(snapshotWar(war, levels), seed, ataraxiaTier, { chooseKing: true, rules: runRules }));
       navigationAccepted = navigateApp('/run');
     } finally {
       // A successful scene replacement retains this component as the outgoing layer
@@ -405,6 +407,11 @@ function RunPanel({
                 value={ataraxiaTier}
                 highestUnlockedTier={highestUnlockedTier}
                 onChange={(tier) => { setArmed(false); setAtaraxiaTier(tier); }}
+                fillSurface={CHROME_LEAF_FILL_SURFACE}
+              />
+              <RunRulesSelector
+                value={runRules}
+                onChange={(rules) => { setArmed(false); setRunRules(rules); }}
                 fillSurface={CHROME_LEAF_FILL_SURFACE}
               />
             </div>

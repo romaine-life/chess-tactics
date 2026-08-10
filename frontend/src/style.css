@@ -27603,32 +27603,39 @@ button.run-card-formation-cell {
   text-wrap: wrap;
 }
 
-.run-ataraxia-selector {
+.run-ataraxia-selector,
+.run-rules-selector {
   display: grid;
   gap: var(--ds-inline-tight);
 }
 
 .run-ataraxia-selector h3,
-.run-ataraxia-selector p {
+.run-ataraxia-selector p,
+.run-rules-selector h3,
+.run-rules-selector p {
   margin: 0;
 }
 
-.run-ataraxia-selector h3 {
+.run-ataraxia-selector h3,
+.run-rules-selector h3 {
   padding-inline: 8px;
 }
 
-.run-ataraxia-select {
+.run-ataraxia-select,
+.run-rules-select {
   inline-size: 100%;
 }
 
-.run-ataraxia-option-copy {
+.run-ataraxia-option-copy,
+.run-rules-option-copy {
   display: grid;
   gap: 4px;
   min-inline-size: 0;
   inline-size: 100%;
 }
 
-.run-ataraxia-option-copy > span {
+.run-ataraxia-option-copy > span,
+.run-rules-option-copy > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -27638,7 +27645,8 @@ button.run-card-formation-cell {
   display: none;
 }
 
-.house-select-option .run-ataraxia-option-copy {
+.house-select-option .run-ataraxia-option-copy,
+.house-select-option .run-rules-option-copy {
   padding-block: 2px;
 }
 
@@ -27649,7 +27657,8 @@ button.run-card-formation-cell {
   white-space: normal;
 }
 
-.run-ataraxia-effect {
+.run-ataraxia-effect,
+.run-rules-effect {
   color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
   font-size: var(--ds-text-xs);
 }
