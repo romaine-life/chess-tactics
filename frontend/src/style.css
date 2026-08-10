@@ -1966,6 +1966,16 @@ h1 {
      width, ui/shell/layoutViewport.ts) so browser zoom magnifies them instead of
      re-flowing; identical to plain vw at 100% zoom. */
   --app-header-h: clamp(84px, calc(var(--layout-vw, 100vw) * .05), 88px);
+  /* Kit frame art is drawn with a 1px fully transparent margin on each edge of its 24px
+     slice, so a rail lands its ink one raster line inside the box it was asked to fill.
+     Where that line falls between two surfaces, neither paints it and the screen behind
+     shows through as a hairline. The app-shell title divider's inner margin is covered from
+     BELOW — the Controls panel already does it with --app-shell-divider-fill-overlap, and
+     this is the same apron for the shell workspace's surface fill. (The Controls panel's
+     own outer margin is answered on the chrome side instead, by outsetting its frame; see
+     chromeFamilyRuntime.) Kept a plain length: overflow-clip-margin, which has to let the
+     apron past the workspace hosts, drops calc() and max() values whole. */
+  --shell-workspace-paint-apron: 1px;
   /* motion — duration + easing tokens (ADR-0043, revised by ADR-0046). Map MOTION ROLES
      onto these; don't hand-pick ms per element. Just TWO durations, by design:
        fast = instant feedback (hover / toggle / focus / filter swap),
@@ -4363,6 +4373,15 @@ h1 {
 /* A complete pre-drawn raster owns every environment pixel. Remove the ordinary
    battlefield backdrop layer altogether instead of retaining an invisible decoded image. */
 .skirmish-screen.is-predrawn-board::before {
+  content: none;
+}
+
+/* Same call for a Run phase whose workspace paints an opaque installed raster across the
+   whole environment column (RunScreen sets the class). The battlefield backdrop reaches no
+   pixel there — measured, it showed only in the seams the workspace paint apron now closes —
+   so it is a decoded image nothing can see. A phase that yields its fill to a retained scene
+   (Sectio's room) still needs it, and keeps it. */
+.skirmish-screen.run-workspace-owns-environment::before {
   content: none;
 }
 
@@ -7573,14 +7592,24 @@ body.loading-bootstrap .app-startup-status {
   isolation: isolate;
   min-height: 0;
   min-width: 0;
-  overflow: hidden;
+  /* `clip` rather than `hidden` so the paint apron below can pass. Content is unaffected:
+     .shell-workspace-content clips it, and neither box has ever scrolled here. */
+  overflow: clip;
+  overflow-clip-margin: var(--shell-workspace-paint-apron, 0px);
   padding: 0;
   position: absolute;
   text-align: left;
   z-index: 2;
 }
+/* The title divider lays its last raster row over the top of the workspace and leaves it
+   transparent (see --shell-workspace-paint-apron), so the surface fill has to reach up under
+   it exactly as the Controls panel's fill already does — otherwise that row belongs to
+   neither and the screen behind shows through as a hairline. Only the fill takes the apron:
+   it is a repeating texture, so the row costs it a one-pixel phase and nothing else. The
+   background artwork keeps the workspace box exactly, because its cover fit is pixelated and
+   re-scaling a whole vista to gain one row is a far worse trade than the row. */
 .shell-workspace-fill {
-  inset: 0;
+  inset: calc(-1 * var(--shell-workspace-paint-apron, 0px)) 0 0 0;
 }
 .shell-workspace-background-artwork {
   inset: 0;
@@ -19778,7 +19807,10 @@ button.tileset-relationship-cell {
   grid-column: 1;
   grid-row: 2;
   min-block-size: 0;
-  overflow: hidden;
+  /* Hosts a .shell-workspace, so it must pass that surface's paint apron rather than
+     clipping it back to the grid column and reopening the seam against the chrome. */
+  overflow: clip;
+  overflow-clip-margin: var(--shell-workspace-paint-apron, 0px);
   position: relative;
 }
 
