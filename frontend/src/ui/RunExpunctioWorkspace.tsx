@@ -81,7 +81,8 @@ function actionLabel(status: ExpunctioRow['status']): string {
   if (status === 'expuncted') return 'Athetized this visit';
   if (status === 'spent') return 'Already used';
   if (status === 'unaffordable') return 'Insufficient gold';
-  return 'Unavailable';
+  // The only unremovable card is the King's own starter, so the refusal names the reason.
+  return 'You cannot sell the king';
 }
 
 function formationStatusLabel(status: ExpunctioRow['status'], units: readonly RunArmyUnit[]): string {
