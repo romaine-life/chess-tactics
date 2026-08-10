@@ -19167,9 +19167,20 @@ button.tileset-relationship-cell {
 /* The settings panel's scroll viewport always occupies the main frame's second (1fr)
    row so the ADR-0030 rail spans the scrollable height, below any pinned header. */
 .settings-scroll {
+  /* A junction atom is seated ON a box's frame and paints outward past it, so the scrollport that
+     clips this column cuts the outer half off — the same two-sided apron the Level Editor's
+     scrollport and the HouseSelect menu already carry. Widen the CLIP box by the overhang and push
+     the content back in by exactly the same amount: the content line does not move, and the atom
+     has room to finish. The frame atom and the divider atom can differ, so take whichever reaches
+     further. */
+  --settings-clip-apron-left: max(var(--le-inner-atom-left-overhang, 0px), var(--le-inner-divider-atom-left-overhang, 0px));
+  --settings-clip-apron-right: max(var(--le-inner-atom-right-overhang, 0px), var(--le-inner-divider-atom-right-overhang, 0px));
   --kit-scroll-gutter-size: 24px;
   block-size: 100%;
   grid-row: 2;
+  margin-inline:
+    calc(-1 * var(--settings-clip-apron-left))
+    calc(-1 * var(--settings-clip-apron-right));
   min-height: 0;
 }
 .settings-scroll > .kit-scroll-content {
@@ -19179,10 +19190,11 @@ button.tileset-relationship-cell {
      off --kit-scroll-gutter so an idle pane gives that region back (ADR-0536). */
   box-sizing: border-box;
   inline-size: calc(100% - var(--kit-scroll-gutter));
-  padding-inline-end: 0;
+  padding-inline: var(--settings-clip-apron-left) var(--settings-clip-apron-right);
 }
 .settings-scroll > .kit-scroll-rail {
-  inset-inline-end: 2px;
+  /* The rail rides the content line, not the widened clip box. */
+  inset-inline-end: calc(2px + var(--settings-clip-apron-right));
 }
 .settings-scroll .settings-row-control {
   flex: 1 1 auto;
