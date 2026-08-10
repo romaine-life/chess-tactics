@@ -519,6 +519,21 @@ export type PoolModel = Readonly<{
 
 export const POOL_MODELS: readonly PoolModel[] = Object.freeze([
   {
+    id: 'synergy',
+    label: 'Synergy priced',
+    note: 'The density curve plus what material cannot express: the opposite-colour Bishop pair, defences, and a penalty for a Pawn stuck directly behind a friendly piece. Pawn shelter counts as a defence here.',
+    knobs: {
+      ...DEFAULT_POOL_KNOBS,
+      terms: [
+        { kind: 'density', power: 0.5, scale: 10 },
+        { kind: 'bishopPair', bonus: 0.25 },
+        { kind: 'defences', bonus: 0.1, countPawnSupport: true },
+        { kind: 'blockedPawn', penalty: 0.15 },
+        { kind: 'round', to: 5 },
+      ],
+    },
+  },
+  {
     id: 'material-bands',
     label: 'Material bands',
     note: 'cost = material, nothing else, and rarity by raw value. NOT the shipped rarity: that also steps any Bishop card up a band and steps awkward footprints down one, which is what puts 23 four-cell cards into common.',
@@ -557,21 +572,6 @@ export const POOL_MODELS: readonly PoolModel[] = Object.freeze([
     },
   },
   {
-    id: 'synergy',
-    label: 'Synergy priced',
-    note: 'The density curve plus what material cannot express: the opposite-colour Bishop pair, defences, and a penalty for a Pawn stuck directly behind a friendly piece. Pawn shelter counts as a defence here.',
-    knobs: {
-      ...DEFAULT_POOL_KNOBS,
-      terms: [
-        { kind: 'density', power: 0.5, scale: 10 },
-        { kind: 'bishopPair', bonus: 0.25 },
-        { kind: 'defences', bonus: 0.1, countPawnSupport: true },
-        { kind: 'blockedPawn', penalty: 0.15 },
-        { kind: 'round', to: 5 },
-      ],
-    },
-  },
-  {
     id: 'synergy-no-pawns',
     label: 'Synergy, pawns excluded',
     note: 'The same proposal with Pawn shelter not counted as a defence, so "is a Pawn in front worth paying for" reads as a difference between two models rather than an argument. The blocked-Pawn penalty applies in both.',
@@ -587,6 +587,12 @@ export const POOL_MODELS: readonly PoolModel[] = Object.freeze([
     },
   },
 ]);
+
+/**
+ * The model the page opens on. Taken from the head of the list rather than named separately, so
+ * "first in the list" and "what loads" cannot drift apart.
+ */
+export const DEFAULT_POOL_MODEL: PoolModel = POOL_MODELS[0];
 
 export function sameKnobs(a: PoolKnobs, b: PoolKnobs): boolean {
   return (Object.keys(a) as (keyof PoolKnobs)[]).every((field) => {

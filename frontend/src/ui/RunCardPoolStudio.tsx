@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState, type ReactElement } from 'react';
 import {
-  DEFAULT_POOL_KNOBS,
+  DEFAULT_POOL_MODEL,
   POOL_GROUPINGS,
   POOL_MODELS,
   POOL_PIECES,
@@ -111,8 +111,8 @@ function CardTable({ cards }: { cards: readonly PoolCard[] }): ReactElement {
 }
 
 export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactElement {
-  const [modelId, setModelId] = useState<string>('density-cost');
-  const [knobs, setKnobs] = useState<PoolKnobs>(DEFAULT_POOL_KNOBS);
+  const [modelId, setModelId] = useState<string>(DEFAULT_POOL_MODEL.id);
+  const [knobs, setKnobs] = useState<PoolKnobs>(DEFAULT_POOL_MODEL.knobs);
   const [bandFilter, setBandFilter] = useState<PoolBand | 'all'>('all');
   const [volumeFilter, setVolumeFilter] = useState<number | 'all'>('all');
   const [pieceFilter, setPieceFilter] = useState<PoolPiece | 'all'>('all');
@@ -239,6 +239,7 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
         .rcp-term { border-top: 1px solid rgba(255,255,255,0.12); padding: 10px 0 4px; }
         .rcp-term:first-of-type { border-top: 0; padding-top: 0; }
         .rcp-term-head { font-size: calc(var(--rcp-fs) * 0.87); letter-spacing: 0.05em; text-transform: uppercase; opacity: 0.62; }
+        .rcp-turns { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.12); }
         .rcp-term-formula { display: block; font-family: ui-monospace, monospace; font-size: calc(var(--rcp-fs) * 0.88); margin: 4px 0 6px; line-height: 1.45; }
         .rcp-active-model { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
         .rcp-active-model span { font-size: calc(var(--rcp-fs) * 0.87); opacity: 0.62; letter-spacing: 0.05em; text-transform: uppercase; }
@@ -342,6 +343,18 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
               ) : null}
             </div>
           ))}
+          <div className="rcp-formula-line rcp-turns">
+            <code>
+              {knobs.collapseRotation
+                ? 'evaluated at all four quarter turns — the best result is the price'
+                : 'evaluated at the card’s bought facing only'}
+            </code>
+          </div>
+          <p className="rcp-note">
+            {knobs.collapseRotation
+              ? 'The whole chain is run once per turn and the best outcome wins, because a card is placed in ONE orientation — it cannot collect one turn’s shelter and another turn’s freedom. Price stands in for value, so the best outcome is the one the player will take.'
+              : 'Facing is bought, so there is one seating to read and nothing to choose between.'}
+          </p>
           <p className="rcp-note">
             These are the terms this model declares. A model that does not name a term does not carry it
             at all — comparing two models compares two formulas, not one formula with zeros in it.

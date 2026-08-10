@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { allRunCards } from '../run/model';
 import {
   DEFAULT_POOL_KNOBS,
+  DEFAULT_POOL_MODEL,
   POOL_MODELS,
   buildPool,
   cardSynergy,
@@ -339,5 +340,25 @@ describe('runCardPool blocked pawns', () => {
     expect(seatings).toHaveLength(4);
     expect(walked.defences + walked.blockedPawns).toBeGreaterThanOrEqual(0);
     expect(walked.cost).toBe(priceCard(cells([0, 0], [0, 1]), ['N', 'P'], model).cost);
+  });
+});
+
+describe('runCardPool default model', () => {
+  it('opens on the head of the list, so order and default cannot drift apart', () => {
+    expect(DEFAULT_POOL_MODEL).toBe(POOL_MODELS[0]);
+    expect(DEFAULT_POOL_MODEL.id).toBe('synergy');
+  });
+
+  it('keeps rotation on, which is what holds the catalog down', () => {
+    expect(DEFAULT_POOL_MODEL.knobs.collapseRotation).toBe(true);
+    const withRotation = buildPool(DEFAULT_POOL_MODEL.knobs).length;
+    const without = buildPool({ ...DEFAULT_POOL_MODEL.knobs, collapseRotation: false }).length;
+    expect(withRotation).toBe(268);
+    expect(without).toBeGreaterThan(withRotation * 2);
+  });
+
+  it('declares the full formula it is being tuned against', () => {
+    expect(DEFAULT_POOL_MODEL.knobs.terms.map((term) => term.kind))
+      .toEqual(['density', 'bishopPair', 'defences', 'blockedPawn', 'round']);
   });
 });
