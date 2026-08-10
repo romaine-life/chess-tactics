@@ -7,7 +7,7 @@ import { levelParTurns, speedBonusClockMs, speedBonusRemainingMs, speedBonusTent
 import type { GameState, Piece, Vec } from '../core/types';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox } from './shared/ChromeBox';
-import { CHROME_LEAF_FILL_SURFACE, leafSurfacePhase } from './shared/chromeSurfacePolicy';
+import { CHROME_LEAF_FILL_SURFACE, CHROME_STRUCTURAL_FILL_ROLE, leafSurfacePhase } from './shared/chromeSurfacePolicy';
 import { TitleBarStatus } from './shell/TitleBarControls';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleRoute, type TitleRouteSegment } from './shell/TitleRoute';
@@ -1452,7 +1452,16 @@ function AftermathPanel({
         {named ? <p className="run-aftermath-subtitle">{named}</p> : null}
       </header>
 
-      <InnerChromeBox as="div" className="run-aftermath-report">
+      {/* The report is a structural box, so it wears the installed marble borrowed from the outer
+          role (ADR-0433) — the same material the Editor's rows and the Run's Battle-preview pane
+          are painted with. Unfilled, the ledger read its labels and its numerals straight off the
+          vista behind it, which is the one thing the frame around them was there to prevent. The
+          scene's leaf adoption (ADR-0557) paints the ACTIONS below, not this box. */}
+      <InnerChromeBox
+        as="div"
+        className="run-aftermath-report"
+        fillRole={CHROME_STRUCTURAL_FILL_ROLE}
+      >
         <dl className="run-aftermath-ledger">
           <AftermathMeasure
             label="Gold won"
