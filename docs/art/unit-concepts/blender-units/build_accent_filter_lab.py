@@ -30,6 +30,22 @@ VELVET = [(0.00000,"#2a0709"),(0.05139,"#5a1013"),(0.09918,"#8a1c1c"),(0.15729,"
 # Each accent is a material Pass Index and the palette that index should wear. Masks
 # chain in order, so a later one paints over an earlier one where they overlap.
 ACCENTS = [(2, "CROWN gold", GOLD), (3, "CROWN velvet", VELVET)]
+# Which HUE each accent owns, measured off the restored crown texture rather than
+# assumed. Gold sits in the yellows; velvet is red and wraps past 0, so it is written
+# as two bands and summed.
+HUE_BANDS = {2: [(0.07, 0.20)], 3: [(0.00, 0.045), (0.94, 1.001)]}
+# Swept, not guessed: 0.18 -> 0.02 takes unclaimed crown pixels from 30 to 13 with
+# ZERO body pixels tinted at any setting, so opening the gate costs nothing here. The
+# 13 that remain are genuinely near-grey and have no hue to read.
+HUE_MIN_SAT = float(os.environ.get("HUE_MIN_SAT", "0.02"))
+# The accent layer exists to INVENT gold on a crown that had none. With the crown's
+# real textures restored it may be fighting art that is already correct, so it has to
+# be switchable to compare.
+if os.environ.get("NO_ACCENT"):
+    ACCENTS = []
+_only = os.environ.get("ACCENT_ONLY")
+if _only:
+    ACCENTS = [a for a in ACCENTS if a[0] == int(_only)]
 masks = []
 
 def srgb(h):
@@ -239,7 +255,61 @@ for offset, (index, label, stops) in enumerate(ACCENTS):
     # alpha still trims whatever reaches past the piece.
     hels.new(float(os.environ.get("ACCENT_THRESH", "0.06"))).color = (1, 1, 1, 1)
     hard.location = (300, -400 - offset * 300)
-    tree.links.new(share.outputs[0], hard.inputs["Fac"])
+    # Hue, not material index. The material split was authored against an untextured
+    # crown and measures as near-random against the real art -- both halves read about
+    # a third reddish and a third yellowish, so neither half means anything. The
+    # render itself knows which parts are gold and which are cloth, so ask it.
+    #
+    # This also sidesteps what no mask on an integer pass could do: hue comes from the
+    # same antialiased image as the colour, so a part-covered edge pixel is classified
+    # from the blend it actually is rather than from whatever material happened to sit
+    # under the pixel centre.
+    hsv = tree.nodes.new("CompositorNodeSeparateColor")
+    hsv.mode = "HSV"
+    hsv.location = (60, -300 - offset * 300)
+    # feeder is the image as the palette sees it -- after Pixelate and Outline. Not
+    # mask_pix's input, which is the coverage pass and has no hue at all; feeding that
+    # produced masks that were empty everywhere and a crown with no accent on it.
+    tree.links.new(feeder, hsv.inputs[0])
+
+    def _gate(sock, op, value, x, y):
+        n = tree.nodes.new("ShaderNodeMath")
+        n.operation = op
+        n.inputs[1].default_value = value
+        n.location = (x, y)
+        tree.links.new(sock, n.inputs[0])
+        return n.outputs[0]
+
+    def _combine(a, b, op, x, y):
+        n = tree.nodes.new("ShaderNodeMath")
+        n.operation = op
+        n.use_clamp = True
+        n.location = (x, y)
+        tree.links.new(a, n.inputs[0])
+        tree.links.new(b, n.inputs[1])
+        return n.outputs[0]
+
+    band_total = None
+    for bi, (lo, hi) in enumerate(HUE_BANDS[index]):
+        above = _gate(hsv.outputs[0], "GREATER_THAN", lo, 140, -260 - offset * 300 - bi * 80)
+        below = _gate(hsv.outputs[0], "LESS_THAN", hi, 140, -300 - offset * 300 - bi * 80)
+        band = _combine(above, below, "MULTIPLY", 220, -280 - offset * 300 - bi * 80)
+        band_total = band if band_total is None else _combine(
+            band_total, band, "ADD", 280, -280 - offset * 300 - bi * 80)
+
+    # Grey pixels have a meaningless hue, so gate on saturation or the body's own
+    # slight warmth would claim half the piece.
+    sat = _gate(hsv.outputs[1], "GREATER_THAN", HUE_MIN_SAT, 220, -380 - offset * 300)
+    hue_mask = _combine(band_total, sat, "MULTIPLY", 320, -330 - offset * 300)
+
+    pixel_mask = tree.nodes.new("CompositorNodePixelate")
+    next(t for t in pixel_mask.inputs if t.name == "Size").default_value = BLOCK
+    pixel_mask.location = (380, -330 - offset * 300)
+    tree.links.new(hue_mask, pixel_mask.inputs[0])
+
+    tree.links.new(
+        pixel_mask.outputs[0] if not os.environ.get("MASK_BY_MATERIAL") else share.outputs[0],
+        hard.inputs["Fac"])
 
     # Grow the mask by one pixel. On the crown's outer silhouette a block is part
     # accent and part BACKGROUND, and background carries material index 0 -- matching
@@ -281,10 +351,13 @@ if os.environ.get("DUMP_MASK"):
     # against the crown's own. Answers whether the lip is a short mask or geometry
     # that genuinely carries the body material.
     # CompositorNodeMixRGB is gone in Blender 5; shader Math works in the compositor.
-    u = tree.nodes.new("ShaderNodeMath"); u.operation = "MAXIMUM"
-    tree.links.new(masks[0], u.inputs[0]); tree.links.new(masks[1], u.inputs[1])
     for l in list(sink.links): tree.links.remove(l)
-    tree.links.new(u.outputs[0], sink)
+    if len(masks) == 1:
+        tree.links.new(masks[0], sink)
+    else:
+        u = tree.nodes.new("ShaderNodeMath"); u.operation = "MAXIMUM"
+        tree.links.new(masks[0], u.inputs[0]); tree.links.new(masks[1], u.inputs[1])
+        tree.links.new(u.outputs[0], sink)
     scene.render.filepath = os.environ["OUT"]
     bpy.ops.render.render(write_still=True)
     raise SystemExit
