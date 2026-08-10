@@ -37,6 +37,7 @@ import {
   canLeaveSectio,
   canUndoRunBattleMove,
   captureRunBattleUndo,
+  chargeRunBattleUndoCheckpoint,
   closeBattle,
   deditioGoldTenths,
   hasLipsanon,
@@ -1730,6 +1731,7 @@ function RunBattlefieldPanel({
         replace(restored);
         return true;
       },
+      chargeEarlier: (checkpoint) => chargeRunBattleUndoCheckpoint(checkpoint),
     } satisfies RunBattleUndoAdapter,
     onVictory: (report) => {
       if (onReviewRewards) {
