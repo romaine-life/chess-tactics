@@ -55,6 +55,7 @@ import {
   runBattleActivityId,
   runCardUnitIds,
   performExpunctio,
+  sectioAdlectioSpent,
   sectioHasChanges,
   runCardDefinition,
   takeCommendatioKing,
@@ -109,14 +110,17 @@ import { useLipsanonFlight } from './runLipsanonFlightView';
 import { RunGoldAmount } from './RunResources';
 import {
   isSectioWorkspaceView,
+  RUN_SECTIO_CONTROL_ICON_ROLE,
   RUN_WORKSPACE_VIEW_LABEL,
   SECTIO_WORKSPACE_VIEWS,
   runArmyUnitHref,
   runWorkspaceHref,
   runWorkspaceTitleSegment,
+  type RunSectioControl,
   type RunSelfInspectionView,
   type RunWorkspaceView,
 } from './RunSelfInspection';
+import { installedUiMedia } from './installedUiMedia';
 import {
   DEFAULT_RUN_ARMY_FILTERS,
   RunArmyWorkspace,
@@ -305,6 +309,15 @@ function useRunAbandon(run: RunDocument): {
   return { abandonDialog: dialog, abandoning, requestAbandon };
 }
 
+/**
+ * The padlock laid on a Sectio offer the visit's one admission has closed. The installed kit
+ * lock, through the same `app-ui` role the Level Editor's own lock resolves and the same door
+ * every other mark on this screen uses: this is the ordinary "you cannot have this" glyph, and
+ * both a padlock drawn for one row and a second way of reaching this one would be a bespoke
+ * parallel (ADR-0059).
+ */
+const RUN_SECTIO_LOCK_ICON_ROLE = 'ui-kit-icons-lock-png';
+
 /** The installed full-screen Sectio scene, or null when the Sectio has no scene art. */
 function useInstalledSectioScene(): ReactElement | null {
   return useMemo(() => {
@@ -313,6 +326,21 @@ function useInstalledSectioScene(): ReactElement | null {
       ? <img className="run-sectio-scene-artwork" src={installed.src} alt="" draggable={false} />
       : null;
   }, []);
+}
+
+/**
+ * A Sectio control's mark, seated ahead of its word.
+ *
+ * `.app-header-button` is already an inline flex row with its own gap, so the mark takes a fixed
+ * seat and the label follows it — every button in the rail then starts its text on the same line
+ * whatever glyph it wears, which is what makes the column scannable rather than ragged.
+ */
+function RunControlMark({ control }: { control: RunSectioControl }): ReactElement {
+  return (
+    <span className="run-control-mark" aria-hidden="true">
+      <img src={installedUiMedia(RUN_SECTIO_CONTROL_ICON_ROLE[control])} alt="" draggable={false} />
+    </span>
+  );
 }
 
 function RunMetaControls({
@@ -353,6 +381,7 @@ function RunMetaControls({
                 aria-pressed={view === 'primary'}
                 onClick={() => onNavigate('primary')}
               >
+                <RunControlMark control="primary" />
                 Sectio
               </ChromeButton>
               {SECTIO_WORKSPACE_VIEWS.map((candidate, index) => (
@@ -365,6 +394,7 @@ function RunMetaControls({
                   aria-pressed={view === candidate}
                   onClick={() => onNavigate(candidate)}
                 >
+                  <RunControlMark control={candidate} />
                   {RUN_WORKSPACE_VIEW_LABEL[candidate]}
                 </ChromeButton>
               ))}
@@ -386,6 +416,7 @@ function RunMetaControls({
                   onNavigate('primary');
                 }}
               >
+                <RunControlMark control="reset-sectio" />
                 Reset Sectio
               </ChromeButton>
               <ChromeButton unit="inner-text-button"
@@ -400,6 +431,7 @@ function RunMetaControls({
                   onNavigate('primary');
                 }}
               >
+                <RunControlMark control="continue" />
                 Continue to next Battle
               </ChromeButton>
             </div>
@@ -418,6 +450,7 @@ function RunMetaControls({
                 disabled={abandoning}
                 onClick={() => { void requestAbandon(); }}
               >
+                <RunControlMark control="abandon" />
                 {abandoning ? 'Abandoning…' : 'Abandon Run'}
               </ChromeButton>
             </div>
@@ -585,6 +618,9 @@ function ArrangedDeploymentControls({
             disabled={abandoning || departing}
             onClick={() => { void requestAbandon(); }}
           >
+            {/* The same control as the Sectio rail's, so it wears the same mark: one button
+                cannot read two ways because it is reached from two screens. */}
+            <RunControlMark control="abandon" />
             {abandoning ? 'Abandoning…' : 'Abandon Run'}
           </ChromeButton>
         </div>
@@ -1227,8 +1263,11 @@ function SectioPanel({
 }): ReactElement {
   const replace = useActiveRun((state) => state.replace);
   const sectio = run.sectio!;
-  const availableOffers = sectio.cardOffers.filter((offer) => !sectio.adlectedCardOfferIds.includes(offer.offerId));
+  // One card to a Sectio. The row keeps every unbought face on the table afterwards -- what you
+  // turned down is part of what you decided -- and a padlock is laid on each one instead.
+  const adlectioSpent = sectioAdlectioSpent(run);
   const cardBackMediaUrl = useRunCardBackMediaUrl();
+  const lockMediaUrl = installedUiMedia(RUN_SECTIO_LOCK_ICON_ROLE);
   return (
     <>
       {view === 'expunctio'
@@ -1252,19 +1291,21 @@ function SectioPanel({
           <span className="sr-only" role="status" aria-live="polite">{adlectioAnnouncement}</span>
           {/*
             The answering half of the opening grant's line. Both screens deal the same faces
-            with the same number printed on them; only here is that number what you hand over.
-            It goes once the stall is bought out, so the screen never invites a take it has
-            just told you is impossible — the empty notice below speaks for that state.
+            with the same number printed on them; only here is that number what you hand over,
+            and only here is one of them all you may have. It stands over the row for the whole
+            visit, before and after the take: with the padlocks that appear on the survivors it
+            reads as one statement — you get one, and this is the one you took. Nothing has to
+            pop up to say so.
           */}
-          {availableOffers.length === 0 ? null : (
-            <p className="run-card-row-call">They require compensation.</p>
-          )}
+          <p className="run-card-row-call">They require compensation. Only one may be admitted.</p>
           <SectioCardRow>
             {sectio.cardOffers.map((offer, index) => {
               const adlected = sectio.adlectedCardOfferIds.includes(offer.offerId);
               return (
                 <RunCardPile
                   backMediaUrl={cardBackMediaUrl}
+                  lockMediaUrl={lockMediaUrl}
+                  locked={adlectioSpent}
                   key={offer.offerId}
                   seatIndex={index}
                 >
@@ -1273,7 +1314,7 @@ function SectioPanel({
                       card={offer}
                       mode="sectio"
                       layoutId={offer.offerId}
-                      disabled={run.goldTenths < offer.cost * GOLD_SCALE}
+                      disabled={adlectioSpent || run.goldTenths < offer.cost * GOLD_SCALE}
                       onSelect={(source) => onAdlect(offer, source)}
                     />
                   )}
@@ -1281,11 +1322,6 @@ function SectioPanel({
               );
             })}
           </SectioCardRow>
-          {availableOffers.length === 0 ? (
-            <InnerChromeBox className="run-sectio-cards-empty" role="status">
-              All offered cards are in the Chartulary.
-            </InnerChromeBox>
-          ) : null}
         </section>
 
 
@@ -1849,7 +1885,12 @@ export function RunScreen({
     // every remaining affordable card and every Sectio control stays responsive while
     // any number of independent visual flights finish in the continuity layer.
     replace(adlected);
-    setAdlectioAnnouncement(`${runCardName(offer)} admitted by Adlectio and added to the Chartulary.`);
+    // The closure is spoken with the admission because it is the same event: a screen reader
+    // gets no second cue from a row whose remaining faces are printed exactly as they were.
+    setAdlectioAnnouncement(
+      `${runCardName(offer)} admitted by Adlectio and added to the Chartulary.`
+      + ' This Sectio admits no other card.',
+    );
   };
   // The Run's opening grant is the same admission as Adlectio and reads as one: the taken
   // card travels into the Chartulary from where it was lying. The Run phase owns that carry
@@ -1944,7 +1985,7 @@ export function RunScreen({
   ) : null;
   // The Sectio scene belongs to the retained shell viewport, not to whichever Sectio
   // workspace happens to be in front of it. Keeping it outside the transition region
-  // prevents Sectio/View Battle/Expunctio swaps from fading or remounting the room.
+  // prevents Sectio/Exploratio/Expunctio swaps from fading or remounting the room.
   const persistentSectioScene = shellRun?.phase === 'sectio' ? sectioScene : null;
   // A craft request speaks for the whole screen while it runs: the Run it is about to replace must
   // not flash its own phase first, and a refused spec has to say why instead of silently doing

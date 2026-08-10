@@ -47,7 +47,7 @@ export function StrategikonTitleNavigation({
             data-strategikon-section={item.section}
             data-run-card-flight-target={item.section === 'chartulary' ? '' : undefined}
           >
-            <img src={item.iconSrc} alt="" aria-hidden="true" />
+            <img className={item.iconClassName} src={item.iconSrc} alt="" aria-hidden="true" />
           </NavButton>
         );
       })}

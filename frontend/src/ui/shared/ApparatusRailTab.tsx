@@ -18,6 +18,9 @@ export interface ApparatusRailTabProps {
    * with two marks. Resolve the URL at the call site (menuModeIcon, installedUiMedia).
    */
   iconSrc: string;
+  /** Set when the mark needs a treatment the shared seat does not assume — the card
+   *  back is a painting among sprites and must be filtered, not point-sampled. */
+  iconClassName?: string;
   /**
    * How the mark's SOURCE CANVAS is authored, which decides the drawn size — not a
    * per-tab style knob. The kit icons this rail was built for reserve canvas margin
@@ -86,6 +89,7 @@ export function ApparatusRailTab({
   index,
   active = false,
   iconSrc,
+  iconClassName,
   markCanvas = 'inset',
   title,
   testId,
@@ -101,7 +105,7 @@ export function ApparatusRailTab({
       style={{ ['--tab-index' as string]: index } as CSSProperties}
     >
       <span className="settings-tab-icon" data-mark-canvas={markCanvas} aria-hidden="true">
-        <img src={iconSrc} alt="" />
+        <img className={iconClassName} src={iconSrc} alt="" />
       </span>
       {detail ? (
         <span className="apparatus-tab-copy">

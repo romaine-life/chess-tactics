@@ -59,7 +59,7 @@ import {
   type EnchiridionSection,
 } from './enchiridionRoute';
 import { installedUiMedia } from './installedUiMedia';
-import { useStrategikonCardsIcon } from './strategikonNavigation';
+import { STRATEGIKON_CARD_MARK_CLASS, useStrategikonCardsIcon } from './strategikonNavigation';
 import { LipsanonIcon } from './Lipsana';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
 import { ataraxiaNumeralArtUrl } from './ataraxiaNumeral';
@@ -1174,6 +1174,7 @@ export function EnchiridionSectionRail({
           index={index}
           active={section === candidate}
           iconSrc={sectionIconSrc[candidate]}
+          iconClassName={candidate === 'cards' ? STRATEGIKON_CARD_MARK_CLASS : undefined}
           markCanvas={candidate === 'ataraxia' ? 'bleed' : 'inset'}
         />
       ))}

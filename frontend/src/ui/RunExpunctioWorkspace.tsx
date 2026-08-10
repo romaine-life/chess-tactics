@@ -18,6 +18,7 @@ import { RunGoldTransactionAmount } from './RunResources';
 import { RunSceneViewport } from './RunWorkspace';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { ChromeButton } from './shared/ChromeButton';
+import { RunActionIcon } from './shared/RunActionIcon';
 import { InnerChromeBox } from './shared/ChromeBox';
 import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
 
@@ -159,7 +160,8 @@ function ExpunctioCardTile({
           disabled={status !== 'available'}
           onClick={() => onExpunct(card.id)}
         >
-          {actionLabel(status)}
+          <RunActionIcon variant="athetize" />
+          <span>{actionLabel(status)}</span>
         </ChromeButton>
       </span>
     </InnerChromeBox>

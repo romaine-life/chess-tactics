@@ -46,6 +46,7 @@ import {
   runCardRarity,
   runCardRarityForRoll,
   runSectioCardMaxValue,
+  sectioAdlectioSpent,
   sectioUpcomingBattleIndex,
   sectioCardOffersAtCursor,
   sectioCardPile,
@@ -481,6 +482,44 @@ describe('plain Run creation and acquisition', () => {
 
     // Reset restores the entry snapshot, so the visit has admitted nothing again.
     expect(sectioAdmittedCardIds(resetSectio(struck)).size).toBe(0);
+  });
+
+  it('admits one card however much gold is left over', () => {
+    // The refusal is the rule, not the price: the Run below can pay for the whole row twice
+    // and still leaves with one card.
+    const base = { ...firstSectio(59), goldTenths: 10_000 };
+    const funded = {
+      ...base,
+      sectio: { ...base.sectio!, entrySnapshot: { ...base.sectio!.entrySnapshot, goldTenths: 10_000 } },
+    };
+    const [first, second] = funded.sectio!.cardOffers;
+
+    const once = performAdlectio(funded, first.offerId);
+    expect(once.sectio!.adlectedCardOfferIds).toEqual([first.offerId]);
+    expect(sectioAdlectioSpent(once)).toBe(true);
+
+    const twice = performAdlectio(once, second.offerId);
+    expect(twice).toBe(once);
+    expect(twice.cards).toHaveLength(once.cards.length);
+    expect(twice.goldTenths).toBe(once.goldTenths);
+  });
+
+  it('returns the admission to the visit when the Sectio is reset', () => {
+    // What keeps one card from being a misclick: Reset restores the entry snapshot, and the
+    // player may then admit a different one.
+    const base = { ...firstSectio(61), goldTenths: 10_000 };
+    const funded = {
+      ...base,
+      sectio: { ...base.sectio!, entrySnapshot: { ...base.sectio!.entrySnapshot, goldTenths: 10_000 } },
+    };
+    const [first, second] = funded.sectio!.cardOffers;
+
+    const reset = resetSectio(performAdlectio(funded, first.offerId));
+    expect(sectioAdlectioSpent(reset)).toBe(false);
+
+    const rechosen = performAdlectio(reset, second.offerId);
+    expect(rechosen.sectio!.adlectedCardOfferIds).toEqual([second.offerId]);
+    expect(rechosen.cards.at(-1)!.coreId).toBe(second.id);
   });
 });
 

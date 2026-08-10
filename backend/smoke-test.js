@@ -6438,27 +6438,30 @@ async function main() {
       entrySnapshot: { ...activeRunDocument.sectio.entrySnapshot, goldTenths: 1000 },
     },
   };
-  const multiAdlectioRun = boardRender.performAdlectio(
-    boardRender.performAdlectio(fundedSectioRun, activeRunOffers[0].offerId),
-    activeRunOffers[1].offerId,
-  );
-  const firstAdlectedCard = multiAdlectioRun.cards.find((card) => card.coreId !== 'his-grace');
+  // A Sectio admits ONE card, so the funded visit below buys once and the second attempt is
+  // refused by the model rather than saved. The gold is there to prove the refusal is the rule
+  // and not the price.
+  const adlectioRun = boardRender.performAdlectio(fundedSectioRun, activeRunOffers[0].offerId);
+  if (boardRender.performAdlectio(adlectioRun, activeRunOffers[1].offerId) !== adlectioRun) {
+    throw new Error('A Sectio admitted a second card.');
+  }
+  const firstAdlectedCard = adlectioRun.cards.find((card) => card.coreId !== 'his-grace');
   const firstAdlectedUnitIds = firstAdlectedCard.unitSeats.filter(Boolean);
   const firstAdlectedUnits = firstAdlectedUnitIds.map(
-    (unitId) => multiAdlectioRun.army.find((unit) => unit.id === unitId),
+    (unitId) => adlectioRun.army.find((unit) => unit.id === unitId),
   );
   const expunctioPriceTenths = boardRender.cardExpunctioPriceTenths(firstAdlectedCard, firstAdlectedUnits);
   const savedRun = await request(
     'PUT', '/api/active-run',
     { cookie: '__Host-chess-tactics-access=abc', 'content-type': 'application/json' },
-    JSON.stringify({ run: multiAdlectioRun, revision: 0 }),
+    JSON.stringify({ run: adlectioRun, revision: 0 }),
   );
   const savedRunBody = JSON.parse(savedRun.body);
   if (
     savedRun.statusCode !== 200
     || savedRunBody.revision !== 1
     || savedRunBody.run.id !== 'run-smoke'
-    || savedRunBody.run.sectio.adlectedCardOfferIds.length !== 2
+    || savedRunBody.run.sectio.adlectedCardOfferIds.length !== 1
   ) {
     throw new Error(`Active Run did not save: ${savedRun.statusCode} ${savedRun.body}`);
   }
@@ -6472,7 +6475,7 @@ async function main() {
   if (
     savedExpunctioRun.statusCode !== 200
     || savedExpunctioRunBody.revision !== 2
-    || savedExpunctioRunBody.run.goldTenths !== multiAdlectioRun.goldTenths - expunctioPriceTenths
+    || savedExpunctioRunBody.run.goldTenths !== adlectioRun.goldTenths - expunctioPriceTenths
     || savedExpunctioRunBody.run.cards.some((card) => card.id === firstAdlectedCard.id)
     || savedExpunctioRunBody.run.army.some((unit) => firstAdlectedUnitIds.includes(unit.id))
     || savedExpunctioRunBody.run.sectio.expunctedCard?.card?.id !== firstAdlectedCard.id

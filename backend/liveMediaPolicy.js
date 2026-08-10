@@ -118,6 +118,10 @@ const RUN_SECTIO_WRAP_SLOT = /^ui\/run\/sectio-wrap\/([a-z][a-z0-9-]{0,79})\.png
 // runtime needs is where the card row sits inside the painted canvas.
 const RUN_SECTIO_WRAP_KINDS = Object.freeze(['seat', 'band', 'slots', 'screen']);
 const RUN_PROGRESS_ICON_COMPONENT = 'run-progress-icon';
+// The mark of one Run card ACTION, drawn on the control that performs it rather
+// than on a screen. Trimmed to its own ink like the position marks, because it
+// shares a row with a label instead of sitting in a padded 64x64 frame.
+const RUN_ACTION_ICON_COMPONENT = 'run-action-icon';
 // Each state and property is registered under the word the game says (ADR-0374): the slot,
 // the stored value and the name a player reads are one vocabulary.
 const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
@@ -135,6 +139,10 @@ const GAME_CONDITION_ICON_BY_SLOT = Object.freeze({
   'ui/kit/icons/run/ataraxia-mark.png': Object.freeze({ component: RUN_PROGRESS_ICON_COMPONENT, variant: 'ataraxia' }),
   'ui/kit/icons/run/conflict.png': Object.freeze({ component: RUN_PROGRESS_ICON_COMPONENT, variant: 'conflict' }),
   'ui/kit/icons/run/battle.png': Object.freeze({ component: RUN_PROGRESS_ICON_COMPONENT, variant: 'battle' }),
+  // Athetize: the card-level act inside Expunctio (ADR-0443). It joins the action
+  // family the board verbs are drawn in rather than the Run-position marks, because
+  // what it names is a button's effect, not a place in the War.
+  'ui/kit/icons/game/athetize.png': Object.freeze({ component: RUN_ACTION_ICON_COMPONENT, variant: 'athetize' }),
 });
 const CARD_TYPE_ROW_TEXTURE_COMPONENT = 'card-type-row-texture';
 const CARD_TYPE_ROW_TEXTURE_GROUP_ID = 'card-type-row-textures-pixen-v1';
@@ -1194,9 +1202,11 @@ function gameConditionIconMediaIssue(row, projectedRuntime = null) {
   if (row.domain !== 'ui-kit') return 'game condition icons require the ui-kit domain';
   if (row.role !== 'icon') return 'game condition icons require the icon role';
   if (row.media_type !== 'image/png') return 'game condition icons require image/png';
-  // Run-position marks sit unframed in a row and ship trimmed to their own ink;
-  // the established unit-ability and card-property icons keep their full frame.
-  const trimmed = contract.component === RUN_PROGRESS_ICON_COMPONENT;
+  // Run-position and action marks sit unframed beside a label and ship trimmed to
+  // their own ink; the established unit-ability and card-property icons keep their
+  // full frame.
+  const trimmed = contract.component === RUN_PROGRESS_ICON_COMPONENT
+    || contract.component === RUN_ACTION_ICON_COMPONENT;
   const rasterIssue = trimmed
     ? trimmedIconRasterIssue(row, 'Run position icons')
     : (Number(row.width) !== 64 || Number(row.height) !== 64
