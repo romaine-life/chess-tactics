@@ -287,6 +287,13 @@ describe('Run rule options are a departure from the defaults, not a step in setu
     expect(source).toContain('Standard formations and pricing. Most Runs want these.');
   });
 
+  it('seats below Start Run, so it is not a step between the Ataraxia choice and the verb', () => {
+    // It also grows when opened; last in the column means opening it extends the column
+    // downward instead of pushing the verb down the screen.
+    expect(playMenu).toMatch(/data-testid="run-start"[\s\S]*?<RunRulesSelector/);
+    expect(playMenu).not.toMatch(/<RunRulesSelector[\s\S]*?data-testid="run-start"/);
+  });
+
   it('is reachable and announced, because a Run is bound to these for its life', () => {
     expect(source).toContain('aria-expanded={open}');
     expect(source).toContain('aria-controls="run-rules-content"');

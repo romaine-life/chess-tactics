@@ -13,6 +13,9 @@ import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
 //
 // Not hidden, though: a Run is bound to these for its whole life, so a player who did change one
 // has to be able to see what they are about to start.
+//
+// It seats BELOW Start Run in the detail column, after the verb rather than before it — see the
+// comment at its mount in PlayMenu.
 
 const SPAN_COPY: Readonly<Record<2 | 4, { label: string; effect: string }>> = {
   2: {
