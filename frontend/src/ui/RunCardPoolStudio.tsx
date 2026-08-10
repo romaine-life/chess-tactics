@@ -240,7 +240,7 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
         .rcp-term:first-of-type { border-top: 0; padding-top: 0; }
         .rcp-term-head { font-size: calc(var(--rcp-fs) * 0.87); letter-spacing: 0.05em; text-transform: uppercase; opacity: 0.62; }
         .rcp-turns { margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.12); }
-        .rcp-term-formula { display: block; font-family: ui-monospace, monospace; font-size: calc(var(--rcp-fs) * 0.88); margin: 4px 0 6px; line-height: 1.45; }
+        .rcp-term-formula { display: block; white-space: pre-line; font-family: ui-monospace, monospace; font-size: calc(var(--rcp-fs) * 0.88); margin: 4px 0 6px; line-height: 1.45; }
         .rcp-active-model { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
         .rcp-active-model span { font-size: calc(var(--rcp-fs) * 0.87); opacity: 0.62; letter-spacing: 0.05em; text-transform: uppercase; }
         .rcp-active-model b { font-size: calc(var(--rcp-fs) * 1.2); }
@@ -362,9 +362,34 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
         </div>
 
         <div className="rcp-panel">
-          <h3>Bands</h3>
-          <NumberRow label="Common ≤" value={knobs.commonMaxCost} onChange={(v) => set('commonMaxCost', v)} step={5} />
-          <NumberRow label="Uncommon ≤" value={knobs.uncommonMaxCost} onChange={(v) => set('uncommonMaxCost', v)} step={5} />
+          <h3>Rarity formula</h3>
+          <div className="rcp-term">
+            <div className="rcp-term-head">Bands on price</div>
+            <code className="rcp-term-formula">
+              {`common    cost <= ${knobs.commonMaxCost}
+uncommon  cost <= ${knobs.uncommonMaxCost}
+rare      everything above`}
+            </code>
+            <NumberRow label="common ≤" value={knobs.commonMaxCost} onChange={(v) => set('commonMaxCost', v)} step={5} />
+            <NumberRow label="uncommon ≤" value={knobs.uncommonMaxCost} onChange={(v) => set('uncommonMaxCost', v)} step={5} />
+          </div>
+          <table>
+            <tbody>
+              {BANDS.map((band) => (
+                <tr key={band}>
+                  <td>{band}</td>
+                  <td>{summary.byBand[band]} cards</td>
+                  <td>{POOL_PILE_SLOTS[band]} slots</td>
+                  <td>{summary.byBand[band] === 0 ? '—' : `${(summary.perPileShare[band] * 100).toFixed(1)}%`}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="rcp-note">
+            Rarity here is derived entirely from price — two cuts, nothing else. That is one proposal
+            rather than a fact: a cut cannot separate cards that price the same, which is why rung 90
+            holds RB and RN alongside the triple-minor cards.
+          </p>
         </div>
       </div>
 
