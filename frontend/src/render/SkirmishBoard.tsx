@@ -675,8 +675,15 @@ export function unitArrivalPlan(
   };
 }
 
+/**
+ * What the arrival order is actually read from. Narrower than `Piece` so a surface with seats but
+ * no game — Exploratio's shuffled preview — can be ordered by this same function instead of
+ * copying its rule (ADR-0059). Every `Piece` satisfies it.
+ */
+export type ArrivalOrderedUnit = Pick<Piece, 'id' | 'side' | 'type' | 'x' | 'y'> & { startY?: number };
+
 export function computeArrivalDelays(
-  pieces: readonly Piece[],
+  pieces: readonly ArrivalOrderedUnit[],
   baseDelayMs = ARRIVAL_BASE_MS,
 ): Map<string, number> {
   const delays = new Map<string, number>();
@@ -749,6 +756,33 @@ export function structureArrivalOp(
   if (arrival.dy === 0 && arrival.opacity >= 1) return op;
   return { ...op, dy: op.dy + arrival.dy, opacity: (op.opacity ?? 1) * arrival.opacity };
 }
+
+/**
+ * Apply a unit's entrance to one of its draw ops — ADR-0045's drop, on the exact curve the
+ * battlefield plays it at, not a second one.
+ *
+ * The same shape `structureArrivalOp` takes, and for the same reason: a surface that composes its
+ * board through `boardDrawOps` rather than through the live game renderer has a flat op list and
+ * an identity on each op, so it can play an entrance without owning a piece model. `dx` moves too,
+ * so a track that comes in from the side is available here as well as the drop.
+ */
+export function unitArrivalOp(
+  op: BoardDrawOp,
+  plan: UnitArrivalPlan | undefined,
+  timeMs: number,
+  track: UnitArrivalTrack = 'drop',
+): BoardDrawOp {
+  if (!plan) return op;
+  const arrival = arrivalOffset(timeMs, plan, track);
+  if (arrival.dx === 0 && arrival.dy === 0 && arrival.opacity >= 1) return op;
+  return {
+    ...op,
+    dx: op.dx + arrival.dx,
+    dy: op.dy + arrival.dy,
+    opacity: (op.opacity ?? 1) * arrival.opacity,
+  };
+}
+
 
 /**
  * The moment a prop's fall reaches the ground — where the impact belongs. This is NOT the end of
@@ -863,6 +897,9 @@ const ARRIVAL_ANIM_MS = 620;
 export const ARRIVAL_CONTACT_PROGRESS = 0.82;
 /** The whole entrance, fall through impact — what a review surface has to be able to replay. */
 export const STRUCTURE_ENTRANCE_MS = ARRIVAL_ANIM_MS + STRUCTURE_IMPACT_MS;
+/** A unit's entrance, from its own release to standing. A surface that plays one outside the
+ *  battlefield uses it to know when the motion is over and it can go back to being still. */
+export const UNIT_ENTRANCE_MS = ARRIVAL_ANIM_MS;
 const FORMATION_SLIDE_ANIM_MS = 560;
 const ZERO_BOARD_DELTA: Vec = { x: 0, y: 0 };
 
@@ -1739,7 +1776,8 @@ export function SkirmishBoard({
   renderCellOverlay?: (context: SkirmishBoardCellOverlayContext) => ReactNode;
   /** Board-space content, such as a placement ghost, seated in the canonical scene. */
   boardOverlay?: ReactNode;
-  /** A secondary click that never panned. Reserved for non-destructive phase modes. */
+  /** A secondary click that never panned, claimed by a phase that carries something on the
+   *  cursor. Left unset, the board takes its own premove chain back (ADR-0550). */
   onSecondaryClick?: () => void;
   className?: string;
   ariaLabel?: string;
@@ -2236,6 +2274,19 @@ export function SkirmishBoard({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [premoves.length, premoveSelectedId, clearPremoves]);
+  // ...and so does a right click on the board (ADR-0550), which is the gesture a chess player
+  // already reaches for. The board is wall-to-wall hit targets, so the secondary button also
+  // pans (ADR-0128) — ViewPane owns that distinction and only calls this for a press that
+  // released without ever crossing the pan threshold. A right DRAG moves the camera and keeps
+  // the chain; with nothing queued this does nothing at all.
+  const takeBackPremoves = useCallback(() => {
+    if (!interactionEnabled) return;
+    clearPremoves();
+    setPremoveSelectedId(null);
+  }, [clearPremoves, interactionEnabled]);
+  // Run Deployment claims the button to turn the formation it is carrying (ADR-0526). An
+  // ordinary battle board carries no formation, so the gesture is the take-back there.
+  const secondaryClick = onSecondaryClick ?? takeBackPremoves;
 
   // Resolve targets from the CURRENT input boundary, not the pickup boundary. In particular,
   // a premove drag may outlive the post-reply landing beat; once live control resumes, both its
@@ -2564,7 +2615,7 @@ export function SkirmishBoard({
         onMinimumZoomChange={setMinZoom}
         onViewportSizeChange={setViewViewportSize}
         onViewInteraction={markViewInteraction}
-        onSecondaryClick={onSecondaryClick}
+        onSecondaryClick={secondaryClick}
       >
         <BoardLabBoard
           board={board}

@@ -134,6 +134,20 @@ export interface BoardStructureIdentity {
   artId: string;
 }
 
+/**
+ * Which seated unit an op's pixels belong to, for the same reason `BoardStructureIdentity`
+ * exists: a renderer that wants to MOVE a unit — an entrance, an exit — has to find its ops in a
+ * flat list without re-deriving placement from board data. A unit draws one seated op and may
+ * draw a reflection of it, and both carry this, so a unit falling into place falls in the mirror
+ * beside it rather than leaving its reflection standing on the ground.
+ */
+export interface BoardUnitIdentity {
+  /** Seat cell key `"x,y"`, exactly as it is keyed in `board.units`. */
+  key: string;
+  x: number;
+  y: number;
+}
+
 export interface BoardDrawOp {
   /** Semantic ownership used by composed renderers; never infer this from `src`. */
   layer?: BoardDrawLayer;
@@ -154,6 +168,8 @@ export interface BoardDrawOp {
   animation?: BoardSpritePlayback;
   /** Present on every op drawn for a placed prop; absent on terrain, cover and units. */
   structure?: BoardStructureIdentity;
+  /** Present on every op drawn for a seated unit; absent on terrain, cover and props. */
+  unit?: BoardUnitIdentity;
   /** Board-space polygon paths used to expose broken cells inside a composite terrain image. */
   clipPolygons?: number[][];
   /** Complete-scene inverse raster map. Present only on a persisted registered pre-drawn plate. */
@@ -323,6 +339,7 @@ function staticUnitSubject(
       dh: imageH,
       z: objectBaseZIndex({ x, y }),
       contain: true,
+      unit: { key, x, y },
     },
   };
 }

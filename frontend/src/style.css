@@ -10910,6 +10910,15 @@ body { font-size: 17px; }
   filter: brightness(1.45) saturate(1.3);
 }
 
+/* Shuffle and Clear are one control group on the row's label side, where the Zone row's single
+   button stands — so the two rows share a left edge and the readout stays a ledger of label and
+   value rather than a column of loose buttons. */
+.ce-li-preview-controls {
+  align-items: center;
+  display: inline-flex;
+  gap: var(--ds-inline-tight);
+}
+
 .terrain-grass { background: #6a9b3f; }
 .terrain-water { background: #3a78c8; }
 .terrain-bridge { background: #b08750; }
@@ -19787,7 +19796,7 @@ button.tileset-relationship-cell {
 
 /* The primary Sectio workspaces normally paint the shell's standard fill. When the
    retained viewport artwork is installed, that fill must yield so the shared scene
-   remains visible beneath Sectio, View Battle, and Expunctio alike. */
+   remains visible beneath Sectio, Exploratio, and Expunctio alike. */
 .run-screen.has-persistent-viewport-artwork .run-phase-primary > .run-workspace .shell-workspace-fill {
   visibility: hidden;
 }
@@ -19978,9 +19987,17 @@ button.tileset-relationship-cell {
 
 /* One continuous ledger down the pane's right column: the facts, then the note as its last
    section. Nothing between them is a frame — the pane's rail is the column's left edge. */
+/* The readout's sections are sized by their own content and the COLUMN scrolls; the rows must
+   say so explicitly. Left `auto`, grid's maximize-tracks step can only grow a row as far as the
+   free space allows, so a column taller than its viewport is handed rows BETWEEN min-content and
+   max-content — every section then quietly renders past the bottom of the row it was given, and
+   the last of them (Time) printed straight through the note underneath it while the column
+   reported nothing to scroll. `max-content` takes the row's full height as its base size, which
+   is what leaves a real overflow for the installed scrollbar to carry. */
 .run-battle-preview-intelligence {
   align-content: start;
   display: grid;
+  grid-auto-rows: max-content;
   min-block-size: 0;
   min-inline-size: 0;
   overflow: auto;
@@ -20185,7 +20202,7 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
-.run-card-pile > :is(.run-card-pile-back, .run-card-offer) {
+.run-card-pile > :is(.run-card-pile-back, .run-card-offer, .run-card-pile-lock) {
   grid-column: 1;
   grid-row: 1;
 }
@@ -20237,16 +20254,66 @@ button.tileset-relationship-cell {
   cursor: default;
 }
 
-/* A card is printed art, never a faded control: an unaffordable or already-purchased
-   offer stays fully opaque. Overrides the global `button:disabled` fade. */
+/* A card is printed art, never a faded control: an unaffordable or locked offer stays fully
+   opaque. Overrides the global `button:disabled` fade.
+
+   The pointer stays quiet for the same reason. A card you cannot take is not an error to be
+   scolded for reaching toward -- the price is printed on it and the lock is laid on it, and
+   `not-allowed`'s barred circle adds a rebuke on top of a state the card has already said
+   plainly. It takes the ordinary arrow instead: this is not a control right now. */
 .run-card-action:disabled {
-  cursor: not-allowed;
+  cursor: default;
   opacity: 1;
 }
 
-.run-sectio-cards-empty {
+/* The padlock laid on an offer the visit's one admission has closed (ADR-0551). It sits in the
+   pile's own registered seat, over the middle of the printed face, and is drawn from the kit's
+   64x64 lock at a fraction of the card so it reads as an object placed on the card rather than
+   as a badge stuck to the corner of a control. Nearest-neighbour, like every other pixel mark
+   the Run prints. Inert: the disabled offer beneath it stays the thing under the pointer.
+
+   Present but hidden while the offer is open, rather than mounted at the moment of locking: a
+   lock mounted then is also FETCHED then, and the survivors of an Adlectio stand there unmarked
+   until it arrives.
+
+   And it is PUT ON the card rather than switched on over it. Appearing at full strength on its
+   final centre gives a padlock no arrival at all -- it is simply somewhere it had not been, which
+   is the one thing a heavy object never does.
+
+   It comes down at the speed a Run card moves: the hover RAISE, exactly -- same duration, same
+   curve, and the same distance, since the descent IS the tuned hover raise read backwards. A card
+   lifting under the pointer and a lock being set onto one are one move in two directions, and
+   binding them means the Studio cannot tune the two of them apart. A visit entered already spent
+   mounts locked and plays nothing: nothing has just happened there. */
+.run-card-pile-lock {
+  opacity: 0;
+  transition:
+    opacity var(--run-card-raise-duration) var(--run-card-raise-ease),
+    translate var(--run-card-raise-duration) var(--run-card-raise-ease);
+  translate: 0 calc(-1 * var(--run-card-hover-raise, 7px));
+}
+
+.run-card-pile-lock.is-locked {
+  opacity: 1;
+  translate: 0 0;
+}
+
+.run-card-pile-lock {
+  align-self: center;
+  /* A share of the CARD, not a fixed size: the row's cards are sized by their host, and a lock
+     that stayed put while they grew would drift from an object on the card to a badge on it. */
+  inline-size: 26%;
   justify-self: center;
-  padding: var(--ds-space-3) var(--ds-space-4);
+  line-height: 0;
+  pointer-events: none;
+  /* Above the offer's own z-index: 1. The face it is laid on is opaque. */
+  z-index: 2;
+}
+
+.run-card-pile-lock > img {
+  display: block;
+  image-rendering: pixelated;
+  inline-size: 100%;
 }
 
 /* Adlected cards travel above every clipped Sectio and shell layer into the real
@@ -20294,6 +20361,15 @@ button.tileset-relationship-cell {
    the ADR-0032/0059 contract, which this is not. Nothing here paints a surface or touches the
    printed face. */
 
+/* How fast a Run card MOVES when something happens to it, named once because two gestures have
+   to agree. A hovered card is picked up off the table over this; a padlock is set down onto a
+   locked one over the same, across the same distance -- the tuned hover raise -- so the two are
+   one move in opposite directions rather than two speeds a screen has to reconcile. */
+:root {
+  --run-card-raise-duration: 200ms;
+  --run-card-raise-ease: cubic-bezier(0.2, 0.75, 0.3, 1);
+}
+
 /* Registered so the amplitude itself can be TRANSITIONED. That is what lets a hovered card
    settle: the drift keeps running on its own clock while its rise eases to zero, so the card
    comes to rest at exactly translate 0 -- its seat on the table -- from wherever in the cycle
@@ -20303,6 +20379,18 @@ button.tileset-relationship-cell {
   syntax: '<length>';
   inherits: true;
   initial-value: 8px;
+}
+
+/* The emanation's STEADY LEVEL, registered on the same principle so it too can be transitioned:
+   a locked card has to go dark, and a light that cuts out while the card is still gliding down
+   onto its seat is a second event laid over the first. Every use already reads it as
+   `var(--run-card-glow, 1)`, so an initial value of 1 is exactly the fallback they were getting.
+   The Studio's Card Size instrument writes it as a plain number, which is what the syntax below
+   accepts. */
+@property --run-card-glow {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 1;
 }
 
 /* The emanation's PULSE DEPTH, on the same principle. A hovered card has to stop moving, and a
@@ -20412,7 +20500,12 @@ button.tileset-relationship-cell {
     var(--run-card-float-timing, linear)
     var(--run-card-float-delay, 0s)
     infinite !important;
-  transition: --run-card-float-rise 240ms cubic-bezier(0.3, 0.7, 0.3, 1);
+  /* The steady light rides the settle: a hovered card never changes it, and a locked one has to
+     lose it over exactly the beat it comes to rest, or the card is still moving after it has
+     gone dark. */
+  transition:
+    --run-card-float-rise 240ms cubic-bezier(0.3, 0.7, 0.3, 1),
+    --run-card-glow 240ms cubic-bezier(0.3, 0.7, 0.3, 1);
   /* Promoted deliberately: a composited layer is rasterized once and MOVED by the compositor,
      so whole-pixel drift never resamples this pixel art. */
   will-change: translate;
@@ -20438,7 +20531,7 @@ button.tileset-relationship-cell {
     --run-card-flare 220ms ease,
     --run-card-glow-pulse 240ms cubic-bezier(0.3, 0.7, 0.3, 1),
     --run-card-lift 220ms ease,
-    translate 200ms cubic-bezier(0.2, 0.75, 0.3, 1);
+    translate var(--run-card-raise-duration) var(--run-card-raise-ease);
 }
 
 /* The two cases that hold ONE steady light rather than a breathing one, at the emanation's
@@ -20488,6 +20581,29 @@ button.tileset-relationship-cell {
 .run-card-alive:has(.run-card-action:enabled:hover) .run-card-action,
 .run-card-alive:focus-within .run-card-action {
   translate: 0 calc(-1 * var(--run-card-hover-raise, 7px));
+}
+
+/* A LOCKED offer stops asking (ADR-0551). The life is a card asking to be picked up -- it drifts
+   and it throws gold light -- and a Sectio that has spent its admission is not asking for
+   anything, so both end when the padlock lands.
+
+   Settled through the same registered vars and the same pause a hovered card uses, rather than by
+   taking the animation away: the rise eases to nothing, so a card caught mid-drift comes DOWN
+   onto its seat instead of snapping onto it.
+
+   It is the hover's own settle, on the hover's own timing: the rise and the steady light ease out
+   over the beat a hovered card takes to come to rest, because that is the speed a Run card moves
+   at. The lock coming down over it is the hover RAISE, same duration, same curve, same distance.
+   Nothing here invents a pace of its own. */
+.run-card-pile.is-locked {
+  --run-card-float-rise: 0px;
+  --run-card-glow: 0;
+  --run-card-glow-pulse: 0;
+}
+
+.run-card-pile.is-locked,
+.run-card-pile.is-locked .run-card-action {
+  animation-play-state: paused !important;
 }
 
 /* The explicit in-game reduced-motion choice stills the drift; the steady-light rule above keeps
@@ -23122,6 +23238,27 @@ button.tileset-relationship-cell {
 
 .run-meta-controls [data-chrome-fill-surface] {
   --chrome-surface-position-y: calc(var(--run-leaf-control-index, 0) * -1 * var(--run-leaf-control-surface-pitch));
+}
+
+/* The Sectio rail's controls read as a column of destinations, so each one's mark takes a fixed
+   seat at its leading edge and every label starts on the same line. The seat is square and holds
+   its size whatever the glyph's own aspect, which is what stops a wide mark from pushing one
+   button's word further in than its neighbours'. The buttons themselves are already inline flex
+   rows with their own gap (.app-header-button), so nothing here re-states that. */
+.run-control-mark {
+  align-items: center;
+  block-size: 22px;
+  display: inline-flex;
+  flex: none;
+  inline-size: 22px;
+  justify-content: center;
+}
+
+.run-control-mark > img {
+  block-size: 100%;
+  image-rendering: pixelated;
+  inline-size: 100%;
+  object-fit: contain;
 }
 
 .run-meta-abandon {

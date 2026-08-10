@@ -294,6 +294,7 @@ export function LevelInfoCompact({
   className = '',
   titleBar = null,
   deploymentBand = null,
+  deploymentPreview = null,
   framed = true,
 }: {
   level: Level;
@@ -310,6 +311,19 @@ export function LevelInfoCompact({
    * "where". A readout with no board of its own leaves this null and the row states the fact.
    */
   deploymentBand?: { shown: boolean; onToggle: () => void } | null;
+  /**
+   * When the host can imagine the player's own army onto that board, the Deployment section gains
+   * the control that deals it: Shuffle seats one possible arrangement and re-seats a different one
+   * on every press, and Clear takes the reconnaissance back to the authored map. A readout with no
+   * army to deal — a Level selector, the Campaign editor — leaves this null and the row is absent.
+   */
+  deploymentPreview?: {
+    shown: boolean;
+    placedUnitCount: number;
+    placedCardCount: number;
+    onShuffle: () => void;
+    onClear: () => void;
+  } | null;
   /**
    * False when the HOST already owns the frame this readout sits in — a divided pane whose rails
    * separate it from its neighbours. A second frame inside that one would draw a box around a
@@ -430,6 +444,45 @@ export function LevelInfoCompact({
             ) : <span>Zone</span>}
             <strong>{deploymentSquares} square{deploymentSquares === 1 ? '' : 's'}</strong>
           </div>
+          {/* Directly under the band it fills. The two controls are one row because they are one
+              question — what would my army look like standing there — and Clear is only ever the
+              way back from an answer, so it is present and dead until there is one to leave. */}
+          {deploymentPreview ? (
+            <div className="ce-li-stat ce-li-preview-row">
+              <span className="ce-li-preview-controls">
+                <ChromeButton
+                  unit="inner-text-button"
+                  className="app-header-button ce-li-zone-toggle"
+                  data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                  data-testid="level-info-shuffle-preview"
+                  selected={deploymentPreview.shown}
+                  onClick={deploymentPreview.onShuffle}
+                  title={deploymentPreview.shown
+                    ? 'Deal and seat a different possible arrangement'
+                    : 'Deal your collection onto the band, seated at random'}
+                >
+                  Shuffle
+                </ChromeButton>
+                <ChromeButton
+                  unit="inner-text-button"
+                  className="app-header-button ce-li-zone-toggle"
+                  data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                  data-testid="level-info-clear-preview"
+                  disabled={!deploymentPreview.shown}
+                  onClick={deploymentPreview.onClear}
+                  title="Take the board back to the authored map"
+                >
+                  Clear
+                </ChromeButton>
+              </span>
+              <strong>
+                {deploymentPreview.shown
+                  ? `${deploymentPreview.placedCardCount} card${deploymentPreview.placedCardCount === 1 ? '' : 's'}`
+                    + `  ·  ${deploymentPreview.placedUnitCount} unit${deploymentPreview.placedUnitCount === 1 ? '' : 's'}`
+                  : 'Not shown'}
+              </strong>
+            </div>
+          ) : null}
           {/* Only when there is a real count to describe: an unfinished Battle's row says "Not
               set", and a sentence about how many cards come off the collection would be inventing
               a number the Level does not have. */}
