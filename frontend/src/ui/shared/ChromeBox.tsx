@@ -200,6 +200,8 @@ export function ShellControlsPanel({
       chromeConsumer="shell-controls"
       titled
       data-shell-controls-panel=""
+      // Every trigger in the panel wears the oak, borrowed components included (ADR-0555).
+      data-chrome-leaf-surface=""
       className={`shell-controls-panel skirmish-hud ${className}`.trim()}
     >
       <OuterChromeHeader

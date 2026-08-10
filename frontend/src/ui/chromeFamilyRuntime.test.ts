@@ -14,7 +14,7 @@ import {
   type FrameRender,
 } from './chromeFamilyRuntime';
 import { CHROME_LIVE_SLOTS } from './chromeCandidateSources';
-import { chromeUnitRoleSelectors, chromeUnitScopedSelectors } from './chromeUnitRegistry';
+import { chromeUnitMaterialSelectors, chromeUnitRoleSelectors, chromeUnitScopedSelectors } from './chromeUnitRegistry';
 
 const frame = (url: string, slice: number): FrameRender => ({
   url,
@@ -403,5 +403,38 @@ describe('chrome family geometry ownership (ADR-0083)', () => {
     for (const rule of fieldRules) {
       expect(rule).toContain(':not([data-chrome-tab-fill-surface] .settings-tab)');
     }
+  });
+
+  /**
+   * The same trap, one level up and one commit later (ADR-0556): the Controls panel's leaf rule
+   * only ever TIED the field default and won on source order, so the `:not()` added above took
+   * its oak off every trigger on both rails. A leaf inherits its material from its host, which
+   * a `:not()` on the leaf itself cannot see — so the field must exclude the inherited path, and
+   * this test measures the emitted CSS rather than asserting order.
+   */
+  it('excludes an adopted host’s leaves from the inner role field default', () => {
+    const css = frameCss(
+      roleDefault('outer'),
+      roleDefault('inner'),
+      frame('outer.png', 19),
+      frame('inner.png', 5),
+      dividers,
+    );
+    const leafSelectors = chromeUnitMaterialSelectors('leaf');
+    const fieldRules = css
+      .split('\n')
+      .filter((line) => line.includes(':not(.has-backdrop):not([data-chrome-fill-surface])'));
+
+    expect(leafSelectors.length).toBeGreaterThan(0);
+    expect(fieldRules.length).toBeGreaterThan(0);
+    for (const rule of fieldRules) {
+      expect(rule).toContain(`:not([data-chrome-leaf-surface] :is(${leafSelectors.join(', ')}))`);
+    }
+
+    // One host attribute for every destination, so that exclusion stays ONE name rather than
+    // growing a `:not()` per surface that adopts the hierarchy.
+    const leafPaintRule = css.indexOf('[data-chrome-leaf-surface] .text-button:not([data-chrome-fill-surface])');
+    expect(leafPaintRule).toBeGreaterThan(-1);
+    expect(css).not.toContain('[data-shell-controls-panel] .text-button');
   });
 });
