@@ -14,16 +14,18 @@ export function RunBattleUndoButton({
   className?: string;
 }): ReactElement | null {
   const runUndoEnabled = useSkirmish((state) => state.runUndoEnabled);
-  const checkpoint = useSkirmish((state) => state.undoCheckpoint);
+  const undoDepth = useSkirmish((state) => state.undoStack.length);
   const canUndoLastPlayerMove = useSkirmish((state) => state.canUndoLastPlayerMove);
   const undoLastPlayerMove = useSkirmish((state) => state.undoLastPlayerMove);
   if (!runUndoEnabled) return null;
 
-  const canUndo = Boolean(checkpoint) && canUndoLastPlayerMove();
+  // Every press takes back one more decision, so the button never retires while the Battle
+  // still has moves behind it and the purse can pay for the next one (ADR-0556).
+  const canUndo = undoDepth > 0 && canUndoLastPlayerMove();
   const cost = formatGold(RUN_BATTLE_UNDO_COST_TENTHS);
   const title = canUndo
     ? `Undo your last move and the opponent’s reply for ${cost} gold.`
-    : checkpoint
+    : undoDepth > 0
       ? `Undo costs ${cost} gold.`
       : 'Make a move before undoing.';
 
