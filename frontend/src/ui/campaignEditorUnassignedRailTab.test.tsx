@@ -49,34 +49,31 @@ describe('UnassignedRailTab', () => {
     <ApparatusRailColumn opens="panel-beside">{tab}</ApparatusRailColumn>,
   );
 
-  it('marks unsaved editor work without changing the canonical level count', () => {
+  it('states the canonical level count and nothing else', () => {
     const markup = inRail(
       <UnassignedRailTab
         count={3}
         active={false}
         index={4}
-        hasUnsavedDrafts
         onSelect={() => {}}
         opensAddress="/editor?collection=unassigned"
       />,
     );
 
-    expect(markup).toContain('aria-label="Levels, 3 levels, unsaved drafts available"');
+    expect(markup).toContain('aria-label="Levels, 3 levels"');
     expect(markup).toContain('<small>3 levels</small>');
-    expect(markup).toContain('data-testid="unassigned-draft-attention"');
-    expect(markup).toContain('title="Unsaved drafts available"');
-    // A carved mark, never a typed character: the exclamation was a keyboard glyph with a CSS glow.
-    expect(markup).toContain('ce-icon-img');
-    expect(markup).not.toContain('>!</span>');
   });
 
-  it('omits the attention marker when no resumable drafts exist', () => {
+  // The tab carried a save mark whenever a draft existed, which is the editor's ordinary state
+  // rather than news — so it was always lit, and a badge that is always on says nothing.
+  it('carries no attention badge', () => {
     const markup = inRail(
       <UnassignedRailTab count={1} active index={2} onSelect={() => {}} opensAddress="/editor?collection=unassigned" />,
     );
 
     expect(markup).toContain('aria-label="Levels, 1 level"');
     expect(markup).not.toContain('unassigned-draft-attention');
+    expect(markup).not.toContain('ce-tab-draft-status');
     expect(markup).not.toContain('unsaved draft');
   });
 });

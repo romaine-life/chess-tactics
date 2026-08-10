@@ -19738,12 +19738,9 @@ button.tileset-relationship-cell {
   display: inline-flex;
   justify-content: center;
 }
-.ce-tab-draft-status {
-  align-items: center;
-  display: inline-flex;
-  justify-content: center;
-  min-inline-size: 20px;
-}
+/* No draft badge. The save mark that used to ride the Levels tab said "unsaved drafts exist",
+   which is the editor's ordinary state and not news — so it was always lit. The lock and the
+   ownership marks above are still real trailing badges. */
 
 /* Pinned rail footer — creation (New Level / New Campaign), then workspace verbs. */
 .ce-rail-actions {

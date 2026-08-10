@@ -1,6 +1,5 @@
 import type { ReactElement } from 'react';
 import { ApparatusRailTab } from './ApparatusRailTab';
-import { EditorRowIcon } from './EditorLevelRow';
 
 /**
  * One collection-level destination in the Editor rail.
@@ -19,8 +18,6 @@ export function EditorCollectionRailTab({
   iconSrc,
   title,
   itemName,
-  hasAttention = false,
-  attentionLabel = 'Unsaved drafts available',
 }: {
   count: number;
   active: boolean;
@@ -35,31 +32,19 @@ export function EditorCollectionRailTab({
   iconSrc: string;
   title: string;
   itemName: string;
-  hasAttention?: boolean;
-  attentionLabel?: string;
 }): ReactElement {
   const itemCount = `${count} ${itemName}${count === 1 ? '' : 's'}`;
   return (
     <ApparatusRailTab
       label={title}
       detail={itemCount}
-      ariaLabel={`${title}, ${itemCount}${hasAttention ? `, ${attentionLabel.toLowerCase()}` : ''}`}
+      ariaLabel={`${title}, ${itemCount}`}
       index={index}
       active={active}
       opensAddress={opensAddress}
       iconSrc={iconSrc}
       className="ce-campaign-tab ce-campaign-tab-meta"
       onSelect={onSelect}
-            // The installed save mark, not a typed "!". A mark on this rail is carved art like every
-      // other one, and the exclamation was a keyboard character wearing a CSS glow.
-      trailing={hasAttention ? (
-        <span
-          className="ce-tab-trail ce-tab-draft-status"
-          data-testid="unassigned-draft-attention"
-          title={attentionLabel}
-          aria-hidden="true"
-        ><EditorRowIcon icon="save" /></span>
-      ) : undefined}
     />
   );
 }

@@ -238,7 +238,6 @@ export function UnassignedRailTab({
   opensAddress,
   title = 'Levels',
   itemName = 'level',
-  hasUnsavedDrafts = false,
 }: {
   count: number;
   active: boolean;
@@ -247,7 +246,6 @@ export function UnassignedRailTab({
   opensAddress: string;
   title?: string;
   itemName?: string;
-  hasUnsavedDrafts?: boolean;
 }): ReactElement {
   return (
     <EditorCollectionRailTab
@@ -259,7 +257,6 @@ export function UnassignedRailTab({
       iconSrc={CAMPAIGN_TAB_ICON}
       title={title}
       itemName={itemName}
-      hasAttention={hasUnsavedDrafts}
     />
   );
 }
@@ -1106,7 +1103,6 @@ export function CampaignEditor({
                   index={railCampaigns.length + 1}
                   active={isUnassignedSelected}
                   opensAddress={campaignCollectionHref('/editor', 'unassigned')}
-                  hasUnsavedDrafts={recentDrafts.length > 0}
                   onSelect={selectUnassignedCollection}
                 />
               </div>
