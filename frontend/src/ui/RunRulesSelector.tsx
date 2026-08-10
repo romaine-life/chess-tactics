@@ -1,7 +1,7 @@
 import { useState, type ReactElement } from 'react';
 import { RUN_CARD_SPANS, type RunRules } from '../run/model';
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
-import { RunPrepSection } from './shared/RunPrepSection';
+import { SectionBox } from './shared/SectionBox';
 
 // Start New Run → the rules the Run is bound to, behind a disclosure that starts closed.
 //
@@ -14,7 +14,7 @@ import { RunPrepSection } from './shared/RunPrepSection';
 // Not hidden, though: a Run is bound to these for its whole life, so a player who did change one
 // has to be able to see what they are about to start.
 //
-// The BOX is the control -- see RunPrepSection, which owns that decision for every section of Run
+// The BOX is the control -- see SectionBox, which owns that decision for every section of Run
 // preparation. This is the one section given a disclosure, so its name row is the trigger: closed,
 // the whole slab is pressable, and opening it grows the same box downward around the choices.
 //
@@ -97,7 +97,7 @@ export function RunRulesSelector({
   }));
 
   return (
-    <RunPrepSection
+    <SectionBox
       title="Options"
       titleId="run-rules-title"
       className="run-rules-selector"
@@ -143,6 +143,6 @@ export function RunRulesSelector({
         fillSurface={fillSurface}
       />
       <p className="run-rules-effect">{PRICING_COPY[value.pricing].effect}</p>
-    </RunPrepSection>
+    </SectionBox>
   );
 }

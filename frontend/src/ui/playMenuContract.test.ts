@@ -212,7 +212,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // states the same ownership, and the tier's `effect` is no longer restated under it. The
     // picker already shows the selected tier, and the baseline's effect is "Standard rules." — a
     // line spent saying the default is the default, floating on live board artwork.
-    expect(ataraxiaSelector).toMatch(/<RunPrepSection[\s\S]*?title="Ataraxia"/);
+    expect(ataraxiaSelector).toMatch(/<SectionBox[\s\S]*?title="Ataraxia"/);
     expect(ataraxiaSelector).not.toContain('run-ataraxia-effect');
     expect(ataraxiaSelector).not.toContain('ATARAXIA_BY_TIER[value].effect');
     expect(style).not.toContain('.run-ataraxia-effect');
@@ -334,7 +334,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
 
 describe('Run rule options are a departure from the defaults, not a step in setup', () => {
   const source = readFileSync(new URL('./RunRulesSelector.tsx', import.meta.url), 'utf8');
-  const prepSection = readFileSync(new URL('./shared/RunPrepSection.tsx', import.meta.url), 'utf8');
+  const prepSection = readFileSync(new URL('./shared/SectionBox.tsx', import.meta.url), 'utf8');
 
   it('starts closed, so a normal Run never has to answer it', () => {
     expect(source).toContain('const [open, setOpen] = useState(false)');
@@ -352,13 +352,13 @@ describe('Run rule options are a departure from the defaults, not a step in setu
   it('is one box that grows, with the box itself as the thing you press', () => {
     // The name row fills the accepted InnerChromeBox rather than being a framed control seated
     // inside it, so the box's own frame is the button's edge and its name rides in it.
-    expect(prepSection).toMatch(/<InnerChromeBox[\s\S]*?className=\{`run-prep-section \$\{className\}`/);
-    expect(prepSection).toMatch(/<button[\s\S]*?className="run-prep-section-head"[\s\S]*?aria-expanded=\{disclosure\.open\}/);
-    expect(prepSection).toContain('<span className="run-prep-section-title" id={titleId}>{title}</span>');
-    expect(source).toMatch(/<RunPrepSection[\s\S]*?title="Options"/);
+    expect(prepSection).toMatch(/<InnerChromeBox[\s\S]*?className=\{`section-box \$\{className\}`/);
+    expect(prepSection).toMatch(/<button[\s\S]*?className="section-box-head"[\s\S]*?aria-expanded=\{disclosure\.open\}/);
+    expect(prepSection).toContain('<span className="section-box-title" id={titleId}>{title}</span>');
+    expect(source).toMatch(/<SectionBox[\s\S]*?title="Options"/);
     expect(source).not.toContain("unit=\"inner-text-button\"");
     // Its inset is the box's whole content padding, so the pressable area reaches the frame.
-    expect(style).toMatch(/\.run-prep-section-head \{[\s\S]*?padding: var\(--ds-inset\);/);
+    expect(style).toMatch(/\.section-box-head \{[\s\S]*?padding: var\(--ds-inset\);/);
   });
 
   it('is marble holding oak, like every box that holds other people\'s controls', () => {

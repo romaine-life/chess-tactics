@@ -72,7 +72,7 @@ const APPROVED_FRAMELESS_SURFACE_RESETS = new Map([
   // InnerChromeBox so the box's frame is the button's edge and pressing the slab is what opens
   // it. These declarations remove the shell's native button chrome from that row; a second frame
   // there would draw a control sitting IN the box instead of the box being the control.
-  ['src/style.css|.run-prep-section-head', new Set([
+  ['src/style.css|.section-box-head', new Set([
     'background:none',
     'border:0',
     'border-radius:0',

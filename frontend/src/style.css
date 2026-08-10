@@ -19259,6 +19259,35 @@ button.tileset-relationship-cell {
   min-height: 80px;
 }
 
+/* A row that is a MEMBER of a SettingsGroup rather than a slab of its own. The group's box is
+   already the frame and already wears the marble, so the member carries only the row layout —
+   and the kit's inner rail between members is what tells them apart. */
+/* The rail between members runs the full inner width, so the body takes no inline padding and each
+   member carries its own — which also lands a member's title on the same line as the group's name
+   above it, instead of one indent in from it. */
+.settings-group > .section-box-body {
+  gap: 0;
+  padding: 0 0 var(--ds-space-2);
+}
+
+.settings-group .settings-row-member {
+  padding-block: var(--ds-space-3);
+  padding-inline: var(--ds-inset);
+}
+
+/* The group's name heads the rows it holds, so it takes the row heading's own treatment rather
+   than reading smaller and plainer than the members it names. */
+.settings-group .section-box-title {
+  color: #f6fbff;
+  font-size: var(--ds-text-lg);
+  text-shadow: 0 2px 0 #02070b;
+  text-transform: uppercase;
+}
+
+.settings-group > .section-box-head {
+  padding-block-end: 0;
+}
+
 /* A control too wide to sit beside its copy — a picker of five board swatches — takes its own
    line under the copy instead of squeezing both.
    The full width is claimed with a WIDTH FLOOR, not `flex-basis: 100%`: below 560px the row flips
@@ -27930,8 +27959,8 @@ button.run-card-formation-cell {
 }
 
 /* Every section of Run preparation is one BOX rather than a heading over loose controls, so its
-   own frame is the outer spacing and the rows inside it carry none. See RunPrepSection. */
-.run-prep-section {
+   own frame is the outer spacing and the rows inside it carry none. See SectionBox. */
+.section-box {
   display: grid;
 }
 
@@ -28484,7 +28513,7 @@ button.run-card-formation-cell {
   text-align: center;
 }
 
-/* Start New Run → one section box per question (RunPrepSection). Rule options is the one that
+/* Start New Run → one section box per question (SectionBox). Rule options is the one that
    opens: closed, its name row is the box's entire interior, so pressing anywhere on the slab
    opens it and the slab itself is what grows.
    That name row is deliberately NOT a registered unit. A second frame inside this one would draw
@@ -28500,7 +28529,7 @@ button.run-card-formation-cell {
   opacity: .78;
 }
 
-.run-prep-section-head {
+.section-box-head {
   align-items: center;
   background: none;
   border: 0;
@@ -28517,23 +28546,23 @@ button.run-card-formation-cell {
   text-shadow: inherit;
 }
 
-button.run-prep-section-head {
+button.section-box-head {
   cursor: pointer;
 }
 
 /* The box's own name — and, where the row is a trigger, the label of the control it is. Sized as
    the section heading each of these boxes replaced. */
-.run-prep-section-title {
+.section-box-title {
   font-size: var(--ds-text-md);
 }
 
-.run-prep-section [hidden] {
+.section-box [hidden] {
   display: none;
 }
 
 /* The controls sit under the name row that already inset itself, so they take the same inset on
    the three remaining sides and none at the top. */
-.run-prep-section-body {
+.section-box-body {
   display: grid;
   gap: var(--ds-inline-tight);
   padding: 0 var(--ds-inset) var(--ds-inset);

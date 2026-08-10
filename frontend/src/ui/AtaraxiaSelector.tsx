@@ -1,7 +1,7 @@
 import type { ReactElement } from 'react';
 import { ATARAXIA_BY_TIER, ATARAXIA_TIERS, type AtaraxiaTier } from '../run/model';
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
-import { RunPrepSection } from './shared/RunPrepSection';
+import { SectionBox } from './shared/SectionBox';
 
 export function AtaraxiaSelector({
   value,
@@ -39,7 +39,7 @@ export function AtaraxiaSelector({
   // is -- reads "Standard rules.", which is a line of copy spent saying that the default is the
   // default. The Enchiridion's Ataraxia reference is where the ladder is explained in full.
   return (
-    <RunPrepSection title="Ataraxia" titleId="run-ataraxia-title" className="run-ataraxia-selector">
+    <SectionBox title="Ataraxia" titleId="run-ataraxia-title" className="run-ataraxia-selector">
       <HouseSelect
         value={String(value)}
         options={options}
@@ -49,6 +49,6 @@ export function AtaraxiaSelector({
         testId="run-ataraxia-select"
         fillSurface={fillSurface}
       />
-    </RunPrepSection>
+    </SectionBox>
   );
 }

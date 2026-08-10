@@ -3,25 +3,25 @@ import { InnerChromeBox } from './ChromeBox';
 import { CHROME_STRUCTURAL_FILL_ROLE } from './chromeSurfacePolicy';
 
 /**
- * One section of Run preparation: a box with its own name across the top and its controls under
- * it.
+ * A named group of controls: a box with its own name across the top and its members under it.
  *
- * Start New Run had two answers to the same question. Ataraxia was a heading on the backdrop with
- * a picker and a line of copy loose beneath it; Rule options was a box. A heading owns its
- * controls by proximity alone, and this column is a stack of framed slabs — so the loose copy sat
- * on live board artwork with nothing behind it to read against, no closer to the picker above it
- * than to the warning below. The box states the same ownership with a frame, and ADR-0433 already
- * has a seat for it: a STRUCTURAL box wearing the marble, holding leaf controls that wear the oak.
- * So the box won, and it lives here rather than being reproduced per section — two hand-rolled
- * boxes that merely happen to match is the bespoke parallel ADR-0059 forbids.
+ * Both surfaces that needed one had reached for a heading instead, and a heading owns its controls
+ * by proximity alone. On screens that are stacks of framed slabs standing on live artwork, that
+ * left the one label naming the group as the only thing with nothing behind it — Run preparation's
+ * Ataraxia copy sat on board art, and Settings' eyebrows sat on the night vista. The box states the
+ * same ownership with a frame, and ADR-0433 already has a seat for it: a STRUCTURAL box wearing the
+ * marble, holding members that wear their own material.
  *
- * A section is a disclosure only when it is given one. Rule options is: its name row is the
+ * It lives here rather than being reproduced per surface — two hand-rolled boxes that merely happen
+ * to match is the bespoke parallel ADR-0059 forbids.
+ *
+ * A section is a disclosure only when it is given one. Run's Rule options is: its name row is the
  * button, the whole slab is pressable when closed, and opening it grows this same box downward
- * around the choices. Ataraxia is not, so its name row is inert and carries no chevron — the
- * chevron is what says a section opens, and putting one on a section that never closes would
- * spend the only mark that distinguishes them.
+ * around the choices. Ataraxia and Settings' groups are not, so their name rows are inert and carry
+ * no chevron — the chevron is what says a section opens, and putting one on a section that never
+ * closes would spend the only mark that distinguishes them.
  */
-export function RunPrepSection({
+export function SectionBox({
   title,
   titleId,
   className = '',
@@ -39,7 +39,7 @@ export function RunPrepSection({
 }): ReactElement {
   const heading = (
     <>
-      <span className="run-prep-section-title" id={titleId}>{title}</span>
+      <span className="section-box-title" id={titleId}>{title}</span>
       {disclosure ? (
         <span
           className={`stepper-glyph stepper-chevron stepper-chevron-${disclosure.open ? 'up' : 'down'}`}
@@ -52,7 +52,7 @@ export function RunPrepSection({
   return (
     <InnerChromeBox
       as="section"
-      className={`run-prep-section ${className}`.trim()}
+      className={`section-box ${className}`.trim()}
       fillRole={CHROME_STRUCTURAL_FILL_ROLE}
       aria-labelledby={titleId}
     >
@@ -62,7 +62,7 @@ export function RunPrepSection({
       {disclosure ? (
         <button
           type="button"
-          className="run-prep-section-head"
+          className="section-box-head"
           aria-expanded={disclosure.open}
           aria-controls={contentId}
           data-testid={disclosure.testId}
@@ -71,11 +71,11 @@ export function RunPrepSection({
           {heading}
         </button>
       ) : (
-        <div className="run-prep-section-head">{heading}</div>
+        <div className="section-box-head">{heading}</div>
       )}
       <div
         id={contentId}
-        className="run-prep-section-body"
+        className="section-box-body"
         hidden={disclosure ? !disclosure.open : undefined}
       >
         {children}
