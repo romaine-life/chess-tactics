@@ -16,10 +16,19 @@
 // where the marks stack vertically and every neighbour is a size reference. A single
 // box is what the owner asked for and what the rail shows.
 //
-// Mechanical compositor — it does NOT generate art. Sources are the highest-fidelity
-// renders available, so the resize is a clean LANCZOS DOWNscale (ADR-0014: the
-// downscale IS the pixelation), then MEDIANCUT-quantized to a limited palette and
-// snapped onto the canvas on whole pixels.
+// Mechanical compositor — it does NOT generate art. The resize is a LANCZOS DOWNscale
+// (ADR-0014: the downscale IS the pixelation), then MEDIANCUT-quantized to a limited
+// palette and snapped onto the canvas on whole pixels.
+//
+// GENERATE THE SOURCE NEAR ITS FINAL SIZE. ADR-0076 says production art is native 1x and
+// a scaled result is only a calibration brief; this script is where ignoring that shows up.
+// A 128px render packed to a 52px box is a 0.4x downscale, and it mushes exactly the art
+// that has no high-contrast geometry to survive it — the pale stone marks came back with
+// soft, melted collars and bases while the gear's hard teeth looked fine, which reads as
+// "the pieces look bad" and is not fixable by prompting harder. Regenerating the same
+// subject at a 64px canvas (a 0.9x downscale) produced a crisp silhouette immediately.
+// PixelLab's `create_image_pro` is the tool to reach for at that size: cost is per CALL
+// and it returns 16 candidates at <=85px, so a small canvas is where it is cheapest.
 //
 // Sources must be fetched from live media or a generator's temporary directory.
 // Outputs are temporary candidates:
