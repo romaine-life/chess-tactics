@@ -26,7 +26,9 @@ import {
   RUN_STARTING_GOLD,
   RUN_STARTING_GOLD_TENTHS,
   acquireLipsanon,
+  canUndoRunBattleMove,
   captureRunBattleUndo,
+  chargeRunBattleUndoCheckpoint,
   DEFAULT_RUN_RULES,
   LEGACY_RUN_RULES,
   RUN_SECTIO_CARD_PILE_RARITY_COUNT,
@@ -869,6 +871,35 @@ describe('Manubiae — what the board pays for', () => {
 
     const undone = undoRunBattleMove(paid.run, checkpoint);
     expect(undone.goldTenths).toBe(battle.goldTenths - RUN_BATTLE_UNDO_COST_TENTHS);
+  });
+
+  it('charges every checkpoint the walk back passes over, so each step costs its own gold', () => {
+    // Two moves' worth of checkpoints cut from the SAME purse -- neither move earned anything.
+    // Restoring the older one verbatim would hand back the gold the first Undo spent, and the
+    // whole rewind would cost one gold however deep it went.
+    const battle = inBattle(createRun(war(), 13));
+    const older = captureRunBattleUndo(battle)!;
+    const newer = captureRunBattleUndo(battle)!;
+
+    const first = undoRunBattleMove(battle, newer);
+    expect(first.goldTenths).toBe(battle.goldTenths - RUN_BATTLE_UNDO_COST_TENTHS);
+
+    const second = undoRunBattleMove(first, chargeRunBattleUndoCheckpoint(older));
+    expect(second.goldTenths).toBe(battle.goldTenths - 2 * RUN_BATTLE_UNDO_COST_TENTHS);
+  });
+
+  it('refuses the step a charged checkpoint can no longer pay for, and never books a debt', () => {
+    const battle = inBattle({ ...createRun(war(), 13), goldTenths: RUN_BATTLE_UNDO_COST_TENTHS });
+    const checkpoint = captureRunBattleUndo(battle)!;
+    expect(canUndoRunBattleMove(battle, checkpoint)).toBe(true);
+
+    // Passed over once, this checkpoint's purse is empty -- and an empty purse is where it
+    // stops. It is not carried into debt, it simply stops being reachable.
+    const charged = chargeRunBattleUndoCheckpoint(checkpoint);
+    expect(charged.goldTenths).toBe(0);
+    expect(chargeRunBattleUndoCheckpoint(charged).goldTenths).toBe(0);
+    expect(canUndoRunBattleMove(battle, charged)).toBe(false);
+    expect(undoRunBattleMove(battle, charged)).toBe(battle);
   });
 
   it('asks a royal fork for a Rook or better, reading the bar off the piece scale itself', () => {
