@@ -32,6 +32,16 @@ export type ChromeUnitStateModel =
   | 'toggle'
   | 'disabled-capable';
 
+/**
+ * Which installed material a unit wears (ADR-0433). `structural` boxes establish a
+ * region for subordinate units and keep the cool stone field; `leaf` units terminate
+ * the interaction tree and wear the oak. Template bases that only pass geometry down
+ * stay structural so a concrete child decides its own material.
+ */
+export type ChromeUnitMaterial =
+  | 'structural'
+  | 'leaf';
+
 export type ChromeUnitId =
   | 'outer-panel'
   | 'inner-box'
@@ -73,6 +83,7 @@ export type ChromeUnitSpec = {
   contentPolicy: ChromeUnitContentPolicy;
   tone: ChromeUnitTone;
   stateModel: ChromeUnitStateModel;
+  material: ChromeUnitMaterial;
   badge: string;
   token: string;
   iconClass?: string;
@@ -103,6 +114,7 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     contentPolicy: 'slot',
     tone: 'structural',
     stateModel: 'static',
+    material: 'structural',
     badge: 'free panel',
     token: '--le-chrome-outer-rail-w',
     defaultWidth: 560,
@@ -135,6 +147,7 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     contentPolicy: 'slot',
     tone: 'structural',
     stateModel: 'static',
+    material: 'structural',
     badge: 'free box + dividers',
     token: '--le-chrome-inner-rail-w',
     defaultWidth: 180,
@@ -175,6 +188,7 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     contentPolicy: 'slot',
     tone: 'neutral',
     stateModel: 'toggle',
+    material: 'leaf',
     badge: 'asset choice',
     token: '--le-chrome-inner-rail-w',
     parentId: 'inner-box',
@@ -204,6 +218,7 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     contentPolicy: 'slot',
     tone: 'neutral',
     stateModel: 'disabled-capable',
+    material: 'structural',
     badge: 'variable width',
     token: '--le-inner-control-h',
     parentId: 'inner-box',
@@ -235,6 +250,7 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     contentPolicy: 'slot',
     tone: 'neutral',
     stateModel: 'disabled-capable',
+    material: 'leaf',
     badge: 'text command',
     token: '--le-inner-control-h',
     parentId: 'inner-locked-rectangle',
@@ -302,6 +318,7 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     contentPolicy: 'slot',
     tone: 'neutral',
     stateModel: 'toggle',
+    material: 'leaf',
     badge: 'on / off',
     token: '--le-inner-control-h',
     parentId: 'inner-locked-rectangle',
@@ -328,6 +345,7 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     contentPolicy: 'slot',
     tone: 'neutral',
     stateModel: 'toggle',
+    material: 'structural',
     badge: 'selectable row',
     token: '--le-inner-control-h',
     parentId: 'inner-locked-rectangle',
@@ -358,6 +376,7 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     contentPolicy: 'slot',
     tone: 'neutral',
     stateModel: 'toggle',
+    material: 'leaf',
     badge: 'height square',
     token: '--le-inner-square',
     parentId: 'inner-locked-rectangle',
@@ -389,6 +408,7 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     contentPolicy: 'fixed',
     tone: 'neutral',
     stateModel: 'disabled-capable',
+    material: 'leaf',
     badge: 'previous / next',
     token: '--le-inner-square',
     parentId: 'inner-tool-square',
@@ -433,6 +453,7 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     contentPolicy: 'fixed',
     tone: 'neutral',
     stateModel: 'toggle',
+    material: 'leaf',
     badge: 'select tool',
     token: '--le-inner-square',
     parentId: 'inner-tool-square',
@@ -456,6 +477,7 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     contentPolicy: 'fixed',
     tone: 'neutral',
     stateModel: 'toggle',
+    material: 'leaf',
     badge: 'brush tool',
     token: '--le-inner-square',
     parentId: 'inner-tool-square',
@@ -479,6 +501,7 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     contentPolicy: 'fixed',
     tone: 'neutral',
     stateModel: 'toggle',
+    material: 'leaf',
     badge: 'erase tool',
     token: '--le-inner-square',
     parentId: 'inner-tool-square',
@@ -502,6 +525,7 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     contentPolicy: 'fixed',
     tone: 'neutral',
     stateModel: 'toggle',
+    material: 'leaf',
     badge: 'move tool',
     token: '--le-inner-square',
     parentId: 'inner-tool-square',
@@ -525,6 +549,7 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     contentPolicy: 'fixed',
     tone: 'neutral',
     stateModel: 'disabled-capable',
+    material: 'leaf',
     badge: 'undo key',
     token: '--le-inner-square',
     parentId: 'inner-tool-square',
@@ -548,6 +573,7 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     contentPolicy: 'fixed',
     tone: 'neutral',
     stateModel: 'disabled-capable',
+    material: 'leaf',
     badge: 'redo key',
     token: '--le-inner-square',
     parentId: 'inner-tool-square',
@@ -571,6 +597,7 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     contentPolicy: 'fixed',
     tone: 'neutral',
     stateModel: 'disabled-capable',
+    material: 'leaf',
     badge: '+ key',
     token: '--le-inner-square',
     parentId: 'inner-tool-square',
@@ -593,6 +620,7 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     contentPolicy: 'fixed',
     tone: 'neutral',
     stateModel: 'disabled-capable',
+    material: 'leaf',
     badge: '- key',
     token: '--le-inner-square',
     parentId: 'inner-tool-square',
@@ -615,6 +643,7 @@ export const CHROME_UNIT_REGISTRY: ChromeUnitSpec[] = [
     contentPolicy: 'slot',
     tone: 'neutral',
     stateModel: 'disabled-capable',
+    material: 'leaf',
     badge: 'select field',
     token: '--le-inner-field-h',
     parentId: 'inner-locked-rectangle',
@@ -686,6 +715,18 @@ export function chromeUnitClassNames(
 export function chromeUnitSelectors(id: ChromeUnitId): string[] {
   const unit = chromeUnitById(id);
   return [`.${unit.name}`, ...unit.selectors];
+}
+
+/**
+ * Every selector for the units that wear one material (ADR-0433). Material lives on
+ * the registry rather than on call sites so a surface adopting the hierarchy states
+ * the destination once and no button can be added to it wearing the wrong stuff.
+ */
+export function chromeUnitMaterialSelectors(material: ChromeUnitMaterial): string[] {
+  const selectors = CHROME_UNIT_REGISTRY
+    .filter((entry) => entry.material === material)
+    .flatMap((entry) => chromeUnitSelectors(entry.id));
+  return [...new Set(selectors)];
 }
 
 /**

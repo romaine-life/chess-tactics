@@ -15,6 +15,8 @@ const battleClockChip = readFileSync(new URL('./BattleClockChip.tsx', import.met
 const titleBarControls = readFileSync(new URL('./shell/TitleBarControls.tsx', import.meta.url), 'utf8');
 const portraitPreload = readFileSync(new URL('../art/preload.ts', import.meta.url), 'utf8');
 const runBattleUndoButton = readFileSync(new URL('./RunBattleUndoButton.tsx', import.meta.url), 'utf8');
+const runArmyWorkspace = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url), 'utf8');
+const chromeUnitRegistry = readFileSync(new URL('./chromeUnitRegistry.ts', import.meta.url), 'utf8');
 
 const buttonBlocks = (source: string): string[] => source.match(/<(?:button|ChromeButton)\b[\s\S]*?<\/(?:button|ChromeButton)>/g) ?? [];
 const navButtonBlocks = (source: string): string[] => source.match(/<(?:NavButton|ChromeNavButton)\b[\s\S]*?<\/(?:NavButton|ChromeNavButton)>/g) ?? [];
@@ -182,6 +184,46 @@ describe('Skirmish chrome hierarchy', () => {
       expectChromeUnit(block, 'inner-text-button');
       expect(block).toContain("&& 'active'");
     }
+  });
+
+  it('paints every Controls-panel trigger with the leaf material and phases repeated ones', () => {
+    // The material is read off the registry and applied to the panel, so a control the panel
+    // only borrows — a Stepper key, an admin action, a Run lifecycle button — cannot arrive
+    // wearing the structural field, and the same component elsewhere is left alone.
+    expect(chromeUnitRegistry).toContain("material: ChromeUnitMaterial;");
+    expect(chromeUnitRegistry).toContain('export function chromeUnitMaterialSelectors');
+    expect(chromeRuntime).toContain('function controlsPanelLeafSurfaceCss');
+    expect(chromeRuntime).toMatch(/chromeUnitMaterialSelectors\('leaf'\)/);
+    expect(chromeRuntime).toMatch(/\$\{CHROME_FAMILY_SURFACE_SELECTOR\} \[data-shell-controls-panel\]/);
+    expect(chromeRuntime).toContain('namedChromeFillSurfacePaint(CHROME_LEAF_FILL_SURFACE)');
+
+    // A box that names its own installed surface is excluded from the role field rather than
+    // out-specified by it, so the two can never trade places on a selector edit.
+    expect(chromeRuntime).toContain(':not(.has-backdrop):not([data-chrome-fill-surface])');
+
+    // Repeated collections phase their wood from the index their own data already has.
+    expect(skirmishHud).toContain('HUD_TABS.map((t, index) =>');
+    expect(skirmishHud).toContain('style={leafSurfacePhase(index)}');
+    expect(skirmishHud).toContain('SHORTCUT_KEY_ROWS.flat().map((key, index) =>');
+    expect(skirmishHud).toContain('const surfacePhase = leafSurfacePhase(index);');
+    expect(stepper).toContain('style={leafSurfacePhase(0)}');
+    expect(stepper).toContain('style={leafSurfacePhase(1)}');
+    expect(styleCss).not.toMatch(/\.skirmish-(?:hud-tabs|view-row|grid)[^}]*:nth-child/);
+  });
+
+  it('keeps a unit portrait wearing its installed scene inside the house chrome', () => {
+    // The scene comes from the catalog with the bust, so the ONE portrait renderer resolves it
+    // from the piece; a call site that forgot to pass it is what put roster thumbnails on flat
+    // fill beside profile portraits that had one.
+    expect(portraitEditor).toContain("const resolvedBackdrop = backdrop === undefined ? defaultBackgroundSet().portraits[piece] : backdrop;");
+    expect(skirmishHud).not.toContain('focusedPortraitBackdrop');
+    expect(runArmyWorkspace).not.toContain('backdrop={defaultBackgroundSet()');
+
+    // ...and the guard against raw-CSS surface paint no longer strips it back off.
+    expect(styleCss).toMatch(/\.inner-box:not\(\.has-backdrop\)\s*\{\s*\r?\n\s*background-color: transparent;\s*\r?\n\s*background-image: none;/);
+    const frameBlock = styleCss.match(/\.chrome-family-surface\) \.inner-box \{[\s\S]*?\}/)?.[0] ?? '';
+    expect(frameBlock).toContain('border-image-source');
+    expect(frameBlock).not.toContain('background-image');
   });
 
   it('maps scenario actions to existing text-button and tool-square units', () => {

@@ -300,7 +300,7 @@ describe('Run Deployment hand', () => {
     expect(buttons.length).toBeGreaterThan(0);
     expect(filled).toHaveLength(buttons.length);
     // Each carries its own index into the surface, so no two neighbours sample the same grain.
-    const indices = [...panel.matchAll(/'--run-leaf-control-index' as string\]: (\d+)/g)]
+    const indices = [...panel.matchAll(/'--chrome-leaf-surface-index' as string\]: (\d+)/g)]
       .map(([, value]) => Number(value));
     expect(indices).toHaveLength(buttons.length);
     expect(new Set(indices).size).toBe(indices.length);

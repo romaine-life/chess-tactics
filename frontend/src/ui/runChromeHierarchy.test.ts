@@ -546,9 +546,13 @@ describe('Run chrome hierarchy', () => {
 
     expect(metaControls).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
     expect(metaControls).toContain('SECTIO_WORKSPACE_VIEWS.map((candidate, index) =>');
-    expect(metaControls).toContain("['--run-leaf-control-index' as string]: index + 1");
-    expect(metaControls).toContain("['--run-leaf-control-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 3");
-    expect(styleCss).toMatch(/\.run-meta-controls \[data-chrome-fill-surface\]\s*\{[\s\S]*?--chrome-surface-position-y:\s*calc\(var\(--run-leaf-control-index, 0\)/);
+    expect(metaControls).toContain("['--chrome-leaf-surface-index' as string]: index + 1");
+    expect(metaControls).toContain("['--chrome-leaf-surface-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 3");
+    // One derivation turns a renderer's phase index into the surface offset, for every leaf
+    // however it was painted — a named surface here, the Controls panel's material rule
+    // elsewhere. A per-surface copy of the same calc is how the two drift apart.
+    expect(styleCss).toMatch(/\[data-chrome-fill-surface\],\s*\r?\n\[data-shell-controls-panel\] \[data-chrome-unit\]\s*\{\s*\r?\n\s*--chrome-surface-position-y:\s*calc\(var\(--chrome-leaf-surface-index, 0\) \* -1 \* var\(--chrome-leaf-surface-pitch\)\)/);
+    expect(styleCss).not.toMatch(/\.run-(?:meta-controls|army-profile) \[data-chrome-fill-surface\]/);
 
     expect(runArmyWorkspace).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
     expect(runExpunctioWorkspace).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');

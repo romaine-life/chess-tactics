@@ -1,5 +1,4 @@
 import { useLayoutEffect, useMemo, useRef, type CSSProperties, type ReactElement, type ReactNode } from 'react';
-import { defaultBackgroundSet } from '../art/backgroundSets';
 import { paletteForSide } from '../core/pieces';
 import {
   PIECE_LABEL,
@@ -166,7 +165,6 @@ function RunArmyPortrait({
       piece={piece}
       palette={palette}
       crop={crops[piece]}
-      backdrop={defaultBackgroundSet().portraits[piece]}
       className={className}
       framed={framed}
       masterUrl={runtimePortraitMasterSrc(piece, palette)}
@@ -395,7 +393,7 @@ export function RunArmyWorkspace({
             <ChromeButton unit="inner-text-button"
               data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
               className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
-              style={{ ['--run-leaf-control-index' as string]: 0 } as CSSProperties}
+              style={{ ['--chrome-leaf-surface-index' as string]: 0 } as CSSProperties}
               onClick={onBack}
             >
               {backLabel}
@@ -424,7 +422,7 @@ export function RunArmyWorkspace({
                     unit="inner-text-button"
                     data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                     className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
-                    style={{ ['--run-leaf-control-index' as string]: 1 } as CSSProperties}
+                    style={{ ['--chrome-leaf-surface-index' as string]: 1 } as CSSProperties}
                     tone="primary"
                     disabled={profileAction.isDisabled?.(selected) ?? false}
                     onClick={() => profileAction.onAction(selected.id)}

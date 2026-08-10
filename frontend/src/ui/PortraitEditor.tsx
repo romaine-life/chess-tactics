@@ -7,6 +7,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactElement, ReactNode, WheelEvent as ReactWheelEvent } from 'react';
 import { UNIT_PALETTES, UNIT_PALETTE_LABELS, type UnitPalette } from '../core/pieces';
+import { defaultBackgroundSet } from '../art/backgroundSets';
 import { saveDrawableAssetBatch } from '../net/drawableCatalogAdmin';
 import { installedPortraitAssets, installedPortraitCrops, PORTRAIT_PIECES, type PortraitCrop, type PortraitPiece } from './portraitCrops';
 import { PORTRAIT_METHODS, defaultPortraitMethod, portraitMasterSrc, portraitMethodSupportsPalette, type PortraitMethod } from './portraitCandidates';
@@ -137,19 +138,25 @@ export function CroppedView({ src, crop, onDisplayedSrcChange }: {
 // InnerChromeBox. HUD, profile, roster, and authoring portraits keep the box; a composition
 // that provides a canonical divider boundary may opt out without reimplementing the crop,
 // backdrop, sizing, or semantic media resolution.
+//
+// The installed portrait scene is part of what a portrait IS, so this renderer resolves it
+// from the piece rather than making each call site remember to pass it — a roster thumbnail
+// that forgot was the whole reason busts sat on flat fill next to profile portraits wearing
+// their painted scene. Pass `backdrop={null}` to render a bust with no scene deliberately.
 export function UnitPortrait({ piece, palette, crop, backdrop, size, className, method, masterUrl, framed = true }: {
   piece: Piece; palette: Palette; crop: Crop; backdrop?: string | null; size?: number; className?: string; method?: PortraitMethod; masterUrl?: string; framed?: boolean;
 }): ReactElement {
+  const resolvedBackdrop = backdrop === undefined ? defaultBackgroundSet().portraits[piece] : backdrop;
   const requestedSrc = masterUrl ?? masterSrc(piece, palette, method);
-  const [displayedBackdrop, setDisplayedBackdrop] = useState({ src: requestedSrc, backdrop });
+  const [displayedBackdrop, setDisplayedBackdrop] = useState({ src: requestedSrc, backdrop: resolvedBackdrop });
   useEffect(() => {
     if (displayedBackdrop.src !== requestedSrc) return;
-    if (displayedBackdrop.backdrop === backdrop) return;
-    setDisplayedBackdrop({ src: requestedSrc, backdrop });
-  }, [backdrop, displayedBackdrop, requestedSrc]);
+    if (displayedBackdrop.backdrop === resolvedBackdrop) return;
+    setDisplayedBackdrop({ src: requestedSrc, backdrop: resolvedBackdrop });
+  }, [resolvedBackdrop, displayedBackdrop, requestedSrc]);
   const onDisplayedSrcChange = useCallback((displayedSrc: string) => {
-    if (displayedSrc === requestedSrc) setDisplayedBackdrop({ src: displayedSrc, backdrop });
-  }, [backdrop, requestedSrc]);
+    if (displayedSrc === requestedSrc) setDisplayedBackdrop({ src: displayedSrc, backdrop: resolvedBackdrop });
+  }, [resolvedBackdrop, requestedSrc]);
 
   const style: CSSProperties = {};
   if (size != null) { style.width = size; style.height = size; }

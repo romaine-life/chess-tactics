@@ -6,10 +6,12 @@ import {
   type ChromeRole,
 } from './chromeCandidateSources';
 import {
+  chromeUnitMaterialSelectors,
   chromeUnitRoleSelectors,
   chromeUnitScopedSelectors,
   chromeUnitSelectors,
 } from './chromeUnitRegistry';
+import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
 import { drawableAssets, requiredDrawableRole } from '@chess-tactics/board-render';
 import { SURFACE_ASSETS } from './surfaceCatalog';
 
@@ -772,15 +774,39 @@ function chromeFillCss(tune: RoleTune): string {
   background-size: ${hasTint ? `auto, ${surfaceScale} auto` : `${surfaceScale} auto`} !important;`;
 }
 
-function namedChromeFillSurfaceCss(): string {
-  return CHROME_FILL_SURFACES.map((surface) => `${CHROME_FAMILY_SURFACE_SELECTOR} [data-chrome-fill-surface="${surface.id}"],
-${CHROME_FAMILY_SURFACE_SELECTOR} [data-chrome-tab-fill-surface="${surface.id}"] .settings-tab {
-  background-color: transparent !important;
+/** The one declaration block that paints an installed named surface onto a box. */
+function namedChromeFillSurfacePaint(id: ChromeFillSurfaceId): string {
+  const surface = chromeFillSurfaceById(id);
+  return `  background-color: transparent !important;
   background-image: url("${surface.src}") !important;
   background-position: 0 var(--chrome-surface-position-y, 0) !important;
   background-repeat: repeat !important;
-  background-size: 1024px auto !important;
+  background-size: 1024px auto !important;`;
+}
+
+function namedChromeFillSurfaceCss(): string {
+  return CHROME_FILL_SURFACES.map((surface) => `${CHROME_FAMILY_SURFACE_SELECTOR} [data-chrome-fill-surface="${surface.id}"],
+${CHROME_FAMILY_SURFACE_SELECTOR} [data-chrome-tab-fill-surface="${surface.id}"] .settings-tab {
+${namedChromeFillSurfacePaint(surface.id)}
 }`).join('\n');
+}
+
+/**
+ * The shell Controls panel adopts the ADR-0433 material hierarchy wholesale: the panel
+ * and its structural boxes keep the stone field, and every registered leaf unit inside
+ * it wears the oak. Reading the material off the registry rather than off each call site
+ * is what makes that true of controls the panel only borrows — steppers, admin controls,
+ * Run lifecycle buttons — without reskinning the same components on other surfaces. A
+ * control that names its own surface still wins.
+ */
+function controlsPanelLeafSurfaceCss(): string {
+  const selectors = chromeUnitScopedSelectors(
+    `${CHROME_FAMILY_SURFACE_SELECTOR} [data-shell-controls-panel]`,
+    chromeUnitMaterialSelectors('leaf').map((selector) => `${selector}:not([data-chrome-fill-surface])`),
+  );
+  return `${selectors} {
+${namedChromeFillSurfacePaint(CHROME_LEAF_FILL_SURFACE)}
+}`;
 }
 
 function borderImageRepeatForTune(tune: RoleTune): string {
@@ -1089,6 +1115,16 @@ export function frameCss(
       .map((selector) => selector === '.inner-box' ? '.inner-box:not(.dropdown)' : selector),
   );
   const innerChromeFrameSelectors = chromeFamilyRoleSelectors('inner');
+  // A box that carries its own installed image is not competing with the role field, so it is
+  // excluded here rather than out-specified later: a named surface and a portrait scene both
+  // arrive from the catalog, and an `!important` role default that merely loses a specificity
+  // race would put the two one edit apart from swapping places.
+  const innerChromeFieldSelectors = chromeUnitScopedSelectors(
+    familySurface,
+    chromeUnitRoleSelectors('inner').map(
+      (selector) => `${selector}:not(.has-backdrop):not([data-chrome-fill-surface])`,
+    ),
+  );
   const titlebarJoint = dividers.outer.atomOverlay;
   const outerDividerRailTop = Math.round((dividers.outer.height - dividers.outer.railHeight) / 2);
   const outerAtomOverlayOutset = outerFrame.atomOverlay?.outset ?? 0;
@@ -1304,11 +1340,20 @@ ${innerChromeFrameSelectors} {
   border-image-slice: ${innerFrame.slice} !important;
   border-image-width: ${innerRailWidth}px !important;
   border-image-repeat: ${borderImageRepeatForTune(inner)} !important;
+}
+/* The role's FIELD is separate from its frame, because a box can carry its own
+   installed image and still want the house frame around it. A unit portrait is the
+   standing case: its painted scene is part of the portrait, not decoration on top of
+   a field, so forcing the role fill over it left every framed bust — the roster
+   thumbnails and the Selected Unit seat — on flat fill while an unframed portrait of
+   the same unit kept its scene. */
+${innerChromeFieldSelectors} {
 ${chromeFillCss(inner)}
 }
 /* A named registered material is an explicit composition override. Keep these
    selectors after role defaults so an inner-framed control can share a canonical
    surface used elsewhere without forking or code-painting that material. */
+${controlsPanelLeafSurfaceCss()}
 ${namedChromeFillSurfaceCss()}
 ${familySurface} .inner-box:is(.active, .is-active, [aria-pressed="true"]) {
   border-image-source: var(--skirmish-chrome-inner-control-active-image) !important;
