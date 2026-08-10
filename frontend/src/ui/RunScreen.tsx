@@ -1554,26 +1554,42 @@ function VictoryPanel({ run }: { run: RunDocument }): ReactElement {
         backgroundArtwork: workspaceBackgroundArtwork('run-victory'),
       }}
     >
-      <h2 id="run-victory-workspace-title">War won</h2>
-      <h2>{run.war.name}</h2>
-      <p>{ATARAXIA_BY_TIER[run.ataraxiaTier].label} — {ATARAXIA_BY_TIER[run.ataraxiaTier].title}</p>
-      <p>{run.war.description}</p>
-      <p className="run-victory-summary">
-        <span>{run.army.length} persistent units</span>
-        <span>{visibleLipsanonCount(run)} lipsana</span>
-        <RunGoldAmount valueTenths={run.goldTenths} />
-      </p>
-      <ChromeButton unit="inner-text-button"
-        className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active', 'run-victory-finish')}
-        onClick={() => {
-          // Same as Abandon: the Run is closed locally before this suspends, so the finished
-          // War does not hold the player on an empty workspace while its row is deleted.
-          void abandon();
-          navigateApp(PLAY_RUN_SELECTOR_HREF, { replace: true, scroll: false });
-        }}
-      >
-        Finish Run
-      </ChromeButton>
+      {/* The same composition as the Battle's Aftermath, because it is the same moment one scale
+          up: a display heading standing on the artwork, the facts in a report box under it, the
+          action last. Every line but the heading used to stand on the artwork too — and this
+          workspace's artwork is a bright daylight sky, so a block of white copy was reading off
+          clouds. Only the heading is display type, which carries its own shadow; the rest is the
+          record the War is remembered by, and a record needs a surface. */}
+      <header className="run-victory-head">
+        <h2 id="run-victory-workspace-title" className="run-victory-title">War won</h2>
+      </header>
+
+      <InnerChromeBox as="div" className="run-victory-report">
+        <h3 className="run-victory-war">{run.war.name}</h3>
+        <p className="run-victory-ataraxia">
+          {ATARAXIA_BY_TIER[run.ataraxiaTier].label} — {ATARAXIA_BY_TIER[run.ataraxiaTier].title}
+        </p>
+        <p className="run-victory-description">{run.war.description}</p>
+        <p className="run-victory-summary">
+          <span>{run.army.length} persistent units</span>
+          <span>{visibleLipsanonCount(run)} lipsana</span>
+          <RunGoldAmount valueTenths={run.goldTenths} />
+        </p>
+      </InnerChromeBox>
+
+      <div className="run-victory-actions">
+        <ChromeButton unit="inner-text-button"
+          className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active', 'run-victory-finish')}
+          onClick={() => {
+            // Same as Abandon: the Run is closed locally before this suspends, so the finished
+            // War does not hold the player on an empty workspace while its row is deleted.
+            void abandon();
+            navigateApp(PLAY_RUN_SELECTOR_HREF, { replace: true, scroll: false });
+          }}
+        >
+          Finish Run
+        </ChromeButton>
+      </div>
     </RunSceneViewport>
   );
 }

@@ -21093,22 +21093,19 @@ button.tileset-relationship-cell {
   margin-inline-end: var(--ds-inline-tight);
 }
 
-/* The Run's last action is a button, not a band. The workspace lane stretches its grid
-   children, which was inconspicuous while this one wore the flat field and reads as a
-   wall the moment it wears a plank. */
-.run-victory-finish {
-  justify-self: start;
-}
-
-/* The report box is the aftermath screen's visual anchor. Equal flexible tracks
+/* The report box is the outcome screen's visual anchor. Equal flexible tracks
    first establish its geometric centre; the complete heading/report/action composition
    then moves by one twentieth of the actual workspace height so the report lands on the
-   45% optical centre without measuring or centring the combined stack (ADR-0456). */
-.run-aftermath-workspace {
+   45% optical centre without measuring or centring the combined stack (ADR-0456).
+   A Battle's Aftermath and a War's Victory are the same moment at two scales, so one set of
+   rules composes both rather than two that drift apart. */
+.run-aftermath-workspace,
+.run-victory-workspace {
   container-type: size;
 }
 
-.run-aftermath-workspace-content {
+.run-aftermath-workspace-content,
+.run-victory-workspace-content {
   align-items: center;
   grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr);
   gap: var(--ds-gutter);
@@ -21117,14 +21114,20 @@ button.tileset-relationship-cell {
 }
 
 .run-aftermath-head,
+.run-victory-head,
 .run-aftermath-report,
-.run-aftermath-actions {
+.run-victory-report,
+.run-aftermath-actions,
+.run-victory-actions {
   translate: 0 -5cqh;
 }
 
-/* The heading stands directly on the artwork with nothing behind it, so it carries its
-   own shadow the way the Sectio's scene copy does. */
-.run-aftermath-head {
+/* The heading stands directly on the artwork with nothing behind it, so it carries its own
+   shadow the way the Sectio's scene copy does. It is the ONLY line that may: it is display
+   type at a size that survives any backdrop, and everything factual belongs in the report
+   below. Victory's sky is bright daylight, and a block of white copy read off clouds there. */
+.run-aftermath-head,
+.run-victory-head {
   align-self: end;
   display: grid;
   gap: var(--ds-space-3);
@@ -21132,7 +21135,8 @@ button.tileset-relationship-cell {
   text-shadow: 0 2px 6px rgba(2, 7, 12, .9);
 }
 
-.run-aftermath-title {
+.run-aftermath-title,
+.run-victory-title {
   font: var(--ds-weight-regular) var(--ds-text-display)/1 var(--ds-font-display);
   letter-spacing: var(--ds-tracking-wide);
   text-transform: uppercase;
@@ -21145,13 +21149,46 @@ button.tileset-relationship-cell {
 
 /* The report is a fixed measure rather than the full content line: a ledger of four
    short rows stretched edge to edge would put its labels and its numbers on opposite
-   sides of the screen. */
+   sides of the screen. Victory's report is prose rather than a ledger, so it takes a
+   wider measure — the same reason read the other way. */
 .run-aftermath-report {
   grid-row: 2;
   inline-size: min(100%, 420px);
 }
 
-.run-aftermath-actions {
+/* The record the War is remembered by. Its own rows carry the spacing, because the kit
+   frame's inner padding is sized for dense panel content. */
+.run-victory-report {
+  display: grid;
+  gap: var(--ds-space-3);
+  grid-row: 2;
+  inline-size: min(100%, 560px);
+  padding: var(--ds-space-4);
+}
+
+.run-victory-war {
+  font: var(--ds-weight-regular) var(--ds-text-lg)/1.1 var(--ds-font-display);
+  margin: 0;
+}
+
+.run-victory-ataraxia {
+  color: var(--ds-ink-2);
+  margin: 0;
+}
+
+.run-victory-description {
+  margin: 0;
+}
+
+.run-victory-summary {
+  justify-content: center;
+}
+
+/* The Run's last action is a button, not a band: the workspace lane stretches its grid
+   children, which was inconspicuous while this one wore the flat field and read as a wall
+   the moment it wore a plank. The actions row is what holds it to its own width now. */
+.run-aftermath-actions,
+.run-victory-actions {
   align-self: start;
   display: flex;
   gap: var(--ds-inline-tight);
