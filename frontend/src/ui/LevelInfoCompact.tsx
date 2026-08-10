@@ -25,7 +25,7 @@ import { InnerChromeBox } from './shared/ChromeBox';
 import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
 import { PieceTypeIcon } from './shared/PieceTypeIcon';
 import { installedUiMedia, installedUiMediaIfPresent } from './installedUiMedia';
-import { useStrategikonCardsIcon } from './strategikonNavigation';
+import { STRATEGIKON_CARD_MARK_CLASS, useStrategikonCardsIcon } from './strategikonNavigation';
 import { levelToEditorBoard } from '../core/levelBoard';
 import { assetFrameSrc, isPredrawnBackgroundActive, studioFamilies } from '@chess-tactics/board-render';
 
@@ -48,10 +48,18 @@ const TERRAIN_LABEL: Record<string, string> = {
  * the player deals, the grass surface the editor paints — rather than a glyph invented for a
  * readout. `aria-hidden` because the label beside it already says the word.
  */
-function RowIcon({ src, className = '' }: { src: string; className?: string }): ReactElement {
+function RowIcon({
+  src,
+  className = '',
+  imgClassName,
+}: {
+  src: string;
+  className?: string;
+  imgClassName?: string;
+}): ReactElement {
   return (
     <span className={`ce-li-icon ${className}`.trim()} aria-hidden="true">
-      <img src={src} alt="" draggable={false} />
+      <img className={imgClassName} src={src} alt="" draggable={false} />
     </span>
   );
 }
@@ -409,7 +417,7 @@ export function LevelInfoCompact({
         <section className="ce-li-deployment">
           <span className="ce-li-title">Deployment</span>
           <div className="ce-li-stat">
-            <span><RowIcon src={cardsIconSrc} className="ce-li-card-icon" />Cards dealt</span>
+            <span><RowIcon src={cardsIconSrc} className="ce-li-card-icon" imgClassName={STRATEGIKON_CARD_MARK_CLASS} />Cards dealt</span>
             <strong>{dealLine}</strong>
           </div>
           <div className="ce-li-stat">

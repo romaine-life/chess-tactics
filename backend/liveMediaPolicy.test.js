@@ -703,6 +703,28 @@ test('condition icon projection keeps all four card properties and granted state
     }), null);
     assert.match(gameConditionIconMediaIssue({ ...progress, width: 47 }), /square/);
   }
+  // Athetize's mark rides a button beside a label, so it ships trimmed to its own ink
+  // like the position marks rather than in the unit-ability icons' padded 64x64 frame.
+  const athetize = gameConditionIcon({
+    slot: 'ui/kit/icons/game/athetize.png',
+    width: 63,
+    height: 63,
+    metadata: { runtime: {
+      ...cacochymic.metadata.runtime,
+      component: 'run-action-icon',
+      variant: 'athetize',
+      nativeRole: 'run-action-icon',
+      frameWidth: 63,
+      frameHeight: 63,
+    } },
+  });
+  assert.deepEqual(gameConditionIconSlot(athetize.slot), { component: 'run-action-icon', variant: 'athetize' });
+  assert.equal(gameConditionIconMediaIssue(athetize), null);
+  assert.match(gameConditionIconMediaIssue({ ...athetize, width: 47 }), /square/);
+  assert.match(gameConditionIconMediaIssue({
+    ...athetize,
+    metadata: { runtime: { ...athetize.metadata.runtime, variant: 'expunctio' } },
+  }), /variant/);
   assert.match(gameConditionIconMediaIssue(gameConditionIcon({ role: 'media' })), /icon role/);
   assert.match(gameConditionIconMediaIssue(gameConditionIcon({ width: 32 })), /64x64/);
   assert.match(gameConditionIconMediaIssue(gameConditionIcon({
