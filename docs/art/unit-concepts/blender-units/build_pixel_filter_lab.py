@@ -61,6 +61,30 @@ if lows:
         if obj.parent is None:
             obj.location.z -= drop
 
+# The demo camera looks head-on. Put it on the game's true-isometric contract
+# instead -- 35.264 degrees is atan(1/sqrt2), the elevation that makes a unit cube
+# project to the 2:1 diamond the board is built from -- so what the knobs are judged
+# against is the angle the sprite actually ships at.
+import math, mathutils
+
+ELEVATION = math.radians(35.264389682754654)
+DISTANCE = 5.0
+component = math.cos(ELEVATION) * DISTANCE / math.sqrt(2)
+camera = scene.camera or next((o for o in bpy.data.objects if o.type == "CAMERA"), None)
+if camera is not None:
+    scene.camera = camera
+    camera.parent = None
+    camera.location = (component, -component, 1.0 + math.sin(ELEVATION) * DISTANCE)
+    camera.rotation_euler = (
+        mathutils.Vector((0, 0, 1.0)) - mathutils.Vector(camera.location)
+    ).to_track_quat("-Z", "Y").to_euler()
+    camera.data.type = "ORTHO"
+    camera.data.ortho_scale = 2.7
+
+# Judgeable size; the demo ships at 128 which is too small to read a filter on.
+scene.render.resolution_x = 512
+scene.render.resolution_y = 512
+
 print("PIXEL_LAB_SUBJECTS", [o.name for o in meshes])
 bpy.ops.wm.save_as_mainfile(filepath=OUT)
 print("PIXEL_LAB_SAVED", OUT)
