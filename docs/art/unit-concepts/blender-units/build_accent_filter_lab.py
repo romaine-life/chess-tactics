@@ -215,9 +215,52 @@ def make_ramp(stops):
     tree.links.new(feeder, r.inputs["Fac"])
     return r
 
-body = make_ramp(BODY)
-body.label = "BODY palette"
-current = body.outputs["Color"]
+# Six palettes wired at once, chosen by one number.
+#
+# The batch renderer picks a palette with an environment variable, which is no use at
+# a node graph -- retyping five colour stops to see the piece in crimson is not
+# switching palettes. So every palette gets its own ramp, and a single Value node
+# labelled PALETTE selects between them: 0 navy-blue, 1 white, 2 golden, 3 emerald,
+# 4 crimson, 5 black. Drag that one field and the piece changes team.
+BODY_PALETTES = [
+    ("navy-blue", [(0.00000, "#0d1926"), (0.05139, "#17314a"), (0.09918, "#224466"), (0.15729, "#2f5983"), (0.28899, "#416e9c")]),
+    ("white",     [(0.00000, "#3b3f47"), (0.05139, "#717b8b"), (0.09918, "#9daabf"), (0.15729, "#ccdbf6"), (0.28899, "#d7e6ff")]),
+    ("golden",    [(0.00000, "#28200a"), (0.05139, "#4f3d10"), (0.09918, "#6c5519"), (0.15729, "#8b6e25"), (0.28899, "#a68637")]),
+    ("emerald",   [(0.00000, "#0c2116"), (0.05139, "#16412a"), (0.09918, "#20593b"), (0.15729, "#2c734e"), (0.28899, "#3c8961")]),
+    ("crimson",   [(0.00000, "#260c10"), (0.05139, "#4a151d"), (0.09918, "#66202a"), (0.15729, "#832c39"), (0.28899, "#9c3e4c")]),
+    ("black",     [(0.00000, "#0d0e10"), (0.05139, "#181c1f"), (0.09918, "#22262b"), (0.15729, "#2c3137"), (0.28899, "#363b41")]),
+]
+
+select = tree.nodes.new("ShaderNodeValue")
+select.label = "PALETTE  0=navy 1=white 2=golden 3=emerald 4=crimson 5=black"
+select.outputs[0].default_value = float(os.environ.get("BODY_PALETTE_INDEX", "0"))
+select.location = (-160, 460)
+
+body = None
+current = None
+for pi, (pname, stops) in enumerate(BODY_PALETTES):
+    ramp = make_ramp(stops)
+    ramp.label = "BODY %s" % pname
+    ramp.location = (200, 460 - pi * 220)
+    if current is None:
+        body, current = ramp, ramp.outputs["Color"]
+        continue
+    # COMPARE returns 1 when the two values are within epsilon, so each palette claims
+    # exactly its own index and the chain reduces to a pick rather than a blend.
+    hit = tree.nodes.new("ShaderNodeMath")
+    hit.operation = "COMPARE"
+    hit.inputs[1].default_value = float(pi)
+    hit.inputs[2].default_value = 0.5
+    hit.location = (360, 460 - pi * 220)
+    tree.links.new(select.outputs[0], hit.inputs[0])
+    pick = tree.nodes.new("ShaderNodeMix")
+    pick.data_type = "RGBA"
+    pick.location = (460, 460 - pi * 220)
+    rgba = [x for x in pick.inputs if x.type == "RGBA"]
+    tree.links.new(hit.outputs[0], pick.inputs["Factor"])
+    tree.links.new(current, rgba[0])
+    tree.links.new(ramp.outputs["Color"], rgba[1])
+    current = [x for x in pick.outputs if x.type == "RGBA"][0]
 
 # Two signals, each used for the one question it can answer.
 #
@@ -487,7 +530,6 @@ tree.links.new(seta.outputs["Image"], sink)
 
 # Label the two ramps so they are tellable apart in the node editor -- otherwise
 # they are two identical-looking ColorRamps and it is a coin flip which is which.
-body.location = (200, 220)
 sep.location = (200, -620)
 seta.location = (940, 80)
 
