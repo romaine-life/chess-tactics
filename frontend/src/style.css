@@ -27625,12 +27625,14 @@ button.run-card-formation-cell {
 .run-ataraxia-selector h3,
 .run-ataraxia-selector p,
 .run-rules-selector h3,
+.run-rules-selector h4,
 .run-rules-selector p {
   margin: 0;
 }
 
 .run-ataraxia-selector h3,
-.run-rules-selector h3 {
+.run-rules-selector h3,
+.run-rules-selector h4 {
   padding-inline: 8px;
 }
 
@@ -28213,4 +28215,28 @@ button.run-card-formation-cell {
 .run-commendatio-question {
   margin: 0;
   text-align: center;
+}
+
+/* Start New Run → Rule options. Closed by default and framed as a departure from the defaults,
+   because the defaults are the game and almost nobody should be changing them before a Run. */
+.run-rules-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ds-inline-tight);
+}
+
+.run-rules-selector h4 {
+  margin-block-start: var(--ds-inline-tight);
+  font-size: var(--ds-text-xs);
+  opacity: .78;
+}
+
+.run-rules-selector [hidden] {
+  display: none;
+}
+
+#run-rules-content {
+  display: grid;
+  gap: var(--ds-inline-tight);
 }
