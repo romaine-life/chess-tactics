@@ -207,8 +207,15 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // baseline's label, so renumbering the ladder cannot leave a stale sentence here.
     expect(ataraxiaSelector).toContain('Complete ${ATARAXIA_BY_TIER[(tier - 1) as AtaraxiaTier].label} to unlock');
     expect(ataraxiaSelector).not.toContain("'Complete Ataraxia 0 to unlock'");
-    expect(ataraxiaSelector).toContain('<p className="run-ataraxia-effect">{ATARAXIA_BY_TIER[value].effect}</p>');
     expect(ataraxiaSelector).not.toContain('role="radiogroup"');
+    // Ataraxia is a section box like Options, not a heading over a loose picker: the same frame
+    // states the same ownership, and the tier's `effect` is no longer restated under it. The
+    // picker already shows the selected tier, and the baseline's effect is "Standard rules." — a
+    // line spent saying the default is the default, floating on live board artwork.
+    expect(ataraxiaSelector).toMatch(/<RunPrepSection[\s\S]*?title="Ataraxia"/);
+    expect(ataraxiaSelector).not.toContain('run-ataraxia-effect');
+    expect(ataraxiaSelector).not.toContain('ATARAXIA_BY_TIER[value].effect');
+    expect(style).not.toContain('.run-ataraxia-effect');
     const detailBodyRule = style.match(/\.play-detail-body\s*\{([^}]*)\}/)?.[1] ?? '';
     expect(detailBodyRule).toContain('flex: 0 0 auto');
     expect(detailBodyRule).not.toContain('flex: 1 1 auto');
@@ -327,10 +334,11 @@ describe('unified Play menu contract (ADR-0074)', () => {
 
 describe('Run rule options are a departure from the defaults, not a step in setup', () => {
   const source = readFileSync(new URL('./RunRulesSelector.tsx', import.meta.url), 'utf8');
+  const prepSection = readFileSync(new URL('./shared/RunPrepSection.tsx', import.meta.url), 'utf8');
 
   it('starts closed, so a normal Run never has to answer it', () => {
     expect(source).toContain('const [open, setOpen] = useState(false)');
-    expect(source).toContain('hidden={!open}');
+    expect(prepSection).toContain('hidden={disclosure ? !disclosure.open : undefined}');
   });
 
   it('closed, states only its own name — no reassuring subtitle under it', () => {
@@ -342,20 +350,22 @@ describe('Run rule options are a departure from the defaults, not a step in setu
   });
 
   it('is one box that grows, with the box itself as the thing you press', () => {
-    // The trigger fills the accepted InnerChromeBox rather than being a framed control seated
+    // The name row fills the accepted InnerChromeBox rather than being a framed control seated
     // inside it, so the box's own frame is the button's edge and its name rides in it.
-    expect(source).toMatch(/<InnerChromeBox[\s\S]*?className=\{`run-rules-selector\$\{open \? ' is-open' : ''\}`\}/);
-    // Marble on the box, oak on the pickers inside it: opened, this is a box holding other
-    // people's controls, and a wood field behind wooden pickers gives them nothing to read
-    // against (ADR-0433). It is the same material as the replacement note above it.
-    expect(source).toMatch(/<InnerChromeBox[\s\S]*?fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/);
-    expect(source).toMatch(/<HouseSelect[\s\S]*?fillSurface=\{fillSurface\}/);
-    expect(source).toMatch(/<button[\s\S]*?className="run-rules-disclosure"/);
-    expect(source).toContain('<span className="run-rules-title" id="run-rules-title">Options</span>');
-    expect(source).not.toContain('run-rules-head');
+    expect(prepSection).toMatch(/<InnerChromeBox[\s\S]*?className=\{`run-prep-section \$\{className\}`/);
+    expect(prepSection).toMatch(/<button[\s\S]*?className="run-prep-section-head"[\s\S]*?aria-expanded=\{disclosure\.open\}/);
+    expect(prepSection).toContain('<span className="run-prep-section-title" id={titleId}>{title}</span>');
+    expect(source).toMatch(/<RunPrepSection[\s\S]*?title="Options"/);
     expect(source).not.toContain("unit=\"inner-text-button\"");
     // Its inset is the box's whole content padding, so the pressable area reaches the frame.
-    expect(style).toMatch(/\.run-rules-disclosure \{[\s\S]*?padding: var\(--ds-inset\);/);
+    expect(style).toMatch(/\.run-prep-section-head \{[\s\S]*?padding: var\(--ds-inset\);/);
+  });
+
+  it('is marble holding oak, like every box that holds other people\'s controls', () => {
+    // Opened, this is a box of pickers rather than a control itself, and a wood field behind
+    // wooden pickers gives them nothing to read against (ADR-0433).
+    expect(prepSection).toMatch(/<InnerChromeBox[\s\S]*?fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/);
+    expect(source).toMatch(/<HouseSelect[\s\S]*?fillSurface=\{fillSurface\}/);
   });
 
   it('seats below Start Run, so it is not a step between the Ataraxia choice and the verb', () => {
@@ -366,9 +376,17 @@ describe('Run rule options are a departure from the defaults, not a step in setu
   });
 
   it('states which way it moves, with the shared chevron rather than a second one', () => {
-    expect(source).toContain("stepper-chevron-${open ? 'up' : 'down'}");
+    expect(prepSection).toContain("stepper-chevron-${disclosure.open ? 'up' : 'down'}");
     expect(style).toMatch(/\.stepper-chevron-down\s*\{[\s\S]*?transform:\s*rotate\(-90deg\);/);
     expect(style).toMatch(/\.stepper-chevron-up\s*\{[\s\S]*?transform:\s*rotate\(90deg\);/);
+  });
+
+  it('gives the chevron only to a section that opens, since that is what it means', () => {
+    // Ataraxia is the same box and never closes, so it takes no disclosure and gets no chevron —
+    // one mark distinguishes the two, and spending it on both would erase the distinction.
+    expect(prepSection).toMatch(/\{disclosure \? \(\s*<span\s+className=\{`stepper-glyph/);
+    expect(ataraxiaSelector).not.toContain('disclosure');
+    expect(ataraxiaSelector).not.toContain('stepper-chevron');
   });
 
   it('holds its own name in both states, so pressing it never relabels the control', () => {
@@ -380,8 +398,9 @@ describe('Run rule options are a departure from the defaults, not a step in setu
   });
 
   it('is reachable and announced, because a Run is bound to these for its life', () => {
-    expect(source).toContain('aria-expanded={open}');
-    expect(source).toContain('aria-controls="run-rules-content"');
+    expect(prepSection).toContain('aria-expanded={disclosure.open}');
+    expect(prepSection).toContain('aria-controls={contentId}');
+    expect(source).toContain('contentId="run-rules-content"');
   });
 
   it('does not call the weighted option "by density", which it is not', () => {

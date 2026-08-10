@@ -1,6 +1,7 @@
 import type { ReactElement } from 'react';
 import { ATARAXIA_BY_TIER, ATARAXIA_TIERS, type AtaraxiaTier } from '../run/model';
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
+import { RunPrepSection } from './shared/RunPrepSection';
 
 export function AtaraxiaSelector({
   value,
@@ -33,9 +34,12 @@ export function AtaraxiaSelector({
     };
   });
 
+  // The selected tier's `effect` is not restated under the picker. Every tier the ladder installs
+  // says it in the option the picker is already showing, and the baseline's -- the only rung there
+  // is -- reads "Standard rules.", which is a line of copy spent saying that the default is the
+  // default. The Enchiridion's Ataraxia reference is where the ladder is explained in full.
   return (
-    <section className="run-ataraxia-selector" aria-labelledby="run-ataraxia-title">
-      <h3 id="run-ataraxia-title">Ataraxia</h3>
+    <RunPrepSection title="Ataraxia" titleId="run-ataraxia-title" className="run-ataraxia-selector">
       <HouseSelect
         value={String(value)}
         options={options}
@@ -45,7 +49,6 @@ export function AtaraxiaSelector({
         testId="run-ataraxia-select"
         fillSurface={fillSurface}
       />
-      <p className="run-ataraxia-effect">{ATARAXIA_BY_TIER[value].effect}</p>
-    </section>
+    </RunPrepSection>
   );
 }

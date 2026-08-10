@@ -1,8 +1,7 @@
 import { useState, type ReactElement } from 'react';
 import { RUN_CARD_SPANS, type RunRules } from '../run/model';
-import { InnerChromeBox } from './shared/ChromeBox';
-import { CHROME_STRUCTURAL_FILL_ROLE } from './shared/chromeSurfacePolicy';
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
+import { RunPrepSection } from './shared/RunPrepSection';
 
 // Start New Run → the rules the Run is bound to, behind a disclosure that starts closed.
 //
@@ -15,15 +14,9 @@ import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
 // Not hidden, though: a Run is bound to these for its whole life, so a player who did change one
 // has to be able to see what they are about to start.
 //
-// The BOX is the control. Closed, the whole slab -- its name and the chevron -- is one pressable
-// thing; opening it grows that same box downward around the choices instead of swapping a
-// heading-plus-Change-button row for a panel that appears beneath it. The trigger is the same DOM
-// node in both states, so it keeps focus across a press, and the header row stays the way back
-// out.
-//
-// It wears the structural marble, not the leaf oak, because opened it is a box holding other
-// people's controls: the pickers inside are the oak, and a wood field behind wooden pickers left
-// them with nothing to read against.
+// The BOX is the control -- see RunPrepSection, which owns that decision for every section of Run
+// preparation. This is the one section given a disclosure, so its name row is the trigger: closed,
+// the whole slab is pressable, and opening it grows the same box downward around the choices.
 //
 // It seats BELOW Start Run in the detail column, after the verb rather than before it — see the
 // comment at its mount in PlayMenu.
@@ -104,31 +97,17 @@ export function RunRulesSelector({
   }));
 
   return (
-    <InnerChromeBox
-      as="section"
-      className={`run-rules-selector${open ? ' is-open' : ''}`}
-      fillRole={CHROME_STRUCTURAL_FILL_ROLE}
-      aria-labelledby="run-rules-title"
+    <RunPrepSection
+      title="Options"
+      titleId="run-rules-title"
+      className="run-rules-selector"
+      contentId="run-rules-content"
+      disclosure={{
+        open,
+        onToggle: () => setOpen((wasOpen) => !wasOpen),
+        testId: 'run-rules-toggle',
+      }}
     >
-      {/* Not a ChromeButton: a registered unit brings its own frame, and a second frame inside
-          this one would draw the control as a thing sitting IN the box rather than as the box.
-          The box's frame is this trigger's edge, so the trigger fills it and paints nothing. */}
-      <button
-        type="button"
-        className="run-rules-disclosure"
-        aria-expanded={open}
-        aria-controls="run-rules-content"
-        data-testid="run-rules-toggle"
-        onClick={() => setOpen((wasOpen) => !wasOpen)}
-      >
-        <span className="run-rules-title" id="run-rules-title">Options</span>
-        <span
-          className={`stepper-glyph stepper-chevron stepper-chevron-${open ? 'up' : 'down'}`}
-          aria-hidden="true"
-        />
-      </button>
-
-      <div id="run-rules-content" className="run-rules-content" hidden={!open}>
       <h4>Formations</h4>
 
       <HouseSelect
@@ -164,7 +143,6 @@ export function RunRulesSelector({
         fillSurface={fillSurface}
       />
       <p className="run-rules-effect">{PRICING_COPY[value.pricing].effect}</p>
-      </div>
-    </InnerChromeBox>
+    </RunPrepSection>
   );
 }

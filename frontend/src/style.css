@@ -27892,26 +27892,15 @@ button.run-card-formation-cell {
   text-wrap: wrap;
 }
 
-.run-ataraxia-selector {
-  display: grid;
-  gap: var(--ds-inline-tight);
-}
-
-/* Rule options is one BOX rather than a heading over loose controls, so its own frame is the
-   outer spacing and the rows inside it carry none. */
-.run-rules-selector {
+/* Every section of Run preparation is one BOX rather than a heading over loose controls, so its
+   own frame is the outer spacing and the rows inside it carry none. See RunPrepSection. */
+.run-prep-section {
   display: grid;
 }
 
-.run-ataraxia-selector h3,
-.run-ataraxia-selector p,
 .run-rules-selector h4,
 .run-rules-selector p {
   margin: 0;
-}
-
-.run-ataraxia-selector h3 {
-  padding-inline: 8px;
 }
 
 .run-ataraxia-select,
@@ -27950,7 +27939,6 @@ button.run-card-formation-cell {
   white-space: normal;
 }
 
-.run-ataraxia-effect,
 .run-rules-effect {
   color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
   font-size: var(--ds-text-xs);
@@ -28459,29 +28447,29 @@ button.run-card-formation-cell {
   text-align: center;
 }
 
-/* Start New Run → Rule options. Closed by default and framed as a departure from the defaults,
-   because the defaults are the game and almost nobody should be changing them before a Run.
-   The whole box is the disclosure: closed, the trigger below is the box's entire interior, so
-   pressing anywhere on the slab opens it and the slab itself is what grows.
-   The trigger is deliberately NOT a registered unit. A second frame inside this one would draw a
-   control sitting IN the box rather than the box being the control, so it fills the accepted
+/* Start New Run → one section box per question (RunPrepSection). Rule options is the one that
+   opens: closed, its name row is the box's entire interior, so pressing anywhere on the slab
+   opens it and the slab itself is what grows.
+   That name row is deliberately NOT a registered unit. A second frame inside this one would draw
+   a control sitting IN the box rather than the box being the control, so it fills the accepted
    InnerChromeBox, takes that box's whole content padding as its own inset (the pressable area
    therefore reaches the frame on every side), strips the shell's native button paint, and paints
-   nothing of its own. check-ui-surface-contract.mjs registers exactly that reset. */
+   nothing of its own. check-ui-surface-contract.mjs registers exactly that reset. A section
+   without a disclosure renders the same row as a div, which needs the layout and inherits the
+   reset harmlessly. */
 .run-rules-selector h4 {
   margin-block-start: var(--ds-inline-tight);
   font-size: var(--ds-text-xs);
   opacity: .78;
 }
 
-.run-rules-disclosure {
+.run-prep-section-head {
   align-items: center;
   background: none;
   border: 0;
   border-radius: 0;
   box-shadow: none;
   color: inherit;
-  cursor: pointer;
   display: flex;
   font: inherit;
   gap: var(--ds-inline-tight);
@@ -28492,19 +28480,23 @@ button.run-card-formation-cell {
   text-shadow: inherit;
 }
 
-/* The box's own name, and the label of the control it is. Sized as the section heading it
-   replaced so Options still reads level with Ataraxia above it. */
-.run-rules-title {
+button.run-prep-section-head {
+  cursor: pointer;
+}
+
+/* The box's own name — and, where the row is a trigger, the label of the control it is. Sized as
+   the section heading each of these boxes replaced. */
+.run-prep-section-title {
   font-size: var(--ds-text-md);
 }
 
-.run-rules-selector [hidden] {
+.run-prep-section [hidden] {
   display: none;
 }
 
-/* The choices sit under the header the trigger already inset, so they take the same inset on
+/* The controls sit under the name row that already inset itself, so they take the same inset on
    the three remaining sides and none at the top. */
-.run-rules-content {
+.run-prep-section-body {
   display: grid;
   gap: var(--ds-inline-tight);
   padding: 0 var(--ds-inset) var(--ds-inset);
