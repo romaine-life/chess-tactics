@@ -18884,6 +18884,10 @@ button.tileset-relationship-cell {
      bounded it falsely). MM_LIVE.btnH mirrors this literal (mmLive.test.ts guards the two, ADR-0057). */
   min-height: 88px;
   padding: 22px; /* even inset — icon sits with equal margin on every side (was 17px/22px) */
+  /* The containing block for the trailing open mark, which is out of flow so that gaining it
+     cannot move the icon or the label. Nothing else inside a tab positions against the tab: the
+     enlarged mark image anchors to .settings-tab-icon, which is relative in its own right. */
+  position: relative;
   /* NON-fixed stone (was `repeat fixed`). background-attachment: fixed routes painting
      through Chromium's viewport-fixed-background path, which intermittently fails to
      repaint when a nearby element composites/decomposites — the Settings menu crossfade
@@ -18937,6 +18941,29 @@ button.tileset-relationship-cell {
 .settings-tab > span:not(.settings-tab-icon) {
   background: transparent;
   transform: translateX(16px); /* label nudge — baked from the Main Menu tuner, shared with Settings */
+}
+
+/* The `›` open mark: "this is the tab whose panel is expanded" (ADR-0561). Taken OUT OF FLOW, so
+   a tab that gains the mark keeps the exact geometry it had without one — no track to reserve, no
+   label box to re-measure, nothing for FittedTabLabel to refit. It cannot be a grid item: an
+   explicitly placed one does not stack under the auto-placed label, it EVICTS it (auto-placement
+   skips an occupied cell), which dropped the label of every marked tab onto a second row. The
+   containing block is the tab's padding box, so the inset is the tab's own inline padding and the
+   mark lands flush with the trailing edge of the content the label sits in. It keeps the rule
+   above's transparent background and overrides only the LABEL nudge, which belongs to the label's
+   optical column and would drag the mark off the trailing edge. Same lettering and stroke as the
+   label beside it — it is the same menu type, not a separate icon. */
+.settings-tab > span.settings-tab-open-mark {
+  color: #f3fbff;
+  font-size: var(--ds-text-xl);
+  inset-block-start: 50%;
+  inset-inline-end: 22px; /* mirrors .settings-tab's padding */
+  line-height: 1;
+  pointer-events: none;
+  position: absolute;
+  -webkit-text-stroke: var(--menu-label-stroke-w) var(--menu-label-stroke-ink);
+  paint-order: stroke fill;
+  transform: translateY(-50%);
 }
 
 /* The label does NOT clip: the tab label wears an outline (see .settings-tab strong below), and a
@@ -26069,6 +26096,12 @@ button.tileset-relationship-cell {
     --settings-tab-icon-bleed-size: 29px;
   }
   .settings-tab > span:not(.settings-tab-icon) { transform: none; }  /* was translateX(37px) */
+  /* Follows this band's tighter tab padding, and restates its own centring — the label reset
+     directly above matches the mark too and would otherwise drop it off the tab's centre line. */
+  .settings-tab > span.settings-tab-open-mark {
+    inset-inline-end: 12px;
+    transform: translateY(-50%);
+  }
   .settings-tab strong { font-size: var(--ds-text-md, 1rem); }
 
   /* Content panel — specificity-matched (0,2,0) so it beats the baked 931px + transform. */

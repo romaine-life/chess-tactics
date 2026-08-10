@@ -62,6 +62,7 @@ import { installedUiMedia } from './installedUiMedia';
 import { STRATEGIKON_CARD_MARK_CLASS, useStrategikonCardsIcon } from './strategikonNavigation';
 import { LipsanonIcon } from './Lipsana';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
+import { siblingRailAddresses, useOpenRailTab } from './shared/railOpenIntent';
 import { ataraxiaNumeralArtUrl } from './ataraxiaNumeral';
 import { InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
@@ -1164,6 +1165,11 @@ export function EnchiridionSectionRail({
   sectionHref: (section: EnchiridionSection) => string;
 }): ReactElement {
   const sectionIconSrc = useSectionIconSrc();
+  // Which section wears the open mark. The sections are siblings under one root, and the root
+  // differs by host (main menu vs Strategikon), so the family is derived from the very hrefs
+  // this rail is handed — see shared/railOpenIntent.ts. `section` is untouched, so the content
+  // pane still waits for the committed address and its transition is unchanged.
+  const openSection = useOpenRailTab(siblingRailAddresses(ENCHIRIDION_SECTIONS, sectionHref), section);
   return (
     <ApparatusRailColumn className="enchiridion-section-rail" aria-label="Enchiridion sections">
       {ENCHIRIDION_SECTIONS.map((candidate, index) => (
@@ -1173,6 +1179,7 @@ export function EnchiridionSectionRail({
           to={sectionHref(candidate)}
           index={index}
           active={section === candidate}
+          expanded={openSection === candidate}
           iconSrc={sectionIconSrc[candidate]}
           iconClassName={candidate === 'cards' ? STRATEGIKON_CARD_MARK_CLASS : undefined}
           markCanvas={candidate === 'ataraxia' ? 'bleed' : 'inset'}
