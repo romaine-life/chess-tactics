@@ -10,6 +10,7 @@ import { chromeUnitClassNames } from '../chromeUnitRegistry';
 import { FittedTabLabel } from './FittedTabLabel';
 import { ChromeNavButton } from './ChromeButton';
 import { CHROME_LEAF_FILL_SURFACE } from './chromeSurfacePolicy';
+import { isRailTabAddress, railTabRoutePath, useLocationIntentPath } from './railOpenIntent';
 
 export interface ApparatusRailTabProps {
   label: string;
@@ -57,15 +58,15 @@ export interface ApparatusRailTabProps {
   /** A badge or control seated at the tab's trailing edge (a lock, a favourite toggle). */
   trailing?: ReactNode;
   /**
-   * This tab's panel is the one currently expanded beside the rail — draws the `›` open mark
-   * at its trailing edge. Only a tab that OPENS something takes it; a tab that navigates away
-   * to a full screen has no panel to be open.
+   * OVERRIDE for a rail whose panel can be COLLAPSED while its tab stays active — the main menu
+   * pressing an open tab again to shut it. Leave it unset and the tab derives the `›` open mark
+   * itself: from its own address where it has one, from its selected state where it selects in
+   * place. Only pass it when the rail knows something the address does not.
    *
    * Deliberately not folded into `active`. `active` is the committed scene's identity and
    * lights a beat late, after the destination's crossfade; the open mark is the player's
-   * intent and appears on the press. See shared/railOpenIntent.ts for how a rail decides it,
-   * and use that — a hand-remembered click goes stale on Back, on a refused navigation, and
-   * on arrival by deep link.
+   * intent and appears on the press — which is why the derivation reads the ADDRESS
+   * (shared/railOpenIntent.ts) rather than the committed state.
    */
   expanded?: boolean;
   /**
@@ -142,10 +143,24 @@ export function ApparatusRailTab({
   locked = false,
   trailing,
   onSelect,
-  expanded = false,
+  expanded,
   className,
 }: ApparatusRailTabProps): ReactElement {
   const unavailable = disabled || locked;
+  // The mark is DERIVED, not remembered. It used to default to false, so a tab wore it only if
+  // its call site passed `expanded` — three rails did and four did not, and the ones that did not
+  // are all rails whose tab opens a panel right beside it (Settings, the Play choices, the editor's
+  // workspace collections). Being a rail tab that opens something has to be enough; hunting for the
+  // ones that forgot is not a review anyone should have to do.
+  //
+  // A tab that addresses its panel derives the mark from the ADDRESS, which is the player's intent
+  // and is already ahead of the committed scene (railOpenIntent.ts) — so the mark still lands on the
+  // press rather than a crossfade later. A tab that selects in place has no address to read, so it
+  // falls back to its own selected state. A rail whose panel can be COLLAPSED while its tab stays
+  // active — the main menu, the Enchiridion, the Strategikon — still passes `expanded` itself,
+  // because only it knows the panel shut.
+  const intentPath = useLocationIntentPath();
+  const marksOpen = expanded ?? (to ? isRailTabAddress(intentPath, railTabRoutePath(to)) : active);
   const classes = chromeUnitClassNames(
     'inner-box',
     'settings-tab main-menu-mode-tab',
@@ -153,7 +168,7 @@ export function ApparatusRailTab({
     active && 'is-active',
     disabled && 'is-disabled',
     locked && 'is-locked',
-    expanded && 'is-expanded',
+    marksOpen && 'is-expanded',
   );
   const seat = { ['--tab-index' as string]: index } as CSSProperties;
   const body = (
@@ -171,7 +186,7 @@ export function ApparatusRailTab({
           gains the mark keeps the exact geometry it had without one — no reserved column, no
           relaid label, nothing for the fitter to re-measure. aria-hidden because it restates
           `aria-current`, which already says this to a reader. */}
-      {expanded ? <span className="settings-tab-open-mark" aria-hidden="true">›</span> : null}
+      {marksOpen ? <span className="settings-tab-open-mark" aria-hidden="true">›</span> : null}
       {trailing}
     </>
   );

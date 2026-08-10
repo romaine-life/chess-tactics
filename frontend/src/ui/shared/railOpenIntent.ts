@@ -25,8 +25,15 @@
 import { useSyncExternalStore } from 'react';
 import { normalizeRoutePath, subscribeAppLocation } from '../navigation';
 
-/** The path the player has ASKED for — ahead of the committed scene while one is fading. */
+/**
+ * The path the player has ASKED for — ahead of the committed scene while one is fading.
+ *
+ * Guarded for a missing window because this is also `useSyncExternalStore`'s SERVER snapshot, so
+ * it runs wherever a rail tab is rendered to a string — which every node-environment component
+ * test does.
+ */
 export function readLocationIntentPath(): string {
+  if (typeof window === 'undefined') return '/';
   return normalizeRoutePath(window.location.pathname);
 }
 

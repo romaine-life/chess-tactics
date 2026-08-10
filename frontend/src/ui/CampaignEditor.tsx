@@ -1086,7 +1086,7 @@ export function CampaignEditor({
                 {/* Continue the stone slice past both content libraries and through the
                     workspace collections; the pinned footer is reserved for verbs. */}
                 <UnassignedRailTab
-                  title="Wars"
+                  title="War"
                   itemName="War"
                   count={wars.length}
                   index={railCampaigns.length}

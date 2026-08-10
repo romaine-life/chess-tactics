@@ -23,10 +23,27 @@ describe('rail open mark', () => {
     }
   });
 
-  it('is passed by every rail that expands a panel', () => {
+  it('is passed only by the rails whose panel can be COLLAPSED under an active tab', () => {
     expect(mainMenu).toContain('expanded={openDest !== null && shellDest(tab.href) === openDest}');
     expect(enchiridion).toContain('expanded={openSection === candidate}');
     expect(strategikon).toContain('expanded={openSection === item.section}');
+  });
+
+  it('is DERIVED everywhere else, so a rail cannot be built without one', () => {
+    // It used to default to false, which made the mark a thing each call site had to remember:
+    // three rails passed it and four did not, and all four of those open a panel right beside the
+    // tab (Settings, the Play choices, the editor's workspace collections, the collection rail).
+    // Hunting for the ones that forgot is not a review anyone should have to do, so the tab works
+    // it out — from its own address where it has one, from its selected state where it does not.
+    const railTab = readFileSync(new URL('./shared/ApparatusRailTab.tsx', import.meta.url), 'utf8');
+    expect(railTab).toContain('const marksOpen = expanded ?? (to ? isRailTabAddress(intentPath, railTabRoutePath(to)) : active);');
+    expect(railTab).not.toContain('expanded = false');
+    // The derivation reads the INTENT address, so the mark still lands on the press rather than a
+    // crossfade later — the whole point of ADR-0561.
+    expect(railTab).toContain('const intentPath = useLocationIntentPath();');
+    // And the helper it reads must survive a node render, since that is where component tests run.
+    expect(readFileSync(new URL('./shared/railOpenIntent.ts', import.meta.url), 'utf8'))
+      .toContain("if (typeof window === 'undefined') return '/';");
   });
 
   it('reads the intended address, not the committed one', () => {
