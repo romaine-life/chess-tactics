@@ -11,7 +11,7 @@ refines:
   - "[ADR-0511](0511-held-cards-are-immutable-formations.md)"
 ---
 
-# ADR-0549: Expunctio says which formations this visit admitted
+# ADR-0553: Expunctio says which formations this Sectio admitted
 
 ## Context
 
