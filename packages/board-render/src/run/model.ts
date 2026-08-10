@@ -28,7 +28,7 @@ export {
 };
 
 /** The schema version of one persisted in-progress Run. Only this exact save shape is read. */
-export const CURRENT_RUN_SAVE_VERSION = 37;
+export const CURRENT_RUN_SAVE_VERSION = 38;
 export type RunSaveVersion = typeof CURRENT_RUN_SAVE_VERSION;
 
 export class UnsupportedRunSaveError extends Error {
@@ -58,6 +58,7 @@ const RUN_SAVE_VERSION_AUTHORED_DEAL_SOURCE = 33;
 const RUN_SAVE_VERSION_KING_CHOICE_SOURCE = 34;
 const RUN_SAVE_VERSION_COMMENDATIO_SOURCE = 35;
 const RUN_SAVE_VERSION_DEDITIO_SOURCE = 36;
+const RUN_SAVE_VERSION_RUN_RULES_SOURCE = 37;
 const RUN_SAVE_VERSION_RARITY_BANDS_SOURCE = 32;
 /**
  * How much gold one point of material value is worth (ADR-0547).
@@ -134,6 +135,15 @@ export type RunRules = Readonly<{
    */
   cardSpan: 2 | 4;
   /**
+   * How a card is priced.
+   *
+   * `material` charges a card its material and nothing else, which is what the game has always
+   * done. `density` charges by concentration instead: the same material packed into fewer cells
+   * costs more, because board space is the scarce thing and a Queen on one square is not two
+   * Knights on two.
+   */
+  pricing: 'material' | 'density';
+  /**
    * Whether the player may turn a formation when placing it. With it on, one card covers all four
    * quarter turns and facing is decided at the board; with it off, facing is whatever the card was
    * dealt with. This does not change which cards exist -- only what may be done with one.
@@ -152,14 +162,14 @@ export const RUN_CARD_SPANS: readonly (2 | 4)[] = Object.freeze([2, 4]);
  * pile fills those seats by repeating commons rather than by shrinking. The mode is playable and
  * the repetition is visible; it resolves when the rarity rule moves, which is the open piece.
  */
-export const DEFAULT_RUN_RULES: RunRules = Object.freeze({ cardSpan: 2, mayRotate: true });
+export const DEFAULT_RUN_RULES: RunRules = Object.freeze({ cardSpan: 2, mayRotate: true, pricing: 'material' });
 
 /**
  * What a Run written before rules existed was already playing: the wide catalog, turnable. NOT the
  * new default -- a Run mid-flight was dealt from the wide pool and is holding cards from it, and
  * narrowing its market now would leave it with formations its own market could no longer offer.
  */
-export const LEGACY_RUN_RULES: RunRules = Object.freeze({ cardSpan: 4, mayRotate: true });
+export const LEGACY_RUN_RULES: RunRules = Object.freeze({ cardSpan: 4, mayRotate: true, pricing: 'material' });
 
 /** The longest side of a formation, blind to which way round it was authored. */
 export function formationSpan(formation: readonly RunCardFormationCell[] | undefined): number {
@@ -172,6 +182,25 @@ export function formationSpan(formation: readonly RunCardFormationCell[] | undef
 /** A Run's rules, defaulting a document written before they existed to the game it was playing. */
 export function runRules(run: Pick<RunDocument, 'rules'> | { rules?: RunRules }): RunRules {
   return run.rules ?? LEGACY_RUN_RULES;
+}
+
+/**
+ * What a card costs a Run playing under `rules`, in whole gold.
+ *
+ * The density curve is the studio's, at the game's scale rather than the studio's readable one:
+ * the x10 there existed so prices read as 5 and 155 instead of 0.5 and 15.5, and gold here is
+ * whole (ADR-0547). Same curve, same exponent, one tenth the scale.
+ *
+ * Floored at one, because a card the market gives away is not an offer.
+ */
+export function runCardCost(
+  card: Pick<RunCoreCard, 'value' | 'formation' | 'pieces'>,
+  rules: RunRules,
+): number {
+  if (rules.pricing === 'material') return card.value;
+  const volume = card.formation?.length ?? card.pieces.length ?? 1;
+  const density = volume === 0 ? 0 : card.value / volume;
+  return Math.max(1, Math.round(card.value * (density / 3) ** 0.5));
 }
 
 /** Whether a card may be dealt to a Run playing under `rules`. */
@@ -1333,6 +1362,7 @@ export function createRunCardOffer(
   card: RunCoreCard,
   battleIndex: number,
   slotIndex: number,
+  rules: RunRules = LEGACY_RUN_RULES,
 ): RunCardOffer {
   void run.seed;
   return {
@@ -1340,7 +1370,7 @@ export function createRunCardOffer(
     pieces: [...card.pieces],
     formation: card.formation?.map((cell) => ({ ...cell })),
     offerId: `sectio-${battleIndex}-${slotIndex}-${card.id}`,
-    cost: card.value,
+    cost: runCardCost(card, rules),
   };
 }
 
@@ -1516,7 +1546,7 @@ export function sectioCardOffersAtCursor(
     }
     const card = pile[pileCursor];
     if (!card) throw new Error(`Sectio pile has no card at cursor ${absoluteIndex}.`);
-    return createRunCardOffer({ seed }, card, battleIndex, absoluteIndex);
+    return createRunCardOffer({ seed }, card, battleIndex, absoluteIndex, rules);
   });
 }
 
@@ -1737,7 +1767,12 @@ function repairRunCardOffers(value: unknown): RunCardOffer[] {
       pieces: [...core.pieces],
       formation: core.formation?.map((cell) => ({ ...cell })),
       offerId: offer.offerId,
-      cost: core.value,
+      // Keep the price the offer was DEALT at. A repair reconstructs a row the Run has already
+      // been quoted, and re-deriving the cost here would silently re-price a live market -- which
+      // was invisible while every Run priced by material and every re-derivation agreed.
+      cost: typeof offer.cost === 'number' && Number.isFinite(offer.cost) && offer.cost >= 0
+        ? offer.cost
+        : core.value,
     }];
   });
 }
@@ -3003,6 +3038,9 @@ export function migrateRunSaveDocument(value: unknown): RunDocument {
   if (stored.runSaveVersion === RUN_SAVE_VERSION_DEDITIO_SOURCE) {
     stored = migrateRunToRunRules(stored);
   }
+  if (stored.runSaveVersion === RUN_SAVE_VERSION_RUN_RULES_SOURCE) {
+    stored = migrateRunToCardPricing(stored);
+  }
   return normalizeRunDocument(stored as unknown as RunDocument);
 }
 
@@ -3050,7 +3088,22 @@ function migrateRunToCommendatio(stored: Record<string, unknown>): Record<string
  * leave it holding formations its own market can no longer offer.
  */
 function migrateRunToRunRules(stored: Record<string, unknown>): Record<string, unknown> {
-  return { ...stored, runSaveVersion: CURRENT_RUN_SAVE_VERSION, rules: { ...LEGACY_RUN_RULES } };
+  return { ...stored, runSaveVersion: RUN_SAVE_VERSION_RUN_RULES_SOURCE, rules: { ...LEGACY_RUN_RULES } };
+}
+
+/**
+ * Pricing joins the Run's rules. Every Run written before it was paying material, and its offers
+ * were priced that way when they were dealt -- so it keeps material, not the new option.
+ */
+function migrateRunToCardPricing(stored: Record<string, unknown>): Record<string, unknown> {
+  const rules = stored.rules && typeof stored.rules === 'object' && !Array.isArray(stored.rules)
+    ? stored.rules as Record<string, unknown>
+    : { ...LEGACY_RUN_RULES };
+  return {
+    ...stored,
+    runSaveVersion: CURRENT_RUN_SAVE_VERSION,
+    rules: { ...rules, pricing: 'material' },
+  };
 }
 
 function migrateRunToDeditio(stored: Record<string, unknown>): Record<string, unknown> {
