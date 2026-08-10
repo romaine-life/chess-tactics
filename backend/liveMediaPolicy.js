@@ -827,6 +827,90 @@ function titleBarMarkMediaIssue(row, projectedRuntime = null) {
  * It gets its own component name rather than borrowing the title bar's, because the two seats are
  * different sizes and a mark accepted for one must not silently satisfy the other.
  */
+/**
+ * Run preparation's rail-tab marks: the glyphs the Current Run and Start New Run tabs wear
+ * (ADR-0558 made those tabs the shared ApparatusRailTab, and a rail tab carries a mark).
+ *
+ * Their contract is the OPPOSITE of a title-bar mark's, which is why they cannot borrow that
+ * validator. A title-bar mark is drawn into a square seat with `contain`, so it must be trimmed
+ * to its own ink or it silently draws small. A rail mark is drawn on the kit's fixed 64x64 icon
+ * canvas at a 40px slot, where the reserved transparent margin IS the optical centring
+ * (ADR-0026) — trimming one would make it draw LARGER than the kit icons beside it. So this
+ * requires the canonical canvas and a stated ink box strictly inside it, rather than filling it.
+ */
+const RUN_RAIL_MARK_COMPONENT = 'run-rail-mark';
+const RUN_RAIL_MARK_CANVAS = 64;
+/**
+ * The band the drawn glyph must land in. The kit's own authored marks fill 62-84% of the 64px
+ * canvas; a generated mark commonly comes back nearer the edge, and that is fine — the seat
+ * compensates with a stated ink fraction (see .settings-tab's --settings-tab-icon-bleed-size).
+ * What the band exists to reject is the two failures the seat CANNOT compensate: a glyph that
+ * fills the canvas edge to edge, which then collides with the tab frame, and one so small it
+ * reads as a different size class from its neighbours.
+ */
+const RUN_RAIL_MARK_INK_MIN = 0.62;
+const RUN_RAIL_MARK_INK_MAX = 0.95;
+const RUN_RAIL_MARK_SLOTS = new Map([
+  ['ui/kit/icons/run/current.png', 'current'],
+  ['ui/kit/icons/run/new.png', 'new'],
+]);
+
+function runRailMarkSlot(slot) {
+  return RUN_RAIL_MARK_SLOTS.get(String(slot || '')) ?? null;
+}
+
+function runRailMarkReviewSurface(url, slot) {
+  return Boolean(runRailMarkSlot(slot))
+    && url instanceof URL
+    && url.pathname === '/studio'
+    && url.searchParams.get('cat') === 'runrailmarks';
+}
+
+function runRailMarkMediaIssue(row, projectedRuntime = null) {
+  const variant = runRailMarkSlot(row.slot);
+  if (!variant) return 'Run rail marks require a registered semantic slot';
+  if (row.domain !== 'ui-kit') return 'Run rail marks require the ui-kit domain';
+  if (row.media_type !== 'image/png') return 'Run rail marks require image/png';
+  if (Number(row.width) !== RUN_RAIL_MARK_CANVAS || Number(row.height) !== RUN_RAIL_MARK_CANVAS) {
+    return `Run rail marks require the canonical ${RUN_RAIL_MARK_CANVAS}x${RUN_RAIL_MARK_CANVAS} kit icon canvas`;
+  }
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime)) return 'Run rail marks require metadata.runtime';
+  const allowed = new Set(['component', 'variant', 'altText', 'nativeRole']);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `Run rail mark runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== RUN_RAIL_MARK_COMPONENT) {
+    return `Run rail mark metadata.runtime.component must be ${RUN_RAIL_MARK_COMPONENT}`;
+  }
+  if (runtime.nativeRole !== RUN_RAIL_MARK_COMPONENT) {
+    return `Run rail mark metadata.runtime.nativeRole must be ${RUN_RAIL_MARK_COMPONENT}`;
+  }
+  if (runtime.variant !== variant) {
+    return `Run rail mark metadata.runtime.variant must be ${variant} for ${row.slot}`;
+  }
+  // The tab's label owns the accessible name, so the mark states none.
+  if (runtime.altText !== '') {
+    return 'Run rail mark metadata.runtime.altText must be empty because the tab label owns its accessible name';
+  }
+  // Margin is a claim about the BYTES, stated where the row's other byte claims live.
+  const native = isObjectRecord(row.native_evidence) ? row.native_evidence : {};
+  const inkBox = isObjectRecord(native.inkBox) ? native.inkBox : null;
+  if (!inkBox) return 'Run rail marks must state nativeEvidence.inkBox, the measured ink box of these bytes';
+  const longest = Math.max(Number(inkBox.width), Number(inkBox.height));
+  if (!Number.isFinite(longest) || longest <= 0) return 'Run rail mark nativeEvidence.inkBox is not a measured box';
+  const fraction = longest / RUN_RAIL_MARK_CANVAS;
+  if (fraction > RUN_RAIL_MARK_INK_MAX) {
+    return 'Run rail marks must reserve canvas margin: ink fills more than 95% of the canvas';
+  }
+  if (fraction < RUN_RAIL_MARK_INK_MIN) {
+    return 'Run rail marks must carry the kit optical mass: ink fills less than 62% of the canvas';
+  }
+  return null;
+}
+
 const ADLECTIO_MARK_COMPONENT = 'adlectio-mark';
 const ADLECTIO_MARK_SLOT = 'ui/run/sectio/adlectio-mark.png';
 
@@ -2097,6 +2181,9 @@ module.exports = {
   levelEditorBrushIconOwnerProofIssue,
   levelEditorBrushIconSlot,
   nativeMediaEvidenceIssue,
+  runRailMarkMediaIssue,
+  runRailMarkSlot,
+  runRailMarkReviewSurface,
   predrawnBoardAlignmentIssue,
   predrawnBoardMediaIssue,
   predrawnBoardOwnerProofIssue,

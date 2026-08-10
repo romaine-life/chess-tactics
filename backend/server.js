@@ -77,6 +77,8 @@ const {
   levelEditorBrushIconOwnerProofIssue,
   levelEditorBrushIconSlot,
   nativeMediaEvidenceIssue,
+  runRailMarkMediaIssue,
+  runRailMarkSlot,
   predrawnBoardMediaIssue,
   predrawnBoardOwnerProofIssue,
   predrawnBoardSlotSlug,
@@ -19644,6 +19646,9 @@ function mediaDomainProjectionIssue(row) {
   }
   if (titleBarMarkSlot(row.slot)) {
     return titleBarMarkMediaIssue(row, runtime.value);
+  }
+  if (runRailMarkSlot(row.slot)) {
+    return runRailMarkMediaIssue(row, runtime.value);
   }
   if (adlectioMarkSlot(row.slot)) {
     return adlectioMarkMediaIssue(row, runtime.value);

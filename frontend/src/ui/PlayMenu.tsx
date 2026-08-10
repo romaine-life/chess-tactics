@@ -13,7 +13,6 @@ import { spawnEventsForLevel } from '../core/levelEvents';
 import { MODE_NAME } from '../core/objectives';
 import { navigateApp } from './navigation';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
-import { RUN_PROGRESS_MEDIA_ROLE } from './shared/RunProgressIcon';
 import { KitScroll } from './KitScroll';
 import { levelObjectiveLine } from './LevelInfoCompact';
 import { LevelPreviewColumn } from './LevelPreviewColumn';
@@ -233,13 +232,13 @@ function RunPanel({
   const [ataraxiaTier, setAtaraxiaTier] = useState<AtaraxiaTier>(0);
   const [runRules, setRunRules] = useState<RunRules>(DEFAULT_RUN_RULES);
   const eligible = useMemo(() => runEligibleOfficialWars(wars), [wars]);
-  // Each destination wears the Run's own installed mark rather than a symbol minted for the
-  // menu: Current Run resumes into a Battle, and Start New Run's whole content is the Ataraxia
-  // choice — the same emblem the title bar and the Enchiridion's Ataraxia tab already carry
-  // (ADR-0059, ADR-0363). Both are authored edge-to-edge for the title bar's tight measure
-  // seat, so they take the rail's `bleed` canvas like Enchiridion's does.
-  const battleMark = installedUiMedia(RUN_PROGRESS_MEDIA_ROLE.battle);
-  const ataraxiaMark = installedUiMedia(RUN_PROGRESS_MEDIA_ROLE.ataraxia);
+  // Each destination wears its OWN installed mark, authored for this seat and reviewed on this
+  // tab (ADR-0559). They borrowed the title bar's Battle and Ataraxia marks first, which read as
+  // arbitrary: those are minted for the bar's tight measure chip, warm where the kit is not, and
+  // authored edge-to-edge so they needed the `bleed` canvas. These are kit-canvas marks, so they
+  // take the same `inset` seat every other rail mark uses.
+  const currentRunMark = installedUiMedia('ui-kit-icons-run-current-png');
+  const newRunMark = installedUiMedia('ui-kit-icons-run-new-png');
   const highestUnlockedTier = highestUnlockedAtaraxiaTier(progression);
   // An adoption conflict does not gate a new Run: starting one discards both candidates, so it
   // is a third answer to "which Run does the account keep?" rather than something blocked by the
@@ -329,8 +328,7 @@ function RunPanel({
             index={PLAY_CHOICE_ROW_SEATS.current}
             active={choice === 'current'}
             disabled={!presentedRun}
-            iconSrc={battleMark}
-            markCanvas="bleed"
+            iconSrc={currentRunMark}
             testId="run-choice-current"
           />
         ) : null}
@@ -356,8 +354,7 @@ function RunPanel({
           index={PLAY_CHOICE_ROW_SEATS.new}
           active={choice === 'new'}
           disabled={newRunUnavailable}
-          iconSrc={ataraxiaMark}
-          markCanvas="bleed"
+          iconSrc={newRunMark}
           testId="run-choice-new"
         />
         {presentation.persistenceError ? <p className="play-content-warning" role="status">{presentation.persistenceError}</p> : null}

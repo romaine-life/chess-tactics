@@ -4,7 +4,7 @@ date: 2026-08-10
 deciders: owner (Nelson) + Claude
 refines:
   - "[ADR-0059](0059-reuse-the-canonical-primitive-not-a-bespoke-parallel.md)"
-  - "[ADR-0231](0231-strategikon-and-enchiridion-share-the-menu-language.md)"
+  - "[ADR-0231](0231-strategikon-and-enchiridion-share-one-reference-workspace-language.md)"
   - "[ADR-0556](0556-run-preparation-chooses-in-a-tab-column-of-one-line-rows.md)"
 ---
 
