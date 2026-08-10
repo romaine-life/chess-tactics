@@ -9,7 +9,20 @@ export interface StrategikonNavigationItem {
   label: string;
   title: string;
   iconSrc: string;
+  iconClassName?: string;
 }
+
+/**
+ * The card mark is the only mark in the game's rails that is a PAINTING rather than
+ * native pixel art: it is the player's 1060x1484 card back, drawn at a ~22px seat.
+ *
+ * Every mark beside it is a 64px sprite that `image-rendering: pixelated` protects —
+ * smoothing those would blur pixels an artist placed. Point-sampling this one keeps
+ * roughly one source pixel in 2300 and returns speckle rather than a card, so it asks
+ * the compositor to filter instead. Every seat it occupies wears this class, so the
+ * two treatments cannot drift apart on one surface and not another (ADR-0059).
+ */
+export const STRATEGIKON_CARD_MARK_CLASS = 'strategikon-card-mark';
 
 /**
  * The mark for held cards is the back of the card itself.
@@ -50,6 +63,7 @@ export function strategikonNavigationItems(cardsIconSrc: string): readonly Strat
       label: STRATEGIKON_SECTION_LABEL.chartulary,
       title: 'The Chartulary — Held Cards',
       iconSrc: cardsIconSrc,
+      iconClassName: STRATEGIKON_CARD_MARK_CLASS,
     },
     {
       section: 'lipsanotheca',

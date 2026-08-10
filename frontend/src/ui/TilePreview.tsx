@@ -37,8 +37,10 @@ import { TileSidesViewer } from './TileSidesViewer';
 import { TILE_SIDE_ITEMS, type TileSideItem } from './tileSideCatalog';
 import { ScrollbarLibraryStudio, ScrollbarViewer } from './ScrollbarLibraryStudio';
 import { PagesLibraryStudio, PagesViewer } from './PagesLibraryStudio';
+import { AdlectioMarkInstallControl, AdlectioMarkReviewCatalog, useAdlectioMarkCatalog } from './RunAdlectioMarkReview';
 import { ScreenArtCatalog, ScreenArtViewer, useScreenArtCatalog } from './ScreenArtReviewStudio';
 import { LipsanonMatCatalog, LipsanonMatViewer, useLipsanonMatCatalog } from './LipsanonMatReview';
+import { AthetizeMarkCatalog, AthetizeMarkControls, useAthetizeMark } from './AthetizeMarkCatalog';
 import { ChromeLabCatalog, ChromeLabViewer, CHROME_LAB_TARGETS, defaultChromeLabTargetId } from './ChromeLab';
 import { RailLab } from './RailLab';
 import { GameLabCatalog, GameLabViewer } from './GameLab';
@@ -133,7 +135,7 @@ type StudioMode = 'catalog' | 'viewer';
 
 // The catalog's kinds-of-thing. Category governs only what the Catalog shows; it
 // does not decide which destination tab you can reach.
-type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'sourceart' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'deployment' | 'gym' | 'solver' | 'cardlayout' | 'cardsize' | 'carddivider' | 'cardicons' | 'cardfit' | 'cardoutline' | 'cardprompts' | 'cardpool' | 'screenart' | 'lipsanonmat';
+type StudioCategory = 'tiles' | 'tilesides' | 'units' | 'doodads' | 'props' | 'sourceart' | 'groundcover' | 'walldecor' | 'wallart' | 'tilecompare' | 'surfacetiles' | 'sceneanim' | 'animscenes' | 'assets' | 'artwork' | 'portraits' | 'glossary' | 'surfaces' | 'fences' | 'walls' | 'scrollbars' | 'sliders' | 'pages' | 'chromelab' | 'sfx' | 'gamelab' | 'deployment' | 'gym' | 'solver' | 'cardlayout' | 'cardsize' | 'carddivider' | 'cardicons' | 'cardfit' | 'cardpool' | 'cardoutline' | 'cardprompts' | 'screenart' | 'lipsanonmat' | 'actionmarks' | 'adlectiomark';
 
 // Every prop KIND present in the catalog, in definition order — DERIVED from PROP_DEFS so a new
 // kind (e.g. 'rock') is a filter facet automatically. Hardcoding ['tree','house'] here silently
@@ -277,7 +279,7 @@ const studioFamilyById = (familyId: StudioFamilyId): StudioFamily =>
 const isStudioFamilyId = (value: string | null): value is StudioFamilyId => Boolean(value && studioFamilies.some((family) => family.id === value));
 
 const isStudioMode = (value: string | null): value is StudioMode => value === 'catalog' || value === 'viewer';
-const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'sourceart' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'chromelab' || value === 'sfx' || value === 'gamelab' || value === 'deployment' || value === 'gym' || value === 'solver' || value === 'cardlayout' || value === 'cardsize' || value === 'carddivider' || value === 'cardicons' || value === 'cardfit' || value === 'cardoutline' || value === 'cardprompts' || value === 'cardpool' || value === 'screenart' || value === 'lipsanonmat';
+const isStudioCategory = (value: string | null): value is StudioCategory => value === 'tiles' || value === 'tilesides' || value === 'units' || value === 'doodads' || value === 'props' || value === 'sourceart' || value === 'groundcover' || value === 'walldecor' || value === 'wallart' || value === 'tilecompare' || value === 'surfacetiles' || value === 'sceneanim' || value === 'animscenes' || value === 'assets' || value === 'artwork' || value === 'portraits' || value === 'glossary' || value === 'surfaces' || value === 'fences' || value === 'walls' || value === 'scrollbars' || value === 'sliders' || value === 'pages' || value === 'chromelab' || value === 'sfx' || value === 'gamelab' || value === 'deployment' || value === 'gym' || value === 'solver' || value === 'cardlayout' || value === 'cardsize' || value === 'carddivider' || value === 'cardicons' || value === 'cardfit' || value === 'cardpool' || value === 'cardoutline' || value === 'cardprompts' || value === 'screenart' || value === 'lipsanonmat' || value === 'actionmarks' || value === 'adlectiomark';
 const isLabMode = (value: string | null): value is LabMode => value === 'board' || value === 'tile' || value === 'unit' || value === 'doodad';
 
 const isTileFilter = (value: string | null): value is TileFilter => value === 'base' || value === 'transitions' || value === 'references' || value === 'board';
@@ -622,6 +624,9 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
   const [selectedLipsanonMatId, setSelectedLipsanonMatId] = useState(initialRoute.selectedLipsanonMatId ?? '');
   const [lipsanonMatSearch, setLipsanonMatSearch] = useState('');
   const lipsanonMat = useLipsanonMatCatalog();
+  const athetizeMark = useAthetizeMark();
+  const adlectioMark = useAdlectioMarkCatalog();
+  const [selectedAdlectioMarkId, setSelectedAdlectioMarkId] = useState('');
   const [surfaceSearch, setSurfaceSearch] = useState('');
   const [scrollbarSearch, setScrollbarSearch] = useState('');
   const [selectedScrollbarName, setSelectedScrollbarName] = useState<string | undefined>(undefined);
@@ -1792,6 +1797,11 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
       ),
     },
     {
+      id: 'actionmarks', label: 'Action Marks', hint: 'The mark a Run card action wears on the control that performs it. Every candidate is mounted in the real Expunctio button, offered and refused; Install binds the selected one.',
+      main: <AthetizeMarkCatalog state={athetizeMark} />,
+      controls: <AthetizeMarkControls state={athetizeMark} />,
+    },
+    {
       id: 'lipsanonmat', label: 'Lipsanon Mat', hint: 'Candidate surfaces for the lipsanon offers to sit on, mounted over the chosen backdrop with live lipsanon cards. Review only — nothing here is installed.',
       main: (
         <LipsanonMatCatalog
@@ -1817,6 +1827,28 @@ export function TilesetStudio({ initialCategory = 'tiles' }: { initialCategory?:
             <input type="range" min="0.75" max="2" step="0.05" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} />
           </label>
           <button type="button" className="tileset-view-action" onClick={() => openViewer('lipsanonmat')}>View Selected</button>
+        </>
+      ),
+    },
+    {
+      id: 'adlectiomark', label: 'Adlectio Mark', hint: 'Every candidate for the mark Expunctio prints beside a formation this Sectio visit admitted, mounted in that exact line. Install picks one.',
+      main: (
+        <AdlectioMarkReviewCatalog
+          items={adlectioMark.items}
+          loading={adlectioMark.loading}
+          error={adlectioMark.error}
+          selected={selectedAdlectioMarkId}
+          onSelect={setSelectedAdlectioMarkId}
+        />
+      ),
+      controls: (
+        <>
+          <AdlectioMarkInstallControl
+            candidate={adlectioMark.items.find((item) => item.id === selectedAdlectioMarkId) ?? null}
+            catalog={adlectioMark.catalog}
+            onInstalled={adlectioMark.refresh}
+          />
+          <button type="button" className="tileset-view-action" onClick={adlectioMark.refresh}>Reload candidates</button>
         </>
       ),
     },

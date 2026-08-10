@@ -3719,11 +3719,33 @@ function openPostBattleSectio(run: RunDocument, victoryGoldTenths: number): RunD
   };
 }
 
+/**
+ * How many cards one Sectio admits. A visit is a CHOICE between the faces it dealt, not a
+ * shopping list drawn against whatever gold the Run happens to be carrying: an army that can
+ * buy the whole row outgrows its War in a Sectio or two, and every Battle after that is priced
+ * for someone else. One is also what the visit's other two transactions already allow --
+ * Expunctio strikes one card, the After-Hours Key sells one lipsanon -- so the card row stops
+ * being the surface that behaves differently.
+ *
+ * Reset Sectio restores the whole visit, which is what keeps the single admission a decision
+ * rather than a misclick.
+ */
+export const SECTIO_ADLECTIO_LIMIT = 1;
+
+/**
+ * Whether this Sectio's admission has been spent. The unbought offers stay on the table and
+ * stay readable; they simply cannot be taken until Reset returns the visit to its entry.
+ */
+export function sectioAdlectioSpent(run: RunDocument): boolean {
+  return (run.sectio?.adlectedCardOfferIds.length ?? 0) >= SECTIO_ADLECTIO_LIMIT;
+}
+
 export function performAdlectio(run: RunDocument, offerId: string): RunDocument {
   const offer = run.sectio?.cardOffers.find((candidate) => candidate.offerId === offerId);
   if (
     run.phase !== 'sectio'
     || !run.sectio
+    || sectioAdlectioSpent(run)
     || run.sectio.adlectedCardOfferIds.includes(offerId)
     || !offer
   ) return run;
@@ -3819,6 +3841,32 @@ export function resetSectio(run: RunDocument): RunDocument {
       expunctedCard: null,
     },
   });
+}
+
+/**
+ * The cards THIS Sectio visit admitted: held (or already struck) now, absent from the snapshot the
+ * visit was entered with. Reset Sectio takes back exactly these, so a surface that lists held cards
+ * can say which ones the visit is still holding provisionally instead of leaving the player to
+ * remember what was just bought. The struck card is included because it too was admitted this
+ * visit — Expunctio shows that record alongside the cards still held.
+ *
+ * The entry snapshot is the authority rather than `acquiredAfterBattleIndex`, which numbers the
+ * Sectio a card came from and cannot separate this visit's Adlectiones from what the visit opened
+ * holding once a Run is crafted or migrated. An absent snapshot yields nothing: no Run holds zero
+ * cards, so an empty one means the visit has no record to compare against, not that everything is
+ * new.
+ */
+export function sectioAdmittedCardIds(run: RunDocument): ReadonlySet<string> {
+  if (run.phase !== 'sectio' || !run.sectio) return new Set();
+  const entryCards = run.sectio.entrySnapshot?.cards ?? [];
+  if (entryCards.length === 0) return new Set();
+  const entryCardIds = new Set(entryCards.map((card) => card.id));
+  const struck = run.sectio.expunctedCard ? [run.sectio.expunctedCard.card] : [];
+  return new Set(
+    [...run.cards, ...struck]
+      .filter((card) => !entryCardIds.has(card.id))
+      .map((card) => card.id),
+  );
 }
 
 export function sectioHasChanges(run: RunDocument): boolean {

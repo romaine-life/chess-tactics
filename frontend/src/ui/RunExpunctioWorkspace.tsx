@@ -2,21 +2,23 @@ import type { CSSProperties, ReactElement } from 'react';
 import {
   cardExpunctioPriceTenths,
   runCardDefinition,
+  sectioAdmittedCardIds,
   type RunArmyUnit,
   type RunCardDefinition,
   type RunDocument,
   type RunOwnedCard,
 } from '../run/model';
-import { runCardName } from '../run/cardNames';
 import { KitScroll } from './KitScroll';
 import { RunCard } from './RunCard';
 import { runCardFrameSlot } from './runCardFaceContent';
 import { runCardFrameGeometryForSlot, runCardFramePaintInsetRatios } from './runCardFrameGeometry';
 import { emptyRunCardPieceIndices, projectRunCardUnitSeats } from './runCardUnitProjection';
+import { RunAdlectioMarkLine } from './RunAdlectioMark';
 import { RunGoldTransactionAmount } from './RunResources';
 import { RunSceneViewport } from './RunWorkspace';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { ChromeButton } from './shared/ChromeButton';
+import { RunActionIcon } from './shared/RunActionIcon';
 import { InnerChromeBox } from './shared/ChromeBox';
 import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
 
@@ -27,6 +29,8 @@ type ExpunctioRow = Readonly<{
   emptyPieceIndices: readonly number[];
   priceTenths: number | null;
   status: 'available' | 'unavailable' | 'unaffordable' | 'spent' | 'expuncted';
+  /** Admitted by this visit's Adlectio rather than carried into it. */
+  admittedThisVisit: boolean;
 }>;
 
 function cardUnitProjection(
@@ -48,6 +52,7 @@ function cardUnitProjection(
 
 function expunctioRows(run: RunDocument): ExpunctioRow[] {
   const spent = run.sectio?.expunctedCard ?? null;
+  const admitted = sectioAdmittedCardIds(run);
   const current = run.cards.flatMap((card): ExpunctioRow[] => {
     const definition = runCardDefinition(card.coreId);
     if (!definition) return [];
@@ -61,7 +66,14 @@ function expunctioRows(run: RunDocument): ExpunctioRow[] {
         : priceTenths === null || run.goldTenths < priceTenths
           ? 'unaffordable'
           : 'available';
-    return [{ card, definition, ...projection, priceTenths, status }];
+    return [{
+      card,
+      definition,
+      ...projection,
+      priceTenths,
+      status,
+      admittedThisVisit: admitted.has(card.id),
+    }];
   });
   if (!spent) return current;
   const definition = runCardDefinition(spent.card.coreId);
@@ -72,6 +84,7 @@ function expunctioRows(run: RunDocument): ExpunctioRow[] {
         ...cardUnitProjection(spent.card, definition, spent.units),
         priceTenths: spent.priceTenths,
         status: 'expuncted',
+        admittedThisVisit: admitted.has(spent.card.id),
       }, ...current]
     : current;
 }
@@ -81,13 +94,8 @@ function actionLabel(status: ExpunctioRow['status']): string {
   if (status === 'expuncted') return 'Athetized this visit';
   if (status === 'spent') return 'Already used';
   if (status === 'unaffordable') return 'Insufficient gold';
-  return 'Unavailable';
-}
-
-function formationStatusLabel(status: ExpunctioRow['status'], units: readonly RunArmyUnit[]): string {
-  if (status === 'expuncted') return 'Formation removed';
-  if (status === 'unavailable') return 'Permanently retained';
-  return `${units.length} attached unit${units.length === 1 ? '' : 's'}`;
+  // The only unremovable card is the King's own starter, so the refusal names the reason.
+  return 'You cannot sell the king';
 }
 
 function ExpunctioCardTile({
@@ -99,11 +107,11 @@ function ExpunctioCardTile({
   index: number;
   onExpunct: (cardId: string) => void;
 }): ReactElement {
-  const { card, definition, units, emptyPieceIndices, priceTenths, status } = row;
+  const { card, definition, emptyPieceIndices, priceTenths, status, admittedThisVisit } = row;
   const paintInsets = runCardFramePaintInsetRatios(runCardFrameGeometryForSlot(runCardFrameSlot(definition)));
   return (
     <InnerChromeBox
-      className={`run-expunctio-row is-${status}`}
+      className={`run-expunctio-row is-${status}${admittedThisVisit ? ' is-admitted-this-visit' : ''}`}
       fillRole="outer"
       style={{
         ['--run-operation-row-index' as string]: index,
@@ -119,12 +127,21 @@ function ExpunctioCardTile({
         />
       </span>
       <span className="run-expunctio-companion">
+        {/*
+          The only thing the companion says in words is what THIS visit did to the record, because
+          everything else it used to say was already on the tile: the face prints the card's name,
+          the workspace's own rules copy states that Athetize takes the complete formation, and the
+          action states the state it is in. Which formations the visit admitted is the one fact
+          nothing else carries — Reset Sectio takes exactly those back, so the choice between
+          striking one and resetting the visit is illegible until the gallery says so.
+        */}
         <span className="run-expunctio-copy">
-          <small>{formationStatusLabel(status, units)}</small>
-          <strong>{runCardName(definition)}</strong>
-          <span>{status === 'expuncted'
-            ? 'The card and all of its units left together.'
-            : 'Athetize removes this card and every attached unit as one formation.'}</span>
+          {/*
+            The admission itself, and nothing about the price: the fee below this line already says
+            what the card cost, so a coin here would only repeat it. The mark's own candidates are
+            auditioned in the Studio's Adlectio Mark category, in this same line.
+          */}
+          {admittedThisVisit ? <RunAdlectioMarkLine /> : null}
         </span>
         <span className="run-expunctio-price">
           <small>{status === 'expuncted' ? 'Paid' : 'Expunctio fee'}</small>
@@ -144,7 +161,8 @@ function ExpunctioCardTile({
           disabled={status !== 'available'}
           onClick={() => onExpunct(card.id)}
         >
-          {actionLabel(status)}
+          <RunActionIcon variant="athetize" />
+          <span>{actionLabel(status)}</span>
         </ChromeButton>
       </span>
     </InnerChromeBox>

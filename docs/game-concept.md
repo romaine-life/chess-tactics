@@ -119,9 +119,12 @@ these.
   long sample. The Sectios following Battles 1 and 2 draw from a pile capped at six gold;
   the cap holds prices down without emptying a tier.
 - A Sectio reveals three seeded formation-card offers, or four while
-  Quartermaster's Ledger is held. Each offer costs exactly its printed material
-  value. Adlectio adds the card and its units without rolling, assigning, or
-  revealing another property. The Run persists only its cursor through the hidden
+  Quartermaster's Ledger is held, and **admits exactly one of them** (ADR-0551).
+  Each offer costs exactly its printed material value. Adlectio adds the card and
+  its units without rolling, assigning, or revealing another property, and the
+  second admission is refused however much gold remains — the unbought offers stay
+  face up and stop being takeable until Reset Sectio returns the admission to the
+  visit. The Run persists only its cursor through the hidden
   pile; its seed reproduces membership and order across reload. The revealed backs
   in consumed offer seats still provide no replacement draw during that Sectio.
 - Run difficulty currently exposes only **Ataraxia 0 — The Untroubled Mind**,
@@ -167,11 +170,15 @@ these.
   standard value (ADR-0220).
 - Sectio visits separate Adlectio, upcoming-Battle reconnaissance, detailed army
   inspection, and card-aware **Expunctio** into explicit main-pane destinations.
-  **View Battle** shows the next canonical Level in a
+  **Exploratio** shows the next canonical Level in a
   pannable read-only board beside its rules, zones, time control, and forces.
   Fixed opponents appear on the map; known setup-event rosters appear in the
-  ledger without resolving their exact squares, and the persistent Run army
-  still waits for Deployment. The persistent Controls panel navigates these
+  ledger without resolving their exact squares. Its **Shuffle** deals the held
+  collection onto the deployment band and seats it at random, by Deployment's own
+  admission and placement rules, so the band can be judged against the army that
+  will stand on it; that arrangement is one possibility rather than the hand the
+  Run will deal, re-seats on every press, and is never written to the Run — the
+  actual deal still waits for Deployment (ADR-0549). The persistent Controls panel navigates these
   destinations, resets the complete same-offer Sectio visit, and continues the
   Run; Army inspection remains available in every Run phase without pausing an
   active Battle. A held card is one formation: Sectio never sells, condenses, or rearranges an
@@ -427,9 +434,10 @@ cursed terrain and pieces; named-tactic surfacing; a competent search-based AI.
 Player armies and Run progression are governed by ADR-0193. ADR-0321 retired the
 separate draft phase in favor of Sectio, while ADR-0494 now removes that opening
 Sectio so Battle 1 introduces the Run before its card economy. ADR-0322's two-Pawn,
-8-gold starter remains. ADR-0323 removes the inherited one-card-per-Sectio cap so
-every affordable dealt card can undergo Adlectio once, and ADR-0393 names that
-optional card admission **Adlectio** in every post-Battle Sectio.
+8-gold starter remains. ADR-0393 names the optional card admission **Adlectio** in
+every post-Battle Sectio, and ADR-0551 holds each Sectio to exactly one of them —
+reversing ADR-0323's uncapped purchasing, whose acquisition rate was governed only
+by gold and outran the difficulty curve its Wars are authored against.
 
 ## 14. Administrator playtesting
 

@@ -7,7 +7,7 @@ import { boardPalettes, LevelInfoCompact, levelBattleDealLine } from './LevelInf
 import type { Level } from '../core/level';
 import { InnerChromeBox } from './shared/ChromeBox';
 import { PieceTypeIcon } from './shared/PieceTypeIcon';
-import { useStrategikonCardsIcon } from './strategikonNavigation';
+import { STRATEGIKON_CARD_MARK_CLASS, useStrategikonCardsIcon } from './strategikonNavigation';
 import { PaintedSurfaceBoundary } from './shell/PaintedSurfaceBoundary';
 
 export function LevelPreviewColumn({
@@ -73,7 +73,7 @@ export function LevelPreviewColumn({
           <InnerChromeBox className="ce-force-readout-box" fillRole="outer">
             <div className="ce-force-readout" aria-label="Level forces">
               {dealLine !== null ? (
-                <span className="ce-force ce-force-cards"><img className="ce-force-card" src={cardsIconSrc} alt="" draggable={false} />Cards <strong>{dealLine}</strong></span>
+                <span className="ce-force ce-force-cards"><img className={`ce-force-card ${STRATEGIKON_CARD_MARK_CLASS}`} src={cardsIconSrc} alt="" draggable={false} />Cards <strong>{dealLine}</strong></span>
               ) : (
                 <span className="ce-force ce-force-ally"><PieceTypeIcon type="rook" palette={palettes.player} className="ce-force-unit" />Allies <strong>{allyCount}</strong></span>
               )}

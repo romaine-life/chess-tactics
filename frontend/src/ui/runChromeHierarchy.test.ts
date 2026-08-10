@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest';
 const runScreen = readFileSync(new URL('./RunScreen.tsx', import.meta.url), 'utf8');
 const runArmyWorkspace = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url), 'utf8');
 const runExpunctioWorkspace = readFileSync(new URL('./RunExpunctioWorkspace.tsx', import.meta.url), 'utf8');
+const runAdlectioMark = readFileSync(new URL('./RunAdlectioMark.tsx', import.meta.url), 'utf8');
+const tilePreview = readFileSync(new URL('./TilePreview.tsx', import.meta.url), 'utf8');
 const runTitleBarChips = readFileSync(new URL('./RunTitleBarChips.tsx', import.meta.url), 'utf8');
 const titleBarControls = readFileSync(new URL('./shell/TitleBarControls.tsx', import.meta.url), 'utf8');
 const app = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8');
@@ -278,7 +280,41 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain('<RunCardPile');
     expect(runCardPile).toContain('<RunCardBack');
     expect(runScreen).toContain('admitted by Adlectio and added to the Chartulary.');
-    expect(runScreen).toContain('All offered cards are in the Chartulary.');
+    // A Sectio admits one card. The count stands over the row for the whole visit and a padlock
+    // is laid on each survivor when the admission is spent; the two together are the whole
+    // statement, so nothing pops up to announce it.
+    expect(runScreen).toContain('They require compensation. Only one may be admitted.');
+    expect(runScreen).toContain('locked={adlectioSpent}');
+    expect(runScreen).toContain('disabled={adlectioSpent || run.goldTenths < offer.cost * GOLD_SCALE}');
+    // The kit's own lock, not a mark drawn for this row -- and through the same installed
+    // `app-ui` role every other mark on this screen resolves, not a second door to it.
+    expect(runScreen).toContain("const RUN_SECTIO_LOCK_ICON_ROLE = 'ui-kit-icons-lock-png';");
+    expect(runScreen).toContain('installedUiMedia(RUN_SECTIO_LOCK_ICON_ROLE)');
+    expect(runCardPile).toContain("data-run-card-pile-lock={sealed ? 'locked' : 'open'}");
+    // A locked offer stops asking: the drift and the gold emanation are settled through the
+    // seat's own registered vars and paused, not deleted, so a card caught mid-drift comes down
+    // onto its seat instead of snapping onto it.
+    expect(runCardPile).toContain('const sealed = covered && locked;');
+    expect(styleCss).toMatch(/\.run-card-pile\.is-locked\s*\{[\s\S]*?--run-card-float-rise:\s*0px;[\s\S]*?--run-card-glow:\s*0;/);
+    expect(styleCss).toMatch(/\.run-card-pile\.is-locked \.run-card-action\s*\{\s*animation-play-state:\s*paused\s*!important;/);
+    // A card you cannot take is not an error to be scolded for reaching toward.
+    expect(styleCss).toMatch(/\.run-card-action:disabled\s*\{[\s\S]*?cursor:\s*default;/);
+    // Supplied for the whole visit and CONCEALED until it locks, exactly as the back beneath it
+    // is: a lock mounted at the moment of locking is fetched then too, and the survivors of an
+    // Adlectio stand unmarked until it arrives.
+    expect(runScreen).toContain('lockMediaUrl={lockMediaUrl}');
+    // And it is PUT ON the card rather than switched on over it: it comes down onto the face and
+    // fades up. At the speed a Run card moves -- the hover RAISE exactly, same duration, same
+    // curve, and the same distance, so the Studio cannot tune the two of them apart.
+    expect(styleCss).toMatch(/\.run-card-pile-lock\s*\{[\s\S]*?opacity:\s*0;[\s\S]*?translate:\s*0 calc\(-1 \* var\(--run-card-hover-raise, 7px\)\);/);
+    expect(styleCss).toMatch(/\.run-card-pile-lock\.is-locked\s*\{[\s\S]*?opacity:\s*1;[\s\S]*?translate:\s*0 0;/);
+    expect(styleCss).toMatch(/\.run-card-pile-lock\s*\{[\s\S]*?transition:[\s\S]*?opacity var\(--run-card-raise-duration\) var\(--run-card-raise-ease\),[\s\S]*?translate var\(--run-card-raise-duration\) var\(--run-card-raise-ease\);/);
+    // The same two variables the hovered card's own raise is declared with -- one speed, named
+    // once, so neither gesture can drift away from the other.
+    expect(styleCss).toMatch(/\.run-card-alive \.run-card-action\s*\{[\s\S]*?translate var\(--run-card-raise-duration\) var\(--run-card-raise-ease\);/);
+    // The settle and the light it takes with it stay on the hover settle's own timing.
+    expect(styleCss).toMatch(/\.run-card-alive\s*\{[\s\S]*?--run-card-float-rise 240ms cubic-bezier\(0\.3, 0\.7, 0\.3, 1\),[\s\S]*?--run-card-glow 240ms cubic-bezier\(0\.3, 0\.7, 0\.3, 1\);/);
+    expect(runScreen).not.toContain('run-sectio-cards-empty');
     expect(runCardFlight).toContain('<RunCard card={flight.offer} mode="reference" />');
     expect(runCard).not.toContain('run-card-purchased-indicator');
   });
@@ -364,6 +400,25 @@ describe('Run chrome hierarchy', () => {
     expect(runExpunctioWorkspace).toContain("if (status === 'expuncted') return 'Athetized this visit';");
     expect(runExpunctioWorkspace).not.toContain("return 'Expunctio';");
     expect(runExpunctioWorkspace).toContain('className="run-expunctio-companion"');
+    // The gallery says which formations this visit admitted, because Reset Sectio takes back
+    // exactly those and nothing else on the tile reveals it.
+    expect(runExpunctioWorkspace).toContain('sectioAdmittedCardIds(run)');
+    // One component owns the line, so the Studio review mounts the real thing (ADR-0059) and the
+    // workspace cannot drift from what the owner judged.
+    expect(runExpunctioWorkspace).toContain('<RunAdlectioMarkLine />');
+    expect(runAdlectioMark).toContain('<span className="run-expunctio-visit-mark">');
+    expect(runAdlectioMark).toContain('Adlected this Sectio');
+    expect(styleCss).toMatch(/\.run-expunctio-visit-mark\s*\{[\s\S]*?color:\s*var\(--skirmish-ink\)/);
+    // No coin and no transaction mark in this line: the fee below it already paints the loss arrow
+    // and says what the card cost, so gold here says only what is already said.
+    expect(runAdlectioMark).not.toContain('RunGoldIcon');
+    expect(runExpunctioWorkspace).not.toContain('<RunGoldTransactionIcon');
+    // A review surface is a Studio category reached by clicking, never a review parameter on a
+    // player route (ADR-0058). Nothing in the Run may read one for this mark.
+    expect(runAdlectioMark).not.toContain('URLSearchParams');
+    expect(runAdlectioMark).not.toContain('Candidate=');
+    expect(tilePreview).toContain("id: 'adlectiomark', label: 'Adlectio Mark'");
+    expect(tilePreview).toContain('<AdlectioMarkReviewCatalog');
     expect(runExpunctioWorkspace).toContain('runCardFramePaintInsetRatios');
     expect(runExpunctioWorkspace).toContain('fillRole="outer"');
     expect(runExpunctioWorkspace).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
@@ -510,7 +565,12 @@ describe('Run chrome hierarchy', () => {
     expect(runExpunctioWorkspace).toContain('<h2 id="run-expunctio-workspace-title">Expunctio</h2>');
     expect(runExpunctioWorkspace).toContain('Athetize one complete formation.');
     expect(runExpunctioWorkspace).toContain('Individual units cannot be removed from a held card.');
-    expect(runExpunctioWorkspace).toContain('Athetize removes this card and every attached unit as one formation.');
+    // The tile repeats nothing the face, the workspace copy or the action already says: no card
+    // name beside a face that prints one, no per-tile restatement of the Athetize rule, and no
+    // attached-unit count left over from the retired per-unit Alienatio (ADR-0511).
+    expect(runExpunctioWorkspace).not.toContain('attached unit${');
+    expect(runExpunctioWorkspace).not.toContain('runCardName');
+    expect(runExpunctioWorkspace).not.toContain('Athetize removes this card and every attached unit as one formation.');
     expect(runExpunctioWorkspace).toContain('<RunGoldTransactionAmount direction="loss"');
     expect(runExpunctioWorkspace).toContain('onExpunct(card.id)');
     expect(runScreen).toContain('<RunExpunctioWorkspace run={shellRun} onExpunct={expunctCard} />');
@@ -764,7 +824,8 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).toContain("import { RunCard } from './RunCard';");
     expect(styleCss).toMatch(/\.run-card-action\s*\{[\s\S]*?aspect-ratio:\s*5 \/ 7;/);
     expect(styleCss).toMatch(/\.run-card-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(auto-fit,[\s\S]*?justify-content:\s*center;/);
-    expect(styleCss).toMatch(/\.run-card-pile > :is\(\.run-card-pile-back, \.run-card-offer\)\s*\{[\s\S]*?grid-column:\s*1;[\s\S]*?grid-row:\s*1;/);
+    // Back, face, and the padlock a spent Sectio lays on a survivor all occupy the ONE seat.
+    expect(styleCss).toMatch(/\.run-card-pile > :is\(\.run-card-pile-back, \.run-card-offer, \.run-card-pile-lock\)\s*\{[\s\S]*?grid-column:\s*1;[\s\S]*?grid-row:\s*1;/);
     // A covered pile paints no part of the card it conceals: the back's opaque
     // generated backdrop otherwise reads as a black edge around every offer.
     expect(styleCss).toMatch(/\.run-card-pile\.is-covered > \.run-card-pile-back\s*\{[\s\S]*?visibility:\s*hidden;/);

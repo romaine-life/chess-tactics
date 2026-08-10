@@ -48,7 +48,9 @@ function at(run: RunDocument, battleIndex: number): RunDocument {
 }
 
 /** A Run holding more than His Grace, adlected through the real Sectio so the cards are the ones
- * a Deployment would actually deal. */
+ * a Deployment would actually deal. Each staged offer is withdrawn once it is taken, exactly as
+ * `craft` stages held cards: a Sectio admits one card, and these are cards the Run arrived
+ * holding rather than one visit's shopping. */
 function holding(run: RunDocument, cardIds: readonly string[]): RunDocument {
   let assembled = openSectio({ ...run, phase: 'battle' }, run.army.map((unit) => unit.id));
   cardIds.forEach((cardId, index) => {
@@ -59,6 +61,10 @@ function holding(run: RunDocument, cardIds: readonly string[]): RunDocument {
       sectio: { ...assembled.sectio!, cardOffers: [...assembled.sectio!.cardOffers, offer] },
     };
     assembled = performAdlectio(assembled, offer.offerId);
+    assembled = {
+      ...assembled,
+      sectio: { ...assembled.sectio!, adlectedCardOfferIds: [] },
+    };
   });
   return leaveSectio(assembled);
 }
