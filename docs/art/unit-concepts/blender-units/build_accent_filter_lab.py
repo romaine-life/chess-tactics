@@ -47,6 +47,7 @@ _only = os.environ.get("ACCENT_ONLY")
 if _only:
     ACCENTS = [a for a in ACCENTS if a[0] == int(_only)]
 masks = []
+hue_prev = None
 
 def srgb(h):
     v=h.lstrip("#"); out=[]
@@ -197,6 +198,54 @@ body = make_ramp(BODY)
 body.label = "BODY palette"
 current = body.outputs["Color"]
 
+# Two signals, each used for the one question it can answer.
+#
+#   IS this pixel crown at all?  The accent AOVs. They accumulate over the same
+#   samples as colour, so they are correct at the antialiased silhouette where an
+#   integer material pass is not.
+#   Gold or cloth?               Hue, off the render itself.
+#
+# Hue alone cannot answer the first: a near-grey pixel has no hue, so it fell through
+# to the body ramp and leaked navy through the crown. Coverage alone cannot answer the
+# second: the material regions it comes from are near-random against the real texture.
+# Together neither weakness is load-bearing.
+_crown_cov = None
+for _idx, _lbl, _pal in ACCENTS:
+    _sock = rl.outputs.get("acc%d" % _idx)
+    if _sock is None:
+        continue
+    if _crown_cov is None:
+        _crown_cov = _sock
+    else:
+        _u = tree.nodes.new("ShaderNodeMath"); _u.operation = "ADD"; _u.use_clamp = True
+        _u.location = (0, -900)
+        tree.links.new(_crown_cov, _u.inputs[0]); tree.links.new(_sock, _u.inputs[1])
+        _crown_cov = _u.outputs[0]
+
+crown_mask = None
+if _crown_cov is not None:
+    _cp = tree.nodes.new("CompositorNodePixelate")
+    next(t for t in _cp.inputs if t.name == "Size").default_value = BLOCK
+    _cp.location = (80, -900)
+    tree.links.new(_crown_cov, _cp.inputs[0])
+    _ap = tree.nodes.new("CompositorNodePixelate")
+    next(t for t in _ap.inputs if t.name == "Size").default_value = BLOCK
+    _ap.location = (80, -980)
+    tree.links.new(rl.outputs["Alpha"], _ap.inputs[0])
+    _dv = tree.nodes.new("ShaderNodeMath"); _dv.operation = "DIVIDE"; _dv.use_clamp = True
+    _dv.location = (180, -930)
+    tree.links.new(_cp.outputs[0], _dv.inputs[0]); tree.links.new(_ap.outputs[0], _dv.inputs[1])
+    _hd = tree.nodes.new("ShaderNodeValToRGB")
+    _hd.color_ramp.interpolation = "CONSTANT"
+    _he = _hd.color_ramp.elements
+    while len(_he) > 1: _he.remove(_he[-1])
+    _he[0].position, _he[0].color = 0.0, (0, 0, 0, 1)
+    _he.new(float(os.environ.get("CROWN_THRESH", "0.2"))).color = (1, 1, 1, 1)
+    _hd.location = (280, -930)
+    _hd.label = "CROWN region"
+    tree.links.new(_dv.outputs[0], _hd.inputs["Fac"])
+    crown_mask = _hd.outputs["Color"]
+
 # ID Mask turns "this pixel's material index == ACCENT_INDEX" into a mask, which then
 # chooses between the two palettes. Anti-aliasing off: a fractional mask would blend
 # gold into navy and produce colours in neither palette.
@@ -307,8 +356,30 @@ for offset, (index, label, stops) in enumerate(ACCENTS):
     pixel_mask.location = (380, -330 - offset * 300)
     tree.links.new(hue_mask, pixel_mask.inputs[0])
 
+    # The LAST accent takes the whole remainder of the crown rather than its own hue
+    # band, so every crown pixel is claimed by one ramp or the other and none can fall
+    # through to the body. That is what stops navy leaking through near-grey gilt.
+    _is_last = (index == ACCENTS[-1][0])
+    _sel = pixel_mask.outputs[0]
+    if _is_last and hue_prev is not None:
+        _inv = tree.nodes.new("ShaderNodeMath")
+        _inv.operation = "SUBTRACT"; _inv.use_clamp = True
+        _inv.inputs[0].default_value = 1.0
+        _inv.location = (420, -330 - offset * 300)
+        tree.links.new(hue_prev, _inv.inputs[1])
+        _sel = _inv.outputs[0]
+    hue_prev = pixel_mask.outputs[0] if not _is_last else hue_prev
+
+    if crown_mask is not None:
+        _and = tree.nodes.new("ShaderNodeMath")
+        _and.operation = "MULTIPLY"; _and.use_clamp = True
+        _and.location = (480, -330 - offset * 300)
+        tree.links.new(crown_mask, _and.inputs[0])
+        tree.links.new(_sel, _and.inputs[1])
+        _sel = _and.outputs[0]
+
     tree.links.new(
-        pixel_mask.outputs[0] if not os.environ.get("MASK_BY_MATERIAL") else share.outputs[0],
+        _sel if not os.environ.get("MASK_BY_MATERIAL") else share.outputs[0],
         hard.inputs["Fac"])
 
     # Grow the mask by one pixel. On the crown's outer silhouette a block is part
