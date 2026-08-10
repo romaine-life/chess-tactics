@@ -27038,6 +27038,43 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   position: relative;
 }
 
+/* Studio → Card Layout. The gallery had no rule of its own, so every card took the panel's whole
+   width: one card per screen, and the Zoom slider — which sets --run-card-gallery-zoom on this
+   grid — drove nothing, because only the card-back study ever read that variable. Zoom is what
+   sizes a card here, so 100% is the width a Sectio deals one and the grid reflows around it. */
+.run-card-prototype-study-grid {
+  --run-card-gallery-card: calc(196px * var(--run-card-gallery-zoom, 1));
+  align-content: start;
+  display: grid;
+  gap: var(--ds-space-4);
+  grid-auto-rows: max-content;
+  grid-template-columns: repeat(auto-fill, var(--run-card-gallery-card));
+  justify-content: start;
+}
+
+.run-card-prototype-study {
+  display: grid;
+  gap: var(--ds-space-2);
+  inline-size: var(--run-card-gallery-card);
+  justify-items: center;
+}
+
+/* The readings the coin fill is actually judged on, pinned above the identity gallery. The
+   catalog opens on fifteen Kings and a King is struck with a mark rather than a price
+   (ADR-0530), so without this the first screenful of a price-tuning surface carries no price.
+   Separated by rhythm rather than by a rule of its own: spacing encodes the grouping
+   (ADR-0056), and a hand-painted divider here would be unregistered chrome. */
+.run-card-prototype-readings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-space-4);
+  margin-block-end: calc(var(--ds-space-4) * 2);
+}
+
+.run-card-prototype-readings > .run-card-prototype-study {
+  inline-size: var(--run-card-gallery-card, 196px);
+}
+
 .run-card-face-layer {
   display: block;
   inset: 0;
@@ -27139,10 +27176,14 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   transform: translateY(calc(var(--run-card-text-ink-centre, .0667) * 1em));
 }
 
+/* Tracking only. The size is `--run-card-cost-size`, which runCardCostSizeCqw already reduced
+   to fit the coin face WITH this tracking priced in — a second flat shrink here stacked on that
+   one and, because the two won at different lengths, made a three-digit price a third smaller
+   than a two-digit one. The padding gives back the trailing letter-space so the reading stays
+   centred in its seat. */
 .run-card-prototype-cost.is-multi-digit {
-  font-size: calc(var(--run-card-cost-size, 6.2cqw) * .76);
-  letter-spacing: -.35cqw;
-  padding-inline-end: .35cqw;
+  letter-spacing: var(--run-card-cost-tracking, -.35cqw);
+  padding-inline-end: calc(var(--run-card-cost-tracking, -.35cqw) * -1);
 }
 
 /* A priceless card is struck with its mark, centred on the coin the numeral would read on

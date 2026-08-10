@@ -33,6 +33,8 @@ import {
   openSectio,
   prepareDeployment,
   removeUnitFromArmyAndCards,
+  runCardCost,
+  runRules,
   setDeploymentChoices,
   snapshotWar,
   takeVacantiaCard,
@@ -886,7 +888,10 @@ function craftOffer(
     pieces: [...core.pieces],
     formation: core.formation?.map((cell) => ({ ...cell })),
     offerId: `craft-${slotIndex}-${core.id}`,
-    cost: core.value,
+    // A pinned offer names the CARD, not its price. Pricing is a Run rule, so the price is the
+    // one this Run's market would print -- restating it as the card's material dealt a flat
+    // market into a density Run, which is a state the game cannot reach and the server refuses.
+    cost: runCardCost(core, runRules(run)),
   };
 }
 
