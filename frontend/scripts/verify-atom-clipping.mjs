@@ -125,7 +125,12 @@ const MEASURE = (tolerancePx) => {
       if (clipsY && fitsTop && box.top < hr.top - tolerancePx) cuts.push(`top by ${(hr.top - box.top).toFixed(1)}px`);
       if (clipsY && fitsBottom && box.bottom > hr.bottom + tolerancePx) cuts.push(`bottom by ${(box.bottom - hr.bottom).toFixed(1)}px`);
       if (cuts.length) {
-        findings.push({ kind: box.kind, atom: box.what, clipper: describe(host), cuts });
+        // An atom that reaches past the WINDOW is a different thing from one a container is
+        // eating: no apron can help, because the pixels are off the screen. That is a decision
+        // about where the control sits, so it is reported and not failed on.
+        const offViewport = box.left < 0 || box.top < 0
+          || box.right > window.innerWidth || box.bottom > window.innerHeight;
+        findings.push({ kind: box.kind, atom: box.what, clipper: describe(host), cuts, offViewport });
         break;
       }
     }
@@ -165,14 +170,19 @@ try {
       console.log(`  · ${url} — no atoms on this route`);
       continue;
     }
-    if (!findings.length) {
-      console.log(`  ✓ ${url} — ${atoms} atoms, none clipped`);
-      continue;
+    const clipped = findings.filter((finding) => !finding.offViewport);
+    const offscreen = findings.filter((finding) => finding.offViewport);
+    if (!clipped.length) {
+      console.log(`  ✓ ${url} — ${atoms} atoms, none cut by a container`);
+    } else {
+      failed = true;
+      console.error(`  ✗ ${url} — ${clipped.length} of ${atoms} atoms cut:`);
+      for (const finding of clipped) {
+        console.error(`      ${finding.kind} ${finding.atom}  cut ${finding.cuts.join(', ')}  by ${finding.clipper}`);
+      }
     }
-    failed = true;
-    console.error(`  ✗ ${url} — ${findings.length} of ${atoms} atoms cut:`);
-    for (const finding of findings) {
-      console.error(`      ${finding.kind} ${finding.atom}  cut ${finding.cuts.join(', ')}  by ${finding.clipper}`);
+    for (const finding of offscreen) {
+      console.log(`      · ${finding.atom} reaches past the window edge (${finding.cuts.join(', ')}) — no apron can help; the control has to move`);
     }
   }
 } finally {

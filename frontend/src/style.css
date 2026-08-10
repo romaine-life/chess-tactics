@@ -18670,6 +18670,22 @@ button.tileset-relationship-cell {
   padding-inline: var(--main-menu-rail-pad-inline) 0;
 }
 
+/* This frame clips, and a tab's corner ornaments paint OUTSIDE the tab, so without an apron it
+   bites 7px off every tab on the side the column ends. Same two-sided apron the scrollports carry:
+   the negative margin pushes the CLIP edge out past the track, the matching padding pulls the
+   content column back to exactly where it was, so no tab moves or resizes. Both classes are named
+   to out-specify the placement rule above, which owns the rail's ordinary inset.
+   verify-atom-clipping.mjs is what found this and is what proves it stays fixed. */
+.apparatus-rail-column.apparatus-rail-column.settings-rail-frame,
+.apparatus-rail-column.apparatus-rail-column.settings-main-frame {
+  --rail-atom-apron-right: var(--le-inner-atom-right-overhang, 0px);
+  --rail-atom-apron-bottom: var(--le-inner-atom-bottom-overhang, 0px);
+  margin-block-end: calc(-1 * var(--rail-atom-apron-bottom));
+  margin-inline-end: calc(-1 * var(--rail-atom-apron-right));
+  padding-block-end: calc(var(--main-menu-rail-pad-block) + var(--rail-atom-apron-bottom));
+  padding-inline-end: var(--rail-atom-apron-right);
+}
+
 .settings-rail-frame {
   gap: clamp(9px, calc(var(--layout-vw, 100vw) * .008), 13px);
   /* Button-group offset — baked from the Main Menu tuner, SHARED with Settings so its rail tabs
@@ -18749,10 +18765,16 @@ button.tileset-relationship-cell {
   gap: var(--settings-rail-tab-gap);
 }
 .menu-dest-action {
-  inline-size: var(--col-action-w);
+  /* Clips, and the rows inside paint their corner ornaments past their own edges — so the column
+     took 7px off every row's right. Apron: negative margin pushes the CLIP edge out, matching
+     padding pulls the content back, nothing moves. See verify-atom-clipping.mjs. */
+  --dest-atom-apron-right: var(--le-inner-atom-right-overhang, 0px);
+  inline-size: calc(var(--col-action-w) + var(--dest-atom-apron-right));
   display: flex;
   flex-direction: column;
+  margin-inline-end: calc(-1 * var(--dest-atom-apron-right));
   overflow: hidden;
+  padding-inline-end: var(--dest-atom-apron-right);
 }
 
 /* Unified Play selector (ADR-0074). Column 2 is one owner: the fixed mode entries stay
@@ -19175,9 +19197,14 @@ button.tileset-relationship-cell {
      further. */
   --settings-clip-apron-left: max(var(--le-inner-atom-left-overhang, 0px), var(--le-inner-divider-atom-left-overhang, 0px));
   --settings-clip-apron-right: max(var(--le-inner-atom-right-overhang, 0px), var(--le-inner-divider-atom-right-overhang, 0px));
+  --settings-clip-apron-top: var(--le-inner-atom-top-overhang, 0px);
+  --settings-clip-apron-bottom: var(--le-inner-atom-bottom-overhang, 0px);
   --kit-scroll-gutter-size: 24px;
-  block-size: 100%;
+  block-size: calc(100% + var(--settings-clip-apron-top) + var(--settings-clip-apron-bottom));
   grid-row: 2;
+  margin-block:
+    calc(-1 * var(--settings-clip-apron-top))
+    calc(-1 * var(--settings-clip-apron-bottom));
   margin-inline:
     calc(-1 * var(--settings-clip-apron-left))
     calc(-1 * var(--settings-clip-apron-right));
@@ -19190,6 +19217,7 @@ button.tileset-relationship-cell {
      off --kit-scroll-gutter so an idle pane gives that region back (ADR-0536). */
   box-sizing: border-box;
   inline-size: calc(100% - var(--kit-scroll-gutter));
+  padding-block: var(--settings-clip-apron-top) var(--settings-clip-apron-bottom);
   padding-inline: var(--settings-clip-apron-left) var(--settings-clip-apron-right);
 }
 .settings-scroll > .kit-scroll-rail {
@@ -19613,8 +19641,18 @@ button.tileset-relationship-cell {
      list inside. That way an idle rail returns the whole 24px and the tabs finish on the
      same line as the pinned New Level / Import / Save verbs beneath them (ADR-0536). */
   --kit-scroll-gutter-size: 24px;
+  /* The tabs inside paint corner ornaments past their own edges, and a scrollport clips, so
+     without an apron this took 8px off their left and 7px off their right. Widen the clip box,
+     push the content back by the same amount; nothing moves. See verify-atom-clipping.mjs. */
+  --ce-rail-apron-left: var(--le-inner-atom-left-overhang, 0px);
+  --ce-rail-apron-right: var(--le-inner-atom-right-overhang, 0px);
   block-size: 100%;
+  margin-inline: calc(-1 * var(--ce-rail-apron-left)) calc(-1 * var(--ce-rail-apron-right));
   min-height: 0;
+}
+.ce-editor-rail .ce-rail-scroll > .kit-scroll-content {
+  box-sizing: border-box;
+  padding-inline: var(--ce-rail-apron-left) var(--ce-rail-apron-right);
 }
 .ce-editor-rail .ce-rail-list {
   align-content: start;
