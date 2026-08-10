@@ -30,7 +30,7 @@ import { useSceneParticipant } from './shell/SceneBoundary';
  * drawable re-point the Enchiridion mark needs (it currently borrows a shared kit
  * glyph and gains a mark of its own family here).
  */
-export const MENU_ICON_BATCH_ID = 'main-menu-icons-2026-08-09-r4';
+export const MENU_ICON_BATCH_ID = 'main-menu-icons-2026-08-09-r5';
 
 /** The rail, in the order the menu stacks it — `slug` is the `behavior.value` the
  *  menu-mode drawable routes on, so a mark and its destination cannot drift apart. */

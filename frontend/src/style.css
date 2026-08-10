@@ -22018,6 +22018,14 @@ button.tileset-relationship-cell {
   margin: 0;
 }
 
+/* Reserve two lines for the set name whether or not it needs them. A one-line title next
+   to a wrapped one starts its rail a line higher, and two rails at different heights
+   cannot be read against each other — which is the only thing this page does. */
+.menu-icon-review-set > h2 {
+  align-content: end;
+  min-block-size: 2.4em;
+}
+
 .menu-icon-review-set > p {
   color: var(--skirmish-muted);
 }
