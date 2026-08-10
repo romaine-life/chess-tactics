@@ -59,6 +59,10 @@ export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactEl
   // Rungs on by default: the whole question is whether cutting a sprite for the zoom
   // beats magnifying one authored size, and it is only answerable side by side.
   const [compareRungs, setCompareRungs] = useState(true);
+  // Locally rendered pixel-filter candidates, served from an ignored public folder so
+  // they can be judged beside the shipped art without a catalog write. Absent unless
+  // someone has rendered them, hence the per-cell fallback rather than a hard path.
+  const [showFiltered, setShowFiltered] = useState(false);
   const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof fetchAdminUnitCatalog>> | null>(null);
   // The ADMIN catalog, because accepting a new asset archives the one it replaced and
   // the public catalog omits archived assets — the before would always be missing.
@@ -121,6 +125,14 @@ export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactEl
             onChange={(event) => setCompareRungs(event.target.checked)}
           />
           <span>Rung vs magnified</span>
+        </label>
+        <label className="unit-roster-toggle">
+          <input
+            type="checkbox"
+            checked={showFiltered}
+            onChange={(event) => setShowFiltered(event.target.checked)}
+          />
+          <span>Pixel-filter candidate</span>
         </label>
         <label className="unit-roster-toggle">
           <input
@@ -228,6 +240,15 @@ export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactEl
                   </figure>
                 );
                 const caption = allPalettes ? family : facing;
+                if (showFiltered) {
+                  // South only: that is the direction the candidates were rendered at.
+                  return (
+                    <div className="unit-roster-pair" key={`${family}:${facing}`}>
+                      {seat('shipped', src)}
+                      {seat(`filter · ${family}`, `/dev-filtered/${family}.png`)}
+                    </div>
+                  );
+                }
                 if (compareRungs) {
                   return (
                     <div className="unit-roster-pair" key={`${family}:${facing}`}>
