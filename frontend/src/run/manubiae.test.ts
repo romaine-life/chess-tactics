@@ -262,36 +262,15 @@ describe('the mate pays once, for what is standing there giving it', () => {
     expect(earned(queen.pieces, queen.mater, { x: 7, y: 0 })).toEqual([]);
   });
 
-  it('pays a queened Pawn the PAWN rate — the endgame win is the whole point of this bounty', () => {
-    // Trading down to a Pawn advantage, passing the Pawn and walking it home is how a lean win is
-    // won. That Queen is a Pawn's work, the roster hands her back as a Pawn next Battle, and
-    // pricing her at nine would pay nothing for the entire endgame — on top of a Deditio already
-    // near zero for the army that was ground down.
+  it('reads what is STANDING there, so a queened Pawn mates as a Queen and pays nothing', () => {
+    // The rest of this module prices a unit by what it started as, because that is what it cost
+    // the Run. This question is the opposite one — how little is on the board giving mate — and
+    // paying a promoted Queen the Pawn rate would put the most ordinary mate at the top of the
+    // ladder.
     const queened = P('player', 'queen', 7, 4, { promotedFrom: 'pawn' });
     const pieces = [queened, P('enemy', 'king', 0, 0), P('enemy', 'pawn', 0, 1), P('enemy', 'pawn', 1, 1)];
-    const got = earned(pieces, queened, { x: 7, y: 0 });
 
-    expect(got.map((item) => item.award)).toEqual([{ id: 'humble-mate', piece: 'pawn' }]);
-
-    // And a Queen who was always a Queen, on the same square, still pays nothing at all.
-    const born = P('player', 'queen', 7, 4);
-    const same = [born, P('enemy', 'king', 0, 0), P('enemy', 'pawn', 0, 1), P('enemy', 'pawn', 1, 1)];
-    expect(earned(same, born, { x: 7, y: 0 })).toEqual([]);
-  });
-
-  it('takes the humblest of two checkers by what each STARTED as', () => {
-    // A double-check mate: the Knight steps off the long diagonal to check from (1,2), uncovering
-    // the queened Pawn behind it. Two units mate at once, and the deed is the lesser of them —
-    // the Queen who was a Pawn — so the Pawn rate is paid and her square is where it seats.
-    const knight = P('player', 'knight', 3, 3);
-    const queened = P('player', 'queen', 4, 4, { promotedFrom: 'pawn' });
-    const pieces = [knight, queened, P('enemy', 'king', 0, 0), P('enemy', 'rook', 1, 0), P('enemy', 'pawn', 0, 1)];
-    const got = earned(pieces, knight, { x: 1, y: 2 });
-
-    expect(ids(got)).toContain('double-check');
-    const humble = got.find((item) => item.award.id === 'humble-mate')!;
-    expect(humble.award).toEqual({ id: 'humble-mate', piece: 'pawn' });
-    expect(humble.at).toEqual({ x: 4, y: 4 });
+    expect(earned(pieces, queened, { x: 7, y: 0 })).toEqual([]);
   });
 
   it('pays a smothered mate INSTEAD of the humble mate its Knight would earn', () => {

@@ -54,17 +54,24 @@ a Knight underpromotion into a smothered mate would collect all four for one mat
   check it discovered, and a capture that also forks is still both.
 - **Paid on the LEAST valuable checker.** When two units mate at once, the deed is the smaller of
   them, and the marker seats on that unit's square.
-- **Priced through `manubiaeUnitWorth` like every other Manubium, so a unit is worth WHAT IT
-  STARTED AS and a queened Pawn mates as a Pawn.** ADR-0540's law holds here with no exception.
-  Reading the board type instead is tempting and was written that way first — a Queen is a Queen,
-  and a Queen's mate feels like the ordinary one — and it is **wrong**, because it throws away the
-  exact win this bounty exists to celebrate. *Trading down to a Pawn advantage, passing the Pawn
-  and walking it home is how a lean win is WON.* That player's Queen is a Pawn's work; the roster
-  has no promotion concept and hands her back as a Pawn next Battle. Pricing her at nine pays them
-  nothing at all for the entire endgame — on top of a Deditio already near zero for the army they
-  ground down — which is the precise opposite of the intent. There is no second value reader:
-  `manubiaeUnitWorth` is the one answer to "what is this unit worth" across the whole category
-  (ADR-0059).
+- **This reads the piece's CURRENT type, where every other Manubium reads `promotedFrom`, and
+  the divergence is the point.** What this entry rewards is a **creative mate** rather than the
+  Queen mate that is the default ending of every game of chess. A Queen delivering mate is not
+  special, and **it does not become special because the Queen used to be a Pawn** — the board at
+  that moment holds a Queen doing the most ordinary thing a Queen does. So `boardPieceValue` is a
+  separate reader with its own name, not a flag on `manubiaeUnitWorth`.
+  `manubiaeUnitWorth` answers a genuinely different question — *what did this cost the Run* — which
+  is why ADR-0540 rightly prices a queened Pawn as a Pawn on both sides of a CAPTURE: the roster
+  has no promotion concept and hands her back as a Pawn next Battle. Both readers are correct for
+  their own question and neither generalizes to the other.
+  **This clause has already been reversed once and reverted, so it is worth saying what the
+  tempting argument is and why it fails.** The argument runs: trading material down to a Pawn
+  advantage, passing the Pawn and walking it home is a lean, skilful win, and pricing that Queen at
+  nine pays nothing for the whole endgame. Every part of that is true, and it is still not what
+  this entry is for. This one pays for the SHAPE OF THE MATE — what is standing there at the end —
+  and a grind-out that finishes with a Queen has no unusual shape however it was reached. Rewarding
+  the grind is a real gap and a real thing to want, but it is a reward for the POSITION, and it
+  needs its own entry measured against this one rather than a reinterpretation of this one.
 - **The King is refused explicitly.** Its zero on the piece scale is a sentinel for "never
   bought", so left to the formula it would read as the humblest unit on the board and pay the
   most. A King may not give check at all, so this cannot arise — the scale is simply not asked to
@@ -88,13 +95,6 @@ a Knight underpromotion into a smothered mate would collect all four for one mat
   ADR-0561 opened that tension with the Pawn walk and this widens it. Two named rewards pulling in
   opposite directions is a choice about how to finish, which is what the Battle screen has been
   short of.
-- **The endgame grind now has exactly one reward, and this is it.** A player who trades material
-  down to a Pawn advantage, passes the Pawn and queens it collects nothing from Deditio (the enemy
-  force is gone), nothing from promotion mate (the promotion move is rarely itself the mate), and
-  under the rejected board-type reading would have collected nothing here either. Paying them the
-  Pawn's 24 is the whole of what the Run says about a won endgame. If a later ADR wants to reward
-  that shape directly — for the position rather than for the last piece standing — this is the
-  entry it should be measured against.
 - A player who queens a Pawn now has a reason not to mate with her. That is a strange sentence and
   a good one: the game is teaching that the last move is a choice, not a formality.
 - `verify:manubiae` can reach this entry more easily than any other, since every won Battle offers

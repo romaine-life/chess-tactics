@@ -28,6 +28,7 @@ import type { GameEvent, GameState, Piece, PieceType, Vec } from '../core/types'
 import {
   manubiaeUnitWorth,
   manubiumGoldTenths,
+  PIECE_VALUE,
   RUN_ROYAL_FORK_MIN_VICTIM_VALUE,
   type ManubiumAward,
   type RunArmyPieceType,
@@ -83,6 +84,17 @@ const RUN_ARMY_PIECES: readonly PieceType[] = ['pawn', 'knight', 'bishop', 'rook
 /** Whether a board unit is one the Run can price at all — an obstacle is not. */
 function isRunArmyPieceType(type: PieceType): type is RunArmyPieceType {
   return RUN_ARMY_PIECES.includes(type);
+}
+
+/**
+ * What a unit is worth AS IT STANDS, by the type it is now.
+ *
+ * Deliberately not `manubiaeUnitWorth`, which reads `promotedFrom` to answer what a unit cost the
+ * Run. Both questions are legitimate and they are not the same question; see the humble-mate
+ * comment below for why this one has to be the board's answer rather than the roster's.
+ */
+function boardPieceValue(piece: Piece): number {
+  return isRunArmyPieceType(piece.type) ? PIECE_VALUE[piece.type] : Number.POSITIVE_INFINITY;
 }
 
 /** One Manubium the board earned, and the square it is seated on. */
@@ -222,29 +234,26 @@ export function manubiaeEarnedBy(game: GameState, events: readonly GameEvent[]):
       });
     }
 
-    // The floor: how little the unit giving mate is worth. Paid on the LEAST valuable checker,
+    // The floor: what is actually standing there giving mate. Paid on the LEAST valuable checker,
     // because when two units mate at once the deed is the smaller of them.
     //
-    // Priced through `manubiaeUnitWorth` like everything else here, which means a unit is worth
-    // WHAT IT STARTED AS and a queened Pawn mates as a Pawn. Reading the board type instead is
-    // tempting — a Queen is a Queen, and a Queen mate feels like the ordinary one — and it is
-    // wrong, because it throws away the exact story this bounty exists to celebrate. Trading down
-    // to a Pawn advantage, passing the Pawn and walking it home is how a lean win is WON; that
-    // player's Queen is a Pawn's work and the roster hands her back as a Pawn next Battle
-    // (ADR-0540). Pricing her at nine would pay them nothing for the whole endgame, on top of a
-    // Deditio already near zero for the army they ground down.
+    // This reads the piece's CURRENT type where the rest of this module reads `promotedFrom`, and
+    // the divergence is the point. `manubiaeUnitWorth` answers "what did this cost the Run", which
+    // is why a queened Pawn is still priced as a Pawn when it captures. The question here is the
+    // opposite one — how little is standing on the board giving mate — and a Queen is a Queen
+    // whatever walked up the board to become her. Pricing her as a Pawn would pay the top of this
+    // ladder for the most ordinary mate there is.
     const humblest = checkers
       .filter((checker) => checker.side === 'player')
-      .reduce<Piece | null>((best, checker) => {
-        const worth = manubiaeUnitWorth(checker);
-        if (worth === null) return best; // unpriceable: a King, which cannot give check anyway
-        const bestWorth = best === null ? null : manubiaeUnitWorth(best);
-        return bestWorth === null || worth < bestWorth ? checker : best;
-      }, null);
-    const startedAs = humblest ? humblest.promotedFrom ?? humblest.type : null;
-    if (humblest && startedAs && isRunArmyPieceType(startedAs)) {
+      .reduce<Piece | null>(
+        (best, checker) => (
+          !best || boardPieceValue(checker) < boardPieceValue(best) ? checker : best
+        ),
+        null,
+      );
+    if (humblest && isRunArmyPieceType(humblest.type)) {
       candidates.push({
-        award: { id: 'humble-mate', piece: startedAs },
+        award: { id: 'humble-mate', piece: humblest.type },
         at: { x: humblest.x, y: humblest.y },
       });
     }
