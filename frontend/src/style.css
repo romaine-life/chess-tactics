@@ -1966,6 +1966,16 @@ h1 {
      width, ui/shell/layoutViewport.ts) so browser zoom magnifies them instead of
      re-flowing; identical to plain vw at 100% zoom. */
   --app-header-h: clamp(84px, calc(var(--layout-vw, 100vw) * .05), 88px);
+  /* Kit frame art is drawn with a 1px fully transparent margin on each edge of its 24px
+     slice, so a rail lands its ink one raster line inside the box it was asked to fill.
+     Where that line falls between two surfaces, neither paints it and the screen behind
+     shows through as a hairline. The app-shell title divider's inner margin is covered from
+     BELOW — the Controls panel already does it with --app-shell-divider-fill-overlap, and
+     this is the same apron for the shell workspace's surface fill. (The Controls panel's
+     own outer margin is answered on the chrome side instead, by outsetting its frame; see
+     chromeFamilyRuntime.) Kept a plain length: overflow-clip-margin, which has to let the
+     apron past the workspace hosts, drops calc() and max() values whole. */
+  --shell-workspace-paint-apron: 1px;
   /* motion — duration + easing tokens (ADR-0043, revised by ADR-0046). Map MOTION ROLES
      onto these; don't hand-pick ms per element. Just TWO durations, by design:
        fast = instant feedback (hover / toggle / focus / filter swap),
@@ -4366,6 +4376,15 @@ h1 {
   content: none;
 }
 
+/* Same call for a Run phase whose workspace paints an opaque installed raster across the
+   whole environment column (RunScreen sets the class). The battlefield backdrop reaches no
+   pixel there — measured, it showed only in the seams the workspace paint apron now closes —
+   so it is a decoded image nothing can see. A phase that yields its fill to a retained scene
+   (Sectio's room) still needs it, and keeps it. */
+.skirmish-screen.run-workspace-owns-environment::before {
+  content: none;
+}
+
 /* The level editor is a homepage-family surface: it shows the ONE shared HomepageBackdrop
    (menu scene + synced rain), NOT the battlefield world (/play keeps that). LevelEditor wraps
    the faded editor chrome in .level-editor-root and renders <HomepageBackdrop> as a SIBLING of
@@ -5932,13 +5951,14 @@ body.loading-bootstrap .app-startup-status {
    every item. The renderer owns a monotonic phase index and this one derivation turns
    it into the surface offset, so no consumer computes a ladder from DOM position
    (forbidden by ADR-0063). It serves both ways a leaf gets painted: an explicitly named
-   surface, and the Controls panel's registry-driven material rule. */
+   surface, and the registry-driven material rule of any surface that has adopted the
+   hierarchy — the Controls panel and every result screen (ADR-0557). */
 :root {
   --chrome-leaf-surface-pitch: calc(46px + var(--ds-inline-tight));
 }
 
 [data-chrome-fill-surface],
-[data-shell-controls-panel] [data-chrome-unit] {
+[data-chrome-leaf-surface] [data-chrome-unit] {
   --chrome-surface-position-y: calc(var(--chrome-leaf-surface-index, 0) * -1 * var(--chrome-leaf-surface-pitch));
 }
 
@@ -7573,14 +7593,24 @@ body.loading-bootstrap .app-startup-status {
   isolation: isolate;
   min-height: 0;
   min-width: 0;
-  overflow: hidden;
+  /* `clip` rather than `hidden` so the paint apron below can pass. Content is unaffected:
+     .shell-workspace-content clips it, and neither box has ever scrolled here. */
+  overflow: clip;
+  overflow-clip-margin: var(--shell-workspace-paint-apron, 0px);
   padding: 0;
   position: absolute;
   text-align: left;
   z-index: 2;
 }
+/* The title divider lays its last raster row over the top of the workspace and leaves it
+   transparent (see --shell-workspace-paint-apron), so the surface fill has to reach up under
+   it exactly as the Controls panel's fill already does — otherwise that row belongs to
+   neither and the screen behind shows through as a hairline. Only the fill takes the apron:
+   it is a repeating texture, so the row costs it a one-pixel phase and nothing else. The
+   background artwork keeps the workspace box exactly, because its cover fit is pixelated and
+   re-scaling a whole vista to gain one row is a far worse trade than the row. */
 .shell-workspace-fill {
-  inset: 0;
+  inset: calc(-1 * var(--shell-workspace-paint-apron, 0px)) 0 0 0;
 }
 .shell-workspace-background-artwork {
   inset: 0;
@@ -19792,7 +19822,10 @@ button.tileset-relationship-cell {
   grid-column: 1;
   grid-row: 2;
   min-block-size: 0;
-  overflow: hidden;
+  /* Hosts a .shell-workspace, so it must pass that surface's paint apron rather than
+     clipping it back to the grid column and reopening the seam against the chrome. */
+  overflow: clip;
+  overflow-clip-margin: var(--shell-workspace-paint-apron, 0px);
   position: relative;
 }
 
@@ -20973,6 +21006,13 @@ button.tileset-relationship-cell {
 .run-victory-summary > span + span::before {
   content: "·";
   margin-inline-end: var(--ds-inline-tight);
+}
+
+/* The Run's last action is a button, not a band. The workspace lane stretches its grid
+   children, which was inconspicuous while this one wore the flat field and reads as a
+   wall the moment it wears a plank. */
+.run-victory-finish {
+  justify-self: start;
 }
 
 /* The report box is the aftermath screen's visual anchor. Equal flexible tracks
@@ -24834,7 +24874,7 @@ button.tileset-relationship-cell {
 /* ui/main-menu/icons-carved/enchiridion.png — ink 48x52 at (8,6) on a 64x64 canvas. The
    Strategikon's Enchiridion tab draws whatever the Enchiridion DESTINATION draws
    (menuModeIcon), so it moved off the shared design-index kit glyph when that destination
-   gained a mark of its own family (ADR-0556). 6/64 below the ink, 52/64 across it. */
+   gained a mark of its own family (ADR-0560). 6/64 below the ink, 52/64 across it. */
 [data-strategikon-section="enchiridion"] img {
   --titlebar-mark-ink-below: .09375;
   --titlebar-mark-ink-fill: .8125;
@@ -25327,6 +25367,15 @@ button.tileset-relationship-cell {
 }
 .stepper-chevron-right {
   transform: scaleX(-1);
+}
+/* A disclosure control says which way its content is about to move: down while closed (it
+   opens below the control), up while open (it folds back up). Same shared mark turned a
+   quarter, mirrored the way -right already is -- never a second chevron implementation. */
+.stepper-chevron-down {
+  transform: rotate(-90deg);
+}
+.stepper-chevron-up {
+  transform: rotate(90deg);
 }
 
 .settings-stepper output {
@@ -27709,12 +27758,14 @@ button.run-card-formation-cell {
 .run-ataraxia-selector h3,
 .run-ataraxia-selector p,
 .run-rules-selector h3,
+.run-rules-selector h4,
 .run-rules-selector p {
   margin: 0;
 }
 
 .run-ataraxia-selector h3,
-.run-rules-selector h3 {
+.run-rules-selector h3,
+.run-rules-selector h4 {
   padding-inline: 8px;
 }
 
@@ -28297,4 +28348,55 @@ button.run-card-formation-cell {
 .run-commendatio-question {
   margin: 0;
   text-align: center;
+}
+
+/* Start New Run → Rule options. Closed by default and framed as a departure from the defaults,
+   because the defaults are the game and almost nobody should be changing them before a Run. */
+.run-rules-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--ds-inline-tight);
+}
+
+.run-rules-selector h4 {
+  margin-block-start: var(--ds-inline-tight);
+  font-size: var(--ds-text-xs);
+  opacity: .78;
+}
+
+/* Verb plus the shared chevron, so the control looks like the disclosure it is rather than a
+   plain command. */
+.run-rules-toggle-copy {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+/* Both verbs share ONE cell, so the control is as wide as its widest state at every moment
+   instead of snapping between two widths when it flips. The lock is the copy itself -- reword
+   either verb and the width still fits the longer one, with no measured number to maintain. */
+.run-rules-toggle-label {
+  display: grid;
+  justify-items: center;
+}
+
+.run-rules-toggle-label > span {
+  grid-area: 1 / 1;
+  /* Not display:none -- a hidden box still has to occupy the cell for it to be measured.
+     visibility also takes the inactive verb out of the accessible name. */
+  visibility: hidden;
+}
+
+.run-rules-toggle-label > span.is-shown {
+  visibility: visible;
+}
+
+.run-rules-selector [hidden] {
+  display: none;
+}
+
+#run-rules-content {
+  display: grid;
+  gap: var(--ds-inline-tight);
 }

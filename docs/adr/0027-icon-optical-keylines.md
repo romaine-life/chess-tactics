@@ -1,11 +1,11 @@
 ---
-status: "accepted; §C keyline table superseded by ADR-0556 for the main-menu set; downscale-without-reforge clauses superseded by ADR-0076; asset-storage clauses superseded by ADR-0085"
+status: "accepted; §C keyline table superseded by ADR-0560 for the main-menu set; downscale-without-reforge clauses superseded by ADR-0076; asset-storage clauses superseded by ADR-0085"
 date: 2026-06-27
 deciders: Nelson, Claude
 ---
 
 > **Section C's keyline table superseded by
-> [ADR-0556](0556-main-menu-marks-share-one-ink-box-and-one-centre.md) (2026-08-09),
+> [ADR-0560](0560-main-menu-marks-share-one-ink-box-and-one-centre.md) (2026-08-09),
 > for the main-menu set only.** Those five marks stack in one column at a fixed seat,
 > so the column itself is a size reference and five per-shape targets read as five
 > sizes; they now share one 52px ink box and one centre line. A dense *functional*

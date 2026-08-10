@@ -132,7 +132,7 @@ test('raster native evidence is required to identify the exact uploaded bytes', 
   assert.equal(nativeMediaEvidenceIssue(raster()), null);
 });
 
-test('ADR-0556 main-menu marks carry a typed projection instead of staying bridge-only', () => {
+test('ADR-0560 main-menu marks carry a typed projection instead of staying bridge-only', () => {
   const row = (overrides = {}, metadata = {}) => ({
     slot: 'ui/main-menu/icons-carved/settings.png',
     domain: 'ui-kit',
@@ -162,7 +162,7 @@ test('ADR-0556 main-menu marks carry a typed projection instead of staying bridg
   assert.match(mainMenuMarkMediaIssue(row({ domain: 'ui' })), /ui-kit domain/);
 });
 
-test('ADR-0556 fitted main-menu marks record their resampling instead of claiming native 1x', () => {
+test('ADR-0560 fitted main-menu marks record their resampling instead of claiming native 1x', () => {
   const mark = (overrides = {}, evidence = {}) => ({
     media_type: 'image/png',
     blob_sha256: originalSha,
@@ -171,7 +171,7 @@ test('ADR-0556 fitted main-menu marks record their resampling instead of claimin
     slot: 'ui/main-menu/icons-carved/settings.png',
     native_evidence: {
       schema: MAIN_MENU_MARK_FITTED_EXCEPTION_SCHEMA,
-      decision: 'ADR-0556',
+      decision: 'ADR-0560',
       status: 'owner-approved-production-exception',
       native1x: false,
       spatialResampling: true,
@@ -197,6 +197,9 @@ test('ADR-0556 fitted main-menu marks record their resampling instead of claimin
     nativeMediaEvidenceIssue(mark({ slot: 'ui/kit/icons/design-index.png' })),
     /restricted to the main-menu mark slots/,
   );
+  // Rows installed before the renumber name ADR-0556 and cannot be patched, so both hold.
+  assert.equal(nativeMediaEvidenceIssue(mark({}, { decision: 'ADR-0556' })), null);
+  assert.match(nativeMediaEvidenceIssue(mark({}, { decision: 'ADR-0555' })), /incomplete/);
   // The exception exists to be HONEST about the fit; it cannot be used to claim the opposite.
   assert.match(nativeMediaEvidenceIssue(mark({}, { native1x: true })), /incomplete/);
   assert.match(nativeMediaEvidenceIssue(mark({}, { spatialResampling: false })), /incomplete/);

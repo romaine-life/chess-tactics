@@ -10,7 +10,7 @@ refines:
   - "[ADR-0433](0433-leaf-chrome-uses-oak-over-structural-teal-fields.md)"
 ---
 
-# ADR-0556: Main-menu marks share one ink height and one centre line
+# ADR-0560: Main-menu marks share one ink height and one centre line
 
 ## Context
 

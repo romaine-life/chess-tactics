@@ -7,7 +7,7 @@ const PREDRAWN_BOARD_SLOT = /^boards\/([a-z0-9][a-z0-9._-]{0,119})\/plate\.png$/
 const PREDRAWN_BOARD_COMPONENT = 'predrawn-board-plate';
 const PREDRAWN_BOARD_PROOF_SCHEMA = 'predrawn-board-canonical-level-proof-v1';
 const PREDRAWN_BOARD_PROOF_RENDERER = 'LevelEditor/PredrawnBoardLayer';
-// ADR-0556: the five main-menu marks, and the kit gear slot the rest of the app draws its
+// ADR-0560: the five main-menu marks, and the kit gear slot the rest of the app draws its
 // gear from, are fitted to one ink HEIGHT so the whole rail carries the same padding above
 // and below every mark. That fit RESAMPLES — the generator draws a 64x64 canvas whose ink is
 // whatever height it happened to draw, and the packer scales that ink until it is exactly 52
@@ -863,7 +863,7 @@ function mainMenuMarkSlot(slot) {
 
 /**
  * The typed completeness validator that lifts the main-menu marks out of `ui-kit`'s
- * bridge-only default (ADR-0556).
+ * bridge-only default (ADR-0560).
  *
  * What the rail actually depends on is geometry, not a runtime component: the seat draws the
  * WHOLE 64x64 canvas at a fixed size and lets the asset's own transparent padding decide how
@@ -2067,29 +2067,33 @@ function nativeMediaEvidenceIssue(row) {
   }
   if (evidence.schema === MAIN_MENU_MARK_FITTED_EXCEPTION_SCHEMA) {
     if (!MAIN_MENU_MARK_FITTED_SLOTS.includes(String(row.slot || ''))) {
-      return 'ADR-0556 fitted mark evidence is restricted to the main-menu mark slots';
+      return 'ADR-0560 fitted mark evidence is restricted to the main-menu mark slots';
     }
     if (
-      evidence.decision !== 'ADR-0556'
+      // The set was installed while this decision was numbered 0556; main took that number
+      // (and 0557-0559) first, so the ADR is 0560. Accepted rows cannot be patched, so both
+      // names are honoured and the stored ones stay truthful about when they were written —
+      // the same accommodation ADR-0520 records for its own renumber.
+      !['ADR-0560', 'ADR-0556'].includes(evidence.decision)
       || evidence.status !== 'owner-approved-production-exception'
       || evidence.native1x !== false
       || evidence.spatialResampling !== true
-    ) return 'ADR-0556 fitted mark evidence is incomplete';
+    ) return 'ADR-0560 fitted mark evidence is incomplete';
     if (
       Number(row.width) !== 64 || Number(row.height) !== 64
       || Number(evidence.outputWidth) !== 64 || Number(evidence.outputHeight) !== 64
       || Number(evidence.inkHeight) !== 52
-    ) return 'ADR-0556 fitted mark evidence must declare a 64x64 canvas holding exactly 52px of ink';
+    ) return 'ADR-0560 fitted mark evidence must declare a 64x64 canvas holding exactly 52px of ink';
     if (
       !Number.isFinite(Number(evidence.sourceWidth)) || Number(evidence.sourceWidth) <= 0
       || !Number.isFinite(Number(evidence.sourceHeight)) || Number(evidence.sourceHeight) <= 0
-    ) return 'ADR-0556 fitted mark evidence must name the generator canvas it was fitted from';
+    ) return 'ADR-0560 fitted mark evidence must name the generator canvas it was fitted from';
     if (
       !normalizedSha(evidence.outputSha256)
       || normalizedSha(evidence.outputSha256) !== normalizedSha(row.blob_sha256)
       || !normalizedSha(evidence.sourceSha256)
       || evidence.transform !== MAIN_MENU_MARK_FITTED_TRANSFORM
-    ) return 'ADR-0556 fitted mark evidence must authorize these bytes and name its exact transform';
+    ) return 'ADR-0560 fitted mark evidence must authorize these bytes and name its exact transform';
     return null;
   }
   if (evidence.native1x !== true) return 'nativeEvidence.native1x must be true';

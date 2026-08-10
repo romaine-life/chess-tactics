@@ -298,7 +298,7 @@ export function MenuIconReview(): ReactElement {
           ink dimensions pinned even, and the mark seated on the button's own centre line —
           so every mark in every set carries the same 5.6px above it and below it. Each mark
           is drawn in the materials its own object is made of, not in one material shared
-          across the set (ADR-0035, ADR-0556). Nothing is installed until you install a set.
+          across the set (ADR-0035, ADR-0560). Nothing is installed until you install a set.
         </p>
         {error ? <p role="alert">{error}</p> : null}
         {!catalog && !error ? <p role="status">Loading candidates…</p> : null}

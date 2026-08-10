@@ -36,7 +36,7 @@ const DECLARED = [
   { rule: '.skirmish-clock .skirmish-icon', slot: 'ui/kit/icons/game/wait.png' },
   { rule: '.skirmish-objective .skirmish-icon', slot: 'ui/kit/icons/game/objective.png' },
   // The Enchiridion tab draws its DESTINATION's mark through menuModeIcon, so it follows the
-  // menu-mode drawable rather than the kit glyph it used to borrow (ADR-0556).
+  // menu-mode drawable rather than the kit glyph it used to borrow (ADR-0560).
   { rule: '[data-strategikon-section="enchiridion"] img', slot: 'ui/main-menu/icons-carved/enchiridion.png', baseline: true },
   { rule: '[data-strategikon-section="prosopography"] img', slot: 'ui/kit/icons/unit-studio.png', baseline: true },
   { rule: '[data-strategikon-section="lipsanotheca"] img', slot: 'ui/kit/icons/info.png', baseline: true },

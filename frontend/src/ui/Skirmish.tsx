@@ -88,6 +88,7 @@ import {
 } from '../render/PredrawnBoardLayer';
 import { useSkirmishViewStoreApi } from '../game/SkirmishViewStoreContext';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
+import { leafSurfacePhase } from './shared/chromeSurfacePolicy';
 import { InnerChromeBox, ShellViewportSwap } from './shared/ChromeBox';
 import { rememberAdminBattleHref } from '../admin/battleRoute';
 import { formatGold, standingEnemyForceValue, type RunBattleReport } from '../run/model';
@@ -1361,6 +1362,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
         role="status"
         aria-label="Battle won"
         data-testid="run-battle-result"
+        data-chrome-leaf-surface=""
       >
         <div ref={runBattleVictoryBannerRef} className="run-battle-victory-banner">
           <h2>Victory</h2>
@@ -1383,12 +1385,15 @@ function SkirmishSession(props: SkirmishProps = {}) {
         </div>
       </div>
     ) : (
-      <div className="campaign-result campaign-result--viewport" role="dialog" aria-label="Run Battle result" data-testid="run-battle-result">
+      <div className="campaign-result campaign-result--viewport" role="dialog" aria-label="Run Battle result" data-testid="run-battle-result" data-chrome-leaf-surface="">
         <div className="settings-frame campaign-result-panel">
           <h2>{game.winner === 'draw' ? 'Draw' : 'Defeat'}</h2>
           <p>{routeLevel.name} — {resultDetail ?? objectiveGoal}</p>
+          {/* The phase index is the action's authored place in this row, not its DOM position:
+              a row of identical keys cut from one plank run rather than the same grain stamped
+              five times (ADR-0433/ADR-0063). Conditional actions keep their own seat. */}
           <div className="campaign-result-actions">
-            {game.winner === 'draw' ? <RunBattleUndoButton testId="undo-run-move-result" /> : null}
+            {game.winner === 'draw' ? <RunBattleUndoButton testId="undo-run-move-result" style={leafSurfacePhase(0)} /> : null}
             <RunBattleRetryButton
               testId="retry-run-battle-result"
               costTenths={runBattle.retryCostTenths}
@@ -1396,6 +1401,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
               onRetry={replayLevel}
               unavailableReason={runBattleRetryUnavailableReason}
               className="active"
+              style={leafSurfacePhase(1)}
             />
             <RunDeploymentRerollButton
               testId="reroll-deployment-result"
@@ -1403,11 +1409,13 @@ function SkirmishSession(props: SkirmishProps = {}) {
               canReroll={!unitDeparture && runBattle.canRerollDeployment}
               onReroll={() => { runBattle.onRerollDeployment(); }}
               departing={Boolean(unitDeparture)}
+              style={leafSurfacePhase(2)}
             />
             {game.winner === 'enemy' ? (
               <>
                 <ChromeNavButton unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+                  style={leafSurfacePhase(3)}
                   data-testid="new-run-after-defeat"
                   to={PLAY_RUN_NEW_SELECTOR_HREF}
                 >
@@ -1415,6 +1423,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
                 </ChromeNavButton>
                 <ChromeNavButton unit="inner-text-button"
                   className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+                  style={leafSurfacePhase(4)}
                   data-testid="main-menu-after-defeat"
                   to="/"
                 >
@@ -1647,20 +1656,20 @@ function SkirmishSession(props: SkirmishProps = {}) {
       ) : null}
 
       {isCampaignPlay && routeCampaignId && routeLevel && game.winner && (
-        <div className="campaign-result" role="dialog" aria-modal="true" aria-label="Battle result" data-testid="campaign-result">
+        <div className="campaign-result" role="dialog" aria-modal="true" aria-label="Battle result" data-testid="campaign-result" data-chrome-leaf-surface="">
           <div className="settings-frame campaign-result-panel">
             <h2>{game.winner === 'player' ? 'Victory' : game.winner === 'draw' ? 'Draw' : 'Defeat'}</h2>
             <p>{routeLevel.name} — {resultDetail ?? objectiveGoal}</p>
             <div className="campaign-result-actions">
-              <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} onClick={replayLevel}>
+              <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} style={leafSurfacePhase(0)} onClick={replayLevel}>
                 {game.winner === 'player' ? 'Replay' : 'Retry'}
               </ChromeButton>
               {game.winner === 'player' && nextLevel ? (
-                <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} onClick={advanceToNextLevel}>
+                <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} style={leafSurfacePhase(1)} onClick={advanceToNextLevel}>
                   Continue
                 </ChromeButton>
               ) : (
-                <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} to={playCampaignSelectorHref(routeCampaignId)}>
+                <ChromeNavButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} style={leafSurfacePhase(1)} to={playCampaignSelectorHref(routeCampaignId)}>
                   Back to Campaign
                 </ChromeNavButton>
               )}
@@ -1673,17 +1682,17 @@ function SkirmishSession(props: SkirmishProps = {}) {
           the way out (leaving via the app-shell nav was the only prior option). "View board"
           dismisses it to review the final position, leaving the persistent exit chip below. */}
       {net && game.winner && !netResultDismissed && (
-        <div className="campaign-result" role="dialog" aria-modal="true" aria-label="Match result" data-testid="netplay-result">
+        <div className="campaign-result" role="dialog" aria-modal="true" aria-label="Match result" data-testid="netplay-result" data-chrome-leaf-surface="">
           <div className="settings-frame campaign-result-panel">
             <h2>{turnLabel}</h2>
             <p>{netResultDisputed
               ? 'The clients disagree about this terminal position. Leaving concedes the match and closes recovery.'
               : `Multiplayer skirmish — ${resultDetail ?? objectiveGoal}`}</p>
             <div className="campaign-result-actions">
-              <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} data-testid="netplay-view-board" onClick={() => setNetResultDismissed(true)}>
+              <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button')} style={leafSurfacePhase(0)} data-testid="netplay-view-board" onClick={() => setNetResultDismissed(true)}>
                 View board
               </ChromeButton>
-              <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} data-testid="netplay-return" onClick={returnToLobbies}>
+              <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')} style={leafSurfacePhase(1)} data-testid="netplay-return" onClick={returnToLobbies}>
                 {netResultDisputed ? 'Concede and leave' : 'Return to lobbies'}
               </ChromeButton>
             </div>
@@ -1696,6 +1705,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
       {net && game.winner && netResultDismissed && (
         <div
           role="status"
+          data-chrome-leaf-surface=""
           style={{ position: 'fixed', left: '50%', bottom: 24, transform: 'translateX(-50%)', zIndex: 40, display: 'flex', alignItems: 'center', gap: 12 }}
         >
           <InnerChromeBox className="skirmish-status-chip skirmish-turn-plate">
