@@ -18800,6 +18800,13 @@ button.tileset-relationship-cell {
      at every seat size (73% of 64/44/40), because these are raster marks. */
   --settings-tab-icon-bleed-size: 47px;
   align-items: center;
+  /* The single grid row is the 40px icon slot, and the tab's content box is 30px (61 − 2·7 border
+     − 2·8.5 padding), so the row is 10px TALLER than the space it sits in. Left at the default
+     `normal` it starts at the content top and hangs all 10px off the bottom, which put the icon
+     and the label ~5px below the button's centre — the icon's own rule below computes its centring
+     against the 61px tab and never got it, because the box it centres inside was itself low.
+     Centring the row splits the overflow, so both land on the button's centre line. */
+  align-content: center;
   appearance: none;
   /* Rendered as a <button> since ADR-0052: buttons don't inherit font (UA default) and
      get the arrow cursor — restore the exact look/feel the anchor version had. */
