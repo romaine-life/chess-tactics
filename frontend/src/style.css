@@ -27945,11 +27945,21 @@ button.run-card-formation-cell {
   padding: 12px;
 }
 
+ /* Pinned: auditing 49 tiers means scrolling deep into the grid and still needing
+    the zoom stepper and the palette picker, which otherwise scroll away above. */
 .unit-roster-controls {
   align-items: center;
+  /* Frosted rather than painted: an opaque bar would be surface paint, which belongs
+     to registered chrome (ADR-0032/0059/0201). A backdrop blur keeps the controls
+     legible over the grid scrolling beneath them without inventing a surface. */
+  backdrop-filter: blur(8px);
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
+  padding: 8px 4px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
 }
 
 .unit-roster-controls label {
