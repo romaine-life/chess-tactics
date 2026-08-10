@@ -23593,8 +23593,7 @@ button.tileset-relationship-cell {
   gap: var(--ds-space-1);
 }
 
-/* 30px, not the coin's own 28: every hand and card candidate turned to mush below it. */
-.run-gold-icon.run-expunctio-visit-mark-icon,
+/* 30px: every hand-and-card candidate turned to mush below it. */
 .run-adlectio-mark-icon.run-expunctio-visit-mark-icon {
   block-size: 30px;
   flex: none;

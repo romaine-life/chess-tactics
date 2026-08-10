@@ -143,7 +143,7 @@ export function AdlectioMarkInstallControl({
           contentSha256: candidate.version.media.sha256,
           slot: ADLECTIO_MARK_SLOT,
           canonicalScale: 1,
-          surfaceKind: 'Expunctio “Adlected this visit” mark seat at its live 30px size',
+          surfaceKind: 'Expunctio “Adlected this Sectio” mark seat at its live 30px size',
         },
       });
       setStatus('Installing…');

@@ -373,11 +373,11 @@ describe('Run chrome hierarchy', () => {
     // workspace cannot drift from what the owner judged.
     expect(runExpunctioWorkspace).toContain('<RunAdlectioMarkLine />');
     expect(runAdlectioMark).toContain('<span className="run-expunctio-visit-mark">');
-    expect(runAdlectioMark).toContain('Adlected this visit');
+    expect(runAdlectioMark).toContain('Adlected this Sectio');
     expect(styleCss).toMatch(/\.run-expunctio-visit-mark\s*\{[\s\S]*?color:\s*var\(--skirmish-ink\)/);
-    // The plain installed coin, never a transaction mark: the fee on the same tile already paints
-    // the loss arrow, and a second arrowed mark reads as a second price.
-    expect(runAdlectioMark).toContain('<RunGoldIcon className="run-expunctio-visit-mark-icon" />');
+    // No coin and no transaction mark in this line: the fee below it already paints the loss arrow
+    // and says what the card cost, so gold here says only what is already said.
+    expect(runAdlectioMark).not.toContain('RunGoldIcon');
     expect(runExpunctioWorkspace).not.toContain('<RunGoldTransactionIcon');
     // A review surface is a Studio category reached by clicking, never a review parameter on a
     // player route (ADR-0058). Nothing in the Run may read one for this mark.

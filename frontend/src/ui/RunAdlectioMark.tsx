@@ -1,6 +1,5 @@
 import type { ReactElement } from 'react';
 import { installedUiMediaIfPresent } from './installedUiMedia';
-import { RunGoldIcon } from './RunResources';
 
 /**
  * The mark for a record THIS Sectio visit admitted — the line Expunctio prints above a
@@ -43,15 +42,18 @@ export function RunAdlectioMarkIcon({
 }
 
 /**
- * The whole line, so the Studio review mounts the real thing rather than a lookalike: the mark,
- * the coin it cost, and the words — one component, two seats (ADR-0059).
+ * The whole line, so the Studio review mounts the real thing rather than a lookalike: the mark and
+ * the words — one component, two seats (ADR-0059).
+ *
+ * No coin beside it. The coin stood in while the mark was undecided, saying only that gold was
+ * involved — which the fee below the line already says. The installed mark is a hand taking the
+ * card, which says the thing the coin could not.
  */
 export function RunAdlectioMarkLine({ src }: { src?: string }): ReactElement {
   return (
     <span className="run-expunctio-visit-mark">
       <RunAdlectioMarkIcon className="run-expunctio-visit-mark-icon" {...(src === undefined ? {} : { src })} />
-      <RunGoldIcon className="run-expunctio-visit-mark-icon" />
-      Adlected this visit
+      Adlected this Sectio
     </span>
   );
 }

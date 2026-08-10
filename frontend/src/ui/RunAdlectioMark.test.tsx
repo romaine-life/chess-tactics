@@ -16,11 +16,12 @@ describe('Adlectio mark', () => {
     expect(markup).toContain('aria-hidden="true"');
   });
 
-  it('keeps the coin and the words when the mark is still undecided', () => {
+  it('is the words alone when no mark is installed, never a coin standing in', () => {
+    // The coin said only that gold was involved, which the fee under this line already says.
     const markup = renderToStaticMarkup(<RunAdlectioMarkLine />);
     expect(markup).toContain('run-expunctio-visit-mark');
-    expect(markup).toContain('Adlected this visit');
-    expect(markup).toContain('run-gold-icon');
+    expect(markup).toContain('Adlected this Sectio');
+    expect(markup).not.toContain('run-gold-icon');
     expect(markup).not.toContain('run-adlectio-mark-icon');
   });
 
@@ -28,6 +29,6 @@ describe('Adlectio mark', () => {
     const markup = renderToStaticMarkup(<RunAdlectioMarkLine src="/api/admin/media/candidate" />);
     expect(markup).toContain('run-adlectio-mark-icon');
     expect(markup).toContain('src="/api/admin/media/candidate"');
-    expect(markup).toContain('Adlected this visit');
+    expect(markup).toContain('Adlected this Sectio');
   });
 });

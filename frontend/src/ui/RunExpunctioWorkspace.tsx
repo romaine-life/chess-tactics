@@ -135,12 +135,9 @@ function ExpunctioCardTile({
         */}
         <span className="run-expunctio-copy">
           {/*
-            The admission itself, then the gold it cost. The coin alone said only that gold was
-            involved, which the fee below already says; the act — gold handed over, or the card
-            taken with it — is the half that makes the line mean "bought, this visit". Which act it
-            draws is still an open art decision, so the seat draws nothing until one is installed
-            and the line falls back to the coin (ADR-0318); the Studio's Adlectio Mark category is
-            where candidates are auditioned in this same line.
+            The admission itself, and nothing about the price: the fee below this line already says
+            what the card cost, so a coin here would only repeat it. The mark's own candidates are
+            auditioned in the Studio's Adlectio Mark category, in this same line.
           */}
           {admittedThisVisit ? <RunAdlectioMarkLine /> : null}
         </span>

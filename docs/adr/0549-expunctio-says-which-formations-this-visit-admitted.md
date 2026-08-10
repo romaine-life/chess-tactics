@@ -50,21 +50,25 @@ have been renormalized.
   means there is no record to compare against, not that everything is new.
 - The struck card is included. A formation admitted and then athetized by the same visit is still
   the visit's doing, and Expunctio shows that record beside the cards still held.
-- The Expunctio tile prints **Adlected this visit**, answering ADR-0443's *Athetized this visit* in
-  the same register. It carries the tile's own ink rather than the muted register the supporting
-  labels use, because it reports state instead of labelling a field.
-- The mark wears the admission itself, then the gold it cost. Never a transaction mark: the fee
-  directly beneath this line already paints `lose-gold`'s arrow, and a second arrowed mark on one
-  tile reads as a second price, while `gold-gained` says the opposite of what happened.
+- The Expunctio tile prints **Adlected this Sectio** — the visit named by the movement the player
+  is standing in, not by a generic "visit" — beside a glyph of the admission. It carries the tile's
+  own ink rather than the muted register the supporting labels use, because it reports state
+  instead of labelling a field.
+- The line says nothing about the price. A coin stood beside the words while the mark's art was
+  undecided, and it said only that gold was involved, which the fee directly beneath the line
+  already says exactly. A transaction mark is worse than redundant: the fee paints `lose-gold`'s
+  arrow, so a second arrowed mark on one tile reads as a second price, and `gold-gained` says the
+  opposite of what happened.
 - The admission gets a new slot, `ui/run/sectio/adlectio-mark.png` (`ui-kit` domain, `icon` role,
   decorative), because the kit had no glyph for it — `game/adlected` belongs to the retired
   unit-ability vocabulary and depicts pikes. The slot is named for WHAT IT MARKS, not for what it
   draws, because what it should draw is an open question with two live answers: the hand that
   handed the gold over, or the hand that took the card the gold bought. Both audition in the one
   seat, so choosing between them is choosing an image and not a code path.
-- That decision stays open in the code: the seat draws nothing at all until a candidate is
-  installed, so the line falls back to the coin alone rather than reserving an empty box that would
-  shove the coin sideways for a mark saying nothing (ADR-0318).
+- The seat draws nothing at all until a candidate is installed, rather than reserving an empty box
+  for a mark that says nothing yet (ADR-0318); the line is then the words alone. The chosen glyph
+  is a hand pulling the card toward the player, which is the act the words name — the reason the
+  coin could go.
 - Candidates are auditioned in the Studio's **Adlectio Mark** category, which mounts every one of
   them in this exact line — the same `RunAdlectioMarkLine` the tile renders, not a lookalike — on
   one page, and installs the chosen one. A review surface is a Studio category reached by clicking
