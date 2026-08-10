@@ -47,7 +47,8 @@
     "verify:royal-fork": "node scripts/verify-royal-fork-bounty.mjs",
     "verify:manubiae": "node scripts/verify-manubiae.mjs",
     "verify:scene-retention": "node scripts/verify-scene-retention.mjs",
-    "verify:icon-seats": "node scripts/verify-icon-seats.mjs"
+    "verify:icon-seats": "node scripts/verify-icon-seats.mjs",
+    "verify:no-freeze": "node scripts/verify-no-ui-block.mjs"
   },
   "devDependencies": {
     "@types/react": "^19.2.17",

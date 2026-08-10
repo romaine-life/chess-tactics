@@ -8,6 +8,7 @@ import {
 import { EnchiridionReference, EnchiridionSectionRail, LipsanaCodex } from './Enchiridion';
 import { HeldCardCodex } from './HeldCardCodex';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
+import { useOpenRailTab } from './shared/railOpenIntent';
 import { InnerChromeBox, ShellWorkspace } from './shared/ChromeBox';
 import {
   StrategikonContentSceneSlot,
@@ -15,9 +16,22 @@ import {
 } from './shell/AuthoredSceneSlot';
 import { TitleBarControlContribution } from './shell/TitleBarControls';
 import type { EnchiridionSection } from './enchiridionRoute';
-import { strategikonAddress, strategikonHref, type StrategikonSection } from './strategikonRoute';
+import {
+  isStrategikonPath,
+  strategikonAddress,
+  strategikonHref,
+  type StrategikonSection,
+} from './strategikonRoute';
 import { strategikonNavigationItems, useStrategikonCardsIcon } from './strategikonNavigation';
 import { installedUiMedia } from './installedUiMedia';
+
+// The addresses the section rail speaks for: the whole Strategikon, including its own
+// section-less root. Leaving it for the Battle or the Run is not this rail's business, and
+// the rail keeps wearing what is committed on the way out. See shared/railOpenIntent.ts.
+const SECTION_RAIL_ADDRESSES = {
+  governs: isStrategikonPath,
+  select: (path: string): StrategikonSection | null => strategikonAddress(path).section,
+};
 
 function UnavailableRunReference({ title, copy }: { title: string; copy: string }): ReactElement {
   return (
@@ -54,6 +68,9 @@ export function Strategikon({
   run?: RunDocument | null;
 }): ReactElement {
   const { base, section, reference } = strategikonAddress(path);
+  // The open mark follows the address; `section` — and so the pane, its scene slot and its
+  // transition — still waits for the committed one.
+  const openSection = useOpenRailTab(SECTION_RAIL_ADDRESSES, section);
   const cardsIcon = useStrategikonCardsIcon();
   const [filters, setFilters] = useState<RunArmyFilters>({ ...DEFAULT_RUN_ARMY_FILTERS });
   const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
@@ -91,6 +108,7 @@ export function Strategikon({
               to={href(item.section)}
               index={index}
               active={section === item.section}
+              expanded={openSection === item.section}
               iconSrc={item.iconSrc}
               iconClassName={item.iconClassName}
             />
