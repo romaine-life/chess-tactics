@@ -16,7 +16,7 @@ import { useAuthSession } from '../net/authSession';
 import { AdminControls } from './AdminControls';
 import { ChromeNavButton } from './shared/ChromeButton';
 import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
-import { ApparatusRailColumn } from './shared/ApparatusRailTab';
+import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
 import { SettingsContentSceneSlot } from './shell/AuthoredSceneSlot';
 import {
   DEFAULT_APP_SETTINGS,
@@ -685,21 +685,17 @@ export function Settings({
         aria-label="Settings sections"
       >
         {tabs.map((tab, index) => (
-          <ChromeNavButton unit="inner-box"
+          <ApparatusRailTab
             key={tab.id}
+            label={tab.label}
             to={withReturnTo(TAB_PATHS[tab.id])}
-            className={chromeUnitClassNames('inner-box', 'settings-tab main-menu-mode-tab', tab.id === activeTab && 'is-active')}
-            // Position down the rail — drives the shared stone-continuity slice
-            // (--tab-index, see .settings-tab in style.css) so the tabs read as one sheet (ADR-0063).
-            style={{ ['--tab-index' as string]: index }}
-            aria-current={tab.id === activeTab ? 'page' : undefined}
-            onClick={() => setConfirmingReset(false)}
-          >
-            <span className="settings-tab-icon" aria-hidden="true">
-              <img src={asset(tab.icon)} alt="" />
-            </span>
-            <FittedTabLabel>{tab.label}</FittedTabLabel>
-          </ChromeNavButton>
+            // Position down the rail — drives the shared stone-continuity slice so the tabs
+            // read as one sheet (ADR-0063). The primitive owns the seat and the slice now.
+            index={index}
+            active={tab.id === activeTab}
+            iconSrc={asset(tab.icon)}
+            onSelect={() => setConfirmingReset(false)}
+          />
         ))}
       </ApparatusRailColumn>
 

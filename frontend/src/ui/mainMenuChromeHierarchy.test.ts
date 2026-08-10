@@ -37,7 +37,7 @@ describe('Main Menu chrome hierarchy', () => {
 
     expect(modeTab).toContain('<ApparatusRailTab');
     expect(apparatusRailTab).toContain('<ChromeNavButton unit="inner-box"');
-    expect(apparatusRailTab).toContain("chromeUnitClassNames('inner-box', 'settings-tab main-menu-mode-tab'");
+    expect(apparatusRailTab).toMatch(/chromeUnitClassNames\(\s*'inner-box',\s*'settings-tab main-menu-mode-tab',/);
     expect(modeTab).not.toMatch(/className=\{`settings-tab main-menu-mode-tab/);
   });
 
@@ -67,8 +67,19 @@ describe('Main Menu chrome hierarchy', () => {
   it('rejects legacy button boxes anywhere in a menu destination', () => {
     expect(mainMenu).toContain('<ApparatusRailTab');
     expect(playMenu).toContain('<ApparatusRailTab');
-    expectTaggedLegacyControls(apparatusRailTab, 'settings-tab main-menu-mode-tab');
-    for (const source of [settings, editor]) expectTaggedLegacyControls(source, 'settings-tab main-menu-mode-tab');
+    // The primitive is the ONLY place a rail tab is assembled — Settings and the Editor mount
+    // <ApparatusRailTab> now, and check-rail-tab-primitive.mjs fails the build on any file that
+    // names these classes in markup again (ADR-0558). So this asserts the one remaining
+    // assembly is registered, and that the converted surfaces carry none.
+    // The primitive assembles the tab across several lines now, so match its registered call
+    // rather than a single-tag regex: chromeUnitClassNames + a registered unit on both hosts.
+    expect(apparatusRailTab).toMatch(/chromeUnitClassNames\(\s*'inner-box',/);
+    expect(apparatusRailTab).toContain('<ChromeNavButton unit="inner-box"');
+    expect(apparatusRailTab).toContain('data-chrome-unit="inner-box"');
+    for (const source of [settings, editor]) {
+      expect(source).not.toMatch(/className=\{?.*?(?<![\w-])settings-tab(?![\w-])/);
+      expect(source).toContain('<ApparatusRailTab');
+    }
     expectTaggedLegacyControls(playMenu, 'ce-link-button');
     for (const source of [editor, warEditor]) expectTaggedLegacyControls(source, 'ce-link-button');
     expectTaggedLegacyControls(lobbies, 'utility-button', 'utilityButtonClassNames(');

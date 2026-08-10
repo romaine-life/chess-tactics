@@ -34,7 +34,9 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('const primaryRunLandingSettled =');
     expect(playMenu).toContain('&& primaryRunLandingSettled');
     expect(playMenu).not.toContain('play-hub-neutral');
-    expect(style).toContain('.play-choice-row:not(.is-selected):not(.is-disabled):hover');
+    // Run's destinations are rail tabs, so their hover, seat, gap and stone slice are the
+    // primitive's — there is no Run-specific row class left to style (ADR-0558).
+    expect(style).not.toContain('.play-choice-row');
     expect(style).not.toContain('.run-choice-row');
   });
 
@@ -95,11 +97,13 @@ describe('unified Play menu contract (ADR-0074)', () => {
   });
 
   it('makes Run preparation the ordinary Play surface while retaining direct Continue', () => {
-    expect(playMenu).toContain('data-testid="run-choice-current"');
-    expect(playMenu).toMatch(/<ChromeNavButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-choice-current"/);
+    // Both destinations are the shared rail tab, which carries the family's oak itself — the
+    // fill is stamped once by ApparatusRailColumn rather than per call site (ADR-0558).
+    expect(playMenu).toContain('testId="run-choice-current"');
+    expect(playMenu).toMatch(/<ApparatusRailTab[\s\S]*?label="Current Run"/);
     expect(playMenu).toContain('to={PLAY_RUN_CURRENT_SELECTOR_HREF}');
-    expect(playMenu).toContain('<h4>Current Run</h4>');
-    expect(playMenu).toContain("'settings-row play-choice-row'");
+    expect(playMenu).not.toContain('play-choice-row');
+    expect(playMenu).toContain('<ApparatusRailColumn className="play-run-choice-rail"');
     expect(playMenu).toContain('data-testid="run-detail-current"');
     expect(playMenu).toContain('to="/run"><span>Play</span></ChromeNavButton>');
     // Every leaf control on the Run surface carries the oak leaf material (ADR-0433).
@@ -115,7 +119,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // An ENABLED row is its name alone — the Battle position and Ataraxia it used to restate
     // are the detail column's first two facts (ADR-0556). The empty state keeps its sentence,
     // because nothing else on the surface says why the row cannot be taken (ADR-0334).
-    expect(playMenu).toContain('{presentedRun ? null : <div className="settings-row-value">No active Run</div>}');
+    expect(playMenu).toContain("detail={presentedRun ? undefined : 'No active Run'}");
     expect(playMenu).not.toContain('<p>Choose Ataraxia</p>');
   });
 
@@ -124,28 +128,28 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // at 0. Two rows like that paint the identical crop — the repeated-texture look. Each row
     // instead samples the slice one plank running down the list would give it, the same
     // recovery the rail tabs use for the `fixed` attachment Chromium forced us to drop.
-    expect(style).toMatch(/\.play-choice-row\s*\{[\s\S]*?--play-choice-row-surface-pitch:\s*calc\(61px \+ var\(--settings-section-rows-gap, 10px\)\);[\s\S]*?--chrome-surface-position-y:\s*calc\(var\(--play-choice-row-index, 0\) \* -1 \* var\(--play-choice-row-surface-pitch\)\);/);
+    // The plank is the RAIL's now: one pitch, one derivation, shared with every other rail in
+    // the app. Run states only which seat each destination holds (ADR-0558).
+    expect(style).toMatch(/--settings-tab-surface-pitch:\s*calc\(61px \+ var\(--settings-rail-tab-gap, 37px\)\);/);
+    expect(style).not.toContain('--play-choice-row-surface-pitch');
     // The pitch is only a constant because BOTH row states are one line — the empty state's
     // sentence is the row's end value, not a second line that would shift the plank when a Run
     // starts or ends. The seat is the main-menu button's, so the rows read as its siblings.
-    // A FIXED seat, and the RAIL's gap — the two stacks stand side by side, so they must step by
-    // the same amount. A min-height let the clamp()ed copy grow the row past the tab's flat 61px
-    // (55.83px at 1280vw, 61.86px at 1920vw), and the shared 10px row gap disagreed with the
-    // rail's clamp from the first gap onward. Both terms of the plank pitch are now exact.
-    expect(style).toMatch(/\.play-choice-row\s*\{[\s\S]*?block-size:\s*61px;/);
-    expect(style).toMatch(/\.play-run-choice-col \.settings-section-rows\s*\{\s*--settings-section-rows-gap:\s*var\(--main-menu-tab-column-gap\);/);
+    // Seat and gap are not Run's to state: it mounts the same tab in the same column type as
+    // every other rail, so the two stacks cannot disagree by construction (ADR-0558).
+    expect(playMenu).not.toContain('--settings-section-rows-gap');
     // And no eyebrow over the one group in the column — it named the column after the only thing
     // in it, and cost the first row its alignment with the first main-menu button (ADR-0556).
     expect(playMenu).not.toContain('<h3 className="settings-section-title">Run</h3>');
-    expect(playMenu).toContain('<section className="settings-section" aria-label="Run">');
+    expect(playMenu).toContain('aria-label="Run"');
     // The pitch may not restate the list gap — it has to step by exactly what layout steps by.
     expect(style).toMatch(/\.settings-section-rows\s*\{[\s\S]*?--settings-section-rows-gap:\s*10px;[\s\S]*?gap:\s*var\(--settings-section-rows-gap\);/);
     // Seats are owned by the panel, never counted off the DOM: a :nth-child ladder re-cuts the
     // plank the moment a "Loading Runs…" or "Runs unavailable" row joins the list.
-    expect(style).not.toMatch(/\.play-choice-row:nth-child\(/);
+    expect(playMenu).not.toMatch(/index=\{\s*\w+\.indexOf/);
     expect(playMenu).toContain('const PLAY_CHOICE_ROW_SEATS = { current: 0, new: 1 } as const;');
-    expect(playMenu).toContain("['--play-choice-row-index' as string]: PLAY_CHOICE_ROW_SEATS.current");
-    expect(playMenu).toContain("['--play-choice-row-index' as string]: PLAY_CHOICE_ROW_SEATS.new");
+    expect(playMenu).toContain('index={PLAY_CHOICE_ROW_SEATS.current}');
+    expect(playMenu).toContain('index={PLAY_CHOICE_ROW_SEATS.new}');
   });
 
   it('presents Run adoption as an unboxed decision group', () => {
@@ -177,8 +181,8 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).not.toContain('Carry one persistent army');
     expect(playMenu).not.toContain('<h3>{run.war.name}</h3>');
     expect(playMenu).not.toContain("run.war.description || 'Active War'");
-    expect(playMenu).toContain('data-testid="run-choice-new"');
-    expect(playMenu).toMatch(/<ChromeNavButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-choice-new"/);
+    expect(playMenu).toContain('testId="run-choice-new"');
+    expect(playMenu).toMatch(/<ApparatusRailTab[\s\S]*?label="Start New Run"/);
     expect(playMenu).toContain('to={PLAY_RUN_NEW_SELECTOR_HREF}');
     expect(playMenu).toContain('data-testid="run-detail-new"');
     expect(playMenu).toContain('<RunDetailContentSceneSlot');

@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import { chromeUnitClassNames } from '../chromeUnitRegistry';
+import { ApparatusRailTab } from './ApparatusRailTab';
 
 /**
  * One collection-level destination in the Editor rail.
@@ -32,37 +32,23 @@ export function EditorCollectionRailTab({
 }): ReactElement {
   const itemCount = `${count} ${itemName}${count === 1 ? '' : 's'}`;
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-label={`${title}, ${itemCount}${hasAttention ? `, ${attentionLabel.toLowerCase()}` : ''}`}
-      aria-current={active ? 'page' : undefined}
-      style={{ ['--tab-index' as string]: index }}
-      data-chrome-unit="inner-box"
-      className={chromeUnitClassNames('inner-box', 'settings-tab main-menu-mode-tab ce-campaign-tab ce-campaign-tab-meta', active && 'is-active')}
-      onClick={onSelect}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          onSelect();
-        }
-      }}
-    >
-      <span className="settings-tab-icon" aria-hidden="true">
-        <img src={iconSrc} alt="" />
-      </span>
-      <span className="ce-campaign-tab-copy">
-        <strong>{title}</strong>
-        <small>{itemCount}</small>
-      </span>
-      {hasAttention ? (
+    <ApparatusRailTab
+      label={title}
+      detail={itemCount}
+      ariaLabel={`${title}, ${itemCount}${hasAttention ? `, ${attentionLabel.toLowerCase()}` : ''}`}
+      index={index}
+      active={active}
+      iconSrc={iconSrc}
+      className="ce-campaign-tab ce-campaign-tab-meta"
+      onSelect={onSelect}
+      trailing={hasAttention ? (
         <span
           className="ce-tab-trail ce-tab-draft-status"
           data-testid="unassigned-draft-attention"
           title={attentionLabel}
           aria-hidden="true"
         >!</span>
-      ) : null}
-    </div>
+      ) : undefined}
+    />
   );
 }

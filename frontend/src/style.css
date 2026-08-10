@@ -18301,6 +18301,19 @@ button.tileset-relationship-cell {
 }
 
 .apparatus-tab-copy > small {
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .55));
+  font-size: var(--ds-text-2xs);
+}
+
+/* A tab that exists but cannot be taken keeps its seat and its slice of the stone; only its
+   interaction goes (ADR-0289's visible-but-disabled language). `is-locked` sits beside it in
+   .ce-campaign-tab below and says the harder thing: not now vs not for you. */
+.settings-tab.is-disabled {
+  cursor: default;
+  opacity: .55;
+}
+
+.apparatus-tab-copy > small {
   color: var(--skirmish-muted);
   font-size: var(--ds-text-xs);
   text-transform: none;
@@ -18755,25 +18768,6 @@ button.tileset-relationship-cell {
   padding-block-end: var(--ds-gutter);
 }
 
-/* Run's choice list SELECTS a destination; the detail column beside it is what acts. That makes
-   it a tab column by role, so it takes --col-tab-w like every other selecting column in the
-   shell. It was drawn at --col-action-w (572px) purely because Run used to sit third in the row
-   — that width is defined as "the max that fits beside two tab columns at the body cap", and
-   ADR-0514 deleted the middle column without re-deciding the leftover. Sized as what it is, the
-   rows land byte-identical to the main-menu buttons they sit beside. ADR-0556. */
-.play-run-choice-col {
-  inline-size: var(--col-tab-w);
-}
-
-/* Two stacks of the same button, side by side, must step by the same amount. The rail's gap is
-   baked from --main-menu-tab-column-gap (a clamp on --layout-vw), so a list next to it that used
-   the shared 10px row gap drifted apart from the first gap onward — 12.79px against 10px at
-   1600vw, and only coincidentally equal near 1250vw. Read the rail's own number instead of
-   restating a literal; the plank pitch is built from --settings-section-rows-gap, so it follows
-   this automatically and still steps by exactly what layout steps by. ADR-0556. */
-.play-run-choice-col .settings-section-rows {
-  --settings-section-rows-gap: var(--main-menu-tab-column-gap);
-}
 
 /* A selected campaign level adds the authored preview as the next destination column.
    On narrower desktop viewports, fit that master/detail pair inside the action column's
@@ -19121,9 +19115,10 @@ button.tileset-relationship-cell {
    8px-radius border around each section's rows; removed so only the per-row atom
    frame shows.) */
 .settings-section-rows {
-  /* Named because a surfaced row's texture pitch is built from it (see .play-choice-row):
-     the sheet has to step by exactly what the layout steps by, so the two may not be
-     stated twice. */
+  /* Named because a surfaced row's texture pitch is built from it: the sheet has to step by
+     exactly what the layout steps by, so the two may not be stated twice. (Run's choice list
+     used to be the caller; it is a rail of ApparatusRailTabs now and steps by the rail's own
+     --settings-tab-surface-pitch instead. ADR-0558.) */
   --settings-section-rows-gap: 10px;
   display: grid;
   gap: var(--settings-section-rows-gap);
@@ -19478,22 +19473,9 @@ button.tileset-relationship-cell {
   cursor: default;
   filter: grayscale(.35) brightness(.86);
 }
-.ce-campaign-tab-copy {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-.ce-campaign-tab-copy strong {
-  font-size: var(--ds-text-md);
+.ce-campaign-tab .apparatus-tab-copy > strong {
   letter-spacing: .02em;
-  overflow: hidden;
-  text-overflow: ellipsis;
   text-transform: uppercase;
-  white-space: nowrap;
-}
-.ce-campaign-tab-copy small {
-  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .55));
-  font-size: var(--ds-text-2xs);
 }
 /* Neutralise the shared label nudge for the trailing badge so it stays in its grid cell. */
 .ce-campaign-tab > span.ce-tab-trail { transform: none; }
@@ -27697,54 +27679,6 @@ button.run-card-formation-cell {
 .run-rules-effect {
   color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
   font-size: var(--ds-text-xs);
-}
-
-/* The Run destinations are boards cut from ONE plank, not the same board stamped twice.
-   A leaf's installed oak is a locally-attached background, so without an offset every row
-   restarts the sheet at 0 and paints an identical crop — two 296px slabs showing the same
-   knot is what reads as a repeated texture. Each row instead samples the vertical slice it
-   would have if one sheet ran down the list, the same recovery the rail tabs use for the
-   `fixed` attachment ADR-0034 §C specified and Chromium's repaint bug forced us to drop.
-
-   The slice is keyed to the row's OWN seat via --play-choice-row-index, which RunPanel owns
-   (Current always seats above New, whatever transient status rows the list is carrying),
-   NOT :nth-child — a DOM ladder re-counts and silently re-seats the plank the moment a
-   "Loading Runs…" or "Runs unavailable" row joins the list. ADR-0063.
-
-   Height: these rows sit beside the main-menu buttons at the same width, so they are held to
-   the same 61px seat those buttons use, the same way — a FIXED block-size, not .settings-row's
-   18px-padded 60px floor (which drew a 96px slab for one line of text) and not a min-height
-   the clamp()ed copy then grows past. A min-height measured 55.83px at 1280vw and 61.86px at
-   1920vw against the tab's flat 61px, so the two stacks disagreed on row two onward. Both row
-   states stay ONE line — the empty state's "No active Run" is the row's end value, not a second
-   line — so the seat is a constant and the plank below it does not shift with Run existence.
-   ADR-0556.
-
-   Pitch = the row's rendered block size + the list gap, and with a fixed seat and the rail's own
-   gap (above) both terms are now exact at every width rather than drifting a few px at the
-   extremes. */
-.play-choice-row {
-  --play-choice-row-surface-pitch: calc(61px + var(--settings-section-rows-gap, 10px));
-  --chrome-surface-position-y: calc(var(--play-choice-row-index, 0) * -1 * var(--play-choice-row-surface-pitch));
-  appearance: none;
-  block-size: 61px;
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  min-height: 61px;
-  /* The seat is fixed, so this only centers the copy inside it (.settings-row is align-items:
-     center); it is stated to keep the box arithmetic in the comment above readable. */
-  padding-block: 10.5px;
-  text-align: start;
-}
-
-.play-choice-row:not(.is-selected):not(.is-disabled):hover {
-  filter: brightness(1.06);
-}
-
-.play-choice-row.is-disabled {
-  cursor: default;
-  opacity: .55;
 }
 
 .play-detail-body {
