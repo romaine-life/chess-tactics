@@ -403,7 +403,7 @@ export const RUN_MANUBIAE: readonly ManubiumDefinition[] = Object.freeze([
   {
     id: 'humble-mate',
     name: 'Humble mate',
-    earnedBy: 'Deliver the checkmate with anything but a Queen. The less the mating unit is worth the more it pays, so a Pawn pays most of all. When two units mate at once it is the lesser of them that is paid for.',
+    earnedBy: 'Deliver the checkmate with anything but a Queen. The less the mating unit is worth the more it pays, so a Pawn pays most of all — and a unit is worth what it started as, so a Pawn you walked home and queened still mates as a Pawn. When two units mate at once it is the lesser of them that is paid for.',
     goldTenths: null,
     // Written from the rate rather than beside it, so the sentence cannot drift from the gold.
     priceNote: `${humbleMateGoldTenths('rook')} for a Rook, ${humbleMateGoldTenths('knight')} for a Bishop or Knight, ${humbleMateGoldTenths('pawn')} for a Pawn`,
