@@ -28,6 +28,20 @@ import { UnitRungSprite } from './UnitRungSprite';
 // is precisely the thing being audited. I twice widened the buttons on the reasoning
 // that a click wants a bigger visible change; that is a comfort argument and it
 // costs coverage, which this surface exists to provide.
+/**
+ * Families rendered through the pixel filter across every palette and facing.
+ *
+ * These read `/dev-filtered/<family>/<palette>/<facing>.png`, so the palette selector
+ * and the facing columns drive them exactly as they drive the shipped art — which is
+ * the point: a candidate judged only in navy, only facing south, is a candidate judged
+ * on one of forty-eight views. Everything else still has a single south-only file at
+ * `/dev-filtered/<family>.png`.
+ *
+ * The folder is gitignored, so an empty set here is the normal state on a fresh
+ * checkout; render the matrix before expecting anything.
+ */
+const FILTER_MATRIX = new Set(['knight', 'bishop']);
+
 const WHEEL_STRIDE = 1;
 const BUTTON_STRIDE = 1;
 const TIER_INDEX_RANGE = { min: -18, max: 30 };
@@ -51,28 +65,73 @@ const TIER_INDEX_RANGE = { min: -18, max: 30 };
  * real thing anyway. Judge separation against terrain on a board.
  */
 
-export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactElement {
-  const [palette, setPalette] = useState<UnitPalette>('navy-blue');
-  const [allPalettes, setAllPalettes] = useState(false);
+/**
+ * The view is in the address, so a specific state can be handed over as a link.
+ *
+ * Without this the viewer always opens on its defaults, and pointing someone at a
+ * candidate means describing which boxes to tick — which puts the navigation back on
+ * the person the link was supposed to spare.
+ */
+function readParams(): URLSearchParams {
+  return new URLSearchParams(typeof window === 'undefined' ? '' : window.location.search);
+}
 
-  const [tierIndex, setTierIndex] = useState(0);
+const asFlag = (value: string | null) => value === '1' || value === 'true';
+
+export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactElement {
+  const initial = useMemo(readParams, []);
+  const [palette, setPalette] = useState<UnitPalette>(
+    (UNIT_PALETTES as readonly string[]).includes(initial.get('palette') ?? '')
+      ? (initial.get('palette') as UnitPalette)
+      : 'navy-blue',
+  );
+  const [allPalettes, setAllPalettes] = useState(asFlag(initial.get('palettes')));
+
+  const [tierIndex, setTierIndex] = useState(() => {
+    const raw = Number.parseInt(initial.get('tier') ?? '', 10);
+    return Number.isFinite(raw) ? Math.min(30, Math.max(-18, raw)) : 0;
+  });
   const tierZoom = zoomForTier(tierIndex);
   // Below 1:1 the board minifies through its mip chain rather than dropping columns,
   // so the browser is allowed to resample here too; magnified, whole-pixel is what
   // the board does and what the art was authored for.
   const nearest = tierZoom >= 1;
-  const [showBefore, setShowBefore] = useState(false);
+  const [showBefore, setShowBefore] = useState(asFlag(initial.get('before')));
   // Rungs on by default: the whole question is whether cutting a sprite for the zoom
   // beats magnifying one authored size, and it is only answerable side by side.
-  const [compareRungs, setCompareRungs] = useState(true);
+  // Rungs default on, but a link that arms any other mode should win over the default.
+  const [compareRungs, setCompareRungs] = useState(
+    initial.has('rungs') ? asFlag(initial.get('rungs')) : !asFlag(initial.get('filter')),
+  );
   // Locally rendered pixel-filter candidates, served from an ignored public folder so
   // they can be judged beside the shipped art without a catalog write. Absent unless
   // someone has rendered them, hence the per-cell fallback rather than a hard path.
-  const [showFiltered, setShowFiltered] = useState(false);
+  const [showFiltered, setShowFiltered] = useState(asFlag(initial.get('filter')));
   const [catalog, setCatalog] = useState<Awaited<ReturnType<typeof fetchAdminUnitCatalog>> | null>(null);
   // The ADMIN catalog, because accepting a new asset archives the one it replaced and
   // the public catalog omits archived assets — the before would always be missing.
   useEffect(() => { void fetchAdminUnitCatalog().then(setCatalog).catch(() => setCatalog(null)); }, []);
+
+  // Keep the address in step with the view, so whatever is on screen can be copied and
+  // sent as-is. replaceState rather than push: adjusting a toggle is not a navigation,
+  // and stacking history entries would make Back walk backwards through checkbox
+  // changes instead of leaving the viewer. The Studio's own params are preserved.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = readParams();
+    params.set('palette', palette);
+    const flag = (key: string, on: boolean) => (on ? params.set(key, '1') : params.delete(key));
+    flag('palettes', allPalettes);
+    flag('filter', showFiltered);
+    flag('before', showBefore);
+    flag('rungs', compareRungs);
+    if (tierIndex === 0) params.delete('tier');
+    else params.set('tier', String(tierIndex));
+    const next = `${window.location.pathname}?${params.toString()}`;
+    if (next !== `${window.location.pathname}${window.location.search}`) {
+      window.history.replaceState(window.history.state, '', next);
+    }
+  }, [palette, allPalettes, showFiltered, showBefore, compareRungs, tierIndex]);
 
   // A unit is drawn standing on a tile, so that is what it has to read against.
   // Real terrain art rather than a flat swatch: the swatch is both a worse test and
@@ -193,8 +252,8 @@ export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactEl
           <div className="unit-roster-row" key={rowKey}>
             <span className="unit-roster-row-label">{rowKey}</span>
             <div className="unit-roster-cells">
-              {(showFiltered
-                ? [(allPalettes ? families : ['south'])[0]]
+              {(showFiltered && !FILTER_MATRIX.has(rowKey as string) && !allPalettes
+                ? ['south']
                 : (allPalettes ? families : columns)
               ).map((columnKey) => {
                 const family = allPalettes ? (columnKey as string) : (rowKey as string);
@@ -256,13 +315,17 @@ export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactEl
                 );
                 const caption = allPalettes ? family : facing;
                 if (showFiltered) {
-                  // ONE pair per piece: the candidates exist only for south, and
-                  // repeating that single image across all eight facing columns reads
-                  // as eight different renders when it is the same file eight times.
+                  // Families rendered across the whole matrix get the real facing and
+                  // palette; the rest still have a single south-only candidate, and
+                  // repeating that across eight columns would read as eight different
+                  // renders of the same file.
+                  const candidate = FILTER_MATRIX.has(family)
+                    ? `/dev-filtered/${family}/${paletteId}/${facing}.png`
+                    : `/dev-filtered/${family}.png`;
                   return (
                     <div className="unit-roster-pair" key={`${family}:${facing}`}>
                       {seat('shipped', src)}
-                      {seat(`filter · ${family}`, `/dev-filtered/${family}.png`)}
+                      {seat(`filter · ${caption}`, candidate)}
                     </div>
                   );
                 }

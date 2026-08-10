@@ -17,6 +17,7 @@ palette coverage all the way down to 51.
        optional UNIT_ART_TOON_PALETTE (default navy-blue), UNIT_ART_DIRECTIONS
 """
 import bpy, os, math, mathutils
+import numpy as np
 
 SOURCE = os.environ["UNIT_ART_BLEND"]
 BTP = os.environ["BTP_BLEND"]
@@ -241,5 +242,23 @@ for name in wanted:
     rig.rotation_euler = (0, 0, math.radians(DIRECTIONS[name]))
     scene.render.filepath = os.path.join(OUT, name)
     bpy.ops.render.render(write_still=True)
-    print("FILTERED", name)
+    # Collapse the blocks. Everything above renders at sprite x BLOCK because the
+    # filter needs that room to work in -- but one Pixelate block IS one art pixel, so
+    # what ships is the block centres. Skipping this leaves a sprite seven times its
+    # true size, which then gets resampled by whatever displays it and quietly undoes
+    # the whole point of a pixel filter.
+    written = os.path.join(OUT, name + ".png")
+    img = bpy.data.images.load(written)
+    w, h = img.size
+    src = np.array(img.pixels[:], dtype=np.float32).reshape(h, w, 4)
+    half = BLOCK // 2
+    small = src[half::BLOCK, half::BLOCK]
+    out = bpy.data.images.new(name + "_sprite", width=small.shape[1], height=small.shape[0], alpha=True)
+    out.pixels = small.reshape(-1)
+    out.file_format = "PNG"
+    out.filepath_raw = written
+    out.save()
+    bpy.data.images.remove(img)
+    bpy.data.images.remove(out)
+    print("FILTERED", name, "%dx%d -> %dx%d" % (w, h, small.shape[1], small.shape[0]))
 print("FILTERED_DONE", OUT, "render", SPRITE * BLOCK, "-> sprite", SPRITE)
