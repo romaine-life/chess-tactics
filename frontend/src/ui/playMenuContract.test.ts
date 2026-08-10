@@ -330,6 +330,18 @@ describe('Run rule options are a departure from the defaults, not a step in setu
     expect(source).toContain('Standard formations and pricing. Most Runs want these.');
   });
 
+  it('is one box that grows, with the box itself as the thing you press', () => {
+    // The trigger fills the accepted InnerChromeBox rather than being a framed control seated
+    // inside it, so the box's own frame is the button's edge and its name rides in it.
+    expect(source).toMatch(/<InnerChromeBox[\s\S]*?className=\{`run-rules-selector\$\{open \? ' is-open' : ''\}`\}/);
+    expect(source).toMatch(/<button[\s\S]*?className="run-rules-disclosure"/);
+    expect(source).toContain('<span className="run-rules-title" id="run-rules-title">Rule options</span>');
+    expect(source).not.toContain('run-rules-head');
+    expect(source).not.toContain("unit=\"inner-text-button\"");
+    // Its inset is the box's whole content padding, so the pressable area reaches the frame.
+    expect(style).toMatch(/\.run-rules-disclosure \{[\s\S]*?padding: var\(--ds-inset\);/);
+  });
+
   it('seats below Start Run, so it is not a step between the Ataraxia choice and the verb', () => {
     // It also grows when opened; last in the column means opening it extends the column
     // downward instead of pushing the verb down the screen.
@@ -343,12 +355,12 @@ describe('Run rule options are a departure from the defaults, not a step in setu
     expect(style).toMatch(/\.stepper-chevron-up\s*\{[\s\S]*?transform:\s*rotate\(90deg\);/);
   });
 
-  it('is cut to its widest verb, so pressing it never resizes it', () => {
-    // Both verbs are in the DOM at once, stacked in one cell; only the current one is visible.
-    expect(source).toContain("<span className={open ? 'is-shown' : undefined}>Hide</span>");
-    expect(source).toContain("<span className={open ? undefined : 'is-shown'}>Change</span>");
-    expect(style).toMatch(/\.run-rules-toggle-label > span \{[\s\S]*?grid-area: 1 \/ 1;/);
-    expect(style).toMatch(/\.run-rules-toggle-label > span\.is-shown \{[\s\S]*?visibility: visible;/);
+  it('holds its own name in both states, so pressing it never relabels the control', () => {
+    // The verb pair that used to be stacked in one cell to lock the control's width is gone with
+    // the Change button itself: the box is named after what it holds, and only the chevron moves.
+    expect(source).not.toContain('>Hide<');
+    expect(source).not.toContain('>Change<');
+    expect(style).not.toContain('.run-rules-toggle-label');
   });
 
   it('is reachable and announced, because a Run is bound to these for its life', () => {

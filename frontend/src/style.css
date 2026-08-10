@@ -27849,23 +27849,25 @@ button.run-card-formation-cell {
   text-wrap: wrap;
 }
 
-.run-ataraxia-selector,
-.run-rules-selector {
+.run-ataraxia-selector {
   display: grid;
   gap: var(--ds-inline-tight);
 }
 
+/* Rule options is one BOX rather than a heading over loose controls, so its own frame is the
+   outer spacing and the rows inside it carry none. */
+.run-rules-selector {
+  display: grid;
+}
+
 .run-ataraxia-selector h3,
 .run-ataraxia-selector p,
-.run-rules-selector h3,
 .run-rules-selector h4,
 .run-rules-selector p {
   margin: 0;
 }
 
-.run-ataraxia-selector h3,
-.run-rules-selector h3,
-.run-rules-selector h4 {
+.run-ataraxia-selector h3 {
   padding-inline: 8px;
 }
 
@@ -28415,52 +28417,62 @@ button.run-card-formation-cell {
 }
 
 /* Start New Run → Rule options. Closed by default and framed as a departure from the defaults,
-   because the defaults are the game and almost nobody should be changing them before a Run. */
-.run-rules-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--ds-inline-tight);
-}
-
+   because the defaults are the game and almost nobody should be changing them before a Run.
+   The whole box is the disclosure: closed, the trigger below is the box's entire interior, so
+   pressing anywhere on the slab opens it and the slab itself is what grows.
+   The trigger is deliberately NOT a registered unit. A second frame inside this one would draw a
+   control sitting IN the box rather than the box being the control, so it fills the accepted
+   InnerChromeBox, takes that box's whole content padding as its own inset (the pressable area
+   therefore reaches the frame on every side), strips the shell's native button paint, and paints
+   nothing of its own. check-ui-surface-contract.mjs registers exactly that reset. */
 .run-rules-selector h4 {
   margin-block-start: var(--ds-inline-tight);
   font-size: var(--ds-text-xs);
   opacity: .78;
 }
 
-/* Verb plus the shared chevron, so the control looks like the disclosure it is rather than a
-   plain command. */
-.run-rules-toggle-copy {
-  align-items: center;
-  display: inline-flex;
-  gap: 6px;
-}
-
-/* Both verbs share ONE cell, so the control is as wide as its widest state at every moment
-   instead of snapping between two widths when it flips. The lock is the copy itself -- reword
-   either verb and the width still fits the longer one, with no measured number to maintain. */
-.run-rules-toggle-label {
+.run-rules-disclosure {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: inherit;
+  cursor: pointer;
   display: grid;
-  justify-items: center;
+  font: inherit;
+  gap: var(--ds-inline-tight);
+  min-block-size: 0;
+  padding: var(--ds-inset);
+  text-align: start;
+  text-shadow: inherit;
 }
 
-.run-rules-toggle-label > span {
-  grid-area: 1 / 1;
-  /* Not display:none -- a hidden box still has to occupy the cell for it to be measured.
-     visibility also takes the inactive verb out of the accessible name. */
-  visibility: hidden;
+.run-rules-disclosure-head {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-inline-tight);
+  justify-content: space-between;
 }
 
-.run-rules-toggle-label > span.is-shown {
-  visibility: visible;
+/* The box's own name, and the label of the control it is. Sized as the section heading it
+   replaced so Rule options still reads level with Ataraxia above it. */
+.run-rules-title {
+  font-size: var(--ds-text-md);
+}
+
+.run-rules-summary {
+  color: var(--ds-color-ink-dim, rgba(230, 225, 215, .72));
+  font-size: var(--ds-text-xs);
 }
 
 .run-rules-selector [hidden] {
   display: none;
 }
 
-#run-rules-content {
+/* The choices sit under the header the trigger already inset, so they take the same inset on
+   the three remaining sides and none at the top. */
+.run-rules-content {
   display: grid;
   gap: var(--ds-inline-tight);
+  padding: 0 var(--ds-inset) var(--ds-inset);
 }

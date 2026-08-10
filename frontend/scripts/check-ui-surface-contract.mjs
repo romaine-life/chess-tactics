@@ -68,6 +68,16 @@ const APPROVED_FRAMELESS_SURFACE_RESETS = new Map([
     'background:none',
     'border:0',
   ])],
+  // Rule options makes the BOX the disclosure — the trigger fills its accepted InnerChromeBox so
+  // the box's frame is the button's edge and pressing the slab is what opens it. These
+  // declarations remove the shell's native button chrome from that trigger; a second frame there
+  // would draw a control sitting IN the box instead of the box being the control.
+  ['src/style.css|.run-rules-disclosure', new Set([
+    'background:none',
+    'border:0',
+    'border-radius:0',
+    'box-shadow:none',
+  ])],
 ]);
 
 function normalize(value) {

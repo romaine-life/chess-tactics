@@ -1,7 +1,6 @@
 import { useState, type ReactElement } from 'react';
 import { RUN_CARD_SPANS, type RunRules } from '../run/model';
-import { chromeUnitClassNames } from './chromeUnitRegistry';
-import { ChromeButton } from './shared/ChromeButton';
+import { InnerChromeBox } from './shared/ChromeBox';
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
 
 // Start New Run → the rules the Run is bound to, behind a disclosure that starts closed.
@@ -13,6 +12,12 @@ import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
 //
 // Not hidden, though: a Run is bound to these for its whole life, so a player who did change one
 // has to be able to see what they are about to start.
+//
+// The BOX is the control. Closed, the whole slab -- its own name, the summary under it, the
+// chevron -- is one pressable thing; opening it grows that same box downward around the choices
+// instead of swapping a heading-plus-Change-button row for a panel that appears beneath it. The
+// trigger is the same DOM node in both states, so it keeps focus across a press, and the header
+// row stays the way back out.
 //
 // It seats BELOW Start Run in the detail column, after the verb rather than before it — see the
 // comment at its mount in PlayMenu.
@@ -93,38 +98,38 @@ export function RunRulesSelector({
   }));
 
   return (
-    <section className="run-rules-selector" aria-labelledby="run-rules-title">
-      <div className="run-rules-head">
-        <h3 id="run-rules-title">Rule options</h3>
-        <ChromeButton
-          unit="inner-text-button"
-          className={chromeUnitClassNames('inner-text-button', 'run-rules-toggle')}
-          data-chrome-fill-surface={fillSurface}
-          aria-expanded={open}
-          aria-controls="run-rules-content"
-          data-testid="run-rules-toggle"
-          onClick={() => setOpen((wasOpen) => !wasOpen)}
-        >
-          <span className="run-rules-toggle-copy">
-            {/* BOTH verbs are always rendered, stacked in one cell, so the control is cut to its
-                widest state once and holds that width through every flip. A control that measured
-                only its current word would resize under the pointer the moment it was pressed. */}
-            <span className="run-rules-toggle-label">
-              <span className={open ? 'is-shown' : undefined}>Hide</span>
-              <span className={open ? undefined : 'is-shown'}>Change</span>
-            </span>
-            <span
-              className={`stepper-glyph stepper-chevron stepper-chevron-${open ? 'up' : 'down'}`}
-              aria-hidden="true"
-            />
-          </span>
-        </ChromeButton>
-      </div>
-      {!open ? (
-        <p className="run-rules-effect">Standard formations and pricing. Most Runs want these.</p>
-      ) : null}
+    <InnerChromeBox
+      as="section"
+      className={`run-rules-selector${open ? ' is-open' : ''}`}
+      fillSurface={fillSurface}
+      aria-labelledby="run-rules-title"
+    >
+      {/* Not a ChromeButton: a registered unit brings its own frame, and a second frame inside
+          this one would draw the control as a thing sitting IN the box rather than as the box.
+          The box's frame is this trigger's edge, so the trigger fills it and paints nothing. */}
+      <button
+        type="button"
+        className="run-rules-disclosure"
+        aria-expanded={open}
+        aria-controls="run-rules-content"
+        data-testid="run-rules-toggle"
+        onClick={() => setOpen((wasOpen) => !wasOpen)}
+      >
+        <span className="run-rules-disclosure-head">
+          <span className="run-rules-title" id="run-rules-title">Rule options</span>
+          <span
+            className={`stepper-glyph stepper-chevron stepper-chevron-${open ? 'up' : 'down'}`}
+            aria-hidden="true"
+          />
+        </span>
+        {/* Closed, the box has to say the defaults are already right. Open, the choices say it
+            themselves, and repeating it would push the first one further down the column. */}
+        {!open ? (
+          <span className="run-rules-summary">Standard formations and pricing. Most Runs want these.</span>
+        ) : null}
+      </button>
 
-      <div id="run-rules-content" hidden={!open}>
+      <div id="run-rules-content" className="run-rules-content" hidden={!open}>
       <h4>Formations</h4>
 
       <HouseSelect
@@ -161,6 +166,6 @@ export function RunRulesSelector({
       />
       <p className="run-rules-effect">{PRICING_COPY[value.pricing].effect}</p>
       </div>
-    </section>
+    </InnerChromeBox>
   );
 }
