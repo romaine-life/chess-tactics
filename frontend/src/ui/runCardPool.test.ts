@@ -350,11 +350,14 @@ describe('runCardPool default model', () => {
     expect(DEFAULT_POOL_MODEL).toBe(POOL_MODELS[0]);
   });
 
-  it('keeps rotation on, which is what holds the catalog down', () => {
-    expect(DEFAULT_POOL_MODEL.knobs.collapseRotation).toBe(true);
-    const withRotation = buildPool(DEFAULT_POOL_MODEL.knobs).length;
-    const without = buildPool({ ...DEFAULT_POOL_MODEL.knobs, collapseRotation: false }).length;
-    expect(without).toBeGreaterThan(withRotation);
+  // Not asserted of the default: the newest snapshot leads the list and may be exploring any rule,
+  // including rotation off. What holds regardless is the mechanism itself.
+  it('holds the catalog down wherever rotation collapse is on', () => {
+    for (const model of POOL_MODELS) {
+      const collapsed = buildPool({ ...model.knobs, collapseRotation: true }).length;
+      const oriented = buildPool({ ...model.knobs, collapseRotation: false }).length;
+      expect(oriented, model.id).toBeGreaterThan(collapsed);
+    }
   });
 
   it('declares a formula rather than pricing at raw material', () => {
@@ -400,5 +403,20 @@ describe('runCardPool dated snapshots', () => {
     // Which leaves exactly four shapes: the single, the domino, the L, and the square.
     expect(new Set(pool.map((c) => poolShapeSignature(c.cells))).size).toBe(4);
     expect(pool).toHaveLength(68);
+  });
+});
+
+describe('runCardPool one-orientation representative', () => {
+  it('emits the DEEPEST orientation, because that is what front and back are made of', () => {
+    // Left to enumeration order the generator kept the horizontal domino — the one orientation
+    // where both cells stand the same distance from the enemy and a bought facing means nothing.
+    const pool = buildPool({
+      ...DEFAULT_POOL_KNOBS, maxCells: 2, collapseRotation: false, oneOrientationPerShape: true,
+    });
+    const dominoes = pool.filter((card) => card.volume === 2);
+    expect(dominoes.length).toBeGreaterThan(0);
+    for (const card of dominoes) {
+      expect(poolShapeSignature(card.cells), card.key).toBe('#/#');
+    }
   });
 });

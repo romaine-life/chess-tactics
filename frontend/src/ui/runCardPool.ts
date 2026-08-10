@@ -180,6 +180,25 @@ function shapeClass(cells: readonly PoolCell[]): string {
     .sort()[0];
 }
 
+/**
+ * When only one orientation of a shape is emitted, which one it should be.
+ *
+ * The DEEPEST one — the rotation extending furthest toward the enemy edge — because depth is what
+ * front and back are made of. A horizontal domino has no front: both cells stand the same distance
+ * from the enemy, so a card built on one cannot sell you an ordering. Left to enumeration order the
+ * generator picked the horizontal domino, which is exactly the orientation that makes a bought
+ * facing meaningless.
+ */
+function deepestOrientation(cells: readonly PoolCell[]): PoolCell[] {
+  const depth = (cs: readonly PoolCell[]): number => Math.max(...cs.map((c) => c.y)) + 1;
+  return [0, 1, 2, 3]
+    .map((turns) => normalize(rotate(cells, turns)))
+    .sort((a, b) => (
+      depth(b) - depth(a)
+      || a.map((c) => `${c.x}${c.y}`).join('').localeCompare(b.map((c) => `${c.x}${c.y}`).join(''))
+    ))[0];
+}
+
 /** Footprints the generator emits: connected, size-capped, left-anchored (the shipped rule). */
 export function poolFootprints(knobs: PoolKnobs): PoolCell[][] {
   const out: PoolCell[][] = [];
@@ -198,6 +217,8 @@ export function poolFootprints(knobs: PoolKnobs): PoolCell[][] {
       const shape = shapeClass(cells);
       if (seenShape.has(shape)) continue;
       seenShape.add(shape);
+      out.push(deepestOrientation(cells));
+      continue;
     }
     out.push(cells.sort((a, b) => a.x - b.x || a.y - b.y));
   }
@@ -523,6 +544,26 @@ export type PoolModel = Readonly<{
 }>;
 
 export const POOL_MODELS: readonly PoolModel[] = Object.freeze([
+  {
+    id: '2026-08-09-1921-2x2-no-rotation',
+    label: '2026-08-09 19:21 · 2x2, no rotation',
+    note: 'The 19:13 shape rule and pricing, with rotation collapse dropped so facing is bought rather than chosen at placement. Every orientation is therefore its own card — a player who cannot turn a card needs the horizontal pair and the vertical pair sold separately. That is what takes the catalog from 68 to 244, and what finally gives the blocked-Pawn penalty teeth: 98 cards carry one here against 10 with rotation on.',
+    knobs: {
+      ...DEFAULT_POOL_KNOBS,
+      cols: 2,
+      rows: 2,
+      collapseRotation: false,
+      terms: [
+        { kind: 'density', power: 0.5, scale: 10 },
+        { kind: 'bishopPair', bonus: 0.25 },
+        { kind: 'defences', bonus: 0.1, countPawnSupport: true },
+        { kind: 'blockedPawn', penalty: 0.15 },
+        { kind: 'round', to: 5 },
+      ],
+      commonMaxCost: 70,
+      uncommonMaxCost: 100,
+    },
+  },
   {
     id: '2026-08-09-1913-2x2-max',
     label: '2026-08-09 19:13 · 2x2 max',
