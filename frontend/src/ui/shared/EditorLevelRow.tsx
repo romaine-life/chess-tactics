@@ -22,13 +22,24 @@ const EDITOR_ROW_ICONS = {
 export type EditorRowIconName = keyof typeof EDITOR_ROW_ICONS;
 
 /**
- * The preview is a compartment of the row, so it fills the row's content height rather than
- * being a smaller picture floating in a pane: 86px box less the 7px inner rail on each side is
- * 72px tall, which at the board's canonical 4:3 window is 96px wide. LevelThumbnail owns its
- * ratio and takes only a width, so the width is what this states — keep it in step with
- * `.ce-editor-level-row`'s `block-size` in style.css.
+ * The preview is a compartment of the row, so it fills the row's content height rather than being
+ * a smaller picture floating in a pane. LevelThumbnail owns the board's 4:3 window and takes only
+ * a WIDTH, so the width is derived from the height it has to fill.
+ *
+ * How much height it has depends on whether the row is framed: a framed row spends the inner rail
+ * on each side, an unframed member spends nothing. Stating that as arithmetic rather than as two
+ * magic numbers is what keeps the picture flush in both — the unframed rows in the War editor's
+ * Battles box kept the framed row's 96px and so sat 14px short of their own compartment.
+ * Keep LEVEL_ROW_BLOCK_SIZE in step with `.ce-editor-level-row`'s `block-size` in style.css.
  */
-const LEVEL_ROW_PREVIEW_WIDTH = 96;
+const LEVEL_ROW_BLOCK_SIZE = 86;
+const LEVEL_ROW_FRAME_RAIL = 7;
+const BOARD_VIEW_ASPECT = 4 / 3;
+
+function levelRowPreviewWidth(framed: boolean): number {
+  const height = LEVEL_ROW_BLOCK_SIZE - (framed ? LEVEL_ROW_FRAME_RAIL * 2 : 0);
+  return Math.round(height * BOARD_VIEW_ASPECT);
+}
 
 /** The carved glyph every editor row control draws — never a typed arrow or ✕ character. */
 export function EditorRowIcon({ icon }: { icon: EditorRowIconName }): ReactElement {
@@ -158,14 +169,14 @@ export function EditorLevelRow({
       // control in the row off centre.
       leadingChrome: false,
       leadingClassName: 'ce-editor-level-thumb',
-      // The rail between the preview and the copy is what makes a FRAMED row read as one object
-      // split into panes. An unframed member has no frame for it to meet, so a row of them stacks
-      // those rails into a continuous spine down the list with junction atoms at every seam.
-      leadingDivider: framed,
+      // The rail between the preview and the copy is what makes the row read as one object split
+      // into panes, framed or not. In a list of unframed members those rails line up down the
+      // column and meet the box's own row rails — a table, which is what this is.
+      leadingDivider: true,
       leading: level ? (
           <GatedLevelThumbnail
             level={level}
-            width={LEVEL_ROW_PREVIEW_WIDTH}
+            width={levelRowPreviewWidth(framed)}
             authoringPreview={!levelThumbnailUrl(level.id)}
           />
         ) : (
