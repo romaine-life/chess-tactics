@@ -28,13 +28,29 @@ os.makedirs(OUT, exist_ok=True)
 # Sampled from the shipped sprites; the ramp positions are LINEAR, which is where a
 # palette placed from PNG-measured percentiles goes wrong -- sRGB 0.35 is linear 0.10,
 # so such stops sit above nearly every pixel and collapse the piece onto one colour.
-RAMP = [
-    (0.00000, "#0d1526"),
-    (0.05139, "#172a4a"),
-    (0.09918, "#223866"),
-    (0.15729, "#2f4a83"),
-    (0.28899, "#415f9c"),
-]
+# Six team palettes, all one ramp shape.
+#
+# navy-blue is the tuned one. The rest carry ITS brightness ladder and wear each
+# palette's own hue and saturation, taken from the mid tone the shipped sprites spend
+# most of their pixels on. Re-sampling every palette from the shipped art instead does
+# not work: that art is only three tones deep -- a shared dark outline, a mid and a
+# light -- so five stops collapse onto two or three repeats.
+#
+# Brightness has to be carried as well as hue, or white and black come out identical:
+# both are near grey, so hue tells you nothing about them and only value separates
+# them. Their mid tones are v=0.353 and v=0.078 against navy's 0.188.
+PALETTES = {
+    "navy-blue": [(0.00000, "#0d1926"), (0.05139, "#17314a"), (0.09918, "#224466"), (0.15729, "#2f5983"), (0.28899, "#416e9c")],
+    "white":     [(0.00000, "#3b3f47"), (0.05139, "#717b8b"), (0.09918, "#9daabf"), (0.15729, "#ccdbf6"), (0.28899, "#d7e6ff")],
+    "golden":    [(0.00000, "#28200a"), (0.05139, "#4f3d10"), (0.09918, "#6c5519"), (0.15729, "#8b6e25"), (0.28899, "#a68637")],
+    "emerald":   [(0.00000, "#0c2116"), (0.05139, "#16412a"), (0.09918, "#20593b"), (0.15729, "#2c734e"), (0.28899, "#3c8961")],
+    "crimson":   [(0.00000, "#260c10"), (0.05139, "#4a151d"), (0.09918, "#66202a"), (0.15729, "#832c39"), (0.28899, "#9c3e4c")],
+    "black":     [(0.00000, "#0d0e10"), (0.05139, "#181c1f"), (0.09918, "#22262b"), (0.15729, "#2c3137"), (0.28899, "#363b41")],
+}
+_PALETTE = os.environ.get("UNIT_ART_TOON_PALETTE", "navy-blue")
+if _PALETTE not in PALETTES:
+    raise SystemExit("unknown palette %r; have %s" % (_PALETTE, ", ".join(PALETTES)))
+RAMP = PALETTES[_PALETTE]
 
 
 def srgb(h):
@@ -107,6 +123,19 @@ if SOURCE.lower().endswith(".obj"):
     c = _co()
     _kn.location = (-(c[:, 0].min() + c[:, 0].max()) / 2, -(c[:, 1].min() + c[:, 1].max()) / 2, -c[:, 2].min())
     bpy.ops.object.transform_apply(location=True)
+    # Drop the wood diffuse. The palette ramp reads LUMINANCE, so a texture's grain
+    # enters as brightness variation the ramp then quantises -- the knight came out at
+    # 15 colours where the plain-material pieces sit at 12. The piece's own renderer
+    # discards this map for the same reason.
+    _plain = bpy.data.materials.new("filter plain")
+    _plain.use_nodes = True
+    _bsdf = _plain.node_tree.nodes.get("Principled BSDF")
+    if _bsdf is not None:
+        _bsdf.inputs["Base Color"].default_value = (0.5, 0.5, 0.5, 1)
+        if "Roughness" in _bsdf.inputs:
+            _bsdf.inputs["Roughness"].default_value = 0.6
+    _kn.data.materials.clear()
+    _kn.data.materials.append(_plain)
 else:
     with bpy.data.libraries.load(SOURCE, link=False) as (src, dst):
         dst.objects = list(src.objects)
