@@ -784,25 +784,58 @@ function namedChromeFillSurfacePaint(id: ChromeFillSurfaceId): string {
   background-size: 1024px auto !important;`;
 }
 
+/**
+ * A rail tab does not name its own surface: the rail COLUMN carries
+ * `data-chrome-tab-fill-surface` and every `.settings-tab` under it inherits that material
+ * (ApparatusRailColumn is the only stamper). The role-field default below must exclude this
+ * inherited path the same way it excludes a box that names its own surface — it cannot see it
+ * through a `:not([data-chrome-fill-surface])` on the tab itself, and out-specifying instead of
+ * excluding is what silently blanked every menu button once the field rule grew a second
+ * `:not()`. These two names are the whole contract; keep the fill rule and its exclusion here.
+ */
+const CHROME_TAB_FILL_HOST_ATTR = 'data-chrome-tab-fill-surface';
+const CHROME_TAB_FILL_INHERITED_SELECTOR = `[${CHROME_TAB_FILL_HOST_ATTR}] .settings-tab`;
+
+function chromeTabFillSelector(id: ChromeFillSurfaceId): string {
+  return `[${CHROME_TAB_FILL_HOST_ATTR}="${id}"] .settings-tab`;
+}
+
 function namedChromeFillSurfaceCss(): string {
   return CHROME_FILL_SURFACES.map((surface) => `${CHROME_FAMILY_SURFACE_SELECTOR} [data-chrome-fill-surface="${surface.id}"],
-${CHROME_FAMILY_SURFACE_SELECTOR} [data-chrome-tab-fill-surface="${surface.id}"] .settings-tab {
+${CHROME_FAMILY_SURFACE_SELECTOR} ${chromeTabFillSelector(surface.id)} {
 ${namedChromeFillSurfacePaint(surface.id)}
 }`).join('\n');
 }
 
 /**
- * The shell Controls panel adopts the ADR-0433 material hierarchy wholesale: the panel
- * and its structural boxes keep the stone field, and every registered leaf unit inside
- * it wears the oak. Reading the material off the registry rather than off each call site
- * is what makes that true of controls the panel only borrows — steppers, admin controls,
- * Run lifecycle buttons — without reskinning the same components on other surfaces. A
- * control that names its own surface still wins.
+ * A surface that has adopted the ADR-0433 material hierarchy wholesale marks itself with
+ * this attribute: its structural boxes keep the stone field, and every registered LEAF unit
+ * inside it wears the oak. Reading the material off the registry rather than off each call
+ * site is what makes that true of controls the surface only borrows — steppers, admin
+ * controls, Run lifecycle buttons — without reskinning the same components elsewhere.
+ *
+ * This is the same inherited-material shape as the rail tab above, and it carries the same
+ * obligation: the role FIELD default must EXCLUDE these leaves rather than try to lose a
+ * specificity race to them. A leaf cannot see its host's attribute through a `:not()` on
+ * itself, and every `:not()` added to the field default raises the field's own specificity —
+ * which is exactly how #881's fix silently blanked this panel's oak one commit later.
  */
-function controlsPanelLeafSurfaceCss(): string {
+const CHROME_LEAF_HOST_ATTR = 'data-chrome-leaf-surface';
+const CHROME_LEAF_HOST_SELECTOR = `[${CHROME_LEAF_HOST_ATTR}]`;
+
+/** Every registered leaf unit that has not named a surface of its own. */
+function chromeLeafUnitSelectors(): string[] {
+  return chromeUnitMaterialSelectors('leaf').map((selector) => `${selector}:not([data-chrome-fill-surface])`);
+}
+
+/** The inherited leaf path, as ONE selector the role field default can exclude. */
+const CHROME_LEAF_HOST_INHERITED_SELECTOR =
+  `${CHROME_LEAF_HOST_SELECTOR} :is(${chromeUnitMaterialSelectors('leaf').join(', ')})`;
+
+function leafSurfaceHostCss(): string {
   const selectors = chromeUnitScopedSelectors(
-    `${CHROME_FAMILY_SURFACE_SELECTOR} [data-shell-controls-panel]`,
-    chromeUnitMaterialSelectors('leaf').map((selector) => `${selector}:not([data-chrome-fill-surface])`),
+    `${CHROME_FAMILY_SURFACE_SELECTOR} ${CHROME_LEAF_HOST_SELECTOR}`,
+    chromeLeafUnitSelectors(),
   );
   return `${selectors} {
 ${namedChromeFillSurfacePaint(CHROME_LEAF_FILL_SURFACE)}
@@ -1118,11 +1151,16 @@ export function frameCss(
   // A box that carries its own installed image is not competing with the role field, so it is
   // excluded here rather than out-specified later: a named surface and a portrait scene both
   // arrive from the catalog, and an `!important` role default that merely loses a specificity
-  // race would put the two one edit apart from swapping places.
+  // race would put the two one edit apart from swapping places. A rail tab is that same case
+  // one level up — it inherits its material from the rail column, so it needs its own
+  // exclusion; without it this rule out-specified the tab fill and blanked every menu button.
+  // A leaf inside a surface that adopted the material hierarchy is the third such case, and
+  // it is why that exclusion cannot be the last one: each `:not()` added here raises THIS
+  // rule's specificity, so anything meant to win by out-specifying it loses on the next edit.
   const innerChromeFieldSelectors = chromeUnitScopedSelectors(
     familySurface,
     chromeUnitRoleSelectors('inner').map(
-      (selector) => `${selector}:not(.has-backdrop):not([data-chrome-fill-surface])`,
+      (selector) => `${selector}:not(.has-backdrop):not([data-chrome-fill-surface]):not(${CHROME_TAB_FILL_INHERITED_SELECTOR}):not(${CHROME_LEAF_HOST_INHERITED_SELECTOR})`,
     ),
   );
   const titlebarJoint = dividers.outer.atomOverlay;
@@ -1353,7 +1391,7 @@ ${chromeFillCss(inner)}
 /* A named registered material is an explicit composition override. Keep these
    selectors after role defaults so an inner-framed control can share a canonical
    surface used elsewhere without forking or code-painting that material. */
-${controlsPanelLeafSurfaceCss()}
+${leafSurfaceHostCss()}
 ${namedChromeFillSurfaceCss()}
 ${familySurface} .inner-box:is(.active, .is-active, [aria-pressed="true"]) {
   border-image-source: var(--skirmish-chrome-inner-control-active-image) !important;

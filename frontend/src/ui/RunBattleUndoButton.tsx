@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import type { CSSProperties, ReactElement } from 'react';
 import { useSkirmish } from '../game/SkirmishStoreContext';
 import { RUN_BATTLE_UNDO_COST_TENTHS, formatGold } from '../run/model';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
@@ -9,21 +9,26 @@ import { ChromeButton } from './shared/ChromeButton';
 export function RunBattleUndoButton({
   testId,
   className = '',
+  style,
 }: {
   testId: string;
   className?: string;
+  /** The host's leaf-surface phase for this seat in its row (`leafSurfacePhase`). */
+  style?: CSSProperties;
 }): ReactElement | null {
   const runUndoEnabled = useSkirmish((state) => state.runUndoEnabled);
-  const checkpoint = useSkirmish((state) => state.undoCheckpoint);
+  const undoDepth = useSkirmish((state) => state.undoStack.length);
   const canUndoLastPlayerMove = useSkirmish((state) => state.canUndoLastPlayerMove);
   const undoLastPlayerMove = useSkirmish((state) => state.undoLastPlayerMove);
   if (!runUndoEnabled) return null;
 
-  const canUndo = Boolean(checkpoint) && canUndoLastPlayerMove();
+  // Every press takes back one more decision, so the button never retires while the Battle
+  // still has moves behind it and the purse can pay for the next one (ADR-0556).
+  const canUndo = undoDepth > 0 && canUndoLastPlayerMove();
   const cost = formatGold(RUN_BATTLE_UNDO_COST_TENTHS);
   const title = canUndo
     ? `Undo your last move and the opponent’s reply for ${cost} gold.`
-    : checkpoint
+    : undoDepth > 0
       ? `Undo costs ${cost} gold.`
       : 'Make a move before undoing.';
 
@@ -31,6 +36,7 @@ export function RunBattleUndoButton({
     <ChromeButton
       unit="inner-text-button"
       className={chromeUnitClassNames('inner-text-button', 'app-header-button', className)}
+      style={style}
       data-testid={testId}
       data-ui-sfx="gold"
       disabled={!canUndo}

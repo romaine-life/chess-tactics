@@ -1,4 +1,4 @@
-import type { ReactElement } from 'react';
+import type { CSSProperties, ReactElement } from 'react';
 import { formatGold } from '../run/model';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { RunGoldAmount } from './RunResources';
@@ -12,6 +12,7 @@ export function RunBattleRetryButton({
   onRetry,
   unavailableReason,
   className = '',
+  style,
 }: {
   testId: string;
   costTenths: number;
@@ -19,12 +20,15 @@ export function RunBattleRetryButton({
   onRetry: () => void;
   unavailableReason?: string;
   className?: string;
+  /** The host's leaf-surface phase for this seat in its row (`leafSurfacePhase`). */
+  style?: CSSProperties;
 }): ReactElement {
   const cost = formatGold(costTenths);
   return (
     <ChromeButton
       unit="inner-text-button"
       className={chromeUnitClassNames('inner-text-button', 'app-header-button', className)}
+      style={style}
       data-testid={testId}
       data-ui-sfx="gold"
       disabled={!canRetry}
