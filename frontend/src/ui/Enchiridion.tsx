@@ -62,6 +62,8 @@ import { installedUiMedia } from './installedUiMedia';
 import { STRATEGIKON_CARD_MARK_CLASS, useStrategikonCardsIcon } from './strategikonNavigation';
 import { LipsanonIcon } from './Lipsana';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
+import { siblingRailAddresses, useOpenRailTab } from './shared/railOpenIntent';
+import { useProgressiveMount } from './shared/useProgressiveMount';
 import { ataraxiaNumeralArtUrl } from './ataraxiaNumeral';
 import { InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
@@ -906,14 +908,26 @@ export function CardCodex({
     () => RUN_CARD_CATALOG.filter((card) => cardMatchesFilters(card, goldFilter, unitFilter, rarityFilter)),
     [goldFilter, rarityFilter, unitFilter],
   );
-  const groups = useMemo(() => cardsByTier(visibleCards, (card) => card), [visibleCards]);
+  // The catalog arrives in pieces so the app is never blocked building it (useProgressiveMount).
+  // Tier order is unaffected: cardsByTier sorts its groups by rank, so a partly-filled catalog is
+  // the same catalog with its tail missing, not a reordered one.
+  const mountedCount = useProgressiveMount(
+    visibleCards.length,
+    `${goldFilter}|${unitFilter}|${rarityFilter}`,
+  );
+  const groups = useMemo(
+    () => cardsByTier(visibleCards.slice(0, mountedCount), (card) => card),
+    [visibleCards, mountedCount],
+  );
   useEffect(() => {
     if (!focusedCardId) return;
     const card = galleryRef.current?.querySelector<HTMLElement>(`[data-card-id="${focusedCardId}"]`);
+    // An addressed card deeper in the catalog is not on the page yet; mountedCount is a dep, so
+    // this runs again on each batch and scrolls to it the moment it arrives.
     if (!card) return;
     const frame = window.requestAnimationFrame(() => card.scrollIntoView({ block: 'nearest', inline: 'nearest' }));
     return () => window.cancelAnimationFrame(frame);
-  }, [focusedCardId, visibleCards]);
+  }, [focusedCardId, visibleCards, mountedCount]);
   return (
     <ReferenceSectionFrame
       chromeConsumer="enchiridion-cards"
@@ -1164,6 +1178,11 @@ export function EnchiridionSectionRail({
   sectionHref: (section: EnchiridionSection) => string;
 }): ReactElement {
   const sectionIconSrc = useSectionIconSrc();
+  // Which section wears the open mark. The sections are siblings under one root, and the root
+  // differs by host (main menu vs Strategikon), so the family is derived from the very hrefs
+  // this rail is handed — see shared/railOpenIntent.ts. `section` is untouched, so the content
+  // pane still waits for the committed address and its transition is unchanged.
+  const openSection = useOpenRailTab(siblingRailAddresses(ENCHIRIDION_SECTIONS, sectionHref), section);
   return (
     <ApparatusRailColumn className="enchiridion-section-rail" aria-label="Enchiridion sections">
       {ENCHIRIDION_SECTIONS.map((candidate, index) => (
@@ -1173,6 +1192,7 @@ export function EnchiridionSectionRail({
           to={sectionHref(candidate)}
           index={index}
           active={section === candidate}
+          expanded={openSection === candidate}
           iconSrc={sectionIconSrc[candidate]}
           iconClassName={candidate === 'cards' ? STRATEGIKON_CARD_MARK_CLASS : undefined}
           markCanvas={candidate === 'ataraxia' ? 'bleed' : 'inset'}
