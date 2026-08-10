@@ -249,6 +249,15 @@ for offset, (index, label, stops) in enumerate(ACCENTS):
     current = [s for s in mix.outputs if s.type == "RGBA"][0]
     masks.append(grow.outputs[0])
 
+if os.environ.get("DUMP_RAW"):
+    # The UNFILTERED render. Answers whether the crown is solid warm colour at this
+    # angle, or whether the head shows through the crown's own openings -- which the
+    # filter would then be faithfully reporting rather than inventing.
+    scene.render.use_compositing = False
+    scene.render.filepath = os.environ["OUT"]
+    bpy.ops.render.render(write_still=True)
+    raise SystemExit
+
 if os.environ.get("DUMP_MASK"):
     # Show the FINAL accent mask as the image, so its silhouette can be compared
     # against the crown's own. Answers whether the lip is a short mask or geometry
@@ -276,10 +285,22 @@ body.location = (200, 220)
 sep.location = (200, -620)
 seta.location = (940, 80)
 
-# NOT stripping the addon's Introduction workspace here. bpy.data.workspaces has no
-# .remove(), and batch_remove() on workspaces segfaults Blender 5.1 outright -- it
-# took the builder down with it. Delete the tab in the UI instead (right-click the
-# workspace tab, Delete, then save); it persists in the saved file from then on.
+# This file opens on the addon's Introduction workspace -- two text editors of its
+# manual -- because that is what was active when BlenderToPixels.blend was saved, and
+# the lab is a copy of it. There is no way to change that from here; both routes are
+# tested, not assumed:
+#
+#   Deleting the workspace  -- bpy.data.workspaces has no .remove(), and
+#                              batch_remove() on a workspace segfaults Blender 5.1.
+#   Setting the active one  -- silently ignored in background mode. Assigning
+#                              win.workspace reads back as Introduction on the very
+#                              next line; the switch is deferred to a window update
+#                              that never runs headlessly.
+#
+# The owner-side fix is Preferences > Save & Load > Load UI, off: opening a file then
+# keeps the current layout instead of adopting the file's. Do not re-attempt the
+# scripted versions.
+
 scene.render.filepath = os.environ["OUT"]
 bpy.ops.render.render(write_still=True)
 if os.environ.get("LAB_OUT"):
