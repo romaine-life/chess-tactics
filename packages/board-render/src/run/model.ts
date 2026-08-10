@@ -28,7 +28,7 @@ export {
 };
 
 /** The schema version of one persisted in-progress Run. Only this exact save shape is read. */
-export const CURRENT_RUN_SAVE_VERSION = 36;
+export const CURRENT_RUN_SAVE_VERSION = 37;
 export type RunSaveVersion = typeof CURRENT_RUN_SAVE_VERSION;
 
 export class UnsupportedRunSaveError extends Error {
@@ -57,6 +57,7 @@ const RUN_SAVE_VERSION_OPENING_CARD_GRANT_SOURCE = 31;
 const RUN_SAVE_VERSION_AUTHORED_DEAL_SOURCE = 33;
 const RUN_SAVE_VERSION_KING_CHOICE_SOURCE = 34;
 const RUN_SAVE_VERSION_COMMENDATIO_SOURCE = 35;
+const RUN_SAVE_VERSION_DEDITIO_SOURCE = 36;
 const RUN_SAVE_VERSION_RARITY_BANDS_SOURCE = 32;
 /**
  * How much gold one point of material value is worth (ADR-0547).
@@ -115,6 +116,68 @@ export const RUN_SECTIO_EARLY_CARD_MAX_VALUE = 6;
 export const RUN_SECTIO_EARLY_CARD_BATTLE_COUNT = 2;
 export const INSTALLED_ATARAXIA_MAX_TIER = 0;
 export type AtaraxiaTier = 0;
+
+/**
+ * The rules a Run is created under and then bound to for its whole life.
+ *
+ * These change which cards the market can deal and what the player may do with one at placement,
+ * so they cannot be a client preference: a Run dealt from the two-by-two pool has to keep dealing
+ * from it across reload, resume and every later Battle. Immutable once the Run exists, like
+ * Ataraxia beside it.
+ *
+ * The default is the mode the game steers players toward. The others exist to be played with.
+ */
+export type RunRules = Readonly<{
+  /**
+   * Longest side, in cells, of a formation the market may offer. Two is the shipped game: the
+   * single, the domino, the L and the square. Four opens the straight runs and the tetrominoes.
+   */
+  cardSpan: 2 | 4;
+  /**
+   * Whether the player may turn a formation when placing it. With it on, one card covers all four
+   * quarter turns and facing is decided at the board; with it off, facing is whatever the card was
+   * dealt with. This does not change which cards exist -- only what may be done with one.
+   */
+  mayRotate: boolean;
+}>;
+
+export const RUN_CARD_SPANS: readonly (2 | 4)[] = Object.freeze([2, 4]);
+
+/**
+ * What a new Run is created under unless the player chooses otherwise: the two-by-two catalog,
+ * turnable at placement.
+ *
+ * One consequence to know rather than discover. The SHIPPED rarity rule is still the material
+ * band, and at a span of two that leaves six distinct commons against sixteen pile seats -- so a
+ * pile fills those seats by repeating commons rather than by shrinking. The mode is playable and
+ * the repetition is visible; it resolves when the rarity rule moves, which is the open piece.
+ */
+export const DEFAULT_RUN_RULES: RunRules = Object.freeze({ cardSpan: 2, mayRotate: true });
+
+/**
+ * What a Run written before rules existed was already playing: the wide catalog, turnable. NOT the
+ * new default -- a Run mid-flight was dealt from the wide pool and is holding cards from it, and
+ * narrowing its market now would leave it with formations its own market could no longer offer.
+ */
+export const LEGACY_RUN_RULES: RunRules = Object.freeze({ cardSpan: 4, mayRotate: true });
+
+/** The longest side of a formation, blind to which way round it was authored. */
+export function formationSpan(formation: readonly RunCardFormationCell[] | undefined): number {
+  if (!formation || formation.length === 0) return 1;
+  const width = Math.max(...formation.map((cell) => cell.x)) - Math.min(...formation.map((cell) => cell.x)) + 1;
+  const height = Math.max(...formation.map((cell) => cell.y)) - Math.min(...formation.map((cell) => cell.y)) + 1;
+  return Math.max(width, height);
+}
+
+/** A Run's rules, defaulting a document written before they existed to the game it was playing. */
+export function runRules(run: Pick<RunDocument, 'rules'> | { rules?: RunRules }): RunRules {
+  return run.rules ?? LEGACY_RUN_RULES;
+}
+
+/** Whether a card may be dealt to a Run playing under `rules`. */
+export function cardAllowedByRules(card: Pick<RunCoreCard, 'formation'>, rules: RunRules): boolean {
+  return formationSpan(card.formation) <= rules.cardSpan;
+}
 
 /**
  * Each tier's presentation. `numeral` is the rung itself and `label` is that rung
@@ -701,6 +764,8 @@ export interface RunDocument {
   id: string;
   seed: number;
   ataraxiaTier: AtaraxiaTier;
+  /** The rules this Run was created under. Immutable for its life; see RunRules. */
+  rules: RunRules;
   /** One Run-wide contract selected before creation; it never changes in-flight. */
   deploymentMode: RunDeploymentMode;
   updatedAt: string;
@@ -1333,10 +1398,13 @@ export function runSectioCardMaxValue(battleIndex: number): number {
  */
 export function sectioPileRarityQuota(
   maxValue = Number.POSITIVE_INFINITY,
+  rules: RunRules = LEGACY_RUN_RULES,
 ): Record<RunCardRarity, number> {
   const quota: Record<RunCardRarity, number> = { common: 0, uncommon: 0, rare: 0 };
+  // A tier the Run's rules leave empty is not "present": its seats re-apportion to the tiers that
+  // can actually fill them, exactly as a cost ceiling emptying a tier already does.
   const present = RUN_CARD_RARITIES.filter((rarity) => RUN_CARD_DECK
-    .some((card) => card.value <= maxValue && card.rarity === rarity));
+    .some((card) => card.value <= maxValue && card.rarity === rarity && cardAllowedByRules(card, rules)));
   const declared = present.reduce((total, rarity) => total + RUN_CARD_RARITY_PERCENT[rarity], 0);
   if (!declared) return quota;
   const remainders = present.map((rarity) => {
@@ -1362,11 +1430,14 @@ export function sectioCardPile(
   seed: number,
   pileIndex: number,
   maxValue = Number.POSITIVE_INFINITY,
+  rules: RunRules = LEGACY_RUN_RULES,
 ): RunCoreCard[] {
   const epoch = Math.max(0, Math.floor(pileIndex));
-  const quota = sectioPileRarityQuota(maxValue);
+  const quota = sectioPileRarityQuota(maxValue, rules);
   const seats = RUN_CARD_RARITIES.flatMap((rarity) => {
-    const pool = RUN_CARD_DECK.filter((card) => card.value <= maxValue && card.rarity === rarity);
+    const pool = RUN_CARD_DECK.filter((card) => (
+      card.value <= maxValue && card.rarity === rarity && cardAllowedByRules(card, rules)
+    ));
     const drawn: RunCoreCard[] = [];
     // A tier smaller than its quota repeats identities rather than shrinking the pile; no live
     // ceiling reaches that, but a pile is defined by its size and must not silently lose seats.
@@ -1396,9 +1467,18 @@ export function openingCardGrantPool(): RunCoreCard[] {
 }
 
 /** The Run's opening card offers: distinct identities drawn from the band, fixed by seed. */
-/** The Kings the opening screen deals: three of the fifteen, shuffled by the Run's own seed. */
-export function openingKingOffers(seed: number): string[] {
-  return shuffled([...RUN_STARTER_CARDS], mixSeed(seed, 'vacantia-opening-kings', 0))
+/**
+ * The Kings the opening screen deals, shuffled by the Run's own seed.
+ *
+ * The Run's rules bind the King as firmly as the market. A Run playing the two-by-two catalog
+ * cannot open by handing the player a three-long or Z-shaped starter -- it would break the rule
+ * on the very first card, before the market has offered anything, and that formation then sits in
+ * the army for the whole Run.
+ */
+export function openingKingOffers(seed: number, rules: RunRules = LEGACY_RUN_RULES): string[] {
+  const eligible = RUN_STARTER_CARDS.filter((card) => cardAllowedByRules(card, rules));
+  if (!eligible.length) throw new Error('No King fits this Run’s formation rules.');
+  return shuffled([...eligible], mixSeed(seed, 'vacantia-opening-kings', 0))
     .slice(0, RUN_OPENING_CARD_OFFER_COUNT)
     .map((card) => card.id);
 }
@@ -1420,6 +1500,7 @@ export function sectioCardOffersAtCursor(
   battleIndex: number,
   cursor: number,
   offerCount: number,
+  rules: RunRules = LEGACY_RUN_RULES,
 ): RunCardOffer[] {
   const start = Math.max(0, Math.floor(cursor));
   const maxValue = runSectioCardMaxValue(battleIndex);
@@ -1430,7 +1511,7 @@ export function sectioCardOffersAtCursor(
     const pileCursor = absoluteIndex % RUN_SECTIO_CARD_PILE_SIZE;
     let pile = piles.get(pileIndex);
     if (!pile) {
-      pile = sectioCardPile(seed, pileIndex, maxValue);
+      pile = sectioCardPile(seed, pileIndex, maxValue, rules);
       piles.set(pileIndex, pile);
     }
     const card = pile[pileCursor];
@@ -1524,6 +1605,8 @@ export interface RunCreateOptions {
   kingId?: RunStarterCardId;
   /** Open on the King choice rather than starting one. Only the player-facing entry sets this. */
   chooseKing?: boolean;
+  /** The rules to bind this Run to. Defaults to DEFAULT_RUN_RULES. */
+  rules?: RunRules;
 }
 
 export function createRun(
@@ -1558,6 +1641,7 @@ export function createRun(
     id: freshRunId(),
     seed: seed >>> 0,
     ataraxiaTier,
+    rules: options?.rules ?? DEFAULT_RUN_RULES,
     deploymentMode: 'arranged',
     updatedAt: createdAt,
     war,
@@ -1591,7 +1675,7 @@ export function createRun(
     army: [],
     cards: [],
     nextArmyUnitNumberByType: initialArmyNumberState(),
-    commendatio: { kingOffers: openingKingOffers(seed) },
+    commendatio: { kingOffers: openingKingOffers(seed, options?.rules ?? DEFAULT_RUN_RULES) },
   };
 }
 
@@ -2916,6 +3000,9 @@ export function migrateRunSaveDocument(value: unknown): RunDocument {
   if (stored.runSaveVersion === RUN_SAVE_VERSION_COMMENDATIO_SOURCE) {
     stored = migrateRunToDeditio(stored);
   }
+  if (stored.runSaveVersion === RUN_SAVE_VERSION_DEDITIO_SOURCE) {
+    stored = migrateRunToRunRules(stored);
+  }
   return normalizeRunDocument(stored as unknown as RunDocument);
 }
 
@@ -2956,11 +3043,21 @@ function migrateRunToCommendatio(stored: Record<string, unknown>): Record<string
  * paid a Deditio, and Continue must bank exactly the total the screen has been showing. Every
  * Battle from here on reads its own count off the board.
  */
+/**
+ * Runs predate the rules that now bind them, so they take the game they were actually playing:
+ * the wide catalog, turnable at placement. NOT the new default -- a Run mid-flight has already
+ * been dealt cards from the wide pool and has them in hand, and narrowing its market now would
+ * leave it holding formations its own market can no longer offer.
+ */
+function migrateRunToRunRules(stored: Record<string, unknown>): Record<string, unknown> {
+  return { ...stored, runSaveVersion: CURRENT_RUN_SAVE_VERSION, rules: { ...LEGACY_RUN_RULES } };
+}
+
 function migrateRunToDeditio(stored: Record<string, unknown>): Record<string, unknown> {
   const aftermath = stored.aftermath && typeof stored.aftermath === 'object' && !Array.isArray(stored.aftermath)
     ? { ...stored.aftermath as Record<string, unknown>, standingEnemyValue: 0 }
     : stored.aftermath;
-  return { ...stored, runSaveVersion: CURRENT_RUN_SAVE_VERSION, aftermath };
+  return { ...stored, runSaveVersion: RUN_SAVE_VERSION_DEDITIO_SOURCE, aftermath };
 }
 
 export function addArmyPieces(
@@ -3678,6 +3775,7 @@ function openPostBattleSectio(run: RunDocument, victoryGoldTenths: number): RunD
     next.battleIndex,
     next.sectioCardCursor,
     cardCount,
+    runRules(next),
   );
   next = { ...next, sectioCardCursor: next.sectioCardCursor + cardCount };
   let paidLipsanonOffer: LipsanonId | null = null;

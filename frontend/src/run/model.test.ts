@@ -26,6 +26,12 @@ import {
   RUN_STARTING_GOLD_TENTHS,
   acquireLipsanon,
   captureRunBattleUndo,
+  DEFAULT_RUN_RULES,
+  LEGACY_RUN_RULES,
+  RUN_SECTIO_CARD_PILE_RARITY_COUNT,
+  formationSpan,
+  openingKingOffers,
+  cardAllowedByRules,
   createRun,
   createRunCardOffer,
   leaveSectio,
@@ -55,6 +61,7 @@ import {
   takeVacantiaCard,
   takeVacantiaLipsanon,
   type RunDocument,
+  type RunRules,
   type RunWarSnapshot,
 } from './model';
 
@@ -73,8 +80,12 @@ function war(): RunWarSnapshot {
   };
 }
 
-function firstSectio(seed: number): RunDocument {
-  const run = createRun(war(), seed);
+// These exercise the PILE mechanism -- cursor advance, row retention, deterministic ordering --
+// so they name the wide rules rather than inheriting the default. The narrow default cannot show
+// three distinct commons in a row (see 'repeats commons under the narrow default'), which would
+// make a mechanism test fail for a reason that has nothing to do with the mechanism.
+function firstSectio(seed: number, rules: RunRules = LEGACY_RUN_RULES): RunDocument {
+  const run = createRun(war(), seed, { rules });
   return openSectio(
     { ...run, phase: 'battle' },
     run.army.map((unit) => unit.id),
@@ -305,6 +316,18 @@ describe('plain Run creation and acquisition', () => {
     expect(run.deploymentMode).toBe('arranged');
   });
 
+  it('repeats commons under the narrow default, because the shipped bands leave six of them', () => {
+    // Recorded rather than asserted-away. At a span of two the material bands leave six distinct
+    // commons against sixteen pile seats, so a pile fills its seats by repeating them. The mode is
+    // playable and this is what it looks like; it resolves when the rarity rule moves.
+    const narrow = RUN_CARD_DECK.filter((card) => cardAllowedByRules(card, DEFAULT_RUN_RULES));
+    expect(narrow.filter((card) => card.rarity === 'common')).toHaveLength(6);
+    expect(RUN_SECTIO_CARD_PILE_RARITY_COUNT.common).toBe(16);
+    const pile = sectioCardPile(23, 0, Number.POSITIVE_INFINITY, DEFAULT_RUN_RULES);
+    expect(pile).toHaveLength(20);
+    expect(new Set(pile.map((card) => card.id)).size).toBeLessThan(pile.length);
+  });
+
   it('deals the first three hidden-pile cards only after Battle 1', () => {
     const run = firstSectio(23);
     const offers = run.sectio!.cardOffers;
@@ -313,7 +336,7 @@ describe('plain Run creation and acquisition', () => {
     expect(offers.every((offer) => ['common', 'uncommon', 'rare'].includes(offer.rarity))).toBe(true);
     expect(run.sectioCardCursor).toBe(3);
     expect(offers.map((offer) => offer.id)).toEqual(
-      sectioCardOffersAtCursor(run.seed, 0, 0, 3).map((offer) => offer.id),
+      sectioCardOffersAtCursor(run.seed, 0, 0, 3, LEGACY_RUN_RULES).map((offer) => offer.id),
     );
   });
 
@@ -852,5 +875,42 @@ describe('Manubiae — what the board pays for', () => {
     expect(PIECE_VALUE.queen).toBeGreaterThanOrEqual(RUN_ROYAL_FORK_MIN_VICTIM_VALUE);
     expect(PIECE_VALUE.bishop).toBeLessThan(RUN_ROYAL_FORK_MIN_VICTIM_VALUE);
     expect(PIECE_VALUE.knight).toBeLessThan(RUN_ROYAL_FORK_MIN_VICTIM_VALUE);
+  });
+});
+
+describe('Run rules bind the King as firmly as the market', () => {
+  it('never opens a narrow Run on a King that breaks its own rule', () => {
+    // Ten of the fifteen starters are three-long, Z-shaped, or three-tall. Handing one to a
+    // two-by-two Run would break the rule on the very first card, before the market has offered
+    // anything, and that formation then sits in the army for the whole Run.
+    const wide = RUN_STARTER_CARDS.filter((card) => cardAllowedByRules(card, LEGACY_RUN_RULES));
+    const narrow = RUN_STARTER_CARDS.filter((card) => cardAllowedByRules(card, DEFAULT_RUN_RULES));
+    expect(wide).toHaveLength(15);
+    expect(narrow).toHaveLength(5);
+
+    for (let seed = 0; seed < 40; seed += 1) {
+      for (const id of openingKingOffers(seed, DEFAULT_RUN_RULES)) {
+        const king = RUN_STARTER_CARDS.find((card) => card.id === id);
+        expect(king, id).toBeDefined();
+        expect(formationSpan(king!.formation), id).toBeLessThanOrEqual(2);
+      }
+    }
+  });
+
+  it('still deals a full choice from the narrowed set', () => {
+    // Five eligible Kings against three offered, so the opening is still a choice rather than a
+    // formality -- but the same five recur every Run, which is the cost of the narrow rule.
+    const offers = openingKingOffers(11, DEFAULT_RUN_RULES);
+    expect(offers).toHaveLength(3);
+    expect(new Set(offers).size).toBe(3);
+  });
+
+  it('opens a Run on the Kings its own rules admit', () => {
+    const narrow = createRun(war(), 7, { chooseKing: true, rules: DEFAULT_RUN_RULES });
+    for (const id of narrow.commendatio!.kingOffers) {
+      expect(formationSpan(RUN_STARTER_CARDS.find((c) => c.id === id)!.formation)).toBeLessThanOrEqual(2);
+    }
+    const wide = createRun(war(), 7, { chooseKing: true, rules: LEGACY_RUN_RULES });
+    expect(wide.commendatio!.kingOffers).not.toEqual(narrow.commendatio!.kingOffers);
   });
 });
