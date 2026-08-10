@@ -344,21 +344,61 @@ describe('runCardPool blocked pawns', () => {
 });
 
 describe('runCardPool default model', () => {
+  // Stated as properties rather than by naming a model, because the newest snapshot becomes the
+  // default and a test that names one would need rewriting every time the design moves.
   it('opens on the head of the list, so order and default cannot drift apart', () => {
     expect(DEFAULT_POOL_MODEL).toBe(POOL_MODELS[0]);
-    expect(DEFAULT_POOL_MODEL.id).toBe('synergy');
   });
 
   it('keeps rotation on, which is what holds the catalog down', () => {
     expect(DEFAULT_POOL_MODEL.knobs.collapseRotation).toBe(true);
     const withRotation = buildPool(DEFAULT_POOL_MODEL.knobs).length;
     const without = buildPool({ ...DEFAULT_POOL_MODEL.knobs, collapseRotation: false }).length;
-    expect(withRotation).toBe(268);
-    expect(without).toBeGreaterThan(withRotation * 2);
+    expect(without).toBeGreaterThan(withRotation);
   });
 
-  it('declares the full formula it is being tuned against', () => {
-    expect(DEFAULT_POOL_MODEL.knobs.terms.map((term) => term.kind))
-      .toEqual(['density', 'bishopPair', 'defences', 'blockedPawn', 'round']);
+  it('declares a formula rather than pricing at raw material', () => {
+    expect(DEFAULT_POOL_MODEL.knobs.terms.length).toBeGreaterThan(0);
+    expect(DEFAULT_POOL_MODEL.knobs.terms.at(-1)?.kind).toBe('round');
+  });
+});
+
+describe('runCardPool dated snapshots', () => {
+  const dated = POOL_MODELS.filter((model) => /^\d{4}-\d{2}-\d{2}/.test(model.id));
+
+  it('keeps dated models in reverse chronological order at the head of the list', () => {
+    expect(dated.length).toBeGreaterThan(0);
+    const ids = dated.map((model) => model.id);
+    expect([...ids].sort().reverse()).toEqual(ids);
+    // Dated entries lead, so the newest position is what the page opens on.
+    expect(POOL_MODELS.slice(0, dated.length).map((m) => m.id)).toEqual(ids);
+  });
+
+  it('pins each snapshot, because editing one destroys what it exists to preserve', () => {
+    const saved = POOL_MODELS.find((m) => m.id === '2026-08-09-1907-synergy-70-100')!;
+    expect(saved.knobs.commonMaxCost).toBe(70);
+    expect(saved.knobs.uncommonMaxCost).toBe(100);
+    expect(saved.knobs.cols).toBe(4);
+    const summary = summarizePool(buildPool(saved.knobs));
+    expect(summary.byBand).toEqual({ common: 152, uncommon: 93, rare: 23 });
+
+    const twoByTwo = POOL_MODELS.find((m) => m.id === '2026-08-09-1913-2x2-max')!;
+    expect(twoByTwo.knobs.cols).toBe(2);
+    expect(twoByTwo.knobs.rows).toBe(2);
+    // Same pricing and same bands as its parent — only the shape rule differs.
+    expect(twoByTwo.knobs.terms).toEqual(saved.knobs.terms);
+    expect(twoByTwo.knobs.commonMaxCost).toBe(saved.knobs.commonMaxCost);
+  });
+
+  it('admits no shape longer than two cells in either direction', () => {
+    const pool = buildPool(POOL_MODELS.find((m) => m.id === '2026-08-09-1913-2x2-max')!.knobs);
+    for (const card of pool) {
+      const w = Math.max(...card.cells.map((c) => c.x)) + 1;
+      const h = Math.max(...card.cells.map((c) => c.y)) + 1;
+      expect(Math.max(w, h), card.key).toBeLessThanOrEqual(2);
+    }
+    // Which leaves exactly four shapes: the single, the domino, the L, and the square.
+    expect(new Set(pool.map((c) => poolShapeSignature(c.cells))).size).toBe(4);
+    expect(pool).toHaveLength(68);
   });
 });

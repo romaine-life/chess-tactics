@@ -509,6 +509,11 @@ export function buildPool(knobs: PoolKnobs): PoolCard[] {
  * Named parameter sets. A design conversation moves by proposing a whole position, not by nudging
  * one number, so the positions worth comparing are written down and selectable rather than
  * reconstructed by hand each time. Adding one is adding an entry here.
+ *
+ * A DATED label is a snapshot of where the design stood at that moment, kept so it can be returned
+ * to and compared against rather than reconstructed from memory. Dated entries sort chronologically
+ * and are never edited afterwards — editing one would destroy the thing it exists to preserve. The
+ * undated entries above are standing reference positions, not moments.
  */
 export type PoolModel = Readonly<{
   id: string;
@@ -518,6 +523,42 @@ export type PoolModel = Readonly<{
 }>;
 
 export const POOL_MODELS: readonly PoolModel[] = Object.freeze([
+  {
+    id: '2026-08-09-1913-2x2-max',
+    label: '2026-08-09 19:13 · 2x2 max',
+    note: 'The 19:07 pricing exactly, with the generator restricted to a two-by-two grid — nothing longer than two cells in either direction. So the vocabulary is 1x1, 1x2, the L, and the square, and every card fits any band that is at least two-by-two. Only the shape rule differs from its parent, so any change in the tiers is the shape rule and nothing else.',
+    knobs: {
+      ...DEFAULT_POOL_KNOBS,
+      cols: 2,
+      rows: 2,
+      terms: [
+        { kind: 'density', power: 0.5, scale: 10 },
+        { kind: 'bishopPair', bonus: 0.25 },
+        { kind: 'defences', bonus: 0.1, countPawnSupport: true },
+        { kind: 'blockedPawn', penalty: 0.15 },
+        { kind: 'round', to: 5 },
+      ],
+      commonMaxCost: 70,
+      uncommonMaxCost: 100,
+    },
+  },
+  {
+    id: '2026-08-09-1907-synergy-70-100',
+    label: '2026-08-09 19:07 · Synergy, bands 70/100',
+    note: 'Saved as found: the synergy formula with the bands moved to 70 and 100. Tier COUNTS land near target (152 / 93 / 23) but the membership does not — common is 75% four-cell, 71 of those carry two or more minors, and rare fills with triple-minor clusters priced above rook-and-minor. Kept as the record of where that setting actually leads.',
+    knobs: {
+      ...DEFAULT_POOL_KNOBS,
+      terms: [
+        { kind: 'density', power: 0.5, scale: 10 },
+        { kind: 'bishopPair', bonus: 0.25 },
+        { kind: 'defences', bonus: 0.1, countPawnSupport: true },
+        { kind: 'blockedPawn', penalty: 0.15 },
+        { kind: 'round', to: 5 },
+      ],
+      commonMaxCost: 70,
+      uncommonMaxCost: 100,
+    },
+  },
   {
     id: 'synergy',
     label: 'Synergy priced',
