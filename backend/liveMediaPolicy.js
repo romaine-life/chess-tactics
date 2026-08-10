@@ -810,6 +810,62 @@ function titleBarMarkMediaIssue(row, projectedRuntime = null) {
 }
 
 /**
+ * The Adlectio mark: the glyph Expunctio prints beside a formation the current Sectio visit
+ * admitted (ADR-0549). It is the same shape of thing as a title-bar mark and carries the same
+ * contract — a small mark drawn into a seat with `contain`, so transparent margin on the canvas
+ * comes straight off the drawn glyph — which is why it states its trimmed-ness at acceptance
+ * rather than leaving the seat to compensate.
+ *
+ * It gets its own component name rather than borrowing the title bar's, because the two seats are
+ * different sizes and a mark accepted for one must not silently satisfy the other.
+ */
+const ADLECTIO_MARK_COMPONENT = 'adlectio-mark';
+const ADLECTIO_MARK_SLOT = 'ui/run/sectio/adlectio-mark.png';
+
+/** Whether this slot is the mark Expunctio prints for a formation admitted this visit. */
+function adlectioMarkSlot(slot) {
+  return String(slot || '') === ADLECTIO_MARK_SLOT;
+}
+
+/**
+ * The typed completeness validator that lifts the Adlectio mark out of `ui-kit`'s bridge-only
+ * default. Deliberately no fixed dimensions: the candidates are hands, cards and coins, which are
+ * not one shape, and forcing a square would reintroduce the padding the ink-box rule rejects.
+ */
+function adlectioMarkMediaIssue(row, projectedRuntime = null) {
+  if (!adlectioMarkSlot(row.slot)) return 'The Adlectio mark requires its registered semantic slot';
+  if (row.domain !== 'ui-kit') return 'The Adlectio mark requires the ui-kit domain';
+  if (row.media_type !== 'image/png') return 'The Adlectio mark requires image/png';
+  if (!Number(row.width) || !Number(row.height)) return 'The Adlectio mark requires decoded raster dimensions';
+
+  const metadata = mediaVersionMetadata(row);
+  const runtime = projectedRuntime ?? (isObjectRecord(metadata.runtime) ? metadata.runtime : null);
+  if (!isObjectRecord(runtime)) return 'The Adlectio mark requires metadata.runtime';
+  const allowed = new Set(['component', 'variant', 'altText', 'nativeRole']);
+  const unsupported = Object.keys(runtime).filter((key) => !allowed.has(key));
+  if (unsupported.length) {
+    return `Adlectio mark runtime metadata contains unsupported keys: ${unsupported.sort().join(', ')}`;
+  }
+  if (runtime.component !== ADLECTIO_MARK_COMPONENT) {
+    return `Adlectio mark metadata.runtime.component must be ${ADLECTIO_MARK_COMPONENT}`;
+  }
+  if (runtime.nativeRole !== ADLECTIO_MARK_COMPONENT) {
+    return `Adlectio mark metadata.runtime.nativeRole must be ${ADLECTIO_MARK_COMPONENT}`;
+  }
+  // The words beside it say "Adlected this visit"; an alt string here would be read out twice.
+  if (runtime.altText !== '') {
+    return 'Adlectio mark metadata.runtime.altText must be empty because the line owns its accessible name';
+  }
+  const native = isObjectRecord(row.native_evidence) ? row.native_evidence : {};
+  const inkBox = isObjectRecord(native.inkBox) ? native.inkBox : null;
+  if (!inkBox) return 'The Adlectio mark must state nativeEvidence.inkBox, the measured ink box of these bytes';
+  if (Number(inkBox.width) !== Number(row.width) || Number(inkBox.height) !== Number(row.height)) {
+    return 'The Adlectio mark must be trimmed to its own ink: the measured ink box must fill the canvas';
+  }
+  return null;
+}
+
+/**
  * The card-price coin is the exact transparent 112px extraction of the shared
  * card coin. The surrounding component owns both the live value and accessible
  * currency label; the raster owns only the blank struck-metal body.
@@ -2057,6 +2113,10 @@ module.exports = {
   titleBarMarkReviewSurface,
   titleBarMarkSlot,
   titleBarMarkMediaIssue,
+  ADLECTIO_MARK_COMPONENT,
+  ADLECTIO_MARK_SLOT,
+  adlectioMarkSlot,
+  adlectioMarkMediaIssue,
   runSectioWrapMediaIssue,
   workspaceBackgroundSlotId,
   workspaceBackgroundMediaIssue,

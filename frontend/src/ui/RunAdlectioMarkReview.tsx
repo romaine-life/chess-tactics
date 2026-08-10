@@ -33,22 +33,37 @@ export interface AdlectioMarkCandidate {
   installed: boolean;
 }
 
-/** Every candidate uploaded against the mark's slot; whatever is installed leads. */
+/**
+ * Every candidate uploaded against the mark's slot, ONE CARD PER IMAGE; whatever is installed
+ * leads.
+ *
+ * Re-uploading the same bytes is ordinary — a candidate is re-sent when it gains the runtime
+ * metadata or evidence acceptance requires — and each attempt is its own version row. Showing all
+ * of them would put three identical marks on the page and leave the owner picking between rows
+ * that differ only in what the backend will accept, so the newest row for a given image wins.
+ */
 export function adlectioMarkCandidates(catalog: AdminLiveMediaCatalog): AdlectioMarkCandidate[] {
   const slot = catalog.slots.find((entry) => entry.slot === ADLECTIO_MARK_SLOT) ?? null;
-  return catalog.versions
-    .filter((version) => version.slot === ADLECTIO_MARK_SLOT && Boolean(version.media))
-    .map((version) => ({
+  const newestByImage = new Map<string, AdlectioMarkCandidate>();
+  for (const version of catalog.versions) {
+    if (version.slot !== ADLECTIO_MARK_SLOT || !version.media) continue;
+    const candidate: AdlectioMarkCandidate = {
       id: version.id,
       label: version.label || 'Candidate',
-      sha256: version.media?.sha256 ?? '',
+      sha256: version.media.sha256,
       version,
       installed: version.status === 'accepted' && slot?.activeVersionId === version.id,
-    }))
-    .sort((left, right) => (
-      Number(right.installed) - Number(left.installed)
-      || left.label.localeCompare(right.label)
-    ));
+    };
+    const seen = newestByImage.get(candidate.sha256);
+    const newer = !seen
+      || candidate.installed
+      || (!seen.installed && candidate.version.createdAt > seen.version.createdAt);
+    if (newer) newestByImage.set(candidate.sha256, candidate);
+  }
+  return [...newestByImage.values()].sort((left, right) => (
+    Number(right.installed) - Number(left.installed)
+    || left.label.localeCompare(right.label)
+  ));
 }
 
 export function useAdlectioMarkCatalog(): {

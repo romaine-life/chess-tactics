@@ -72,6 +72,12 @@ have been renormalized.
   such parameter for this mark, and the guard in `runChromeHierarchy.test.ts` fails if one appears.
   One page also means one comparison: an address per candidate makes the owner do the navigating,
   which is the work the surface exists to do.
+- Installing one needs a typed backend projection, because `ui-kit` candidates are bridge-only by
+  default. `adlectioMarkMediaIssue` is that projection, and it states the contract the seat depends
+  on: the bytes are TRIMMED TO THEIR OWN INK. The seat draws with `contain`, which scales the
+  canvas, so transparent margin comes straight off the glyph and an untrimmed mark silently draws
+  smaller than the coin beside it. No fixed dimensions — the candidates are hands, cards and coins,
+  and forcing a square would reintroduce the padding the ink-box rule exists to reject.
 - That mark is the *only* thing the companion says in words. The attached-unit count, the repeated
   card name and the per-tile restatement of the Athetize rule are deleted; what remains beside the
   face is the mark, the fee, and the action. The face is the sole title owner, as ADR-0446 said,
