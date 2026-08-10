@@ -274,3 +274,28 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(style).toContain('.run-replace-note');
   });
 });
+
+describe('Run rule options are a departure from the defaults, not a step in setup', () => {
+  const source = readFileSync(new URL('./RunRulesSelector.tsx', import.meta.url), 'utf8');
+
+  it('starts closed, so a normal Run never has to answer it', () => {
+    expect(source).toContain('const [open, setOpen] = useState(false)');
+    expect(source).toContain('hidden={!open}');
+  });
+
+  it('says the defaults are already right while it is closed', () => {
+    expect(source).toContain('Standard formations and pricing. Most Runs want these.');
+  });
+
+  it('is reachable and announced, because a Run is bound to these for its life', () => {
+    expect(source).toContain('aria-expanded={open}');
+    expect(source).toContain('aria-controls="run-rules-content"');
+  });
+
+  it('does not call the weighted option "by density", which it is not', () => {
+    // Density weights the material, it does not replace it -- priced by density alone, one Pawn
+    // and four Pawns would cost the same.
+    expect(source).toContain("label: 'Weighted by density'");
+    expect(source).not.toContain("label: 'By density'");
+  });
+});

@@ -138,9 +138,10 @@ export type RunRules = Readonly<{
    * How a card is priced.
    *
    * `material` charges a card its material and nothing else, which is what the game has always
-   * done. `density` charges by concentration instead: the same material packed into fewer cells
-   * costs more, because board space is the scarce thing and a Queen on one square is not two
-   * Knights on two.
+   * done. `density` charges material WEIGHTED by concentration -- it does not price concentration
+   * on its own, which would make one Pawn and four Pawns cost the same. The same material in
+   * fewer cells costs more, because board space is the scarce thing and a Queen on one square is
+   * not two Knights on two.
    */
   pricing: 'material' | 'density';
   /**
