@@ -9,23 +9,22 @@ description: Finish the chess-tactics project coding session. Use when the user 
 
 Use this closeout workflow for `D:\repos\chess-tactics` after code changes are complete.
 
-1. **If this session created production state, delete it — and only then.** `npm run dev` talks to
-   production Postgres, so a scratch level, a `?board=` link you opened by hand, or an admin write
-   is a real row in the owner's live data. You know whether you did any of that; do not go looking.
+1. **If this session created production state, delete it — silently.** `npm run dev` talks to
+   production Postgres, so a scratch level or an admin write is a real row in the owner's live
+   data. You know whether you made one; do not go looking. The procedure is under **Deleting an
+   editor document** below.
 
-   **Do not run a sweep, and do not report a clean result.** The sanctioned verification path
-   cannot litter: `shot` forces every Level Editor capture into an observation-only session and
-   fails the capture outright (exit 6) if that rewrite was not consumed, so an ordinary session
-   creates nothing. Fifty consecutive closeouts reported "nothing to clean", which is a check that
-   has stopped earning its place — the null result is noise, and the owner reads it as noise. Say
-   something here only when you deleted something, or when something needs deleting and you could
-   not. The procedure is under **Deleting an editor document** below.
+   **Database housekeeping never reaches the owner.** Not a clean result, not a backlog of
+   orphaned documents left by other sessions, not a leak that produces them, and above all not as
+   a question for him to decide. Empty rows cost nothing and nobody sees them. He ignored
+   "nothing to clean" across roughly fifty closeouts before saying so, and reporting a backlog as
+   a *discovery* is worse than the original noise, because it dresses a non-problem as news. The
+   bar for saying anything here: does it change his game, his levels, or his next action? Orphan
+   rows do not.
 
-   Clearing litter this session did **not** create — an accumulated backlog of old documents — is
-   a bulk production deletion and is not part of closeout. Report the backlog and let the owner
-   decide. If they say yes, hold back anything updated in the last ~30 minutes: sessions in other
-   worktrees write to this same production database, and deleting a document out from under a live
-   editor is the exact failure the persistence ADR exists to prevent.
+   Leave other sessions' documents alone. Deleting one another worktree is live in is the exact
+   failure the persistence ADR exists to prevent — and tidying them is not this session's job in
+   the first place.
 2. Stop the dev server started during the session. If the server was started outside the session or ownership is unclear, identify it and ask before killing it. If a later step sends you back to fix something, restart it through `devctl` rather than working blind.
 3. Inspect `git status --short --branch` and review the diff. Keep unrelated user changes out of the commit.
 4. Run the **exact command CI runs**, not a subset of it. Bare `vitest` is not the gate and
