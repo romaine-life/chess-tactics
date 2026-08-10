@@ -295,7 +295,7 @@ function RunPanel({
           tied to the rail standing beside it. The column carries no eyebrow — a section title
           distinguishes one group from others beside it, and this column holds exactly one
           (ADR-0556). */}
-      <ApparatusRailColumn className="play-run-choice-rail" placement="open" aria-label="Run">
+      <ApparatusRailColumn opens="panel-beside" className="play-run-choice-rail" placement="open" aria-label="Run">
         {!hydrated || loading ? (
           <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status">
             <div className="settings-row-copy"><h4>Loading Runs…</h4></div>
@@ -820,6 +820,7 @@ export function PlayMenu({
         data-thumbnail-authority={thumbnailSurface.error ? 'error' : thumbnailSurface.complete ? 'ready' : 'loading'}
       >
       {PLAY_SOURCE_RAIL_ENABLED ? <ApparatusRailColumn
+          opens="panel-beside"
         className="menu-dest-col menu-dest-tabs play-source-rail"
         aria-label="Play"
       >

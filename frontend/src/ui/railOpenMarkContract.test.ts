@@ -36,11 +36,28 @@ describe('rail open mark', () => {
     // Hunting for the ones that forgot is not a review anyone should have to do, so the tab works
     // it out — from its own address where it has one, from its selected state where it does not.
     const railTab = readFileSync(new URL('./shared/ApparatusRailTab.tsx', import.meta.url), 'utf8');
-    expect(railTab).toContain('const marksOpen = expanded ?? (to ? isRailTabAddress(intentPath, railTabRoutePath(to)) : active);');
     expect(railTab).not.toContain('expanded = false');
+    // The COLUMN answers it, once, for every tab in it — and `opens` is required, so a new rail
+    // cannot be written without answering. A `no-panel` rail's tabs can never wear the mark; a
+    // `panel-beside` rail's tab must name the address its panel lives at or it throws, because an
+    // unaddressed mark can only follow the committed scene and arrives a crossfade late.
+    expect(railTab).toContain('opens: ApparatusRailOpens;');
+    expect(railTab).toContain("export type ApparatusRailOpens = 'panel-beside' | 'no-panel';");
+    expect(railTab).toContain('const opens = useContext(ApparatusRailOpensContext);');
+    expect(railTab).toContain("if (opens === 'panel-beside' && !panelAddress && expanded === undefined) {");
+    expect(railTab).toMatch(/opens === 'no-panel'\s*\?\s*false/);
+    for (const [name, source] of [['MainMenu', mainMenu], ['Enchiridion', enchiridion], ['Strategikon', strategikon]]) {
+      expect(source, `${name} must declare what its rail opens`).toContain('opens="panel-beside"');
+    }
     // The derivation reads the INTENT address, so the mark still lands on the press rather than a
-    // crossfade later — the whole point of ADR-0561.
-    expect(railTab).toContain('const intentPath = useLocationIntentPath();');
+    // crossfade later — the whole point of ADR-0561. Address, not path: not every shell sections
+    // itself by path. The Campaign Editor's grammar is path PLUS query, so a path-only comparison
+    // normalized its Levels tab and every campaign tab to the same `/editor` and the mark stuck.
+    expect(railTab).toContain('const intent = useLocationIntentAddress();');
+    expect(railTab).toContain('railTabAddressMatches(intent, panelAddress');
+    const intentHelper = readFileSync(new URL('./shared/railOpenIntent.ts', import.meta.url), 'utf8');
+    expect(intentHelper).toContain('export function railTabAddressMatches(');
+    expect(intentHelper).toContain('for (const [key, value] of wanted) if (live.get(key) !== value) return false;');
     // And the helper it reads must survive a node render, since that is where component tests run.
     expect(readFileSync(new URL('./shared/railOpenIntent.ts', import.meta.url), 'utf8'))
       .toContain("if (typeof window === 'undefined') return '/';");

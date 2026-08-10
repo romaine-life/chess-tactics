@@ -107,7 +107,7 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toMatch(/<ApparatusRailTab[\s\S]*?label="Current Run"/);
     expect(playMenu).toContain('to={PLAY_RUN_CURRENT_SELECTOR_HREF}');
     expect(playMenu).not.toContain('play-choice-row');
-    expect(playMenu).toContain('<ApparatusRailColumn className="play-run-choice-rail"');
+    expect(playMenu).toContain('<ApparatusRailColumn opens="panel-beside" className="play-run-choice-rail"');
     expect(playMenu).toContain('data-testid="run-detail-current"');
     expect(playMenu).toContain('to="/run"><span>Play</span></ChromeNavButton>');
     // Every leaf control on the Run surface carries the oak leaf material (ADR-0433).

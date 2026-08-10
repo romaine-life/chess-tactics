@@ -14,6 +14,7 @@ export function EditorCollectionRailTab({
   active,
   index,
   onSelect,
+  opensAddress,
   iconSrc,
   title,
   itemName,
@@ -24,6 +25,12 @@ export function EditorCollectionRailTab({
   active: boolean;
   index: number;
   onSelect: () => void;
+  /**
+   * Where this collection's panel lives. Required, because these tabs navigate from `onSelect`
+   * rather than by being links, and without the address the open mark can only follow the
+   * committed scene — which lands a crossfade after the press.
+   */
+  opensAddress: string;
   iconSrc: string;
   title: string;
   itemName: string;
@@ -38,6 +45,7 @@ export function EditorCollectionRailTab({
       ariaLabel={`${title}, ${itemCount}${hasAttention ? `, ${attentionLabel.toLowerCase()}` : ''}`}
       index={index}
       active={active}
+      opensAddress={opensAddress}
       iconSrc={iconSrc}
       className="ce-campaign-tab ce-campaign-tab-meta"
       onSelect={onSelect}

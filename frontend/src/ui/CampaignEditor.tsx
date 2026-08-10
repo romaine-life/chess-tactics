@@ -210,6 +210,7 @@ function CampaignRailTab({
       locked={locked}
       iconSrc={CAMPAIGN_TAB_ICON}
       className="ce-campaign-tab"
+      opensAddress={editorCampaignHref('/editor', campaign.id)}
       onSelect={selectCampaign}
       trailing={locked ? (
         <span className="ce-tab-trail ce-row-lock" aria-label={`${campaign.name} locked`} role="img">
@@ -234,7 +235,8 @@ export function UnassignedRailTab({
   active,
   index,
   onSelect,
-  title = 'Unassigned levels',
+  opensAddress,
+  title = 'Levels',
   itemName = 'level',
   hasUnsavedDrafts = false,
 }: {
@@ -242,6 +244,7 @@ export function UnassignedRailTab({
   active: boolean;
   index: number;
   onSelect: () => void;
+  opensAddress: string;
   title?: string;
   itemName?: string;
   hasUnsavedDrafts?: boolean;
@@ -252,6 +255,7 @@ export function UnassignedRailTab({
       active={active}
       index={index}
       onSelect={onSelect}
+      opensAddress={opensAddress}
       iconSrc={CAMPAIGN_TAB_ICON}
       title={title}
       itemName={itemName}
@@ -1033,6 +1037,7 @@ export function CampaignEditor({
     <>
       {/* ── RAIL: the campaigns navigator (fold 1 of the old 3-panel layout) ── */}
       <ApparatusRailColumn
+        opens="panel-beside"
         className={embedded ? 'menu-dest-col menu-dest-tabs ce-editor-rail' : 'settings-frame settings-rail-frame ce-editor-rail'}
         placement={embedded ? 'open' : 'framed'}
         aria-label="Campaigns"
@@ -1088,6 +1093,7 @@ export function CampaignEditor({
                 <UnassignedRailTab
                   title="War"
                   itemName="War"
+                  opensAddress={campaignCollectionHref('/editor', 'wars')}
                   count={wars.length}
                   index={railCampaigns.length}
                   active={isWarsSelected}
@@ -1097,6 +1103,7 @@ export function CampaignEditor({
                   count={unassignedLevels.length}
                   index={railCampaigns.length + 1}
                   active={isUnassignedSelected}
+                  opensAddress={campaignCollectionHref('/editor', 'unassigned')}
                   hasUnsavedDrafts={recentDrafts.length > 0}
                   onSelect={selectUnassignedCollection}
                 />

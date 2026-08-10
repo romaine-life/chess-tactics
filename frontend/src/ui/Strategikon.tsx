@@ -99,7 +99,7 @@ export function Strategikon({
       )}
       edgeAttached
       rail={(
-        <ApparatusRailColumn className="strategikon-rail" aria-label="Strategikon sections">
+        <ApparatusRailColumn opens="panel-beside" className="strategikon-rail" aria-label="Strategikon sections">
           {strategikonNavigationItems(cardsIcon).map((item, index) => (
             <ApparatusRailTab
               key={item.section}

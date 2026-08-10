@@ -1,5 +1,7 @@
+import type { ReactElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
+import { ApparatusRailColumn } from './shared/ApparatusRailTab';
 import {
   campaignCollectionFromSearch,
   campaignCollectionHref,
@@ -41,18 +43,25 @@ describe('UnassignedRailTab', () => {
     expect(editorCampaignIdFromSearch('?keep=yes')).toBeNull();
   });
 
+  // A rail tab renders inside its COLUMN, which is what declares whether its tabs open a panel
+  // beside the rail — the tab throws without one rather than guessing.
+  const inRail = (tab: ReactElement): string => renderToStaticMarkup(
+    <ApparatusRailColumn opens="panel-beside">{tab}</ApparatusRailColumn>,
+  );
+
   it('marks unsaved editor work without changing the canonical level count', () => {
-    const markup = renderToStaticMarkup(
+    const markup = inRail(
       <UnassignedRailTab
         count={3}
         active={false}
         index={4}
         hasUnsavedDrafts
         onSelect={() => {}}
+        opensAddress="/editor?collection=unassigned"
       />,
     );
 
-    expect(markup).toContain('aria-label="Unassigned levels, 3 levels, unsaved drafts available"');
+    expect(markup).toContain('aria-label="Levels, 3 levels, unsaved drafts available"');
     expect(markup).toContain('<small>3 levels</small>');
     expect(markup).toContain('data-testid="unassigned-draft-attention"');
     expect(markup).toContain('title="Unsaved drafts available"');
@@ -60,11 +69,11 @@ describe('UnassignedRailTab', () => {
   });
 
   it('omits the attention marker when no resumable drafts exist', () => {
-    const markup = renderToStaticMarkup(
-      <UnassignedRailTab count={1} active index={2} onSelect={() => {}} />,
+    const markup = inRail(
+      <UnassignedRailTab count={1} active index={2} onSelect={() => {}} opensAddress="/editor?collection=unassigned" />,
     );
 
-    expect(markup).toContain('aria-label="Unassigned levels, 1 level"');
+    expect(markup).toContain('aria-label="Levels, 1 level"');
     expect(markup).not.toContain('unassigned-draft-attention');
     expect(markup).not.toContain('unsaved draft');
   });

@@ -1184,7 +1184,7 @@ export function EnchiridionSectionRail({
   // pane still waits for the committed address and its transition is unchanged.
   const openSection = useOpenRailTab(siblingRailAddresses(ENCHIRIDION_SECTIONS, sectionHref), section);
   return (
-    <ApparatusRailColumn className="enchiridion-section-rail" aria-label="Enchiridion sections">
+    <ApparatusRailColumn opens="panel-beside" className="enchiridion-section-rail" aria-label="Enchiridion sections">
       {ENCHIRIDION_SECTIONS.map((candidate, index) => (
         <ApparatusRailTab
           key={candidate}

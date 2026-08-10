@@ -689,6 +689,7 @@ export function Settings({
   const inner = (
     <>
       <ApparatusRailColumn
+        opens="panel-beside"
         className={embedded ? 'menu-dest-col menu-dest-tabs' : 'settings-frame settings-rail-frame'}
         placement={embedded ? 'open' : 'framed'}
         aria-label="Settings sections"

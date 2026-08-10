@@ -1,4 +1,4 @@
-import type { CSSProperties, HTMLAttributes, ReactElement, ReactNode } from 'react';
+import { createContext, useContext, type CSSProperties, type HTMLAttributes, type ReactElement, type ReactNode } from 'react';
 // Every menu-language rail button in the app is this component. `check-rail-tab-primitive.mjs`
 // fails the build on any other file that names `settings-tab` / `main-menu-mode-tab` in markup,
 // because FOUR surfaces had each hand-assembled their own and drifted: the Run choice list
@@ -10,7 +10,7 @@ import { chromeUnitClassNames } from '../chromeUnitRegistry';
 import { FittedTabLabel } from './FittedTabLabel';
 import { ChromeNavButton } from './ChromeButton';
 import { CHROME_LEAF_FILL_SURFACE } from './chromeSurfacePolicy';
-import { isRailTabAddress, railTabRoutePath, useLocationIntentPath } from './railOpenIntent';
+import { railTabAddressMatches, useLocationIntentAddress } from './railOpenIntent';
 
 export interface ApparatusRailTabProps {
   label: string;
@@ -70,6 +70,18 @@ export interface ApparatusRailTabProps {
    */
   expanded?: boolean;
   /**
+   * The address this tab's panel lives at, for a tab that navigates by SIDE EFFECT rather than by
+   * being a link — the Editor's collection tabs call `navigateApp` from `onSelect` and keep a
+   * button host.
+   *
+   * Required (at runtime) of every tab in a `panel-beside` rail that has no `to`, because without
+   * it the mark has nothing to read but the COMMITTED state, which lands a crossfade late: press a
+   * collection in the Editor and the `›` sits on the old tab until the panel has finished fading.
+   * The address is the player's intent and moves on the press, which is how the main menu's mark
+   * has always behaved.
+   */
+  opensAddress?: string;
+  /**
    * What taking the tab does. Beside `to` it is a side effect; without `to` it IS the take,
    * and the tab renders on a role="button" host instead of the nav control.
    */
@@ -80,9 +92,29 @@ export interface ApparatusRailTabProps {
   ariaLabel?: string;
 }
 
+/**
+ * What taking a tab in this rail does — the fact the open mark depends on, and the reason it is
+ * declared on the COLUMN rather than remembered per tab.
+ *
+ * `panel-beside` — the tab opens a panel next to the rail and stays visible beside it. Every tab
+ * in such a rail wears the `›`; none of them can forget to.
+ *
+ * `no-panel` — the tab leads somewhere that replaces the view, or nowhere at all (a specimen in a
+ * review surface). No tab in such a rail may wear the mark, and passing `expanded` to one is an
+ * error rather than a silent no-op.
+ *
+ * It is REQUIRED. A new rail cannot be written without answering the question, which is the whole
+ * point: the mark used to be an opt-in boolean, four rails that should have had it never passed it,
+ * and each one had to be found by eye.
+ */
+export type ApparatusRailOpens = 'panel-beside' | 'no-panel';
+
+const ApparatusRailOpensContext = createContext<ApparatusRailOpens | null>(null);
+
 export interface ApparatusRailColumnProps extends HTMLAttributes<HTMLElement> {
   children: ReactNode;
   placement?: 'open' | 'framed';
+  opens: ApparatusRailOpens;
 }
 
 /**
@@ -106,19 +138,23 @@ export function ApparatusRailColumn({
   children,
   className = '',
   placement = 'open',
+  opens,
   ...props
 }: ApparatusRailColumnProps): ReactElement {
   return (
-    <aside
-      {...props}
-      data-apparatus-rail-column=""
-      data-apparatus-rail-placement={placement}
-      // After the spread: the surface is family-owned, not a per-consumer choice.
-      data-chrome-tab-fill-surface={APPARATUS_RAIL_FILL_SURFACE}
-      className={`apparatus-rail-column ${className}`.trim()}
-    >
-      {children}
-    </aside>
+    <ApparatusRailOpensContext.Provider value={opens}>
+      <aside
+        {...props}
+        data-apparatus-rail-column=""
+        data-apparatus-rail-placement={placement}
+        data-apparatus-rail-opens={opens}
+        // After the spread: the surface is family-owned, not a per-consumer choice.
+        data-chrome-tab-fill-surface={APPARATUS_RAIL_FILL_SURFACE}
+        className={`apparatus-rail-column ${className}`.trim()}
+      >
+        {children}
+      </aside>
+    </ApparatusRailOpensContext.Provider>
   );
 }
 
@@ -144,23 +180,34 @@ export function ApparatusRailTab({
   trailing,
   onSelect,
   expanded,
+  opensAddress,
   className,
 }: ApparatusRailTabProps): ReactElement {
   const unavailable = disabled || locked;
-  // The mark is DERIVED, not remembered. It used to default to false, so a tab wore it only if
-  // its call site passed `expanded` — three rails did and four did not, and the ones that did not
-  // are all rails whose tab opens a panel right beside it (Settings, the Play choices, the editor's
-  // workspace collections). Being a rail tab that opens something has to be enough; hunting for the
-  // ones that forgot is not a review anyone should have to do.
+  const opens = useContext(ApparatusRailOpensContext);
+  // The mark is DERIVED from the rail's declared kind, never remembered per tab. It used to be an
+  // opt-in boolean defaulting to false: three rails passed it, four did not, and all four of those
+  // open a panel right beside the tab. Each had to be found by eye. Now the COLUMN answers the
+  // question once for all its tabs, and answering is not optional — `opens` is a required prop.
   //
-  // A tab that addresses its panel derives the mark from the ADDRESS, which is the player's intent
-  // and is already ahead of the committed scene (railOpenIntent.ts) — so the mark still lands on the
-  // press rather than a crossfade later. A tab that selects in place has no address to read, so it
-  // falls back to its own selected state. A rail whose panel can be COLLAPSED while its tab stays
-  // active — the main menu, the Enchiridion, the Strategikon — still passes `expanded` itself,
-  // because only it knows the panel shut.
-  const intentPath = useLocationIntentPath();
-  const marksOpen = expanded ?? (to ? isRailTabAddress(intentPath, railTabRoutePath(to)) : active);
+  // The mark reads the ADDRESS, which is the player's intent and moves on the press, rather than
+  // the committed state, which lands a crossfade later (ADR-0561, railOpenIntent.ts).
+  const intent = useLocationIntentAddress();
+  if (opens === null) {
+    throw new Error('ApparatusRailTab must be rendered inside an ApparatusRailColumn — the column is what declares whether its tabs open a panel beside the rail.');
+  }
+  const panelAddress = to ?? opensAddress;
+  if (opens === 'panel-beside' && !panelAddress && expanded === undefined) {
+    throw new Error(`Rail tab "${label}" opens a panel beside its rail but names no address. Give it \`to\`, or \`opensAddress\` when it navigates from onSelect — otherwise its open mark can only follow the committed scene and arrives a crossfade late.`);
+  }
+  if (opens === 'no-panel' && expanded !== undefined) {
+    throw new Error(`Rail tab "${label}" is in a rail declared \`no-panel\`, so it has no panel to be open and must not be passed \`expanded\`.`);
+  }
+  // A rail whose panel can be COLLAPSED while its tab stays active — the main menu, the
+  // Enchiridion, the Strategikon — still says so itself, because only it knows the panel shut.
+  const marksOpen = opens === 'no-panel'
+    ? false
+    : expanded ?? railTabAddressMatches(intent, panelAddress ?? '/');
   const classes = chromeUnitClassNames(
     'inner-box',
     'settings-tab main-menu-mode-tab',

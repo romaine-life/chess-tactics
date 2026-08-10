@@ -161,7 +161,7 @@ function RailPreview({
   reviewHref: string;
 }): ReactElement {
   return (
-    <ApparatusRailColumn className="menu-icon-review-rail">
+    <ApparatusRailColumn opens="no-panel" className="menu-icon-review-rail">
       {MENU_ICON_DESTINATIONS.map((destination, index) => {
         const mark = marks.get(destination.slug);
         return mark ? (
