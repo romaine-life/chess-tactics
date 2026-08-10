@@ -108,6 +108,12 @@ describe('playLevelGame', () => {
     // well before the 300-ply cap that used to be the only way out.
     const level = createBlankLevel('sp-fifty', 'Fifty', 8, 8);
     level.objective = 'capture-king';
+    // One impassable corner keeps this board OFF the dead-position rule (ADR-0554), which
+    // would otherwise end bare Kings at ply 0 and leave the clock untested. The kings still
+    // have the rest of the board, so the halfmove count is unaffected.
+    level.layers.terrain = level.layers.terrain.map((cell) => (
+      cell.x === 0 && cell.y === 0 ? { ...cell, terrain: 'rock' as const } : cell
+    ));
     level.layers.units = [
       { x: 4, y: 7, type: 'king', side: 'player' },
       { x: 4, y: 0, type: 'king', side: 'enemy' },

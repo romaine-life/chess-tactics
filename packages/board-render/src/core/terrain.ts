@@ -116,6 +116,13 @@ export function isPassableTerrain(t: TerrainType): boolean {
 // and knights (no path, just a landing square) hop straight over.
 const HALTS_TRAVEL: ReadonlySet<TerrainType> = new Set<TerrainType>(['water']);
 
+/** Whether this terrain family stops a multi-square move that enters it. The un-indexed
+ * counterpart of `haltsTravel`, for callers reading an authored layer rather than probing
+ * a board coordinate (see rules.boardIsAllSquares). */
+export function haltsTravelTerrain(t: TerrainType): boolean {
+  return HALTS_TRAVEL.has(t);
+}
+
 /** Whether the cell at (x, y) stops a multi-square move that enters it. */
 export function haltsTravel(index: TerrainIndex, x: number, y: number): boolean {
   const i = offset(index, x, y);
