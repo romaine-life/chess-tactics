@@ -8757,7 +8757,7 @@ app.post('/api/lobbies/:id/moves', async (req, res) => {
 });
 
 const LOBBY_PLAYING_SIDES = new Set(['player', 'enemy']);
-const LOBBY_DRAW_REASONS = new Set(['stalemate', 'fifty-move', 'threefold']);
+const LOBBY_DRAW_REASONS = new Set(['stalemate', 'dead-position', 'fifty-move', 'threefold']);
 const LOBBY_WIN_REASONS = new Set(['victory-rule', 'checkmate']);
 
 function sameLobbyResult(a, b) {

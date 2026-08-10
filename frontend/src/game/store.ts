@@ -274,10 +274,12 @@ function moveEntries(notation: readonly string[], side: Side, startPly: number):
     .filter((entry) => entry.text !== '');
 }
 
-/** Log copy for a draw forced by the chess draw rules (ADR-0072), same on every surface. */
-const DRAW_RULE_COPY: Record<RuleDrawKind, string> = {
+/** Log copy for a draw the position itself forces, same on every surface: the chess draw rules
+ *  the level authored (ADR-0072) plus the dead position, which needs no authoring. */
+const DRAW_RULE_COPY: Record<RuleDrawKind | 'dead-position', string> = {
   'fifty-move': 'Draw — 50 moves have passed without a capture or pawn move.',
   threefold: 'Draw — the same position has occurred three times.',
+  'dead-position': 'Draw — neither side has the force left to deliver a checkmate.',
 };
 
 /** Result-screen "how it ended" line per draw kind (see resultDetail). */
@@ -286,6 +288,7 @@ const DRAW_RESULT_DETAIL: Record<Exclude<Adjudication['kind'], 'victory-rule'>, 
   stalemate: 'Stalemate — no legal moves remain.',
   'fifty-move': '50 moves passed without a capture or pawn move.',
   threefold: 'The same position occurred three times.',
+  'dead-position': 'Neither side has the force left to deliver a checkmate.',
 };
 
 function movePromotesPawn(game: GameState, piece: Piece, move: Move): boolean {
