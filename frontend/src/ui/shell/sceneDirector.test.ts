@@ -226,6 +226,42 @@ describe('scene director', () => {
     expect(state.retryEpoch).toBe(2);
   });
 
+  it('leaves the committed epoch alone until a destination is promoted', () => {
+    // App.tsx keys the outgoing layer of a scene replacement by this, so it must be the epoch
+    // the visible scene was BUILT with. A retry belongs to the destination that failed; taking
+    // the live retryEpoch here would change the committed layer's key and destroy the screen
+    // standing painted behind the failure — the flicker of ADR-0557, on a worse surface.
+    let state = initialSceneState(sceneManifest('/'));
+    expect(state.committedEpoch).toBe(0);
+
+    state = reduceScene(state, { type: 'navigate', destination: sceneManifest('/play'), href: '/play' });
+    state = reduceScene(state, { type: 'exit-finished', generation: state.generation });
+    // Beginning a replacement moves nothing: the outgoing layer must keep the key it had.
+    expect(state).toMatchObject({ phase: 'loading', retryEpoch: 0, committedEpoch: 0 });
+
+    state = reduceScene(state, { type: 'failed', generation: state.generation, error: new Error('backend down') });
+    state = reduceScene(state, { type: 'retry' });
+    expect(state).toMatchObject({ retryEpoch: 1, committedEpoch: 0 });
+
+    state = reduceScene(state, { type: 'destination-painted', generation: state.generation });
+    state = reduceScene(state, { type: 'entrance-finished', generation: state.generation });
+    // Promotion is the one moment the committed layer legitimately becomes a different mount,
+    // and it lands on exactly the epoch the incoming layer was keyed by, so its key is unchanged.
+    expect(state).toMatchObject({ phase: 'current', retryEpoch: 1, committedEpoch: 1 });
+  });
+
+  it('promotes the committed epoch through an empty destination slot too', () => {
+    let state = initialSceneState(sceneManifest('/play/select/levels'));
+    state = reduceScene(state, { type: 'retry' });
+    state = reduceScene(state, {
+      type: 'navigate',
+      destination: sceneManifest('/play/select'),
+      href: '/play/select',
+    });
+    state = reduceScene(state, { type: 'empty-slot-committed', generation: state.generation });
+    expect(state).toMatchObject({ phase: 'current', committedEpoch: state.retryEpoch });
+  });
+
   it('rebuilds a failed cold load as well as a failed navigation', () => {
     let state = initialSceneState(sceneManifest('/editor/level'), '/editor/level');
     state = reduceScene(state, { type: 'startup-failed', generation: 0, error: new Error('chrome failed') });
