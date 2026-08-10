@@ -19237,8 +19237,12 @@ button.tileset-relationship-cell {
   padding-block: var(--settings-clip-apron-top) var(--settings-clip-apron-bottom);
   padding-inline: var(--settings-clip-apron-left) var(--settings-clip-apron-right);
 }
+/* The rail rides the CONTENT line, not the widened clip box — on both axes. The apron pushes this
+   scrollport's edges out past the content so an atom can finish painting, and the rail is absolutely
+   positioned against the scrollport, so without this it starts wherever the apron starts: 8px above
+   the first box's top surface, which is exactly how far the block apron reaches. */
 .settings-scroll > .kit-scroll-rail {
-  /* The rail rides the content line, not the widened clip box. */
+  inset-block: var(--settings-clip-apron-top) var(--settings-clip-apron-bottom);
   inset-inline-end: calc(2px + var(--settings-clip-apron-right));
 }
 .settings-scroll .settings-row-control {
