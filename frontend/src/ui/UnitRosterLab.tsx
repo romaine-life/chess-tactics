@@ -23,12 +23,13 @@ import { UnitRungSprite } from './UnitRungSprite';
  * Sampled every few rungs rather than every 5% step: the ladder is deliberately fine
  * for the wheel, and a stepper wants strides you can see between.
  */
-// The wheel is the player's control and matches the board exactly: one 5% rung per
-// notch. The buttons are navigation rather than simulation -- a deliberate click
-// wants a change you can see, and 5% is invisible -- so they travel further. Six
-// rungs was 34% and skipped past the tier you were aiming at; three is about 16%.
+// One rung per input, wheel and buttons alike, because the job here is auditing
+// EVERY view a player can reach -- and a stride bigger than one skips tiers, which
+// is precisely the thing being audited. I twice widened the buttons on the reasoning
+// that a click wants a bigger visible change; that is a comfort argument and it
+// costs coverage, which this surface exists to provide.
 const WHEEL_STRIDE = 1;
-const BUTTON_STRIDE = 3;
+const BUTTON_STRIDE = 1;
 const TIER_INDEX_RANGE = { min: -18, max: 30 };
 
 /**
@@ -156,7 +157,13 @@ export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactEl
           >
             −
           </button>
-          <span className="unit-roster-magnify-value">{Math.round(tierZoom * 100)}%</span>
+          <span className="unit-roster-magnify-value">
+            {Math.round(tierZoom * 100)}%
+            {' '}
+            <small>
+              tier {tierIndex - TIER_INDEX_RANGE.min + 1}/{TIER_INDEX_RANGE.max - TIER_INDEX_RANGE.min + 1}
+            </small>
+          </span>
           <button
             type="button"
             aria-label="Zoom in one tier"
