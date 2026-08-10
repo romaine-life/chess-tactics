@@ -5932,13 +5932,14 @@ body.loading-bootstrap .app-startup-status {
    every item. The renderer owns a monotonic phase index and this one derivation turns
    it into the surface offset, so no consumer computes a ladder from DOM position
    (forbidden by ADR-0063). It serves both ways a leaf gets painted: an explicitly named
-   surface, and the Controls panel's registry-driven material rule. */
+   surface, and the registry-driven material rule of any surface that has adopted the
+   hierarchy — the Controls panel and every result screen (ADR-0557). */
 :root {
   --chrome-leaf-surface-pitch: calc(46px + var(--ds-inline-tight));
 }
 
 [data-chrome-fill-surface],
-[data-shell-controls-panel] [data-chrome-unit] {
+[data-chrome-leaf-surface] [data-chrome-unit] {
   --chrome-surface-position-y: calc(var(--chrome-leaf-surface-index, 0) * -1 * var(--chrome-leaf-surface-pitch));
 }
 
@@ -20959,6 +20960,13 @@ button.tileset-relationship-cell {
 .run-victory-summary > span + span::before {
   content: "·";
   margin-inline-end: var(--ds-inline-tight);
+}
+
+/* The Run's last action is a button, not a band. The workspace lane stretches its grid
+   children, which was inconspicuous while this one wore the flat field and reads as a
+   wall the moment it wears a plank. */
+.run-victory-finish {
+  justify-self: start;
 }
 
 /* The report box is the aftermath screen's visual anchor. Equal flexible tracks
