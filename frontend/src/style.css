@@ -18656,6 +18656,14 @@ button.tileset-relationship-cell {
   display: grid;
   gap: var(--settings-rail-tab-gap);
   min-block-size: 0;
+  /* .settings-screen keeps unused canvas click-through, so every panel on it must opt back
+     in (see .settings-frame / .menu-dest-col above). A rail is a column of BUTTONS — there
+     is no rail that should be click-through — so the primitive owns the opt-in rather than
+     each consumer remembering to also wear .settings-frame or .menu-dest-col. Run
+     preparation is why: converting it to this primitive (ADR-0558) dropped the
+     .menu-dest-col its hand-assembled column had carried, and Current Run / Start New Run
+     rendered pixel-perfect, hovered as buttons, and swallowed every click. */
+  pointer-events: auto;
   /* The containing block for the open connector, which is out of flow so it neither takes a
      row in the tab stack nor moves a tab. */
   position: relative;
