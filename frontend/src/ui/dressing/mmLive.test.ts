@@ -89,16 +89,24 @@ describe('MM_LIVE mirrors the baked menu/settings-rail chrome in style.css', () 
       .toContain(`text-shadow: ${cssLen(shadowX)} ${cssLen(shadowY)} ${cssLen(shadowBlur)} ${shadowColor}`);
   });
 
-  it('label stroke: the baked -webkit-text-stroke, repainted under the fill', () => {
-    // The stroke lives on the SECOND `.settings-tab strong` rule (the tab-label typography one);
-    // the first is the grouped colour/shadow rule shared with .settings-row h4, which is not
-    // stroked. Find the block that carries it rather than assuming an ordinal.
+  it('label stroke: one token, and every rule that wears the outline reads it', () => {
+    // Width and ink live on --menu-label-stroke-*, so the rail tabs, the destination slabs and the
+    // Campaign rail's padding gutter cannot drift apart. MM_LABEL_LIVE mirrors the token.
     expect(MM_LABEL_LIVE.outline).toBe('stroke');
+    expect(css).toContain(`--menu-label-stroke-w: ${MM_LABEL_LIVE.strokeW}px`);
+    expect(css).toContain(`--menu-label-stroke-ink: ${MM_LABEL_LIVE.strokeColor}`);
+
+    const OUTLINE = '-webkit-text-stroke: var(--menu-label-stroke-w) var(--menu-label-stroke-ink)';
     const stroked = blocksFor('.settings-tab strong').filter((b) => b.includes('-webkit-text-stroke'));
     expect(stroked, 'exactly one .settings-tab strong rule should carry the outline').toHaveLength(1);
-    expect(stroked[0]).toContain(`-webkit-text-stroke: ${MM_LABEL_LIVE.strokeW}px ${MM_LABEL_LIVE.strokeColor}`);
+    expect(stroked[0]).toContain(OUTLINE);
     // Without this the stroke eats inward from the glyph outline and thins the shipped weight.
     expect(stroked[0]).toContain('paint-order: stroke fill');
+
+    // The Run choice slabs behind PLAY wear the same one, read from the same token.
+    const dest = firstBlock('.play-choice-row h4');
+    expect(dest).toContain(OUTLINE);
+    expect(dest).toContain('paint-order: stroke fill');
   });
 
   it('label stroke: the label boxes do not clip it away', () => {
@@ -110,8 +118,8 @@ describe('MM_LIVE mirrors the baked menu/settings-rail chrome in style.css', () 
     expect(firstBlock('.settings-tab-label strong')).toContain('overflow: visible');
     const campaign = firstBlock('.ce-campaign-tab-copy strong');
     expect(campaign).toContain('text-overflow: ellipsis');
-    expect(campaign).toContain(`padding-inline-start: ${MM_LABEL_LIVE.strokeW}px`);
-    expect(campaign).toContain(`margin-inline-start: -${MM_LABEL_LIVE.strokeW}px`);
+    expect(campaign).toContain('padding-inline-start: var(--menu-label-stroke-w)');
+    expect(campaign).toContain('margin-inline-start: calc(-1 * var(--menu-label-stroke-w))');
   });
 
   it('gap: a representative value inside the rail clamp()', () => {
