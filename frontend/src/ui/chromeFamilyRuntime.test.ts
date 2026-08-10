@@ -383,4 +383,25 @@ describe('chrome family geometry ownership (ADR-0083)', () => {
     expect(css.slice(namedFillRule, css.indexOf('}', namedFillRule) + 1))
       .toContain('background-position: 0 var(--chrome-surface-position-y, 0) !important;');
   });
+
+  /**
+   * Source order only breaks ties at EQUAL specificity, so the ordering assertion above is
+   * not enough on its own: the role FIELD rule out-specified the tab fill the moment it grew
+   * its second `:not()` (#879), and every menu-language rail button lost its oak while these
+   * tests stayed green. The field rule must therefore EXCLUDE the inherited tab path, not
+   * merely sit before it.
+   */
+  it('excludes the inherited rail-tab fill from the inner role field default', () => {
+    const outer = roleDefault('outer');
+    const inner = roleDefault('inner');
+    const css = frameCss(outer, inner, frame('outer.png', 19), frame('inner.png', 5), dividers);
+    const fieldRules = css
+      .split('\n')
+      .filter((line) => line.includes(':not(.has-backdrop):not([data-chrome-fill-surface])'));
+
+    expect(fieldRules.length).toBeGreaterThan(0);
+    for (const rule of fieldRules) {
+      expect(rule).toContain(':not([data-chrome-tab-fill-surface] .settings-tab)');
+    }
+  });
 });
