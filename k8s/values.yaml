@@ -4,7 +4,7 @@
 image:
   repository: romainecr.azurecr.io/chess-tactics
   # Quoted so YAML never reinterprets tag or digest-reference characters.
-  tag: "romainecr.azurecr.io/chess-tactics@sha256:c8fea025df469c35d6c1b0a4a2bd5518458c60c3b46af5b66a14ba1c9aa6e2f5"
+  tag: "romainecr.azurecr.io/chess-tactics@sha256:27573c85d4cc49a7a9d353784de523c88eaabbf42d5ba69884cafe10bbc2ac38"
   pullPolicy: IfNotPresent
 
 # Human-facing build provenance surfaced in Settings → About via /api/build-info
@@ -17,10 +17,10 @@ image:
 # in would let a reused image show a stale PR. Empty by
 # default; non-main lanes (test slots / dev) show just the baked app version.
 build:
-  prTitle: "Main menu labels wear a 5px stroke, and a tuner to judge it by"
-  prNumber: "890"
-  prUrl: "https://github.com/romaine-life/chess-tactics/pull/890"
-  commit: "b397ef5d"
+  prTitle: "Run preparation is a rail: one-line tabs, its own marks, and a primitive you cannot bypass"
+  prNumber: "891"
+  prUrl: "https://github.com/romaine-life/chess-tactics/pull/891"
+  commit: "d6cea7f2"
 
 name: chess-tactics
 namespace: chess-tactics
