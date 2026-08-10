@@ -23,10 +23,11 @@ import { UnitRungSprite } from './UnitRungSprite';
  * Sampled every few rungs rather than every 5% step: the ladder is deliberately fine
  * for the wheel, and a stepper wants strides you can see between.
  */
-// Rungs per click. The ladder itself is 5% a rung, which is right for a wheel; six
-// of them per button press is a 34% jump, which is not. Two is ~10% -- visible
-// without skipping past the tier you were trying to look at.
-const TIER_STRIDE = 2;
+// One rung per input, matching the board exactly. This surface exists to test what a
+// player actually gets, so its zoom has to be the player's zoom rather than a
+// convenient stepper -- an easier-to-click stride would be testing something the game
+// does not do.
+const TIER_STRIDE = 1;
 const TIER_INDEX_RANGE = { min: -18, max: 30 };
 
 /**
