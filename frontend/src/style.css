@@ -24611,7 +24611,17 @@ button.tileset-relationship-cell {
   min-inline-size: 0;
 }
 
+/* The catalog is ~284 faces and only a handful are ever on screen. Without this the browser
+   lays out and paints every one of them the moment the gallery mounts, in a single stretch it
+   cannot paint through — the app froze for about a second, rain and waterfalls included.
+   `content-visibility: auto` lets it skip the work for anything off screen and do it when the
+   card is scrolled to instead. `auto` on the intrinsic size means a card that HAS been rendered
+   is remembered at its real size, so the scrollbar does not jump; the two lengths are only the
+   first guess for one that has never been on screen (the grid's column cap, and a face's
+   measured height at that width). */
 .enchiridion-card-gallery-item {
+  contain-intrinsic-size: auto 232px auto 305px;
+  content-visibility: auto;
   min-inline-size: 0;
 }
 
