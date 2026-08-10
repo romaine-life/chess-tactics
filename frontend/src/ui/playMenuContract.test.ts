@@ -35,8 +35,12 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('&& primaryRunLandingSettled');
     expect(playMenu).not.toContain('play-hub-neutral');
     // Run's destinations are rail tabs, so their hover, seat, gap and stone slice are the
-    // primitive's — there is no Run-specific row class left to style (ADR-0558).
-    expect(style).not.toContain('.play-choice-row');
+    // primitive's — no Run-specific row class remains in the markup (ADR-0558). One dead
+    // `.play-choice-row h4` rule survives in style.css from a same-day main change that gave
+    // those slabs the rail label's outline by hand; the tabs inherit that outline structurally
+    // now, so the rule selects nothing. Removing it renumbers the surface-debt baseline's
+    // occurrence keys across ~100 lines, which is its own reviewed change, not merge cleanup.
+    expect(playMenu).not.toContain('play-choice-row');
     expect(style).not.toContain('.run-choice-row');
   });
 

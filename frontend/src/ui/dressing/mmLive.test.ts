@@ -116,7 +116,7 @@ describe('MM_LIVE mirrors the baked menu/settings-rail chrome in style.css', () 
     // with padding instead, so it is checked on its own terms.
     expect(firstBlock('.settings-tab-label')).toContain('overflow: visible');
     expect(firstBlock('.settings-tab-label strong')).toContain('overflow: visible');
-    const campaign = firstBlock('.ce-campaign-tab-copy strong');
+    const campaign = firstBlock('.ce-campaign-tab .apparatus-tab-copy > strong');
     expect(campaign).toContain('text-overflow: ellipsis');
     expect(campaign).toContain('padding-inline-start: var(--menu-label-stroke-w)');
     expect(campaign).toContain('margin-inline-start: calc(-1 * var(--menu-label-stroke-w))');
