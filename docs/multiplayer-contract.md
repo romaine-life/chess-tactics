@@ -43,7 +43,7 @@ survive settlement; only the relative Victory/Defeat wording changes by client.
 - Only an ordered server echo or backfill mutates the multiplayer board.
 - A local promoting Pawn's arrival presentation before choice or echo is a client-local piece
   projection, not a canonical board mutation. It is projected — and its choice opened — in the
-  frame the move is authored (ADR-0558). It remains visible through submission, and an
+  frame the move is authored (ADR-0559). It remains visible through submission, and an
   authoritative rejection removes it.
 - At most one local move intent may be pending for an expected relay index.
 - Every gesture has a stable `intentId`. All retries reuse it; the server returns an

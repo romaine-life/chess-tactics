@@ -2252,7 +2252,7 @@ export function SkirmishBoard({
 
   // Whose promotion is being asked about, and where the callout attaches. A mid-commit move asks
   // beside the destination its Pawn is projected onto — which is where the callout sits from the
-  // frame the move is authored, while the sprite is still gliding in (ADR-0558). A queue-time
+  // frame the move is authored, while the sprite is still gliding in (ADR-0559). A queue-time
   // question asks beside that Pawn's GHOST, which the premove projection is already drawing on
   // the promotion cell (ADR-0541).
   const promotingPiece = choosingPromotion

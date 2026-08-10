@@ -928,7 +928,7 @@ describe('skirmish store: survive + reach objectives', () => {
       log: [],
     });
     useSkirmish.getState().tryMoveTo(0, 0); // pawn steps onto the target
-    // Answerable in the same tick — no timer runs between the move and the question (ADR-0558).
+    // Answerable in the same tick — no timer runs between the move and the question (ADR-0559).
     expect(useSkirmish.getState().pendingPromotion).toMatchObject({ pieceId: 'pp', phase: 'choosing' });
     expect(useSkirmish.getState().game.pieces.find((p) => p.id === 'pp')).toMatchObject({ type: 'pawn', x: 0, y: 1 });
     useSkirmish.getState().choosePromotion('rook');
@@ -1436,7 +1436,7 @@ describe('skirmish store: premoves', () => {
     useSkirmish.getState().tryMoveTo(0, 0);
 
     // No timer has run: the Pawn is still gliding and the choice is already answerable
-    // (ADR-0558). The canonical board has not moved it — that waits on the answer.
+    // (ADR-0559). The canonical board has not moved it — that waits on the answer.
     expect(useSkirmish.getState().pendingPromotion).toMatchObject({
       mode: 'move',
       phase: 'choosing',

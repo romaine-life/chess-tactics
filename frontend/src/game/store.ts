@@ -739,7 +739,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
 
   /**
    * Project the Pawn's arrival and ask what it becomes in the same frame the move is
-   * authored (ADR-0558). The player already knows the promotion is coming — it is why they
+   * authored (ADR-0559). The player already knows the promotion is coming — it is why they
    * played the move — so the question opens over the destination while the sprite is still
    * gliding to it rather than one presentation interval later.
    *
@@ -2041,7 +2041,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     if (p && movePromotesPawn(projected, p, mv)) {
       set({
         premoves,
-        // Same immediacy as a played promotion (ADR-0558): the ghost appears in the frame the
+        // Same immediacy as a played promotion (ADR-0559): the ghost appears in the frame the
         // step is queued and the question opens with it.
         pendingPromotion: {
           mode: 'premove-queue',

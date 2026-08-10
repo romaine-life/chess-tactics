@@ -252,7 +252,7 @@ The **default** ruleset is **real chess**:
   (50-move and threefold repetition) are all in the v1 baseline** unless a board
   says otherwise.
 - A player Pawn played onto an authored promotion cell is asked what it becomes **immediately**,
-  in the frame the move is authored, while the Pawn is still gliding to that square (ADR-0558).
+  in the frame the move is authored, while the Pawn is still gliding to that square (ADR-0559).
   The destination is highlighted and the blocking picker stays attached directly beside it rather
   than asking through ordinary HUD chrome (ADR-0503, ADR-0504). The move itself still commits
   atomically only once the choice is made.

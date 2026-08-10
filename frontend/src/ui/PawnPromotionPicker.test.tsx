@@ -39,7 +39,7 @@ describe('PawnPromotionPicker', () => {
     expect(markup).toContain('data-chrome-fill-role="outer"');
     expect(markup.match(/data-chrome-fill-surface="hybrid-wood-oak"/g)).toHaveLength(4);
     // The default subject opens while the Pawn is still gliding in, so the eyebrow names the
-    // event rather than claiming it has landed (ADR-0558).
+    // event rather than claiming it has landed (ADR-0559).
     expect(markup).toContain('Pawn promoting');
     expect(markup).not.toContain('Pawn arrived');
     expect(markup).toContain('Choose what this Pawn becomes');

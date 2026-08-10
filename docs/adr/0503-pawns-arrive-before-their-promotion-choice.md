@@ -5,7 +5,7 @@ deciders: Nelson
 partially_superseded_by:
   - "[ADR-0504](0504-promotion-choices-stay-with-the-arrived-pawn.md)'s board-anchored choice presentation"
   - "[ADR-0541](0541-a-promotion-premove-is-asked-what-it-becomes-as-it-is-queued.md)'s queue-time premove choice, which replaces the destination-only premove clause and its unresolved type boundary"
-  - "[ADR-0558](0558-a-promotion-asks-as-the-move-is-played-not-as-it-lands.md)'s same-frame choice, which replaces the clause holding the controls absent until the glide has settled"
+  - "[ADR-0559](0559-a-promotion-asks-as-the-move-is-played-not-as-it-lands.md)'s same-frame choice, which replaces the clause holding the controls absent until the glide has settled"
 ---
 
 # ADR-0503: Pawns arrive before their promotion choice

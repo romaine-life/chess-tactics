@@ -164,7 +164,7 @@ Do:
 - Keep selected-unit, actions, roster, threats, and event log clearly separated.
 - Keep a blocking piece-caused choice attached to that piece on the battlefield: Pawn promotion
   highlights the promotion square and opens its registered callout beside it as the move is
-  authored — the Pawn glides in underneath an already-answerable question (ADR-0558) — never as an
+  authored — the Pawn glides in underneath an already-answerable question (ADR-0559) — never as an
   ordinary Controls-rail card. Its containing field is structural teal stone and its terminal
   choice buttons are oak leaves; none appears focused, selected, or default until the player
   deliberately enters or activates it (ADR-0433, ADR-0504, ADR-0505).
