@@ -565,6 +565,10 @@ describe('Run chrome hierarchy', () => {
     expect(runTitleBarChips).not.toContain('data-chrome-fill-surface=');
     expect(titleBarControls).toContain('data-chrome-fill-surface={fillSurface}');
     expect(runExpunctioWorkspace).toContain('fillRole="outer"');
+    // The aftermath report is a structural box and takes the marble by NAMING the shared policy
+    // role, not by inheriting the scene's leaf adoption (ADR-0433/ADR-0557 — a box wears the
+    // marble, the actions under it wear the oak). Unfilled it read its ledger off the vista.
+    expect(runScreen).toMatch(/className="run-aftermath-report"\s*\r?\n\s*fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/);
     expect(styleCss).not.toMatch(/\.run-(?:roster-filters|meta-controls)[^}]*:nth-child/);
   });
 
