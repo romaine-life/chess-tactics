@@ -30,6 +30,7 @@ VELVET = [(0.00000,"#2a0709"),(0.05139,"#5a1013"),(0.09918,"#8a1c1c"),(0.15729,"
 # Each accent is a material Pass Index and the palette that index should wear. Masks
 # chain in order, so a later one paints over an earlier one where they overlap.
 ACCENTS = [(2, "CROWN gold", GOLD), (3, "CROWN velvet", VELVET)]
+masks = []
 
 def srgb(h):
     v=h.lstrip("#"); out=[]
@@ -100,7 +101,9 @@ if ol:
     bt = next((x for x in ol.node_tree.nodes
                if (x.label or x.name).lower().startswith("border")), None)
     if bt is not None and "Size" in bt.inputs:
-        bt.inputs["Size"].default_value = 8
+        bt.inputs["Size"].default_value = int(os.environ.get("OL_SIZE", "8"))
+    if os.environ.get("NO_OUTLINE"):
+        ol.mute = True
 
 # Bypass the 8Mat Dither Combiner. It was harmless while every material sat at Pass
 # Index 0 -- that routes to no slot -- but assigning indices 1 and 2 for the ID Mask
@@ -169,7 +172,13 @@ for offset, (index, label, stops) in enumerate(ACCENTS):
     while len(hels) > 1:
         hels.remove(hels[-1])
     hels[0].position, hels[0].color = 0.0, (0, 0, 0, 1)
-    hels.new(0.5).color = (1, 1, 1, 1)
+    # NOT 0.5. The alpha the render draws is antialiased at the silhouette; Material
+    # Index is an integer pass sampled at pixel centres and is not. So the outermost
+    # block of the crown is DRAWN but carries index 0, falls through to the body ramp,
+    # and -- because gold is bright -- lands on the body's lightest stop. That is the
+    # blue lip. A low cutoff claims any block containing ANY crown for the crown;
+    # alpha still trims whatever reaches past the piece.
+    hels.new(float(os.environ.get("ACCENT_THRESH", "0.06"))).color = (1, 1, 1, 1)
     hard.location = (300, -400 - offset * 300)
     tree.links.new(mask_pix.outputs[0], hard.inputs["Fac"])
 
@@ -179,11 +188,13 @@ for offset, (index, label, stops) in enumerate(ACCENTS):
     # of navy around the crown. Dilating covers those edge blocks; alpha still trims
     # anything that reaches past the piece.
     grow = tree.nodes.new("CompositorNodeDilateErode")
-    # Blender 5 moved Distance onto an input socket, like ID Mask's Index.
-    if "Distance" in grow.inputs:
-        grow.inputs["Distance"].default_value = 1
-    elif hasattr(grow, "distance"):
-        grow.distance = 1
+    # The socket is Size, NOT Distance. Blender 5 moved this off the node property
+    # like ID Mask's Index, and renamed it on the way -- so a "Distance" lookup finds
+    # nothing, writes nothing, and leaves the dilate at 0 while looking correct. That
+    # silently no-op'd every attempt to widen this mask, and is the same mistake that
+    # hid the outline's Border Thickness. Assert instead of falling back: a missing
+    # socket here is a broken graph, not a version to tolerate.
+    grow.inputs["Size"].default_value = int(os.environ.get("ACCENT_GROW", "1"))
     grow.location = (420, -400 - offset * 300)
     tree.links.new(hard.outputs["Color"], grow.inputs[0])
 
@@ -195,6 +206,20 @@ for offset, (index, label, stops) in enumerate(ACCENTS):
     tree.links.new(current, rgba_in[0])
     tree.links.new(ramp.outputs["Color"], rgba_in[1])
     current = [s for s in mix.outputs if s.type == "RGBA"][0]
+    masks.append(grow.outputs[0])
+
+if os.environ.get("DUMP_MASK"):
+    # Show the FINAL accent mask as the image, so its silhouette can be compared
+    # against the crown's own. Answers whether the lip is a short mask or geometry
+    # that genuinely carries the body material.
+    # CompositorNodeMixRGB is gone in Blender 5; shader Math works in the compositor.
+    u = tree.nodes.new("ShaderNodeMath"); u.operation = "MAXIMUM"
+    tree.links.new(masks[0], u.inputs[0]); tree.links.new(masks[1], u.inputs[1])
+    for l in list(sink.links): tree.links.remove(l)
+    tree.links.new(u.outputs[0], sink)
+    scene.render.filepath = os.environ["OUT"]
+    bpy.ops.render.render(write_still=True)
+    raise SystemExit
 
 sep = tree.nodes.new("CompositorNodeSeparateColor")
 seta = tree.nodes.new("CompositorNodeSetAlpha")
