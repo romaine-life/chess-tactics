@@ -29,7 +29,7 @@ export interface RunViewportSceneSpec {
 /**
  * The Run scenes that report an OUTCOME: the Battle's report and the won War. They read as
  * one family with the board-visible Victory banner and the result cards beside it, so they
- * adopt the leaf material the same way (ADR-0556). Deriving the adoption from the scene view
+ * adopt the leaf material the same way (ADR-0557). Deriving the adoption from the scene view
  * — the data the viewport already has — is what keeps a call site from forgetting it.
  */
 const RUN_OUTCOME_SCENE_VIEWS: readonly RunViewportSceneView[] = ['aftermath', 'victory'];

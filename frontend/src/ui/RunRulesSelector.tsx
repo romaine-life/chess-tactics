@@ -13,6 +13,9 @@ import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
 //
 // Not hidden, though: a Run is bound to these for its whole life, so a player who did change one
 // has to be able to see what they are about to start.
+//
+// It seats BELOW Start Run in the detail column, after the verb rather than before it — see the
+// comment at its mount in PlayMenu.
 
 const SPAN_COPY: Readonly<Record<2 | 4, { label: string; effect: string }>> = {
   2: {
@@ -101,7 +104,19 @@ export function RunRulesSelector({
           data-testid="run-rules-toggle"
           onClick={() => setOpen((wasOpen) => !wasOpen)}
         >
-          <span>{open ? 'Hide' : 'Change'}</span>
+          <span className="run-rules-toggle-copy">
+            {/* BOTH verbs are always rendered, stacked in one cell, so the control is cut to its
+                widest state once and holds that width through every flip. A control that measured
+                only its current word would resize under the pointer the moment it was pressed. */}
+            <span className="run-rules-toggle-label">
+              <span className={open ? 'is-shown' : undefined}>Hide</span>
+              <span className={open ? undefined : 'is-shown'}>Change</span>
+            </span>
+            <span
+              className={`stepper-glyph stepper-chevron stepper-chevron-${open ? 'up' : 'down'}`}
+              aria-hidden="true"
+            />
+          </span>
         </ChromeButton>
       </div>
       {!open ? (

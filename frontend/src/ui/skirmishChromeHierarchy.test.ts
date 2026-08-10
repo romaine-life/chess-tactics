@@ -192,7 +192,7 @@ describe('Skirmish chrome hierarchy', () => {
     // wearing the structural field, and the same component elsewhere is left alone.
     expect(chromeUnitRegistry).toContain("material: ChromeUnitMaterial;");
     expect(chromeUnitRegistry).toContain('export function chromeUnitMaterialSelectors');
-    // ADR-0556 generalized the panel's own rule to one host attribute every adopted surface
+    // ADR-0557 generalized the panel's own rule to one host attribute every adopted surface
     // carries, so the panel declares adoption instead of the runtime naming it.
     expect(chromeRuntime).toContain('function leafSurfaceHostCss');
     expect(chromeRuntime).toMatch(/chromeUnitMaterialSelectors\('leaf'\)/);
@@ -204,7 +204,7 @@ describe('Skirmish chrome hierarchy', () => {
     // A box that names its own installed surface is excluded from the role field rather than
     // out-specified by it, so the two can never trade places on a selector edit. An adopted
     // host's leaves are excluded the same way — winning that rule on source order alone is
-    // what let #881's third `:not()` blank this panel a day later (ADR-0556).
+    // what let #881's third `:not()` blank this panel a day later (ADR-0557).
     expect(chromeRuntime).toContain(':not(.has-backdrop):not([data-chrome-fill-surface])');
     expect(chromeRuntime).toContain(':not(${CHROME_LEAF_HOST_INHERITED_SELECTOR})');
 

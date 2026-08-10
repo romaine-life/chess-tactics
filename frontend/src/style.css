@@ -5933,7 +5933,7 @@ body.loading-bootstrap .app-startup-status {
    it into the surface offset, so no consumer computes a ladder from DOM position
    (forbidden by ADR-0063). It serves both ways a leaf gets painted: an explicitly named
    surface, and the registry-driven material rule of any surface that has adopted the
-   hierarchy — the Controls panel and every result screen (ADR-0556). */
+   hierarchy — the Controls panel and every result screen (ADR-0557). */
 :root {
   --chrome-leaf-surface-pitch: calc(46px + var(--ds-inline-tight));
 }
@@ -25252,6 +25252,15 @@ button.tileset-relationship-cell {
 .stepper-chevron-right {
   transform: scaleX(-1);
 }
+/* A disclosure control says which way its content is about to move: down while closed (it
+   opens below the control), up while open (it folds back up). Same shared mark turned a
+   quarter, mirrored the way -right already is -- never a second chevron implementation. */
+.stepper-chevron-down {
+  transform: rotate(-90deg);
+}
+.stepper-chevron-up {
+  transform: rotate(90deg);
+}
 
 .settings-stepper output {
   color: #f8fcff;
@@ -28238,6 +28247,33 @@ button.run-card-formation-cell {
   margin-block-start: var(--ds-inline-tight);
   font-size: var(--ds-text-xs);
   opacity: .78;
+}
+
+/* Verb plus the shared chevron, so the control looks like the disclosure it is rather than a
+   plain command. */
+.run-rules-toggle-copy {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+/* Both verbs share ONE cell, so the control is as wide as its widest state at every moment
+   instead of snapping between two widths when it flips. The lock is the copy itself -- reword
+   either verb and the width still fits the longer one, with no measured number to maintain. */
+.run-rules-toggle-label {
+  display: grid;
+  justify-items: center;
+}
+
+.run-rules-toggle-label > span {
+  grid-area: 1 / 1;
+  /* Not display:none -- a hidden box still has to occupy the cell for it to be measured.
+     visibility also takes the inactive verb out of the accessible name. */
+  visibility: hidden;
+}
+
+.run-rules-toggle-label > span.is-shown {
+  visibility: visible;
 }
 
 .run-rules-selector [hidden] {

@@ -406,7 +406,7 @@ describe('chrome family geometry ownership (ADR-0083)', () => {
   });
 
   /**
-   * The same trap, one level up and one commit later (ADR-0556): the Controls panel's leaf rule
+   * The same trap, one level up and one commit later (ADR-0557): the Controls panel's leaf rule
    * only ever TIED the field default and won on source order, so the `:not()` added above took
    * its oak off every trigger on both rails. A leaf inherits its material from its host, which
    * a `:not()` on the leaf itself cannot see — so the field must exclude the inherited path, and

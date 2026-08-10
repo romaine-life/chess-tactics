@@ -7,7 +7,7 @@ refines:
   - "[ADR-0555](0555-the-controls-panel-wears-the-leaf-material-and-a-portrait-keeps-its-scene.md)"
 ---
 
-# ADR-0556: A result screen wears the leaf material, and the role field excludes it
+# ADR-0557: A result screen wears the leaf material, and the role field excludes it
 
 ## Context and Problem Statement
 

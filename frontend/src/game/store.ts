@@ -163,6 +163,10 @@ export interface RunBattleUndoAdapter {
   capture: () => RunBattleUndoCheckpoint | null;
   canRestore: (checkpoint: RunBattleUndoCheckpoint) => boolean;
   restore: (checkpoint: RunBattleUndoCheckpoint) => boolean;
+  /** Re-price a checkpoint older than one just restored, for the Undo that restoring it
+   * cost. The board store holds the history but names no price — the Run owns the
+   * economy, here as everywhere else. */
+  chargeEarlier: (checkpoint: RunBattleUndoCheckpoint) => RunBattleUndoCheckpoint;
 }
 
 /** One browser-resumable checkpoint immediately before a committed player move. */
@@ -533,8 +537,9 @@ export interface SkirmishState {
    *  live move; both paths still perform their canonical fresh legality check. */
   releaseMoveGesture: (pieceId: string, x: number, y: number, startedAsPremove: boolean) => void;
   choosePromotion: (type: PromotionPieceType) => void;
-  /** One Run-only checkpoint before the latest committed player move (ADR-0394). */
-  undoCheckpoint: PlayerMoveUndoCheckpoint | null;
+  /** Run-only checkpoints, one per committed player move this Battle, oldest first. Undo pops
+   * the last, so a player can walk the whole Battle back a decision at a time (ADR-0556). */
+  undoStack: PlayerMoveUndoCheckpoint[];
   /** True while this mounted Battle supplies the Run economy half of Undo. */
   runUndoEnabled: boolean;
   canUndoLastPlayerMove: () => boolean;
@@ -634,14 +639,14 @@ export function moveGestureInputMode({
  */
 export function shouldStartFreshSkirmish(
   state: Pick<SkirmishState, 'started' | 'game' | 'levelId' | 'activityId'>
-    & Partial<Pick<SkirmishState, 'undoCheckpoint'>>
+    & Partial<Pick<SkirmishState, 'undoStack'>>
     & { net?: NetState | null },
   requestedLevelId: string | null,
   requestedActivityId: string | null,
 ): boolean {
   return !!state.net
     || !state.started
-    || (state.game.winner !== null && !state.undoCheckpoint)
+    || (state.game.winner !== null && !state.undoStack?.length)
     || state.levelId !== requestedLevelId
     || state.activityId !== requestedActivityId;
 }
@@ -1071,7 +1076,10 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     landingAlreadyPresented = false,
   ) => {
     const s = get();
-    const undoCheckpoint = capturePlayerMoveUndo();
+    // A capture that fails is not a shallower history, it is a hole: the older checkpoints
+    // below it can only be reached by rewinding through a move nothing recorded. Drop them.
+    const captured = capturePlayerMoveUndo();
+    const undoStack = captured ? [...s.undoStack, captured] : [];
     pauseClockWithIncrement();
     const playerRes = applyMove(s.game, piece.id, mv, { promotion });
     const runTransform = runBattleTransformSink?.(playerRes.state, playerRes.events) ?? null;
@@ -1124,7 +1132,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       resultDetail,
       pendingPromotion: null,
       premoveInputOpen: false,
-      undoCheckpoint,
+      undoStack,
       ...interaction,
       log: extendLog(s.log, msgs),
       goldNotices: [...s.goldNotices, ...goldNotices],
@@ -1321,7 +1329,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       focusedId: null,
       pendingPromotion: null,
       adminMode: null,
-      undoCheckpoint: null,
+      undoStack: [],
       premoves: [],
       premoveInputOpen: false,
       sessionEpoch: epoch,
@@ -1359,7 +1367,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
   battleElapsed: { elapsedMs: 0, startedAtMs: null },
   pendingPromotion: null,
   adminMode: null,
-  undoCheckpoint: null,
+  undoStack: [],
   runUndoEnabled: false,
   sessionEpoch: 0,
   boardViewEpoch: 0,
@@ -1435,7 +1443,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       battleElapsed: { elapsedMs: 0, startedAtMs: null },
       pendingPromotion: null,
       adminMode: null,
-      undoCheckpoint: null,
+      undoStack: [],
       sessionEpoch: epoch,
       boardViewEpoch: opts.preserveBoardPresentation ? get().boardViewEpoch : epoch,
       net: null,
@@ -1528,7 +1536,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       battleElapsed: { elapsedMs: 0, startedAtMs: null },
       pendingPromotion: null,
       adminMode: null,
-      undoCheckpoint: null,
+      undoStack: [],
       sessionEpoch: epoch,
       boardViewEpoch: epoch,
       premoves: [],
@@ -1593,7 +1601,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       selectedId: null,
       pendingPromotion: null,
       adminMode: null,
-      undoCheckpoint: null,
+      undoStack: [],
       premoves: [],
       premoveInputOpen: false,
     });
@@ -1648,7 +1656,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       pendingPromotion: null,
       adminMode: null,
       resultDetail: null,
-      undoCheckpoint: null,
+      undoStack: [],
       clock: s.clock ? { ...s.clock, running: false } : null,
       testMode: false,
       testMinCpuDelayMs: 0,
@@ -1678,7 +1686,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       pendingPromotion: null,
       adminMode: null,
       resultDetail: reason === 'resign' ? null : s.resultDetail,
-      undoCheckpoint: null,
+      undoStack: [],
       premoves: [],
       premoveInputOpen: false,
       testMode: false,
@@ -1714,7 +1722,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       focusedId: null,
       pendingPromotion: null,
       adminMode: null,
-      undoCheckpoint: null,
+      undoStack: [],
       runUndoEnabled: false,
       premoves: [],
       premoveInputOpen: false,
@@ -1723,23 +1731,25 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
 
   canUndoLastPlayerMove: () => {
     const s = get();
+    const checkpoint = s.undoStack[s.undoStack.length - 1];
     return Boolean(
       !s.net
       && s.runUndoEnabled
-      && s.undoCheckpoint
-      && runBattleUndoAdapter?.canRestore(s.undoCheckpoint.run),
+      && checkpoint
+      && runBattleUndoAdapter?.canRestore(checkpoint.run),
     );
   },
 
   undoLastPlayerMove: () => {
     const s = get();
-    const checkpoint = s.undoCheckpoint;
+    const adapter = runBattleUndoAdapter;
+    const checkpoint = s.undoStack[s.undoStack.length - 1];
     if (
       s.net
       || !s.runUndoEnabled
       || !checkpoint
-      || !runBattleUndoAdapter?.canRestore(checkpoint.run)
-      || !runBattleUndoAdapter.restore(checkpoint.run)
+      || !adapter?.canRestore(checkpoint.run)
+      || !adapter.restore(checkpoint.run)
     ) return false;
 
     const epoch = beginSession();
@@ -1761,7 +1771,15 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       adminMode: null,
       premoves: [],
       premoveInputOpen: false,
-      undoCheckpoint: null,
+      // Each remaining checkpoint recorded the gold its move was played from, captured
+      // BEFORE this Undo was paid for. Restoring one verbatim would hand that payment
+      // straight back, so a walk all the way through the Battle would cost one gold however
+      // far it went. Charge every older checkpoint for the Undo just bought, and the next
+      // pop pays its own price from a purse that already knows about this one.
+      undoStack: s.undoStack.slice(0, -1).map((older) => ({
+        ...older,
+        run: adapter.chargeEarlier(older.run),
+      })),
       sessionEpoch: epoch,
     });
     startClock();
@@ -1809,7 +1827,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       premoveInputOpen: false,
       pendingPromotion: null,
       adminMode: null,
-      undoCheckpoint: match.undoCheckpoint ?? null,
+      undoStack: match.undoStack ?? [],
       sessionEpoch: epoch,
       boardViewEpoch: epoch,
       // Resume with the clock paused; startClock re-arms the deadline from the
@@ -1958,7 +1976,7 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
       adminMode: null,
       premoves: [],
       premoveInputOpen: false,
-      undoCheckpoint: null,
+      undoStack: [],
       sessionEpoch: epoch,
       clock: s.clock ? { ...s.clock, running: false } : null,
       log: extendLog(s.log, [logNote('Admin awarded victory to the player.')]),
