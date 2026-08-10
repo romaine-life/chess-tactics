@@ -252,6 +252,21 @@ and don't tell the user screenshots are impossible. Use the helper below.
    It fails on more than one exit per navigation, a lost canonicalization
    navigation, or an uncanonicalized final address — the double-fade bug class.
 
+   Scene-layer keying / SceneBoundary changes additionally run the retention gate,
+   which drives a real navigation and asserts the screen being LEFT is not rebuilt
+   on its way out (ADR-0557):
+   ```
+   npm run verify:scene-retention -- '<battle-victory-craft-url>' --click '[data-testid="run-battle-rewards"]'
+   ```
+   It marks the committed scene's boundary element and fails if that element is not
+   the one still there once the layer becomes `outgoing` — mount identity, not
+   pixels, because a rebuilt outgoing scene walks through its whole loading contract
+   in front of the player (Rewards blinked the battlefield away and put its own
+   "Preparing battlefield…" card under the Victory heading) and pixels would only say
+   that something flashed. It is route-agnostic: any settled screen plus a selector to
+   press is a valid subject, and a click that drives no transition FAILS rather than
+   passing silently.
+
    Run viewport/scene-authority changes additionally run the Run scene gate on a
    Bona Vacantia craft link containing Conscription Notice:
    ```
