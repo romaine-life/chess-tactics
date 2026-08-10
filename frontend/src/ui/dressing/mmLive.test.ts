@@ -21,6 +21,22 @@ function firstBlock(selector: string): string {
   return css.slice(open + 1, close);
 }
 
+/** Every `selector {` rule body, in source order — for selectors that carry more than one rule. */
+function blocksFor(selector: string): string[] {
+  const out: string[] = [];
+  let from = 0;
+  for (;;) {
+    const start = css.indexOf(`${selector} {`, from);
+    if (start < 0) break;
+    const open = css.indexOf('{', start);
+    const close = css.indexOf('}', open);
+    out.push(css.slice(open + 1, close));
+    from = close;
+  }
+  expect(out.length, `style.css should contain a "${selector} {" rule`).toBeGreaterThan(0);
+  return out;
+}
+
 describe('MM_LIVE mirrors the baked menu/settings-rail chrome in style.css', () => {
   it('btnH: the menu-scoped .main-menu-mode-tab height', () => {
     // The menu runs shorter buttons than the .settings-tab base (88px), so btnH mirrors the
@@ -73,14 +89,29 @@ describe('MM_LIVE mirrors the baked menu/settings-rail chrome in style.css', () 
       .toContain(`text-shadow: ${cssLen(shadowX)} ${cssLen(shadowY)} ${cssLen(shadowBlur)} ${shadowColor}`);
   });
 
-  it('label stroke: the shipped label has NO outline, so the tuner opens at 0', () => {
-    // The other direction of the same mirror — if an outline is ever baked in, "off / 0" stops
-    // meaning "what ships" and the tuner would quietly audition against the wrong baseline.
-    expect(MM_LABEL_LIVE.outline).toBe('off');
-    expect(MM_LABEL_LIVE.strokeW).toBe(0);
-    const block = firstBlock('.settings-tab strong');
-    expect(block).not.toContain('-webkit-text-stroke');
-    expect(block).not.toContain('paint-order');
+  it('label stroke: the baked -webkit-text-stroke, repainted under the fill', () => {
+    // The stroke lives on the SECOND `.settings-tab strong` rule (the tab-label typography one);
+    // the first is the grouped colour/shadow rule shared with .settings-row h4, which is not
+    // stroked. Find the block that carries it rather than assuming an ordinal.
+    expect(MM_LABEL_LIVE.outline).toBe('stroke');
+    const stroked = blocksFor('.settings-tab strong').filter((b) => b.includes('-webkit-text-stroke'));
+    expect(stroked, 'exactly one .settings-tab strong rule should carry the outline').toHaveLength(1);
+    expect(stroked[0]).toContain(`-webkit-text-stroke: ${MM_LABEL_LIVE.strokeW}px ${MM_LABEL_LIVE.strokeColor}`);
+    // Without this the stroke eats inward from the glyph outline and thins the shipped weight.
+    expect(stroked[0]).toContain('paint-order: stroke fill');
+  });
+
+  it('label stroke: the label boxes do not clip it away', () => {
+    // A stroke paints outside the text box and the ink starts flush against that box's left edge,
+    // so `overflow: hidden` here shears the outline off the first letter of every word — the exact
+    // defect this pairing exists to prevent. The Campaign rail keeps its ellipsis and buys room
+    // with padding instead, so it is checked on its own terms.
+    expect(firstBlock('.settings-tab-label')).toContain('overflow: visible');
+    expect(firstBlock('.settings-tab-label strong')).toContain('overflow: visible');
+    const campaign = firstBlock('.ce-campaign-tab-copy strong');
+    expect(campaign).toContain('text-overflow: ellipsis');
+    expect(campaign).toContain(`padding-inline-start: ${MM_LABEL_LIVE.strokeW}px`);
+    expect(campaign).toContain(`margin-inline-start: -${MM_LABEL_LIVE.strokeW}px`);
   });
 
   it('gap: a representative value inside the rail clamp()', () => {

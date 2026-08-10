@@ -21,17 +21,17 @@ export const MM_LIVE = { btnH: 61, railW: 322, gap: 11, icon: 64, textX: 16, btn
 //   shadow* → .settings-row h4, .settings-tab strong { text-shadow: <x> <y> <blur> <colour> }
 //             — the ONE shipped treatment: a hard drop shadow straight down, zero blur. It reads
 //             as a dark edge UNDER the glyphs and nothing on the other three sides.
-//   stroke  → nothing ships an outline: no -webkit-text-stroke, no paint-order, no shadow ring.
-//             So the stroke controls open at 0 and mmLive.test.ts asserts the shipped rule still
-//             carries no stroke — the mirror has to stay honest in BOTH directions, or "0" would
-//             silently stop meaning "what ships".
+//   stroke* → .settings-tab strong { -webkit-text-stroke: <width> <colour> } with
+//             `paint-order: stroke fill` — auditioned in the tuner and baked at 5px. The label
+//             boxes must not clip for it to paint (see .settings-tab-label), which mmLive.test.ts
+//             guards too: an outline plus a clip is an outline sheared off the first letter.
 export const MM_LABEL_LIVE = {
   shadowX: 0,
   shadowY: 2,
   shadowBlur: 0,
   shadowColor: '#02070b',
-  outline: 'off',
-  strokeW: 0,
+  outline: 'stroke',
+  strokeW: 5,
   strokeColor: '#02070b',
 } as const;
 

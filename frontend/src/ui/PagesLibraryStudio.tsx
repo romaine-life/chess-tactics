@@ -116,32 +116,18 @@ const RING_STEPS: ReadonlyArray<readonly [number, number]> = [
   [-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0],
 ];
 
-// An outline is the first thing this label has ever painted OUTSIDE its own text box, and the
-// fitted label clips both axes (`.settings-tab-label` and its `strong` are overflow:hidden). The
-// glyph ink starts flush at the box's left edge — measured slack is 0px — so every left-hand ring
-// copy and the left half of a stroke land outside and are cut, while the right side survives on
-// the box's spare width. That reads as an outline that is missing down one side of the word.
+// The label boxes no longer clip. A stroke ships, it paints OUTSIDE the text box, and the glyph
+// ink starts flush against that box's left edge — measured slack 0px — so `overflow: hidden` was
+// shearing the outline off the first letter of every word while the right side survived on the
+// box's spare width. That relief is part of the shipped chrome now (`.settings-tab-label` in
+// style.css, guarded by mmLive.test.ts), which is why nothing here emits it.
 //
-// So an armed outline carries its own clip relief. It rides WITH the treatment (preview and bake
-// alike) rather than being lifted globally, because the clip is only wrong when there is ink
-// outside the box: with no outline, hidden is the correct fallback behind FittedTabLabel's
-// shrink-to-fit. Lifting it trades that fallback — a label that still overran at the fitter's 8px
-// floor would spill instead of being cut — for an outline that paints on all four sides.
-// Scoped to the FITTED label only; the `.apparatus-tab-copy` variant needs its hidden overflow for
-// text-overflow: ellipsis, and the menu does not use it.
-export const LABEL_CLIP_RELIEF_SELECTOR = '.settings-tab-label, .settings-tab-label strong';
-
 // Outline width ceiling. Well past useful — a `-webkit-text-stroke` is centred on the glyph
 // outline, so half of it grows INWARD and the ~19px label's counters have closed long before this
 // — but the range is there to be run to its end rather than to stop where someone guessed the
-// answer was. The tab and the label both let the ink out (see the clip relief above), so a wide
-// stroke shows you exactly what it does, including bleeding over the icon and past the button.
+// answer was. Nothing clips it, so a wide stroke shows you exactly what it does, including growing
+// into a plate behind the word and reaching toward the icon.
 export const LABEL_OUTLINE_MAX_WIDTH = 16;
-
-/** True when the treatment paints outside the text box and would be clipped without relief. */
-export function outlineNeedsClipRelief(t: LabelTreatment): boolean {
-  return t.outline !== 'off' && t.strokeW > 0;
-}
 
 /** The declarations the treatment needs — `[]` when it matches what ships (an untouched panel emits nothing). */
 export function labelTreatmentDecls(t: LabelTreatment): string[] {
@@ -150,6 +136,12 @@ export function labelTreatmentDecls(t: LabelTreatment): string[] {
   const strokeOn = t.outline === 'stroke' && t.strokeW > 0;
   const shadowMoved = t.shadowX !== MM_LABEL_LIVE.shadowX || t.shadowY !== MM_LABEL_LIVE.shadowY
     || t.shadowBlur !== MM_LABEL_LIVE.shadowBlur || t.shadowColor !== MM_LABEL_LIVE.shadowColor;
+  // The label SHIPS a stroke, so "differs from live" is a three-part comparison, and picking Ring
+  // or None is a change that has to be WRITTEN — the shipped stroke would otherwise still be under
+  // whatever replaced it, and a ring would be auditioned on top of a 5px stroke.
+  const outlineMoved = t.outline !== MM_LABEL_LIVE.outline || t.strokeW !== MM_LABEL_LIVE.strokeW
+    || t.strokeColor !== MM_LABEL_LIVE.strokeColor;
+  const shipsStroke = MM_LABEL_LIVE.outline === 'stroke' && MM_LABEL_LIVE.strokeW > 0;
 
   const decls: string[] = [];
   if (ringOn || shadowMoved) {
@@ -160,9 +152,13 @@ export function labelTreatmentDecls(t: LabelTreatment): string[] {
     if (!shadowFlat) parts.push(`${cssLen(t.shadowX)} ${cssLen(t.shadowY)} ${cssLen(t.shadowBlur)} ${t.shadowColor}`);
     decls.push(`text-shadow: ${parts.length ? parts.join(', ') : 'none'}`);
   }
-  if (strokeOn) {
-    decls.push(`-webkit-text-stroke: ${t.strokeW}px ${t.strokeColor}`);
-    decls.push('paint-order: stroke fill');
+  if (outlineMoved) {
+    if (strokeOn) {
+      decls.push(`-webkit-text-stroke: ${t.strokeW}px ${t.strokeColor}`);
+      decls.push('paint-order: stroke fill');
+    } else if (shipsStroke) {
+      decls.push('-webkit-text-stroke: 0');
+    }
   }
   return decls;
 }
@@ -316,14 +312,9 @@ function MainMenuViewer({ page, header, zoom = 1 }: { page: PageEntry; header?: 
   // Label text treatment (outline + drop shadow). Targets `.settings-tab strong`, the SHARED tab
   // label — the same selector the shipped shadow lives on — so the Settings/Campaign rails keep
   // matching the menu, exactly as the geometry knobs above already do.
-  const clipRelief = outlineNeedsClipRelief(treatment);
-  const reliefPreview = clipRelief
-    ? `\n${LABEL_CLIP_RELIEF_SELECTOR.split(', ').map((s) => `.pages-menu-tweak ${s}`).join(', ')} { overflow: visible !important; }`
-    : '';
-  const reliefBake = clipRelief ? `\n\n${LABEL_CLIP_RELIEF_SELECTOR} {\n  overflow: visible;\n}` : '';
   add(labelDecls.length > 0,
-    `.pages-menu-tweak .settings-tab strong { ${labelDecls.map((d) => `${d} !important;`).join(' ')} }${reliefPreview}`,
-    `.settings-tab strong {\n${labelDecls.map((d) => `  ${d};`).join('\n')}\n}${reliefBake}`);
+    `.pages-menu-tweak .settings-tab strong { ${labelDecls.map((d) => `${d} !important;`).join(' ')} }`,
+    `.settings-tab strong {\n${labelDecls.map((d) => `  ${d};`).join('\n')}\n}`);
   add(!!surfaceUrl,
     `.pages-menu-tweak .main-menu-mode-tab { background-image: url("${surfaceUrl}") !important; }`,
     `.main-menu-mode-tab {\n  background-image: url("${surfaceUrl}");\n}`);
@@ -440,13 +431,10 @@ function MainMenuViewer({ page, header, zoom = 1 }: { page: PageEntry; header?: 
                   </>
                 ) : null}
                 <p className="tileset-catalog-note">
-                  Nothing outlines the label today — the only shipped treatment is the drop shadow below, so <strong>None</strong> is what you are looking at now.
-                  {' '}<strong>Pixel ring</strong> is eight hard shadow copies: square corners, whole pixels, the outline this font is drawn for.
-                  {' '}<strong>Stroke</strong> is a real antialiased stroke — softer, and it rounds the pixel corners at this size.
+                  The label ships <strong>Stroke at {MM_LABEL_LIVE.strokeW}px</strong> — a real antialiased stroke, centred on the glyph outline so half of it grows inward and the counters tighten as you widen it.
+                  {' '}<strong>Pixel ring</strong> is the other way: eight hard shadow copies, square corners and whole pixels, the outline this font is drawn for.
+                  {' '}<strong>None</strong> leaves only the drop shadow below.
                 </p>
-                {clipRelief ? (
-                  <p className="tileset-catalog-note">The word’s ink starts flush against the label box, which clips both axes — so an outline needs <strong>overflow: visible</strong> on the label or it is cut off down the left of every word. That declaration rides with the outline here and in the copied CSS.</p>
-                ) : null}
                 <SliderRow label={<>Shadow · horizontal · {shadowX > 0 ? '+' : ''}{shadowX}px{shadowX === MM_LABEL_LIVE.shadowX ? ' · live' : ''}</>} value={shadowX} set={setShadowX} min={-6} max={6} dflt={MM_LABEL_LIVE.shadowX} />
                 <SliderRow label={<>Shadow · vertical · {shadowY > 0 ? '+' : ''}{shadowY}px{shadowY === MM_LABEL_LIVE.shadowY ? ' · live' : ''}</>} value={shadowY} set={setShadowY} min={-6} max={6} dflt={MM_LABEL_LIVE.shadowY} />
                 <SliderRow label={<>Shadow · blur · {shadowBlur}px{shadowBlur === MM_LABEL_LIVE.shadowBlur ? ' · live' : ''}</>} value={shadowBlur} set={setShadowBlur} min={0} max={12} dflt={MM_LABEL_LIVE.shadowBlur} />

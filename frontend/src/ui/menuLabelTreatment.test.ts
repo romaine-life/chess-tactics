@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { labelTreatmentDecls, outlineNeedsClipRelief, type LabelTreatment } from './PagesLibraryStudio';
+import { labelTreatmentDecls, type LabelTreatment } from './PagesLibraryStudio';
 import { MM_LABEL_LIVE } from './dressing/mmLive';
 
 // The dressing-room principle: an untouched panel must emit NOTHING, so the preview is the real
@@ -15,14 +15,16 @@ describe('menu label text treatment', () => {
     expect(labelTreatmentDecls(live)).toEqual([]);
   });
 
-  it('emits nothing when an outline is armed but its width is still zero', () => {
-    expect(labelTreatmentDecls(tune({ outline: 'ring' }))).toEqual([]);
-    expect(labelTreatmentDecls(tune({ outline: 'stroke' }))).toEqual([]);
+  it('cancels the shipped stroke when the outline is turned off', () => {
+    // Without this the 5px stroke in style.css stays underneath, so "None" would not be none.
+    expect(labelTreatmentDecls(tune({ outline: 'off', strokeW: 0 }))).toEqual(['-webkit-text-stroke: 0']);
   });
 
-  it('pixel ring: eight hard copies that KEEP the shipped drop shadow', () => {
-    const [shadow, ...rest] = labelTreatmentDecls(tune({ outline: 'ring', strokeW: 1, strokeColor: '#101820' }));
-    expect(rest).toEqual([]); // a ring is text-shadow only — no stroke properties
+  it('pixel ring: eight hard copies that KEEP the shipped drop shadow, over a cancelled stroke', () => {
+    const decls = labelTreatmentDecls(tune({ outline: 'ring', strokeW: 1, strokeColor: '#101820' }));
+    // The shipped stroke has to go, or the ring is auditioned on top of it.
+    expect(decls).toContain('-webkit-text-stroke: 0');
+    const shadow = decls.find((d) => d.startsWith('text-shadow'))!;
     const parts = shadow.replace('text-shadow: ', '').split(', ');
     expect(parts).toHaveLength(9); // 8 ring copies + the drop shadow
     expect(parts.slice(0, 8).every((p) => p.endsWith('#101820') && p.includes(' 0 '))).toBe(true);
@@ -44,29 +46,16 @@ describe('menu label text treatment', () => {
     expect(decls.some((d) => d.startsWith('text-shadow'))).toBe(false);
   });
 
+  it('a stroke at the shipped width but a new colour still emits', () => {
+    expect(labelTreatmentDecls(tune({ strokeColor: '#7a3b12' })))
+      .toContain(`-webkit-text-stroke: ${MM_LABEL_LIVE.strokeW}px #7a3b12`);
+  });
+
   it('a fully zeroed shadow removes it rather than emitting an invisible no-op', () => {
     expect(labelTreatmentDecls(tune({ shadowX: 0, shadowY: 0, shadowBlur: 0 }))).toEqual(['text-shadow: none']);
   });
 
   it('a moved shadow is emitted with CSS shorthand zeroes', () => {
     expect(labelTreatmentDecls(tune({ shadowY: 3, shadowBlur: 2 }))).toEqual(['text-shadow: 0 3px 2px #02070b']);
-  });
-});
-
-// The label box clips both axes and the glyph ink starts flush against its left edge (measured
-// slack: 0px), so ink painted outside is cut down the left of every word. Relief must ride with
-// the outline — an outline emitted without it is an outline you cannot judge.
-describe('outline clip relief', () => {
-  it('is required by any armed outline, of either kind', () => {
-    expect(outlineNeedsClipRelief(tune({ outline: 'ring', strokeW: 1 }))).toBe(true);
-    expect(outlineNeedsClipRelief(tune({ outline: 'stroke', strokeW: 0.5 }))).toBe(true);
-  });
-
-  it('is NOT applied when there is no ink outside the box', () => {
-    // The shipped drop shadow lands inside the line box, so hidden stays correct — relief is not
-    // a blanket "lift the clip", it is scoped to the case that needs it.
-    expect(outlineNeedsClipRelief(live)).toBe(false);
-    expect(outlineNeedsClipRelief(tune({ shadowY: 4, shadowBlur: 3 }))).toBe(false);
-    expect(outlineNeedsClipRelief(tune({ outline: 'ring', strokeW: 0 }))).toBe(false);
   });
 });

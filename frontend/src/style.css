@@ -18878,13 +18878,20 @@ button.tileset-relationship-cell {
   transform: translateX(16px); /* label nudge — baked from the Main Menu tuner, shared with Settings */
 }
 
+/* The label does NOT clip: the tab label wears an outline (see .settings-tab strong below), and a
+   stroke paints outside the text box. The glyph ink starts flush against this box's left edge —
+   zero slack — so `overflow: hidden` here amputated the outline down the left of every word while
+   the right side survived on the box's spare width. FittedTabLabel already shrinks the text to
+   fit, so the clip was only ever the fallback behind that; a label that still overran at its 8px
+   floor now spills instead of being cut. Do not put `hidden` back without also removing the
+   outline — mmLive.test.ts fails if you do. */
 .settings-tab-label {
   align-content: center;
   block-size: var(--settings-tab-icon-slot);
   inline-size: 100%;
   justify-items: start;
   max-inline-size: 100%;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .settings-tab-label strong {
@@ -18892,7 +18899,7 @@ button.tileset-relationship-cell {
   display: block;
   inline-size: 100%;
   max-block-size: 100%;
-  overflow: hidden;
+  overflow: visible;
   text-wrap: balance;
 }
 
@@ -18963,6 +18970,14 @@ button.tileset-relationship-cell {
   font-size: var(--ds-text-lg);
   letter-spacing: 0.02em;
   text-transform: uppercase;
+  /* Outline, auditioned in the Pages tuner (Studio → Pages → Main Menu → Button label) and baked
+     at 5px. A -webkit-text-stroke is centred on the glyph outline, so half of it grows INWARD;
+     `paint-order: stroke fill` repaints the fill over it so the stems keep the weight the font
+     draws, and only the counters tighten. The label boxes above must not clip (a stroke paints
+     outside the text box) — the Campaign rail keeps its ellipsis and makes room a different way.
+     MM_LABEL_LIVE mirrors these two values; mmLive.test.ts derives them back out of here. */
+  -webkit-text-stroke: 5px #02070b;
+  paint-order: stroke fill;
 }
 
 .settings-main-frame {
@@ -19464,10 +19479,17 @@ button.tileset-relationship-cell {
   gap: 2px;
   min-width: 0;
 }
+/* This label carries a user-authored campaign name, so unlike the fitted rail labels it must keep
+   `overflow: hidden` for its ellipsis — it cannot take the same relief. It still inherits the tab
+   label's outline, so it makes room INSIDE the clip instead: padding opens a stroke-width gutter
+   the ink can occupy, and the matching negative margin puts the text back where it sat, so the
+   only thing that changed is that the outline is no longer sheared off the first letter. */
 .ce-campaign-tab-copy strong {
   font-size: var(--ds-text-md);
   letter-spacing: .02em;
+  margin-inline-start: -5px;
   overflow: hidden;
+  padding-inline-start: 5px;
   text-overflow: ellipsis;
   text-transform: uppercase;
   white-space: nowrap;
