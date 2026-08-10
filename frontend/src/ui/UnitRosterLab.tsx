@@ -23,7 +23,10 @@ import { UnitRungSprite } from './UnitRungSprite';
  * Sampled every few rungs rather than every 5% step: the ladder is deliberately fine
  * for the wheel, and a stepper wants strides you can see between.
  */
-const TIER_STRIDE = 6;
+// Rungs per click. The ladder itself is 5% a rung, which is right for a wheel; six
+// of them per button press is a 34% jump, which is not. Two is ~10% -- visible
+// without skipping past the tier you were trying to look at.
+const TIER_STRIDE = 2;
 const TIER_INDEX_RANGE = { min: -18, max: 30 };
 
 /**
