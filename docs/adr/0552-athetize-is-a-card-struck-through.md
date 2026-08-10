@@ -9,7 +9,7 @@ refines:
   - "[ADR-0443](0443-athetize-is-the-card-action-within-expunctio.md)"
 ---
 
-# ADR-0550: Athetize is a card struck through
+# ADR-0552: Athetize is a card struck through
 
 ## Context
 
