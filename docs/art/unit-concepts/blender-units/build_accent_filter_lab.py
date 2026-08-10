@@ -560,11 +560,45 @@ if os.environ.get("LAB_OUT"):
     # area.type and space.image are plain data and DO take from a script, unlike the
     # active workspace. The render above has already run, so Render Result exists to
     # point at; arranging this before the render would leave the pane blank.
+    # A .blend opens on whichever workspace was active when it was saved, and that is
+    # Layout on a factory base. Which workspace is active CANNOT be changed from a
+    # script -- assigning window.workspace is ignored in background and with a real
+    # window alike, workspace.delete() under temp_override reports success and does
+    # nothing, and batch_remove segfaults. Four routes, all dead.
+    #
+    # But what is INSIDE the opening workspace is plain data. So rather than fight for
+    # a different workspace, make the one it opens on the right one: rename it and give
+    # it the compositor and the render. The stock Compositing tab stays where it is for
+    # anyone who wants it.
+    _layout = bpy.data.workspaces.get("Layout")
+    if _layout is not None:
+        for _scr in _layout.screens:
+            for _area in _scr.areas:
+                if _area.type == "OUTLINER":
+                    _area.type = "IMAGE_EDITOR"
+                elif _area.type == "VIEW_3D":
+                    _area.type = "NODE_EDITOR"
+                    # Retyping an area swaps in a space of the new kind, but the
+                    # freshly made one does not carry every property yet, so probe
+                    # rather than assume.
+                    _space = _area.spaces[0]
+                    if hasattr(_space, "tree_type"):
+                        _space.tree_type = "CompositorNodeTree"
+                    # The shelf flag reads as present but is READ-ONLY on a space
+                    # this freshly retyped -- its regions do not exist yet in
+                    # background mode, so there is no shelf to hide. hasattr is not
+                    # enough of a check here; it has to be attempted.
+                    try:
+                        _space.show_region_asset_shelf = False
+                    except AttributeError:
+                        pass
+        _layout.name = "Filter"
+
     for _ws in bpy.data.workspaces:
         for _scr in _ws.screens:
             for _area in _scr.areas:
-                if _ws.name == "Layout" and _area.type == "OUTLINER":
-                    _area.type = "IMAGE_EDITOR"
+                if False:
+                    pass
     # NOT Render Result. A render result is never written into a .blend, so a pane
     # pointing at it opens blank -- which is what "the king is not visible" looked
     # like. Load the build's own output as a real image and pack it, so opening the
@@ -583,7 +617,7 @@ if os.environ.get("LAB_OUT"):
         # Paint have image editors too, and theirs are for the map being painted --
         # commandeering those would be a bug, not a convenience.
         for _ws in bpy.data.workspaces:
-            if _ws.name not in {"Layout", "Compositing", "Rendering"}:
+            if _ws.name not in {"Filter", "Layout", "Compositing", "Rendering"}:
                 continue
             for _scr in _ws.screens:
                 for _area in _scr.areas:
@@ -593,14 +627,17 @@ if os.environ.get("LAB_OUT"):
     # (Chromatic Aberration, Sepia, Vignette...) across the bottom of the node editor.
     # None of them belong to this filter, and they cost the graph a third of its
     # height. Plain data, so this one is simply assignable.
-    WORKING = {"Layout", "Compositing", "Rendering"}
+    WORKING = {"Filter", "Layout", "Compositing", "Rendering"}
     for _ws in bpy.data.workspaces:
         if _ws.name not in WORKING:
             continue
         for _scr in _ws.screens:
             for _area in _scr.areas:
                 if _area.type == "NODE_EDITOR":
-                    _area.spaces[0].show_region_asset_shelf = False
+                    try:
+                        _area.spaces[0].show_region_asset_shelf = False
+                    except AttributeError:
+                        pass
 
     # The timeline underneath it is an AREA, which needs an operator rather than a
     # property -- and screen.area_close under temp_override genuinely works, unlike
