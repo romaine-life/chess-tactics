@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { liveMediaForSlot, resolvedLiveMediaUrl } from '@chess-tactics/board-render';
 import {
   acceptLiveMediaVersions,
@@ -6,7 +6,15 @@ import {
   reviewLiveMediaVersion,
   type AdminLiveMediaCatalog,
 } from '../net/liveMediaAdmin';
-import { RUN_CARD_CATALOG } from '../run/model';
+import {
+  DEFAULT_RUN_RULES,
+  GOLD_SCALE,
+  RUN_CARD_CATALOG,
+  RUN_CARD_DECK,
+  createRunCardOffer,
+  runCardCost,
+  type RunCardOffer,
+} from '../run/model';
 import { runCardArtSlot, runCardName } from '../run/cardNames';
 import { RunCard } from './RunCard';
 import { RUN_CARD_APPROVED_TUNING, RunCardFace } from './RunCardFace';
@@ -318,8 +326,26 @@ function RunCardBackStudy({ header, viewerZoom }: { header: ReactNode; viewerZoo
  */
 const COIN_FACE_FILL_LIMITS = Object.freeze({ min: 40, max: 100, step: 1, nudge: 1 });
 
-/** The readings the fill is judged against: one of every length the deck can print. */
-const COIN_FILL_SPECIMEN_COSTS: readonly number[] = Object.freeze([9, 60, 160]);
+/**
+ * The readings the fill is judged against — the cheapest card the market deals, the dearest, and
+ * one in between, priced the way the Run itself prices them.
+ *
+ * Real prices rather than round hypotheticals, because the fill is decided by what is actually
+ * printed: no card costs a single digit (the cheapest is ten gold), and the dearest is a lone
+ * Queen, whose three digits are the reading the coin is tightest on.
+ */
+function coinFillSpecimens(): readonly RunCardOffer[] {
+  const priced = RUN_CARD_DECK
+    .map((card) => ({ card, gold: runCardCost(card, DEFAULT_RUN_RULES) * GOLD_SCALE }))
+    .sort((left, right) => left.gold - right.gold);
+  const cheapest = priced[0];
+  const dearest = priced[priced.length - 1];
+  // The widest TWO-digit reading between them, which is the length the size cap binds first.
+  const middle = [...priced].reverse().find((entry) => String(entry.gold).length === 2) ?? cheapest;
+  return [cheapest, middle, dearest].map((entry, index) => (
+    createRunCardOffer({ seed: 0 }, entry.card, 0, index, DEFAULT_RUN_RULES)
+  ));
+}
 
 /** The Studio's live formation-card review surface. */
 export function RunCardPrototypeViewer({
@@ -338,6 +364,7 @@ export function RunCardPrototypeViewer({
   );
   const faceFill = faceFillPercent / 100;
   const tuning = { ...RUN_CARD_APPROVED_TUNING, costFaceFill: faceFill };
+  const specimens = useMemo(() => coinFillSpecimens(), []);
   const shipped = Math.round(RUN_CARD_APPROVED_TUNING.costFaceFill * 100);
   const copyFill = async (): Promise<void> => {
     await navigator.clipboard.writeText(
@@ -355,7 +382,22 @@ export function RunCardPrototypeViewer({
   return (
     <>
       <section className="run-card-prototype-workspace" aria-label="Formation card gallery">
-        {header}
+        <div
+          className="run-card-prototype-study-grid run-card-prototype-readings"
+          aria-label="The readings the coin fill is judged on"
+          style={{ '--run-card-gallery-zoom': viewerZoom } as CSSProperties}
+        >
+          {specimens.map((offer) => (
+            <article className="run-card-prototype-study" key={offer.offerId}>
+              <RunCard card={offer} mode="reference" tuning={tuning} />
+              <small>
+                {offer.cost * GOLD_SCALE} gold ·{' '}
+                {runCardCostSizeCqw(offer.cost * GOLD_SCALE, tuning.costSize, faceFill).toFixed(2)}cqw ·
+                {' inks '}{Math.round(runCardCostFaceShare(offer.cost * GOLD_SCALE, tuning.costSize, faceFill) * 100)}%
+              </small>
+            </article>
+          ))}
+        </div>
         <div
           className="run-card-prototype-study-grid"
           style={{ '--run-card-gallery-zoom': viewerZoom } as CSSProperties}
@@ -371,6 +413,7 @@ export function RunCardPrototypeViewer({
       <aside className="tileset-view-controls" aria-label="Card face controls">
         <section className="tileset-inspector-section">
           <h2>Controls</h2>
+          {header}
           <div className="tileset-control-stack">
             <div data-testid="run-card-coin-fill-control">
               <SliderRow
@@ -408,16 +451,20 @@ export function RunCardPrototypeViewer({
             </button>
           </div>
           <dl data-testid="run-card-coin-fill-readout">
-            {COIN_FILL_SPECIMEN_COSTS.map((cost) => (
-              <div key={cost}>
-                <dt>{cost} gold</dt>
-                <dd>
-                  {runCardCostSizeCqw(cost, tuning.costSize, faceFill).toFixed(2)}cqw
-                  {' · inks '}
-                  {Math.round(runCardCostFaceShare(cost, tuning.costSize, faceFill) * 100)}%
-                </dd>
-              </div>
-            ))}
+            {specimens.map((offer) => {
+              const gold = offer.cost * GOLD_SCALE;
+              const size = runCardCostSizeCqw(gold, tuning.costSize, faceFill);
+              return (
+                <div key={offer.offerId}>
+                  <dt>{gold} gold</dt>
+                  <dd>
+                    {size.toFixed(2)}cqw · inks{' '}
+                    {Math.round(runCardCostFaceShare(gold, tuning.costSize, faceFill) * 100)}%
+                    {size === tuning.costSize ? ' · at the size cap' : ''}
+                  </dd>
+                </div>
+              );
+            })}
           </dl>
           <p role="status">{status}</p>
         </section>
