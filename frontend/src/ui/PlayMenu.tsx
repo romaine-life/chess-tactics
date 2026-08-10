@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { ensureCampaignsHydrated, isUserWorkspaceAvailable } from '../campaign/hydrate';
 import {
   CAMPAIGN_PROGRESS_EVENT,
@@ -176,6 +176,15 @@ function ContinuePanel({ inventory }: { inventory: ContinueInventory }): ReactEl
   );
 }
 
+/**
+ * Where each Run destination sits on the one plank the list is cut from, so its installed oak
+ * steps instead of restarting (`.play-choice-row` in style.css builds the offset from this).
+ * The panel owns the seats rather than the DOM: Current always seats above New whatever
+ * transient status row the list is carrying, and New keeps its slice when the adoption
+ * conflict card speaks for Current instead — a :nth-child ladder would re-cut both. ADR-0063.
+ */
+const PLAY_CHOICE_ROW_SEATS = { current: 0, new: 1 } as const;
+
 type RunChoice = 'current' | 'new' | null;
 
 function RunPanel({
@@ -326,6 +335,7 @@ function RunPanel({
                   to={PLAY_RUN_CURRENT_SELECTOR_HREF}
                   className={chromeUnitClassNames('inner-list-row', 'settings-row play-choice-row', !presentedRun && 'is-disabled', choice === 'current' && 'active is-selected')}
                   data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                  style={{ ['--play-choice-row-index' as string]: PLAY_CHOICE_ROW_SEATS.current } as CSSProperties}
                   disabled={!presentedRun}
                   aria-current={choice === 'current' ? 'page' : undefined}
                   data-testid="run-choice-current"
@@ -358,6 +368,7 @@ function RunPanel({
                 to={PLAY_RUN_NEW_SELECTOR_HREF}
                 className={chromeUnitClassNames('inner-list-row', 'settings-row play-choice-row', newRunUnavailable && 'is-disabled', choice === 'new' && 'active is-selected')}
                 data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                style={{ ['--play-choice-row-index' as string]: PLAY_CHOICE_ROW_SEATS.new } as CSSProperties}
                 disabled={newRunUnavailable}
                 aria-current={choice === 'new' ? 'page' : undefined}
                 data-testid="run-choice-new"

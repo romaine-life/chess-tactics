@@ -19087,8 +19087,12 @@ button.tileset-relationship-cell {
    8px-radius border around each section's rows; removed so only the per-row atom
    frame shows.) */
 .settings-section-rows {
+  /* Named because a surfaced row's texture pitch is built from it (see .play-choice-row):
+     the sheet has to step by exactly what the layout steps by, so the two may not be
+     stated twice. */
+  --settings-section-rows-gap: 10px;
   display: grid;
-  gap: 10px;
+  gap: var(--settings-section-rows-gap);
 }
 
 .settings-row {
@@ -27654,7 +27658,26 @@ button.run-card-formation-cell {
   font-size: var(--ds-text-xs);
 }
 
+/* The Run destinations are boards cut from ONE plank, not the same board stamped twice.
+   A leaf's installed oak is a locally-attached background, so without an offset every row
+   restarts the sheet at 0 and paints an identical crop — two 547px slabs showing the same
+   knot is what reads as a repeated texture. Each row instead samples the vertical slice it
+   would have if one sheet ran down the list, the same recovery the rail tabs use for the
+   `fixed` attachment ADR-0034 §C specified and Chromium's repaint bug forced us to drop.
+
+   The slice is keyed to the row's OWN seat via --play-choice-row-index, which RunPanel owns
+   (Current always seats above New, whatever transient status rows the list is carrying),
+   NOT :nth-child — a DOM ladder re-counts and silently re-seats the plank the moment a
+   "Loading Runs…" or "Runs unavailable" row joins the list. ADR-0063.
+
+   Pitch = the row's rendered block size + the list gap. 96px is border(2 x 7) + padding
+   (2 x 18) + the two-line copy at the design width; the copy is clamp()ed type, so the real
+   row runs 92-102px across the range and the sheet drifts a few px at the extremes. That is
+   invisible in wood, and the 10px gap of open scene between rows breaks literal grain
+   continuity anyway — same accepted trade as the tab rail's measured step. */
 .play-choice-row {
+  --play-choice-row-surface-pitch: calc(96px + var(--settings-section-rows-gap, 10px));
+  --chrome-surface-position-y: calc(var(--play-choice-row-index, 0) * -1 * var(--play-choice-row-surface-pitch));
   appearance: none;
   color: inherit;
   cursor: pointer;
