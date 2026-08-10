@@ -11,13 +11,8 @@ import {
   type RefObject,
 } from 'react';
 import { KitScroll } from '../KitScroll';
-import {
-  ChromeDivider,
-  ChromeJunction,
-  ChromeSurfaceFill,
-  InnerChromeBox,
-  type ChromeJunctionSides,
-} from './ChromeBox';
+import { ChromeSurfaceFill, InnerChromeBox } from './ChromeBox';
+import { ChromeGridRail, ChromeJunction, type ChromeJunctionSides } from './chromeRailInternals';
 
 export type ChromeDividedGridNode = {
   line: number;
@@ -215,9 +210,8 @@ export function DividedInnerChromeBox({
         <Fragment key={isValidElement(row) && row.key != null ? row.key : index}>
           {index > 0 ? (
             <div className="chrome-divided-grid__row-boundary">
-              <ChromeDivider
-                role="inner"
-                junctions="none"
+              <ChromeGridRail
+                role="inner"
                 className="chrome-divided-grid__horizontal-rail"
                 data-chrome-grid-inline-start="frame-start"
                 data-chrome-grid-inline-end={topology.horizontalEndBoundary}
@@ -247,11 +241,10 @@ export function DividedInnerChromeBox({
     >
       <div className="chrome-divided-grid__fixed-rails" style={gridStyle} aria-hidden="true">
         {topology.verticalLines.map((line) => (
-          <ChromeDivider
+          <ChromeGridRail
             key={`vertical-${line}`}
             role="inner"
-            orientation="vertical"
-            junctions="none"
+            orientation="vertical"
             className="chrome-divided-grid__vertical-rail"
             data-chrome-grid-block-start="frame-start"
             data-chrome-grid-block-end="frame-end"

@@ -188,137 +188,194 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
                   that only ever restated "this one". Bring them back with the second War. */}
               {selectedWar ? (
                 <>
-                  <SettingsGroup title="War" titleId="war-editor-war-title">
-                    <EditorRow framed={false} title="Name" description="Shown when the War is selected for a Run.">
-                      <input
-                        className="ce-name-input"
-                        value={selectedWar.name}
-                        disabled={!canEditSelected}
-                        aria-label="War name"
-                        onChange={(event) => useWars.getState().renameWar(selectedWar.id, event.target.value)}
-                      />
-                    </EditorRow>
-                    <EditorRow framed={false} title="Description" description="The premise players see before choosing their opening hand." tall>
-                      <textarea
-                        className="ce-name-input war-description-input"
-                        value={selectedWar.description}
-                        disabled={!canEditSelected}
-                        aria-label="War description"
-                        onChange={(event) => useWars.getState().setWarDescription(selectedWar.id, event.target.value)}
-                      />
-                    </EditorRow>
-                    {selectedWar.origin === 'official' ? (
-                      <EditorRow
-                        framed={false}
-                        title="Eligible for Run"
-                        description="Includes this published War in the equal-odds main Run pool."
-                        value={<span>{selectedWar.eligibleForRun ? 'Included' : 'Excluded'}</span>}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedWar.eligibleForRun === true}
-                          disabled={!canEditSelected || !orderedBattles.length}
-                          aria-label="Eligible for Run"
-                          onChange={(event) => useWars.getState().setWarEligible(selectedWar.id, event.target.checked)}
-                        />
-                      </EditorRow>
-                    ) : null}
-                    {/* The Ataraxia picker is a member row here, not a box of its own: it is one of
-                        the War's settings, and its own box inside this one would draw the same
-                        marble twice. */}
-                    <EditorRow framed={false} title="Ataraxia" description="The rung this War is played at.">
-                      <AtaraxiaSelector
-                        framed={false}
-                        value={ataraxiaTier}
-                        highestUnlockedTier={highestUnlockedTier}
-                        onChange={setAtaraxiaTier}
-                        fillSurface={EDITOR_COLUMN_CONTROL_FILL_SURFACE}
-                      />
-                    </EditorRow>
-                    <EditorRow
-                      framed={false}
-                      title="Play this War"
-                      description="Private Wars can be started directly here; only eligible official Wars enter the main pool."
-                    >
-                      <EditorButton disabled={!orderedBattles.length} onClick={() => void startSelectedWar()}>
-                        Start Run
-                      </EditorButton>
-                    </EditorRow>
-                  </SettingsGroup>
+                  <SettingsGroup
+                    title="War"
+                    titleId="war-editor-war-title"
+                    members={[
+                      {
+                        id: 'name',
+                        content: (
+                          <EditorRow framed={false} title="Name" description="Shown when the War is selected for a Run.">
+                            <input
+                              className="ce-name-input"
+                              value={selectedWar.name}
+                              disabled={!canEditSelected}
+                              aria-label="War name"
+                              onChange={(event) => useWars.getState().renameWar(selectedWar.id, event.target.value)}
+                            />
+                          </EditorRow>
+                        ),
+                      },
+                      {
+                        id: 'description',
+                        content: (
+                          <EditorRow framed={false} title="Description" description="The premise players see before choosing their opening hand." tall>
+                            <textarea
+                              className="ce-name-input war-description-input"
+                              value={selectedWar.description}
+                              disabled={!canEditSelected}
+                              aria-label="War description"
+                              onChange={(event) => useWars.getState().setWarDescription(selectedWar.id, event.target.value)}
+                            />
+                          </EditorRow>
+                        ),
+                      },
+                      ...(selectedWar.origin === 'official' ? [{
+                        id: 'eligible',
+                        content: (
+                          <EditorRow
+                            framed={false}
+                            title="Eligible for Run"
+                            description="Includes this published War in the equal-odds main Run pool."
+                            value={<span>{selectedWar.eligibleForRun ? 'Included' : 'Excluded'}</span>}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selectedWar.eligibleForRun === true}
+                              disabled={!canEditSelected || !orderedBattles.length}
+                              aria-label="Eligible for Run"
+                              onChange={(event) => useWars.getState().setWarEligible(selectedWar.id, event.target.checked)}
+                            />
+                          </EditorRow>
+                        ),
+                      }] : []),
+                      {
+                        // The Ataraxia picker is a member row here, not a box of its own: it is one
+                        // of the War's settings, and its own box inside this one would draw the
+                        // same marble twice.
+                        id: 'ataraxia',
+                        content: (
+                          <EditorRow framed={false} title="Ataraxia" description="The rung this War is played at.">
+                            <AtaraxiaSelector
+                              framed={false}
+                              value={ataraxiaTier}
+                              highestUnlockedTier={highestUnlockedTier}
+                              onChange={setAtaraxiaTier}
+                              fillSurface={EDITOR_COLUMN_CONTROL_FILL_SURFACE}
+                            />
+                          </EditorRow>
+                        ),
+                      },
+                      {
+                        id: 'play',
+                        content: (
+                          <EditorRow
+                            framed={false}
+                            title="Play this War"
+                            description="Private Wars can be started directly here; only eligible official Wars enter the main pool."
+                          >
+                            <EditorButton disabled={!orderedBattles.length} onClick={() => void startSelectedWar()}>
+                              Start Run
+                            </EditorButton>
+                          </EditorRow>
+                        ),
+                      },
+                    ]}
+                  />
 
-                  <SectionBox title="Battles" titleId="war-editor-battles-title" className="war-battles-box">
-                    {/* A Battle is an authored level in an ordered container, exactly like a
-                        campaign level, so it takes the same row: board thumbnail, goal line,
-                        and the carved edit / reorder / delete verbs (ADR-0529). */}
-                    <div className="ce-level-list war-battle-list">
-                      {orderedBattles.length === 0 ? <p className="ce-empty">No Battles. Add one to begin.</p> : null}
-                      {orderedBattles.map((battle, index) => {
+                  {/* A Battle is an authored level in an ordered container, exactly like a campaign
+                      level, so it takes the same row: board thumbnail, goal line, and the carved
+                      info / edit / reorder / delete verbs (ADR-0529). Each is a MEMBER, so the box
+                      lays the rail between them and caps it where it meets the frame. */}
+                  <SectionBox
+                    title="Battles"
+                    titleId="war-editor-battles-title"
+                    className="war-battles-box"
+                    members={[
+                      ...(orderedBattles.length === 0 ? [{
+                        id: 'empty',
+                        content: <p className="ce-empty">No Battles. Add one to begin.</p>,
+                      }] : []),
+                      ...orderedBattles.map((battle, index) => {
                         const level = levels[battle.levelId];
                         const name = level?.name ?? battle.levelId;
                         const role = index === orderedBattles.length - 1
                           ? 'Final Battle · War ends here'
                           : level?.battle?.loot ? 'Loot Battle' : 'Battle';
-                        return (
-                          <EditorLevelRow
-                            key={battle.levelId}
-                            levelId={battle.levelId}
-                            objective={level?.objective}
-                            level={level}
-                            index={index}
-                            framed={false}
-                            active={battle.levelId === selectedBattle?.levelId}
-                            readOnly={!canEditSelected}
-                            description={level ? `${role} · ${levelObjectiveLine(level)}` : role}
-                            ariaLabel={`Select ${name}`}
-                            onInfo={() => useWars.getState().selectBattle(battle.levelId)}
-                            infoLabel={`Details for ${name}`}
-                            editHref={level ? editBattleBoardHref(selectedWar.id, battle.levelId) : undefined}
-                            onMoveUp={() => useWars.getState().moveBattle(selectedWar.id, battle.levelId, -1)}
-                            onMoveDown={() => useWars.getState().moveBattle(selectedWar.id, battle.levelId, 1)}
-                            canMoveUp={index > 0}
-                            canMoveDown={index < orderedBattles.length - 1}
-                            onDelete={level ? () => { void confirmDeleteBattle(level); } : undefined}
-                            deleteLabel={`Delete Battle ${name}`}
-                            deleteTitle="Delete Battle"
-                          />
-                        );
-                      })}
-                    </div>
-                    {canEditSelected ? (
-                      <div className="ce-section-action">
-                        <EditorButton onClick={() => useWars.getState().addBattle(selectedWar.id)}>+ Add Battle</EditorButton>
-                      </div>
-                    ) : null}
-                  </SectionBox>
+                        return {
+                          id: battle.levelId,
+                          content: (
+                            <EditorLevelRow
+                              levelId={battle.levelId}
+                              objective={level?.objective}
+                              level={level}
+                              index={index}
+                              framed={false}
+                              active={battle.levelId === selectedBattle?.levelId}
+                              readOnly={!canEditSelected}
+                              description={level ? `${role} · ${levelObjectiveLine(level)}` : role}
+                              ariaLabel={`Select ${name}`}
+                              onInfo={() => useWars.getState().selectBattle(battle.levelId)}
+                              infoLabel={`Details for ${name}`}
+                              editHref={level ? editBattleBoardHref(selectedWar.id, battle.levelId) : undefined}
+                              onMoveUp={() => useWars.getState().moveBattle(selectedWar.id, battle.levelId, -1)}
+                              onMoveDown={() => useWars.getState().moveBattle(selectedWar.id, battle.levelId, 1)}
+                              canMoveUp={index > 0}
+                              canMoveDown={index < orderedBattles.length - 1}
+                              onDelete={level ? () => { void confirmDeleteBattle(level); } : undefined}
+                              deleteLabel={`Delete Battle ${name}`}
+                              deleteTitle="Delete Battle"
+                            />
+                          ),
+                        };
+                      }),
+                      ...(canEditSelected ? [{
+                        id: 'add-battle',
+                        className: 'ce-section-action',
+                        content: (
+                          <EditorButton onClick={() => useWars.getState().addBattle(selectedWar.id)}>+ Add Battle</EditorButton>
+                        ),
+                      }] : []),
+                    ]}
+                  />
 
                   {selectedLevel && selectedBattle ? (
-                    <SettingsGroup title="Battle" titleId="war-editor-battle-title">
-                      <EditorRow
-                        framed={false}
-                        title="Loot"
-                        description={isFinalBattle
-                          ? 'The final Battle ends the War, so there is no following Sectio or lipsanon offer.'
-                          : 'After this Battle, Bona Vacantia reveals three unseen lipsana and the player chooses one for free.'}
-                        value={<span>{!isFinalBattle && selectedLevel.battle?.loot ? 'Lipsanon choice' : 'Normal Sectio'}</span>}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={!isFinalBattle && selectedLevel.battle?.loot === true}
-                          disabled={!canEditSelected || isFinalBattle}
-                          aria-label="Battle grants Loot"
-                          onChange={(event) => useWars.getState().setBattleLoot(selectedLevel.id, event.target.checked)}
-                        />
-                      </EditorRow>
-                      <EditorRow
-                        framed={false}
-                        title="Battle position"
-                        description={isFinalBattle ? 'The last ordered Battle is automatically the War end.' : 'Every non-final victory eventually opens the next Sectio.'}
-                        value={<span>{selectedBattleIndex + 1} of {orderedBattles.length}</span>}
-                      />
-                      <EditorRow framed={false} title="Delete Battle" description="Removes this Battle level from the War workspace.">
-                        <EditorButton tone="danger" disabled={!canEditSelected} onClick={() => void confirmDeleteBattle(selectedLevel)}>Delete</EditorButton>
-                      </EditorRow>
-                    </SettingsGroup>
+                    <SettingsGroup
+                      title="Battle"
+                      titleId="war-editor-battle-title"
+                      members={[
+                        {
+                          id: 'loot',
+                          content: (
+                            <EditorRow
+                              framed={false}
+                              title="Loot"
+                              description={isFinalBattle
+                                ? 'The final Battle ends the War, so there is no following Sectio or lipsanon offer.'
+                                : 'After this Battle, Bona Vacantia reveals three unseen lipsana and the player chooses one for free.'}
+                              value={<span>{!isFinalBattle && selectedLevel.battle?.loot ? 'Lipsanon choice' : 'Normal Sectio'}</span>}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={!isFinalBattle && selectedLevel.battle?.loot === true}
+                                disabled={!canEditSelected || isFinalBattle}
+                                aria-label="Battle grants Loot"
+                                onChange={(event) => useWars.getState().setBattleLoot(selectedLevel.id, event.target.checked)}
+                              />
+                            </EditorRow>
+                          ),
+                        },
+                        {
+                          id: 'position',
+                          content: (
+                            <EditorRow
+                              framed={false}
+                              title="Battle position"
+                              description={isFinalBattle ? 'The last ordered Battle is automatically the War end.' : 'Every non-final victory eventually opens the next Sectio.'}
+                              value={<span>{selectedBattleIndex + 1} of {orderedBattles.length}</span>}
+                            />
+                          ),
+                        },
+                        {
+                          id: 'delete',
+                          content: (
+                            <EditorRow framed={false} title="Delete Battle" description="Removes this Battle level from the War workspace.">
+                              <EditorButton tone="danger" disabled={!canEditSelected} onClick={() => void confirmDeleteBattle(selectedLevel)}>Delete</EditorButton>
+                            </EditorRow>
+                          ),
+                        },
+                      ]}
+                    />
                   ) : null}
 
                   <SettingsSection>

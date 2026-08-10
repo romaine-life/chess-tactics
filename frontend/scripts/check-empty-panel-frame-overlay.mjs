@@ -1171,7 +1171,11 @@ if (!/<InnerChromeBox className="skirmish-service-record">/.test(skirmishHud)
   || !/if \(!framed\) return <div className=\{classes\}/.test(portraitEditor)
   || !/className="run-army-ledger-portrait unit-portrait--divided"[\s\S]*?framed=\{false\}/.test(runArmyWorkspace)
   || !/<DividedInnerChromeBox[\s\S]*?columns=\{\['var\(--run-army-row-block-size,\s*158px\)',\s*'minmax\(0,\s*1fr\)',\s*'112px'\]\}/.test(runArmyWorkspace)
-  || !/<ChromeDivider[\s\S]*?role="inner"[\s\S]*?orientation="vertical"[\s\S]*?junctions="none"/.test(chromeDividedGrid)) {
+  // The grid's own rails are drawn with the PRIVATE rail part, not a public ChromeDivider with its
+  // caps switched off: the grid places every junction itself from its line topology, and no call
+  // site may say "no caps" any more (see check-chrome-rails.mjs).
+  || !/<ChromeGridRail[\s\S]*?role="inner"[\s\S]*?orientation="vertical"/.test(chromeDividedGrid)
+  || !/from '\.\/chromeRailInternals'/.test(chromeDividedGrid)) {
   failures.push('Portrait hosts must use the registered InnerChromeBox or the Run Army row’s registered vertical divider composition');
 }
 if (/<ChromeDivider\b/.test(runArmyWorkspace)

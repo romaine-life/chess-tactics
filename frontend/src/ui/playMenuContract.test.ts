@@ -352,13 +352,27 @@ describe('Run rule options are a departure from the defaults, not a step in setu
   it('is one box that grows, with the box itself as the thing you press', () => {
     // The name row fills the accepted InnerChromeBox rather than being a framed control seated
     // inside it, so the box's own frame is the button's edge and its name rides in it.
-    expect(prepSection).toMatch(/<InnerChromeBox[\s\S]*?className=\{`section-box \$\{className\}`/);
+    expect(prepSection).toContain('const boxClassName = `section-box ${className}`.trim();');
     expect(prepSection).toMatch(/<button[\s\S]*?className="section-box-head"[\s\S]*?aria-expanded=\{disclosure\.open\}/);
     expect(prepSection).toContain('<span className="section-box-title" id={titleId}>{title}</span>');
     expect(source).toMatch(/<SectionBox[\s\S]*?title="Options"/);
     expect(source).not.toContain("unit=\"inner-text-button\"");
     // Its inset is the box's whole content padding, so the pressable area reaches the frame.
     expect(style).toMatch(/\.section-box-head \{[\s\S]*?padding: var\(--ds-inset\);/);
+  });
+
+  it('cannot be handed a rail to place itself — the box owns the space between members', () => {
+    // A box of several things takes a typed member list, never children, so no caller can author
+    // the gap where a rail would go. A hand-placed rail cannot know where its ends meet the frame,
+    // and one shipped into Settings with no junction caps on either end. Now it is unsayable:
+    // ChromeDivider has no `junctions` prop at all, and the parts that suppress caps are private.
+    expect(prepSection).toContain('members: readonly SectionBoxMember[]');
+    expect(prepSection).toContain('children?: never');
+    expect(prepSection).toMatch(/<DividedInnerChromeBox[\s\S]*?columns=\{\['minmax\(0, 1fr\)'\]\}/);
+    const chromeBox = readFileSync(new URL('./shared/ChromeBox.tsx', import.meta.url), 'utf8');
+    expect(chromeBox).not.toContain('junctions?:');
+    expect(chromeBox).toContain('data-chrome-divider-junctions="endpoints"');
+    expect(existsSync(new URL('../../scripts/check-chrome-rails.mjs', import.meta.url))).toBe(true);
   });
 
   it('is marble holding oak, like every box that holds other people\'s controls', () => {

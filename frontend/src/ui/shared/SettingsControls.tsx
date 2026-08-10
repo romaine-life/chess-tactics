@@ -1,10 +1,10 @@
-import { Children, Fragment, isValidElement, type AriaRole, type ReactElement, type ReactNode } from 'react';
+import { type AriaRole, type ReactElement, type ReactNode } from 'react';
 import type { InterfaceSfxCue } from '../../core/sfxProfile';
 import type { ChromeRole } from '../chromeCandidateSources';
-import { ChromeDivider, InnerChromeBox } from './ChromeBox';
+import { InnerChromeBox } from './ChromeBox';
 import { InnerTextButton, InnerTextNavButton, type ChromeButtonTone } from './ChromeButton';
 import { CHROME_LEAF_FILL_SURFACE, CHROME_STRUCTURAL_FILL_ROLE } from './chromeSurfacePolicy';
-import { SectionBox } from './SectionBox';
+import { SectionBox, type SectionBoxMember } from './SectionBox';
 
 // The shared settings/menu "rail + content" control primitives (ADR-0059): a section
 // (uppercase eyebrow + grouped rows), a row (copy · value · control grid), and a chrome
@@ -139,31 +139,33 @@ export function SettingsRow({
 }
 
 /**
- * A SectionBox whose members are settings rows: one box, named, with the kit's inner divider
- * between each row. Reach for it when a group genuinely holds several settings — a group of ONE
- * is its own row, and naming it twice is a label that says what the row below already says.
+ * A SectionBox whose members are settings rows: one box, named, with the kit's rails between rows.
+ * Reach for it when a group genuinely holds several settings — a group of ONE is its own row, and
+ * naming it twice is a label that says what the row below already says.
+ *
+ * The rows arrive as a typed member list rather than as children, so the space between them is the
+ * box's to lay and nobody else's. That is not ceremony: a rail hand-placed between children cannot
+ * know where its ends meet the frame, and the first version of this component shipped one with no
+ * junction caps at all.
  */
 export function SettingsGroup({
   title,
   titleId,
   className = '',
-  children,
+  members,
 }: {
   title: string;
   titleId: string;
   className?: string;
-  children: ReactNode;
+  members: readonly SectionBoxMember[];
 }): ReactElement {
-  const members = Children.toArray(children);
   return (
-    <SectionBox title={title} titleId={titleId} className={`settings-group ${className}`.trim()}>
-      {members.map((member, index) => (
-        <Fragment key={isValidElement(member) && member.key != null ? member.key : index}>
-          {index > 0 ? <ChromeDivider role="inner" junctions="none" /> : null}
-          {member}
-        </Fragment>
-      ))}
-    </SectionBox>
+    <SectionBox
+      title={title}
+      titleId={titleId}
+      className={`settings-group ${className}`.trim()}
+      members={members}
+    />
   );
 }
 

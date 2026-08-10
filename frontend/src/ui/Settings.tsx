@@ -504,20 +504,34 @@ export function Settings({
         />
         <SettingsButton href={withReturnTo(TRACKS_PATH)} ariaLabel="View the soundtrack track list">View Tracks</SettingsButton>
       </SettingsRow>
-      <SettingsGroup title="Effects" titleId="settings-effects-title">
-        <SettingsRow framed={false} title="Volume" description="Set the target effects mix for this browser.">
-          <Slider
-            value={settings.effectsVolume}
-            suffix="%"
-            label="Effects Volume"
-            onChange={(next) => updateSetting('effectsVolume', clamp(next, 0, 100, DEFAULT_APP_SETTINGS.effectsVolume))}
-          />
-          <SettingsButton onClick={() => previewTerrain('water')} ariaLabel="Play a sample effect sound">Test</SettingsButton>
-        </SettingsRow>
-        <SettingsRow framed={false} title="Interface Sounds" description="Enable or disable menu and control feedback sounds.">
-          <Toggle checked={settings.interfaceSounds} label="Toggle Interface Sounds" onChange={(enabled) => updateSetting('interfaceSounds', enabled)} fillSurface={CHROME_LEAF_FILL_SURFACE} />
-        </SettingsRow>
-      </SettingsGroup>
+      <SettingsGroup
+        title="Effects"
+        titleId="settings-effects-title"
+        members={[
+          {
+            id: 'effects-volume',
+            content: (
+              <SettingsRow framed={false} title="Volume" description="Set the target effects mix for this browser.">
+                <Slider
+                  value={settings.effectsVolume}
+                  suffix="%"
+                  label="Effects Volume"
+                  onChange={(next) => updateSetting('effectsVolume', clamp(next, 0, 100, DEFAULT_APP_SETTINGS.effectsVolume))}
+                />
+                <SettingsButton onClick={() => previewTerrain('water')} ariaLabel="Play a sample effect sound">Test</SettingsButton>
+              </SettingsRow>
+            ),
+          },
+          {
+            id: 'interface-sounds',
+            content: (
+              <SettingsRow framed={false} title="Interface Sounds" description="Enable or disable menu and control feedback sounds.">
+                <Toggle checked={settings.interfaceSounds} label="Toggle Interface Sounds" onChange={(enabled) => updateSetting('interfaceSounds', enabled)} fillSurface={CHROME_LEAF_FILL_SURFACE} />
+              </SettingsRow>
+            ),
+          },
+        ]}
+      />
       <SettingsRow
         title="Local Settings"
         description="Audio settings are saved on this device."
