@@ -26,6 +26,23 @@ export interface SceneState {
    * rebuild every just-committed screen and its store.
    */
   retryEpoch: number;
+  /**
+   * The `retryEpoch` the COMMITTED scene was mounted with, so its layer keeps one React
+   * mount identity for its whole life.
+   *
+   * `retryEpoch` belongs to the destination being prepared. The committed scene cannot key
+   * itself by that number, because a retry advances it while the committed scene is standing
+   * fully painted behind the failure — and a changed key is React's instruction to destroy the
+   * subtree and build a new one. It was worse before this existed: the outgoing layer of a
+   * scene replacement carried NO epoch at all, so the visible screen's key changed the instant
+   * a navigation began. The board Victory was sitting on was torn down and rebuilt in front of
+   * the player, blinking through its own entrance again, before the crossfade to the next scene
+   * had started (ADR-0558).
+   *
+   * It advances only where a destination is promoted to current, which is the one moment the
+   * committed layer legitimately becomes a different mount.
+   */
+  committedEpoch: number;
   /** True while a cold load is walking the shell ladder in front of the scene rung. */
   startupActive: boolean;
   /** Index into SHELL_LADDER of the deepest rung already revealed; -1 before the first. */
@@ -69,6 +86,7 @@ export function initialSceneState(
     generation: 0,
     error: null,
     retryEpoch: 0,
+    committedEpoch: 0,
     startupActive: cold,
     startupStage: cold ? -1 : SETTLED_STAGE,
     startupReady: [],
@@ -194,6 +212,7 @@ export function reduceScene(state: SceneState, action: SceneAction): SceneState 
       destination: null,
       destinationHref: null,
       error: null,
+      committedEpoch: state.retryEpoch,
     };
   }
   if (action.type === 'exit-finished' && state.phase === 'exiting') {
@@ -216,6 +235,7 @@ export function reduceScene(state: SceneState, action: SceneAction): SceneState 
       destination: null,
       destinationHref: null,
       error: null,
+      committedEpoch: state.retryEpoch,
       startupActive: false,
       startupStage: SETTLED_STAGE,
     };

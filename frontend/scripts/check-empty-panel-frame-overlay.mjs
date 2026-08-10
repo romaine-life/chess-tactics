@@ -804,11 +804,13 @@ const shellWorkspace = shellWorkspaceRules.find((block) => /position\s*:\s*absol
 if (!shellWorkspace) {
   failures.push('the shared chrome primitives must expose a shell-owned center-workspace surface');
 } else {
+  // `clip` rather than `hidden`: it clips at least as tightly and, unlike `hidden`, carries
+  // the paint apron allowance checked below.
   if (!/position\s*:\s*absolute\s*;/.test(shellWorkspace)
     || !/inset\s*:\s*0\s*;/.test(shellWorkspace)
     || !/min-height\s*:\s*0\s*;/.test(shellWorkspace)
     || !/min-width\s*:\s*0\s*;/.test(shellWorkspace)
-    || !/overflow\s*:\s*hidden\s*;/.test(shellWorkspace)) {
+    || !/overflow\s*:\s*clip\s*;/.test(shellWorkspace)) {
     failures.push('shared shell workspaces must fill and clip to their positioned center-workspace parent');
   }
   if (shellWorkspaceRules.some((block) => /position\s*:\s*fixed|\b(?:100)?v[wh]\b|--app-header-h|--skirmish-rail-w|--skirmish-board-controls-gutter|--le-outer-atom-outset/.test(block))) {
@@ -843,9 +845,32 @@ if (!shellWorkspaceBody
   || css.includes('--shell-workspace-content-padding')) {
   failures.push('ShellWorkspace internal body must own shared block/start insets and stay attached to Controls');
 }
+// The fill reaches the workspace edges AND one apron up under the title divider's transparent
+// last row, so that row is not left for the screen behind. Both clipping hosts have to pass
+// that apron; an `overflow: hidden` on either silently re-opens the seam.
 const shellWorkspaceFill = blockFor('.shell-workspace-fill');
-if (!shellWorkspaceFill || !/inset\s*:\s*0\s*;/.test(shellWorkspaceFill)) {
-  failures.push('shared shell workspaces must paint the outer-role fill edge-to-edge');
+if (!shellWorkspaceFill
+  || !/inset\s*:\s*calc\(-1 \* var\(--shell-workspace-paint-apron, 0px\)\) 0 0 0\s*;/.test(shellWorkspaceFill)) {
+  failures.push('shared shell workspaces must paint the outer-role fill edge-to-edge, one apron under the title divider');
+}
+// The background artwork is a pixelated cover fit: growing its box to gain the apron re-scales
+// the whole raster, so it stays exactly on the workspace box.
+if (/--shell-workspace-paint-apron/.test(blockFor('.shell-workspace-background-artwork'))) {
+  failures.push('the shell workspace background artwork must keep its exact cover box, not take the paint apron');
+}
+for (const host of ['.shell-workspace', '.run-workspace']) {
+  const hostBlock = blockFor(host);
+  if (!hostBlock
+    || !/overflow\s*:\s*clip\s*;/.test(hostBlock)
+    || !/overflow-clip-margin\s*:\s*var\(--shell-workspace-paint-apron, 0px\)\s*;/.test(hostBlock)) {
+    failures.push(`${host} must pass the shell workspace paint apron instead of clipping the chrome seam back open`);
+  }
+}
+// The Controls panel's workspace-facing rail borders a foreign surface, so its frame art's
+// transparent bleed has to be compensated on the chrome side rather than left as a hairline.
+if (!chromeRuntime.includes('border-image-outset: 0 0 0 ${FRAME_EDGE_BLEED_PX}px !important;')
+  || !chromeRuntime.includes('export const FRAME_EDGE_BLEED_PX = 1;')) {
+  failures.push('the Controls panel frame must outset its workspace-facing rail by the frame art edge bleed');
 }
 const playShellGrid = blockFor('.skirmish-screen');
 const battleFieldGutter = blockFor('.skirmish-screen:not(.level-editor-screen) .skirmish-war-room > .skirmish-field');

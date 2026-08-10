@@ -432,11 +432,6 @@ function RunPanel({
                 onChange={(tier) => { setArmed(false); setAtaraxiaTier(tier); }}
                 fillSurface={CHROME_LEAF_FILL_SURFACE}
               />
-              <RunRulesSelector
-                value={runRules}
-                onChange={(rules) => { setArmed(false); setRunRules(rules); }}
-                fillSurface={CHROME_LEAF_FILL_SURFACE}
-              />
             </div>
             {presentedRun ? (
               <InnerChromeBox
@@ -484,6 +479,16 @@ function RunPanel({
                 </ChromeButton>
               </div>
             )}
+            {/* Below the verb, deliberately. The defaults are the game and almost nobody opens
+                this, so it must not sit between the Ataraxia choice and Start Run as if it were
+                a step in setup — and it is a disclosure that grows the column when opened, which
+                would push the verb down the screen from above. Last child, so opening it extends
+                the column downward and leaves everything above it where it was. */}
+            <RunRulesSelector
+              value={runRules}
+              onChange={(rules) => { setArmed(false); setRunRules(rules); }}
+              fillSurface={CHROME_LEAF_FILL_SURFACE}
+            />
           </aside>
         ) : null}
       </RunDetailContentSceneSlot>

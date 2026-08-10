@@ -28,6 +28,17 @@ export const NO_ATOM_SOURCE_ID = 'none';
 export const DIVIDER_H = 34;
 export const INNER_DIVIDER_H = 7;
 export const DEFAULT_DIVIDER_ATOM_SIZE = 17;
+/**
+ * Transparent margin the kit's frame and divider art carries outside its ink, in source
+ * pixels — measured from the installed rasters, whose 24px slice runs alpha 0, then 22 rows
+ * of ink, then alpha 0 again. Nothing in the catalog declares it (the bytes live in blob
+ * storage), so it is stated here the way the icon seats state their ink fractions.
+ *
+ * It only costs anything where a rail borders a FOREIGN surface: there the bleed is a raster
+ * line neither side paints, and the screen behind shows through it. Re-measure this if the
+ * kit frame is redrawn, and drop the compensation outright once the art ships trimmed.
+ */
+export const FRAME_EDGE_BLEED_PX = 1;
 export const EMPTY_FRAME: FrameRender = { url: '', slice: 1, size: 3, atomOverlay: null };
 export const EMPTY_DIVIDER: DividerRender = { railUrl: '', railHeight: 1, railTileWidth: 1, height: DIVIDER_H, atomOverlay: null };
 export const ATOM_TURNS = [0, 1, 2, 3] as const;
@@ -808,17 +819,34 @@ ${namedChromeFillSurfacePaint(surface.id)}
 }
 
 /**
- * The shell Controls panel adopts the ADR-0433 material hierarchy wholesale: the panel
- * and its structural boxes keep the stone field, and every registered leaf unit inside
- * it wears the oak. Reading the material off the registry rather than off each call site
- * is what makes that true of controls the panel only borrows — steppers, admin controls,
- * Run lifecycle buttons — without reskinning the same components on other surfaces. A
- * control that names its own surface still wins.
+ * A surface that has adopted the ADR-0433 material hierarchy wholesale marks itself with
+ * this attribute: its structural boxes keep the stone field, and every registered LEAF unit
+ * inside it wears the oak. Reading the material off the registry rather than off each call
+ * site is what makes that true of controls the surface only borrows — steppers, admin
+ * controls, Run lifecycle buttons — without reskinning the same components elsewhere.
+ *
+ * This is the same inherited-material shape as the rail tab above, and it carries the same
+ * obligation: the role FIELD default must EXCLUDE these leaves rather than try to lose a
+ * specificity race to them. A leaf cannot see its host's attribute through a `:not()` on
+ * itself, and every `:not()` added to the field default raises the field's own specificity —
+ * which is exactly how #881's fix silently blanked this panel's oak one commit later.
  */
-function controlsPanelLeafSurfaceCss(): string {
+const CHROME_LEAF_HOST_ATTR = 'data-chrome-leaf-surface';
+const CHROME_LEAF_HOST_SELECTOR = `[${CHROME_LEAF_HOST_ATTR}]`;
+
+/** Every registered leaf unit that has not named a surface of its own. */
+function chromeLeafUnitSelectors(): string[] {
+  return chromeUnitMaterialSelectors('leaf').map((selector) => `${selector}:not([data-chrome-fill-surface])`);
+}
+
+/** The inherited leaf path, as ONE selector the role field default can exclude. */
+const CHROME_LEAF_HOST_INHERITED_SELECTOR =
+  `${CHROME_LEAF_HOST_SELECTOR} :is(${chromeUnitMaterialSelectors('leaf').join(', ')})`;
+
+function leafSurfaceHostCss(): string {
   const selectors = chromeUnitScopedSelectors(
-    `${CHROME_FAMILY_SURFACE_SELECTOR} [data-shell-controls-panel]`,
-    chromeUnitMaterialSelectors('leaf').map((selector) => `${selector}:not([data-chrome-fill-surface])`),
+    `${CHROME_FAMILY_SURFACE_SELECTOR} ${CHROME_LEAF_HOST_SELECTOR}`,
+    chromeLeafUnitSelectors(),
   );
   return `${selectors} {
 ${namedChromeFillSurfacePaint(CHROME_LEAF_FILL_SURFACE)}
@@ -1137,10 +1165,13 @@ export function frameCss(
   // race would put the two one edit apart from swapping places. A rail tab is that same case
   // one level up — it inherits its material from the rail column, so it needs its own
   // exclusion; without it this rule out-specified the tab fill and blanked every menu button.
+  // A leaf inside a surface that adopted the material hierarchy is the third such case, and
+  // it is why that exclusion cannot be the last one: each `:not()` added here raises THIS
+  // rule's specificity, so anything meant to win by out-specifying it loses on the next edit.
   const innerChromeFieldSelectors = chromeUnitScopedSelectors(
     familySurface,
     chromeUnitRoleSelectors('inner').map(
-      (selector) => `${selector}:not(.has-backdrop):not([data-chrome-fill-surface]):not(${CHROME_TAB_FILL_INHERITED_SELECTOR})`,
+      (selector) => `${selector}:not(.has-backdrop):not([data-chrome-fill-surface]):not(${CHROME_TAB_FILL_INHERITED_SELECTOR}):not(${CHROME_LEAF_HOST_INHERITED_SELECTOR})`,
     ),
   );
   const titlebarJoint = dividers.outer.atomOverlay;
@@ -1310,9 +1341,17 @@ ${familySurface} [data-shell-controls-panel] {
   --app-shell-divider-fill-overlap: 1px;
   --le-outer-fill-box-top: calc(-1 * var(--app-shell-divider-fill-overlap)) !important;
 }
+/* The workspace-facing rail is the one frame edge that borders a foreign surface rather
+   than the viewport, and kit frame art carries FRAME_EDGE_BLEED_PX of fully transparent
+   margin outside its ink. Undisplaced, the rail therefore starts its ink that far inside
+   the panel and leaves a raster column the workspace does not paint either — the screen
+   behind shows through it as a hairline. Outset the border image by the bleed so the ink
+   lands on the panel's own edge; the transparent margin moves harmlessly over the
+   workspace. Every other edge meets the viewport, where the same margin costs nothing. */
 ${familySurface} [data-shell-controls-panel]::before {
   border-width: 0 ${outerRailWidth}px ${outerRailWidth}px ${outerRailWidth}px !important;
   border-image-width: 0 ${outerRailWidth}px ${outerRailWidth}px ${outerRailWidth}px !important;
+  border-image-outset: 0 0 0 ${FRAME_EDGE_BLEED_PX}px !important;
 }
 ${cornerAtomOverlayCss(`${familySurface} .le-outer-panel`, outerFrame.atomOverlay)}
 ${controlSeamAtomCss}
@@ -1371,7 +1410,7 @@ ${chromeFillCss(inner)}
 /* A named registered material is an explicit composition override. Keep these
    selectors after role defaults so an inner-framed control can share a canonical
    surface used elsewhere without forking or code-painting that material. */
-${controlsPanelLeafSurfaceCss()}
+${leafSurfaceHostCss()}
 ${namedChromeFillSurfaceCss()}
 ${familySurface} .inner-box:is(.active, .is-active, [aria-pressed="true"]) {
   border-image-source: var(--skirmish-chrome-inner-control-active-image) !important;

@@ -23,9 +23,12 @@ import {
   RUN_STARTER_CARD_BY_ID,
   RUN_STARTER_CARDS,
   RUN_STARTER_GOLD_BASELINE_VALUE,
+  RUN_STARTING_GOLD,
   RUN_STARTING_GOLD_TENTHS,
   acquireLipsanon,
+  canUndoRunBattleMove,
   captureRunBattleUndo,
+  chargeRunBattleUndoCheckpoint,
   DEFAULT_RUN_RULES,
   LEGACY_RUN_RULES,
   RUN_SECTIO_CARD_PILE_RARITY_COUNT,
@@ -870,6 +873,35 @@ describe('Manubiae — what the board pays for', () => {
     expect(undone.goldTenths).toBe(battle.goldTenths - RUN_BATTLE_UNDO_COST_TENTHS);
   });
 
+  it('charges every checkpoint the walk back passes over, so each step costs its own gold', () => {
+    // Two moves' worth of checkpoints cut from the SAME purse -- neither move earned anything.
+    // Restoring the older one verbatim would hand back the gold the first Undo spent, and the
+    // whole rewind would cost one gold however deep it went.
+    const battle = inBattle(createRun(war(), 13));
+    const older = captureRunBattleUndo(battle)!;
+    const newer = captureRunBattleUndo(battle)!;
+
+    const first = undoRunBattleMove(battle, newer);
+    expect(first.goldTenths).toBe(battle.goldTenths - RUN_BATTLE_UNDO_COST_TENTHS);
+
+    const second = undoRunBattleMove(first, chargeRunBattleUndoCheckpoint(older));
+    expect(second.goldTenths).toBe(battle.goldTenths - 2 * RUN_BATTLE_UNDO_COST_TENTHS);
+  });
+
+  it('refuses the step a charged checkpoint can no longer pay for, and never books a debt', () => {
+    const battle = inBattle({ ...createRun(war(), 13), goldTenths: RUN_BATTLE_UNDO_COST_TENTHS });
+    const checkpoint = captureRunBattleUndo(battle)!;
+    expect(canUndoRunBattleMove(battle, checkpoint)).toBe(true);
+
+    // Passed over once, this checkpoint's purse is empty -- and an empty purse is where it
+    // stops. It is not carried into debt, it simply stops being reachable.
+    const charged = chargeRunBattleUndoCheckpoint(checkpoint);
+    expect(charged.goldTenths).toBe(0);
+    expect(chargeRunBattleUndoCheckpoint(charged).goldTenths).toBe(0);
+    expect(canUndoRunBattleMove(battle, charged)).toBe(false);
+    expect(undoRunBattleMove(battle, charged)).toBe(battle);
+  });
+
   it('asks a royal fork for a Rook or better, reading the bar off the piece scale itself', () => {
     // A bare 5 would silently become some other piece's worth if the scale were re-weighted.
     expect(RUN_ROYAL_FORK_MIN_VICTIM_VALUE).toBe(PIECE_VALUE.rook);
@@ -922,21 +954,42 @@ describe('card pricing is a Run rule', () => {
     expect(card, id).toBeDefined();
     return runCardCost(card!, rules);
   };
+  const material = { ...DEFAULT_RUN_RULES, pricing: 'material' as const };
   const density = { ...DEFAULT_RUN_RULES, pricing: 'density' as const };
+
+  it('weights material by density unless the Run was told otherwise', () => {
+    expect(DEFAULT_RUN_RULES.pricing).toBe('density');
+    // Legacy Runs keep the game they were dealt: their offers were priced flat when they were
+    // dealt, so the mode they are bound to has to stay flat too.
+    expect(LEGACY_RUN_RULES.pricing).toBe('material');
+  });
 
   it('charges material when told to, which is what the game has always done', () => {
     for (const card of RUN_CARD_DECK) {
-      expect(runCardCost(card, DEFAULT_RUN_RULES), card.id).toBe(card.value);
+      expect(runCardCost(card, material), card.id).toBe(card.value);
     }
   });
 
   it('charges concentration when told to, so the same material costs differently', () => {
     // A Queen alone and a Queen behind a Pawn are 9 and 10 material -- nearly equal -- but one
     // occupies a single square. Material pricing cannot tell them apart; density can.
-    expect(priced('q', DEFAULT_RUN_RULES)).toBe(9);
-    expect(priced('pq-front', DEFAULT_RUN_RULES)).toBe(10);
+    expect(priced('q', material)).toBe(9);
+    expect(priced('pq-front', material)).toBe(10);
     expect(priced('q', density)).toBe(16);
     expect(priced('pq-front', density)).toBe(13);
+  });
+
+  it('leaves the opening market inside the opening purse', () => {
+    // The early ceiling is a VALUE ceiling, so under density an offer can cost more than the
+    // ceiling reads. It still cannot outrun the starting gold -- the dearest card the six-value
+    // band admits is a lone Rook, at six against eight.
+    const early = RUN_CARD_DECK.filter((card) => (
+      card.value <= RUN_SECTIO_EARLY_CARD_MAX_VALUE && cardAllowedByRules(card, DEFAULT_RUN_RULES)
+    ));
+    expect(early.length).toBeGreaterThan(0);
+    const dearest = Math.max(...early.map((card) => runCardCost(card, DEFAULT_RUN_RULES)));
+    expect(dearest).toBe(6);
+    expect(dearest).toBeLessThanOrEqual(RUN_STARTING_GOLD);
   });
 
   it('never gives a card away, however thin it is', () => {
@@ -952,11 +1005,11 @@ describe('card pricing is a Run rule', () => {
   });
 
   it('prices an offer by the rules of the Run that was dealt it', () => {
-    const materialRun = createRun(war(), 5, { rules: DEFAULT_RUN_RULES });
+    const materialRun = createRun(war(), 5, { rules: material });
     const densityRun = createRun(war(), 5, { rules: density });
     expect(materialRun.rules.pricing).toBe('material');
     expect(densityRun.rules.pricing).toBe('density');
-    const asMaterial = sectioCardOffersAtCursor(5, 0, 0, 3, DEFAULT_RUN_RULES);
+    const asMaterial = sectioCardOffersAtCursor(5, 0, 0, 3, material);
     const asDensity = sectioCardOffersAtCursor(5, 0, 0, 3, density);
     expect(asDensity.map((o) => o.id)).toEqual(asMaterial.map((o) => o.id));
     expect(asDensity.map((o) => o.cost)).not.toEqual(asMaterial.map((o) => o.cost));

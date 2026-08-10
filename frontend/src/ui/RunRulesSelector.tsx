@@ -13,6 +13,9 @@ import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
 //
 // Not hidden, though: a Run is bound to these for its whole life, so a player who did change one
 // has to be able to see what they are about to start.
+//
+// It seats BELOW Start Run in the detail column, after the verb rather than before it — see the
+// comment at its mount in PlayMenu.
 
 const SPAN_COPY: Readonly<Record<2 | 4, { label: string; effect: string }>> = {
   2: {
@@ -37,15 +40,15 @@ const ROTATION_COPY: Readonly<Record<'on' | 'off', { label: string; effect: stri
 };
 
 const PRICING_COPY: Readonly<Record<'material' | 'density', { label: string; effect: string }>> = {
-  material: {
-    label: 'Flat material',
-    effect: 'A card costs what its pieces are worth. A Queen is nine whether she arrives alone or beside three Pawns.',
-  },
   density: {
     // Not "by density": density only WEIGHTS the material, it does not replace it. Priced by
     // density alone, one Pawn and four Pawns would cost the same -- both are density 1.
     label: 'Weighted by density',
     effect: 'Still material, scaled by how concentrated it is: the same pieces in fewer squares cost more. A Queen alone is dearer than a Queen with a Pawn beside her.',
+  },
+  material: {
+    label: 'Flat material',
+    effect: 'A card costs what its pieces are worth. A Queen is nine whether she arrives alone or beside three Pawns.',
   },
 };
 
@@ -79,7 +82,8 @@ export function RunRulesSelector({
 
   const rotationKey = value.mayRotate ? 'on' : 'off';
 
-  const pricingOptions: readonly HouseSelectOption[] = (['material', 'density'] as const).map((key) => ({
+  // Default first, as the span and facing lists above are ordered.
+  const pricingOptions: readonly HouseSelectOption[] = (['density', 'material'] as const).map((key) => ({
     value: key,
     label: (
       <span className="run-rules-option-copy">
@@ -101,7 +105,19 @@ export function RunRulesSelector({
           data-testid="run-rules-toggle"
           onClick={() => setOpen((wasOpen) => !wasOpen)}
         >
-          <span>{open ? 'Hide' : 'Change'}</span>
+          <span className="run-rules-toggle-copy">
+            {/* BOTH verbs are always rendered, stacked in one cell, so the control is cut to its
+                widest state once and holds that width through every flip. A control that measured
+                only its current word would resize under the pointer the moment it was pressed. */}
+            <span className="run-rules-toggle-label">
+              <span className={open ? 'is-shown' : undefined}>Hide</span>
+              <span className={open ? undefined : 'is-shown'}>Change</span>
+            </span>
+            <span
+              className={`stepper-glyph stepper-chevron stepper-chevron-${open ? 'up' : 'down'}`}
+              aria-hidden="true"
+            />
+          </span>
         </ChromeButton>
       </div>
       {!open ? (

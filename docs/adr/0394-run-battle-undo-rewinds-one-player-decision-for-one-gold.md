@@ -9,6 +9,7 @@ refines:
 partially_superseded_by:
   - "[ADR-0428](0428-run-defeat-offers-retry-and-exits-without-blocking-controls.md)"
   - "[ADR-0452](0452-a-won-run-battle-pauses-on-its-visible-board-before-rewards.md)"
+  - "[ADR-0556](0556-undo-walks-a-battle-back-a-decision-at-a-time.md) — the one-level limit only"
 ---
 
 # ADR-0394: Run Battle Undo rewinds one player decision for one gold
@@ -42,6 +43,10 @@ decision the player is paying to retract.
 - Undo has one level and no Redo. After an Undo, the next committed player move replaces the
   checkpoint. Restart, entering another Battle, multiplayer, administrator board mutation,
   resignation, and other Battle replacement clear it.
+  **Superseded by [ADR-0556](0556-undo-walks-a-battle-back-a-decision-at-a-time.md): one checkpoint
+  per committed move is kept, and Undo pops the last, so a press takes back one more decision for
+  as far back as the Battle goes. The no-Redo rule and the list of clearing events stand — they
+  empty the whole history rather than one slot.**
 - The checkpoint is part of the existing browser-owned resumable match snapshot, so reload does
   not silently remove the offered Undo. It is not added to `RunDocument`: the active board is
   already device-local, while the restored Run economy continues through the ordinary active-Run

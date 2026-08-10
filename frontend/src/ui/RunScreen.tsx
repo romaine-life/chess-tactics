@@ -7,7 +7,7 @@ import { levelParTurns, speedBonusClockMs, speedBonusRemainingMs, speedBonusTent
 import type { GameState, Piece, Vec } from '../core/types';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { InnerChromeBox } from './shared/ChromeBox';
-import { CHROME_LEAF_FILL_SURFACE } from './shared/chromeSurfacePolicy';
+import { CHROME_LEAF_FILL_SURFACE, leafSurfacePhase } from './shared/chromeSurfacePolicy';
 import { TitleBarStatus } from './shell/TitleBarControls';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleRoute, type TitleRouteSegment } from './shell/TitleRoute';
@@ -37,6 +37,7 @@ import {
   canLeaveSectio,
   canUndoRunBattleMove,
   captureRunBattleUndo,
+  chargeRunBattleUndoCheckpoint,
   closeBattle,
   deditioGoldTenths,
   hasLipsanon,
@@ -65,6 +66,7 @@ import {
   type RunBattleNotice,
   type RunCardOffer,
   type RunDocument,
+  type RunPhase,
   type LipsanonId,
 } from '../run/model';
 import {
@@ -161,6 +163,21 @@ type RunScreenView = RunWorkspaceView;
 
 function visibleLipsanonCount(run: RunDocument): number {
   return run.lipsana.filter((lipsanonId) => Boolean(LIPSANON_BY_ID[lipsanonId])).length;
+}
+
+/**
+ * Phases whose workspace paints an installed opaque raster over the whole environment
+ * column, so the shell's battlefield backdrop reaches no pixel behind them and is dropped
+ * (`.skirmish-screen.run-workspace-owns-environment`). Both mount the `run-victory`
+ * workspace background at cover fit over the shell's own opaque surface fill.
+ *
+ * This is a claim about pixels, so re-measure it rather than extend it by eye: paint
+ * `.skirmish-screen::before` a flat colour on the live phase and count the pixels that
+ * change. A phase that yields its fill to a retained scene — Sectio's room, which hides
+ * `.shell-workspace-fill` — does NOT qualify, and keeps the backdrop.
+ */
+export function runWorkspaceOwnsEnvironment(phase: RunPhase | undefined): boolean {
+  return phase === 'victory' || phase === 'aftermath';
 }
 
 function runBattleProgress(run: RunDocument): {
@@ -1502,6 +1519,7 @@ function AftermathPanel({
           <ChromeButton unit="inner-text-button"
             data-testid="run-aftermath-back"
             className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
+            style={leafSurfacePhase(0)}
             onClick={onReviewBattle}
           >
             Back
@@ -1510,6 +1528,7 @@ function AftermathPanel({
         <ChromeButton unit="inner-text-button"
           data-testid="run-aftermath-continue"
           className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+          style={leafSurfacePhase(1)}
           onClick={() => {
             replace(leaveAftermath(run));
             clearMatch();
@@ -1545,7 +1564,7 @@ function VictoryPanel({ run }: { run: RunDocument }): ReactElement {
         <RunGoldAmount valueTenths={run.goldTenths} />
       </p>
       <ChromeButton unit="inner-text-button"
-        className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
+        className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active', 'run-victory-finish')}
         onClick={() => {
           // Same as Abandon: the Run is closed locally before this suspends, so the finished
           // War does not hold the player on an empty workspace while its row is deleted.
@@ -1730,6 +1749,7 @@ function RunBattlefieldPanel({
         replace(restored);
         return true;
       },
+      chargeEarlier: (checkpoint) => chargeRunBattleUndoCheckpoint(checkpoint),
     } satisfies RunBattleUndoAdapter,
     onVictory: (report) => {
       if (onReviewRewards) {
@@ -2155,6 +2175,7 @@ export function RunScreen({
         {form.add(runActivity({
           id: sceneInstance,
           testId: 'run-screen',
+          className: runWorkspaceOwnsEnvironment(shellRun?.phase) ? 'run-workspace-owns-environment' : undefined,
           controlsContent: shellRun ? (
             <RunMetaControls
               run={shellRun}

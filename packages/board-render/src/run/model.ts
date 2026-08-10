@@ -156,14 +156,24 @@ export const RUN_CARD_SPANS: readonly (2 | 4)[] = Object.freeze([2, 4]);
 
 /**
  * What a new Run is created under unless the player chooses otherwise: the two-by-two catalog,
- * turnable at placement.
+ * turnable at placement, priced by material weighted by density.
  *
- * One consequence to know rather than discover. The SHIPPED rarity rule is still the material
- * band, and at a span of two that leaves six distinct commons against sixteen pile seats -- so a
- * pile fills those seats by repeating commons rather than by shrinking. The mode is playable and
- * the repetition is visible; it resolves when the rarity rule moves, which is the open piece.
+ * Density is the default because board space is the scarce thing a formation game is played on:
+ * the same material in fewer cells is worth more, and a market that cannot say so prices a Queen
+ * on one square the same as two Knights on two. Flat material remains a mode, not the baseline.
+ *
+ * Two consequences to know rather than discover.
+ *
+ * The SHIPPED rarity rule is still the material band, and at a span of two that leaves six
+ * distinct commons against sixteen pile seats -- so a pile fills those seats by repeating commons
+ * rather than by shrinking. The mode is playable and the repetition is visible; it resolves when
+ * the rarity rule moves, which is the open piece.
+ *
+ * The early-market ceiling is a VALUE ceiling (`runSectioCardMaxValue`), so under density an offer
+ * at the ceiling may cost more than the ceiling reads. It still cannot outrun the opening purse:
+ * the dearest card the six-value band admits is a lone Rook at six gold against a starting eight.
  */
-export const DEFAULT_RUN_RULES: RunRules = Object.freeze({ cardSpan: 2, mayRotate: true, pricing: 'material' });
+export const DEFAULT_RUN_RULES: RunRules = Object.freeze({ cardSpan: 2, mayRotate: true, pricing: 'density' });
 
 /**
  * What a Run written before rules existed was already playing: the wide catalog, turnable. NOT the
@@ -3473,6 +3483,29 @@ export function undoRunBattleMove(
     cards: cloneRunBattleUndoCards(checkpoint.cards),
     battleRuntime: cloneRunBattleRuntime(checkpoint.battleRuntime),
   });
+}
+
+/**
+ * Charge a checkpoint older than one just restored for the Undo that restoring it cost.
+ *
+ * A checkpoint records the purse the Battle held before its move, so it is a photograph of a
+ * moment, not a running balance. Undoing back to it restores that photograph -- including
+ * gold that has since been spent undoing everything in between, which would make the whole
+ * walk back through a Battle cost the single gold of its last step. Every earlier checkpoint
+ * therefore pays the price the moment it is passed over, and the purse it will restore stays
+ * the one the player would really be holding there.
+ *
+ * The floor is the empty purse rather than a debt: a checkpoint too poor to buy its own Undo
+ * is unreachable, and `canUndoRunBattleMove` already says so from the price alone. Letting it
+ * go negative would say the same thing by making the checkpoint malformed instead.
+ */
+export function chargeRunBattleUndoCheckpoint(
+  checkpoint: RunBattleUndoCheckpoint,
+): RunBattleUndoCheckpoint {
+  return {
+    ...checkpoint,
+    goldTenths: Math.max(0, checkpoint.goldTenths - RUN_BATTLE_UNDO_COST_TENTHS),
+  };
 }
 
 /**
