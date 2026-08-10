@@ -1,3 +1,25 @@
+"""Build a Blender file for tuning a unit's BODY and ACCENT palettes separately.
+
+A single ColorRamp maps by brightness alone, so it cannot tell stone from gold: the
+king's crown came out navy because it happened to be bright, not because anything
+decided it should. Measured, the accented pieces had zero warm pixels.
+
+The fix is Blender's own Material Index pass. Each material carries a Pass Index, an
+ID Mask node turns "index == N" into a mask, and two ColorRamps run in parallel with
+the mask choosing between them per pixel. Body index 1, crown 2. That took the king
+from 0% warm pixels to 32.5%.
+
+Mask anti-aliasing is off deliberately: a fractional mask blends the two palettes and
+produces colours belonging to neither.
+
+  blender --background --python build_accent_filter_lab.py
+  env: SRC (piece blend), BTP (BlenderToPixels.blend), OUT (render), LAB_OUT (blend)
+
+Known limit: the king's gold and red velvet are ONE material, separated by vertex
+colours inside it, which the compositor cannot see. The velvet therefore lands on the
+dark end of the gold ramp rather than staying red; splitting that mesh into two
+materials would fix it.
+"""
 import bpy, os, math, mathutils
 
 SPRITE = 51; BLOCK = 7
