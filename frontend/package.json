@@ -46,6 +46,7 @@
     "verify:premove-cancel": "node scripts/verify-premove-cancel.mjs",
     "verify:royal-fork": "node scripts/verify-royal-fork-bounty.mjs",
     "verify:manubiae": "node scripts/verify-manubiae.mjs",
+    "verify:scene-retention": "node scripts/verify-scene-retention.mjs",
     "verify:icon-seats": "node scripts/verify-icon-seats.mjs"
   },
   "devDependencies": {
