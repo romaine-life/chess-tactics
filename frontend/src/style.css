@@ -23227,13 +23227,14 @@ button.tileset-relationship-cell {
   grid-column: 1 / -1;
 }
 
-/* Account/browser Run adoption is a decision made with two buttons, not a
-   framed record of its own. The Run section already supplies the surrounding
-   structure, so the conflict copy and actions sit directly in that flow. */
+/* Account/browser Run adoption is a decision made with two buttons, not a framed record of its
+   own. It is answered inside the Current Run detail column now (ADR-0557), which already
+   supplies the head, the body inset and the two-column action row — so the copy carries no
+   padding of its own and the buttons are ordinary .ce-preview-actions. It used to stand in the
+   choice column, in the seat the Current Run row occupies, and paid its own inset for that. */
 .run-adoption-conflict {
   display: grid;
   gap: var(--ds-stack);
-  padding: var(--ds-space-2) var(--ds-space-2) 0;
 }
 
 .run-adoption-conflict-copy {
@@ -23241,7 +23242,7 @@ button.tileset-relationship-cell {
   gap: var(--ds-inline-tight);
 }
 
-.run-adoption-conflict :is(h3, p) {
+.run-adoption-conflict p {
   margin: 0;
 }
 

@@ -300,39 +300,15 @@ function RunPanel({
                   <div className="settings-row-copy"><h4>Loading Runs…</h4></div>
                 </section>
               ) : null}
-              {presentation.adoptionConflict ? (
-                <div className="run-adoption-conflict" role="alert" data-testid="run-adoption-conflict">
-                  <div className="run-adoption-conflict-copy">
-                    <h3>Two active Runs</h3>
-                    <p>This browser has {presentation.adoptionConflict.browserRun.war.name}; your account has {presentation.adoptionConflict.accountRun.war.name}. Choose which one the account keeps.</p>
-                  </div>
-                  <div className="run-inline-actions">
-                    <ChromeButton unit="inner-text-button"
-                      className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
-                      data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                      data-testid="run-keep-account"
-                      onClick={keepAccountRun}
-                    >
-                      Keep account Run
-                    </ChromeButton>
-                    <ChromeButton unit="inner-text-button"
-                      className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-                      data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
-                      data-testid="run-adopt-browser"
-                      disabled={presentation.syncing}
-                      onClick={() => { void adoptBrowserRun(); }}
-                    >
-                      Adopt browser Run
-                    </ChromeButton>
-                  </div>
-                </div>
-              ) : null}
               {/* The row keeps its place when no Run exists — disabled like the Continue
                   rows ("Nothing to continue") and the locked Ataraxia tiers, so the
                   resume point stays learnable where it will appear (ADR-0289's
-                  visible-but-disabled language). It only leaves the list while the
-                  adoption conflict card speaks for the current Run instead. */}
-              {!presentation.adoptionConflict && (presentedRun || (hydrated && !loading)) ? (
+                  visible-but-disabled language). It keeps its place during an adoption
+                  conflict too: that question belongs to whoever is going to resume, and a
+                  card standing in the row's seat removed the expected control from a player
+                  who was only ever going to start a new Run (ADR-0557). The question is now
+                  what the row OPENS, and the status line below still says it is waiting. */}
+              {presentedRun || (hydrated && !loading) ? (
                 <ChromeNavButton unit="inner-list-row"
                   to={PLAY_RUN_CURRENT_SELECTOR_HREF}
                   className={chromeUnitClassNames('inner-list-row', 'settings-row play-choice-row', !presentedRun && 'is-disabled', choice === 'current' && 'active is-selected')}
@@ -394,7 +370,42 @@ function RunPanel({
         className="play-run-detail-slot"
         sceneInstance={choice ? `play/run/${choice}` : 'play/run'}
       >
-        {choice === 'current' && presentedRun ? (
+        {/* Which Run the account keeps is a question for the player who is about to RESUME one,
+            so it is answered here, behind Current Run, in the seat that already holds "what
+            happens if I take this row". Someone starting a new Run never has to read it —
+            starting one is itself a third answer, and it was already never blocked by the
+            question (ADR-0557). */}
+        {choice === 'current' && presentation.adoptionConflict ? (
+          <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Two active Runs" data-testid="run-detail-current">
+            <div className="ce-selected-head"><h2>Two active Runs</h2></div>
+            <div className="play-detail-body">
+              <div className="run-adoption-conflict" data-testid="run-adoption-conflict">
+                <div className="run-adoption-conflict-copy">
+                  <p>This browser has {presentation.adoptionConflict.browserRun.war.name}; your account has {presentation.adoptionConflict.accountRun.war.name}. Choose which one the account keeps.</p>
+                </div>
+              </div>
+            </div>
+            <div className="ce-preview-actions run-adoption-decision">
+              <ChromeButton unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
+                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                data-testid="run-keep-account"
+                onClick={keepAccountRun}
+              >
+                <span>Keep account Run</span>
+              </ChromeButton>
+              <ChromeButton unit="inner-text-button"
+                className={chromeUnitClassNames('inner-text-button', 'ce-link-button')}
+                data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+                data-testid="run-adopt-browser"
+                disabled={presentation.syncing}
+                onClick={() => { void adoptBrowserRun(); }}
+              >
+                <span>Adopt browser Run</span>
+              </ChromeButton>
+            </div>
+          </aside>
+        ) : choice === 'current' && presentedRun ? (
           <aside className="menu-dest-col menu-dest-preview ce-preview-col play-detail-col" aria-label="Current Run" data-testid="run-detail-current">
             <div className="ce-selected-head"><h2>Current Run</h2></div>
             <div className="play-detail-body">

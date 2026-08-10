@@ -143,6 +143,16 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain('data-testid="run-adoption-conflict"');
     expect(playMenu).not.toContain('<InnerChromeBox className="play-level-card" role="alert">');
     expect(style).toContain('.run-adoption-conflict {');
+    // The question is answered BEHIND Current Run, never in its seat: a card standing where the
+    // row belongs removed an expected control from a player who was only going to start a new
+    // Run (ADR-0557). So the row's presence cannot depend on the conflict, and the conflict is
+    // rendered inside the detail column the row opens.
+    expect(playMenu).not.toContain('!presentation.adoptionConflict &&');
+    expect(playMenu).toContain("{choice === 'current' && presentation.adoptionConflict ? (");
+    expect(playMenu).toMatch(/choice === 'current' && presentation\.adoptionConflict[\s\S]*?data-testid="run-adoption-conflict"/);
+    // Ambient only: the status line keeps saying the account is waiting on an answer, so the
+    // question is discoverable without a card taking the row's place.
+    expect(playMenu).toContain('<p className="play-content-warning" role="status">');
     // Unboxed does not mean unmaterialed: the two decision buttons are leaf controls over
     // the live vista, so they carry the same oak as every other Run leaf (ADR-0433).
     expect(playMenu).toMatch(/<ChromeButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-keep-account"/);
