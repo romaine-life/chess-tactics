@@ -150,6 +150,49 @@ export function EditorLevelRow({
   const actionContent = actions === undefined ? undefined : actions;
   const hasActions = Boolean(rowActions?.length || actionContent);
   const containerIsButton = Boolean(onSelect);
+  const preview = level ? (
+    <GatedLevelThumbnail
+      level={level}
+      width={levelRowPreviewWidth(framed)}
+      authoringPreview={!levelThumbnailUrl(level.id)}
+    />
+  ) : (
+    <span className="settings-row-thumb-empty" />
+  );
+
+  // An unframed MEMBER hands its box TWO CELLS — preview, then everything else — so the rail
+  // between them is the box's own column line. A framed row is a single object that splits itself
+  // into panes and keeps the preview inside.
+  if (!framed) {
+    return (
+      <>
+        <div className="ce-editor-level-thumb ce-editor-level-cell-preview">{preview}</div>
+        <ActionListRow item={{
+          id: levelId,
+          title: `${showOrdinal ? `${index + 1}. ` : ''}${rowName}`,
+          description: <p>{goalLine}</p>,
+          heading: (
+            <div className="ce-editor-level-heading">
+              {heading ?? <h4 id={headingId}>{showOrdinal ? `${index + 1}. ` : ''}{rowName}</h4>}
+            </div>
+          ),
+          descriptionId,
+          framed: false,
+          selected: false,
+          readOnly: !hasActions,
+          neutral: !containerIsButton,
+          className: `${className} ce-editor-level-cell-body`,
+          copyClassName,
+          ariaLabel,
+          actionsLabel: actionsLabel ?? `Actions for ${rowName}`,
+          onSelect,
+          actions: rowActions,
+          actionContent,
+        }} />
+      </>
+    );
+  }
+
   return (
     <ActionListRow item={{
       id: levelId,
@@ -169,19 +212,14 @@ export function EditorLevelRow({
       // control in the row off centre.
       leadingChrome: false,
       leadingClassName: 'ce-editor-level-thumb',
-      // The rail between the preview and the copy is what makes the row read as one object split
-      // into panes, framed or not. In a list of unframed members those rails line up down the
-      // column and meet the box's own row rails — a table, which is what this is.
-      leadingDivider: true,
-      leading: level ? (
-          <GatedLevelThumbnail
-            level={level}
-            width={levelRowPreviewWidth(framed)}
-            authoringPreview={!levelThumbnailUrl(level.id)}
-          />
-        ) : (
-          <span className="settings-row-thumb-empty" />
-        ),
+      // A FRAMED row draws the rail between its preview and its copy itself, because the row's own
+      // frame is what the rail's ends meet. An unframed MEMBER must not: its ends meet the row
+      // boundaries of the box around it, which belong to that box's topology, and a rail drawn
+      // here can only cap itself as though it met a frame — landing a terminator in the middle of
+      // the row rail it actually crosses. The box declares a COLUMN instead, and the crossing
+      // becomes the four-way junction the grid places. See SectionBox's `columns`.
+      leadingDivider: framed,
+      leading: preview,
       fillRole: framed ? EDITOR_COLUMN_BOX_FILL_ROLE : undefined,
       framed,
       // A framed row shows which one is current by lighting its own frame. An unframed member has

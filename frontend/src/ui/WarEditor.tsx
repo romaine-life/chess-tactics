@@ -281,6 +281,11 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
                     title="Battles"
                     titleId="war-editor-battles-title"
                     className="war-battles-box"
+                    // The preview is a COLUMN of this box, not a rule each row draws: the rail
+                    // between the two belongs to the box's topology, so where it meets every row
+                    // boundary the grid places a four-way junction. A rail drawn inside a row
+                    // could only cap itself as though it met a frame.
+                    columns={['115px', 'minmax(0, 1fr)']}
                     members={[
                       ...(orderedBattles.length === 0 ? [{
                         id: 'empty',

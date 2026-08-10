@@ -34,6 +34,15 @@ import { CHROME_STRUCTURAL_FILL_ROLE } from './chromeSurfacePolicy';
 export type SectionBoxMember = {
   /** Stable identity for the row, so React keeps it across reorders. */
   id: string;
+  /**
+   * The member's cells — ONE node per declared column, in order. With the default single column
+   * that is just the member's content; with more, the box's own vertical rail runs between them
+   * and every crossing with a row boundary is a junction the grid places.
+   *
+   * This is why a compartment inside a member is a COLUMN and never a rule the member draws: a
+   * hand-placed rule is outside the topology, so it can only cap its ends as if they met a frame,
+   * and it lands that terminator in the middle of the row rail it actually crosses.
+   */
   content: ReactNode;
   className?: string;
 };
@@ -49,6 +58,12 @@ type SectionBoxCommon = {
 type SectionBoxProps = SectionBoxCommon & (
   | {
     members: readonly SectionBoxMember[];
+    /**
+     * The box's own columns, when its members are split into compartments — a preview beside its
+     * copy. The vertical rail between them belongs to the box, so it crosses every row boundary
+     * as a junction instead of terminating against nothing. Defaults to one full-width column.
+     */
+    columns?: readonly string[];
     children?: never;
     contentId?: never;
     disclosure?: never;
@@ -89,15 +104,16 @@ export function SectionBox({
 
   if (shape.members) {
     // The head is row 0 of the grid, so the rail under it and the rails between members are the
-    // same rails, laid and capped by one topology.
+    // same rails, laid and capped by one topology. It spans every column: the box's name is not
+    // one of the compartments its members are split into.
     return (
       <DividedInnerChromeBox
-        columns={['minmax(0, 1fr)']}
+        columns={shape.columns ?? ['minmax(0, 1fr)']}
         className={`${boxClassName} section-box-divided`}
         fillRole={CHROME_STRUCTURAL_FILL_ROLE}
         aria-labelledby={titleId}
       >
-        <ChromeDividedGridRow className="section-box-head">
+        <ChromeDividedGridRow className="section-box-head section-box-head-row">
           <SectionBoxHeading title={title} titleId={titleId} />
         </ChromeDividedGridRow>
         {shape.members.map((member) => (

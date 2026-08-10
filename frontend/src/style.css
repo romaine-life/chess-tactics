@@ -19323,6 +19323,12 @@ button.tileset-relationship-cell {
 /* A row that is a MEMBER of a SettingsGroup rather than a slab of its own. The group's box is
    already the frame and already wears the marble, so the member carries only the row layout —
    and the kit's inner rail between members is what tells them apart. */
+/* The box's name is not one of the compartments its members are split into, so the head spans
+   every column the box declares. */
+.section-box-head-row > * {
+  grid-column: 1 / -1;
+}
+
 /* The rail between members runs the full inner width, so the body takes no inline padding and each
    member carries its own — which also lands a member's title on the same line as the group's name
    above it, instead of one indent in from it. */
@@ -19837,12 +19843,30 @@ button.tileset-relationship-cell {
   padding: 0;
 }
 
-/* An unframed MEMBER of a list box spends no inner rail, so its preview fills the row's whole
-   86px rather than 86 less a rail each side — and the compartment has to widen with it or the
-   picture is squeezed narrower than the board it holds. 86 at the board's 4:3 window is 115.
-   Its twin is levelRowPreviewWidth() in shared/EditorLevelRow.tsx, which sizes the thumbnail. */
-.settings-row.ce-editor-level-row.action-list-row-member {
-  --ce-level-row-preview-inline: 115px;
+/* A member row hands the box TWO CELLS. The preview cell is the box's first column — its width is
+   the column, declared where the box declares its columns — and the body cell carries only the
+   copy and the verbs, because the rail between them is the box's own column line now.
+   86px at the board's 4:3 window is 115; its twin is levelRowPreviewWidth() in
+   shared/EditorLevelRow.tsx, which sizes the thumbnail to fill it. */
+/* Both cells name their column outright. The framed row places its panes by `grid-area`, and a
+   named area that its parent no longer defines does not fall back to "first free cell" — it drops
+   the cell into auto-placement and shuffles the row. */
+.ce-editor-level-thumb.ce-editor-level-cell-preview {
+  align-self: stretch;
+  block-size: 86px;
+  display: block;
+  grid-area: auto;
+  grid-column: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+}
+
+.settings-row.ce-editor-level-row.ce-editor-level-cell-body {
+  block-size: 86px;
+  grid-column: 2;
+  grid-template-areas: "copy actions";
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-block-size: 86px;
 }
 
 /* Draft cards keep navigation and management controls as sibling buttons. This transparent

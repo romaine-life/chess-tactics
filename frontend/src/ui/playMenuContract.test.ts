@@ -368,7 +368,11 @@ describe('Run rule options are a departure from the defaults, not a step in setu
     // ChromeDivider has no `junctions` prop at all, and the parts that suppress caps are private.
     expect(prepSection).toContain('members: readonly SectionBoxMember[]');
     expect(prepSection).toContain('children?: never');
-    expect(prepSection).toMatch(/<DividedInnerChromeBox[\s\S]*?columns=\{\['minmax\(0, 1fr\)'\]\}/);
+    // A box's members can be split into compartments, and the rail between them is the BOX's
+    // column line — so it crosses every row boundary as a junction the grid places, instead of a
+    // rail drawn inside a row capping itself as though it met a frame.
+    expect(prepSection).toMatch(/<DividedInnerChromeBox[\s\S]*?columns=\{shape\.columns \?\? \['minmax\(0, 1fr\)'\]\}/);
+    expect(prepSection).toContain('columns?: readonly string[];');
     const chromeBox = readFileSync(new URL('./shared/ChromeBox.tsx', import.meta.url), 'utf8');
     expect(chromeBox).not.toContain('junctions?:');
     expect(chromeBox).toContain('data-chrome-divider-junctions="endpoints"');
