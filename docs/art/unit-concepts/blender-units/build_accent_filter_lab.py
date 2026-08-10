@@ -15,10 +15,9 @@ produces colours belonging to neither.
   blender --background --python build_accent_filter_lab.py
   env: SRC (piece blend), BTP (BlenderToPixels.blend), OUT (render), LAB_OUT (blend)
 
-Known limit: the king's gold and red velvet are ONE material, separated by vertex
-colours inside it, which the compositor cannot see. The velvet therefore lands on the
-dark end of the gold ramp rather than staying red; splitting that mesh into two
-materials would fix it.
+Accents chain: each is a Pass Index and the palette that index wears, so any number
+of them stack. The king runs three -- navy body, gold crown, red velvet -- after
+`split_crown_materials.py` divides the crown mesh on its own region map.
 """
 import bpy, os, math, mathutils
 
@@ -27,7 +26,10 @@ BODY = [(0.00000,"#0d1526"),(0.05139,"#172a4a"),(0.09918,"#223866"),(0.15729,"#2
 # Gold for the crown. Same shape as the body ramp -- dark stop first, positions on the
 # render's linear luminance, not on PNG-measured values.
 GOLD = [(0.00000,"#2a1c06"),(0.05139,"#5c4310"),(0.09918,"#8a6a1e"),(0.15729,"#b8933a"),(0.28899,"#e2c268")]
-ACCENT_INDEX = 2
+VELVET = [(0.00000,"#2a0709"),(0.05139,"#5a1013"),(0.09918,"#8a1c1c"),(0.15729,"#b03028"),(0.28899,"#d4544a")]
+# Each accent is a material Pass Index and the palette that index should wear. Masks
+# chain in order, so a later one paints over an earlier one where they overlap.
+ACCENTS = [(2, "CROWN gold", GOLD), (3, "CROWN velvet", VELVET)]
 
 def srgb(h):
     v=h.lstrip("#"); out=[]
@@ -51,7 +53,12 @@ for o in bpy.data.objects:
 # Body 1, crown 2. This is the split the compositor masks on.
 for m in bpy.data.materials:
     n = m.name.lower()
-    m.pass_index = ACCENT_INDEX if ("crown" in n or "tiara" in n or "gold" in n) else 1
+    if "velvet" in n:
+        m.pass_index = 3
+    elif "crown" in n or "tiara" in n or "gold" in n:
+        m.pass_index = 2
+    else:
+        m.pass_index = 1
 
 lows=[min((o.matrix_world @ v.co).z for v in o.data.vertices) for o in meshes if o.data.vertices]
 if lows:
@@ -118,7 +125,8 @@ def make_ramp(stops):
     return r
 
 body = make_ramp(BODY)
-gold = make_ramp(GOLD)
+body.label = "BODY palette"
+current = body.outputs["Color"]
 
 # ID Mask turns "this pixel's material index == ACCENT_INDEX" into a mask, which then
 # chooses between the two palettes. Anti-aliasing off: a fractional mask would blend
@@ -132,35 +140,40 @@ mask_pix = tree.nodes.new("CompositorNodePixelate")
 next(s for s in mask_pix.inputs if s.name == "Size").default_value = BLOCK
 tree.links.new(rl.outputs["Material Index"], mask_pix.inputs[0])
 
-idm = tree.nodes.new("CompositorNodeIDMask")
-# Blender 5 moved these off the node onto its input sockets.
-idm.inputs["Index"].default_value = ACCENT_INDEX
-if "Anti-Alias" in idm.inputs:
-    idm.inputs["Anti-Alias"].default_value = False
-tree.links.new(mask_pix.outputs[0], idm.inputs["ID value"])
+for offset, (index, label, stops) in enumerate(ACCENTS):
+    ramp = make_ramp(stops)
+    ramp.label = label
+    ramp.location = (200, -60 - offset * 300)
+    idm = tree.nodes.new("CompositorNodeIDMask")
+    idm.inputs["Index"].default_value = index
+    if "Anti-Alias" in idm.inputs:
+        # A fractional mask blends two palettes and yields colours in neither.
+        idm.inputs["Anti-Alias"].default_value = False
+    idm.location = (0, -320 - offset * 300)
+    tree.links.new(mask_pix.outputs[0], idm.inputs["ID value"])
 
-mix = tree.nodes.new("ShaderNodeMix"); mix.data_type="RGBA"
-rgba_in=[s for s in mix.inputs if s.type=="RGBA"]
-tree.links.new(idm.outputs["Alpha"], mix.inputs["Factor"])
-tree.links.new(body.outputs["Color"], rgba_in[0])
-tree.links.new(gold.outputs["Color"], rgba_in[1])
-rgba_out=[s for s in mix.outputs if s.type=="RGBA"][0]
+    mix = tree.nodes.new("ShaderNodeMix")
+    mix.data_type = "RGBA"
+    mix.location = (460 + offset * 220, 80)
+    rgba_in = [s for s in mix.inputs if s.type == "RGBA"]
+    tree.links.new(idm.outputs["Alpha"], mix.inputs["Factor"])
+    tree.links.new(current, rgba_in[0])
+    tree.links.new(ramp.outputs["Color"], rgba_in[1])
+    current = [s for s in mix.outputs if s.type == "RGBA"][0]
 
 sep = tree.nodes.new("CompositorNodeSeparateColor")
 seta = tree.nodes.new("CompositorNodeSetAlpha")
 tree.links.new(feeder, sep.inputs[0])
-tree.links.new(rgba_out, seta.inputs["Image"])
+tree.links.new(current, seta.inputs["Image"])
 tree.links.new(sep.outputs.get("Alpha") or sep.outputs[-1], seta.inputs["Alpha"])
 for l in list(sink.links): tree.links.remove(l)
 tree.links.new(seta.outputs["Image"], sink)
 
 # Label the two ramps so they are tellable apart in the node editor -- otherwise
 # they are two identical-looking ColorRamps and it is a coin flip which is which.
-body.label = "BODY palette"
-gold.label = "CROWN palette"
-body.location = (200, 220); gold.location = (200, -60)
-idm.location = (0, -320); mix.location = (460, 80)
-sep.location = (200, -320); seta.location = (700, 80)
+body.location = (200, 220)
+sep.location = (200, -620)
+seta.location = (940, 80)
 
 scene.render.filepath = os.environ["OUT"]
 bpy.ops.render.render(write_still=True)
