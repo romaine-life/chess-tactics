@@ -123,12 +123,21 @@ gold = make_ramp(GOLD)
 # ID Mask turns "this pixel's material index == ACCENT_INDEX" into a mask, which then
 # chooses between the two palettes. Anti-aliasing off: a fractional mask would blend
 # gold into navy and produce colours in neither palette.
+# Pixelate the index pass on the SAME grid as the image before masking. The mask was
+# reading the full-resolution Material Index while the colour came off the pixelated
+# image, so the mask edge followed the crown's true silhouette and the colour sat on a
+# 7px grid -- every boundary block kept part of the body palette, which shows up as
+# blue pixels poking out of the crown.
+mask_pix = tree.nodes.new("CompositorNodePixelate")
+next(s for s in mask_pix.inputs if s.name == "Size").default_value = BLOCK
+tree.links.new(rl.outputs["Material Index"], mask_pix.inputs[0])
+
 idm = tree.nodes.new("CompositorNodeIDMask")
 # Blender 5 moved these off the node onto its input sockets.
 idm.inputs["Index"].default_value = ACCENT_INDEX
 if "Anti-Alias" in idm.inputs:
     idm.inputs["Anti-Alias"].default_value = False
-tree.links.new(rl.outputs["Material Index"], idm.inputs["ID value"])
+tree.links.new(mask_pix.outputs[0], idm.inputs["ID value"])
 
 mix = tree.nodes.new("ShaderNodeMix"); mix.data_type="RGBA"
 rgba_in=[s for s in mix.inputs if s.type=="RGBA"]
