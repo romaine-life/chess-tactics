@@ -322,6 +322,26 @@ seta.location = (940, 80)
 scene.render.filepath = os.environ["OUT"]
 bpy.ops.render.render(write_still=True)
 if os.environ.get("LAB_OUT"):
+    # The file opens on Layout, and factory Layout has no image editor -- so a render
+    # pops a separate window, which has to be closed to see the model again. Retype
+    # the Outliner (a small top-right pane, the least useful of the four here) into an
+    # Image Editor on the render, so it is visible in place while working.
+    #
+    # area.type and space.image are plain data and DO take from a script, unlike the
+    # active workspace. The render above has already run, so Render Result exists to
+    # point at; arranging this before the render would leave the pane blank.
+    for _ws in bpy.data.workspaces:
+        for _scr in _ws.screens:
+            for _area in _scr.areas:
+                if _ws.name == "Layout" and _area.type == "OUTLINER":
+                    _area.type = "IMAGE_EDITOR"
+    _rr = bpy.data.images.get("Render Result")
+    if _rr is not None:
+        for _ws in bpy.data.workspaces:
+            for _scr in _ws.screens:
+                for _area in _scr.areas:
+                    if _area.type == "IMAGE_EDITOR":
+                        _area.spaces[0].image = _rr
     bpy.ops.wm.save_as_mainfile(filepath=os.environ["LAB_OUT"])
     print("LAB_SAVED", os.environ["LAB_OUT"])
 print("ACCENT_DONE", [(m.name, m.pass_index) for m in bpy.data.materials])
