@@ -772,9 +772,9 @@ describe('Manubiae — what the board pays for', () => {
     // The catalog is the source. A named constant that disagreed with it would be a second
     // price for the same deed, which is exactly what naming the category was meant to end.
     expect(RUN_MANUBIAE.map((entry) => entry.id)).toEqual([
-      'advantageous-capture', 'royal-fork', 'long-capture', 'humble-mate', 'discovered-check',
-      'long-check', 'double-check', 'en-passant', 'smothered-mate', 'promotion-mate',
-      'underpromotion-mate',
+      'advantageous-capture', 'knight-fork', 'royal-fork', 'long-capture', 'humble-mate',
+      'discovered-check', 'long-check', 'double-check', 'en-passant', 'smothered-mate',
+      'promotion-mate', 'underpromotion-mate',
     ]);
     expect(new Set(RUN_MANUBIAE.map((entry) => entry.id)).size).toBe(RUN_MANUBIAE.length);
     expect(RUN_EN_PASSANT_BOUNTY_TENTHS).toBe(50);
@@ -814,6 +814,26 @@ describe('Manubiae — what the board pays for', () => {
     // The scaled entry's own words are written FROM those rates, so the sentence in the
     // Enchiridion cannot drift from the gold the player is handed.
     expect(RUN_MANUBIUM_BY_ID['underpromotion-mate'].priceNote).toBe('60 for a Rook, 80 for a Bishop or Knight');
+  });
+
+  it("accelerates a Knight's fork, so each further prong is worth more than the last", () => {
+    const paid = (targets: number) => manubiumGoldTenths({ id: 'knight-fork', targets });
+    expect(paid(0)).toBe(0);
+    expect(paid(1)).toBe(0); // one unit attacked is not a fork
+    expect(paid(2)).toBe(5);
+    expect(paid(3)).toBe(15);
+    expect(paid(4)).toBe(30);
+    expect(paid(5)).toBe(50);
+    // Each step up is bigger than the one before it — a flat rate would say a Knight hitting
+    // four things is twice a Knight hitting two, and it is nothing of the sort.
+    const steps = [2, 3, 4, 5, 6].map((n) => paid(n) - paid(n - 1));
+    for (let i = 1; i < steps.length; i += 1) expect(steps[i]).toBeGreaterThan(steps[i - 1]);
+    // A plain two-prong fork lands UNDER the royal fork it is often a lesser version of, and
+    // three prongs passes it. That order is the whole reason the rate is five and not ten.
+    expect(paid(2)).toBeLessThan(manubiumGoldTenths({ id: 'royal-fork' }));
+    expect(paid(3)).toBeGreaterThan(manubiumGoldTenths({ id: 'royal-fork' }));
+    expect(RUN_MANUBIUM_BY_ID['knight-fork'].priceNote)
+      .toBe('5 for two units, 15 for three, 30 for four, 50 for five');
   });
 
   it('pays a humble mate for the distance the mating unit falls short of a Queen', () => {

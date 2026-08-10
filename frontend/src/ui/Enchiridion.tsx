@@ -358,6 +358,21 @@ const MANUBIUM_EXAMPLE: Readonly<Record<ManubiumId, ManubiumExample>> = {
     opened: [],
     seed: 811,
   },
+  'knight-fork': {
+    // Three prongs at once, and a Knight none of them can answer: the Queen, Rook and Bishop it
+    // strikes all move on lines that do not reach the square it landed on. The marked empty
+    // square below-left is where it came from.
+    size: { cols: 5, rows: 5 },
+    pieces: [
+      unit('player', 'knight', 2, 2),
+      unit('enemy', 'queen', 1, 0),
+      unit('enemy', 'rook', 3, 0),
+      unit('enemy', 'bishop', 4, 1),
+    ],
+    struck: ['1,0', '3,0', '4,1'],
+    opened: ['0,3'],
+    seed: 933,
+  },
   'royal-fork': {
     size: { cols: 5, rows: 5 },
     pieces: [unit('player', 'knight', 2, 2), unit('enemy', 'king', 3, 0), unit('enemy', 'rook', 1, 0)],

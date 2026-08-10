@@ -299,7 +299,8 @@ export type ManubiumId =
   | 'underpromotion-mate'
   | 'humble-mate'
   | 'long-capture'
-  | 'long-check';
+  | 'long-check'
+  | 'knight-fork';
 
 /** What a Pawn may become instead of a Queen. The Queen is the ordinary case, so she is not here. */
 export type UnderpromotionPieceType = Exclude<PromotionPieceType, 'queen'>;
@@ -383,6 +384,30 @@ export const RUN_HUMBLE_MATE_TENTHS_PER_POINT = 3;
 export const RUN_LONG_REACH_SQUARES = 8;
 
 /**
+ * What each further rung of a Knight's fork is worth.
+ *
+ * The price ACCELERATES: the second unit attacked adds one of these, the third adds two, the
+ * fourth adds three, and so on, so the run of prices is 5, 15, 30, 50, 75 for two, three, four,
+ * five and six units. A flat rate per unit would say a Knight hitting four things is twice a
+ * Knight hitting two, and it is nothing of the sort — the second prong is a fork, and every
+ * prong after it is a square the enemy cannot answer, which is why the marginal one is worth
+ * more than the one before it.
+ *
+ * Five rather than ten so the plain two-prong fork lands UNDER the royal fork it is often a
+ * lesser version of; three prongs then passes it, which is the right order.
+ */
+export const RUN_KNIGHT_FORK_TENTHS_PER_RUNG = 5;
+
+/**
+ * What a Knight attacking `targets` enemy units at once pays. Nothing for fewer than two: one
+ * unit attacked is not a fork, it is just an attack.
+ */
+export function knightForkGoldTenths(targets: number): number {
+  const prongs = Math.max(0, Math.floor(targets) - 1);
+  return (prongs * (prongs + 1) / 2) * RUN_KNIGHT_FORK_TENTHS_PER_RUNG;
+}
+
+/**
  * What a mate delivered by `piece` pays — nothing at all for a Queen.
  *
  * The King's zero on the piece scale is a sentinel for "never bought" and would otherwise read
@@ -409,6 +434,14 @@ export const RUN_MANUBIAE: readonly ManubiumDefinition[] = Object.freeze([
     earnedBy: 'Capture an enemy unit worth more than the unit that takes it. A unit is worth what it started as, so a promoted pawn is still a Pawn on both sides of that comparison.',
     goldTenths: null,
     priceNote: '2 gold for each point of material won',
+  },
+  {
+    id: 'knight-fork',
+    name: "Knight's fork",
+    earnedBy: 'Attack two or more enemy units at once with a Knight, from the square it just moved to. Each further unit is worth more than the last. The fork has to hold: taking the Knight must cost the enemy more than the Knight is worth.',
+    goldTenths: null,
+    // Written from the rate rather than beside it, so the sentence cannot drift from the gold.
+    priceNote: `${knightForkGoldTenths(2)} for two units, ${knightForkGoldTenths(3)} for three, ${knightForkGoldTenths(4)} for four, ${knightForkGoldTenths(5)} for five`,
   },
   {
     id: 'royal-fork',
@@ -490,7 +523,13 @@ export type ManubiumAward =
   | { readonly id: 'advantageous-capture'; readonly marginPoints: number }
   | { readonly id: 'underpromotion-mate'; readonly piece: UnderpromotionPieceType }
   | { readonly id: 'humble-mate'; readonly piece: RunArmyPieceType }
-  | { readonly id: Exclude<ManubiumId, 'advantageous-capture' | 'underpromotion-mate' | 'humble-mate'> };
+  | { readonly id: 'knight-fork'; readonly targets: number }
+  | {
+    readonly id: Exclude<
+      ManubiumId,
+      'advantageous-capture' | 'underpromotion-mate' | 'humble-mate' | 'knight-fork'
+    >;
+  };
 
 /**
  * What a unit is worth when Manubiae compares two of them — what it STARTED as, never what
@@ -521,6 +560,7 @@ export function manubiumGoldTenths(award: ManubiumAward): number {
   }
   if (award.id === 'underpromotion-mate') return RUN_UNDERPROMOTION_MATE_TENTHS[award.piece] ?? 0;
   if (award.id === 'humble-mate') return humbleMateGoldTenths(award.piece);
+  if (award.id === 'knight-fork') return knightForkGoldTenths(award.targets);
   return RUN_MANUBIUM_BY_ID[award.id].goldTenths ?? 0;
 }
 

@@ -15,6 +15,7 @@
 import {
   applyMove,
   attacksSquare,
+  enemiesAttackedBy,
   gameEnv,
   kingCheckers,
   legalMoves,
@@ -182,11 +183,27 @@ export function manubiaeEarnedBy(game: GameState, events: readonly GameEvent[]):
     //
     // This asks only about the FORKER, never the victim. Whether the victim is defended stays
     // unasked (ADR-0527) -- what a real fork is worth to answer is the position's business.
-    if (
-      royalForkVictim(mover, game.pieces, game.size, env, RUN_ROYAL_FORK_MIN_VICTIM_VALUE)
-      && forkHolds(mover, game, env)
-    ) {
-      earned.push({ award: { id: 'royal-fork' }, at });
+    //
+    // Two entries read one fork: the royal one asks about the QUALITY of the prongs and the
+    // Knight's asks how MANY there are. A Knight striking the King and a Rook is both, and one
+    // unit's fork is one deed, so the dearer of the two pays and the other stands down --
+    // exactly the ladder the two checks and the mates already run on. Which also means
+    // `forkHolds` is asked ONCE, of the fork rather than of an entry, and only when there is a
+    // fork to ask about.
+    const forks: ManubiumAward[] = [];
+    if (royalForkVictim(mover, game.pieces, game.size, env, RUN_ROYAL_FORK_MIN_VICTIM_VALUE)) {
+      forks.push({ id: 'royal-fork' });
+    }
+    if (mover.type === 'knight') {
+      const targets = enemiesAttackedBy(mover, game.pieces, game.size, env).length;
+      // Two is where a fork starts; one unit attacked is not a fork, it is just an attack.
+      if (targets >= 2) forks.push({ id: 'knight-fork', targets });
+    }
+    if (forks.length && forkHolds(mover, game, env)) {
+      const best = forks.reduce((dearest, fork) => (
+        manubiumGoldTenths(fork) > manubiumGoldTenths(dearest) ? fork : dearest
+      ));
+      if (manubiumGoldTenths(best) > 0) earned.push({ award: best, at });
     }
   }
 

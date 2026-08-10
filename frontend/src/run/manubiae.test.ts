@@ -222,6 +222,81 @@ describe('what a committed board earns', () => {
   });
 });
 
+describe("a Knight's fork, by how many it catches", () => {
+  /** A Knight landing on (4,4), with `victims` seated on squares it attacks from there. */
+  function forkOf(...victims: Piece[]) {
+    const knight = P('player', 'knight', 2, 5);
+    return { knight, pieces: [knight, ...victims] };
+  }
+
+  it('pays two prongs, and pays more for each further one', () => {
+    const two = forkOf(P('enemy', 'rook', 3, 2), P('enemy', 'bishop', 5, 2));
+    const gotTwo = earned(two.pieces, two.knight, { x: 4, y: 4 });
+    expect(gotTwo.map((item) => item.award)).toContainEqual({ id: 'knight-fork', targets: 2 });
+
+    const three = forkOf(P('enemy', 'rook', 3, 2), P('enemy', 'bishop', 5, 2), P('enemy', 'pawn', 2, 3));
+    const gotThree = earned(three.pieces, three.knight, { x: 4, y: 4 });
+    expect(gotThree.map((item) => item.award)).toContainEqual({ id: 'knight-fork', targets: 3 });
+
+    // Accelerating, not flat: the third prong is worth more than the second was.
+    const paidTwo = manubiumGoldTenths({ id: 'knight-fork', targets: 2 });
+    const paidThree = manubiumGoldTenths({ id: 'knight-fork', targets: 3 });
+    const paidFour = manubiumGoldTenths({ id: 'knight-fork', targets: 4 });
+    expect(paidThree - paidTwo).toBeGreaterThan(paidTwo);
+    expect(paidFour - paidThree).toBeGreaterThan(paidThree - paidTwo);
+  });
+
+  it('pays nothing for attacking one unit, which is not a fork', () => {
+    const one = forkOf(P('enemy', 'rook', 3, 2));
+    expect(ids(earned(one.pieces, one.knight, { x: 4, y: 4 }))).not.toContain('knight-fork');
+  });
+
+  it('does not count a unit it cannot take', () => {
+    // An obstacle stands on a square the Knight attacks and is not an enemy unit, so the second
+    // prong is missing and there is no fork.
+    const withRock = forkOf(P('enemy', 'rook', 3, 2), P('neutral', 'rock', 5, 2));
+    expect(ids(earned(withRock.pieces, withRock.knight, { x: 4, y: 4 }))).not.toContain('knight-fork');
+  });
+
+  it('does not pay a fork the enemy can profitably take', () => {
+    // The same three prongs, with the Knight's landing square hanging: taking it is the answer,
+    // and paying for this would teach the player to hand over a Knight.
+    const hanging = forkOf(
+      P('enemy', 'rook', 3, 2),
+      P('enemy', 'bishop', 5, 2),
+      P('enemy', 'pawn', 2, 3),
+      P('enemy', 'rook', 4, 0), // sweeps the file the Knight lands on
+    );
+    expect(ids(earned(hanging.pieces, hanging.knight, { x: 4, y: 4 }))).not.toContain('knight-fork');
+  });
+
+  it('pays the DEARER of the two forks and never both, because one fork is one deed', () => {
+    // King and Rook: a royal fork at 10, and also a two-prong Knight's fork at 5.
+    const royal = forkOf(P('enemy', 'king', 3, 2), P('enemy', 'rook', 5, 2));
+    const gotRoyal = ids(earned(royal.pieces, royal.knight, { x: 4, y: 4 }));
+    expect(gotRoyal).toContain('royal-fork');
+    expect(gotRoyal).not.toContain('knight-fork');
+
+    // Add a third prong and the count overtakes it, so the Knight's fork pays in its place.
+    const wide = forkOf(P('enemy', 'king', 3, 2), P('enemy', 'rook', 5, 2), P('enemy', 'bishop', 2, 3));
+    const gotWide = ids(earned(wide.pieces, wide.knight, { x: 4, y: 4 }));
+    expect(gotWide).toContain('knight-fork');
+    expect(gotWide).not.toContain('royal-fork');
+  });
+
+  it('pays only a Knight — the same prongs from a Queen are not this deed', () => {
+    const queen = P('player', 'queen', 4, 6);
+    const pieces = [queen, P('enemy', 'rook', 4, 1), P('enemy', 'bishop', 1, 4)];
+    expect(ids(earned(pieces, queen, { x: 4, y: 4 }))).not.toContain('knight-fork');
+  });
+
+  it('pays the enemy nothing for forking the player', () => {
+    const knight = P('enemy', 'knight', 2, 5);
+    const pieces = [knight, P('player', 'rook', 3, 2), P('player', 'bishop', 5, 2)];
+    expect(earned(pieces, knight, { x: 4, y: 4 })).toEqual([]);
+  });
+});
+
 describe('a deed that reaches eight squares', () => {
   it('pays a long capture, seated where the unit landed', () => {
     // Eight up the file, the width of a whole chessboard, to take a Bishop.
