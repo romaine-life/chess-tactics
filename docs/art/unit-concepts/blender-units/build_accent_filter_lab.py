@@ -302,7 +302,10 @@ for offset, (index, label, stops) in enumerate(ACCENTS):
     # and -- because gold is bright -- lands on the body's lightest stop. That is the
     # blue lip. A low cutoff claims any block containing ANY crown for the crown;
     # alpha still trims whatever reaches past the piece.
-    hels.new(float(os.environ.get("ACCENT_THRESH", "0.06"))).color = (1, 1, 1, 1)
+    # Majority rule: a block wears gold when more than half of it is gold. Measured
+    # against the art, which is 64.7% gold: 0.50 gives 55.6%, 0.35 sits nearer, 0.20
+    # gives 68.5%. Left at the principled value rather than the closest-fitting one.
+    hels.new(float(os.environ.get("ACCENT_THRESH", "0.5"))).color = (1, 1, 1, 1)
     hard.location = (300, -400 - offset * 300)
     # Hue, not material index. The material split was authored against an untextured
     # crown and measures as near-random against the real art -- both halves read about
@@ -316,10 +319,13 @@ for offset, (index, label, stops) in enumerate(ACCENTS):
     hsv = tree.nodes.new("CompositorNodeSeparateColor")
     hsv.mode = "HSV"
     hsv.location = (60, -300 - offset * 300)
-    # feeder is the image as the palette sees it -- after Pixelate and Outline. Not
-    # mask_pix's input, which is the coverage pass and has no hue at all; feeding that
-    # produced masks that were empty everywhere and a crown with no accent on it.
-    tree.links.new(feeder, hsv.inputs[0])
+    # The RENDER, at full resolution -- not `feeder`, which is the image after
+    # Pixelate. A 7x7 block averages gilt and cloth together before the hue is read,
+    # and the blend lands outside the gold band, so gold measured 65% of the crown in
+    # the art and came out 20% on the piece. Classify every rendered pixel, then
+    # average the MASK (below) and threshold that: the question becomes "is this block
+    # mostly gold", which is the one a block can actually answer.
+    tree.links.new(rl.outputs["Image"], hsv.inputs[0])
 
     def _gate(sock, op, value, x, y):
         n = tree.nodes.new("ShaderNodeMath")
@@ -368,7 +374,6 @@ for offset, (index, label, stops) in enumerate(ACCENTS):
         _inv.location = (420, -330 - offset * 300)
         tree.links.new(hue_prev, _inv.inputs[1])
         _sel = _inv.outputs[0]
-    hue_prev = pixel_mask.outputs[0] if not _is_last else hue_prev
 
     if crown_mask is not None:
         _and = tree.nodes.new("ShaderNodeMath")
@@ -407,6 +412,13 @@ for offset, (index, label, stops) in enumerate(ACCENTS):
     tree.links.new(ramp.outputs["Color"], rgba_in[1])
     current = [s for s in mix.outputs if s.type == "RGBA"][0]
     masks.append(grow.outputs[0])
+    # Hand the LAST accent the DECIDED gold mask, not the raw hue coverage. Taking the
+    # complement before thresholding meant both selectors met the same cutoff from
+    # opposite sides: at 0.2 velvet claimed everything under 0.8, at 0.8 the two left a
+    # gap in the middle that fell through to the body as navy. Complementing a mask
+    # that is already 0 or 1 makes the split exact at any threshold.
+    if not _is_last:
+        hue_prev = grow.outputs[0]
 
 if os.environ.get("DUMP_RAW"):
     # The UNFILTERED render. Answers whether the crown is solid warm colour at this
