@@ -27,7 +27,7 @@ import { useConfirm } from './shared/ConfirmDialog';
 import { useDeleteKeyAction } from './shared/deleteKeyAction';
 import { useSceneParticipant } from './shell/SceneBoundary';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
-import { ChromeNavButton } from './shared/ChromeButton';
+import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 import { AtaraxiaSelector } from './AtaraxiaSelector';
 import { levelObjectiveLine } from './LevelInfoCompact';
 import { EditorLevelRow } from './shared/EditorLevelRow';
@@ -324,11 +324,22 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
                           ),
                         };
                       }),
+                      // The verb that closes the list is the WHOLE bottom section, not a small
+                      // button parked in a marble row: it spans every column (so the preview rail
+                      // stops above it — there is nothing divided here to rule a line through) and
+                      // it wears the oak, because the section IS the button.
                       ...(canEditSelected ? [{
                         id: 'add-battle',
-                        className: 'ce-section-action',
+                        spans: 'all' as const,
+                        className: 'war-battles-add',
                         content: (
-                          <EditorButton onClick={() => useWars.getState().addBattle(selectedWar.id)}>+ Add Battle</EditorButton>
+                          <ChromeButton unit="inner-text-button"
+                            className={chromeUnitClassNames('inner-text-button', 'war-battles-add-verb')}
+                            data-chrome-fill-surface={EDITOR_COLUMN_CONTROL_FILL_SURFACE}
+                            onClick={() => useWars.getState().addBattle(selectedWar.id)}
+                          >
+                            <span>+ Add Battle</span>
+                          </ChromeButton>
                         ),
                       }] : []),
                     ]}

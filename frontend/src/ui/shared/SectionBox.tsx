@@ -44,6 +44,12 @@ export type SectionBoxMember = {
    * and it lands that terminator in the middle of the row rail it actually crosses.
    */
   content: ReactNode;
+  /**
+   * 'all' for a member that is ONE thing across every column — a full-width verb closing the list.
+   * It has no internal boundary, so the box breaks its vertical rail there rather than ruling a
+   * line through something that is not divided.
+   */
+  spans?: 'all';
   className?: string;
 };
 
@@ -113,11 +119,15 @@ export function SectionBox({
         fillRole={CHROME_STRUCTURAL_FILL_ROLE}
         aria-labelledby={titleId}
       >
-        <ChromeDividedGridRow className="section-box-head section-box-head-row">
+        <ChromeDividedGridRow spans="all" className="section-box-head section-box-head-row">
           <SectionBoxHeading title={title} titleId={titleId} />
         </ChromeDividedGridRow>
         {shape.members.map((member) => (
-          <ChromeDividedGridRow key={member.id} className={`section-box-member ${member.className ?? ''}`.trim()}>
+          <ChromeDividedGridRow
+            key={member.id}
+            spans={member.spans}
+            className={`section-box-member ${member.className ?? ''}`.trim()}
+          >
             {member.content}
           </ChromeDividedGridRow>
         ))}

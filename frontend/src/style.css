@@ -7350,6 +7350,25 @@ body.loading-bootstrap .app-startup-status {
   z-index: 2;
 }
 
+/* One divided row's share of the verticals, for a box that also carries a spanning row and so
+   cannot rule a single line down the whole of itself. It overlays its OWN row only; consecutive
+   rows' segments stack into the same continuous line, and the four-way junctions on the row
+   boundaries between them are already placed by the boundary layer. */
+.chrome-divided-grid__row {
+  position: relative;
+}
+
+.chrome-divided-grid__row-rails {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: var(--chrome-divided-grid-columns);
+  grid-template-rows: minmax(0, 1fr);
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+
 .chrome-divided-grid__scroll {
   block-size: 100%;
   margin-inline-start: calc(-1 * var(--chrome-divided-grid-inline-apron-start));
@@ -19323,9 +19342,10 @@ button.tileset-relationship-cell {
 /* A row that is a MEMBER of a SettingsGroup rather than a slab of its own. The group's box is
    already the frame and already wears the marble, so the member carries only the row layout —
    and the kit's inner rail between members is what tells them apart. */
-/* The box's name is not one of the compartments its members are split into, so the head spans
-   every column the box declares. */
-.section-box-head-row > * {
+/* A row that declared itself one thing across every column IS one cell: its content spans the
+   whole width. Stated on the grid's own class, not on the section box, because it is the other
+   half of what `spans="all"` means — the rail breaks there AND the content fills the row. */
+.chrome-divided-grid__row--spanning > * {
   grid-column: 1 / -1;
 }
 
@@ -19859,6 +19879,13 @@ button.tileset-relationship-cell {
   grid-column: 1;
   min-inline-size: 0;
   overflow: hidden;
+}
+
+/* The list's closing verb IS the bottom section: the button fills the row edge to edge so the
+   whole strip is the thing you press, rather than a small control sitting in a marble band. */
+.war-battles-add > .war-battles-add-verb {
+  inline-size: 100%;
+  justify-content: center;
 }
 
 .settings-row.ce-editor-level-row.ce-editor-level-cell-body {

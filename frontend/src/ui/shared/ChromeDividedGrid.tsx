@@ -1,7 +1,9 @@
 import {
   Children,
   Fragment,
+  createContext,
   isValidElement,
+  useContext,
   type ButtonHTMLAttributes,
   type ComponentProps,
   type CSSProperties,
@@ -112,22 +114,64 @@ function GridJunction({
   );
 }
 
+/**
+ * What a row needs from the grid to draw its own share of the verticals — supplied by the grid, so
+ * a row can never be handed a rail it did not earn, and a consumer never places one.
+ */
+type ChromeDividedGridSegments = {
+  verticalLines: readonly number[];
+  trackCount: number;
+  /** True once ANY row spans every column, which is when one full-height rail stops being right. */
+  segmented: boolean;
+};
+const ChromeDividedGridSegmentContext = createContext<ChromeDividedGridSegments | null>(null);
+
 export function ChromeDividedGridRow({
   as = 'div',
   className = '',
+  spans,
+  children,
   ...props
 }: (
   | HTMLAttributes<HTMLDivElement>
   | ButtonHTMLAttributes<HTMLButtonElement>
 ) & {
   as?: 'div' | 'button';
+  /**
+   * 'all' for a row that is ONE thing across every column — the box's name, a full-width verb.
+   * Such a row has no internal column boundary, so no vertical rail may cross it.
+   */
+  spans?: 'all';
 }): ReactElement {
-  const classes = `chrome-divided-grid__row ${className}`.trim();
+  const segments = useContext(ChromeDividedGridSegmentContext);
+  const classes = `chrome-divided-grid__row ${spans === 'all' ? 'chrome-divided-grid__row--spanning' : ''} ${className}`.replace(/\s+/g, ' ').trim();
+  // A box with a spanning row cannot rule one line down the whole of itself, so each DIVIDED row
+  // carries its own segment and consecutive segments stack into the same continuous line. The
+  // four-way junctions where they cross a row boundary are already the boundary layer's.
+  const rails = segments?.segmented && spans !== 'all' ? (
+    <span className="chrome-divided-grid__row-rails" aria-hidden="true">
+      {segments.verticalLines.map((line) => (
+        <ChromeGridRail
+          key={`row-vertical-${line}`}
+          role="inner"
+          orientation="vertical"
+          className="chrome-divided-grid__vertical-rail"
+          style={linePlacement(line, segments.trackCount)}
+        />
+      ))}
+    </span>
+  ) : null;
+  const body = <>{children}{rails}</>;
   if (as === 'button') {
     const buttonProps = props as ButtonHTMLAttributes<HTMLButtonElement>;
-    return <button {...buttonProps} type={buttonProps.type ?? 'button'} className={classes} />;
+    return <button {...buttonProps} type={buttonProps.type ?? 'button'} className={classes}>{body}</button>;
   }
-  return <div {...props as HTMLAttributes<HTMLDivElement>} className={classes} />;
+  return <div {...props as HTMLAttributes<HTMLDivElement>} className={classes}>{body}</div>;
+}
+
+/** Whether a grid child declared itself one thing across every column. */
+function rowSpansAllColumns(row: ReactNode): boolean {
+  return isValidElement<{ spans?: 'all' }>(row) && row.props.spans === 'all';
 }
 
 /**
@@ -211,7 +255,7 @@ export function DividedInnerChromeBox({
           {index > 0 ? (
             <div className="chrome-divided-grid__row-boundary">
               <ChromeGridRail
-                role="inner"
+                role="inner"
                 className="chrome-divided-grid__horizontal-rail"
                 data-chrome-grid-inline-start="frame-start"
                 data-chrome-grid-inline-end={topology.horizontalEndBoundary}
@@ -233,18 +277,29 @@ export function DividedInnerChromeBox({
   );
 
   const Frame = framed ? InnerChromeBox : UnframedDividedGrid;
+  const segments: ChromeDividedGridSegments = {
+    verticalLines: topology.verticalLines,
+    trackCount: topology.trackCount,
+    segmented: rows.some(rowSpansAllColumns),
+  };
   return (
+    <ChromeDividedGridSegmentContext.Provider value={segments}>
     <Frame
       {...props}
       className={`chrome-divided-grid ${className}`.trim()}
       style={{ ...gridStyle, ...props.style }}
     >
       <div className="chrome-divided-grid__fixed-rails" style={gridStyle} aria-hidden="true">
-        {topology.verticalLines.map((line) => (
+        {/* A vertical rail spans only the rows that ARE divided. A row that is one thing across
+            every column — the box's name, a full-width verb — has no boundary for a rail to be,
+            so ruling a line through it draws a division that is not there. The rails layer is
+            suppressed entirely once any row spans, and each divided row carries its own segment
+            instead; consecutive segments stack into the same continuous line. */}
+        {rows.some(rowSpansAllColumns) ? null : topology.verticalLines.map((line) => (
           <ChromeGridRail
             key={`vertical-${line}`}
             role="inner"
-            orientation="vertical"
+            orientation="vertical"
             className="chrome-divided-grid__vertical-rail"
             data-chrome-grid-block-start="frame-start"
             data-chrome-grid-block-end="frame-end"
@@ -274,5 +329,6 @@ export function DividedInnerChromeBox({
         </KitScroll>
       ) : rowLayer}
     </Frame>
+    </ChromeDividedGridSegmentContext.Provider>
   );
 }
