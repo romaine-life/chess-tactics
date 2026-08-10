@@ -9,7 +9,6 @@ import { EnchiridionReference, EnchiridionSectionRail, LipsanaCodex } from './En
 import { HeldCardCodex } from './HeldCardCodex';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
 import { useOpenRailTab } from './shared/railOpenIntent';
-import { RailOpenConnector } from './shared/RailOpenConnector';
 import { InnerChromeBox, ShellWorkspace } from './shared/ChromeBox';
 import {
   StrategikonContentSceneSlot,
@@ -114,7 +113,6 @@ export function Strategikon({
               iconClassName={item.iconClassName}
             />
           ))}
-          <RailOpenConnector panelSelector="[data-shell-workspace-body]" open={openSection} />
         </ApparatusRailColumn>
       )}
       aria-label="Strategikon"

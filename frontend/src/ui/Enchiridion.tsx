@@ -63,7 +63,6 @@ import { STRATEGIKON_CARD_MARK_CLASS, useStrategikonCardsIcon } from './strategi
 import { LipsanonIcon } from './Lipsana';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
 import { siblingRailAddresses, useOpenRailTab } from './shared/railOpenIntent';
-import { RailOpenConnector } from './shared/RailOpenConnector';
 import { ataraxiaNumeralArtUrl } from './ataraxiaNumeral';
 import { InnerChromeBox, OuterChromeBox, OuterChromeHeader } from './shared/ChromeBox';
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
@@ -1186,9 +1185,6 @@ export function EnchiridionSectionRail({
           markCanvas={candidate === 'ataraxia' ? 'bleed' : 'inset'}
         />
       ))}
-      {/* Both hosts name their content pane the same thing, so one selector serves the main
-          menu's Enchiridion and the Strategikon's reference alike. */}
-      <RailOpenConnector panelSelector=".enchiridion-content, .strategikon-reference-pane" open={openSection} />
     </ApparatusRailColumn>
   );
 }
