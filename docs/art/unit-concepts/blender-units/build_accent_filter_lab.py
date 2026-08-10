@@ -169,6 +169,7 @@ scene.render.image_settings.file_format="PNG"; scene.render.image_settings.color
 
 tree = scene.compositing_node_group
 pix = next(n for n in tree.nodes if n.bl_idname=="CompositorNodePixelate")
+pix.label = "BLOCK SIZE (one art pixel)"
 next(s for s in pix.inputs if s.name=="Size").default_value = BLOCK
 ol = next((n for n in tree.nodes if n.bl_idname=="CompositorNodeGroup" and n.node_tree and n.node_tree.name.startswith("Outline")), None)
 if ol:
@@ -331,6 +332,9 @@ for offset, (index, label, stops) in enumerate(ACCENTS):
     # gives 68.5%. Left at the principled value rather than the closest-fitting one.
     hels.new(float(os.environ.get("ACCENT_THRESH", "0.5"))).color = (1, 1, 1, 1)
     hard.location = (300, -400 - offset * 300)
+    # Named so it is findable in the editor. Every node worth turning carries a label;
+    # an unlabelled ColorRamp beside three others is a coin flip.
+    hard.label = "%s cutoff" % label
     # Hue, not material index. The material split was authored against an untextured
     # crown and measures as near-random against the real art -- both halves read about
     # a third reddish and a third yellowish, so neither half means anything. The
@@ -384,6 +388,7 @@ for offset, (index, label, stops) in enumerate(ACCENTS):
     pixel_mask = tree.nodes.new("CompositorNodePixelate")
     next(t for t in pixel_mask.inputs if t.name == "Size").default_value = BLOCK
     pixel_mask.location = (380, -330 - offset * 300)
+    pixel_mask.label = "%s mask blocks" % label
     tree.links.new(hue_mask, pixel_mask.inputs[0])
 
     # The LAST accent takes the whole remainder of the crown rather than its own hue
