@@ -48,6 +48,12 @@ Between them they bought a 96px slab for a row whose content is a name.
 - That constancy is load-bearing, not cosmetic: the two rows are cut from ONE plank of installed
   oak by a fixed `--play-choice-row-surface-pitch` (ADR-0034/ADR-0063). A row that grew a second
   line when a Run ended would shift the plank under the row below it.
+- The column carries **no section eyebrow**. A section title distinguishes one row group from the
+  others beside it — Continue from Levels, Soundtrack from the settings above it — and this
+  column holds exactly one group, so **RUN** labelled the whole column with the name of the only
+  thing in it. The section keeps its accessible name; only the drawn label goes. The first choice
+  row then starts at the column's own top inset, level with the first main-menu button (measured
+  equal at every width), which is the alignment the shared inset was built to give.
 
 ## Consequences
 

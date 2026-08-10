@@ -129,6 +129,10 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // sentence is the row's end value, not a second line that would shift the plank when a Run
     // starts or ends. The seat is the main-menu button's, so the rows read as its siblings.
     expect(style).toMatch(/\.play-choice-row\s*\{[\s\S]*?min-height:\s*61px;/);
+    // And no eyebrow over the one group in the column — it named the column after the only thing
+    // in it, and cost the first row its alignment with the first main-menu button (ADR-0556).
+    expect(playMenu).not.toContain('<h3 className="settings-section-title">Run</h3>');
+    expect(playMenu).toContain('<section className="settings-section" aria-label="Run">');
     // The pitch may not restate the list gap — it has to step by exactly what layout steps by.
     expect(style).toMatch(/\.settings-section-rows\s*\{[\s\S]*?--settings-section-rows-gap:\s*10px;[\s\S]*?gap:\s*var\(--settings-section-rows-gap\);/);
     // Seats are owned by the panel, never counted off the DOM: a :nth-child ladder re-cuts the

@@ -292,8 +292,13 @@ function RunPanel({
     <>
       <ActionColumn className="play-run-choice-col">
         <div className="settings-panel-content run-selector-panel">
-          <section className="settings-section">
-            <h3 className="settings-section-title">Run</h3>
+          {/* No eyebrow. A section title distinguishes one row group from the others beside it —
+              Continue from Levels, Soundtrack from the settings above it — and this column holds
+              exactly one group, so "RUN" labelled the whole column with the name of the only
+              thing in it. The section keeps the accessible name; only the drawn label goes, which
+              also lets the first choice row start at the column's top inset, level with the first
+              main-menu button. ADR-0556. */}
+          <section className="settings-section" aria-label="Run">
             <div className="settings-section-rows">
               {!hydrated || loading ? (
                 <section data-chrome-unit="inner-box" className={chromeUnitClassNames('inner-box', 'settings-row')} role="status">
