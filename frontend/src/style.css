@@ -18755,6 +18755,16 @@ button.tileset-relationship-cell {
   padding-block-end: var(--ds-gutter);
 }
 
+/* Run's choice list SELECTS a destination; the detail column beside it is what acts. That makes
+   it a tab column by role, so it takes --col-tab-w like every other selecting column in the
+   shell. It was drawn at --col-action-w (572px) purely because Run used to sit third in the row
+   — that width is defined as "the max that fits beside two tab columns at the body cap", and
+   ADR-0514 deleted the middle column without re-deciding the leftover. Sized as what it is, the
+   rows land byte-identical to the main-menu buttons they sit beside. ADR-0556. */
+.play-run-choice-col {
+  inline-size: var(--col-tab-w);
+}
+
 /* A selected campaign level adds the authored preview as the next destination column.
    On narrower desktop viewports, fit that master/detail pair inside the action column's
    original width instead of drawing the preview beyond the right edge. The compact list
@@ -27680,7 +27690,7 @@ button.run-card-formation-cell {
 
 /* The Run destinations are boards cut from ONE plank, not the same board stamped twice.
    A leaf's installed oak is a locally-attached background, so without an offset every row
-   restarts the sheet at 0 and paints an identical crop — two 547px slabs showing the same
+   restarts the sheet at 0 and paints an identical crop — two 296px slabs showing the same
    knot is what reads as a repeated texture. Each row instead samples the vertical slice it
    would have if one sheet ran down the list, the same recovery the rail tabs use for the
    `fixed` attachment ADR-0034 §C specified and Chromium's repaint bug forced us to drop.
@@ -27690,18 +27700,25 @@ button.run-card-formation-cell {
    NOT :nth-child — a DOM ladder re-counts and silently re-seats the plank the moment a
    "Loading Runs…" or "Runs unavailable" row joins the list. ADR-0063.
 
-   Pitch = the row's rendered block size + the list gap. 96px is border(2 x 7) + padding
-   (2 x 18) + the two-line copy at the design width; the copy is clamp()ed type, so the real
-   row runs 92-102px across the range and the sheet drifts a few px at the extremes. That is
-   invisible in wood, and the 10px gap of open scene between rows breaks literal grain
-   continuity anyway — same accepted trade as the tab rail's measured step. */
+   Height: these rows sit beside the main-menu buttons at the same width, so they are held to
+   the same 61px seat those buttons use (.main-menu-mode-tab) instead of .settings-row's
+   18px-padded 60px floor, which drew a 96px slab for one line of text. Both states stay ONE
+   line — the empty state's "No active Run" is the row's end value, not a second line — so the
+   seat is a constant and the plank below it does not shift with Run existence. ADR-0556.
+
+   Pitch = the row's rendered block size + the list gap: border(2 x 7) + padding(2 x 10.5) +
+   one clamp()ed copy line = 61px at the design width, drifting a few px at the extremes of the
+   range. That is invisible in wood, and the 10px gap of open scene between rows breaks literal
+   grain continuity anyway — same accepted trade as the tab rail's measured step. */
 .play-choice-row {
-  --play-choice-row-surface-pitch: calc(96px + var(--settings-section-rows-gap, 10px));
+  --play-choice-row-surface-pitch: calc(61px + var(--settings-section-rows-gap, 10px));
   --chrome-surface-position-y: calc(var(--play-choice-row-index, 0) * -1 * var(--play-choice-row-surface-pitch));
   appearance: none;
   color: inherit;
   cursor: pointer;
   font: inherit;
+  min-height: 61px;
+  padding-block: 10.5px;
   text-align: start;
 }
 

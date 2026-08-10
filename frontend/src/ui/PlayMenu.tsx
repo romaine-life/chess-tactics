@@ -128,9 +128,9 @@ function levelForceSummary(level: Level): string {
   return `${count('player')}v${count('enemy')}`;
 }
 
-function ActionColumn({ children }: { children: ReactElement }): ReactElement {
+function ActionColumn({ children, className = '' }: { children: ReactElement; className?: string }): ReactElement {
   return (
-    <main className="menu-dest-col menu-dest-action play-action-col">
+    <main className={`menu-dest-col menu-dest-action play-action-col ${className}`.trim()}>
       <KitScroll className="play-action-scroll">{children}</KitScroll>
     </main>
   );
@@ -290,7 +290,7 @@ function RunPanel({
 
   return (
     <>
-      <ActionColumn>
+      <ActionColumn className="play-run-choice-col">
         <div className="settings-panel-content run-selector-panel">
           <section className="settings-section">
             <h3 className="settings-section-title">Run</h3>
@@ -342,12 +342,17 @@ function RunPanel({
                   aria-current={choice === 'current' ? 'page' : undefined}
                   data-testid="run-choice-current"
                 >
+                  {/* An enabled row carries its name and nothing else: the Battle position and
+                      Ataraxia it used to restate are the first two facts of the detail column it
+                      opens, so the summary was a duplicate paid for in row height (ADR-0556).
+                      ADR-0334's "No active Run" survives as the row's end VALUE — it is the only
+                      thing that says why the row cannot be taken, and the shared row's optional
+                      value slot states it without spending a second line the enabled row would
+                      then have to reserve (which is what kept the plank pitch a constant). */}
                   <div className="settings-row-copy">
                     <h4>Current Run</h4>
-                    <p>{presentedRun
-                      ? `Battle ${presentedRun.battleIndex + 1} of ${presentedRun.war.battles.length} · ${ATARAXIA_BY_TIER[presentedRun.ataraxiaTier].label}`
-                      : 'No active Run'}</p>
                   </div>
+                  {presentedRun ? null : <div className="settings-row-value">No active Run</div>}
                 </ChromeNavButton>
               ) : null}
               {!loading && officialAvailable && eligible.length === 0 ? (
@@ -377,7 +382,6 @@ function RunPanel({
               >
                 <div className="settings-row-copy">
                   <h4>Start New Run</h4>
-                  <p>Choose Ataraxia</p>
                 </div>
               </ChromeNavButton>
             </div>

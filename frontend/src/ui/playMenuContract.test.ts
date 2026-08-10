@@ -111,7 +111,11 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // no active Run it stays in place disabled (like Continue's "Nothing to continue"
     // rows), keeping the resume point spatially learnable.
     expect(playMenu).toContain('disabled={!presentedRun}');
-    expect(playMenu).toContain("'No active Run'");
+    // An ENABLED row is its name alone — the Battle position and Ataraxia it used to restate
+    // are the detail column's first two facts (ADR-0556). The empty state keeps its sentence,
+    // because nothing else on the surface says why the row cannot be taken (ADR-0334).
+    expect(playMenu).toContain('{presentedRun ? null : <div className="settings-row-value">No active Run</div>}');
+    expect(playMenu).not.toContain('<p>Choose Ataraxia</p>');
   });
 
   it('cuts the Run destinations from one plank instead of stamping one crop twice (ADR-0034/ADR-0063)', () => {
@@ -119,7 +123,11 @@ describe('unified Play menu contract (ADR-0074)', () => {
     // at 0. Two rows like that paint the identical crop — the repeated-texture look. Each row
     // instead samples the slice one plank running down the list would give it, the same
     // recovery the rail tabs use for the `fixed` attachment Chromium forced us to drop.
-    expect(style).toMatch(/\.play-choice-row\s*\{[\s\S]*?--play-choice-row-surface-pitch:\s*calc\(96px \+ var\(--settings-section-rows-gap, 10px\)\);[\s\S]*?--chrome-surface-position-y:\s*calc\(var\(--play-choice-row-index, 0\) \* -1 \* var\(--play-choice-row-surface-pitch\)\);/);
+    expect(style).toMatch(/\.play-choice-row\s*\{[\s\S]*?--play-choice-row-surface-pitch:\s*calc\(61px \+ var\(--settings-section-rows-gap, 10px\)\);[\s\S]*?--chrome-surface-position-y:\s*calc\(var\(--play-choice-row-index, 0\) \* -1 \* var\(--play-choice-row-surface-pitch\)\);/);
+    // The pitch is only a constant because BOTH row states are one line — the empty state's
+    // sentence is the row's end value, not a second line that would shift the plank when a Run
+    // starts or ends. The seat is the main-menu button's, so the rows read as its siblings.
+    expect(style).toMatch(/\.play-choice-row\s*\{[\s\S]*?min-height:\s*61px;/);
     // The pitch may not restate the list gap — it has to step by exactly what layout steps by.
     expect(style).toMatch(/\.settings-section-rows\s*\{[\s\S]*?--settings-section-rows-gap:\s*10px;[\s\S]*?gap:\s*var\(--settings-section-rows-gap\);/);
     // Seats are owned by the panel, never counted off the DOM: a :nth-child ladder re-cuts the
