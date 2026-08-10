@@ -32,6 +32,8 @@ export type PoolTerm =
   | Readonly<{ kind: 'bishopPair'; bonus: number }>
   /** x (1 + defences x bonus). `countPawnSupport` decides whether Pawn shelter counts. */
   | Readonly<{ kind: 'defences'; bonus: number; countPawnSupport: boolean }>
+  /** x (1 - blocked x penalty). A Pawn directly behind a friendly piece can never advance. */
+  | Readonly<{ kind: 'blockedPawn'; penalty: number }>
   /** Round to the nearest `to`. Normally last. */
   | Readonly<{ kind: 'round'; to: number }>;
 
@@ -108,6 +110,8 @@ export type PoolCard = Readonly<{
   hasBishopPair: boolean;
   /** Total defences across the card: per piece, how many others cover it, summed. */
   defences: number;
+  /** Pawns immobilised by a friendly piece directly in front of them. */
+  blockedPawns: number;
 }>;
 
 const key = (cells: readonly PoolCell[]): string => cells.map((c) => `${c.x},${c.y}`).join(' ');
@@ -313,6 +317,27 @@ export function cardSynergy(
   return { defences, hasBishopPair };
 }
 
+/**
+ * Pawns that cannot move: one sits directly in front of them, on the same card.
+ *
+ * A Pawn only advances forward, so a friendly piece on the square ahead immobilises it completely
+ * — and because a Pawn captures diagonally, that Pawn is not defending the thing blocking it
+ * either. It is a dead unit paying rent on a cell. This is the DIRECTLY-behind case only; a Pawn
+ * diagonally behind covers the piece and is counted as a defence instead.
+ */
+export function countBlockedPawns(
+  cells: readonly PoolCell[],
+  pieces: readonly PoolPiece[],
+): number {
+  let blocked = 0;
+  for (let i = 0; i < cells.length; i += 1) {
+    if (pieces[i] !== 'P') continue;
+    // y = 0 is the enemy edge, so forward is one row toward zero.
+    if (cells.some((cell) => cell.x === cells[i].x && cell.y === cells[i].y - 1)) blocked += 1;
+  }
+  return blocked;
+}
+
 /** One applied step, so the formula readout and the worked example share a single source. */
 export type PoolPriceStep = Readonly<{
   term: PoolTerm;
@@ -331,6 +356,7 @@ export function poolTermFormula(term: PoolTerm): string {
   if (term.kind === 'defences') {
     return `x (1 + defences x ${term.bonus})${term.countPawnSupport ? '' : ', Pawn shelter not counted'}`;
   }
+  if (term.kind === 'blockedPawn') return `x (1 - blocked Pawns x ${term.penalty})`;
   return `rounded to the nearest ${term.to}`;
 }
 
@@ -338,6 +364,7 @@ export function poolTermLabel(term: PoolTerm): string {
   if (term.kind === 'density') return 'Density curve';
   if (term.kind === 'bishopPair') return 'Bishop pair';
   if (term.kind === 'defences') return 'Defences';
+  if (term.kind === 'blockedPawn') return 'Blocked pawns';
   return 'Rounding';
 }
 
@@ -348,23 +375,19 @@ export function poolTermLabel(term: PoolTerm): string {
  * exactly the steps it names -- there is no inert factor sitting in the arithmetic multiplying
  * by one.
  */
-export function poolPriceSteps(
-  cells: readonly PoolCell[],
+/** Run the declared terms once, over one specific seating of the card. */
+function runTerms(
+  seated: readonly PoolCell[],
   pieces: readonly PoolPiece[],
   knobs: PoolKnobs,
-): Readonly<{ value: number; volume: number; density: number; hasBishopPair: boolean; defences: number; cost: number; steps: readonly PoolPriceStep[] }> {
-  const value = pieces.reduce((total, piece) => total + knobs.pieceValue[piece], 0);
-  const volume = cells.length;
-  const density = volume === 0 ? 0 : value / volume;
-  const hasBishopPair = hasOppositeColourBishopPair(cells, pieces);
-  const turns = knobs.collapseRotation ? [0, 1, 2, 3] : [0];
-  const defencesFor = (countPawnSupport: boolean): number => Math.max(...turns.map((turn) => (
-    countDefences(rotateSeated(cells, turn), pieces, countPawnSupport)
-  )));
-
+  value: number,
+  density: number,
+  hasBishopPair: boolean,
+): Readonly<{ cost: number; steps: PoolPriceStep[]; defences: number; blockedPawns: number }> {
   const steps: PoolPriceStep[] = [];
   let cost = value;
-  let reportedDefences = 0;
+  let defences = 0;
+  let blockedPawns = 0;
   for (const term of knobs.terms) {
     const before = cost;
     let worked: string | null = null;
@@ -374,28 +397,77 @@ export function poolPriceSteps(
     } else if (term.kind === 'bishopPair') {
       if (hasBishopPair) { cost = before * (1 + term.bonus); worked = `x (1 + ${term.bonus})`; }
     } else if (term.kind === 'defences') {
-      const defences = defencesFor(term.countPawnSupport);
-      reportedDefences = Math.max(reportedDefences, defences);
+      defences = countDefences(seated, pieces, term.countPawnSupport);
       if (defences > 0) { cost = before * (1 + defences * term.bonus); worked = `x (1 + ${defences} x ${term.bonus})`; }
+    } else if (term.kind === 'blockedPawn') {
+      blockedPawns = countBlockedPawns(seated, pieces);
+      if (blockedPawns > 0) {
+        cost = before * (1 - blockedPawns * term.penalty);
+        worked = `x (1 - ${blockedPawns} x ${term.penalty})`;
+      }
     } else {
       cost = roundTo(before, term.to);
       worked = `-> ${cost}`;
     }
     steps.push({ term, formula: poolTermFormula(term), worked, before, after: cost });
   }
-  return { value, volume, density, hasBishopPair, defences: reportedDefences, cost, steps };
+  return { cost, steps, defences, blockedPawns };
+}
+
+/**
+ * Run a model's formula over one card, from raw material through every term it declares.
+ *
+ * A model that does not declare a term does not carry it at all, so its price is derived from
+ * exactly the steps it names -- there is no inert factor sitting in the arithmetic multiplying
+ * by one.
+ *
+ * While the player rotates at placement, the whole chain is evaluated once per quarter turn and
+ * the BEST result is the price. It has to be the whole chain and not each term separately: a card
+ * is placed in ONE orientation, so the turn that maximises defences may be the same turn that
+ * blocks a Pawn, and taking each term's best independently would price a card the player can
+ * never actually field. Price stands in for value here, so the best result is the highest one --
+ * the arrangement the player will choose.
+ */
+export function poolPriceSteps(
+  cells: readonly PoolCell[],
+  pieces: readonly PoolPiece[],
+  knobs: PoolKnobs,
+): Readonly<{
+  value: number; volume: number; density: number; hasBishopPair: boolean;
+  defences: number; blockedPawns: number; cost: number; steps: readonly PoolPriceStep[];
+}> {
+  const value = pieces.reduce((total, piece) => total + knobs.pieceValue[piece], 0);
+  const volume = cells.length;
+  const density = volume === 0 ? 0 : value / volume;
+  const hasBishopPair = hasOppositeColourBishopPair(cells, pieces);
+  const turns = knobs.collapseRotation ? [0, 1, 2, 3] : [0];
+  const best = turns
+    .map((turn) => runTerms(rotateSeated(cells, turn), pieces, knobs, value, density, hasBishopPair))
+    .reduce((a, b) => (b.cost > a.cost ? b : a));
+  return {
+    value,
+    volume,
+    density,
+    hasBishopPair,
+    defences: best.defences,
+    blockedPawns: best.blockedPawns,
+    cost: best.cost,
+    steps: best.steps,
+  };
 }
 
 export function priceCard(
   cells: readonly PoolCell[],
   pieces: readonly PoolPiece[],
   knobs: PoolKnobs,
-): Pick<PoolCard, 'value' | 'volume' | 'density' | 'cost' | 'band' | 'hasBishopPair' | 'defences'> {
-  const { value, volume, density, hasBishopPair, defences, cost } = poolPriceSteps(cells, pieces, knobs);
+): Pick<PoolCard, 'value' | 'volume' | 'density' | 'cost' | 'band' | 'hasBishopPair' | 'defences' | 'blockedPawns'> {
+  const {
+    value, volume, density, hasBishopPair, defences, blockedPawns, cost,
+  } = poolPriceSteps(cells, pieces, knobs);
   const band: PoolBand = cost <= knobs.commonMaxCost
     ? 'common'
     : cost <= knobs.uncommonMaxCost ? 'uncommon' : 'rare';
-  return { value, volume, density, cost, band, hasBishopPair, defences };
+  return { value, volume, density, cost, band, hasBishopPair, defences, blockedPawns };
 }
 
 export function buildPool(knobs: PoolKnobs): PoolCard[] {
@@ -487,13 +559,14 @@ export const POOL_MODELS: readonly PoolModel[] = Object.freeze([
   {
     id: 'synergy',
     label: 'Synergy priced',
-    note: 'The density curve plus the two chess rules material cannot express: the opposite-colour Bishop pair, and defences. Pawn shelter counts — it is the cheapest defender and therefore the best one, and a rotating player takes whichever turn supplies it.',
+    note: 'The density curve plus what material cannot express: the opposite-colour Bishop pair, defences, and a penalty for a Pawn stuck directly behind a friendly piece. Pawn shelter counts as a defence here.',
     knobs: {
       ...DEFAULT_POOL_KNOBS,
       terms: [
         { kind: 'density', power: 0.5, scale: 10 },
         { kind: 'bishopPair', bonus: 0.25 },
         { kind: 'defences', bonus: 0.1, countPawnSupport: true },
+        { kind: 'blockedPawn', penalty: 0.15 },
         { kind: 'round', to: 5 },
       ],
     },
@@ -501,13 +574,14 @@ export const POOL_MODELS: readonly PoolModel[] = Object.freeze([
   {
     id: 'synergy-no-pawns',
     label: 'Synergy, pawns excluded',
-    note: 'The same synergy proposal with Pawn shelter left out, so the question "is a Pawn in front worth paying for" can be read as a difference between two models rather than argued.',
+    note: 'The same proposal with Pawn shelter not counted as a defence, so "is a Pawn in front worth paying for" reads as a difference between two models rather than an argument. The blocked-Pawn penalty applies in both.',
     knobs: {
       ...DEFAULT_POOL_KNOBS,
       terms: [
         { kind: 'density', power: 0.5, scale: 10 },
         { kind: 'bishopPair', bonus: 0.25 },
         { kind: 'defences', bonus: 0.1, countPawnSupport: false },
+        { kind: 'blockedPawn', penalty: 0.15 },
         { kind: 'round', to: 5 },
       ],
     },

@@ -88,7 +88,7 @@ function CardTable({ cards }: { cards: readonly PoolCard[] }): ReactElement {
   return (
     <table>
       <thead>
-        <tr><th>shape</th><th>pieces</th><th>mat</th><th>vol</th><th>dens</th><th>cost</th><th>band</th><th title="Total defences: per piece, how many others cover it, summed">def</th><th>BB</th></tr>
+        <tr><th>shape</th><th>pieces</th><th>mat</th><th>vol</th><th>dens</th><th>cost</th><th>band</th><th title="Total defences: per piece, how many others cover it, summed">def</th><th title="Pawns stuck directly behind a friendly piece">blk</th><th>BB</th></tr>
       </thead>
       <tbody>
         {cards.slice(0, MAX_ROWS_PER_GROUP).map((card) => (
@@ -101,6 +101,7 @@ function CardTable({ cards }: { cards: readonly PoolCard[] }): ReactElement {
             <td>{card.cost}</td>
             <td>{card.band}</td>
             <td>{card.defences || ''}</td>
+            <td>{card.blockedPawns || ''}</td>
             <td>{card.hasBishopPair ? '✦' : ''}</td>
           </tr>
         ))}
@@ -333,6 +334,9 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
                   </label>
                 </>
               ) : null}
+              {term.kind === 'blockedPawn' ? (
+                <NumberRow label="penalty" value={term.penalty} onChange={(v) => setTerm(index, { ...term, penalty: v })} step={0.05} />
+              ) : null}
               {term.kind === 'round' ? (
                 <NumberRow label="to" value={term.to} onChange={(v) => setTerm(index, { ...term, to: Math.max(0, v) })} step={1} min={0} />
               ) : null}
@@ -413,7 +417,8 @@ export function RunCardPoolCatalog({ textSize }: { textSize: number }): ReactEle
                 <tr><td>material</td><td>{draftStats.value}</td><td>volume</td><td>{draftStats.volume}</td></tr>
                 <tr><td>density</td><td>{draftStats.density.toFixed(2)}</td><td>cost</td><td><b>{draftStats.cost}</b></td></tr>
                 <tr><td>band</td><td>{draftStats.band}</td><td>defences</td><td>{draftStats.defences}</td></tr>
-                <tr><td>bishop pair</td><td>{draftStats.hasBishopPair ? 'yes' : 'no'}</td><td>in pool</td><td>{draftInPool ? 'yes' : 'no — outside the generator'}</td></tr>
+                <tr><td>blocked pawns</td><td>{draftStats.blockedPawns}</td><td>bishop pair</td><td>{draftStats.hasBishopPair ? 'yes' : 'no'}</td></tr>
+                <tr><td>in pool</td><td colSpan={3}>{draftInPool ? 'yes' : 'no — outside the generator'}</td></tr>
               </tbody>
             </table>
           ) : <p className="rcp-note">Click cells to seat pieces. Each click cycles P → N → B → R → Q → empty.</p>}

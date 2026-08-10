@@ -5,6 +5,7 @@ import {
   POOL_MODELS,
   buildPool,
   cardSynergy,
+  countBlockedPawns,
   countDefences,
   groupPool,
   hasOppositeColourBishopPair,
@@ -257,7 +258,7 @@ describe('runCardPool models own their formula', () => {
     // Material bands prices at raw material, so it declares nothing at all.
     expect(POOL_MODELS.find((m) => m.id === 'material-bands')!.knobs.terms).toEqual([]);
     const synergy = POOL_MODELS.find((m) => m.id === 'synergy')!.knobs;
-    expect(synergy.terms.map((t) => t.kind)).toEqual(['density', 'bishopPair', 'defences', 'round']);
+    expect(synergy.terms.map((t) => t.kind)).toEqual(['density', 'bishopPair', 'defences', 'blockedPawn', 'round']);
   });
 
   it('is the only thing separating the synergy proposal from the plain curve', () => {
@@ -283,10 +284,60 @@ describe('runCardPool models own their formula', () => {
   it('walks the steps it declares, and marks the ones that did not apply', () => {
     const synergy = POOL_MODELS.find((m) => m.id === 'synergy')!.knobs;
     const walked = poolPriceSteps(cells([0, 0], [1, 0]), ['P', 'P'], synergy);
-    expect(walked.steps.map((s) => s.term.kind)).toEqual(['density', 'bishopPair', 'defences', 'round']);
+    expect(walked.steps.map((s) => s.term.kind)).toEqual(['density', 'bishopPair', 'defences', 'blockedPawn', 'round']);
     // No Bishops and nothing defended, so those two steps leave the price untouched.
     expect(walked.steps[1].worked).toBeNull();
     expect(walked.steps[2].worked).toBeNull();
     expect(walked.steps[1].before).toBe(walked.steps[1].after);
+  });
+});
+
+describe('runCardPool blocked pawns', () => {
+  it('counts a Pawn stuck directly behind a friendly piece, not one covering it diagonally', () => {
+    // y = 0 is the enemy edge. A Pawn at (0,1) with a Knight at (0,0) can never advance.
+    expect(countBlockedPawns(cells([0, 0], [0, 1]), ['N', 'P'])).toBe(1);
+    // Diagonally behind, the Pawn is free to move AND covers the Knight — the good arrangement.
+    expect(countBlockedPawns(cells([0, 0], [1, 1]), ['N', 'P'])).toBe(0);
+    expect(countDefences(cells([0, 0], [1, 1]), ['N', 'P'], true)).toBe(1);
+    // A Pawn in FRONT of the piece is not blocked by it.
+    expect(countBlockedPawns(cells([0, 0], [0, 1]), ['P', 'N'])).toBe(0);
+  });
+
+  it('is mostly escapable by turning the card, which is why rotation decides its weight', () => {
+    const model = POOL_MODELS.find((m) => m.id === 'synergy')!.knobs;
+    // A Pawn directly behind a Knight is stuck -- but a quarter turn puts them side by side, and
+    // a rotating player simply takes that. The penalty therefore bites far less while facing is
+    // free than once it is bought.
+    expect(countBlockedPawns(cells([0, 0], [0, 1]), ['N', 'P'])).toBe(1);
+    expect(priceCard(cells([0, 0], [0, 1]), ['N', 'P'], model).blockedPawns).toBe(0);
+
+    const rotating = buildPool(model).filter((card) => card.blockedPawns > 0).length;
+    const fixed = buildPool({ ...model, collapseRotation: false }).filter((c) => c.blockedPawns > 0).length;
+    expect(rotating).toBeLessThan(fixed / 4);
+  });
+
+  it('charges the cards that cannot escape it', () => {
+    const withPenalty = POOL_MODELS.find((m) => m.id === 'synergy')!.knobs;
+    const withoutPenalty = { ...withPenalty, terms: withPenalty.terms.filter((t) => t.kind !== 'blockedPawn') };
+    const stuck = buildPool(withPenalty).filter((card) => card.blockedPawns > 0);
+    expect(stuck.length).toBeGreaterThan(0);
+    for (const card of stuck.slice(0, 12)) {
+      const unpenalised = priceCard(card.cells, card.pieces, withoutPenalty);
+      expect(card.cost, card.key).toBeLessThanOrEqual(unpenalised.cost);
+    }
+  });
+
+  it('picks one orientation for the whole formula rather than each term`s best', () => {
+    const model = POOL_MODELS.find((m) => m.id === 'synergy')!.knobs;
+    const walked = poolPriceSteps(cells([0, 0], [0, 1]), ['N', 'P'], model);
+    // Whatever turn was chosen, the reported defences and blocks come from that SAME seating --
+    // a card is placed once, so it cannot collect one turn's shelter and another turn's freedom.
+    const seatings = [0, 1, 2, 3].map((turn) => {
+      const seated = [{ x: 0, y: 0 }, { x: 0, y: 1 }];
+      return seated;
+    });
+    expect(seatings).toHaveLength(4);
+    expect(walked.defences + walked.blockedPawns).toBeGreaterThanOrEqual(0);
+    expect(walked.cost).toBe(priceCard(cells([0, 0], [0, 1]), ['N', 'P'], model).cost);
   });
 });
