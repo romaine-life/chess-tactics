@@ -5928,6 +5928,20 @@ body.loading-bootstrap .app-startup-status {
   z-index: 0;
 }
 
+/* ADR-0433: a repeated leaf collection never restarts its wood at the same origin on
+   every item. The renderer owns a monotonic phase index and this one derivation turns
+   it into the surface offset, so no consumer computes a ladder from DOM position
+   (forbidden by ADR-0063). It serves both ways a leaf gets painted: an explicitly named
+   surface, and the Controls panel's registry-driven material rule. */
+:root {
+  --chrome-leaf-surface-pitch: calc(46px + var(--ds-inline-tight));
+}
+
+[data-chrome-fill-surface],
+[data-shell-controls-panel] [data-chrome-unit] {
+  --chrome-surface-position-y: calc(var(--chrome-leaf-surface-index, 0) * -1 * var(--chrome-leaf-surface-pitch));
+}
+
 :is(.level-editor-screen, .skirmish-screen) .le-outer-panel > .le-outer-panel-fill {
   image-rendering: pixelated;
   inset:
@@ -23222,7 +23236,6 @@ button.tileset-relationship-cell {
 }
 
 .run-meta-controls {
-  --run-leaf-control-surface-pitch: calc(46px + var(--ds-inline-tight));
   align-content: start;
   display: flex;
   flex: 1 1 auto;
@@ -23248,10 +23261,6 @@ button.tileset-relationship-cell {
 
 .run-meta-navigation > button {
   inline-size: 100%;
-}
-
-.run-meta-controls [data-chrome-fill-surface] {
-  --chrome-surface-position-y: calc(var(--run-leaf-control-index, 0) * -1 * var(--run-leaf-control-surface-pitch));
 }
 
 /* The Sectio rail's controls read as a column of destinations, so each one's mark takes a fixed
@@ -23528,20 +23537,12 @@ button.tileset-relationship-cell {
   display: block;
 }
 
-.run-army-profile {
-  --run-leaf-control-surface-pitch: calc(46px + var(--ds-inline-tight));
-}
-
 .run-army-profile-content {
   block-size: 100%;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   min-block-size: 0;
   overflow: hidden;
-}
-
-.run-army-profile [data-chrome-fill-surface] {
-  --chrome-surface-position-y: calc(var(--run-leaf-control-index, 0) * -1 * var(--run-leaf-control-surface-pitch));
 }
 
 .run-army-profile-scroll {
@@ -26312,8 +26313,6 @@ button.tileset-relationship-cell {
    contract after the feature rules also prevents a local raw-CSS background or
    one-pixel border from silently winning over the installed Chrome family. */
 :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .inner-box {
-  background-color: transparent;
-  background-image: none;
   border-color: transparent;
   border-radius: 0;
   border-style: solid;
@@ -26325,6 +26324,16 @@ button.tileset-relationship-cell {
   box-shadow: none;
   box-sizing: border-box;
   image-rendering: pixelated;
+}
+
+/* The field is stripped separately from the frame, because the guard above is aimed at a
+   raw-CSS background — not at a box whose own INSTALLED image is the point of it. A unit
+   portrait's painted scene arrives from the drawable catalog and is part of the portrait,
+   so stripping it left every framed bust (the roster thumbnails, the Selected Unit seat)
+   on flat fill while the same unit's unframed portrait kept its scene. */
+:is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .inner-box:not(.has-backdrop) {
+  background-color: transparent;
+  background-image: none;
 }
 
 :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .inner-box:is(.active, .is-active, [aria-pressed="true"]) {

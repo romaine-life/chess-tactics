@@ -86,7 +86,7 @@ export function RunArrangementSteppers({
           unit="inner-text-button"
           data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
           className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'run-arrangement-step')}
-          style={{ ['--run-leaf-control-index' as string]: 0 } as CSSProperties}
+          style={{ ['--chrome-leaf-surface-index' as string]: 0 } as CSSProperties}
           disabled={disabled || admitted.length < 2}
           onClick={() => onStep(-1)}
           aria-label="Previous formation"
@@ -120,7 +120,7 @@ export function RunArrangementSteppers({
           unit="inner-text-button"
           data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
           className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'run-arrangement-step')}
-          style={{ ['--run-leaf-control-index' as string]: 1 } as CSSProperties}
+          style={{ ['--chrome-leaf-surface-index' as string]: 1 } as CSSProperties}
           disabled={disabled || admitted.length < 2}
           onClick={() => onStep(1)}
           aria-label="Next formation"

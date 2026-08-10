@@ -5263,7 +5263,15 @@
       "file": "src/style.css",
       "context": "",
       "selector": "/* ADR-0082: these are the real DOM ancestors shown by Chrome Audit. Legacy feature classes may still own layout, spacing, and copy treatment, but every house-chrome frame is painted by the registered inner role. Keeping this contract after the feature rules also prevents a local raw-CSS background or one-pixel border from silently winning over the installed Chrome family. */ :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .inner-box",
-      "surfaceHash": "c42622503a9d351da53fdff0ece0c13a3b59018a174220d8ee927b196d35c88d",
+      "surfaceHash": "bd8183e0465b1c70440686df860e380ee9064df0bba0b623fe6bcc58e1dcf988",
+      "occurrence": 1
+    },
+    {
+      "kind": "css",
+      "file": "src/style.css",
+      "context": "",
+      "selector": "/* The field is stripped separately from the frame, because the guard above is aimed at a raw-CSS background \u2014 not at a box whose own INSTALLED image is the point of it. A unit portrait's painted scene arrives from the drawable catalog and is part of the portrait, so stripping it left every framed bust (the roster thumbnails, the Selected Unit seat) on flat fill while the same unit's unframed portrait kept its scene. */ :is(.level-editor-screen, .skirmish-screen, .chrome-family-surface) .inner-box:not(.has-backdrop)",
+      "surfaceHash": "f9d51ffd9dbbc3fbfc13afc50c6e9c9f634dcfb4b4cc87b41b40ff318df691ee",
       "occurrence": 1
     },
     {

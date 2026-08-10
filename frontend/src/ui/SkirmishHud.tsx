@@ -9,7 +9,6 @@ import { usePlayerPalette } from '../settings/playerPalette';
 import type { Piece, PieceType, Side } from '../core/types';
 import { promotionArrivalPieces } from '../game/promotionPresentation';
 import type { TimeControl } from '../core/level';
-import { defaultBackgroundSet } from '../art/backgroundSets';
 // One shared "unit portrait box" (master render + crop + the fill-frame) — the Selected-Unit
 // portrait AND the roster slots both render through it, so framing/fill/crop are defined once and
 // never re-derived per surface. See docs/portrait-contract.md.
@@ -27,6 +26,7 @@ import { InnerChromeBox, ShellControlsPanel } from './shared/ChromeBox';
 import { useAuthSession } from '../net/authSession';
 import { AdminControls } from './AdminControls';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
+import { CHROME_LEAF_FILL_SURFACE, leafSurfacePhase } from './shared/chromeSurfacePolicy';
 import { StrategikonTitleNavigation } from './StrategikonTitleNavigation';
 import { RunBattleUndoButton } from './RunBattleUndoButton';
 import { RunBattleRetryButton } from './RunBattleRetryButton';
@@ -355,7 +355,6 @@ export function SkirmishHud({
   const selected = presentedPieces.find((piece) => piece.id === selectedId && piece.alive) ?? null;
   const focused = presentedPieces.find((piece) => piece.id === focusedId && piece.alive) ?? selected;
   const logLines: LogEntry[] = log.length ? log : [{ text: 'Skirmish begins.' }];
-  const focusedPortraitBackdrop = focused && isPlayablePieceType(focused.type) ? defaultBackgroundSet().portraits[focused.type] : null;
   const turnLabel = clientTurnLabel(game, localSide, !!net?.pendingMove);
   const strategikonNavigation = strategikonPath
     ? <StrategikonTitleNavigation path={strategikonPath} search={strategikonSearch} />
@@ -379,7 +378,7 @@ export function SkirmishHud({
             aria-label="HUD sections"
             data-transition-policy="immediate-local"
           >
-            {HUD_TABS.map((t) => (
+            {HUD_TABS.map((t, index) => (
               <ChromeButton unit="inner-text-button"
                 key={t.id}
                 role="tab"
@@ -389,6 +388,7 @@ export function SkirmishHud({
                 className={chromeUnitClassNames('inner-text-button', 'skirmish-hud-tab', tab === t.id && 'active')}
                 aria-label={t.label}
                 title={t.label}
+                style={leafSurfacePhase(index)}
                 onClick={() => setTab(t.id)}
               >
                 <span className={`skirmish-tab-icon skirmish-tab-icon-${t.id}`} aria-hidden="true" />
@@ -428,7 +428,6 @@ export function SkirmishHud({
                   piece={focused.type as PortraitPiece}
                   palette={paletteForSide(focused.side, focused.palette) as PortraitPalette}
                   crop={portraitCrops[focused.type as PortraitPiece]}
-                  backdrop={focusedPortraitBackdrop}
                   className="unit-portrait--hud"
                   masterUrl={runtimePortraitMasterSrc(
                     focused.type as PortraitPiece,
@@ -436,7 +435,13 @@ export function SkirmishHud({
                   )}
                 />
               ) : (
-                <InnerChromeBox className="unit-portrait unit-portrait--hud" style={{ display: 'grid', placeItems: 'center' }}>
+                // No unit selected, so there is no portrait scene to stand in: the seat is a
+                // terminal identity plate and wears the leaf material rather than reading as an
+                // unpainted hole beside the portraits it alternates with (ADR-0433).
+                <InnerChromeBox className="unit-portrait unit-portrait--hud"
+                  fillSurface={CHROME_LEAF_FILL_SURFACE}
+                  style={{ display: 'grid', placeItems: 'center' }}
+                >
                   <UnitBadge piece={focused} large />
                 </InnerChromeBox>
               )}
@@ -531,11 +536,11 @@ export function SkirmishHud({
             <div className="skirmish-view-group">
               <span className="skirmish-eyebrow">Overlays</span>
               <div className="skirmish-view-row">
-                <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', showMoves && 'active')} onClick={() => toggleOverlay('showMoves')} aria-pressed={showMoves}>Moves</ChromeButton>
-                <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', showEnemyAttacks && 'active')} onClick={() => toggleOverlay('showEnemyAttacks')} aria-pressed={showEnemyAttacks}>Opp. attacks</ChromeButton>
-                <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', showBlocked && 'active')} onClick={() => toggleOverlay('showBlocked')} aria-pressed={showBlocked}>Blocks</ChromeButton>
-                <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', showPromotionZones && 'active')} onClick={() => toggleOverlay('showPromotionZones')} aria-pressed={showPromotionZones}>Promotion</ChromeButton>
-                <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', showGrid && 'active')} onClick={() => toggleOverlay('showGrid')} aria-pressed={showGrid}>Grid</ChromeButton>
+                <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', showMoves && 'active')} style={leafSurfacePhase(0)} onClick={() => toggleOverlay('showMoves')} aria-pressed={showMoves}>Moves</ChromeButton>
+                <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', showEnemyAttacks && 'active')} style={leafSurfacePhase(1)} onClick={() => toggleOverlay('showEnemyAttacks')} aria-pressed={showEnemyAttacks}>Opp. attacks</ChromeButton>
+                <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', showBlocked && 'active')} style={leafSurfacePhase(2)} onClick={() => toggleOverlay('showBlocked')} aria-pressed={showBlocked}>Blocks</ChromeButton>
+                <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', showPromotionZones && 'active')} style={leafSurfacePhase(3)} onClick={() => toggleOverlay('showPromotionZones')} aria-pressed={showPromotionZones}>Promotion</ChromeButton>
+                <ChromeButton unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', showGrid && 'active')} style={leafSurfacePhase(4)} onClick={() => toggleOverlay('showGrid')} aria-pressed={showGrid}>Grid</ChromeButton>
               </div>
             </div>
             {onOpenPredrawnRegistration ? (
@@ -558,11 +563,15 @@ export function SkirmishHud({
             <div className="skirmish-view-group">
               <span className="skirmish-eyebrow">Shortcuts</span>
               <div className="skirmish-grid" role="group" aria-label="Match shortcut grid">
-                {SHORTCUT_KEY_ROWS.flat().map((key) => {
+                {SHORTCUT_KEY_ROWS.flat().map((key, index) => {
                   const action = SHORTCUT_BINDINGS[key];
+                  // The command card is one repeated leaf collection, so its wood phases by
+                  // the key's own place in the authored grid (ADR-0433) rather than stamping
+                  // fifteen identical planks.
+                  const surfacePhase = leafSurfacePhase(index);
                   if (!action) {
                     return (
-                      <span key={key} data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'skirmish-grid-key', 'is-empty')} aria-hidden="true">
+                      <span key={key} data-chrome-unit="inner-text-button" className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'skirmish-grid-key', 'is-empty')} style={surfacePhase} aria-hidden="true">
                         <kbd className="skirmish-grid-cap">{key.toUpperCase()}</kbd>
                       </span>
                     );
@@ -574,6 +583,7 @@ export function SkirmishHud({
                       key={key}
                       data-testid={`shortcut-${key}`}
                       className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'skirmish-grid-key', active && 'active is-active')}
+                      style={surfacePhase}
                       aria-pressed={isToggle ? active : undefined}
                       title={action.hint}
                       onClick={() => { runSkirmishShortcut(key, false, skirmishViewStore, skirmishStore); }}

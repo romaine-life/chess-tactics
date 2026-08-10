@@ -377,7 +377,7 @@ function RunMetaControls({
                 data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                 data-testid="run-view-primary"
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === 'primary' && 'active')}
-                style={{ ['--run-leaf-control-index' as string]: 0 } as CSSProperties}
+                style={{ ['--chrome-leaf-surface-index' as string]: 0 } as CSSProperties}
                 aria-pressed={view === 'primary'}
                 onClick={() => onNavigate('primary')}
               >
@@ -390,7 +390,7 @@ function RunMetaControls({
                   data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                   data-testid={`run-view-${candidate}`}
                   className={chromeUnitClassNames('inner-text-button', 'app-header-button', view === candidate && 'active')}
-                  style={{ ['--run-leaf-control-index' as string]: index + 1 } as CSSProperties}
+                  style={{ ['--chrome-leaf-surface-index' as string]: index + 1 } as CSSProperties}
                   aria-pressed={view === candidate}
                   onClick={() => onNavigate(candidate)}
                 >
@@ -408,7 +408,7 @@ function RunMetaControls({
               <ChromeButton unit="inner-text-button"
                 data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
-                style={{ ['--run-leaf-control-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 1 } as CSSProperties}
+                style={{ ['--chrome-leaf-surface-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 1 } as CSSProperties}
                 disabled={!sectioHasChanges(run)}
                 data-testid="reset-run-sectio"
                 onClick={() => {
@@ -422,7 +422,7 @@ function RunMetaControls({
               <ChromeButton unit="inner-text-button"
                 data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'active')}
-                style={{ ['--run-leaf-control-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 2 } as CSSProperties}
+                style={{ ['--chrome-leaf-surface-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 2 } as CSSProperties}
                 disabled={!canLeave}
                 data-testid="continue-run-sectio"
                 title={!canLeave && continueHint ? continueHint : undefined}
@@ -445,7 +445,7 @@ function RunMetaControls({
               <ChromeButton unit="inner-text-button"
                 data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                 className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'danger')}
-                style={{ ['--run-leaf-control-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 3 } as CSSProperties}
+                style={{ ['--chrome-leaf-surface-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 3 } as CSSProperties}
                 data-testid="abandon-run"
                 disabled={abandoning}
                 onClick={() => { void requestAbandon(); }}
@@ -558,7 +558,7 @@ function ArrangedDeploymentControls({
                     unit="inner-text-button"
                     data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                     className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'run-arrangement-turn')}
-                    style={{ ['--run-leaf-control-index' as string]: 2 } as CSSProperties}
+                    style={{ ['--chrome-leaf-surface-index' as string]: 2 } as CSSProperties}
                     disabled={!turnable || departing || availableRotations.size < 2}
                     onClick={() => onTurn('counter-clockwise')}
                     aria-label="Turn the formation left"
@@ -570,7 +570,7 @@ function ArrangedDeploymentControls({
                     unit="inner-text-button"
                     data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                     className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'run-arrangement-turn')}
-                    style={{ ['--run-leaf-control-index' as string]: 3 } as CSSProperties}
+                    style={{ ['--chrome-leaf-surface-index' as string]: 3 } as CSSProperties}
                     disabled={!turnable || departing || availableRotations.size < 2}
                     onClick={() => onTurn('clockwise')}
                     aria-label="Turn the formation right"
@@ -594,7 +594,7 @@ function ArrangedDeploymentControls({
                   unit="inner-text-button"
                   data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
                   className={chromeUnitClassNames('inner-text-button', 'app-header-button')}
-                  style={{ ['--run-leaf-control-index' as string]: 4 } as CSSProperties}
+                  style={{ ['--chrome-leaf-surface-index' as string]: 4 } as CSSProperties}
                   data-testid="arrangement-remove-formation"
                   disabled={!arranging || departing || !selected?.placed}
                   onClick={onRemove}
@@ -613,7 +613,7 @@ function ArrangedDeploymentControls({
             unit="inner-text-button"
             data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
             className={chromeUnitClassNames('inner-text-button', 'app-header-button', 'danger')}
-            style={{ ['--run-leaf-control-index' as string]: 6 } as CSSProperties}
+            style={{ ['--chrome-leaf-surface-index' as string]: 6 } as CSSProperties}
             data-testid="abandon-run"
             disabled={abandoning || departing}
             onClick={() => { void requestAbandon(); }}
@@ -645,7 +645,7 @@ function ArrangedDeploymentControls({
               className={chromeUnitClassNames(
                 'inner-text-button', 'app-header-button', 'run-arrangement-begin', canBegin && 'active',
               )}
-              style={{ ['--run-leaf-control-index' as string]: 5 } as CSSProperties}
+              style={{ ['--chrome-leaf-surface-index' as string]: 5 } as CSSProperties}
               data-testid="arrangement-begin-battle"
               disabled={departing || !canBegin}
               onClick={onBeginBattle}
