@@ -12,7 +12,7 @@ import { ADLECTIO_MARK_MEDIA_ROLE, ADLECTIO_MARK_SLOT, RunAdlectioMarkLine } fro
 
 /**
  * Owner review for the Adlectio mark: the glyph Expunctio prints beside a formation this Sectio
- * visit admitted (ADR-0549). Every uploaded candidate is mounted in the SAME line the live tile
+ * visit admitted (ADR-0553). Every uploaded candidate is mounted in the SAME line the live tile
  * paints — `RunAdlectioMarkLine`, the component the workspace renders, never a lookalike — and
  * they all sit on one page, so the decision is one comparison rather than a walk through one
  * address per candidate.

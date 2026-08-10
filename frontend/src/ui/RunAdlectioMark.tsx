@@ -3,7 +3,7 @@ import { installedUiMediaIfPresent } from './installedUiMedia';
 
 /**
  * The mark for a record THIS Sectio visit admitted — the line Expunctio prints above a
- * just-admitted formation's fee (ADR-0549).
+ * just-admitted formation's fee (ADR-0553).
  *
  * The seat is named for what it marks rather than for what it draws, because what it should draw
  * is still an open question: a hand handing over the gold, or a hand taking the card that gold

@@ -819,7 +819,7 @@ function titleBarMarkMediaIssue(row, projectedRuntime = null) {
 
 /**
  * The Adlectio mark: the glyph Expunctio prints beside a formation the current Sectio visit
- * admitted (ADR-0549). It is the same shape of thing as a title-bar mark and carries the same
+ * admitted (ADR-0553). It is the same shape of thing as a title-bar mark and carries the same
  * contract — a small mark drawn into a seat with `contain`, so transparent margin on the canvas
  * comes straight off the drawn glyph — which is why it states its trimmed-ness at acceptance
  * rather than leaving the seat to compensate.
