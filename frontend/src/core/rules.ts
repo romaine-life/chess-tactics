@@ -903,6 +903,30 @@ export function royalForkVictim(
 }
 
 /**
+ * Every enemy unit `piece` currently attacks — the counting counterpart of `royalForkVictim`,
+ * which asks about the QUALITY of two prongs where this asks how many there are.
+ *
+ * Membership is `isEnemy`, the same predicate a capture uses, so this counts exactly the units
+ * `piece` could take: obstacles and neutrals are not attacked things. That is deliberately not
+ * `opponentsUnderAttackBy`, which serves the service record and counts any non-obstacle of
+ * another side, neutrals included.
+ *
+ * Read through the same `attacksSquare` geometry as check detection, so an attack here is an
+ * attack there. Board law never consults it.
+ */
+export function enemiesAttackedBy(
+  piece: Piece,
+  pieces: readonly Piece[],
+  size: BoardSize,
+  env?: MoveEnv,
+): Piece[] {
+  if (!piece || !piece.alive || isObstacle(piece)) return [];
+  return pieces.filter((target) => (
+    target.alive && isEnemy(piece, target) && attacksSquare(piece, pieces, size, env, target.x, target.y)
+  ));
+}
+
+/**
  * Every living piece hostile to `side` that currently attacks one of `side`'s kings.
  *
  * `sideInCheck` answers whether that list is non-empty; this hands back the list itself,

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { applyMove } from '../core/rules';
 import type { BoardSize, GameState, Piece, PieceType, Side } from '../core/types';
+import type { PromotionPieceType } from '../core/types';
 import { manubiaeEarnedBy } from './manubiae';
-import { PIECE_VALUE } from './model';
+import { manubiumGoldTenths, PIECE_VALUE, RUN_UNDERPROMOTION_MATE_TENTHS } from './model';
 
 const SIZE: BoardSize = { cols: 8, rows: 12 };
 
@@ -11,9 +12,39 @@ function P(side: Side, type: PieceType, x: number, y: number, extra: Partial<Pie
 }
 
 /** Play `to` with `piece` on a board of `pieces`, and ask what the Run owes for it. */
-function earned(pieces: Piece[], piece: Piece, to: { x: number; y: number; capture?: string }) {
-  const state: GameState = { size: SIZE, pieces, turn: piece.side, winner: null };
+function earned(
+  pieces: Piece[],
+  piece: Piece,
+  to: { x: number; y: number; capture?: string },
+  size: BoardSize = SIZE,
+) {
+  const state: GameState = { size, pieces, turn: piece.side, winner: null };
   const result = applyMove(state, piece.id, to);
+  return manubiaeEarnedBy(result.state, result.events);
+}
+
+/**
+ * The same, for a Pawn arriving on the promotion rank and choosing what it becomes.
+ *
+ * The player's promotion rank is row 0 — the far edge from where a player Pawn starts — which
+ * is the shape every Run battle authors (`run-player-promotion`), so these boards are the real
+ * one rather than a fixture geometry.
+ */
+function earnedByPromoting(
+  pieces: Piece[],
+  pawn: Piece,
+  to: { x: number; y: number; capture?: string },
+  promotion: PromotionPieceType,
+) {
+  const cells = Array.from({ length: SIZE.cols }, (_, x) => ({ x, y: 0 }));
+  const state: GameState = {
+    size: SIZE,
+    pieces,
+    turn: pawn.side,
+    winner: null,
+    promotionRules: [{ side: 'player', cells }],
+  };
+  const result = applyMove(state, pawn.id, to, { promotion });
   return manubiaeEarnedBy(result.state, result.events);
 }
 const ids = (list: ReturnType<typeof earned>) => list.map((item) => item.award.id);
@@ -188,5 +219,385 @@ describe('what a committed board earns', () => {
     const knight = P('enemy', 'knight', 4, 6);
     const rook = P('player', 'rook', 5, 4);
     expect(earned([knight, rook], knight, { x: 5, y: 4, capture: rook.id })).toEqual([]);
+  });
+});
+
+describe("a Knight's fork, by how many it catches", () => {
+  /** A Knight landing on (4,4), with `victims` seated on squares it attacks from there. */
+  function forkOf(...victims: Piece[]) {
+    const knight = P('player', 'knight', 2, 5);
+    return { knight, pieces: [knight, ...victims] };
+  }
+
+  it('pays two prongs, and pays more for each further one', () => {
+    const two = forkOf(P('enemy', 'rook', 3, 2), P('enemy', 'bishop', 5, 2));
+    const gotTwo = earned(two.pieces, two.knight, { x: 4, y: 4 });
+    expect(gotTwo.map((item) => item.award)).toContainEqual({ id: 'knight-fork', targets: 2 });
+
+    const three = forkOf(P('enemy', 'rook', 3, 2), P('enemy', 'bishop', 5, 2), P('enemy', 'pawn', 2, 3));
+    const gotThree = earned(three.pieces, three.knight, { x: 4, y: 4 });
+    expect(gotThree.map((item) => item.award)).toContainEqual({ id: 'knight-fork', targets: 3 });
+
+    // Accelerating, not flat: the third prong is worth more than the second was.
+    const paidTwo = manubiumGoldTenths({ id: 'knight-fork', targets: 2 });
+    const paidThree = manubiumGoldTenths({ id: 'knight-fork', targets: 3 });
+    const paidFour = manubiumGoldTenths({ id: 'knight-fork', targets: 4 });
+    expect(paidThree - paidTwo).toBeGreaterThan(paidTwo);
+    expect(paidFour - paidThree).toBeGreaterThan(paidThree - paidTwo);
+  });
+
+  it('pays nothing for attacking one unit, which is not a fork', () => {
+    const one = forkOf(P('enemy', 'rook', 3, 2));
+    expect(ids(earned(one.pieces, one.knight, { x: 4, y: 4 }))).not.toContain('knight-fork');
+  });
+
+  it('does not count a unit it cannot take', () => {
+    // An obstacle stands on a square the Knight attacks and is not an enemy unit, so the second
+    // prong is missing and there is no fork.
+    const withRock = forkOf(P('enemy', 'rook', 3, 2), P('neutral', 'rock', 5, 2));
+    expect(ids(earned(withRock.pieces, withRock.knight, { x: 4, y: 4 }))).not.toContain('knight-fork');
+  });
+
+  it('does not pay a fork the enemy can profitably take', () => {
+    // The same three prongs, with the Knight's landing square hanging: taking it is the answer,
+    // and paying for this would teach the player to hand over a Knight.
+    const hanging = forkOf(
+      P('enemy', 'rook', 3, 2),
+      P('enemy', 'bishop', 5, 2),
+      P('enemy', 'pawn', 2, 3),
+      P('enemy', 'rook', 4, 0), // sweeps the file the Knight lands on
+    );
+    expect(ids(earned(hanging.pieces, hanging.knight, { x: 4, y: 4 }))).not.toContain('knight-fork');
+  });
+
+  it('pays the DEARER of the two forks and never both, because one fork is one deed', () => {
+    // King and Rook: a royal fork at 10, and also a two-prong Knight's fork at 5.
+    const royal = forkOf(P('enemy', 'king', 3, 2), P('enemy', 'rook', 5, 2));
+    const gotRoyal = ids(earned(royal.pieces, royal.knight, { x: 4, y: 4 }));
+    expect(gotRoyal).toContain('royal-fork');
+    expect(gotRoyal).not.toContain('knight-fork');
+
+    // Add a third prong and the count overtakes it, so the Knight's fork pays in its place.
+    const wide = forkOf(P('enemy', 'king', 3, 2), P('enemy', 'rook', 5, 2), P('enemy', 'bishop', 2, 3));
+    const gotWide = ids(earned(wide.pieces, wide.knight, { x: 4, y: 4 }));
+    expect(gotWide).toContain('knight-fork');
+    expect(gotWide).not.toContain('royal-fork');
+  });
+
+  it('pays only a Knight — the same prongs from a Queen are not this deed', () => {
+    const queen = P('player', 'queen', 4, 6);
+    const pieces = [queen, P('enemy', 'rook', 4, 1), P('enemy', 'bishop', 1, 4)];
+    expect(ids(earned(pieces, queen, { x: 4, y: 4 }))).not.toContain('knight-fork');
+  });
+
+  it('pays the enemy nothing for forking the player', () => {
+    const knight = P('enemy', 'knight', 2, 5);
+    const pieces = [knight, P('player', 'rook', 3, 2), P('player', 'bishop', 5, 2)];
+    expect(earned(pieces, knight, { x: 4, y: 4 })).toEqual([]);
+  });
+});
+
+describe('a deed that reaches eight squares', () => {
+  it('pays a long capture, seated where the unit landed', () => {
+    // Eight up the file, the width of a whole chessboard, to take a Bishop.
+    const rook = P('player', 'rook', 3, 10);
+    const victim = P('enemy', 'bishop', 3, 2);
+    const got = earned([rook, victim], rook, { x: 3, y: 2, capture: victim.id });
+
+    expect(ids(got)).toContain('long-capture');
+    expect(got.find((item) => item.award.id === 'long-capture')!.at).toEqual({ x: 3, y: 2 });
+  });
+
+  it('counts a diagonal along the LINE, not as both axes added up', () => {
+    // This is the discriminating case. A Bishop seven along a diagonal has covered seven squares
+    // and fourteen if you add the axes — so a rule that summed them would pay here, and does not.
+    const bishop = P('player', 'bishop', 0, 10);
+    const near = P('enemy', 'rook', 7, 3);
+    expect(ids(earned([bishop, near], bishop, { x: 7, y: 3, capture: near.id }))).not.toContain('long-capture');
+
+    // And on a board wide enough to hold one, eight diagonal squares is eight, exactly as eight
+    // along a rank is. The threshold has to mean the same thing to every unit.
+    const wide: BoardSize = { cols: 12, rows: 12 };
+    const far = P('player', 'bishop', 0, 10);
+    const target = P('enemy', 'rook', 8, 2);
+    expect(ids(earned([far, target], far, { x: 8, y: 2, capture: target.id }, wide))).toContain('long-capture');
+  });
+
+  it('pays nothing for a capture that falls one square short', () => {
+    const rook = P('player', 'rook', 3, 10);
+    const victim = P('enemy', 'bishop', 3, 3); // seven
+    expect(ids(earned([rook, victim], rook, { x: 3, y: 3, capture: victim.id }))).not.toContain('long-capture');
+  });
+
+  it('stacks with what the capture won, because reach and material are different deeds', () => {
+    const rook = P('player', 'rook', 3, 10);
+    const queen = P('enemy', 'queen', 3, 2);
+    const got = ids(earned([rook, queen], rook, { x: 3, y: 2, capture: queen.id }));
+
+    expect(got).toContain('long-capture');
+    expect(got).toContain('advantageous-capture');
+  });
+
+  it('pays a long check on the line the check RUNS, seated on the unit giving it', () => {
+    const rook = P('player', 'rook', 5, 10);
+    const king = P('enemy', 'king', 3, 1);
+    const got = earned([rook, king], rook, { x: 3, y: 10 }); // slides to the King's file, nine away
+
+    expect(ids(got)).toContain('long-check');
+    expect(got.find((item) => item.award.id === 'long-check')!.at).toEqual({ x: 3, y: 10 });
+  });
+
+  it('measures the check from the unit giving it, not from the unit that moved', () => {
+    // The Bishop steps aside and the Rook nine squares behind it now runs to the King. The mover
+    // went one square; the CHECK reaches nine, and the reach is what is paid for.
+    const rook = P('player', 'rook', 2, 10);
+    const bishop = P('player', 'bishop', 2, 4);
+    const king = P('enemy', 'king', 2, 1);
+    const got = ids(earned([rook, bishop, king], bishop, { x: 3, y: 5 }));
+
+    expect(got).toContain('discovered-check');
+    expect(got).toContain('long-check');
+  });
+
+  it('pays nothing for a check struck from close range', () => {
+    const rook = P('player', 'rook', 5, 4);
+    const king = P('enemy', 'king', 2, 2);
+    expect(ids(earned([rook, king], rook, { x: 2, y: 4 }))).not.toContain('long-check');
+  });
+
+  it('pays the enemy nothing for reaching across the board', () => {
+    const rook = P('enemy', 'rook', 3, 1);
+    const victim = P('player', 'bishop', 3, 9);
+    expect(earned([rook, victim], rook, { x: 3, y: 9, capture: victim.id })).toEqual([]);
+  });
+});
+
+describe('the mate pays once, for what is standing there giving it', () => {
+  /**
+   * A Pawn's mate: the King sealed against the edge by four of its own men, the fifth square
+   * held by the mating Pawn itself, which a second Pawn defends so the King cannot take it.
+   */
+  function pawnMate() {
+    const pawn = P('player', 'pawn', 2, 2, { pawnForward: 'north' });
+    return {
+      pawn,
+      pieces: [
+        pawn,
+        P('player', 'pawn', 1, 2, { pawnForward: 'north' }),
+        P('enemy', 'king', 1, 0),
+        P('enemy', 'rook', 0, 0),
+        P('enemy', 'knight', 2, 0),
+        P('enemy', 'pawn', 0, 1, { pawnForward: 'south' }),
+        P('enemy', 'pawn', 1, 1, { pawnForward: 'south' }),
+      ],
+    };
+  }
+
+  it('pays a Pawn the most, seated on the Pawn that gave the mate', () => {
+    const { pawn, pieces } = pawnMate();
+    const got = earned(pieces, pawn, { x: 2, y: 1 });
+
+    expect(ids(got)).toEqual(['humble-mate']);
+    expect(got[0].award).toEqual({ id: 'humble-mate', piece: 'pawn' });
+    expect(got[0].at).toEqual({ x: 2, y: 1 });
+  });
+
+  it('names the unit that gave the mate, and pays a Queen nothing at all', () => {
+    // One back-rank mate, delivered onto the same square by two different units. The gradient
+    // between the piece types is pinned in run/model.test.ts; what matters here is that the
+    // board's answer is the piece actually standing there.
+    const board = (type: PieceType) => {
+      const mater = P('player', type, 7, 4);
+      return { mater, pieces: [mater, P('enemy', 'king', 0, 0), P('enemy', 'pawn', 0, 1), P('enemy', 'pawn', 1, 1)] };
+    };
+    const rook = board('rook');
+    expect(earned(rook.pieces, rook.mater, { x: 7, y: 0 })[0].award).toEqual({ id: 'humble-mate', piece: 'rook' });
+
+    const queen = board('queen');
+    expect(earned(queen.pieces, queen.mater, { x: 7, y: 0 })).toEqual([]);
+  });
+
+  it('reads what is STANDING there, so a queened Pawn mates as a Queen and pays nothing', () => {
+    // The rest of this module prices a unit by what it started as, because that is what it cost
+    // the Run. This question is the opposite one — how little is on the board giving mate — and
+    // paying a promoted Queen the Pawn rate would put the most ordinary mate at the top of the
+    // ladder.
+    const queened = P('player', 'queen', 7, 4, { promotedFrom: 'pawn' });
+    const pieces = [queened, P('enemy', 'king', 0, 0), P('enemy', 'pawn', 0, 1), P('enemy', 'pawn', 1, 1)];
+
+    expect(earned(pieces, queened, { x: 7, y: 0 })).toEqual([]);
+  });
+
+  it('pays a smothered mate INSTEAD of the humble mate its Knight would earn', () => {
+    const knight = P('player', 'knight', 4, 3);
+    const king = P('enemy', 'king', 7, 0);
+    const pieces = [knight, king, P('enemy', 'rook', 6, 0), P('enemy', 'pawn', 7, 1), P('enemy', 'pawn', 6, 1)];
+    const got = ids(earned(pieces, knight, { x: 5, y: 1 }));
+
+    expect(got).toEqual(['smothered-mate']);
+    expect(got).not.toContain('humble-mate');
+  });
+
+  it('pays nothing for a check that is not mate, however small the unit giving it', () => {
+    // The bounty is for ENDING the Battle with a lesser piece, not for checking with one.
+    const pawn = P('player', 'pawn', 2, 2, { pawnForward: 'north' });
+    const pieces = [pawn, P('enemy', 'king', 1, 0)];
+
+    expect(earned(pieces, pawn, { x: 2, y: 1 })).toEqual([]);
+  });
+
+  it('pays the enemy nothing for mating the player with a Pawn', () => {
+    const pawn = P('enemy', 'pawn', 2, 9, { pawnForward: 'south' });
+    const pieces = [
+      pawn,
+      P('enemy', 'pawn', 1, 9, { pawnForward: 'south' }),
+      P('player', 'king', 1, 11),
+      P('player', 'rook', 0, 11),
+      P('player', 'knight', 2, 11),
+      P('player', 'pawn', 0, 10, { pawnForward: 'north' }),
+      P('player', 'pawn', 1, 10, { pawnForward: 'north' }),
+    ];
+
+    expect(earned(pieces, pawn, { x: 2, y: 10 })).toEqual([]);
+  });
+});
+
+describe('a Pawn that ends the Battle by arriving', () => {
+  /** A Pawn one step from the far rank, with the enemy King sealed against that rank by its own men. */
+  function backRankBoard() {
+    const pawn = P('player', 'pawn', 7, 1, { pawnForward: 'north' });
+    return {
+      pawn,
+      pieces: [
+        pawn,
+        P('enemy', 'king', 0, 0),
+        P('enemy', 'pawn', 0, 1, { pawnForward: 'south' }),
+        P('enemy', 'pawn', 1, 1, { pawnForward: 'south' }),
+      ],
+    };
+  }
+
+  it('pays a promotion mate, seated on the square the Pawn arrived at', () => {
+    const { pawn, pieces } = backRankBoard();
+    const got = earnedByPromoting(pieces, pawn, { x: 7, y: 0 }, 'queen');
+
+    expect(ids(got)).toEqual(['promotion-mate']);
+    expect(got[0].at).toEqual({ x: 7, y: 0 });
+  });
+
+  it('pays an underpromotion mate INSTEAD of the promotion mate, never both', () => {
+    // The very same board and the very same mate — a Rook on that square sweeps the rank exactly
+    // as the Queen does. All that changed is the piece the player chose, so this is the one
+    // ladder paying its better rung.
+    const { pawn, pieces } = backRankBoard();
+    const got = earnedByPromoting(pieces, pawn, { x: 7, y: 0 }, 'rook');
+
+    expect(ids(got)).toEqual(['underpromotion-mate']);
+    expect(got[0].award).toEqual({ id: 'underpromotion-mate', piece: 'rook' });
+  });
+
+  it('pays a Knight mate a Queen could not have given at all', () => {
+    // The whole reason underpromotion exists: from (2,0) a Queen does not even attack (0,1), so
+    // taking her here throws the mate away. The King's flights are answered by its own men at
+    // (0,0), (1,0) and (1,1), by the new Knight at (1,2), and by the second Pawn at (0,2).
+    const pawn = P('player', 'pawn', 2, 1, { pawnForward: 'north' });
+    const pieces = [
+      pawn,
+      P('player', 'pawn', 1, 3, { pawnForward: 'north' }),
+      P('enemy', 'king', 0, 1),
+      P('enemy', 'bishop', 0, 0),
+      P('enemy', 'pawn', 1, 0, { pawnForward: 'south' }),
+      P('enemy', 'pawn', 1, 1, { pawnForward: 'south' }),
+    ];
+    const got = earnedByPromoting(pieces, pawn, { x: 2, y: 0 }, 'knight');
+
+    expect(ids(got)).toEqual(['underpromotion-mate']);
+    expect(got[0].award).toEqual({ id: 'underpromotion-mate', piece: 'knight' });
+    expect(got[0].at).toEqual({ x: 2, y: 0 });
+  });
+
+  it('pays the Bishop and the Knight more than the Rook', () => {
+    const rook = manubiumGoldTenths({ id: 'underpromotion-mate', piece: 'rook' });
+    const bishop = manubiumGoldTenths({ id: 'underpromotion-mate', piece: 'bishop' });
+    const knight = manubiumGoldTenths({ id: 'underpromotion-mate', piece: 'knight' });
+
+    expect(rook).toBe(RUN_UNDERPROMOTION_MATE_TENTHS.rook);
+    expect(bishop).toBeGreaterThan(rook);
+    expect(knight).toBeGreaterThan(rook);
+    expect(knight).toBe(bishop);
+    // And every underpromotion outpays the ordinary promotion mate it stands in for.
+    expect(rook).toBeGreaterThan(manubiumGoldTenths({ id: 'promotion-mate' }));
+  });
+
+  it('pays nothing for a promotion that only gives check', () => {
+    // The same Queen arriving on the same square, with one of the King's own blockers gone: the
+    // King simply steps out. Reaching the far rank is not itself the deed.
+    const pawn = P('player', 'pawn', 7, 1, { pawnForward: 'north' });
+    const pieces = [pawn, P('enemy', 'king', 0, 0), P('enemy', 'pawn', 0, 1, { pawnForward: 'south' })];
+
+    expect(earnedByPromoting(pieces, pawn, { x: 7, y: 0 }, 'queen')).toEqual([]);
+  });
+
+  it('pays nothing for a promotion when a DIFFERENT unit delivers the mate', () => {
+    // The Pawn takes the Rook and becomes a Knight, which attacks nothing near the King. What
+    // mates is the Rook behind it, down the file the Pawn just vacated — that is a discovered
+    // check, and it is paid as the thing it is rather than as a promotion mate.
+    const pawn = P('player', 'pawn', 2, 1, { pawnForward: 'north' });
+    const victim = P('enemy', 'rook', 3, 0);
+    const pieces = [
+      pawn,
+      P('player', 'rook', 2, 8),
+      P('player', 'bishop', 5, 2), // defends the square the new Knight lands on
+      victim,
+      P('enemy', 'king', 2, 0),
+      P('enemy', 'pawn', 1, 0, { pawnForward: 'south' }),
+      P('enemy', 'pawn', 1, 1, { pawnForward: 'south' }),
+      P('enemy', 'pawn', 3, 1, { pawnForward: 'south' }),
+    ];
+    const got = ids(earnedByPromoting(pieces, pawn, { x: 3, y: 0, capture: victim.id }, 'knight'));
+
+    expect(got).toContain('discovered-check');
+    expect(got).toContain('advantageous-capture');
+    expect(got).not.toContain('promotion-mate');
+    expect(got).not.toContain('underpromotion-mate');
+  });
+
+  it('pays an underpromotion mate INSTEAD of the humble mate the same Knight would earn', () => {
+    // Both entries describe one mate — the Knight is the lesser piece the Pawn chose — so the
+    // dearer rung pays and the other stands down. The mate pays once.
+    const pawn = P('player', 'pawn', 2, 1, { pawnForward: 'north' });
+    const pieces = [
+      pawn,
+      P('player', 'pawn', 1, 3, { pawnForward: 'north' }),
+      P('enemy', 'king', 0, 1),
+      P('enemy', 'bishop', 0, 0),
+      P('enemy', 'pawn', 1, 0, { pawnForward: 'south' }),
+      P('enemy', 'pawn', 1, 1, { pawnForward: 'south' }),
+    ];
+    const got = ids(earnedByPromoting(pieces, pawn, { x: 2, y: 0 }, 'knight'));
+
+    expect(got).toEqual(['underpromotion-mate']);
+    expect(got).not.toContain('humble-mate');
+  });
+
+  it('pays the enemy nothing for promoting into mate', () => {
+    const pawn = P('enemy', 'pawn', 7, 10, { pawnForward: 'south' });
+    const pieces = [
+      pawn,
+      P('player', 'king', 0, 11),
+      P('player', 'pawn', 0, 10, { pawnForward: 'north' }),
+      P('player', 'pawn', 1, 10, { pawnForward: 'north' }),
+    ];
+    const cells = Array.from({ length: SIZE.cols }, (_, x) => ({ x, y: 11 }));
+    const state: GameState = {
+      size: SIZE,
+      pieces,
+      turn: 'enemy',
+      winner: null,
+      promotionRules: [{ side: 'enemy', cells }],
+    };
+    const result = applyMove(state, pawn.id, { x: 7, y: 11 }, { promotion: 'knight' });
+
+    expect(manubiaeEarnedBy(result.state, result.events)).toEqual([]);
   });
 });
