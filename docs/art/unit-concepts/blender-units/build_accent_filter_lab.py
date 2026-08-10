@@ -359,6 +359,34 @@ if os.environ.get("LAB_OUT"):
                 for _area in _scr.areas:
                     if _area.type == "IMAGE_EDITOR":
                         _area.spaces[0].image = _rr
+    # Blender ships compositor presets as an asset shelf -- a strip of thumbnails
+    # (Chromatic Aberration, Sepia, Vignette...) across the bottom of the node editor.
+    # None of them belong to this filter, and they cost the graph a third of its
+    # height. Plain data, so this one is simply assignable.
+    WORKING = {"Layout", "Compositing", "Rendering"}
+    for _ws in bpy.data.workspaces:
+        if _ws.name not in WORKING:
+            continue
+        for _scr in _ws.screens:
+            for _area in _scr.areas:
+                if _area.type == "NODE_EDITOR":
+                    _area.spaces[0].show_region_asset_shelf = False
+
+    # The timeline underneath it is an AREA, which needs an operator rather than a
+    # property -- and screen.area_close under temp_override genuinely works, unlike
+    # workspace.delete, which takes the same treatment and silently does nothing. The
+    # lab has no animation, so the strip is pure loss.
+    _win = bpy.data.window_managers[0].windows[0]
+    for _ws in bpy.data.workspaces:
+        if _ws.name not in WORKING:
+            continue
+        for _scr in _ws.screens:
+            for _area in list(_scr.areas):
+                if _area.type != "DOPESHEET_EDITOR":
+                    continue
+                with bpy.context.temp_override(window=_win, screen=_scr, area=_area):
+                    bpy.ops.screen.area_close()
+
     # The factory base leaves an empty "Scene" behind beside the appended one, which
     # shows up in every scene picker and invites working in the wrong one.
     for _s in list(bpy.data.scenes):
