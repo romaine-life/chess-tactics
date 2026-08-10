@@ -131,6 +131,13 @@ const RING_STEPS: ReadonlyArray<readonly [number, number]> = [
 // text-overflow: ellipsis, and the menu does not use it.
 export const LABEL_CLIP_RELIEF_SELECTOR = '.settings-tab-label, .settings-tab-label strong';
 
+// Outline width ceiling. Well past useful — a `-webkit-text-stroke` is centred on the glyph
+// outline, so half of it grows INWARD and the ~19px label's counters have closed long before this
+// — but the range is there to be run to its end rather than to stop where someone guessed the
+// answer was. The tab and the label both let the ink out (see the clip relief above), so a wide
+// stroke shows you exactly what it does, including bleeding over the icon and past the button.
+export const LABEL_OUTLINE_MAX_WIDTH = 16;
+
 /** True when the treatment paints outside the text box and would be clipped without relief. */
 export function outlineNeedsClipRelief(t: LabelTreatment): boolean {
   return t.outline !== 'off' && t.strokeW > 0;
@@ -421,7 +428,7 @@ function MainMenuViewer({ page, header, zoom = 1 }: { page: PageEntry; header?: 
                   <>
                     <SliderRow
                       label={<>Outline width · {outline === 'ring' ? `${Math.max(1, Math.round(strokeW))}px` : `${strokeW}px`}{strokeW === MM_LABEL_LIVE.strokeW ? ' · live (none)' : ''}</>}
-                      value={strokeW} set={setStrokeW} min={0} max={4} step={outline === 'ring' ? 1 : 0.5} nudge={outline === 'ring' ? 1 : 0.5} dflt={MM_LABEL_LIVE.strokeW}
+                      value={strokeW} set={setStrokeW} min={0} max={LABEL_OUTLINE_MAX_WIDTH} step={outline === 'ring' ? 1 : 0.5} nudge={outline === 'ring' ? 1 : 0.5} dflt={MM_LABEL_LIVE.strokeW}
                     />
                     <label className="tileset-category-select">
                       <span>Outline colour</span>
