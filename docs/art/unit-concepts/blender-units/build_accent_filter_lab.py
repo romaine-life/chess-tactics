@@ -88,6 +88,20 @@ if ol:
     ol.inputs["Sensitivity"].default_value=5.0
     ol.inputs["Color"].default_value=(*srgb("#181818"),1)
 
+# Bypass the 8Mat Dither Combiner. It was harmless while every material sat at Pass
+# Index 0 -- that routes to no slot -- but assigning indices 1 and 2 for the ID Mask
+# switches it on, and its demo gradients run dark->navy->green->lime on slot 1 and red
+# on slot 2. It then recolours the image before either of our ramps sees it, which is
+# a lime body and a red crown. Route around it rather than fight its ramps.
+comb = next((n for n in tree.nodes if n.bl_idname=="CompositorNodeGroup"
+             and n.node_tree and n.node_tree.name.startswith("8Mat")), None)
+if comb is not None and comb.inputs["Image"].is_linked and comb.outputs[0].is_linked:
+    upstream = comb.inputs["Image"].links[0].from_socket
+    for link in list(comb.outputs[0].links):
+        target = link.to_socket
+        tree.links.remove(link)
+        tree.links.new(upstream, target)
+
 rl = next(n for n in tree.nodes if n.bl_idname=="CompositorNodeRLayers")
 out_node = next(n for n in tree.nodes if n.bl_idname=="NodeGroupOutput")
 sink = out_node.inputs[0]
