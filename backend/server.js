@@ -100,6 +100,8 @@ const {
   runExpunctioReviewSurface,
   runGoldTransactionReviewSurface,
   titleBarMarkReviewSurface,
+  adlectioMarkSlot,
+  adlectioMarkMediaIssue,
   titleBarMarkSlot,
   titleBarMarkMediaIssue,
   runSectioWrapMediaIssue,
@@ -19642,6 +19644,9 @@ function mediaDomainProjectionIssue(row) {
   }
   if (titleBarMarkSlot(row.slot)) {
     return titleBarMarkMediaIssue(row, runtime.value);
+  }
+  if (adlectioMarkSlot(row.slot)) {
+    return adlectioMarkMediaIssue(row, runtime.value);
   }
   const runCardFrame = runCardFrameProjection(row);
   if (runCardFrame.claimed) return runCardFrame.issue;

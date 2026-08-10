@@ -20636,11 +20636,21 @@ button.tileset-relationship-cell {
   justify-content: center;
 }
 
-.run-gold-icon img {
+.run-gold-icon img,
+.run-adlectio-mark-icon img {
   block-size: 100%;
   image-rendering: pixelated;
   inline-size: 100%;
   object-fit: contain;
+}
+
+/* The mark for a record this Sectio visit admitted, drawn beside the coin it cost. Same seat rules
+   as the coin; the size belongs to whichever line mounts it, because this mark has no measure row
+   of its own. */
+.run-adlectio-mark-icon {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
 }
 
 .run-gold-icon.is-unavailable {
@@ -23767,18 +23777,38 @@ button.tileset-relationship-cell {
   padding-block: var(--run-expunctio-card-paint-start-inset) var(--run-expunctio-card-paint-end-inset);
 }
 
+/* One short line of state, seated level with the card's own title plate rather than floating in
+   the middle of the empty column the stripped-back tile leaves behind. */
 .run-expunctio-copy {
-  align-content: center;
+  align-content: start;
   display: grid;
   gap: var(--ds-space-1);
   min-inline-size: 0;
   grid-area: copy;
 }
 
-.run-expunctio-copy > :is(small, span),
-.run-expunctio-price > small {
+.run-expunctio-price > small,
+.run-expunctio-visit-mark {
   color: var(--skirmish-muted);
   font: var(--ds-weight-regular) var(--ds-text-md)/1.35 var(--ds-font-display);
+}
+
+/* The only words the companion says about the record itself: this visit admitted the card, and
+   Reset Sectio would take it back. It carries the tile's own ink rather than the muted register
+   the supporting labels use, because it reports state instead of labelling a field, and it wears
+   the installed coin the same way every other Run measure wears its mark. */
+.run-expunctio-visit-mark {
+  align-items: center;
+  color: var(--skirmish-ink);
+  display: inline-flex;
+  gap: var(--ds-space-1);
+}
+
+/* 30px: every hand-and-card candidate turned to mush below it. */
+.run-adlectio-mark-icon.run-expunctio-visit-mark-icon {
+  block-size: 30px;
+  flex: none;
+  inline-size: 30px;
 }
 
 .run-expunctio-price {

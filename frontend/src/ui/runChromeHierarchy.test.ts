@@ -5,6 +5,8 @@ import { describe, expect, it } from 'vitest';
 const runScreen = readFileSync(new URL('./RunScreen.tsx', import.meta.url), 'utf8');
 const runArmyWorkspace = readFileSync(new URL('./RunArmyWorkspace.tsx', import.meta.url), 'utf8');
 const runExpunctioWorkspace = readFileSync(new URL('./RunExpunctioWorkspace.tsx', import.meta.url), 'utf8');
+const runAdlectioMark = readFileSync(new URL('./RunAdlectioMark.tsx', import.meta.url), 'utf8');
+const tilePreview = readFileSync(new URL('./TilePreview.tsx', import.meta.url), 'utf8');
 const runTitleBarChips = readFileSync(new URL('./RunTitleBarChips.tsx', import.meta.url), 'utf8');
 const titleBarControls = readFileSync(new URL('./shell/TitleBarControls.tsx', import.meta.url), 'utf8');
 const app = readFileSync(new URL('./App.tsx', import.meta.url), 'utf8');
@@ -398,6 +400,25 @@ describe('Run chrome hierarchy', () => {
     expect(runExpunctioWorkspace).toContain("if (status === 'expuncted') return 'Athetized this visit';");
     expect(runExpunctioWorkspace).not.toContain("return 'Expunctio';");
     expect(runExpunctioWorkspace).toContain('className="run-expunctio-companion"');
+    // The gallery says which formations this visit admitted, because Reset Sectio takes back
+    // exactly those and nothing else on the tile reveals it.
+    expect(runExpunctioWorkspace).toContain('sectioAdmittedCardIds(run)');
+    // One component owns the line, so the Studio review mounts the real thing (ADR-0059) and the
+    // workspace cannot drift from what the owner judged.
+    expect(runExpunctioWorkspace).toContain('<RunAdlectioMarkLine />');
+    expect(runAdlectioMark).toContain('<span className="run-expunctio-visit-mark">');
+    expect(runAdlectioMark).toContain('Adlected this Sectio');
+    expect(styleCss).toMatch(/\.run-expunctio-visit-mark\s*\{[\s\S]*?color:\s*var\(--skirmish-ink\)/);
+    // No coin and no transaction mark in this line: the fee below it already paints the loss arrow
+    // and says what the card cost, so gold here says only what is already said.
+    expect(runAdlectioMark).not.toContain('RunGoldIcon');
+    expect(runExpunctioWorkspace).not.toContain('<RunGoldTransactionIcon');
+    // A review surface is a Studio category reached by clicking, never a review parameter on a
+    // player route (ADR-0058). Nothing in the Run may read one for this mark.
+    expect(runAdlectioMark).not.toContain('URLSearchParams');
+    expect(runAdlectioMark).not.toContain('Candidate=');
+    expect(tilePreview).toContain("id: 'adlectiomark', label: 'Adlectio Mark'");
+    expect(tilePreview).toContain('<AdlectioMarkReviewCatalog');
     expect(runExpunctioWorkspace).toContain('runCardFramePaintInsetRatios');
     expect(runExpunctioWorkspace).toContain('fillRole="outer"');
     expect(runExpunctioWorkspace).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
@@ -544,7 +565,12 @@ describe('Run chrome hierarchy', () => {
     expect(runExpunctioWorkspace).toContain('<h2 id="run-expunctio-workspace-title">Expunctio</h2>');
     expect(runExpunctioWorkspace).toContain('Athetize one complete formation.');
     expect(runExpunctioWorkspace).toContain('Individual units cannot be removed from a held card.');
-    expect(runExpunctioWorkspace).toContain('Athetize removes this card and every attached unit as one formation.');
+    // The tile repeats nothing the face, the workspace copy or the action already says: no card
+    // name beside a face that prints one, no per-tile restatement of the Athetize rule, and no
+    // attached-unit count left over from the retired per-unit Alienatio (ADR-0511).
+    expect(runExpunctioWorkspace).not.toContain('attached unit${');
+    expect(runExpunctioWorkspace).not.toContain('runCardName');
+    expect(runExpunctioWorkspace).not.toContain('Athetize removes this card and every attached unit as one formation.');
     expect(runExpunctioWorkspace).toContain('<RunGoldTransactionAmount direction="loss"');
     expect(runExpunctioWorkspace).toContain('onExpunct(card.id)');
     expect(runScreen).toContain('<RunExpunctioWorkspace run={shellRun} onExpunct={expunctCard} />');

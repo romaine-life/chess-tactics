@@ -4,6 +4,10 @@ const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 const test = require('node:test');
 const {
+  ADLECTIO_MARK_COMPONENT,
+  ADLECTIO_MARK_SLOT,
+  adlectioMarkMediaIssue,
+  adlectioMarkSlot,
   ATARAXIA_NUMERAL_COMPONENT,
   ATARAXIA_NUMERAL_PROOF_RENDERER,
   ATARAXIA_NUMERAL_PROOF_SCHEMA,
@@ -1496,4 +1500,49 @@ test('Run card rarity-frame review pins native pixels and the artwork-bezel deci
   }, rarityFrameSurfaceUrl), /candidate bytes/);
   const wrongUrl = rarityFrameSurfaceUrl.replace(rarityFrameSha, 'a'.repeat(64));
   assert.match(runCardRarityFrameOwnerProofIssue(row, { ...proof, surfaceUrl: wrongUrl }, wrongUrl), /exact Card Layout/);
+});
+
+const adlectioMarkRow = (overrides = {}) => ({
+  slot: ADLECTIO_MARK_SLOT,
+  domain: 'ui-kit',
+  role: 'icon',
+  media_type: 'image/png',
+  width: 61,
+  height: 63,
+  metadata: { runtime: { component: ADLECTIO_MARK_COMPONENT, nativeRole: ADLECTIO_MARK_COMPONENT, altText: '' } },
+  native_evidence: { inkBox: { width: 61, height: 63 } },
+  ...overrides,
+});
+
+test('the Adlectio mark is one registered ui-kit slot, not a shape', () => {
+  assert.equal(adlectioMarkSlot(ADLECTIO_MARK_SLOT), true);
+  assert.equal(adlectioMarkSlot('ui/kit/icons/game/wait.png'), false);
+  assert.equal(adlectioMarkSlot(''), false);
+});
+
+test('the Adlectio mark must be trimmed to its own ink and name its own component', () => {
+  // The seat draws with `contain`, so transparent margin comes straight off the glyph: an
+  // untrimmed mark would silently draw smaller than the coin beside it.
+  assert.equal(adlectioMarkMediaIssue(adlectioMarkRow()), null);
+  assert.match(
+    adlectioMarkMediaIssue(adlectioMarkRow({ native_evidence: { inkBox: { width: 48, height: 63 } } })),
+    /trimmed to its own ink/,
+  );
+  assert.match(adlectioMarkMediaIssue(adlectioMarkRow({ native_evidence: {} })), /nativeEvidence\.inkBox/);
+  assert.match(adlectioMarkMediaIssue(adlectioMarkRow({ metadata: {} })), /requires metadata\.runtime/);
+  assert.match(
+    adlectioMarkMediaIssue(adlectioMarkRow({
+      metadata: { runtime: { component: 'title-bar-mark', nativeRole: 'title-bar-mark', altText: '' } },
+    })),
+    /component must be adlectio-mark/,
+  );
+  // The line already says "Adlected this visit"; alt text here would be announced twice.
+  assert.match(
+    adlectioMarkMediaIssue(adlectioMarkRow({
+      metadata: { runtime: { component: ADLECTIO_MARK_COMPONENT, nativeRole: ADLECTIO_MARK_COMPONENT, altText: 'card' } },
+    })),
+    /altText must be empty/,
+  );
+  assert.match(adlectioMarkMediaIssue(adlectioMarkRow({ media_type: 'image/webp' })), /image\/png/);
+  assert.match(adlectioMarkMediaIssue(adlectioMarkRow({ domain: 'terrain' })), /ui-kit domain/);
 });
