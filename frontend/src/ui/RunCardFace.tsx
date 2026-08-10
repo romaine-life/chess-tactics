@@ -11,6 +11,7 @@ import { projectBoardPoint, resolvedLiveMediaUrl, TILE_TEMPLATE } from '@chess-t
 import { defaultFacingForSide, paletteForSide, pieceSpritePath, type PlayablePieceType, type UnitPalette } from '../core/pieces';
 import type { RunCardFaceContent, RunCardFormationPiece, RunCardGrant } from './runCardFaceContent';
 import {
+  RUN_CARD_COST_LETTER_SPACING_CQW,
   RUN_CARD_FRAME_BOX_NAMES,
   RUN_CARD_STANDARD_FRAME_GEOMETRY,
   RUN_CARD_TEXT_PLACEMENT,
@@ -895,6 +896,9 @@ export function RunCardFace({
       style={{
         '--run-card-prototype-width': width,
         '--run-card-cost-size': `${runCardCostSizeCqw(displayed.card.cost, tuning.costSize)}cqw`,
+        // The tracking the size above already priced in, so CSS sets the same number rather
+        // than a second one that the cap would be blind to.
+        '--run-card-cost-tracking': `${RUN_CARD_COST_LETTER_SPACING_CQW}cqw`,
         '--run-card-title-size': `${tuning.titleSize}cqw`,
         '--run-card-type-size': `${tuning.typeSize}cqw`,
         '--run-card-text-inset': `${tuning.textInset}cqw`,

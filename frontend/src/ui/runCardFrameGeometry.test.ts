@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  RUN_CARD_COIN_FACE_CQW,
+  RUN_CARD_COIN_FACE_FILL,
+  RUN_CARD_COST_LETTER_SPACING_CQW,
+  RUN_CARD_NUMERAL_EM_ADVANCE,
   RUN_CARD_FRAME_BOX_NAMES,
   RUN_CARD_FRAME_GEOMETRY_BY_VARIANT,
   RUN_CARD_FRAME_NATIVE_HEIGHT,
@@ -98,10 +102,36 @@ describe('Run card frame geometry', () => {
   it('sizes the cost reading to the coin face instead of letting it crowd the rim', () => {
     // A one-digit reading never reaches the cap, so the common card is untouched.
     for (const cost of [1, 4, 9]) expect(runCardCostSizeCqw(cost, 6.2)).toBe(6.2);
-    // Two digits are measured as a pair — "1" is narrower than "0" — and shrink
-    // only as far as it takes to sit inside the face.
-    for (const cost of [10, 11, 12]) expect(runCardCostSizeCqw(cost, 6.2)).toBe(5.33);
+    // Longer readings shrink only as far as it takes to sit inside the face.
+    for (const cost of [10, 11, 12, 90]) expect(runCardCostSizeCqw(cost, 6.2)).toBe(5.75);
+    for (const cost of [100, 160, 250]) expect(runCardCostSizeCqw(cost, 6.2)).toBe(4.1);
     expect(runCardCostSizeCqw(12, 4)).toBe(4);
+  });
+
+  it('shrinks a reading by what it needs, not by a step that grows with its length', () => {
+    // A three-digit price is one digit wider than a two-digit one, so it may be somewhat
+    // smaller. It may not be a THIRD smaller, which is what a second flat shrink in CSS
+    // produced by winning at three digits while the cap won at two.
+    const two = runCardCostSizeCqw(60, 6.2);
+    const three = runCardCostSizeCqw(160, 6.2);
+    expect(three).toBeLessThan(two);
+    expect(three / two).toBeGreaterThan(.7);
+  });
+
+  it('measures the display face rather than assuming digits scale', () => {
+    // Advance Wars 2 GBA is monospaced at this advance for every digit but "1", measured in
+    // the font. So the widest reading of a length is that many advances, and the widest ink
+    // of every multi-digit reading lands on the same share of the coin face.
+    expect(RUN_CARD_NUMERAL_EM_ADVANCE).toBe(.4375);
+    const inkCqw = (digits: number): number => {
+      const size = runCardCostSizeCqw(Number('9'.repeat(digits)), 6.2);
+      return RUN_CARD_NUMERAL_EM_ADVANCE * digits * size + RUN_CARD_COST_LETTER_SPACING_CQW * digits;
+    };
+    const face = RUN_CARD_COIN_FACE_CQW * RUN_CARD_COIN_FACE_FILL;
+    expect(inkCqw(2)).toBeCloseTo(face, 1);
+    expect(inkCqw(3)).toBeCloseTo(face, 1);
+    // Four digits are not reachable in play, but the rule must not fall off a table's end.
+    expect(inkCqw(4)).toBeCloseTo(face, 1);
   });
 
   it('states the entire text-placement rule as two shared values', () => {

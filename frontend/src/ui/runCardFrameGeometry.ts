@@ -135,21 +135,38 @@ export const RUN_CARD_COIN_FACE_CQW = 6.01;
 export const RUN_CARD_COIN_FACE_FILL = .72;
 
 /**
- * The display face's widest numeral at each length, in em. Digits are not equal
- * width — "1" is narrower than "0" — so a two-digit reading is measured as a
- * pair rather than assumed to be twice one digit.
+ * The display face's digit advance, in em, measured in the font itself rather than estimated.
+ *
+ * The face is monospaced at this width for every digit but "1", which is narrower — so the
+ * WIDEST reading of any length is that many of this advance, and a reading carrying a 1 comes
+ * in under its own cap instead of over it. There is no per-length table to keep: a table that
+ * declared a two-digit pair at .8125em was measuring a pair CONTAINING the narrow 1, which
+ * understated every widest reading by 7%, and had no entry at all past two digits.
  */
-const NUMERAL_EM_WIDTH: readonly number[] = Object.freeze([0, .4375, .8125]);
+export const RUN_CARD_NUMERAL_EM_ADVANCE = .4375;
 
 /**
- * The cost numeral's size: the approved size, reduced only as far as it takes to
- * keep the reading inside the coin's face. One digit never reaches the cap, so
- * the common card is unchanged and two digits stop touching the rim.
+ * The tightening a multi-digit reading is set with, in cqw, applied after every digit. The size
+ * below reads it because it is real width: a reading is its advances PLUS its tracking, and a
+ * cap blind to the tracking leaves the coin under-filled.
+ */
+export const RUN_CARD_COST_LETTER_SPACING_CQW = -.35;
+
+/**
+ * The cost numeral's size: the approved size, reduced only as far as it takes to keep the
+ * reading inside the coin's face. One digit never reaches the cap, so the common card is
+ * unchanged; longer readings shrink exactly enough to sit in the face and no further.
+ *
+ * This is the ONLY authority on the numeral's size. A second, flat shrink in CSS used to stack
+ * on top of it, and because the two won at different lengths — CSS at two digits, this cap at
+ * three — a three-digit price rendered a third smaller than a two-digit one for no reason the
+ * geometry could account for.
  */
 export function runCardCostSizeCqw(cost: number, approvedSizeCqw: number): number {
   const digits = Math.abs(Math.trunc(cost)).toString().length;
-  const emWidth = NUMERAL_EM_WIDTH[digits] ?? NUMERAL_EM_WIDTH[NUMERAL_EM_WIDTH.length - 1] * digits / 2;
-  const fits = (RUN_CARD_COIN_FACE_CQW * RUN_CARD_COIN_FACE_FILL) / emWidth;
+  const emWidth = RUN_CARD_NUMERAL_EM_ADVANCE * digits;
+  const tracking = digits > 1 ? RUN_CARD_COST_LETTER_SPACING_CQW * digits : 0;
+  const fits = (RUN_CARD_COIN_FACE_CQW * RUN_CARD_COIN_FACE_FILL - tracking) / emWidth;
   return Math.round(Math.min(approvedSizeCqw, fits) * 100) / 100;
 }
 

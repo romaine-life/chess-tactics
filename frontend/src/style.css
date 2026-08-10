@@ -27090,10 +27090,14 @@ html.predrawn-reference-capture-mode .predrawn-reference-export-frame {
   transform: translateY(calc(var(--run-card-text-ink-centre, .0667) * 1em));
 }
 
+/* Tracking only. The size is `--run-card-cost-size`, which runCardCostSizeCqw already reduced
+   to fit the coin face WITH this tracking priced in — a second flat shrink here stacked on that
+   one and, because the two won at different lengths, made a three-digit price a third smaller
+   than a two-digit one. The padding gives back the trailing letter-space so the reading stays
+   centred in its seat. */
 .run-card-prototype-cost.is-multi-digit {
-  font-size: calc(var(--run-card-cost-size, 6.2cqw) * .76);
-  letter-spacing: -.35cqw;
-  padding-inline-end: .35cqw;
+  letter-spacing: var(--run-card-cost-tracking, -.35cqw);
+  padding-inline-end: calc(var(--run-card-cost-tracking, -.35cqw) * -1);
 }
 
 /* A priceless card is struck with its mark, centred on the coin the numeral would read on
