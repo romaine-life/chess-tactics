@@ -363,6 +363,24 @@ const MANUBIUM_EXAMPLE: Readonly<Record<ManubiumId, ManubiumExample>> = {
     opened: [],
     seed: 822,
   },
+  'humble-mate': {
+    // A PAWN's mate, drawn because it is the top of this ladder and the least likely thing a
+    // player will ever see. Four of the King's own men seal it in; the fifth square is held by
+    // the Pawn giving the mate, which the second Pawn defends so the King cannot simply take it.
+    size: { cols: 5, rows: 5 },
+    pieces: [
+      unit('player', 'pawn', 2, 1),
+      unit('player', 'pawn', 1, 2),
+      unit('enemy', 'king', 1, 0),
+      unit('enemy', 'rook', 0, 0),
+      unit('enemy', 'knight', 2, 0),
+      unit('enemy', 'pawn', 0, 1),
+      unit('enemy', 'pawn', 1, 1),
+    ],
+    struck: ['1,0'],
+    opened: ['2,2'],
+    seed: 899,
+  },
   'discovered-check': {
     // The Bishop has just stepped off the file to the corner, and the Rook behind it now runs
     // all the way to the King. The open squares between them are the discovery.
@@ -535,8 +553,9 @@ function ManubiaeSection({ framed }: { framed: boolean }): ReactElement {
       <InnerChromeBox className="enchiridion-rule-exceptions">
         <h3>How they add up</h3>
         <p>Only <strong>your</strong> units earn these — the enemy does the same things and is paid nothing — and each one pays again every time you land it.</p>
-        <p>One move may earn <strong>several</strong> at once, and each pays in full: a capture that also forks is both, and a Knight that promotes into a smothered mate is both.</p>
-        <p>Two pairs are the exception, because in each the second is a kind of the first. Every double check <em>is</em> a discovered check — uncovering the second attacker is the only way to give check with two units at once — and every underpromotion mate <em>is</em> a promotion mate. Each pair is rungs of one ladder, so the better rung pays and the other stands down: a double check pays <strong>30</strong> in place of the discovered check&rsquo;s 20, never 50 for the same check.</p>
+        <p>One move may earn <strong>several</strong> at once, and each pays in full: a capture that also forks is both, and a promotion that mates is paid alongside the check it discovered.</p>
+        <p>The two checks are one ladder, because every double check <em>is</em> a discovered check — uncovering the second attacker is the only way to give check with two units at once. The better rung pays and the other stands down: a double check pays <strong>30</strong> in place of the discovered check&rsquo;s 20, never 50 for the same check.</p>
+        <p><strong>The mate pays once.</strong> Every Battle ends in checkmate, and four of these describe one — what the mating unit is worth, what the King&rsquo;s own men were doing around it, and whether that unit arrived by promoting. A smothered mate <em>is</em> a Knight&rsquo;s mate and an underpromotion mate <em>is</em> a mate by the lesser piece you chose, so they are rungs of one ladder too. The dearest that fits your mate is the one you are paid.</p>
         <p><strong>Undo</strong> takes back the gold along with the move that earned it, so no deed here is worth undoing for profit.</p>
       </InnerChromeBox>
     </ReferenceSectionFrame>

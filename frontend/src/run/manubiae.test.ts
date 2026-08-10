@@ -217,6 +217,96 @@ describe('what a committed board earns', () => {
   });
 });
 
+describe('the mate pays once, for what is standing there giving it', () => {
+  /**
+   * A Pawn's mate: the King sealed against the edge by four of its own men, the fifth square
+   * held by the mating Pawn itself, which a second Pawn defends so the King cannot take it.
+   */
+  function pawnMate() {
+    const pawn = P('player', 'pawn', 2, 2, { pawnForward: 'north' });
+    return {
+      pawn,
+      pieces: [
+        pawn,
+        P('player', 'pawn', 1, 2, { pawnForward: 'north' }),
+        P('enemy', 'king', 1, 0),
+        P('enemy', 'rook', 0, 0),
+        P('enemy', 'knight', 2, 0),
+        P('enemy', 'pawn', 0, 1, { pawnForward: 'south' }),
+        P('enemy', 'pawn', 1, 1, { pawnForward: 'south' }),
+      ],
+    };
+  }
+
+  it('pays a Pawn the most, seated on the Pawn that gave the mate', () => {
+    const { pawn, pieces } = pawnMate();
+    const got = earned(pieces, pawn, { x: 2, y: 1 });
+
+    expect(ids(got)).toEqual(['humble-mate']);
+    expect(got[0].award).toEqual({ id: 'humble-mate', piece: 'pawn' });
+    expect(got[0].at).toEqual({ x: 2, y: 1 });
+  });
+
+  it('names the unit that gave the mate, and pays a Queen nothing at all', () => {
+    // One back-rank mate, delivered onto the same square by two different units. The gradient
+    // between the piece types is pinned in run/model.test.ts; what matters here is that the
+    // board's answer is the piece actually standing there.
+    const board = (type: PieceType) => {
+      const mater = P('player', type, 7, 4);
+      return { mater, pieces: [mater, P('enemy', 'king', 0, 0), P('enemy', 'pawn', 0, 1), P('enemy', 'pawn', 1, 1)] };
+    };
+    const rook = board('rook');
+    expect(earned(rook.pieces, rook.mater, { x: 7, y: 0 })[0].award).toEqual({ id: 'humble-mate', piece: 'rook' });
+
+    const queen = board('queen');
+    expect(earned(queen.pieces, queen.mater, { x: 7, y: 0 })).toEqual([]);
+  });
+
+  it('reads what is STANDING there, so a queened Pawn mates as a Queen and pays nothing', () => {
+    // The rest of this module prices a unit by what it started as, because that is what it cost
+    // the Run. This question is the opposite one — how little is on the board giving mate — and
+    // paying a promoted Queen the Pawn rate would put the most ordinary mate at the top of the
+    // ladder.
+    const queened = P('player', 'queen', 7, 4, { promotedFrom: 'pawn' });
+    const pieces = [queened, P('enemy', 'king', 0, 0), P('enemy', 'pawn', 0, 1), P('enemy', 'pawn', 1, 1)];
+
+    expect(earned(pieces, queened, { x: 7, y: 0 })).toEqual([]);
+  });
+
+  it('pays a smothered mate INSTEAD of the humble mate its Knight would earn', () => {
+    const knight = P('player', 'knight', 4, 3);
+    const king = P('enemy', 'king', 7, 0);
+    const pieces = [knight, king, P('enemy', 'rook', 6, 0), P('enemy', 'pawn', 7, 1), P('enemy', 'pawn', 6, 1)];
+    const got = ids(earned(pieces, knight, { x: 5, y: 1 }));
+
+    expect(got).toEqual(['smothered-mate']);
+    expect(got).not.toContain('humble-mate');
+  });
+
+  it('pays nothing for a check that is not mate, however small the unit giving it', () => {
+    // The bounty is for ENDING the Battle with a lesser piece, not for checking with one.
+    const pawn = P('player', 'pawn', 2, 2, { pawnForward: 'north' });
+    const pieces = [pawn, P('enemy', 'king', 1, 0)];
+
+    expect(earned(pieces, pawn, { x: 2, y: 1 })).toEqual([]);
+  });
+
+  it('pays the enemy nothing for mating the player with a Pawn', () => {
+    const pawn = P('enemy', 'pawn', 2, 9, { pawnForward: 'south' });
+    const pieces = [
+      pawn,
+      P('enemy', 'pawn', 1, 9, { pawnForward: 'south' }),
+      P('player', 'king', 1, 11),
+      P('player', 'rook', 0, 11),
+      P('player', 'knight', 2, 11),
+      P('player', 'pawn', 0, 10, { pawnForward: 'north' }),
+      P('player', 'pawn', 1, 10, { pawnForward: 'north' }),
+    ];
+
+    expect(earned(pieces, pawn, { x: 2, y: 10 })).toEqual([]);
+  });
+});
+
 describe('a Pawn that ends the Battle by arriving', () => {
   /** A Pawn one step from the far rank, with the enemy King sealed against that rank by its own men. */
   function backRankBoard() {
@@ -315,6 +405,24 @@ describe('a Pawn that ends the Battle by arriving', () => {
     expect(got).toContain('advantageous-capture');
     expect(got).not.toContain('promotion-mate');
     expect(got).not.toContain('underpromotion-mate');
+  });
+
+  it('pays an underpromotion mate INSTEAD of the humble mate the same Knight would earn', () => {
+    // Both entries describe one mate — the Knight is the lesser piece the Pawn chose — so the
+    // dearer rung pays and the other stands down. The mate pays once.
+    const pawn = P('player', 'pawn', 2, 1, { pawnForward: 'north' });
+    const pieces = [
+      pawn,
+      P('player', 'pawn', 1, 3, { pawnForward: 'north' }),
+      P('enemy', 'king', 0, 1),
+      P('enemy', 'bishop', 0, 0),
+      P('enemy', 'pawn', 1, 0, { pawnForward: 'south' }),
+      P('enemy', 'pawn', 1, 1, { pawnForward: 'south' }),
+    ];
+    const got = ids(earnedByPromoting(pieces, pawn, { x: 2, y: 0 }, 'knight'));
+
+    expect(got).toEqual(['underpromotion-mate']);
+    expect(got).not.toContain('humble-mate');
   });
 
   it('pays the enemy nothing for promoting into mate', () => {

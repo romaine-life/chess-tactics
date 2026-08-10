@@ -27,8 +27,11 @@ import {
 import type { GameEvent, GameState, Piece, PieceType, Vec } from '../core/types';
 import {
   manubiaeUnitWorth,
+  manubiumGoldTenths,
+  PIECE_VALUE,
   RUN_ROYAL_FORK_MIN_VICTIM_VALUE,
   type ManubiumAward,
+  type RunArmyPieceType,
   type UnderpromotionPieceType,
 } from './model';
 
@@ -76,6 +79,24 @@ function underpromotionPiece(to: PieceType): UnderpromotionPieceType | null {
   return UNDERPROMOTION_PIECES.includes(to) ? (to as UnderpromotionPieceType) : null;
 }
 
+const RUN_ARMY_PIECES: readonly PieceType[] = ['pawn', 'knight', 'bishop', 'rook', 'queen', 'king'];
+
+/** Whether a board unit is one the Run can price at all — an obstacle is not. */
+function isRunArmyPieceType(type: PieceType): type is RunArmyPieceType {
+  return RUN_ARMY_PIECES.includes(type);
+}
+
+/**
+ * What a unit is worth AS IT STANDS, by the type it is now.
+ *
+ * Deliberately not `manubiaeUnitWorth`, which reads `promotedFrom` to answer what a unit cost the
+ * Run. Both questions are legitimate and they are not the same question; see the humble-mate
+ * comment below for why this one has to be the board's answer rather than the roster's.
+ */
+function boardPieceValue(piece: Piece): number {
+  return isRunArmyPieceType(piece.type) ? PIECE_VALUE[piece.type] : Number.POSITIVE_INFINITY;
+}
+
 /** One Manubium the board earned, and the square it is seated on. */
 export interface EarnedManubium {
   readonly award: ManubiumAward;
@@ -95,7 +116,7 @@ export interface EarnedManubium {
  * the Run pay for a line it drew itself.
  *
  * Returned in reading order: what the capture won, then what the move threatens, then the mate
- * that ends it.
+ * that ends it — of which there is at most ONE, however many entries describe it.
  */
 export function manubiaeEarnedBy(game: GameState, events: readonly GameEvent[]): EarnedManubium[] {
   const earned: EarnedManubium[] = [];
@@ -146,9 +167,6 @@ export function manubiaeEarnedBy(game: GameState, events: readonly GameEvent[]):
     ) {
       earned.push({ award: { id: 'royal-fork' }, at });
     }
-    if (smotheredMateBy(mover, game.pieces, game.size, env)) {
-      earned.push({ award: { id: 'smothered-mate' }, at });
-    }
   }
 
   // What a check IS is a property of the position, not of a piece, so the check shapes are read
@@ -174,34 +192,81 @@ export function manubiaeEarnedBy(game: GameState, events: readonly GameEvent[]):
     if (shape) earned.push({ award: shape, at: { x: mover.x, y: mover.y } });
   }
 
-  // A Pawn that walked the whole board and ended the Battle the moment it arrived. Read last,
-  // because it is the last thing that happens: the deed is the arrival itself.
+  // THE MATE PAYS ONCE. Read last, because it is the last thing that happens.
   //
-  // The new piece has to be GIVING the check. A Pawn that queens while some other unit delivers
-  // the mate has not mated by promoting — that check is a discovered one and is paid above as
-  // the different thing it is. Being among the checkers is the bar rather than being the only
-  // one, so a promotion that mates as half of a double check still counts: it is still the
-  // arriving piece that ends the Battle.
+  // Every Battle ends in checkmate (ADR-0543), so unlike everything above, the end of a Battle
+  // always has SOMETHING here to say about it — and four entries describe it: what the mating
+  // unit is worth, what the King's own men were doing around it, and whether the unit arrived by
+  // promotion. Left to stack, one move would collect all four for one mate. They are rungs of
+  // one ladder in exactly the sense ADR-0540 gave the two checks: a smothered mate IS a mate by
+  // a Knight, and an underpromotion mate IS a mate by the lesser piece the Pawn chose. So the
+  // candidates are gathered and the DEAREST is paid, the rest standing down.
   //
-  // Mate needs no search here. `checkers` is already the committed board's answer to "is the
-  // enemy King attacked", and `sideHasLegalMove` is the same "no legal action" expression the
-  // canonical adjudicator uses (ADR-0059), so this cannot call a position mate that the Battle
-  // does not.
+  // Mate needs no search. `checkers` is already the committed board's answer to "is the enemy
+  // King attacked", and `sideHasLegalMove` is the same "no legal action" expression the canonical
+  // adjudicator uses (ADR-0059), so this cannot call a position mate that the Battle does not.
   const mated = checkers.length > 0 && !sideHasLegalMove(game.pieces, 'enemy', game.size, env);
   if (mated) {
+    const candidates: EarnedManubium[] = [];
+
+    for (const event of playerMoved) {
+      const mover = pieceOf(event.pieceId);
+      if (mover?.alive && smotheredMateBy(mover, game.pieces, game.size, env)) {
+        candidates.push({ award: { id: 'smothered-mate' }, at: { x: mover.x, y: mover.y } });
+      }
+    }
+
+    // A Pawn that walked the whole board and ended the Battle the moment it arrived.
+    //
+    // The new piece has to be GIVING the check. A Pawn that queens while some other unit delivers
+    // the mate has not mated by promoting — that check is a discovered one and is paid above as
+    // the different thing it is. Being among the checkers is the bar rather than being the only
+    // one, so a promotion that mates as half of a double check still counts.
     for (const event of events) {
       if (event.kind !== 'promoted') continue;
       const promoted = pieceOf(event.pieceId);
       if (promoted?.side !== 'player' || !promoted.alive) continue;
       if (!checkers.some((checker) => checker.id === promoted.id)) continue;
-      // Rungs of one ladder again: an underpromotion mate IS a promotion mate, so the better
-      // rung pays and the other stands down, exactly as the two checks do above.
       const under = underpromotionPiece(event.to);
-      earned.push({
+      candidates.push({
         award: under ? { id: 'underpromotion-mate', piece: under } : { id: 'promotion-mate' },
         at: { x: promoted.x, y: promoted.y },
       });
     }
+
+    // The floor: what is actually standing there giving mate. Paid on the LEAST valuable checker,
+    // because when two units mate at once the deed is the smaller of them.
+    //
+    // This reads the piece's CURRENT type where the rest of this module reads `promotedFrom`, and
+    // the divergence is the point. `manubiaeUnitWorth` answers "what did this cost the Run", which
+    // is why a queened Pawn is still priced as a Pawn when it captures. The question here is the
+    // opposite one — how little is standing on the board giving mate — and a Queen is a Queen
+    // whatever walked up the board to become her. Pricing her as a Pawn would pay the top of this
+    // ladder for the most ordinary mate there is.
+    const humblest = checkers
+      .filter((checker) => checker.side === 'player')
+      .reduce<Piece | null>(
+        (best, checker) => (
+          !best || boardPieceValue(checker) < boardPieceValue(best) ? checker : best
+        ),
+        null,
+      );
+    if (humblest && isRunArmyPieceType(humblest.type)) {
+      candidates.push({
+        award: { id: 'humble-mate', piece: humblest.type },
+        at: { x: humblest.x, y: humblest.y },
+      });
+    }
+
+    const best = candidates.reduce<EarnedManubium | null>(
+      (dearest, candidate) => (
+        !dearest || manubiumGoldTenths(candidate.award) > manubiumGoldTenths(dearest.award)
+          ? candidate
+          : dearest
+      ),
+      null,
+    );
+    if (best && manubiumGoldTenths(best.award) > 0) earned.push(best);
   }
 
   return earned;

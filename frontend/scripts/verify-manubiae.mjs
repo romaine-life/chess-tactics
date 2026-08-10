@@ -24,7 +24,7 @@
 //   e.g. a /run/craft/<id> link crafted onto a Battle whose opening position offers a capture
 //   worth more than the unit that takes it.
 //
-// `--want` narrows the search to one entry — `advantageous-capture`, `royal-fork`,
+// `--want` narrows the search to one entry — `advantageous-capture`, `royal-fork`, `humble-mate`,
 // `discovered-check`, `double-check`, `en-passant`, `smothered-mate`, `promotion-mate` — for
 // proving a single bounty against a position known to offer it. Without it the gate takes
 // whatever the position offers first, which is what you want when the question is "does the

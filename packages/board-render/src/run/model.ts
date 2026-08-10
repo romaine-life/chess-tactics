@@ -296,7 +296,8 @@ export type ManubiumId =
   | 'en-passant'
   | 'smothered-mate'
   | 'promotion-mate'
-  | 'underpromotion-mate';
+  | 'underpromotion-mate'
+  | 'humble-mate';
 
 /** What a Pawn may become instead of a Queen. The Queen is the ordinary case, so she is not here. */
 export type UnderpromotionPieceType = Exclude<PromotionPieceType, 'queen'>;
@@ -350,6 +351,34 @@ export const RUN_UNDERPROMOTION_MATE_TENTHS: Readonly<Record<UnderpromotionPiece
 });
 
 /**
+ * What a humble mate pays for each point the mating unit falls short of a Queen.
+ *
+ * A Queen is 9, so a Queen's mate comes out at exactly nothing and "anything but a Queen" is
+ * what the arithmetic SAYS rather than a clause bolted onto it. Every other unit is paid for
+ * the distance: a Rook 12, a Bishop or Knight 18, a Pawn 24.
+ *
+ * Three a point rather than the two an advantageous capture and Deditio pay, because this is
+ * counted once per Battle at most while those are counted many times — but still in the low
+ * band, and for the same reason. Every Battle ends in checkmate (ADR-0543), so unlike every
+ * other Manubium this one is nearly always available; a Rook mate is the ordinary way a Battle
+ * finishes, and paying 12 for it is the Run noticing something you were going to do anyway. The
+ * gradient is where the teaching is: it is worth looking for the Knight's mate instead.
+ */
+export const RUN_HUMBLE_MATE_TENTHS_PER_POINT = 3;
+
+/**
+ * What a mate delivered by `piece` pays — nothing at all for a Queen.
+ *
+ * The King's zero on the piece scale is a sentinel for "never bought" and would otherwise read
+ * as the humblest unit on the board, paying the most. It cannot arise, since a King may not
+ * give check at all, but the scale is not asked to be lucky about it.
+ */
+export function humbleMateGoldTenths(piece: RunArmyPieceType): number {
+  if (piece === 'king') return 0;
+  return Math.max(0, PIECE_VALUE.queen - PIECE_VALUE[piece]) * RUN_HUMBLE_MATE_TENTHS_PER_POINT;
+}
+
+/**
  * Every Manubium, cheapest first, which is also roughly rarest-last-to-first: the ladder
  * runs from what a competent player does several times a Battle to what they may never do.
  *
@@ -370,6 +399,14 @@ export const RUN_MANUBIAE: readonly ManubiumDefinition[] = Object.freeze([
     name: 'Royal fork',
     earnedBy: 'Attack the enemy King and a Rook or Queen with one unit, from the square it just moved to. The fork has to hold: taking that unit must cost the enemy more than the unit is worth.',
     goldTenths: GOLD_SCALE,
+  },
+  {
+    id: 'humble-mate',
+    name: 'Humble mate',
+    earnedBy: 'Deliver the checkmate with anything but a Queen. The less the mating unit is worth the more it pays, so a Pawn pays most of all. When two units mate at once it is the lesser of them that is paid for.',
+    goldTenths: null,
+    // Written from the rate rather than beside it, so the sentence cannot drift from the gold.
+    priceNote: `${humbleMateGoldTenths('rook')} for a Rook, ${humbleMateGoldTenths('knight')} for a Bishop or Knight, ${humbleMateGoldTenths('pawn')} for a Pawn`,
   },
   {
     id: 'discovered-check',
@@ -424,7 +461,8 @@ export const RUN_MANUBIUM_BY_ID: Readonly<Record<ManubiumId, ManubiumDefinition>
 export type ManubiumAward =
   | { readonly id: 'advantageous-capture'; readonly marginPoints: number }
   | { readonly id: 'underpromotion-mate'; readonly piece: UnderpromotionPieceType }
-  | { readonly id: Exclude<ManubiumId, 'advantageous-capture' | 'underpromotion-mate'> };
+  | { readonly id: 'humble-mate'; readonly piece: RunArmyPieceType }
+  | { readonly id: Exclude<ManubiumId, 'advantageous-capture' | 'underpromotion-mate' | 'humble-mate'> };
 
 /**
  * What a unit is worth when Manubiae compares two of them — what it STARTED as, never what
@@ -454,6 +492,7 @@ export function manubiumGoldTenths(award: ManubiumAward): number {
     return Math.max(0, Math.round(award.marginPoints)) * RUN_ADVANTAGEOUS_CAPTURE_TENTHS_PER_POINT;
   }
   if (award.id === 'underpromotion-mate') return RUN_UNDERPROMOTION_MATE_TENTHS[award.piece] ?? 0;
+  if (award.id === 'humble-mate') return humbleMateGoldTenths(award.piece);
   return RUN_MANUBIUM_BY_ID[award.id].goldTenths ?? 0;
 }
 

@@ -771,8 +771,8 @@ describe('Manubiae — what the board pays for', () => {
     // The catalog is the source. A named constant that disagreed with it would be a second
     // price for the same deed, which is exactly what naming the category was meant to end.
     expect(RUN_MANUBIAE.map((entry) => entry.id)).toEqual([
-      'advantageous-capture', 'royal-fork', 'discovered-check', 'double-check', 'en-passant', 'smothered-mate',
-      'promotion-mate', 'underpromotion-mate',
+      'advantageous-capture', 'royal-fork', 'humble-mate', 'discovered-check', 'double-check',
+      'en-passant', 'smothered-mate', 'promotion-mate', 'underpromotion-mate',
     ]);
     expect(new Set(RUN_MANUBIAE.map((entry) => entry.id)).size).toBe(RUN_MANUBIAE.length);
     expect(RUN_EN_PASSANT_BOUNTY_TENTHS).toBe(50);
@@ -805,6 +805,29 @@ describe('Manubiae — what the board pays for', () => {
     // The scaled entry's own words are written FROM those rates, so the sentence in the
     // Enchiridion cannot drift from the gold the player is handed.
     expect(RUN_MANUBIUM_BY_ID['underpromotion-mate'].priceNote).toBe('60 for a Rook, 80 for a Bishop or Knight');
+  });
+
+  it('pays a humble mate for the distance the mating unit falls short of a Queen', () => {
+    // The Queen's own 9 makes her mate come out at exactly nothing, so "anything but a Queen" is
+    // what the arithmetic says rather than a clause bolted onto it.
+    expect(manubiumGoldTenths({ id: 'humble-mate', piece: 'queen' })).toBe(0);
+    expect(manubiumGoldTenths({ id: 'humble-mate', piece: 'rook' })).toBe(12);
+    expect(manubiumGoldTenths({ id: 'humble-mate', piece: 'bishop' })).toBe(18);
+    expect(manubiumGoldTenths({ id: 'humble-mate', piece: 'knight' })).toBe(18);
+    expect(manubiumGoldTenths({ id: 'humble-mate', piece: 'pawn' })).toBe(24);
+    // The King's zero on the piece scale is a sentinel for "never bought" and would otherwise
+    // read as the humblest unit on the board. A King cannot give check, so this cannot arise —
+    // the scale is simply not asked to be lucky about it.
+    expect(manubiumGoldTenths({ id: 'humble-mate', piece: 'king' })).toBe(0);
+    expect(RUN_MANUBIUM_BY_ID['humble-mate'].priceNote)
+      .toBe('12 for a Rook, 18 for a Bishop or Knight, 24 for a Pawn');
+    // And every rung of the mate ladder above it outpays it, which is what makes "the dearest
+    // pays" and "the most specific pays" the same rule rather than two that can disagree.
+    const humblest = manubiumGoldTenths({ id: 'humble-mate', piece: 'pawn' });
+    for (const better of ['smothered-mate', 'promotion-mate'] as const) {
+      expect(manubiumGoldTenths({ id: better })).toBeGreaterThan(humblest);
+    }
+    expect(manubiumGoldTenths({ id: 'underpromotion-mate', piece: 'rook' })).toBeGreaterThan(humblest);
   });
 
   it('scales an advantageous capture by the material actually won', () => {
