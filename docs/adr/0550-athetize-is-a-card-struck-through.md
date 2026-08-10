@@ -70,13 +70,20 @@ inside a gold filigree border, crossed corner to corner by one bold red X. It sa
   registers as a trimmed game-condition icon in the live-media policy, accepting a square
   raster from 16×16 through 64×64 whose runtime frame equals its own side.
 
-**The pixels are the owner's call, not the agent's.** Ten candidates are uploaded to the
-slot and mounted at `/studio?athetizeIconReview=1` — each one in the real Expunctio
-button, in both states that button has, with its native raster beside it. Nothing is
-installed until the owner installs one, and Install is the whole decision in one act:
-record approval of those exact bytes, accept the version into its slot, bind the slot to
-its `app-ui` role. The candidate seam `?athetizeCandidate=<sha256>` auditions one in the
-live workspace without installing anything (ADR-0219).
+**The pixels are the owner's call, not the agent's.** Candidates are uploaded to the slot
+and judged in **Studio → Action Marks**, a catalog category reached by clicking its tab —
+every candidate on one page, each mounted in the real Expunctio button, in both states
+that button has. Nothing is installed until the owner installs one, and Install lives in
+the controls rail as the whole decision in one act: record approval of those exact bytes,
+accept the version into its slot, bind the slot to its `app-ui` role.
+
+**There is no `?athetizeCandidate=<sha256>` seam, and the review is not a URL-only route.**
+Both were built first and both were wrong under [ADR-0058](0058-every-route-is-click-reachable.md):
+a dev surface is a Studio category reachable by clicking, never an address the owner has to
+be handed. A candidate parameter also makes a *player* route carry review state it has no
+business carrying, and turns a comparison into one page load per candidate, which is not a
+comparison. The equivalent parameters elsewhere in the app are grandfathered debt; copying
+one is not precedent.
 
 ## Consequences
 

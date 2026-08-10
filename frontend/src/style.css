@@ -21810,39 +21810,33 @@ button.tileset-relationship-cell {
   color: var(--skirmish-muted);
 }
 
-/* Athetize action-mark review: every candidate is mounted in the SAME button the
-   Expunctio row paints, in both states that control has — offered, and refused —
-   with its native pixels beside it. Layout only; the buttons bring their own kit
-   frame and the review never restyles the seat it is judging. */
-.athetize-icon-review-grid {
-  display: grid;
-  gap: var(--ds-inline);
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.athetize-icon-review-grid figure {
-  align-items: start;
-  display: grid;
-  gap: var(--ds-inline);
-  grid-template-columns: 64px minmax(0, 1fr);
-  margin: 0;
-  padding: var(--ds-inset);
-}
-
-.athetize-icon-review-buttons {
+/* Studio > Action Marks: each catalog card carries the candidate in the SAME button the
+   Expunctio row paints, in both states that control has — offered, and refused. Layout
+   only; the buttons bring their own kit frame and the catalog never restyles the seat it
+   is judging. */
+.athetize-mark-buttons {
   display: grid;
   gap: var(--ds-inline-tight);
   inline-size: 100%;
   justify-items: stretch;
 }
 
-.athetize-icon-review-grid figcaption {
-  display: grid;
-  gap: var(--ds-space-1);
+.athetize-mark-card-image {
+  block-size: auto;
+  padding: var(--ds-inset);
 }
 
-.athetize-icon-review-grid small {
-  color: var(--skirmish-muted);
+/* A catalog card is narrower than the workspace row this control normally fills, so its
+   label truncates instead of spilling past the card. The MARK is what is being judged
+   here, and it keeps its seat at full size either way. */
+.athetize-mark-buttons button {
+  min-inline-size: 0;
+}
+
+.athetize-mark-buttons button > span:not(.run-action-icon) {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Sectio wrap-art candidate rows: generated art is review-mounted around the
