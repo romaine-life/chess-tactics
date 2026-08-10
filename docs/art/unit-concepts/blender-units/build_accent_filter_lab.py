@@ -81,6 +81,31 @@ cam.rotation_euler=(mathutils.Vector((0,0,1.0))-mathutils.Vector(cam.location)).
 cam.data.type="ORTHO"; cam.data.ortho_scale=2.7
 
 vl = scene.view_layers[0]; vl.use_pass_material_index = True
+
+# Material Index cannot mask an antialiased edge: it is an integer sampled at the
+# pixel centre, so the crown's outermost block reads 0 and takes the body palette.
+# A shader AOV is accumulated over the SAME samples as colour, so it comes back as
+# true coverage -- 0.4 for a block the crown fills four tenths of. That is the number
+# the mask needs, and it is why this is a graph change rather than a threshold tweak.
+for index, _label, _pal in ACCENTS:
+    aov = "acc%d" % index
+    if aov not in {a.name for a in vl.aovs}:
+        entry = vl.aovs.add()
+        entry.name = aov
+        # VALUE, not the COLOR default. An AOV Output node has both a Color and a
+        # Value input and honours only the one matching the AOV's type, so a Value
+        # written to a COLOR aov is silently dropped and the pass renders black --
+        # which reads as "the accent has no coverage anywhere" rather than as a
+        # misconfiguration, and takes the crown's colour off entirely.
+        entry.type = "VALUE"
+    for mat in bpy.data.materials:
+        if mat.pass_index != index or not mat.use_nodes:
+            continue
+        if any(n.bl_idname == "ShaderNodeOutputAOV" and n.name == aov for n in mat.node_tree.nodes):
+            continue
+        node = mat.node_tree.nodes.new("ShaderNodeOutputAOV")
+        node.name = node.aov_name = aov
+        node.inputs["Value"].default_value = 1.0
 scene.render.engine="CYCLES"; scene.cycles.samples=256
 scene.render.filter_size=0.01; scene.view_settings.view_transform="Standard"
 scene.render.film_transparent=True; scene.render.use_compositing=True
@@ -158,11 +183,27 @@ for offset, (index, label, stops) in enumerate(ACCENTS):
         idm.inputs["Anti-Alias"].default_value = False
     idm.location = (0, -320 - offset * 300)
     tree.links.new(rl.outputs["Material Index"], idm.inputs["ID value"])
+    coverage = rl.outputs.get("acc%d" % index)
 
     mask_pix = tree.nodes.new("CompositorNodePixelate")
     next(t for t in mask_pix.inputs if t.name == "Size").default_value = BLOCK
     mask_pix.location = (120, -400 - offset * 300)
-    tree.links.new(idm.outputs["Alpha"], mask_pix.inputs[0])
+    tree.links.new(coverage or idm.outputs["Alpha"], mask_pix.inputs[0])
+
+    # Coverage alone still misjudges the piece's OUTER edge, where the block is part
+    # crown and part nothing: 0.4 accent over 0.4 alpha is a wholly-crown block that a
+    # raw 0.5 cutoff would reject. Dividing by the block's own alpha asks the question
+    # that actually decides the colour -- of the ink here, how much is crown.
+    alpha_pix = tree.nodes.new("CompositorNodePixelate")
+    next(t for t in alpha_pix.inputs if t.name == "Size").default_value = BLOCK
+    alpha_pix.location = (120, -520 - offset * 300)
+    tree.links.new(rl.outputs["Alpha"], alpha_pix.inputs[0])
+    share = tree.nodes.new("ShaderNodeMath")
+    share.operation = "DIVIDE"
+    share.use_clamp = True
+    share.location = (210, -460 - offset * 300)
+    tree.links.new(mask_pix.outputs[0], share.inputs[0])
+    tree.links.new(alpha_pix.outputs[0], share.inputs[1])
 
     # Averaging a binary mask leaves fractions at the edges; a CONSTANT ramp with one
     # stop at the midpoint snaps them back so every block is fully one palette.
@@ -180,7 +221,7 @@ for offset, (index, label, stops) in enumerate(ACCENTS):
     # alpha still trims whatever reaches past the piece.
     hels.new(float(os.environ.get("ACCENT_THRESH", "0.06"))).color = (1, 1, 1, 1)
     hard.location = (300, -400 - offset * 300)
-    tree.links.new(mask_pix.outputs[0], hard.inputs["Fac"])
+    tree.links.new(share.outputs[0], hard.inputs["Fac"])
 
     # Grow the mask by one pixel. On the crown's outer silhouette a block is part
     # accent and part BACKGROUND, and background carries material index 0 -- matching
