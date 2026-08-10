@@ -28028,6 +28028,16 @@ button.run-card-formation-cell {
   pointer-events: none;
 }
 
+/* Every unit image is capped to the board's 1x draw rect, scaled by the tier. Four
+   families still ship 512x512 sprites, and without this they render at natural size
+   and blow the grid apart -- rows overflow into each other and the labels stop
+   matching the pieces beside them. The board caps them the same way. */
+.unit-roster-unit,
+.unit-roster-unit-slot canvas {
+  max-height: calc(92px * var(--roster-tier, 1));
+  max-width: calc(78px * var(--roster-tier, 1));
+}
+
 /* Seated exactly where the board seats it. The tile frame is 96x180 with its top
    face near the TOP -- the equator is 68px down -- so anchoring to the frame's
    bottom edge drops the unit clean off the tile. The unit's own contact point is
