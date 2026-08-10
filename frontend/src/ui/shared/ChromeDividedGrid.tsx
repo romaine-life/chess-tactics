@@ -240,7 +240,14 @@ export function DividedInnerChromeBox({
   const boundaryNodes = (nodes: readonly ChromeDividedGridNode[]): ChromeDividedGridNode[] => (
     framed ? [...nodes] : nodes.filter((node) => node.inlineBoundary === 'internal')
   );
-  const blockBoundaryNodes = framed ? topology : { ...topology, topNodes: [], bottomNodes: [] };
+  // The caps where a VERTICAL rail meets the box's top and bottom frame — so only where a vertical
+  // rail reaches that edge. An unframed grid has no frame for them to meet; a grid whose first or
+  // last row spans every column has no rail arriving there either.
+  const blockBoundaryNodes = {
+    ...topology,
+    topNodes: framed && !rowSpansAllColumns(rows[0]) ? topology.topNodes : [],
+    bottomNodes: framed && !rowSpansAllColumns(rows[rows.length - 1]) ? topology.bottomNodes : [],
+  };
   const template = [
     ...columns,
     ...(scroll ? ['var(--chrome-divided-grid-scroll-gutter)'] : []),
@@ -261,7 +268,14 @@ export function DividedInnerChromeBox({
                 data-chrome-grid-inline-end={topology.horizontalEndBoundary}
                 style={{ gridColumn: `1 / ${topology.horizontalEndLine}` }}
               />
-              {boundaryNodes(topology.rowNodes).map((node) => (
+              {/* A four-way junction on this boundary only where a vertical rail actually crosses
+                  it — which needs the rows on BOTH sides to be divided. Next to a spanning row
+                  there is no rail to cap, and the crossing glyph became an ornament floating in a
+                  rail with nothing running through it. */}
+              {boundaryNodes(topology.rowNodes)
+                .filter((node) => node.inlineBoundary !== 'internal'
+                  || (!rowSpansAllColumns(rows[index - 1]) && !rowSpansAllColumns(row)))
+                .map((node) => (
                 <GridJunction
                   key={`${node.line}-${node.sides}`}
                   node={node}

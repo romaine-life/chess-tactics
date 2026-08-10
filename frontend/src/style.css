@@ -19871,6 +19871,10 @@ button.tileset-relationship-cell {
 /* Both cells name their column outright. The framed row places its panes by `grid-area`, and a
    named area that its parent no longer defines does not fall back to "first free cell" — it drops
    the cell into auto-placement and shuffles the row. */
+/* The section IS the button. The grid row itself is the control, so the box's own frame is this
+   thing's edge and there is no second rail a few pixels inside it. These declarations only remove
+   the shell's native button paint. The row wears the installed oak and the box draws the frame,
+   and check-ui-surface-contract.mjs registers exactly that reset. */
 .ce-editor-level-thumb.ce-editor-level-cell-preview {
   align-self: stretch;
   block-size: 86px;
@@ -19881,11 +19885,19 @@ button.tileset-relationship-cell {
   overflow: hidden;
 }
 
-/* The list's closing verb IS the bottom section: the button fills the row edge to edge so the
-   whole strip is the thing you press, rather than a small control sitting in a marble band. */
-.war-battles-add > .war-battles-add-verb {
-  inline-size: 100%;
-  justify-content: center;
+.section-box-member-verb {
+  align-items: center;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  justify-items: center;
+  min-block-size: 0;
+  padding: var(--ds-inset);
+  text-shadow: inherit;
 }
 
 .settings-row.ce-editor-level-row.ce-editor-level-cell-body {

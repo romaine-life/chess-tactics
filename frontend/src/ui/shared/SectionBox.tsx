@@ -1,7 +1,7 @@
 import { type ReactElement, type ReactNode } from 'react';
 import { InnerChromeBox } from './ChromeBox';
 import { ChromeDividedGridRow, DividedInnerChromeBox } from './ChromeDividedGrid';
-import { CHROME_STRUCTURAL_FILL_ROLE } from './chromeSurfacePolicy';
+import { CHROME_LEAF_FILL_SURFACE, CHROME_STRUCTURAL_FILL_ROLE } from './chromeSurfacePolicy';
 
 /**
  * A named group of controls: a box with its own name across the top and its contents under it.
@@ -50,6 +50,13 @@ export type SectionBoxMember = {
    * line through something that is not divided.
    */
   spans?: 'all';
+  /**
+   * Makes the member ITSELF the control — the row is the button, wearing the leaf oak, pressable
+   * edge to edge. Not a button placed inside a row: the box's own frame is already this thing's
+   * edge, so a control nested in here draws a second rail a few pixels inside the first and reads
+   * as something inserted into the section rather than as the section.
+   */
+  press?: { onPress: () => void; ariaLabel?: string };
   className?: string;
 };
 
@@ -122,7 +129,19 @@ export function SectionBox({
         <ChromeDividedGridRow spans="all" className="section-box-head section-box-head-row">
           <SectionBoxHeading title={title} titleId={titleId} />
         </ChromeDividedGridRow>
-        {shape.members.map((member) => (
+        {shape.members.map((member) => member.press ? (
+          <ChromeDividedGridRow
+            key={member.id}
+            as="button"
+            spans={member.spans}
+            aria-label={member.press.ariaLabel}
+            data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}
+            onClick={member.press.onPress}
+            className={`section-box-member section-box-member-verb ${member.className ?? ''}`.trim()}
+          >
+            {member.content}
+          </ChromeDividedGridRow>
+        ) : (
           <ChromeDividedGridRow
             key={member.id}
             spans={member.spans}

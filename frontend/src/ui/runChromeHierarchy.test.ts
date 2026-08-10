@@ -680,7 +680,11 @@ describe('Run chrome hierarchy', () => {
     // A junction caps a rail where it meets the box's own FRAME. Unframed there is no such frame,
     // so a boundary cap caps nothing and sits on the host's chrome as a stray atom.
     expect(chromeDividedGrid).toContain("nodes.filter((node) => node.inlineBoundary === 'internal')");
-    expect(chromeDividedGrid).toContain('const blockBoundaryNodes = framed ? topology : { ...topology, topNodes: [], bottomNodes: [] };');
+    // A vertical rail's frame caps also require a rail to actually ARRIVE at that edge — a grid
+    // whose first or last row spans every column has none, and the cap became an ornament sitting
+    // in a rail with nothing running through it.
+    expect(chromeDividedGrid).toContain('topNodes: framed && !rowSpansAllColumns(rows[0]) ? topology.topNodes : [],');
+    expect(chromeDividedGrid).toContain('bottomNodes: framed && !rowSpansAllColumns(rows[rows.length - 1]) ? topology.bottomNodes : [],');
     expect(styleCss).toMatch(
       /\.chrome-divided-grid\[data-chrome-grid-framed="false"\]\s*\{\s*overflow: hidden;/,
     );

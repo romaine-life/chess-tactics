@@ -331,16 +331,9 @@ export function WarEditor({ embedded = false }: { embedded?: boolean } = {}): Re
                       ...(canEditSelected ? [{
                         id: 'add-battle',
                         spans: 'all' as const,
+                        press: { onPress: () => useWars.getState().addBattle(selectedWar.id) },
                         className: 'war-battles-add',
-                        content: (
-                          <ChromeButton unit="inner-text-button"
-                            className={chromeUnitClassNames('inner-text-button', 'war-battles-add-verb')}
-                            data-chrome-fill-surface={EDITOR_COLUMN_CONTROL_FILL_SURFACE}
-                            onClick={() => useWars.getState().addBattle(selectedWar.id)}
-                          >
-                            <span>+ Add Battle</span>
-                          </ChromeButton>
-                        ),
+                        content: <span>+ Add Battle</span>,
                       }] : []),
                     ]}
                   />
