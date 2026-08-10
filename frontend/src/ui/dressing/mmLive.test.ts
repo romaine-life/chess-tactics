@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { MM_LIVE } from './mmLive';
+import { MM_LIVE, MM_LABEL_LIVE, cssLen } from './mmLive';
 
 // ADR-0057 rot guard: MM_LIVE hand-mirrors literals baked into style.css (the tuner can't
 // read CSS source at runtime). This test re-derives each value from the stylesheet, so the
@@ -62,6 +62,25 @@ describe('MM_LIVE mirrors the baked menu/settings-rail chrome in style.css', () 
 
   it('textX: the label nudge', () => {
     expect(firstBlock('.settings-tab > span:not(.settings-tab-icon)')).toContain(`translateX(${MM_LIVE.textX}px)`);
+  });
+
+  it('label shadow: the .settings-tab strong rule (the tab label + settings row title share it)', () => {
+    // firstBlock finds the FIRST `.settings-tab strong {` — the grouped
+    // `.settings-row h4, .settings-tab strong` colour/shadow rule. The later same-named rule
+    // (font-size / letter-spacing / text-transform) carries no shadow.
+    const { shadowX, shadowY, shadowBlur, shadowColor } = MM_LABEL_LIVE;
+    expect(firstBlock('.settings-tab strong'))
+      .toContain(`text-shadow: ${cssLen(shadowX)} ${cssLen(shadowY)} ${cssLen(shadowBlur)} ${shadowColor}`);
+  });
+
+  it('label stroke: the shipped label has NO outline, so the tuner opens at 0', () => {
+    // The other direction of the same mirror — if an outline is ever baked in, "off / 0" stops
+    // meaning "what ships" and the tuner would quietly audition against the wrong baseline.
+    expect(MM_LABEL_LIVE.outline).toBe('off');
+    expect(MM_LABEL_LIVE.strokeW).toBe(0);
+    const block = firstBlock('.settings-tab strong');
+    expect(block).not.toContain('-webkit-text-stroke');
+    expect(block).not.toContain('paint-order');
   });
 
   it('gap: a representative value inside the rail clamp()', () => {

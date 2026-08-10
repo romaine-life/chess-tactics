@@ -470,6 +470,16 @@ function preserveDeploymentLabRouteParams(params: URLSearchParams, route: Tilese
   });
 }
 
+// The Main Menu tuner owns which ELEMENT its panel is showing (Buttons / Button label / Button
+// icon / Interaction) and addresses it as ?el=, so a handed-over link opens on the element under
+// review rather than one click short of it. Same shape as the Chrome Lab keys above: the tuner
+// writes the param, this keeps it alive when the Studio rebuilds the query from its own model.
+function preserveMainMenuTunerRouteParams(params: URLSearchParams, route: TilesetStudioRouteState): void {
+  if (route.category !== 'pages' && route.viewerKind !== 'page') return;
+  const value = new URLSearchParams(window.location.search).get('el');
+  if (value) params.set('el', value);
+}
+
 const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   // Canonicalise to /studio even when entered via the /nine-slice-editor
   // alias, so the alias is a pure entry point and all subsequent state rides the
@@ -497,6 +507,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
     if (route.category === 'gym' && route.selectedGymLevelId) catalogParams.set('gymlvl', route.selectedGymLevelId);
     preserveChromeLabRouteParams(catalogParams, route);
     preserveDeploymentLabRouteParams(catalogParams, route);
+    preserveMainMenuTunerRouteParams(catalogParams, route);
     if (route.category === 'solver' && route.selectedSolverLevelId) catalogParams.set('slvl', route.selectedSolverLevelId);
     if (route.category === 'cardprompts' && route.selectedRunCardPromptId) catalogParams.set('cardPrompt', route.selectedRunCardPromptId);
     const catalogQuery = catalogParams.toString();
@@ -557,6 +568,7 @@ const writeTilesetStudioRoute = (route: TilesetStudioRouteState): void => {
   preserveCardLayoutRouteParams(params, route);
   preserveCardIconFittingRouteParams(params, route);
   preserveDeploymentLabRouteParams(params, route);
+  preserveMainMenuTunerRouteParams(params, route);
   const nextHref = `${STUDIO_PATH}?${params.toString()}`;
   const currentHref = `${window.location.pathname}${window.location.search}`;
   if (nextHref !== currentHref) {

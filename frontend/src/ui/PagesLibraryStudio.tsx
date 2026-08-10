@@ -7,7 +7,8 @@ import { SliderRow, ctlReset } from './dressing/SliderRow';
 import { ElementSelect, type ElementOption } from './dressing/ElementSelect';
 import { useInjectedStyle } from './dressing/useInjectedStyle';
 import { iconTreatFilter, type IconTreat } from './dressing/iconTreat';
-import { MM_LIVE } from './dressing/mmLive';
+import { MM_LIVE, MM_LABEL_LIVE, cssLen } from './dressing/mmLive';
+import { navigateApp } from './navigation';
 import { drawableAssets } from '@chess-tactics/board-render';
 import { ChoiceGroup } from './shared/ChoiceGroup';
 import { HoverSlideControl, IconTreatmentControl } from './dressing/SurfaceEffectsControls';
@@ -59,6 +60,86 @@ export function PagesLibraryStudio({
 // `.settings-rail-frame` inside `.settings-shell`; the bake targets those SHARED
 // selectors, so re-tuning here updates Settings' rail too and Reset returns to shipped.
 
+// ===== Menu label text treatment =====
+// The tab label ships with ONE treatment — a hard drop shadow straight down (MM_LABEL_LIVE) — and
+// no outline of any kind. These two are the ways to give a pixel font an outline, and they do NOT
+// look the same, so the tuner offers both rather than picking for you:
+//
+//   'stroke' — `-webkit-text-stroke`, a real vector stroke centred on the glyph outline. It is
+//              sub-pixel and antialiased, so on a 19px pixel font it rounds the corners and eats
+//              inward; `paint-order: stroke fill` repaints the fill on top so the letterform keeps
+//              its shipped weight instead of being thinned by its own outline.
+//   'ring'   — eight hard `text-shadow` copies at ±w. Zero blur, whole pixels, so it stays square:
+//              the classic pixel-art outline, and the one that survives `image-rendering: pixelated`
+//              chrome. Width is whole-pixel by construction.
+//
+// Both compose with the drop shadow, which is why the ring and the shadow share one `text-shadow`
+// declaration — emitting a ring has to RE-STATE the drop shadow or turning the ring on would
+// silently delete it.
+// The tuner's element categories, and the `?el=` param that addresses them. The Studio's central
+// route encoder rebuilds the query from its own model, so `el` is preserved across that rebuild by
+// preserveMainMenuTunerRouteParams in TilePreview — the same shape the Chrome Lab uses for its own
+// sub-state. 'buttons' is the default and is written as an ABSENT param, so a plain viewer link
+// stays plain.
+export const MENU_ELEMENT_GROUPS = ['buttons', 'label', 'icon', 'interaction'] as const;
+export type MenuElementGroup = (typeof MENU_ELEMENT_GROUPS)[number];
+export const MENU_ELEMENT_PARAM = 'el';
+
+function readMenuElementGroup(): MenuElementGroup {
+  if (typeof window === 'undefined') return 'buttons';
+  const value = new URLSearchParams(window.location.search).get(MENU_ELEMENT_PARAM);
+  return MENU_ELEMENT_GROUPS.includes(value as MenuElementGroup) ? value as MenuElementGroup : 'buttons';
+}
+
+function writeMenuElementGroup(next: MenuElementGroup): void {
+  if (typeof window === 'undefined') return;
+  const url = new URL(window.location.href);
+  if (next === 'buttons') url.searchParams.delete(MENU_ELEMENT_PARAM);
+  else url.searchParams.set(MENU_ELEMENT_PARAM, next);
+  const query = url.searchParams.toString();
+  navigateApp(`${url.pathname}${query ? `?${query}` : ''}${url.hash}`, { replace: true, scroll: false });
+}
+
+export type LabelOutline = 'off' | 'stroke' | 'ring';
+
+export interface LabelTreatment {
+  outline: LabelOutline;
+  strokeW: number;
+  strokeColor: string;
+  shadowX: number;
+  shadowY: number;
+  shadowBlur: number;
+  shadowColor: string;
+}
+
+const RING_STEPS: ReadonlyArray<readonly [number, number]> = [
+  [-1, -1], [0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0],
+];
+
+/** The declarations the treatment needs — `[]` when it matches what ships (an untouched panel emits nothing). */
+export function labelTreatmentDecls(t: LabelTreatment): string[] {
+  const ringW = Math.max(1, Math.round(t.strokeW));
+  const ringOn = t.outline === 'ring' && t.strokeW > 0;
+  const strokeOn = t.outline === 'stroke' && t.strokeW > 0;
+  const shadowMoved = t.shadowX !== MM_LABEL_LIVE.shadowX || t.shadowY !== MM_LABEL_LIVE.shadowY
+    || t.shadowBlur !== MM_LABEL_LIVE.shadowBlur || t.shadowColor !== MM_LABEL_LIVE.shadowColor;
+
+  const decls: string[] = [];
+  if (ringOn || shadowMoved) {
+    const shadowFlat = t.shadowX === 0 && t.shadowY === 0 && t.shadowBlur === 0;
+    const parts = ringOn ? RING_STEPS.map(([x, y]) => `${cssLen(x * ringW)} ${cssLen(y * ringW)} 0 ${t.strokeColor}`) : [];
+    // A zero-offset, zero-blur drop shadow paints nothing you can see (it sits entirely behind the
+    // glyph), so drop it from the list rather than emitting a decorative no-op.
+    if (!shadowFlat) parts.push(`${cssLen(t.shadowX)} ${cssLen(t.shadowY)} ${cssLen(t.shadowBlur)} ${t.shadowColor}`);
+    decls.push(`text-shadow: ${parts.length ? parts.join(', ') : 'none'}`);
+  }
+  if (strokeOn) {
+    decls.push(`-webkit-text-stroke: ${t.strokeW}px ${t.strokeColor}`);
+    decls.push('paint-order: stroke fill');
+  }
+  return decls;
+}
+
 // Functional viewer: the LIVE main menu shown by iframing the REAL "/" route (ADR-0029 req 4 —
 // exercise the real component, never a dead image). Iframing — the same shape the Settings dressing
 // room and Campaign viewer already use — makes the preview inherit the full app shell, INCLUDING the
@@ -88,7 +169,21 @@ function MainMenuViewer({ page, header, zoom = 1 }: { page: PageEntry; header?: 
   const [iconTreat, setIconTreat] = useState<IconTreat>('off');
   const [iconLighten, setIconLighten] = useState(1.85);
   const [copied, setCopied] = useState(false);
-  const [group, setGroup] = useState<'buttons' | 'label' | 'icon' | 'interaction'>('buttons'); // active element category
+  // Label text treatment — opens at what ships (see MM_LABEL_LIVE).
+  const [outline, setOutline] = useState<LabelOutline>(MM_LABEL_LIVE.outline);
+  const [strokeW, setStrokeW] = useState<number>(MM_LABEL_LIVE.strokeW);
+  const [strokeColor, setStrokeColor] = useState<string>(MM_LABEL_LIVE.strokeColor);
+  const [shadowX, setShadowX] = useState<number>(MM_LABEL_LIVE.shadowX);
+  const [shadowY, setShadowY] = useState<number>(MM_LABEL_LIVE.shadowY);
+  const [shadowBlur, setShadowBlur] = useState<number>(MM_LABEL_LIVE.shadowBlur);
+  const [shadowColor, setShadowColor] = useState<string>(MM_LABEL_LIVE.shadowColor);
+  // Active element category. Addressable as ?el= so a handed-over link lands ON the element being
+  // reviewed instead of one click short of it (the group is what the panel actually shows).
+  const [group, setGroup] = useState<MenuElementGroup>(readMenuElementGroup);
+  const pickGroup = (next: MenuElementGroup): void => {
+    setGroup(next);
+    writeMenuElementGroup(next);
+  };
   const resetDefaults = (): void => {
     setBtnH(MM_LIVE.btnH);
     setRailW(MM_LIVE.railW);
@@ -103,7 +198,17 @@ function MainMenuViewer({ page, header, zoom = 1 }: { page: PageEntry; header?: 
     setSurface('');
     setIconTreat('off');
     setIconLighten(1.85);
+    setOutline(MM_LABEL_LIVE.outline);
+    setStrokeW(MM_LABEL_LIVE.strokeW);
+    setStrokeColor(MM_LABEL_LIVE.strokeColor);
+    setShadowX(MM_LABEL_LIVE.shadowX);
+    setShadowY(MM_LABEL_LIVE.shadowY);
+    setShadowBlur(MM_LABEL_LIVE.shadowBlur);
+    setShadowColor(MM_LABEL_LIVE.shadowColor);
   };
+
+  const treatment: LabelTreatment = { outline, strokeW, strokeColor, shadowX, shadowY, shadowBlur, shadowColor };
+  const labelDecls = labelTreatmentDecls(treatment);
 
   const iconFilter = iconTreatFilter(iconTreat, iconLighten);
   const slide = hoverSlide === '6' ? 6 : hoverSlide === '10' ? 10 : 0;
@@ -181,6 +286,12 @@ function MainMenuViewer({ page, header, zoom = 1 }: { page: PageEntry; header?: 
   add(textX !== MM_LIVE.textX,
     `.pages-menu-tweak .settings-tab > span:not(.settings-tab-icon) { transform: translateX(${textX}px); }`,
     `.settings-tab > span:not(.settings-tab-icon) {\n  transform: translateX(${textX}px);\n}`);
+  // Label text treatment (outline + drop shadow). Targets `.settings-tab strong`, the SHARED tab
+  // label — the same selector the shipped shadow lives on — so the Settings/Campaign rails keep
+  // matching the menu, exactly as the geometry knobs above already do.
+  add(labelDecls.length > 0,
+    `.pages-menu-tweak .settings-tab strong { ${labelDecls.map((d) => `${d} !important;`).join(' ')} }`,
+    `.settings-tab strong {\n${labelDecls.map((d) => `  ${d};`).join('\n')}\n}`);
   add(!!surfaceUrl,
     `.pages-menu-tweak .main-menu-mode-tab { background-image: url("${surfaceUrl}") !important; }`,
     `.main-menu-mode-tab {\n  background-image: url("${surfaceUrl}");\n}`);
@@ -215,7 +326,7 @@ function MainMenuViewer({ page, header, zoom = 1 }: { page: PageEntry; header?: 
   // Element categories for the dropdown — a ` •` marks a category that carries an override.
   const groupOptions: ElementOption[] = [
     { id: 'buttons', label: 'Buttons', tuned: btnH !== MM_LIVE.btnH || railW !== MM_LIVE.railW || tabGap !== MM_LIVE.gap || btnX !== MM_LIVE.btnX || btnY !== MM_LIVE.btnY || !!surface },
-    { id: 'label', label: 'Button label', tuned: textX !== MM_LIVE.textX },
+    { id: 'label', label: 'Button label', tuned: textX !== MM_LIVE.textX || labelDecls.length > 0 },
     { id: 'icon', label: 'Button icon', tuned: iconSize !== MM_LIVE.icon || iconX !== 0 || iconTreat !== 'off' },
     { id: 'interaction', label: 'Interaction', tuned: hoverSlide !== 'off' },
   ];
@@ -244,7 +355,7 @@ function MainMenuViewer({ page, header, zoom = 1 }: { page: PageEntry; header?: 
           <div className="tileset-control-stack">
             {header}
             <p className="tileset-catalog-note">Pick an <strong>element</strong>, then tune it — controls drive the <strong>live</strong> menu; defaults = what ships. <strong>Copy menu CSS</strong> to bake.</p>
-            <ElementSelect value={group} options={groupOptions} onChange={(id) => setGroup(id as typeof group)} />
+            <ElementSelect value={group} options={groupOptions} onChange={(id) => pickGroup(id as MenuElementGroup)} />
 
             {group === 'buttons' ? (
               <>
@@ -267,7 +378,52 @@ function MainMenuViewer({ page, header, zoom = 1 }: { page: PageEntry; header?: 
             ) : null}
 
             {group === 'label' ? (
-              <SliderRow label={<>Text position · {textX > 0 ? '+' : ''}{textX}px{textX === MM_LIVE.textX ? ' · live' : ''}</>} value={textX} set={setTextX} min={-80} max={160} dflt={MM_LIVE.textX} />
+              <>
+                <SliderRow label={<>Text position · {textX > 0 ? '+' : ''}{textX}px{textX === MM_LIVE.textX ? ' · live' : ''}</>} value={textX} set={setTextX} min={-80} max={160} dflt={MM_LIVE.textX} />
+                <div className="tileset-filter-field">
+                  <span>Outline</span>
+                  <div className="pages-ctl-row">
+                    <ChoiceGroup
+                      value={outline}
+                      options={[{ value: 'off', label: 'None' }, { value: 'ring', label: 'Pixel ring' }, { value: 'stroke', label: 'Stroke' }]}
+                      onChange={(value) => setOutline(value as LabelOutline)}
+                      ariaLabel="Label outline"
+                    />
+                    {ctlReset(() => setOutline(MM_LABEL_LIVE.outline))}
+                  </div>
+                </div>
+                {outline !== 'off' ? (
+                  <>
+                    <SliderRow
+                      label={<>Outline width · {outline === 'ring' ? `${Math.max(1, Math.round(strokeW))}px` : `${strokeW}px`}{strokeW === MM_LABEL_LIVE.strokeW ? ' · live (none)' : ''}</>}
+                      value={strokeW} set={setStrokeW} min={0} max={4} step={outline === 'ring' ? 1 : 0.5} nudge={outline === 'ring' ? 1 : 0.5} dflt={MM_LABEL_LIVE.strokeW}
+                    />
+                    <label className="tileset-category-select">
+                      <span>Outline colour</span>
+                      <div className="pages-ctl-row">
+                        <input type="color" value={strokeColor} onChange={(e) => setStrokeColor(e.target.value)} aria-label="Outline colour" />
+                        {ctlReset(() => setStrokeColor(MM_LABEL_LIVE.strokeColor))}
+                      </div>
+                    </label>
+                  </>
+                ) : null}
+                <p className="tileset-catalog-note">
+                  Nothing outlines the label today — the only shipped treatment is the drop shadow below, so <strong>None</strong> is what you are looking at now.
+                  {' '}<strong>Pixel ring</strong> is eight hard shadow copies: square corners, whole pixels, the outline this font is drawn for.
+                  {' '}<strong>Stroke</strong> is a real antialiased stroke — softer, and it rounds the pixel corners at this size.
+                </p>
+                <SliderRow label={<>Shadow · horizontal · {shadowX > 0 ? '+' : ''}{shadowX}px{shadowX === MM_LABEL_LIVE.shadowX ? ' · live' : ''}</>} value={shadowX} set={setShadowX} min={-6} max={6} dflt={MM_LABEL_LIVE.shadowX} />
+                <SliderRow label={<>Shadow · vertical · {shadowY > 0 ? '+' : ''}{shadowY}px{shadowY === MM_LABEL_LIVE.shadowY ? ' · live' : ''}</>} value={shadowY} set={setShadowY} min={-6} max={6} dflt={MM_LABEL_LIVE.shadowY} />
+                <SliderRow label={<>Shadow · blur · {shadowBlur}px{shadowBlur === MM_LABEL_LIVE.shadowBlur ? ' · live' : ''}</>} value={shadowBlur} set={setShadowBlur} min={0} max={12} dflt={MM_LABEL_LIVE.shadowBlur} />
+                <label className="tileset-category-select">
+                  <span>Shadow colour</span>
+                  <div className="pages-ctl-row">
+                    <input type="color" value={shadowColor} onChange={(e) => setShadowColor(e.target.value)} aria-label="Shadow colour" />
+                    {ctlReset(() => setShadowColor(MM_LABEL_LIVE.shadowColor))}
+                  </div>
+                </label>
+                <p className="tileset-catalog-note">Shipped shadow is <strong>0 · +2 · 0 blur</strong> — hard, straight down, so it reads as a dark edge under the glyphs and nothing on the other three sides. Zero on all three removes it.</p>
+              </>
             ) : null}
 
             {group === 'icon' ? (
