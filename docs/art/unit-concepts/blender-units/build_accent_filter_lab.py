@@ -335,13 +335,36 @@ if os.environ.get("LAB_OUT"):
             for _area in _scr.areas:
                 if _ws.name == "Layout" and _area.type == "OUTLINER":
                     _area.type = "IMAGE_EDITOR"
-    _rr = bpy.data.images.get("Render Result")
+    # NOT Render Result. A render result is never written into a .blend, so a pane
+    # pointing at it opens blank -- which is what "the king is not visible" looked
+    # like. Load the build's own output as a real image and pack it, so opening the
+    # file shows the last render immediately; F12 then swaps the pane to the live
+    # Render Result as usual.
+    _rr = None
+    _shot = os.environ["OUT"] + ".png"
+    if os.path.exists(_shot):
+        _rr = bpy.data.images.load(_shot, check_existing=True)
+        _rr.name = "last build"
+        _rr.pack()
+    if _rr is None:
+        _rr = bpy.data.images.get("Render Result")
     if _rr is not None:
+        # Only the workspaces where the render is the subject. UV Editing and Texture
+        # Paint have image editors too, and theirs are for the map being painted --
+        # commandeering those would be a bug, not a convenience.
         for _ws in bpy.data.workspaces:
+            if _ws.name not in {"Layout", "Compositing", "Rendering"}:
+                continue
             for _scr in _ws.screens:
                 for _area in _scr.areas:
                     if _area.type == "IMAGE_EDITOR":
                         _area.spaces[0].image = _rr
+    # The factory base leaves an empty "Scene" behind beside the appended one, which
+    # shows up in every scene picker and invites working in the wrong one.
+    for _s in list(bpy.data.scenes):
+        if _s is not scene and getattr(_s, "compositing_node_group", None) is None:
+            bpy.data.scenes.remove(_s)
+
     bpy.ops.wm.save_as_mainfile(filepath=os.environ["LAB_OUT"])
     print("LAB_SAVED", os.environ["LAB_OUT"])
 print("ACCENT_DONE", [(m.name, m.pass_index) for m in bpy.data.materials])
