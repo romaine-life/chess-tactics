@@ -104,7 +104,13 @@ export function RunRulesSelector({
           data-testid="run-rules-toggle"
           onClick={() => setOpen((wasOpen) => !wasOpen)}
         >
-          <span>{open ? 'Hide' : 'Change'}</span>
+          <span className="run-rules-toggle-copy">
+            {open ? 'Hide' : 'Change'}
+            <span
+              className={`stepper-glyph stepper-chevron stepper-chevron-${open ? 'up' : 'down'}`}
+              aria-hidden="true"
+            />
+          </span>
         </ChromeButton>
       </div>
       {!open ? (

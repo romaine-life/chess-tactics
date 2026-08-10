@@ -294,6 +294,12 @@ describe('Run rule options are a departure from the defaults, not a step in setu
     expect(playMenu).not.toMatch(/<RunRulesSelector[\s\S]*?data-testid="run-start"/);
   });
 
+  it('states which way it moves, with the shared chevron rather than a second one', () => {
+    expect(source).toContain("stepper-chevron-${open ? 'up' : 'down'}");
+    expect(style).toMatch(/\.stepper-chevron-down\s*\{[\s\S]*?transform:\s*rotate\(-90deg\);/);
+    expect(style).toMatch(/\.stepper-chevron-up\s*\{[\s\S]*?transform:\s*rotate\(90deg\);/);
+  });
+
   it('is reachable and announced, because a Run is bound to these for its life', () => {
     expect(source).toContain('aria-expanded={open}');
     expect(source).toContain('aria-controls="run-rules-content"');
