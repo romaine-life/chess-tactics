@@ -24,7 +24,7 @@ describe('PawnPromotionPicker', () => {
   beforeEach(() => applyLiveUnitCatalog(testLiveUnitCatalog({ directionalUrls: true })));
   afterEach(() => resetLiveUnitCatalog());
 
-  it('names the arrived Pawn and exposes every replacement as an anchored dialog', () => {
+  it('names the promoting Pawn and exposes every replacement as an anchored dialog', () => {
     const markup = renderToStaticMarkup(
       <PawnPromotionPicker
         piece={pawn}
@@ -38,7 +38,10 @@ describe('PawnPromotionPicker', () => {
     expect(markup).toContain('aria-label="Pawn promotion"');
     expect(markup).toContain('data-chrome-fill-role="outer"');
     expect(markup.match(/data-chrome-fill-surface="hybrid-wood-oak"/g)).toHaveLength(4);
-    expect(markup).toContain('Pawn arrived');
+    // The default subject opens while the Pawn is still gliding in, so the eyebrow names the
+    // event rather than claiming it has landed (ADR-0556).
+    expect(markup).toContain('Pawn promoting');
+    expect(markup).not.toContain('Pawn arrived');
     expect(markup).toContain('Choose what this Pawn becomes');
     expect(markup).not.toContain('autofocus');
     for (const label of ['Queen', 'Rook', 'Bishop', 'Knight']) {
@@ -60,7 +63,7 @@ describe('PawnPromotionPicker', () => {
 
     expect(markup).toContain('Premove queued');
     expect(markup).toContain('Choose what this Pawn will become');
-    expect(markup).not.toContain('Pawn arrived');
+    expect(markup).not.toContain('Pawn promoting');
     expect(markup).toContain('aria-label="Pawn promotion"');
   });
 

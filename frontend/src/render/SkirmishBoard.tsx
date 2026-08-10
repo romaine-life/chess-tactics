@@ -2251,8 +2251,10 @@ export function SkirmishBoard({
     premovedOriginPieceAt(x, y) ?? provisionalLocalPieceAt(x, y);
 
   // Whose promotion is being asked about, and where the callout attaches. A mid-commit move asks
-  // beside the Pawn it has just landed; a queue-time question asks beside that Pawn's GHOST, which
-  // the premove projection is already drawing on the promotion cell (ADR-0541).
+  // beside the destination its Pawn is projected onto — which is where the callout sits from the
+  // frame the move is authored, while the sprite is still gliding in (ADR-0556). A queue-time
+  // question asks beside that Pawn's GHOST, which the premove projection is already drawing on
+  // the promotion cell (ADR-0541).
   const promotingPiece = choosingPromotion
     ? (choosingPromotion.mode === 'premove-queue' ? provGame.pieces : livePieces)
         .find((piece) => piece.id === choosingPromotion.pieceId && piece.alive) ?? null
@@ -2737,7 +2739,7 @@ export function SkirmishBoard({
             <PawnPromotionPicker
               piece={promotingPiece}
               choices={choosingPromotion.choices}
-              subject={choosingPromotion.mode === 'premove-queue' ? 'queued' : 'arrived'}
+              subject={choosingPromotion.mode === 'premove-queue' ? 'queued' : 'promoting'}
               boardSeat={promotionPickerSeat}
               boardZoom={boardZoom}
               onChoose={choosePromotion}

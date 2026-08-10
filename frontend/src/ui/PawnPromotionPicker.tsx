@@ -18,14 +18,15 @@ export type PromotionPickerSide = 'left' | 'right';
 /**
  * Which Pawn the picker is standing beside.
  *
- * `arrived` is the one that has physically finished its move (ADR-0503). `queued` is the ghost of
- * a premoved Pawn — the move is still a prediction, so the copy asks about a Pawn that WILL
- * arrive rather than claiming one has (ADR-0541).
+ * `promoting` is a Pawn whose move is committing: the question opens as the move is authored
+ * and the sprite is still gliding to the square underneath it (ADR-0556), so the copy names the
+ * event rather than claiming the Pawn has landed. `queued` is the ghost of a premoved Pawn —
+ * the move is still a prediction, so it asks about a Pawn that WILL arrive (ADR-0541).
  */
-export type PromotionPickerSubject = 'arrived' | 'queued';
+export type PromotionPickerSubject = 'promoting' | 'queued';
 
 const SUBJECT_COPY: Record<PromotionPickerSubject, { eyebrow: string; question: string }> = {
-  arrived: { eyebrow: 'Pawn arrived', question: 'Choose what this Pawn becomes' },
+  promoting: { eyebrow: 'Pawn promoting', question: 'Choose what this Pawn becomes' },
   queued: { eyebrow: 'Premove queued', question: 'Choose what this Pawn will become' },
 };
 
@@ -56,7 +57,7 @@ export function promotionPickerPositionStyle(
 export function PawnPromotionPicker({
   piece,
   choices,
-  subject = 'arrived',
+  subject = 'promoting',
   boardSeat,
   boardZoom,
   onChoose,

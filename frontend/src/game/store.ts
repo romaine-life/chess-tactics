@@ -25,7 +25,6 @@ import { clearPersistedNetIntent, loadPersistedNetIntent, persistNetIntent } fro
 import { adminMoveTargets, killUnitForAdmin } from './adminBattle';
 import { sanForMove } from './sanNotation';
 import type { RunBattleNotice, RunBattleUndoCheckpoint } from '../run/model';
-import { PROMOTION_CHOICE_REVEAL_MS } from './promotionPresentation';
 
 // Seed the shipped-AI-weights cache once so the live enemy AI picks up any weights an
 // admin shipped for a level (ship-to-everyone). Best-effort; a failure leaves the
@@ -406,7 +405,7 @@ export interface PendingPromotion {
    * promotion cell, and the answer is written onto the queued step for the drain to fire later.
    */
   mode: 'move' | 'premove' | 'premove-queue';
-  phase: 'landing' | 'choosing' | 'submitted';
+  phase: 'choosing' | 'submitted';
   pieceId: string;
   move: Move;
   choices: readonly PromotionPieceType[];
@@ -734,9 +733,13 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
   };
 
   /**
-   * Present the Pawn's physical arrival before exposing the replacement decision.
+   * Project the Pawn's arrival and ask what it becomes in the same frame the move is
+   * authored (ADR-0556). The player already knows the promotion is coming — it is why they
+   * played the move — so the question opens over the destination while the sprite is still
+   * gliding to it rather than one presentation interval later.
+   *
    * Canonical chess state stays untouched until choosePromotion commits/submits the
-   * complete atomic move; SkirmishBoard derives the arrived Pawn from this pending state.
+   * complete atomic move; SkirmishBoard derives the arriving Pawn from this pending state.
    */
   const stagePromotionArrival = (
     mode: PendingPromotion['mode'],
@@ -745,23 +748,13 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     choices: readonly PromotionPieceType[],
     remainingPremoves: PremoveStep[] = [],
   ): void => {
-    const pending: PendingPromotion = {
-      mode,
-      phase: 'landing',
-      pieceId: piece.id,
-      move,
-      choices,
-    };
     set({
-      pendingPromotion: pending,
+      pendingPromotion: { mode, phase: 'choosing', pieceId: piece.id, move, choices },
       premoves: mode === 'premove' ? remainingPremoves : [],
       premoveInputOpen: mode === 'premove' ? get().premoveInputOpen : false,
     });
+    // The footstep still belongs to the glide, not to the question: it seats when the Pawn does.
     playLandingSfx(get().env, move.x, move.y, LANDING_SFX_DELAY);
-    scheduleSessionEffect(() => {
-      if (get().pendingPromotion !== pending) return;
-      set({ pendingPromotion: { ...pending, phase: 'choosing' } });
-    }, PROMOTION_CHOICE_REVEAL_MS);
   };
 
   // Flag fall: losing on time is a defeat like any other — turn locks, result copy
@@ -1154,8 +1147,8 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     const mv = p ? legalMoves(p, s.game.pieces, s.game.size, s.env).find((m) => m.x === head.x && m.y === head.y) : undefined;
     if (!p || !mv) { set({ premoves: [], premoveInputOpen: false }); return false; }
     // Player-authored promotion premoves answer this at queue time (ADR-0541), so a head that
-    // still carries no choice came from somewhere else — a programmatic or legacy step. It falls
-    // back to the arrive-then-ask presentation rather than picking for the player.
+    // still carries no choice came from somewhere else — a programmatic or legacy step. It asks
+    // as the step fires rather than picking for the player.
     if (movePromotesPawn(s.game, p, mv) && head.promotion === undefined) {
       stagePromotionArrival('premove', p, mv, promotionChoicesForMove(s.game, p, mv), rest);
       return true;
@@ -2030,8 +2023,8 @@ const createSkirmishState: StateCreator<SkirmishState> = (set, get) => {
     if (p && movePromotesPawn(projected, p, mv)) {
       set({
         premoves,
-        // No arrival glide to wait out: the ghost appears in the same frame the step is queued,
-        // so the choice opens with it rather than one presentation interval later.
+        // Same immediacy as a played promotion (ADR-0556): the ghost appears in the frame the
+        // step is queued and the question opens with it.
         pendingPromotion: {
           mode: 'premove-queue',
           phase: 'choosing',

@@ -29,8 +29,8 @@ revalidated against the authoritative board before submission. A promotion premo
 its Pawn becomes as the step is queued, beside that step's ghost, and stores the answer alongside
 its destination; the chain may continue past it as the chosen piece, and the whole move is
 submitted as one complete ordered intent when the step fires, with no local arrival projection.
-A step carrying no choice — programmatic or legacy, never player-authored — falls back to arriving
-first and asking at the front of the queue.
+A step carrying no choice — programmatic or legacy, never player-authored — is asked at the front
+of the queue instead, as it fires.
 
 Objective and result presentation must use the same resolved `VictoryRule[]` as gameplay.
 Each seat is told its own win paths and threats. Authored rule names and exact draw reasons
@@ -41,8 +41,9 @@ survive settlement; only the relative Victory/Defeat wording changes by client.
 - The lobby server owns move ordering.
 - A client POST is an intent, not a board commit.
 - Only an ordered server echo or backfill mutates the multiplayer board.
-- A local promoting Pawn's arrived presentation before choice or echo is a client-local piece
-  projection, not a canonical board mutation. It remains visible through submission, and an
+- A local promoting Pawn's arrival presentation before choice or echo is a client-local piece
+  projection, not a canonical board mutation. It is projected — and its choice opened — in the
+  frame the move is authored (ADR-0556). It remains visible through submission, and an
   authoritative rejection removes it.
 - At most one local move intent may be pending for an expected relay index.
 - Every gesture has a stable `intentId`. All retries reuse it; the server returns an

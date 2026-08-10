@@ -251,10 +251,11 @@ The **default** ruleset is **real chess**:
   checkmate wins. **Castling, en passant, promotion, stalemate, and the draw rules
   (50-move and threefold repetition) are all in the v1 baseline** unless a board
   says otherwise.
-- A player Pawn visibly completes its move onto an authored promotion cell before the
-  replacement choices appear. The arrived Pawn's square is highlighted and its blocking picker
-  stays attached directly beside it rather than asking through ordinary HUD chrome
-  (ADR-0503, ADR-0504).
+- A player Pawn played onto an authored promotion cell is asked what it becomes **immediately**,
+  in the frame the move is authored, while the Pawn is still gliding to that square (ADR-0556).
+  The destination is highlighted and the blocking picker stays attached directly beside it rather
+  than asking through ordinary HUD chrome (ADR-0503, ADR-0504). The move itself still commits
+  atomically only once the choice is made.
 - A **premove** onto a promotion cell is asked the same question **as it is queued**, beside the
   ghost that already stands there, and carries the answer on the queued step — a premove exists
   to spend the opponent's thinking time, so it does not stop the game to ask a turn later. The
