@@ -928,14 +928,9 @@ describe('skirmish store: survive + reach objectives', () => {
       log: [],
     });
     useSkirmish.getState().tryMoveTo(0, 0); // pawn steps onto the target
-    expect(useSkirmish.getState().pendingPromotion).toMatchObject({ pieceId: 'pp', phase: 'landing' });
+    // Answerable in the same tick — no timer runs between the move and the question (ADR-0559).
+    expect(useSkirmish.getState().pendingPromotion).toMatchObject({ pieceId: 'pp', phase: 'choosing' });
     expect(useSkirmish.getState().game.pieces.find((p) => p.id === 'pp')).toMatchObject({ type: 'pawn', x: 0, y: 1 });
-    useSkirmish.getState().choosePromotion('rook'); // hidden while the arrival is still moving
-    expect(useSkirmish.getState().pendingPromotion).toMatchObject({ phase: 'landing' });
-    vi.advanceTimersByTime(359);
-    expect(useSkirmish.getState().pendingPromotion).toMatchObject({ phase: 'landing' });
-    vi.advanceTimersByTime(1);
-    expect(useSkirmish.getState().pendingPromotion).toMatchObject({ phase: 'choosing' });
     useSkirmish.getState().choosePromotion('rook');
     const { game } = useSkirmish.getState();
     expect(game.winner).toBe('player');
@@ -1435,13 +1430,33 @@ describe('skirmish store: premoves', () => {
     });
   }
 
+  it('opens a played promotion question in the same tick as the move, mid-glide', () => {
+    loadPromotionBoard();
+    useSkirmish.setState({ selectedId: 'pp', focusedId: 'pp' });
+    useSkirmish.getState().tryMoveTo(0, 0);
+
+    // No timer has run: the Pawn is still gliding and the choice is already answerable
+    // (ADR-0559). The canonical board has not moved it — that waits on the answer.
+    expect(useSkirmish.getState().pendingPromotion).toMatchObject({
+      mode: 'move',
+      phase: 'choosing',
+      pieceId: 'pp',
+      move: { x: 0, y: 0 },
+    });
+    expect(useSkirmish.getState().game.pieces.find((p) => p.id === 'pp')).toMatchObject({ type: 'pawn', x: 0, y: 1 });
+
+    useSkirmish.getState().choosePromotion('knight');
+    expect(useSkirmish.getState().pendingPromotion).toBeNull();
+    expect(useSkirmish.getState().game.pieces.find((p) => p.id === 'pp')).toMatchObject({ type: 'knight', x: 0, y: 0 });
+  });
+
   it('asks a promotion premove what it becomes the moment it is queued', () => {
     loadPromotionBoard();
     useSkirmish.getState().tryMoveTo(1, 7); // king step → opponent's turn
     useSkirmish.getState().queueMove('pp', 0, 0);
 
-    // Open immediately — the ghost is already on the promotion cell, so there is no arrival
-    // glide to wait out and no 'landing' phase to sit through.
+    // Open immediately — the ghost is already on the promotion cell, and nothing gates the
+    // question on a tween.
     expect(useSkirmish.getState().pendingPromotion).toMatchObject({
       mode: 'premove-queue',
       phase: 'choosing',
@@ -1503,7 +1518,7 @@ describe('skirmish store: premoves', () => {
     expect(useSkirmish.getState().game.pieces.find((p) => p.id === 'pp')).toMatchObject({ type: 'pawn', x: 0, y: 1 });
   });
 
-  it('lands a programmatic promotion premove before asking, since nobody chose for it', () => {
+  it('asks a programmatic promotion premove as it fires, since nobody chose for it', () => {
     loadPromotionBoard();
     useSkirmish.getState().tryMoveTo(1, 7);
     // Queued without a choice — the shape a legacy/programmatic step still has.
@@ -1512,11 +1527,9 @@ describe('skirmish store: premoves', () => {
     vi.advanceTimersByTime(520 + 620);
     expect(useSkirmish.getState()).toMatchObject({
       premoveInputOpen: true,
-      pendingPromotion: { mode: 'premove', phase: 'landing', pieceId: 'pp' },
+      pendingPromotion: { mode: 'premove', phase: 'choosing', pieceId: 'pp' },
     });
     expect(useSkirmish.getState().game.pieces.find((p) => p.id === 'pp')).toMatchObject({ type: 'pawn', x: 0, y: 1 });
-    vi.advanceTimersByTime(360);
-    expect(useSkirmish.getState().pendingPromotion).toMatchObject({ phase: 'choosing' });
 
     useSkirmish.getState().choosePromotion('queen');
     const s = useSkirmish.getState();
