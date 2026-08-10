@@ -91,8 +91,13 @@ one is not precedent.
   keeps its register without carrying the whole load alone.
 - `RunActionIcon` exists for the next card action that needs one — the family is a
   variant map, not a second bespoke seat.
-- Until an option is installed the seat renders empty. That is the reserved state working,
-  not a missing asset: the button is unchanged from before this ADR.
+- The owner selected **Option 08** — densest ornament, coolest gold, nearest the real card
+  back at seat size — and it is installed: content `e294c24e…adb9d88`, native 64×64,
+  accepted into `ui/kit/icons/game/athetize.png` and bound to `ui-kit-icons-game-athetize-png`.
+  Every Athetize button paints it. The other seven candidates remain uploaded and
+  unaccepted, so the catalog offers them for comparison without any of them being runtime art.
+- Before that selection the seat rendered empty, which was the reserved state working rather
+  than a missing asset. That contract still holds for the next action variant added here.
 - No Run document, database, or save-format migration follows. This is presentation and
   one additive live-media slot, which is recoverable by retiring it.
 
