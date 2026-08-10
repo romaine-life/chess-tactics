@@ -29,6 +29,17 @@ const ROTATION_COPY: Readonly<Record<'on' | 'off', { label: string; effect: stri
   },
 };
 
+const PRICING_COPY: Readonly<Record<'material' | 'density', { label: string; effect: string }>> = {
+  material: {
+    label: 'By material',
+    effect: 'A card costs what its pieces are worth. A Queen is nine whether she arrives alone or beside three Pawns.',
+  },
+  density: {
+    label: 'By density',
+    effect: 'A card costs by how concentrated it is, so the same material packed into fewer squares costs more. Board space is what you are really buying.',
+  },
+};
+
 export function RunRulesSelector({
   value,
   onChange,
@@ -58,6 +69,15 @@ export function RunRulesSelector({
 
   const rotationKey = value.mayRotate ? 'on' : 'off';
 
+  const pricingOptions: readonly HouseSelectOption[] = (['material', 'density'] as const).map((key) => ({
+    value: key,
+    label: (
+      <span className="run-rules-option-copy">
+        <span>{PRICING_COPY[key].label}</span>
+      </span>
+    ),
+  }));
+
   return (
     <section className="run-rules-selector" aria-labelledby="run-rules-title">
       <h3 id="run-rules-title">Formations</h3>
@@ -83,6 +103,18 @@ export function RunRulesSelector({
         fillSurface={fillSurface}
       />
       <p className="run-rules-effect">{ROTATION_COPY[rotationKey].effect}</p>
+
+      <h3 id="run-pricing-title">Pricing</h3>
+      <HouseSelect
+        value={value.pricing}
+        options={pricingOptions}
+        onChange={(next) => onChange({ ...value, pricing: next as 'material' | 'density' })}
+        ariaLabel="Card pricing"
+        className="run-rules-select"
+        testId="run-rules-pricing"
+        fillSurface={fillSurface}
+      />
+      <p className="run-rules-effect">{PRICING_COPY[value.pricing].effect}</p>
     </section>
   );
 }

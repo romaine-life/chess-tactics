@@ -32,6 +32,7 @@ import {
   formationSpan,
   openingKingOffers,
   cardAllowedByRules,
+  runCardCost,
   createRun,
   createRunCardOffer,
   leaveSectio,
@@ -912,5 +913,52 @@ describe('Run rules bind the King as firmly as the market', () => {
     }
     const wide = createRun(war(), 7, { chooseKing: true, rules: LEGACY_RUN_RULES });
     expect(wide.commendatio!.kingOffers).not.toEqual(narrow.commendatio!.kingOffers);
+  });
+});
+
+describe('card pricing is a Run rule', () => {
+  const priced = (id: string, rules: typeof DEFAULT_RUN_RULES) => {
+    const card = RUN_CARD_DECK.find((c) => c.id === id);
+    expect(card, id).toBeDefined();
+    return runCardCost(card!, rules);
+  };
+  const density = { ...DEFAULT_RUN_RULES, pricing: 'density' as const };
+
+  it('charges material when told to, which is what the game has always done', () => {
+    for (const card of RUN_CARD_DECK) {
+      expect(runCardCost(card, DEFAULT_RUN_RULES), card.id).toBe(card.value);
+    }
+  });
+
+  it('charges concentration when told to, so the same material costs differently', () => {
+    // A Queen alone and a Queen behind a Pawn are 9 and 10 material -- nearly equal -- but one
+    // occupies a single square. Material pricing cannot tell them apart; density can.
+    expect(priced('q', DEFAULT_RUN_RULES)).toBe(9);
+    expect(priced('pq-front', DEFAULT_RUN_RULES)).toBe(10);
+    expect(priced('q', density)).toBe(16);
+    expect(priced('pq-front', density)).toBe(13);
+  });
+
+  it('never gives a card away, however thin it is', () => {
+    for (const card of RUN_CARD_DECK) {
+      expect(runCardCost(card, density), card.id).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('keeps every price whole, because gold is whole', () => {
+    for (const card of RUN_CARD_DECK) {
+      expect(Number.isInteger(runCardCost(card, density)), card.id).toBe(true);
+    }
+  });
+
+  it('prices an offer by the rules of the Run that was dealt it', () => {
+    const materialRun = createRun(war(), 5, { rules: DEFAULT_RUN_RULES });
+    const densityRun = createRun(war(), 5, { rules: density });
+    expect(materialRun.rules.pricing).toBe('material');
+    expect(densityRun.rules.pricing).toBe('density');
+    const asMaterial = sectioCardOffersAtCursor(5, 0, 0, 3, DEFAULT_RUN_RULES);
+    const asDensity = sectioCardOffersAtCursor(5, 0, 0, 3, density);
+    expect(asDensity.map((o) => o.id)).toEqual(asMaterial.map((o) => o.id));
+    expect(asDensity.map((o) => o.cost)).not.toEqual(asMaterial.map((o) => o.cost));
   });
 });
