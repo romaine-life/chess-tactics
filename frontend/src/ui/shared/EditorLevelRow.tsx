@@ -13,6 +13,7 @@ const EDITOR_ROW_ICONS = {
   'chevron-up': installedUiMedia('ui-kit-icons-chevron-up-png'),
   'chevron-down': installedUiMedia('ui-kit-icons-chevron-down-png'),
   delete: installedUiMedia('ui-kit-icons-delete-png'),
+  info: installedUiMedia('ui-kit-icons-info-png'),
   lock: installedUiMedia('ui-kit-icons-lock-png'),
   pencil: installedUiMedia('ui-kit-icons-pencil-png'),
   save: installedUiMedia('ui-kit-icons-save-png'),
@@ -66,6 +67,9 @@ export function EditorLevelRow({
   className = 'ce-editor-level-row',
   copyClassName = 'ce-editor-level-copy',
   onSelect,
+  onInfo,
+  infoLabel,
+  framed = true,
   editHref,
   onMoveUp,
   onMoveDown,
@@ -97,6 +101,11 @@ export function EditorLevelRow({
   className?: string;
   copyClassName?: string;
   onSelect?: () => void;
+  /** Renders an "i" verb beside the row controls instead of making the row itself pressable. */
+  onInfo?: () => void;
+  infoLabel?: string;
+  /** False for a row that is a member of a list BOX; the box is already the frame. */
+  framed?: boolean;
   editHref?: string;
   onMoveUp?: () => void;
   onMoveDown?: () => void;
@@ -111,11 +120,16 @@ export function EditorLevelRow({
   // ref's objective as a mode name only.
   const rowName = displayName ?? level?.name ?? levelId;
   const goalLine = description ?? (level ? levelObjectiveLine(level) : MODE_NAME[objective ?? 'capture-all']);
-  const hasDefaultActions = !readOnly && Boolean(editHref || onMoveUp || onMoveDown || onDelete);
+  const hasDefaultActions = !readOnly && Boolean(onInfo || editHref || onMoveUp || onMoveDown || onDelete);
   // Every verb on the row is a trigger, so every verb wears the column's oak (see
   // EditorColumnControls) rather than the inner role's tint.
   const oak = EDITOR_COLUMN_CONTROL_FILL_SURFACE;
   const defaultActions: ActionListAction[] = hasDefaultActions ? [
+    // An "i" beside the other verbs, for a row that is a MEMBER of a list box rather than a
+    // clickable slab of its own. Selecting by pressing the row needs the row to LOOK pressable,
+    // which is the per-row frame this kind of list is trying not to draw; the button says the
+    // same thing in the space the row already gives its verbs.
+    ...(onInfo ? [{ id: 'info', label: infoLabel ?? `Details for ${rowName}`, title: 'Details', icon: <EditorRowIcon icon="info" />, selected: active, fillSurface: oak, onPress: onInfo }] : []),
     ...(editHref ? [{ id: 'edit', href: editHref, label: `Edit board for ${rowName}`, title: 'Edit board', icon: <EditorRowIcon icon="pencil" />, fillSurface: oak }] : []),
     ...(onMoveUp ? [{ id: 'move-up', label: `Move ${rowName} up`, title: 'Move up', icon: <EditorRowIcon icon="chevron-up" />, disabled: !canMoveUp, fillSurface: oak, onPress: onMoveUp }] : []),
     ...(onMoveDown ? [{ id: 'move-down', label: `Move ${rowName} down`, title: 'Move down', icon: <EditorRowIcon icon="chevron-down" />, disabled: !canMoveDown, fillSurface: oak, onPress: onMoveDown }] : []),
@@ -144,7 +158,10 @@ export function EditorLevelRow({
       // control in the row off centre.
       leadingChrome: false,
       leadingClassName: 'ce-editor-level-thumb',
-      leadingDivider: true,
+      // The rail between the preview and the copy is what makes a FRAMED row read as one object
+      // split into panes. An unframed member has no frame for it to meet, so a row of them stacks
+      // those rails into a continuous spine down the list with junction atoms at every seam.
+      leadingDivider: framed,
       leading: level ? (
           <GatedLevelThumbnail
             level={level}
@@ -154,8 +171,12 @@ export function EditorLevelRow({
         ) : (
           <span className="settings-row-thumb-empty" />
         ),
-      fillRole: EDITOR_COLUMN_BOX_FILL_ROLE,
-      selected: active,
+      fillRole: framed ? EDITOR_COLUMN_BOX_FILL_ROLE : undefined,
+      framed,
+      // A framed row shows which one is current by lighting its own frame. An unframed member has
+      // none to light, and the same class paints a bare outline floating in the list — so the "i"
+      // that opened the details carries the state instead, which is also the thing you pressed.
+      selected: framed ? active : false,
       readOnly: !hasActions,
       neutral: !containerIsButton,
       className,

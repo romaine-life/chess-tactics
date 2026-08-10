@@ -46,6 +46,13 @@ export type ActionListItem = {
   disabled?: boolean;
   readOnly?: boolean;
   neutral?: boolean;
+  /**
+   * False for a row that is a MEMBER of a list box rather than a slab standing on its own: the
+   * box around it is already the frame and already wears the material, so framing the row again
+   * draws the same stuff inside itself. Members are told apart by the rail the list puts between
+   * them. Defaults true, so every existing list keeps its per-row frame.
+   */
+  framed?: boolean;
   className?: string;
   copyClassName?: string;
   actionsClassName?: string;
@@ -108,12 +115,14 @@ export function ActionListRow({ item }: { item: ActionListItem }): ReactElement 
     </InnerChromeBox>
   );
   const primary = item.primaryAction;
+  const framed = item.framed !== false;
+  const Frame = framed ? InnerChromeBox : 'div';
+  const frameProps = framed ? { fillRole: item.fillRole, fillSurface: item.fillSurface } : {};
 
   return (
-    <InnerChromeBox
-      className={`settings-row action-list-row ${item.className ?? ''} ${item.selected ? 'active is-active is-selected' : ''} ${item.disabled ? 'is-disabled' : ''} ${item.readOnly ? 'is-read-only' : ''} ${item.neutral ? 'is-neutral' : ''}`.replace(/\s+/g, ' ').trim()}
-      fillRole={item.fillRole}
-      fillSurface={item.fillSurface}
+    <Frame
+      {...frameProps}
+      className={`settings-row action-list-row ${framed ? '' : 'action-list-row-member'} ${item.className ?? ''} ${item.selected ? 'active is-active is-selected' : ''} ${item.disabled ? 'is-disabled' : ''} ${item.readOnly ? 'is-read-only' : ''} ${item.neutral ? 'is-neutral' : ''}`.replace(/\s+/g, ' ').trim()}
       role={interactive ? 'button' : undefined}
       tabIndex={interactive ? 0 : undefined}
       aria-label={interactive ? item.ariaLabel : undefined}
@@ -158,7 +167,7 @@ export function ActionListRow({ item }: { item: ActionListItem }): ReactElement 
           {item.actions?.map((action) => <ActionControl key={action.id} action={action} />)}
         </div>
       ) : null}
-    </InnerChromeBox>
+    </Frame>
   );
 }
 

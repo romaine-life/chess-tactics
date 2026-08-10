@@ -19275,16 +19275,28 @@ button.tileset-relationship-cell {
   padding-inline: var(--ds-inset);
 }
 
-/* The group's name heads the rows it holds, so it takes the row heading's own treatment rather
-   than reading smaller and plainer than the members it names. */
-.settings-group .section-box-title {
+/* The War's Battles are members of one Battles box, so each battle row drops its own frame the
+   same way a settings member does; the list's gap is what separates them. */
+.war-battles-box > .section-box-body {
+  padding: 0 var(--ds-inset) var(--ds-inset);
+}
+
+.war-battles-box .action-list-row-member {
+  padding-inline: 0;
+}
+
+/* The group's name heads the rows it holds, so it takes the row heading's own treatment one step
+   up rather than reading smaller and plainer than the members it names. */
+.settings-group .section-box-title,
+.war-battles-box .section-box-title {
   color: #f6fbff;
-  font-size: var(--ds-text-lg);
+  font-size: var(--ds-text-xl);
   text-shadow: 0 2px 0 #02070b;
   text-transform: uppercase;
 }
 
-.settings-group > .section-box-head {
+.settings-group > .section-box-head,
+.war-battles-box > .section-box-head {
   padding-block-end: 0;
 }
 

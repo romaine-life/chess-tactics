@@ -24,7 +24,12 @@ describe('Campaign and War Editor libraries', () => {
     expect(campaign.indexOf('title="Wars"')).toBeLessThan(campaign.indexOf('count={unassignedLevels.length}'));
     expect(campaign).not.toContain('Skirmish profiles');
 
-    expect(war).toContain('<SettingsSection title="Wars">');
+    // No War picker inside the War editor. There is one War and the store lands on it, so a list
+    // to choose from — plus New War, plus New official War — was three slabs above the work that
+    // only ever restated "this one". The rail's own Wars entry is what navigates here.
+    expect(war).not.toContain('title="Wars"');
+    expect(war).not.toContain('+ New War');
+    expect(war).not.toContain('+ New Official War');
     expect(war).not.toContain('ce-editor-rail');
     expect(war).not.toContain('ce-rail-actions');
   });
