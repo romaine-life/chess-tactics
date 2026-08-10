@@ -210,6 +210,10 @@ body.location = (200, 220)
 sep.location = (200, -620)
 seta.location = (940, 80)
 
+# NOT stripping the addon's Introduction workspace here. bpy.data.workspaces has no
+# .remove(), and batch_remove() on workspaces segfaults Blender 5.1 outright -- it
+# took the builder down with it. Delete the tab in the UI instead (right-click the
+# workspace tab, Delete, then save); it persists in the saved file from then on.
 scene.render.filepath = os.environ["OUT"]
 bpy.ops.render.render(write_still=True)
 if os.environ.get("LAB_OUT"):
