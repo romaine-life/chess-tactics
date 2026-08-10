@@ -94,6 +94,13 @@ if ol:
     ol.inputs["Fine Adjust"].default_value=1.0
     ol.inputs["Sensitivity"].default_value=5.0
     ol.inputs["Color"].default_value=(*srgb("#181818"),1)
+    # Thickness lives INSIDE the group, on a Dilate/Erode node's Size socket -- not on
+    # the group's own inputs, which is why reading the exposed sockets missed it and a
+    # freshly built lab silently inherited the addon's -1 instead of the tuned 8.
+    bt = next((x for x in ol.node_tree.nodes
+               if (x.label or x.name).lower().startswith("border")), None)
+    if bt is not None and "Size" in bt.inputs:
+        bt.inputs["Size"].default_value = 8
 
 # Bypass the 8Mat Dither Combiner. It was harmless while every material sat at Pass
 # Index 0 -- that routes to no slot -- but assigning indices 1 and 2 for the ID Mask
@@ -131,15 +138,12 @@ current = body.outputs["Color"]
 # ID Mask turns "this pixel's material index == ACCENT_INDEX" into a mask, which then
 # chooses between the two palettes. Anti-aliasing off: a fractional mask would blend
 # gold into navy and produce colours in neither palette.
-# Pixelate the index pass on the SAME grid as the image before masking. The mask was
-# reading the full-resolution Material Index while the colour came off the pixelated
-# image, so the mask edge followed the crown's true silhouette and the colour sat on a
-# 7px grid -- every boundary block kept part of the body palette, which shows up as
-# blue pixels poking out of the crown.
-mask_pix = tree.nodes.new("CompositorNodePixelate")
-next(s for s in mask_pix.inputs if s.name == "Size").default_value = BLOCK
-tree.links.new(rl.outputs["Material Index"], mask_pix.inputs[0])
-
+# The mask is built at FULL resolution and only then put on the image's grid.
+# Pixelate averages, and an index pass must never be averaged: a block straddling
+# index 1 and 2 becomes 1.5, matches no mask exactly, and falls through to the body
+# palette -- a one-pixel lip of the wrong colour around every accent. So ID Mask
+# first, on exact integers, then pixelate the resulting 0/1 mask and re-threshold it
+# back to hard edges.
 for offset, (index, label, stops) in enumerate(ACCENTS):
     ramp = make_ramp(stops)
     ramp.label = label
@@ -150,13 +154,44 @@ for offset, (index, label, stops) in enumerate(ACCENTS):
         # A fractional mask blends two palettes and yields colours in neither.
         idm.inputs["Anti-Alias"].default_value = False
     idm.location = (0, -320 - offset * 300)
-    tree.links.new(mask_pix.outputs[0], idm.inputs["ID value"])
+    tree.links.new(rl.outputs["Material Index"], idm.inputs["ID value"])
+
+    mask_pix = tree.nodes.new("CompositorNodePixelate")
+    next(t for t in mask_pix.inputs if t.name == "Size").default_value = BLOCK
+    mask_pix.location = (120, -400 - offset * 300)
+    tree.links.new(idm.outputs["Alpha"], mask_pix.inputs[0])
+
+    # Averaging a binary mask leaves fractions at the edges; a CONSTANT ramp with one
+    # stop at the midpoint snaps them back so every block is fully one palette.
+    hard = tree.nodes.new("ShaderNodeValToRGB")
+    hard.color_ramp.interpolation = "CONSTANT"
+    hels = hard.color_ramp.elements
+    while len(hels) > 1:
+        hels.remove(hels[-1])
+    hels[0].position, hels[0].color = 0.0, (0, 0, 0, 1)
+    hels.new(0.5).color = (1, 1, 1, 1)
+    hard.location = (300, -400 - offset * 300)
+    tree.links.new(mask_pix.outputs[0], hard.inputs["Fac"])
+
+    # Grow the mask by one pixel. On the crown's outer silhouette a block is part
+    # accent and part BACKGROUND, and background carries material index 0 -- matching
+    # no accent mask, so it fell through to the body palette and left a one-pixel lip
+    # of navy around the crown. Dilating covers those edge blocks; alpha still trims
+    # anything that reaches past the piece.
+    grow = tree.nodes.new("CompositorNodeDilateErode")
+    # Blender 5 moved Distance onto an input socket, like ID Mask's Index.
+    if "Distance" in grow.inputs:
+        grow.inputs["Distance"].default_value = 1
+    elif hasattr(grow, "distance"):
+        grow.distance = 1
+    grow.location = (420, -400 - offset * 300)
+    tree.links.new(hard.outputs["Color"], grow.inputs[0])
 
     mix = tree.nodes.new("ShaderNodeMix")
     mix.data_type = "RGBA"
     mix.location = (460 + offset * 220, 80)
     rgba_in = [s for s in mix.inputs if s.type == "RGBA"]
-    tree.links.new(idm.outputs["Alpha"], mix.inputs["Factor"])
+    tree.links.new(grow.outputs[0], mix.inputs["Factor"])
     tree.links.new(current, rgba_in[0])
     tree.links.new(ramp.outputs["Color"], rgba_in[1])
     current = [s for s in mix.outputs if s.type == "RGBA"][0]

@@ -37,6 +37,11 @@ OUTLINE = {
     "Color": "#181818",
     "Fine Adjust": 1.0,
     "Sensitivity": 5.0,
+    # Thickness is NOT on the group's inputs. It lives inside, on a Dilate/Erode node
+    # labelled "Border Thickness", as its Size socket -- so reading the exposed
+    # sockets misses it entirely and a freshly built scene silently inherits the
+    # addon's -1 instead of this. That cost a round of "why is there no outline".
+    "Border Thickness.Size": 8,
 }
 
 # CONSTANT interpolation is what makes this a palette rather than a gradient: every
