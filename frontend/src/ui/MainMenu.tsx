@@ -16,6 +16,7 @@ import {
 } from './enchiridionRoute';
 import { ApparatusRailColumn, ApparatusRailTab } from './shared/ApparatusRailTab';
 import { useOpenRailTab } from './shared/railOpenIntent';
+import { RailOpenConnector } from './shared/RailOpenConnector';
 import { isPlaySelectorPath, PLAY_SELECTOR_ROOT } from './playHubRoute';
 
 // The Editor is heavier / code-split out of the menu bundle. App's SceneBoundary
@@ -174,6 +175,7 @@ export function MainMenu({
                 expanded={openDest !== null && shellDest(tab.href) === openDest}
               />
             ))}
+            <RailOpenConnector panelSelector=".menu-dest" open={openDest} />
           </ApparatusRailColumn>
           <MenuDestinationSceneSlot
             className="menu-dest"

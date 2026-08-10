@@ -18641,6 +18641,14 @@ button.tileset-relationship-cell {
   overflow: hidden;
 }
 
+/* The connector's whole job is to reach OUT of its rail, and this clip cut it off at the tab's
+   trailing edge — the line was drawn, measured and invisible. Scoped with :has so the Settings
+   rail, which mounts no connector, keeps the clip. The tabs carry their own `overflow: hidden`
+   for their enlarged marks, so nothing else in this column depends on the column clipping. */
+.settings-rail-frame:has(.rail-open-connector) {
+  overflow: visible;
+}
+
 .apparatus-rail-column {
   --settings-rail-tab-gap: var(--main-menu-tab-column-gap);
   align-content: start;
@@ -18648,6 +18656,41 @@ button.tileset-relationship-cell {
   display: grid;
   gap: var(--settings-rail-tab-gap);
   min-block-size: 0;
+  /* The containing block for the open connector, which is out of flow so it neither takes a
+     row in the tab stack nor moves a tab. */
+  position: relative;
+}
+
+/* A rail carrying a connector paints ABOVE the panel it reaches into. Both are positioned
+   siblings at z-index auto, so DOM order alone decided it, and the panel comes second: the main
+   menu's `.menu-dest` (relative) covered the run where it crossed the gutter, while the
+   Enchiridion's static content pane did not — the same line, visible on one rail and invisible
+   on the other. Scoped with :has so no rail without a connector changes stacking. The rail's own
+   box does not overlap the panel and the connector takes no pointer events, so nothing beneath
+   becomes unreachable. */
+.apparatus-rail-column:has(.rail-open-connector) {
+  z-index: 1;
+}
+
+/* The line from an open tab to the panel it opened (RailOpenConnector). It reaches across the
+   gutter into the next column, so it must NOT be clipped to the rail's own box — an SVG clips
+   to its viewport by default, which would cut the run at the tab's trailing edge. */
+.rail-open-connector {
+  block-size: 100%;
+  inline-size: 100%;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  position: absolute;
+}
+
+/* Same ink as the active ring on .settings-tab, at the same weight: the ring, the `›` mark and
+   this line are one selection language saying one thing. */
+.rail-open-connector-line {
+  fill: none;
+  stroke: rgba(101, 184, 255, 0.78);
+  stroke-linecap: round;
+  stroke-width: 2;
 }
 
 .apparatus-rail-column[data-apparatus-rail-placement="open"] {
