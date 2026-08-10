@@ -39,11 +39,15 @@ their next click would resolve anyway.
   action row where Current Run's Play and Start New Run's Start Run sit.
 - The conflict replaces the Current Run FACTS, not the row: while it is unresolved, taking
   Current Run asks which Run before it offers to play one.
-- The ambient signal stays where it was: the status line **This browser and account each have an
-  active Run** keeps rendering under the choice list, so the pending question is discoverable
-  without a card standing in a row's seat. It is no longer announced as an `alert`, because a
+- The conflict is stated **once**, there. The store no longer writes a companion string into the
+  shared `persistenceError` channel — neither **This browser and account each have an active Run**
+  on hydrate nor **Choose which active Run this account should keep** on a save conflict.
+  `adoptionConflict` is the state; that channel is for persistence trouble the player cannot see
+  anywhere else, and Run preparation renders it under the choice list, which is precisely where
+  this question does not belong. It is no longer announced as an `alert` either, because a
   question you navigate to is not an interruption.
-- Start New Run is untouched and remains available throughout, as it already was.
+- Start New Run is untouched and remains available throughout, as it already was. Nothing beside
+  it mentions a conflict that has never gated it.
 
 ## Consequences
 
@@ -54,3 +58,7 @@ their next click would resolve anyway.
   visible-but-disabled language a rule rather than a default.
 - Resolving the conflict from the detail column returns the same column to Current Run's facts,
   so the answer lands where the next action already is.
+- A player who never opens Current Run is never told about the conflict, which is the point: it
+  cannot affect them, and the account keeps whichever Run they leave it holding until someone
+  answers. The `persistenceError` channel keeps its remaining messages — waiting cloud sync, a
+  failed abandon, an unsupported save version — which are all things no other surface reports.

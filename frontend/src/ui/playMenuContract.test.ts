@@ -11,6 +11,7 @@ const livePlay = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8'
 const ataraxiaSelector = readFileSync(new URL('./AtaraxiaSelector.tsx', import.meta.url), 'utf8');
 const authoredSceneSlots = readFileSync(new URL('./shell/AuthoredSceneSlot.tsx', import.meta.url), 'utf8');
 const playModeAvailability = readFileSync(new URL('./playModeAvailability.ts', import.meta.url), 'utf8');
+const runStore = readFileSync(new URL('../run/store.ts', import.meta.url), 'utf8');
 
 describe('unified Play menu contract (ADR-0074)', () => {
   it('has one top-level Play entry and no retired picker destinations', () => {
@@ -150,9 +151,12 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).not.toContain('!presentation.adoptionConflict &&');
     expect(playMenu).toContain("{choice === 'current' && presentation.adoptionConflict ? (");
     expect(playMenu).toMatch(/choice === 'current' && presentation\.adoptionConflict[\s\S]*?data-testid="run-adoption-conflict"/);
-    // Ambient only: the status line keeps saying the account is waiting on an answer, so the
-    // question is discoverable without a card taking the row's place.
-    expect(playMenu).toContain('<p className="play-content-warning" role="status">');
+    // And it is stated ONCE. `adoptionConflict` is the state; a companion string in the shared
+    // error channel repeated it in the choice column, beside a Start New Run the conflict has
+    // never gated. Both conflict branches leave that channel clear (ADR-0557).
+    expect(runStore).not.toContain('This browser and account each have an active Run.');
+    expect(runStore).not.toContain('Choose which active Run this account should keep.');
+    expect(runStore.match(/adoptionConflict: \{ browserRun, accountRun \}/g)).toHaveLength(2);
     // Unboxed does not mean unmaterialed: the two decision buttons are leaf controls over
     // the live vista, so they carry the same oak as every other Run leaf (ADR-0433).
     expect(playMenu).toMatch(/<ChromeButton[^>]*data-chrome-fill-surface=\{CHROME_LEAF_FILL_SURFACE\}[^>]*data-testid="run-keep-account"/);
