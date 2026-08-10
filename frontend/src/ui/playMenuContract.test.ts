@@ -114,6 +114,22 @@ describe('unified Play menu contract (ADR-0074)', () => {
     expect(playMenu).toContain("'No active Run'");
   });
 
+  it('cuts the Run destinations from one plank instead of stamping one crop twice (ADR-0034/ADR-0063)', () => {
+    // A leaf's installed oak is locally attached, so a row with no offset restarts the sheet
+    // at 0. Two rows like that paint the identical crop — the repeated-texture look. Each row
+    // instead samples the slice one plank running down the list would give it, the same
+    // recovery the rail tabs use for the `fixed` attachment Chromium forced us to drop.
+    expect(style).toMatch(/\.play-choice-row\s*\{[\s\S]*?--play-choice-row-surface-pitch:\s*calc\(96px \+ var\(--settings-section-rows-gap, 10px\)\);[\s\S]*?--chrome-surface-position-y:\s*calc\(var\(--play-choice-row-index, 0\) \* -1 \* var\(--play-choice-row-surface-pitch\)\);/);
+    // The pitch may not restate the list gap — it has to step by exactly what layout steps by.
+    expect(style).toMatch(/\.settings-section-rows\s*\{[\s\S]*?--settings-section-rows-gap:\s*10px;[\s\S]*?gap:\s*var\(--settings-section-rows-gap\);/);
+    // Seats are owned by the panel, never counted off the DOM: a :nth-child ladder re-cuts the
+    // plank the moment a "Loading Runs…" or "Runs unavailable" row joins the list.
+    expect(style).not.toMatch(/\.play-choice-row:nth-child\(/);
+    expect(playMenu).toContain('const PLAY_CHOICE_ROW_SEATS = { current: 0, new: 1 } as const;');
+    expect(playMenu).toContain("['--play-choice-row-index' as string]: PLAY_CHOICE_ROW_SEATS.current");
+    expect(playMenu).toContain("['--play-choice-row-index' as string]: PLAY_CHOICE_ROW_SEATS.new");
+  });
+
   it('presents Run adoption as an unboxed decision group', () => {
     expect(playMenu).toContain('className="run-adoption-conflict"');
     expect(playMenu).toContain('data-testid="run-adoption-conflict"');
