@@ -29,11 +29,31 @@ GOLD = [(0.00000,"#2a1c06"),(0.05139,"#5c4310"),(0.09918,"#8a6a1e"),(0.15729,"#b
 VELVET = [(0.00000,"#2a0709"),(0.05139,"#5a1013"),(0.09918,"#8a1c1c"),(0.15729,"#b03028"),(0.28899,"#d4544a")]
 # Each accent is a material Pass Index and the palette that index should wear. Masks
 # chain in order, so a later one paints over an earlier one where they overlap.
+# ONE mask for the whole crown, one ramp, keyed on brightness like the body's.
+#
+# Splitting gold from cloth cannot work at this size: the gilt runs about 9 px wide in
+# a render that is 7x the sprite, so a strand is 1.3 SPRITE pixels. A mask can only say
+# gold or not-gold, so a 1.3-pixel strand lands as 1 px here and 2 px there and breaks
+# up along its length -- which is the chunky look, and no threshold moves it because
+# the detail is finer than the grid.
+#
+# A single ramp sidesteps the decision entirely. A pixel that is part gilt and part
+# cloth averages to an in-between brightness and takes an in-between stop, so
+# sub-pixel detail degrades into shading rather than into blocks. Shadow reads velvet,
+# highlight reads gold, and the crown holds its shape at any threshold.
+CROWN = [(0.00000, "#2a0709"), (0.05139, "#5a1013"), (0.09918, "#8a1c1c"),
+         (0.15729, "#b8933a"), (0.28899, "#e2c268")]
+
 ACCENTS = [(2, "CROWN gold", GOLD), (3, "CROWN velvet", VELVET)]
+if os.environ.get("CROWN_SPLIT") is None:
+    ACCENTS = [(2, "CROWN", CROWN)]
 # Which HUE each accent owns, measured off the restored crown texture rather than
 # assumed. Gold sits in the yellows; velvet is red and wraps past 0, so it is written
 # as two bands and summed.
 HUE_BANDS = {2: [(0.07, 0.20)], 3: [(0.00, 0.045), (0.94, 1.001)]}
+# The materials that make up the crown, independent of how many ramps paint it.
+CROWN_INDICES = [2, 3]
+
 # Swept, not guessed: 0.18 -> 0.02 takes unclaimed crown pixels from 30 to 13 with
 # ZERO body pixels tinted at any setting, so opening the gate costs nothing here. The
 # 13 that remain are genuinely near-grey and have no hue to read.
@@ -122,7 +142,7 @@ vl = scene.view_layers[0]; vl.use_pass_material_index = True
 # A shader AOV is accumulated over the SAME samples as colour, so it comes back as
 # true coverage -- 0.4 for a block the crown fills four tenths of. That is the number
 # the mask needs, and it is why this is a graph change rather than a threshold tweak.
-for index, _label, _pal in ACCENTS:
+for index in CROWN_INDICES:
     aov = "acc%d" % index
     if aov not in {a.name for a in vl.aovs}:
         entry = vl.aovs.add()
@@ -209,8 +229,12 @@ current = body.outputs["Color"]
 # to the body ramp and leaked navy through the crown. Coverage alone cannot answer the
 # second: the material regions it comes from are near-random against the real texture.
 # Together neither weakness is load-bearing.
+# EVERY crown material, not just the ones that have their own ramp. With a single
+# crown ramp the accent list is one entry long, and summing coverage over that list
+# alone left the cloth's material out of the crown mask -- 22 crown pixels fell
+# through to the body and came back as navy.
 _crown_cov = None
-for _idx, _lbl, _pal in ACCENTS:
+for _idx in CROWN_INDICES:
     _sock = rl.outputs.get("acc%d" % _idx)
     if _sock is None:
         continue
@@ -367,6 +391,9 @@ for offset, (index, label, stops) in enumerate(ACCENTS):
     # through to the body. That is what stops navy leaking through near-grey gilt.
     _is_last = (index == ACCENTS[-1][0])
     _sel = pixel_mask.outputs[0]
+    if os.environ.get("CROWN_SPLIT") is None and crown_mask is not None:
+        # One mask: the crown's own coverage, with no hue decision at all.
+        _sel = crown_mask
     if _is_last and hue_prev is not None:
         _inv = tree.nodes.new("ShaderNodeMath")
         _inv.operation = "SUBTRACT"; _inv.use_clamp = True
