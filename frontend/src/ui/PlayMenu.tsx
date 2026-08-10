@@ -33,6 +33,7 @@ import {
 import { playSkirmishLevelHref, skirmishMapLevels } from './skirmishMaps';
 import { chromeUnitClassNames } from './chromeUnitRegistry';
 import { installedUiMedia } from './installedUiMedia';
+import { menuModeIcon } from './menuModeIcon';
 import { PaintedSurfaceBoundary } from './shell/PaintedSurfaceBoundary';
 import { PlayContentSceneSlot, RunDetailContentSceneSlot } from './shell/AuthoredSceneSlot';
 import {
@@ -40,7 +41,6 @@ import {
   ThumbnailSurface as AtomicThumbnailSurface,
   type ThumbnailSurfaceState,
 } from './shell/ThumbnailSurface';
-import { drawableAssets } from '@chess-tactics/board-render';
 import { useWars, runEligibleOfficialWars } from '../war/store';
 import { useActiveRun } from '../run/store';
 import {
@@ -70,15 +70,6 @@ import {
 } from './playModeAvailability';
 
 type PlayIcon = 'solo-skirmish' | 'campaign-editor' | 'level-editor' | 'lobbies';
-
-/** Installed menu-mode records own their icons. Play must not independently ask
- * app-ui for duplicate legacy path roles that are not members of that projection. */
-function menuModeIcon(value: 'play' | 'campaign-editor' | 'lobbies'): string {
-  const asset = drawableAssets('menu-mode').find((candidate) => candidate.behavior.value === value);
-  const icon = asset?.media.icon?.media.immutableUrl;
-  if (!icon) throw new Error(`menu mode ${value} has no installed icon`);
-  return icon;
-}
 
 function carvedIcon(name: PlayIcon): string {
   if (name === 'solo-skirmish') return menuModeIcon('play');

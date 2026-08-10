@@ -18829,6 +18829,16 @@ button.tileset-relationship-cell {
      at every seat size (73% of 64/44/40), because these are raster marks. */
   --settings-tab-icon-bleed-size: 47px;
   align-items: center;
+  /* Centre the icon+label ROW in whatever content box the button actually has.
+     Both rail heights were computed against a 2px border — "border(4) + 2·padding + icon
+     slot(40)" — but the panel-line border-image resolves to 7px a side, so the real content
+     box is 30px against a 40px row track. The row overflowed the full 10px DOWNWARD from its
+     start edge, seating every mark and label 5px below its button's centre line: the menu's
+     marks sat 10.6px under the frame and 0.6px above it. Centring the track spreads that
+     overflow evenly instead, which is what the fixed heights always meant. Deliberately not
+     re-derived padding: the border-image width is the thing that moved once already, and a
+     hand-computed inset would go stale the next time it does. */
+  align-content: center;
   appearance: none;
   /* Rendered as a <button> since ADR-0052: buttons don't inherit font (UA default) and
      get the arrow cursor — restore the exact look/feel the anchor version had. */
@@ -18977,9 +18987,13 @@ button.tileset-relationship-cell {
 .main-menu-mode-tab .settings-tab-icon img {
   position: absolute;
   left: 50%;
-  /* 61px tab - 44px icon = 17px: exact centring is 8.5px. Resolve the
-     half-pixel upward so the raster icon paints on whole logical pixels. */
-  top: calc(50% - .5px);
+  /* 61px tab - 44px icon = 17px, so exact centring is 8.5px and lands the icon box on a
+     half pixel. This used to resolve that half pixel UPWARD to keep the raster on whole
+     logical pixels — which bought nothing (44/64 is already a fractional scale, so the
+     art is resampled either way) and cost the thing the eye actually reads: it made the
+     gap above the mark 6px and the gap below it 7px, on every button in the rail. The
+     half pixel stays where it belongs and the mark sits on the button's centre line. */
+  top: 50%;
   transform: translate(calc(-50% + 0px), -50%);
 }
 
@@ -21994,6 +22008,73 @@ button.tileset-relationship-cell {
   color: var(--skirmish-muted);
 }
 
+/* Main-menu mark review: each candidate SET is mounted as a whole rail through the same
+   primitive the menu paints, laid out side by side so the sets can be read against each
+   other and against what is installed. Layout only — the rail brings its own column
+   width, gap, surface and seat, and the review never restyles the thing it is judging
+   (a review that re-sizes the seat proves nothing about the seat). */
+.menu-icon-review-screen {
+  block-size: 100%;
+  box-sizing: border-box;
+  grid-template-columns: minmax(0, 1fr);
+  overflow: auto;
+  padding: var(--ds-inset);
+}
+
+.menu-icon-review-panel {
+  grid-column: 1;
+  grid-row: 2;
+  margin-inline: auto;
+  /* Four 322px rails plus their gaps. The panel is sized to hold the comparison, not
+     to a house width — a panel that clips the fourth set hides the set. */
+  max-inline-size: 1480px;
+  overflow: auto;
+  inline-size: 100%;
+}
+
+.menu-icon-review-panel > .le-outer-panel-content {
+  display: grid;
+  gap: var(--ds-inline);
+}
+
+.menu-icon-review-sets {
+  align-items: start;
+  display: flex;
+  gap: var(--ds-inline);
+  /* One row, always. A wrapped set is a set that can no longer be compared against the
+     one it wrapped away from, which is the entire job of this page; a narrow window
+     scrolls the row instead of breaking it. */
+  overflow-x: auto;
+}
+
+.menu-icon-review-set {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  justify-items: start;
+}
+
+.menu-icon-review-set > h2,
+.menu-icon-review-set > p {
+  margin: 0;
+}
+
+/* Reserve two lines for the set name whether or not it needs them. A one-line title next
+   to a wrapped one starts its rail a line higher, and two rails at different heights
+   cannot be read against each other — which is the only thing this page does. */
+.menu-icon-review-set > h2 {
+  align-content: end;
+  min-block-size: 2.4em;
+}
+
+.menu-icon-review-set > p {
+  color: var(--skirmish-muted);
+}
+
+.menu-icon-review-missing {
+  color: var(--skirmish-muted);
+  margin: 0;
+}
+
 /* Studio > Action Marks: each catalog card carries the candidate in the SAME button the
    Expunctio row paints, in both states that control has — offered, and refused. Layout
    only; the buttons bring their own kit frame and the catalog never restyles the seat it
@@ -24790,10 +24871,13 @@ button.tileset-relationship-cell {
   pointer-events: none;
 }
 
-/* ui/kit/icons/design-index.png — ink 40x40 at (12,12) on a 64x64 canvas. */
+/* ui/main-menu/icons-carved/enchiridion.png — ink 48x52 at (8,6) on a 64x64 canvas. The
+   Strategikon's Enchiridion tab draws whatever the Enchiridion DESTINATION draws
+   (menuModeIcon), so it moved off the shared design-index kit glyph when that destination
+   gained a mark of its own family (ADR-0560). 6/64 below the ink, 52/64 across it. */
 [data-strategikon-section="enchiridion"] img {
-  --titlebar-mark-ink-below: .1875;
-  --titlebar-mark-ink-fill: .625;
+  --titlebar-mark-ink-below: .09375;
+  --titlebar-mark-ink-fill: .8125;
 }
 
 /* ui/kit/icons/unit-studio.png — ink 26x40 at (19,12) on a 64x64 canvas. */
