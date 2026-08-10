@@ -181,7 +181,10 @@ export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactEl
           <div className="unit-roster-row" key={rowKey}>
             <span className="unit-roster-row-label">{rowKey}</span>
             <div className="unit-roster-cells">
-              {(allPalettes ? families : columns).map((columnKey) => {
+              {(showFiltered
+                ? [(allPalettes ? families : ['south'])[0]]
+                : (allPalettes ? families : columns)
+              ).map((columnKey) => {
                 const family = allPalettes ? (columnKey as string) : (rowKey as string);
                 const facing: UnitFacing = allPalettes ? 'south' : (columnKey as UnitFacing);
                 const paletteId = allPalettes ? (rowKey as UnitPalette) : palette;
@@ -241,7 +244,9 @@ export function UnitRosterLab(_: { header?: ReactNode; zoom?: number }): ReactEl
                 );
                 const caption = allPalettes ? family : facing;
                 if (showFiltered) {
-                  // South only: that is the direction the candidates were rendered at.
+                  // ONE pair per piece: the candidates exist only for south, and
+                  // repeating that single image across all eight facing columns reads
+                  // as eight different renders when it is the same file eight times.
                   return (
                     <div className="unit-roster-pair" key={`${family}:${facing}`}>
                       {seat('shipped', src)}
