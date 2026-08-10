@@ -363,6 +363,16 @@ const MANUBIUM_EXAMPLE: Readonly<Record<ManubiumId, ManubiumExample>> = {
     opened: [],
     seed: 822,
   },
+  'long-capture': {
+    // The only diagrams in this section that are not five squares square, because the deed does
+    // not fit on a board that size: eight squares of reach needs nine of board. The whole lane
+    // the Rook crossed is marked, so the distance is the picture rather than a number in the copy.
+    size: { cols: 9, rows: 5 },
+    pieces: [unit('player', 'rook', 0, 2), unit('enemy', 'bishop', 8, 2)],
+    struck: ['8,2'],
+    opened: ['1,2', '2,2', '3,2', '4,2', '5,2', '6,2', '7,2'],
+    seed: 911,
+  },
   'humble-mate': {
     // A PAWN's mate, drawn because it is the top of this ladder and the least likely thing a
     // player will ever see. Four of the King's own men seal it in; the fifth square is held by
@@ -389,6 +399,15 @@ const MANUBIUM_EXAMPLE: Readonly<Record<ManubiumId, ManubiumExample>> = {
     struck: ['2,0'],
     opened: ['2,3', '2,2', '2,1'],
     seed: 833,
+  },
+  'long-check': {
+    // The long diagonal of a nine-square board, corner to corner: the Bishop stands at one end
+    // and the King is in check at the other, eight squares away with nothing in between.
+    size: { cols: 9, rows: 9 },
+    pieces: [unit('player', 'bishop', 0, 8), unit('enemy', 'king', 8, 0)],
+    struck: ['8,0'],
+    opened: ['1,7', '2,6', '3,5', '4,4', '5,3', '6,2', '7,1'],
+    seed: 922,
   },
   'double-check': {
     // The same open file, and a Knight that strikes the King as well. Two attackers at once:

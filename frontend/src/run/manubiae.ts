@@ -14,6 +14,7 @@
 
 import {
   applyMove,
+  attacksSquare,
   gameEnv,
   kingCheckers,
   legalMoves,
@@ -29,6 +30,7 @@ import {
   manubiaeUnitWorth,
   manubiumGoldTenths,
   PIECE_VALUE,
+  RUN_LONG_REACH_SQUARES,
   RUN_ROYAL_FORK_MIN_VICTIM_VALUE,
   type ManubiumAward,
   type RunArmyPieceType,
@@ -97,6 +99,15 @@ function boardPieceValue(piece: Piece): number {
   return isRunArmyPieceType(piece.type) ? PIECE_VALUE[piece.type] : Number.POSITIVE_INFINITY;
 }
 
+/**
+ * How many squares a deed reaches across, counted the way a player counts them: along the line,
+ * not as a sum of both axes. A Rook eight along a rank and a Bishop eight along a diagonal are
+ * both eight, which is what makes one threshold mean the same thing to every unit.
+ */
+function reachSquares(from: Vec, to: Vec): number {
+  return Math.max(Math.abs(to.x - from.x), Math.abs(to.y - from.y));
+}
+
 /** One Manubium the board earned, and the square it is seated on. */
 export interface EarnedManubium {
   readonly award: ManubiumAward;
@@ -121,6 +132,10 @@ export interface EarnedManubium {
 export function manubiaeEarnedBy(game: GameState, events: readonly GameEvent[]): EarnedManubium[] {
   const earned: EarnedManubium[] = [];
   const pieceOf = (id: string) => game.pieces.find((piece) => piece.id === id);
+  const moved = events.flatMap((event) => (event.kind === 'moved' ? [event] : []));
+  // Where each unit set out from this move, which is the only thing a committed board cannot say
+  // for itself — the piece is standing at its destination by the time anything here reads it.
+  const setOutFrom = new Map(moved.map((event) => [event.pieceId, event.from]));
 
   for (const event of events) {
     if (event.kind !== 'captured') continue;
@@ -140,10 +155,16 @@ export function manubiaeEarnedBy(game: GameState, events: readonly GameEvent[]):
     if (victimWorth !== null && capturerWorth !== null && victimWorth > capturerWorth) {
       earned.push({ award: { id: 'advantageous-capture', marginPoints: victimWorth - capturerWorth }, at });
     }
+    // How far the unit came to make the capture, measured on the move the player actually made.
+    // (For an en passant the victim's square and the landing square differ, and it does not
+    // matter: the two-square Pawn step it answers is never eight of anything.)
+    const from = setOutFrom.get(event.by);
+    if (from && reachSquares(from, at) >= RUN_LONG_REACH_SQUARES) {
+      earned.push({ award: { id: 'long-capture' }, at });
+    }
   }
 
   const env = gameEnv(game);
-  const moved = events.flatMap((event) => (event.kind === 'moved' ? [event] : []));
   const playerMoved = moved.filter((event) => pieceOf(event.pieceId)?.side === 'player');
   for (const event of playerMoved) {
     const mover = pieceOf(event.pieceId);
@@ -190,6 +211,30 @@ export function manubiaeEarnedBy(game: GameState, events: readonly GameEvent[]):
         ? { id: 'discovered-check' }
         : null;
     if (shape) earned.push({ award: shape, at: { x: mover.x, y: mover.y } });
+  }
+
+  // A check struck from across the board. Measured along the line the check actually runs — from
+  // the unit giving it to the King it is given to — rather than on the move, so the piece need not
+  // be the one that moved: a line you opened reaches from wherever the unit behind it stands, and
+  // that reach is the deed. Paid once for the check however many checkers qualify, seated on the
+  // one that reaches furthest, because there is one check to be paid for.
+  //
+  // Each checker is paired with the King it is actually attacking rather than the nearest one, so
+  // a board fielding more than one enemy King cannot be credited with a line it does not have.
+  const enemyKings = game.pieces.filter((piece) => piece.alive && piece.side === 'enemy' && piece.type === 'king');
+  let longestCheck: { reach: number; at: Vec } | null = null;
+  for (const checker of checkers) {
+    if (checker.side !== 'player') continue;
+    for (const king of enemyKings) {
+      if (!attacksSquare(checker, game.pieces, game.size, env, king.x, king.y)) continue;
+      const reach = reachSquares(checker, king);
+      if (!longestCheck || reach > longestCheck.reach) {
+        longestCheck = { reach, at: { x: checker.x, y: checker.y } };
+      }
+    }
+  }
+  if (longestCheck && longestCheck.reach >= RUN_LONG_REACH_SQUARES) {
+    earned.push({ award: { id: 'long-check' }, at: longestCheck.at });
   }
 
   // THE MATE PAYS ONCE. Read last, because it is the last thing that happens.

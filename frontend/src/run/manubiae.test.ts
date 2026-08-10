@@ -12,8 +12,13 @@ function P(side: Side, type: PieceType, x: number, y: number, extra: Partial<Pie
 }
 
 /** Play `to` with `piece` on a board of `pieces`, and ask what the Run owes for it. */
-function earned(pieces: Piece[], piece: Piece, to: { x: number; y: number; capture?: string }) {
-  const state: GameState = { size: SIZE, pieces, turn: piece.side, winner: null };
+function earned(
+  pieces: Piece[],
+  piece: Piece,
+  to: { x: number; y: number; capture?: string },
+  size: BoardSize = SIZE,
+) {
+  const state: GameState = { size, pieces, turn: piece.side, winner: null };
   const result = applyMove(state, piece.id, to);
   return manubiaeEarnedBy(result.state, result.events);
 }
@@ -214,6 +219,81 @@ describe('what a committed board earns', () => {
     const knight = P('enemy', 'knight', 4, 6);
     const rook = P('player', 'rook', 5, 4);
     expect(earned([knight, rook], knight, { x: 5, y: 4, capture: rook.id })).toEqual([]);
+  });
+});
+
+describe('a deed that reaches eight squares', () => {
+  it('pays a long capture, seated where the unit landed', () => {
+    // Eight up the file, the width of a whole chessboard, to take a Bishop.
+    const rook = P('player', 'rook', 3, 10);
+    const victim = P('enemy', 'bishop', 3, 2);
+    const got = earned([rook, victim], rook, { x: 3, y: 2, capture: victim.id });
+
+    expect(ids(got)).toContain('long-capture');
+    expect(got.find((item) => item.award.id === 'long-capture')!.at).toEqual({ x: 3, y: 2 });
+  });
+
+  it('counts a diagonal along the LINE, not as both axes added up', () => {
+    // This is the discriminating case. A Bishop seven along a diagonal has covered seven squares
+    // and fourteen if you add the axes — so a rule that summed them would pay here, and does not.
+    const bishop = P('player', 'bishop', 0, 10);
+    const near = P('enemy', 'rook', 7, 3);
+    expect(ids(earned([bishop, near], bishop, { x: 7, y: 3, capture: near.id }))).not.toContain('long-capture');
+
+    // And on a board wide enough to hold one, eight diagonal squares is eight, exactly as eight
+    // along a rank is. The threshold has to mean the same thing to every unit.
+    const wide: BoardSize = { cols: 12, rows: 12 };
+    const far = P('player', 'bishop', 0, 10);
+    const target = P('enemy', 'rook', 8, 2);
+    expect(ids(earned([far, target], far, { x: 8, y: 2, capture: target.id }, wide))).toContain('long-capture');
+  });
+
+  it('pays nothing for a capture that falls one square short', () => {
+    const rook = P('player', 'rook', 3, 10);
+    const victim = P('enemy', 'bishop', 3, 3); // seven
+    expect(ids(earned([rook, victim], rook, { x: 3, y: 3, capture: victim.id }))).not.toContain('long-capture');
+  });
+
+  it('stacks with what the capture won, because reach and material are different deeds', () => {
+    const rook = P('player', 'rook', 3, 10);
+    const queen = P('enemy', 'queen', 3, 2);
+    const got = ids(earned([rook, queen], rook, { x: 3, y: 2, capture: queen.id }));
+
+    expect(got).toContain('long-capture');
+    expect(got).toContain('advantageous-capture');
+  });
+
+  it('pays a long check on the line the check RUNS, seated on the unit giving it', () => {
+    const rook = P('player', 'rook', 5, 10);
+    const king = P('enemy', 'king', 3, 1);
+    const got = earned([rook, king], rook, { x: 3, y: 10 }); // slides to the King's file, nine away
+
+    expect(ids(got)).toContain('long-check');
+    expect(got.find((item) => item.award.id === 'long-check')!.at).toEqual({ x: 3, y: 10 });
+  });
+
+  it('measures the check from the unit giving it, not from the unit that moved', () => {
+    // The Bishop steps aside and the Rook nine squares behind it now runs to the King. The mover
+    // went one square; the CHECK reaches nine, and the reach is what is paid for.
+    const rook = P('player', 'rook', 2, 10);
+    const bishop = P('player', 'bishop', 2, 4);
+    const king = P('enemy', 'king', 2, 1);
+    const got = ids(earned([rook, bishop, king], bishop, { x: 3, y: 5 }));
+
+    expect(got).toContain('discovered-check');
+    expect(got).toContain('long-check');
+  });
+
+  it('pays nothing for a check struck from close range', () => {
+    const rook = P('player', 'rook', 5, 4);
+    const king = P('enemy', 'king', 2, 2);
+    expect(ids(earned([rook, king], rook, { x: 2, y: 4 }))).not.toContain('long-check');
+  });
+
+  it('pays the enemy nothing for reaching across the board', () => {
+    const rook = P('enemy', 'rook', 3, 1);
+    const victim = P('player', 'bishop', 3, 9);
+    expect(earned([rook, victim], rook, { x: 3, y: 9, capture: victim.id })).toEqual([]);
   });
 });
 

@@ -297,7 +297,9 @@ export type ManubiumId =
   | 'smothered-mate'
   | 'promotion-mate'
   | 'underpromotion-mate'
-  | 'humble-mate';
+  | 'humble-mate'
+  | 'long-capture'
+  | 'long-check';
 
 /** What a Pawn may become instead of a Queen. The Queen is the ordinary case, so she is not here. */
 export type UnderpromotionPieceType = Exclude<PromotionPieceType, 'queen'>;
@@ -367,6 +369,20 @@ export const RUN_UNDERPROMOTION_MATE_TENTHS: Readonly<Record<UnderpromotionPiece
 export const RUN_HUMBLE_MATE_TENTHS_PER_POINT = 3;
 
 /**
+ * How far a deed must reach before the Run calls it long: eight squares.
+ *
+ * Eight because that is the width of a standard chessboard — a move that crosses it end to end
+ * is the reach every player already has a feel for, even though no board in this game is that
+ * shape. Counted the way a player counts along a line rather than as a sum of both axes, so a
+ * Rook eight along a rank and a Bishop eight along a diagonal are the same eight.
+ *
+ * A board smaller than nine in both dimensions can never offer it, and no arrangement is made
+ * for that: a Battle on a small board simply has no long moves in it, which is true and needs
+ * no clause.
+ */
+export const RUN_LONG_REACH_SQUARES = 8;
+
+/**
  * What a mate delivered by `piece` pays — nothing at all for a Queen.
  *
  * The King's zero on the piece scale is a sentinel for "never bought" and would otherwise read
@@ -401,6 +417,12 @@ export const RUN_MANUBIAE: readonly ManubiumDefinition[] = Object.freeze([
     goldTenths: GOLD_SCALE,
   },
   {
+    id: 'long-capture',
+    name: 'Long capture',
+    earnedBy: 'Take an enemy unit eight or more squares from where the unit taking it set out — the width of a whole chessboard, crossed in one move. Any unit may earn it.',
+    goldTenths: GOLD_SCALE,
+  },
+  {
     id: 'humble-mate',
     name: 'Humble mate',
     earnedBy: 'Deliver the checkmate with anything but a Queen. The less the mating unit is worth the more it pays, so a Pawn pays most of all. When two units mate at once it is the lesser of them that is paid for.',
@@ -412,6 +434,12 @@ export const RUN_MANUBIAE: readonly ManubiumDefinition[] = Object.freeze([
     id: 'discovered-check',
     name: 'Discovered check',
     earnedBy: 'Move one unit out of the way so that a different unit behind it gives check.',
+    goldTenths: 2 * GOLD_SCALE,
+  },
+  {
+    id: 'long-check',
+    name: 'Long check',
+    earnedBy: 'Give check from eight or more squares away, counted along the line the check runs. Any unit may earn it, and it need not be the unit you moved — a line you opened counts from wherever the unit behind it stands.',
     goldTenths: 2 * GOLD_SCALE,
   },
   {

@@ -45,6 +45,7 @@ import {
   manubiaeUnitWorth,
   manubiumGoldTenths,
   payRunManubium,
+  RUN_LONG_REACH_SQUARES,
   RUN_MANUBIAE,
   RUN_MANUBIUM_BY_ID,
   performAdlectio,
@@ -771,8 +772,9 @@ describe('Manubiae — what the board pays for', () => {
     // The catalog is the source. A named constant that disagreed with it would be a second
     // price for the same deed, which is exactly what naming the category was meant to end.
     expect(RUN_MANUBIAE.map((entry) => entry.id)).toEqual([
-      'advantageous-capture', 'royal-fork', 'humble-mate', 'discovered-check', 'double-check',
-      'en-passant', 'smothered-mate', 'promotion-mate', 'underpromotion-mate',
+      'advantageous-capture', 'royal-fork', 'long-capture', 'humble-mate', 'discovered-check',
+      'long-check', 'double-check', 'en-passant', 'smothered-mate', 'promotion-mate',
+      'underpromotion-mate',
     ]);
     expect(new Set(RUN_MANUBIAE.map((entry) => entry.id)).size).toBe(RUN_MANUBIAE.length);
     expect(RUN_EN_PASSANT_BOUNTY_TENTHS).toBe(50);
@@ -792,6 +794,13 @@ describe('Manubiae — what the board pays for', () => {
     expect(manubiumGoldTenths({ id: 'en-passant' })).toBe(50);
     expect(manubiumGoldTenths({ id: 'smothered-mate' })).toBe(50);
     expect(manubiumGoldTenths({ id: 'promotion-mate' })).toBe(50);
+    // Reach: the capture is usually one the player wanted anyway and the distance is the flourish,
+    // so it sits at the noticing pole; the check had to be engineered and pays double.
+    expect(manubiumGoldTenths({ id: 'long-capture' })).toBe(10);
+    expect(manubiumGoldTenths({ id: 'long-check' })).toBe(20);
+    // Eight squares, because that is the width of a standard chessboard — the one reach every
+    // player already has a feel for, even though no board in this game is that shape.
+    expect(RUN_LONG_REACH_SQUARES).toBe(8);
   });
 
   it('prices a mating underpromotion by the piece the Pawn chose instead of a Queen', () => {
