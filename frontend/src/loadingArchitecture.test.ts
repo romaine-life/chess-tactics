@@ -75,7 +75,7 @@ describe('professional loading architecture guards', () => {
     // It was `sceneLayerKey(scene.current)` with no epoch at all, so beginning a replacement
     // changed the key of the layer holding the VISIBLE screen and React rebuilt it: the
     // battlefield blinked away, showed its own "Preparing battlefield…" card under the Victory
-    // heading, came back, and only then crossfaded (ADR-0557). `committedEpoch`, never
+    // heading, came back, and only then crossfaded (ADR-0558). `committedEpoch`, never
     // `retryEpoch` — the live epoch belongs to the destination and advances while the committed
     // scene stands painted behind a failure.
     expect(app).toContain('key: `${sceneLayerKey(scene.current)}#${scene.committedEpoch}`');
@@ -280,7 +280,7 @@ describe('professional loading architecture guards', () => {
     // Which epoch the single layer carries follows from WHICH scene it is mounting: a preparing
     // destination is keyed by the retry that built it, while the committed scene keeps the epoch
     // it was committed with. Keying the committed scene by a retry it had no part in rebuilt it
-    // mid-exit — the same defect as the overlap key above (ADR-0557).
+    // mid-exit — the same defect as the overlap key above (ADR-0558).
     expect(app).toContain(
       'key: `${sceneLayerKey(mountedScene)}#${mountedScene === scene.destination ? scene.retryEpoch : scene.committedEpoch}`',
     );

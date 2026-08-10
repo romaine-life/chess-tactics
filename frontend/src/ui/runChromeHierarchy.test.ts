@@ -30,6 +30,9 @@ const runDeploymentCardStack = readFileSync(new URL('./RunDeploymentCardStack.ts
 const runLipsana = readFileSync(new URL('./Lipsana.tsx', import.meta.url), 'utf8');
 const runSelfInspection = readFileSync(new URL('./RunSelfInspection.tsx', import.meta.url), 'utf8');
 const skirmish = readFileSync(new URL('./Skirmish.tsx', import.meta.url), 'utf8');
+const runBattleRetryButton = readFileSync(new URL('./RunBattleRetryButton.tsx', import.meta.url), 'utf8');
+const runBattleUndoButton = readFileSync(new URL('./RunBattleUndoButton.tsx', import.meta.url), 'utf8');
+const runDeploymentRerollButton = readFileSync(new URL('./RunDeploymentRerollButton.tsx', import.meta.url), 'utf8');
 const skirmishShell = readFileSync(new URL('./SkirmishShell.tsx', import.meta.url), 'utf8');
 const runForm = readFileSync(new URL('./RunForm.tsx', import.meta.url), 'utf8');
 const skirmishBoard = readFileSync(new URL('../render/SkirmishBoard.tsx', import.meta.url), 'utf8');
@@ -549,9 +552,9 @@ describe('Run chrome hierarchy', () => {
     expect(metaControls).toContain("['--chrome-leaf-surface-index' as string]: index + 1");
     expect(metaControls).toContain("['--chrome-leaf-surface-index' as string]: SECTIO_WORKSPACE_VIEWS.length + 3");
     // One derivation turns a renderer's phase index into the surface offset, for every leaf
-    // however it was painted — a named surface here, the Controls panel's material rule
+    // however it was painted — a named surface here, an adopted host's material rule
     // elsewhere. A per-surface copy of the same calc is how the two drift apart.
-    expect(styleCss).toMatch(/\[data-chrome-fill-surface\],\s*\r?\n\[data-shell-controls-panel\] \[data-chrome-unit\]\s*\{\s*\r?\n\s*--chrome-surface-position-y:\s*calc\(var\(--chrome-leaf-surface-index, 0\) \* -1 \* var\(--chrome-leaf-surface-pitch\)\)/);
+    expect(styleCss).toMatch(/\[data-chrome-fill-surface\],\s*\r?\n\[data-chrome-leaf-surface\] \[data-chrome-unit\]\s*\{\s*\r?\n\s*--chrome-surface-position-y:\s*calc\(var\(--chrome-leaf-surface-index, 0\) \* -1 \* var\(--chrome-leaf-surface-pitch\)\)/);
     expect(styleCss).not.toMatch(/\.run-(?:meta-controls|army-profile) \[data-chrome-fill-surface\]/);
 
     expect(runArmyWorkspace).toContain('data-chrome-fill-surface={CHROME_LEAF_FILL_SURFACE}');
@@ -563,6 +566,49 @@ describe('Run chrome hierarchy', () => {
     expect(titleBarControls).toContain('data-chrome-fill-surface={fillSurface}');
     expect(runExpunctioWorkspace).toContain('fillRole="outer"');
     expect(styleCss).not.toMatch(/\.run-(?:roster-filters|meta-controls)[^}]*:nth-child/);
+  });
+
+  /**
+   * ADR-0557. The screens a Battle or a Run ENDS on are one family the player meets in one
+   * moment, so they adopt the leaf material together — a half-adopted family reads as a bug
+   * the first time a Battle is lost. Every one of them declares adoption with the single host
+   * attribute the role field excludes; a per-surface attribute would grow that exclusion list
+   * once per destination, which is what let the Controls panel's own oak go silently.
+   */
+  it('wears the leaf material on every screen a Battle or a Run ends on', () => {
+    for (const testId of ['run-battle-result', 'campaign-result', 'netplay-result']) {
+      // The won board and the lost board are both `run-battle-result`; both must adopt.
+      const adopted = skirmish.match(
+        new RegExp(`data-testid="${testId}"\\s*\\r?\\n?\\s*data-chrome-leaf-surface=""`, 'g'),
+      ) ?? [];
+      expect(adopted.length).toBe(testId === 'run-battle-result' ? 2 : 1);
+    }
+    // The dismissed netplay card leaves its exit behind; it is the same result, still standing.
+    expect(skirmish).toMatch(/role="status"\s*\r?\n\s*data-chrome-leaf-surface=""/);
+
+    // The two Run outcome scenes adopt from the VIEW the viewport already has, so a scene
+    // cannot be added to the family and forget (ADR-0063).
+    expect(runWorkspace).toContain("const RUN_OUTCOME_SCENE_VIEWS: readonly RunViewportSceneView[] = ['aftermath', 'victory']");
+    expect(runWorkspace).toContain("data-chrome-leaf-surface={RUN_OUTCOME_SCENE_VIEWS.includes(scene.view) ? '' : undefined}");
+
+    // A row of result actions is a repeated leaf collection: it phases from the action's
+    // authored seat, never from DOM position. The borrowed Run battle buttons forward the
+    // style for exactly that — annotating them any other way reskins them everywhere.
+    expect(skirmish).toContain('<RunBattleUndoButton testId="undo-run-move-result" style={leafSurfacePhase(0)} />');
+    expect(skirmish).toContain('style={leafSurfacePhase(1)}');
+    expect(skirmish).toContain('style={leafSurfacePhase(2)}');
+    expect(runScreen).toContain('style={leafSurfacePhase(0)}');
+    expect(runScreen).toContain('style={leafSurfacePhase(1)}');
+    for (const button of [runBattleRetryButton, runBattleUndoButton, runDeploymentRerollButton]) {
+      expect(button).toContain('style?: CSSProperties;');
+      expect(button).toContain('style={style}');
+    }
+    expect(styleCss).not.toMatch(/\.(?:campaign-result-actions|run-aftermath-actions)[^}]*:nth-child/);
+
+    // The Run's last action is a button, not a band: the workspace lane stretches its grid
+    // children, which only became conspicuous once it wore a plank.
+    expect(runScreen).toContain("'active', 'run-victory-finish'");
+    expect(styleCss).toMatch(/\.run-victory-finish\s*\{[\s\S]*?justify-self:\s*start;/);
   });
 
   it('keeps Expunctio card-first and removes only complete held formations', () => {
@@ -905,6 +951,7 @@ describe('Run chrome hierarchy', () => {
       /data-testid="run-battle-result"[\s\S]*?onClick=\{\(\) => runBattle\.onVictory\(\{[\s\S]*?\}\)\}/,
     )?.[0] ?? '';
 
+    expect(victoryBranch).toContain('data-chrome-leaf-surface=""');
     expect(victoryBranch).toContain('run-battle-victory-overlay');
     expect(victoryBranch).not.toContain('className="campaign-result ');
     expect(victoryBranch).toContain('role="status"');

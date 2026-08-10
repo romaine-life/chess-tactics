@@ -7,7 +7,7 @@ refines:
   - "[ADR-0369](0369-one-cold-load-ladder-builds-background-then-chrome-then-scene.md)"
 ---
 
-# ADR-0557: A scene being replaced is not rebuilt on its way out
+# ADR-0558: A scene being replaced is not rebuilt on its way out
 
 ## Context
 

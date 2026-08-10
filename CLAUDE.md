@@ -254,7 +254,7 @@ and don't tell the user screenshots are impossible. Use the helper below.
 
    Scene-layer keying / SceneBoundary changes additionally run the retention gate,
    which drives a real navigation and asserts the screen being LEFT is not rebuilt
-   on its way out (ADR-0557):
+   on its way out (ADR-0558):
    ```
    npm run verify:scene-retention -- '<battle-victory-craft-url>' --click '[data-testid="run-battle-rewards"]'
    ```

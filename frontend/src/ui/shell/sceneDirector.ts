@@ -37,7 +37,7 @@ export interface SceneState {
    * scene replacement carried NO epoch at all, so the visible screen's key changed the instant
    * a navigation began. The board Victory was sitting on was torn down and rebuilt in front of
    * the player, blinking through its own entrance again, before the crossfade to the next scene
-   * had started (ADR-0557).
+   * had started (ADR-0558).
    *
    * It advances only where a destination is promoted to current, which is the one moment the
    * committed layer legitimately becomes a different mount.

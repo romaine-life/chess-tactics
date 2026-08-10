@@ -613,7 +613,7 @@ export function App(): ReactElement {
           // player is looking at. Dropping the epoch here made every scene replacement
           // destroy and rebuild its own outgoing scene: Rewards tore down the settled
           // Victory board and re-ran its entrance before the crossfade began, which is the
-          // flicker ADR-0557 is about. `committedEpoch` — not `retryEpoch` — because a
+          // flicker ADR-0558 is about. `committedEpoch` — not `retryEpoch` — because a
           // retry belongs to the failed destination and must not rebuild the painted scene
           // standing behind it.
           key: `${sceneLayerKey(scene.current)}#${scene.committedEpoch}`,
@@ -652,7 +652,7 @@ export function App(): ReactElement {
           // Which epoch depends on WHICH scene this layer is mounting: a destination is
           // keyed by the retry that built it, while the committed scene keeps the epoch it
           // was committed with. Keying an outgoing scene by a retry it had no part in
-          // rebuilt it mid-exit — the same defect as the overlap key above (ADR-0557).
+          // rebuilt it mid-exit — the same defect as the overlap key above (ADR-0558).
           key: `${sceneLayerKey(mountedScene)}#${mountedScene === scene.destination ? scene.retryEpoch : scene.committedEpoch}`,
           scene: mountedScene,
           manifest,

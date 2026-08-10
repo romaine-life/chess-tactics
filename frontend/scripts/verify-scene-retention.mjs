@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Live gate: a scene replacement must not rebuild the scene the player is already looking at
-// (ADR-0557).
+// (ADR-0558).
 //
 // The defect this exists to catch: pressing Rewards on a settled Victory tore the battlefield
 // down and mounted a second copy of it. The board vanished, its own "Preparing battlefield…"
@@ -158,7 +158,7 @@ try {
         'the outgoing scene was destroyed and rebuilt during its own replacement',
         `first seen in phase '${first.phase}' with ${first.roots} boundaries and ${first.marked} still carrying the original mount`
         + '\nThe player watches the screen they are leaving blink through its entrance before the crossfade starts.'
-        + '\nThe layer key changed: see sceneLayerKey/committedEpoch in App.tsx (ADR-0557).',
+        + '\nThe layer key changed: see sceneLayerKey/committedEpoch in App.tsx (ADR-0558).',
       );
     }
 

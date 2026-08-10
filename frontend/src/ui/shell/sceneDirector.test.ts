@@ -230,7 +230,7 @@ describe('scene director', () => {
     // App.tsx keys the outgoing layer of a scene replacement by this, so it must be the epoch
     // the visible scene was BUILT with. A retry belongs to the destination that failed; taking
     // the live retryEpoch here would change the committed layer's key and destroy the screen
-    // standing painted behind the failure — the flicker of ADR-0557, on a worse surface.
+    // standing painted behind the failure — the flicker of ADR-0558, on a worse surface.
     let state = initialSceneState(sceneManifest('/'));
     expect(state.committedEpoch).toBe(0);
 
