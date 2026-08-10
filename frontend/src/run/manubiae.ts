@@ -20,11 +20,17 @@ import {
   livingPieces,
   royalForkVictim,
   sideCanCaptureUnit,
+  sideHasLegalMove,
   smotheredMateBy,
   type MoveEnv,
 } from '../core/rules';
-import type { GameEvent, GameState, Piece, Vec } from '../core/types';
-import { manubiaeUnitWorth, RUN_ROYAL_FORK_MIN_VICTIM_VALUE, type ManubiumAward } from './model';
+import type { GameEvent, GameState, Piece, PieceType, Vec } from '../core/types';
+import {
+  manubiaeUnitWorth,
+  RUN_ROYAL_FORK_MIN_VICTIM_VALUE,
+  type ManubiumAward,
+  type UnderpromotionPieceType,
+} from './model';
 
 /**
  * Whether a fork HOLDS — whether the enemy can break it by taking the forking unit without
@@ -63,6 +69,13 @@ function forkHolds(mover: Piece, game: GameState, env: MoveEnv | undefined): boo
   return true;
 }
 
+const UNDERPROMOTION_PIECES: readonly PieceType[] = ['rook', 'bishop', 'knight'];
+
+/** The piece a Pawn took instead of a Queen, or `null` when it took the Queen after all. */
+function underpromotionPiece(to: PieceType): UnderpromotionPieceType | null {
+  return UNDERPROMOTION_PIECES.includes(to) ? (to as UnderpromotionPieceType) : null;
+}
+
 /** One Manubium the board earned, and the square it is seated on. */
 export interface EarnedManubium {
   readonly award: ManubiumAward;
@@ -81,7 +94,8 @@ export interface EarnedManubium {
  * before anything the Run itself adds. A Reservist landing first would stand in a ray and make
  * the Run pay for a line it drew itself.
  *
- * Returned in reading order: what the capture won, then what the move threatens.
+ * Returned in reading order: what the capture won, then what the move threatens, then the mate
+ * that ends it.
  */
 export function manubiaeEarnedBy(game: GameState, events: readonly GameEvent[]): EarnedManubium[] {
   const earned: EarnedManubium[] = [];
@@ -145,10 +159,10 @@ export function manubiaeEarnedBy(game: GameState, events: readonly GameEvent[]):
   // moved is a line this move opened. Castling moves two pieces and emits a `moved` event for
   // each, so the castled rook counts as having moved and its check is an ordinary one -- which
   // is what chess calls it.
+  const checkers = kingCheckers('enemy', game.pieces, game.size, env);
   const mover = playerMoved.length ? pieceOf(playerMoved[0].pieceId) : null;
   if (mover?.alive) {
     const movedIds = new Set(moved.map((event) => event.pieceId));
-    const checkers = kingCheckers('enemy', game.pieces, game.size, env);
     // These two are rungs of one ladder, not separate deeds: a double check is a discovered
     // check with the mover joining in. Paying both would be paying twice for one check, so the
     // better rung pays and the other stands down.
@@ -158,6 +172,36 @@ export function manubiaeEarnedBy(game: GameState, events: readonly GameEvent[]):
         ? { id: 'discovered-check' }
         : null;
     if (shape) earned.push({ award: shape, at: { x: mover.x, y: mover.y } });
+  }
+
+  // A Pawn that walked the whole board and ended the Battle the moment it arrived. Read last,
+  // because it is the last thing that happens: the deed is the arrival itself.
+  //
+  // The new piece has to be GIVING the check. A Pawn that queens while some other unit delivers
+  // the mate has not mated by promoting — that check is a discovered one and is paid above as
+  // the different thing it is. Being among the checkers is the bar rather than being the only
+  // one, so a promotion that mates as half of a double check still counts: it is still the
+  // arriving piece that ends the Battle.
+  //
+  // Mate needs no search here. `checkers` is already the committed board's answer to "is the
+  // enemy King attacked", and `sideHasLegalMove` is the same "no legal action" expression the
+  // canonical adjudicator uses (ADR-0059), so this cannot call a position mate that the Battle
+  // does not.
+  const mated = checkers.length > 0 && !sideHasLegalMove(game.pieces, 'enemy', game.size, env);
+  if (mated) {
+    for (const event of events) {
+      if (event.kind !== 'promoted') continue;
+      const promoted = pieceOf(event.pieceId);
+      if (promoted?.side !== 'player' || !promoted.alive) continue;
+      if (!checkers.some((checker) => checker.id === promoted.id)) continue;
+      // Rungs of one ladder again: an underpromotion mate IS a promotion mate, so the better
+      // rung pays and the other stands down, exactly as the two checks do above.
+      const under = underpromotionPiece(event.to);
+      earned.push({
+        award: under ? { id: 'underpromotion-mate', piece: under } : { id: 'promotion-mate' },
+        at: { x: promoted.x, y: promoted.y },
+      });
+    }
   }
 
   return earned;

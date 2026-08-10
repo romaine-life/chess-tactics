@@ -6,7 +6,7 @@ import {
   type War,
 } from '../core/level';
 import { migrateLevelDocument } from '../core/levelMigration';
-import type { PieceType, Vec } from '../core/types';
+import type { PieceType, PromotionPieceType, Vec } from '../core/types';
 import {
   LIPSANON_BY_ID,
   RUN_LIPSANA,
@@ -294,7 +294,12 @@ export type ManubiumId =
   | 'discovered-check'
   | 'double-check'
   | 'en-passant'
-  | 'smothered-mate';
+  | 'smothered-mate'
+  | 'promotion-mate'
+  | 'underpromotion-mate';
+
+/** What a Pawn may become instead of a Queen. The Queen is the ordinary case, so she is not here. */
+export type UnderpromotionPieceType = Exclude<PromotionPieceType, 'queen'>;
 
 export interface ManubiumDefinition {
   readonly id: ManubiumId;
@@ -318,6 +323,31 @@ export interface ManubiumDefinition {
  * taking a queen — and it is a whole number of gold, so no rounding rule is needed.
  */
 export const RUN_ADVANTAGEOUS_CAPTURE_TENTHS_PER_POINT = 2;
+
+/**
+ * What a mating underpromotion pays, by the piece the Pawn chose instead of a Queen.
+ *
+ * The ladder is rarity, and the chess behind it is exact. A Rook or a Bishop can never mate
+ * where a Queen would not: on the same square the Queen attacks every square the Rook does and
+ * every square the Bishop does, so any mate they deliver she delivers too. Choosing one of them
+ * is style, not necessity — the player saw a lesser piece finish the job and took it.
+ *
+ * Only the KNIGHT can mate where the Queen cannot, because the Knight's move is the one thing
+ * she does not have. That is the underpromotion every puzzle book prints, and the only one a
+ * position can genuinely require.
+ *
+ * So the Rook sits just above an ordinary promotion mate — once the mate is there, taking a Rook
+ * instead of a Queen costs the player nothing, and the Battle is over either way, so it is paid
+ * as the flourish it is. The Bishop is dearer because a Bishop mate needs a far narrower shape
+ * than a Rook mate: one colour of diagonal, and every other flight square answered by other men.
+ * The Knight is paid alongside the Bishop rather than above it, because what the two ask of a
+ * position is nothing alike and ranking them against each other would be inventing a difference.
+ */
+export const RUN_UNDERPROMOTION_MATE_TENTHS: Readonly<Record<UnderpromotionPieceType, number>> = Object.freeze({
+  rook: 6 * GOLD_SCALE,
+  bishop: 8 * GOLD_SCALE,
+  knight: 8 * GOLD_SCALE,
+});
 
 /**
  * Every Manubium, cheapest first, which is also roughly rarest-last-to-first: the ladder
@@ -365,6 +395,21 @@ export const RUN_MANUBIAE: readonly ManubiumDefinition[] = Object.freeze([
     earnedBy: 'Checkmate with a Knight while the enemy King is hemmed in on every side by its own men.',
     goldTenths: 5 * GOLD_SCALE,
   },
+  {
+    id: 'promotion-mate',
+    name: 'Promotion mate',
+    earnedBy: 'Walk a Pawn all the way to a promotion square and have the piece it becomes give checkmate on arrival.',
+    goldTenths: 5 * GOLD_SCALE,
+  },
+  {
+    id: 'underpromotion-mate',
+    name: 'Underpromotion mate',
+    earnedBy: 'The same, with the Pawn refusing the Queen. A Knight is the only piece that can mate where a Queen could not, so it is paid the most, alongside the Bishop. This pays in place of the promotion mate, not on top of it.',
+    goldTenths: null,
+    // Written from the rates rather than beside them, so the sentence a player reads cannot
+    // drift from the gold they are actually paid.
+    priceNote: `${RUN_UNDERPROMOTION_MATE_TENTHS.rook} for a Rook, ${RUN_UNDERPROMOTION_MATE_TENTHS.bishop} for a Bishop or Knight`,
+  },
 ] as const);
 
 export const RUN_MANUBIUM_BY_ID: Readonly<Record<ManubiumId, ManubiumDefinition>> = Object.freeze(
@@ -378,7 +423,8 @@ export const RUN_MANUBIUM_BY_ID: Readonly<Record<ManubiumId, ManubiumDefinition>
  */
 export type ManubiumAward =
   | { readonly id: 'advantageous-capture'; readonly marginPoints: number }
-  | { readonly id: Exclude<ManubiumId, 'advantageous-capture'> };
+  | { readonly id: 'underpromotion-mate'; readonly piece: UnderpromotionPieceType }
+  | { readonly id: Exclude<ManubiumId, 'advantageous-capture' | 'underpromotion-mate'> };
 
 /**
  * What a unit is worth when Manubiae compares two of them — what it STARTED as, never what
@@ -407,6 +453,7 @@ export function manubiumGoldTenths(award: ManubiumAward): number {
   if (award.id === 'advantageous-capture') {
     return Math.max(0, Math.round(award.marginPoints)) * RUN_ADVANTAGEOUS_CAPTURE_TENTHS_PER_POINT;
   }
+  if (award.id === 'underpromotion-mate') return RUN_UNDERPROMOTION_MATE_TENTHS[award.piece] ?? 0;
   return RUN_MANUBIUM_BY_ID[award.id].goldTenths ?? 0;
 }
 

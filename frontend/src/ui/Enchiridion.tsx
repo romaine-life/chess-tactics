@@ -403,6 +403,38 @@ const MANUBIUM_EXAMPLE: Readonly<Record<ManubiumId, ManubiumExample>> = {
     opened: [],
     seed: 866,
   },
+  'promotion-mate': {
+    // The Pawn has just arrived on the top rank and become a Queen. The marked empty square
+    // below her is the one it stepped off; the King is sealed against the edge by its own Pawns
+    // and there is nothing on the rank to block her.
+    size: { cols: 5, rows: 5 },
+    pieces: [
+      unit('player', 'queen', 4, 0),
+      unit('enemy', 'king', 0, 0),
+      unit('enemy', 'pawn', 0, 1),
+      unit('enemy', 'pawn', 1, 1),
+    ],
+    struck: ['0,0'],
+    opened: ['4,1'],
+    seed: 877,
+  },
+  'underpromotion-mate': {
+    // The Knight case, drawn because it is the only one a position can require: a QUEEN on this
+    // same square would not even be giving check. The King's other flights are answered — two by
+    // its own men, one by the Knight, one by the second Pawn coming up behind.
+    size: { cols: 5, rows: 5 },
+    pieces: [
+      unit('player', 'knight', 2, 0),
+      unit('player', 'pawn', 1, 3),
+      unit('enemy', 'king', 0, 1),
+      unit('enemy', 'bishop', 0, 0),
+      unit('enemy', 'pawn', 1, 0),
+      unit('enemy', 'pawn', 1, 1),
+    ],
+    struck: ['0,1'],
+    opened: ['2,1'],
+    seed: 888,
+  },
 };
 
 function ManubiumDiagram({ id, name }: { id: ManubiumId; name: string }): ReactElement {
@@ -503,8 +535,8 @@ function ManubiaeSection({ framed }: { framed: boolean }): ReactElement {
       <InnerChromeBox className="enchiridion-rule-exceptions">
         <h3>How they add up</h3>
         <p>Only <strong>your</strong> units earn these — the enemy does the same things and is paid nothing — and each one pays again every time you land it.</p>
-        <p>One move may earn <strong>several</strong> at once, and each pays in full: a capture that also forks is both.</p>
-        <p>The two checks are the exception, because every double check <em>is</em> a discovered check — uncovering the second attacker is the only way to give check with two units at once. They are rungs of one ladder, so a double check pays <strong>3</strong> in place of the discovered check&rsquo;s 2, never 5 for the same check.</p>
+        <p>One move may earn <strong>several</strong> at once, and each pays in full: a capture that also forks is both, and a Knight that promotes into a smothered mate is both.</p>
+        <p>Two pairs are the exception, because in each the second is a kind of the first. Every double check <em>is</em> a discovered check — uncovering the second attacker is the only way to give check with two units at once — and every underpromotion mate <em>is</em> a promotion mate. Each pair is rungs of one ladder, so the better rung pays and the other stands down: a double check pays <strong>30</strong> in place of the discovered check&rsquo;s 20, never 50 for the same check.</p>
         <p><strong>Undo</strong> takes back the gold along with the move that earned it, so no deed here is worth undoing for profit.</p>
       </InnerChromeBox>
     </ReferenceSectionFrame>

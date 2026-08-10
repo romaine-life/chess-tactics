@@ -46,6 +46,7 @@ import {
   manubiumGoldTenths,
   payRunManubium,
   RUN_MANUBIAE,
+  RUN_MANUBIUM_BY_ID,
   performAdlectio,
   performExpunctio,
   resetSectio,
@@ -771,6 +772,7 @@ describe('Manubiae — what the board pays for', () => {
     // price for the same deed, which is exactly what naming the category was meant to end.
     expect(RUN_MANUBIAE.map((entry) => entry.id)).toEqual([
       'advantageous-capture', 'royal-fork', 'discovered-check', 'double-check', 'en-passant', 'smothered-mate',
+      'promotion-mate', 'underpromotion-mate',
     ]);
     expect(new Set(RUN_MANUBIAE.map((entry) => entry.id)).size).toBe(RUN_MANUBIAE.length);
     expect(RUN_EN_PASSANT_BOUNTY_TENTHS).toBe(50);
@@ -789,6 +791,20 @@ describe('Manubiae — what the board pays for', () => {
     expect(manubiumGoldTenths({ id: 'double-check' })).toBe(30);
     expect(manubiumGoldTenths({ id: 'en-passant' })).toBe(50);
     expect(manubiumGoldTenths({ id: 'smothered-mate' })).toBe(50);
+    expect(manubiumGoldTenths({ id: 'promotion-mate' })).toBe(50);
+  });
+
+  it('prices a mating underpromotion by the piece the Pawn chose instead of a Queen', () => {
+    // The ladder is what each choice asks of the position. A Rook or a Bishop can never mate
+    // where a Queen would not — on that square she attacks everything they do — so choosing one
+    // is a flourish, and it is paid just above the ordinary promotion mate. The Knight is the
+    // only piece that can mate where she cannot, which is why it sits at the top.
+    expect(manubiumGoldTenths({ id: 'underpromotion-mate', piece: 'rook' })).toBe(60);
+    expect(manubiumGoldTenths({ id: 'underpromotion-mate', piece: 'bishop' })).toBe(80);
+    expect(manubiumGoldTenths({ id: 'underpromotion-mate', piece: 'knight' })).toBe(80);
+    // The scaled entry's own words are written FROM those rates, so the sentence in the
+    // Enchiridion cannot drift from the gold the player is handed.
+    expect(RUN_MANUBIUM_BY_ID['underpromotion-mate'].priceNote).toBe('60 for a Rook, 80 for a Bishop or Knight');
   });
 
   it('scales an advantageous capture by the material actually won', () => {

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { applyMove } from '../core/rules';
 import type { BoardSize, GameState, Piece, PieceType, Side } from '../core/types';
+import type { PromotionPieceType } from '../core/types';
 import { manubiaeEarnedBy } from './manubiae';
-import { PIECE_VALUE } from './model';
+import { manubiumGoldTenths, PIECE_VALUE, RUN_UNDERPROMOTION_MATE_TENTHS } from './model';
 
 const SIZE: BoardSize = { cols: 8, rows: 12 };
 
@@ -14,6 +15,31 @@ function P(side: Side, type: PieceType, x: number, y: number, extra: Partial<Pie
 function earned(pieces: Piece[], piece: Piece, to: { x: number; y: number; capture?: string }) {
   const state: GameState = { size: SIZE, pieces, turn: piece.side, winner: null };
   const result = applyMove(state, piece.id, to);
+  return manubiaeEarnedBy(result.state, result.events);
+}
+
+/**
+ * The same, for a Pawn arriving on the promotion rank and choosing what it becomes.
+ *
+ * The player's promotion rank is row 0 — the far edge from where a player Pawn starts — which
+ * is the shape every Run battle authors (`run-player-promotion`), so these boards are the real
+ * one rather than a fixture geometry.
+ */
+function earnedByPromoting(
+  pieces: Piece[],
+  pawn: Piece,
+  to: { x: number; y: number; capture?: string },
+  promotion: PromotionPieceType,
+) {
+  const cells = Array.from({ length: SIZE.cols }, (_, x) => ({ x, y: 0 }));
+  const state: GameState = {
+    size: SIZE,
+    pieces,
+    turn: pawn.side,
+    winner: null,
+    promotionRules: [{ side: 'player', cells }],
+  };
+  const result = applyMove(state, pawn.id, to, { promotion });
   return manubiaeEarnedBy(result.state, result.events);
 }
 const ids = (list: ReturnType<typeof earned>) => list.map((item) => item.award.id);
@@ -188,5 +214,127 @@ describe('what a committed board earns', () => {
     const knight = P('enemy', 'knight', 4, 6);
     const rook = P('player', 'rook', 5, 4);
     expect(earned([knight, rook], knight, { x: 5, y: 4, capture: rook.id })).toEqual([]);
+  });
+});
+
+describe('a Pawn that ends the Battle by arriving', () => {
+  /** A Pawn one step from the far rank, with the enemy King sealed against that rank by its own men. */
+  function backRankBoard() {
+    const pawn = P('player', 'pawn', 7, 1, { pawnForward: 'north' });
+    return {
+      pawn,
+      pieces: [
+        pawn,
+        P('enemy', 'king', 0, 0),
+        P('enemy', 'pawn', 0, 1, { pawnForward: 'south' }),
+        P('enemy', 'pawn', 1, 1, { pawnForward: 'south' }),
+      ],
+    };
+  }
+
+  it('pays a promotion mate, seated on the square the Pawn arrived at', () => {
+    const { pawn, pieces } = backRankBoard();
+    const got = earnedByPromoting(pieces, pawn, { x: 7, y: 0 }, 'queen');
+
+    expect(ids(got)).toEqual(['promotion-mate']);
+    expect(got[0].at).toEqual({ x: 7, y: 0 });
+  });
+
+  it('pays an underpromotion mate INSTEAD of the promotion mate, never both', () => {
+    // The very same board and the very same mate — a Rook on that square sweeps the rank exactly
+    // as the Queen does. All that changed is the piece the player chose, so this is the one
+    // ladder paying its better rung.
+    const { pawn, pieces } = backRankBoard();
+    const got = earnedByPromoting(pieces, pawn, { x: 7, y: 0 }, 'rook');
+
+    expect(ids(got)).toEqual(['underpromotion-mate']);
+    expect(got[0].award).toEqual({ id: 'underpromotion-mate', piece: 'rook' });
+  });
+
+  it('pays a Knight mate a Queen could not have given at all', () => {
+    // The whole reason underpromotion exists: from (2,0) a Queen does not even attack (0,1), so
+    // taking her here throws the mate away. The King's flights are answered by its own men at
+    // (0,0), (1,0) and (1,1), by the new Knight at (1,2), and by the second Pawn at (0,2).
+    const pawn = P('player', 'pawn', 2, 1, { pawnForward: 'north' });
+    const pieces = [
+      pawn,
+      P('player', 'pawn', 1, 3, { pawnForward: 'north' }),
+      P('enemy', 'king', 0, 1),
+      P('enemy', 'bishop', 0, 0),
+      P('enemy', 'pawn', 1, 0, { pawnForward: 'south' }),
+      P('enemy', 'pawn', 1, 1, { pawnForward: 'south' }),
+    ];
+    const got = earnedByPromoting(pieces, pawn, { x: 2, y: 0 }, 'knight');
+
+    expect(ids(got)).toEqual(['underpromotion-mate']);
+    expect(got[0].award).toEqual({ id: 'underpromotion-mate', piece: 'knight' });
+    expect(got[0].at).toEqual({ x: 2, y: 0 });
+  });
+
+  it('pays the Bishop and the Knight more than the Rook', () => {
+    const rook = manubiumGoldTenths({ id: 'underpromotion-mate', piece: 'rook' });
+    const bishop = manubiumGoldTenths({ id: 'underpromotion-mate', piece: 'bishop' });
+    const knight = manubiumGoldTenths({ id: 'underpromotion-mate', piece: 'knight' });
+
+    expect(rook).toBe(RUN_UNDERPROMOTION_MATE_TENTHS.rook);
+    expect(bishop).toBeGreaterThan(rook);
+    expect(knight).toBeGreaterThan(rook);
+    expect(knight).toBe(bishop);
+    // And every underpromotion outpays the ordinary promotion mate it stands in for.
+    expect(rook).toBeGreaterThan(manubiumGoldTenths({ id: 'promotion-mate' }));
+  });
+
+  it('pays nothing for a promotion that only gives check', () => {
+    // The same Queen arriving on the same square, with one of the King's own blockers gone: the
+    // King simply steps out. Reaching the far rank is not itself the deed.
+    const pawn = P('player', 'pawn', 7, 1, { pawnForward: 'north' });
+    const pieces = [pawn, P('enemy', 'king', 0, 0), P('enemy', 'pawn', 0, 1, { pawnForward: 'south' })];
+
+    expect(earnedByPromoting(pieces, pawn, { x: 7, y: 0 }, 'queen')).toEqual([]);
+  });
+
+  it('pays nothing for a promotion when a DIFFERENT unit delivers the mate', () => {
+    // The Pawn takes the Rook and becomes a Knight, which attacks nothing near the King. What
+    // mates is the Rook behind it, down the file the Pawn just vacated — that is a discovered
+    // check, and it is paid as the thing it is rather than as a promotion mate.
+    const pawn = P('player', 'pawn', 2, 1, { pawnForward: 'north' });
+    const victim = P('enemy', 'rook', 3, 0);
+    const pieces = [
+      pawn,
+      P('player', 'rook', 2, 8),
+      P('player', 'bishop', 5, 2), // defends the square the new Knight lands on
+      victim,
+      P('enemy', 'king', 2, 0),
+      P('enemy', 'pawn', 1, 0, { pawnForward: 'south' }),
+      P('enemy', 'pawn', 1, 1, { pawnForward: 'south' }),
+      P('enemy', 'pawn', 3, 1, { pawnForward: 'south' }),
+    ];
+    const got = ids(earnedByPromoting(pieces, pawn, { x: 3, y: 0, capture: victim.id }, 'knight'));
+
+    expect(got).toContain('discovered-check');
+    expect(got).toContain('advantageous-capture');
+    expect(got).not.toContain('promotion-mate');
+    expect(got).not.toContain('underpromotion-mate');
+  });
+
+  it('pays the enemy nothing for promoting into mate', () => {
+    const pawn = P('enemy', 'pawn', 7, 10, { pawnForward: 'south' });
+    const pieces = [
+      pawn,
+      P('player', 'king', 0, 11),
+      P('player', 'pawn', 0, 10, { pawnForward: 'north' }),
+      P('player', 'pawn', 1, 10, { pawnForward: 'north' }),
+    ];
+    const cells = Array.from({ length: SIZE.cols }, (_, x) => ({ x, y: 11 }));
+    const state: GameState = {
+      size: SIZE,
+      pieces,
+      turn: 'enemy',
+      winner: null,
+      promotionRules: [{ side: 'enemy', cells }],
+    };
+    const result = applyMove(state, pawn.id, { x: 7, y: 11 }, { promotion: 'knight' });
+
+    expect(manubiaeEarnedBy(result.state, result.events)).toEqual([]);
   });
 });
