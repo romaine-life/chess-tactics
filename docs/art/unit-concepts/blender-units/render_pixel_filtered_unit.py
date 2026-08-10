@@ -50,12 +50,71 @@ bpy.ops.wm.open_mainfile(filepath=BTP)
 scene = bpy.context.scene
 existing = {o.name for o in bpy.data.objects}
 
-with bpy.data.libraries.load(SOURCE, link=False) as (src, dst):
-    dst.objects = list(src.objects)
+if SOURCE.lower().endswith(".obj"):
+    # The knight ships as an OBJ, not a blend, and arrives in an arbitrary orientation.
+    # This is the same solve the piece's own renderer uses (render_knight_fur.py), kept
+    # in step with it deliberately -- guessing an axis convention produces a piece that
+    # renders beautifully facing the wrong way, which reads as a filter problem.
+    import numpy as _np
+    bpy.ops.wm.obj_import(filepath=SOURCE)
+    _ms = [o for o in bpy.context.scene.objects if o.type == "MESH" and o.name not in existing]
+    for _o in _ms:
+        _o.select_set(True)
+    bpy.context.view_layer.objects.active = _ms[0]
+    if len(_ms) > 1:
+        bpy.ops.object.join()
+    _kn = bpy.context.view_layer.objects.active
+    # obj_import bakes an axis-conversion rotation; apply it before measuring anything.
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+
+    def _co():
+        n = len(_kn.data.vertices)
+        a = _np.empty(n * 3)
+        _kn.data.vertices.foreach_get("co", a)
+        return a.reshape(-1, 3)
+
+    c = _co()
+    _up = int(_np.argmax(c.max(0) - c.min(0)))       # tallest extent is the piece's up
+    if _up == 0:
+        _kn.rotation_euler = (0, math.radians(-90), 0)
+    elif _up == 1:
+        _kn.rotation_euler = (math.radians(90), 0, 0)
+    bpy.ops.object.transform_apply(rotation=True)
+    # A chess piece is wider at the base than the head, so if the top is the broader
+    # end it came in upside down.
+    c = _co()
+    _zr = c[:, 2].max() - c[:, 2].min()
+    _top = c[c[:, 2] > c[:, 2].max() - 0.2 * _zr]
+    _bot = c[c[:, 2] < c[:, 2].min() + 0.2 * _zr]
+    _spread = lambda pts: _np.sqrt(((pts[:, :2] - pts[:, :2].mean(0)) ** 2).sum(1)).mean()
+    if _spread(_top) > _spread(_bot):
+        _kn.rotation_euler = (math.radians(180), 0, 0)
+        bpy.ops.object.transform_apply(rotation=True)
+    # The muzzle is the part of the head furthest from the axis; yaw it to face south.
+    c = _co()
+    _zmin, _zmax = c[:, 2].min(), c[:, 2].max()
+    _cen = c[:, :2].mean(0)
+    _head = c[c[:, 2] > _zmin + 0.58 * (_zmax - _zmin)]
+    _hr = _np.linalg.norm(_head[:, :2] - _cen, axis=1)
+    _muz = _head[_hr > _np.percentile(_hr, 88)]
+    _md = (_muz[:, :2] - _cen).mean(0)
+    _kn.rotation_euler = (0, 0, (math.pi / 2) - math.atan2(_md[1], _md[0]))
+    bpy.ops.object.transform_apply(rotation=True)
+    c = _co()
+    _s = float(os.environ.get("UNIT_ART_OBJ_HEIGHT", "2.0")) / (c[:, 2].max() - c[:, 2].min())
+    _kn.scale = (_s, _s, _s)
+    bpy.ops.object.transform_apply(scale=True)
+    c = _co()
+    _kn.location = (-(c[:, 0].min() + c[:, 0].max()) / 2, -(c[:, 1].min() + c[:, 1].max()) / 2, -c[:, 2].min())
+    bpy.ops.object.transform_apply(location=True)
+else:
+    with bpy.data.libraries.load(SOURCE, link=False) as (src, dst):
+        dst.objects = list(src.objects)
 added = [o for o in bpy.data.objects if o.name not in existing]
 meshes = [o for o in added if o.type == "MESH"]
 for obj in added:
-    if obj.type in {"MESH", "EMPTY"}:
+    # obj_import links what it creates already; appending from a blend does not.
+    if obj.type in {"MESH", "EMPTY"} and obj.name not in scene.collection.objects:
         scene.collection.objects.link(obj)
 for obj in bpy.data.objects:
     if obj.name in existing and obj.type == "MESH":
@@ -88,7 +147,14 @@ cam.parent = None
 cam.location = (comp, -comp, 1.0 + math.sin(ELEV) * DIST)
 cam.rotation_euler = (mathutils.Vector((0, 0, 1.0)) - mathutils.Vector(cam.location)).to_track_quat("-Z", "Y").to_euler()
 cam.data.type = "ORTHO"
-cam.data.ortho_scale = 2.7
+# 2.7 frames the pawn. Taller pieces need more room -- the bishop's mitre clipped at
+# row 0 of the frame at 2.7 -- so this is per-piece rather than a constant.
+cam.data.ortho_scale = float(os.environ.get("UNIT_ART_ORTHO", "2.7"))
+# Pin the ortho scale to WIDTH. Blender fits it to the longer side by default, so a
+# taller frame would silently shrink the piece -- and the whole point of a taller frame
+# is to give a tall piece room WITHOUT changing its scale relative to the others. With
+# this, ortho_scale is the roster's shared scale and height is per-piece headroom.
+cam.data.sensor_fit = "HORIZONTAL"
 
 scene.render.engine = "CYCLES"
 scene.cycles.samples = 256
@@ -96,7 +162,8 @@ scene.render.filter_size = 0.01
 scene.view_settings.view_transform = "Standard"
 scene.render.film_transparent = True
 scene.render.use_compositing = True
-scene.render.resolution_x = scene.render.resolution_y = SPRITE * BLOCK
+scene.render.resolution_x = SPRITE * BLOCK
+scene.render.resolution_y = int(os.environ.get("UNIT_ART_SPRITE_PY", SPRITE)) * BLOCK
 scene.render.image_settings.file_format = "PNG"
 scene.render.image_settings.color_mode = "RGBA"
 
