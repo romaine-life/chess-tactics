@@ -65,3 +65,29 @@ whole new list up in one commit again.
   change.
 - Any other screen that mounts a long list should use this hook. Screenshots of such a screen
   must let the fill finish before capturing; `npm run shot` already settles the scene first.
+
+## The gate, and why there wasn't one
+
+This was never a regression of a shipped mechanism — `git log -S` puts the first appearance of
+`startTransition`, `useDeferredValue` and `requestIdleCallback` in this repo at the two commits
+above. What DID exist, and read like a solved problem, was everything about how waiting LOOKS: a
+director, ordered phases, a loading presentation, a cold-load ladder, `verify:play-transition`,
+`verify:scene-retention`, `verify:run-scenes`, `verify:unit-arrival`. Every one of those asks
+whether the right thing appeared, in the right order, with the right identity. Not one of them
+asks whether the player could see anything WHILE it happened, so the app could hold the main
+thread for a second and pass all of them.
+
+That is the gap this closes:
+
+```
+npm run verify:no-freeze -- '<url>' --click '<css>' [--budget <ms>]
+```
+
+It presses a real control on the real app and reads the gaps between real animation frames,
+failing when the screen goes longer than the budget (default 250ms) without painting. Frame gaps,
+not a CPU profile: a profile says where the time went, this says whether the player got anything,
+and only the second one is the requirement. Verified both ways — it passes on this change (worst
+gap 110ms) and fails on the commit before it (1139ms, 383ms, 567ms).
+
+A screenshot cannot show this and no unit test can reach it: a frozen app and a fluid one render
+the same pixels. Measuring the frames is the only evidence there is.
