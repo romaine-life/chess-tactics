@@ -91,6 +91,17 @@ if (!/dataset\.chromeUnit\s*=\s*'inner-box'/.test(bgm)
   || !/className\s*=\s*'inner-box titlebar-control titlebar-control--icon bgm-control'/.test(bgm)) {
   failures.push('src/bgm.js: dynamic music title-bar button must declare registered inner-box ownership.');
 }
+// The music button is the one title-bar control built outside React, and bgm.js must stay
+// loadable by plain `node` (scripts/check-bgm-shuffle.mjs), so it cannot import the TypeScript
+// surface policy. Hold its literal to the policy constant instead: every control in the ONE
+// lane wears the same leaf material (ADR-0433), and this is the only seat that could drift.
+const surfacePolicy = readFileSync(join(root, 'shared', 'chromeSurfacePolicy.ts'), 'utf8');
+const leafFillSurface = surfacePolicy.match(/export const CHROME_LEAF_FILL_SURFACE = '([^']+)'/)?.[1];
+if (!leafFillSurface) {
+  failures.push('src/ui/shared/chromeSurfacePolicy.ts: CHROME_LEAF_FILL_SURFACE must be a literal named surface id.');
+} else if (!new RegExp(`dataset\\.chromeFillSurface\\s*=\\s*'${leafFillSurface}'`).test(bgm)) {
+  failures.push(`src/bgm.js: the music title-bar button must wear the leaf fill surface '${leafFillSurface}' like every other control in the lane.`);
+}
 
 const styleCss = readFileSync(join(process.cwd(), 'src', 'style.css'), 'utf8');
 const runtimeSources = [...files.map((file) => readFileSync(file, 'utf8')), bgm, styleCss].join('\n');

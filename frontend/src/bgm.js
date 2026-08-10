@@ -492,6 +492,14 @@ export function initBgm(iconUrl) {
     const el = document.createElement('button');
     el.type = 'button';
     el.dataset.chromeUnit = 'inner-box';
+    // Same leaf material as every other control in the bar (ADR-0433). This module is
+    // plain vanilla ES that plain `node` also loads (scripts/check-bgm-shuffle.mjs), so it
+    // states the registered ids as literals the way it already does for the chrome unit
+    // above; check-titlebar-actions.mjs holds this one to CHROME_LEAF_FILL_SURFACE so the
+    // two cannot drift. It is the first seat of the invariant trailing cluster, so it takes
+    // phase 0 — the CSS default — and TITLE_BAR_CLUSTER_LEAF_PHASE phases the gear and
+    // account seats after it.
+    el.dataset.chromeFillSurface = 'hybrid-wood-oak';
     el.className = 'inner-box titlebar-control titlebar-control--icon bgm-control';
     const icon = document.createElement('img');
     icon.className = 'titlebar-control-glyph bgm-control-icon';

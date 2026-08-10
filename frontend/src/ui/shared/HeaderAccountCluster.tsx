@@ -3,7 +3,7 @@ import { requiredDrawableRole } from '@chess-tactics/board-render';
 import { goSignIn, updateDisplayName, type AuthUser } from '../../net/auth';
 import { reportAuthSessionFailure, updateAuthSessionUser, useAuthSession } from '../../net/authSession';
 import { normalizeRoutePath } from '../navigation';
-import { TitleBarIconButtonPrimitive } from '../shell/TitleBarControls';
+import { TITLE_BAR_CLUSTER_LEAF_PHASE, TitleBarIconButtonPrimitive } from '../shell/TitleBarControls';
 import { AccountMenu } from './AccountMenu';
 import { installedUiMedia } from '../installedUiMedia';
 
@@ -104,7 +104,7 @@ export function HeaderAccountCluster({
         // editor rewrite their query via replaceState WITHOUT re-rendering this persistent
         // bar, which is why the anchor this replaced needed a pointerdown/keydown
         // just-in-time href rewrite hack (ADR-0052 retires it).
-        <TitleBarIconButtonPrimitive className="cluster-icon-button" to={() => settingsHref()} label="Settings" title="Settings" iconSrc={SETTINGS_ICON} />
+        <TitleBarIconButtonPrimitive className="cluster-icon-button" surfacePhase={TITLE_BAR_CLUSTER_LEAF_PHASE.settings} to={() => settingsHref()} label="Settings" title="Settings" iconSrc={SETTINGS_ICON} />
       ) : null}
       {!authResolved ? (
         <span className="account-auth-pending" role="status" aria-label="Checking account" />
@@ -113,6 +113,7 @@ export function HeaderAccountCluster({
           name={accountName}
           email={accountEmail}
           avatarUrl={me!.avatar_url ?? null}
+          surfacePhase={TITLE_BAR_CLUSTER_LEAF_PHASE.account}
           onRename={renameAccount}
           onSignOut={signOut}
           defaultOpen={menuOpen}
@@ -124,6 +125,7 @@ export function HeaderAccountCluster({
         <TitleBarIconButtonPrimitive
           active
           className="cluster-icon-button account-sign-in-button"
+          surfacePhase={TITLE_BAR_CLUSTER_LEAF_PHASE.account}
           label="Sign in"
           iconSrc={SIGN_IN_ICON}
           onClick={() => goSignIn(signInReturnTo)}
