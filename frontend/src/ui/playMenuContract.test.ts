@@ -300,6 +300,14 @@ describe('Run rule options are a departure from the defaults, not a step in setu
     expect(style).toMatch(/\.stepper-chevron-up\s*\{[\s\S]*?transform:\s*rotate\(90deg\);/);
   });
 
+  it('is cut to its widest verb, so pressing it never resizes it', () => {
+    // Both verbs are in the DOM at once, stacked in one cell; only the current one is visible.
+    expect(source).toContain("<span className={open ? 'is-shown' : undefined}>Hide</span>");
+    expect(source).toContain("<span className={open ? undefined : 'is-shown'}>Change</span>");
+    expect(style).toMatch(/\.run-rules-toggle-label > span \{[\s\S]*?grid-area: 1 \/ 1;/);
+    expect(style).toMatch(/\.run-rules-toggle-label > span\.is-shown \{[\s\S]*?visibility: visible;/);
+  });
+
   it('is reachable and announced, because a Run is bound to these for its life', () => {
     expect(source).toContain('aria-expanded={open}');
     expect(source).toContain('aria-controls="run-rules-content"');

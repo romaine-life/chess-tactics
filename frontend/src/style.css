@@ -28249,6 +28249,25 @@ button.run-card-formation-cell {
   gap: 6px;
 }
 
+/* Both verbs share ONE cell, so the control is as wide as its widest state at every moment
+   instead of snapping between two widths when it flips. The lock is the copy itself -- reword
+   either verb and the width still fits the longer one, with no measured number to maintain. */
+.run-rules-toggle-label {
+  display: grid;
+  justify-items: center;
+}
+
+.run-rules-toggle-label > span {
+  grid-area: 1 / 1;
+  /* Not display:none -- a hidden box still has to occupy the cell for it to be measured.
+     visibility also takes the inactive verb out of the accessible name. */
+  visibility: hidden;
+}
+
+.run-rules-toggle-label > span.is-shown {
+  visibility: visible;
+}
+
 .run-rules-selector [hidden] {
   display: none;
 }

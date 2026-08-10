@@ -105,7 +105,13 @@ export function RunRulesSelector({
           onClick={() => setOpen((wasOpen) => !wasOpen)}
         >
           <span className="run-rules-toggle-copy">
-            {open ? 'Hide' : 'Change'}
+            {/* BOTH verbs are always rendered, stacked in one cell, so the control is cut to its
+                widest state once and holds that width through every flip. A control that measured
+                only its current word would resize under the pointer the moment it was pressed. */}
+            <span className="run-rules-toggle-label">
+              <span className={open ? 'is-shown' : undefined}>Hide</span>
+              <span className={open ? undefined : 'is-shown'}>Change</span>
+            </span>
             <span
               className={`stepper-glyph stepper-chevron stepper-chevron-${open ? 'up' : 'down'}`}
               aria-hidden="true"
