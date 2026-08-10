@@ -20,7 +20,9 @@ describe('Campaign and War Editor libraries', () => {
     expect(campaign).toContain('<EditorContentSceneSlot');
     expect(campaign).toContain("navigateApp(editorCampaignHref('/editor', campaignId))");
     expect(campaign).not.toContain('setSelectedCollection');
-    expect(campaign.indexOf('<p className="campaign-rail-group">Workspace</p>')).toBeLessThan(campaign.indexOf('title="War"'));
+    // No "Workspace" eyebrow over the collection tabs — bare text on the vista naming a group of
+    // two tabs that already say what they are.
+    expect(campaign).not.toContain('>Workspace</p>');
     // Wars, then the Unassigned catch-all. Skirmish profiles is retired (ADR-0529).
     expect(campaign.indexOf('title="War"')).toBeLessThan(campaign.indexOf('count={unassignedLevels.length}'));
     expect(campaign).not.toContain('Skirmish profiles');

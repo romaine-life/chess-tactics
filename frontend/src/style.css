@@ -18318,12 +18318,24 @@ button.tileset-relationship-cell {
   text-shadow: 0 2px 0 #02070b;
 }
 
+/* Every rail-tab label wears the menu outline (`.settings-tab strong`), and a -webkit-text-stroke
+   paints OUTSIDE the text box, so any box that clips a label shears the outline off its first
+   letter. This copy block clips — it has to, or a long campaign name would run out of its tab —
+   so it makes room instead: the apron widens the clip box by the stroke's reach and the matching
+   padding puts the text back exactly where it sat.
+   It is stated HERE, on the shared copy block, not on one rail. The apron existed on
+   `.ce-campaign-tab`'s label alone and was defeated anyway, because THIS box is the outer clipper
+   and had no room of its own — so the editor's War and Levels tabs still lost the left of every
+   word while the main menu's labels, which do not clip at all, looked right. */
 .apparatus-tab-copy {
+  --tab-label-stroke-apron: var(--menu-label-stroke-w, 5px);
   align-content: center;
   display: grid;
   gap: 2px;
+  margin-inline-start: calc(-1 * var(--tab-label-stroke-apron));
   min-inline-size: 0;
   overflow: hidden;
+  padding-inline-start: var(--tab-label-stroke-apron);
 }
 
 .apparatus-tab-copy > strong,
@@ -18334,9 +18346,14 @@ button.tileset-relationship-cell {
   white-space: nowrap;
 }
 
+/* The other half of the apron: the line clips its own text for the ellipsis, so it needs the
+   stroke's room inside its own box as well as inside the block above it. */
 .apparatus-tab-copy > strong {
   font-size: var(--ds-text-md);
+  margin-inline-start: calc(-1 * var(--tab-label-stroke-apron));
+  padding-inline-start: var(--tab-label-stroke-apron);
 }
+
 
 .apparatus-tab-copy > small {
   color: var(--ds-color-ink-dim, rgba(230, 225, 215, .55));
@@ -19687,14 +19704,11 @@ button.tileset-relationship-cell {
    only thing that changed is that the outline is no longer sheared off the first letter.
    (The copy block itself is the shared .apparatus-tab-copy since ADR-0558 — the Campaign Editor
    tab is the primitive now, so only its own uppercase treatment is stated here.) */
-.ce-campaign-tab .apparatus-tab-copy > strong {
-  letter-spacing: .02em;
-  margin-inline-start: calc(-1 * var(--menu-label-stroke-w));
-  overflow: hidden;
-  padding-inline-start: var(--menu-label-stroke-w);
-  text-overflow: ellipsis;
-  text-transform: uppercase;
-}
+/* The stroke apron that used to live here is on `.apparatus-tab-copy` now, where the box that
+   actually clips can carry it — every rail with a two-line label needs the room, not just this
+   one, and scoping it here left the room unreachable behind the parent's own clip.
+   Uppercase and tracking come from the shared `.settings-tab strong`, so nothing rail-specific
+   remains for the Campaign Editor's label. */
 /* Neutralise the shared label nudge for the trailing badge so it stays in its grid cell. */
 .ce-campaign-tab > span.ce-tab-trail { transform: none; }
 .ce-tab-trail {

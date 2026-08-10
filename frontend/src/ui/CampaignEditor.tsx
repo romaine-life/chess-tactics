@@ -1087,9 +1087,11 @@ export function CampaignEditor({
                     ))}
                   </>
                 ) : null}
-                <p className="campaign-rail-group">Workspace</p>
-                {/* Continue the stone slice past both content libraries and through the
-                    workspace collections; the pinned footer is reserved for verbs. */}
+                {/* No "Workspace" eyebrow. It was bare text on the night vista naming a group of
+                    two tabs that already say what they are, on a rail that carries no other group
+                    unless a campaign is addressed. Continue the stone slice past both content
+                    libraries and through the workspace collections; the pinned footer is reserved
+                    for verbs. */}
                 <UnassignedRailTab
                   title="War"
                   itemName="War"
