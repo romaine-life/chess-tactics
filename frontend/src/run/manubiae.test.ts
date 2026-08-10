@@ -222,19 +222,29 @@ describe('what a committed board earns', () => {
   });
 });
 
-describe("a Knight's fork, by how many it catches", () => {
-  /** A Knight landing on (4,4), with `victims` seated on squares it attacks from there. */
+describe("a Knight's fork, by how many prongs the enemy cannot answer", () => {
+  /**
+   * A Knight landing on (4,4) in check to an enemy King on (3,2), with `victims` seated on other
+   * squares it attacks from there.
+   *
+   * The King is in every board because the deed requires it (ADR-0566): the check is what forces
+   * a move and buys the free one that collects a prong. The King on (3,2) also DEFENDS (2,3),
+   * which is one of the eight squares the Knight strikes — the tests below use that square when
+   * they want a prong their own men cover.
+   */
   function forkOf(...victims: Piece[]) {
     const knight = P('player', 'knight', 2, 5);
-    return { knight, pieces: [knight, ...victims] };
+    const king = P('enemy', 'king', 3, 2);
+    return { knight, king, pieces: [knight, king, ...victims] };
   }
 
-  it('pays two prongs, and pays more for each further one', () => {
-    const two = forkOf(P('enemy', 'rook', 3, 2), P('enemy', 'bishop', 5, 2));
+  it('pays the King and one undefended unit, and pays more for each further one', () => {
+    // A Bishop is under the royal fork's Rook bar, so this is the plain Knight's fork alone.
+    const two = forkOf(P('enemy', 'bishop', 5, 2));
     const gotTwo = earned(two.pieces, two.knight, { x: 4, y: 4 });
     expect(gotTwo.map((item) => item.award)).toContainEqual({ id: 'knight-fork', targets: 2 });
 
-    const three = forkOf(P('enemy', 'rook', 3, 2), P('enemy', 'bishop', 5, 2), P('enemy', 'pawn', 2, 3));
+    const three = forkOf(P('enemy', 'bishop', 5, 2), P('enemy', 'bishop', 6, 5));
     const gotThree = earned(three.pieces, three.knight, { x: 4, y: 4 });
     expect(gotThree.map((item) => item.award)).toContainEqual({ id: 'knight-fork', targets: 3 });
 
@@ -246,15 +256,44 @@ describe("a Knight's fork, by how many it catches", () => {
     expect(paidFour - paidThree).toBeGreaterThan(paidThree - paidTwo);
   });
 
-  it('pays nothing for attacking one unit, which is not a fork', () => {
-    const one = forkOf(P('enemy', 'rook', 3, 2));
-    expect(ids(earned(one.pieces, one.knight, { x: 4, y: 4 }))).not.toContain('knight-fork');
+  it('pays nothing for the King alone, which is a check and not a fork', () => {
+    const alone = forkOf();
+    expect(ids(earned(alone.pieces, alone.knight, { x: 4, y: 4 }))).not.toContain('knight-fork');
+  });
+
+  it('pays nothing for breadth without the King, however many it catches', () => {
+    // Three enemy units at once and not one of them has to move, so the Knight collects exactly
+    // one of them next turn and the enemy keeps the other two. Breadth is only worth paying for
+    // when a check makes the whole board answer it.
+    const knight = P('player', 'knight', 2, 5);
+    const pieces = [
+      knight,
+      P('enemy', 'bishop', 5, 2),
+      P('enemy', 'bishop', 6, 5),
+      P('enemy', 'rook', 3, 6),
+    ];
+    expect(ids(earned(pieces, knight, { x: 4, y: 4 }))).not.toContain('knight-fork');
+  });
+
+  it('does not count a unit their own men defend', () => {
+    // Their King covers (2,3), so the Bishop standing there is not a prong: the Knight that took
+    // it would be taken straight back. Two prongs, not three, on a board that strikes three units.
+    const covered = forkOf(P('enemy', 'bishop', 5, 2), P('enemy', 'bishop', 2, 3));
+    const got = earned(covered.pieces, covered.knight, { x: 4, y: 4 });
+    expect(got.map((item) => item.award)).toContainEqual({ id: 'knight-fork', targets: 2 });
+  });
+
+  it('pays nothing when the only other unit struck is defended', () => {
+    // Their Rook on (5,0) guards the Bishop down the file. Nothing here is free, so the check
+    // wins nothing and there is no fork to pay for.
+    const held = forkOf(P('enemy', 'bishop', 5, 2), P('enemy', 'rook', 5, 0));
+    expect(ids(earned(held.pieces, held.knight, { x: 4, y: 4 }))).not.toContain('knight-fork');
   });
 
   it('does not count a unit it cannot take', () => {
     // An obstacle stands on a square the Knight attacks and is not an enemy unit, so the second
     // prong is missing and there is no fork.
-    const withRock = forkOf(P('enemy', 'rook', 3, 2), P('neutral', 'rock', 5, 2));
+    const withRock = forkOf(P('neutral', 'rock', 5, 2));
     expect(ids(earned(withRock.pieces, withRock.knight, { x: 4, y: 4 }))).not.toContain('knight-fork');
   });
 
@@ -262,37 +301,47 @@ describe("a Knight's fork, by how many it catches", () => {
     // The same three prongs, with the Knight's landing square hanging: taking it is the answer,
     // and paying for this would teach the player to hand over a Knight.
     const hanging = forkOf(
-      P('enemy', 'rook', 3, 2),
       P('enemy', 'bishop', 5, 2),
-      P('enemy', 'pawn', 2, 3),
+      P('enemy', 'bishop', 6, 5),
       P('enemy', 'rook', 4, 0), // sweeps the file the Knight lands on
     );
     expect(ids(earned(hanging.pieces, hanging.knight, { x: 4, y: 4 }))).not.toContain('knight-fork');
   });
 
   it('pays the DEARER of the two forks and never both, because one fork is one deed', () => {
-    // King and Rook: a royal fork at 10, and also a two-prong Knight's fork at 5.
-    const royal = forkOf(P('enemy', 'king', 3, 2), P('enemy', 'rook', 5, 2));
+    // King and undefended Rook: a royal fork at 10, and also a two-prong Knight's fork at 5.
+    const royal = forkOf(P('enemy', 'rook', 5, 2));
     const gotRoyal = ids(earned(royal.pieces, royal.knight, { x: 4, y: 4 }));
     expect(gotRoyal).toContain('royal-fork');
     expect(gotRoyal).not.toContain('knight-fork');
 
     // Add a third prong and the count overtakes it, so the Knight's fork pays in its place.
-    const wide = forkOf(P('enemy', 'king', 3, 2), P('enemy', 'rook', 5, 2), P('enemy', 'bishop', 2, 3));
+    const wide = forkOf(P('enemy', 'rook', 5, 2), P('enemy', 'rook', 6, 5));
     const gotWide = ids(earned(wide.pieces, wide.knight, { x: 4, y: 4 }));
     expect(gotWide).toContain('knight-fork');
     expect(gotWide).not.toContain('royal-fork');
   });
 
+  it('still pays the ROYAL fork on a prong their own men defend', () => {
+    // The two forks ask different questions and this is where they part. Their Rook on (5,0)
+    // guards the forked Rook, so the Knight's fork sees no free prong at all — but a Rook won for
+    // a Knight is worth the exchange even when they take back, which is ADR-0527's reading and
+    // stands untouched.
+    const held = forkOf(P('enemy', 'rook', 5, 2), P('enemy', 'rook', 5, 0));
+    const got = ids(earned(held.pieces, held.knight, { x: 4, y: 4 }));
+    expect(got).toContain('royal-fork');
+    expect(got).not.toContain('knight-fork');
+  });
+
   it('pays only a Knight — the same prongs from a Queen are not this deed', () => {
     const queen = P('player', 'queen', 4, 6);
-    const pieces = [queen, P('enemy', 'rook', 4, 1), P('enemy', 'bishop', 1, 4)];
+    const pieces = [queen, P('enemy', 'king', 4, 1), P('enemy', 'bishop', 1, 4)];
     expect(ids(earned(pieces, queen, { x: 4, y: 4 }))).not.toContain('knight-fork');
   });
 
   it('pays the enemy nothing for forking the player', () => {
     const knight = P('enemy', 'knight', 2, 5);
-    const pieces = [knight, P('player', 'rook', 3, 2), P('player', 'bishop', 5, 2)];
+    const pieces = [knight, P('player', 'king', 3, 2), P('player', 'bishop', 5, 2)];
     expect(earned(pieces, knight, { x: 4, y: 4 })).toEqual([]);
   });
 });
