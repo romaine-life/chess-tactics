@@ -21954,6 +21954,65 @@ button.tileset-relationship-cell {
   color: var(--skirmish-muted);
 }
 
+/* Main-menu mark review: each candidate SET is mounted as a whole rail through the same
+   primitive the menu paints, laid out side by side so the sets can be read against each
+   other and against what is installed. Layout only — the rail brings its own column
+   width, gap, surface and seat, and the review never restyles the thing it is judging
+   (a review that re-sizes the seat proves nothing about the seat). */
+.menu-icon-review-screen {
+  block-size: 100%;
+  box-sizing: border-box;
+  grid-template-columns: minmax(0, 1fr);
+  overflow: auto;
+  padding: var(--ds-inset);
+}
+
+.menu-icon-review-panel {
+  grid-column: 1;
+  grid-row: 2;
+  margin-inline: auto;
+  /* Four 322px rails plus their gaps. The panel is sized to hold the comparison, not
+     to a house width — a panel that clips the fourth set hides the set. */
+  max-inline-size: 1480px;
+  overflow: auto;
+  inline-size: 100%;
+}
+
+.menu-icon-review-panel > .le-outer-panel-content {
+  display: grid;
+  gap: var(--ds-inline);
+}
+
+.menu-icon-review-sets {
+  align-items: start;
+  display: flex;
+  gap: var(--ds-inline);
+  /* One row, always. A wrapped set is a set that can no longer be compared against the
+     one it wrapped away from, which is the entire job of this page; a narrow window
+     scrolls the row instead of breaking it. */
+  overflow-x: auto;
+}
+
+.menu-icon-review-set {
+  display: grid;
+  gap: var(--ds-inline-tight);
+  justify-items: start;
+}
+
+.menu-icon-review-set > h2,
+.menu-icon-review-set > p {
+  margin: 0;
+}
+
+.menu-icon-review-set > p {
+  color: var(--skirmish-muted);
+}
+
+.menu-icon-review-missing {
+  color: var(--skirmish-muted);
+  margin: 0;
+}
+
 /* Studio > Action Marks: each catalog card carries the candidate in the SAME button the
    Expunctio row paints, in both states that control has — offered, and refused. Layout
    only; the buttons bring their own kit frame and the catalog never restyles the seat it
