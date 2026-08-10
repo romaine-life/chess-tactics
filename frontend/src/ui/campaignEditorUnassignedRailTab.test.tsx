@@ -65,7 +65,9 @@ describe('UnassignedRailTab', () => {
     expect(markup).toContain('<small>3 levels</small>');
     expect(markup).toContain('data-testid="unassigned-draft-attention"');
     expect(markup).toContain('title="Unsaved drafts available"');
-    expect(markup).toContain('>!</span>');
+    // A carved mark, never a typed character: the exclamation was a keyboard glyph with a CSS glow.
+    expect(markup).toContain('ce-icon-img');
+    expect(markup).not.toContain('>!</span>');
   });
 
   it('omits the attention marker when no resumable drafts exist', () => {

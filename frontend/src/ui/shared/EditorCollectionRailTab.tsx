@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 import { ApparatusRailTab } from './ApparatusRailTab';
+import { EditorRowIcon } from './EditorLevelRow';
 
 /**
  * One collection-level destination in the Editor rail.
@@ -49,13 +50,15 @@ export function EditorCollectionRailTab({
       iconSrc={iconSrc}
       className="ce-campaign-tab ce-campaign-tab-meta"
       onSelect={onSelect}
+            // The installed save mark, not a typed "!". A mark on this rail is carved art like every
+      // other one, and the exclamation was a keyboard character wearing a CSS glow.
       trailing={hasAttention ? (
         <span
           className="ce-tab-trail ce-tab-draft-status"
           data-testid="unassigned-draft-attention"
           title={attentionLabel}
           aria-hidden="true"
-        >!</span>
+        ><EditorRowIcon icon="save" /></span>
       ) : undefined}
     />
   );

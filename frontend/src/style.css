@@ -19747,12 +19747,10 @@ button.tileset-relationship-cell {
   justify-content: center;
 }
 .ce-tab-draft-status {
-  color: var(--ce-gold-bright);
-  font-size: var(--ds-text-xl);
-  font-weight: 900;
-  line-height: 1;
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
   min-inline-size: 20px;
-  text-shadow: 0 0 8px rgba(240, 189, 85, .28);
 }
 
 /* Pinned rail footer — creation (New Level / New Campaign), then workspace verbs. */
@@ -19887,6 +19885,8 @@ button.tileset-relationship-cell {
 
 .section-box-member-verb {
   align-items: center;
+  /* A button is shrink-to-fit even as a grid, so the section would be as wide as its label. */
+  inline-size: 100%;
   background: none;
   border: 0;
   border-radius: 0;
