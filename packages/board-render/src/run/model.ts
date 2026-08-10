@@ -402,9 +402,9 @@ export const RUN_KNIGHT_FORK_TENTHS_PER_RUNG = 5;
  * What a Knight's fork of `targets` prongs pays. Nothing for fewer than two: one prong is not a
  * fork, it is just an attack.
  *
- * A prong is something the enemy cannot answer — the King, which must move, or an undefended
- * unit the check buys a free move to take (ADR-0566). Counting is the board seam's job; this
- * only prices the count.
+ * A prong is something the enemy cannot answer — their King, which must move, or an undefended
+ * unit their one move cannot save alongside another (ADR-0566). Counting is the board seam's
+ * job; this only prices the count.
  */
 export function knightForkGoldTenths(targets: number): number {
   const prongs = Math.max(0, Math.floor(targets) - 1);
@@ -442,7 +442,7 @@ export const RUN_MANUBIAE: readonly ManubiumDefinition[] = Object.freeze([
   {
     id: 'knight-fork',
     name: "Knight's fork",
-    earnedBy: 'Strike the enemy King and at least one UNDEFENDED enemy unit at once with a Knight, from the square it just moved to. The King and each undefended unit is a prong, and each further prong is worth more than the last; a defended unit is no prong, because they simply take the Knight back. The fork has to hold: taking the Knight must cost the enemy more than the Knight is worth.',
+    earnedBy: 'Strike two or more things at once with a Knight that the enemy cannot answer, from the square it just moved to: their King, which must move, or an UNDEFENDED unit, which their one move cannot save alongside another. Each further prong is worth more than the last. A defended unit is no prong, because they simply take the Knight back. The fork has to hold: taking the Knight must cost the enemy more than the Knight is worth.',
     goldTenths: null,
     // Written from the rate rather than beside it, so the sentence cannot drift from the gold.
     priceNote: `${knightForkGoldTenths(2)} for two prongs, ${knightForkGoldTenths(3)} for three, ${knightForkGoldTenths(4)} for four, ${knightForkGoldTenths(5)} for five`,

@@ -187,34 +187,33 @@ export function manubiaeEarnedBy(game: GameState, events: readonly GameEvent[]):
     // when they take back, so what it is worth to answer is the position's business.
     //
     // Two entries read one fork: the royal one asks about the QUALITY of the prongs and the
-    // Knight's asks how many there are that the enemy CANNOT ANSWER — the King, which must
-    // move, and the undefended pieces the check buys a free move to collect (ADR-0566). A
-    // Knight striking the King and an undefended Rook is both, and one unit's fork is one deed,
-    // so the dearer of the two pays and the other stands down -- exactly the ladder the two
-    // checks and the mates already run on. Which also means `forkHolds` is asked ONCE, of the
-    // fork rather than of an entry, and only when there is a fork to ask about.
+    // Knight's asks how many there are that the enemy CANNOT ANSWER — their King, or a unit
+    // nothing of theirs defends (ADR-0566). A Knight striking the King and an undefended Rook is
+    // both, and one unit's fork is one deed, so the dearer of the two pays and the other stands
+    // down -- exactly the ladder the two checks and the mates already run on. Which also means
+    // `forkHolds` is asked ONCE, of the fork rather than of an entry, and only when there is a
+    // fork to ask about.
     const forks: ManubiumAward[] = [];
     if (royalForkVictim(mover, game.pieces, game.size, env, RUN_ROYAL_FORK_MIN_VICTIM_VALUE)) {
       forks.push({ id: 'royal-fork' });
     }
     if (mover.type === 'knight') {
-      // The King, plus the units the player can simply TAKE (ADR-0566).
+      // Prongs the enemy CANNOT ANSWER, of which there are exactly two kinds (ADR-0566).
       //
-      // A prong only means something if the enemy cannot answer it, and there are exactly two
-      // ways they cannot. The King must move, so striking it is a prong by force of law. A
-      // defended piece is no prong at all — they leave it where it is and the Knight that takes
-      // it is taken back — so the pieces that count are the undefended ones, which the check
-      // buys a free move to collect. A Knight parked among a chain of mutually defended Pawns
-      // wins nothing, and the count on its own said otherwise.
+      // Their King is one, because it must move — that is the whole force of a check. An
+      // UNDEFENDED unit is the other, because the enemy has one move and it cannot save two of
+      // them. The two are interchangeable and that is the point: the King and a free piece, or
+      // two free pieces, are the same fork of two.
       //
-      // The King is one of the prongs it is counted as, so the price ladder is unchanged: two
-      // prongs is the King and one free piece.
+      // A DEFENDED unit is no prong at all. They leave it where it stands and the Knight that
+      // takes it is taken straight back, so a Knight parked in a chain of mutually defended
+      // Pawns strikes three units and wins nothing — which the bare count said otherwise about.
       const struck = enemiesAttackedBy(mover, game.pieces, game.size, env);
-      const checksKing = struck.some((target) => target.type === 'king');
-      const free = struck.filter((target) => (
-        target.type !== 'king' && !unitIsDefended(target, game.pieces, game.size, env)
+      const prongs = struck.filter((target) => (
+        target.type === 'king' || !unitIsDefended(target, game.pieces, game.size, env)
       )).length;
-      if (checksKing && free >= 1) forks.push({ id: 'knight-fork', targets: free + 1 });
+      // Two is where a fork starts; one prong is not a fork, it is just a threat.
+      if (prongs >= 2) forks.push({ id: 'knight-fork', targets: prongs });
     }
     if (forks.length && forkHolds(mover, game, env)) {
       const best = forks.reduce((dearest, fork) => (
