@@ -251,6 +251,7 @@ ol = next((n for n in tree.nodes if n.bl_idname=="CompositorNodeGroup" and n.nod
 if ol:
     ol.inputs["Fine Adjust"].default_value=1.0
     ol.inputs["Sensitivity"].default_value=float(os.environ.get("OL_SENS", _tuning["outline_sensitivity"]))
+    if os.environ.get("MUTE_OUTLINE"): ol.mute = True
     ol.inputs["Color"].default_value=(*srgb("#181818"),1)
     # Thickness lives INSIDE the group, on a Dilate/Erode node's Size socket -- not on
     # the group's own inputs, which is why reading the exposed sockets missed it and a
@@ -616,11 +617,74 @@ if os.environ.get("DUMP_MASK"):
     bpy.ops.render.render(write_still=True)
     raise SystemExit
 
+# An outline where the accent MEETS the body.
+#
+# The Outline group is fed by the depth pass, so it fires where the piece meets
+# background and nowhere else. The queen's tiara sits flush on her head: that is a
+# material boundary, not a depth one, so no outline was drawn there at all -- measured,
+# nothing dark touches the tiara, everything adjacent is mid navy.
+#
+# The accent mask already knows exactly where that boundary is. Erode it by one and
+# subtract, and what is left is its border, one pixel wide, which gets the same dark the
+# silhouette outline uses.
+if crown_mask is not None and not os.environ.get("NO_ACCENT_OUTLINE"):
+    _shrunk = tree.nodes.new("CompositorNodeDilateErode")
+    # GROW, not shrink. Eroding puts the border inside the accent, and these accents
+    # are tiny -- a one-pixel inner border took the queen's 15-pixel tiara down to 1,
+    # because at that size the border IS the feature. Growing puts the ring on body
+    # pixels instead, so the accent keeps every pixel it had.
+    _shrunk.inputs["Size"].default_value = int(os.environ.get("ACCENT_OUTLINE_PX", "1")) * BLOCK
+    tree.links.new(crown_mask, _shrunk.inputs[0])
+    _edge = tree.nodes.new("ShaderNodeMath")
+    _edge.operation = "SUBTRACT"
+    _edge.use_clamp = True
+    tree.links.new(_shrunk.outputs[0], _edge.inputs[0])
+    tree.links.new(crown_mask, _edge.inputs[1])
+    _ink = tree.nodes.new("ShaderNodeMix")
+    _ink.data_type = "RGBA"
+    _ink.label = "ACCENT edge ink"
+    _rgba = [x for x in _ink.inputs if x.type == "RGBA"]
+    _rgba[1].default_value = (*srgb(os.environ.get("ACCENT_OUTLINE_COLOR", "#181818")), 1)
+    tree.links.new(_edge.outputs[0], _ink.inputs["Factor"])
+    tree.links.new(current, _rgba[0])
+    current = [x for x in _ink.outputs if x.type == "RGBA"][0]
+
 sep = tree.nodes.new("CompositorNodeSeparateColor")
 seta = tree.nodes.new("CompositorNodeSetAlpha")
 tree.links.new(feeder, sep.inputs[0])
+# A real stroke: pixels OUTSIDE the silhouette.
+#
+# The addon's Outline draws within the piece, and the final alpha is the render's own,
+# so anything painted past the edge is trimmed. That is why the tiara had no stroke
+# over its top -- there was nowhere outside the shape for one to exist. Growing the
+# alpha gives the stroke somewhere to live, and every pixel that is in the grown alpha
+# but not the original becomes ink.
+#
+# Grown by whole art pixels, since a stroke half a pixel wide is not a stroke.
+_alpha = sep.outputs.get("Alpha") or sep.outputs[-1]
+if not os.environ.get("NO_STROKE"):
+    _grow_px = int(os.environ.get("STROKE_PX", "1")) * BLOCK
+    _fat = tree.nodes.new("CompositorNodeDilateErode")
+    _fat.inputs["Size"].default_value = _grow_px
+    _fat.label = "STROKE width"
+    tree.links.new(_alpha, _fat.inputs[0])
+    _ring = tree.nodes.new("ShaderNodeMath")
+    _ring.operation = "SUBTRACT"
+    _ring.use_clamp = True
+    tree.links.new(_fat.outputs[0], _ring.inputs[0])
+    tree.links.new(_alpha, _ring.inputs[1])
+    _stroke = tree.nodes.new("ShaderNodeMix")
+    _stroke.data_type = "RGBA"
+    _stroke.label = "STROKE ink"
+    _sr = [x for x in _stroke.inputs if x.type == "RGBA"]
+    _sr[1].default_value = (*srgb(os.environ.get("STROKE_COLOR", "#181818")), 1)
+    tree.links.new(_ring.outputs[0], _stroke.inputs["Factor"])
+    tree.links.new(current, _sr[0])
+    current = [x for x in _stroke.outputs if x.type == "RGBA"][0]
+    _alpha = _fat.outputs[0]
+
 tree.links.new(current, seta.inputs["Image"])
-tree.links.new(sep.outputs.get("Alpha") or sep.outputs[-1], seta.inputs["Alpha"])
+tree.links.new(_alpha, seta.inputs["Alpha"])
 for l in list(sink.links): tree.links.remove(l)
 tree.links.new(seta.outputs["Image"], sink)
 
