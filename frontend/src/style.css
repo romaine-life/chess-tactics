@@ -19711,10 +19711,14 @@ button.tileset-relationship-cell {
    NO padding: the map is a compartment that reaches the frame, and every rail has to reach it
    too. The rows that carry text take the inset instead. */
 .ce-preview-box {
-  /* The height a verb takes in this column — the same 40px `.ce-link-button` gave the button
-     boxes these cells replaced, stated here because `--le-inner-control-h` is scoped to the
-     Level Editor screen and does not reach the menu shell's columns. */
-  --ce-preview-verb-h: 40px;
+  /* The height a verb takes in this column, sized so its PAINTED plate matches the editor's
+     framed buttons — Delete War, Save, Start Run — standing beside it.
+     A framed button is a 40px box whose own 9-slice eats ~10px a side, so ~26px of it is oak.
+     A cell has no frame of its own (the box's rail is its edge), so at 40px it painted 37px of
+     oak and read half again as heavy as every button on the screen. 30px is the same plate.
+     Stated here because `--le-inner-control-compact-h` is scoped to the Level Editor screen and
+     does not reach the menu shell's columns. */
+  --ce-preview-verb-h: 30px;
   flex: 0 0 auto;
   min-inline-size: 0;
   padding: 0;
