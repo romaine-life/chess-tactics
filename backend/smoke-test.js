@@ -2634,8 +2634,11 @@ async function validateGeneratedFormationRunMigration63() {
       runSaveVersion: 24, phase: 'sectio', deployment: null, battleRuntime: null, aftermath: null,
       sectio: {
         cardOffers: [
+          // One card per tier, so the re-read proves it reaches the whole ladder. The middle seat
+          // is Rook-and-Bishop rather than a lone Rook: the bands are cut on PRICE, and five
+          // material on one square is 60 gold and Common.
           offer('p', 'p', ['pawn'], [{ x: 0, y: 0 }], 1),
-          offer('r', 'r', ['rook'], [{ x: 0, y: 0 }], 5),
+          offer('f-0111-rb', 'rb', ['rook', 'bishop'], [{ x: 0, y: 0 }, { x: 0, y: 1 }], 8),
           offer('bb-vertical', 'bb', ['bishop', 'bishop'], [{ x: 0, y: 0 }, { x: 0, y: 1 }], 6),
         ],
       },
