@@ -4,7 +4,7 @@
 // imported here. Shared board core (tile families, the animation clock, the facing
 // compass, the per-frame src) comes from ./studioBoard.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type ReactElement, type ReactNode, type SetStateAction } from 'react';
-import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, cameraToContainBounds, defaultBoardCameraBounds, defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, MAX_FLOATING_ARTWORK_PIXEL, mergeSharedLevel, MAXIMUM_AUTHORED_CAMERA_ZOOM_IN, normalizeBoardCameraBounds, normalizeCameraZoomIn, predrawnEnvironmentGeometryFingerprintInputV2, predrawnRenderSurface, predrawnVisualFootprintClipStyleForCell, resolvedBoardCameraBounds, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, worldViewportForCamera, type BoardBackgroundMode, type BoardCameraBounds, type BoardCameraSnapMode, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
+import { BOARD_CAMERA_TECHNICAL_MINIMUM_ZOOM, boardBackgroundMode, boardBounds, cameraToContainBounds, defaultBoardCameraBounds, defaultSubterrainMaterial, isVersionedPredrawnBoardSurface, largestBoxInsideBoardCameraPolygon, MAX_FLOATING_ARTWORK_PIXEL, mergeSharedLevel, MAXIMUM_AUTHORED_CAMERA_ZOOM_IN, normalizeBoardCameraBounds, normalizeCameraZoomIn, predrawnEnvironmentGeometryFingerprintInputV2, predrawnRenderSurface, predrawnVisualFootprintClipStyleForCell, resolvedBoardCameraBounds, resolveTerrainSideExposure, resolveTerrainSideFaces, subterrainMaterials, subterrainFaceKey, subterrainMaterialSrc, worldViewportForCamera, type BoardBackgroundMode, type BoardCameraBounds, type BoardCameraSnapMode, type PredrawnGenerationFrame, type SubterrainMaterial, type SubterrainPlacementMap, type TerrainSideMaterials, type VersionedPredrawnBoardSurface } from '@chess-tactics/board-render';
 import { boardLabCellPosition, boardLabMetrics, immutableBoardLabTerrainSrc } from '../render/BoardLabBoard';
 import { projectBoardPoint, unprojectBoardPoint, type BoardForest, type BoardForestSection, type BoardForestTree, type BoardTown, type BoardTownSection } from '@chess-tactics/board-render';
 import { TILE_TEMPLATE } from '../art/tileTemplate';
@@ -161,6 +161,7 @@ import {
   predrawnReviewGridCells,
   predrawnBoardPreviewRegistration,
   predrawnBoardPreviewSrc,
+  runtimePredrawnBoardPlate,
   serializePredrawnBoardPreviewRegistration,
   storedPredrawnBoardRegistration,
   type PredrawnBoardCornerRegistration,
@@ -4392,6 +4393,22 @@ export function LevelEditor(): ReactElement {
     setCameraBoundaryInteractionMode('edit');
     frameCameraBoundary(bounds);
   };
+  /**
+   * The largest rectangle that stays inside this level's artwork. Only offered where there IS
+   * artwork; a tiled level's backdrop follows the camera and has no edge to fit to.
+   */
+  const cameraBoundaryFitToArtwork = predrawnCoverPolygon?.length
+    ? largestBoxInsideBoardCameraPolygon(predrawnCoverPolygon)
+    : undefined;
+  const fitCameraBoundaryToArtwork = (): void => {
+    if (!cameraBoundaryFitToArtwork) {
+      reportStatus('This level has no artwork to fit the camera to.', 'warning');
+      return;
+    }
+    commitCameraBoundary(cameraBoundaryFitToArtwork);
+    setCameraBoundaryInteractionMode('edit');
+    frameCameraBoundary(cameraBoundaryFitToArtwork);
+  };
   const setCameraBoundaryFromView = (): void => {
     if (!viewViewportSize) {
       reportStatus(
@@ -4434,11 +4451,20 @@ export function LevelEditor(): ReactElement {
     const current = currentEditorBoardRef.current;
     // Newly set artwork was generated FROM the geometry on screen, so it arrives bound to it again:
     // the detachment and the hand placement both belong to the selection they were made against.
+    // New artwork brings a new edge, so the camera box is refitted to it. Assigning art and
+    // then finding the camera still bounded by the old one is the drawn-box-means-nothing
+    // problem in miniature; the button below does the same thing on demand.
+    const fitted = largestBoxInsideBoardCameraPolygon(
+      predrawnBoardCoverPolygon(runtimePredrawnBoardPlate(surface), predrawnCoverCells),
+    );
     const next = {
       ...cloneEditorBoard(current),
       surface,
       predrawnGridDetached: false,
       predrawnPlateOffset: undefined,
+      ...(fitted
+        ? { cameraBounds: normalizeBoardCameraBounds(fitted, { cols: boardCols, rows: boardRows }) }
+        : {}),
     };
     if (boardSignature(next) === boardSignature(current)) return;
     setPredrawnSelectionValidation({ kind: 'checking' });
@@ -11187,6 +11213,27 @@ export function LevelEditor(): ReactElement {
             </div>
             <p className="le-board-note">Balanced is the default: ten percent padding with a two projected-tile-step minimum per axis.</p>
           </section>
+          {cameraBoundaryFitToArtwork ? (
+            <section className="skirmish-card skirmish-view-card" aria-label="Camera boundary artwork fit">
+              <h2>Fit to artwork</h2>
+              <div className="skirmish-view-row">
+                <ChromeButton
+                  unit="inner-text-button"
+                  className={chromeUnitClassNames('inner-text-button', 'le-seg-btn')}
+                  onClick={fitCameraBoundaryToArtwork}
+                  disabled={!editorSessionCanWrite}
+                  title="Set the boundary to the largest rectangle that stays inside this level's artwork."
+                >Fit to artwork</ChromeButton>
+                <span className="le-board-note">
+                  {Math.round(cameraBoundaryFitToArtwork.width)}
+                  {' × '}
+                  {Math.round(cameraBoundaryFitToArtwork.height)}
+                  {' world px'}
+                </span>
+              </div>
+              <p className="le-board-note">The furthest the camera can go without leaving the painting.</p>
+            </section>
+          ) : null}
           </>
         ) : layer === 'generate' ? (<>
           <section className="skirmish-card le-generate">

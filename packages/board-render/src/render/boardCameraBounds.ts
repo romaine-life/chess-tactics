@@ -113,6 +113,86 @@ export function resolvedBoardCameraBounds(board: BoardWithCameraBounds): BoardCa
     ?? defaultBoardCameraBounds(board);
 }
 
+/**
+ * The largest axis-aligned rectangle that fits inside a convex region — the camera box an
+ * author wants when they say "as much as the artwork actually covers".
+ *
+ * A current plate's accepted region is already an axis-aligned rectangle, so that case returns
+ * it unchanged rather than approaching it by search. A legacy plate registered through a
+ * homography is a quad, and there the answer is a real fit: for a convex region the horizontal
+ * span available across a slab is the narrower of its two edges, so scanning pairs of
+ * horizontal cuts finds the maximum area without needing calculus.
+ */
+export function largestBoxInsideBoardCameraPolygon(
+  polygon: readonly BoardCameraPoint[],
+): BoardCameraBounds | undefined {
+  if (polygon.length < 3) return undefined;
+  const xs = polygon.map((point) => point.x);
+  const ys = polygon.map((point) => point.y);
+  if (xs.some((x) => !Number.isFinite(x)) || ys.some((y) => !Number.isFinite(y))) return undefined;
+  const minX = Math.min(...xs);
+  const maxX = Math.max(...xs);
+  const minY = Math.min(...ys);
+  const maxY = Math.max(...ys);
+  if (maxX - minX <= 0 || maxY - minY <= 0) return undefined;
+
+  const axisAligned = polygon.every((point) => (
+    (Math.abs(point.x - minX) <= GEOMETRY_EPSILON || Math.abs(point.x - maxX) <= GEOMETRY_EPSILON)
+    && (Math.abs(point.y - minY) <= GEOMETRY_EPSILON || Math.abs(point.y - maxY) <= GEOMETRY_EPSILON)
+  ));
+  if (axisAligned) return { minX, minY, width: maxX - minX, height: maxY - minY };
+
+  // Horizontal span of the region at one height. Walking a consistently wound convex ring
+  // means an edge going down bounds the right side and an edge going up bounds the left.
+  const orientation = signedArea(polygon) > 0 ? 1 : -1;
+  const ring = orientation > 0 ? polygon : [...polygon].reverse();
+  const spanOn = (y: number) => {
+    let left = -Infinity;
+    let right = Infinity;
+    for (let index = 0; index < ring.length; index += 1) {
+      const start = ring[index];
+      const end = ring[(index + 1) % ring.length];
+      if (Math.abs(end.y - start.y) <= GEOMETRY_EPSILON) continue;
+      const low = Math.min(start.y, end.y);
+      const high = Math.max(start.y, end.y);
+      if (y < low - GEOMETRY_EPSILON || y > high + GEOMETRY_EPSILON) continue;
+      const t = (y - start.y) / (end.y - start.y);
+      const x = start.x + (end.x - start.x) * t;
+      if (end.y > start.y) right = Math.min(right, x);
+      else left = Math.max(left, x);
+    }
+    if (!Number.isFinite(left) || !Number.isFinite(right) || right <= left) return null;
+    return { left, right };
+  };
+
+  const SAMPLES = 160;
+  const cuts: { y: number; left: number; right: number }[] = [];
+  for (let index = 0; index <= SAMPLES; index += 1) {
+    const y = minY + ((maxY - minY) * index) / SAMPLES;
+    const span = spanOn(y);
+    if (span) cuts.push({ y, left: span.left, right: span.right });
+  }
+  let best: BoardCameraBounds | undefined;
+  let bestArea = 0;
+  for (let top = 0; top < cuts.length; top += 1) {
+    let left = cuts[top].left;
+    let right = cuts[top].right;
+    for (let bottom = top + 1; bottom < cuts.length; bottom += 1) {
+      left = Math.max(left, cuts[bottom].left);
+      right = Math.min(right, cuts[bottom].right);
+      const width = right - left;
+      const height = cuts[bottom].y - cuts[top].y;
+      if (width <= 0) break;
+      const area = width * height;
+      if (area > bestArea) {
+        bestArea = area;
+        best = { minX: left, minY: cuts[top].y, width, height };
+      }
+    }
+  }
+  return best;
+}
+
 export function boardCameraBoundsPolygon(bounds: BoardCameraBounds): BoardCameraPoint[] {
   return [
     { x: bounds.minX, y: bounds.minY },

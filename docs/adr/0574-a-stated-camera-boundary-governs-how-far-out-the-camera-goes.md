@@ -165,3 +165,28 @@ cover tier of its own stored box.
 The default box is about ten percent larger than the opening composition while one ladder rung
 is five percent, so most levels open with no zoom-out range. That is now a property of the
 stored value rather than of the code, which is the point: it is a rectangle an author drags.
+
+## Fitting the box to the artwork
+
+A box that must be dragged by hand to every artwork edge is a chore, and a box assigned
+artwork and then left bounding the previous one is the drawn-box-means-nothing problem again.
+So the fit is an ACTION, in three places, all answering with the same function:
+
+- **Camera page → Fit to artwork.** Shown only where there is artwork; a tiled level's backdrop
+  follows the camera and has no edge to fit to. Commits through the ordinary boundary path, so
+  it is an edit like any drag.
+- **On assignment.** Setting a level's AI artwork refits the box to it, overwriting whatever was
+  there. The artwork's edge moved, so the limit moves with it.
+- **Backfilled** onto the nine existing AI-artwork levels, each of which now carries a box equal
+  to its own painting: hold-bridge 1450x816, fortress-gate 1360x765, and seven test battles.
+
+`largestBoxInsideBoardCameraPolygon` returns a rectangular accepted region unchanged, and fits
+the largest axis-aligned rectangle inside a legacy warped quad by scanning pairs of horizontal
+cuts. Its result still passes through `normalizeBoardCameraBounds`, so a level whose artwork is
+smaller than its own opening frame keeps a box that shows the board — reachable only by
+resizing a board after its artwork was made, or by masking the accepted region down.
+
+Note for anyone writing a similar tool: the plate's stored `worldBounds` are relative to the
+board origin, which is `boardLabMetrics`. A hand-rolled origin put every plate hundreds of
+world pixels off and reported six of nine levels as needing to grow past their own art; the
+package's own function is the only correct source.
