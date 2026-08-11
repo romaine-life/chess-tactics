@@ -1,7 +1,9 @@
-import { useState, type ReactElement } from 'react';
+import { useState, type ReactNode } from 'react';
 import { RUN_CARD_SPANS, RUN_RARITY_RULE_IDS, type RunRarityRuleId, type RunRules } from '../run/model';
+import { chromeUnitClassNames } from './chromeUnitRegistry';
+import { ChromeButton } from './shared/ChromeButton';
+import { ChromeDividedGridRow } from './shared/ChromeDividedGrid';
 import { HouseSelect, type HouseSelectOption } from './shared/HouseSelect';
-import { SectionBox } from './shared/SectionBox';
 
 // Start New Run → the rules the Run is bound to, behind a disclosure that starts closed.
 //
@@ -14,12 +16,36 @@ import { SectionBox } from './shared/SectionBox';
 // Not hidden, though: a Run is bound to these for its whole life, so a player who did change one
 // has to be able to see what they are about to start.
 //
-// The BOX is the control -- see SectionBox, which owns that decision for every section of Run
-// preparation. This is the one section given a disclosure, so its name row is the trigger: closed,
-// the whole slab is pressable, and opening it grows the same box downward around the choices.
+// These are the LAST CELLS of Start New Run's one box, and three things follow from being cells
+// rather than a box of their own:
 //
-// It seats BELOW Start Run in the detail column, after the verb rather than before it — see the
-// comment at its mount in PlayMenu.
+//   The trigger is a SQUARE KEY, not the slab. A cell has no frame — the box's frame is around all
+//   of it and the rails are its edges — so there is no slab here to be the button, and pressing the
+//   whole cell would put a press on a region whose boundary belongs to something bigger. The key is
+//   the registered tool square, seated where the chevron used to hang.
+//
+//   Each picker FILLS its own cell, seated rather than framed. A framed picker inside a cell draws
+//   a second frame just inside the box's rail and leaves its wood floating on a strip of marble.
+//
+//   The cells are ALWAYS THERE, empty when closed. A disclosure that grows the box moves the box's
+//   own bottom edge and re-seats every rail above it, which is a lot of the screen moving for a
+//   control almost nobody presses. Reserved, opening it paints compartments that were already
+//   there and nothing else moves at all. The space is held by keeping the choices LAID OUT and
+//   hiding only their paint (`visibility`), so what is reserved is exactly what they need rather
+//   than a number in the stylesheet that would drift the first time a rule changed.
+//
+// They seat BELOW Start Run, after the verb rather than before it — see the comment in PlayMenu.
+
+// Each rule is TWO cells: what it is and what the current answer does, then the picker that
+// answers it. The two group headings this section used to carry ("Formations", "Pricing") are gone
+// with them -- three rules do not need grouping, and each of the three now states its own name,
+// which none of them did: on screen they were three unlabelled pickers under one word.
+const RULE_NAMES = {
+  span: 'Formation size',
+  rotation: 'Placement facing',
+  pricing: 'Card pricing',
+  rarity: 'Card rarity',
+} as const;
 
 const SPAN_COPY: Readonly<Record<2 | 4, { label: string; effect: string }>> = {
   2: {
@@ -72,7 +98,11 @@ const RARITY_COPY: Readonly<Record<RunRarityRuleId, { label: string; effect: str
   },
 };
 
-export function RunRulesSelector({
+/**
+ * The rule options as CELLS of Run preparation's box — an array rather than a component, because
+ * only a direct child of the box is a row it lays a rail around (see ChromeDividedGrid).
+ */
+export function useRunRulesCells({
   value,
   onChange,
   fillSurface,
@@ -80,7 +110,7 @@ export function RunRulesSelector({
   value: RunRules;
   onChange: (rules: RunRules) => void;
   fillSurface?: string;
-}): ReactElement {
+}): ReactNode[] {
   const [open, setOpen] = useState(false);
   const spanOptions: readonly HouseSelectOption[] = RUN_CARD_SPANS.map((span) => ({
     value: String(span),
@@ -121,65 +151,100 @@ export function RunRulesSelector({
     ),
   }));
 
-  return (
-    <SectionBox
-      title="Options"
-      titleId="run-rules-title"
-      className="run-rules-selector"
-      contentId="run-rules-content"
-      disclosure={{
-        open,
-        onToggle: () => setOpen((wasOpen) => !wasOpen),
-        testId: 'run-rules-toggle',
-      }}
-    >
-      <h4>Formations</h4>
+  // Every cell below the name carries the closed state on itself rather than being wrapped in one
+  // element: a wrapper around them would be a single row of the box, and the rails between the
+  // choices would go with it.
+  const hidden = { 'data-open': open ? 'true' : 'false' } as const;
 
+  return [
+    <ChromeDividedGridRow key="rules-name" spans="all" className="run-prep-cell run-prep-name">
+      <span className="run-prep-cell-name" id="run-rules-title">Options</span>
+      {/* Named BY the cell's own name rather than carrying a second one, so pressing it never
+          relabels the control and the screen never says Options twice. What changed is stated by
+          aria-expanded and by which way the chevron points. */}
+      <ChromeButton
+        unit="inner-tool-square"
+        className={chromeUnitClassNames('inner-tool-square', 'run-rules-toggle')}
+        data-chrome-fill-surface={fillSurface}
+        data-testid="run-rules-toggle"
+        aria-labelledby="run-rules-title"
+        aria-expanded={open}
+        aria-controls="run-rules-content"
+        onClick={() => setOpen((wasOpen) => !wasOpen)}
+      >
+        <span
+          className={`stepper-glyph stepper-chevron stepper-chevron-${open ? 'up' : 'down'}`}
+          aria-hidden="true"
+        />
+      </ChromeButton>
+    </ChromeDividedGridRow>,
+
+    <ChromeDividedGridRow key="rules-span-copy" spans="all" className="run-prep-cell run-rules-cell" id="run-rules-content" {...hidden}>
+      <h4>{RULE_NAMES.span}</h4>
+      <p className="run-rules-effect">{SPAN_COPY[value.cardSpan].effect}</p>
+    </ChromeDividedGridRow>,
+    <ChromeDividedGridRow key="rules-span" spans="all" className="run-prep-plate run-rules-cell" {...hidden}>
       <HouseSelect
+        seated
         value={String(value.cardSpan)}
         options={spanOptions}
         onChange={(next) => onChange({ ...value, cardSpan: Number(next) as 2 | 4 })}
-        ariaLabel="Formation size"
+        ariaLabel={RULE_NAMES.span}
         className="run-rules-select"
         testId="run-rules-span"
         fillSurface={fillSurface}
       />
-      <p className="run-rules-effect">{SPAN_COPY[value.cardSpan].effect}</p>
+    </ChromeDividedGridRow>,
 
+    <ChromeDividedGridRow key="rules-rotation-copy" spans="all" className="run-prep-cell run-rules-cell" {...hidden}>
+      <h4>{RULE_NAMES.rotation}</h4>
+      <p className="run-rules-effect">{ROTATION_COPY[rotationKey].effect}</p>
+    </ChromeDividedGridRow>,
+    <ChromeDividedGridRow key="rules-rotation" spans="all" className="run-prep-plate run-rules-cell" {...hidden}>
       <HouseSelect
+        seated
         value={rotationKey}
         options={rotationOptions}
         onChange={(next) => onChange({ ...value, mayRotate: next === 'on' })}
-        ariaLabel="Placement facing"
+        ariaLabel={RULE_NAMES.rotation}
         className="run-rules-select"
         testId="run-rules-rotation"
         fillSurface={fillSurface}
       />
-      <p className="run-rules-effect">{ROTATION_COPY[rotationKey].effect}</p>
+    </ChromeDividedGridRow>,
 
-      <h4>Pricing</h4>
+    <ChromeDividedGridRow key="rules-pricing-copy" spans="all" className="run-prep-cell run-rules-cell" {...hidden}>
+      <h4>{RULE_NAMES.pricing}</h4>
+      <p className="run-rules-effect">{PRICING_COPY[value.pricing].effect}</p>
+    </ChromeDividedGridRow>,
+    <ChromeDividedGridRow key="rules-pricing" spans="all" className="run-prep-plate run-rules-cell" {...hidden}>
       <HouseSelect
+        seated
         value={value.pricing}
         options={pricingOptions}
         onChange={(next) => onChange({ ...value, pricing: next as 'material' | 'density' })}
-        ariaLabel="Card pricing"
+        ariaLabel={RULE_NAMES.pricing}
         className="run-rules-select"
         testId="run-rules-pricing"
         fillSurface={fillSurface}
       />
-      <p className="run-rules-effect">{PRICING_COPY[value.pricing].effect}</p>
+    </ChromeDividedGridRow>,
 
-      <h4>Rarity</h4>
+    <ChromeDividedGridRow key="rules-rarity-copy" spans="all" className="run-prep-cell run-rules-cell" {...hidden}>
+      <h4>{RULE_NAMES.rarity}</h4>
+      <p className="run-rules-effect">{RARITY_COPY[value.rarity].effect}</p>
+    </ChromeDividedGridRow>,
+    <ChromeDividedGridRow key="rules-rarity" spans="all" className="run-prep-plate run-rules-cell" {...hidden}>
       <HouseSelect
+        seated
         value={value.rarity}
         options={rarityOptions}
         onChange={(next) => onChange({ ...value, rarity: next as RunRarityRuleId })}
-        ariaLabel="Card rarity"
+        ariaLabel={RULE_NAMES.rarity}
         className="run-rules-select"
         testId="run-rules-rarity"
         fillSurface={fillSurface}
       />
-      <p className="run-rules-effect">{RARITY_COPY[value.rarity].effect}</p>
-    </SectionBox>
-  );
+    </ChromeDividedGridRow>,
+  ];
 }

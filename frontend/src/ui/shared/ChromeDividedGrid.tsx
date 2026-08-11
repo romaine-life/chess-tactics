@@ -11,6 +11,7 @@ import {
   type HTMLAttributes,
   type ReactElement,
   type ReactNode,
+  type Ref,
   type RefObject,
 } from 'react';
 import { KitScroll } from '../KitScroll';
@@ -192,6 +193,8 @@ export function ChromeDividedGridRow({
   | ButtonHTMLAttributes<HTMLButtonElement>
 ) & {
   as?: 'div' | 'button';
+  /** For a row that IS a control and has to be focused — the safe answer to a danger question. */
+  ref?: Ref<HTMLButtonElement>;
   /**
    * 'all' for a row that is ONE thing across every column — the box's name, a full-width verb.
    * Such a row has no internal column boundary, so no vertical rail may cross it.

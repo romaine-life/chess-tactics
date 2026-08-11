@@ -221,8 +221,11 @@ export interface LevelMeta {
   victory?: VictoryRules;
   // Authored non-victory events: setup spawns, pawn promotion triggers, and future event kinds.
   events?: LevelEvents;
-  // Run-specific authored battle metadata. Board edits must carry this through unchanged;
-  // the War editor owns the setting while the Level editor owns the board.
+  // Run-specific authored battle metadata. Split ownership: the War editor owns Loot, and the
+  // Level editor's Rules panel owns the Deployment deal. So a board edit carries the block through
+  // unchanged, but a save must fold the panel's deal back in — `editorCandidateLevel` is the one
+  // place that does, and passing a metadata source's block straight through here silently
+  // republishes the saved deal over the authored one.
   battle?: BattleSettings;
   difficulty?: string;
   economy?: LevelEconomy;

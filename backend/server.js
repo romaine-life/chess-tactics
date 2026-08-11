@@ -13293,8 +13293,14 @@ app.post('/api/editor-documents/:documentId/save', async (req, res) => {
       ? `official:${current.workspace_id}:${current.level_id}`
       : `user:${user.email}:${current.level_id}`;
     let thumbnailReady = true;
+    // The address of the derivative this Save just baked. Lists hold installed thumbnail URLs for
+    // the life of a page, so a Save that answers without one leaves every row rendering the
+    // pre-save picture until a full reload — which is exactly what the editor's own "the thumbnail
+    // now uses this position" acknowledgement promises did not happen.
+    let thumbnailUrl = null;
     try {
-      await ensureLevelThumbnailDerivative(thumbnailAuthority, saved.row.body);
+      const derivative = await ensureLevelThumbnailDerivative(thumbnailAuthority, saved.row.body);
+      thumbnailUrl = levelThumbnailDerivativeUrl(thumbnailAuthority, current.level_id, derivative.blob_sha256);
     } catch (thumbnailError) {
       // The canonical save has already committed. Never report that durable user
       // work failed merely because its disposable list derivative could not be
@@ -13306,6 +13312,7 @@ app.post('/api/editor-documents/:documentId/save', async (req, res) => {
       document: publicEditorDocument(saved.row),
       workspace_revision: saved.workspaceRevision,
       thumbnail_ready: thumbnailReady,
+      thumbnail_url: thumbnailUrl,
     });
   } catch (error) {
     respondEditorDocumentError(res, error, 'save');
@@ -17047,19 +17054,28 @@ app.put('/api/official-campaigns/:id', async (req, res) => {
       });
       return;
     }
+    const publishedLevels = Object.entries(raw.data.levels);
     const thumbnailResults = await ensureLevelThumbnailDerivativeBatch(
-      Object.entries(raw.data.levels).map(([levelId, level]) => [`official:${id}:${levelId}`, level]),
+      publishedLevels.map(([levelId, level]) => [`official:${id}:${levelId}`, level]),
     );
     const thumbnailReady = thumbnailResults.every((thumbnailResult) => thumbnailResult.status === 'fulfilled');
-    for (const thumbnailResult of thumbnailResults) {
+    // Answer with the addresses this publish just baked, in the same shape the read manifest uses.
+    // Without them the publisher's own lists keep the pre-publish pictures for the whole session.
+    const thumbnailUrls = {};
+    thumbnailResults.forEach((thumbnailResult, index) => {
       if (thumbnailResult.status === 'rejected') {
         console.error('saved official level thumbnail preparation failed:', thumbnailResult.reason && thumbnailResult.reason.message);
+        return;
       }
-    }
+      const levelId = publishedLevels[index][0];
+      const authorityKey = `official:${id}:${levelId}`;
+      thumbnailUrls[levelId] = levelThumbnailDerivativeUrl(authorityKey, levelId, thumbnailResult.value.blob_sha256);
+    });
     res.status(200).json({
       portfolio: publicOfficialCampaignsDocument(id, result.row),
       store_schema_version: OFFICIAL_CAMPAIGNS_STORE_SCHEMA_VERSION,
       thumbnail_ready: thumbnailReady,
+      thumbnail_urls: thumbnailUrls,
     });
   } catch (error) {
     if (error?.statusCode && error?.responseCode) {
@@ -24091,6 +24107,22 @@ async function storedLevelThumbnail(authorityKey) {
   return rows[0] || null;
 }
 
+/**
+ * The address a stored derivative is served from: an official one is a published blob, a private
+ * one is served through the owner-scoped workspace route.
+ *
+ * Every response that hands a derivative back — a manifest read OR the write that just baked it —
+ * addresses it here, so a write's answer can never disagree with the manifest the next read
+ * produces. That matters because the client holds installed URLs for the life of a page: a Save
+ * whose response omits the new address leaves the list rendering the pre-save picture until a
+ * full reload.
+ */
+function levelThumbnailDerivativeUrl(authorityKey, levelId, blobSha256) {
+  return authorityKey.startsWith('user:')
+    ? `/api/campaign-workspace/level-thumbnails/${encodeURIComponent(levelId)}/${blobSha256}.png`
+    : `/api/media/${blobSha256}`;
+}
+
 async function currentStoredLevelThumbnailUrls(preparedEntries) {
   if (!preparedEntries.length) return {};
   await ensureDbReady();
@@ -24106,10 +24138,7 @@ async function currentStoredLevelThumbnailUrls(preparedEntries) {
     const entry = entryByAuthority.get(row.authority_key);
     if (!entry) return [];
     if (row.content_version !== entry.contentVersion) return [];
-    const url = row.authority_key.startsWith('user:')
-      ? `/api/campaign-workspace/level-thumbnails/${encodeURIComponent(entry.levelId)}/${row.blob_sha256}.png`
-      : `/api/media/${row.blob_sha256}`;
-    return [[entry.levelId, url]];
+    return [[entry.levelId, levelThumbnailDerivativeUrl(row.authority_key, entry.levelId, row.blob_sha256)]];
   }));
 }
 

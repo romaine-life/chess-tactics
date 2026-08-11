@@ -360,7 +360,7 @@ import { SPEED_BONUS_SECONDS_PER_PAR_TURN, derivedParTurns } from '../core/speed
 import { validatePlayability, validateWarBattlePlayability } from '../core/playability';
 import { PLAYABLE_PIECE_TYPES, type PlayablePieceType } from '../core/pieces';
 import { effectiveLevelEvents, normalizeLevelEvents } from '../core/levelEvents';
-import { battleSettingsForSave, guardRulesSeed, levelRulesSeed, seededBaselineLevel, type AuthoredRulesField, type LevelRulesSeed } from './levelEditorRulesSeed';
+import { editorCandidateLevel, guardRulesSeed, levelRulesSeed, seededBaselineLevel, type AuthoredRulesField, type LevelRulesSeed } from './levelEditorRulesSeed';
 import { ChromeButton, ChromeNavButton } from './shared/ChromeButton';
 import { ChromeSeatGrid } from './shared/ChromeSeatGrid';
 
@@ -1990,22 +1990,21 @@ type OtherEventTemplateId = typeof OTHER_EVENT_TEMPLATES[number]['id'];
 // dropped on the way out is written away by the recovering page's first autosave. `parTurns` and the
 // Battle's `cardsDealt` were both stored and never read, which is how an authored par survived being
 // typed, survived autosave, and then vanished the moment the level was reopened (ADR-0539).
-const levelFromDraft = (draft: LevelEditorDraft, base: Level): Level => editorBoardToLevel(draft.board, {
-  id: base.id,
-  name: draft.levelName,
-  objective: draft.objective,
-  surviveTurns: draft.objective === 'survive' ? draft.surviveTurns : undefined,
-  timeControl: draft.timeControl,
-  parTurns: draft.parTurns,
-  victory: draft.victory,
-  events: draft.events,
-  battle: battleSettingsForSave(base.battle, draft.cardsDealt ?? null),
-  notes: base.notes,
-  difficulty: base.difficulty,
-  economy: base.economy,
-  theme: base.theme,
-  previousTerrain: base.layers.terrain,
-});
+const levelFromDraft = (draft: LevelEditorDraft, base: Level): Level => editorCandidateLevel(
+  draft.board,
+  {
+    id: base.id,
+    name: draft.levelName,
+    objective: draft.objective,
+    surviveTurns: draft.objective === 'survive' ? draft.surviveTurns : undefined,
+    timeControl: draft.timeControl,
+    parTurns: draft.parTurns,
+    victory: draft.victory,
+    events: draft.events,
+  },
+  base,
+  draft.cardsDealt ?? null,
+);
 
 const EDITOR_REVISION_REASON_LABELS: Record<EditorDocumentRevisionSummary['reason'], string> = {
   migration: 'History enabled',
@@ -6139,23 +6138,18 @@ export function LevelEditor(): ReactElement {
   // A War Battle always authors its Deployment deal; nothing else is ever dealt cards, so nothing
   // else may pick the field up merely by being opened here.
   const isWarBattle = Boolean(routeParams.warId);
-  const battleForSave = useMemo(
-    () => battleSettingsForSave(candidateMetadataSource?.battle, isWarBattle ? battleCardsDealt : null),
-    [candidateMetadataSource, isWarBattle, battleCardsDealt],
-  );
+  // The authored Deployment deal a serialization folds in — the count for a War Battle, and null
+  // for anything else, which is never dealt cards and so must not pick the field up by passing
+  // through this editor.
+  const dealForSave = isWarBattle ? battleCardsDealt : null;
   const candidateLevel = useMemo(
-    () => editorBoardToLevel(currentEditorBoard, {
-      id: editingId ?? 'draft',
-      name: levelNameForSave,
-      ...modeMeta,
-      notes: candidateMetadataSource?.notes,
-      difficulty: candidateMetadataSource?.difficulty,
-      economy: candidateMetadataSource?.economy,
-      theme: candidateMetadataSource?.theme,
-      battle: battleForSave,
-      previousTerrain: candidateMetadataSource?.layers.terrain,
-    }),
-    [candidateMetadataSource, battleForSave, currentEditorBoard, editingId, levelNameForSave, modeMeta],
+    () => editorCandidateLevel(
+      currentEditorBoard,
+      { id: editingId ?? 'draft', name: levelNameForSave, ...modeMeta },
+      candidateMetadataSource,
+      dealForSave,
+    ),
+    [candidateMetadataSource, dealForSave, currentEditorBoard, editingId, levelNameForSave, modeMeta],
   );
   // The board's own par estimate, recomputed from the live candidate so the Par panel tracks the
   // pieces as they are painted. `effectiveParTurns` is what the level actually plays to: the
@@ -6553,7 +6547,7 @@ export function LevelEditor(): ReactElement {
       objective,
       surviveTurns,
       timeControl: clockEnabled ? { initialSeconds: clockInitialSeconds, incrementSeconds: clockIncrementSeconds } : undefined,
-      cardsDealt: battleForSave?.cardsDealt,
+      cardsDealt: candidateLevel.battle?.cardsDealt,
       parTurns: parTurnsForSave,
       victory: victoryForSave,
       events: eventsForSave,
@@ -6580,13 +6574,13 @@ export function LevelEditor(): ReactElement {
       } catch { /* The browser copy still exists even if sessionStorage is unavailable. */ }
     }
     // EVERY field written into the draft above must appear below, or an edit that touches only
-    // that field never reaches the browser copy. `battleForSave` and `parTurnsForSave` were both
-    // added to the draft body without being added here, so a Deployment-deal-only or par-only edit
-    // wrote nothing — and because canonicalizing levelId -> document deliberately REMOUNTS this
+    // that field never reaches the browser copy. The Deployment deal and `parTurnsForSave` were
+    // both added to the draft body without being added here, so a Deployment-deal-only or par-only
+    // edit wrote nothing — and because canonicalizing levelId -> document deliberately REMOUNTS this
     // component (see sameDocumentRemountRef), the new instance re-seeded from a draft that had
     // never heard of the edit and silently discarded it. That is what made an authored par snap
     // back to the board estimate a second after it was typed (ADR-0539).
-  }, [battleForSave, campaignAssignmentId, clockEnabled, clockIncrementSeconds, clockInitialSeconds, currentEditorBoard, draftKey, editAuthorityState, editorClientIdentity, editorDocument, editorLoadError, editorReady, eventsForSave, levelNameForSave, me?.email, objective, parTurnsForSave, savedSig, surviveTurns, targetLevelId, victoryForSave]);
+  }, [candidateLevel, campaignAssignmentId, clockEnabled, clockIncrementSeconds, clockInitialSeconds, currentEditorBoard, draftKey, editAuthorityState, editorClientIdentity, editorDocument, editorLoadError, editorReady, eventsForSave, levelNameForSave, me?.email, objective, parTurnsForSave, savedSig, surviveTurns, targetLevelId, victoryForSave]);
 
   const eventsEditorHref = (open: boolean, tab: LevelEditorEventsTab = eventsTab): string => (
     levelEditorHrefWithRouteState(window.location.href, {
@@ -8495,21 +8489,18 @@ export function LevelEditor(): ReactElement {
     // so a board save doesn't reset them. The working document is the fallback for a brand-new
     // unassigned level that has not entered the canonical store yet.
     const existing = useCampaigns.getState().levels[targetLevelId] ?? editorDocument.level;
-    const level = editorBoardToLevel(currentEditorBoard, {
-      id: targetLevelId,
-      name: levelNameForSave,
-      notes: existing?.notes,
-      // The Rules panel is the source of truth for objective, battle settings, and authored events;
-      // setup spawning is explicit events, not the legacy placement/roster fields.
-      ...modeMeta,
-      difficulty: existing?.difficulty,
-      economy: existing?.economy,
-      theme: existing?.theme,
-      battle: existing?.battle,
-      // Preserve non-editor-expressible terrain (road/bridge/cliff/rock) from the saved level so
-      // republishing a legacy official (no boardCode) doesn't flatten those surfaces to grass.
-      previousTerrain: existing?.layers.terrain,
-    });
+    // The same serialization the playability gate judges, so what is persisted is exactly what was
+    // shown as savable. The Rules panel is the source of truth for objective, battle settings, and
+    // authored events; setup spawning is explicit events, not the legacy placement/roster fields.
+    // The canonical level is the metadata source, which is what preserves non-editor-expressible
+    // terrain (road/bridge/cliff/rock) so republishing a legacy official (no boardCode) doesn't
+    // flatten those surfaces to grass.
+    const level = editorCandidateLevel(
+      currentEditorBoard,
+      { id: targetLevelId, name: levelNameForSave, ...modeMeta },
+      existing,
+      dealForSave,
+    );
     const official = tierOf(level.id) === 'official';
     if (official && !(await ask({
       title: 'Publish to all players?',

@@ -366,7 +366,12 @@ describe('Level Editor chrome hierarchy', () => {
   it('registers dropdown triggers and frames each popup as one divided inner box', () => {
     expectRegisteredFamily(paletteSelect, 'palette-select-trigger', 'inner-dropdown');
     expect(houseSelect).toMatch(/chromeUnitClassNames\(\s*'inner-dropdown',\s*'house-select',\s*'le-select-wrap',\s*'house-select-trigger',\s*className,/);
-    expect(houseSelect).toMatch(/<ChromeButton unit="inner-dropdown"\s+ref=\{buttonRef\}\s+className=\{triggerClass\}/);
+    expect(houseSelect).toMatch(/<ChromeButton unit="inner-dropdown" \{\.\.\.triggerProps\} ref=\{buttonRef\}>/);
+    // A picker SEATED in a cell of a divided box names no unit, because `inner-dropdown` IS the
+    // 9-slice frame and the cell it fills has no room for one — the box's rails are its edges.
+    // Only that fork may go unregistered; every free-standing picker still wears the unit.
+    expect(houseSelect).toMatch(/seated\s*\?\s*\['house-select', 'house-select-trigger', 'house-select-seated', className\]/);
+    expect(houseSelect).toMatch(/\{seated \? \([\s\S]*?<button \{\.\.\.triggerProps\} type="button" ref=\{buttonRef\}>/);
     expect(houseSelect).not.toContain('<div ref={rootRef} data-chrome-unit="inner-dropdown"');
     expect(houseSelect).toContain('if (option.value !== value) onChange(option.value);');
     // The menu IS the divided box, so its scroll and its gutter are the grid's own rather than a

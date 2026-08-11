@@ -58,6 +58,7 @@ export function HouseSelect<TValue extends string>({
   title,
   testId,
   fillSurface,
+  seated = false,
 }: {
   value: TValue;
   options: readonly HouseSelectOption<TValue>[];
@@ -69,6 +70,20 @@ export function HouseSelect<TValue extends string>({
   testId?: string;
   /** Optional named fill for the closed leaf control; the menu remains a structural field. */
   fillSurface?: string;
+  /**
+   * SEATED IN A CELL of a divided box, rather than standing on a field inside one.
+   *
+   * The ordinary picker is a registered `inner-dropdown`: it brings its own 9-slice frame and
+   * paints its wood inside it. Dropped into a cell whose edges are already the box's rails, that
+   * draws a second frame a few pixels inside the first — a box in a box — and the wood ends up as
+   * a plaque floating on a strip of marble that belongs to nothing.
+   *
+   * Seated, the trigger IS the cell: no frame of its own, the wood filling the whole area between
+   * the rails, and the shared chevron mark rather than the frame's own. This is the same decision
+   * `section-box-member-verb` makes for a verb that closes a box — the frame is the box's, so the
+   * control does not draw one.
+   */
+  seated?: boolean;
 }): ReactElement {
   const id = useId();
   const buttonRef = useRef<HTMLButtonElement | null>(null);
@@ -219,13 +234,17 @@ export function HouseSelect<TValue extends string>({
         '--house-select-menu-max-height': `${menuBox.maxHeight}px`,
       }
     : undefined;
-  const triggerClass = chromeUnitClassNames(
-    'inner-dropdown',
-    'house-select',
-    'le-select-wrap',
-    'house-select-trigger',
-    className,
-  );
+  // Seated, the trigger names no registered unit: `inner-dropdown` IS the 9-slice frame, and the
+  // whole point of a seated picker is that the cell it fills has no room for one.
+  const triggerClass = seated
+    ? ['house-select', 'house-select-trigger', 'house-select-seated', className].filter(Boolean).join(' ')
+    : chromeUnitClassNames(
+      'inner-dropdown',
+      'house-select',
+      'le-select-wrap',
+      'house-select-trigger',
+      className,
+    );
 
   const menu = open && typeof document !== 'undefined'
     ? createPortal(
@@ -286,24 +305,38 @@ export function HouseSelect<TValue extends string>({
     )
     : null;
 
+  const triggerProps = {
+    className: triggerClass,
+    'data-chrome-fill-surface': fillSurface,
+    'data-testid': testId,
+    'aria-label': ariaLabel,
+    'aria-haspopup': 'listbox' as const,
+    'aria-expanded': open,
+    'aria-controls': `${id}-menu`,
+    disabled: disabled || options.length === 0,
+    title: title ?? selectedOption?.title,
+    onClick: () => { if (open) closeMenu(); else openMenu(); },
+    onKeyDown: handleKeyDown,
+  };
+
   return (
     <>
-      <ChromeButton unit="inner-dropdown"
-        ref={buttonRef}
-        className={triggerClass}
-        data-chrome-fill-surface={fillSurface}
-        data-testid={testId}
-        aria-label={ariaLabel}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-controls={`${id}-menu`}
-        disabled={disabled || options.length === 0}
-        title={title ?? selectedOption?.title}
-        onClick={() => { if (open) closeMenu(); else openMenu(); }}
-        onKeyDown={handleKeyDown}
-      >
-        {selectedOption?.label ?? ''}
-      </ChromeButton>
+      {seated ? (
+        // The framed picker's chevron is drawn by its frame (`.le-select-wrap::after`), which a
+        // seated one does not have. It takes the SHARED stepper chevron instead of a second
+        // implementation of the same mark, pointing the way the menu is about to move.
+        <button {...triggerProps} type="button" ref={buttonRef}>
+          <span className="house-select-seated-label">{selectedOption?.label ?? ''}</span>
+          <span
+            className={`stepper-glyph stepper-chevron stepper-chevron-${open ? 'up' : 'down'}`}
+            aria-hidden="true"
+          />
+        </button>
+      ) : (
+        <ChromeButton unit="inner-dropdown" {...triggerProps} ref={buttonRef}>
+          {selectedOption?.label ?? ''}
+        </ChromeButton>
+      )}
       {menu}
     </>
   );
