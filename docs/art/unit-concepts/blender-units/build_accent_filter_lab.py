@@ -35,7 +35,7 @@ PIECE_TUNING = {
     "pawn":   {"block": 7, "outline_sensitivity": 3.0},
     "king":   {"block": 6, "outline_sensitivity": 3.0},
     "rook":   {"block": 5, "outline_sensitivity": 4.0},
-    "queen":  {"block": 7, "outline_sensitivity": 3.0},
+    "queen":  {"block": 6, "outline_sensitivity": 3.0},
     "bishop": {"block": 7, "outline_sensitivity": 3.0},
     "knight": {"block": 7, "outline_sensitivity": 3.0},
 }
