@@ -167,11 +167,17 @@ interface RunSkirmishProps {
 
 export type SkirmishProps = StandaloneSkirmishProps | RunSkirmishProps;
 
-export function shouldLoadSkirmishWorldBackground(
-  boardSettled: boolean,
-  predrawnBackgroundActive: boolean,
-): boolean {
-  return boardSettled && !predrawnBackgroundActive;
+/**
+ * A pre-drawn plate does NOT own every environment pixel, so it does not excuse this layer.
+ *
+ * Measured: Hold the Bridge's raster is 1450x816 world px, and screens routinely want more
+ * than that — at 2560x900 the widest legal view needs 1426x501 and the plate cannot reach the
+ * flanks. With no backdrop behind it the only way to hide bare stage was to hold the camera
+ * inside the raster, which cost the whole zoom-out range and cropped the board outright on a
+ * wide-short window (ADR-0574). The wasted request this once avoided is not wasted.
+ */
+export function shouldLoadSkirmishWorldBackground(boardSettled: boolean): boolean {
+  return boardSettled;
 }
 
 /**
@@ -1285,13 +1291,10 @@ function SkirmishSession(props: SkirmishProps = {}) {
     };
   }, [routeLobby]);
 
-  // A complete pre-drawn plate is the sole source of environment pixels (ADR-0158).
-  // Do not even resolve the ordinary world image into CSS until the chosen board has
-  // settled and proved that it needs that layer; this prevents a hidden wasted request.
-  const screenStyle = shouldLoadSkirmishWorldBackground(
-    boardSettled,
-    screenPredrawnBackgroundActive,
-  )
+  // Do not resolve the ordinary world image into CSS until the chosen board has settled;
+  // that prevents a request for a layer the screen may never mount. A pre-drawn plate no
+  // longer waives it — the plate is finite and the screen is not (ADR-0574).
+  const screenStyle = shouldLoadSkirmishWorldBackground(boardSettled)
     ? {
         '--skirmish-world-bg': `url("${defaultBackgroundSet().world}")`,
       } as CSSProperties

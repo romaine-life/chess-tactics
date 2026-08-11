@@ -9,7 +9,7 @@ refines:
   - "[ADR-0302](0302-camera-authoring-is-a-dedicated-level-editor-page.md)"
 ---
 
-# ADR-0574: A stated camera boundary governs how far out the camera goes
+# ADR-0574: Zoom-out ends with the whole painting visible, on the region a player can see
 
 ## Context
 
@@ -104,3 +104,29 @@ resolves — landing on it by URL frames it seconds before the artwork arrives.
 - [ADR-0301](0301-levels-own-an-authored-camera-coverage-boundary.md) — the boundary this restores
 - [ADR-0491](0491-camera-boundary-can-adopt-the-current-editor-view.md) — authoring the boundary
 - `frontend/src/game/zoomTiers.ts`, `frontend/src/ui/shared/ViewPane.tsx`
+
+## Addendum — the camera must not buy coverage for pixels nobody sees
+
+Two further defects surfaced when the owner could still neither zoom out nor see the whole
+board, and both came from this ADR's own first implementation.
+
+**The visible region was the WINDOW.** `coverageViewportForStage` walked to the nearest
+clipping ancestor and landed on `.skirmish-screen`, which includes the strips under the opaque
+title bar and the Controls rail. The camera was therefore zooming in to keep art under chrome
+nobody can see through, and paying for it out of the pixels a player can see — the rail is on
+the right, which is exactly where the board was being cut. The region is now the board's own
+allocation, `[data-shell-viewport-primary]`, which the shell already marks. At 2560x900 that
+alone moves the floor from 1.80 to 1.55 and the board fits again.
+
+**And a pre-drawn plate does not own every environment pixel.** `.skirmish-screen.is-predrawn-board::before { content: none }` and `shouldLoadSkirmishWorldBackground` both deleted the
+battlefield backdrop on that premise. Hold the Bridge's raster is 1450x816 world px; the scene
+layer paints nothing beyond it (read from canvas alpha). With no backdrop, anything outside the
+raster was bare stage, so the camera had to be held inside it — and the raster clears the
+opening composition by about 3% vertically, less than one 5% ladder rung, so there was no zoom
+rung to take. Zero zoom-out range at almost every window size, measured on both pre-drawn
+levels. Restoring the backdrop makes the region beyond the painting the game's own world layer,
+and the floor becomes what it always should have been: **zooming out ends with the whole
+painting visible**. At 1920x1080 that is four rungs of range where there were none.
+
+Coverage still governs PAN: the viewport is held inside the boundary wherever that is feasible,
+so a player cannot drag the board off the side of the screen.

@@ -4378,11 +4378,12 @@ h1 {
   z-index: -1;
 }
 
-/* A complete pre-drawn raster owns every environment pixel. Remove the ordinary
-   battlefield backdrop layer altogether instead of retaining an invisible decoded image. */
-.skirmish-screen.is-predrawn-board::before {
-  content: none;
-}
+/* A pre-drawn raster does NOT own every environment pixel — measured, Hold the Bridge's is
+   1450x816 world px against screens that routinely want more, and the scene layer paints
+   nothing beyond it. Deleting the backdrop left bare stage behind the painting, so the only
+   way to hide it was to hold the camera inside the raster: zero zoom-out range at almost every
+   window size, and a board cropped outright on a wide-short one. The backdrop costs one
+   already-decoded gradient and buys the camera its range back (ADR-0574). */
 
 /* Same call for a Run phase whose workspace paints an opaque installed raster across the
    whole environment column (RunScreen sets the class). The battlefield backdrop reaches no

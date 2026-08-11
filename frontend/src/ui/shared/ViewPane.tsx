@@ -114,27 +114,28 @@ function viewportCorners(viewport: ViewPaneCoverViewport): ViewPanePoint[] {
  *
  * The stage is the MEASURED drawable viewport, and for a framed viewer it is also the clip,
  * so the two agree. The Play board deliberately does not clip at its stage — it floats past
- * it, behind the title bar and HUD, and is cut only at the screen edge (see `style.css`,
- * "Full-bleed board"). Enforcing coverage on the stage there leaves that bleed answerable to
- * nothing, which is precisely how a player reaches world no camera boundary had to cover and
- * sees exposed black at the screen edge.
+ * it and is cut only further up (see `style.css`, "Full-bleed board") — so there the two
+ * differ and the wider one is what a player sees.
  *
- * So the question is asked of the nearest ancestor that actually clips. Reading it from the
- * live DOM rather than a prop keeps it honest: a CSS change to where the board is cut moves
- * the coverage rectangle with it instead of silently desynchronising the two.
+ * But "wider" stops at the board's own ALLOCATION, not at the window. The screen rectangle
+ * includes the strips under the opaque title bar and the Controls rail, and a camera made to
+ * keep those inside the painting is buying coverage for pixels nobody can see, at the price
+ * of the pixels they can — the rail is on the right, which is exactly where the board was
+ * being cut. `[data-shell-viewport-primary]` is that allocation, and the shell already marks
+ * it, so this asks the DOM rather than hard-coding a chrome inset that could drift.
  */
 export function coverageViewportForStage(stage: HTMLElement): ViewPaneCoverViewport {
   const local = { width: stage.clientWidth, height: stage.clientHeight };
   const stageRect = stage.getBoundingClientRect();
   // The whole composition may be uniformly scaled; pan and zoom are in local units, so the
-  // clip has to come back through that same scale before it can be compared with them.
+  // region has to come back through that same scale before it can be compared with them.
   const scale = stageRect.width > 0 && local.width > 0 ? stageRect.width / local.width : 1;
-  let clip: DOMRect | null = null;
-  for (let node: HTMLElement | null = stage; node; node = node.parentElement) {
+  let clip = stage.closest<HTMLElement>('[data-shell-viewport-primary]')?.getBoundingClientRect()
+    ?? null;
+  for (let node: HTMLElement | null = stage; node && !clip; node = node.parentElement) {
     const style = getComputedStyle(node);
     if (style.overflowX !== 'visible' || style.overflowY !== 'visible') {
       clip = node.getBoundingClientRect();
-      break;
     }
   }
   if (!clip || scale <= 0) return local;
@@ -414,22 +415,22 @@ export function minimumZoomToCoverViewport({
 }
 
 /**
- * How far out this pane may go.
+ * How far out this pane may go: zooming out ends with the WHOLE of the level's box visible,
+ * and never further.
  *
- * **A stated boundary governs alone.** `coverPolygon` is the camera boundary, and the
- * furthest-out rung it permits is already the answer to "how far out may I go" — the whole
- * point of stating one is that the camera fills it and stops. Nothing else may hold the
- * camera in tighter, and a usefulness limit taken from a DIFFERENT box will: the snap
- * default is sized around the playable surface and is smaller than what a level paints, so
- * asking it as well stopped a boundary-governed camera short of the boundary the Level
- * Editor draws — 81% of it where coverage alone reaches 89%. Two limits measured against
- * two different boxes is not a safety margin, it is the editor and the game disagreeing
- * again, which is the whole defect (ADR-0574).
+ * The box is the boundary when a level states one and its own extent otherwise. Which of the
+ * two it is changes nothing about the question, because both name the same thing — how much
+ * world this level has to show.
  *
- * `containBox` is the level's own extent, and it answers only the case where there IS no
- * boundary: a viewport-locked backdrop paints wherever the camera goes, so nothing is
- * uncovered and a camera that could retreat forever would be useless. Then, and only then,
- * zooming out ends with the whole level visible.
+ * The camera does NOT have to keep the viewport inside that box, and forcing it to was the
+ * mistake. Anything beyond the painting is the screen's own backdrop, so a view wider than
+ * the painting shows backdrop, not bare stage. Demanding containment instead cost the entire
+ * zoom-out range — measured, zero rungs at almost every window size on both pre-drawn levels
+ * — and on a wide-short window it cropped the board outright, because a screen of one aspect
+ * cannot fit inside a painting of another without being driven in until it does (ADR-0574).
+ *
+ * Pan is still held inside the boundary wherever that is feasible; see the pane body. Losing
+ * the board off the side of the screen is a different failure from seeing past the painting.
  */
 export function boardZoomFloor({
   viewport,
@@ -444,13 +445,9 @@ export function boardZoomFloor({
   minZoom: number;
   maxZoom: number;
 }): number {
-  if (coverPolygon) {
-    return minimumZoomToCoverViewport({ viewport, polygon: coverPolygon, minZoom, maxZoom });
-  }
-  if (containBox) {
-    return zoomTierRange({ viewport, levelBox: containBox, cell: BOARD_CELL_SIZE }).outer;
-  }
-  return minZoom;
+  const box = coverPolygon ? polygonBoundingBox(coverPolygon) : containBox;
+  if (!box) return minZoom;
+  return zoomTierRange({ viewport, levelBox: box, cell: BOARD_CELL_SIZE }).outer;
 }
 
 export function ViewPane({
