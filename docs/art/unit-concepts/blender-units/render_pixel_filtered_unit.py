@@ -41,12 +41,12 @@ os.makedirs(OUT, exist_ok=True)
 # both are near grey, so hue tells you nothing about them and only value separates
 # them. Their mid tones are v=0.353 and v=0.078 against navy's 0.188.
 PALETTES = {
-    "navy-blue": [(0.00000, "#0d1926"), (0.05139, "#17314a"), (0.09918, "#224466"), (0.15729, "#2f5983"), (0.28899, "#416e9c")],
-    "white":     [(0.00000, "#3b3f47"), (0.05139, "#717b8b"), (0.09918, "#9daabf"), (0.15729, "#ccdbf6"), (0.28899, "#d7e6ff")],
-    "golden":    [(0.00000, "#28200a"), (0.05139, "#4f3d10"), (0.09918, "#6c5519"), (0.15729, "#8b6e25"), (0.28899, "#a68637")],
-    "emerald":   [(0.00000, "#0c2116"), (0.05139, "#16412a"), (0.09918, "#20593b"), (0.15729, "#2c734e"), (0.28899, "#3c8961")],
-    "crimson":   [(0.00000, "#260c10"), (0.05139, "#4a151d"), (0.09918, "#66202a"), (0.15729, "#832c39"), (0.28899, "#9c3e4c")],
-    "black":     [(0.00000, "#0d0e10"), (0.05139, "#181c1f"), (0.09918, "#22262b"), (0.15729, "#2c3137"), (0.28899, "#363b41")],
+    "navy-blue": [(0.00000, "#0d1926"), (0.05139, "#17314a"), (0.10824, "#224466"), (0.13614, "#2f5983"), (0.25274, "#416e9c")],
+    "white":     [(0.00000, "#3b3f47"), (0.05139, "#717b8b"), (0.10824, "#9daabf"), (0.13614, "#ccdbf6"), (0.25274, "#d7e6ff")],
+    "golden":    [(0.00000, "#28200a"), (0.05139, "#4f3d10"), (0.10824, "#6c5519"), (0.13614, "#8b6e25"), (0.25274, "#a68637")],
+    "emerald":   [(0.00000, "#0c2116"), (0.05139, "#16412a"), (0.10824, "#20593b"), (0.13614, "#2c734e"), (0.25274, "#3c8961")],
+    "crimson":   [(0.00000, "#260c10"), (0.05139, "#4a151d"), (0.10824, "#66202a"), (0.13614, "#832c39"), (0.25274, "#9c3e4c")],
+    "black":     [(0.00000, "#0d0e10"), (0.05139, "#181c1f"), (0.10824, "#22262b"), (0.13614, "#2c3137"), (0.25274, "#363b41")],
 }
 _PALETTE = os.environ.get("UNIT_ART_TOON_PALETTE", "navy-blue")
 if _PALETTE not in PALETTES:
@@ -218,12 +218,19 @@ outline = next((n for n in tree.nodes if n.bl_idname == "CompositorNodeGroup"
                 and n.node_tree and n.node_tree.name.startswith("Outline")), None)
 if outline:
     outline.inputs["Fine Adjust"].default_value = 1.0
-    outline.inputs["Sensitivity"].default_value = 5.0
+    outline.inputs["Sensitivity"].default_value = 3.0
     # This colour never reaches the output -- the ramp downstream remaps it -- but it
     # sets the LUMINANCE the outline hands the ramp, and so which stop the stroke
     # lands on. Leaving it at the addon default put the outline on a mid tone and cut
     # the dark coverage from 33% of the piece to 11%.
     outline.inputs["Color"].default_value = (*srgb("#181818"), 1)
+    # Thickness is NOT an exposed socket. It lives inside the group on a Dilate/Erode
+    # node labelled "Border Thickness", as its Size input -- so reading the group's
+    # sockets misses it and a freshly built scene silently inherits the addon's -1.
+    _bt = next((x for x in outline.node_tree.nodes
+                if (x.label or x.name).lower().startswith("border")), None)
+    if _bt is not None and "Size" in _bt.inputs:
+        _bt.inputs["Size"].default_value = 7
 
 # Palette: a CONSTANT ramp after Pixelate, with alpha split off and restored -- a
 # ramp reads one value and would otherwise return the piece as an opaque square.

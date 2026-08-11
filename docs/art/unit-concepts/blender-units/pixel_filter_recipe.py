@@ -36,12 +36,12 @@ PIXELATE = {"Size": 7}
 OUTLINE = {
     "Color": "#181818",
     "Fine Adjust": 1.0,
-    "Sensitivity": 5.0,
+    "Sensitivity": 3.0,
     # Thickness is NOT on the group's inputs. It lives inside, on a Dilate/Erode node
     # labelled "Border Thickness", as its Size socket -- so reading the exposed
     # sockets misses it entirely and a freshly built scene silently inherits the
     # addon's -1 instead of this. That cost a round of "why is there no outline".
-    "Border Thickness.Size": 8,
+    "Border Thickness.Size": 7,
 }
 
 # CONSTANT interpolation is what makes this a palette rather than a gradient: every
@@ -51,9 +51,9 @@ COLOR_RAMP = {
     "stops": [
         (0.00000, "#0d1526"),
         (0.05139, "#172a4a"),
-        (0.09918, "#223866"),
-        (0.15729, "#2f4a83"),
-        (0.28899, "#415f9c"),
+        (0.10824, "#223866"),
+        (0.13614, "#2f4a83"),
+        (0.25274, "#415f9c"),
     ],
 }
 
@@ -64,4 +64,6 @@ DITHERER = {"Posterize Levels": 8.0, "Dither Amount": 0.25}
 # Tuned on the pawn only. The other five pieces have their own silhouettes -- the
 # rook is ten separate meshes and takes far more outline than a smooth pawn does --
 # so treat these as the starting point per piece, not as settled for the roster.
+# Retuned on the pawn AFTER the addon's Fog and Flares were found sitting ahead of the
+# filter and switched off. The earlier numbers were partly compensating for them.
 TUNED_ON = "pawn"

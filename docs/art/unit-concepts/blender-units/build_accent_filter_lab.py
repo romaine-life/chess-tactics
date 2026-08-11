@@ -188,7 +188,7 @@ next(s for s in pix.inputs if s.name=="Size").default_value = BLOCK
 ol = next((n for n in tree.nodes if n.bl_idname=="CompositorNodeGroup" and n.node_tree and n.node_tree.name.startswith("Outline")), None)
 if ol:
     ol.inputs["Fine Adjust"].default_value=1.0
-    ol.inputs["Sensitivity"].default_value=5.0
+    ol.inputs["Sensitivity"].default_value=3.0
     ol.inputs["Color"].default_value=(*srgb("#181818"),1)
     # Thickness lives INSIDE the group, on a Dilate/Erode node's Size socket -- not on
     # the group's own inputs, which is why reading the exposed sockets missed it and a
@@ -196,7 +196,7 @@ if ol:
     bt = next((x for x in ol.node_tree.nodes
                if (x.label or x.name).lower().startswith("border")), None)
     if bt is not None and "Size" in bt.inputs:
-        bt.inputs["Size"].default_value = int(os.environ.get("OL_SIZE", "8"))
+        bt.inputs["Size"].default_value = int(os.environ.get("OL_SIZE", "7"))
     if os.environ.get("NO_OUTLINE"):
         ol.mute = True
 
@@ -249,7 +249,7 @@ def make_ramp(stops):
 # rather than a possibility, so the positions are stated ONCE here and every ramp is
 # built from them. Tune them on one palette in the lab, then have them read back and
 # set here -- do not hand-edit five ramps to match a sixth.
-BODY_POSITIONS = [0.00000, 0.05139, 0.09918, 0.15729, 0.28899]
+BODY_POSITIONS = [0.00000, 0.05139, 0.10824, 0.13614, 0.25274]
 
 BODY_COLOURS = [
     ("navy-blue", ["#0d1926", "#17314a", "#224466", "#2f5983", "#416e9c"]),
