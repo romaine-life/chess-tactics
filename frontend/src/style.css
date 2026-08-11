@@ -19711,6 +19711,10 @@ button.tileset-relationship-cell {
    NO padding: the map is a compartment that reaches the frame, and every rail has to reach it
    too. The rows that carry text take the inset instead. */
 .ce-preview-box {
+  /* The height a verb takes in this column — the same 40px `.ce-link-button` gave the button
+     boxes these cells replaced, stated here because `--le-inner-control-h` is scoped to the
+     Level Editor screen and does not reach the menu shell's columns. */
+  --ce-preview-verb-h: 40px;
   flex: 0 0 auto;
   min-inline-size: 0;
   padding: 0;
@@ -19778,12 +19782,18 @@ button.tileset-relationship-cell {
 
 /* Each verb IS its compartment — pressable edge to edge, so the box's frame and its column line
    are this control's edges and there is no second frame a few pixels inside them. The row takes
-   no inset; the verb's own padding is the whole cell's. */
-.ce-preview-verb {
+   no inset; the verb's own padding is the whole cell's.
+
+   It is still a VERB in the editor's chrome family, so it keeps the height and the label size
+   `.ce-link-button` gave it. The section verb's symmetric `--ds-inset` sizes a row by its text,
+   which here made the plate taller than every other verb on the screen while shrinking the word
+   on it — so this out-specifies that padding rather than inheriting it. */
+.ce-preview-verbs .ce-preview-verb {
   display: grid;
   font-family: var(--ds-font-display);
-  font-size: var(--ds-text-2xs);
-  letter-spacing: .08em;
+  font-size: var(--ds-text-xs);
+  min-block-size: var(--ce-preview-verb-h);
+  padding: 0 var(--ds-inset);
   text-transform: uppercase;
 }
 
