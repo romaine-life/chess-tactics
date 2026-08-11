@@ -1723,6 +1723,15 @@ const EMPTY_PREMOVES: readonly PremoveStep[] = [];
 const EMPTY_PREVIEW_PIECES: readonly Piece[] = [];
 const EMPTY_PLANNED_PIECE_IDS: ReadonlySet<string> = new Set();
 export interface SkirmishBoardSurfaceState {
+  /**
+   * What this passive position IS. A `plan` is a position still being built and never played
+   * (Deployment). A `review` is an earlier position of the SAME live match, held up for
+   * reading: board facts that no move can change — the grid, the authored promotion cells —
+   * still describe it truthfully and stay on, while anything derived from where the pieces
+   * stand (legal moves, threat squares) belongs to the live board and does not.
+   * Defaults to `plan`, which is what every existing caller means.
+   */
+  kind?: 'plan' | 'review';
   /** A passive position projected through the live Battle compositor without starting a match. */
   game: GameState;
   seed: number;
@@ -1828,7 +1837,7 @@ export function SkirmishBoard({
   const showEnemyMoves = surfaceState ? false : storedShowEnemyMoves;
   const showPlayerAttacks = surfaceState ? false : storedShowPlayerAttacks;
   const showPlayerMoves = surfaceState ? false : storedShowPlayerMoves;
-  const showPromotionZones = surfaceState ? false : storedShowPromotionZones;
+  const showPromotionZones = surfaceState && surfaceState.kind !== 'review' ? false : storedShowPromotionZones;
   const showGrid = useSkirmishView((s) => s.showGrid);
   // The sprite resolvers above read the chosen player color from module state, which React cannot
   // see. Subscribing here is what repaints the board when the setting changes under a live battle.

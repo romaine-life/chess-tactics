@@ -135,7 +135,9 @@ describe('Run chrome hierarchy', () => {
     expect(runScreen).not.toMatch(/if \([^)]*phase === 'deployment'[\s\S]{0,200}return \(/);
     expect(skirmish).toContain('presentedDeploymentSurface');
     expect(skirmish).toContain('preserveBoardPresentation: true');
-    expect(skirmish).toContain("unitArrivals={runBattleReviewTerminal ? 'settled' : sceneActivated ? 'active' : 'pending'}");
+    // A terminal review — and an earlier half-move held up for reading — both keep their
+    // already-arrived position settled rather than replaying an entrance.
+    expect(skirmish).toContain("unitArrivals={runBattleReviewTerminal || reviewSurface ? 'settled' : sceneActivated ? 'active' : 'pending'}");
     expect(skirmish).toContain('revealTransition="scene"');
     expect(skirmishBoard).toContain("data-reveal-transition={revealTransition}");
     expect(skirmishBoard).toContain('data-unit-arrivals={unitArrivals}');
@@ -438,7 +440,9 @@ describe('Run chrome hierarchy', () => {
     expect(skirmish).toContain("primaryClassName: 'skirmish-field'");
     expect(runScreen).toContain('className="run-meta-controls run-deployment-controls run-arrangement-controls"');
     expect(skirmish).toContain('<SkirmishBoard');
-    expect(skirmish).toContain('surfaceState={presentedDeploymentSurface}');
+    // One passive-position seam for the battlefield, with Deployment first in line: a move
+    // review of the live match may offer a board there, and never displaces this one.
+    expect(skirmish).toContain('surfaceState={presentedDeploymentSurface ?? reviewSurface}');
     expect(skirmish).not.toContain('cameraActive=');
     expect(runScreen).toContain('viewKey: runBattleActivityId(prepared.id, prepared.battleIndex)');
     expect(runScreen).toContain('gameForRunDeployment(prepared, level, layout, true)');

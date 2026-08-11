@@ -27,8 +27,10 @@ export type PersistedMatch = Pick<
   'game' | 'seed' | 'tick' | 'log' | 'objective' | 'objectiveCtx' | 'victoryOverride' | 'turnsElapsed' | 'levelId' | 'clock' | 'battleElapsed'
 > &
   // Optional for snapshots written before these fields existed. resumeMatch defaults
-  // a missing AI mode to search and a missing activity id to standalone play.
-  Partial<Pick<SkirmishState, 'aiMode' | 'activityId' | 'undoStack'>> & {
+  // a missing AI mode to search and a missing activity id to standalone play, and a
+  // missing position history to the one board the snapshot holds (review has nothing
+  // earlier to offer, rather than claiming the game began there).
+  Partial<Pick<SkirmishState, 'aiMode' | 'activityId' | 'undoStack' | 'positions'>> & {
     /** Wall-clock recency used only to order Play's resumable activities. */
     savedAt?: string;
   };
@@ -84,6 +86,11 @@ function sliceOf(state: SkirmishState): PersistedMatch {
     },
     aiMode: state.aiMode,
     undoStack: state.undoStack ?? [],
+    // The score sheet's boards, so a reloaded match can still be read back move by move.
+    // Each entry is the mutable half of a position only (see game/moveReview), which is what
+    // keeps a whole game's worth of them off the same order of size as the board itself.
+    // The review CURSOR is not stored: a resumed match opens live.
+    positions: state.positions ?? [],
     savedAt: new Date().toISOString(),
   };
 }

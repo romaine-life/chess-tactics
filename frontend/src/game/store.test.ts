@@ -557,6 +557,111 @@ describe('skirmish store', () => {
     expect(useSkirmish.getState().game).toBe(moved);
   });
 
+  // Move review — reading the game back without taking anything back. The whole point is the
+  // distinction from the paid Undo directly above: that one REWINDS the match, this one does
+  // not touch it at all.
+  it('records the opening plus one board for every half-move played', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null });
+
+    expect(useSkirmish.getState().positions.map((entry) => entry.ply)).toEqual([0]);
+
+    playOneMove();
+
+    // The player's half-move and the enemy's answer are both on the score sheet, each with
+    // its own board, so the reply can be stepped back through separately from the move.
+    const plies = useSkirmish.getState().positions.map((entry) => entry.ply);
+    expect(plies[0]).toBe(0);
+    expect(plies).toEqual(plies.map((_, i) => i));
+    expect(plies.length).toBeGreaterThanOrEqual(3);
+    // Every recorded board matches a notated row in the log — the two never disagree.
+    const notated = useSkirmish.getState().log.filter((row) => row.ply !== undefined).length;
+    expect(plies.length).toBe(notated + 1);
+  });
+
+  it('leaves the live game untouched while an earlier position is under review', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null });
+    playOneMove();
+    const live = useSkirmish.getState();
+    const openingPieces = live.positions[0].snapshot.pieces;
+
+    useSkirmish.getState().reviewPosition(0);
+
+    expect(useSkirmish.getState().reviewIndex).toBe(0);
+    // Not a rewind: the board the RULES play on, the turn, the env and the clock are the
+    // live ones, and only the review cursor moved.
+    expect(useSkirmish.getState().game).toBe(live.game);
+    expect(useSkirmish.getState().game.turn).toBe(live.game.turn);
+    expect(useSkirmish.getState().env).toBe(live.env);
+    expect(useSkirmish.getState().positions[0].snapshot.pieces).toBe(openingPieces);
+  });
+
+  it('keeps the reviewed position while the game plays on underneath it', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null });
+    playOneMove();
+    useSkirmish.getState().reviewPosition(0);
+    const recordedBefore = useSkirmish.getState().positions.length;
+
+    playOneMove();
+
+    // The score sheet grew; the player is still reading exactly where they were.
+    expect(useSkirmish.getState().positions.length).toBeGreaterThan(recordedBefore);
+    expect(useSkirmish.getState().reviewIndex).toBe(0);
+  });
+
+  it('returns to the live board the moment the game is decided', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null });
+    playOneMove();
+    useSkirmish.getState().reviewPosition(0);
+
+    // A result has to land on the real board rather than under an older one.
+    useSkirmish.getState().resignLocal();
+
+    expect(useSkirmish.getState().game.winner).toBe('enemy');
+    expect(useSkirmish.getState().reviewIndex).toBeNull();
+    // ...and the finished game is still there to be read back, which is when a player most
+    // wants it. A decided game keeps its score sheet; only a rewind takes plies off it.
+    expect(useSkirmish.getState().positions.length).toBeGreaterThan(1);
+  });
+
+  it('reads the newest recorded position as live rather than freezing on a copy of it', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null });
+    playOneMove();
+    const last = useSkirmish.getState().positions.length - 1;
+
+    useSkirmish.getState().reviewPosition(last);
+
+    expect(useSkirmish.getState().reviewIndex).toBeNull();
+  });
+
+  it('drops the plies a paid Undo took back, and the review with them', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null });
+    installFakeRunEconomy(200);
+    playOneMove();
+    const afterMove = useSkirmish.getState().positions.length;
+    useSkirmish.getState().reviewPosition(0);
+
+    expect(useSkirmish.getState().undoLastPlayerMove()).toBe(true);
+
+    // Those half-moves did not happen after all, so the score sheet stops offering them.
+    expect(useSkirmish.getState().positions.length).toBeLessThan(afterMove);
+    expect(useSkirmish.getState().positions.at(-1)?.ply).toBe(0);
+    expect(useSkirmish.getState().reviewIndex).toBeNull();
+  });
+
+  it('holds a queued premove across a review', () => {
+    useSkirmish.getState().newSkirmish({ seed: 5, timeControl: null });
+    playOneMove();
+    const mover = holdFirstMovablePiece();
+    const target = useSkirmish.getState().movesForSelected()[0];
+    useSkirmish.setState({ premoves: [{ pieceId: mover, x: target.x, y: target.y }] });
+
+    useSkirmish.getState().reviewPosition(0);
+    useSkirmish.getState().reviewPosition(null);
+
+    // Reading the game back is not an input, so it cannot cost the player their queued plan.
+    expect(useSkirmish.getState().premoves).toEqual([{ pieceId: mover, x: target.x, y: target.y }]);
+  });
+
   it('newSkirmish marks the game as started and records its level', () => {
     useSkirmish.getState().newSkirmish({ seed: 5 });
     expect(useSkirmish.getState().started).toBe(true);

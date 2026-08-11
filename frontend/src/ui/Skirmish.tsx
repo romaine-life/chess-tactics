@@ -26,6 +26,8 @@ import { RestartGlyph } from './shared/actionGlyphs';
 import { TitleBarSlot } from './shell/TitleBarSlot';
 import { TitleBarControlContribution, TitleBarStatusTip } from './shell/TitleBarControls';
 import { shouldStartFreshSkirmish, type RunBattleTransformSink, type RunBattleUndoAdapter } from '../game/store';
+import { reviewGameOf } from '../game/moveReview';
+import { MoveReviewControls } from './shared/MoveReviewControls';
 import { SkirmishStoreProvider, useSkirmish, useSkirmishStoreApi } from '../game/SkirmishStoreContext';
 import {
   loadMatch,
@@ -389,6 +391,28 @@ function SkirmishSession(props: SkirmishProps = {}) {
   // nowhere else, so it has to be read while the board is still mounted.
   const turnsElapsed = useSkirmish((s) => s.turnsElapsed);
   const activityId = useSkirmish((s) => s.activityId);
+  // Move review: while the player is reading an earlier half-move, the battlefield shows THAT
+  // board instead of the live one. The match underneath is untouched — its turn, its clock and
+  // its queued premoves all keep running — so this is a projection, exactly like Deployment's,
+  // and it goes through the same passive-position seam rather than reaching into the game.
+  const positions = useSkirmish((s) => s.positions);
+  const reviewIndex = useSkirmish((s) => s.reviewIndex);
+  const seed = useSkirmish((s) => s.seed);
+  const storeLevelId = useSkirmish((s) => s.levelId);
+  const boardViewEpoch = useSkirmish((s) => s.boardViewEpoch);
+  const reviewGame = useMemo(
+    () => reviewGameOf(game, positions, reviewIndex),
+    [game, positions, reviewIndex],
+  );
+  const reviewSurface = useMemo(() => (reviewGame ? {
+    kind: 'review' as const,
+    game: reviewGame,
+    seed,
+    // Deliberately the SAME camera identity the live board computes for itself: stepping
+    // through the score sheet must not reframe, refit or re-fly the camera. The player keeps
+    // the zoom and pan they were reading the position at.
+    viewKey: activityId ?? `${storeLevelId ?? 'free'}:${boardViewEpoch}`,
+  } : undefined), [activityId, boardViewEpoch, reviewGame, seed, storeLevelId]);
   const adminMode = useSkirmish((s) => s.adminMode);
   const armAdminMode = useSkirmish((s) => s.armAdminMode);
   const adminWinBattle = useSkirmish((s) => s.adminWinBattle);
@@ -1531,7 +1555,7 @@ function SkirmishSession(props: SkirmishProps = {}) {
             hiding, reacquiring, or replaying the board's first-frame lifecycle. */}
           <SkirmishBoard
             interactive={!runDeployment && !unitDeparture && sceneActivated && (!net || (netSeatInteractive && !netRelayFrozen))}
-            surfaceState={presentedDeploymentSurface}
+            surfaceState={presentedDeploymentSurface ?? reviewSurface}
             renderCellOverlay={runDeployment?.renderCellOverlay}
             boardOverlay={runDeployment?.boardOverlay}
             onSecondaryClick={runDeployment?.onBoardSecondaryClick}
@@ -1545,7 +1569,9 @@ function SkirmishSession(props: SkirmishProps = {}) {
             reveal={playableSurfaceReady && sceneRevealed}
             revealTransition="scene"
             activate={!runDeployment && sceneActivated}
-            unitArrivals={runBattleReviewTerminal ? 'settled' : sceneActivated ? 'active' : 'pending'}
+            // A reviewed board is one the units reached long ago. It admits them at their seats
+            // rather than replaying an entrance for every piece a step back brings back to life.
+            unitArrivals={runBattleReviewTerminal || reviewSurface ? 'settled' : sceneActivated ? 'active' : 'pending'}
             unitArrivalTrack={runDeployment?.unitArrivalTrack}
             unitArrivalStartDelta={runDeployment?.unitArrivalStartDelta}
             predrawnReview={predrawnPreview ? {
@@ -1558,6 +1584,28 @@ function SkirmishSession(props: SkirmishProps = {}) {
               <strong>Preparing battlefield…</strong>
               <small>Composing terrain, units, and controls</small>
             </InnerChromeBox>
+          ) : null}
+          {/* A board showing an earlier half-move says so, unmissably, and carries its own way
+              out. The battlefield is read-only while this is up but the MATCH is not paused —
+              the clock, the opponent's think and any queued premove all keep running — so this
+              is what stops a review from being mistaken for a live board that stopped taking
+              input. It is seated inside the battlefield region, never over the position it is
+              describing. */}
+          {reviewSurface ? (
+            // The SEAT owns the placement, not the plate. The plate wears the registered inner
+            // chrome frame, and that frame's own rule sets `position: relative` later in the
+            // stylesheet at equal specificity — the trap ADR-0570 was written about. A plain
+            // box the chrome cannot reach holds the plate out of the battlefield's flow, so it
+            // cannot take a grid row and squash the board it is describing.
+            <div className="skirmish-review-seat">
+              <InnerChromeBox className="skirmish-status-chip skirmish-review-plate" role="status" data-testid="move-review-plate">
+                <span className="skirmish-review-plate-heading">
+                  <strong>Reviewing</strong>
+                  <small>The game underneath is still running</small>
+                </span>
+                <MoveReviewControls variant="board" />
+              </InnerChromeBox>
+            </div>
           ) : null}
         </>
       ) : routeLobby ? (

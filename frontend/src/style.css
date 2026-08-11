@@ -9444,6 +9444,160 @@ body.loading-bootstrap .app-startup-status {
   letter-spacing: .02em;
 }
 
+/* ---- Move review ---------------------------------------------------------
+   Reading the game back. The position being reviewed is marked on its own row, so the
+   score sheet says where the board is without the player having to read the plate and
+   count. The mark is the row's OWN rail grown to full height — geometry and ink, not a
+   second surface painted over it. */
+.skirmish-log-card li.is-showing > span {
+  height: 22px;
+  margin-top: 0;
+  width: 4px;
+}
+
+.skirmish-log-card li.is-showing em {
+  color: #fff;
+  text-shadow: 0 0 10px rgba(120, 200, 255, .45);
+}
+
+.skirmish-log-card li > button.skirmish-log-move {
+  /* A move row that has a recorded board is pressable — it takes the same
+     [number][notation] columns as the plain row it replaces, so a navigable score sheet and
+     a static one line up to the pixel and the list does not visibly change shape when a
+     match has no history to offer. */
+  align-items: start;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  gap: 9px;
+  grid-column: 2 / -1;
+  grid-template-columns: 32px minmax(0, 1fr);
+  margin: 0;
+  padding: 0;
+  text-align: inherit;
+}
+
+.skirmish-log-card li > button.skirmish-log-move:hover em,
+.skirmish-log-card li > button.skirmish-log-move:focus-visible em {
+  color: #fff;
+}
+
+.skirmish-log-card li > button.skirmish-log-move:focus-visible {
+  outline: 2px solid var(--skirmish-blue);
+  outline-offset: 2px;
+}
+
+/* The transport row. One rule for both homes — under the Event Log and on the board
+   plate — because they are the same control and must not drift apart. */
+.move-review-controls {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-inline-tight, 6px);
+  min-width: 0;
+}
+
+.move-review-keys {
+  display: flex;
+  gap: var(--ds-inline-tight, 6px);
+  min-width: 0;
+}
+
+/* In the Controls column the four keys share the panel's width on their own line, with the
+   move name (and the way back to live) under them. A key row wide enough to press and a
+   move name long enough to read do not both fit that column on one line, and the name is
+   the half that must never be the one clipped — it is what says WHICH move is on screen. */
+.move-review-controls.is-panel {
+  display: grid;
+  gap: var(--ds-space-1, 6px);
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-block-end: var(--ds-space-2, 10px);
+}
+
+.move-review-controls.is-panel .move-review-keys {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.move-review-key {
+  min-inline-size: 0;
+  padding-inline: 0;
+}
+
+.move-review-glyph {
+  display: block;
+  height: 14px;
+  margin-inline: auto;
+  width: 14px;
+}
+
+/* The readout names the exact half-move on screen ("7… Rxb2"), so it is the widest
+   cell and the one that may shrink; the keys never do. */
+.move-review-readout {
+  color: var(--skirmish-muted);
+  flex: 1 1 auto;
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: var(--ds-text-sm, .9rem);
+  min-width: 0;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.move-review-controls.is-reviewing .move-review-readout { color: #fff; }
+
+/* The battlefield's own review plate, seated inside the field region — never over the
+   position it describes, and never able to slide under the Controls panel, because it is
+   placed against the field box rather than the viewport.
+   The SEAT holds the placement so the plate can wear the registered chrome frame without
+   that frame's `position: relative` taking the placement back (ADR-0570). Out of flow, so
+   it cannot take a grid row from the board it is describing; pointer-transparent across
+   its full width, so only the plate itself is in the way of the board underneath. */
+.skirmish-review-seat {
+  bottom: var(--ds-space-3, 16px);
+  display: flex;
+  justify-content: center;
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+  z-index: 30;
+}
+
+.skirmish-review-seat > * { pointer-events: auto; }
+
+/* Unlike its status-chip siblings the plate stacks a heading over a control row, so it
+   takes its own height rather than the bar's one control height. */
+.skirmish-review-plate {
+  block-size: auto;
+  flex-direction: column;
+  gap: var(--ds-space-1, 6px);
+  padding-block: var(--ds-space-2, 10px);
+}
+
+.skirmish-review-plate-heading {
+  align-items: center;
+  display: flex;
+  gap: var(--ds-inline, 10px);
+}
+
+.skirmish-review-plate-heading strong {
+  color: #ffe9a8;
+  font-family: "Advance Wars 2 GBA", "Jersey 10", "VT323", ui-monospace, monospace;
+  font-size: var(--ds-text-sm, .9rem);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.skirmish-review-plate-heading small {
+  color: var(--skirmish-muted);
+  font-size: var(--ds-text-xs, .78rem);
+}
+
 .skirmish-icon {
   background-position: center;
   background-repeat: no-repeat;

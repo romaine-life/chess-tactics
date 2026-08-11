@@ -1101,7 +1101,10 @@ if (!/testId=\{runDeployment \? 'run-deployment' : 'skirmish'\}/.test(skirmish)
   || !/primaryClassName="skirmish-field"/.test(skirmish)
   || !/className="run-meta-controls run-deployment-controls run-arrangement-controls"/.test(runScreen)
   || !/renderCellOverlay:/.test(runScreen)
-  || !/surfaceState=\{presentedDeploymentSurface\}/.test(skirmish)
+  // Deployment still projects its own position through the battlefield's one passive-surface
+  // seam, and still outranks anything else offered there (today, a move review of the live
+  // match). What this pins is that it goes through that seam at all.
+  || !/surfaceState=\{presentedDeploymentSurface(?: \?\? \w+)?\}/.test(skirmish)
   || /run-deployment-workspace|<LevelPreviewColumn|Choose square…/.test(runBattlefieldSources)) {
   failures.push('Run Deployment must use the battlefield and phase-specific Controls instead of a RunWorkspace level manifest');
 }
