@@ -358,12 +358,56 @@ const MANUBIUM_EXAMPLE: Readonly<Record<ManubiumId, ManubiumExample>> = {
     opened: [],
     seed: 811,
   },
+  'knight-fork': {
+    // Three prongs the enemy cannot answer, drawn as one of each kind: the King, which must move,
+    // beside a Rook and a Bishop that nothing of theirs defends. One move cannot save all three,
+    // and nothing on the board reaches the square the Knight landed on either. The marked empty
+    // square below-left is where it came from.
+    size: { cols: 5, rows: 5 },
+    pieces: [
+      unit('player', 'knight', 2, 2),
+      unit('enemy', 'king', 1, 0),
+      unit('enemy', 'rook', 3, 0),
+      unit('enemy', 'bishop', 4, 3),
+    ],
+    struck: ['1,0', '3,0', '4,3'],
+    opened: ['0,3'],
+    seed: 933,
+  },
   'royal-fork': {
     size: { cols: 5, rows: 5 },
     pieces: [unit('player', 'knight', 2, 2), unit('enemy', 'king', 3, 0), unit('enemy', 'rook', 1, 0)],
     struck: ['3,0', '1,0'],
     opened: [],
     seed: 822,
+  },
+  'long-capture': {
+    // The only diagrams in this section that are not five squares square, because the deed does
+    // not fit on a board that size: eight squares of reach needs nine of board. The whole lane
+    // the Rook crossed is marked, so the distance is the picture rather than a number in the copy.
+    size: { cols: 9, rows: 5 },
+    pieces: [unit('player', 'rook', 0, 2), unit('enemy', 'bishop', 8, 2)],
+    struck: ['8,2'],
+    opened: ['1,2', '2,2', '3,2', '4,2', '5,2', '6,2', '7,2'],
+    seed: 911,
+  },
+  'humble-mate': {
+    // A PAWN's mate, drawn because it is the top of this ladder and the least likely thing a
+    // player will ever see. Four of the King's own men seal it in; the fifth square is held by
+    // the Pawn giving the mate, which the second Pawn defends so the King cannot simply take it.
+    size: { cols: 5, rows: 5 },
+    pieces: [
+      unit('player', 'pawn', 2, 1),
+      unit('player', 'pawn', 1, 2),
+      unit('enemy', 'king', 1, 0),
+      unit('enemy', 'rook', 0, 0),
+      unit('enemy', 'knight', 2, 0),
+      unit('enemy', 'pawn', 0, 1),
+      unit('enemy', 'pawn', 1, 1),
+    ],
+    struck: ['1,0'],
+    opened: ['2,2'],
+    seed: 899,
   },
   'discovered-check': {
     // The Bishop has just stepped off the file to the corner, and the Rook behind it now runs
@@ -373,6 +417,15 @@ const MANUBIUM_EXAMPLE: Readonly<Record<ManubiumId, ManubiumExample>> = {
     struck: ['2,0'],
     opened: ['2,3', '2,2', '2,1'],
     seed: 833,
+  },
+  'long-check': {
+    // The long diagonal of a nine-square board, corner to corner: the Bishop stands at one end
+    // and the King is in check at the other, eight squares away with nothing in between.
+    size: { cols: 9, rows: 9 },
+    pieces: [unit('player', 'bishop', 0, 8), unit('enemy', 'king', 8, 0)],
+    struck: ['8,0'],
+    opened: ['1,7', '2,6', '3,5', '4,4', '5,3', '6,2', '7,1'],
+    seed: 922,
   },
   'double-check': {
     // The same open file, and a Knight that strikes the King as well. Two attackers at once:
@@ -404,6 +457,38 @@ const MANUBIUM_EXAMPLE: Readonly<Record<ManubiumId, ManubiumExample>> = {
     struck: ['4,0'],
     opened: [],
     seed: 866,
+  },
+  'promotion-mate': {
+    // The Pawn has just arrived on the top rank and become a Queen. The marked empty square
+    // below her is the one it stepped off; the King is sealed against the edge by its own Pawns
+    // and there is nothing on the rank to block her.
+    size: { cols: 5, rows: 5 },
+    pieces: [
+      unit('player', 'queen', 4, 0),
+      unit('enemy', 'king', 0, 0),
+      unit('enemy', 'pawn', 0, 1),
+      unit('enemy', 'pawn', 1, 1),
+    ],
+    struck: ['0,0'],
+    opened: ['4,1'],
+    seed: 877,
+  },
+  'underpromotion-mate': {
+    // The Knight case, drawn because it is the only one a position can require: a QUEEN on this
+    // same square would not even be giving check. The King's other flights are answered — two by
+    // its own men, one by the Knight, one by the second Pawn coming up behind.
+    size: { cols: 5, rows: 5 },
+    pieces: [
+      unit('player', 'knight', 2, 0),
+      unit('player', 'pawn', 1, 3),
+      unit('enemy', 'king', 0, 1),
+      unit('enemy', 'bishop', 0, 0),
+      unit('enemy', 'pawn', 1, 0),
+      unit('enemy', 'pawn', 1, 1),
+    ],
+    struck: ['0,1'],
+    opened: ['2,1'],
+    seed: 888,
   },
 };
 
@@ -505,8 +590,10 @@ function ManubiaeSection({ framed }: { framed: boolean }): ReactElement {
       <InnerChromeBox className="enchiridion-rule-exceptions">
         <h3>How they add up</h3>
         <p>Only <strong>your</strong> units earn these — the enemy does the same things and is paid nothing — and each one pays again every time you land it.</p>
-        <p>One move may earn <strong>several</strong> at once, and each pays in full: a capture that also forks is both.</p>
-        <p>The two checks are the exception, because every double check <em>is</em> a discovered check — uncovering the second attacker is the only way to give check with two units at once. They are rungs of one ladder, so a double check pays <strong>3</strong> in place of the discovered check&rsquo;s 2, never 5 for the same check.</p>
+        <p>One move may earn <strong>several</strong> at once, and each pays in full: a capture that also forks is both, and a promotion that mates is paid alongside the check it discovered.</p>
+        <p>The two checks are one ladder, because every double check <em>is</em> a discovered check — uncovering the second attacker is the only way to give check with two units at once. The better rung pays and the other stands down: a double check pays <strong>30</strong> in place of the discovered check&rsquo;s 20, never 50 for the same check.</p>
+        <p><strong>The two forks are one ladder too.</strong> A Knight striking the King and an undefended Rook is a royal fork <em>and</em> a two-prong Knight&rsquo;s fork, and one Knight&rsquo;s fork is one deed, so the dearer pays: the royal fork&rsquo;s <strong>10</strong> beats two prongs at 5, and a third prong overtakes it at 15. They ask different questions — the royal fork asks how <em>good</em> the piece beside the King is and never minds a recapture, because a Rook won for a Knight is worth the exchange; the Knight&rsquo;s fork asks how <em>many</em> things it hits that they cannot answer, and their King and a piece nothing of theirs defends count the same there.</p>
+        <p><strong>The mate pays once.</strong> Every Battle ends in checkmate, and four of these describe one — what the mating unit is worth, what the King&rsquo;s own men were doing around it, and whether that unit arrived by promoting. A smothered mate <em>is</em> a Knight&rsquo;s mate and an underpromotion mate <em>is</em> a mate by the lesser piece you chose, so they are rungs of one ladder too. The dearest that fits your mate is the one you are paid.</p>
         <p><strong>Undo</strong> takes back the gold along with the move that earned it, so no deed here is worth undoing for profit.</p>
       </InnerChromeBox>
     </ReferenceSectionFrame>

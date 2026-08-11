@@ -565,6 +565,10 @@ describe('Run chrome hierarchy', () => {
     expect(runTitleBarChips).not.toContain('data-chrome-fill-surface=');
     expect(titleBarControls).toContain('data-chrome-fill-surface={fillSurface}');
     expect(runExpunctioWorkspace).toContain('fillRole="outer"');
+    // The aftermath report is a structural box and takes the marble by NAMING the shared policy
+    // role, not by inheriting the scene's leaf adoption (ADR-0433/ADR-0557 — a box wears the
+    // marble, the actions under it wear the oak). Unfilled it read its ledger off the vista.
+    expect(runScreen).toMatch(/className="run-aftermath-report"\s*\r?\n\s*fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/);
     expect(styleCss).not.toMatch(/\.run-(?:roster-filters|meta-controls)[^}]*:nth-child/);
   });
 
@@ -1034,7 +1038,8 @@ describe('Run chrome hierarchy', () => {
     // role's TINT — a translucent field rather than an installed material, and unapproved paint
     // no gate catches, because it arrives from the generated role CSS and not from style.css.
     expect(runScreen).toMatch(/className="run-victory-report" fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/);
-    expect(runScreen).toMatch(/className="run-aftermath-report" fillRole=\{CHROME_STRUCTURAL_FILL_ROLE\}/);
+    // The aftermath report's own fill is pinned above, against the wrapping this file already
+    // expects. Asserting it a second time here only pinned a line break.
     expect(styleCss).toMatch(/\.run-screen\.has-lipsana \.run-aftermath-workspace-content\s*\{[\s\S]*?padding-block-start:\s*0;/);
 
     // The reward is reported in aftermath; restating it in Sectio remains retired.

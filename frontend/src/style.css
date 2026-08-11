@@ -18439,9 +18439,11 @@ button.tileset-relationship-cell {
   object-fit: cover;
 }
 
+/* No avatar image: the initial sits straight on the seat's leaf wood (ADR-0433) rather
+   than on a bespoke dark plate, so a signed-in account with no Gravatar reads as the same
+   material as the rest of the cluster. */
 .account-avatar-fallback {
   align-items: center;
-  background: #07111a;
   color: var(--cobalt-bright);
   display: grid;
   font-family: "Advance Wars 2 GBA", "VT323", ui-monospace, monospace;

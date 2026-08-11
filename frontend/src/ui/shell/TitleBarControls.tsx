@@ -3,10 +3,26 @@ import { createPortal } from 'react-dom';
 import { chromeUnitClassNames } from '../chromeUnitRegistry';
 import { useTitleBarPortalTarget } from './TitleBarPortalContext';
 import { ChromeButton, ChromeNavButton } from '../shared/ChromeButton';
+import { CHROME_LEAF_FILL_SURFACE, leafSurfacePhase } from '../shared/chromeSurfacePolicy';
 import { Tooltip } from '../shared/InfoTip';
 import { useSceneActivation } from './SceneBoundary';
 
 type TitleBarControlVariant = 'label' | 'return' | 'icon';
+
+/**
+ * Leaf-surface phases for the ONE title-bar control lane (ADR-0433). Every control in
+ * the bar is a terminal action, so every control wears the oak — and no two of these
+ * identical squares may start the plank at the same origin. The phase is owned by the
+ * data, never read off DOM position (ADR-0063).
+ *
+ * The invariant trailing cluster is a fixed named set, so it takes the first phases: the
+ * music button (bgm.js) rides the CSS default 0, then the Settings gear and the account
+ * control. A route's contributions carry their own array index and continue AFTER the
+ * cluster, so a lane holding a single contributed control never repeats the cluster's
+ * grain across the persistent divider.
+ */
+export const TITLE_BAR_CLUSTER_LEAF_PHASE = { music: 0, settings: 1, account: 2 } as const;
+const CONTRIBUTED_LEAF_PHASE_BASE = 3;
 
 function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(' ');
@@ -88,21 +104,35 @@ export function TitleBarStatusTip({
   );
 }
 
-interface TitleBarButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'type'> {
+/**
+ * `style` is deliberately unavailable: the one thing a caller has to say about this
+ * button's paint is which seat it occupies, and `surfacePhase` is the whole vocabulary
+ * for saying it. Anything else would be a route reaching into the bar's own material.
+ */
+interface TitleBarButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'type' | 'style'> {
   active?: boolean;
   replace?: boolean;
   scroll?: boolean;
+  /** This control's seat in the lane; see TITLE_BAR_CLUSTER_LEAF_PHASE. */
+  surfacePhase?: number;
   to?: string | (() => string);
   variant?: TitleBarControlVariant;
 }
 
-/** App-shell internal. Routed screens contribute TitleBarControlSpec values instead. */
+/**
+ * App-shell internal. Routed screens contribute TitleBarControlSpec values instead.
+ *
+ * The registered inner-box role owns the frame; the button names the leaf material on
+ * itself (ADR-0433) because a title-bar control ends the interaction tree rather than
+ * establishing a region — the bar behind it is the structural field.
+ */
 export function TitleBarButtonPrimitive({
   active,
   children,
   className,
   replace,
   scroll,
+  surfacePhase = 0,
   to,
   variant = 'label',
   ...props
@@ -114,17 +144,29 @@ export function TitleBarButtonPrimitive({
     active && 'active titlebar-control--active',
     className,
   );
+  const surface = {
+    'data-chrome-fill-surface': CHROME_LEAF_FILL_SURFACE,
+    style: leafSurfacePhase(surfacePhase),
+  };
 
   if (to) {
     return (
-      <ChromeNavButton unit="inner-box" className={controlClassName} to={to} replace={replace} scroll={scroll} {...props}>
+      <ChromeNavButton
+        unit="inner-box"
+        className={controlClassName}
+        {...surface}
+        to={to}
+        replace={replace}
+        scroll={scroll}
+        {...props}
+      >
         {children}
       </ChromeNavButton>
     );
   }
 
   return (
-    <ChromeButton unit="inner-box" className={controlClassName} {...props}>
+    <ChromeButton unit="inner-box" className={controlClassName} {...surface} {...props}>
       {children}
     </ChromeButton>
   );
@@ -186,11 +228,14 @@ export type TitleBarControlSpec = TitleBarControlBase & (TitleBarTextPresentatio
     }
 );
 
-function renderContributedControl(control: TitleBarControlSpec): ReactElement {
+function renderContributedControl(control: TitleBarControlSpec, index: number): ReactElement {
   const common = {
     active: control.active,
     disabled: control.disabled,
     title: control.title ?? control.label,
+    // The seat comes from this control's place in the contributed ARRAY, which is the only
+    // ordering the screen actually authored — a spec carries no markup or layout of its own.
+    surfacePhase: CONTRIBUTED_LEAF_PHASE_BASE + index,
     'aria-pressed': control.pressed,
     'data-testid': control.testId,
     'data-titlebar-control-id': control.id,

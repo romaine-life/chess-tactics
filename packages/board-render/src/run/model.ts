@@ -6,7 +6,7 @@ import {
   type War,
 } from '../core/level';
 import { migrateLevelDocument } from '../core/levelMigration';
-import type { PieceType, Vec } from '../core/types';
+import type { PieceType, PromotionPieceType, Vec } from '../core/types';
 import {
   LIPSANON_BY_ID,
   RUN_LIPSANA,
@@ -294,7 +294,16 @@ export type ManubiumId =
   | 'discovered-check'
   | 'double-check'
   | 'en-passant'
-  | 'smothered-mate';
+  | 'smothered-mate'
+  | 'promotion-mate'
+  | 'underpromotion-mate'
+  | 'humble-mate'
+  | 'long-capture'
+  | 'long-check'
+  | 'knight-fork';
+
+/** What a Pawn may become instead of a Queen. The Queen is the ordinary case, so she is not here. */
+export type UnderpromotionPieceType = Exclude<PromotionPieceType, 'queen'>;
 
 export interface ManubiumDefinition {
   readonly id: ManubiumId;
@@ -320,6 +329,101 @@ export interface ManubiumDefinition {
 export const RUN_ADVANTAGEOUS_CAPTURE_TENTHS_PER_POINT = 2;
 
 /**
+ * What a mating underpromotion pays, by the piece the Pawn chose instead of a Queen.
+ *
+ * The ladder is rarity, and the chess behind it is exact. A Rook or a Bishop can never mate
+ * where a Queen would not: on the same square the Queen attacks every square the Rook does and
+ * every square the Bishop does, so any mate they deliver she delivers too. Choosing one of them
+ * is style, not necessity — the player saw a lesser piece finish the job and took it.
+ *
+ * Only the KNIGHT can mate where the Queen cannot, because the Knight's move is the one thing
+ * she does not have. That is the underpromotion every puzzle book prints, and the only one a
+ * position can genuinely require.
+ *
+ * So the Rook sits just above an ordinary promotion mate — once the mate is there, taking a Rook
+ * instead of a Queen costs the player nothing, and the Battle is over either way, so it is paid
+ * as the flourish it is. The Bishop is dearer because a Bishop mate needs a far narrower shape
+ * than a Rook mate: one colour of diagonal, and every other flight square answered by other men.
+ * The Knight is paid alongside the Bishop rather than above it, because what the two ask of a
+ * position is nothing alike and ranking them against each other would be inventing a difference.
+ */
+export const RUN_UNDERPROMOTION_MATE_TENTHS: Readonly<Record<UnderpromotionPieceType, number>> = Object.freeze({
+  rook: 6 * GOLD_SCALE,
+  bishop: 8 * GOLD_SCALE,
+  knight: 8 * GOLD_SCALE,
+});
+
+/**
+ * What a humble mate pays for each point the mating unit falls short of a Queen.
+ *
+ * A Queen is 9, so a Queen's mate comes out at exactly nothing and "anything but a Queen" is
+ * what the arithmetic SAYS rather than a clause bolted onto it. Every other unit is paid for
+ * the distance: a Rook 12, a Bishop or Knight 18, a Pawn 24.
+ *
+ * Three a point rather than the two an advantageous capture and Deditio pay, because this is
+ * counted once per Battle at most while those are counted many times — but still in the low
+ * band, and for the same reason. Every Battle ends in checkmate (ADR-0543), so unlike every
+ * other Manubium this one is nearly always available; a Rook mate is the ordinary way a Battle
+ * finishes, and paying 12 for it is the Run noticing something you were going to do anyway. The
+ * gradient is where the teaching is: it is worth looking for the Knight's mate instead.
+ */
+export const RUN_HUMBLE_MATE_TENTHS_PER_POINT = 3;
+
+/**
+ * How far a deed must reach before the Run calls it long: eight squares.
+ *
+ * Eight because that is the width of a standard chessboard — a move that crosses it end to end
+ * is the reach every player already has a feel for, even though no board in this game is that
+ * shape. Counted the way a player counts along a line rather than as a sum of both axes, so a
+ * Rook eight along a rank and a Bishop eight along a diagonal are the same eight.
+ *
+ * A board smaller than nine in both dimensions can never offer it, and no arrangement is made
+ * for that: a Battle on a small board simply has no long moves in it, which is true and needs
+ * no clause.
+ */
+export const RUN_LONG_REACH_SQUARES = 8;
+
+/**
+ * What each further rung of a Knight's fork is worth.
+ *
+ * The price ACCELERATES: the second prong adds one of these, the third adds two, the fourth
+ * adds three, and so on, so the run of prices is 5, 15, 30, 50, 75 for two, three, four, five
+ * and six prongs. A flat rate per prong would say a Knight hitting four things is twice a Knight
+ * hitting two, and it is nothing of the sort — the second prong is a fork, and every prong after
+ * it is a square the enemy cannot answer, which is why the marginal one is worth more than the
+ * one before it.
+ *
+ * Five rather than ten so the plain two-prong fork lands UNDER the royal fork it is often a
+ * lesser version of; three prongs then passes it, which is the right order.
+ */
+export const RUN_KNIGHT_FORK_TENTHS_PER_RUNG = 5;
+
+/**
+ * What a Knight's fork of `targets` prongs pays. Nothing for fewer than two: one prong is not a
+ * fork, it is just an attack.
+ *
+ * A prong is something the enemy cannot answer — their King, which must move, or an undefended
+ * unit their one move cannot save alongside another (ADR-0566). Counting is the board seam's
+ * job; this only prices the count.
+ */
+export function knightForkGoldTenths(targets: number): number {
+  const prongs = Math.max(0, Math.floor(targets) - 1);
+  return (prongs * (prongs + 1) / 2) * RUN_KNIGHT_FORK_TENTHS_PER_RUNG;
+}
+
+/**
+ * What a mate delivered by `piece` pays — nothing at all for a Queen.
+ *
+ * The King's zero on the piece scale is a sentinel for "never bought" and would otherwise read
+ * as the humblest unit on the board, paying the most. It cannot arise, since a King may not
+ * give check at all, but the scale is not asked to be lucky about it.
+ */
+export function humbleMateGoldTenths(piece: RunArmyPieceType): number {
+  if (piece === 'king') return 0;
+  return Math.max(0, PIECE_VALUE.queen - PIECE_VALUE[piece]) * RUN_HUMBLE_MATE_TENTHS_PER_POINT;
+}
+
+/**
  * Every Manubium, cheapest first, which is also roughly rarest-last-to-first: the ladder
  * runs from what a competent player does several times a Battle to what they may never do.
  *
@@ -336,15 +440,43 @@ export const RUN_MANUBIAE: readonly ManubiumDefinition[] = Object.freeze([
     priceNote: '2 gold for each point of material won',
   },
   {
+    id: 'knight-fork',
+    name: "Knight's fork",
+    earnedBy: 'Strike two or more things at once with a Knight that the enemy cannot answer, from the square it just moved to: their King, which must move, or an UNDEFENDED unit, which their one move cannot save alongside another. Each further prong is worth more than the last. A defended unit is no prong, because they simply take the Knight back. The fork has to hold: taking the Knight must cost the enemy more than the Knight is worth.',
+    goldTenths: null,
+    // Written from the rate rather than beside it, so the sentence cannot drift from the gold.
+    priceNote: `${knightForkGoldTenths(2)} for two prongs, ${knightForkGoldTenths(3)} for three, ${knightForkGoldTenths(4)} for four, ${knightForkGoldTenths(5)} for five`,
+  },
+  {
     id: 'royal-fork',
     name: 'Royal fork',
     earnedBy: 'Attack the enemy King and a Rook or Queen with one unit, from the square it just moved to. The fork has to hold: taking that unit must cost the enemy more than the unit is worth.',
     goldTenths: GOLD_SCALE,
   },
   {
+    id: 'long-capture',
+    name: 'Long capture',
+    earnedBy: 'Take an enemy unit eight or more squares from where the unit taking it set out — the width of a whole chessboard, crossed in one move. Any unit may earn it.',
+    goldTenths: GOLD_SCALE,
+  },
+  {
+    id: 'humble-mate',
+    name: 'Humble mate',
+    earnedBy: 'Deliver the checkmate with anything but a Queen. The less the mating unit is worth the more it pays, so a Pawn pays most of all. When two units mate at once it is the lesser of them that is paid for.',
+    goldTenths: null,
+    // Written from the rate rather than beside it, so the sentence cannot drift from the gold.
+    priceNote: `${humbleMateGoldTenths('rook')} for a Rook, ${humbleMateGoldTenths('knight')} for a Bishop or Knight, ${humbleMateGoldTenths('pawn')} for a Pawn`,
+  },
+  {
     id: 'discovered-check',
     name: 'Discovered check',
     earnedBy: 'Move one unit out of the way so that a different unit behind it gives check.',
+    goldTenths: 2 * GOLD_SCALE,
+  },
+  {
+    id: 'long-check',
+    name: 'Long check',
+    earnedBy: 'Give check from eight or more squares away, counted along the line the check runs. Any unit may earn it, and it need not be the unit you moved — a line you opened counts from wherever the unit behind it stands.',
     goldTenths: 2 * GOLD_SCALE,
   },
   {
@@ -365,6 +497,21 @@ export const RUN_MANUBIAE: readonly ManubiumDefinition[] = Object.freeze([
     earnedBy: 'Checkmate with a Knight while the enemy King is hemmed in on every side by its own men.',
     goldTenths: 5 * GOLD_SCALE,
   },
+  {
+    id: 'promotion-mate',
+    name: 'Promotion mate',
+    earnedBy: 'Walk a Pawn all the way to a promotion square and have the piece it becomes give checkmate on arrival.',
+    goldTenths: 5 * GOLD_SCALE,
+  },
+  {
+    id: 'underpromotion-mate',
+    name: 'Underpromotion mate',
+    earnedBy: 'The same, with the Pawn refusing the Queen. A Knight is the only piece that can mate where a Queen could not, so it is paid the most, alongside the Bishop. This pays in place of the promotion mate, not on top of it.',
+    goldTenths: null,
+    // Written from the rates rather than beside them, so the sentence a player reads cannot
+    // drift from the gold they are actually paid.
+    priceNote: `${RUN_UNDERPROMOTION_MATE_TENTHS.rook} for a Rook, ${RUN_UNDERPROMOTION_MATE_TENTHS.bishop} for a Bishop or Knight`,
+  },
 ] as const);
 
 export const RUN_MANUBIUM_BY_ID: Readonly<Record<ManubiumId, ManubiumDefinition>> = Object.freeze(
@@ -378,7 +525,15 @@ export const RUN_MANUBIUM_BY_ID: Readonly<Record<ManubiumId, ManubiumDefinition>
  */
 export type ManubiumAward =
   | { readonly id: 'advantageous-capture'; readonly marginPoints: number }
-  | { readonly id: Exclude<ManubiumId, 'advantageous-capture'> };
+  | { readonly id: 'underpromotion-mate'; readonly piece: UnderpromotionPieceType }
+  | { readonly id: 'humble-mate'; readonly piece: RunArmyPieceType }
+  | { readonly id: 'knight-fork'; readonly targets: number }
+  | {
+    readonly id: Exclude<
+      ManubiumId,
+      'advantageous-capture' | 'underpromotion-mate' | 'humble-mate' | 'knight-fork'
+    >;
+  };
 
 /**
  * What a unit is worth when Manubiae compares two of them — what it STARTED as, never what
@@ -407,6 +562,9 @@ export function manubiumGoldTenths(award: ManubiumAward): number {
   if (award.id === 'advantageous-capture') {
     return Math.max(0, Math.round(award.marginPoints)) * RUN_ADVANTAGEOUS_CAPTURE_TENTHS_PER_POINT;
   }
+  if (award.id === 'underpromotion-mate') return RUN_UNDERPROMOTION_MATE_TENTHS[award.piece] ?? 0;
+  if (award.id === 'humble-mate') return humbleMateGoldTenths(award.piece);
+  if (award.id === 'knight-fork') return knightForkGoldTenths(award.targets);
   return RUN_MANUBIUM_BY_ID[award.id].goldTenths ?? 0;
 }
 

@@ -46,14 +46,6 @@
       "kind": "css",
       "file": "src/style.css",
       "context": "",
-      "selector": ".account-avatar-fallback",
-      "surfaceHash": "f0abe335e326cd88a00878d612a02bc88a728bc3171422f25da424ff4bebc2d1",
-      "occurrence": 1
-    },
-    {
-      "kind": "css",
-      "file": "src/style.css",
-      "context": "",
       "selector": ".account-menu-icon-button",
       "surfaceHash": "7581fde9a3ddfa554cd58d22ba74dc79927f42b5f93eddfa0d0caeb98281227b",
       "occurrence": 1

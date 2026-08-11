@@ -1452,10 +1452,16 @@ function AftermathPanel({
         {named ? <p className="run-aftermath-subtitle">{named}</p> : null}
       </header>
 
-      {/* Marble, like every structural box. Naming no fill drops it onto the inner role's TINT,
-          which is a translucent field rather than an installed material — unapproved paint that no
-          gate catches, because it arrives from the generated role CSS and not from style.css. */}
-      <InnerChromeBox as="div" className="run-aftermath-report" fillRole={CHROME_STRUCTURAL_FILL_ROLE}>
+      {/* The report is a structural box, so it wears the installed marble borrowed from the outer
+          role (ADR-0433) — the same material the Editor's rows and the Run's Battle-preview pane
+          are painted with. Unfilled, the ledger read its labels and its numerals straight off the
+          vista behind it, which is the one thing the frame around them was there to prevent. The
+          scene's leaf adoption (ADR-0557) paints the ACTIONS below, not this box. */}
+      <InnerChromeBox
+        as="div"
+        className="run-aftermath-report"
+        fillRole={CHROME_STRUCTURAL_FILL_ROLE}
+      >
         <dl className="run-aftermath-ledger">
           <AftermathMeasure
             label="Gold won"
